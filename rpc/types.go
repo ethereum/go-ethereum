@@ -117,11 +117,13 @@ type ServerCodec interface {
 }
 
 type BlockNumber int64
+type EpochNumber int64
 
 const (
 	PendingBlockNumber  = BlockNumber(-2)
 	LatestBlockNumber   = BlockNumber(-1)
 	EarliestBlockNumber = BlockNumber(0)
+	LatestEpochNumber	= EpochNumber(-1)
 )
 
 // UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:
@@ -131,11 +133,7 @@ const (
 // - an invalid block number error when the given argument isn't a known strings
 // - an out of range error when the given block number is either too little or too large
 func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
-	input := strings.TrimSpace(string(data))
-	if len(input) >= 2 && input[0] == '"' && input[len(input)-1] == '"' {
-		input = input[1 : len(input)-1]
-	}
-
+	input := trimData(data)
 	switch input {
 	case "earliest":
 		*bn = EarliestBlockNumber
@@ -162,4 +160,35 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 
 func (bn BlockNumber) Int64() int64 {
 	return (int64)(bn)
+}
+
+func (e *EpochNumber) UnmarshalJSON(data []byte) error {
+	input := trimData(data)
+	if input == "latest" {
+		*e = LatestEpochNumber
+		return nil
+	}
+
+	eNum, err := hexutil.DecodeUint64(input)
+	if err != nil {
+		return err
+	}
+	if eNum > math.MaxInt64 {
+		return fmt.Errorf("EpochNumber too high")
+	}
+
+	*e = EpochNumber(eNum)
+	return nil
+}
+
+func (e EpochNumber) Int64() int64 {
+	return (int64)(e)
+}
+
+func trimData(data []byte) string {
+	input := strings.TrimSpace(string(data))
+	if len(input) >= 2 && input[0] == '"' && input[len(input)-1] == '"' {
+		input = input[1 : len(input)-1]
+	}
+	return input
 }

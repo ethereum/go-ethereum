@@ -3715,6 +3715,13 @@ var inputBlockNumberFormatter = function (blockNumber) {
     return utils.toHex(blockNumber);
 };
 
+var inputEpochNumberFormatter = function (epochNumber) {
+  if (epochNumber === undefined || epochNumber === "latest") {
+    return "latest";
+  }
+  return utils.toHex(epochNumber);
+};
+
 /**
  * Formats the input of a transaction and converts all values to HEX
  *
@@ -3840,6 +3847,22 @@ var outputBlockFormatter = function(block) {
 
     return block;
 };
+/**
+ * Formats the output of a blockSigner list
+ *
+ * @method outputBlockFormatter
+ * @param {Object} blockSigners
+ * @returns {Object}
+ */
+var outputBlockSignersFormatter = function(blockSigners) {
+  if (utils.isArray(blockSigners)) {
+    blockSigners.forEach(function(item){
+      if(!utils.isString(item))
+        return formatOutputAddress(item);
+    });
+  }
+  return blockSigners;
+};
 
 /**
  * Formats the output of a log
@@ -3950,6 +3973,7 @@ var outputSyncingFormatter = function(result) {
 module.exports = {
     inputDefaultBlockNumberFormatter: inputDefaultBlockNumberFormatter,
     inputBlockNumberFormatter: inputBlockNumberFormatter,
+    inputEpochNumberFormatter: inputEpochNumberFormatter,
     inputCallFormatter: inputCallFormatter,
     inputTransactionFormatter: inputTransactionFormatter,
     inputAddressFormatter: inputAddressFormatter,
@@ -3958,6 +3982,7 @@ module.exports = {
     outputTransactionFormatter: outputTransactionFormatter,
     outputTransactionReceiptFormatter: outputTransactionReceiptFormatter,
     outputBlockFormatter: outputBlockFormatter,
+    outputBlockSignersFormatter: outputBlockSignersFormatter,
     outputLogFormatter: outputLogFormatter,
     outputPostFormatter: outputPostFormatter,
     outputSyncingFormatter: outputSyncingFormatter
@@ -5210,6 +5235,14 @@ var blockCall = function (args) {
     return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? "eth_getBlockByHash" : "eth_getBlockByNumber";
 };
 
+var blockSignersCall = function (args) {
+  return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? "eth_getBlockSignersByHash" : "eth_getBlockSignersByNumber";
+};
+
+var blockFinalityCall = function (args) {
+  return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? "eth_getBlockFinalityByHash" : "eth_getBlockFinalityByNumber";
+};
+
 var transactionFromBlockCall = function (args) {
     return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getTransactionByBlockHashAndIndex' : 'eth_getTransactionByBlockNumberAndIndex';
 };
@@ -5295,6 +5328,22 @@ var methods = function () {
         params: 2,
         inputFormatter: [formatters.inputBlockNumberFormatter, function (val) { return !!val; }],
         outputFormatter: formatters.outputBlockFormatter
+    });
+
+    var getBlockSigners = new Method({
+      name: 'getBlockSigners',
+      call: blockSignersCall,
+      params: 1,
+      inputFormatter: [formatters.inputBlockNumberFormatter],
+      outputFormatter: formatters.outputBlockSignersFormatter
+    });
+
+    var getBlockFinality = new Method({
+      name: 'getBlockFinality',
+      call: blockFinalityCall,
+      params: 1,
+      inputFormatter: [formatters.inputBlockNumberFormatter],
+      outputFormatter: formatters.formatOutputInt
     });
 
     var getUncle = new Method({
@@ -5431,11 +5480,20 @@ var methods = function () {
         params: 0
     });
 
+    var getCandidateStatus = new Method({
+      name: 'getCandidateStatus',
+      call: 'eth_getCandidateStatus',
+      params: 2,
+      inputFormatter: [formatters.inputAddressFormatter, formatters.inputEpochNumberFormatter]
+    });
     return [
         getBalance,
         getStorageAt,
         getCode,
         getBlock,
+        getBlockSigners,
+        getBlockFinality,
+        getCandidateStatus,
         getUncle,
         getCompilers,
         getBlockTransactionCount,
