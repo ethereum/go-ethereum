@@ -22,8 +22,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"sync"
+	"time"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -38,6 +41,10 @@ import (
 // release resources used by the database.
 type GlobalStore struct {
 	db *leveldb.DB
+	// protects nodes and keys indexes
+	// in Put and Delete methods
+	nodesLocks sync.Map
+	keysLocks  sync.Map
 }
 
 // NewGlobalStore creates a new instance of GlobalStore.
@@ -65,14 +72,14 @@ func (s *GlobalStore) NewNodeStore(addr common.Address) *mock.NodeStore {
 // Get returns chunk data if the chunk with key exists for node
 // on address addr.
 func (s *GlobalStore) Get(addr common.Address, key []byte) (data []byte, err error) {
-	has, err := s.db.Has(dbKeyNodes(addr, key), nil)
+	has, err := s.db.Has(indexNodeKeysKey(addr, key), nil)
 	if err != nil {
 		return nil, mock.ErrNotFound
 	}
 	if !has {
 		return nil, mock.ErrNotFound
 	}
-	data, err = s.db.Get(dataDBKey(key), nil)
+	data, err = s.db.Get(indexDataKey(key), nil)
 	if err == leveldb.ErrNotFound {
 		err = mock.ErrNotFound
 	}
@@ -81,48 +88,163 @@ func (s *GlobalStore) Get(addr common.Address, key []byte) (data []byte, err err
 
 // Put saves the chunk data for node with address addr.
 func (s *GlobalStore) Put(addr common.Address, key []byte, data []byte) error {
+	unlock, err := s.lock(addr, key)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
 	batch := new(leveldb.Batch)
-	batch.Put(dbKeyNodes(addr, key), nil)
-	batch.Put(dbKeyKeys(addr, key), nil)
-	batch.Put(dataDBKey(key), data)
+	batch.Put(indexNodeKeysKey(addr, key), nil)
+	batch.Put(indexKeyNodesKey(key, addr), nil)
+	batch.Put(indexNodesKey(addr), nil)
+	batch.Put(indexKeysKey(key), nil)
+	batch.Put(indexDataKey(key), data)
 	return s.db.Write(batch, nil)
 }
 
 // Delete removes the chunk reference to node with address addr.
 func (s *GlobalStore) Delete(addr common.Address, key []byte) error {
+	unlock, err := s.lock(addr, key)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
 	batch := new(leveldb.Batch)
-	batch.Delete(dbKeyNodes(addr, key))
-	batch.Delete(dbKeyKeys(addr, key))
+	batch.Delete(indexNodeKeysKey(addr, key))
+	batch.Delete(indexKeyNodesKey(key, addr))
+
+	// check if this node contains any keys, and if not
+	// remove it from the
+	x := indexNodeKeysKeyPrefix(addr)
+	if k, _ := s.db.Get(x, nil); !bytes.HasPrefix(k, x) {
+		batch.Delete(indexNodesKey(addr))
+	}
+
+	x = indexKeyNodesKeyPrefix(key)
+	if k, _ := s.db.Get(x, nil); !bytes.HasPrefix(k, x) {
+		batch.Delete(indexKeysKey(key))
+	}
 	return s.db.Write(batch, nil)
 }
 
 // HasKey returns whether a node with addr contains the key.
 func (s *GlobalStore) HasKey(addr common.Address, key []byte) bool {
-	has, err := s.db.Has(dbKeyNodes(addr, key), nil)
+	has, err := s.db.Has(indexNodeKeysKey(addr, key), nil)
 	if err != nil {
 		has = false
 	}
 	return has
 }
 
+// Keys returns a paginated list of keys on all nodes.
 func (s *GlobalStore) Keys(startKey []byte, limit int) (keys mock.Keys, err error) {
-	// TODO: implement
-	return keys, errors.New("not implemented")
+	return s.keys(nil, startKey, limit)
 }
 
+// Nodes returns a paginated list of all known nodes.
 func (s *GlobalStore) Nodes(startAddr *common.Address, limit int) (nodes mock.Nodes, err error) {
-	// TODO: implement
-	return nodes, errors.New("not implemented")
+	return s.nodes(nil, startAddr, limit)
 }
 
+// NodeKeys returns a paginated list of keys on a node with provided address.
 func (s *GlobalStore) NodeKeys(addr common.Address, startKey []byte, limit int) (keys mock.Keys, err error) {
-	// TODO: implement
-	return keys, errors.New("not implemented")
+	return s.keys(&addr, startKey, limit)
 }
 
+// KeyNodes returns a paginated list of nodes that contain a particular key.
 func (s *GlobalStore) KeyNodes(key []byte, startAddr *common.Address, limit int) (nodes mock.Nodes, err error) {
-	// TODO: implement
-	return nodes, errors.New("not implemented")
+	return s.nodes(key, startAddr, limit)
+}
+
+// keys returns a paginated list of keys. If addr is not nil, only keys on that
+// node will be returned.
+func (s *GlobalStore) keys(addr *common.Address, startKey []byte, limit int) (keys mock.Keys, err error) {
+	iter := s.db.NewIterator(nil, nil)
+	defer iter.Release()
+
+	if limit <= 0 {
+		limit = mock.DefaultLimit
+	}
+
+	prefix := []byte{indexKeysPrefix}
+	if addr != nil {
+		prefix = indexNodeKeysKeyPrefix(*addr)
+	}
+	if startKey != nil {
+		if addr != nil {
+			startKey = indexNodeKeysKey(*addr, startKey)
+		} else {
+			startKey = indexKeysKey(startKey)
+		}
+	} else {
+		startKey = prefix
+	}
+
+	ok := iter.Seek(startKey)
+	if !ok {
+		return keys, iter.Error()
+	}
+	for ; ok; ok = iter.Next() {
+		k := iter.Key()
+		if !bytes.HasPrefix(k, prefix) {
+			break
+		}
+		key := append([]byte(nil), bytes.TrimPrefix(k, prefix)...)
+
+		if len(keys.Keys) >= limit {
+			keys.Next = key
+			break
+		}
+
+		keys.Keys = append(keys.Keys, key)
+	}
+	return keys, iter.Error()
+}
+
+// nodes returns a paginated list of node addresses. If key is not nil,
+// only nodes that contain that key will be returned.
+func (s *GlobalStore) nodes(key []byte, startAddr *common.Address, limit int) (nodes mock.Nodes, err error) {
+	iter := s.db.NewIterator(nil, nil)
+	defer iter.Release()
+
+	if limit <= 0 {
+		limit = mock.DefaultLimit
+	}
+
+	prefix := []byte{indexNodesPrefix}
+	if key != nil {
+		prefix = indexKeyNodesKeyPrefix(key)
+	}
+	startKey := prefix
+	if startAddr != nil {
+		if key != nil {
+			startKey = indexKeyNodesKey(key, *startAddr)
+		} else {
+			startKey = indexNodesKey(*startAddr)
+		}
+	}
+
+	ok := iter.Seek(startKey)
+	if !ok {
+		return nodes, iter.Error()
+	}
+	for ; ok; ok = iter.Next() {
+		k := iter.Key()
+		if !bytes.HasPrefix(k, prefix) {
+			break
+		}
+		addr := common.BytesToAddress(append([]byte(nil), bytes.TrimPrefix(k, prefix)...))
+
+		if len(nodes.Addrs) >= limit {
+			nodes.Next = &addr
+			break
+		}
+
+		nodes.Addrs = append(nodes.Addrs, addr)
+	}
+	return nodes, iter.Error()
 }
 
 // Import reads tar archive from a reader that contains exported chunk data.
@@ -149,12 +271,18 @@ func (s *GlobalStore) Import(r io.Reader) (n int, err error) {
 			return n, err
 		}
 
+		key := common.Hex2Bytes(hdr.Name)
+
 		batch := new(leveldb.Batch)
 		for _, addr := range c.Addrs {
-			batch.Put(dbKeyNodesHex(addr, hdr.Name), nil)
+			batch.Put(indexNodeKeysKey(addr, key), nil)
+			batch.Put(indexKeyNodesKey(key, addr), nil)
+			batch.Put(indexNodesKey(addr), nil)
 		}
 
-		batch.Put(dataDBKey(common.Hex2Bytes(hdr.Name)), c.Data)
+		batch.Put(indexKeysKey(key), nil)
+		batch.Put(indexDataKey(key), c.Data)
+
 		if err = s.db.Write(batch, nil); err != nil {
 			return n, err
 		}
@@ -173,18 +301,23 @@ func (s *GlobalStore) Export(w io.Writer) (n int, err error) {
 	buf := bytes.NewBuffer(make([]byte, 0, 1024))
 	encoder := json.NewEncoder(buf)
 
-	iter := s.db.NewIterator(util.BytesPrefix(nodesPrefix), nil)
+	snap, err := s.db.GetSnapshot()
+	if err != nil {
+		return 0, err
+	}
+
+	iter := snap.NewIterator(util.BytesPrefix([]byte{indexKeyNodesPrefix}), nil)
 	defer iter.Release()
 
 	var currentKey string
 	var addrs []common.Address
 
-	saveChunk := func(hexKey string) error {
-		key := common.Hex2Bytes(hexKey)
+	saveChunk := func() error {
+		hexKey := currentKey
 
-		data, err := s.db.Get(dataDBKey(key), nil)
+		data, err := snap.Get(indexDataKey(common.Hex2Bytes(hexKey)), nil)
 		if err != nil {
-			return err
+			return fmt.Errorf("get data %s: %v", hexKey, err)
 		}
 
 		buf.Reset()
@@ -212,8 +345,8 @@ func (s *GlobalStore) Export(w io.Writer) (n int, err error) {
 	}
 
 	for iter.Next() {
-		k := bytes.TrimPrefix(iter.Key(), nodesPrefix)
-		i := bytes.Index(k, []byte("-"))
+		k := bytes.TrimPrefix(iter.Key(), []byte{indexKeyNodesPrefix})
+		i := bytes.Index(k, []byte{keyTermByte})
 		if i < 0 {
 			continue
 		}
@@ -224,7 +357,7 @@ func (s *GlobalStore) Export(w io.Writer) (n int, err error) {
 		}
 
 		if hexKey != currentKey {
-			if err = saveChunk(currentKey); err != nil {
+			if err = saveChunk(); err != nil {
 				return n, err
 			}
 
@@ -232,44 +365,112 @@ func (s *GlobalStore) Export(w io.Writer) (n int, err error) {
 		}
 
 		currentKey = hexKey
-		addrs = append(addrs, common.BytesToAddress(k[i:]))
+		addrs = append(addrs, common.BytesToAddress(k[i+1:]))
 	}
 
 	if len(addrs) > 0 {
-		if err = saveChunk(currentKey); err != nil {
+		if err = saveChunk(); err != nil {
 			return n, err
 		}
 	}
 
-	return n, err
+	return n, iter.Error()
 }
 
 var (
-	nodesPrefix = []byte("nodes-")
-	keysPrefix  = []byte("keys-")
-	dataPrefix  = []byte("data-")
+	// maximal time for lock to wait until it returns error
+	lockTimeout = 3 * time.Second
+	// duration between two lock checks.
+	lockCheckDelay = 30 * time.Microsecond
+	// error returned by lock method when lock timeout is reached
+	errLockTimeout = errors.New("lock timeout")
 )
 
-// dbKeyNodes constructs a database key for key/node mappings.
-func dbKeyNodes(addr common.Address, key []byte) []byte {
-	return dbKeyNodesHex(addr, common.Bytes2Hex(key))
+// lock protects parallel writes in Put and Delete methods for both
+// node with provided address and for data with provided key.
+func (s *GlobalStore) lock(addr common.Address, key []byte) (unlock func(), err error) {
+	start := time.Now()
+	nodeLockKey := addr.Hex()
+	for {
+		_, loaded := s.nodesLocks.LoadOrStore(nodeLockKey, struct{}{})
+		if !loaded {
+			break
+		}
+		time.Sleep(lockCheckDelay)
+		if time.Since(start) > lockTimeout {
+			return nil, errLockTimeout
+		}
+	}
+	start = time.Now()
+	keyLockKey := common.Bytes2Hex(key)
+	for {
+		_, loaded := s.keysLocks.LoadOrStore(keyLockKey, struct{}{})
+		if !loaded {
+			break
+		}
+		time.Sleep(lockCheckDelay)
+		if time.Since(start) > lockTimeout {
+			return nil, errLockTimeout
+		}
+	}
+	return func() {
+		s.nodesLocks.Delete(nodeLockKey)
+		s.keysLocks.Delete(keyLockKey)
+	}, nil
 }
 
-// dbKeyNodesHex constructs a database key for key/node mappings
-// using the hexadecimal string representation of the key.
-func dbKeyNodesHex(addr common.Address, hexKey string) []byte {
-	return append(append(nodesPrefix, []byte(hexKey+"-")...), addr[:]...)
+const (
+	// prefixes for different indexes
+	indexDataPrefix     = 0
+	indexNodeKeysPrefix = 1
+	indexKeyNodesPrefix = 2
+	indexNodesPrefix    = 3
+	indexKeysPrefix     = 4
+
+	// keyTermByte splits keys and node addresses
+	// in database keys
+	keyTermByte = 0xff
+)
+
+// indexNodeKeysKey constructs a database key to store keys used in
+// NodeKeys method.
+func indexNodeKeysKey(addr common.Address, key []byte) []byte {
+	return append(indexNodeKeysKeyPrefix(addr), key...)
 }
 
-func dbKeyKeys(addr common.Address, key []byte) []byte {
-	return dbKeyKeysHex(addr, common.Bytes2Hex(key))
+// indexNodeKeysKeyPrefix returns a prefix containing a node address used in
+// NodeKeys method. Node address is hex encoded to be able to use keyTermByte
+// for splitting node address and key.
+func indexNodeKeysKeyPrefix(addr common.Address) []byte {
+	return append([]byte{indexNodeKeysPrefix}, append([]byte(addr.Hex()), keyTermByte)...)
 }
 
-func dbKeyKeysHex(addr common.Address, hexKey string) []byte {
-	return append(append(keysPrefix, []byte(addr.Hex()+"-")...), hexKey[:]...)
+// indexKeyNodesKey constructs a database key to store keys used in
+// KeyNodes method.
+func indexKeyNodesKey(key []byte, addr common.Address) []byte {
+	return append(indexKeyNodesKeyPrefix(key), addr[:]...)
 }
 
-// dataDBkey constructs a database key for key/data storage.
-func dataDBKey(key []byte) []byte {
-	return append(dataPrefix, key...)
+// indexKeyNodesKeyPrefix returns a prefix containing a key used in
+// KeyNodes method. Key is hex encoded to be able to use keyTermByte
+// for splitting key and node address.
+func indexKeyNodesKeyPrefix(key []byte) []byte {
+	return append([]byte{indexKeyNodesPrefix}, append([]byte(common.Bytes2Hex(key)), keyTermByte)...)
+}
+
+// indexNodesKey constructs a database key to store keys used in
+// Nodes method.
+func indexNodesKey(addr common.Address) []byte {
+	return append([]byte{indexNodesPrefix}, addr[:]...)
+}
+
+// indexKeysKey constructs a database key to store keys used in
+// Keys method.
+func indexKeysKey(key []byte) []byte {
+	return append([]byte{indexKeysPrefix}, key...)
+}
+
+// indexDataKey constructs a database key for key/data storage.
+func indexDataKey(key []byte) []byte {
+	return append([]byte{indexDataPrefix}, key...)
 }
