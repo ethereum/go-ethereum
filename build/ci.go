@@ -511,41 +511,44 @@ func doDebianSource(cmdline []string) {
 			debuild.Dir = pkgdir
 			build.MustRun(debuild)
 
-			changes := fmt.Sprintf("%s_%s_source.changes", meta.Name(), meta.VersionString())
-			changes = filepath.Join(*workdir, changes)
+			var (
+				basename = fmt.Sprintf("%s_%s", meta.Name(), meta.VersionString())
+				source   = filepath.Join(*workdir, basename+".tar.xz")
+				dsc      = filepath.Join(*workdir, basename+".dsc")
+				changes  = filepath.Join(*workdir, basename+"_source.changes")
+			)
 			if *signer != "" {
 				build.MustRunCommand("debsign", changes)
 			}
 			if *upload != "" {
-				uploadDebianSource(*workdir, *upload, *sshUser, changes)
+				ppaUpload(*workdir, *upload, *sshUser, []string{source, dsc, changes})
 			}
 		}
 	}
 }
 
-func uploadDebianSource(workdir, ppa, sshUser, changes string) {
-	// Create the dput config file.
-	dputConfig := filepath.Join(workdir, "dput.cf")
+func ppaUpload(workdir, ppa, sshUser string, files []string) {
 	p := strings.Split(ppa, "/")
 	if len(p) != 2 {
 		log.Fatal("-upload PPA name must contain single /")
 	}
-	templateData := map[string]string{
-		"LaunchpadUser": p[0],
-		"LaunchpadPPA":  p[1],
-		"LaunchpadSSH":  sshUser,
+	if sshUser == "" {
+		sshUser = p[0]
 	}
+	incomingDir := fmt.Sprintf("~%s/ubuntu/%s", p[0], p[1])
+	// Create the SSH identity file if it doesn't exist.
+	var idfile string
 	if sshkey := getenvBase64("PPA_SSH_KEY"); len(sshkey) > 0 {
-		idfile := filepath.Join(workdir, "sshkey")
-		ioutil.WriteFile(idfile, sshkey, 0600)
-		templateData["IdentityFile"] = idfile
+		idfile = filepath.Join(workdir, "sshkey")
+		if _, err := os.Stat(idfile); os.IsNotExist(err) {
+			ioutil.WriteFile(idfile, sshkey, 0600)
+		}
 	}
-	build.Render("build/dput-launchpad.cf", dputConfig, 0644, templateData)
-
-	// Run dput to do the upload.
-	dput := exec.Command("dput", "-c", dputConfig, "--no-upload-log", ppa, changes)
-	dput.Stdin = strings.NewReader("Yes\n") // accept SSH host key
-	build.MustRun(dput)
+	// Upload
+	dest := sshUser + "@ppa.launchpad.net"
+	if err := build.UploadSFTP(idfile, dest, incomingDir, files); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func getenvBase64(variable string) []byte {
