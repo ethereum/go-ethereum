@@ -74,7 +74,7 @@ func TestRetrieval(t *testing.T) {
 	//if nodes/chunks have been provided via commandline,
 	//run the tests with these values
 	if *nodes != 0 && *chunks != 0 {
-		err := runRetrievalTest(*chunks, *nodes)
+		err := runRetrievalTest(t, *chunks, *nodes)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -93,10 +93,12 @@ func TestRetrieval(t *testing.T) {
 		}
 		for _, n := range nodeCnt {
 			for _, c := range chnkCnt {
-				err := runRetrievalTest(c, n)
-				if err != nil {
-					t.Fatal(err)
-				}
+				t.Run(fmt.Sprintf("TestRetrieval_%d_%d", n, c), func(t *testing.T) {
+					err := runRetrievalTest(t, c, n)
+					if err != nil {
+						t.Fatal(err)
+					}
+				})
 			}
 		}
 	}
@@ -225,7 +227,8 @@ simulation's `action` function.
 
 The snapshot should have 'streamer' in its service list.
 */
-func runRetrievalTest(chunkCount int, nodeCount int) error {
+func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) error {
+	t.Helper()
 	sim := simulation.New(retrievalSimServiceMap)
 	defer sim.Close()
 

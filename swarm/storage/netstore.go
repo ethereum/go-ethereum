@@ -128,7 +128,25 @@ func (n *NetStore) FetchFunc(ctx context.Context, ref Address) func(context.Cont
 func (n *NetStore) Close() {
 	close(n.closeC)
 	n.store.Close()
-	// TODO: loop through fetchers to cancel them
+
+	wg := sync.WaitGroup{}
+	for _, key := range n.fetchers.Keys() {
+		if f, ok := n.fetchers.Get(key); ok {
+			if fetch, ok := f.(*fetcher); ok {
+				wg.Add(1)
+				go func(fetch *fetcher) {
+					defer wg.Done()
+					fetch.cancel()
+
+					select {
+					case <-fetch.deliveredC:
+					case <-fetch.cancelledC:
+					}
+				}(fetch)
+			}
+		}
+	}
+	wg.Wait()
 }
 
 // get attempts at retrieving the chunk from LocalStore

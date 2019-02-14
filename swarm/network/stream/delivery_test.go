@@ -453,133 +453,136 @@ func TestDeliveryFromNodes(t *testing.T) {
 }
 
 func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) {
-	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-			addr, netStore, delivery, clean, err := newNetStoreAndDelivery(ctx, bucket)
+	t.Helper()
+	t.Run(fmt.Sprintf("testDeliveryFromNodes_%d_%d_skipCheck_%t", nodes, chunkCount, skipCheck), func(t *testing.T) {
+		sim := simulation.New(map[string]simulation.ServiceFunc{
+			"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+				addr, netStore, delivery, clean, err := newNetStoreAndDelivery(ctx, bucket)
+				if err != nil {
+					return nil, nil, err
+				}
+
+				r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+					SkipCheck: skipCheck,
+					Syncing:   SyncingDisabled,
+					Retrieval: RetrievalEnabled,
+				}, nil)
+				bucket.Store(bucketKeyRegistry, r)
+
+				cleanup = func() {
+					r.Close()
+					clean()
+				}
+
+				return r, cleanup, nil
+			},
+		})
+		defer sim.Close()
+
+		log.Info("Adding nodes to simulation")
+		_, err := sim.AddNodesAndConnectChain(nodes)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		log.Info("Starting simulation")
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
+			nodeIDs := sim.UpNodeIDs()
+			//determine the pivot node to be the first node of the simulation
+			pivot := nodeIDs[0]
+
+			//distribute chunks of a random file into Stores of nodes 1 to nodes
+			//we will do this by creating a file store with an underlying round-robin store:
+			//the file store will create a hash for the uploaded file, but every chunk will be
+			//distributed to different nodes via round-robin scheduling
+			log.Debug("Writing file to round-robin file store")
+			//to do this, we create an array for chunkstores (length minus one, the pivot node)
+			stores := make([]storage.ChunkStore, len(nodeIDs)-1)
+			//we then need to get all stores from the sim....
+			lStores := sim.NodesItems(bucketKeyStore)
+			i := 0
+			//...iterate the buckets...
+			for id, bucketVal := range lStores {
+				//...and remove the one which is the pivot node
+				if id == pivot {
+					continue
+				}
+				//the other ones are added to the array...
+				stores[i] = bucketVal.(storage.ChunkStore)
+				i++
+			}
+			//...which then gets passed to the round-robin file store
+			roundRobinFileStore := storage.NewFileStore(newRoundRobinStore(stores...), storage.NewFileStoreParams())
+			//now we can actually upload a (random) file to the round-robin store
+			size := chunkCount * chunkSize
+			log.Debug("Storing data to file store")
+			fileHash, wait, err := roundRobinFileStore.Store(ctx, testutil.RandomReader(1, size), int64(size), false)
+			// wait until all chunks stored
 			if err != nil {
-				return nil, nil, err
+				return err
+			}
+			err = wait(ctx)
+			if err != nil {
+				return err
 			}
 
-			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
-				SkipCheck: skipCheck,
-				Syncing:   SyncingDisabled,
-				Retrieval: RetrievalEnabled,
-			}, nil)
-			bucket.Store(bucketKeyRegistry, r)
-
-			cleanup = func() {
-				r.Close()
-				clean()
+			log.Debug("Waiting for kademlia")
+			// TODO this does not seem to be correct usage of the function, as the simulation may have no kademlias
+			if _, err := sim.WaitTillHealthy(ctx); err != nil {
+				return err
 			}
 
-			return r, cleanup, nil
-		},
+			//get the pivot node's filestore
+			item, ok := sim.NodeItem(pivot, bucketKeyFileStore)
+			if !ok {
+				return fmt.Errorf("No filestore")
+			}
+			pivotFileStore := item.(*storage.FileStore)
+			log.Debug("Starting retrieval routine")
+			retErrC := make(chan error)
+			go func() {
+				// start the retrieval on the pivot node - this will spawn retrieve requests for missing chunks
+				// we must wait for the peer connections to have started before requesting
+				n, err := readAll(pivotFileStore, fileHash)
+				log.Info(fmt.Sprintf("retrieved %v", fileHash), "read", n, "err", err)
+				retErrC <- err
+			}()
+
+			disconnected := watchDisconnections(ctx, sim)
+			defer func() {
+				if err != nil && disconnected.bool() {
+					err = errors.New("disconnect events received")
+				}
+			}()
+
+			//finally check that the pivot node gets all chunks via the root hash
+			log.Debug("Check retrieval")
+			success := true
+			var total int64
+			total, err = readAll(pivotFileStore, fileHash)
+			if err != nil {
+				return err
+			}
+			log.Info(fmt.Sprintf("check if %08x is available locally: number of bytes read %v/%v (error: %v)", fileHash, total, size, err))
+			if err != nil || total != int64(size) {
+				success = false
+			}
+
+			if !success {
+				return fmt.Errorf("Test failed, chunks not available on all nodes")
+			}
+			if err := <-retErrC; err != nil {
+				return fmt.Errorf("requesting chunks: %v", err)
+			}
+			log.Debug("Test terminated successfully")
+			return nil
+		})
+		if result.Error != nil {
+			t.Fatal(result.Error)
+		}
 	})
-	defer sim.Close()
-
-	log.Info("Adding nodes to simulation")
-	_, err := sim.AddNodesAndConnectChain(nodes)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	log.Info("Starting simulation")
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
-		nodeIDs := sim.UpNodeIDs()
-		//determine the pivot node to be the first node of the simulation
-		pivot := nodeIDs[0]
-
-		//distribute chunks of a random file into Stores of nodes 1 to nodes
-		//we will do this by creating a file store with an underlying round-robin store:
-		//the file store will create a hash for the uploaded file, but every chunk will be
-		//distributed to different nodes via round-robin scheduling
-		log.Debug("Writing file to round-robin file store")
-		//to do this, we create an array for chunkstores (length minus one, the pivot node)
-		stores := make([]storage.ChunkStore, len(nodeIDs)-1)
-		//we then need to get all stores from the sim....
-		lStores := sim.NodesItems(bucketKeyStore)
-		i := 0
-		//...iterate the buckets...
-		for id, bucketVal := range lStores {
-			//...and remove the one which is the pivot node
-			if id == pivot {
-				continue
-			}
-			//the other ones are added to the array...
-			stores[i] = bucketVal.(storage.ChunkStore)
-			i++
-		}
-		//...which then gets passed to the round-robin file store
-		roundRobinFileStore := storage.NewFileStore(newRoundRobinStore(stores...), storage.NewFileStoreParams())
-		//now we can actually upload a (random) file to the round-robin store
-		size := chunkCount * chunkSize
-		log.Debug("Storing data to file store")
-		fileHash, wait, err := roundRobinFileStore.Store(ctx, testutil.RandomReader(1, size), int64(size), false)
-		// wait until all chunks stored
-		if err != nil {
-			return err
-		}
-		err = wait(ctx)
-		if err != nil {
-			return err
-		}
-
-		log.Debug("Waiting for kademlia")
-		// TODO this does not seem to be correct usage of the function, as the simulation may have no kademlias
-		if _, err := sim.WaitTillHealthy(ctx); err != nil {
-			return err
-		}
-
-		//get the pivot node's filestore
-		item, ok := sim.NodeItem(pivot, bucketKeyFileStore)
-		if !ok {
-			return fmt.Errorf("No filestore")
-		}
-		pivotFileStore := item.(*storage.FileStore)
-		log.Debug("Starting retrieval routine")
-		retErrC := make(chan error)
-		go func() {
-			// start the retrieval on the pivot node - this will spawn retrieve requests for missing chunks
-			// we must wait for the peer connections to have started before requesting
-			n, err := readAll(pivotFileStore, fileHash)
-			log.Info(fmt.Sprintf("retrieved %v", fileHash), "read", n, "err", err)
-			retErrC <- err
-		}()
-
-		disconnected := watchDisconnections(ctx, sim)
-		defer func() {
-			if err != nil && disconnected.bool() {
-				err = errors.New("disconnect events received")
-			}
-		}()
-
-		//finally check that the pivot node gets all chunks via the root hash
-		log.Debug("Check retrieval")
-		success := true
-		var total int64
-		total, err = readAll(pivotFileStore, fileHash)
-		if err != nil {
-			return err
-		}
-		log.Info(fmt.Sprintf("check if %08x is available locally: number of bytes read %v/%v (error: %v)", fileHash, total, size, err))
-		if err != nil || total != int64(size) {
-			success = false
-		}
-
-		if !success {
-			return fmt.Errorf("Test failed, chunks not available on all nodes")
-		}
-		if err := <-retErrC; err != nil {
-			return fmt.Errorf("requesting chunks: %v", err)
-		}
-		log.Debug("Test terminated successfully")
-		return nil
-	})
-	if result.Error != nil {
-		t.Fatal(result.Error)
-	}
 }
 
 func BenchmarkDeliveryFromNodesWithoutCheck(b *testing.B) {
