@@ -33,6 +33,8 @@ import (
 const (
 	TestProtocolVersion   = 8
 	TestProtocolNetworkID = 3
+
+	noLightNode = false
 )
 
 var (
@@ -164,13 +166,12 @@ func correctBzzHandshake(addr *BzzAddr, lightNode bool) *HandshakeMsg {
 }
 
 func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
-	lightNode := false
 	addr := RandomAddr()
-	s := newBzzHandshakeTester(1, addr, lightNode)
+	s := newBzzHandshakeTester(1, addr, noLightNode)
 	node := s.Nodes[0]
 
 	err := s.testHandshake(
-		correctBzzHandshake(addr, lightNode),
+		correctBzzHandshake(addr, noLightNode),
 		&HandshakeMsg{Version: TestProtocolVersion, NetworkID: 321, Addr: NewAddr(node)},
 		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): network id mismatch 321 (!= 3)")},
 	)
@@ -181,13 +182,12 @@ func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 }
 
 func TestBzzHandshakeVersionMismatch(t *testing.T) {
-	lightNode := false
 	addr := RandomAddr()
-	s := newBzzHandshakeTester(1, addr, lightNode)
+	s := newBzzHandshakeTester(1, addr, noLightNode)
 	node := s.Nodes[0]
 
 	err := s.testHandshake(
-		correctBzzHandshake(addr, lightNode),
+		correctBzzHandshake(addr, noLightNode),
 		&HandshakeMsg{Version: 0, NetworkID: TestProtocolNetworkID, Addr: NewAddr(node)},
 		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): version mismatch 0 (!= %d)", TestProtocolVersion)},
 	)
@@ -198,13 +198,12 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 }
 
 func TestBzzHandshakeSuccess(t *testing.T) {
-	lightNode := false
 	addr := RandomAddr()
-	s := newBzzHandshakeTester(1, addr, lightNode)
+	s := newBzzHandshakeTester(1, addr, noLightNode)
 	node := s.Nodes[0]
 
 	err := s.testHandshake(
-		correctBzzHandshake(addr, lightNode),
+		correctBzzHandshake(addr, noLightNode),
 		&HandshakeMsg{Version: TestProtocolVersion, NetworkID: TestProtocolNetworkID, Addr: NewAddr(node)},
 	)
 
