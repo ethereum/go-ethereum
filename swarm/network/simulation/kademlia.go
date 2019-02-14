@@ -64,7 +64,7 @@ func (s *Simulation) WaitTillHealthy(ctx context.Context) (ill map[enode.ID]*net
 				addr := common.Bytes2Hex(k.BaseAddr())
 				pp := ppmap[addr]
 				//call Healthy RPC
-				h := k.Healthy(pp)
+				h := k.GetHealthInfo(pp)
 				//print info
 				log.Debug(k.String())
 				log.Debug("kademlia", "connectNN", h.ConnectNN, "knowNN", h.KnowNN)
