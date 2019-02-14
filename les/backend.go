@@ -141,23 +141,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 
 	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
 
-	if leth.protocolManager, err = NewProtocolManager(
-		leth.chainConfig,
-		light.DefaultClientIndexerConfig,
-		true,
-		config.NetworkId,
-		leth.eventMux,
-		leth.engine,
-		leth.peers,
-		leth.blockchain,
-		nil,
-		chainDb,
-		leth.odr,
-		leth.relay,
-		leth.serverPool,
-		quitSync,
-		&leth.wg,
-		config.ULC); err != nil {
+	if leth.protocolManager, err = NewProtocolManager(leth.chainConfig, light.DefaultClientIndexerConfig, true, config.NetworkId, leth.eventMux, leth.engine, leth.peers, leth.blockchain, nil, chainDb, leth.odr, leth.relay, leth.serverPool, quitSync, &leth.wg, config.ULC); err != nil {
 		return nil, err
 	}
 
