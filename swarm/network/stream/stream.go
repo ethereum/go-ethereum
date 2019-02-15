@@ -75,7 +75,7 @@ const (
 // subscriptionFunc is used to determine what to do in order to perform subscriptions
 // usually we would start to really subscribe to nodes, but for tests other functionality may be needed
 // (see TestRequestPeerSubscriptions in streamer_test.go)
-var subscriptionFunc func(r *Registry, p *network.Peer, bin uint8, subs map[enode.ID]map[Stream]struct{}) bool = doRequestSubscription
+var subscriptionFunc = doRequestSubscription
 
 // Registry registry for outgoing and incoming streamer constructors
 type Registry struct {
