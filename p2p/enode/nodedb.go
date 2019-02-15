@@ -172,14 +172,6 @@ func splitNodeItemKey(key []byte) (id ID, ip net.IP, field string) {
 	return id, ip, field
 }
 
-// localItemKey returns the key of a local node item.
-func localItemKey(id ID, field string) []byte {
-	key := append([]byte(dbLocalPrefix), id[:]...)
-	key = append(key, ':')
-	key = append(key, field...)
-	return key
-}
-
 // fetchInt64 retrieves an integer associated with a particular key.
 func (db *DB) fetchInt64(key []byte) int64 {
 	blob, err := db.lvl.Get(key, nil)
