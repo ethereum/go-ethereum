@@ -37,15 +37,16 @@ var (
 )
 
 var (
-	allhosts  string
-	hosts     []string
-	filesize  int
-	syncDelay int
-	httpPort  int
-	wsPort    int
-	verbosity int
-	timeout   int
-	single    bool
+	allhosts          string
+	hosts             []string
+	filesize          int
+	syncDelay         int
+	httpPort          int
+	wsPort            int
+	verbosity         int
+	timeout           int
+	single            bool
+	getAllRefsTimeout int
 )
 
 func main() {
@@ -101,6 +102,12 @@ func main() {
 			Name:        "single",
 			Usage:       "whether to fetch content from a single node or from all nodes",
 			Destination: &single,
+		},
+		cli.IntFlag{
+			Name:        "refs-timeout",
+			Value:       5,
+			Usage:       "timeout in seconds to wait for GetAllReferences to return",
+			Destination: &getAllRefsTimeout,
 		},
 	}
 

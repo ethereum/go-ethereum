@@ -55,13 +55,14 @@ func uploadAndSyncCmd(ctx *cli.Context, tuid string) error {
 	case <-time.After(time.Duration(timeout) * time.Second):
 		metrics.GetOrRegisterCounter(fmt.Sprintf("%s.timeout", commandName), nil).Inc(1)
 
+		e := fmt.Errorf("timeout after %v sec", timeout)
 		// trigger debug functionality on randomBytes
-		err := triggerChunkDebug(randomBytes)
+		err := triggerChunkDebug(randomBytes[:])
 		if err != nil {
-			log.Error("test timed out and triggerChunkDebug also produced error", "err", err)
+			e = fmt.Errorf("%v; triggerChunkDebug failed: %v", e, err)
 		}
 
-		return fmt.Errorf("timeout after %v sec", timeout)
+		return e
 	}
 }
 
@@ -72,6 +73,7 @@ func triggerChunkDebug(testData []byte) error {
 	if err != nil {
 		return err
 	}
+	log.Trace("All references retrieved")
 
 	// has-chunks
 	for _, host := range hosts {
@@ -115,16 +117,11 @@ func getAllRefs(testData []byte) (storage.AddressCollection, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(getAllRefsTimeout)*time.Second)
 	defer cancel()
 
 	reader := bytes.NewReader(testData)
-	addrs, err := fileStore.GetAllReferences(ctx, reader, false)
-	if err != nil {
-		return nil, err
-	}
-	log.Trace("All references retrieved")
-	return addrs, err
+	return fileStore.GetAllReferences(ctx, reader, false)
 }
 
 func uplaodAndSync(c *cli.Context, randomBytes []byte, tuid string) error {
