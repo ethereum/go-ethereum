@@ -40,7 +40,7 @@ const (
 	bzzHandshakeTimeout = 3000 * time.Millisecond
 )
 
-var regexpEnodeIP = regexp.MustCompile("@(.+:[0-9]+)")
+var regexpEnodeIP = regexp.MustCompile("@(.+):([0-9]+)")
 
 // BzzSpec is the spec of the generic swarm handshake
 var BzzSpec = &protocols.Spec{
@@ -216,17 +216,24 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 		handshake.err = err
 		return err
 	}
-	log.Warn("have hs before", "remote", p.LocalAddr(), "hs", rsh.(*HandshakeMsg).Addr)
-	handshake.peerAddr = rsh.(*HandshakeMsg).Addr
-	ip, port, err := net.SplitHostPort(p.LocalAddr().String())
-	if err == nil {
-		remoteStr := fmt.Sprintf("@%s:%s", ip, port)
-		log.Warn("remoteaddr", "a", p.LocalAddr(), "s", remoteStr)
-		handshake.peerAddr.UAddr = regexpEnodeIP.ReplaceAll(handshake.peerAddr.UAddr, []byte(remoteStr))
-	}
-	log.Warn("have hs after", "remote", p.LocalAddr(), "hs", handshake.peerAddr)
+	handshake.peerAddr = sanitizeEnodeRemote(p.RemoteAddr(), rsh.(*HandshakeMsg).Addr)
 	handshake.LightNode = rsh.(*HandshakeMsg).LightNode
 	return nil
+}
+
+// the remote enode string may advertise arbitrary host information (e.g. localhost)
+// this method ensures that the addr of the peer will be the one
+// applicable on the interface the connection came in on
+// it modifies the passed bzzaddr in place, and returns the same pointer
+func sanitizeEnodeRemote(paddr net.Addr, baddr *BzzAddr) *BzzAddr {
+	hsSubmatch := regexpEnodeIP.FindSubmatch(baddr.UAddr)
+	ip, _, err := net.SplitHostPort(paddr.String())
+	if err == nil && string(hsSubmatch[1]) != ip {
+		remoteStr := fmt.Sprintf("@%s:%s", ip, string(hsSubmatch[2]))
+		log.Debug("rewrote peer uaddr host/port", "addr", baddr)
+		baddr.UAddr = regexpEnodeIP.ReplaceAll(baddr.UAddr, []byte(remoteStr))
+	}
+	return baddr
 }
 
 // runBzz is the p2p protocol run function for the bzz base protocol
@@ -335,7 +342,7 @@ func (b *Bzz) GetOrCreateHandshake(peerID enode.ID) (*HandshakeMsg, bool) {
 			init:      make(chan bool, 1),
 			done:      make(chan struct{}),
 		}
-		// when handhsake is first created for a remote peer
+		// when handshake is first created for a remote peer
 		// it is initialised with the init
 		handshake.init <- true
 		b.handshakes[peerID] = handshake
