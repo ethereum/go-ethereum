@@ -22,11 +22,13 @@ var (
 	store        = spanStore{}
 )
 
-// TracingEnabledFlag is the CLI flag name to use to enable trace collections.
 const (
+	// TracingEnabledFlag is the CLI flag name to use to enable trace collections.
 	TracingEnabledFlag = "tracing"
-	StoreLabelId       = "span_save_id"
-	StoreLabelMeta     = "span_save_meta"
+
+	// StoreLabels are used to pass span information through context instances to the span store
+	StoreLabelId   = "span_save_id"
+	StoreLabelMeta = "span_save_meta"
 )
 
 var (
@@ -113,10 +115,14 @@ func initTracer(endpoint, svc string) (closer io.Closer) {
 	return closer
 }
 
+// spanStore holds saved spans
 type spanStore struct {
 	spans sync.Map
 }
 
+// StartSaveSpan stores the span specified in the passed context for later retrieval
+// The span object but be context value on the key StoreLabelId.
+// It will be stored under the the following string key context.Value(StoreLabelId)|.|context.Value(StoreLabelMeta)
 func StartSaveSpan(ctx context.Context) context.Context {
 	if !Enabled {
 		return ctx
@@ -139,6 +145,8 @@ func StartSaveSpan(ctx context.Context) context.Context {
 	return ctx
 }
 
+// ShiftSpanByKey retrieves the span stored under the key of the string given as argument
+// The span is then deleted from the store
 func ShiftSpanByKey(k string) opentracing.Span {
 	if !Enabled {
 		return nil
@@ -151,6 +159,8 @@ func ShiftSpanByKey(k string) opentracing.Span {
 	return span.(opentracing.Span)
 }
 
+// FinishSpans calls `Finish()` on all stored spans
+// It should be called on instance shutdown
 func FinishSpans() {
 	store.spans.Range(func(k, v interface{}) bool {
 		v.(opentracing.Span).Finish()
