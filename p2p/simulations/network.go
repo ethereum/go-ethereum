@@ -377,6 +377,14 @@ func (net *Network) GetNode(id enode.ID) *Node {
 	return net.getNode(id)
 }
 
+func (net *Network) getNode(id enode.ID) *Node {
+	i, found := net.nodeMap[id]
+	if !found {
+		return nil
+	}
+	return net.Nodes[i]
+}
+
 // GetNode gets the node with the given name, returning nil if the node does
 // not exist
 func (net *Network) GetNodeByName(name string) *Node {
@@ -399,16 +407,12 @@ func (net *Network) GetNodes() (nodes []*Node) {
 	net.lock.RLock()
 	defer net.lock.RUnlock()
 
-	nodes = append(nodes, net.Nodes...)
-	return nodes
+	return net.getNodes()
 }
 
-func (net *Network) getNode(id enode.ID) *Node {
-	i, found := net.nodeMap[id]
-	if !found {
-		return nil
-	}
-	return net.Nodes[i]
+func (net *Network) getNodes() (nodes []*Node) {
+	nodes = append(nodes, net.Nodes...)
+	return nodes
 }
 
 // GetRandomUpNode returns a random node on the network, which is running.
@@ -435,7 +439,7 @@ func (net *Network) GetRandomDownNode(excludeIDs ...enode.ID) *Node {
 }
 
 func (net *Network) getDownNodeIDs() (ids []enode.ID) {
-	for _, node := range net.GetNodes() {
+	for _, node := range net.getNodes() {
 		if !node.Up() {
 			ids = append(ids, node.ID())
 		}
