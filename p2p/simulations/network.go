@@ -278,8 +278,14 @@ func (net *Network) Stop(id enode.ID) error {
 // Connect connects two nodes together by calling the "admin_addPeer" RPC
 // method on the "one" node so that it connects to the "other" node
 func (net *Network) Connect(oneID, otherID enode.ID) error {
+	net.lock.Lock()
+	defer net.lock.Unlock()
+	return net.connect(oneID, otherID)
+}
+
+func (net *Network) connect(oneID, otherID enode.ID) error {
 	log.Debug("Connecting nodes with addPeer", "id", oneID, "other", otherID)
-	conn, err := net.InitConn(oneID, otherID)
+	conn, err := net.initConn(oneID, otherID)
 	if err != nil {
 		return err
 	}
@@ -419,6 +425,11 @@ func (net *Network) getNodes() (nodes []*Node) {
 func (net *Network) GetRandomUpNode(excludeIDs ...enode.ID) *Node {
 	net.lock.RLock()
 	defer net.lock.RUnlock()
+	return net.getRandomUpNode(excludeIDs...)
+}
+
+// GetRandomUpNode returns a random node on the network, which is running.
+func (net *Network) getRandomUpNode(excludeIDs ...enode.ID) *Node {
 	return net.getRandomNode(net.getUpNodeIDs(), excludeIDs)
 }
 
@@ -532,6 +543,10 @@ func (net *Network) getConn(oneID, otherID enode.ID) *Conn {
 func (net *Network) InitConn(oneID, otherID enode.ID) (*Conn, error) {
 	net.lock.Lock()
 	defer net.lock.Unlock()
+	return net.initConn(oneID, otherID)
+}
+
+func (net *Network) initConn(oneID, otherID enode.ID) (*Conn, error) {
 	if oneID == otherID {
 		return nil, fmt.Errorf("refusing to connect to self %v", oneID)
 	}
