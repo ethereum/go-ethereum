@@ -84,7 +84,7 @@ type TestNode struct {
 var result TestData
 var nodes [NumNodes]*TestNode
 var sharedKey = []byte("some arbitrary data here")
-var sharedTopic TopicType = TopicType{0xF, 0x1, 0x2, 0}
+var sharedTopic = TopicType{0xF, 0x1, 0x2, 0}
 var expectedMessage = []byte("per rectum ad astra")
 
 // This test does the following:
