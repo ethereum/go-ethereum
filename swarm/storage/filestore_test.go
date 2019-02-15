@@ -177,7 +177,6 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 // TestGetAllReferences only tests that GetAllReferences returns an expected
 // number of references for a given file
 func TestGetAllReferences(t *testing.T) {
-	t.Skip("sometimes fails with chunk count 247 instead of 248")
 	tdb, cleanup, err := newTestDbStore(false, false)
 	defer cleanup()
 	if err != nil {
