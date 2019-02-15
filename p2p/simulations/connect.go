@@ -141,7 +141,6 @@ func (net *Network) ConnectNodesStar(ids []enode.ID, center enode.ID) (err error
 	return nil
 }
 
-// connectByIgnoringAlreadyConnected connects two nodes but ignores already connected error.
 func (net *Network) connectNotConnected(oneID, otherID enode.ID) error {
 	return ignoreAlreadyConnectedErr(net.connect(oneID, otherID))
 }
