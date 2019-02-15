@@ -253,18 +253,36 @@ func (net *Network) watchPeerEvents(id enode.ID, events chan *p2p.PeerEvent, sub
 
 // Stop stops the node with the given ID
 func (net *Network) Stop(id enode.ID) error {
+	// IMPORTANT: node.Stop() must NOT be called under net.lock as
+	// node.Reachable() closure has a reference to the network and
+	// calls net.InitConn() what also locks the network. => DEADLOCK
+	// That holds until the following ticket is not resolved:
+
+	var err error
+
+	node, err := func() (*Node, error) {
+		net.lock.Lock()
+		defer net.lock.Unlock()
+
+		node := net.getNode(id)
+		if node == nil {
+			return nil, fmt.Errorf("node %v does not exist", id)
+		}
+		if !node.Up() {
+			return nil, fmt.Errorf("node %v already down", id)
+		}
+		node.SetUp(false)
+		return node, nil
+	}()
+	if err != nil {
+		return err
+	}
+
+	err = node.Stop() // must be called without net.lock
+
 	net.lock.Lock()
 	defer net.lock.Unlock()
-	node := net.getNode(id)
-	if node == nil {
-		return fmt.Errorf("node %v does not exist", id)
-	}
-	if !node.Up() {
-		return fmt.Errorf("node %v already down", id)
-	}
-	node.SetUp(false)
 
-	err := node.Stop()
 	if err != nil {
 		node.SetUp(true)
 		return err
