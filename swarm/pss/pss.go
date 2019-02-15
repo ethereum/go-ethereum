@@ -116,7 +116,6 @@ type Pss struct {
 	*KeyStore
 
 	privateKey *ecdsa.PrivateKey // pss can have it's own independent key
-	w          *whisper.Whisper  // key and encryption backend
 	auxAPIs    []rpc.API         // builtins (handshake, test) can add APIs
 
 	// sending and forwarding
@@ -159,10 +158,9 @@ func NewPss(k *network.Kademlia, params *PssParams) (*Pss, error) {
 	}
 	ps := &Pss{
 		Kademlia: k,
-		KeyStore: newKeyStore(),
+		KeyStore: loadKeyStore(),
 
 		privateKey: params.privateKey,
-		w:          whisper.New(&whisper.DefaultConfig),
 		quitC:      make(chan struct{}),
 
 		fwdPool:         make(map[string]*protocols.Peer),
@@ -527,61 +525,6 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 	log.Trace("selfpossible", "po", po, "depth", depth)
 
 	return depth <= po
-}
-
-/////////////////////////////////////////////////////////////////////
-// SECTION: Encryption
-/////////////////////////////////////////////////////////////////////
-
-// Automatically generate a new symkey for a topic and address hint
-func (p *Pss) GenerateSymmetricKey(topic Topic, address PssAddress, addToCache bool) (string, error) {
-	keyid, err := p.w.GenerateSymKey()
-	if err == nil {
-		p.addSymmetricKeyToPool(keyid, topic, address, addToCache, false)
-	}
-	return keyid, err
-}
-
-// Links a peer symmetric key (arbitrary byte sequence) to a topic.
-//
-// This is required for symmetrically encrypted message exchange on the given topic.
-//
-// The key is stored in the whisper backend.
-//
-// If addtocache is set to true, the key will be added to the cache of keys
-// used to attempt symmetric decryption of incoming messages.
-//
-// Returns a string id that can be used to retrieve the key bytes
-// from the whisper backend (see pss.GetSymmetricKey())
-func (p *Pss) SetSymmetricKey(key []byte, topic Topic, address PssAddress, addtocache bool) (string, error) {
-	if err := validateAddress(address); err != nil {
-		return "", err
-	}
-	return p.setSymmetricKey(key, topic, address, addtocache, true)
-}
-
-func (p *Pss) setSymmetricKey(key []byte, topic Topic, address PssAddress, addtocache bool, protected bool) (string, error) {
-	keyid, err := p.w.AddSymKeyDirect(key)
-	if err == nil {
-		p.addSymmetricKeyToPool(keyid, topic, address, addtocache, protected)
-	}
-	return keyid, err
-}
-
-// Returns a symmetric key byte sequence stored in the whisper backend by its unique id
-// Passes on the error value from the whisper backend
-func (p *Pss) GetSymmetricKey(symkeyid string) ([]byte, error) {
-	return p.w.GetSymKey(symkeyid)
-}
-
-// Attempt to decrypt, validate and unpack a symmetrically encrypted message.
-// If successful, returns the unpacked whisper ReceivedMessage struct
-// encapsulating the decrypted message, and the whisper backend id
-// of the symmetric key used to decrypt the message.
-// It fails if decryption of the message fails or if the message is corrupted.
-func (p *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, PssAddress, error) {
-	metrics.GetOrRegisterCounter("pss.process.sym", nil).Inc(1)
-	return p.processSymMsg(p.w, envelope)
 }
 
 /////////////////////////////////////////////////////////////////////
