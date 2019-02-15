@@ -18,6 +18,7 @@ package pss
 
 import (
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -26,11 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
-	"github.com/pkg/errors"
 )
 
 type KeyStore struct {
-	w *whisper.Whisper  // key and encryption backend
+	w *whisper.Whisper // key and encryption backend
 
 	mx                       sync.RWMutex
 	pubKeyPool               map[string]map[Topic]*pssPeer // mapping of hex public keys to peer address by topic.
