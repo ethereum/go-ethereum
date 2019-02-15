@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"regexp"
 	"sync"
 	"time"
 
@@ -38,6 +39,8 @@ const (
 	// timeout for waiting
 	bzzHandshakeTimeout = 3000 * time.Millisecond
 )
+
+var regexpEnodeIP = regexp.MustCompile("@(.+:[0-9]+)")
 
 // BzzSpec is the spec of the generic swarm handshake
 var BzzSpec = &protocols.Spec{
@@ -213,8 +216,15 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 		handshake.err = err
 		return err
 	}
-	log.Warn("have hs", "remote", p.RemoteAddr(), "hs", rsh.(*HandshakeMsg).Addr)
+	log.Warn("have hs before", "remote", p.LocalAddr(), "hs", rsh.(*HandshakeMsg).Addr)
 	handshake.peerAddr = rsh.(*HandshakeMsg).Addr
+	ip, port, err := net.SplitHostPort(p.LocalAddr().String())
+	if err == nil {
+		remoteStr := fmt.Sprintf("@%s:%s", ip, port)
+		log.Warn("remoteaddr", "a", p.LocalAddr(), "s", remoteStr)
+		handshake.peerAddr.UAddr = regexpEnodeIP.ReplaceAll(handshake.peerAddr.UAddr, []byte(remoteStr))
+	}
+	log.Warn("have hs after", "remote", p.LocalAddr(), "hs", handshake.peerAddr)
 	handshake.LightNode = rsh.(*HandshakeMsg).LightNode
 	return nil
 }
