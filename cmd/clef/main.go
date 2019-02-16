@@ -104,11 +104,6 @@ var (
 		Name:  "signersecret",
 		Usage: "A file containing the (encrypted) master seed to encrypt Clef data, e.g. keystore credentials and ruleset hash",
 	}
-	dBFlag = cli.StringFlag{
-		Name:  "4bytedb",
-		Usage: "File containing 4byte-identifiers",
-		Value: "./4byte.json",
-	}
 	customDBFlag = cli.StringFlag{
 		Name:  "4bytedb-custom",
 		Usage: "File used for writing new 4byte-identifiers submitted via API",
@@ -206,7 +201,6 @@ func init() {
 		utils.RPCEnabledFlag,
 		rpcPortFlag,
 		signerSecretFlag,
-		dBFlag,
 		customDBFlag,
 		auditLogFlag,
 		ruleFlag,
@@ -365,13 +359,17 @@ func signer(c *cli.Context) error {
 		log.Info("Using CLI as UI-channel")
 		ui = core.NewCommandlineUI()
 	}
-	fourByteDb := c.GlobalString(dBFlag.Name)
+	// 4bytedb data
 	fourByteLocal := c.GlobalString(customDBFlag.Name)
-	db, err := core.NewAbiDBFromFiles(fourByteDb, fourByteLocal)
+	data, err := Asset("resources/4byte.json")
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
-	log.Info("Loaded 4byte db", "signatures", db.Size(), "file", fourByteDb, "local", fourByteLocal)
+	db, err := core.NewAbiDBFromFiles(data, fourByteLocal)
+	if err != nil {
+		utils.Fatalf(err.Error())
+	}
+	log.Info("Loaded 4byte db", "signatures", db.Size(), "local", fourByteLocal)
 
 	var (
 		api       core.ExternalAPI

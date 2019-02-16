@@ -18,6 +18,7 @@ package core
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -183,17 +184,13 @@ func NewAbiDBFromFile(path string) (*AbiDb, error) {
 	return db, nil
 }
 
-// NewAbiDBFromFiles loads both the standard signature database and a custom database. The latter will be used
-// to write new values into if they are submitted via the API
-func NewAbiDBFromFiles(standard, custom string) (*AbiDb, error) {
+// NewAbiDBFromFiles loads both the standard signature database (resource file)and a custom database.
+// The latter will be used to write new values into if they are submitted via the API
+func NewAbiDBFromFiles(raw []byte, custom string) (*AbiDb, error) {
 
 	db := &AbiDb{make(map[string]string), make(map[string]string), custom}
 	db.customdbPath = custom
 
-	raw, err := ioutil.ReadFile(standard)
-	if err != nil {
-		return nil, err
-	}
 	if err := json.Unmarshal(raw, &db.db); err != nil {
 		return nil, err
 	}
@@ -207,7 +204,6 @@ func NewAbiDBFromFiles(standard, custom string) (*AbiDb, error) {
 			return nil, err
 		}
 	}
-
 	return db, nil
 }
 
@@ -217,7 +213,7 @@ func (db *AbiDb) LookupMethodSelector(id []byte) (string, error) {
 	if len(id) < 4 {
 		return "", fmt.Errorf("Expected 4-byte id, got %d", len(id))
 	}
-	sig := common.ToHex(id[:4])
+	sig := hex.EncodeToString(id[:4])
 	if key, exists := db.db[sig]; exists {
 		return key, nil
 	}
@@ -226,6 +222,7 @@ func (db *AbiDb) LookupMethodSelector(id []byte) (string, error) {
 	}
 	return "", fmt.Errorf("Signature %v not found", sig)
 }
+
 func (db *AbiDb) Size() int {
 	return len(db.db)
 }
@@ -255,6 +252,6 @@ func (db *AbiDb) AddSignature(selector string, data []byte) error {
 	if err == nil {
 		return nil
 	}
-	sig := common.ToHex(data[:4])
+	sig := hex.EncodeToString(data[:4])
 	return db.saveCustomAbi(selector, sig)
 }
