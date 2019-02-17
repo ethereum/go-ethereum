@@ -234,7 +234,6 @@ func sanitizeEnodeRemote(paddr net.Addr, baddr *BzzAddr) {
 		log.Debug("rewrote peer uaddr host/port", "addr", baddr)
 		baddr.UAddr = regexpEnodeIP.ReplaceAll(baddr.UAddr, []byte(remoteStr))
 	}
-	return
 }
 
 // runBzz is the p2p protocol run function for the bzz base protocol
