@@ -228,7 +228,6 @@ func ToP2pMsg(msg []byte) (p2p.Msg, error) {
 // to link the peer to.
 // The key must exist in the pss store prior to adding the peer.
 func (p *Protocol) AddPeer(peer *p2p.Peer, topic Topic, asymmetric bool, key string) (p2p.MsgReadWriter, error) {
-	var ok bool
 	rw := &PssReadWriter{
 		Pss:   p.Pss,
 		rw:    make(chan p2p.Msg),
@@ -242,20 +241,14 @@ func (p *Protocol) AddPeer(peer *p2p.Peer, topic Topic, asymmetric bool, key str
 		rw.sendFunc = p.Pss.SendSym
 	}
 	if asymmetric {
-		p.Pss.pubKeyPoolMu.Lock()
-		_, ok = p.Pss.pubKeyPool[key]
-		p.Pss.pubKeyPoolMu.Unlock()
-		if !ok {
+		if !p.Pss.isPubKeyStored(key) {
 			return nil, fmt.Errorf("asym key does not exist: %s", key)
 		}
 		p.RWPoolMu.Lock()
 		p.pubKeyRWPool[key] = rw
 		p.RWPoolMu.Unlock()
 	} else {
-		p.Pss.symKeyPoolMu.Lock()
-		_, ok = p.Pss.symKeyPool[key]
-		p.Pss.symKeyPoolMu.Unlock()
-		if !ok {
+		if !p.Pss.isSymKeyStored(key) {
 			return nil, fmt.Errorf("symkey does not exist: %s", key)
 		}
 		p.RWPoolMu.Lock()
