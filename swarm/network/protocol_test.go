@@ -272,8 +272,8 @@ func TestSanitizeEnodeRemote(t *testing.T) {
 	baddr := RandomAddr()
 	oldUAddr := []byte(nodLocal.String())
 	baddr.UAddr = oldUAddr
-	newUAddr := sanitizeEnodeRemote(&remoteAddr, baddr).UAddr
-	if !bytes.Equal(newUAddr, []byte(nodRemote.String())) {
-		t.Fatalf("insane address. expected %v, got %v", nodRemote.String(), string(newUAddr))
+	sanitizeEnodeRemote(&remoteAddr, baddr)
+	if !bytes.Equal(baddr.UAddr, []byte(nodRemote.String())) {
+		t.Fatalf("insane address. expected %v, got %v", nodRemote.String(), string(baddr.UAddr))
 	}
 }

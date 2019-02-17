@@ -216,7 +216,8 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 		handshake.err = err
 		return err
 	}
-	handshake.peerAddr = sanitizeEnodeRemote(p.RemoteAddr(), rsh.(*HandshakeMsg).Addr)
+	handshake.peerAddr = rsh.(*HandshakeMsg).Addr
+	sanitizeEnodeRemote(p.RemoteAddr(), handshake.peerAddr)
 	handshake.LightNode = rsh.(*HandshakeMsg).LightNode
 	return nil
 }
@@ -225,7 +226,7 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 // this method ensures that the addr of the peer will be the one
 // applicable on the interface the connection came in on
 // it modifies the passed bzzaddr in place, and returns the same pointer
-func sanitizeEnodeRemote(paddr net.Addr, baddr *BzzAddr) *BzzAddr {
+func sanitizeEnodeRemote(paddr net.Addr, baddr *BzzAddr) {
 	hsSubmatch := regexpEnodeIP.FindSubmatch(baddr.UAddr)
 	ip, _, err := net.SplitHostPort(paddr.String())
 	if err == nil && string(hsSubmatch[1]) != ip {
@@ -233,7 +234,7 @@ func sanitizeEnodeRemote(paddr net.Addr, baddr *BzzAddr) *BzzAddr {
 		log.Debug("rewrote peer uaddr host/port", "addr", baddr)
 		baddr.UAddr = regexpEnodeIP.ReplaceAll(baddr.UAddr, []byte(remoteStr))
 	}
-	return baddr
+	return
 }
 
 // runBzz is the p2p protocol run function for the bzz base protocol
