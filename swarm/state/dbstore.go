@@ -88,18 +88,15 @@ func (s *DBStore) Get(key string, i interface{}) (err error) {
 // Put stores an object that implements Binary for a specific key.
 func (s *DBStore) Put(key string, i interface{}) (err error) {
 	var bytes []byte
-
-	marshaler, ok := i.(encoding.BinaryMarshaler)
-	if !ok {
-		if bytes, err = json.Marshal(i); err != nil {
-			return err
-		}
-	} else {
+	if marshaler, ok := i.(encoding.BinaryMarshaler); ok {
 		if bytes, err = marshaler.MarshalBinary(); err != nil {
 			return err
 		}
+	} else {
+		if bytes, err = json.Marshal(i); err != nil {
+			return err
+		}
 	}
-
 	return s.db.Put([]byte(key), bytes, nil)
 }
 
