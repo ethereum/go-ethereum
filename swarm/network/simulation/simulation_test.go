@@ -124,7 +124,7 @@ func TestClose(t *testing.T) {
 
 	var upNodeCount int
 	for _, n := range sim.Net.GetNodes() {
-		if n.Up {
+		if n.Up() {
 			upNodeCount++
 		}
 	}
@@ -140,7 +140,7 @@ func TestClose(t *testing.T) {
 
 	upNodeCount = 0
 	for _, n := range sim.Net.GetNodes() {
-		if n.Up {
+		if n.Up() {
 			upNodeCount++
 		}
 	}
