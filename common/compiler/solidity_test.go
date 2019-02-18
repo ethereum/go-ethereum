@@ -39,7 +39,7 @@ func skipWithoutSolc(t *testing.T) {
 	}
 }
 
-func TestCompiler(t *testing.T) {
+func TestSolidityCompiler(t *testing.T) {
 	skipWithoutSolc(t)
 
 	contracts, err := CompileSolidityString("", testSource)
@@ -67,7 +67,7 @@ func TestCompiler(t *testing.T) {
 	}
 }
 
-func TestCompileError(t *testing.T) {
+func TestSolidityCompileError(t *testing.T) {
 	skipWithoutSolc(t)
 
 	contracts, err := CompileSolidityString("", testSource[4:])

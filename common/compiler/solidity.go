@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package compiler wraps the Solidity compiler executable (solc).
+// Package compiler wraps the Solidity and Vyper compiler executables (solc; vyper).
 package compiler
 
 import (
@@ -22,40 +22,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 )
 
-var versionRegexp = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
-
-// Contract contains information about a compiled contract, alongside its code and runtime code.
-type Contract struct {
-	Code        string       `json:"code"`
-	RuntimeCode string       `json:"runtime-code"`
-	Info        ContractInfo `json:"info"`
-}
-
-// ContractInfo contains information about a compiled contract, including access
-// to the ABI definition, source mapping, user and developer docs, and metadata.
-//
-// Depending on the source, language version, compiler version, and compiler
-// options will provide information about how the contract was compiled.
-type ContractInfo struct {
-	Source          string      `json:"source"`
-	Language        string      `json:"language"`
-	LanguageVersion string      `json:"languageVersion"`
-	CompilerVersion string      `json:"compilerVersion"`
-	CompilerOptions string      `json:"compilerOptions"`
-	SrcMap          string      `json:"srcMap"`
-	SrcMapRuntime   string      `json:"srcMapRuntime"`
-	AbiDefinition   interface{} `json:"abiDefinition"`
-	UserDoc         interface{} `json:"userDoc"`
-	DeveloperDoc    interface{} `json:"developerDoc"`
-	Metadata        string      `json:"metadata"`
-}
+var solVersionRegexp = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
 
 // Solidity contains information about the solidity compiler.
 type Solidity struct {
@@ -96,7 +69,7 @@ func SolidityVersion(solc string) (*Solidity, error) {
 	if err != nil {
 		return nil, err
 	}
-	matches := versionRegexp.FindStringSubmatch(out.String())
+	matches := solVersionRegexp.FindStringSubmatch(out.String())
 	if len(matches) != 4 {
 		return nil, fmt.Errorf("can't parse solc version %q", out.String())
 	}
@@ -209,14 +182,3 @@ func ParseCombinedJSON(combinedJSON []byte, source string, languageVersion strin
 	return contracts, nil
 }
 
-func slurpFiles(files []string) (string, error) {
-	var concat bytes.Buffer
-	for _, file := range files {
-		content, err := ioutil.ReadFile(file)
-		if err != nil {
-			return "", err
-		}
-		concat.Write(content)
-	}
-	return concat.String(), nil
-}
