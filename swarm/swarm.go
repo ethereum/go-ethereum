@@ -482,60 +482,65 @@ func (s *Swarm) Protocols() (protos []p2p.Protocol) {
 
 // implements node.Service
 // APIs returns the RPC API descriptors the Swarm implementation offers
-func (self *Swarm) APIs() []rpc.API {
+func (s *Swarm) APIs() []rpc.API {
 
 	apis := []rpc.API{
 		// public APIs
 		{
 			Namespace: "bzz",
 			Version:   "3.0",
-			Service:   &Info{self.config, chequebook.ContractParams},
+			Service:   &Info{s.config, chequebook.ContractParams},
 			Public:    true,
 		},
 		// admin APIs
 		{
 			Namespace: "bzz",
 			Version:   "3.0",
-			Service:   api.NewInspector(self.api, self.bzz.Hive, self.netStore),
+			Service:   api.NewInspector(s.api, s.bzz.Hive, s.netStore),
 			Public:    false,
 		},
 		{
 			Namespace: "chequebook",
 			Version:   chequebook.Version,
-			Service:   chequebook.NewAPI(self.config.Swap.Chequebook),
+			Service:   chequebook.NewAPI(s.config.Swap.Chequebook),
 			Public:    false,
 		},
 		{
 			Namespace: "swarmfs",
 			Version:   fuse.Swarmfs_Version,
-			Service:   self.sfs,
+			Service:   s.sfs,
 			Public:    false,
 		},
 		{
 			Namespace: "accounting",
 			Version:   protocols.AccountingVersion,
-			Service:   protocols.NewAccountingApi(self.accountingMetrics),
+			Service:   protocols.NewAccountingApi(s.accountingMetrics),
 			Public:    false,
 		},
 	}
 
-	apis = append(apis, self.bzz.APIs()...)
+	apis = append(apis, s.bzz.APIs()...)
 
-	if self.ps != nil {
-		apis = append(apis, self.ps.APIs()...)
+	if s.ps != nil {
+		apis = append(apis, s.ps.APIs()...)
 	}
 
 	return apis
 }
 
 // SetChequebook ensures that the local checquebook is set up on chain.
-func (self *Swarm) SetChequebook(ctx context.Context) error {
-	err := self.config.Swap.SetChequebook(ctx, self.backend, self.config.Path)
+func (s *Swarm) SetChequebook(ctx context.Context) error {
+	err := s.config.Swap.SetChequebook(ctx, s.backend, s.config.Path)
 	if err != nil {
 		return err
 	}
-	log.Info(fmt.Sprintf("new chequebook set (%v): saving config file, resetting all connections in the hive", self.config.Swap.Contract.Hex()))
+	log.Info(fmt.Sprintf("new chequebook set (%v): saving config file, resetting all connections in the hive", s.config.Swap.Contract.Hex()))
 	return nil
+}
+
+// RegisterPssProtocol adds a devp2p protocol to the swarm node's Pss instance
+func (s *Swarm) RegisterPssProtocol(topic *pss.Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *pss.ProtocolParams) (*pss.Protocol, error) {
+	return pss.RegisterProtocol(s.ps, topic, spec, targetprotocol, options)
 }
 
 // serialisable info about swarm
@@ -544,6 +549,6 @@ type Info struct {
 	*chequebook.Params
 }
 
-func (self *Info) Info() *Info {
-	return self
+func (s *Info) Info() *Info {
+	return s
 }
