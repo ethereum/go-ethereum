@@ -55,7 +55,7 @@ if [[ ! -z $NETWORK_ID ]]; then
       ;;
     89 )
       genesisPath="testnet.json"
-      params="$params --tomo-testnet"
+      params="$params --tomo-testnet --gcmode archive --rpcapi db,eth,net,web3,personal,debug"
       ;;
     90 )
       genesisPath="devnet.json"
