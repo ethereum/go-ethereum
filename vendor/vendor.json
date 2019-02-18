@@ -39,16 +39,16 @@
 			"revisionTime": "2018-01-16T20:38:02Z"
 		},
 		{
-			"checksumSHA1": "9Niiu1GNhWUrXnGZrl8AU4EzbVE=",
+			"checksumSHA1": "8skJYOdQytXjimcDPLRW4tonX3A=",
 			"path": "github.com/allegro/bigcache",
-			"revision": "bff00e20c68d9f136477d62d182a7dc917bae0ca",
-			"revisionTime": "2018-10-22T20:06:25Z"
+			"revision": "e24eb225f15679bbe54f91bfa7da3b00e59b9768",
+			"revisionTime": "2019-02-18T06:46:05Z"
 		},
 		{
-			"checksumSHA1": "zqToN+R6KybEskp1D4G/lAOKXU4=",
+			"checksumSHA1": "vtT7NcYLatJmxVQQEeSESyrgVg0=",
 			"path": "github.com/allegro/bigcache/queue",
-			"revision": "bff00e20c68d9f136477d62d182a7dc917bae0ca",
-			"revisionTime": "2018-10-22T20:06:25Z"
+			"revision": "e24eb225f15679bbe54f91bfa7da3b00e59b9768",
+			"revisionTime": "2019-02-18T06:46:05Z"
 		},
 		{
 			"checksumSHA1": "USkefO0g1U9mr+8hagv3fpSkrxg=",
