@@ -1,8 +1,39 @@
 ### Changelog for internal API (ui-api)
 
+### 4.0.0
+
+* Bidirectional communication implemented, so the UI can query `clef` via the stdin/stdout RPC channel. Methods implemented are:
+  - `clef_listWallets` 
+  - `clef_listAccounts`
+  - `clef_listWallets`
+  - `clef_deriveAccount`
+  - `clef_importRawKey`
+  - `clef_openWallet`
+  - `clef_chainId`
+  - `clef_setChainId`
+  - `clef_export`
+  - `clef_import`
+ 
+* The type `Account` was modified (the json-field `type` was removed), to consist of 
+
+```golang
+type Account struct {
+	Address common.Address `json:"address"` // Ethereum account address derived from the key
+	URL     URL            `json:"url"`     // Optional resource locator within a backend
+}
+```
+
+
+### 3.2.0
+
+* Make `ShowError`, `OnApprovedTx`, `OnSignerStartup` be json-rpc [notifications](https://www.jsonrpc.org/specification#notification):
+
+> A Notification is a Request object without an "id" member. A Request object that is a Notification signifies the Client's lack of interest in the corresponding Response object, and as such no Response object needs to be returned to the client. The Server MUST NOT reply to a Notification, including those that are within a batch request.
+> 
+>  Notifications are not confirmable by definition, since they do not have a Response object to be returned. As such, the Client would not be aware of any errors (like e.g. "Invalid params","Internal error"
 ### 3.1.0
 
-* Add `ContentType string` to `SignDataRequest` to accommodate the latest EIP-191 and EIP-712 implementations.
+* Add `ContentType` `string` to `SignDataRequest` to accommodate the latest EIP-191 and EIP-712 implementations.
 
 ### 3.0.0
 

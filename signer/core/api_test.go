@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -46,6 +47,8 @@ func (ui *HeadlessUI) OnInputRequired(info UserInputRequest) (UserInputResponse,
 }
 
 func (ui *HeadlessUI) OnSignerStartup(info StartupInfo) {
+}
+func (ui *HeadlessUI) RegisterUIServer(api *UIServerAPI) {
 }
 
 func (ui *HeadlessUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
@@ -91,7 +94,7 @@ func (ui *HeadlessUI) ApproveListing(request *ListRequest) (ListResponse, error)
 	case "A":
 		return ListResponse{request.Accounts}, nil
 	case "1":
-		l := make([]Account, 1)
+		l := make([]accounts.Account, 1)
 		l[0] = request.Accounts[1]
 		return ListResponse{l}, nil
 	default:
@@ -138,13 +141,8 @@ func setup(t *testing.T) (*SignerAPI, chan string) {
 	}
 	var (
 		ui  = &HeadlessUI{controller}
-		api = NewSignerAPI(
-			1,
-			tmpDirName(t),
-			true,
-			ui,
-			db,
-			true, true)
+		am  = StartClefAccountManager(tmpDirName(t), true, true)
+		api = NewSignerAPI(am, 1337, true, ui, db, true)
 	)
 	return api, controller
 }
@@ -169,22 +167,22 @@ func failCreateAccountWithPassword(control chan string, api *SignerAPI, password
 	control <- "Y"
 	control <- password
 
-	acc, err := api.New(context.Background())
+	addr, err := api.New(context.Background())
 	if err == nil {
 		t.Fatal("Should have returned an error")
 	}
-	if acc.Address != (common.Address{}) {
+	if addr != (common.Address{}) {
 		t.Fatal("Empty address should be returned")
 	}
 }
 
 func failCreateAccount(control chan string, api *SignerAPI, t *testing.T) {
 	control <- "N"
-	acc, err := api.New(context.Background())
+	addr, err := api.New(context.Background())
 	if err != ErrRequestDenied {
 		t.Fatal(err)
 	}
-	if acc.Address != (common.Address{}) {
+	if addr != (common.Address{}) {
 		t.Fatal("Empty address should be returned")
 	}
 }

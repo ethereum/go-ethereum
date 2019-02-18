@@ -136,14 +136,14 @@ func main() {
         }
         abis = append(abis, string(abi))
 
-        bin := []byte{}
-        if *binFlag != "" {
-            if bin, err = ioutil.ReadFile(*binFlag); err != nil {
-                fmt.Printf("Failed to read input bytecode: %v\n", err)
-                os.Exit(-1)
-            }
-        }
-        bins = append(bins, string(bin))
+		var bin []byte
+		if *binFlag != "" {
+			if bin, err = ioutil.ReadFile(*binFlag); err != nil {
+				fmt.Printf("Failed to read input bytecode: %v\n", err)
+				os.Exit(-1)
+			}
+		}
+		bins = append(bins, string(bin))
 
         kind := *typFlag
         if kind == "" {

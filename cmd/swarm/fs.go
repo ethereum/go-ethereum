@@ -123,7 +123,7 @@ func listMounts(cliContext *cli.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	mf := []fuse.MountInfo{}
+	var mf []fuse.MountInfo
 	err = client.CallContext(ctx, &mf, "swarmfs_listmounts")
 	if err != nil {
 		utils.Fatalf("encountered an error calling the RPC endpoint while listing mounts: %v", err)

@@ -220,7 +220,7 @@ func (n *Node) Start() error {
 		return convertFileLockError(err)
 	}
 	// Start each of the services
-	started := []reflect.Type{}
+	var started []reflect.Type
 	for kind, service := range services {
 		// Start the next service, stopping all previous upon failure
 		if err := service.Start(running); err != nil {

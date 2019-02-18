@@ -178,8 +178,8 @@ func accessNewACT(ctx *cli.Context) {
 		accessKey            []byte
 		err                  error
 		ref                  = args[0]
-		pkGrantees           = []string{}
-		passGrantees         = []string{}
+		pkGrantees           []string
+		passGrantees         []string
 		pkGranteesFilename   = ctx.String(SwarmAccessGrantKeysFlag.Name)
 		passGranteesFilename = ctx.String(utils.PasswordFileFlag.Name)
 		privateKey           = getPrivKey(ctx)

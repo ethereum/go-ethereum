@@ -39,16 +39,16 @@
 			"revisionTime": "2018-01-16T20:38:02Z"
 		},
 		{
-			"checksumSHA1": "9Niiu1GNhWUrXnGZrl8AU4EzbVE=",
+			"checksumSHA1": "8skJYOdQytXjimcDPLRW4tonX3A=",
 			"path": "github.com/allegro/bigcache",
-			"revision": "bff00e20c68d9f136477d62d182a7dc917bae0ca",
-			"revisionTime": "2018-10-22T20:06:25Z"
+			"revision": "e24eb225f15679bbe54f91bfa7da3b00e59b9768",
+			"revisionTime": "2019-02-18T06:46:05Z"
 		},
 		{
-			"checksumSHA1": "zqToN+R6KybEskp1D4G/lAOKXU4=",
+			"checksumSHA1": "vtT7NcYLatJmxVQQEeSESyrgVg0=",
 			"path": "github.com/allegro/bigcache/queue",
-			"revision": "bff00e20c68d9f136477d62d182a7dc917bae0ca",
-			"revisionTime": "2018-10-22T20:06:25Z"
+			"revision": "e24eb225f15679bbe54f91bfa7da3b00e59b9768",
+			"revisionTime": "2019-02-18T06:46:05Z"
 		},
 		{
 			"checksumSHA1": "USkefO0g1U9mr+8hagv3fpSkrxg=",
@@ -785,22 +785,22 @@
 			"revisionTime": "2017-05-17T20:25:26Z"
 		},
 		{
-			"checksumSHA1": "REkmyB368pIiip76LiqMLspgCRk=",
+			"checksumSHA1": "2HmF5lkH5eTCChFqqUPKGyZq46o=",
 			"path": "golang.org/x/sys/cpu",
-			"revision": "904bdc257025c7b3f43c19360ad3ab85783fad78",
-			"revisionTime": "2018-08-08T08:17:46Z"
+			"revision": "e77772198cdc3dbfcf7f2de96630204df9fd3a0b",
+			"revisionTime": "2019-02-14T21:28:15Z"
 		},
 		{
-			"checksumSHA1": "r1jWq0V3AI5DLN0aCnXXMH/is9Q=",
+			"checksumSHA1": "k8nyiVwbKd7N/Lo9z85y6v/03NE=",
 			"path": "golang.org/x/sys/unix",
-			"revision": "1e2299c37cc91a509f1b12369872d27be0ce98a6",
-			"revisionTime": "2017-11-09T13:50:42Z"
+			"revision": "e77772198cdc3dbfcf7f2de96630204df9fd3a0b",
+			"revisionTime": "2019-02-14T21:28:15Z"
 		},
 		{
-			"checksumSHA1": "ck5uxoEeMDUL/QqPvGvBmcbsJzg=",
+			"checksumSHA1": "IwB9A6UjgGYrHIBFJEamnrXPeNo=",
 			"path": "golang.org/x/sys/windows",
-			"revision": "1e2299c37cc91a509f1b12369872d27be0ce98a6",
-			"revisionTime": "2017-11-09T13:50:42Z"
+			"revision": "e77772198cdc3dbfcf7f2de96630204df9fd3a0b",
+			"revisionTime": "2019-02-14T21:28:15Z"
 		},
 		{
 			"checksumSHA1": "Mr4ur60bgQJnQFfJY0dGtwWwMPE=",

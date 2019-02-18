@@ -120,10 +120,10 @@ func (c *Console) init(preload []string) error {
 	consoleObj.Object().Set("error", c.consoleOutput)
 
 	// Load all the internal utility JavaScript libraries
-	if err := c.jsre.Compile("bignumber.js", jsre.BigNumber_JS); err != nil {
+	if err := c.jsre.Compile("bignumber.js", jsre.BignumberJs); err != nil {
 		return fmt.Errorf("bignumber.js: %v", err)
 	}
-	if err := c.jsre.Compile("web3.js", jsre.Web3_JS); err != nil {
+	if err := c.jsre.Compile("web3.js", jsre.Web3Js); err != nil {
 		return fmt.Errorf("web3.js: %v", err)
 	}
 	if _, err := c.jsre.Run("var Web3 = require('web3');"); err != nil {
@@ -236,7 +236,7 @@ func (c *Console) clearHistory() {
 // consoleOutput is an override for the console.log and console.error methods to
 // stream the output into the configured output stream instead of stdout.
 func (c *Console) consoleOutput(call otto.FunctionCall) otto.Value {
-	output := []string{}
+	var output []string
 	for _, argument := range call.ArgumentList {
 		output = append(output, fmt.Sprintf("%v", argument))
 	}

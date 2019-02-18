@@ -466,7 +466,7 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 		return nil, "", err
 	}
 	// Assemble the account manager and supported backends
-	backends := []accounts.Backend{}
+	var backends []accounts.Backend
 	if len(conf.ExternalSigner) > 0 {
 		log.Info("Using external signer", "url", conf.ExternalSigner)
 		if extapi, err := external.NewExternalBackend(conf.ExternalSigner); err == nil {

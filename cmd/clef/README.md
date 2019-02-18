@@ -16,7 +16,8 @@ Check out
 
 * the [tutorial](tutorial.md) for some concrete examples on how the signer works.
 * the [setup docs](docs/setup.md) for some information on how to configure it to work on QubesOS or USBArmory. 
-
+* the [data types](datatypes.md) for detailed information on the json types used in the communication between
+  clef and an external UI 
 
 ## Command line flags
 Clef accepts the following command line options:
@@ -24,28 +25,34 @@ Clef accepts the following command line options:
 COMMANDS:
    init    Initialize the signer, generate secret storage
    attest  Attest that a js-file is to be used
-   addpw   Store a credential for a keystore file
+   setpw   Store a credential for a keystore file
+   gendoc  Generate documentation about json-rpc format
    help    Shows a list of commands or help for one command
-
+   
 GLOBAL OPTIONS:
    --loglevel value        log level to emit to the screen (default: 4)
    --keystore value        Directory for the keystore (default: "$HOME/.ethereum/keystore")
-   --configdir value       Directory for clef configuration (default: "$HOME/.clef")
-   --networkid value       Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten, 4=Rinkeby) (default: 1)
+   --configdir value       Directory for Clef configuration (default: "$HOME/.clef")
+   --chainid value         Chain id to use for signing (1=mainnet, 3=ropsten, 4=rinkeby, 5=Goerli) (default: 1)
    --lightkdf              Reduce key-derivation RAM & CPU usage at some expense of KDF strength
    --nousb                 Disables monitoring for and managing USB hardware wallets
    --rpcaddr value         HTTP-RPC server listening interface (default: "localhost")
+   --rpcvhosts value       Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (default: "localhost")
+   --ipcdisable            Disable the IPC-RPC server
+   --ipcpath               Filename for IPC socket/pipe within the datadir (explicit paths escape it)
+   --rpc                   Enable the HTTP-RPC server
    --rpcport value         HTTP-RPC server listening port (default: 8550)
-   --signersecret value    A file containing the password used to encrypt signer credentials, e.g. keystore credentials and ruleset hash
+   --signersecret value    A file containing the (encrypted) master seed to encrypt Clef data, e.g. keystore credentials and ruleset hash
    --4bytedb value         File containing 4byte-identifiers (default: "./4byte.json")
    --4bytedb-custom value  File used for writing new 4byte-identifiers submitted via API (default: "./4byte-custom.json")
    --auditlog value        File used to emit audit logs. Set to "" to disable (default: "audit.log")
    --rules value           Enable rule-engine (default: "rules.json")
-   --stdio-ui              Use STDIN/STDOUT as a channel for an external UI. This means that an STDIN/STDOUT is used for RPC-communication with a e.g. a graphical user interface, and can be used when the signer is started by an external process.
-   --stdio-ui-test         Mechanism to test interface between signer and UI. Requires 'stdio-ui'.
+   --stdio-ui              Use STDIN/STDOUT as a channel for an external UI. This means that an STDIN/STDOUT is used for RPC-communication with a e.g. a graphical user interface, and can be used when Clef is started by an external process.
+   --stdio-ui-test         Mechanism to test interface between Clef and UI. Requires 'stdio-ui'.
+   --advanced              If enabled, issues warnings instead of rejections for suspicious requests. Default off
    --help, -h              show help
    --version, -v           print the version
-
+   
 ```
 
 

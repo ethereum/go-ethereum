@@ -77,12 +77,10 @@ type alwaysDenyUI struct{}
 func (alwaysDenyUI) OnInputRequired(info core.UserInputRequest) (core.UserInputResponse, error) {
 	return core.UserInputResponse{}, nil
 }
-
-func (alwaysDenyUI) OnSignerStartup(info core.StartupInfo) {
+func (alwaysDenyUI) RegisterUIServer(api *core.UIServerAPI) {
 }
 
-func (alwaysDenyUI) OnMasterPassword(request *core.PasswordRequest) (core.PasswordResponse, error) {
-	return core.PasswordResponse{}, nil
+func (alwaysDenyUI) OnSignerStartup(info core.StartupInfo) {
 }
 
 func (alwaysDenyUI) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
@@ -133,11 +131,11 @@ func initRuleEngine(js string) (*rulesetUI, error) {
 }
 
 func TestListRequest(t *testing.T) {
-	accs := make([]core.Account, 5)
+	accs := make([]accounts.Account, 5)
 
 	for i := range accs {
 		addr := fmt.Sprintf("000000000000000000000000000000000000000%x", i)
-		acc := core.Account{
+		acc := accounts.Account{
 			Address: common.BytesToAddress(common.Hex2Bytes(addr)),
 			URL:     accounts.URL{Scheme: "test", Path: fmt.Sprintf("acc-%d", i)},
 		}
@@ -208,6 +206,10 @@ type dummyUI struct {
 	calls []string
 }
 
+func (d *dummyUI) RegisterUIServer(api *core.UIServerAPI) {
+	panic("implement me")
+}
+
 func (d *dummyUI) OnInputRequired(info core.UserInputRequest) (core.UserInputResponse, error) {
 	d.calls = append(d.calls, "OnInputRequired")
 	return core.UserInputResponse{}, nil
@@ -253,10 +255,6 @@ func (d *dummyUI) ShowInfo(message string) {
 
 func (d *dummyUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	d.calls = append(d.calls, "OnApprovedTx")
-}
-
-func (d *dummyUI) OnMasterPassword(request *core.PasswordRequest) (core.PasswordResponse, error) {
-	return core.PasswordResponse{}, nil
 }
 
 func (d *dummyUI) OnSignerStartup(info core.StartupInfo) {
@@ -531,12 +529,10 @@ func (d *dontCallMe) OnInputRequired(info core.UserInputRequest) (core.UserInput
 	d.t.Fatalf("Did not expect next-handler to be called")
 	return core.UserInputResponse{}, nil
 }
-
-func (d *dontCallMe) OnSignerStartup(info core.StartupInfo) {
+func (d *dontCallMe) RegisterUIServer(api *core.UIServerAPI) {
 }
 
-func (d *dontCallMe) OnMasterPassword(request *core.PasswordRequest) (core.PasswordResponse, error) {
-	return core.PasswordResponse{}, nil
+func (d *dontCallMe) OnSignerStartup(info core.StartupInfo) {
 }
 
 func (d *dontCallMe) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
