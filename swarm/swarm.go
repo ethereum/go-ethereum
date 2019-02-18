@@ -344,51 +344,51 @@ Start is called when the stack is started
 * TODO: start subservices like sword, swear, swarmdns
 */
 // implements the node.Service interface
-func (self *Swarm) Start(srv *p2p.Server) error {
+func (s *Swarm) Start(srv *p2p.Server) error {
 	startTime := time.Now()
 
-	self.tracerClose = tracing.Closer
+	s.tracerClose = tracing.Closer
 
 	// update uaddr to correct enode
-	newaddr := self.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
+	newaddr := s.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 	// set chequebook
 	//TODO: Currently if swap is enabled and no chequebook (or inexistent) contract is provided, the node would crash.
 	//Once we integrate back the contracts, this check MUST be revisited
-	if self.config.SwapEnabled && self.config.SwapAPI != "" {
+	if s.config.SwapEnabled && s.config.SwapAPI != "" {
 		ctx := context.Background() // The initial setup has no deadline.
-		err := self.SetChequebook(ctx)
+		err := s.SetChequebook(ctx)
 		if err != nil {
 			return fmt.Errorf("Unable to set chequebook for SWAP: %v", err)
 		}
-		log.Debug(fmt.Sprintf("-> cheque book for SWAP: %v", self.config.Swap.Chequebook()))
+		log.Debug(fmt.Sprintf("-> cheque book for SWAP: %v", s.config.Swap.Chequebook()))
 	} else {
 		log.Debug(fmt.Sprintf("SWAP disabled: no cheque book set"))
 	}
 
 	log.Info("Starting bzz service")
 
-	err := self.bzz.Start(srv)
+	err := s.bzz.Start(srv)
 	if err != nil {
 		log.Error("bzz failed", "err", err)
 		return err
 	}
-	log.Info("Swarm network started", "bzzaddr", fmt.Sprintf("%x", self.bzz.Hive.BaseAddr()))
+	log.Info("Swarm network started", "bzzaddr", fmt.Sprintf("%x", s.bzz.Hive.BaseAddr()))
 
-	if self.ps != nil {
-		self.ps.Start(srv)
+	if s.ps != nil {
+		s.ps.Start(srv)
 	}
 
 	// start swarm http proxy server
-	if self.config.Port != "" {
-		addr := net.JoinHostPort(self.config.ListenAddr, self.config.Port)
-		server := httpapi.NewServer(self.api, self.config.Cors)
+	if s.config.Port != "" {
+		addr := net.JoinHostPort(s.config.ListenAddr, s.config.Port)
+		server := httpapi.NewServer(s.api, s.config.Cors)
 
-		if self.config.Cors != "" {
-			log.Debug("Swarm HTTP proxy CORS headers", "allowedOrigins", self.config.Cors)
+		if s.config.Cors != "" {
+			log.Debug("Swarm HTTP proxy CORS headers", "allowedOrigins", s.config.Cors)
 		}
 
-		log.Debug("Starting Swarm HTTP proxy", "port", self.config.Port)
+		log.Debug("Starting Swarm HTTP proxy", "port", s.config.Port)
 		go func() {
 			err := server.ListenAndServe(addr)
 			if err != nil {
@@ -399,7 +399,7 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 
 	doneC := make(chan struct{})
 
-	self.cleanupFuncs = append(self.cleanupFuncs, func() error {
+	s.cleanupFuncs = append(s.cleanupFuncs, func() error {
 		close(doneC)
 		return nil
 	})
@@ -409,7 +409,7 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 			select {
 			case <-time.After(updateGaugesPeriod):
 				uptimeGauge.Update(time.Since(startTime).Nanoseconds())
-				requestsCacheGauge.Update(int64(self.netStore.RequestsCacheLen()))
+				requestsCacheGauge.Update(int64(s.netStore.RequestsCacheLen()))
 			case <-doneC:
 				return
 			}
@@ -417,46 +417,46 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 	}(startTime)
 
 	startCounter.Inc(1)
-	self.streamer.Start(srv)
+	s.streamer.Start(srv)
 	return nil
 }
 
 // implements the node.Service interface
 // stops all component services.
-func (self *Swarm) Stop() error {
-	if self.tracerClose != nil {
-		err := self.tracerClose.Close()
+func (s *Swarm) Stop() error {
+	if s.tracerClose != nil {
+		err := s.tracerClose.Close()
 		if err != nil {
 			return err
 		}
 	}
 
-	if self.ps != nil {
-		self.ps.Stop()
+	if s.ps != nil {
+		s.ps.Stop()
 	}
-	if ch := self.config.Swap.Chequebook(); ch != nil {
+	if ch := s.config.Swap.Chequebook(); ch != nil {
 		ch.Stop()
 		ch.Save()
 	}
-	if self.swap != nil {
-		self.swap.Close()
+	if s.swap != nil {
+		s.swap.Close()
 	}
-	if self.accountingMetrics != nil {
-		self.accountingMetrics.Close()
+	if s.accountingMetrics != nil {
+		s.accountingMetrics.Close()
 	}
-	if self.netStore != nil {
-		self.netStore.Close()
+	if s.netStore != nil {
+		s.netStore.Close()
 	}
-	self.sfs.Stop()
+	s.sfs.Stop()
 	stopCounter.Inc(1)
-	self.streamer.Stop()
+	s.streamer.Stop()
 
-	err := self.bzz.Stop()
-	if self.stateStore != nil {
-		self.stateStore.Close()
+	err := s.bzz.Stop()
+	if s.stateStore != nil {
+		s.stateStore.Close()
 	}
 
-	for _, cleanF := range self.cleanupFuncs {
+	for _, cleanF := range s.cleanupFuncs {
 		err = cleanF()
 		if err != nil {
 			log.Error("encountered an error while running cleanup function", "err", err)
