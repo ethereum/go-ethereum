@@ -111,7 +111,7 @@ func (w *keystoreWallet) SignText(account accounts.Account, text []byte) ([]byte
 	return w.signHash(account, accounts.TextHash(text))
 }
 
-// SignHashWithPassphrase implements accounts.Wallet, attempting to sign the
+// SignTextWithPassphrase implements accounts.Wallet, attempting to sign the
 // given hash with the given account using passphrase as extra authentication.
 func (w *keystoreWallet) SignTextWithPassphrase(account accounts.Account, passphrase string, text []byte) ([]byte, error) {
 	// Make sure the requested account is contained within
