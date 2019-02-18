@@ -57,7 +57,7 @@ func uploadAndSyncCmd(ctx *cli.Context, tuid string) error {
 
 		e := fmt.Errorf("timeout after %v sec", timeout)
 		// trigger debug functionality on randomBytes
-		err := triggerChunkDebug(randomBytes[:])
+		err := trackChunks(randomBytes[:])
 		if err != nil {
 			e = fmt.Errorf("%v; triggerChunkDebug failed: %v", e, err)
 		}
@@ -66,7 +66,7 @@ func uploadAndSyncCmd(ctx *cli.Context, tuid string) error {
 	}
 }
 
-func triggerChunkDebug(testData []byte) error {
+func trackChunks(testData []byte) error {
 	log.Warn("Test timed out; running chunk debug sequence")
 
 	addrs, err := getAllRefs(testData)
@@ -117,7 +117,7 @@ func getAllRefs(testData []byte) (storage.AddressCollection, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(getAllRefsTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(trackTimeout)*time.Second)
 	defer cancel()
 
 	reader := bytes.NewReader(testData)

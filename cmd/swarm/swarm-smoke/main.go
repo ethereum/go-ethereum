@@ -37,16 +37,16 @@ var (
 )
 
 var (
-	allhosts          string
-	hosts             []string
-	filesize          int
-	syncDelay         int
-	httpPort          int
-	wsPort            int
-	verbosity         int
-	timeout           int
-	single            bool
-	getAllRefsTimeout int
+	allhosts     string
+	hosts        []string
+	filesize     int
+	syncDelay    int
+	httpPort     int
+	wsPort       int
+	verbosity    int
+	timeout      int
+	single       bool
+	trackTimeout int
 )
 
 func main() {
@@ -104,10 +104,10 @@ func main() {
 			Destination: &single,
 		},
 		cli.IntFlag{
-			Name:        "refs-timeout",
+			Name:        "track-timeout",
 			Value:       5,
 			Usage:       "timeout in seconds to wait for GetAllReferences to return",
-			Destination: &getAllRefsTimeout,
+			Destination: &trackTimeout,
 		},
 	}
 
