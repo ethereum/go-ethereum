@@ -28,7 +28,7 @@ accountsCount=$(
 
 # file to env
 for env in IDENTITY PASSWORD PRIVATE_KEY BOOTNODES WS_SECRET NETSTATS_HOST \
-           NETSTATS_PORT EXTIP SYNC_MODE NETWORK_ID ANNOUNCE_TXS STORE_REWARD; do
+           NETSTATS_PORT EXTIP SYNC_MODE NETWORK_ID ANNOUNCE_TXS STORE_REWARD DEBUG_MODE; do
   file=$(eval echo "\$${env}_FILE")
   if [[ -f $file ]] && [[ ! -z $file ]]; then
     echo "Replacing $env by $file"
@@ -148,6 +148,11 @@ fi
 # store reward
 if [[ ! -z $STORE_REWARD ]]; then
   params="$params --store-reward"
+fi
+
+# debug mode
+if [[ ! -z $DEBUG_MODE ]]; then
+  params="$params --gcmode archive --rpcapi db,eth,net,web3,personal,debug"
 fi
 
 # dump
