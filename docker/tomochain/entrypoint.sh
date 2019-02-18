@@ -151,7 +151,7 @@ fi
 
 # debug mode
 if [[ ! -z $DEBUG_MODE ]]; then
-  params="$params --tomo-testnet --gcmode archive --rpcapi db,eth,net,web3,personal,debug"
+  params="$params --gcmode archive --rpcapi db,eth,net,web3,personal,debug"
 fi
 
 # dump
