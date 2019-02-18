@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	colorable "github.com/mattn/go-colorable"
+	"github.com/mattn/go-colorable"
 )
 
 var (
@@ -57,12 +57,7 @@ func init() {
 // static and dynamic Swarm nodes in network simulation, by
 // uploading files to every node and retrieving them.
 func TestSwarmNetwork(t *testing.T) {
-	for _, tc := range []struct {
-		name     string
-		steps    []testSwarmNetworkStep
-		options  *testSwarmNetworkOptions
-		disabled bool
-	}{
+	var tests = []testSwarmNetworkCase{
 		{
 			name: "10_nodes",
 			steps: []testSwarmNetworkStep{
@@ -87,6 +82,58 @@ func TestSwarmNetwork(t *testing.T) {
 			},
 		},
 		{
+			name: "dec_inc_node_count",
+			steps: []testSwarmNetworkStep{
+				{
+					nodeCount: 3,
+				},
+				{
+					nodeCount: 1,
+				},
+				{
+					nodeCount: 5,
+				},
+			},
+			options: &testSwarmNetworkOptions{
+				Timeout: 90 * time.Second,
+			},
+		},
+	}
+
+	if *longrunning {
+		tests = append(tests, longRunningCases()...)
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testSwarmNetwork(t, tc.options, tc.steps...)
+		})
+	}
+}
+
+type testSwarmNetworkCase struct {
+	name    string
+	steps   []testSwarmNetworkStep
+	options *testSwarmNetworkOptions
+}
+
+// testSwarmNetworkStep is the configuration
+// for the state of the simulation network.
+type testSwarmNetworkStep struct {
+	// number of swarm nodes that must be in the Up state
+	nodeCount int
+}
+
+// testSwarmNetworkOptions contains optional parameters for running
+// testSwarmNetwork.
+type testSwarmNetworkOptions struct {
+	Timeout   time.Duration
+	SkipCheck bool
+}
+
+func longRunningCases() []testSwarmNetworkCase {
+	return []testSwarmNetworkCase{
+		{
 			name: "50_nodes",
 			steps: []testSwarmNetworkStep{
 				{
@@ -96,7 +143,6 @@ func TestSwarmNetwork(t *testing.T) {
 			options: &testSwarmNetworkOptions{
 				Timeout: 3 * time.Minute,
 			},
-			disabled: !*longrunning,
 		},
 		{
 			name: "50_nodes_skip_check",
@@ -109,7 +155,6 @@ func TestSwarmNetwork(t *testing.T) {
 				Timeout:   3 * time.Minute,
 				SkipCheck: true,
 			},
-			disabled: !*longrunning,
 		},
 		{
 			name: "inc_node_count",
@@ -127,7 +172,6 @@ func TestSwarmNetwork(t *testing.T) {
 			options: &testSwarmNetworkOptions{
 				Timeout: 90 * time.Second,
 			},
-			disabled: !*longrunning,
 		},
 		{
 			name: "dec_node_count",
@@ -140,24 +184,6 @@ func TestSwarmNetwork(t *testing.T) {
 				},
 				{
 					nodeCount: 3,
-				},
-			},
-			options: &testSwarmNetworkOptions{
-				Timeout: 90 * time.Second,
-			},
-			disabled: !*longrunning,
-		},
-		{
-			name: "dec_inc_node_count",
-			steps: []testSwarmNetworkStep{
-				{
-					nodeCount: 3,
-				},
-				{
-					nodeCount: 1,
-				},
-				{
-					nodeCount: 5,
 				},
 			},
 			options: &testSwarmNetworkOptions{
@@ -186,7 +212,6 @@ func TestSwarmNetwork(t *testing.T) {
 			options: &testSwarmNetworkOptions{
 				Timeout: 5 * time.Minute,
 			},
-			disabled: !*longrunning,
 		},
 		{
 			name: "inc_dec_node_count_skip_check",
@@ -211,23 +236,8 @@ func TestSwarmNetwork(t *testing.T) {
 				Timeout:   5 * time.Minute,
 				SkipCheck: true,
 			},
-			disabled: !*longrunning,
 		},
-	} {
-		if tc.disabled {
-			continue
-		}
-		t.Run(tc.name, func(t *testing.T) {
-			testSwarmNetwork(t, tc.options, tc.steps...)
-		})
 	}
-}
-
-// testSwarmNetworkStep is the configuration
-// for the state of the simulation network.
-type testSwarmNetworkStep struct {
-	// number of swarm nodes that must be in the Up state
-	nodeCount int
 }
 
 // file represents the file uploaded on a particular node.
@@ -242,13 +252,6 @@ type file struct {
 type check struct {
 	key    string
 	nodeID enode.ID
-}
-
-// testSwarmNetworkOptions contains optional parameters for running
-// testSwarmNetwork.
-type testSwarmNetworkOptions struct {
-	Timeout   time.Duration
-	SkipCheck bool
 }
 
 // testSwarmNetwork is a helper function used for testing different
