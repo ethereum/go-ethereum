@@ -175,7 +175,6 @@ func (b *bridge) OpenWallet(call otto.FunctionCall) (response otto.Value) {
 		throwJSException(err.Error())
 	}
 	return val
->>>>>>> accounts/scwallet, console: user friendly card opening
 }
 
 func (b *bridge) readPassphraseAndReopenWallet(call otto.FunctionCall) (otto.Value, error) {
