@@ -1,6 +1,14 @@
 ---
 layout: default
 ---
+{% for coll in site.collections %}
+    {% if coll.sidebar %}
+        <h2>{{ coll.caption }}</h2>
+        {% for page in coll.docs %}
+            <h3>{{ page.title | remove_first: coll.label | remove_first: '/ '}}</h3>
+        {% endfor %}
+    {% endif %}
+{% endfor %}
 <div class="container" style="padding-top: 24px;">
     <div class="row">
           <div class="col-md-3" id="toc" style="padding-top: 16px;">

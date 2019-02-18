@@ -13,3 +13,10 @@ defaults:
       path: docs
     values:
       layout: sidebar
+
+collections_dir: docs
+collections:
+  Mobile:
+    output: true
+    caption: Mobile-related
+    sidebar: true
