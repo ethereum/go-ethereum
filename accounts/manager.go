@@ -24,9 +24,14 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
+type Config struct {
+	InsecureUnlockAllowed bool // Whether account unlocking in insecure environment is allowed
+}
+
 // Manager is an overarching account manager that can communicate with various
 // backends for signing transactions.
 type Manager struct {
+	config   *Config                    // Account manager relative configs
 	backends map[reflect.Type][]Backend // Index of backends currently registered
 	updaters []event.Subscription       // Wallet update subscriptions for all backends
 	updates  chan WalletEvent           // Subscription sink for backend wallet changes
@@ -40,7 +45,7 @@ type Manager struct {
 
 // NewManager creates a generic account manager to sign transaction via various
 // supported backends.
-func NewManager(backends ...Backend) *Manager {
+func NewManager(insecureUnlockAllowed bool, backends ...Backend) *Manager {
 	// Retrieve the initial list of wallets from the backends and sort by URL
 	var wallets []Wallet
 	for _, backend := range backends {
@@ -55,6 +60,7 @@ func NewManager(backends ...Backend) *Manager {
 	}
 	// Assemble the account manager and return
 	am := &Manager{
+		config:   &Config{insecureUnlockAllowed},
 		backends: make(map[reflect.Type][]Backend),
 		updaters: subs,
 		updates:  updates,
@@ -75,6 +81,11 @@ func (am *Manager) Close() error {
 	errc := make(chan error)
 	am.quit <- errc
 	return <-errc
+}
+
+// Config returns the configuration of account manager.
+func (am *Manager) Config() *Config {
+	return am.config
 }
 
 // update is the wallet event loop listening for notifications from the backends

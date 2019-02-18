@@ -256,6 +256,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx = context.WithValue(ctx, "remote", r.RemoteAddr)
 	ctx = context.WithValue(ctx, "scheme", r.Proto)
 	ctx = context.WithValue(ctx, "local", r.Host)
+	ctx = context.WithValue(ctx, "http", true)
 	if ua := r.Header.Get("User-Agent"); ua != "" {
 		ctx = context.WithValue(ctx, "User-Agent", ua)
 	}
