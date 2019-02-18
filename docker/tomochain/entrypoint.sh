@@ -55,6 +55,7 @@ if [[ ! -z $NETWORK_ID ]]; then
       ;;
     89 )
       genesisPath="testnet.json"
+      params="$params --tomo-testnet"
       ;;
     90 )
       genesisPath="devnet.json"
