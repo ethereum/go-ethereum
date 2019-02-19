@@ -48,7 +48,7 @@ func TestSyncerSimulation(t *testing.T) {
 	// race detector. Allow it to finish successfully by
 	// reducing its scope, and still check for data races
 	// with the smallest number of nodes.
-	if !raceTest {
+	if !testutil.RaceEnabled {
 		testSyncBetweenNodes(t, 4, dataChunkCount, true, 1)
 		testSyncBetweenNodes(t, 8, dataChunkCount, true, 1)
 		testSyncBetweenNodes(t, 16, dataChunkCount, true, 1)
@@ -88,7 +88,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 
 			var dir string
 			var store *state.DBStore
-			if raceTest {
+			if testutil.RaceEnabled {
 				// Use on-disk DBStore to reduce memory consumption in race tests.
 				dir, err = ioutil.TempDir("", "swarm-stream-")
 				if err != nil {

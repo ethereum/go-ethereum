@@ -42,8 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
-const MaxTimeout = 600
-
 type synctestConfig struct {
 	addrs         [][]byte
 	hashes        []storage.Address
@@ -93,7 +91,7 @@ func TestSyncingViaGlobalSync(t *testing.T) {
 		if *longrunning {
 			chnkCnt = []int{1, 8, 32, 256, 1024}
 			nodeCnt = []int{16, 32, 64, 128, 256}
-		} else if raceTest {
+		} else if testutil.RaceEnabled {
 			// TestSyncingViaGlobalSync allocates a lot of memory
 			// with race detector. By reducing the number of chunks
 			// and nodes, memory consumption is lower and data races
@@ -125,7 +123,7 @@ var simServiceMap = map[string]simulation.ServiceFunc{
 
 		var dir string
 		var store *state.DBStore
-		if raceTest {
+		if testutil.RaceEnabled {
 			// Use on-disk DBStore to reduce memory consumption in race tests.
 			dir, err = ioutil.TempDir("", "swarm-stream-")
 			if err != nil {
