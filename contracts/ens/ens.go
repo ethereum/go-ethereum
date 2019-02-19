@@ -16,9 +16,9 @@
 
 package ens
 
-//go:generate abigen --sol contract/ENS.sol --exc contract/AbstractENS.sol:AbstractENS --pkg contract --out contract/ens.go
-//go:generate abigen --sol contract/FIFSRegistrar.sol --exc contract/AbstractENS.sol:AbstractENS --pkg contract --out contract/fifsregistrar.go
-//go:generate abigen --sol contract/PublicResolver.sol --exc contract/AbstractENS.sol:AbstractENS --pkg contract --out contract/publicresolver.go
+//go:generate abigen --sol contract/ENS.sol --pkg contract --out contract/ens.go
+//go:generate abigen --sol contract/FIFSRegistrar.sol --pkg contract --out contract/fifsregistrar.go
+//go:generate abigen --sol contract/PublicResolver.sol --pkg contract --out contract/publicresolver.go
 
 import (
 	"strings"

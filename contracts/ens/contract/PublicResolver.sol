@@ -1,6 +1,6 @@
 pragma solidity >=0.4.25;
 
-import "@ensdomains/ens/contracts/ENS.sol";
+import "./ENS.sol";
 
 /**
  * A simple resolver anyone can use; only allows the owner of a node to set its
