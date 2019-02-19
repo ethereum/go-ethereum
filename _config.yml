@@ -20,7 +20,19 @@ collections:
     output: true
     caption: Install and build
     sidebar: true
-  Mobile:
+  how-to:
     output: true
-    caption: Mobile-related
+    caption: How to use
+    sidebar: true
+  interface:
+    output: true
+    caption: Interface documentation
+    sidebar: true
+  support:
+    output: true
+    caption: Issues and support
+    sidebar: true
+  developers:
+    output: true
+    caption: Developers
     sidebar: true
