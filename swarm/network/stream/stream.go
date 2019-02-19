@@ -95,6 +95,7 @@ type Registry struct {
 	spec           *protocols.Spec   //this protocol's spec
 	balance        protocols.Balance //implements protocols.Balance, for accounting
 	prices         protocols.Prices  //implements protocols.Prices, provides prices to accounting
+	close          chan struct{}     // terminates registry goroutines
 }
 
 // RegistryOptions holds optional values for NewRegistry constructor.
@@ -117,6 +118,8 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 	// check if retrieval has been disabled
 	retrieval := options.Retrieval != RetrievalDisabled
 
+	closeChan := make(chan struct{})
+
 	streamer := &Registry{
 		addr:           localID,
 		skipCheck:      options.SkipCheck,
@@ -128,6 +131,7 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 		autoRetrieval:  retrieval,
 		maxPeerServers: options.MaxPeerServers,
 		balance:        balance,
+		close:          closeChan,
 	}
 
 	streamer.setupSpec()
@@ -172,12 +176,17 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 			go func() {
 				defer close(out)
 
-				for i := range in {
+				for {
 					select {
-					case <-out:
-					default:
+					case i := <-in:
+						select {
+						case <-out:
+						default:
+						}
+						out <- i
+					case <-closeChan:
+						return
 					}
-					out <- i
 				}
 			}()
 
@@ -229,6 +238,8 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 							<-timer.C
 						}
 						timer.Reset(options.SyncUpdateDelay)
+					case <-closeChan:
+						break loop
 					}
 				}
 				timer.Stop()
@@ -398,6 +409,7 @@ func (r *Registry) Quit(peerId enode.ID, s Stream) error {
 }
 
 func (r *Registry) Close() error {
+	close(r.close)
 	return r.intervalsStore.Close()
 }
 
