@@ -18,6 +18,7 @@ import (
 )
 
 var (
+	// Enabled turns tracing on for the current swarm instance
 	Enabled bool = false
 	store        = spanStore{}
 )
@@ -26,8 +27,11 @@ const (
 	// TracingEnabledFlag is the CLI flag name to use to enable trace collections.
 	TracingEnabledFlag = "tracing"
 
-	// StoreLabels are used to pass span information through context instances to the span store
-	StoreLabelId   = "span_save_id"
+	// StoreLabelId is the context value key of the name of the span to be saved
+	StoreLabelId = "span_save_id"
+
+	// StoreLabelMeta is the context value key that together with StoreLabelId constitutes the retrieval key for saved spans in the span store
+	// StartSaveSpan and ShiftSpanByKey
 	StoreLabelMeta = "span_save_meta"
 )
 
