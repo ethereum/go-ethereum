@@ -124,6 +124,13 @@ func wsHandshakeValidator(allowedOrigins []string) func(*websocket.Config, *http
 	log.Debug(fmt.Sprintf("Allowed origin(s) for WS RPC interface %v", origins.ToSlice()))
 
 	f := func(cfg *websocket.Config, req *http.Request) error {
+		// Skip origin verification if no Origin header is present. The origin check
+		// is supposed to protect against browser based attacks. Browsers always set
+		// Origin. Non-browser software can put anything in origin and checking it doesn't
+		// provide additional security.
+		if _, ok := req.Header["Origin"]; !ok {
+			return
+		}
 		// Verify origin against whitelist.
 		origin := strings.ToLower(req.Header.Get("Origin"))
 		if allowAllOrigins || origins.Contains(origin) {
