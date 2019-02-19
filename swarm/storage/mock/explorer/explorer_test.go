@@ -82,9 +82,10 @@ func testHandler(t *testing.T, globalStore mock.GlobalStorer) {
 	nodeKeys := make(map[string][]string)
 
 	// a node address that is not present in global store
-	invalidAddr := "0x0000000000000000000000000000000000000000"
+	invalidAddr := "0x7b8b72938c254cf002c4e1e714d27e022be88d93"
+
 	// a key that is not present in global store
-	invalidKey := "0000000000000000"
+	invalidKey := "f9824192fb515cfb"
 
 	for i := 1; i <= nodeCount; i++ {
 		b := make([]byte, 8)
