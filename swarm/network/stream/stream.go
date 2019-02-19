@@ -178,7 +178,10 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 
 				for {
 					select {
-					case i := <-in:
+					case i, ok := <-in:
+						if !ok {
+							return
+						}
 						select {
 						case <-out:
 						default:
@@ -193,13 +196,21 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 			return out
 		}
 
+		kad := streamer.delivery.kad
+		// get notification channels from Kademlia before returning
+		// from this function to avoid race with Close method and
+		// the goroutine created below
+		depthC := latestIntC(kad.NeighbourhoodDepthC())
+		addressBookSizeC := latestIntC(kad.AddrCountC())
+
 		go func() {
 			// wait for kademlia table to be healthy
-			time.Sleep(options.SyncUpdateDelay)
-
-			kad := streamer.delivery.kad
-			depthC := latestIntC(kad.NeighbourhoodDepthC())
-			addressBookSizeC := latestIntC(kad.AddrCountC())
+			// but return if Registry is closed before
+			select {
+			case <-time.After(options.SyncUpdateDelay):
+			case <-quit:
+				return
+			}
 
 			// initial requests for syncing subscription to peers
 			streamer.updateSyncing()
