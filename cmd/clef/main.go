@@ -533,7 +533,12 @@ func DefaultConfigDir() string {
 		if runtime.GOOS == "darwin" {
 			return filepath.Join(home, "Library", "Signer")
 		} else if runtime.GOOS == "windows" {
-			return filepath.Join(home, "AppData", "Roaming", "Signer")
+			appdata := os.Getenv("APPDATA")
+			if appdata != "" {
+				return filepath.Join(appdata, "Signer")
+			} else {
+				return filepath.Join(home, "AppData", "Roaming", "Signer")
+			}
 		} else {
 			return filepath.Join(home, ".clef")
 		}
