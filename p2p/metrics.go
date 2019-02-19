@@ -191,10 +191,13 @@ func (c *meteredConn) encHandshakeDone(id enode.ID) {
 
 // peerAdded is called after the connection passes the protocol handshake.
 func (c *meteredConn) peerAdded(info *PeerInfo) {
+	c.lock.RLock()
+	id := c.id
+	c.lock.RUnlock()
 	meteredPeerFeed.Send(MeteredPeerEvent{
 		Type: PeerProtoHandshakeSucceeded,
 		Addr: c.addr.String(),
-		ID:   c.id,
+		ID:   id,
 		Info: info,
 	})
 }
