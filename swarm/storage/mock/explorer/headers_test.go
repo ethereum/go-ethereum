@@ -57,77 +57,69 @@ func TestHandler_CORSOrigin(t *testing.T) {
 			}
 
 			for _, origin := range origins {
-				t.Run(fmt.Sprintf("get %q", origin), func(t *testing.T) {
-					req, err := http.NewRequest(http.MethodGet, "/", nil)
-					if err != nil {
-						t.Fatal(err)
-					}
-					req.Header.Set("Origin", origin)
-
-					w := httptest.NewRecorder()
-					handler.ServeHTTP(w, req)
-					resp := w.Result()
-
-					header := resp.Header.Get("Access-Control-Allow-Origin")
-					if header != origin {
-						t.Errorf("got Access-Control-Allow-Origin header %q, want %q", header, origin)
-					}
-				})
-
-				t.Run(fmt.Sprintf("preflight %q", origin), func(t *testing.T) {
-					req, err := http.NewRequest(http.MethodOptions, "/", nil)
-					if err != nil {
-						t.Fatal(err)
-					}
-					req.Header.Set("Origin", origin)
-					req.Header.Set("Access-Control-Request-Method", "GET")
-
-					w := httptest.NewRecorder()
-					handler.ServeHTTP(w, req)
-					resp := w.Result()
-
-					header := resp.Header.Get("Access-Control-Allow-Origin")
-					if header != origin {
-						t.Errorf("got Access-Control-Allow-Origin header %q, want %q", header, origin)
-					}
-				})
+				t.Run(fmt.Sprintf("get %q", origin), newTestCORSOrigin(handler, origin, origin))
+				t.Run(fmt.Sprintf("preflight %q", origin), newTestCORSPreflight(handler, origin, origin))
 			}
 
-			t.Run(fmt.Sprintf("get %q", notAllowedOrigin), func(t *testing.T) {
-				req, err := http.NewRequest(http.MethodGet, "/", nil)
-				if err != nil {
-					t.Fatal(err)
-				}
-				req.Header.Set("Origin", notAllowedOrigin)
-
-				w := httptest.NewRecorder()
-				handler.ServeHTTP(w, req)
-				resp := w.Result()
-
-				header := resp.Header.Get("Access-Control-Allow-Origin")
-				if header != "" {
-					t.Errorf("got Access-Control-Allow-Origin header %q, want %q", header, "")
-				}
-			})
-
-			t.Run(fmt.Sprintf("preflight %q", notAllowedOrigin), func(t *testing.T) {
-				req, err := http.NewRequest(http.MethodOptions, "/", nil)
-				if err != nil {
-					t.Fatal(err)
-				}
-				req.Header.Set("Origin", notAllowedOrigin)
-				req.Header.Set("Access-Control-Request-Method", "GET")
-
-				w := httptest.NewRecorder()
-				handler.ServeHTTP(w, req)
-				resp := w.Result()
-
-				header := resp.Header.Get("Access-Control-Allow-Origin")
-				if header != "" {
-					t.Errorf("got Access-Control-Allow-Origin header %q, want %q", header, "")
-				}
-			})
+			t.Run(fmt.Sprintf("get %q", notAllowedOrigin), newTestCORSOrigin(handler, notAllowedOrigin, ""))
+			t.Run(fmt.Sprintf("preflight %q", notAllowedOrigin), newTestCORSPreflight(handler, notAllowedOrigin, ""))
 		})
+	}
+
+	t.Run("wildcard", func(t *testing.T) {
+		handler := NewHandler(mem.NewGlobalStore(), []string{"*"})
+
+		for _, origin := range []string{
+			"http://example.com/",
+			"http://ethereum.org",
+			"http://localhost",
+		} {
+			t.Run(fmt.Sprintf("get %q", origin), newTestCORSOrigin(handler, origin, origin))
+			t.Run(fmt.Sprintf("preflight %q", origin), newTestCORSPreflight(handler, origin, origin))
+		}
+	})
+}
+
+// newTestCORSOrigin returns a test function that validates if wantOrigin CORS header is
+// served by the handler for a GET request.
+func newTestCORSOrigin(handler http.Handler, origin, wantOrigin string) func(t *testing.T) {
+	return func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Origin", origin)
+
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		resp := w.Result()
+
+		header := resp.Header.Get("Access-Control-Allow-Origin")
+		if header != wantOrigin {
+			t.Errorf("got Access-Control-Allow-Origin header %q, want %q", header, wantOrigin)
+		}
+	}
+}
+
+// newTestCORSPreflight returns a test function that validates if wantOrigin CORS header is
+// served by the handler for an OPTIONS CORS preflight request.
+func newTestCORSPreflight(handler http.Handler, origin, wantOrigin string) func(t *testing.T) {
+	return func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodOptions, "/", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Origin", origin)
+		req.Header.Set("Access-Control-Request-Method", "GET")
+
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		resp := w.Result()
+
+		header := resp.Header.Get("Access-Control-Allow-Origin")
+		if header != wantOrigin {
+			t.Errorf("got Access-Control-Allow-Origin header %q, want %q", header, wantOrigin)
+		}
 	}
 }
 
