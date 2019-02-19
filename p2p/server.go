@@ -717,6 +717,9 @@ running:
 			case <-srv.quit:
 				break running
 			}
+			if conn, ok := c.fd.(*meteredConn); ok {
+				conn.encHandshakeDone(c.node.ID())
+			}
 		case c := <-srv.addpeer:
 			// At this point the connection is past the protocol handshake.
 			// Its capabilities are known and the remote identity is verified.
@@ -735,6 +738,9 @@ running:
 				peers[c.node.ID()] = p
 				if p.Inbound() {
 					inboundCount++
+				}
+				if conn, ok := c.fd.(*meteredConn); ok {
+					conn.peerAdded(p.Info())
 				}
 			}
 			// The dialer logic relies on the assumption that
@@ -919,9 +925,6 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		c.node = dialDest
 	} else {
 		c.node = nodeFromConn(remotePubkey, c.fd)
-	}
-	if conn, ok := c.fd.(*meteredConn); ok {
-		conn.handshakeDone(c.node)
 	}
 	clog := srv.log.New("id", c.node.ID(), "addr", c.fd.RemoteAddr(), "conn", c.flags)
 	err = srv.checkpoint(c, srv.posthandshake)
