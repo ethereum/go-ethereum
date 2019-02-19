@@ -103,7 +103,7 @@ type Account struct {
 }
 
 // newObject creates a state object.
-func newObject(db *StateDB, address common.Address, data Account) *stateObject {
+func newObject(stateDB *StateDB, address common.Address, data Account) *stateObject {
 	if data.Balance == nil {
 		data.Balance = new(big.Int)
 	}
@@ -111,7 +111,7 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 		data.CodeHash = emptyCodeHash
 	}
 	return &stateObject{
-		db:            db,
+		db:            stateDB,
 		address:       address,
 		addrHash:      crypto.Keccak256Hash(address[:]),
 		data:          data,
@@ -296,10 +296,10 @@ func (s *stateObject) setBalance(amount *big.Int) {
 // Return the gas back to the origin. Used by the Virtual machine or Closures
 func (s *stateObject) ReturnGas(gas *big.Int) {}
 
-func (s *stateObject) deepCopy(db *StateDB) *stateObject {
-	stateObject := newObject(db, s.address, s.data)
+func (s *stateObject) deepCopy(stateDB *StateDB) *stateObject {
+	stateObject := newObject(stateDB, s.address, s.data)
 	if s.trie != nil {
-		stateObject.trie = db.db.CopyTrie(s.trie)
+		stateObject.trie = stateDB.db.CopyTrie(s.trie)
 	}
 	stateObject.code = s.code
 	stateObject.dirtyStorage = s.dirtyStorage.Copy()

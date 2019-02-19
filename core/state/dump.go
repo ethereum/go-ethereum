@@ -39,15 +39,15 @@ type Dump struct {
 	Accounts map[string]DumpAccount `json:"accounts"`
 }
 
-func (db *StateDB) RawDump() Dump {
+func (self *StateDB) RawDump() Dump {
 	dump := Dump{
-		Root:     fmt.Sprintf("%x", db.trie.Hash()),
+		Root:     fmt.Sprintf("%x", self.trie.Hash()),
 		Accounts: make(map[string]DumpAccount),
 	}
 
-	it := trie.NewIterator(db.trie.NodeIterator(nil))
+	it := trie.NewIterator(self.trie.NodeIterator(nil))
 	for it.Next() {
-		addr := db.trie.GetKey(it.Key)
+		addr := self.trie.GetKey(it.Key)
 		var data Account
 		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 			panic(err)
@@ -59,20 +59,20 @@ func (db *StateDB) RawDump() Dump {
 			Nonce:    data.Nonce,
 			Root:     common.Bytes2Hex(data.Root[:]),
 			CodeHash: common.Bytes2Hex(data.CodeHash),
-			Code:     common.Bytes2Hex(obj.Code(db.db)),
+			Code:     common.Bytes2Hex(obj.Code(self.db)),
 			Storage:  make(map[string]string),
 		}
-		storageIt := trie.NewIterator(obj.getTrie(db.db).NodeIterator(nil))
+		storageIt := trie.NewIterator(obj.getTrie(self.db).NodeIterator(nil))
 		for storageIt.Next() {
-			account.Storage[common.Bytes2Hex(db.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
+			account.Storage[common.Bytes2Hex(self.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
 		}
 		dump.Accounts[common.Bytes2Hex(addr)] = account
 	}
 	return dump
 }
 
-func (db *StateDB) Dump() []byte {
-	json, err := json.MarshalIndent(db.RawDump(), "", "    ")
+func (self *StateDB) Dump() []byte {
+	json, err := json.MarshalIndent(self.RawDump(), "", "    ")
 	if err != nil {
 		fmt.Println("dump err", err)
 	}
