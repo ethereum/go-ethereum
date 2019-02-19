@@ -46,7 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
@@ -1833,7 +1833,7 @@ func (bc *BlockChain) UpdateM1() error {
 		return err
 	}
 	addr := common.HexToAddress(common.MasternodeVotingSMC)
-	validator, err := contractValidator.NewKyc(addr, client)
+	validator, err := contractValidator.NewXDCValidator(addr, client)
 	if err != nil {
 		return err
 	}

@@ -374,7 +374,7 @@ func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*
 }
 
 // Get candidate owner by address.
-func GetCandidatesOwnerBySigner(validator *contractValidator.Kyc, signerAddr common.Address) common.Address {
+func GetCandidatesOwnerBySigner(validator *contractValidator.XDCValidator, signerAddr common.Address) common.Address {
 	owner := signerAddr
 	opts := new(bind.CallOpts)
 	owner, err := validator.GetCandidateOwner(opts, signerAddr)
@@ -387,7 +387,7 @@ func GetCandidatesOwnerBySigner(validator *contractValidator.Kyc, signerAddr com
 }
 
 // Calculate reward for holders.
-func CalculateRewardForHolders(foudationWalletAddr common.Address, validator *contractValidator.Kyc, state *state.StateDB, signer common.Address, calcReward *big.Int) (error, map[common.Address]*big.Int) {
+func CalculateRewardForHolders(foudationWalletAddr common.Address, validator *contractValidator.XDCValidator, state *state.StateDB, signer common.Address, calcReward *big.Int) (error, map[common.Address]*big.Int) {
 	rewards, err := GetRewardBalancesRate(foudationWalletAddr, signer, calcReward, validator)
 	if err != nil {
 		return err, nil
@@ -401,7 +401,7 @@ func CalculateRewardForHolders(foudationWalletAddr common.Address, validator *co
 }
 
 // Get reward balance rates for master node, founder and holders.
-func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common.Address, totalReward *big.Int, validator *contractValidator.Kyc) (map[common.Address]*big.Int, error) {
+func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common.Address, totalReward *big.Int, validator *contractValidator.XDCValidator) (map[common.Address]*big.Int, error) {
 	owner := GetCandidatesOwnerBySigner(validator, masterAddr)
 	balances := make(map[common.Address]*big.Int)
 	rewardMaster := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(common.RewardMasterPercent))

@@ -30,13 +30,12 @@ import (
 	"time"
 
 	"bytes"
-
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/XDPoS"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/consensus/XDPoS"
 	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
@@ -324,7 +323,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					return err, nil
 				}
 				// Get validator.
-				validator, err := contract.NewKyc(common.HexToAddress(common.MasternodeVotingSMC), client)
+				validator, err := contract.NewXDCValidator(common.HexToAddress(common.MasternodeVotingSMC), client)
 				if err != nil {
 					log.Error("Fail get instance of XDC Validator", "error", err)
 					return err, nil
