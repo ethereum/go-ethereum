@@ -9,9 +9,8 @@ layout: default
                     <div class="list-group">
                         <a class="list-group-item active">{{ coll.caption }}</a>
                         {% for doc in coll.docs %}
-                            {% capture url %}/{{ site.collections_dir}}/{{ doc.url }}{% endcapture %}
                             <a class="list-group-item" 
-                                href="{% include link.html url=url %}">
+                                href="{% include link.html url=doc.url %}">
                                 {% include title.html doc=doc coll=coll %}</a>
                         {% endfor %}
                     </div>
@@ -20,7 +19,7 @@ layout: default
           </div>
           <div class="col-md-9" id="content">
             {% if page.title %}
-            <h1 class="featurette-heading">{{ page.title }}</h1>
+            <h1 class="featurette-heading">{% include title.html doc=page coll=page.collection %}</h1>
             {% endif %}
 
             {{ content }}

@@ -10,12 +10,16 @@ favicon: /static/images/favicon.png
 defaults:
   -
     scope:
-      path: docs
+      path: ""
     values:
       layout: sidebar
 
 collections_dir: docs
 collections:
+  install-and-build:
+    output: true
+    caption: Install and build
+    sidebar: true
   Mobile:
     output: true
     caption: Mobile-related
