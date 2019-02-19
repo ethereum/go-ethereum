@@ -409,6 +409,10 @@ func (r *Registry) Quit(peerId enode.ID, s Stream) error {
 }
 
 func (r *Registry) Close() error {
+	// Stop sending neighborhood depth change and address count
+	// change from Kademlia that were initiated in NewRegistry constructor.
+	r.delivery.kad.CloseNeighbourhoodDepthC()
+	r.delivery.kad.CloseAddrCountC()
 	close(r.close)
 	return r.intervalsStore.Close()
 }

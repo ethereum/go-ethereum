@@ -333,6 +333,18 @@ func (k *Kademlia) NeighbourhoodDepthC() <-chan int {
 	return k.nDepthC
 }
 
+// CloseNeighbourhoodDepthC closes the channel returned by
+// NeighbourhoodDepthC and stops sending neighbourhood change.
+func (k *Kademlia) CloseNeighbourhoodDepthC() {
+	k.lock.Lock()
+	defer k.lock.Unlock()
+
+	if k.nDepthC != nil {
+		close(k.nDepthC)
+		k.nDepthC = nil
+	}
+}
+
 // sendNeighbourhoodDepthChange sends new neighbourhood depth to k.nDepth channel
 // if it is initialized.
 func (k *Kademlia) sendNeighbourhoodDepthChange() {
@@ -360,6 +372,18 @@ func (k *Kademlia) AddrCountC() <-chan int {
 		k.addrCountC = make(chan int)
 	}
 	return k.addrCountC
+}
+
+// CloseAddrCountC closes the channel returned by
+// AddrCountC and stops sending address count change.
+func (k *Kademlia) CloseAddrCountC() {
+	k.lock.Lock()
+	defer k.lock.Unlock()
+
+	if k.addrCountC != nil {
+		close(k.addrCountC)
+		k.addrCountC = nil
+	}
 }
 
 // Off removes a peer from among live peers
