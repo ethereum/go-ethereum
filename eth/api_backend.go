@@ -225,6 +225,6 @@ func (b *EthAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	}
 }
 
-func (b *EthApiBackend) FilterTaskChannel() chan *filters.BlockFilterTask {
+func (b *EthAPIBackend) FilterTaskChannel() chan *filters.BlockFilterTask {
 	return b.eth.filterTasks
 }

@@ -368,7 +368,7 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 		rmLogsFeed = new(event.Feed)
 		logsFeed   = new(event.Feed)
 		chainFeed  = new(event.Feed)
-		backend    = &testBackend{mux, db, 0, txFeed, rmLogsFeed, logsFeed, chainFeed}
+		backend    = &testBackend{mux, db, 0, txFeed, rmLogsFeed, logsFeed, chainFeed, nil}
 		api        = NewPublicFilterAPI(backend, false)
 		blockHash  = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
 	)

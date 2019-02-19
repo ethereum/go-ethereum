@@ -316,7 +316,6 @@ func (f *Filter) unindexedLogs(ctx context.Context, tasks chan *BlockFilterTask,
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-		logs = append(logs, found...)
 	}
 	return nil
 }
