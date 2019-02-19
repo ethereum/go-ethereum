@@ -129,7 +129,7 @@ func wsHandshakeValidator(allowedOrigins []string) func(*websocket.Config, *http
 		// Origin. Non-browser software can put anything in origin and checking it doesn't
 		// provide additional security.
 		if _, ok := req.Header["Origin"]; !ok {
-			return
+			return nil
 		}
 		// Verify origin against whitelist.
 		origin := strings.ToLower(req.Header.Get("Origin"))
