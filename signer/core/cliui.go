@@ -18,13 +18,12 @@ package core
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
-
 	"sync"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
@@ -38,6 +37,10 @@ type CommandlineUI struct {
 
 func NewCommandlineUI() *CommandlineUI {
 	return &CommandlineUI{in: bufio.NewReader(os.Stdin)}
+}
+
+func (ui *CommandlineUI) RegisterUIServer(api *UIServerAPI) {
+	// noop
 }
 
 // readString reads a single line from stdin, trimming if from spaces, enforcing
@@ -165,8 +168,12 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 
 	fmt.Printf("-------- Sign data request--------------\n")
 	fmt.Printf("Account:  %s\n", request.Address.String())
-	fmt.Printf("message:  \n%q\n", request.Message)
-	fmt.Printf("raw data: \n%v\n", request.Rawdata)
+	fmt.Printf("message:\n")
+	for _, nvt := range request.Message {
+		fmt.Printf("%v\n", nvt.Pprint(1))
+	}
+	//fmt.Printf("message:  \n%v\n", request.Message)
+	fmt.Printf("raw data:  \n%q\n", request.Rawdata)
 	fmt.Printf("message hash:  %v\n", request.Hash)
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)
@@ -220,7 +227,6 @@ func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListResponse, err
 	for _, account := range request.Accounts {
 		fmt.Printf("  [x] %v\n", account.Address.Hex())
 		fmt.Printf("    URL: %v\n", account.URL)
-		fmt.Printf("    Type: %v\n", account.Typ)
 	}
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)
@@ -261,7 +267,11 @@ func (ui *CommandlineUI) ShowInfo(message string) {
 
 func (ui *CommandlineUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	fmt.Printf("Transaction signed:\n ")
-	spew.Dump(tx.Tx)
+	if jsn, err := json.MarshalIndent(tx.Tx, "  ", "  "); err != nil {
+		fmt.Printf("WARN: marshalling error %v\n", err)
+	} else {
+		fmt.Println(string(jsn))
+	}
 }
 
 func (ui *CommandlineUI) OnSignerStartup(info StartupInfo) {

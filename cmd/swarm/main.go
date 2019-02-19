@@ -39,13 +39,16 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm"
 	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
 	swarmmetrics "github.com/ethereum/go-ethereum/swarm/metrics"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+	mockrpc "github.com/ethereum/go-ethereum/swarm/storage/mock/rpc"
 	"github.com/ethereum/go-ethereum/swarm/tracing"
 	sv "github.com/ethereum/go-ethereum/swarm/version"
 
-	"gopkg.in/urfave/cli.v1"
+	cli "gopkg.in/urfave/cli.v1"
 )
 
 const clientIdentifier = "swarm"
@@ -142,6 +145,8 @@ func init() {
 		dbCommand,
 		// See config.go
 		DumpConfigCommand,
+		// hashesCommand
+		hashesCommand,
 	}
 
 	// append a hidden help subcommand to all commands that have subcommands
@@ -194,6 +199,7 @@ func init() {
 		SwarmStorePath,
 		SwarmStoreCapacity,
 		SwarmStoreCacheCapacity,
+		SwarmGlobalStoreAPIFlag,
 	}
 	rpcFlags := []cli.Flag{
 		utils.WSEnabledFlag,
@@ -288,6 +294,7 @@ func bzzd(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("can't create node: %v", err)
 	}
+	defer stack.Close()
 
 	//a few steps need to be done after the config phase is completed,
 	//due to overriding behavior
@@ -322,8 +329,18 @@ func bzzd(ctx *cli.Context) error {
 func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) {
 	//define the swarm service boot function
 	boot := func(_ *node.ServiceContext) (node.Service, error) {
-		// In production, mockStore must be always nil.
-		return swarm.NewSwarm(bzzconfig, nil)
+		var nodeStore *mock.NodeStore
+		if bzzconfig.GlobalStoreAPI != "" {
+			// connect to global store
+			client, err := rpc.Dial(bzzconfig.GlobalStoreAPI)
+			if err != nil {
+				return nil, fmt.Errorf("global store: %v", err)
+			}
+			globalStore := mockrpc.NewGlobalStore(client)
+			// create a node store for this swarm key on global store
+			nodeStore = globalStore.NewNodeStore(common.HexToAddress(bzzconfig.BzzKey))
+		}
+		return swarm.NewSwarm(bzzconfig, nodeStore)
 	}
 	//register within the ethereum node
 	if err := stack.Register(boot); err != nil {
@@ -365,6 +382,8 @@ func getPrivKey(ctx *cli.Context) *ecdsa.PrivateKey {
 	if err != nil {
 		utils.Fatalf("can't create node: %v", err)
 	}
+	defer stack.Close()
+
 	return getAccount(bzzconfig.BzzAccount, ctx, stack)
 }
 
@@ -449,5 +468,5 @@ func setSwarmBootstrapNodes(ctx *cli.Context, cfg *node.Config) {
 		}
 		cfg.P2P.BootstrapNodes = append(cfg.P2P.BootstrapNodes, node)
 	}
-	log.Debug("added default swarm bootnodes", "length", len(cfg.P2P.BootstrapNodes))
+
 }

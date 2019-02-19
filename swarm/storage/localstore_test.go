@@ -209,3 +209,36 @@ func setupLocalStore(t *testing.T, ldbCap int) (ls *LocalStore, cleanup func()) 
 
 	return store, cleanup
 }
+
+func TestHas(t *testing.T) {
+	ldbCap := defaultGCRatio
+	store, cleanup := setupLocalStore(t, ldbCap)
+	defer cleanup()
+
+	nonStoredAddr := GenerateRandomChunk(128).Address()
+
+	has := store.Has(context.Background(), nonStoredAddr)
+	if has {
+		t.Fatal("Expected Has() to return false, but returned true!")
+	}
+
+	storeChunks := GenerateRandomChunks(128, 3)
+	for _, ch := range storeChunks {
+		err := store.Put(context.Background(), ch)
+		if err != nil {
+			t.Fatalf("Expected store to store chunk, but it failed: %v", err)
+		}
+
+		has := store.Has(context.Background(), ch.Address())
+		if !has {
+			t.Fatal("Expected Has() to return true, but returned false!")
+		}
+	}
+
+	//let's be paranoic and test again that the non-existent chunk returns false
+	has = store.Has(context.Background(), nonStoredAddr)
+	if has {
+		t.Fatal("Expected Has() to return false, but returned true!")
+	}
+
+}

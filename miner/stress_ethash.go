@@ -69,7 +69,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		defer node.Stop()
+		defer node.Close()
 
 		for node.Server().NodeInfo().Ports.Listener == 0 {
 			time.Sleep(250 * time.Millisecond)

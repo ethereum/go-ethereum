@@ -353,6 +353,9 @@ func (k *Kademlia) sendNeighbourhoodDepthChange() {
 // Not receiving from the returned channel will block Register function
 // when address count value changes.
 func (k *Kademlia) AddrCountC() <-chan int {
+	k.lock.Lock()
+	defer k.lock.Unlock()
+
 	if k.addrCountC == nil {
 		k.addrCountC = make(chan int)
 	}
@@ -625,7 +628,8 @@ func (k *Kademlia) string() string {
 // used for testing only
 // TODO move to separate testing tools file
 type PeerPot struct {
-	NNSet [][]byte
+	NNSet       [][]byte
+	PeersPerBin []int
 }
 
 // NewPeerPotMap creates a map of pot record of *BzzAddr with keys
@@ -651,6 +655,7 @@ func NewPeerPotMap(neighbourhoodSize int, addrs [][]byte) map[string]*PeerPot {
 
 		// all nn-peers
 		var nns [][]byte
+		peersPerBin := make([]int, depth)
 
 		// iterate through the neighbours, going from the deepest to the shallowest
 		np.EachNeighbour(a, Pof, func(val pot.Val, po int) bool {
@@ -664,14 +669,18 @@ func NewPeerPotMap(neighbourhoodSize int, addrs [][]byte) map[string]*PeerPot {
 			// a neighbor is any peer in or deeper than the depth
 			if po >= depth {
 				nns = append(nns, addr)
-				return true
+			} else {
+				// for peers < depth, we just count the number in each bin
+				// the bin is the index of the slice
+				peersPerBin[po]++
 			}
-			return false
+			return true
 		})
 
-		log.Trace(fmt.Sprintf("%x PeerPotMap NNS: %s", addrs[i][:4], LogAddrs(nns)))
+		log.Trace(fmt.Sprintf("%x PeerPotMap NNS: %s, peersPerBin", addrs[i][:4], LogAddrs(nns)))
 		ppmap[common.Bytes2Hex(a)] = &PeerPot{
-			NNSet: nns,
+			NNSet:       nns,
+			PeersPerBin: peersPerBin,
 		}
 	}
 	return ppmap
@@ -693,6 +702,39 @@ func (k *Kademlia) saturation() int {
 		return 0
 	}
 	return prev
+}
+
+// isSaturated returns true if the kademlia is considered saturated, or false if not.
+// It checks this by checking an array of ints called unsaturatedBins; each item in that array corresponds
+// to the bin which is unsaturated (number of connections < k.MinBinSize).
+// The bin is considered unsaturated only if there are actual peers in that PeerPot's bin (peersPerBin)
+// (if there is no peer for a given bin, then no connection could ever be established;
+// in a God's view this is relevant as no more peers will ever appear on that bin)
+func (k *Kademlia) isSaturated(peersPerBin []int, depth int) bool {
+	// depth could be calculated from k but as this is called from `GetHealthInfo()`,
+	// the depth has already been calculated so we can require it as a parameter
+
+	// early check for depth
+	if depth != len(peersPerBin) {
+		return false
+	}
+	unsaturatedBins := make([]int, 0)
+	k.conns.EachBin(k.base, Pof, 0, func(po, size int, f func(func(val pot.Val) bool) bool) bool {
+
+		if po >= depth {
+			return false
+		}
+		log.Trace("peers per bin", "peersPerBin[po]", peersPerBin[po], "po", po)
+		// if there are actually peers in the PeerPot who can fulfill k.MinBinSize
+		if size < k.MinBinSize && size < peersPerBin[po] {
+			log.Trace("connections for po", "po", po, "size", size)
+			unsaturatedBins = append(unsaturatedBins, po)
+		}
+		return true
+	})
+
+	log.Trace("list of unsaturated bins", "unsaturatedBins", unsaturatedBins)
+	return len(unsaturatedBins) == 0
 }
 
 // knowNeighbours tests if all neighbours in the peerpot
@@ -777,11 +819,13 @@ type Health struct {
 	ConnectNN        bool     // whether node is connected to all its neighbours
 	CountConnectNN   int      // amount of neighbours connected to
 	MissingConnectNN [][]byte // which neighbours we should have been connected to but we're not
-	Saturated        bool     // whether we are connected to all the peers we would have liked to
-	Hive             string
+	// Saturated: if in all bins < depth number of connections >= MinBinsize or,
+	// if number of connections < MinBinSize, to the number of available peers in that bin
+	Saturated bool
+	Hive      string
 }
 
-// Healthy reports the health state of the kademlia connectivity
+// GetHealthInfo reports the health state of the kademlia connectivity
 //
 // The PeerPot argument provides an all-knowing view of the network
 // The resulting Health object is a result of comparisons between
@@ -789,7 +833,7 @@ type Health struct {
 // what SHOULD it have been when we take all we know about the network into consideration.
 //
 // used for testing only
-func (k *Kademlia) Healthy(pp *PeerPot) *Health {
+func (k *Kademlia) GetHealthInfo(pp *PeerPot) *Health {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
 	if len(pp.NNSet) < k.NeighbourhoodSize {
@@ -798,7 +842,10 @@ func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	gotnn, countgotnn, culpritsgotnn := k.connectedNeighbours(pp.NNSet)
 	knownn, countknownn, culpritsknownn := k.knowNeighbours(pp.NNSet)
 	depth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
-	saturated := k.saturation() < depth
+
+	// check saturation
+	saturated := k.isSaturated(pp.PeersPerBin, depth)
+
 	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, saturated: %v\n", k.base, knownn, gotnn, saturated))
 	return &Health{
 		KnowNN:           knownn,
@@ -810,4 +857,14 @@ func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 		Saturated:        saturated,
 		Hive:             k.string(),
 	}
+}
+
+// Healthy return the strict interpretation of `Healthy` given a `Health` struct
+// definition of strict health: all conditions must be true:
+// - we at least know one peer
+// - we know all neighbors
+// - we are connected to all known neighbors
+// - it is saturated
+func (h *Health) Healthy() bool {
+	return h.KnowNN && h.ConnectNN && h.CountKnowNN > 0 && h.Saturated
 }

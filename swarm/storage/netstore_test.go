@@ -46,12 +46,12 @@ type mockNetFetcher struct {
 	mu              sync.Mutex
 }
 
-func (m *mockNetFetcher) Offer(ctx context.Context, source *enode.ID) {
+func (m *mockNetFetcher) Offer(source *enode.ID) {
 	m.offerCalled = true
 	m.sources = append(m.sources, source)
 }
 
-func (m *mockNetFetcher) Request(ctx context.Context, hopCount uint8) {
+func (m *mockNetFetcher) Request(hopCount uint8) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

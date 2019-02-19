@@ -182,6 +182,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		pcCopy  uint64 // needed for the deferred Tracer
 		gasCopy uint64 // for Tracer to log gas remaining before execution
 		logged  bool   // deferred Tracer should ignore already logged steps
+		res     []byte // result of the opcode execution function
 	)
 	contract.Input = input
 
@@ -216,11 +217,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if !operation.valid {
 			return nil, fmt.Errorf("invalid opcode 0x%x", int(op))
 		}
-		if err := operation.validateStack(stack); err != nil {
+		if err = operation.validateStack(stack); err != nil {
 			return nil, err
 		}
 		// If the operation is valid, enforce and write restrictions
-		if err := in.enforceRestrictions(op, operation, stack); err != nil {
+		if err = in.enforceRestrictions(op, operation, stack); err != nil {
 			return nil, err
 		}
 
@@ -254,7 +255,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 
 		// execute the operation
-		res, err := operation.execute(&pc, in, contract, mem, stack)
+		res, err = operation.execute(&pc, in, contract, mem, stack)
 		// verifyPool is a build flag. Pool verification makes sure the integrity
 		// of the integer pool by comparing values to a default value.
 		if verifyPool {

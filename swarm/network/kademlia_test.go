@@ -168,6 +168,46 @@ func TestNeighbourhoodDepth(t *testing.T) {
 	testNum++
 }
 
+// TestHighMinBinSize tests that the saturation function also works
+// if MinBinSize is > 2, the connection count is < k.MinBinSize
+// and there are more peers available than connected
+func TestHighMinBinSize(t *testing.T) {
+	// a function to test for different MinBinSize values
+	testKad := func(minBinSize int) {
+		// create a test kademlia
+		tk := newTestKademlia(t, "11111111")
+		// set its MinBinSize to desired value
+		tk.KadParams.MinBinSize = minBinSize
+
+		// add a couple of peers (so we have NN and depth)
+		tk.On("00000000") // bin 0
+		tk.On("11100000") // bin 3
+		tk.On("11110000") // bin 4
+
+		first := "10000000" // add a first peer at bin 1
+		tk.Register(first)  // register it
+		// we now have one registered peer at bin 1;
+		// iterate and connect one peer at each iteration;
+		// should be unhealthy until at minBinSize - 1
+		// we connect the unconnected but registered peer
+		for i := 1; i < minBinSize; i++ {
+			peer := fmt.Sprintf("1000%b", 8|i)
+			tk.On(peer)
+			if i == minBinSize-1 {
+				tk.On(first)
+				tk.checkHealth(true)
+				return
+			}
+			tk.checkHealth(false)
+		}
+	}
+	// test MinBinSizes of 3 to 5
+	testMinBinSizes := []int{3, 4, 5}
+	for _, k := range testMinBinSizes {
+		testKad(k)
+	}
+}
+
 // TestHealthStrict tests the simplest definition of health
 // Which means whether we are connected to all neighbors we know of
 func TestHealthStrict(t *testing.T) {
@@ -176,60 +216,116 @@ func TestHealthStrict(t *testing.T) {
 	// no peers
 	// unhealthy (and lonely)
 	tk := newTestKademlia(t, "11111111")
-	tk.checkHealth(false, false)
+	tk.checkHealth(false)
 
 	// know one peer but not connected
 	// unhealthy
 	tk.Register("11100000")
-	tk.checkHealth(false, false)
+	tk.checkHealth(false)
 
 	// know one peer and connected
-	// healthy
+	// unhealthy: not saturated
 	tk.On("11100000")
-	tk.checkHealth(true, false)
+	tk.checkHealth(true)
 
 	// know two peers, only one connected
 	// unhealthy
 	tk.Register("11111100")
-	tk.checkHealth(false, false)
+	tk.checkHealth(false)
 
 	// know two peers and connected to both
 	// healthy
 	tk.On("11111100")
-	tk.checkHealth(true, false)
+	tk.checkHealth(true)
 
 	// know three peers, connected to the two deepest
 	// healthy
 	tk.Register("00000000")
-	tk.checkHealth(true, false)
+	tk.checkHealth(false)
 
 	// know three peers, connected to all three
 	// healthy
 	tk.On("00000000")
-	tk.checkHealth(true, false)
+	tk.checkHealth(true)
 
 	// add fourth peer deeper than current depth
 	// unhealthy
 	tk.Register("11110000")
-	tk.checkHealth(false, false)
+	tk.checkHealth(false)
 
 	// connected to three deepest peers
 	// healthy
 	tk.On("11110000")
-	tk.checkHealth(true, false)
+	tk.checkHealth(true)
 
 	// add additional peer in same bin as deepest peer
 	// unhealthy
 	tk.Register("11111101")
-	tk.checkHealth(false, false)
+	tk.checkHealth(false)
 
 	// four deepest of five peers connected
 	// healthy
 	tk.On("11111101")
-	tk.checkHealth(true, false)
+	tk.checkHealth(true)
+
+	// add additional peer in bin 0
+	// unhealthy: unsaturated bin 0, 2 known but 1 connected
+	tk.Register("00000001")
+	tk.checkHealth(false)
+
+	// Connect second in bin 0
+	// healthy
+	tk.On("00000001")
+	tk.checkHealth(true)
+
+	// add peer in bin 1
+	// unhealthy, as it is known but not connected
+	tk.Register("10000000")
+	tk.checkHealth(false)
+
+	// connect  peer in bin 1
+	// depth change, is now 1
+	// healthy, 1 peer in bin 1 known and connected
+	tk.On("10000000")
+	tk.checkHealth(true)
+
+	// add second peer in bin 1
+	// unhealthy, as it is known but not connected
+	tk.Register("10000001")
+	tk.checkHealth(false)
+
+	// connect second peer in bin 1
+	// healthy,
+	tk.On("10000001")
+	tk.checkHealth(true)
+
+	// connect third peer in bin 1
+	// healthy,
+	tk.On("10000011")
+	tk.checkHealth(true)
+
+	// add peer in bin 2
+	// unhealthy, no depth change
+	tk.Register("11000000")
+	tk.checkHealth(false)
+
+	// connect peer in bin 2
+	// depth change - as we already have peers in bin 3 and 4,
+	// we have contiguous bins, no bin < po 5 is empty -> depth 5
+	// healthy, every bin < depth has the max available peers,
+	// even if they are < MinBinSize
+	tk.On("11000000")
+	tk.checkHealth(true)
+
+	// add peer in bin 2
+	// unhealthy, peer bin is below depth 5 but
+	// has more available peers (2) than connected ones (1)
+	// --> unsaturated
+	tk.Register("11000011")
+	tk.checkHealth(false)
 }
 
-func (tk *testKademlia) checkHealth(expectHealthy bool, expectSaturation bool) {
+func (tk *testKademlia) checkHealth(expectHealthy bool) {
 	tk.t.Helper()
 	kid := common.Bytes2Hex(tk.BaseAddr())
 	addrs := [][]byte{tk.BaseAddr()}
@@ -239,13 +335,13 @@ func (tk *testKademlia) checkHealth(expectHealthy bool, expectSaturation bool) {
 	})
 
 	pp := NewPeerPotMap(tk.NeighbourhoodSize, addrs)
-	healthParams := tk.Healthy(pp[kid])
+	healthParams := tk.GetHealthInfo(pp[kid])
 
 	// definition of health, all conditions but be true:
 	// - we at least know one peer
 	// - we know all neighbors
 	// - we are connected to all known neighbors
-	health := healthParams.KnowNN && healthParams.ConnectNN && healthParams.CountKnowNN > 0
+	health := healthParams.Healthy()
 	if expectHealthy != health {
 		tk.t.Fatalf("expected kademlia health %v, is %v\n%v", expectHealthy, health, tk.String())
 	}

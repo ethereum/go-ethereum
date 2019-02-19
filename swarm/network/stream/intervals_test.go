@@ -21,9 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -31,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -62,26 +59,11 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 	externalStreamMaxKeys := uint64(100)
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"intervalsStreamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-			n := ctx.Config.Node()
-			addr := network.NewAddr(n)
-			store, datadir, err := createTestLocalStorageForID(n.ID(), addr)
+		"intervalsStreamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
+			addr, netStore, delivery, clean, err := newNetStoreAndDelivery(ctx, bucket)
 			if err != nil {
 				return nil, nil, err
 			}
-			bucket.Store(bucketKeyStore, store)
-			cleanup = func() {
-				store.Close()
-				os.RemoveAll(datadir)
-			}
-			localStore := store.(*storage.LocalStore)
-			netStore, err := storage.NewNetStore(localStore, nil)
-			if err != nil {
-				return nil, nil, err
-			}
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, netStore)
-			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				Retrieval: RetrievalDisabled,
@@ -97,11 +79,12 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 				return newTestExternalServer(t, externalStreamSessionAt, externalStreamMaxKeys, nil), nil
 			})
 
-			fileStore := storage.NewFileStore(localStore, storage.NewFileStoreParams())
-			bucket.Store(bucketKeyFileStore, fileStore)
+			cleanup := func() {
+				r.Close()
+				clean()
+			}
 
 			return r, cleanup, nil
-
 		},
 	})
 	defer sim.Close()
@@ -134,13 +117,11 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 
 		_, wait, err := fileStore.Store(ctx, testutil.RandomReader(1, size), int64(size), false)
 		if err != nil {
-			log.Error("Store error: %v", "err", err)
-			t.Fatal(err)
+			return fmt.Errorf("store: %v", err)
 		}
 		err = wait(ctx)
 		if err != nil {
-			log.Error("Wait error: %v", "err", err)
-			t.Fatal(err)
+			return fmt.Errorf("wait store: %v", err)
 		}
 
 		item, ok = sim.NodeItem(checker, bucketKeyRegistry)
@@ -152,32 +133,15 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		liveErrC := make(chan error)
 		historyErrC := make(chan error)
 
-		log.Debug("Watching for disconnections")
-		disconnections := sim.PeerEvents(
-			context.Background(),
-			sim.NodeIDs(),
-			simulation.NewPeerEventsFilter().Drop(),
-		)
-
 		err = registry.Subscribe(storer, NewStream(externalStreamName, "", live), history, Top)
 		if err != nil {
 			return err
 		}
 
-		var disconnected atomic.Value
-		go func() {
-			for d := range disconnections {
-				if d.Error != nil {
-					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-					disconnected.Store(true)
-				}
-			}
-		}()
+		disconnected := watchDisconnections(ctx, sim)
 		defer func() {
-			if err != nil {
-				if yes, ok := disconnected.Load().(bool); ok && yes {
-					err = errors.New("disconnect events received")
-				}
+			if err != nil && disconnected.bool() {
+				err = errors.New("disconnect events received")
 			}
 		}()
 

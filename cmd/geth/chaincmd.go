@@ -190,6 +190,8 @@ func initGenesis(ctx *cli.Context) error {
 	}
 	// Open an initialise both full and light databases
 	stack := makeFullNode(ctx)
+	defer stack.Close()
+
 	for _, name := range []string{"chaindata", "lightchaindata"} {
 		chaindb, err := stack.OpenDatabase(name, 0, 0)
 		if err != nil {
@@ -209,6 +211,8 @@ func importChain(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 	stack := makeFullNode(ctx)
+	defer stack.Close()
+
 	chain, chainDb := utils.MakeChain(ctx, stack)
 	defer chainDb.Close()
 
@@ -303,6 +307,8 @@ func exportChain(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 	stack := makeFullNode(ctx)
+	defer stack.Close()
+
 	chain, _ := utils.MakeChain(ctx, stack)
 	start := time.Now()
 
@@ -336,9 +342,11 @@ func importPreimages(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 	stack := makeFullNode(ctx)
-	diskdb := utils.MakeChainDatabase(ctx, stack).(*ethdb.LDBDatabase)
+	defer stack.Close()
 
+	diskdb := utils.MakeChainDatabase(ctx, stack).(*ethdb.LDBDatabase)
 	start := time.Now()
+
 	if err := utils.ImportPreimages(diskdb, ctx.Args().First()); err != nil {
 		utils.Fatalf("Import error: %v\n", err)
 	}
@@ -352,9 +360,11 @@ func exportPreimages(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 	stack := makeFullNode(ctx)
-	diskdb := utils.MakeChainDatabase(ctx, stack).(*ethdb.LDBDatabase)
+	defer stack.Close()
 
+	diskdb := utils.MakeChainDatabase(ctx, stack).(*ethdb.LDBDatabase)
 	start := time.Now()
+
 	if err := utils.ExportPreimages(diskdb, ctx.Args().First()); err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
@@ -369,8 +379,9 @@ func copyDb(ctx *cli.Context) error {
 	}
 	// Initialize a new chain for the running node to sync into
 	stack := makeFullNode(ctx)
-	chain, chainDb := utils.MakeChain(ctx, stack)
+	defer stack.Close()
 
+	chain, chainDb := utils.MakeChain(ctx, stack)
 	syncmode := *utils.GlobalTextMarshaler(ctx, utils.SyncModeFlag.Name).(*downloader.SyncMode)
 	dl := downloader.New(syncmode, chainDb, new(event.TypeMux), chain, nil, nil)
 
@@ -441,6 +452,8 @@ func removeDB(ctx *cli.Context) error {
 
 func dump(ctx *cli.Context) error {
 	stack := makeFullNode(ctx)
+	defer stack.Close()
+
 	chain, chainDb := utils.MakeChain(ctx, stack)
 	for _, arg := range ctx.Args() {
 		var block *types.Block
