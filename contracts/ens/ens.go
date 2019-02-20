@@ -22,6 +22,7 @@ package ens
 //go:generate abigen --sol contract/PublicResolver.sol --exc contract/ENS.sol:ENS --pkg contract --out contract/publicresolver.go
 
 import (
+	"encoding/binary"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -32,9 +33,16 @@ import (
 )
 
 var (
-	MainNetAddress = common.HexToAddress("0x314159265dD8dbb310642f98f50C066173C1259b")
-	TestNetAddress = common.HexToAddress("0x112234455c3a32fd11230c42e7bccd4a84e02010")
+	MainNetAddress           = common.HexToAddress("0x314159265dD8dbb310642f98f50C066173C1259b")
+	TestNetAddress           = common.HexToAddress("0x112234455c3a32fd11230c42e7bccd4a84e02010")
+	contentHash_Interface_Id [4]byte
 )
+
+const contentHash_Interface_Id_Spec = 0xbc1c58d1
+
+func init() {
+	binary.BigEndian.PutUint32(contentHash_Interface_Id[:], contentHash_Interface_Id_Spec)
+}
 
 // ENS is the swarm domain name registry and resolver
 type ENS struct {
@@ -135,6 +143,18 @@ func (ens *ENS) Resolve(name string) (common.Hash, error) {
 		return common.Hash{}, err
 	}
 
+	// IMPORTANT: The old contract is deprecated. This code should be removed latest on June 1st 2019
+	supported, err := resolver.SupportsInterface(contentHash_Interface_Id)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	if !supported {
+		panic("w00t")
+	}
+
+	// END DEPRECATED CODE
+
 	ret, err := resolver.Contenthash(node)
 	if err != nil {
 		return common.Hash{}, err
@@ -191,6 +211,19 @@ func (ens *ENS) SetContentHash(name string, hash []byte) (*types.Transaction, er
 	if err != nil {
 		return nil, err
 	}
+
+	// IMPORTANT: The old contract is deprecated. This code should be removed latest on June 1st 2019
+	supported, err := resolver.SupportsInterface(contentHash_Interface_Id)
+	if err != nil {
+		return nil, err
+	}
+
+	if !supported {
+		panic("w00t")
+	}
+
+	// END DEPRECATED CODE
+
 	opts := ens.TransactOpts
 	opts.GasLimit = 200000
 	return resolver.Contract.SetContenthash(&opts, node, hash)

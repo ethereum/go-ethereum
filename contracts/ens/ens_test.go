@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens/contract"
+	"github.com/ethereum/go-ethereum/contracts/ens/fallback_contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -91,4 +92,30 @@ func TestENS(t *testing.T) {
 	if testAddr != recoveredAddr {
 		t.Fatalf("resolve error, expected %v, got %v", testAddr.Hex(), recoveredAddr.Hex())
 	}
+
+	// deploy the fallback contract and see that the fallback mechanism works
+	newResolverAddr, _, _, err := fallback_contract.DeployPublicResolver(transactOpts, contractBackend, ensAddr)
+	if err != nil {
+		t.Fatalf("can't deploy resolver: %v", err)
+	}
+	if _, err := ens.SetResolver(EnsNode(name), newResolverAddr); err != nil {
+		t.Fatalf("can't set resolver: %v", err)
+	}
+	contractBackend.Commit()
+
+	// Set the content hash for the name.
+	if _, err = ens.SetContentHash(name, hash.Bytes()); err != nil {
+		t.Fatalf("can't set content hash: %v", err)
+	}
+	contractBackend.Commit()
+
+	// Try to resolve the name.
+	vhost, err = ens.Resolve(name)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if vhost != hash {
+		t.Fatalf("resolve error, expected %v, got %v", hash.Hex(), vhost.Hex())
+	}
+
 }
