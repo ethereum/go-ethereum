@@ -60,7 +60,7 @@ func TestHTTP_Database(t *testing.T) {
 func testHTTP(t *testing.T, put bool, args ...string) {
 	addr := findFreeTCPAddress(t)
 	testCmd := runGlobalStore(t, append([]string{"http", "--addr", addr}, args...)...)
-	defer testCmd.Interrupt()
+	defer testCmd.Kill()
 
 	client, err := rpc.DialHTTP("http://" + addr)
 	if err != nil {
@@ -135,7 +135,7 @@ func TestWebsocket_Database(t *testing.T) {
 func testWebsocket(t *testing.T, put bool, args ...string) {
 	addr := findFreeTCPAddress(t)
 	testCmd := runGlobalStore(t, append([]string{"ws", "--addr", addr}, args...)...)
-	defer testCmd.Interrupt()
+	defer testCmd.Kill()
 
 	var client *rpc.Client
 	var err error
