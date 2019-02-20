@@ -166,7 +166,7 @@ func ShiftSpanByKey(k string) opentracing.Span {
 // FinishSpans calls `Finish()` on all stored spans
 // It should be called on instance shutdown
 func FinishSpans() {
-	store.spans.Range(func(k, v interface{}) bool {
+	store.spans.Range(func(_, v interface{}) bool {
 		v.(opentracing.Span).Finish()
 		return true
 	})

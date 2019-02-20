@@ -35,8 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-
-	opentracing "github.com/opentracing/opentracing-go"
 )
 
 const (
@@ -97,7 +95,6 @@ type Registry struct {
 	spec           *protocols.Spec   //this protocol's spec
 	balance        protocols.Balance //implements protocols.Balance, for accounting
 	prices         protocols.Prices  //implements protocols.Prices, provides prices to accounting
-	spans          sync.Map
 }
 
 // RegistryOptions holds optional values for NewRegistry constructor.
@@ -887,10 +884,6 @@ func (r *Registry) Start(server *p2p.Server) error {
 }
 
 func (r *Registry) Stop() error {
-	r.spans.Range(func(k, v interface{}) bool {
-		v.(opentracing.Span).Finish()
-		return true
-	})
 	return nil
 }
 
