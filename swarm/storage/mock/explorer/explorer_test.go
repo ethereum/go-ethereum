@@ -173,6 +173,7 @@ func testHandler(t *testing.T, globalStore mock.GlobalStorer) {
 
 	handler := NewHandler(globalStore, nil)
 
+	// this subtest confirms that it has uploaded key and that it does not have invalid keys
 	t.Run("has key", func(t *testing.T) {
 		for addr, keys := range nodeKeys {
 			for _, key := range keys {
@@ -185,6 +186,7 @@ func testHandler(t *testing.T, globalStore mock.GlobalStorer) {
 		testStatusResponse(t, handler, "/api/has-key/"+unmatchedAddr+"/"+unmatchedKey, http.StatusNotFound)
 	})
 
+	// this subtest confirms that all keys are are listed in correct order with expected pagination
 	t.Run("keys", func(t *testing.T) {
 		var allKeys []string
 		for key := range keyNodes {
@@ -201,6 +203,8 @@ func testHandler(t *testing.T, globalStore mock.GlobalStorer) {
 		t.Run("limit negative", testKeys(handler, allKeys, -10, ""))
 	})
 
+	// this subtest confirms that all keys are are listed for every node in correct order
+	// and that for one node different pagination options are correct
 	t.Run("node keys", func(t *testing.T) {
 		var limitCheckAddr string
 
@@ -222,6 +226,7 @@ func testHandler(t *testing.T, globalStore mock.GlobalStorer) {
 		t.Run("limit negative", testKeys(handler, limitCheckKeys, -10, limitCheckAddr))
 	})
 
+	// this subtest confirms that all nodes are are listed in correct order with expected pagination
 	t.Run("nodes", func(t *testing.T) {
 		var allNodes []string
 		for addr := range nodeKeys {
@@ -238,6 +243,8 @@ func testHandler(t *testing.T, globalStore mock.GlobalStorer) {
 		t.Run("limit negative", testNodes(handler, allNodes, -10, ""))
 	})
 
+	// this subtest confirms that all nodes are are listed that contain a a particular key in correct order
+	// and that for one key different node pagination options are correct
 	t.Run("key nodes", func(t *testing.T) {
 		var limitCheckKey string
 
