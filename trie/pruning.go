@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -237,13 +238,17 @@ func (p *pruner) loop() {
 			memcachePruneTimeTimer.Update(time.Since(start))
 
 			p.db.prunetime += time.Since(start)
-			p.db.lock.RUnlock()
 
 			// Push any change to disk
 			if err := batch.Write(); err != nil {
 				log.Crit("Failed to flush pruned nodes", "err", err)
 			}
 			batch.Reset()
+
+			// Relinquish the lock to any writer. We can't do this earlier to avoid data
+			// races between this goroutine deleting the same node that some other one is
+			// attempting to put back.
+			p.db.lock.RUnlock()
 
 			// If we're actually shutting down, clean up everything
 			if quit != nil {
@@ -260,11 +265,17 @@ func (p *pruner) loop() {
 	}
 }
 
+var faultyOwner = common.HexToHash("0x9f13f88230a70de90ed5fa41ba35a5fb78bc55d11cc9406f17d314fb67047ac7")
+var faultyHash = common.HexToHash("0x5610d8d5e4056edad0db0743616df01c0911675c5fc5604c8967312a4961cf72")
+
 // prune deletes a trie node from disk if there are no more live references to
 // it, cascading until all dangling nodes are removed. If the pruner's interrupt
 // has been triggered (block processing pending), the remaining nodes are bubbled
 // up to the caller to reschedule later.
 func (p *pruner) prune(owner common.Hash, hash common.Hash, path []byte, taskset map[string]struct{}, tries []*traverser, batch ethdb.Batch) []*prunerTarget {
+	if owner == faultyOwner && hash == faultyHash {
+		log.Error("Evaluating sensitive dex trie node", "owner", owner, "hash", hash, "path", hexutil.Encode(path))
+	}
 	// If the node is already queued for pruning, don't duplicate any effort on it
 	key := makeNodeKey(owner, hash)
 	if _, ok := taskset[key]; ok {
@@ -272,7 +283,7 @@ func (p *pruner) prune(owner common.Hash, hash common.Hash, path []byte, taskset
 	}
 	// If the node is still live in the memory cache, it's still referenced so we
 	// can abort. This case is important when and old trie being pruned references
-	// a new node (maybe that node was recreted since), since currently live nodes
+	// a new node (maybe that node was recreated since), since currently live nodes
 	// are stored expanded, not as hashes.
 	if p.db.dirties[key] != nil {
 		return nil
@@ -302,6 +313,9 @@ func (p *pruner) prune(owner common.Hash, hash common.Hash, path []byte, taskset
 	node := mustDecodeNode(hash[:], blob, 0)
 
 	// Prune the node and its children if it's not a bytecode blob
+	if owner == faultyOwner && hash == faultyHash {
+		log.Error("Deleting sensitive dex trie node", "owner", owner, "hash", hash, "path", hexutil.Encode(path))
+	}
 	p.db.cleans.Delete(string(hash[:]))
 	batch.Delete(dead)
 	p.db.prunenodes++

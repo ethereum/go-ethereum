@@ -437,6 +437,9 @@ func (db *Database) DiskDB() DatabaseReader {
 // well ex trie node insertions. The blob must always be specified to allow proper
 // size tracking.
 func (db *Database) insert(owner common.Hash, hash common.Hash, blob []byte, node node) {
+	if owner == faultyOwner && hash == faultyHash {
+		log.Error("Inserting sensitive dex trie node", "owner", owner, "hash", hash)
+	}
 	// If the node's already cached, skip
 	key := makeNodeKey(owner, hash)
 	if _, ok := db.dirties[key]; ok {
@@ -464,6 +467,10 @@ func (db *Database) insert(owner common.Hash, hash common.Hash, blob []byte, nod
 		db.dirties[db.newest].flushNext, db.newest = key, key
 	}
 	db.dirtiesSize += common.StorageSize(common.HashLength + entry.size)
+
+	if owner == faultyOwner && hash == faultyHash {
+		log.Error("Inserted sensitive dex trie node", "owner", owner, "hash", hash)
+	}
 }
 
 // insertPreimage writes a new trie node pre-image to the memory database if it's
