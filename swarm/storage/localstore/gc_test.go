@@ -47,6 +47,8 @@ func TestDB_collectGarbageWorker_multipleBatches(t *testing.T) {
 // testDB_collectGarbageWorker is a helper test function to test
 // garbage collection runs by uploading and syncing a number of chunks.
 func testDB_collectGarbageWorker(t *testing.T) {
+	t.Helper()
+
 	chunkCount := 150
 
 	testHookCollectGarbageChan := make(chan int64)

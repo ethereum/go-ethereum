@@ -16,9 +16,11 @@
 
 // +build !race
 
-package stream
+package testutil
 
-// Provide a flag to reduce the scope of tests when running them
-// with race detector. Some of the tests are doing a lot of allocations
-// on the heap, and race detector uses much more memory to track them.
-const raceTest = false
+// RaceEnabled is true when -race flag is provided to the go tool. This const
+// might be used in tests to skip some cases as the race detector may increase
+// memory usage 5-10x and execution time by 2-20x. That might causes problems
+// on Travis. Please, use this flag sparingly and keep your unit tests
+// as light on resources as possible.
+const RaceEnabled = false

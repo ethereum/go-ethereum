@@ -136,16 +136,6 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 	//define a wrapper object to be able to pass around data
 	wrapper := &netWrapper{}
 
-	nodeCount := *nodes
-	chunkCount := *chunks
-
-	if nodeCount == 0 || chunkCount == 0 {
-		nodeCount = 32
-		chunkCount = 1
-	}
-
-	log.Info(fmt.Sprintf("Running the simulation with %d nodes and %d chunks", nodeCount, chunkCount))
-
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			addr, netStore, delivery, clean, err := newNetStoreAndDeliveryWithRequestFunc(ctx, bucket, dummyRequestFromPeers)
@@ -178,6 +168,7 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 	nodeCount, chunkCount, sim := setupSim(simServiceMap)
 	defer sim.Close()
 
+	log.Info(fmt.Sprintf("Running the simulation with %d nodes and %d chunks", nodeCount, chunkCount))
 	log.Info("Initializing test config")
 
 	conf := &synctestConfig{}

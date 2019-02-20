@@ -16,8 +16,8 @@
 
 // +build race
 
-package stream
+package testutil
 
-// Reduce the scope of some tests when running with race detector,
-// as it raises the memory consumption significantly.
-const raceTest = true
+// RaceEnabled is true when -race flag is provided to the go tool.
+// See norace.go for more.
+const RaceEnabled = true

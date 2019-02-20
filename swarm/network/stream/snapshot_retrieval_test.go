@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/swarm/testutil"
+
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -43,23 +45,24 @@ const (
 //Files are uploaded to nodes, other nodes try to retrieve the file
 //Number of nodes can be provided via commandline too.
 func TestFileRetrieval(t *testing.T) {
+	var nodeCount []int
+
 	if *nodes != 0 {
-		err := runFileRetrievalTest(*nodes)
-		if err != nil {
-			t.Fatal(err)
-		}
+		nodeCount = []int{*nodes}
 	} else {
-		nodeCnt := []int{16}
-		//if the `longrunning` flag has been provided
-		//run more test combinations
+		nodeCount = []int{16}
+
 		if *longrunning {
-			nodeCnt = append(nodeCnt, 32, 64, 128)
+			nodeCount = append(nodeCount, 32, 64, 128)
+		} else if testutil.RaceEnabled {
+			nodeCount = []int{4}
 		}
-		for _, n := range nodeCnt {
-			err := runFileRetrievalTest(n)
-			if err != nil {
-				t.Fatal(err)
-			}
+
+	}
+
+	for _, nc := range nodeCount {
+		if err := runFileRetrievalTest(nc); err != nil {
+			t.Error(err)
 		}
 	}
 }
@@ -79,18 +82,17 @@ func TestRetrieval(t *testing.T) {
 			t.Fatal(err)
 		}
 	} else {
-		var nodeCnt []int
-		var chnkCnt []int
-		//if the `longrunning` flag has been provided
-		//run more test combinations
+		nodeCnt := []int{16}
+		chnkCnt := []int{32}
+
 		if *longrunning {
 			nodeCnt = []int{16, 32, 128}
 			chnkCnt = []int{4, 32, 256}
-		} else {
-			//default test
-			nodeCnt = []int{16}
-			chnkCnt = []int{32}
+		} else if testutil.RaceEnabled {
+			nodeCnt = []int{4}
+			chnkCnt = []int{4}
 		}
+
 		for _, n := range nodeCnt {
 			for _, c := range chnkCnt {
 				t.Run(fmt.Sprintf("TestRetrieval_%d_%d", n, c), func(t *testing.T) {

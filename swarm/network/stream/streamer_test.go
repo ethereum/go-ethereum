@@ -21,11 +21,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -1177,6 +1180,11 @@ starts the simulation, waits for SyncUpdateDelay in order to kick off
 stream registration, then tests that there are subscriptions.
 */
 func TestGetSubscriptionsRPC(t *testing.T) {
+
+	if testutil.RaceEnabled && os.Getenv("TRAVIS") == "true" {
+		t.Skip("flaky with -race on Travis")
+		// Note: related ticket https://github.com/ethersphere/go-ethereum/issues/1234
+	}
 
 	// arbitrarily set to 4
 	nodeCount := 4

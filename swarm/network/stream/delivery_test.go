@@ -446,6 +446,12 @@ func TestDeliveryFromNodes(t *testing.T) {
 	testDeliveryFromNodes(t, 2, dataChunkCount, false)
 	testDeliveryFromNodes(t, 4, dataChunkCount, true)
 	testDeliveryFromNodes(t, 4, dataChunkCount, false)
+
+	if testutil.RaceEnabled {
+		// Travis cannot handle more nodes with -race; would time out.
+		return
+	}
+
 	testDeliveryFromNodes(t, 8, dataChunkCount, true)
 	testDeliveryFromNodes(t, 8, dataChunkCount, false)
 	testDeliveryFromNodes(t, 16, dataChunkCount, true)
