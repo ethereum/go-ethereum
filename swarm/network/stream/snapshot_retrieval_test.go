@@ -82,18 +82,17 @@ func TestRetrieval(t *testing.T) {
 			t.Fatal(err)
 		}
 	} else {
-		var nodeCnt []int
-		var chnkCnt []int
-		//if the `longrunning` flag has been provided
-		//run more test combinations
+		nodeCnt := []int{16}
+		chnkCnt := []int{32}
+
 		if *longrunning {
 			nodeCnt = []int{16, 32, 128}
 			chnkCnt = []int{4, 32, 256}
-		} else {
-			//default test
-			nodeCnt = []int{16}
-			chnkCnt = []int{32}
+		} else if testutil.RaceEnabled {
+			nodeCnt = []int{4}
+			chnkCnt = []int{4}
 		}
+
 		for _, n := range nodeCnt {
 			for _, c := range chnkCnt {
 				t.Run(fmt.Sprintf("TestRetrieval_%d_%d", n, c), func(t *testing.T) {
