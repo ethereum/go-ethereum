@@ -216,7 +216,7 @@ matrix:
         - go run build/ci.go purge -store gethstore/builds -days 14
 
     - name: Race Detector for Swarm
-      if: repo = ethersphere/go-ethereum AND type = cron
+      if: repo = ethersphere/go-ethereum
       os: linux
       dist: trusty
       go: 1.11.x
