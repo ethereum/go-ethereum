@@ -133,7 +133,7 @@ func (ens *ENS) Resolve(name string) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-	ret, err := resolver.Content(node)
+	ret, err := resolver.Contenthash(node)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -191,5 +191,5 @@ func (ens *ENS) SetContentHash(name string, hash common.Hash) (*types.Transactio
 	}
 	opts := ens.TransactOpts
 	opts.GasLimit = 200000
-	return resolver.Contract.SetContent(&opts, node, hash)
+	return resolver.Contract.SetContenthash(&opts, node, hash)
 }
