@@ -35,7 +35,7 @@ func TestExplorer(t *testing.T) {
 	addr := findFreeTCPAddress(t)
 	explorerAddr := findFreeTCPAddress(t)
 	testCmd := runGlobalStore(t, "ws", "--addr", addr, "--explorer-address", explorerAddr)
-	defer testCmd.Interrupt()
+	defer testCmd.Kill()
 
 	client := websocketClient(t, addr)
 
@@ -137,7 +137,7 @@ func TestExplorer_CORSOrigin(t *testing.T) {
 		"--explorer-address", explorerAddr,
 		"--explorer-cors-origin", origin,
 	)
-	defer testCmd.Interrupt()
+	defer testCmd.Kill()
 
 	// wait until the server is started
 	waitHTTPEndpoint(t, explorerAddr)
