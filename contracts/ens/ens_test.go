@@ -118,5 +118,5 @@ func TestENS(t *testing.T) {
 	if vhost != fallbackHash {
 		t.Fatalf("resolve error, expected %v, got %v", hash.Hex(), vhost.Hex())
 	}
-
+	t.Fatal("todo: try to set old contract with new multicodec stuff and assert fail, set new contract with multicodec stuff, encode, decode and assert returns correct hash")
 }

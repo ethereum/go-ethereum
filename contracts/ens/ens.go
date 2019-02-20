@@ -260,3 +260,16 @@ func (ens *ENS) SetContentHash(name string, hash []byte) (*types.Transaction, er
 	// END DEPRECATED CODE
 	return resolver.Contract.SetContenthash(&opts, node, hash)
 }
+
+func decodeMultiCodec(b []byte) (common.Hash, error) {
+	/* from the EIP documentation
+	   storage system: Swarm (0xe4)
+	   CID version: 1 (0x01)
+	   content type: swarm-manifest (0x??)
+	   hash function: keccak-256 (0x1B)
+	   hash length: 32 bytes (0x20)
+	   hash: 29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f
+	*/
+	//<protoCode uvarint><cid-version><multicodec-content-type><multihash-content-address>
+
+}
