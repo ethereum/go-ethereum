@@ -597,6 +597,16 @@ func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 // HandleMsg is the message handler that delegates incoming messages
 func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
+	select {
+	case <-p.streamer.quit:
+		log.Trace("message received after the streamer is closed", "peer", p.ID())
+		// return without an error since streamer is closed and
+		// no messages should be handled as other subcomponents like
+		// storage leveldb may be closed
+		return nil
+	default:
+	}
+
 	switch msg := msg.(type) {
 
 	case *SubscribeMsg:
