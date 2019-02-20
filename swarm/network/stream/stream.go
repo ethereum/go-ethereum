@@ -381,7 +381,7 @@ func (r *Registry) Subscribe(peerId enode.ID, s Stream, h *Range, priority uint8
 	}
 	log.Debug("Subscribe ", "peer", peerId, "stream", s, "history", h)
 
-	return peer.SendPriority(context.TODO(), msg, priority, "")
+	return peer.SendPriority(context.TODO(), msg, priority)
 }
 
 func (r *Registry) Unsubscribe(peerId enode.ID, s Stream) error {
@@ -757,7 +757,7 @@ func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error 
 			return err
 		}
 
-		if err := p.SendPriority(context.TODO(), tp, c.priority, ""); err != nil {
+		if err := p.SendPriority(context.TODO(), tp, c.priority); err != nil {
 			return err
 		}
 		if c.to > 0 && tp.Takeover.End >= c.to {
