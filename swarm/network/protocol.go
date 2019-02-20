@@ -229,6 +229,7 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 func sanitizeEnodeRemote(paddr net.Addr, baddr *BzzAddr) {
 	hsSubmatch := regexpEnodeIP.FindSubmatch(baddr.UAddr)
 	ip, _, err := net.SplitHostPort(paddr.String())
+	// since we expect nothing else than ipv4 here, a panic on missing submatch is desired
 	if err == nil && string(hsSubmatch[1]) != ip {
 		remoteStr := fmt.Sprintf("@%s:%s", ip, string(hsSubmatch[2]))
 		log.Debug("rewrote peer uaddr host/port", "addr", baddr)
