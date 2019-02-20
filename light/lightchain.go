@@ -109,7 +109,9 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	for hash := range core.BadHashes {
 		if header := bc.GetHeaderByHash(hash); header != nil {
 			log.Error("Found bad hash, rewinding chain", "number", header.Number, "hash", header.ParentHash)
-			bc.SetHead(header.Number.Uint64() - 1)
+			if err := bc.SetHead(header.Number.Uint64() - 1); err != nil {
+				return nil, err
+			}
 			log.Error("Chain rewind was successful, resuming normal operation")
 		}
 	}
@@ -146,7 +148,9 @@ func (lc *LightChain) Odr() OdrBackend {
 func (lc *LightChain) loadLastState() error {
 	if head := rawdb.ReadHeadHeaderHash(lc.chainDb); head == (common.Hash{}) {
 		// Corrupt or empty database, init from scratch
-		lc.Reset()
+		if err := lc.Reset(); err != nil {
+			return err
+		}
 	} else {
 		if header := lc.GetHeaderByHash(head); header != nil {
 			lc.hc.SetCurrentHeader(header)
@@ -163,12 +167,12 @@ func (lc *LightChain) loadLastState() error {
 
 // SetHead rewinds the local chain to a new head. Everything above the new
 // head will be deleted and the new one set.
-func (lc *LightChain) SetHead(head uint64) {
+func (lc *LightChain) SetHead(head uint64) error {
 	lc.chainmu.Lock()
 	defer lc.chainmu.Unlock()
 
 	lc.hc.SetHead(head, nil)
-	lc.loadLastState()
+	return lc.loadLastState()
 }
 
 // GasLimit returns the gas limit of the current HEAD block.
@@ -177,16 +181,17 @@ func (lc *LightChain) GasLimit() uint64 {
 }
 
 // Reset purges the entire blockchain, restoring it to its genesis state.
-func (lc *LightChain) Reset() {
-	lc.ResetWithGenesisBlock(lc.genesisBlock)
+func (lc *LightChain) Reset() error {
+	return lc.ResetWithGenesisBlock(lc.genesisBlock)
 }
 
 // ResetWithGenesisBlock purges the entire blockchain, restoring it to the
 // specified genesis state.
-func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
+func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	// Dump the entire block chain and purge the caches
-	lc.SetHead(0)
-
+	if err := lc.SetHead(0); err != nil {
+		return err
+	}
 	lc.chainmu.Lock()
 	defer lc.chainmu.Unlock()
 
@@ -197,6 +202,7 @@ func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 	lc.genesisBlock = genesis
 	lc.hc.SetGenesis(lc.genesisBlock.Header())
 	lc.hc.SetCurrentHeader(lc.genesisBlock.Header())
+	return nil
 }
 
 // Accessors

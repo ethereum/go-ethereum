@@ -135,7 +135,9 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
-		leth.blockchain.SetHead(compat.RewindTo)
+		if err := leth.blockchain.SetHead(compat.RewindTo); err != nil {
+			return nil, err
+		}
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
 
@@ -238,8 +240,8 @@ func (s *LightEthereum) APIs() []rpc.API {
 	}...)
 }
 
-func (s *LightEthereum) ResetWithGenesisBlock(gb *types.Block) {
-	s.blockchain.ResetWithGenesisBlock(gb)
+func (s *LightEthereum) ResetWithGenesisBlock(gb *types.Block) error {
+	return s.blockchain.ResetWithGenesisBlock(gb)
 }
 
 func (s *LightEthereum) BlockChain() *light.LightChain      { return s.blockchain }
