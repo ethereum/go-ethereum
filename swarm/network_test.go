@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/swarm/testutil"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -102,6 +104,9 @@ func TestSwarmNetwork(t *testing.T) {
 
 	if *longrunning {
 		tests = append(tests, longRunningCases()...)
+	} else if testutil.RaceEnabled {
+		tests = shortCaseForRace()
+
 	}
 
 	for _, tc := range tests {
@@ -240,6 +245,23 @@ func longRunningCases() []testSwarmNetworkCase {
 	}
 }
 
+func shortCaseForRace() []testSwarmNetworkCase {
+	// As for now, Travis with -race can only run 8 nodes
+	return []testSwarmNetworkCase{
+		{
+			name: "8_nodes",
+			steps: []testSwarmNetworkStep{
+				{
+					nodeCount: 8,
+				},
+			},
+			options: &testSwarmNetworkOptions{
+				Timeout: 1 * time.Minute,
+			},
+		},
+	}
+}
+
 // file represents the file uploaded on a particular node.
 type file struct {
 	addr   storage.Address
@@ -262,6 +284,7 @@ type check struct {
 //  - May wait for Kademlia on every node to be healthy.
 //  - Checking if a file is retrievable from all nodes.
 func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwarmNetworkStep) {
+	t.Helper()
 
 	if o == nil {
 		o = new(testSwarmNetworkOptions)
