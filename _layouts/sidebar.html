@@ -4,8 +4,9 @@ layout: default
 <div class="container" style="padding-top: 24px;">
     <div class="row">
           <div class="col-md-3" id="toc" style="padding-top: 16px;">
-            {% for coll in site.collections %}
-                {% if coll.sidebar %}
+            {% assign collections = site.collections | sort: "sidebar_index" %}
+            {% for coll in collections %}
+                {% if coll.sidebar_index %}
                     <div class="list-group">
                         <a class="list-group-item active">{{ coll.caption }}</a>
                         {% for doc in coll.docs %}

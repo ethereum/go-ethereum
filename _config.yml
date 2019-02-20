@@ -19,20 +19,20 @@ collections:
   install-and-build:
     output: true
     caption: Install and build
-    sidebar: true
+    sidebar_index: 1
   how-to:
     output: true
     caption: How to use
-    sidebar: true
+    sidebar_index: 2
   interface:
     output: true
     caption: Interface documentation
-    sidebar: true
+    sidebar_index: 3
   support:
     output: true
     caption: Issues and support
-    sidebar: true
+    sidebar_index: 4
   developers:
     output: true
     caption: Developers
-    sidebar: true
+    sidebar_index: 5
