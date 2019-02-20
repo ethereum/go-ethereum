@@ -168,18 +168,18 @@ func (b *SimulatedBackend) TransactionReceipt(ctx context.Context, txHash common
 // blockchain. The isPending return value indicates whether the transaction has been
 // mined yet. Note that the transaction may not be part of the canonical chain even if
 // it's not pending.
-func (b *SimulatedBackend) TransactionByHash(ctx context.Context, txHash common.Hash) (tx *types.Transaction, isPending bool, err error) {
+func (b *SimulatedBackend) TransactionByHash(ctx context.Context, txHash common.Hash) (*types.Transaction, bool, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
-	tx = b.pendingBlock.Transaction(txHash)
+	tx := b.pendingBlock.Transaction(txHash)
 	if tx != nil {
 		return tx, true, nil
 	}
-
 	tx, _, _, _ = rawdb.ReadTransaction(b.database, txHash)
 	if tx != nil {
 		return tx, false, nil
 	}
-
 	return nil, false, ethereum.NotFound
 }
 
