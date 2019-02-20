@@ -72,7 +72,7 @@ func (s *GlobalStore) NewNodeStore(addr common.Address) *mock.NodeStore {
 // Get returns chunk data if the chunk with key exists for node
 // on address addr.
 func (s *GlobalStore) Get(addr common.Address, key []byte) (data []byte, err error) {
-	has, err := s.db.Has(indexNodeKeysKey(addr, key), nil)
+	has, err := s.db.Has(indexForHashesPerNode(addr, key), nil)
 	if err != nil {
 		return nil, mock.ErrNotFound
 	}
@@ -95,10 +95,10 @@ func (s *GlobalStore) Put(addr common.Address, key []byte, data []byte) error {
 	defer unlock()
 
 	batch := new(leveldb.Batch)
-	batch.Put(indexNodeKeysKey(addr, key), nil)
-	batch.Put(indexKeyNodesKey(key, addr), nil)
-	batch.Put(indexNodesKey(addr), nil)
-	batch.Put(indexKeysKey(key), nil)
+	batch.Put(indexForHashesPerNode(addr, key), nil)
+	batch.Put(indexForNodesWithHash(key, addr), nil)
+	batch.Put(indexForNodes(addr), nil)
+	batch.Put(indexForHashes(key), nil)
 	batch.Put(indexDataKey(key), data)
 	return s.db.Write(batch, nil)
 }
@@ -112,26 +112,26 @@ func (s *GlobalStore) Delete(addr common.Address, key []byte) error {
 	defer unlock()
 
 	batch := new(leveldb.Batch)
-	batch.Delete(indexNodeKeysKey(addr, key))
-	batch.Delete(indexKeyNodesKey(key, addr))
+	batch.Delete(indexForHashesPerNode(addr, key))
+	batch.Delete(indexForNodesWithHash(key, addr))
 
 	// check if this node contains any keys, and if not
 	// remove it from the
-	x := indexNodeKeysKeyPrefix(addr)
+	x := indexForHashesPerNodePrefix(addr)
 	if k, _ := s.db.Get(x, nil); !bytes.HasPrefix(k, x) {
-		batch.Delete(indexNodesKey(addr))
+		batch.Delete(indexForNodes(addr))
 	}
 
-	x = indexKeyNodesKeyPrefix(key)
+	x = indexForNodesWithHashPrefix(key)
 	if k, _ := s.db.Get(x, nil); !bytes.HasPrefix(k, x) {
-		batch.Delete(indexKeysKey(key))
+		batch.Delete(indexForHashes(key))
 	}
 	return s.db.Write(batch, nil)
 }
 
 // HasKey returns whether a node with addr contains the key.
 func (s *GlobalStore) HasKey(addr common.Address, key []byte) bool {
-	has, err := s.db.Has(indexNodeKeysKey(addr, key), nil)
+	has, err := s.db.Has(indexForHashesPerNode(addr, key), nil)
 	if err != nil {
 		has = false
 	}
@@ -168,15 +168,15 @@ func (s *GlobalStore) keys(addr *common.Address, startKey []byte, limit int) (ke
 		limit = mock.DefaultLimit
 	}
 
-	prefix := []byte{indexKeysPrefix}
+	prefix := []byte{indexForHashesPrefix}
 	if addr != nil {
-		prefix = indexNodeKeysKeyPrefix(*addr)
+		prefix = indexForHashesPerNodePrefix(*addr)
 	}
 	if startKey != nil {
 		if addr != nil {
-			startKey = indexNodeKeysKey(*addr, startKey)
+			startKey = indexForHashesPerNode(*addr, startKey)
 		} else {
-			startKey = indexKeysKey(startKey)
+			startKey = indexForHashes(startKey)
 		}
 	} else {
 		startKey = prefix
@@ -213,16 +213,16 @@ func (s *GlobalStore) nodes(key []byte, startAddr *common.Address, limit int) (n
 		limit = mock.DefaultLimit
 	}
 
-	prefix := []byte{indexNodesPrefix}
+	prefix := []byte{indexForNodesPrefix}
 	if key != nil {
-		prefix = indexKeyNodesKeyPrefix(key)
+		prefix = indexForNodesWithHashPrefix(key)
 	}
 	startKey := prefix
 	if startAddr != nil {
 		if key != nil {
-			startKey = indexKeyNodesKey(key, *startAddr)
+			startKey = indexForNodesWithHash(key, *startAddr)
 		} else {
-			startKey = indexNodesKey(*startAddr)
+			startKey = indexForNodes(*startAddr)
 		}
 	}
 
@@ -275,12 +275,12 @@ func (s *GlobalStore) Import(r io.Reader) (n int, err error) {
 
 		batch := new(leveldb.Batch)
 		for _, addr := range c.Addrs {
-			batch.Put(indexNodeKeysKey(addr, key), nil)
-			batch.Put(indexKeyNodesKey(key, addr), nil)
-			batch.Put(indexNodesKey(addr), nil)
+			batch.Put(indexForHashesPerNode(addr, key), nil)
+			batch.Put(indexForNodesWithHash(key, addr), nil)
+			batch.Put(indexForNodes(addr), nil)
 		}
 
-		batch.Put(indexKeysKey(key), nil)
+		batch.Put(indexForHashes(key), nil)
 		batch.Put(indexDataKey(key), c.Data)
 
 		if err = s.db.Write(batch, nil); err != nil {
@@ -306,7 +306,7 @@ func (s *GlobalStore) Export(w io.Writer) (n int, err error) {
 		return 0, err
 	}
 
-	iter := snap.NewIterator(util.BytesPrefix([]byte{indexKeyNodesPrefix}), nil)
+	iter := snap.NewIterator(util.BytesPrefix([]byte{indexForHashesByNodePrefix}), nil)
 	defer iter.Release()
 
 	var currentKey string
@@ -345,7 +345,7 @@ func (s *GlobalStore) Export(w io.Writer) (n int, err error) {
 	}
 
 	for iter.Next() {
-		k := bytes.TrimPrefix(iter.Key(), []byte{indexKeyNodesPrefix})
+		k := bytes.TrimPrefix(iter.Key(), []byte{indexForHashesByNodePrefix})
 		i := bytes.Index(k, []byte{keyTermByte})
 		if i < 0 {
 			continue
@@ -421,53 +421,53 @@ func (s *GlobalStore) lock(addr common.Address, key []byte) (unlock func(), err 
 
 const (
 	// prefixes for different indexes
-	indexDataPrefix     = 0
-	indexNodeKeysPrefix = 1
-	indexKeyNodesPrefix = 2
-	indexNodesPrefix    = 3
-	indexKeysPrefix     = 4
+	indexDataPrefix               = 0
+	indexForNodesWithHashesPrefix = 1
+	indexForHashesByNodePrefix    = 2
+	indexForNodesPrefix           = 3
+	indexForHashesPrefix          = 4
 
 	// keyTermByte splits keys and node addresses
 	// in database keys
 	keyTermByte = 0xff
 )
 
-// indexNodeKeysKey constructs a database key to store keys used in
+// indexForHashesPerNode constructs a database key to store keys used in
 // NodeKeys method.
-func indexNodeKeysKey(addr common.Address, key []byte) []byte {
-	return append(indexNodeKeysKeyPrefix(addr), key...)
+func indexForHashesPerNode(addr common.Address, key []byte) []byte {
+	return append(indexForHashesPerNodePrefix(addr), key...)
 }
 
-// indexNodeKeysKeyPrefix returns a prefix containing a node address used in
+// indexForHashesPerNodePrefix returns a prefix containing a node address used in
 // NodeKeys method. Node address is hex encoded to be able to use keyTermByte
 // for splitting node address and key.
-func indexNodeKeysKeyPrefix(addr common.Address) []byte {
-	return append([]byte{indexNodeKeysPrefix}, append([]byte(addr.Hex()), keyTermByte)...)
+func indexForHashesPerNodePrefix(addr common.Address) []byte {
+	return append([]byte{indexForNodesWithHashesPrefix}, append([]byte(addr.Hex()), keyTermByte)...)
 }
 
-// indexKeyNodesKey constructs a database key to store keys used in
+// indexForNodesWithHash constructs a database key to store keys used in
 // KeyNodes method.
-func indexKeyNodesKey(key []byte, addr common.Address) []byte {
-	return append(indexKeyNodesKeyPrefix(key), addr[:]...)
+func indexForNodesWithHash(key []byte, addr common.Address) []byte {
+	return append(indexForNodesWithHashPrefix(key), addr[:]...)
 }
 
-// indexKeyNodesKeyPrefix returns a prefix containing a key used in
+// indexForNodesWithHashPrefix returns a prefix containing a key used in
 // KeyNodes method. Key is hex encoded to be able to use keyTermByte
 // for splitting key and node address.
-func indexKeyNodesKeyPrefix(key []byte) []byte {
-	return append([]byte{indexKeyNodesPrefix}, append([]byte(common.Bytes2Hex(key)), keyTermByte)...)
+func indexForNodesWithHashPrefix(key []byte) []byte {
+	return append([]byte{indexForHashesByNodePrefix}, append([]byte(common.Bytes2Hex(key)), keyTermByte)...)
 }
 
-// indexNodesKey constructs a database key to store keys used in
+// indexForNodes constructs a database key to store keys used in
 // Nodes method.
-func indexNodesKey(addr common.Address) []byte {
-	return append([]byte{indexNodesPrefix}, addr[:]...)
+func indexForNodes(addr common.Address) []byte {
+	return append([]byte{indexForNodesPrefix}, addr[:]...)
 }
 
-// indexKeysKey constructs a database key to store keys used in
+// indexForHashes constructs a database key to store keys used in
 // Keys method.
-func indexKeysKey(key []byte) []byte {
-	return append([]byte{indexKeysPrefix}, key...)
+func indexForHashes(key []byte) []byte {
+	return append([]byte{indexForHashesPrefix}, key...)
 }
 
 // indexDataKey constructs a database key for key/data storage.
