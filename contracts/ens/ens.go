@@ -273,3 +273,10 @@ func decodeMultiCodec(b []byte) (common.Hash, error) {
 	//<protoCode uvarint><cid-version><multicodec-content-type><multihash-content-address>
 
 }
+
+func encodeMultiCodec(h common.Hash) []byte {
+	b := []byte{0xe4, 0x01, 0x01, 0x1b, 0x20}
+
+	b = append(b, h.Bytes()...)
+	return b
+}
