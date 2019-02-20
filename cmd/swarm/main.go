@@ -39,13 +39,16 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm"
 	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
 	swarmmetrics "github.com/ethereum/go-ethereum/swarm/metrics"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+	mockrpc "github.com/ethereum/go-ethereum/swarm/storage/mock/rpc"
 	"github.com/ethereum/go-ethereum/swarm/tracing"
 	sv "github.com/ethereum/go-ethereum/swarm/version"
 
-	"gopkg.in/urfave/cli.v1"
+	cli "gopkg.in/urfave/cli.v1"
 )
 
 const clientIdentifier = "swarm"
@@ -66,9 +69,10 @@ OPTIONS:
 {{end}}{{end}}
 `
 
-var (
-	gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
-)
+// Git SHA1 commit hash of the release (set via linker flags)
+// this variable will be assigned if corresponding parameter is passed with install, but not with test
+// e.g.: go install -ldflags "-X main.gitCommit=ed1312d01b19e04ef578946226e5d8069d5dfd5a" ./cmd/swarm
+var gitCommit string
 
 //declare a few constant error messages, useful for later error check comparisons in test
 var (
@@ -89,6 +93,7 @@ var defaultNodeConfig = node.DefaultConfig
 
 // This init function sets defaults so cmd/swarm can run alongside geth.
 func init() {
+	sv.GitCommit = gitCommit
 	defaultNodeConfig.Name = clientIdentifier
 	defaultNodeConfig.Version = sv.VersionWithCommit(gitCommit)
 	defaultNodeConfig.P2P.ListenAddr = ":30399"
@@ -140,6 +145,8 @@ func init() {
 		dbCommand,
 		// See config.go
 		DumpConfigCommand,
+		// hashesCommand
+		hashesCommand,
 	}
 
 	// append a hidden help subcommand to all commands that have subcommands
@@ -154,7 +161,6 @@ func init() {
 		utils.BootnodesFlag,
 		utils.KeyStoreDirFlag,
 		utils.ListenPortFlag,
-		utils.NoDiscoverFlag,
 		utils.DiscoveryV5Flag,
 		utils.NetrestrictFlag,
 		utils.NodeKeyFileFlag,
@@ -187,10 +193,13 @@ func init() {
 		SwarmUploadDefaultPath,
 		SwarmUpFromStdinFlag,
 		SwarmUploadMimeType,
+		// bootnode mode
+		SwarmBootnodeModeFlag,
 		// storage flags
 		SwarmStorePath,
 		SwarmStoreCapacity,
 		SwarmStoreCacheCapacity,
+		SwarmGlobalStoreAPIFlag,
 	}
 	rpcFlags := []cli.Flag{
 		utils.WSEnabledFlag,
@@ -227,12 +236,17 @@ func main() {
 
 func keys(ctx *cli.Context) error {
 	privateKey := getPrivKey(ctx)
-	pub := hex.EncodeToString(crypto.FromECDSAPub(&privateKey.PublicKey))
+	pubkey := crypto.FromECDSAPub(&privateKey.PublicKey)
+	pubkeyhex := hex.EncodeToString(pubkey)
 	pubCompressed := hex.EncodeToString(crypto.CompressPubkey(&privateKey.PublicKey))
+	bzzkey := crypto.Keccak256Hash(pubkey).Hex()
+
 	if !ctx.Bool(SwarmCompressedFlag.Name) {
-		fmt.Println(fmt.Sprintf("publicKey=%s", pub))
+		fmt.Println(fmt.Sprintf("bzzkey=%s", bzzkey[2:]))
+		fmt.Println(fmt.Sprintf("publicKey=%s", pubkeyhex))
 	}
 	fmt.Println(fmt.Sprintf("publicKeyCompressed=%s", pubCompressed))
+
 	return nil
 }
 
@@ -272,6 +286,10 @@ func bzzd(ctx *cli.Context) error {
 	setSwarmBootstrapNodes(ctx, &cfg)
 	//setup the ethereum node
 	utils.SetNodeConfig(ctx, &cfg)
+
+	//always disable discovery from p2p package - swarm discovery is done with the `hive` protocol
+	cfg.P2P.NoDiscovery = true
+
 	stack, err := node.New(&cfg)
 	if err != nil {
 		utils.Fatalf("can't create node: %v", err)
@@ -294,6 +312,15 @@ func bzzd(ctx *cli.Context) error {
 		stack.Stop()
 	}()
 
+	// add swarm bootnodes, because swarm doesn't use p2p package's discovery discv5
+	go func() {
+		s := stack.Server()
+
+		for _, n := range cfg.P2P.BootstrapNodes {
+			s.AddPeer(n)
+		}
+	}()
+
 	stack.Wait()
 	return nil
 }
@@ -301,8 +328,18 @@ func bzzd(ctx *cli.Context) error {
 func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) {
 	//define the swarm service boot function
 	boot := func(_ *node.ServiceContext) (node.Service, error) {
-		// In production, mockStore must be always nil.
-		return swarm.NewSwarm(bzzconfig, nil)
+		var nodeStore *mock.NodeStore
+		if bzzconfig.GlobalStoreAPI != "" {
+			// connect to global store
+			client, err := rpc.Dial(bzzconfig.GlobalStoreAPI)
+			if err != nil {
+				return nil, fmt.Errorf("global store: %v", err)
+			}
+			globalStore := mockrpc.NewGlobalStore(client)
+			// create a node store for this swarm key on global store
+			nodeStore = globalStore.NewNodeStore(common.HexToAddress(bzzconfig.BzzKey))
+		}
+		return swarm.NewSwarm(bzzconfig, nodeStore)
 	}
 	//register within the ethereum node
 	if err := stack.Register(boot); err != nil {
@@ -428,5 +465,5 @@ func setSwarmBootstrapNodes(ctx *cli.Context, cfg *node.Config) {
 		}
 		cfg.P2P.BootstrapNodes = append(cfg.P2P.BootstrapNodes, node)
 	}
-	log.Debug("added default swarm bootnodes", "length", len(cfg.P2P.BootstrapNodes))
+
 }

@@ -18,7 +18,6 @@ package stream
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -27,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/log"
-	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -76,7 +74,7 @@ func TestRetrieval(t *testing.T) {
 	//if nodes/chunks have been provided via commandline,
 	//run the tests with these values
 	if *nodes != 0 && *chunks != 0 {
-		err := runRetrievalTest(*chunks, *nodes)
+		err := runRetrievalTest(t, *chunks, *nodes)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -95,53 +93,37 @@ func TestRetrieval(t *testing.T) {
 		}
 		for _, n := range nodeCnt {
 			for _, c := range chnkCnt {
-				err := runRetrievalTest(c, n)
-				if err != nil {
-					t.Fatal(err)
-				}
+				t.Run(fmt.Sprintf("TestRetrieval_%d_%d", n, c), func(t *testing.T) {
+					err := runRetrievalTest(t, c, n)
+					if err != nil {
+						t.Fatal(err)
+					}
+				})
 			}
 		}
 	}
 }
 
 var retrievalSimServiceMap = map[string]simulation.ServiceFunc{
-	"streamer": retrievalStreamerFunc,
-}
+	"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+		addr, netStore, delivery, clean, err := newNetStoreAndDelivery(ctx, bucket)
+		if err != nil {
+			return nil, nil, err
+		}
 
-func retrievalStreamerFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-	n := ctx.Config.Node()
-	addr := network.NewAddr(n)
-	store, datadir, err := createTestLocalStorageForID(n.ID(), addr)
-	if err != nil {
-		return nil, nil, err
-	}
-	bucket.Store(bucketKeyStore, store)
+		r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+			Retrieval:       RetrievalEnabled,
+			Syncing:         SyncingAutoSubscribe,
+			SyncUpdateDelay: 3 * time.Second,
+		}, nil)
 
-	localStore := store.(*storage.LocalStore)
-	netStore, err := storage.NewNetStore(localStore, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-	delivery := NewDelivery(kad, netStore)
-	netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
+		cleanup = func() {
+			r.Close()
+			clean()
+		}
 
-	r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
-		Retrieval:       RetrievalEnabled,
-		Syncing:         SyncingAutoSubscribe,
-		SyncUpdateDelay: 3 * time.Second,
-	}, nil)
-
-	fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
-	bucket.Store(bucketKeyFileStore, fileStore)
-
-	cleanup = func() {
-		os.RemoveAll(datadir)
-		netStore.Close()
-		r.Close()
-	}
-
-	return r, cleanup, nil
+		return r, cleanup, nil
+	},
 }
 
 /*
@@ -171,7 +153,7 @@ func runFileRetrievalTest(nodeCount int) error {
 		return err
 	}
 
-	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
+	ctx, cancelSimRun := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancelSimRun()
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
@@ -245,7 +227,8 @@ simulation's `action` function.
 
 The snapshot should have 'streamer' in its service list.
 */
-func runRetrievalTest(chunkCount int, nodeCount int) error {
+func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) error {
+	t.Helper()
 	sim := simulation.New(retrievalSimServiceMap)
 	defer sim.Close()
 

@@ -43,14 +43,18 @@ type mockNetFetcher struct {
 	quit            <-chan struct{}
 	ctx             context.Context
 	hopCounts       []uint8
+	mu              sync.Mutex
 }
 
-func (m *mockNetFetcher) Offer(ctx context.Context, source *enode.ID) {
+func (m *mockNetFetcher) Offer(source *enode.ID) {
 	m.offerCalled = true
 	m.sources = append(m.sources, source)
 }
 
-func (m *mockNetFetcher) Request(ctx context.Context, hopCount uint8) {
+func (m *mockNetFetcher) Request(hopCount uint8) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.requestCalled = true
 	var peers []Address
 	m.peers.Range(func(key interface{}, _ interface{}) bool {

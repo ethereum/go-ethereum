@@ -156,6 +156,10 @@ var (
 		Name:  "compressed",
 		Usage: "Prints encryption keys in compressed form",
 	}
+	SwarmBootnodeModeFlag = cli.BoolFlag{
+		Name:  "bootnode-mode",
+		Usage: "Run Swarm in Bootnode mode",
+	}
 	SwarmFeedNameFlag = cli.StringFlag{
 		Name:  "name",
 		Usage: "User-defined name for the new feed, limited to 32 characters. If combined with topic, it will refer to a subtopic with this name",
@@ -171,5 +175,10 @@ var (
 	SwarmFeedUserFlag = cli.StringFlag{
 		Name:  "user",
 		Usage: "Indicates the user who updates the feed",
+	}
+	SwarmGlobalStoreAPIFlag = cli.StringFlag{
+		Name:   "globalstore-api",
+		Usage:  "URL of the Global Store API provider (only for testing)",
+		EnvVar: SWARM_GLOBALSTORE_API,
 	}
 )

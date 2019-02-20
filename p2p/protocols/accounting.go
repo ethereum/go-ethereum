@@ -27,23 +27,21 @@ var (
 	// All metrics are cumulative
 
 	// total amount of units credited
-	mBalanceCredit metrics.Counter
+	mBalanceCredit = metrics.NewRegisteredCounterForced("account.balance.credit", metrics.AccountingRegistry)
 	// total amount of units debited
-	mBalanceDebit metrics.Counter
+	mBalanceDebit = metrics.NewRegisteredCounterForced("account.balance.debit", metrics.AccountingRegistry)
 	// total amount of bytes credited
-	mBytesCredit metrics.Counter
+	mBytesCredit = metrics.NewRegisteredCounterForced("account.bytes.credit", metrics.AccountingRegistry)
 	// total amount of bytes debited
-	mBytesDebit metrics.Counter
+	mBytesDebit = metrics.NewRegisteredCounterForced("account.bytes.debit", metrics.AccountingRegistry)
 	// total amount of credited messages
-	mMsgCredit metrics.Counter
+	mMsgCredit = metrics.NewRegisteredCounterForced("account.msg.credit", metrics.AccountingRegistry)
 	// total amount of debited messages
-	mMsgDebit metrics.Counter
+	mMsgDebit = metrics.NewRegisteredCounterForced("account.msg.debit", metrics.AccountingRegistry)
 	// how many times local node had to drop remote peers
-	mPeerDrops metrics.Counter
+	mPeerDrops = metrics.NewRegisteredCounterForced("account.peerdrops", metrics.AccountingRegistry)
 	// how many times local node overdrafted and dropped
-	mSelfDrops metrics.Counter
-
-	MetricsRegistry metrics.Registry
+	mSelfDrops = metrics.NewRegisteredCounterForced("account.selfdrops", metrics.AccountingRegistry)
 )
 
 // Prices defines how prices are being passed on to the accounting instance
@@ -110,24 +108,13 @@ func NewAccounting(balance Balance, po Prices) *Accounting {
 	return ah
 }
 
-// SetupAccountingMetrics creates a separate registry for p2p accounting metrics;
+// SetupAccountingMetrics uses a separate registry for p2p accounting metrics;
 // this registry should be independent of any other metrics as it persists at different endpoints.
-// It also instantiates the given metrics and starts the persisting go-routine which
+// It also starts the persisting go-routine which
 // at the passed interval writes the metrics to a LevelDB
 func SetupAccountingMetrics(reportInterval time.Duration, path string) *AccountingMetrics {
-	// create an empty registry
-	MetricsRegistry = metrics.NewRegistry()
-	// instantiate the metrics
-	mBalanceCredit = metrics.NewRegisteredCounterForced("account.balance.credit", MetricsRegistry)
-	mBalanceDebit = metrics.NewRegisteredCounterForced("account.balance.debit", MetricsRegistry)
-	mBytesCredit = metrics.NewRegisteredCounterForced("account.bytes.credit", MetricsRegistry)
-	mBytesDebit = metrics.NewRegisteredCounterForced("account.bytes.debit", MetricsRegistry)
-	mMsgCredit = metrics.NewRegisteredCounterForced("account.msg.credit", MetricsRegistry)
-	mMsgDebit = metrics.NewRegisteredCounterForced("account.msg.debit", MetricsRegistry)
-	mPeerDrops = metrics.NewRegisteredCounterForced("account.peerdrops", MetricsRegistry)
-	mSelfDrops = metrics.NewRegisteredCounterForced("account.selfdrops", MetricsRegistry)
 	// create the DB and start persisting
-	return NewAccountingMetrics(MetricsRegistry, reportInterval, path)
+	return NewAccountingMetrics(metrics.AccountingRegistry, reportInterval, path)
 }
 
 // Send takes a peer, a size and a msg and

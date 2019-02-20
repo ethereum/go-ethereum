@@ -79,8 +79,10 @@ const (
 	SWARM_ENV_STORE_PATH              = "SWARM_STORE_PATH"
 	SWARM_ENV_STORE_CAPACITY          = "SWARM_STORE_CAPACITY"
 	SWARM_ENV_STORE_CACHE_CAPACITY    = "SWARM_STORE_CACHE_CAPACITY"
+	SWARM_ENV_BOOTNODE_MODE           = "SWARM_BOOTNODE_MODE"
 	SWARM_ACCESS_PASSWORD             = "SWARM_ACCESS_PASSWORD"
 	SWARM_AUTO_DEFAULTPATH            = "SWARM_AUTO_DEFAULTPATH"
+	SWARM_GLOBALSTORE_API             = "SWARM_GLOBALSTORE_API"
 	GETH_ENV_DATADIR                  = "GETH_DATADIR"
 )
 
@@ -164,10 +166,9 @@ func configFileOverride(config *bzzapi.Config, ctx *cli.Context) (*bzzapi.Config
 	return config, err
 }
 
-//override the current config with whatever is provided through the command line
-//most values are not allowed a zero value (empty string), if not otherwise noted
+// cmdLineOverride overrides the current config with whatever is provided through the command line
+// most values are not allowed a zero value (empty string), if not otherwise noted
 func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Config {
-
 	if keyid := ctx.GlobalString(SwarmAccountFlag.Name); keyid != "" {
 		currentConfig.BzzAccount = keyid
 	}
@@ -258,14 +259,21 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.LocalStoreParams.CacheCapacity = storeCacheCapacity
 	}
 
+	if ctx.GlobalIsSet(SwarmBootnodeModeFlag.Name) {
+		currentConfig.BootnodeMode = ctx.GlobalBool(SwarmBootnodeModeFlag.Name)
+	}
+
+	if ctx.GlobalIsSet(SwarmGlobalStoreAPIFlag.Name) {
+		currentConfig.GlobalStoreAPI = ctx.GlobalString(SwarmGlobalStoreAPIFlag.Name)
+	}
+
 	return currentConfig
 
 }
 
-//override the current config with whatver is provided in environment variables
-//most values are not allowed a zero value (empty string), if not otherwise noted
+// envVarsOverride overrides the current config with whatver is provided in environment variables
+// most values are not allowed a zero value (empty string), if not otherwise noted
 func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
-
 	if keyid := os.Getenv(SWARM_ENV_ACCOUNT); keyid != "" {
 		currentConfig.BzzAccount = keyid
 	}
@@ -362,6 +370,18 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 
 	if cors := os.Getenv(SWARM_ENV_CORS); cors != "" {
 		currentConfig.Cors = cors
+	}
+
+	if bm := os.Getenv(SWARM_ENV_BOOTNODE_MODE); bm != "" {
+		bootnodeMode, err := strconv.ParseBool(bm)
+		if err != nil {
+			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_BOOTNODE_MODE, err)
+		}
+		currentConfig.BootnodeMode = bootnodeMode
+	}
+
+	if api := os.Getenv(SWARM_GLOBALSTORE_API); api != "" {
+		currentConfig.GlobalStoreAPI = api
 	}
 
 	return currentConfig
