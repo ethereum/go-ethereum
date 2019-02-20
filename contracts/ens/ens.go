@@ -17,6 +17,7 @@
 package ens
 
 //go:generate abigen --sol contract/ENS.sol --pkg contract --out contract/ens.go
+//go:generate abigen --sol contract/ENSRegistry.sol --exc contract/ENS.sol:ENS --pkg contract --out contract/ensregistry.go
 //go:generate abigen --sol contract/FIFSRegistrar.sol --exc contract/ENS.sol:ENS --pkg contract --out contract/fifsregistrar.go
 //go:generate abigen --sol contract/PublicResolver.sol --exc contract/ENS.sol:ENS --pkg contract --out contract/publicresolver.go
 
@@ -60,7 +61,7 @@ func NewENS(transactOpts *bind.TransactOpts, contractAddr common.Address, contra
 // DeployENS deploys an instance of the ENS nameservice, with a 'first-in, first-served' root registrar.
 func DeployENS(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend) (common.Address, *ENS, error) {
 	// Deploy the ENS registry
-	ensAddr, _, _, err := contract.DeployENS(transactOpts, contractBackend)
+	ensAddr, _, _, err := contract.DeployENSRegistry(transactOpts, contractBackend)
 	if err != nil {
 		return ensAddr, nil, err
 	}
@@ -133,6 +134,7 @@ func (ens *ENS) Resolve(name string) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
+
 	ret, err := resolver.Contenthash(node)
 	if err != nil {
 		return common.Hash{}, err
@@ -181,8 +183,8 @@ func (ens *ENS) Register(name string) (*types.Transaction, error) {
 }
 
 // SetContentHash sets the content hash associated with a name. Only works if the caller
-// owns the name, and the associated resolver implements a `setContent` function.
-func (ens *ENS) SetContentHash(name string, hash common.Hash) (*types.Transaction, error) {
+// owns the name, and the associated resolver implements a `setContenthash` function.
+func (ens *ENS) SetContentHash(name string, hash []byte) (*types.Transaction, error) {
 	node := EnsNode(name)
 
 	resolver, err := ens.getResolver(node)

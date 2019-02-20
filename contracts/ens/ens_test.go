@@ -63,7 +63,7 @@ func TestENS(t *testing.T) {
 	contractBackend.Commit()
 
 	// Set the content hash for the name.
-	if _, err = ens.SetContentHash(name, hash); err != nil {
+	if _, err = ens.SetContentHash(name, hash.Bytes()); err != nil {
 		t.Fatalf("can't set content hash: %v", err)
 	}
 	contractBackend.Commit()
@@ -88,7 +88,7 @@ func TestENS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if vhost != hash {
+	if testAddr != recoveredAddr {
 		t.Fatalf("resolve error, expected %v, got %v", testAddr.Hex(), recoveredAddr.Hex())
 	}
 }
