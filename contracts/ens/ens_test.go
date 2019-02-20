@@ -30,11 +30,12 @@ import (
 )
 
 var (
-	key, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	name     = "my name on ENS"
-	hash     = crypto.Keccak256Hash([]byte("my content"))
-	addr     = crypto.PubkeyToAddress(key.PublicKey)
-	testAddr = common.HexToAddress("0x1234123412341234123412341234123412341234")
+	key, _       = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	name         = "my name on ENS"
+	hash         = crypto.Keccak256Hash([]byte("my content"))
+	fallbackHash = crypto.Keccak256Hash([]byte("my content hash"))
+	addr         = crypto.PubkeyToAddress(key.PublicKey)
+	testAddr     = common.HexToAddress("0x1234123412341234123412341234123412341234")
 )
 
 func TestENS(t *testing.T) {
@@ -94,17 +95,17 @@ func TestENS(t *testing.T) {
 	}
 
 	// deploy the fallback contract and see that the fallback mechanism works
-	newResolverAddr, _, _, err := fallback_contract.DeployPublicResolver(transactOpts, contractBackend, ensAddr)
+	fallbackResolverAddr, _, _, err := fallback_contract.DeployPublicResolver(transactOpts, contractBackend, ensAddr)
 	if err != nil {
 		t.Fatalf("can't deploy resolver: %v", err)
 	}
-	if _, err := ens.SetResolver(EnsNode(name), newResolverAddr); err != nil {
+	if _, err := ens.SetResolver(EnsNode(name), fallbackResolverAddr); err != nil {
 		t.Fatalf("can't set resolver: %v", err)
 	}
 	contractBackend.Commit()
 
 	// Set the content hash for the name.
-	if _, err = ens.SetContentHash(name, hash.Bytes()); err != nil {
+	if _, err = ens.SetContentHash(name, fallbackHash.Bytes()); err != nil {
 		t.Fatalf("can't set content hash: %v", err)
 	}
 	contractBackend.Commit()
@@ -114,7 +115,7 @@ func TestENS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if vhost != hash {
+	if vhost != fallbackHash {
 		t.Fatalf("resolve error, expected %v, got %v", hash.Hex(), vhost.Hex())
 	}
 

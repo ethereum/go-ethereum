@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens/contract"
+	"github.com/ethereum/go-ethereum/contracts/ens/fallback_contract"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -119,6 +120,21 @@ func (ens *ENS) getResolver(node [32]byte) (*contract.PublicResolverSession, err
 	}, nil
 }
 
+func (ens *ENS) getFallbackResolver(node [32]byte) (*fallback_contract.PublicResolverSession, error) {
+	resolverAddr, err := ens.Resolver(node)
+	if err != nil {
+		return nil, err
+	}
+	resolver, err := fallback_contract.NewPublicResolver(resolverAddr, ens.contractBackend)
+	if err != nil {
+		return nil, err
+	}
+	return &fallback_contract.PublicResolverSession{
+		Contract:     resolver,
+		TransactOpts: ens.TransactOpts,
+	}, nil
+}
+
 func (ens *ENS) getRegistrar(node [32]byte) (*contract.FIFSRegistrarSession, error) {
 	registrarAddr, err := ens.Owner(node)
 	if err != nil {
@@ -150,7 +166,15 @@ func (ens *ENS) Resolve(name string) (common.Hash, error) {
 	}
 
 	if !supported {
-		panic("w00t")
+		resolver, err := ens.getFallbackResolver(node)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		ret, err := resolver.Content(node)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		return common.BytesToHash(ret[:]), nil
 	}
 
 	// END DEPRECATED CODE
@@ -212,6 +236,9 @@ func (ens *ENS) SetContentHash(name string, hash []byte) (*types.Transaction, er
 		return nil, err
 	}
 
+	opts := ens.TransactOpts
+	opts.GasLimit = 200000
+
 	// IMPORTANT: The old contract is deprecated. This code should be removed latest on June 1st 2019
 	supported, err := resolver.SupportsInterface(contentHash_Interface_Id)
 	if err != nil {
@@ -219,12 +246,17 @@ func (ens *ENS) SetContentHash(name string, hash []byte) (*types.Transaction, er
 	}
 
 	if !supported {
-		panic("w00t")
+		resolver, err := ens.getFallbackResolver(node)
+		if err != nil {
+			return nil, err
+		}
+		opts := ens.TransactOpts
+		opts.GasLimit = 200000
+		var b [32]byte
+		copy(b[:], hash)
+		return resolver.Contract.SetContent(&opts, node, b)
 	}
 
 	// END DEPRECATED CODE
-
-	opts := ens.TransactOpts
-	opts.GasLimit = 200000
 	return resolver.Contract.SetContenthash(&opts, node, hash)
 }
