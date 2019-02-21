@@ -259,224 +259,239 @@ js:
     </script>
 
     <script type="text/javascript">
-      $.ajax({
-        url: 'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list',
-        error: function() {
-          alert("Failed to load releases!");
-        },
-        dataType: 'xml',
-        success: function(data) {
-          // Define the release tables
-          var releases = {
-            stable:  [],
-            develop: [],
-            cross:   []
-          };
-          var signatures = {};
+      // Create the blob retriever that iterates over all the pages of the blobstore.
+      var blobs = [];
+      var retrieveBlobs = function(marker, finished) {
+        // Generate the blob listing URL and request it from Azure
+        var url = 'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&maxresults=5000&prefix=geth-';
+        if (marker != "") {
+          url += "&marker=" + marker;
+        }
+        $.ajax({
+          url: url,
+          type: 'GET',
+          error: function() {
+            alert("Failed to load releases!");
+          },
+          dataType: 'xml',
+          success: function(data) {
+            // List of blobs retrieved, acumulate them first of all
+            Array.prototype.push.apply(blobs, $(data).find('Blob'));
 
-          // Iterate over all the blobs and populate the tables
-          var blobs = $(data).find('Blob')
-          for (var i = 0; i < blobs.length; i++) {
-            // Gather all available resources to later inspection
-            var name = $($(blobs[i]).find('Name')[0]).text();
-            resources[name] = true;
-
-            // Skip any signatures, those are assumed implicitly
-            if (name.endsWith(".asc")) {
-              signatures[name] = true;
-              continue;
-            }
-
-            // Skip any blobs that do not start with "geth"
-            if (!name.startsWith("geth")) {
-              continue;
-            }
-
-            // Otherwise add an entry to one of the release tables
-            var parts = name.split("-");
-            var date  = parts[parts.length-1].split(".")[0];
-            if (date.length != 14) {
-              date = parts[parts.length-2];
-            }
-            if (date.length != 14) {
-              date = new Date($($(blobs[i]).find('Last-Modified')[0]).text());
+            // If there are more pages, load them all
+            marker = $($(data).find('NextMarker')[0]).text();
+            if (marker != "") {
+              retrieveBlobs(marker, finished);
             } else {
-              date = moment(date, "YYYYMMDDhhmmss").toDate();
-            }
-            var size = $($(blobs[i]).find('Content-Length')[0]).text();
-
-            var sum = window.atob($($(blobs[i]).find('Content-MD5')[0]).text());
-            sum = sum.split('').map(function (char) { return ('0' + char.charCodeAt(0).toString(16)).slice(-2); }).join('');
-
-            var parts  = name.split("-");
-            var commit = parts[parts.length - 1].split(".")[0];
-
-            if (name.includes("unstable")) {
-              releases.develop.push({name: name, commit: commit, date: date, size: size, sum: sum});
-            } else {
-              releases.stable.push({name: name, commit: commit, date: date, size: size, sum: sum});
+              finished(blobs);
             }
           }
-          // Generate the actual release HTML tables
-          var groups = ["stable", "develop"];
-          var oses   = ["android", "ios", "linux", "darwin", "windows"];
+        });
+      }
+      // Start retrieving the release blobs and populate the page on success
+      retrieveBlobs("", function() {
+        // Define the release tables
+        var releases = {
+          stable:  [],
+          develop: [],
+          cross:   []
+        };
+        var signatures = {};
 
-          for (var i = 0; i < groups.length; i++) {
-            // Fetch and sort the releases in the given group
-            var group = groups[i];
+        // Iterate over all the blobs and populate the tables
+        for (var i = 0; i < blobs.length; i++) {
+          // Gather all available resources to later inspection
+          var name = $($(blobs[i]).find('Name')[0]).text();
+          resources[name] = true;
 
-            var bins = releases[group];
-            bins.sort(function compare(a,b) { return b.date - a.date; });
+          // Skip any signatures, those are assumed implicitly
+          if (name.endsWith(".asc")) {
+            signatures[name] = true;
+            continue;
+          }
+          // Otherwise add an entry to one of the release tables
+          var parts = name.split("-");
+          var date  = parts[parts.length-1].split(".")[0];
+          if (date.length != 14) {
+            date = parts[parts.length-2];
+          }
+          if (date.length != 14) {
+            date = new Date($($(blobs[i]).find('Last-Modified')[0]).text());
+          } else {
+            date = moment(date, "YYYYMMDDhhmmss").toDate();
+          }
+          var size = $($(blobs[i]).find('Content-Length')[0]).text();
 
-            // Split up the releases into different OSes
-            for (var j = 0; j < oses.length; j++) {
-              var os = oses[j];
+          var sum = window.atob($($(blobs[i]).find('Content-MD5')[0]).text());
+          sum = sum.split('').map(function (char) { return ('0' + char.charCodeAt(0).toString(16)).slice(-2); }).join('');
 
-              // Gather all the releases belonging to this group and operating system, split by version
-              var versions = [];
+          var parts  = name.split("-");
+          var commit = parts[parts.length - 1].split(".")[0];
 
-              for (var k = 0; k < bins.length; k++) {
-                if (bins[k].name.includes(os)) {
-                  var parts = bins[k].name.split("-").slice(1);
+          if (name.includes("unstable")) {
+            releases.develop.push({name: name, commit: commit, date: date, size: size, sum: sum});
+          } else {
+            releases.stable.push({name: name, commit: commit, date: date, size: size, sum: sum});
+          }
+        }
+        // Generate the actual release HTML tables
+        var groups = ["stable", "develop"];
+        var oses   = ["android", "ios", "linux", "darwin", "windows"];
 
-                  // Assemble the name of the download with the version string
-                  var name = "Geth ";
-                  if (parts[0] == "alltools") {
-                    name += "&amp; Tools ";
-                    parts = parts.slice(1);
-                  }
-                  name += parts[2];
+        for (var i = 0; i < groups.length; i++) {
+          // Fetch and sort the releases in the given group
+          var group = groups[i];
 
-                  // Extract a user friendly archive type
-                  var kind = "Archive";
-                  if (os == "android" || os == "ios") {
-                    kind = "Library";
-                  } else if (os == "windows" && bins[k].name.split('.').pop() == "exe") {
-                    kind = "Installer";
-                  }
-                  // Extract the architecture and make it user friendly
-                  var arch = parts[1];
-                  switch (arch) {
-                    case "386":
-                      arch = "32-bit";
-                      break;
-                    case "amd64":
-                      arch = "64-bit";
-                      break;
-                    case "arm5":
-                      arch = "ARMv5";
-                      break;
-                    case "arm6":
-                      arch = "ARMv6";
-                      break;
-                    case "arm7":
-                      arch = "ARMv7";
-                      break;
-                    case "arm64":
-                      arch = "ARM64";
-                      break;
-                    case "mips":
-                      arch = "MIPS32";
-                      break;
-                    case "mipsle":
-                      arch = "MIPS32(le)";
-                      break;
-                    case "mips64":
-                      arch = "MIPS64";
-                      break;
-                    case "mips64le":
-                      arch = "MIPS64(le)";
-                      break;
-                  }
-                  var primary = (os == "android" && arch == "all") || (os == "ios" && arch == "all") ||
-                    (os == "linux" && arch == "64-bit") || (os == "darwin" && arch == "64-bit") || (os == "windows" && arch == "64-bit" && kind == "Installer");
+          var bins = releases[group];
+          bins.sort(function compare(a,b) { return b.date - a.date; });
 
-                  // Extract the commit hash from the download name
-                  parts = parts.slice(3);
-                  if (parts[0] == "unstable") {
-                    parts = parts.slice(1);
-                  }
-                  var commit = parts[0].split(".")[0];
+          // Split up the releases into different OSes
+          for (var j = 0; j < oses.length; j++) {
+            var os = oses[j];
 
-                  // Figure out whether a signature is available
-                  var sig = (bins[k].name+".asc") in signatures;
+            // Gather all the releases belonging to this group and operating system, split by version
+            var versions = [];
 
-                  if (versions.length == 0 || versions[versions.length - 1].commit != commit) {
-                    versions.push({commit: commit, bins: []});
-                  }
-                  versions[versions.length - 1].bins.push({
-                    file: bins[k].name, date: bins[k].date, sum: bins[k].sum, size: bins[k].size,
-                    name: name, commit: commit, kind: kind, arch: arch, primary: primary, sig: sig
-                  });
+            for (var k = 0; k < bins.length; k++) {
+              if (bins[k].name.includes(os)) {
+                var parts = bins[k].name.split("-").slice(1);
+
+                // Assemble the name of the download with the version string
+                var name = "Geth ";
+                if (parts[0] == "alltools") {
+                  name += "&amp; Tools ";
+                  parts = parts.slice(1);
                 }
-              }
-              // Look up the HTML table corresponding to the [group || os] and empty it
-              var table = $('#table_' + group + "_" + os);
-              table.empty();
+                name += parts[2];
 
-              $("<thead><tr>" +
-                "  <th class='text-center'>Release</th>" +
-                "  <th class='text-center'>Commit</th>" +
-                "  <th class='text-center'>Kind</th>" +
-                "  <th class='text-center'>Arch</th>" +
-                "  <th class='text-center'>Size</th>" +
-                "  <th class='text-center'>Published</th>" +
-                "  <th class='text-center'>Signature</th>" +
-                "  <th class='text-center'>Checksum (MD5)</th>" +
-                "</tr></thead>").appendTo(table);
-              var body = $("<tbody></tbody>").appendTo(table);
+                // Extract a user friendly archive type
+                var kind = "Archive";
+                if (os == "android" || os == "ios") {
+                  kind = "Library";
+                } else if (os == "windows" && bins[k].name.split('.').pop() == "exe") {
+                  kind = "Installer";
+                }
+                // Extract the architecture and make it user friendly
+                var arch = parts[1];
+                switch (arch) {
+                  case "386":
+                    arch = "32-bit";
+                    break;
+                  case "amd64":
+                    arch = "64-bit";
+                    break;
+                  case "arm5":
+                    arch = "ARMv5";
+                    break;
+                  case "arm6":
+                    arch = "ARMv6";
+                    break;
+                  case "arm7":
+                    arch = "ARMv7";
+                    break;
+                  case "arm64":
+                    arch = "ARM64";
+                    break;
+                  case "mips":
+                    arch = "MIPS32";
+                    break;
+                  case "mipsle":
+                    arch = "MIPS32(le)";
+                    break;
+                  case "mips64":
+                    arch = "MIPS64";
+                    break;
+                  case "mips64le":
+                    arch = "MIPS64(le)";
+                    break;
+                }
+                var primary = (os == "android" && arch == "all") || (os == "ios" && arch == "all") ||
+                  (os == "linux" && arch == "64-bit") || (os == "darwin" && arch == "64-bit") || (os == "windows" && arch == "64-bit" && kind == "Installer");
 
-              // Generate the contents for the HTML table
-              var collapsed = false;
-              var entires   = 0;
+                // Extract the commit hash from the download name
+                parts = parts.slice(3);
+                if (parts[0] == "unstable") {
+                  parts = parts.slice(1);
+                }
+                var commit = parts[0].split(".")[0];
 
-              for (var k = 0; k < versions.length; k++) {
-                // Sort the downloads in the version group by name and architecture
-                var verbins = versions[k].bins;
-                verbins.sort(function(a, b) {
-                  if (a.name < b.name) return 1;
-                  if (a.name > b.name) return -1;
-                  if (a.arch < b.arch) return -1;
-                  if (a.arch > b.arch) return 1;
-                  return 0;
+                // Figure out whether a signature is available
+                var sig = (bins[k].name+".asc") in signatures;
+
+                if (versions.length == 0 || versions[versions.length - 1].commit != commit) {
+                  versions.push({commit: commit, bins: []});
+                }
+                versions[versions.length - 1].bins.push({
+                  file: bins[k].name, date: bins[k].date, sum: bins[k].sum, size: bins[k].size,
+                  name: name, commit: commit, kind: kind, arch: arch, primary: primary, sig: sig
                 });
-                // Iterate over the binaries and display them
-                for (var l = 0; l < verbins.length; l++) {
-                  // Retrieve the current archive and decide on its recentness
-                  var bin = verbins[l];
+              }
+            }
+            // Look up the HTML table corresponding to the [group || os] and empty it
+            var table = $('#table_' + group + "_" + os);
+            table.empty();
 
-                  // Append the archive to the download table
-                  $("<tr style='text-align: center; " + (k == 0 && bin.primary ? " font-weight: bold;" : "") + "' class='" + (group == "develop" && k == 0 ? "latest" : "") + (k >= 2 && entires >= 10 ? " collapse out" : "") + "'>" +
-                    "  <td><a href='https://gethstore.blob.core.windows.net/builds/" + bin.file + "' style='text-decoration: none;'>" + bin.name + "</a></td>" +
-                    "  <td><a href='https://github.com/ethereum/go-ethereum/tree/" + bin.commit + "' target='_blank' style='text-decoration: none; font-family: monospace;'>" + bin.commit + "&hellip;</a></td>" +
-                    "  <td>" + bin.kind + "</td>" +
-                    "  <td>" + bin.arch + "</td>" +
-                    "  <td>" + filesize(bin.size) + "</td>" +
-                    "  <td>" + moment(bin.date).calendar() + "</td>" +
-                    "  <td>" + (bin.sig ? "<a href='https://gethstore.blob.core.windows.net/builds/" + bin.file + ".asc' style='text-decoration: none;'>Signature</a>" : "Unavailable") + "</td>" +
-                    "  <td style='font-family: monospace;'>" + bin.sum + "</td>" +
-                    "</tr>").appendTo(body);
+            $("<thead><tr>" +
+              "  <th class='text-center'>Release</th>" +
+              "  <th class='text-center'>Commit</th>" +
+              "  <th class='text-center'>Kind</th>" +
+              "  <th class='text-center'>Arch</th>" +
+              "  <th class='text-center'>Size</th>" +
+              "  <th class='text-center'>Published</th>" +
+              "  <th class='text-center'>Signature</th>" +
+              "  <th class='text-center'>Checksum (MD5)</th>" +
+              "</tr></thead>").appendTo(table);
+            var body = $("<tbody></tbody>").appendTo(table);
 
-                  // If we've displayed at least 3 versions and the table's getting long, collapse
-                  if (k >= 2 && !collapsed && entires >= 10) {
-                    $("<tr style='text-align: center;'>" +
-                      "  <td colspan='8'><a class='btn btn-success btn-xs'>Show older releases</a></td>" +
-                      "</tr>").appendTo(table);
-                    $(table.find('.btn')).click(function(){
-                      $(this).parent().parent().toggle();
-                      $(this).parent().parent().parent().find('.collapse').toggle();
-                    });
-                    collapsed = true;
-                  }
-                  entires++;
+            // Generate the contents for the HTML table
+            var collapsed = false;
+            var entires   = 0;
+
+            for (var k = 0; k < versions.length; k++) {
+              // Sort the downloads in the version group by name and architecture
+              var verbins = versions[k].bins;
+              verbins.sort(function(a, b) {
+                if (a.name < b.name) return 1;
+                if (a.name > b.name) return -1;
+                if (a.arch < b.arch) return -1;
+                if (a.arch > b.arch) return 1;
+                return 0;
+              });
+              // Iterate over the binaries and display them
+              for (var l = 0; l < verbins.length; l++) {
+                // Retrieve the current archive and decide on its recentness
+                var bin = verbins[l];
+
+                // Append the archive to the download table
+                $("<tr style='text-align: center; " + (k == 0 && bin.primary ? " font-weight: bold;" : "") + "' class='" + (group == "develop" && k == 0 ? "latest" : "") + (k >= 2 && entires >= 10 ? " collapse out" : "") + "'>" +
+                  "  <td><a href='https://gethstore.blob.core.windows.net/builds/" + bin.file + "' style='text-decoration: none;'>" + bin.name + "</a></td>" +
+                  "  <td><a href='https://github.com/ethereum/go-ethereum/tree/" + bin.commit + "' target='_blank' style='text-decoration: none; font-family: monospace;'>" + bin.commit + "&hellip;</a></td>" +
+                  "  <td>" + bin.kind + "</td>" +
+                  "  <td>" + bin.arch + "</td>" +
+                  "  <td>" + filesize(bin.size) + "</td>" +
+                  "  <td>" + moment(bin.date).calendar() + "</td>" +
+                  "  <td>" + (bin.sig ? "<a href='https://gethstore.blob.core.windows.net/builds/" + bin.file + ".asc' style='text-decoration: none;'>Signature</a>" : "Unavailable") + "</td>" +
+                  "  <td style='font-family: monospace;'>" + bin.sum + "</td>" +
+                  "</tr>").appendTo(body);
+
+                // If we've displayed at least 3 versions and the table's getting long, collapse
+                if (k >= 2 && !collapsed && entires >= 10) {
+                  $("<tr style='text-align: center;'>" +
+                    "  <td colspan='8'><a class='btn btn-success btn-xs'>Show older releases</a></td>" +
+                    "</tr>").appendTo(table);
+                  $(table.find('.btn')).click(function(){
+                    $(this).parent().parent().toggle();
+                    $(this).parent().parent().parent().find('.collapse').toggle();
+                  });
+                  collapsed = true;
                 }
+                entires++;
               }
             }
           }
-          // Mark the request done to possibly hide the loading page
-          requestDone();
-        },
-        type: 'GET'
+        }
+        // Mark the request done to possibly hide the loading page
+        requestDone();
       });
     </script>
 
