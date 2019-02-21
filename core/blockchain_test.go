@@ -2227,8 +2227,8 @@ func BenchmarkBlockChain_1x1000ValueTransferToExisting(b *testing.B) {
 
 func BenchmarkBlockChain_1x1000Executions(b *testing.B) {
 	var (
-		numTxs    = 1000
-		numBlocks = 1
+		numTxs= 1000
+		numBlocks= 1
 	)
 	b.StopTimer()
 	b.ResetTimer()
@@ -2286,4 +2286,85 @@ func TestSideImportPrunedBlocks(t *testing.T) {
 	if err != nil {
 		t.Errorf("Got error, %v", err)
 	}
+}
+
+func TestProcessingStateDiffs(t *testing.T) {
+	defaultTrieCleanCache := 256
+	defaultTrieDirtyCache := 256
+	defaultTrieTimeout := 60 * time.Minute
+	cacheConfig := &CacheConfig{
+		TrieDirtyDisabled:    false,
+		TrieCleanLimit:       defaultTrieCleanCache,
+		TrieDirtyLimit:       defaultTrieDirtyCache,
+		TrieTimeLimit:        defaultTrieTimeout,
+		ProcessingStateDiffs: true,
+	}
+	db := rawdb.NewMemoryDatabase()
+	genesis := new(Genesis).MustCommit(db)
+	numberOfBlocks := TriesInMemory
+	engine := ethash.NewFaker()
+	blockchain, _ := NewBlockChain(db, cacheConfig, params.AllEthashProtocolChanges, engine, vm.Config{}, nil)
+	blocks := makeBlockChain(genesis, numberOfBlocks+1, engine, db, canonicalSeed)
+	_, err := blockchain.InsertChain(blocks)
+	if err != nil {
+		t.Fatalf("failed to create pristine chain: %v", err)
+	}
+	defer blockchain.Stop()
+
+	//when adding a root hash to the collection, it will increment the count
+	firstStateRoot := blocks[0].Root()
+	blockchain.AddToStateDiffProcessedCollection(firstStateRoot)
+	value, ok := blockchain.stateDiffsProcessed[firstStateRoot]
+	if !ok {
+		t.Error("state root not found in collection")
+	}
+	if value != 1 {
+		t.Error("state root count not correct", "want", 1, "got", value)
+	}
+
+	blockchain.AddToStateDiffProcessedCollection(firstStateRoot)
+	value, ok = blockchain.stateDiffsProcessed[firstStateRoot]
+	if !ok {
+		t.Error("state root not found in collection")
+	}
+	if value != 2 {
+		t.Error("state root count not correct", "want", 2, "got", value)
+	}
+
+	moreBlocks := makeBlockChain(blocks[len(blocks)-1], 1, engine, db, canonicalSeed)
+	_, err = blockchain.InsertChain(moreBlocks)
+
+	//a root hash can be dereferenced when it's state diff and it's child's state diff have been processed
+	//(i.e. it has a count of 2 in stateDiffsProcessed)
+	nodes := blockchain.stateCache.TrieDB().Nodes()
+	if containsRootHash(nodes, firstStateRoot) {
+		t.Errorf("stateRoot %s in nodes, want: %t, got: %t", firstStateRoot.Hex(), false, true)
+	}
+
+	//a root hash should still be in the in-mem db if it's child's state diff hasn't yet been processed
+	//(i.e. it has a count of 1 stateDiffsProcessed)
+	secondStateRoot := blocks[1].Root()
+	blockchain.AddToStateDiffProcessedCollection(secondStateRoot)
+	if !containsRootHash(nodes, secondStateRoot) {
+		t.Errorf("stateRoot %s in nodes, want: %t, got: %t", secondStateRoot.Hex(), true, false)
+	}
+
+	//the stateDiffsProcessed collection is cleaned up once a hash has been dereferenced
+	_, ok = blockchain.stateDiffsProcessed[firstStateRoot]
+	if ok {
+		t.Errorf("stateRoot %s in stateDiffsProcessed collection, want: %t, got: %t",
+			firstStateRoot.Hex(),
+			false,
+			ok,
+		)
+	}
+}
+
+func containsRootHash(collection []common.Hash, hash common.Hash) bool {
+	for _, n := range collection {
+		if n == hash {
+			return true
+		}
+	}
+	return false
 }

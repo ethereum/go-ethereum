@@ -24,11 +24,10 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-func sortKeys(data map[common.Address]*state.Account) []string {
+func sortKeys(data AccountsMap) []string {
 	var keys []string
 	for key := range data {
 		keys = append(keys, key.Hex())

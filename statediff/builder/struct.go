@@ -26,12 +26,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+type AccountDiffsMap map[common.Hash]AccountDiff
 type StateDiff struct {
-	BlockNumber     int64                          `json:"blockNumber"      gencodec:"required"`
-	BlockHash       common.Hash                    `json:"blockHash"        gencodec:"required"`
-	CreatedAccounts map[common.Address]AccountDiff `json:"createdAccounts"  gencodec:"required"`
-	DeletedAccounts map[common.Address]AccountDiff `json:"deletedAccounts"  gencodec:"required"`
-	UpdatedAccounts map[common.Address]AccountDiff `json:"updatedAccounts"  gencodec:"required"`
+	BlockNumber     int64           `json:"blockNumber"      gencodec:"required"`
+	BlockHash       common.Hash     `json:"blockHash"        gencodec:"required"`
+	CreatedAccounts AccountDiffsMap `json:"createdAccounts"  gencodec:"required"`
+	DeletedAccounts AccountDiffsMap `json:"deletedAccounts"  gencodec:"required"`
+	UpdatedAccounts AccountDiffsMap `json:"updatedAccounts"  gencodec:"required"`
 
 	encoded []byte
 	err     error

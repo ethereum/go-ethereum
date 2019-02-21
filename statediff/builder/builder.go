@@ -22,6 +22,7 @@ package builder
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -35,25 +36,27 @@ type Builder interface {
 
 type builder struct {
 	chainDB    ethdb.Database
-	trieDB     *trie.Database
-	cachedTrie *trie.Trie
+	blockChain *core.BlockChain
 }
 
-func NewBuilder(db ethdb.Database) *builder {
+type AccountsMap map[common.Hash]*state.Account
+
+func NewBuilder(db ethdb.Database, blockChain *core.BlockChain) *builder {
 	return &builder{
-		chainDB: db,
-		trieDB:  trie.NewDatabase(db),
+		chainDB:    db,
+		blockChain: blockChain,
 	}
 }
 
 func (sdb *builder) BuildStateDiff(oldStateRoot, newStateRoot common.Hash, blockNumber int64, blockHash common.Hash) (*StateDiff, error) {
 	// Generate tries for old and new states
-	oldTrie, err := trie.New(oldStateRoot, sdb.trieDB)
+	stateCache := sdb.blockChain.StateCache()
+	oldTrie, err := stateCache.OpenTrie(oldStateRoot)
 	if err != nil {
 		log.Error("Error creating trie for oldStateRoot", "error", err)
 		return nil, err
 	}
-	newTrie, err := trie.New(newStateRoot, sdb.trieDB)
+	newTrie, err := stateCache.OpenTrie(newStateRoot)
 	if err != nil {
 		log.Error("Error creating trie for newStateRoot", "error", err)
 		return nil, err
@@ -108,33 +111,27 @@ func (sdb *builder) BuildStateDiff(oldStateRoot, newStateRoot common.Hash, block
 	}, nil
 }
 
-func (sdb *builder) collectDiffNodes(a, b trie.NodeIterator) (map[common.Address]*state.Account, error) {
-	var diffAccounts = make(map[common.Address]*state.Account)
+func (sdb *builder) collectDiffNodes(a, b trie.NodeIterator) (AccountsMap, error) {
+	var diffAccounts = make(AccountsMap)
 	it, _ := trie.NewDifferenceIterator(a, b)
 
 	for {
 		log.Debug("Current Path and Hash", "path", pathToStr(it), "hashold", it.Hash())
 		if it.Leaf() {
-
-			// lookup address
-			path := make([]byte, len(it.Path())-1)
-			copy(path, it.Path())
-			addr, err := sdb.addressByPath(path)
-			if err != nil {
-				log.Error("Error looking up address via path", "path", path, "error", err)
-				return nil, err
-			}
+			leafKey := make([]byte, len(it.LeafKey()))
+			copy(leafKey, it.LeafKey())
+			leafKeyHash := common.BytesToHash(leafKey)
 
 			// lookup account state
 			var account state.Account
 			if err := rlp.DecodeBytes(it.LeafBlob(), &account); err != nil {
-				log.Error("Error looking up account via address", "address", addr, "error", err)
+				log.Error("Error looking up account via address", "address", leafKeyHash, "error", err)
 				return nil, err
 			}
 
 			// record account to diffs (creation if we are looking at new - old; deletion if old - new)
-			log.Debug("Account lookup successful", "address", addr, "account", account)
-			diffAccounts[*addr] = &account
+			log.Debug("Account lookup successful", "address", leafKeyHash, "account", account)
+			diffAccounts[leafKeyHash] = &account
 		}
 		cont := it.Next(true)
 		if !cont {
@@ -145,8 +142,8 @@ func (sdb *builder) collectDiffNodes(a, b trie.NodeIterator) (map[common.Address
 	return diffAccounts, nil
 }
 
-func (sdb *builder) buildDiffEventual(accounts map[common.Address]*state.Account) (map[common.Address]AccountDiff, error) {
-	accountDiffs := make(map[common.Address]AccountDiff)
+func (sdb *builder) buildDiffEventual(accounts AccountsMap) (AccountDiffsMap, error) {
+	accountDiffs := make(AccountDiffsMap)
 	for addr, val := range accounts {
 		sr := val.Root
 		storageDiffs, err := sdb.buildStorageDiffsEventual(sr)
@@ -172,11 +169,11 @@ func (sdb *builder) buildDiffEventual(accounts map[common.Address]*state.Account
 	return accountDiffs, nil
 }
 
-func (sdb *builder) buildDiffIncremental(creations map[common.Address]*state.Account, deletions map[common.Address]*state.Account, updatedKeys []string) (map[common.Address]AccountDiff, error) {
-	updatedAccounts := make(map[common.Address]AccountDiff)
+func (sdb *builder) buildDiffIncremental(creations AccountsMap, deletions AccountsMap, updatedKeys []string) (AccountDiffsMap, error) {
+	updatedAccounts := make(AccountDiffsMap)
 	for _, val := range updatedKeys {
-		createdAcc := creations[common.HexToAddress(val)]
-		deletedAcc := deletions[common.HexToAddress(val)]
+		createdAcc := creations[common.HexToHash(val)]
+		deletedAcc := deletions[common.HexToHash(val)]
 		oldSR := deletedAcc.Root
 		newSR := createdAcc.Root
 		if storageDiffs, err := sdb.buildStorageDiffsIncremental(oldSR, newSR); err != nil {
@@ -190,15 +187,15 @@ func (sdb *builder) buildDiffIncremental(creations map[common.Address]*state.Acc
 			nHexRoot := createdAcc.Root.Hex()
 			contractRoot := DiffString{Value: &nHexRoot}
 
-			updatedAccounts[common.HexToAddress(val)] = AccountDiff{
+			updatedAccounts[common.HexToHash(val)] = AccountDiff{
 				Nonce:        nonce,
 				Balance:      balance,
 				CodeHash:     codeHash,
 				ContractRoot: contractRoot,
 				Storage:      storageDiffs,
 			}
-			delete(creations, common.HexToAddress(val))
-			delete(deletions, common.HexToAddress(val))
+			delete(creations, common.HexToHash(val))
+			delete(deletions, common.HexToHash(val))
 		}
 	}
 	return updatedAccounts, nil
@@ -206,7 +203,8 @@ func (sdb *builder) buildDiffIncremental(creations map[common.Address]*state.Acc
 
 func (sdb *builder) buildStorageDiffsEventual(sr common.Hash) (map[string]DiffStorage, error) {
 	log.Debug("Storage Root For Eventual Diff", "root", sr.Hex())
-	sTrie, err := trie.New(sr, sdb.trieDB)
+	stateCache := sdb.blockChain.StateCache()
+	sTrie, err := stateCache.OpenTrie(sr)
 	if err != nil {
 		log.Info("error in build storage diff eventual", "error", err)
 		return nil, err
@@ -218,11 +216,13 @@ func (sdb *builder) buildStorageDiffsEventual(sr common.Hash) (map[string]DiffSt
 
 func (sdb *builder) buildStorageDiffsIncremental(oldSR common.Hash, newSR common.Hash) (map[string]DiffStorage, error) {
 	log.Debug("Storage Roots for Incremental Diff", "old", oldSR.Hex(), "new", newSR.Hex())
-	oldTrie, err := trie.New(oldSR, sdb.trieDB)
+	stateCache := sdb.blockChain.StateCache()
+
+	oldTrie, err := stateCache.OpenTrie(oldSR)
 	if err != nil {
 		return nil, err
 	}
-	newTrie, err := trie.New(newSR, sdb.trieDB)
+	newTrie, err := stateCache.OpenTrie(newSR)
 	if err != nil {
 		return nil, err
 	}

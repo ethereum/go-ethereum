@@ -3,6 +3,8 @@ package mocks
 import (
 	"errors"
 
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -15,6 +17,8 @@ type BlockChain struct {
 	callCount            int
 	ChainEvents          []core.ChainEvent
 }
+
+func (mc *BlockChain) AddToStateDiffProcessedCollection(hash common.Hash) {}
 
 func (mc *BlockChain) SetParentBlocksToReturn(blocks []*types.Block) {
 	mc.parentBlocksToReturn = blocks
@@ -43,6 +47,7 @@ func (bc *BlockChain) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subsc
 	subscription := event.NewSubscription(func(quit <-chan struct{}) error {
 		for _, chainEvent := range bc.ChainEvents {
 			if eventCounter > 1 {
+				time.Sleep(250 * time.Millisecond)
 				return subErr
 			}
 			select {

@@ -61,6 +61,8 @@ var DefaultConfig = Config{
 		Blocks:     20,
 		Percentile: 60,
 	},
+
+	StateDiff: false,
 }
 
 func init() {
@@ -157,4 +159,6 @@ type Config struct {
 
 	// Istanbul block override (TODO: remove after the fork)
 	OverrideIstanbul *big.Int
+
+	StateDiff bool
 }

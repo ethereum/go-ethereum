@@ -15,7 +15,7 @@ var (
 	Headers = []string{
 		"blockNumber", "blockHash", "accountAction", "codeHash",
 		"nonceValue", "balanceValue", "contractRoot", "storageDiffPaths",
-		"accountAddress", "storageKey", "storageValue",
+		"accountLeafKey", "storageKey", "storageValue",
 	}
 
 	timeStampFormat      = "20060102150405.00000"
@@ -81,7 +81,7 @@ func accumulateAccountRows(sd builder.StateDiff) [][]string {
 	return accountRows
 }
 
-func formatAccountData(accountAddr common.Address, accountDiff builder.AccountDiff, sd builder.StateDiff, accountAction string) [][]string {
+func formatAccountData(accountAddr common.Hash, accountDiff builder.AccountDiff, sd builder.StateDiff, accountAction string) [][]string {
 	blockNumberString := strconv.FormatInt(sd.BlockNumber, 10)
 	blockHash := sd.BlockHash.String()
 	codeHash := accountDiff.CodeHash

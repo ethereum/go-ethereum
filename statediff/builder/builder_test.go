@@ -10,10 +10,12 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	b "github.com/ethereum/go-ethereum/statediff/builder"
+	"github.com/ethereum/go-ethereum/statediff/testhelpers"
 )
 
 var (
@@ -21,26 +23,33 @@ var (
 
 	testBankKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey) //0x71562b71999873DB5b286dF957af199Ec94617F7
+	bankLeafKey     = testhelpers.AddressToLeafKey(testBankAddress)
 	testBankFunds   = big.NewInt(100000000)
 	genesis         = core.GenesisBlockForTesting(testdb, testBankAddress, testBankFunds)
 
 	account1Key, _                                 = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 	account2Key, _                                 = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
 	account1Addr                                   = crypto.PubkeyToAddress(account1Key.PublicKey) //0x703c4b2bD70c169f5717101CaeE543299Fc946C7
+	account1LeafKey                                = testhelpers.AddressToLeafKey(account1Addr)
 	account2Addr                                   = crypto.PubkeyToAddress(account2Key.PublicKey) //0x0D3ab14BBaD3D99F4203bd7a11aCB94882050E7e
+	account2LeafKey                                = testhelpers.AddressToLeafKey(account2Addr)
 	contractCode                                   = common.Hex2Bytes("608060405234801561001057600080fd5b50602060405190810160405280600160ff16815250600090600161003592919061003b565b506100a5565b826064810192821561006f579160200282015b8281111561006e578251829060ff1690559160200191906001019061004e565b5b50905061007c9190610080565b5090565b6100a291905b8082111561009e576000816000905550600101610086565b5090565b90565b610124806100b46000396000f3fe6080604052348015600f57600080fd5b5060043610604f576000357c01000000000000000000000000000000000000000000000000000000009004806360cd2685146054578063c16431b9146093575b600080fd5b607d60048036036020811015606857600080fd5b810190808035906020019092919050505060c8565b6040518082815260200191505060405180910390f35b60c66004803603604081101560a757600080fd5b81019080803590602001909291908035906020019092919050505060e0565b005b6000808260648110151560d757fe5b01549050919050565b8060008360648110151560ef57fe5b0181905550505056fea165627a7a7230582064e918c3140a117bf3aa65865a9b9e83fae21ad1720506e7933b2a9f54bb40260029")
 	contractAddr                                   common.Address
-	emptyAccountDiffEventualMap                    = make(map[common.Address]b.AccountDiff)
-	emptyAccountDiffIncrementalMap                 = make(map[common.Address]b.AccountDiff)
+	contractLeafKey                                common.Hash
+	emptyAccountDiffEventualMap                    = make(b.AccountDiffsMap)
+	emptyAccountDiffIncrementalMap                 = make(b.AccountDiffsMap)
 	block0Hash, block1Hash, block2Hash, block3Hash common.Hash
 	block0, block1, block2, block3                 *types.Block
 	builder                                        b.Builder
 	miningReward                                   = int64(2000000000000000000)
 	burnAddress                                    = common.HexToAddress("0x0")
+	burnLeafKey                                    = testhelpers.AddressToLeafKey(burnAddress)
 )
 
 func TestBuilder(t *testing.T) {
-	_, blockMap := makeChain(3, genesis)
+	_, blockMap, chain := makeChain(3, genesis)
+	contractLeafKey = testhelpers.AddressToLeafKey(contractAddr)
+	defer chain.Stop()
 	block0Hash = common.HexToHash("0xd1721cfd0b29c36fd7a68f25c128e86413fb666a6e1d68e89b875bd299262661")
 	block1Hash = common.HexToHash("0xbbe88de60ba33a3f18c0caa37d827bfb70252e19e40a07cd34041696c35ecb1a")
 	block2Hash = common.HexToHash("0xde75663f36a8497b4bdda2a4b52bd9540b705a2728c7391c59b8cb2cde5a2feb")
@@ -50,7 +59,7 @@ func TestBuilder(t *testing.T) {
 	block1 = blockMap[block1Hash]
 	block2 = blockMap[block2Hash]
 	block3 = blockMap[block3Hash]
-	builder = b.NewBuilder(testdb)
+	builder = b.NewBuilder(testdb, chain)
 
 	type arguments struct {
 		oldStateRoot common.Hash
@@ -113,15 +122,15 @@ func TestBuilder(t *testing.T) {
 			&b.StateDiff{
 				BlockNumber: block1.Number().Int64(),
 				BlockHash:   block1.Hash(),
-				CreatedAccounts: map[common.Address]b.AccountDiff{
-					account1Addr: {
+				CreatedAccounts: b.AccountDiffsMap{
+					account1LeafKey: {
 						Nonce:        b.DiffUint64{Value: &nonce0},
 						Balance:      b.DiffBigInt{Value: big.NewInt(balanceChange10000)},
 						CodeHash:     "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
 						ContractRoot: b.DiffString{Value: &originalContractRoot},
 						Storage:      map[string]b.DiffStorage{},
 					},
-					burnAddress: {
+					burnLeafKey: {
 						Nonce:        b.DiffUint64{Value: &nonce0},
 						Balance:      b.DiffBigInt{Value: big.NewInt(miningReward)},
 						CodeHash:     "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
@@ -130,8 +139,8 @@ func TestBuilder(t *testing.T) {
 					},
 				},
 				DeletedAccounts: emptyAccountDiffEventualMap,
-				UpdatedAccounts: map[common.Address]b.AccountDiff{
-					testBankAddress: {
+				UpdatedAccounts: b.AccountDiffsMap{
+					bankLeafKey: {
 						Nonce:        b.DiffUint64{Value: &nonce1},
 						Balance:      b.DiffBigInt{Value: big.NewInt(testBankFunds.Int64() - balanceChange10000)},
 						CodeHash:     "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
@@ -154,15 +163,15 @@ func TestBuilder(t *testing.T) {
 			&b.StateDiff{
 				BlockNumber: block2.Number().Int64(),
 				BlockHash:   block2.Hash(),
-				CreatedAccounts: map[common.Address]b.AccountDiff{
-					account2Addr: {
+				CreatedAccounts: b.AccountDiffsMap{
+					account2LeafKey: {
 						Nonce:        b.DiffUint64{Value: &nonce0},
 						Balance:      b.DiffBigInt{Value: big.NewInt(balanceChange1000)},
 						CodeHash:     "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
 						ContractRoot: b.DiffString{Value: &originalContractRoot},
 						Storage:      map[string]b.DiffStorage{},
 					},
-					contractAddr: {
+					contractLeafKey: {
 						Nonce:        b.DiffUint64{Value: &nonce1},
 						Balance:      b.DiffBigInt{Value: big.NewInt(0)},
 						CodeHash:     "0x753f98a8d4328b15636e46f66f2cb4bc860100aa17967cc145fcd17d1d4710ea",
@@ -175,22 +184,22 @@ func TestBuilder(t *testing.T) {
 					},
 				},
 				DeletedAccounts: emptyAccountDiffEventualMap,
-				UpdatedAccounts: map[common.Address]b.AccountDiff{
-					testBankAddress: {
+				UpdatedAccounts: b.AccountDiffsMap{
+					bankLeafKey: {
 						Nonce:        b.DiffUint64{Value: &nonce2},
 						Balance:      b.DiffBigInt{Value: big.NewInt(block1BankBalance - balanceChange1000)},
 						CodeHash:     "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
 						ContractRoot: b.DiffString{Value: &originalContractRoot},
 						Storage:      map[string]b.DiffStorage{},
 					},
-					account1Addr: {
+					account1LeafKey: {
 						Nonce:        b.DiffUint64{Value: &nonce2},
 						Balance:      b.DiffBigInt{Value: big.NewInt(block1Account1Balance - balanceChange1000 + balanceChange1000)},
 						CodeHash:     "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
 						ContractRoot: b.DiffString{Value: &originalContractRoot},
 						Storage:      map[string]b.DiffStorage{},
 					},
-					burnAddress: {
+					burnLeafKey: {
 						Nonce:        b.DiffUint64{Value: &nonce0},
 						Balance:      b.DiffBigInt{Value: big.NewInt(miningReward + miningReward)},
 						CodeHash:     "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
@@ -213,17 +222,17 @@ func TestBuilder(t *testing.T) {
 			&b.StateDiff{
 				BlockNumber:     block3.Number().Int64(),
 				BlockHash:       block3.Hash(),
-				CreatedAccounts: map[common.Address]b.AccountDiff{},
+				CreatedAccounts: b.AccountDiffsMap{},
 				DeletedAccounts: emptyAccountDiffEventualMap,
-				UpdatedAccounts: map[common.Address]b.AccountDiff{
-					account2Addr: {
+				UpdatedAccounts: b.AccountDiffsMap{
+					account2LeafKey: {
 						Nonce:        b.DiffUint64{Value: &nonce0},
 						Balance:      b.DiffBigInt{Value: big.NewInt(block2Account2Balance + miningReward)},
 						CodeHash:     "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
 						ContractRoot: b.DiffString{Value: &originalContractRoot},
 						Storage:      map[string]b.DiffStorage{},
 					},
-					contractAddr: {
+					contractLeafKey: {
 						Nonce:        b.DiffUint64{Value: &nonce1},
 						Balance:      b.DiffBigInt{Value: big.NewInt(0)},
 						CodeHash:     "0x753f98a8d4328b15636e46f66f2cb4bc860100aa17967cc145fcd17d1d4710ea",
@@ -234,7 +243,7 @@ func TestBuilder(t *testing.T) {
 								Value: &updatedStorageValue},
 						},
 					},
-					testBankAddress: {
+					bankLeafKey: {
 						Nonce:        b.DiffUint64{Value: &nonce3},
 						Balance:      b.DiffBigInt{Value: big.NewInt(99989000)},
 						CodeHash:     "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
@@ -252,7 +261,6 @@ func TestBuilder(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-
 		fields := []string{"BlockNumber", "BlockHash", "DeletedAccounts", "UpdatedAccounts", "CreatedAccounts"}
 
 		for _, field := range fields {
@@ -287,8 +295,14 @@ func equals(actual, expected interface{}) (success bool) {
 // the returned hash chain is ordered head->parent. In addition, every 3rd block
 // contains a transaction and every 5th an uncle to allow testing correct block
 // reassembly.
-func makeChain(n int, parent *types.Block) ([]common.Hash, map[common.Hash]*types.Block) {
+func makeChain(n int, parent *types.Block) ([]common.Hash, map[common.Hash]*types.Block, *core.BlockChain) {
 	blocks, _ := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testdb, n, testChainGen)
+	headers := make([]*types.Header, len(blocks))
+	for i, block := range blocks {
+		headers[i] = block.Header()
+	}
+	chain, _ := core.NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil)
+
 	hashes := make([]common.Hash, n+1)
 	hashes[len(hashes)-1] = parent.Hash()
 	blockm := make(map[common.Hash]*types.Block, n+1)
@@ -297,7 +311,7 @@ func makeChain(n int, parent *types.Block) ([]common.Hash, map[common.Hash]*type
 		hashes[len(hashes)-i-2] = b.Hash()
 		blockm[b.Hash()] = b
 	}
-	return hashes, blockm
+	return hashes, blockm, chain
 }
 
 func testChainGen(i int, block *core.BlockGen) {

@@ -19,6 +19,7 @@ import (
 type BlockChain interface {
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	GetBlockByHash(hash common.Hash) *types.Block
+	AddToStateDiffProcessedCollection(hash common.Hash)
 }
 
 type StateDiffService struct {
@@ -28,7 +29,7 @@ type StateDiffService struct {
 }
 
 func NewStateDiffService(db ethdb.Database, blockChain *core.BlockChain, config statediff.Config) (*StateDiffService, error) {
-	builder := b.NewBuilder(db)
+	builder := b.NewBuilder(db, blockChain)
 	publisher, err := p.NewPublisher(config)
 	if err != nil {
 		return nil, err
@@ -94,6 +95,8 @@ HandleBlockChLoop:
 				log.Error("Error extracting statediff", "block number", currentBlock.Number(), "error", err)
 			} else {
 				log.Info("Statediff extracted", "block number", currentBlock.Number(), "location", stateDiffLocation)
+				sds.BlockChain.AddToStateDiffProcessedCollection(parentBlock.Root())
+				sds.BlockChain.AddToStateDiffProcessedCollection(currentBlock.Root())
 			}
 		case <-quitCh:
 			log.Debug("Quitting the statediff block channel")

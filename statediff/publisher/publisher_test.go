@@ -35,7 +35,7 @@ var expectedCreatedAccountRow = []string{
 	strconv.FormatInt(testhelpers.NewBalanceValue, 10),
 	testhelpers.ContractRoot,
 	testhelpers.StoragePath,
-	testhelpers.ContractAddress,
+	testhelpers.ContractLeafKey.Hex(),
 	"0000000000000000000000000000000000000000000000000000000000000001",
 	testhelpers.StorageValue,
 }
@@ -49,7 +49,7 @@ var expectedCreatedAccountWithoutStorageUpdateRow = []string{
 	strconv.FormatInt(testhelpers.NewBalanceValue, 10),
 	testhelpers.ContractRoot,
 	"",
-	testhelpers.AnotherContractAddress,
+	testhelpers.AnotherContractLeafKey.Hex(),
 	"",
 	"",
 }
@@ -63,7 +63,7 @@ var expectedUpdatedAccountRow = []string{
 	strconv.FormatInt(testhelpers.NewBalanceValue, 10),
 	testhelpers.ContractRoot,
 	testhelpers.StoragePath,
-	testhelpers.ContractAddress,
+	testhelpers.ContractLeafKey.Hex(),
 	"0000000000000000000000000000000000000000000000000000000000000001",
 	testhelpers.StorageValue,
 }
@@ -77,7 +77,7 @@ var expectedDeletedAccountRow = []string{
 	strconv.FormatInt(testhelpers.NewBalanceValue, 10),
 	testhelpers.ContractRoot,
 	testhelpers.StoragePath,
-	testhelpers.ContractAddress,
+	testhelpers.ContractLeafKey.Hex(),
 	"0000000000000000000000000000000000000000000000000000000000000001",
 	testhelpers.StorageValue,
 }
