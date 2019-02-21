@@ -18,7 +18,7 @@ layout: default
                             {% endfor %}
                         </div>
                     {% else %}
-                        {% capture url %}../{{ coll.label }}{% endcapture %}
+                        {% capture url %}/{{ coll.label }}{% endcapture %}
                         <div class="list-group">
                             <a class="list-group-item active"
                                href="{% include link.html url=url %}">{{ coll.caption }}</a>
