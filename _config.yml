@@ -36,3 +36,7 @@ collections:
     output: true
     caption: Developers
     sidebar_index: 5
+  doc:
+    output: true
+    caption: Other
+    sidebar_index: 6
