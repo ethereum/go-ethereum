@@ -588,13 +588,6 @@ func (bc *BlockChain) HasState(hash common.Hash) bool {
 	return err == nil
 }
 
-// IsCanon returns whether the given hash/number is part of the canon chain,
-// irrespective of whether the state has been pruned or not
-func (bc *BlockChain) IsCanon(hash common.Hash, number uint64) bool {
-	canonHash := rawdb.ReadCanonicalHash(bc.db, number)
-	return canonHash != (common.Hash{}) && canonHash == hash
-}
-
 // HasBlockAndState checks if a block and associated state trie is fully present
 // in the database or not, caching it if present.
 func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
