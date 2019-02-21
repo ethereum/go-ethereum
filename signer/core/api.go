@@ -40,7 +40,7 @@ const (
 	// ExternalAPIVersion -- see extapi_changelog.md
 	ExternalAPIVersion = "6.0.0"
 	// InternalAPIVersion -- see intapi_changelog.md
-	InternalAPIVersion = "4.0.0"
+	InternalAPIVersion = "6s.0.0"
 )
 
 // ExternalAPI defines the external API through which signing requests are made.
@@ -183,7 +183,6 @@ type (
 		//The UI may make changes to the TX
 		Transaction SendTxArgs `json:"transaction"`
 		Approved    bool       `json:"approved"`
-		Password    string     `json:"password"`
 	}
 	SignDataRequest struct {
 		ContentType string                  `json:"content_type"`
@@ -195,14 +194,12 @@ type (
 	}
 	SignDataResponse struct {
 		Approved bool `json:"approved"`
-		Password string
 	}
 	NewAccountRequest struct {
 		Meta Metadata `json:"meta"`
 	}
 	NewAccountResponse struct {
-		Approved bool   `json:"approved"`
-		Password string `json:"password"`
+		Approved bool `json:"approved"`
 	}
 	ListRequest struct {
 		Accounts []accounts.Account `json:"accounts"`
