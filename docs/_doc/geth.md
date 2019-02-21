@@ -18,20 +18,20 @@ By installing and running `geth`, you can take part in the ethereum frontier liv
 Supported Platforms are Linux, Mac Os and Windows.
 
 We support two types of installation: binary or scripted install for users. 
-See [Install instructions](Building-Ethereum) for binary and scripted installs.
+See [Install instructions](../install-and-build/Building-Ethereum) for binary and scripted installs.
 
-Developers and community enthusiast are advised to read the [Developers' Guide](Developers-Guide), which contains detailed instructions for manual build from source (on any platform) as well as detailed tips on testing, monitoring, contributing, debugging and submitting pull requests on github.
+Developers and community enthusiast are advised to read the [Developers' Guide](../install-and-build/Developers-Guide), which contains detailed instructions for manual build from source (on any platform) as well as detailed tips on testing, monitoring, contributing, debugging and submitting pull requests on github.
 
 ## Interfaces
 
-* Javascript Console: `geth` can be launched with an interactive console, that provides a javascript runtime environment exposing a javascript API to interact with your node. [Javascript Console API](JavaScript-Console) includes the `web3` javascript Ðapp API as well as an additional admin API. 
+* Javascript Console: `geth` can be launched with an interactive console, that provides a javascript runtime environment exposing a javascript API to interact with your node. [Javascript Console API](../interface/JavaScript-Console) includes the `web3` javascript Ðapp API as well as an additional admin API. 
 * JSON-RPC server: `geth` can be launched with a json-rpc server that exposes the [JSON-RPC API](https://github.com/ethereum/wiki/JSON-RPC)
-* [Command line options](Command-Line-Options) documents command line parameters as well as subcommands.
+* [Command line options](../interface/Command-Line-Options) documents command line parameters as well as subcommands.
 
 ## Basic Use Case Documentation
 
-* [Managing accounts](Managing-your-accounts)
-* [Mining](Mining)
+* [Managing accounts](../how-to/Managing-your-accounts)
+* [Mining](../how-to/Mining)
 
 **Note** buying and selling ether through exchanges is not discussed here. 
 

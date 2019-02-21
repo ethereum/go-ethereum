@@ -4,7 +4,7 @@ title: Setting up private network or local cluster
 This page describes how to set up a local cluster of nodes, advise how to make it private, and how to hook up your nodes on the eth-netstat network monitoring app. 
 A fully controlled ethereum network is useful as a backend for network integration testing (core developers working on issues related to networking/blockchain synching/message propagation, etc or DAPP developers testing multi-block and multi-user scenarios).
 
-We assume you are able to build `geth` following the [build instructions](Building-Ethereum)
+We assume you are able to build `geth` following the [build instructions](../install-and-build/Building-Ethereum)
 
 ## Setting up multiple nodes
 

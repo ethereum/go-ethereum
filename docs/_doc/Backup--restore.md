@@ -16,9 +16,9 @@ The default data directory locations are platform specific:
 
 Accounts are stored in the `keystore` subdirectory. The contents of this directories should be transportable between nodes, platforms, implementations (C++, Go, Python).
 
-To configure the location of the data directory, the `--datadir` parameter can be specified. See [CLI Options](Command-Line-Options) for more details.
+To configure the location of the data directory, the `--datadir` parameter can be specified. See [CLI Options](../interface/Command-Line-Options) for more details.
 
-_**Note:** The [Ethash DAG](Mining#ethash-dag) is stored at `~/.ethash` (Mac/Linux) or `%APPDATA%\Ethash` (Windows) so that it can be reused by all clients. You can store this in a different location by using a symbolic link._
+_**Note:** The [Ethash DAG](../how-to/Mining#ethash-dag) is stored at `~/.ethash` (Mac/Linux) or `%APPDATA%\Ethash` (Windows) so that it can be reused by all clients. You can store this in a different location by using a symbolic link._
 
 ## Upgrades
 

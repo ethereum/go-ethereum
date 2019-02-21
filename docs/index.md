@@ -8,13 +8,13 @@ This is the documentation for the official Ethereum golang implementation. For g
 
 Main entry points:
 
-* [Installation Instructions](Building-Ethereum)
-* [Developer/Management API](Management-APIs)
-* [Managing Accounts](Managing-your-accounts)
-* [Command Line Options](Command-Line-Options)
-* [JavaScript Console](JavaScript-Console)
-* [Private Network](Private-network)
-* [Developers' Guide](Developers-Guide)
-* [Whisper v6](Whisper)
+* [Installation Instructions](../install-and-build/Building-Ethereum)
+* [Management APIs](../interface/Management-APIs)
+* [Managing Accounts](../how-to/Managing-your-accounts)
+* [Command Line Options](../interface/Command-Line-Options)
+* [JavaScript Console](../interface/JavaScript-Console)
+* [Private Network](../doc/Private-network)
+* [Developers' Guide](../install-and-build/Developers-Guide)
+* [Whisper v6](../doc/Whisper)
 
 Sidebar lists all pages.

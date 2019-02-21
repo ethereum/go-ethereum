@@ -27,7 +27,7 @@ or import). Without it you are not able to unlock your account.
 Note that exporting your key in unencrypted format is NOT supported.
 
 Keys are stored under `<DATADIR>/keystore`. Make sure you backup your keys regularly! See
-[DATADIR backup & restore](Backup--restore)
+[DATADIR backup & restore](../doc/Backup--restore)
 for more information. If a custom datadir and keystore option are given the keystore
 option takes preference over the datadir option.
 
@@ -62,7 +62,7 @@ OPTIONS:
   --keystore                       Directory for the keystore (default = inside the datadir)
 ```
 
-Accounts can also be managed via the [Javascript Console](JavaScript-Console)
+Accounts can also be managed via the [Javascript Console](../interface/JavaScript-Console)
 
 ## Examples
 ### Interactive use
@@ -335,7 +335,7 @@ That can then be executed with:
 
 Since this function will disappear after restarting geth, it can be helpful to store
 commonly used functions to be recalled later. The
-[loadScript](JavaScript-Console#loadscript)
+[loadScript](../interface/JavaScript-Console#loadscript)
 function makes this very easy.
 
 First, save the `checkAllBalances()` function definition to a file on your computer. For

@@ -13,7 +13,7 @@ Both types of accounts have an ether balance.
 
 Transactions can be fired from from both types of accounts, though contracts only fire transactions in response to other transactions that they have received. Therefore, all action on ethereum block chain is set in motion by transactions fired from externally controlled accounts.
 
-The simplest transactions are ether transfer transactions. But before we go into that you should read up on [accounts](Managing-your-accounts) and perhaps on [mining](Mining).
+The simplest transactions are ether transfer transactions. But before we go into that you should read up on [accounts](../how-to/Managing-your-accounts) and perhaps on [mining](../how-to/Mining).
 
 ## Ether transfer
 
