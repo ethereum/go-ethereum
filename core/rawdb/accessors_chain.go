@@ -306,6 +306,9 @@ func ReadReceipts(db DatabaseReader, hash common.Hash, number uint64) types.Rece
 			logIndex += 1
 		}
 		receipts[i] = (*types.Receipt)(receipt)
+		receipts[i].BlockHash = hash
+		receipts[i].BlockNumber = big.NewInt(0).SetUint64(number)
+		receipts[i].TransactionIndex = big.NewInt(int64(i))
 	}
 	return receipts
 }
