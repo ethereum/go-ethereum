@@ -151,6 +151,9 @@ func TestDB_SubscribePull_since(t *testing.T) {
 	})()
 
 	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]ChunkDescriptor) {
+		addrsMu.Lock()
+		defer addrsMu.Unlock()
+
 		last = make(map[uint8]ChunkDescriptor)
 		for i := 0; i < count; i++ {
 			chunk := generateRandomChunk()
@@ -162,7 +165,6 @@ func TestDB_SubscribePull_since(t *testing.T) {
 
 			bin := db.po(chunk.Address())
 
-			addrsMu.Lock()
 			if _, ok := addrs[bin]; !ok {
 				addrs[bin] = make([]storage.Address, 0)
 			}
@@ -170,7 +172,6 @@ func TestDB_SubscribePull_since(t *testing.T) {
 				addrs[bin] = append(addrs[bin], chunk.Address())
 				wantedChunksCount++
 			}
-			addrsMu.Unlock()
 
 			lastTimestampMu.RLock()
 			storeTimestamp := lastTimestamp
@@ -241,6 +242,9 @@ func TestDB_SubscribePull_until(t *testing.T) {
 	})()
 
 	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]ChunkDescriptor) {
+		addrsMu.Lock()
+		defer addrsMu.Unlock()
+
 		last = make(map[uint8]ChunkDescriptor)
 		for i := 0; i < count; i++ {
 			chunk := generateRandomChunk()
@@ -252,7 +256,6 @@ func TestDB_SubscribePull_until(t *testing.T) {
 
 			bin := db.po(chunk.Address())
 
-			addrsMu.Lock()
 			if _, ok := addrs[bin]; !ok {
 				addrs[bin] = make([]storage.Address, 0)
 			}
@@ -260,7 +263,6 @@ func TestDB_SubscribePull_until(t *testing.T) {
 				addrs[bin] = append(addrs[bin], chunk.Address())
 				wantedChunksCount++
 			}
-			addrsMu.Unlock()
 
 			lastTimestampMu.RLock()
 			storeTimestamp := lastTimestamp
@@ -330,6 +332,9 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 	})()
 
 	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]ChunkDescriptor) {
+		addrsMu.Lock()
+		defer addrsMu.Unlock()
+
 		last = make(map[uint8]ChunkDescriptor)
 		for i := 0; i < count; i++ {
 			chunk := generateRandomChunk()
@@ -341,7 +346,6 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 
 			bin := db.po(chunk.Address())
 
-			addrsMu.Lock()
 			if _, ok := addrs[bin]; !ok {
 				addrs[bin] = make([]storage.Address, 0)
 			}
@@ -349,7 +353,6 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 				addrs[bin] = append(addrs[bin], chunk.Address())
 				wantedChunksCount++
 			}
-			addrsMu.Unlock()
 
 			lastTimestampMu.RLock()
 			storeTimestamp := lastTimestamp
@@ -410,6 +413,9 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 // uploadRandomChunksBin uploads random chunks to database and adds them to
 // the map of addresses ber bin.
 func uploadRandomChunksBin(t *testing.T, db *DB, uploader *Putter, addrs map[uint8][]storage.Address, addrsMu *sync.Mutex, wantedChunksCount *int, count int) {
+	addrsMu.Lock()
+	defer addrsMu.Unlock()
+
 	for i := 0; i < count; i++ {
 		chunk := generateRandomChunk()
 
@@ -418,13 +424,11 @@ func uploadRandomChunksBin(t *testing.T, db *DB, uploader *Putter, addrs map[uin
 			t.Fatal(err)
 		}
 
-		addrsMu.Lock()
 		bin := db.po(chunk.Address())
 		if _, ok := addrs[bin]; !ok {
 			addrs[bin] = make([]storage.Address, 0)
 		}
 		addrs[bin] = append(addrs[bin], chunk.Address())
-		addrsMu.Unlock()
 
 		*wantedChunksCount++
 	}
