@@ -1319,11 +1319,12 @@ func (bc *BlockChain) insertSidechain(block *types.Block, it *insertIterator) (i
 	for ; block != nil && (err == consensus.ErrPrunedAncestor); block, err = it.next() {
 		// Check the canonical state root for that number
 		if number := block.NumberU64(); current.NumberU64() >= number {
-			if canonical := bc.GetBlockByNumber(number); canonical != nil && canonical.Hash() == block.Hash() {
+			canonical := bc.GetBlockByNumber(number)
+			if canonical != nil && canonical.Hash() == block.Hash() {
 				// Not a sidechain block, this is a re-import of a canon block which has it's state pruned
 				continue
 			}
-			if canonical := bc.GetBlockByNumber(number); canonical != nil && canonical.Root() == block.Root() {
+			if canonical != nil && canonical.Root() == block.Root() {
 				// This is most likely a shadow-state attack. When a fork is imported into the
 				// database, and it eventually reaches a block height which is not pruned, we
 				// just found that the state already exist! This means that the sidechain block
