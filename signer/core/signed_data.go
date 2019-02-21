@@ -139,8 +139,14 @@ func (api *SignerAPI) sign(addr common.MixedcaseAddress, req *SignDataRequest, l
 	if err != nil {
 		return nil, err
 	}
+	pw, err := api.lookupOrQueryPassword(account.Address,
+		"Password for signing",
+		fmt.Sprintf("Please enter password for signing data with account %s", account.Address.Hex()))
+	if err != nil {
+		return nil, err
+	}
 	// Sign the data with the wallet
-	signature, err := wallet.SignDataWithPassphrase(account, res.Password, req.ContentType, req.Rawdata)
+	signature, err := wallet.SignDataWithPassphrase(account, pw, req.ContentType, req.Rawdata)
 	if err != nil {
 		return nil, err
 	}

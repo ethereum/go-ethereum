@@ -84,11 +84,11 @@ func (alwaysDenyUI) OnSignerStartup(info core.StartupInfo) {
 }
 
 func (alwaysDenyUI) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
-	return core.SignTxResponse{Transaction: request.Transaction, Approved: false, Password: ""}, nil
+	return core.SignTxResponse{Transaction: request.Transaction, Approved: false}, nil
 }
 
 func (alwaysDenyUI) ApproveSignData(request *core.SignDataRequest) (core.SignDataResponse, error) {
-	return core.SignDataResponse{Approved: false, Password: ""}, nil
+	return core.SignDataResponse{Approved: false}, nil
 }
 
 func (alwaysDenyUI) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
@@ -96,7 +96,7 @@ func (alwaysDenyUI) ApproveListing(request *core.ListRequest) (core.ListResponse
 }
 
 func (alwaysDenyUI) ApproveNewAccount(request *core.NewAccountRequest) (core.NewAccountResponse, error) {
-	return core.NewAccountResponse{Approved: false, Password: ""}, nil
+	return core.NewAccountResponse{Approved: false}, nil
 }
 
 func (alwaysDenyUI) ShowError(message string) {
@@ -112,7 +112,7 @@ func (alwaysDenyUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 }
 
 func initRuleEngine(js string) (*rulesetUI, error) {
-	r, err := NewRuleEvaluator(&alwaysDenyUI{}, storage.NewEphemeralStorage(), storage.NewEphemeralStorage())
+	r, err := NewRuleEvaluator(&alwaysDenyUI{}, storage.NewEphemeralStorage())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create js engine: %v", err)
 	}
@@ -248,8 +248,7 @@ func TestForwarding(t *testing.T) {
 	js := ""
 	ui := &dummyUI{make([]string, 0)}
 	jsBackend := storage.NewEphemeralStorage()
-	credBackend := storage.NewEphemeralStorage()
-	r, err := NewRuleEvaluator(ui, jsBackend, credBackend)
+	r, err := NewRuleEvaluator(ui, jsBackend)
 	if err != nil {
 		t.Fatalf("Failed to create js engine: %v", err)
 	}
@@ -567,7 +566,7 @@ func TestContextIsCleared(t *testing.T) {
 	}
 	`
 	ui := &dontCallMe{t}
-	r, err := NewRuleEvaluator(ui, storage.NewEphemeralStorage(), storage.NewEphemeralStorage())
+	r, err := NewRuleEvaluator(ui, storage.NewEphemeralStorage())
 	if err != nil {
 		t.Fatalf("Failed to create js engine: %v", err)
 	}

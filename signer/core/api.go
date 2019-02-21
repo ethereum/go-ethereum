@@ -21,8 +21,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/signer/storage"
 	"math/big"
 	"reflect"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -92,11 +94,12 @@ type UIClientAPI interface {
 
 // SignerAPI defines the actual implementation of ExternalAPI
 type SignerAPI struct {
-	chainID    *big.Int
-	am         *accounts.Manager
-	UI         UIClientAPI
-	validator  *Validator
-	rejectMode bool
+	chainID     *big.Int
+	am          *accounts.Manager
+	UI          UIClientAPI
+	validator   *Validator
+	rejectMode  bool
+	credentials storage.Storage
 }
 
 // Metadata about a request
@@ -231,11 +234,11 @@ var ErrRequestDenied = errors.New("Request denied")
 // key that is generated when a new Account is created.
 // noUSB disables USB support that is required to support hardware devices such as
 // ledger and trezor.
-func NewSignerAPI(am *accounts.Manager, chainID int64, noUSB bool, ui UIClientAPI, abidb *AbiDb, advancedMode bool) *SignerAPI {
+func NewSignerAPI(am *accounts.Manager, chainID int64, noUSB bool, ui UIClientAPI, abidb *AbiDb, advancedMode bool, credentials storage.Storage) *SignerAPI {
 	if advancedMode {
 		log.Info("Clef is in advanced mode: will warn instead of reject")
 	}
-	signer := &SignerAPI{big.NewInt(chainID), am, ui, NewValidator(abidb), !advancedMode}
+	signer := &SignerAPI{big.NewInt(chainID), am, ui, NewValidator(abidb), !advancedMode, credentials}
 	if !noUSB {
 		signer.startUSBListener()
 	}
@@ -356,24 +359,27 @@ func (api *SignerAPI) New(ctx context.Context) (common.Address, error) {
 	if len(be) == 0 {
 		return common.Address{}, errors.New("password based accounts not supported")
 	}
-	var (
-		resp NewAccountResponse
-		err  error
-	)
+	if resp, err := api.UI.ApproveNewAccount(&NewAccountRequest{MetadataFromContext(ctx)}); err != nil {
+		return common.Address{}, err
+	} else if !resp.Approved {
+		return common.Address{}, ErrRequestDenied
+	}
+
 	// Three retries to get a valid password
 	for i := 0; i < 3; i++ {
-		resp, err = api.UI.ApproveNewAccount(&NewAccountRequest{MetadataFromContext(ctx)})
+		resp, err := api.UI.OnInputRequired(UserInputRequest{
+			"New account password",
+			fmt.Sprintf("Please enter a password for the new account to be created (attempt %d of 3)", i),
+			true})
 		if err != nil {
-			return common.Address{}, err
+			log.Warn("error obtaining password", "attempt", i, "error", err)
+			continue
 		}
-		if !resp.Approved {
-			return common.Address{}, ErrRequestDenied
-		}
-		if pwErr := ValidatePasswordFormat(resp.Password); pwErr != nil {
+		if pwErr := ValidatePasswordFormat(resp.Text); pwErr != nil {
 			api.UI.ShowError(fmt.Sprintf("Account creation attempt #%d failed due to password requirements: %v", (i + 1), pwErr))
 		} else {
 			// No error
-			acc, err := be[0].(*keystore.KeyStore).NewAccount(resp.Password)
+			acc, err := be[0].(*keystore.KeyStore).NewAccount(resp.Text)
 			return acc.Address, err
 		}
 	}
@@ -427,6 +433,24 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 	return modified
 }
 
+func (api *SignerAPI) lookupPassword(address common.Address) string {
+	return api.credentials.Get(strings.ToLower(address.String()))
+}
+func (api *SignerAPI) lookupOrQueryPassword(address common.Address, title, prompt string) (string, error) {
+	if pw := api.lookupPassword(address); pw != "" {
+		return pw, nil
+	} else {
+		pwResp, err := api.UI.OnInputRequired(UserInputRequest{title, prompt, true})
+		if err != nil {
+			log.Warn("error obtaining password", "error", err)
+			// We'll not forward the error here, in case the error contains info about the response from the UI,
+			// which could leak the password if it was malformed json or something
+			return "", errors.New("internal error")
+		}
+		return pwResp.Text, nil
+	}
+}
+
 // SignTransaction signs the given Transaction and returns it both as json and rlp-encoded form
 func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error) {
 	var (
@@ -470,9 +494,14 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 	}
 	// Convert fields into a real transaction
 	var unsignedTx = result.Transaction.toTransaction()
-
+	// Get the password for the transaction
+	pw, err := api.lookupOrQueryPassword(acc.Address, "Account password",
+		fmt.Sprintf("Please enter the password for account %s", acc.Address.String()))
+	if err != nil {
+		return nil, err
+	}
 	// The one to sign is the one that was returned from the UI
-	signedTx, err := wallet.SignTxWithPassphrase(acc, result.Password, unsignedTx, api.chainID)
+	signedTx, err := wallet.SignTxWithPassphrase(acc, pw, unsignedTx, api.chainID)
 	if err != nil {
 		api.UI.ShowError(err.Error())
 		return nil, err

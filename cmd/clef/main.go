@@ -119,7 +119,7 @@ var (
 	ruleFlag = cli.StringFlag{
 		Name:  "rules",
 		Usage: "Enable rule-engine",
-		Value: "rules.json",
+		Value: "",
 	}
 	stdiouiFlag = cli.BoolFlag{
 		Name: "stdio-ui",
@@ -371,17 +371,14 @@ func signer(c *cli.Context) error {
 	log.Info("Loaded 4byte db", "signatures", db.Size(), "file", fourByteDb, "local", fourByteLocal)
 
 	var (
-		api core.ExternalAPI
+		api       core.ExternalAPI
+		pwStorage storage.Storage = &storage.NoStorage{}
 	)
 
 	configDir := c.GlobalString(configdirFlag.Name)
 	if stretchedKey, err := readMasterKey(c, ui); err != nil {
 		log.Info("No master seed provided, rules disabled", "error", err)
 	} else {
-
-		if err != nil {
-			utils.Fatalf(err.Error())
-		}
 		vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
 
 		// Generate domain specific keys
@@ -390,30 +387,31 @@ func signer(c *cli.Context) error {
 		confkey := crypto.Keccak256([]byte("config"), stretchedKey)
 
 		// Initialize the encrypted storages
-		pwStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
+		pwStorage = storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
 		jsStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "jsstorage.json"), jskey)
 		configStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "config.json"), confkey)
 
 		//Do we have a rule-file?
-		ruleJS, err := ioutil.ReadFile(c.GlobalString(ruleFlag.Name))
-		if err != nil {
-			log.Info("Could not load rulefile, rules not enabled", "file", "rulefile")
-		} else {
-			hasher := sha256.New()
-			hasher.Write(ruleJS)
-			shasum := hasher.Sum(nil)
-			storedShasum := configStorage.Get("ruleset_sha256")
-			if storedShasum != hex.EncodeToString(shasum) {
-				log.Info("Could not validate ruleset hash, rules not enabled", "got", hex.EncodeToString(shasum), "expected", storedShasum)
+		if ruleFile := c.GlobalString(ruleFlag.Name); ruleFile != "" {
+			ruleJS, err := ioutil.ReadFile(c.GlobalString(ruleFile))
+			if err != nil {
+				log.Info("Could not load rulefile, rules not enabled", "file", "rulefile")
 			} else {
-				// Initialize rules
-				ruleEngine, err := rules.NewRuleEvaluator(ui, jsStorage, pwStorage)
-				if err != nil {
-					utils.Fatalf(err.Error())
+				shasum := sha256.Sum256(ruleJS)
+				foundShaSum := hex.EncodeToString(shasum[:])
+				storedShasum := configStorage.Get("ruleset_sha256")
+				if storedShasum != foundShaSum {
+					log.Info("Could not validate ruleset hash, rules not enabled", "got", foundShaSum, "expected", storedShasum)
+				} else {
+					// Initialize rules
+					ruleEngine, err := rules.NewRuleEvaluator(ui, jsStorage)
+					if err != nil {
+						utils.Fatalf(err.Error())
+					}
+					ruleEngine.Init(string(ruleJS))
+					ui = ruleEngine
+					log.Info("Rule engine configured", "file", c.String(ruleFlag.Name))
 				}
-				ruleEngine.Init(string(ruleJS))
-				ui = ruleEngine
-				log.Info("Rule engine configured", "file", c.String(ruleFlag.Name))
 			}
 		}
 	}
@@ -427,7 +425,7 @@ func signer(c *cli.Context) error {
 	log.Info("Starting signer", "chainid", chainId, "keystore", ksLoc,
 		"light-kdf", lightKdf, "advanced", advanced)
 	am := core.StartClefAccountManager(ksLoc, nousb, lightKdf)
-	apiImpl := core.NewSignerAPI(am, chainId, nousb, ui, db, advanced)
+	apiImpl := core.NewSignerAPI(am, chainId, nousb, ui, db, advanced, pwStorage)
 
 	// Establish the bidirectional communication, by creating a new UI backend and registering
 	// it with the UI.
@@ -798,7 +796,7 @@ func GenDoc(ctx *cli.Context) {
 	}
 	{ // Sign plain text response
 		add("SignDataResponse - approve", "Response to SignDataRequest",
-			&core.SignDataResponse{Password: "apassword", Approved: true})
+			&core.SignDataResponse{Approved: true})
 		add("SignDataResponse - deny", "Response to SignDataRequest",
 			&core.SignDataResponse{})
 	}
@@ -833,9 +831,9 @@ func GenDoc(ctx *cli.Context) {
 	}
 	{ // Sign tx response
 		data := hexutil.Bytes([]byte{0x04, 0x03, 0x02, 0x01})
-		add("SignDataResponse - approve", "Response to SignDataRequest. This response needs to contain the `transaction`"+
+		add("SignTxResponse - approve", "Response to request to sign a transaction. This response needs to contain the `transaction`"+
 			", because the UI is free to make modifications to the transaction.",
-			&core.SignTxResponse{Password: "apassword", Approved: true,
+			&core.SignTxResponse{Approved: true,
 				Transaction: core.SendTxArgs{
 					Data:     &data,
 					Nonce:    0x4,
@@ -846,9 +844,9 @@ func GenDoc(ctx *cli.Context) {
 					Gas:      1000,
 					Input:    nil,
 				}})
-		add("SignDataResponse - deny", "Response to SignDataRequest. When denying a request, there's no need to "+
+		add("SignTxResponse - deny", "Response to SignTxRequest. When denying a request, there's no need to "+
 			"provide the transaction in return",
-			&core.SignDataResponse{})
+			&core.SignTxResponse{})
 	}
 	{ // WHen a signed tx is ready to go out
 		desc := "SignTransactionResult is used in the call `clef` -> `OnApprovedTx(result)`" +
@@ -874,7 +872,7 @@ func GenDoc(ctx *cli.Context) {
 	{ // User input
 		add("UserInputRequest", "Sent when clef needs the user to provide data. If 'password' is true, the input field should be treated accordingly (echo-free)",
 			&core.UserInputRequest{IsPassword: true, Title: "The title here", Prompt: "The question to ask the user"})
-		add("UserInputResponse", "Response to SignDataRequest",
+		add("UserInputResponse", "Response to UserInputRequest",
 			&core.UserInputResponse{Text: "The textual response from user"})
 	}
 	{ // List request
@@ -888,7 +886,7 @@ func GenDoc(ctx *cli.Context) {
 					{b, accounts.URL{Scheme: "keystore", Path: "/path/to/keyfile/b"}}},
 			})
 
-		add("UserInputResponse", "Response to list request. The response contains a list of all addresses to show to the caller. "+
+		add("ListResponse", "Response to list request. The response contains a list of all addresses to show to the caller. "+
 			"Note: the UI is free to respond with any address the caller, regardless of whether it exists or not",
 			&core.ListResponse{
 				Accounts: []accounts.Account{

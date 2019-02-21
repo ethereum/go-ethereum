@@ -156,9 +156,9 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	showMetadata(request.Meta)
 	fmt.Printf("-------------------------------------------\n")
 	if !ui.confirm() {
-		return SignTxResponse{request.Transaction, false, ""}, nil
+		return SignTxResponse{request.Transaction, false}, nil
 	}
-	return SignTxResponse{request.Transaction, true, ui.readPassword()}, nil
+	return SignTxResponse{request.Transaction, true}, nil
 }
 
 // ApproveSignData prompt the user for confirmation to request to sign data
@@ -178,9 +178,9 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)
 	if !ui.confirm() {
-		return SignDataResponse{false, ""}, nil
+		return SignDataResponse{false}, nil
 	}
-	return SignDataResponse{true, ui.readPassword()}, nil
+	return SignDataResponse{true}, nil
 }
 
 // ApproveListing prompt the user for confirmation to list accounts
@@ -217,9 +217,9 @@ func (ui *CommandlineUI) ApproveNewAccount(request *NewAccountRequest) (NewAccou
 	fmt.Printf("and the address is returned to the external caller\n\n")
 	showMetadata(request.Meta)
 	if !ui.confirm() {
-		return NewAccountResponse{false, ""}, nil
+		return NewAccountResponse{false}, nil
 	}
-	return NewAccountResponse{true, ui.readPassword()}, nil
+	return NewAccountResponse{true}, nil
 }
 
 // ShowError displays error message to user
