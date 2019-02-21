@@ -30,15 +30,14 @@ func ReadTxLookupEntry(db DatabaseReader, hash common.Hash) common.Hash {
 	if len(data) == 0 {
 		return common.Hash{}
 	}
-	var entry TxLookupEntry
+	if len(data) == common.HashLength {
+		return common.BytesToHash(data)
+	}
+	// Probably it's legacy txlookup entry data, try to decode it.
+	var entry LegacyTxLookupEntry
 	if err := rlp.DecodeBytes(data, &entry); err != nil {
-		var dec LegacyTxLookupEntry
-		if err = rlp.DecodeBytes(data, &dec); err != nil {
-			log.Error("Invalid transaction lookup entry RLP", "hash", hash, "err", err)
-			return common.Hash{}
-		}
-		entry.BlockHash = dec.BlockHash
-
+		log.Error("Invalid transaction lookup entry RLP", "hash", hash, "blob", data, "err", err)
+		return common.Hash{}
 	}
 	return entry.BlockHash
 }
@@ -47,14 +46,7 @@ func ReadTxLookupEntry(db DatabaseReader, hash common.Hash) common.Hash {
 // a block, enabling hash based transaction and receipt lookups.
 func WriteTxLookupEntries(db DatabaseWriter, block *types.Block) {
 	for _, tx := range block.Transactions() {
-		entry := TxLookupEntry{
-			BlockHash: block.Hash(),
-		}
-		data, err := rlp.EncodeToBytes(entry)
-		if err != nil {
-			log.Crit("Failed to encode transaction lookup entry", "err", err)
-		}
-		if err := db.Put(txLookupKey(tx.Hash()), data); err != nil {
+		if err := db.Put(txLookupKey(tx.Hash()), block.Hash().Bytes()); err != nil {
 			log.Crit("Failed to store transaction lookup entry", "err", err)
 		}
 	}

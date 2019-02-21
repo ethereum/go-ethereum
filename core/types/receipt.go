@@ -206,6 +206,7 @@ func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 	for i, log := range dec.Logs {
 		r.Logs[i] = (*Log)(log)
 	}
+
 	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
 	// Assign the implementation fields
 	r.TxHash, r.ContractAddress, r.GasUsed = dec.TxHash, dec.ContractAddress, dec.GasUsed
