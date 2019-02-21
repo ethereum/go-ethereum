@@ -445,12 +445,13 @@ func readPullSubscriptionBin(ctx context.Context, bin uint8, ch <-chan ChunkDesc
 			addrsMu.Lock()
 			if i+1 > len(addrs[bin]) {
 				err = fmt.Errorf("got more chunk addresses %v, then expected %v, for bin %v", i+1, len(addrs[bin]), bin)
+			} else {
+				want := addrs[bin][i]
+				if !bytes.Equal(got.Address, want) {
+					err = fmt.Errorf("got chunk address %v in bin %v %s, want %s", i, bin, got.Address.Hex(), want)
+				}
 			}
-			want := addrs[bin][i]
 			addrsMu.Unlock()
-			if err == nil && !bytes.Equal(got.Address, want) {
-				err = fmt.Errorf("got chunk address %v in bin %v %s, want %s", i, bin, got.Address.Hex(), want)
-			}
 			i++
 			// send one and only one error per received address
 			select {
