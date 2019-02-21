@@ -453,7 +453,11 @@ func readPullSubscriptionBin(ctx context.Context, bin uint8, ch <-chan ChunkDesc
 			}
 			i++
 			// send one and only one error per received address
-			errChan <- err
+			select {
+			case errChan <- err:
+			case <-ctx.Done():
+				return
+			}
 		case <-ctx.Done():
 			return
 		}

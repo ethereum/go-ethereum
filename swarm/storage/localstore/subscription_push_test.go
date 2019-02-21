@@ -90,7 +90,11 @@ func TestDB_SubscribePush(t *testing.T) {
 				}
 				i++
 				// send one and only one error per received address
-				errChan <- err
+				select {
+				case errChan <- err:
+				case <-ctx.Done():
+					return
+				}
 			case <-ctx.Done():
 				return
 			}
@@ -175,7 +179,11 @@ func TestDB_SubscribePush_multiple(t *testing.T) {
 					}
 					i++
 					// send one and only one error per received address
-					errChan <- err
+					select {
+					case errChan <- err:
+					case <-ctx.Done():
+						return
+					}
 				case <-ctx.Done():
 					return
 				}
