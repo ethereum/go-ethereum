@@ -527,8 +527,8 @@ func (s *LDBStore) Cleanup(f func(*chunk) bool) {
 		if err != nil {
 			found := false
 
-			// highest possible proximity is 255
-			for po = 1; po <= 255; po++ {
+			// The highest possible proximity is 255, so exit loop upon overflow.
+			for po = uint8(1); po != 0; po++ {
 				datakey = getDataKey(index.Idx, po)
 				data, err = s.db.Get(datakey)
 				if err == nil {
