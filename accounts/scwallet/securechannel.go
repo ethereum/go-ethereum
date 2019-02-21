@@ -165,11 +165,7 @@ func (s *SecureChannelSession) Open() error {
 	// The IV is the last bytes returned from the Open APDU.
 	s.iv = response.Data[scSecretLength:]
 
-	if err := s.mutuallyAuthenticate(); err != nil {
-		return err
-	}
-
-	return nil
+	return s.mutuallyAuthenticate()
 }
 
 // mutuallyAuthenticate is an internal method to authenticate both ends of the

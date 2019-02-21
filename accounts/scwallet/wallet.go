@@ -1060,7 +1060,7 @@ func determinePublicKey(sig, pubkeyX []byte) ([]byte, error) {
 		sig[64] = byte(v)
 		pubkey, err := crypto.Ecrecover(DerivationSignatureHash[:], sig)
 		if err == nil {
-			if bytes.Compare(pubkey[1:33], pubkeyX) == 0 {
+			if bytes.Equal(pubkey[1:33], pubkeyX) {
 				return pubkey, nil
 			}
 		} else if v == 1 || err != secp256k1.ErrRecoverFailed {
@@ -1077,7 +1077,7 @@ func makeRecoverableSignature(hash, sig, expectedPubkey []byte) ([]byte, error) 
 		sig[64] = byte(v)
 		pubkey, err := crypto.Ecrecover(hash, sig)
 		if err == nil {
-			if bytes.Compare(pubkey, expectedPubkey) == 0 {
+			if bytes.Equal(pubkey, expectedPubkey) {
 				return sig, nil
 			}
 		} else if v == 1 || err != secp256k1.ErrRecoverFailed {
