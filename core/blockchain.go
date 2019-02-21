@@ -1084,15 +1084,21 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	if len(chain) == 0 {
 		return 0, nil
 	}
+	// Remove already known canon-blocks
+	var (
+		block, prev *types.Block
+	)
 	// Do a sanity check that the provided chain is actually ordered and linked
 	for i := 1; i < len(chain); i++ {
-		if chain[i].NumberU64() != chain[i-1].NumberU64()+1 || chain[i].ParentHash() != chain[i-1].Hash() {
+		block = chain[i]
+		prev = chain[i-1]
+		if block.NumberU64() != prev.NumberU64()+1 || block.ParentHash() != prev.Hash() {
 			// Chain broke ancestry, log a message (programming error) and skip insertion
-			log.Error("Non contiguous block insert", "number", chain[i].Number(), "hash", chain[i].Hash(),
-				"parent", chain[i].ParentHash(), "prevnumber", chain[i-1].Number(), "prevhash", chain[i-1].Hash())
+			log.Error("Non contiguous block insert", "number", block.Number(), "hash", block.Hash(),
+				"parent", block.ParentHash(), "prevnumber", prev.Number(), "prevhash", prev.Hash())
 
-			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])", i-1, chain[i-1].NumberU64(),
-				chain[i-1].Hash().Bytes()[:4], i, chain[i].NumberU64(), chain[i].Hash().Bytes()[:4], chain[i].ParentHash().Bytes()[:4])
+			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])", i-1, prev.NumberU64(),
+				prev.Hash().Bytes()[:4], i, block.NumberU64(), block.Hash().Bytes()[:4], block.ParentHash().Bytes()[:4])
 		}
 	}
 	// Pre-checks passed, start the full block imports
@@ -1146,6 +1152,22 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	it := newInsertIterator(chain, results, bc.Validator())
 
 	block, err := it.next()
+
+	// Left-trim all the known blocks
+	if err == ErrKnownBlock {
+		// First block (and state) is known
+		//   1. We did a roll-back, and should now do a re-import
+		//   2. The block is stored as a sidechain, and is lying about it's stateroot, and passes a stateroot
+		// 	    from the canonical chain, which has not been verified.
+		// Skip all known blocks that are behind us
+		current := bc.CurrentBlock().NumberU64()
+		for block != nil && err == ErrKnownBlock && current >= block.NumberU64() {
+			stats.ignored++
+			block, err = it.next()
+		}
+		// Falls through to the block import
+	}
+
 	switch {
 	// First block is pruned, insert as sidechain and reorg only if TD grows enough
 	case err == consensus.ErrPrunedAncestor:
@@ -1164,20 +1186,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 
 		// If there are any still remaining, mark as ignored
 		return it.index, events, coalescedLogs, err
-
-	// First block (and state) is known
-	//   1. We did a roll-back, and should now do a re-import
-	//   2. The block is stored as a sidechain, and is lying about it's stateroot, and passes a stateroot
-	// 	    from the canonical chain, which has not been verified.
-	case err == ErrKnownBlock:
-		// Skip all known blocks that behind us
-		current := bc.CurrentBlock().NumberU64()
-
-		for block != nil && err == ErrKnownBlock && current >= block.NumberU64() {
-			stats.ignored++
-			block, err = it.next()
-		}
-		// Falls through to the block import
 
 	// Some other error occurred, abort
 	case err != nil:
@@ -1304,7 +1312,12 @@ func (bc *BlockChain) insertSidechain(block *types.Block, it *insertIterator) (i
 	for ; block != nil && (err == consensus.ErrPrunedAncestor); block, err = it.next() {
 		// Check the canonical state root for that number
 		if number := block.NumberU64(); current.NumberU64() >= number {
-			if canonical := bc.GetBlockByNumber(number); canonical != nil && canonical.Root() == block.Root() {
+			canonical := bc.GetBlockByNumber(number)
+			if canonical != nil && canonical.Hash() == block.Hash() {
+				// Not a sidechain block, this is a re-import of a canon block which has it's state pruned
+				continue
+			}
+			if canonical != nil && canonical.Root() == block.Root() {
 				// This is most likely a shadow-state attack. When a fork is imported into the
 				// database, and it eventually reaches a block height which is not pruned, we
 				// just found that the state already exist! This means that the sidechain block
