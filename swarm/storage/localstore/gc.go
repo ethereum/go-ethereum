@@ -134,7 +134,7 @@ func (db *DB) collectGarbageWorker() {
 				db.triggerGarbageCollection()
 			}
 
-			if testHookCollectGarbage != nil {
+			if collectedCount > 0 && testHookCollectGarbage != nil {
 				testHookCollectGarbage(collectedCount)
 			}
 		case <-db.close:
