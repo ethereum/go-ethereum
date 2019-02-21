@@ -290,6 +290,7 @@ func TestDB_gcSize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer db.Close()
 
 	t.Run("gc index size", newIndexGCSizeTest(db))
 
