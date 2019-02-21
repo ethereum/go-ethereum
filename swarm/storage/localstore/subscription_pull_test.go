@@ -20,13 +20,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 // TestDB_SubscribePull uploads some chunks before and after
@@ -34,12 +32,6 @@ import (
 // all addresses are received in the right order
 // for expected proximity order bins.
 func TestDB_SubscribePull(t *testing.T) {
-
-	if testutil.RaceEnabled && os.Getenv("TRAVIS") == "true" {
-		t.Skip("does not complete with -race on Travis")
-		// Note: related ticket TODO
-	}
-
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
@@ -87,12 +79,6 @@ func TestDB_SubscribePull(t *testing.T) {
 // validates if all addresses are received in the right order
 // for expected proximity order bins.
 func TestDB_SubscribePull_multiple(t *testing.T) {
-
-	if testutil.RaceEnabled && os.Getenv("TRAVIS") == "true" {
-		t.Skip("does not complete with -race on Travis")
-		// Note: related ticket TODO
-	}
-
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
@@ -146,12 +132,6 @@ func TestDB_SubscribePull_multiple(t *testing.T) {
 // and validates if all expected addresses are received in the
 // right order for expected proximity order bins.
 func TestDB_SubscribePull_since(t *testing.T) {
-
-	if testutil.RaceEnabled && os.Getenv("TRAVIS") == "true" {
-		t.Skip("does not complete with -race on Travis")
-		// Note: related ticket TODO
-	}
-
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
@@ -242,12 +222,6 @@ func TestDB_SubscribePull_since(t *testing.T) {
 // and validates if all expected addresses are received in the
 // right order for expected proximity order bins.
 func TestDB_SubscribePull_until(t *testing.T) {
-
-	if testutil.RaceEnabled && os.Getenv("TRAVIS") == "true" {
-		t.Skip("does not complete with -race on Travis")
-		// Note: related ticket TODO
-	}
-
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
@@ -337,12 +311,6 @@ func TestDB_SubscribePull_until(t *testing.T) {
 // and until arguments, and validates if all expected addresses
 // are received in the right order for expected proximity order bins.
 func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
-
-	if testutil.RaceEnabled && os.Getenv("TRAVIS") == "true" {
-		t.Skip("does not complete with -race on Travis")
-		// Note: related ticket TODO
-	}
-
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
