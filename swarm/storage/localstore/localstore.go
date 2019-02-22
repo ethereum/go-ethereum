@@ -372,7 +372,7 @@ func (db *DB) Close() (err error) {
 
 	// wait for gc worker and gc size write workers to
 	// return before closing the shed
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(5 * time.Second)
 	select {
 	case <-db.collectGarbageWorkerDone:
 	case <-timeout:
