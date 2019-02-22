@@ -24,11 +24,16 @@ func InitOutputFile(outputFile string) {
 	var err error
 	file, err = os.OpenFile(outputFile, os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Fail to create log file for timing.")
+		fmt.Fprintln(os.Stderr, "Failed to create log file for timing.")
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	file.WriteString("Timing log initialized.\n")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Failed to write log file for timing.")
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
 func Record(timingLog TimingLog) error {
 	b, err := json.Marshal(timingLog)
