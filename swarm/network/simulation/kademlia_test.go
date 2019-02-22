@@ -22,13 +22,29 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
+/*
+	TestWaitTillHealthy tests that we indeed get a healthy network after we wait for it.
+	For this to be tested, a bit of a snake tail bite needs to happen:
+		* First we create a first simulation
+		* Run it as nodes connected in a ring
+		* Wait until the network is healthy
+		* Then we create a snapshot
+		* With this snapshot we create a new simulation
+		* This simulation is expected to have a healthy configuration, as it uses the snapshot
+		* Thus we just iterate all nodes and check that their kademlias are healthy
+		* If all kademlias are healthy, the test succeeded, otherwise it failed
+*/
 func TestWaitTillHealthy(t *testing.T) {
-	sim := New(map[string]ServiceFunc{
+
+	// abstraction of the services used for the simulations
+	var simServiceMap = map[string]ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			addr := network.NewAddr(ctx.Config.Node())
 			hp := network.NewHiveParams()
@@ -43,9 +59,13 @@ func TestWaitTillHealthy(t *testing.T) {
 			b.Store(BucketKeyKademlia, kad)
 			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
 		},
-	})
+	}
+
+	// create the first simulation
+	sim := New(simServiceMap)
 	defer sim.Close()
 
+	// connect and...
 	_, err := sim.AddNodesAndConnectRing(10)
 	if err != nil {
 		t.Fatal(err)
@@ -53,6 +73,8 @@ func TestWaitTillHealthy(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
+
+	// ...wait until healthy
 	ill, err := sim.WaitTillHealthy(ctx)
 	if err != nil {
 		for id, kad := range ill {
@@ -61,6 +83,49 @@ func TestWaitTillHealthy(t *testing.T) {
 		}
 		if err != nil {
 			t.Fatal(err)
+		}
+	}
+
+	// now create a snapshot of this network
+	snap, err := sim.Net.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// create a control simulation
+	controlSim := New(simServiceMap)
+	defer controlSim.Close()
+
+	// load the snapshot into this control simulation
+	err = controlSim.Net.Load(snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// for each node...
+	nodeIDs := controlSim.UpNodeIDs()
+	for _, node := range nodeIDs {
+		// ...get its kademlia
+		item, ok := sim.NodeItem(node, BucketKeyKademlia)
+		if !ok {
+			t.Fatal("No kademlia bucket item")
+		}
+		kad := item.(*network.Kademlia)
+		// get its base address
+		kid := common.Bytes2Hex(kad.BaseAddr())
+		// build a PeerPot
+		addrs := [][]byte{kad.BaseAddr()}
+		kad.EachAddr(nil, 255, func(addr *network.BzzAddr, po int) bool {
+			addrs = append(addrs, addr.Address())
+			return true
+		})
+
+		// check that it is healthy
+		pp := network.NewPeerPotMap(kad.NeighbourhoodSize, addrs)
+		healthy := kad.GetHealthInfo(pp[kid]).Healthy()
+		log.Trace("Node is healthy", "node", node, "healthy", healthy)
+		if !healthy {
+			t.Fatalf("Expected node %v of control simulation to be healthy, but it is not", node)
 		}
 	}
 }
