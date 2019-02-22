@@ -337,13 +337,7 @@ func (c *Config) instanceDir() string {
 	if c.DataDir == "" {
 		return ""
 	}
-	name := c.name()
-	if name == "p2p-node" {
-		// use original data dir with network simulator in order to allow using
-		// an existing database for a simulated node instead of a temporary one
-		name = "geth"
-	}
-	return filepath.Join(c.DataDir, name)
+	return filepath.Join(c.DataDir, c.name())
 }
 
 // NodeKey retrieves the currently configured private key of the node, checking
