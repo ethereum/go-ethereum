@@ -28,13 +28,17 @@ func InitOutputFile(outputFile string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	file.WriteString("Timing log initialized.\n")
+	_, err = file.WriteString("Timing log initialized.\n")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Failed to write log file for timing.")
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
-	} else {
-		fmt.Println("Timing log initialized.")
+	}
+	err = file.Sync()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Failed to write log file for timing.")
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 }
 func Record(timingLog TimingLog) error {
@@ -45,5 +49,10 @@ func Record(timingLog TimingLog) error {
 	b = append(b, '\n')
 
 	_, err = file.Write(b)
+	if err != nil {
+		return err
+	}
+
+	err = file.Sync()
 	return err
 }
