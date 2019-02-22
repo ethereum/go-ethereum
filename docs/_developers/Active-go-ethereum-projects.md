@@ -32,4 +32,3 @@ title: Active go-ethereum projects
 - Countable trie experiment  - For better sync statistic and futher storage rent
 - Build an end-to-end test system
 - Finalize simple checkpoint syncing
-- Blockscout for Puppeth
