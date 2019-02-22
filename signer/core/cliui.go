@@ -87,8 +87,8 @@ func (ui *CommandlineUI) readPasswordText(inputstring string) string {
 }
 
 func (ui *CommandlineUI) OnInputRequired(info UserInputRequest) (UserInputResponse, error) {
-	fmt.Println(info.Title)
-	fmt.Println(info.Prompt)
+
+	fmt.Printf("## %s\n\n%s\n", info.Title, info.Prompt)
 	if info.IsPassword {
 		text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
 		if err != nil {
@@ -224,14 +224,13 @@ func (ui *CommandlineUI) ApproveNewAccount(request *NewAccountRequest) (NewAccou
 
 // ShowError displays error message to user
 func (ui *CommandlineUI) ShowError(message string) {
-	fmt.Printf("-------- Error message from Clef-----------\n")
-	fmt.Println(message)
+	fmt.Printf("## Error \n%s\n", message)
 	fmt.Printf("-------------------------------------------\n")
 }
 
 // ShowInfo displays info message to user
 func (ui *CommandlineUI) ShowInfo(message string) {
-	fmt.Printf("Info: %v\n", message)
+	fmt.Printf("## Info \n%s\n", message)
 }
 
 func (ui *CommandlineUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
