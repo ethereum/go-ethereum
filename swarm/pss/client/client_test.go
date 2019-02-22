@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -285,19 +284,4 @@ func newServices() adapters.Services {
 			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil), nil
 		},
 	}
-}
-
-// copied from swarm/network/protocol_test_go
-type testStore struct {
-	sync.Mutex
-
-	values map[string][]byte
-}
-
-func (t *testStore) Load(key string) ([]byte, error) {
-	return nil, nil
-}
-
-func (t *testStore) Save(key string, v []byte) error {
-	return nil
 }
