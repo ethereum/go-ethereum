@@ -1,4 +1,4 @@
-## Go Ethereum 1.8 with Timing
+# Go Ethereum 1.8 with Timing
 
 ## Compile
 Steps are the same as compiling the official Go Ethereum.
