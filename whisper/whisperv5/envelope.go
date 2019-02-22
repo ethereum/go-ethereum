@@ -21,12 +21,13 @@ package whisperv5
 import (
 	"crypto/ecdsa"
 	"encoding/binary"
-	"errors"
 	"fmt"
-	"math"
+	gmath "math"
+	"math/big"
 	"time"
 
 	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/common/math"
 	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/crypto/ecies"
 	"github.com/ubiq/go-ubiq/rlp"
@@ -39,7 +40,6 @@ type Envelope struct {
 	Expiry   uint32
 	TTL      uint32
 	Topic    TopicType
-	Salt     []byte
 	AESNonce []byte
 	Data     []byte
 	EnvNonce uint64
@@ -49,15 +49,25 @@ type Envelope struct {
 	// Don't access hash directly, use Hash() function instead.
 }
 
+// size returns the size of envelope as it is sent (i.e. public fields only)
+func (e *Envelope) size() int {
+	return 20 + len(e.Version) + len(e.AESNonce) + len(e.Data)
+}
+
+// rlpWithoutNonce returns the RLP encoded envelope contents, except the nonce.
+func (e *Envelope) rlpWithoutNonce() []byte {
+	res, _ := rlp.EncodeToBytes([]interface{}{e.Version, e.Expiry, e.TTL, e.Topic, e.AESNonce, e.Data})
+	return res
+}
+
 // NewEnvelope wraps a Whisper message with expiration and destination data
 // included into an envelope for network forwarding.
-func NewEnvelope(ttl uint32, topic TopicType, salt []byte, aesNonce []byte, msg *SentMessage) *Envelope {
+func NewEnvelope(ttl uint32, topic TopicType, aesNonce []byte, msg *sentMessage) *Envelope {
 	env := Envelope{
 		Version:  make([]byte, 1),
 		Expiry:   uint32(time.Now().Add(time.Second * time.Duration(ttl)).Unix()),
 		TTL:      ttl,
 		Topic:    topic,
-		Salt:     salt,
 		AESNonce: aesNonce,
 		Data:     msg.Raw,
 		EnvNonce: 0,
@@ -81,7 +91,7 @@ func (e *Envelope) isAsymmetric() bool {
 }
 
 func (e *Envelope) Ver() uint64 {
-	return bytesToIntLittleEndian(e.Version)
+	return bytesToUintLittleEndian(e.Version)
 }
 
 // Seal closes the envelope by spending the requested amount of time as a proof
@@ -93,6 +103,9 @@ func (e *Envelope) Seal(options *MessageParams) error {
 		e.Expiry += options.WorkTime
 	} else {
 		target = e.powToFirstBit(options.PoW)
+		if target < 1 {
+			target = 1
+		}
 	}
 
 	buf := make([]byte, 64)
@@ -103,8 +116,8 @@ func (e *Envelope) Seal(options *MessageParams) error {
 	for nonce := uint64(0); time.Now().UnixNano() < finish; {
 		for i := 0; i < 1024; i++ {
 			binary.BigEndian.PutUint64(buf[56:], nonce)
-			h = crypto.Keccak256(buf)
-			firstBit := common.FirstBitSet(common.BigD(h))
+			d := new(big.Int).SetBytes(crypto.Keccak256(buf))
+			firstBit := math.FirstBitSet(d)
 			if firstBit > bestBit {
 				e.EnvNonce, bestBit = nonce, firstBit
 				if target > 0 && bestBit >= target {
@@ -116,7 +129,7 @@ func (e *Envelope) Seal(options *MessageParams) error {
 	}
 
 	if target > 0 && bestBit < target {
-		return errors.New("Failed to reach the PoW target")
+		return fmt.Errorf("failed to reach the PoW target, specified pow time (%d seconds) was insufficient", options.WorkTime)
 	}
 
 	return nil
@@ -134,27 +147,21 @@ func (e *Envelope) calculatePoW(diff uint32) {
 	h := crypto.Keccak256(e.rlpWithoutNonce())
 	copy(buf[:32], h)
 	binary.BigEndian.PutUint64(buf[56:], e.EnvNonce)
-	h = crypto.Keccak256(buf)
-	firstBit := common.FirstBitSet(common.BigD(h))
-	x := math.Pow(2, float64(firstBit))
-	x /= float64(len(e.Data)) // we only count e.Data, other variable-sized members are checked in Whisper.add()
+	d := new(big.Int).SetBytes(crypto.Keccak256(buf))
+	firstBit := math.FirstBitSet(d)
+	x := gmath.Pow(2, float64(firstBit))
+	x /= float64(e.size())
 	x /= float64(e.TTL + diff)
 	e.pow = x
 }
 
 func (e *Envelope) powToFirstBit(pow float64) int {
 	x := pow
-	x *= float64(len(e.Data))
+	x *= float64(e.size())
 	x *= float64(e.TTL)
-	bits := math.Log2(x)
-	bits = math.Ceil(bits)
+	bits := gmath.Log2(x)
+	bits = gmath.Ceil(bits)
 	return int(bits)
-}
-
-// rlpWithoutNonce returns the RLP encoded envelope contents, except the nonce.
-func (e *Envelope) rlpWithoutNonce() []byte {
-	res, _ := rlp.EncodeToBytes([]interface{}{e.Expiry, e.TTL, e.Topic, e.Salt, e.AESNonce, e.Data})
-	return res
 }
 
 // Hash returns the SHA3 hash of the envelope, calculating it if not yet done.
@@ -202,7 +209,7 @@ func (e *Envelope) OpenAsymmetric(key *ecdsa.PrivateKey) (*ReceivedMessage, erro
 // OpenSymmetric tries to decrypt an envelope, potentially encrypted with a particular key.
 func (e *Envelope) OpenSymmetric(key []byte) (msg *ReceivedMessage, err error) {
 	msg = &ReceivedMessage{Raw: e.Data}
-	err = msg.decryptSymmetric(key, e.Salt, e.AESNonce)
+	err = msg.decryptSymmetric(key, e.AESNonce)
 	if err != nil {
 		msg = nil
 	}

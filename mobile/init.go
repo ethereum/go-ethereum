@@ -19,16 +19,15 @@
 package gubiq
 
 import (
+	"os"
 	"runtime"
 
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 )
 
 func init() {
 	// Initialize the logger
-	glog.SetV(logger.Info)
-	glog.SetToStderr(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
 	// Initialize the goroutine count
 	runtime.GOMAXPROCS(runtime.NumCPU())

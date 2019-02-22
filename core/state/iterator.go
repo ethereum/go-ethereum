@@ -19,7 +19,6 @@ package state
 import (
 	"bytes"
 	"fmt"
-	"math/big"
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/rlp"
@@ -31,15 +30,14 @@ import (
 type NodeIterator struct {
 	state *StateDB // State being iterated
 
-	stateIt *trie.NodeIterator // Primary iterator for the global state trie
-	dataIt  *trie.NodeIterator // Secondary iterator for the data trie of a contract
+	stateIt trie.NodeIterator // Primary iterator for the global state trie
+	dataIt  trie.NodeIterator // Secondary iterator for the data trie of a contract
 
 	accountHash common.Hash // Hash of the node containing the account
 	codeHash    common.Hash // Hash of the contract source code
 	code        []byte      // Source code associated with a contract
 
 	Hash   common.Hash // Hash of the current entry being iterated (nil if not standalone)
-	Entry  interface{} // Current state entry being iterated (internal representation)
 	Parent common.Hash // Hash of the first full ancestor node (nil if current is the root)
 
 	Error error // Failure set in case of an internal error in the iterator
@@ -76,13 +74,13 @@ func (it *NodeIterator) step() error {
 	}
 	// Initialize the iterator if we've just started
 	if it.stateIt == nil {
-		it.stateIt = it.state.trie.NodeIterator()
+		it.stateIt = it.state.trie.NodeIterator(nil)
 	}
 	// If we had data nodes previously, we surely have at least state nodes
 	if it.dataIt != nil {
-		if cont := it.dataIt.Next(); !cont {
-			if it.dataIt.Error != nil {
-				return it.dataIt.Error
+		if cont := it.dataIt.Next(true); !cont {
+			if it.dataIt.Error() != nil {
+				return it.dataIt.Error()
 			}
 			it.dataIt = nil
 		}
@@ -94,43 +92,39 @@ func (it *NodeIterator) step() error {
 		return nil
 	}
 	// Step to the next state trie node, terminating if we're out of nodes
-	if cont := it.stateIt.Next(); !cont {
-		if it.stateIt.Error != nil {
-			return it.stateIt.Error
+	if cont := it.stateIt.Next(true); !cont {
+		if it.stateIt.Error() != nil {
+			return it.stateIt.Error()
 		}
 		it.state, it.stateIt = nil, nil
 		return nil
 	}
 	// If the state trie node is an internal entry, leave as is
-	if !it.stateIt.Leaf {
+	if !it.stateIt.Leaf() {
 		return nil
 	}
 	// Otherwise we've reached an account node, initiate data iteration
-	var account struct {
-		Nonce    uint64
-		Balance  *big.Int
-		Root     common.Hash
-		CodeHash []byte
-	}
-	if err := rlp.Decode(bytes.NewReader(it.stateIt.LeafBlob), &account); err != nil {
+	var account Account
+	if err := rlp.Decode(bytes.NewReader(it.stateIt.LeafBlob()), &account); err != nil {
 		return err
 	}
-	dataTrie, err := trie.New(account.Root, it.state.db)
+	dataTrie, err := it.state.db.OpenStorageTrie(common.BytesToHash(it.stateIt.LeafKey()), account.Root)
 	if err != nil {
 		return err
 	}
-	it.dataIt = trie.NewNodeIterator(dataTrie)
-	if !it.dataIt.Next() {
+	it.dataIt = dataTrie.NodeIterator(nil)
+	if !it.dataIt.Next(true) {
 		it.dataIt = nil
 	}
 	if !bytes.Equal(account.CodeHash, emptyCodeHash) {
 		it.codeHash = common.BytesToHash(account.CodeHash)
-		it.code, err = it.state.db.Get(account.CodeHash)
+		addrHash := common.BytesToHash(it.stateIt.LeafKey())
+		it.code, err = it.state.db.ContractCode(addrHash, common.BytesToHash(account.CodeHash))
 		if err != nil {
 			return fmt.Errorf("code %x: %v", account.CodeHash, err)
 		}
 	}
-	it.accountHash = it.stateIt.Parent
+	it.accountHash = it.stateIt.Parent()
 	return nil
 }
 
@@ -138,7 +132,7 @@ func (it *NodeIterator) step() error {
 // The method returns whether there are any more data left for inspection.
 func (it *NodeIterator) retrieve() bool {
 	// Clear out any previously set values
-	it.Hash, it.Entry = common.Hash{}, nil
+	it.Hash = common.Hash{}
 
 	// If the iteration's done, return no available data
 	if it.state == nil {
@@ -147,14 +141,14 @@ func (it *NodeIterator) retrieve() bool {
 	// Otherwise retrieve the current entry
 	switch {
 	case it.dataIt != nil:
-		it.Hash, it.Entry, it.Parent = it.dataIt.Hash, it.dataIt.Node, it.dataIt.Parent
+		it.Hash, it.Parent = it.dataIt.Hash(), it.dataIt.Parent()
 		if it.Parent == (common.Hash{}) {
 			it.Parent = it.accountHash
 		}
 	case it.code != nil:
-		it.Hash, it.Entry, it.Parent = it.codeHash, it.code, it.accountHash
+		it.Hash, it.Parent = it.codeHash, it.accountHash
 	case it.stateIt != nil:
-		it.Hash, it.Entry, it.Parent = it.stateIt.Hash, it.stateIt.Node, it.stateIt.Parent
+		it.Hash, it.Parent = it.stateIt.Hash(), it.stateIt.Parent()
 	}
 	return true
 }

@@ -46,7 +46,7 @@ func TestKeyEncryptDecrypt(t *testing.T) {
 		// Decrypt with the correct password
 		key, err := DecryptKey(keyjson, password)
 		if err != nil {
-			t.Errorf("test %d: json key failed to decrypt: %v", i, err)
+			t.Fatalf("test %d: json key failed to decrypt: %v", i, err)
 		}
 		if key.Address != address {
 			t.Errorf("test %d: key address mismatch: have %x, want %x", i, key.Address, address)

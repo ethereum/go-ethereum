@@ -35,11 +35,11 @@ func setupReleaseTest(t *testing.T, prefund ...*ecdsa.PrivateKey) (*ecdsa.Privat
 	key, _ := crypto.GenerateKey()
 	auth := bind.NewKeyedTransactor(key)
 
-	accounts := []core.GenesisAccount{{Address: auth.From, Balance: big.NewInt(10000000000)}}
+	alloc := core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}
 	for _, key := range prefund {
-		accounts = append(accounts, core.GenesisAccount{Address: crypto.PubkeyToAddress(key.PublicKey), Balance: big.NewInt(10000000000)})
+		alloc[crypto.PubkeyToAddress(key.PublicKey)] = core.GenesisAccount{Balance: big.NewInt(10000000000)}
 	}
-	sim := backends.NewSimulatedBackend(accounts...)
+	sim := backends.NewSimulatedBackend(alloc)
 
 	// Deploy a version oracle contract, commit and return
 	_, _, oracle, err := DeployReleaseOracle(auth, sim, []common.Address{auth.From})
@@ -79,7 +79,7 @@ func TestSignerPromotion(t *testing.T) {
 	// Gradually promote the keys, until all are authorized
 	keys = append([]*ecdsa.PrivateKey{key}, keys...)
 	for i := 1; i < len(keys); i++ {
-		// Check that no votes are accepted from the not yet authed user
+		// Check that no votes are accepted from the not yet authorized user
 		if _, err := oracle.Promote(bind.NewKeyedTransactor(keys[i]), common.Address{}); err != nil {
 			t.Fatalf("Iter #%d: failed invalid promotion attempt: %v", i, err)
 		}
@@ -216,7 +216,7 @@ func TestVersionRelease(t *testing.T) {
 	// Gradually push releases, always requiring more signers than previously
 	keys = append([]*ecdsa.PrivateKey{key}, keys...)
 	for i := 1; i < len(keys); i++ {
-		// Check that no votes are accepted from the not yet authed user
+		// Check that no votes are accepted from the not yet authorized user
 		if _, err := oracle.Release(bind.NewKeyedTransactor(keys[i]), 0, 0, 0, [20]byte{0}); err != nil {
 			t.Fatalf("Iter #%d: failed invalid release attempt: %v", i, err)
 		}

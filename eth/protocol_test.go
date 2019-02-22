@@ -25,13 +25,13 @@ import (
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/crypto"
+	"github.com/ubiq/go-ubiq/eth/downloader"
 	"github.com/ubiq/go-ubiq/p2p"
 	"github.com/ubiq/go-ubiq/rlp"
 )
 
 func init() {
-	// glog.SetToStderr(true)
-	// glog.SetV(6)
+	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 }
 
 var testAccount, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -41,7 +41,7 @@ func TestStatusMsgErrors62(t *testing.T) { testStatusMsgErrors(t, 62) }
 func TestStatusMsgErrors63(t *testing.T) { testStatusMsgErrors(t, 63) }
 
 func testStatusMsgErrors(t *testing.T, protocol int) {
-	pm := newTestProtocolManagerMust(t, false, 0, nil, nil)
+	pm := newTestProtocolManagerMust(t, downloader.FullSync, 0, nil, nil)
 	td, currentBlock, genesis := pm.blockchain.Status()
 	defer pm.Stop()
 
@@ -55,7 +55,7 @@ func testStatusMsgErrors(t *testing.T, protocol int) {
 			wantError: errResp(ErrNoStatusMsg, "first msg has code 2 (!= 0)"),
 		},
 		{
-			code: StatusMsg, data: statusData{10, NetworkId, td, currentBlock, genesis},
+			code: StatusMsg, data: statusData{10, DefaultConfig.NetworkId, td, currentBlock, genesis},
 			wantError: errResp(ErrProtocolVersionMismatch, "10 (!= %d)", protocol),
 		},
 		{
@@ -63,8 +63,8 @@ func testStatusMsgErrors(t *testing.T, protocol int) {
 			wantError: errResp(ErrNetworkIdMismatch, "999 (!= 1)"),
 		},
 		{
-			code: StatusMsg, data: statusData{uint32(protocol), NetworkId, td, currentBlock, common.Hash{3}},
-			wantError: errResp(ErrGenesisBlockMismatch, "0300000000000000000000000000000000000000000000000000000000000000 (!= %x)", genesis),
+			code: StatusMsg, data: statusData{uint32(protocol), DefaultConfig.NetworkId, td, currentBlock, common.Hash{3}},
+			wantError: errResp(ErrGenesisBlockMismatch, "0300000000000000 (!= %x)", genesis[:8]),
 		},
 	}
 
@@ -94,8 +94,8 @@ func TestRecvTransactions63(t *testing.T) { testRecvTransactions(t, 63) }
 
 func testRecvTransactions(t *testing.T, protocol int) {
 	txAdded := make(chan []*types.Transaction)
-	pm := newTestProtocolManagerMust(t, false, 0, nil, txAdded)
-	pm.synced = 1 // mark synced to accept transactions
+	pm := newTestProtocolManagerMust(t, downloader.FullSync, 0, nil, txAdded)
+	pm.acceptTxs = 1 // mark synced to accept transactions
 	p, _ := newTestPeer("peer", protocol, pm, true)
 	defer pm.Stop()
 	defer p.close()
@@ -121,7 +121,7 @@ func TestSendTransactions62(t *testing.T) { testSendTransactions(t, 62) }
 func TestSendTransactions63(t *testing.T) { testSendTransactions(t, 63) }
 
 func testSendTransactions(t *testing.T, protocol int) {
-	pm := newTestProtocolManagerMust(t, false, 0, nil, nil)
+	pm := newTestProtocolManagerMust(t, downloader.FullSync, 0, nil, nil)
 	defer pm.Stop()
 
 	// Fill the pool with big transactions.
@@ -130,7 +130,7 @@ func testSendTransactions(t *testing.T, protocol int) {
 	for nonce := range alltxs {
 		alltxs[nonce] = newTestTransaction(testAccount, uint64(nonce), txsize)
 	}
-	pm.txpool.AddBatch(alltxs)
+	pm.txpool.AddRemotes(alltxs)
 
 	// Connect several peers. They should all receive the pending transactions.
 	var wg sync.WaitGroup

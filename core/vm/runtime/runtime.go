@@ -17,6 +17,7 @@
 package runtime
 
 import (
+	"math"
 	"math/big"
 	"time"
 
@@ -37,7 +38,7 @@ type Config struct {
 	Coinbase    common.Address
 	BlockNumber *big.Int
 	Time        *big.Int
-	GasLimit    *big.Int
+	GasLimit    uint64
 	GasPrice    *big.Int
 	Value       *big.Int
 	DisableJit  bool // "disable" so it's enabled by default
@@ -66,8 +67,8 @@ func setDefaults(cfg *Config) {
 	if cfg.Time == nil {
 		cfg.Time = big.NewInt(time.Now().Unix())
 	}
-	if cfg.GasLimit == nil {
-		cfg.GasLimit = new(big.Int).Set(common.MaxBig)
+	if cfg.GasLimit == 0 {
+		cfg.GasLimit = math.MaxUint64
 	}
 	if cfg.GasPrice == nil {
 		cfg.GasPrice = new(big.Int)
@@ -99,20 +100,20 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 
 	if cfg.State == nil {
 		db, _ := ethdb.NewMemDatabase()
-		cfg.State, _ = state.New(common.Hash{}, db)
+		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(db))
 	}
 	var (
-		vmenv    = NewEnv(cfg, cfg.State)
-		sender   = cfg.State.CreateAccount(cfg.Origin)
-		receiver = cfg.State.CreateAccount(common.StringToAddress("contract"))
+		address = common.StringToAddress("contract")
+		vmenv   = NewEnv(cfg, cfg.State)
+		sender  = vm.AccountRef(cfg.Origin)
 	)
+	cfg.State.CreateAccount(address)
 	// set the receiver's (the executing contract) code for execution.
-	receiver.SetCode(crypto.Keccak256Hash(code), code)
-
+	cfg.State.SetCode(address, code)
 	// Call the code with the given configuration.
-	ret, err := vmenv.Call(
+	ret, _, err := vmenv.Call(
 		sender,
-		receiver.Address(),
+		common.StringToAddress("contract"),
 		input,
 		cfg.GasLimit,
 		cfg.Value,
@@ -122,7 +123,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 }
 
 // Create executes the code using the EVM create method
-func Create(input []byte, cfg *Config) ([]byte, common.Address, error) {
+func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	if cfg == nil {
 		cfg = new(Config)
 	}
@@ -130,20 +131,21 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, error) {
 
 	if cfg.State == nil {
 		db, _ := ethdb.NewMemDatabase()
-		cfg.State, _ = state.New(common.Hash{}, db)
+		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(db))
 	}
 	var (
 		vmenv  = NewEnv(cfg, cfg.State)
-		sender = cfg.State.CreateAccount(cfg.Origin)
+		sender = vm.AccountRef(cfg.Origin)
 	)
 
 	// Call the code with the given configuration.
-	return vmenv.Create(
+	code, address, leftOverGas, err := vmenv.Create(
 		sender,
 		input,
 		cfg.GasLimit,
 		cfg.Value,
 	)
+	return code, address, leftOverGas, err
 }
 
 // Call executes the code given by the contract's address. It will return the
@@ -151,14 +153,14 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, error) {
 //
 // Call, unlike Execute, requires a config and also requires the State field to
 // be set.
-func Call(address common.Address, input []byte, cfg *Config) ([]byte, error) {
+func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, error) {
 	setDefaults(cfg)
 
 	vmenv := NewEnv(cfg, cfg.State)
 
 	sender := cfg.State.GetOrNewStateObject(cfg.Origin)
 	// Call the code with the given configuration.
-	ret, err := vmenv.Call(
+	ret, leftOverGas, err := vmenv.Call(
 		sender,
 		address,
 		input,
@@ -166,5 +168,5 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, error) {
 		cfg.Value,
 	)
 
-	return ret, err
+	return ret, leftOverGas, err
 }

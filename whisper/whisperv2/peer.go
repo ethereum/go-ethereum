@@ -21,8 +21,7 @@ import (
 	"time"
 
 	"github.com/ubiq/go-ubiq/common"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/p2p"
 	"github.com/ubiq/go-ubiq/rlp"
 	"gopkg.in/fatih/set.v0"
@@ -54,13 +53,13 @@ func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 // into the network.
 func (self *peer) start() {
 	go self.update()
-	glog.V(logger.Debug).Infof("%v: whisper started", self.peer)
+	log.Debug(fmt.Sprintf("%v: whisper started", self.peer))
 }
 
 // stop terminates the peer updater, stopping message forwarding to it.
 func (self *peer) stop() {
 	close(self.quit)
-	glog.V(logger.Debug).Infof("%v: whisper stopped", self.peer)
+	log.Debug(fmt.Sprintf("%v: whisper stopped", self.peer))
 }
 
 // handshake sends the protocol initiation status message to the remote peer and
@@ -112,7 +111,7 @@ func (self *peer) update() {
 
 		case <-transmit.C:
 			if err := self.broadcast(); err != nil {
-				glog.V(logger.Info).Infof("%v: broadcast failed: %v", self.peer, err)
+				log.Info(fmt.Sprintf("%v: broadcast failed: %v", self.peer, err))
 				return
 			}
 
@@ -170,6 +169,6 @@ func (self *peer) broadcast() error {
 	if err := p2p.Send(self.ws, messagesCode, transmit); err != nil {
 		return err
 	}
-	glog.V(logger.Detail).Infoln(self.peer, "broadcasted", len(transmit), "message(s)")
+	log.Trace(fmt.Sprint(self.peer, "broadcasted", len(transmit), "message(s)"))
 	return nil
 }

@@ -23,6 +23,9 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+
+	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/swarm/storage"
 )
 
 var testDownloadDir, _ = ioutil.TempDir(os.TempDir(), "bzz-test")
@@ -51,16 +54,17 @@ func TestApiDirUpload0(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		content := readPath(t, "testdata", "test0", "index.html")
-		resp := testGet(t, api, bzzhash+"/index.html")
+		resp := testGet(t, api, bzzhash, "index.html")
 		exp := expResponse(content, "text/html; charset=utf-8", 0)
 		checkResponse(t, resp, exp)
 
 		content = readPath(t, "testdata", "test0", "index.css")
-		resp = testGet(t, api, bzzhash+"/index.css")
+		resp = testGet(t, api, bzzhash, "index.css")
 		exp = expResponse(content, "text/css", 0)
 		checkResponse(t, resp, exp)
 
-		_, _, _, err = api.Get(bzzhash, true)
+		key := storage.Key(common.Hex2Bytes(bzzhash))
+		_, _, _, err = api.Get(key, "")
 		if err == nil {
 			t.Fatalf("expected error: %v", err)
 		}
@@ -90,7 +94,8 @@ func TestApiDirUploadModify(t *testing.T) {
 			return
 		}
 
-		bzzhash, err = api.Modify(bzzhash+"/index.html", "", "", true)
+		key := storage.Key(common.Hex2Bytes(bzzhash))
+		key, err = api.Modify(key, "index.html", "", "")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
@@ -107,32 +112,33 @@ func TestApiDirUploadModify(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		bzzhash, err = api.Modify(bzzhash+"/index2.html", hash.Hex(), "text/html; charset=utf-8", true)
+		key, err = api.Modify(key, "index2.html", hash.Hex(), "text/html; charset=utf-8")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		bzzhash, err = api.Modify(bzzhash+"/img/logo.png", hash.Hex(), "text/html; charset=utf-8", true)
+		key, err = api.Modify(key, "img/logo.png", hash.Hex(), "text/html; charset=utf-8")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
+		bzzhash = key.String()
 
 		content := readPath(t, "testdata", "test0", "index.html")
-		resp := testGet(t, api, bzzhash+"/index2.html")
+		resp := testGet(t, api, bzzhash, "index2.html")
 		exp := expResponse(content, "text/html; charset=utf-8", 0)
 		checkResponse(t, resp, exp)
 
-		resp = testGet(t, api, bzzhash+"/img/logo.png")
+		resp = testGet(t, api, bzzhash, "img/logo.png")
 		exp = expResponse(content, "text/html; charset=utf-8", 0)
 		checkResponse(t, resp, exp)
 
 		content = readPath(t, "testdata", "test0", "index.css")
-		resp = testGet(t, api, bzzhash+"/index.css")
+		resp = testGet(t, api, bzzhash, "index.css")
 		exp = expResponse(content, "text/css", 0)
 		checkResponse(t, resp, exp)
 
-		_, _, _, err = api.Get(bzzhash, true)
+		_, _, _, err = api.Get(key, "")
 		if err == nil {
 			t.Errorf("expected error: %v", err)
 		}
@@ -149,7 +155,7 @@ func TestApiDirUploadWithRootFile(t *testing.T) {
 		}
 
 		content := readPath(t, "testdata", "test0", "index.html")
-		resp := testGet(t, api, bzzhash)
+		resp := testGet(t, api, bzzhash, "")
 		exp := expResponse(content, "text/html; charset=utf-8", 0)
 		checkResponse(t, resp, exp)
 	})
@@ -165,7 +171,7 @@ func TestApiFileUpload(t *testing.T) {
 		}
 
 		content := readPath(t, "testdata", "test0", "index.html")
-		resp := testGet(t, api, bzzhash+"/index.html")
+		resp := testGet(t, api, bzzhash, "index.html")
 		exp := expResponse(content, "text/html; charset=utf-8", 0)
 		checkResponse(t, resp, exp)
 	})
@@ -181,7 +187,7 @@ func TestApiFileUploadWithRootFile(t *testing.T) {
 		}
 
 		content := readPath(t, "testdata", "test0", "index.html")
-		resp := testGet(t, api, bzzhash)
+		resp := testGet(t, api, bzzhash, "")
 		exp := expResponse(content, "text/html; charset=utf-8", 0)
 		checkResponse(t, resp, exp)
 	})

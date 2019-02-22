@@ -33,7 +33,7 @@ const (
 	FixedBytesTy
 	BytesTy
 	HashTy
-	FixedpointTy
+	FixedPointTy
 	FunctionTy
 )
 
@@ -126,13 +126,11 @@ func NewType(t string) (typ Type, err error) {
 
 	switch varType {
 	case "int":
-		typ.Kind = reflectIntKind(false, varSize)
-		typ.Type = big_t
+		typ.Kind, typ.Type = reflectIntKindAndType(false, varSize)
 		typ.Size = varSize
 		typ.T = IntTy
 	case "uint":
-		typ.Kind = reflectIntKind(true, varSize)
-		typ.Type = ubig_t
+		typ.Kind, typ.Type = reflectIntKindAndType(true, varSize)
 		typ.Size = varSize
 		typ.T = UintTy
 	case "bool":

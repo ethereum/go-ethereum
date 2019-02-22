@@ -19,9 +19,9 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 
+	"github.com/ubiq/go-ubiq/cmd/utils"
 	"github.com/ubiq/go-ubiq/swarm/storage"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -29,12 +29,11 @@ import (
 func hash(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) < 1 {
-		log.Fatal("Usage: swarm hash <file name>")
+		utils.Fatalf("Usage: swarm hash <file name>")
 	}
 	f, err := os.Open(args[0])
 	if err != nil {
-		fmt.Println("Error opening file " + args[1])
-		os.Exit(1)
+		utils.Fatalf("Error opening file " + args[1])
 	}
 	defer f.Close()
 
@@ -42,7 +41,7 @@ func hash(ctx *cli.Context) {
 	chunker := storage.NewTreeChunker(storage.NewChunkerParams())
 	key, err := chunker.Split(f, stat.Size(), nil, nil, nil)
 	if err != nil {
-		log.Fatalf("%v\n", err)
+		utils.Fatalf("%v\n", err)
 	} else {
 		fmt.Printf("%v\n", key)
 	}

@@ -29,7 +29,6 @@ import (
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/crypto"
-	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/p2p"
 	"github.com/ubiq/go-ubiq/p2p/nat"
 	"github.com/ubiq/go-ubiq/whisper"
@@ -47,7 +46,7 @@ func main() {
 	name := common.MakeName("whisper-go", "1.0")
 	shh := whisper.New()
 
-	// Create an Ethereum peer to communicate through
+	// Create an Ubiq peer to communicate through
 	server := p2p.Server{
 		PrivateKey: key,
 		MaxPeers:   10,
@@ -56,9 +55,9 @@ func main() {
 		ListenAddr: ":30300",
 		NAT:        nat.Any(),
 	}
-	fmt.Println("Starting Ethereum peer...")
+	fmt.Println("Starting Ubiq peer...")
 	if err := server.Start(); err != nil {
-		fmt.Printf("Failed to start Ethereum peer: %v.\n", err)
+		fmt.Printf("Failed to start Ubiq peer: %v.\n", err)
 		os.Exit(1)
 	}
 

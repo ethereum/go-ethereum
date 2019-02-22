@@ -35,8 +35,9 @@ type ID string
 // a Subscription is created by a notifier and tight to that notifier. The client can use
 // this subscription to wait for an unsubscribe request for the client, see Err().
 type Subscription struct {
-	ID  ID
-	err chan error // closed on unsubscribe
+	ID        ID
+	namespace string
+	err       chan error // closed on unsubscribe
 }
 
 // Err returns a channel that is closed when the client send an unsubscribe request.
@@ -78,7 +79,7 @@ func NotifierFromContext(ctx context.Context) (*Notifier, bool) {
 // are dropped until the subscription is marked as active. This is done
 // by the RPC server after the subscription ID is send to the client.
 func (n *Notifier) CreateSubscription() *Subscription {
-	s := &Subscription{NewID(), make(chan error)}
+	s := &Subscription{ID: NewID(), err: make(chan error)}
 	n.subMu.Lock()
 	n.inactive[s.ID] = s
 	n.subMu.Unlock()
@@ -91,9 +92,9 @@ func (n *Notifier) Notify(id ID, data interface{}) error {
 	n.subMu.RLock()
 	defer n.subMu.RUnlock()
 
-	_, active := n.active[id]
+	sub, active := n.active[id]
 	if active {
-		notification := n.codec.CreateNotification(string(id), data)
+		notification := n.codec.CreateNotification(string(id), sub.namespace, data)
 		if err := n.codec.Write(notification); err != nil {
 			n.codec.Close()
 			return err
@@ -124,10 +125,11 @@ func (n *Notifier) unsubscribe(id ID) error {
 // notifications are dropped. This method is called by the RPC server after
 // the subscription ID was sent to client. This prevents notifications being
 // send to the client before the subscription ID is send to the client.
-func (n *Notifier) activate(id ID) {
+func (n *Notifier) activate(id ID, namespace string) {
 	n.subMu.Lock()
 	defer n.subMu.Unlock()
 	if sub, found := n.inactive[id]; found {
+		sub.namespace = namespace
 		n.active[id] = sub
 		delete(n.inactive, id)
 	}

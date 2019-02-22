@@ -18,217 +18,132 @@ package tests
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
-	"io"
 	"math/big"
-	"strconv"
-	"testing"
 
 	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/common/hexutil"
+	"github.com/ubiq/go-ubiq/common/math"
+	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/state"
-	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/core/vm"
+	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/ethdb"
-	"github.com/ubiq/go-ubiq/logger/glog"
 	"github.com/ubiq/go-ubiq/params"
 )
 
-func RunVmTestWithReader(r io.Reader, skipTests []string) error {
-	tests := make(map[string]VmTest)
-	err := readJson(r, &tests)
-	if err != nil {
-		return err
-	}
-
-	if err != nil {
-		return err
-	}
-
-	if err := runVmTests(tests, skipTests); err != nil {
-		return err
-	}
-
-	return nil
+// VMTest checks EVM execution without block or transaction context.
+// See https://github.com/ethereum/tests/wiki/VM-Tests for the test format specification.
+type VMTest struct {
+	json vmJSON
 }
 
-type bconf struct {
-	name    string
-	precomp bool
-	jit     bool
+func (t *VMTest) UnmarshalJSON(data []byte) error {
+	return json.Unmarshal(data, &t.json)
 }
 
-func BenchVmTest(p string, conf bconf, b *testing.B) error {
-	tests := make(map[string]VmTest)
-	err := readJsonFile(p, &tests)
-	if err != nil {
-		return err
-	}
-
-	test, ok := tests[conf.name]
-	if !ok {
-		return fmt.Errorf("test not found: %s", conf.name)
-	}
-
-	env := make(map[string]string)
-	env["currentCoinbase"] = test.Env.CurrentCoinbase
-	env["currentDifficulty"] = test.Env.CurrentDifficulty
-	env["currentGasLimit"] = test.Env.CurrentGasLimit
-	env["currentNumber"] = test.Env.CurrentNumber
-	env["previousHash"] = test.Env.PreviousHash
-	if n, ok := test.Env.CurrentTimestamp.(float64); ok {
-		env["currentTimestamp"] = strconv.Itoa(int(n))
-	} else {
-		env["currentTimestamp"] = test.Env.CurrentTimestamp.(string)
-	}
-
-	/*
-		if conf.precomp {
-			program := vm.NewProgram(test.code)
-			err := vm.AttachProgram(program)
-			if err != nil {
-				return err
-			}
-		}
-	*/
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		benchVmTest(test, env, b)
-	}
-
-	return nil
+type vmJSON struct {
+	Env           stEnv                `json:"env"`
+	Exec          vmExec               `json:"exec"`
+	Logs          []stLog              `json:"logs"`
+	GasRemaining  *math.HexOrDecimal64 `json:"gas"`
+	Out           hexutil.Bytes        `json:"out"`
+	Pre           core.GenesisAlloc    `json:"pre"`
+	Post          core.GenesisAlloc    `json:"post"`
+	PostStateRoot common.Hash          `json:"postStateRoot"`
 }
 
-func benchVmTest(test VmTest, env map[string]string, b *testing.B) {
-	b.StopTimer()
+//go:generate gencodec -type vmExec -field-override vmExecMarshaling -out gen_vmexec.go
+
+type vmExec struct {
+	Address  common.Address `json:"address"  gencodec:"required"`
+	Caller   common.Address `json:"caller"   gencodec:"required"`
+	Origin   common.Address `json:"origin"   gencodec:"required"`
+	Code     []byte         `json:"code"     gencodec:"required"`
+	Data     []byte         `json:"data"     gencodec:"required"`
+	Value    *big.Int       `json:"value"    gencodec:"required"`
+	GasLimit uint64         `json:"gas"      gencodec:"required"`
+	GasPrice *big.Int       `json:"gasPrice" gencodec:"required"`
+}
+
+type vmExecMarshaling struct {
+	Address  common.UnprefixedAddress
+	Caller   common.UnprefixedAddress
+	Origin   common.UnprefixedAddress
+	Code     hexutil.Bytes
+	Data     hexutil.Bytes
+	Value    *math.HexOrDecimal256
+	GasLimit math.HexOrDecimal64
+	GasPrice *math.HexOrDecimal256
+}
+
+func (t *VMTest) Run(vmconfig vm.Config) error {
 	db, _ := ethdb.NewMemDatabase()
-	statedb := makePreState(db, test.Pre)
-	b.StartTimer()
+	statedb := makePreState(db, t.json.Pre)
+	ret, gasRemaining, err := t.exec(statedb, vmconfig)
 
-	RunVm(statedb, env, test.Exec)
-}
-
-func RunVmTest(p string, skipTests []string) error {
-	tests := make(map[string]VmTest)
-	err := readJsonFile(p, &tests)
-	if err != nil {
-		return err
-	}
-
-	if err := runVmTests(tests, skipTests); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func runVmTests(tests map[string]VmTest, skipTests []string) error {
-	skipTest := make(map[string]bool, len(skipTests))
-	for _, name := range skipTests {
-		skipTest[name] = true
-	}
-
-	for name, test := range tests {
-		if skipTest[name] /*|| name != "loop_stacklimit_1021"*/ {
-			glog.Infoln("Skipping VM test", name)
-			continue
+	if t.json.GasRemaining == nil {
+		if err == nil {
+			return fmt.Errorf("gas unspecified (indicating an error), but VM returned no error")
 		}
-
-		if err := runVmTest(test); err != nil {
-			return fmt.Errorf("%s %s", name, err.Error())
+		if gasRemaining > 0 {
+			return fmt.Errorf("gas unspecified (indicating an error), but VM returned gas remaining > 0")
 		}
-
-		glog.Infoln("VM test passed: ", name)
-		//fmt.Println(string(statedb.Dump()))
+		return nil
 	}
-	return nil
-}
-
-func runVmTest(test VmTest) error {
-	db, _ := ethdb.NewMemDatabase()
-	statedb := makePreState(db, test.Pre)
-
-	// XXX Yeah, yeah...
-	env := make(map[string]string)
-	env["currentCoinbase"] = test.Env.CurrentCoinbase
-	env["currentDifficulty"] = test.Env.CurrentDifficulty
-	env["currentGasLimit"] = test.Env.CurrentGasLimit
-	env["currentNumber"] = test.Env.CurrentNumber
-	env["previousHash"] = test.Env.PreviousHash
-	if n, ok := test.Env.CurrentTimestamp.(float64); ok {
-		env["currentTimestamp"] = strconv.Itoa(int(n))
-	} else {
-		env["currentTimestamp"] = test.Env.CurrentTimestamp.(string)
+	// Test declares gas, expecting outputs to match.
+	if !bytes.Equal(ret, t.json.Out) {
+		return fmt.Errorf("return data mismatch: got %x, want %x", ret, t.json.Out)
 	}
-
-	var (
-		ret  []byte
-		gas  *big.Int
-		err  error
-		logs []*types.Log
-	)
-
-	ret, logs, gas, err = RunVm(statedb, env, test.Exec)
-
-	// Compare expected and actual return
-	rexp := common.FromHex(test.Out)
-	if !bytes.Equal(rexp, ret) {
-		return fmt.Errorf("return failed. Expected %x, got %x\n", rexp, ret)
+	if gasRemaining != uint64(*t.json.GasRemaining) {
+		return fmt.Errorf("remaining gas %v, want %v", gasRemaining, *t.json.GasRemaining)
 	}
-
-	// Check gas usage
-	if len(test.Gas) == 0 && err == nil {
-		return fmt.Errorf("gas unspecified, indicating an error. VM returned (incorrectly) successful")
-	} else {
-		gexp := common.Big(test.Gas)
-		if gexp.Cmp(gas) != 0 {
-			return fmt.Errorf("gas failed. Expected %v, got %v\n", gexp, gas)
-		}
-	}
-
-	// check post state
-	for addr, account := range test.Post {
-		obj := statedb.GetStateObject(common.HexToAddress(addr))
-		if obj == nil {
-			continue
-		}
-		for addr, value := range account.Storage {
-			v := statedb.GetState(obj.Address(), common.HexToHash(addr))
-			vexp := common.HexToHash(value)
-			if v != vexp {
-				return fmt.Errorf("(%x: %s) storage failed. Expected %x, got %x (%v %v)\n", obj.Address().Bytes()[0:4], addr, vexp, v, vexp.Big(), v.Big())
+	for addr, account := range t.json.Post {
+		for k, wantV := range account.Storage {
+			if haveV := statedb.GetState(addr, k); haveV != wantV {
+				return fmt.Errorf("wrong storage value at %x:\n  got  %x\n  want %x", k, haveV, wantV)
 			}
 		}
 	}
-
-	// check logs
-	if len(test.Logs) > 0 {
-		lerr := checkLogs(test.Logs, logs)
-		if lerr != nil {
-			return lerr
-		}
-	}
-
-	return nil
+	// if root := statedb.IntermediateRoot(false); root != t.json.PostStateRoot {
+	// 	return fmt.Errorf("post state root mismatch, got %x, want %x", root, t.json.PostStateRoot)
+	// }
+	return checkLogs(statedb.Logs(), t.json.Logs)
 }
 
-func RunVm(statedb *state.StateDB, env, exec map[string]string) ([]byte, []*types.Log, *big.Int, error) {
-	chainConfig := &params.ChainConfig{
-		HomesteadBlock: params.MainNetHomesteadBlock,
-		DAOForkBlock:   params.MainNetDAOForkBlock,
-		DAOForkSupport: true,
-	}
-	var (
-		to    = common.HexToAddress(exec["address"])
-		from  = common.HexToAddress(exec["caller"])
-		data  = common.FromHex(exec["data"])
-		gas   = common.Big(exec["gas"])
-		value = common.Big(exec["value"])
-	)
-	caller := statedb.GetOrNewStateObject(from)
-	vm.PrecompiledContracts = make(map[common.Address]vm.PrecompiledContract)
+func (t *VMTest) exec(statedb *state.StateDB, vmconfig vm.Config) ([]byte, uint64, error) {
+	evm := t.newEVM(statedb, vmconfig)
+	e := t.json.Exec
+	return evm.Call(vm.AccountRef(e.Caller), e.Address, e.Data, e.GasLimit, e.Value)
+}
 
-	environment, _ := NewEVMEnvironment(true, chainConfig, statedb, env, exec)
-	ret, err := environment.Call(caller, to, data, gas, value)
-	return ret, statedb.Logs(), gas, err
+func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) *vm.EVM {
+	initialCall := true
+	canTransfer := func(db vm.StateDB, address common.Address, amount *big.Int) bool {
+		if initialCall {
+			initialCall = false
+			return true
+		}
+		return core.CanTransfer(db, address, amount)
+	}
+	transfer := func(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {}
+	context := vm.Context{
+		CanTransfer: canTransfer,
+		Transfer:    transfer,
+		GetHash:     vmTestBlockHash,
+		Origin:      t.json.Exec.Origin,
+		Coinbase:    t.json.Env.Coinbase,
+		BlockNumber: new(big.Int).SetUint64(t.json.Env.Number),
+		Time:        new(big.Int).SetUint64(t.json.Env.Timestamp),
+		GasLimit:    t.json.Env.GasLimit,
+		Difficulty:  t.json.Env.Difficulty,
+		GasPrice:    t.json.Exec.GasPrice,
+	}
+	vmconfig.NoRecursion = true
+	return vm.NewEVM(context, statedb, params.MainnetChainConfig, vmconfig)
+}
+
+func vmTestBlockHash(n uint64) common.Hash {
+	return common.BytesToHash(crypto.Keccak256([]byte(big.NewInt(int64(n)).String())))
 }

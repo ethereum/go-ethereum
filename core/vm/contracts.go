@@ -17,38 +17,40 @@
 package vm
 
 import (
+	"crypto/sha256"
+	"errors"
 	"math/big"
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/crypto"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/params"
+	"golang.org/x/crypto/ripemd160"
 )
+
+var errBadPrecompileInput = errors.New("bad pre compile input")
 
 // Precompiled contract is the basic interface for native Go contracts. The implementation
 // requires a deterministic gas count based on the input size of the Run method of the
 // contract.
 type PrecompiledContract interface {
-	RequiredGas(inputSize int) *big.Int // RequiredPrice calculates the contract gas use
-	Run(input []byte) []byte            // Run runs the precompiled contract
+	RequiredGas(input []byte) uint64  // RequiredPrice calculates the contract gas use
+	Run(input []byte) ([]byte, error) // Run runs the precompiled contract
 }
 
-// Precompiled contains the default set of ethereum contracts
+// PrecompiledContracts contains the default set of ethereum contracts
 var PrecompiledContracts = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256{},
-	common.BytesToAddress([]byte{3}): &ripemd160{},
+	common.BytesToAddress([]byte{2}): &sha256hash{},
+	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
 }
 
 // RunPrecompile runs and evaluate the output of a precompiled contract defined in contracts.go
 func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contract) (ret []byte, err error) {
-	gas := p.RequiredGas(len(input))
+	gas := p.RequiredGas(input)
 	if contract.UseGas(gas) {
-		ret = p.Run(input)
-
-		return ret, nil
+		return p.Run(input)
 	} else {
 		return nil, ErrOutOfGas
 	}
@@ -57,71 +59,79 @@ func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contr
 // ECRECOVER implemented as a native contract
 type ecrecover struct{}
 
-func (c *ecrecover) RequiredGas(inputSize int) *big.Int {
+func (c *ecrecover) RequiredGas(input []byte) uint64 {
 	return params.EcrecoverGas
 }
 
-func (c *ecrecover) Run(in []byte) []byte {
+func (c *ecrecover) Run(in []byte) ([]byte, error) {
 	const ecRecoverInputLength = 128
 
 	in = common.RightPadBytes(in, ecRecoverInputLength)
 	// "in" is (hash, v, r, s), each 32 bytes
 	// but for ecrecover we want (r, s, v)
 
-	r := common.BytesToBig(in[64:96])
-	s := common.BytesToBig(in[96:128])
+	r := new(big.Int).SetBytes(in[64:96])
+	s := new(big.Int).SetBytes(in[96:128])
 	v := in[63] - 27
 
 	// tighter sig s values in homestead only apply to tx sigs
-	if common.Bytes2Big(in[32:63]).BitLen() > 0 || !crypto.ValidateSignatureValues(v, r, s, false) {
-		glog.V(logger.Detail).Infof("ECRECOVER error: v, r or s value invalid")
-		return nil
+	if !allZero(in[32:63]) || !crypto.ValidateSignatureValues(v, r, s, false) {
+		log.Trace("ECRECOVER error: v, r or s value invalid")
+		return nil, nil
 	}
 	// v needs to be at the end for libsecp256k1
 	pubKey, err := crypto.Ecrecover(in[:32], append(in[64:128], v))
 	// make sure the public key is a valid one
 	if err != nil {
-		glog.V(logger.Detail).Infoln("ECRECOVER error: ", err)
-		return nil
+		log.Trace("ECRECOVER failed", "err", err)
+		return nil, nil
 	}
 
 	// the first byte of pubkey is bitcoin heritage
-	return common.LeftPadBytes(crypto.Keccak256(pubKey[1:])[12:], 32)
+	return common.LeftPadBytes(crypto.Keccak256(pubKey[1:])[12:], 32), nil
 }
 
 // SHA256 implemented as a native contract
-type sha256 struct{}
+type sha256hash struct{}
 
-func (c *sha256) RequiredGas(inputSize int) *big.Int {
-	n := big.NewInt(int64(inputSize+31) / 32)
-	n.Mul(n, params.Sha256WordGas)
-	return n.Add(n, params.Sha256Gas)
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+//
+// This method does not require any overflow checking as the input size gas costs
+// required for anything significant is so high it's impossible to pay for.
+func (c *sha256hash) RequiredGas(input []byte) uint64 {
+	return uint64(len(input)+31)/32*params.Sha256WordGas + params.Sha256Gas
 }
-func (c *sha256) Run(in []byte) []byte {
-	return crypto.Sha256(in)
+func (c *sha256hash) Run(in []byte) ([]byte, error) {
+	h := sha256.Sum256(in)
+	return h[:], nil
 }
 
 // RIPMED160 implemented as a native contract
-type ripemd160 struct{}
+type ripemd160hash struct{}
 
-func (c *ripemd160) RequiredGas(inputSize int) *big.Int {
-	n := big.NewInt(int64(inputSize+31) / 32)
-	n.Mul(n, params.Ripemd160WordGas)
-	return n.Add(n, params.Ripemd160Gas)
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+//
+// This method does not require any overflow checking as the input size gas costs
+// required for anything significant is so high it's impossible to pay for.
+func (c *ripemd160hash) RequiredGas(input []byte) uint64 {
+	return uint64(len(input)+31)/32*params.Ripemd160WordGas + params.Ripemd160Gas
 }
-func (c *ripemd160) Run(in []byte) []byte {
-	return common.LeftPadBytes(crypto.Ripemd160(in), 32)
+func (c *ripemd160hash) Run(in []byte) ([]byte, error) {
+	ripemd := ripemd160.New()
+	ripemd.Write(in)
+	return common.LeftPadBytes(ripemd.Sum(nil), 32), nil
 }
 
 // data copy implemented as a native contract
 type dataCopy struct{}
 
-func (c *dataCopy) RequiredGas(inputSize int) *big.Int {
-	n := big.NewInt(int64(inputSize+31) / 32)
-	n.Mul(n, params.IdentityWordGas)
-
-	return n.Add(n, params.IdentityGas)
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+//
+// This method does not require any overflow checking as the input size gas costs
+// required for anything significant is so high it's impossible to pay for.
+func (c *dataCopy) RequiredGas(input []byte) uint64 {
+	return uint64(len(input)+31)/32*params.IdentityWordGas + params.IdentityGas
 }
-func (c *dataCopy) Run(in []byte) []byte {
-	return in
+func (c *dataCopy) Run(in []byte) ([]byte, error) {
+	return in, nil
 }

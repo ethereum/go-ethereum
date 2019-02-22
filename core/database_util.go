@@ -28,8 +28,7 @@ import (
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/ethdb"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/metrics"
 	"github.com/ubiq/go-ubiq/params"
 	"github.com/ubiq/go-ubiq/rlp"
@@ -58,7 +57,7 @@ var (
 	oldReceiptsPrefix = []byte("receipts-")
 	oldTxMetaSuffix   = []byte{0x01}
 
-	ChainConfigNotFoundErr = errors.New("ChainConfig not found") // general config not found error
+	ErrChainConfigNotFound = errors.New("ChainConfig not found") // general config not found error
 
 	mipmapBloomMu sync.Mutex // protect against race condition when updating mipmap blooms
 
@@ -99,7 +98,15 @@ const missingNumber = uint64(0xffffffffffffffff)
 func GetBlockNumber(db ethdb.Database, hash common.Hash) uint64 {
 	data, _ := db.Get(append(blockHashPrefix, hash.Bytes()...))
 	if len(data) != 8 {
-		return missingNumber
+		data, _ := db.Get(append(append(oldBlockPrefix, hash.Bytes()...), oldHeaderSuffix...))
+		if len(data) == 0 {
+			return missingNumber
+		}
+		header := new(types.Header)
+		if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
+			log.Crit("Failed to decode block header", "err", err)
+		}
+		return header.Number.Uint64()
 	}
 	return binary.BigEndian.Uint64(data)
 }
@@ -154,7 +161,7 @@ func GetHeader(db ethdb.Database, hash common.Hash, number uint64) *types.Header
 	}
 	header := new(types.Header)
 	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
-		glog.V(logger.Error).Infof("invalid block header RLP for hash %x: %v", hash, err)
+		log.Error("Invalid block header RLP", "hash", hash, "err", err)
 		return nil
 	}
 	return header
@@ -175,7 +182,7 @@ func GetBody(db ethdb.Database, hash common.Hash, number uint64) *types.Body {
 	}
 	body := new(types.Body)
 	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
-		glog.V(logger.Error).Infof("invalid block body RLP for hash %x: %v", hash, err)
+		log.Error("Invalid block body RLP", "hash", hash, "err", err)
 		return nil
 	}
 	return body
@@ -190,7 +197,7 @@ func GetTd(db ethdb.Database, hash common.Hash, number uint64) *big.Int {
 	}
 	td := new(big.Int)
 	if err := rlp.Decode(bytes.NewReader(data), td); err != nil {
-		glog.V(logger.Error).Infof("invalid block total difficulty RLP for hash %x: %v", hash, err)
+		log.Error("Invalid block total difficulty RLP", "hash", hash, "err", err)
 		return nil
 	}
 	return td
@@ -225,7 +232,7 @@ func GetBlockReceipts(db ethdb.Database, hash common.Hash, number uint64) types.
 	}
 	storageReceipts := []*types.ReceiptForStorage{}
 	if err := rlp.DecodeBytes(data, &storageReceipts); err != nil {
-		glog.V(logger.Error).Infof("invalid receipt array RLP for hash %x: %v", hash, err)
+		log.Error("Invalid receipt array RLP", "hash", hash, "err", err)
 		return nil
 	}
 	receipts := make(types.Receipts, len(storageReceipts))
@@ -288,29 +295,16 @@ func GetTransaction(db ethdb.Database, hash common.Hash) (*types.Transaction, co
 	return &tx, entry.BlockHash, entry.BlockIndex, entry.Index
 }
 
-// GetReceipt retrieves a specific transaction receipt from the database, along with
-// its added positional metadata.
-func GetReceipt(db ethdb.Database, hash common.Hash) (*types.Receipt, common.Hash, uint64, uint64) {
-	// Retrieve the lookup metadata and resolve the receipt from the receipts
-	blockHash, blockNumber, receiptIndex := GetTxLookupEntry(db, hash)
-
-	if blockHash != (common.Hash{}) {
-		receipts := GetBlockReceipts(db, blockHash, blockNumber)
-		if len(receipts) <= int(receiptIndex) {
-			glog.V(logger.Error).Infof("Receipt refereced missing", "number", blockNumber, "hash", blockHash, "index", receiptIndex)
-			return nil, common.Hash{}, 0, 0
-		}
-		return receipts[receiptIndex], blockHash, blockNumber, receiptIndex
-	}
-	// Old receipt representation, load the receipt and set an unknown metadata
-	data, _ := db.Get(append(oldReceiptsPrefix, hash[:]...))
+// GetReceipt returns a receipt by hash
+func GetReceipt(db ethdb.Database, hash common.Hash) *types.Receipt {
+	data, _ := db.Get(append(receiptsPrefix, hash[:]...))
 	if len(data) == 0 {
 		return nil, common.Hash{}, 0, 0
 	}
 	var receipt types.ReceiptForStorage
 	err := rlp.DecodeBytes(data, &receipt)
 	if err != nil {
-		glog.V(logger.Core).Infoln("GetReceipt err:", err)
+		log.Error("Invalid receipt RLP", "hash", hash, "err", err)
 	}
 	return (*types.Receipt)(&receipt), common.Hash{}, 0, 0
 }
@@ -319,7 +313,7 @@ func GetReceipt(db ethdb.Database, hash common.Hash) (*types.Receipt, common.Has
 func WriteCanonicalHash(db ethdb.Database, hash common.Hash, number uint64) error {
 	key := append(append(headerPrefix, encodeBlockNumber(number)...), numSuffix...)
 	if err := db.Put(key, hash.Bytes()); err != nil {
-		glog.Fatalf("failed to store number to hash mapping into database: %v", err)
+		log.Crit("Failed to store number to hash mapping", "err", err)
 	}
 	return nil
 }
@@ -327,7 +321,7 @@ func WriteCanonicalHash(db ethdb.Database, hash common.Hash, number uint64) erro
 // WriteHeadHeaderHash stores the head header's hash.
 func WriteHeadHeaderHash(db ethdb.Database, hash common.Hash) error {
 	if err := db.Put(headHeaderKey, hash.Bytes()); err != nil {
-		glog.Fatalf("failed to store last header's hash into database: %v", err)
+		log.Crit("Failed to store last header's hash", "err", err)
 	}
 	return nil
 }
@@ -335,7 +329,7 @@ func WriteHeadHeaderHash(db ethdb.Database, hash common.Hash) error {
 // WriteHeadBlockHash stores the head block's hash.
 func WriteHeadBlockHash(db ethdb.Database, hash common.Hash) error {
 	if err := db.Put(headBlockKey, hash.Bytes()); err != nil {
-		glog.Fatalf("failed to store last block's hash into database: %v", err)
+		log.Crit("Failed to store last block's hash", "err", err)
 	}
 	return nil
 }
@@ -343,7 +337,7 @@ func WriteHeadBlockHash(db ethdb.Database, hash common.Hash) error {
 // WriteHeadFastBlockHash stores the fast head block's hash.
 func WriteHeadFastBlockHash(db ethdb.Database, hash common.Hash) error {
 	if err := db.Put(headFastKey, hash.Bytes()); err != nil {
-		glog.Fatalf("failed to store last fast block's hash into database: %v", err)
+		log.Crit("Failed to store last fast block's hash", "err", err)
 	}
 	return nil
 }
@@ -359,13 +353,12 @@ func WriteHeader(db ethdb.Database, header *types.Header) error {
 	encNum := encodeBlockNumber(num)
 	key := append(blockHashPrefix, hash...)
 	if err := db.Put(key, encNum); err != nil {
-		glog.Fatalf("failed to store hash to number mapping into database: %v", err)
+		log.Crit("Failed to store hash to number mapping", "err", err)
 	}
 	key = append(append(headerPrefix, encNum...), hash...)
 	if err := db.Put(key, data); err != nil {
-		glog.Fatalf("failed to store header into database: %v", err)
+		log.Crit("Failed to store header", "err", err)
 	}
-	glog.V(logger.Debug).Infof("stored header #%v [%x…]", header.Number, hash[:4])
 	return nil
 }
 
@@ -382,9 +375,8 @@ func WriteBody(db ethdb.Database, hash common.Hash, number uint64, body *types.B
 func WriteBodyRLP(db ethdb.Database, hash common.Hash, number uint64, rlp rlp.RawValue) error {
 	key := append(append(bodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 	if err := db.Put(key, rlp); err != nil {
-		glog.Fatalf("failed to store block body into database: %v", err)
+		log.Crit("Failed to store block body", "err", err)
 	}
-	glog.V(logger.Debug).Infof("stored block body [%x…]", hash.Bytes()[:4])
 	return nil
 }
 
@@ -396,9 +388,8 @@ func WriteTd(db ethdb.Database, hash common.Hash, number uint64, td *big.Int) er
 	}
 	key := append(append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...), tdSuffix...)
 	if err := db.Put(key, data); err != nil {
-		glog.Fatalf("failed to store block total difficulty into database: %v", err)
+		log.Crit("Failed to store block total difficulty", "err", err)
 	}
-	glog.V(logger.Debug).Infof("stored block total difficulty [%x…]: %v", hash.Bytes()[:4], td)
 	return nil
 }
 
@@ -431,9 +422,8 @@ func WriteBlockReceipts(db ethdb.Database, hash common.Hash, number uint64, rece
 	// Store the flattened receipt slice
 	key := append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 	if err := db.Put(key, bytes); err != nil {
-		glog.Fatalf("failed to store block receipts into database: %v", err)
+		log.Crit("Failed to store block receipts", "err", err)
 	}
-	glog.V(logger.Debug).Infof("stored block receipts [%x…]", hash.Bytes()[:4])
 	return nil
 }
 
@@ -444,7 +434,20 @@ func WriteTxLookupEntries(db ethdb.Database, block *types.Block) error {
 
 	// Iterate over each transaction and encode its metadata
 	for i, tx := range block.Transactions() {
-		entry := txLookupEntry{
+		// Encode and queue up the transaction for storage
+		data, err := rlp.EncodeToBytes(tx)
+		if err != nil {
+			return err
+		}
+		if err = batch.Put(tx.Hash().Bytes(), data); err != nil {
+			return err
+		}
+		// Encode and queue up the transaction metadata for storage
+		meta := struct {
+			BlockHash  common.Hash
+			BlockIndex uint64
+			Index      uint64
+		}{
 			BlockHash:  block.Hash(),
 			BlockIndex: block.NumberU64(),
 			Index:      uint64(i),
@@ -459,7 +462,39 @@ func WriteTxLookupEntries(db ethdb.Database, block *types.Block) error {
 	}
 	// Write the scheduled data into the database
 	if err := batch.Write(); err != nil {
-		glog.Fatalf("Failed to store lookup entries", "err", err)
+		log.Crit("Failed to store transactions", "err", err)
+	}
+	return nil
+}
+
+// WriteReceipt stores a single transaction receipt into the database.
+func WriteReceipt(db ethdb.Database, receipt *types.Receipt) error {
+	storageReceipt := (*types.ReceiptForStorage)(receipt)
+	data, err := rlp.EncodeToBytes(storageReceipt)
+	if err != nil {
+		return err
+	}
+	return db.Put(append(receiptsPrefix, receipt.TxHash.Bytes()...), data)
+}
+
+// WriteReceipts stores a batch of transaction receipts into the database.
+func WriteReceipts(db ethdb.Database, receipts types.Receipts) error {
+	batch := db.NewBatch()
+
+	// Iterate over all the receipts and queue them for database injection
+	for _, receipt := range receipts {
+		storageReceipt := (*types.ReceiptForStorage)(receipt)
+		data, err := rlp.EncodeToBytes(storageReceipt)
+		if err != nil {
+			return err
+		}
+		if err := batch.Put(append(receiptsPrefix, receipt.TxHash.Bytes()...), data); err != nil {
+			return err
+		}
+	}
+	// Write the scheduled data into the database
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to store receipts", "err", err)
 	}
 	return nil
 }
@@ -498,9 +533,15 @@ func DeleteBlockReceipts(db ethdb.Database, hash common.Hash, number uint64) {
 	db.Delete(append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...))
 }
 
-// DeleteTxLookupEntry removes all transaction data associated with a hash.
-func DeleteTxLookupEntry(db ethdb.Database, hash common.Hash) {
-	db.Delete(append(lookupPrefix, hash.Bytes()...))
+// DeleteTransaction removes all transaction data associated with a hash.
+func DeleteTransaction(db ethdb.Database, hash common.Hash) {
+	db.Delete(hash.Bytes())
+	db.Delete(append(hash.Bytes(), txMetaSuffix...))
+}
+
+// DeleteReceipt removes all receipt data associated with a transaction hash.
+func DeleteReceipt(db ethdb.Database, hash common.Hash) {
+	db.Delete(append(receiptsPrefix, hash.Bytes()...))
 }
 
 // returns a formatted MIP mapped key by adding prefix, canonical number and level
@@ -514,7 +555,7 @@ func mipmapKey(num, level uint64) []byte {
 	return append(mipmapPre, append(lkey, key.Bytes()...)...)
 }
 
-// WriteMapmapBloom writes each address included in the receipts' logs to the
+// WriteMipmapBloom writes each address included in the receipts' logs to the
 // MIP bloom bin.
 func WriteMipmapBloom(db ethdb.Database, number uint64, receipts types.Receipts) error {
 	mipmapBloomMu.Lock()
@@ -559,7 +600,7 @@ func WritePreimages(db ethdb.Database, number uint64, preimages map[common.Hash]
 	for hash, preimage := range preimages {
 		if _, err := table.Get(hash.Bytes()); err != nil {
 			batch.Put(hash.Bytes(), preimage)
-			hitCount += 1
+			hitCount++
 		}
 	}
 	preimageCounter.Inc(int64(len(preimages)))
@@ -568,7 +609,6 @@ func WritePreimages(db ethdb.Database, number uint64, preimages map[common.Hash]
 		if err := batch.Write(); err != nil {
 			return fmt.Errorf("preimage write fail for block %d: %v", number, err)
 		}
-		glog.V(logger.Debug).Infof("%d preimages in block %d, including %d new", len(preimages), number, hitCount)
 	}
 	return nil
 }
@@ -607,7 +647,7 @@ func WriteChainConfig(db ethdb.Database, hash common.Hash, cfg *params.ChainConf
 func GetChainConfig(db ethdb.Database, hash common.Hash) (*params.ChainConfig, error) {
 	jsonChainConfig, _ := db.Get(append(configPrefix, hash[:]...))
 	if len(jsonChainConfig) == 0 {
-		return nil, ChainConfigNotFoundErr
+		return nil, ErrChainConfigNotFound
 	}
 
 	var config params.ChainConfig

@@ -18,50 +18,9 @@ package downloader
 
 import (
 	"fmt"
-	"math/big"
 
-	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core/types"
 )
-
-// headerCheckFn is a callback type for verifying a header's presence in the local chain.
-type headerCheckFn func(common.Hash) bool
-
-// blockAndStateCheckFn is a callback type for verifying block and associated states' presence in the local chain.
-type blockAndStateCheckFn func(common.Hash) bool
-
-// headerRetrievalFn is a callback type for retrieving a header from the local chain.
-type headerRetrievalFn func(common.Hash) *types.Header
-
-// blockRetrievalFn is a callback type for retrieving a block from the local chain.
-type blockRetrievalFn func(common.Hash) *types.Block
-
-// headHeaderRetrievalFn is a callback type for retrieving the head header from the local chain.
-type headHeaderRetrievalFn func() *types.Header
-
-// headBlockRetrievalFn is a callback type for retrieving the head block from the local chain.
-type headBlockRetrievalFn func() *types.Block
-
-// headFastBlockRetrievalFn is a callback type for retrieving the head fast block from the local chain.
-type headFastBlockRetrievalFn func() *types.Block
-
-// headBlockCommitterFn is a callback for directly committing the head block to a certain entity.
-type headBlockCommitterFn func(common.Hash) error
-
-// tdRetrievalFn is a callback type for retrieving the total difficulty of a local block.
-type tdRetrievalFn func(common.Hash) *big.Int
-
-// headerChainInsertFn is a callback type to insert a batch of headers into the local chain.
-type headerChainInsertFn func([]*types.Header, int) (int, error)
-
-// blockChainInsertFn is a callback type to insert a batch of blocks into the local chain.
-type blockChainInsertFn func(types.Blocks) (int, error)
-
-// receiptChainInsertFn is a callback type to insert a batch of receipts into the local chain.
-type receiptChainInsertFn func(types.Blocks, []types.Receipts) (int, error)
-
-// chainRollbackFn is a callback type to remove a few recently added elements from the local chain.
-type chainRollbackFn func([]common.Hash)
 
 // peerDropFn is a callback type for dropping a peer detected as malicious.
 type peerDropFn func(id string)

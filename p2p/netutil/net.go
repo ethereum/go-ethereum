@@ -84,6 +84,31 @@ func ParseNetlist(s string) (*Netlist, error) {
 	return &l, nil
 }
 
+// MarshalTOML implements toml.MarshalerRec.
+func (l Netlist) MarshalTOML() interface{} {
+	list := make([]string, 0, len(l))
+	for _, net := range l {
+		list = append(list, net.String())
+	}
+	return list
+}
+
+// UnmarshalTOML implements toml.UnmarshalerRec.
+func (l *Netlist) UnmarshalTOML(fn func(interface{}) error) error {
+	var masks []string
+	if err := fn(&masks); err != nil {
+		return err
+	}
+	for _, mask := range masks {
+		_, n, err := net.ParseCIDR(mask)
+		if err != nil {
+			return err
+		}
+		*l = append(*l, *n)
+	}
+	return nil
+}
+
 // Add parses a CIDR mask and appends it to the list. It panics for invalid masks and is
 // intended to be used for setting up static lists.
 func (l *Netlist) Add(cidr string) {

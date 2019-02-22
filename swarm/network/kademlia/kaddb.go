@@ -24,8 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 )
 
 type NodeData interface {
@@ -88,12 +87,12 @@ func (self *KadDb) findOrCreate(index int, a Address, url string) *NodeRecord {
 			Addr: a,
 			Url:  url,
 		}
-		glog.V(logger.Info).Infof("add new record %v to kaddb", record)
+		log.Info(fmt.Sprintf("add new record %v to kaddb", record))
 		// insert in kaddb
 		self.index[a] = record
 		self.Nodes[index] = append(self.Nodes[index], record)
 	} else {
-		glog.V(logger.Info).Infof("found record %v in kaddb", record)
+		log.Info(fmt.Sprintf("found record %v in kaddb", record))
 	}
 	// update last seen time
 	record.setSeen()
@@ -121,13 +120,13 @@ func (self *KadDb) add(nrs []*NodeRecord, proximityBin func(Address) int) {
 			copy(newnodes[:], nodes[:dbcursor])
 			newnodes[dbcursor] = node
 			copy(newnodes[dbcursor+1:], nodes[dbcursor:])
-			glog.V(logger.Detail).Infof("new nodes: %v (keys: %v)\nnodes: %v", newnodes, nodes)
+			log.Trace(fmt.Sprintf("new nodes: %v, nodes: %v", newnodes, nodes))
 			self.Nodes[index] = newnodes
 			n++
 		}
 	}
 	if n > 0 {
-		glog.V(logger.Debug).Infof("%d/%d node records (new/known)", n, len(nrs))
+		log.Debug(fmt.Sprintf("%d/%d node records (new/known)", n, len(nrs)))
 	}
 }
 
@@ -207,13 +206,13 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 
 				// skip already connected nodes
 				if node.node != nil {
-					glog.V(logger.Debug).Infof("kaddb record %v (PO%03d:%d/%d) already connected", node.Addr, po, cursor, len(dbrow))
+					log.Debug(fmt.Sprintf("kaddb record %v (PO%03d:%d/%d) already connected", node.Addr, po, cursor, len(dbrow)))
 					continue ROW
 				}
 
 				// if node is scheduled to connect
 				if time.Time(node.After).After(time.Now()) {
-					glog.V(logger.Debug).Infof("kaddb record %v (PO%03d:%d) skipped. seen at %v (%v ago), scheduled at %v", node.Addr, po, cursor, node.Seen, delta, node.After)
+					log.Debug(fmt.Sprintf("kaddb record %v (PO%03d:%d) skipped. seen at %v (%v ago), scheduled at %v", node.Addr, po, cursor, node.Seen, delta, node.After))
 					continue ROW
 				}
 
@@ -224,17 +223,17 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 				if delta > self.purgeInterval {
 					// remove node
 					purge[cursor] = true
-					glog.V(logger.Debug).Infof("kaddb record %v (PO%03d:%d) unreachable since %v. Removed", node.Addr, po, cursor, node.Seen)
+					log.Debug(fmt.Sprintf("kaddb record %v (PO%03d:%d) unreachable since %v. Removed", node.Addr, po, cursor, node.Seen))
 					continue ROW
 				}
 
-				glog.V(logger.Debug).Infof("kaddb record %v (PO%03d:%d) ready to be tried. seen at %v (%v ago), scheduled at %v", node.Addr, po, cursor, node.Seen, delta, node.After)
+				log.Debug(fmt.Sprintf("kaddb record %v (PO%03d:%d) ready to be tried. seen at %v (%v ago), scheduled at %v", node.Addr, po, cursor, node.Seen, delta, node.After))
 
 				// scheduling next check
 				interval = time.Duration(delta * time.Duration(self.connRetryExp))
 				after = time.Now().Add(interval)
 
-				glog.V(logger.Debug).Infof("kaddb record %v (PO%03d:%d) selected as candidate connection %v. seen at %v (%v ago), selectable since %v, retry after %v (in %v)", node.Addr, po, cursor, rounds, node.Seen, delta, node.After, after, interval)
+				log.Debug(fmt.Sprintf("kaddb record %v (PO%03d:%d) selected as candidate connection %v. seen at %v (%v ago), selectable since %v, retry after %v (in %v)", node.Addr, po, cursor, rounds, node.Seen, delta, node.After, after, interval))
 				node.After = after
 				found = true
 			} // ROW
@@ -295,9 +294,9 @@ func (self *KadDb) save(path string, cb func(*NodeRecord, Node)) error {
 	}
 	err = ioutil.WriteFile(path, data, os.ModePerm)
 	if err != nil {
-		glog.V(logger.Warn).Infof("unable to save kaddb with %v nodes to %v: err", n, path, err)
+		log.Warn(fmt.Sprintf("unable to save kaddb with %v nodes to %v: %v", n, path, err))
 	} else {
-		glog.V(logger.Info).Infof("saved kaddb with %v nodes to %v", n, path)
+		log.Info(fmt.Sprintf("saved kaddb with %v nodes to %v", n, path))
 	}
 	return err
 }
@@ -338,7 +337,7 @@ func (self *KadDb) load(path string, cb func(*NodeRecord, Node) error) (err erro
 		}
 		self.delete(po, purge)
 	}
-	glog.V(logger.Info).Infof("loaded kaddb with %v nodes from %v", n, path)
+	log.Info(fmt.Sprintf("loaded kaddb with %v nodes from %v", n, path))
 
 	return
 }

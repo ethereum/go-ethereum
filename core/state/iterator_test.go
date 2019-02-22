@@ -21,13 +21,12 @@ import (
 	"testing"
 
 	"github.com/ubiq/go-ubiq/common"
-	"github.com/ubiq/go-ubiq/ethdb"
 )
 
 // Tests that the node iterator indeed walks over the entire database contents.
 func TestNodeIteratorCoverage(t *testing.T) {
 	// Create some arbitrary test state to iterate
-	db, root, _ := makeTestState()
+	db, mem, root, _ := makeTestState()
 
 	state, err := New(root, db)
 	if err != nil {
@@ -40,13 +39,14 @@ func TestNodeIteratorCoverage(t *testing.T) {
 			hashes[it.Hash] = struct{}{}
 		}
 	}
+
 	// Cross check the hashes and the database itself
 	for hash := range hashes {
-		if _, err := db.Get(hash.Bytes()); err != nil {
+		if _, err := mem.Get(hash.Bytes()); err != nil {
 			t.Errorf("failed to retrieve reported node %x: %v", hash, err)
 		}
 	}
-	for _, key := range db.(*ethdb.MemDatabase).Keys() {
+	for _, key := range mem.Keys() {
 		if bytes.HasPrefix(key, []byte("secure-key-")) {
 			continue
 		}

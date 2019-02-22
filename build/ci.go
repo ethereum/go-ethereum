@@ -23,15 +23,16 @@ Usage: go run ci.go <command> <command flags/arguments>
 
 Available commands are:
 
-   install    [-arch architecture] [ packages... ]                                           -- builds packages and executables
-   test       [ -coverage ] [ -vet ] [ -misspell ] [ packages... ]                           -- runs the tests
-   archive    [-arch architecture] [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artefacts
-   importkeys                                                                                -- imports signing keys from env
-   debsrc     [ -signer key-id ] [ -upload dest ]                                            -- creates a debian source package
-   nsis                                                                                      -- creates a Windows NSIS installer
-   aar        [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                    -- creates an Android archive
-   xcode      [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                    -- creates an iOS XCode framework
-   xgo        [ options ]                                                                    -- cross builds according to options
+   install    [ -arch architecture ] [ packages... ]                                           -- builds packages and executables
+   test       [ -coverage ] [ -misspell ] [ packages... ]                                      -- runs the tests
+   archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artefacts
+   importkeys                                                                                  -- imports signing keys from env
+   debsrc     [ -signer key-id ] [ -upload dest ]                                              -- creates a debian source package
+   nsis                                                                                        -- creates a Windows NSIS installer
+   aar        [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an Android archive
+   xcode      [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an iOS XCode framework
+   xgo        [ -alltools ] [ options ]                                                        -- cross builds according to options
+   purge      [ -store blobstore ] [ -days threshold ]                                         -- purges old archives from the blobstore
 
 For all commands, -n prevents execution of external programs (dry run mode).
 
@@ -70,40 +71,55 @@ var (
 	allToolsArchiveFiles = []string{
 		"COPYING",
 		executablePath("abigen"),
+		executablePath("bootnode"),
 		executablePath("evm"),
 		executablePath("gubiq"),
-		executablePath("swarm"),
+		executablePath("puppeth"),
 		executablePath("rlpdump"),
+		executablePath("swarm"),
+		executablePath("wnode"),
 	}
 
 	// A debian package is created for all executables listed here.
 	debExecutables = []debExecutable{
 		{
-			Name:        "gubiq",
-			Description: "Ubiq CLI client.",
+			Name:        "abigen",
+			Description: "Source code generator to convert Ubiq contract definitions into easy to use, compile-time type-safe Go packages.",
 		},
 		{
-			Name:        "rlpdump",
-			Description: "Developer utility tool that prints RLP structures.",
+			Name:        "bootnode",
+			Description: "Ethereum bootnode.",
 		},
 		{
 			Name:        "evm",
 			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
 		},
 		{
+			Name:        "gubiq",
+			Description: "Ubiq CLI client.",
+		},
+		{
+			Name:        "puppeth",
+			Description: "Ubiq private network manager.",
+		},
+		{
+			Name:        "rlpdump",
+			Description: "Developer utility tool that prints RLP structures.",
+		},
+		{
 			Name:        "swarm",
 			Description: "Ethereum Swarm daemon and tools",
 		},
 		{
-			Name:        "abigen",
-			Description: "Source code generator to convert Ethereum contract definitions into easy to use, compile-time type-safe Go packages.",
+			Name:        "wnode",
+			Description: "Ethereum Whisper diagnostic tool",
 		},
 	}
 
 	// Distros for which packages are created.
 	// Note: vivid is unsupported because there is no golang-1.6 package for it.
 	// Note: wily is unsupported because it was officially deprecated on lanchpad.
-	debDistros = []string{"trusty", "xenial", "yakkety"}
+	debDistros = []string{"trusty", "xenial", "yakkety", "zesty"}
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -141,6 +157,8 @@ func main() {
 		doXCodeFramework(os.Args[2:])
 	case "xgo":
 		doXgo(os.Args[2:])
+	case "purge":
+		doPurge(os.Args[2:])
 	default:
 		log.Fatal("unknown command ", os.Args[1])
 	}
@@ -164,7 +182,7 @@ func doInstall(cmdline []string) {
 
 		if minor < 7 {
 			log.Println("You have Go version", runtime.Version())
-			log.Println("go-ethereum requires at least Go version 1.7 and cannot")
+			log.Println("go-ubiq requires at least Go version 1.7 and cannot")
 			log.Println("be compiled with an earlier version. Please upgrade your Go installation.")
 			os.Exit(1)
 		}
@@ -174,6 +192,8 @@ func doInstall(cmdline []string) {
 	if flag.NArg() > 0 {
 		packages = flag.Args()
 	}
+	packages = build.ExpandPackagesNoVendor(packages)
+
 	if *arch == "" || *arch == runtime.GOARCH {
 		goinstall := goTool("install", buildFlags(env)...)
 		goinstall.Args = append(goinstall.Args, "-v")
@@ -216,13 +236,16 @@ func doInstall(cmdline []string) {
 }
 
 func buildFlags(env build.Environment) (flags []string) {
-	if os.Getenv("GO_OPENCL") != "" {
-		flags = append(flags, "-tags", "opencl")
+	var ld []string
+	if env.Commit != "" {
+		ld = append(ld, "-X", "main.gitCommit="+env.Commit)
+	}
+	if runtime.GOOS == "darwin" {
+		ld = append(ld, "-s")
 	}
 
-	// Set gitCommit constant via link-time assignment.
-	if env.Commit != "" {
-		flags = append(flags, "-ldflags", "-X main.gitCommit="+env.Commit)
+	if len(ld) > 0 {
+		flags = append(flags, "-ldflags", strings.Join(ld, " "))
 	}
 	return flags
 }
@@ -268,38 +291,26 @@ func goToolArch(arch string, subcmd string, args ...string) *exec.Cmd {
 
 func doTest(cmdline []string) {
 	var (
-		vet      = flag.Bool("vet", false, "Whether to run go vet")
 		misspell = flag.Bool("misspell", false, "Whether to run the spell checker")
 		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
 	)
 	flag.CommandLine.Parse(cmdline)
+	env := build.Env()
 
 	packages := []string{"./..."}
 	if len(flag.CommandLine.Args()) > 0 {
 		packages = flag.CommandLine.Args()
 	}
-	if len(packages) == 1 && packages[0] == "./..." {
-		// Resolve ./... manually since go vet will fail on vendored stuff
-		out, err := goTool("list", "./...").CombinedOutput()
-		if err != nil {
-			log.Fatalf("package listing failed: %v\n%s", err, string(out))
-		}
-		packages = []string{}
-		for _, line := range strings.Split(string(out), "\n") {
-			if !strings.Contains(line, "vendor") {
-				packages = append(packages, strings.TrimSpace(line))
-			}
-		}
-	}
+	packages = build.ExpandPackagesNoVendor(packages)
+
 	// Run analysis tools before the tests.
-	if *vet {
-		build.MustRun(goTool("vet", packages...))
-	}
+	build.MustRun(goTool("vet", packages...))
 	if *misspell {
-		spellcheck(packages)
+		// TODO(karalabe): Reenable after false detection is fixed: https://github.com/client9/misspell/issues/105
+		// spellcheck(packages)
 	}
 	// Run the actual tests.
-	gotest := goTool("test")
+	gotest := goTool("test", buildFlags(env)...)
 	// Test a single package at a time. CI builders are slow
 	// and some tests run into timeouts under load.
 	gotest.Args = append(gotest.Args, "-p", "1")
@@ -437,6 +448,10 @@ func archiveUpload(archive string, blobstore string, signer string) error {
 func maybeSkipArchive(env build.Environment) {
 	if env.IsPullRequest {
 		log.Printf("skipping because this is a PR build")
+		os.Exit(0)
+	}
+	if env.IsCronJob {
+		log.Printf("skipping because this is a cron job")
 		os.Exit(0)
 	}
 	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") {
@@ -916,6 +931,9 @@ func newPodMetadata(env build.Environment, archive string) podMetadata {
 // Cross compilation
 
 func doXgo(cmdline []string) {
+	var (
+		alltools = flag.Bool("alltools", false, `Flag whether we're building all known tools, or only on in particular`)
+	)
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
 
@@ -923,8 +941,27 @@ func doXgo(cmdline []string) {
 	gogetxgo := goTool("get", "github.com/karalabe/xgo")
 	build.MustRun(gogetxgo)
 
-	// Execute the actual cross compilation
-	xgo := xgoTool(append(buildFlags(env), flag.Args()...))
+	// If all tools building is requested, build everything the builder wants
+	args := append(buildFlags(env), flag.Args()...)
+
+	if *alltools {
+		args = append(args, []string{"--dest", GOBIN}...)
+		for _, res := range allToolsArchiveFiles {
+			if strings.HasPrefix(res, GOBIN) {
+				// Binary tool found, cross build it explicitly
+				args = append(args, "./"+filepath.Join("cmd", filepath.Base(res)))
+				xgo := xgoTool(args)
+				build.MustRun(xgo)
+				args = args[:len(args)-1]
+			}
+		}
+		return
+	}
+	// Otherwise xxecute the explicit cross compilation
+	path := args[len(args)-1]
+	args = append(args[:len(args)-1], []string{"--dest", GOBIN, path}...)
+
+	xgo := xgoTool(args)
 	build.MustRun(xgo)
 }
 
@@ -941,4 +978,63 @@ func xgoTool(args []string) *exec.Cmd {
 		cmd.Env = append(cmd.Env, e)
 	}
 	return cmd
+}
+
+// Binary distribution cleanups
+
+func doPurge(cmdline []string) {
+	var (
+		store = flag.String("store", "", `Destination from where to purge archives (usually "gubiqstore/builds")`)
+		limit = flag.Int("days", 30, `Age threshold above which to delete unstalbe archives`)
+	)
+	flag.CommandLine.Parse(cmdline)
+
+	if env := build.Env(); !env.IsCronJob {
+		log.Printf("skipping because not a cron job")
+		os.Exit(0)
+	}
+	// Create the azure authentication and list the current archives
+	auth := build.AzureBlobstoreConfig{
+		Account:   strings.Split(*store, "/")[0],
+		Token:     os.Getenv("AZURE_BLOBSTORE_TOKEN"),
+		Container: strings.SplitN(*store, "/", 2)[1],
+	}
+	blobs, err := build.AzureBlobstoreList(auth)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Iterate over the blobs, collect and sort all unstable builds
+	for i := 0; i < len(blobs); i++ {
+		if !strings.Contains(blobs[i].Name, "unstable") {
+			blobs = append(blobs[:i], blobs[i+1:]...)
+			i--
+		}
+	}
+	for i := 0; i < len(blobs); i++ {
+		for j := i + 1; j < len(blobs); j++ {
+			iTime, err := time.Parse(time.RFC1123, blobs[i].Properties.LastModified)
+			if err != nil {
+				log.Fatal(err)
+			}
+			jTime, err := time.Parse(time.RFC1123, blobs[j].Properties.LastModified)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if iTime.After(jTime) {
+				blobs[i], blobs[j] = blobs[j], blobs[i]
+			}
+		}
+	}
+	// Filter out all archives more recent that the given threshold
+	for i, blob := range blobs {
+		timestamp, _ := time.Parse(time.RFC1123, blob.Properties.LastModified)
+		if time.Since(timestamp) < time.Duration(*limit)*24*time.Hour {
+			blobs = blobs[:i]
+			break
+		}
+	}
+	// Delete all marked as such and return
+	if err := build.AzureBlobstoreDelete(auth, blobs); err != nil {
+		log.Fatal(err)
+	}
 }

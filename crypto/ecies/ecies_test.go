@@ -31,7 +31,6 @@ package ecies
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
@@ -42,7 +41,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ubiq/go-ubiq/crypto/secp256k1"
+	"github.com/ubiq/go-ubiq/crypto"
 )
 
 var dumpEnc bool
@@ -150,7 +149,7 @@ func TestSharedKey(t *testing.T) {
 func TestSharedKeyPadding(t *testing.T) {
 	// sanity checks
 	prv0 := hexKey("1adf5c18167d96a1f9a0b1ef63be8aa27eaf6032c233b2b38f7850cf5b859fd9")
-	prv1 := hexKey("97a076fc7fcd9208240668e31c9abee952cbb6e375d1b8febc7499d6e16f1a")
+	prv1 := hexKey("0097a076fc7fcd9208240668e31c9abee952cbb6e375d1b8febc7499d6e16f1a")
 	x0, _ := new(big.Int).SetString("1a8ed022ff7aec59dc1b440446bdda5ff6bcb3509a8b109077282b361efffbd8", 16)
 	x1, _ := new(big.Int).SetString("6ab3ac374251f638d0abb3ef596d1dc67955b507c104e5f2009724812dc027b8", 16)
 	y0, _ := new(big.Int).SetString("e040bd480b1deccc3bc40bd5b1fdcb7bfd352500b477cb9471366dbd4493f923", 16)
@@ -354,7 +353,7 @@ func BenchmarkGenSharedKeyP256(b *testing.B) {
 
 // Benchmark the generation of S256 shared keys.
 func BenchmarkGenSharedKeyS256(b *testing.B) {
-	prv, err := GenerateKey(rand.Reader, secp256k1.S256(), nil)
+	prv, err := GenerateKey(rand.Reader, crypto.S256(), nil)
 	if err != nil {
 		fmt.Println(err.Error())
 		b.FailNow()
@@ -597,6 +596,29 @@ func TestBasicKeyValidation(t *testing.T) {
 	}
 }
 
+func TestBox(t *testing.T) {
+	prv1 := hexKey("4b50fa71f5c3eeb8fdc452224b2395af2fcc3d125e06c32c82e048c0559db03f")
+	prv2 := hexKey("d0b043b4c5d657670778242d82d68a29d25d7d711127d17b8e299f156dad361a")
+	pub2 := &prv2.PublicKey
+
+	message := []byte("Hello, world.")
+	ct, err := Encrypt(rand.Reader, pub2, message, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pt, err := prv2.Decrypt(rand.Reader, ct, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(pt, message) {
+		t.Fatal("ecies: plaintext doesn't match message")
+	}
+	if _, err = prv1.Decrypt(rand.Reader, ct, nil, nil); err == nil {
+		t.Fatal("ecies: encryption should not have succeeded")
+	}
+}
+
 // Verify GenerateShared against static values - useful when
 // debugging changes in underlying libs
 func TestSharedKeyStatic(t *testing.T) {
@@ -628,11 +650,10 @@ func TestSharedKeyStatic(t *testing.T) {
 	}
 }
 
-// TODO: remove after refactoring packages crypto and crypto/ecies
 func hexKey(prv string) *PrivateKey {
-	priv := new(ecdsa.PrivateKey)
-	priv.PublicKey.Curve = secp256k1.S256()
-	priv.D, _ = new(big.Int).SetString(prv, 16)
-	priv.PublicKey.X, priv.PublicKey.Y = secp256k1.S256().ScalarBaseMult(priv.D.Bytes())
-	return ImportECDSA(priv)
+	key, err := crypto.HexToECDSA(prv)
+	if err != nil {
+		panic(err)
+	}
+	return ImportECDSA(key)
 }

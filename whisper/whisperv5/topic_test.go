@@ -16,7 +16,10 @@
 
 package whisperv5
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 var topicStringTests = []struct {
 	topic TopicType
@@ -53,6 +56,38 @@ var bytesToTopicTests = []struct {
 	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: nil},
 }
 
+var unmarshalTestsGood = []struct {
+	topic TopicType
+	data  []byte
+}{
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"0x00000000"`)},
+	{topic: TopicType{0x00, 0x7f, 0x80, 0xff}, data: []byte(`"0x007f80ff"`)},
+	{topic: TopicType{0xff, 0x80, 0x7f, 0x00}, data: []byte(`"0xff807f00"`)},
+	{topic: TopicType{0xf2, 0x6e, 0x77, 0x79}, data: []byte(`"0xf26e7779"`)},
+}
+
+var unmarshalTestsBad = []struct {
+	topic TopicType
+	data  []byte
+}{
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"0x000000"`)},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"0x0000000"`)},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"0x000000000"`)},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"0x0000000000"`)},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"000000"`)},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"0000000"`)},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"000000000"`)},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"0000000000"`)},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"abcdefg0"`)},
+}
+
+var unmarshalTestsUgly = []struct {
+	topic TopicType
+	data  []byte
+}{
+	{topic: TopicType{0x01, 0x00, 0x00, 0x00}, data: []byte(`"0x00000001"`)},
+}
+
 func TestBytesToTopic(t *testing.T) {
 	for i, tst := range bytesToTopicTests {
 		top := BytesToTopic(tst.data)
@@ -62,51 +97,14 @@ func TestBytesToTopic(t *testing.T) {
 	}
 }
 
-var unmarshalTestsGood = []struct {
-	topic TopicType
-	data  []byte
-}{
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("0x00000000")},
-	{topic: TopicType{0x00, 0x7f, 0x80, 0xff}, data: []byte("0x007f80ff")},
-	{topic: TopicType{0xff, 0x80, 0x7f, 0x00}, data: []byte("0xff807f00")},
-	{topic: TopicType{0xf2, 0x6e, 0x77, 0x79}, data: []byte("0xf26e7779")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("00000000")},
-	{topic: TopicType{0x00, 0x80, 0x01, 0x00}, data: []byte("00800100")},
-	{topic: TopicType{0x00, 0x7f, 0x80, 0xff}, data: []byte("007f80ff")},
-	{topic: TopicType{0xff, 0x80, 0x7f, 0x00}, data: []byte("ff807f00")},
-	{topic: TopicType{0xf2, 0x6e, 0x77, 0x79}, data: []byte("f26e7779")},
-}
-
-var unmarshalTestsBad = []struct {
-	topic TopicType
-	data  []byte
-}{
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("0x000000")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("0x0000000")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("0x000000000")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("0x0000000000")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("000000")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("0000000")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("000000000")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("0000000000")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("abcdefg0")},
-}
-
-var unmarshalTestsUgly = []struct {
-	topic TopicType
-	data  []byte
-}{
-	{topic: TopicType{0x01, 0x00, 0x00, 0x00}, data: []byte("00000001")},
-}
-
 func TestUnmarshalTestsGood(t *testing.T) {
 	for i, tst := range unmarshalTestsGood {
 		var top TopicType
-		err := top.UnmarshalJSON(tst.data)
+		err := json.Unmarshal(tst.data, &top)
 		if err != nil {
-			t.Fatalf("failed test %d. input: %v.", i, tst.data)
+			t.Errorf("failed test %d. input: %v. err: %v", i, tst.data, err)
 		} else if top != tst.topic {
-			t.Fatalf("failed test %d: have %v, want %v.", i, t, tst.topic)
+			t.Errorf("failed test %d: have %v, want %v.", i, t, tst.topic)
 		}
 	}
 }
@@ -115,7 +113,7 @@ func TestUnmarshalTestsBad(t *testing.T) {
 	// in this test UnmarshalJSON() is supposed to fail
 	for i, tst := range unmarshalTestsBad {
 		var top TopicType
-		err := top.UnmarshalJSON(tst.data)
+		err := json.Unmarshal(tst.data, &top)
 		if err == nil {
 			t.Fatalf("failed test %d. input: %v.", i, tst.data)
 		}
@@ -126,11 +124,11 @@ func TestUnmarshalTestsUgly(t *testing.T) {
 	// in this test UnmarshalJSON() is NOT supposed to fail, but result should be wrong
 	for i, tst := range unmarshalTestsUgly {
 		var top TopicType
-		err := top.UnmarshalJSON(tst.data)
+		err := json.Unmarshal(tst.data, &top)
 		if err != nil {
-			t.Fatalf("failed test %d. input: %v.", i, tst.data)
+			t.Errorf("failed test %d. input: %v.", i, tst.data)
 		} else if top == tst.topic {
-			t.Fatalf("failed test %d: have %v, want %v.", i, top, tst.topic)
+			t.Errorf("failed test %d: have %v, want %v.", i, top, tst.topic)
 		}
 	}
 }

@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/ubiq/go-ubiq/common"
-	"github.com/ubiq/go-ubiq/consensus/ethash"
+	"github.com/ubiq/go-ubiq/consensus/ubqhash"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/types"
@@ -37,6 +37,8 @@ import (
 	"github.com/ubiq/go-ubiq/p2p"
 	"github.com/ubiq/go-ubiq/params"
 )
+
+var bigTxGas = new(big.Int).SetUint64(params.TxGas)
 
 // Tests that protocol versions and modes of operations are matched up properly.
 func TestProtocolCompatibility(t *testing.T) {
@@ -57,7 +59,7 @@ func TestProtocolCompatibility(t *testing.T) {
 	for i, tt := range tests {
 		ProtocolVersions = []uint{tt.version}
 
-		pm, _, err := newTestProtocolManager(tt.mode, 0, nil, nil)
+		pm, err := newTestProtocolManager(tt.mode, 0, nil, nil)
 		if pm != nil {
 			defer pm.Stop()
 		}
@@ -72,7 +74,7 @@ func TestGetBlockHeaders62(t *testing.T) { testGetBlockHeaders(t, 62) }
 func TestGetBlockHeaders63(t *testing.T) { testGetBlockHeaders(t, 63) }
 
 func testGetBlockHeaders(t *testing.T, protocol int) {
-	pm, _ := newTestProtocolManagerMust(t, downloader.FullSync, downloader.MaxHashFetch+15, nil, nil)
+	pm := newTestProtocolManagerMust(t, downloader.FullSync, downloader.MaxHashFetch+15, nil, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -231,7 +233,7 @@ func TestGetBlockBodies62(t *testing.T) { testGetBlockBodies(t, 62) }
 func TestGetBlockBodies63(t *testing.T) { testGetBlockBodies(t, 63) }
 
 func testGetBlockBodies(t *testing.T, protocol int) {
-	pm, _ := newTestProtocolManagerMust(t, downloader.FullSync, downloader.MaxBlockFetch+15, nil, nil)
+	pm := newTestProtocolManagerMust(t, downloader.FullSync, downloader.MaxBlockFetch+15, nil, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -314,13 +316,13 @@ func testGetNodeData(t *testing.T, protocol int) {
 		switch i {
 		case 0:
 			// In block 1, the test bank sends account #1 some ether.
-			tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil), signer, testBankKey)
+			tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(10000), bigTxGas, nil, nil), signer, testBankKey)
 			block.AddTx(tx)
 		case 1:
 			// In block 2, the test bank sends some more ether to account #1.
 			// acc1Addr passes it on to account #2.
-			tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, testBankKey)
-			tx2, _ := types.SignTx(types.NewTransaction(block.TxNonce(acc1Addr), acc2Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, acc1Key)
+			tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(1000), bigTxGas, nil, nil), signer, testBankKey)
+			tx2, _ := types.SignTx(types.NewTransaction(block.TxNonce(acc1Addr), acc2Addr, big.NewInt(1000), bigTxGas, nil, nil), signer, acc1Key)
 			block.AddTx(tx1)
 			block.AddTx(tx2)
 		case 2:
@@ -338,7 +340,7 @@ func testGetNodeData(t *testing.T, protocol int) {
 		}
 	}
 	// Assemble the test environment
-	pm, db := newTestProtocolManagerMust(t, downloader.FullSync, 4, generator, nil)
+	pm := newTestProtocolManagerMust(t, downloader.FullSync, 4, generator, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -406,13 +408,13 @@ func testGetReceipt(t *testing.T, protocol int) {
 		switch i {
 		case 0:
 			// In block 1, the test bank sends account #1 some ether.
-			tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil), signer, testBankKey)
+			tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(10000), bigTxGas, nil, nil), signer, testBankKey)
 			block.AddTx(tx)
 		case 1:
 			// In block 2, the test bank sends some more ether to account #1.
 			// acc1Addr passes it on to account #2.
-			tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, testBankKey)
-			tx2, _ := types.SignTx(types.NewTransaction(block.TxNonce(acc1Addr), acc2Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, acc1Key)
+			tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(1000), bigTxGas, nil, nil), signer, testBankKey)
+			tx2, _ := types.SignTx(types.NewTransaction(block.TxNonce(acc1Addr), acc2Addr, big.NewInt(1000), bigTxGas, nil, nil), signer, acc1Key)
 			block.AddTx(tx1)
 			block.AddTx(tx2)
 		case 2:
@@ -430,7 +432,7 @@ func testGetReceipt(t *testing.T, protocol int) {
 		}
 	}
 	// Assemble the test environment
-	pm, _ := newTestProtocolManagerMust(t, downloader.FullSync, 4, generator, nil)
+	pm := newTestProtocolManagerMust(t, downloader.FullSync, 4, generator, nil)
 	peer, _ := newTestPeer("peer", protocol, pm, true)
 	defer peer.close()
 
@@ -472,18 +474,15 @@ func TestBroadcastBlock(t *testing.T) {
 
 func testBroadcastBlock(t *testing.T, totalPeers, broadcastExpected int) {
 	var (
-		evmux   = new(event.TypeMux)
-		pow     = ethash.NewFaker()
-		db      = ethdb.NewMemDatabase()
-		config  = &params.ChainConfig{}
-		gspec   = &core.Genesis{Config: config}
-		genesis = gspec.MustCommit(db)
+		evmux         = new(event.TypeMux)
+		pow           = ubqhash.NewFaker()
+		db, _         = ethdb.NewMemDatabase()
+		config        = &params.ChainConfig{}
+		gspec         = &core.Genesis{Config: config}
+		genesis       = gspec.MustCommit(db)
+		blockchain, _ = core.NewBlockChain(db, config, pow, evmux, vm.Config{})
 	)
-	blockchain, err := core.NewBlockChain(db, nil, config, pow, vm.Config{}, nil)
-	if err != nil {
-		t.Fatalf("failed to create new blockchain: %v", err)
-	}
-	pm, err := NewProtocolManager(config, downloader.FullSync, DefaultConfig.NetworkId, evmux, new(testTxPool), pow, blockchain, db, nil)
+	pm, err := NewProtocolManager(config, downloader.FullSync, DefaultConfig.NetworkId, 1000, evmux, new(testTxPool), pow, blockchain, db)
 	if err != nil {
 		t.Fatalf("failed to start test protocol manager: %v", err)
 	}
@@ -495,7 +494,7 @@ func testBroadcastBlock(t *testing.T, totalPeers, broadcastExpected int) {
 		defer peer.close()
 		peers = append(peers, peer)
 	}
-	chain, _ := core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, 1, func(i int, gen *core.BlockGen) {})
+	chain, _ := core.GenerateChain(gspec.Config, genesis, ubqhash.NewFaker(), db, 1, func(i int, gen *core.BlockGen) {})
 	pm.BroadcastBlock(chain[0], true /*propagate*/)
 
 	errCh := make(chan error, totalPeers)

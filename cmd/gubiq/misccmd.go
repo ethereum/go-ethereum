@@ -25,8 +25,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ubiq/ubqhash"
 	"github.com/ubiq/go-ubiq/cmd/utils"
+	"github.com/ubiq/go-ubiq/consensus/ubqhash"
 	"github.com/ubiq/go-ubiq/eth"
 	"github.com/ubiq/go-ubiq/params"
 	"gopkg.in/urfave/cli.v1"
@@ -34,7 +34,7 @@ import (
 
 var (
 	makedagCommand = cli.Command{
-		Action:    makedag,
+		Action:    utils.MigrateFlags(makedag),
 		Name:      "makedag",
 		Usage:     "Generate ubqhash DAG (for testing)",
 		ArgsUsage: "<blockNum> <outputDir>",
@@ -47,7 +47,7 @@ Regular users do not need to execute it.
 `,
 	}
 	versionCommand = cli.Command{
-		Action:    version,
+		Action:    utils.MigrateFlags(version),
 		Name:      "version",
 		Usage:     "Print version numbers",
 		ArgsUsage: " ",
@@ -57,7 +57,7 @@ The output of this command is supposed to be machine-readable.
 `,
 	}
 	licenseCommand = cli.Command{
-		Action:    license,
+		Action:    utils.MigrateFlags(license),
 		Name:      "license",
 		Usage:     "Display license information",
 		ArgsUsage: " ",
@@ -87,7 +87,7 @@ func makedag(ctx *cli.Context) error {
 				utils.Fatalf("Can't find dir")
 			}
 			fmt.Println("making DAG, this could take awhile...")
-			ubqhash.MakeDAG(blockNum, dir)
+			ubqhash.MakeDataset(blockNum, dir)
 		}
 	default:
 		wrongArgs()
@@ -101,10 +101,11 @@ func version(ctx *cli.Context) error {
 	if gitCommit != "" {
 		fmt.Println("Git Commit:", gitCommit)
 	}
+	fmt.Println("Architecture:", runtime.GOARCH)
 	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
-	fmt.Println("Network Id:", ctx.GlobalInt(utils.NetworkIdFlag.Name))
+	fmt.Println("Network Id:", eth.DefaultConfig.NetworkId)
 	fmt.Println("Go Version:", runtime.Version())
-	fmt.Println("OS:", runtime.GOOS)
+	fmt.Println("Operating System:", runtime.GOOS)
 	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
 	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
 	return nil

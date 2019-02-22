@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package mailserver
 
@@ -30,8 +30,8 @@ import (
 )
 
 const powRequirement = 0.00001
-const keyName = "6d604bac5401ce9a6b995f1b45a4ab"
 
+var keyID string
 var shh *whisper.Whisper
 var seed = time.Now().Unix()
 
@@ -58,15 +58,19 @@ func TestDBKey(t *testing.T) {
 }
 
 func generateEnvelope(t *testing.T) *whisper.Envelope {
+	h := crypto.Keccak256Hash([]byte("test sample data"))
 	params := &whisper.MessageParams{
-		KeySym:   []byte("test key"),
+		KeySym:   h[:],
 		Topic:    whisper.TopicType{},
 		Payload:  []byte("test payload"),
 		PoW:      powRequirement,
 		WorkTime: 2,
 	}
 
-	msg := whisper.NewSentMessage(params)
+	msg, err := whisper.NewSentMessage(params)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
 	env, err := msg.Wrap(params)
 	if err != nil {
 		t.Fatalf("failed to wrap with seed %d: %s.", seed, err)
@@ -78,17 +82,19 @@ func TestMailServer(t *testing.T) {
 	const password = "password_for_this_test"
 	const dbPath = "whisper-server-test"
 
-	_, err := ioutil.TempDir("", dbPath)
+	dir, err := ioutil.TempDir("", dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var server WMailServer
-	shh = whisper.NewWhisper(&server)
-	server.Init(shh, dbPath, password, powRequirement)
+	shh = whisper.New(&whisper.DefaultConfig)
+	shh.RegisterServer(&server)
+
+	server.Init(shh, dir, password, powRequirement)
 	defer server.Close()
 
-	err = shh.AddSymKey(keyName, []byte(password))
+	keyID, err = shh.AddSymKeyFromPassword(password)
 	if err != nil {
 		t.Fatalf("Failed to create symmetric key for mail request: %s", err)
 	}
@@ -100,7 +106,14 @@ func TestMailServer(t *testing.T) {
 }
 
 func deliverTest(t *testing.T, server *WMailServer, env *whisper.Envelope) {
-	testPeerID := shh.NewIdentity()
+	id, err := shh.NewKeyPair()
+	if err != nil {
+		t.Fatalf("failed to generate new key pair with seed %d: %s.", seed, err)
+	}
+	testPeerID, err := shh.GetPrivateKey(id)
+	if err != nil {
+		t.Fatalf("failed to retrieve new key pair with seed %d: %s.", seed, err)
+	}
 	birth := env.Expiry - env.TTL
 	p := &ServerTestParams{
 		topic: env.Topic,
@@ -165,8 +178,13 @@ func createRequest(t *testing.T, p *ServerTestParams) *whisper.Envelope {
 	binary.BigEndian.PutUint32(data[4:], p.upp)
 	copy(data[8:], p.topic[:])
 
+	key, err := shh.GetSymKey(keyID)
+	if err != nil {
+		t.Fatalf("failed to retrieve sym key with seed %d: %s.", seed, err)
+	}
+
 	params := &whisper.MessageParams{
-		KeySym:   shh.GetSymKey(keyName),
+		KeySym:   key,
 		Topic:    p.topic,
 		Payload:  data,
 		PoW:      powRequirement * 2,
@@ -174,7 +192,10 @@ func createRequest(t *testing.T, p *ServerTestParams) *whisper.Envelope {
 		Src:      p.key,
 	}
 
-	msg := whisper.NewSentMessage(params)
+	msg, err := whisper.NewSentMessage(params)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
 	env, err := msg.Wrap(params)
 	if err != nil {
 		t.Fatalf("failed to wrap with seed %d: %s.", seed, err)

@@ -28,10 +28,12 @@ import (
 	"testing"
 
 	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/consensus/ubqhash"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/core/vm"
 	"github.com/ubiq/go-ubiq/crypto"
+	"github.com/ubiq/go-ubiq/eth/downloader"
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/event"
 	"github.com/ubiq/go-ubiq/p2p"
@@ -41,30 +43,30 @@ import (
 
 var (
 	testBankKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	testBank       = core.GenesisAccount{
-		Address: crypto.PubkeyToAddress(testBankKey.PublicKey),
-		Balance: big.NewInt(1000000),
-	}
+	testBank       = crypto.PubkeyToAddress(testBankKey.PublicKey)
 )
 
 // newTestProtocolManager creates a new protocol manager for testing purposes,
 // with the given number of blocks already known, and potential notification
 // channels for different events.
-func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) (*ProtocolManager, error) {
+func newTestProtocolManager(mode downloader.SyncMode, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) (*ProtocolManager, error) {
 	var (
-		evmux         = new(event.TypeMux)
-		pow           = new(core.FakePow)
-		db, _         = ethdb.NewMemDatabase()
-		genesis       = core.WriteGenesisBlockForTesting(db, testBank)
-		chainConfig   = &params.ChainConfig{HomesteadBlock: big.NewInt(0)} // homestead set to 0 because of chain maker
-		blockchain, _ = core.NewBlockChain(db, chainConfig, pow, evmux, vm.Config{})
+		evmux  = new(event.TypeMux)
+		engine = ubqhash.NewFaker()
+		db, _  = ethdb.NewMemDatabase()
+		gspec  = &core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc:  core.GenesisAlloc{testBank: {Balance: big.NewInt(1000000)}},
+		}
+		genesis       = gspec.MustCommit(db)
+		blockchain, _ = core.NewBlockChain(db, gspec.Config, engine, evmux, vm.Config{})
 	)
-	chain, _ := core.GenerateChain(chainConfig, genesis, db, blocks, generator)
+	chain, _ := core.GenerateChain(gspec.Config, genesis, db, blocks, generator)
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		panic(err)
 	}
 
-	pm, err := NewProtocolManager(chainConfig, fastSync, NetworkId, 1000, evmux, &testTxPool{added: newtx}, pow, blockchain, db)
+	pm, err := NewProtocolManager(gspec.Config, mode, DefaultConfig.NetworkId, 1000, evmux, &testTxPool{added: newtx}, engine, blockchain, db)
 	if err != nil {
 		return nil, err
 	}
@@ -76,8 +78,8 @@ func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core
 // with the given number of blocks already known, and potential notification
 // channels for different events. In case of an error, the constructor force-
 // fails the test.
-func newTestProtocolManagerMust(t *testing.T, fastSync bool, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) *ProtocolManager {
-	pm, err := newTestProtocolManager(fastSync, blocks, generator, newtx)
+func newTestProtocolManagerMust(t *testing.T, mode downloader.SyncMode, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) *ProtocolManager {
+	pm, err := newTestProtocolManager(mode, blocks, generator, newtx)
 	if err != nil {
 		t.Fatalf("Failed to create protocol manager: %v", err)
 	}
@@ -92,9 +94,9 @@ type testTxPool struct {
 	lock sync.RWMutex // Protects the transaction pool
 }
 
-// AddBatch appends a batch of transactions to the pool, and notifies any
+// AddRemotes appends a batch of transactions to the pool, and notifies any
 // listeners if the addition channel is non nil
-func (p *testTxPool) AddBatch(txs []*types.Transaction) error {
+func (p *testTxPool) AddRemotes(txs []*types.Transaction) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -171,7 +173,7 @@ func newTestPeer(name string, version int, pm *ProtocolManager, shake bool) (*te
 func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, genesis common.Hash) {
 	msg := &statusData{
 		ProtocolVersion: uint32(p.version),
-		NetworkId:       uint32(NetworkId),
+		NetworkId:       DefaultConfig.NetworkId,
 		TD:              td,
 		CurrentBlock:    head,
 		GenesisBlock:    genesis,

@@ -1,37 +1,35 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package mailserver
 
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 
 	"github.com/ubiq/go-ubiq/cmd/utils"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/crypto"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/rlp"
 	whisper "github.com/ubiq/go-ubiq/whisper/whisperv5"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
-
-const MailServerKeyName = "958e04ab302fb36ad2616a352cbac79d"
 
 type WMailServer struct {
 	db  *leveldb.DB
@@ -75,11 +73,14 @@ func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, p
 	s.w = shh
 	s.pow = pow
 
-	err = s.w.AddSymKey(MailServerKeyName, []byte(password))
+	MailServerKeyID, err := s.w.AddSymKeyFromPassword(password)
 	if err != nil {
 		utils.Fatalf("Failed to create symmetric key for MailServer: %s", err)
 	}
-	s.key = s.w.GetSymKey(MailServerKeyName)
+	s.key, err = s.w.GetSymKey(MailServerKeyID)
+	if err != nil {
+		utils.Fatalf("Failed to save symmetric key for MailServer")
+	}
 }
 
 func (s *WMailServer) Close() {
@@ -92,18 +93,18 @@ func (s *WMailServer) Archive(env *whisper.Envelope) {
 	key := NewDbKey(env.Expiry-env.TTL, env.Hash())
 	rawEnvelope, err := rlp.EncodeToBytes(env)
 	if err != nil {
-		glog.V(logger.Error).Infof("rlp.EncodeToBytes failed: %s", err)
+		log.Error(fmt.Sprintf("rlp.EncodeToBytes failed: %s", err))
 	} else {
 		err = s.db.Put(key.raw, rawEnvelope, nil)
 		if err != nil {
-			glog.V(logger.Error).Infof("Writing to DB failed: %s", err)
+			log.Error(fmt.Sprintf("Writing to DB failed: %s", err))
 		}
 	}
 }
 
 func (s *WMailServer) DeliverMail(peer *whisper.Peer, request *whisper.Envelope) {
 	if peer == nil {
-		glog.V(logger.Error).Info("Whisper peer is nil")
+		log.Error(fmt.Sprint("Whisper peer is nil"))
 		return
 	}
 
@@ -127,7 +128,7 @@ func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, to
 		var envelope whisper.Envelope
 		err = rlp.DecodeBytes(i.Value(), &envelope)
 		if err != nil {
-			glog.V(logger.Error).Infof("RLP decoding failed: %s", err)
+			log.Error(fmt.Sprintf("RLP decoding failed: %s", err))
 		}
 
 		if topic == empty || envelope.Topic == topic {
@@ -137,7 +138,7 @@ func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, to
 			} else {
 				err = s.w.SendP2PDirect(peer, &envelope)
 				if err != nil {
-					glog.V(logger.Error).Infof("Failed to send direct message to peer: %s", err)
+					log.Error(fmt.Sprintf("Failed to send direct message to peer: %s", err))
 					return nil
 				}
 			}
@@ -146,7 +147,7 @@ func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, to
 
 	err = i.Error()
 	if err != nil {
-		glog.V(logger.Error).Infof("Level DB iterator error: %s", err)
+		log.Error(fmt.Sprintf("Level DB iterator error: %s", err))
 	}
 
 	return ret
@@ -161,12 +162,12 @@ func (s *WMailServer) validateRequest(peerID []byte, request *whisper.Envelope) 
 	f := whisper.Filter{KeySym: s.key}
 	decrypted := request.Open(&f)
 	if decrypted == nil {
-		glog.V(logger.Warn).Infof("Failed to decrypt p2p request")
+		log.Warn(fmt.Sprintf("Failed to decrypt p2p request"))
 		return false, 0, 0, topic
 	}
 
 	if len(decrypted.Payload) < 8 {
-		glog.V(logger.Warn).Infof("Undersized p2p request")
+		log.Warn(fmt.Sprintf("Undersized p2p request"))
 		return false, 0, 0, topic
 	}
 
@@ -175,7 +176,7 @@ func (s *WMailServer) validateRequest(peerID []byte, request *whisper.Envelope) 
 		src = src[1:]
 	}
 	if !bytes.Equal(peerID, src) {
-		glog.V(logger.Warn).Infof("Wrong signature of p2p request")
+		log.Warn(fmt.Sprintf("Wrong signature of p2p request"))
 		return false, 0, 0, topic
 	}
 

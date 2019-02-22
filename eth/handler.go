@@ -27,18 +27,18 @@ import (
 	"time"
 
 	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/consensus"
+	"github.com/ubiq/go-ubiq/consensus/misc"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/eth/downloader"
 	"github.com/ubiq/go-ubiq/eth/fetcher"
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/event"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/p2p"
 	"github.com/ubiq/go-ubiq/p2p/discover"
 	"github.com/ubiq/go-ubiq/params"
-	"github.com/ubiq/go-ubiq/pow"
 	"github.com/ubiq/go-ubiq/rlp"
 )
 
@@ -59,10 +59,10 @@ func errResp(code errCode, format string, v ...interface{}) error {
 }
 
 type ProtocolManager struct {
-	networkId int
+	networkId uint64
 
-	fastSync uint32 // Flag whether fast sync is enabled (gets disabled if we already have blocks)
-	synced   uint32 // Flag whether we're considered synchronised (enables transaction processing)
+	fastSync  uint32 // Flag whether fast sync is enabled (gets disabled if we already have blocks)
+	acceptTxs uint32 // Flag whether we're considered synchronised (enables transaction processing)
 
 	txpool      txPool
 	blockchain  *core.BlockChain
@@ -86,8 +86,6 @@ type ProtocolManager struct {
 	quitSync    chan struct{}
 	noMorePeers chan struct{}
 
-	lesServer LesServer
-
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
 	wg sync.WaitGroup
@@ -95,7 +93,7 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(config *params.ChainConfig, fastSync bool, networkId int, maxPeers int, mux *event.TypeMux, txpool txPool, pow pow.PoW, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
+func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkId uint64, maxPeers int, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		networkId:   networkId,
@@ -112,18 +110,18 @@ func NewProtocolManager(config *params.ChainConfig, fastSync bool, networkId int
 		quitSync:    make(chan struct{}),
 	}
 	// Figure out whether to allow fast sync or not
-	if fastSync && blockchain.CurrentBlock().NumberU64() > 0 {
-		glog.V(logger.Info).Infof("blockchain not empty, fast sync disabled")
-		fastSync = false
+	if mode == downloader.FastSync && blockchain.CurrentBlock().NumberU64() > 0 {
+		log.Warn("Blockchain not empty, fast sync disabled")
+		mode = downloader.FullSync
 	}
-	if fastSync {
+	if mode == downloader.FastSync {
 		manager.fastSync = uint32(1)
 	}
 	// Initiate a sub-protocol for every implemented version we can handle
 	manager.SubProtocols = make([]p2p.Protocol, 0, len(ProtocolVersions))
 	for i, version := range ProtocolVersions {
 		// Skip protocol version if incompatible with the mode of operation
-		if fastSync && version < eth63 {
+		if mode == downloader.FastSync && version < eth63 {
 			continue
 		}
 		// Compatible; initialise the sub-protocol
@@ -158,19 +156,21 @@ func NewProtocolManager(config *params.ChainConfig, fastSync bool, networkId int
 		return nil, errIncompatibleConfig
 	}
 	// Construct the different synchronisation mechanisms
-	manager.downloader = downloader.New(downloader.FullSync, chaindb, manager.eventMux, blockchain.HasHeader, blockchain.HasBlockAndState, blockchain.GetHeaderByHash,
-		blockchain.GetBlockByHash, blockchain.CurrentHeader, blockchain.CurrentBlock, blockchain.CurrentFastBlock, blockchain.FastSyncCommitHead,
-		blockchain.GetTdByHash, blockchain.InsertHeaderChain, manager.blockchain.InsertChain, blockchain.InsertReceiptChain, blockchain.Rollback,
-		manager.removePeer)
+	manager.downloader = downloader.New(mode, chaindb, manager.eventMux, blockchain, nil, manager.removePeer)
 
-	validator := func(block *types.Block, parent *types.Block) error {
-		return core.ValidateHeader(config, pow, block.Header(), parent.Header(), true, false, blockchain)
+	validator := func(header *types.Header) error {
+		return engine.VerifyHeader(blockchain, header, true)
 	}
 	heighter := func() uint64 {
 		return blockchain.CurrentBlock().NumberU64()
 	}
 	inserter := func(blocks types.Blocks) (int, error) {
-		atomic.StoreUint32(&manager.synced, 1) // Mark initial sync done on any fetcher import
+		// If fast sync is running, deny importing weird blocks
+		if atomic.LoadUint32(&manager.fastSync) == 1 {
+			log.Warn("Discarded bad propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
+			return 0, nil
+		}
+		atomic.StoreUint32(&manager.acceptTxs, 1) // Mark initial sync done on any fetcher import
 		return manager.blockchain.InsertChain(blocks)
 	}
 	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, manager.removePeer)
@@ -184,12 +184,12 @@ func (pm *ProtocolManager) removePeer(id string) {
 	if peer == nil {
 		return
 	}
-	glog.V(logger.Debug).Infoln("Removing peer", id)
+	log.Debug("Removing Ubiq peer", "peer", id)
 
-	// Unregister the peer from the downloader and Ethereum peer set
+	// Unregister the peer from the downloader and Ubiq peer set
 	pm.downloader.UnregisterPeer(id)
 	if err := pm.peers.Unregister(id); err != nil {
-		glog.V(logger.Error).Infoln("Removal failed:", err)
+		log.Error("Peer removal failed", "peer", id, "err", err)
 	}
 	// Hard disconnect at the networking layer
 	if peer != nil {
@@ -211,7 +211,7 @@ func (pm *ProtocolManager) Start() {
 }
 
 func (pm *ProtocolManager) Stop() {
-	glog.V(logger.Info).Infoln("Stopping ubiq protocol handler...")
+	log.Info("Stopping Ubiq protocol")
 
 	pm.txSub.Unsubscribe()         // quits txBroadcastLoop
 	pm.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
@@ -232,7 +232,7 @@ func (pm *ProtocolManager) Stop() {
 	// Wait for all peer handler goroutines and the loops to come down.
 	pm.wg.Wait()
 
-	glog.V(logger.Info).Infoln("Ubiq protocol handler stopped")
+	log.Info("Ubiq protocol stopped")
 }
 
 func (pm *ProtocolManager) newPeer(pv int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -245,28 +245,26 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	if pm.peers.Len() >= pm.maxPeers {
 		return p2p.DiscTooManyPeers
 	}
-
-	glog.V(logger.Debug).Infof("%v: peer connected [%s]", p, p.Name())
+	p.Log().Debug("Ubiq peer connected", "name", p.Name())
 
 	// Execute the Ethereum handshake
 	td, head, genesis := pm.blockchain.Status()
 	if err := p.Handshake(pm.networkId, td, head, genesis); err != nil {
-		glog.V(logger.Debug).Infof("%v: handshake failed: %v", p, err)
+		p.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
 	}
 	if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
 		rw.Init(p.version)
 	}
 	// Register the peer locally
-	glog.V(logger.Detail).Infof("%v: adding peer", p)
 	if err := pm.peers.Register(p); err != nil {
-		glog.V(logger.Error).Infof("%v: addition failed: %v", p, err)
+		p.Log().Error("Ubiq peer registration failed", "err", err)
 		return err
 	}
 	defer pm.removePeer(p.id)
 
 	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
-	if err := pm.downloader.RegisterPeer(p.id, p.version, p.Head, p.RequestHeadersByHash, p.RequestHeadersByNumber, p.RequestBodies, p.RequestReceipts, p.RequestNodeData); err != nil {
+	if err := pm.downloader.RegisterPeer(p.id, p.version, p); err != nil {
 		return err
 	}
 	// Propagate existing transactions. new transactions appearing
@@ -276,7 +274,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	// main loop. handle incoming messages.
 	for {
 		if err := pm.handleMsg(p); err != nil {
-			glog.V(logger.Debug).Infof("%v: message handling failed: %v", p, err)
+			p.Log().Debug("Ethereum message handling failed", "err", err)
 			return err
 		}
 	}
@@ -352,7 +350,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				)
 				if next <= current {
 					infos, _ := json.MarshalIndent(p.Peer.Info(), "", "  ")
-					glog.V(logger.Warn).Infof("%v: GetBlockHeaders skip overflow attack (current %v, skip %v, next %v)\nMalicious peer infos: %s", p, current, query.Skip, next, infos)
+					p.Log().Warn("GetBlockHeaders skip overflow attack", "current", current, "skip", query.Skip, "next", next, "attacker", infos)
 					unknown = true
 				} else {
 					if header := pm.blockchain.GetHeaderByNumber(next); header != nil {
@@ -391,7 +389,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if len(headers) > 0 || !filter {
 			err := pm.downloader.DeliverHeaders(p.id, headers)
 			if err != nil {
-				glog.V(logger.Debug).Infoln(err)
+				log.Debug("Failed to deliver headers", "err", err)
 			}
 		}
 
@@ -444,7 +442,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if len(trasactions) > 0 || len(uncles) > 0 || !filter {
 			err := pm.downloader.DeliverBodies(p.id, trasactions, uncles)
 			if err != nil {
-				glog.V(logger.Debug).Infoln(err)
+				log.Debug("Failed to deliver bodies", "err", err)
 			}
 		}
 
@@ -483,7 +481,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		// Deliver all to the downloader
 		if err := pm.downloader.DeliverNodeData(p.id, data); err != nil {
-			glog.V(logger.Debug).Infof("failed to deliver node state data: %v", err)
+			log.Debug("Failed to deliver node state data", "err", err)
 		}
 
 	case p.version >= eth63 && msg.Code == GetReceiptsMsg:
@@ -514,7 +512,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 			// If known, encode and queue for response packet
 			if encoded, err := rlp.EncodeToBytes(results); err != nil {
-				glog.V(logger.Error).Infof("failed to encode receipt: %v", err)
+				log.Error("Failed to encode receipt", "err", err)
 			} else {
 				receipts = append(receipts, encoded)
 				bytes += len(encoded)
@@ -530,7 +528,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		// Deliver all to the downloader
 		if err := pm.downloader.DeliverReceipts(p.id, receipts); err != nil {
-			glog.V(logger.Debug).Infof("failed to deliver receipts: %v", err)
+			log.Debug("Failed to deliver receipts", "err", err)
 		}
 
 	case msg.Code == NewBlockHashesMsg:
@@ -587,7 +585,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 	case msg.Code == TxMsg:
 		// Transactions arrived, make sure we have a valid and fresh chain to handle them
-		if atomic.LoadUint32(&pm.synced) == 0 {
+		if atomic.LoadUint32(&pm.acceptTxs) == 0 {
 			break
 		}
 		// Transactions can be processed, parse all of them and deliver to the pool
@@ -602,7 +600,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 			p.MarkTransaction(tx.Hash())
 		}
-		pm.txpool.AddBatch(txs)
+		pm.txpool.AddRemotes(txs)
 
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
@@ -623,7 +621,7 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 		if parent := pm.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
 			td = new(big.Int).Add(block.Difficulty(), pm.blockchain.GetTd(block.ParentHash(), block.NumberU64()-1))
 		} else {
-			glog.V(logger.Error).Infof("propagating dangling block #%d [%x]", block.NumberU64(), hash[:4])
+			log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
 			return
 		}
 		// Send the block to a subset of our peers
@@ -638,14 +636,14 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 		for _, peer := range transfer {
 			peer.SendNewBlock(block, td)
 		}
-		glog.V(logger.Detail).Infof("propagated block %x to %d peers in %v", hash[:4], len(transfer), time.Since(block.ReceivedAt))
+		log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
 	if pm.blockchain.HasBlock(hash) {
 		for _, peer := range peers {
 			peer.SendNewBlockHashes([]common.Hash{hash}, []uint64{block.NumberU64()})
 		}
-		glog.V(logger.Detail).Infof("announced block %x to %d peers in %v", hash[:4], len(peers), time.Since(block.ReceivedAt))
+		log.Trace("Announced block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}
 }
 
@@ -658,7 +656,7 @@ func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) 
 	for _, peer := range peers {
 		peer.SendTransactions(types.Transactions{tx})
 	}
-	glog.V(logger.Detail).Infoln("broadcast tx to", len(peers), "peers")
+	log.Trace("Broadcast transaction", "hash", hash, "recipients", len(peers))
 }
 
 // Mined broadcast loop
@@ -684,7 +682,7 @@ func (self *ProtocolManager) txBroadcastLoop() {
 // EthNodeInfo represents a short summary of the Ethereum sub-protocol metadata known
 // about the host peer.
 type EthNodeInfo struct {
-	Network    int         `json:"network"`    // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3)
+	Network    uint64      `json:"network"`    // Ubiq network ID (1=Frontier, 2=Morden, Ropsten=3)
 	Difficulty *big.Int    `json:"difficulty"` // Total difficulty of the host's blockchain
 	Genesis    common.Hash `json:"genesis"`    // SHA3 hash of the host's genesis block
 	Head       common.Hash `json:"head"`       // SHA3 hash of the host's best owned block

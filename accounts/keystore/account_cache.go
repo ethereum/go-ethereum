@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -30,8 +30,7 @@ import (
 
 	"github.com/ubiq/go-ubiq/accounts"
 	"github.com/ubiq/go-ubiq/common"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 )
 
 // Minimum amount of time between cache reloads. This limit applies if the platform does
@@ -210,8 +209,8 @@ func (ac *accountCache) close() {
 // Callers must hold ac.mu.
 func (ac *accountCache) reload() {
 	accounts, err := ac.scan()
-	if err != nil && glog.V(logger.Debug) {
-		glog.Errorf("can't load keys: %v", err)
+	if err != nil {
+		log.Debug("Failed to reload keystore contents", "err", err)
 	}
 	ac.all = accounts
 	sort.Sort(ac.all)
@@ -225,7 +224,7 @@ func (ac *accountCache) reload() {
 	case ac.notify <- struct{}{}:
 	default:
 	}
-	glog.V(logger.Debug).Infof("reloaded keys, cache has %d accounts", len(ac.all))
+	log.Debug("Reloaded keystore contents", "accounts", len(ac.all))
 }
 
 func (ac *accountCache) scan() ([]accounts.Account, error) {
@@ -244,12 +243,14 @@ func (ac *accountCache) scan() ([]accounts.Account, error) {
 	for _, fi := range files {
 		path := filepath.Join(ac.keydir, fi.Name())
 		if skipKeyFile(fi) {
-			glog.V(logger.Detail).Infof("ignoring file %s", path)
+			log.Trace("Ignoring file on account scan", "path", path)
 			continue
 		}
+		logger := log.New("path", path)
+
 		fd, err := os.Open(path)
 		if err != nil {
-			glog.V(logger.Detail).Infoln(err)
+			logger.Trace("Failed to open keystore file", "err", err)
 			continue
 		}
 		buf.Reset(fd)
@@ -259,9 +260,9 @@ func (ac *accountCache) scan() ([]accounts.Account, error) {
 		addr := common.HexToAddress(keyJSON.Address)
 		switch {
 		case err != nil:
-			glog.V(logger.Debug).Infof("can't decode key %s: %v", path, err)
+			logger.Debug("Failed to decode keystore key", "err", err)
 		case (addr == common.Address{}):
-			glog.V(logger.Debug).Infof("can't decode key %s: missing or zero address", path)
+			logger.Debug("Failed to decode keystore key", "err", "missing or zero address")
 		default:
 			addrs = append(addrs, accounts.Account{Address: addr, URL: accounts.URL{Scheme: KeyStoreScheme, Path: path}})
 		}

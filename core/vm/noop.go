@@ -45,26 +45,26 @@ func (NoopEVMCallContext) DelegateCall(me ContractRef, addr common.Address, data
 
 type NoopStateDB struct{}
 
-func (NoopStateDB) GetAccount(common.Address) Account                 { return nil }
-func (NoopStateDB) CreateAccount(common.Address) Account              { return nil }
-func (NoopStateDB) SubBalance(common.Address, *big.Int)               {}
-func (NoopStateDB) AddBalance(common.Address, *big.Int)               {}
-func (NoopStateDB) GetBalance(common.Address) *big.Int                { return nil }
-func (NoopStateDB) GetNonce(common.Address) uint64                    { return 0 }
-func (NoopStateDB) SetNonce(common.Address, uint64)                   {}
-func (NoopStateDB) GetCodeHash(common.Address) common.Hash            { return common.Hash{} }
-func (NoopStateDB) GetCode(common.Address) []byte                     { return nil }
-func (NoopStateDB) SetCode(common.Address, []byte)                    {}
-func (NoopStateDB) GetCodeSize(common.Address) int                    { return 0 }
-func (NoopStateDB) AddRefund(*big.Int)                                {}
-func (NoopStateDB) GetRefund() *big.Int                               { return nil }
-func (NoopStateDB) GetState(common.Address, common.Hash) common.Hash  { return common.Hash{} }
-func (NoopStateDB) SetState(common.Address, common.Hash, common.Hash) {}
-func (NoopStateDB) Suicide(common.Address) bool                       { return false }
-func (NoopStateDB) HasSuicided(common.Address) bool                   { return false }
-func (NoopStateDB) Exist(common.Address) bool                         { return false }
-func (NoopStateDB) Empty(common.Address) bool                         { return false }
-func (NoopStateDB) RevertToSnapshot(int)                              {}
-func (NoopStateDB) Snapshot() int                                     { return 0 }
-func (NoopStateDB) AddLog(*types.Log)                                 {}
-func (NoopStateDB) AddPreimage(common.Hash, []byte)                   {}
+func (NoopStateDB) CreateAccount(common.Address)                                       {}
+func (NoopStateDB) SubBalance(common.Address, *big.Int)                                {}
+func (NoopStateDB) AddBalance(common.Address, *big.Int)                                {}
+func (NoopStateDB) GetBalance(common.Address) *big.Int                                 { return nil }
+func (NoopStateDB) GetNonce(common.Address) uint64                                     { return 0 }
+func (NoopStateDB) SetNonce(common.Address, uint64)                                    {}
+func (NoopStateDB) GetCodeHash(common.Address) common.Hash                             { return common.Hash{} }
+func (NoopStateDB) GetCode(common.Address) []byte                                      { return nil }
+func (NoopStateDB) SetCode(common.Address, []byte)                                     {}
+func (NoopStateDB) GetCodeSize(common.Address) int                                     { return 0 }
+func (NoopStateDB) AddRefund(*big.Int)                                                 {}
+func (NoopStateDB) GetRefund() *big.Int                                                { return nil }
+func (NoopStateDB) GetState(common.Address, common.Hash) common.Hash                   { return common.Hash{} }
+func (NoopStateDB) SetState(common.Address, common.Hash, common.Hash)                  {}
+func (NoopStateDB) Suicide(common.Address) bool                                        { return false }
+func (NoopStateDB) HasSuicided(common.Address) bool                                    { return false }
+func (NoopStateDB) Exist(common.Address) bool                                          { return false }
+func (NoopStateDB) Empty(common.Address) bool                                          { return false }
+func (NoopStateDB) RevertToSnapshot(int)                                               {}
+func (NoopStateDB) Snapshot() int                                                      { return 0 }
+func (NoopStateDB) AddLog(*types.Log)                                                  {}
+func (NoopStateDB) AddPreimage(common.Hash, []byte)                                    {}
+func (NoopStateDB) ForEachStorage(common.Address, func(common.Hash, common.Hash) bool) {}

@@ -87,7 +87,7 @@ blue(myWriter, "important notice: %s", stars)
 
 // Mix up with multiple attributes
 success := color.New(color.Bold, color.FgGreen).FprintlnFunc()
-success(myWriter, don't forget this...")
+success(myWriter, "Don't forget this...")
 ```
 
 ### Insert into noncolor strings (SprintFunc)

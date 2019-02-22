@@ -18,7 +18,6 @@ package types
 
 import (
 	"container/heap"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -28,22 +27,20 @@ import (
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/common/hexutil"
 	"github.com/ubiq/go-ubiq/crypto"
-	"github.com/ubiq/go-ubiq/params"
 	"github.com/ubiq/go-ubiq/rlp"
 )
 
-var ErrInvalidSig = errors.New("invalid transaction v, r, s values")
+//go:generate gencodec -type txdata -field-override txdataMarshaling -out gen_tx_json.go
 
 var (
-	errMissingTxSignatureFields = errors.New("missing required JSON transaction signature fields")
-	errMissingTxFields          = errors.New("missing required JSON transaction fields")
-	errNoSigner                 = errors.New("missing signing methods")
+	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
+	errNoSigner   = errors.New("missing signing methods")
 )
 
 // deriveSigner makes a *best* guess about which signer to use.
 func deriveSigner(V *big.Int) Signer {
-	if V.BitLen() > 0 && isProtectedV(V) {
-		return EIP155Signer{chainId: deriveChainId(V)}
+	if V.Sign() != 0 && isProtectedV(V) {
+		return NewEIP155Signer(deriveChainId(V))
 	} else {
 		return HomesteadSigner{}
 	}
@@ -58,26 +55,31 @@ type Transaction struct {
 }
 
 type txdata struct {
-	AccountNonce    uint64
-	Price, GasLimit *big.Int
-	Recipient       *common.Address `rlp:"nil"` // nil means contract creation
-	Amount          *big.Int
-	Payload         []byte
-	V               *big.Int // signature
-	R, S            *big.Int // signature
+	AccountNonce uint64          `json:"nonce"    gencodec:"required"`
+	Price        *big.Int        `json:"gasPrice" gencodec:"required"`
+	GasLimit     *big.Int        `json:"gas"      gencodec:"required"`
+	Recipient    *common.Address `json:"to"       rlp:"nil"` // nil means contract creation
+	Amount       *big.Int        `json:"value"    gencodec:"required"`
+	Payload      []byte          `json:"input"    gencodec:"required"`
+
+	// Signature values
+	V *big.Int `json:"v" gencodec:"required"`
+	R *big.Int `json:"r" gencodec:"required"`
+	S *big.Int `json:"s" gencodec:"required"`
+
+	// This is only used when marshaling to JSON.
+	Hash *common.Hash `json:"hash" rlp:"-"`
 }
 
-type jsonTransaction struct {
-	Hash         *common.Hash    `json:"hash"`
-	AccountNonce *hexutil.Uint64 `json:"nonce"`
-	Price        *hexutil.Big    `json:"gasPrice"`
-	GasLimit     *hexutil.Big    `json:"gas"`
-	Recipient    *common.Address `json:"to"`
-	Amount       *hexutil.Big    `json:"value"`
-	Payload      *hexutil.Bytes  `json:"input"`
-	V            *hexutil.Big    `json:"v"`
-	R            *hexutil.Big    `json:"r"`
-	S            *hexutil.Big    `json:"s"`
+type txdataMarshaling struct {
+	AccountNonce hexutil.Uint64
+	Price        *hexutil.Big
+	GasLimit     *hexutil.Big
+	Amount       *hexutil.Big
+	Payload      hexutil.Bytes
+	V            *hexutil.Big
+	R            *hexutil.Big
+	S            *hexutil.Big
 }
 
 func NewTransaction(nonce uint64, to common.Address, amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {
@@ -116,19 +118,6 @@ func newTransaction(nonce uint64, to *common.Address, amount, gasLimit, gasPrice
 	return &Transaction{data: d}
 }
 
-func pickSigner(rules params.Rules) Signer {
-	var signer Signer
-	switch {
-	case rules.IsEIP155:
-		signer = NewEIP155Signer(rules.ChainId)
-	case rules.IsHomestead:
-		signer = HomesteadSigner{}
-	default:
-		signer = FrontierSigner{}
-	}
-	return signer
-}
-
 // ChainId returns which chain id this transaction was signed for (if at all)
 func (tx *Transaction) ChainId() *big.Int {
 	return deriveChainId(tx.data.V)
@@ -164,66 +153,30 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	return err
 }
 
-// MarshalJSON encodes transactions into the web3 RPC response block format.
 func (tx *Transaction) MarshalJSON() ([]byte, error) {
 	hash := tx.Hash()
-
-	return json.Marshal(&jsonTransaction{
-		Hash:         &hash,
-		AccountNonce: (*hexutil.Uint64)(&tx.data.AccountNonce),
-		Price:        (*hexutil.Big)(tx.data.Price),
-		GasLimit:     (*hexutil.Big)(tx.data.GasLimit),
-		Recipient:    tx.data.Recipient,
-		Amount:       (*hexutil.Big)(tx.data.Amount),
-		Payload:      (*hexutil.Bytes)(&tx.data.Payload),
-		V:            (*hexutil.Big)(tx.data.V),
-		R:            (*hexutil.Big)(tx.data.R),
-		S:            (*hexutil.Big)(tx.data.S),
-	})
+	data := tx.data
+	data.Hash = &hash
+	return data.MarshalJSON()
 }
 
 // UnmarshalJSON decodes the web3 RPC transaction format.
 func (tx *Transaction) UnmarshalJSON(input []byte) error {
-	var dec jsonTransaction
-	if err := json.Unmarshal(input, &dec); err != nil {
+	var dec txdata
+	if err := dec.UnmarshalJSON(input); err != nil {
 		return err
 	}
-	// Ensure that all fields are set. V, R, S are checked separately because they're a
-	// recent addition to the RPC spec (as of August 2016) and older implementations might
-	// not provide them. Note that Recipient is not checked because it can be missing for
-	// contract creations.
-	if dec.V == nil || dec.R == nil || dec.S == nil {
-		return errMissingTxSignatureFields
-	}
-
 	var V byte
-	if isProtectedV((*big.Int)(dec.V)) {
-		chainId := deriveChainId((*big.Int)(dec.V)).Uint64()
-		V = byte(dec.V.ToInt().Uint64() - 35 - 2*chainId)
+	if isProtectedV(dec.V) {
+		chainId := deriveChainId(dec.V).Uint64()
+		V = byte(dec.V.Uint64() - 35 - 2*chainId)
 	} else {
-		V = byte(((*big.Int)(dec.V)).Uint64() - 27)
+		V = byte(dec.V.Uint64() - 27)
 	}
-	if !crypto.ValidateSignatureValues(V, (*big.Int)(dec.R), (*big.Int)(dec.S), false) {
+	if !crypto.ValidateSignatureValues(V, dec.R, dec.S, false) {
 		return ErrInvalidSig
 	}
-
-	if dec.AccountNonce == nil || dec.Price == nil || dec.GasLimit == nil || dec.Amount == nil || dec.Payload == nil {
-		return errMissingTxFields
-	}
-	// Assign the fields. This is not atomic but reusing transactions
-	// for decoding isn't thread safe anyway.
-	*tx = Transaction{}
-	tx.data = txdata{
-		AccountNonce: uint64(*dec.AccountNonce),
-		Recipient:    dec.Recipient,
-		Amount:       (*big.Int)(dec.Amount),
-		GasLimit:     (*big.Int)(dec.GasLimit),
-		Price:        (*big.Int)(dec.Price),
-		Payload:      *dec.Payload,
-		V:            (*big.Int)(dec.V),
-		R:            (*big.Int)(dec.R),
-		S:            (*big.Int)(dec.S),
-	}
+	*tx = Transaction{data: dec}
 	return nil
 }
 

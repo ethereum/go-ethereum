@@ -18,10 +18,10 @@ package rpc
 
 import (
 	"context"
+	"fmt"
 	"net"
 
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 )
 
 // CreateIPCListener creates an listener, on Unix platforms this is a unix socket, on
@@ -37,7 +37,7 @@ func (srv *Server) ServeListener(l net.Listener) error {
 		if err != nil {
 			return err
 		}
-		glog.V(logger.Detail).Infoln("accepted conn", conn.RemoteAddr())
+		log.Trace(fmt.Sprint("accepted conn", conn.RemoteAddr()))
 		go srv.ServeCodec(NewJSONCodec(conn), OptionMethodInvocation|OptionSubscriptions)
 	}
 }

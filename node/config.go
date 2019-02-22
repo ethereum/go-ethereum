@@ -20,7 +20,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -31,12 +30,9 @@ import (
 	"github.com/ubiq/go-ubiq/accounts/usbwallet"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/crypto"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
+	"github.com/ubiq/go-ubiq/p2p"
 	"github.com/ubiq/go-ubiq/p2p/discover"
-	"github.com/ubiq/go-ubiq/p2p/discv5"
-	"github.com/ubiq/go-ubiq/p2p/nat"
-	"github.com/ubiq/go-ubiq/p2p/netutil"
 )
 
 var (
@@ -54,14 +50,14 @@ type Config struct {
 	// Name sets the instance name of the node. It must not contain the / character and is
 	// used in the devp2p node identifier. The instance name of gubiq is "gubiq". If no
 	// value is specified, the basename of the current executable is used.
-	Name string
+	Name string `toml:"-"`
 
 	// UserIdent, if set, is used as an additional component in the devp2p node identifier.
-	UserIdent string
+	UserIdent string `toml:",omitempty"`
 
 	// Version should be set to the version number of the program. It is used
 	// in the devp2p node identifier.
-	Version string
+	Version string `toml:"-"`
 
 	// DataDir is the file system folder the node should use for any data storage
 	// requirements. The configured data directory will not be directly shared with
@@ -70,6 +66,9 @@ type Config struct {
 	// in memory.
 	DataDir string
 
+	// Configuration of peer-to-peer networking.
+	P2P p2p.Config
+
 	// KeyStoreDir is the file system folder that contains private keys. The directory can
 	// be specified as a relative path, in which case it is resolved relative to the
 	// current directory.
@@ -77,106 +76,58 @@ type Config struct {
 	// If KeyStoreDir is empty, the default location is the "keystore" subdirectory of
 	// DataDir. If DataDir is unspecified and KeyStoreDir is empty, an ephemeral directory
 	// is created by New and destroyed when the node is stopped.
-	KeyStoreDir string
+	KeyStoreDir string `toml:",omitempty"`
 
 	// UseLightweightKDF lowers the memory and CPU requirements of the key store
 	// scrypt KDF at the expense of security.
-	UseLightweightKDF bool
+	UseLightweightKDF bool `toml:",omitempty"`
+
+	// NoUSB disables hardware wallet monitoring and connectivity.
+	NoUSB bool `toml:",omitempty"`
 
 	// IPCPath is the requested location to place the IPC endpoint. If the path is
 	// a simple file name, it is placed inside the data directory (or on the root
 	// pipe path on Windows), whereas if it's a resolvable path name (absolute or
 	// relative), then that specific path is enforced. An empty path disables IPC.
-	IPCPath string
-
-	// This field should be a valid secp256k1 private key that will be used for both
-	// remote peer identification as well as network traffic encryption. If no key
-	// is configured, the preset one is loaded from the data dir, generating it if
-	// needed.
-	PrivateKey *ecdsa.PrivateKey
-
-	// NoDiscovery specifies whether the peer discovery mechanism should be started
-	// or not. Disabling is usually useful for protocol debugging (manual topology).
-	NoDiscovery bool
-
-	// DiscoveryV5 specifies whether the the new topic-discovery based V5 discovery
-	// protocol should be started or not.
-	DiscoveryV5 bool
-
-	// Listener address for the V5 discovery protocol UDP traffic.
-	DiscoveryV5Addr string
-
-	// Restrict communication to white listed IP networks.
-	// The whitelist only applies when non-nil.
-	NetRestrict *netutil.Netlist
-
-	// BootstrapNodes used to establish connectivity with the rest of the network.
-	BootstrapNodes []*discover.Node
-
-	// BootstrapNodesV5 used to establish connectivity with the rest of the network
-	// using the V5 discovery protocol.
-	BootstrapNodesV5 []*discv5.Node
-
-	// Network interface address on which the node should listen for inbound peers.
-	ListenAddr string
-
-	// If set to a non-nil value, the given NAT port mapper is used to make the
-	// listening port available to the Internet.
-	NAT nat.Interface
-
-	// If Dialer is set to a non-nil value, the given Dialer is used to dial outbound
-	// peer connections.
-	Dialer *net.Dialer
-
-	// If NoDial is true, the node will not dial any peers.
-	NoDial bool
-
-	// MaxPeers is the maximum number of peers that can be connected. If this is
-	// set to zero, then only the configured static and trusted peers can connect.
-	MaxPeers int
-
-	// MaxPendingPeers is the maximum number of peers that can be pending in the
-	// handshake phase, counted separately for inbound and outbound connections.
-	// Zero defaults to preset values.
-	MaxPendingPeers int
+	IPCPath string `toml:",omitempty"`
 
 	// HTTPHost is the host interface on which to start the HTTP RPC server. If this
 	// field is empty, no HTTP API endpoint will be started.
-	HTTPHost string
+	HTTPHost string `toml:",omitempty"`
 
 	// HTTPPort is the TCP port number on which to start the HTTP RPC server. The
 	// default zero value is/ valid and will pick a port number randomly (useful
 	// for ephemeral nodes).
-	HTTPPort int
+	HTTPPort int `toml:",omitempty"`
 
 	// HTTPCors is the Cross-Origin Resource Sharing header to send to requesting
 	// clients. Please be aware that CORS is a browser enforced security, it's fully
 	// useless for custom HTTP clients.
-	HTTPCors string
+	HTTPCors []string `toml:",omitempty"`
 
 	// HTTPModules is a list of API modules to expose via the HTTP RPC interface.
 	// If the module list is empty, all RPC API endpoints designated public will be
 	// exposed.
-	HTTPModules []string
+	HTTPModules []string `toml:",omitempty"`
 
 	// WSHost is the host interface on which to start the websocket RPC server. If
 	// this field is empty, no websocket API endpoint will be started.
-	WSHost string
+	WSHost string `toml:",omitempty"`
 
 	// WSPort is the TCP port number on which to start the websocket RPC server. The
 	// default zero value is/ valid and will pick a port number randomly (useful for
 	// ephemeral nodes).
-	WSPort int
+	WSPort int `toml:",omitempty"`
 
 	// WSOrigins is the list of domain to accept websocket requests from. Please be
 	// aware that the server can only act upon the HTTP request the client sends and
 	// cannot verify the validity of the request header.
-	WSOrigins string
+	WSOrigins []string `toml:",omitempty"`
 
 	// WSModules is a list of API modules to expose via the websocket RPC interface.
 	// If the module list is empty, all RPC API endpoints designated public will be
 	// exposed.
-	WSModules []string
+	WSModules []string `toml:",omitempty"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
@@ -267,7 +218,7 @@ func (c *Config) NodeName() string {
 	if c.Version != "" {
 		name += "/v" + c.Version
 	}
-	name += "/" + runtime.GOOS
+	name += "/" + runtime.GOOS + "-" + runtime.GOARCH
 	name += "/" + runtime.Version()
 	return name
 }
@@ -327,14 +278,14 @@ func (c *Config) instanceDir() string {
 // data folder. If no key can be found, a new one is generated.
 func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	// Use any specifically configured key.
-	if c.PrivateKey != nil {
-		return c.PrivateKey
+	if c.P2P.PrivateKey != nil {
+		return c.P2P.PrivateKey
 	}
 	// Generate ephemeral key if no datadir is being used.
 	if c.DataDir == "" {
 		key, err := crypto.GenerateKey()
 		if err != nil {
-			glog.Fatalf("Failed to generate ephemeral node key: %v", err)
+			log.Crit(fmt.Sprintf("Failed to generate ephemeral node key: %v", err))
 		}
 		return key
 	}
@@ -346,16 +297,16 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	// No persistent key found, generate and store a new one.
 	key, err := crypto.GenerateKey()
 	if err != nil {
-		glog.Fatalf("Failed to generate node key: %v", err)
+		log.Crit(fmt.Sprintf("Failed to generate node key: %v", err))
 	}
 	instanceDir := filepath.Join(c.DataDir, c.name())
 	if err := os.MkdirAll(instanceDir, 0700); err != nil {
-		glog.V(logger.Error).Infof("Failed to persist node key: %v", err)
+		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
 		return key
 	}
 	keyfile = filepath.Join(instanceDir, datadirPrivateKey)
 	if err := crypto.SaveECDSA(keyfile, key); err != nil {
-		glog.V(logger.Error).Infof("Failed to persist node key: %v", err)
+		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
 	}
 	return key
 }
@@ -383,7 +334,7 @@ func (c *Config) parsePersistentNodes(path string) []*discover.Node {
 	// Load the nodes from the config file.
 	var nodelist []string
 	if err := common.LoadJSON(path, &nodelist); err != nil {
-		glog.V(logger.Error).Infof("Can't load node file %s: %v", path, err)
+		log.Error(fmt.Sprintf("Can't load node file %s: %v", path, err))
 		return nil
 	}
 	// Interpret the list as a discovery node array
@@ -394,7 +345,7 @@ func (c *Config) parsePersistentNodes(path string) []*discover.Node {
 		}
 		node, err := discover.ParseNode(url)
 		if err != nil {
-			glog.V(logger.Error).Infof("Node URL %s: %v\n", url, err)
+			log.Error(fmt.Sprintf("Node URL %s: %v\n", url, err))
 			continue
 		}
 		nodes = append(nodes, node)
@@ -441,10 +392,12 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 	backends := []accounts.Backend{
 		keystore.NewKeyStore(keydir, scryptN, scryptP),
 	}
-	if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {
-		glog.V(logger.Warn).Infof("Failed to start Ledger hub, disabling: %v", err)
-	} else {
-		backends = append(backends, ledgerhub)
+	if !conf.NoUSB {
+		if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {
+			log.Warn(fmt.Sprintf("Failed to start Ledger hub, disabling: %v", err))
+		} else {
+			backends = append(backends, ledgerhub)
+		}
 	}
 	return accounts.NewManager(backends...), ephemeral, nil
 }

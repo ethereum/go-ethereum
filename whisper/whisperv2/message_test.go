@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/ubiq/go-ubiq/crypto"
-	"github.com/ubiq/go-ubiq/crypto/secp256k1"
 )
 
 // Tests whether a message can be wrapped without any identity or encryption.
@@ -73,8 +72,8 @@ func TestMessageCleartextSignRecover(t *testing.T) {
 	if pubKey == nil {
 		t.Fatalf("failed to recover public key")
 	}
-	p1 := elliptic.Marshal(secp256k1.S256(), key.PublicKey.X, key.PublicKey.Y)
-	p2 := elliptic.Marshal(secp256k1.S256(), pubKey.X, pubKey.Y)
+	p1 := elliptic.Marshal(crypto.S256(), key.PublicKey.X, key.PublicKey.Y)
+	p2 := elliptic.Marshal(crypto.S256(), pubKey.X, pubKey.Y)
 	if !bytes.Equal(p1, p2) {
 		t.Fatalf("public key mismatch: have 0x%x, want 0x%x", p2, p1)
 	}
@@ -151,8 +150,8 @@ func TestMessageFullCrypto(t *testing.T) {
 	if pubKey == nil {
 		t.Fatalf("failed to recover public key")
 	}
-	p1 := elliptic.Marshal(secp256k1.S256(), fromKey.PublicKey.X, fromKey.PublicKey.Y)
-	p2 := elliptic.Marshal(secp256k1.S256(), pubKey.X, pubKey.Y)
+	p1 := elliptic.Marshal(crypto.S256(), fromKey.PublicKey.X, fromKey.PublicKey.Y)
+	p2 := elliptic.Marshal(crypto.S256(), pubKey.X, pubKey.Y)
 	if !bytes.Equal(p1, p2) {
 		t.Fatalf("public key mismatch: have 0x%x, want 0x%x", p2, p1)
 	}

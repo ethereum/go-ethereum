@@ -25,7 +25,7 @@ import (
 
 	"github.com/ubiq/go-ubiq/cmd/utils"
 	"github.com/ubiq/go-ubiq/crypto"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/p2p/discover"
 	"github.com/ubiq/go-ubiq/p2p/discv5"
 	"github.com/ubiq/go-ubiq/p2p/nat"
@@ -42,14 +42,18 @@ func main() {
 		natdesc     = flag.String("nat", "none", "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)")
 		netrestrict = flag.String("netrestrict", "", "restrict network communication to the given IP networks (CIDR masks)")
 		runv5       = flag.Bool("v5", false, "run a v5 topic discovery bootnode")
+		verbosity   = flag.Int("verbosity", int(log.LvlInfo), "log verbosity (0-9)")
+		vmodule     = flag.String("vmodule", "", "log verbosity pattern")
 
 		nodeKey *ecdsa.PrivateKey
 		err     error
 	)
-	flag.Var(glog.GetVerbosity(), "verbosity", "log verbosity (0-9)")
-	flag.Var(glog.GetVModule(), "vmodule", "log verbosity pattern")
-	glog.SetToStderr(true)
 	flag.Parse()
+
+	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
+	glogger.Verbosity(log.Lvl(*verbosity))
+	glogger.Vmodule(*vmodule)
+	log.Root().SetHandler(glogger)
 
 	natm, err := nat.Parse(*natdesc)
 	if err != nil {
@@ -64,6 +68,7 @@ func main() {
 		if err = crypto.SaveECDSA(*genKey, nodeKey); err != nil {
 			utils.Fatalf("%v", err)
 		}
+		return
 	case *nodeKeyFile == "" && *nodeKeyHex == "":
 		utils.Fatalf("Use -nodekey or -nodekeyhex to specify a private key")
 	case *nodeKeyFile != "" && *nodeKeyHex != "":

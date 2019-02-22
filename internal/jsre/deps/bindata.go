@@ -84,7 +84,7 @@ func bignumberJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "bignumber.js", size: 17314, mode: os.FileMode(420), modTime: time.Unix(1484232218, 0)}
+	info := bindataFileInfo{name: "bignumber.js", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -104,7 +104,7 @@ func web3Js() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "web3.js", size: 491740, mode: os.FileMode(420), modTime: time.Unix(1484232456, 0)}
+	info := bindataFileInfo{name: "web3.js", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }

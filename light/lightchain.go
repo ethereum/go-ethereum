@@ -23,17 +23,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/hashicorp/golang-lru"
 	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/consensus"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/event"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/params"
-	"github.com/ubiq/go-ubiq/pow"
 	"github.com/ubiq/go-ubiq/rlp"
+	"github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -65,14 +64,13 @@ type LightChain struct {
 	procInterrupt int32 // interrupt signaler for block processing
 	wg            sync.WaitGroup
 
-	pow       pow.PoW
-	validator core.HeaderValidator
+	engine consensus.Engine
 }
 
 // NewLightChain returns a fully initialised light chain using information
 // available in the database. It initialises the default Ethereum header
 // validator.
-func NewLightChain(odr OdrBackend, config *params.ChainConfig, pow pow.PoW, mux *event.TypeMux) (*LightChain, error) {
+func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine, mux *event.TypeMux) (*LightChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
@@ -85,43 +83,21 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, pow pow.PoW, mux 
 		bodyCache:    bodyCache,
 		bodyRLPCache: bodyRLPCache,
 		blockCache:   blockCache,
-		pow:          pow,
+		engine:       engine,
 	}
-
 	var err error
-	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.Validator, bc.getProcInterrupt)
-	bc.SetValidator(core.NewHeaderValidator(config, bc.hc, pow))
+	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.getProcInterrupt)
 	if err != nil {
 		return nil, err
 	}
-
 	bc.genesisBlock, _ = bc.GetBlockByNumber(NoOdr, 0)
 	if bc.genesisBlock == nil {
-		bc.genesisBlock, err = core.WriteDefaultGenesisBlock(odr.Database())
-		if err != nil {
-			return nil, err
-		}
-		glog.V(logger.Info).Infoln("WARNING: Wrote default ubiq genesis block")
+		return nil, core.ErrNoGenesis
 	}
-
-	if bc.genesisBlock.Hash() == (common.Hash{212, 229, 103, 64, 248, 118, 174, 248, 192, 16, 184, 106, 64, 213, 245, 103, 69, 161, 24, 208, 144, 106, 52, 230, 154, 236, 140, 13, 177, 203, 143, 163}) {
+	if bc.genesisBlock.Hash() == params.MainnetGenesisHash {
 		// add trusted CHT
-		WriteTrustedCht(bc.chainDb, TrustedCht{
-			Number: 523,
-			Root:   common.HexToHash("c035076523faf514038f619715de404a65398c51899b5dccca9c05b00bc79315"),
-		})
-		glog.V(logger.Info).Infoln("Added trusted CHT for mainnet")
-	} else {
-		if bc.genesisBlock.Hash() == (common.Hash{12, 215, 134, 162, 66, 93, 22, 241, 82, 198, 88, 49, 108, 66, 62, 108, 225, 24, 30, 21, 195, 41, 88, 38, 215, 201, 144, 76, 186, 156, 227, 3}) {
-			// add trusted CHT for testnet
-			WriteTrustedCht(bc.chainDb, TrustedCht{
-				Number: 452,
-				Root:   common.HexToHash("511da2c88e32b14cf4a4e62f7fcbb297139faebc260a4ab5eb43cce6edcba324"),
-			})
-			glog.V(logger.Info).Infoln("Added trusted CHT for testnet")
-		} else {
-			DeleteTrustedCht(bc.chainDb)
-		}
+		WriteTrustedCht(bc.chainDb, TrustedCht{Number: 805, Root: common.HexToHash("85e4286fe0a730390245c49de8476977afdae0eb5530b277f62a52b12313d50f")})
+		log.Info("Added trusted CHT for mainnet")
 	}
 
 	if err := bc.loadLastState(); err != nil {
@@ -130,9 +106,9 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, pow pow.PoW, mux 
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
 	for hash := range core.BadHashes {
 		if header := bc.GetHeaderByHash(hash); header != nil {
-			glog.V(logger.Error).Infof("Found bad hash, rewinding chain to block #%d [%x…]", header.Number, header.ParentHash[:4])
+			log.Error("Found bad hash, rewinding chain", "number", header.Number, "hash", header.ParentHash)
 			bc.SetHead(header.Number.Uint64() - 1)
-			glog.V(logger.Error).Infoln("Chain rewind was successful, resuming normal operation")
+			log.Error("Chain rewind was successful, resuming normal operation")
 		}
 	}
 	return bc, nil
@@ -162,7 +138,7 @@ func (self *LightChain) loadLastState() error {
 	// Issue a status log and return
 	header := self.hc.CurrentHeader()
 	headerTd := self.GetTd(header.Hash(), header.Number.Uint64())
-	glog.V(logger.Info).Infof("Last header: #%d [%x…] TD=%v", self.hc.CurrentHeader().Number, self.hc.CurrentHeader().Hash().Bytes()[:4], headerTd)
+	log.Info("Loaded most recent local header", "number", header.Number, "hash", header.Hash(), "td", headerTd)
 
 	return nil
 }
@@ -204,25 +180,6 @@ func (self *LightChain) Status() (td *big.Int, currentBlock common.Hash, genesis
 	return self.GetTd(hash, header.Number.Uint64()), hash, self.genesisBlock.Hash()
 }
 
-// SetValidator sets the validator which is used to validate incoming headers.
-func (self *LightChain) SetValidator(validator core.HeaderValidator) {
-	self.procmu.Lock()
-	defer self.procmu.Unlock()
-	self.validator = validator
-}
-
-// Validator returns the current header validator.
-func (self *LightChain) Validator() core.HeaderValidator {
-	self.procmu.RLock()
-	defer self.procmu.RUnlock()
-	return self.validator
-}
-
-// State returns a new mutable state based on the current HEAD block.
-func (self *LightChain) State() *LightState {
-	return NewLightState(StateTrieID(self.hc.CurrentHeader()), self.odr)
-}
-
 // Reset purges the entire blockchain, restoring it to its genesis state.
 func (bc *LightChain) Reset() {
 	bc.ResetWithGenesisBlock(bc.genesisBlock)
@@ -239,10 +196,10 @@ func (bc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 
 	// Prepare the genesis block and reinitialise the chain
 	if err := core.WriteTd(bc.chainDb, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty()); err != nil {
-		glog.Fatalf("failed to write genesis block TD: %v", err)
+		log.Crit("Failed to write genesis block TD", "err", err)
 	}
 	if err := core.WriteBlock(bc.chainDb, genesis); err != nil {
-		glog.Fatalf("failed to write genesis block: %v", err)
+		log.Crit("Failed to write genesis block", "err", err)
 	}
 	bc.genesisBlock = genesis
 	bc.hc.SetGenesis(bc.genesisBlock.Header())
@@ -250,6 +207,9 @@ func (bc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 }
 
 // Accessors
+
+// Engine retrieves the light chain's consensus engine.
+func (bc *LightChain) Engine() consensus.Engine { return bc.engine }
 
 // Genesis returns the genesis block
 func (bc *LightChain) Genesis() *types.Block {
@@ -338,8 +298,7 @@ func (bc *LightChain) Stop() {
 	atomic.StoreInt32(&bc.procInterrupt, 1)
 
 	bc.wg.Wait()
-
-	glog.V(logger.Info).Infoln("Chain manager stopped")
+	log.Info("Blockchain manager stopped")
 }
 
 // Rollback is designed to remove a chain of links from the database that aren't
@@ -383,9 +342,17 @@ func (self *LightChain) postChainEvents(events []interface{}) {
 // In the case of a light chain, InsertHeaderChain also creates and posts light
 // chain events when necessary.
 func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+	start := time.Now()
+	if i, err := self.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
+		return i, err
+	}
+
 	// Make sure only one thread manipulates the chain at once
 	self.chainmu.Lock()
-	defer self.chainmu.Unlock()
+	defer func() {
+		self.chainmu.Unlock()
+		time.Sleep(time.Millisecond * 10) // ugly hack; do not hog chain lock in case syncing is CPU-limited by validation
+	}()
 
 	self.wg.Add(1)
 	defer self.wg.Done()
@@ -399,24 +366,16 @@ func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 
 		switch status {
 		case core.CanonStatTy:
-			if glog.V(logger.Debug) {
-				glog.Infof("[%v] inserted header #%d (%x...).\n", time.Now().UnixNano(), header.Number, header.Hash().Bytes()[0:4])
-			}
+			log.Debug("Inserted new header", "number", header.Number, "hash", header.Hash())
 			events = append(events, core.ChainEvent{Block: types.NewBlockWithHeader(header), Hash: header.Hash()})
 
 		case core.SideStatTy:
-			if glog.V(logger.Detail) {
-				glog.Infof("inserted forked header #%d (TD=%v) (%x...).\n", header.Number, header.Difficulty, header.Hash().Bytes()[0:4])
-			}
+			log.Debug("Inserted forked header", "number", header.Number, "hash", header.Hash())
 			events = append(events, core.ChainSideEvent{Block: types.NewBlockWithHeader(header)})
-
-		case core.SplitStatTy:
-			events = append(events, core.ChainSplitEvent{Block: types.NewBlockWithHeader(header)})
 		}
-
 		return err
 	}
-	i, err := self.hc.InsertHeaderChain(chain, checkFreq, whFunc)
+	i, err := self.hc.InsertHeaderChain(chain, whFunc, start)
 	go self.postChainEvents(events)
 	return i, err
 }

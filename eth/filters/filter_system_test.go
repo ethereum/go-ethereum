@@ -72,12 +72,11 @@ func TestBlockSubscription(t *testing.T) {
 	t.Parallel()
 
 	var (
-		mux     = new(event.TypeMux)
-		db, _   = ethdb.NewMemDatabase()
-		backend = &testBackend{mux, db}
-		api     = NewPublicFilterAPI(backend, false)
-
-		genesis     = core.WriteGenesisBlockForTesting(db)
+		mux         = new(event.TypeMux)
+		db, _       = ethdb.NewMemDatabase()
+		backend     = &testBackend{mux, db}
+		api         = NewPublicFilterAPI(backend, false)
+		genesis     = new(core.Genesis).MustCommit(db)
 		chain, _    = core.GenerateChain(params.TestChainConfig, genesis, db, 10, func(i int, gen *core.BlockGen) {})
 		chainEvents = []core.ChainEvent{}
 	)

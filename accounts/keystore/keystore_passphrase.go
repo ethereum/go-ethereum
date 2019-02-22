@@ -36,6 +36,7 @@ import (
 	"path/filepath"
 
 	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/common/math"
 	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/crypto/randentropy"
 	"github.com/pborman/uuid"
@@ -115,8 +116,7 @@ func EncryptKey(key *Key, auth string, scryptN, scryptP int) ([]byte, error) {
 		return nil, err
 	}
 	encryptKey := derivedKey[:16]
-	keyBytes0 := crypto.FromECDSA(key.PrivateKey)
-	keyBytes := common.LeftPadBytes(keyBytes0, 32)
+	keyBytes := math.PaddedBigBytes(key.PrivateKey.D, 32)
 
 	iv := randentropy.GetEntropyCSPRNG(aes.BlockSize) // 16
 	cipherText, err := aesCTRXOR(encryptKey, keyBytes, iv)
@@ -182,7 +182,8 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	key := crypto.ToECDSA(keyBytes)
+	key := crypto.ToECDSAUnsafe(keyBytes)
+
 	return &Key{
 		Id:         uuid.UUID(keyId),
 		Address:    crypto.PubkeyToAddress(key.PublicKey),

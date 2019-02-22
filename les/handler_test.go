@@ -25,6 +25,7 @@ import (
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/eth/downloader"
+	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/p2p"
 	"github.com/ubiq/go-ubiq/rlp"
 	"github.com/ubiq/go-ubiq/trie"
@@ -42,7 +43,8 @@ func expectResponse(r p2p.MsgReader, msgcode, reqID, bv uint64, data interface{}
 func TestGetBlockHeadersLes1(t *testing.T) { testGetBlockHeaders(t, 1) }
 
 func testGetBlockHeaders(t *testing.T, protocol int) {
-	pm, _, _ := newTestProtocolManagerMust(t, false, downloader.MaxHashFetch+15, nil)
+	db, _ := ethdb.NewMemDatabase()
+	pm := newTestProtocolManagerMust(t, false, downloader.MaxHashFetch+15, nil, nil, nil, db)
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
 	defer peer.close()
@@ -170,7 +172,8 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 func TestGetBlockBodiesLes1(t *testing.T) { testGetBlockBodies(t, 1) }
 
 func testGetBlockBodies(t *testing.T, protocol int) {
-	pm, _, _ := newTestProtocolManagerMust(t, false, downloader.MaxBlockFetch+15, nil)
+	db, _ := ethdb.NewMemDatabase()
+	pm := newTestProtocolManagerMust(t, false, downloader.MaxBlockFetch+15, nil, nil, nil, db)
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
 	defer peer.close()
@@ -246,7 +249,8 @@ func TestGetCodeLes1(t *testing.T) { testGetCode(t, 1) }
 
 func testGetCode(t *testing.T, protocol int) {
 	// Assemble the test environment
-	pm, _, _ := newTestProtocolManagerMust(t, false, 4, testChainGen)
+	db, _ := ethdb.NewMemDatabase()
+	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
 	defer peer.close()
@@ -278,7 +282,8 @@ func TestGetReceiptLes1(t *testing.T) { testGetReceipt(t, 1) }
 
 func testGetReceipt(t *testing.T, protocol int) {
 	// Assemble the test environment
-	pm, db, _ := newTestProtocolManagerMust(t, false, 4, testChainGen)
+	db, _ := ethdb.NewMemDatabase()
+	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
 	defer peer.close()
@@ -304,7 +309,8 @@ func TestGetProofsLes1(t *testing.T) { testGetReceipt(t, 1) }
 
 func testGetProofs(t *testing.T, protocol int) {
 	// Assemble the test environment
-	pm, db, _ := newTestProtocolManagerMust(t, false, 4, testChainGen)
+	db, _ := ethdb.NewMemDatabase()
+	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
 	defer peer.close()

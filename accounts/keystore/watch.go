@@ -21,8 +21,7 @@ package keystore
 import (
 	"time"
 
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/rjeczalik/notify"
 )
 
@@ -64,15 +63,16 @@ func (w *watcher) loop() {
 		w.starting = false
 		w.ac.mu.Unlock()
 	}()
+	logger := log.New("path", w.ac.keydir)
 
-	err := notify.Watch(w.ac.keydir, w.ev, notify.All)
-	if err != nil {
-		glog.V(logger.Detail).Infof("can't watch %s: %v", w.ac.keydir, err)
+	if err := notify.Watch(w.ac.keydir, w.ev, notify.All); err != nil {
+		logger.Trace("Failed to watch keystore folder", "err", err)
 		return
 	}
 	defer notify.Stop(w.ev)
-	glog.V(logger.Detail).Infof("now watching %s", w.ac.keydir)
-	defer glog.V(logger.Detail).Infof("no longer watching %s", w.ac.keydir)
+
+	logger.Trace("Started watching keystore folder")
+	defer logger.Trace("Stopped watching keystore folder")
 
 	w.ac.mu.Lock()
 	w.running = true

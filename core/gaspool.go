@@ -35,7 +35,7 @@ func (gp *GasPool) AddGas(amount *big.Int) *GasPool {
 func (gp *GasPool) SubGas(amount *big.Int) error {
 	i := (*big.Int)(gp)
 	if i.Cmp(amount) < 0 {
-		return &GasLimitErr{Have: new(big.Int).Set(i), Want: amount}
+		return ErrGasLimitReached
 	}
 	i.Sub(i, amount)
 	return nil

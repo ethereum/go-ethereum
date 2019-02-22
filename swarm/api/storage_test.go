@@ -36,7 +36,7 @@ func TestStoragePutGet(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		// to check put against the Api#Get
-		resp0 := testGet(t, api.api, bzzhash)
+		resp0 := testGet(t, api.api, bzzhash, "")
 		checkResponse(t, resp0, exp)
 
 		// check storage#Get

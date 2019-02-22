@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/ubiq/go-ubiq/common"
-	"github.com/ubiq/go-ubiq/crypto/secp256k1"
 )
 
 var testAddrHex = "970e8128ab834e8eac17ab8e3812f010678cf791"
@@ -37,28 +36,10 @@ var testPrivHex = "289c2857d4598e37fb9647507e47a309d6133539bf21a8b9cb6df88fd5232
 // These tests are sanity checks.
 // They should ensure that we don't e.g. use Sha3-224 instead of Sha3-256
 // and that the sha3 library uses keccak-f permutation.
-func TestSha3(t *testing.T) {
-	msg := []byte("abc")
-	exp, _ := hex.DecodeString("4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45")
-	checkhash(t, "Sha3-256", func(in []byte) []byte { return Keccak256(in) }, msg, exp)
-}
-
-func TestSha3Hash(t *testing.T) {
+func TestKeccak256Hash(t *testing.T) {
 	msg := []byte("abc")
 	exp, _ := hex.DecodeString("4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45")
 	checkhash(t, "Sha3-256-array", func(in []byte) []byte { h := Keccak256Hash(in); return h[:] }, msg, exp)
-}
-
-func TestSha256(t *testing.T) {
-	msg := []byte("abc")
-	exp, _ := hex.DecodeString("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
-	checkhash(t, "Sha256", Sha256, msg, exp)
-}
-
-func TestRipemd160(t *testing.T) {
-	msg := []byte("abc")
-	exp, _ := hex.DecodeString("8eb208f7e05d987a9b044a8e98c6b087f15a0bfc")
-	checkhash(t, "Ripemd160", Ripemd160, msg, exp)
 }
 
 func BenchmarkSha3(b *testing.B) {
@@ -170,7 +151,7 @@ func TestValidateSignatureValues(t *testing.T) {
 	minusOne := big.NewInt(-1)
 	one := common.Big1
 	zero := common.Big0
-	secp256k1nMinus1 := new(big.Int).Sub(secp256k1.N, common.Big1)
+	secp256k1nMinus1 := new(big.Int).Sub(secp256k1_N, common.Big1)
 
 	// correct v,r,s
 	check(true, 0, one, one)
@@ -197,9 +178,9 @@ func TestValidateSignatureValues(t *testing.T) {
 	// correct sig with max r,s
 	check(true, 0, secp256k1nMinus1, secp256k1nMinus1)
 	// correct v, combinations of incorrect r,s at upper limit
-	check(false, 0, secp256k1.N, secp256k1nMinus1)
-	check(false, 0, secp256k1nMinus1, secp256k1.N)
-	check(false, 0, secp256k1.N, secp256k1.N)
+	check(false, 0, secp256k1_N, secp256k1nMinus1)
+	check(false, 0, secp256k1nMinus1, secp256k1_N)
+	check(false, 0, secp256k1_N, secp256k1_N)
 
 	// current callers ensures r,s cannot be negative, but let's test for that too
 	// as crypto package could be used stand-alone
@@ -225,14 +206,13 @@ func checkAddr(t *testing.T, addr0, addr1 common.Address) {
 func TestPythonIntegration(t *testing.T) {
 	kh := "289c2857d4598e37fb9647507e47a309d6133539bf21a8b9cb6df88fd5232032"
 	k0, _ := HexToECDSA(kh)
-	k1 := FromECDSA(k0)
 
 	msg0 := Keccak256([]byte("foo"))
-	sig0, _ := secp256k1.Sign(msg0, k1)
+	sig0, _ := Sign(msg0, k0)
 
 	msg1 := common.FromHex("00000000000000000000000000000000")
-	sig1, _ := secp256k1.Sign(msg0, k1)
+	sig1, _ := Sign(msg0, k0)
 
-	fmt.Printf("msg: %x, privkey: %x sig: %x\n", msg0, k1, sig0)
-	fmt.Printf("msg: %x, privkey: %x sig: %x\n", msg1, k1, sig1)
+	t.Logf("msg: %x, privkey: %s sig: %x\n", msg0, kh, sig0)
+	t.Logf("msg: %x, privkey: %s sig: %x\n", msg1, kh, sig1)
 }

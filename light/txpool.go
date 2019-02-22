@@ -24,11 +24,11 @@ import (
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core"
+	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/event"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/params"
 	"github.com/ubiq/go-ubiq/rlp"
 )
@@ -101,17 +101,18 @@ func NewTxPool(config *params.ChainConfig, eventMux *event.TypeMux, chain *Light
 }
 
 // currentState returns the light state of the current head header
-func (pool *TxPool) currentState() *LightState {
-	return NewLightState(StateTrieID(pool.chain.CurrentHeader()), pool.odr)
+func (pool *TxPool) currentState(ctx context.Context) *state.StateDB {
+	return NewState(ctx, pool.chain.CurrentHeader(), pool.odr)
 }
 
 // GetNonce returns the "pending" nonce of a given address. It always queries
 // the nonce belonging to the latest header too in order to detect if another
 // client using the same key sent a transaction.
 func (pool *TxPool) GetNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	nonce, err := pool.currentState().GetNonce(ctx, addr)
-	if err != nil {
-		return 0, err
+	state := pool.currentState(ctx)
+	nonce := state.GetNonce(addr)
+	if state.Error() != nil {
+		return 0, state.Error()
 	}
 	sn, ok := pool.nonce[addr]
 	if ok && sn > nonce {
@@ -308,7 +309,7 @@ func (pool *TxPool) setNewHead(head *types.Header) {
 func (pool *TxPool) Stop() {
 	close(pool.quit)
 	pool.events.Unsubscribe()
-	glog.V(logger.Info).Infoln("Transaction pool stopped")
+	log.Info("Transaction pool stopped")
 }
 
 // Stats returns the number of currently pending (locally created) transactions
@@ -334,13 +335,9 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 		return core.ErrInvalidSender
 	}
 	// Last but not least check for nonce errors
-	currentState := pool.currentState()
-	if n, err := currentState.GetNonce(ctx, from); err == nil {
-		if n > tx.Nonce() {
-			return core.ErrNonce
-		}
-	} else {
-		return err
+	currentState := pool.currentState(ctx)
+	if n := currentState.GetNonce(from); n > tx.Nonce() {
+		return core.ErrNonceTooLow
 	}
 
 	// Check the transaction doesn't exceed the current
@@ -353,18 +350,14 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	// Transactions can't be negative. This may never happen
 	// using RLP decoded transactions but may occur if you create
 	// a transaction using the RPC for example.
-	if tx.Value().Cmp(common.Big0) < 0 {
+	if tx.Value().Sign() < 0 {
 		return core.ErrNegativeValue
 	}
 
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
-	if b, err := currentState.GetBalance(ctx, from); err == nil {
-		if b.Cmp(tx.Cost()) < 0 {
-			return core.ErrInsufficientFunds
-		}
-	} else {
-		return err
+	if b := currentState.GetBalance(from); b.Cmp(tx.Cost()) < 0 {
+		return core.ErrInsufficientFunds
 	}
 
 	// Should supply enough intrinsic gas
@@ -372,7 +365,7 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 		return core.ErrIntrinsicGas
 	}
 
-	return nil
+	return currentState.Error()
 }
 
 // add validates a new transaction and sets its state pending if processable.
@@ -404,20 +397,8 @@ func (self *TxPool) add(ctx context.Context, tx *types.Transaction) error {
 		go self.eventMux.Post(core.TxPreEvent{Tx: tx})
 	}
 
-	if glog.V(logger.Debug) {
-		var toname string
-		if to := tx.To(); to != nil {
-			toname = common.Bytes2Hex(to[:4])
-		} else {
-			toname = "[NEW_CONTRACT]"
-		}
-		// we can ignore the error here because From is
-		// verified in ValidateTransaction.
-		f, _ := types.Sender(self.signer, tx)
-		from := common.Bytes2Hex(f[:4])
-		glog.Infof("(t) %x => %s (%v) %x\n", from, toname, tx.Value, hash)
-	}
-
+	// Print a log message if low enough level is set
+	log.Debug("Pooled new transaction", "hash", hash, "from", log.Lazy{Fn: func() common.Address { from, _ := types.Sender(self.signer, tx); return from }}, "to", tx.To())
 	return nil
 }
 
@@ -450,15 +431,10 @@ func (self *TxPool) AddBatch(ctx context.Context, txs []*types.Transaction) {
 	var sendTx types.Transactions
 
 	for _, tx := range txs {
-		if err := self.add(ctx, tx); err != nil {
-			glog.V(logger.Debug).Infoln("tx error:", err)
-		} else {
+		if err := self.add(ctx, tx); err == nil {
 			sendTx = append(sendTx, tx)
-			h := tx.Hash()
-			glog.V(logger.Debug).Infof("tx %x\n", h[:4])
 		}
 	}
-
 	if len(sendTx) > 0 {
 		self.relay.Send(sendTx)
 	}

@@ -2,7 +2,7 @@ Source: {{.Name}}
 Section: science
 Priority: extra
 Maintainer: {{.Author}}
-Build-Depends: debhelper (>= 8.0.0), golang-1.7
+Build-Depends: debhelper (>= 8.0.0), golang-1.8
 Standards-Version: 3.9.5
 Homepage: https://ethereum.org
 Vcs-Git: git://github.com/ubiq/go-ubiq.git
@@ -13,7 +13,7 @@ Architecture: any
 Depends: ${misc:Depends}, {{.ExeList}}
 Description: Meta-package to install gubiq and other tools
  Meta-package to install gubiq and other tools
- 
+
 {{range .Executables}}
 Package: {{$.ExeName .}}
 Conflicts: {{$.ExeConflicts .}}

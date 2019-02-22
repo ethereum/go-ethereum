@@ -25,20 +25,11 @@ import (
 	"io/ioutil"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
-
-	"github.com/ubiq/go-ubiq/common"
-	"github.com/ubiq/go-ubiq/crypto"
 )
 
-var (
-	versionRegexp = regexp.MustCompile(`[0-9]+\.[0-9]+\.[0-9]+`)
-	solcParams    = []string{
-		"--combined-json", "bin,abi,userdoc,devdoc",
-		"--add-std",  // include standard lib contracts
-		"--optimize", // code optimizer switched on
-	}
-)
+var versionRegexp = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
 
 type Contract struct {
 	Code string       `json:"code"`
@@ -54,17 +45,33 @@ type ContractInfo struct {
 	AbiDefinition   interface{} `json:"abiDefinition"`
 	UserDoc         interface{} `json:"userDoc"`
 	DeveloperDoc    interface{} `json:"developerDoc"`
+	Metadata        string      `json:"metadata"`
 }
 
 // Solidity contains information about the solidity compiler.
 type Solidity struct {
 	Path, Version, FullVersion string
+	Major, Minor, Patch        int
 }
 
 // --combined-output format
 type solcOutput struct {
-	Contracts map[string]struct{ Bin, Abi, Devdoc, Userdoc string }
-	Version   string
+	Contracts map[string]struct {
+		Bin, Abi, Devdoc, Userdoc, Metadata string
+	}
+	Version string
+}
+
+func (s *Solidity) makeArgs() []string {
+	p := []string{
+		"--combined-json", "bin,abi,userdoc,devdoc",
+		"--add-std",  // include standard lib contracts
+		"--optimize", // code optimizer switched on
+	}
+	if s.Major > 0 || s.Minor > 4 || s.Patch > 6 {
+		p[1] += ",metadata"
+	}
+	return p
 }
 
 // SolidityVersion runs solc and parses its version output.
@@ -75,13 +82,23 @@ func SolidityVersion(solc string) (*Solidity, error) {
 	var out bytes.Buffer
 	cmd := exec.Command(solc, "--version")
 	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
+	err := cmd.Run()
+	if err != nil {
 		return nil, err
 	}
-	s := &Solidity{
-		Path:        cmd.Path,
-		FullVersion: out.String(),
-		Version:     versionRegexp.FindString(out.String()),
+	matches := versionRegexp.FindStringSubmatch(out.String())
+	if len(matches) != 4 {
+		return nil, fmt.Errorf("can't parse solc version %q", out.String())
+	}
+	s := &Solidity{Path: cmd.Path, FullVersion: out.String(), Version: matches[0]}
+	if s.Major, err = strconv.Atoi(matches[1]); err != nil {
+		return nil, err
+	}
+	if s.Minor, err = strconv.Atoi(matches[2]); err != nil {
+		return nil, err
+	}
+	if s.Patch, err = strconv.Atoi(matches[3]); err != nil {
+		return nil, err
 	}
 	return s, nil
 }
@@ -91,13 +108,14 @@ func CompileSolidityString(solc, source string) (map[string]*Contract, error) {
 	if len(source) == 0 {
 		return nil, errors.New("solc: empty source string")
 	}
-	if solc == "" {
-		solc = "solc"
+	s, err := SolidityVersion(solc)
+	if err != nil {
+		return nil, err
 	}
-	args := append(solcParams, "--")
-	cmd := exec.Command(solc, append(args, "-")...)
+	args := append(s.makeArgs(), "--")
+	cmd := exec.Command(s.Path, append(args, "-")...)
 	cmd.Stdin = strings.NewReader(source)
-	return runsolc(cmd, source)
+	return s.run(cmd, source)
 }
 
 // CompileSolidity compiles all given Solidity source files.
@@ -109,15 +127,16 @@ func CompileSolidity(solc string, sourcefiles ...string) (map[string]*Contract, 
 	if err != nil {
 		return nil, err
 	}
-	if solc == "" {
-		solc = "solc"
+	s, err := SolidityVersion(solc)
+	if err != nil {
+		return nil, err
 	}
-	args := append(solcParams, "--")
-	cmd := exec.Command(solc, append(args, sourcefiles...)...)
-	return runsolc(cmd, source)
+	args := append(s.makeArgs(), "--")
+	cmd := exec.Command(s.Path, append(args, sourcefiles...)...)
+	return s.run(cmd, source)
 }
 
-func runsolc(cmd *exec.Cmd, source string) (map[string]*Contract, error) {
+func (s *Solidity) run(cmd *exec.Cmd, source string) (map[string]*Contract, error) {
 	var stderr, stdout bytes.Buffer
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stdout
@@ -128,7 +147,6 @@ func runsolc(cmd *exec.Cmd, source string) (map[string]*Contract, error) {
 	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
 		return nil, err
 	}
-	shortVersion := versionRegexp.FindString(output.Version)
 
 	// Compilation succeeded, assemble and return the contracts.
 	contracts := make(map[string]*Contract)
@@ -151,12 +169,13 @@ func runsolc(cmd *exec.Cmd, source string) (map[string]*Contract, error) {
 			Info: ContractInfo{
 				Source:          source,
 				Language:        "Solidity",
-				LanguageVersion: shortVersion,
-				CompilerVersion: shortVersion,
-				CompilerOptions: strings.Join(solcParams, " "),
+				LanguageVersion: s.Version,
+				CompilerVersion: s.Version,
+				CompilerOptions: strings.Join(s.makeArgs(), " "),
 				AbiDefinition:   abi,
 				UserDoc:         userdoc,
 				DeveloperDoc:    devdoc,
+				Metadata:        info.Metadata,
 			},
 		}
 	}
@@ -173,14 +192,4 @@ func slurpFiles(files []string) (string, error) {
 		concat.Write(content)
 	}
 	return concat.String(), nil
-}
-
-// SaveInfo serializes info to the given file and returns its Keccak256 hash.
-func SaveInfo(info *ContractInfo, filename string) (common.Hash, error) {
-	infojson, err := json.Marshal(info)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	contenthash := common.BytesToHash(crypto.Keccak256(infojson))
-	return contenthash, ioutil.WriteFile(filename, infojson, 0600)
 }

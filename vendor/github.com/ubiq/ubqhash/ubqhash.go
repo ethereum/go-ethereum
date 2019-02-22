@@ -42,8 +42,7 @@ import (
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/crypto"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/pow"
 )
 
@@ -145,7 +144,7 @@ func (l *Light) Verify(block pow.Block) bool {
 	/* Cannot happen if block header diff is validated prior to PoW, but can
 		 happen if PoW is checked first due to parallel PoW checking.
 		 We could check the minimum valid difficulty but for SoC we avoid (duplicating)
-	   Ethereum protocol consensus rules here which are not in scope of Ubqhash
+	   Ubiq protocol consensus rules here which are not in scope of Ubqhash
 	*/
 	if difficulty.Cmp(common.Big0) == 0 {
 		glog.V(logger.Debug).Infof("invalid block difficulty")

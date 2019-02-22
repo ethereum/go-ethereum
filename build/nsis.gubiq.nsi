@@ -31,7 +31,7 @@ CRCCheck on
 
 !define GROUPNAME "Ubiq"
 !define APPNAME "Gubiq"
-!define DESCRIPTION "Official Go implementation of the Ethereum protocol"
+!define DESCRIPTION "Official Go implementation of the Ubiq protocol"
 !addplugindir .\
 
 # Require admin rights on NT6+ (When UAC is turned on)

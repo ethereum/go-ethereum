@@ -23,11 +23,9 @@ import (
 	"fmt"
 	"net"
 	"sort"
-	"strings"
 	"time"
 
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 )
 
 const (
@@ -51,16 +49,10 @@ func checkClockDrift() {
 		return
 	}
 	if drift < -driftThreshold || drift > driftThreshold {
-		warning := fmt.Sprintf("System clock seems off by %v, which can prevent network connectivity", drift)
-		howtofix := fmt.Sprintf("Please enable network time synchronisation in system settings")
-		separator := strings.Repeat("-", len(warning))
-
-		glog.V(logger.Warn).Info(separator)
-		glog.V(logger.Warn).Info(warning)
-		glog.V(logger.Warn).Info(howtofix)
-		glog.V(logger.Warn).Info(separator)
+		log.Warn(fmt.Sprintf("System clock seems off by %v, which can prevent network connectivity", drift))
+		log.Warn("Please enable network time synchronisation in system settings.")
 	} else {
-		glog.V(logger.Debug).Infof("Sanity NTP check reported %v drift, all ok", drift)
+		log.Debug("NTP sanity check done", "drift", drift)
 	}
 }
 

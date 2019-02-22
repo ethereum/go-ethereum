@@ -9,7 +9,7 @@
   <version>{{.Version}}</version>
   <packaging>aar</packaging>
 
-  <name>Android Ethereum Client</name>
+  <name>Android Ubiq Client</name>
   <description>Android port of the go-ubiq libraries and node</description>
   <url>https://github.com/ubiq/go-ubiq</url>
   <inceptionYear>2015</inceptionYear>

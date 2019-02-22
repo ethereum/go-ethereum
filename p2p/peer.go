@@ -17,7 +17,6 @@
 package p2p
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -25,8 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/common/mclock"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/p2p/discover"
 	"github.com/ubiq/go-ubiq/rlp"
 )
@@ -65,6 +64,8 @@ type protoHandshake struct {
 type Peer struct {
 	rw      *conn
 	running map[string]*protoRW
+	log     log.Logger
+	created mclock.AbsTime
 
 	wg       sync.WaitGroup
 	protoErr chan error
@@ -126,20 +127,25 @@ func newPeer(conn *conn, protocols []Protocol) *Peer {
 	p := &Peer{
 		rw:       conn,
 		running:  protomap,
+		created:  mclock.Now(),
 		disc:     make(chan DiscReason),
 		protoErr: make(chan error, len(protomap)+1), // protocols + pingLoop
 		closed:   make(chan struct{}),
+		log:      log.New("id", conn.id, "conn", conn.flags),
 	}
 	return p
 }
 
-func (p *Peer) run() DiscReason {
+func (p *Peer) Log() log.Logger {
+	return p.log
+}
+
+func (p *Peer) run() (remoteRequested bool, err error) {
 	var (
 		writeStart = make(chan struct{}, 1)
 		writeErr   = make(chan error, 1)
 		readErr    = make(chan error, 1)
-		reason     DiscReason
-		requested  bool
+		reason     DiscReason // sent to the peer
 	)
 	p.wg.Add(2)
 	go p.readLoop(readErr)
@@ -153,31 +159,26 @@ func (p *Peer) run() DiscReason {
 loop:
 	for {
 		select {
-		case err := <-writeErr:
+		case err = <-writeErr:
 			// A write finished. Allow the next write to start if
 			// there was no error.
 			if err != nil {
-				glog.V(logger.Detail).Infof("%v: write error: %v\n", p, err)
 				reason = DiscNetworkError
 				break loop
 			}
 			writeStart <- struct{}{}
-		case err := <-readErr:
+		case err = <-readErr:
 			if r, ok := err.(DiscReason); ok {
-				glog.V(logger.Debug).Infof("%v: remote requested disconnect: %v\n", p, r)
-				requested = true
+				remoteRequested = true
 				reason = r
 			} else {
-				glog.V(logger.Detail).Infof("%v: read error: %v\n", p, err)
 				reason = DiscNetworkError
 			}
 			break loop
-		case err := <-p.protoErr:
+		case err = <-p.protoErr:
 			reason = discReasonForError(err)
-			glog.V(logger.Debug).Infof("%v: protocol error: %v (%v)\n", p, err, reason)
 			break loop
-		case reason = <-p.disc:
-			glog.V(logger.Debug).Infof("%v: locally requested disconnect: %v\n", p, reason)
+		case err = <-p.disc:
 			break loop
 		}
 	}
@@ -185,10 +186,7 @@ loop:
 	close(p.closed)
 	p.rw.close(reason)
 	p.wg.Wait()
-	if requested {
-		reason = DiscRequested
-	}
-	return reason
+	return remoteRequested, err
 }
 
 func (p *Peer) pingLoop() {
@@ -298,14 +296,14 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 		proto.closed = p.closed
 		proto.wstart = writeStart
 		proto.werr = writeErr
-		glog.V(logger.Detail).Infof("%v: Starting protocol %s/%d\n", p, proto.Name, proto.Version)
+		p.log.Trace(fmt.Sprintf("Starting protocol %s/%d", proto.Name, proto.Version))
 		go func() {
 			err := proto.Run(p, proto)
 			if err == nil {
-				glog.V(logger.Detail).Infof("%v: Protocol %s/%d returned\n", p, proto.Name, proto.Version)
-				err = errors.New("protocol returned")
+				p.log.Trace(fmt.Sprintf("Protocol %s/%d returned", proto.Name, proto.Version))
+				err = errProtocolReturned
 			} else if err != io.EOF {
-				glog.V(logger.Detail).Infof("%v: Protocol %s/%d error: %v\n", p, proto.Name, proto.Version, err)
+				p.log.Trace(fmt.Sprintf("Protocol %s/%d failed", proto.Name, proto.Version), "err", err)
 			}
 			p.protoErr <- err
 			p.wg.Done()

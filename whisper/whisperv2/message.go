@@ -21,13 +21,15 @@ package whisperv2
 
 import (
 	"crypto/ecdsa"
+	crand "crypto/rand"
+	"fmt"
 	"math/rand"
 	"time"
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/crypto"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/crypto/ecies"
+	"github.com/ubiq/go-ubiq/log"
 )
 
 // Message represents an end-user data packet to transmit through the Whisper
@@ -123,7 +125,7 @@ func (self *Message) Recover() *ecdsa.PublicKey {
 	// Otherwise try and recover the signature
 	pub, err := crypto.SigToPub(self.hash(), self.Signature)
 	if err != nil {
-		glog.V(logger.Error).Infof("Could not get public key from signature: %v", err)
+		log.Error(fmt.Sprintf("Could not get public key from signature: %v", err))
 		return nil
 	}
 	return pub
@@ -131,13 +133,13 @@ func (self *Message) Recover() *ecdsa.PublicKey {
 
 // encrypt encrypts a message payload with a public key.
 func (self *Message) encrypt(key *ecdsa.PublicKey) (err error) {
-	self.Payload, err = crypto.Encrypt(key, self.Payload)
+	self.Payload, err = ecies.Encrypt(crand.Reader, ecies.ImportECDSAPublic(key), self.Payload, nil, nil)
 	return
 }
 
 // decrypt decrypts an encrypted payload with a private key.
 func (self *Message) decrypt(key *ecdsa.PrivateKey) error {
-	cleartext, err := crypto.Decrypt(key, self.Payload)
+	cleartext, err := ecies.ImportECDSA(key).Decrypt(crand.Reader, self.Payload, nil, nil)
 	if err == nil {
 		self.Payload = cleartext
 	}

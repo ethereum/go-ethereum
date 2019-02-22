@@ -38,7 +38,7 @@ var ErrNotSupported = errors.New("not supported")
 var ErrInvalidPassphrase = errors.New("invalid passphrase")
 
 // ErrWalletAlreadyOpen is returned if a wallet is attempted to be opened the
-// secodn time.
+// second time.
 var ErrWalletAlreadyOpen = errors.New("wallet already open")
 
 // ErrWalletClosed is returned if a wallet is attempted to be opened the

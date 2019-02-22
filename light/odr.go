@@ -34,7 +34,7 @@ import (
 // service is not required.
 var NoOdr = context.Background()
 
-// OdrBackend is an interface to a backend service that handles ODR retrievals
+// OdrBackend is an interface to a backend service that handles ODR retrievals type
 type OdrBackend interface {
 	Database() ethdb.Database
 	Retrieve(ctx context.Context, req OdrRequest) error
@@ -66,11 +66,11 @@ func StateTrieID(header *types.Header) *TrieID {
 // StorageTrieID returns a TrieID for a contract storage trie at a given account
 // of a given state trie. It also requires the root hash of the trie for
 // checking Merkle proofs.
-func StorageTrieID(state *TrieID, addr common.Address, root common.Hash) *TrieID {
+func StorageTrieID(state *TrieID, addrHash, root common.Hash) *TrieID {
 	return &TrieID{
 		BlockHash:   state.BlockHash,
 		BlockNumber: state.BlockNumber,
-		AccKey:      crypto.Keccak256(addr[:]),
+		AccKey:      addrHash[:],
 		Root:        root,
 	}
 }
@@ -102,7 +102,7 @@ func storeProof(db ethdb.Database, proof []rlp.RawValue) {
 // CodeRequest is the ODR request type for retrieving contract code
 type CodeRequest struct {
 	OdrRequest
-	Id   *TrieID
+	Id   *TrieID // references storage trie of the account
 	Hash common.Hash
 	Data []byte
 }

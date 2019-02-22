@@ -18,6 +18,7 @@ package node
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -30,8 +31,7 @@ import (
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/event"
 	"github.com/ubiq/go-ubiq/internal/debug"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/p2p"
 	"github.com/ubiq/go-ubiq/rpc"
 	"github.com/syndtr/goleveldb/leveldb/storage"
@@ -153,27 +153,20 @@ func (n *Node) Start() error {
 
 	// Initialize the p2p server. This creates the node key and
 	// discovery databases.
-	n.serverConfig = p2p.Config{
-		PrivateKey:       n.config.NodeKey(),
-		Name:             n.config.NodeName(),
-		Discovery:        !n.config.NoDiscovery,
-		DiscoveryV5:      n.config.DiscoveryV5,
-		DiscoveryV5Addr:  n.config.DiscoveryV5Addr,
-		BootstrapNodes:   n.config.BootstrapNodes,
-		BootstrapNodesV5: n.config.BootstrapNodesV5,
-		StaticNodes:      n.config.StaticNodes(),
-		TrustedNodes:     n.config.TrusterNodes(),
-		NodeDatabase:     n.config.NodeDB(),
-		ListenAddr:       n.config.ListenAddr,
-		NetRestrict:      n.config.NetRestrict,
-		NAT:              n.config.NAT,
-		Dialer:           n.config.Dialer,
-		NoDial:           n.config.NoDial,
-		MaxPeers:         n.config.MaxPeers,
-		MaxPendingPeers:  n.config.MaxPendingPeers,
+	n.serverConfig = n.config.P2P
+	n.serverConfig.PrivateKey = n.config.NodeKey()
+	n.serverConfig.Name = n.config.NodeName()
+	if n.serverConfig.StaticNodes == nil {
+		n.serverConfig.StaticNodes = n.config.StaticNodes()
+	}
+	if n.serverConfig.TrustedNodes == nil {
+		n.serverConfig.TrustedNodes = n.config.TrusterNodes()
+	}
+	if n.serverConfig.NodeDatabase == "" {
+		n.serverConfig.NodeDatabase = n.config.NodeDB()
 	}
 	running := &p2p.Server{Config: n.serverConfig}
-	glog.V(logger.Info).Infoln("instance:", n.serverConfig.Name)
+	log.Info("Starting peer-to-peer node", "instance", n.serverConfig.Name)
 
 	// Otherwise copy and specialize the P2P configuration
 	services := make(map[reflect.Type]Service)
@@ -301,7 +294,7 @@ func (n *Node) startInProc(apis []rpc.API) error {
 		if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
 			return err
 		}
-		glog.V(logger.Debug).Infof("InProc registered %T under '%s'", api.Service, api.Namespace)
+		log.Debug(fmt.Sprintf("InProc registered %T under '%s'", api.Service, api.Namespace))
 	}
 	n.inprocHandler = handler
 	return nil
@@ -327,7 +320,7 @@ func (n *Node) startIPC(apis []rpc.API) error {
 		if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
 			return err
 		}
-		glog.V(logger.Debug).Infof("IPC registered %T under '%s'", api.Service, api.Namespace)
+		log.Debug(fmt.Sprintf("IPC registered %T under '%s'", api.Service, api.Namespace))
 	}
 	// All APIs registered, start the IPC listener
 	var (
@@ -338,7 +331,7 @@ func (n *Node) startIPC(apis []rpc.API) error {
 		return err
 	}
 	go func() {
-		glog.V(logger.Info).Infof("IPC endpoint opened: %s", n.ipcEndpoint)
+		log.Info(fmt.Sprintf("IPC endpoint opened: %s", n.ipcEndpoint))
 
 		for {
 			conn, err := listener.Accept()
@@ -351,7 +344,7 @@ func (n *Node) startIPC(apis []rpc.API) error {
 					return
 				}
 				// Not closed, just some error; report and continue
-				glog.V(logger.Error).Infof("IPC accept failed: %v", err)
+				log.Error(fmt.Sprintf("IPC accept failed: %v", err))
 				continue
 			}
 			go handler.ServeCodec(rpc.NewJSONCodec(conn), rpc.OptionMethodInvocation|rpc.OptionSubscriptions)
@@ -370,7 +363,7 @@ func (n *Node) stopIPC() {
 		n.ipcListener.Close()
 		n.ipcListener = nil
 
-		glog.V(logger.Info).Infof("IPC endpoint closed: %s", n.ipcEndpoint)
+		log.Info(fmt.Sprintf("IPC endpoint closed: %s", n.ipcEndpoint))
 	}
 	if n.ipcHandler != nil {
 		n.ipcHandler.Stop()
@@ -379,7 +372,7 @@ func (n *Node) stopIPC() {
 }
 
 // startHTTP initializes and starts the HTTP RPC endpoint.
-func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors string) error {
+func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors []string) error {
 	// Short circuit if the HTTP endpoint isn't being exposed
 	if endpoint == "" {
 		return nil
@@ -396,7 +389,7 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 			if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
 				return err
 			}
-			glog.V(logger.Debug).Infof("HTTP registered %T under '%s'", api.Service, api.Namespace)
+			log.Debug(fmt.Sprintf("HTTP registered %T under '%s'", api.Service, api.Namespace))
 		}
 	}
 	// All APIs registered, start the HTTP listener
@@ -408,7 +401,7 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 		return err
 	}
 	go rpc.NewHTTPServer(cors, handler).Serve(listener)
-	glog.V(logger.Info).Infof("HTTP endpoint opened: http://%s", endpoint)
+	log.Info(fmt.Sprintf("HTTP endpoint opened: http://%s", endpoint))
 
 	// All listeners booted successfully
 	n.httpEndpoint = endpoint
@@ -424,7 +417,7 @@ func (n *Node) stopHTTP() {
 		n.httpListener.Close()
 		n.httpListener = nil
 
-		glog.V(logger.Info).Infof("HTTP endpoint closed: http://%s", n.httpEndpoint)
+		log.Info(fmt.Sprintf("HTTP endpoint closed: http://%s", n.httpEndpoint))
 	}
 	if n.httpHandler != nil {
 		n.httpHandler.Stop()
@@ -433,7 +426,7 @@ func (n *Node) stopHTTP() {
 }
 
 // startWS initializes and starts the websocket RPC endpoint.
-func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrigins string) error {
+func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrigins []string) error {
 	// Short circuit if the WS endpoint isn't being exposed
 	if endpoint == "" {
 		return nil
@@ -450,7 +443,7 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrig
 			if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
 				return err
 			}
-			glog.V(logger.Debug).Infof("WebSocket registered %T under '%s'", api.Service, api.Namespace)
+			log.Debug(fmt.Sprintf("WebSocket registered %T under '%s'", api.Service, api.Namespace))
 		}
 	}
 	// All APIs registered, start the HTTP listener
@@ -462,7 +455,7 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrig
 		return err
 	}
 	go rpc.NewWSServer(wsOrigins, handler).Serve(listener)
-	glog.V(logger.Info).Infof("WebSocket endpoint opened: ws://%s", endpoint)
+	log.Info(fmt.Sprintf("WebSocket endpoint opened: ws://%s", endpoint))
 
 	// All listeners booted successfully
 	n.wsEndpoint = endpoint
@@ -478,7 +471,7 @@ func (n *Node) stopWS() {
 		n.wsListener.Close()
 		n.wsListener = nil
 
-		glog.V(logger.Info).Infof("WebSocket endpoint closed: ws://%s", n.wsEndpoint)
+		log.Info(fmt.Sprintf("WebSocket endpoint closed: ws://%s", n.wsEndpoint))
 	}
 	if n.wsHandler != nil {
 		n.wsHandler.Stop()
@@ -543,6 +536,7 @@ func (n *Node) Stop() error {
 func (n *Node) Wait() {
 	n.lock.RLock()
 	if n.server == nil {
+		n.lock.RUnlock()
 		return
 	}
 	stop := n.stop

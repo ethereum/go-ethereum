@@ -19,21 +19,19 @@ package miner
 
 import (
 	"fmt"
-	"math/big"
 	"sync/atomic"
 
 	"github.com/ubiq/go-ubiq/accounts"
 	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/consensus"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/eth/downloader"
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/event"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/params"
-	"github.com/ubiq/go-ubiq/pow"
 )
 
 // Backend wraps all methods required for mining.
@@ -50,24 +48,24 @@ type Miner struct {
 
 	worker *worker
 
-	threads  int
 	coinbase common.Address
 	mining   int32
 	eth      Backend
-	pow      pow.PoW
+	engine   consensus.Engine
 
 	canStart    int32 // can start indicates whether we can start the mining operation
 	shouldStart int32 // should start indicates whether we should start after sync
 }
 
-func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, pow pow.PoW) *Miner {
+func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine) *Miner {
 	miner := &Miner{
 		eth:      eth,
 		mux:      mux,
-		pow:      pow,
-		worker:   newWorker(config, common.Address{}, eth, mux),
+		engine:   engine,
+		worker:   newWorker(config, engine, common.Address{}, eth, mux),
 		canStart: 1,
 	}
+	miner.Register(NewCpuAgent(eth.BlockChain(), engine))
 	go miner.update()
 
 	return miner
@@ -87,7 +85,7 @@ out:
 			if self.Mining() {
 				self.Stop()
 				atomic.StoreInt32(&self.shouldStart, 1)
-				glog.V(logger.Info).Infoln("Mining operation aborted due to sync operation")
+				log.Info("Mining aborted due to sync")
 			}
 		case downloader.DoneEvent, downloader.FailedEvent:
 			shouldStart := atomic.LoadInt32(&self.shouldStart) == 1
@@ -95,7 +93,7 @@ out:
 			atomic.StoreInt32(&self.canStart, 1)
 			atomic.StoreInt32(&self.shouldStart, 0)
 			if shouldStart {
-				self.Start(self.coinbase, self.threads)
+				self.Start(self.coinbase)
 			}
 			// unsubscribe. we're only interested in this event once
 			events.Unsubscribe()
@@ -105,35 +103,18 @@ out:
 	}
 }
 
-func (m *Miner) GasPrice() *big.Int {
-	return new(big.Int).Set(m.worker.gasPrice)
-}
-
-func (m *Miner) SetGasPrice(price *big.Int) {
-	// FIXME block tests set a nil gas price. Quick dirty fix
-	if price == nil {
-		return
-	}
-	m.worker.setGasPrice(price)
-}
-
-func (self *Miner) Start(coinbase common.Address, threads int) {
+func (self *Miner) Start(coinbase common.Address) {
 	atomic.StoreInt32(&self.shouldStart, 1)
 	self.worker.setEtherbase(coinbase)
 	self.coinbase = coinbase
-	self.threads = threads
 
 	if atomic.LoadInt32(&self.canStart) == 0 {
-		glog.V(logger.Info).Infoln("Can not start mining operation due to network sync (starts when finished)")
+		log.Info("Network syncing, will start miner afterwards")
 		return
 	}
 	atomic.StoreInt32(&self.mining, 1)
 
-	for i := 0; i < threads; i++ {
-		self.worker.register(NewCpuAgent(i, self.pow))
-	}
-
-	glog.V(logger.Info).Infof("Starting mining operation (CPU=%d TOT=%d)\n", threads, len(self.worker.agents))
+	log.Info("Starting mining operation")
 	self.worker.start()
 	self.worker.commitNewWork()
 }
@@ -160,18 +141,22 @@ func (self *Miner) Mining() bool {
 }
 
 func (self *Miner) HashRate() (tot int64) {
-	tot += self.pow.GetHashrate()
+	if pow, ok := self.engine.(consensus.PoW); ok {
+		tot += int64(pow.Hashrate())
+	}
 	// do we care this might race? is it worth we're rewriting some
 	// aspects of the worker/locking up agents so we can get an accurate
 	// hashrate?
 	for agent := range self.worker.agents {
-		tot += agent.GetHashRate()
+		if _, ok := agent.(*CpuAgent); !ok {
+			tot += agent.GetHashRate()
+		}
 	}
 	return
 }
 
 func (self *Miner) SetExtra(extra []byte) error {
-	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
+	if uint64(len(extra)) > params.MaximumExtraDataSize {
 		return fmt.Errorf("Extra exceeds max length. %d > %v", len(extra), params.MaximumExtraDataSize)
 	}
 	self.worker.setExtra(extra)

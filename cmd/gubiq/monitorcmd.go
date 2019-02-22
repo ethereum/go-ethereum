@@ -49,7 +49,7 @@ var (
 		Usage: "Refresh interval in seconds",
 	}
 	monitorCommand = cli.Command{
-		Action:    monitor,
+		Action:    utils.MigrateFlags(monitor), // keep track of migration progress
 		Name:      "monitor",
 		Usage:     "Monitor and visualize node metrics",
 		ArgsUsage: " ",

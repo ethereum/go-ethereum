@@ -22,14 +22,17 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ubiq/go-ubiq/params"
-	"github.com/ubiq/go-ubiq/rpc"
+)
+
+const (
+	ipcAPIs  = "admin:1.0 debug:1.0 eth:1.0 miner:1.0 net:1.0 personal:1.0 rpc:1.0 shh:1.0 txpool:1.0 web3:1.0"
+	httpAPIs = "eth:1.0 net:1.0 rpc:1.0 web3:1.0"
 )
 
 // Tests that a node embedded within a console can be started up properly and
@@ -44,29 +47,26 @@ func TestConsoleWelcome(t *testing.T) {
 		"console")
 
 	// Gather all the infos the welcome message needs to contain
-	gubiq.setTemplateFunc("goos", func() string { return runtime.GOOS })
-	gubiq.setTemplateFunc("gover", runtime.Version)
-	gubiq.setTemplateFunc("gubiqver", func() string { return utils.Version })
-	gubiq.setTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
-	gubiq.setTemplateFunc("apis", func() []string {
-		apis := append(strings.Split(rpc.DefaultIPCApis, ","), rpc.MetadataApi)
-		sort.Strings(apis)
-		return apis
-	})
+	gubiq.SetTemplateFunc("goos", func() string { return runtime.GOOS })
+	gubiq.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
+	gubiq.SetTemplateFunc("gover", runtime.Version)
+	gubiq.SetTemplateFunc("gubiqver", func() string { return params.Version })
+	gubiq.SetTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
+	gubiq.SetTemplateFunc("apis", func() string { return ipcAPIs })
 
 	// Verify the actual welcome message to the required template
-	gubiq.expect(`
+	gubiq.Expect(`
 Welcome to the Gubiq JavaScript console!
 
-instance: Gubiq/v{{gubiqver}}/{{goos}}/{{gover}}
+instance: Gubiq/v{{gubiqver}}/{{goos}}-{{goarch}}/{{gover}}
 coinbase: {{.Etherbase}}
 at block: 0 ({{niltime}})
  datadir: {{.Datadir}}
- modules:{{range apis}} {{.}}:1.0{{end}}
+ modules: {{apis}}
 
 > {{.InputLine "exit"}}
 `)
-	gubiq.expectExit()
+	gubiq.ExpectExit()
 }
 
 // Tests that a console can be attached to a running node via various means.
@@ -88,10 +88,10 @@ func TestIPCAttachWelcome(t *testing.T) {
 		"--etherbase", coinbase, "--shh", "--ipcpath", ipc)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
-	testAttachWelcome(t, gubiq, "ipc:"+ipc)
+	testAttachWelcome(t, gubiq, "ipc:"+ipc, ipcAPIs)
 
-	gubiq.interrupt()
-	gubiq.expectExit()
+	gubiq.Interrupt()
+	gubiq.ExpectExit()
 }
 
 func TestHTTPAttachWelcome(t *testing.T) {
@@ -102,10 +102,10 @@ func TestHTTPAttachWelcome(t *testing.T) {
 		"--etherbase", coinbase, "--rpc", "--rpcport", port)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
-	testAttachWelcome(t, gubiq, "http://localhost:"+port)
+	testAttachWelcome(t, gubiq, "http://localhost:"+port, httpAPIs)
 
-	gubiq.interrupt()
-	gubiq.expectExit()
+	gubiq.Interrupt()
+	gubiq.ExpectExit()
 }
 
 func TestWSAttachWelcome(t *testing.T) {
@@ -117,50 +117,42 @@ func TestWSAttachWelcome(t *testing.T) {
 		"--etherbase", coinbase, "--ws", "--wsport", port)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
-	testAttachWelcome(t, gubiq, "ws://localhost:"+port)
+	testAttachWelcome(t, gubiq, "ws://localhost:"+port, httpAPIs)
 
-	gubiq.interrupt()
-	gubiq.expectExit()
+	gubiq.Interrupt()
+	gubiq.ExpectExit()
 }
 
-func testAttachWelcome(t *testing.T, gubiq *testgubiq, endpoint string) {
+func testAttachWelcome(t *testing.T, gubiq *testgubiq, endpoint, apis string) {
 	// Attach to a running gubiq note and terminate immediately
 	attach := runGubiq(t, "attach", endpoint)
-	defer attach.expectExit()
-	attach.stdin.Close()
+	defer attach.ExpectExit()
+	attach.CloseStdin()
 
 	// Gather all the infos the welcome message needs to contain
-	attach.setTemplateFunc("goos", func() string { return runtime.GOOS })
-	attach.setTemplateFunc("gover", runtime.Version)
-	attach.setTemplateFunc("gubiqver", func() string { return utils.Version })
-	attach.setTemplateFunc("etherbase", func() string { return gubiq.Etherbase })
-	attach.setTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
-	attach.setTemplateFunc("ipc", func() bool { return strings.HasPrefix(endpoint, "ipc") })
-	attach.setTemplateFunc("datadir", func() string { return gubiq.Datadir })
-	attach.setTemplateFunc("apis", func() []string {
-		var apis []string
-		if strings.HasPrefix(endpoint, "ipc") {
-			apis = append(strings.Split(rpc.DefaultIPCApis, ","), rpc.MetadataApi)
-		} else {
-			apis = append(strings.Split(rpc.DefaultHTTPApis, ","), rpc.MetadataApi)
-		}
-		sort.Strings(apis)
-		return apis
-	})
+	attach.SetTemplateFunc("goos", func() string { return runtime.GOOS })
+	attach.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
+	attach.SetTemplateFunc("gover", runtime.Version)
+	attach.SetTemplateFunc("gubiqver", func() string { return params.Version })
+	attach.SetTemplateFunc("etherbase", func() string { return gubiq.Etherbase })
+	attach.SetTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
+	attach.SetTemplateFunc("ipc", func() bool { return strings.HasPrefix(endpoint, "ipc") })
+	attach.SetTemplateFunc("datadir", func() string { return gubiq.Datadir })
+	attach.SetTemplateFunc("apis", func() string { return apis })
 
 	// Verify the actual welcome message to the required template
-	attach.expect(`
+	attach.Expect(`
 Welcome to the Gubiq JavaScript console!
 
-instance: Gubiq/v{{gubiqver}}/{{goos}}/{{gover}}
+instance: Gubiq/v{{gubiqver}}/{{goos}}-{{goarch}}/{{gover}}
 coinbase: {{etherbase}}
 at block: 0 ({{niltime}}){{if ipc}}
  datadir: {{datadir}}{{end}}
- modules:{{range apis}} {{.}}:1.0{{end}}
+ modules: {{apis}}
 
 > {{.InputLine "exit" }}
 `)
-	attach.expectExit()
+	attach.ExpectExit()
 }
 
 // trulyRandInt generates a crypto random integer used by the console tests to

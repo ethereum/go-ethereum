@@ -18,6 +18,7 @@
 package les
 
 import (
+	"fmt"
 	"io"
 	"math"
 	"math/rand"
@@ -28,8 +29,7 @@ import (
 
 	"github.com/ubiq/go-ubiq/common/mclock"
 	"github.com/ubiq/go-ubiq/ethdb"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/p2p"
 	"github.com/ubiq/go-ubiq/p2p/discover"
 	"github.com/ubiq/go-ubiq/p2p/discv5"
@@ -102,6 +102,8 @@ type serverPool struct {
 	wg     *sync.WaitGroup
 	connWg sync.WaitGroup
 
+	topic discv5.Topic
+
 	discSetPeriod chan time.Duration
 	discNodes     chan *discv5.Node
 	discLookups   chan bool
@@ -118,11 +120,9 @@ type serverPool struct {
 }
 
 // newServerPool creates a new serverPool instance
-func newServerPool(db ethdb.Database, dbPrefix []byte, server *p2p.Server, topic discv5.Topic, quit chan struct{}, wg *sync.WaitGroup) *serverPool {
+func newServerPool(db ethdb.Database, quit chan struct{}, wg *sync.WaitGroup) *serverPool {
 	pool := &serverPool{
 		db:           db,
-		dbKey:        append(dbPrefix, []byte(topic)...),
-		server:       server,
 		quit:         quit,
 		wg:           wg,
 		entries:      make(map[discover.NodeID]*poolEntry),
@@ -135,19 +135,25 @@ func newServerPool(db ethdb.Database, dbPrefix []byte, server *p2p.Server, topic
 	}
 	pool.knownQueue = newPoolEntryQueue(maxKnownEntries, pool.removeEntry)
 	pool.newQueue = newPoolEntryQueue(maxNewEntries, pool.removeEntry)
-	wg.Add(1)
-	pool.loadNodes()
-	pool.checkDial()
+	return pool
+}
 
+func (pool *serverPool) start(server *p2p.Server, topic discv5.Topic) {
+	pool.server = server
+	pool.topic = topic
+	pool.dbKey = append([]byte("serverPool/"), []byte(topic)...)
+	pool.wg.Add(1)
+	pool.loadNodes()
+
+	go pool.eventLoop()
+
+	pool.checkDial()
 	if pool.server.DiscV5 != nil {
 		pool.discSetPeriod = make(chan time.Duration, 1)
 		pool.discNodes = make(chan *discv5.Node, 100)
 		pool.discLookups = make(chan bool, 100)
-		go pool.server.DiscV5.SearchTopic(topic, pool.discSetPeriod, pool.discNodes, pool.discLookups)
+		go pool.server.DiscV5.SearchTopic(pool.topic, pool.discSetPeriod, pool.discNodes, pool.discLookups)
 	}
-
-	go pool.eventLoop()
-	return pool
 }
 
 // connect should be called upon any incoming connection. If the connection has been
@@ -162,7 +168,7 @@ func (pool *serverPool) connect(p *peer, ip net.IP, port uint16) *poolEntry {
 	if entry == nil {
 		entry = pool.findOrNewNode(p.ID(), ip, port)
 	}
-	glog.V(logger.Debug).Infof("connecting to %v, state: %v", p.id, entry.state)
+	p.Log().Debug("Connecting to new peer", "state", entry.state)
 	if entry.state == psConnected || entry.state == psRegistered {
 		return nil
 	}
@@ -184,7 +190,7 @@ func (pool *serverPool) connect(p *peer, ip net.IP, port uint16) *poolEntry {
 
 // registered should be called after a successful handshake
 func (pool *serverPool) registered(entry *poolEntry) {
-	glog.V(logger.Debug).Infof("registered %v", entry.id.String())
+	log.Debug("Registered new entry", "enode", entry.id)
 	pool.lock.Lock()
 	defer pool.lock.Unlock()
 
@@ -202,7 +208,7 @@ func (pool *serverPool) registered(entry *poolEntry) {
 // can be updated optionally (not updated if no registration happened, in this case
 // only connection statistics are updated, just like in case of timeout)
 func (pool *serverPool) disconnect(entry *poolEntry) {
-	glog.V(logger.Debug).Infof("disconnected %v", entry.id.String())
+	log.Debug("Disconnected old entry", "enode", entry.id)
 	pool.lock.Lock()
 	defer pool.lock.Unlock()
 
@@ -265,82 +271,6 @@ func (pool *serverPool) adjustResponseTime(entry *poolEntry, time time.Duration,
 		pool.adjustStats <- poolStatAdjust{pseResponseTimeout, entry, time}
 	} else {
 		pool.adjustStats <- poolStatAdjust{pseResponseTime, entry, time}
-	}
-}
-
-type selectPeerItem struct {
-	peer   *peer
-	weight int64
-	wait   time.Duration
-}
-
-func (sp selectPeerItem) Weight() int64 {
-	return sp.weight
-}
-
-// selectPeer selects a suitable peer for a request, also returning a necessary waiting time to perform the request
-// and a "locked" flag meaning that the request has been assigned to the given peer and its execution is guaranteed
-// after the given waiting time. If locked flag is false, selectPeer should be called again after the waiting time.
-func (pool *serverPool) selectPeer(reqID uint64, canSend func(*peer) (bool, time.Duration)) (*peer, time.Duration, bool) {
-	pool.lock.Lock()
-	type selectPeer struct {
-		peer         *peer
-		rstat, tstat float64
-	}
-	var list []selectPeer
-	sel := newWeightedRandomSelect()
-	for _, entry := range pool.entries {
-		if entry.state == psRegistered {
-			if !entry.peer.fcServer.IsAssigned() {
-				list = append(list, selectPeer{entry.peer, entry.responseStats.recentAvg(), entry.timeoutStats.recentAvg()})
-			}
-		}
-	}
-	pool.lock.Unlock()
-
-	for _, sp := range list {
-		ok, wait := canSend(sp.peer)
-		if ok {
-			w := int64(1000000000 * (peerSelectMinWeight + math.Exp(-(sp.rstat+float64(wait))/float64(responseScoreTC))*math.Pow((1-sp.tstat), timeoutPow)))
-			sel.update(selectPeerItem{peer: sp.peer, weight: w, wait: wait})
-		}
-	}
-	choice := sel.choose()
-	if choice == nil {
-		return nil, 0, false
-	}
-	peer, wait := choice.(selectPeerItem).peer, choice.(selectPeerItem).wait
-	locked := false
-	if wait < time.Millisecond*100 {
-		if peer.fcServer.AssignRequest(reqID) {
-			ok, w := canSend(peer)
-			wait = time.Duration(w)
-			if ok && wait < time.Millisecond*100 {
-				locked = true
-			} else {
-				peer.fcServer.DeassignRequest(reqID)
-				wait = time.Millisecond * 100
-			}
-		}
-	} else {
-		wait = time.Millisecond * 100
-	}
-	return peer, wait, locked
-}
-
-// selectPeer selects a suitable peer for a request, waiting until an assignment to
-// the request is guaranteed or the process is aborted.
-func (pool *serverPool) selectPeerWait(reqID uint64, canSend func(*peer) (bool, time.Duration), abort <-chan struct{}) *peer {
-	for {
-		peer, wait, locked := pool.selectPeer(reqID, canSend)
-		if locked {
-			return peer
-		}
-		select {
-		case <-abort:
-			return nil
-		case <-time.After(wait):
-		}
 	}
 }
 
@@ -418,7 +348,7 @@ func (pool *serverPool) findOrNewNode(id discover.NodeID, ip net.IP, port uint16
 	now := mclock.Now()
 	entry := pool.entries[id]
 	if entry == nil {
-		glog.V(logger.Debug).Infof("discovered %v", id.String())
+		log.Debug("Discovered new entry", "id", id)
 		entry = &poolEntry{
 			id:         id,
 			addr:       make(map[string]*poolEntryAddress),
@@ -459,11 +389,15 @@ func (pool *serverPool) loadNodes() {
 	var list []*poolEntry
 	err = rlp.DecodeBytes(enc, &list)
 	if err != nil {
-		glog.V(logger.Debug).Infof("node list decode error: %v", err)
+		log.Debug("Failed to decode node list", "err", err)
 		return
 	}
 	for _, e := range list {
-		glog.V(logger.Debug).Infof("loaded server stats %016x  fails: %v  connStats: %v / %v  delayStats: %v / %v  responseStats: %v / %v  timeoutStats: %v / %v", e.id[0:8], e.lastConnected.fails, e.connectStats.avg, e.connectStats.weight, time.Duration(e.delayStats.avg), e.delayStats.weight, time.Duration(e.responseStats.avg), e.responseStats.weight, e.timeoutStats.avg, e.timeoutStats.weight)
+		log.Debug("Loaded server stats", "id", e.id, "fails", e.lastConnected.fails,
+			"conn", fmt.Sprintf("%v/%v", e.connectStats.avg, e.connectStats.weight),
+			"delay", fmt.Sprintf("%v/%v", time.Duration(e.delayStats.avg), e.delayStats.weight),
+			"response", fmt.Sprintf("%v/%v", time.Duration(e.responseStats.avg), e.responseStats.weight),
+			"timeout", fmt.Sprintf("%v/%v", e.timeoutStats.avg, e.timeoutStats.weight))
 		pool.entries[e.id] = e
 		pool.knownQueue.setLatest(e)
 		pool.knownSelect.update((*knownEntry)(e))
@@ -557,7 +491,7 @@ func (pool *serverPool) checkDial() {
 
 // dial initiates a new connection
 func (pool *serverPool) dial(entry *poolEntry, knownSelected bool) {
-	if entry.state != psNotConnected {
+	if pool.server == nil || entry.state != psNotConnected {
 		return
 	}
 	entry.state = psDialed
@@ -568,7 +502,7 @@ func (pool *serverPool) dial(entry *poolEntry, knownSelected bool) {
 		pool.newSelected++
 	}
 	addr := entry.addrSelect.choose().(*poolEntryAddress)
-	glog.V(logger.Debug).Infof("dialing %v out of %v, known: %v", entry.id.String()+"@"+addr.strKey(), len(entry.addr), knownSelected)
+	log.Debug("Dialing new peer", "lesaddr", entry.id.String()+"@"+addr.strKey(), "set", len(entry.addr), "known", knownSelected)
 	entry.dialed = addr
 	go func() {
 		pool.server.AddPeer(discover.NewNode(entry.id, addr.ip, addr.port, addr.port))
@@ -589,7 +523,7 @@ func (pool *serverPool) checkDialTimeout(entry *poolEntry) {
 	if entry.state != psDialed {
 		return
 	}
-	glog.V(logger.Debug).Infof("timeout %v", entry.id.String()+"@"+entry.dialed.strKey())
+	log.Debug("Dial timeout", "lesaddr", entry.id.String()+"@"+entry.dialed.strKey())
 	entry.state = psNotConnected
 	if entry.knownSelected {
 		pool.knownSelected--

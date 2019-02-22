@@ -19,40 +19,169 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"sync"
+	"time"
 
 	"github.com/ubiq/go-ubiq/common"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/swarm/storage"
 )
 
 const (
-	manifestType = "application/bzz-manifest+json"
+	ManifestType = "application/bzz-manifest+json"
 )
+
+// Manifest represents a swarm manifest
+type Manifest struct {
+	Entries []ManifestEntry `json:"entries,omitempty"`
+}
+
+// ManifestEntry represents an entry in a swarm manifest
+type ManifestEntry struct {
+	Hash        string    `json:"hash,omitempty"`
+	Path        string    `json:"path,omitempty"`
+	ContentType string    `json:"contentType,omitempty"`
+	Mode        int64     `json:"mode,omitempty"`
+	Size        int64     `json:"size,omitempty"`
+	ModTime     time.Time `json:"mod_time,omitempty"`
+	Status      int       `json:"status,omitempty"`
+}
+
+// ManifestList represents the result of listing files in a manifest
+type ManifestList struct {
+	CommonPrefixes []string         `json:"common_prefixes,omitempty"`
+	Entries        []*ManifestEntry `json:"entries,omitempty"`
+}
+
+// NewManifest creates and stores a new, empty manifest
+func (a *Api) NewManifest() (storage.Key, error) {
+	var manifest Manifest
+	data, err := json.Marshal(&manifest)
+	if err != nil {
+		return nil, err
+	}
+	return a.Store(bytes.NewReader(data), int64(len(data)), nil)
+}
+
+// ManifestWriter is used to add and remove entries from an underlying manifest
+type ManifestWriter struct {
+	api   *Api
+	trie  *manifestTrie
+	quitC chan bool
+}
+
+func (a *Api) NewManifestWriter(key storage.Key, quitC chan bool) (*ManifestWriter, error) {
+	trie, err := loadManifest(a.dpa, key, quitC)
+	if err != nil {
+		return nil, fmt.Errorf("error loading manifest %s: %s", key, err)
+	}
+	return &ManifestWriter{a, trie, quitC}, nil
+}
+
+// AddEntry stores the given data and adds the resulting key to the manifest
+func (m *ManifestWriter) AddEntry(data io.Reader, e *ManifestEntry) (storage.Key, error) {
+	key, err := m.api.Store(data, e.Size, nil)
+	if err != nil {
+		return nil, err
+	}
+	entry := newManifestTrieEntry(e, nil)
+	entry.Hash = key.String()
+	m.trie.addEntry(entry, m.quitC)
+	return key, nil
+}
+
+// RemoveEntry removes the given path from the manifest
+func (m *ManifestWriter) RemoveEntry(path string) error {
+	m.trie.deleteEntry(path, m.quitC)
+	return nil
+}
+
+// Store stores the manifest, returning the resulting storage key
+func (m *ManifestWriter) Store() (storage.Key, error) {
+	return m.trie.hash, m.trie.recalcAndStore()
+}
+
+// ManifestWalker is used to recursively walk the entries in the manifest and
+// all of its submanifests
+type ManifestWalker struct {
+	api   *Api
+	trie  *manifestTrie
+	quitC chan bool
+}
+
+func (a *Api) NewManifestWalker(key storage.Key, quitC chan bool) (*ManifestWalker, error) {
+	trie, err := loadManifest(a.dpa, key, quitC)
+	if err != nil {
+		return nil, fmt.Errorf("error loading manifest %s: %s", key, err)
+	}
+	return &ManifestWalker{a, trie, quitC}, nil
+}
+
+// SkipManifest is used as a return value from WalkFn to indicate that the
+// manifest should be skipped
+var SkipManifest = errors.New("skip this manifest")
+
+// WalkFn is the type of function called for each entry visited by a recursive
+// manifest walk
+type WalkFn func(entry *ManifestEntry) error
+
+// Walk recursively walks the manifest calling walkFn for each entry in the
+// manifest, including submanifests
+func (m *ManifestWalker) Walk(walkFn WalkFn) error {
+	return m.walk(m.trie, "", walkFn)
+}
+
+func (m *ManifestWalker) walk(trie *manifestTrie, prefix string, walkFn WalkFn) error {
+	for _, entry := range trie.entries {
+		if entry == nil {
+			continue
+		}
+		entry.Path = prefix + entry.Path
+		err := walkFn(&entry.ManifestEntry)
+		if err != nil {
+			if entry.ContentType == ManifestType && err == SkipManifest {
+				continue
+			}
+			return err
+		}
+		if entry.ContentType != ManifestType {
+			continue
+		}
+		if err := trie.loadSubTrie(entry, nil); err != nil {
+			return err
+		}
+		if err := m.walk(entry.subtrie, entry.Path, walkFn); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 type manifestTrie struct {
 	dpa     *storage.DPA
-	entries [257]*manifestTrieEntry // indexed by first character of path, entries[256] is the empty path entry
+	entries [257]*manifestTrieEntry // indexed by first character of basePath, entries[256] is the empty basePath entry
 	hash    storage.Key             // if hash != nil, it is stored
 }
 
-type manifestJSON struct {
-	Entries []*manifestTrieEntry `json:"entries"`
+func newManifestTrieEntry(entry *ManifestEntry, subtrie *manifestTrie) *manifestTrieEntry {
+	return &manifestTrieEntry{
+		ManifestEntry: *entry,
+		subtrie:       subtrie,
+	}
 }
 
 type manifestTrieEntry struct {
-	Path        string `json:"path"`
-	Hash        string `json:"hash"` // for manifest content type, empty until subtrie is evaluated
-	ContentType string `json:"contentType"`
-	Status      int    `json:"status"`
-	subtrie     *manifestTrie
+	ManifestEntry
+
+	subtrie *manifestTrie
 }
 
 func loadManifest(dpa *storage.DPA, hash storage.Key, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 
-	glog.V(logger.Detail).Infof("manifest lookup key: '%v'.", hash.Log())
+	log.Trace(fmt.Sprintf("manifest lookup key: '%v'.", hash.Log()))
 	// retrieve manifest via DPA
 	manifestReader := dpa.Retrieve(hash)
 	return readManifest(manifestReader, hash, dpa, quitC)
@@ -70,23 +199,25 @@ func readManifest(manifestReader storage.LazySectionReader, hash storage.Key, dp
 	manifestData := make([]byte, size)
 	read, err := manifestReader.Read(manifestData)
 	if int64(read) < size {
-		glog.V(logger.Detail).Infof("Manifest %v not found.", hash.Log())
+		log.Trace(fmt.Sprintf("Manifest %v not found.", hash.Log()))
 		if err == nil {
 			err = fmt.Errorf("Manifest retrieval cut short: read %v, expect %v", read, size)
 		}
 		return
 	}
 
-	glog.V(logger.Detail).Infof("Manifest %v retrieved", hash.Log())
-	man := manifestJSON{}
+	log.Trace(fmt.Sprintf("Manifest %v retrieved", hash.Log()))
+	var man struct {
+		Entries []*manifestTrieEntry `json:"entries"`
+	}
 	err = json.Unmarshal(manifestData, &man)
 	if err != nil {
 		err = fmt.Errorf("Manifest %v is malformed: %v", hash.Log(), err)
-		glog.V(logger.Detail).Infof("%v", err)
+		log.Trace(fmt.Sprintf("%v", err))
 		return
 	}
 
-	glog.V(logger.Detail).Infof("Manifest %v has %d entries.", hash.Log(), len(man.Entries))
+	log.Trace(fmt.Sprintf("Manifest %v has %d entries.", hash.Log(), len(man.Entries)))
 
 	trie = &manifestTrie{
 		dpa: dpa,
@@ -106,18 +237,18 @@ func (self *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
 	}
 
 	b := byte(entry.Path[0])
-	if (self.entries[b] == nil) || (self.entries[b].Path == entry.Path) {
+	oldentry := self.entries[b]
+	if (oldentry == nil) || (oldentry.Path == entry.Path && oldentry.ContentType != ManifestType) {
 		self.entries[b] = entry
 		return
 	}
 
-	oldentry := self.entries[b]
 	cpl := 0
 	for (len(entry.Path) > cpl) && (len(oldentry.Path) > cpl) && (entry.Path[cpl] == oldentry.Path[cpl]) {
 		cpl++
 	}
 
-	if (oldentry.ContentType == manifestType) && (cpl == len(oldentry.Path)) {
+	if (oldentry.ContentType == ManifestType) && (cpl == len(oldentry.Path)) {
 		if self.loadSubTrie(oldentry, quitC) != nil {
 			return
 		}
@@ -137,12 +268,10 @@ func (self *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
 	subtrie.addEntry(entry, quitC)
 	subtrie.addEntry(oldentry, quitC)
 
-	self.entries[b] = &manifestTrieEntry{
+	self.entries[b] = newManifestTrieEntry(&ManifestEntry{
 		Path:        commonPrefix,
-		Hash:        "",
-		ContentType: manifestType,
-		subtrie:     subtrie,
-	}
+		ContentType: ManifestType,
+	}, subtrie)
 }
 
 func (self *manifestTrie) getCountLast() (cnt int, entry *manifestTrieEntry) {
@@ -174,7 +303,7 @@ func (self *manifestTrie) deleteEntry(path string, quitC chan bool) {
 	}
 
 	epl := len(entry.Path)
-	if (entry.ContentType == manifestType) && (len(path) >= epl) && (path[:epl] == entry.Path) {
+	if (entry.ContentType == ManifestType) && (len(path) >= epl) && (path[:epl] == entry.Path) {
 		if self.loadSubTrie(entry, quitC) != nil {
 			return
 		}
@@ -199,7 +328,7 @@ func (self *manifestTrie) recalcAndStore() error {
 	var buffer bytes.Buffer
 	buffer.WriteString(`{"entries":[`)
 
-	list := &manifestJSON{}
+	list := &Manifest{}
 	for _, entry := range self.entries {
 		if entry != nil {
 			if entry.Hash == "" { // TODO: paralellize
@@ -209,8 +338,9 @@ func (self *manifestTrie) recalcAndStore() error {
 				}
 				entry.Hash = entry.subtrie.hash.String()
 			}
-			list.Entries = append(list.Entries, entry)
+			list.Entries = append(list.Entries, entry.ManifestEntry)
 		}
+
 	}
 
 	manifest, err := json.Marshal(list)
@@ -255,7 +385,7 @@ func (self *manifestTrie) listWithPrefixInt(prefix, rp string, quitC chan bool, 
 		entry := self.entries[i]
 		if entry != nil {
 			epl := len(entry.Path)
-			if entry.ContentType == manifestType {
+			if entry.ContentType == ManifestType {
 				l := plen
 				if epl < l {
 					l = epl
@@ -286,7 +416,7 @@ func (self *manifestTrie) listWithPrefix(prefix string, quitC chan bool, cb func
 
 func (self *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *manifestTrieEntry, pos int) {
 
-	glog.V(logger.Detail).Infof("findPrefixOf(%s)", path)
+	log.Trace(fmt.Sprintf("findPrefixOf(%s)", path))
 
 	if len(path) == 0 {
 		return self.entries[256], 0
@@ -298,10 +428,10 @@ func (self *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *man
 		return self.entries[256], 0
 	}
 	epl := len(entry.Path)
-	glog.V(logger.Detail).Infof("path = %v  entry.Path = %v  epl = %v", path, entry.Path, epl)
+	log.Trace(fmt.Sprintf("path = %v  entry.Path = %v  epl = %v", path, entry.Path, epl))
 	if (len(path) >= epl) && (path[:epl] == entry.Path) {
-		glog.V(logger.Detail).Infof("entry.ContentType = %v", entry.ContentType)
-		if entry.ContentType == manifestType {
+		log.Trace(fmt.Sprintf("entry.ContentType = %v", entry.ContentType))
+		if entry.ContentType == ManifestType {
 			err := self.loadSubTrie(entry, quitC)
 			if err != nil {
 				return nil, 0

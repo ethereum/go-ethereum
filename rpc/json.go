@@ -26,16 +26,15 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 )
 
 const (
-	jsonrpcVersion         = "2.0"
-	serviceMethodSeparator = "_"
-	subscribeMethod        = "eth_subscribe"
-	unsubscribeMethod      = "eth_unsubscribe"
-	notificationMethod     = "eth_subscription"
+	jsonrpcVersion           = "2.0"
+	serviceMethodSeparator   = "_"
+	subscribeMethodSuffix    = "_subscribe"
+	unsubscribeMethodSuffix  = "_unsubscribe"
+	notificationMethodSuffix = "_subscription"
 )
 
 type jsonRequest struct {
@@ -165,27 +164,26 @@ func parseRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, Error) {
 	}
 
 	// subscribe are special, they will always use `subscribeMethod` as first param in the payload
-	if in.Method == subscribeMethod {
+	if strings.HasSuffix(in.Method, subscribeMethodSuffix) {
 		reqs := []rpcRequest{{id: &in.Id, isPubSub: true}}
 		if len(in.Payload) > 0 {
 			// first param must be subscription name
 			var subscribeMethod [1]string
 			if err := json.Unmarshal(in.Payload, &subscribeMethod); err != nil {
-				glog.V(logger.Debug).Infof("Unable to parse subscription method: %v\n", err)
+				log.Debug(fmt.Sprintf("Unable to parse subscription method: %v\n", err))
 				return nil, false, &invalidRequestError{"Unable to parse subscription request"}
 			}
 
-			// all subscriptions are made on the eth service
-			reqs[0].service, reqs[0].method = "eth", subscribeMethod[0]
+			reqs[0].service, reqs[0].method = strings.TrimSuffix(in.Method, subscribeMethodSuffix), subscribeMethod[0]
 			reqs[0].params = in.Payload
 			return reqs, false, nil
 		}
 		return nil, false, &invalidRequestError{"Unable to parse subscription request"}
 	}
 
-	if in.Method == unsubscribeMethod {
+	if strings.HasSuffix(in.Method, unsubscribeMethodSuffix) {
 		return []rpcRequest{{id: &in.Id, isPubSub: true,
-			method: unsubscribeMethod, params: in.Payload}}, false, nil
+			method: in.Method, params: in.Payload}}, false, nil
 	}
 
 	elems := strings.Split(in.Method, serviceMethodSeparator)
@@ -217,19 +215,18 @@ func parseBatchRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, Error) 
 
 		id := &in[i].Id
 
-		// subscribe are special, they will always use `subscribeMethod` as first param in the payload
-		if r.Method == subscribeMethod {
+		// subscribe are special, they will always use `subscriptionMethod` as first param in the payload
+		if strings.HasSuffix(r.Method, subscribeMethodSuffix) {
 			requests[i] = rpcRequest{id: id, isPubSub: true}
 			if len(r.Payload) > 0 {
 				// first param must be subscription name
 				var subscribeMethod [1]string
 				if err := json.Unmarshal(r.Payload, &subscribeMethod); err != nil {
-					glog.V(logger.Debug).Infof("Unable to parse subscription method: %v\n", err)
+					log.Debug(fmt.Sprintf("Unable to parse subscription method: %v\n", err))
 					return nil, false, &invalidRequestError{"Unable to parse subscription request"}
 				}
 
-				// all subscriptions are made on the eth service
-				requests[i].service, requests[i].method = "eth", subscribeMethod[0]
+				requests[i].service, requests[i].method = strings.TrimSuffix(r.Method, subscribeMethodSuffix), subscribeMethod[0]
 				requests[i].params = r.Payload
 				continue
 			}
@@ -237,8 +234,8 @@ func parseBatchRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, Error) 
 			return nil, true, &invalidRequestError{"Unable to parse (un)subscribe request arguments"}
 		}
 
-		if r.Method == unsubscribeMethod {
-			requests[i] = rpcRequest{id: id, isPubSub: true, method: unsubscribeMethod, params: r.Payload}
+		if strings.HasSuffix(r.Method, unsubscribeMethodSuffix) {
+			requests[i] = rpcRequest{id: id, isPubSub: true, method: r.Method, params: r.Payload}
 			continue
 		}
 
@@ -326,13 +323,13 @@ func (c *jsonCodec) CreateErrorResponseWithInfo(id interface{}, err Error, info 
 }
 
 // CreateNotification will create a JSON-RPC notification with the given subscription id and event as params.
-func (c *jsonCodec) CreateNotification(subid string, event interface{}) interface{} {
+func (c *jsonCodec) CreateNotification(subid, namespace string, event interface{}) interface{} {
 	if isHexNum(reflect.TypeOf(event)) {
-		return &jsonNotification{Version: jsonrpcVersion, Method: notificationMethod,
+		return &jsonNotification{Version: jsonrpcVersion, Method: namespace + notificationMethodSuffix,
 			Params: jsonSubscription{Subscription: subid, Result: fmt.Sprintf(`%#x`, event)}}
 	}
 
-	return &jsonNotification{Version: jsonrpcVersion, Method: notificationMethod,
+	return &jsonNotification{Version: jsonrpcVersion, Method: namespace + notificationMethodSuffix,
 		Params: jsonSubscription{Subscription: subid, Result: event}}
 }
 

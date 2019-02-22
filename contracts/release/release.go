@@ -30,8 +30,7 @@ import (
 	"github.com/ubiq/go-ubiq/eth"
 	"github.com/ubiq/go-ubiq/internal/ethapi"
 	"github.com/ubiq/go-ubiq/les"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/node"
 	"github.com/ubiq/go-ubiq/p2p"
 	"github.com/ubiq/go-ubiq/rpc"
@@ -137,9 +136,9 @@ func (r *ReleaseService) checkVersion() {
 	version, err := r.oracle.CurrentVersion(opts)
 	if err != nil {
 		if err == bind.ErrNoCode {
-			glog.V(logger.Debug).Infof("Release oracle not found at %x", r.config.Oracle)
+			log.Debug("Release oracle not found", "contract", r.config.Oracle)
 		} else {
-			glog.V(logger.Error).Infof("Failed to retrieve current release: %v", err)
+			log.Error("Failed to retrieve current release", "err", err)
 		}
 		return
 	}
@@ -150,15 +149,16 @@ func (r *ReleaseService) checkVersion() {
 
 		warning := fmt.Sprintf("Client v%d.%d.%d-%x seems older than the latest upstream release v%d.%d.%d-%x",
 			r.config.Major, r.config.Minor, r.config.Patch, r.config.Commit[:4], version.Major, version.Minor, version.Patch, version.Commit[:4])
-		howtofix := fmt.Sprintf("Please check https://github.com/ethereum/go-ethereum/releases for new releases")
+		howtofix := fmt.Sprintf("Please check https://github.com/ubiq/go-ubiq/releases for new releases")
 		separator := strings.Repeat("-", len(warning))
 
-		glog.V(logger.Warn).Info(separator)
-		glog.V(logger.Warn).Info(warning)
-		glog.V(logger.Warn).Info(howtofix)
-		glog.V(logger.Warn).Info(separator)
+		log.Warn(separator)
+		log.Warn(warning)
+		log.Warn(howtofix)
+		log.Warn(separator)
 	} else {
-		glog.V(logger.Debug).Infof("Client v%d.%d.%d-%x seems up to date with upstream v%d.%d.%d-%x",
-			r.config.Major, r.config.Minor, r.config.Patch, r.config.Commit[:4], version.Major, version.Minor, version.Patch, version.Commit[:4])
+		log.Debug("Client seems up to date with upstream",
+			"local", fmt.Sprintf("v%d.%d.%d-%x", r.config.Major, r.config.Minor, r.config.Patch, r.config.Commit[:4]),
+			"upstream", fmt.Sprintf("v%d.%d.%d-%x", version.Major, version.Minor, version.Patch, version.Commit[:4]))
 	}
 }

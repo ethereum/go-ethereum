@@ -218,6 +218,7 @@ var encTests = []encTest{
 	{val: &tailRaw{A: 1, Tail: []RawValue{unhex("02")}}, output: "C20102"},
 	{val: &tailRaw{A: 1, Tail: []RawValue{}}, output: "C101"},
 	{val: &tailRaw{A: 1, Tail: nil}, output: "C101"},
+	{val: &hasIgnoredField{A: 1, B: 2, C: 3}, output: "C20103"},
 
 	// nil
 	{val: (*uint)(nil), output: "80"},

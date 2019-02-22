@@ -18,109 +18,37 @@ package tests
 
 import (
 	"math/big"
-	"path/filepath"
 	"testing"
 
 	"github.com/ubiq/go-ubiq/params"
 )
 
-func TestTransactions(t *testing.T) {
-	config := &params.ChainConfig{}
-	err := RunTransactionTests(config, filepath.Join(transactionTestDir, "ttTransactionTest.json"), TransSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
+func TestTransaction(t *testing.T) {
+	t.Parallel()
 
-func TestWrongRLPTransactions(t *testing.T) {
-	config := &params.ChainConfig{}
-	err := RunTransactionTests(config, filepath.Join(transactionTestDir, "ttWrongRLPTransaction.json"), TransSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func Test10MBTransactions(t *testing.T) {
-	config := &params.ChainConfig{}
-	err := RunTransactionTests(config, filepath.Join(transactionTestDir, "tt10mbDataField.json"), TransSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-// homestead tests
-func TestHomesteadTransactions(t *testing.T) {
-	config := &params.ChainConfig{
+	txt := new(testMatcher)
+	txt.config(`^Homestead/`, params.ChainConfig{
 		HomesteadBlock: big.NewInt(0),
-	}
-	err := RunTransactionTests(config, filepath.Join(transactionTestDir, "Homestead", "ttTransactionTest.json"), TransSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestHomesteadWrongRLPTransactions(t *testing.T) {
-	config := &params.ChainConfig{
+	})
+	txt.config(`^EIP155/`, params.ChainConfig{
 		HomesteadBlock: big.NewInt(0),
-	}
-	err := RunTransactionTests(config, filepath.Join(transactionTestDir, "Homestead", "ttWrongRLPTransaction.json"), TransSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestHomestead10MBTransactions(t *testing.T) {
-	config := &params.ChainConfig{
-		HomesteadBlock: big.NewInt(0),
-	}
-	err := RunTransactionTests(config, filepath.Join(transactionTestDir, "Homestead", "tt10mbDataField.json"), TransSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestHomesteadVitalik(t *testing.T) {
-	config := &params.ChainConfig{
-		HomesteadBlock: big.NewInt(0),
-	}
-	err := RunTransactionTests(config, filepath.Join(transactionTestDir, "Homestead", "ttTransactionTestEip155VitaliksTests.json"), TransSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestTxEIP155Transaction(t *testing.T) {
-	config := &params.ChainConfig{
-		ChainId:        big.NewInt(1),
-		HomesteadBlock: big.NewInt(0),
+		EIP150Block:    big.NewInt(0),
 		EIP155Block:    big.NewInt(0),
-	}
-	err := RunTransactionTests(config, filepath.Join(transactionTestDir, "EIP155", "ttTransactionTest.json"), TransSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestTxEIP155VitaliksTests(t *testing.T) {
-	config := &params.ChainConfig{
+		EIP158Block:    big.NewInt(0),
 		ChainId:        big.NewInt(1),
-		HomesteadBlock: big.NewInt(0),
-		EIP155Block:    big.NewInt(0),
-	}
-	err := RunTransactionTests(config, filepath.Join(transactionTestDir, "EIP155", "ttTransactionTestEip155VitaliksTests.json"), TransSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
+	})
+	txt.config(`^Metropolis/`, params.ChainConfig{
+		HomesteadBlock:  big.NewInt(0),
+		EIP150Block:     big.NewInt(0),
+		EIP155Block:     big.NewInt(0),
+		EIP158Block:     big.NewInt(0),
+		MetropolisBlock: big.NewInt(0),
+	})
 
-func TestTxEIP155VRule(t *testing.T) {
-	config := &params.ChainConfig{
-		ChainId:        big.NewInt(1),
-		HomesteadBlock: big.NewInt(0),
-		EIP155Block:    big.NewInt(0),
-	}
-	err := RunTransactionTests(config, filepath.Join(transactionTestDir, "EIP155", "ttTransactionTestVRule.json"), TransSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
+	txt.walk(t, transactionTestDir, func(t *testing.T, name string, test *TransactionTest) {
+		cfg := txt.findConfig(name)
+		if err := txt.checkFailure(t, name, test.Run(cfg)); err != nil {
+			t.Error(err)
+		}
+	})
 }

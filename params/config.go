@@ -18,30 +18,72 @@ package params
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ubiq/go-ubiq/common"
 )
 
-// MainnetChainConfig is the chain parameters to run a node on the main network.
-var MainnetChainConfig = &ChainConfig{
-	ChainId:        MainNetChainID,
-	HomesteadBlock: MainNetHomesteadBlock,
-	EIP150Block:    MainNetHomesteadGasRepriceBlock,
-	EIP150Hash:     MainNetHomesteadGasRepriceHash,
-	EIP155Block:    MainNetSpuriousDragon,
-	EIP158Block:    MainNetSpuriousDragon,
-}
+var (
+	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3") // Mainnet genesis hash to enforce below configs on
+	TestnetGenesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d") // Testnet genesis hash to enforce below configs on
+)
 
-// TestnetChainConfig is the chain parameters to run a node on the test network.
-var TestnetChainConfig = &ChainConfig{
-	ChainId:        big.NewInt(9),
-	HomesteadBlock: big.NewInt(0),
-	EIP150Block:    big.NewInt(0),
-	EIP150Hash:     common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
-	EIP155Block:    big.NewInt(10),
-	EIP158Block:    big.NewInt(10),
-}
+var (
+	// MainnetChainConfig is the chain parameters to run a node on the main network.
+	MainnetChainConfig = &ChainConfig{
+		ChainId:         big.NewInt(1),
+		HomesteadBlock:  big.NewInt(1150000),
+		EIP150Block:     big.NewInt(2463000),
+		EIP150Hash:      common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+		EIP155Block:     big.NewInt(2675000),
+		EIP158Block:     big.NewInt(2675000),
+		MetropolisBlock: big.NewInt(math.MaxInt64), // Don't enable yet
+
+		Ubqhash: new(UbqhashConfig),
+	}
+
+	// TestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
+	TestnetChainConfig = &ChainConfig{
+		ChainId:         big.NewInt(9),
+		HomesteadBlock:  big.NewInt(0),
+		EIP150Block:     big.NewInt(0),
+		EIP150Hash:      common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+		EIP155Block:     big.NewInt(10),
+		EIP158Block:     big.NewInt(10),
+		MetropolisBlock: big.NewInt(math.MaxInt64), // Don't enable yet
+
+		Ubqhash: new(UbqhashConfig),
+	}
+
+	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
+	RinkebyChainConfig = &ChainConfig{
+		ChainId:         big.NewInt(4),
+		HomesteadBlock:  big.NewInt(1),
+		EIP150Block:     big.NewInt(2),
+		EIP150Hash:      common.HexToHash("0x9b095b36c15eaf13044373aef8ee0bd3a382a5abb92e402afa44b8249c3a90e9"),
+		EIP155Block:     big.NewInt(3),
+		EIP158Block:     big.NewInt(3),
+		MetropolisBlock: big.NewInt(math.MaxInt64), // Don't enable yet
+
+		Clique: &CliqueConfig{
+			Period: 15,
+			Epoch:  30000,
+		},
+	}
+
+	// AllProtocolChanges contains every protocol change (EIPs)
+	// introduced and accepted by the Ubiq core developers.
+	//
+	// This configuration is intentionally not using keyed fields.
+	// This configuration must *always* have all forks enabled, which
+	// means that all fields must be set at all times. This forces
+	// anyone adding flags to the config to also have to set these
+	// fields.
+	AllProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(math.MaxInt64) /*disabled*/, new(UbqhashConfig), nil}
+	TestChainConfig    = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), nil, new(UbqhashConfig), nil}
+	TestRules          = TestChainConfig.Rules(new(big.Int))
+)
 
 // ChainConfig is the core config which determines the blockchain settings.
 //
@@ -51,38 +93,82 @@ var TestnetChainConfig = &ChainConfig{
 type ChainConfig struct {
 	ChainId *big.Int `json:"chainId"` // Chain id identifies the current chain and is used for replay protection
 
-	HomesteadBlock *big.Int `json:"homesteadBlock"` // Homestead switch block (nil = no fork, 0 = already homestead)
+	HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
 
 	// EIP150 implements the Gas price changes (https://github.com/ethereum/EIPs/issues/150)
-	EIP150Block *big.Int    `json:"eip150Block"` // EIP150 HF block (nil = no fork)
-	EIP150Hash  common.Hash `json:"eip150Hash"`  // EIP150 HF hash (fast sync aid)
+	EIP150Block *big.Int    `json:"eip150Block,omitempty"` // EIP150 HF block (nil = no fork)
+	EIP150Hash  common.Hash `json:"eip150Hash,omitempty"`  // EIP150 HF hash (fast sync aid)
 
-	EIP155Block *big.Int `json:"eip155Block"` // EIP155 HF block
-	EIP158Block *big.Int `json:"eip158Block"` // EIP158 HF block
+	EIP155Block *big.Int `json:"eip155Block,omitempty"` // EIP155 HF block
+	EIP158Block *big.Int `json:"eip158Block,omitempty"` // EIP158 HF block
+
+	MetropolisBlock *big.Int `json:"metropolisBlock,omitempty"` // Metropolis switch block (nil = no fork, 0 = alraedy on homestead)
+
+	// Various consensus engines
+	Ubqhash *UbqhashConfig `json:"ubqhash,omitempty"`
+	Clique *CliqueConfig `json:"clique,omitempty"`
 }
 
-// String implements the Stringer interface.
+// UbqhashConfig is the consensus engine configs for proof-of-work based sealing.
+type UbqhashConfig struct{}
+
+// String implements the stringer interface, returning the consensus engine details.
+func (c *UbqhashConfig) String() string {
+	return "ubqhash"
+}
+
+// CliqueConfig is the consensus engine configs for proof-of-authority based sealing.
+type CliqueConfig struct {
+	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
+	Epoch  uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
+}
+
+// String implements the stringer interface, returning the consensus engine details.
+func (c *CliqueConfig) String() string {
+	return "clique"
+}
+
+// String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
-	return fmt.Sprintf("{ChainID: %v Homestead: %v EIP150: %v EIP155: %v EIP158: %v}",
+	var engine interface{}
+	switch {
+	case c.Ubqhash != nil:
+		engine = c.Ubqhash
+	case c.Clique != nil:
+		engine = c.Clique
+	default:
+		engine = "unknown"
+	}
+	return fmt.Sprintf("{ChainID: %v Homestead: %v EIP150: %v EIP155: %v EIP158: %v Metropolis: %v Engine: %v}",
 		c.ChainId,
 		c.HomesteadBlock,
 		c.EIP150Block,
 		c.EIP155Block,
 		c.EIP158Block,
+		c.MetropolisBlock,
+		engine,
 	)
 }
 
-var (
-	TestChainConfig = &ChainConfig{big.NewInt(1), new(big.Int), new(big.Int), common.Hash{}, new(big.Int), new(big.Int)}
-	TestRules       = TestChainConfig.Rules(new(big.Int))
-)
-
 // IsHomestead returns whether num is either equal to the homestead block or greater.
 func (c *ChainConfig) IsHomestead(num *big.Int) bool {
-	if c.HomesteadBlock == nil || num == nil {
-		return false
-	}
-	return num.Cmp(c.HomesteadBlock) >= 0
+	return isForked(c.HomesteadBlock, num)
+}
+
+func (c *ChainConfig) IsEIP150(num *big.Int) bool {
+	return isForked(c.EIP150Block, num)
+}
+
+func (c *ChainConfig) IsEIP155(num *big.Int) bool {
+	return isForked(c.EIP155Block, num)
+}
+
+func (c *ChainConfig) IsEIP158(num *big.Int) bool {
+	return isForked(c.EIP158Block, num)
+}
+
+func (c *ChainConfig) IsMetropolis(num *big.Int) bool {
+	return isForked(c.MetropolisBlock, num)
 }
 
 // GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).
@@ -92,39 +178,109 @@ func (c *ChainConfig) GasTable(num *big.Int) GasTable {
 	if num == nil {
 		return GasTableHomestead
 	}
-
 	switch {
-	case c.EIP158Block != nil && num.Cmp(c.EIP158Block) >= 0:
+	case c.IsEIP158(num):
 		return GasTableEIP158
-	case c.EIP150Block != nil && num.Cmp(c.EIP150Block) >= 0:
+	case c.IsEIP150(num):
 		return GasTableHomesteadGasRepriceFork
 	default:
 		return GasTableHomestead
 	}
 }
 
-func (c *ChainConfig) IsEIP150(num *big.Int) bool {
-	if c.EIP150Block == nil || num == nil {
-		return false
-	}
-	return num.Cmp(c.EIP150Block) >= 0
+// CheckCompatible checks whether scheduled fork transitions have been imported
+// with a mismatching chain configuration.
+func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64) *ConfigCompatError {
+	bhead := new(big.Int).SetUint64(height)
 
+	// Iterate checkCompatible to find the lowest conflict.
+	var lasterr *ConfigCompatError
+	for {
+		err := c.checkCompatible(newcfg, bhead)
+		if err == nil || (lasterr != nil && err.RewindTo == lasterr.RewindTo) {
+			break
+		}
+		lasterr = err
+		bhead.SetUint64(err.RewindTo)
+	}
+	return lasterr
 }
 
-func (c *ChainConfig) IsEIP155(num *big.Int) bool {
-	if c.EIP155Block == nil || num == nil {
-		return false
+func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *ConfigCompatError {
+	if isForkIncompatible(c.HomesteadBlock, newcfg.HomesteadBlock, head) {
+		return newCompatError("Homestead fork block", c.HomesteadBlock, newcfg.HomesteadBlock)
 	}
-	return num.Cmp(c.EIP155Block) >= 0
-
+	if isForkIncompatible(c.EIP150Block, newcfg.EIP150Block, head) {
+		return newCompatError("EIP150 fork block", c.EIP150Block, newcfg.EIP150Block)
+	}
+	if isForkIncompatible(c.EIP155Block, newcfg.EIP155Block, head) {
+		return newCompatError("EIP155 fork block", c.EIP155Block, newcfg.EIP155Block)
+	}
+	if isForkIncompatible(c.EIP158Block, newcfg.EIP158Block, head) {
+		return newCompatError("EIP158 fork block", c.EIP158Block, newcfg.EIP158Block)
+	}
+	if c.IsEIP158(head) && !configNumEqual(c.ChainId, newcfg.ChainId) {
+		return newCompatError("EIP158 chain ID", c.EIP158Block, newcfg.EIP158Block)
+	}
+	if isForkIncompatible(c.MetropolisBlock, newcfg.MetropolisBlock, head) {
+		return newCompatError("Metropolis fork block", c.MetropolisBlock, newcfg.MetropolisBlock)
+	}
+	return nil
 }
 
-func (c *ChainConfig) IsEIP158(num *big.Int) bool {
-	if c.EIP158Block == nil || num == nil {
+// isForkIncompatible returns true if a fork scheduled at s1 cannot be rescheduled to
+// block s2 because head is already past the fork.
+func isForkIncompatible(s1, s2, head *big.Int) bool {
+	return (isForked(s1, head) || isForked(s2, head)) && !configNumEqual(s1, s2)
+}
+
+// isForked returns whether a fork scheduled at block s is active at the given head block.
+func isForked(s, head *big.Int) bool {
+	if s == nil || head == nil {
 		return false
 	}
-	return num.Cmp(c.EIP158Block) >= 0
+	return s.Cmp(head) <= 0
+}
 
+func configNumEqual(x, y *big.Int) bool {
+	if x == nil {
+		return y == nil
+	}
+	if y == nil {
+		return x == nil
+	}
+	return x.Cmp(y) == 0
+}
+
+// ConfigCompatError is raised if the locally-stored blockchain is initialised with a
+// ChainConfig that would alter the past.
+type ConfigCompatError struct {
+	What string
+	// block numbers of the stored and new configurations
+	StoredConfig, NewConfig *big.Int
+	// the block number to which the local chain must be rewound to correct the error
+	RewindTo uint64
+}
+
+func newCompatError(what string, storedblock, newblock *big.Int) *ConfigCompatError {
+	var rew *big.Int
+	switch {
+	case storedblock == nil:
+		rew = newblock
+	case newblock == nil || storedblock.Cmp(newblock) < 0:
+		rew = storedblock
+	default:
+		rew = newblock
+	}
+	err := &ConfigCompatError{what, storedblock, newblock, 0}
+	if rew != nil && rew.Sign() > 0 {
+		err.RewindTo = rew.Uint64() - 1
+	}
+	return err
+}
+
+func (err *ConfigCompatError) Error() string {
+	return fmt.Sprintf("mismatching %s in database (have %d, want %d, rewindto %d)", err.What, err.StoredConfig, err.NewConfig, err.RewindTo)
 }
 
 // Rules wraps ChainConfig and is merely syntatic sugar or can be used for functions
@@ -135,8 +291,13 @@ func (c *ChainConfig) IsEIP158(num *big.Int) bool {
 type Rules struct {
 	ChainId                                   *big.Int
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158 bool
+	IsMetropolis                              bool
 }
 
 func (c *ChainConfig) Rules(num *big.Int) Rules {
-	return Rules{ChainId: new(big.Int).Set(c.ChainId), IsHomestead: c.IsHomestead(num), IsEIP150: c.IsEIP150(num), IsEIP155: c.IsEIP155(num), IsEIP158: c.IsEIP158(num)}
+	chainId := c.ChainId
+	if chainId == nil {
+		chainId = new(big.Int)
+	}
+	return Rules{ChainId: new(big.Int).Set(chainId), IsHomestead: c.IsHomestead(num), IsEIP150: c.IsEIP150(num), IsEIP155: c.IsEIP155(num), IsEIP158: c.IsEIP158(num), IsMetropolis: c.IsMetropolis(num)}
 }

@@ -21,8 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/common/hexutil"
 	"github.com/ubiq/go-ubiq/core/vm"
 	"github.com/robertkrimen/otto"
 )
@@ -164,20 +166,53 @@ func (dw *dbWrapper) toValue(vm *otto.Otto) otto.Value {
 	return value
 }
 
+// contractWrapper provides a JS wrapper around vm.Contract
+type contractWrapper struct {
+	contract *vm.Contract
+}
+
+func (c *contractWrapper) caller() common.Address {
+	return c.contract.Caller()
+}
+
+func (c *contractWrapper) address() common.Address {
+	return c.contract.Address()
+}
+
+func (c *contractWrapper) value() *big.Int {
+	return c.contract.Value()
+}
+
+func (c *contractWrapper) calldata() []byte {
+	return c.contract.Input
+}
+
+func (c *contractWrapper) toValue(vm *otto.Otto) otto.Value {
+	value, _ := vm.ToValue(c)
+	obj := value.Object()
+	obj.Set("caller", c.caller)
+	obj.Set("address", c.address)
+	obj.Set("value", c.value)
+	obj.Set("calldata", c.calldata)
+	return value
+}
+
 // JavascriptTracer provides an implementation of Tracer that evaluates a
 // Javascript function for each VM execution step.
 type JavascriptTracer struct {
-	vm         *otto.Otto             // Javascript VM instance
-	traceobj   *otto.Object           // User-supplied object to call
-	log        map[string]interface{} // (Reusable) map for the `log` arg to `step`
-	logvalue   otto.Value             // JS view of `log`
-	memory     *memoryWrapper         // Wrapper around the VM memory
-	memvalue   otto.Value             // JS view of `memory`
-	stack      *stackWrapper          // Wrapper around the VM stack
-	stackvalue otto.Value             // JS view of `stack`
-	db         *dbWrapper             // Wrapper around the VM environment
-	dbvalue    otto.Value             // JS view of `db`
-	err        error                  // Error, if one has occurred
+	vm            *otto.Otto             // Javascript VM instance
+	traceobj      *otto.Object           // User-supplied object to call
+	log           map[string]interface{} // (Reusable) map for the `log` arg to `step`
+	logvalue      otto.Value             // JS view of `log`
+	memory        *memoryWrapper         // Wrapper around the VM memory
+	memvalue      otto.Value             // JS view of `memory`
+	stack         *stackWrapper          // Wrapper around the VM stack
+	stackvalue    otto.Value             // JS view of `stack`
+	db            *dbWrapper             // Wrapper around the VM environment
+	dbvalue       otto.Value             // JS view of `db`
+	contract      *contractWrapper       // Wrapper around the contract object
+	contractvalue otto.Value             // JS view of `contract`
+	err           error                  // Error, if one has occurred
 }
 
 // NewJavascriptTracer instantiates a new JavascriptTracer instance.
@@ -189,6 +224,7 @@ func NewJavascriptTracer(code string) (*JavascriptTracer, error) {
 
 	// Set up builtins for this environment
 	vm.Set("big", &fakeBig{})
+	vm.Set("toHex", hexutil.Encode)
 
 	jstracer, err := vm.Object("(" + code + ")")
 	if err != nil {
@@ -220,19 +256,22 @@ func NewJavascriptTracer(code string) (*JavascriptTracer, error) {
 	mem := &memoryWrapper{}
 	stack := &stackWrapper{}
 	db := &dbWrapper{}
+	contract := &contractWrapper{}
 
 	return &JavascriptTracer{
-		vm:         vm,
-		traceobj:   jstracer,
-		log:        log,
-		logvalue:   logvalue,
-		memory:     mem,
-		memvalue:   mem.toValue(vm),
-		stack:      stack,
-		stackvalue: stack.toValue(vm),
-		db:         db,
-		dbvalue:    db.toValue(vm),
-		err:        nil,
+		vm:            vm,
+		traceobj:      jstracer,
+		log:           log,
+		logvalue:      logvalue,
+		memory:        mem,
+		memvalue:      mem.toValue(vm),
+		stack:         stack,
+		stackvalue:    stack.toValue(vm),
+		db:            db,
+		dbvalue:       db.toValue(vm),
+		contract:      contract,
+		contractvalue: contract.toValue(vm),
+		err:           nil,
 	}, nil
 }
 
@@ -278,20 +317,22 @@ func wrapError(context string, err error) error {
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution
-func (jst *JavascriptTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost *big.Int, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
+func (jst *JavascriptTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
 	if jst.err == nil {
 		jst.memory.memory = memory
 		jst.stack.stack = stack
 		jst.db.db = env.StateDB
+		jst.contract.contract = contract
 
 		ocw := &opCodeWrapper{op}
 
 		jst.log["pc"] = pc
 		jst.log["op"] = ocw.toValue(jst.vm)
-		jst.log["gas"] = gas.Int64()
-		jst.log["gasPrice"] = cost.Int64()
+		jst.log["gas"] = gas
+		jst.log["gasPrice"] = cost
 		jst.log["memory"] = jst.memvalue
 		jst.log["stack"] = jst.stackvalue
+		jst.log["contract"] = jst.contractvalue
 		jst.log["depth"] = depth
 		jst.log["account"] = contract.Address()
 		jst.log["err"] = err
@@ -301,6 +342,12 @@ func (jst *JavascriptTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, 
 			jst.err = wrapError("step", err)
 		}
 	}
+	return nil
+}
+
+// CaptureEnd is called after the call finishes
+func (jst *JavascriptTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration) error {
+	//TODO! @Arachnid please figure out of there's anything we can use this method for
 	return nil
 }
 

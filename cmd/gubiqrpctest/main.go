@@ -27,7 +27,7 @@ import (
 	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/eth"
 	"github.com/ubiq/go-ubiq/ethdb"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	
 	"github.com/ubiq/go-ubiq/node"
 	"github.com/ubiq/go-ubiq/params"
 	"github.com/ubiq/go-ubiq/tests"
@@ -115,7 +115,7 @@ func MakeSystemNode(privkey string, test *tests.BlockTest) (*node.Node, error) {
 			return nil, err
 		}
 	}
-	// Initialize and register the Ethereum protocol
+	// Initialize and register the Ubiq protocol
 	db, _ := ethdb.NewMemDatabase()
 	if _, err := test.InsertPreState(db); err != nil {
 		return nil, err

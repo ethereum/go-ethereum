@@ -17,14 +17,8 @@
 package compiler
 
 import (
-	"encoding/json"
-	"io/ioutil"
-	"os"
 	"os/exec"
-	"path"
 	"testing"
-
-	"github.com/ubiq/go-ubiq/common"
 )
 
 const (
@@ -36,7 +30,6 @@ contract test {
    }
 }
 `
-	testInfo = `{"source":"\ncontract test {\n   /// @notice Will multiply ` + "`a`" + ` by 7.\n   function multiply(uint a) returns(uint d) {\n       return a * 7;\n   }\n}\n","language":"Solidity","languageVersion":"0.1.1","compilerVersion":"0.1.1","compilerOptions":"--binary file --json-abi file --add-std 1","abiDefinition":[{"constant":false,"inputs":[{"name":"a","type":"uint256"}],"name":"multiply","outputs":[{"name":"d","type":"uint256"}],"type":"function"}],"userDoc":{"methods":{"multiply(uint256)":{"notice":"Will multiply ` + "`a`" + ` by 7."}}},"developerDoc":{"methods":{}}}`
 )
 
 func skipWithoutSolc(t *testing.T) {
@@ -57,7 +50,10 @@ func TestCompiler(t *testing.T) {
 	}
 	c, ok := contracts["test"]
 	if !ok {
-		t.Fatal("info for contract 'test' not present in result")
+		c, ok = contracts["<stdin>:test"]
+		if !ok {
+			t.Fatal("info for contract 'test' not present in result")
+		}
 	}
 	if c.Code == "" {
 		t.Error("empty code")
@@ -78,29 +74,4 @@ func TestCompileError(t *testing.T) {
 		t.Errorf("error expected compiling source. got none. result %v", contracts)
 	}
 	t.Logf("error: %v", err)
-}
-
-func TestSaveInfo(t *testing.T) {
-	var cinfo ContractInfo
-	err := json.Unmarshal([]byte(testInfo), &cinfo)
-	if err != nil {
-		t.Errorf("%v", err)
-	}
-	filename := path.Join(os.TempDir(), "solctest.info.json")
-	os.Remove(filename)
-	cinfohash, err := SaveInfo(&cinfo, filename)
-	if err != nil {
-		t.Errorf("error extracting info: %v", err)
-	}
-	got, err := ioutil.ReadFile(filename)
-	if err != nil {
-		t.Errorf("error reading '%v': %v", filename, err)
-	}
-	if string(got) != testInfo {
-		t.Errorf("incorrect info.json extracted, expected:\n%s\ngot\n%s", testInfo, string(got))
-	}
-	wantHash := common.HexToHash("0x22450a77f0c3ff7a395948d07bc1456881226a1b6325f4189cb5f1254a824080")
-	if cinfohash != wantHash {
-		t.Errorf("content hash for info is incorrect. expected %v, got %v", wantHash.Hex(), cinfohash.Hex())
-	}
 }

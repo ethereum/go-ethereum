@@ -18,6 +18,7 @@ package network
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -25,14 +26,12 @@ import (
 	"time"
 
 	"github.com/ubiq/go-ubiq/crypto"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/swarm/storage"
 )
 
 func init() {
-	glog.SetV(0)
-	glog.SetToStderr(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlCrit, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 }
 
 type testSyncDb struct {
@@ -83,7 +82,7 @@ func (self *testSyncDb) push(n int) {
 		self.sent = append(self.sent, self.c)
 		self.c++
 	}
-	glog.V(logger.Debug).Infof("pushed %v requests", n)
+	log.Debug(fmt.Sprintf("pushed %v requests", n))
 }
 
 func (self *testSyncDb) draindb() {
@@ -128,7 +127,7 @@ func (self *testSyncDb) expect(n int, db bool) {
 		}
 		if len(self.sent) > self.at && !bytes.Equal(crypto.Keccak256([]byte{byte(self.sent[self.at])}), self.delivered[self.at]) {
 			self.t.Fatalf("expected delivery %v/%v/%v to be hash of  %v, from db: %v = %v", i, n, self.at, self.sent[self.at], ok, db)
-			glog.V(logger.Debug).Infof("%v/%v/%v to be hash of  %v, from db: %v = %v", i, n, self.at, self.sent[self.at], ok, db)
+			log.Debug(fmt.Sprintf("%v/%v/%v to be hash of  %v, from db: %v = %v", i, n, self.at, self.sent[self.at], ok, db))
 		}
 		if !ok && db {
 			self.t.Fatalf("expected delivery %v/%v/%v from db", i, n, self.at)

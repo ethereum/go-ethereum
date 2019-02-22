@@ -17,11 +17,11 @@
 package network
 
 import (
+	"fmt"
 	"math/rand"
 	"time"
 
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/swarm/storage"
 )
 
@@ -56,10 +56,10 @@ var searchTimeout = 3 * time.Second
 // logic propagating retrieve requests to peers given by the kademlia hive
 func (self *forwarder) Retrieve(chunk *storage.Chunk) {
 	peers := self.hive.getPeers(chunk.Key, 0)
-	glog.V(logger.Detail).Infof("forwarder.Retrieve: %v - received %d peers from KΛÐΞMLIΛ...", chunk.Key.Log(), len(peers))
+	log.Trace(fmt.Sprintf("forwarder.Retrieve: %v - received %d peers from KΛÐΞMLIΛ...", chunk.Key.Log(), len(peers)))
 OUT:
 	for _, p := range peers {
-		glog.V(logger.Detail).Infof("forwarder.Retrieve: sending retrieveRequest %v to peer [%v]", chunk.Key.Log(), p)
+		log.Trace(fmt.Sprintf("forwarder.Retrieve: sending retrieveRequest %v to peer [%v]", chunk.Key.Log(), p))
 		for _, recipients := range chunk.Req.Requesters {
 			for _, recipient := range recipients {
 				req := recipient.(*retrieveRequestMsgData)
@@ -80,7 +80,7 @@ OUT:
 			p.retrieve(req)
 			break OUT
 		}
-		glog.V(logger.Warn).Infof("forwarder.Retrieve: unable to send retrieveRequest to peer [%v]: %v", chunk.Key.Log(), err)
+		log.Warn(fmt.Sprintf("forwarder.Retrieve: unable to send retrieveRequest to peer [%v]: %v", chunk.Key.Log(), err))
 	}
 }
 
@@ -98,14 +98,14 @@ func (self *forwarder) Store(chunk *storage.Chunk) {
 		source = chunk.Source.(*peer)
 	}
 	for _, p := range self.hive.getPeers(chunk.Key, 0) {
-		glog.V(logger.Detail).Infof("forwarder.Store: %v %v", p, chunk)
+		log.Trace(fmt.Sprintf("forwarder.Store: %v %v", p, chunk))
 
 		if p.syncer != nil && (source == nil || p.Addr() != source.Addr()) {
 			n++
 			Deliver(p, msg, PropagateReq)
 		}
 	}
-	glog.V(logger.Detail).Infof("forwarder.Store: sent to %v peers (chunk = %v)", n, chunk)
+	log.Trace(fmt.Sprintf("forwarder.Store: sent to %v peers (chunk = %v)", n, chunk))
 }
 
 // once a chunk is found deliver it to its requesters unless timed out
@@ -123,7 +123,7 @@ func (self *forwarder) Deliver(chunk *storage.Chunk) {
 		for id, r := range requesters {
 			req = r.(*retrieveRequestMsgData)
 			if req.timeout == nil || req.timeout.After(time.Now()) {
-				glog.V(logger.Detail).Infof("forwarder.Deliver: %v -> %v", req.Id, req.from)
+				log.Trace(fmt.Sprintf("forwarder.Deliver: %v -> %v", req.Id, req.from))
 				msg.Id = uint64(id)
 				Deliver(req.from, msg, DeliverReq)
 				n++
@@ -133,7 +133,7 @@ func (self *forwarder) Deliver(chunk *storage.Chunk) {
 				}
 			}
 		}
-		glog.V(logger.Detail).Infof("forwarder.Deliver: submit chunk %v (request id %v) for delivery to %v peers", chunk.Key.Log(), id, n)
+		log.Trace(fmt.Sprintf("forwarder.Deliver: submit chunk %v (request id %v) for delivery to %v peers", chunk.Key.Log(), id, n))
 	}
 }
 

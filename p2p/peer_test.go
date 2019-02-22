@@ -43,7 +43,7 @@ var discard = Protocol{
 	},
 }
 
-func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan DiscReason) {
+func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan error) {
 	fd1, fd2 := net.Pipe()
 	c1 := &conn{fd: fd1, transport: newTestTransport(randomID(), fd1)}
 	c2 := &conn{fd: fd2, transport: newTestTransport(randomID(), fd2)}
@@ -53,15 +53,17 @@ func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan DiscReason) {
 	}
 
 	peer := newPeer(c1, protos)
-	errc := make(chan DiscReason, 1)
-	go func() { errc <- peer.run() }()
+	errc := make(chan error, 1)
+	go func() {
+		_, err := peer.run()
+		errc <- err
+	}()
 
 	closer := func() { c2.close(errors.New("close func called")) }
 	return closer, c2, peer, errc
 }
 
 func TestPeerProtoReadMsg(t *testing.T) {
-	done := make(chan struct{})
 	proto := Protocol{
 		Name:   "a",
 		Length: 5,
@@ -75,7 +77,6 @@ func TestPeerProtoReadMsg(t *testing.T) {
 			if err := ExpectMsg(rw, 4, []uint{3}); err != nil {
 				t.Error(err)
 			}
-			close(done)
 			return nil
 		},
 	}
@@ -88,9 +89,10 @@ func TestPeerProtoReadMsg(t *testing.T) {
 	Send(rw, baseProtocolLength+4, []uint{3})
 
 	select {
-	case <-done:
 	case err := <-errc:
-		t.Errorf("peer returned: %v", err)
+		if err != errProtocolReturned {
+			t.Errorf("peer returned error: %v", err)
+		}
 	case <-time.After(2 * time.Second):
 		t.Errorf("receive timeout")
 	}
@@ -137,8 +139,8 @@ func TestPeerDisconnect(t *testing.T) {
 	}
 	select {
 	case reason := <-disc:
-		if reason != DiscRequested {
-			t.Errorf("run returned wrong reason: got %v, want %v", reason, DiscRequested)
+		if reason != DiscQuitting {
+			t.Errorf("run returned wrong reason: got %v, want %v", reason, DiscQuitting)
 		}
 	case <-time.After(500 * time.Millisecond):
 		t.Error("peer did not return")

@@ -93,3 +93,8 @@ func (bi *BigInts) Set(index int, bigint *BigInt) error {
 	bi.bigints[index] = bigint.bigint
 	return nil
 }
+
+// GetString returns the value of x as a formatted string in some number base.
+func (bi *BigInt) GetString(base int) string {
+	return bi.bigint.Text(base)
+}

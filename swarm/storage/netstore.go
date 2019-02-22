@@ -17,12 +17,12 @@
 package storage
 
 import (
+	"fmt"
 	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 )
 
 /*
@@ -98,14 +98,14 @@ func (self *NetStore) Put(entry *Chunk) {
 
 	// handle deliveries
 	if entry.Req != nil {
-		glog.V(logger.Detail).Infof("NetStore.Put: localStore.Put %v hit existing request...delivering", entry.Key.Log())
+		log.Trace(fmt.Sprintf("NetStore.Put: localStore.Put %v hit existing request...delivering", entry.Key.Log()))
 		// closing C signals to other routines (local requests)
 		// that the chunk is has been retrieved
 		close(entry.Req.C)
 		// deliver the chunk to requesters upstream
 		go self.cloud.Deliver(entry)
 	} else {
-		glog.V(logger.Detail).Infof("NetStore.Put: localStore.Put %v stored locally", entry.Key.Log())
+		log.Trace(fmt.Sprintf("NetStore.Put: localStore.Put %v stored locally", entry.Key.Log()))
 		// handle propagating store requests
 		// go self.cloud.Store(entry)
 		go self.cloud.Store(entry)
@@ -118,15 +118,15 @@ func (self *NetStore) Get(key Key) (*Chunk, error) {
 	chunk, err := self.localStore.Get(key)
 	if err == nil {
 		if chunk.Req == nil {
-			glog.V(logger.Detail).Infof("NetStore.Get: %v found locally", key)
+			log.Trace(fmt.Sprintf("NetStore.Get: %v found locally", key))
 		} else {
-			glog.V(logger.Detail).Infof("NetStore.Get: %v hit on an existing request", key)
+			log.Trace(fmt.Sprintf("NetStore.Get: %v hit on an existing request", key))
 			// no need to launch again
 		}
 		return chunk, err
 	}
 	// no data and no request status
-	glog.V(logger.Detail).Infof("NetStore.Get: %v not found locally. open new request", key)
+	log.Trace(fmt.Sprintf("NetStore.Get: %v not found locally. open new request", key))
 	chunk = NewChunk(key, newRequestStatus(key))
 	self.localStore.memStore.Put(chunk)
 	go self.cloud.Retrieve(chunk)

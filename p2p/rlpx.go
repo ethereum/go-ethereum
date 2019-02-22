@@ -303,7 +303,7 @@ func (h *encHandshake) makeAuthMsg(prv *ecdsa.PrivateKey, token []byte) (*authMs
 		return nil, err
 	}
 	// Generate random keypair to for ECDH.
-	h.randomPrivKey, err = ecies.GenerateKey(rand.Reader, secp256k1.S256(), nil)
+	h.randomPrivKey, err = ecies.GenerateKey(rand.Reader, crypto.S256(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +381,7 @@ func (h *encHandshake) handleAuthMsg(msg *authMsgV4, prv *ecdsa.PrivateKey) erro
 	// Generate random keypair for ECDH.
 	// If a private key is already set, use it instead of generating one (for testing).
 	if h.randomPrivKey == nil {
-		h.randomPrivKey, err = ecies.GenerateKey(rand.Reader, secp256k1.S256(), nil)
+		h.randomPrivKey, err = ecies.GenerateKey(rand.Reader, crypto.S256(), nil)
 		if err != nil {
 			return err
 		}

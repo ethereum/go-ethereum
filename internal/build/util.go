@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"text/template"
 )
@@ -135,4 +136,31 @@ func CopyFile(dst, src string, mode os.FileMode) {
 	if _, err := io.Copy(destFile, srcFile); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// ExpandPackagesNoVendor expands a cmd/go import path pattern, skipping
+// vendored packages.
+func ExpandPackagesNoVendor(patterns []string) []string {
+	expand := false
+	for _, pkg := range patterns {
+		if strings.Contains(pkg, "...") {
+			expand = true
+		}
+	}
+	if expand {
+		args := append([]string{"list"}, patterns...)
+		cmd := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), args...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Fatalf("package listing failed: %v\n%s", err, string(out))
+		}
+		var packages []string
+		for _, line := range strings.Split(string(out), "\n") {
+			if !strings.Contains(line, "/vendor/") {
+				packages = append(packages, strings.TrimSpace(line))
+			}
+		}
+		return packages
+	}
+	return patterns
 }

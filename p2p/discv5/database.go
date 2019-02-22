@@ -23,13 +23,13 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
+	"fmt"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/ubiq/go-ubiq/crypto"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
@@ -192,7 +192,7 @@ func (db *nodeDB) fetchRLP(key []byte, val interface{}) error {
 	}
 	err = rlp.DecodeBytes(blob, val)
 	if err != nil {
-		glog.V(logger.Warn).Infof("key %x (%T) %v", key, val, err)
+		log.Warn(fmt.Sprintf("key %x (%T) %v", key, val, err))
 	}
 	return err
 }
@@ -244,7 +244,7 @@ func (db *nodeDB) expirer() {
 		select {
 		case <-tick:
 			if err := db.expireNodes(); err != nil {
-				glog.V(logger.Error).Infof("Failed to expire nodedb items: %v", err)
+				log.Error(fmt.Sprintf("Failed to expire nodedb items: %v", err))
 			}
 
 		case <-db.quit:
@@ -396,9 +396,7 @@ func nextNode(it iterator.Iterator) *Node {
 		}
 		var n Node
 		if err := rlp.DecodeBytes(it.Value(), &n); err != nil {
-			if glog.V(logger.Warn) {
-				glog.Errorf("invalid node %x: %v", id, err)
-			}
+			log.Warn(fmt.Sprintf("invalid node %x: %v", id, err))
 			continue
 		}
 		return &n

@@ -49,17 +49,17 @@ const (
 	paddingMask   = byte(3)
 	signatureFlag = byte(4)
 
-	TopicLength       = 4
-	signatureLength   = 65
-	aesKeyLength      = 32
-	saltLength        = 12
-	AESNonceMaxLength = 12
+	TopicLength     = 4
+	signatureLength = 65
+	aesKeyLength    = 32
+	AESNonceLength  = 12
+	keyIdSize       = 32
 
-	MaxMessageLength = 0xFFFF // todo: remove this restriction after testing. this should be regulated by PoW.
-	MinimumPoW       = 1.0    // todo: review after testing.
+	MaxMessageSize        = uint32(10 * 1024 * 1024) // maximum accepted size of a message.
+	DefaultMaxMessageSize = uint32(1024 * 1024)
+	DefaultMinimumPoW     = 0.2
 
-	padSizeLimitLower = 128 // it can not be less - we don't want to reveal the absence of signature
-	padSizeLimitUpper = 256 // just an arbitrary number, could be changed without losing compatibility
+	padSizeLimit      = 256 // just an arbitrary number, could be changed without breaking the protocol (must not exceed 2^24)
 	messageQueueLimit = 1024
 
 	expirationCycle   = time.Second

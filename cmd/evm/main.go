@@ -19,19 +19,10 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"math/big"
 	"os"
-	goruntime "runtime"
-	"time"
 
 	"github.com/ubiq/go-ubiq/cmd/utils"
-	"github.com/ubiq/go-ubiq/common"
-	"github.com/ubiq/go-ubiq/core/state"
-	"github.com/ubiq/go-ubiq/core/vm"
-	"github.com/ubiq/go-ubiq/core/vm/runtime"
-	"github.com/ubiq/go-ubiq/crypto"
-	"github.com/ubiq/go-ubiq/ethdb"
-	"github.com/ubiq/go-ubiq/logger/glog"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -44,6 +35,18 @@ var (
 		Name:  "debug",
 		Usage: "output full trace logs",
 	}
+	MemProfileFlag = cli.StringFlag{
+		Name:  "memprofile",
+		Usage: "creates a memory profile at the given path",
+	}
+	CPUProfileFlag = cli.StringFlag{
+		Name:  "cpuprofile",
+		Usage: "creates a CPU profile at the given path",
+	}
+	StatDumpFlag = cli.BoolFlag{
+		Name:  "statdump",
+		Usage: "displays stack and heap memory information",
+	}
 	CodeFlag = cli.StringFlag{
 		Name:  "code",
 		Usage: "EVM code",
@@ -52,20 +55,20 @@ var (
 		Name:  "codefile",
 		Usage: "file containing EVM code",
 	}
-	GasFlag = cli.StringFlag{
+	GasFlag = cli.Uint64Flag{
 		Name:  "gas",
 		Usage: "gas limit for the evm",
-		Value: "10000000000",
+		Value: 10000000000,
 	}
-	PriceFlag = cli.StringFlag{
+	PriceFlag = utils.BigFlag{
 		Name:  "price",
 		Usage: "price set for the evm",
-		Value: "0",
+		Value: new(big.Int),
 	}
-	ValueFlag = cli.StringFlag{
+	ValueFlag = utils.BigFlag{
 		Name:  "value",
 		Usage: "value set for the evm",
-		Value: "0",
+		Value: new(big.Int),
 	}
 	DumpFlag = cli.BoolFlag{
 		Name:  "dump",
@@ -74,10 +77,6 @@ var (
 	InputFlag = cli.StringFlag{
 		Name:  "input",
 		Usage: "input for the EVM",
-	}
-	SysStatFlag = cli.BoolFlag{
-		Name:  "sysstat",
-		Usage: "display system stats",
 	}
 	VerbosityFlag = cli.IntFlag{
 		Name:  "verbosity",
@@ -91,6 +90,26 @@ var (
 		Name:  "nogasmetering",
 		Usage: "disable gas metering",
 	}
+	GenesisFlag = cli.StringFlag{
+		Name:  "prestate",
+		Usage: "JSON file with prestate (genesis) config",
+	}
+	MachineFlag = cli.BoolFlag{
+		Name:  "json",
+		Usage: "output trace logs in machine readable format (json)",
+	}
+	SenderFlag = cli.StringFlag{
+		Name:  "sender",
+		Usage: "The transaction origin",
+	}
+	DisableMemoryFlag = cli.BoolFlag{
+		Name:  "nomemory",
+		Usage: "disable memory output",
+	}
+	DisableStackFlag = cli.BoolFlag{
+		Name:  "nostack",
+		Usage: "disable stack output",
+	}
 )
 
 func init() {
@@ -98,7 +117,6 @@ func init() {
 		CreateFlag,
 		DebugFlag,
 		VerbosityFlag,
-		SysStatFlag,
 		CodeFlag,
 		CodeFileFlag,
 		GasFlag,
@@ -107,108 +125,20 @@ func init() {
 		DumpFlag,
 		InputFlag,
 		DisableGasMeteringFlag,
+		MemProfileFlag,
+		CPUProfileFlag,
+		StatDumpFlag,
+		GenesisFlag,
+		MachineFlag,
+		SenderFlag,
+		DisableMemoryFlag,
+		DisableStackFlag,
 	}
-	app.Action = run
-}
-
-func run(ctx *cli.Context) error {
-	glog.SetToStderr(true)
-	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
-
-	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
-	sender := statedb.CreateAccount(common.StringToAddress("sender"))
-
-	logger := vm.NewStructLogger(nil)
-
-	tstart := time.Now()
-
-	var (
-		code []byte
-		ret  []byte
-		err  error
-	)
-
-	if ctx.GlobalString(CodeFlag.Name) != "" {
-		code = common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name))
-	} else {
-		var hexcode []byte
-		if ctx.GlobalString(CodeFileFlag.Name) != "" {
-			var err error
-			hexcode, err = ioutil.ReadFile(ctx.GlobalString(CodeFileFlag.Name))
-			if err != nil {
-				fmt.Printf("Could not load code from file: %v\n", err)
-				os.Exit(1)
-			}
-		} else {
-			var err error
-			hexcode, err = ioutil.ReadAll(os.Stdin)
-			if err != nil {
-				fmt.Printf("Could not load code from stdin: %v\n", err)
-				os.Exit(1)
-			}
-		}
-		code = common.Hex2Bytes(string(hexcode[:]))
+	app.Commands = []cli.Command{
+		compileCommand,
+		disasmCommand,
+		runCommand,
 	}
-
-	if ctx.GlobalBool(CreateFlag.Name) {
-		input := append(code, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name))...)
-		ret, _, err = runtime.Create(input, &runtime.Config{
-			Origin:   sender.Address(),
-			State:    statedb,
-			GasLimit: common.Big(ctx.GlobalString(GasFlag.Name)),
-			GasPrice: common.Big(ctx.GlobalString(PriceFlag.Name)),
-			Value:    common.Big(ctx.GlobalString(ValueFlag.Name)),
-			EVMConfig: vm.Config{
-				Tracer:             logger,
-				Debug:              ctx.GlobalBool(DebugFlag.Name),
-				DisableGasMetering: ctx.GlobalBool(DisableGasMeteringFlag.Name),
-			},
-		})
-	} else {
-		receiver := statedb.CreateAccount(common.StringToAddress("receiver"))
-		receiver.SetCode(crypto.Keccak256Hash(code), code)
-
-		ret, err = runtime.Call(receiver.Address(), common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtime.Config{
-			Origin:   sender.Address(),
-			State:    statedb,
-			GasLimit: common.Big(ctx.GlobalString(GasFlag.Name)),
-			GasPrice: common.Big(ctx.GlobalString(PriceFlag.Name)),
-			Value:    common.Big(ctx.GlobalString(ValueFlag.Name)),
-			EVMConfig: vm.Config{
-				Tracer:             logger,
-				Debug:              ctx.GlobalBool(DebugFlag.Name),
-				DisableGasMetering: ctx.GlobalBool(DisableGasMeteringFlag.Name),
-			},
-		})
-	}
-	vmdone := time.Since(tstart)
-
-	if ctx.GlobalBool(DumpFlag.Name) {
-		statedb.Commit(true)
-		fmt.Println(string(statedb.Dump()))
-	}
-	vm.StdErrFormat(logger.StructLogs())
-
-	if ctx.GlobalBool(SysStatFlag.Name) {
-		var mem goruntime.MemStats
-		goruntime.ReadMemStats(&mem)
-		fmt.Printf("vm took %v\n", vmdone)
-		fmt.Printf(`alloc:      %d
-tot alloc:  %d
-no. malloc: %d
-heap alloc: %d
-heap objs:  %d
-num gc:     %d
-`, mem.Alloc, mem.TotalAlloc, mem.Mallocs, mem.HeapAlloc, mem.HeapObjects, mem.NumGC)
-	}
-
-	fmt.Printf("OUT: 0x%x", ret)
-	if err != nil {
-		fmt.Printf(" error: %v", err)
-	}
-	fmt.Println()
-	return nil
 }
 
 func main() {

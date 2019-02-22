@@ -18,12 +18,10 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -32,57 +30,92 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ubiq/go-ubiq/cmd/utils"
+	swarm "github.com/ubiq/go-ubiq/swarm/api/client"
 	"gopkg.in/urfave/cli.v1"
 )
 
 func upload(ctx *cli.Context) {
+
 	args := ctx.Args()
 	var (
 		bzzapi       = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 		recursive    = ctx.GlobalBool(SwarmRecursiveUploadFlag.Name)
 		wantManifest = ctx.GlobalBoolT(SwarmWantManifestFlag.Name)
 		defaultPath  = ctx.GlobalString(SwarmUploadDefaultPath.Name)
+		fromStdin    = ctx.GlobalBool(SwarmUpFromStdinFlag.Name)
+		mimeType     = ctx.GlobalString(SwarmUploadMimeType.Name)
+		client       = swarm.NewClient(bzzapi)
+		file         string
 	)
+
 	if len(args) != 1 {
-		log.Fatal("need filename as the first and only argument")
+		if fromStdin {
+			tmp, err := ioutil.TempFile("", "swarm-stdin")
+			if err != nil {
+				utils.Fatalf("error create tempfile: %s", err)
+			}
+			defer os.Remove(tmp.Name())
+			n, err := io.Copy(tmp, os.Stdin)
+			if err != nil {
+				utils.Fatalf("error copying stdin to tempfile: %s", err)
+			} else if n == 0 {
+				utils.Fatalf("error reading from stdin: zero length")
+			}
+			file = tmp.Name()
+		} else {
+			utils.Fatalf("Need filename as the first and only argument")
+		}
+	} else {
+		file = expandPath(args[0])
 	}
 
-	var (
-		file   = args[0]
-		client = &client{api: bzzapi}
-	)
-	fi, err := os.Stat(expandPath(file))
-	if err != nil {
-		log.Fatal(err)
-	}
-	if fi.IsDir() {
-		if !recursive {
-			log.Fatal("argument is a directory and recursive upload is disabled")
-		}
-		if !wantManifest {
-			log.Fatal("manifest is required for directory uploads")
-		}
-		mhash, err := client.uploadDirectory(file, defaultPath)
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println(mhash)
-		return
-	}
-	entry, err := client.uploadFile(file, fi)
-	if err != nil {
-		log.Fatalln("upload failed:", err)
-	}
-	mroot := manifest{[]manifestEntry{entry}}
 	if !wantManifest {
-		// Print the manifest. This is the only output to stdout.
-		mrootJSON, _ := json.MarshalIndent(mroot, "", "  ")
-		fmt.Println(string(mrootJSON))
+		f, err := swarm.Open(file)
+		if err != nil {
+			utils.Fatalf("Error opening file: %s", err)
+		}
+		defer f.Close()
+		hash, err := client.UploadRaw(f, f.Size)
+		if err != nil {
+			utils.Fatalf("Upload failed: %s", err)
+		}
+		fmt.Println(hash)
 		return
 	}
-	hash, err := client.uploadManifest(mroot)
+
+	stat, err := os.Stat(file)
 	if err != nil {
-		log.Fatalln("manifest upload failed:", err)
+		utils.Fatalf("Error opening file: %s", err)
+	}
+
+	// define a function which either uploads a directory or single file
+	// based on the type of the file being uploaded
+	var doUpload func() (hash string, err error)
+	if stat.IsDir() {
+		doUpload = func() (string, error) {
+			if !recursive {
+				return "", errors.New("Argument is a directory and recursive upload is disabled")
+			}
+			return client.UploadDirectory(file, defaultPath, "")
+		}
+	} else {
+		doUpload = func() (string, error) {
+			f, err := swarm.Open(file)
+			if err != nil {
+				return "", fmt.Errorf("error opening file: %s", err)
+			}
+			defer f.Close()
+			if mimeType == "" {
+				mimeType = detectMimeType(file)
+			}
+			f.ContentType = mimeType
+			return client.Upload(f, "")
+		}
+	}
+	hash, err := doUpload()
+	if err != nil {
+		utils.Fatalf("Upload failed: %s", err)
 	}
 	fmt.Println(hash)
 }
@@ -111,147 +144,18 @@ func homeDir() string {
 	return ""
 }
 
-// client wraps interaction with the swarm HTTP gateway.
-type client struct {
-	api string
-}
-
-// manifest is the JSON representation of a swarm manifest.
-type manifestEntry struct {
-	Hash        string `json:"hash,omitempty"`
-	ContentType string `json:"contentType,omitempty"`
-	Path        string `json:"path,omitempty"`
-}
-
-// manifest is the JSON representation of a swarm manifest.
-type manifest struct {
-	Entries []manifestEntry `json:"entries,omitempty"`
-}
-
-func (c *client) uploadDirectory(dir string, defaultPath string) (string, error) {
-	mhash, err := c.postRaw("application/json", 2, ioutil.NopCloser(bytes.NewReader([]byte("{}"))))
+func detectMimeType(file string) string {
+	if ext := filepath.Ext(file); ext != "" {
+		return mime.TypeByExtension(ext)
+	}
+	f, err := os.Open(file)
 	if err != nil {
-		return "", fmt.Errorf("failed to upload empty manifest")
+		return ""
 	}
-	if len(defaultPath) > 0 {
-		fi, err := os.Stat(defaultPath)
-		if err != nil {
-			return "", err
-		}
-		mhash, err = c.uploadToManifest(mhash, "", defaultPath, fi)
-		if err != nil {
-			return "", err
-		}
+	defer f.Close()
+	buf := make([]byte, 512)
+	if n, _ := f.Read(buf); n > 0 {
+		return http.DetectContentType(buf)
 	}
-	prefix := filepath.ToSlash(filepath.Clean(dir)) + "/"
-	err = filepath.Walk(dir, func(path string, fi os.FileInfo, err error) error {
-		if err != nil || fi.IsDir() {
-			return err
-		}
-		if !strings.HasPrefix(path, dir) {
-			return fmt.Errorf("path %s outside directory %s", path, dir)
-		}
-		uripath := strings.TrimPrefix(filepath.ToSlash(filepath.Clean(path)), prefix)
-		mhash, err = c.uploadToManifest(mhash, uripath, path, fi)
-		return err
-	})
-	return mhash, err
-}
-
-func (c *client) uploadFile(file string, fi os.FileInfo) (manifestEntry, error) {
-	hash, err := c.uploadFileContent(file, fi)
-	m := manifestEntry{
-		Hash:        hash,
-		ContentType: mime.TypeByExtension(filepath.Ext(fi.Name())),
-	}
-	return m, err
-}
-
-func (c *client) uploadFileContent(file string, fi os.FileInfo) (string, error) {
-	fd, err := os.Open(file)
-	if err != nil {
-		return "", err
-	}
-	defer fd.Close()
-	log.Printf("uploading file %s (%d bytes)", file, fi.Size())
-	return c.postRaw("application/octet-stream", fi.Size(), fd)
-}
-
-func (c *client) uploadManifest(m manifest) (string, error) {
-	jsm, err := json.Marshal(m)
-	if err != nil {
-		panic(err)
-	}
-	log.Println("uploading manifest")
-	return c.postRaw("application/json", int64(len(jsm)), ioutil.NopCloser(bytes.NewReader(jsm)))
-}
-
-func (c *client) uploadToManifest(mhash string, path string, fpath string, fi os.FileInfo) (string, error) {
-	fd, err := os.Open(fpath)
-	if err != nil {
-		return "", err
-	}
-	defer fd.Close()
-	log.Printf("uploading file %s (%d bytes) and adding path %v", fpath, fi.Size(), path)
-	req, err := http.NewRequest("PUT", c.api+"/bzz:/"+mhash+"/"+path, fd)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("content-type", mime.TypeByExtension(filepath.Ext(fi.Name())))
-	req.ContentLength = fi.Size()
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("bad status: %s", resp.Status)
-	}
-	content, err := ioutil.ReadAll(resp.Body)
-	return string(content), err
-}
-
-func (c *client) postRaw(mimetype string, size int64, body io.ReadCloser) (string, error) {
-	req, err := http.NewRequest("POST", c.api+"/bzzr:/", body)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("content-type", mimetype)
-	req.ContentLength = size
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("bad status: %s", resp.Status)
-	}
-	content, err := ioutil.ReadAll(resp.Body)
-	return string(content), err
-}
-
-func (c *client) downloadManifest(mhash string) (manifest, error) {
-
-	mroot := manifest{}
-	req, err := http.NewRequest("GET", c.api + "/bzzr:/" + mhash, nil)
-	if err != nil {
-		return mroot, err
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return mroot, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return mroot, fmt.Errorf("bad status: %s", resp.Status)
-
-	}
-	content, err := ioutil.ReadAll(resp.Body)
-
-	err = json.Unmarshal(content, &mroot)
-	if err != nil {
-		return mroot, fmt.Errorf("Manifest %v is malformed: %v", mhash, err)
-	}
-	return mroot, err
+	return ""
 }

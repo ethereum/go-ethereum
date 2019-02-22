@@ -32,7 +32,6 @@ package hexutil
 
 import (
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -41,15 +40,22 @@ import (
 const uintBits = 32 << (uint64(^uint(0)) >> 63)
 
 var (
-	ErrEmptyString   = errors.New("empty hex string")
-	ErrMissingPrefix = errors.New("missing 0x prefix for hex data")
-	ErrSyntax        = errors.New("invalid hex")
-	ErrEmptyNumber   = errors.New("hex number has no digits after 0x")
-	ErrLeadingZero   = errors.New("hex number has leading zero digits after 0x")
-	ErrOddLength     = errors.New("hex string has odd length")
-	ErrUint64Range   = errors.New("hex number does not fit into 64 bits")
-	ErrUintRange     = fmt.Errorf("hex number does not fit into %d bits", uintBits)
+	ErrEmptyString   = &decError{"empty hex string"}
+	ErrSyntax        = &decError{"invalid hex string"}
+	ErrMissingPrefix = &decError{"hex string without 0x prefix"}
+	ErrOddLength     = &decError{"hex string of odd length"}
+	ErrEmptyNumber   = &decError{"hex string \"0x\""}
+	ErrLeadingZero   = &decError{"hex number with leading zero digits"}
+	ErrUint64Range   = &decError{"hex number > 64 bits"}
+	ErrUintRange     = &decError{fmt.Sprintf("hex number > %d bits", uintBits)}
+	ErrBig256Range   = &decError{"hex number > 256 bits"}
 )
+
+type decError struct{ msg string }
+
+func (err decError) Error() string {
+	return string(err.msg)
+}
 
 // Decode decodes a hex string with 0x prefix.
 func Decode(input string) ([]byte, error) {
@@ -59,7 +65,11 @@ func Decode(input string) ([]byte, error) {
 	if !has0xPrefix(input) {
 		return nil, ErrMissingPrefix
 	}
-	return hex.DecodeString(input[2:])
+	b, err := hex.DecodeString(input[2:])
+	if err != nil {
+		err = mapError(err)
+	}
+	return b, err
 }
 
 // MustDecode decodes a hex string with 0x prefix. It panics for invalid input.
@@ -126,10 +136,14 @@ func init() {
 }
 
 // DecodeBig decodes a hex string with 0x prefix as a quantity.
+// Numbers larger than 256 bits are not accepted.
 func DecodeBig(input string) (*big.Int, error) {
 	raw, err := checkNumber(input)
 	if err != nil {
 		return nil, err
+	}
+	if len(raw) > 64 {
+		return nil, ErrBig256Range
 	}
 	words := make([]big.Word, len(raw)/bigWordNibbles+1)
 	end := len(raw)
@@ -169,7 +183,7 @@ func EncodeBig(bigint *big.Int) string {
 	if nbits == 0 {
 		return "0x0"
 	}
-	return fmt.Sprintf("0x%x", bigint)
+	return fmt.Sprintf("%#x", bigint)
 }
 
 func has0xPrefix(input string) bool {

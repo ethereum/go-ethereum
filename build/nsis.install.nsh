@@ -13,7 +13,7 @@ PageEx license
 PageExEnd
 
 # Install gubiq binary
-Section "Gubiq" GETH_IDX
+Section "Gubiq" GUBIQ_IDX
   SetOutPath $INSTDIR
   file {{.Gubiq}}
 
@@ -54,8 +54,8 @@ Var GetInstalledSize.total
 Function GetInstalledSize
   StrCpy $GetInstalledSize.total 0
 
-  ${if} ${SectionIsSelected} ${GETH_IDX}
-    SectionGetSize ${GETH_IDX} $0
+  ${if} ${SectionIsSelected} ${GUBIQ_IDX}
+    SectionGetSize ${GUBIQ_IDX} $0
     IntOp $GetInstalledSize.total $GetInstalledSize.total + $0
   ${endif}
 

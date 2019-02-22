@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/consensus/ubqhash"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/core/vm"
@@ -77,21 +78,20 @@ func txPoolTestChainGen(i int, block *core.BlockGen) {
 
 func TestTxPool(t *testing.T) {
 	for i := range testTx {
-		testTx[i], _ = types.SignTx(types.NewTransaction(uint64(i), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
+		testTx[i], _ = types.SignTx(types.NewTransaction(uint64(i), acc1Addr, big.NewInt(10000), bigTxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
 	}
 
 	var (
 		evmux   = new(event.TypeMux)
-		pow     = new(core.FakePow)
 		sdb, _  = ethdb.NewMemDatabase()
 		ldb, _  = ethdb.NewMemDatabase()
-		genesis = core.WriteGenesisBlockForTesting(sdb, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
+		gspec   = core.Genesis{Alloc: core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}}}
+		genesis = gspec.MustCommit(sdb)
 	)
-	core.WriteGenesisBlockForTesting(ldb, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
+	gspec.MustCommit(ldb)
 	// Assemble the test environment
-	blockchain, _ := core.NewBlockChain(sdb, testChainConfig(), pow, evmux, vm.Config{})
-	chainConfig := &params.ChainConfig{HomesteadBlock: new(big.Int)}
-	gchain, _ := core.GenerateChain(chainConfig, genesis, sdb, poolTestBlocks, txPoolTestChainGen)
+	blockchain, _ := core.NewBlockChain(sdb, params.TestChainConfig, ubqhash.NewFullFaker(), evmux, vm.Config{})
+	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, sdb, poolTestBlocks, txPoolTestChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		panic(err)
 	}
@@ -102,10 +102,9 @@ func TestTxPool(t *testing.T) {
 		discard: make(chan int, 1),
 		mined:   make(chan int, 1),
 	}
-	lightchain, _ := NewLightChain(odr, testChainConfig(), pow, evmux)
-	lightchain.SetValidator(bproc{})
+	lightchain, _ := NewLightChain(odr, params.TestChainConfig, ubqhash.NewFullFaker(), evmux)
 	txPermanent = 50
-	pool := NewTxPool(testChainConfig(), evmux, lightchain, relay)
+	pool := NewTxPool(params.TestChainConfig, evmux, lightchain, relay)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 

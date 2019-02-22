@@ -22,6 +22,7 @@ import (
 
 	"github.com/ubiq/go-ubiq/accounts"
 	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/common/math"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/types"
@@ -30,7 +31,6 @@ import (
 	"github.com/ubiq/go-ubiq/eth/gasprice"
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/event"
-	"github.com/ubiq/go-ubiq/internal/ethapi"
 	"github.com/ubiq/go-ubiq/params"
 	"github.com/ubiq/go-ubiq/rpc"
 )
@@ -38,7 +38,7 @@ import (
 // EthApiBackend implements ethapi.Backend for full nodes
 type EthApiBackend struct {
 	eth *Ethereum
-	gpo *gasprice.GasPriceOracle
+	gpo *gasprice.Oracle
 }
 
 func (b *EthApiBackend) ChainConfig() *params.ChainConfig {
@@ -50,6 +50,7 @@ func (b *EthApiBackend) CurrentBlock() *types.Block {
 }
 
 func (b *EthApiBackend) SetHead(number uint64) {
+	b.eth.protocolManager.downloader.Cancel()
 	b.eth.blockchain.SetHead(number)
 }
 
@@ -79,11 +80,11 @@ func (b *EthApiBackend) BlockByNumber(ctx context.Context, blockNr rpc.BlockNumb
 	return b.eth.blockchain.GetBlockByNumber(uint64(blockNr)), nil
 }
 
-func (b *EthApiBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (ethapi.State, *types.Header, error) {
+func (b *EthApiBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	// Pending state is only known by the miner
 	if blockNr == rpc.PendingBlockNumber {
 		block, state := b.eth.miner.Pending()
-		return EthApiState{state}, block.Header(), nil
+		return state, block.Header(), nil
 	}
 	// Otherwise resolve the block number and return its state
 	header, err := b.HeaderByNumber(ctx, blockNr)
@@ -91,7 +92,7 @@ func (b *EthApiBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.
 		return nil, nil, err
 	}
 	stateDb, err := b.eth.BlockChain().StateAt(header.Root)
-	return EthApiState{stateDb}, header, err
+	return stateDb, header, err
 }
 
 func (b *EthApiBackend) GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error) {
@@ -106,40 +107,27 @@ func (b *EthApiBackend) GetTd(blockHash common.Hash) *big.Int {
 	return b.eth.blockchain.GetTdByHash(blockHash)
 }
 
-func (b *EthApiBackend) GetVMEnv(ctx context.Context, msg core.Message, state ethapi.State, header *types.Header) (*vm.EVM, func() error, error) {
-	statedb := state.(EthApiState).state
-	from := statedb.GetOrNewStateObject(msg.From())
-	from.SetBalance(common.MaxBig)
+func (b *EthApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmCfg vm.Config) (*vm.EVM, func() error, error) {
+	state.SetBalance(msg.From(), math.MaxBig256)
 	vmError := func() error { return nil }
 
-	context := core.NewEVMContext(msg, header, b.eth.BlockChain())
-	return vm.NewEVM(context, statedb, b.eth.chainConfig, vm.Config{}), vmError, nil
+	context := core.NewEVMContext(msg, header, b.eth.BlockChain(), nil)
+	return vm.NewEVM(context, state, b.eth.chainConfig, vmCfg), vmError, nil
 }
 
 func (b *EthApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
-	b.eth.txMu.Lock()
-	defer b.eth.txMu.Unlock()
-
-	b.eth.txPool.SetLocal(signedTx)
-	return b.eth.txPool.Add(signedTx)
+	return b.eth.txPool.AddLocal(signedTx)
 }
 
 func (b *EthApiBackend) RemoveTx(txHash common.Hash) {
-	b.eth.txMu.Lock()
-	defer b.eth.txMu.Unlock()
-
 	b.eth.txPool.Remove(txHash)
 }
 
 func (b *EthApiBackend) GetPoolTransactions() (types.Transactions, error) {
-	b.eth.txMu.Lock()
-	defer b.eth.txMu.Unlock()
-
 	pending, err := b.eth.txPool.Pending()
 	if err != nil {
 		return nil, err
 	}
-
 	var txs types.Transactions
 	for _, batch := range pending {
 		txs = append(txs, batch...)
@@ -148,30 +136,18 @@ func (b *EthApiBackend) GetPoolTransactions() (types.Transactions, error) {
 }
 
 func (b *EthApiBackend) GetPoolTransaction(hash common.Hash) *types.Transaction {
-	b.eth.txMu.Lock()
-	defer b.eth.txMu.Unlock()
-
 	return b.eth.txPool.Get(hash)
 }
 
 func (b *EthApiBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	b.eth.txMu.Lock()
-	defer b.eth.txMu.Unlock()
-
 	return b.eth.txPool.State().GetNonce(addr), nil
 }
 
 func (b *EthApiBackend) Stats() (pending int, queued int) {
-	b.eth.txMu.Lock()
-	defer b.eth.txMu.Unlock()
-
 	return b.eth.txPool.Stats()
 }
 
 func (b *EthApiBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
-	b.eth.txMu.Lock()
-	defer b.eth.txMu.Unlock()
-
 	return b.eth.TxPool().Content()
 }
 
@@ -184,7 +160,7 @@ func (b *EthApiBackend) ProtocolVersion() int {
 }
 
 func (b *EthApiBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
-	return b.gpo.SuggestPrice(), nil
+	return b.gpo.SuggestPrice(ctx)
 }
 
 func (b *EthApiBackend) ChainDb() ethdb.Database {
@@ -197,24 +173,4 @@ func (b *EthApiBackend) EventMux() *event.TypeMux {
 
 func (b *EthApiBackend) AccountManager() *accounts.Manager {
 	return b.eth.AccountManager()
-}
-
-type EthApiState struct {
-	state *state.StateDB
-}
-
-func (s EthApiState) GetBalance(ctx context.Context, addr common.Address) (*big.Int, error) {
-	return s.state.GetBalance(addr), nil
-}
-
-func (s EthApiState) GetCode(ctx context.Context, addr common.Address) ([]byte, error) {
-	return s.state.GetCode(addr), nil
-}
-
-func (s EthApiState) GetState(ctx context.Context, a common.Address, b common.Hash) (common.Hash, error) {
-	return s.state.GetState(a, b), nil
-}
-
-func (s EthApiState) GetNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	return s.state.GetNonce(addr), nil
 }

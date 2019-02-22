@@ -30,9 +30,9 @@ import (
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/les/flowcontrol"
 	"github.com/ubiq/go-ubiq/light"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/p2p"
+	"github.com/ubiq/go-ubiq/p2p/discv5"
 	"github.com/ubiq/go-ubiq/rlp"
 	"github.com/ubiq/go-ubiq/trie"
 )
@@ -42,17 +42,24 @@ type LesServer struct {
 	fcManager       *flowcontrol.ClientManager // nil if our node is client only
 	fcCostStats     *requestCostStats
 	defParams       *flowcontrol.ServerParams
+	lesTopic        discv5.Topic
+	quitSync        chan struct{}
 	stopped         bool
 }
 
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
-	pm, err := NewProtocolManager(config.ChainConfig, false, config.NetworkId, eth.EventMux(), eth.Pow(), eth.BlockChain(), eth.TxPool(), eth.ChainDb(), nil, nil)
+	quitSync := make(chan struct{})
+	pm, err := NewProtocolManager(eth.BlockChain().Config(), false, config.NetworkId, eth.EventMux(), eth.Engine(), newPeerSet(), eth.BlockChain(), eth.TxPool(), eth.ChainDb(), nil, nil, quitSync, new(sync.WaitGroup))
 	if err != nil {
 		return nil, err
 	}
 	pm.blockLoop()
 
-	srv := &LesServer{protocolManager: pm}
+	srv := &LesServer{
+		protocolManager: pm,
+		quitSync:        quitSync,
+		lesTopic:        lesTopic(eth.BlockChain().Genesis().Hash()),
+	}
 	pm.server = srv
 
 	srv.defParams = &flowcontrol.ServerParams{
@@ -70,7 +77,14 @@ func (s *LesServer) Protocols() []p2p.Protocol {
 
 // Start starts the LES server
 func (s *LesServer) Start(srvr *p2p.Server) {
-	s.protocolManager.Start(srvr)
+	s.protocolManager.Start()
+	go func() {
+		logger := log.New("topic", s.lesTopic)
+		logger.Info("Starting topic registration")
+		defer logger.Info("Terminated topic registration")
+
+		srvr.DiscV5.RegisterTopic(s.lesTopic, s.quitSync)
+	}()
 }
 
 // Stop stops the LES service
@@ -292,7 +306,7 @@ func (pm *ProtocolManager) blockLoop() {
 						lastHead = header
 						lastBroadcastTd = td
 
-						glog.V(logger.Debug).Infoln("===> ", number, hash, td, reorg)
+						log.Debug("Announcing block to peers", "number", number, "hash", hash, "td", td, "reorg", reorg)
 
 						announce := announceData{Hash: hash, Number: number, Td: td, ReorgDepth: reorg}
 						for _, p := range peers {
@@ -396,7 +410,7 @@ func makeCht(db ethdb.Database) bool {
 	} else {
 		lastChtNum++
 
-		glog.V(logger.Detail).Infof("cht: %d %064x", lastChtNum, root)
+		log.Trace("Generated CHT", "number", lastChtNum, "root", root.Hex())
 
 		storeChtRoot(db, lastChtNum, root)
 		var data [8]byte

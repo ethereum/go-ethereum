@@ -23,8 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 )
 
 const (
@@ -117,7 +116,7 @@ func (self *Kademlia) DBCount() int {
 // On is the entry point called when a new nodes is added
 // unsafe in that node is not checked to be already active node (to be called once)
 func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error) {
-	glog.V(logger.Warn).Infof("%v", self)
+	log.Debug(fmt.Sprintf("%v", self))
 	defer self.lock.Unlock()
 	self.lock.Lock()
 
@@ -126,11 +125,11 @@ func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error
 
 	if cb != nil {
 		err = cb(record, node)
-		glog.V(logger.Detail).Infof("cb(%v, %v) ->%v", record, node, err)
+		log.Trace(fmt.Sprintf("cb(%v, %v) ->%v", record, node, err))
 		if err != nil {
 			return fmt.Errorf("unable to add node %v, callback error: %v", node.Addr(), err)
 		}
-		glog.V(logger.Debug).Infof("add node record %v with node %v", record, node)
+		log.Debug(fmt.Sprintf("add node record %v with node %v", record, node))
 	}
 
 	// insert in kademlia table of active nodes
@@ -139,7 +138,7 @@ func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error
 	// TODO: give priority to peers with active traffic
 	if len(bucket) < self.BucketSize { // >= allows us to add peers beyond the bucketsize limitation
 		self.buckets[index] = append(bucket, node)
-		glog.V(logger.Debug).Infof("add node %v to table", node)
+		log.Debug(fmt.Sprintf("add node %v to table", node))
 		self.setProxLimit(index, true)
 		record.node = node
 		self.count++
@@ -159,10 +158,10 @@ func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error
 		}
 	}
 	if replaced == nil {
-		glog.V(logger.Debug).Infof("all peers wanted, PO%03d bucket full", index)
+		log.Debug(fmt.Sprintf("all peers wanted, PO%03d bucket full", index))
 		return fmt.Errorf("bucket full")
 	}
-	glog.V(logger.Debug).Infof("node %v replaced by %v (idle for %v  > %v)", replaced, node, idle, self.MaxIdleInterval)
+	log.Debug(fmt.Sprintf("node %v replaced by %v (idle for %v  > %v)", replaced, node, idle, self.MaxIdleInterval))
 	replaced.Drop()
 	// actually replace in the row. When off(node) is called, the peer is no longer in the row
 	bucket[pos] = node
@@ -195,7 +194,7 @@ func (self *Kademlia) Off(node Node, cb func(*NodeRecord, Node)) (err error) {
 	}
 	record.node = nil
 	self.count--
-	glog.V(logger.Debug).Infof("remove node %v from table, population now is %v", node, self.count)
+	log.Debug(fmt.Sprintf("remove node %v from table, population now is %v", node, self.count))
 
 	return
 }
@@ -223,7 +222,7 @@ func (self *Kademlia) setProxLimit(r int, on bool) {
 			self.proxLimit++
 			curr = len(self.buckets[self.proxLimit])
 
-			glog.V(logger.Detail).Infof("proxbin contraction (size: %v, limit: %v, bin: %v)", self.proxSize, self.proxLimit, r)
+			log.Trace(fmt.Sprintf("proxbin contraction (size: %v, limit: %v, bin: %v)", self.proxSize, self.proxLimit, r))
 		}
 		return
 	}
@@ -237,7 +236,7 @@ func (self *Kademlia) setProxLimit(r int, on bool) {
 		//
 		self.proxLimit--
 		self.proxSize += len(self.buckets[self.proxLimit])
-		glog.V(logger.Detail).Infof("proxbin expansion (size: %v, limit: %v, bin: %v)", self.proxSize, self.proxLimit, r)
+		log.Trace(fmt.Sprintf("proxbin expansion (size: %v, limit: %v, bin: %v)", self.proxSize, self.proxLimit, r))
 	}
 }
 
@@ -257,7 +256,7 @@ func (self *Kademlia) FindClosest(target Address, max int) []Node {
 	po := self.proximityBin(target)
 	index := po
 	step := 1
-	glog.V(logger.Detail).Infof("serving %v nodes at %v (PO%02d)", max, index, po)
+	log.Trace(fmt.Sprintf("serving %v nodes at %v (PO%02d)", max, index, po))
 
 	// if max is set to 0, just want a full bucket, dynamic number
 	min := max
@@ -276,7 +275,7 @@ func (self *Kademlia) FindClosest(target Address, max int) []Node {
 			n++
 		}
 		// terminate if index reached the bottom or enough peers > min
-		glog.V(logger.Detail).Infof("add %v -> %v (PO%02d, PO%03d)", len(self.buckets[index]), n, index, po)
+		log.Trace(fmt.Sprintf("add %v -> %v (PO%02d, PO%03d)", len(self.buckets[index]), n, index, po))
 		if n >= min && (step < 0 || max == 0) {
 			break
 		}
@@ -287,7 +286,7 @@ func (self *Kademlia) FindClosest(target Address, max int) []Node {
 		}
 		index += step
 	}
-	glog.V(logger.Detail).Infof("serve %d (<=%d) nodes for target lookup %v (PO%03d)", n, max, target, po)
+	log.Trace(fmt.Sprintf("serve %d (<=%d) nodes for target lookup %v (PO%03d)", n, max, target, po))
 	return r.nodes
 }
 

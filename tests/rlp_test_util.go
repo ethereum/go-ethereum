@@ -21,9 +21,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
-	"os"
 	"strings"
 
 	"github.com/ubiq/go-ubiq/rlp"
@@ -42,33 +40,6 @@ type RLPTest struct {
 
 	// Out is a hex-encoded RLP value.
 	Out string
-}
-
-// RunRLPTest runs the tests in the given file, skipping tests by name.
-func RunRLPTest(file string, skip []string) error {
-	f, err := os.Open(file)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return RunRLPTestWithReader(f, skip)
-}
-
-// RunRLPTest runs the tests encoded in r, skipping tests by name.
-func RunRLPTestWithReader(r io.Reader, skip []string) error {
-	var tests map[string]*RLPTest
-	if err := readJson(r, &tests); err != nil {
-		return err
-	}
-	for _, s := range skip {
-		delete(tests, s)
-	}
-	for name, test := range tests {
-		if err := test.Run(); err != nil {
-			return fmt.Errorf("test %q failed: %v", name, err)
-		}
-	}
-	return nil
 }
 
 // Run executes the test.

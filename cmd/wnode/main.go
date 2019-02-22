@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -22,14 +22,14 @@ package main
 import (
 	"bufio"
 	"crypto/ecdsa"
-	"crypto/sha1"
-	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/binary"
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -38,8 +38,7 @@ import (
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/console"
 	"github.com/ubiq/go-ubiq/crypto"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/p2p"
 	"github.com/ubiq/go-ubiq/p2p/discover"
 	"github.com/ubiq/go-ubiq/p2p/nat"
@@ -67,33 +66,38 @@ var (
 	asymKey    *ecdsa.PrivateKey
 	nodeid     *ecdsa.PrivateKey
 	topic      whisper.TopicType
-	filterID   uint32
+	asymKeyID  string
+	filterID   string
+	symPass    string
 	msPassword string
 )
 
 // cmd arguments
 var (
-	echoMode       = flag.Bool("e", false, "echo mode: prints some arguments for diagnostics")
-	bootstrapMode  = flag.Bool("b", false, "boostrap node: don't actively connect to peers, wait for incoming connections")
-	forwarderMode  = flag.Bool("f", false, "forwarder mode: only forward messages, neither send nor decrypt messages")
-	mailServerMode = flag.Bool("s", false, "mail server mode: delivers expired messages on demand")
-	requestMail    = flag.Bool("r", false, "request expired messages from the bootstrap server")
-	asymmetricMode = flag.Bool("a", false, "use asymmetric encryption")
-	testMode       = flag.Bool("t", false, "use of predefined parameters for diagnostics")
-	generateKey    = flag.Bool("k", false, "generate and show the private key")
+	bootstrapMode  = flag.Bool("standalone", false, "boostrap node: don't actively connect to peers, wait for incoming connections")
+	forwarderMode  = flag.Bool("forwarder", false, "forwarder mode: only forward messages, neither send nor decrypt messages")
+	mailServerMode = flag.Bool("mailserver", false, "mail server mode: delivers expired messages on demand")
+	requestMail    = flag.Bool("mailclient", false, "request expired messages from the bootstrap server")
+	asymmetricMode = flag.Bool("asym", false, "use asymmetric encryption")
+	generateKey    = flag.Bool("generatekey", false, "generate and show the private key")
+	fileExMode     = flag.Bool("fileexchange", false, "file exchange mode")
+	testMode       = flag.Bool("test", false, "use of predefined parameters for diagnostics")
+	echoMode       = flag.Bool("echo", false, "echo mode: prints some arguments for diagnostics")
 
+	argVerbosity = flag.Int("verbosity", int(log.LvlError), "log verbosity level")
 	argTTL       = flag.Uint("ttl", 30, "time-to-live for messages in seconds")
 	argWorkTime  = flag.Uint("work", 5, "work time in seconds")
-	argPoW       = flag.Float64("pow", whisper.MinimumPoW, "PoW for normal messages in float format (e.g. 2.7)")
-	argServerPoW = flag.Float64("mspow", whisper.MinimumPoW, "PoW requirement for Mail Server request")
+	argMaxSize   = flag.Uint("maxsize", uint(whisper.DefaultMaxMessageSize), "max size of message")
+	argPoW       = flag.Float64("pow", whisper.DefaultMinimumPoW, "PoW for normal messages in float format (e.g. 2.7)")
+	argServerPoW = flag.Float64("mspow", whisper.DefaultMinimumPoW, "PoW requirement for Mail Server request")
 
-	argIP     = flag.String("ip", "", "IP address and port of this node (e.g. 127.0.0.1:30303)")
-	argSalt   = flag.String("salt", "", "salt (for topic and key derivation)")
-	argPub    = flag.String("pub", "", "public key for asymmetric encryption")
-	argDBPath = flag.String("dbpath", "", "path to the server's DB directory")
-	argIDFile = flag.String("idfile", "", "file name with node id (private key)")
-	argEnode  = flag.String("boot", "", "bootstrap node you want to connect to (e.g. enode://e454......08d50@52.176.211.200:16428)")
-	argTopic  = flag.String("topic", "", "topic in hexadecimal format (e.g. 70a4beef)")
+	argIP      = flag.String("ip", "", "IP address and port of this node (e.g. 127.0.0.1:30388)")
+	argPub     = flag.String("pub", "", "public key for asymmetric encryption")
+	argDBPath  = flag.String("dbpath", "", "path to the server's DB directory")
+	argIDFile  = flag.String("idfile", "", "file name with node id (private key)")
+	argEnode   = flag.String("boot", "", "bootstrap node you want to connect to (e.g. enode://e454......08d50@52.176.211.200:16428)")
+	argTopic   = flag.String("topic", "", "topic in hexadecimal format (e.g. 70a4beef)")
+	argSaveDir = flag.String("savedir", "", "directory where incoming messages will be saved as files")
 )
 
 func main() {
@@ -135,6 +139,14 @@ func processArgs() {
 		}
 	}
 
+	if len(*argSaveDir) > 0 {
+		if _, err := os.Stat(*argSaveDir); os.IsNotExist(err) {
+			utils.Fatalf("Download directory '%s' does not exist", *argSaveDir)
+		}
+	} else if *fileExMode {
+		utils.Fatalf("Parameter 'savedir' is mandatory for file exchange mode")
+	}
+
 	if *echoMode {
 		echo()
 	}
@@ -146,7 +158,6 @@ func echo() {
 	fmt.Printf("pow = %f \n", *argPoW)
 	fmt.Printf("mspow = %f \n", *argServerPoW)
 	fmt.Printf("ip = %s \n", *argIP)
-	fmt.Printf("salt = %s \n", *argSalt)
 	fmt.Printf("pub = %s \n", common.ToHex(crypto.FromECDSAPub(pub)))
 	fmt.Printf("idfile = %s \n", *argIDFile)
 	fmt.Printf("dbpath = %s \n", *argDBPath)
@@ -154,8 +165,7 @@ func echo() {
 }
 
 func initialize() {
-	glog.SetV(logger.Warn)
-	glog.SetToStderr(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*argVerbosity), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
 	done = make(chan struct{})
 	var peers []*discover.Node
@@ -172,11 +182,8 @@ func initialize() {
 	}
 
 	if *testMode {
-		password := []byte("test password for symmetric encryption")
-		salt := []byte("test salt for symmetric encryption")
-		symKey = pbkdf2.Key(password, salt, 64, 32, sha256.New)
-		topic = whisper.TopicType{0xFF, 0xFF, 0xFF, 0xFF}
-		msPassword = "mail server test password"
+		symPass = "wwww" // ascii code: 0x77777777
+		msPassword = "wwww"
 	}
 
 	if *bootstrapMode {
@@ -191,6 +198,11 @@ func initialize() {
 		peers = append(peers, peer)
 	}
 
+	cfg := &whisper.Config{
+		MaxMessageSize:     uint32(*argMaxSize),
+		MinimumAcceptedPOW: *argPoW,
+	}
+
 	if *mailServerMode {
 		if len(msPassword) == 0 {
 			msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
@@ -198,15 +210,48 @@ func initialize() {
 				utils.Fatalf("Failed to read Mail Server password: %s", err)
 			}
 		}
-		shh = whisper.NewWhisper(&mailServer)
+
+		shh = whisper.New(cfg)
+		shh.RegisterServer(&mailServer)
 		mailServer.Init(shh, *argDBPath, msPassword, *argServerPoW)
 	} else {
-		shh = whisper.NewWhisper(nil)
+		shh = whisper.New(cfg)
 	}
 
-	asymKey = shh.NewIdentity()
+	if *argPoW != whisper.DefaultMinimumPoW {
+		err := shh.SetMinimumPoW(*argPoW)
+		if err != nil {
+			utils.Fatalf("Failed to set PoW: %s", err)
+		}
+	}
+
+	if uint32(*argMaxSize) != whisper.DefaultMaxMessageSize {
+		err := shh.SetMaxMessageSize(uint32(*argMaxSize))
+		if err != nil {
+			utils.Fatalf("Failed to set max message size: %s", err)
+		}
+	}
+
+	asymKeyID, err = shh.NewKeyPair()
+	if err != nil {
+		utils.Fatalf("Failed to generate a new key pair: %s", err)
+	}
+
+	asymKey, err = shh.GetPrivateKey(asymKeyID)
+	if err != nil {
+		utils.Fatalf("Failed to retrieve a new key pair: %s", err)
+	}
+
 	if nodeid == nil {
-		nodeid = shh.NewIdentity()
+		tmpID, err := shh.NewKeyPair()
+		if err != nil {
+			utils.Fatalf("Failed to generate a new key pair: %s", err)
+		}
+
+		nodeid, err = shh.GetPrivateKey(tmpID)
+		if err != nil {
+			utils.Fatalf("Failed to retrieve a new key pair: %s", err)
+		}
 	}
 
 	maxPeers := 80
@@ -218,7 +263,7 @@ func initialize() {
 		Config: p2p.Config{
 			PrivateKey:     nodeid,
 			MaxPeers:       maxPeers,
-			Name:           common.MakeName("whisper-go", "5.0"),
+			Name:           common.MakeName("wnode", "5.0"),
 			Protocols:      shh.Protocols(),
 			ListenAddr:     *argIP,
 			NAT:            nat.Any(),
@@ -268,7 +313,11 @@ func configureNode() {
 	if *asymmetricMode {
 		if len(*argPub) == 0 {
 			s := scanLine("Please enter the peer's public key: ")
-			pub = crypto.ToECDSAPub(common.FromHex(s))
+			b := common.FromHex(s)
+			if b == nil {
+				utils.Fatalf("Error: can not convert hexadecimal string")
+			}
+			pub = crypto.ToECDSAPub(b)
 			if !isKeyValid(pub) {
 				utils.Fatalf("Error: invalid public key")
 			}
@@ -285,21 +334,27 @@ func configureNode() {
 		}
 	}
 
-	if !*asymmetricMode && !*forwarderMode && !*testMode {
-		pass, err := console.Stdin.PromptPassword("Please enter the password: ")
+	if !*asymmetricMode && !*forwarderMode {
+		if len(symPass) == 0 {
+			symPass, err = console.Stdin.PromptPassword("Please enter the password for symmetric encryption: ")
+			if err != nil {
+				utils.Fatalf("Failed to read passphrase: %v", err)
+			}
+		}
+
+		symKeyID, err := shh.AddSymKeyFromPassword(symPass)
 		if err != nil {
-			utils.Fatalf("Failed to read passphrase: %v", err)
+			utils.Fatalf("Failed to create symmetric key: %s", err)
 		}
-
-		if len(*argSalt) == 0 {
-			argSalt = scanLineA("Please enter the salt: ")
+		symKey, err = shh.GetSymKey(symKeyID)
+		if err != nil {
+			utils.Fatalf("Failed to save symmetric key: %s", err)
 		}
-
-		symKey = pbkdf2.Key([]byte(pass), []byte(*argSalt), 65356, 32, sha256.New)
-
 		if len(*argTopic) == 0 {
-			generateTopic([]byte(pass), []byte(*argSalt))
+			generateTopic([]byte(symPass))
 		}
+
+		fmt.Printf("Filter is configured for the topic: %x \n", topic)
 	}
 
 	if *mailServerMode {
@@ -309,24 +364,21 @@ func configureNode() {
 	}
 
 	filter := whisper.Filter{
-		KeySym:    symKey,
-		KeyAsym:   asymKey,
-		Topics:    []whisper.TopicType{topic},
-		AcceptP2P: p2pAccept,
+		KeySym:   symKey,
+		KeyAsym:  asymKey,
+		Topics:   [][]byte{topic[:]},
+		AllowP2P: p2pAccept,
 	}
-	filterID = shh.Watch(&filter)
-	fmt.Printf("Filter is configured for the topic: %x \n", topic)
+	filterID, err = shh.Subscribe(&filter)
+	if err != nil {
+		utils.Fatalf("Failed to install filter: %s", err)
+	}
 }
 
-func generateTopic(password, salt []byte) {
-	const rounds = 4000
-	const size = 128
-	x1 := pbkdf2.Key(password, salt, rounds, size, sha512.New)
-	x2 := pbkdf2.Key(password, salt, rounds, size, sha1.New)
-	x3 := pbkdf2.Key(x1, x2, rounds, size, sha256.New)
-
-	for i := 0; i < size; i++ {
-		topic[i%whisper.TopicLength] ^= x3[i]
+func generateTopic(password []byte) {
+	x := pbkdf2.Key(password, password, 4096, 128, sha512.New)
+	for i := 0; i < len(x); i++ {
+		topic[i%whisper.TopicLength] ^= x[i]
 	}
 }
 
@@ -360,6 +412,8 @@ func run() {
 
 	if *requestMail {
 		requestExpiredMessagesLoop()
+	} else if *fileExMode {
+		sendFilesLoop()
 	} else {
 		sendLoop()
 	}
@@ -378,9 +432,34 @@ func sendLoop() {
 		if *asymmetricMode {
 			// print your own message for convenience,
 			// because in asymmetric mode it is impossible to decrypt it
-			hour, min, sec := time.Now().Clock()
+			timestamp := time.Now().Unix()
 			from := crypto.PubkeyToAddress(asymKey.PublicKey)
-			fmt.Printf("\n%02d:%02d:%02d <%x>: %s\n", hour, min, sec, from, s)
+			fmt.Printf("\n%d <%x>: %s\n", timestamp, from, s)
+		}
+	}
+}
+
+func sendFilesLoop() {
+	for {
+		s := scanLine("")
+		if s == quitCommand {
+			fmt.Println("Quit command received")
+			close(done)
+			break
+		}
+		b, err := ioutil.ReadFile(s)
+		if err != nil {
+			fmt.Printf(">>> Error: %s \n", err)
+			continue
+		} else {
+			h := sendMsg(b)
+			if (h == common.Hash{}) {
+				fmt.Printf(">>> Error: message was not sent \n")
+			} else {
+				timestamp := time.Now().Unix()
+				from := crypto.PubkeyToAddress(asymKey.PublicKey)
+				fmt.Printf("\n%d <%x>: sent message with hash %x\n", timestamp, from, h)
+			}
 		}
 	}
 }
@@ -411,7 +490,7 @@ func scanUint(prompt string) uint32 {
 	return uint32(i)
 }
 
-func sendMsg(payload []byte) {
+func sendMsg(payload []byte) common.Hash {
 	params := whisper.MessageParams{
 		Src:      asymKey,
 		Dst:      pub,
@@ -423,17 +502,23 @@ func sendMsg(payload []byte) {
 		WorkTime: uint32(*argWorkTime),
 	}
 
-	msg := whisper.NewSentMessage(&params)
+	msg, err := whisper.NewSentMessage(&params)
+	if err != nil {
+		utils.Fatalf("failed to create new message: %s", err)
+	}
 	envelope, err := msg.Wrap(&params)
 	if err != nil {
 		fmt.Printf("failed to seal message: %v \n", err)
-		return
+		return common.Hash{}
 	}
 
 	err = shh.Send(envelope)
 	if err != nil {
 		fmt.Printf("failed to send message: %v \n", err)
+		return common.Hash{}
 	}
+
+	return envelope.Hash()
 }
 
 func messageLoop() {
@@ -449,7 +534,11 @@ func messageLoop() {
 		case <-ticker.C:
 			messages := f.Retrieve()
 			for _, msg := range messages {
-				printMessageInfo(msg)
+				if *fileExMode || len(msg.Payload) > 2048 {
+					writeMessageToFile(*argSaveDir, msg)
+				} else {
+					printMessageInfo(msg)
+				}
 			}
 		case <-done:
 			return
@@ -473,19 +562,47 @@ func printMessageInfo(msg *whisper.ReceivedMessage) {
 	}
 }
 
+func writeMessageToFile(dir string, msg *whisper.ReceivedMessage) {
+	timestamp := fmt.Sprintf("%d", msg.Sent)
+	name := fmt.Sprintf("%x", msg.EnvelopeHash)
+
+	var address common.Address
+	if msg.Src != nil {
+		address = crypto.PubkeyToAddress(*msg.Src)
+	}
+
+	if whisper.IsPubKeyEqual(msg.Src, &asymKey.PublicKey) {
+		// message from myself: don't save, only report
+		fmt.Printf("\n%s <%x>: message received: '%s'\n", timestamp, address, name)
+	} else if len(dir) > 0 {
+		fullpath := filepath.Join(dir, name)
+		err := ioutil.WriteFile(fullpath, msg.Payload, 0644)
+		if err != nil {
+			fmt.Printf("\n%s {%x}: message received but not saved: %s\n", timestamp, address, err)
+		} else {
+			fmt.Printf("\n%s {%x}: message received and saved as '%s' (%d bytes)\n", timestamp, address, name, len(msg.Payload))
+		}
+	} else {
+		fmt.Printf("\n%s {%x}: big message received (%d bytes), but not saved: %s\n", timestamp, address, len(msg.Payload), name)
+	}
+}
+
 func requestExpiredMessagesLoop() {
 	var key, peerID []byte
 	var timeLow, timeUpp uint32
 	var t string
 	var xt, empty whisper.TopicType
 
-	err := shh.AddSymKey(mailserver.MailServerKeyName, []byte(msPassword))
+	keyID, err := shh.AddSymKeyFromPassword(msPassword)
 	if err != nil {
 		utils.Fatalf("Failed to create symmetric key for mail request: %s", err)
 	}
-	key = shh.GetSymKey(mailserver.MailServerKeyName)
+	key, err = shh.GetSymKey(keyID)
+	if err != nil {
+		utils.Fatalf("Failed to save symmetric key for mail request: %s", err)
+	}
 	peerID = extractIdFromEnode(*argEnode)
-	shh.MarkPeerTrusted(peerID)
+	shh.AllowP2PMessagesFromPeer(peerID)
 
 	for {
 		timeLow = scanUint("Please enter the lower limit of the time range (unix timestamp): ")
@@ -517,7 +634,10 @@ func requestExpiredMessagesLoop() {
 		params.Src = nodeid
 		params.WorkTime = 5
 
-		msg := whisper.NewSentMessage(&params)
+		msg, err := whisper.NewSentMessage(&params)
+		if err != nil {
+			utils.Fatalf("failed to create new message: %s", err)
+		}
 		env, err := msg.Wrap(&params)
 		if err != nil {
 			utils.Fatalf("Wrap failed: %s", err)
@@ -536,7 +656,6 @@ func extractIdFromEnode(s string) []byte {
 	n, err := discover.ParseNode(s)
 	if err != nil {
 		utils.Fatalf("Failed to parse enode: %s", err)
-		return nil
 	}
 	return n.ID[:]
 }

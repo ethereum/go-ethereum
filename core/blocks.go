@@ -18,5 +18,5 @@ package core
 
 import "github.com/ubiq/go-ubiq/common"
 
-// Set of manually tracked bad hashes (usually hard forks)
+// BadHashes represent a set of manually tracked bad hashes (usually hard forks)
 var BadHashes = map[common.Hash]bool{}

@@ -96,7 +96,7 @@ type ChainStateReader interface {
 }
 
 // SyncProgress gives progress indications when the node is synchronising with
-// the Ethereum network.
+// the Ubiq network.
 type SyncProgress struct {
 	StartingBlock uint64 // Block number where sync began
 	CurrentBlock  uint64 // Current block number where sync is at

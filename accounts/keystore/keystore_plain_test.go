@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -140,21 +141,32 @@ func TestV3_PBKDF2_1(t *testing.T) {
 	testDecryptV3(tests["wikipage_test_vector_pbkdf2"], t)
 }
 
+var testsSubmodule = filepath.Join("..", "..", "tests", "testdata", "KeyStoreTests")
+
+func skipIfSubmoduleMissing(t *testing.T) {
+	if !common.FileExist(testsSubmodule) {
+		t.Skipf("can't find JSON tests from submodule at %s", testsSubmodule)
+	}
+}
+
 func TestV3_PBKDF2_2(t *testing.T) {
+	skipIfSubmoduleMissing(t)
 	t.Parallel()
-	tests := loadKeyStoreTestV3("../../tests/files/KeyStoreTests/basic_tests.json", t)
+	tests := loadKeyStoreTestV3(filepath.Join(testsSubmodule, "basic_tests.json"), t)
 	testDecryptV3(tests["test1"], t)
 }
 
 func TestV3_PBKDF2_3(t *testing.T) {
+	skipIfSubmoduleMissing(t)
 	t.Parallel()
-	tests := loadKeyStoreTestV3("../../tests/files/KeyStoreTests/basic_tests.json", t)
+	tests := loadKeyStoreTestV3(filepath.Join(testsSubmodule, "basic_tests.json"), t)
 	testDecryptV3(tests["python_generated_test_with_odd_iv"], t)
 }
 
 func TestV3_PBKDF2_4(t *testing.T) {
+	skipIfSubmoduleMissing(t)
 	t.Parallel()
-	tests := loadKeyStoreTestV3("../../tests/files/KeyStoreTests/basic_tests.json", t)
+	tests := loadKeyStoreTestV3(filepath.Join(testsSubmodule, "basic_tests.json"), t)
 	testDecryptV3(tests["evilnonce"], t)
 }
 
@@ -165,8 +177,9 @@ func TestV3_Scrypt_1(t *testing.T) {
 }
 
 func TestV3_Scrypt_2(t *testing.T) {
+	skipIfSubmoduleMissing(t)
 	t.Parallel()
-	tests := loadKeyStoreTestV3("../../tests/files/KeyStoreTests/basic_tests.json", t)
+	tests := loadKeyStoreTestV3(filepath.Join(testsSubmodule, "basic_tests.json"), t)
 	testDecryptV3(tests["test2"], t)
 }
 

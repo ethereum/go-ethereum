@@ -20,10 +20,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/rpc"
 	"github.com/robertkrimen/otto"
 )
@@ -241,17 +241,19 @@ func (b *bridge) Send(call otto.FunctionCall) (response otto.Value) {
 		throwJSException(err.Error())
 	}
 	var (
-		rawReq = []byte(reqVal.String())
+		rawReq = reqVal.String()
+		dec    = json.NewDecoder(strings.NewReader(rawReq))
 		reqs   []jsonrpcCall
 		batch  bool
 	)
+	dec.UseNumber() // avoid float64s
 	if rawReq[0] == '[' {
 		batch = true
-		json.Unmarshal(rawReq, &reqs)
+		dec.Decode(&reqs)
 	} else {
 		batch = false
 		reqs = make([]jsonrpcCall, 1)
-		json.Unmarshal(rawReq, &reqs[0])
+		dec.Decode(&reqs[0])
 	}
 
 	// Execute the requests.
@@ -306,7 +308,7 @@ func setError(resp *otto.Object, code int, msg string) {
 func throwJSException(msg interface{}) otto.Value {
 	val, err := otto.ToValue(msg)
 	if err != nil {
-		glog.V(logger.Error).Infof("Failed to serialize JavaScript exception %v: %v", msg, err)
+		log.Error("Failed to serialize JavaScript exception", "exception", msg, "err", err)
 	}
 	panic(val)
 }

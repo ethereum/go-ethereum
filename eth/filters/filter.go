@@ -19,8 +19,8 @@ package filters
 import (
 	"context"
 	"math"
-	"time"
 	"math/big"
+	"time"
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core"

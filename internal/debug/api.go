@@ -33,8 +33,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 )
 
 // Handler is the global debugging handler.
@@ -51,23 +50,22 @@ type HandlerT struct {
 	traceFile string
 }
 
-// Verbosity sets the glog verbosity ceiling.
-// The verbosity of individual packages and source files
-// can be raised using Vmodule.
+// Verbosity sets the log verbosity ceiling. The verbosity of individual packages
+// and source files can be raised using Vmodule.
 func (*HandlerT) Verbosity(level int) {
-	glog.SetV(level)
+	glogger.Verbosity(log.Lvl(level))
 }
 
-// Vmodule sets the glog verbosity pattern. See package
-// glog for details on pattern syntax.
+// Vmodule sets the log verbosity pattern. See package log for details on the
+// pattern syntax.
 func (*HandlerT) Vmodule(pattern string) error {
-	return glog.GetVModule().Set(pattern)
+	return glogger.Vmodule(pattern)
 }
 
-// BacktraceAt sets the glog backtrace location.
-// See package glog for details on pattern syntax.
+// BacktraceAt sets the log backtrace location. See package log for details on
+// the pattern syntax.
 func (*HandlerT) BacktraceAt(location string) error {
-	return glog.GetTraceLocation().Set(location)
+	return glogger.BacktraceAt(location)
 }
 
 // MemStats returns detailed runtime memory statistics.
@@ -112,7 +110,7 @@ func (h *HandlerT) StartCPUProfile(file string) error {
 	}
 	h.cpuW = f
 	h.cpuFile = file
-	glog.V(logger.Info).Infoln("CPU profiling started, writing to", h.cpuFile)
+	log.Info("CPU profiling started", "dump", h.cpuFile)
 	return nil
 }
 
@@ -124,7 +122,7 @@ func (h *HandlerT) StopCPUProfile() error {
 	if h.cpuW == nil {
 		return errors.New("CPU profiling not in progress")
 	}
-	glog.V(logger.Info).Infoln("done writing CPU profile to", h.cpuFile)
+	log.Info("Done writing CPU profile", "dump", h.cpuFile)
 	h.cpuW.Close()
 	h.cpuW = nil
 	h.cpuFile = ""
@@ -180,7 +178,7 @@ func (*HandlerT) Stacks() string {
 
 func writeProfile(name, file string) error {
 	p := pprof.Lookup(name)
-	glog.V(logger.Info).Infof("writing %d %s profile records to %s", p.Count(), name, file)
+	log.Info("Writing profile records", "count", p.Count(), "type", name, "dump", file)
 	f, err := os.Create(expandHome(file))
 	if err != nil {
 		return err

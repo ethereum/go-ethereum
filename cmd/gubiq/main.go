@@ -18,7 +18,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
 	"os"
 	"runtime"
@@ -30,16 +29,12 @@ import (
 	"github.com/ubiq/go-ubiq/cmd/utils"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/console"
-	"github.com/ubiq/go-ubiq/contracts/release"
 	"github.com/ubiq/go-ubiq/eth"
 	"github.com/ubiq/go-ubiq/ethclient"
 	"github.com/ubiq/go-ubiq/internal/debug"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/metrics"
 	"github.com/ubiq/go-ubiq/node"
-	"github.com/ubiq/go-ubiq/params"
-	"github.com/ubiq/go-ubiq/rlp"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -54,13 +49,95 @@ var (
 	relOracle = common.HexToAddress("0xfa7b9770ca4cb04296cac84f37736d4041251cdf")
 	// The app that holds all commands and flags.
 	app = utils.NewApp(gitCommit, "the go-ubiq command line interface")
+	// flags that configure the node
+	nodeFlags = []cli.Flag{
+		utils.IdentityFlag,
+		utils.UnlockedAccountFlag,
+		utils.PasswordFileFlag,
+		utils.BootnodesFlag,
+		utils.BootnodesV4Flag,
+		utils.BootnodesV5Flag,
+		utils.DataDirFlag,
+		utils.KeyStoreDirFlag,
+		utils.NoUSBFlag,
+		utils.UbqhashCacheDirFlag,
+		utils.UbqhashCachesInMemoryFlag,
+		utils.UbqhashCachesOnDiskFlag,
+		utils.UbqhashDatasetDirFlag,
+		utils.UbqhashDatasetsInMemoryFlag,
+		utils.UbqhashDatasetsOnDiskFlag,
+		utils.TxPoolNoLocalsFlag,
+		utils.TxPoolPriceLimitFlag,
+		utils.TxPoolPriceBumpFlag,
+		utils.TxPoolAccountSlotsFlag,
+		utils.TxPoolGlobalSlotsFlag,
+		utils.TxPoolAccountQueueFlag,
+		utils.TxPoolGlobalQueueFlag,
+		utils.TxPoolLifetimeFlag,
+		utils.FastSyncFlag,
+		utils.LightModeFlag,
+		utils.SyncModeFlag,
+		utils.LightServFlag,
+		utils.LightPeersFlag,
+		utils.LightKDFFlag,
+		utils.CacheFlag,
+		utils.TrieCacheGenFlag,
+		utils.ListenPortFlag,
+		utils.MaxPeersFlag,
+		utils.MaxPendingPeersFlag,
+		utils.EtherbaseFlag,
+		utils.GasPriceFlag,
+		utils.MinerThreadsFlag,
+		utils.MiningEnabledFlag,
+		utils.TargetGasLimitFlag,
+		utils.NATFlag,
+		utils.NoDiscoverFlag,
+		utils.DiscoveryV5Flag,
+		utils.NetrestrictFlag,
+		utils.NodeKeyFileFlag,
+		utils.NodeKeyHexFlag,
+		utils.DevModeFlag,
+		utils.TestnetFlag,
+		utils.RinkebyFlag,
+		utils.VMEnableDebugFlag,
+		utils.NetworkIdFlag,
+		utils.RPCCORSDomainFlag,
+		utils.EthStatsURLFlag,
+		utils.MetricsEnabledFlag,
+		utils.FakePoWFlag,
+		utils.NoCompactionFlag,
+		utils.GpoBlocksFlag,
+		utils.GpoPercentileFlag,
+		utils.ExtraDataFlag,
+		configFileFlag,
+	}
+
+	rpcFlags = []cli.Flag{
+		utils.RPCEnabledFlag,
+		utils.RPCListenAddrFlag,
+		utils.RPCPortFlag,
+		utils.RPCApiFlag,
+		utils.WSEnabledFlag,
+		utils.WSListenAddrFlag,
+		utils.WSPortFlag,
+		utils.WSApiFlag,
+		utils.WSAllowedOriginsFlag,
+		utils.IPCDisabledFlag,
+		utils.IPCPathFlag,
+	}
+
+	whisperFlags = []cli.Flag{
+		utils.WhisperEnabledFlag,
+		utils.WhisperMaxMessageSizeFlag,
+		utils.WhisperMinPOWFlag,
+	}
 )
 
 func init() {
 	// Initialize the CLI app and start Gubiq
 	app.Action = gubiq
 	app.HideVersion = true // we have a command to print the version
-	app.Copyright = "Copyright 2013-2016 The go-ubiq Authors"
+	app.Copyright = "Copyright 2013-2017 The go-gubiq Authors"
 	app.Commands = []cli.Command{
 		// See chaincmd.go:
 		initCommand,
@@ -80,74 +157,17 @@ func init() {
 		// See misccmd.go:
 		makedagCommand,
 		versionCommand,
+		bugCommand,
 		licenseCommand,
+		// See config.go
+		dumpConfigCommand,
 	}
 
-	app.Flags = []cli.Flag{
-		utils.IdentityFlag,
-		utils.UnlockedAccountFlag,
-		utils.PasswordFileFlag,
-		utils.BootnodesFlag,
-		utils.DataDirFlag,
-		utils.KeyStoreDirFlag,
-		utils.FastSyncFlag,
-		utils.LightModeFlag,
-		utils.LightServFlag,
-		utils.LightPeersFlag,
-		utils.LightKDFFlag,
-		utils.CacheFlag,
-		utils.TrieCacheGenFlag,
-		utils.JSpathFlag,
-		utils.ListenPortFlag,
-		utils.MaxPeersFlag,
-		utils.MaxPendingPeersFlag,
-		utils.EtherbaseFlag,
-		utils.GasPriceFlag,
-		utils.MinerThreadsFlag,
-		utils.MiningEnabledFlag,
-		utils.AutoDAGFlag,
-		utils.TargetGasLimitFlag,
-		utils.NATFlag,
-		utils.NoDiscoverFlag,
-		utils.DiscoveryV5Flag,
-		utils.NetrestrictFlag,
-		utils.NodeKeyFileFlag,
-		utils.NodeKeyHexFlag,
-		utils.RPCEnabledFlag,
-		utils.RPCListenAddrFlag,
-		utils.RPCPortFlag,
-		utils.RPCApiFlag,
-		utils.WSEnabledFlag,
-		utils.WSListenAddrFlag,
-		utils.WSPortFlag,
-		utils.WSApiFlag,
-		utils.WSAllowedOriginsFlag,
-		utils.IPCDisabledFlag,
-		utils.IPCApiFlag,
-		utils.IPCPathFlag,
-		utils.ExecFlag,
-		utils.PreloadJSFlag,
-		utils.WhisperEnabledFlag,
-		utils.DevModeFlag,
-		utils.TestNetFlag,
-		utils.VMForceJitFlag,
-		utils.VMJitCacheFlag,
-		utils.VMEnableJitFlag,
-		utils.VMEnableDebugFlag,
-		utils.NetworkIdFlag,
-		utils.RPCCORSDomainFlag,
-		utils.EthStatsURLFlag,
-		utils.MetricsEnabledFlag,
-		utils.FakePoWFlag,
-		utils.GpoMinGasPriceFlag,
-		utils.GpoMaxGasPriceFlag,
-		utils.GpoFullBlockRatioFlag,
-		utils.GpobaseStepDownFlag,
-		utils.GpobaseStepUpFlag,
-		utils.GpobaseCorrectionFactorFlag,
-		utils.ExtraDataFlag,
-	}
+	app.Flags = append(app.Flags, nodeFlags...)
+	app.Flags = append(app.Flags, rpcFlags...)
+	app.Flags = append(app.Flags, consoleFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
+	app.Flags = append(app.Flags, whisperFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
@@ -185,53 +205,6 @@ func gubiq(ctx *cli.Context) error {
 	return nil
 }
 
-func makeFullNode(ctx *cli.Context) *node.Node {
-	// Create the default extradata and construct the base node
-	var clientInfo = struct {
-		Version   uint
-		Name      string
-		GoVersion string
-		Os        string
-	}{uint(params.VersionMajor<<16 | params.VersionMinor<<8 | params.VersionPatch), clientIdentifier, runtime.Version(), runtime.GOOS}
-	extra, err := rlp.EncodeToBytes(clientInfo)
-	if err != nil {
-		glog.V(logger.Warn).Infoln("error setting canonical miner information:", err)
-	}
-	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
-		glog.V(logger.Warn).Infoln("error setting canonical miner information: extra exceeds", params.MaximumExtraDataSize)
-		glog.V(logger.Debug).Infof("extra: %x\n", extra)
-		extra = nil
-	}
-	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
-	utils.RegisterEthService(ctx, stack, extra)
-
-	// Whisper must be explicitly enabled, but is auto-enabled in --dev mode.
-	shhEnabled := ctx.GlobalBool(utils.WhisperEnabledFlag.Name)
-	shhAutoEnabled := !ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DevModeFlag.Name)
-	if shhEnabled || shhAutoEnabled {
-		utils.RegisterShhService(stack)
-	}
-	// Add the Ethereum Stats daemon if requested
-	if url := ctx.GlobalString(utils.EthStatsURLFlag.Name); url != "" {
-		utils.RegisterEthStatsService(stack, url)
-	}
-	// Add the release oracle service so it boots along with node.
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		config := release.Config{
-			Oracle: relOracle,
-			Major:  uint32(params.VersionMajor),
-			Minor:  uint32(params.VersionMinor),
-			Patch:  uint32(params.VersionPatch),
-		}
-		commit, _ := hex.DecodeString(gitCommit)
-		copy(config.Commit[:], commit)
-		return release.NewReleaseService(ctx, config)
-	}); err != nil {
-		utils.Fatalf("Failed to register the Gubiq release oracle service: %v", err)
-	}
-	return stack
-}
-
 // startNode boots up the system node and all registered protocols, after which
 // it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
 // miner.
@@ -264,7 +237,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		// Open and self derive any wallets already attached
 		for _, wallet := range stack.AccountManager().Wallets() {
 			if err := wallet.Open(""); err != nil {
-				glog.V(logger.Warn).Infof("Failed to open wallet %s: %v", wallet.URL(), err)
+				log.Warn("Failed to open wallet", "url", wallet.URL(), "err", err)
 			} else {
 				wallet.SelfDerive(accounts.DefaultBaseDerivationPath, stateReader)
 			}
@@ -273,24 +246,36 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		for event := range events {
 			if event.Arrive {
 				if err := event.Wallet.Open(""); err != nil {
-					glog.V(logger.Info).Infof("New wallet appeared: %s, failed to open: %s", event.Wallet.URL(), err)
+					log.Warn("New wallet appeared, failed to open", "url", event.Wallet.URL(), "err", err)
 				} else {
-					glog.V(logger.Info).Infof("New wallet appeared: %s, %s", event.Wallet.URL(), event.Wallet.Status())
+					log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", event.Wallet.Status())
 					event.Wallet.SelfDerive(accounts.DefaultBaseDerivationPath, stateReader)
 				}
 			} else {
-				glog.V(logger.Info).Infof("Old wallet dropped:  %s", event.Wallet.URL())
+				log.Info("Old wallet dropped", "url", event.Wallet.URL())
 				event.Wallet.Close()
 			}
 		}
 	}()
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
+		// Mining only makes sense if a full Ethereum node is running
 		var ethereum *eth.Ethereum
 		if err := stack.Service(&ethereum); err != nil {
 			utils.Fatalf("ubiq service not running: %v", err)
 		}
-		if err := ethereum.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name)); err != nil {
+		// Use a reduced number of threads if requested
+		if threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name); threads > 0 {
+			type threaded interface {
+				SetThreads(threads int)
+			}
+			if th, ok := ethereum.Engine().(threaded); ok {
+				th.SetThreads(threads)
+			}
+		}
+		// Set the gas price to the limits from the CLI and start mining
+		ethereum.TxPool().SetGasPrice(utils.GlobalBig(ctx, utils.GasPriceFlag.Name))
+		if err := ethereum.StartMining(true); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}

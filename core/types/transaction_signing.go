@@ -27,7 +27,12 @@ import (
 	"github.com/ubiq/go-ubiq/params"
 )
 
-var ErrInvalidChainId = errors.New("invalid chaid id for signer")
+var (
+	ErrInvalidChainId = errors.New("invalid chain id for signer")
+
+	errAbstractSigner     = errors.New("abstract signer")
+	abstractSignerAddress = common.HexToAddress("ffffffffffffffffffffffffffffffffffffffff")
+)
 
 // sigCache is used to cache the derived sender and contains
 // the signer used to derive it.
@@ -112,6 +117,9 @@ type EIP155Signer struct {
 }
 
 func NewEIP155Signer(chainId *big.Int) EIP155Signer {
+	if chainId == nil {
+		chainId = new(big.Int)
+	}
 	return EIP155Signer{
 		chainId:    chainId,
 		chainIdMul: new(big.Int).Mul(chainId, big.NewInt(2)),
@@ -167,7 +175,7 @@ func (s EIP155Signer) WithSignature(tx *Transaction, sig []byte) (*Transaction, 
 	cpy.data.R = new(big.Int).SetBytes(sig[:32])
 	cpy.data.S = new(big.Int).SetBytes(sig[32:64])
 	cpy.data.V = new(big.Int).SetBytes([]byte{sig[64]})
-	if s.chainId.BitLen() > 0 {
+	if s.chainId.Sign() != 0 {
 		cpy.data.V = big.NewInt(int64(sig[64] + 35))
 		cpy.data.V.Add(cpy.data.V, s.chainIdMul)
 	}

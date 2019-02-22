@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -18,205 +18,295 @@ package tests
 
 import (
 	"bytes"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
-	"io"
 	"math/big"
-	"strconv"
+	"reflect"
 	"strings"
-	"testing"
 
 	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/common/hexutil"
+	"github.com/ubiq/go-ubiq/common/math"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/types"
+	"github.com/ubiq/go-ubiq/core/vm"
+	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/ethdb"
-	"github.com/ubiq/go-ubiq/logger/glog"
 	"github.com/ubiq/go-ubiq/params"
 )
 
-func RunStateTestWithReader(chainConfig *params.ChainConfig, r io.Reader, skipTests []string) error {
-	tests := make(map[string]VmTest)
-	if err := readJson(r, &tests); err != nil {
-		return err
-	}
-
-	if err := runStateTests(chainConfig, tests, skipTests); err != nil {
-		return err
-	}
-
-	return nil
+// This table defines supported forks and their chain config.
+var stateTestForks = map[string]*params.ChainConfig{
+	"Frontier": &params.ChainConfig{
+		ChainId: big.NewInt(1),
+	},
+	"Homestead": &params.ChainConfig{
+		HomesteadBlock: big.NewInt(0),
+		ChainId:        big.NewInt(1),
+	},
+	"EIP150": &params.ChainConfig{
+		HomesteadBlock: big.NewInt(0),
+		EIP150Block:    big.NewInt(0),
+		ChainId:        big.NewInt(1),
+	},
+	"EIP158": &params.ChainConfig{
+		HomesteadBlock: big.NewInt(0),
+		EIP150Block:    big.NewInt(0),
+		EIP155Block:    big.NewInt(0),
+		EIP158Block:    big.NewInt(0),
+		ChainId:        big.NewInt(1),
+	},
+	"Metropolis": &params.ChainConfig{
+		HomesteadBlock:  big.NewInt(0),
+		EIP150Block:     big.NewInt(0),
+		EIP155Block:     big.NewInt(0),
+		EIP158Block:     big.NewInt(0),
+		MetropolisBlock: big.NewInt(0),
+		ChainId:         big.NewInt(1),
+	},
 }
 
-func RunStateTest(chainConfig *params.ChainConfig, p string, skipTests []string) error {
-	tests := make(map[string]VmTest)
-	if err := readJsonFile(p, &tests); err != nil {
-		return err
-	}
-
-	if err := runStateTests(chainConfig, tests, skipTests); err != nil {
-		return err
-	}
-
-	return nil
-
+// StateTest checks transaction processing without block context.
+// See https://github.com/ethereum/EIPs/issues/176 for the test format specification.
+type StateTest struct {
+	json stJSON
 }
 
-func BenchStateTest(chainConfig *params.ChainConfig, p string, conf bconf, b *testing.B) error {
-	tests := make(map[string]VmTest)
-	if err := readJsonFile(p, &tests); err != nil {
-		return err
+// StateSubtest selects a specific configuration of a General State Test.
+type StateSubtest struct {
+	Fork  string
+	Index int
+}
+
+func (t *StateTest) UnmarshalJSON(in []byte) error {
+	return json.Unmarshal(in, &t.json)
+}
+
+type stJSON struct {
+	Env  stEnv                    `json:"env"`
+	Pre  core.GenesisAlloc        `json:"pre"`
+	Tx   stTransaction            `json:"transaction"`
+	Out  hexutil.Bytes            `json:"out"`
+	Post map[string][]stPostState `json:"post"`
+}
+
+type stPostState struct {
+	Root    common.UnprefixedHash `json:"hash"`
+	Logs    *[]stLog              `json:"logs"`
+	Indexes struct {
+		Data  int `json:"data"`
+		Gas   int `json:"gas"`
+		Value int `json:"value"`
 	}
-	test, ok := tests[conf.name]
+}
+
+//go:generate gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
+
+type stEnv struct {
+	Coinbase   common.Address `json:"currentCoinbase"   gencodec:"required"`
+	Difficulty *big.Int       `json:"currentDifficulty" gencodec:"required"`
+	GasLimit   *big.Int       `json:"currentGasLimit"   gencodec:"required"`
+	Number     uint64         `json:"currentNumber"     gencodec:"required"`
+	Timestamp  uint64         `json:"currentTimestamp"  gencodec:"required"`
+}
+
+type stEnvMarshaling struct {
+	Coinbase   common.UnprefixedAddress
+	Difficulty *math.HexOrDecimal256
+	GasLimit   *math.HexOrDecimal256
+	Number     math.HexOrDecimal64
+	Timestamp  math.HexOrDecimal64
+}
+
+//go:generate gencodec -type stTransaction -field-override stTransactionMarshaling -out gen_sttransaction.go
+
+type stTransaction struct {
+	GasPrice   *big.Int `json:"gasPrice"`
+	Nonce      uint64   `json:"nonce"`
+	To         string   `json:"to"`
+	Data       []string `json:"data"`
+	GasLimit   []uint64 `json:"gasLimit"`
+	Value      []string `json:"value"`
+	PrivateKey []byte   `json:"secretKey"`
+}
+
+type stTransactionMarshaling struct {
+	GasPrice   *math.HexOrDecimal256
+	Nonce      math.HexOrDecimal64
+	GasLimit   []math.HexOrDecimal64
+	PrivateKey hexutil.Bytes
+}
+
+//go:generate gencodec -type stLog -field-override stLogMarshaling -out gen_stlog.go
+
+type stLog struct {
+	Address common.Address `json:"address"`
+	Data    []byte         `json:"data"`
+	Topics  []common.Hash  `json:"topics"`
+	Bloom   string         `json:"bloom"`
+}
+
+type stLogMarshaling struct {
+	Address common.UnprefixedAddress
+	Data    hexutil.Bytes
+	Topics  []common.UnprefixedHash
+}
+
+// Subtests returns all valid subtests of the test.
+func (t *StateTest) Subtests() []StateSubtest {
+	var sub []StateSubtest
+	for fork, pss := range t.json.Post {
+		for i, _ := range pss {
+			sub = append(sub, StateSubtest{fork, i})
+		}
+	}
+	return sub
+}
+
+// Run executes a specific subtest.
+func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config) error {
+	config, ok := stateTestForks[subtest.Fork]
 	if !ok {
-		return fmt.Errorf("test not found: %s", conf.name)
+		return fmt.Errorf("no config for fork %q", subtest.Fork)
 	}
-
-	// XXX Yeah, yeah...
-	env := make(map[string]string)
-	env["currentCoinbase"] = test.Env.CurrentCoinbase
-	env["currentDifficulty"] = test.Env.CurrentDifficulty
-	env["currentGasLimit"] = test.Env.CurrentGasLimit
-	env["currentNumber"] = test.Env.CurrentNumber
-	env["previousHash"] = test.Env.PreviousHash
-	if n, ok := test.Env.CurrentTimestamp.(float64); ok {
-		env["currentTimestamp"] = strconv.Itoa(int(n))
-	} else {
-		env["currentTimestamp"] = test.Env.CurrentTimestamp.(string)
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		benchStateTest(chainConfig, test, env, b)
-	}
-
-	return nil
-}
-
-func benchStateTest(chainConfig *params.ChainConfig, test VmTest, env map[string]string, b *testing.B) {
-	b.StopTimer()
+	block, _ := t.genesis(config).ToBlock()
 	db, _ := ethdb.NewMemDatabase()
-	statedb := makePreState(db, test.Pre)
-	b.StartTimer()
+	statedb := makePreState(db, t.json.Pre)
 
-	RunState(chainConfig, statedb, env, test.Exec)
-}
-
-func runStateTests(chainConfig *params.ChainConfig, tests map[string]VmTest, skipTests []string) error {
-	skipTest := make(map[string]bool, len(skipTests))
-	for _, name := range skipTests {
-		skipTest[name] = true
+	post := t.json.Post[subtest.Fork][subtest.Index]
+	msg, err := t.json.Tx.toMessage(post)
+	if err != nil {
+		return err
 	}
+	context := core.NewEVMContext(msg, block.Header(), nil, &t.json.Env.Coinbase)
+	context.GetHash = vmTestBlockHash
+	evm := vm.NewEVM(context, statedb, config, vmconfig)
 
-	for name, test := range tests {
-		if skipTest[name] {
-			glog.Infoln("Skipping state test", name)
-			continue
-		}
-
-		//fmt.Println("StateTest:", name)
-		if err := runStateTest(chainConfig, test); err != nil {
-			return fmt.Errorf("%s: %s\n", name, err.Error())
-		}
-
-		//glog.Infoln("State test passed: ", name)
-		//fmt.Println(string(statedb.Dump()))
+	gaspool := new(core.GasPool)
+	gaspool.AddGas(block.GasLimit())
+	snapshot := statedb.Snapshot()
+	if _, _, err := core.ApplyMessage(evm, msg, gaspool); err != nil {
+		statedb.RevertToSnapshot(snapshot)
 	}
-	return nil
-
-}
-
-func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
-	db, _ := ethdb.NewMemDatabase()
-	statedb := makePreState(db, test.Pre)
-
-	// XXX Yeah, yeah...
-	env := make(map[string]string)
-	env["currentCoinbase"] = test.Env.CurrentCoinbase
-	env["currentDifficulty"] = test.Env.CurrentDifficulty
-	env["currentGasLimit"] = test.Env.CurrentGasLimit
-	env["currentNumber"] = test.Env.CurrentNumber
-	env["previousHash"] = test.Env.PreviousHash
-	if n, ok := test.Env.CurrentTimestamp.(float64); ok {
-		env["currentTimestamp"] = strconv.Itoa(int(n))
-	} else {
-		env["currentTimestamp"] = test.Env.CurrentTimestamp.(string)
-	}
-
-	var (
-		ret []byte
-		// gas  *big.Int
-		// err  error
-		logs []*types.Log
-	)
-
-	ret, logs, _, _ = RunState(chainConfig, statedb, env, test.Transaction)
-
-	// Compare expected and actual return
-	var rexp []byte
-	if strings.HasPrefix(test.Out, "#") {
-		n, _ := strconv.Atoi(test.Out[1:])
-		rexp = make([]byte, n)
-	} else {
-		rexp = common.FromHex(test.Out)
-	}
-	if !bytes.Equal(rexp, ret) {
-		return fmt.Errorf("return failed. Expected %x, got %x\n", rexp, ret)
-	}
-
-	// check post state
-	for addr, account := range test.Post {
-		obj := statedb.GetStateObject(common.HexToAddress(addr))
-		if obj == nil {
-			return fmt.Errorf("did not find expected post-state account: %s", addr)
-		}
-
-		if obj.Balance().Cmp(common.Big(account.Balance)) != 0 {
-			return fmt.Errorf("(%x) balance failed. Expected: %v have: %v\n", obj.Address().Bytes()[:4], common.String2Big(account.Balance), obj.Balance())
-		}
-
-		if obj.Nonce() != common.String2Big(account.Nonce).Uint64() {
-			return fmt.Errorf("(%x) nonce failed. Expected: %v have: %v\n", obj.Address().Bytes()[:4], account.Nonce, obj.Nonce())
-		}
-
-		for addr, value := range account.Storage {
-			v := statedb.GetState(obj.Address(), common.HexToHash(addr))
-			vexp := common.HexToHash(value)
-
-			if v != vexp {
-				return fmt.Errorf("storage failed:\n%x: %s:\nexpected: %x\nhave:     %x\n(%v %v)\n", obj.Address().Bytes(), addr, vexp, v, vexp.Big(), v.Big())
-			}
-		}
-	}
-
-	root, _ := statedb.Commit(false)
-	if common.HexToHash(test.PostStateRoot) != root {
-		return fmt.Errorf("Post state root error. Expected: %s have: %x", test.PostStateRoot, root)
-	}
-
-	// check logs
-	if len(test.Logs) > 0 {
-		if err := checkLogs(test.Logs, logs); err != nil {
+	if post.Logs != nil {
+		if err := checkLogs(statedb.Logs(), *post.Logs); err != nil {
 			return err
 		}
 	}
-
+	root, _ := statedb.CommitTo(db, config.IsEIP158(block.Number()))
+	if root != common.Hash(post.Root) {
+		return fmt.Errorf("post state root mismatch: got %x, want %x", root, post.Root)
+	}
 	return nil
 }
 
-func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, env, tx map[string]string) ([]byte, []*types.Log, *big.Int, error) {
-	environment, msg := NewEVMEnvironment(false, chainConfig, statedb, env, tx)
-	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
+func (t *StateTest) gasLimit(subtest StateSubtest) uint64 {
+	return t.json.Tx.GasLimit[t.json.Post[subtest.Fork][subtest.Index].Indexes.Gas]
+}
 
-	root, _ := statedb.Commit(false)
-	statedb.Reset(root)
-
-	snapshot := statedb.Snapshot()
-
-	ret, gasUsed, err := core.ApplyMessage(environment, msg, gaspool)
-	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || core.IsGasLimitErr(err) {
-		statedb.RevertToSnapshot(snapshot)
+func makePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB {
+	sdb := state.NewDatabase(db)
+	statedb, _ := state.New(common.Hash{}, sdb)
+	for addr, a := range accounts {
+		statedb.SetCode(addr, a.Code)
+		statedb.SetNonce(addr, a.Nonce)
+		statedb.SetBalance(addr, a.Balance)
+		for k, v := range a.Storage {
+			statedb.SetState(addr, k, v)
+		}
 	}
-	statedb.Commit(chainConfig.IsEIP158(environment.Context.BlockNumber))
+	// Commit and re-open to start with a clean state.
+	root, _ := statedb.CommitTo(db, false)
+	statedb, _ = state.New(root, sdb)
+	return statedb
+}
 
-	return ret, statedb.Logs(), gasUsed, err
+func (t *StateTest) genesis(config *params.ChainConfig) *core.Genesis {
+	return &core.Genesis{
+		Config:     config,
+		Coinbase:   t.json.Env.Coinbase,
+		Difficulty: t.json.Env.Difficulty,
+		GasLimit:   t.json.Env.GasLimit.Uint64(),
+		Number:     t.json.Env.Number,
+		Timestamp:  t.json.Env.Timestamp,
+		Alloc:      t.json.Pre,
+	}
+}
+
+func (tx *stTransaction) toMessage(ps stPostState) (core.Message, error) {
+	// Derive sender from private key if present.
+	var from common.Address
+	if len(tx.PrivateKey) > 0 {
+		key, err := crypto.ToECDSA(tx.PrivateKey)
+		if err != nil {
+			return nil, fmt.Errorf("invalid private key: %v", err)
+		}
+		from = crypto.PubkeyToAddress(key.PublicKey)
+	}
+	// Parse recipient if present.
+	var to *common.Address
+	if tx.To != "" {
+		to = new(common.Address)
+		if err := to.UnmarshalText([]byte(tx.To)); err != nil {
+			return nil, fmt.Errorf("invalid to address: %v", err)
+		}
+	}
+
+	// Get values specific to this post state.
+	if ps.Indexes.Data > len(tx.Data) {
+		return nil, fmt.Errorf("tx data index %d out of bounds", ps.Indexes.Data)
+	}
+	if ps.Indexes.Value > len(tx.Value) {
+		return nil, fmt.Errorf("tx value index %d out of bounds", ps.Indexes.Value)
+	}
+	if ps.Indexes.Gas > len(tx.GasLimit) {
+		return nil, fmt.Errorf("tx gas limit index %d out of bounds", ps.Indexes.Gas)
+	}
+	dataHex := tx.Data[ps.Indexes.Data]
+	valueHex := tx.Value[ps.Indexes.Value]
+	gasLimit := tx.GasLimit[ps.Indexes.Gas]
+	// Value, Data hex encoding is messy: https://github.com/ethereum/tests/issues/203
+	value := new(big.Int)
+	if valueHex != "0x" {
+		v, ok := math.ParseBig256(valueHex)
+		if !ok {
+			return nil, fmt.Errorf("invalid tx value %q", valueHex)
+		}
+		value = v
+	}
+	data, err := hex.DecodeString(strings.TrimPrefix(dataHex, "0x"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid tx data %q", dataHex)
+	}
+
+	msg := types.NewMessage(from, to, tx.Nonce, value, new(big.Int).SetUint64(gasLimit), tx.GasPrice, data, true)
+	return msg, nil
+}
+
+func checkLogs(have []*types.Log, want []stLog) error {
+	if len(have) != len(want) {
+		return fmt.Errorf("logs length mismatch: got %d, want %d", len(have), len(want))
+	}
+	for i := range have {
+		if have[i].Address != want[i].Address {
+			return fmt.Errorf("log address %d: got %x, want %x", i, have[i].Address, want[i].Address)
+		}
+		if !bytes.Equal(have[i].Data, want[i].Data) {
+			return fmt.Errorf("log data %d: got %x, want %x", i, have[i].Data, want[i].Data)
+		}
+		if !reflect.DeepEqual(have[i].Topics, want[i].Topics) {
+			return fmt.Errorf("log topics %d:\ngot  %x\nwant %x", i, have[i].Topics, want[i].Topics)
+		}
+		genBloom := math.PaddedBigBytes(types.LogsBloom([]*types.Log{have[i]}), 256)
+		var wantBloom types.Bloom
+		if err := hexutil.UnmarshalFixedUnprefixedText("Bloom", []byte(want[i].Bloom), wantBloom[:]); err != nil {
+			return fmt.Errorf("test log %d has invalid bloom: %v", i, err)
+		}
+		if !bytes.Equal(genBloom, wantBloom[:]) {
+			return fmt.Errorf("bloom mismatch")
+		}
+	}
+	return nil
 }

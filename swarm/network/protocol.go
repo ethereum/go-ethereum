@@ -31,15 +31,14 @@ The bzz protocol component speaks the bzz protocol
 */
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
 	"time"
 
 	"github.com/ubiq/go-ubiq/contracts/chequebook"
-	"github.com/ubiq/go-ubiq/errs"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/p2p"
 	"github.com/ubiq/go-ubiq/p2p/discover"
 	bzzswap "github.com/ubiq/go-ubiq/swarm/services/swap"
@@ -54,32 +53,6 @@ const (
 	NetworkId          = 3
 )
 
-const (
-	ErrMsgTooLarge = iota
-	ErrDecode
-	ErrInvalidMsgCode
-	ErrVersionMismatch
-	ErrNetworkIdMismatch
-	ErrNoStatusMsg
-	ErrExtraStatusMsg
-	ErrSwap
-	ErrSync
-	ErrUnwanted
-)
-
-var errorToString = map[int]string{
-	ErrMsgTooLarge:       "Message too long",
-	ErrDecode:            "Invalid message",
-	ErrInvalidMsgCode:    "Invalid message code",
-	ErrVersionMismatch:   "Protocol version mismatch",
-	ErrNetworkIdMismatch: "NetworkId mismatch",
-	ErrNoStatusMsg:       "No status message",
-	ErrExtraStatusMsg:    "Extra status message",
-	ErrSwap:              "SWAP error",
-	ErrSync:              "Sync error",
-	ErrUnwanted:          "Unwanted peer",
-}
-
 // bzz represents the swarm wire protocol
 // an instance is running on each peer
 type bzz struct {
@@ -92,7 +65,6 @@ type bzz struct {
 	remoteAddr *peerAddr            // remote peers address
 	peer       *p2p.Peer            // the p2p peer object
 	rw         p2p.MsgReadWriter    // messageReadWriter to send messages to
-	errors     *errs.Errors         // errors table
 	backend    chequebook.Backend
 	lastActive time.Time
 	NetworkId  uint64
@@ -163,17 +135,13 @@ the main protocol loop that
 func run(requestDb *storage.LDBDatabase, depo StorageHandler, backend chequebook.Backend, hive *Hive, dbaccess *DbAccess, sp *bzzswap.SwapParams, sy *SyncParams, networkId uint64, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 
 	self := &bzz{
-		storage:   depo,
-		backend:   backend,
-		hive:      hive,
-		dbAccess:  dbaccess,
-		requestDb: requestDb,
-		peer:      p,
-		rw:        rw,
-		errors: &errs.Errors{
-			Package: "BZZ",
-			Errors:  errorToString,
-		},
+		storage:     depo,
+		backend:     backend,
+		hive:        hive,
+		dbAccess:    dbaccess,
+		requestDb:   requestDb,
+		peer:        p,
+		rw:          rw,
 		swapParams:  sp,
 		syncParams:  sy,
 		swapEnabled: hive.swapEnabled,
@@ -201,7 +169,7 @@ func run(requestDb *storage.LDBDatabase, depo StorageHandler, backend chequebook
 	// the main forever loop that handles incoming requests
 	for {
 		if self.hive.blockRead {
-			glog.V(logger.Warn).Infof("Cannot read network")
+			log.Warn(fmt.Sprintf("Cannot read network"))
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
@@ -221,12 +189,12 @@ func (self *bzz) Drop() {
 // one cycle of the main forever loop that handles and dispatches incoming messages
 func (self *bzz) handle() error {
 	msg, err := self.rw.ReadMsg()
-	glog.V(logger.Debug).Infof("<- %v", msg)
+	log.Debug(fmt.Sprintf("<- %v", msg))
 	if err != nil {
 		return err
 	}
 	if msg.Size > ProtocolMaxMsgSize {
-		return self.protoError(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
+		return fmt.Errorf("message too long: %v > %v", msg.Size, ProtocolMaxMsgSize)
 	}
 	// make sure that the payload has been fully consumed
 	defer msg.Discard()
@@ -236,21 +204,21 @@ func (self *bzz) handle() error {
 	case statusMsg:
 		// no extra status message allowed. The one needed already handled by
 		// handleStatus
-		glog.V(logger.Debug).Infof("Status message: %v", msg)
-		return self.protoError(ErrExtraStatusMsg, "")
+		log.Debug(fmt.Sprintf("Status message: %v", msg))
+		return errors.New("extra status message")
 
 	case storeRequestMsg:
 		// store requests are dispatched to netStore
 		var req storeRequestMsgData
 		if err := msg.Decode(&req); err != nil {
-			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
+			return fmt.Errorf("<- %v: %v", msg, err)
 		}
-		if len(req.SData) < 9 {
-			return self.protoError(ErrDecode, "<- %v: Data too short (%v)", msg)
+		if n := len(req.SData); n < 9 {
+			return fmt.Errorf("<- %v: Data too short (%v)", msg, n)
 		}
 		// last Active time is set only when receiving chunks
 		self.lastActive = time.Now()
-		glog.V(logger.Detail).Infof("incoming store request: %s", req.String())
+		log.Trace(fmt.Sprintf("incoming store request: %s", req.String()))
 		// swap accounting is done within forwarding
 		self.storage.HandleStoreRequestMsg(&req, &peer{bzz: self})
 
@@ -258,14 +226,14 @@ func (self *bzz) handle() error {
 		// retrieve Requests are dispatched to netStore
 		var req retrieveRequestMsgData
 		if err := msg.Decode(&req); err != nil {
-			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
+			return fmt.Errorf("<- %v: %v", msg, err)
 		}
 		req.from = &peer{bzz: self}
 		// if request is lookup and not to be delivered
 		if req.isLookup() {
-			glog.V(logger.Detail).Infof("self lookup for %v: responding with peers only...", req.from)
+			log.Trace(fmt.Sprintf("self lookup for %v: responding with peers only...", req.from))
 		} else if req.Key == nil {
-			return self.protoError(ErrDecode, "protocol handler: req.Key == nil || req.Timeout == nil")
+			return fmt.Errorf("protocol handler: req.Key == nil || req.Timeout == nil")
 		} else {
 			// swap accounting is done within netStore
 			self.storage.HandleRetrieveRequestMsg(&req, &peer{bzz: self})
@@ -278,18 +246,18 @@ func (self *bzz) handle() error {
 		// dispatches new peer data to the hive that adds them to KADDB
 		var req peersMsgData
 		if err := msg.Decode(&req); err != nil {
-			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
+			return fmt.Errorf("<- %v: %v", msg, err)
 		}
 		req.from = &peer{bzz: self}
-		glog.V(logger.Detail).Infof("<- peer addresses: %v", req)
+		log.Trace(fmt.Sprintf("<- peer addresses: %v", req))
 		self.hive.HandlePeersMsg(&req, &peer{bzz: self})
 
 	case syncRequestMsg:
 		var req syncRequestMsgData
 		if err := msg.Decode(&req); err != nil {
-			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
+			return fmt.Errorf("<- %v: %v", msg, err)
 		}
-		glog.V(logger.Debug).Infof("<- sync request: %v", req)
+		log.Debug(fmt.Sprintf("<- sync request: %v", req))
 		self.lastActive = time.Now()
 		self.sync(req.SyncState)
 
@@ -297,13 +265,13 @@ func (self *bzz) handle() error {
 		// coming from parent node offering
 		var req unsyncedKeysMsgData
 		if err := msg.Decode(&req); err != nil {
-			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
+			return fmt.Errorf("<- %v: %v", msg, err)
 		}
-		glog.V(logger.Debug).Infof("<- unsynced keys : %s", req.String())
+		log.Debug(fmt.Sprintf("<- unsynced keys : %s", req.String()))
 		err := self.storage.HandleUnsyncedKeysMsg(&req, &peer{bzz: self})
 		self.lastActive = time.Now()
 		if err != nil {
-			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
+			return fmt.Errorf("<- %v: %v", msg, err)
 		}
 
 	case deliveryRequestMsg:
@@ -311,13 +279,13 @@ func (self *bzz) handle() error {
 		// also relays the last synced state to the source
 		var req deliveryRequestMsgData
 		if err := msg.Decode(&req); err != nil {
-			return self.protoError(ErrDecode, "<-msg %v: %v", msg, err)
+			return fmt.Errorf("<-msg %v: %v", msg, err)
 		}
-		glog.V(logger.Debug).Infof("<- delivery request: %s", req.String())
+		log.Debug(fmt.Sprintf("<- delivery request: %s", req.String()))
 		err := self.storage.HandleDeliveryRequestMsg(&req, &peer{bzz: self})
 		self.lastActive = time.Now()
 		if err != nil {
-			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
+			return fmt.Errorf("<- %v: %v", msg, err)
 		}
 
 	case paymentMsg:
@@ -325,15 +293,15 @@ func (self *bzz) handle() error {
 		if self.swapEnabled {
 			var req paymentMsgData
 			if err := msg.Decode(&req); err != nil {
-				return self.protoError(ErrDecode, "<- %v: %v", msg, err)
+				return fmt.Errorf("<- %v: %v", msg, err)
 			}
-			glog.V(logger.Debug).Infof("<- payment: %s", req.String())
+			log.Debug(fmt.Sprintf("<- payment: %s", req.String()))
 			self.swap.Receive(int(req.Units), req.Promise)
 		}
 
 	default:
 		// no other message is allowed
-		return self.protoError(ErrInvalidMsgCode, "%v", msg.Code)
+		return fmt.Errorf("invalid message code: %v", msg.Code)
 	}
 	return nil
 }
@@ -353,7 +321,7 @@ func (self *bzz) handleStatus() (err error) {
 
 	err = p2p.Send(self.rw, statusMsg, handshake)
 	if err != nil {
-		self.protoError(ErrNoStatusMsg, err.Error())
+		return err
 	}
 
 	// read and handle remote status
@@ -364,45 +332,45 @@ func (self *bzz) handleStatus() (err error) {
 	}
 
 	if msg.Code != statusMsg {
-		self.protoError(ErrNoStatusMsg, "first msg has code %x (!= %x)", msg.Code, statusMsg)
+		return fmt.Errorf("first msg has code %x (!= %x)", msg.Code, statusMsg)
 	}
 
 	if msg.Size > ProtocolMaxMsgSize {
-		return self.protoError(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
+		return fmt.Errorf("message too long: %v > %v", msg.Size, ProtocolMaxMsgSize)
 	}
 
 	var status statusMsgData
 	if err := msg.Decode(&status); err != nil {
-		return self.protoError(ErrDecode, " %v: %v", msg, err)
+		return fmt.Errorf("<- %v: %v", msg, err)
 	}
 
 	if status.NetworkId != self.NetworkId {
-		return self.protoError(ErrNetworkIdMismatch, "%d (!= %d)", status.NetworkId, self.NetworkId)
+		return fmt.Errorf("network id mismatch: %d (!= %d)", status.NetworkId, self.NetworkId)
 	}
 
 	if Version != status.Version {
-		return self.protoError(ErrVersionMismatch, "%d (!= %d)", status.Version, Version)
+		return fmt.Errorf("protocol version mismatch: %d (!= %d)", status.Version, Version)
 	}
 
 	self.remoteAddr = self.peerAddr(status.Addr)
-	glog.V(logger.Detail).Infof("self: advertised IP: %v, peer advertised: %v, local address: %v\npeer: advertised IP: %v, remote address: %v\n", self.selfAddr(), self.remoteAddr, self.peer.LocalAddr(), status.Addr.IP, self.peer.RemoteAddr())
+	log.Trace(fmt.Sprintf("self: advertised IP: %v, peer advertised: %v, local address: %v\npeer: advertised IP: %v, remote address: %v\n", self.selfAddr(), self.remoteAddr, self.peer.LocalAddr(), status.Addr.IP, self.peer.RemoteAddr()))
 
 	if self.swapEnabled {
 		// set remote profile for accounting
 		self.swap, err = bzzswap.NewSwap(self.swapParams, status.Swap, self.backend, self)
 		if err != nil {
-			return self.protoError(ErrSwap, "%v", err)
+			return err
 		}
 	}
 
-	glog.V(logger.Info).Infof("Peer %08x is capable (%d/%d)", self.remoteAddr.Addr[:4], status.Version, status.NetworkId)
+	log.Info(fmt.Sprintf("Peer %08x is capable (%d/%d)", self.remoteAddr.Addr[:4], status.Version, status.NetworkId))
 	err = self.hive.addPeer(&peer{bzz: self})
 	if err != nil {
-		return self.protoError(ErrUnwanted, "%v", err)
+		return err
 	}
 
 	// hive sets syncstate so sync should start after node added
-	glog.V(logger.Info).Infof("syncronisation request sent with %v", self.syncState)
+	log.Info(fmt.Sprintf("syncronisation request sent with %v", self.syncState))
 	self.syncRequest()
 
 	return nil
@@ -411,7 +379,7 @@ func (self *bzz) handleStatus() (err error) {
 func (self *bzz) sync(state *syncState) error {
 	// syncer setup
 	if self.syncer != nil {
-		return self.protoError(ErrSync, "sync request can only be sent once")
+		return errors.New("sync request can only be sent once")
 	}
 
 	cnt := self.dbAccess.counter()
@@ -421,7 +389,7 @@ func (self *bzz) sync(state *syncState) error {
 	// an explicitly received nil syncstate disables syncronisation
 	if state == nil {
 		self.syncEnabled = false
-		glog.V(logger.Warn).Infof("syncronisation disabled for peer %v", self)
+		log.Warn(fmt.Sprintf("syncronisation disabled for peer %v", self))
 		state = &syncState{DbSyncState: &storage.DbSyncState{}, Synced: true}
 	} else {
 		state.synced = make(chan bool)
@@ -430,7 +398,7 @@ func (self *bzz) sync(state *syncState) error {
 			state.Start = storage.Key(start[:])
 			state.Stop = storage.Key(stop[:])
 		}
-		glog.V(logger.Debug).Infof("syncronisation requested by peer %v at state %v", self, state)
+		log.Debug(fmt.Sprintf("syncronisation requested by peer %v at state %v", self, state))
 	}
 	var err error
 	self.syncer, err = newSyncer(
@@ -441,9 +409,9 @@ func (self *bzz) sync(state *syncState) error {
 		self.syncParams, state, func() bool { return self.syncEnabled },
 	)
 	if err != nil {
-		return self.protoError(ErrSync, "%v", err)
+		return nil
 	}
-	glog.V(logger.Detail).Infof("syncer set for peer %v", self)
+	log.Trace(fmt.Sprintf("syncer set for peer %v", self))
 	return nil
 }
 
@@ -490,11 +458,11 @@ func (self *bzz) store(req *storeRequestMsgData) error {
 func (self *bzz) syncRequest() error {
 	req := &syncRequestMsgData{}
 	if self.hive.syncEnabled {
-		glog.V(logger.Debug).Infof("syncronisation request to peer %v at state %v", self, self.syncState)
+		log.Debug(fmt.Sprintf("syncronisation request to peer %v at state %v", self, self.syncState))
 		req.SyncState = self.syncState
 	}
 	if self.syncState == nil {
-		glog.V(logger.Warn).Infof("syncronisation disabled for peer %v at state %v", self, self.syncState)
+		log.Warn(fmt.Sprintf("syncronisation disabled for peer %v at state %v", self, self.syncState))
 	}
 	return self.send(syncRequestMsg, req)
 }
@@ -532,17 +500,11 @@ func (self *bzz) peers(req *peersMsgData) error {
 	return self.send(peersMsg, req)
 }
 
-func (self *bzz) protoError(code int, format string, params ...interface{}) (err *errs.Error) {
-	err = self.errors.New(code, format, params...)
-	err.Log(glog.V(logger.Info))
-	return
-}
-
 func (self *bzz) send(msg uint64, data interface{}) error {
 	if self.hive.blockWrite {
 		return fmt.Errorf("network write blocked")
 	}
-	glog.V(logger.Detail).Infof("-> %v: %v (%T) to %v", msg, data, data, self)
+	log.Trace(fmt.Sprintf("-> %v: %v (%T) to %v", msg, data, data, self))
 	err := p2p.Send(self.rw, msg, data)
 	if err != nil {
 		self.Drop()

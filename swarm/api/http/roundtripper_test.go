@@ -18,13 +18,13 @@ package http
 
 import (
 	"io/ioutil"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 )
-
-const port = "3222"
 
 func TestRoundTripper(t *testing.T) {
 	serveMux := http.NewServeMux()
@@ -36,9 +36,12 @@ func TestRoundTripper(t *testing.T) {
 			http.Error(w, "Method "+r.Method+" is not supported.", http.StatusMethodNotAllowed)
 		}
 	})
-	go http.ListenAndServe(":"+port, serveMux)
 
-	rt := &RoundTripper{Port: port}
+	srv := httptest.NewServer(serveMux)
+	defer srv.Close()
+
+	host, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	rt := &RoundTripper{Host: host, Port: port}
 	trans := &http.Transport{}
 	trans.RegisterProtocol("bzz", rt)
 	client := &http.Client{Transport: trans}

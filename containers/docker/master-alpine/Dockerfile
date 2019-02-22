@@ -2,7 +2,7 @@ FROM alpine:3.5
 
 RUN \
   apk add --update go git make gcc musl-dev linux-headers ca-certificates && \
-  git clone --depth 1 --branch release/1.5 https://github.com/ubiq/go-ubiq && \
+  git clone --depth 1 --branch release/1.6 https://github.com/ubiq/go-ubiq && \
   (cd go-ubiq && make gubiq) && \
   cp go-ubiq/build/bin/gubiq /gubiq && \
   apk del go git make gcc musl-dev linux-headers && \

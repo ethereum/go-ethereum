@@ -380,7 +380,12 @@ func builtinString_split(call FunctionCall) Value {
 			split = split[:limit]
 		}
 
-		return call.runtime.toValue(split)
+		valueArray := make([]Value, len(split))
+		for index, value := range split {
+			valueArray[index] = toValue_string(value)
+		}
+
+		return toValue_object(call.runtime.newArrayOf(valueArray))
 	}
 }
 

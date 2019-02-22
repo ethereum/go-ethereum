@@ -18,7 +18,6 @@ package hexutil
 
 import (
 	"bytes"
-	"encoding/hex"
 	"math/big"
 	"testing"
 )
@@ -29,9 +28,10 @@ type marshalTest struct {
 }
 
 type unmarshalTest struct {
-	input   string
-	want    interface{}
-	wantErr error
+	input        string
+	want         interface{}
+	wantErr      error // if set, decoding must fail on any platform
+	wantErr32bit error // if set, decoding must fail on 32bit platforms (used for Uint tests)
 }
 
 var (
@@ -47,6 +47,7 @@ var (
 		{referenceBig("ff"), "0xff"},
 		{referenceBig("112233445566778899aabbccddeeff"), "0x112233445566778899aabbccddeeff"},
 		{referenceBig("80a7f2c1bcc396c00"), "0x80a7f2c1bcc396c00"},
+		{referenceBig("-80a7f2c1bcc396c00"), "-0x80a7f2c1bcc396c00"},
 	}
 
 	encodeUint64Tests = []marshalTest{
@@ -56,14 +57,21 @@ var (
 		{uint64(0x1122334455667788), "0x1122334455667788"},
 	}
 
+	encodeUintTests = []marshalTest{
+		{uint(0), "0x0"},
+		{uint(1), "0x1"},
+		{uint(0xff), "0xff"},
+		{uint(0x11223344), "0x11223344"},
+	}
+
 	decodeBytesTests = []unmarshalTest{
 		// invalid
 		{input: ``, wantErr: ErrEmptyString},
 		{input: `0`, wantErr: ErrMissingPrefix},
-		{input: `0x0`, wantErr: hex.ErrLength},
-		{input: `0x023`, wantErr: hex.ErrLength},
-		{input: `0xxx`, wantErr: hex.InvalidByteError('x')},
-		{input: `0x01zz01`, wantErr: hex.InvalidByteError('z')},
+		{input: `0x0`, wantErr: ErrOddLength},
+		{input: `0x023`, wantErr: ErrOddLength},
+		{input: `0xxx`, wantErr: ErrSyntax},
+		{input: `0x01zz01`, wantErr: ErrSyntax},
 		// valid
 		{input: `0x`, want: []byte{}},
 		{input: `0X`, want: []byte{}},
@@ -83,6 +91,10 @@ var (
 		{input: `0x01`, wantErr: ErrLeadingZero},
 		{input: `0xx`, wantErr: ErrSyntax},
 		{input: `0x1zz01`, wantErr: ErrSyntax},
+		{
+			input:   `0x10000000000000000000000000000000000000000000000000000000000000000`,
+			wantErr: ErrBig256Range,
+		},
 		// valid
 		{input: `0x0`, want: big.NewInt(0)},
 		{input: `0x2`, want: big.NewInt(0x2)},
@@ -98,6 +110,10 @@ var (
 		{
 			input: `0xffffffffffffffffffffffffffffffffffff`,
 			want:  referenceBig("ffffffffffffffffffffffffffffffffffff"),
+		},
+		{
+			input: `0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`,
+			want:  referenceBig("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
 		},
 	}
 

@@ -32,7 +32,6 @@ import (
 	"github.com/ubiq/go-ubiq/accounts"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/crypto"
-	"github.com/ubiq/go-ubiq/crypto/secp256k1"
 	"github.com/pborman/uuid"
 )
 
@@ -125,14 +124,13 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 	if err != nil {
 		return err
 	}
-
-	privkey, err := hex.DecodeString(keyJSON.PrivateKey)
+	privkey, err := crypto.HexToECDSA(keyJSON.PrivateKey)
 	if err != nil {
 		return err
 	}
 
 	k.Address = common.BytesToAddress(addr)
-	k.PrivateKey = crypto.ToECDSA(privkey)
+	k.PrivateKey = privkey
 
 	return nil
 }
@@ -157,7 +155,7 @@ func NewKeyForDirectICAP(rand io.Reader) *Key {
 		panic("key generation: could not read from random source: " + err.Error())
 	}
 	reader := bytes.NewReader(randBytes)
-	privateKeyECDSA, err := ecdsa.GenerateKey(secp256k1.S256(), reader)
+	privateKeyECDSA, err := ecdsa.GenerateKey(crypto.S256(), reader)
 	if err != nil {
 		panic("key generation: ecdsa.GenerateKey failed: " + err.Error())
 	}
@@ -169,7 +167,7 @@ func NewKeyForDirectICAP(rand io.Reader) *Key {
 }
 
 func newKey(rand io.Reader) (*Key, error) {
-	privateKeyECDSA, err := ecdsa.GenerateKey(secp256k1.S256(), rand)
+	privateKeyECDSA, err := ecdsa.GenerateKey(crypto.S256(), rand)
 	if err != nil {
 		return nil, err
 	}

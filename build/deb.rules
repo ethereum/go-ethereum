@@ -5,7 +5,7 @@
 #export DH_VERBOSE=1
 
 override_dh_auto_build:
-	build/env.sh /usr/lib/go-1.7/bin/go run build/ci.go install -git-commit={{.Env.Commit}} -git-branch={{.Env.Branch}} -git-tag={{.Env.Tag}} -buildnum={{.Env.Buildnum}} -pull-request={{.Env.IsPullRequest}}
+	build/env.sh /usr/lib/go-1.8/bin/go run build/ci.go install -git-commit={{.Env.Commit}} -git-branch={{.Env.Branch}} -git-tag={{.Env.Tag}} -buildnum={{.Env.Buildnum}} -pull-request={{.Env.IsPullRequest}}
 
 override_dh_auto_test:
 

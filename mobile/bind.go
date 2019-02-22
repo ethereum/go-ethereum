@@ -103,7 +103,7 @@ func (opts *TransactOpts) SetGasLimit(limit int64)     { opts.opts.GasLimit = bi
 func (opts *TransactOpts) SetContext(context *Context) { opts.opts.Context = context.context }
 
 // BoundContract is the base wrapper object that reflects a contract on the
-// Ethereum network. It contains a collection of methods that are used by the
+// Ubiq network. It contains a collection of methods that are used by the
 // higher level contract bindings to operate.
 type BoundContract struct {
 	contract *bind.BoundContract

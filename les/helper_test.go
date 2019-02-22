@@ -25,9 +25,9 @@ import (
 	"math/big"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/consensus/ubqhash"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/core/vm"
@@ -57,6 +57,8 @@ var (
 	testContractDeployed     = uint64(2)
 
 	testBufLimit = uint64(100)
+
+	bigTxGas = new(big.Int).SetUint64(params.TxGas)
 )
 
 /*
@@ -80,15 +82,15 @@ func testChainGen(i int, block *core.BlockGen) {
 	switch i {
 	case 0:
 		// In block 1, the test bank sends account #1 some ether.
-		tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil), signer, testBankKey)
+		tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(10000), bigTxGas, nil, nil), signer, testBankKey)
 		block.AddTx(tx)
 	case 1:
 		// In block 2, the test bank sends some more ether to account #1.
 		// acc1Addr passes it on to account #2.
 		// acc1Addr creates a test contract.
-		tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, testBankKey)
+		tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(1000), bigTxGas, nil, nil), signer, testBankKey)
 		nonce := block.TxNonce(acc1Addr)
-		tx2, _ := types.SignTx(types.NewTransaction(nonce, acc2Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, acc1Key)
+		tx2, _ := types.SignTx(types.NewTransaction(nonce, acc2Addr, big.NewInt(1000), bigTxGas, nil, nil), signer, acc1Key)
 		nonce++
 		tx3, _ := types.SignTx(types.NewContractCreation(nonce, big.NewInt(0), big.NewInt(200000), big.NewInt(0), testContractCode), signer, acc1Key)
 		testContractAddr = crypto.CreateAddress(acc1Addr, nonce)
@@ -129,32 +131,35 @@ func testRCL() RequestCostList {
 // newTestProtocolManager creates a new protocol manager for testing purposes,
 // with the given number of blocks already known, and potential notification
 // channels for different events.
-func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *core.BlockGen)) (*ProtocolManager, ethdb.Database, *LesOdr, error) {
+func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *core.BlockGen), peers *peerSet, odr *LesOdr, db ethdb.Database) (*ProtocolManager, error) {
 	var (
-		evmux       = new(event.TypeMux)
-		pow         = new(core.FakePow)
-		db, _       = ethdb.NewMemDatabase()
-		genesis     = core.WriteGenesisBlockForTesting(db, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
-		chainConfig = &params.ChainConfig{HomesteadBlock: big.NewInt(0)} // homestead set to 0 because of chain maker
-		odr         *LesOdr
+		evmux  = new(event.TypeMux)
+		engine = ubqhash.NewFaker()
+		gspec  = core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
+		}
+		genesis = gspec.MustCommit(db)
 		chain       BlockChain
 	)
+	if peers == nil {
+		peers = newPeerSet()
+	}
 
 	if lightSync {
-		odr = NewLesOdr(db)
-		chain, _ = light.NewLightChain(odr, chainConfig, pow, evmux)
+		chain, _ = light.NewLightChain(odr, gspec.Config, engine, evmux)
 	} else {
-		blockchain, _ := core.NewBlockChain(db, chainConfig, pow, evmux, vm.Config{})
-		gchain, _ := core.GenerateChain(chainConfig, genesis, db, blocks, generator)
+		blockchain, _ := core.NewBlockChain(db, gspec.Config, engine, evmux, vm.Config{})
+		gchain, _ := core.GenerateChain(gspec.Config, genesis, db, blocks, generator)
 		if _, err := blockchain.InsertChain(gchain); err != nil {
 			panic(err)
 		}
 		chain = blockchain
 	}
 
-	pm, err := NewProtocolManager(chainConfig, lightSync, NetworkId, evmux, pow, chain, nil, db, odr, nil)
+	pm, err := NewProtocolManager(gspec.Config, lightSync, NetworkId, evmux, engine, peers, chain, nil, db, odr, nil, make(chan struct{}), new(sync.WaitGroup))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	if !lightSync {
 		srv := &LesServer{protocolManager: pm}
@@ -168,20 +173,20 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		srv.fcManager = flowcontrol.NewClientManager(50, 10, 1000000000)
 		srv.fcCostStats = newCostStats(nil)
 	}
-	pm.Start(nil)
-	return pm, db, odr, nil
+	pm.Start()
+	return pm, nil
 }
 
 // newTestProtocolManagerMust creates a new protocol manager for testing purposes,
 // with the given number of blocks already known, and potential notification
 // channels for different events. In case of an error, the constructor force-
 // fails the test.
-func newTestProtocolManagerMust(t *testing.T, lightSync bool, blocks int, generator func(int, *core.BlockGen)) (*ProtocolManager, ethdb.Database, *LesOdr) {
-	pm, db, odr, err := newTestProtocolManager(lightSync, blocks, generator)
+func newTestProtocolManagerMust(t *testing.T, lightSync bool, blocks int, generator func(int, *core.BlockGen), peers *peerSet, odr *LesOdr, db ethdb.Database) *ProtocolManager {
+	pm, err := newTestProtocolManager(lightSync, blocks, generator, peers, odr, db)
 	if err != nil {
 		t.Fatalf("Failed to create protocol manager: %v", err)
 	}
-	return pm, db, odr
+	return pm
 }
 
 // testTxPool is a fake, helper transaction pool for testing purposes
@@ -335,27 +340,4 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 // manager of termination.
 func (p *testPeer) close() {
 	p.app.Close()
-}
-
-type testServerPool struct {
-	peer *peer
-	lock sync.RWMutex
-}
-
-func (p *testServerPool) setPeer(peer *peer) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	p.peer = peer
-}
-
-func (p *testServerPool) selectPeerWait(uint64, func(*peer) (bool, time.Duration), <-chan struct{}) *peer {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	return p.peer
-}
-
-func (p *testServerPool) adjustResponseTime(*poolEntry, time.Duration, bool) {
-
 }

@@ -14,13 +14,15 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package geth
+package gubiq
 
 import (
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"os"
+
+	"github.com/ubiq/go-ubiq/log"
 )
 
 // SetVerbosity sets the global verbosity level (between 0 and 6 - see logger/verbosity.go).
 func SetVerbosity(level int) {
-	glog.SetV(level)
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(level), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 }

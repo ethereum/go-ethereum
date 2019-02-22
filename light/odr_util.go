@@ -27,8 +27,6 @@ import (
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/ethdb"
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
 	"github.com/ubiq/go-ubiq/rlp"
 )
 
@@ -108,25 +106,6 @@ func GetCanonicalHash(ctx context.Context, odr OdrBackend, number uint64) (commo
 	return common.Hash{}, err
 }
 
-// retrieveContractCode tries to retrieve the contract code of the given account
-// with the given hash from the network (id points to the storage trie belonging
-// to the same account)
-func retrieveContractCode(ctx context.Context, odr OdrBackend, id *TrieID, hash common.Hash) ([]byte, error) {
-	if hash == sha3_nil {
-		return nil, nil
-	}
-	res, _ := odr.Database().Get(hash[:])
-	if res != nil {
-		return res, nil
-	}
-	r := &CodeRequest{Id: id, Hash: hash}
-	if err := odr.Retrieve(ctx, r); err != nil {
-		return nil, err
-	} else {
-		return r.Data, nil
-	}
-}
-
 // GetBodyRLP retrieves the block body (transactions and uncles) in RLP encoding.
 func GetBodyRLP(ctx context.Context, odr OdrBackend, hash common.Hash, number uint64) (rlp.RawValue, error) {
 	if data := core.GetBodyRLP(odr.Database(), hash, number); data != nil {
@@ -149,7 +128,6 @@ func GetBody(ctx context.Context, odr OdrBackend, hash common.Hash, number uint6
 	}
 	body := new(types.Body)
 	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
-		glog.V(logger.Error).Infof("invalid block body RLP for hash %x: %v", hash, err)
 		return nil, err
 	}
 	return body, nil
@@ -181,7 +159,6 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 	r := &ReceiptsRequest{Hash: hash, Number: number}
 	if err := odr.Retrieve(ctx, r); err != nil {
 		return nil, err
-	} else {
-		return r.Receipts, nil
 	}
+	return r.Receipts, nil
 }

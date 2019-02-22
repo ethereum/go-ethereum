@@ -28,8 +28,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -279,7 +278,7 @@ func (s *DbStore) Cleanup() {
 
 		data, err := s.db.Get(getDataKey(index.Idx))
 		if err != nil {
-			glog.V(logger.Warn).Infof("Chunk %x found but could not be accessed: %v", key[:], err)
+			log.Warn(fmt.Sprintf("Chunk %x found but could not be accessed: %v", key[:], err))
 			s.delete(index.Idx, getIndexKey(key[1:]))
 			errorsFound++
 		} else {
@@ -287,7 +286,7 @@ func (s *DbStore) Cleanup() {
 			hasher.Write(data)
 			hash := hasher.Sum(nil)
 			if !bytes.Equal(hash, key[1:]) {
-				glog.V(logger.Warn).Infof("Found invalid chunk. Hash mismatch. hash=%x, key=%x", hash, key[:])
+				log.Warn(fmt.Sprintf("Found invalid chunk. Hash mismatch. hash=%x, key=%x", hash, key[:]))
 				s.delete(index.Idx, getIndexKey(key[1:]))
 				errorsFound++
 			}
@@ -295,7 +294,7 @@ func (s *DbStore) Cleanup() {
 		it.Next()
 	}
 	it.Release()
-	glog.V(logger.Warn).Infof("Found %v errors out of %v entries", errorsFound, total)
+	log.Warn(fmt.Sprintf("Found %v errors out of %v entries", errorsFound, total))
 }
 
 func (s *DbStore) delete(idx uint64, idxKey []byte) {
@@ -324,7 +323,7 @@ func (s *DbStore) Put(chunk *Chunk) {
 		if chunk.dbStored != nil {
 			close(chunk.dbStored)
 		}
-		glog.V(logger.Detail).Infof("Storing to DB: chunk already exists, only update access")
+		log.Trace(fmt.Sprintf("Storing to DB: chunk already exists, only update access"))
 		return // already exists, only update access
 	}
 
@@ -356,7 +355,7 @@ func (s *DbStore) Put(chunk *Chunk) {
 	if chunk.dbStored != nil {
 		close(chunk.dbStored)
 	}
-	glog.V(logger.Detail).Infof("DbStore.Put: %v. db storage counter: %v ", chunk.Key.Log(), s.dataIdx)
+	log.Trace(fmt.Sprintf("DbStore.Put: %v. db storage counter: %v ", chunk.Key.Log(), s.dataIdx))
 }
 
 // try to find index; if found, update access cnt and return true
@@ -390,7 +389,7 @@ func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
 		var data []byte
 		data, err = s.db.Get(getDataKey(index.Idx))
 		if err != nil {
-			glog.V(logger.Detail).Infof("DBStore: Chunk %v found but could not be accessed: %v", key.Log(), err)
+			log.Trace(fmt.Sprintf("DBStore: Chunk %v found but could not be accessed: %v", key.Log(), err))
 			s.delete(index.Idx, getIndexKey(key))
 			return
 		}
@@ -400,7 +399,7 @@ func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
 		hash := hasher.Sum(nil)
 		if !bytes.Equal(hash, key) {
 			s.delete(index.Idx, getIndexKey(key))
-			panic("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
+			log.Warn("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
 		}
 
 		chunk = &Chunk{
