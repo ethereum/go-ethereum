@@ -22,7 +22,7 @@ func InitOutputFile(outputFile string) {
 		os.Exit(1)
 	}
 	var err error
-	file, err = os.OpenFile(outputFile, os.O_APPEND|os.O_CREATE, 0644)
+	file, err = os.OpenFile(outputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Failed to create log file for timing.")
 		fmt.Fprintln(os.Stderr, err)
