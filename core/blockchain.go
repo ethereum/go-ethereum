@@ -1340,7 +1340,7 @@ func (bc *BlockChain) insertSidechain(it *insertIterator) (int, []interface{}, [
 		numbers []uint64
 	)
 	parent := bc.GetHeader(it.previous().Hash(), it.previous().NumberU64())
-	for parent != nil && !bc.HasState(parent.Root) {
+	for parent != nil && rawdb.ReadCanonicalHash(bc.db, parent.Number.Uint64()) != parent.Hash() {
 		hashes = append(hashes, parent.Hash())
 		numbers = append(numbers, parent.Number.Uint64())
 
