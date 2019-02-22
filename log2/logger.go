@@ -17,6 +17,9 @@ type TimingLog struct {
 }
 
 func InitOutputFile(outputFile string) {
+	if outputFile == "" {
+		log.Fatalln("You must specify the log file, e.g. \"geth --timing.output=/path/to/file.txt\"")
+	}
 	var err error
 	file, err = os.OpenFile(outputFile, os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
