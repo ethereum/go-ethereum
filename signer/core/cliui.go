@@ -90,6 +90,7 @@ func (ui *CommandlineUI) OnInputRequired(info UserInputRequest) (UserInputRespon
 
 	fmt.Printf("## %s\n\n%s\n", info.Title, info.Prompt)
 	if info.IsPassword {
+		fmt.Printf("> ")
 		text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
 		if err != nil {
 			log.Error("Failed to read password", "err", err)

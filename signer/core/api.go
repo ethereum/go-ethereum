@@ -218,8 +218,8 @@ type (
 		Info map[string]interface{} `json:"info"`
 	}
 	UserInputRequest struct {
-		Prompt     string `json:"prompt"`
 		Title      string `json:"title"`
+		Prompt     string `json:"prompt"`
 		IsPassword bool   `json:"isPassword"`
 	}
 	UserInputResponse struct {
