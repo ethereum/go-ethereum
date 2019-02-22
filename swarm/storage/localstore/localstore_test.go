@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"runtime"
 	"sort"
 	"strconv"
 	"sync"
@@ -33,6 +34,26 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/syndtr/goleveldb/leveldb"
 )
+
+func init() {
+	// Some of the tests in localstore package rely on the same ordering of
+	// items uploaded or accessed compared to the ordering of items in indexes
+	// that contain StoreTimestamp or AccessTimestamp in keys. In tests
+	// where the same order is required from the database as the order
+	// in which chunks are put or accessed, if the StoreTimestamp or
+	// AccessTimestamp are the same for two or more sequential items
+	// their order in database will be based on the chunk address value,
+	// in which case the ordering of items/chunks stored in a test slice
+	// will not be the same. To ensure the same ordering in database on such
+	// indexes on windows systems, an additional short sleep is added to
+	// the now function.
+	if runtime.GOOS == "windows" {
+		setNow(func() int64 {
+			time.Sleep(time.Microsecond)
+			return time.Now().UTC().UnixNano()
+		})
+	}
+}
 
 // TestDB validates if the chunk can be uploaded and
 // correctly retrieved.
