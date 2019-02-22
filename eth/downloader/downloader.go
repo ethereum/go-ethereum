@@ -58,8 +58,9 @@ var (
 	qosTuningImpact  = 0.25 // Impact that a new tuning target has on the previous value
 
 	maxQueuedHeaders  = 32 * 1024 // [eth/62] Maximum number of headers to queue for import (DOS protection)
-	maxHeadersProcess = 2048      // Number of header download results to import at once into the chain
-	maxResultsProcess = 2048      // Number of content download results to import at once into the chain
+	// set maxHeadersProcess & maxResultsProcess to 1 so calcPastMedianTime/flux dont implode.
+	maxHeadersProcess = 1 // Number of header download results to import at once into the chain
+	maxResultsProcess = 1 // Number of content download results to import at once into the chain
 
 	fsHeaderCheckFrequency = 100        // Verification frequency of the downloaded headers during fast sync
 	fsHeaderSafetyNet      = 2048       // Number of headers to discard in case a chain violation is detected
@@ -389,6 +390,14 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 	if d.mode == FastSync && atomic.LoadUint32(&d.fsPivotFails) >= fsCriticalTrials {
 		d.mode = FullSync
 	}
+
+	// If FastSync its safe to increase maxResultsProcess
+	if d.mode == FastSync {
+		maxResultsProcess = 2048
+	} else {
+		maxResultsProcess = 1
+	}
+
 	// Retrieve the origin peer and initiate the downloading process
 	p := d.peers.Peer(id)
 	if p == nil {

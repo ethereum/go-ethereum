@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	importBatchSize = 2500
+	importBatchSize = 1
 )
 
 // Fatalf formats a message to standard error and exits the program.
