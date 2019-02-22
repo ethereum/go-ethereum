@@ -283,7 +283,7 @@ func geth(ctx *cli.Context) error {
 // miner.
 func startNode(ctx *cli.Context, stack *node.Node) {
 	//timing
-	log2.InitOutputFile(ctx.String(utils.TimingOutputFlag.Name))
+	log2.InitOutputFile(ctx.GlobalString(utils.TimingOutputFlag.Name))
 
 	debug.Memsize.Add("node", stack)
 
