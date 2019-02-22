@@ -33,6 +33,8 @@ func InitOutputFile(outputFile string) {
 		fmt.Fprintln(os.Stderr, "Failed to write log file for timing.")
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
+	} else {
+		fmt.Println("Timing log initialized.")
 	}
 }
 func Record(timingLog TimingLog) error {
