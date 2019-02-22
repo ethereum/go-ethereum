@@ -238,7 +238,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		contractAction = "contract creation"
 	} else {
 		// Increment the nonce for the next transaction
-		nonce = st.state.GetNonce(sender.Address())+1
+		nonce = st.state.GetNonce(sender.Address()) + 1
 		st.state.SetNonce(sender.Address(), nonce)
 		ret, st.gas, vmerr = evm.Call(sender, st.to().Address(), st.data, st.gas, st.value)
 		contractAction = "contract call"

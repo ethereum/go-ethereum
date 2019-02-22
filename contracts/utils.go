@@ -355,7 +355,7 @@ func GetSignersSignedAtBlockHash(c *posv.Posv, chain consensus.ChainReader, data
 // Get signers list from bytes.
 func GetSignersFromBytes(byteHeader []byte) []common.Address {
 	signers := make([]common.Address, len(byteHeader)/common.AddressLength)
-	for i := 0; i < len(masternodes); i++ {
+	for i := 0; i < len(signers); i++ {
 		copy(signers[i][:], byteHeader[i*common.AddressLength:])
 	}
 

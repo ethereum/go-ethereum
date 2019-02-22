@@ -337,9 +337,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 						}
 					}
 					if len(prevSigners) > 0 {
-						for _, signer := range prevSigners {
-							penSigners = append(penSigners, signer)
-						}
+						penSigners = append(penSigners, prevSigners...)
 					}
 				}
 
