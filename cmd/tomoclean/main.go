@@ -25,9 +25,12 @@ import (
 var (
 	dir       = flag.String("dir", "", "dir to mainet chain data")
 	cacheSize = flag.Int("size", 1000000, "dir to mainet chain data")
-	file      = flag.String("file", "", "dir to mainet chain data")
 )
 
+type TrieRoot struct {
+	trie   *trie.SecureTrie
+	number uint64
+}
 type StateNode struct {
 	node trie.Node
 	path []byte
@@ -45,7 +48,7 @@ var cleanAddress = []common.Address{common.HexToAddress(common.BlockSigners)}
 var cache *lru.Cache
 var finish = int32(0)
 var running = true
-var stateRoots = make(chan *trie.SecureTrie)
+var stateRoots = make(chan TrieRoot)
 
 func main() {
 	flag.Parse()
@@ -63,10 +66,9 @@ func main() {
 			if err != nil {
 				continue
 			}
-			fmt.Println(time.Now().Format(time.RFC3339), "Found a trie state root at block ", i, "state root ", root.Hex())
 			if running {
-				stateRoots <- trieRoot
-			}else {
+				stateRoots <- TrieRoot{trieRoot, i}
+			} else {
 				break
 			}
 		}
@@ -78,29 +80,31 @@ func main() {
 		atomic.StoreInt32(&finish, 1)
 		if running {
 			for _, address := range cleanAddress {
-				enc := trieRoot.Get(address.Bytes())
+				enc := trieRoot.trie.Get(address.Bytes())
 				var data state.Account
 				rlp.DecodeBytes(enc, &data)
-				fmt.Println(time.Now().Format(time.RFC3339), "Start clean state address ", address.Hex(), " at state root ", common.Bytes2Hex(trieRoot.Root()), "state address root", data.Root.Hex())
+				fmt.Println(time.Now().Format(time.RFC3339), "Start clean state address ", address.Hex(), " at block ", trieRoot.number)
 				signerRoot, err := resolveHash(data.Root[:], lddb.LDB())
 				if err != nil {
-					fmt.Println(time.Now().Format(time.RFC3339), "Not found clean state address ", address.Hex(), " at state root ", common.Bytes2Hex(trieRoot.Root()), "state address root", data.Root.Hex())
+					fmt.Println(time.Now().Format(time.RFC3339), "Not found clean state address ", address.Hex(), " at block ", trieRoot.number)
 					continue
 				}
 				batch := new(leveldb.Batch)
-				list := []*StateNode{&StateNode{node: signerRoot}}
+				count := 1
+				list := []*StateNode{{node: signerRoot}}
 				for len(list) > 0 {
 					newList, total := findNewNodes(list, lddb.LDB(), batch)
+					count = count + 17*len(newList)
 					list = removeNodesNil(newList, total)
 				}
-				fmt.Println(time.Now().Format(time.RFC3339), "Finish clean state address ", address.Hex(), " at state root ", common.Bytes2Hex(trieRoot.Root()), "state address root", data.Root.Hex())
+				fmt.Println(time.Now().Format(time.RFC3339), "Finish clean state address ", address.Hex(), " at block ", trieRoot.number, " keys ", count)
 				err = lddb.LDB().Write(batch, nil)
 				if err != nil {
 					fmt.Println(time.Now().Format(time.RFC3339), "Write batch leveldb error", err)
 					os.Exit(1)
 				}
 			}
-		}else {
+		} else {
 			break
 		}
 		atomic.StoreInt32(&finish, 0)
@@ -133,10 +137,7 @@ func catchEventInterupt(db *leveldb.DB) {
 			running = false
 			if atomic.LoadInt32(&finish) == 0 {
 				close(stateRoots)
-				fmt.Println(time.Now(), "interrupt compact")
-				db.CompactRange(util.Range{})
 				db.Close()
-				fmt.Println(time.Now(), "interrupt end")
 				os.Exit(1)
 			}
 		}
@@ -169,7 +170,7 @@ func getAllChilds(n StateNode, db *leveldb.DB) ([17]*StateNode, error) {
 				if err == nil {
 					childs[i] = &StateNode{node: childNode, path: append(n.path, byte(i))}
 				} else if err != nil {
-					_, ok := err.(*trie.MissingNodeError);
+					_, ok := err.(*trie.MissingNodeError)
 					if !ok {
 						return childs, err
 					}
@@ -186,7 +187,7 @@ func getAllChilds(n StateNode, db *leveldb.DB) ([17]*StateNode, error) {
 		if err == nil {
 			childs[0] = &StateNode{node: childNode, path: append(n.path, node.Key...)}
 		} else if err != nil {
-			_, ok := err.(*trie.MissingNodeError);
+			_, ok := err.(*trie.MissingNodeError)
 			if !ok {
 				return childs, err
 			}
@@ -234,8 +235,7 @@ func findNewNodes(nodes []*StateNode, db *leveldb.DB, batchlvdb *leveldb.Batch) 
 	childNodes := make([][17]*StateNode, length)
 	results := make(chan ResultProcessNode)
 	wg := sync.WaitGroup{}
-	wgResults := sync.WaitGroup{}
-	wg.Add(nWorker)
+	wg.Add(length)
 	for i := 0; i < nWorker; i++ {
 		from := i * chunkSize
 		to := from + chunkSize
@@ -245,15 +245,12 @@ func findNewNodes(nodes []*StateNode, db *leveldb.DB, batchlvdb *leveldb.Batch) 
 		go func(from int, to int) {
 			for j := from; j < to; j++ {
 				childs, keys, number := processNodes(*nodes[j], db)
-				wgResults.Add(1)
 				go func(result ResultProcessNode) {
 					results <- result
 				}(ResultProcessNode{j, number, childs, keys})
 			}
-			wg.Done()
 		}(from, to)
 	}
-	wg.Wait()
 	total := 0
 	go func() {
 		for result := range results {
@@ -264,10 +261,10 @@ func findNewNodes(nodes []*StateNode, db *leveldb.DB, batchlvdb *leveldb.Batch) 
 					batchlvdb.Delete(*key)
 				}
 			}
-			wgResults.Done()
+			wg.Done()
 		}
 	}()
-	wgResults.Wait()
+	wg.Wait()
 	close(results)
 	return childNodes, total
 }

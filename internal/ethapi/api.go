@@ -963,7 +963,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlockSigners(b *types.Block, ctx context.
 			if prevCheckpointBlock != nil {
 				masternodes := engine.GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header(), blockNumber, s.b.ChainConfig().Posv.Epoch)
 				signedBlock, _ := s.b.BlockByNumber(ctx, rpc.BlockNumber(signedBlockNumber))
-				if s.b.ChainConfig().IsTIPEVMSigner(latestBlockNumber) {
+				if s.b.ChainConfig().IsTIPSigning(latestBlockNumber) {
 					signers, err = GetSignersFromBlocks(s.b, signedBlock.NumberU64(), signedBlock.Hash(), masternodes)
 				} else {
 					signers, err = contracts.GetSignersByExecutingEVM(common.HexToAddress(common.BlockSigners), client, signedBlock.Hash())
@@ -1662,7 +1662,7 @@ func GetSignersFromBlocks(b Backend, blockNumber uint64, blockHash common.Hash, 
 			for _, signtx := range signTxs {
 				blkHash := common.BytesToHash(signtx.Data()[len(signtx.Data())-32:])
 				from := *signtx.From()
-				if blkHash == blockHash && mapMN[from] == true {
+				if blkHash == blockHash && mapMN[from] {
 					addrs = append(addrs, from)
 					delete(mapMN, from)
 				}

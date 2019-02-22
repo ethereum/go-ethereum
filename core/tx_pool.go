@@ -218,8 +218,8 @@ type TxPool struct {
 
 	wg sync.WaitGroup // for shutdown sync
 
-	homestead    bool
-	IsMasterNode func(address common.Address) bool
+	homestead bool
+	IsSigner  func(address common.Address) bool
 }
 
 // NewTxPool creates a new transaction pool to gather, sort and filter inbound
@@ -592,7 +592,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// Drop non-local transactions under our own minimal accepted gas price
 	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
 	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
-		if !tx.IsSpecialTransaction() || (pool.IsMasterNode != nil && !pool.IsMasterNode(from)) {
+		if !tx.IsSpecialTransaction() || (pool.IsSigner != nil && !pool.IsSigner(from)) {
 			return ErrUnderpriced
 		}
 	}
@@ -661,7 +661,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 		return false, err
 	}
 	from, _ := types.Sender(pool.signer, tx) // already validated
-	if tx.IsSpecialTransaction() && pool.IsMasterNode != nil && pool.IsMasterNode(from) && pool.pendingState.GetNonce(from) == tx.Nonce() {
+	if tx.IsSpecialTransaction() && pool.IsSigner != nil && pool.IsSigner(from) && pool.pendingState.GetNonce(from) == tx.Nonce() {
 		return pool.promoteSpecialTx(from, tx)
 	}
 	// If the transaction pool is full, discard underpriced transactions

@@ -20,7 +20,10 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/eth/filters"
+	"github.com/ethereum/go-ethereum/rlp"
 	"math/big"
 	"runtime"
 	"sync"
@@ -30,7 +33,6 @@ import (
 	"bytes"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/posv"
@@ -41,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -51,7 +52,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -208,12 +208,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if eth.chainConfig.Posv != nil {
 		c := eth.engine.(*posv.Posv)
 		signHook := func(block *types.Block) error {
-			ok, err := eth.ValidateMasternode()
+			eb, err := eth.Etherbase()
 			if err != nil {
-				return fmt.Errorf("Can't verify masternode permission: %v", err)
+				log.Error("Cannot get etherbase for append m2 header", "err", err)
+				return fmt.Errorf("etherbase missing: %v", err)
 			}
+			ok := eth.txPool.IsSigner != nil && eth.txPool.IsSigner(eb)
 			if !ok {
-				// silently return as this node doesn't have masternode permission to sign block
 				return nil
 			}
 			if block.NumberU64()%common.MergeSignRange == 0 || !eth.chainConfig.IsTIP2019(block.Number()) {
@@ -274,7 +275,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				start := time.Now()
 				prevHeader := chain.GetHeaderByNumber(prevEpoc)
 				penSigners := c.GetMasternodes(chain, prevHeader)
-				signedSigners := make(map[common.Address]*big.Int)
 				if len(penSigners) > 0 {
 					// Loop for each block to check missing sign.
 					for i := prevEpoc; i < blockNumberEpoc; i++ {
@@ -283,64 +283,27 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 							bhash := bheader.Hash()
 							block := chain.GetBlock(bhash, i)
 							if len(penSigners) > 0 {
-								signer, err := c.RecoverSigner(block.Header())
+								signedMasternodes, err := contracts.GetSignersFromContract(canonicalState, block)
 								if err != nil {
 									return nil, err
 								}
-								for _, addr := range penSigners {
-									if signer == addr {
-										signedSigners[signer] = signedSigners[signer].Add(signedSigners[signer], big.NewInt(1))
+								if len(signedMasternodes) > 0 {
+									// Check signer signed?
+									for _, signed := range signedMasternodes {
+										for j, addr := range penSigners {
+											if signed == addr {
+												// Remove it from dupSigners.
+												penSigners = append(penSigners[:j], penSigners[j+1:]...)
+											}
+										}
 									}
 								}
 							} else {
 								break
 							}
 						}
-
-						if len(signedSigners) > 0 {
-							for signer, totalSign := range signedSigners {
-								if totalSign.Cmp(big.NewInt(4)) >= 0 {
-									for j, addr := range penSigners {
-										if signer == addr {
-											// If create block above 4 times then remove it from penSigners.
-											penSigners = append(penSigners[:j], penSigners[j+1:]...)
-										}
-									}
-								}
-							}
-						}
 					}
 				}
-
-				// Check penalty signer return chain.
-				prevSigners := contracts.GetSignersFromBytes(prevHeader.Penalties)
-				if len(prevSigners) > 0 {
-					startCheck := blockNumberEpoc - common.RangeReturnSigner
-					data := make(map[common.Hash][]common.Address)
-					mapBlkHash := map[uint64]common.Hash{}
-					for curNumber := startCheck; curNumber < blockNumberEpoc; curNumber++ {
-						signers := make(map[common.Hash][]common.Address)
-						header := chain.GetHeaderByNumber(curNumber)
-						mapBlkHash[curNumber] = header.Hash()
-						data = contracts.GetSignersSignedAtBlockHash(c, chain, signers, header, curNumber)
-					}
-
-					for _, blkHash := range mapBlkHash {
-						signers := data[blkHash]
-						for j, addr := range prevSigners {
-							for _, signer := range signers {
-								if signer == addr {
-									// If create block above 4 times then remove it from penSigners.
-									prevSigners = append(prevSigners[:j], prevSigners[j+1:]...)
-								}
-							}
-						}
-					}
-					if len(prevSigners) > 0 {
-						penSigners = append(penSigners, prevSigners...)
-					}
-				}
-
 				log.Debug("Time Calculated HookPenalty ", "block", blockNumberEpoc, "time", common.PrettyDuration(time.Since(start)))
 				return penSigners, nil
 			}
@@ -348,54 +311,108 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		}
 
 		// Hook scans for bad masternodes and decide to penalty them
-		c.HookPenaltyTIPEVM = func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error) {
-			canonicalState, err := eth.blockchain.State()
-			if canonicalState == nil || err != nil {
-				log.Crit("Can't get state at head of canonical chain", "head number", eth.blockchain.CurrentHeader().Number.Uint64(), "err", err)
+		c.HookPenaltyTIPSigning = func(chain consensus.ChainReader, header *types.Header, candidates []common.Address) ([]common.Address, error) {
+			prevEpoc := header.Number.Uint64() - chain.Config().Posv.Epoch
+			combackEpoch := uint64(0)
+			comebackLength := uint64((common.LimitPenaltyEpoch + 1) * chain.Config().Posv.Epoch)
+			if header.Number.Uint64() > comebackLength {
+				combackEpoch = header.Number.Uint64() - comebackLength
 			}
-			prevEpoc := blockNumberEpoc - chain.Config().Posv.Epoch
 			if prevEpoc >= 0 {
 				start := time.Now()
+
+				listBlockHash := make([]common.Hash, chain.Config().Posv.Epoch)
+
+				// get list block hash & stats total created block
+				statMiners := make(map[common.Address]int)
+				listBlockHash[0] = header.ParentHash
+				parentnumber := header.Number.Uint64() - 1
+				parentHash := header.ParentHash
+				for i := uint64(1); i < chain.Config().Posv.Epoch; i++ {
+					parentHeader := chain.GetHeader(parentHash, parentnumber)
+					miner, _ := c.RecoverSigner(parentHeader)
+					value, exist := statMiners[miner]
+					if exist {
+						value = value + 1
+					} else {
+						value = 1
+					}
+					statMiners[miner] = value
+					parentHash = parentHeader.ParentHash
+					parentnumber--
+					listBlockHash[i] = parentHash
+				}
+
+				// add list not miner to penalties
 				prevHeader := chain.GetHeaderByNumber(prevEpoc)
-				penSigners := c.GetMasternodes(chain, prevHeader)
-				if len(penSigners) > 0 {
-					// Loop for each block to check missing sign.
-					blockHash := map[common.Hash]bool{}
-					for i := prevEpoc; i < blockNumberEpoc; i++ {
-						if len(penSigners) > 0 {
-							bheader := chain.GetHeaderByNumber(i)
-							bhash := bheader.Hash()
-							if i%common.MergeSignRange == 0 {
-								blockHash[bhash] = true
+				preMasternodes := c.GetMasternodes(chain, prevHeader)
+				penalties := []common.Address{}
+				for miner, total := range statMiners {
+					if total < common.MinimunMinerBlockPerEpoch {
+						log.Debug("Find a node not enough requirement create block", "addr", miner.Hex(), "total", total)
+						penalties = append(penalties, miner)
+					}
+				}
+				for _, addr := range preMasternodes {
+					if _, exist := statMiners[addr]; !exist {
+						log.Debug("Find a node don't create block", "addr", addr.Hex())
+						penalties = append(penalties, addr)
+					}
+				}
+				
+				// get list check penalties signing block & list master nodes wil comeback
+				penComebacks := []common.Address{}
+				if combackEpoch > 0 {
+					combackHeader := chain.GetHeaderByNumber(combackEpoch)
+					penalties := common.ExtractAddressFromBytes(combackHeader.Penalties)
+					for _, penaltie := range penalties {
+						for _, addr := range candidates {
+							if penaltie == addr {
+								penComebacks = append(penComebacks, penaltie)
 							}
-							signData, ok := c.BlockSigners.Get(bhash)
-							if !ok {
-								block := chain.GetBlock(bhash, i)
-								txs := block.Transactions()
-								signData = c.CacheSigner(bheader, txs);
-							}
-							txs := signData.([]*types.Transaction)
-							// Check signer signed?
-							for _, tx := range txs {
-								blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
-								from := *tx.From()
-								if blockHash[blkHash] == true {
-									for j, addr := range penSigners {
-										if from == addr {
-											// Remove it from dupSigners.
-											penSigners = append(penSigners[:j], penSigners[j+1:]...)
-											break
-										}
-									}
-								}
-							}
-						} else {
-							break
 						}
 					}
 				}
-				log.Debug("Time Calculated HookPenaltyTIPEVM ", "block", blockNumberEpoc, "time", common.PrettyDuration(time.Since(start)))
-				return penSigners, nil
+
+				// Loop for each block to check missing sign. with comeback nodes
+				mapBlockHash := map[common.Hash]bool{}
+				for i := common.RangeReturnSigner - 1; i >= 0; i-- {
+					if len(penComebacks) > 0 {
+						blockNumber := header.Number.Uint64() - uint64(i) - 1
+						bhash := listBlockHash[i]
+						if blockNumber%common.MergeSignRange == 0 {
+							mapBlockHash[bhash] = true
+						}
+						signData, ok := c.BlockSigners.Get(bhash)
+						if !ok {
+							block := chain.GetBlock(bhash, blockNumber)
+							txs := block.Transactions()
+							signData = c.CacheSigner(bhash, txs)
+						}
+						txs := signData.([]*types.Transaction)
+						// Check signer signed?
+						for _, tx := range txs {
+							blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+							from := *tx.From()
+							if mapBlockHash[blkHash] {
+								for j, addr := range penComebacks {
+									if from == addr {
+										// Remove it from dupSigners.
+										penComebacks = append(penComebacks[:j], penComebacks[j+1:]...)
+										break
+									}
+								}
+							}
+						}
+					} else {
+						break
+					}
+				}
+
+				log.Debug("Time Calculated HookPenaltyTIPSigning ", "block", header.Number, "hash", header.Hash().Hex(), "pen comeback nodes", len(penComebacks), "not enough miner", len(penalties), "time", common.PrettyDuration(time.Since(start)))
+				penalties = append(penalties, penComebacks...)
+				return penComebacks, nil
+
 			}
 			return []common.Address{}, nil
 		}
@@ -473,7 +490,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			return nil
 		}
 
-		eth.txPool.IsMasterNode = func(address common.Address) bool {
+		eth.txPool.IsSigner = func(address common.Address) bool {
 			currentHeader := eth.blockchain.CurrentHeader()
 			header := currentHeader
 			// Sometimes, the latest block hasn't been inserted to chain yet
@@ -721,7 +738,9 @@ func (s *Ethereum) StartStaking(local bool) error {
 	return nil
 }
 
-func (s *Ethereum) StopStaking()        { s.miner.Stop() }
+func (s *Ethereum) StopStaking() {
+	s.miner.Stop()
+}
 func (s *Ethereum) IsStaking() bool     { return s.miner.Mining() }
 func (s *Ethereum) Miner() *miner.Miner { return s.miner }
 

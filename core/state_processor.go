@@ -73,7 +73,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
-	if p.config.IsTIPEVMSigner(header.Number) {
+	if common.TIPSigning.Cmp(header.Number) == 0 {
 		statedb.DeleteAddress(common.HexToAddress(common.BlockSigners))
 	}
 	InitSignerInTransactions(p.config, header, block.Transactions())
@@ -104,7 +104,7 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
-	if p.config.IsTIPEVMSigner(header.Number) {
+	if common.TIPSigning.Cmp(header.Number) == 0 {
 		statedb.DeleteAddress(common.HexToAddress(common.BlockSigners))
 	}
 	if cBlock.stop {
@@ -138,7 +138,7 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, uint64, error) {
-	if tx.To() != nil && tx.To().String() == common.BlockSigners && config.IsTIPEVMSigner(header.Number) {
+	if tx.To() != nil && tx.To().String() == common.BlockSigners && config.IsTIPSigning(header.Number) {
 		return ApplySignTransaction(config, statedb, header, tx, usedGas)
 	}
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))

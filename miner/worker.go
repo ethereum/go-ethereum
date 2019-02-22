@@ -584,7 +584,7 @@ func (self *worker) commitNewWork() {
 	if self.config.DAOForkSupport && self.config.DAOForkBlock != nil && self.config.DAOForkBlock.Cmp(header.Number) == 0 {
 		misc.ApplyDAOHardFork(work.state)
 	}
-	if self.config.IsTIPEVMSigner(header.Number) {
+	if common.TIPSigning.Cmp(header.Number) == 0 {
 		work.state.DeleteAddress(common.HexToAddress(common.BlockSigners))
 	}
 	// won't grasp txs at checkpoint
@@ -677,7 +677,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		}
 		if tx.To().Hex() == common.BlockSigners {
 			if len(tx.Data()) < 68 {
-				log.Trace("Data special transaction invalid lenght", "hash", tx.Hash(), "data", len(tx.Data()))
+				log.Trace("Data special transaction invalid length", "hash", tx.Hash(), "data", len(tx.Data()))
 				continue
 			}
 			blkNumber := binary.BigEndian.Uint64(tx.Data()[8:40])
