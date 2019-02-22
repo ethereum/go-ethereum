@@ -40,6 +40,9 @@ func TestDB_SubscribePush(t *testing.T) {
 	var chunksMu sync.Mutex
 
 	uploadRandomChunks := func(count int) {
+		chunksMu.Lock()
+		defer chunksMu.Unlock()
+
 		for i := 0; i < count; i++ {
 			chunk := generateRandomChunk()
 
@@ -48,9 +51,7 @@ func TestDB_SubscribePush(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			chunksMu.Lock()
 			chunks = append(chunks, chunk)
-			chunksMu.Unlock()
 		}
 	}
 
@@ -90,7 +91,11 @@ func TestDB_SubscribePush(t *testing.T) {
 				}
 				i++
 				// send one and only one error per received address
-				errChan <- err
+				select {
+				case errChan <- err:
+				case <-ctx.Done():
+					return
+				}
 			case <-ctx.Done():
 				return
 			}
@@ -123,6 +128,9 @@ func TestDB_SubscribePush_multiple(t *testing.T) {
 	var addrsMu sync.Mutex
 
 	uploadRandomChunks := func(count int) {
+		addrsMu.Lock()
+		defer addrsMu.Unlock()
+
 		for i := 0; i < count; i++ {
 			chunk := generateRandomChunk()
 
@@ -131,9 +139,7 @@ func TestDB_SubscribePush_multiple(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			addrsMu.Lock()
 			addrs = append(addrs, chunk.Address())
-			addrsMu.Unlock()
 		}
 	}
 
@@ -175,7 +181,11 @@ func TestDB_SubscribePush_multiple(t *testing.T) {
 					}
 					i++
 					// send one and only one error per received address
-					errChan <- err
+					select {
+					case errChan <- err:
+					case <-ctx.Done():
+						return
+					}
 				case <-ctx.Done():
 					return
 				}

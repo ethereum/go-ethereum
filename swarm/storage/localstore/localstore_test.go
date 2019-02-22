@@ -163,6 +163,7 @@ func BenchmarkNew(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
+			defer db.Close()
 			uploader := db.NewPutter(ModePutUpload)
 			syncer := db.NewSetter(ModeSetSync)
 			for i := 0; i < count; i++ {

@@ -117,6 +117,8 @@ var (
 // run. GC run iterates on gcIndex and removes older items
 // form retrieval and other indexes.
 func (db *DB) collectGarbageWorker() {
+	defer close(db.collectGarbageWorkerDone)
+
 	for {
 		select {
 		case <-db.collectGarbageTrigger:
@@ -132,7 +134,7 @@ func (db *DB) collectGarbageWorker() {
 				db.triggerGarbageCollection()
 			}
 
-			if testHookCollectGarbage != nil {
+			if collectedCount > 0 && testHookCollectGarbage != nil {
 				testHookCollectGarbage(collectedCount)
 			}
 		case <-db.close:
@@ -243,6 +245,8 @@ func (db *DB) triggerGarbageCollection() {
 // writeGCSizeDelay duration to avoid very frequent
 // database operations.
 func (db *DB) writeGCSizeWorker() {
+	defer close(db.writeGCSizeWorkerDone)
+
 	for {
 		select {
 		case <-db.writeGCSizeTrigger:

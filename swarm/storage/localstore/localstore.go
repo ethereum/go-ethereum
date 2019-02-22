@@ -107,6 +107,12 @@ type DB struct {
 	// this channel is closed when close function is called
 	// to terminate other goroutines
 	close chan struct{}
+
+	// protect Close method from exiting before
+	// garbage collection and gc size write workers
+	// are done
+	collectGarbageWorkerDone chan struct{}
+	writeGCSizeWorkerDone    chan struct{}
 }
 
 // Options struct holds optional parameters for configuring DB.
@@ -138,9 +144,11 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		// need to be buffered with the size of 1
 		// to signal another event if it
 		// is triggered during already running function
-		collectGarbageTrigger: make(chan struct{}, 1),
-		writeGCSizeTrigger:    make(chan struct{}, 1),
-		close:                 make(chan struct{}),
+		collectGarbageTrigger:    make(chan struct{}, 1),
+		writeGCSizeTrigger:       make(chan struct{}, 1),
+		close:                    make(chan struct{}),
+		collectGarbageWorkerDone: make(chan struct{}),
+		writeGCSizeWorkerDone:    make(chan struct{}),
 	}
 	if db.capacity <= 0 {
 		db.capacity = defaultCapacity
@@ -361,6 +369,21 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 func (db *DB) Close() (err error) {
 	close(db.close)
 	db.updateGCWG.Wait()
+
+	// wait for gc worker and gc size write workers to
+	// return before closing the shed
+	timeout := time.After(5 * time.Second)
+	select {
+	case <-db.collectGarbageWorkerDone:
+	case <-timeout:
+		log.Error("localstore: collect garbage worker did not return after db close")
+	}
+	select {
+	case <-db.writeGCSizeWorkerDone:
+	case <-timeout:
+		log.Error("localstore: write gc size worker did not return after db close")
+	}
+
 	if err := db.writeGCSize(db.getGCSize()); err != nil {
 		log.Error("localstore: write gc size", "err", err)
 	}
