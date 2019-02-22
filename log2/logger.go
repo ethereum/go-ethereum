@@ -28,6 +28,7 @@ func InitOutputFile(outputFile string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	file.WriteString("Timing log initialized.\n")
 }
 func Record(timingLog TimingLog) error {
 	b, err := json.Marshal(timingLog)
