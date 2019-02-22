@@ -23,15 +23,15 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"go-ethereum-timing/common"
+	"go-ethereum-timing/core/rawdb"
+	"go-ethereum-timing/core/types"
+	"go-ethereum-timing/crypto"
+	"go-ethereum-timing/ethdb"
+	"go-ethereum-timing/light"
+	"go-ethereum-timing/log"
+	"go-ethereum-timing/rlp"
+	"go-ethereum-timing/trie"
 )
 
 var (

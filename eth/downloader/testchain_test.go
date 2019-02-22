@@ -21,13 +21,13 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
+	"go-ethereum-timing/common"
+	"go-ethereum-timing/consensus/ethash"
+	"go-ethereum-timing/core"
+	"go-ethereum-timing/core/types"
+	"go-ethereum-timing/crypto"
+	"go-ethereum-timing/ethdb"
+	"go-ethereum-timing/params"
 )
 
 // Test chain parameters.

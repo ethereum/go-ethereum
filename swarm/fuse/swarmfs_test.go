@@ -29,11 +29,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/testutil"
 	colorable "github.com/mattn/go-colorable"
+	"go-ethereum-timing/log"
+	"go-ethereum-timing/swarm/api"
+	"go-ethereum-timing/swarm/storage"
+	"go-ethereum-timing/swarm/testutil"
 )
 
 var (

@@ -26,9 +26,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/mohae/deepcopy"
 	"github.com/rjeczalik/notify"
+	"go-ethereum-timing/log"
 )
 
 var emptyChunk = json.RawMessage("[]")

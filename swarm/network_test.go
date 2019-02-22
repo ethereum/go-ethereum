@@ -28,15 +28,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/network/simulation"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	colorable "github.com/mattn/go-colorable"
+	"go-ethereum-timing/crypto"
+	"go-ethereum-timing/log"
+	"go-ethereum-timing/node"
+	"go-ethereum-timing/p2p/enode"
+	"go-ethereum-timing/p2p/simulations/adapters"
+	"go-ethereum-timing/swarm/api"
+	"go-ethereum-timing/swarm/network/simulation"
+	"go-ethereum-timing/swarm/storage"
 )
 
 var (

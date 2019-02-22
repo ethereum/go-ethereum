@@ -24,12 +24,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
+	"go-ethereum-timing"
+	"go-ethereum-timing/common"
+	"go-ethereum-timing/common/hexutil"
+	"go-ethereum-timing/core/types"
+	"go-ethereum-timing/rlp"
+	"go-ethereum-timing/rpc"
 )
 
 // Client defines typed wrappers for the Ethereum RPC API.

@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"go-ethereum-timing/common/hexutil"
 )
 
 // KV mocks a key value store

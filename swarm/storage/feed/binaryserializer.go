@@ -16,7 +16,7 @@
 
 package feed
 
-import "github.com/ethereum/go-ethereum/common/hexutil"
+import "go-ethereum-timing/common/hexutil"
 
 type binarySerializer interface {
 	binaryPut(serializedData []byte) error

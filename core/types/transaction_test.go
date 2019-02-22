@@ -23,9 +23,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
+	"go-ethereum-timing/common"
+	"go-ethereum-timing/crypto"
+	"go-ethereum-timing/rlp"
 )
 
 // The values in those tests are from the Transaction Tests

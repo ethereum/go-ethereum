@@ -26,9 +26,9 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
+	"go-ethereum-timing/common"
+	"go-ethereum-timing/crypto"
+	"go-ethereum-timing/rlp"
 )
 
 func init() {

@@ -92,9 +92,9 @@ package localstore
 import (
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/swarm/shed"
 	"github.com/syndtr/goleveldb/leveldb"
+	"go-ethereum-timing/log"
+	"go-ethereum-timing/swarm/shed"
 )
 
 var (

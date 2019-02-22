@@ -28,35 +28,35 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/fdlimit"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/clique"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/dashboard"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethstats"
-	"github.com/ethereum/go-ethereum/les"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/metrics/influxdb"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
-	"github.com/ethereum/go-ethereum/params"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+	"go-ethereum-timing/accounts"
+	"go-ethereum-timing/accounts/keystore"
+	"go-ethereum-timing/common"
+	"go-ethereum-timing/common/fdlimit"
+	"go-ethereum-timing/consensus"
+	"go-ethereum-timing/consensus/clique"
+	"go-ethereum-timing/consensus/ethash"
+	"go-ethereum-timing/core"
+	"go-ethereum-timing/core/state"
+	"go-ethereum-timing/core/vm"
+	"go-ethereum-timing/crypto"
+	"go-ethereum-timing/dashboard"
+	"go-ethereum-timing/eth"
+	"go-ethereum-timing/eth/downloader"
+	"go-ethereum-timing/eth/gasprice"
+	"go-ethereum-timing/ethdb"
+	"go-ethereum-timing/ethstats"
+	"go-ethereum-timing/les"
+	"go-ethereum-timing/log"
+	"go-ethereum-timing/metrics"
+	"go-ethereum-timing/metrics/influxdb"
+	"go-ethereum-timing/node"
+	"go-ethereum-timing/p2p"
+	"go-ethereum-timing/p2p/discv5"
+	"go-ethereum-timing/p2p/enode"
+	"go-ethereum-timing/p2p/nat"
+	"go-ethereum-timing/p2p/netutil"
+	"go-ethereum-timing/params"
+	whisper "go-ethereum-timing/whisper/whisperv6"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -636,6 +636,13 @@ var (
 	EVMInterpreterFlag = cli.StringFlag{
 		Name:  "vm.evm",
 		Usage: "External EVM configuration (default = built-in interpreter)",
+		Value: "",
+	}
+
+	//Timing flag
+	TimingOutputFlag = cli.StringFlag{
+		Name:  "timing.output",
+		Usage: "The output file of timing.",
 		Value: "",
 	}
 )

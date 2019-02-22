@@ -21,8 +21,8 @@ package geth
 import (
 	"errors"
 
-	ethereum "github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/common"
+	ethereum "go-ethereum-timing"
+	"go-ethereum-timing/common"
 )
 
 // Subscription represents an event subscription where events are

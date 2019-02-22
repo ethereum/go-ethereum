@@ -11,7 +11,7 @@
 
   <name>Android Ethereum Client</name>
   <description>Android port of the go-ethereum libraries and node</description>
-  <url>https://github.com/ethereum/go-ethereum</url>
+  <url>https://go-ethereum-timing</url>
   <inceptionYear>2015</inceptionYear>
 
   <licenses>
@@ -48,10 +48,10 @@
 
   <issueManagement>
     <system>GitHub Issues</system>
-    <url>https://github.com/ethereum/go-ethereum/issues/</url>
+    <url>https://go-ethereum-timing/issues/</url>
   </issueManagement>
 
   <scm>
-    <url>https://github.com/ethereum/go-ethereum</url>
+    <url>https://go-ethereum-timing</url>
   </scm>
 </project>

@@ -26,13 +26,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/testutil"
 	"github.com/pborman/uuid"
+	"go-ethereum-timing/log"
+	"go-ethereum-timing/metrics"
+	"go-ethereum-timing/rpc"
+	"go-ethereum-timing/swarm/api"
+	"go-ethereum-timing/swarm/storage"
+	"go-ethereum-timing/swarm/testutil"
 
 	cli "gopkg.in/urfave/cli.v1"
 )

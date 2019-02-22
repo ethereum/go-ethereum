@@ -26,7 +26,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/ethereum/go-ethereum/log"
+	"go-ethereum-timing/log"
 )
 
 type storedCredential struct {

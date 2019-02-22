@@ -25,13 +25,13 @@ import (
 	"sync"
 	"time"
 
-	ethereum "github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/rpc"
+	ethereum "go-ethereum-timing"
+	"go-ethereum-timing/common"
+	"go-ethereum-timing/common/hexutil"
+	"go-ethereum-timing/core/types"
+	"go-ethereum-timing/ethdb"
+	"go-ethereum-timing/event"
+	"go-ethereum-timing/rpc"
 )
 
 var (

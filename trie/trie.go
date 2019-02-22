@@ -21,10 +21,10 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
+	"go-ethereum-timing/common"
+	"go-ethereum-timing/crypto"
+	"go-ethereum-timing/log"
+	"go-ethereum-timing/metrics"
 )
 
 var (

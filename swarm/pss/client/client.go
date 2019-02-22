@@ -25,14 +25,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/swarm/log"
-	"github.com/ethereum/go-ethereum/swarm/pss"
+	"go-ethereum-timing/common/hexutil"
+	"go-ethereum-timing/p2p"
+	"go-ethereum-timing/p2p/enode"
+	"go-ethereum-timing/p2p/protocols"
+	"go-ethereum-timing/rlp"
+	"go-ethereum-timing/rpc"
+	"go-ethereum-timing/swarm/log"
+	"go-ethereum-timing/swarm/pss"
 )
 
 const (

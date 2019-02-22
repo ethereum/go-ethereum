@@ -19,7 +19,7 @@ package vm
 import (
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	"go-ethereum-timing/crypto"
 )
 
 func TestJumpDestAnalysis(t *testing.T) {

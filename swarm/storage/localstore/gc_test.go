@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"go-ethereum-timing/swarm/storage"
 )
 
 // TestDB_collectGarbageWorker tests garbage collection runs

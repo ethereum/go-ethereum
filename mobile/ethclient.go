@@ -21,8 +21,8 @@ package geth
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient"
+	"go-ethereum-timing/core/types"
+	"go-ethereum-timing/ethclient"
 )
 
 // EthereumClient provides access to the Ethereum APIs.

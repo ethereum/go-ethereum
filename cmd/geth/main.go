@@ -19,6 +19,7 @@ package main
 
 import (
 	"fmt"
+	"go-ethereum-timing/log2"
 	"math"
 	"os"
 	godebug "runtime/debug"
@@ -28,17 +29,17 @@ import (
 	"time"
 
 	"github.com/elastic/gosigar"
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/node"
-	cli "gopkg.in/urfave/cli.v1"
+	"go-ethereum-timing/accounts"
+	"go-ethereum-timing/accounts/keystore"
+	"go-ethereum-timing/cmd/utils"
+	"go-ethereum-timing/console"
+	"go-ethereum-timing/eth"
+	"go-ethereum-timing/ethclient"
+	"go-ethereum-timing/internal/debug"
+	"go-ethereum-timing/log"
+	"go-ethereum-timing/metrics"
+	"go-ethereum-timing/node"
+	"gopkg.in/urfave/cli.v1"
 )
 
 const (
@@ -167,6 +168,10 @@ var (
 		utils.MetricsInfluxDBPasswordFlag,
 		utils.MetricsInfluxDBTagsFlag,
 	}
+
+	timingFlags = []cli.Flag{
+		utils.TimingOutputFlag,
+	}
 )
 
 func init() {
@@ -210,6 +215,7 @@ func init() {
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Flags = append(app.Flags, whisperFlags...)
 	app.Flags = append(app.Flags, metricsFlags...)
+	app.Flags = append(app.Flags, timingFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
 		logdir := ""
@@ -265,6 +271,9 @@ func geth(ctx *cli.Context) error {
 	if args := ctx.Args(); len(args) > 0 {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
+
+	log2.InitOutputFile(ctx.String(utils.TimingOutputFlag.Name))
+
 	node := makeFullNode(ctx)
 	startNode(ctx, node)
 	node.Wait()

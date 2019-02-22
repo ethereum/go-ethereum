@@ -19,8 +19,8 @@ package feed
 import (
 	"crypto/ecdsa"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"go-ethereum-timing/common"
+	"go-ethereum-timing/crypto"
 )
 
 const signatureLength = 65

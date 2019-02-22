@@ -23,11 +23,11 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"go-ethereum-timing/common"
+	"go-ethereum-timing/core"
+	"go-ethereum-timing/core/rawdb"
+	"go-ethereum-timing/core/types"
+	"go-ethereum-timing/ethdb"
 )
 
 // NoOdr is the default context passed to an ODR capable function when the ODR

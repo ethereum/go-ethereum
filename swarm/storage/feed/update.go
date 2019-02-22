@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"go-ethereum-timing/swarm/chunk"
 )
 
 // ProtocolVersion defines the current version of the protocol that will be included in each update message

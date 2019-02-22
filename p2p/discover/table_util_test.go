@@ -24,8 +24,8 @@ import (
 	"net"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
+	"go-ethereum-timing/p2p/enode"
+	"go-ethereum-timing/p2p/enr"
 )
 
 var nullNode *enode.Node

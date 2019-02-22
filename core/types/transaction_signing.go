@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
+	"go-ethereum-timing/common"
+	"go-ethereum-timing/crypto"
+	"go-ethereum-timing/params"
 )
 
 var (

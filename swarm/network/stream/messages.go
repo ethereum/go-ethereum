@@ -21,12 +21,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/swarm/log"
-	bv "github.com/ethereum/go-ethereum/swarm/network/bitvector"
-	"github.com/ethereum/go-ethereum/swarm/spancontext"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/opentracing/opentracing-go"
+	"go-ethereum-timing/metrics"
+	"go-ethereum-timing/swarm/log"
+	bv "go-ethereum-timing/swarm/network/bitvector"
+	"go-ethereum-timing/swarm/spancontext"
+	"go-ethereum-timing/swarm/storage"
 )
 
 var syncBatchTimeout = 30 * time.Second

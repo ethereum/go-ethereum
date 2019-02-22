@@ -22,7 +22,7 @@ import (
 	"html/template"
 	"path"
 
-	"github.com/ethereum/go-ethereum/swarm/api"
+	"go-ethereum-timing/swarm/api"
 )
 
 type htmlListData struct {

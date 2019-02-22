@@ -19,7 +19,7 @@ package vm
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common/math"
+	"go-ethereum-timing/common/math"
 )
 
 func memorySha3(stack *Stack) *big.Int {

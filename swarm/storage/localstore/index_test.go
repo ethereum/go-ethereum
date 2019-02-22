@@ -21,7 +21,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"go-ethereum-timing/swarm/storage"
 )
 
 // TestDB_pullIndex validates the ordering of keys in pull index.

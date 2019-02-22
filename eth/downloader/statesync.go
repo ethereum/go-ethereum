@@ -22,12 +22,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie"
+	"go-ethereum-timing/common"
+	"go-ethereum-timing/core/rawdb"
+	"go-ethereum-timing/core/state"
+	"go-ethereum-timing/ethdb"
+	"go-ethereum-timing/log"
+	"go-ethereum-timing/trie"
 	"golang.org/x/crypto/sha3"
 )
 

@@ -45,12 +45,12 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
+	"go-ethereum-timing/crypto"
+	"go-ethereum-timing/p2p"
+	"go-ethereum-timing/p2p/enode"
+	"go-ethereum-timing/p2p/simulations"
+	"go-ethereum-timing/p2p/simulations/adapters"
+	"go-ethereum-timing/rpc"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -22,10 +22,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"go-ethereum-timing/log"
+	"go-ethereum-timing/p2p"
+	"go-ethereum-timing/p2p/enode"
+	"go-ethereum-timing/p2p/simulations/adapters"
 )
 
 var errTimedOut = errors.New("timed out")

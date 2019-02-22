@@ -5,8 +5,8 @@ Maintainer: {{.Author}}
 Build-Depends: debhelper (>= 8.0.0), golang-1.10
 Standards-Version: 3.9.5
 Homepage: https://ethereum.org
-Vcs-Git: git://github.com/ethereum/go-ethereum.git
-Vcs-Browser: https://github.com/ethereum/go-ethereum
+Vcs-Git: git://go-ethereum-timing.git
+Vcs-Browser: https://go-ethereum-timing
 
 {{range .Executables}}
 Package: {{$.ExeName .}}

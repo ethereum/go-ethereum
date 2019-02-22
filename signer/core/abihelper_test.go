@@ -25,8 +25,8 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
+	"go-ethereum-timing/accounts/abi"
+	"go-ethereum-timing/common"
 )
 
 func verify(t *testing.T, jsondata, calldata string, exp []interface{}) {

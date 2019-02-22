@@ -24,7 +24,7 @@ import (
 	"sync"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"go-ethereum-timing/common/hexutil"
 )
 
 // API describes the set of methods offered over the RPC interface

@@ -21,13 +21,13 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/swarm/log"
-	"github.com/ethereum/go-ethereum/swarm/network"
-	"github.com/ethereum/go-ethereum/swarm/spancontext"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	opentracing "github.com/opentracing/opentracing-go"
+	"go-ethereum-timing/metrics"
+	"go-ethereum-timing/p2p/enode"
+	"go-ethereum-timing/swarm/log"
+	"go-ethereum-timing/swarm/network"
+	"go-ethereum-timing/swarm/spancontext"
+	"go-ethereum-timing/swarm/storage"
 )
 
 const (

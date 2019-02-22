@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
+	"go-ethereum-timing/common/hexutil"
+	"go-ethereum-timing/common/math"
 )
 
 var _ = (*stTransactionMarshaling)(nil)

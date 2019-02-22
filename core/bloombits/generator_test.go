@@ -21,7 +21,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/core/types"
+	"go-ethereum-timing/core/types"
 )
 
 // Tests that batched bloom bits are correctly rotated from the input bloom

@@ -20,10 +20,10 @@ package storage
 // no need for queueing/caching
 
 import (
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"go-ethereum-timing/metrics"
 )
 
 const openFileLimit = 128

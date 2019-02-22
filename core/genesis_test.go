@@ -22,12 +22,12 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
+	"go-ethereum-timing/common"
+	"go-ethereum-timing/consensus/ethash"
+	"go-ethereum-timing/core/rawdb"
+	"go-ethereum-timing/core/vm"
+	"go-ethereum-timing/ethdb"
+	"go-ethereum-timing/params"
 )
 
 func TestDefaultGenesisBlock(t *testing.T) {

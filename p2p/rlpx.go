@@ -35,12 +35,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/bitutil"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/ecies"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/golang/snappy"
+	"go-ethereum-timing/common/bitutil"
+	"go-ethereum-timing/crypto"
+	"go-ethereum-timing/crypto/ecies"
+	"go-ethereum-timing/crypto/secp256k1"
+	"go-ethereum-timing/rlp"
 	"golang.org/x/crypto/sha3"
 )
 

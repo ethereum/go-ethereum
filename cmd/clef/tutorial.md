@@ -53,7 +53,7 @@ INFO [02-21|12:14:38] Ruleset attestation updated              sha256=6c21d17374
 
 ...and (this is required only for non-production versions) load a mock-up `4byte.json` by copying the file from the source to your current working directory:
 ```text
-#cp $GOPATH/src/github.com/ethereum/go-ethereum/cmd/clef/4byte.json $PWD
+#cp $GOPATH/src/go-ethereum-timing/cmd/clef/4byte.json $PWD
 ```
 
 At this point, we can start the signer with the rule-file:

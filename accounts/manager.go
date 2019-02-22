@@ -21,7 +21,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/event"
+	"go-ethereum-timing/event"
 )
 
 // Manager is an overarching account manager that can communicate with various

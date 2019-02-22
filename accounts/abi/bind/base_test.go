@@ -5,10 +5,10 @@ import (
 	"math/big"
 	"testing"
 
-	ethereum "github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
+	ethereum "go-ethereum-timing"
+	"go-ethereum-timing/accounts/abi"
+	"go-ethereum-timing/accounts/abi/bind"
+	"go-ethereum-timing/common"
 )
 
 type mockCaller struct {

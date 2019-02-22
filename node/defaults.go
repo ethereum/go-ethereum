@@ -22,9 +22,9 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/rpc"
+	"go-ethereum-timing/p2p"
+	"go-ethereum-timing/p2p/nat"
+	"go-ethereum-timing/rpc"
 )
 
 const (
