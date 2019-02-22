@@ -17,6 +17,7 @@
 package core
 
 import (
+	"encoding/hex"
 	"errors"
 	"go-ethereum-timing/log2"
 	"math"
@@ -208,7 +209,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		vmerr error
 	)
 
-	startTime:=time.Now()
+	startTime := time.Now()
 
 	if contractCreation {
 		ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value)
@@ -218,9 +219,15 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		ret, st.gas, vmerr = evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 
-	endTime:=time.Now()
+	endTime := time.Now()
 	executionTime := endTime.Sub(startTime)
-	log2.Record(st.msg,executionTime)
+	log2.Record(log2.TimingLog{
+		From:              st.msg.From().String(),
+		To:                st.msg.From().String(),
+		TimeCost:          executionTime.Nanoseconds(),
+		DataFirst4ByteHex: hex.EncodeToString(st.msg.Data()[0:4]),
+		Timestamp:         time.Now().Unix(),
+	})
 
 	if vmerr != nil {
 		log.Debug("VM returned with error", "err", vmerr)

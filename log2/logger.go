@@ -1,12 +1,9 @@
 package log2
 
 import (
-	"encoding/hex"
 	"encoding/json"
-	"go-ethereum-timing/core"
 	"log"
 	"os"
-	"time"
 )
 
 var file *os.File
@@ -26,14 +23,7 @@ func InitOutputFile(outputFile string) {
 		log.Fatalln("Fail to create log file for timing.")
 	}
 }
-func Record(message core.Message, timeCost time.Duration) error {
-	timingLog := TimingLog{
-		From:              message.From().String(),
-		To:                message.From().String(),
-		TimeCost:          timeCost.Nanoseconds(),
-		DataFirst4ByteHex: hex.EncodeToString(message.Data()[0:4]),
-		Timestamp:         time.Now().Unix(),
-	}
+func Record(timingLog TimingLog) error {
 	b, err := json.Marshal(timingLog)
 	if err != nil {
 		return err
