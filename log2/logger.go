@@ -2,7 +2,7 @@ package log2
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
 	"os"
 )
 
@@ -18,12 +18,16 @@ type TimingLog struct {
 
 func InitOutputFile(outputFile string) {
 	if outputFile == "" {
-		log.Fatalln("You must specify the log file, e.g. \"geth --timing.output=/path/to/file.txt\"")
+		fmt.Fprintln(os.Stderr, "You must specify the log file, e.g. \"geth --timing.output=/path/to/file.txt\"")
+		os.Exit(1)
 	}
 	var err error
 	file, err = os.OpenFile(outputFile, os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
-		log.Fatalln("Fail to create log file for timing.")
+		fmt.Fprintln(os.Stderr, "Fail to create log file for timing.")
+		fmt.Fprintln(os.Stderr, err)
+
+		os.Exit(1)
 	}
 }
 func Record(timingLog TimingLog) error {
