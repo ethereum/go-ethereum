@@ -53,7 +53,7 @@ matrix:
         - go run build/ci.go lint
 
     # This builder does the Ubuntu PPA upload
-    - if: type = push
+    - if: repo = ethereum/go-ethereum AND type = push
       os: linux
       dist: trusty
       go: 1.11.x
@@ -75,7 +75,7 @@ matrix:
         - go run build/ci.go debsrc -upload ethereum/ethereum -sftp-user geth-ci -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
 
     # This builder does the Linux Azure uploads
-    - if: type = push
+    - if: repo = ethereum/go-ethereum AND type = push
       os: linux
       dist: trusty
       sudo: required
@@ -109,7 +109,7 @@ matrix:
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Linux Azure MIPS xgo uploads
-    - if: type = push
+    - if: repo = ethereum/go-ethereum AND type = push
       os: linux
       dist: trusty
       services:
@@ -137,7 +137,7 @@ matrix:
         - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Android Maven and Azure uploads
-    - if: type = push
+    - if: repo = ethereum/go-ethereum AND type = push
       os: linux
       dist: trusty
       addons:
@@ -175,7 +175,7 @@ matrix:
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
-    - if: type = push
+    - if: repo = ethereum/go-ethereum AND type = push
       os: osx
       go: 1.11.x
       env:
@@ -204,7 +204,7 @@ matrix:
         - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
 
     # This builder does the Azure archive purges to avoid accumulating junk
-    - if: type = cron
+    - if: repo = ethereum/go-ethereum AND type = cron
       os: linux
       dist: trusty
       go: 1.11.x
@@ -214,3 +214,12 @@ matrix:
         submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go purge -store gethstore/builds -days 14
+
+    - name: Race Detector for Swarm
+      if: repo = ethersphere/go-ethereum
+      os: linux
+      dist: trusty
+      go: 1.11.x
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      script: ./build/travis_keepalive.sh go test -v -timeout 20m -race ./swarm...
