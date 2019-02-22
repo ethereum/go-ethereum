@@ -48,17 +48,12 @@ func slidingWindowCmd(ctx *cli.Context, tuid string) error {
 			metrics.GetOrRegisterCounter(fmt.Sprintf("%s.fail", commandName), nil).Inc(1)
 		}
 		return err
-	case <-time.After(time.Duration(timeout) * time.Second):
-		metrics.GetOrRegisterCounter(fmt.Sprintf("%s.timeout", commandName), nil).Inc(1)
-
-		return fmt.Errorf("timeout after %v sec", timeout)
 	}
 }
 
 func slidingWindow(ctx *cli.Context, tuid string) error {
 	var hashes []uploadResult //swarm hashes of the uploads
 	nodes := len(hosts)
-	const iterationTimeout = 30 * time.Second
 	log.Info("sliding window test started", "tuid", tuid, "nodes", nodes, "filesize(kb)", filesize, "timeout", timeout)
 	uploadedBytes := 0
 	networkDepth := 0
@@ -121,6 +116,7 @@ outer:
 			}
 			networkDepth = i
 			metrics.GetOrRegisterGauge("sliding-window.network-depth", nil).Update(int64(networkDepth))
+			log.Info("sliding window test successfully fetched file", "currentDepth", networkDepth)
 		}
 	}
 
