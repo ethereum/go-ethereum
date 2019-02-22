@@ -18,6 +18,8 @@
 package consensus
 
 import (
+	"math/big"
+
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/types"
@@ -45,6 +47,10 @@ type ChainReader interface {
 
 	// GetBlock retrieves a block from the database by hash and number.
 	GetBlock(hash common.Hash, number uint64) *types.Block
+
+	// CalcPastMedianTime calculates the median time of the previous few blocks
+	// prior to, and including, the passed block node.
+	CalcPastMedianTime(number uint64, parent *types.Header) *big.Int
 }
 
 // Engine is an algorithm agnostic consensus engine.

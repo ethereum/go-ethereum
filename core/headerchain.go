@@ -38,6 +38,8 @@ const (
 	headerCacheLimit = 512
 	tdCacheLimit     = 1024
 	numberCacheLimit = 2048
+	hashCacheLimit   = 64
+	medianTimeBlocks = 11
 )
 
 // HeaderChain implements the basic block header chain logic that is shared by
@@ -57,6 +59,7 @@ type HeaderChain struct {
 	headerCache *lru.Cache // Cache for the most recent block headers
 	tdCache     *lru.Cache // Cache for the most recent block total difficulties
 	numberCache *lru.Cache // Cache for the most recent block numbers
+	hashCache   *lru.Cache
 
 	procInterrupt func() bool
 
@@ -72,6 +75,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 	headerCache, _ := lru.New(headerCacheLimit)
 	tdCache, _ := lru.New(tdCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
+	hashCache, _ := lru.New(hashCacheLimit)
 
 	// Seed a fast but crypto originating random generator
 	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
@@ -85,6 +89,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 		headerCache:   headerCache,
 		tdCache:       tdCache,
 		numberCache:   numberCache,
+		hashCache:     hashCache,
 		procInterrupt: procInterrupt,
 		rand:          mrand.New(mrand.NewSource(seed.Int64())),
 		engine:        engine,
@@ -115,6 +120,7 @@ func (hc *HeaderChain) GetBlockNumber(hash common.Hash) uint64 {
 	number := GetBlockNumber(hc.chainDb, hash)
 	if number != missingNumber {
 		hc.numberCache.Add(hash, number)
+		hc.hashCache.Add(number, hash)
 	}
 	return number
 }
@@ -190,6 +196,7 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 
 	hc.headerCache.Add(hash, header)
 	hc.numberCache.Add(hash, number)
+	hc.hashCache.Add(number, hash)
 
 	return
 }
@@ -354,8 +361,7 @@ func (hc *HeaderChain) GetTdByHash(hash common.Hash) *big.Int {
 // prior to, and including, the passed block node.
 //
 // Modified from btcsuite
-func (hc *HeaderChain) CalcPastMedianTime(number uint64) *big.Int {
-	medianTimeBlocks := uint64(11)
+func (hc *HeaderChain) CalcPastMedianTime(number uint64, parent *types.Header) *big.Int {
 
 	// Genesis block.
 	if number == 0 {
@@ -364,13 +370,22 @@ func (hc *HeaderChain) CalcPastMedianTime(number uint64) *big.Int {
 
 	timestamps := make([]*big.Int, medianTimeBlocks)
 	numNodes := 0
-	iterNode := hc.GetHeaderByNumber(number)
+	limit := uint64(0)
+	if number >= medianTimeBlocks {
+		limit = number - medianTimeBlocks + 1
+	}
 
-	ancestors := make(map[common.Hash]*types.Header)
-	for i, ancestor := range hc.GetBlockHeadersFromHash(iterNode.Hash(), medianTimeBlocks) {
-		ancestors[ancestor.Hash()] = ancestor
-		timestamps[i] = ancestor.Time
+	for i := number; i >= limit; i-- {
+		if parent != nil && i == number {
+			timestamps[numNodes] = parent.Time
+		} else {
+			header := hc.GetHeaderByNumber(i)
+			timestamps[numNodes] = header.Time
+		}
 		numNodes++
+		if i == 0 {
+			break
+		}
 	}
 
 	// Prune the slice to the actual number of available timestamps which
@@ -424,6 +439,11 @@ func (hc *HeaderChain) HasHeader(hash common.Hash) bool {
 // GetHeaderByNumber retrieves a block header from the database by number,
 // caching it (associated with its hash) if found.
 func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
+	// check cache
+	if cache, ok := hc.hashCache.Get(number); ok {
+		return hc.GetHeader(cache.(common.Hash), number)
+	}
+
 	hash := GetCanonicalHash(hc.chainDb, number)
 	if hash == (common.Hash{}) {
 		return nil
@@ -476,6 +496,7 @@ func (hc *HeaderChain) SetHead(head uint64, delFn DeleteCallback) {
 	hc.headerCache.Purge()
 	hc.tdCache.Purge()
 	hc.numberCache.Purge()
+	hc.hashCache.Purge()
 
 	if hc.currentHeader == nil {
 		hc.currentHeader = hc.genesisHeader

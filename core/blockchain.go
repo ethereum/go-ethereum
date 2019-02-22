@@ -536,31 +536,8 @@ func (bc *BlockChain) HasBlockAndState(hash common.Hash) bool {
 // prior to, and including, the passed block node.
 //
 // Modified from btcsuite
-func (bc *BlockChain) CalcPastMedianTime(number uint64) *big.Int {
-	// Genesis block.
-	if number == 0 {
-		return bc.Genesis().Time()
-	}
-
-	timestamps := make([]*big.Int, medianTimeBlocks)
-	numNodes := 0
-	iterNode := bc.GetHeaderByNumber(number)
-
-	ancestors := make(map[common.Hash]*types.Header)
-	for i, ancestor := range bc.GetBlockHeadersFromHash(iterNode.Hash(), medianTimeBlocks) {
-		ancestors[ancestor.Hash()] = ancestor
-		timestamps[i] = ancestor.Time
-		numNodes++
-	}
-
-	// Prune the slice to the actual number of available timestamps which
-	// will be fewer than desired near the beginning of the block chain
-	// and sort them.
-	timestamps = timestamps[:numNodes]
-	sort.Sort(BigIntSlice(timestamps))
-
-	medianTimestamp := timestamps[numNodes/2]
-	return medianTimestamp
+func (bc *BlockChain) CalcPastMedianTime(number uint64, parent *types.Header) *big.Int {
+	return bc.hc.CalcPastMedianTime(number, parent)
 }
 
 // GetBlock retrieves a block from the database by hash and number,
