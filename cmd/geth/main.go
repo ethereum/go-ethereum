@@ -272,8 +272,6 @@ func geth(ctx *cli.Context) error {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
 
-	log2.InitOutputFile(ctx.String(utils.TimingOutputFlag.Name))
-
 	node := makeFullNode(ctx)
 	startNode(ctx, node)
 	node.Wait()
@@ -284,6 +282,9 @@ func geth(ctx *cli.Context) error {
 // it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
 // miner.
 func startNode(ctx *cli.Context, stack *node.Node) {
+	//timing
+	log2.InitOutputFile(ctx.String(utils.TimingOutputFlag.Name))
+
 	debug.Memsize.Add("node", stack)
 
 	// Start up the node itself

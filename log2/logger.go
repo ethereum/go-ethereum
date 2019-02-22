@@ -26,7 +26,6 @@ func InitOutputFile(outputFile string) {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Fail to create log file for timing.")
 		fmt.Fprintln(os.Stderr, err)
-
 		os.Exit(1)
 	}
 }
