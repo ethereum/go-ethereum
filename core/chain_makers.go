@@ -22,7 +22,6 @@ import (
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/consensus/ubqhash"
-	"github.com/ubiq/go-ubiq/consensus/misc"
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/core/vm"
@@ -164,10 +163,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, db ethdb.Dat
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
 	genblock := func(i int, h *types.Header, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{parent: parent, i: i, chain: blocks, header: h, statedb: statedb, config: config}
-		// Mutate the state and block according to any hard-fork specs
-		if config == nil {
-			config = MakeChainConfig()
-		}
+
 		// Execute any user modifications to the block and finalize it
 		if gen != nil {
 			gen(i, b)
