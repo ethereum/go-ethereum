@@ -142,7 +142,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 	if b.header.Time.Cmp(b.parent.Header().Time) <= 0 {
 		panic("block time out of range")
 	}
-	b.header.Difficulty = ubqhash.CalcDifficulty(b.config, b.header.Time.Uint64(), b.parent.Header())
+	b.header.Difficulty = ubqhash.CalcDifficultyLegacy(b.header.Time.Uint64(), b.parent.Time().Uint64(), b.parent.Number(), b.parent.Difficulty())
 }
 
 // GenerateChain creates a chain of n blocks. The first block's
@@ -206,11 +206,7 @@ func makeHeader(config *params.ChainConfig, parent *types.Block, state *state.St
 		Root:       state.IntermediateRoot(config.IsEIP158(parent.Number())),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
-		Difficulty: ubqhash.CalcDifficulty(config, time.Uint64(), &types.Header{
-			Number:     parent.Number(),
-			Time:       new(big.Int).Sub(time, big.NewInt(10)),
-			Difficulty: parent.Difficulty(),
-		}),
+		Difficulty: ubqhash.CalcDifficultyLegacy(time.Uint64(), new(big.Int).Sub(time, big.NewInt(10)).Uint64(), parent.Number(), parent.Difficulty()),
 		GasLimit: CalcGasLimit(parent),
 		GasUsed:  new(big.Int),
 		Number:   new(big.Int).Add(parent.Number(), common.Big1),
