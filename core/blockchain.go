@@ -1182,8 +1182,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// When transactions get deleted from the database that means the
 	// receipts that were created in the fork must also be deleted
 	for _, tx := range diff {
-		DeleteReceipt(bc.chainDb, tx.Hash())
-		DeleteTransaction(bc.chainDb, tx.Hash())
+		DeleteTxLookupEntry(bc.chainDb, tx.Hash())
 	}
 	// Must be posted in a goroutine because of the transaction pool trying
 	// to acquire the chain manager lock
@@ -1402,3 +1401,10 @@ func (bc *BlockChain) Config() *params.ChainConfig { return bc.config }
 
 // Engine retrieves the blockchain's consensus engine.
 func (bc *BlockChain) Engine() consensus.Engine { return bc.engine }
+
+// BigIntSlice attaches the methods of sort.Interface to []*big.Int, sorting in increasing order.
+type BigIntSlice []*big.Int
+
+func (s BigIntSlice) Len() int           { return len(s) }
+func (s BigIntSlice) Less(i, j int) bool { return s[i].Cmp(s[j]) < 0 }
+func (s BigIntSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }

@@ -98,15 +98,7 @@ const missingNumber = uint64(0xffffffffffffffff)
 func GetBlockNumber(db ethdb.Database, hash common.Hash) uint64 {
 	data, _ := db.Get(append(blockHashPrefix, hash.Bytes()...))
 	if len(data) != 8 {
-		data, _ := db.Get(append(append(oldBlockPrefix, hash.Bytes()...), oldHeaderSuffix...))
-		if len(data) == 0 {
-			return missingNumber
-		}
-		header := new(types.Header)
-		if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
-			log.Crit("Failed to decode block header", "err", err)
-		}
-		return header.Number.Uint64()
+		return missingNumber
 	}
 	return binary.BigEndian.Uint64(data)
 }
@@ -253,7 +245,7 @@ func GetTxLookupEntry(db ethdb.Database, hash common.Hash) (common.Hash, uint64,
 	// Parse and return the contents of the lookup entry
 	var entry txLookupEntry
 	if err := rlp.DecodeBytes(data, &entry); err != nil {
-		glog.V(logger.Error).Infof("Invalid lookup entry RLP", "hash", hash, "err", err)
+		log.Error("Invalid lookup entry RLP", "hash", hash, "err", err)
 		return common.Hash{}, 0, 0
 	}
 	return entry.BlockHash, entry.BlockIndex, entry.Index
@@ -268,7 +260,7 @@ func GetTransaction(db ethdb.Database, hash common.Hash) (*types.Transaction, co
 	if blockHash != (common.Hash{}) {
 		body := GetBody(db, blockHash, blockNumber)
 		if body == nil || len(body.Transactions) <= int(txIndex) {
-			glog.V(logger.Error).Infof("Transaction referenced missing", "number", blockNumber, "hash", blockHash, "index", txIndex)
+			log.Error("Transaction referenced missing", "number", blockNumber, "hash", blockHash, "index", txIndex)
 			return nil, common.Hash{}, 0, 0
 		}
 		return body.Transactions[txIndex], blockHash, blockNumber, txIndex
@@ -295,9 +287,22 @@ func GetTransaction(db ethdb.Database, hash common.Hash) (*types.Transaction, co
 	return &tx, entry.BlockHash, entry.BlockIndex, entry.Index
 }
 
-// GetReceipt returns a receipt by hash
-func GetReceipt(db ethdb.Database, hash common.Hash) *types.Receipt {
-	data, _ := db.Get(append(receiptsPrefix, hash[:]...))
+// GetReceipt retrieves a specific transaction receipt from the database, along with
+// its added positional metadata.
+func GetReceipt(db ethdb.Database, hash common.Hash) (*types.Receipt, common.Hash, uint64, uint64) {
+	// Retrieve the lookup metadata and resolve the receipt from the receipts
+	blockHash, blockNumber, receiptIndex := GetTxLookupEntry(db, hash)
+
+	if blockHash != (common.Hash{}) {
+		receipts := GetBlockReceipts(db, blockHash, blockNumber)
+		if len(receipts) <= int(receiptIndex) {
+			log.Error("Receipt refereced missing", "number", blockNumber, "hash", blockHash, "index", receiptIndex)
+			return nil, common.Hash{}, 0, 0
+		}
+		return receipts[receiptIndex], blockHash, blockNumber, receiptIndex
+	}
+	// Old receipt representation, load the receipt and set an unknown metadata
+	data, _ := db.Get(append(oldReceiptsPrefix, hash[:]...))
 	if len(data) == 0 {
 		return nil, common.Hash{}, 0, 0
 	}
@@ -434,20 +439,7 @@ func WriteTxLookupEntries(db ethdb.Database, block *types.Block) error {
 
 	// Iterate over each transaction and encode its metadata
 	for i, tx := range block.Transactions() {
-		// Encode and queue up the transaction for storage
-		data, err := rlp.EncodeToBytes(tx)
-		if err != nil {
-			return err
-		}
-		if err = batch.Put(tx.Hash().Bytes(), data); err != nil {
-			return err
-		}
-		// Encode and queue up the transaction metadata for storage
-		meta := struct {
-			BlockHash  common.Hash
-			BlockIndex uint64
-			Index      uint64
-		}{
+		entry := txLookupEntry{
 			BlockHash:  block.Hash(),
 			BlockIndex: block.NumberU64(),
 			Index:      uint64(i),
@@ -462,39 +454,7 @@ func WriteTxLookupEntries(db ethdb.Database, block *types.Block) error {
 	}
 	// Write the scheduled data into the database
 	if err := batch.Write(); err != nil {
-		log.Crit("Failed to store transactions", "err", err)
-	}
-	return nil
-}
-
-// WriteReceipt stores a single transaction receipt into the database.
-func WriteReceipt(db ethdb.Database, receipt *types.Receipt) error {
-	storageReceipt := (*types.ReceiptForStorage)(receipt)
-	data, err := rlp.EncodeToBytes(storageReceipt)
-	if err != nil {
-		return err
-	}
-	return db.Put(append(receiptsPrefix, receipt.TxHash.Bytes()...), data)
-}
-
-// WriteReceipts stores a batch of transaction receipts into the database.
-func WriteReceipts(db ethdb.Database, receipts types.Receipts) error {
-	batch := db.NewBatch()
-
-	// Iterate over all the receipts and queue them for database injection
-	for _, receipt := range receipts {
-		storageReceipt := (*types.ReceiptForStorage)(receipt)
-		data, err := rlp.EncodeToBytes(storageReceipt)
-		if err != nil {
-			return err
-		}
-		if err := batch.Put(append(receiptsPrefix, receipt.TxHash.Bytes()...), data); err != nil {
-			return err
-		}
-	}
-	// Write the scheduled data into the database
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to store receipts", "err", err)
+		log.Crit("Failed to store lookup entries:", err)
 	}
 	return nil
 }
@@ -533,15 +493,9 @@ func DeleteBlockReceipts(db ethdb.Database, hash common.Hash, number uint64) {
 	db.Delete(append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...))
 }
 
-// DeleteTransaction removes all transaction data associated with a hash.
-func DeleteTransaction(db ethdb.Database, hash common.Hash) {
-	db.Delete(hash.Bytes())
-	db.Delete(append(hash.Bytes(), txMetaSuffix...))
-}
-
-// DeleteReceipt removes all receipt data associated with a transaction hash.
-func DeleteReceipt(db ethdb.Database, hash common.Hash) {
-	db.Delete(append(receiptsPrefix, hash.Bytes()...))
+// DeleteTxLookupEntry removes all transaction data associated with a hash.
+func DeleteTxLookupEntry(db ethdb.Database, hash common.Hash) {
+	db.Delete(append(lookupPrefix, hash.Bytes()...))
 }
 
 // returns a formatted MIP mapped key by adding prefix, canonical number and level

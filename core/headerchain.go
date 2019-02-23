@@ -23,6 +23,7 @@ import (
 	"math"
 	"math/big"
 	mrand "math/rand"
+	"sort"
 	"time"
 
 	"github.com/ubiq/go-ubiq/common"
