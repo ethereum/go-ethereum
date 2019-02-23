@@ -24,7 +24,6 @@ import (
 	"math/big"
 	mrand "math/rand"
 	"runtime"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -57,7 +56,6 @@ const (
 	blockCacheLimit     = 256
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
-	medianTimeBlocks    = 11
 	badBlockLimit       = 10
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
