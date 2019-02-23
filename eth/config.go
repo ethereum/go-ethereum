@@ -39,7 +39,7 @@ var DefaultConfig = Config{
 	UbqhashCachesOnDisk:   3,
 	UbqhashDatasetsInMem:  1,
 	UbqhashDatasetsOnDisk: 2,
-	NetworkId:            1,
+	NetworkId:            88,
 	LightPeers:           20,
 	DatabaseCache:        128,
 	GasPrice:             big.NewInt(18 * params.Shannon),
