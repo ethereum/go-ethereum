@@ -30,6 +30,7 @@ import (
 	"github.com/ubiq/go-ubiq/consensus/misc"
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/types"
+	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/params"
 	set "gopkg.in/fatih/set.v0"
 )
@@ -626,7 +627,7 @@ func (ubqhash *Ubqhash) Prepare(chain consensus.ChainReader, header *types.Heade
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	header.Difficulty = CalcDifficulty(chain.Config(), header.Time.Uint64(), parent)
+	header.Difficulty = CalcDifficulty(chain, header.Time.Uint64(), parent)
 
 	return nil
 }
