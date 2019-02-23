@@ -17,6 +17,7 @@
 package main
 
 import (
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -66,7 +67,7 @@ func startWS(ctx *cli.Context) (err error) {
 	return http.Serve(listener, server.WebsocketHandler(origins))
 }
 
-// newServer creates a global store and returns its RPC server.
+// newServer creates a global store and starts a chunk explorer server if configured.
 // Returned cleanup function should be called only if err is nil.
 func newServer(ctx *cli.Context) (server *rpc.Server, cleanup func(), err error) {
 	log.PrintOrigins(true)
@@ -81,7 +82,9 @@ func newServer(ctx *cli.Context) (server *rpc.Server, cleanup func(), err error)
 			return nil, nil, err
 		}
 		cleanup = func() {
-			dbStore.Close()
+			if err := dbStore.Close(); err != nil {
+				log.Error("global store: close", "err", err)
+			}
 		}
 		globalStore = dbStore
 		log.Info("database global store", "dir", dir)
@@ -94,6 +97,23 @@ func newServer(ctx *cli.Context) (server *rpc.Server, cleanup func(), err error)
 	if err := server.RegisterName("mockStore", globalStore); err != nil {
 		cleanup()
 		return nil, nil, err
+	}
+
+	shutdown, err := serveChunkExplorer(ctx, globalStore)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	if shutdown != nil {
+		cleanup = func() {
+			shutdown()
+
+			if c, ok := globalStore.(io.Closer); ok {
+				if err := c.Close(); err != nil {
+					log.Error("global store: close", "err", err)
+				}
+			}
+		}
 	}
 
 	return server, cleanup, nil
