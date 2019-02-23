@@ -118,15 +118,6 @@ func testDB_collectGarbageWorker(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-
-	// cleanup: drain the last testHookCollectGarbageChan
-	// element before calling deferred functions not to block
-	// collectGarbageWorker loop, preventing the race in
-	// setting testHookCollectGarbage function
-	select {
-	case <-testHookCollectGarbageChan:
-	default:
-	}
 }
 
 // TestDB_collectGarbageWorker_withRequests is a helper test function
@@ -290,6 +281,7 @@ func TestDB_gcSize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer db.Close()
 
 	t.Run("gc index size", newIndexGCSizeTest(db))
 
