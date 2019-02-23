@@ -17,7 +17,6 @@
 package ethapi
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -35,7 +34,6 @@ import (
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/core/vm"
 	"github.com/ubiq/go-ubiq/crypto"
-	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/p2p"
 	"github.com/ubiq/go-ubiq/params"
@@ -949,42 +947,29 @@ func (s *PublicTransactionPoolAPI) GetTransactionCount(ctx context.Context, addr
 }
 
 // GetTransactionByHash returns the transaction for the given hash
-func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, hash common.Hash) (*RPCTransaction, error) {
-	var tx *types.Transaction
-	var isPending bool
-	var err error
-
-	if tx, isPending, err = getTransaction(s.b.ChainDb(), s.b, hash); err != nil {
-		log.Debug("Failed to retrieve transaction", "hash", hash, "err", err)
-		return nil, nil
-	} else if tx == nil {
-		return nil, nil
+func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, hash common.Hash) *RPCTransaction {
+	// Try to return an already finalized transaction
+	if tx, blockHash, blockNumber, index := core.GetTransaction(s.b.ChainDb(), hash); tx != nil {
+		return newRPCTransaction(tx, blockHash, blockNumber, index)
 	}
-	if isPending {
-		return newRPCPendingTransaction(tx), nil
+	// No finalized transaction, try to retrieve it from the pool
+	if tx := s.b.GetPoolTransaction(hash); tx != nil {
+		return newRPCPendingTransaction(tx)
 	}
-
-	blockHash, _, _, err := getTransactionBlockData(s.b.ChainDb(), hash)
-	if err != nil {
-		log.Debug("Failed to retrieve transaction block", "hash", hash, "err", err)
-		return nil, nil
-	}
-
-	if block, _ := s.b.GetBlock(ctx, blockHash); block != nil {
-		return newRPCTransaction(block, hash)
-	}
-	return nil, nil
+	// Transaction unknown, return as such
+	return nil
 }
 
 // GetRawTransactionByHash returns the bytes of the transaction for the given hash.
 func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
 	var tx *types.Transaction
 
-	if tx, _, err = getTransaction(s.b.ChainDb(), s.b, hash); err != nil {
-		log.Debug("Failed to retrieve transaction", "hash", hash, "err", err)
-		return nil, nil
-	} else if tx == nil {
-		return nil, nil
+	// Retrieve a finalized transaction, or a pooled otherwise
+	if tx, _, _, _ = core.GetTransaction(s.b.ChainDb(), hash); tx == nil {
+		if tx = s.b.GetPoolTransaction(hash); tx == nil {
+			// Transaction not found anywhere, abort
+			return nil, nil
+		}
 	}
 	// Serialize to RLP and return
 	return rlp.EncodeToBytes(tx)
@@ -992,21 +977,8 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, 
 
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
 func (s *PublicTransactionPoolAPI) GetTransactionReceipt(hash common.Hash) (map[string]interface{}, error) {
-	receipt := core.GetReceipt(s.b.ChainDb(), hash)
-	if receipt == nil {
-		log.Debug("Receipt not found for transaction", "hash", hash)
-		return nil, nil
-	}
-
-	tx, _, err := getTransaction(s.b.ChainDb(), s.b, hash)
-	if err != nil {
-		log.Debug("Failed to retrieve transaction", "hash", hash, "err", err)
-		return nil, nil
-	}
-
-	txBlock, blockIndex, index, err := getTransactionBlockData(s.b.ChainDb(), hash)
-	if err != nil {
-		log.Debug("Failed to retrieve transaction block", "hash", hash, "err", err)
+	tx, blockHash, blockNumber, index := core.GetTransaction(s.b.ChainDb(), hash)
+	if tx == nil {
 		return nil, nil
 	}
 	receipt, _, _, _ := core.GetReceipt(s.b.ChainDb(), hash) // Old receipts don't have the lookup data available
@@ -1019,8 +991,8 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(hash common.Hash) (map[
 
 	fields := map[string]interface{}{
 		"root":              hexutil.Bytes(receipt.PostState),
-		"blockHash":         txBlock,
-		"blockNumber":       hexutil.Uint64(blockIndex),
+		"blockHash":         blockHash,
+		"blockNumber":       hexutil.Uint64(blockNumber),
 		"transactionHash":   hash,
 		"transactionIndex":  hexutil.Uint64(index),
 		"from":              from,
