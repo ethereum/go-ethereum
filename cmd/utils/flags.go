@@ -74,8 +74,10 @@ SUBCOMMANDS:
 
 func init() {
 	cli.AppHelpTemplate = `{{.Name}} {{if .Flags}}[global options] {{end}}command{{if .Flags}} [command options]{{end}} [arguments...]
+
 VERSION:
    {{.Version}}
+
 COMMANDS:
    {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
    {{end}}{{if .Flags}}
@@ -110,12 +112,6 @@ func NewApp(gitCommit, usage string) *cli.App {
 // are the same for all commands.
 
 var (
-	// XDC flags.
-	RollbackFlag = cli.StringFlag{
-		Name:  "rollback",
-		Usage: "Rollback chain at hash",
-		Value: "",
-	}
 	// General settings
 	AnnounceTxsFlag = cli.BoolFlag{
 		Name:  "announce-txs",
@@ -745,9 +741,9 @@ func setIPC(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
-// MakeDatabaseHandles raises out the number of allowed file handles per process
+// makeDatabaseHandles raises out the number of allowed file handles per process
 // for XDC and returns half of the allowance to assign to the database.
-func MakeDatabaseHandles() int {
+func makeDatabaseHandles() int {
 	limit, err := fdlimit.Current()
 	if err != nil {
 		Fatalf("Failed to retrieve file descriptor allowance: %v", err)
@@ -1064,7 +1060,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheDatabaseFlag.Name) {
 		cfg.DatabaseCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
 	}
-	cfg.DatabaseHandles = MakeDatabaseHandles()
+	cfg.DatabaseHandles = makeDatabaseHandles()
 
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
@@ -1091,9 +1087,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		cfg.EnablePreimageRecording = ctx.GlobalBool(VMEnableDebugFlag.Name)
 	}
 	if ctx.GlobalIsSet(StoreRewardFlag.Name) {
-		common.StoreRewardFolder = filepath.Join(stack.DataDir(), "XDC", "rewards")
-		if _, err := os.Stat(common.StoreRewardFolder); os.IsNotExist(err) {
-			os.Mkdir(common.StoreRewardFolder, os.ModePerm)
+		cfg.StoreRewardFolder = filepath.Join(stack.DataDir(), "XDC", "rewards")
+		if _, err := os.Stat(cfg.StoreRewardFolder); os.IsNotExist(err) {
+			os.Mkdir(cfg.StoreRewardFolder, os.ModePerm)
 		}
 	}
 	// Override any default configs for hard coded networks.
@@ -1210,7 +1206,7 @@ func SetupNetwork(ctx *cli.Context) {
 func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	var (
 		cache   = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
-		handles = MakeDatabaseHandles()
+		handles = makeDatabaseHandles()
 	)
 	name := "chaindata"
 	if ctx.GlobalBool(LightModeFlag.Name) {
@@ -1260,7 +1256,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 				DatasetsOnDisk: eth.DefaultConfig.Ethash.DatasetsOnDisk,
 			})
 		}
-		Fatalf("Only support XDPoS consensus")
 	}
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)

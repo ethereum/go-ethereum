@@ -469,14 +469,14 @@ func runRandTest(rt randTest) bool {
 	return true
 }
 
-func checkCacheInvariant(n, parent Node, parentCachegen uint16, parentDirty bool, depth int) error {
-	var children []Node
+func checkCacheInvariant(n, parent node, parentCachegen uint16, parentDirty bool, depth int) error {
+	var children []node
 	var flag nodeFlag
 	switch n := n.(type) {
-	case *ShortNode:
+	case *shortNode:
 		flag = n.flags
-		children = []Node{n.Val}
-	case *FullNode:
+		children = []node{n.Val}
+	case *fullNode:
 		flag = n.flags
 		children = n.Children[:]
 	default:
