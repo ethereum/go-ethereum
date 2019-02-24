@@ -60,10 +60,10 @@ func upload(ctx *cli.Context) {
 		autoDefaultPath = false
 		file            string
 	)
-	if autoDefaultPathString := os.Getenv(SWARM_AUTO_DEFAULTPATH); autoDefaultPathString != "" {
+	if autoDefaultPathString := os.Getenv(SwarmAutoDefaultPath); autoDefaultPathString != "" {
 		b, err := strconv.ParseBool(autoDefaultPathString)
 		if err != nil {
-			utils.Fatalf("invalid environment variable %s: %v", SWARM_AUTO_DEFAULTPATH, err)
+			utils.Fatalf("invalid environment variable %s: %v", SwarmAutoDefaultPath, err)
 		}
 		autoDefaultPath = b
 	}
