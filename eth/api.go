@@ -20,6 +20,7 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"math/big"
@@ -338,33 +339,31 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 type AccountRangeResult struct {
 	Addresses []common.Address `json:"addresses"`
 	Next      common.Address   `json:"next"`
-	Images    []common.Hash    `json:"preimages"`
-	NextImage common.Hash      `json:"nextPreimage"`
 }
 
 func accountRange(st state.Trie, start *common.Address, maxResult int) (AccountRangeResult, error) {
 	it := trie.NewIterator(st.NodeIterator(crypto.Keccak256(start[:])))
-	result := AccountRangeResult{Addresses: []common.Address{}, Next: common.Address{}, Images: []common.Hash{}, NextImage: common.Hash{}}
+	result := AccountRangeResult{Addresses: []common.Address{}, Next: common.Address{}}
 	for i := 0; i < maxResult && it.Next(); i++ {
 		if preimage := st.GetKey(it.Key); preimage != nil {
 			result.Addresses = append(result.Addresses, common.BytesToAddress(preimage))
 		} else {
-			result.Images = append(result.Images, common.BytesToHash(it.Key))
+			return AccountRangeResult{}, fmt.Errorf("preimage not found for 0x%s", hex.EncodeToString(it.Key))
 		}
 	}
 
 	if it.Next() {
 		if preimage := st.GetKey(it.Key); preimage != nil {
-			result.Next = common.BytesToAddress(st.GetKey(preimage))
+			result.Next = common.BytesToAddress(preimage)
 		} else {
-			result.NextImage = common.BytesToHash(it.Key)
+			return AccountRangeResult{}, fmt.Errorf("preimage not found for 0x%s", hex.EncodeToString(it.Key))
 		}
 	}
 
 	return result, nil
 }
 
-// enumerate all accounts in the state after the last transaction in the latest block
+// enumerate all accounts in the latest state
 func (api *PrivateDebugAPI) AccountRangeAt(ctx context.Context, startAddr *common.Address, maxResults int) (AccountRangeResult, error) {
 	var statedb *state.StateDB = nil
 	var err error = nil
