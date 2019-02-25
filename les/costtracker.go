@@ -76,7 +76,7 @@ var (
 		GetTxStatusMsg:         {0, 100},
 	}
 	minBufLimit = uint64(50000000 * maxCostFactor)          // minimum buffer limit allowed for a client
-	minCapacity = uint64((minBufLimit-1)/bufLimitRatio + 1) // minimum capacity allowed for a client
+	minCapacity = (minBufLimit-1)/bufLimitRatio + 1 // minimum capacity allowed for a client
 )
 
 const (
