@@ -57,7 +57,7 @@ func testConstantTotalCapacity(t *testing.T, nodeCount, maxCapacityNodes, random
 	clock := &mclock.Simulated{}
 	nodes := make([]*testNode, nodeCount)
 	var totalCapacity uint64
-	for i, _ := range nodes {
+	for i := range nodes {
 		nodes[i] = &testNode{capacity: uint64(50000 + rand.Intn(100000))}
 		totalCapacity += nodes[i].capacity
 	}
@@ -67,7 +67,7 @@ func testConstantTotalCapacity(t *testing.T, nodeCount, maxCapacityNodes, random
 		n.node = NewClientNode(m, ServerParams{BufLimit: n.bufLimit, MinRecharge: n.capacity})
 	}
 	maxNodes := make([]int, maxCapacityNodes)
-	for i, _ := range maxNodes {
+	for i := range maxNodes {
 		// we don't care if some indexes are selected multiple times
 		// in that case we have fewer max nodes
 		maxNodes[i] = rand.Intn(nodeCount)

@@ -131,7 +131,7 @@ func (cm *ClientManager) SetRechargeCurve(curve PieceWiseLinear) {
 }
 
 // connect should be called when a client is connected, before passing it to any
-// other ClientManager funtion
+// other ClientManager function
 func (cm *ClientManager) connect(node *ClientNode) {
 	cm.lock.Lock()
 	defer cm.lock.Unlock()

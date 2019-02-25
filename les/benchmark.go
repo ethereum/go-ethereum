@@ -64,7 +64,7 @@ func (b *benchmarkBlockHeaders) init(pm *ProtocolManager, count int) error {
 	}
 	if b.byHash {
 		b.hashes = make([]common.Hash, count)
-		for i, _ := range b.hashes {
+		for i := range b.hashes {
 			b.hashes[i] = rawdb.ReadCanonicalHash(pm.chainDb, uint64(b.offset+rand.Int63n(b.randMax)))
 		}
 	}
@@ -88,7 +88,7 @@ type benchmarkBodiesOrReceipts struct {
 func (b *benchmarkBodiesOrReceipts) init(pm *ProtocolManager, count int) error {
 	randMax := pm.blockchain.CurrentHeader().Number.Int64() + 1
 	b.hashes = make([]common.Hash, count)
-	for i, _ := range b.hashes {
+	for i := range b.hashes {
 		b.hashes[i] = rawdb.ReadCanonicalHash(pm.chainDb, uint64(rand.Int63n(randMax)))
 	}
 	return nil
@@ -117,9 +117,9 @@ func (b *benchmarkProofsOrCode) request(peer *peer, index int) error {
 	key := make([]byte, 32)
 	rand.Read(key)
 	if b.code {
-		return peer.RequestCode(0, 0, []CodeReq{CodeReq{BHash: b.headHash, AccKey: key}})
+		return peer.RequestCode(0, 0, []CodeReq{{BHash: b.headHash, AccKey: key}})
 	} else {
-		return peer.RequestProofs(0, 0, []ProofReq{ProofReq{BHash: b.headHash, Key: key}})
+		return peer.RequestProofs(0, 0, []ProofReq{{BHash: b.headHash, Key: key}})
 	}
 }
 
@@ -149,14 +149,14 @@ func (b *benchmarkHelperTrie) request(peer *peer, index int) error {
 
 	if b.bloom {
 		bitIdx := uint16(rand.Intn(2048))
-		for i, _ := range reqs {
+		for i := range reqs {
 			key := make([]byte, 10)
 			binary.BigEndian.PutUint16(key[:2], bitIdx)
 			binary.BigEndian.PutUint64(key[2:], uint64(rand.Int63n(int64(b.sectionCount))))
 			reqs[i] = HelperTrieReq{Type: htBloomBits, TrieIdx: b.sectionCount - 1, Key: key}
 		}
 	} else {
-		for i, _ := range reqs {
+		for i := range reqs {
 			key := make([]byte, 8)
 			binary.BigEndian.PutUint64(key[:], uint64(rand.Int63n(int64(b.headNum))))
 			reqs[i] = HelperTrieReq{Type: htCanonical, TrieIdx: b.sectionCount - 1, Key: key, AuxReq: auxHeader}
@@ -177,7 +177,7 @@ func (b *benchmarkTxSend) init(pm *ProtocolManager, count int) error {
 	signer := types.NewEIP155Signer(big.NewInt(18))
 	b.txs = make(types.Transactions, count)
 
-	for i, _ := range b.txs {
+	for i := range b.txs {
 		data := make([]byte, txSizeCostLimit)
 		rand.Read(data)
 		tx, err := types.SignTx(types.NewTransaction(0, addr, new(big.Int), 0, new(big.Int), data), signer, key)
@@ -288,7 +288,7 @@ func (pm *ProtocolManager) measure(setup *benchmarkSetup, count int) error {
 	serverPeer.announceType = announceTypeNone
 	serverPeer.fcCosts = make(requestCostTable)
 	c := &requestCosts{}
-	for code, _ := range requests {
+	for code := range requests {
 		serverPeer.fcCosts[code] = c
 	}
 	serverPeer.fcParams = flowcontrol.ServerParams{BufLimit: 1, MinRecharge: 1}

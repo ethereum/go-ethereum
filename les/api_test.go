@@ -183,7 +183,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 
 		processedSince := func(start []uint64) []uint64 {
 			res := make([]uint64, len(reqCount))
-			for i, _ := range reqCount {
+			for i := range reqCount {
 				res[i] = atomic.LoadUint64(&reqCount[i])
 				if start != nil {
 					res[i] -= start[i]
@@ -197,7 +197,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 			setCapacity(ctx, t, serverRpcClient, clients[freeIdx].ID(), freeCap)
 			freeIdx = rand.Intn(len(clients))
 			var sum float64
-			for i, _ := range clients {
+			for i := range clients {
 				if i == freeIdx {
 					weights[i] = 0
 				} else {
@@ -220,14 +220,14 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 				}
 			}
 			weights[freeIdx] = float64(freeCap)
-			for i, _ := range clients {
+			for i := range clients {
 				weights[i] /= float64(testCap)
 			}
 
 			time.Sleep(flowcontrol.DecParamDelay)
 			fmt.Println("Starting measurement")
 			fmt.Printf("Relative weights:")
-			for i, _ := range clients {
+			for i := range clients {
 				fmt.Printf("  %f", weights[i])
 			}
 			fmt.Println()
@@ -459,7 +459,7 @@ func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []
 	servers := make([]*simulations.Node, serverCount)
 	clients := make([]*simulations.Node, clientCount)
 
-	for i, _ := range clients {
+	for i := range clients {
 		clientconf := adapters.RandomNodeConfig()
 		clientconf.Services = []string{"lesclient"}
 		if len(clientDir) == clientCount {
@@ -472,7 +472,7 @@ func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []
 		clients[i] = client
 	}
 
-	for i, _ := range servers {
+	for i := range servers {
 		serverconf := adapters.RandomNodeConfig()
 		serverconf.Services = []string{"lesserver"}
 		if len(serverDir) == serverCount {

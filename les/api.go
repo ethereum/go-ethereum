@@ -83,7 +83,7 @@ type (
 
 // send sends a changed total capacity event to the subscribers
 func (s tcSubs) send(tc uint64, underrun bool) {
-	for sub, _ := range s {
+	for sub := range s {
 		select {
 		case <-sub.rpcSub.Err():
 			delete(s, sub)

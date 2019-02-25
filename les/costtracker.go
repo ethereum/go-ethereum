@@ -89,7 +89,7 @@ const (
 )
 
 // costTracker is responsible for calculating costs and cost estimates on the
-// server side. It continously updates the global cost factor which is defined
+// server side. It continuously updates the global cost factor which is defined
 // as the number of cost units per nanosecond of serving time in a single thread.
 // It is based on statistics collected during serving requests in high-load periods
 // and practically acts as a one-dimension request price scaling factor over the
@@ -127,7 +127,7 @@ func newCostTracker(db ethdb.Database, config *eth.Config) *costTracker {
 	}
 	if makeCostStats {
 		ct.stats = make(map[uint64][]uint64)
-		for code, _ := range reqAvgTimeCost {
+		for code := range reqAvgTimeCost {
 			ct.stats[code] = make([]uint64, 10)
 		}
 	}
@@ -370,7 +370,7 @@ func (list RequestCostList) decode() requestCostTable {
 func testCostList() RequestCostList {
 	cl := make(RequestCostList, len(reqAvgTimeCost))
 	var max uint64
-	for code, _ := range reqAvgTimeCost {
+	for code := range reqAvgTimeCost {
 		if code > max {
 			max = code
 		}
