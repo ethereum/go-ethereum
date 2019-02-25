@@ -95,6 +95,7 @@ type Registry struct {
 	spec           *protocols.Spec   //this protocol's spec
 	balance        protocols.Balance //implements protocols.Balance, for accounting
 	prices         protocols.Prices  //implements protocols.Prices, provides prices to accounting
+	quit           chan struct{}     // terminates registry goroutines
 }
 
 // RegistryOptions holds optional values for NewRegistry constructor.
@@ -117,6 +118,8 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 	// check if retrieval has been disabled
 	retrieval := options.Retrieval != RetrievalDisabled
 
+	quit := make(chan struct{})
+
 	streamer := &Registry{
 		addr:           localID,
 		skipCheck:      options.SkipCheck,
@@ -128,6 +131,7 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 		autoRetrieval:  retrieval,
 		maxPeerServers: options.MaxPeerServers,
 		balance:        balance,
+		quit:           quit,
 	}
 
 	streamer.setupSpec()
@@ -172,25 +176,41 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 			go func() {
 				defer close(out)
 
-				for i := range in {
+				for {
 					select {
-					case <-out:
-					default:
+					case i, ok := <-in:
+						if !ok {
+							return
+						}
+						select {
+						case <-out:
+						default:
+						}
+						out <- i
+					case <-quit:
+						return
 					}
-					out <- i
 				}
 			}()
 
 			return out
 		}
 
+		kad := streamer.delivery.kad
+		// get notification channels from Kademlia before returning
+		// from this function to avoid race with Close method and
+		// the goroutine created below
+		depthC := latestIntC(kad.NeighbourhoodDepthC())
+		addressBookSizeC := latestIntC(kad.AddrCountC())
+
 		go func() {
 			// wait for kademlia table to be healthy
-			time.Sleep(options.SyncUpdateDelay)
-
-			kad := streamer.delivery.kad
-			depthC := latestIntC(kad.NeighbourhoodDepthC())
-			addressBookSizeC := latestIntC(kad.AddrCountC())
+			// but return if Registry is closed before
+			select {
+			case <-time.After(options.SyncUpdateDelay):
+			case <-quit:
+				return
+			}
 
 			// initial requests for syncing subscription to peers
 			streamer.updateSyncing()
@@ -229,6 +249,8 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 							<-timer.C
 						}
 						timer.Reset(options.SyncUpdateDelay)
+					case <-quit:
+						break loop
 					}
 				}
 				timer.Stop()
@@ -398,6 +420,11 @@ func (r *Registry) Quit(peerId enode.ID, s Stream) error {
 }
 
 func (r *Registry) Close() error {
+	// Stop sending neighborhood depth change and address count
+	// change from Kademlia that were initiated in NewRegistry constructor.
+	r.delivery.kad.CloseNeighbourhoodDepthC()
+	r.delivery.kad.CloseAddrCountC()
+	close(r.quit)
 	return r.intervalsStore.Close()
 }
 
@@ -570,6 +597,16 @@ func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 // HandleMsg is the message handler that delegates incoming messages
 func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
+	select {
+	case <-p.streamer.quit:
+		log.Trace("message received after the streamer is closed", "peer", p.ID())
+		// return without an error since streamer is closed and
+		// no messages should be handled as other subcomponents like
+		// storage leveldb may be closed
+		return nil
+	default:
+	}
+
 	switch msg := msg.(type) {
 
 	case *SubscribeMsg:
@@ -729,6 +766,7 @@ func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error 
 		if err != nil {
 			return err
 		}
+
 		if err := p.SendPriority(context.TODO(), tp, c.priority); err != nil {
 			return err
 		}
@@ -928,4 +966,34 @@ func (api *API) SubscribeStream(peerId enode.ID, s Stream, history *Range, prior
 
 func (api *API) UnsubscribeStream(peerId enode.ID, s Stream) error {
 	return api.streamer.Unsubscribe(peerId, s)
+}
+
+/*
+GetPeerSubscriptions is a API function which allows to query a peer for stream subscriptions it has.
+It can be called via RPC.
+It returns a map of node IDs with an array of string representations of Stream objects.
+*/
+func (api *API) GetPeerSubscriptions() map[string][]string {
+	//create the empty map
+	pstreams := make(map[string][]string)
+
+	//iterate all streamer peers
+	api.streamer.peersMu.RLock()
+	defer api.streamer.peersMu.RUnlock()
+
+	for id, p := range api.streamer.peers {
+		var streams []string
+		//every peer has a map of stream servers
+		//every stream server represents a subscription
+		p.serverMu.RLock()
+		for s := range p.servers {
+			//append the string representation of the stream
+			//to the list for this peer
+			streams = append(streams, s.String())
+		}
+		p.serverMu.RUnlock()
+		//set the array of stream servers to the map
+		pstreams[id.String()] = streams
+	}
+	return pstreams
 }

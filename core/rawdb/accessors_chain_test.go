@@ -279,6 +279,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 		ContractAddress: common.BytesToAddress([]byte{0x01, 0x11, 0x11}),
 		GasUsed:         111111,
 	}
+	receipt1.Bloom = types.CreateBloom(types.Receipts{receipt1})
 	receipt2 := &types.Receipt{
 		PostState:         common.Hash{2}.Bytes(),
 		CumulativeGasUsed: 2,
@@ -290,6 +291,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 		ContractAddress: common.BytesToAddress([]byte{0x02, 0x22, 0x22}),
 		GasUsed:         222222,
 	}
+	receipt2.Bloom = types.CreateBloom(types.Receipts{receipt2})
 	receipts := []*types.Receipt{receipt1, receipt2}
 
 	// Check that no receipt entries are in a pristine database

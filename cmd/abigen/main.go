@@ -124,7 +124,7 @@ func main() {
 		}
 		abis = append(abis, string(abi))
 
-		bin := []byte{}
+		var bin []byte
 		if *binFlag != "" {
 			if bin, err = ioutil.ReadFile(*binFlag); err != nil {
 				fmt.Printf("Failed to read input bytecode: %v\n", err)

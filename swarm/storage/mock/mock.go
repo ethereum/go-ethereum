@@ -39,6 +39,17 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+const (
+	// DefaultLimit should be used as default limit for
+	// Keys, Nodes, NodeKeys and KeyNodes GlobarStorer
+	// methids implementations.
+	DefaultLimit = 100
+	// MaxLimit should be used as the maximal returned number
+	// of items for Keys, Nodes, NodeKeys and KeyNodes GlobarStorer
+	// methids implementations, regardless of provided limit.
+	MaxLimit = 1000
+)
+
 // ErrNotFound indicates that the chunk is not found.
 var ErrNotFound = errors.New("not found")
 
@@ -76,6 +87,10 @@ func (n *NodeStore) Delete(key []byte) error {
 	return n.store.Delete(n.addr, key)
 }
 
+func (n *NodeStore) Keys(startKey []byte, limit int) (keys Keys, err error) {
+	return n.store.NodeKeys(n.addr, startKey, limit)
+}
+
 // GlobalStorer defines methods for mock db store
 // that stores chunk data for all swarm nodes.
 // It is used in tests to construct mock NodeStores
@@ -85,10 +100,26 @@ type GlobalStorer interface {
 	Put(addr common.Address, key []byte, data []byte) error
 	Delete(addr common.Address, key []byte) error
 	HasKey(addr common.Address, key []byte) bool
+	Keys(startKey []byte, limit int) (keys Keys, err error)
+	Nodes(startAddr *common.Address, limit int) (nodes Nodes, err error)
+	NodeKeys(addr common.Address, startKey []byte, limit int) (keys Keys, err error)
+	KeyNodes(key []byte, startAddr *common.Address, limit int) (nodes Nodes, err error)
 	// NewNodeStore creates an instance of NodeStore
 	// to be used by a single swarm node with
 	// address addr.
 	NewNodeStore(addr common.Address) *NodeStore
+}
+
+// Keys are returned results by Keys and NodeKeys GlobalStorer methods.
+type Keys struct {
+	Keys [][]byte
+	Next []byte
+}
+
+// Nodes are returned results by Nodes and KeyNodes GlobalStorer methods.
+type Nodes struct {
+	Addrs []common.Address
+	Next  *common.Address
 }
 
 // Importer defines method for importing mock store data

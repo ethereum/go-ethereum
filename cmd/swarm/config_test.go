@@ -52,7 +52,7 @@ func TestConfigFailsSwapEnabledNoSwapApi(t *testing.T) {
 	}
 
 	swarm := runSwarm(t, flags...)
-	swarm.Expect("Fatal: " + SWARM_ERR_SWAP_SET_NO_API + "\n")
+	swarm.Expect("Fatal: " + SwarmErrSwapSetNoAPI + "\n")
 	swarm.ExpectExit()
 }
 
@@ -63,7 +63,7 @@ func TestConfigFailsNoBzzAccount(t *testing.T) {
 	}
 
 	swarm := runSwarm(t, flags...)
-	swarm.Expect("Fatal: " + SWARM_ERR_NO_BZZACCOUNT + "\n")
+	swarm.Expect("Fatal: " + SwarmErrNoBZZAccount + "\n")
 	swarm.ExpectExit()
 }
 

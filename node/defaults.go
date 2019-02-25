@@ -58,16 +58,45 @@ func DefaultDataDir() string {
 	// Try to place the data folder in the user's home dir
 	home := homeDir()
 	if home != "" {
-		if runtime.GOOS == "darwin" {
+		switch runtime.GOOS {
+		case "darwin":
 			return filepath.Join(home, "Library", "Ethereum")
-		} else if runtime.GOOS == "windows" {
-			return filepath.Join(home, "AppData", "Roaming", "Ethereum")
-		} else {
+		case "windows":
+			// We used to put everything in %HOME%\AppData\Roaming, but this caused
+			// problems with non-typical setups. If this fallback location exists and
+			// is non-empty, use it, otherwise DTRT and check %LOCALAPPDATA%.
+			fallback := filepath.Join(home, "AppData", "Roaming", "Ethereum")
+			appdata := windowsAppData()
+			if appdata == "" || isNonEmptyDir(fallback) {
+				return fallback
+			}
+			return filepath.Join(appdata, "Ethereum")
+		default:
 			return filepath.Join(home, ".ethereum")
 		}
 	}
 	// As we cannot guess a stable location, return empty and handle later
 	return ""
+}
+
+func windowsAppData() string {
+	if v := os.Getenv("LOCALAPPDATA"); v != "" {
+		return v // Vista+
+	}
+	if v := os.Getenv("APPDATA"); v != "" {
+		return filepath.Join(v, "Local")
+	}
+	return ""
+}
+
+func isNonEmptyDir(dir string) bool {
+	f, err := os.Open(dir)
+	if err != nil {
+		return false
+	}
+	names, _ := f.Readdir(1)
+	f.Close()
+	return len(names) > 0
 }
 
 func homeDir() string {

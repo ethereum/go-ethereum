@@ -28,32 +28,32 @@ func newTestMemStore() *MemStore {
 	return NewMemStore(storeparams, nil)
 }
 
-func testMemStoreRandom(n int, chunksize int64, t *testing.T) {
+func testMemStoreRandom(n int, t *testing.T) {
 	m := newTestMemStore()
 	defer m.Close()
-	testStoreRandom(m, n, chunksize, t)
+	testStoreRandom(m, n, t)
 }
 
-func testMemStoreCorrect(n int, chunksize int64, t *testing.T) {
+func testMemStoreCorrect(n int, t *testing.T) {
 	m := newTestMemStore()
 	defer m.Close()
-	testStoreCorrect(m, n, chunksize, t)
+	testStoreCorrect(m, n, t)
 }
 
 func TestMemStoreRandom_1(t *testing.T) {
-	testMemStoreRandom(1, 0, t)
+	testMemStoreRandom(1, t)
 }
 
 func TestMemStoreCorrect_1(t *testing.T) {
-	testMemStoreCorrect(1, 4104, t)
+	testMemStoreCorrect(1, t)
 }
 
 func TestMemStoreRandom_1k(t *testing.T) {
-	testMemStoreRandom(1000, 0, t)
+	testMemStoreRandom(1000, t)
 }
 
 func TestMemStoreCorrect_1k(t *testing.T) {
-	testMemStoreCorrect(100, 4096, t)
+	testMemStoreCorrect(100, t)
 }
 
 func TestMemStoreNotFound(t *testing.T) {
@@ -66,32 +66,24 @@ func TestMemStoreNotFound(t *testing.T) {
 	}
 }
 
-func benchmarkMemStorePut(n int, processors int, chunksize int64, b *testing.B) {
+func benchmarkMemStorePut(n int, b *testing.B) {
 	m := newTestMemStore()
 	defer m.Close()
-	benchmarkStorePut(m, n, chunksize, b)
+	benchmarkStorePut(m, n, b)
 }
 
-func benchmarkMemStoreGet(n int, processors int, chunksize int64, b *testing.B) {
+func benchmarkMemStoreGet(n int, b *testing.B) {
 	m := newTestMemStore()
 	defer m.Close()
-	benchmarkStoreGet(m, n, chunksize, b)
+	benchmarkStoreGet(m, n, b)
 }
 
-func BenchmarkMemStorePut_1_500(b *testing.B) {
-	benchmarkMemStorePut(500, 1, 4096, b)
+func BenchmarkMemStorePut_500(b *testing.B) {
+	benchmarkMemStorePut(500, b)
 }
 
-func BenchmarkMemStorePut_8_500(b *testing.B) {
-	benchmarkMemStorePut(500, 8, 4096, b)
-}
-
-func BenchmarkMemStoreGet_1_500(b *testing.B) {
-	benchmarkMemStoreGet(500, 1, 4096, b)
-}
-
-func BenchmarkMemStoreGet_8_500(b *testing.B) {
-	benchmarkMemStoreGet(500, 8, 4096, b)
+func BenchmarkMemStoreGet_500(b *testing.B) {
+	benchmarkMemStoreGet(500, b)
 }
 
 func TestMemStoreAndLDBStore(t *testing.T) {

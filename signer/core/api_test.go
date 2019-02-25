@@ -28,8 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -47,6 +47,8 @@ func (ui *HeadlessUI) OnInputRequired(info UserInputRequest) (UserInputResponse,
 }
 
 func (ui *HeadlessUI) OnSignerStartup(info StartupInfo) {
+}
+func (ui *HeadlessUI) RegisterUIServer(api *UIServerAPI) {
 }
 
 func (ui *HeadlessUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
@@ -92,7 +94,7 @@ func (ui *HeadlessUI) ApproveListing(request *ListRequest) (ListResponse, error)
 	case "A":
 		return ListResponse{request.Accounts}, nil
 	case "1":
-		l := make([]Account, 1)
+		l := make([]accounts.Account, 1)
 		l[0] = request.Accounts[1]
 		return ListResponse{l}, nil
 	default:
@@ -135,17 +137,12 @@ func setup(t *testing.T) (*SignerAPI, chan string) {
 
 	db, err := NewAbiDBFromFile("../../cmd/clef/4byte.json")
 	if err != nil {
-		utils.Fatalf(err.Error())
+		t.Fatal(err.Error())
 	}
 	var (
 		ui  = &HeadlessUI{controller}
-		api = NewSignerAPI(
-			1,
-			tmpDirName(t),
-			true,
-			ui,
-			db,
-			true, true)
+		am  = StartClefAccountManager(tmpDirName(t), true, true)
+		api = NewSignerAPI(am, 1337, true, ui, db, true)
 	)
 	return api, controller
 }
@@ -170,22 +167,22 @@ func failCreateAccountWithPassword(control chan string, api *SignerAPI, password
 	control <- "Y"
 	control <- password
 
-	acc, err := api.New(context.Background())
+	addr, err := api.New(context.Background())
 	if err == nil {
 		t.Fatal("Should have returned an error")
 	}
-	if acc.Address != (common.Address{}) {
+	if addr != (common.Address{}) {
 		t.Fatal("Empty address should be returned")
 	}
 }
 
 func failCreateAccount(control chan string, api *SignerAPI, t *testing.T) {
 	control <- "N"
-	acc, err := api.New(context.Background())
+	addr, err := api.New(context.Background())
 	if err != ErrRequestDenied {
 		t.Fatal(err)
 	}
-	if acc.Address != (common.Address{}) {
+	if addr != (common.Address{}) {
 		t.Fatal("Empty address should be returned")
 	}
 }
@@ -245,45 +242,6 @@ func TestNewAcc(t *testing.T) {
 	}
 }
 
-func TestSignData(t *testing.T) {
-	api, control := setup(t)
-	//Create two accounts
-	createAccount(control, api, t)
-	createAccount(control, api, t)
-	control <- "1"
-	list, err := api.List(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	a := common.NewMixedcaseAddress(list[0])
-
-	control <- "Y"
-	control <- "wrongpassword"
-	h, err := api.Sign(context.Background(), a, []byte("EHLO world"))
-	if h != nil {
-		t.Errorf("Expected nil-data, got %x", h)
-	}
-	if err != keystore.ErrDecrypt {
-		t.Errorf("Expected ErrLocked! %v", err)
-	}
-	control <- "No way"
-	h, err = api.Sign(context.Background(), a, []byte("EHLO world"))
-	if h != nil {
-		t.Errorf("Expected nil-data, got %x", h)
-	}
-	if err != ErrRequestDenied {
-		t.Errorf("Expected ErrRequestDenied! %v", err)
-	}
-	control <- "Y"
-	control <- "a_long_password"
-	h, err = api.Sign(context.Background(), a, []byte("EHLO world"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if h == nil || len(h) != 65 {
-		t.Errorf("Expected 65 byte signature (got %d bytes)", len(h))
-	}
-}
 func mkTestTx(from common.MixedcaseAddress) SendTxArgs {
 	to := common.NewMixedcaseAddress(common.HexToAddress("0x1337"))
 	gas := hexutil.Uint64(21000)

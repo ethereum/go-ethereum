@@ -53,7 +53,7 @@ matrix:
         - go run build/ci.go lint
 
     # This builder does the Ubuntu PPA upload
-    - if: type = push
+    - if: repo = ethereum/go-ethereum AND type = push
       os: linux
       dist: trusty
       go: 1.11.x
@@ -68,11 +68,14 @@ matrix:
             - debhelper
             - dput
             - fakeroot
+            - python-bzrlib
+            - python-paramiko
       script:
-        - go run build/ci.go debsrc -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>" -upload ppa:ethereum/ethereum
+        - echo '|1|7SiYPr9xl3uctzovOTj4gMwAC1M=|t6ReES75Bo/PxlOPJ6/GsGbTrM0= ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA0aKz5UTUndYgIGG7dQBV+HaeuEZJ2xPHo2DS2iSKvUL4xNMSAY4UguNW+pX56nAQmZKIZZ8MaEvSj6zMEDiq6HFfn5JcTlM80UwlnyKe8B8p7Nk06PPQLrnmQt5fh0HmEcZx+JU9TZsfCHPnX7MNz4ELfZE6cFsclClrKim3BHUIGq//t93DllB+h4O9LHjEUsQ1Sr63irDLSutkLJD6RXchjROXkNirlcNVHH/jwLWR5RcYilNX7S5bIkK8NlWPjsn/8Ua5O7I9/YoE97PpO6i73DTGLh5H9JN/SITwCKBkgSDWUt61uPK3Y11Gty7o2lWsBjhBUm2Y38CBsoGmBw==' >> ~/.ssh/known_hosts
+        - go run build/ci.go debsrc -upload ethereum/ethereum -sftp-user geth-ci -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
 
     # This builder does the Linux Azure uploads
-    - if: type = push
+    - if: repo = ethereum/go-ethereum AND type = push
       os: linux
       dist: trusty
       sudo: required
@@ -106,7 +109,7 @@ matrix:
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Linux Azure MIPS xgo uploads
-    - if: type = push
+    - if: repo = ethereum/go-ethereum AND type = push
       os: linux
       dist: trusty
       services:
@@ -134,7 +137,7 @@ matrix:
         - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Android Maven and Azure uploads
-    - if: type = push
+    - if: repo = ethereum/go-ethereum AND type = push
       os: linux
       dist: trusty
       addons:
@@ -168,11 +171,11 @@ matrix:
         - export ANDROID_NDK=$HOME/android-ndk-r17b
 
         - mkdir -p $GOPATH/src/github.com/ethereum
-        - ln -s `pwd` $GOPATH/src/github.com/ethereum
+        - ln -s `pwd` $GOPATH/src/github.com/ethereum/go-ethereum
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
-    - if: type = push
+    - if: repo = ethereum/go-ethereum AND type = push
       os: osx
       go: 1.11.x
       env:
@@ -201,7 +204,7 @@ matrix:
         - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
 
     # This builder does the Azure archive purges to avoid accumulating junk
-    - if: type = cron
+    - if: repo = ethereum/go-ethereum AND type = cron
       os: linux
       dist: trusty
       go: 1.11.x
@@ -211,3 +214,12 @@ matrix:
         submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go purge -store gethstore/builds -days 14
+
+    - name: Race Detector for Swarm
+      if: repo = ethersphere/go-ethereum
+      os: linux
+      dist: trusty
+      go: 1.11.x
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      script: ./build/travis_keepalive.sh go test -v -timeout 20m -race ./swarm...

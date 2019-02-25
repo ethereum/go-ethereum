@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-func hexAddr(a string) common.Address { return common.BytesToAddress(common.FromHex(a)) }
 func mixAddr(a string) (*common.MixedcaseAddress, error) {
 	return common.NewMixedcaseAddressFromString(a)
 }

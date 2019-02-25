@@ -29,10 +29,10 @@ func TestLigthnodeRetrieveRequestWithRetrieve(t *testing.T) {
 		Syncing:   SyncingDisabled,
 	}
 	tester, _, _, teardown, err := newStreamerTester(registryOptions)
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	node := tester.Nodes[0]
 
@@ -68,10 +68,10 @@ func TestLigthnodeRetrieveRequestWithoutRetrieve(t *testing.T) {
 		Syncing:   SyncingDisabled,
 	}
 	tester, _, _, teardown, err := newStreamerTester(registryOptions)
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	node := tester.Nodes[0]
 
@@ -112,10 +112,10 @@ func TestLigthnodeRequestSubscriptionWithSync(t *testing.T) {
 		Syncing:   SyncingRegisterOnly,
 	}
 	tester, _, _, teardown, err := newStreamerTester(registryOptions)
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	node := tester.Nodes[0]
 
@@ -157,10 +157,10 @@ func TestLigthnodeRequestSubscriptionWithoutSync(t *testing.T) {
 		Syncing:   SyncingDisabled,
 	}
 	tester, _, _, teardown, err := newStreamerTester(registryOptions)
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	node := tester.Nodes[0]
 

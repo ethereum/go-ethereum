@@ -88,3 +88,27 @@ func (s *GlobalStore) HasKey(addr common.Address, key []byte) bool {
 	}
 	return has
 }
+
+// Keys returns a paginated list of keys on all nodes.
+func (s *GlobalStore) Keys(startKey []byte, limit int) (keys mock.Keys, err error) {
+	err = s.client.Call(&keys, "mockStore_keys", startKey, limit)
+	return keys, err
+}
+
+// Nodes returns a paginated list of all known nodes.
+func (s *GlobalStore) Nodes(startAddr *common.Address, limit int) (nodes mock.Nodes, err error) {
+	err = s.client.Call(&nodes, "mockStore_nodes", startAddr, limit)
+	return nodes, err
+}
+
+// NodeKeys returns a paginated list of keys on a node with provided address.
+func (s *GlobalStore) NodeKeys(addr common.Address, startKey []byte, limit int) (keys mock.Keys, err error) {
+	err = s.client.Call(&keys, "mockStore_nodeKeys", addr, startKey, limit)
+	return keys, err
+}
+
+// KeyNodes returns a paginated list of nodes that contain a particular key.
+func (s *GlobalStore) KeyNodes(key []byte, startAddr *common.Address, limit int) (nodes mock.Nodes, err error) {
+	err = s.client.Call(&nodes, "mockStore_keyNodes", key, startAddr, limit)
+	return nodes, err
+}

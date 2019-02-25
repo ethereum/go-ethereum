@@ -17,7 +17,6 @@
 package core
 
 import (
-	"fmt"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -126,13 +125,6 @@ func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, compara
 	comparator(tdPre, tdPost)
 }
 
-func printChain(bc *BlockChain) {
-	for i := bc.CurrentBlock().Number().Uint64(); i > 0; i-- {
-		b := bc.GetBlockByNumber(uint64(i))
-		fmt.Printf("\t%x %v\n", b.Hash(), b.Difficulty())
-	}
-}
-
 // testBlockChainImport tries to process a chain of blocks, writing them into
 // the database if successful.
 func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
@@ -186,15 +178,6 @@ func testHeaderChainImport(chain []*types.Header, blockchain *BlockChain) error 
 		blockchain.chainmu.Unlock()
 	}
 	return nil
-}
-
-func insertChain(done chan bool, blockchain *BlockChain, chain types.Blocks, t *testing.T) {
-	_, err := blockchain.InsertChain(chain)
-	if err != nil {
-		fmt.Println(err)
-		t.FailNow()
-	}
-	done <- true
 }
 
 func TestLastBlock(t *testing.T) {
@@ -1429,7 +1412,7 @@ func benchmarkLargeNumberOfValueToNonexisting(b *testing.B, numTxs, numBlocks in
 		}
 		b.StopTimer()
 		if got := chain.CurrentBlock().Transactions().Len(); got != numTxs*numBlocks {
-			b.Fatalf("Transactions were not included, expected %d, got %d", (numTxs * numBlocks), got)
+			b.Fatalf("Transactions were not included, expected %d, got %d", numTxs*numBlocks, got)
 
 		}
 	}
@@ -1482,4 +1465,141 @@ func BenchmarkBlockChain_1x1000Executions(b *testing.B) {
 	}
 
 	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn, dataFn)
+}
+
+// Tests that importing a very large side fork, which is larger than the canon chain,
+// but where the difficulty per block is kept low: this means that it will not
+// overtake the 'canon' chain until after it's passed canon by about 200 blocks.
+//
+// Details at:
+//  - https://github.com/ethereum/go-ethereum/issues/18977
+//  - https://github.com/ethereum/go-ethereum/pull/18988
+func TestLowDiffLongChain(t *testing.T) {
+	// Generate a canonical chain to act as the main dataset
+	engine := ethash.NewFaker()
+	db := ethdb.NewMemDatabase()
+	genesis := new(Genesis).MustCommit(db)
+
+	// We must use a pretty long chain to ensure that the fork doesn't overtake us
+	// until after at least 128 blocks post tip
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 6*triesInMemory, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+		b.OffsetTime(-9)
+	})
+
+	// Import the canonical chain
+	diskdb := ethdb.NewMemDatabase()
+	new(Genesis).MustCommit(diskdb)
+
+	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+	// Generate fork chain, starting from an early block
+	parent := blocks[10]
+	fork, _ := GenerateChain(params.TestChainConfig, parent, engine, db, 8*triesInMemory, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{2})
+	})
+
+	// And now import the fork
+	if i, err := chain.InsertChain(fork); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", i, err)
+	}
+	head := chain.CurrentBlock()
+	if got := fork[len(fork)-1].Hash(); got != head.Hash() {
+		t.Fatalf("head wrong, expected %x got %x", head.Hash(), got)
+	}
+	// Sanity check that all the canonical numbers are present
+	header := chain.CurrentHeader()
+	for number := head.NumberU64(); number > 0; number-- {
+		if hash := chain.GetHeaderByNumber(number).Hash(); hash != header.Hash() {
+			t.Fatalf("header %d: canonical hash mismatch: have %x, want %x", number, hash, header.Hash())
+		}
+		header = chain.GetHeader(header.ParentHash, number-1)
+	}
+}
+
+// Tests that importing a sidechain (S), where
+// - S is sidechain, containing blocks [Sn...Sm]
+// - C is canon chain, containing blocks [G..Cn..Cm]
+// - A common ancestor is placed at prune-point + blocksBetweenCommonAncestorAndPruneblock
+// - The sidechain S is prepended with numCanonBlocksInSidechain blocks from the canon chain
+func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommonAncestorAndPruneblock int) {
+
+	// Generate a canonical chain to act as the main dataset
+	engine := ethash.NewFaker()
+	db := ethdb.NewMemDatabase()
+	genesis := new(Genesis).MustCommit(db)
+
+	// Generate and import the canonical chain
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 2*triesInMemory, nil)
+	diskdb := ethdb.NewMemDatabase()
+	new(Genesis).MustCommit(diskdb)
+	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	lastPrunedIndex := len(blocks) - triesInMemory - 1
+	lastPrunedBlock := blocks[lastPrunedIndex]
+	firstNonPrunedBlock := blocks[len(blocks)-triesInMemory]
+
+	// Verify pruning of lastPrunedBlock
+	if chain.HasBlockAndState(lastPrunedBlock.Hash(), lastPrunedBlock.NumberU64()) {
+		t.Errorf("Block %d not pruned", lastPrunedBlock.NumberU64())
+	}
+	// Verify firstNonPrunedBlock is not pruned
+	if !chain.HasBlockAndState(firstNonPrunedBlock.Hash(), firstNonPrunedBlock.NumberU64()) {
+		t.Errorf("Block %d pruned", firstNonPrunedBlock.NumberU64())
+	}
+	// Generate the sidechain
+	// First block should be a known block, block after should be a pruned block. So
+	// canon(pruned), side, side...
+
+	// Generate fork chain, make it longer than canon
+	parentIndex := lastPrunedIndex + blocksBetweenCommonAncestorAndPruneblock
+	parent := blocks[parentIndex]
+	fork, _ := GenerateChain(params.TestChainConfig, parent, engine, db, 2*triesInMemory, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{2})
+	})
+	// Prepend the parent(s)
+	var sidechain []*types.Block
+	for i := numCanonBlocksInSidechain; i > 0; i-- {
+		sidechain = append(sidechain, blocks[parentIndex+1-i])
+	}
+	sidechain = append(sidechain, fork...)
+	_, err = chain.InsertChain(sidechain)
+	if err != nil {
+		t.Errorf("Got error, %v", err)
+	}
+	head := chain.CurrentBlock()
+	if got := fork[len(fork)-1].Hash(); got != head.Hash() {
+		t.Fatalf("head wrong, expected %x got %x", head.Hash(), got)
+	}
+}
+
+// Tests that importing a sidechain (S), where
+// - S is sidechain, containing blocks [Sn...Sm]
+// - C is canon chain, containing blocks [G..Cn..Cm]
+// - The common ancestor Cc is pruned
+// - The first block in S: Sn, is == Cn
+// That is: the sidechain for import contains some blocks already present in canon chain.
+// So the blocks are
+// [ Cn, Cn+1, Cc, Sn+3 ... Sm]
+//   ^    ^    ^  pruned
+func TestPrunedImportSide(t *testing.T) {
+	//glogger := log.NewGlogHandler(log.StreamHandler(os.Stdout, log.TerminalFormat(false)))
+	//glogger.Verbosity(3)
+	//log.Root().SetHandler(log.Handler(glogger))
+	testSideImport(t, 3, 3)
+	testSideImport(t, 3, -3)
+	testSideImport(t, 10, 0)
+	testSideImport(t, 1, 10)
+	testSideImport(t, 1, -10)
 }

@@ -90,15 +90,12 @@ func TestMocker(t *testing.T) {
 		for {
 			select {
 			case event := <-events:
-				//if the event is a node Up event only
-				if event.Node != nil && event.Node.Up {
+				if isNodeUp(event) {
 					//add the correspondent node ID to the map
 					nodemap[event.Node.Config.ID] = true
 					//this means all nodes got a nodeUp event, so we can continue the test
 					if len(nodemap) == nodeCount {
 						nodesComplete = true
-						//wait for 3s as the mocker will need time to connect the nodes
-						//time.Sleep( 3 *time.Second)
 					}
 				} else if event.Conn != nil && nodesComplete {
 					connCount += 1
@@ -168,4 +165,8 @@ func TestMocker(t *testing.T) {
 	if len(nodesInfo) != 0 {
 		t.Fatalf("Expected empty list of nodes, got: %d", len(nodesInfo))
 	}
+}
+
+func isNodeUp(event *Event) bool {
+	return event.Node != nil && event.Node.Up()
 }

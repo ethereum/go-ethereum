@@ -313,7 +313,7 @@ func TestIncompleteSync(t *testing.T) {
 	triedb := NewDatabase(diskdb)
 	sched := NewSync(srcTrie.Hash(), diskdb, nil)
 
-	added := []common.Hash{}
+	var added []common.Hash
 	queue := append([]common.Hash{}, sched.Missing(1)...)
 	for len(queue) > 0 {
 		// Fetch a batch of trie nodes

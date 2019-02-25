@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"regexp"
 	"sync"
 	"time"
 
@@ -38,6 +39,8 @@ const (
 	// timeout for waiting
 	bzzHandshakeTimeout = 3000 * time.Millisecond
 )
+
+var regexpEnodeIP = regexp.MustCompile("@(.+):([0-9]+)")
 
 // BzzSpec is the spec of the generic swarm handshake
 var BzzSpec = &protocols.Spec{
@@ -214,8 +217,24 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 		return err
 	}
 	handshake.peerAddr = rsh.(*HandshakeMsg).Addr
+	sanitizeEnodeRemote(p.RemoteAddr(), handshake.peerAddr)
 	handshake.LightNode = rsh.(*HandshakeMsg).LightNode
 	return nil
+}
+
+// the remote enode string may advertise arbitrary host information (e.g. localhost)
+// this method ensures that the addr of the peer will be the one
+// applicable on the interface the connection came in on
+// it modifies the passed bzzaddr in place, and returns the same pointer
+func sanitizeEnodeRemote(paddr net.Addr, baddr *BzzAddr) {
+	hsSubmatch := regexpEnodeIP.FindSubmatch(baddr.UAddr)
+	ip, _, err := net.SplitHostPort(paddr.String())
+	// since we expect nothing else than ipv4 here, a panic on missing submatch is desired
+	if err == nil && string(hsSubmatch[1]) != ip {
+		remoteStr := fmt.Sprintf("@%s:%s", ip, string(hsSubmatch[2]))
+		log.Debug("rewrote peer uaddr host/port", "addr", baddr)
+		baddr.UAddr = regexpEnodeIP.ReplaceAll(baddr.UAddr, []byte(remoteStr))
+	}
 }
 
 // runBzz is the p2p protocol run function for the bzz base protocol
@@ -324,7 +343,7 @@ func (b *Bzz) GetOrCreateHandshake(peerID enode.ID) (*HandshakeMsg, bool) {
 			init:      make(chan bool, 1),
 			done:      make(chan struct{}),
 		}
-		// when handhsake is first created for a remote peer
+		// when handshake is first created for a remote peer
 		// it is initialised with the init
 		handshake.init <- true
 		b.handshakes[peerID] = handshake

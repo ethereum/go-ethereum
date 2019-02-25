@@ -397,7 +397,7 @@ func testACT(t *testing.T, bogusEntries int) {
 	}
 
 	ref := matches[0]
-	grantees := []string{}
+	var grantees []string
 	for i, v := range cluster.Nodes {
 		if i == nodeToSkip {
 			continue
@@ -408,7 +408,7 @@ func testACT(t *testing.T, bogusEntries int) {
 	}
 
 	if bogusEntries > 0 {
-		bogusGrantees := []string{}
+		var bogusGrantees []string
 
 		for i := 0; i < bogusEntries; i++ {
 			prv, err := ecies.GenerateKey(rand.Reader, DefaultCurve, nil)
