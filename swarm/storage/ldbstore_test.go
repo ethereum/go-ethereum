@@ -189,9 +189,9 @@ func TestMockDbStoreNotFound(t *testing.T) {
 }
 
 func testIterator(t *testing.T, mock bool) {
-	var chunkcount int = 32
 	var i int
 	var poc uint
+	chunkcount := 32
 	chunkkeys := NewAddressCollection(chunkcount)
 	chunkkeysResults := NewAddressCollection(chunkcount)
 
