@@ -14,13 +14,10 @@ import (
 )
 
 func TestFetcherULCPeerSelector(t *testing.T) {
-
-	var (
-		id1 enode.ID = newNodeID(t).ID()
-		id2 enode.ID = newNodeID(t).ID()
-		id3 enode.ID = newNodeID(t).ID()
-		id4 enode.ID = newNodeID(t).ID()
-	)
+	id1 := newNodeID(t).ID()
+	id2 := newNodeID(t).ID()
+	id3 := newNodeID(t).ID()
+	id4 := newNodeID(t).ID()
 
 	ftn1 := &fetcherTreeNode{
 		hash: common.HexToHash("1"),
