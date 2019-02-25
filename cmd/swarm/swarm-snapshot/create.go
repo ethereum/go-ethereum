@@ -59,12 +59,15 @@ func createSnapshot(filename string, nodes int, services []string) (err error) {
 	log.Debug("create snapshot", "filename", filename, "nodes", nodes, "services", services)
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
+		"bzz": func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
 			addr := network.NewAddr(ctx.Config.Node())
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			hp := network.NewHiveParams()
 			hp.KeepAliveInterval = time.Duration(200) * time.Millisecond
 			hp.Discovery = true // discovery must be enabled when creating a snapshot
+
+			// store the kademlia in the bucket, needed later in the WaitTillHealthy function
+			bucket.Store(simulation.BucketKeyKademlia, kad)
 
 			config := &network.BzzConfig{
 				OverlayAddr:  addr.Over(),
@@ -76,12 +79,12 @@ func createSnapshot(filename string, nodes int, services []string) (err error) {
 	})
 	defer sim.Close()
 
-	_, err = sim.AddNodes(nodes)
+	ids, err := sim.AddNodes(nodes)
 	if err != nil {
 		return fmt.Errorf("add nodes: %v", err)
 	}
 
-	err = sim.Net.ConnectNodesRing(nil)
+	err = sim.Net.ConnectNodesRing(ids)
 	if err != nil {
 		return fmt.Errorf("connect nodes: %v", err)
 	}
