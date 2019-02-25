@@ -50,6 +50,7 @@ func TestWaitTillHealthy(t *testing.T) {
 
 	// create the first simulation
 	sim := New(simServiceMap)
+	defer sim.Close()
 
 	// connect and...
 	_, err := sim.AddNodesAndConnectRing(testNodesNum)
@@ -77,7 +78,6 @@ func TestWaitTillHealthy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sim.Close()
 
 	// create a control simulation
 	controlSim := New(createSimServiceMap(false))
@@ -85,6 +85,10 @@ func TestWaitTillHealthy(t *testing.T) {
 
 	// load the snapshot into this control simulation
 	err = controlSim.Net.Load(snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = controlSim.WaitTillHealthy(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,6 +126,7 @@ func TestWaitTillHealthy(t *testing.T) {
 		healthy := info.Healthy()
 		log.Trace("Node is healthy", "node", node, "healthy", healthy)
 		if !healthy {
+			log.Trace("Unhealthy kademlia", "kad", kad.String())
 			t.Fatalf("Expected node %v of control simulation to be healthy, but it is not", node)
 		}
 	}
