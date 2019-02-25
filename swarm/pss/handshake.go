@@ -206,7 +206,9 @@ func (ctl *HandshakeController) updateKeys(pubkeyid string, topic *Topic, in boo
 			limit:    limit,
 		}
 		*keystore = append(*keystore, storekey)
+		ctl.pss.mx.Lock()
 		ctl.pss.symKeyPool[*storekey.symKeyID][*topic].protected = true
+		ctl.pss.mx.Unlock()
 	}
 	for i := 0; i < len(*keystore); i++ {
 		ctl.symKeyIndex[*(*keystore)[i].symKeyID] = &((*keystore)[i])
