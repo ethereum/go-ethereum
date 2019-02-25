@@ -61,6 +61,7 @@ func slidingWindow(ctx *cli.Context, tuid string) error {
 
 outer:
 	for {
+		seed = int(time.Now().UTC().UnixNano())
 		log.Info("uploading to "+httpEndpoint(hosts[0])+" and syncing", "seed", seed)
 
 		t1 := time.Now()
