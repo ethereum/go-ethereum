@@ -50,7 +50,6 @@ func TestWaitTillHealthy(t *testing.T) {
 
 	// create the first simulation
 	sim := New(simServiceMap)
-	defer sim.Close()
 
 	// connect and...
 	_, err := sim.AddNodesAndConnectRing(testNodesNum)
@@ -79,6 +78,7 @@ func TestWaitTillHealthy(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	sim.Close()
 	// create a control simulation
 	controlSim := New(createSimServiceMap(false))
 	defer controlSim.Close()
@@ -111,7 +111,7 @@ func TestWaitTillHealthy(t *testing.T) {
 
 	for _, node := range nodeIDs {
 		// ...get its kademlia
-		item, ok := sim.NodeItem(node, BucketKeyKademlia)
+		item, ok := controlSim.NodeItem(node, BucketKeyKademlia)
 		if !ok {
 			t.Fatal("No kademlia bucket item")
 		}
