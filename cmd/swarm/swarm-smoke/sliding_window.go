@@ -118,6 +118,9 @@ outer:
 			networkDepth = i
 			metrics.GetOrRegisterGauge("sliding-window.network-depth", nil).Update(int64(networkDepth))
 			log.Info("sliding window test successfully fetched file", "currentDepth", networkDepth)
+			// this test might take a long time to finish - but we'd like to see metrics while they accumulate and not just when
+			// the test finishes. therefore emit the metrics on each iteration
+			emitMetrics(ctx)
 		}
 	}
 
