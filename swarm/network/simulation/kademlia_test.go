@@ -44,29 +44,15 @@ import (
 func TestWaitTillHealthy(t *testing.T) {
 
 	// abstraction of the services used for the simulations
-	var simServiceMap = map[string]ServiceFunc{
-		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
-			addr := network.NewAddr(ctx.Config.Node())
-			hp := network.NewHiveParams()
-			config := &network.BzzConfig{
-				OverlayAddr:  addr.Over(),
-				UnderlayAddr: addr.Under(),
-				HiveParams:   hp,
-			}
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			// store kademlia in node's bucket under BucketKeyKademlia
-			// so that it can be found by WaitTillHealthy method.
-			b.Store(BucketKeyKademlia, kad)
-			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
-		},
-	}
+	var simServiceMap = createSimServiceMap(true)
+
+	testNodesNum := 10
 
 	// create the first simulation
 	sim := New(simServiceMap)
-	defer sim.Close()
 
 	// connect and...
-	_, err := sim.AddNodesAndConnectRing(10)
+	_, err := sim.AddNodesAndConnectRing(testNodesNum)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,9 +77,10 @@ func TestWaitTillHealthy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sim.Close()
 
 	// create a control simulation
-	controlSim := New(simServiceMap)
+	controlSim := New(createSimServiceMap(false))
 	defer controlSim.Close()
 
 	// load the snapshot into this control simulation
@@ -101,9 +88,23 @@ func TestWaitTillHealthy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	// for each node...
 	nodeIDs := controlSim.UpNodeIDs()
+	if len(nodeIDs) != testNodesNum {
+		t.Fatal("Number of up nodes is not equal to number of all nodes")
+	}
+	// array of all overlay addresses
+	var addrs [][]byte
+	// iterate once to be able to build the peer map
+	for _, node := range nodeIDs {
+		//get the kademlia overlay address from this ID
+		a := node.Bytes()
+		//append it to the array of all overlay addresses
+		addrs = append(addrs, a)
+	}
+	// build a PeerPot only once
+	pp := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
+
 	for _, node := range nodeIDs {
 		// ...get its kademlia
 		item, ok := sim.NodeItem(node, BucketKeyKademlia)
@@ -113,19 +114,40 @@ func TestWaitTillHealthy(t *testing.T) {
 		kad := item.(*network.Kademlia)
 		// get its base address
 		kid := common.Bytes2Hex(kad.BaseAddr())
-		// build a PeerPot
-		addrs := [][]byte{kad.BaseAddr()}
-		kad.EachAddr(nil, 255, func(addr *network.BzzAddr, po int) bool {
-			addrs = append(addrs, addr.Address())
-			return true
-		})
 
+		//get the health info
+		info := kad.GetHealthInfo(pp[kid])
+		log.Trace("Health info", "info", info)
 		// check that it is healthy
-		pp := network.NewPeerPotMap(kad.NeighbourhoodSize, addrs)
-		healthy := kad.GetHealthInfo(pp[kid]).Healthy()
+		healthy := info.Healthy()
 		log.Trace("Node is healthy", "node", node, "healthy", healthy)
 		if !healthy {
 			t.Fatalf("Expected node %v of control simulation to be healthy, but it is not", node)
 		}
+	}
+}
+
+// createSimServiceMap returns the services map
+// this function will create the sim services with or without discovery enabled
+// based on the flag passed
+func createSimServiceMap(withDiscovery bool) map[string]ServiceFunc {
+	return map[string]ServiceFunc{
+		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
+			addr := network.NewAddr(ctx.Config.Node())
+			hp := network.NewHiveParams()
+			if !withDiscovery {
+				hp.Discovery = false
+			}
+			config := &network.BzzConfig{
+				OverlayAddr:  addr.Over(),
+				UnderlayAddr: addr.Under(),
+				HiveParams:   hp,
+			}
+			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+			// store kademlia in node's bucket under BucketKeyKademlia
+			// so that it can be found by WaitTillHealthy method.
+			b.Store(BucketKeyKademlia, kad)
+			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
+		},
 	}
 }
