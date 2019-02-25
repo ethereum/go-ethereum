@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/shed"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
 
@@ -392,8 +392,8 @@ func (db *DB) Close() (err error) {
 
 // po computes the proximity order between the address
 // and database base key.
-func (db *DB) po(addr storage.Address) (bin uint8) {
-	return uint8(storage.Proximity(db.baseKey, addr))
+func (db *DB) po(addr chunk.Address) (bin uint8) {
+	return uint8(chunk.Proximity(db.baseKey, addr))
 }
 
 var (
@@ -409,7 +409,7 @@ var (
 // If the address is locked this function will check it
 // in a for loop for addressLockTimeout time, after which
 // it will return ErrAddressLockTimeout error.
-func (db *DB) lockAddr(addr storage.Address) (unlock func(), err error) {
+func (db *DB) lockAddr(addr chunk.Address) (unlock func(), err error) {
 	start := time.Now()
 	lockKey := hex.EncodeToString(addr)
 	for {
@@ -426,7 +426,7 @@ func (db *DB) lockAddr(addr storage.Address) (unlock func(), err error) {
 }
 
 // chunkToItem creates new Item with data provided by the Chunk.
-func chunkToItem(ch storage.Chunk) shed.Item {
+func chunkToItem(ch chunk.Chunk) shed.Item {
 	return shed.Item{
 		Address: ch.Address(),
 		Data:    ch.Data(),
@@ -434,7 +434,7 @@ func chunkToItem(ch storage.Chunk) shed.Item {
 }
 
 // addressToItem creates new Item with a provided address.
-func addressToItem(addr storage.Address) shed.Item {
+func addressToItem(addr chunk.Address) shed.Item {
 	return shed.Item{
 		Address: addr,
 	}

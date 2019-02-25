@@ -17,7 +17,7 @@
 package storage
 
 import (
-	"errors"
+	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 const (
@@ -31,7 +31,8 @@ const (
 	ErrNotSynced
 )
 
+// Errors are the same as the ones in chunk package for backward compatibility.
 var (
-	ErrChunkNotFound = errors.New("chunk not found")
-	ErrChunkInvalid  = errors.New("invalid chunk")
+	ErrChunkNotFound = ch.ErrChunkNotFound
+	ErrChunkInvalid  = ch.ErrChunkNotFound
 )

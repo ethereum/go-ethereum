@@ -20,7 +20,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 // BenchmarkRetrievalIndexes uploads a number of chunks in order to measure
@@ -64,9 +64,9 @@ func benchmarkRetrievalIndexes(b *testing.B, o *Options, count int) {
 	uploader := db.NewPutter(ModePutUpload)
 	syncer := db.NewSetter(ModeSetSync)
 	requester := db.NewGetter(ModeGetRequest)
-	addrs := make([]storage.Address, count)
+	addrs := make([]chunk.Address, count)
 	for i := 0; i < count; i++ {
-		chunk := generateFakeRandomChunk()
+		chunk := generateTestRandomChunk()
 		err := uploader.Put(chunk)
 		if err != nil {
 			b.Fatal(err)
@@ -134,9 +134,9 @@ func benchmarkUpload(b *testing.B, o *Options, count int) {
 	db, cleanupFunc := newTestDB(b, o)
 	defer cleanupFunc()
 	uploader := db.NewPutter(ModePutUpload)
-	chunks := make([]storage.Chunk, count)
+	chunks := make([]chunk.Chunk, count)
 	for i := 0; i < count; i++ {
-		chunk := generateFakeRandomChunk()
+		chunk := generateTestRandomChunk()
 		chunks[i] = chunk
 	}
 	b.StartTimer()

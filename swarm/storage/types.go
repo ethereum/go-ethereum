@@ -22,53 +22,29 @@ import (
 	"crypto"
 	"crypto/rand"
 	"encoding/binary"
-	"fmt"
 	"io"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/swarm/bmt"
 	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 	"golang.org/x/crypto/sha3"
 )
 
-const MaxPO = 16
-const AddressLength = 32
+// MaxPO is the same as chunk.MaxPO for backward compatibility.
+const MaxPO = ch.MaxPO
+
+// AddressLength is the same as chunk.AddressLength for backward compatibility.
+const AddressLength = ch.AddressLength
 
 type SwarmHasher func() SwarmHash
 
-type Address []byte
+// Address is an alias for chunk.Address for backward compatibility.
+type Address = ch.Address
 
-// Proximity(x, y) returns the proximity order of the MSB distance between x and y
-//
-// The distance metric MSB(x, y) of two equal length byte sequences x an y is the
-// value of the binary integer cast of the x^y, ie., x and y bitwise xor-ed.
-// the binary cast is big endian: most significant bit first (=MSB).
-//
-// Proximity(x, y) is a discrete logarithmic scaling of the MSB distance.
-// It is defined as the reverse rank of the integer part of the base 2
-// logarithm of the distance.
-// It is calculated by counting the number of common leading zeros in the (MSB)
-// binary representation of the x^y.
-//
-// (0 farthest, 255 closest, 256 self)
-func Proximity(one, other []byte) (ret int) {
-	b := (MaxPO-1)/8 + 1
-	if b > len(one) {
-		b = len(one)
-	}
-	m := 8
-	for i := 0; i < b; i++ {
-		oxo := one[i] ^ other[i]
-		for j := 0; j < m; j++ {
-			if (oxo>>uint8(7-j))&0x01 != 0 {
-				return i*8 + j
-			}
-		}
-	}
-	return MaxPO
-}
+// Proximity is the same as chunk.Proximity for backward compatibility.
+var Proximity = ch.Proximity
 
-var ZeroAddr = Address(common.Hash{}.Bytes())
+// ZeroAddr is the same as chunk.ZeroAddr for backward compatibility.
+var ZeroAddr = ch.ZeroAddr
 
 func MakeHashFunc(hash string) SwarmHasher {
 	switch hash {
@@ -85,33 +61,6 @@ func MakeHashFunc(hash string) SwarmHasher {
 			return bmt.New(pool)
 		}
 	}
-	return nil
-}
-
-func (a Address) Hex() string {
-	return fmt.Sprintf("%064x", []byte(a[:]))
-}
-
-func (a Address) Log() string {
-	if len(a[:]) < 8 {
-		return fmt.Sprintf("%x", []byte(a[:]))
-	}
-	return fmt.Sprintf("%016x", []byte(a[:8]))
-}
-
-func (a Address) String() string {
-	return fmt.Sprintf("%064x", []byte(a))
-}
-
-func (a Address) MarshalJSON() (out []byte, err error) {
-	return []byte(`"` + a.String() + `"`), nil
-}
-
-func (a *Address) UnmarshalJSON(value []byte) error {
-	s := string(value)
-	*a = make([]byte, 32)
-	h := common.Hex2Bytes(s[1 : len(s)-1])
-	copy(*a, h)
 	return nil
 }
 
@@ -133,38 +82,11 @@ func (c AddressCollection) Swap(i, j int) {
 	c[i], c[j] = c[j], c[i]
 }
 
-// Chunk interface implemented by context.Contexts and data chunks
-type Chunk interface {
-	Address() Address
-	Data() []byte
-}
+// Chunk is an alias for chunk.Chunk for backward compatibility.
+type Chunk = ch.Chunk
 
-type chunk struct {
-	addr  Address
-	sdata []byte
-	span  int64
-}
-
-func NewChunk(addr Address, data []byte) *chunk {
-	return &chunk{
-		addr:  addr,
-		sdata: data,
-		span:  -1,
-	}
-}
-
-func (c *chunk) Address() Address {
-	return c.addr
-}
-
-func (c *chunk) Data() []byte {
-	return c.sdata
-}
-
-// String() for pretty printing
-func (self *chunk) String() string {
-	return fmt.Sprintf("Address: %v TreeSize: %v Chunksize: %v", self.addr.Log(), self.span, len(self.sdata))
-}
+// NewChunk is the same as chunk.NewChunk for backward compatibility.
+var NewChunk = ch.NewChunk
 
 func GenerateRandomChunk(dataSize int64) Chunk {
 	hasher := MakeHashFunc(DefaultHash)()

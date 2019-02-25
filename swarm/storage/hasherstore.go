@@ -156,7 +156,7 @@ func (h *hasherStore) createHash(chunkData ChunkData) Address {
 	return hasher.Sum(nil)
 }
 
-func (h *hasherStore) createChunk(chunkData ChunkData) *chunk {
+func (h *hasherStore) createChunk(chunkData ChunkData) Chunk {
 	hash := h.createHash(chunkData)
 	chunk := NewChunk(hash, chunkData)
 	return chunk
@@ -239,7 +239,7 @@ func (h *hasherStore) newDataEncryption(key encryption.Key) encryption.Encryptio
 	return encryption.New(key, int(ch.DefaultSize), 0, sha3.NewLegacyKeccak256)
 }
 
-func (h *hasherStore) storeChunk(ctx context.Context, chunk *chunk) {
+func (h *hasherStore) storeChunk(ctx context.Context, chunk Chunk) {
 	atomic.AddUint64(&h.nrChunks, 1)
 	go func() {
 		select {

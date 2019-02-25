@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 // TestDB_collectGarbageWorker tests garbage collection runs
@@ -64,11 +64,11 @@ func testDB_collectGarbageWorker(t *testing.T) {
 	uploader := db.NewPutter(ModePutUpload)
 	syncer := db.NewSetter(ModeSetSync)
 
-	addrs := make([]storage.Address, 0)
+	addrs := make([]chunk.Address, 0)
 
 	// upload random chunks
 	for i := 0; i < chunkCount; i++ {
-		chunk := generateRandomChunk()
+		chunk := generateTestRandomChunk()
 
 		err := uploader.Put(chunk)
 		if err != nil {
@@ -106,8 +106,8 @@ func testDB_collectGarbageWorker(t *testing.T) {
 	// the first synced chunk should be removed
 	t.Run("get the first synced chunk", func(t *testing.T) {
 		_, err := db.NewGetter(ModeGetRequest).Get(addrs[0])
-		if err != storage.ErrChunkNotFound {
-			t.Errorf("got error %v, want %v", err, storage.ErrChunkNotFound)
+		if err != chunk.ErrChunkNotFound {
+			t.Errorf("got error %v, want %v", err, chunk.ErrChunkNotFound)
 		}
 	})
 
@@ -137,11 +137,11 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 		testHookCollectGarbageChan <- collectedCount
 	})()
 
-	addrs := make([]storage.Address, 0)
+	addrs := make([]chunk.Address, 0)
 
 	// upload random chunks just up to the capacity
 	for i := 0; i < int(db.capacity)-1; i++ {
-		chunk := generateRandomChunk()
+		chunk := generateTestRandomChunk()
 
 		err := uploader.Put(chunk)
 		if err != nil {
@@ -166,16 +166,16 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 
 	// upload and sync another chunk to trigger
 	// garbage collection
-	chunk := generateRandomChunk()
-	err = uploader.Put(chunk)
+	ch := generateTestRandomChunk()
+	err = uploader.Put(ch)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = syncer.Set(chunk.Address())
+	err = syncer.Set(ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
-	addrs = append(addrs, chunk.Address())
+	addrs = append(addrs, ch.Address())
 
 	// wait for garbage collection
 
@@ -217,8 +217,8 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	// the second synced chunk should be removed
 	t.Run("get gc-ed chunk", func(t *testing.T) {
 		_, err := db.NewGetter(ModeGetRequest).Get(addrs[1])
-		if err != storage.ErrChunkNotFound {
-			t.Errorf("got error %v, want %v", err, storage.ErrChunkNotFound)
+		if err != chunk.ErrChunkNotFound {
+			t.Errorf("got error %v, want %v", err, chunk.ErrChunkNotFound)
 		}
 	})
 
@@ -254,7 +254,7 @@ func TestDB_gcSize(t *testing.T) {
 	count := 100
 
 	for i := 0; i < count; i++ {
-		chunk := generateRandomChunk()
+		chunk := generateTestRandomChunk()
 
 		err := uploader.Put(chunk)
 		if err != nil {
