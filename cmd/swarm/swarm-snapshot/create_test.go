@@ -48,7 +48,7 @@ func TestSnapshotCreate(t *testing.T) {
 		},
 		{
 			name:  "more nodes",
-			nodes: defaultNodes + 5,
+			nodes: defaultNodes + 4,
 		},
 		{
 			name:     "services",
