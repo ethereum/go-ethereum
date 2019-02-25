@@ -89,7 +89,7 @@ func createSnapshot(filename string, nodes int, services []string) (err error) {
 		return fmt.Errorf("connect nodes: %v", err)
 	}
 
-	ctx, cancelSimRun := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancelSimRun := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancelSimRun()
 	if _, err := sim.WaitTillHealthy(ctx); err != nil {
 		return fmt.Errorf("wait for healthy kademlia: %v", err)
