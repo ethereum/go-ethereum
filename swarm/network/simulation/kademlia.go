@@ -58,8 +58,7 @@ func (s *Simulation) WaitTillHealthy(ctx context.Context) (ill map[enode.ID]*net
 			for k := range ill {
 				delete(ill, k)
 			}
-			log.Debug("kademlia health check", "addr count", len(addrs))
-			log.Debug("kademlias length", "len", len(kademlias))
+			log.Debug("kademlia health check", "addr count", len(addrs), "kad len", len(kademlias))
 			for id, k := range kademlias {
 				//PeerPot for this node
 				addr := common.Bytes2Hex(k.BaseAddr())

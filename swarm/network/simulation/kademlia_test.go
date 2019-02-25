@@ -43,19 +43,30 @@ import (
 */
 func TestWaitTillHealthy(t *testing.T) {
 
-	// abstraction of the services used for the simulations
-	var simServiceMap = createSimServiceMap(true)
-
 	testNodesNum := 10
 
 	// create the first simulation
-	sim := New(simServiceMap)
+	sim := New(createSimServiceMap(true))
 
 	// connect and...
 	_, err := sim.AddNodesAndConnectRing(testNodesNum)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// for each node...
+	nodeIDs := sim.UpNodeIDs()
+	// array of all overlay addresses
+	var addrs [][]byte
+	// iterate once to be able to build the peer map
+	for _, node := range nodeIDs {
+		//get the kademlia overlay address from this ID
+		a := node.Bytes()
+		//append it to the array of all overlay addresses
+		addrs = append(addrs, a)
+	}
+	// build a PeerPot only once
+	pp := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
@@ -78,6 +89,7 @@ func TestWaitTillHealthy(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// close the initial simulation
 	sim.Close()
 	// create a control simulation
 	controlSim := New(createSimServiceMap(false))
@@ -92,22 +104,6 @@ func TestWaitTillHealthy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// for each node...
-	nodeIDs := controlSim.UpNodeIDs()
-	if len(nodeIDs) != testNodesNum {
-		t.Fatal("Number of up nodes is not equal to number of all nodes")
-	}
-	// array of all overlay addresses
-	var addrs [][]byte
-	// iterate once to be able to build the peer map
-	for _, node := range nodeIDs {
-		//get the kademlia overlay address from this ID
-		a := node.Bytes()
-		//append it to the array of all overlay addresses
-		addrs = append(addrs, a)
-	}
-	// build a PeerPot only once
-	pp := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
 
 	for _, node := range nodeIDs {
 		// ...get its kademlia
@@ -124,10 +120,8 @@ func TestWaitTillHealthy(t *testing.T) {
 		log.Trace("Health info", "info", info)
 		// check that it is healthy
 		healthy := info.Healthy()
-		log.Trace("Node is healthy", "node", node, "healthy", healthy)
 		if !healthy {
-			log.Trace("Unhealthy kademlia", "kad", kad.String())
-			t.Fatalf("Expected node %v of control simulation to be healthy, but it is not", node)
+			t.Fatalf("Expected node %v of control simulation to be healthy, but it is not, unhealthy kademlias: %v", node, kad.String())
 		}
 	}
 }
@@ -135,14 +129,12 @@ func TestWaitTillHealthy(t *testing.T) {
 // createSimServiceMap returns the services map
 // this function will create the sim services with or without discovery enabled
 // based on the flag passed
-func createSimServiceMap(withDiscovery bool) map[string]ServiceFunc {
+func createSimServiceMap(discovery bool) map[string]ServiceFunc {
 	return map[string]ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			addr := network.NewAddr(ctx.Config.Node())
 			hp := network.NewHiveParams()
-			if !withDiscovery {
-				hp.Discovery = false
-			}
+			hp.Discovery = discovery
 			config := &network.BzzConfig{
 				OverlayAddr:  addr.Over(),
 				UnderlayAddr: addr.Under(),

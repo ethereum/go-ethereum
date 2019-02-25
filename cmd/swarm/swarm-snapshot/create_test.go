@@ -81,7 +81,7 @@ func TestSnapshotCreate(t *testing.T) {
 			}
 			testCmd := runSnapshot(t, append(args, file.Name())...)
 
-			testCmd.ExpectExit()
+			testCmd.WaitExit()
 			if code := testCmd.ExitStatus(); code != 0 {
 				t.Fatalf("command exit code %v, expected 0", code)
 			}
