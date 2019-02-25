@@ -106,6 +106,7 @@ func NewHandshakeParams() *HandshakeParams {
 type HandshakeController struct {
 	pss                  *Pss
 	keyC                 map[string]chan []string // adds a channel to report when a handshake succeeds
+	keyCMu               sync.Mutex               // protects keyC map
 	lock                 sync.Mutex
 	symKeyRequestTimeout time.Duration
 	symKeyExpiryTimeout  time.Duration
@@ -442,6 +443,8 @@ func (ctl *HandshakeController) sendKey(pubkeyid string, topic *Topic, keycount 
 
 // Enables callback for keys received from a key exchange request
 func (ctl *HandshakeController) alertHandshake(pubkeyid string, symkeys []string) chan []string {
+	ctl.keyCMu.Lock()
+	defer ctl.keyCMu.Unlock()
 	if len(symkeys) > 0 {
 		if _, ok := ctl.keyC[pubkeyid]; ok {
 			ctl.keyC[pubkeyid] <- symkeys
