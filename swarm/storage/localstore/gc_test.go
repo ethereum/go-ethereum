@@ -156,6 +156,14 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 		addrs = append(addrs, chunk.Address())
 	}
 
+	// set update gc test hook to signal when
+	// update gc goroutine is done by closing
+	// testHookUpdateGCChan channel
+	testHookUpdateGCChan := make(chan struct{})
+	resetTestHookUpdateGC := setTestHookUpdateGC(func() {
+		close(testHookUpdateGCChan)
+	})
+
 	// request the latest synced chunk
 	// to prioritize it in the gc index
 	// not to be collected
@@ -163,6 +171,17 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// wait for update gc goroutine to finish for garbage
+	// collector to be correctly triggered after the last upload
+	select {
+	case <-testHookUpdateGCChan:
+	case <-time.After(10 * time.Second):
+		t.Fatal("updateGC was not called after getting chunk with ModeGetRequest")
+	}
+
+	// no need to wait for update gc hook anymore
+	resetTestHookUpdateGC()
 
 	// upload and sync another chunk to trigger
 	// garbage collection
