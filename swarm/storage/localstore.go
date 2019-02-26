@@ -241,7 +241,7 @@ func (ls *LocalStore) Migrate() error {
 func (ls *LocalStore) migrateFromNoneToPurity() {
 	// delete chunks that are not valid, i.e. chunks that do not pass
 	// any of the ls.Validators
-	ls.DbStore.Cleanup(func(c *chunk) bool {
+	ls.DbStore.Cleanup(func(c Chunk) bool {
 		return !ls.isValid(c)
 	})
 }

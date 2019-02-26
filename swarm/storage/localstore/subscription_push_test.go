@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 // TestDB_SubscribePush uploads some chunks before and after
@@ -36,7 +36,7 @@ func TestDB_SubscribePush(t *testing.T) {
 
 	uploader := db.NewPutter(ModePutUpload)
 
-	chunks := make([]storage.Chunk, 0)
+	chunks := make([]chunk.Chunk, 0)
 	var chunksMu sync.Mutex
 
 	uploadRandomChunks := func(count int) {
@@ -44,7 +44,7 @@ func TestDB_SubscribePush(t *testing.T) {
 		defer chunksMu.Unlock()
 
 		for i := 0; i < count; i++ {
-			chunk := generateRandomChunk()
+			chunk := generateTestRandomChunk()
 
 			err := uploader.Put(chunk)
 			if err != nil {
@@ -124,7 +124,7 @@ func TestDB_SubscribePush_multiple(t *testing.T) {
 
 	uploader := db.NewPutter(ModePutUpload)
 
-	addrs := make([]storage.Address, 0)
+	addrs := make([]chunk.Address, 0)
 	var addrsMu sync.Mutex
 
 	uploadRandomChunks := func(count int) {
@@ -132,7 +132,7 @@ func TestDB_SubscribePush_multiple(t *testing.T) {
 		defer addrsMu.Unlock()
 
 		for i := 0; i < count; i++ {
-			chunk := generateRandomChunk()
+			chunk := generateTestRandomChunk()
 
 			err := uploader.Put(chunk)
 			if err != nil {

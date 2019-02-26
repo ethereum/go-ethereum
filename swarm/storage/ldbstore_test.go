@@ -28,7 +28,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	ch "github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
 	ldberrors "github.com/syndtr/goleveldb/leveldb/errors"
@@ -103,7 +103,7 @@ func TestMarkAccessed(t *testing.T) {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 
-	h := GenerateRandomChunk(ch.DefaultSize)
+	h := GenerateRandomChunk(chunk.DefaultSize)
 
 	db.Put(context.Background(), h)
 
@@ -201,7 +201,7 @@ func testIterator(t *testing.T, mock bool) {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 
-	chunks := GenerateRandomChunks(ch.DefaultSize, chunkcount)
+	chunks := GenerateRandomChunks(chunk.DefaultSize, chunkcount)
 
 	for i = 0; i < len(chunks); i++ {
 		chunkkeys[i] = chunks[i].Address()
@@ -468,7 +468,7 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	// put capacity count number of chunks
 	chunks := make([]Chunk, n)
 	for i := 0; i < n; i++ {
-		c := GenerateRandomChunk(ch.DefaultSize)
+		c := GenerateRandomChunk(chunk.DefaultSize)
 		chunks[i] = c
 		log.Trace("generate random chunk", "idx", i, "chunk", c)
 	}
