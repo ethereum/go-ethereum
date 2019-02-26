@@ -199,8 +199,18 @@ var (
 	}
 	LightServFlag = cli.IntFlag{
 		Name:  "lightserv",
-		Usage: "Maximum percentage of time allowed for serving LES requests (0-90)",
+		Usage: "Maximum percentage of time allowed for serving LES requests (multi-threaded processing allows values over 100)",
 		Value: 0,
+	}
+	LightBandwidthInFlag = cli.IntFlag{
+		Name:  "lightbwin",
+		Usage: "Incoming bandwidth limit for light server (1000 bytes/sec, 0 = unlimited)",
+		Value: 1000,
+	}
+	LightBandwidthOutFlag = cli.IntFlag{
+		Name:  "lightbwout",
+		Usage: "Outgoing bandwidth limit for light server (1000 bytes/sec, 0 = unlimited)",
+		Value: 5000,
 	}
 	LightPeersFlag = cli.IntFlag{
 		Name:  "lightpeers",
@@ -1305,6 +1315,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(LightServFlag.Name) {
 		cfg.LightServ = ctx.GlobalInt(LightServFlag.Name)
 	}
+	cfg.LightBandwidthIn = ctx.GlobalInt(LightBandwidthInFlag.Name)
+	cfg.LightBandwidthOut = ctx.GlobalInt(LightBandwidthOutFlag.Name)
 	if ctx.GlobalIsSet(LightPeersFlag.Name) {
 		cfg.LightPeers = ctx.GlobalInt(LightPeersFlag.Name)
 	}
