@@ -210,6 +210,8 @@ func (ks *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessage
 // - it is not marked as protected
 // - it is not in the incoming decryption cache
 func (ks *Pss) cleanKeys() (count int) {
+	ks.mx.Lock()
+	defer ks.mx.Unlock()
 	for keyid, peertopics := range ks.symKeyPool {
 		var expiredtopics []Topic
 		for topic, psp := range peertopics {
@@ -229,10 +231,8 @@ func (ks *Pss) cleanKeys() (count int) {
 			}
 		}
 		for _, topic := range expiredtopics {
-			ks.mx.Lock()
 			delete(ks.symKeyPool[keyid], topic)
 			log.Trace("symkey cleanup deletion", "symkeyid", keyid, "topic", topic, "val", ks.symKeyPool[keyid])
-			ks.mx.Unlock()
 			count++
 		}
 	}
