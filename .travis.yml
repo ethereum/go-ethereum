@@ -14,7 +14,6 @@ matrix:
       - go run build/ci.go install
       - go run build/ci.go test -coverage $TEST_PACKAGES
 
-    # These are the latest Go versions.
     - os: linux
       dist: trusty
       sudo: required
@@ -26,8 +25,20 @@ matrix:
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
+    # These are the latest Go versions.
+    - os: linux
+      dist: trusty
+      sudo: required
+      go: 1.12.x
+      script:
+        - sudo modprobe fuse
+        - sudo chmod 666 /dev/fuse
+        - sudo chown root:$USER /etc/fuse.conf
+        - go run build/ci.go install
+        - go run build/ci.go test -coverage $TEST_PACKAGES
+
     - os: osx
-      go: 1.11.x
+      go: 1.12.x
       script:
         - echo "Increase the maximum number of open file descriptors on macOS"
         - NOFILE=20480
@@ -44,7 +55,7 @@ matrix:
     # This builder only tests code linters on latest version of Go
     - os: linux
       dist: trusty
-      go: 1.11.x
+      go: 1.12.x
       env:
         - lint
       git:
@@ -56,7 +67,7 @@ matrix:
     - if: repo = ethereum/go-ethereum AND type = push
       os: linux
       dist: trusty
-      go: 1.11.x
+      go: 1.12.x
       env:
         - ubuntu-ppa
       git:
@@ -79,7 +90,7 @@ matrix:
       os: linux
       dist: trusty
       sudo: required
-      go: 1.11.x
+      go: 1.12.x
       env:
         - azure-linux
       git:
@@ -114,7 +125,7 @@ matrix:
       dist: trusty
       services:
         - docker
-      go: 1.11.x
+      go: 1.12.x
       env:
         - azure-linux-mips
       git:
@@ -159,7 +170,7 @@ matrix:
       git:
         submodules: false # avoid cloning ethereum/tests
       before_install:
-        - curl https://storage.googleapis.com/golang/go1.11.5.linux-amd64.tar.gz | tar -xz
+        - curl https://dl.google.com/go/go1.12.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
@@ -176,7 +187,7 @@ matrix:
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
     - if: repo = ethereum/go-ethereum AND type = push
       os: osx
-      go: 1.11.x
+      go: 1.12.x
       env:
         - azure-osx
         - azure-ios
@@ -206,7 +217,7 @@ matrix:
     - if: repo = ethereum/go-ethereum AND type = cron
       os: linux
       dist: trusty
-      go: 1.11.x
+      go: 1.12.x
       env:
         - azure-purge
       git:
@@ -218,7 +229,7 @@ matrix:
       if: repo = ethersphere/go-ethereum
       os: linux
       dist: trusty
-      go: 1.11.x
+      go: 1.12.x
       git:
         submodules: false # avoid cloning ethereum/tests
       script: ./build/travis_keepalive.sh go test -v -timeout 20m -race ./swarm...
