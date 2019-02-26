@@ -16,9 +16,7 @@
 
 package storage
 
-import (
-	ch "github.com/ethereum/go-ethereum/swarm/chunk"
-)
+import "github.com/ethereum/go-ethereum/swarm/chunk"
 
 const (
 	ErrInit = iota
@@ -33,6 +31,6 @@ const (
 
 // Errors are the same as the ones in chunk package for backward compatibility.
 var (
-	ErrChunkNotFound = ch.ErrChunkNotFound
-	ErrChunkInvalid  = ch.ErrChunkNotFound
+	ErrChunkNotFound = chunk.ErrChunkNotFound
+	ErrChunkInvalid  = chunk.ErrChunkNotFound
 )

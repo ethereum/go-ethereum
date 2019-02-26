@@ -25,26 +25,26 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/swarm/bmt"
-	ch "github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"golang.org/x/crypto/sha3"
 )
 
 // MaxPO is the same as chunk.MaxPO for backward compatibility.
-const MaxPO = ch.MaxPO
+const MaxPO = chunk.MaxPO
 
 // AddressLength is the same as chunk.AddressLength for backward compatibility.
-const AddressLength = ch.AddressLength
+const AddressLength = chunk.AddressLength
 
 type SwarmHasher func() SwarmHash
 
 // Address is an alias for chunk.Address for backward compatibility.
-type Address = ch.Address
+type Address = chunk.Address
 
 // Proximity is the same as chunk.Proximity for backward compatibility.
-var Proximity = ch.Proximity
+var Proximity = chunk.Proximity
 
 // ZeroAddr is the same as chunk.ZeroAddr for backward compatibility.
-var ZeroAddr = ch.ZeroAddr
+var ZeroAddr = chunk.ZeroAddr
 
 func MakeHashFunc(hash string) SwarmHasher {
 	switch hash {
@@ -56,7 +56,7 @@ func MakeHashFunc(hash string) SwarmHasher {
 		return func() SwarmHash {
 			hasher := sha3.NewLegacyKeccak256
 			hasherSize := hasher().Size()
-			segmentCount := ch.DefaultSize / hasherSize
+			segmentCount := chunk.DefaultSize / hasherSize
 			pool := bmt.NewTreePool(hasher, segmentCount, bmt.PoolSize)
 			return bmt.New(pool)
 		}
@@ -83,10 +83,10 @@ func (c AddressCollection) Swap(i, j int) {
 }
 
 // Chunk is an alias for chunk.Chunk for backward compatibility.
-type Chunk = ch.Chunk
+type Chunk = chunk.Chunk
 
 // NewChunk is the same as chunk.NewChunk for backward compatibility.
-var NewChunk = ch.NewChunk
+var NewChunk = chunk.NewChunk
 
 func GenerateRandomChunk(dataSize int64) Chunk {
 	hasher := MakeHashFunc(DefaultHash)()
@@ -196,9 +196,9 @@ func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
 }
 
 // Validate that the given key is a valid content address for the given data
-func (v *ContentAddressValidator) Validate(chunk Chunk) bool {
-	data := chunk.Data()
-	if l := len(data); l < 9 || l > ch.DefaultSize+8 {
+func (v *ContentAddressValidator) Validate(ch Chunk) bool {
+	data := ch.Data()
+	if l := len(data); l < 9 || l > chunk.DefaultSize+8 {
 		// log.Error("invalid chunk size", "chunk", addr.Hex(), "size", l)
 		return false
 	}
@@ -208,7 +208,7 @@ func (v *ContentAddressValidator) Validate(chunk Chunk) bool {
 	hasher.Write(data[8:])
 	hash := hasher.Sum(nil)
 
-	return bytes.Equal(hash, chunk.Address())
+	return bytes.Equal(hash, ch.Address())
 }
 
 type ChunkStore interface {

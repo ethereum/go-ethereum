@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	ch "github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 var (
@@ -65,7 +65,7 @@ func TestValidator(t *testing.T) {
 	// add content address validator and check puts
 	// bad should fail, good should pass
 	store.Validators = append(store.Validators, NewContentAddressValidator(hashfunc))
-	chunks = GenerateRandomChunks(ch.DefaultSize, 2)
+	chunks = GenerateRandomChunks(chunk.DefaultSize, 2)
 	goodChunk = chunks[0]
 	badChunk = chunks[1]
 	copy(badChunk.Data(), goodChunk.Data())
@@ -83,7 +83,7 @@ func TestValidator(t *testing.T) {
 	var negV boolTestValidator
 	store.Validators = append(store.Validators, negV)
 
-	chunks = GenerateRandomChunks(ch.DefaultSize, 2)
+	chunks = GenerateRandomChunks(chunk.DefaultSize, 2)
 	goodChunk = chunks[0]
 	badChunk = chunks[1]
 	copy(badChunk.Data(), goodChunk.Data())
@@ -101,7 +101,7 @@ func TestValidator(t *testing.T) {
 	var posV boolTestValidator = true
 	store.Validators = append(store.Validators, posV)
 
-	chunks = GenerateRandomChunks(ch.DefaultSize, 2)
+	chunks = GenerateRandomChunks(chunk.DefaultSize, 2)
 	goodChunk = chunks[0]
 	badChunk = chunks[1]
 	copy(badChunk.Data(), goodChunk.Data())
@@ -138,7 +138,7 @@ func putChunks(store *LocalStore, chunks ...Chunk) []error {
 
 func put(store *LocalStore, n int, f func(i int64) Chunk) (hs []Address, errs []error) {
 	for i := int64(0); i < int64(n); i++ {
-		chunk := f(ch.DefaultSize)
+		chunk := f(chunk.DefaultSize)
 		err := store.Put(context.TODO(), chunk)
 		errs = append(errs, err)
 		hs = append(hs, chunk.Address())
@@ -158,7 +158,7 @@ func TestGetFrequentlyAccessedChunkWontGetGarbageCollected(t *testing.T) {
 
 	var chunks []Chunk
 	for i := 0; i < ldbCap; i++ {
-		chunks = append(chunks, GenerateRandomChunk(ch.DefaultSize))
+		chunks = append(chunks, GenerateRandomChunk(chunk.DefaultSize))
 	}
 
 	mostAccessed := chunks[0].Address()
