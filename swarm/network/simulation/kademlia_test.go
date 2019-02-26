@@ -49,13 +49,11 @@ func TestWaitTillHealthy(t *testing.T) {
 	sim := New(createSimServiceMap(true))
 
 	// connect and...
-	_, err := sim.AddNodesAndConnectRing(testNodesNum)
+	nodeIDs, err := sim.AddNodesAndConnectRing(testNodesNum)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// for each node...
-	nodeIDs := sim.UpNodeIDs()
 	// array of all overlay addresses
 	var addrs [][]byte
 	// iterate once to be able to build the peer map
@@ -78,9 +76,7 @@ func TestWaitTillHealthy(t *testing.T) {
 			t.Log("Node", id)
 			t.Log(kad.String())
 		}
-		if err != nil {
-			t.Fatal(err)
-		}
+		t.Fatal(err)
 	}
 
 	// now create a snapshot of this network
