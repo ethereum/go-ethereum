@@ -137,7 +137,7 @@ matrix:
         - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Android Maven and Azure uploads
-    - if: repo = ethereum/go-ethereum AND type = push
+    - if: repo = ethereum/go-ethereum
       os: linux
       dist: trusty
       addons:
@@ -165,10 +165,10 @@ matrix:
         - export GOPATH=$HOME/go
       script:
         # Build the Android archive and upload it to Maven Central and Azure
-        - curl https://dl.google.com/android/repository/android-ndk-r17b-linux-x86_64.zip -o android-ndk-r17b.zip
-        - unzip -q android-ndk-r17b.zip && rm android-ndk-r17b.zip
-        - mv android-ndk-r17b $HOME
-        - export ANDROID_NDK=$HOME/android-ndk-r17b
+        - curl https://dl.google.com/android/repository/android-ndk-r19b-linux-x86_64.zip -o android-ndk-r19b.zip
+        - unzip -q android-ndk-r19b.zip && rm android-ndk-r19b.zip
+        - mv android-ndk-r19b $HOME
+        - export NDK_PATH=$HOME/android-ndk-r19b
 
         - mkdir -p $GOPATH/src/github.com/ethereum
         - ln -s `pwd` $GOPATH/src/github.com/ethereum/go-ethereum
