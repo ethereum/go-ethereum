@@ -103,6 +103,8 @@ type NodeConfig struct {
 	Reachable func(id enode.ID) bool
 
 	Port uint16
+
+	EnodeFunc func() *enode.Node
 }
 
 // nodeConfigJSON is used to encode and decode NodeConfig as JSON by encoding
@@ -168,6 +170,9 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 
 // Node returns the node descriptor represented by the config.
 func (n *NodeConfig) Node() *enode.Node {
+	if n.EnodeFunc != nil {
+		return n.EnodeFunc()
+	}
 	return enode.NewV4(&n.PrivateKey.PublicKey, net.IP{127, 0, 0, 1}, int(n.Port), int(n.Port))
 }
 
