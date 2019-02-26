@@ -28,7 +28,7 @@ func TestModeSetAccess(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	chunk := generateRandomChunk()
+	chunk := generateTestRandomChunk()
 
 	wantTimestamp := time.Now().UTC().UnixNano()
 	defer setNow(func() (t int64) {
@@ -56,7 +56,7 @@ func TestModeSetSync(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	chunk := generateRandomChunk()
+	chunk := generateTestRandomChunk()
 
 	wantTimestamp := time.Now().UTC().UnixNano()
 	defer setNow(func() (t int64) {
@@ -89,7 +89,7 @@ func TestModeSetRemove(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	chunk := generateRandomChunk()
+	chunk := generateTestRandomChunk()
 
 	err := db.NewPutter(ModePutUpload).Put(chunk)
 	if err != nil {
