@@ -137,7 +137,7 @@ matrix:
         - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Android Maven and Azure uploads
-    - if: repo = ethereum/go-ethereum
+    - if: repo = ethereum/go-ethereum AND type = push
       os: linux
       dist: trusty
       addons:
