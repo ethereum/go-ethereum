@@ -75,6 +75,7 @@ outer:
 		}
 
 		metrics.GetOrRegisterResettingTimer("sliding-window.upload-time", nil).UpdateSince(t1)
+		metrics.GetOrRegisterGauge("sliding-window.upload-depth", nil).Update(int64(len(hashes)))
 
 		fhash, err := digest(bytes.NewReader(randomBytes))
 		if err != nil {
