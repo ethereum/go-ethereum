@@ -150,6 +150,14 @@ func (tf tFiles) searchMax(icmp *iComparer, ikey internalKey) int {
 	})
 }
 
+// Searches smallest index of tables whose its file number
+// is smaller than the given number.
+func (tf tFiles) searchNumLess(num int64) int {
+	return sort.Search(len(tf), func(i int) bool {
+		return tf[i].fd.Num < num
+	})
+}
+
 // Returns true if given key range overlaps with one or more
 // tables key range. If unsorted is true then binary search will not be used.
 func (tf tFiles) overlaps(icmp *iComparer, umin, umax []byte, unsorted bool) bool {
