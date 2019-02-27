@@ -86,24 +86,26 @@ outer:
 		hashes = append(hashes, uploadResult{hash: hash, digest: fhash})
 		time.Sleep(time.Duration(syncDelay) * time.Second)
 		uploadedBytes += filesize * 1000
-		c := make(chan struct{}, 1)
+		q := make(chan struct{}, 1)
 		d := make(chan struct{})
-		defer close(c)
+		defer close(q)
 		defer close(d)
 		for i, v := range hashes {
-			timeout := time.After(time.Duration(timeout) * time.Second)
+			timeoutC := time.After(time.Duration(timeout) * time.Second)
 			errored = false
 
 		task:
 			for {
 				select {
-				case c <- struct{}{}:
+				case q <- struct{}{}:
 					go func() {
+						var start time.Time
 					inner:
 						for {
 							log.Info("trying to retrieve hash", "hash", v.hash)
 							idx := 1 + rand.Intn(len(hosts)-1)
 							ruid := uuid.New()[:8]
+							start = time.Now()
 							// fetch hangs when swarm dies out, so we have to jump through a bit more hoops to actually
 							// catch the timeout, but also allow this retry logic
 							err := fetch(v.hash, httpEndpoint(hosts[idx]), v.digest, ruid, "")
@@ -116,13 +118,13 @@ outer:
 						d <- struct{}{}
 					}()
 				case <-d:
-					<-c
+					<-q
 					break task
-				case <-timeout:
+				case <-timeoutC:
 					errored = true
 					log.Error("error retrieving hash. timeout", "hash idx", i, "err", err)
 					metrics.GetOrRegisterCounter("sliding-window.single.error", nil).Inc(1)
-					break task
+					break outer
 				default:
 				}
 			}
