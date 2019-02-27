@@ -33,8 +33,12 @@ type twoOperandTest struct {
 }
 
 func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)) {
+	env, err := NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+	if err != nil {
+		t.Fatalf("error creating the EVM object: %v", err)
+	}
+
 	var (
-		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
 		stack          = newstack()
 		pc             = uint64(0)
 		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
@@ -74,8 +78,11 @@ func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64
 }
 
 func TestByteOp(t *testing.T) {
+	env, err := NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+	if err != nil {
+		t.Fatalf("error creating the EVM object: %v", err)
+	}
 	var (
-		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
 		stack          = newstack()
 		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
 	)
@@ -209,8 +216,11 @@ func TestSLT(t *testing.T) {
 }
 
 func opBenchmark(bench *testing.B, op func(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error), args ...string) {
+	env, err := NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+	if err != nil {
+		bench.Fatalf("error creating the EVM object: %v", err)
+	}
 	var (
-		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
 		stack          = newstack()
 		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
 	)
@@ -444,8 +454,11 @@ func BenchmarkOpIsZero(b *testing.B) {
 }
 
 func TestOpMstore(t *testing.T) {
+	env, err := NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+	if err != nil {
+		t.Fatalf("error creating the EVM object: %v", err)
+	}
 	var (
-		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
 		stack          = newstack()
 		mem            = NewMemory()
 		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
@@ -470,8 +483,11 @@ func TestOpMstore(t *testing.T) {
 }
 
 func BenchmarkOpMstore(bench *testing.B) {
+	env, err := NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+	if err != nil {
+		bench.Fatalf("error creating the EVM object: %v", err)
+	}
 	var (
-		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
 		stack          = newstack()
 		mem            = NewMemory()
 		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
@@ -493,8 +509,11 @@ func BenchmarkOpMstore(bench *testing.B) {
 }
 
 func BenchmarkOpSHA3(bench *testing.B) {
+	env, err := NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+	if err != nil {
+		bench.Fatalf("error creating the EVM object: %v", err)
+	}
 	var (
-		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
 		stack          = newstack()
 		mem            = NewMemory()
 		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)

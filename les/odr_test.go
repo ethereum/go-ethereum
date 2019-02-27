@@ -36,13 +36,13 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-type odrTestFn func(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte
+type odrTestFn func(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) ([]byte, error)
 
 func TestOdrGetBlockLes1(t *testing.T) { testOdr(t, 1, 1, odrGetBlock) }
 
 func TestOdrGetBlockLes2(t *testing.T) { testOdr(t, 2, 1, odrGetBlock) }
 
-func odrGetBlock(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
+func odrGetBlock(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) ([]byte, error) {
 	var block *types.Block
 	if bc != nil {
 		block = bc.GetBlockByHash(bhash)
@@ -50,17 +50,17 @@ func odrGetBlock(ctx context.Context, db ethdb.Database, config *params.ChainCon
 		block, _ = lc.GetBlockByHash(ctx, bhash)
 	}
 	if block == nil {
-		return nil
+		return nil, nil
 	}
 	rlp, _ := rlp.EncodeToBytes(block)
-	return rlp
+	return rlp, nil
 }
 
 func TestOdrGetReceiptsLes1(t *testing.T) { testOdr(t, 1, 1, odrGetReceipts) }
 
 func TestOdrGetReceiptsLes2(t *testing.T) { testOdr(t, 2, 1, odrGetReceipts) }
 
-func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
+func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) ([]byte, error) {
 	var receipts types.Receipts
 	if bc != nil {
 		if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
@@ -72,17 +72,17 @@ func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.Chain
 		}
 	}
 	if receipts == nil {
-		return nil
+		return nil, nil
 	}
 	rlp, _ := rlp.EncodeToBytes(receipts)
-	return rlp
+	return rlp, nil
 }
 
 func TestOdrAccountsLes1(t *testing.T) { testOdr(t, 1, 1, odrAccounts) }
 
 func TestOdrAccountsLes2(t *testing.T) { testOdr(t, 2, 1, odrAccounts) }
 
-func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
+func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) ([]byte, error) {
 	dummyAddr := common.HexToAddress("1234567812345678123456781234567812345678")
 	acc := []common.Address{testBankAddress, acc1Addr, acc2Addr, dummyAddr}
 
@@ -105,7 +105,7 @@ func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainCon
 			res = append(res, rlp...)
 		}
 	}
-	return res
+	return res, nil
 }
 
 func TestOdrContractCallLes1(t *testing.T) { testOdr(t, 1, 2, odrContractCall) }
@@ -118,7 +118,7 @@ type callmsg struct {
 
 func (callmsg) CheckNonce() bool { return false }
 
-func odrContractCall(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
+func odrContractCall(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) ([]byte, error) {
 	data := common.Hex2Bytes("60CD26850000000000000000000000000000000000000000000000000000000000000000")
 
 	var res []byte
@@ -135,7 +135,10 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false)}
 
 				context := core.NewEVMContext(msg, header, bc, nil)
-				vmenv := vm.NewEVM(context, statedb, config, vm.Config{})
+				vmenv, err := vm.NewEVM(context, statedb, config, vm.Config{})
+				if err != nil {
+					return nil, err
+				}
 
 				//vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(math.MaxUint64)
@@ -148,7 +151,10 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			state.SetBalance(testBankAddress, math.MaxBig256)
 			msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, false)}
 			context := core.NewEVMContext(msg, header, lc, nil)
-			vmenv := vm.NewEVM(context, state, config, vm.Config{})
+			vmenv, err := vm.NewEVM(context, state, config, vm.Config{})
+			if err != nil {
+				return nil, err
+			}
 			gp := new(core.GasPool).AddGas(math.MaxUint64)
 			ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp)
 			if state.Error() == nil {
@@ -156,7 +162,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			}
 		}
 	}
-	return res
+	return res, nil
 }
 
 // testOdr tests odr requests whose validation guaranteed by block headers.
@@ -169,11 +175,17 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	test := func(expFail uint64) {
 		for i := uint64(0); i <= server.pm.blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := rawdb.ReadCanonicalHash(server.db, i)
-			b1 := fn(light.NoOdr, server.db, server.pm.chainConfig, server.pm.blockchain.(*core.BlockChain), nil, bhash)
+			b1, err := fn(light.NoOdr, server.db, server.pm.chainConfig, server.pm.blockchain.(*core.BlockChain), nil, bhash)
+			if err != nil {
+				t.Errorf("Error executing test function: %v", err)
+			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 			defer cancel()
-			b2 := fn(ctx, client.db, client.pm.chainConfig, nil, client.pm.blockchain.(*light.LightChain), bhash)
+			b2, err := fn(ctx, client.db, client.pm.chainConfig, nil, client.pm.blockchain.(*light.LightChain), bhash)
+			if err != nil {
+				t.Errorf("Error executing test function: %v", err)
+			}
 
 			eq := bytes.Equal(b1, b2)
 			exp := i < expFail

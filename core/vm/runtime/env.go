@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-func NewEnv(cfg *Config) *vm.EVM {
+func NewEnv(cfg *Config) (*vm.EVM, error) {
 	context := vm.Context{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,

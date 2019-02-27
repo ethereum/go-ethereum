@@ -49,8 +49,12 @@ type dummyStatedb struct {
 func (*dummyStatedb) GetRefund() uint64 { return 1337 }
 
 func TestStoreCapture(t *testing.T) {
+	env, err := NewEVM(Context{}, &dummyStatedb{}, params.TestChainConfig, Config{})
+	if err != nil {
+		t.Errorf("failed to create an EVM: %v", err)
+	}
+
 	var (
-		env      = NewEVM(Context{}, &dummyStatedb{}, params.TestChainConfig, Config{})
 		logger   = NewStructLogger(nil)
 		mem      = NewMemory()
 		stack    = newstack()

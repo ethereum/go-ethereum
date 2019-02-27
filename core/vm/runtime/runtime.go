@@ -103,9 +103,12 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	}
 	var (
 		address = common.BytesToAddress([]byte("contract"))
-		vmenv   = NewEnv(cfg)
 		sender  = vm.AccountRef(cfg.Origin)
 	)
+	vmenv, err := NewEnv(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
 	cfg.State.CreateAccount(address)
 	// set the receiver's (the executing contract) code for execution.
 	cfg.State.SetCode(address, code)
@@ -131,10 +134,13 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	if cfg.State == nil {
 		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()))
 	}
-	var (
-		vmenv  = NewEnv(cfg)
-		sender = vm.AccountRef(cfg.Origin)
-	)
+
+	sender := vm.AccountRef(cfg.Origin)
+
+	vmenv, err := NewEnv(cfg)
+	if err != nil {
+		return nil, common.Address{}, 0, err
+	}
 
 	// Call the code with the given configuration.
 	code, address, leftOverGas, err := vmenv.Create(
@@ -154,7 +160,10 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, error) {
 	setDefaults(cfg)
 
-	vmenv := NewEnv(cfg)
+	vmenv, err := NewEnv(cfg)
+	if err != nil {
+		return nil, 0, err
+	}
 
 	sender := cfg.State.GetOrNewStateObject(cfg.Origin)
 	// Call the code with the given configuration.

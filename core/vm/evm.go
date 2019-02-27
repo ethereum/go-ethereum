@@ -129,7 +129,7 @@ type EVM struct {
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
-func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmConfig Config) *EVM {
+func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmConfig Config) (*EVM, error) {
 	evm := &EVM{
 		Context:      ctx,
 		StateDB:      statedb,
@@ -160,7 +160,7 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 	evm.interpreters = append(evm.interpreters, NewEVMInterpreter(evm, vmConfig))
 	evm.interpreter = evm.interpreters[0]
 
-	return evm
+	return evm, nil
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and

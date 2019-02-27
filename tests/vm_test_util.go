@@ -115,12 +115,15 @@ func (t *VMTest) Run(vmconfig vm.Config) error {
 }
 
 func (t *VMTest) exec(statedb *state.StateDB, vmconfig vm.Config) ([]byte, uint64, error) {
-	evm := t.newEVM(statedb, vmconfig)
+	evm, err := t.newEVM(statedb, vmconfig)
+	if err != nil {
+		return nil, 0, err
+	}
 	e := t.json.Exec
 	return evm.Call(vm.AccountRef(e.Caller), e.Address, e.Data, e.GasLimit, e.Value)
 }
 
-func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) *vm.EVM {
+func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) (*vm.EVM, error) {
 	initialCall := true
 	canTransfer := func(db vm.StateDB, address common.Address, amount *big.Int) bool {
 		if initialCall {
