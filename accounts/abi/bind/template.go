@@ -452,7 +452,6 @@ const tmplSourceJava = `
 package {{.Package}};
 
 import org.ethereum.geth.*;
-import org.ethereum.geth.internal.*;
 
 {{range $contract := .Contracts}}
 	public class {{.Type}} {
@@ -461,7 +460,7 @@ import org.ethereum.geth.internal.*;
 
 		{{if .InputBin}}
 			// BYTECODE is the compiled bytecode used for deploying new contracts.
-			public final static byte[] BYTECODE = "{{.InputBin}}".getBytes();
+			public final static String BYTECODE = "{{.InputBin}}";
 
 			// deploy deploys a new Ethereum contract, binding an instance of {{.Type}} to it.
 			public static {{.Type}} deploy(TransactOpts auth, EthereumClient client{{range .Constructor.Inputs}}, {{bindtype .Type}} {{.Name}}{{end}}) throws Exception {
@@ -469,7 +468,7 @@ import org.ethereum.geth.internal.*;
 				{{range $index, $element := .Constructor.Inputs}}
 				  args.set({{$index}}, Geth.newInterface()); args.get({{$index}}).set{{namedtype (bindtype .Type) .Type}}({{.Name}});
 				{{end}}
-				return new {{.Type}}(Geth.deployContract(auth, ABI, BYTECODE, client, args));
+				return new {{.Type}}(Geth.deployContract(auth, ABI, Geth.fromHex(BYTECODE), client, args));
 			}
 
 			// Internal constructor used by contract deployment.

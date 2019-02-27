@@ -42,26 +42,26 @@ func NewInterface() *Interface {
 	return new(Interface)
 }
 
-func (i *Interface) SetBool(b bool)                { i.object = &b }
-func (i *Interface) SetBools(bs []bool)            { i.object = &bs }
-func (i *Interface) SetString(str string)          { i.object = &str }
-func (i *Interface) SetStrings(strs *Strings)      { i.object = &strs.strs }
-func (i *Interface) SetBinary(binary []byte)       { b := common.CopyBytes(binary); i.object = &b }
-func (i *Interface) SetBinaries(binaries [][]byte) { i.object = &binaries }
-func (i *Interface) SetAddress(address *Address)   { i.object = &address.address }
-func (i *Interface) SetAddresses(addrs *Addresses) { i.object = &addrs.addresses }
-func (i *Interface) SetHash(hash *Hash)            { i.object = &hash.hash }
-func (i *Interface) SetHashes(hashes *Hashes)      { i.object = &hashes.hashes }
-func (i *Interface) SetInt8(n int8)                { i.object = &n }
-func (i *Interface) SetInt16(n int16)              { i.object = &n }
-func (i *Interface) SetInt32(n int32)              { i.object = &n }
-func (i *Interface) SetInt64(n int64)              { i.object = &n }
-func (i *Interface) SetUint8(bigint *BigInt)       { n := uint8(bigint.bigint.Uint64()); i.object = &n }
-func (i *Interface) SetUint16(bigint *BigInt)      { n := uint16(bigint.bigint.Uint64()); i.object = &n }
-func (i *Interface) SetUint32(bigint *BigInt)      { n := uint32(bigint.bigint.Uint64()); i.object = &n }
-func (i *Interface) SetUint64(bigint *BigInt)      { n := bigint.bigint.Uint64(); i.object = &n }
-func (i *Interface) SetBigInt(bigint *BigInt)      { i.object = &bigint.bigint }
-func (i *Interface) SetBigInts(bigints *BigInts)   { i.object = &bigints.bigints }
+func (i *Interface) SetBool(b bool)                 { i.object = &b }
+func (i *Interface) SetBools(bs *Bools)             { i.object = &bs.bools }
+func (i *Interface) SetString(str string)           { i.object = &str }
+func (i *Interface) SetStrings(strs *Strings)       { i.object = &strs.strs }
+func (i *Interface) SetBinary(binary []byte)        { b := common.CopyBytes(binary); i.object = &b }
+func (i *Interface) SetBinaries(binaries *Binaries) { i.object = &binaries.binaries }
+func (i *Interface) SetAddress(address *Address)    { i.object = &address.address }
+func (i *Interface) SetAddresses(addrs *Addresses)  { i.object = &addrs.addresses }
+func (i *Interface) SetHash(hash *Hash)             { i.object = &hash.hash }
+func (i *Interface) SetHashes(hashes *Hashes)       { i.object = &hashes.hashes }
+func (i *Interface) SetInt8(n int8)                 { i.object = &n }
+func (i *Interface) SetInt16(n int16)               { i.object = &n }
+func (i *Interface) SetInt32(n int32)               { i.object = &n }
+func (i *Interface) SetInt64(n int64)               { i.object = &n }
+func (i *Interface) SetUint8(bigint *BigInt)        { n := uint8(bigint.bigint.Uint64()); i.object = &n }
+func (i *Interface) SetUint16(bigint *BigInt)       { n := uint16(bigint.bigint.Uint64()); i.object = &n }
+func (i *Interface) SetUint32(bigint *BigInt)       { n := uint32(bigint.bigint.Uint64()); i.object = &n }
+func (i *Interface) SetUint64(bigint *BigInt)       { n := bigint.bigint.Uint64(); i.object = &n }
+func (i *Interface) SetBigInt(bigint *BigInt)       { i.object = &bigint.bigint }
+func (i *Interface) SetBigInts(bigints *BigInts)    { i.object = &bigints.bigints }
 
 func (i *Interface) SetDefaultBool()      { i.object = new(bool) }
 func (i *Interface) SetDefaultBools()     { i.object = new([]bool) }
@@ -85,11 +85,11 @@ func (i *Interface) SetDefaultBigInt()    { i.object = new(*big.Int) }
 func (i *Interface) SetDefaultBigInts()   { i.object = new([]*big.Int) }
 
 func (i *Interface) GetBool() bool            { return *i.object.(*bool) }
-func (i *Interface) GetBools() []bool         { return *i.object.(*[]bool) }
+func (i *Interface) GetBools() *Bools         { return &Bools{*i.object.(*[]bool)} }
 func (i *Interface) GetString() string        { return *i.object.(*string) }
 func (i *Interface) GetStrings() *Strings     { return &Strings{*i.object.(*[]string)} }
 func (i *Interface) GetBinary() []byte        { return *i.object.(*[]byte) }
-func (i *Interface) GetBinaries() [][]byte    { return *i.object.(*[][]byte) }
+func (i *Interface) GetBinaries() *Binaries   { return &Binaries{*i.object.(*[][]byte)} }
 func (i *Interface) GetAddress() *Address     { return &Address{*i.object.(*common.Address)} }
 func (i *Interface) GetAddresses() *Addresses { return &Addresses{*i.object.(*[]common.Address)} }
 func (i *Interface) GetHash() *Hash           { return &Hash{*i.object.(*common.Hash)} }
@@ -115,14 +115,16 @@ func (i *Interface) GetBigInts() *BigInts { return &BigInts{*i.object.(*[]*big.I
 
 // Interfaces is a slices of wrapped generic objects.
 type Interfaces struct {
-	objects []interface{}
+	objects []*Interface // Notably, each element in the objects is not nil
 }
 
 // NewInterfaces creates a slice of uninitialized interfaces.
 func NewInterfaces(size int) *Interfaces {
-	return &Interfaces{
-		objects: make([]interface{}, size),
+	ifaces := &Interfaces{objects: make([]*Interface, size)}
+	for i := 0; i < ifaces.Size(); i++ {
+		ifaces.objects[i] = NewInterface()
 	}
+	return ifaces
 }
 
 // Size returns the number of interfaces in the slice.
@@ -135,7 +137,7 @@ func (i *Interfaces) Get(index int) (iface *Interface, _ error) {
 	if index < 0 || index >= len(i.objects) {
 		return nil, errors.New("index out of bounds")
 	}
-	return &Interface{i.objects[index]}, nil
+	return i.objects[index], nil
 }
 
 // Set sets the big int at the given index in the slice.
@@ -143,6 +145,17 @@ func (i *Interfaces) Set(index int, object *Interface) error {
 	if index < 0 || index >= len(i.objects) {
 		return errors.New("index out of bounds")
 	}
-	i.objects[index] = object.object
+	i.objects[index].object = object.object
 	return nil
+}
+
+// value returns a batch of embedded values.
+//
+// Notably, this function won't be exposed.
+func (i *Interfaces) value() []interface{} {
+	values := make([]interface{}, 0, i.Size())
+	for index := 0; index < i.Size(); index += 1 {
+		values = append(values, i.objects[index].object)
+	}
+	return values
 }
