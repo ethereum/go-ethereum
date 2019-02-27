@@ -468,7 +468,7 @@ func recoverTable(s *session, o *opt.Options) error {
 	}
 
 	// Commit.
-	return s.commit(rec)
+	return s.commit(rec, false)
 }
 
 func (db *DB) recoverJournal() error {
@@ -538,7 +538,7 @@ func (db *DB) recoverJournal() error {
 
 				rec.setJournalNum(fd.Num)
 				rec.setSeqNum(db.seq)
-				if err := db.s.commit(rec); err != nil {
+				if err := db.s.commit(rec, false); err != nil {
 					fr.Close()
 					return err
 				}
@@ -617,7 +617,7 @@ func (db *DB) recoverJournal() error {
 	// Commit.
 	rec.setJournalNum(db.journalFd.Num)
 	rec.setSeqNum(db.seq)
-	if err := db.s.commit(rec); err != nil {
+	if err := db.s.commit(rec, false); err != nil {
 		// Close journal on error.
 		if db.journal != nil {
 			db.journal.Close()
@@ -872,6 +872,10 @@ func (db *DB) Has(key []byte, ro *opt.ReadOptions) (ret bool, err error) {
 // DB. And a nil Range.Limit is treated as a key after all keys in
 // the DB.
 //
+// WARNING: Any slice returned by interator (e.g. slice returned by calling
+// Iterator.Key() or Iterator.Key() methods), its content should not be modified
+// unless noted otherwise.
+//
 // The iterator must be released after use, by calling Release method.
 //
 // Also read Iterator documentation of the leveldb/iterator package.
@@ -953,15 +957,27 @@ func (db *DB) GetProperty(name string) (value string, err error) {
 		value = "Compactions\n" +
 			" Level |   Tables   |    Size(MB)   |    Time(sec)  |    Read(MB)   |   Write(MB)\n" +
 			"-------+------------+---------------+---------------+---------------+---------------\n"
+		var totalTables int
+		var totalSize, totalRead, totalWrite int64
+		var totalDuration time.Duration
 		for level, tables := range v.levels {
 			duration, read, write := db.compStats.getStat(level)
 			if len(tables) == 0 && duration == 0 {
 				continue
 			}
+			totalTables += len(tables)
+			totalSize += tables.size()
+			totalRead += read
+			totalWrite += write
+			totalDuration += duration
 			value += fmt.Sprintf(" %3d   | %10d | %13.5f | %13.5f | %13.5f | %13.5f\n",
 				level, len(tables), float64(tables.size())/1048576.0, duration.Seconds(),
 				float64(read)/1048576.0, float64(write)/1048576.0)
 		}
+		value += "-------+------------+---------------+---------------+---------------+---------------\n"
+		value += fmt.Sprintf(" Total | %10d | %13.5f | %13.5f | %13.5f | %13.5f\n",
+			totalTables, float64(totalSize)/1048576.0, totalDuration.Seconds(),
+			float64(totalRead)/1048576.0, float64(totalWrite)/1048576.0)
 	case p == "iostats":
 		value = fmt.Sprintf("Read(MB):%.5f Write(MB):%.5f",
 			float64(db.s.stor.reads())/1048576.0,
@@ -1013,10 +1029,10 @@ type DBStats struct {
 	BlockCacheSize    int
 	OpenedTablesCount int
 
-	LevelSizes        []int64
+	LevelSizes        Sizes
 	LevelTablesCounts []int
-	LevelRead         []int64
-	LevelWrite        []int64
+	LevelRead         Sizes
+	LevelWrite        Sizes
 	LevelDurations    []time.Duration
 }
 
