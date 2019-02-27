@@ -123,6 +123,17 @@ func (db *DB) Get(key []byte) (value []byte, err error) {
 	return value, nil
 }
 
+// Has wraps LevelDB Has method to increment metrics counter.
+func (db *DB) Has(key []byte) (yes bool, err error) {
+	yes, err = db.ldb.Has(key, nil)
+	if err != nil {
+		metrics.GetOrRegisterCounter("DB.hasFail", nil).Inc(1)
+		return false, err
+	}
+	metrics.GetOrRegisterCounter("DB.has", nil).Inc(1)
+	return yes, nil
+}
+
 // Delete wraps LevelDB Delete method to increment metrics counter.
 func (db *DB) Delete(key []byte) (err error) {
 	err = db.ldb.Delete(key, nil)
