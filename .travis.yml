@@ -52,6 +52,24 @@ matrix:
       script:
         - go run build/ci.go lint
 
+    # This builder runs the ewasm test suite
+    - os: linux
+      dist: trusty
+      go: 1.11.x
+      sudo: required
+      git:
+        submodules: false # avoid cloning ethereum/tests, we need a different version
+      script:
+        - sudo modprobe fuse
+        - sudo chmod 666 /dev/fuse
+        - sudo chown root:$USER /etc/fuse.conf
+        - git clone http://github.com/ewasm/tests.git tests/testdata
+        - wget https://github.com/ewasm/hera/releases/download/v0.2.3-alpha.0/hera-0.2.3-alpha.0-linux-x86_64.tar.gz
+        - mkdir hera
+        - tar xfz hera-0.2.3-alpha.0-linux-x86_64.tar.gz -C hera
+        - go run build/ci.go install
+        - go run build/ci.go test -coverage $TEST_PACKAGES -- --ewasm.vm="$PWD/hera/libhera.so"
+
     # This builder does the Ubuntu PPA upload
     - if: type = push
       os: linux
