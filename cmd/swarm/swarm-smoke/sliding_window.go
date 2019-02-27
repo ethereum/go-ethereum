@@ -86,35 +86,47 @@ outer:
 		hashes = append(hashes, uploadResult{hash: hash, digest: fhash})
 		time.Sleep(time.Duration(syncDelay) * time.Second)
 		uploadedBytes += filesize * 1000
-
+		c := make(chan struct{}, 1)
+		d := make(chan struct{})
+		defer close(c)
+		defer close(d)
 		for i, v := range hashes {
 			timeout := time.After(time.Duration(timeout) * time.Second)
 			errored = false
 
-		inner:
+		task:
 			for {
 				select {
+				case c <- struct{}{}:
+					go func() {
+					inner:
+						for {
+							log.Info("trying to retrieve hash", "hash", v.hash)
+							idx := 1 + rand.Intn(len(hosts)-1)
+							ruid := uuid.New()[:8]
+							// fetch hangs when swarm dies out, so we have to jump through a bit more hoops to actually
+							// catch the timeout, but also allow this retry logic
+							err := fetch(v.hash, httpEndpoint(hosts[idx]), v.digest, ruid, "")
+							if err != nil {
+								continue inner
+							}
+							break inner
+						}
+						metrics.GetOrRegisterResettingTimer("sliding-window.single.fetch-time", nil).UpdateSince(start)
+						d <- struct{}{}
+					}()
+				case <-d:
+					<-c
+					break task
 				case <-timeout:
 					errored = true
 					log.Error("error retrieving hash. timeout", "hash idx", i, "err", err)
 					metrics.GetOrRegisterCounter("sliding-window.single.error", nil).Inc(1)
-					break inner
+					break task
 				default:
-					idx := 1 + rand.Intn(len(hosts)-1)
-					ruid := uuid.New()[:8]
-					start := time.Now()
-					err := fetch(v.hash, httpEndpoint(hosts[idx]), v.digest, ruid, "")
-					if err != nil {
-						continue inner
-					}
-					metrics.GetOrRegisterResettingTimer("sliding-window.single.fetch-time", nil).UpdateSince(start)
-					break inner
 				}
 			}
 
-			if errored {
-				break outer
-			}
 			networkDepth = i
 			metrics.GetOrRegisterGauge("sliding-window.network-depth", nil).Update(int64(networkDepth))
 			log.Info("sliding window test successfully fetched file", "currentDepth", networkDepth)
