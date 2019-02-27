@@ -519,24 +519,14 @@ func testInsertNonceError(t *testing.T, full bool) {
 			failRes int
 			failNum uint64
 		)
-		if full {
-			blocks := makeBlockChain(blockchain.CurrentBlock(), i, ethash.NewFaker(), db, 0)
+		headers := makeHeaderChain(blockchain.CurrentHeader(), i, ethash.NewFaker(), db, 0)
 
-			failAt = rand.Int() % len(blocks)
-			failNum = blocks[failAt].NumberU64()
+		failAt = rand.Int() % len(headers)
+		failNum = headers[failAt].Number.Uint64()
 
-			blockchain.engine = ethash.NewFakeFailer(failNum)
-			failRes, err = blockchain.InsertChain(blocks)
-		} else {
-			headers := makeHeaderChain(blockchain.CurrentHeader(), i, ethash.NewFaker(), db, 0)
-
-			failAt = rand.Int() % len(headers)
-			failNum = headers[failAt].Number.Uint64()
-
-			blockchain.engine = ethash.NewFakeFailer(failNum)
-			blockchain.hc.engine = blockchain.engine
-			failRes, err = blockchain.InsertHeaderChain(headers, 1)
-		}
+		blockchain.engine = ethash.NewFakeFailer(failNum)
+		blockchain.hc.engine = blockchain.engine
+		failRes, err = blockchain.InsertHeaderChain(headers, 1)
 		// Check that the returned error indicates the failure.
 		if failRes != failAt {
 			t.Errorf("test %d: failure index mismatch: have %d, want %d", i, failRes, failAt)
