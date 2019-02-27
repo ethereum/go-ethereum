@@ -96,7 +96,7 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 
 	noOfActiveMounts := len(swarmfs.activeMounts)
 	log.Debug("swarmfs mount", "# active mounts", noOfActiveMounts)
-	if noOfActiveMounts >= maxFuseMounts {
+	if noOfActiveMounts >= maxFUSEMounts {
 		return nil, errMaxMountCount
 	}
 

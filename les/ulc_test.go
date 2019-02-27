@@ -11,6 +11,7 @@ import (
 	"crypto/ecdsa"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -217,7 +218,7 @@ func newFullPeerPair(t *testing.T, index int, numberOfblocks int, chainGen func(
 // newLightPeer creates node with light sync mode
 func newLightPeer(t *testing.T, ulcConfig *eth.ULCConfig) pairPeer {
 	peers := newPeerSet()
-	dist := newRequestDistributor(peers, make(chan struct{}))
+	dist := newRequestDistributor(peers, make(chan struct{}), &mclock.System{})
 	rm := newRetrieveManager(peers, dist, nil)
 	ldb := ethdb.NewMemDatabase()
 

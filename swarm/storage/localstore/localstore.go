@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/shed"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
 
@@ -107,6 +107,12 @@ type DB struct {
 	// this channel is closed when close function is called
 	// to terminate other goroutines
 	close chan struct{}
+
+	// protect Close method from exiting before
+	// garbage collection and gc size write workers
+	// are done
+	collectGarbageWorkerDone chan struct{}
+	writeGCSizeWorkerDone    chan struct{}
 }
 
 // Options struct holds optional parameters for configuring DB.
@@ -138,9 +144,11 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		// need to be buffered with the size of 1
 		// to signal another event if it
 		// is triggered during already running function
-		collectGarbageTrigger: make(chan struct{}, 1),
-		writeGCSizeTrigger:    make(chan struct{}, 1),
-		close:                 make(chan struct{}),
+		collectGarbageTrigger:    make(chan struct{}, 1),
+		writeGCSizeTrigger:       make(chan struct{}, 1),
+		close:                    make(chan struct{}),
+		collectGarbageWorkerDone: make(chan struct{}),
+		writeGCSizeWorkerDone:    make(chan struct{}),
 	}
 	if db.capacity <= 0 {
 		db.capacity = defaultCapacity
@@ -361,6 +369,21 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 func (db *DB) Close() (err error) {
 	close(db.close)
 	db.updateGCWG.Wait()
+
+	// wait for gc worker and gc size write workers to
+	// return before closing the shed
+	timeout := time.After(5 * time.Second)
+	select {
+	case <-db.collectGarbageWorkerDone:
+	case <-timeout:
+		log.Error("localstore: collect garbage worker did not return after db close")
+	}
+	select {
+	case <-db.writeGCSizeWorkerDone:
+	case <-timeout:
+		log.Error("localstore: write gc size worker did not return after db close")
+	}
+
 	if err := db.writeGCSize(db.getGCSize()); err != nil {
 		log.Error("localstore: write gc size", "err", err)
 	}
@@ -369,8 +392,8 @@ func (db *DB) Close() (err error) {
 
 // po computes the proximity order between the address
 // and database base key.
-func (db *DB) po(addr storage.Address) (bin uint8) {
-	return uint8(storage.Proximity(db.baseKey, addr))
+func (db *DB) po(addr chunk.Address) (bin uint8) {
+	return uint8(chunk.Proximity(db.baseKey, addr))
 }
 
 var (
@@ -386,7 +409,7 @@ var (
 // If the address is locked this function will check it
 // in a for loop for addressLockTimeout time, after which
 // it will return ErrAddressLockTimeout error.
-func (db *DB) lockAddr(addr storage.Address) (unlock func(), err error) {
+func (db *DB) lockAddr(addr chunk.Address) (unlock func(), err error) {
 	start := time.Now()
 	lockKey := hex.EncodeToString(addr)
 	for {
@@ -403,7 +426,7 @@ func (db *DB) lockAddr(addr storage.Address) (unlock func(), err error) {
 }
 
 // chunkToItem creates new Item with data provided by the Chunk.
-func chunkToItem(ch storage.Chunk) shed.Item {
+func chunkToItem(ch chunk.Chunk) shed.Item {
 	return shed.Item{
 		Address: ch.Address(),
 		Data:    ch.Data(),
@@ -411,7 +434,7 @@ func chunkToItem(ch storage.Chunk) shed.Item {
 }
 
 // addressToItem creates new Item with a provided address.
-func addressToItem(addr storage.Address) shed.Item {
+func addressToItem(addr chunk.Address) shed.Item {
 	return shed.Item{
 		Address: addr,
 	}

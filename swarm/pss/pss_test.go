@@ -38,8 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -1369,8 +1367,6 @@ func TestNetwork(t *testing.T) {
 // nodes/msgs/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
 func TestNetwork2000(t *testing.T) {
-	//enableMetrics()
-
 	if !*longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
@@ -1381,8 +1377,6 @@ func TestNetwork2000(t *testing.T) {
 }
 
 func TestNetwork5000(t *testing.T) {
-	//enableMetrics()
-
 	if !*longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
@@ -1393,8 +1387,6 @@ func TestNetwork5000(t *testing.T) {
 }
 
 func TestNetwork10000(t *testing.T) {
-	//enableMetrics()
-
 	if !*longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
@@ -2097,12 +2089,4 @@ func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymke
 
 func (apitest *APITest) Clean() (int, error) {
 	return apitest.Pss.cleanKeys(), nil
-}
-
-// enableMetrics is starting InfluxDB reporter so that we collect stats when running tests locally
-func enableMetrics() {
-	metrics.Enabled = true
-	go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 1*time.Second, "http://localhost:8086", "metrics", "admin", "admin", "swarm.", map[string]string{
-		"host": "test",
-	})
 }

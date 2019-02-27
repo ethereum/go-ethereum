@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 // TestModePutRequest validates ModePutRequest index values on the provided DB.
@@ -33,7 +33,7 @@ func TestModePutRequest(t *testing.T) {
 
 	putter := db.NewPutter(ModePutRequest)
 
-	chunk := generateRandomChunk()
+	chunk := generateTestRandomChunk()
 
 	// keep the record when the chunk is stored
 	var storeTimestamp int64
@@ -87,7 +87,7 @@ func TestModePutSync(t *testing.T) {
 		return wantTimestamp
 	})()
 
-	chunk := generateRandomChunk()
+	chunk := generateTestRandomChunk()
 
 	err := db.NewPutter(ModePutSync).Put(chunk)
 	if err != nil {
@@ -109,7 +109,7 @@ func TestModePutUpload(t *testing.T) {
 		return wantTimestamp
 	})()
 
-	chunk := generateRandomChunk()
+	chunk := generateTestRandomChunk()
 
 	err := db.NewPutter(ModePutUpload).Put(chunk)
 	if err != nil {
@@ -132,7 +132,7 @@ func TestModePutUpload_parallel(t *testing.T) {
 	chunkCount := 1000
 	workerCount := 100
 
-	chunkChan := make(chan storage.Chunk)
+	chunkChan := make(chan chunk.Chunk)
 	errChan := make(chan error)
 	doneChan := make(chan struct{})
 	defer close(doneChan)
@@ -159,13 +159,13 @@ func TestModePutUpload_parallel(t *testing.T) {
 		}(i)
 	}
 
-	chunks := make([]storage.Chunk, 0)
+	chunks := make([]chunk.Chunk, 0)
 	var chunksMu sync.Mutex
 
 	// send chunks to workers
 	go func() {
 		for i := 0; i < chunkCount; i++ {
-			chunk := generateRandomChunk()
+			chunk := generateTestRandomChunk()
 			select {
 			case chunkChan <- chunk:
 			case <-doneChan:
@@ -271,9 +271,9 @@ func benchmarkPutUpload(b *testing.B, o *Options, count, maxParallelUploads int)
 	defer cleanupFunc()
 
 	uploader := db.NewPutter(ModePutUpload)
-	chunks := make([]storage.Chunk, count)
+	chunks := make([]chunk.Chunk, count)
 	for i := 0; i < count; i++ {
-		chunks[i] = generateFakeRandomChunk()
+		chunks[i] = generateTestRandomChunk()
 	}
 	errs := make(chan error)
 	b.StartTimer()

@@ -32,7 +32,7 @@ func TestModeGetRequest(t *testing.T) {
 		return uploadTimestamp
 	})()
 
-	chunk := generateRandomChunk()
+	chunk := generateTestRandomChunk()
 
 	err := db.NewPutter(ModePutUpload).Put(chunk)
 	if err != nil {
@@ -146,7 +146,7 @@ func TestModeGetSync(t *testing.T) {
 		return uploadTimestamp
 	})()
 
-	chunk := generateRandomChunk()
+	chunk := generateTestRandomChunk()
 
 	err := db.NewPutter(ModePutUpload).Put(chunk)
 	if err != nil {

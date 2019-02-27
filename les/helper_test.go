@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -133,16 +134,6 @@ func testIndexers(db ethdb.Database, odr light.OdrBackend, iConfig *light.Indexe
 	return chtIndexer, bloomIndexer, bloomTrieIndexer
 }
 
-func testRCL() RequestCostList {
-	cl := make(RequestCostList, len(reqList))
-	for i, code := range reqList {
-		cl[i].MsgCode = code
-		cl[i].BaseCost = 0
-		cl[i].ReqCost = 0
-	}
-	return cl
-}
-
 // newTestProtocolManager creates a new protocol manager for testing purposes,
 // with the given number of blocks already known, potential notification
 // channels for different events and relative chain indexers array.
@@ -183,14 +174,14 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 	if !lightSync {
 		srv := &LesServer{lesCommons: lesCommons{protocolManager: pm}}
 		pm.server = srv
+		pm.servingQueue.setThreads(4)
 
-		srv.defParams = &flowcontrol.ServerParams{
+		srv.defParams = flowcontrol.ServerParams{
 			BufLimit:    testBufLimit,
 			MinRecharge: 1,
 		}
 
-		srv.fcManager = flowcontrol.NewClientManager(50, 10, 1000000000)
-		srv.fcCostStats = newCostStats(nil)
+		srv.fcManager = flowcontrol.NewClientManager(nil, &mclock.System{})
 	}
 	pm.Start(1000)
 	return pm, nil
@@ -304,7 +295,7 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 	expList = expList.add("txRelay", nil)
 	expList = expList.add("flowControl/BL", testBufLimit)
 	expList = expList.add("flowControl/MRR", uint64(1))
-	expList = expList.add("flowControl/MRC", testRCL())
+	expList = expList.add("flowControl/MRC", testCostList())
 
 	if err := p2p.ExpectMsg(p.app, StatusMsg, expList); err != nil {
 		t.Fatalf("status recv: %v", err)
@@ -313,7 +304,7 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 		t.Fatalf("status send: %v", err)
 	}
 
-	p.fcServerParams = &flowcontrol.ServerParams{
+	p.fcParams = flowcontrol.ServerParams{
 		BufLimit:    testBufLimit,
 		MinRecharge: 1,
 	}
@@ -375,7 +366,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, waitIndexers fun
 	db, ldb := ethdb.NewMemDatabase(), ethdb.NewMemDatabase()
 	peers, lPeers := newPeerSet(), newPeerSet()
 
-	dist := newRequestDistributor(lPeers, make(chan struct{}))
+	dist := newRequestDistributor(lPeers, make(chan struct{}), &mclock.System{})
 	rm := newRetrieveManager(lPeers, dist, nil)
 	odr := NewLesOdr(ldb, light.TestClientIndexerConfig, rm)
 

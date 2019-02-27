@@ -101,20 +101,20 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 		for {
 			select {
 			case <-ticker.C:
-				var len_maxi int
-				var cap_maxi int
+				var lenMaxi int
+				var capMaxi int
 				for k := range pq.Queues {
-					if len_maxi < len(pq.Queues[k]) {
-						len_maxi = len(pq.Queues[k])
+					if lenMaxi < len(pq.Queues[k]) {
+						lenMaxi = len(pq.Queues[k])
 					}
 
-					if cap_maxi < cap(pq.Queues[k]) {
-						cap_maxi = cap(pq.Queues[k])
+					if capMaxi < cap(pq.Queues[k]) {
+						capMaxi = cap(pq.Queues[k])
 					}
 				}
 
-				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_len_%s", p.ID().TerminalString()), nil).Update(int64(len_maxi))
-				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_cap_%s", p.ID().TerminalString()), nil).Update(int64(cap_maxi))
+				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_len_%s", p.ID().TerminalString()), nil).Update(int64(lenMaxi))
+				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_cap_%s", p.ID().TerminalString()), nil).Update(int64(capMaxi))
 			case <-p.quit:
 				return
 			}

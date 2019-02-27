@@ -97,7 +97,11 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 		Stack: node.DefaultConfig,
 		Node:  config,
 	}
-	conf.Stack.DataDir = filepath.Join(dir, "data")
+	if config.DataDir != "" {
+		conf.Stack.DataDir = config.DataDir
+	} else {
+		conf.Stack.DataDir = filepath.Join(dir, "data")
+	}
 	conf.Stack.WSHost = "127.0.0.1"
 	conf.Stack.WSPort = 0
 	conf.Stack.WSOrigins = []string{"*"}

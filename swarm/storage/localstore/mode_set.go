@@ -17,7 +17,7 @@
 package localstore
 
 import (
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -53,7 +53,7 @@ func (db *DB) NewSetter(mode ModeSet) *Setter {
 
 // Set updates database indexes for a specific
 // chunk represented by the address.
-func (s *Setter) Set(addr storage.Address) (err error) {
+func (s *Setter) Set(addr chunk.Address) (err error) {
 	return s.db.set(s.mode, addr)
 }
 
@@ -61,7 +61,7 @@ func (s *Setter) Set(addr storage.Address) (err error) {
 // chunk represented by the address.
 // It acquires lockAddr to protect two calls
 // of this function for the same address in parallel.
-func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
+func (db *DB) set(mode ModeSet, addr chunk.Address) (err error) {
 	// protect parallel updates
 	unlock, err := db.lockAddr(addr)
 	if err != nil {

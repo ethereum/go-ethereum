@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -25,8 +25,7 @@ var (
 
 //ulc connects to trusted peer and send announceType=announceTypeSigned
 func TestPeerHandshakeSetAnnounceTypeToAnnounceTypeSignedForTrustedPeer(t *testing.T) {
-
-	var id enode.ID = newNodeID(t).ID()
+	id := newNodeID(t).ID()
 
 	//peer to connect(on ulc side)
 	p := peer{
@@ -36,7 +35,7 @@ func TestPeerHandshakeSetAnnounceTypeToAnnounceTypeSignedForTrustedPeer(t *testi
 		rw: &rwStub{
 			WriteHook: func(recvList keyValueList) {
 				//checking that ulc sends to peer allowedRequests=onlyAnnounceRequests and announceType = announceTypeSigned
-				recv := recvList.decode()
+				recv, _ := recvList.decode()
 				var reqType uint64
 
 				err := recv.get("announceType", &reqType)
@@ -74,14 +73,14 @@ func TestPeerHandshakeSetAnnounceTypeToAnnounceTypeSignedForTrustedPeer(t *testi
 }
 
 func TestPeerHandshakeAnnounceTypeSignedForTrustedPeersPeerNotInTrusted(t *testing.T) {
-	var id enode.ID = newNodeID(t).ID()
+	id := newNodeID(t).ID()
 	p := peer{
 		Peer:    p2p.NewPeer(id, "test peer", []p2p.Cap{}),
 		version: protocol_version,
 		rw: &rwStub{
 			WriteHook: func(recvList keyValueList) {
 				//checking that ulc sends to peer allowedRequests=noRequests and announceType != announceTypeSigned
-				recv := recvList.decode()
+				recv, _ := recvList.decode()
 				var reqType uint64
 
 				err := recv.get("announceType", &reqType)
@@ -118,7 +117,7 @@ func TestPeerHandshakeAnnounceTypeSignedForTrustedPeersPeerNotInTrusted(t *testi
 }
 
 func TestPeerHandshakeDefaultAllRequests(t *testing.T) {
-	var id enode.ID = newNodeID(t).ID()
+	id := newNodeID(t).ID()
 
 	s := generateLesServer()
 
@@ -147,7 +146,7 @@ func TestPeerHandshakeDefaultAllRequests(t *testing.T) {
 }
 
 func TestPeerHandshakeServerSendOnlyAnnounceRequestsHeaders(t *testing.T) {
-	var id enode.ID = newNodeID(t).ID()
+	id := newNodeID(t).ID()
 
 	s := generateLesServer()
 	s.onlyAnnounce = true
@@ -181,7 +180,7 @@ func TestPeerHandshakeServerSendOnlyAnnounceRequestsHeaders(t *testing.T) {
 	}
 }
 func TestPeerHandshakeClientReceiveOnlyAnnounceRequestsHeaders(t *testing.T) {
-	var id enode.ID = newNodeID(t).ID()
+	id := newNodeID(t).ID()
 
 	p := peer{
 		Peer:    p2p.NewPeer(id, "test peer", []p2p.Cap{}),
@@ -212,7 +211,7 @@ func TestPeerHandshakeClientReceiveOnlyAnnounceRequestsHeaders(t *testing.T) {
 }
 
 func TestPeerHandshakeClientReturnErrorOnUselessPeer(t *testing.T) {
-	var id enode.ID = newNodeID(t).ID()
+	id := newNodeID(t).ID()
 
 	p := peer{
 		Peer:    p2p.NewPeer(id, "test peer", []p2p.Cap{}),
@@ -239,17 +238,11 @@ func TestPeerHandshakeClientReturnErrorOnUselessPeer(t *testing.T) {
 
 func generateLesServer() *LesServer {
 	s := &LesServer{
-		defParams: &flowcontrol.ServerParams{
+		defParams: flowcontrol.ServerParams{
 			BufLimit:    uint64(300000000),
 			MinRecharge: uint64(50000),
 		},
-		fcManager: flowcontrol.NewClientManager(1, 2, 3),
-		fcCostStats: &requestCostStats{
-			stats: make(map[uint64]*linReg, len(reqList)),
-		},
-	}
-	for _, code := range reqList {
-		s.fcCostStats.stats[code] = &linReg{cnt: 100}
+		fcManager: flowcontrol.NewClientManager(nil, &mclock.System{}),
 	}
 	return s
 }
