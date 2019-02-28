@@ -115,8 +115,12 @@ func (l *LogForStorage) EncodeRLP(w io.Writer) error {
 //
 // Note some redundant fields(e.g. block number, tx hash etc) will be assembled later.
 func (l *LogForStorage) DecodeRLP(s *rlp.Stream) error {
+	blob, err := s.Raw()
+	if err != nil {
+		return err
+	}
 	var dec rlpStorageLog
-	err := s.Decode(&dec)
+	err = rlp.DecodeBytes(blob, &dec)
 	if err == nil {
 		*l = LogForStorage{
 			Address: dec.Address,
@@ -126,7 +130,7 @@ func (l *LogForStorage) DecodeRLP(s *rlp.Stream) error {
 	} else {
 		// Try to decode log with previous definition.
 		var dec LegacyRlpStorageLog
-		err = s.Decode(&dec)
+		err = rlp.DecodeBytes(blob, &dec)
 		if err == nil {
 			*l = LogForStorage{
 				Address: dec.Address,
