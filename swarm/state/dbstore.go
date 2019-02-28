@@ -28,9 +28,6 @@ import (
 // ErrNotFound is returned when no results are returned from the database
 var ErrNotFound = errors.New("ErrorNotFound")
 
-// ErrInvalidArgument is returned when the argument type does not match the expected type
-var ErrInvalidArgument = errors.New("ErrorInvalidArgument")
-
 // Store defines methods required to get, set, delete values for different keys
 // and close the underlying resources.
 type Store interface {
@@ -91,18 +88,15 @@ func (s *DBStore) Get(key string, i interface{}) (err error) {
 // Put stores an object that implements Binary for a specific key.
 func (s *DBStore) Put(key string, i interface{}) (err error) {
 	var bytes []byte
-
-	marshaler, ok := i.(encoding.BinaryMarshaler)
-	if !ok {
-		if bytes, err = json.Marshal(i); err != nil {
-			return err
-		}
-	} else {
+	if marshaler, ok := i.(encoding.BinaryMarshaler); ok {
 		if bytes, err = marshaler.MarshalBinary(); err != nil {
 			return err
 		}
+	} else {
+		if bytes, err = json.Marshal(i); err != nil {
+			return err
+		}
 	}
-
 	return s.db.Put([]byte(key), bytes, nil)
 }
 

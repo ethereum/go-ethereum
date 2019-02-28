@@ -149,8 +149,8 @@ func (env *tester) Close(t *testing.T) {
 	if err := env.console.Stop(false); err != nil {
 		t.Errorf("failed to stop embedded console: %v", err)
 	}
-	if err := env.stack.Stop(); err != nil {
-		t.Errorf("failed to stop embedded node: %v", err)
+	if err := env.stack.Close(); err != nil {
+		t.Errorf("failed to tear down embedded node: %v", err)
 	}
 	os.RemoveAll(env.workspace)
 }

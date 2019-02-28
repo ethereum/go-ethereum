@@ -17,22 +17,24 @@
 package shed
 
 import (
+	"bytes"
+
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// IndexItem holds fields relevant to Swarm Chunk data and metadata.
+// Item holds fields relevant to Swarm Chunk data and metadata.
 // All information required for swarm storage and operations
 // on that storage must be defined here.
 // This structure is logically connected to swarm storage,
 // the only part of this package that is not generalized,
 // mostly for performance reasons.
 //
-// IndexItem is a type that is used for retrieving, storing and encoding
+// Item is a type that is used for retrieving, storing and encoding
 // chunk data and metadata. It is passed as an argument to Index encoding
 // functions, get function and put function.
 // But it is also returned with additional data from get function call
 // and as the argument in iterator function definition.
-type IndexItem struct {
+type Item struct {
 	Address         []byte
 	Data            []byte
 	AccessTimestamp int64
@@ -43,9 +45,9 @@ type IndexItem struct {
 }
 
 // Merge is a helper method to construct a new
-// IndexItem by filling up fields with default values
-// of a particular IndexItem with values from another one.
-func (i IndexItem) Merge(i2 IndexItem) (new IndexItem) {
+// Item by filling up fields with default values
+// of a particular Item with values from another one.
+func (i Item) Merge(i2 Item) (new Item) {
 	if i.Address == nil {
 		i.Address = i2.Address
 	}
@@ -67,26 +69,26 @@ func (i IndexItem) Merge(i2 IndexItem) (new IndexItem) {
 // Index represents a set of LevelDB key value pairs that have common
 // prefix. It holds functions for encoding and decoding keys and values
 // to provide transparent actions on saved data which inclide:
-// - getting a particular IndexItem
-// - saving a particular IndexItem
+// - getting a particular Item
+// - saving a particular Item
 // - iterating over a sorted LevelDB keys
 // It implements IndexIteratorInterface interface.
 type Index struct {
 	db              *DB
 	prefix          []byte
-	encodeKeyFunc   func(fields IndexItem) (key []byte, err error)
-	decodeKeyFunc   func(key []byte) (e IndexItem, err error)
-	encodeValueFunc func(fields IndexItem) (value []byte, err error)
-	decodeValueFunc func(value []byte) (e IndexItem, err error)
+	encodeKeyFunc   func(fields Item) (key []byte, err error)
+	decodeKeyFunc   func(key []byte) (e Item, err error)
+	encodeValueFunc func(fields Item) (value []byte, err error)
+	decodeValueFunc func(keyFields Item, value []byte) (e Item, err error)
 }
 
 // IndexFuncs structure defines functions for encoding and decoding
 // LevelDB keys and values for a specific index.
 type IndexFuncs struct {
-	EncodeKey   func(fields IndexItem) (key []byte, err error)
-	DecodeKey   func(key []byte) (e IndexItem, err error)
-	EncodeValue func(fields IndexItem) (value []byte, err error)
-	DecodeValue func(value []byte) (e IndexItem, err error)
+	EncodeKey   func(fields Item) (key []byte, err error)
+	DecodeKey   func(key []byte) (e Item, err error)
+	EncodeValue func(fields Item) (value []byte, err error)
+	DecodeValue func(keyFields Item, value []byte) (e Item, err error)
 }
 
 // NewIndex returns a new Index instance with defined name and
@@ -105,7 +107,7 @@ func (db *DB) NewIndex(name string, funcs IndexFuncs) (f Index, err error) {
 		// by appending the provided index id byte.
 		// This is needed to avoid collisions between keys of different
 		// indexes as all index ids are unique.
-		encodeKeyFunc: func(e IndexItem) (key []byte, err error) {
+		encodeKeyFunc: func(e Item) (key []byte, err error) {
 			key, err = funcs.EncodeKey(e)
 			if err != nil {
 				return nil, err
@@ -115,7 +117,7 @@ func (db *DB) NewIndex(name string, funcs IndexFuncs) (f Index, err error) {
 		// This function reverses the encodeKeyFunc constructed key
 		// to transparently work with index keys without their index ids.
 		// It assumes that index keys are prefixed with only one byte.
-		decodeKeyFunc: func(key []byte) (e IndexItem, err error) {
+		decodeKeyFunc: func(key []byte) (e Item, err error) {
 			return funcs.DecodeKey(key[1:])
 		},
 		encodeValueFunc: funcs.EncodeValue,
@@ -123,10 +125,10 @@ func (db *DB) NewIndex(name string, funcs IndexFuncs) (f Index, err error) {
 	}, nil
 }
 
-// Get accepts key fields represented as IndexItem to retrieve a
+// Get accepts key fields represented as Item to retrieve a
 // value from the index and return maximum available information
-// from the index represented as another IndexItem.
-func (f Index) Get(keyFields IndexItem) (out IndexItem, err error) {
+// from the index represented as another Item.
+func (f Index) Get(keyFields Item) (out Item, err error) {
 	key, err := f.encodeKeyFunc(keyFields)
 	if err != nil {
 		return out, err
@@ -135,16 +137,16 @@ func (f Index) Get(keyFields IndexItem) (out IndexItem, err error) {
 	if err != nil {
 		return out, err
 	}
-	out, err = f.decodeValueFunc(value)
+	out, err = f.decodeValueFunc(keyFields, value)
 	if err != nil {
 		return out, err
 	}
 	return out.Merge(keyFields), nil
 }
 
-// Put accepts IndexItem to encode information from it
+// Put accepts Item to encode information from it
 // and save it to the database.
-func (f Index) Put(i IndexItem) (err error) {
+func (f Index) Put(i Item) (err error) {
 	key, err := f.encodeKeyFunc(i)
 	if err != nil {
 		return err
@@ -159,7 +161,7 @@ func (f Index) Put(i IndexItem) (err error) {
 // PutInBatch is the same as Put method, but it just
 // saves the key/value pair to the batch instead
 // directly to the database.
-func (f Index) PutInBatch(batch *leveldb.Batch, i IndexItem) (err error) {
+func (f Index) PutInBatch(batch *leveldb.Batch, i Item) (err error) {
 	key, err := f.encodeKeyFunc(i)
 	if err != nil {
 		return err
@@ -172,9 +174,9 @@ func (f Index) PutInBatch(batch *leveldb.Batch, i IndexItem) (err error) {
 	return nil
 }
 
-// Delete accepts IndexItem to remove a key/value pair
+// Delete accepts Item to remove a key/value pair
 // from the database based on its fields.
-func (f Index) Delete(keyFields IndexItem) (err error) {
+func (f Index) Delete(keyFields Item) (err error) {
 	key, err := f.encodeKeyFunc(keyFields)
 	if err != nil {
 		return err
@@ -184,7 +186,7 @@ func (f Index) Delete(keyFields IndexItem) (err error) {
 
 // DeleteInBatch is the same as Delete just the operation
 // is performed on the batch instead on the database.
-func (f Index) DeleteInBatch(batch *leveldb.Batch, keyFields IndexItem) (err error) {
+func (f Index) DeleteInBatch(batch *leveldb.Batch, keyFields Item) (err error) {
 	key, err := f.encodeKeyFunc(keyFields)
 	if err != nil {
 		return err
@@ -193,32 +195,71 @@ func (f Index) DeleteInBatch(batch *leveldb.Batch, keyFields IndexItem) (err err
 	return nil
 }
 
-// IndexIterFunc is a callback on every IndexItem that is decoded
+// IndexIterFunc is a callback on every Item that is decoded
 // by iterating on an Index keys.
 // By returning a true for stop variable, iteration will
 // stop, and by returning the error, that error will be
 // propagated to the called iterator method on Index.
-type IndexIterFunc func(item IndexItem) (stop bool, err error)
+type IndexIterFunc func(item Item) (stop bool, err error)
 
-// IterateAll iterates over all keys of the Index.
-func (f Index) IterateAll(fn IndexIterFunc) (err error) {
+// IterateOptions defines optional parameters for Iterate function.
+type IterateOptions struct {
+	// StartFrom is the Item to start the iteration from.
+	StartFrom *Item
+	// If SkipStartFromItem is true, StartFrom item will not
+	// be iterated on.
+	SkipStartFromItem bool
+	// Iterate over items which keys have a common prefix.
+	Prefix []byte
+}
+
+// Iterate function iterates over keys of the Index.
+// If IterateOptions is nil, the iterations is over all keys.
+func (f Index) Iterate(fn IndexIterFunc, options *IterateOptions) (err error) {
+	if options == nil {
+		options = new(IterateOptions)
+	}
+	// construct a prefix with Index prefix and optional common key prefix
+	prefix := append(f.prefix, options.Prefix...)
+	// start from the prefix
+	startKey := prefix
+	if options.StartFrom != nil {
+		// start from the provided StartFrom Item key value
+		startKey, err = f.encodeKeyFunc(*options.StartFrom)
+		if err != nil {
+			return err
+		}
+	}
 	it := f.db.NewIterator()
 	defer it.Release()
 
-	for ok := it.Seek(f.prefix); ok; ok = it.Next() {
+	// move the cursor to the start key
+	ok := it.Seek(startKey)
+	if !ok {
+		// stop iterator if seek has failed
+		return it.Error()
+	}
+	if options.SkipStartFromItem && bytes.Equal(startKey, it.Key()) {
+		// skip the start from Item if it is the first key
+		// and it is explicitly configured to skip it
+		ok = it.Next()
+	}
+	for ; ok; ok = it.Next() {
 		key := it.Key()
-		if key[0] != f.prefix[0] {
+		if !bytes.HasPrefix(key, prefix) {
 			break
 		}
-		keyIndexItem, err := f.decodeKeyFunc(key)
+		// create a copy of key byte slice not to share leveldb underlaying slice array
+		keyItem, err := f.decodeKeyFunc(append([]byte(nil), key...))
 		if err != nil {
 			return err
 		}
-		valueIndexItem, err := f.decodeValueFunc(it.Value())
+		// create a copy of value byte slice not to share leveldb underlaying slice array
+		valueItem, err := f.decodeValueFunc(keyItem, append([]byte(nil), it.Value()...))
 		if err != nil {
 			return err
 		}
-		stop, err := fn(keyIndexItem.Merge(valueIndexItem))
+		stop, err := fn(keyItem.Merge(valueItem))
 		if err != nil {
 			return err
 		}
@@ -229,12 +270,27 @@ func (f Index) IterateAll(fn IndexIterFunc) (err error) {
 	return it.Error()
 }
 
-// IterateFrom iterates over Index keys starting from the key
-// encoded from the provided IndexItem.
-func (f Index) IterateFrom(start IndexItem, fn IndexIterFunc) (err error) {
+// Count returns the number of items in index.
+func (f Index) Count() (count int, err error) {
+	it := f.db.NewIterator()
+	defer it.Release()
+
+	for ok := it.Seek(f.prefix); ok; ok = it.Next() {
+		key := it.Key()
+		if key[0] != f.prefix[0] {
+			break
+		}
+		count++
+	}
+	return count, it.Error()
+}
+
+// CountFrom returns the number of items in index keys
+// starting from the key encoded from the provided Item.
+func (f Index) CountFrom(start Item) (count int, err error) {
 	startKey, err := f.encodeKeyFunc(start)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	it := f.db.NewIterator()
 	defer it.Release()
@@ -244,21 +300,7 @@ func (f Index) IterateFrom(start IndexItem, fn IndexIterFunc) (err error) {
 		if key[0] != f.prefix[0] {
 			break
 		}
-		keyIndexItem, err := f.decodeKeyFunc(key)
-		if err != nil {
-			return err
-		}
-		valueIndexItem, err := f.decodeValueFunc(it.Value())
-		if err != nil {
-			return err
-		}
-		stop, err := fn(keyIndexItem.Merge(valueIndexItem))
-		if err != nil {
-			return err
-		}
-		if stop {
-			break
-		}
+		count++
 	}
-	return it.Error()
+	return count, it.Error()
 }

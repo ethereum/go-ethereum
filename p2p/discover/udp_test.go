@@ -19,6 +19,7 @@ package discover
 import (
 	"bytes"
 	"crypto/ecdsa"
+	crand "crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -57,6 +58,7 @@ type udpTest struct {
 	t                   *testing.T
 	pipe                *dgramPipe
 	table               *Table
+	db                  *enode.DB
 	udp                 *udp
 	sent                [][]byte
 	localkey, remotekey *ecdsa.PrivateKey
@@ -71,22 +73,32 @@ func newUDPTest(t *testing.T) *udpTest {
 		remotekey:  newkey(),
 		remoteaddr: &net.UDPAddr{IP: net.IP{10, 0, 1, 99}, Port: 30303},
 	}
-	db, _ := enode.OpenDB("")
-	ln := enode.NewLocalNode(db, test.localkey)
+	test.db, _ = enode.OpenDB("")
+	ln := enode.NewLocalNode(test.db, test.localkey)
 	test.table, test.udp, _ = newUDP(test.pipe, ln, Config{PrivateKey: test.localkey})
 	// Wait for initial refresh so the table doesn't send unexpected findnode.
 	<-test.table.initDone
 	return test
 }
 
+func (test *udpTest) close() {
+	test.table.Close()
+	test.db.Close()
+}
+
 // handles a packet as if it had been sent to the transport.
 func (test *udpTest) packetIn(wantError error, ptype byte, data packet) error {
-	enc, _, err := encodePacket(test.remotekey, ptype, data)
+	return test.packetInFrom(wantError, test.remotekey, test.remoteaddr, ptype, data)
+}
+
+// handles a packet as if it had been sent to the transport by the key/endpoint.
+func (test *udpTest) packetInFrom(wantError error, key *ecdsa.PrivateKey, addr *net.UDPAddr, ptype byte, data packet) error {
+	enc, _, err := encodePacket(key, ptype, data)
 	if err != nil {
 		return test.errorf("packet (%d) encode error: %v", ptype, err)
 	}
 	test.sent = append(test.sent, enc)
-	if err = test.udp.handlePacket(test.remoteaddr, enc); err != wantError {
+	if err = test.udp.handlePacket(addr, enc); err != wantError {
 		return test.errorf("error mismatch: got %q, want %q", err, wantError)
 	}
 	return nil
@@ -94,19 +106,19 @@ func (test *udpTest) packetIn(wantError error, ptype byte, data packet) error {
 
 // waits for a packet to be sent by the transport.
 // validate should have type func(*udpTest, X) error, where X is a packet type.
-func (test *udpTest) waitPacketOut(validate interface{}) ([]byte, error) {
+func (test *udpTest) waitPacketOut(validate interface{}) (*net.UDPAddr, []byte, error) {
 	dgram := test.pipe.waitPacketOut()
-	p, _, hash, err := decodePacket(dgram)
+	p, _, hash, err := decodePacket(dgram.data)
 	if err != nil {
-		return hash, test.errorf("sent packet decode error: %v", err)
+		return &dgram.to, hash, test.errorf("sent packet decode error: %v", err)
 	}
 	fn := reflect.ValueOf(validate)
 	exptype := fn.Type().In(0)
 	if reflect.TypeOf(p) != exptype {
-		return hash, test.errorf("sent packet type mismatch, got: %v, want: %v", reflect.TypeOf(p), exptype)
+		return &dgram.to, hash, test.errorf("sent packet type mismatch, got: %v, want: %v", reflect.TypeOf(p), exptype)
 	}
 	fn.Call([]reflect.Value{reflect.ValueOf(p)})
-	return hash, nil
+	return &dgram.to, hash, nil
 }
 
 func (test *udpTest) errorf(format string, args ...interface{}) error {
@@ -125,7 +137,7 @@ func (test *udpTest) errorf(format string, args ...interface{}) error {
 
 func TestUDP_packetErrors(t *testing.T) {
 	test := newUDPTest(t)
-	defer test.table.Close()
+	defer test.close()
 
 	test.packetIn(errExpired, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: 4})
 	test.packetIn(errUnsolicitedReply, pongPacket, &pong{ReplyTok: []byte{}, Expiration: futureExp})
@@ -136,7 +148,7 @@ func TestUDP_packetErrors(t *testing.T) {
 func TestUDP_pingTimeout(t *testing.T) {
 	t.Parallel()
 	test := newUDPTest(t)
-	defer test.table.Close()
+	defer test.close()
 
 	toaddr := &net.UDPAddr{IP: net.ParseIP("1.2.3.4"), Port: 2222}
 	toid := enode.ID{1, 2, 3, 4}
@@ -148,7 +160,7 @@ func TestUDP_pingTimeout(t *testing.T) {
 func TestUDP_responseTimeouts(t *testing.T) {
 	t.Parallel()
 	test := newUDPTest(t)
-	defer test.table.Close()
+	defer test.close()
 
 	rand.Seed(time.Now().UnixNano())
 	randomDuration := func(max time.Duration) time.Duration {
@@ -166,20 +178,20 @@ func TestUDP_responseTimeouts(t *testing.T) {
 		// with ptype <= 128 will not get a reply and should time out.
 		// For all other requests, a reply is scheduled to arrive
 		// within the timeout window.
-		p := &pending{
+		p := &replyMatcher{
 			ptype:    byte(rand.Intn(255)),
-			callback: func(interface{}) bool { return true },
+			callback: func(interface{}) (bool, bool) { return true, true },
 		}
 		binary.BigEndian.PutUint64(p.from[:], uint64(i))
 		if p.ptype <= 128 {
 			p.errc = timeoutErr
-			test.udp.addpending <- p
+			test.udp.addReplyMatcher <- p
 			nTimeouts++
 		} else {
 			p.errc = nilErr
-			test.udp.addpending <- p
+			test.udp.addReplyMatcher <- p
 			time.AfterFunc(randomDuration(60*time.Millisecond), func() {
-				if !test.udp.handleReply(p.from, p.ptype, nil) {
+				if !test.udp.handleReply(p.from, p.ip, p.ptype, nil) {
 					t.Logf("not matched: %v", p)
 				}
 			})
@@ -220,7 +232,7 @@ func TestUDP_responseTimeouts(t *testing.T) {
 func TestUDP_findnodeTimeout(t *testing.T) {
 	t.Parallel()
 	test := newUDPTest(t)
-	defer test.table.Close()
+	defer test.close()
 
 	toaddr := &net.UDPAddr{IP: net.ParseIP("1.2.3.4"), Port: 2222}
 	toid := enode.ID{1, 2, 3, 4}
@@ -236,50 +248,65 @@ func TestUDP_findnodeTimeout(t *testing.T) {
 
 func TestUDP_findnode(t *testing.T) {
 	test := newUDPTest(t)
-	defer test.table.Close()
+	defer test.close()
 
 	// put a few nodes into the table. their exact
 	// distribution shouldn't matter much, although we need to
 	// take care not to overflow any bucket.
 	nodes := &nodesByDistance{target: testTarget.id()}
-	for i := 0; i < bucketSize; i++ {
+	live := make(map[enode.ID]bool)
+	numCandidates := 2 * bucketSize
+	for i := 0; i < numCandidates; i++ {
 		key := newkey()
-		n := wrapNode(enode.NewV4(&key.PublicKey, net.IP{10, 13, 0, 1}, 0, i))
-		nodes.push(n, bucketSize)
+		ip := net.IP{10, 13, 0, byte(i)}
+		n := wrapNode(enode.NewV4(&key.PublicKey, ip, 0, 2000))
+		// Ensure half of table content isn't verified live yet.
+		if i > numCandidates/2 {
+			n.livenessChecks = 1
+			live[n.ID()] = true
+		}
+		nodes.push(n, numCandidates)
 	}
-	test.table.stuff(nodes.entries)
+	fillTable(test.table, nodes.entries)
 
 	// ensure there's a bond with the test node,
 	// findnode won't be accepted otherwise.
 	remoteID := encodePubkey(&test.remotekey.PublicKey).id()
-	test.table.db.UpdateLastPongReceived(remoteID, time.Now())
+	test.table.db.UpdateLastPongReceived(remoteID, test.remoteaddr.IP, time.Now())
 
 	// check that closest neighbors are returned.
-	test.packetIn(nil, findnodePacket, &findnode{Target: testTarget, Expiration: futureExp})
 	expected := test.table.closest(testTarget.id(), bucketSize)
-
+	test.packetIn(nil, findnodePacket, &findnode{Target: testTarget, Expiration: futureExp})
 	waitNeighbors := func(want []*node) {
 		test.waitPacketOut(func(p *neighbors) {
 			if len(p.Nodes) != len(want) {
 				t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), bucketSize)
 			}
-			for i := range p.Nodes {
-				if p.Nodes[i].ID.id() != want[i].ID() {
-					t.Errorf("result mismatch at %d:\n  got:  %v\n  want: %v", i, p.Nodes[i], expected.entries[i])
+			for i, n := range p.Nodes {
+				if n.ID.id() != want[i].ID() {
+					t.Errorf("result mismatch at %d:\n  got:  %v\n  want: %v", i, n, expected.entries[i])
+				}
+				if !live[n.ID.id()] {
+					t.Errorf("result includes dead node %v", n.ID.id())
 				}
 			}
 		})
 	}
-	waitNeighbors(expected.entries[:maxNeighbors])
-	waitNeighbors(expected.entries[maxNeighbors:])
+	// Receive replies.
+	want := expected.entries
+	if len(want) > maxNeighbors {
+		waitNeighbors(want[:maxNeighbors])
+		want = want[maxNeighbors:]
+	}
+	waitNeighbors(want)
 }
 
 func TestUDP_findnodeMultiReply(t *testing.T) {
 	test := newUDPTest(t)
-	defer test.table.Close()
+	defer test.close()
 
 	rid := enode.PubkeyToIDV4(&test.remotekey.PublicKey)
-	test.table.db.UpdateLastPingReceived(rid, time.Now())
+	test.table.db.UpdateLastPingReceived(rid, test.remoteaddr.IP, time.Now())
 
 	// queue a pending findnode request
 	resultc, errc := make(chan []*node), make(chan error)
@@ -329,11 +356,40 @@ func TestUDP_findnodeMultiReply(t *testing.T) {
 	}
 }
 
+func TestUDP_pingMatch(t *testing.T) {
+	test := newUDPTest(t)
+	defer test.close()
+
+	randToken := make([]byte, 32)
+	crand.Read(randToken)
+
+	test.packetIn(nil, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: 4, Expiration: futureExp})
+	test.waitPacketOut(func(*pong) error { return nil })
+	test.waitPacketOut(func(*ping) error { return nil })
+	test.packetIn(errUnsolicitedReply, pongPacket, &pong{ReplyTok: randToken, To: testLocalAnnounced, Expiration: futureExp})
+}
+
+func TestUDP_pingMatchIP(t *testing.T) {
+	test := newUDPTest(t)
+	defer test.close()
+
+	test.packetIn(nil, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: 4, Expiration: futureExp})
+	test.waitPacketOut(func(*pong) error { return nil })
+
+	_, hash, _ := test.waitPacketOut(func(*ping) error { return nil })
+	wrongAddr := &net.UDPAddr{IP: net.IP{33, 44, 1, 2}, Port: 30000}
+	test.packetInFrom(errUnsolicitedReply, test.remotekey, wrongAddr, pongPacket, &pong{
+		ReplyTok:   hash,
+		To:         testLocalAnnounced,
+		Expiration: futureExp,
+	})
+}
+
 func TestUDP_successfulPing(t *testing.T) {
 	test := newUDPTest(t)
 	added := make(chan *node, 1)
 	test.table.nodeAddedHook = func(n *node) { added <- n }
-	defer test.table.Close()
+	defer test.close()
 
 	// The remote side sends a ping packet to initiate the exchange.
 	go test.packetIn(nil, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: 4, Expiration: futureExp})
@@ -356,7 +412,7 @@ func TestUDP_successfulPing(t *testing.T) {
 	})
 
 	// remote is unknown, the table pings back.
-	hash, _ := test.waitPacketOut(func(p *ping) error {
+	_, hash, _ := test.waitPacketOut(func(p *ping) error {
 		if !reflect.DeepEqual(p.From, test.udp.ourEndpoint()) {
 			t.Errorf("got ping.From %#v, want %#v", p.From, test.udp.ourEndpoint())
 		}
@@ -510,7 +566,12 @@ type dgramPipe struct {
 	cond    *sync.Cond
 	closing chan struct{}
 	closed  bool
-	queue   [][]byte
+	queue   []dgram
+}
+
+type dgram struct {
+	to   net.UDPAddr
+	data []byte
 }
 
 func newpipe() *dgramPipe {
@@ -531,7 +592,7 @@ func (c *dgramPipe) WriteToUDP(b []byte, to *net.UDPAddr) (n int, err error) {
 	if c.closed {
 		return 0, errors.New("closed")
 	}
-	c.queue = append(c.queue, msg)
+	c.queue = append(c.queue, dgram{*to, b})
 	c.cond.Signal()
 	return len(b), nil
 }
@@ -556,7 +617,7 @@ func (c *dgramPipe) LocalAddr() net.Addr {
 	return &net.UDPAddr{IP: testLocal.IP, Port: int(testLocal.UDP)}
 }
 
-func (c *dgramPipe) waitPacketOut() []byte {
+func (c *dgramPipe) waitPacketOut() dgram {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for len(c.queue) == 0 {

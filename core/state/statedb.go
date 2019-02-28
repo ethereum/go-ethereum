@@ -468,9 +468,9 @@ func (self *StateDB) createObject(addr common.Address) (newobj, prev *stateObjec
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
 func (self *StateDB) CreateAccount(addr common.Address) {
-	new, prev := self.createObject(addr)
+	newObj, prev := self.createObject(addr)
 	if prev != nil {
-		new.setBalance(prev.data.Balance)
+		newObj.setBalance(prev.data.Balance)
 	}
 }
 
@@ -502,7 +502,7 @@ func (self *StateDB) Copy() *StateDB {
 		refund:            self.refund,
 		logs:              make(map[common.Hash][]*types.Log, len(self.logs)),
 		logSize:           self.logSize,
-		preimages:         make(map[common.Hash][]byte),
+		preimages:         make(map[common.Hash][]byte, len(self.preimages)),
 		journal:           newJournal(),
 	}
 	// Copy the dirty states, logs, and preimages

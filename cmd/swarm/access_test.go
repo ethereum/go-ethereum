@@ -33,11 +33,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarmapi "github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -397,7 +397,7 @@ func testACT(t *testing.T, bogusEntries int) {
 	}
 
 	ref := matches[0]
-	grantees := []string{}
+	var grantees []string
 	for i, v := range cluster.Nodes {
 		if i == nodeToSkip {
 			continue
@@ -408,7 +408,7 @@ func testACT(t *testing.T, bogusEntries int) {
 	}
 
 	if bogusEntries > 0 {
-		bogusGrantees := []string{}
+		var bogusGrantees []string
 
 		for i := 0; i < bogusEntries; i++ {
 			prv, err := ecies.GenerateKey(rand.Reader, DefaultCurve, nil)
@@ -598,7 +598,7 @@ func TestKeypairSanity(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		hasher := sha3.NewKeccak256()
+		hasher := sha3.NewLegacyKeccak256()
 		hasher.Write(salt)
 		shared, err := hex.DecodeString(sharedSecret)
 		if err != nil {

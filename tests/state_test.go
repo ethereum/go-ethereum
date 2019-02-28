@@ -17,6 +17,7 @@
 package tests
 
 import (
+	"bufio"
 	"bytes"
 	"flag"
 	"fmt"
@@ -45,9 +46,12 @@ func TestState(t *testing.T) {
 	st.skipLoad(`^stTransactionTest/OverflowGasRequire\.json`) // gasLimit > 256 bits
 	st.skipLoad(`^stTransactionTest/zeroSigTransa[^/]*\.json`) // EIP-86 is not supported yet
 	// Expected failures:
-	st.fails(`^stRevertTest/RevertPrecompiledTouch\.json/EIP158`, "bug in test")
-	st.fails(`^stRevertTest/RevertPrecompiledTouch\.json/Byzantium`, "bug in test")
-	st.fails(`^stRevertTest/RevertPrecompiledTouch.json/Constantinople`, "bug in test")
+	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Byzantium/0`, "bug in test")
+	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Byzantium/3`, "bug in test")
+	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Constantinople/0`, "bug in test")
+	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Constantinople/3`, "bug in test")
+	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/ConstantinopleFix/0`, "bug in test")
+	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/ConstantinopleFix/3`, "bug in test")
 
 	st.walk(t, stateTestDir, func(t *testing.T, name string, test *StateTest) {
 		for _, subtest := range test.Subtests() {
@@ -86,18 +90,19 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 		t.Log("gas limit too high for EVM trace")
 		return
 	}
-	tracer := vm.NewStructLogger(nil)
+	buf := new(bytes.Buffer)
+	w := bufio.NewWriter(buf)
+	tracer := vm.NewJSONLogger(&vm.LogConfig{DisableMemory: true}, w)
 	err2 := test(vm.Config{Debug: true, Tracer: tracer})
 	if !reflect.DeepEqual(err, err2) {
 		t.Errorf("different error for second run: %v", err2)
 	}
-	buf := new(bytes.Buffer)
-	vm.WriteTrace(buf, tracer.StructLogs())
+	w.Flush()
 	if buf.Len() == 0 {
 		t.Log("no EVM operation logs generated")
 	} else {
 		t.Log("EVM operation log:\n" + buf.String())
 	}
-	t.Logf("EVM output: 0x%x", tracer.Output())
-	t.Logf("EVM error: %v", tracer.Error())
+	//t.Logf("EVM output: 0x%x", tracer.Output())
+	//t.Logf("EVM error: %v", tracer.Error())
 }

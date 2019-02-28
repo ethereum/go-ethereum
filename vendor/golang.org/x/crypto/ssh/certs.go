@@ -44,7 +44,9 @@ type Signature struct {
 const CertTimeInfinity = 1<<64 - 1
 
 // An Certificate represents an OpenSSH certificate as defined in
-// [PROTOCOL.certkeys]?rev=1.8.
+// [PROTOCOL.certkeys]?rev=1.8. The Certificate type implements the
+// PublicKey interface, so it can be unmarshaled using
+// ParsePublicKey.
 type Certificate struct {
 	Nonce           []byte
 	Key             PublicKey
@@ -220,6 +222,11 @@ type openSSHCertSigner struct {
 	signer Signer
 }
 
+type algorithmOpenSSHCertSigner struct {
+	*openSSHCertSigner
+	algorithmSigner AlgorithmSigner
+}
+
 // NewCertSigner returns a Signer that signs with the given Certificate, whose
 // private key is held by signer. It returns an error if the public key in cert
 // doesn't match the key used by signer.
@@ -228,7 +235,12 @@ func NewCertSigner(cert *Certificate, signer Signer) (Signer, error) {
 		return nil, errors.New("ssh: signer and cert have different public key")
 	}
 
-	return &openSSHCertSigner{cert, signer}, nil
+	if algorithmSigner, ok := signer.(AlgorithmSigner); ok {
+		return &algorithmOpenSSHCertSigner{
+			&openSSHCertSigner{cert, signer}, algorithmSigner}, nil
+	} else {
+		return &openSSHCertSigner{cert, signer}, nil
+	}
 }
 
 func (s *openSSHCertSigner) Sign(rand io.Reader, data []byte) (*Signature, error) {
@@ -237,6 +249,10 @@ func (s *openSSHCertSigner) Sign(rand io.Reader, data []byte) (*Signature, error
 
 func (s *openSSHCertSigner) PublicKey() PublicKey {
 	return s.pub
+}
+
+func (s *algorithmOpenSSHCertSigner) SignWithAlgorithm(rand io.Reader, data []byte, algorithm string) (*Signature, error) {
+	return s.algorithmSigner.SignWithAlgorithm(rand, data, algorithm)
 }
 
 const sourceAddressCriticalOption = "source-address"
@@ -340,10 +356,10 @@ func (c *CertChecker) Authenticate(conn ConnMetadata, pubKey PublicKey) (*Permis
 // the signature of the certificate.
 func (c *CertChecker) CheckCert(principal string, cert *Certificate) error {
 	if c.IsRevoked != nil && c.IsRevoked(cert) {
-		return fmt.Errorf("ssh: certicate serial %d revoked", cert.Serial)
+		return fmt.Errorf("ssh: certificate serial %d revoked", cert.Serial)
 	}
 
-	for opt, _ := range cert.CriticalOptions {
+	for opt := range cert.CriticalOptions {
 		// sourceAddressCriticalOption will be enforced by
 		// serverAuthenticate
 		if opt == sourceAddressCriticalOption {

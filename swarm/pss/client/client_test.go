@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -38,7 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/state"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 )
 
 type protoCtrl struct {
@@ -238,7 +237,7 @@ func newServices() adapters.Services {
 			return k
 		}
 		params := network.NewKadParams()
-		params.MinProxBinSize = 2
+		params.NeighbourhoodSize = 2
 		params.MaxBinSize = 3
 		params.MinBinSize = 1
 		params.MaxRetries = 1000
@@ -285,19 +284,4 @@ func newServices() adapters.Services {
 			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil), nil
 		},
 	}
-}
-
-// copied from swarm/network/protocol_test_go
-type testStore struct {
-	sync.Mutex
-
-	values map[string][]byte
-}
-
-func (t *testStore) Load(key string) ([]byte, error) {
-	return nil, nil
-}
-
-func (t *testStore) Save(key string, v []byte) error {
-	return nil
 }

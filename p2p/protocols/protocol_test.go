@@ -142,9 +142,9 @@ func newProtocol(pp *p2ptest.TestPeerPool) func(*p2p.Peer, p2p.MsgReadWriter) er
 	}
 }
 
-func protocolTester(t *testing.T, pp *p2ptest.TestPeerPool) *p2ptest.ProtocolTester {
+func protocolTester(pp *p2ptest.TestPeerPool) *p2ptest.ProtocolTester {
 	conf := adapters.RandomNodeConfig()
-	return p2ptest.NewProtocolTester(t, conf.ID, 2, newProtocol(pp))
+	return p2ptest.NewProtocolTester(conf.ID, 2, newProtocol(pp))
 }
 
 func protoHandshakeExchange(id enode.ID, proto *protoHandshake) []p2ptest.Exchange {
@@ -173,7 +173,7 @@ func protoHandshakeExchange(id enode.ID, proto *protoHandshake) []p2ptest.Exchan
 
 func runProtoHandshake(t *testing.T, proto *protoHandshake, errs ...error) {
 	pp := p2ptest.NewTestPeerPool()
-	s := protocolTester(t, pp)
+	s := protocolTester(pp)
 	// TODO: make this more than one handshake
 	node := s.Nodes[0]
 	if err := s.TestExchanges(protoHandshakeExchange(node.ID(), proto)...); err != nil {
@@ -250,7 +250,7 @@ func TestProtocolHook(t *testing.T) {
 	}
 
 	conf := adapters.RandomNodeConfig()
-	tester := p2ptest.NewProtocolTester(t, conf.ID, 2, runFunc)
+	tester := p2ptest.NewProtocolTester(conf.ID, 2, runFunc)
 	err := tester.TestExchanges(p2ptest.Exchange{
 		Expects: []p2ptest.Expect{
 			{
@@ -269,8 +269,11 @@ func TestProtocolHook(t *testing.T) {
 	if !testHook.send {
 		t.Fatal("Expected a send message, but it is not")
 	}
-	if testHook.peer == nil || testHook.peer.ID() != tester.Nodes[0].ID() {
-		t.Fatal("Expected peer ID to be set correctly, but it is not")
+	if testHook.peer == nil {
+		t.Fatal("Expected peer to be set, is nil")
+	}
+	if peerId := testHook.peer.ID(); peerId != tester.Nodes[0].ID() && peerId != tester.Nodes[1].ID() {
+		t.Fatalf("Expected peer ID to be set correctly, but it is not (got %v, exp %v or %v", peerId, tester.Nodes[0].ID(), tester.Nodes[1].ID())
 	}
 	if testHook.size != 11 { //11 is the length of the encoded message
 		t.Fatalf("Expected size to be %d, but it is %d ", 1, testHook.size)
@@ -389,7 +392,7 @@ func moduleHandshakeExchange(id enode.ID, resp uint) []p2ptest.Exchange {
 
 func runModuleHandshake(t *testing.T, resp uint, errs ...error) {
 	pp := p2ptest.NewTestPeerPool()
-	s := protocolTester(t, pp)
+	s := protocolTester(pp)
 	node := s.Nodes[0]
 	if err := s.TestExchanges(protoHandshakeExchange(node.ID(), &protoHandshake{42, "420"})...); err != nil {
 		t.Fatal(err)
@@ -469,7 +472,7 @@ func testMultiPeerSetup(a, b enode.ID) []p2ptest.Exchange {
 
 func runMultiplePeers(t *testing.T, peer int, errs ...error) {
 	pp := p2ptest.NewTestPeerPool()
-	s := protocolTester(t, pp)
+	s := protocolTester(pp)
 
 	if err := s.TestExchanges(testMultiPeerSetup(s.Nodes[0].ID(), s.Nodes[1].ID())...); err != nil {
 		t.Fatal(err)

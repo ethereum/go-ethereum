@@ -16,30 +16,21 @@
 
 package storage
 
-import (
-	"errors"
-)
+import "github.com/ethereum/go-ethereum/swarm/chunk"
 
 const (
 	ErrInit = iota
 	ErrNotFound
-	ErrIO
 	ErrUnauthorized
 	ErrInvalidValue
 	ErrDataOverflow
 	ErrNothingToReturn
-	ErrCorruptData
 	ErrInvalidSignature
 	ErrNotSynced
-	ErrPeriodDepth
-	ErrCnt
 )
 
+// Errors are the same as the ones in chunk package for backward compatibility.
 var (
-	ErrChunkNotFound    = errors.New("chunk not found")
-	ErrFetching         = errors.New("chunk still fetching")
-	ErrChunkInvalid     = errors.New("invalid chunk")
-	ErrChunkForward     = errors.New("cannot forward")
-	ErrChunkUnavailable = errors.New("chunk unavailable")
-	ErrChunkTimeout     = errors.New("timeout")
+	ErrChunkNotFound = chunk.ErrChunkNotFound
+	ErrChunkInvalid  = chunk.ErrChunkNotFound
 )

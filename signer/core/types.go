@@ -19,39 +19,13 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"strings"
 
-	"math/big"
-
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 )
-
-type Accounts []Account
-
-func (as Accounts) String() string {
-	var output []string
-	for _, a := range as {
-		output = append(output, a.String())
-	}
-	return strings.Join(output, "\n")
-}
-
-type Account struct {
-	Typ     string         `json:"type"`
-	URL     accounts.URL   `json:"url"`
-	Address common.Address `json:"address"`
-}
-
-func (a Account) String() string {
-	s, err := json.Marshal(a)
-	if err == nil {
-		return string(s)
-	}
-	return err.Error()
-}
 
 type ValidationInfo struct {
 	Typ     string `json:"type"`
@@ -101,7 +75,7 @@ type SendTxArgs struct {
 	Nonce    hexutil.Uint64           `json:"nonce"`
 	// We accept "data" and "input" for backwards-compatibility reasons.
 	Data  *hexutil.Bytes `json:"data"`
-	Input *hexutil.Bytes `json:"input"`
+	Input *hexutil.Bytes `json:"input,omitempty"`
 }
 
 func (args SendTxArgs) String() string {

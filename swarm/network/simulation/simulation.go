@@ -28,12 +28,12 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
 // Common errors that are returned by functions in this package.
 var (
 	ErrNodeNotFound = errors.New("node not found")
-	ErrNoPivotNode  = errors.New("no pivot node set")
 )
 
 // Simulation provides methods on network, nodes and services
@@ -43,13 +43,13 @@ type Simulation struct {
 	// of p2p/simulations.Network.
 	Net *simulations.Network
 
-	serviceNames []string
-	cleanupFuncs []func()
-	buckets      map[enode.ID]*sync.Map
-	pivotNodeID  *enode.ID
-	shutdownWG   sync.WaitGroup
-	done         chan struct{}
-	mu           sync.RWMutex
+	serviceNames      []string
+	cleanupFuncs      []func()
+	buckets           map[enode.ID]*sync.Map
+	shutdownWG        sync.WaitGroup
+	done              chan struct{}
+	mu                sync.RWMutex
+	neighbourhoodSize int
 
 	httpSrv *http.Server        //attach a HTTP server via SimulationOptions
 	handler *simulations.Server //HTTP handler for the server
@@ -66,16 +66,16 @@ type Simulation struct {
 // after network shutdown.
 type ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error)
 
-// New creates a new Simulation instance with new
-// simulations.Network initialized with provided services.
+// New creates a new simulation instance
 // Services map must have unique keys as service names and
 // every ServiceFunc must return a node.Service of the unique type.
 // This restriction is required by node.Node.Start() function
 // which is used to start node.Service returned by ServiceFunc.
 func New(services map[string]ServiceFunc) (s *Simulation) {
 	s = &Simulation{
-		buckets: make(map[enode.ID]*sync.Map),
-		done:    make(chan struct{}),
+		buckets:           make(map[enode.ID]*sync.Map),
+		done:              make(chan struct{}),
+		neighbourhoodSize: network.NewKadParams().NeighbourhoodSize,
 	}
 
 	adapterServices := make(map[string]adapters.ServiceFunc, len(services))

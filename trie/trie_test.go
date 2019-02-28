@@ -614,3 +614,16 @@ func updateString(trie *Trie, k, v string) {
 func deleteString(trie *Trie, k string) {
 	trie.Delete([]byte(k))
 }
+
+func TestDecodeNode(t *testing.T) {
+	t.Parallel()
+	var (
+		hash  = make([]byte, 20)
+		elems = make([]byte, 20)
+	)
+	for i := 0; i < 5000000; i++ {
+		rand.Read(hash)
+		rand.Read(elems)
+		decodeNode(hash, elems, 1)
+	}
+}

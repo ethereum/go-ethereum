@@ -65,7 +65,7 @@ func (d *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 
 // NotifyDepth sends a message to all connections if depth of saturation is changed
 func NotifyDepth(depth uint8, kad *Kademlia) {
-	f := func(val *Peer, po int, _ bool) bool {
+	f := func(val *Peer, po int) bool {
 		val.NotifyDepth(depth)
 		return true
 	}
@@ -74,7 +74,7 @@ func NotifyDepth(depth uint8, kad *Kademlia) {
 
 // NotifyPeer informs all peers about a newly added node
 func NotifyPeer(p *BzzAddr, k *Kademlia) {
-	f := func(val *Peer, po int, _ bool) bool {
+	f := func(val *Peer, po int) bool {
 		val.NotifyPeer(p, uint8(po))
 		return true
 	}
@@ -160,8 +160,8 @@ func (d *Peer) handleSubPeersMsg(msg *subPeersMsg) error {
 	if !d.sentPeers {
 		d.setDepth(msg.Depth)
 		var peers []*BzzAddr
-		d.kad.EachConn(d.Over(), 255, func(p *Peer, po int, isproxbin bool) bool {
-			if pob, _ := pof(d, d.kad.BaseAddr(), 0); pob > po {
+		d.kad.EachConn(d.Over(), 255, func(p *Peer, po int) bool {
+			if pob, _ := Pof(d, d.kad.BaseAddr(), 0); pob > po {
 				return false
 			}
 			if !d.seen(p.BzzAddr) {

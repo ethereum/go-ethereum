@@ -260,7 +260,7 @@ func (db *DB) compactionCommit(name string, rec *sessionRecord) {
 	db.compCommitLk.Lock()
 	defer db.compCommitLk.Unlock() // Defer is necessary.
 	db.compactionTransactFunc(name+"@commit", func(cnt *compactionTransactCounter) error {
-		return db.s.commit(rec)
+		return db.s.commit(rec, true)
 	}, nil)
 }
 
@@ -663,7 +663,7 @@ type cCmd interface {
 }
 
 type cAuto struct {
-	// Note for table compaction, an empty ackC represents it's a compaction waiting command.
+	// Note for table compaction, an non-empty ackC represents it's a compaction waiting command.
 	ackC chan<- error
 }
 
@@ -777,8 +777,8 @@ func (db *DB) mCompaction() {
 
 func (db *DB) tCompaction() {
 	var (
-		x           cCmd
-		ackQ, waitQ []cCmd
+		x     cCmd
+		waitQ []cCmd
 	)
 
 	defer func() {
@@ -786,10 +786,6 @@ func (db *DB) tCompaction() {
 			if x != errCompactionTransactExiting {
 				panic(x)
 			}
-		}
-		for i := range ackQ {
-			ackQ[i].ack(ErrClosed)
-			ackQ[i] = nil
 		}
 		for i := range waitQ {
 			waitQ[i].ack(ErrClosed)
@@ -821,11 +817,6 @@ func (db *DB) tCompaction() {
 				waitQ = waitQ[:0]
 			}
 		} else {
-			for i := range ackQ {
-				ackQ[i].ack(nil)
-				ackQ[i] = nil
-			}
-			ackQ = ackQ[:0]
 			for i := range waitQ {
 				waitQ[i].ack(nil)
 				waitQ[i] = nil
@@ -844,9 +835,12 @@ func (db *DB) tCompaction() {
 			switch cmd := x.(type) {
 			case cAuto:
 				if cmd.ackC != nil {
-					waitQ = append(waitQ, x)
-				} else {
-					ackQ = append(ackQ, x)
+					// Check the write pause state before caching it.
+					if db.resumeWrite() {
+						x.ack(nil)
+					} else {
+						waitQ = append(waitQ, x)
+					}
 				}
 			case cRange:
 				x.ack(db.tableRangeCompaction(cmd.level, cmd.min, cmd.max))

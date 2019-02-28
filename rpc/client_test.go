@@ -35,13 +35,13 @@ import (
 )
 
 func TestClientRequest(t *testing.T) {
-	server := newTestServer("service", new(Service))
+	server := newTestServer()
 	defer server.Stop()
 	client := DialInProc(server)
 	defer client.Close()
 
 	var resp Result
-	if err := client.Call(&resp, "service_echo", "hello", 10, &Args{"world"}); err != nil {
+	if err := client.Call(&resp, "test_echo", "hello", 10, &Args{"world"}); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(resp, Result{"hello", 10, &Args{"world"}}) {
@@ -50,19 +50,19 @@ func TestClientRequest(t *testing.T) {
 }
 
 func TestClientBatchRequest(t *testing.T) {
-	server := newTestServer("service", new(Service))
+	server := newTestServer()
 	defer server.Stop()
 	client := DialInProc(server)
 	defer client.Close()
 
 	batch := []BatchElem{
 		{
-			Method: "service_echo",
+			Method: "test_echo",
 			Args:   []interface{}{"hello", 10, &Args{"world"}},
 			Result: new(Result),
 		},
 		{
-			Method: "service_echo",
+			Method: "test_echo",
 			Args:   []interface{}{"hello2", 11, &Args{"world"}},
 			Result: new(Result),
 		},
@@ -77,12 +77,12 @@ func TestClientBatchRequest(t *testing.T) {
 	}
 	wantResult := []BatchElem{
 		{
-			Method: "service_echo",
+			Method: "test_echo",
 			Args:   []interface{}{"hello", 10, &Args{"world"}},
 			Result: &Result{"hello", 10, &Args{"world"}},
 		},
 		{
-			Method: "service_echo",
+			Method: "test_echo",
 			Args:   []interface{}{"hello2", 11, &Args{"world"}},
 			Result: &Result{"hello2", 11, &Args{"world"}},
 		},
@@ -90,11 +90,22 @@ func TestClientBatchRequest(t *testing.T) {
 			Method: "no_such_method",
 			Args:   []interface{}{1, 2, 3},
 			Result: new(int),
-			Error:  &jsonError{Code: -32601, Message: "The method no_such_method_ does not exist/is not available"},
+			Error:  &jsonError{Code: -32601, Message: "the method no_such_method does not exist/is not available"},
 		},
 	}
 	if !reflect.DeepEqual(batch, wantResult) {
 		t.Errorf("batch results mismatch:\ngot %swant %s", spew.Sdump(batch), spew.Sdump(wantResult))
+	}
+}
+
+func TestClientNotify(t *testing.T) {
+	server := newTestServer()
+	defer server.Stop()
+	client := DialInProc(server)
+	defer client.Close()
+
+	if err := client.Notify(context.Background(), "test_echo", "hello", 10, &Args{"world"}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -106,7 +117,12 @@ func TestClientCancelIPC(t *testing.T)       { testClientCancel("ipc", t) }
 // This test checks that requests made through CallContext can be canceled by canceling
 // the context.
 func testClientCancel(transport string, t *testing.T) {
-	server := newTestServer("service", new(Service))
+	// These tests take a lot of time, run them all at once.
+	// You probably want to run with -parallel 1 or comment out
+	// the call to t.Parallel if you enable the logging.
+	t.Parallel()
+
+	server := newTestServer()
 	defer server.Stop()
 
 	// What we want to achieve is that the context gets canceled
@@ -142,11 +158,6 @@ func testClientCancel(transport string, t *testing.T) {
 		panic("unknown transport: " + transport)
 	}
 
-	// These tests take a lot of time, run them all at once.
-	// You probably want to run with -parallel 1 or comment out
-	// the call to t.Parallel if you enable the logging.
-	t.Parallel()
-
 	// The actual test starts here.
 	var (
 		wg       sync.WaitGroup
@@ -174,7 +185,8 @@ func testClientCancel(transport string, t *testing.T) {
 			}
 			// Now perform a call with the context.
 			// The key thing here is that no call will ever complete successfully.
-			err := client.CallContext(ctx, nil, "service_sleep", 2*maxContextCancelTimeout)
+			sleepTime := maxContextCancelTimeout + 20*time.Millisecond
+			err := client.CallContext(ctx, nil, "test_sleep", sleepTime)
 			if err != nil {
 				log.Debug(fmt.Sprint("got expected error:", err))
 			} else {
@@ -191,7 +203,7 @@ func testClientCancel(transport string, t *testing.T) {
 }
 
 func TestClientSubscribeInvalidArg(t *testing.T) {
-	server := newTestServer("service", new(Service))
+	server := newTestServer()
 	defer server.Stop()
 	client := DialInProc(server)
 	defer client.Close()
@@ -221,14 +233,14 @@ func TestClientSubscribeInvalidArg(t *testing.T) {
 }
 
 func TestClientSubscribe(t *testing.T) {
-	server := newTestServer("eth", new(NotificationTestService))
+	server := newTestServer()
 	defer server.Stop()
 	client := DialInProc(server)
 	defer client.Close()
 
 	nc := make(chan int)
 	count := 10
-	sub, err := client.EthSubscribe(context.Background(), nc, "someSubscription", count, 0)
+	sub, err := client.Subscribe(context.Background(), "nftest", nc, "someSubscription", count, 0)
 	if err != nil {
 		t.Fatal("can't subscribe:", err)
 	}
@@ -251,46 +263,17 @@ func TestClientSubscribe(t *testing.T) {
 	}
 }
 
-func TestClientSubscribeCustomNamespace(t *testing.T) {
-	namespace := "custom"
-	server := newTestServer(namespace, new(NotificationTestService))
-	defer server.Stop()
-	client := DialInProc(server)
-	defer client.Close()
-
-	nc := make(chan int)
-	count := 10
-	sub, err := client.Subscribe(context.Background(), namespace, nc, "someSubscription", count, 0)
-	if err != nil {
-		t.Fatal("can't subscribe:", err)
-	}
-	for i := 0; i < count; i++ {
-		if val := <-nc; val != i {
-			t.Fatalf("value mismatch: got %d, want %d", val, i)
-		}
-	}
-
-	sub.Unsubscribe()
-	select {
-	case v := <-nc:
-		t.Fatal("received value after unsubscribe:", v)
-	case err := <-sub.Err():
-		if err != nil {
-			t.Fatalf("Err returned a non-nil error after explicit unsubscribe: %q", err)
-		}
-	case <-time.After(1 * time.Second):
-		t.Fatalf("subscription not closed within 1s after unsubscribe")
-	}
-}
-
-// In this test, the connection drops while EthSubscribe is
-// waiting for a response.
+// In this test, the connection drops while Subscribe is waiting for a response.
 func TestClientSubscribeClose(t *testing.T) {
-	service := &NotificationTestService{
+	server := newTestServer()
+	service := &notificationTestService{
 		gotHangSubscriptionReq:  make(chan struct{}),
 		unblockHangSubscription: make(chan struct{}),
 	}
-	server := newTestServer("eth", service)
+	if err := server.RegisterName("nftest2", service); err != nil {
+		t.Fatal(err)
+	}
+
 	defer server.Stop()
 	client := DialInProc(server)
 	defer client.Close()
@@ -302,7 +285,7 @@ func TestClientSubscribeClose(t *testing.T) {
 		err  error
 	)
 	go func() {
-		sub, err = client.EthSubscribe(context.Background(), nc, "hangSubscription", 999)
+		sub, err = client.Subscribe(context.Background(), "nftest2", nc, "hangSubscription", 999)
 		errc <- err
 	}()
 
@@ -313,27 +296,26 @@ func TestClientSubscribeClose(t *testing.T) {
 	select {
 	case err := <-errc:
 		if err == nil {
-			t.Errorf("EthSubscribe returned nil error after Close")
+			t.Errorf("Subscribe returned nil error after Close")
 		}
 		if sub != nil {
-			t.Error("EthSubscribe returned non-nil subscription after Close")
+			t.Error("Subscribe returned non-nil subscription after Close")
 		}
 	case <-time.After(1 * time.Second):
-		t.Fatalf("EthSubscribe did not return within 1s after Close")
+		t.Fatalf("Subscribe did not return within 1s after Close")
 	}
 }
 
 // This test reproduces https://github.com/ethereum/go-ethereum/issues/17837 where the
 // client hangs during shutdown when Unsubscribe races with Client.Close.
 func TestClientCloseUnsubscribeRace(t *testing.T) {
-	service := &NotificationTestService{}
-	server := newTestServer("eth", service)
+	server := newTestServer()
 	defer server.Stop()
 
 	for i := 0; i < 20; i++ {
 		client := DialInProc(server)
 		nc := make(chan int)
-		sub, err := client.EthSubscribe(context.Background(), nc, "someSubscription", 3, 1)
+		sub, err := client.Subscribe(context.Background(), "nftest", nc, "someSubscription", 3, 1)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -350,7 +332,7 @@ func TestClientCloseUnsubscribeRace(t *testing.T) {
 // This test checks that Client doesn't lock up when a single subscriber
 // doesn't read subscription events.
 func TestClientNotificationStorm(t *testing.T) {
-	server := newTestServer("eth", new(NotificationTestService))
+	server := newTestServer()
 	defer server.Stop()
 
 	doTest := func(count int, wantError bool) {
@@ -362,7 +344,7 @@ func TestClientNotificationStorm(t *testing.T) {
 		// Subscribe on the server. It will start sending many notifications
 		// very quickly.
 		nc := make(chan int)
-		sub, err := client.EthSubscribe(ctx, nc, "someSubscription", count, 0)
+		sub, err := client.Subscribe(ctx, "nftest", nc, "someSubscription", count, 0)
 		if err != nil {
 			t.Fatal("can't subscribe:", err)
 		}
@@ -384,7 +366,7 @@ func TestClientNotificationStorm(t *testing.T) {
 				return
 			}
 			var r int
-			err := client.CallContext(ctx, &r, "eth_echo", i)
+			err := client.CallContext(ctx, &r, "nftest_echo", i)
 			if err != nil {
 				if !wantError {
 					t.Fatalf("(%d/%d) call error: %v", i, count, err)
@@ -399,7 +381,7 @@ func TestClientNotificationStorm(t *testing.T) {
 }
 
 func TestClientHTTP(t *testing.T) {
-	server := newTestServer("service", new(Service))
+	server := newTestServer()
 	defer server.Stop()
 
 	client, hs := httpTestClient(server, "http", nil)
@@ -416,7 +398,7 @@ func TestClientHTTP(t *testing.T) {
 	for i := range results {
 		i := i
 		go func() {
-			errc <- client.Call(&results[i], "service_echo",
+			errc <- client.Call(&results[i], "test_echo",
 				wantResult.String, wantResult.Int, wantResult.Args)
 		}()
 	}
@@ -445,16 +427,16 @@ func TestClientHTTP(t *testing.T) {
 
 func TestClientReconnect(t *testing.T) {
 	startServer := func(addr string) (*Server, net.Listener) {
-		srv := newTestServer("service", new(Service))
+		srv := newTestServer()
 		l, err := net.Listen("tcp", addr)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatal("can't listen:", err)
 		}
 		go http.Serve(l, srv.WebsocketHandler([]string{"*"}))
 		return srv, l
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
 
 	// Start a server and corresponding client.
@@ -466,20 +448,21 @@ func TestClientReconnect(t *testing.T) {
 
 	// Perform a call. This should work because the server is up.
 	var resp Result
-	if err := client.CallContext(ctx, &resp, "service_echo", "", 1, nil); err != nil {
+	if err := client.CallContext(ctx, &resp, "test_echo", "", 1, nil); err != nil {
 		t.Fatal(err)
 	}
 
-	// Shut down the server and try calling again. It shouldn't work.
+	// Shut down the server and allow for some cool down time so we can listen on the same
+	// address again.
 	l1.Close()
 	s1.Stop()
-	if err := client.CallContext(ctx, &resp, "service_echo", "", 2, nil); err == nil {
+	time.Sleep(2 * time.Second)
+
+	// Try calling again. It shouldn't work.
+	if err := client.CallContext(ctx, &resp, "test_echo", "", 2, nil); err == nil {
 		t.Error("successful call while the server is down")
 		t.Logf("resp: %#v", resp)
 	}
-
-	// Allow for some cool down time so we can listen on the same address again.
-	time.Sleep(2 * time.Second)
 
 	// Start it up again and call again. The connection should be reestablished.
 	// We spawn multiple calls here to check whether this hangs somehow.
@@ -493,7 +476,7 @@ func TestClientReconnect(t *testing.T) {
 		go func() {
 			<-start
 			var resp Result
-			errors <- client.CallContext(ctx, &resp, "service_echo", "", 3, nil)
+			errors <- client.CallContext(ctx, &resp, "test_echo", "", 3, nil)
 		}()
 	}
 	close(start)
@@ -503,18 +486,10 @@ func TestClientReconnect(t *testing.T) {
 			errcount++
 		}
 	}
-	t.Log("err:", err)
+	t.Logf("%d errors, last error: %v", errcount, err)
 	if errcount > 1 {
 		t.Errorf("expected one error after disconnect, got %d", errcount)
 	}
-}
-
-func newTestServer(serviceName string, service interface{}) *Server {
-	server := NewServer()
-	if err := server.RegisterName(serviceName, service); err != nil {
-		panic(err)
-	}
-	return server
 }
 
 func httpTestClient(srv *Server, transport string, fl *flakeyListener) (*Client, *httptest.Server) {

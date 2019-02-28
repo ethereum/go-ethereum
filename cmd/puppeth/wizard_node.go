@@ -126,7 +126,7 @@ func (w *wizard) deployNode(boot bool) {
 				} else {
 					fmt.Println()
 					fmt.Printf("Reuse previous (%s) signing account (y/n)? (default = yes)\n", key.Address.Hex())
-					if w.readDefaultString("y") != "y" {
+					if !w.readDefaultYesNo(true) {
 						infos.keyJSON, infos.keyPass = "", ""
 					}
 				}
@@ -165,7 +165,7 @@ func (w *wizard) deployNode(boot bool) {
 	if existed {
 		fmt.Println()
 		fmt.Printf("Should the node be built from scratch (y/n)? (default = no)\n")
-		nocache = w.readDefaultString("n") != "n"
+		nocache = w.readDefaultYesNo(false)
 	}
 	if out, err := deployNode(client, w.network, w.conf.bootnodes, infos, nocache); err != nil {
 		log.Error("Failed to deploy Ethereum node container", "err", err)

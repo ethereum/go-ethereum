@@ -52,7 +52,7 @@ type Store struct {
 // and possible conflicts with schema from existing database is checked
 // automatically.
 func New(path string) (s *Store, err error) {
-	db, err := shed.NewDB(path)
+	db, err := shed.NewDB(path, "")
 	if err != nil {
 		return nil, err
 	}
@@ -71,20 +71,20 @@ func New(path string) (s *Store, err error) {
 	}
 	// Index storing actual chunk address, data and store timestamp.
 	s.retrievalIndex, err = db.NewIndex("Address->StoreTimestamp|Data", shed.IndexFuncs{
-		EncodeKey: func(fields shed.IndexItem) (key []byte, err error) {
+		EncodeKey: func(fields shed.Item) (key []byte, err error) {
 			return fields.Address, nil
 		},
-		DecodeKey: func(key []byte) (e shed.IndexItem, err error) {
+		DecodeKey: func(key []byte) (e shed.Item, err error) {
 			e.Address = key
 			return e, nil
 		},
-		EncodeValue: func(fields shed.IndexItem) (value []byte, err error) {
+		EncodeValue: func(fields shed.Item) (value []byte, err error) {
 			b := make([]byte, 8)
 			binary.BigEndian.PutUint64(b, uint64(fields.StoreTimestamp))
 			value = append(b, fields.Data...)
 			return value, nil
 		},
-		DecodeValue: func(value []byte) (e shed.IndexItem, err error) {
+		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
 			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
 			e.Data = value[8:]
 			return e, nil
@@ -96,19 +96,19 @@ func New(path string) (s *Store, err error) {
 	// Index storing access timestamp for a particular address.
 	// It is needed in order to update gc index keys for iteration order.
 	s.accessIndex, err = db.NewIndex("Address->AccessTimestamp", shed.IndexFuncs{
-		EncodeKey: func(fields shed.IndexItem) (key []byte, err error) {
+		EncodeKey: func(fields shed.Item) (key []byte, err error) {
 			return fields.Address, nil
 		},
-		DecodeKey: func(key []byte) (e shed.IndexItem, err error) {
+		DecodeKey: func(key []byte) (e shed.Item, err error) {
 			e.Address = key
 			return e, nil
 		},
-		EncodeValue: func(fields shed.IndexItem) (value []byte, err error) {
+		EncodeValue: func(fields shed.Item) (value []byte, err error) {
 			b := make([]byte, 8)
 			binary.BigEndian.PutUint64(b, uint64(fields.AccessTimestamp))
 			return b, nil
 		},
-		DecodeValue: func(value []byte) (e shed.IndexItem, err error) {
+		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
 			e.AccessTimestamp = int64(binary.BigEndian.Uint64(value))
 			return e, nil
 		},
@@ -118,23 +118,23 @@ func New(path string) (s *Store, err error) {
 	}
 	// Index with keys ordered by access timestamp for garbage collection prioritization.
 	s.gcIndex, err = db.NewIndex("AccessTimestamp|StoredTimestamp|Address->nil", shed.IndexFuncs{
-		EncodeKey: func(fields shed.IndexItem) (key []byte, err error) {
+		EncodeKey: func(fields shed.Item) (key []byte, err error) {
 			b := make([]byte, 16, 16+len(fields.Address))
 			binary.BigEndian.PutUint64(b[:8], uint64(fields.AccessTimestamp))
 			binary.BigEndian.PutUint64(b[8:16], uint64(fields.StoreTimestamp))
 			key = append(b, fields.Address...)
 			return key, nil
 		},
-		DecodeKey: func(key []byte) (e shed.IndexItem, err error) {
+		DecodeKey: func(key []byte) (e shed.Item, err error) {
 			e.AccessTimestamp = int64(binary.BigEndian.Uint64(key[:8]))
 			e.StoreTimestamp = int64(binary.BigEndian.Uint64(key[8:16]))
 			e.Address = key[16:]
 			return e, nil
 		},
-		EncodeValue: func(fields shed.IndexItem) (value []byte, err error) {
+		EncodeValue: func(fields shed.Item) (value []byte, err error) {
 			return nil, nil
 		},
-		DecodeValue: func(value []byte) (e shed.IndexItem, err error) {
+		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
 			return e, nil
 		},
 	})
@@ -146,7 +146,7 @@ func New(path string) (s *Store, err error) {
 
 // Put stores the chunk and sets it store timestamp.
 func (s *Store) Put(_ context.Context, ch storage.Chunk) (err error) {
-	return s.retrievalIndex.Put(shed.IndexItem{
+	return s.retrievalIndex.Put(shed.Item{
 		Address:        ch.Address(),
 		Data:           ch.Data(),
 		StoreTimestamp: time.Now().UTC().UnixNano(),
@@ -161,7 +161,7 @@ func (s *Store) Get(_ context.Context, addr storage.Address) (c storage.Chunk, e
 	batch := new(leveldb.Batch)
 
 	// Get the chunk data and storage timestamp.
-	item, err := s.retrievalIndex.Get(shed.IndexItem{
+	item, err := s.retrievalIndex.Get(shed.Item{
 		Address: addr,
 	})
 	if err != nil {
@@ -172,13 +172,13 @@ func (s *Store) Get(_ context.Context, addr storage.Address) (c storage.Chunk, e
 	}
 
 	// Get the chunk access timestamp.
-	accessItem, err := s.accessIndex.Get(shed.IndexItem{
+	accessItem, err := s.accessIndex.Get(shed.Item{
 		Address: addr,
 	})
 	switch err {
 	case nil:
 		// Remove gc index entry if access timestamp is found.
-		err = s.gcIndex.DeleteInBatch(batch, shed.IndexItem{
+		err = s.gcIndex.DeleteInBatch(batch, shed.Item{
 			Address:         item.Address,
 			StoreTimestamp:  accessItem.AccessTimestamp,
 			AccessTimestamp: item.StoreTimestamp,
@@ -197,7 +197,7 @@ func (s *Store) Get(_ context.Context, addr storage.Address) (c storage.Chunk, e
 	accessTimestamp := time.Now().UTC().UnixNano()
 
 	// Put new access timestamp in access index.
-	err = s.accessIndex.PutInBatch(batch, shed.IndexItem{
+	err = s.accessIndex.PutInBatch(batch, shed.Item{
 		Address:         addr,
 		AccessTimestamp: accessTimestamp,
 	})
@@ -206,7 +206,7 @@ func (s *Store) Get(_ context.Context, addr storage.Address) (c storage.Chunk, e
 	}
 
 	// Put new access timestamp in gc index.
-	err = s.gcIndex.PutInBatch(batch, shed.IndexItem{
+	err = s.gcIndex.PutInBatch(batch, shed.Item{
 		Address:         item.Address,
 		AccessTimestamp: accessTimestamp,
 		StoreTimestamp:  item.StoreTimestamp,
@@ -244,7 +244,7 @@ func (s *Store) CollectGarbage() (err error) {
 		// New batch for a new cg round.
 		trash := new(leveldb.Batch)
 		// Iterate through all index items and break when needed.
-		err = s.gcIndex.IterateAll(func(item shed.IndexItem) (stop bool, err error) {
+		err = s.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 			// Remove the chunk.
 			err = s.retrievalIndex.DeleteInBatch(trash, item)
 			if err != nil {
@@ -265,7 +265,7 @@ func (s *Store) CollectGarbage() (err error) {
 				return true, nil
 			}
 			return false, nil
-		})
+		}, nil)
 		if err != nil {
 			return err
 		}

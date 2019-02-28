@@ -20,20 +20,34 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"strconv"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
+	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/network/simulation"
+	"github.com/ethereum/go-ethereum/swarm/state"
+	"golang.org/x/crypto/sha3"
 )
 
 func TestStreamerSubscribe(t *testing.T) {
-	tester, streamer, _, teardown, err := newStreamerTester(t, nil)
-	defer teardown()
+	tester, streamer, _, teardown, err := newStreamerTester(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	stream := NewStream("foo", "", true)
 	err = streamer.Subscribe(tester.Nodes[0].ID(), stream, NewRange(0, 0), Top)
@@ -43,11 +57,11 @@ func TestStreamerSubscribe(t *testing.T) {
 }
 
 func TestStreamerRequestSubscription(t *testing.T) {
-	tester, streamer, _, teardown, err := newStreamerTester(t, nil)
-	defer teardown()
+	tester, streamer, _, teardown, err := newStreamerTester(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	stream := NewStream("foo", "", false)
 	err = streamer.RequestSubscription(tester.Nodes[0].ID(), stream, &Range{}, Top)
@@ -134,11 +148,11 @@ func (self *testServer) Close() {
 }
 
 func TestStreamerDownstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
-	tester, streamer, _, teardown, err := newStreamerTester(t, nil)
-	defer teardown()
+	tester, streamer, _, teardown, err := newStreamerTester(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	streamer.RegisterClientFunc("foo", func(p *Peer, t string, live bool) (Client, error) {
 		return newTestClient(t), nil
@@ -227,11 +241,11 @@ func TestStreamerDownstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 }
 
 func TestStreamerUpstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
-	tester, streamer, _, teardown, err := newStreamerTester(t, nil)
-	defer teardown()
+	tester, streamer, _, teardown, err := newStreamerTester(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	stream := NewStream("foo", "", false)
 
@@ -294,11 +308,11 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 }
 
 func TestStreamerUpstreamSubscribeUnsubscribeMsgExchangeLive(t *testing.T) {
-	tester, streamer, _, teardown, err := newStreamerTester(t, nil)
-	defer teardown()
+	tester, streamer, _, teardown, err := newStreamerTester(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	stream := NewStream("foo", "", true)
 
@@ -360,11 +374,11 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchangeLive(t *testing.T) {
 }
 
 func TestStreamerUpstreamSubscribeErrorMsgExchange(t *testing.T) {
-	tester, streamer, _, teardown, err := newStreamerTester(t, nil)
-	defer teardown()
+	tester, streamer, _, teardown, err := newStreamerTester(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	streamer.RegisterServerFunc("foo", func(p *Peer, t string, live bool) (Server, error) {
 		return newTestServer(t, 0), nil
@@ -404,11 +418,11 @@ func TestStreamerUpstreamSubscribeErrorMsgExchange(t *testing.T) {
 }
 
 func TestStreamerUpstreamSubscribeLiveAndHistory(t *testing.T) {
-	tester, streamer, _, teardown, err := newStreamerTester(t, nil)
-	defer teardown()
+	tester, streamer, _, teardown, err := newStreamerTester(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	stream := NewStream("foo", "", true)
 
@@ -467,11 +481,11 @@ func TestStreamerUpstreamSubscribeLiveAndHistory(t *testing.T) {
 }
 
 func TestStreamerDownstreamCorruptHashesMsgExchange(t *testing.T) {
-	tester, streamer, _, teardown, err := newStreamerTester(t, nil)
-	defer teardown()
+	tester, streamer, _, teardown, err := newStreamerTester(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	stream := NewStream("foo", "", true)
 
@@ -532,11 +546,11 @@ func TestStreamerDownstreamCorruptHashesMsgExchange(t *testing.T) {
 }
 
 func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
-	tester, streamer, _, teardown, err := newStreamerTester(t, nil)
-	defer teardown()
+	tester, streamer, _, teardown, err := newStreamerTester(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	stream := NewStream("foo", "", true)
 
@@ -631,11 +645,11 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 }
 
 func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
-	tester, streamer, _, teardown, err := newStreamerTester(t, nil)
-	defer teardown()
+	tester, streamer, _, teardown, err := newStreamerTester(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	streamer.RegisterServerFunc("foo", func(p *Peer, t string, live bool) (Server, error) {
 		return newTestServer(t, 10), nil
@@ -764,15 +778,15 @@ func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 // leaving place for new streams.
 func TestMaxPeerServersWithUnsubscribe(t *testing.T) {
 	var maxPeerServers = 6
-	tester, streamer, _, teardown, err := newStreamerTester(t, &RegistryOptions{
+	tester, streamer, _, teardown, err := newStreamerTester(&RegistryOptions{
 		Retrieval:      RetrievalDisabled,
 		Syncing:        SyncingDisabled,
 		MaxPeerServers: maxPeerServers,
 	})
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	streamer.RegisterServerFunc("foo", func(p *Peer, t string, live bool) (Server, error) {
 		return newTestServer(t, 0), nil
@@ -840,13 +854,13 @@ func TestMaxPeerServersWithUnsubscribe(t *testing.T) {
 // error message exchange.
 func TestMaxPeerServersWithoutUnsubscribe(t *testing.T) {
 	var maxPeerServers = 6
-	tester, streamer, _, teardown, err := newStreamerTester(t, &RegistryOptions{
+	tester, streamer, _, teardown, err := newStreamerTester(&RegistryOptions{
 		MaxPeerServers: maxPeerServers,
 	})
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	streamer.RegisterServerFunc("foo", func(p *Peer, t string, live bool) (Server, error) {
 		return newTestServer(t, 0), nil
@@ -920,4 +934,432 @@ func TestMaxPeerServersWithoutUnsubscribe(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+//TestHasPriceImplementation is to check that the Registry has a
+//`Price` interface implementation
+func TestHasPriceImplementation(t *testing.T) {
+	_, r, _, teardown, err := newStreamerTester(&RegistryOptions{
+		Retrieval: RetrievalDisabled,
+		Syncing:   SyncingDisabled,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardown()
+
+	if r.prices == nil {
+		t.Fatal("No prices implementation available for the stream protocol")
+	}
+
+	pricesInstance, ok := r.prices.(*StreamerPrices)
+	if !ok {
+		t.Fatal("`Registry` does not have the expected Prices instance")
+	}
+	price := pricesInstance.Price(&ChunkDeliveryMsgRetrieval{})
+	if price == nil || price.Value == 0 || price.Value != pricesInstance.getChunkDeliveryMsgRetrievalPrice() {
+		t.Fatal("No prices set for chunk delivery msg")
+	}
+
+	price = pricesInstance.Price(&RetrieveRequestMsg{})
+	if price == nil || price.Value == 0 || price.Value != pricesInstance.getRetrieveRequestMsgPrice() {
+		t.Fatal("No prices set for chunk delivery msg")
+	}
+}
+
+/*
+TestRequestPeerSubscriptions is a unit test for stream's pull sync subscriptions.
+
+The test does:
+	* assign each connected peer to a bin map
+  * build up a known kademlia in advance
+	* run the EachConn function, which returns supposed subscription bins
+	* store all supposed bins per peer in a map
+	* check that all peers have the expected subscriptions
+
+This kad table and its peers are copied from network.TestKademliaCase1,
+it represents an edge case but for the purpose of testing the
+syncing subscriptions it is just fine.
+
+Addresses used in this test are discovered as part of the simulation network
+in higher level tests for streaming. They were generated randomly.
+
+The resulting kademlia looks like this:
+=========================================================================
+Fri Dec 21 20:02:39 UTC 2018 KΛÐΞMLIΛ hive: queen's address: 7efef1
+population: 12 (12), MinProxBinSize: 2, MinBinSize: 2, MaxBinSize: 4
+000  2 8196 835f                    |  2 8196 (0) 835f (0)
+001  2 2690 28f0                    |  2 2690 (0) 28f0 (0)
+002  2 4d72 4a45                    |  2 4d72 (0) 4a45 (0)
+003  1 646e                         |  1 646e (0)
+004  3 769c 76d1 7656               |  3 769c (0) 76d1 (0) 7656 (0)
+============ DEPTH: 5 ==========================================
+005  1 7a48                         |  1 7a48 (0)
+006  1 7cbd                         |  1 7cbd (0)
+007  0                              |  0
+008  0                              |  0
+009  0                              |  0
+010  0                              |  0
+011  0                              |  0
+012  0                              |  0
+013  0                              |  0
+014  0                              |  0
+015  0                              |  0
+=========================================================================
+*/
+func TestRequestPeerSubscriptions(t *testing.T) {
+	// the pivot address; this is the actual kademlia node
+	pivotAddr := "7efef1c41d77f843ad167be95f6660567eb8a4a59f39240000cce2e0d65baf8e"
+
+	// a map of bin number to addresses from the given kademlia
+	binMap := make(map[int][]string)
+	binMap[0] = []string{
+		"835fbbf1d16ba7347b6e2fc552d6e982148d29c624ea20383850df3c810fa8fc",
+		"81968a2d8fb39114342ee1da85254ec51e0608d7f0f6997c2a8354c260a71009",
+	}
+	binMap[1] = []string{
+		"28f0bc1b44658548d6e05dd16d4c2fe77f1da5d48b6774bc4263b045725d0c19",
+		"2690a910c33ee37b91eb6c4e0731d1d345e2dc3b46d308503a6e85bbc242c69e",
+	}
+	binMap[2] = []string{
+		"4a45f1fc63e1a9cb9dfa44c98da2f3d20c2923e5d75ff60b2db9d1bdb0c54d51",
+		"4d72a04ddeb851a68cd197ef9a92a3e2ff01fbbff638e64929dd1a9c2e150112",
+	}
+	binMap[3] = []string{
+		"646e9540c84f6a2f9cf6585d45a4c219573b4fd1b64a3c9a1386fc5cf98c0d4d",
+	}
+	binMap[4] = []string{
+		"7656caccdc79cd8d7ce66d415cc96a718e8271c62fb35746bfc2b49faf3eebf3",
+		"76d1e83c71ca246d042e37ff1db181f2776265fbcfdc890ce230bfa617c9c2f0",
+		"769ce86aa90b518b7ed382f9fdacfbed93574e18dc98fe6c342e4f9f409c2d5a",
+	}
+	binMap[5] = []string{
+		"7a48f75f8ca60487ae42d6f92b785581b40b91f2da551ae73d5eae46640e02e8",
+	}
+	binMap[6] = []string{
+		"7cbd42350bde8e18ae5b955b5450f8e2cef3419f92fbf5598160c60fd78619f0",
+	}
+
+	// create the pivot's kademlia
+	addr := common.FromHex(pivotAddr)
+	k := network.NewKademlia(addr, network.NewKadParams())
+
+	// construct the peers and the kademlia
+	for _, binaddrs := range binMap {
+		for _, a := range binaddrs {
+			addr := common.FromHex(a)
+			k.On(network.NewPeer(&network.BzzPeer{BzzAddr: &network.BzzAddr{OAddr: addr}}, k))
+		}
+	}
+
+	// TODO: check kad table is same
+	// currently k.String() prints date so it will never be the same :)
+	// --> implement JSON representation of kad table
+	log.Debug(k.String())
+
+	// simulate that we would do subscriptions: just store the bin numbers
+	fakeSubscriptions := make(map[string][]int)
+	//after the test, we need to reset the subscriptionFunc to the default
+	defer func() { subscriptionFunc = doRequestSubscription }()
+	// define the function which should run for each connection
+	// instead of doing real subscriptions, we just store the bin numbers
+	subscriptionFunc = func(r *Registry, p *network.Peer, bin uint8, subs map[enode.ID]map[Stream]struct{}) bool {
+		// get the peer ID
+		peerstr := fmt.Sprintf("%x", p.Over())
+		// create the array of bins per peer
+		if _, ok := fakeSubscriptions[peerstr]; !ok {
+			fakeSubscriptions[peerstr] = make([]int, 0)
+		}
+		// store the (fake) bin subscription
+		log.Debug(fmt.Sprintf("Adding fake subscription for peer %s with bin %d", peerstr, bin))
+		fakeSubscriptions[peerstr] = append(fakeSubscriptions[peerstr], int(bin))
+		return true
+	}
+	// create just a simple Registry object in order to be able to call...
+	r := &Registry{}
+	r.requestPeerSubscriptions(k, nil)
+	// calculate the kademlia depth
+	kdepth := k.NeighbourhoodDepth()
+
+	// now, check that all peers have the expected (fake) subscriptions
+	// iterate the bin map
+	for bin, peers := range binMap {
+		// for every peer...
+		for _, peer := range peers {
+			// ...get its (fake) subscriptions
+			fakeSubsForPeer := fakeSubscriptions[peer]
+			// if the peer's bin is shallower than the kademlia depth...
+			if bin < kdepth {
+				// (iterate all (fake) subscriptions)
+				for _, subbin := range fakeSubsForPeer {
+					// ...only the peer's bin should be "subscribed"
+					// (and thus have only one subscription)
+					if subbin != bin || len(fakeSubsForPeer) != 1 {
+						t.Fatalf("Did not get expected subscription for bin < depth; bin of peer %s: %d, subscription: %d", peer, bin, subbin)
+					}
+				}
+			} else { //if the peer's bin is equal or higher than the kademlia depth...
+				// (iterate all (fake) subscriptions)
+				for i, subbin := range fakeSubsForPeer {
+					// ...each bin from the peer's bin number up to k.MaxProxDisplay should be "subscribed"
+					// as we start from depth we can use the iteration index to check
+					if subbin != i+kdepth {
+						t.Fatalf("Did not get expected subscription for bin > depth; bin of peer %s: %d, subscription: %d", peer, bin, subbin)
+					}
+					// the last "subscription" should be k.MaxProxDisplay
+					if i == len(fakeSubsForPeer)-1 && subbin != k.MaxProxDisplay {
+						t.Fatalf("Expected last subscription to be: %d, but is: %d", k.MaxProxDisplay, subbin)
+					}
+				}
+			}
+		}
+	}
+	// print some output
+	for p, subs := range fakeSubscriptions {
+		log.Debug(fmt.Sprintf("Peer %s has the following fake subscriptions: ", p))
+		for _, bin := range subs {
+			log.Debug(fmt.Sprintf("%d,", bin))
+		}
+	}
+}
+
+// TestGetSubscriptions is a unit test for the api.GetPeerSubscriptions() function
+func TestGetSubscriptions(t *testing.T) {
+	// create an amount of dummy peers
+	testPeerCount := 8
+	// every peer will have this amount of dummy servers
+	testServerCount := 4
+	// the peerMap which will store this data for the registry
+	peerMap := make(map[enode.ID]*Peer)
+	// create the registry
+	r := &Registry{}
+	api := NewAPI(r)
+	// call once, at this point should be empty
+	regs := api.GetPeerSubscriptions()
+	if len(regs) != 0 {
+		t.Fatal("Expected subscription count to be 0, but it is not")
+	}
+
+	// now create a number of dummy servers for each node
+	for i := 0; i < testPeerCount; i++ {
+		addr := network.RandomAddr()
+		id := addr.ID()
+		p := &Peer{}
+		p.servers = make(map[Stream]*server)
+		for k := 0; k < testServerCount; k++ {
+			s := Stream{
+				Name: strconv.Itoa(k),
+				Key:  "",
+				Live: false,
+			}
+			p.servers[s] = &server{}
+		}
+		peerMap[id] = p
+	}
+	r.peers = peerMap
+
+	// call the subscriptions again
+	regs = api.GetPeerSubscriptions()
+	// count how many (fake) subscriptions there are
+	cnt := 0
+	for _, reg := range regs {
+		for range reg {
+			cnt++
+		}
+	}
+	// check expected value
+	expectedCount := testPeerCount * testServerCount
+	if cnt != expectedCount {
+		t.Fatalf("Expected %d subscriptions, but got %d", expectedCount, cnt)
+	}
+}
+
+/*
+TestGetSubscriptionsRPC sets up a simulation network of `nodeCount` nodes,
+starts the simulation, waits for SyncUpdateDelay in order to kick off
+stream registration, then tests that there are subscriptions.
+*/
+func TestGetSubscriptionsRPC(t *testing.T) {
+
+	if testutil.RaceEnabled && os.Getenv("TRAVIS") == "true" {
+		t.Skip("flaky with -race on Travis")
+		// Note: related ticket https://github.com/ethersphere/go-ethereum/issues/1234
+	}
+
+	// arbitrarily set to 4
+	nodeCount := 4
+	// run with more nodes if `longrunning` flag is set
+	if *longrunning {
+		nodeCount = 64
+	}
+	// set the syncUpdateDelay for sync registrations to start
+	syncUpdateDelay := 200 * time.Millisecond
+	// holds the msg code for SubscribeMsg
+	var subscribeMsgCode uint64
+	var ok bool
+	var expectedMsgCount counter
+
+	// this channel signalizes that the expected amount of subscriptiosn is done
+	allSubscriptionsDone := make(chan struct{})
+	// after the test, we need to reset the subscriptionFunc to the default
+	defer func() { subscriptionFunc = doRequestSubscription }()
+
+	// we use this subscriptionFunc for this test: just increases count and calls the actual subscription
+	subscriptionFunc = func(r *Registry, p *network.Peer, bin uint8, subs map[enode.ID]map[Stream]struct{}) bool {
+		expectedMsgCount.inc()
+		doRequestSubscription(r, p, bin, subs)
+		return true
+	}
+	// create a standard sim
+	sim := simulation.New(map[string]simulation.ServiceFunc{
+		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+			addr, netStore, delivery, clean, err := newNetStoreAndDeliveryWithRequestFunc(ctx, bucket, dummyRequestFromPeers)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			// configure so that sync registrations actually happen
+			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+				Retrieval:       RetrievalEnabled,
+				Syncing:         SyncingAutoSubscribe, //enable sync registrations
+				SyncUpdateDelay: syncUpdateDelay,
+			}, nil)
+
+			// get the SubscribeMsg code
+			subscribeMsgCode, ok = r.GetSpec().GetCode(SubscribeMsg{})
+			if !ok {
+				t.Fatal("Message code for SubscribeMsg not found")
+			}
+
+			cleanup = func() {
+				r.Close()
+				clean()
+			}
+
+			return r, cleanup, nil
+		},
+	})
+	defer sim.Close()
+
+	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancelSimRun()
+
+	// upload a snapshot
+	err := sim.UploadSnapshot(fmt.Sprintf("testing/snapshot_%d.json", nodeCount))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// setup the filter for SubscribeMsg
+	msgs := sim.PeerEvents(
+		context.Background(),
+		sim.NodeIDs(),
+		simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(subscribeMsgCode),
+	)
+
+	// strategy: listen to all SubscribeMsg events; after every event we wait
+	// if after `waitDuration` no more messages are being received, we assume the
+	// subscription phase has terminated!
+
+	// the loop in this go routine will either wait for new message events
+	// or times out after 1 second, which signals that we are not receiving
+	// any new subscriptions any more
+	go func() {
+		//for long running sims, waiting 1 sec will not be enough
+		waitDuration := time.Duration(nodeCount/16) * time.Second
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case m := <-msgs: // just reset the loop
+				if m.Error != nil {
+					log.Error("stream message", "err", m.Error)
+					continue
+				}
+				log.Trace("stream message", "node", m.NodeID, "peer", m.PeerID)
+			case <-time.After(waitDuration):
+				// one second passed, don't assume more subscriptions
+				allSubscriptionsDone <- struct{}{}
+				log.Info("All subscriptions received")
+				return
+
+			}
+		}
+	}()
+
+	//run the simulation
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+		log.Info("Simulation running")
+		nodes := sim.Net.Nodes
+
+		//wait until all subscriptions are done
+		select {
+		case <-allSubscriptionsDone:
+		case <-ctx.Done():
+			return errors.New("Context timed out")
+		}
+
+		log.Debug("Expected message count: ", "expectedMsgCount", expectedMsgCount.count())
+		//now iterate again, this time we call each node via RPC to get its subscriptions
+		realCount := 0
+		for _, node := range nodes {
+			//create rpc client
+			client, err := node.Client()
+			if err != nil {
+				return fmt.Errorf("create node 1 rpc client fail: %v", err)
+			}
+
+			//ask it for subscriptions
+			pstreams := make(map[string][]string)
+			err = client.Call(&pstreams, "stream_getPeerSubscriptions")
+			if err != nil {
+				return fmt.Errorf("client call stream_getPeerSubscriptions: %v", err)
+			}
+			//length of the subscriptions can not be smaller than number of peers
+			log.Debug("node subscriptions", "node", node.String())
+			for p, ps := range pstreams {
+				log.Debug("... with", "peer", p)
+				for _, s := range ps {
+					log.Debug(".......", "stream", s)
+					// each node also has subscriptions to RETRIEVE_REQUEST streams,
+					// we need to ignore those, we are only counting SYNC streams
+					if !strings.HasPrefix(s, "RETRIEVE_REQUEST") {
+						realCount++
+					}
+				}
+			}
+		}
+		// every node is mutually subscribed to each other, so the actual count is half of it
+		emc := expectedMsgCount.count()
+		if realCount/2 != emc {
+			return fmt.Errorf("Real subscriptions and expected amount don't match; real: %d, expected: %d", realCount/2, emc)
+		}
+		return nil
+	})
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+}
+
+// counter is used to concurrently increment
+// and read an integer value.
+type counter struct {
+	v  int
+	mu sync.RWMutex
+}
+
+// Increment the counter.
+func (c *counter) inc() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.v++
+}
+
+// Read the counter value.
+func (c *counter) count() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.v
 }

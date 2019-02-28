@@ -17,8 +17,15 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"sort"
+
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	gethmetrics "github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/metrics/influxdb"
+	swarmmetrics "github.com/ethereum/go-ethereum/swarm/metrics"
+	"github.com/ethereum/go-ethereum/swarm/tracing"
 
 	"github.com/ethereum/go-ethereum/log"
 
@@ -26,14 +33,20 @@ import (
 )
 
 var (
-	endpoints        []string
-	includeLocalhost bool
-	cluster          string
-	scheme           string
-	filesize         int
-	from             int
-	to               int
-	verbosity        int
+	gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
+)
+
+var (
+	allhosts     string
+	hosts        []string
+	filesize     int
+	syncDelay    int
+	httpPort     int
+	wsPort       int
+	verbosity    int
+	timeout      int
+	single       bool
+	trackTimeout int
 )
 
 func main() {
@@ -44,33 +57,22 @@ func main() {
 
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
-			Name:        "cluster-endpoint",
-			Value:       "prod",
-			Usage:       "cluster to point to (prod or a given namespace)",
-			Destination: &cluster,
+			Name:        "hosts",
+			Value:       "",
+			Usage:       "comma-separated list of swarm hosts",
+			Destination: &allhosts,
 		},
 		cli.IntFlag{
-			Name:        "cluster-from",
-			Value:       8501,
-			Usage:       "swarm node (from)",
-			Destination: &from,
+			Name:        "http-port",
+			Value:       80,
+			Usage:       "http port",
+			Destination: &httpPort,
 		},
 		cli.IntFlag{
-			Name:        "cluster-to",
-			Value:       8512,
-			Usage:       "swarm node (to)",
-			Destination: &to,
-		},
-		cli.StringFlag{
-			Name:        "cluster-scheme",
-			Value:       "http",
-			Usage:       "http or https",
-			Destination: &scheme,
-		},
-		cli.BoolFlag{
-			Name:        "include-localhost",
-			Usage:       "whether to include localhost:8500 as an endpoint",
-			Destination: &includeLocalhost,
+			Name:        "ws-port",
+			Value:       8546,
+			Usage:       "ws port",
+			Destination: &wsPort,
 		},
 		cli.IntFlag{
 			Name:        "filesize",
@@ -79,33 +81,110 @@ func main() {
 			Destination: &filesize,
 		},
 		cli.IntFlag{
+			Name:        "sync-delay",
+			Value:       5,
+			Usage:       "duration of delay in seconds to wait for content to be synced",
+			Destination: &syncDelay,
+		},
+		cli.IntFlag{
 			Name:        "verbosity",
 			Value:       1,
 			Usage:       "verbosity",
 			Destination: &verbosity,
 		},
+		cli.IntFlag{
+			Name:        "timeout",
+			Value:       120,
+			Usage:       "timeout in seconds after which kill the process",
+			Destination: &timeout,
+		},
+		cli.BoolFlag{
+			Name:        "single",
+			Usage:       "whether to fetch content from a single node or from all nodes",
+			Destination: &single,
+		},
+		cli.IntFlag{
+			Name:        "track-timeout",
+			Value:       5,
+			Usage:       "timeout in seconds to wait for GetAllReferences to return",
+			Destination: &trackTimeout,
+		},
 	}
+
+	app.Flags = append(app.Flags, []cli.Flag{
+		utils.MetricsEnabledFlag,
+		swarmmetrics.MetricsInfluxDBEndpointFlag,
+		swarmmetrics.MetricsInfluxDBDatabaseFlag,
+		swarmmetrics.MetricsInfluxDBUsernameFlag,
+		swarmmetrics.MetricsInfluxDBPasswordFlag,
+		swarmmetrics.MetricsInfluxDBTagsFlag,
+	}...)
+
+	app.Flags = append(app.Flags, tracing.Flags...)
 
 	app.Commands = []cli.Command{
 		{
 			Name:    "upload_and_sync",
 			Aliases: []string{"c"},
 			Usage:   "upload and sync",
-			Action:  cliUploadAndSync,
+			Action:  wrapCliCommand("upload-and-sync", uploadAndSyncCmd),
 		},
 		{
 			Name:    "feed_sync",
 			Aliases: []string{"f"},
 			Usage:   "feed update generate, upload and sync",
-			Action:  cliFeedUploadAndSync,
+			Action:  wrapCliCommand("feed-and-sync", feedUploadAndSyncCmd),
+		},
+		{
+			Name:    "upload_speed",
+			Aliases: []string{"u"},
+			Usage:   "measure upload speed",
+			Action:  wrapCliCommand("upload-speed", uploadSpeedCmd),
+		},
+		{
+			Name:    "sliding_window",
+			Aliases: []string{"s"},
+			Usage:   "measure network aggregate capacity",
+			Action:  wrapCliCommand("sliding-window", slidingWindowCmd),
 		},
 	}
 
 	sort.Sort(cli.FlagsByName(app.Flags))
 	sort.Sort(cli.CommandsByName(app.Commands))
 
+	app.Before = func(ctx *cli.Context) error {
+		tracing.Setup(ctx)
+		return nil
+	}
+
+	app.After = func(ctx *cli.Context) error {
+		return emitMetrics(ctx)
+	}
+
 	err := app.Run(os.Args)
 	if err != nil {
 		log.Error(err.Error())
+
+		os.Exit(1)
 	}
+}
+
+func emitMetrics(ctx *cli.Context) error {
+	if gethmetrics.Enabled {
+		var (
+			endpoint = ctx.GlobalString(swarmmetrics.MetricsInfluxDBEndpointFlag.Name)
+			database = ctx.GlobalString(swarmmetrics.MetricsInfluxDBDatabaseFlag.Name)
+			username = ctx.GlobalString(swarmmetrics.MetricsInfluxDBUsernameFlag.Name)
+			password = ctx.GlobalString(swarmmetrics.MetricsInfluxDBPasswordFlag.Name)
+			tags     = ctx.GlobalString(swarmmetrics.MetricsInfluxDBTagsFlag.Name)
+		)
+
+		tagsMap := utils.SplitTagsFlag(tags)
+		tagsMap["version"] = gitCommit
+		tagsMap["filesize"] = fmt.Sprintf("%v", filesize)
+
+		return influxdb.InfluxDBWithTagsOnce(gethmetrics.DefaultRegistry, endpoint, database, username, password, "swarm-smoke.", tagsMap)
+	}
+
+	return nil
 }

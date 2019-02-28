@@ -86,7 +86,7 @@ func (s *Simulation) NewService(ctx *adapters.ServiceContext) (node.Service, err
 	addr := network.NewAddr(node)
 
 	kp := network.NewKadParams()
-	kp.MinProxBinSize = 2
+	kp.NeighbourhoodSize = 2
 	kp.MaxBinSize = 4
 	kp.MinBinSize = 1
 	kp.MaxRetries = 1000

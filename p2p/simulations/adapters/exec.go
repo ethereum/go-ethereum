@@ -46,7 +46,7 @@ import (
 
 func init() {
 	// Register a reexec function to start a simulation node when the current binary is
-	// executed as "p2p-node" (rather than whataver the main() function would normally do).
+	// executed as "p2p-node" (rather than whatever the main() function would normally do).
 	reexec.Register("p2p-node", execP2PNode)
 }
 
@@ -97,7 +97,11 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 		Stack: node.DefaultConfig,
 		Node:  config,
 	}
-	conf.Stack.DataDir = filepath.Join(dir, "data")
+	if config.DataDir != "" {
+		conf.Stack.DataDir = config.DataDir
+	} else {
+		conf.Stack.DataDir = filepath.Join(dir, "data")
+	}
 	conf.Stack.WSHost = "127.0.0.1"
 	conf.Stack.WSPort = 0
 	conf.Stack.WSOrigins = []string{"*"}

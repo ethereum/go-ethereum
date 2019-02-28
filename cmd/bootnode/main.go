@@ -112,11 +112,12 @@ func main() {
 		if !realaddr.IP.IsLoopback() {
 			go nat.Map(natm, nil, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
 		}
-		// TODO: react to external IP changes over time.
 		if ext, err := natm.ExternalIP(); err == nil {
 			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
 		}
 	}
+
+	printNotice(&nodeKey.PublicKey, *realaddr)
 
 	if *runv5 {
 		if _, err := discv5.ListenUDP(nodeKey, conn, "", restrictList); err != nil {
@@ -135,4 +136,14 @@ func main() {
 	}
 
 	select {}
+}
+
+func printNotice(nodeKey *ecdsa.PublicKey, addr net.UDPAddr) {
+	if addr.IP.IsUnspecified() {
+		addr.IP = net.IP{127, 0, 0, 1}
+	}
+	n := enode.NewV4(nodeKey, addr.IP, 0, addr.Port)
+	fmt.Println(n.String())
+	fmt.Println("Note: you're using cmd/bootnode, a developer tool.")
+	fmt.Println("We recommend using a regular node as bootstrap node for production deployments.")
 }

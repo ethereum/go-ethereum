@@ -25,8 +25,8 @@ func TestStorageSizeString(t *testing.T) {
 		size StorageSize
 		str  string
 	}{
-		{2381273, "2.38 mB"},
-		{2192, "2.19 kB"},
+		{2381273, "2.27 MiB"},
+		{2192, "2.14 KiB"},
 		{12, "12.00 B"},
 	}
 

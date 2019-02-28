@@ -157,7 +157,7 @@ func (s *Sync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) {
 
 // Missing retrieves the known missing nodes from the trie for retrieval.
 func (s *Sync) Missing(max int) []common.Hash {
-	requests := []common.Hash{}
+	var requests []common.Hash
 	for !s.queue.Empty() && (max == 0 || len(requests) < max) {
 		requests = append(requests, s.queue.PopItem().(common.Hash))
 	}
@@ -254,7 +254,7 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 		node  node
 		depth int
 	}
-	children := []child{}
+	var children []child
 
 	switch node := (object).(type) {
 	case *shortNode:

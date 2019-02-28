@@ -415,7 +415,8 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		if err != nil {
 			d.mux.Post(FailedEvent{err})
 		} else {
-			d.mux.Post(DoneEvent{})
+			latest := d.lightchain.CurrentHeader()
+			d.mux.Post(DoneEvent{latest})
 		}
 	}()
 	if p.version < 62 {
@@ -718,7 +719,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 			}
 			// Make sure the peer's reply conforms to the request
 			for i, header := range headers {
-				expectNumber := from + int64(i)*int64((skip+1))
+				expectNumber := from + int64(i)*int64(skip+1)
 				if number := header.Number.Int64(); number != expectNumber {
 					p.log.Warn("Head headers broke chain ordering", "index", i, "requested", expectNumber, "received", number)
 					return 0, errInvalidChain
@@ -1369,7 +1370,6 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 			}
 			// Otherwise split the chunk of headers into batches and process them
 			gotHeaders = true
-
 			for len(headers) > 0 {
 				// Terminate if something failed in between processing chunks
 				select {
@@ -1432,7 +1432,6 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 				headers = headers[limit:]
 				origin += uint64(limit)
 			}
-
 			// Update the highest block number we know if a higher one is found.
 			d.syncStatsLock.Lock()
 			if d.syncStatsChainHeight < origin {
@@ -1488,7 +1487,15 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
 	}
 	if index, err := d.blockchain.InsertChain(blocks); err != nil {
-		log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
+		if index < len(results) {
+			log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
+		} else {
+			// The InsertChain method in blockchain.go will sometimes return an out-of-bounds index,
+			// when it needs to preprocess blocks to import a sidechain.
+			// The importer will put together a new list of blocks to import, which is a superset
+			// of the blocks delivered from the downloader, and the indexing will be off.
+			log.Debug("Downloaded item processing failed on sidechain import", "index", index, "err", err)
+		}
 		return errInvalidChain
 	}
 	return nil

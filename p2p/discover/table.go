@@ -75,8 +75,10 @@ type Table struct {
 	net        transport
 	refreshReq chan chan struct{}
 	initDone   chan struct{}
-	closeReq   chan struct{}
-	closed     chan struct{}
+
+	closeOnce sync.Once
+	closeReq  chan struct{}
+	closed    chan struct{}
 
 	nodeAddedHook func(*node) // for testing
 }
@@ -180,16 +182,14 @@ func (tab *Table) ReadRandomNodes(buf []*enode.Node) (n int) {
 
 // Close terminates the network listener and flushes the node database.
 func (tab *Table) Close() {
-	if tab.net != nil {
-		tab.net.close()
-	}
-
-	select {
-	case <-tab.closed:
-		// already closed.
-	case tab.closeReq <- struct{}{}:
-		<-tab.closed // wait for refreshLoop to end.
-	}
+	tab.closeOnce.Do(func() {
+		if tab.net != nil {
+			tab.net.close()
+		}
+		// Wait for loop to end.
+		close(tab.closeReq)
+		<-tab.closed
+	})
 }
 
 // setFallbackNodes sets the initial points of contact. These nodes
@@ -290,12 +290,16 @@ func (tab *Table) lookup(targetKey encPubkey, refreshIfEmpty bool) []*node {
 			// we have asked all closest nodes, stop the search
 			break
 		}
-		// wait for the next reply
-		for _, n := range <-reply {
-			if n != nil && !seen[n.ID()] {
-				seen[n.ID()] = true
-				result.push(n, bucketSize)
+		select {
+		case nodes := <-reply:
+			for _, n := range nodes {
+				if n != nil && !seen[n.ID()] {
+					seen[n.ID()] = true
+					result.push(n, bucketSize)
+				}
 			}
+		case <-tab.closeReq:
+			return nil // shutdown, no need to continue.
 		}
 		pendingQueries--
 	}
@@ -303,24 +307,28 @@ func (tab *Table) lookup(targetKey encPubkey, refreshIfEmpty bool) []*node {
 }
 
 func (tab *Table) findnode(n *node, targetKey encPubkey, reply chan<- []*node) {
-	fails := tab.db.FindFails(n.ID())
+	fails := tab.db.FindFails(n.ID(), n.IP())
 	r, err := tab.net.findnode(n.ID(), n.addr(), targetKey)
-	if err != nil || len(r) == 0 {
+	if err == errClosed {
+		// Avoid recording failures on shutdown.
+		reply <- nil
+		return
+	} else if err != nil || len(r) == 0 {
 		fails++
-		tab.db.UpdateFindFails(n.ID(), fails)
+		tab.db.UpdateFindFails(n.ID(), n.IP(), fails)
 		log.Trace("Findnode failed", "id", n.ID(), "failcount", fails, "err", err)
 		if fails >= maxFindnodeFailures {
 			log.Trace("Too many findnode failures, dropping", "id", n.ID(), "failcount", fails)
 			tab.delete(n)
 		}
 	} else if fails > 0 {
-		tab.db.UpdateFindFails(n.ID(), fails-1)
+		tab.db.UpdateFindFails(n.ID(), n.IP(), fails-1)
 	}
 
 	// Grab as many nodes as possible. Some of them might not be alive anymore, but we'll
 	// just remove those again during revalidation.
 	for _, n := range r {
-		tab.add(n)
+		tab.addSeenNode(n)
 	}
 	reply <- r
 }
@@ -329,7 +337,7 @@ func (tab *Table) refresh() <-chan struct{} {
 	done := make(chan struct{})
 	select {
 	case tab.refreshReq <- done:
-	case <-tab.closed:
+	case <-tab.closeReq:
 		close(done)
 	}
 	return done
@@ -433,9 +441,9 @@ func (tab *Table) loadSeedNodes() {
 	seeds = append(seeds, tab.nursery...)
 	for i := range seeds {
 		seed := seeds[i]
-		age := log.Lazy{Fn: func() interface{} { return time.Since(tab.db.LastPongReceived(seed.ID())) }}
+		age := log.Lazy{Fn: func() interface{} { return time.Since(tab.db.LastPongReceived(seed.ID(), seed.IP())) }}
 		log.Trace("Found seed node in database", "id", seed.ID(), "addr", seed.addr(), "age", age)
-		tab.add(seed)
+		tab.addSeenNode(seed)
 	}
 }
 
@@ -458,16 +466,17 @@ func (tab *Table) doRevalidate(done chan<- struct{}) {
 	b := tab.buckets[bi]
 	if err == nil {
 		// The node responded, move it to the front.
-		log.Debug("Revalidated node", "b", bi, "id", last.ID())
-		b.bump(last)
+		last.livenessChecks++
+		log.Debug("Revalidated node", "b", bi, "id", last.ID(), "checks", last.livenessChecks)
+		tab.bumpInBucket(b, last)
 		return
 	}
 	// No reply received, pick a replacement or delete the node if there aren't
 	// any replacements.
 	if r := tab.replace(b, last); r != nil {
-		log.Debug("Replaced dead node", "b", bi, "id", last.ID(), "ip", last.IP(), "r", r.ID(), "rip", r.IP())
+		log.Debug("Replaced dead node", "b", bi, "id", last.ID(), "ip", last.IP(), "checks", last.livenessChecks, "r", r.ID(), "rip", r.IP())
 	} else {
-		log.Debug("Removed dead node", "b", bi, "id", last.ID(), "ip", last.IP())
+		log.Debug("Removed dead node", "b", bi, "id", last.ID(), "ip", last.IP(), "checks", last.livenessChecks)
 	}
 }
 
@@ -502,7 +511,7 @@ func (tab *Table) copyLiveNodes() {
 	now := time.Now()
 	for _, b := range &tab.buckets {
 		for _, n := range b.entries {
-			if now.Sub(n.addedAt) >= seedMinTableTime {
+			if n.livenessChecks > 0 && now.Sub(n.addedAt) >= seedMinTableTime {
 				tab.db.UpdateNode(unwrapNode(n))
 			}
 		}
@@ -518,7 +527,9 @@ func (tab *Table) closest(target enode.ID, nresults int) *nodesByDistance {
 	close := &nodesByDistance{target: target}
 	for _, b := range &tab.buckets {
 		for _, n := range b.entries {
-			close.push(n, nresults)
+			if n.livenessChecks > 0 {
+				close.push(n, nresults)
+			}
 		}
 	}
 	return close
@@ -540,12 +551,12 @@ func (tab *Table) bucket(id enode.ID) *bucket {
 	return tab.buckets[d-bucketMinDistance-1]
 }
 
-// add attempts to add the given node to its corresponding bucket. If the bucket has space
-// available, adding the node succeeds immediately. Otherwise, the node is added if the
-// least recently active node in the bucket does not respond to a ping packet.
+// addSeenNode adds a node which may or may not be live to the end of a bucket. If the
+// bucket has space available, adding the node succeeds immediately. Otherwise, the node is
+// added to the replacements list.
 //
 // The caller must not hold tab.mutex.
-func (tab *Table) add(n *node) {
+func (tab *Table) addSeenNode(n *node) {
 	if n.ID() == tab.self().ID() {
 		return
 	}
@@ -553,39 +564,67 @@ func (tab *Table) add(n *node) {
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
 	b := tab.bucket(n.ID())
-	if !tab.bumpOrAdd(b, n) {
-		// Node is not in table. Add it to the replacement list.
+	if contains(b.entries, n.ID()) {
+		// Already in bucket, don't add.
+		return
+	}
+	if len(b.entries) >= bucketSize {
+		// Bucket full, maybe add as replacement.
 		tab.addReplacement(b, n)
+		return
+	}
+	if !tab.addIP(b, n.IP()) {
+		// Can't add: IP limit reached.
+		return
+	}
+	// Add to end of bucket:
+	b.entries = append(b.entries, n)
+	b.replacements = deleteNode(b.replacements, n)
+	n.addedAt = time.Now()
+	if tab.nodeAddedHook != nil {
+		tab.nodeAddedHook(n)
 	}
 }
 
-// addThroughPing adds the given node to the table. Compared to plain
-// 'add' there is an additional safety measure: if the table is still
-// initializing the node is not added. This prevents an attack where the
-// table could be filled by just sending ping repeatedly.
+// addVerifiedNode adds a node whose existence has been verified recently to the front of a
+// bucket. If the node is already in the bucket, it is moved to the front. If the bucket
+// has no space, the node is added to the replacements list.
+//
+// There is an additional safety measure: if the table is still initializing the node
+// is not added. This prevents an attack where the table could be filled by just sending
+// ping repeatedly.
 //
 // The caller must not hold tab.mutex.
-func (tab *Table) addThroughPing(n *node) {
+func (tab *Table) addVerifiedNode(n *node) {
 	if !tab.isInitDone() {
 		return
 	}
-	tab.add(n)
-}
+	if n.ID() == tab.self().ID() {
+		return
+	}
 
-// stuff adds nodes the table to the end of their corresponding bucket
-// if the bucket is not full. The caller must not hold tab.mutex.
-func (tab *Table) stuff(nodes []*node) {
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
-
-	for _, n := range nodes {
-		if n.ID() == tab.self().ID() {
-			continue // don't add self
-		}
-		b := tab.bucket(n.ID())
-		if len(b.entries) < bucketSize {
-			tab.bumpOrAdd(b, n)
-		}
+	b := tab.bucket(n.ID())
+	if tab.bumpInBucket(b, n) {
+		// Already in bucket, moved to front.
+		return
+	}
+	if len(b.entries) >= bucketSize {
+		// Bucket full, maybe add as replacement.
+		tab.addReplacement(b, n)
+		return
+	}
+	if !tab.addIP(b, n.IP()) {
+		// Can't add: IP limit reached.
+		return
+	}
+	// Add to front of bucket.
+	b.entries, _ = pushNode(b.entries, n, bucketSize)
+	b.replacements = deleteNode(b.replacements, n)
+	n.addedAt = time.Now()
+	if tab.nodeAddedHook != nil {
+		tab.nodeAddedHook(n)
 	}
 }
 
@@ -657,12 +696,21 @@ func (tab *Table) replace(b *bucket, last *node) *node {
 	return r
 }
 
-// bump moves the given node to the front of the bucket entry list
+// bumpInBucket moves the given node to the front of the bucket entry list
 // if it is contained in that list.
-func (b *bucket) bump(n *node) bool {
+func (tab *Table) bumpInBucket(b *bucket, n *node) bool {
 	for i := range b.entries {
 		if b.entries[i].ID() == n.ID() {
-			// move it to the front
+			if !n.IP().Equal(b.entries[i].IP()) {
+				// Endpoint has changed, ensure that the new IP fits into table limits.
+				tab.removeIP(b, b.entries[i].IP())
+				if !tab.addIP(b, n.IP()) {
+					// It doesn't, put the previous one back.
+					tab.addIP(b, b.entries[i].IP())
+					return false
+				}
+			}
+			// Move it to the front.
 			copy(b.entries[1:], b.entries[:i])
 			b.entries[0] = n
 			return true
@@ -671,27 +719,18 @@ func (b *bucket) bump(n *node) bool {
 	return false
 }
 
-// bumpOrAdd moves n to the front of the bucket entry list or adds it if the list isn't
-// full. The return value is true if n is in the bucket.
-func (tab *Table) bumpOrAdd(b *bucket, n *node) bool {
-	if b.bump(n) {
-		return true
-	}
-	if len(b.entries) >= bucketSize || !tab.addIP(b, n.IP()) {
-		return false
-	}
-	b.entries, _ = pushNode(b.entries, n, bucketSize)
-	b.replacements = deleteNode(b.replacements, n)
-	n.addedAt = time.Now()
-	if tab.nodeAddedHook != nil {
-		tab.nodeAddedHook(n)
-	}
-	return true
-}
-
 func (tab *Table) deleteInBucket(b *bucket, n *node) {
 	b.entries = deleteNode(b.entries, n)
 	tab.removeIP(b, n.IP())
+}
+
+func contains(ns []*node, id enode.ID) bool {
+	for _, n := range ns {
+		if n.ID() == id {
+			return true
+		}
+	}
+	return false
 }
 
 // pushNode adds n to the front of list, keeping at most max items.
