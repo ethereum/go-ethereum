@@ -184,10 +184,14 @@ func (r *ReceiptForStorage) EncodeRLP(w io.Writer) error {
 // DecodeRLP implements rlp.Decoder, and loads both consensus and implementation
 // fields of a receipt from an RLP stream.
 func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
+	blob, err := s.Raw()
+	if err != nil {
+		return err
+	}
 	var dec receiptStorageRLP
-	if err := s.Decode(&dec); err != nil {
+	if err := rlp.DecodeBytes(blob, &dec); err != nil {
 		var sdec LegacyReceiptStorageRLP
-		if err := s.Decode(&sdec); err != nil {
+		if err := rlp.DecodeBytes(blob, &sdec); err != nil {
 			return err
 		}
 		dec.PostStateOrStatus = common.CopyBytes(sdec.PostStateOrStatus)
