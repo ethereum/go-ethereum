@@ -54,6 +54,7 @@ func TestFileRetrieval(t *testing.T) {
 
 		if *longrunning {
 			nodeCount = append(nodeCount, 32, 64, 128)
+			//nodeCount = append(nodeCount, 32, 64)
 		} else if testutil.RaceEnabled {
 			nodeCount = []int{4}
 		}
