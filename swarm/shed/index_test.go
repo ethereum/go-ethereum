@@ -917,7 +917,6 @@ func TestIncByteSlice(t *testing.T) {
 		{b: []byte{1, 0}, want: []byte{1, 1}},
 		{b: []byte{1, 255}, want: []byte{2, 0}},
 		{b: []byte{255, 255}, want: nil},
-		{b: []byte{255, 255}, want: nil},
 		{b: []byte{32, 0, 255}, want: []byte{32, 1, 0}},
 	} {
 		got := incByteSlice(tc.b)
