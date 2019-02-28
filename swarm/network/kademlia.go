@@ -155,10 +155,16 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 				return newEntry(p)
 			}
 
-			e, ok := v.(*entry)
-			if ok {
-				log.Trace("found among known peers, do nothing", "new", p, "old", e.BzzAddr)
+			e := v.(*entry)
+
+			// if underlay address is different, still add
+			if bytes.Compare(e.BzzAddr.UAddr, p.UAddr) != 0 {
+				log.Trace("underlay addr is different, so add again", "new", p, "old", e.BzzAddr)
+				// insert new offline peer into conns
+				return newEntry(p)
 			}
+
+			log.Trace("found among known peers, underlay addr is same, do nothing", "new", p, "old", e.BzzAddr)
 
 			return v
 		})
