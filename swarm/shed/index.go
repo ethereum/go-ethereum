@@ -265,7 +265,7 @@ func (f Index) Iterate(fn IndexIterFunc, options *IterateOptions) (err error) {
 }
 
 // First returns the first item in the Index which encoded key starts with a prefix.
-// If the prefix is nil, the Last element of the whole index is returned.
+// If the prefix is nil, the first element of the whole index is returned.
 // If Index has no elements, a leveldb.ErrNotFound error is returned.
 func (f Index) First(prefix []byte) (i Item, err error) {
 	it := f.db.NewIterator()
@@ -300,7 +300,7 @@ func (f Index) itemFromIterator(it iterator.Iterator, totalPrefix []byte) (i Ite
 }
 
 // Last returns the last item in the Index which encoded key starts with a prefix.
-// If the prefix is nil, the Last element of the whole index is returned.
+// If the prefix is nil, the last element of the whole index is returned.
 // If Index has no elements, a leveldb.ErrNotFound error is returned.
 func (f Index) Last(prefix []byte) (i Item, err error) {
 	it := f.db.NewIterator()
