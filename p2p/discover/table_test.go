@@ -624,6 +624,8 @@ func (tn *preminedTestnet) findnode(toid enode.ID, toaddr *net.UDPAddr, target e
 func (*preminedTestnet) close()                                        {}
 func (*preminedTestnet) ping(toid enode.ID, toaddr *net.UDPAddr) error { return nil }
 
+var _ = (*preminedTestnet).mine // avoid linter warning about mine being dead code.
+
 // mine generates a testnet struct literal with nodes at
 // various distances to the given target.
 func (tn *preminedTestnet) mine(target encPubkey) {
