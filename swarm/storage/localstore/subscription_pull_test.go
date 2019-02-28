@@ -510,7 +510,7 @@ func TestDB_LastPullSubscriptionChunk(t *testing.T) {
 
 	// do a few rounds of uploads and check if
 	// last pull subscription chunk is correct
-	for _, count := range []int{1, 1, 10, 10, 100, 100} {
+	for _, count := range []int{1, 3, 10, 11, 100, 120} {
 
 		// upload
 		for i := 0; i < count; i++ {
