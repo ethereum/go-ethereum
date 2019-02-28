@@ -158,7 +158,7 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 			e := v.(*entry)
 
 			// if underlay address is different, still add
-			if bytes.Compare(e.BzzAddr.UAddr, p.UAddr) != 0 {
+			if !bytes.Equal(e.BzzAddr.UAddr, p.UAddr) {
 				log.Trace("underlay addr is different, so add again", "new", p, "old", e.BzzAddr)
 				// insert new offline peer into conns
 				return newEntry(p)
