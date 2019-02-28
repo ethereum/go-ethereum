@@ -75,11 +75,10 @@ matrix:
         - sudo chmod 666 /dev/fuse
         - sudo chown root:$USER /etc/fuse.conf
         - git clone http://github.com/ewasm/tests.git tests/testdata
-        - wget https://github.com/ewasm/hera/releases/download/v0.2.3-alpha.0/hera-0.2.3-alpha.0-linux-x86_64.tar.gz
-        - mkdir hera
-        - tar xfz hera-0.2.3-alpha.0-linux-x86_64.tar.gz -C hera
+        - wget https://github.com/ethereum/aleth/releases/download/v1.6.0-alpha.1/aleth-1.6.0-alpha.1-linux-x86_64.tar.gz
+        - tar xfz aleth-1.6.0-alpha.1-linux-x86_64.tar.gz lib/libaleth-interpreter.so
         - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES -- --ewasm.vm="$PWD/hera/libhera.so"
+        - go test ./tests/... -run TestState -vm.evm $PWD/lib/libaleth-interpreter.so
 
     # This builder does the Ubuntu PPA upload
     - if: repo = ethereum/go-ethereum AND type = push
