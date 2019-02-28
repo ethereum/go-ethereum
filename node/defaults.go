@@ -85,7 +85,7 @@ func windowsAppData() string {
 		// Windows XP and below don't have LocalAppData. Crash here because
 		// we don't support Windows XP and undefining the variable will cause
 		// other issues.
-		panic("environment varibale LocalAppData is undefined")
+		panic("environment variable LocalAppData is undefined")
 	}
 	return v
 }
