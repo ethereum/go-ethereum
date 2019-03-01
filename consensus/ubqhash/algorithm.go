@@ -31,6 +31,8 @@ import (
 	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/crypto/sha3"
 	"github.com/ubiq/go-ubiq/log"
+
+	"golang.org/x/crypto/blake2b"
 )
 
 const (
@@ -45,6 +47,8 @@ const (
 	datasetParents     = 256     // Number of parents of each dataset element
 	cacheRounds        = 3       // Number of rounds in cache production
 	loopAccesses       = 64      // Number of accesses in hashimoto loop
+
+	uip1Epoch = 22
 )
 
 // hasher is a repetitive hasher allowing the same hash data structures to be
@@ -124,6 +128,10 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 	}()
 	// Create a hasher to reuse between invocations
 	keccak512 := makeHasher(sha3.NewKeccak512())
+	if epoch > uip1Epoch {
+		h, _ := blake2b.New512(nil)
+		keccak512 = makeHasher(h)
+	}
 
 	// Sequentially produce the initial dataset
 	keccak512(cache, seed)
