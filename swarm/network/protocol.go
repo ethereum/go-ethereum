@@ -236,6 +236,8 @@ func sanitizeEnodeRemote(paddr net.Addr, baddr *BzzAddr) {
 		remoteStr := fmt.Sprintf("@%s:%s", ip, string(hsSubmatch[2]))
 		log.Debug("rewrote peer uaddr host/port", "addr", baddr)
 		baddr.UAddr = regexpEnodeIP.ReplaceAll(baddr.UAddr, []byte(remoteStr))
+	} else {
+		log.Trace("passthrough handshake addr rewrite", "submatch", hsSubmatch[1])
 	}
 }
 
