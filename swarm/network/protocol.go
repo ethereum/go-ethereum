@@ -231,7 +231,7 @@ func sanitizeEnodeRemote(paddr net.Addr, baddr *BzzAddr) {
 	hsSubmatch := regexpEnodeIP.FindSubmatch(baddr.UAddr)
 	ip, _, err := net.SplitHostPort(paddr.String())
 	if len(hsSubmatch) < 2 {
-		log.Warn("sanitize found non ipv4 string", "str", paddr.String())
+		log.Warn("sanitize found non ipv4 string", "remotestring", paddr.String(), "handshakeaddr", baddr)
 	} else if err == nil && bytes.Equal(hsSubmatch[1], []byte("127.0.0.1")) {
 		remoteStr := fmt.Sprintf("@%s:%s", ip, string(hsSubmatch[2]))
 		log.Debug("rewrote peer uaddr host/port", "addr", baddr)
