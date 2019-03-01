@@ -149,7 +149,7 @@ func dialRPC(ctx *cli.Context) (*rpc.Client, error) {
 
 func getIPCEndpoint(ctx *cli.Context) string {
 	cfg := defaultNodeConfig
-	utils.SetNodeConfig(ctx, &cfg)
+	utils.SetNodeConfig(ctx, &cfg, nil)
 
 	endpoint := cfg.IPCEndpoint()
 

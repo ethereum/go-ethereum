@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -919,8 +920,32 @@ func setIPC(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
-// SetULC setup ULC config from file if given.
-func SetULC(ctx *cli.Context, cfg *eth.Config) {
+// SetLesConfig processes LES server/client/ultralight client parameters
+func SetLesConfig(ctx *cli.Context, cfg *eth.Config) {
+	if ctx.GlobalIsSet(SyncModeFlag.Name) {
+		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
+	}
+	if cfg.SyncMode != downloader.LightSync {
+		if ctx.GlobalIsSet(LightServFlag.Name) {
+			cfg.LightServ = ctx.GlobalInt(LightServFlag.Name)
+		} else if !ctx.GlobalBool(MiningEnabledFlag.Name) {
+			// enable light server with a given chance
+			rand.Seed(time.Now().UnixNano())
+			if rand.Intn(100) < 20 {
+				log.Warn("LES server mode enabled (use --lightserv option to explicitly enable or disable)")
+				cfg.LightServ = 50
+			}
+		}
+	}
+	cfg.LightBandwidthIn = ctx.GlobalInt(LightBandwidthInFlag.Name)
+	cfg.LightBandwidthOut = ctx.GlobalInt(LightBandwidthOutFlag.Name)
+	if ctx.GlobalIsSet(LightPeersFlag.Name) {
+		cfg.LightPeers = ctx.GlobalInt(LightPeersFlag.Name)
+	}
+	if ctx.GlobalIsSet(OnlyAnnounceModeFlag.Name) {
+		cfg.OnlyAnnounce = ctx.GlobalBool(OnlyAnnounceModeFlag.Name)
+	}
+
 	// ULC config isn't loaded from global config and ULC config and ULC trusted nodes are not defined.
 	if cfg.ULC == nil && !(ctx.GlobalIsSet(ULCModeConfigFlag.Name) || ctx.GlobalIsSet(ULCTrustedNodesFlag.Name)) {
 		return
@@ -1035,15 +1060,18 @@ func MakePasswordList(ctx *cli.Context) []string {
 	return lines
 }
 
-func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
+func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config, ethCfg *eth.Config) {
 	setNodeKey(ctx, cfg)
 	setNAT(ctx, cfg)
 	setListenAddress(ctx, cfg)
 	setBootstrapNodes(ctx, cfg)
 	setBootstrapNodesV5(ctx, cfg)
 
-	lightClient := ctx.GlobalString(SyncModeFlag.Name) == "light"
-	lightServer := ctx.GlobalInt(LightServFlag.Name) != 0
+	var lightClient, lightServer bool
+	if ethCfg != nil {
+		lightClient = ethCfg.SyncMode == downloader.LightSync
+		lightServer = ethCfg.LightServ != 0
+	}
 	lightPeers := ctx.GlobalInt(LightPeersFlag.Name)
 
 	if ctx.GlobalIsSet(MaxPeersFlag.Name) {
@@ -1103,8 +1131,8 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 }
 
 // SetNodeConfig applies node-related command line flags to the config.
-func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
-	SetP2PConfig(ctx, &cfg.P2P)
+func SetNodeConfig(ctx *cli.Context, cfg *node.Config, ethCfg *eth.Config) {
+	SetP2PConfig(ctx, &cfg.P2P, ethCfg)
 	setIPC(ctx, cfg)
 	setHTTP(ctx, cfg)
 	setGraphQL(ctx, cfg)
@@ -1309,20 +1337,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	setEthash(ctx, cfg)
 	setWhitelist(ctx, cfg)
 
-	if ctx.GlobalIsSet(SyncModeFlag.Name) {
-		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
-	}
-	if ctx.GlobalIsSet(LightServFlag.Name) {
-		cfg.LightServ = ctx.GlobalInt(LightServFlag.Name)
-	}
-	cfg.LightBandwidthIn = ctx.GlobalInt(LightBandwidthInFlag.Name)
-	cfg.LightBandwidthOut = ctx.GlobalInt(LightBandwidthOutFlag.Name)
-	if ctx.GlobalIsSet(LightPeersFlag.Name) {
-		cfg.LightPeers = ctx.GlobalInt(LightPeersFlag.Name)
-	}
-	if ctx.GlobalIsSet(OnlyAnnounceModeFlag.Name) {
-		cfg.OnlyAnnounce = ctx.GlobalBool(OnlyAnnounceModeFlag.Name)
-	}
 	if ctx.GlobalIsSet(NetworkIdFlag.Name) {
 		cfg.NetworkId = ctx.GlobalUint64(NetworkIdFlag.Name)
 	}

@@ -285,7 +285,7 @@ func bzzd(ctx *cli.Context) error {
 	//optionally set the bootnodes before configuring the node
 	setSwarmBootstrapNodes(ctx, &cfg)
 	//setup the ethereum node
-	utils.SetNodeConfig(ctx, &cfg)
+	utils.SetNodeConfig(ctx, &cfg, nil)
 
 	//disable dynamic dialing from p2p/discovery
 	cfg.P2P.NoDial = true
@@ -377,7 +377,7 @@ func getPrivKey(ctx *cli.Context) *ecdsa.PrivateKey {
 	if _, err := os.Stat(bzzconfig.Path); err == nil {
 		cfg.DataDir = bzzconfig.Path
 	}
-	utils.SetNodeConfig(ctx, &cfg)
+	utils.SetNodeConfig(ctx, &cfg, nil)
 	stack, err := node.New(&cfg)
 	if err != nil {
 		utils.Fatalf("can't create node: %v", err)
