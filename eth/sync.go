@@ -171,7 +171,11 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	td := pm.blockchain.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
 
 	pHead, pTd := peer.Head()
-	if pTd.Cmp(td) <= 0 {
+	if cmp := pTd.Cmp(td); cmp <= 0 {
+		if cmp < 0 {
+			// propagate our better chain back to peers
+			go pm.BroadcastBlock(currentBlock, true)
+		}
 		return
 	}
 	// Otherwise try to sync with the downloader
