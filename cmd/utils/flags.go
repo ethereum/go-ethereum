@@ -126,12 +126,12 @@ var (
 	}
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
-		Usage: "Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten, 4=Rinkeby)",
+		Usage: "Network identifier (integer, 88=Mainnet, 9=Testnet (legacy))",
 		Value: eth.DefaultConfig.NetworkId,
 	}
 	TestnetFlag = cli.BoolFlag{
 		Name:  "testnet",
-		Usage: "Ropsten network: pre-configured proof-of-work test network",
+		Usage: "Pre-configured proof-of-work test network (legacy)",
 	}
 	DevModeFlag = cli.BoolFlag{
 		Name:  "dev",
@@ -148,16 +148,16 @@ var (
 	}
 	FastSyncFlag = cli.BoolFlag{
 		Name:  "fast",
-		Usage: "Enable fast syncing through state downloads - Currently UNSUPPORTED",
+		Usage: "Enable fast syncing through state downloads",
 	}
 	LightModeFlag = cli.BoolFlag{
 		Name:  "light",
-		Usage: "Enable light client mode",
+		Usage: "Enable light client mode - currently unsupported",
 	}
 	defaultSyncMode = eth.DefaultConfig.SyncMode
 	SyncModeFlag    = TextMarshalerFlag{
 		Name:  "syncmode",
-		Usage: `Blockchain sync mode ("fast", "full", or "light")`,
+		Usage: `Blockchain sync mode ("fast", "full")`,
 		Value: &defaultSyncMode,
 	}
 
