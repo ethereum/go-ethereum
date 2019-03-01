@@ -128,7 +128,7 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 	}()
 	// Create a hasher to reuse between invocations
 	keccak512 := makeHasher(sha3.NewKeccak512())
-	if epoch > uip1Epoch {
+	if epoch >= uip1Epoch {
 		h, _ := blake2b.New512(nil)
 		keccak512 = makeHasher(h)
 	}
