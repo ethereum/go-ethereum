@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"regexp"
 	"sync"
 	"time"
 
@@ -39,8 +38,6 @@ const (
 	// timeout for waiting
 	bzzHandshakeTimeout = 3000 * time.Millisecond
 )
-
-var regexpEnodeIP = regexp.MustCompile("@(.+):([0-9]+)")
 
 // BzzSpec is the spec of the generic swarm handshake
 var BzzSpec = &protocols.Spec{
@@ -217,7 +214,7 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 		return err
 	}
 	handshake.peerAddr = rsh.(*HandshakeMsg).Addr
-	sanitizeEnodeRemote(p.RemoteAddr(), handshake.peerAddr)
+	sanitizeEnodeRemote(p.Node(), handshake.peerAddr)
 	handshake.LightNode = rsh.(*HandshakeMsg).LightNode
 	return nil
 }
@@ -226,20 +223,12 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 // this method ensures that if this default is used in a networked environment, we replace
 // the ip with the one applicable on the interface the connection came in on
 // it modifies the passed bzzaddr in place, and returns the same pointer
-func sanitizeEnodeRemote(paddr net.Addr, baddr *BzzAddr) {
-	hsSubmatch := regexpEnodeIP.FindSubmatch(baddr.UAddr)
-	ip, _, err := net.SplitHostPort(paddr.String())
-	if len(hsSubmatch) < 2 {
-		log.Warn("sanitize found non ipv4 string", "remotestring", paddr.String(), "handshakeaddr", baddr)
-	} else if err == nil {
-		hsip := net.ParseIP(string(hsSubmatch[1]))
-		if hsip != nil && hsip.IsLoopback() {
-			remoteStr := fmt.Sprintf("@%s:%s", ip, string(hsSubmatch[2]))
-			log.Debug("rewrote peer uaddr host/port", "addr", baddr)
-			baddr.UAddr = regexpEnodeIP.ReplaceAll(baddr.UAddr, []byte(remoteStr))
+func sanitizeEnodeRemote(paddr *enode.Node, baddr *BzzAddr) {
+	enod, err := enode.ParseV4(string(baddr.UAddr))
+	if err == nil {
+		if enod.IP().IsLoopback() {
+			baddr.UAddr = []byte(paddr.String())
 		}
-	} else {
-		log.Trace("passthrough handshake addr rewrite", "submatch", hsSubmatch[1])
 	}
 }
 
