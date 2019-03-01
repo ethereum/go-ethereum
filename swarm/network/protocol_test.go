@@ -17,15 +17,12 @@
 package network
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
-	"net"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -252,28 +249,5 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 				t.Fatal("test timeout")
 			}
 		})
-	}
-}
-
-// Tests the overwriting of localhost enode in handshake if actual remote ip is known
-// (swarm.network/protocol.go:sanitizeEnodeRemote)
-func TestSanitizeEnodeRemote(t *testing.T) {
-	pk, err := crypto.GenerateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-	remoteIP := net.IPv4(0x80, 0x40, 0x20, 0x10)
-	remoteAddr := net.TCPAddr{
-		IP:   remoteIP,
-		Port: 30399,
-	}
-	nodLocal := enode.NewV4(&pk.PublicKey, net.IPv4(0x7f, 0x00, 0x00, 0x01), 30341, 30341)
-	nodRemote := enode.NewV4(&pk.PublicKey, remoteIP, 30341, 30341)
-	baddr := RandomAddr()
-	oldUAddr := []byte(nodLocal.String())
-	baddr.UAddr = oldUAddr
-	sanitizeEnodeRemote(&remoteAddr, baddr)
-	if !bytes.Equal(baddr.UAddr, []byte(nodRemote.String())) {
-		t.Fatalf("insane address. expected %v, got %v", nodRemote.String(), string(baddr.UAddr))
 	}
 }
