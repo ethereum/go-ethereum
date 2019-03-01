@@ -268,14 +268,14 @@ func TestSanitizeEnodeRemote(t *testing.T) {
 	baddr := RandomAddr()
 	oldUAddr := []byte(nodLocal.String())
 	baddr.UAddr = oldUAddr
-	sanitizeEnodeRemote(nodRemote, baddr)
+	baddr.sanitizeEnodeRemote(nodRemote)
 	if !bytes.Equal(baddr.UAddr, []byte(nodRemote.String())) {
 		t.Fatalf("insane address. expected %v, got %v", nodRemote.String(), string(baddr.UAddr))
 	}
 
 	remoteIP = net.IPv4(0x04, 0x04, 0x04, 0x04)
 	nodRemoteTwo := enode.NewV4(&pk.PublicKey, remoteIP, 30341, 30341)
-	sanitizeEnodeRemote(nodRemoteTwo, baddr)
+	baddr.sanitizeEnodeRemote(nodRemoteTwo)
 	if !bytes.Equal(baddr.UAddr, []byte(nodRemote.String())) {
 		t.Fatalf("Should not have rewritten non-localhost string. expected %v, got %v", nodRemote.String(), string(baddr.UAddr))
 	}

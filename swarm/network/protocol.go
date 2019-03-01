@@ -214,24 +214,9 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 		return err
 	}
 	handshake.peerAddr = rsh.(*HandshakeMsg).Addr
-	sanitizeEnodeRemote(p.Node(), handshake.peerAddr)
+	handshake.peerAddr.sanitizeEnodeRemote(p.Node())
 	handshake.LightNode = rsh.(*HandshakeMsg).LightNode
 	return nil
-}
-
-// if started without the natip argument, the enode string will be localhost
-// this method ensures that if this default is used in a networked environment, we replace
-// the ip with the one applicable on the interface the connection came in on
-// it modifies the passed bzzaddr in place, and returns the same pointer
-func sanitizeEnodeRemote(paddr *enode.Node, baddr *BzzAddr) {
-	enod, err := enode.ParseV4(string(baddr.UAddr))
-	if err != nil {
-		log.Error("invalid bzz address", "addr", baddr)
-		return
-	}
-	if enod.IP().IsLoopback() {
-		baddr.UAddr = []byte(paddr.String())
-	}
 }
 
 // runBzz is the p2p protocol run function for the bzz base protocol
@@ -387,6 +372,21 @@ func (a *BzzAddr) Update(na *BzzAddr) *BzzAddr {
 // String pretty prints the address
 func (a *BzzAddr) String() string {
 	return fmt.Sprintf("%x <%s>", a.OAddr, a.UAddr)
+}
+
+// if started without the natip argument, the enode string will be localhost
+// this method ensures that if this default is used in a networked environment, we replace
+// the ip with the one applicable on the interface the connection came in on
+// it modifies the passed bzzaddr in place, and returns the same pointer
+func (b *BzzAddr) sanitizeEnodeRemote(paddr *enode.Node) {
+	enod, err := enode.ParseV4(string(b.UAddr))
+	if err != nil {
+		log.Error("invalid bzz address", "addr", b)
+		return
+	}
+	if enod.IP().IsLoopback() {
+		b.UAddr = []byte(paddr.String())
+	}
 }
 
 // RandomAddr is a utility method generating an address from a public key
