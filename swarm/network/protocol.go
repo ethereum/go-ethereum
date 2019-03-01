@@ -225,10 +225,12 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 // it modifies the passed bzzaddr in place, and returns the same pointer
 func sanitizeEnodeRemote(paddr *enode.Node, baddr *BzzAddr) {
 	enod, err := enode.ParseV4(string(baddr.UAddr))
-	if err == nil {
-		if enod.IP().IsLoopback() {
-			baddr.UAddr = []byte(paddr.String())
-		}
+	if err != nil {
+		log.Error("invalid bzz address", "addr", baddr)
+		return
+	}
+	if enod.IP().IsLoopback() {
+		baddr.UAddr = []byte(paddr.String())
 	}
 }
 
