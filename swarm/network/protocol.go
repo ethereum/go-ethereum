@@ -17,6 +17,7 @@
 package network
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -222,15 +223,16 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 	return nil
 }
 
-// the remote enode string may advertise arbitrary host information (e.g. localhost)
-// this method ensures that the addr of the peer will be the one
-// applicable on the interface the connection came in on
+// if started without the natip argument, the enode string will be localhost
+// this method ensures that if this default is used in a networked environment, we replace
+// the ip with the one applicable on the interface the connection came in on
 // it modifies the passed bzzaddr in place, and returns the same pointer
 func sanitizeEnodeRemote(paddr net.Addr, baddr *BzzAddr) {
 	hsSubmatch := regexpEnodeIP.FindSubmatch(baddr.UAddr)
 	ip, _, err := net.SplitHostPort(paddr.String())
-	// since we expect nothing else than ipv4 here, a panic on missing submatch is desired
-	if err == nil && string(hsSubmatch[1]) != ip {
+	if len(hsSubmatch) < 2 {
+		log.Warn("sanitize found non ipv4 string", "str", paddr.String())
+	} else if err == nil && bytes.Equal(hsSubmatch[1], []byte("127.0.0.1")) {
 		remoteStr := fmt.Sprintf("@%s:%s", ip, string(hsSubmatch[2]))
 		log.Debug("rewrote peer uaddr host/port", "addr", baddr)
 		baddr.UAddr = regexpEnodeIP.ReplaceAll(baddr.UAddr, []byte(remoteStr))
