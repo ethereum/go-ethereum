@@ -63,7 +63,7 @@ type flagGroup struct {
 // AppHelpFlagGroups is the application flags, grouped by functionality.
 var AppHelpFlagGroups = []flagGroup{
 	{
-		Name: "ETHEREUM",
+		Name: "UBIQ",
 		Flags: []cli.Flag{
 			configFileFlag,
 			utils.DataDirFlag,
@@ -81,7 +81,7 @@ var AppHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
-		Name: "ETHASH",
+		Name: "UBQHASH",
 		Flags: []cli.Flag{
 			utils.UbqhashCacheDirFlag,
 			utils.UbqhashCachesInMemoryFlag,
