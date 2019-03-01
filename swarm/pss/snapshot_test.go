@@ -120,6 +120,7 @@ func initTestVariables(sim *simulation.Simulation, msgCount int) {
 
 	for i := 0; i < int(msgCount); i++ {
 		msgAddr := pot.RandomAddress() // we choose message addresses randomly
+		msgAddr[0] = byte(0x24)
 
 		msgs = append(msgs, msgAddr.Bytes())
 		smallestPo := 256
@@ -179,9 +180,9 @@ func testProxNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*16)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*4)
 	defer cancel()
-	waitTillSerenity(t, snap, sim, 4000)
+	waitTillSerenity(t, snap, sim, 1000)
 	initTestVariables(sim, msgCount)
 	result := sim.Run(ctx, runFunc)
 	if result.Error != nil {
@@ -202,6 +203,7 @@ func waitTillSerenity(t *testing.T, snap simulations.Snapshot, sim *simulation.S
 			time.Sleep(time.Millisecond * time.Duration(interval))
 		}
 	}
+	time.Sleep(time.Millisecond * 10) // todo: remove this later
 }
 
 func listSnapConnections(conns []simulations.Conn) (res []uint64) {
