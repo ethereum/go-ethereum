@@ -156,7 +156,7 @@ var (
 	// Note: yakkety is unsupported because it was officially deprecated on lanchpad.
 	// Note: zesty is unsupported because it was officially deprecated on lanchpad.
 	// Note: artful is unsupported because it was officially deprecated on lanchpad.
-	debDistros = []string{"trusty", "xenial", "bionic", "cosmic"}
+	debDistros = []string{"trusty", "xenial", "bionic", "cosmic", "disco"}
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
