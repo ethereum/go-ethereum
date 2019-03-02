@@ -18,12 +18,14 @@ package simulation
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
@@ -95,4 +97,71 @@ func (s *Simulation) kademlias() (ks map[enode.ID]*network.Kademlia) {
 		ks[id] = k
 	}
 	return ks
+}
+
+func (s *Simulation) WaitTillSnapshotRecreated(ctx context.Context, snap simulations.Snapshot) error {
+	expected := listSnapshotConnections(snap.Conns)
+	ticker := time.NewTicker(256 * time.Millisecond) // todo: reduce
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			actual := listActualConnections(s.kademlias())
+			if isAllDeployed(expected, actual) {
+				return nil
+			}
+		}
+	}
+}
+
+func listActualConnections(kademlias map[enode.ID]*network.Kademlia) (res []uint64) {
+	for base, k := range kademlias {
+		k.EachConn(base[:], 256, func(p *network.Peer, _ int) bool {
+			res = append(res, getConnectionHash(base, p.ID()))
+			return true
+		})
+	}
+	return res
+}
+
+func listSnapshotConnections(conns []simulations.Conn) (res []uint64) {
+	for _, c := range conns {
+		res = append(res, getConnectionHash(c.One, c.Other))
+	}
+	return res
+}
+
+// returns an integer connection identifier (similar to 8-byte hash)
+func getConnectionHash(a, b enode.ID) uint64 {
+	var h [8]byte
+	for i := 0; i < 8; i++ {
+		h[i] = a[i] ^ b[i]
+	}
+	res := binary.LittleEndian.Uint64(h[:])
+	return res
+}
+
+// returns true if all connections in expected are listed in actual
+func isAllDeployed(expected []uint64, actual []uint64) bool {
+	exp := make([]uint64, len(expected))
+	copy(exp, expected)
+	if len(exp) > 0 {
+		for _, c := range actual {
+			// remove value c from exp
+			for i := 0; i < len(exp); i++ {
+				if exp[i] == c {
+					last := len(exp) - 1
+					if last == 0 {
+						return true
+					}
+					exp[i] = exp[last]
+					exp = exp[:last]
+				}
+			}
+		}
+	}
+	return len(exp) == 0
 }

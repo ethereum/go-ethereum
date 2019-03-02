@@ -30,29 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/state"
 )
 
-var (
-	runNodes    = flag.Int("nodes", 0, "nodes to start in the network")
-	runMessages = flag.Int("messages", 0, "messages to send during test")
-
-	topic         = BytesToTopic([]byte{0x00, 0x00, 0x06, 0x82})
-	mu            sync.Mutex // keeps handlerDonc in sync
-	kademlias     = make(map[enode.ID]*network.Kademlia)
-	nodeAddrs     = make(map[enode.ID][]byte)   // make predictable overlay addresses from the generated random enode ids
-	msgsToReceive int                           // total count of messages to receive, used for terminating the simulation run
-	recipients    = make(map[int][]enode.ID)    // for logging output only
-	msgs          [][]byte                      // recipient addresses of messages
-	expectedMsgs  = make(map[enode.ID][]uint64) // message serials we expect respective nodes to receive
-	senders       = make(map[int]enode.ID)      // originating nodes of the messages (intention is to choose as far as possible from the receiving neighborhood)
-	pof           = pot.DefaultPof(256)         // generate messages and index them
-	sim           *simulation.Simulation
-	handlerDone   bool                             // set to true on termination of the simulation run
-	handlerC      = make(chan handlerNotification) // passes message from pss message handler to simulation driver
-	doneC         = make(chan struct{})            // terminates the handler channel listener
-	errC          = make(chan error)               // error to pass to main sim thread
-	msgC          = make(chan handlerNotification) // message receipt notification to main sim thread
-	debugCnt      int
-)
-
 // needed to make the enode id of the receiving node available to the handler for triggers
 type handlerContextFunc func(*adapters.NodeConfig) *handler
 
@@ -63,6 +40,48 @@ type handlerContextFunc func(*adapters.NodeConfig) *handler
 type handlerNotification struct {
 	id     enode.ID
 	serial uint64
+}
+
+var (
+	runNodes    = flag.Int("nodes", 0, "nodes to start in the network")
+	runMessages = flag.Int("messages", 0, "messages to send during test")
+
+	pof           = pot.DefaultPof(256) // generate messages and index them
+	topic         = BytesToTopic([]byte{0x00, 0x00, 0x06, 0x82})
+	mu            sync.Mutex // keeps handlerDonc in sync
+	sim           *simulation.Simulation
+
+	handlerDone   bool // set to true on termination of the simulation run
+	msgsToReceive int  // total count of messages to receive, used for terminating the simulation run
+	debugCnt      int
+
+	kademlias     map[enode.ID]*network.Kademlia
+	nodeAddrs     map[enode.ID][]byte   // make predictable overlay addresses from the generated random enode ids
+	recipients    map[int][]enode.ID    // for logging output only
+	expectedMsgs  map[enode.ID][]uint64 // message serials we expect respective nodes to receive
+	senders       map[int]enode.ID      // originating nodes of the messages (intention is to choose as far as possible from the receiving neighborhood)
+	handlerC      chan handlerNotification // passes message from pss message handler to simulation driver
+	doneC         chan struct{}            // terminates the handler channel listener
+	errC          chan error               // error to pass to main sim thread
+	msgC          chan handlerNotification // message receipt notification to main sim thread
+	msgs          [][]byte                 // recipient addresses of messages
+)
+
+func resetTestVariables() {
+	handlerDone = false
+	msgsToReceive = 0
+	debugCnt = 0
+	msgs = nil
+
+	kademlias     = make(map[enode.ID]*network.Kademlia)
+	nodeAddrs     = make(map[enode.ID][]byte)
+	recipients    = make(map[int][]enode.ID)
+	expectedMsgs  = make(map[enode.ID][]uint64)
+	senders       = make(map[int]enode.ID)
+	handlerC      = make(chan handlerNotification)
+	doneC         = make(chan struct{})
+	errC          = make(chan error)
+	msgC          = make(chan handlerNotification)
 }
 
 func init() {
@@ -111,7 +130,7 @@ func readSnapshot(t *testing.T, nodeCount int) simulations.Snapshot {
 	return snap
 }
 
-func initTestVariables(sim *simulation.Simulation, msgCount int) {
+func assingTestVariables(sim *simulation.Simulation, msgCount int) {
 	log.Debug("-------------------------------------------------------------------------")
 	var targets string
 	for _, nodeId := range sim.NodeIDs() {
@@ -169,6 +188,7 @@ func TestProxNetwork(t *testing.T) {
 // Upon sending the messages, it verifies that the respective message is passed to the message handlers of these recipients.
 // It will fail if a recipient handles a message it should not, or if after propagation not all expected messages are handled (timeout)
 func testProxNetwork(t *testing.T) {
+	resetTestVariables()
 	msgCount, nodeCount := getCmdParams(t)
 	handlerContextFuncs := make(map[Topic]handlerContextFunc)
 	handlerContextFuncs[topic] = nodeMsgHandler
@@ -180,10 +200,14 @@ func testProxNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*4)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 	defer cancel()
-	waitTillSerenity(t, snap, sim, 1000)
-	initTestVariables(sim, msgCount)
+	err = sim.WaitTillSnapshotRecreated(ctx, snap)
+	if err != nil {
+		t.Fatalf("failed to recreate snapshot: %s", err)
+	}
+	//waitTillSerenity(t, snap, sim, 1000)
+	assingTestVariables(sim, msgCount)
 	result := sim.Run(ctx, runFunc)
 	if result.Error != nil {
 		log.Debug("--------------------------------------------------------------------------------", "rcv", debugCnt)
@@ -192,6 +216,7 @@ func testProxNetwork(t *testing.T) {
 	t.Logf("completed %d", result.Duration)
 }
 
+/*
 func waitTillSerenity(t *testing.T, snap simulations.Snapshot, sim *simulation.Simulation, timeout int) {
 	interval := 16
 	expected := listSnapConnections(snap.Conns)
@@ -203,7 +228,7 @@ func waitTillSerenity(t *testing.T, snap simulations.Snapshot, sim *simulation.S
 			time.Sleep(time.Millisecond * time.Duration(interval))
 		}
 	}
-	time.Sleep(time.Millisecond * 10) // todo: remove this later
+	time.Sleep(time.Millisecond * 16) // todo: remove this later
 }
 
 func listSnapConnections(conns []simulations.Conn) (res []uint64) {
@@ -251,6 +276,7 @@ func isSerenity(expected []uint64, actual []uint64) bool {
 	}
 	return len(exp) == 0
 }
+*/
 
 func sendAllMsgs(sim *simulation.Simulation, msgs [][]byte, senders map[int]enode.ID) {
 	for i, msg := range msgs {
