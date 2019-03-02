@@ -779,3 +779,149 @@ func checkItem(t *testing.T, got, want Item) {
 		t.Errorf("got access timestamp %v, expected %v", got.AccessTimestamp, want.AccessTimestamp)
 	}
 }
+
+// TestIndex_firstAndLast validates that index First and Last methods
+// are returning expected results based on the provided prefix.
+func TestIndex_firstAndLast(t *testing.T) {
+	db, cleanupFunc := newTestDB(t)
+	defer cleanupFunc()
+
+	index, err := db.NewIndex("retrieval", retrievalIndexFuncs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	addrs := [][]byte{
+		{0, 0, 0, 0, 0},
+		{0, 1},
+		{0, 1, 0, 0, 0},
+		{0, 1, 0, 0, 1},
+		{0, 1, 0, 0, 2},
+		{0, 2, 0, 0, 1},
+		{0, 4, 0, 0, 0},
+		{0, 10, 0, 0, 10},
+		{0, 10, 0, 0, 11},
+		{0, 10, 0, 0, 20},
+		{1, 32, 255, 0, 1},
+		{1, 32, 255, 0, 2},
+		{1, 32, 255, 0, 3},
+		{255, 255, 255, 255, 32},
+		{255, 255, 255, 255, 64},
+		{255, 255, 255, 255, 255},
+	}
+
+	// ensure that the addresses are sorted for
+	// validation of nil prefix
+	sort.Slice(addrs, func(i, j int) (less bool) {
+		return bytes.Compare(addrs[i], addrs[j]) == -1
+	})
+
+	batch := new(leveldb.Batch)
+	for _, addr := range addrs {
+		index.PutInBatch(batch, Item{
+			Address: addr,
+		})
+	}
+	err = db.WriteBatch(batch)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		prefix []byte
+		first  []byte
+		last   []byte
+		err    error
+	}{
+		{
+			prefix: nil,
+			first:  addrs[0],
+			last:   addrs[len(addrs)-1],
+		},
+		{
+			prefix: []byte{0, 0},
+			first:  []byte{0, 0, 0, 0, 0},
+			last:   []byte{0, 0, 0, 0, 0},
+		},
+		{
+			prefix: []byte{0},
+			first:  []byte{0, 0, 0, 0, 0},
+			last:   []byte{0, 10, 0, 0, 20},
+		},
+		{
+			prefix: []byte{0, 1},
+			first:  []byte{0, 1},
+			last:   []byte{0, 1, 0, 0, 2},
+		},
+		{
+			prefix: []byte{0, 10},
+			first:  []byte{0, 10, 0, 0, 10},
+			last:   []byte{0, 10, 0, 0, 20},
+		},
+		{
+			prefix: []byte{1, 32, 255},
+			first:  []byte{1, 32, 255, 0, 1},
+			last:   []byte{1, 32, 255, 0, 3},
+		},
+		{
+			prefix: []byte{255},
+			first:  []byte{255, 255, 255, 255, 32},
+			last:   []byte{255, 255, 255, 255, 255},
+		},
+		{
+			prefix: []byte{255, 255, 255, 255, 255},
+			first:  []byte{255, 255, 255, 255, 255},
+			last:   []byte{255, 255, 255, 255, 255},
+		},
+		{
+			prefix: []byte{0, 3},
+			err:    leveldb.ErrNotFound,
+		},
+		{
+			prefix: []byte{222},
+			err:    leveldb.ErrNotFound,
+		},
+	} {
+		got, err := index.Last(tc.prefix)
+		if tc.err != err {
+			t.Errorf("got error %v for Last with prefix %v, want %v", err, tc.prefix, tc.err)
+		} else {
+			if !bytes.Equal(got.Address, tc.last) {
+				t.Errorf("got %v for Last with prefix %v, want %v", got.Address, tc.prefix, tc.last)
+			}
+		}
+
+		got, err = index.First(tc.prefix)
+		if tc.err != err {
+			t.Errorf("got error %v for First with prefix %v, want %v", err, tc.prefix, tc.err)
+		} else {
+			if !bytes.Equal(got.Address, tc.first) {
+				t.Errorf("got %v for First with prefix %v, want %v", got.Address, tc.prefix, tc.first)
+			}
+		}
+	}
+}
+
+// TestIncByteSlice validates returned values of incByteSlice function.
+func TestIncByteSlice(t *testing.T) {
+	for _, tc := range []struct {
+		b    []byte
+		want []byte
+	}{
+		{b: nil, want: nil},
+		{b: []byte{}, want: nil},
+		{b: []byte{0}, want: []byte{1}},
+		{b: []byte{42}, want: []byte{43}},
+		{b: []byte{255}, want: nil},
+		{b: []byte{0, 0}, want: []byte{0, 1}},
+		{b: []byte{1, 0}, want: []byte{1, 1}},
+		{b: []byte{1, 255}, want: []byte{2, 0}},
+		{b: []byte{255, 255}, want: nil},
+		{b: []byte{32, 0, 255}, want: []byte{32, 1, 0}},
+	} {
+		got := incByteSlice(tc.b)
+		if !bytes.Equal(got, tc.want) {
+			t.Errorf("got %v, want %v", got, tc.want)
+		}
+	}
+}

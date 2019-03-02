@@ -485,3 +485,75 @@ func checkErrChan(ctx context.Context, t *testing.T, errChan chan error, wantedC
 		}
 	}
 }
+
+// TestDB_LastPullSubscriptionChunk validates that LastPullSubscriptionChunk
+// is returning the last chunk descriptor for proximity order bins by
+// doing a few rounds of chunk uploads.
+func TestDB_LastPullSubscriptionChunk(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, nil)
+	defer cleanupFunc()
+
+	uploader := db.NewPutter(ModePutUpload)
+
+	addrs := make(map[uint8][]chunk.Address)
+
+	lastTimestamp := time.Now().UTC().UnixNano()
+	var lastTimestampMu sync.RWMutex
+	defer setNow(func() (t int64) {
+		lastTimestampMu.Lock()
+		defer lastTimestampMu.Unlock()
+		lastTimestamp++
+		return lastTimestamp
+	})()
+
+	last := make(map[uint8]ChunkDescriptor)
+
+	// do a few rounds of uploads and check if
+	// last pull subscription chunk is correct
+	for _, count := range []int{1, 3, 10, 11, 100, 120} {
+
+		// upload
+		for i := 0; i < count; i++ {
+			ch := generateTestRandomChunk()
+
+			err := uploader.Put(ch)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			bin := db.po(ch.Address())
+
+			if _, ok := addrs[bin]; !ok {
+				addrs[bin] = make([]chunk.Address, 0)
+			}
+			addrs[bin] = append(addrs[bin], ch.Address())
+
+			lastTimestampMu.RLock()
+			storeTimestamp := lastTimestamp
+			lastTimestampMu.RUnlock()
+
+			last[bin] = ChunkDescriptor{
+				Address:        ch.Address(),
+				StoreTimestamp: storeTimestamp,
+			}
+		}
+
+		// check
+		for bin := uint8(0); bin <= uint8(chunk.MaxPO); bin++ {
+			want, ok := last[bin]
+			got, err := db.LastPullSubscriptionChunk(bin)
+			if ok {
+				if err != nil {
+					t.Errorf("got unexpected error value %v", err)
+				}
+				if !bytes.Equal(got.Address, want.Address) {
+					t.Errorf("got last address %s, want %s", got.Address.Hex(), want.Address.Hex())
+				}
+			} else {
+				if err != chunk.ErrChunkNotFound {
+					t.Errorf("got unexpected error value %v, want %v", err, chunk.ErrChunkNotFound)
+				}
+			}
+		}
+	}
+}
