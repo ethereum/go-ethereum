@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/chaindb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -51,7 +51,8 @@ var (
 type LightChain struct {
 	hc            *core.HeaderChain
 	indexerConfig *IndexerConfig
-	chainDb       ethdb.Database
+	db            ethdb.Database
+	chainDB       *chaindb.ChainDB
 	engine        consensus.Engine
 	odr           OdrBackend
 	chainFeed     event.Feed
@@ -82,8 +83,11 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
 
+	db := odr.Database()
+	chainDB := chaindb.Wrap(db)
 	bc := &LightChain{
-		chainDb:       odr.Database(),
+		db:            db,
+		chainDB:       chainDB,
 		indexerConfig: odr.IndexerConfig(),
 		odr:           odr,
 		quit:          make(chan struct{}),
@@ -93,7 +97,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		engine:        engine,
 	}
 	var err error
-	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.getProcInterrupt)
+	bc.hc, err = core.NewHeaderChain(chainDB, config, bc.engine, bc.getProcInterrupt)
 	if err != nil {
 		return nil, err
 	}
@@ -121,11 +125,11 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 // addTrustedCheckpoint adds a trusted checkpoint to the blockchain
 func (lc *LightChain) addTrustedCheckpoint(cp *params.TrustedCheckpoint) {
 	if lc.odr.ChtIndexer() != nil {
-		StoreChtRoot(lc.chainDb, cp.SectionIndex, cp.SectionHead, cp.CHTRoot)
+		StoreChtRoot(lc.db, cp.SectionIndex, cp.SectionHead, cp.CHTRoot)
 		lc.odr.ChtIndexer().AddCheckpoint(cp.SectionIndex, cp.SectionHead)
 	}
 	if lc.odr.BloomTrieIndexer() != nil {
-		StoreBloomTrieRoot(lc.chainDb, cp.SectionIndex, cp.SectionHead, cp.BloomRoot)
+		StoreBloomTrieRoot(lc.db, cp.SectionIndex, cp.SectionHead, cp.BloomRoot)
 		lc.odr.BloomTrieIndexer().AddCheckpoint(cp.SectionIndex, cp.SectionHead)
 	}
 	if lc.odr.BloomIndexer() != nil {
@@ -146,7 +150,7 @@ func (lc *LightChain) Odr() OdrBackend {
 // loadLastState loads the last known chain state from the database. This method
 // assumes that the chain manager mutex is held.
 func (lc *LightChain) loadLastState() error {
-	if head := rawdb.ReadHeadHeaderHash(lc.chainDb); head == (common.Hash{}) {
+	if head := lc.chainDB.ReadHeadHeaderHash(); head == (common.Hash{}) {
 		// Corrupt or empty database, init from scratch
 		lc.Reset()
 	} else {
@@ -193,8 +197,8 @@ func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 	defer lc.chainmu.Unlock()
 
 	// Prepare the genesis block and reinitialise the chain
-	rawdb.WriteTd(lc.chainDb, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
-	rawdb.WriteBlock(lc.chainDb, genesis)
+	lc.chainDB.WriteTD(genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
+	lc.chainDB.WriteBlock(genesis)
 
 	lc.genesisBlock = genesis
 	lc.hc.SetGenesis(lc.genesisBlock.Header())

@@ -64,20 +64,24 @@ func ReadTransaction(db DatabaseReader, hash common.Hash) (*types.Transaction, c
 	if blockHash == (common.Hash{}) {
 		return nil, common.Hash{}, 0, 0
 	}
+
 	blockNumber := ReadHeaderNumber(db, blockHash)
 	if blockNumber == nil {
 		return nil, common.Hash{}, 0, 0
 	}
+
 	body := ReadBody(db, blockHash, *blockNumber)
 	if body == nil {
 		log.Error("Transaction referenced missing", "number", blockNumber, "hash", blockHash)
 		return nil, common.Hash{}, 0, 0
 	}
+
 	for txIndex, tx := range body.Transactions {
 		if tx.Hash() == hash {
 			return tx, blockHash, *blockNumber, uint64(txIndex)
 		}
 	}
+
 	log.Error("Transaction not found", "number", blockNumber, "hash", blockHash, "txhash", hash)
 	return nil, common.Hash{}, 0, 0
 }

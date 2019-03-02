@@ -60,6 +60,14 @@ func ReadHeaderNumber(db DatabaseReader, hash common.Hash) *uint64 {
 	return &number
 }
 
+// WriteHeaderNumber stores the header number assigned to a hash.
+func WriteHeaderNumber(db DatabaseWriter, hash common.Hash, number uint64) {
+	key := headerNumberKey(hash)
+	if err := db.Put(key, encodeBlockNumber(number)); err != nil {
+		log.Crit("Failed to store hash to number mapping", "err", err)
+	}
+}
+
 // ReadHeadHeaderHash retrieves the hash of the current canonical head header.
 func ReadHeadHeaderHash(db DatabaseReader) common.Hash {
 	data, _ := db.Get(headHeaderKey)
@@ -159,20 +167,16 @@ func ReadHeader(db DatabaseReader, hash common.Hash, number uint64) *types.Heade
 func WriteHeader(db DatabaseWriter, header *types.Header) {
 	// Write the hash -> number mapping
 	var (
-		hash    = header.Hash()
-		number  = header.Number.Uint64()
-		encoded = encodeBlockNumber(number)
+		hash   = header.Hash()
+		number = header.Number.Uint64()
 	)
-	key := headerNumberKey(hash)
-	if err := db.Put(key, encoded); err != nil {
-		log.Crit("Failed to store hash to number mapping", "err", err)
-	}
+	WriteHeaderNumber(db, hash, number)
 	// Write the encoded header
 	data, err := rlp.EncodeToBytes(header)
 	if err != nil {
 		log.Crit("Failed to RLP encode header", "err", err)
 	}
-	key = headerKey(number, hash)
+	key := headerKey(number, hash)
 	if err := db.Put(key, data); err != nil {
 		log.Crit("Failed to store header", "err", err)
 	}
