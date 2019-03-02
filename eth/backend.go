@@ -242,11 +242,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			if m2 == eb {
 				wallet, err := eth.accountManager.Find(accounts.Account{Address: eb})
 				if err != nil {
+					log.Error("Can't find coinbase account wallet", "err", err)
 					return block, false, err
 				}
 				header := block.Header()
 				sighash, err := wallet.SignHash(accounts.Account{Address: eb}, XDPoS.SigHash(header).Bytes())
-				if err != nil {
+				if err != nil || sighash == nil {
+					log.Error("Can't get signature hash of m2", "sighash", sighash, "err", err)
 					return block, false, err
 				}
 				header.Validator = sighash
@@ -551,7 +553,7 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
 func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chainConfig *params.ChainConfig, db ethdb.Database) consensus.Engine {
-	// If Xinfin-XDPoS voting is requested, set it up
+	// If Xinfin XDPoS is requested, set it up
 	if chainConfig.XDPoS != nil {
 		return XDPoS.New(chainConfig.XDPoS, db)
 	}

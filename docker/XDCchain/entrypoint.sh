@@ -171,9 +171,9 @@ exec XDC $params \
   --datadir $DATA_DIR \
   --keystore $KEYSTORE_DIR \
   --identity $IDENTITY \
+  --maxpeers $MAXPEERS \
   --password ./password \
   --port 30303 \
-  --maxpeers $MAXPEERS \
   --txpool.globalqueue 5000 \
   --txpool.globalslots 5000 \
   --rpc \
