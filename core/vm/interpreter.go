@@ -118,22 +118,6 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	}
 }
 
-func (in *EVMInterpreter) enforceRestrictions(op OpCode, operation operation, stack *Stack) error {
-	if in.evm.chainRules.IsByzantium {
-		if in.readOnly {
-			// If the interpreter is operating in readonly mode, make sure no
-			// state-modifying operation is performed. The 3rd stack item
-			// for a call operation is the value. Transferring value from one
-			// account to the others means the state is modified and should also
-			// return with an error.
-			if operation.writes || (op == CALL && stack.Back(2).BitLen() > 0) {
-				return errWriteProtection
-			}
-		}
-	}
-	return nil
-}
-
 // Run loops and evaluates the contract's code with the given input data and returns
 // the return byte-slice and an error if one occurred.
 //
@@ -217,12 +201,24 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if !operation.valid {
 			return nil, fmt.Errorf("invalid opcode 0x%x", int(op))
 		}
-		if err = operation.validateStack(stack); err != nil {
-			return nil, err
+		// Validate stack
+		if sLen := stack.len(); sLen < operation.minStack{
+			return nil, fmt.Errorf("stack underflow (%d <=> %d)", sLen, operation.minStack)
+		}else{
+			if sLen > operation.maxStack{
+				return nil, fmt.Errorf("stack limit reached %d (%d)", sLen, operation.maxStack)
+			}
 		}
 		// If the operation is valid, enforce and write restrictions
-		if err = in.enforceRestrictions(op, operation, stack); err != nil {
-			return nil, err
+		if in.readOnly && in.evm.chainRules.IsByzantium {
+				// If the interpreter is operating in readonly mode, make sure no
+				// state-modifying operation is performed. The 3rd stack item
+				// for a call operation is the value. Transferring value from one
+				// account to the others means the state is modified and should also
+				// return with an error.
+				if operation.writes || (op == CALL && stack.Back(2).BitLen() > 0) {
+					return nil, errWriteProtection
+				}
 		}
 
 		var memorySize uint64
