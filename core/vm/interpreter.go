@@ -202,23 +202,27 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			return nil, fmt.Errorf("invalid opcode 0x%x", int(op))
 		}
 		// Validate stack
-		if sLen := stack.len(); sLen < operation.minStack{
+		if sLen := stack.len(); sLen < operation.minStack {
 			return nil, fmt.Errorf("stack underflow (%d <=> %d)", sLen, operation.minStack)
-		}else{
-			if sLen > operation.maxStack{
+		} else {
+			if sLen > operation.maxStack {
 				return nil, fmt.Errorf("stack limit reached %d (%d)", sLen, operation.maxStack)
 			}
 		}
 		// If the operation is valid, enforce and write restrictions
 		if in.readOnly && in.evm.chainRules.IsByzantium {
-				// If the interpreter is operating in readonly mode, make sure no
-				// state-modifying operation is performed. The 3rd stack item
-				// for a call operation is the value. Transferring value from one
-				// account to the others means the state is modified and should also
-				// return with an error.
-				if operation.writes || (op == CALL && stack.Back(2).BitLen() > 0) {
-					return nil, errWriteProtection
-				}
+			// If the interpreter is operating in readonly mode, make sure no
+			// state-modifying operation is performed. The 3rd stack item
+			// for a call operation is the value. Transferring value from one
+			// account to the others means the state is modified and should also
+			// return with an error.
+			if operation.writes || (op == CALL && stack.Back(2).BitLen() > 0) {
+				return nil, errWriteProtection
+			}
+		}
+		// Static portion of gas
+		if !contract.UseGas(operation.constantGas) {
+			return nil, ErrOutOfGas
 		}
 
 		var memorySize uint64
@@ -235,11 +239,14 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 				return nil, errGasUintOverflow
 			}
 		}
+		// Dynamic portion of gas
 		// consume the gas and return an error if not enough gas is available.
 		// cost is explicitly set so that the capture state defer method can get the proper cost
-		cost, err = operation.gasCost(in.gasTable, in.evm, contract, stack, mem, memorySize)
-		if err != nil || !contract.UseGas(cost) {
-			return nil, ErrOutOfGas
+		if operation.dynamicGas != nil {
+			cost, err = operation.dynamicGas(in.gasTable, in.evm, contract, stack, mem, memorySize)
+			if err != nil || !contract.UseGas(cost) {
+				return nil, ErrOutOfGas
+			}
 		}
 		if memorySize > 0 {
 			mem.Resize(memorySize)
