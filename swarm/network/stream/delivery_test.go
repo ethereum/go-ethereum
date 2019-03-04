@@ -536,9 +536,11 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 
 			log.Debug("Waiting for kademlia")
 			// TODO this does not seem to be correct usage of the function, as the simulation may have no kademlias
-			if _, err := sim.WaitTillHealthy(ctx); err != nil {
-				return err
-			}
+			/*
+				if _, err := sim.WaitTillHealthy(ctx); err != nil {
+					return err
+				}
+			*/
 
 			//get the pivot node's filestore
 			item, ok := sim.NodeItem(pivot, bucketKeyFileStore)
