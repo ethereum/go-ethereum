@@ -18,7 +18,6 @@ package vm
 
 import (
 	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -35,6 +34,7 @@ var (
 	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
 	errExecutionReverted     = errors.New("evm: execution reverted")
 	errMaxCodeSizeExceeded   = errors.New("evm: max code size exceeded")
+	errInvalidJump           = errors.New("evm: invalid jump destination")
 )
 
 func opAdd(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -645,8 +645,7 @@ func opSstore(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memor
 func opJump(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	pos := stack.pop()
 	if !contract.validJumpdest(pos) {
-		nop := contract.GetOp(pos.Uint64())
-		return nil, fmt.Errorf("invalid jump destination (%v) %v", nop, pos)
+		return nil, errInvalidJump
 	}
 	*pc = pos.Uint64()
 
@@ -658,8 +657,7 @@ func opJumpi(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory
 	pos, cond := stack.pop(), stack.pop()
 	if cond.Sign() != 0 {
 		if !contract.validJumpdest(pos) {
-			nop := contract.GetOp(pos.Uint64())
-			return nil, fmt.Errorf("invalid jump destination (%v) %v", nop, pos)
+			return nil, errInvalidJump
 		}
 		*pc = pos.Uint64()
 	} else {
