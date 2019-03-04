@@ -486,6 +486,12 @@ func (p *versionStaging) finish(trivial bool) *version {
 				nt = append(nt, t)
 			}
 
+			// Avoid resort if only files in this level are deleted
+			if len(scratch.added) == 0 {
+				nv.levels[level] = nt
+				continue
+			}
+
 			// For normal table compaction, one compaction will only involve two levels
 			// of files. And the new files generated after merging the source level and
 			// source+1 level related files can be inserted as a whole into source+1 level
