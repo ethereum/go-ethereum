@@ -80,13 +80,14 @@ func DefaultDataDir() string {
 }
 
 func windowsAppData() string {
-	if v := os.Getenv("LOCALAPPDATA"); v != "" {
-		return v // Vista+
+	v := os.Getenv("LOCALAPPDATA")
+	if v == "" {
+		// Windows XP and below don't have LocalAppData. Crash here because
+		// we don't support Windows XP and undefining the variable will cause
+		// other issues.
+		panic("environment variable LocalAppData is undefined")
 	}
-	if v := os.Getenv("APPDATA"); v != "" {
-		return filepath.Join(v, "Local")
-	}
-	return ""
+	return v
 }
 
 func isNonEmptyDir(dir string) bool {
