@@ -60,23 +60,23 @@ func TestDB(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	chunk := generateTestRandomChunk()
+	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(ModePutUpload).Put(chunk)
+	err := db.NewPutter(chunk.ModePutUpload).Put(ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := db.NewGetter(ModeGetRequest).Get(chunk.Address())
+	got, err := db.NewGetter(chunk.ModeGetRequest).Get(ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !bytes.Equal(got.Address(), chunk.Address()) {
-		t.Errorf("got address %x, want %x", got.Address(), chunk.Address())
+	if !bytes.Equal(got.Address(), ch.Address()) {
+		t.Errorf("got address %x, want %x", got.Address(), ch.Address())
 	}
-	if !bytes.Equal(got.Data(), chunk.Data()) {
-		t.Errorf("got data %x, want %x", got.Data(), chunk.Data())
+	if !bytes.Equal(got.Data(), ch.Data()) {
+		t.Errorf("got data %x, want %x", got.Data(), ch.Data())
 	}
 }
 
@@ -114,19 +114,19 @@ func TestDB_updateGCSem(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	chunk := generateTestRandomChunk()
+	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(ModePutUpload).Put(chunk)
+	err := db.NewPutter(chunk.ModePutUpload).Put(ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	getter := db.NewGetter(ModeGetRequest)
+	getter := db.NewGetter(chunk.ModeGetRequest)
 
 	// get more chunks then maxParallelUpdateGC
 	// in time shorter then updateGCSleep
 	for i := 0; i < 5; i++ {
-		_, err = getter.Get(chunk.Address())
+		_, err = getter.Get(ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -184,8 +184,8 @@ func BenchmarkNew(b *testing.B) {
 				b.Fatal(err)
 			}
 			defer db.Close()
-			uploader := db.NewPutter(ModePutUpload)
-			syncer := db.NewSetter(ModeSetSync)
+			uploader := db.NewPutter(chunk.ModePutUpload)
+			syncer := db.NewSetter(chunk.ModeSetSync)
 			for i := 0; i < count; i++ {
 				chunk := generateTestRandomChunk()
 				err := uploader.Put(chunk)

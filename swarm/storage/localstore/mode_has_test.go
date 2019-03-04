@@ -18,6 +18,8 @@ package localstore
 
 import (
 	"testing"
+
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 // TestHas validates that Hasser is returning true for
@@ -26,16 +28,16 @@ func TestHas(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	chunk := generateTestRandomChunk()
+	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(ModePutUpload).Put(chunk)
+	err := db.NewPutter(chunk.ModePutUpload).Put(ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	hasser := db.NewHasser()
 
-	has, err := hasser.Has(chunk.Address())
+	has, err := hasser.Has(ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}

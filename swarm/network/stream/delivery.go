@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/swarm/chunk"
+
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -123,11 +125,11 @@ func (s *SwarmChunkServer) Close() {
 
 // GetData retrives chunk data from db store
 func (s *SwarmChunkServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
-	chunk, err := s.chunkStore.Get(ctx, storage.Address(key))
+	ch, err := s.chunkStore.Get(ctx, chunk.ModeGetRequest, storage.Address(key))
 	if err != nil {
 		return nil, err
 	}
-	return chunk.Data(), nil
+	return ch.Data(), nil
 }
 
 // RetrieveRequestMsg is the protocol msg for chunk retrieve requests
@@ -168,7 +170,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 
 	go func() {
 		defer osp.Finish()
-		chunk, err := d.chunkStore.Get(ctx, req.Addr)
+		ch, err := d.chunkStore.Get(ctx, chunk.ModeGetRequest, req.Addr)
 		if err != nil {
 			retrieveChunkFail.Inc(1)
 			log.Debug("ChunkStore.Get can not retrieve chunk", "peer", sp.ID().String(), "addr", req.Addr, "hopcount", req.HopCount, "err", err)
@@ -176,14 +178,14 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 		}
 		if req.SkipCheck {
 			syncing := false
-			err = sp.Deliver(ctx, chunk, s.priority, syncing)
+			err = sp.Deliver(ctx, ch, s.priority, syncing)
 			if err != nil {
 				log.Warn("ERROR in handleRetrieveRequestMsg", "err", err)
 			}
 			return
 		}
 		select {
-		case streamer.deliveryC <- chunk.Address()[:]:
+		case streamer.deliveryC <- ch.Address()[:]:
 		case <-streamer.quit:
 		}
 
@@ -223,7 +225,7 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 		}
 
 		req.peer = sp
-		err := d.chunkStore.Put(ctx, storage.NewChunk(req.Addr, req.SData))
+		err := d.chunkStore.Put(ctx, chunk.ModePutRequest, storage.NewChunk(req.Addr, req.SData))
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
 				// we removed this log because it spams the logs

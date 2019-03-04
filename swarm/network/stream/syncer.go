@@ -21,8 +21,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/swarm/chunk"
+
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -69,22 +70,23 @@ func (s *SwarmSyncerServer) Close() {
 
 // GetData retrieves the actual chunk from netstore
 func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
-	chunk, err := s.store.Get(ctx, storage.Address(key))
+	ch, err := s.store.Get(ctx, chunk.ModeGetSync, storage.Address(key))
 	if err != nil {
 		return nil, err
 	}
-	return chunk.Data(), nil
+	return ch.Data(), nil
 }
 
 // SessionIndex returns current storage bin (po) index.
 func (s *SwarmSyncerServer) SessionIndex() (uint64, error) {
-	return s.store.BinIndex(s.po), nil
+	return 0, nil
+	//return s.store.BinIndex(s.po), nil
 }
 
 // GetBatch retrieves the next batch of hashes from the dbstore
 func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
 	var batch []byte
-	i := 0
+	//i := 0
 
 	var ticker *time.Ticker
 	defer func() {
@@ -106,27 +108,27 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		}
 
 		metrics.GetOrRegisterCounter("syncer.setnextbatch.iterator", nil).Inc(1)
-		err := s.store.Iterator(from, to, s.po, func(key storage.Address, idx uint64) bool {
-			select {
-			case <-s.quit:
-				return false
-			default:
-			}
-			batch = append(batch, key[:]...)
-			i++
-			to = idx
-			return i < BatchSize
-		})
-		if err != nil {
-			return nil, 0, 0, nil, err
-		}
+		// err := s.store.Iterator(from, to, s.po, func(key storage.Address, idx uint64) bool {
+		// 	select {
+		// 	case <-s.quit:
+		// 		return false
+		// 	default:
+		// 	}
+		// 	batch = append(batch, key[:]...)
+		// 	i++
+		// 	to = idx
+		// 	return i < BatchSize
+		// })
+		// if err != nil {
+		// 	return nil, 0, 0, nil, err
+		// }
 		if len(batch) > 0 {
 			break
 		}
 		wait = true
 	}
 
-	log.Trace("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.store.BinIndex(s.po))
+	//log.Trace("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.store.BinIndex(s.po))
 	return batch, from, to, nil, nil
 }
 

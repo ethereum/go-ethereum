@@ -34,7 +34,7 @@ func TestDB_SubscribePush(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(ModePutUpload)
+	uploader := db.NewPutter(chunk.ModePutUpload)
 
 	chunks := make([]chunk.Chunk, 0)
 	var chunksMu sync.Mutex
@@ -122,7 +122,7 @@ func TestDB_SubscribePush_multiple(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(ModePutUpload)
+	uploader := db.NewPutter(chunk.ModePutUpload)
 
 	addrs := make([]chunk.Address, 0)
 	var addrsMu sync.Mutex

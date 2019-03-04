@@ -61,8 +61,8 @@ func testDB_collectGarbageWorker(t *testing.T) {
 	})
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(ModePutUpload)
-	syncer := db.NewSetter(ModeSetSync)
+	uploader := db.NewPutter(chunk.ModePutUpload)
+	syncer := db.NewSetter(chunk.ModeSetSync)
 
 	addrs := make([]chunk.Address, 0)
 
@@ -105,7 +105,7 @@ func testDB_collectGarbageWorker(t *testing.T) {
 
 	// the first synced chunk should be removed
 	t.Run("get the first synced chunk", func(t *testing.T) {
-		_, err := db.NewGetter(ModeGetRequest).Get(addrs[0])
+		_, err := db.NewGetter(chunk.ModeGetRequest).Get(addrs[0])
 		if err != chunk.ErrChunkNotFound {
 			t.Errorf("got error %v, want %v", err, chunk.ErrChunkNotFound)
 		}
@@ -113,7 +113,7 @@ func testDB_collectGarbageWorker(t *testing.T) {
 
 	// last synced chunk should not be removed
 	t.Run("get most recent synced chunk", func(t *testing.T) {
-		_, err := db.NewGetter(ModeGetRequest).Get(addrs[len(addrs)-1])
+		_, err := db.NewGetter(chunk.ModeGetRequest).Get(addrs[len(addrs)-1])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -129,8 +129,8 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	})
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(ModePutUpload)
-	syncer := db.NewSetter(ModeSetSync)
+	uploader := db.NewPutter(chunk.ModePutUpload)
+	syncer := db.NewSetter(chunk.ModeSetSync)
 
 	testHookCollectGarbageChan := make(chan int64)
 	defer setTestHookCollectGarbage(func(collectedCount int64) {
@@ -167,7 +167,7 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	// request the latest synced chunk
 	// to prioritize it in the gc index
 	// not to be collected
-	_, err := db.NewGetter(ModeGetRequest).Get(addrs[0])
+	_, err := db.NewGetter(chunk.ModeGetRequest).Get(addrs[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 
 	// requested chunk should not be removed
 	t.Run("get requested chunk", func(t *testing.T) {
-		_, err := db.NewGetter(ModeGetRequest).Get(addrs[0])
+		_, err := db.NewGetter(chunk.ModeGetRequest).Get(addrs[0])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -235,7 +235,7 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 
 	// the second synced chunk should be removed
 	t.Run("get gc-ed chunk", func(t *testing.T) {
-		_, err := db.NewGetter(ModeGetRequest).Get(addrs[1])
+		_, err := db.NewGetter(chunk.ModeGetRequest).Get(addrs[1])
 		if err != chunk.ErrChunkNotFound {
 			t.Errorf("got error %v, want %v", err, chunk.ErrChunkNotFound)
 		}
@@ -243,7 +243,7 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 
 	// last synced chunk should not be removed
 	t.Run("get most recent synced chunk", func(t *testing.T) {
-		_, err := db.NewGetter(ModeGetRequest).Get(addrs[len(addrs)-1])
+		_, err := db.NewGetter(chunk.ModeGetRequest).Get(addrs[len(addrs)-1])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -267,8 +267,8 @@ func TestDB_gcSize(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	uploader := db.NewPutter(ModePutUpload)
-	syncer := db.NewSetter(ModeSetSync)
+	uploader := db.NewPutter(chunk.ModePutUpload)
+	syncer := db.NewSetter(chunk.ModeSetSync)
 
 	count := 100
 

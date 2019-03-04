@@ -35,7 +35,7 @@ func TestDB_SubscribePull(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(ModePutUpload)
+	uploader := db.NewPutter(chunk.ModePutUpload)
 
 	addrs := make(map[uint8][]chunk.Address)
 	var addrsMu sync.Mutex
@@ -82,7 +82,7 @@ func TestDB_SubscribePull_multiple(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(ModePutUpload)
+	uploader := db.NewPutter(chunk.ModePutUpload)
 
 	addrs := make(map[uint8][]chunk.Address)
 	var addrsMu sync.Mutex
@@ -135,7 +135,7 @@ func TestDB_SubscribePull_since(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(ModePutUpload)
+	uploader := db.NewPutter(chunk.ModePutUpload)
 
 	addrs := make(map[uint8][]chunk.Address)
 	var addrsMu sync.Mutex
@@ -226,7 +226,7 @@ func TestDB_SubscribePull_until(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(ModePutUpload)
+	uploader := db.NewPutter(chunk.ModePutUpload)
 
 	addrs := make(map[uint8][]chunk.Address)
 	var addrsMu sync.Mutex
@@ -316,7 +316,7 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(ModePutUpload)
+	uploader := db.NewPutter(chunk.ModePutUpload)
 
 	addrs := make(map[uint8][]chunk.Address)
 	var addrsMu sync.Mutex

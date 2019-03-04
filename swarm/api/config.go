@@ -45,7 +45,13 @@ const (
 type Config struct {
 	// serialised/persisted fields
 	*storage.FileStoreParams
-	*storage.LocalStoreParams
+
+	// LocalStore
+	ChunkDbPath   string
+	DbCapacity    uint64
+	CacheCapacity uint
+	BaseKey       []byte
+
 	*network.HiveParams
 	Swap *swap.LocalProfile
 	Pss  *pss.PssParams
@@ -79,9 +85,9 @@ type Config struct {
 func NewConfig() (c *Config) {
 
 	c = &Config{
-		LocalStoreParams: storage.NewDefaultLocalStoreParams(),
-		FileStoreParams:  storage.NewFileStoreParams(),
-		HiveParams:       network.NewHiveParams(),
+		//LocalStoreParams: storage.NewDefaultLocalStoreParams(),
+		FileStoreParams: storage.NewFileStoreParams(),
+		HiveParams:      network.NewHiveParams(),
 		//SyncParams:    network.NewDefaultSyncParams(),
 		Swap:                 swap.NewDefaultSwapParams(),
 		Pss:                  pss.NewPssParams(),
@@ -128,8 +134,8 @@ func (c *Config) Init(prvKey *ecdsa.PrivateKey) {
 	}
 
 	c.privateKey = prvKey
-	c.LocalStoreParams.Init(c.Path)
-	c.LocalStoreParams.BaseKey = common.FromHex(keyhex)
+	c.ChunkDbPath = filepath.Join(c.Path, "chunks")
+	c.BaseKey = common.FromHex(keyhex)
 
 	c.Pss = c.Pss.WithPrivateKey(c.privateKey)
 }

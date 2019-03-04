@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 // TestModeGetRequest validates ModeGetRequest index values on the provided DB.
@@ -32,14 +34,14 @@ func TestModeGetRequest(t *testing.T) {
 		return uploadTimestamp
 	})()
 
-	chunk := generateTestRandomChunk()
+	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(ModePutUpload).Put(chunk)
+	err := db.NewPutter(chunk.ModePutUpload).Put(ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	requester := db.NewGetter(ModeGetRequest)
+	requester := db.NewGetter(chunk.ModeGetRequest)
 
 	// set update gc test hook to signal when
 	// update gc goroutine is done by sending to
@@ -52,22 +54,22 @@ func TestModeGetRequest(t *testing.T) {
 	})()
 
 	t.Run("get unsynced", func(t *testing.T) {
-		got, err := requester.Get(chunk.Address())
+		got, err := requester.Get(ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
 		// wait for update gc goroutine to be done
 		<-testHookUpdateGCChan
 
-		if !bytes.Equal(got.Address(), chunk.Address()) {
-			t.Errorf("got chunk address %x, want %x", got.Address(), chunk.Address())
+		if !bytes.Equal(got.Address(), ch.Address()) {
+			t.Errorf("got chunk address %x, want %x", got.Address(), ch.Address())
 		}
 
-		if !bytes.Equal(got.Data(), chunk.Data()) {
-			t.Errorf("got chunk data %x, want %x", got.Data(), chunk.Data())
+		if !bytes.Equal(got.Data(), ch.Data()) {
+			t.Errorf("got chunk data %x, want %x", got.Data(), ch.Data())
 		}
 
-		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, uploadTimestamp, 0))
+		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, ch, uploadTimestamp, 0))
 
 		t.Run("gc index count", newItemsCountTest(db.gcIndex, 0))
 
@@ -75,30 +77,30 @@ func TestModeGetRequest(t *testing.T) {
 	})
 
 	// set chunk to synced state
-	err = db.NewSetter(ModeSetSync).Set(chunk.Address())
+	err = db.NewSetter(chunk.ModeSetSync).Set(ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Run("first get", func(t *testing.T) {
-		got, err := requester.Get(chunk.Address())
+		got, err := requester.Get(ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
 		// wait for update gc goroutine to be done
 		<-testHookUpdateGCChan
 
-		if !bytes.Equal(got.Address(), chunk.Address()) {
-			t.Errorf("got chunk address %x, want %x", got.Address(), chunk.Address())
+		if !bytes.Equal(got.Address(), ch.Address()) {
+			t.Errorf("got chunk address %x, want %x", got.Address(), ch.Address())
 		}
 
-		if !bytes.Equal(got.Data(), chunk.Data()) {
-			t.Errorf("got chunk data %x, want %x", got.Data(), chunk.Data())
+		if !bytes.Equal(got.Data(), ch.Data()) {
+			t.Errorf("got chunk data %x, want %x", got.Data(), ch.Data())
 		}
 
-		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, uploadTimestamp, uploadTimestamp))
+		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, ch, uploadTimestamp, uploadTimestamp))
 
-		t.Run("gc index", newGCIndexTest(db, chunk, uploadTimestamp, uploadTimestamp))
+		t.Run("gc index", newGCIndexTest(db, ch, uploadTimestamp, uploadTimestamp))
 
 		t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
@@ -111,24 +113,24 @@ func TestModeGetRequest(t *testing.T) {
 			return accessTimestamp
 		})()
 
-		got, err := requester.Get(chunk.Address())
+		got, err := requester.Get(ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
 		// wait for update gc goroutine to be done
 		<-testHookUpdateGCChan
 
-		if !bytes.Equal(got.Address(), chunk.Address()) {
-			t.Errorf("got chunk address %x, want %x", got.Address(), chunk.Address())
+		if !bytes.Equal(got.Address(), ch.Address()) {
+			t.Errorf("got chunk address %x, want %x", got.Address(), ch.Address())
 		}
 
-		if !bytes.Equal(got.Data(), chunk.Data()) {
-			t.Errorf("got chunk data %x, want %x", got.Data(), chunk.Data())
+		if !bytes.Equal(got.Data(), ch.Data()) {
+			t.Errorf("got chunk data %x, want %x", got.Data(), ch.Data())
 		}
 
-		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, uploadTimestamp, accessTimestamp))
+		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, ch, uploadTimestamp, accessTimestamp))
 
-		t.Run("gc index", newGCIndexTest(db, chunk, uploadTimestamp, accessTimestamp))
+		t.Run("gc index", newGCIndexTest(db, ch, uploadTimestamp, accessTimestamp))
 
 		t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
@@ -146,27 +148,27 @@ func TestModeGetSync(t *testing.T) {
 		return uploadTimestamp
 	})()
 
-	chunk := generateTestRandomChunk()
+	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(ModePutUpload).Put(chunk)
+	err := db.NewPutter(chunk.ModePutUpload).Put(ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := db.NewGetter(ModeGetSync).Get(chunk.Address())
+	got, err := db.NewGetter(chunk.ModeGetSync).Get(ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !bytes.Equal(got.Address(), chunk.Address()) {
-		t.Errorf("got chunk address %x, want %x", got.Address(), chunk.Address())
+	if !bytes.Equal(got.Address(), ch.Address()) {
+		t.Errorf("got chunk address %x, want %x", got.Address(), ch.Address())
 	}
 
-	if !bytes.Equal(got.Data(), chunk.Data()) {
-		t.Errorf("got chunk data %x, want %x", got.Data(), chunk.Data())
+	if !bytes.Equal(got.Data(), ch.Data()) {
+		t.Errorf("got chunk data %x, want %x", got.Data(), ch.Data())
 	}
 
-	t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, uploadTimestamp, 0))
+	t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, ch, uploadTimestamp, 0))
 
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, 0))
 

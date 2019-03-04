@@ -61,9 +61,9 @@ func benchmarkRetrievalIndexes(b *testing.B, o *Options, count int) {
 	b.StopTimer()
 	db, cleanupFunc := newTestDB(b, o)
 	defer cleanupFunc()
-	uploader := db.NewPutter(ModePutUpload)
-	syncer := db.NewSetter(ModeSetSync)
-	requester := db.NewGetter(ModeGetRequest)
+	uploader := db.NewPutter(chunk.ModePutUpload)
+	syncer := db.NewSetter(chunk.ModeSetSync)
+	requester := db.NewGetter(chunk.ModeGetRequest)
 	addrs := make([]chunk.Address, count)
 	for i := 0; i < count; i++ {
 		chunk := generateTestRandomChunk()
@@ -133,7 +133,7 @@ func benchmarkUpload(b *testing.B, o *Options, count int) {
 	b.StopTimer()
 	db, cleanupFunc := newTestDB(b, o)
 	defer cleanupFunc()
-	uploader := db.NewPutter(ModePutUpload)
+	uploader := db.NewPutter(chunk.ModePutUpload)
 	chunks := make([]chunk.Chunk, count)
 	for i := 0; i < count; i++ {
 		chunk := generateTestRandomChunk()

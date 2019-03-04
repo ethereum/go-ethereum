@@ -17,34 +17,23 @@
 package localstore
 
 import (
+	"context"
+
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/shed"
 	"github.com/syndtr/goleveldb/leveldb"
-)
-
-// ModePut enumerates different Putter modes.
-type ModePut int
-
-// Putter modes.
-const (
-	// ModePutRequest: when a chunk is received as a result of retrieve request and delivery
-	ModePutRequest ModePut = iota
-	// ModePutSync: when a chunk is received via syncing
-	ModePutSync
-	// ModePutUpload: when a chunk is created by local upload
-	ModePutUpload
 )
 
 // Putter provides Put method to store Chunks
 // to database.
 type Putter struct {
 	db   *DB
-	mode ModePut
+	mode chunk.ModePut
 }
 
 // NewPutter returns a new Putter on database
 // with a specific Mode.
-func (db *DB) NewPutter(mode ModePut) *Putter {
+func (db *DB) NewPutter(mode chunk.ModePut) *Putter {
 	return &Putter{
 		mode: mode,
 		db:   db,
@@ -57,12 +46,16 @@ func (p *Putter) Put(ch chunk.Chunk) (err error) {
 	return p.db.put(p.mode, chunkToItem(ch))
 }
 
+func (db *DB) Put(_ context.Context, mode chunk.ModePut, ch chunk.Chunk) (err error) {
+	return db.put(mode, chunkToItem(ch))
+}
+
 // put stores Item to database and updates other
 // indexes. It acquires lockAddr to protect two calls
 // of this function for the same address in parallel.
 // Item fields Address and Data must not be
 // with their nil values.
-func (db *DB) put(mode ModePut, item shed.Item) (err error) {
+func (db *DB) put(mode chunk.ModePut, item shed.Item) (err error) {
 	// protect parallel updates
 	unlock, err := db.lockAddr(item.Address)
 	if err != nil {
@@ -79,7 +72,7 @@ func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 	var triggerPushFeed bool // signal push feed subscriptions to iterate
 
 	switch mode {
-	case ModePutRequest:
+	case chunk.ModePutRequest:
 		// put to indexes: retrieve, gc; it does not enter the syncpool
 
 		// check if the chunk already is in the database
@@ -121,7 +114,7 @@ func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 
 		db.retrievalDataIndex.PutInBatch(batch, item)
 
-	case ModePutUpload:
+	case chunk.ModePutUpload:
 		// put to indexes: retrieve, push, pull
 
 		item.StoreTimestamp = now()
@@ -131,7 +124,7 @@ func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 		db.pushIndex.PutInBatch(batch, item)
 		triggerPushFeed = true
 
-	case ModePutSync:
+	case chunk.ModePutSync:
 		// put to indexes: retrieve, pull
 
 		item.StoreTimestamp = now()

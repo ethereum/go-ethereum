@@ -22,8 +22,10 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
@@ -35,21 +37,17 @@ func TestFileStorerandom(t *testing.T) {
 }
 
 func testFileStoreRandom(toEncrypt bool, t *testing.T) {
-	tdb, cleanup, err := newTestDbStore(false, false)
-	defer cleanup()
+	dir, err := ioutil.TempDir("", "swarm-storage-")
 	if err != nil {
-		t.Fatalf("init dbStore failed: %v", err)
+		t.Fatal(err)
 	}
-	db := tdb.LDBStore
-	db.setCapacity(50000)
-	memStore := NewMemStore(NewDefaultStoreParams(), db)
-	localStore := &LocalStore{
-		memStore: memStore,
-		DbStore:  db,
-	}
+	defer os.RemoveAll(dir)
+	localStore, err := localstore.New(dir, make([]byte, 32), &localstore.Options{
+		Capacity: 50000,
+	})
+	defer localStore.Close()
 
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
-	defer os.RemoveAll("/tmp/bzz")
 
 	slice := testutil.RandomBytes(1, testDataSize)
 	ctx := context.TODO()
@@ -76,9 +74,8 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	if !bytes.Equal(slice, resultSlice) {
 		t.Fatalf("Comparison error.")
 	}
-	ioutil.WriteFile("/tmp/slice.bzz.16M", slice, 0666)
-	ioutil.WriteFile("/tmp/result.bzz.16M", resultSlice, 0666)
-	localStore.memStore = NewMemStore(NewDefaultStoreParams(), db)
+	ioutil.WriteFile(filepath.Join(dir, "slice.bzz.16M"), slice, 0666)
+	ioutil.WriteFile(filepath.Join(dir, "result.bzz.16M"), resultSlice, 0666)
 	resultReader, isEncrypted = fileStore.Retrieve(context.TODO(), key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
@@ -104,17 +101,16 @@ func TestFileStoreCapacity(t *testing.T) {
 }
 
 func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
-	tdb, cleanup, err := newTestDbStore(false, false)
-	defer cleanup()
+	dir, err := ioutil.TempDir("", "swarm-storage-")
 	if err != nil {
-		t.Fatalf("init dbStore failed: %v", err)
+		t.Fatal(err)
 	}
-	db := tdb.LDBStore
-	memStore := NewMemStore(NewDefaultStoreParams(), db)
-	localStore := &LocalStore{
-		memStore: memStore,
-		DbStore:  db,
-	}
+	defer os.RemoveAll(dir)
+	localStore, err := localstore.New(dir, make([]byte, 32), &localstore.Options{
+		Capacity: 50000,
+	})
+	defer localStore.Close()
+
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
 	slice := testutil.RandomBytes(1, testDataSize)
 	ctx := context.TODO()
@@ -142,9 +138,9 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 		t.Fatalf("Comparison error.")
 	}
 	// Clear memStore
-	memStore.setCapacity(0)
+	//memStore.setCapacity(0)
 	// check whether it is, indeed, empty
-	fileStore.ChunkStore = memStore
+	//fileStore.ChunkStore = memStore
 	resultReader, isEncrypted = fileStore.Retrieve(context.TODO(), key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
@@ -177,17 +173,16 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 // TestGetAllReferences only tests that GetAllReferences returns an expected
 // number of references for a given file
 func TestGetAllReferences(t *testing.T) {
-	tdb, cleanup, err := newTestDbStore(false, false)
-	defer cleanup()
+	dir, err := ioutil.TempDir("", "swarm-storage-")
 	if err != nil {
-		t.Fatalf("init dbStore failed: %v", err)
+		t.Fatal(err)
 	}
-	db := tdb.LDBStore
-	memStore := NewMemStore(NewDefaultStoreParams(), db)
-	localStore := &LocalStore{
-		memStore: memStore,
-		DbStore:  db,
-	}
+	defer os.RemoveAll(dir)
+	localStore, err := localstore.New(dir, make([]byte, 32), &localstore.Options{
+		Capacity: 50000,
+	})
+	defer localStore.Close()
+
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
 
 	// testRuns[i] and expectedLen[i] are dataSize and expected length respectively

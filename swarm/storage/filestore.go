@@ -21,6 +21,9 @@ import (
 	"io"
 	"sort"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 )
 
 /*
@@ -58,14 +61,11 @@ func NewFileStoreParams() *FileStoreParams {
 
 // for testing locally
 func NewLocalFileStore(datadir string, basekey []byte) (*FileStore, error) {
-	params := NewDefaultLocalStoreParams()
-	params.Init(datadir)
-	localStore, err := NewLocalStore(params, nil)
+	localStore, err := localstore.New(datadir, basekey, nil)
 	if err != nil {
 		return nil, err
 	}
-	localStore.Validators = append(localStore.Validators, NewContentAddressValidator(MakeHashFunc(DefaultHash)))
-	return NewFileStore(localStore, NewFileStoreParams()), nil
+	return NewFileStore(chunk.NewValidatorStore(localStore, NewContentAddressValidator(MakeHashFunc(DefaultHash))), NewFileStoreParams()), nil
 }
 
 func NewFileStore(store ChunkStore, params *FileStoreParams) *FileStore {

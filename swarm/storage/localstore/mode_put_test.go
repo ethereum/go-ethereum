@@ -31,7 +31,7 @@ func TestModePutRequest(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	putter := db.NewPutter(ModePutRequest)
+	putter := db.NewPutter(chunk.ModePutRequest)
 
 	chunk := generateTestRandomChunk()
 
@@ -87,16 +87,16 @@ func TestModePutSync(t *testing.T) {
 		return wantTimestamp
 	})()
 
-	chunk := generateTestRandomChunk()
+	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(ModePutSync).Put(chunk)
+	err := db.NewPutter(chunk.ModePutSync).Put(ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Run("retrieve indexes", newRetrieveIndexesTest(db, chunk, wantTimestamp, 0))
+	t.Run("retrieve indexes", newRetrieveIndexesTest(db, ch, wantTimestamp, 0))
 
-	t.Run("pull index", newPullIndexTest(db, chunk, wantTimestamp, nil))
+	t.Run("pull index", newPullIndexTest(db, ch, wantTimestamp, nil))
 }
 
 // TestModePutUpload validates ModePutUpload index values on the provided DB.
@@ -109,18 +109,18 @@ func TestModePutUpload(t *testing.T) {
 		return wantTimestamp
 	})()
 
-	chunk := generateTestRandomChunk()
+	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(ModePutUpload).Put(chunk)
+	err := db.NewPutter(chunk.ModePutUpload).Put(ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Run("retrieve indexes", newRetrieveIndexesTest(db, chunk, wantTimestamp, 0))
+	t.Run("retrieve indexes", newRetrieveIndexesTest(db, ch, wantTimestamp, 0))
 
-	t.Run("pull index", newPullIndexTest(db, chunk, wantTimestamp, nil))
+	t.Run("pull index", newPullIndexTest(db, ch, wantTimestamp, nil))
 
-	t.Run("push index", newPushIndexTest(db, chunk, wantTimestamp, nil))
+	t.Run("push index", newPushIndexTest(db, ch, wantTimestamp, nil))
 }
 
 // TestModePutUpload_parallel uploads chunks in parallel
@@ -140,7 +140,7 @@ func TestModePutUpload_parallel(t *testing.T) {
 	// start uploader workers
 	for i := 0; i < workerCount; i++ {
 		go func(i int) {
-			uploader := db.NewPutter(ModePutUpload)
+			uploader := db.NewPutter(chunk.ModePutUpload)
 			for {
 				select {
 				case chunk, ok := <-chunkChan:
@@ -188,7 +188,7 @@ func TestModePutUpload_parallel(t *testing.T) {
 	}
 
 	// get every chunk and validate its data
-	getter := db.NewGetter(ModeGetRequest)
+	getter := db.NewGetter(chunk.ModeGetRequest)
 
 	chunksMu.Lock()
 	defer chunksMu.Unlock()
@@ -270,7 +270,7 @@ func benchmarkPutUpload(b *testing.B, o *Options, count, maxParallelUploads int)
 	db, cleanupFunc := newTestDB(b, o)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(ModePutUpload)
+	uploader := db.NewPutter(chunk.ModePutUpload)
 	chunks := make([]chunk.Chunk, count)
 	for i := 0; i < count; i++ {
 		chunks[i] = generateTestRandomChunk()

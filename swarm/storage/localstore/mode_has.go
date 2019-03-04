@@ -17,6 +17,8 @@
 package localstore
 
 import (
+	"context"
+
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
@@ -36,4 +38,8 @@ func (db *DB) NewHasser() *Hasser {
 // Has returns true if the chunk is stored in database.
 func (h *Hasser) Has(addr chunk.Address) (yes bool, err error) {
 	return h.db.retrievalDataIndex.Has(addressToItem(addr))
+}
+
+func (db *DB) Has(_ context.Context, addr chunk.Address) (yes bool, err error) {
+	return db.retrievalDataIndex.Has(addressToItem(addr))
 }

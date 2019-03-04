@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -135,13 +135,10 @@ func dbImport(ctx *cli.Context) {
 	log.Info(fmt.Sprintf("successfully imported %d chunks", count))
 }
 
-func openLDBStore(path string, basekey []byte) (*storage.LDBStore, error) {
+func openLDBStore(path string, basekey []byte) (*localstore.DB, error) {
 	if _, err := os.Stat(filepath.Join(path, "CURRENT")); err != nil {
 		return nil, fmt.Errorf("invalid chunkdb path: %s", err)
 	}
 
-	storeparams := storage.NewDefaultStoreParams()
-	ldbparams := storage.NewLDBStoreParams(storeparams, path)
-	ldbparams.BaseKey = basekey
-	return storage.NewLDBStore(ldbparams)
+	return localstore.New(path, basekey, nil)
 }

@@ -29,6 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
 
+// DB implements chunk.Store.
+var _ chunk.Store = &DB{}
+
 var (
 	// ErrInvalidMode is retuned when an unknown Mode
 	// is provided to the function.

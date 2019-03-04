@@ -17,33 +17,24 @@
 package localstore
 
 import (
+	"context"
+
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/shed"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// ModeGet enumerates different Getter modes.
-type ModeGet int
-
-// Getter modes.
-const (
-	// ModeGetRequest: when accessed for retrieval
-	ModeGetRequest ModeGet = iota
-	// ModeGetSync: when accessed for syncing or proof of custody request
-	ModeGetSync
-)
-
 // Getter provides Get method to retrieve Chunks
 // from database.
 type Getter struct {
 	db   *DB
-	mode ModeGet
+	mode chunk.ModeGet
 }
 
 // NewGetter returns a new Getter on database
 // with a specific Mode.
-func (db *DB) NewGetter(mode ModeGet) *Getter {
+func (db *DB) NewGetter(mode chunk.ModeGet) *Getter {
 	return &Getter{
 		mode: mode,
 		db:   db,
@@ -65,9 +56,20 @@ func (g *Getter) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
 	return chunk.NewChunk(out.Address, out.Data), nil
 }
 
+func (db *DB) Get(_ context.Context, mode chunk.ModeGet, addr chunk.Address) (ch chunk.Chunk, err error) {
+	out, err := db.get(mode, addr)
+	if err != nil {
+		if err == leveldb.ErrNotFound {
+			return nil, chunk.ErrChunkNotFound
+		}
+		return nil, err
+	}
+	return chunk.NewChunk(out.Address, out.Data), nil
+}
+
 // get returns Item from the retrieval index
 // and updates other indexes.
-func (db *DB) get(mode ModeGet, addr chunk.Address) (out shed.Item, err error) {
+func (db *DB) get(mode chunk.ModeGet, addr chunk.Address) (out shed.Item, err error) {
 	item := addressToItem(addr)
 
 	out, err = db.retrievalDataIndex.Get(item)
@@ -76,7 +78,7 @@ func (db *DB) get(mode ModeGet, addr chunk.Address) (out shed.Item, err error) {
 	}
 	switch mode {
 	// update the access timestamp and gc index
-	case ModeGetRequest:
+	case chunk.ModeGetRequest:
 		if db.updateGCSem != nil {
 			// wait before creating new goroutines
 			// if updateGCSem buffer id full
@@ -101,7 +103,8 @@ func (db *DB) get(mode ModeGet, addr chunk.Address) (out shed.Item, err error) {
 		}()
 
 	// no updates to indexes
-	case ModeGetSync:
+	case chunk.ModeGetSync:
+	case chunk.ModeGetFeedLookup:
 	default:
 		return out, ErrInvalidMode
 	}

@@ -35,7 +35,7 @@ func TestDB_pullIndex(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(ModePutUpload)
+	uploader := db.NewPutter(chunk.ModePutUpload)
 
 	chunkCount := 50
 
@@ -87,7 +87,7 @@ func TestDB_gcIndex(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(ModePutUpload)
+	uploader := db.NewPutter(chunk.ModePutUpload)
 
 	chunkCount := 50
 
@@ -123,9 +123,9 @@ func TestDB_gcIndex(t *testing.T) {
 	})()
 
 	t.Run("request unsynced", func(t *testing.T) {
-		chunk := chunks[1]
+		ch := chunks[1]
 
-		_, err := db.NewGetter(ModeGetRequest).Get(chunk.Address())
+		_, err := db.NewGetter(chunk.ModeGetRequest).Get(ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -140,9 +140,9 @@ func TestDB_gcIndex(t *testing.T) {
 	})
 
 	t.Run("sync one chunk", func(t *testing.T) {
-		chunk := chunks[0]
+		ch := chunks[0]
 
-		err := db.NewSetter(ModeSetSync).Set(chunk.Address())
+		err := db.NewSetter(chunk.ModeSetSync).Set(ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -154,7 +154,7 @@ func TestDB_gcIndex(t *testing.T) {
 	})
 
 	t.Run("sync all chunks", func(t *testing.T) {
-		setter := db.NewSetter(ModeSetSync)
+		setter := db.NewSetter(chunk.ModeSetSync)
 
 		for i := range chunks {
 			err := setter.Set(chunks[i].Address())
@@ -171,7 +171,7 @@ func TestDB_gcIndex(t *testing.T) {
 	t.Run("request one chunk", func(t *testing.T) {
 		i := 6
 
-		_, err := db.NewGetter(ModeGetRequest).Get(chunks[i].Address())
+		_, err := db.NewGetter(chunk.ModeGetRequest).Get(chunks[i].Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -189,7 +189,7 @@ func TestDB_gcIndex(t *testing.T) {
 	})
 
 	t.Run("random chunk request", func(t *testing.T) {
-		requester := db.NewGetter(ModeGetRequest)
+		requester := db.NewGetter(chunk.ModeGetRequest)
 
 		rand.Shuffle(len(chunks), func(i, j int) {
 			chunks[i], chunks[j] = chunks[j], chunks[i]
@@ -212,7 +212,7 @@ func TestDB_gcIndex(t *testing.T) {
 	t.Run("remove one chunk", func(t *testing.T) {
 		i := 3
 
-		err := db.NewSetter(modeSetRemove).Set(chunks[i].Address())
+		err := db.NewSetter(chunk.ModeSetRemove).Set(chunks[i].Address())
 		if err != nil {
 			t.Fatal(err)
 		}

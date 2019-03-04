@@ -60,7 +60,11 @@ func (inspector *Inspector) Has(chunkAddresses []storage.Address) []HasInfo {
 	for _, addr := range chunkAddresses {
 		res := HasInfo{}
 		res.Addr = addr.String()
-		res.Has = inspector.netStore.Has(context.Background(), addr)
+		has, err := inspector.netStore.Has(context.Background(), addr)
+		if err != nil {
+			has = false
+		}
+		res.Has = has
 		results = append(results, res)
 	}
 	return results
