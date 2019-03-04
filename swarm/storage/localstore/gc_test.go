@@ -51,14 +51,16 @@ func testDB_collectGarbageWorker(t *testing.T) {
 
 	chunkCount := 150
 
-	testHookCollectGarbageChan := make(chan int64)
-	defer setTestHookCollectGarbage(func(collectedCount int64) {
-		testHookCollectGarbageChan <- collectedCount
-	})()
-
 	db, cleanupFunc := newTestDB(t, &Options{
 		Capacity: 100,
 	})
+	testHookCollectGarbageChan := make(chan int64)
+	defer setTestHookCollectGarbage(func(collectedCount int64) {
+		select {
+		case testHookCollectGarbageChan <- collectedCount:
+		case <-db.close:
+		}
+	})()
 	defer cleanupFunc()
 
 	uploader := db.NewPutter(ModePutUpload)
