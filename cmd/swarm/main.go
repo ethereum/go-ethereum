@@ -287,8 +287,8 @@ func bzzd(ctx *cli.Context) error {
 	//setup the ethereum node
 	utils.SetNodeConfig(ctx, &cfg)
 
-	//always disable discovery from p2p package - swarm discovery is done with the `hive` protocol
-	cfg.P2P.NoDiscovery = true
+	//disable dynamic dialing from p2p/discovery
+	cfg.P2P.NoDial = true
 
 	stack, err := node.New(&cfg)
 	if err != nil {
