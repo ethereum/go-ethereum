@@ -405,7 +405,7 @@ func opSha3(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 }
 
 func opAddress(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(contract.Address().Big())
+	stack.push(contract.Address().SetBig(interpreter.intPool.get()))
 	return nil, nil
 }
 
@@ -416,12 +416,12 @@ func opBalance(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memo
 }
 
 func opOrigin(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(interpreter.evm.Origin.Big())
+	stack.push(interpreter.evm.Origin.SetBig(interpreter.intPool.get()))
 	return nil, nil
 }
 
 func opCaller(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(contract.Caller().Big())
+	stack.push(contract.Caller().SetBig(interpreter.intPool.get()))
 	return nil, nil
 }
 
