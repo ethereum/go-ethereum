@@ -567,7 +567,7 @@ func newFrontierInstructionSet() [256]operation {
 			valid:       true,
 		},
 		PUSH1: {
-			execute:     makePush(1, 1),
+			execute:     opPush1,
 			constantGas: GasFastestStep,
 			minStack:    minStack(0, 1),
 			maxStack:    maxStack(0, 1),

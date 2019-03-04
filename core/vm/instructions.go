@@ -886,6 +886,21 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memo
 	return nil, nil
 }
 
+// opPush1 is a specialized version of pushN
+func opPush1(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	var (
+		codeLen = uint64(len(contract.Code))
+		integer = interpreter.intPool.get()
+	)
+	*pc += 1
+	if *pc < codeLen {
+		stack.push(integer.SetUint64(uint64(contract.Code[*pc])))
+	} else {
+		stack.push(integer.SetUint64(0))
+	}
+	return nil, nil
+}
+
 // following functions are used by the instruction jump  table
 
 // make log instruction function
