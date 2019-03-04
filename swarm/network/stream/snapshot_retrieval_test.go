@@ -115,7 +115,7 @@ var retrievalSimServiceMap = map[string]simulation.ServiceFunc{
 
 		syncUpdateDelay := 1 * time.Second
 		if *longrunning {
-			syncUpdateDelay = 15 * time.Second
+			syncUpdateDelay = 5 * time.Second
 		}
 
 		r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
@@ -145,7 +145,7 @@ func runFileRetrievalTest(nodeCount int) error {
 	sim := simulation.New(retrievalSimServiceMap)
 	defer sim.Close()
 
-	log.Info("Initializing test config")
+	log.Info("Initializing test config", "node count", nodeCount)
 
 	conf := &synctestConfig{}
 	//map of discover ID to indexes of chunks expected at that ID
@@ -162,6 +162,8 @@ func runFileRetrievalTest(nodeCount int) error {
 
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancelSimRun()
+
+	log.Info("Starting simulation")
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
@@ -190,6 +192,8 @@ func runFileRetrievalTest(nodeCount int) error {
 			return err
 		}
 
+		log.Info("network healthy, start file checks")
+
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
 	REPEAT:
@@ -216,6 +220,8 @@ func runFileRetrievalTest(nodeCount int) error {
 			return nil
 		}
 	})
+
+	log.Info("Simulation terminated")
 
 	if result.Error != nil {
 		return result.Error
