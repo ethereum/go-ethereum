@@ -86,7 +86,7 @@ func TestRetrieval(t *testing.T) {
 		chnkCnt := []int{32}
 
 		if *longrunning {
-			nodeCnt = []int{16, 32, 128}
+			nodeCnt = []int{16, 32, 64}
 			chnkCnt = []int{4, 32, 256}
 		} else if testutil.RaceEnabled {
 			nodeCnt = []int{4}

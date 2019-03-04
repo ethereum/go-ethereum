@@ -841,7 +841,7 @@ func (net *Network) snapshot(addServices []string, removeServices []string) (*Sn
 }
 
 // longrunning tests may need a longer timeout
-var snapshotLoadTimeout = 7200 * time.Second
+var snapshotLoadTimeout = 900 * time.Second
 
 // Load loads a network snapshot
 func (net *Network) Load(snap *Snapshot) error {
