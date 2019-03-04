@@ -81,7 +81,7 @@ func main() {
 		bins  []string
 		types []string
 	)
-	if *solFlag != "" || *vyFlag != "" || (*abiFlag == "-" && *pkgFlag == "") {
+	if *solFlag != "" || *vyFlag != "" || *abiFlag == "-" {
 		// Generate the list of types to exclude from binding
 		exclude := make(map[string]bool)
 		for _, kind := range strings.Split(*excFlag, ",") {
