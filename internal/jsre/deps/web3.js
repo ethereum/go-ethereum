@@ -3715,6 +3715,13 @@ var inputBlockNumberFormatter = function (blockNumber) {
     return utils.toHex(blockNumber);
 };
 
+var inputEpochNumberFormatter = function (epochNumber) {
+  if (epochNumber === undefined || epochNumber === "latest") {
+    return "latest";
+  }
+  return utils.toHex(epochNumber);
+};
+
 /**
  * Formats the input of a transaction and converts all values to HEX
  *
@@ -3966,6 +3973,7 @@ var outputSyncingFormatter = function(result) {
 module.exports = {
     inputDefaultBlockNumberFormatter: inputDefaultBlockNumberFormatter,
     inputBlockNumberFormatter: inputBlockNumberFormatter,
+    inputEpochNumberFormatter: inputEpochNumberFormatter,
     inputCallFormatter: inputCallFormatter,
     inputTransactionFormatter: inputTransactionFormatter,
     inputAddressFormatter: inputAddressFormatter,
@@ -5472,6 +5480,12 @@ var methods = function () {
         params: 0
     });
 
+    var getCandidateStatus = new Method({
+      name: 'getCandidateStatus',
+      call: 'eth_getCandidateStatus',
+      params: 2,
+      inputFormatter: [formatters.inputAddressFormatter, formatters.inputEpochNumberFormatter]
+    });
     return [
         getBalance,
         getStorageAt,
@@ -5479,6 +5493,7 @@ var methods = function () {
         getBlock,
         getBlockSigners,
         getBlockFinality,
+        getCandidateStatus,
         getUncle,
         getCompilers,
         getBlockTransactionCount,
