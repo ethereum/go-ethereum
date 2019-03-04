@@ -80,6 +80,7 @@ var (
 		executablePath("puppeth"),
 		executablePath("rlpdump"),
 		executablePath("wnode"),
+		executablePath("clef"),
 	}
 
 	// Files that end up in the swarm*.zip archive.
@@ -117,6 +118,10 @@ var (
 		{
 			BinaryName:  "wnode",
 			Description: "Ethereum Whisper diagnostic tool",
+		},
+		{
+			BinaryName:  "clef",
+			Description: "Ethereum account management tool.",
 		},
 	}
 
