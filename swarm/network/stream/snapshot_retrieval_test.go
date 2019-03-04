@@ -53,7 +53,7 @@ func TestFileRetrieval(t *testing.T) {
 		nodeCount = []int{16}
 
 		if *longrunning {
-			nodeCount = append(nodeCount, 32, 64, 128)
+			nodeCount = append(nodeCount, 32, 64)
 		} else if testutil.RaceEnabled {
 			nodeCount = []int{4}
 		}
@@ -86,7 +86,7 @@ func TestRetrieval(t *testing.T) {
 		chnkCnt := []int{32}
 
 		if *longrunning {
-			nodeCnt = []int{16, 32, 128}
+			nodeCnt = []int{16, 32, 64}
 			chnkCnt = []int{4, 32, 256}
 		} else if testutil.RaceEnabled {
 			nodeCnt = []int{4}
@@ -115,7 +115,7 @@ var retrievalSimServiceMap = map[string]simulation.ServiceFunc{
 
 		syncUpdateDelay := 1 * time.Second
 		if *longrunning {
-			syncUpdateDelay = 5 * time.Second
+			syncUpdateDelay = 3 * time.Second
 		}
 
 		r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
