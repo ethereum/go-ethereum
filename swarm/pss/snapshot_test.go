@@ -53,12 +53,15 @@ var (
 
 	handlerDone   bool // set to true on termination of the simulation run
 	msgsToReceive int  // total count of messages to receive, used for terminating the simulation run
-	debugCnt      int
+	maxMessages   int
+	msgCnt        int
 
 	kademlias     map[enode.ID]*network.Kademlia
 	nodeAddrs     map[enode.ID][]byte   // make predictable overlay addresses from the generated random enode ids
 	recipients    map[int][]enode.ID    // for logging output only
+	allowed		  map[int][]enode.ID    // allowed recipients
 	expectedMsgs  map[enode.ID][]uint64 // message serials we expect respective nodes to receive
+	allowedMsgs   map[enode.ID][]uint64 // message serials we expect respective nodes to receive
 	senders       map[int]enode.ID      // originating nodes of the messages (intention is to choose as far as possible from the receiving neighborhood)
 	handlerC      chan handlerNotification // passes message from pss message handler to simulation driver
 	doneC         chan struct{}            // terminates the handler channel listener
@@ -70,13 +73,16 @@ var (
 func resetTestVariables() {
 	handlerDone = false
 	msgsToReceive = 0
-	debugCnt = 0
+	maxMessages = 0
+	msgCnt = 0
 	msgs = nil
 
 	kademlias     = make(map[enode.ID]*network.Kademlia)
 	nodeAddrs     = make(map[enode.ID][]byte)
 	recipients    = make(map[int][]enode.ID)
+	allowed       = make(map[int][]enode.ID)
 	expectedMsgs  = make(map[enode.ID][]uint64)
+	allowedMsgs   = make(map[enode.ID][]uint64)
 	senders       = make(map[int]enode.ID)
 	handlerC      = make(chan handlerNotification)
 	doneC         = make(chan struct{})
@@ -132,44 +138,53 @@ func readSnapshot(t *testing.T, nodeCount int) simulations.Snapshot {
 
 func assingTestVariables(sim *simulation.Simulation, msgCount int) {
 	log.Debug("-------------------------------------------------------------------------")
-	var targets string
 	for _, nodeId := range sim.NodeIDs() {
 		nodeAddrs[nodeId] = nodeIDToAddr(nodeId)
 	}
 
 	for i := 0; i < int(msgCount); i++ {
 		msgAddr := pot.RandomAddress() // we choose message addresses randomly
-		msgAddr[0] = byte(0x24)
-
 		msgs = append(msgs, msgAddr.Bytes())
 		smallestPo := 256
+		var targets []enode.ID
+		var prev int
 
 		// loop through all nodes and add the message to recipient indices
 		for _, nod := range sim.Net.GetNodes() {
 			po, _ := pof(msgs[i], nodeAddrs[nod.ID()], 0)
 			depth := kademlias[nod.ID()].NeighbourhoodDepth()
 
-			// node has message address within nearest neighborhood depth, that means it is a recipient
-			if po >= depth {
-				recipients[i] = append(recipients[i], nod.ID())
-				expectedMsgs[nod.ID()] = append(expectedMsgs[nod.ID()], uint64(i))
-				msgsToReceive++
-				id := nod.ID()
-				targets += fmt.Sprintf("%x ", id[:4])
+			// only nodes with closest IDs (wrt msg) will receive the msg
+			if po > prev {
+				prev = po
+				targets = nil
+				targets = append(targets, nod.ID())
+			} else if po == prev {
+				targets = append(targets, nod.ID())
 			}
 
-			// keep track of the smallest po value in the iteration
-			// the first node in the smallest value bin will be the sender
+			if po >= depth {
+				maxMessages++
+				allowed[i] = append(recipients[i], nod.ID())
+				allowedMsgs[nod.ID()] = append(allowedMsgs[nod.ID()], uint64(i))
+			}
+
+			// a node with the smallest PO (wrt msg) will be the sender
 			if po < smallestPo {
 				smallestPo = po
 				senders[i] = nod.ID()
 			}
 		}
+
+		msgsToReceive += len(targets)
+		for _, id := range targets {
+			recipients[i] = append(recipients[i], id)
+			expectedMsgs[id] = append(expectedMsgs[id], uint64(i))
+		}
+
 		log.Debug("nn for msg", "targets", len(recipients[i]), "msgidx", i, "msg", common.Bytes2Hex(msgAddr[:8]), "sender", senders[i], "senderpo", smallestPo)
-		//log.Debug("nn for msg", "rcptcount", len(recipients[i]), "msgidx", i, "msg", common.Bytes2Hex(msgs[i][:8]), "sender", senders[i], "senderpo", smallestPo)
 	}
 	log.Debug("msgs to receive", "count", msgsToReceive)
-	log.Debug("targets", "nodes", targets)
 }
 
 func TestProxNetwork(t *testing.T) {
@@ -206,77 +221,19 @@ func testProxNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to recreate snapshot: %s", err)
 	}
-	//waitTillSerenity(t, snap, sim, 1000)
 	assingTestVariables(sim, msgCount)
 	result := sim.Run(ctx, runFunc)
 	if result.Error != nil {
-		log.Debug("--------------------------------------------------------------------------------", "rcv", debugCnt)
-		t.Fatal(result.Error)
+		// context deadline exceeded
+		// however, it might just mean that not all possible messages are received
+		// now we must check if all required messages are received
+		log.Debug("--------------------------------------------------------------------------------", "rcv", msgCnt)
+		if msgCnt < msgsToReceive {
+			t.Fatal(result.Error)
+		}
 	}
 	t.Logf("completed %d", result.Duration)
 }
-
-/*
-func waitTillSerenity(t *testing.T, snap simulations.Snapshot, sim *simulation.Simulation, timeout int) {
-	interval := 16
-	expected := listSnapConnections(snap.Conns)
-	for ms := 0; ms < timeout; ms += interval {
-		actual := listSimConnections(sim.Net.Conns)
-		if isSerenity(expected, actual) {
-			return
-		} else {
-			time.Sleep(time.Millisecond * time.Duration(interval))
-		}
-	}
-	time.Sleep(time.Millisecond * 16) // todo: remove this later
-}
-
-func listSnapConnections(conns []simulations.Conn) (res []uint64) {
-	for _, c := range conns {
-		res = append(res, getConnectionHash(c.One, c.Other))
-	}
-	return res
-}
-
-func listSimConnections(conns []*simulations.Conn) (res []uint64) {
-	for _, c := range conns {
-		res = append(res, getConnectionHash(c.One, c.Other))
-	}
-	return res
-}
-
-// returns an integer connection identifier (similar to 8-byte hash)
-func getConnectionHash(a, b enode.ID) uint64 {
-	var h [8]byte
-	for i := 0; i < 8; i++ {
-		h[i] = a[i] ^ b[i]
-	}
-	res := binary.LittleEndian.Uint64(h[:])
-	return res
-}
-
-// returns true if all connections in expected are listed in actual
-func isSerenity(expected []uint64, actual []uint64) bool {
-	exp := make([]uint64, len(expected))
-	copy(exp, expected)
-	if len(exp) > 0 {
-		for _, c := range actual {
-			// remove value c from exp
-			for i := 0; i < len(exp); i++ {
-				if exp[i] == c {
-					last := len(exp) - 1
-					if last == 0 {
-						return true
-					}
-					exp[i] = exp[last]
-					exp = exp[:last]
-				}
-			}
-		}
-	}
-	return len(exp) == 0
-}
-*/
 
 func sendAllMsgs(sim *simulation.Simulation, msgs [][]byte, senders map[int]enode.ID) {
 	for i, msg := range msgs {
@@ -294,10 +251,10 @@ func sendAllMsgs(sim *simulation.Simulation, msgs [][]byte, senders map[int]enod
 
 func runFunc(ctx context.Context, sim *simulation.Simulation) error {
 	go handlerChannelListener(ctx)
-	time.Sleep(128 * time.Millisecond)
 	go sendAllMsgs(sim, msgs, senders)
-	// collect incoming messages and terminate with corresponding status when message handler listener ends
 	received := 0
+
+	// collect incoming messages and terminate with corresponding status when message handler listener ends
 	for {
 		select {
 		case err := <-errC:
@@ -305,7 +262,7 @@ func runFunc(ctx context.Context, sim *simulation.Simulation) error {
 		case hn := <-msgC:
 			received++
 			log.Debug("msg received", "msgs_received", received, "total_expected", msgsToReceive, "id", hn.id, "serial", hn.serial)
-			if received >= msgsToReceive {
+			if received >= maxMessages {
 				close(doneC)
 				return nil
 			}
@@ -330,8 +287,8 @@ func handlerChannelListener(ctx context.Context) {
 		// incoming message from pss message handler
 		case handlerNotification := <-handlerC:
 			// check if recipient has already received all its messages and notify to fail the test if so
-			xMsgs := expectedMsgs[handlerNotification.id]
-			if len(xMsgs) == 0 {
+			aMsgs := allowedMsgs[handlerNotification.id]
+			if len(aMsgs) == 0 {
 				setDone()
 				errC <- fmt.Errorf("too many messages received by recipient %x", handlerNotification.id)
 				return
@@ -339,7 +296,7 @@ func handlerChannelListener(ctx context.Context) {
 
 			// check if message serial is in expected messages for this recipient and notify to fail the test if not
 			idx := -1
-			for i, msg := range xMsgs {
+			for i, msg := range aMsgs {
 				if handlerNotification.serial == msg {
 					idx = i
 					break
@@ -352,8 +309,8 @@ func handlerChannelListener(ctx context.Context) {
 			}
 
 			// message is ok, so remove that message serial from the recipient expectation array and notify the main sim thread
-			xMsgs[idx] = xMsgs[len(xMsgs)-1]
-			xMsgs = xMsgs[:len(xMsgs)-1]
+			aMsgs[idx] = aMsgs[len(aMsgs)-1]
+			aMsgs = aMsgs[:len(aMsgs)-1]
 			msgC <- handlerNotification
 		}
 	}
@@ -362,8 +319,8 @@ func handlerChannelListener(ctx context.Context) {
 func nodeMsgHandler(config *adapters.NodeConfig) *handler {
 	return &handler{
 		f: func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
-			debugCnt++
-			log.Debug("nodeMsgHandler rcv", "cnt", debugCnt)
+			msgCnt++
+			log.Debug("nodeMsgHandler rcv", "cnt", msgCnt)
 
 			// using simple serial in message body, makes it easy to keep track of who's getting what
 			serial, c := binary.Uvarint(msg)
@@ -423,6 +380,7 @@ func newProxServices(allowRaw bool, handlerContextFuncs map[Topic]handlerContext
 			if err != nil {
 				return nil, nil, err
 			}
+			b.Store(simulation.BucketKeyKademlia, pskad)
 
 			// register the handlers we've been passed
 			var deregisters []func()

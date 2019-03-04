@@ -109,7 +109,7 @@ func (s *Simulation) WaitTillSnapshotRecreated(ctx context.Context, snap simulat
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			actual := listActualConnections(s.kademlias())
+			actual := s.listActualConnections()
 			if isAllDeployed(expected, actual) {
 				return nil
 			}
@@ -117,7 +117,8 @@ func (s *Simulation) WaitTillSnapshotRecreated(ctx context.Context, snap simulat
 	}
 }
 
-func listActualConnections(kademlias map[enode.ID]*network.Kademlia) (res []uint64) {
+func (s *Simulation) listActualConnections() (res []uint64) {
+	kademlias := s.kademlias()
 	for base, k := range kademlias {
 		k.EachConn(base[:], 256, func(p *network.Peer, _ int) bool {
 			res = append(res, getConnectionHash(base, p.ID()))
