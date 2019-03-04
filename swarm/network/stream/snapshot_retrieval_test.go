@@ -113,10 +113,15 @@ var retrievalSimServiceMap = map[string]simulation.ServiceFunc{
 			return nil, nil, err
 		}
 
+		syncUpdateDelay := 1 * time.Second
+		if *longrunning {
+			syncUpdateDelay = 15 * time.Second
+		}
+
 		r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 			Retrieval:       RetrievalEnabled,
 			Syncing:         SyncingAutoSubscribe,
-			SyncUpdateDelay: 3 * time.Second,
+			SyncUpdateDelay: syncUpdateDelay,
 		}, nil)
 
 		cleanup = func() {
