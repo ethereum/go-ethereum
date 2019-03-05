@@ -94,8 +94,8 @@ func TestSyncingViaGlobalSync(t *testing.T) {
 		//if the `longrunning` flag has been provided
 		//run more test combinations
 		if *longrunning {
-			chunkCounts = []int{1, 8, 32, 256, 1024}
-			nodeCounts = []int{16, 32, 64, 128, 256}
+			chunkCounts = []int{64, 128}
+			nodeCounts = []int{32, 64}
 		}
 
 		for _, chunkCount := range chunkCounts {

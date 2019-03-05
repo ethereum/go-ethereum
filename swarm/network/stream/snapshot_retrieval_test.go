@@ -53,7 +53,7 @@ func TestFileRetrieval(t *testing.T) {
 		nodeCount = []int{16}
 
 		if *longrunning {
-			nodeCount = append(nodeCount, 32, 64, 128)
+			nodeCount = append(nodeCount, 32, 64)
 		} else if testutil.RaceEnabled {
 			nodeCount = []int{4}
 		}
@@ -86,7 +86,7 @@ func TestRetrieval(t *testing.T) {
 		chnkCnt := []int{32}
 
 		if *longrunning {
-			nodeCnt = []int{16, 32, 128}
+			nodeCnt = []int{16, 32, 64}
 			chnkCnt = []int{4, 32, 256}
 		} else if testutil.RaceEnabled {
 			nodeCnt = []int{4}
@@ -113,10 +113,15 @@ var retrievalSimServiceMap = map[string]simulation.ServiceFunc{
 			return nil, nil, err
 		}
 
+		syncUpdateDelay := 1 * time.Second
+		if *longrunning {
+			syncUpdateDelay = 3 * time.Second
+		}
+
 		r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 			Retrieval:       RetrievalEnabled,
 			Syncing:         SyncingAutoSubscribe,
-			SyncUpdateDelay: 3 * time.Second,
+			SyncUpdateDelay: syncUpdateDelay,
 		}, nil)
 
 		cleanup = func() {
@@ -140,7 +145,7 @@ func runFileRetrievalTest(nodeCount int) error {
 	sim := simulation.New(retrievalSimServiceMap)
 	defer sim.Close()
 
-	log.Info("Initializing test config")
+	log.Info("Initializing test config", "node count", nodeCount)
 
 	conf := &synctestConfig{}
 	//map of discover ID to indexes of chunks expected at that ID
@@ -157,6 +162,8 @@ func runFileRetrievalTest(nodeCount int) error {
 
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancelSimRun()
+
+	log.Info("Starting simulation")
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
@@ -185,6 +192,8 @@ func runFileRetrievalTest(nodeCount int) error {
 			return err
 		}
 
+		log.Info("network healthy, start file checks")
+
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
 	REPEAT:
@@ -211,6 +220,8 @@ func runFileRetrievalTest(nodeCount int) error {
 			return nil
 		}
 	})
+
+	log.Info("Simulation terminated")
 
 	if result.Error != nil {
 		return result.Error

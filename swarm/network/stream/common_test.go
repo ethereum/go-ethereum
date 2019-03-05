@@ -134,6 +134,9 @@ func netStoreAndDeliveryWithAddr(ctx *adapters.ServiceContext, bucket *sync.Map,
 	bucket.Store(bucketKeyDB, netStore)
 	bucket.Store(bucketKeyDelivery, delivery)
 	bucket.Store(bucketKeyFileStore, fileStore)
+	// for the kademlia object, we use the global key from the simulation package,
+	// as the simulation will try to access it in the WaitTillHealthy with that key
+	bucket.Store(simulation.BucketKeyKademlia, kad)
 
 	cleanup := func() {
 		netStore.Close()
