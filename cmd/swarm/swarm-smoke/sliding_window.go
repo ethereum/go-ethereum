@@ -42,13 +42,11 @@ func slidingWindowCmd(ctx *cli.Context, tuid string) error {
 		errc <- slidingWindow(ctx, tuid)
 	}()
 
-	select {
-	case err := <-errc:
-		if err != nil {
-			metrics.GetOrRegisterCounter(fmt.Sprintf("%s.fail", commandName), nil).Inc(1)
-		}
-		return err
+	err := <-errc
+	if err != nil {
+		metrics.GetOrRegisterCounter(fmt.Sprintf("%s.fail", commandName), nil).Inc(1)
 	}
+	return err
 }
 
 func slidingWindow(ctx *cli.Context, tuid string) error {
