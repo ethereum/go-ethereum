@@ -150,7 +150,7 @@ var (
 	SwarmStoreCacheCapacity = cli.UintFlag{
 		Name:   "store.cache.size",
 		Usage:  "Number of recent chunks cached in memory",
-		EnvVar: SWARM_ENV_STORE_CACHE_CAPACITY,
+		EnvVar: SwarmEnvStoreCacheCapacity,
 		Value:  10000,
 	}
 	SwarmCompressedFlag = cli.BoolFlag{

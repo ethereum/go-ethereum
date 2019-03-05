@@ -101,8 +101,8 @@ outer:
 				case q <- struct{}{}:
 					go func() {
 						var start time.Time
-					inner:
-						for {
+						done := false
+						for !done {
 							log.Info("trying to retrieve hash", "hash", v.hash)
 							idx := 1 + rand.Intn(len(hosts)-1)
 							ruid := uuid.New()[:8]
@@ -111,9 +111,10 @@ outer:
 							// catch the timeout, but also allow this retry logic
 							err := fetch(v.hash, httpEndpoint(hosts[idx]), v.digest, ruid, "")
 							if err != nil {
-								continue inner
+								log.Error("error fetching hash", "err", err)
+								continue
 							}
-							break inner
+							done = true
 						}
 						metrics.GetOrRegisterResettingTimer("sliding-window.single.fetch-time", nil).UpdateSince(start)
 						d <- struct{}{}
@@ -123,7 +124,7 @@ outer:
 					break task
 				case <-timeoutC:
 					errored = true
-					log.Error("error retrieving hash. timeout", "hash idx", i, "err", err)
+					log.Error("error retrieving hash. timeout", "hash idx", i)
 					metrics.GetOrRegisterCounter("sliding-window.single.error", nil).Inc(1)
 					break outer
 				default:
