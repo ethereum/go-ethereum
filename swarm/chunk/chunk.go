@@ -148,20 +148,33 @@ const (
 	ModeSetRemove
 )
 
+// Descriptor holds information required for Pull syncing. This struct
+// is provided by subscribing to pull index.
+type Descriptor struct {
+	Address        Address
+	StoreTimestamp int64
+}
+
+func (c *Descriptor) String() string {
+	if c == nil {
+		return "none"
+	}
+	return fmt.Sprintf("%s stored at %v", c.Address.Hex(), c.StoreTimestamp)
+}
+
 type Store interface {
 	Get(ctx context.Context, mode ModeGet, addr Address) (ch Chunk, err error)
 	Put(ctx context.Context, mode ModePut, ch Chunk) (err error)
-	//Set(ctx context.Context, mode ModeSet, addr Address) (err error)
 	Has(ctx context.Context, addr Address) (yes bool, err error)
+	Set(ctx context.Context, mode ModeSet, addr Address) (err error)
+	LastPullSubscriptionChunk(bin uint8) (c *Descriptor, err error)
+	SubscribePull(ctx context.Context, bin uint8, since, until *Descriptor) (c <-chan Descriptor, stop func())
 	Close() (err error)
 }
 
-// SyncStore is a Store which supports syncing
-type SyncStore interface {
+// FetchStore is a Store which supports syncing
+type FetchStore interface {
 	Store
-	// BinIndex(po uint8) uint64
-	// Iterator(from uint64, to uint64, po uint8, f func(Address, uint64) bool) error
-	// SubscribePull(ctx context.Context, bin uint8, since, until *localstore.ChunkDescriptor) (c <-chan localstore.ChunkDescriptor, stop func())
 	FetchFunc(ctx context.Context, addr Address) func(context.Context) error
 }
 

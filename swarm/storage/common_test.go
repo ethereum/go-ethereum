@@ -250,6 +250,18 @@ func (m *MapChunkStore) Has(ctx context.Context, ref Address) (has bool, err err
 	return has, nil
 }
 
+func (m *MapChunkStore) Set(ctx context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
+	return nil
+}
+
+func (m *MapChunkStore) LastPullSubscriptionChunk(bin uint8) (c *chunk.Descriptor, err error) {
+	return nil, nil
+}
+
+func (m *MapChunkStore) SubscribePull(ctx context.Context, bin uint8, since, until *chunk.Descriptor) (c <-chan chunk.Descriptor, stop func()) {
+	return nil, nil
+}
+
 func (m *MapChunkStore) Close() error {
 	return nil
 }

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -37,8 +36,8 @@ import (
 // function will terminate current and further iterations without errors, and also close the returned channel.
 // Make sure that you check the second returned parameter from the channel to stop iteration when its value
 // is false.
-func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkDescriptor) (c <-chan ChunkDescriptor, stop func()) {
-	chunkDescriptors := make(chan ChunkDescriptor)
+func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *chunk.Descriptor) (c <-chan chunk.Descriptor, stop func()) {
+	chunkDescriptors := make(chan chunk.Descriptor)
 	trigger := make(chan struct{}, 1)
 
 	db.pullTriggersMu.Lock()
@@ -59,7 +58,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkD
 	var errStopSubscription = errors.New("stop subscription")
 
 	go func() {
-		// close the returned ChunkDescriptor channel at the end to
+		// close the returned chunk.Descriptor channel at the end to
 		// signal that the subscription is done
 		defer close(chunkDescriptors)
 		// sinceItem is the Item from which the next iteration
@@ -80,7 +79,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkD
 				// - context is done
 				err := db.pullIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 					select {
-					case chunkDescriptors <- ChunkDescriptor{
+					case chunkDescriptors <- chunk.Descriptor{
 						Address:        item.Address,
 						StoreTimestamp: item.StoreTimestamp,
 					}:
@@ -159,10 +158,10 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkD
 	return chunkDescriptors, stop
 }
 
-// LastPullSubscriptionChunk returns ChunkDescriptor of the latest Chunk
+// LastPullSubscriptionChunk returns chunk.Descriptor of the latest Chunk
 // in pull syncing index for a provided bin. If there are no chunks in
 // that bin, chunk.ErrChunkNotFound is returned.
-func (db *DB) LastPullSubscriptionChunk(bin uint8) (c *ChunkDescriptor, err error) {
+func (db *DB) LastPullSubscriptionChunk(bin uint8) (c *chunk.Descriptor, err error) {
 	item, err := db.pullIndex.Last([]byte{bin})
 	if err != nil {
 		if err == leveldb.ErrNotFound {
@@ -170,24 +169,10 @@ func (db *DB) LastPullSubscriptionChunk(bin uint8) (c *ChunkDescriptor, err erro
 		}
 		return nil, err
 	}
-	return &ChunkDescriptor{
+	return &chunk.Descriptor{
 		Address:        item.Address,
 		StoreTimestamp: item.StoreTimestamp,
 	}, nil
-}
-
-// ChunkDescriptor holds information required for Pull syncing. This struct
-// is provided by subscribing to pull index.
-type ChunkDescriptor struct {
-	Address        chunk.Address
-	StoreTimestamp int64
-}
-
-func (c *ChunkDescriptor) String() string {
-	if c == nil {
-		return "none"
-	}
-	return fmt.Sprintf("%s stored at %v", c.Address.Hex(), c.StoreTimestamp)
 }
 
 // triggerPullSubscriptions is used internally for starting iterations

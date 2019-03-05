@@ -37,12 +37,12 @@ const (
 // * (live/non-live historical) chunk syncing per proximity bin
 type SwarmSyncerServer struct {
 	po    uint8
-	store storage.SyncChunkStore
+	store chunk.FetchStore
 	quit  chan struct{}
 }
 
 // NewSwarmSyncerServer is constructor for SwarmSyncerServer
-func NewSwarmSyncerServer(po uint8, syncChunkStore storage.SyncChunkStore) (*SwarmSyncerServer, error) {
+func NewSwarmSyncerServer(po uint8, syncChunkStore chunk.FetchStore) (*SwarmSyncerServer, error) {
 	return &SwarmSyncerServer{
 		po:    po,
 		store: syncChunkStore,
@@ -50,7 +50,7 @@ func NewSwarmSyncerServer(po uint8, syncChunkStore storage.SyncChunkStore) (*Swa
 	}, nil
 }
 
-func RegisterSwarmSyncerServer(streamer *Registry, syncChunkStore storage.SyncChunkStore) {
+func RegisterSwarmSyncerServer(streamer *Registry, syncChunkStore chunk.FetchStore) {
 	streamer.RegisterServerFunc("SYNC", func(_ *Peer, t string, _ bool) (Server, error) {
 		po, err := ParseSyncBinKey(t)
 		if err != nil {
@@ -134,13 +134,13 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 
 // SwarmSyncerClient
 type SwarmSyncerClient struct {
-	store  storage.SyncChunkStore
+	store  chunk.FetchStore
 	peer   *Peer
 	stream Stream
 }
 
 // NewSwarmSyncerClient is a contructor for provable data exchange syncer
-func NewSwarmSyncerClient(p *Peer, store storage.SyncChunkStore, stream Stream) (*SwarmSyncerClient, error) {
+func NewSwarmSyncerClient(p *Peer, store chunk.FetchStore, stream Stream) (*SwarmSyncerClient, error) {
 	return &SwarmSyncerClient{
 		store:  store,
 		peer:   p,
@@ -186,7 +186,7 @@ func NewSwarmSyncerClient(p *Peer, store storage.SyncChunkStore, stream Stream) 
 
 // RegisterSwarmSyncerClient registers the client constructor function for
 // to handle incoming sync streams
-func RegisterSwarmSyncerClient(streamer *Registry, store storage.SyncChunkStore) {
+func RegisterSwarmSyncerClient(streamer *Registry, store chunk.FetchStore) {
 	streamer.RegisterClientFunc("SYNC", func(p *Peer, t string, live bool) (Client, error) {
 		return NewSwarmSyncerClient(p, store, NewStream("SYNC", t, live))
 	})

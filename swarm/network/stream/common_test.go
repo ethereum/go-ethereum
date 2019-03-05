@@ -231,6 +231,18 @@ func (rrs *roundRobinStore) Put(ctx context.Context, mode chunk.ModePut, ch stor
 	return rrs.stores[idx].Put(ctx, mode, ch)
 }
 
+func (rrs *roundRobinStore) Set(ctx context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
+	return nil
+}
+
+func (rrs *roundRobinStore) LastPullSubscriptionChunk(bin uint8) (c *chunk.Descriptor, err error) {
+	return nil, nil
+}
+
+func (rrs *roundRobinStore) SubscribePull(ctx context.Context, bin uint8, since, until *chunk.Descriptor) (c <-chan chunk.Descriptor, stop func()) {
+	return nil, nil
+}
+
 func (rrs *roundRobinStore) Close() error {
 	for _, store := range rrs.stores {
 		store.Close()

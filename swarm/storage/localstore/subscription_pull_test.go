@@ -150,11 +150,11 @@ func TestDB_SubscribePull_since(t *testing.T) {
 		return lastTimestamp
 	})()
 
-	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]ChunkDescriptor) {
+	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]chunk.Descriptor) {
 		addrsMu.Lock()
 		defer addrsMu.Unlock()
 
-		last = make(map[uint8]ChunkDescriptor)
+		last = make(map[uint8]chunk.Descriptor)
 		for i := 0; i < count; i++ {
 			ch := generateTestRandomChunk()
 
@@ -177,7 +177,7 @@ func TestDB_SubscribePull_since(t *testing.T) {
 			storeTimestamp := lastTimestamp
 			lastTimestampMu.RUnlock()
 
-			last[bin] = ChunkDescriptor{
+			last[bin] = chunk.Descriptor{
 				Address:        ch.Address(),
 				StoreTimestamp: storeTimestamp,
 			}
@@ -200,7 +200,7 @@ func TestDB_SubscribePull_since(t *testing.T) {
 	errChan := make(chan error)
 
 	for bin := uint8(0); bin <= uint8(chunk.MaxPO); bin++ {
-		var since *ChunkDescriptor
+		var since *chunk.Descriptor
 		if c, ok := last[bin]; ok {
 			since = &c
 		}
@@ -241,11 +241,11 @@ func TestDB_SubscribePull_until(t *testing.T) {
 		return lastTimestamp
 	})()
 
-	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]ChunkDescriptor) {
+	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]chunk.Descriptor) {
 		addrsMu.Lock()
 		defer addrsMu.Unlock()
 
-		last = make(map[uint8]ChunkDescriptor)
+		last = make(map[uint8]chunk.Descriptor)
 		for i := 0; i < count; i++ {
 			ch := generateTestRandomChunk()
 
@@ -268,7 +268,7 @@ func TestDB_SubscribePull_until(t *testing.T) {
 			storeTimestamp := lastTimestamp
 			lastTimestampMu.RUnlock()
 
-			last[bin] = ChunkDescriptor{
+			last[bin] = chunk.Descriptor{
 				Address:        ch.Address(),
 				StoreTimestamp: storeTimestamp,
 			}
@@ -331,11 +331,11 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 		return lastTimestamp
 	})()
 
-	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]ChunkDescriptor) {
+	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]chunk.Descriptor) {
 		addrsMu.Lock()
 		defer addrsMu.Unlock()
 
-		last = make(map[uint8]ChunkDescriptor)
+		last = make(map[uint8]chunk.Descriptor)
 		for i := 0; i < count; i++ {
 			ch := generateTestRandomChunk()
 
@@ -358,7 +358,7 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 			storeTimestamp := lastTimestamp
 			lastTimestampMu.RUnlock()
 
-			last[bin] = ChunkDescriptor{
+			last[bin] = chunk.Descriptor{
 				Address:        ch.Address(),
 				StoreTimestamp: storeTimestamp,
 			}
@@ -387,7 +387,7 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 	errChan := make(chan error)
 
 	for bin := uint8(0); bin <= uint8(chunk.MaxPO); bin++ {
-		var since *ChunkDescriptor
+		var since *chunk.Descriptor
 		if c, ok := upload1[bin]; ok {
 			since = &c
 		}
@@ -434,10 +434,10 @@ func uploadRandomChunksBin(t *testing.T, db *DB, uploader *Putter, addrs map[uin
 	}
 }
 
-// readPullSubscriptionBin is a helper function that reads all ChunkDescriptors from a channel and
-// sends error to errChan, even if it is nil, to count the number of ChunkDescriptors
+// readPullSubscriptionBin is a helper function that reads all chunk.Descriptors from a channel and
+// sends error to errChan, even if it is nil, to count the number of chunk.Descriptors
 // returned by the channel.
-func readPullSubscriptionBin(ctx context.Context, bin uint8, ch <-chan ChunkDescriptor, addrs map[uint8][]chunk.Address, addrsMu *sync.Mutex, errChan chan error) {
+func readPullSubscriptionBin(ctx context.Context, bin uint8, ch <-chan chunk.Descriptor, addrs map[uint8][]chunk.Address, addrsMu *sync.Mutex, errChan chan error) {
 	var i int // address index
 	for {
 		select {
@@ -506,7 +506,7 @@ func TestDB_LastPullSubscriptionChunk(t *testing.T) {
 		return lastTimestamp
 	})()
 
-	last := make(map[uint8]ChunkDescriptor)
+	last := make(map[uint8]chunk.Descriptor)
 
 	// do a few rounds of uploads and check if
 	// last pull subscription chunk is correct
@@ -532,7 +532,7 @@ func TestDB_LastPullSubscriptionChunk(t *testing.T) {
 			storeTimestamp := lastTimestamp
 			lastTimestampMu.RUnlock()
 
-			last[bin] = ChunkDescriptor{
+			last[bin] = chunk.Descriptor{
 				Address:        ch.Address(),
 				StoreTimestamp: storeTimestamp,
 			}

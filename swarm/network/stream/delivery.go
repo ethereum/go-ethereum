@@ -48,12 +48,12 @@ var (
 )
 
 type Delivery struct {
-	chunkStore storage.SyncChunkStore
+	chunkStore chunk.FetchStore
 	kad        *network.Kademlia
 	getPeer    func(enode.ID) *Peer
 }
 
-func NewDelivery(kad *network.Kademlia, chunkStore storage.SyncChunkStore) *Delivery {
+func NewDelivery(kad *network.Kademlia, chunkStore chunk.FetchStore) *Delivery {
 	return &Delivery{
 		chunkStore: chunkStore,
 		kad:        kad,

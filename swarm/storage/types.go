@@ -211,8 +211,6 @@ func (v *ContentAddressValidator) Validate(ch Chunk) bool {
 
 type ChunkStore = chunk.Store
 
-type SyncChunkStore = chunk.SyncStore
-
 // FakeChunkStore doesn't store anything, just implements the ChunkStore interface
 // It can be used to inject into a hasherStore if you don't want to actually store data just do the
 // hashing
@@ -232,6 +230,18 @@ func (f *FakeChunkStore) Has(_ context.Context, ref Address) (bool, error) {
 // Get doesn't store anything it is just here to implement ChunkStore
 func (f *FakeChunkStore) Get(_ context.Context, _ chunk.ModeGet, ref Address) (Chunk, error) {
 	panic("FakeChunkStore doesn't support Get")
+}
+
+func (f *FakeChunkStore) Set(ctx context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
+	return nil
+}
+
+func (f *FakeChunkStore) LastPullSubscriptionChunk(bin uint8) (c *chunk.Descriptor, err error) {
+	return nil, nil
+}
+
+func (f *FakeChunkStore) SubscribePull(ctx context.Context, bin uint8, since, until *chunk.Descriptor) (c <-chan chunk.Descriptor, stop func()) {
+	return nil, nil
 }
 
 // Close doesn't store anything it is just here to implement ChunkStore
