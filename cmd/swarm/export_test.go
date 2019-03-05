@@ -38,8 +38,6 @@ import (
 // 5. imports the exported datastore
 // 6. fetches the uploaded random file from the second node
 func TestCLISwarmExportImport(t *testing.T) {
-	t.Skip("disabled since http get is not working")
-
 	if runtime.GOOS == "windows" {
 		t.Skip()
 	}
