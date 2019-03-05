@@ -34,6 +34,8 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
@@ -82,13 +84,36 @@ func testEncHandshake(token []byte) error {
 	type result struct {
 		side   string
 		pubkey *ecdsa.PublicKey
+		enode  *enode.Node
 		err    error
 	}
 	var (
-		prv0, _  = crypto.GenerateKey()
-		prv1, _  = crypto.GenerateKey()
+		prv0, _ = crypto.GenerateKey()
+		prv1, _ = crypto.GenerateKey()
+	)
+
+	var rec0 enr.Record
+	err := enode.SignV4(&rec0, prv0)
+	if err != nil {
+		return err
+	}
+	enode0, err := enode.New(enode.V4ID{}, &rec0)
+	if err != nil {
+		return err
+	}
+	var rec1 enr.Record
+	err = enode.SignV4(&rec1, prv1)
+	if err != nil {
+		return err
+	}
+	enode1, err := enode.New(enode.V4ID{}, &rec1)
+	if err != nil {
+		return err
+	}
+
+	var (
 		fd0, fd1 = net.Pipe()
-		c0, c1   = newRLPX(fd0).(*rlpx), newRLPX(fd1).(*rlpx)
+		c0, c1   = newRLPX(enode0, fd0).(*rlpx), newRLPX(enode1, fd1).(*rlpx)
 		output   = make(chan result)
 	)
 
@@ -97,7 +122,7 @@ func testEncHandshake(token []byte) error {
 		defer func() { output <- r }()
 		defer fd0.Close()
 
-		r.pubkey, r.err = c0.doEncHandshake(prv0, &prv1.PublicKey)
+		r.pubkey, r.enode, r.err = c0.doEncHandshake(prv0, &prv1.PublicKey)
 		if r.err != nil {
 			return
 		}
@@ -110,7 +135,7 @@ func testEncHandshake(token []byte) error {
 		defer func() { output <- r }()
 		defer fd1.Close()
 
-		r.pubkey, r.err = c1.doEncHandshake(prv1, nil)
+		r.pubkey, r.enode, r.err = c1.doEncHandshake(prv1, nil)
 		if r.err != nil {
 			return
 		}
@@ -157,6 +182,26 @@ func TestProtocolHandshake(t *testing.T) {
 		wg sync.WaitGroup
 	)
 
+	var rec0 enr.Record
+	err := enode.SignV4(&rec0, prv0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enode0, err := enode.New(enode.V4ID{}, &rec0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rec1 enr.Record
+	err = enode.SignV4(&rec1, prv1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	enode1, err := enode.New(enode.V4ID{}, &rec1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	fd0, fd1, err := pipes.TCPPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -166,8 +211,8 @@ func TestProtocolHandshake(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		defer fd0.Close()
-		rlpx := newRLPX(fd0)
-		rpubkey, err := rlpx.doEncHandshake(prv0, &prv1.PublicKey)
+		rlpx := newRLPX(enode0, fd0)
+		rpubkey, _, err := rlpx.doEncHandshake(prv0, &prv1.PublicKey)
 		if err != nil {
 			t.Errorf("dial side enc handshake failed: %v", err)
 			return
@@ -192,8 +237,8 @@ func TestProtocolHandshake(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		defer fd1.Close()
-		rlpx := newRLPX(fd1)
-		rpubkey, err := rlpx.doEncHandshake(prv1, nil)
+		rlpx := newRLPX(enode1, fd1)
+		rpubkey, _, err := rlpx.doEncHandshake(prv1, nil)
 		if err != nil {
 			t.Errorf("listen side enc handshake failed: %v", err)
 			return

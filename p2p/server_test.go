@@ -44,7 +44,8 @@ type testTransport struct {
 }
 
 func newTestTransport(rpub *ecdsa.PublicKey, fd net.Conn) transport {
-	wrapped := newRLPX(fd).(*rlpx)
+	enod := enode.NewV4(rpub, nil, 0, 0)
+	wrapped := newRLPX(enod, fd).(*rlpx)
 	wrapped.rw = newRLPXFrameRW(fd, secrets{
 		MAC:        zero16,
 		AES:        zero16,
@@ -54,8 +55,8 @@ func newTestTransport(rpub *ecdsa.PublicKey, fd net.Conn) transport {
 	return &testTransport{rpub: rpub, rlpx: wrapped}
 }
 
-func (c *testTransport) doEncHandshake(prv *ecdsa.PrivateKey, dialDest *ecdsa.PublicKey) (*ecdsa.PublicKey, error) {
-	return c.rpub, nil
+func (c *testTransport) doEncHandshake(prv *ecdsa.PrivateKey, dialDest *ecdsa.PublicKey) (*ecdsa.PublicKey, *enode.Node, error) {
+	return c.rpub, nil, nil
 }
 
 func (c *testTransport) doProtoHandshake(our *protoHandshake) (*protoHandshake, error) {
@@ -78,7 +79,7 @@ func startTestServer(t *testing.T, remoteKey *ecdsa.PublicKey, pf func(*Peer)) *
 	server := &Server{
 		Config:       config,
 		newPeerHook:  pf,
-		newTransport: func(fd net.Conn) transport { return newTestTransport(remoteKey, fd) },
+		newTransport: func(enod *enode.Node, fd net.Conn) transport { return newTestTransport(remoteKey, fd) },
 	}
 	if err := server.Start(); err != nil {
 		t.Fatalf("Could not start server: %v", err)
@@ -435,7 +436,7 @@ func TestServerPeerLimits(t *testing.T) {
 			NoDial:     true,
 			Protocols:  []Protocol{discard},
 		},
-		newTransport: func(fd net.Conn) transport { return tp },
+		newTransport: func(enod *enode.Node, fd net.Conn) transport { return tp },
 		log:          log.New(),
 	}
 	if err := srv.Start(); err != nil {
@@ -548,7 +549,7 @@ func TestServerSetupConn(t *testing.T) {
 				NoDial:     true,
 				Protocols:  []Protocol{discard},
 			},
-			newTransport: func(fd net.Conn) transport { return test.tt },
+			newTransport: func(enod *enode.Node, fd net.Conn) transport { return test.tt },
 			log:          log.New(),
 		}
 		if !test.dontstart {
@@ -577,9 +578,9 @@ type setupTransport struct {
 	closeErr error
 }
 
-func (c *setupTransport) doEncHandshake(prv *ecdsa.PrivateKey, dialDest *ecdsa.PublicKey) (*ecdsa.PublicKey, error) {
+func (c *setupTransport) doEncHandshake(prv *ecdsa.PrivateKey, dialDest *ecdsa.PublicKey) (*ecdsa.PublicKey, *enode.Node, error) {
 	c.calls += "doEncHandshake,"
-	return c.pubkey, c.encHandshakeErr
+	return c.pubkey, nil, c.encHandshakeErr
 }
 
 func (c *setupTransport) doProtoHandshake(our *protoHandshake) (*protoHandshake, error) {

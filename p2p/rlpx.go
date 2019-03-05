@@ -39,6 +39,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/golang/snappy"
 	"golang.org/x/crypto/sha3"
@@ -77,15 +79,16 @@ var errPlainMessageTooLarge = errors.New("message length >= 16MB")
 // rlpx is the transport protocol used by actual (non-test) connections.
 // It wraps the frame encoder with locks and read/write deadlines.
 type rlpx struct {
-	fd net.Conn
+	self *enode.Node
+	fd   net.Conn
 
 	rmu, wmu sync.Mutex
 	rw       *rlpxFrameRW
 }
 
-func newRLPX(fd net.Conn) transport {
+func newRLPX(self *enode.Node, fd net.Conn) transport {
 	fd.SetDeadline(time.Now().Add(handshakeTimeout))
-	return &rlpx{fd: fd}
+	return &rlpx{self: self, fd: fd}
 }
 
 func (t *rlpx) ReadMsg() (Msg, error) {
@@ -175,23 +178,23 @@ func readProtocolHandshake(rw MsgReader, our *protoHandshake) (*protoHandshake, 
 // messages. the protocol handshake is the first authenticated message
 // and also verifies whether the encryption handshake 'worked' and the
 // remote side actually provided the right public key.
-func (t *rlpx) doEncHandshake(prv *ecdsa.PrivateKey, dial *ecdsa.PublicKey) (*ecdsa.PublicKey, error) {
+func (t *rlpx) doEncHandshake(prv *ecdsa.PrivateKey, dial *ecdsa.PublicKey) (*ecdsa.PublicKey, *enode.Node, error) {
 	var (
 		sec secrets
 		err error
 	)
 	if dial == nil {
-		sec, err = receiverEncHandshake(t.fd, prv)
+		sec, err = receiverEncHandshake(t.fd, prv, t.self)
 	} else {
-		sec, err = initiatorEncHandshake(t.fd, prv, dial)
+		sec, err = initiatorEncHandshake(t.fd, prv, t.self, dial)
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	t.wmu.Lock()
 	t.rw = newRLPXFrameRW(t.fd, sec)
 	t.wmu.Unlock()
-	return sec.Remote.ExportECDSA(), nil
+	return sec.Remote.ExportECDSA(), sec.RemoteNode, nil
 }
 
 // encHandshake contains the state of the encryption handshake.
@@ -201,6 +204,7 @@ type encHandshake struct {
 	initNonce, respNonce []byte            // nonce
 	randomPrivKey        *ecies.PrivateKey // ecdhe-random
 	remoteRandomPub      *ecies.PublicKey  // ecdhe-random-pubk
+	remoteNode           *enr.Record
 }
 
 // secrets represents the connection secrets
@@ -210,6 +214,7 @@ type secrets struct {
 	AES, MAC              []byte
 	EgressMAC, IngressMAC hash.Hash
 	Token                 []byte
+	RemoteNode            *enode.Node
 }
 
 // RLPx v4 handshake auth (defined in EIP-8).
@@ -223,6 +228,7 @@ type authMsgV4 struct {
 
 	// Ignore additional fields (forward-compatibility)
 	Rest []rlp.RawValue `rlp:"tail"`
+	// 	Record *enr.Record    -- EIP-XXX RLPx ENR Extension
 }
 
 // RLPx v4 handshake response (defined in EIP-8).
@@ -233,6 +239,7 @@ type authRespV4 struct {
 
 	// Ignore additional fields (forward-compatibility)
 	Rest []rlp.RawValue `rlp:"tail"`
+	// 	Record *enr.Record    -- EIP-XXX RLPx ENR Extension
 }
 
 // secrets is called after the handshake is completed.
@@ -265,6 +272,14 @@ func (h *encHandshake) secrets(auth, authResp []byte) (secrets, error) {
 		s.EgressMAC, s.IngressMAC = mac2, mac1
 	}
 
+	// Verify ENR.
+	if h.remoteNode != nil {
+		rn, err := enode.New(enode.ValidSchemes, h.remoteNode)
+		if err != nil {
+			return s, fmt.Errorf("invalid node record: %v", err)
+		}
+		s.RemoteNode = rn
+	}
 	return s, nil
 }
 
@@ -278,9 +293,9 @@ func (h *encHandshake) staticSharedSecret(prv *ecdsa.PrivateKey) ([]byte, error)
 // it should be called on the dialing side of the connection.
 //
 // prv is the local client's private key.
-func initiatorEncHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey, remote *ecdsa.PublicKey) (s secrets, err error) {
+func initiatorEncHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey, self *enode.Node, remote *ecdsa.PublicKey) (s secrets, err error) {
 	h := &encHandshake{initiator: true, remote: ecies.ImportECDSAPublic(remote)}
-	authMsg, err := h.makeAuthMsg(prv)
+	authMsg, err := h.makeAuthMsg(prv, self)
 	if err != nil {
 		return s, err
 	}
@@ -304,7 +319,7 @@ func initiatorEncHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey, remote *ec
 }
 
 // makeAuthMsg creates the initiator handshake message.
-func (h *encHandshake) makeAuthMsg(prv *ecdsa.PrivateKey) (*authMsgV4, error) {
+func (h *encHandshake) makeAuthMsg(prv *ecdsa.PrivateKey, self *enode.Node) (*authMsgV4, error) {
 	// Generate random initiator nonce.
 	h.initNonce = make([]byte, shaLen)
 	_, err := rand.Read(h.initNonce)
@@ -333,12 +348,20 @@ func (h *encHandshake) makeAuthMsg(prv *ecdsa.PrivateKey) (*authMsgV4, error) {
 	copy(msg.InitiatorPubkey[:], crypto.FromECDSAPub(&prv.PublicKey)[1:])
 	copy(msg.Nonce[:], h.initNonce)
 	msg.Version = 4
+
+	// Encode node record.
+	record, err := rlp.EncodeToBytes(self.Record())
+	if err != nil {
+		return nil, err
+	}
+	msg.Rest = []rlp.RawValue{record}
 	return msg, nil
 }
 
 func (h *encHandshake) handleAuthResp(msg *authRespV4) (err error) {
 	h.respNonce = msg.Nonce[:]
 	h.remoteRandomPub, err = importPublicKey(msg.RandomPubkey[:])
+	h.remoteNode = recordFromTail(msg.Rest)
 	return err
 }
 
@@ -346,7 +369,7 @@ func (h *encHandshake) handleAuthResp(msg *authRespV4) (err error) {
 // it should be called on the listening side of the connection.
 //
 // prv is the local client's private key.
-func receiverEncHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey) (s secrets, err error) {
+func receiverEncHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey, self *enode.Node) (s secrets, err error) {
 	authMsg := new(authMsgV4)
 	authPacket, err := readHandshakeMsg(authMsg, encAuthMsgLen, prv, conn)
 	if err != nil {
@@ -357,7 +380,7 @@ func receiverEncHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey) (s secrets,
 		return s, err
 	}
 
-	authRespMsg, err := h.makeAuthResp()
+	authRespMsg, err := h.makeAuthResp(self)
 	if err != nil {
 		return s, err
 	}
@@ -405,10 +428,11 @@ func (h *encHandshake) handleAuthMsg(msg *authMsgV4, prv *ecdsa.PrivateKey) erro
 		return err
 	}
 	h.remoteRandomPub, _ = importPublicKey(remoteRandomPub)
+	h.remoteNode = recordFromTail(msg.Rest)
 	return nil
 }
 
-func (h *encHandshake) makeAuthResp() (msg *authRespV4, err error) {
+func (h *encHandshake) makeAuthResp(self *enode.Node) (msg *authRespV4, err error) {
 	// Generate random nonce.
 	h.respNonce = make([]byte, shaLen)
 	if _, err = rand.Read(h.respNonce); err != nil {
@@ -419,6 +443,13 @@ func (h *encHandshake) makeAuthResp() (msg *authRespV4, err error) {
 	copy(msg.Nonce[:], h.respNonce)
 	copy(msg.RandomPubkey[:], exportPubkey(&h.randomPrivKey.PublicKey))
 	msg.Version = 4
+
+	// Encode node record.
+	record, err := rlp.EncodeToBytes(self.Record())
+	if err != nil {
+		return nil, err
+	}
+	msg.Rest = []rlp.RawValue{record}
 	return msg, nil
 }
 
@@ -452,6 +483,17 @@ func (msg *authRespV4) decodePlain(input []byte) {
 	n := copy(msg.RandomPubkey[:], input)
 	copy(msg.Nonce[:], input[n:])
 	msg.Version = 4
+}
+
+func recordFromTail(tail []rlp.RawValue) *enr.Record {
+	if len(tail) == 0 {
+		return nil
+	}
+	var r enr.Record
+	if err := rlp.DecodeBytes(tail[0], &r); err != nil {
+		return nil
+	}
+	return &r
 }
 
 var padSpace = make([]byte, 300)

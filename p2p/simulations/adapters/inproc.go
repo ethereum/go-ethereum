@@ -117,7 +117,6 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 // an in-memory net.Pipe
 func (s *SimAdapter) Dial(dest *enode.Node) (conn net.Conn, err error) {
 	node, ok := s.GetNode(dest.ID())
-	log.Debug("destnode", "dest", dest)
 	if !ok {
 		return nil, fmt.Errorf("unknown node: %s", dest.ID())
 	}
@@ -133,7 +132,7 @@ func (s *SimAdapter) Dial(dest *enode.Node) (conn net.Conn, err error) {
 	// this is simulated 'listening'
 	// asynchronously call the dialed destination node's p2p server
 	// to set up connection on the 'listening' side
-	go srv.SetupConn(pipe1, 0, dest)
+	go srv.SetupConn(pipe1, 0, nil)
 	return pipe2, nil
 }
 

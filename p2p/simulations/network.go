@@ -303,19 +303,17 @@ func (net *Network) Connect(oneID, otherID enode.ID) error {
 }
 
 func (net *Network) connect(oneID, otherID enode.ID) error {
+	log.Debug("Connecting nodes with addPeer", "id", oneID, "other", otherID)
 	conn, err := net.initConn(oneID, otherID)
 	if err != nil {
-		log.Error("connect", "init", err.Error())
 		return err
 	}
 	client, err := conn.one.Client()
 	if err != nil {
-		log.Error("connect", "client", err.Error())
 		return err
 	}
 	net.events.Send(ControlEvent(conn))
-	s := string(conn.other.Addr())
-	return client.Call(nil, "admin_addPeer", s)
+	return client.Call(nil, "admin_addPeer", string(conn.other.Addr()))
 }
 
 // Disconnect disconnects two nodes by calling the "admin_removePeer" RPC

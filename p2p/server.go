@@ -157,7 +157,7 @@ type Server struct {
 
 	// Hooks for testing. These are useful because we can inhibit
 	// the whole protocol stack.
-	newTransport func(net.Conn) transport
+	newTransport func(self *enode.Node, fd net.Conn) transport
 	newPeerHook  func(*Peer)
 
 	lock    sync.Mutex // protects running
@@ -219,7 +219,7 @@ type conn struct {
 
 type transport interface {
 	// The two handshakes.
-	doEncHandshake(prv *ecdsa.PrivateKey, dialDest *ecdsa.PublicKey) (*ecdsa.PublicKey, error)
+	doEncHandshake(prv *ecdsa.PrivateKey, dialDest *ecdsa.PublicKey) (*ecdsa.PublicKey, *enode.Node, error)
 	doProtoHandshake(our *protoHandshake) (*protoHandshake, error)
 	// The MsgReadWriter can only be used after the encryption
 	// handshake has completed. The code uses conn.id to track this
@@ -880,7 +880,7 @@ func (srv *Server) listenLoop() {
 // as a peer. It returns when the connection has been added as a peer
 // or the handshakes have failed.
 func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) error {
-	c := &conn{fd: fd, transport: srv.newTransport(fd), flags: flags, cont: make(chan error)}
+	c := &conn{fd: fd, transport: srv.newTransport(srv.Self(), fd), flags: flags, cont: make(chan error)}
 	err := srv.setupConn(c, flags, dialDest)
 	if err != nil {
 		c.close(err)
@@ -906,7 +906,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		}
 	}
 	// Run the encryption handshake.
-	remotePubkey, err := c.doEncHandshake(srv.PrivateKey, dialPubkey)
+	remotePubkey, rlpxNode, err := c.doEncHandshake(srv.PrivateKey, dialPubkey)
 	if err != nil {
 		srv.log.Trace("Failed RLPx handshake", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
 		return err
@@ -916,10 +916,8 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		if dialPubkey.X.Cmp(remotePubkey.X) != 0 || dialPubkey.Y.Cmp(remotePubkey.Y) != 0 {
 			return DiscUnexpectedIdentity
 		}
-		c.node = dialDest
-	} else {
-		c.node = nodeFromConn(remotePubkey, c.fd)
 	}
+	c.node = handshakeNode(dialDest, rlpxNode, remotePubkey, c.fd)
 	if conn, ok := c.fd.(*meteredConn); ok {
 		conn.handshakeDone(c.node.ID())
 	}
@@ -951,14 +949,28 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	return nil
 }
 
-func nodeFromConn(pubkey *ecdsa.PublicKey, conn net.Conn) *enode.Node {
-	var ip net.IP
-	var port int
-	if tcp, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
-		ip = tcp.IP
-		port = tcp.Port
+// handshakeNode decides which node record is stored in Peer after the handshake.
+func handshakeNode(dialDest, rlpxNode *enode.Node, pubkey *ecdsa.PublicKey, conn net.Conn) *enode.Node {
+	switch {
+	case dialDest == nil && rlpxNode == nil:
+		// Fallback: no node record available, fake it
+		var ip net.IP
+		var port int
+		if tcp, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
+			ip = tcp.IP
+			port = tcp.Port
+		}
+		return enode.NewV4(pubkey, ip, port, port)
+	case dialDest == nil:
+		return rlpxNode
+	case rlpxNode == nil:
+		return dialDest
+	default:
+		if rlpxNode.Seq() > dialDest.Seq() {
+			return rlpxNode
+		}
+		return dialDest
 	}
-	return enode.NewV4(pubkey, ip, port, port)
 }
 
 func truncateName(s string) string {

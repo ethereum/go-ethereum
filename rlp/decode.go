@@ -405,7 +405,6 @@ func decodeByteSlice(s *Stream, val reflect.Value) error {
 }
 
 func decodeByteArray(s *Stream, val reflect.Value) error {
-	log.Warn("in decodebytarray", "v", val)
 	kind, size, err := s.Kind()
 	if err != nil {
 		return err

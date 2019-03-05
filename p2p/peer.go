@@ -17,6 +17,7 @@
 package p2p
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -429,6 +430,7 @@ type PeerInfo struct {
 	ID      string   `json:"id"`    // Unique node identifier
 	Name    string   `json:"name"`  // Name of the node, including client type, version, OS, custom data
 	Caps    []string `json:"caps"`  // Protocols advertised by this peer
+	ENR     string   `json:"enr"`   // Ethereum Node Record
 	Network struct {
 		LocalAddress  string `json:"localAddress"`  // Local endpoint of the TCP data connection
 		RemoteAddress string `json:"remoteAddress"` // Remote endpoint of the TCP data connection
@@ -453,6 +455,9 @@ func (p *Peer) Info() *PeerInfo {
 		Name:      p.Name(),
 		Caps:      caps,
 		Protocols: make(map[string]interface{}),
+	}
+	if enc, err := rlp.EncodeToBytes(p.Node().Record()); err == nil {
+		info.ENR = "0x" + hex.EncodeToString(enc)
 	}
 	info.Network.LocalAddress = p.LocalAddr().String()
 	info.Network.RemoteAddress = p.RemoteAddr().String()
