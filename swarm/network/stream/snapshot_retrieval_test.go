@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 
 	"github.com/ethereum/go-ethereum/node"
@@ -278,7 +279,7 @@ func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) error {
 		if !ok {
 			return fmt.Errorf("No localstore")
 		}
-		lstore := item.(*storage.LocalStore)
+		lstore := item.(*localstore.DB)
 		conf.hashes, err = uploadFileToSingleNodeStore(node.ID(), chunkCount, lstore)
 		if err != nil {
 			return err
