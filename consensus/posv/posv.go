@@ -225,11 +225,12 @@ type Posv struct {
 	signFn clique.SignerFn // Signer function to authorize hashes with
 	lock   sync.RWMutex    // Protects the signer fields
 
-	BlockSigners  *lru.Cache
-	HookReward    func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
-	HookPenalty   func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
-	HookValidator func(header *types.Header, signers []common.Address) ([]byte, error)
-	HookVerifyMNs func(header *types.Header, signers []common.Address) error
+	BlockSigners *lru.Cache
+	HookReward   func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
+	HookPenalty           func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
+	HookPenaltyTIPSigning func(chain consensus.ChainReader, header *types.Header, candidate []common.Address) ([]common.Address, error)
+	HookValidator         func(header *types.Header, signers []common.Address) ([]byte, error)
+	HookVerifyMNs         func(header *types.Header, signers []common.Address) error
 }
 
 // New creates a PoSV proof-of-stake-voting consensus engine with the initial
@@ -397,9 +398,15 @@ func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.
 	}
 	// If the block is a checkpoint block, verify the signer list
 	if number%c.config.Epoch == 0 {
+		signers := snap.GetSigners()
 		penPenalties := []common.Address{}
-		if c.HookPenalty != nil {
-			penPenalties, err = c.HookPenalty(chain, number)
+		if c.HookPenalty != nil || c.HookPenaltyTIPSigning != nil {
+			var err error = nil
+			if chain.Config().IsTIPSigning(header.Number) {
+				penPenalties, err = c.HookPenaltyTIPSigning(chain, header, signers)
+			} else {
+				penPenalties, err = c.HookPenalty(chain, number)
+			}
 			if err != nil {
 				return err
 			}
@@ -411,7 +418,6 @@ func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.
 				return errInvalidCheckpointPenalties
 			}
 		}
-		signers := snap.GetSigners()
 		signers = common.RemoveItemFromArray(signers, penPenalties)
 		for i := 1; i <= common.LimitPenaltyEpoch; i++ {
 			if number > uint64(i)*c.config.Epoch {
@@ -788,8 +794,14 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	header.Extra = header.Extra[:extraVanity]
 	masternodes := snap.GetSigners()
 	if number >= c.config.Epoch && number%c.config.Epoch == 0 {
-		if c.HookPenalty != nil {
-			penMasternodes, err := c.HookPenalty(chain, number)
+		if c.HookPenalty != nil || c.HookPenaltyTIPSigning != nil {
+			var penMasternodes []common.Address = nil
+			var err error = nil
+			if chain.Config().IsTIPSigning(header.Number) {
+				penMasternodes, err = c.HookPenaltyTIPSigning(chain, header, masternodes)
+			} else {
+				penMasternodes, err = c.HookPenalty(chain, number)
+			}
 			if err != nil {
 				return err
 			}
@@ -797,7 +809,7 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 				// penalize bad masternode(s)
 				masternodes = common.RemoveItemFromArray(masternodes, penMasternodes)
 				for _, address := range penMasternodes {
-					log.Debug("Penalty status", "address", address, "block number", number)
+					log.Debug("Penalty status", "address", address, "number", number)
 				}
 				header.Penalties = common.ExtractAddressToBytes(penMasternodes)
 			}
@@ -1036,8 +1048,8 @@ func (c *Posv) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.Hea
 	return masternodes
 }
 
-func (c *Posv) CacheData(header *types.Header, txs []*types.Transaction, receipts []*types.Receipt) error {
-	var signTxs []*types.Transaction
+func (c *Posv) CacheData(header *types.Header, txs []*types.Transaction, receipts []*types.Receipt) []*types.Transaction {
+	signTxs := []*types.Transaction{}
 	for _, tx := range txs {
 		if tx.IsSigningTransaction() {
 			var b uint
@@ -1063,7 +1075,19 @@ func (c *Posv) CacheData(header *types.Header, txs []*types.Transaction, receipt
 	log.Debug("Save tx signers to cache", "hash", header.Hash().String(), "number", header.Number, "len(txs)", len(signTxs))
 	c.BlockSigners.Add(header.Hash(), signTxs)
 
-	return nil
+	return signTxs
+}
+
+func (c *Posv) CacheSigner(hash common.Hash, txs []*types.Transaction) []*types.Transaction {
+	signTxs := []*types.Transaction{}
+	for _, tx := range txs {
+		if tx.IsSigningTransaction() {
+			signTxs = append(signTxs, tx)
+		}
+	}
+	log.Debug("Save tx signers to cache", "hash", hash.String(), "len(txs)", len(signTxs))
+	c.BlockSigners.Add(hash, signTxs)
+	return signTxs
 }
 
 func (c *Posv) GetDb() ethdb.Database {

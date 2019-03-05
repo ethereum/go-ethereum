@@ -73,6 +73,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
+	if common.TIPSigning.Cmp(header.Number) == 0 {
+		statedb.DeleteAddress(common.HexToAddress(common.BlockSigners))
+	}
 	InitSignerInTransactions(p.config, header, block.Transactions())
 	for i, tx := range block.Transactions() {
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
@@ -100,6 +103,9 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 	// Mutate the the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
+	}
+	if common.TIPSigning.Cmp(header.Number) == 0 {
+		statedb.DeleteAddress(common.HexToAddress(common.BlockSigners))
 	}
 	if cBlock.stop {
 		return nil, nil, 0, ErrStopPreparingBlock
@@ -132,6 +138,9 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, uint64, error) {
+	if tx.To() != nil && tx.To().String() == common.BlockSigners && config.IsTIPSigning(header.Number) {
+		return ApplySignTransaction(config, statedb, header, tx, usedGas)
+	}
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
 	if err != nil {
 		return nil, 0, err
@@ -169,6 +178,41 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 	return receipt, gas, err
+}
+
+func ApplySignTransaction(config *params.ChainConfig, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64) (*types.Receipt, uint64, error) {
+	// Update the state with pending changes
+	var root []byte
+	if config.IsByzantium(header.Number) {
+		statedb.Finalise(true)
+	} else {
+		root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
+	}
+	from, err := types.Sender(types.MakeSigner(config, header.Number), tx)
+	if err != nil {
+		return nil, 0, err
+	}
+	nonce := statedb.GetNonce(from)
+	if nonce < tx.Nonce() {
+		return nil, 0, ErrNonceTooHigh
+	} else if nonce > tx.Nonce() {
+		return nil, 0, ErrNonceTooLow
+	}
+	statedb.SetNonce(from, nonce+1)
+	// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
+	// based on the eip phase, we're passing wether the root touch-delete accounts.
+	receipt := types.NewReceipt(root, false, *usedGas)
+	receipt.TxHash = tx.Hash()
+	receipt.GasUsed = 0
+	// if the transaction created a contract, store the creation address in the receipt.
+	// Set the receipt logs and create a bloom for filtering
+	log := &types.Log{}
+	log.Address = common.HexToAddress(common.BlockSigners)
+	log.BlockNumber = header.Number.Uint64()
+	statedb.AddLog(log)
+	receipt.Logs = statedb.GetLogs(tx.Hash())
+	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	return receipt, 0, nil
 }
 
 func InitSignerInTransactions(config *params.ChainConfig, header *types.Header, txs types.Transactions) {

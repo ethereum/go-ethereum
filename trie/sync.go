@@ -248,21 +248,21 @@ func (s *TrieSync) schedule(req *request) {
 
 // children retrieves all the missing children of a state trie entry for future
 // retrieval scheduling.
-func (s *TrieSync) children(req *request, object node) ([]*request, error) {
+func (s *TrieSync) children(req *request, object Node) ([]*request, error) {
 	// Gather all the children of the node, irrelevant whether known or not
 	type child struct {
-		node  node
+		node  Node
 		depth int
 	}
 	children := []child{}
 
 	switch node := (object).(type) {
-	case *shortNode:
+	case *ShortNode:
 		children = []child{{
 			node:  node.Val,
 			depth: req.depth + len(node.Key),
 		}}
-	case *fullNode:
+	case *FullNode:
 		for i := 0; i < 17; i++ {
 			if node.Children[i] != nil {
 				children = append(children, child{
@@ -279,14 +279,14 @@ func (s *TrieSync) children(req *request, object node) ([]*request, error) {
 	for _, child := range children {
 		// Notify any external watcher of a new key/value node
 		if req.callback != nil {
-			if node, ok := (child.node).(valueNode); ok {
+			if node, ok := (child.node).(ValueNode); ok {
 				if err := req.callback(node, req.hash); err != nil {
 					return nil, err
 				}
 			}
 		}
 		// If the child references another node, resolve or schedule
-		if node, ok := (child.node).(hashNode); ok {
+		if node, ok := (child.node).(HashNode); ok {
 			// Try to resolve the node from the local database
 			hash := common.BytesToHash(node)
 			if _, ok := s.membatch.batch[hash]; ok {

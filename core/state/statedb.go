@@ -357,6 +357,14 @@ func (self *StateDB) deleteStateObject(stateObject *stateObject) {
 	self.setError(self.trie.TryDelete(addr[:]))
 }
 
+// DeleteAddress removes the address from the state trie.
+func (self *StateDB) DeleteAddress(addr common.Address) {
+	stateObject := self.getStateObject(addr)
+	if stateObject != nil && !stateObject.deleted {
+		self.deleteStateObject(stateObject)
+	}
+}
+
 // Retrieve a state object given my the address. Returns nil if not found.
 func (self *StateDB) getStateObject(addr common.Address) (stateObject *stateObject) {
 	// Prefer 'live' objects.

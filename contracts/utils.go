@@ -320,45 +320,23 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, header *t
 	for i := prevCheckpoint + (rCheckpoint * 2) - 1; i >= startBlockNumber; i-- {
 		header = chain.GetHeader(header.ParentHash, i)
 		mapBlkHash[i] = header.Hash()
-		if signData, ok := c.BlockSigners.Get(header.Hash()); ok {
-			txs := signData.([]*types.Transaction)
-			for _, tx := range txs {
-				blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
-				from := *tx.From()
-				data[blkHash] = append(data[blkHash], from)
-			}
-		} else {
+		signData, ok := c.BlockSigners.Get(header.Hash())
+		if !ok {
 			log.Debug("Failed get from cached", "hash", header.Hash().String(), "number", i)
 			block := chain.GetBlock(header.Hash(), i)
 			txs := block.Transactions()
-			receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
-
-			var signTxs []*types.Transaction
-			for _, tx := range txs {
-				if tx.IsSigningTransaction() {
-					var b uint
-					for _, r := range receipts {
-						if r.TxHash == tx.Hash() {
-							if len(r.PostState) > 0 {
-								b = types.ReceiptStatusSuccessful
-							} else {
-								b = r.Status
-							}
-							break
-						}
-					}
-
-					if b == types.ReceiptStatusFailed {
-						continue
-					}
-
-					signTxs = append(signTxs, tx)
-					blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
-					from := *tx.From()
-					data[blkHash] = append(data[blkHash], from)
-				}
+			if !chain.Config().IsTIPSigning(header.Number) {
+				receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
+				signData = c.CacheData(header, txs, receipts)
+			} else {
+				signData = c.CacheSigner(header.Hash(), txs)
 			}
-			c.BlockSigners.Add(header.Hash(), signTxs)
+		}
+		txs := signData.([]*types.Transaction)
+		for _, tx := range txs {
+			blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+			from := *tx.From()
+			data[blkHash] = append(data[blkHash], from)
 		}
 	}
 	header = chain.GetHeader(header.ParentHash, prevCheckpoint)
