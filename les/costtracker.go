@@ -18,6 +18,7 @@ package les
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -26,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/les/csvlogger"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -99,16 +101,22 @@ type costTracker struct {
 	gfLock          sync.RWMutex
 	totalRechargeCh chan uint64
 
-	stats map[uint64][]uint64
+	stats                                        map[uint64][]uint64
+	logger                                       *csvlogger.Logger
+	logRecentUsage, logTotalRecharge, logRelCost *csvlogger.Channel
 }
 
 // newCostTracker creates a cost tracker and loads the cost factor statistics from the database
-func newCostTracker(db ethdb.Database, config *eth.Config) *costTracker {
+func newCostTracker(db ethdb.Database, config *eth.Config, logger *csvlogger.Logger) *costTracker {
 	utilTarget := float64(config.LightServ) * flowcontrol.FixedPointMultiplier / 100
 	ct := &costTracker{
-		db:         db,
-		stopCh:     make(chan chan struct{}),
-		utilTarget: utilTarget,
+		db:               db,
+		stopCh:           make(chan chan struct{}),
+		utilTarget:       utilTarget,
+		logger:           logger,
+		logRelCost:       logger.NewMinMaxChannel("relativeCost", true),
+		logRecentUsage:   logger.NewMinMaxChannel("recentUsage", true),
+		logTotalRecharge: logger.NewChannel("totalRecharge", 0.01),
 	}
 	if config.LightBandwidthIn > 0 {
 		ct.inSizeFactor = utilTarget / float64(config.LightBandwidthIn)
@@ -201,14 +209,23 @@ func (ct *costTracker) gfLoop() {
 			case r := <-ct.gfUpdateCh:
 				now := mclock.Now()
 				max := r.servingTime * gf
+				if ct.logRelCost != nil && r.avgTime > 1e-20 {
+					ct.logRelCost.Update(max / r.avgTime)
+				}
 				if r.avgTime > max {
 					max = r.avgTime
 				}
 				dt := float64(now - expUpdate)
 				expUpdate = now
 				gfUsage = gfUsage*math.Exp(-dt/float64(gfUsageTC)) + max*1000000/float64(gfUsageTC)
+				totalRecharge := ct.utilTarget * gf
+				ct.logRecentUsage.Update(gfUsage)
+				ct.logTotalRecharge.Update(totalRecharge)
+				if r.servingTime > 1000000000 {
+					ct.logger.Event(fmt.Sprintf("Very long servingTime = %f  avgTime = %f  costFactor = %f", r.servingTime, r.avgTime, gf))
+				}
 
-				if gfUsage >= gfUsageThreshold*ct.utilTarget*gf {
+				if gfUsage >= gfUsageThreshold*totalRecharge {
 					gfSum += r.avgTime
 					gfWeight += r.servingTime
 					if time.Duration(now-lastUpdate) > time.Second {
@@ -224,7 +241,7 @@ func (ct *costTracker) gfLoop() {
 						ct.gfLock.Unlock()
 						if ch != nil {
 							select {
-							case ct.totalRechargeCh <- uint64(ct.utilTarget * gf):
+							case ct.totalRechargeCh <- uint64(totalRecharge):
 							default:
 							}
 						}

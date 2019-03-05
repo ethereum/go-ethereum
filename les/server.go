@@ -19,6 +19,7 @@ package les
 import (
 	"crypto/ecdsa"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -26,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/les/csvlogger"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -47,6 +49,7 @@ type LesServer struct {
 	privateKey   *ecdsa.PrivateKey
 	quitSync     chan struct{}
 	onlyAnnounce bool
+	csvLogger    *csvlogger.Logger
 
 	thcNormal, thcBlockProcessing int // serving thread count for normal operation and block processing mode
 
@@ -83,6 +86,8 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	for i, pv := range AdvertiseProtocolVersions {
 		lesTopics[i] = lesTopic(eth.BlockChain().Genesis().Hash(), pv)
 	}
+	var csvLogger *csvlogger.Logger
+	csvLogger = csvlogger.NewLogger("/tmp/server.csv", time.Second*10, "event, peerId")
 
 	srv := &LesServer{
 		lesCommons: lesCommons{
@@ -93,20 +98,22 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 			bloomTrieIndexer: light.NewBloomTrieIndexer(eth.ChainDb(), nil, params.BloomBitsBlocks, params.BloomTrieFrequency),
 			protocolManager:  pm,
 		},
-		costTracker:  newCostTracker(eth.ChainDb(), config),
+		costTracker:  newCostTracker(eth.ChainDb(), config, csvLogger),
 		quitSync:     quitSync,
 		lesTopics:    lesTopics,
 		onlyAnnounce: config.OnlyAnnounce,
+		csvLogger:    csvLogger,
 	}
 
 	logger := log.New()
 	pm.server = srv
+	pm.logger = csvLogger
 	srv.thcNormal = config.LightServ * 4 / 100
 	if srv.thcNormal < 4 {
 		srv.thcNormal = 4
 	}
 	srv.thcBlockProcessing = config.LightServ/100 + 1
-	srv.fcManager = flowcontrol.NewClientManager(nil, &mclock.System{})
+	srv.fcManager = flowcontrol.NewClientManager(nil, &mclock.System{}, csvLogger)
 
 	chtSectionCount, _, _ := srv.chtIndexer.Sections()
 	if chtSectionCount != 0 {
@@ -205,10 +212,11 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 		log.Warn("Light peer count limited", "specified", s.maxPeers, "allowed", freePeers)
 	}
 
-	s.freeClientPool = newFreeClientPool(s.chainDb, s.freeClientCap, 10000, mclock.System{}, func(id string) { go s.protocolManager.removePeer(id) })
-	s.priorityClientPool = newPriorityClientPool(s.freeClientCap, s.protocolManager.peers, s.freeClientPool)
+	s.freeClientPool = newFreeClientPool(s.chainDb, s.freeClientCap, 10000, mclock.System{}, func(id string) { go s.protocolManager.removePeer(id) }, s.csvLogger)
+	s.priorityClientPool = newPriorityClientPool(s.freeClientCap, s.protocolManager.peers, s.freeClientPool, s.csvLogger)
 
 	s.protocolManager.peers.notify(s.priorityClientPool)
+	s.csvLogger.Start()
 	s.startEventLoop()
 	s.protocolManager.Start(s.config.LightPeers)
 	if srvr.DiscV5 != nil {
@@ -241,6 +249,7 @@ func (s *LesServer) Stop() {
 	s.freeClientPool.stop()
 	s.costTracker.stop()
 	s.protocolManager.Stop()
+	s.csvLogger.Stop()
 }
 
 // todo(rjl493456442) separate client and server implementation.
