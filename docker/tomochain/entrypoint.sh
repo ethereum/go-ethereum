@@ -7,6 +7,7 @@
 # - BOOTNODES (default to empty)
 # - EXTIP (default to empty)
 # - VERBOSITY (default to 3)
+# - MAXPEERS (default to 25)
 # - SYNC_MODE (default to 'full')
 # - NETWORK_ID (default to '89')
 # - WS_SECRET (default to empty)
@@ -28,7 +29,7 @@ accountsCount=$(
 
 # file to env
 for env in IDENTITY PASSWORD PRIVATE_KEY BOOTNODES WS_SECRET NETSTATS_HOST \
-           NETSTATS_PORT EXTIP SYNC_MODE NETWORK_ID ANNOUNCE_TXS STORE_REWARD DEBUG_MODE; do
+           NETSTATS_PORT EXTIP SYNC_MODE NETWORK_ID ANNOUNCE_TXS STORE_REWARD DEBUG_MODE MAXPEERS; do
   file=$(eval echo "\$${env}_FILE")
   if [[ -f $file ]] && [[ ! -z $file ]]; then
     echo "Replacing $env by $file"
@@ -155,6 +156,11 @@ if [[ ! -z $DEBUG_MODE ]]; then
   params="$params --gcmode archive --rpcapi db,eth,net,web3,personal,debug"
 fi
 
+# maxpeers
+if [[ -z $MAXPEERS ]]; then
+  MAXPEERS=25
+fi
+
 # dump
 echo "dump: $IDENTITY $account $BOOTNODES"
 
@@ -167,7 +173,7 @@ exec tomo $params \
   --identity $IDENTITY \
   --password ./password \
   --port 30303 \
-  --maxpeers 25 \
+  --maxpeers $MAXPEERS \
   --txpool.globalqueue 5000 \
   --txpool.globalslots 5000 \
   --rpc \
