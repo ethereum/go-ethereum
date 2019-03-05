@@ -173,10 +173,6 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			}
 		}
 		// here we distribute chunks of a random file into stores 1...nodes
-		if _, err := sim.WaitTillHealthy(ctx); err != nil {
-			return err
-		}
-
 		// collect hashes in po 1 bin for each node
 		hashes := make([][]storage.Address, nodes)
 		totalHashes := 0

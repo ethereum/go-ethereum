@@ -1188,12 +1188,13 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 
 	// arbitrarily set to 4
 	nodeCount := 4
+	// set the syncUpdateDelay for sync registrations to start
+	syncUpdateDelay := 200 * time.Millisecond
 	// run with more nodes if `longrunning` flag is set
 	if *longrunning {
 		nodeCount = 64
+		syncUpdateDelay = 10 * time.Second
 	}
-	// set the syncUpdateDelay for sync registrations to start
-	syncUpdateDelay := 200 * time.Millisecond
 	// holds the msg code for SubscribeMsg
 	var subscribeMsgCode uint64
 	var ok bool
@@ -1241,7 +1242,7 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 	})
 	defer sim.Close()
 
-	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
+	ctx, cancelSimRun := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancelSimRun()
 
 	// upload a snapshot
@@ -1267,6 +1268,9 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 	go func() {
 		//for long running sims, waiting 1 sec will not be enough
 		waitDuration := time.Duration(nodeCount/16) * time.Second
+		if *longrunning {
+			waitDuration = syncUpdateDelay
+		}
 		for {
 			select {
 			case <-ctx.Done():
@@ -1328,11 +1332,11 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 					}
 				}
 			}
+			log.Debug("All node streams counted", "realCount", realCount)
 		}
-		// every node is mutually subscribed to each other, so the actual count is half of it
 		emc := expectedMsgCount.count()
-		if realCount/2 != emc {
-			return fmt.Errorf("Real subscriptions and expected amount don't match; real: %d, expected: %d", realCount/2, emc)
+		if realCount != emc {
+			return fmt.Errorf("Real subscriptions and expected amount don't match; real: %d, expected: %d", realCount, emc)
 		}
 		return nil
 	})
