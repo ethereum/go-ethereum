@@ -18,7 +18,6 @@ package vm
 
 import (
 	"errors"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -26,8 +25,8 @@ import (
 type (
 	executionFunc func(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)
 	gasFunc       func(params.GasTable, *EVM, *Contract, *Stack, *Memory, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
-	//stackValidationFunc func(*Stack) error
-	memorySizeFunc func(*Stack) *big.Int
+	// memorySizeFunc returns the required size, and whether the operation overflowed a uint64
+	memorySizeFunc func(*Stack) (size uint64, overflow bool)
 )
 
 var errGasUintOverflow = errors.New("gas uint64 overflow")

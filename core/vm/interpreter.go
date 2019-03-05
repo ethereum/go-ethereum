@@ -229,7 +229,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// calculate the new memory size and expand the memory to fit
 		// the operation
 		if operation.memorySize != nil {
-			memSize, overflow := bigUint64(operation.memorySize(stack))
+			memSize, overflow := operation.memorySize(stack)
 			if overflow {
 				return nil, errGasUintOverflow
 			}

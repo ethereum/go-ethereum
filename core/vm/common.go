@@ -23,13 +23,47 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
-// calculates the memory size required for a step
-func calcMemSize(off, l *big.Int) *big.Int {
+// calcMemSize64 calculates the required memory size, and returns
+// the size and whether the result overflowed uint64
+func calcMemSize64(off, l *big.Int) (uint64, bool) {
+	// if length is zero, memsize is always zero, regardless of offset
 	if l.Sign() == 0 {
-		return common.Big0
+		return 0, true
+	}
+	// Check that neither offset nor length overflows
+	if off.BitLen() > 64 || l.BitLen() > 64 {
+		return 0, true
 	}
 
-	return new(big.Int).Add(off, l)
+	offset64 := off.Uint64()
+	length64 := l.Uint64()
+	val := offset64 + length64
+	// Check that the total doesn't overflow
+	if val < offset64 {
+		return 0, true
+	}
+	return val, false
+}
+
+// calcMemSize64WithUint calculates the required memory size, and returns
+// the size and whether the result overflowed uint64
+// Identical to calcMemSize64, but length is a uint64
+func calcMemSize64WithUint(off *big.Int, length64 uint64) (uint64, bool) {
+	// if length is zero, memsize is always zero, regardless of offset
+	if length64 == 0 {
+		return 0, true
+	}
+	// Check that offset doesn't overflow
+	if off.BitLen() > 64 {
+		return 0, true
+	}
+	offset64 := off.Uint64()
+	val := offset64 + length64
+	// Check that the total doesn't overflow
+	if val < offset64 {
+		return 0, true
+	}
+	return val, false
 }
 
 // getData returns a slice from the data based on the start and size and pads
