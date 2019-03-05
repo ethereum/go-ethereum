@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -45,7 +45,7 @@ func (db *DB) Export(w io.Writer) (count int64, err error) {
 			return false, err
 		}
 		count++
-		return true, nil
+		return false, nil
 	}, nil)
 
 	return count, err
@@ -71,7 +71,7 @@ func (db *DB) Import(r io.Reader) (count int64, err error) {
 				}
 			}
 
-			if len(hdr.Name) != 64 || len(hdr.Name) != 128 {
+			if len(hdr.Name) != 64 && len(hdr.Name) != 128 {
 				log.Warn("ignoring non-chunk file", "name", hdr.Name)
 				continue
 			}
@@ -90,7 +90,7 @@ func (db *DB) Import(r io.Reader) (count int64, err error) {
 				}
 			}
 			key := chunk.Address(keybytes)
-			ch := chunk.NewChunk(key, data[32:])
+			ch := chunk.NewChunk(key, data)
 
 			go func() {
 				select {

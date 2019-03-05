@@ -493,7 +493,7 @@ func TestDB_LastPullSubscriptionChunk(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(ModePutUpload)
+	uploader := db.NewPutter(chunk.ModePutUpload)
 
 	addrs := make(map[uint8][]chunk.Address)
 
