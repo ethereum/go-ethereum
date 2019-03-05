@@ -80,7 +80,7 @@ func (w *wizard) deployExplorer() {
 		infos.dbdir = w.readString()
 	} else {
 		fmt.Printf("Where should postgres data be stored on the remote machine? (default = %s)\n", infos.dbdir)
-		infos.dbdir = w.readDefaultString(infos.datadir)
+		infos.dbdir = w.readDefaultString(infos.dbdir)
 	}
 	// Figure out which port to listen on
 	fmt.Println()
