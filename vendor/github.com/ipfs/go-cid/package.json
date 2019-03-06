@@ -1,0 +1,30 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/ipfs/go-cid"
+  },
+  "gx": {
+    "dvcsimport": "github.com/ipfs/go-cid"
+  },
+  "gxDependencies": [
+    {
+      "author": "whyrusleeping",
+      "hash": "QmerPMzPk1mJVowm8KgmoknWa4yCYvvugMPsgWmDNUvDLW",
+      "name": "go-multihash",
+      "version": "1.0.9"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmekxXDhCxCJRNuzmHreuaT3BsuJcsjcXWNrtV9C8DRHtd",
+      "name": "go-multibase",
+      "version": "0.3.0"
+    }
+  ],
+  "gxVersion": "0.8.0",
+  "language": "go",
+  "license": "MIT",
+  "name": "go-cid",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "0.9.3"
+}
+

@@ -1,0 +1,15 @@
+{
+  "author": "Golang",
+  "bugs": {
+    "url": "https://github.com/multiformats/go-base32"
+  },
+  "gx": {
+    "dvcsimport": "github.com/multiformats/go-base32"
+  },
+  "gxVersion": "0.7.0",
+  "language": "go",
+  "license": "BSD-3",
+  "name": "base32",
+  "version": "0.0.3"
+}
+

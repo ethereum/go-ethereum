@@ -177,6 +177,18 @@
 			"revisionTime": "2017-02-15T23:32:05Z"
 		},
 		{
+			"checksumSHA1": "Y+uHjKmEbNsYWIoNCedtUB3daIY=",
+			"path": "github.com/gxed/hashland/keccakpg",
+			"revision": "a72cc0875a1e95edd309d3134bc7c11bf2d7360b",
+			"revisionTime": "2019-02-19T10:43:48Z"
+		},
+		{
+			"checksumSHA1": "gb/llZpNhsLWkFwlFPTF9yZJUMA=",
+			"path": "github.com/gxed/hashland/murmur3",
+			"revision": "a72cc0875a1e95edd309d3134bc7c11bf2d7360b",
+			"revisionTime": "2019-02-19T10:43:48Z"
+		},
+		{
 			"checksumSHA1": "d9PxF1XQGLMJZRct2R8qVM/eYlE=",
 			"path": "github.com/hashicorp/golang-lru",
 			"revision": "0a025b7e63adc15a622f29b0b2c4c3848243bbf6",
@@ -255,6 +267,12 @@
 			"revisionTime": "2018-02-21T22:33:40Z"
 		},
 		{
+			"checksumSHA1": "INwWX2RCW85DQQVpmG1gblYqjho=",
+			"path": "github.com/ipfs/go-cid",
+			"revision": "e7e67e08cfba888a4297224402e12832bdc15ea0",
+			"revisionTime": "2019-02-28T17:32:58Z"
+		},
+		{
 			"checksumSHA1": "vTGKMIfiMwz43y5bsgx9PrL+AVw=",
 			"path": "github.com/jackpal/go-nat-pmp",
 			"revision": "1fa385a6f45828c83361136b45b1a21a12139493",
@@ -299,6 +317,18 @@
 			"revisionTime": "2018-04-08T05:53:51Z"
 		},
 		{
+			"checksumSHA1": "mJQtsTCZGhCmjdFtXBWryZSri/o=",
+			"path": "github.com/minio/blake2b-simd",
+			"revision": "3f5f724cb5b182a5c278d6d3d55b40e7f8c2efb4",
+			"revisionTime": "2016-07-23T06:10:19Z"
+		},
+		{
+			"checksumSHA1": "tFP2txVVKFxMKtwUGPui8a1EobE=",
+			"path": "github.com/minio/sha256-simd",
+			"revision": "2d45a736cd16732fe6a57563cc20d8b035193e58",
+			"revisionTime": "2019-01-31T02:09:04Z"
+		},
+		{
 			"checksumSHA1": "L3leymg2RT8hFl5uL+5KP/LpBkg=",
 			"path": "github.com/mitchellh/go-wordwrap",
 			"revision": "ad45545899c7b13c020ea92b2072220eefad42b8",
@@ -309,6 +339,30 @@
 			"path": "github.com/mohae/deepcopy",
 			"revision": "c48cc78d482608239f6c4c92a4abd87eb8761c90",
 			"revisionTime": "2017-09-29T03:49:55Z"
+		},
+		{
+			"checksumSHA1": "EsER+f+hvVc2mWkpxaxrfYo1QoA=",
+			"path": "github.com/mr-tron/base58/base58",
+			"revision": "fe73eb13120270ef478822e38664f5e56dc39547",
+			"revisionTime": "2019-01-03T13:33:59Z"
+		},
+		{
+			"checksumSHA1": "maHY4xyjVMM1Sotm+FDr0V2t8dE=",
+			"path": "github.com/multiformats/go-base32",
+			"revision": "a9c2755c3d1672dbe6a7e4a5d182169fa30b6a8e",
+			"revisionTime": "2019-02-26T18:46:57Z"
+		},
+		{
+			"checksumSHA1": "F+8+3uHpnceU/oueKHcJIXotHKs=",
+			"path": "github.com/multiformats/go-multibase",
+			"revision": "d63641945dc1749baa23686ad0564ad63fef0493",
+			"revisionTime": "2019-02-27T12:28:37Z"
+		},
+		{
+			"checksumSHA1": "DmVIXklDBvZo6SiXwr7iYUdRHso=",
+			"path": "github.com/multiformats/go-multihash",
+			"revision": "1a04c485626b992b36afcaa599584fdb0770c397",
+			"revisionTime": "2019-02-26T17:49:41Z"
 		},
 		{
 			"checksumSHA1": "FYM/8R2CqS6PSNAoKl6X5gNJ20A=",
@@ -627,6 +681,12 @@
 			"path": "github.com/uber/jaeger-lib/metrics",
 			"revision": "a51202d6f4a7e5a219e3841a43614ff7187ae7f1",
 			"revisionTime": "2018-06-15T20:27:29Z"
+		},
+		{
+			"checksumSHA1": "8M/pD2ostkgQtYh4d6QYUvCZh+E=",
+			"path": "golang.org/x/crypto/blake2s",
+			"revision": "8dd112bcdc25174059e45e07517d9fc663123347",
+			"revisionTime": "2019-02-28T09:13:53Z"
 		},
 		{
 			"checksumSHA1": "TT1rac6kpQp2vz24m5yDGUNQ/QQ=",
