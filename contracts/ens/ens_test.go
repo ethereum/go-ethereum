@@ -17,6 +17,8 @@
 package ens
 
 import (
+	"bytes"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -27,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/ens/fallback_contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
+	mh "github.com/multiformats/go-multihash"
 )
 
 var (
@@ -119,4 +122,64 @@ func TestENS(t *testing.T) {
 		t.Fatalf("resolve error, expected %v, got %v", hash.Hex(), vhost.Hex())
 	}
 	t.Fatal("todo: try to set old contract with new multicodec stuff and assert fail, set new contract with multicodec stuff, encode, decode and assert returns correct hash")
+}
+
+func TestCIDSanity(t *testing.T) {
+	for _, v := range []struct {
+		name    string
+		hashStr string
+		fail    bool
+	}{
+		{
+			name:    "hash OK, should not fail",
+			hashStr: "d1de9994b4d039f6548d191eb26786769f580809256b4685ef316805265ea162",
+			fail:    false,
+		},
+		{
+			name:    "hash empty , should fail",
+			hashStr: "",
+			fail:    true,
+		},
+	} {
+		t.Run(v.name, func(t *testing.T) {
+			hash := common.HexToHash(v.hashStr)
+			cc, err := encodeCid(hash)
+			if err != nil {
+				if v.fail {
+					return
+				}
+				t.Fatal(err)
+			}
+
+			if cc.Prefix().MhLength != 32 {
+				t.Fatal("w00t")
+			}
+			fmt.Println(cc.Hash())
+			decoded, err := mh.Decode(cc.Hash())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if decoded.Length != 32 {
+				t.Fatal("invalid length")
+			}
+			if !bytes.Equal(decoded.Digest, hash[:]) {
+				t.Fatalf("hashes not equal")
+			}
+
+			if decoded.Length != 32 {
+				t.Fatal("wrong length")
+			}
+			fmt.Println("Created CID: ", cc)
+
+		})
+
+		/*c, err := cid.Decode("zdvgqEMYmNeH5fKciougvQcfzMcNjF3Z1tPouJ8C7pc3pe63k")
+		if err != nil {
+			t.Fatal("Error decoding CID")
+		}
+
+		fmt.Sprintf("Got CID: %v", c)
+		fmt.Println("Got CID:", c.Prefix())
+		*/
+	}
 }

@@ -25,12 +25,15 @@ import (
 	"encoding/binary"
 	"strings"
 
+	mh "github.com/multiformats/go-multihash"
+
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens/contract"
 	"github.com/ethereum/go-ethereum/contracts/ens/fallback_contract"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ipfs/go-cid"
 )
 
 var (
@@ -262,6 +265,14 @@ func (ens *ENS) SetContentHash(name string, hash []byte) (*types.Transaction, er
 }
 
 func decodeMultiCodec(b []byte) (common.Hash, error) {
+
+	// Create a cid from a marshaled string
+	c, err := cid.Decode(string(b))
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	return common.Hash{}, nil
 	/* from the EIP documentation
 	   storage system: Swarm (0xe4)
 	   CID version: 1 (0x01)
@@ -274,9 +285,16 @@ func decodeMultiCodec(b []byte) (common.Hash, error) {
 
 }
 
-func encodeMultiCodec(h common.Hash) []byte {
-	b := []byte{0xe4, 0x01, 0x01, 0x1b, 0x20}
+// encodeCid encodes a swarm hash into an IPLD CID
+func encodeCid(h common.Hash) (cid.Cid, error) {
+	b := []byte{0x1b, 0x20}     //0x1b = keccak256 (should be changed to bmt), 0x20 = 32 bytes hash length
+	b = append(b, h.Bytes()...) // append actual hash bytes
+	multi, err := mh.Cast(b)
+	if err != nil {
+		return cid.Cid{}, err
+	}
 
-	b = append(b, h.Bytes()...)
-	return b
+	c := cid.NewCidV1(cid.Raw, multi) //todo: cid.Raw should be swarm manifest
+
+	return c, nil
 }
