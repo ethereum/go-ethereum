@@ -1189,7 +1189,7 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 	// arbitrarily set to 4
 	nodeCount := 4
 	// set the syncUpdateDelay for sync registrations to start
-	syncUpdateDelay := 800 * time.Millisecond
+	syncUpdateDelay := 200 * time.Millisecond
 	// run with more nodes if `longrunning` flag is set
 	if *longrunning {
 		nodeCount = 64
@@ -1207,7 +1207,12 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 
 	// we use this subscriptionFunc for this test: just increases count and calls the actual subscription
 	subscriptionFunc = func(r *Registry, p *network.Peer, bin uint8, subs map[enode.ID]map[Stream]struct{}) bool {
-		expectedMsgCount.inc()
+		// syncing starts after syncUpdateDelay and loops after that Duration; we only want to count at the first iteration
+		// in the first iteration, subs will be empty (no existing subscriptions), thus we can use this check
+		// this avoids flakyness
+		if len(subs) == 0 {
+			expectedMsgCount.inc()
+		}
 		doRequestSubscription(r, p, bin, subs)
 		return true
 	}
