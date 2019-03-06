@@ -20,7 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
-// Hasser provides Get method to retrieve Chunks
+// Hasser provides Has method to retrieve Chunks
 // from database.
 type Hasser struct {
 	db *DB
