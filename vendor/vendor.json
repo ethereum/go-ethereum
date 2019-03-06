@@ -779,6 +779,12 @@
 			"revisionTime": "2017-02-15T08:41:58Z"
 		},
 		{
+			"checksumSHA1": "iEK5hCRfrkdc1JOJsaiWuymHmeQ=",
+			"path": "golang.org/x/sync/errgroup",
+			"revision": "e225da77a7e68af35c70ccbf71af2b83e6acac3c",
+			"revisionTime": "2019-02-15T22:36:53Z"
+		},
+		{
 			"checksumSHA1": "4TEYFKrAUuwBMqExjQBsnf/CgjQ=",
 			"path": "golang.org/x/sync/syncmap",
 			"revision": "f52d1811a62927559de87708c8913c1650ce4f26",
