@@ -1340,7 +1340,7 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 			log.Debug("All node streams counted", "realCount", realCount)
 		}
 		emc := expectedMsgCount.count()
-		// after a subscription request, internally a live AND a history stream will be subscirbed,
+		// after a subscription request, internally a live AND a history stream will be subscribed,
 		// thus the real count should be half of the actual request subscriptions sent
 		if realCount/2 != emc {
 			return fmt.Errorf("Real subscriptions and expected amount don't match; real: %d, expected: %d", realCount/2, emc)
