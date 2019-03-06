@@ -76,6 +76,7 @@ func resetTestVariables() {
 	maxMessages = 0
 	msgCnt = 0
 	msgs = nil
+	sim = nil
 
 	kademlias     = make(map[enode.ID]*network.Kademlia)
 	nodeAddrs     = make(map[enode.ID][]byte)
@@ -165,7 +166,7 @@ func assingTestVariables(sim *simulation.Simulation, msgCount int) {
 
 			if po >= depth {
 				maxMessages++
-				allowed[i] = append(recipients[i], nod.ID())
+				allowed[i] = append(allowed[i], nod.ID())
 				allowedMsgs[nod.ID()] = append(allowedMsgs[nod.ID()], uint64(i))
 			}
 

@@ -101,7 +101,7 @@ func (s *Simulation) kademlias() (ks map[enode.ID]*network.Kademlia) {
 
 func (s *Simulation) WaitTillSnapshotRecreated(ctx context.Context, snap simulations.Snapshot) error {
 	expected := listSnapshotConnections(snap.Conns)
-	ticker := time.NewTicker(256 * time.Millisecond) // todo: reduce
+	ticker := time.NewTicker(16 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
@@ -125,6 +125,9 @@ func (s *Simulation) listActualConnections() (res []uint64) {
 			return true
 		})
 	}
+
+	// only list those connections that appear twice (both peers should recognize connection as active)
+	res = removeDuplicatesAndSingletons(res)
 	return res
 }
 
@@ -154,15 +157,41 @@ func isAllDeployed(expected []uint64, actual []uint64) bool {
 			// remove value c from exp
 			for i := 0; i < len(exp); i++ {
 				if exp[i] == c {
-					last := len(exp) - 1
-					if last == 0 {
+					exp = removeListElement(exp, i)
+					if len(exp) == 0 {
 						return true
 					}
-					exp[i] = exp[last]
-					exp = exp[:last]
 				}
 			}
 		}
 	}
 	return len(exp) == 0
+}
+
+func removeListElement(arr []uint64, i int) []uint64 {
+	last := len(arr)-1
+	arr[i] = arr[last]
+	arr = arr[:last]
+	return arr
+}
+
+func removeDuplicatesAndSingletons(arr []uint64) []uint64 {
+	for i := 0; i < len(arr); {
+		found := false
+		for j := i+1; j < len(arr); j++ {
+			if arr[i] == arr[j] {
+				arr = removeListElement(arr, j) // remove duplicate
+				found = true
+				break
+			}
+		}
+
+		if found {
+			i++
+		} else {
+			arr = removeListElement(arr, i) // remove singleton
+		}
+	}
+
+	return arr
 }
