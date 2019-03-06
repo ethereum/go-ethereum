@@ -798,6 +798,9 @@ func (pool *TxPool) AddRemotes(txs []*types.Transaction) []error {
 
 // addTx enqueues a single transaction into the pool if it is valid.
 func (pool *TxPool) addTx(tx *types.Transaction, local bool) error {
+	// caching signature check result before holding lock significantly improve concurrency
+	types.Sender(pool.signer, tx)
+
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -816,6 +819,11 @@ func (pool *TxPool) addTx(tx *types.Transaction, local bool) error {
 
 // addTxs attempts to queue a batch of transactions if they are valid.
 func (pool *TxPool) addTxs(txs []*types.Transaction, local bool) []error {
+	// caching signature check result before holding lock significantly improve concurrency
+	for _, tx := range txs {
+		types.Sender(pool.signer, tx)
+	}
+
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
