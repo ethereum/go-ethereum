@@ -42,7 +42,7 @@ type session struct {
 	stTempFileNum    int64
 	stSeqNum         uint64 // last mem compacted seq; need external synchronization
 
-	stor     storage.Storage
+	stor     *iStorage
 	storLock storage.Locker
 	o        *cachedOptions
 	icmp     *iComparer
@@ -68,7 +68,7 @@ func newSession(stor storage.Storage, o *opt.Options) (s *session, err error) {
 		return
 	}
 	s = &session{
-		stor:     stor,
+		stor:     newIStorage(stor),
 		storLock: storLock,
 		fileRef:  make(map[int64]int),
 	}
@@ -180,19 +180,19 @@ func (s *session) recover() (err error) {
 	}
 
 	s.manifestFd = fd
-	s.setVersion(staging.finish())
+	s.setVersion(staging.finish(false))
 	s.setNextFileNum(rec.nextFileNum)
 	s.recordCommited(rec)
 	return nil
 }
 
 // Commit session; need external synchronization.
-func (s *session) commit(r *sessionRecord) (err error) {
+func (s *session) commit(r *sessionRecord, trivial bool) (err error) {
 	v := s.version()
 	defer v.release()
 
 	// spawn new version based on current version
-	nv := v.spawn(r)
+	nv := v.spawn(r, trivial)
 
 	if s.manifest == nil {
 		// manifest journal writer not yet created, create one

@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -23,29 +23,29 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// This table defines supported forks and their chain config.
+// Forks table defines supported forks and their chain config.
 var Forks = map[string]*params.ChainConfig{
 	"Frontier": {
-		ChainId: big.NewInt(1),
+		ChainID: big.NewInt(1),
 	},
 	"Homestead": {
-		ChainId:        big.NewInt(1),
+		ChainID:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 	},
 	"EIP150": {
-		ChainId:        big.NewInt(1),
+		ChainID:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(0),
 	},
 	"EIP158": {
-		ChainId:        big.NewInt(1),
+		ChainID:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(0),
 		EIP155Block:    big.NewInt(0),
 		EIP158Block:    big.NewInt(0),
 	},
 	"Byzantium": {
-		ChainId:        big.NewInt(1),
+		ChainID:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(0),
 		EIP155Block:    big.NewInt(0),
@@ -53,28 +53,59 @@ var Forks = map[string]*params.ChainConfig{
 		DAOForkBlock:   big.NewInt(0),
 		ByzantiumBlock: big.NewInt(0),
 	},
+	"Constantinople": {
+		ChainID:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(0),
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		DAOForkBlock:        big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(10000000),
+	},
+	"ConstantinopleFix": {
+		ChainID:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(0),
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		DAOForkBlock:        big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+	},
 	"FrontierToHomesteadAt5": {
-		ChainId:        big.NewInt(1),
+		ChainID:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(5),
 	},
 	"HomesteadToEIP150At5": {
-		ChainId:        big.NewInt(1),
+		ChainID:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(5),
 	},
 	"HomesteadToDaoAt5": {
-		ChainId:        big.NewInt(1),
+		ChainID:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		DAOForkBlock:   big.NewInt(5),
 		DAOForkSupport: true,
 	},
 	"EIP158ToByzantiumAt5": {
-		ChainId:        big.NewInt(1),
+		ChainID:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(0),
 		EIP155Block:    big.NewInt(0),
 		EIP158Block:    big.NewInt(0),
 		ByzantiumBlock: big.NewInt(5),
+	},
+	"ByzantiumToConstantinopleAt5": {
+		ChainID:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(0),
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(5),
 	},
 }
 

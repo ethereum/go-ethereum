@@ -38,7 +38,7 @@ ADD chain.json /chain.json
 RUN \
   echo '(cd ../eth-net-intelligence-api && pm2 start /ethstats.json)' >  explorer.sh && \
 	echo '(cd ../etherchain-light && npm start &)'                      >> explorer.sh && \
-	echo '/parity/parity --chain=/chain.json --port={{.NodePort}} --tracing=on --fat-db=on --pruning=archive' >> explorer.sh
+	echo 'exec /parity/parity --chain=/chain.json --port={{.NodePort}} --tracing=on --fat-db=on --pruning=archive' >> explorer.sh
 
 ENTRYPOINT ["/bin/sh", "explorer.sh"]
 `
@@ -77,6 +77,7 @@ services:
   explorer:
     build: .
     image: {{.Network}}/explorer
+    container_name: {{.Network}}_explorer_1
     ports:
       - "{{.NodePort}}:{{.NodePort}}"
       - "{{.NodePort}}:{{.NodePort}}/udp"{{if not .VHost}}
@@ -140,9 +141,9 @@ func deployExplorer(client *sshClient, network string, chainspec []byte, config 
 
 	// Build and deploy the boot or seal node service
 	if nocache {
-		return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s build --pull --no-cache && docker-compose -p %s up -d --force-recreate", workdir, network, network))
+		return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s build --pull --no-cache && docker-compose -p %s up -d --force-recreate --timeout 60", workdir, network, network))
 	}
-	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build --force-recreate", workdir, network))
+	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build --force-recreate --timeout 60", workdir, network))
 }
 
 // explorerInfos is returned from a block explorer status check to allow reporting
@@ -168,7 +169,7 @@ func (info *explorerInfos) Report() map[string]string {
 	return report
 }
 
-// checkExplorer does a health-check against an block explorer server to verify
+// checkExplorer does a health-check against a block explorer server to verify
 // whether it's running, and if yes, whether it's responsive.
 func checkExplorer(client *sshClient, network string) (*explorerInfos, error) {
 	// Inspect a possible block explorer container on the host

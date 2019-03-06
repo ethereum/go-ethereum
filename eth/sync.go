@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 const (
@@ -64,7 +64,7 @@ func (pm *ProtocolManager) syncTransactions(p *peer) {
 // the transactions in small packs to one peer at a time.
 func (pm *ProtocolManager) txsyncLoop() {
 	var (
-		pending = make(map[discover.NodeID]*txsync)
+		pending = make(map[enode.ID]*txsync)
 		sending = false               // whether a send is active
 		pack    = new(txsync)         // the pack that is being sent
 		done    = make(chan error, 1) // result of the send
@@ -188,18 +188,21 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		atomic.StoreUint32(&pm.fastSync, 1)
 		mode = downloader.FastSync
 	}
-	// Run the sync cycle, and disable fast sync if we've went past the pivot block
-	err := pm.downloader.Synchronise(peer.id, pHead, pTd, mode)
 
-	if atomic.LoadUint32(&pm.fastSync) == 1 {
-		// Disable fast sync if we indeed have something in our chain
-		if pm.blockchain.CurrentBlock().NumberU64() > 0 {
-			log.Info("Fast sync complete, auto disabling")
-			atomic.StoreUint32(&pm.fastSync, 0)
+	if mode == downloader.FastSync {
+		// Make sure the peer's total difficulty we are synchronizing is higher.
+		if pm.blockchain.GetTdByHash(pm.blockchain.CurrentFastBlock().Hash()).Cmp(pTd) >= 0 {
+			return
 		}
 	}
-	if err != nil {
+
+	// Run the sync cycle, and disable fast sync if we've went past the pivot block
+	if err := pm.downloader.Synchronise(peer.id, pHead, pTd, mode); err != nil {
 		return
+	}
+	if atomic.LoadUint32(&pm.fastSync) == 1 {
+		log.Info("Fast sync complete, auto disabling")
+		atomic.StoreUint32(&pm.fastSync, 0)
 	}
 	atomic.StoreUint32(&pm.acceptTxs, 1) // Mark initial sync done
 	if head := pm.blockchain.CurrentBlock(); head.NumberU64() > 0 {

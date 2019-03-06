@@ -48,15 +48,15 @@ func (w *wizard) deployNode(boot bool) {
 	infos, err := checkNode(client, w.network, boot)
 	if err != nil {
 		if boot {
-			infos = &nodeInfos{portFull: 30303, peersTotal: 512, peersLight: 256}
+			infos = &nodeInfos{port: 30303, peersTotal: 512, peersLight: 256}
 		} else {
-			infos = &nodeInfos{portFull: 30303, peersTotal: 50, peersLight: 0, gasTarget: 4.7, gasPrice: 18}
+			infos = &nodeInfos{port: 30303, peersTotal: 50, peersLight: 0, gasTarget: 7.5, gasLimit: 10, gasPrice: 1}
 		}
 	}
 	existed := err == nil
 
 	infos.genesis, _ = json.MarshalIndent(w.conf.Genesis, "", "  ")
-	infos.network = w.conf.Genesis.Config.ChainId.Int64()
+	infos.network = w.conf.Genesis.Config.ChainID.Int64()
 
 	// Figure out where the user wants to store the persistent data
 	fmt.Println()
@@ -79,8 +79,8 @@ func (w *wizard) deployNode(boot bool) {
 	}
 	// Figure out which port to listen on
 	fmt.Println()
-	fmt.Printf("Which TCP/UDP port to listen on? (default = %d)\n", infos.portFull)
-	infos.portFull = w.readDefaultInt(infos.portFull)
+	fmt.Printf("Which TCP/UDP port to listen on? (default = %d)\n", infos.port)
+	infos.port = w.readDefaultInt(infos.port)
 
 	// Figure out how many peers to allow (different based on node type)
 	fmt.Println()
@@ -107,7 +107,7 @@ func (w *wizard) deployNode(boot bool) {
 			// Ethash based miners only need an etherbase to mine against
 			fmt.Println()
 			if infos.etherbase == "" {
-				fmt.Printf("What address should the miner user?\n")
+				fmt.Printf("What address should the miner use?\n")
 				for {
 					if address := w.readAddress(); address != nil {
 						infos.etherbase = address.Hex()
@@ -115,7 +115,7 @@ func (w *wizard) deployNode(boot bool) {
 					}
 				}
 			} else {
-				fmt.Printf("What address should the miner user? (default = %s)\n", infos.etherbase)
+				fmt.Printf("What address should the miner use? (default = %s)\n", infos.etherbase)
 				infos.etherbase = w.readDefaultAddress(common.HexToAddress(infos.etherbase)).Hex()
 			}
 		} else if w.conf.Genesis.Config.Clique != nil {
@@ -126,7 +126,7 @@ func (w *wizard) deployNode(boot bool) {
 				} else {
 					fmt.Println()
 					fmt.Printf("Reuse previous (%s) signing account (y/n)? (default = yes)\n", key.Address.Hex())
-					if w.readDefaultString("y") != "y" {
+					if !w.readDefaultYesNo(true) {
 						infos.keyJSON, infos.keyPass = "", ""
 					}
 				}
@@ -153,6 +153,10 @@ func (w *wizard) deployNode(boot bool) {
 		infos.gasTarget = w.readDefaultFloat(infos.gasTarget)
 
 		fmt.Println()
+		fmt.Printf("What gas limit should full blocks target (MGas)? (default = %0.3f)\n", infos.gasLimit)
+		infos.gasLimit = w.readDefaultFloat(infos.gasLimit)
+
+		fmt.Println()
 		fmt.Printf("What gas price should the signer require (GWei)? (default = %0.3f)\n", infos.gasPrice)
 		infos.gasPrice = w.readDefaultFloat(infos.gasPrice)
 	}
@@ -161,9 +165,9 @@ func (w *wizard) deployNode(boot bool) {
 	if existed {
 		fmt.Println()
 		fmt.Printf("Should the node be built from scratch (y/n)? (default = no)\n")
-		nocache = w.readDefaultString("n") != "n"
+		nocache = w.readDefaultYesNo(false)
 	}
-	if out, err := deployNode(client, w.network, w.conf.bootFull, w.conf.bootLight, infos, nocache); err != nil {
+	if out, err := deployNode(client, w.network, w.conf.bootnodes, infos, nocache); err != nil {
 		log.Error("Failed to deploy Ethereum node container", "err", err)
 		if len(out) > 0 {
 			fmt.Printf("%s\n", out)

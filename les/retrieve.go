@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package light implements on-demand retrieval capable state and chain objects
-// for the Ethereum Light Client.
 package les
 
 import (
@@ -27,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/light"
 )
 
 var (
@@ -69,9 +68,9 @@ type sentReq struct {
 	lock   sync.RWMutex // protect access to sentTo map
 	sentTo map[distPeer]sentReqToPeer
 
-	reqQueued    bool // a request has been queued but not sent
-	reqSent      bool // a request has been sent but not timed out
-	reqSrtoCount int  // number of requests that reached soft (but not hard) timeout
+	lastReqQueued bool     // last request has been queued but not sent
+	lastReqSentTo distPeer // if not nil then last request has been sent to given peer but not timed out
+	reqSrtoCount  int      // number of requests that reached soft (but not hard) timeout
 }
 
 // sentReqToPeer notifies the request-from-peer goroutine (tryRequest) about a response
@@ -180,7 +179,7 @@ type reqStateFn func() reqStateFn
 // retrieveLoop is the retrieval state machine event loop
 func (r *sentReq) retrieveLoop() {
 	go r.tryRequest()
-	r.reqQueued = true
+	r.lastReqQueued = true
 	state := r.stateRequesting
 
 	for state != nil {
@@ -207,14 +206,21 @@ func (r *sentReq) stateRequesting() reqStateFn {
 					return r.stateNoMorePeers
 				}
 				// nothing to wait for, no more peers to ask, return with error
-				r.stop(ErrNoPeers)
+				r.stop(light.ErrNoPeers)
 				// no need to go to stopped state because waiting() already returned false
 				return nil
 			}
 		case rpSoftTimeout:
 			// last request timed out, try asking a new peer
 			go r.tryRequest()
-			r.reqQueued = true
+			r.lastReqQueued = true
+			return r.stateRequesting
+		case rpDeliveredInvalid:
+			// if it was the last sent request (set to nil by update) then start a new one
+			if !r.lastReqQueued && r.lastReqSentTo == nil {
+				go r.tryRequest()
+				r.lastReqQueued = true
+			}
 			return r.stateRequesting
 		case rpDeliveredValid:
 			r.stop(nil)
@@ -233,7 +239,7 @@ func (r *sentReq) stateNoMorePeers() reqStateFn {
 	select {
 	case <-time.After(retryQueue):
 		go r.tryRequest()
-		r.reqQueued = true
+		r.lastReqQueued = true
 		return r.stateRequesting
 	case ev := <-r.eventsCh:
 		r.update(ev)
@@ -241,7 +247,11 @@ func (r *sentReq) stateNoMorePeers() reqStateFn {
 			r.stop(nil)
 			return r.stateStopped
 		}
-		return r.stateNoMorePeers
+		if r.waiting() {
+			return r.stateNoMorePeers
+		}
+		r.stop(light.ErrNoPeers)
+		return nil
 	case <-r.stopCh:
 		return r.stateStopped
 	}
@@ -260,22 +270,26 @@ func (r *sentReq) stateStopped() reqStateFn {
 func (r *sentReq) update(ev reqPeerEvent) {
 	switch ev.event {
 	case rpSent:
-		r.reqQueued = false
-		if ev.peer != nil {
-			r.reqSent = true
-		}
+		r.lastReqQueued = false
+		r.lastReqSentTo = ev.peer
 	case rpSoftTimeout:
-		r.reqSent = false
+		r.lastReqSentTo = nil
 		r.reqSrtoCount++
-	case rpHardTimeout, rpDeliveredValid, rpDeliveredInvalid:
+	case rpHardTimeout:
 		r.reqSrtoCount--
+	case rpDeliveredValid, rpDeliveredInvalid:
+		if ev.peer == r.lastReqSentTo {
+			r.lastReqSentTo = nil
+		} else {
+			r.reqSrtoCount--
+		}
 	}
 }
 
 // waiting returns true if the retrieval mechanism is waiting for an answer from
 // any peer
 func (r *sentReq) waiting() bool {
-	return r.reqQueued || r.reqSent || r.reqSrtoCount > 0
+	return r.lastReqQueued || r.lastReqSentTo != nil || r.reqSrtoCount > 0
 }
 
 // tryRequest tries to send the request to a new peer and waits for it to either

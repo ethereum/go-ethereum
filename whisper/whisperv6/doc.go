@@ -33,7 +33,6 @@ particularly the notion of singular endpoints.
 package whisperv6
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -60,7 +59,7 @@ const (
 	aesKeyLength    = 32 // in bytes
 	aesNonceLength  = 12 // in bytes; for more info please see cipher.gcmStandardNonceSize & aesgcm.NonceSize()
 	keyIDSize       = 32 // in bytes
-	bloomFilterSize = 64 // in bytes
+	BloomFilterSize = 64 // in bytes
 	flagsLength     = 1
 
 	EnvelopeHeaderLength = 20
@@ -78,12 +77,6 @@ const (
 	DefaultTTL           = 50 // seconds
 	DefaultSyncAllowance = 10 // seconds
 )
-
-type unknownVersionError uint64
-
-func (e unknownVersionError) Error() string {
-	return fmt.Sprintf("invalid envelope version %d", uint64(e))
-}
 
 // MailServer represents a mail server, capable of
 // archiving the old messages for subsequent delivery

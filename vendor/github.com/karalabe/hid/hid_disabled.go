@@ -36,7 +36,7 @@ func (info DeviceInfo) Open() (*Device, error) {
 
 // Close releases the HID USB device handle. On platforms that this file implements
 // the method is just a noop.
-func (dev *Device) Close() {}
+func (dev *Device) Close() error { return nil }
 
 // Write sends an output report to a HID device. On platforms that this file
 // implements the method just returns an error.

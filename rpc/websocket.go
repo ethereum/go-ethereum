@@ -17,8 +17,12 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -27,22 +31,63 @@ import (
 	"strings"
 	"time"
 
+	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/net/websocket"
-	"gopkg.in/fatih/set.v0"
 )
+
+// websocketJSONCodec is a custom JSON codec with payload size enforcement and
+// special number parsing.
+var websocketJSONCodec = websocket.Codec{
+	// Marshal is the stock JSON marshaller used by the websocket library too.
+	Marshal: func(v interface{}) ([]byte, byte, error) {
+		msg, err := json.Marshal(v)
+		return msg, websocket.TextFrame, err
+	},
+	// Unmarshal is a specialized unmarshaller to properly convert numbers.
+	Unmarshal: func(msg []byte, payloadType byte, v interface{}) error {
+		dec := json.NewDecoder(bytes.NewReader(msg))
+		dec.UseNumber()
+
+		return dec.Decode(v)
+	},
+}
 
 // WebsocketHandler returns a handler that serves JSON-RPC to WebSocket connections.
 //
 // allowedOrigins should be a comma-separated list of allowed origin URLs.
 // To allow connections with any origin, pass "*".
-func (srv *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
+func (s *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
 	return websocket.Server{
 		Handshake: wsHandshakeValidator(allowedOrigins),
 		Handler: func(conn *websocket.Conn) {
-			srv.ServeCodec(NewJSONCodec(conn), OptionMethodInvocation|OptionSubscriptions)
+			codec := newWebsocketCodec(conn)
+			s.ServeCodec(codec, OptionMethodInvocation|OptionSubscriptions)
 		},
 	}
+}
+
+func newWebsocketCodec(conn *websocket.Conn) ServerCodec {
+	// Create a custom encode/decode pair to enforce payload size and number encoding
+	conn.MaxPayloadBytes = maxRequestContentLength
+	encoder := func(v interface{}) error {
+		return websocketJSONCodec.Send(conn, v)
+	}
+	decoder := func(v interface{}) error {
+		return websocketJSONCodec.Receive(conn, v)
+	}
+	rpcconn := Conn(conn)
+	if conn.IsServerConn() {
+		// Override remote address with the actual socket address because
+		// package websocket crashes if there is no request origin.
+		addr := conn.Request().RemoteAddr
+		if wsaddr := conn.RemoteAddr().(*websocket.Addr); wsaddr.URL != nil {
+			// Add origin if present.
+			addr += "(" + wsaddr.URL.String() + ")"
+		}
+		rpcconn = connWithRemoteAddr{conn, addr}
+	}
+	return NewCodec(rpcconn, encoder, decoder)
 }
 
 // NewWSServer creates a new websocket RPC server around an API provider.
@@ -56,7 +101,7 @@ func NewWSServer(allowedOrigins []string, srv *Server) *http.Server {
 // websocket upgrade process. When a '*' is specified as an allowed origins all
 // connections are accepted.
 func wsHandshakeValidator(allowedOrigins []string) func(*websocket.Config, *http.Request) error {
-	origins := set.New()
+	origins := mapset.NewSet()
 	allowAllOrigins := false
 
 	for _, origin := range allowedOrigins {
@@ -69,33 +114,36 @@ func wsHandshakeValidator(allowedOrigins []string) func(*websocket.Config, *http
 	}
 
 	// allow localhost if no allowedOrigins are specified.
-	if len(origins.List()) == 0 {
+	if len(origins.ToSlice()) == 0 {
 		origins.Add("http://localhost")
 		if hostname, err := os.Hostname(); err == nil {
 			origins.Add("http://" + strings.ToLower(hostname))
 		}
 	}
 
-	log.Debug(fmt.Sprintf("Allowed origin(s) for WS RPC interface %v\n", origins.List()))
+	log.Debug(fmt.Sprintf("Allowed origin(s) for WS RPC interface %v", origins.ToSlice()))
 
 	f := func(cfg *websocket.Config, req *http.Request) error {
-		origin := strings.ToLower(req.Header.Get("Origin"))
-		if allowAllOrigins || origins.Has(origin) {
+		// Skip origin verification if no Origin header is present. The origin check
+		// is supposed to protect against browser based attacks. Browsers always set
+		// Origin. Non-browser software can put anything in origin and checking it doesn't
+		// provide additional security.
+		if _, ok := req.Header["Origin"]; !ok {
 			return nil
 		}
-		log.Warn(fmt.Sprintf("origin '%s' not allowed on WS-RPC interface\n", origin))
-		return fmt.Errorf("origin %s not allowed", origin)
+		// Verify origin against whitelist.
+		origin := strings.ToLower(req.Header.Get("Origin"))
+		if allowAllOrigins || origins.Contains(origin) {
+			return nil
+		}
+		log.Warn("Rejected WebSocket connection", "origin", origin)
+		return errors.New("origin not allowed")
 	}
 
 	return f
 }
 
-// DialWebsocket creates a new RPC client that communicates with a JSON-RPC server
-// that is listening on the given endpoint.
-//
-// The context is used for the initial connection establishment. It does not
-// affect subsequent interactions with the client.
-func DialWebsocket(ctx context.Context, endpoint, origin string) (*Client, error) {
+func wsGetConfig(endpoint, origin string) (*websocket.Config, error) {
 	if origin == "" {
 		var err error
 		if origin, err = os.Hostname(); err != nil {
@@ -112,8 +160,31 @@ func DialWebsocket(ctx context.Context, endpoint, origin string) (*Client, error
 		return nil, err
 	}
 
-	return newClient(ctx, func(ctx context.Context) (net.Conn, error) {
-		return wsDialContext(ctx, config)
+	if config.Location.User != nil {
+		b64auth := base64.StdEncoding.EncodeToString([]byte(config.Location.User.String()))
+		config.Header.Add("Authorization", "Basic "+b64auth)
+		config.Location.User = nil
+	}
+	return config, nil
+}
+
+// DialWebsocket creates a new RPC client that communicates with a JSON-RPC server
+// that is listening on the given endpoint.
+//
+// The context is used for the initial connection establishment. It does not
+// affect subsequent interactions with the client.
+func DialWebsocket(ctx context.Context, endpoint, origin string) (*Client, error) {
+	config, err := wsGetConfig(endpoint, origin)
+	if err != nil {
+		return nil, err
+	}
+
+	return newClient(ctx, func(ctx context.Context) (ServerCodec, error) {
+		conn, err := wsDialContext(ctx, config)
+		if err != nil {
+			return nil, err
+		}
+		return newWebsocketCodec(conn), nil
 	})
 }
 

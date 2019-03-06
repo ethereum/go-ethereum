@@ -18,222 +18,98 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"crypto"
-	"fmt"
-	"hash"
+	"crypto/rand"
+	"encoding/binary"
 	"io"
-	"sync"
 
-	"github.com/ethereum/go-ethereum/bmt"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/swarm/bmt"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"golang.org/x/crypto/sha3"
 )
 
-type Hasher func() hash.Hash
+// MaxPO is the same as chunk.MaxPO for backward compatibility.
+const MaxPO = chunk.MaxPO
+
+// AddressLength is the same as chunk.AddressLength for backward compatibility.
+const AddressLength = chunk.AddressLength
+
 type SwarmHasher func() SwarmHash
 
-// Peer is the recorded as Source on the chunk
-// should probably not be here? but network should wrap chunk object
-type Peer interface{}
+// Address is an alias for chunk.Address for backward compatibility.
+type Address = chunk.Address
 
-type Key []byte
+// Proximity is the same as chunk.Proximity for backward compatibility.
+var Proximity = chunk.Proximity
 
-func (x Key) Size() uint {
-	return uint(len(x))
-}
-
-func (x Key) isEqual(y Key) bool {
-	return bytes.Equal(x, y)
-}
-
-func (h Key) bits(i, j uint) uint {
-	ii := i >> 3
-	jj := i & 7
-	if ii >= h.Size() {
-		return 0
-	}
-
-	if jj+j <= 8 {
-		return uint((h[ii] >> jj) & ((1 << j) - 1))
-	}
-
-	res := uint(h[ii] >> jj)
-	jj = 8 - jj
-	j -= jj
-	for j != 0 {
-		ii++
-		if j < 8 {
-			res += uint(h[ii]&((1<<j)-1)) << jj
-			return res
-		}
-		res += uint(h[ii]) << jj
-		jj += 8
-		j -= 8
-	}
-	return res
-}
-
-func IsZeroKey(key Key) bool {
-	return len(key) == 0 || bytes.Equal(key, ZeroKey)
-}
-
-var ZeroKey = Key(common.Hash{}.Bytes())
+// ZeroAddr is the same as chunk.ZeroAddr for backward compatibility.
+var ZeroAddr = chunk.ZeroAddr
 
 func MakeHashFunc(hash string) SwarmHasher {
 	switch hash {
 	case "SHA256":
 		return func() SwarmHash { return &HashWithLength{crypto.SHA256.New()} }
 	case "SHA3":
-		return func() SwarmHash { return &HashWithLength{sha3.NewKeccak256()} }
+		return func() SwarmHash { return &HashWithLength{sha3.NewLegacyKeccak256()} }
 	case "BMT":
 		return func() SwarmHash {
-			hasher := sha3.NewKeccak256
-			pool := bmt.NewTreePool(hasher, bmt.DefaultSegmentCount, bmt.DefaultPoolSize)
+			hasher := sha3.NewLegacyKeccak256
+			hasherSize := hasher().Size()
+			segmentCount := chunk.DefaultSize / hasherSize
+			pool := bmt.NewTreePool(hasher, segmentCount, bmt.PoolSize)
 			return bmt.New(pool)
 		}
 	}
 	return nil
 }
 
-func (key Key) Hex() string {
-	return fmt.Sprintf("%064x", []byte(key[:]))
+type AddressCollection []Address
+
+func NewAddressCollection(l int) AddressCollection {
+	return make(AddressCollection, l)
 }
 
-func (key Key) Log() string {
-	if len(key[:]) < 4 {
-		return fmt.Sprintf("%x", []byte(key[:]))
+func (c AddressCollection) Len() int {
+	return len(c)
+}
+
+func (c AddressCollection) Less(i, j int) bool {
+	return bytes.Compare(c[i], c[j]) == -1
+}
+
+func (c AddressCollection) Swap(i, j int) {
+	c[i], c[j] = c[j], c[i]
+}
+
+// Chunk is an alias for chunk.Chunk for backward compatibility.
+type Chunk = chunk.Chunk
+
+// NewChunk is the same as chunk.NewChunk for backward compatibility.
+var NewChunk = chunk.NewChunk
+
+func GenerateRandomChunk(dataSize int64) Chunk {
+	hasher := MakeHashFunc(DefaultHash)()
+	sdata := make([]byte, dataSize+8)
+	rand.Read(sdata[8:])
+	binary.LittleEndian.PutUint64(sdata[:8], uint64(dataSize))
+	hasher.ResetWithLength(sdata[:8])
+	hasher.Write(sdata[8:])
+	return NewChunk(hasher.Sum(nil), sdata)
+}
+
+func GenerateRandomChunks(dataSize int64, count int) (chunks []Chunk) {
+	for i := 0; i < count; i++ {
+		ch := GenerateRandomChunk(dataSize)
+		chunks = append(chunks, ch)
 	}
-	return fmt.Sprintf("%08x", []byte(key[:4]))
-}
-
-func (key Key) String() string {
-	return fmt.Sprintf("%064x", []byte(key)[:])
-}
-
-func (key Key) MarshalJSON() (out []byte, err error) {
-	return []byte(`"` + key.String() + `"`), nil
-}
-
-func (key *Key) UnmarshalJSON(value []byte) error {
-	s := string(value)
-	*key = make([]byte, 32)
-	h := common.Hex2Bytes(s[1 : len(s)-1])
-	copy(*key, h)
-	return nil
-}
-
-// each chunk when first requested opens a record associated with the request
-// next time a request for the same chunk arrives, this record is updated
-// this request status keeps track of the request ID-s as well as the requesting
-// peers and has a channel that is closed when the chunk is retrieved. Multiple
-// local callers can wait on this channel (or combined with a timeout, block with a
-// select).
-type RequestStatus struct {
-	Key        Key
-	Source     Peer
-	C          chan bool
-	Requesters map[uint64][]interface{}
-}
-
-func newRequestStatus(key Key) *RequestStatus {
-	return &RequestStatus{
-		Key:        key,
-		Requesters: make(map[uint64][]interface{}),
-		C:          make(chan bool),
-	}
-}
-
-// Chunk also serves as a request object passed to ChunkStores
-// in case it is a retrieval request, Data is nil and Size is 0
-// Note that Size is not the size of the data chunk, which is Data.Size()
-// but the size of the subtree encoded in the chunk
-// 0 if request, to be supplied by the dpa
-type Chunk struct {
-	Key      Key             // always
-	SData    []byte          // nil if request, to be supplied by dpa
-	Size     int64           // size of the data covered by the subtree encoded in this chunk
-	Source   Peer            // peer
-	C        chan bool       // to signal data delivery by the dpa
-	Req      *RequestStatus  // request Status needed by netStore
-	wg       *sync.WaitGroup // wg to synchronize
-	dbStored chan bool       // never remove a chunk from memStore before it is written to dbStore
-}
-
-func NewChunk(key Key, rs *RequestStatus) *Chunk {
-	return &Chunk{Key: key, Req: rs}
-}
-
-/*
-The ChunkStore interface is implemented by :
-
-- MemStore: a memory cache
-- DbStore: local disk/db store
-- LocalStore: a combination (sequence of) memStore and dbStore
-- NetStore: cloud storage abstraction layer
-- DPA: local requests for swarm storage and retrieval
-*/
-type ChunkStore interface {
-	Put(*Chunk) // effectively there is no error even if there is an error
-	Get(Key) (*Chunk, error)
-	Close()
-}
-
-/*
-Chunker is the interface to a component that is responsible for disassembling and assembling larger data and indended to be the dependency of a DPA storage system with fixed maximum chunksize.
-
-It relies on the underlying chunking model.
-
-When calling Split, the caller provides a channel (chan *Chunk) on which it receives chunks to store. The DPA delegates to storage layers (implementing ChunkStore interface).
-
-Split returns an error channel, which the caller can monitor.
-After getting notified that all the data has been split (the error channel is closed), the caller can safely read or save the root key. Optionally it times out if not all chunks get stored or not the entire stream of data has been processed. By inspecting the errc channel the caller can check if any explicit errors (typically IO read/write failures) occurred during splitting.
-
-When calling Join with a root key, the caller gets returned a seekable lazy reader. The caller again provides a channel on which the caller receives placeholder chunks with missing data. The DPA is supposed to forward this to the chunk stores and notify the chunker if the data has been delivered (i.e. retrieved from memory cache, disk-persisted db or cloud based swarm delivery). As the seekable reader is used, the chunker then puts these together the relevant parts on demand.
-*/
-type Splitter interface {
-	/*
-	   When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Key), the root hash of the entire content will fill this once processing finishes.
-	   New chunks to store are coming to caller via the chunk storage channel, which the caller provides.
-	   wg is a Waitgroup (can be nil) that can be used to block until the local storage finishes
-	   The caller gets returned an error channel, if an error is encountered during splitting, it is fed to errC error channel.
-	   A closed error signals process completion at which point the key can be considered final if there were no errors.
-	*/
-	Split(io.Reader, int64, chan *Chunk, *sync.WaitGroup, *sync.WaitGroup) (Key, error)
-
-	/* This is the first step in making files mutable (not chunks)..
-	   Append allows adding more data chunks to the end of the already existsing file.
-	   The key for the root chunk is supplied to load the respective tree.
-	   Rest of the parameters behave like Split.
-	*/
-	Append(Key, io.Reader, chan *Chunk, *sync.WaitGroup, *sync.WaitGroup) (Key, error)
-}
-
-type Joiner interface {
-	/*
-	   Join reconstructs original content based on a root key.
-	   When joining, the caller gets returned a Lazy SectionReader, which is
-	   seekable and implements on-demand fetching of chunks as and where it is read.
-	   New chunks to retrieve are coming to caller via the Chunk channel, which the caller provides.
-	   If an error is encountered during joining, it appears as a reader error.
-	   The SectionReader.
-	   As a result, partial reads from a document are possible even if other parts
-	   are corrupt or lost.
-	   The chunks are not meant to be validated by the chunker when joining. This
-	   is because it is left to the DPA to decide which sources are trusted.
-	*/
-	Join(key Key, chunkC chan *Chunk) LazySectionReader
-}
-
-type Chunker interface {
-	Joiner
-	Splitter
-	// returns the key length
-	// KeySize() int64
+	return chunks
 }
 
 // Size, Seek, Read, ReadAt
 type LazySectionReader interface {
-	Size(chan bool) (int64, error)
+	Context() context.Context
+	Size(context.Context, chan bool) (int64, error)
 	io.Seeker
 	io.Reader
 	io.ReaderAt
@@ -243,6 +119,134 @@ type LazyTestSectionReader struct {
 	*io.SectionReader
 }
 
-func (self *LazyTestSectionReader) Size(chan bool) (int64, error) {
-	return self.SectionReader.Size(), nil
+func (r *LazyTestSectionReader) Size(context.Context, chan bool) (int64, error) {
+	return r.SectionReader.Size(), nil
+}
+
+func (r *LazyTestSectionReader) Context() context.Context {
+	return context.TODO()
+}
+
+type StoreParams struct {
+	Hash          SwarmHasher `toml:"-"`
+	DbCapacity    uint64
+	CacheCapacity uint
+	BaseKey       []byte
+}
+
+func NewDefaultStoreParams() *StoreParams {
+	return NewStoreParams(defaultLDBCapacity, defaultCacheCapacity, nil, nil)
+}
+
+func NewStoreParams(ldbCap uint64, cacheCap uint, hash SwarmHasher, basekey []byte) *StoreParams {
+	if basekey == nil {
+		basekey = make([]byte, 32)
+	}
+	if hash == nil {
+		hash = MakeHashFunc(DefaultHash)
+	}
+	return &StoreParams{
+		Hash:          hash,
+		DbCapacity:    ldbCap,
+		CacheCapacity: cacheCap,
+		BaseKey:       basekey,
+	}
+}
+
+type ChunkData []byte
+
+type Reference []byte
+
+// Putter is responsible to store data and create a reference for it
+type Putter interface {
+	Put(context.Context, ChunkData) (Reference, error)
+	// RefSize returns the length of the Reference created by this Putter
+	RefSize() int64
+	// Close is to indicate that no more chunk data will be Put on this Putter
+	Close()
+	// Wait returns if all data has been store and the Close() was called.
+	Wait(context.Context) error
+}
+
+// Getter is an interface to retrieve a chunk's data by its reference
+type Getter interface {
+	Get(context.Context, Reference) (ChunkData, error)
+}
+
+// NOTE: this returns invalid data if chunk is encrypted
+func (c ChunkData) Size() uint64 {
+	return binary.LittleEndian.Uint64(c[:8])
+}
+
+type ChunkValidator interface {
+	Validate(chunk Chunk) bool
+}
+
+// Provides method for validation of content address in chunks
+// Holds the corresponding hasher to create the address
+type ContentAddressValidator struct {
+	Hasher SwarmHasher
+}
+
+// Constructor
+func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
+	return &ContentAddressValidator{
+		Hasher: hasher,
+	}
+}
+
+// Validate that the given key is a valid content address for the given data
+func (v *ContentAddressValidator) Validate(ch Chunk) bool {
+	data := ch.Data()
+	if l := len(data); l < 9 || l > chunk.DefaultSize+8 {
+		// log.Error("invalid chunk size", "chunk", addr.Hex(), "size", l)
+		return false
+	}
+
+	hasher := v.Hasher()
+	hasher.ResetWithLength(data[:8])
+	hasher.Write(data[8:])
+	hash := hasher.Sum(nil)
+
+	return bytes.Equal(hash, ch.Address())
+}
+
+type ChunkStore interface {
+	Put(ctx context.Context, ch Chunk) (err error)
+	Get(rctx context.Context, ref Address) (ch Chunk, err error)
+	Has(rctx context.Context, ref Address) bool
+	Close()
+}
+
+// SyncChunkStore is a ChunkStore which supports syncing
+type SyncChunkStore interface {
+	ChunkStore
+	BinIndex(po uint8) uint64
+	Iterator(from uint64, to uint64, po uint8, f func(Address, uint64) bool) error
+	FetchFunc(ctx context.Context, ref Address) func(context.Context) error
+}
+
+// FakeChunkStore doesn't store anything, just implements the ChunkStore interface
+// It can be used to inject into a hasherStore if you don't want to actually store data just do the
+// hashing
+type FakeChunkStore struct {
+}
+
+// Put doesn't store anything it is just here to implement ChunkStore
+func (f *FakeChunkStore) Put(_ context.Context, ch Chunk) error {
+	return nil
+}
+
+// Has doesn't do anything it is just here to implement ChunkStore
+func (f *FakeChunkStore) Has(_ context.Context, ref Address) bool {
+	panic("FakeChunkStore doesn't support HasChunk")
+}
+
+// Get doesn't store anything it is just here to implement ChunkStore
+func (f *FakeChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
+	panic("FakeChunkStore doesn't support Get")
+}
+
+// Close doesn't store anything it is just here to implement ChunkStore
+func (f *FakeChunkStore) Close() {
 }

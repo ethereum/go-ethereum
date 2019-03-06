@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"sync"
@@ -24,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -36,11 +38,11 @@ import (
 type ChainIndexerBackend interface {
 	// Reset initiates the processing of a new chain segment, potentially terminating
 	// any partially completed operations (in case of a reorg).
-	Reset(section uint64, prevHead common.Hash) error
+	Reset(ctx context.Context, section uint64, prevHead common.Hash) error
 
 	// Process crunches through the next header in the chain segment. The caller
 	// will ensure a sequential order of headers.
-	Process(header *types.Header)
+	Process(ctx context.Context, header *types.Header) error
 
 	// Commit finalizes the section metadata and stores it into the database.
 	Commit() error
@@ -51,14 +53,14 @@ type ChainIndexerChain interface {
 	// CurrentHeader retrieves the latest locally known header.
 	CurrentHeader() *types.Header
 
-	// SubscribeChainEvent subscribes to new head header notifications.
-	SubscribeChainEvent(ch chan<- ChainEvent) event.Subscription
+	// SubscribeChainHeadEvent subscribes to new head header notifications.
+	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 }
 
 // ChainIndexer does a post-processing job for equally sized sections of the
 // canonical chain (like BlooomBits and CHT structures). A ChainIndexer is
 // connected to the blockchain through the event system by starting a
-// ChainEventLoop in a goroutine.
+// ChainHeadEventLoop in a goroutine.
 //
 // Further child ChainIndexers can be added which use the output of the parent
 // section indexer. These child indexers receive new head notifications only
@@ -70,9 +72,11 @@ type ChainIndexer struct {
 	backend  ChainIndexerBackend // Background processor generating the index data content
 	children []*ChainIndexer     // Child indexers to cascade chain updates to
 
-	active uint32          // Flag whether the event loop was started
-	update chan struct{}   // Notification channel that headers should be processed
-	quit   chan chan error // Quit channel to tear down running goroutines
+	active    uint32          // Flag whether the event loop was started
+	update    chan struct{}   // Notification channel that headers should be processed
+	quit      chan chan error // Quit channel to tear down running goroutines
+	ctx       context.Context
+	ctxCancel func()
 
 	sectionSize uint64 // Number of blocks in a single chain segment to process
 	confirmsReq uint64 // Number of confirmations before processing a completed segment
@@ -80,6 +84,9 @@ type ChainIndexer struct {
 	storedSections uint64 // Number of sections successfully indexed into the database
 	knownSections  uint64 // Number of sections known to be complete (block wise)
 	cascadedHead   uint64 // Block number of the last completed section cascaded to subindexers
+
+	checkpointSections uint64      // Number of sections covered by the checkpoint
+	checkpointHead     common.Hash // Section head belonging to the checkpoint
 
 	throttling time.Duration // Disk throttling to prevent a heavy upgrade from hogging resources
 
@@ -104,16 +111,25 @@ func NewChainIndexer(chainDb, indexDb ethdb.Database, backend ChainIndexerBacken
 	}
 	// Initialize database dependent fields and start the updater
 	c.loadValidSections()
+	c.ctx, c.ctxCancel = context.WithCancel(context.Background())
+
 	go c.updateLoop()
 
 	return c
 }
 
-// AddKnownSectionHead marks a new section head as known/processed if it is newer
-// than the already known best section head
-func (c *ChainIndexer) AddKnownSectionHead(section uint64, shead common.Hash) {
+// AddCheckpoint adds a checkpoint. Sections are never processed and the chain
+// is not expected to be available before this point. The indexer assumes that
+// the backend has sufficient information available to process subsequent sections.
+//
+// Note: knownSections == 0 and storedSections == checkpointSections until
+// syncing reaches the checkpoint
+func (c *ChainIndexer) AddCheckpoint(section uint64, shead common.Hash) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
+
+	c.checkpointSections = section + 1
+	c.checkpointHead = shead
 
 	if section < c.storedSections {
 		return
@@ -126,8 +142,8 @@ func (c *ChainIndexer) AddKnownSectionHead(section uint64, shead common.Hash) {
 // cascading background processing. Children do not need to be started, they
 // are notified about new events by their parents.
 func (c *ChainIndexer) Start(chain ChainIndexerChain) {
-	events := make(chan ChainEvent, 10)
-	sub := chain.SubscribeChainEvent(events)
+	events := make(chan ChainHeadEvent, 10)
+	sub := chain.SubscribeChainHeadEvent(events)
 
 	go c.eventLoop(chain.CurrentHeader(), events, sub)
 }
@@ -136,6 +152,8 @@ func (c *ChainIndexer) Start(chain ChainIndexerChain) {
 // that might have occurred internally.
 func (c *ChainIndexer) Close() error {
 	var errs []error
+
+	c.ctxCancel()
 
 	// Tear down the primary update loop
 	errc := make(chan error)
@@ -172,7 +190,7 @@ func (c *ChainIndexer) Close() error {
 // eventLoop is a secondary - optional - event loop of the indexer which is only
 // started for the outermost indexer to push chain head events into a processing
 // queue.
-func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainEvent, sub event.Subscription) {
+func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainHeadEvent, sub event.Subscription) {
 	// Mark the chain indexer as active, requiring an additional teardown
 	atomic.StoreUint32(&c.active, 1)
 
@@ -201,10 +219,13 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainE
 			}
 			header := ev.Block.Header()
 			if header.ParentHash != prevHash {
-				// Reorg to the common ancestor (might not exist in light sync mode, skip reorg then)
+				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
 				// TODO(karalabe, zsfelfoldi): This seems a bit brittle, can we detect this case explicitly?
-				if h := FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
-					c.newHead(h.Number.Uint64(), true)
+
+				if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.Number.Uint64()) != prevHash {
+					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
+						c.newHead(h.Number.Uint64(), true)
+					}
 				}
 			}
 			c.newHead(header.Number.Uint64(), false)
@@ -222,16 +243,23 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 	// If a reorg happened, invalidate all sections until that point
 	if reorg {
 		// Revert the known section number to the reorg point
-		changed := head / c.sectionSize
-		if changed < c.knownSections {
-			c.knownSections = changed
+		known := head / c.sectionSize
+		stored := known
+		if known < c.checkpointSections {
+			known = 0
+		}
+		if stored < c.checkpointSections {
+			stored = c.checkpointSections
+		}
+		if known < c.knownSections {
+			c.knownSections = known
 		}
 		// Revert the stored sections from the database to the reorg point
-		if changed < c.storedSections {
-			c.setValidSections(changed)
+		if stored < c.storedSections {
+			c.setValidSections(stored)
 		}
 		// Update the new head number to the finalized section end and notify children
-		head = changed * c.sectionSize
+		head = known * c.sectionSize
 
 		if head < c.cascadedHead {
 			c.cascadedHead = head
@@ -245,7 +273,18 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 	var sections uint64
 	if head >= c.confirmsReq {
 		sections = (head + 1 - c.confirmsReq) / c.sectionSize
+		if sections < c.checkpointSections {
+			sections = 0
+		}
 		if sections > c.knownSections {
+			if c.knownSections < c.checkpointSections {
+				// syncing reached the checkpoint, verify section head
+				syncedHead := rawdb.ReadCanonicalHash(c.chainDb, c.checkpointSections*c.sectionSize-1)
+				if syncedHead != c.checkpointHead {
+					c.log.Error("Synced chain does not match checkpoint", "number", c.checkpointSections*c.sectionSize-1, "expected", c.checkpointHead, "synced", syncedHead)
+					return
+				}
+			}
 			c.knownSections = sections
 
 			select {
@@ -293,6 +332,12 @@ func (c *ChainIndexer) updateLoop() {
 				c.lock.Unlock()
 				newHead, err := c.processSection(section, oldHead)
 				if err != nil {
+					select {
+					case <-c.ctx.Done():
+						<-c.quit <- nil
+						return
+					default:
+					}
 					c.log.Error("Section processing failed", "error", err)
 				}
 				c.lock.Lock()
@@ -305,7 +350,6 @@ func (c *ChainIndexer) updateLoop() {
 						updating = false
 						c.log.Info("Finished upgrading chain index")
 					}
-
 					c.cascadedHead = c.storedSections*c.sectionSize - 1
 					for _, child := range c.children {
 						c.log.Trace("Cascading chain index update", "head", c.cascadedHead)
@@ -340,27 +384,28 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 
 	// Reset and partial processing
 
-	if err := c.backend.Reset(section, lastHead); err != nil {
+	if err := c.backend.Reset(c.ctx, section, lastHead); err != nil {
 		c.setValidSections(0)
 		return common.Hash{}, err
 	}
 
 	for number := section * c.sectionSize; number < (section+1)*c.sectionSize; number++ {
-		hash := GetCanonicalHash(c.chainDb, number)
+		hash := rawdb.ReadCanonicalHash(c.chainDb, number)
 		if hash == (common.Hash{}) {
 			return common.Hash{}, fmt.Errorf("canonical block #%d unknown", number)
 		}
-		header := GetHeader(c.chainDb, hash, number)
+		header := rawdb.ReadHeader(c.chainDb, hash, number)
 		if header == nil {
 			return common.Hash{}, fmt.Errorf("block #%d [%x…] not found", number, hash[:4])
 		} else if header.ParentHash != lastHead {
 			return common.Hash{}, fmt.Errorf("chain reorged during section processing")
 		}
-		c.backend.Process(header)
+		if err := c.backend.Process(c.ctx, header); err != nil {
+			return common.Hash{}, err
+		}
 		lastHead = header.Hash()
 	}
 	if err := c.backend.Commit(); err != nil {
-		c.log.Error("Section commit failed", "error", err)
 		return common.Hash{}, err
 	}
 	return lastHead, nil
@@ -384,8 +429,14 @@ func (c *ChainIndexer) AddChildIndexer(indexer *ChainIndexer) {
 	c.children = append(c.children, indexer)
 
 	// Cascade any pending updates to new children too
-	if c.storedSections > 0 {
-		indexer.newHead(c.storedSections*c.sectionSize-1, false)
+	sections := c.storedSections
+	if c.knownSections < sections {
+		// if a section is "stored" but not "known" then it is a checkpoint without
+		// available chain data so we should not cascade it yet
+		sections = c.knownSections
+	}
+	if sections > 0 {
+		indexer.newHead(sections*c.sectionSize-1, false)
 	}
 }
 
@@ -394,7 +445,7 @@ func (c *ChainIndexer) AddChildIndexer(indexer *ChainIndexer) {
 func (c *ChainIndexer) loadValidSections() {
 	data, _ := c.indexDb.Get([]byte("count"))
 	if len(data) == 8 {
-		c.storedSections = binary.BigEndian.Uint64(data[:])
+		c.storedSections = binary.BigEndian.Uint64(data)
 	}
 }
 

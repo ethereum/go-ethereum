@@ -67,6 +67,7 @@ func TestContextServices(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
+	defer stack.Close()
 	// Define a verifier that ensures a NoopA is before it and NoopB after
 	verifier := func(ctx *ServiceContext) (Service, error) {
 		var objA *NoopServiceA

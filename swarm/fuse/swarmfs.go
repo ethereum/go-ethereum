@@ -17,16 +17,17 @@
 package fuse
 
 import (
-	"github.com/ethereum/go-ethereum/swarm/api"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/swarm/api"
 )
 
 const (
-	Swarmfs_Version = "0.1"
-	mountTimeout    = time.Second * 5
-	unmountTimeout  = time.Second * 10
-	maxFuseMounts   = 5
+	SwarmFSVersion = "0.1"
+	mountTimeout   = time.Second * 5
+	unmountTimeout = time.Second * 10
+	maxFUSEMounts  = 5
 )
 
 var (
@@ -38,12 +39,12 @@ var (
 )
 
 type SwarmFS struct {
-	swarmApi     *api.Api
+	swarmApi     *api.API
 	activeMounts map[string]*MountInfo
 	swarmFsLock  *sync.RWMutex
 }
 
-func NewSwarmFS(api *api.Api) *SwarmFS {
+func NewSwarmFS(api *api.API) *SwarmFS {
 	swarmfsLock.Do(func() {
 		swarmfs = &SwarmFS{
 			swarmApi:     api,

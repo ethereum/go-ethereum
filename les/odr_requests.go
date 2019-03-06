@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package light implements on-demand retrieval capable state and chain objects
-// for the Ethereum Light Client.
 package les
 
 import (
@@ -24,7 +22,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -84,7 +82,7 @@ func (r *BlockRequest) GetCost(peer *peer) uint64 {
 
 // CanSend tells if a certain peer is suitable for serving the given request
 func (r *BlockRequest) CanSend(peer *peer) bool {
-	return peer.HasBlock(r.Hash, r.Number)
+	return peer.HasBlock(r.Hash, r.Number, false)
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
@@ -110,7 +108,7 @@ func (r *BlockRequest) Validate(db ethdb.Database, msg *Msg) error {
 	body := bodies[0]
 
 	// Retrieve our stored header and validate block content against it
-	header := core.GetHeader(db, r.Hash, r.Number)
+	header := rawdb.ReadHeader(db, r.Hash, r.Number)
 	if header == nil {
 		return errHeaderUnavailable
 	}
@@ -140,7 +138,7 @@ func (r *ReceiptsRequest) GetCost(peer *peer) uint64 {
 
 // CanSend tells if a certain peer is suitable for serving the given request
 func (r *ReceiptsRequest) CanSend(peer *peer) bool {
-	return peer.HasBlock(r.Hash, r.Number)
+	return peer.HasBlock(r.Hash, r.Number, false)
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
@@ -166,7 +164,7 @@ func (r *ReceiptsRequest) Validate(db ethdb.Database, msg *Msg) error {
 	receipt := receipts[0]
 
 	// Retrieve our stored header and validate receipt content against it
-	header := core.GetHeader(db, r.Hash, r.Number)
+	header := rawdb.ReadHeader(db, r.Hash, r.Number)
 	if header == nil {
 		return errHeaderUnavailable
 	}
@@ -202,7 +200,7 @@ func (r *TrieRequest) GetCost(peer *peer) uint64 {
 
 // CanSend tells if a certain peer is suitable for serving the given request
 func (r *TrieRequest) CanSend(peer *peer) bool {
-	return peer.HasBlock(r.Id.BlockHash, r.Id.BlockNumber)
+	return peer.HasBlock(r.Id.BlockHash, r.Id.BlockNumber, true)
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
@@ -230,7 +228,7 @@ func (r *TrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 		}
 		nodeSet := proofs[0].NodeSet()
 		// Verify the proof and store if checks out
-		if _, err, _ := trie.VerifyProof(r.Id.Root, r.Key, nodeSet); err != nil {
+		if _, _, err := trie.VerifyProof(r.Id.Root, r.Key, nodeSet); err != nil {
 			return fmt.Errorf("merkle proof verification failed: %v", err)
 		}
 		r.Proof = nodeSet
@@ -241,7 +239,7 @@ func (r *TrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 		// Verify the proof and store if checks out
 		nodeSet := proofs.NodeSet()
 		reads := &readTraceDB{db: nodeSet}
-		if _, err, _ := trie.VerifyProof(r.Id.Root, r.Key, reads); err != nil {
+		if _, _, err := trie.VerifyProof(r.Id.Root, r.Key, reads); err != nil {
 			return fmt.Errorf("merkle proof verification failed: %v", err)
 		}
 		// check if all nodes have been read by VerifyProof
@@ -272,7 +270,7 @@ func (r *CodeRequest) GetCost(peer *peer) uint64 {
 
 // CanSend tells if a certain peer is suitable for serving the given request
 func (r *CodeRequest) CanSend(peer *peer) bool {
-	return peer.HasBlock(r.Id.BlockHash, r.Id.BlockNumber)
+	return peer.HasBlock(r.Id.BlockHash, r.Id.BlockNumber, true)
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
@@ -321,7 +319,7 @@ const (
 )
 
 type HelperTrieReq struct {
-	HelperTrieType    uint
+	Type              uint
 	TrieIdx           uint64
 	Key               []byte
 	FromLevel, AuxReq uint
@@ -365,7 +363,7 @@ func (r *ChtRequest) CanSend(peer *peer) bool {
 	peer.lock.RLock()
 	defer peer.lock.RUnlock()
 
-	return peer.headInfo.Number >= light.HelperTrieConfirmations && r.ChtNum <= (peer.headInfo.Number-light.HelperTrieConfirmations)/light.ChtFrequency
+	return peer.headInfo.Number >= r.Config.ChtConfirms && r.ChtNum <= (peer.headInfo.Number-r.Config.ChtConfirms)/r.Config.ChtSize
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
@@ -374,12 +372,26 @@ func (r *ChtRequest) Request(reqID uint64, peer *peer) error {
 	var encNum [8]byte
 	binary.BigEndian.PutUint64(encNum[:], r.BlockNum)
 	req := HelperTrieReq{
-		HelperTrieType: htCanonical,
-		TrieIdx:        r.ChtNum,
-		Key:            encNum[:],
-		AuxReq:         auxHeader,
+		Type:    htCanonical,
+		TrieIdx: r.ChtNum,
+		Key:     encNum[:],
+		AuxReq:  auxHeader,
 	}
-	return peer.RequestHelperTrieProofs(reqID, r.GetCost(peer), []HelperTrieReq{req})
+	switch peer.version {
+	case lpv1:
+		var reqsV1 ChtReq
+		if req.Type != htCanonical || req.AuxReq != auxHeader || len(req.Key) != 8 {
+			return fmt.Errorf("Request invalid in LES/1 mode")
+		}
+		blockNum := binary.BigEndian.Uint64(req.Key)
+		// convert HelperTrie request to old CHT request
+		reqsV1 = ChtReq{ChtNum: (req.TrieIdx + 1) * (r.Config.ChtSize / r.Config.PairChtSize), BlockNum: blockNum, FromLevel: req.FromLevel}
+		return peer.RequestHelperTrieProofs(reqID, r.GetCost(peer), []ChtReq{reqsV1})
+	case lpv2:
+		return peer.RequestHelperTrieProofs(reqID, r.GetCost(peer), []HelperTrieReq{req})
+	default:
+		panic(nil)
+	}
 }
 
 // Valid processes an ODR request reply message from the LES network
@@ -400,7 +412,7 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 		var encNumber [8]byte
 		binary.BigEndian.PutUint64(encNumber[:], r.BlockNum)
 
-		value, err, _ := trie.VerifyProof(r.ChtRoot, encNumber[:], light.NodeList(proof.Proof).NodeSet())
+		value, _, err := trie.VerifyProof(r.ChtRoot, encNumber[:], light.NodeList(proof.Proof).NodeSet())
 		if err != nil {
 			return err
 		}
@@ -435,7 +447,7 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 		binary.BigEndian.PutUint64(encNumber[:], r.BlockNum)
 
 		reads := &readTraceDB{db: nodeSet}
-		value, err, _ := trie.VerifyProof(r.ChtRoot, encNumber[:], reads)
+		value, _, err := trie.VerifyProof(r.ChtRoot, encNumber[:], reads)
 		if err != nil {
 			return fmt.Errorf("merkle proof verification failed: %v", err)
 		}
@@ -464,7 +476,7 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 }
 
 type BloomReq struct {
-	BloomTrieNum, BitIdx, SectionIdx, FromLevel uint64
+	BloomTrieNum, BitIdx, SectionIndex, FromLevel uint64
 }
 
 // ODR request type for requesting headers by Canonical Hash Trie, see LesOdrRequest interface
@@ -473,7 +485,7 @@ type BloomRequest light.BloomRequest
 // GetCost returns the cost of the given ODR request according to the serving
 // peer's cost table (implementation of LesOdrRequest)
 func (r *BloomRequest) GetCost(peer *peer) uint64 {
-	return peer.GetRequestCost(GetHelperTrieProofsMsg, len(r.SectionIdxList))
+	return peer.GetRequestCost(GetHelperTrieProofsMsg, len(r.SectionIndexList))
 }
 
 // CanSend tells if a certain peer is suitable for serving the given request
@@ -484,23 +496,23 @@ func (r *BloomRequest) CanSend(peer *peer) bool {
 	if peer.version < lpv2 {
 		return false
 	}
-	return peer.headInfo.Number >= light.HelperTrieConfirmations && r.BloomTrieNum <= (peer.headInfo.Number-light.HelperTrieConfirmations)/light.BloomTrieFrequency
+	return peer.headInfo.Number >= r.Config.BloomTrieConfirms && r.BloomTrieNum <= (peer.headInfo.Number-r.Config.BloomTrieConfirms)/r.Config.BloomTrieSize
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (r *BloomRequest) Request(reqID uint64, peer *peer) error {
-	peer.Log().Debug("Requesting BloomBits", "bloomTrie", r.BloomTrieNum, "bitIdx", r.BitIdx, "sections", r.SectionIdxList)
-	reqs := make([]HelperTrieReq, len(r.SectionIdxList))
+	peer.Log().Debug("Requesting BloomBits", "bloomTrie", r.BloomTrieNum, "bitIdx", r.BitIdx, "sections", r.SectionIndexList)
+	reqs := make([]HelperTrieReq, len(r.SectionIndexList))
 
 	var encNumber [10]byte
-	binary.BigEndian.PutUint16(encNumber[0:2], uint16(r.BitIdx))
+	binary.BigEndian.PutUint16(encNumber[:2], uint16(r.BitIdx))
 
-	for i, sectionIdx := range r.SectionIdxList {
-		binary.BigEndian.PutUint64(encNumber[2:10], sectionIdx)
+	for i, sectionIdx := range r.SectionIndexList {
+		binary.BigEndian.PutUint64(encNumber[2:], sectionIdx)
 		reqs[i] = HelperTrieReq{
-			HelperTrieType: htBloomBits,
-			TrieIdx:        r.BloomTrieNum,
-			Key:            common.CopyBytes(encNumber[:]),
+			Type:    htBloomBits,
+			TrieIdx: r.BloomTrieNum,
+			Key:     common.CopyBytes(encNumber[:]),
 		}
 	}
 	return peer.RequestHelperTrieProofs(reqID, r.GetCost(peer), reqs)
@@ -510,7 +522,7 @@ func (r *BloomRequest) Request(reqID uint64, peer *peer) error {
 // returns true and stores results in memory if the message was a valid reply
 // to the request (implementation of LesOdrRequest)
 func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
-	log.Debug("Validating BloomBits", "bloomTrie", r.BloomTrieNum, "bitIdx", r.BitIdx, "sections", r.SectionIdxList)
+	log.Debug("Validating BloomBits", "bloomTrie", r.BloomTrieNum, "bitIdx", r.BitIdx, "sections", r.SectionIndexList)
 
 	// Ensure we have a correct message with a single proof element
 	if msg.MsgType != MsgHelperTrieProofs {
@@ -521,15 +533,15 @@ func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
 	nodeSet := proofs.NodeSet()
 	reads := &readTraceDB{db: nodeSet}
 
-	r.BloomBits = make([][]byte, len(r.SectionIdxList))
+	r.BloomBits = make([][]byte, len(r.SectionIndexList))
 
 	// Verify the proofs
 	var encNumber [10]byte
-	binary.BigEndian.PutUint16(encNumber[0:2], uint16(r.BitIdx))
+	binary.BigEndian.PutUint16(encNumber[:2], uint16(r.BitIdx))
 
-	for i, idx := range r.SectionIdxList {
-		binary.BigEndian.PutUint64(encNumber[2:10], idx)
-		value, err, _ := trie.VerifyProof(r.BloomTrieRoot, encNumber[:], reads)
+	for i, idx := range r.SectionIndexList {
+		binary.BigEndian.PutUint64(encNumber[2:], idx)
+		value, _, err := trie.VerifyProof(r.BloomTrieRoot, encNumber[:], reads)
 		if err != nil {
 			return err
 		}

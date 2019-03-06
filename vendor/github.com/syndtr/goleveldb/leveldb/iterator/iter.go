@@ -40,11 +40,11 @@ type IteratorSeeker interface {
 	Seek(key []byte) bool
 
 	// Next moves the iterator to the next key/value pair.
-	// It returns whether the iterator is exhausted.
+	// It returns false if the iterator is exhausted.
 	Next() bool
 
 	// Prev moves the iterator to the previous key/value pair.
-	// It returns whether the iterator is exhausted.
+	// It returns false if the iterator is exhausted.
 	Prev() bool
 }
 
@@ -88,7 +88,7 @@ type Iterator interface {
 	// its contents may change on the next call to any 'seeks method'.
 	Key() []byte
 
-	// Value returns the key of the current key/value pair, or nil if done.
+	// Value returns the value of the current key/value pair, or nil if done.
 	// The caller should not modify the contents of the returned slice, and
 	// its contents may change on the next call to any 'seeks method'.
 	Value() []byte

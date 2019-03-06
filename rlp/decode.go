@@ -26,11 +26,33 @@ import (
 	"math/big"
 	"reflect"
 	"strings"
+	"sync"
 )
 
 var (
+	// EOL is returned when the end of the current list
+	// has been reached during streaming.
+	EOL = errors.New("rlp: end of list")
+
+	// Actual Errors
+	ErrExpectedString   = errors.New("rlp: expected String or Byte")
+	ErrExpectedList     = errors.New("rlp: expected List")
+	ErrCanonInt         = errors.New("rlp: non-canonical integer format")
+	ErrCanonSize        = errors.New("rlp: non-canonical size information")
+	ErrElemTooLarge     = errors.New("rlp: element is larger than containing list")
+	ErrValueTooLarge    = errors.New("rlp: value size exceeds available input length")
+	ErrMoreThanOneValue = errors.New("rlp: input contains more than one value")
+
+	// internal errors
+	errNotInList     = errors.New("rlp: call of ListEnd outside of any list")
+	errNotAtEOL      = errors.New("rlp: call of ListEnd not positioned at EOL")
+	errUintOverflow  = errors.New("rlp: uint overflow")
 	errNoPointer     = errors.New("rlp: interface given to Decode must be a pointer")
 	errDecodeIntoNil = errors.New("rlp: pointer given to Decode must not be nil")
+
+	streamPool = sync.Pool{
+		New: func() interface{} { return new(Stream) },
+	}
 )
 
 // Decoder is implemented by types that require custom RLP
@@ -109,17 +131,24 @@ type Decoder interface {
 //
 //     NewStream(r, limit).Decode(val)
 func Decode(r io.Reader, val interface{}) error {
-	// TODO: this could use a Stream from a pool.
-	return NewStream(r, 0).Decode(val)
+	stream := streamPool.Get().(*Stream)
+	defer streamPool.Put(stream)
+
+	stream.Reset(r, 0)
+	return stream.Decode(val)
 }
 
 // DecodeBytes parses RLP data from b into val.
 // Please see the documentation of Decode for the decoding rules.
 // The input must contain exactly one value and no trailing data.
 func DecodeBytes(b []byte, val interface{}) error {
-	// TODO: this could use a Stream from a pool.
 	r := bytes.NewReader(b)
-	if err := NewStream(r, uint64(len(b))).Decode(val); err != nil {
+
+	stream := streamPool.Get().(*Stream)
+	defer streamPool.Put(stream)
+
+	stream.Reset(r, uint64(len(b)))
+	if err := stream.Decode(val); err != nil {
 		return err
 	}
 	if r.Len() > 0 {
@@ -274,9 +303,8 @@ func makeListDecoder(typ reflect.Type, tag tags) (decoder, error) {
 	if etype.Kind() == reflect.Uint8 && !reflect.PtrTo(etype).Implements(decoderInterface) {
 		if typ.Kind() == reflect.Array {
 			return decodeByteArray, nil
-		} else {
-			return decodeByteSlice, nil
 		}
+		return decodeByteSlice, nil
 	}
 	etypeinfo, err := cachedTypeInfo1(etype, tags{})
 	if err != nil {
@@ -554,29 +582,6 @@ func (k Kind) String() string {
 		return fmt.Sprintf("Unknown(%d)", k)
 	}
 }
-
-var (
-	// EOL is returned when the end of the current list
-	// has been reached during streaming.
-	EOL = errors.New("rlp: end of list")
-
-	// Actual Errors
-	ErrExpectedString = errors.New("rlp: expected String or Byte")
-	ErrExpectedList   = errors.New("rlp: expected List")
-	ErrCanonInt       = errors.New("rlp: non-canonical integer format")
-	ErrCanonSize      = errors.New("rlp: non-canonical size information")
-	ErrElemTooLarge   = errors.New("rlp: element is larger than containing list")
-	ErrValueTooLarge  = errors.New("rlp: value size exceeds available input length")
-
-	// This error is reported by DecodeBytes if the slice contains
-	// additional data after the first RLP value.
-	ErrMoreThanOneValue = errors.New("rlp: input contains more than one value")
-
-	// internal errors
-	errNotInList    = errors.New("rlp: call of ListEnd outside of any list")
-	errNotAtEOL     = errors.New("rlp: call of ListEnd not positioned at EOL")
-	errUintOverflow = errors.New("rlp: uint overflow")
-)
 
 // ByteReader must be implemented by any input reader for a Stream. It
 // is implemented by e.g. bufio.Reader and bytes.Reader.
@@ -860,6 +865,7 @@ func (s *Stream) Reset(r io.Reader, inputLimit uint64) {
 	if s.uintbuf == nil {
 		s.uintbuf = make([]byte, 8)
 	}
+	s.byteval = 0
 }
 
 // Kind returns the kind and size of the next value in the

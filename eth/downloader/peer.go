@@ -229,13 +229,6 @@ func (p *peerConnection) SetHeadersIdle(delivered int) {
 	p.setIdle(p.headerStarted, delivered, &p.headerThroughput, &p.headerIdle)
 }
 
-// SetBlocksIdle sets the peer to idle, allowing it to execute new block retrieval
-// requests. Its estimated block retrieval throughput is updated with that measured
-// just now.
-func (p *peerConnection) SetBlocksIdle(delivered int) {
-	p.setIdle(p.blockStarted, delivered, &p.blockThroughput, &p.blockIdle)
-}
-
 // SetBodiesIdle sets the peer to idle, allowing it to execute block body retrieval
 // requests. Its estimated body retrieval throughput is updated with that measured
 // just now.
@@ -551,7 +544,7 @@ func (ps *peerSet) idlePeers(minProtocol, maxProtocol int, idleCheck func(*peerC
 // medianRTT returns the median RTT of the peerset, considering only the tuning
 // peers if there are more peers available.
 func (ps *peerSet) medianRTT() time.Duration {
-	// Gather all the currnetly measured round trip times
+	// Gather all the currently measured round trip times
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 

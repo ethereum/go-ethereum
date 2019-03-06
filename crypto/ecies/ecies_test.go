@@ -93,19 +93,6 @@ func cmpPublic(pub1, pub2 PublicKey) bool {
 	return bytes.Equal(pub1Out, pub2Out)
 }
 
-// cmpPrivate returns true if the two private keys are the same.
-func cmpPrivate(prv1, prv2 *PrivateKey) bool {
-	if prv1 == nil || prv1.D == nil {
-		return false
-	} else if prv2 == nil || prv2.D == nil {
-		return false
-	} else if prv1.D.Cmp(prv2.D) != 0 {
-		return false
-	} else {
-		return cmpPublic(prv1.PublicKey, prv2.PublicKey)
-	}
-}
-
 // Validate the ECDH component.
 func TestSharedKey(t *testing.T) {
 	prv1, err := GenerateKey(rand.Reader, DefaultCurve, nil)
@@ -270,7 +257,7 @@ func TestEncryptDecrypt(t *testing.T) {
 		t.FailNow()
 	}
 
-	pt, err := prv2.Decrypt(rand.Reader, ct, nil, nil)
+	pt, err := prv2.Decrypt(ct, nil, nil)
 	if err != nil {
 		fmt.Println(err.Error())
 		t.FailNow()
@@ -281,7 +268,7 @@ func TestEncryptDecrypt(t *testing.T) {
 		t.FailNow()
 	}
 
-	_, err = prv1.Decrypt(rand.Reader, ct, nil, nil)
+	_, err = prv1.Decrypt(ct, nil, nil)
 	if err == nil {
 		fmt.Println("ecies: encryption should not have succeeded")
 		t.FailNow()
@@ -301,7 +288,7 @@ func TestDecryptShared2(t *testing.T) {
 	}
 
 	// Check that decrypting with correct shared data works.
-	pt, err := prv.Decrypt(rand.Reader, ct, nil, shared2)
+	pt, err := prv.Decrypt(ct, nil, shared2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,10 +297,10 @@ func TestDecryptShared2(t *testing.T) {
 	}
 
 	// Decrypting without shared data or incorrect shared data fails.
-	if _, err = prv.Decrypt(rand.Reader, ct, nil, nil); err == nil {
+	if _, err = prv.Decrypt(ct, nil, nil); err == nil {
 		t.Fatal("ecies: decrypting without shared data didn't fail")
 	}
-	if _, err = prv.Decrypt(rand.Reader, ct, nil, []byte("garbage")); err == nil {
+	if _, err = prv.Decrypt(ct, nil, []byte("garbage")); err == nil {
 		t.Fatal("ecies: decrypting with incorrect shared data didn't fail")
 	}
 }
@@ -381,7 +368,7 @@ func testParamSelection(t *testing.T, c testCase) {
 		t.FailNow()
 	}
 
-	pt, err := prv2.Decrypt(rand.Reader, ct, nil, nil)
+	pt, err := prv2.Decrypt(ct, nil, nil)
 	if err != nil {
 		fmt.Printf("%s (%s)\n", err.Error(), c.Name)
 		t.FailNow()
@@ -393,7 +380,7 @@ func testParamSelection(t *testing.T, c testCase) {
 		t.FailNow()
 	}
 
-	_, err = prv1.Decrypt(rand.Reader, ct, nil, nil)
+	_, err = prv1.Decrypt(ct, nil, nil)
 	if err == nil {
 		fmt.Printf("ecies: encryption should not have succeeded (%s)\n",
 			c.Name)
@@ -422,7 +409,7 @@ func TestBasicKeyValidation(t *testing.T) {
 
 	for _, b := range badBytes {
 		ct[0] = b
-		_, err := prv.Decrypt(rand.Reader, ct, nil, nil)
+		_, err := prv.Decrypt(ct, nil, nil)
 		if err != ErrInvalidPublicKey {
 			fmt.Println("ecies: validated an invalid key")
 			t.FailNow()
@@ -441,14 +428,14 @@ func TestBox(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pt, err := prv2.Decrypt(rand.Reader, ct, nil, nil)
+	pt, err := prv2.Decrypt(ct, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(pt, message) {
 		t.Fatal("ecies: plaintext doesn't match message")
 	}
-	if _, err = prv1.Decrypt(rand.Reader, ct, nil, nil); err == nil {
+	if _, err = prv1.Decrypt(ct, nil, nil); err == nil {
 		t.Fatal("ecies: encryption should not have succeeded")
 	}
 }

@@ -20,14 +20,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/light"
-)
-
-const (
-	//forceSyncCycle      = 10 * time.Second // Time interval to force syncs, even if few peers are available
-	minDesiredPeerCount = 5 // Amount of peers desired to start syncing
 )
 
 // syncer is responsible for periodically synchronising with the network, both
@@ -61,7 +56,7 @@ func (pm *ProtocolManager) syncer() {
 
 func (pm *ProtocolManager) needToSync(peerHead blockInfo) bool {
 	head := pm.blockchain.CurrentHeader()
-	currentTd := core.GetTd(pm.chainDb, head.Hash(), head.Number.Uint64())
+	currentTd := rawdb.ReadTd(pm.chainDb, head.Hash(), head.Number.Uint64())
 	return currentTd != nil && peerHead.Td.Cmp(currentTd) > 0
 }
 

@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// Gas costs
 const (
 	GasQuickStep   uint64 = 2
 	GasFastestStep uint64 = 3
@@ -29,10 +30,6 @@ const (
 	GasMidStep     uint64 = 8
 	GasSlowStep    uint64 = 10
 	GasExtStep     uint64 = 20
-
-	GasReturn       uint64 = 0
-	GasStop         uint64 = 0
-	GasContractByte uint64 = 200
 )
 
 // calcGas returns the actual gas cost of the call.

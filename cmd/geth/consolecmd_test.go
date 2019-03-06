@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	ipcAPIs  = "admin:1.0 debug:1.0 eth:1.0 miner:1.0 net:1.0 personal:1.0 rpc:1.0 shh:1.0 txpool:1.0 web3:1.0"
+	ipcAPIs  = "admin:1.0 debug:1.0 eth:1.0 ethash:1.0 miner:1.0 net:1.0 personal:1.0 rpc:1.0 shh:1.0 txpool:1.0 web3:1.0"
 	httpAPIs = "eth:1.0 net:1.0 rpc:1.0 web3:1.0"
 )
 
@@ -50,7 +50,7 @@ func TestConsoleWelcome(t *testing.T) {
 	geth.SetTemplateFunc("goos", func() string { return runtime.GOOS })
 	geth.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
 	geth.SetTemplateFunc("gover", runtime.Version)
-	geth.SetTemplateFunc("gethver", func() string { return params.Version })
+	geth.SetTemplateFunc("gethver", func() string { return params.VersionWithMeta })
 	geth.SetTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
 	geth.SetTemplateFunc("apis", func() string { return ipcAPIs })
 
@@ -133,7 +133,7 @@ func testAttachWelcome(t *testing.T, geth *testgeth, endpoint, apis string) {
 	attach.SetTemplateFunc("goos", func() string { return runtime.GOOS })
 	attach.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
 	attach.SetTemplateFunc("gover", runtime.Version)
-	attach.SetTemplateFunc("gethver", func() string { return params.Version })
+	attach.SetTemplateFunc("gethver", func() string { return params.VersionWithMeta })
 	attach.SetTemplateFunc("etherbase", func() string { return geth.Etherbase })
 	attach.SetTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
 	attach.SetTemplateFunc("ipc", func() bool { return strings.HasPrefix(endpoint, "ipc") })

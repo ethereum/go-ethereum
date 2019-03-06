@@ -55,7 +55,7 @@ func (w *wizard) deployExplorer() {
 	}
 	existed := err == nil
 
-	chainspec, err := newParityChainSpec(w.network, w.conf.Genesis, w.conf.bootFull)
+	chainspec, err := newParityChainSpec(w.network, w.conf.Genesis, w.conf.bootnodes)
 	if err != nil {
 		log.Error("Failed to create chain spec for explorer", "err", err)
 		return
@@ -100,7 +100,7 @@ func (w *wizard) deployExplorer() {
 	if existed {
 		fmt.Println()
 		fmt.Printf("Should the explorer be built from scratch (y/n)? (default = no)\n")
-		nocache = w.readDefaultString("n") != "n"
+		nocache = w.readDefaultYesNo(false)
 	}
 	if out, err := deployExplorer(client, w.network, chain, infos, nocache); err != nil {
 		log.Error("Failed to deploy explorer container", "err", err)

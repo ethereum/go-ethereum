@@ -14,24 +14,21 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package light implements on-demand retrieval capable state and chain objects
-// for the Ethereum Light Client.
 package les
 
 import (
 	"container/list"
-	"errors"
 	"sync"
 	"time"
-)
 
-// ErrNoPeers is returned if no peers capable of serving a queued request are available
-var ErrNoPeers = errors.New("no suitable peers available")
+	"github.com/ethereum/go-ethereum/common/mclock"
+)
 
 // requestDistributor implements a mechanism that distributes requests to
 // suitable peers, obeying flow control rules and prioritizing them in creation
 // order (even when a resend is necessary).
 type requestDistributor struct {
+	clock            mclock.Clock
 	reqQueue         *list.List
 	lastReqOrder     uint64
 	peers            map[distPeer]struct{}
@@ -71,8 +68,9 @@ type distReq struct {
 }
 
 // newRequestDistributor creates a new request distributor
-func newRequestDistributor(peers *peerSet, stopChn chan struct{}) *requestDistributor {
+func newRequestDistributor(peers *peerSet, stopChn chan struct{}, clock mclock.Clock) *requestDistributor {
 	d := &requestDistributor{
+		clock:    clock,
 		reqQueue: list.New(),
 		loopChn:  make(chan struct{}, 2),
 		stopChn:  stopChn,
@@ -118,7 +116,9 @@ func (d *requestDistributor) loop() {
 			d.lock.Lock()
 			elem := d.reqQueue.Front()
 			for elem != nil {
-				close(elem.Value.(*distReq).sentChn)
+				req := elem.Value.(*distReq)
+				close(req.sentChn)
+				req.sentChn = nil
 				elem = elem.Next()
 			}
 			d.lock.Unlock()
@@ -150,7 +150,7 @@ func (d *requestDistributor) loop() {
 						wait = distMaxWait
 					}
 					go func() {
-						time.Sleep(wait)
+						d.clock.Sleep(wait)
 						d.loopChn <- struct{}{}
 					}()
 					break loop

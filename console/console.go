@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"syscall"
 
 	"github.com/ethereum/go-ethereum/internal/jsre"
 	"github.com/ethereum/go-ethereum/internal/web3ext"
@@ -59,7 +60,7 @@ type Config struct {
 	Preload  []string     // Absolute paths to JavaScript files to preload
 }
 
-// Console is a JavaScript interpreted runtime environment. It is a fully fleged
+// Console is a JavaScript interpreted runtime environment. It is a fully fledged
 // JavaScript console attached to a running node via an external or in-process RPC
 // client.
 type Console struct {
@@ -72,6 +73,8 @@ type Console struct {
 	printer  io.Writer    // Output writer to serialize any display strings to
 }
 
+// New initializes a JavaScript interpreted runtime environment and sets defaults
+// with the config struct.
 func New(config Config) (*Console, error) {
 	// Handle unset config values gracefully
 	if config.Prompter == nil {
@@ -117,10 +120,10 @@ func (c *Console) init(preload []string) error {
 	consoleObj.Object().Set("error", c.consoleOutput)
 
 	// Load all the internal utility JavaScript libraries
-	if err := c.jsre.Compile("bignumber.js", jsre.BigNumber_JS); err != nil {
+	if err := c.jsre.Compile("bignumber.js", jsre.BignumberJs); err != nil {
 		return fmt.Errorf("bignumber.js: %v", err)
 	}
-	if err := c.jsre.Compile("web3.js", jsre.Web3_JS); err != nil {
+	if err := c.jsre.Compile("web3.js", jsre.Web3Js); err != nil {
 		return fmt.Errorf("web3.js: %v", err)
 	}
 	if _, err := c.jsre.Run("var Web3 = require('web3');"); err != nil {
@@ -233,7 +236,7 @@ func (c *Console) clearHistory() {
 // consoleOutput is an override for the console.log and console.error methods to
 // stream the output into the configured output stream instead of stdout.
 func (c *Console) consoleOutput(call otto.FunctionCall) otto.Value {
-	output := []string{}
+	var output []string
 	for _, argument := range call.ArgumentList {
 		output = append(output, fmt.Sprintf("%v", argument))
 	}
@@ -311,7 +314,7 @@ func (c *Console) Interactive() {
 		input     = ""                // Current user input
 		scheduler = make(chan string) // Channel to send the next prompt on and receive the input
 	)
-	// Start a goroutine to listen for promt requests and send back inputs
+	// Start a goroutine to listen for prompt requests and send back inputs
 	go func() {
 		for {
 			// Read the next user input
@@ -332,7 +335,7 @@ func (c *Console) Interactive() {
 	}()
 	// Monitor Ctrl-C too in case the input is empty and we need to bail
 	abort := make(chan os.Signal, 1)
-	signal.Notify(abort, os.Interrupt)
+	signal.Notify(abort, syscall.SIGINT, syscall.SIGTERM)
 
 	// Start sending prompts to the user and reading back inputs
 	for {

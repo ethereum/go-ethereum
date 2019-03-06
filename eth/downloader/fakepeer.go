@@ -21,13 +21,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // FakePeer is a mock downloader peer that operates on a local database instance
 // instead of being an actual live node. It's useful for testing and to implement
-// sync commands from an xisting local database.
+// sync commands from an existing local database.
 type FakePeer struct {
 	id string
 	db ethdb.Database
@@ -48,7 +49,7 @@ func (p *FakePeer) Head() (common.Hash, *big.Int) {
 }
 
 // RequestHeadersByHash implements downloader.Peer, returning a batch of headers
-// defined by the origin hash and the associaed query parameters.
+// defined by the origin hash and the associated query parameters.
 func (p *FakePeer) RequestHeadersByHash(hash common.Hash, amount int, skip int, reverse bool) error {
 	var (
 		headers []*types.Header
@@ -92,7 +93,7 @@ func (p *FakePeer) RequestHeadersByHash(hash common.Hash, amount int, skip int, 
 }
 
 // RequestHeadersByNumber implements downloader.Peer, returning a batch of headers
-// defined by the origin number and the associaed query parameters.
+// defined by the origin number and the associated query parameters.
 func (p *FakePeer) RequestHeadersByNumber(number uint64, amount int, skip int, reverse bool) error {
 	var (
 		headers []*types.Header
@@ -126,7 +127,7 @@ func (p *FakePeer) RequestBodies(hashes []common.Hash) error {
 		uncles [][]*types.Header
 	)
 	for _, hash := range hashes {
-		block := core.GetBlock(p.db, hash, p.hc.GetBlockNumber(hash))
+		block := rawdb.ReadBlock(p.db, hash, *p.hc.GetBlockNumber(hash))
 
 		txs = append(txs, block.Transactions())
 		uncles = append(uncles, block.Uncles())
@@ -140,7 +141,7 @@ func (p *FakePeer) RequestBodies(hashes []common.Hash) error {
 func (p *FakePeer) RequestReceipts(hashes []common.Hash) error {
 	var receipts [][]*types.Receipt
 	for _, hash := range hashes {
-		receipts = append(receipts, core.GetBlockReceipts(p.db, hash, p.hc.GetBlockNumber(hash)))
+		receipts = append(receipts, rawdb.ReadReceipts(p.db, hash, *p.hc.GetBlockNumber(hash)))
 	}
 	p.dl.DeliverReceipts(p.id, receipts)
 	return nil

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build nacl js nocgo
+// +build nacl js !cgo
 
 package crypto
 
@@ -88,7 +88,7 @@ func VerifySignature(pubkey, hash, signature []byte) bool {
 		return false
 	}
 	// Reject malleable signatures. libsecp256k1 does this check but btcec doesn't.
-	if sig.S.Cmp(secp256k1_halfN) > 0 {
+	if sig.S.Cmp(secp256k1halfN) > 0 {
 		return false
 	}
 	return sig.Verify(hash, key)

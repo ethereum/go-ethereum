@@ -52,7 +52,7 @@ func (w *wizard) deployWallet() {
 	existed := err == nil
 
 	infos.genesis, _ = json.MarshalIndent(w.conf.Genesis, "", "  ")
-	infos.network = w.conf.Genesis.Config.ChainId.Int64()
+	infos.network = w.conf.Genesis.Config.ChainID.Int64()
 
 	// Figure out which port to listen on
 	fmt.Println()
@@ -96,9 +96,9 @@ func (w *wizard) deployWallet() {
 	if existed {
 		fmt.Println()
 		fmt.Printf("Should the wallet be built from scratch (y/n)? (default = no)\n")
-		nocache = w.readDefaultString("n") != "n"
+		nocache = w.readDefaultYesNo(false)
 	}
-	if out, err := deployWallet(client, w.network, w.conf.bootFull, infos, nocache); err != nil {
+	if out, err := deployWallet(client, w.network, w.conf.bootnodes, infos, nocache); err != nil {
 		log.Error("Failed to deploy wallet container", "err", err)
 		if len(out) > 0 {
 			fmt.Printf("%s\n", out)

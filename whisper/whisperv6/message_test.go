@@ -73,7 +73,7 @@ func singleMessageTest(t *testing.T, symmetric bool) {
 	text := make([]byte, 0, 512)
 	text = append(text, params.Payload...)
 
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -131,7 +131,7 @@ func TestMessageWrap(t *testing.T) {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
 
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -149,7 +149,7 @@ func TestMessageWrap(t *testing.T) {
 	}
 
 	// set PoW target too high, expect error
-	msg2, err := newSentMessage(params)
+	msg2, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -172,7 +172,7 @@ func TestMessageSeal(t *testing.T) {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
 
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -234,7 +234,7 @@ func singleEnvelopeOpenTest(t *testing.T, symmetric bool) {
 	text := make([]byte, 0, 512)
 	text = append(text, params.Payload...)
 
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -289,7 +289,7 @@ func TestEncryptWithZeroKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -303,7 +303,7 @@ func TestEncryptWithZeroKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
-	msg, err = newSentMessage(params)
+	msg, err = NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -317,7 +317,7 @@ func TestEncryptWithZeroKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
-	msg, err = newSentMessage(params)
+	msg, err = NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -335,7 +335,7 @@ func TestRlpEncode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -379,7 +379,7 @@ func singlePaddingTest(t *testing.T, padSize int) {
 	if n != padSize {
 		t.Fatalf("padding is not copied (seed %d): %s", seed, err)
 	}
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}

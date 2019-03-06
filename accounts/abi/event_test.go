@@ -58,11 +58,27 @@ var jsonEventPledge = []byte(`{
   "type": "event"
 }`)
 
+var jsonEventMixedCase = []byte(`{
+	"anonymous": false,
+	"inputs": [{
+		"indexed": false, "name": "value", "type": "uint256"
+	  }, {
+		"indexed": false, "name": "_value", "type": "uint256"
+	  }, {
+		"indexed": false, "name": "Value", "type": "uint256"
+	}],
+	"name": "MixedCase",
+	"type": "event"
+  }`)
+
 // 1000000
 var transferData1 = "00000000000000000000000000000000000000000000000000000000000f4240"
 
 // "0x00Ce0d46d924CC8437c806721496599FC3FFA268", 2218516807680, "usd"
 var pledgeData1 = "00000000000000000000000000ce0d46d924cc8437c806721496599fc3ffa2680000000000000000000000000000000000000000000000000000020489e800007573640000000000000000000000000000000000000000000000000000000000"
+
+// 1000000,2218516807680,1000001
+var mixedCaseData1 = "00000000000000000000000000000000000000000000000000000000000f42400000000000000000000000000000000000000000000000000000020489e8000000000000000000000000000000000000000000000000000000000000000f4241"
 
 func TestEventId(t *testing.T) {
 	var table = []struct {
@@ -71,12 +87,12 @@ func TestEventId(t *testing.T) {
 	}{
 		{
 			definition: `[
-			{ "type" : "event", "name" : "balance", "inputs": [{ "name" : "in", "type": "uint256" }] },
-			{ "type" : "event", "name" : "check", "inputs": [{ "name" : "t", "type": "address" }, { "name": "b", "type": "uint256" }] }
+			{ "type" : "event", "name" : "Balance", "inputs": [{ "name" : "in", "type": "uint256" }] },
+			{ "type" : "event", "name" : "Check", "inputs": [{ "name" : "t", "type": "address" }, { "name": "b", "type": "uint256" }] }
 			]`,
 			expectations: map[string]common.Hash{
-				"balance": crypto.Keccak256Hash([]byte("balance(uint256)")),
-				"check":   crypto.Keccak256Hash([]byte("check(address,uint256)")),
+				"Balance": crypto.Keccak256Hash([]byte("Balance(uint256)")),
+				"Check":   crypto.Keccak256Hash([]byte("Check(address,uint256)")),
 			},
 		},
 	}
@@ -90,6 +106,39 @@ func TestEventId(t *testing.T) {
 		for name, event := range abi.Events {
 			if event.Id() != test.expectations[name] {
 				t.Errorf("expected id to be %x, got %x", test.expectations[name], event.Id())
+			}
+		}
+	}
+}
+
+func TestEventString(t *testing.T) {
+	var table = []struct {
+		definition   string
+		expectations map[string]string
+	}{
+		{
+			definition: `[
+			{ "type" : "event", "name" : "Balance", "inputs": [{ "name" : "in", "type": "uint256" }] },
+			{ "type" : "event", "name" : "Check", "inputs": [{ "name" : "t", "type": "address" }, { "name": "b", "type": "uint256" }] },
+			{ "type" : "event", "name" : "Transfer", "inputs": [{ "name": "from", "type": "address", "indexed": true }, { "name": "to", "type": "address", "indexed": true }, { "name": "value", "type": "uint256" }] }
+			]`,
+			expectations: map[string]string{
+				"Balance":  "event Balance(uint256 in)",
+				"Check":    "event Check(address t, uint256 b)",
+				"Transfer": "event Transfer(address indexed from, address indexed to, uint256 value)",
+			},
+		},
+	}
+
+	for _, test := range table {
+		abi, err := JSON(strings.NewReader(test.definition))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for name, event := range abi.Events {
+			if event.String() != test.expectations[name] {
+				t.Errorf("expected string to be %s, got %s", test.expectations[name], event.String())
 			}
 		}
 	}
@@ -121,6 +170,27 @@ func TestEventTupleUnpack(t *testing.T) {
 		Value *big.Int
 	}
 
+	type EventTransferWithTag struct {
+		// this is valid because `value` is not exportable,
+		// so value is only unmarshalled into `Value1`.
+		value  *big.Int
+		Value1 *big.Int `abi:"value"`
+	}
+
+	type BadEventTransferWithSameFieldAndTag struct {
+		Value  *big.Int
+		Value1 *big.Int `abi:"value"`
+	}
+
+	type BadEventTransferWithDuplicatedTag struct {
+		Value1 *big.Int `abi:"value"`
+		Value2 *big.Int `abi:"value"`
+	}
+
+	type BadEventTransferWithEmptyTag struct {
+		Value *big.Int `abi:""`
+	}
+
 	type EventPledge struct {
 		Who      common.Address
 		Wad      *big.Int
@@ -133,9 +203,16 @@ func TestEventTupleUnpack(t *testing.T) {
 		Currency [3]byte
 	}
 
+	type EventMixedCase struct {
+		Value1 *big.Int `abi:"value"`
+		Value2 *big.Int `abi:"_value"`
+		Value3 *big.Int `abi:"Value"`
+	}
+
 	bigint := new(big.Int)
 	bigintExpected := big.NewInt(1000000)
 	bigintExpected2 := big.NewInt(2218516807680)
+	bigintExpected3 := big.NewInt(1000001)
 	addr := common.HexToAddress("0x00Ce0d46d924CC8437c806721496599FC3FFA268")
 	var testCases = []struct {
 		data     string
@@ -158,6 +235,34 @@ func TestEventTupleUnpack(t *testing.T) {
 		jsonEventTransfer,
 		"",
 		"Can unpack ERC20 Transfer event into slice",
+	}, {
+		transferData1,
+		&EventTransferWithTag{},
+		&EventTransferWithTag{Value1: bigintExpected},
+		jsonEventTransfer,
+		"",
+		"Can unpack ERC20 Transfer event into structure with abi: tag",
+	}, {
+		transferData1,
+		&BadEventTransferWithDuplicatedTag{},
+		&BadEventTransferWithDuplicatedTag{},
+		jsonEventTransfer,
+		"struct: abi tag in 'Value2' already mapped",
+		"Can not unpack ERC20 Transfer event with duplicated abi tag",
+	}, {
+		transferData1,
+		&BadEventTransferWithSameFieldAndTag{},
+		&BadEventTransferWithSameFieldAndTag{},
+		jsonEventTransfer,
+		"abi: multiple variables maps to the same abi field 'value'",
+		"Can not unpack ERC20 Transfer event with a field and a tag mapping to the same abi variable",
+	}, {
+		transferData1,
+		&BadEventTransferWithEmptyTag{},
+		&BadEventTransferWithEmptyTag{},
+		jsonEventTransfer,
+		"struct: abi tag in 'Value' is empty",
+		"Can not unpack ERC20 Transfer event with an empty tag",
 	}, {
 		pledgeData1,
 		&EventPledge{},
@@ -216,6 +321,13 @@ func TestEventTupleUnpack(t *testing.T) {
 		jsonEventPledge,
 		"abi: cannot unmarshal tuple into map[string]interface {}",
 		"Can not unpack Pledge event into map",
+	}, {
+		mixedCaseData1,
+		&EventMixedCase{},
+		&EventMixedCase{Value1: bigintExpected, Value2: bigintExpected2, Value3: bigintExpected3},
+		jsonEventMixedCase,
+		"",
+		"Can unpack abi variables with mixed case",
 	}}
 
 	for _, tc := range testCases {
@@ -227,7 +339,7 @@ func TestEventTupleUnpack(t *testing.T) {
 				assert.Nil(err, "Should be able to unpack event data.")
 				assert.Equal(tc.expected, tc.dest, tc.name)
 			} else {
-				assert.EqualError(err, tc.error)
+				assert.EqualError(err, tc.error, tc.name)
 			}
 		})
 	}

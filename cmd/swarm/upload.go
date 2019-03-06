@@ -22,33 +22,51 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"mime"
-	"net/http"
 	"os"
 	"os/user"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/log"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
+
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
 
-func upload(ctx *cli.Context) {
+var upCommand = cli.Command{
+	Action:             upload,
+	CustomHelpTemplate: helpTemplate,
+	Name:               "up",
+	Usage:              "uploads a file or directory to swarm using the HTTP API",
+	ArgsUsage:          "<file>",
+	Flags:              []cli.Flag{SwarmEncryptedFlag},
+	Description:        "uploads a file or directory to swarm using the HTTP API and prints the root hash",
+}
 
+func upload(ctx *cli.Context) {
 	args := ctx.Args()
 	var (
-		bzzapi       = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-		recursive    = ctx.GlobalBool(SwarmRecursiveUploadFlag.Name)
-		wantManifest = ctx.GlobalBoolT(SwarmWantManifestFlag.Name)
-		defaultPath  = ctx.GlobalString(SwarmUploadDefaultPath.Name)
-		fromStdin    = ctx.GlobalBool(SwarmUpFromStdinFlag.Name)
-		mimeType     = ctx.GlobalString(SwarmUploadMimeType.Name)
-		client       = swarm.NewClient(bzzapi)
-		file         string
+		bzzapi          = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		recursive       = ctx.GlobalBool(SwarmRecursiveFlag.Name)
+		wantManifest    = ctx.GlobalBoolT(SwarmWantManifestFlag.Name)
+		defaultPath     = ctx.GlobalString(SwarmUploadDefaultPath.Name)
+		fromStdin       = ctx.GlobalBool(SwarmUpFromStdinFlag.Name)
+		mimeType        = ctx.GlobalString(SwarmUploadMimeType.Name)
+		client          = swarm.NewClient(bzzapi)
+		toEncrypt       = ctx.Bool(SwarmEncryptedFlag.Name)
+		autoDefaultPath = false
+		file            string
 	)
-
+	if autoDefaultPathString := os.Getenv(SwarmAutoDefaultPath); autoDefaultPathString != "" {
+		b, err := strconv.ParseBool(autoDefaultPathString)
+		if err != nil {
+			utils.Fatalf("invalid environment variable %s: %v", SwarmAutoDefaultPath, err)
+		}
+		autoDefaultPath = b
+	}
 	if len(args) != 1 {
 		if fromStdin {
 			tmp, err := ioutil.TempFile("", "swarm-stdin")
@@ -76,7 +94,7 @@ func upload(ctx *cli.Context) {
 			utils.Fatalf("Error opening file: %s", err)
 		}
 		defer f.Close()
-		hash, err := client.UploadRaw(f, f.Size)
+		hash, err := client.UploadRaw(f, f.Size, toEncrypt)
 		if err != nil {
 			utils.Fatalf("Upload failed: %s", err)
 		}
@@ -97,7 +115,27 @@ func upload(ctx *cli.Context) {
 			if !recursive {
 				return "", errors.New("Argument is a directory and recursive upload is disabled")
 			}
-			return client.UploadDirectory(file, defaultPath, "")
+			if autoDefaultPath && defaultPath == "" {
+				defaultEntryCandidate := path.Join(file, "index.html")
+				log.Debug("trying to find default path", "path", defaultEntryCandidate)
+				defaultEntryStat, err := os.Stat(defaultEntryCandidate)
+				if err == nil && !defaultEntryStat.IsDir() {
+					log.Debug("setting auto detected default path", "path", defaultEntryCandidate)
+					defaultPath = defaultEntryCandidate
+				}
+			}
+			if defaultPath != "" {
+				// construct absolute default path
+				absDefaultPath, _ := filepath.Abs(defaultPath)
+				absFile, _ := filepath.Abs(file)
+				// make sure absolute directory ends with only one "/"
+				// to trim it from absolute default path and get relative default path
+				absFile = strings.TrimRight(absFile, "/") + "/"
+				if absDefaultPath != "" && absFile != "" && strings.HasPrefix(absDefaultPath, absFile) {
+					defaultPath = strings.TrimPrefix(absDefaultPath, absFile)
+				}
+			}
+			return client.UploadDirectory(file, defaultPath, "", toEncrypt)
 		}
 	} else {
 		doUpload = func() (string, error) {
@@ -106,11 +144,10 @@ func upload(ctx *cli.Context) {
 				return "", fmt.Errorf("error opening file: %s", err)
 			}
 			defer f.Close()
-			if mimeType == "" {
-				mimeType = detectMimeType(file)
+			if mimeType != "" {
+				f.ContentType = mimeType
 			}
-			f.ContentType = mimeType
-			return client.Upload(f, "")
+			return client.Upload(f, "", toEncrypt)
 		}
 	}
 	hash, err := doUpload()
@@ -126,6 +163,12 @@ func upload(ctx *cli.Context) {
 // 3. cleans the path, e.g. /a/b/../c -> /a/c
 // Note, it has limitations, e.g. ~someuser/tmp will not be expanded
 func expandPath(p string) string {
+	if i := strings.Index(p, ":"); i > 0 {
+		return p
+	}
+	if i := strings.Index(p, "@"); i > 0 {
+		return p
+	}
 	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {
 		if home := homeDir(); home != "" {
 			p = home + p[1:]
@@ -140,22 +183,6 @@ func homeDir() string {
 	}
 	if usr, err := user.Current(); err == nil {
 		return usr.HomeDir
-	}
-	return ""
-}
-
-func detectMimeType(file string) string {
-	if ext := filepath.Ext(file); ext != "" {
-		return mime.TypeByExtension(ext)
-	}
-	f, err := os.Open(file)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	buf := make([]byte, 512)
-	if n, _ := f.Read(buf); n > 0 {
-		return http.DetectContentType(buf)
 	}
 	return ""
 }
