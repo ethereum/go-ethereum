@@ -18,9 +18,9 @@ package network
 
 import (
 	"io/ioutil"
-	"log"
 	"os"
 	"testing"
+	"time"
 
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/swarm/state"
@@ -35,6 +35,8 @@ func newHiveTester(t *testing.T, params *HiveParams, n int, store state.Store) (
 	return newBzzBaseTester(t, n, addr, DiscoverySpec, pp.Run), pp
 }
 
+// TestRegisterAndConnect verifies that the protocol runs successfully
+// and that the peer connection exists afterwards
 func TestRegisterAndConnect(t *testing.T) {
 	params := NewHiveParams()
 	s, pp := newHiveTester(t, params, 1, nil)
@@ -43,25 +45,57 @@ func TestRegisterAndConnect(t *testing.T) {
 	raddr := NewAddr(node)
 	pp.Register(raddr)
 
-	// start the hive and wait for the connection
+	// start the hive
 	err := pp.Start(s.Server)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer pp.Stop()
-	// retrieve and broadcast
+
+	// both hive connect and disconect check have time delays
+	// therefore we need to verify that peer is connected
+	// so that we are sure that the disconnect timeout doesn't complete
+	// before the hive connect method is run at least once
+	timeout := time.After(time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatalf("expected connection")
+		default:
+		}
+		i := 0
+		pp.Kademlia.EachConn(nil, 256, func(addr *Peer, po int) bool {
+			i++
+			return true
+		})
+		if i > 0 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	// check that the connection actually exists
+	// the timeout error means no disconnection events
+	// were received within the a certain timeout
 	err = s.TestDisconnected(&p2ptest.Disconnect{
 		Peer:  s.Nodes[0].ID(),
 		Error: nil,
 	})
 
 	if err == nil || err.Error() != "timed out waiting for peers to disconnect" {
-		t.Fatalf("expected peer to connect")
+		t.Fatalf("expected no disconnection event")
 	}
 }
 
+// TestHiveStatePersistance creates a protocol simulation with n peers for a node
+// After protocols complete, the node is shut down and the state is stored.
+// Another simulation is created, where 0 nodes are created, but where the stored state is passed
+// The test succeeds if all the peers from the stored state are known after the protocols of the
+// second simulation have completed
+//
+// Actual connectivity is not in scope for this test, as the peers loaded from state are not known to
+// the simulation; the test only verifies that the peers are known to the node
 func TestHiveStatePersistance(t *testing.T) {
-	log.SetOutput(os.Stdout)
 
 	dir, err := ioutil.TempDir("", "hive_test_store")
 	if err != nil {
@@ -84,7 +118,8 @@ func TestHiveStatePersistance(t *testing.T) {
 		peers[raddr.String()] = true
 	}
 
-	// start the hive and wait for the connection
+	// start and stop the hive
+	// the known peers should be saved upon stopping
 	err = pp.Start(s.Server)
 	if err != nil {
 		t.Fatal(err)
@@ -92,26 +127,29 @@ func TestHiveStatePersistance(t *testing.T) {
 	pp.Stop()
 	store.Close()
 
-	persistedStore, err := state.NewDBStore(dir) //start the hive with an empty dbstore
+	// start the hive with an empty dbstore
+	persistedStore, err := state.NewDBStore(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	s1, pp := newHiveTester(t, params, 1, persistedStore)
+	s1, pp := newHiveTester(t, params, 0, persistedStore)
 
-	//start the hive and wait for the connection
-
+	// start the hive and check that we know of all expected peers
 	pp.Start(s1.Server)
 	i := 0
-	pp.Kademlia.EachAddr(nil, 256, func(addr *BzzAddr, po int, nn bool) bool {
+	pp.Kademlia.EachAddr(nil, 256, func(addr *BzzAddr, po int) bool {
 		delete(peers, addr.String())
 		i++
 		return true
 	})
+	// TODO remove this line when verified that test passes
+	time.Sleep(time.Second)
 	if i != 5 {
-		t.Errorf("invalid number of entries: got %v, want %v", i, 5)
+		t.Fatalf("invalid number of entries: got %v, want %v", i, 5)
 	}
 	if len(peers) != 0 {
 		t.Fatalf("%d peers left over: %v", len(peers), peers)
 	}
+
 }

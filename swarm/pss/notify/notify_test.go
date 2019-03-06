@@ -19,7 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/state"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 )
 
 var (
@@ -51,6 +51,7 @@ func TestStart(t *testing.T) {
 		ID:             "0",
 		DefaultService: "bzz",
 	})
+	defer net.Shutdown()
 	leftNodeConf := adapters.RandomNodeConfig()
 	leftNodeConf.Services = []string{"bzz", "pss"}
 	leftNode, err := net.NewNodeWithConfig(leftNodeConf)
@@ -128,7 +129,7 @@ func TestStart(t *testing.T) {
 	defer rightSub.Unsubscribe()
 
 	updateC := make(chan []byte)
-	updateMsg := []byte{}
+	var updateMsg []byte
 	ctrlClient := NewController(psses[rightPub])
 	ctrlNotifier := NewController(psses[leftPub])
 	ctrlNotifier.NewNotifier("foo.eth", 2, updateC)
@@ -145,17 +146,24 @@ func TestStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	copyOfUpdateMsg := make([]byte, len(updateMsg))
+	copy(copyOfUpdateMsg, updateMsg)
+	ctrlClientError := make(chan error, 1)
 	ctrlClient.Subscribe(rsrcName, pubkey, addrbytes, func(s string, b []byte) error {
-		if s != "foo.eth" || !bytes.Equal(updateMsg, b) {
-			t.Fatalf("unexpected result in client handler: '%s':'%x'", s, b)
+		if s != "foo.eth" || !bytes.Equal(copyOfUpdateMsg, b) {
+			ctrlClientError <- fmt.Errorf("unexpected result in client handler: '%s':'%x'", s, b)
+		} else {
+			log.Info("client handler receive", "s", s, "b", b)
 		}
-		log.Info("client handler receive", "s", s, "b", b)
 		return nil
 	})
 
 	var inMsg *pss.APIMsg
 	select {
 	case inMsg = <-rmsgC:
+	case err := <-ctrlClientError:
+		t.Fatal(err)
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
@@ -209,7 +217,7 @@ func newServices(allowRaw bool) adapters.Services {
 			return k
 		}
 		params := network.NewKadParams()
-		params.MinProxBinSize = 2
+		params.NeighbourhoodSize = 2
 		params.MaxBinSize = 3
 		params.MinBinSize = 1
 		params.MaxRetries = 1000

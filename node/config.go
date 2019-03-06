@@ -27,6 +27,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/external"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/common"
@@ -80,6 +81,9 @@ type Config struct {
 	// is created by New and destroyed when the node is stopped.
 	KeyStoreDir string `toml:",omitempty"`
 
+	// ExternalSigner specifies an external URI for a clef-type signer
+	ExternalSigner string `toml:"omitempty"`
+
 	// UseLightweightKDF lowers the memory and CPU requirements of the key store
 	// scrypt KDF at the expense of security.
 	UseLightweightKDF bool `toml:",omitempty"`
@@ -101,6 +105,29 @@ type Config struct {
 	// default zero value is/ valid and will pick a port number randomly (useful
 	// for ephemeral nodes).
 	HTTPPort int `toml:",omitempty"`
+
+	// GraphQLHost is the host interface on which to start the GraphQL server. If this
+	// field is empty, no GraphQL API endpoint will be started.
+	GraphQLHost string `toml:",omitempty"`
+
+	// GraphQLPort is the TCP port number on which to start the GraphQL server. The
+	// default zero value is/ valid and will pick a port number randomly (useful
+	// for ephemeral nodes).
+	GraphQLPort int `toml:",omitempty"`
+
+	// GraphQLCors is the Cross-Origin Resource Sharing header to send to requesting
+	// clients. Please be aware that CORS is a browser enforced security, it's fully
+	// useless for custom HTTP clients.
+	GraphQLCors []string `toml:",omitempty"`
+
+	// GraphQLVirtualHosts is the list of virtual hostnames which are allowed on incoming requests.
+	// This is by default {'localhost'}. Using this prevents attacks like
+	// DNS rebinding, which bypasses SOP by simply masquerading as being within the same
+	// origin. These attacks do not utilize CORS, since they are not cross-domain.
+	// By explicitly checking the Host-header, the server will not allow requests
+	// made against the server with a malicious host domain.
+	// Requests using ip address directly are not affected
+	GraphQLVirtualHosts []string `toml:",omitempty"`
 
 	// HTTPCors is the Cross-Origin Resource Sharing header to send to requesting
 	// clients. Please be aware that CORS is a browser enforced security, it's fully
@@ -211,6 +238,15 @@ func (c *Config) HTTPEndpoint() string {
 		return ""
 	}
 	return fmt.Sprintf("%s:%d", c.HTTPHost, c.HTTPPort)
+}
+
+// GraphQLEndpoint resolves a GraphQL endpoint based on the configured host interface
+// and port parameters.
+func (c *Config) GraphQLEndpoint() string {
+	if c.GraphQLHost == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d", c.GraphQLHost, c.GraphQLPort)
 }
 
 // DefaultHTTPEndpoint returns the HTTP endpoint used by default.
@@ -430,23 +466,37 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 		return nil, "", err
 	}
 	// Assemble the account manager and supported backends
-	backends := []accounts.Backend{
-		keystore.NewKeyStore(keydir, scryptN, scryptP),
-	}
-	if !conf.NoUSB {
-		// Start a USB hub for Ledger hardware wallets
-		if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {
-			log.Warn(fmt.Sprintf("Failed to start Ledger hub, disabling: %v", err))
+	var backends []accounts.Backend
+	if len(conf.ExternalSigner) > 0 {
+		log.Info("Using external signer", "url", conf.ExternalSigner)
+		if extapi, err := external.NewExternalBackend(conf.ExternalSigner); err == nil {
+			backends = append(backends, extapi)
 		} else {
-			backends = append(backends, ledgerhub)
-		}
-		// Start a USB hub for Trezor hardware wallets
-		if trezorhub, err := usbwallet.NewTrezorHub(); err != nil {
-			log.Warn(fmt.Sprintf("Failed to start Trezor hub, disabling: %v", err))
-		} else {
-			backends = append(backends, trezorhub)
+			log.Info("Error configuring external signer", "error", err)
 		}
 	}
+	if len(backends) == 0 {
+		// For now, we're using EITHER external signer OR local signers.
+		// If/when we implement some form of lockfile for USB and keystore wallets,
+		// we can have both, but it's very confusing for the user to see the same
+		// accounts in both externally and locally, plus very racey.
+		backends = append(backends, keystore.NewKeyStore(keydir, scryptN, scryptP))
+		if !conf.NoUSB {
+			// Start a USB hub for Ledger hardware wallets
+			if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {
+				log.Warn(fmt.Sprintf("Failed to start Ledger hub, disabling: %v", err))
+			} else {
+				backends = append(backends, ledgerhub)
+			}
+			// Start a USB hub for Trezor hardware wallets
+			if trezorhub, err := usbwallet.NewTrezorHub(); err != nil {
+				log.Warn(fmt.Sprintf("Failed to start Trezor hub, disabling: %v", err))
+			} else {
+				backends = append(backends, trezorhub)
+			}
+		}
+	}
+
 	return accounts.NewManager(backends...), ephemeral, nil
 }
 

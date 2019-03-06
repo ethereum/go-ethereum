@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
 func TestTable_pingReplace(t *testing.T) {
@@ -50,8 +51,8 @@ func TestTable_pingReplace(t *testing.T) {
 func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding bool) {
 	transport := newPingRecorder()
 	tab, db := newTestTable(transport)
-	defer tab.Close()
 	defer db.Close()
+	defer tab.Close()
 
 	<-tab.initDone
 
@@ -64,7 +65,7 @@ func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding
 	// its bucket if it is unresponsive. Revalidate again to ensure that
 	transport.dead[last.ID()] = !lastInBucketIsResponding
 	transport.dead[pingSender.ID()] = !newNodeIsResponding
-	tab.add(pingSender)
+	tab.addSeenNode(pingSender)
 	tab.doRevalidate(make(chan struct{}, 1))
 	tab.doRevalidate(make(chan struct{}, 1))
 
@@ -114,10 +115,14 @@ func TestBucket_bumpNoDuplicates(t *testing.T) {
 	}
 
 	prop := func(nodes []*node, bumps []int) (ok bool) {
+		tab, db := newTestTable(newPingRecorder())
+		defer db.Close()
+		defer tab.Close()
+
 		b := &bucket{entries: make([]*node, len(nodes))}
 		copy(b.entries, nodes)
 		for i, pos := range bumps {
-			b.bump(b.entries[pos])
+			tab.bumpInBucket(b, b.entries[pos])
 			if hasDuplicates(b.entries) {
 				t.Logf("bucket has duplicates after %d/%d bumps:", i+1, len(bumps))
 				for _, n := range b.entries {
@@ -126,6 +131,7 @@ func TestBucket_bumpNoDuplicates(t *testing.T) {
 				return false
 			}
 		}
+		checkIPLimitInvariant(t, tab)
 		return true
 	}
 	if err := quick.Check(prop, cfg); err != nil {
@@ -137,32 +143,50 @@ func TestBucket_bumpNoDuplicates(t *testing.T) {
 func TestTable_IPLimit(t *testing.T) {
 	transport := newPingRecorder()
 	tab, db := newTestTable(transport)
-	defer tab.Close()
 	defer db.Close()
+	defer tab.Close()
 
 	for i := 0; i < tableIPLimit+1; i++ {
 		n := nodeAtDistance(tab.self().ID(), i, net.IP{172, 0, 1, byte(i)})
-		tab.add(n)
+		tab.addSeenNode(n)
 	}
 	if tab.len() > tableIPLimit {
 		t.Errorf("too many nodes in table")
 	}
+	checkIPLimitInvariant(t, tab)
 }
 
 // This checks that the per-bucket IP limit is applied correctly.
 func TestTable_BucketIPLimit(t *testing.T) {
 	transport := newPingRecorder()
 	tab, db := newTestTable(transport)
-	defer tab.Close()
 	defer db.Close()
+	defer tab.Close()
 
 	d := 3
 	for i := 0; i < bucketIPLimit+1; i++ {
 		n := nodeAtDistance(tab.self().ID(), d, net.IP{172, 0, 1, byte(i)})
-		tab.add(n)
+		tab.addSeenNode(n)
 	}
 	if tab.len() > bucketIPLimit {
 		t.Errorf("too many nodes in table")
+	}
+	checkIPLimitInvariant(t, tab)
+}
+
+// checkIPLimitInvariant checks that ip limit sets contain an entry for every
+// node in the table and no extra entries.
+func checkIPLimitInvariant(t *testing.T, tab *Table) {
+	t.Helper()
+
+	tabset := netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit}
+	for _, b := range tab.buckets {
+		for _, n := range b.entries {
+			tabset.Add(n.IP())
+		}
+	}
+	if tabset.String() != tab.ips.String() {
+		t.Errorf("table IP set is incorrect:\nhave: %v\nwant: %v", tab.ips, tabset)
 	}
 }
 
@@ -173,9 +197,9 @@ func TestTable_closest(t *testing.T) {
 		// for any node table, Target and N
 		transport := newPingRecorder()
 		tab, db := newTestTable(transport)
-		defer tab.Close()
 		defer db.Close()
-		tab.stuff(test.All)
+		defer tab.Close()
+		fillTable(tab, test.All)
 
 		// check that closest(Target, N) returns nodes
 		result := tab.closest(test.Target, test.N).entries
@@ -234,13 +258,13 @@ func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 	test := func(buf []*enode.Node) bool {
 		transport := newPingRecorder()
 		tab, db := newTestTable(transport)
-		defer tab.Close()
 		defer db.Close()
+		defer tab.Close()
 		<-tab.initDone
 
 		for i := 0; i < len(buf); i++ {
 			ld := cfg.Rand.Intn(len(tab.buckets))
-			tab.stuff([]*node{nodeAtDistance(tab.self().ID(), ld, intIP(ld))})
+			fillTable(tab, []*node{nodeAtDistance(tab.self().ID(), ld, intIP(ld))})
 		}
 		gotN := tab.ReadRandomNodes(buf)
 		if gotN != tab.len() {
@@ -272,16 +296,82 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 		N:      rand.Intn(bucketSize),
 	}
 	for _, id := range gen([]enode.ID{}, rand).([]enode.ID) {
-		n := enode.SignNull(new(enr.Record), id)
-		t.All = append(t.All, wrapNode(n))
+		r := new(enr.Record)
+		r.Set(enr.IP(genIP(rand)))
+		n := wrapNode(enode.SignNull(r, id))
+		n.livenessChecks = 1
+		t.All = append(t.All, n)
 	}
 	return reflect.ValueOf(t)
 }
 
+func TestTable_addVerifiedNode(t *testing.T) {
+	tab, db := newTestTable(newPingRecorder())
+	<-tab.initDone
+	defer db.Close()
+	defer tab.Close()
+
+	// Insert two nodes.
+	n1 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 1})
+	n2 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 2})
+	tab.addSeenNode(n1)
+	tab.addSeenNode(n2)
+
+	// Verify bucket content:
+	bcontent := []*node{n1, n2}
+	if !reflect.DeepEqual(tab.bucket(n1.ID()).entries, bcontent) {
+		t.Fatalf("wrong bucket content: %v", tab.bucket(n1.ID()).entries)
+	}
+
+	// Add a changed version of n2.
+	newrec := n2.Record()
+	newrec.Set(enr.IP{99, 99, 99, 99})
+	newn2 := wrapNode(enode.SignNull(newrec, n2.ID()))
+	tab.addVerifiedNode(newn2)
+
+	// Check that bucket is updated correctly.
+	newBcontent := []*node{newn2, n1}
+	if !reflect.DeepEqual(tab.bucket(n1.ID()).entries, newBcontent) {
+		t.Fatalf("wrong bucket content after update: %v", tab.bucket(n1.ID()).entries)
+	}
+	checkIPLimitInvariant(t, tab)
+}
+
+func TestTable_addSeenNode(t *testing.T) {
+	tab, db := newTestTable(newPingRecorder())
+	<-tab.initDone
+	defer db.Close()
+	defer tab.Close()
+
+	// Insert two nodes.
+	n1 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 1})
+	n2 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 2})
+	tab.addSeenNode(n1)
+	tab.addSeenNode(n2)
+
+	// Verify bucket content:
+	bcontent := []*node{n1, n2}
+	if !reflect.DeepEqual(tab.bucket(n1.ID()).entries, bcontent) {
+		t.Fatalf("wrong bucket content: %v", tab.bucket(n1.ID()).entries)
+	}
+
+	// Add a changed version of n2.
+	newrec := n2.Record()
+	newrec.Set(enr.IP{99, 99, 99, 99})
+	newn2 := wrapNode(enode.SignNull(newrec, n2.ID()))
+	tab.addSeenNode(newn2)
+
+	// Check that bucket content is unchanged.
+	if !reflect.DeepEqual(tab.bucket(n1.ID()).entries, bcontent) {
+		t.Fatalf("wrong bucket content after update: %v", tab.bucket(n1.ID()).entries)
+	}
+	checkIPLimitInvariant(t, tab)
+}
+
 func TestTable_Lookup(t *testing.T) {
 	tab, db := newTestTable(lookupTestnet)
-	defer tab.Close()
 	defer db.Close()
+	defer tab.Close()
 
 	// lookup on empty table returns no nodes
 	if results := tab.lookup(lookupTestnet.target, false); len(results) > 0 {
@@ -289,8 +379,9 @@ func TestTable_Lookup(t *testing.T) {
 	}
 	// seed table with initial node (otherwise lookup will terminate immediately)
 	seedKey, _ := decodePubkey(lookupTestnet.dists[256][0])
-	seed := wrapNode(enode.NewV4(seedKey, net.IP{}, 0, 256))
-	tab.stuff([]*node{seed})
+	seed := wrapNode(enode.NewV4(seedKey, net.IP{127, 0, 0, 1}, 0, 256))
+	seed.livenessChecks = 1
+	fillTable(tab, []*node{seed})
 
 	results := tab.lookup(lookupTestnet.target, true)
 	t.Logf("results:")
@@ -531,8 +622,9 @@ func (tn *preminedTestnet) findnode(toid enode.ID, toaddr *net.UDPAddr, target e
 }
 
 func (*preminedTestnet) close()                                        {}
-func (*preminedTestnet) waitping(from enode.ID) error                  { return nil }
 func (*preminedTestnet) ping(toid enode.ID, toaddr *net.UDPAddr) error { return nil }
+
+var _ = (*preminedTestnet).mine // avoid linter warning about mine being dead code.
 
 // mine generates a testnet struct literal with nodes at
 // various distances to the given target.
@@ -576,6 +668,12 @@ func gen(typ interface{}, rand *rand.Rand) interface{} {
 		panic(fmt.Sprintf("couldn't generate random value of type %T", typ))
 	}
 	return v.Interface()
+}
+
+func genIP(rand *rand.Rand) net.IP {
+	ip := make(net.IP, 4)
+	rand.Read(ip)
+	return ip
 }
 
 func quickcfg() *quick.Config {

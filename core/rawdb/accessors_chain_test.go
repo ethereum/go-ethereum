@@ -23,9 +23,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/crypto/sha3"
 )
 
 // Tests block header storage and retrieval operations.
@@ -47,7 +47,7 @@ func TestHeaderStorage(t *testing.T) {
 	if entry := ReadHeaderRLP(db, header.Hash(), header.Number.Uint64()); entry == nil {
 		t.Fatalf("Stored header RLP not found")
 	} else {
-		hasher := sha3.NewKeccak256()
+		hasher := sha3.NewLegacyKeccak256()
 		hasher.Write(entry)
 
 		if hash := common.BytesToHash(hasher.Sum(nil)); hash != header.Hash() {
@@ -68,7 +68,7 @@ func TestBodyStorage(t *testing.T) {
 	// Create a test body to move around the database and make sure it's really new
 	body := &types.Body{Uncles: []*types.Header{{Extra: []byte("test header")}}}
 
-	hasher := sha3.NewKeccak256()
+	hasher := sha3.NewLegacyKeccak256()
 	rlp.Encode(hasher, body)
 	hash := common.BytesToHash(hasher.Sum(nil))
 
@@ -85,7 +85,7 @@ func TestBodyStorage(t *testing.T) {
 	if entry := ReadBodyRLP(db, hash, 0); entry == nil {
 		t.Fatalf("Stored body RLP not found")
 	} else {
-		hasher := sha3.NewKeccak256()
+		hasher := sha3.NewLegacyKeccak256()
 		hasher.Write(entry)
 
 		if calc := common.BytesToHash(hasher.Sum(nil)); calc != hash {
@@ -279,6 +279,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 		ContractAddress: common.BytesToAddress([]byte{0x01, 0x11, 0x11}),
 		GasUsed:         111111,
 	}
+	receipt1.Bloom = types.CreateBloom(types.Receipts{receipt1})
 	receipt2 := &types.Receipt{
 		PostState:         common.Hash{2}.Bytes(),
 		CumulativeGasUsed: 2,
@@ -290,6 +291,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 		ContractAddress: common.BytesToAddress([]byte{0x02, 0x22, 0x22}),
 		GasUsed:         222222,
 	}
+	receipt2.Bloom = types.CreateBloom(types.Receipts{receipt2})
 	receipts := []*types.Receipt{receipt1, receipt2}
 
 	// Check that no receipt entries are in a pristine database

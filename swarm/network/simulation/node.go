@@ -44,7 +44,7 @@ func (s *Simulation) NodeIDs() (ids []enode.ID) {
 func (s *Simulation) UpNodeIDs() (ids []enode.ID) {
 	nodes := s.Net.GetNodes()
 	for _, node := range nodes {
-		if node.Up {
+		if node.Up() {
 			ids = append(ids, node.ID())
 		}
 	}
@@ -55,7 +55,7 @@ func (s *Simulation) UpNodeIDs() (ids []enode.ID) {
 func (s *Simulation) DownNodeIDs() (ids []enode.ID) {
 	nodes := s.Net.GetNodes()
 	for _, node := range nodes {
-		if !node.Up {
+		if !node.Up() {
 			ids = append(ids, node.ID())
 		}
 	}
@@ -188,16 +188,16 @@ func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (i
 	if err != nil {
 		return nil, err
 	}
-	err = s.Net.ConnectNodesStar(ids[0], ids[1:])
+	err = s.Net.ConnectNodesStar(ids[1:], ids[0])
 	if err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
-//UploadSnapshot uploads a snapshot to the simulation
-//This method tries to open the json file provided, applies the config to all nodes
-//and then loads the snapshot into the Simulation network
+// UploadSnapshot uploads a snapshot to the simulation
+// This method tries to open the json file provided, applies the config to all nodes
+// and then loads the snapshot into the Simulation network
 func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) error {
 	f, err := os.Open(snapshotFile)
 	if err != nil {
@@ -222,11 +222,11 @@ func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) 
 	//the snapshot probably has the property EnableMsgEvents not set
 	//just in case, set it to true!
 	//(we need this to wait for messages before uploading)
-	for _, n := range snap.Nodes {
-		n.Node.Config.EnableMsgEvents = true
-		n.Node.Config.Services = s.serviceNames
+	for i := range snap.Nodes {
+		snap.Nodes[i].Node.Config.EnableMsgEvents = true
+		snap.Nodes[i].Node.Config.Services = s.serviceNames
 		for _, o := range opts {
-			o(n.Node.Config)
+			o(snap.Nodes[i].Node.Config)
 		}
 	}
 
@@ -239,25 +239,6 @@ func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) 
 	}
 	log.Info("Snapshot loaded")
 	return nil
-}
-
-// SetPivotNode sets the NodeID of the network's pivot node.
-// Pivot node is just a specific node that should be treated
-// differently then other nodes in test. SetPivotNode and
-// PivotNodeID are just a convenient functions to set and
-// retrieve it.
-func (s *Simulation) SetPivotNode(id enode.ID) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.pivotNodeID = &id
-}
-
-// PivotNodeID returns NodeID of the pivot node set by
-// Simulation.SetPivotNode method.
-func (s *Simulation) PivotNodeID() (id *enode.ID) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.pivotNodeID
 }
 
 // StartNode starts a node by NodeID.

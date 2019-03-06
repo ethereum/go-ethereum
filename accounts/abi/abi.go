@@ -58,13 +58,11 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 			return nil, err
 		}
 		return arguments, nil
-
 	}
 	method, exist := abi.Methods[name]
 	if !exist {
 		return nil, fmt.Errorf("method '%s' not found", name)
 	}
-
 	arguments, err := method.Inputs.Pack(args...)
 	if err != nil {
 		return nil, err
@@ -82,7 +80,7 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) (err error) {
 	// we need to decide whether we're calling a method or an event
 	if method, ok := abi.Methods[name]; ok {
 		if len(output)%32 != 0 {
-			return fmt.Errorf("abi: improperly formatted output")
+			return fmt.Errorf("abi: improperly formatted output: %s - Bytes: [%+v]", string(output), output)
 		}
 		return method.Outputs.Unpack(v, output)
 	} else if event, ok := abi.Events[name]; ok {
@@ -138,7 +136,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 // returns nil if none found
 func (abi *ABI) MethodById(sigdata []byte) (*Method, error) {
 	if len(sigdata) < 4 {
-		return nil, fmt.Errorf("data too short (% bytes) for abi method lookup", len(sigdata))
+		return nil, fmt.Errorf("data too short (%d bytes) for abi method lookup", len(sigdata))
 	}
 	for _, method := range abi.Methods {
 		if bytes.Equal(method.Id(), sigdata[:4]) {

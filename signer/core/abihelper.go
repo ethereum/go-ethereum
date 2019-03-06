@@ -17,17 +17,16 @@
 package core
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"regexp"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-
-	"bytes"
-	"os"
-	"regexp"
 )
 
 type decodedArgument struct {
@@ -178,7 +177,9 @@ func NewAbiDBFromFile(path string) (*AbiDb, error) {
 	if err != nil {
 		return nil, err
 	}
-	json.Unmarshal(raw, &db.db)
+	if err := json.Unmarshal(raw, &db.db); err != nil {
+		return nil, err
+	}
 	return db, nil
 }
 
@@ -193,14 +194,18 @@ func NewAbiDBFromFiles(standard, custom string) (*AbiDb, error) {
 	if err != nil {
 		return nil, err
 	}
-	json.Unmarshal(raw, &db.db)
+	if err := json.Unmarshal(raw, &db.db); err != nil {
+		return nil, err
+	}
 	// Custom file may not exist. Will be created during save, if needed
 	if _, err := os.Stat(custom); err == nil {
 		raw, err = ioutil.ReadFile(custom)
 		if err != nil {
 			return nil, err
 		}
-		json.Unmarshal(raw, &db.customdb)
+		if err := json.Unmarshal(raw, &db.customdb); err != nil {
+			return nil, err
+		}
 	}
 
 	return db, nil

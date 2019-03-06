@@ -35,8 +35,6 @@ import (
 
 const (
 	DefaultNetworkID = 3
-	// ProtocolMaxMsgSize maximum allowed message size
-	ProtocolMaxMsgSize = 10 * 1024 * 1024
 	// timeout for waiting
 	bzzHandshakeTimeout = 3000 * time.Millisecond
 )
@@ -69,6 +67,7 @@ type BzzConfig struct {
 	HiveParams   *HiveParams
 	NetworkID    uint64
 	LightNode    bool
+	BootnodeMode bool
 }
 
 // Bzz is the swarm protocol bundle
@@ -89,7 +88,7 @@ type Bzz struct {
 // * overlay driver
 // * peer store
 func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *protocols.Spec, streamerRun func(*BzzPeer) error) *Bzz {
-	return &Bzz{
+	bzz := &Bzz{
 		Hive:         NewHive(config.HiveParams, kad, store),
 		NetworkID:    config.NetworkID,
 		LightNode:    config.LightNode,
@@ -98,6 +97,13 @@ func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *p
 		streamerRun:  streamerRun,
 		streamerSpec: streamerSpec,
 	}
+
+	if config.BootnodeMode {
+		bzz.streamerRun = nil
+		bzz.streamerSpec = nil
+	}
+
+	return bzz
 }
 
 // UpdateLocalAddr updates underlayaddress of the running node
@@ -170,7 +176,7 @@ func (b *Bzz) APIs() []rpc.API {
 func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*p2p.Peer, p2p.MsgReadWriter) error {
 	return func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		// wait for the bzz protocol to perform the handshake
-		handshake, _ := b.GetHandshake(p.ID())
+		handshake, _ := b.GetOrCreateHandshake(p.ID())
 		defer b.removeHandshake(p.ID())
 		select {
 		case <-handshake.done:
@@ -215,7 +221,7 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 // runBzz is the p2p protocol run function for the bzz base protocol
 // that negotiates the bzz handshake
 func (b *Bzz) runBzz(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	handshake, _ := b.GetHandshake(p.ID())
+	handshake, _ := b.GetOrCreateHandshake(p.ID())
 	if !<-handshake.init {
 		return fmt.Errorf("%08x: bzz already started on peer %08x", b.localAddr.Over()[:4], p.ID().Bytes()[:4])
 	}
@@ -248,11 +254,6 @@ type BzzPeer struct {
 
 func NewBzzPeer(p *protocols.Peer) *BzzPeer {
 	return &BzzPeer{Peer: p, BzzAddr: NewAddr(p.Node())}
-}
-
-// LastActive returns the time the peer was last active
-func (p *BzzPeer) LastActive() time.Time {
-	return p.lastActive
 }
 
 // ID returns the peer's underlay node identifier.
@@ -310,7 +311,7 @@ func (b *Bzz) removeHandshake(peerID enode.ID) {
 }
 
 // GetHandshake returns the bzz handhake that the remote peer with peerID sent
-func (b *Bzz) GetHandshake(peerID enode.ID) (*HandshakeMsg, bool) {
+func (b *Bzz) GetOrCreateHandshake(peerID enode.ID) (*HandshakeMsg, bool) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 	handshake, found := b.handshakes[peerID]

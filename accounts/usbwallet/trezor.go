@@ -28,7 +28,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/usbwallet/internal/trezor"
+	"github.com/ethereum/go-ethereum/accounts/usbwallet/trezor"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -41,6 +41,9 @@ import (
 // encoded passphrase.
 var ErrTrezorPINNeeded = errors.New("trezor: pin needed")
 
+// ErrTrezorPassphraseNeeded is returned if opening the trezor requires a passphrase
+var ErrTrezorPassphraseNeeded = errors.New("trezor: passphrase needed")
+
 // errTrezorReplyInvalidHeader is the error message returned by a Trezor data exchange
 // if the device replies with a mismatching header. This usually means the device
 // is in browser mode.
@@ -48,12 +51,13 @@ var errTrezorReplyInvalidHeader = errors.New("trezor: invalid reply header")
 
 // trezorDriver implements the communication with a Trezor hardware wallet.
 type trezorDriver struct {
-	device  io.ReadWriter // USB device connection to communicate through
-	version [3]uint32     // Current version of the Trezor firmware
-	label   string        // Current textual label of the Trezor device
-	pinwait bool          // Flags whether the device is waiting for PIN entry
-	failure error         // Any failure that would make the device unusable
-	log     log.Logger    // Contextual logger to tag the trezor with its id
+	device         io.ReadWriter // USB device connection to communicate through
+	version        [3]uint32     // Current version of the Trezor firmware
+	label          string        // Current textual label of the Trezor device
+	pinwait        bool          // Flags whether the device is waiting for PIN entry
+	passphrasewait bool          // Flags whether the device is waiting for passphrase entry
+	failure        error         // Any failure that would make the device unusable
+	log            log.Logger    // Contextual logger to tag the trezor with its id
 }
 
 // newTrezorDriver creates a new instance of a Trezor USB protocol driver.
@@ -79,7 +83,7 @@ func (w *trezorDriver) Status() (string, error) {
 }
 
 // Open implements usbwallet.driver, attempting to initialize the connection to
-// the Trezor hardware wallet. Initializing the Trezor is a two phase operation:
+// the Trezor hardware wallet. Initializing the Trezor is a two or three phase operation:
 //  * The first phase is to initialize the connection and read the wallet's
 //    features. This phase is invoked is the provided passphrase is empty. The
 //    device will display the pinpad as a result and will return an appropriate
@@ -87,11 +91,13 @@ func (w *trezorDriver) Status() (string, error) {
 //  * The second phase is to unlock access to the Trezor, which is done by the
 //    user actually providing a passphrase mapping a keyboard keypad to the pin
 //    number of the user (shuffled according to the pinpad displayed).
+//  * If needed the device will ask for passphrase which will require calling
+//    open again with the actual passphrase (3rd phase)
 func (w *trezorDriver) Open(device io.ReadWriter, passphrase string) error {
 	w.device, w.failure = device, nil
 
 	// If phase 1 is requested, init the connection and wait for user callback
-	if passphrase == "" {
+	if passphrase == "" && !w.passphrasewait {
 		// If we're already waiting for a PIN entry, insta-return
 		if w.pinwait {
 			return ErrTrezorPINNeeded
@@ -104,26 +110,46 @@ func (w *trezorDriver) Open(device io.ReadWriter, passphrase string) error {
 		w.version = [3]uint32{features.GetMajorVersion(), features.GetMinorVersion(), features.GetPatchVersion()}
 		w.label = features.GetLabel()
 
-		// Do a manual ping, forcing the device to ask for its PIN
+		// Do a manual ping, forcing the device to ask for its PIN and Passphrase
 		askPin := true
-		res, err := w.trezorExchange(&trezor.Ping{PinProtection: &askPin}, new(trezor.PinMatrixRequest), new(trezor.Success))
+		askPassphrase := true
+		res, err := w.trezorExchange(&trezor.Ping{PinProtection: &askPin, PassphraseProtection: &askPassphrase}, new(trezor.PinMatrixRequest), new(trezor.PassphraseRequest), new(trezor.Success))
 		if err != nil {
 			return err
 		}
 		// Only return the PIN request if the device wasn't unlocked until now
-		if res == 1 {
-			return nil // Device responded with trezor.Success
+		switch res {
+		case 0:
+			w.pinwait = true
+			return ErrTrezorPINNeeded
+		case 1:
+			w.pinwait = false
+			w.passphrasewait = true
+			return ErrTrezorPassphraseNeeded
+		case 2:
+			return nil // responded with trezor.Success
 		}
-		w.pinwait = true
-		return ErrTrezorPINNeeded
 	}
 	// Phase 2 requested with actual PIN entry
-	w.pinwait = false
-
-	if _, err := w.trezorExchange(&trezor.PinMatrixAck{Pin: &passphrase}, new(trezor.Success)); err != nil {
-		w.failure = err
-		return err
+	if w.pinwait {
+		w.pinwait = false
+		res, err := w.trezorExchange(&trezor.PinMatrixAck{Pin: &passphrase}, new(trezor.Success), new(trezor.PassphraseRequest))
+		if err != nil {
+			w.failure = err
+			return err
+		}
+		if res == 1 {
+			w.passphrasewait = true
+			return ErrTrezorPassphraseNeeded
+		}
+	} else if w.passphrasewait {
+		w.passphrasewait = false
+		if _, err := w.trezorExchange(&trezor.PassphraseAck{Passphrase: &passphrase}, new(trezor.Success)); err != nil {
+			w.failure = err
+			return err
+		}
 	}
+
 	return nil
 }
 

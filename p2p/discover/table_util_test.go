@@ -17,7 +17,6 @@
 package discover
 
 import (
-	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
 	"math/rand"
@@ -83,6 +82,14 @@ func fillBucket(tab *Table, n *node) (last *node) {
 	return b.entries[bucketSize-1]
 }
 
+// fillTable adds nodes the table to the end of their corresponding bucket
+// if the bucket is not full. The caller must not hold tab.mutex.
+func fillTable(tab *Table, nodes []*node) {
+	for _, n := range nodes {
+		tab.addSeenNode(n)
+	}
+}
+
 type pingRecorder struct {
 	mu           sync.Mutex
 	dead, pinged map[enode.ID]bool
@@ -107,10 +114,6 @@ func (t *pingRecorder) self() *enode.Node {
 
 func (t *pingRecorder) findnode(toid enode.ID, toaddr *net.UDPAddr, target encPubkey) ([]*node, error) {
 	return nil, nil
-}
-
-func (t *pingRecorder) waitping(from enode.ID) error {
-	return nil // remote always pings
 }
 
 func (t *pingRecorder) ping(toid enode.ID, toaddr *net.UDPAddr) error {
@@ -141,15 +144,6 @@ func hasDuplicates(slice []*node) bool {
 	return false
 }
 
-func contains(ns []*node, id enode.ID) bool {
-	for _, n := range ns {
-		if n.ID() == id {
-			return true
-		}
-	}
-	return false
-}
-
 func sortedByDistanceTo(distbase enode.ID, slice []*node) bool {
 	var last enode.ID
 	for i, e := range slice {
@@ -171,12 +165,4 @@ func hexEncPubkey(h string) (ret encPubkey) {
 	}
 	copy(ret[:], b)
 	return ret
-}
-
-func hexPubkey(h string) *ecdsa.PublicKey {
-	k, err := decodePubkey(hexEncPubkey(h))
-	if err != nil {
-		panic(err)
-	}
-	return k
 }

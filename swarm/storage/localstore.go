@@ -132,6 +132,13 @@ func (ls *LocalStore) Put(ctx context.Context, chunk Chunk) error {
 	return err
 }
 
+// Has queries the underlying DbStore if a chunk with the given address
+// is being stored there.
+// Returns true if it is stored, false if not
+func (ls *LocalStore) Has(ctx context.Context, addr Address) bool {
+	return ls.DbStore.Has(ctx, addr)
+}
+
 // Get(chunk *Chunk) looks up a chunk in the local stores
 // This method is blocking until the chunk is retrieved
 // so additional timeout may be needed to wrap this call if
@@ -234,7 +241,7 @@ func (ls *LocalStore) Migrate() error {
 func (ls *LocalStore) migrateFromNoneToPurity() {
 	// delete chunks that are not valid, i.e. chunks that do not pass
 	// any of the ls.Validators
-	ls.DbStore.Cleanup(func(c *chunk) bool {
+	ls.DbStore.Cleanup(func(c Chunk) bool {
 		return !ls.isValid(c)
 	})
 }

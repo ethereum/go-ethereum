@@ -174,7 +174,11 @@ func (spec *alethGenesisSpec) setPrecompile(address byte, data *alethGenesisSpec
 	if spec.Accounts == nil {
 		spec.Accounts = make(map[common.UnprefixedAddress]*alethGenesisSpecAccount)
 	}
-	spec.Accounts[common.UnprefixedAddress(common.BytesToAddress([]byte{address}))].Precompiled = data
+	addr := common.UnprefixedAddress(common.BytesToAddress([]byte{address}))
+	if _, exist := spec.Accounts[addr]; !exist {
+		spec.Accounts[addr] = &alethGenesisSpecAccount{}
+	}
+	spec.Accounts[addr].Precompiled = data
 }
 
 func (spec *alethGenesisSpec) setAccount(address common.Address, account core.GenesisAccount) {
@@ -219,28 +223,29 @@ type parityChainSpec struct {
 	} `json:"engine"`
 
 	Params struct {
-		AccountStartNonce     hexutil.Uint64       `json:"accountStartNonce"`
-		MaximumExtraDataSize  hexutil.Uint64       `json:"maximumExtraDataSize"`
-		MinGasLimit           hexutil.Uint64       `json:"minGasLimit"`
-		GasLimitBoundDivisor  math2.HexOrDecimal64 `json:"gasLimitBoundDivisor"`
-		NetworkID             hexutil.Uint64       `json:"networkID"`
-		ChainID               hexutil.Uint64       `json:"chainID"`
-		MaxCodeSize           hexutil.Uint64       `json:"maxCodeSize"`
-		MaxCodeSizeTransition hexutil.Uint64       `json:"maxCodeSizeTransition"`
-		EIP98Transition       hexutil.Uint64       `json:"eip98Transition"`
-		EIP150Transition      hexutil.Uint64       `json:"eip150Transition"`
-		EIP160Transition      hexutil.Uint64       `json:"eip160Transition"`
-		EIP161abcTransition   hexutil.Uint64       `json:"eip161abcTransition"`
-		EIP161dTransition     hexutil.Uint64       `json:"eip161dTransition"`
-		EIP155Transition      hexutil.Uint64       `json:"eip155Transition"`
-		EIP140Transition      hexutil.Uint64       `json:"eip140Transition"`
-		EIP211Transition      hexutil.Uint64       `json:"eip211Transition"`
-		EIP214Transition      hexutil.Uint64       `json:"eip214Transition"`
-		EIP658Transition      hexutil.Uint64       `json:"eip658Transition"`
-		EIP145Transition      hexutil.Uint64       `json:"eip145Transition"`
-		EIP1014Transition     hexutil.Uint64       `json:"eip1014Transition"`
-		EIP1052Transition     hexutil.Uint64       `json:"eip1052Transition"`
-		EIP1283Transition     hexutil.Uint64       `json:"eip1283Transition"`
+		AccountStartNonce        hexutil.Uint64       `json:"accountStartNonce"`
+		MaximumExtraDataSize     hexutil.Uint64       `json:"maximumExtraDataSize"`
+		MinGasLimit              hexutil.Uint64       `json:"minGasLimit"`
+		GasLimitBoundDivisor     math2.HexOrDecimal64 `json:"gasLimitBoundDivisor"`
+		NetworkID                hexutil.Uint64       `json:"networkID"`
+		ChainID                  hexutil.Uint64       `json:"chainID"`
+		MaxCodeSize              hexutil.Uint64       `json:"maxCodeSize"`
+		MaxCodeSizeTransition    hexutil.Uint64       `json:"maxCodeSizeTransition"`
+		EIP98Transition          hexutil.Uint64       `json:"eip98Transition"`
+		EIP150Transition         hexutil.Uint64       `json:"eip150Transition"`
+		EIP160Transition         hexutil.Uint64       `json:"eip160Transition"`
+		EIP161abcTransition      hexutil.Uint64       `json:"eip161abcTransition"`
+		EIP161dTransition        hexutil.Uint64       `json:"eip161dTransition"`
+		EIP155Transition         hexutil.Uint64       `json:"eip155Transition"`
+		EIP140Transition         hexutil.Uint64       `json:"eip140Transition"`
+		EIP211Transition         hexutil.Uint64       `json:"eip211Transition"`
+		EIP214Transition         hexutil.Uint64       `json:"eip214Transition"`
+		EIP658Transition         hexutil.Uint64       `json:"eip658Transition"`
+		EIP145Transition         hexutil.Uint64       `json:"eip145Transition"`
+		EIP1014Transition        hexutil.Uint64       `json:"eip1014Transition"`
+		EIP1052Transition        hexutil.Uint64       `json:"eip1052Transition"`
+		EIP1283Transition        hexutil.Uint64       `json:"eip1283Transition"`
+		EIP1283DisableTransition hexutil.Uint64       `json:"eip1283DisableTransition"`
 	} `json:"params"`
 
 	Genesis struct {
@@ -343,6 +348,11 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	if num := genesis.Config.ConstantinopleBlock; num != nil {
 		spec.setConstantinople(num)
 	}
+	// ConstantinopleFix (remove eip-1283)
+	if num := genesis.Config.PetersburgBlock; num != nil {
+		spec.setConstantinopleFix(num)
+	}
+
 	spec.Params.MaximumExtraDataSize = (hexutil.Uint64)(params.MaximumExtraDataSize)
 	spec.Params.MinGasLimit = (hexutil.Uint64)(params.MinGasLimit)
 	spec.Params.GasLimitBoundDivisor = (math2.HexOrDecimal64)(params.GasLimitBoundDivisor)
@@ -435,6 +445,10 @@ func (spec *parityChainSpec) setConstantinople(num *big.Int) {
 	spec.Params.EIP1014Transition = n
 	spec.Params.EIP1052Transition = n
 	spec.Params.EIP1283Transition = n
+}
+
+func (spec *parityChainSpec) setConstantinopleFix(num *big.Int) {
+	spec.Params.EIP1283DisableTransition = hexutil.Uint64(num.Uint64())
 }
 
 // pyEthereumGenesisSpec represents the genesis specification format used by the

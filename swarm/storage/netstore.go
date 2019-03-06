@@ -26,6 +26,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
+	"github.com/opentracing/opentracing-go"
+
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -34,8 +37,8 @@ type (
 )
 
 type NetFetcher interface {
-	Request(ctx context.Context, hopCount uint8)
-	Offer(ctx context.Context, source *enode.ID)
+	Request(hopCount uint8)
+	Offer(source *enode.ID)
 }
 
 // NetStore is an extension of local storage
@@ -128,7 +131,25 @@ func (n *NetStore) FetchFunc(ctx context.Context, ref Address) func(context.Cont
 func (n *NetStore) Close() {
 	close(n.closeC)
 	n.store.Close()
-	// TODO: loop through fetchers to cancel them
+
+	wg := sync.WaitGroup{}
+	for _, key := range n.fetchers.Keys() {
+		if f, ok := n.fetchers.Get(key); ok {
+			if fetch, ok := f.(*fetcher); ok {
+				wg.Add(1)
+				go func(fetch *fetcher) {
+					defer wg.Done()
+					fetch.cancel()
+
+					select {
+					case <-fetch.deliveredC:
+					case <-fetch.cancelledC:
+					}
+				}(fetch)
+			}
+		}
+	}
+	wg.Wait()
 }
 
 // get attempts at retrieving the chunk from LocalStore
@@ -150,7 +171,7 @@ func (n *NetStore) get(ctx context.Context, ref Address) (Chunk, func(context.Co
 		}
 		// The chunk is not available in the LocalStore, let's get the fetcher for it, or create a new one
 		// if it doesn't exist yet
-		f := n.getOrCreateFetcher(ref)
+		f := n.getOrCreateFetcher(ctx, ref)
 		// If the caller needs the chunk, it has to use the returned fetch function to get it
 		return nil, f.Fetch, nil
 	}
@@ -158,10 +179,17 @@ func (n *NetStore) get(ctx context.Context, ref Address) (Chunk, func(context.Co
 	return chunk, nil, nil
 }
 
+// Has is the storage layer entry point to query the underlying
+// database to return if it has a chunk or not.
+// Called from the DebugAPI
+func (n *NetStore) Has(ctx context.Context, ref Address) bool {
+	return n.store.Has(ctx, ref)
+}
+
 // getOrCreateFetcher attempts at retrieving an existing fetchers
 // if none exists, creates one and saves it in the fetchers cache
 // caller must hold the lock
-func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
+func (n *NetStore) getOrCreateFetcher(ctx context.Context, ref Address) *fetcher {
 	if f := n.getFetcher(ref); f != nil {
 		return f
 	}
@@ -169,7 +197,7 @@ func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
 	// no fetcher for the given address, we have to create a new one
 	key := hex.EncodeToString(ref)
 	// create the context during which fetching is kept alive
-	ctx, cancel := context.WithTimeout(context.Background(), fetcherTimeout)
+	cctx, cancel := context.WithTimeout(ctx, fetcherTimeout)
 	// destroy is called when all requests finish
 	destroy := func() {
 		// remove fetcher from fetchers
@@ -183,7 +211,11 @@ func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
 	// the peers which requested the chunk should not be requested to deliver it.
 	peers := &sync.Map{}
 
-	fetcher := newFetcher(ref, n.NewNetFetcherFunc(ctx, ref, peers), destroy, peers, n.closeC)
+	cctx, sp := spancontext.StartSpan(
+		cctx,
+		"netstore.fetcher",
+	)
+	fetcher := newFetcher(sp, ref, n.NewNetFetcherFunc(cctx, ref, peers), destroy, peers, n.closeC)
 	n.fetchers.Add(key, fetcher)
 
 	return fetcher
@@ -208,15 +240,16 @@ func (n *NetStore) RequestsCacheLen() int {
 // One fetcher object is responsible to fetch one chunk for one address, and keep track of all the
 // peers who have requested it and did not receive it yet.
 type fetcher struct {
-	addr        Address       // address of chunk
-	chunk       Chunk         // fetcher can set the chunk on the fetcher
-	deliveredC  chan struct{} // chan signalling chunk delivery to requests
-	cancelledC  chan struct{} // chan signalling the fetcher has been cancelled (removed from fetchers in NetStore)
-	netFetcher  NetFetcher    // remote fetch function to be called with a request source taken from the context
-	cancel      func()        // cleanup function for the remote fetcher to call when all upstream contexts are called
-	peers       *sync.Map     // the peers which asked for the chunk
-	requestCnt  int32         // number of requests on this chunk. If all the requests are done (delivered or context is done) the cancel function is called
-	deliverOnce *sync.Once    // guarantees that we only close deliveredC once
+	addr        Address          // address of chunk
+	chunk       Chunk            // fetcher can set the chunk on the fetcher
+	deliveredC  chan struct{}    // chan signalling chunk delivery to requests
+	cancelledC  chan struct{}    // chan signalling the fetcher has been cancelled (removed from fetchers in NetStore)
+	netFetcher  NetFetcher       // remote fetch function to be called with a request source taken from the context
+	cancel      func()           // cleanup function for the remote fetcher to call when all upstream contexts are called
+	peers       *sync.Map        // the peers which asked for the chunk
+	requestCnt  int32            // number of requests on this chunk. If all the requests are done (delivered or context is done) the cancel function is called
+	deliverOnce *sync.Once       // guarantees that we only close deliveredC once
+	span        opentracing.Span // measure retrieve time per chunk
 }
 
 // newFetcher creates a new fetcher object for the fiven addr. fetch is the function which actually
@@ -225,7 +258,7 @@ type fetcher struct {
 //     1. when the chunk has been fetched all peers have been either notified or their context has been done
 //     2. the chunk has not been fetched but all context from all the requests has been done
 // The peers map stores all the peers which have requested chunk.
-func newFetcher(addr Address, nf NetFetcher, cancel func(), peers *sync.Map, closeC chan struct{}) *fetcher {
+func newFetcher(span opentracing.Span, addr Address, nf NetFetcher, cancel func(), peers *sync.Map, closeC chan struct{}) *fetcher {
 	cancelOnce := &sync.Once{} // cancel should only be called once
 	return &fetcher{
 		addr:        addr,
@@ -239,6 +272,7 @@ func newFetcher(addr Address, nf NetFetcher, cancel func(), peers *sync.Map, clo
 			})
 		},
 		peers: peers,
+		span:  span,
 	}
 }
 
@@ -251,6 +285,7 @@ func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 		if atomic.AddInt32(&f.requestCnt, -1) == 0 {
 			f.cancel()
 		}
+		f.span.Finish()
 	}()
 
 	// The peer asking for the chunk. Store in the shared peers map, but delete after the request
@@ -271,9 +306,9 @@ func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 		if err := source.UnmarshalText([]byte(sourceIF.(string))); err != nil {
 			return nil, err
 		}
-		f.netFetcher.Offer(rctx, &source)
+		f.netFetcher.Offer(&source)
 	} else {
-		f.netFetcher.Request(rctx, hopCount)
+		f.netFetcher.Request(hopCount)
 	}
 
 	// wait until either the chunk is delivered or the context is done

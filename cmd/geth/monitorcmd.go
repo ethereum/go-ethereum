@@ -169,7 +169,7 @@ func retrieveMetrics(client *rpc.Client) (map[string]interface{}, error) {
 // resolveMetrics takes a list of input metric patterns, and resolves each to one
 // or more canonical metric names.
 func resolveMetrics(metrics map[string]interface{}, patterns []string) []string {
-	res := []string{}
+	var res []string
 	for _, pattern := range patterns {
 		res = append(res, resolveMetric(metrics, pattern, "")...)
 	}
@@ -179,7 +179,7 @@ func resolveMetrics(metrics map[string]interface{}, patterns []string) []string 
 // resolveMetrics takes a single of input metric pattern, and resolves it to one
 // or more canonical metric names.
 func resolveMetric(metrics map[string]interface{}, pattern string, path string) []string {
-	results := []string{}
+	var results []string
 
 	// If a nested metric was requested, recurse optionally branching (via comma)
 	parts := strings.SplitN(pattern, "/", 2)
@@ -215,7 +215,7 @@ func resolveMetric(metrics map[string]interface{}, pattern string, path string) 
 // expandMetrics expands the entire tree of metrics into a flat list of paths.
 func expandMetrics(metrics map[string]interface{}, path string) []string {
 	// Iterate over all fields and expand individually
-	list := []string{}
+	var list []string
 	for name, metric := range metrics {
 		switch metric := metric.(type) {
 		case float64:

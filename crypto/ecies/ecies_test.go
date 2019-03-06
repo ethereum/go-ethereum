@@ -93,19 +93,6 @@ func cmpPublic(pub1, pub2 PublicKey) bool {
 	return bytes.Equal(pub1Out, pub2Out)
 }
 
-// cmpPrivate returns true if the two private keys are the same.
-func cmpPrivate(prv1, prv2 *PrivateKey) bool {
-	if prv1 == nil || prv1.D == nil {
-		return false
-	} else if prv2 == nil || prv2.D == nil {
-		return false
-	} else if prv1.D.Cmp(prv2.D) != 0 {
-		return false
-	} else {
-		return cmpPublic(prv1.PublicKey, prv2.PublicKey)
-	}
-}
-
 // Validate the ECDH component.
 func TestSharedKey(t *testing.T) {
 	prv1, err := GenerateKey(rand.Reader, DefaultCurve, nil)

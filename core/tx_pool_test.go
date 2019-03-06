@@ -126,7 +126,7 @@ func validateEvents(events chan NewTxsEvent, count int) error {
 		case ev := <-events:
 			received = append(received, ev.Txs...)
 		case <-time.After(time.Second):
-			return fmt.Errorf("event #%d not fired", received)
+			return fmt.Errorf("event #%d not fired", len(received))
 		}
 	}
 	if len(received) > count {
@@ -1095,7 +1095,7 @@ func TestTransactionPendingMinimumAllowance(t *testing.T) {
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed)}
 
 	config := testTxPoolConfig
-	config.GlobalSlots = 0
+	config.GlobalSlots = 1
 
 	pool := NewTxPool(config, params.TestChainConfig, blockchain)
 	defer pool.Stop()
@@ -1274,14 +1274,14 @@ func TestTransactionPoolRepricingKeepsLocals(t *testing.T) {
 	}
 	// Create transaction (both pending and queued) with a linearly growing gasprice
 	for i := uint64(0); i < 500; i++ {
-		// Add pending
-		p_tx := pricedTransaction(i, 100000, big.NewInt(int64(i)), keys[2])
-		if err := pool.AddLocal(p_tx); err != nil {
+		// Add pending transaction.
+		pendingTx := pricedTransaction(i, 100000, big.NewInt(int64(i)), keys[2])
+		if err := pool.AddLocal(pendingTx); err != nil {
 			t.Fatal(err)
 		}
-		// Add queued
-		q_tx := pricedTransaction(i+501, 100000, big.NewInt(int64(i)), keys[2])
-		if err := pool.AddLocal(q_tx); err != nil {
+		// Add queued transaction.
+		queuedTx := pricedTransaction(i+501, 100000, big.NewInt(int64(i)), keys[2])
+		if err := pool.AddLocal(queuedTx); err != nil {
 			t.Fatal(err)
 		}
 	}

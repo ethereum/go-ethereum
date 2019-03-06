@@ -80,7 +80,7 @@ func (ap *testerAccountPool) sign(header *types.Header, signer string) {
 		ap.accounts[signer], _ = crypto.GenerateKey()
 	}
 	// Sign the header and embed the signature in extra data
-	sig, _ := crypto.Sign(sigHash(header).Bytes(), ap.accounts[signer])
+	sig, _ := crypto.Sign(SealHash(header).Bytes(), ap.accounts[signer])
 	copy(header.Extra[len(header.Extra)-extraSeal:], sig)
 }
 
@@ -246,10 +246,10 @@ func TestClique(t *testing.T) {
 			// Votes from deauthorized signers are discarded immediately (auth votes)
 			signers: []string{"A", "B", "C"},
 			votes: []testerVote{
-				{signer: "C", voted: "B", auth: false},
+				{signer: "C", voted: "D", auth: true},
 				{signer: "A", voted: "C", auth: false},
 				{signer: "B", voted: "C", auth: false},
-				{signer: "A", voted: "B", auth: false},
+				{signer: "A", voted: "D", auth: true},
 			},
 			results: []string{"A", "B"},
 		}, {

@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -56,22 +57,37 @@ var websocketJSONCodec = websocket.Codec{
 //
 // allowedOrigins should be a comma-separated list of allowed origin URLs.
 // To allow connections with any origin, pass "*".
-func (srv *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
+func (s *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
 	return websocket.Server{
 		Handshake: wsHandshakeValidator(allowedOrigins),
 		Handler: func(conn *websocket.Conn) {
-			// Create a custom encode/decode pair to enforce payload size and number encoding
-			conn.MaxPayloadBytes = maxRequestContentLength
-
-			encoder := func(v interface{}) error {
-				return websocketJSONCodec.Send(conn, v)
-			}
-			decoder := func(v interface{}) error {
-				return websocketJSONCodec.Receive(conn, v)
-			}
-			srv.ServeCodec(NewCodec(conn, encoder, decoder), OptionMethodInvocation|OptionSubscriptions)
+			codec := newWebsocketCodec(conn)
+			s.ServeCodec(codec, OptionMethodInvocation|OptionSubscriptions)
 		},
 	}
+}
+
+func newWebsocketCodec(conn *websocket.Conn) ServerCodec {
+	// Create a custom encode/decode pair to enforce payload size and number encoding
+	conn.MaxPayloadBytes = maxRequestContentLength
+	encoder := func(v interface{}) error {
+		return websocketJSONCodec.Send(conn, v)
+	}
+	decoder := func(v interface{}) error {
+		return websocketJSONCodec.Receive(conn, v)
+	}
+	rpcconn := Conn(conn)
+	if conn.IsServerConn() {
+		// Override remote address with the actual socket address because
+		// package websocket crashes if there is no request origin.
+		addr := conn.Request().RemoteAddr
+		if wsaddr := conn.RemoteAddr().(*websocket.Addr); wsaddr.URL != nil {
+			// Add origin if present.
+			addr += "(" + wsaddr.URL.String() + ")"
+		}
+		rpcconn = connWithRemoteAddr{conn, addr}
+	}
+	return NewCodec(rpcconn, encoder, decoder)
 }
 
 // NewWSServer creates a new websocket RPC server around an API provider.
@@ -105,15 +121,23 @@ func wsHandshakeValidator(allowedOrigins []string) func(*websocket.Config, *http
 		}
 	}
 
-	log.Debug(fmt.Sprintf("Allowed origin(s) for WS RPC interface %v\n", origins.ToSlice()))
+	log.Debug(fmt.Sprintf("Allowed origin(s) for WS RPC interface %v", origins.ToSlice()))
 
 	f := func(cfg *websocket.Config, req *http.Request) error {
+		// Skip origin verification if no Origin header is present. The origin check
+		// is supposed to protect against browser based attacks. Browsers always set
+		// Origin. Non-browser software can put anything in origin and checking it doesn't
+		// provide additional security.
+		if _, ok := req.Header["Origin"]; !ok {
+			return nil
+		}
+		// Verify origin against whitelist.
 		origin := strings.ToLower(req.Header.Get("Origin"))
 		if allowAllOrigins || origins.Contains(origin) {
 			return nil
 		}
-		log.Warn(fmt.Sprintf("origin '%s' not allowed on WS-RPC interface\n", origin))
-		return fmt.Errorf("origin %s not allowed", origin)
+		log.Warn("Rejected WebSocket connection", "origin", origin)
+		return errors.New("origin not allowed")
 	}
 
 	return f
@@ -155,8 +179,12 @@ func DialWebsocket(ctx context.Context, endpoint, origin string) (*Client, error
 		return nil, err
 	}
 
-	return newClient(ctx, func(ctx context.Context) (net.Conn, error) {
-		return wsDialContext(ctx, config)
+	return newClient(ctx, func(ctx context.Context) (ServerCodec, error) {
+		conn, err := wsDialContext(ctx, config)
+		if err != nil {
+			return nil, err
+		}
+		return newWebsocketCodec(conn), nil
 	})
 }
 

@@ -51,10 +51,6 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("not found")
-)
-
-var (
 	apiResolveCount        = metrics.NewRegisteredCounter("api.resolve.count", nil)
 	apiResolveFail         = metrics.NewRegisteredCounter("api.resolve.fail", nil)
 	apiPutCount            = metrics.NewRegisteredCounter("api.put.count", nil)
@@ -136,13 +132,6 @@ func MultiResolverOptionWithResolver(r ResolveValidator, tld string) MultiResolv
 	}
 }
 
-// MultiResolverOptionWithNameHash is unused at the time of this writing
-func MultiResolverOptionWithNameHash(nameHash func(string) common.Hash) MultiResolverOption {
-	return func(m *MultiResolver) {
-		m.nameHash = nameHash
-	}
-}
-
 // NewMultiResolver creates a new instance of MultiResolver.
 func NewMultiResolver(opts ...MultiResolverOption) (m *MultiResolver) {
 	m = &MultiResolver{
@@ -173,40 +162,6 @@ func (m *MultiResolver) Resolve(addr string) (h common.Hash, err error) {
 	return
 }
 
-// ValidateOwner checks the ENS to validate that the owner of the given domain is the given eth address
-func (m *MultiResolver) ValidateOwner(name string, address common.Address) (bool, error) {
-	rs, err := m.getResolveValidator(name)
-	if err != nil {
-		return false, err
-	}
-	var addr common.Address
-	for _, r := range rs {
-		addr, err = r.Owner(m.nameHash(name))
-		// we hide the error if it is not for the last resolver we check
-		if err == nil {
-			return addr == address, nil
-		}
-	}
-	return false, err
-}
-
-// HeaderByNumber uses the validator of the given domainname and retrieves the header for the given block number
-func (m *MultiResolver) HeaderByNumber(ctx context.Context, name string, blockNr *big.Int) (*types.Header, error) {
-	rs, err := m.getResolveValidator(name)
-	if err != nil {
-		return nil, err
-	}
-	for _, r := range rs {
-		var header *types.Header
-		header, err = r.HeaderByNumber(ctx, blockNr)
-		// we hide the error if it is not for the last resolver we check
-		if err == nil {
-			return header, nil
-		}
-	}
-	return nil, err
-}
-
 // getResolveValidator uses the hostname to retrieve the resolver associated with the top level domain
 func (m *MultiResolver) getResolveValidator(name string) ([]ResolveValidator, error) {
 	rs := m.resolvers[""]
@@ -222,11 +177,6 @@ func (m *MultiResolver) getResolveValidator(name string) ([]ResolveValidator, er
 		return rs, NewNoResolverError(tld)
 	}
 	return rs, nil
-}
-
-// SetNameHash sets the hasher function that hashes the domain into a name hash that ENS uses
-func (m *MultiResolver) SetNameHash(nameHash func(string) common.Hash) {
-	m.nameHash = nameHash
 }
 
 /*
@@ -264,9 +214,6 @@ func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt b
 	log.Debug("api.store", "size", size)
 	return a.fileStore.Store(ctx, data, size, toEncrypt)
 }
-
-// ErrResolve is returned when an URI cannot be resolved from ENS.
-type ErrResolve error
 
 // Resolve a name into a content-addressed hash
 // where address could be an ENS name, or a content addressed hash
@@ -484,7 +431,7 @@ func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Add
 		apiDeleteFail.Inc(1)
 		return nil, err
 	}
-	key, err := a.ResolveURI(ctx, uri, EMPTY_CREDENTIALS)
+	key, err := a.ResolveURI(ctx, uri, EmptyCredentials)
 
 	if err != nil {
 		return nil, err
@@ -696,7 +643,7 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 		apiAddFileFail.Inc(1)
 		return nil, "", err
 	}
-	mkey, err := a.ResolveURI(ctx, uri, EMPTY_CREDENTIALS)
+	mkey, err := a.ResolveURI(ctx, uri, EmptyCredentials)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
@@ -813,7 +760,7 @@ func (a *API) RemoveFile(ctx context.Context, mhash string, path string, fname s
 		apiRmFileFail.Inc(1)
 		return "", err
 	}
-	mkey, err := a.ResolveURI(ctx, uri, EMPTY_CREDENTIALS)
+	mkey, err := a.ResolveURI(ctx, uri, EmptyCredentials)
 	if err != nil {
 		apiRmFileFail.Inc(1)
 		return "", err
@@ -880,7 +827,7 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
 	}
-	mkey, err := a.ResolveURI(ctx, uri, EMPTY_CREDENTIALS)
+	mkey, err := a.ResolveURI(ctx, uri, EmptyCredentials)
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
@@ -978,11 +925,6 @@ func (a *API) FeedsNewRequest(ctx context.Context, feed *feed.Feed) (*feed.Reque
 // FeedsUpdate publishes a new update on the given feed
 func (a *API) FeedsUpdate(ctx context.Context, request *feed.Request) (storage.Address, error) {
 	return a.feed.Update(ctx, request)
-}
-
-// FeedsHashSize returned the size of the digest produced by Swarm feeds' hashing function
-func (a *API) FeedsHashSize() int {
-	return a.feed.HashSize
 }
 
 // ErrCannotLoadFeedManifest is returned when looking up a feeds manifest fails

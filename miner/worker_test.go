@@ -224,7 +224,7 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	for i := 0; i < 2; i += 1 {
 		select {
 		case <-taskCh:
-		case <-time.NewTimer(time.Second).C:
+		case <-time.NewTimer(2 * time.Second).C:
 			t.Error("new task timeout")
 		}
 	}

@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package les implements the Light Ethereum Subprotocol.
 package les
 
 import (
@@ -81,6 +80,25 @@ const (
 	TxStatusMsg            = 0x15
 )
 
+type requestInfo struct {
+	name     string
+	maxCount uint64
+}
+
+var requests = map[uint64]requestInfo{
+	GetBlockHeadersMsg:     {"GetBlockHeaders", MaxHeaderFetch},
+	GetBlockBodiesMsg:      {"GetBlockBodies", MaxBodyFetch},
+	GetReceiptsMsg:         {"GetReceipts", MaxReceiptFetch},
+	GetProofsV1Msg:         {"GetProofsV1", MaxProofsFetch},
+	GetCodeMsg:             {"GetCode", MaxCodeFetch},
+	SendTxMsg:              {"SendTx", MaxTxSend},
+	GetHeaderProofsMsg:     {"GetHeaderProofs", MaxHelperTrieProofsFetch},
+	GetProofsV2Msg:         {"GetProofsV2", MaxProofsFetch},
+	GetHelperTrieProofsMsg: {"GetHelperTrieProofs", MaxHelperTrieProofsFetch},
+	SendTxV2Msg:            {"SendTxV2", MaxTxSend},
+	GetTxStatusMsg:         {"GetTxStatus", MaxTxStatus},
+}
+
 type errCode int
 
 const (
@@ -146,9 +164,9 @@ func (a *announceData) sign(privKey *ecdsa.PrivateKey) {
 }
 
 // checkSignature verifies if the block announcement has a valid signature by the given pubKey
-func (a *announceData) checkSignature(id enode.ID) error {
+func (a *announceData) checkSignature(id enode.ID, update keyValueMap) error {
 	var sig []byte
-	if err := a.Update.decode().get("sign", &sig); err != nil {
+	if err := update.get("sign", &sig); err != nil {
 		return err
 	}
 	rlp, _ := rlp.EncodeToBytes(announceBlock{a.Hash, a.Number, a.Td})
@@ -221,6 +239,6 @@ type proofsData [][]rlp.RawValue
 
 type txStatus struct {
 	Status core.TxStatus
-	Lookup *rawdb.TxLookupEntry `rlp:"nil"`
+	Lookup *rawdb.LegacyTxLookupEntry `rlp:"nil"`
 	Error  string
 }
