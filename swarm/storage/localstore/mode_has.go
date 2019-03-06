@@ -34,6 +34,6 @@ func (db *DB) NewHasser() *Hasser {
 }
 
 // Has returns true if the chunk is stored in database.
-func (h *Hasser) Has(addr chunk.Address) (yes bool, err error) {
+func (h *Hasser) Has(addr chunk.Address) (bool, error) {
 	return h.db.retrievalDataIndex.Has(addressToItem(addr))
 }
