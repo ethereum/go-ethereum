@@ -148,7 +148,7 @@ func (f Index) Get(keyFields Item) (out Item, err error) {
 // Has accepts key fields represented as Item to check
 // if there this Item's encoded key is stored in
 // the index.
-func (f Index) Has(keyFields Item) (yes bool, err error) {
+func (f Index) Has(keyFields Item) (bool, error) {
 	key, err := f.encodeKeyFunc(keyFields)
 	if err != nil {
 		return false, err
