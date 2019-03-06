@@ -29,6 +29,8 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/ens/fallback_contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ipfs/go-cid"
+	"github.com/multiformats/go-multibase"
 	mh "github.com/multiformats/go-multihash"
 )
 
@@ -125,61 +127,46 @@ func TestENS(t *testing.T) {
 }
 
 func TestCIDSanity(t *testing.T) {
-	for _, v := range []struct {
-		name    string
-		hashStr string
-		fail    bool
-	}{
-		{
-			name:    "hash OK, should not fail",
-			hashStr: "d1de9994b4d039f6548d191eb26786769f580809256b4685ef316805265ea162",
-			fail:    false,
-		},
-		{
-			name:    "hash empty , should fail",
-			hashStr: "",
-			fail:    true,
-		},
-	} {
-		t.Run(v.name, func(t *testing.T) {
-			hash := common.HexToHash(v.hashStr)
-			cc, err := encodeCid(hash)
-			if err != nil {
-				if v.fail {
-					return
-				}
-				t.Fatal(err)
-			}
-
-			if cc.Prefix().MhLength != 32 {
-				t.Fatal("w00t")
-			}
-			fmt.Println(cc.Hash())
-			decoded, err := mh.Decode(cc.Hash())
-			if err != nil {
-				t.Fatal(err)
-			}
-			if decoded.Length != 32 {
-				t.Fatal("invalid length")
-			}
-			if !bytes.Equal(decoded.Digest, hash[:]) {
-				t.Fatalf("hashes not equal")
-			}
-
-			if decoded.Length != 32 {
-				t.Fatal("wrong length")
-			}
-			fmt.Println("Created CID: ", cc)
-
-		})
-
-		/*c, err := cid.Decode("zdvgqEMYmNeH5fKciougvQcfzMcNjF3Z1tPouJ8C7pc3pe63k")
-		if err != nil {
-			t.Fatal("Error decoding CID")
-		}
-
-		fmt.Sprintf("Got CID: %v", c)
-		fmt.Println("Got CID:", c.Prefix())
-		*/
+	hashStr := "d1de9994b4d039f6548d191eb26786769f580809256b4685ef316805265ea162"
+	hash := common.HexToHash(hashStr) //this always yields a 32 byte long hash
+	cc, err := encodeCid(hash)
+	if err != nil {
+		t.Fatal(err)
 	}
+
+	if cc.Prefix().MhLength != 32 {
+		t.Fatal("w00t")
+	}
+	decoded, err := mh.Decode(cc.Hash())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Length != 32 {
+		t.Fatal("invalid length")
+	}
+	if !bytes.Equal(decoded.Digest, hash[:]) {
+		t.Fatalf("hashes not equal")
+	}
+
+	if decoded.Length != 32 {
+		t.Fatal("wrong length")
+	}
+
+	bbbb, e := cc.StringOfBase(multibase.Base16)
+	if e != nil {
+		t.Fatal(e)
+	}
+	fmt.Println(bbbb)
+	//create the CID string artificially
+	hashStr = "f01551b20" + hashStr
+	fmt.Println(cc.Hash())
+
+	c, err := cid.Decode(hashStr) //"zdvgqEMYmNeH5fKciougvQcfzMcNjF3Z1tPouJ8C7pc3pe63k")
+	if err != nil {
+		t.Fatalf("Error decoding CID: %v", err)
+	}
+
+	fmt.Sprintf("Got CID: %v", c)
+	fmt.Println("Got CID:", c.Prefix())
+
 }

@@ -267,7 +267,7 @@ func (ens *ENS) SetContentHash(name string, hash []byte) (*types.Transaction, er
 func decodeMultiCodec(b []byte) (common.Hash, error) {
 
 	// Create a cid from a marshaled string
-	c, err := cid.Decode(string(b))
+	_, err := cid.Decode(string(b))
 	if err != nil {
 		return common.Hash{}, err
 	}
