@@ -169,7 +169,7 @@ func isAllDeployed(expected []uint64, actual []uint64) bool {
 }
 
 func removeListElement(arr []uint64, i int) []uint64 {
-	last := len(arr)-1
+	last := len(arr) - 1
 	arr[i] = arr[last]
 	arr = arr[:last]
 	return arr
@@ -178,7 +178,7 @@ func removeListElement(arr []uint64, i int) []uint64 {
 func removeDuplicatesAndSingletons(arr []uint64) []uint64 {
 	for i := 0; i < len(arr); {
 		found := false
-		for j := i+1; j < len(arr); j++ {
+		for j := i + 1; j < len(arr); j++ {
 			if arr[i] == arr[j] {
 				arr = removeListElement(arr, j) // remove duplicate
 				found = true

@@ -46,28 +46,28 @@ var (
 	runNodes    = flag.Int("nodes", 0, "nodes to start in the network")
 	runMessages = flag.Int("messages", 0, "messages to send during test")
 
-	pof           = pot.DefaultPof(256) // generate messages and index them
-	topic         = BytesToTopic([]byte{0x00, 0x00, 0x06, 0x82})
-	mu            sync.Mutex // keeps handlerDonc in sync
-	sim           *simulation.Simulation
+	pof   = pot.DefaultPof(256) // generate messages and index them
+	topic = BytesToTopic([]byte{0x00, 0x00, 0x06, 0x82})
+	mu    sync.Mutex // keeps handlerDonc in sync
+	sim   *simulation.Simulation
 
 	handlerDone   bool // set to true on termination of the simulation run
 	msgsToReceive int  // total count of messages to receive, used for terminating the simulation run
 	maxMessages   int
 	msgCnt        int
 
-	kademlias     map[enode.ID]*network.Kademlia
-	nodeAddrs     map[enode.ID][]byte   // make predictable overlay addresses from the generated random enode ids
-	recipients    map[int][]enode.ID    // for logging output only
-	allowed		  map[int][]enode.ID    // allowed recipients
-	expectedMsgs  map[enode.ID][]uint64 // message serials we expect respective nodes to receive
-	allowedMsgs   map[enode.ID][]uint64 // message serials we expect respective nodes to receive
-	senders       map[int]enode.ID      // originating nodes of the messages (intention is to choose as far as possible from the receiving neighborhood)
-	handlerC      chan handlerNotification // passes message from pss message handler to simulation driver
-	doneC         chan struct{}            // terminates the handler channel listener
-	errC          chan error               // error to pass to main sim thread
-	msgC          chan handlerNotification // message receipt notification to main sim thread
-	msgs          [][]byte                 // recipient addresses of messages
+	kademlias    map[enode.ID]*network.Kademlia
+	nodeAddrs    map[enode.ID][]byte      // make predictable overlay addresses from the generated random enode ids
+	recipients   map[int][]enode.ID       // for logging output only
+	allowed      map[int][]enode.ID       // allowed recipients
+	expectedMsgs map[enode.ID][]uint64    // message serials we expect respective nodes to receive
+	allowedMsgs  map[enode.ID][]uint64    // message serials we expect respective nodes to receive
+	senders      map[int]enode.ID         // originating nodes of the messages (intention is to choose as far as possible from the receiving neighborhood)
+	handlerC     chan handlerNotification // passes message from pss message handler to simulation driver
+	doneC        chan struct{}            // terminates the handler channel listener
+	errC         chan error               // error to pass to main sim thread
+	msgC         chan handlerNotification // message receipt notification to main sim thread
+	msgs         [][]byte                 // recipient addresses of messages
 )
 
 func resetTestVariables() {
@@ -78,21 +78,17 @@ func resetTestVariables() {
 	msgs = nil
 	sim = nil
 
-	kademlias     = make(map[enode.ID]*network.Kademlia)
-	nodeAddrs     = make(map[enode.ID][]byte)
-	recipients    = make(map[int][]enode.ID)
-	allowed       = make(map[int][]enode.ID)
-	expectedMsgs  = make(map[enode.ID][]uint64)
-	allowedMsgs   = make(map[enode.ID][]uint64)
-	senders       = make(map[int]enode.ID)
-	handlerC      = make(chan handlerNotification)
-	doneC         = make(chan struct{})
-	errC          = make(chan error)
-	msgC          = make(chan handlerNotification)
-}
-
-func init() {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	kademlias = make(map[enode.ID]*network.Kademlia)
+	nodeAddrs = make(map[enode.ID][]byte)
+	recipients = make(map[int][]enode.ID)
+	allowed = make(map[int][]enode.ID)
+	expectedMsgs = make(map[enode.ID][]uint64)
+	allowedMsgs = make(map[enode.ID][]uint64)
+	senders = make(map[int]enode.ID)
+	handlerC = make(chan handlerNotification)
+	doneC = make(chan struct{})
+	errC = make(chan error)
+	msgC = make(chan handlerNotification)
 }
 
 func isDone() bool {
