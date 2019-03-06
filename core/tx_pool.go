@@ -392,6 +392,18 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 				rem = pool.chain.GetBlock(oldHead.Hash(), oldHead.Number.Uint64())
 				add = pool.chain.GetBlock(newHead.Hash(), newHead.Number.Uint64())
 			)
+
+			// handle cases where rem or add could come up nil
+			if rem == nil && add == nil {
+				return
+			} else if rem != nil && add == nil {
+				discarded = append(discarded, rem.Transactions()...)
+				return
+			} else if rem == nil && add != nil {
+				included = append(included, add.Transactions()...)
+				return
+			}
+
 			for rem.NumberU64() > add.NumberU64() {
 				discarded = append(discarded, rem.Transactions()...)
 				if rem = pool.chain.GetBlock(rem.ParentHash(), rem.NumberU64()-1); rem == nil {
