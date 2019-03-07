@@ -179,15 +179,15 @@ func TestSignData(t *testing.T) {
 	//Create two accounts
 	createAccount(control, api, t)
 	createAccount(control, api, t)
-	control <- "1"
+	control.approveCh <- "1"
 	list, err := api.List(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	a := common.NewMixedcaseAddress(list[0])
 
-	control <- "Y"
-	control <- "wrongpassword"
+	control.approveCh <- "Y"
+	control.inputCh <- "wrongpassword"
 	signature, err := api.SignData(context.Background(), TextPlain.Mime, a, hexutil.Encode([]byte("EHLO world")))
 	if signature != nil {
 		t.Errorf("Expected nil-data, got %x", signature)
@@ -195,7 +195,7 @@ func TestSignData(t *testing.T) {
 	if err != keystore.ErrDecrypt {
 		t.Errorf("Expected ErrLocked! '%v'", err)
 	}
-	control <- "No way"
+	control.approveCh <- "No way"
 	signature, err = api.SignData(context.Background(), TextPlain.Mime, a, hexutil.Encode([]byte("EHLO world")))
 	if signature != nil {
 		t.Errorf("Expected nil-data, got %x", signature)
@@ -204,8 +204,8 @@ func TestSignData(t *testing.T) {
 		t.Errorf("Expected ErrRequestDenied! '%v'", err)
 	}
 	// text/plain
-	control <- "Y"
-	control <- "a_long_password"
+	control.approveCh <- "Y"
+	control.inputCh <- "a_long_password"
 	signature, err = api.SignData(context.Background(), TextPlain.Mime, a, hexutil.Encode([]byte("EHLO world")))
 	if err != nil {
 		t.Fatal(err)
@@ -214,8 +214,8 @@ func TestSignData(t *testing.T) {
 		t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
 	}
 	// data/typed
-	control <- "Y"
-	control <- "a_long_password"
+	control.approveCh <- "Y"
+	control.inputCh <- "a_long_password"
 	signature, err = api.SignTypedData(context.Background(), a, typedData)
 	if err != nil {
 		t.Fatal(err)
