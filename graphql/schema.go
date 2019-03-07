@@ -22,6 +22,7 @@ const schema string = `
     # Address is a 20 byte Ethereum address, represented as 0x-prefixed hexadecimal.
     scalar Address
     # Bytes is an arbitrary length binary string, represented as 0x-prefixed hexadecimal.
+    # An empty byte string is represented as '0x'. Byte strings must have an even number of hexadecimal nybbles.
     scalar Bytes
     # BigInt is a large integer. Input is accepted as either a JSON number or as a string.
     # Strings may be either decimal or 0x-prefixed hexadecimal. Output values are all
@@ -75,7 +76,7 @@ const schema string = `
         # Nonce is the nonce of the account this transaction was generated with.
         nonce: Long!
         # Index is the index of this transaction in the parent block. This will
-        # be null if the transaction has not yet beenn mined.
+        # be null if the transaction has not yet been mined.
         index: Int
         # From is the account that sent this transaction - this will always be
         # an externally owned account.
@@ -123,16 +124,16 @@ const schema string = `
         # empty, results will not be filtered by address.
         addresses: [Address!]
         # Topics list restricts matches to particular event topics. Each event has a list
-    	# of topics. Topics matches a prefix of that list. An empty element array matches any
-    	# topic. Non-empty elements represent an alternative that matches any of the
-    	# contained topics.
-    	#
-    	# Examples:
-    	#  - [] or nil          matches any topic list
-    	#  - [[A]]              matches topic A in first position
-    	#  - [[], [B]]          matches any topic in first position, B in second position
-    	#  - [[A], [B]]         matches topic A in first position, B in second position
-    	#  - [[A, B]], [C, D]]  matches topic (A OR B) in first position, (C OR D) in second position
+      # of topics. Topics matches a prefix of that list. An empty element array matches any
+      # topic. Non-empty elements represent an alternative that matches any of the
+      # contained topics.
+      #
+      # Examples:
+      #  - [] or nil          matches any topic list
+      #  - [[A]]              matches topic A in first position
+      #  - [[], [B]]          matches any topic in first position, B in second position
+      #  - [[A], [B]]         matches topic A in first position, B in second position
+      #  - [[A, B]], [C, D]]  matches topic (A OR B) in first position, (C OR D) in second position
         topics: [[Bytes32!]!]
     }
 
@@ -198,6 +199,13 @@ const schema string = `
         transactionAt(index: Int!): Transaction
         # Logs returns a filtered set of logs from this block.
         logs(filter: BlockFilterCriteria!): [Log!]!
+        # Account fetches an Ethereum account at the current block's state.
+        account(address: Address!): Account!
+        # Call executes a local call operation at the current block's state.
+        call(data: CallData!): CallResult
+        # EstimateGas estimates the amount of gas that will be required for
+        # successful execution of a transaction at the current block's state.
+        estimateGas(data: CallData!): Long!
     }
 
     # CallData represents the data associated with a local contract call.
@@ -217,7 +225,7 @@ const schema string = `
         data: Bytes
     }
 
-    # CallResult is the result of a local call operationn.
+    # CallResult is the result of a local call operation.
     type CallResult {
         # Data is the return data of the called contract.
         data: Bytes!
@@ -239,16 +247,16 @@ const schema string = `
         # empty, results will not be filtered by address.
         addresses: [Address!]
         # Topics list restricts matches to particular event topics. Each event has a list
-    	# of topics. Topics matches a prefix of that list. An empty element array matches any
-    	# topic. Non-empty elements represent an alternative that matches any of the
-    	# contained topics.
-    	#
-    	# Examples:
-    	#  - [] or nil          matches any topic list
-    	#  - [[A]]              matches topic A in first position
-    	#  - [[], [B]]          matches any topic in first position, B in second position
-    	#  - [[A], [B]]         matches topic A in first position, B in second position
-    	#  - [[A, B]], [C, D]]  matches topic (A OR B) in first position, (C OR D) in second position
+      # of topics. Topics matches a prefix of that list. An empty element array matches any
+      # topic. Non-empty elements represent an alternative that matches any of the
+      # contained topics.
+      #
+      # Examples:
+      #  - [] or nil          matches any topic list
+      #  - [[A]]              matches topic A in first position
+      #  - [[], [B]]          matches any topic in first position, B in second position
+      #  - [[A], [B]]         matches topic A in first position, B in second position
+      #  - [[A, B]], [C, D]]  matches topic (A OR B) in first position, (C OR D) in second position
         topics: [[Bytes32!]!]
     }
 
@@ -268,25 +276,32 @@ const schema string = `
         knownStates: Long
     }
 
+    # Pending represents the current pending state.
+    type Pending {
+      # TransactionCount is the number of transactions in the pending state.
+      transactionCount: Int!
+      # Transactions is a list of transactions in the current pending state.
+      transactions: [Transaction!]
+      # Account fetches an Ethereum account for the pending state.
+      account(address: Address!): Account!
+      # Call executes a local call operation for the pending state.
+      call(data: CallData!): CallResult
+      # EstimateGas estimates the amount of gas that will be required for
+      # successful execution of a transaction for the pending state.
+      estimateGas(data: CallData!): Long!
+    }
+
     type Query {
-        # Account fetches an Ethereum account at the specified block number.
-        # If blockNumber is not provided, it defaults to the most recent block.
-        account(address: Address!, blockNumber: Long): Account!
         # Block fetches an Ethereum block by number or by hash. If neither is
         # supplied, the most recent known block is returned.
         block(number: Long, hash: Bytes32): Block
         # Blocks returns all the blocks between two numbers, inclusive. If
         # to is not supplied, it defaults to the most recent known block.
         blocks(from: Long!, to: Long): [Block!]!
+        # Pending returns the current pending state.
+        pending: Pending!
         # Transaction returns a transaction specified by its hash.
         transaction(hash: Bytes32!): Transaction
-        # Call executes a local call operation. If blockNumber is not specified,
-        # it defaults to the most recent known block.
-        call(data: CallData!, blockNumber: Long): CallResult
-        # EstimateGas estimates the amount of gas that will be required for
-        # successful execution of a transaction. If blockNumber is not specified,
-        # it defaults ot the most recent known block.
-        estimateGas(data: CallData!, blockNumber: Long): Long!
         # Logs returns log entries matching the provided filter.
         logs(filter: FilterCriteria!): [Log!]!
         # GasPrice returns the node's estimate of a gas price sufficient to
