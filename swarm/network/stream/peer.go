@@ -160,7 +160,7 @@ func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8,
 // SendPriority sends message to the peer using the outgoing priority queue
 func (p *Peer) SendPriority(ctx context.Context, msg interface{}, priority uint8) error {
 	defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("peer.sendpriority_t.%d", priority), nil).UpdateSince(time.Now())
-	tracing.StartSaveSpan(ctx)
+	ctx = tracing.StartSaveSpan(ctx)
 	metrics.GetOrRegisterCounter(fmt.Sprintf("peer.sendpriority.%d", priority), nil).Inc(1)
 	wmsg := WrappedPriorityMsg{
 		Context: ctx,
