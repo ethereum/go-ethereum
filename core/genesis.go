@@ -134,7 +134,7 @@ type GenesisMismatchError struct {
 }
 
 func (e *GenesisMismatchError) Error() string {
-	return fmt.Sprintf("database already contains an incompatible genesis block (have %x, new %x)", e.Stored[:8], e.New[:8])
+	return fmt.Sprintf("database contains incompatible genesis (have %x, new %x)", e.Stored, e.New)
 }
 
 // SetupGenesisBlock writes or updates the genesis block in db.
@@ -228,7 +228,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 // to the given database (or discards it if nil).
 func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if db == nil {
-		db = ethdb.NewMemDatabase()
+		db = rawdb.NewMemoryDatabase()
 	}
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
 	for addr, account := range g.Alloc {

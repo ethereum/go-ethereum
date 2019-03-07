@@ -19,13 +19,14 @@ package rawdb
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // ReadTxLookupEntry retrieves the positional metadata associated with a transaction
 // hash to allow retrieving the transaction or receipt by hash.
-func ReadTxLookupEntry(db DatabaseReader, hash common.Hash) common.Hash {
+func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) common.Hash {
 	data, _ := db.Get(txLookupKey(hash))
 	if len(data) == 0 {
 		return common.Hash{}
@@ -44,7 +45,7 @@ func ReadTxLookupEntry(db DatabaseReader, hash common.Hash) common.Hash {
 
 // WriteTxLookupEntries stores a positional metadata for every transaction from
 // a block, enabling hash based transaction and receipt lookups.
-func WriteTxLookupEntries(db DatabaseWriter, block *types.Block) {
+func WriteTxLookupEntries(db ethdb.Writer, block *types.Block) {
 	for _, tx := range block.Transactions() {
 		if err := db.Put(txLookupKey(tx.Hash()), block.Hash().Bytes()); err != nil {
 			log.Crit("Failed to store transaction lookup entry", "err", err)
@@ -53,13 +54,13 @@ func WriteTxLookupEntries(db DatabaseWriter, block *types.Block) {
 }
 
 // DeleteTxLookupEntry removes all transaction data associated with a hash.
-func DeleteTxLookupEntry(db DatabaseDeleter, hash common.Hash) {
+func DeleteTxLookupEntry(db ethdb.Deleter, hash common.Hash) {
 	db.Delete(txLookupKey(hash))
 }
 
 // ReadTransaction retrieves a specific transaction from the database, along with
 // its added positional metadata.
-func ReadTransaction(db DatabaseReader, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
+func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
 	blockHash := ReadTxLookupEntry(db, hash)
 	if blockHash == (common.Hash{}) {
 		return nil, common.Hash{}, 0, 0
@@ -84,7 +85,7 @@ func ReadTransaction(db DatabaseReader, hash common.Hash) (*types.Transaction, c
 
 // ReadReceipt retrieves a specific transaction receipt from the database, along with
 // its added positional metadata.
-func ReadReceipt(db DatabaseReader, hash common.Hash) (*types.Receipt, common.Hash, uint64, uint64) {
+func ReadReceipt(db ethdb.Reader, hash common.Hash) (*types.Receipt, common.Hash, uint64, uint64) {
 	blockHash := ReadTxLookupEntry(db, hash)
 	if blockHash == (common.Hash{}) {
 		return nil, common.Hash{}, 0, 0
@@ -105,13 +106,13 @@ func ReadReceipt(db DatabaseReader, hash common.Hash) (*types.Receipt, common.Ha
 
 // ReadBloomBits retrieves the compressed bloom bit vector belonging to the given
 // section and bit index from the.
-func ReadBloomBits(db DatabaseReader, bit uint, section uint64, head common.Hash) ([]byte, error) {
+func ReadBloomBits(db ethdb.Reader, bit uint, section uint64, head common.Hash) ([]byte, error) {
 	return db.Get(bloomBitsKey(bit, section, head))
 }
 
 // WriteBloomBits stores the compressed bloom bits vector belonging to the given
 // section and bit index.
-func WriteBloomBits(db DatabaseWriter, bit uint, section uint64, head common.Hash, bits []byte) {
+func WriteBloomBits(db ethdb.Writer, bit uint, section uint64, head common.Hash, bits []byte) {
 	if err := db.Put(bloomBitsKey(bit, section, head), bits); err != nil {
 		log.Crit("Failed to store bloom bits", "err", err)
 	}

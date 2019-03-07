@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
 func TestFreeClientPoolL10C100(t *testing.T) {
@@ -44,7 +44,7 @@ const testFreeClientPoolTicks = 500000
 func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 	var (
 		clock       mclock.Simulated
-		db          = ethdb.NewMemDatabase()
+		db          = rawdb.NewMemoryDatabase()
 		connected   = make([]bool, clientCount)
 		connTicks   = make([]int, clientCount)
 		disconnCh   = make(chan int, clientCount)

@@ -121,7 +121,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	log.Info("Allocated trie memory caches", "clean", common.StorageSize(config.TrieCleanCache)*1024*1024, "dirty", common.StorageSize(config.TrieDirtyCache)*1024*1024)
 
 	// Assemble the Ethereum object
-	chainDb, err := CreateDB(ctx, config, "chaindata")
+	chainDb, err := ctx.OpenDatabase("chaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/")
 	if err != nil {
 		return nil, err
 	}
@@ -218,18 +218,6 @@ func makeExtraData(extra []byte) []byte {
 		extra = nil
 	}
 	return extra
-}
-
-// CreateDB creates the chain database.
-func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Database, error) {
-	db, err := ctx.OpenDatabase(name, config.DatabaseCache, config.DatabaseHandles)
-	if err != nil {
-		return nil, err
-	}
-	if db, ok := db.(*ethdb.LDBDatabase); ok {
-		db.Meter("eth/db/chaindata/")
-	}
-	return db, nil
 }
 
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service

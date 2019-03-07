@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -331,7 +332,7 @@ type TestEntity struct {
 
 // newServerEnv creates a server testing environment with a connected test peer for testing purpose.
 func newServerEnv(t *testing.T, blocks int, protocol int, waitIndexers func(*core.ChainIndexer, *core.ChainIndexer, *core.ChainIndexer)) (*TestEntity, func()) {
-	db := ethdb.NewMemDatabase()
+	db := rawdb.NewMemoryDatabase()
 	cIndexer, bIndexer, btIndexer := testIndexers(db, nil, light.TestServerIndexerConfig)
 
 	pm := newTestProtocolManagerMust(t, false, blocks, testChainGen, nil, nil, db, nil)
@@ -363,7 +364,7 @@ func newServerEnv(t *testing.T, blocks int, protocol int, waitIndexers func(*cor
 // newClientServerEnv creates a client/server arch environment with a connected les server and light client pair
 // for testing purpose.
 func newClientServerEnv(t *testing.T, blocks int, protocol int, waitIndexers func(*core.ChainIndexer, *core.ChainIndexer, *core.ChainIndexer), newPeer bool) (*TestEntity, *TestEntity, func()) {
-	db, ldb := ethdb.NewMemDatabase(), ethdb.NewMemDatabase()
+	db, ldb := rawdb.NewMemoryDatabase(), rawdb.NewMemoryDatabase()
 	peers, lPeers := newPeerSet(), newPeerSet()
 
 	dist := newRequestDistributor(lPeers, make(chan struct{}), &mclock.System{})
