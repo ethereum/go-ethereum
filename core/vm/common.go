@@ -28,7 +28,7 @@ import (
 func calcMemSize64(off, l *big.Int) (uint64, bool) {
 	// if length is zero, memsize is always zero, regardless of offset
 	if l.Sign() == 0 {
-		return 0, true
+		return 0, false
 	}
 	// Check that neither offset nor length overflows
 	if off.BitLen() > 64 || l.BitLen() > 64 {
@@ -51,7 +51,7 @@ func calcMemSize64(off, l *big.Int) (uint64, bool) {
 func calcMemSize64WithUint(off *big.Int, length64 uint64) (uint64, bool) {
 	// if length is zero, memsize is always zero, regardless of offset
 	if length64 == 0 {
-		return 0, true
+		return 0, false
 	}
 	// Check that offset doesn't overflow
 	if off.BitLen() > 64 {
