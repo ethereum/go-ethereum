@@ -23,6 +23,8 @@ package ens
 
 import (
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"strings"
 
 	mh "github.com/multiformats/go-multihash"
@@ -283,6 +285,50 @@ func decodeMultiCodec(b []byte) (common.Hash, error) {
 	*/
 	//<protoCode uvarint><cid-version><multicodec-content-type><multihash-content-address>
 
+}
+
+func manualDecode(buf []byte) (common.Hash, error) {
+	if len(buf) < 2 {
+		return common.Hash{}, errors.New("buffer too short")
+	}
+
+	storageSys, n := binary.Uvarint(buf)
+	if storageSys != 0xe3 && storageSys != 0xe4 {
+		return common.Hash{}, errors.New("unknown storage system")
+	}
+	buf = buf[n:]
+	vers, n := binary.Uvarint(buf)
+
+	if vers != 1 {
+		return common.Hash{}, fmt.Errorf("expected 1 as the cid version number, got: %d", vers)
+	}
+
+	buf = buf[n:]
+	ctype, n := binary.Uvarint(buf)
+
+	if ctype != 0x99 {
+		return common.Hash{}, errors.New("unknown content type")
+	}
+	buf = buf[n:]
+	hashType, n := binary.Uvarint(buf)
+
+	if hashType != 0x1b {
+		return common.Hash{}, errors.New("unknown multihash type")
+	}
+
+	buf = buf[n:]
+	hashLen, n := binary.Uvarint(buf)
+
+	if hashLen != 32 {
+		return common.Hash{}, errors.New("odd hash length, swarm expects 32 bytes")
+	}
+	buf = buf[n:]
+
+	if len(buf) != int(hashLen) {
+		return common.Hash{}, errors.New("hash length mismatch")
+	}
+
+	return common.BytesToHash(buf), nil
 }
 
 // encodeCid encodes a swarm hash into an IPLD CID

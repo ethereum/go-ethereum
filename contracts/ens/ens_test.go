@@ -18,6 +18,8 @@ package ens
 
 import (
 	"bytes"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"testing"
@@ -124,6 +126,51 @@ func TestENS(t *testing.T) {
 		t.Fatalf("resolve error, expected %v, got %v", hash.Hex(), vhost.Hex())
 	}
 	t.Fatal("todo: try to set old contract with new multicodec stuff and assert fail, set new contract with multicodec stuff, encode, decode and assert returns correct hash")
+}
+func TestManuelCidDecode(t *testing.T) {
+	// call cid encode method with hash. expect byte slice returned, compare according to spec
+	bb := []byte{}
+	buf := make([]byte, binary.MaxVarintLen64)
+
+	for _, v := range []byte{0xe4, 0x01, 0x99, 0x1b, 0x20} {
+		n := binary.PutUvarint(buf, uint64(v))
+		bb = append(bb, buf[:n]...)
+	}
+	h := common.HexToHash("29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f")
+	bb = append(bb, h[:]...)
+	str := hex.EncodeToString(bb)
+	fmt.Println(str)
+	decodedHash, e := manualDecode(bb)
+	if e != nil {
+		t.Fatal(e)
+	}
+
+	if !bytes.Equal(decodedHash[:], h[:]) {
+		t.Fatal("hashes not equal")
+	}
+	/* from the EIP documentation
+	   storage system: Swarm (0xe4)
+	   CID version: 1 (0x01)
+	   content type: swarm-manifest (0x??)
+	   hash function: keccak-256 (0x1B)
+	   hash length: 32 bytes (0x20)
+	   hash: 29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f
+	*/
+
+}
+
+func TestManuelCidEncode(t *testing.T) {
+	// call cid encode method with hash. expect byte slice returned, compare according to spec
+
+	/* from the EIP documentation
+	   storage system: Swarm (0xe4)
+	   CID version: 1 (0x01)
+	   content type: swarm-manifest (0x??)
+	   hash function: keccak-256 (0x1B)
+	   hash length: 32 bytes (0x20)
+	   hash: 29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f
+	*/
+
 }
 
 func TestCIDSanity(t *testing.T) {
