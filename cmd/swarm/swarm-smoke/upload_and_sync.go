@@ -113,15 +113,15 @@ func trackChunks(testData []byte) error {
 				hostChunks = append(hostChunks, "1")
 			} else {
 				hostChunks = append(hostChunks, "0")
+				count++
 			}
 
-			count++
 		}
 		if count == 0 {
 			log.Info("host reported to have all chunks", "host", host)
 		}
 
-		log.Trace("chunks", "chunks", strings.Join(hostChunks, ""), "host", httpHost)
+		log.Trace("chunks", "chunks", strings.Join(hostChunks, ""), "host", host)
 	}
 	return nil
 }
