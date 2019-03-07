@@ -67,6 +67,12 @@ type chainInsertFn func(types.Blocks) (int, error)
 // peerDropFn is a callback type for dropping a peer detected as malicious.
 type peerDropFn func(id string)
 
+// peerHeaderRequesterFn is a callback type for sending a header retrieval request.
+type peerHeaderRequesterFn func(string) func(common.Hash) error
+
+// peerBodyRequesterFn is a callback type for sending a body retrieval request.
+type peerBodyRequesterFn func(string) func([]common.Hash) error
+
 // announce is the hash notification of the availability of a new block in the
 // network.
 type announce struct {
@@ -135,6 +141,8 @@ type Fetcher struct {
 	chainHeight    chainHeightFn      // Retrieves the current chain's height
 	insertChain    chainInsertFn      // Injects a batch of blocks into the chain
 	dropPeer       peerDropFn         // Drops a peer for misbehaving
+	headerRequest  peerHeaderRequesterFn
+	bodyRequest    peerBodyRequesterFn
 
 	// Testing hooks
 	announceChangeHook func(common.Hash, bool) // Method to call upon adding or deleting a hash from the announce list
@@ -145,7 +153,7 @@ type Fetcher struct {
 }
 
 // New creates a block fetcher to retrieve blocks based on hash announcements.
-func New(getBlock blockRetrievalFn, verifyHeader headerVerifierFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, insertChain chainInsertFn, dropPeer peerDropFn) *Fetcher {
+func New(getBlock blockRetrievalFn, verifyHeader headerVerifierFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, insertChain chainInsertFn, dropPeer peerDropFn, headerRequest peerHeaderRequesterFn, bodyRequest peerBodyRequesterFn) *Fetcher {
 	return &Fetcher{
 		notify:         make(chan *announce),
 		inject:         make(chan *inject),
@@ -167,6 +175,8 @@ func New(getBlock blockRetrievalFn, verifyHeader headerVerifierFn, broadcastBloc
 		chainHeight:    chainHeight,
 		insertChain:    insertChain,
 		dropPeer:       dropPeer,
+		headerRequest:  headerRequest,
+		bodyRequest:    bodyRequest,
 	}
 }
 
@@ -296,17 +306,35 @@ func (f *Fetcher) loop() {
 			}
 			// If too high up the chain or phase, continue later
 			number := op.block.NumberU64()
-			if number > height+1 {
-				f.queue.Push(op, -int64(number))
-				if f.queueChangeHook != nil {
-					f.queueChangeHook(hash, true)
-				}
-				break
-			}
 			// Otherwise if fresh and still unknown, try and import
 			if number+maxUncleDist < height || f.getBlock(hash) != nil {
 				f.forgetBlock(hash)
 				continue
+			}
+			parentHash := op.block.ParentHash()
+			if f.getBlock(parentHash) == nil {
+				f.queue.Push(op, -int64(number))
+				if f.queueChangeHook != nil {
+					f.queueChangeHook(hash, true)
+				}
+				if len(f.announced[parentHash]) > 0 {
+					// only request for parent hash once
+					break
+				}
+				headerRequestFn := f.headerRequest(op.origin)
+				bodyRequestFn := f.bodyRequest(op.origin)
+				if headerRequestFn == nil || bodyRequestFn == nil {
+					log.Info("Peer lost while fetching for parent", "peer", op.origin)
+					break
+				}
+				go func() {
+					log.Info("Notify of parent hash", "hash", parentHash, "number", op.block.NumberU64()-1, "peer", op.origin)
+					err := f.Notify(op.origin, parentHash, op.block.NumberU64()-1, time.Now(), headerRequestFn, bodyRequestFn)
+					if err != nil {
+						log.Error("Unable to notify of parent block", "error", err)
+					}
+				}()
+				break
 			}
 			f.insert(op.origin, op.block)
 		}

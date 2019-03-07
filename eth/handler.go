@@ -182,7 +182,19 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		atomic.StoreUint32(&manager.acceptTxs, 1) // Mark initial sync done on any fetcher import
 		return manager.blockchain.InsertChain(blocks)
 	}
-	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, manager.removePeer)
+	headerRequest := func(id string) func(common.Hash) error {
+		if peer := manager.peers.Peer(id); peer != nil {
+			return peer.RequestOneHeader
+		}
+		return nil
+	}
+	bodyRequest := func(id string) func([]common.Hash) error {
+		if peer := manager.peers.Peer(id); peer != nil {
+			return peer.RequestBodies
+		}
+		return nil
+	}
+	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, manager.removePeer, headerRequest, bodyRequest)
 
 	return manager, nil
 }
