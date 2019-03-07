@@ -151,6 +151,7 @@ func TestCIDSanity(t *testing.T) {
 	if decoded.Length != 32 {
 		t.Fatal("wrong length")
 	}
+	fmt.Println(cc.StringOfBase(multibase.Base16))
 
 	bbbb, e := cc.StringOfBase(multibase.Base16)
 	if e != nil {
@@ -159,9 +160,8 @@ func TestCIDSanity(t *testing.T) {
 	fmt.Println(bbbb)
 	//create the CID string artificially
 	hashStr = "f01551b20" + hashStr
-	fmt.Println(cc.Hash())
 
-	c, err := cid.Decode(hashStr) //"zdvgqEMYmNeH5fKciougvQcfzMcNjF3Z1tPouJ8C7pc3pe63k")
+	c, err := cid.Decode(hashStr)
 	if err != nil {
 		t.Fatalf("Error decoding CID: %v", err)
 	}
