@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
 
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -215,6 +216,8 @@ func (n *NetStore) getOrCreateFetcher(ctx context.Context, ref Address) *fetcher
 		cctx,
 		"netstore.fetcher",
 	)
+
+	sp.LogFields(olog.String("ref", ref.String()))
 	fetcher := newFetcher(sp, ref, n.NewNetFetcherFunc(cctx, ref, peers), destroy, peers, n.closeC)
 	n.fetchers.Add(key, fetcher)
 
