@@ -274,9 +274,7 @@ func (w *wallet) close() error {
 	w.device = nil
 
 	w.accounts, w.paths = nil, nil
-	w.driver.Close()
-
-	return nil
+	return w.driver.Close()
 }
 
 // Accounts implements accounts.Wallet, returning the list of accounts pinned to
