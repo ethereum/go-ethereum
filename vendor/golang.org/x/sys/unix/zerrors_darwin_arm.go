@@ -393,7 +393,7 @@ const (
 	DLT_TZSP                          = 0x80
 	DLT_USB                           = 0xba
 	DLT_USB_LINUX                     = 0xbd
-	DLT_USB_LINUX_MMAPPED             = 0XDC
+	DLT_USB_LINUX_MMAPPED             = 0xdc
 	DLT_USER0                         = 0x93
 	DLT_USER1                         = 0x94
 	DLT_USER10                        = 0x9d
@@ -912,7 +912,7 @@ const (
 	MCL_CURRENT                       = 0x1
 	MCL_FUTURE                        = 0x2
 	MNT_ASYNC                         = 0x40
-	MNT_AUXDCUNTED                   = 0x400000
+	MNT_AUTOMOUNTED                   = 0x400000
 	MNT_CMDFLAGS                      = 0xf0000
 	MNT_CPROTECT                      = 0x80
 	MNT_DEFWRITE                      = 0x2000000
