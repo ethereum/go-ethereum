@@ -69,7 +69,11 @@ func (m *mockRequester) doRequest(ctx context.Context, request *Request) (*enode
 func TestFetcherSingleRequest(t *testing.T) {
 	requester := newMockRequester()
 	addr := make([]byte, 32)
-	fetcher := NewFetcher(addr, requester.doRequest, true)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	fetcher := NewFetcher(ctx, addr, requester.doRequest, true)
 
 	peers := []string{"a", "b", "c", "d"}
 	peersToSkip := &sync.Map{}
@@ -77,13 +81,9 @@ func TestFetcherSingleRequest(t *testing.T) {
 		peersToSkip.Store(p, time.Now())
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	go fetcher.run(peersToSkip)
 
-	go fetcher.run(ctx, peersToSkip)
-
-	rctx := context.Background()
-	fetcher.Request(rctx, 0)
+	fetcher.Request(0)
 
 	select {
 	case request := <-requester.requestC:
@@ -115,20 +115,19 @@ func TestFetcherSingleRequest(t *testing.T) {
 func TestFetcherCancelStopsFetcher(t *testing.T) {
 	requester := newMockRequester()
 	addr := make([]byte, 32)
-	fetcher := NewFetcher(addr, requester.doRequest, true)
-
-	peersToSkip := &sync.Map{}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	fetcher := NewFetcher(ctx, addr, requester.doRequest, true)
+
+	peersToSkip := &sync.Map{}
+
 	// we start the fetcher, and then we immediately cancel the context
-	go fetcher.run(ctx, peersToSkip)
+	go fetcher.run(peersToSkip)
 	cancel()
 
-	rctx, rcancel := context.WithTimeout(ctx, 100*time.Millisecond)
-	defer rcancel()
 	// we call Request with an active context
-	fetcher.Request(rctx, 0)
+	fetcher.Request(0)
 
 	// fetcher should not initiate request, we can only check by waiting a bit and making sure no request is happening
 	select {
@@ -140,23 +139,23 @@ func TestFetcherCancelStopsFetcher(t *testing.T) {
 
 // TestFetchCancelStopsRequest tests that calling a Request function with a cancelled context does not initiate a request
 func TestFetcherCancelStopsRequest(t *testing.T) {
+	t.Skip("since context is now per fetcher, this test is likely redundant")
+
 	requester := newMockRequester(100 * time.Millisecond)
 	addr := make([]byte, 32)
-	fetcher := NewFetcher(addr, requester.doRequest, true)
-
-	peersToSkip := &sync.Map{}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// we start the fetcher with an active context
-	go fetcher.run(ctx, peersToSkip)
+	fetcher := NewFetcher(ctx, addr, requester.doRequest, true)
 
-	rctx, rcancel := context.WithCancel(context.Background())
-	rcancel()
+	peersToSkip := &sync.Map{}
+
+	// we start the fetcher with an active context
+	go fetcher.run(peersToSkip)
 
 	// we call Request with a cancelled context
-	fetcher.Request(rctx, 0)
+	fetcher.Request(0)
 
 	// fetcher should not initiate request, we can only check by waiting a bit and making sure no request is happening
 	select {
@@ -166,8 +165,7 @@ func TestFetcherCancelStopsRequest(t *testing.T) {
 	}
 
 	// if there is another Request with active context, there should be a request, because the fetcher itself is not cancelled
-	rctx = context.Background()
-	fetcher.Request(rctx, 0)
+	fetcher.Request(0)
 
 	select {
 	case <-requester.requestC:
@@ -182,19 +180,19 @@ func TestFetcherCancelStopsRequest(t *testing.T) {
 func TestFetcherOfferUsesSource(t *testing.T) {
 	requester := newMockRequester(100 * time.Millisecond)
 	addr := make([]byte, 32)
-	fetcher := NewFetcher(addr, requester.doRequest, true)
-
-	peersToSkip := &sync.Map{}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// start the fetcher
-	go fetcher.run(ctx, peersToSkip)
+	fetcher := NewFetcher(ctx, addr, requester.doRequest, true)
 
-	rctx := context.Background()
+	peersToSkip := &sync.Map{}
+
+	// start the fetcher
+	go fetcher.run(peersToSkip)
+
 	// call the Offer function with the source peer
-	fetcher.Offer(rctx, &sourcePeerID)
+	fetcher.Offer(&sourcePeerID)
 
 	// fetcher should not initiate request
 	select {
@@ -204,8 +202,7 @@ func TestFetcherOfferUsesSource(t *testing.T) {
 	}
 
 	// call Request after the Offer
-	rctx = context.Background()
-	fetcher.Request(rctx, 0)
+	fetcher.Request(0)
 
 	// there should be exactly 1 request coming from fetcher
 	var request *Request
@@ -234,19 +231,19 @@ func TestFetcherOfferUsesSource(t *testing.T) {
 func TestFetcherOfferAfterRequestUsesSourceFromContext(t *testing.T) {
 	requester := newMockRequester(100 * time.Millisecond)
 	addr := make([]byte, 32)
-	fetcher := NewFetcher(addr, requester.doRequest, true)
-
-	peersToSkip := &sync.Map{}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	fetcher := NewFetcher(ctx, addr, requester.doRequest, true)
+
+	peersToSkip := &sync.Map{}
+
 	// start the fetcher
-	go fetcher.run(ctx, peersToSkip)
+	go fetcher.run(peersToSkip)
 
 	// call Request first
-	rctx := context.Background()
-	fetcher.Request(rctx, 0)
+	fetcher.Request(0)
 
 	// there should be a request coming from fetcher
 	var request *Request
@@ -260,7 +257,7 @@ func TestFetcherOfferAfterRequestUsesSourceFromContext(t *testing.T) {
 	}
 
 	// after the Request call Offer
-	fetcher.Offer(context.Background(), &sourcePeerID)
+	fetcher.Offer(&sourcePeerID)
 
 	// there should be a request coming from fetcher
 	select {
@@ -283,25 +280,21 @@ func TestFetcherOfferAfterRequestUsesSourceFromContext(t *testing.T) {
 func TestFetcherRetryOnTimeout(t *testing.T) {
 	requester := newMockRequester()
 	addr := make([]byte, 32)
-	fetcher := NewFetcher(addr, requester.doRequest, true)
-
-	peersToSkip := &sync.Map{}
-
-	// set searchTimeOut to low value so the test is quicker
-	defer func(t time.Duration) {
-		searchTimeout = t
-	}(searchTimeout)
-	searchTimeout = 250 * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	fetcher := NewFetcher(ctx, addr, requester.doRequest, true)
+	// set searchTimeOut to low value so the test is quicker
+	fetcher.searchTimeout = 250 * time.Millisecond
+
+	peersToSkip := &sync.Map{}
+
 	// start the fetcher
-	go fetcher.run(ctx, peersToSkip)
+	go fetcher.run(peersToSkip)
 
 	// call the fetch function with an active context
-	rctx := context.Background()
-	fetcher.Request(rctx, 0)
+	fetcher.Request(0)
 
 	// after 100ms the first request should be initiated
 	time.Sleep(100 * time.Millisecond)
@@ -343,7 +336,7 @@ func TestFetcherFactory(t *testing.T) {
 
 	fetcher := fetcherFactory.New(context.Background(), addr, peersToSkip)
 
-	fetcher.Request(context.Background(), 0)
+	fetcher.Request(0)
 
 	// check if the created fetchFunction really starts a fetcher and initiates a request
 	select {
@@ -357,23 +350,21 @@ func TestFetcherFactory(t *testing.T) {
 func TestFetcherRequestQuitRetriesRequest(t *testing.T) {
 	requester := newMockRequester()
 	addr := make([]byte, 32)
-	fetcher := NewFetcher(addr, requester.doRequest, true)
-
-	// make sure searchTimeout is long so it is sure the request is not retried because of timeout
-	defer func(t time.Duration) {
-		searchTimeout = t
-	}(searchTimeout)
-	searchTimeout = 10 * time.Second
-
-	peersToSkip := &sync.Map{}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go fetcher.run(ctx, peersToSkip)
+	fetcher := NewFetcher(ctx, addr, requester.doRequest, true)
 
-	rctx := context.Background()
-	fetcher.Request(rctx, 0)
+	// make sure the searchTimeout is long so it is sure the request is not
+	// retried because of timeout
+	fetcher.searchTimeout = 10 * time.Second
+
+	peersToSkip := &sync.Map{}
+
+	go fetcher.run(peersToSkip)
+
+	fetcher.Request(0)
 
 	select {
 	case <-requester.requestC:
@@ -466,17 +457,15 @@ func TestRequestSkipPeerPermanent(t *testing.T) {
 func TestFetcherMaxHopCount(t *testing.T) {
 	requester := newMockRequester()
 	addr := make([]byte, 32)
-	fetcher := NewFetcher(addr, requester.doRequest, true)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	fetcher := NewFetcher(ctx, addr, requester.doRequest, true)
+
 	peersToSkip := &sync.Map{}
 
-	go fetcher.run(ctx, peersToSkip)
-
-	rctx := context.Background()
-	fetcher.Request(rctx, maxHopCount)
+	go fetcher.run(peersToSkip)
 
 	// if hopCount is already at max no request should be initiated
 	select {

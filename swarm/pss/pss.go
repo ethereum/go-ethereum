@@ -38,7 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/pot"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -112,10 +112,11 @@ func (params *PssParams) WithPrivateKey(privatekey *ecdsa.PrivateKey) *PssParams
 //
 // Implements node.Service
 type Pss struct {
-	*network.Kademlia                   // we can get the Kademlia address from this
-	privateKey        *ecdsa.PrivateKey // pss can have it's own independent key
-	w                 *whisper.Whisper  // key and encryption backend
-	auxAPIs           []rpc.API         // builtins (handshake, test) can add APIs
+	*network.Kademlia // we can get the Kademlia address from this
+	*KeyStore
+
+	privateKey *ecdsa.PrivateKey // pss can have it's own independent key
+	auxAPIs    []rpc.API         // builtins (handshake, test) can add APIs
 
 	// sending and forwarding
 	fwdPool         map[string]*protocols.Peer // keep track of all peers sitting on the pssmsg routing layer
@@ -127,15 +128,6 @@ type Pss struct {
 	paddingByteSize int
 	capstring       string
 	outbox          chan *PssMsg
-
-	// keys and peers
-	pubKeyPool                 map[string]map[Topic]*pssPeer // mapping of hex public keys to peer address by topic.
-	pubKeyPoolMu               sync.RWMutex
-	symKeyPool                 map[string]map[Topic]*pssPeer // mapping of symkeyids to peer address by topic.
-	symKeyPoolMu               sync.RWMutex
-	symKeyDecryptCache         []*string // fast lookup of symkeys recently used for decryption; last used is on top of stack
-	symKeyDecryptCacheCursor   int       // modular cursor pointing to last used, wraps on symKeyDecryptCache array
-	symKeyDecryptCacheCapacity int       // max amount of symkeys to keep.
 
 	// message handling
 	handlers         map[Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
@@ -164,9 +156,10 @@ func NewPss(k *network.Kademlia, params *PssParams) (*Pss, error) {
 		Version: pssVersion,
 	}
 	ps := &Pss{
-		Kademlia:   k,
+		Kademlia: k,
+		KeyStore: loadKeyStore(),
+
 		privateKey: params.privateKey,
-		w:          whisper.New(&whisper.DefaultConfig),
 		quitC:      make(chan struct{}),
 
 		fwdPool:         make(map[string]*protocols.Peer),
@@ -176,11 +169,6 @@ func NewPss(k *network.Kademlia, params *PssParams) (*Pss, error) {
 		paddingByteSize: defaultPaddingByteSize,
 		capstring:       cap.String(),
 		outbox:          make(chan *PssMsg, defaultOutboxCapacity),
-
-		pubKeyPool:                 make(map[string]map[Topic]*pssPeer),
-		symKeyPool:                 make(map[string]map[Topic]*pssPeer),
-		symKeyDecryptCache:         make([]*string, params.SymKeyCacheCapacity),
-		symKeyDecryptCacheCapacity: params.SymKeyCacheCapacity,
 
 		handlers:         make(map[Topic]map[*handler]bool),
 		topicHandlerCaps: make(map[Topic]*handlerCaps),
@@ -520,227 +508,6 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 }
 
 /////////////////////////////////////////////////////////////////////
-// SECTION: Encryption
-/////////////////////////////////////////////////////////////////////
-
-// Links a peer ECDSA public key to a topic
-//
-// This is required for asymmetric message exchange
-// on the given topic
-//
-// The value in `address` will be used as a routing hint for the
-// public key / topic association
-func (p *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, address PssAddress) error {
-	if err := validateAddress(address); err != nil {
-		return err
-	}
-	pubkeybytes := crypto.FromECDSAPub(pubkey)
-	if len(pubkeybytes) == 0 {
-		return fmt.Errorf("invalid public key: %v", pubkey)
-	}
-	pubkeyid := common.ToHex(pubkeybytes)
-	psp := &pssPeer{
-		address: address,
-	}
-	p.pubKeyPoolMu.Lock()
-	if _, ok := p.pubKeyPool[pubkeyid]; !ok {
-		p.pubKeyPool[pubkeyid] = make(map[Topic]*pssPeer)
-	}
-	p.pubKeyPool[pubkeyid][topic] = psp
-	p.pubKeyPoolMu.Unlock()
-	log.Trace("added pubkey", "pubkeyid", pubkeyid, "topic", topic, "address", address)
-	return nil
-}
-
-// Automatically generate a new symkey for a topic and address hint
-func (p *Pss) GenerateSymmetricKey(topic Topic, address PssAddress, addToCache bool) (string, error) {
-	keyid, err := p.w.GenerateSymKey()
-	if err != nil {
-		return "", err
-	}
-	p.addSymmetricKeyToPool(keyid, topic, address, addToCache, false)
-	return keyid, nil
-}
-
-// Links a peer symmetric key (arbitrary byte sequence) to a topic
-//
-// This is required for symmetrically encrypted message exchange
-// on the given topic
-//
-// The key is stored in the whisper backend.
-//
-// If addtocache is set to true, the key will be added to the cache of keys
-// used to attempt symmetric decryption of incoming messages.
-//
-// Returns a string id that can be used to retrieve the key bytes
-// from the whisper backend (see pss.GetSymmetricKey())
-func (p *Pss) SetSymmetricKey(key []byte, topic Topic, address PssAddress, addtocache bool) (string, error) {
-	if err := validateAddress(address); err != nil {
-		return "", err
-	}
-	return p.setSymmetricKey(key, topic, address, addtocache, true)
-}
-
-func (p *Pss) setSymmetricKey(key []byte, topic Topic, address PssAddress, addtocache bool, protected bool) (string, error) {
-	keyid, err := p.w.AddSymKeyDirect(key)
-	if err != nil {
-		return "", err
-	}
-	p.addSymmetricKeyToPool(keyid, topic, address, addtocache, protected)
-	return keyid, nil
-}
-
-// adds a symmetric key to the pss key pool, and optionally adds the key
-// to the collection of keys used to attempt symmetric decryption of
-// incoming messages
-func (p *Pss) addSymmetricKeyToPool(keyid string, topic Topic, address PssAddress, addtocache bool, protected bool) {
-	psp := &pssPeer{
-		address:   address,
-		protected: protected,
-	}
-	p.symKeyPoolMu.Lock()
-	if _, ok := p.symKeyPool[keyid]; !ok {
-		p.symKeyPool[keyid] = make(map[Topic]*pssPeer)
-	}
-	p.symKeyPool[keyid][topic] = psp
-	p.symKeyPoolMu.Unlock()
-	if addtocache {
-		p.symKeyDecryptCacheCursor++
-		p.symKeyDecryptCache[p.symKeyDecryptCacheCursor%cap(p.symKeyDecryptCache)] = &keyid
-	}
-	key, _ := p.GetSymmetricKey(keyid)
-	log.Trace("added symkey", "symkeyid", keyid, "symkey", common.ToHex(key), "topic", topic, "address", address, "cache", addtocache)
-}
-
-// Returns a symmetric key byte seqyence stored in the whisper backend
-// by its unique id
-//
-// Passes on the error value from the whisper backend
-func (p *Pss) GetSymmetricKey(symkeyid string) ([]byte, error) {
-	symkey, err := p.w.GetSymKey(symkeyid)
-	if err != nil {
-		return nil, err
-	}
-	return symkey, nil
-}
-
-// Returns all recorded topic and address combination for a specific public key
-func (p *Pss) GetPublickeyPeers(keyid string) (topic []Topic, address []PssAddress, err error) {
-	p.pubKeyPoolMu.RLock()
-	defer p.pubKeyPoolMu.RUnlock()
-	for t, peer := range p.pubKeyPool[keyid] {
-		topic = append(topic, t)
-		address = append(address, peer.address)
-	}
-
-	return topic, address, nil
-}
-
-func (p *Pss) getPeerAddress(keyid string, topic Topic) (PssAddress, error) {
-	p.pubKeyPoolMu.RLock()
-	defer p.pubKeyPoolMu.RUnlock()
-	if peers, ok := p.pubKeyPool[keyid]; ok {
-		if t, ok := peers[topic]; ok {
-			return t.address, nil
-		}
-	}
-	return nil, fmt.Errorf("peer with pubkey %s, topic %x not found", keyid, topic)
-}
-
-// Attempt to decrypt, validate and unpack a
-// symmetrically encrypted message
-// If successful, returns the unpacked whisper ReceivedMessage struct
-// encapsulating the decrypted message, and the whisper backend id
-// of the symmetric key used to decrypt the message.
-// It fails if decryption of the message fails or if the message is corrupted
-func (p *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, PssAddress, error) {
-	metrics.GetOrRegisterCounter("pss.process.sym", nil).Inc(1)
-
-	for i := p.symKeyDecryptCacheCursor; i > p.symKeyDecryptCacheCursor-cap(p.symKeyDecryptCache) && i > 0; i-- {
-		symkeyid := p.symKeyDecryptCache[i%cap(p.symKeyDecryptCache)]
-		symkey, err := p.w.GetSymKey(*symkeyid)
-		if err != nil {
-			continue
-		}
-		recvmsg, err := envelope.OpenSymmetric(symkey)
-		if err != nil {
-			continue
-		}
-		if !recvmsg.Validate() {
-			return nil, "", nil, fmt.Errorf("symmetrically encrypted message has invalid signature or is corrupt")
-		}
-		p.symKeyPoolMu.Lock()
-		from := p.symKeyPool[*symkeyid][Topic(envelope.Topic)].address
-		p.symKeyPoolMu.Unlock()
-		p.symKeyDecryptCacheCursor++
-		p.symKeyDecryptCache[p.symKeyDecryptCacheCursor%cap(p.symKeyDecryptCache)] = symkeyid
-		return recvmsg, *symkeyid, from, nil
-	}
-	return nil, "", nil, fmt.Errorf("could not decrypt message")
-}
-
-// Attempt to decrypt, validate and unpack an
-// asymmetrically encrypted message
-// If successful, returns the unpacked whisper ReceivedMessage struct
-// encapsulating the decrypted message, and the byte representation of
-// the public key used to decrypt the message.
-// It fails if decryption of message fails, or if the message is corrupted
-func (p *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, PssAddress, error) {
-	metrics.GetOrRegisterCounter("pss.process.asym", nil).Inc(1)
-
-	recvmsg, err := envelope.OpenAsymmetric(p.privateKey)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("could not decrypt message: %s", err)
-	}
-	// check signature (if signed), strip padding
-	if !recvmsg.Validate() {
-		return nil, "", nil, fmt.Errorf("invalid message")
-	}
-	pubkeyid := common.ToHex(crypto.FromECDSAPub(recvmsg.Src))
-	var from PssAddress
-	p.pubKeyPoolMu.Lock()
-	if p.pubKeyPool[pubkeyid][Topic(envelope.Topic)] != nil {
-		from = p.pubKeyPool[pubkeyid][Topic(envelope.Topic)].address
-	}
-	p.pubKeyPoolMu.Unlock()
-	return recvmsg, pubkeyid, from, nil
-}
-
-// Symkey garbage collection
-// a key is removed if:
-// - it is not marked as protected
-// - it is not in the incoming decryption cache
-func (p *Pss) cleanKeys() (count int) {
-	for keyid, peertopics := range p.symKeyPool {
-		var expiredtopics []Topic
-		for topic, psp := range peertopics {
-			if psp.protected {
-				continue
-			}
-
-			var match bool
-			for i := p.symKeyDecryptCacheCursor; i > p.symKeyDecryptCacheCursor-cap(p.symKeyDecryptCache) && i > 0; i-- {
-				cacheid := p.symKeyDecryptCache[i%cap(p.symKeyDecryptCache)]
-				if *cacheid == keyid {
-					match = true
-				}
-			}
-			if !match {
-				expiredtopics = append(expiredtopics, topic)
-			}
-		}
-		for _, topic := range expiredtopics {
-			p.symKeyPoolMu.Lock()
-			delete(p.symKeyPool[keyid], topic)
-			log.Trace("symkey cleanup deletion", "symkeyid", keyid, "topic", topic, "val", p.symKeyPool[keyid])
-			p.symKeyPoolMu.Unlock()
-			count++
-		}
-	}
-	return
-}
-
-/////////////////////////////////////////////////////////////////////
 // SECTION: Message sending
 /////////////////////////////////////////////////////////////////////
 
@@ -797,9 +564,7 @@ func (p *Pss) SendSym(symkeyid string, topic Topic, msg []byte) error {
 	if err != nil {
 		return fmt.Errorf("missing valid send symkey %s: %v", symkeyid, err)
 	}
-	p.symKeyPoolMu.Lock()
-	psp, ok := p.symKeyPool[symkeyid][topic]
-	p.symKeyPoolMu.Unlock()
+	psp, ok := p.getPeerSym(symkeyid, topic)
 	if !ok {
 		return fmt.Errorf("invalid topic '%s' for symkey '%s'", topic.String(), symkeyid)
 	}
@@ -813,9 +578,7 @@ func (p *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
 	if _, err := crypto.UnmarshalPubkey(common.FromHex(pubkeyid)); err != nil {
 		return fmt.Errorf("Cannot unmarshal pubkey: %x", pubkeyid)
 	}
-	p.pubKeyPoolMu.Lock()
-	psp, ok := p.pubKeyPool[pubkeyid][topic]
-	p.pubKeyPoolMu.Unlock()
+	psp, ok := p.getPeerPub(pubkeyid, topic)
 	if !ok {
 		return fmt.Errorf("invalid topic '%s' for pubkey '%s'", topic.String(), pubkeyid)
 	}

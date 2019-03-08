@@ -23,7 +23,7 @@ import (
 const (
 	VersionMajor = 0        // Major version component of the current release
 	VersionMinor = 3        // Minor version component of the current release
-	VersionPatch = 9        // Patch version component of the current release
+	VersionPatch = 11       // Patch version component of the current release
 	VersionMeta  = "stable" // Version metadata to append to the version string
 )
 
@@ -40,6 +40,9 @@ var VersionWithMeta = func() string {
 	}
 	return v
 }()
+
+// Git SHA1 commit hash of the release, will be set by main.init() function
+var GitCommit string
 
 // ArchiveVersion holds the textual version string used for Swarm archives.
 // e.g. "0.3.0-dea1ce05" for stable releases, or

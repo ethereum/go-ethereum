@@ -44,7 +44,7 @@ func (s *Simulation) NodeIDs() (ids []enode.ID) {
 func (s *Simulation) UpNodeIDs() (ids []enode.ID) {
 	nodes := s.Net.GetNodes()
 	for _, node := range nodes {
-		if node.Up {
+		if node.Up() {
 			ids = append(ids, node.ID())
 		}
 	}
@@ -55,7 +55,7 @@ func (s *Simulation) UpNodeIDs() (ids []enode.ID) {
 func (s *Simulation) DownNodeIDs() (ids []enode.ID) {
 	nodes := s.Net.GetNodes()
 	for _, node := range nodes {
-		if !node.Up {
+		if !node.Up() {
 			ids = append(ids, node.ID())
 		}
 	}

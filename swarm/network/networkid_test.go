@@ -44,7 +44,7 @@ var (
 
 const (
 	NumberOfNets = 4
-	MaxTimeout   = 6
+	MaxTimeout   = 15 * time.Second
 )
 
 func init() {
@@ -76,13 +76,12 @@ func TestNetworkID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error setting up network: %v", err)
 	}
-	defer func() {
-		//shutdown the snapshot network
-		log.Trace("Shutting down network")
-		net.Shutdown()
-	}()
 	//let's sleep to ensure all nodes are connected
 	time.Sleep(1 * time.Second)
+	// shutdown the the network to avoid race conditions
+	// on accessing kademlias global map while network nodes
+	// are accepting messages
+	net.Shutdown()
 	//for each group sharing the same network ID...
 	for _, netIDGroup := range nodeMap {
 		log.Trace("netIDGroup size", "size", len(netIDGroup))
@@ -147,7 +146,7 @@ func setupNetwork(numnodes int) (net *simulations.Network, err error) {
 			return nil, fmt.Errorf("create node %d rpc client fail: %v", i, err)
 		}
 		//now setup and start event watching in order to know when we can upload
-		ctx, watchCancel := context.WithTimeout(context.Background(), MaxTimeout*time.Second)
+		ctx, watchCancel := context.WithTimeout(context.Background(), MaxTimeout)
 		defer watchCancel()
 		watchSubscriptionEvents(ctx, nodes[i].ID(), client, errc, quitC)
 		//on every iteration we connect to all previous ones
