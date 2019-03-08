@@ -99,9 +99,13 @@ func (s *Simulation) kademlias() (ks map[enode.ID]*network.Kademlia) {
 	return ks
 }
 
+// WaitTillSnapshotRecreated is blocking until all the connections specified
+// in the snapshot are actually up and running.
+// It differs from WaitTillHealthy, which waits only until all the kademlias are
+// healthy (it might happen even before all the connections are established).
 func (s *Simulation) WaitTillSnapshotRecreated(ctx context.Context, snap simulations.Snapshot) error {
-	expected := listSnapshotConnections(snap.Conns)
-	ticker := time.NewTicker(16 * time.Millisecond)
+	expected := getSnapshotConnections(snap.Conns)
+	ticker := time.NewTicker(150 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
@@ -109,7 +113,7 @@ func (s *Simulation) WaitTillSnapshotRecreated(ctx context.Context, snap simulat
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			actual := s.listActualConnections()
+			actual := s.getActualConnections()
 			if isAllDeployed(expected, actual) {
 				return nil
 			}
@@ -117,7 +121,7 @@ func (s *Simulation) WaitTillSnapshotRecreated(ctx context.Context, snap simulat
 	}
 }
 
-func (s *Simulation) listActualConnections() (res []uint64) {
+func (s *Simulation) getActualConnections() (res []uint64) {
 	kademlias := s.kademlias()
 	for base, k := range kademlias {
 		k.EachConn(base[:], 256, func(p *network.Peer, _ int) bool {
@@ -131,9 +135,10 @@ func (s *Simulation) listActualConnections() (res []uint64) {
 	return res
 }
 
-func listSnapshotConnections(conns []simulations.Conn) (res []uint64) {
+func getSnapshotConnections(conns []simulations.Conn) (res []uint64) {
 	for _, c := range conns {
 		res = append(res, getConnectionHash(c.One, c.Other))
+		c.String()
 	}
 	return res
 }
@@ -150,17 +155,19 @@ func getConnectionHash(a, b enode.ID) uint64 {
 
 // returns true if all connections in expected are listed in actual
 func isAllDeployed(expected []uint64, actual []uint64) bool {
+	if len(expected) == 0 {
+		return true
+	}
+
 	exp := make([]uint64, len(expected))
 	copy(exp, expected)
-	if len(exp) > 0 {
-		for _, c := range actual {
-			// remove value c from exp
-			for i := 0; i < len(exp); i++ {
-				if exp[i] == c {
-					exp = removeListElement(exp, i)
-					if len(exp) == 0 {
-						return true
-					}
+	for _, c := range actual {
+		// remove value c from exp
+		for i := 0; i < len(exp); i++ {
+			if exp[i] == c {
+				exp = removeListElement(exp, i)
+				if len(exp) == 0 {
+					return true
 				}
 			}
 		}

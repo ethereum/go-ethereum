@@ -51,10 +51,10 @@ var (
 	mu    sync.Mutex // keeps handlerDonc in sync
 	sim   *simulation.Simulation
 
-	handlerDone   bool // set to true on termination of the simulation run
-	msgsToReceive int  // total count of messages to receive, used for terminating the simulation run
-	maxMessages   int
-	msgCnt        int
+	handlerDone bool // set to true on termination of the simulation run
+	requiredMessages int
+	allowedMessages int
+	messageCount int
 
 	kademlias    map[enode.ID]*network.Kademlia
 	nodeAddrs    map[enode.ID][]byte      // make predictable overlay addresses from the generated random enode ids
@@ -72,9 +72,9 @@ var (
 
 func resetTestVariables() {
 	handlerDone = false
-	msgsToReceive = 0
-	maxMessages = 0
-	msgCnt = 0
+	requiredMessages = 0
+	allowedMessages = 0
+	messageCount = 0
 	msgs = nil
 	sim = nil
 
@@ -133,8 +133,8 @@ func readSnapshot(t *testing.T, nodeCount int) simulations.Snapshot {
 	return snap
 }
 
-func assingTestVariables(sim *simulation.Simulation, msgCount int) {
-	log.Debug("-------------------------------------------------------------------------")
+func assignTestVariables(sim *simulation.Simulation, msgCount int) {
+	log.Debug("TestProxNetwork start")
 	for _, nodeId := range sim.NodeIDs() {
 		nodeAddrs[nodeId] = nodeIDToAddr(nodeId)
 	}
@@ -144,7 +144,7 @@ func assingTestVariables(sim *simulation.Simulation, msgCount int) {
 		msgs = append(msgs, msgAddr.Bytes())
 		smallestPo := 256
 		var targets []enode.ID
-		var prev int
+		var closestPO int
 
 		// loop through all nodes and add the message to recipient indices
 		for _, nod := range sim.Net.GetNodes() {
@@ -152,16 +152,16 @@ func assingTestVariables(sim *simulation.Simulation, msgCount int) {
 			depth := kademlias[nod.ID()].NeighbourhoodDepth()
 
 			// only nodes with closest IDs (wrt msg) will receive the msg
-			if po > prev {
-				prev = po
+			if po > closestPO {
+				closestPO = po
 				targets = nil
 				targets = append(targets, nod.ID())
-			} else if po == prev {
+			} else if po == closestPO {
 				targets = append(targets, nod.ID())
 			}
 
 			if po >= depth {
-				maxMessages++
+				allowedMessages++
 				allowed[i] = append(allowed[i], nod.ID())
 				allowedMsgs[nod.ID()] = append(allowedMsgs[nod.ID()], uint64(i))
 			}
@@ -173,7 +173,7 @@ func assingTestVariables(sim *simulation.Simulation, msgCount int) {
 			}
 		}
 
-		msgsToReceive += len(targets)
+		requiredMessages += len(targets)
 		for _, id := range targets {
 			recipients[i] = append(recipients[i], id)
 			expectedMsgs[id] = append(expectedMsgs[id], uint64(i))
@@ -181,7 +181,7 @@ func assingTestVariables(sim *simulation.Simulation, msgCount int) {
 
 		log.Debug("nn for msg", "targets", len(recipients[i]), "msgidx", i, "msg", common.Bytes2Hex(msgAddr[:8]), "sender", senders[i], "senderpo", smallestPo)
 	}
-	log.Debug("msgs to receive", "count", msgsToReceive)
+	log.Debug("msgs to receive", "count", requiredMessages)
 }
 
 func TestProxNetwork(t *testing.T) {
@@ -218,14 +218,14 @@ func testProxNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to recreate snapshot: %s", err)
 	}
-	assingTestVariables(sim, msgCount)
+	assignTestVariables(sim, msgCount)
 	result := sim.Run(ctx, runFunc)
 	if result.Error != nil {
 		// context deadline exceeded
 		// however, it might just mean that not all possible messages are received
 		// now we must check if all required messages are received
-		log.Debug("--------------------------------------------------------------------------------", "rcv", msgCnt)
-		if msgCnt < msgsToReceive {
+		log.Debug("TestProxNetwork finnished", "rcv", messageCount)
+		if messageCount < requiredMessages {
 			t.Fatal(result.Error)
 		}
 	}
@@ -258,8 +258,8 @@ func runFunc(ctx context.Context, sim *simulation.Simulation) error {
 			return err
 		case hn := <-msgC:
 			received++
-			log.Debug("msg received", "msgs_received", received, "total_expected", msgsToReceive, "id", hn.id, "serial", hn.serial)
-			if received >= maxMessages {
+			log.Debug("msg received", "msgs_received", received, "total_expected", requiredMessages, "id", hn.id, "serial", hn.serial)
+			if received == allowedMessages {
 				close(doneC)
 				return nil
 			}
@@ -316,8 +316,8 @@ func handlerChannelListener(ctx context.Context) {
 func nodeMsgHandler(config *adapters.NodeConfig) *handler {
 	return &handler{
 		f: func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
-			msgCnt++
-			log.Debug("nodeMsgHandler rcv", "cnt", msgCnt)
+			messageCount++
+			log.Debug("nodeMsgHandler rcv", "cnt", messageCount)
 
 			// using simple serial in message body, makes it easy to keep track of who's getting what
 			serial, c := binary.Uvarint(msg)

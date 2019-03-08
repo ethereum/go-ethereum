@@ -379,7 +379,7 @@ func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 	if !ok {
 		return fmt.Errorf("invalid message type. Expected *PssMsg, got %T ", msg)
 	}
-	log.Trace("handler", "self, topic", fmt.Sprintf("%s   %s", label(p.Kademlia.BaseAddr()), label(pssmsg.Payload.Topic[:])))
+	log.Trace("handler", "self", label(p.Kademlia.BaseAddr()), "topic", label(pssmsg.Payload.Topic[:]))
 	if int64(pssmsg.Expire) < time.Now().Unix() {
 		metrics.GetOrRegisterCounter("pss.expire", nil).Inc(1)
 		log.Warn("pss filtered expired message", "from", common.ToHex(p.Kademlia.BaseAddr()), "to", common.ToHex(pssmsg.To))
