@@ -197,7 +197,7 @@ func _builtinGlobal_encodeURI(call FunctionCall, escape *regexp.Regexp) Value {
 	for index := 0; index < length; {
 		value := input[index]
 		decode := utf16.Decode(input[index : index+1])
-		if value >= 0XDC00 && value <= 0xDFFF {
+		if value >= 0xDC00 && value <= 0xDFFF {
 			panic(call.runtime.panicURIError("URI malformed"))
 		}
 		if value >= 0xD800 && value <= 0xDBFF {
@@ -207,10 +207,10 @@ func _builtinGlobal_encodeURI(call FunctionCall, escape *regexp.Regexp) Value {
 			}
 			// input = ..., value, value1, ...
 			value1 := input[index]
-			if value1 < 0XDC00 || value1 > 0xDFFF {
+			if value1 < 0xDC00 || value1 > 0xDFFF {
 				panic(call.runtime.panicURIError("URI malformed"))
 			}
-			decode = []rune{((rune(value) - 0xD800) * 0x400) + (rune(value1) - 0XDC00) + 0x10000}
+			decode = []rune{((rune(value) - 0xD800) * 0x400) + (rune(value1) - 0xDC00) + 0x10000}
 		}
 		index += 1
 		size := utf8.EncodeRune(encode, decode[0])

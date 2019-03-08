@@ -452,7 +452,7 @@ const (
 	replacement_char = '\uFFFD'
 	max_rune         = '\U0010FFFF'
 	surr1            = 0xd800
-	surr2            = 0XDC00
+	surr2            = 0xdc00
 	surr3            = 0xe000
 	surr_self        = 0x10000
 )
