@@ -357,7 +357,7 @@ func (u *utf16Decoder) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, e
 }
 
 func isHighSurrogate(r rune) bool {
-	return 0XDC00 <= r && r <= 0xDFFF
+	return 0xDC00 <= r && r <= 0xDFFF
 }
 
 type utf16Encoder struct {
