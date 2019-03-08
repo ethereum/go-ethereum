@@ -24,7 +24,6 @@ import (
 	"os"
 	"runtime"
 	"sort"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -134,89 +133,6 @@ func TestDB_updateGCSem(t *testing.T) {
 
 	if max != maxParallelUpdateGC {
 		t.Errorf("got max %v, want %v", max, maxParallelUpdateGC)
-	}
-}
-
-// BenchmarkNew measures the time that New function
-// needs to initialize and count the number of key/value
-// pairs in GC index.
-// This benchmark generates a number of chunks, uploads them,
-// sets them to synced state for them to enter the GC index,
-// and measures the execution time of New function by creating
-// new databases with the same data directory.
-//
-// This benchmark takes significant amount of time.
-//
-// Measurements on MacBook Pro (Retina, 15-inch, Mid 2014) show
-// that New function executes around 1s for database with 1M chunks.
-//
-// # go test -benchmem -run=none github.com/ethereum/go-ethereum/swarm/storage/localstore -bench BenchmarkNew -v -timeout 20m
-// goos: darwin
-// goarch: amd64
-// pkg: github.com/ethereum/go-ethereum/swarm/storage/localstore
-// BenchmarkNew/1000-8         	     200	  11672414 ns/op	 9570960 B/op	   10008 allocs/op
-// BenchmarkNew/10000-8        	     100	  14890609 ns/op	10490118 B/op	    7759 allocs/op
-// BenchmarkNew/100000-8       	      20	  58334080 ns/op	17763157 B/op	   22978 allocs/op
-// BenchmarkNew/1000000-8      	       2	 748595153 ns/op	45297404 B/op	  253242 allocs/op
-// PASS
-func BenchmarkNew(b *testing.B) {
-	if testing.Short() {
-		b.Skip("skipping benchmark in short mode")
-	}
-	for _, count := range []int{
-		1000,
-		10000,
-		100000,
-		1000000,
-	} {
-		b.Run(strconv.Itoa(count), func(b *testing.B) {
-			dir, err := ioutil.TempDir("", "localstore-new-benchmark")
-			if err != nil {
-				b.Fatal(err)
-			}
-			defer os.RemoveAll(dir)
-			baseKey := make([]byte, 32)
-			if _, err := rand.Read(baseKey); err != nil {
-				b.Fatal(err)
-			}
-			db, err := New(dir, baseKey, nil)
-			if err != nil {
-				b.Fatal(err)
-			}
-			defer db.Close()
-			uploader := db.NewPutter(ModePutUpload)
-			syncer := db.NewSetter(ModeSetSync)
-			for i := 0; i < count; i++ {
-				chunk := generateTestRandomChunk()
-				err := uploader.Put(chunk)
-				if err != nil {
-					b.Fatal(err)
-				}
-				err = syncer.Set(chunk.Address())
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-			err = db.Close()
-			if err != nil {
-				b.Fatal(err)
-			}
-			b.ResetTimer()
-
-			for n := 0; n < b.N; n++ {
-				b.StartTimer()
-				db, err := New(dir, baseKey, nil)
-				b.StopTimer()
-
-				if err != nil {
-					b.Fatal(err)
-				}
-				err = db.Close()
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-		})
 	}
 }
 
@@ -411,7 +327,7 @@ func newItemsCountTest(i shed.Index, want int) func(t *testing.T) {
 // value is the same as the number of items in DB.gcIndex.
 func newIndexGCSizeTest(db *DB) func(t *testing.T) {
 	return func(t *testing.T) {
-		var want int64
+		var want uint64
 		err := db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 			want++
 			return
@@ -419,7 +335,10 @@ func newIndexGCSizeTest(db *DB) func(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := db.getGCSize()
+		got, err := db.gcSize.Get()
+		if err != nil {
+			t.Fatal(err)
+		}
 		if got != want {
 			t.Errorf("got gc size %v, want %v", got, want)
 		}

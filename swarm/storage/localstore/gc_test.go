@@ -38,7 +38,7 @@ func TestDB_collectGarbageWorker(t *testing.T) {
 func TestDB_collectGarbageWorker_multipleBatches(t *testing.T) {
 	// lower the maximal number of chunks in a single
 	// gc batch to ensure multiple batches.
-	defer func(s int64) { gcBatchSize = s }(gcBatchSize)
+	defer func(s uint64) { gcBatchSize = s }(gcBatchSize)
 	gcBatchSize = 2
 
 	testDB_collectGarbageWorker(t)
@@ -54,8 +54,8 @@ func testDB_collectGarbageWorker(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, &Options{
 		Capacity: 100,
 	})
-	testHookCollectGarbageChan := make(chan int64)
-	defer setTestHookCollectGarbage(func(collectedCount int64) {
+	testHookCollectGarbageChan := make(chan uint64)
+	defer setTestHookCollectGarbage(func(collectedCount uint64) {
 		select {
 		case testHookCollectGarbageChan <- collectedCount:
 		case <-db.close:
@@ -93,7 +93,10 @@ func testDB_collectGarbageWorker(t *testing.T) {
 		case <-time.After(10 * time.Second):
 			t.Error("collect garbage timeout")
 		}
-		gcSize := db.getGCSize()
+		gcSize, err := db.gcSize.Get()
+		if err != nil {
+			t.Fatal(err)
+		}
 		if gcSize == gcTarget {
 			break
 		}
@@ -134,8 +137,8 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	uploader := db.NewPutter(ModePutUpload)
 	syncer := db.NewSetter(ModeSetSync)
 
-	testHookCollectGarbageChan := make(chan int64)
-	defer setTestHookCollectGarbage(func(collectedCount int64) {
+	testHookCollectGarbageChan := make(chan uint64)
+	defer setTestHookCollectGarbage(func(collectedCount uint64) {
 		testHookCollectGarbageChan <- collectedCount
 	})()
 
@@ -202,7 +205,7 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 
 	gcTarget := db.gcTarget()
 
-	var totalCollectedCount int64
+	var totalCollectedCount uint64
 	for {
 		select {
 		case c := <-testHookCollectGarbageChan:
@@ -210,13 +213,16 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 		case <-time.After(10 * time.Second):
 			t.Error("collect garbage timeout")
 		}
-		gcSize := db.getGCSize()
+		gcSize, err := db.gcSize.Get()
+		if err != nil {
+			t.Fatal(err)
+		}
 		if gcSize == gcTarget {
 			break
 		}
 	}
 
-	wantTotalCollectedCount := int64(len(addrs)) - gcTarget
+	wantTotalCollectedCount := uint64(len(addrs)) - gcTarget
 	if totalCollectedCount != wantTotalCollectedCount {
 		t.Errorf("total collected chunks %v, want %v", totalCollectedCount, wantTotalCollectedCount)
 	}
@@ -288,10 +294,7 @@ func TestDB_gcSize(t *testing.T) {
 		}
 	}
 
-	// DB.Close writes gc size to disk, so
-	// Instead calling Close, close the database
-	// without it.
-	if err := db.closeWithOptions(false); err != nil {
+	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -302,14 +305,12 @@ func TestDB_gcSize(t *testing.T) {
 	defer db.Close()
 
 	t.Run("gc index size", newIndexGCSizeTest(db))
-
-	t.Run("gc uncounted hashes index count", newItemsCountTest(db.gcUncountedHashesIndex, 0))
 }
 
 // setTestHookCollectGarbage sets testHookCollectGarbage and
 // returns a function that will reset it to the
 // value before the change.
-func setTestHookCollectGarbage(h func(collectedCount int64)) (reset func()) {
+func setTestHookCollectGarbage(h func(collectedCount uint64)) (reset func()) {
 	current := testHookCollectGarbage
 	reset = func() { testHookCollectGarbage = current }
 	testHookCollectGarbage = h
@@ -321,7 +322,7 @@ func setTestHookCollectGarbage(h func(collectedCount int64)) (reset func()) {
 // resets the original function.
 func TestSetTestHookCollectGarbage(t *testing.T) {
 	// Set the current function after the test finishes.
-	defer func(h func(collectedCount int64)) { testHookCollectGarbage = h }(testHookCollectGarbage)
+	defer func(h func(collectedCount uint64)) { testHookCollectGarbage = h }(testHookCollectGarbage)
 
 	// expected value for the unchanged function
 	original := 1
@@ -332,7 +333,7 @@ func TestSetTestHookCollectGarbage(t *testing.T) {
 	var got int
 
 	// define the original (unchanged) functions
-	testHookCollectGarbage = func(_ int64) {
+	testHookCollectGarbage = func(_ uint64) {
 		got = original
 	}
 
@@ -345,7 +346,7 @@ func TestSetTestHookCollectGarbage(t *testing.T) {
 	}
 
 	// set the new function
-	reset := setTestHookCollectGarbage(func(_ int64) {
+	reset := setTestHookCollectGarbage(func(_ uint64) {
 		got = changed
 	})
 

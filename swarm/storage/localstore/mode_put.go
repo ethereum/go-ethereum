@@ -64,11 +64,8 @@ func (p *Putter) Put(ch chunk.Chunk) (err error) {
 // with their nil values.
 func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 	// protect parallel updates
-	unlock, err := db.lockAddr(item.Address)
-	if err != nil {
-		return err
-	}
-	defer unlock()
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
 
 	batch := new(leveldb.Batch)
 
@@ -116,7 +113,6 @@ func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 		db.retrievalAccessIndex.PutInBatch(batch, item)
 		// add new entry to gc index
 		db.gcIndex.PutInBatch(batch, item)
-		db.gcUncountedHashesIndex.PutInBatch(batch, item)
 		gcSizeChange++
 
 		db.retrievalDataIndex.PutInBatch(batch, item)
@@ -143,12 +139,14 @@ func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 		return ErrInvalidMode
 	}
 
-	err = db.shed.WriteBatch(batch)
+	err = db.incGCSizeInBatch(batch, gcSizeChange)
 	if err != nil {
 		return err
 	}
-	if gcSizeChange != 0 {
-		db.incGCSize(gcSizeChange)
+
+	err = db.shed.WriteBatch(batch)
+	if err != nil {
+		return err
 	}
 	if triggerPullFeed {
 		db.triggerPullSubscriptions(db.po(item.Address))

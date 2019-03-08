@@ -18,7 +18,6 @@ package localstore
 
 import (
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"sync"
 	"time"
@@ -41,7 +40,7 @@ var (
 
 var (
 	// Default value for Capacity DB option.
-	defaultCapacity int64 = 5000000
+	defaultCapacity uint64 = 5000000
 	// Limit the number of goroutines created by Getters
 	// that call updateGC function. Value 0 sets no limit.
 	maxParallelUpdateGC = 1000
@@ -54,8 +53,6 @@ type DB struct {
 
 	// schema name of loaded data
 	schemaName shed.StringField
-	// field that stores number of intems in gc index
-	storedGCSize shed.Uint64Field
 
 	// retrieval indexes
 	retrievalDataIndex   shed.Index
@@ -74,23 +71,16 @@ type DB struct {
 
 	// garbage collection index
 	gcIndex shed.Index
-	// index that stores hashes that are not
-	// counted in and saved to storedGCSize
-	gcUncountedHashesIndex shed.Index
 
-	// number of elements in garbage collection index
-	// it must be always read by getGCSize and
-	// set with incGCSize which are locking gcSizeMu
-	gcSize   int64
-	gcSizeMu sync.RWMutex
+	// field that stores number of intems in gc index
+	gcSize shed.Uint64Field
+
 	// garbage collection is triggered when gcSize exceeds
 	// the capacity value
-	capacity int64
+	capacity uint64
 
 	// triggers garbage collection event loop
 	collectGarbageTrigger chan struct{}
-	// triggers write gc size event loop
-	writeGCSizeTrigger chan struct{}
 
 	// a buffered channel acting as a semaphore
 	// to limit the maximal number of goroutines
@@ -102,7 +92,7 @@ type DB struct {
 
 	baseKey []byte
 
-	addressLocks sync.Map
+	batchMu sync.Mutex
 
 	// this channel is closed when close function is called
 	// to terminate other goroutines
@@ -112,7 +102,6 @@ type DB struct {
 	// garbage collection and gc size write workers
 	// are done
 	collectGarbageWorkerDone chan struct{}
-	writeGCSizeWorkerDone    chan struct{}
 }
 
 // Options struct holds optional parameters for configuring DB.
@@ -125,7 +114,7 @@ type Options struct {
 	MockStore *mock.NodeStore
 	// Capacity is a limit that triggers garbage collection when
 	// number of items in gcIndex equals or exceeds it.
-	Capacity int64
+	Capacity uint64
 	// MetricsPrefix defines a prefix for metrics names.
 	MetricsPrefix string
 }
@@ -140,15 +129,13 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	db = &DB{
 		capacity: o.Capacity,
 		baseKey:  baseKey,
-		// channels collectGarbageTrigger and writeGCSizeTrigger
-		// need to be buffered with the size of 1
+		// channel collectGarbageTrigger
+		// needs to be buffered with the size of 1
 		// to signal another event if it
 		// is triggered during already running function
 		collectGarbageTrigger:    make(chan struct{}, 1),
-		writeGCSizeTrigger:       make(chan struct{}, 1),
 		close:                    make(chan struct{}),
 		collectGarbageWorkerDone: make(chan struct{}),
-		writeGCSizeWorkerDone:    make(chan struct{}),
 	}
 	if db.capacity <= 0 {
 		db.capacity = defaultCapacity
@@ -167,7 +154,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		return nil, err
 	}
 	// Persist gc size.
-	db.storedGCSize, err = db.shed.NewUint64Field("gc-size")
+	db.gcSize, err = db.shed.NewUint64Field("gc-size")
 	if err != nil {
 		return nil, err
 	}
@@ -318,48 +305,6 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	if err != nil {
 		return nil, err
 	}
-	// gc uncounted hashes index keeps hashes that are in gc index
-	// but not counted in and saved to storedGCSize
-	db.gcUncountedHashesIndex, err = db.shed.NewIndex("Hash->nil", shed.IndexFuncs{
-		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			return fields.Address, nil
-		},
-		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.Address = key
-			return e, nil
-		},
-		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			return nil, nil
-		},
-		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			return e, nil
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// count number of elements in garbage collection index
-	gcSize, err := db.storedGCSize.Get()
-	if err != nil {
-		return nil, err
-	}
-	// get number of uncounted hashes
-	gcUncountedSize, err := db.gcUncountedHashesIndex.Count()
-	if err != nil {
-		return nil, err
-	}
-	gcSize += uint64(gcUncountedSize)
-	// remove uncounted hashes from the index and
-	// save the total gcSize after uncounted hashes are removed
-	err = db.writeGCSize(int64(gcSize))
-	if err != nil {
-		return nil, err
-	}
-	db.incGCSize(int64(gcSize))
-
-	// start worker to write gc size
-	go db.writeGCSizeWorker()
 	// start garbage collection worker
 	go db.collectGarbageWorker()
 	return db, nil
@@ -367,33 +312,15 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 
 // Close closes the underlying database.
 func (db *DB) Close() (err error) {
-	return db.closeWithOptions(true)
-}
-
-// closeWithOptions provides a more control which part of closing
-// is done for tests.
-func (db *DB) closeWithOptions(writeGCSize bool) (err error) {
 	close(db.close)
 	db.updateGCWG.Wait()
 
-	// wait for gc worker and gc size write workers to
+	// wait for gc worker to
 	// return before closing the shed
-	timeout := time.After(5 * time.Second)
 	select {
 	case <-db.collectGarbageWorkerDone:
-	case <-timeout:
+	case <-time.After(5 * time.Second):
 		log.Error("localstore: collect garbage worker did not return after db close")
-	}
-	select {
-	case <-db.writeGCSizeWorkerDone:
-	case <-timeout:
-		log.Error("localstore: write gc size worker did not return after db close")
-	}
-
-	if writeGCSize {
-		if err := db.writeGCSize(db.getGCSize()); err != nil {
-			log.Error("localstore: write gc size", "err", err)
-		}
 	}
 	return db.shed.Close()
 }
@@ -402,35 +329,6 @@ func (db *DB) closeWithOptions(writeGCSize bool) (err error) {
 // and database base key.
 func (db *DB) po(addr chunk.Address) (bin uint8) {
 	return uint8(chunk.Proximity(db.baseKey, addr))
-}
-
-var (
-	// Maximal time for lockAddr to wait until it
-	// returns error.
-	addressLockTimeout = 3 * time.Second
-	// duration between two lock checks in lockAddr.
-	addressLockCheckDelay = 30 * time.Microsecond
-)
-
-// lockAddr sets the lock on a particular address
-// using addressLocks sync.Map and returns unlock function.
-// If the address is locked this function will check it
-// in a for loop for addressLockTimeout time, after which
-// it will return ErrAddressLockTimeout error.
-func (db *DB) lockAddr(addr chunk.Address) (unlock func(), err error) {
-	start := time.Now()
-	lockKey := hex.EncodeToString(addr)
-	for {
-		_, loaded := db.addressLocks.LoadOrStore(lockKey, struct{}{})
-		if !loaded {
-			break
-		}
-		time.Sleep(addressLockCheckDelay)
-		if time.Since(start) > addressLockTimeout {
-			return nil, ErrAddressLockTimeout
-		}
-	}
-	return func() { db.addressLocks.Delete(lockKey) }, nil
 }
 
 // chunkToItem creates new Item with data provided by the Chunk.
