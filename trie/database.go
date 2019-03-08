@@ -17,6 +17,8 @@
 package trie
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -92,7 +94,7 @@ func splitNodeKey(key string) (common.Hash, common.Hash) {
 		return common.BytesToHash([]byte(key[common.HashLength:])), common.BytesToHash([]byte(key[:common.HashLength]))
 
 	default:
-		panic(fmt.Sprintf("invalid node key: %s", key))
+		panic(fmt.Sprintf("invalid node key: %x", key))
 	}
 }
 
@@ -106,10 +108,11 @@ type Database struct {
 	pruner  *pruner // Background pruner to remove unreferenced trie nodes
 	pruning uint32  // Flag whether the pruner is running (sanity checks)
 
-	cleans  *bigcache.BigCache     // GC friendly memory cache of clean node RLPs
-	dirties map[string]*cachedNode // Data and references relationships of dirty nodes
-	oldest  string                 // Oldest tracked node, flush-list head
-	newest  string                 // Newest tracked node, flush-list tail
+	cleans  *bigcache.BigCache            // GC friendly memory cache of clean node RLPs
+	dirties map[string]*cachedNode        // Data and references relationships of dirty nodes
+	hashmap map[common.Hash][]*cachedNode // Hash to dirty mapping to cater for legacy fast sync (TODO(karalabe): remove!)
+	oldest  string                        // Oldest tracked node, flush-list head
+	newest  string                        // Newest tracked node, flush-list tail
 
 	preimages map[common.Hash][]byte // Preimages of nodes from the secure trie
 
@@ -369,6 +372,7 @@ func NewDatabaseWithCache(diskdb ethdb.KeyValueStore, cache int, prune bool) *Da
 		noprune:   make(map[common.Hash]struct{}),
 		cleans:    cleans,
 		dirties:   map[string]*cachedNode{metaRoot: {}},
+		hashmap:   make(map[common.Hash][]*cachedNode),
 		preimages: make(map[common.Hash][]byte),
 	}
 	if prune {
@@ -468,6 +472,7 @@ func (db *Database) insert(owner common.Hash, hash common.Hash, blob []byte, nod
 		return nil
 	})
 	db.dirties[key] = entry
+	db.hashmap[hash] = append(db.hashmap[hash], entry)
 
 	// Update the flush-list endpoints
 	if db.oldest == metaRoot {
@@ -539,34 +544,34 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 			return enc, nil
 		}
 	}
-	// TODO(karalabe): We need 2 new retrieval mechanisms:
-	//   - We need to retrieve from the dirty cache, needs some data struct extension (no owner)
-	//   - We need to retrieve from the database, needs prefix iteration support (just needs the interface ext)
-	//
-	// The code below is what's needed to work, just without the 'owner' being available
-	/*
-		// Retrieve the node from the dirty cache if available
-		key := makeNodeKey(owner, hash)
+	// Retrieve the node from the dirty cache if available
+	var dirty *cachedNode
 
-		db.lock.RLock()
-		dirty := db.dirties[key]
-		db.lock.RUnlock()
+	db.lock.RLock()
+	if dirties := db.hashmap[hash]; len(dirties) > 0 {
+		dirty = dirties[0] // any version will do, we just want the rlp
+	}
+	db.lock.RUnlock()
 
-		if dirty != nil {
-			return dirty.rlp(), nil
-		}
-		// Content unavailable in memory, attempt to retrieve from disk
-		enc, err := db.diskdb.Get([]byte(key))
-		if err == nil && enc != nil {
+	if dirty != nil {
+		return dirty.rlp(), nil
+	}
+	// Content unavailable in memory, attempt to retrieve from disk
+	it := db.diskdb.NewIteratorWithPrefix(hash[:])
+	defer it.Release()
+
+	if it.Next() {
+		if bytes.HasPrefix(it.Key(), hash[:]) {
+			blob := common.CopyBytes(it.Value())
 			if db.cleans != nil {
-				db.cleans.Set(string(hash[:]), enc)
+				db.cleans.Set(string(hash[:]), blob)
 				memcacheCleanMissMeter.Mark(1)
-				memcacheCleanWriteMeter.Mark(int64(len(enc)))
+				memcacheCleanWriteMeter.Mark(int64(len(blob)))
 			}
+			return blob, nil
 		}
-		return enc, err
-	*/
-	return nil, nil
+	}
+	return nil, errors.New("not found")
 }
 
 // preimage retrieves a cached trie node pre-image from memory. If it cannot be
@@ -721,7 +726,7 @@ func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, p
 			db.dirties[child.flushPrev].flushNext = child.flushNext
 			db.dirties[child.flushNext].flushPrev = child.flushPrev
 		}
-		// Dereference all children and delete the node
+		// Dereference all children
 		child.iterateRefs(path, func(path []byte, hash common.Hash) error {
 			db.dereference(childOwner, hash, childOwner, childHash, path, derefs)
 			return nil
@@ -730,7 +735,23 @@ func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, p
 			owner, hash := splitNodeKey(key)
 			db.dereference(owner, hash, childOwner, childHash, nil, derefs)
 		}
+		// Delete the dirty node and also remove it from the hash index
 		delete(db.dirties, childKey)
+
+		index := db.hashmap[childHash]
+		entries := len(index)
+
+		for i, dirty := range index {
+			if dirty == child {
+				if len(index) > 1 {
+					index[i] = index[entries-1]
+					db.hashmap[childHash] = index[:entries-1]
+				} else {
+					delete(db.hashmap, childHash)
+				}
+				break
+			}
+		}
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(child.size))
 
 		if childOwner == faultyOwner && childHash == faultyHash {
@@ -825,8 +846,22 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		db.preimagesSize = 0
 	}
 	for db.oldest != oldest {
+		// Delete the oldest node and also remove it from the hash index
 		node := db.dirties[db.oldest]
+		_, hash := splitNodeKey(db.oldest)
+
 		delete(db.dirties, db.oldest)
+
+		index := db.hashmap[hash]
+		entries := len(index)
+
+		for i, dirty := range index {
+			if dirty == node {
+				index[i] = index[entries-1]
+				db.hashmap[hash] = index[:entries-1]
+				break
+			}
+		}
 		db.oldest = node.flushNext
 
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
@@ -982,7 +1017,7 @@ func (db *Database) uncache(owner common.Hash, hash common.Hash) {
 		db.dirties[node.flushPrev].flushNext = node.flushNext
 		db.dirties[node.flushNext].flushPrev = node.flushPrev
 	}
-	// Uncache the node's subtries and remove the node itself too
+	// Uncache the node's subtries
 	node.iterateRefs(nil, func(path []byte, child common.Hash) error {
 		db.uncache(owner, child)
 		return nil
@@ -990,7 +1025,19 @@ func (db *Database) uncache(owner common.Hash, hash common.Hash) {
 	for child := range node.children {
 		db.uncache(splitNodeKey(child))
 	}
+	// Delete the cleaned up node and also remove it from the hash index
 	delete(db.dirties, key)
+
+	index := db.hashmap[hash]
+	entries := len(index)
+
+	for i, dirty := range index {
+		if dirty == node {
+			index[i] = index[entries-1]
+			db.hashmap[hash] = index[:entries-1]
+			break
+		}
+	}
 	db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 }
 

@@ -33,11 +33,15 @@ var ErrNotRequested = errors.New("not requested")
 // node it already processed previously.
 var ErrAlreadyProcessed = errors.New("already processed")
 
+// codePrefix is the database key prefix used to store raw trie entries (code).
+var codePrefix = []byte("c")
+
 // request represents a scheduled or already in-flight state retrieval request.
 type request struct {
-	hash common.Hash // Hash of the node data content to retrieve
-	data []byte      // Data content of the node, cached until all subtrees complete
-	raw  bool        // Whether this is a raw entry (code) or a trie node
+	key  string // Key of the node data content to retrieve
+	path []byte // Merkle-Patricia path to track sub-trie ownership
+	data []byte // Data content of the node, cached until all subtrees complete
+	raw  bool   // Whether this is a raw entry (code) or a trie node
 
 	parents []*request // Parent state nodes referencing this entry (notify all upon completion)
 	depth   int        // Depth level within the trie the node is located to prioritise DFS
@@ -46,25 +50,42 @@ type request struct {
 	callback LeafCallback // Callback to invoke if a leaf node it reached on this branch
 }
 
-// SyncResult is a simple list to return missing nodes along with their request
-// hashes.
+// SplitNodeKey interprets the specified key, splitting it into an owner:hash
+// tuple, also specifying whether the key represents a bytecode.
+func SplitNodeKey(key string) (common.Hash, common.Hash, bool) {
+	// Figure out if this key represents a byte code or not
+	var code bool
+
+	if len(key)%2 == 1 {
+		if key[0] != codePrefix[0] {
+			panic(fmt.Sprintf("invalid node prefix: %x", key[0]))
+		}
+		code, key = true, key[1:]
+	}
+	// Split the key into an [owner]:hash tuple and return
+	owner, hash := splitNodeKey(key)
+	return owner, hash, code
+}
+
+// SyncResult is a simple struct to return missing nodes along with their request
+// keys.
 type SyncResult struct {
-	Hash common.Hash // Hash of the originally unknown trie node
-	Data []byte      // Data content of the retrieved node
+	Key  string // Key of the originally unknown trie node
+	Data []byte // Data content of the retrieved node
 }
 
 // syncMemBatch is an in-memory buffer of successfully downloaded but not yet
 // persisted data items.
 type syncMemBatch struct {
-	batch map[common.Hash][]byte // In-memory membatch of recently completed items
-	order []common.Hash          // Order of completion to prevent out-of-order data loss
+	batch map[string][]byte // In-memory membatch of recently completed items
+	order []string          // Order of completion to prevent out-of-order data loss
 }
 
 // newSyncMemBatch allocates a new memory-buffer for not-yet persisted trie nodes.
 func newSyncMemBatch() *syncMemBatch {
 	return &syncMemBatch{
-		batch: make(map[common.Hash][]byte),
-		order: make([]common.Hash, 0, 256),
+		batch: make(map[string][]byte),
+		order: make([]string, 0, 256),
 	}
 }
 
@@ -72,10 +93,10 @@ func newSyncMemBatch() *syncMemBatch {
 // unknown trie hashes to retrieve, accepts node data associated with said hashes
 // and reconstructs the trie step by step until all is done.
 type Sync struct {
-	database ethdb.Reader             // Persistent database to check for existing entries
-	membatch *syncMemBatch            // Memory buffer to avoid frequent database writes
-	requests map[common.Hash]*request // Pending requests pertaining to a key hash
-	queue    *prque.Prque             // Priority queue with the pending requests
+	database ethdb.Reader        // Persistent database to check for existing entries
+	membatch *syncMemBatch       // Memory buffer to avoid frequent database writes
+	requests map[string]*request // Pending requests pertaining to a key hash
+	queue    *prque.Prque        // Priority queue with the pending requests
 }
 
 // NewSync creates a new trie data download scheduler.
@@ -83,36 +104,42 @@ func NewSync(root common.Hash, database ethdb.Reader, callback LeafCallback) *Sy
 	ts := &Sync{
 		database: database,
 		membatch: newSyncMemBatch(),
-		requests: make(map[common.Hash]*request),
+		requests: make(map[string]*request),
 		queue:    prque.New(nil),
 	}
-	ts.AddSubTrie(root, 0, common.Hash{}, callback)
+	ts.AddSubTrie(common.Hash{}, root, 0, common.Hash{}, callback)
 	return ts
 }
 
-// AddSubTrie registers a new trie to the sync code, rooted at the designated parent.
-func (s *Sync) AddSubTrie(root common.Hash, depth int, parent common.Hash, callback LeafCallback) {
-	// Short circuit if the trie is empty or already known
+// AddSubTrie registers a new trie to the sync code, rooted at the designated
+// parent for completion tracking.
+//
+// Note, the root has an owner field for tracking which account (hash/path) it
+// belongs to whereas parent does not. The reason is that Ethereum only ever
+// supports 2 layers of tries (account -> storage), so a sub-trie will never
+// ever have a parent who's owner is not the nil hash.
+func (s *Sync) AddSubTrie(owner, root common.Hash, depth int, parent common.Hash, callback LeafCallback) {
+	// Short circuit if the trie is empty or already known	_, hash := splitNodeKey(root)
 	if root == emptyRoot {
 		return
 	}
-	if _, ok := s.membatch.batch[root]; ok {
+	key := makeNodeKey(owner, root)
+	if _, ok := s.membatch.batch[key]; ok {
 		return
 	}
-	key := root.Bytes()
-	blob, _ := s.database.Get(key)
-	if local, err := decodeNode(key, blob, 0); local != nil && err == nil {
+	blob, _ := s.database.Get([]byte(key))
+	if local, err := decodeNode(root[:], blob, 0); local != nil && err == nil {
 		return
 	}
 	// Assemble the new sub-trie sync request
 	req := &request{
-		hash:     root,
+		key:      key,
 		depth:    depth,
 		callback: callback,
 	}
 	// If this sub-trie has a designated parent, link them together
-	if parent != (common.Hash{}) {
-		ancestor := s.requests[parent]
+	if (parent != common.Hash{}) {
+		ancestor := s.requests[makeNodeKey(common.Hash{}, parent)]
 		if ancestor == nil {
 			panic(fmt.Sprintf("sub-trie ancestor not found: %x", parent))
 		}
@@ -126,26 +153,35 @@ func (s *Sync) AddSubTrie(root common.Hash, depth int, parent common.Hash, callb
 // interpreted as a trie node, but rather accepted and stored into the database
 // as is. This method's goal is to support misc state metadata retrievals (e.g.
 // contract code).
+//
+// Note, neither the hash, nor the parent has an owner specified. The reason is
+// that in Ethereum, only bytecode is stored as a raw-entry referenced by the
+// trie, but that is deduplicated to prevent attacks. The parent is always an
+// account, so we know it's owner is the nil hash.
 func (s *Sync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) {
 	// Short circuit if the entry is empty or already known
 	if hash == emptyState {
 		return
 	}
-	if _, ok := s.membatch.batch[hash]; ok {
+	var (
+		keyRaw = append(codePrefix, hash[:]...)
+		keyStr = string(keyRaw)
+	)
+	if _, ok := s.membatch.batch[keyStr]; ok {
 		return
 	}
-	if ok, _ := s.database.Has(hash.Bytes()); ok {
+	if ok, _ := s.database.Has(keyRaw); ok {
 		return
 	}
 	// Assemble the new sub-trie sync request
 	req := &request{
-		hash:  hash,
+		key:   keyStr,
 		raw:   true,
 		depth: depth,
 	}
 	// If this sub-trie has a designated parent, link them together
-	if parent != (common.Hash{}) {
-		ancestor := s.requests[parent]
+	if (parent != common.Hash{}) {
+		ancestor := s.requests[makeNodeKey(common.Hash{}, parent)]
 		if ancestor == nil {
 			panic(fmt.Sprintf("raw-entry ancestor not found: %x", parent))
 		}
@@ -156,10 +192,18 @@ func (s *Sync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) {
 }
 
 // Missing retrieves the known missing nodes from the trie for retrieval.
-func (s *Sync) Missing(max int) []common.Hash {
-	var requests []common.Hash
+//
+// The returned strings can represent three different things:
+//   - `hash` if it's an account trie node
+//   - `owner + hash` if it's a storage trie node
+//   - `'c' + hash` if it's an account bydecode node
+//
+// Use trie.SplitNodeKey to get an accurate interpretation of what exactly a
+// returned key means.
+func (s *Sync) Missing(max int) []string {
+	var requests []string
 	for !s.queue.Empty() && (max == 0 || len(requests) < max) {
-		requests = append(requests, s.queue.PopItem().(common.Hash))
+		requests = append(requests, s.queue.PopItem().(string))
 	}
 	return requests
 }
@@ -172,7 +216,7 @@ func (s *Sync) Process(results []SyncResult) (bool, int, error) {
 
 	for i, item := range results {
 		// If the item was not requested, bail out
-		request := s.requests[item.Hash]
+		request := s.requests[item.Key]
 		if request == nil {
 			return committed, i, ErrNotRequested
 		}
@@ -187,7 +231,8 @@ func (s *Sync) Process(results []SyncResult) (bool, int, error) {
 			continue
 		}
 		// Decode the node data content and update the request
-		node, err := decodeNode(item.Hash[:], item.Data, 0)
+		_, hash := splitNodeKey(item.Key)
+		node, err := decodeNode(hash[:], item.Data, 0)
 		if err != nil {
 			return committed, i, err
 		}
@@ -216,7 +261,7 @@ func (s *Sync) Process(results []SyncResult) (bool, int, error) {
 func (s *Sync) Commit(dbw ethdb.Writer) (int, error) {
 	// Dump the membatch into a database dbw
 	for i, key := range s.membatch.order {
-		if err := dbw.Put(key[:], s.membatch.batch[key]); err != nil {
+		if err := dbw.Put([]byte(key), s.membatch.batch[key]); err != nil {
 			return i, err
 		}
 	}
@@ -237,13 +282,13 @@ func (s *Sync) Pending() int {
 // and only a parent reference added to the old one.
 func (s *Sync) schedule(req *request) {
 	// If we're already requesting this node, add a new reference and stop
-	if old, ok := s.requests[req.hash]; ok {
+	if old, ok := s.requests[req.key]; ok {
 		old.parents = append(old.parents, req.parents...)
 		return
 	}
 	// Schedule the request for future retrieval
-	s.queue.Push(req.hash, int64(req.depth))
-	s.requests[req.hash] = req
+	s.queue.Push(req.key, int64(req.depth))
+	s.requests[req.key] = req
 }
 
 // children retrieves all the missing children of a state trie entry for future
@@ -251,6 +296,7 @@ func (s *Sync) schedule(req *request) {
 func (s *Sync) children(req *request, object node) ([]*request, error) {
 	// Gather all the children of the node, irrelevant whether known or not
 	type child struct {
+		path  []byte
 		node  node
 		depth int
 	}
@@ -259,6 +305,7 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 	switch node := (object).(type) {
 	case *shortNode:
 		children = []child{{
+			path:  append(common.CopyBytes(req.path), node.Key...),
 			node:  node.Val,
 			depth: req.depth + len(node.Key),
 		}}
@@ -266,6 +313,7 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 		for i := 0; i < 17; i++ {
 			if node.Children[i] != nil {
 				children = append(children, child{
+					path:  append(common.CopyBytes(req.path), byte(i)),
 					node:  node.Children[i],
 					depth: req.depth + 1,
 				})
@@ -275,12 +323,18 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 		panic(fmt.Sprintf("unknown node: %+v", node))
 	}
 	// Iterate over the children, and request all unknown ones
+	owner, hash := splitNodeKey(req.key)
+
 	requests := make([]*request, 0, len(children))
 	for _, child := range children {
 		// Notify any external watcher of a new key/value node
 		if req.callback != nil {
 			if node, ok := (child.node).(valueNode); ok {
-				if err := req.callback(common.Hash{}, node, req.hash); err != nil {
+				if len(child.path) != 65 {
+					panic(fmt.Sprintf("invalid child path (len %d): %x", len(child.path), child.path))
+				}
+				owner := common.BytesToHash(hexToKeybytes(child.path[:64]))
+				if err := req.callback(owner, node, hash); err != nil {
 					return nil, err
 				}
 			}
@@ -288,16 +342,17 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 		// If the child references another node, resolve or schedule
 		if node, ok := (child.node).(hashNode); ok {
 			// Try to resolve the node from the local database
-			hash := common.BytesToHash(node)
-			if _, ok := s.membatch.batch[hash]; ok {
+			key := makeNodeKey(owner, common.BytesToHash(node))
+			if _, ok := s.membatch.batch[key]; ok {
 				continue
 			}
-			if ok, _ := s.database.Has(node); ok {
+			if ok, _ := s.database.Has([]byte(key)); ok {
 				continue
 			}
 			// Locally unknown node, schedule for retrieval
 			requests = append(requests, &request{
-				hash:     hash,
+				key:      key,
+				path:     child.path,
 				parents:  []*request{req},
 				depth:    child.depth,
 				callback: req.callback,
@@ -312,10 +367,10 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 // committed themselves.
 func (s *Sync) commit(req *request) (err error) {
 	// Write the node content to the membatch
-	s.membatch.batch[req.hash] = req.data
-	s.membatch.order = append(s.membatch.order, req.hash)
+	s.membatch.batch[req.key] = req.data
+	s.membatch.order = append(s.membatch.order, req.key)
 
-	delete(s.requests, req.hash)
+	delete(s.requests, req.key)
 
 	// Check all parents for completion
 	for _, parent := range req.parents {

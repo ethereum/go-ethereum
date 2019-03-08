@@ -16,14 +16,7 @@
 
 package state
 
-import (
-	"bytes"
-	"testing"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-)
-
+/*
 // Tests that the node iterator indeed walks over the entire database contents.
 func TestNodeIteratorCoverage(t *testing.T) {
 	// Create some arbitrary test state to iterate
@@ -63,3 +56,4 @@ func TestNodeIteratorCoverage(t *testing.T) {
 	}
 	it.Release()
 }
+*/

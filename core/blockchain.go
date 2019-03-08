@@ -215,8 +215,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		bc.gcsave = head.Root()
 		bc.stateCache.TrieDB().ForbidPrune(bc.gcsave)
 	}
-	bc.stateCache.TrieDB().ResumePruning()
-
 	// Take ownership of this particular state
 	go bc.update()
 	return bc, nil
@@ -359,6 +357,16 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	bc.chainmu.Lock()
 	bc.currentBlock.Store(block)
 	bc.chainmu.Unlock()
+
+	// Forbid pruning this chain segment until
+	triedb := bc.stateCache.TrieDB()
+
+	triedb.ForbidPrune(block.Root())
+	if bc.gcsave != (common.Hash{}) {
+		triedb.PermitPrune(bc.gcsave)
+		triedb.Dereference(bc.gcsave)
+	}
+	bc.gcsave = block.Root()
 
 	log.Info("Committed new head block", "number", block.Number(), "hash", hash)
 	return nil

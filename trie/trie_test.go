@@ -45,7 +45,7 @@ func init() {
 
 // Used for testing
 func newEmpty() *Trie {
-	trie, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
+	trie, _ := New(common.Hash{}, NewDatabase(memorydb.New(), false))
 	return trie
 }
 
@@ -69,7 +69,7 @@ func TestNull(t *testing.T) {
 }
 
 func TestMissingRoot(t *testing.T) {
-	trie, err := New(common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"), NewDatabase(memorydb.New()))
+	trie, err := New(common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"), NewDatabase(memorydb.New(), false))
 	if trie != nil {
 		t.Error("New returned non-nil trie for invalid root")
 	}
@@ -83,7 +83,7 @@ func TestMissingNodeMemonly(t *testing.T) { testMissingNode(t, true) }
 
 func testMissingNode(t *testing.T, memonly bool) {
 	diskdb := memorydb.New()
-	triedb := NewDatabase(diskdb)
+	triedb := NewDatabase(diskdb, false)
 
 	trie, _ := New(common.Hash{}, triedb)
 	updateString(trie, "120000", "qwerqwerqwerqwerqwerqwerqwerqwer")
@@ -121,7 +121,7 @@ func testMissingNode(t *testing.T, memonly bool) {
 
 	hash := common.HexToHash("0xe1d943cc8f061a0c0b98162830b970395ac9315654824bf21b73b891365262f9")
 	if memonly {
-		delete(triedb.dirties, hash)
+		delete(triedb.dirties, makeNodeKey(common.Hash{}, hash))
 	} else {
 		diskdb.Delete(hash[:])
 	}
@@ -345,7 +345,7 @@ func TestCacheUnload(t *testing.T) {
 	// The branch containing it is loaded from DB exactly two times:
 	// in the 0th and 6th iteration.
 	diskdb := &countingDB{KeyValueStore: trie.db.diskdb, gets: make(map[string]int)}
-	triedb := NewDatabase(diskdb)
+	triedb := NewDatabase(diskdb, false)
 	trie, _ = New(root, triedb)
 	trie.SetCacheLimit(5)
 	for i := 0; i < 12; i++ {
@@ -414,7 +414,7 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 }
 
 func runRandTest(rt randTest) bool {
-	triedb := NewDatabase(memorydb.New())
+	triedb := NewDatabase(memorydb.New(), false)
 
 	tr, _ := New(common.Hash{}, triedb)
 	values := make(map[string]string) // tracks content of the trie
@@ -602,7 +602,7 @@ func tempDB() (string, *Database) {
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary database: %v", err))
 	}
-	return dir, NewDatabase(diskdb)
+	return dir, NewDatabase(diskdb, false)
 }
 
 func getString(trie *Trie, k string) []byte {
