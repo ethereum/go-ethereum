@@ -218,6 +218,16 @@ func parseTopicsIntoMap(out map[string]interface{}, fields abi.Arguments, topics
 			out[arg.Name] = topics[0]
 		case abi.BytesTy, abi.FixedBytesTy:
 			out[arg.Name] = topics[0][:]
+		case abi.StringTy:
+			bytes := topics[0].Bytes()
+			var trimmedBytes []byte
+			for i, by := range bytes {
+				if by != 0 {
+					trimmedBytes = bytes[i:]
+					break
+				}
+			}
+			out[arg.Name] = string(trimmedBytes)
 		default:
 		}
 

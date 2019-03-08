@@ -694,7 +694,7 @@ func TestUnpackEvent(t *testing.T) {
 	}
 }
 
-func TestUnpackIntoMapEvent(t *testing.T) {
+func TestUnpackEventIntoMap(t *testing.T) {
 	const abiJSON = `[{"constant":false,"inputs":[{"name":"memo","type":"bytes"}],"name":"receive","outputs":[],"payable":true,"stateMutability":"payable","type":"function"},{"anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"}],"name":"receivedAddr","type":"event"}]`
 	abi, err := JSON(strings.NewReader(abiJSON))
 	if err != nil {
@@ -716,37 +716,37 @@ func TestUnpackIntoMapEvent(t *testing.T) {
 		"amount": big.NewInt(1),
 		"memo":   []uint8{88},
 	}
-
-	err = abi.UnpackIntoMap(receivedMap, "received", data)
-	if err != nil {
+	if err := abi.UnpackIntoMap(receivedMap, "received", data); err != nil {
 		t.Error(err)
 	}
 
+	if len(receivedMap) != 3 {
+		t.Error("unpacked map expected to have length 3")
+	}
 	if receivedMap["sender"] != expectedReceivedMap["sender"] {
-		t.Errorf("unpacked map does not match expected map")
+		t.Error("unpacked map does not match expected map")
 	}
-
 	if receivedMap["amount"].(*big.Int).String() != expectedReceivedMap["amount"].(*big.Int).String() {
-		t.Errorf("unpacked map does not match expected map")
+		t.Error("unpacked map does not match expected map")
 	}
-
 	u8 := receivedMap["memo"].([]uint8)
 	expectedU8 := expectedReceivedMap["memo"].([]uint8)
 	for i, v := range expectedU8 {
 		if u8[i] != v {
-			t.Errorf("unpacked map does not match expected map")
+			t.Error("unpacked map does not match expected map")
 		}
 	}
 
 	receivedAddrMap := map[string]interface{}{}
-
-	err = abi.UnpackIntoMap(receivedAddrMap, "receivedAddr", data)
-	if err != nil {
+	if err = abi.UnpackIntoMap(receivedAddrMap, "receivedAddr", data); err != nil {
 		t.Error(err)
 	}
 
+	if len(receivedAddrMap) != 1 {
+		t.Error("unpacked map expected to have length 1")
+	}
 	if receivedAddrMap["sender"] != expectedReceivedMap["sender"] {
-		t.Errorf("unpacked map does not match expected map")
+		t.Error("unpacked map does not match expected map")
 	}
 }
 
