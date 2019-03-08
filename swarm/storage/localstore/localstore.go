@@ -367,6 +367,12 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 
 // Close closes the underlying database.
 func (db *DB) Close() (err error) {
+	return db.closeWithOptions(true)
+}
+
+// closeWithOptions provides a more control which part of closing
+// is done for tests.
+func (db *DB) closeWithOptions(writeGCSize bool) (err error) {
 	close(db.close)
 	db.updateGCWG.Wait()
 
@@ -384,8 +390,10 @@ func (db *DB) Close() (err error) {
 		log.Error("localstore: write gc size worker did not return after db close")
 	}
 
-	if err := db.writeGCSize(db.getGCSize()); err != nil {
-		log.Error("localstore: write gc size", "err", err)
+	if writeGCSize {
+		if err := db.writeGCSize(db.getGCSize()); err != nil {
+			log.Error("localstore: write gc size", "err", err)
+		}
 	}
 	return db.shed.Close()
 }
