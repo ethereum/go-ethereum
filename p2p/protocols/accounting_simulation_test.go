@@ -161,7 +161,7 @@ func TestAccountingSimulation(t *testing.T) {
 type matrix struct {
 	n    int     //number of nodes
 	m    []int64 //array of balances
-	lock sync.RWMutex
+	lock sync.Mutex
 }
 
 // create a new matrix
