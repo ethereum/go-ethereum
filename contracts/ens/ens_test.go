@@ -124,6 +124,40 @@ func TestENS(t *testing.T) {
 	}
 	t.Fatal("todo: try to set old contract with new multicodec stuff and assert fail, set new contract with multicodec stuff, encode, decode and assert returns correct hash")
 }
+
+func TestEIPSpecCidDecode(t *testing.T) {
+	/*storage system: IPFS (0xe3)
+	  CID version: 1 (0x01)
+	  content type: dag-pb (0x70)
+	  hash function: sha2-256 (0x12)
+	  hash length: 32 bytes (0x20)
+	  hash: 29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f
+	*/
+
+	const eipSpecHash = "e3010170122029f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f"
+	const eipHash = "29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f"
+
+	b, err := hex.DecodeString(eipSpecHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hashBytes, err := hex.DecodeString(eipHash)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := manualDecode(b)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(h[:], hashBytes) {
+		t.Fatal("should be equal")
+	}
+
+}
+
 func TestManualCidDecode(t *testing.T) {
 	// call cid encode method with hash. expect byte slice returned, compare according to spec
 	bb := []byte{}
@@ -141,12 +175,12 @@ func TestManualCidDecode(t *testing.T) {
 		{
 			name:        "cid version wrong, should fail",
 			headerBytes: []byte{0xe4, 0x01, 0x99, 0x1b, 0x20},
-			fails:       false,
+			fails:       true,
 		},
 		{
 			name:        "hash length wrong, should fail",
-			headerBytes: []byte{0xe4, 0x01, 0x99, 0x1b, 0x1F},
-			fails:       false,
+			headerBytes: []byte{0xe4, 0x01, 0x99, 0x1b, 0x1f},
+			fails:       true,
 		},
 		{
 			name:        "values correct for ipfs, should fail",

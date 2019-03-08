@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"strings"
 
-
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens/contract"
@@ -283,13 +282,13 @@ func manualDecode(buf []byte) (common.Hash, error) {
 	buf = buf[n:]
 	ctype, n := binary.Uvarint(buf)
 
-	if ctype != 0x99 {
+	if ctype < 0 { // ctype != 0x99 {
 		return common.Hash{}, errors.New("unknown content type")
 	}
 	buf = buf[n:]
 	hashType, n := binary.Uvarint(buf)
 
-	if hashType != 0x1b {
+	if hashType != 0x1b && hashType != 0x12 {
 		return common.Hash{}, errors.New("unknown multihash type")
 	}
 
