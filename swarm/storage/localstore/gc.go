@@ -136,7 +136,8 @@ func (db *DB) triggerGarbageCollection() {
 }
 
 // incGCSizeInBatch changes gcSize field value
-// by change which can be negative.
+// by change which can be negative. This function
+// must be called under batchMu lock.
 func (db *DB) incGCSizeInBatch(batch *leveldb.Batch, change int64) (err error) {
 	if change == 0 {
 		return nil

@@ -294,10 +294,7 @@ func TestDB_gcSize(t *testing.T) {
 		}
 	}
 
-	// DB.Close writes gc size to disk, so
-	// Instead calling Close, close the database
-	// without it.
-	if err := db.closeWithOptions(false); err != nil {
+	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
 

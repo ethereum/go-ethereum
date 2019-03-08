@@ -312,21 +312,14 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 
 // Close closes the underlying database.
 func (db *DB) Close() (err error) {
-	return db.closeWithOptions(true)
-}
-
-// closeWithOptions provides a more control which part of closing
-// is done for tests.
-func (db *DB) closeWithOptions(writeGCSize bool) (err error) {
 	close(db.close)
 	db.updateGCWG.Wait()
 
 	// wait for gc worker to
 	// return before closing the shed
-	timeout := time.After(5 * time.Second)
 	select {
 	case <-db.collectGarbageWorkerDone:
-	case <-timeout:
+	case <-time.After(5 * time.Second):
 		log.Error("localstore: collect garbage worker did not return after db close")
 	}
 	return db.shed.Close()
