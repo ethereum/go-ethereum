@@ -22,10 +22,44 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
+// freezerdb is a databse wrapper that enabled freezer data retrievals.
+type freezerdb struct {
+	ethdb.KeyValueStore
+	ethdb.Ancienter
+}
+
+// nofreezedb is a database wrapper that disables freezer data retrievals.
+type nofreezedb struct {
+	ethdb.KeyValueStore
+}
+
+// Frozen returns nil as we don't have a backing chain freezer.
+func (db *nofreezedb) Ancient(kind string, number uint64) ([]byte, error) {
+	return nil, errOutOfBounds
+}
+
 // NewDatabase creates a high level database on top of a given key-value data
 // store without a freezer moving immutable chain segments into cold storage.
 func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
-	return db
+	return &nofreezedb{
+		KeyValueStore: db,
+	}
+}
+
+// NewDatabaseWithFreezer creates a high level database on top of a given key-
+// value data store with a freezer moving immutable chain segments into cold
+// storage.
+func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace string) (ethdb.Database, error) {
+	frdb, err := newFreezer(freezer, namespace)
+	if err != nil {
+		return nil, err
+	}
+	go frdb.freeze(db)
+
+	return &freezerdb{
+		KeyValueStore: db,
+		Ancienter:     frdb,
+	}, nil
 }
 
 // NewMemoryDatabase creates an ephemeral in-memory key-value database without a
@@ -34,9 +68,9 @@ func NewMemoryDatabase() ethdb.Database {
 	return NewDatabase(memorydb.New())
 }
 
-// NewMemoryDatabaseWithCap creates an ephemeral in-memory key-value database with
-// an initial starting capacity, but without a freezer moving immutable chain
-// segments into cold storage.
+// NewMemoryDatabaseWithCap creates an ephemeral in-memory key-value database
+// with an initial starting capacity, but without a freezer moving immutable
+// chain segments into cold storage.
 func NewMemoryDatabaseWithCap(size int) ethdb.Database {
 	return NewDatabase(memorydb.NewWithCap(size))
 }
@@ -49,4 +83,19 @@ func NewLevelDBDatabase(file string, cache int, handles int, namespace string) (
 		return nil, err
 	}
 	return NewDatabase(db), nil
+}
+
+// NewLevelDBDatabaseWithFreezer creates a persistent key-value database with a
+// freezer moving immutable chain segments into cold storage.
+func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, freezer string, namespace string) (ethdb.Database, error) {
+	kvdb, err := leveldb.New(file, cache, handles, namespace)
+	if err != nil {
+		return nil, err
+	}
+	frdb, err := NewDatabaseWithFreezer(kvdb, freezer, namespace)
+	if err != nil {
+		kvdb.Close()
+		return nil, err
+	}
+	return frdb, nil
 }

@@ -67,10 +67,23 @@ type KeyValueStore interface {
 	io.Closer
 }
 
+// Ancienter wraps the Ancient method for a backing immutable chain data store.
+type Ancienter interface {
+	// Ancient retrieves an ancient binary blob from the append-only immutable files.
+	Ancient(kind string, number uint64) ([]byte, error)
+}
+
+// AncientReader contains the methods required to access both key-value as well as
+// immutable ancient data.
+type AncientReader interface {
+	Reader
+	Ancienter
+}
+
 // Database contains all the methods required by the high level database to not
 // only access the key-value data store but also the chain freezer.
 type Database interface {
-	Reader
+	AncientReader
 	Writer
 	Batcher
 	Iteratee

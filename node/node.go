@@ -614,6 +614,26 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (
 	return rawdb.NewLevelDBDatabase(n.config.ResolvePath(name), cache, handles, namespace)
 }
 
+// OpenDatabaseWithFreezer opens an existing database with the given name (or
+// creates one if no previous can be found) from within the node's data directory,
+// also attaching a chain freezer to it that moves ancient chain data from the
+// database to immutable append-only files. If the node is an ephemeral one, a
+// memory database is returned.
+func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer, namespace string) (ethdb.Database, error) {
+	if n.config.DataDir == "" {
+		return rawdb.NewMemoryDatabase(), nil
+	}
+	root := n.config.ResolvePath(name)
+
+	switch {
+	case freezer == "":
+		freezer = filepath.Join(root, "ancient")
+	case !filepath.IsAbs(freezer):
+		freezer = n.config.ResolvePath(freezer)
+	}
+	return rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace)
+}
+
 // ResolvePath returns the absolute path of a resource in the instance directory.
 func (n *Node) ResolvePath(x string) string {
 	return n.config.ResolvePath(x)

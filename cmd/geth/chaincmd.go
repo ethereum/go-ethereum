@@ -368,8 +368,11 @@ func exportPreimages(ctx *cli.Context) error {
 
 func copyDb(ctx *cli.Context) error {
 	// Ensure we have a source chain directory to copy
-	if len(ctx.Args()) != 1 {
+	if len(ctx.Args()) < 1 {
 		utils.Fatalf("Source chaindata directory path argument missing")
+	}
+	if len(ctx.Args()) < 2 {
+		utils.Fatalf("Source ancient chain directory path argument missing")
 	}
 	// Initialize a new chain for the running node to sync into
 	stack := makeFullNode(ctx)
@@ -385,7 +388,7 @@ func copyDb(ctx *cli.Context) error {
 	dl := downloader.New(0, chainDb, syncBloom, new(event.TypeMux), chain, nil, nil)
 
 	// Create a source peer to satisfy downloader requests from
-	db, err := rawdb.NewLevelDBDatabase(ctx.Args().First(), ctx.GlobalInt(utils.CacheFlag.Name)/2, 256, "")
+	db, err := rawdb.NewLevelDBDatabaseWithFreezer(ctx.Args().First(), ctx.GlobalInt(utils.CacheFlag.Name)/2, 256, ctx.Args().Get(1), "")
 	if err != nil {
 		return err
 	}
