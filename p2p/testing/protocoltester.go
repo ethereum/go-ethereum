@@ -51,7 +51,7 @@ type ProtocolTester struct {
 // NewProtocolTester constructs a new ProtocolTester
 // it takes as argument the pivot node id, the number of dummy peers and the
 // protocol run function called on a peer connection by the p2p server
-func NewProtocolTester(id enode.ID, n int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
+func NewProtocolTester(id enode.ID, nodeCount int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
 	services := adapters.Services{
 		"test": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			return &testNode{run}, nil
@@ -74,9 +74,9 @@ func NewProtocolTester(id enode.ID, n int, run func(*p2p.Peer, p2p.MsgReadWriter
 	}
 
 	node := net.GetNode(id).Node.(*adapters.SimNode)
-	peers := make([]*adapters.NodeConfig, n)
-	nodes := make([]*enode.Node, n)
-	for i := 0; i < n; i++ {
+	peers := make([]*adapters.NodeConfig, nodeCount)
+	nodes := make([]*enode.Node, nodeCount)
+	for i := 0; i < nodeCount; i++ {
 		peers[i] = adapters.RandomNodeConfig()
 		peers[i].Services = []string{"mock"}
 		nodes[i] = peers[i].Node()
@@ -100,9 +100,8 @@ func NewProtocolTester(id enode.ID, n int, run func(*p2p.Peer, p2p.MsgReadWriter
 }
 
 // Stop stops the p2p server
-func (t *ProtocolTester) Stop() error {
+func (t *ProtocolTester) Stop() {
 	t.Server.Stop()
-	return nil
 }
 
 // Connect brings up the remote peer node and connects it using the
