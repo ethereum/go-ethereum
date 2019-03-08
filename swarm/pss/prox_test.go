@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -43,12 +42,9 @@ type handlerNotification struct {
 }
 
 var (
-	runNodes    = flag.Int("nodes", 0, "nodes to start in the network")
-	runMessages = flag.Int("messages", 0, "messages to send during test")
-
 	pof   = pot.DefaultPof(256) // generate messages and index them
 	topic = BytesToTopic([]byte{0x00, 0x00, 0x06, 0x82})
-	mu    sync.Mutex // keeps handlerDonc in sync
+	mu    sync.Mutex // keeps handlerDone in sync
 	sim   *simulation.Simulation
 
 	handlerDone bool // set to true on termination of the simulation run
@@ -105,11 +101,11 @@ func setDone() {
 
 func getCmdParams(t *testing.T) (int, int) {
 	args := strings.Split(t.Name(), "/")
-	msgCount, err := strconv.ParseInt(args[1], 10, 16)
+	msgCount, err := strconv.ParseInt(args[2], 10, 16)
 	if err != nil {
 		t.Fatal(err)
 	}
-	nodeCount, err := strconv.ParseInt(args[2], 10, 16)
+	nodeCount, err := strconv.ParseInt(args[1], 10, 16)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,6 +117,7 @@ func readSnapshot(t *testing.T, nodeCount int) simulations.Snapshot {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer f.Close()
 	jsonbyte, err := ioutil.ReadAll(f)
 	if err != nil {
 		t.Fatal(err)
@@ -185,13 +182,18 @@ func assignTestVariables(sim *simulation.Simulation, msgCount int) {
 }
 
 func TestProxNetwork(t *testing.T) {
-	if (*runNodes > 0 && *runMessages == 0) || (*runMessages > 0 && *runNodes == 0) {
-		t.Fatal("cannot specify only one of flags --nodes and --messages")
-	} else if *runNodes > 0 {
-		t.Run(fmt.Sprintf("%d/%d", *runMessages, *runNodes), testProxNetwork)
-	} else {
-		t.Run("1/4", testProxNetwork)
+	t.Run("16/16", testProxNetwork)
+}
+
+// params in run name: nodes/msgs
+func TestProxNetworkLong(t *testing.T) {
+	if !*longrunning {
+		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
+	t.Run("8/100", testProxNetwork)
+	t.Run("16/100", testProxNetwork)
+	t.Run("32/100", testProxNetwork)
+	t.Run("64/100", testProxNetwork)
 }
 
 // This tests generates a sequenced number of messages with random addresses.
@@ -205,15 +207,15 @@ func testProxNetwork(t *testing.T) {
 	handlerContextFuncs := make(map[Topic]handlerContextFunc)
 	handlerContextFuncs[topic] = nodeMsgHandler
 	services := newProxServices(true, handlerContextFuncs, kademlias)
-	snap := readSnapshot(t, nodeCount)
 	sim = simulation.New(services)
 	defer sim.Close()
-	err := sim.Net.Load(&snap)
+	err := sim.UploadSnapshot(fmt.Sprintf("testdata/snapshot_%d.json", nodeCount))
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3) // todo: increase
 	defer cancel()
+	snap := readSnapshot(t, nodeCount)
 	err = sim.WaitTillSnapshotRecreated(ctx, snap)
 	if err != nil {
 		t.Fatalf("failed to recreate snapshot: %s", err)
@@ -260,6 +262,7 @@ func runFunc(ctx context.Context, sim *simulation.Simulation) error {
 			received++
 			log.Debug("msg received", "msgs_received", received, "total_expected", requiredMessages, "id", hn.id, "serial", hn.serial)
 			if received == allowedMessages {
+				doneC <- struct{}{}
 				close(doneC)
 				return nil
 			}
@@ -361,6 +364,23 @@ func newProxServices(allowRaw bool, handlerContextFuncs map[Topic]handlerContext
 		return kademlias[id]
 	}
 	return map[string]simulation.ServiceFunc{
+		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
+			// normally translation of enode id to swarm address is concealed by the network package
+			// however, we need to keep track of it in the test driver aswell.
+			// if the translation in the network package changes, that can cause thiese tests to unpredictably fail
+			// therefore we keep a local copy of the translation here
+			addr := network.NewAddr(ctx.Config.Node())
+			addr.OAddr = nodeIDToAddr(ctx.Config.Node().ID())
+
+			hp := network.NewHiveParams()
+			hp.Discovery = false
+			config := &network.BzzConfig{
+				OverlayAddr:  addr.Over(),
+				UnderlayAddr: addr.Under(),
+				HiveParams:   hp,
+			}
+			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil), nil, nil
+		},
 		"pss": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			// execadapter does not exec init()
 			initTest()
@@ -406,23 +426,6 @@ func newProxServices(allowRaw bool, handlerContextFuncs map[Topic]handlerContext
 					deregisters[i-1]()
 				}
 			}, nil
-		},
-		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
-			// normally translation of enode id to swarm address is concealed by the network package
-			// however, we need to keep track of it in the test driver aswell.
-			// if the translation in the network package changes, that can cause thiese tests to unpredictably fail
-			// therefore we keep a local copy of the translation here
-			addr := network.NewAddr(ctx.Config.Node())
-			addr.OAddr = nodeIDToAddr(ctx.Config.Node().ID())
-
-			hp := network.NewHiveParams()
-			hp.Discovery = false
-			config := &network.BzzConfig{
-				OverlayAddr:  addr.Over(),
-				UnderlayAddr: addr.Under(),
-				HiveParams:   hp,
-			}
-			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil), nil, nil
 		},
 	}
 }
