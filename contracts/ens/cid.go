@@ -25,6 +25,8 @@ import (
 )
 
 const (
+	cidv1 = 0x1
+
 	ns_ipfs  = 0xe3
 	ns_swarm = 0xe4
 
@@ -97,6 +99,26 @@ func extractContentHash(buf []byte) (common.Hash, error) {
 	}
 
 	return common.BytesToHash(buf), nil
+}
+
+func encodeSwarmHash(hash common.Hash) ([]byte, error) {
+	var cidBytes []byte
+	var headerBytes = []byte{
+		ns_swarm,       //swarm namespace
+		cidv1,          // CIDv1
+		swarm_typecode, // the swarm type-code
+		swarm_hashtype, // swarm hash type. todo BMT
+		hash_length,    //hash length. 32 bytes
+	}
+
+	varintbuf := make([]byte, binary.MaxVarintLen64)
+	for _, v := range headerBytes {
+		n := binary.PutUvarint(varintbuf, uint64(v))
+		cidBytes = append(cidBytes, varintbuf[:n]...)
+	}
+
+	cidBytes = append(cidBytes, hash[:]...)
+	return cidBytes, nil
 }
 
 // encodeCid encodes a swarm hash into an IPLD CID

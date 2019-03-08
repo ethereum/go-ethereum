@@ -26,16 +26,16 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+const (
+	eipSpecHash = "e3010170122029f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f"
+	eipHash     = "29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f"
+
+	dag_pb   = 0x70
+	sha2_256 = 0x12
+)
+
 // Tests for the decoding of the example ENS
 func TestEIPSpecCidDecode(t *testing.T) {
-	const (
-		eipSpecHash = "e3010170122029f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f"
-		eipHash     = "29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f"
-
-		dag_pb   = 0x70
-		sha2_256 = 0x12
-	)
-
 	b, err := hex.DecodeString(eipSpecHash)
 	if err != nil {
 		t.Fatal(err)
@@ -70,7 +70,6 @@ func TestEIPSpecCidDecode(t *testing.T) {
 }
 func TestManualCidDecode(t *testing.T) {
 	// call cid encode method with hash. expect byte slice returned, compare according to spec
-	bb := []byte{}
 
 	for _, v := range []struct {
 		name        string
@@ -99,13 +98,14 @@ func TestManualCidDecode(t *testing.T) {
 		},
 	} {
 		t.Run(v.name, func(t *testing.T) {
+			var bb []byte
 			buf := make([]byte, binary.MaxVarintLen64)
 			for _, vv := range v.headerBytes {
 				n := binary.PutUvarint(buf, uint64(vv))
 				bb = append(bb, buf[:n]...)
 			}
 
-			h := common.HexToHash("29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f")
+			h := common.HexToHash(eipHash)
 			bb = append(bb, h[:]...)
 			str := hex.EncodeToString(bb)
 			fmt.Println(str)
@@ -127,74 +127,23 @@ func TestManualCidDecode(t *testing.T) {
 
 		})
 	}
-
-	/* from the EIP documentation
-	   storage system: Swarm (0xe4)
-	   CID version: 1 (0x01)
-	   content type: swarm-manifest (0x??)
-	   hash function: keccak-256 (0x1B)
-	   hash length: 32 bytes (0x20)
-	   hash: 29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f
-	*/
-
 }
 
 func TestManuelCidEncode(t *testing.T) {
 	// call cid encode method with hash. expect byte slice returned, compare according to spec
+	cidBytes, err := encodeSwarmHash(common.HexToHash(eipHash))
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	/* from the EIP documentation
-	   storage system: Swarm (0xe4)
-	   CID version: 1 (0x01)
-	   content type: swarm-manifest (0x??)
-	   hash function: keccak-256 (0x1B)
-	   hash length: 32 bytes (0x20)
-	   hash: 29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f
-	*/
+	// logic in extractContentHash is unit tested thoroughly
+	// hence we just check that the returned hash is equal
+	h, err := extractContentHash(cidBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
 
+	if bytes.Equal(h[:], cidBytes) {
+		t.Fatal("should be equal")
+	}
 }
-
-/*
-func TestCIDSanity(t *testing.T) {
-	hashStr := "d1de9994b4d039f6548d191eb26786769f580809256b4685ef316805265ea162"
-	hash := common.HexToHash(hashStr) //this always yields a 32 byte long hash
-	cc, err := encodeCid(hash)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if cc.Prefix().MhLength != 32 {
-		t.Fatal("w00t")
-	}
-	decoded, err := mh.Decode(cc.Hash())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if decoded.Length != 32 {
-		t.Fatal("invalid length")
-	}
-	if !bytes.Equal(decoded.Digest, hash[:]) {
-		t.Fatalf("hashes not equal")
-	}
-
-	if decoded.Length != 32 {
-		t.Fatal("wrong length")
-	}
-	fmt.Println(cc.StringOfBase(multibase.Base16))
-
-	bbbb, e := cc.StringOfBase(multibase.Base16)
-	if e != nil {
-		t.Fatal(e)
-	}
-	fmt.Println(bbbb)
-	//create the CID string artificially
-	hashStr = "f01551b20" + hashStr
-
-	c, err := cid.Decode(hashStr)
-	if err != nil {
-		t.Fatalf("Error decoding CID: %v", err)
-	}
-
-	fmt.Sprintf("Got CID: %v", c)
-	fmt.Println("Got CID:", c.Prefix())
-
-}*/
