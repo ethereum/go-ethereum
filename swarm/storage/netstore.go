@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/opentracing/opentracing-go"
 	olog "github.com/opentracing/opentracing-go/log"
+	"github.com/syndtr/goleveldb/leveldb"
 
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -167,7 +168,8 @@ func (n *NetStore) get(ctx context.Context, ref Address) (Chunk, func(context.Co
 
 	chunk, err := n.store.Get(ctx, ref)
 	if err != nil {
-		if err != ErrChunkNotFound {
+		// TODO: Fix comparison - we should be comparing against leveldb.ErrNotFound, this error should be wrapped.
+		if err != ErrChunkNotFound && err != leveldb.ErrNotFound {
 			log.Debug("Received error from LocalStore other than ErrNotFound", "err", err)
 		}
 		// The chunk is not available in the LocalStore, let's get the fetcher for it, or create a new one

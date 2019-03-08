@@ -1005,7 +1005,10 @@ func (s *LDBStore) get(addr Address) (chunk Chunk, err error) {
 			if err != nil {
 				log.Trace("ldbstore.get chunk found but could not be accessed", "key", addr, "err", err)
 				s.deleteNow(index, getIndexKey(addr), s.po(addr))
-				return
+				if err == leveldb.ErrNotFound {
+					return nil, ErrChunkNotFound
+				}
+				return nil, err
 			}
 		}
 
