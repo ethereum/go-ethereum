@@ -65,18 +65,23 @@ func TestENS(t *testing.T) {
 	contractBackend.Commit()
 
 	// Set the content hash for the name.
-	if _, err = ens.SetContentHash(name, hash.Bytes()); err != nil {
+
+	cid, err := encodeSwarmHash(hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = ens.SetContentHash(name, cid); err != nil {
 		t.Fatalf("can't set content hash: %v", err)
 	}
 	contractBackend.Commit()
 
 	// Try to resolve the name.
-	vhost, err := ens.Resolve(name)
+	resolvedHash, err := ens.Resolve(name)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if vhost != hash {
-		t.Fatalf("resolve error, expected %v, got %v", hash.Hex(), vhost.Hex())
+	if resolvedHash.Hex() != hash.Hex() {
+		t.Fatalf("resolve error, expected %v, got %v", hash.Hex(), resolvedHash.Hex())
 	}
 
 	// set the address for the name
@@ -90,7 +95,7 @@ func TestENS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if testAddr != recoveredAddr {
+	if testAddr.Hex() != recoveredAddr.Hex() {
 		t.Fatalf("resolve error, expected %v, got %v", testAddr.Hex(), recoveredAddr.Hex())
 	}
 
@@ -111,12 +116,11 @@ func TestENS(t *testing.T) {
 	contractBackend.Commit()
 
 	// Try to resolve the name.
-	vhost, err = ens.Resolve(name)
+	fallbackResolvedHash, err := ens.Resolve(name)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if vhost != fallbackHash {
-		t.Fatalf("resolve error, expected %v, got %v", hash.Hex(), vhost.Hex())
+	if fallbackResolvedHash.Hex() != fallbackHash.Hex() {
+		t.Fatalf("resolve error, expected %v, got %v", hash.Hex(), resolvedHash.Hex())
 	}
-	t.Fatal("todo: try to set old contract with new multicodec stuff and assert fail, set new contract with multicodec stuff, encode, decode and assert returns correct hash")
 }

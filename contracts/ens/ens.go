@@ -179,11 +179,12 @@ func (ens *ENS) Resolve(name string) (common.Hash, error) {
 
 	// END DEPRECATED CODE
 
-	ret, err := resolver.Contenthash(node)
+	contentHash, err := resolver.Contenthash(node)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return common.BytesToHash(ret[:]), nil
+
+	return extractContentHash(contentHash)
 }
 
 // Addr is a non-transactional call that returns the address associated with a name.
