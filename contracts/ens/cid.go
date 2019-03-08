@@ -120,17 +120,3 @@ func encodeSwarmHash(hash common.Hash) ([]byte, error) {
 	cidBytes = append(cidBytes, hash[:]...)
 	return cidBytes, nil
 }
-
-// encodeCid encodes a swarm hash into an IPLD CID
-/*func encodeCid(h common.Hash) (cid.Cid, error) {
-	b := []byte{0x1b, 0x20}     //0x1b = keccak256 (should be changed to bmt), 0x20 = 32 bytes hash length
-	b = append(b, h.Bytes()...) // append actual hash bytes
-	multi, err := mh.Cast(b)
-	if err != nil {
-		return cid.Cid{}, err
-	}
-
-	c := cid.NewCidV1(cid.Raw, multi) //todo: cid.Raw should be swarm manifest
-
-	return c, nil
-}*/
