@@ -124,7 +124,7 @@ func TestENS(t *testing.T) {
 	}
 	t.Fatal("todo: try to set old contract with new multicodec stuff and assert fail, set new contract with multicodec stuff, encode, decode and assert returns correct hash")
 }
-func TestManuelCidDecode(t *testing.T) {
+func TestManualCidDecode(t *testing.T) {
 	// call cid encode method with hash. expect byte slice returned, compare according to spec
 	bb := []byte{}
 
@@ -134,30 +134,56 @@ func TestManuelCidDecode(t *testing.T) {
 		fails       bool
 	}{
 		{
-			name:        "w00t",
+			name:        "values correct, should not fail",
 			headerBytes: []byte{0xe4, 0x01, 0x99, 0x1b, 0x20},
 			fails:       false,
 		},
+		{
+			name:        "cid version wrong, should fail",
+			headerBytes: []byte{0xe4, 0x01, 0x99, 0x1b, 0x20},
+			fails:       false,
+		},
+		{
+			name:        "hash length wrong, should fail",
+			headerBytes: []byte{0xe4, 0x01, 0x99, 0x1b, 0x1F},
+			fails:       false,
+		},
+		{
+			name:        "values correct for ipfs, should fail",
+			headerBytes: []byte{0xe3, 0x01, 0x99, 0x1b, 0x20},
+			fails:       true,
+		},
 	} {
-		buf := make([]byte, binary.MaxVarintLen64)
-		for _, vv := range v.headerBytes {
-			n := binary.PutUvarint(buf, uint64(vv))
-			bb = append(bb, buf[:n]...)
-		}
+		t.Run(v.name, func(t *testing.T) {
+			buf := make([]byte, binary.MaxVarintLen64)
+			for _, vv := range v.headerBytes {
+				n := binary.PutUvarint(buf, uint64(vv))
+				bb = append(bb, buf[:n]...)
+			}
 
-		h := common.HexToHash("29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f")
-		bb = append(bb, h[:]...)
-		str := hex.EncodeToString(bb)
-		fmt.Println(str)
-		decodedHash, e := manualDecode(bb)
-		if e != nil {
-			t.Fatal(e)
-		}
+			h := common.HexToHash("29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f")
+			bb = append(bb, h[:]...)
+			str := hex.EncodeToString(bb)
+			fmt.Println(str)
+			decodedHash, e := manualDecode(bb)
+			switch v.fails {
+			case true:
+				if e == nil {
+					t.Fatal("the decode should fail")
+				}
+			case false:
+				if e != nil {
+					t.Fatal("the deccode shouldnt fail")
+				}
+			}
+			if e != nil {
+				t.Fatal(e)
+			}
 
-		if !bytes.Equal(decodedHash[:], h[:]) {
-			t.Fatal("hashes not equal")
-		}
-
+			if !bytes.Equal(decodedHash[:], h[:]) {
+				t.Fatal("hashes not equal")
+			}
+		})
 	}
 
 	/* from the EIP documentation
