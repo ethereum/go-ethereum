@@ -1,5 +1,3 @@
-// +build go1.8
-//
 // Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -29,47 +27,49 @@ import (
 // TestDBStore is running a test.MockStore tests
 // using test.MockStore function.
 func TestDBStore(t *testing.T) {
-	dir, err := ioutil.TempDir("", "mock_"+t.Name())
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(dir)
-
-	store, err := NewGlobalStore(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store.Close()
+	store, cleanup := newTestStore(t)
+	defer cleanup()
 
 	test.MockStore(t, store, 100)
+}
+
+// TestDBStoreListings is running test.MockStoreListings tests.
+func TestDBStoreListings(t *testing.T) {
+	store, cleanup := newTestStore(t)
+	defer cleanup()
+
+	test.MockStoreListings(t, store, 1000)
 }
 
 // TestImportExport is running a test.ImportExport tests
 // using test.MockStore function.
 func TestImportExport(t *testing.T) {
-	dir1, err := ioutil.TempDir("", "mock_"+t.Name()+"_exporter")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(dir1)
+	store1, cleanup := newTestStore(t)
+	defer cleanup()
 
-	store1, err := NewGlobalStore(dir1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store1.Close()
-
-	dir2, err := ioutil.TempDir("", "mock_"+t.Name()+"_importer")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(dir2)
-
-	store2, err := NewGlobalStore(dir2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store2.Close()
+	store2, cleanup := newTestStore(t)
+	defer cleanup()
 
 	test.ImportExport(t, store1, store2, 100)
+}
+
+// newTestStore creates a temporary GlobalStore
+// that will be closed and data deleted when
+// calling returned cleanup function.
+func newTestStore(t *testing.T) (s *GlobalStore, cleanup func()) {
+	dir, err := ioutil.TempDir("", "swarm-mock-db-")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s, err = NewGlobalStore(dir)
+	if err != nil {
+		os.RemoveAll(dir)
+		t.Fatal(err)
+	}
+
+	return s, func() {
+		s.Close()
+		os.RemoveAll(dir)
+	}
 }

@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 // TestDB_collectGarbageWorker tests garbage collection runs
@@ -47,26 +47,30 @@ func TestDB_collectGarbageWorker_multipleBatches(t *testing.T) {
 // testDB_collectGarbageWorker is a helper test function to test
 // garbage collection runs by uploading and syncing a number of chunks.
 func testDB_collectGarbageWorker(t *testing.T) {
-	chunkCount := 150
+	t.Helper()
 
-	testHookCollectGarbageChan := make(chan uint64)
-	defer setTestHookCollectGarbage(func(collectedCount uint64) {
-		testHookCollectGarbageChan <- collectedCount
-	})()
+	chunkCount := 150
 
 	db, cleanupFunc := newTestDB(t, &Options{
 		Capacity: 100,
 	})
+	testHookCollectGarbageChan := make(chan uint64)
+	defer setTestHookCollectGarbage(func(collectedCount uint64) {
+		select {
+		case testHookCollectGarbageChan <- collectedCount:
+		case <-db.close:
+		}
+	})()
 	defer cleanupFunc()
 
 	uploader := db.NewPutter(ModePutUpload)
 	syncer := db.NewSetter(ModeSetSync)
 
-	addrs := make([]storage.Address, 0)
+	addrs := make([]chunk.Address, 0)
 
 	// upload random chunks
 	for i := 0; i < chunkCount; i++ {
-		chunk := generateRandomChunk()
+		chunk := generateTestRandomChunk()
 
 		err := uploader.Put(chunk)
 		if err != nil {
@@ -107,8 +111,8 @@ func testDB_collectGarbageWorker(t *testing.T) {
 	// the first synced chunk should be removed
 	t.Run("get the first synced chunk", func(t *testing.T) {
 		_, err := db.NewGetter(ModeGetRequest).Get(addrs[0])
-		if err != storage.ErrChunkNotFound {
-			t.Errorf("got error %v, want %v", err, storage.ErrChunkNotFound)
+		if err != chunk.ErrChunkNotFound {
+			t.Errorf("got error %v, want %v", err, chunk.ErrChunkNotFound)
 		}
 	})
 
@@ -119,15 +123,6 @@ func testDB_collectGarbageWorker(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-
-	// cleanup: drain the last testHookCollectGarbageChan
-	// element before calling deferred functions not to block
-	// collectGarbageWorker loop, preventing the race in
-	// setting testHookCollectGarbage function
-	select {
-	case <-testHookCollectGarbageChan:
-	default:
-	}
 }
 
 // TestDB_collectGarbageWorker_withRequests is a helper test function
@@ -147,11 +142,11 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 		testHookCollectGarbageChan <- collectedCount
 	})()
 
-	addrs := make([]storage.Address, 0)
+	addrs := make([]chunk.Address, 0)
 
 	// upload random chunks just up to the capacity
 	for i := 0; i < int(db.capacity)-1; i++ {
-		chunk := generateRandomChunk()
+		chunk := generateTestRandomChunk()
 
 		err := uploader.Put(chunk)
 		if err != nil {
@@ -166,6 +161,14 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 		addrs = append(addrs, chunk.Address())
 	}
 
+	// set update gc test hook to signal when
+	// update gc goroutine is done by closing
+	// testHookUpdateGCChan channel
+	testHookUpdateGCChan := make(chan struct{})
+	resetTestHookUpdateGC := setTestHookUpdateGC(func() {
+		close(testHookUpdateGCChan)
+	})
+
 	// request the latest synced chunk
 	// to prioritize it in the gc index
 	// not to be collected
@@ -174,18 +177,29 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// wait for update gc goroutine to finish for garbage
+	// collector to be correctly triggered after the last upload
+	select {
+	case <-testHookUpdateGCChan:
+	case <-time.After(10 * time.Second):
+		t.Fatal("updateGC was not called after getting chunk with ModeGetRequest")
+	}
+
+	// no need to wait for update gc hook anymore
+	resetTestHookUpdateGC()
+
 	// upload and sync another chunk to trigger
 	// garbage collection
-	chunk := generateRandomChunk()
-	err = uploader.Put(chunk)
+	ch := generateTestRandomChunk()
+	err = uploader.Put(ch)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = syncer.Set(chunk.Address())
+	err = syncer.Set(ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
-	addrs = append(addrs, chunk.Address())
+	addrs = append(addrs, ch.Address())
 
 	// wait for garbage collection
 
@@ -230,8 +244,8 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	// the second synced chunk should be removed
 	t.Run("get gc-ed chunk", func(t *testing.T) {
 		_, err := db.NewGetter(ModeGetRequest).Get(addrs[1])
-		if err != storage.ErrChunkNotFound {
-			t.Errorf("got error %v, want %v", err, storage.ErrChunkNotFound)
+		if err != chunk.ErrChunkNotFound {
+			t.Errorf("got error %v, want %v", err, chunk.ErrChunkNotFound)
 		}
 	})
 
@@ -267,7 +281,7 @@ func TestDB_gcSize(t *testing.T) {
 	count := 100
 
 	for i := 0; i < count; i++ {
-		chunk := generateRandomChunk()
+		chunk := generateTestRandomChunk()
 
 		err := uploader.Put(chunk)
 		if err != nil {
@@ -281,12 +295,9 @@ func TestDB_gcSize(t *testing.T) {
 	}
 
 	// DB.Close writes gc size to disk, so
-	// Instead calling Close, simulate database shutdown
+	// Instead calling Close, close the database
 	// without it.
-	close(db.close)
-	db.updateGCWG.Wait()
-	err = db.shed.Close()
-	if err != nil {
+	if err := db.closeWithOptions(false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -294,6 +305,7 @@ func TestDB_gcSize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer db.Close()
 
 	t.Run("gc index size", newIndexGCSizeTest(db))
 }

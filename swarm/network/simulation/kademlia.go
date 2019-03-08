@@ -58,19 +58,19 @@ func (s *Simulation) WaitTillHealthy(ctx context.Context) (ill map[enode.ID]*net
 			for k := range ill {
 				delete(ill, k)
 			}
-			log.Debug("kademlia health check", "addr count", len(addrs))
+			log.Debug("kademlia health check", "addr count", len(addrs), "kad len", len(kademlias))
 			for id, k := range kademlias {
 				//PeerPot for this node
 				addr := common.Bytes2Hex(k.BaseAddr())
 				pp := ppmap[addr]
 				//call Healthy RPC
-				h := k.Healthy(pp)
+				h := k.GetHealthInfo(pp)
 				//print info
 				log.Debug(k.String())
 				log.Debug("kademlia", "connectNN", h.ConnectNN, "knowNN", h.KnowNN)
 				log.Debug("kademlia", "health", h.ConnectNN && h.KnowNN, "addr", hex.EncodeToString(k.BaseAddr()), "node", id)
 				log.Debug("kademlia", "ill condition", !h.ConnectNN, "addr", hex.EncodeToString(k.BaseAddr()), "node", id)
-				if !h.ConnectNN {
+				if !h.Healthy() {
 					ill[id] = k
 				}
 			}
@@ -85,6 +85,7 @@ func (s *Simulation) WaitTillHealthy(ctx context.Context) (ill map[enode.ID]*net
 // in simulation bucket.
 func (s *Simulation) kademlias() (ks map[enode.ID]*network.Kademlia) {
 	items := s.UpNodesItems(BucketKeyKademlia)
+	log.Debug("kademlia len items", "len", len(items))
 	ks = make(map[enode.ID]*network.Kademlia, len(items))
 	for id, v := range items {
 		k, ok := v.(*network.Kademlia)

@@ -260,7 +260,7 @@ func (db *DB) compactionCommit(name string, rec *sessionRecord) {
 	db.compCommitLk.Lock()
 	defer db.compCommitLk.Unlock() // Defer is necessary.
 	db.compactionTransactFunc(name+"@commit", func(cnt *compactionTransactCounter) error {
-		return db.s.commit(rec)
+		return db.s.commit(rec, true)
 	}, nil)
 }
 

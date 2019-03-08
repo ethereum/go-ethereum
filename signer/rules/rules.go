@@ -22,7 +22,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/signer/core"
@@ -42,28 +41,29 @@ func consoleOutput(call otto.FunctionCall) otto.Value {
 	for _, argument := range call.ArgumentList {
 		output = append(output, fmt.Sprintf("%v", argument))
 	}
-	fmt.Fprintln(os.Stdout, strings.Join(output, " "))
+	fmt.Fprintln(os.Stderr, strings.Join(output, " "))
 	return otto.Value{}
 }
 
-// rulesetUI provides an implementation of SignerUI that evaluates a javascript
+// rulesetUI provides an implementation of UIClientAPI that evaluates a javascript
 // file for each defined UI-method
 type rulesetUI struct {
-	next        core.SignerUI // The next handler, for manual processing
-	storage     storage.Storage
-	credentials storage.Storage
-	jsRules     string // The rules to use
+	next    core.UIClientAPI // The next handler, for manual processing
+	storage storage.Storage
+	jsRules string // The rules to use
 }
 
-func NewRuleEvaluator(next core.SignerUI, jsbackend, credentialsBackend storage.Storage) (*rulesetUI, error) {
+func NewRuleEvaluator(next core.UIClientAPI, jsbackend storage.Storage) (*rulesetUI, error) {
 	c := &rulesetUI{
-		next:        next,
-		storage:     jsbackend,
-		credentials: credentialsBackend,
-		jsRules:     "",
+		next:    next,
+		storage: jsbackend,
+		jsRules: "",
 	}
 
 	return c, nil
+}
+func (r *rulesetUI) RegisterUIServer(api *core.UIServerAPI) {
+	// TODO, make it possible to query from js
 }
 
 func (r *rulesetUI) Init(javascriptRules string) error {
@@ -150,16 +150,10 @@ func (r *rulesetUI) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse,
 	if approved {
 		return core.SignTxResponse{
 				Transaction: request.Transaction,
-				Approved:    true,
-				Password:    r.lookupPassword(request.Transaction.From.Address()),
-			},
+				Approved:    true},
 			nil
 	}
 	return core.SignTxResponse{Approved: false}, err
-}
-
-func (r *rulesetUI) lookupPassword(address common.Address) string {
-	return r.credentials.Get(strings.ToLower(address.String()))
 }
 
 func (r *rulesetUI) ApproveSignData(request *core.SignDataRequest) (core.SignDataResponse, error) {
@@ -170,28 +164,9 @@ func (r *rulesetUI) ApproveSignData(request *core.SignDataRequest) (core.SignDat
 		return r.next.ApproveSignData(request)
 	}
 	if approved {
-		return core.SignDataResponse{Approved: true, Password: r.lookupPassword(request.Address.Address())}, nil
+		return core.SignDataResponse{Approved: true}, nil
 	}
-	return core.SignDataResponse{Approved: false, Password: ""}, err
-}
-
-func (r *rulesetUI) ApproveExport(request *core.ExportRequest) (core.ExportResponse, error) {
-	jsonreq, err := json.Marshal(request)
-	approved, err := r.checkApproval("ApproveExport", jsonreq, err)
-	if err != nil {
-		log.Info("Rule-based approval error, going to manual", "error", err)
-		return r.next.ApproveExport(request)
-	}
-	if approved {
-		return core.ExportResponse{Approved: true}, nil
-	}
-	return core.ExportResponse{Approved: false}, err
-}
-
-func (r *rulesetUI) ApproveImport(request *core.ImportRequest) (core.ImportResponse, error) {
-	// This cannot be handled by rules, requires setting a password
-	// dispatch to next
-	return r.next.ApproveImport(request)
+	return core.SignDataResponse{Approved: false}, err
 }
 
 // OnInputRequired not handled by rules

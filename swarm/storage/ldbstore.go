@@ -312,12 +312,11 @@ func decodeIndex(data []byte, index *dpaDBIndex) error {
 	return dec.Decode(index)
 }
 
-func decodeData(addr Address, data []byte) (*chunk, error) {
+func decodeData(addr Address, data []byte) (Chunk, error) {
 	return NewChunk(addr, data[32:]), nil
 }
 
 func (s *LDBStore) collectGarbage() error {
-
 	// prevent duplicate gc from starting when one is already running
 	select {
 	case <-s.gc.runC:
@@ -335,7 +334,6 @@ func (s *LDBStore) collectGarbage() error {
 	s.startGC(int(entryCnt))
 	log.Debug("collectGarbage", "target", s.gc.target, "entryCnt", entryCnt)
 
-	var totalDeleted int
 	for s.gc.count < s.gc.target {
 		it := s.db.NewIterator()
 		ok := it.Seek([]byte{keyGCIdx})
@@ -371,15 +369,15 @@ func (s *LDBStore) collectGarbage() error {
 		}
 
 		s.writeBatch(s.gc.batch, wEntryCnt)
+		log.Trace("garbage collect batch done", "batch", singleIterationCount, "total", s.gc.count)
 		s.lock.Unlock()
 		it.Release()
-		log.Trace("garbage collect batch done", "batch", singleIterationCount, "total", s.gc.count)
 	}
 
-	s.gc.runC <- struct{}{}
+	metrics.GetOrRegisterCounter("ldbstore.collectgarbage.delete", nil).Inc(int64(s.gc.count))
 	log.Debug("garbage collect done", "c", s.gc.count)
+	s.gc.runC <- struct{}{}
 
-	metrics.GetOrRegisterCounter("ldbstore.collectgarbage.delete", nil).Inc(int64(totalDeleted))
 	return nil
 }
 
@@ -504,7 +502,7 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 }
 
 // Cleanup iterates over the database and deletes chunks if they pass the `f` condition
-func (s *LDBStore) Cleanup(f func(*chunk) bool) {
+func (s *LDBStore) Cleanup(f func(Chunk) bool) {
 	var errorsFound, removed, total int
 
 	it := s.db.NewIterator()
@@ -529,8 +527,8 @@ func (s *LDBStore) Cleanup(f func(*chunk) bool) {
 		if err != nil {
 			found := false
 
-			// highest possible proximity is 255
-			for po = 1; po <= 255; po++ {
+			// The highest possible proximity is 255, so exit loop upon overflow.
+			for po = uint8(1); po != 0; po++ {
 				datakey = getDataKey(index.Idx, po)
 				data, err = s.db.Get(datakey)
 				if err == nil {
@@ -553,12 +551,14 @@ func (s *LDBStore) Cleanup(f func(*chunk) bool) {
 			continue
 		}
 
-		cs := int64(binary.LittleEndian.Uint64(c.sdata[:8]))
-		log.Trace("chunk", "key", fmt.Sprintf("%x", key), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(c.sdata), "size", cs)
+		sdata := c.Data()
+
+		cs := int64(binary.LittleEndian.Uint64(sdata[:8]))
+		log.Trace("chunk", "key", fmt.Sprintf("%x", key), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(sdata), "size", cs)
 
 		// if chunk is to be removed
 		if f(c) {
-			log.Warn("chunk for cleanup", "key", fmt.Sprintf("%x", key), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(c.sdata), "size", cs)
+			log.Warn("chunk for cleanup", "key", fmt.Sprintf("%x", key), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(sdata), "size", cs)
 			s.deleteNow(&index, getIndexKey(key[1:]), po)
 			removed++
 			errorsFound++
@@ -969,8 +969,20 @@ func (s *LDBStore) Get(_ context.Context, addr Address) (chunk Chunk, err error)
 	return s.get(addr)
 }
 
+// Has queries the underlying DB if a chunk with the given address is stored
+// Returns true if the chunk is found, false if not
+func (s *LDBStore) Has(_ context.Context, addr Address) bool {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	ikey := getIndexKey(addr)
+	_, err := s.db.Get(ikey)
+
+	return err == nil
+}
+
 // TODO: To conform with other private methods of this object indices should not be updated
-func (s *LDBStore) get(addr Address) (chunk *chunk, err error) {
+func (s *LDBStore) get(addr Address) (chunk Chunk, err error) {
 	if s.closed {
 		return nil, ErrDBClosed
 	}
@@ -1037,7 +1049,6 @@ func (s *LDBStore) Close() {
 	s.lock.Unlock()
 	// force writing out current batch
 	s.writeCurrentBatch()
-	close(s.batchesC)
 	s.db.Close()
 }
 

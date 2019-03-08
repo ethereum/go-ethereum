@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"os/signal"
 	"os/user"
@@ -35,25 +36,25 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/console"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/signer/core"
 	"github.com/ethereum/go-ethereum/signer/rules"
 	"github.com/ethereum/go-ethereum/signer/storage"
 	"gopkg.in/urfave/cli.v1"
 )
-
-// ExternalAPIVersion -- see extapi_changelog.md
-const ExternalAPIVersion = "4.0.0"
-
-// InternalAPIVersion -- see intapi_changelog.md
-const InternalAPIVersion = "3.0.0"
 
 const legalWarning = `
 WARNING! 
@@ -86,6 +87,11 @@ var (
 		Value: DefaultConfigDir(),
 		Usage: "Directory for Clef configuration",
 	}
+	chainIdFlag = cli.Int64Flag{
+		Name:  "chainid",
+		Value: params.MainnetChainConfig.ChainID.Int64(),
+		Usage: "Chain id to use for signing (1=mainnet, 3=ropsten, 4=rinkeby, 5=Goerli)",
+	}
 	rpcPortFlag = cli.IntFlag{
 		Name:  "rpcport",
 		Usage: "HTTP-RPC server listening port",
@@ -113,7 +119,7 @@ var (
 	ruleFlag = cli.StringFlag{
 		Name:  "rules",
 		Usage: "Enable rule-engine",
-		Value: "rules.json",
+		Value: "",
 	}
 	stdiouiFlag = cli.BoolFlag{
 		Name: "stdio-ui",
@@ -168,10 +174,16 @@ Clef that the file is 'safe' to execute.`,
 			signerSecretFlag,
 		},
 		Description: `
-		The setpw command stores a password for a given address (keyfile). If you enter a blank passphrase, it will 
+The setpw command stores a password for a given address (keyfile). If you enter a blank passphrase, it will 
 remove any stored credential for that address (keyfile)
-`,
-	}
+`}
+	gendocCommand = cli.Command{
+		Action: GenDoc,
+		Name:   "gendoc",
+		Usage:  "Generate documentation about json-rpc format",
+		Description: `
+The gendoc generates example structures of the json-rpc communication types.
+`}
 )
 
 func init() {
@@ -181,7 +193,7 @@ func init() {
 		logLevelFlag,
 		keystoreFlag,
 		configdirFlag,
-		utils.NetworkIdFlag,
+		chainIdFlag,
 		utils.LightKDFFlag,
 		utils.NoUSBFlag,
 		utils.RPCListenAddrFlag,
@@ -200,7 +212,7 @@ func init() {
 		advancedMode,
 	}
 	app.Action = signer
-	app.Commands = []cli.Command{initCommand, attestCommand, setCredentialCommand}
+	app.Commands = []cli.Command{initCommand, attestCommand, setCredentialCommand, gendocCommand}
 
 }
 func main() {
@@ -341,7 +353,7 @@ func signer(c *cli.Context) error {
 		return err
 	}
 	var (
-		ui core.SignerUI
+		ui core.UIClientAPI
 	)
 	if c.GlobalBool(stdiouiFlag.Name) {
 		log.Info("Using stdin/stdout as UI-channel")
@@ -359,17 +371,14 @@ func signer(c *cli.Context) error {
 	log.Info("Loaded 4byte db", "signatures", db.Size(), "file", fourByteDb, "local", fourByteLocal)
 
 	var (
-		api core.ExternalAPI
+		api       core.ExternalAPI
+		pwStorage storage.Storage = &storage.NoStorage{}
 	)
 
 	configDir := c.GlobalString(configdirFlag.Name)
 	if stretchedKey, err := readMasterKey(c, ui); err != nil {
 		log.Info("No master seed provided, rules disabled", "error", err)
 	} else {
-
-		if err != nil {
-			utils.Fatalf(err.Error())
-		}
 		vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
 
 		// Generate domain specific keys
@@ -378,41 +387,49 @@ func signer(c *cli.Context) error {
 		confkey := crypto.Keccak256([]byte("config"), stretchedKey)
 
 		// Initialize the encrypted storages
-		pwStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
+		pwStorage = storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
 		jsStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "jsstorage.json"), jskey)
 		configStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "config.json"), confkey)
 
 		//Do we have a rule-file?
-		ruleJS, err := ioutil.ReadFile(c.GlobalString(ruleFlag.Name))
-		if err != nil {
-			log.Info("Could not load rulefile, rules not enabled", "file", "rulefile")
-		} else {
-			hasher := sha256.New()
-			hasher.Write(ruleJS)
-			shasum := hasher.Sum(nil)
-			storedShasum := configStorage.Get("ruleset_sha256")
-			if storedShasum != hex.EncodeToString(shasum) {
-				log.Info("Could not validate ruleset hash, rules not enabled", "got", hex.EncodeToString(shasum), "expected", storedShasum)
+		if ruleFile := c.GlobalString(ruleFlag.Name); ruleFile != "" {
+			ruleJS, err := ioutil.ReadFile(c.GlobalString(ruleFile))
+			if err != nil {
+				log.Info("Could not load rulefile, rules not enabled", "file", "rulefile")
 			} else {
-				// Initialize rules
-				ruleEngine, err := rules.NewRuleEvaluator(ui, jsStorage, pwStorage)
-				if err != nil {
-					utils.Fatalf(err.Error())
+				shasum := sha256.Sum256(ruleJS)
+				foundShaSum := hex.EncodeToString(shasum[:])
+				storedShasum := configStorage.Get("ruleset_sha256")
+				if storedShasum != foundShaSum {
+					log.Info("Could not validate ruleset hash, rules not enabled", "got", foundShaSum, "expected", storedShasum)
+				} else {
+					// Initialize rules
+					ruleEngine, err := rules.NewRuleEvaluator(ui, jsStorage)
+					if err != nil {
+						utils.Fatalf(err.Error())
+					}
+					ruleEngine.Init(string(ruleJS))
+					ui = ruleEngine
+					log.Info("Rule engine configured", "file", c.String(ruleFlag.Name))
 				}
-				ruleEngine.Init(string(ruleJS))
-				ui = ruleEngine
-				log.Info("Rule engine configured", "file", c.String(ruleFlag.Name))
 			}
 		}
 	}
+	var (
+		chainId  = c.GlobalInt64(chainIdFlag.Name)
+		ksLoc    = c.GlobalString(keystoreFlag.Name)
+		lightKdf = c.GlobalBool(utils.LightKDFFlag.Name)
+		advanced = c.GlobalBool(advancedMode.Name)
+		nousb    = c.GlobalBool(utils.NoUSBFlag.Name)
+	)
+	log.Info("Starting signer", "chainid", chainId, "keystore", ksLoc,
+		"light-kdf", lightKdf, "advanced", advanced)
+	am := core.StartClefAccountManager(ksLoc, nousb, lightKdf)
+	apiImpl := core.NewSignerAPI(am, chainId, nousb, ui, db, advanced, pwStorage)
 
-	apiImpl := core.NewSignerAPI(
-		c.GlobalInt64(utils.NetworkIdFlag.Name),
-		c.GlobalString(keystoreFlag.Name),
-		c.GlobalBool(utils.NoUSBFlag.Name),
-		ui, db,
-		c.GlobalBool(utils.LightKDFFlag.Name),
-		c.GlobalBool(advancedMode.Name))
+	// Establish the bidirectional communication, by creating a new UI backend and registering
+	// it with the UI.
+	ui.RegisterUIServer(core.NewUIServerAPI(apiImpl))
 	api = apiImpl
 	// Audit logging
 	if logfile := c.GlobalString(auditLogFlag.Name); logfile != "" {
@@ -479,8 +496,8 @@ func signer(c *cli.Context) error {
 	}
 	ui.OnSignerStartup(core.StartupInfo{
 		Info: map[string]interface{}{
-			"extapi_version": ExternalAPIVersion,
-			"intapi_version": InternalAPIVersion,
+			"extapi_version": core.ExternalAPIVersion,
+			"intapi_version": core.InternalAPIVersion,
 			"extapi_http":    extapiURL,
 			"extapi_ipc":     ipcapiURL,
 		},
@@ -514,7 +531,12 @@ func DefaultConfigDir() string {
 		if runtime.GOOS == "darwin" {
 			return filepath.Join(home, "Library", "Signer")
 		} else if runtime.GOOS == "windows" {
-			return filepath.Join(home, "AppData", "Roaming", "Signer")
+			appdata := os.Getenv("APPDATA")
+			if appdata != "" {
+				return filepath.Join(appdata, "Signer")
+			} else {
+				return filepath.Join(home, "AppData", "Roaming", "Signer")
+			}
 		} else {
 			return filepath.Join(home, ".clef")
 		}
@@ -532,7 +554,7 @@ func homeDir() string {
 	}
 	return ""
 }
-func readMasterKey(ctx *cli.Context, ui core.SignerUI) ([]byte, error) {
+func readMasterKey(ctx *cli.Context, ui core.UIClientAPI) ([]byte, error) {
 	var (
 		file      string
 		configDir = ctx.GlobalString(configdirFlag.Name)
@@ -616,42 +638,123 @@ func testExternalUI(api *core.SignerAPI) {
 	ctx := context.WithValue(context.Background(), "remote", "clef binary")
 	ctx = context.WithValue(ctx, "scheme", "in-proc")
 	ctx = context.WithValue(ctx, "local", "main")
-
 	errs := make([]string, 0)
 
-	api.UI.ShowInfo("Testing 'ShowInfo'")
-	api.UI.ShowError("Testing 'ShowError'")
+	a := common.HexToAddress("0xdeadbeef000000000000000000000000deadbeef")
 
-	checkErr := func(method string, err error) {
-		if err != nil && err != core.ErrRequestDenied {
-			errs = append(errs, fmt.Sprintf("%v: %v", method, err.Error()))
+	queryUser := func(q string) string {
+		resp, err := api.UI.OnInputRequired(core.UserInputRequest{
+			Title:  "Testing",
+			Prompt: q,
+		})
+		if err != nil {
+			errs = append(errs, err.Error())
+		}
+		return resp.Text
+	}
+	expectResponse := func(testcase, question, expect string) {
+		if got := queryUser(question); got != expect {
+			errs = append(errs, fmt.Sprintf("%s: got %v, expected %v", testcase, got, expect))
 		}
 	}
-	var err error
-
-	_, err = api.SignTransaction(ctx, core.SendTxArgs{From: common.MixedcaseAddress{}}, nil)
-	checkErr("SignTransaction", err)
-	_, err = api.Sign(ctx, common.MixedcaseAddress{}, common.Hex2Bytes("01020304"))
-	checkErr("Sign", err)
-	_, err = api.List(ctx)
-	checkErr("List", err)
-	_, err = api.New(ctx)
-	checkErr("New", err)
-	_, err = api.Export(ctx, common.Address{})
-	checkErr("Export", err)
-	_, err = api.Import(ctx, json.RawMessage{})
-	checkErr("Import", err)
-
-	api.UI.ShowInfo("Tests completed")
-
-	if len(errs) > 0 {
-		log.Error("Got errors")
-		for _, e := range errs {
-			log.Error(e)
+	expectApprove := func(testcase string, err error) {
+		if err == nil || err == accounts.ErrUnknownAccount {
+			return
 		}
-	} else {
-		log.Info("No errors")
+		errs = append(errs, fmt.Sprintf("%v: expected no error, got %v", testcase, err.Error()))
 	}
+	expectDeny := func(testcase string, err error) {
+		if err == nil || err != core.ErrRequestDenied {
+			errs = append(errs, fmt.Sprintf("%v: expected ErrRequestDenied, got %v", testcase, err))
+		}
+	}
+
+	// Test display of info and error
+	{
+		api.UI.ShowInfo("If you see this message, enter 'yes' to next question")
+		expectResponse("showinfo", "Did you see the message? [yes/no]", "yes")
+		api.UI.ShowError("If you see this message, enter 'yes' to the next question")
+		expectResponse("showerror", "Did you see the message? [yes/no]", "yes")
+	}
+	{ // Sign data test - clique header
+		api.UI.ShowInfo("Please approve the next request for signing a clique header")
+		cliqueHeader := types.Header{
+			common.HexToHash("0000H45H"),
+			common.HexToHash("0000H45H"),
+			common.HexToAddress("0000H45H"),
+			common.HexToHash("0000H00H"),
+			common.HexToHash("0000H45H"),
+			common.HexToHash("0000H45H"),
+			types.Bloom{},
+			big.NewInt(1337),
+			big.NewInt(1337),
+			1338,
+			1338,
+			big.NewInt(1338),
+			[]byte("Extra data Extra data Extra data  Extra data  Extra data  Extra data  Extra data Extra data"),
+			common.HexToHash("0x0000H45H"),
+			types.BlockNonce{},
+		}
+		cliqueRlp, err := rlp.EncodeToBytes(cliqueHeader)
+		if err != nil {
+			utils.Fatalf("Should not error: %v", err)
+		}
+		addr, _ := common.NewMixedcaseAddressFromString("0x0011223344556677889900112233445566778899")
+		_, err = api.SignData(ctx, accounts.MimetypeClique, *addr, hexutil.Encode(cliqueRlp))
+		expectApprove("signdata - clique header", err)
+	}
+	{ // Sign data test - plain text
+		api.UI.ShowInfo("Please approve the next request for signing text")
+		addr, _ := common.NewMixedcaseAddressFromString("0x0011223344556677889900112233445566778899")
+		_, err := api.SignData(ctx, accounts.MimetypeTextPlain, *addr, hexutil.Encode([]byte("hello world")))
+		expectApprove("signdata - text", err)
+	}
+	{ // Sign data test - plain text reject
+		api.UI.ShowInfo("Please deny the next request for signing text")
+		addr, _ := common.NewMixedcaseAddressFromString("0x0011223344556677889900112233445566778899")
+		_, err := api.SignData(ctx, accounts.MimetypeTextPlain, *addr, hexutil.Encode([]byte("hello world")))
+		expectDeny("signdata - text", err)
+	}
+	{ // Sign transaction
+
+		api.UI.ShowInfo("Please reject next transaction")
+		data := hexutil.Bytes([]byte{})
+		to := common.NewMixedcaseAddress(a)
+		tx := core.SendTxArgs{
+			Data:     &data,
+			Nonce:    0x1,
+			Value:    hexutil.Big(*big.NewInt(6)),
+			From:     common.NewMixedcaseAddress(a),
+			To:       &to,
+			GasPrice: hexutil.Big(*big.NewInt(5)),
+			Gas:      1000,
+			Input:    nil,
+		}
+		_, err := api.SignTransaction(ctx, tx, nil)
+		expectDeny("signtransaction [1]", err)
+		expectResponse("signtransaction [2]", "Did you see any warnings for the last transaction? (yes/no)", "no")
+	}
+	{ // Listing
+		api.UI.ShowInfo("Please reject listing-request")
+		_, err := api.List(ctx)
+		expectDeny("list", err)
+	}
+	{ // Import
+		api.UI.ShowInfo("Please reject new account-request")
+		_, err := api.New(ctx)
+		expectDeny("newaccount", err)
+	}
+	{ // Metadata
+		api.UI.ShowInfo("Please check if you see the Origin in next listing (approve or deny)")
+		api.List(context.WithValue(ctx, "Origin", "origin.com"))
+		expectResponse("metadata - origin", "Did you see origin (origin.com)? [yes/no] ", "yes")
+	}
+
+	for _, e := range errs {
+		log.Error(e)
+	}
+	result := fmt.Sprintf("Tests completed. %d errors:\n%s\n", len(errs), strings.Join(errs, "\n"))
+	api.UI.ShowInfo(result)
 
 }
 
@@ -706,6 +809,154 @@ func decryptSeed(keyjson []byte, auth string) ([]byte, error) {
 		return nil, err
 	}
 	return seed, err
+}
+
+// GenDoc outputs examples of all structures used in json-rpc communication
+func GenDoc(ctx *cli.Context) {
+
+	var (
+		a    = common.HexToAddress("0xdeadbeef000000000000000000000000deadbeef")
+		b    = common.HexToAddress("0x1111111122222222222233333333334444444444")
+		meta = core.Metadata{
+			Scheme:    "http",
+			Local:     "localhost:8545",
+			Origin:    "www.malicious.ru",
+			Remote:    "localhost:9999",
+			UserAgent: "Firefox 3.2",
+		}
+		output []string
+		add    = func(name, desc string, v interface{}) {
+			if data, err := json.MarshalIndent(v, "", "  "); err == nil {
+				output = append(output, fmt.Sprintf("### %s\n\n%s\n\nExample:\n```json\n%s\n```", name, desc, data))
+			} else {
+				log.Error("Error generating output", err)
+			}
+		}
+	)
+
+	{ // Sign plain text request
+		desc := "SignDataRequest contains information about a pending request to sign some data. " +
+			"The data to be signed can be of various types, defined by content-type. Clef has done most " +
+			"of the work in canonicalizing and making sense of the data, and it's up to the UI to present" +
+			"the user with the contents of the `message`"
+		sighash, msg := accounts.TextAndHash([]byte("hello world"))
+		message := []*core.NameValueType{{"message", msg, accounts.MimetypeTextPlain}}
+
+		add("SignDataRequest", desc, &core.SignDataRequest{
+			Address:     common.NewMixedcaseAddress(a),
+			Meta:        meta,
+			ContentType: accounts.MimetypeTextPlain,
+			Rawdata:     []byte(msg),
+			Message:     message,
+			Hash:        sighash})
+	}
+	{ // Sign plain text response
+		add("SignDataResponse - approve", "Response to SignDataRequest",
+			&core.SignDataResponse{Approved: true})
+		add("SignDataResponse - deny", "Response to SignDataRequest",
+			&core.SignDataResponse{})
+	}
+	{ // Sign transaction request
+		desc := "SignTxRequest contains information about a pending request to sign a transaction. " +
+			"Aside from the transaction itself, there is also a `call_info`-struct. That struct contains " +
+			"messages of various types, that the user should be informed of." +
+			"\n\n" +
+			"As in any request, it's important to consider that the `meta` info also contains untrusted data." +
+			"\n\n" +
+			"The `transaction` (on input into clef) can have either `data` or `input` -- if both are set, " +
+			"they must be identical, otherwise an error is generated. " +
+			"However, Clef will always use `data` when passing this struct on (if Clef does otherwise, please file a ticket)"
+
+		data := hexutil.Bytes([]byte{0x01, 0x02, 0x03, 0x04})
+		add("SignTxRequest", desc, &core.SignTxRequest{
+			Meta: meta,
+			Callinfo: []core.ValidationInfo{
+				{"Warning", "Something looks odd, show this message as a warning"},
+				{"Info", "User should see this aswell"},
+			},
+			Transaction: core.SendTxArgs{
+				Data:     &data,
+				Nonce:    0x1,
+				Value:    hexutil.Big(*big.NewInt(6)),
+				From:     common.NewMixedcaseAddress(a),
+				To:       nil,
+				GasPrice: hexutil.Big(*big.NewInt(5)),
+				Gas:      1000,
+				Input:    nil,
+			}})
+	}
+	{ // Sign tx response
+		data := hexutil.Bytes([]byte{0x04, 0x03, 0x02, 0x01})
+		add("SignTxResponse - approve", "Response to request to sign a transaction. This response needs to contain the `transaction`"+
+			", because the UI is free to make modifications to the transaction.",
+			&core.SignTxResponse{Approved: true,
+				Transaction: core.SendTxArgs{
+					Data:     &data,
+					Nonce:    0x4,
+					Value:    hexutil.Big(*big.NewInt(6)),
+					From:     common.NewMixedcaseAddress(a),
+					To:       nil,
+					GasPrice: hexutil.Big(*big.NewInt(5)),
+					Gas:      1000,
+					Input:    nil,
+				}})
+		add("SignTxResponse - deny", "Response to SignTxRequest. When denying a request, there's no need to "+
+			"provide the transaction in return",
+			&core.SignTxResponse{})
+	}
+	{ // WHen a signed tx is ready to go out
+		desc := "SignTransactionResult is used in the call `clef` -> `OnApprovedTx(result)`" +
+			"\n\n" +
+			"This occurs _after_ successful completion of the entire signing procedure, but right before the signed " +
+			"transaction is passed to the external caller. This method (and data) can be used by the UI to signal " +
+			"to the user that the transaction was signed, but it is primarily useful for ruleset implementations." +
+			"\n\n" +
+			"A ruleset that implements a rate limitation needs to know what transactions are sent out to the external " +
+			"interface. By hooking into this methods, the ruleset can maintain track of that count." +
+			"\n\n" +
+			"**OBS:** Note that if an attacker can restore your `clef` data to a previous point in time" +
+			" (e.g through a backup), the attacker can reset such windows, even if he/she is unable to decrypt the content. " +
+			"\n\n" +
+			"The `OnApproved` method cannot be responded to, it's purely informative"
+
+		rlpdata := common.FromHex("0xf85d640101948a8eafb1cf62bfbeb1741769dae1a9dd47996192018026a0716bd90515acb1e68e5ac5867aa11a1e65399c3349d479f5fb698554ebc6f293a04e8a4ebfff434e971e0ef12c5bf3a881b06fd04fc3f8b8a7291fb67a26a1d4ed")
+		var tx types.Transaction
+		rlp.DecodeBytes(rlpdata, &tx)
+		add("OnApproved - SignTransactionResult", desc, &ethapi.SignTransactionResult{Raw: rlpdata, Tx: &tx})
+
+	}
+	{ // User input
+		add("UserInputRequest", "Sent when clef needs the user to provide data. If 'password' is true, the input field should be treated accordingly (echo-free)",
+			&core.UserInputRequest{IsPassword: true, Title: "The title here", Prompt: "The question to ask the user"})
+		add("UserInputResponse", "Response to UserInputRequest",
+			&core.UserInputResponse{Text: "The textual response from user"})
+	}
+	{ // List request
+		add("ListRequest", "Sent when a request has been made to list addresses. The UI is provided with the "+
+			"full `account`s, including local directory names. Note: this information is not passed back to the external caller, "+
+			"who only sees the `address`es. ",
+			&core.ListRequest{
+				Meta: meta,
+				Accounts: []accounts.Account{
+					{a, accounts.URL{Scheme: "keystore", Path: "/path/to/keyfile/a"}},
+					{b, accounts.URL{Scheme: "keystore", Path: "/path/to/keyfile/b"}}},
+			})
+
+		add("ListResponse", "Response to list request. The response contains a list of all addresses to show to the caller. "+
+			"Note: the UI is free to respond with any address the caller, regardless of whether it exists or not",
+			&core.ListResponse{
+				Accounts: []accounts.Account{
+					{common.HexToAddress("0xcowbeef000000cowbeef00000000000000000c0w"), accounts.URL{Path: ".. ignored .."}},
+					{common.HexToAddress("0xffffffffffffffffffffffffffffffffffffffff"), accounts.URL{}},
+				}})
+	}
+
+	fmt.Println(`## UI Client interface
+
+These data types are defined in the channel between clef and the UI`)
+	for _, elem := range output {
+		fmt.Println(elem)
+	}
 }
 
 /**

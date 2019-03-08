@@ -27,6 +27,27 @@ import (
 // TestDBStore is running test for a GlobalStore
 // using test.MockStore function.
 func TestRPCStore(t *testing.T) {
+	store, cleanup := newTestStore(t)
+	defer cleanup()
+
+	test.MockStore(t, store, 30)
+}
+
+// TestRPCStoreListings is running test for a GlobalStore
+// using test.MockStoreListings function.
+func TestRPCStoreListings(t *testing.T) {
+	store, cleanup := newTestStore(t)
+	defer cleanup()
+
+	test.MockStoreListings(t, store, 1000)
+}
+
+// newTestStore creates a temporary GlobalStore
+// that will be closed when returned cleanup function
+// is called.
+func newTestStore(t *testing.T) (s *GlobalStore, cleanup func()) {
+	t.Helper()
+
 	serverStore := mem.NewGlobalStore()
 
 	server := rpc.NewServer()
@@ -35,7 +56,9 @@ func TestRPCStore(t *testing.T) {
 	}
 
 	store := NewGlobalStore(rpc.DialInProc(server))
-	defer store.Close()
-
-	test.MockStore(t, store, 30)
+	return store, func() {
+		if err := store.Close(); err != nil {
+			t.Error(err)
+		}
+	}
 }

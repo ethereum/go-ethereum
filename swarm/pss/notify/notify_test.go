@@ -19,7 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/state"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 )
 
 var (
@@ -51,6 +51,7 @@ func TestStart(t *testing.T) {
 		ID:             "0",
 		DefaultService: "bzz",
 	})
+	defer net.Shutdown()
 	leftNodeConf := adapters.RandomNodeConfig()
 	leftNodeConf.Services = []string{"bzz", "pss"}
 	leftNode, err := net.NewNodeWithConfig(leftNodeConf)

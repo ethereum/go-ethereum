@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/swarm/testutil"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -82,11 +84,18 @@ func getDbStore(nodeID string) (*state.DBStore, error) {
 }
 
 var (
-	nodeCount = flag.Int("nodes", 32, "number of nodes to create (default 32)")
+	nodeCount = flag.Int("nodes", defaultNodeCount(), "number of nodes to create (default 32)")
 	initCount = flag.Int("conns", 1, "number of originally connected peers	 (default 1)")
 	loglevel  = flag.Int("loglevel", 3, "verbosity of logs")
 	rawlog    = flag.Bool("rawlog", false, "remove terminal formatting from logs")
 )
+
+func defaultNodeCount() int {
+	if testutil.RaceEnabled {
+		return 8
+	}
+	return 32
+}
 
 func init() {
 	flag.Parse()
@@ -267,7 +276,7 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 		}
 
 		healthy := &network.Health{}
-		if err := client.Call(&healthy, "hive_healthy", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
+		if err := client.Call(&healthy, "hive_getHealthInfo", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
 		log.Debug(fmt.Sprintf("node %4s healthy: connected nearest neighbours: %v, know nearest neighbours: %v,\n\n%v", id, healthy.ConnectNN, healthy.KnowNN, healthy.Hive))
@@ -352,7 +361,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 				healthy := &network.Health{}
 				addr := id.String()
 				ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
-				if err := client.Call(&healthy, "hive_healthy", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
+				if err := client.Call(&healthy, "hive_getHealthInfo", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
 					return fmt.Errorf("error getting node health: %s", err)
 				}
 
@@ -362,9 +371,6 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 					return fmt.Errorf("error getting node string %s", err)
 				}
 				log.Info(nodeStr)
-				for _, a := range addrs {
-					log.Info(common.Bytes2Hex(a))
-				}
 				if !healthy.ConnectNN || healthy.CountKnowNN == 0 {
 					isHealthy = false
 					break
@@ -425,7 +431,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 		healthy := &network.Health{}
 		ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
 
-		if err := client.Call(&healthy, "hive_healthy", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
+		if err := client.Call(&healthy, "hive_getHealthInfo", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
 		log.Info(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v", id, healthy.ConnectNN, healthy.KnowNN))

@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/karalabe/hid"
 )
@@ -273,9 +274,7 @@ func (w *wallet) close() error {
 	w.device = nil
 
 	w.accounts, w.paths = nil, nil
-	w.driver.Close()
-
-	return nil
+	return w.driver.Close()
 }
 
 // Accounts implements accounts.Wallet, returning the list of accounts pinned to
@@ -495,10 +494,26 @@ func (w *wallet) SelfDerive(base accounts.DerivationPath, chain ethereum.ChainSt
 	w.deriveChain = chain
 }
 
-// SignHash implements accounts.Wallet, however signing arbitrary data is not
+// signHash implements accounts.Wallet, however signing arbitrary data is not
 // supported for hardware wallets, so this method will always return an error.
-func (w *wallet) SignHash(account accounts.Account, hash []byte) ([]byte, error) {
+func (w *wallet) signHash(account accounts.Account, hash []byte) ([]byte, error) {
 	return nil, accounts.ErrNotSupported
+}
+
+// SignData signs keccak256(data). The mimetype parameter describes the type of data being signed
+func (w *wallet) SignData(account accounts.Account, mimeType string, data []byte) ([]byte, error) {
+	return w.signHash(account, crypto.Keccak256(data))
+}
+
+// SignDataWithPassphrase implements accounts.Wallet, attempting to sign the given
+// data with the given account using passphrase as extra authentication.
+// Since USB wallets don't rely on passphrases, these are silently ignored.
+func (w *wallet) SignDataWithPassphrase(account accounts.Account, passphrase, mimeType string, data []byte) ([]byte, error) {
+	return w.SignData(account, mimeType, data)
+}
+
+func (w *wallet) SignText(account accounts.Account, text []byte) ([]byte, error) {
+	return w.signHash(account, accounts.TextHash(text))
 }
 
 // SignTx implements accounts.Wallet. It sends the transaction over to the Ledger
@@ -550,8 +565,8 @@ func (w *wallet) SignTx(account accounts.Account, tx *types.Transaction, chainID
 // SignHashWithPassphrase implements accounts.Wallet, however signing arbitrary
 // data is not supported for Ledger wallets, so this method will always return
 // an error.
-func (w *wallet) SignHashWithPassphrase(account accounts.Account, passphrase string, hash []byte) ([]byte, error) {
-	return w.SignHash(account, hash)
+func (w *wallet) SignTextWithPassphrase(account accounts.Account, passphrase string, text []byte) ([]byte, error) {
+	return w.SignText(account, accounts.TextHash(text))
 }
 
 // SignTxWithPassphrase implements accounts.Wallet, attempting to sign the given

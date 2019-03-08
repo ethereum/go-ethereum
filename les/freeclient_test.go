@@ -14,18 +14,17 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package light implements on-demand retrieval capable state and chain objects
-// for the Ethereum Light Client.
 package les
 
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
 func TestFreeClientPoolL10C100(t *testing.T) {
@@ -44,32 +43,38 @@ const testFreeClientPoolTicks = 500000
 
 func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 	var (
-		clock     mclock.Simulated
-		db        = ethdb.NewMemDatabase()
-		pool      = newFreeClientPool(db, connLimit, 10000, &clock)
-		connected = make([]bool, clientCount)
-		connTicks = make([]int, clientCount)
-		disconnCh = make(chan int, clientCount)
-	)
-	peerId := func(i int) string {
-		return fmt.Sprintf("test peer #%d", i)
-	}
-	disconnFn := func(i int) func() {
-		return func() {
+		clock       mclock.Simulated
+		db          = rawdb.NewMemoryDatabase()
+		connected   = make([]bool, clientCount)
+		connTicks   = make([]int, clientCount)
+		disconnCh   = make(chan int, clientCount)
+		peerAddress = func(i int) string {
+			return fmt.Sprintf("addr #%d", i)
+		}
+		peerId = func(i int) string {
+			return fmt.Sprintf("id #%d", i)
+		}
+		disconnFn = func(id string) {
+			i, err := strconv.Atoi(id[4:])
+			if err != nil {
+				panic(err)
+			}
 			disconnCh <- i
 		}
-	}
+		pool = newFreeClientPool(db, 1, 10000, &clock, disconnFn)
+	)
+	pool.setLimits(connLimit, uint64(connLimit))
 
 	// pool should accept new peers up to its connected limit
 	for i := 0; i < connLimit; i++ {
-		if pool.connect(peerId(i), disconnFn(i)) {
+		if pool.connect(peerAddress(i), peerId(i)) {
 			connected[i] = true
 		} else {
 			t.Fatalf("Test peer #%d rejected", i)
 		}
 	}
 	// since all accepted peers are new and should not be kicked out, the next one should be rejected
-	if pool.connect(peerId(connLimit), disconnFn(connLimit)) {
+	if pool.connect(peerAddress(connLimit), peerId(connLimit)) {
 		connected[connLimit] = true
 		t.Fatalf("Peer accepted over connected limit")
 	}
@@ -80,11 +85,11 @@ func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 
 		i := rand.Intn(clientCount)
 		if connected[i] {
-			pool.disconnect(peerId(i))
+			pool.disconnect(peerAddress(i))
 			connected[i] = false
 			connTicks[i] += tickCounter
 		} else {
-			if pool.connect(peerId(i), disconnFn(i)) {
+			if pool.connect(peerAddress(i), peerId(i)) {
 				connected[i] = true
 				connTicks[i] -= tickCounter
 			}
@@ -93,7 +98,7 @@ func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 		for {
 			select {
 			case i := <-disconnCh:
-				pool.disconnect(peerId(i))
+				pool.disconnect(peerAddress(i))
 				if connected[i] {
 					connTicks[i] += tickCounter
 					connected[i] = false
@@ -119,20 +124,21 @@ func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 	}
 
 	// a previously unknown peer should be accepted now
-	if !pool.connect("newPeer", func() {}) {
+	if !pool.connect("newAddr", "newId") {
 		t.Fatalf("Previously unknown peer rejected")
 	}
 
 	// close and restart pool
 	pool.stop()
-	pool = newFreeClientPool(db, connLimit, 10000, &clock)
+	pool = newFreeClientPool(db, 1, 10000, &clock, disconnFn)
+	pool.setLimits(connLimit, uint64(connLimit))
 
 	// try connecting all known peers (connLimit should be filled up)
 	for i := 0; i < clientCount; i++ {
-		pool.connect(peerId(i), func() {})
+		pool.connect(peerAddress(i), peerId(i))
 	}
 	// expect pool to remember known nodes and kick out one of them to accept a new one
-	if !pool.connect("newPeer2", func() {}) {
+	if !pool.connect("newAddr2", "newId2") {
 		t.Errorf("Previously unknown peer rejected after restarting pool")
 	}
 	pool.stop()

@@ -173,3 +173,35 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 		t.Fatalf("Comparison error after clearing memStore.")
 	}
 }
+
+// TestGetAllReferences only tests that GetAllReferences returns an expected
+// number of references for a given file
+func TestGetAllReferences(t *testing.T) {
+	tdb, cleanup, err := newTestDbStore(false, false)
+	defer cleanup()
+	if err != nil {
+		t.Fatalf("init dbStore failed: %v", err)
+	}
+	db := tdb.LDBStore
+	memStore := NewMemStore(NewDefaultStoreParams(), db)
+	localStore := &LocalStore{
+		memStore: memStore,
+		DbStore:  db,
+	}
+	fileStore := NewFileStore(localStore, NewFileStoreParams())
+
+	// testRuns[i] and expectedLen[i] are dataSize and expected length respectively
+	testRuns := []int{1024, 8192, 16000, 30000, 1000000}
+	expectedLens := []int{1, 3, 5, 9, 248}
+	for i, r := range testRuns {
+		slice := testutil.RandomBytes(1, r)
+
+		addrs, err := fileStore.GetAllReferences(context.Background(), bytes.NewReader(slice), false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(addrs) != expectedLens[i] {
+			t.Fatalf("Expected reference array length to be %d, but is %d", expectedLens[i], len(addrs))
+		}
+	}
+}

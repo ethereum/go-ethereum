@@ -44,7 +44,7 @@ func (s *Simulation) NodeIDs() (ids []enode.ID) {
 func (s *Simulation) UpNodeIDs() (ids []enode.ID) {
 	nodes := s.Net.GetNodes()
 	for _, node := range nodes {
-		if node.Up {
+		if node.Up() {
 			ids = append(ids, node.ID())
 		}
 	}
@@ -55,7 +55,7 @@ func (s *Simulation) UpNodeIDs() (ids []enode.ID) {
 func (s *Simulation) DownNodeIDs() (ids []enode.ID) {
 	nodes := s.Net.GetNodes()
 	for _, node := range nodes {
-		if !node.Up {
+		if !node.Up() {
 			ids = append(ids, node.ID())
 		}
 	}
@@ -222,11 +222,11 @@ func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) 
 	//the snapshot probably has the property EnableMsgEvents not set
 	//just in case, set it to true!
 	//(we need this to wait for messages before uploading)
-	for _, n := range snap.Nodes {
-		n.Node.Config.EnableMsgEvents = true
-		n.Node.Config.Services = s.serviceNames
+	for i := range snap.Nodes {
+		snap.Nodes[i].Node.Config.EnableMsgEvents = true
+		snap.Nodes[i].Node.Config.Services = s.serviceNames
 		for _, o := range opts {
-			o(n.Node.Config)
+			o(snap.Nodes[i].Node.Config)
 		}
 	}
 

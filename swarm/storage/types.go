@@ -22,53 +22,29 @@ import (
 	"crypto"
 	"crypto/rand"
 	"encoding/binary"
-	"fmt"
 	"io"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/swarm/bmt"
-	ch "github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"golang.org/x/crypto/sha3"
 )
 
-const MaxPO = 16
-const AddressLength = 32
+// MaxPO is the same as chunk.MaxPO for backward compatibility.
+const MaxPO = chunk.MaxPO
+
+// AddressLength is the same as chunk.AddressLength for backward compatibility.
+const AddressLength = chunk.AddressLength
 
 type SwarmHasher func() SwarmHash
 
-type Address []byte
+// Address is an alias for chunk.Address for backward compatibility.
+type Address = chunk.Address
 
-// Proximity(x, y) returns the proximity order of the MSB distance between x and y
-//
-// The distance metric MSB(x, y) of two equal length byte sequences x an y is the
-// value of the binary integer cast of the x^y, ie., x and y bitwise xor-ed.
-// the binary cast is big endian: most significant bit first (=MSB).
-//
-// Proximity(x, y) is a discrete logarithmic scaling of the MSB distance.
-// It is defined as the reverse rank of the integer part of the base 2
-// logarithm of the distance.
-// It is calculated by counting the number of common leading zeros in the (MSB)
-// binary representation of the x^y.
-//
-// (0 farthest, 255 closest, 256 self)
-func Proximity(one, other []byte) (ret int) {
-	b := (MaxPO-1)/8 + 1
-	if b > len(one) {
-		b = len(one)
-	}
-	m := 8
-	for i := 0; i < b; i++ {
-		oxo := one[i] ^ other[i]
-		for j := 0; j < m; j++ {
-			if (oxo>>uint8(7-j))&0x01 != 0 {
-				return i*8 + j
-			}
-		}
-	}
-	return MaxPO
-}
+// Proximity is the same as chunk.Proximity for backward compatibility.
+var Proximity = chunk.Proximity
 
-var ZeroAddr = Address(common.Hash{}.Bytes())
+// ZeroAddr is the same as chunk.ZeroAddr for backward compatibility.
+var ZeroAddr = chunk.ZeroAddr
 
 func MakeHashFunc(hash string) SwarmHasher {
 	switch hash {
@@ -80,38 +56,11 @@ func MakeHashFunc(hash string) SwarmHasher {
 		return func() SwarmHash {
 			hasher := sha3.NewLegacyKeccak256
 			hasherSize := hasher().Size()
-			segmentCount := ch.DefaultSize / hasherSize
+			segmentCount := chunk.DefaultSize / hasherSize
 			pool := bmt.NewTreePool(hasher, segmentCount, bmt.PoolSize)
 			return bmt.New(pool)
 		}
 	}
-	return nil
-}
-
-func (a Address) Hex() string {
-	return fmt.Sprintf("%064x", []byte(a[:]))
-}
-
-func (a Address) Log() string {
-	if len(a[:]) < 8 {
-		return fmt.Sprintf("%x", []byte(a[:]))
-	}
-	return fmt.Sprintf("%016x", []byte(a[:8]))
-}
-
-func (a Address) String() string {
-	return fmt.Sprintf("%064x", []byte(a))
-}
-
-func (a Address) MarshalJSON() (out []byte, err error) {
-	return []byte(`"` + a.String() + `"`), nil
-}
-
-func (a *Address) UnmarshalJSON(value []byte) error {
-	s := string(value)
-	*a = make([]byte, 32)
-	h := common.Hex2Bytes(s[1 : len(s)-1])
-	copy(*a, h)
 	return nil
 }
 
@@ -133,38 +82,11 @@ func (c AddressCollection) Swap(i, j int) {
 	c[i], c[j] = c[j], c[i]
 }
 
-// Chunk interface implemented by context.Contexts and data chunks
-type Chunk interface {
-	Address() Address
-	Data() []byte
-}
+// Chunk is an alias for chunk.Chunk for backward compatibility.
+type Chunk = chunk.Chunk
 
-type chunk struct {
-	addr  Address
-	sdata []byte
-	span  int64
-}
-
-func NewChunk(addr Address, data []byte) *chunk {
-	return &chunk{
-		addr:  addr,
-		sdata: data,
-		span:  -1,
-	}
-}
-
-func (c *chunk) Address() Address {
-	return c.addr
-}
-
-func (c *chunk) Data() []byte {
-	return c.sdata
-}
-
-// String() for pretty printing
-func (self *chunk) String() string {
-	return fmt.Sprintf("Address: %v TreeSize: %v Chunksize: %v", self.addr.Log(), self.span, len(self.sdata))
-}
+// NewChunk is the same as chunk.NewChunk for backward compatibility.
+var NewChunk = chunk.NewChunk
 
 func GenerateRandomChunk(dataSize int64) Chunk {
 	hasher := MakeHashFunc(DefaultHash)()
@@ -274,9 +196,9 @@ func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
 }
 
 // Validate that the given key is a valid content address for the given data
-func (v *ContentAddressValidator) Validate(chunk Chunk) bool {
-	data := chunk.Data()
-	if l := len(data); l < 9 || l > ch.DefaultSize+8 {
+func (v *ContentAddressValidator) Validate(ch Chunk) bool {
+	data := ch.Data()
+	if l := len(data); l < 9 || l > chunk.DefaultSize+8 {
 		// log.Error("invalid chunk size", "chunk", addr.Hex(), "size", l)
 		return false
 	}
@@ -286,12 +208,13 @@ func (v *ContentAddressValidator) Validate(chunk Chunk) bool {
 	hasher.Write(data[8:])
 	hash := hasher.Sum(nil)
 
-	return bytes.Equal(hash, chunk.Address())
+	return bytes.Equal(hash, ch.Address())
 }
 
 type ChunkStore interface {
 	Put(ctx context.Context, ch Chunk) (err error)
 	Get(rctx context.Context, ref Address) (ch Chunk, err error)
+	Has(rctx context.Context, ref Address) bool
 	Close()
 }
 
@@ -314,7 +237,12 @@ func (f *FakeChunkStore) Put(_ context.Context, ch Chunk) error {
 	return nil
 }
 
-// Gut doesn't store anything it is just here to implement ChunkStore
+// Has doesn't do anything it is just here to implement ChunkStore
+func (f *FakeChunkStore) Has(_ context.Context, ref Address) bool {
+	panic("FakeChunkStore doesn't support HasChunk")
+}
+
+// Get doesn't store anything it is just here to implement ChunkStore
 func (f *FakeChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
 	panic("FakeChunkStore doesn't support Get")
 }

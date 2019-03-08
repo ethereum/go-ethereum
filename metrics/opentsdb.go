@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-var shortHostName string = ""
+var shortHostName = ""
 
 // OpenTSDBConfig provides a container with configuration parameters for
 // the OpenTSDB exporter

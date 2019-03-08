@@ -54,7 +54,7 @@ func TestUpDownNodeIDs(t *testing.T) {
 	gotIDs = sim.UpNodeIDs()
 
 	for _, id := range gotIDs {
-		if !sim.Net.GetNode(id).Up {
+		if !sim.Net.GetNode(id).Up() {
 			t.Errorf("node %s should not be down", id)
 		}
 	}
@@ -66,7 +66,7 @@ func TestUpDownNodeIDs(t *testing.T) {
 	gotIDs = sim.DownNodeIDs()
 
 	for _, id := range gotIDs {
-		if sim.Net.GetNode(id).Up {
+		if sim.Net.GetNode(id).Up() {
 			t.Errorf("node %s should not be up", id)
 		}
 	}
@@ -112,7 +112,7 @@ func TestAddNode(t *testing.T) {
 		t.Fatal("node not found")
 	}
 
-	if !n.Up {
+	if !n.Up() {
 		t.Error("node not started")
 	}
 }
@@ -327,7 +327,7 @@ func TestStartStopNode(t *testing.T) {
 	if n == nil {
 		t.Fatal("node not found")
 	}
-	if !n.Up {
+	if !n.Up() {
 		t.Error("node not started")
 	}
 
@@ -335,26 +335,17 @@ func TestStartStopNode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n.Up {
+	if n.Up() {
 		t.Error("node not stopped")
 	}
 
-	// Sleep here to ensure that Network.watchPeerEvents defer function
-	// has set the `node.Up = false` before we start the node again.
-	// p2p/simulations/network.go:215
-	//
-	// The same node is stopped and started again, and upon start
-	// watchPeerEvents is started in a goroutine. If the node is stopped
-	// and then very quickly started, that goroutine may be scheduled later
-	// then start and force `node.Up = false` in its defer function.
-	// This will make this test unreliable.
-	time.Sleep(time.Second)
+	waitForPeerEventPropagation()
 
 	err = sim.StartNode(id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !n.Up {
+	if !n.Up() {
 		t.Error("node not started")
 	}
 }
@@ -377,7 +368,7 @@ func TestStartStopRandomNode(t *testing.T) {
 	if n == nil {
 		t.Fatal("node not found")
 	}
-	if n.Up {
+	if n.Up() {
 		t.Error("node not stopped")
 	}
 
@@ -386,16 +377,7 @@ func TestStartStopRandomNode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Sleep here to ensure that Network.watchPeerEvents defer function
-	// has set the `node.Up = false` before we start the node again.
-	// p2p/simulations/network.go:215
-	//
-	// The same node is stopped and started again, and upon start
-	// watchPeerEvents is started in a goroutine. If the node is stopped
-	// and then very quickly started, that goroutine may be scheduled later
-	// then start and force `node.Up = false` in its defer function.
-	// This will make this test unreliable.
-	time.Sleep(time.Second)
+	waitForPeerEventPropagation()
 
 	idStarted, err := sim.StartRandomNode()
 	if err != nil {
@@ -426,21 +408,12 @@ func TestStartStopRandomNodes(t *testing.T) {
 		if n == nil {
 			t.Fatal("node not found")
 		}
-		if n.Up {
+		if n.Up() {
 			t.Error("node not stopped")
 		}
 	}
 
-	// Sleep here to ensure that Network.watchPeerEvents defer function
-	// has set the `node.Up = false` before we start the node again.
-	// p2p/simulations/network.go:215
-	//
-	// The same node is stopped and started again, and upon start
-	// watchPeerEvents is started in a goroutine. If the node is stopped
-	// and then very quickly started, that goroutine may be scheduled later
-	// then start and force `node.Up = false` in its defer function.
-	// This will make this test unreliable.
-	time.Sleep(time.Second)
+	waitForPeerEventPropagation()
 
 	ids, err = sim.StartRandomNodes(2)
 	if err != nil {
@@ -452,8 +425,20 @@ func TestStartStopRandomNodes(t *testing.T) {
 		if n == nil {
 			t.Fatal("node not found")
 		}
-		if !n.Up {
+		if !n.Up() {
 			t.Error("node not started")
 		}
 	}
+}
+
+func waitForPeerEventPropagation() {
+	// Sleep here to ensure that Network.watchPeerEvents defer function
+	// has set the `node.Up() = false` before we start the node again.
+	//
+	// The same node is stopped and started again, and upon start
+	// watchPeerEvents is started in a goroutine. If the node is stopped
+	// and then very quickly started, that goroutine may be scheduled later
+	// then start and force `node.Up() = false` in its defer function.
+	// This will make this test unreliable.
+	time.Sleep(1 * time.Second)
 }

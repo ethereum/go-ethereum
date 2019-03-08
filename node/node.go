@@ -27,6 +27,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/debug"
@@ -121,6 +122,29 @@ func New(conf *Config) (*Node, error) {
 	}, nil
 }
 
+// Close stops the Node and releases resources acquired in
+// Node constructor New.
+func (n *Node) Close() error {
+	var errs []error
+
+	// Terminate all subsystems and collect any errors
+	if err := n.Stop(); err != nil && err != ErrNodeStopped {
+		errs = append(errs, err)
+	}
+	if err := n.accman.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	// Report any errors that might have occurred
+	switch len(errs) {
+	case 0:
+		return nil
+	case 1:
+		return errs[0]
+	default:
+		return fmt.Errorf("%v", errs)
+	}
+}
+
 // Register injects a new service into the node's stack. The service created by
 // the passed constructor must be unique in its type with regard to sibling ones.
 func (n *Node) Register(constructor ServiceConstructor) error {
@@ -197,7 +221,7 @@ func (n *Node) Start() error {
 		return convertFileLockError(err)
 	}
 	// Start each of the services
-	started := []reflect.Type{}
+	var started []reflect.Type
 	for kind, service := range services {
 		// Start the next service, stopping all previous upon failure
 		if err := service.Start(running); err != nil {
@@ -578,11 +602,11 @@ func (n *Node) EventMux() *event.TypeMux {
 // OpenDatabase opens an existing database with the given name (or creates one if no
 // previous can be found) from within the node's instance directory. If the node is
 // ephemeral, a memory database is returned.
-func (n *Node) OpenDatabase(name string, cache, handles int) (ethdb.Database, error) {
+func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (ethdb.Database, error) {
 	if n.config.DataDir == "" {
-		return ethdb.NewMemDatabase(), nil
+		return rawdb.NewMemoryDatabase(), nil
 	}
-	return ethdb.NewLDBDatabase(n.config.ResolvePath(name), cache, handles)
+	return rawdb.NewLevelDBDatabase(n.config.ResolvePath(name), cache, handles, namespace)
 }
 
 // ResolvePath returns the absolute path of a resource in the instance directory.

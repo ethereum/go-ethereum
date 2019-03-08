@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 // TestDB_SubscribePush uploads some chunks before and after
@@ -36,21 +36,22 @@ func TestDB_SubscribePush(t *testing.T) {
 
 	uploader := db.NewPutter(ModePutUpload)
 
-	chunks := make([]storage.Chunk, 0)
+	chunks := make([]chunk.Chunk, 0)
 	var chunksMu sync.Mutex
 
 	uploadRandomChunks := func(count int) {
+		chunksMu.Lock()
+		defer chunksMu.Unlock()
+
 		for i := 0; i < count; i++ {
-			chunk := generateRandomChunk()
+			chunk := generateTestRandomChunk()
 
 			err := uploader.Put(chunk)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			chunksMu.Lock()
 			chunks = append(chunks, chunk)
-			chunksMu.Unlock()
 		}
 	}
 
@@ -90,7 +91,11 @@ func TestDB_SubscribePush(t *testing.T) {
 				}
 				i++
 				// send one and only one error per received address
-				errChan <- err
+				select {
+				case errChan <- err:
+				case <-ctx.Done():
+					return
+				}
 			case <-ctx.Done():
 				return
 			}
@@ -119,21 +124,22 @@ func TestDB_SubscribePush_multiple(t *testing.T) {
 
 	uploader := db.NewPutter(ModePutUpload)
 
-	addrs := make([]storage.Address, 0)
+	addrs := make([]chunk.Address, 0)
 	var addrsMu sync.Mutex
 
 	uploadRandomChunks := func(count int) {
+		addrsMu.Lock()
+		defer addrsMu.Unlock()
+
 		for i := 0; i < count; i++ {
-			chunk := generateRandomChunk()
+			chunk := generateTestRandomChunk()
 
 			err := uploader.Put(chunk)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			addrsMu.Lock()
 			addrs = append(addrs, chunk.Address())
-			addrsMu.Unlock()
 		}
 	}
 
@@ -175,7 +181,11 @@ func TestDB_SubscribePush_multiple(t *testing.T) {
 					}
 					i++
 					// send one and only one error per received address
-					errChan <- err
+					select {
+					case errChan <- err:
+					case <-ctx.Done():
+						return
+					}
 				case <-ctx.Done():
 					return
 				}

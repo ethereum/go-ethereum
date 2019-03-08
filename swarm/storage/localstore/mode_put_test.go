@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 // TestModePutRequest validates ModePutRequest index values on the provided DB.
@@ -33,7 +33,7 @@ func TestModePutRequest(t *testing.T) {
 
 	putter := db.NewPutter(ModePutRequest)
 
-	chunk := generateRandomChunk()
+	chunk := generateTestRandomChunk()
 
 	// keep the record when the chunk is stored
 	var storeTimestamp int64
@@ -87,7 +87,7 @@ func TestModePutSync(t *testing.T) {
 		return wantTimestamp
 	})()
 
-	chunk := generateRandomChunk()
+	chunk := generateTestRandomChunk()
 
 	err := db.NewPutter(ModePutSync).Put(chunk)
 	if err != nil {
@@ -109,7 +109,7 @@ func TestModePutUpload(t *testing.T) {
 		return wantTimestamp
 	})()
 
-	chunk := generateRandomChunk()
+	chunk := generateTestRandomChunk()
 
 	err := db.NewPutter(ModePutUpload).Put(chunk)
 	if err != nil {
@@ -132,7 +132,7 @@ func TestModePutUpload_parallel(t *testing.T) {
 	chunkCount := 1000
 	workerCount := 100
 
-	chunkChan := make(chan storage.Chunk)
+	chunkChan := make(chan chunk.Chunk)
 	errChan := make(chan error)
 	doneChan := make(chan struct{})
 	defer close(doneChan)
@@ -159,13 +159,13 @@ func TestModePutUpload_parallel(t *testing.T) {
 		}(i)
 	}
 
-	chunks := make([]storage.Chunk, 0)
+	chunks := make([]chunk.Chunk, 0)
 	var chunksMu sync.Mutex
 
 	// send chunks to workers
 	go func() {
 		for i := 0; i < chunkCount; i++ {
-			chunk := generateRandomChunk()
+			chunk := generateTestRandomChunk()
 			select {
 			case chunkChan <- chunk:
 			case <-doneChan:
@@ -213,30 +213,30 @@ func TestModePutUpload_parallel(t *testing.T) {
 // goos: darwin
 // goarch: amd64
 // pkg: github.com/ethereum/go-ethereum/swarm/storage/localstore
-// BenchmarkPutUpload/count_100_parallel_1-8         	     300	   4955055 ns/op	 2061388 B/op	    1754 allocs/op
-// BenchmarkPutUpload/count_100_parallel_2-8         	     300	   5162484 ns/op	 2061452 B/op	    1755 allocs/op
-// BenchmarkPutUpload/count_100_parallel_4-8         	     300	   5260477 ns/op	 2061655 B/op	    1756 allocs/op
-// BenchmarkPutUpload/count_100_parallel_8-8         	     300	   5381812 ns/op	 2061843 B/op	    1758 allocs/op
-// BenchmarkPutUpload/count_100_parallel_16-8        	     300	   5477313 ns/op	 2062115 B/op	    1762 allocs/op
-// BenchmarkPutUpload/count_100_parallel_32-8        	     300	   5565273 ns/op	 2062965 B/op	    1775 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_1-8        	      20	  75632247 ns/op	25009474 B/op	   17204 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_2-8        	      20	  78194544 ns/op	25009064 B/op	   17205 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_4-8        	      20	  77413001 ns/op	25010023 B/op	   17206 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_8-8        	      20	  77406586 ns/op	25010968 B/op	   17206 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_16-8       	      20	  81943323 ns/op	25006622 B/op	   17209 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_32-8       	      20	  84393475 ns/op	25009450 B/op	   17222 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_1-8       	       2	 612973544 ns/op	214429212 B/op	  186539 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_2-8       	       2	 613744836 ns/op	214525364 B/op	  188857 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_4-8       	       2	 619848337 ns/op	214437448 B/op	  188043 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_8-8       	       2	 612132728 ns/op	214492440 B/op	  188061 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_16-8      	       2	 625959679 ns/op	214493172 B/op	  188840 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_32-8      	       2	 652223974 ns/op	214648080 B/op	  188916 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_1-8      	       1	22682989072 ns/op	2317757256 B/op	 3486655 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_2-8      	       1	23928779747 ns/op	2339295256 B/op	 3621696 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_4-8      	       1	22704591819 ns/op	2317971752 B/op	 3495423 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_8-8      	       1	22654015490 ns/op	2320451336 B/op	 3506505 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_16-8     	       1	23192344424 ns/op	2326781648 B/op	 3540538 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_32-8     	       1	24188298331 ns/op	2344201416 B/op	 3651945 allocs/op
+// BenchmarkPutUpload/count_100_parallel_1-8         	     300	   5107704 ns/op	 2081461 B/op	    2374 allocs/op
+// BenchmarkPutUpload/count_100_parallel_2-8         	     300	   5411742 ns/op	 2081608 B/op	    2364 allocs/op
+// BenchmarkPutUpload/count_100_parallel_4-8         	     500	   3704964 ns/op	 2081696 B/op	    2324 allocs/op
+// BenchmarkPutUpload/count_100_parallel_8-8         	     500	   2932663 ns/op	 2082594 B/op	    2295 allocs/op
+// BenchmarkPutUpload/count_100_parallel_16-8        	     500	   3117157 ns/op	 2085438 B/op	    2282 allocs/op
+// BenchmarkPutUpload/count_100_parallel_32-8        	     500	   3449122 ns/op	 2089721 B/op	    2286 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_1-8        	      20	  79784470 ns/op	25211240 B/op	   23225 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_2-8        	      20	  75422164 ns/op	25210730 B/op	   23187 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_4-8        	      20	  70698378 ns/op	25206522 B/op	   22692 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_8-8        	      20	  71285528 ns/op	25213436 B/op	   22345 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_16-8       	      20	  71301826 ns/op	25205040 B/op	   22090 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_32-8       	      30	  57713506 ns/op	25219781 B/op	   21848 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_1-8       	       2	 656719345 ns/op	216792908 B/op	  248940 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_2-8       	       2	 646301962 ns/op	216730800 B/op	  248270 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_4-8       	       2	 532784228 ns/op	216667080 B/op	  241910 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_8-8       	       3	 494290188 ns/op	216297749 B/op	  236247 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_16-8      	       3	 483485315 ns/op	216060384 B/op	  231090 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_32-8      	       3	 434461294 ns/op	215371280 B/op	  224800 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_1-8      	       1	22767894338 ns/op	2331372088 B/op	 4049876 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_2-8      	       1	25347872677 ns/op	2344140160 B/op	 4106763 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_4-8      	       1	23580460174 ns/op	2338582576 B/op	 4027452 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_8-8      	       1	22197559193 ns/op	2321803496 B/op	 3877553 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_16-8     	       1	22527046476 ns/op	2327854800 B/op	 3885455 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_32-8     	       1	21332243613 ns/op	2299654568 B/op	 3697181 allocs/op
 // PASS
 func BenchmarkPutUpload(b *testing.B) {
 	for _, count := range []int{
@@ -271,9 +271,9 @@ func benchmarkPutUpload(b *testing.B, o *Options, count, maxParallelUploads int)
 	defer cleanupFunc()
 
 	uploader := db.NewPutter(ModePutUpload)
-	chunks := make([]storage.Chunk, count)
+	chunks := make([]chunk.Chunk, count)
 	for i := 0; i < count; i++ {
-		chunks[i] = generateFakeRandomChunk()
+		chunks[i] = generateTestRandomChunk()
 	}
 	errs := make(chan error)
 	b.StartTimer()
