@@ -31,9 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/ens/fallback_contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ipfs/go-cid"
-	"github.com/multiformats/go-multibase"
-	mh "github.com/multiformats/go-multihash"
 )
 
 var (
@@ -130,24 +127,39 @@ func TestENS(t *testing.T) {
 func TestManuelCidDecode(t *testing.T) {
 	// call cid encode method with hash. expect byte slice returned, compare according to spec
 	bb := []byte{}
-	buf := make([]byte, binary.MaxVarintLen64)
 
-	for _, v := range []byte{0xe4, 0x01, 0x99, 0x1b, 0x20} {
-		n := binary.PutUvarint(buf, uint64(v))
-		bb = append(bb, buf[:n]...)
-	}
-	h := common.HexToHash("29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f")
-	bb = append(bb, h[:]...)
-	str := hex.EncodeToString(bb)
-	fmt.Println(str)
-	decodedHash, e := manualDecode(bb)
-	if e != nil {
-		t.Fatal(e)
+	for _, v := range []struct {
+		name        string
+		headerBytes []byte
+		fails       bool
+	}{
+		{
+			name:        "w00t",
+			headerBytes: []byte{0xe4, 0x01, 0x99, 0x1b, 0x20},
+			fails:       false,
+		},
+	} {
+		buf := make([]byte, binary.MaxVarintLen64)
+		for _, vv := range v.headerBytes {
+			n := binary.PutUvarint(buf, uint64(vv))
+			bb = append(bb, buf[:n]...)
+		}
+
+		h := common.HexToHash("29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f")
+		bb = append(bb, h[:]...)
+		str := hex.EncodeToString(bb)
+		fmt.Println(str)
+		decodedHash, e := manualDecode(bb)
+		if e != nil {
+			t.Fatal(e)
+		}
+
+		if !bytes.Equal(decodedHash[:], h[:]) {
+			t.Fatal("hashes not equal")
+		}
+
 	}
 
-	if !bytes.Equal(decodedHash[:], h[:]) {
-		t.Fatal("hashes not equal")
-	}
 	/* from the EIP documentation
 	   storage system: Swarm (0xe4)
 	   CID version: 1 (0x01)
@@ -173,6 +185,7 @@ func TestManuelCidEncode(t *testing.T) {
 
 }
 
+/*
 func TestCIDSanity(t *testing.T) {
 	hashStr := "d1de9994b4d039f6548d191eb26786769f580809256b4685ef316805265ea162"
 	hash := common.HexToHash(hashStr) //this always yields a 32 byte long hash
@@ -216,4 +229,4 @@ func TestCIDSanity(t *testing.T) {
 	fmt.Sprintf("Got CID: %v", c)
 	fmt.Println("Got CID:", c.Prefix())
 
-}
+}*/

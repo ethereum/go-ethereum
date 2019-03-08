@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"strings"
 
-	mh "github.com/multiformats/go-multihash"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -35,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/ens/fallback_contract"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ipfs/go-cid"
 )
 
 var (
@@ -266,27 +264,6 @@ func (ens *ENS) SetContentHash(name string, hash []byte) (*types.Transaction, er
 	return resolver.Contract.SetContenthash(&opts, node, hash)
 }
 
-func decodeMultiCodec(b []byte) (common.Hash, error) {
-
-	// Create a cid from a marshaled string
-	_, err := cid.Decode(string(b))
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	return common.Hash{}, nil
-	/* from the EIP documentation
-	   storage system: Swarm (0xe4)
-	   CID version: 1 (0x01)
-	   content type: swarm-manifest (0x??)
-	   hash function: keccak-256 (0x1B)
-	   hash length: 32 bytes (0x20)
-	   hash: 29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f
-	*/
-	//<protoCode uvarint><cid-version><multicodec-content-type><multihash-content-address>
-
-}
-
 func manualDecode(buf []byte) (common.Hash, error) {
 	if len(buf) < 2 {
 		return common.Hash{}, errors.New("buffer too short")
@@ -332,7 +309,7 @@ func manualDecode(buf []byte) (common.Hash, error) {
 }
 
 // encodeCid encodes a swarm hash into an IPLD CID
-func encodeCid(h common.Hash) (cid.Cid, error) {
+/*func encodeCid(h common.Hash) (cid.Cid, error) {
 	b := []byte{0x1b, 0x20}     //0x1b = keccak256 (should be changed to bmt), 0x20 = 32 bytes hash length
 	b = append(b, h.Bytes()...) // append actual hash bytes
 	multi, err := mh.Cast(b)
@@ -343,4 +320,4 @@ func encodeCid(h common.Hash) (cid.Cid, error) {
 	c := cid.NewCidV1(cid.Raw, multi) //todo: cid.Raw should be swarm manifest
 
 	return c, nil
-}
+}*/
