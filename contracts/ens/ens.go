@@ -23,8 +23,6 @@ package ens
 
 import (
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -262,61 +260,3 @@ func (ens *ENS) SetContentHash(name string, hash []byte) (*types.Transaction, er
 	// END DEPRECATED CODE
 	return resolver.Contract.SetContenthash(&opts, node, hash)
 }
-
-func manualDecode(buf []byte) (common.Hash, error) {
-	if len(buf) < 2 {
-		return common.Hash{}, errors.New("buffer too short")
-	}
-
-	storageSys, n := binary.Uvarint(buf)
-	if storageSys != 0xe3 && storageSys != 0xe4 {
-		return common.Hash{}, errors.New("unknown storage system")
-	}
-	buf = buf[n:]
-	vers, n := binary.Uvarint(buf)
-
-	if vers != 1 {
-		return common.Hash{}, fmt.Errorf("expected 1 as the cid version number, got: %d", vers)
-	}
-
-	buf = buf[n:]
-	ctype, n := binary.Uvarint(buf)
-
-	if ctype < 0 { // ctype != 0x99 {
-		return common.Hash{}, errors.New("unknown content type")
-	}
-	buf = buf[n:]
-	hashType, n := binary.Uvarint(buf)
-
-	if hashType != 0x1b && hashType != 0x12 {
-		return common.Hash{}, errors.New("unknown multihash type")
-	}
-
-	buf = buf[n:]
-	hashLen, n := binary.Uvarint(buf)
-
-	if hashLen != 32 {
-		return common.Hash{}, errors.New("odd hash length, swarm expects 32 bytes")
-	}
-	buf = buf[n:]
-
-	if len(buf) != int(hashLen) {
-		return common.Hash{}, errors.New("hash length mismatch")
-	}
-
-	return common.BytesToHash(buf), nil
-}
-
-// encodeCid encodes a swarm hash into an IPLD CID
-/*func encodeCid(h common.Hash) (cid.Cid, error) {
-	b := []byte{0x1b, 0x20}     //0x1b = keccak256 (should be changed to bmt), 0x20 = 32 bytes hash length
-	b = append(b, h.Bytes()...) // append actual hash bytes
-	multi, err := mh.Cast(b)
-	if err != nil {
-		return cid.Cid{}, err
-	}
-
-	c := cid.NewCidV1(cid.Raw, multi) //todo: cid.Raw should be swarm manifest
-
-	return c, nil
-}*/
