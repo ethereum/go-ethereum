@@ -25,7 +25,6 @@ import (
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/consensus"
-	"github.com/ubiq/go-ubiq/consensus/misc"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/types"
