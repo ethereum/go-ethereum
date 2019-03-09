@@ -23,13 +23,13 @@ package bind
 import (
 	"bytes"
 	"fmt"
-	"go/format"
 	"regexp"
 	"strings"
 	"text/template"
 	"unicode"
 
 	"github.com/ubiq/go-ubiq/accounts/abi"
+	"golang.org/x/tools/imports"
 )
 
 // Lang is a target programming language selector to generate bindings for.
