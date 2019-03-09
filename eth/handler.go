@@ -48,7 +48,6 @@ const (
 	// txChanSize is the size of channel listening to TxPreEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
-)
 
 	// minimim number of peers to broadcast new blocks to
 	minBroadcastPeers = 4
