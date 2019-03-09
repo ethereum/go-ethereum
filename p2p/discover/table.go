@@ -427,7 +427,7 @@ func (tab *Table) bondall(nodes []*Node) (result []*Node) {
 	rc := make(chan *Node, len(nodes))
 	for i := range nodes {
 		go func(n *Node) {
-			nn, _ := tab.bond(false, n.ID, n.addr(), uint16(n.TCP))
+			nn, _ := tab.bond(false, n.ID, n.addr(), n.TCP)
 			rc <- nn
 		}(nodes[i])
 	}

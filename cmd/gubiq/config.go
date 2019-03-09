@@ -30,6 +30,7 @@ import (
 
 	"github.com/ubiq/go-ubiq/cmd/utils"
 	"github.com/ubiq/go-ubiq/contracts/release"
+	"github.com/ubiq/go-ubiq/dashboard"
 	"github.com/ubiq/go-ubiq/eth"
 	"github.com/ubiq/go-ubiq/node"
 	"github.com/ubiq/go-ubiq/params"
@@ -76,10 +77,11 @@ type ethstatsConfig struct {
 }
 
 type gubiqConfig struct {
-	Eth      eth.Config
-	Shh      whisper.Config
-	Node     node.Config
-	Ethstats ethstatsConfig
+	Eth       eth.Config
+	Shh       whisper.Config
+	Node      node.Config
+	Ethstats  ethstatsConfig
+	Dashboard dashboard.Config
 }
 
 func loadConfig(file string, cfg *gubiqConfig) error {
@@ -110,9 +112,10 @@ func defaultNodeConfig() node.Config {
 func makeConfigNode(ctx *cli.Context) (*node.Node, gubiqConfig) {
 	// Load defaults.
 	cfg := gubiqConfig{
-		Eth:  eth.DefaultConfig,
-		Shh:  whisper.DefaultConfig,
-		Node: defaultNodeConfig(),
+		Eth:       eth.DefaultConfig,
+		Shh:       whisper.DefaultConfig,
+		Node:      defaultNodeConfig(),
+		Dashboard: dashboard.DefaultConfig,
 	}
 
 	// Load config file.
@@ -134,6 +137,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gubiqConfig) {
 	}
 
 	utils.SetShhConfig(ctx, stack, &cfg.Shh)
+	utils.SetDashboardConfig(ctx, &cfg.Dashboard)
 
 	return stack, cfg
 }
@@ -153,9 +157,12 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 
 	utils.RegisterEthService(stack, &cfg.Eth)
 
+	if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
+		utils.RegisterDashboardService(stack, &cfg.Dashboard)
+	}
 	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode
 	shhEnabled := enableWhisper(ctx)
-	shhAutoEnabled := !ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DevModeFlag.Name)
+	shhAutoEnabled := !ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DeveloperFlag.Name)
 	if shhEnabled || shhAutoEnabled {
 		if ctx.GlobalIsSet(utils.WhisperMaxMessageSizeFlag.Name) {
 			cfg.Shh.MaxMessageSize = uint32(ctx.Int(utils.WhisperMaxMessageSizeFlag.Name))

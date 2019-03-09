@@ -25,6 +25,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -88,6 +89,15 @@ func RunGit(args ...string) string {
 	return strings.TrimSpace(stdout.String())
 }
 
+// readGitFile returns content of file in .git directory.
+func readGitFile(file string) string {
+	content, err := ioutil.ReadFile(path.Join(".git", file))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(content))
+}
+
 // Render renders the given template file into outputFile.
 func Render(templateFile, outputFile string, outputPerm os.FileMode, x interface{}) {
 	tpl := template.Must(template.ParseFiles(templateFile))
@@ -138,6 +148,19 @@ func CopyFile(dst, src string, mode os.FileMode) {
 	}
 }
 
+// GoTool returns the command that runs a go tool. This uses go from GOROOT instead of PATH
+// so that go commands executed by build use the same version of Go as the 'host' that runs
+// build code. e.g.
+//
+//     /usr/lib/go-1.8/bin/go run build/ci.go ...
+//
+// runs using go 1.8 and invokes go 1.8 tools from the same GOROOT. This is also important
+// because runtime.Version checks on the host should match the tools that are run.
+func GoTool(tool string, args ...string) *exec.Cmd {
+	args = append([]string{tool}, args...)
+	return exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), args...)
+}
+
 // ExpandPackagesNoVendor expands a cmd/go import path pattern, skipping
 // vendored packages.
 func ExpandPackagesNoVendor(patterns []string) []string {
@@ -148,8 +171,7 @@ func ExpandPackagesNoVendor(patterns []string) []string {
 		}
 	}
 	if expand {
-		args := append([]string{"list"}, patterns...)
-		cmd := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), args...)
+		cmd := GoTool("list", patterns...)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			log.Fatalf("package listing failed: %v\n%s", err, string(out))

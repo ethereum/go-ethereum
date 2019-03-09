@@ -78,7 +78,7 @@ type memTree struct {
 func newMemTree(b uint, parent *memTree, pidx uint) (node *memTree) {
 	node = new(memTree)
 	node.bits = b
-	node.width = 1 << uint(b)
+	node.width = 1 << b
 	node.subtree = make([]*memTree, node.width)
 	node.access = make([]uint64, node.width-1)
 	node.parent = parent
@@ -128,10 +128,6 @@ func (s *MemStore) setCapacity(c uint) {
 		s.removeOldest()
 	}
 	s.capacity = c
-}
-
-func (s *MemStore) getEntryCnt() uint {
-	return s.entryCnt
 }
 
 // entry (not its copy) is going to be in MemStore
@@ -206,8 +202,6 @@ func (s *MemStore) Put(entry *Chunk) {
 	node.lastDBaccess = s.dbAccessCnt
 	node.updateAccess(s.accessCnt)
 	s.entryCnt++
-
-	return
 }
 
 func (s *MemStore) Get(hash Key) (chunk *Chunk, err error) {
@@ -323,6 +317,4 @@ func (s *MemStore) removeOldest() {
 }
 
 // Close memstore
-func (s *MemStore) Close() {
-	return
-}
+func (s *MemStore) Close() {}

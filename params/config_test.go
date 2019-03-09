@@ -29,8 +29,8 @@ func TestCheckCompatible(t *testing.T) {
 		wantErr     *ConfigCompatError
 	}
 	tests := []test{
-		{stored: AllProtocolChanges, new: AllProtocolChanges, head: 0, wantErr: nil},
-		{stored: AllProtocolChanges, new: AllProtocolChanges, head: 100, wantErr: nil},
+		{stored: AllUbqhashProtocolChanges, new: AllUbqhashProtocolChanges, head: 0, wantErr: nil},
+		{stored: AllUbqhashProtocolChanges, new: AllUbqhashProtocolChanges, head: 100, wantErr: nil},
 		{
 			stored:  &ChainConfig{EIP150Block: big.NewInt(10)},
 			new:     &ChainConfig{EIP150Block: big.NewInt(20)},
@@ -38,7 +38,7 @@ func TestCheckCompatible(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			stored: AllProtocolChanges,
+			stored: AllUbqhashProtocolChanges,
 			new:    &ChainConfig{HomesteadBlock: nil},
 			head:   3,
 			wantErr: &ConfigCompatError{
@@ -49,7 +49,7 @@ func TestCheckCompatible(t *testing.T) {
 			},
 		},
 		{
-			stored: AllProtocolChanges,
+			stored: AllUbqhashProtocolChanges,
 			new:    &ChainConfig{HomesteadBlock: big.NewInt(1)},
 			head:   3,
 			wantErr: &ConfigCompatError{

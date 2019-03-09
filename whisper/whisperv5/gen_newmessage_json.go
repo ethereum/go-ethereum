@@ -8,6 +8,8 @@ import (
 	"github.com/ubiq/go-ubiq/common/hexutil"
 )
 
+var _ = (*newMessageOverride)(nil)
+
 func (n NewMessage) MarshalJSON() ([]byte, error) {
 	type NewMessage struct {
 		SymKeyID   string        `json:"symKeyID"`

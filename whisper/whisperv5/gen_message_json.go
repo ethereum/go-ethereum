@@ -8,6 +8,8 @@ import (
 	"github.com/ubiq/go-ubiq/common/hexutil"
 )
 
+var _ = (*messageOverride)(nil)
+
 func (m Message) MarshalJSON() ([]byte, error) {
 	type Message struct {
 		Sig       hexutil.Bytes `json:"sig,omitempty"`

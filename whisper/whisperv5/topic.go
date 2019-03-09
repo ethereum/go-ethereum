@@ -40,8 +40,8 @@ func BytesToTopic(b []byte) (t TopicType) {
 }
 
 // String converts a topic byte array to a string representation.
-func (topic *TopicType) String() string {
-	return string(common.ToHex(topic[:]))
+func (t *TopicType) String() string {
+	return common.ToHex(t[:])
 }
 
 // MarshalText returns the hex representation of t.

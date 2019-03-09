@@ -77,6 +77,13 @@ func (ec *EthereumClient) GetTransactionByHash(ctx *Context, hash *Hash) (tx *Tr
 	return &Transaction{rawTx}, err
 }
 
+// GetTransactionSender returns the sender address of a transaction. The transaction must
+// be included in blockchain at the given block and index.
+func (ec *EthereumClient) GetTransactionSender(ctx *Context, tx *Transaction, blockhash *Hash, index int) (sender *Address, _ error) {
+	addr, err := ec.client.TransactionSender(ctx.context, tx.tx, blockhash.hash, uint(index))
+	return &Address{addr}, err
+}
+
 // GetTransactionCount returns the total number of transactions in the given block.
 func (ec *EthereumClient) GetTransactionCount(ctx *Context, hash *Hash) (count int, _ error) {
 	rawCount, err := ec.client.TransactionCount(ctx.context, hash.hash)
@@ -191,8 +198,8 @@ func (ec *EthereumClient) FilterLogs(ctx *Context, query *FilterQuery) (logs *Lo
 	}
 	// Temp hack due to vm.Logs being []*vm.Log
 	res := make([]*types.Log, len(rawLogs))
-	for i, log := range rawLogs {
-		res[i] = &log
+	for i := range rawLogs {
+		res[i] = &rawLogs[i]
 	}
 	return &Logs{res}, nil
 }

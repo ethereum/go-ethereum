@@ -1,16 +1,16 @@
-# Use Alpine Linux
-FROM golang:1.9-alpine as builder 
+# Build Gubiq in a stock Go builder container
+FROM golang:1.9-alpine as builder
+
+RUN apk add --no-cache make gcc musl-dev linux-headers
 
 ADD . /go-ubiq
-RUN \
-  apk add --update git go make gcc musl-dev linux-headers && \
-  (cd go-ubiq && make gubiq)                           && \
-  cp go-ubiq/build/bin/gubiq /usr/local/bin/           && \
-  apk del git go make gcc musl-dev linux-headers          && \
-  rm -rf /go-ubiq && rm -rf /var/cache/apk/*
+RUN cd /go-ubiq && make gubiq
 
-EXPOSE 8588
-EXPOSE 30388
-EXPOSE 30388/udp
+# Pull Gubiq into a second stage deploy alpine container
+FROM alpine:latest
 
+RUN apk add --no-cache ca-certificates
+COPY --from=builder /go-ubiq/build/bin/gubiq /usr/local/bin/
+
+EXPOSE 8588 8589 30388 30388/udp 30389/udp
 ENTRYPOINT ["gubiq"]

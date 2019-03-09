@@ -25,6 +25,7 @@ import (
 	"github.com/ubiq/go-ubiq/cmd/utils"
 	"github.com/ubiq/go-ubiq/internal/debug"
 	"gopkg.in/urfave/cli.v1"
+	"strings"
 )
 
 // AppHelpTemplate is the test template for the default, global app help topic.
@@ -80,6 +81,12 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.LightKDFFlag,
 		},
 	},
+	{Name: "DEVELOPER CHAIN",
+		Flags: []cli.Flag{
+			utils.DeveloperFlag,
+			utils.DeveloperPeriodFlag,
+		},
+	},
 	{
 		Name: "UBQHASH",
 		Flags: []cli.Flag{
@@ -91,10 +98,22 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.UbqhashDatasetsOnDiskFlag,
 		},
 	},
+	//{
+	//	Name: "DASHBOARD",
+	//	Flags: []cli.Flag{
+	//		utils.DashboardEnabledFlag,
+	//		utils.DashboardAddrFlag,
+	//		utils.DashboardPortFlag,
+	//		utils.DashboardRefreshFlag,
+	//		utils.DashboardAssetsFlag,
+	//	},
+	//},
 	{
 		Name: "TRANSACTION POOL",
 		Flags: []cli.Flag{
 			utils.TxPoolNoLocalsFlag,
+			utils.TxPoolJournalFlag,
+			utils.TxPoolRejournalFlag,
 			utils.TxPoolPriceLimitFlag,
 			utils.TxPoolPriceBumpFlag,
 			utils.TxPoolAccountSlotsFlag,
@@ -260,6 +279,9 @@ func init() {
 			uncategorized := []cli.Flag{}
 			for _, flag := range data.(*cli.App).Flags {
 				if _, ok := categorized[flag.String()]; !ok {
+					if strings.HasPrefix(flag.GetName(), "dashboard") {
+						continue
+					}
 					uncategorized = append(uncategorized, flag)
 				}
 			}

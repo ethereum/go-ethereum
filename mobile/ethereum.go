@@ -64,7 +64,7 @@ func (msg *CallMsg) SetFrom(address *Address)  { msg.msg.From = address.address 
 func (msg *CallMsg) SetGas(gas int64)          { msg.msg.Gas = big.NewInt(gas) }
 func (msg *CallMsg) SetGasPrice(price *BigInt) { msg.msg.GasPrice = price.bigint }
 func (msg *CallMsg) SetValue(value *BigInt)    { msg.msg.Value = value.bigint }
-func (msg *CallMsg) SetData(data []byte)       { msg.msg.Data = data }
+func (msg *CallMsg) SetData(data []byte)       { msg.msg.Data = common.CopyBytes(data) }
 func (msg *CallMsg) SetTo(address *Address) {
 	if address == nil {
 		msg.msg.To = nil

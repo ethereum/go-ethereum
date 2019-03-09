@@ -170,7 +170,6 @@ func TestVerifyErrors(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	time.Sleep(5)
 	chbox, err := NewInbox(key1, contr0, addr1, &key0.PublicKey, backend)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -193,7 +192,7 @@ func TestVerifyErrors(t *testing.T) {
 	received, err = chbox.Receive(ch1)
 	t.Logf("correct error: %v", err)
 	if err == nil {
-		t.Fatalf("expected receiver error, got none")
+		t.Fatalf("expected receiver error, got none and value %v", received)
 	}
 
 	ch2, err := chbook1.Issue(addr1, amount)
@@ -203,7 +202,7 @@ func TestVerifyErrors(t *testing.T) {
 	received, err = chbox.Receive(ch2)
 	t.Logf("correct error: %v", err)
 	if err == nil {
-		t.Fatalf("expected sender error, got none")
+		t.Fatalf("expected sender error, got none and value %v", received)
 	}
 
 	_, err = chbook1.Issue(addr1, new(big.Int).SetInt64(-1))
@@ -215,7 +214,7 @@ func TestVerifyErrors(t *testing.T) {
 	received, err = chbox.Receive(ch0)
 	t.Logf("correct error: %v", err)
 	if err == nil {
-		t.Fatalf("expected incorrect amount error, got none")
+		t.Fatalf("expected incorrect amount error, got none and value %v", received)
 	}
 
 }
@@ -233,8 +232,8 @@ func TestDeposit(t *testing.T) {
 	balance := new(big.Int).SetUint64(42)
 	chbook.Deposit(balance)
 	backend.Commit()
-	if chbook.balance.Cmp(balance) != 0 {
-		t.Fatalf("expected balance %v, got %v", balance, chbook.balance)
+	if chbook.Balance().Cmp(balance) != 0 {
+		t.Fatalf("expected balance %v, got %v", balance, chbook.Balance())
 	}
 
 	amount := common.Big1
@@ -244,8 +243,8 @@ func TestDeposit(t *testing.T) {
 	}
 	backend.Commit()
 	exp := new(big.Int).SetUint64(41)
-	if chbook.balance.Cmp(exp) != 0 {
-		t.Fatalf("expected balance %v, got %v", exp, chbook.balance)
+	if chbook.Balance().Cmp(exp) != 0 {
+		t.Fatalf("expected balance %v, got %v", exp, chbook.Balance())
 	}
 
 	// autodeposit on each issue
@@ -260,8 +259,8 @@ func TestDeposit(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	backend.Commit()
-	if chbook.balance.Cmp(balance) != 0 {
-		t.Fatalf("expected balance %v, got %v", balance, chbook.balance)
+	if chbook.Balance().Cmp(balance) != 0 {
+		t.Fatalf("expected balance %v, got %v", balance, chbook.Balance())
 	}
 
 	// autodeposit off
@@ -278,11 +277,11 @@ func TestDeposit(t *testing.T) {
 	backend.Commit()
 
 	exp = new(big.Int).SetUint64(40)
-	if chbook.balance.Cmp(exp) != 0 {
-		t.Fatalf("expected balance %v, got %v", exp, chbook.balance)
+	if chbook.Balance().Cmp(exp) != 0 {
+		t.Fatalf("expected balance %v, got %v", exp, chbook.Balance())
 	}
 
-	// autodeposit every 10ms if new cheque issued
+	// autodeposit every 30ms if new cheque issued
 	interval := 30 * time.Millisecond
 	chbook.AutoDeposit(interval, common.Big1, balance)
 	_, err = chbook.Issue(addr1, amount)
@@ -297,14 +296,14 @@ func TestDeposit(t *testing.T) {
 	backend.Commit()
 
 	exp = new(big.Int).SetUint64(38)
-	if chbook.balance.Cmp(exp) != 0 {
-		t.Fatalf("expected balance %v, got %v", exp, chbook.balance)
+	if chbook.Balance().Cmp(exp) != 0 {
+		t.Fatalf("expected balance %v, got %v", exp, chbook.Balance())
 	}
 
 	time.Sleep(3 * interval)
 	backend.Commit()
-	if chbook.balance.Cmp(balance) != 0 {
-		t.Fatalf("expected balance %v, got %v", balance, chbook.balance)
+	if chbook.Balance().Cmp(balance) != 0 {
+		t.Fatalf("expected balance %v, got %v", balance, chbook.Balance())
 	}
 
 	exp = new(big.Int).SetUint64(40)
@@ -320,8 +319,8 @@ func TestDeposit(t *testing.T) {
 	}
 	time.Sleep(3 * interval)
 	backend.Commit()
-	if chbook.balance.Cmp(exp) != 0 {
-		t.Fatalf("expected balance %v, got %v", exp, chbook.balance)
+	if chbook.Balance().Cmp(exp) != 0 {
+		t.Fatalf("expected balance %v, got %v", exp, chbook.Balance())
 	}
 
 	_, err = chbook.Issue(addr1, amount)
@@ -331,8 +330,8 @@ func TestDeposit(t *testing.T) {
 	time.Sleep(1 * interval)
 	backend.Commit()
 
-	if chbook.balance.Cmp(balance) != 0 {
-		t.Fatalf("expected balance %v, got %v", balance, chbook.balance)
+	if chbook.Balance().Cmp(balance) != 0 {
+		t.Fatalf("expected balance %v, got %v", balance, chbook.Balance())
 	}
 
 	chbook.AutoDeposit(1*interval, common.Big0, balance)
@@ -353,8 +352,8 @@ func TestDeposit(t *testing.T) {
 	backend.Commit()
 
 	exp = new(big.Int).SetUint64(39)
-	if chbook.balance.Cmp(exp) != 0 {
-		t.Fatalf("expected balance %v, got %v", exp, chbook.balance)
+	if chbook.Balance().Cmp(exp) != 0 {
+		t.Fatalf("expected balance %v, got %v", exp, chbook.Balance())
 	}
 
 }

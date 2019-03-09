@@ -89,8 +89,8 @@ func TestClientUploadDownloadFiles(t *testing.T) {
 		if file.Size != int64(len(expected)) {
 			t.Fatalf("expected downloaded file to be %d bytes, got %d", len(expected), file.Size)
 		}
-		if file.ContentType != file.ContentType {
-			t.Fatalf("expected downloaded file to have type %q, got %q", file.ContentType, file.ContentType)
+		if file.ContentType != "text/plain" {
+			t.Fatalf("expected downloaded file to have type %q, got %q", "text/plain", file.ContentType)
 		}
 		data, err := ioutil.ReadAll(file)
 		if err != nil {
@@ -235,9 +235,7 @@ func TestClientFileList(t *testing.T) {
 			t.Fatal(err)
 		}
 		paths := make([]string, 0, len(list.CommonPrefixes)+len(list.Entries))
-		for _, prefix := range list.CommonPrefixes {
-			paths = append(paths, prefix)
-		}
+		paths = append(paths, list.CommonPrefixes...)
 		for _, entry := range list.Entries {
 			paths = append(paths, entry.Path)
 		}
@@ -246,25 +244,25 @@ func TestClientFileList(t *testing.T) {
 	}
 
 	tests := map[string][]string{
-		"":                    []string{"dir1/", "dir2/", "file1.txt", "file2.txt"},
-		"file":                []string{"file1.txt", "file2.txt"},
-		"file1":               []string{"file1.txt"},
-		"file2.txt":           []string{"file2.txt"},
-		"file12":              []string{},
-		"dir":                 []string{"dir1/", "dir2/"},
-		"dir1":                []string{"dir1/"},
-		"dir1/":               []string{"dir1/file3.txt", "dir1/file4.txt"},
-		"dir1/file":           []string{"dir1/file3.txt", "dir1/file4.txt"},
-		"dir1/file3.txt":      []string{"dir1/file3.txt"},
-		"dir1/file34":         []string{},
-		"dir2/":               []string{"dir2/dir3/", "dir2/dir4/", "dir2/file5.txt"},
-		"dir2/file":           []string{"dir2/file5.txt"},
-		"dir2/dir":            []string{"dir2/dir3/", "dir2/dir4/"},
-		"dir2/dir3/":          []string{"dir2/dir3/file6.txt"},
-		"dir2/dir4/":          []string{"dir2/dir4/file7.txt", "dir2/dir4/file8.txt"},
-		"dir2/dir4/file":      []string{"dir2/dir4/file7.txt", "dir2/dir4/file8.txt"},
-		"dir2/dir4/file7.txt": []string{"dir2/dir4/file7.txt"},
-		"dir2/dir4/file78":    []string{},
+		"":                    {"dir1/", "dir2/", "file1.txt", "file2.txt"},
+		"file":                {"file1.txt", "file2.txt"},
+		"file1":               {"file1.txt"},
+		"file2.txt":           {"file2.txt"},
+		"file12":              {},
+		"dir":                 {"dir1/", "dir2/"},
+		"dir1":                {"dir1/"},
+		"dir1/":               {"dir1/file3.txt", "dir1/file4.txt"},
+		"dir1/file":           {"dir1/file3.txt", "dir1/file4.txt"},
+		"dir1/file3.txt":      {"dir1/file3.txt"},
+		"dir1/file34":         {},
+		"dir2/":               {"dir2/dir3/", "dir2/dir4/", "dir2/file5.txt"},
+		"dir2/file":           {"dir2/file5.txt"},
+		"dir2/dir":            {"dir2/dir3/", "dir2/dir4/"},
+		"dir2/dir3/":          {"dir2/dir3/file6.txt"},
+		"dir2/dir4/":          {"dir2/dir4/file7.txt", "dir2/dir4/file8.txt"},
+		"dir2/dir4/file":      {"dir2/dir4/file7.txt", "dir2/dir4/file8.txt"},
+		"dir2/dir4/file7.txt": {"dir2/dir4/file7.txt"},
+		"dir2/dir4/file78":    {},
 	}
 	for prefix, expected := range tests {
 		actual := ls(prefix)

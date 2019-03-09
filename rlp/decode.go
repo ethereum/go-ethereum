@@ -693,7 +693,7 @@ func (s *Stream) Raw() ([]byte, error) {
 		return nil, err
 	}
 	if kind == String {
-		puthead(buf, 0x80, 0xB8, size)
+		puthead(buf, 0x80, 0xB7, size)
 	} else {
 		puthead(buf, 0xC0, 0xF7, size)
 	}

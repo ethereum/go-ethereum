@@ -597,7 +597,7 @@ func TestDialResolve(t *testing.T) {
 	}
 
 	// Now run the task, it should resolve the ID once.
-	config := Config{Dialer: &net.Dialer{Deadline: time.Now().Add(-5 * time.Minute)}}
+	config := Config{Dialer: TCPDialer{&net.Dialer{Deadline: time.Now().Add(-5 * time.Minute)}}}
 	srv := &Server{ntab: table, Config: config}
 	tasks[0].Do(srv)
 	if !reflect.DeepEqual(table.resolveCalls, []discover.NodeID{dest.ID}) {

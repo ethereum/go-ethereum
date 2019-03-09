@@ -199,7 +199,7 @@ var dashboardContent = `
 									</div>
 									<div class="x_content">
 										<p>The Ethereum Wallet is an <a href="https://electron.atom.io/" target="about:blank">Electron</a> based desktop application to manage your Ethereum accounts and funds. Beside the usual account life-cycle operations you would expect to perform, the wallet also provides a means to send transactions from your accounts and to interact with smart contracts deployed on the network.</p>
-										<p>Under the hood the wallet is backed by a go-ubiq full node, meaning that a mid range machine is assumed. Similarly, synchronization is based on <strong>fast-sync</strong>, which will download all blockchain data from the network and make it available to the wallet. Light nodes cannot currently fully back the wallet, but it's a target actively pursued.</p>
+										<p>Under the hood the wallet is backed by a go-ethereum full node, meaning that a mid range machine is assumed. Similarly, synchronization is based on <strong>fast-sync</strong>, which will download all blockchain data from the network and make it available to the wallet. Light nodes cannot currently fully back the wallet, but it's a target actively pursued.</p>
 										<br/>
 										<p>To connect with the Ethereum Wallet, you'll need to initialize your private network first via Gubiq as the wallet does not currently support calling Gubiq directly. To initialize your local chain, download <a href="/{{.GubiqGenesis}}"><code>{{.GubiqGenesis}}</code></a> and run:
 											<pre>gubiq --datadir=$HOME/.{{.Network}} init {{.GubiqGenesis}}</pre>
@@ -220,7 +220,7 @@ var dashboardContent = `
 									</div>
 									<div class="x_content">
 										<p>The Mist browser is an <a href="https://electron.atom.io/" target="about:blank">Electron</a> based desktop application to load and interact with Ethereum enabled third party web DApps. Beside all the functionality provided by the Ethereum Wallet, Mist is an extended web-browser where loaded pages have access to the Ubiq network via a web3.js provider, and may also interact with users' own accounts (given proper authorization and confirmation of course).</p>
-										<p>Under the hood the browser is backed by a go-ubiq full node, meaning that a mid range machine is assumed. Similarly, synchronization is based on <strong>fast-sync</strong>, which will download all blockchain data from the network and make it available to the wallet. Light nodes cannot currently fully back the wallet, but it's a target actively pursued.</p>
+										<p>Under the hood the browser is backed by a go-ethereum full node, meaning that a mid range machine is assumed. Similarly, synchronization is based on <strong>fast-sync</strong>, which will download all blockchain data from the network and make it available to the wallet. Light nodes cannot currently fully back the wallet, but it's a target actively pursued.</p>
 										<br/>
 										<p>To connect with the Mist browser, you'll need to initialize your private network first via Gubiq as Mist does not currently support calling Gubiq directly. To initialize your local chain, download <a href="/{{.GubiqGenesis}}"><code>{{.GubiqGenesis}}</code></a> and run:
 											<pre>gubiq --datadir=$HOME/.{{.Network}} init {{.GubiqGenesis}}</pre>
@@ -251,7 +251,7 @@ var dashboardContent = `
 									</div>
 									<div class="x_content">
 										<p>Starting with the 1.5 release of go-ubiq, we've transitioned away from shipping only full blown Ubiq clients and started focusing on releasing the code as reusable packages initially for Go projects, then later for Java based Android projects too. Mobile support is still evolving, hence is bound to change often and hard, but the Ubiq network can nonetheless be accessed from Android too.</p>
-										<p>Under the hood the Android library is backed by a go-ubiq light node, meaning that given a not-too-old Android device, you should be able to join the network without significant issues. Certain functionality is not yet available and rough edges are bound to appear here and there, please report issues if you find any.</p>
+										<p>Under the hood the Android library is backed by a go-ethereum light node, meaning that given a not-too-old Android device, you should be able to join the network without significant issues. Certain functionality is not yet available and rough edges are bound to appear here and there, please report issues if you find any.</p>
 										<br/>
 										<p>The stable Android archives are distributed via Maven Central, and the develop snapshots via the Sonatype repositories. Before proceeding, please ensure you have a recent version configured in your Android project. You can find details in <a href="https://github.com/ubiq/go-ubiq/wiki/Mobile:-Introduction#android-archive" target="about:blank">Mobile: Introduction &ndash; Android archive</a>.
 										<p>Before connecting to the Ubiq network, download the <a href="/{{.GubiqGenesis}}"><code>{{.GubiqGenesis}}</code></a> genesis json file and either store it in your Android project as a resource file you can access, or save it as a string in a variable. You're going to need to to initialize your client.</p>
@@ -282,7 +282,7 @@ node.start();
 									</div>
 									<div class="x_content">
 										<p>Starting with the 1.5 release of go-ubiq, we've transitioned away from shipping only full blown Ubiq clients and started focusing on releasing the code as reusable packages initially for Go projects, then later for ObjC/Swift based iOS projects too. Mobile support is still evolving, hence is bound to change often and hard, but the Ubiq network can nonetheless be accessed from iOS too.</p>
-										<p>Under the hood the iOS library is backed by a go-ubiq light node, meaning that given a not-too-old Apple device, you should be able to join the network without significant issues. Certain functionality is not yet available and rough edges are bound to appear here and there, please report issues if you find any.</p>
+										<p>Under the hood the iOS library is backed by a go-ethereum light node, meaning that given a not-too-old Apple device, you should be able to join the network without significant issues. Certain functionality is not yet available and rough edges are bound to appear here and there, please report issues if you find any.</p>
 										<br/>
 										<p>Both stable and develop builds of the iOS framework are available via CocoaPods. Before proceeding, please ensure you have a recent version configured in your iOS project. You can find details in <a href="https://github.com/ubiq/go-ubiq/wiki/Mobile:-Introduction#ios-framework" target="about:blank">Mobile: Introduction &ndash; iOS framework</a>.
 										<p>Before connecting to the Ubiq network, download the <a href="/{{.GubiqGenesis}}"><code>{{.GubiqGenesis}}</code></a> genesis json file and either store it in your iOS project as a resource file you can access, or save it as a string in a variable. You're going to need to to initialize your client.</p>
@@ -324,7 +324,7 @@ try! node?.start();
 										<br/>
 										<p>Puppeth is distributed as part of the <a href="https://gubiq.ethereum.org/downloads/" target="about:blank">Gubiq &amp; Tools</a> bundles, but can also be installed separately via:<pre>go get github.com/ubiq/go-ubiq/cmd/puppeth</pre></p>
 										<br/>
-										<p><em>Copyright 2017. The go-ubiq Authors.</em></p>
+										<p><em>Copyright 2017. The go-ethereum Authors.</em></p>
 									</div>
 									<div style="display: inline-block; vertical-align: bottom; width: 217px;">
 										<img src="puppeth.png" style="height: 256px; margin: 16px 16px 16px 16px"></img>
@@ -425,6 +425,11 @@ services:
       - "{{.Port}}:80"{{else}}
     environment:
       - VIRTUAL_HOST={{.VHost}}{{end}}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "10"
     restart: always
 `
 

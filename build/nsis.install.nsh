@@ -5,7 +5,7 @@ OutFile "${OUTPUTFILE}" # set through command line arguments
 # Links for "Add/Remove Programs"
 !define HELPURL "https://github.com/ubiq/go-ubiq/issues"
 !define UPDATEURL "https://github.com/ubiq/go-ubiq/releases"
-!define ABOUTURL "https://github.com/ubiq/go-ubiq#ethereum-go"
+!define ABOUTURL "https://github.com/ubiq/go-ubiq#ubiq-go"
 !define /date NOW "%Y%m%d"
 
 PageEx license

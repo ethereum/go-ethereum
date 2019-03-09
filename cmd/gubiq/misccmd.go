@@ -18,9 +18,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -33,14 +31,27 @@ import (
 )
 
 var (
-	makedagCommand = cli.Command{
-		Action:    utils.MigrateFlags(makedag),
-		Name:      "makedag",
-		Usage:     "Generate ubqhash DAG (for testing)",
+	makecacheCommand = cli.Command{
+		Action:    utils.MigrateFlags(makecache),
+		Name:      "makecache",
+		Usage:     "Generate ubqhash verification cache (for testing)",
 		ArgsUsage: "<blockNum> <outputDir>",
 		Category:  "MISCELLANEOUS COMMANDS",
 		Description: `
-The makedag command generates an ubqhash DAG in /tmp/dag.
+The makecache command generates an ubqhash cache in <outputDir>.
+
+This command exists to support the system testing project.
+Regular users do not need to execute it.
+`,
+	}
+	makedagCommand = cli.Command{
+		Action:    utils.MigrateFlags(makedag),
+		Name:      "makedag",
+		Usage:     "Generate ubqhash mining DAG (for testing)",
+		ArgsUsage: "<blockNum> <outputDir>",
+		Category:  "MISCELLANEOUS COMMANDS",
+		Description: `
+The makedag command generates an ubqhash DAG in <outputDir>.
 
 This command exists to support the system testing project.
 Regular users do not need to execute it.
@@ -65,33 +76,33 @@ The output of this command is supposed to be machine-readable.
 	}
 )
 
+// makecache generates an ubqhash verification cache into the provided folder.
+func makecache(ctx *cli.Context) error {
+	args := ctx.Args()
+	if len(args) != 2 {
+		utils.Fatalf(`Usage: gubiq makecache <block number> <outputdir>`)
+	}
+	block, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		utils.Fatalf("Invalid block number: %v", err)
+	}
+	ubqhash.MakeCache(block, args[1])
+
+	return nil
+}
+
+// makedag generates an ubqhash mining DAG into the provided folder.
 func makedag(ctx *cli.Context) error {
 	args := ctx.Args()
-	wrongArgs := func() {
+	if len(args) != 2 {
 		utils.Fatalf(`Usage: gubiq makedag <block number> <outputdir>`)
 	}
-	switch {
-	case len(args) == 2:
-		blockNum, err := strconv.ParseUint(args[0], 0, 64)
-		dir := args[1]
-		if err != nil {
-			wrongArgs()
-		} else {
-			dir = filepath.Clean(dir)
-			// seems to require a trailing slash
-			if !strings.HasSuffix(dir, "/") {
-				dir = dir + "/"
-			}
-			_, err = ioutil.ReadDir(dir)
-			if err != nil {
-				utils.Fatalf("Can't find dir")
-			}
-			fmt.Println("making DAG, this could take awhile...")
-			ubqhash.MakeDataset(blockNum, dir)
-		}
-	default:
-		wrongArgs()
+	block, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		utils.Fatalf("Invalid block number: %v", err)
 	}
+	ubqhash.MakeDataset(block, args[1])
+
 	return nil
 }
 

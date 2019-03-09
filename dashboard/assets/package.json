@@ -1,0 +1,22 @@
+{
+  "dependencies": {
+    "babel-core": "^6.26.0",
+    "babel-eslint": "^8.0.1",
+    "babel-loader": "^7.1.2",
+    "babel-preset-env": "^1.6.1",
+    "babel-preset-react": "^6.24.1",
+    "babel-preset-stage-0": "^6.24.1",
+    "classnames": "^2.2.5",
+    "eslint": "^4.5.0",
+    "eslint-plugin-react": "^7.4.0",
+    "material-ui": "^1.0.0-beta.18",
+    "material-ui-icons": "^1.0.0-beta.17",
+    "path": "^0.12.7",
+    "prop-types": "^15.6.0",
+    "recharts": "^1.0.0-beta.0",
+    "react": "^16.0.0",
+    "react-dom": "^16.0.0",
+    "url": "^0.11.0",
+    "webpack": "^3.5.5"
+  }
+}

@@ -40,7 +40,6 @@ import (
 	"github.com/ubiq/go-ubiq/contracts/chequebook"
 	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/p2p"
-	"github.com/ubiq/go-ubiq/p2p/discover"
 	bzzswap "github.com/ubiq/go-ubiq/swarm/services/swap"
 	"github.com/ubiq/go-ubiq/swarm/services/swap/swap"
 	"github.com/ubiq/go-ubiq/swarm/storage"
@@ -56,8 +55,6 @@ const (
 // bzz represents the swarm wire protocol
 // an instance is running on each peer
 type bzz struct {
-	selfID     discover.NodeID      // peer's node id used in peer advertising in handshake
-	key        storage.Key          // baseaddress as storage.Key
 	storage    StorageHandler       // handler storage/retrieval related requests coming via the bzz wire protocol
 	hive       *Hive                // the logistic manager, peerPool, routing service and peer handler
 	dbAccess   *DbAccess            // access to db storage counter and iterator for syncing
@@ -312,7 +309,7 @@ func (self *bzz) handleStatus() (err error) {
 		Version:   uint64(Version),
 		ID:        "honey",
 		Addr:      self.selfAddr(),
-		NetworkId: uint64(self.NetworkId),
+		NetworkId: self.NetworkId,
 		Swap: &bzzswap.SwapProfile{
 			Profile:    self.swapParams.Profile,
 			PayProfile: self.swapParams.PayProfile,

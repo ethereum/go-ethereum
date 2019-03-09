@@ -42,8 +42,9 @@ type Wallet interface {
 	URL() URL
 
 	// Status returns a textual status to aid the user in the current state of the
-	// wallet.
-	Status() string
+	// wallet. It also returns an error indicating any failure the wallet might have
+	// encountered.
+	Status() (string, error)
 
 	// Open initializes access to a wallet instance. It is not meant to unlock or
 	// decrypt account keys, rather simply to establish a connection to hardware
@@ -147,9 +148,26 @@ type Backend interface {
 	Subscribe(sink chan<- WalletEvent) event.Subscription
 }
 
+// WalletEventType represents the different event types that can be fired by
+// the wallet subscription subsystem.
+type WalletEventType int
+
+const (
+	// WalletArrived is fired when a new wallet is detected either via USB or via
+	// a filesystem event in the keystore.
+	WalletArrived WalletEventType = iota
+
+	// WalletOpened is fired when a wallet is successfully opened with the purpose
+	// of starting any background processes such as automatic key derivation.
+	WalletOpened
+
+	// WalletDropped
+	WalletDropped
+)
+
 // WalletEvent is an event fired by an account backend when a wallet arrival or
 // departure is detected.
 type WalletEvent struct {
-	Wallet Wallet // Wallet instance arrived or departed
-	Arrive bool   // Whether the wallet was added or removed
+	Wallet Wallet          // Wallet instance arrived or departed
+	Kind   WalletEventType // Event type that happened in the system
 }

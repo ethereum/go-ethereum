@@ -91,14 +91,6 @@ type cipherparamsJSON struct {
 	IV string `json:"iv"`
 }
 
-type scryptParamsJSON struct {
-	N     int    `json:"n"`
-	R     int    `json:"r"`
-	P     int    `json:"p"`
-	DkLen int    `json:"dklen"`
-	Salt  string `json:"salt"`
-}
-
 func (k *Key) MarshalJSON() (j []byte, err error) {
 	jStruct := plainKeyJSON{
 		hex.EncodeToString(k.Address[:]),

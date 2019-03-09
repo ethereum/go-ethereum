@@ -1,0 +1,52 @@
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+// React syntax style mostly according to https://github.com/airbnb/javascript/tree/master/react
+{
+  "plugins": [
+    "react"
+  ],
+  "parser": "babel-eslint",
+  "parserOptions": {
+    "ecmaFeatures": {
+      "jsx": true,
+      "modules": true
+    }
+  },
+  "rules": {
+    "react/prefer-es6-class": 2,
+    "react/prefer-stateless-function": 2,
+    "react/jsx-pascal-case": 2,
+    "react/jsx-closing-bracket-location": [1, {"selfClosing": "tag-aligned", "nonEmpty": "tag-aligned"}],
+    "react/jsx-closing-tag-location": 1,
+    "jsx-quotes": ["error", "prefer-double"],
+    "no-multi-spaces": "error",
+    "react/jsx-tag-spacing": 2,
+    "react/jsx-curly-spacing": [2, {"when": "never", "children": true}],
+    "react/jsx-boolean-value": 2,
+    "react/no-string-refs": 2,
+    "react/jsx-wrap-multilines": 2,
+    "react/self-closing-comp": 2,
+    "react/jsx-no-bind": 2,
+    "react/require-render-return": 2,
+    "react/no-is-mounted": 2,
+    "key-spacing": ["error", {"align": {
+      "beforeColon": false,
+      "afterColon": true,
+      "on": "value"
+    }}]
+  }
+}

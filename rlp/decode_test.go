@@ -256,16 +256,31 @@ func TestStreamList(t *testing.T) {
 }
 
 func TestStreamRaw(t *testing.T) {
-	s := NewStream(bytes.NewReader(unhex("C58401010101")), 0)
-	s.List()
-
-	want := unhex("8401010101")
-	raw, err := s.Raw()
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		input  string
+		output string
+	}{
+		{
+			"C58401010101",
+			"8401010101",
+		},
+		{
+			"F842B84001010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101",
+			"B84001010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101",
+		},
 	}
-	if !bytes.Equal(want, raw) {
-		t.Errorf("raw mismatch: got %x, want %x", raw, want)
+	for i, tt := range tests {
+		s := NewStream(bytes.NewReader(unhex(tt.input)), 0)
+		s.List()
+
+		want := unhex(tt.output)
+		raw, err := s.Raw()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(want, raw) {
+			t.Errorf("test %d: raw mismatch: got %x, want %x", i, raw, want)
+		}
 	}
 }
 

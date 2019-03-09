@@ -26,11 +26,10 @@ import (
 )
 
 var (
-	textZero = []byte(`0x0`)
-	bytesT   = reflect.TypeOf(Bytes(nil))
-	bigT     = reflect.TypeOf((*Big)(nil))
-	uintT    = reflect.TypeOf(Uint(0))
-	uint64T  = reflect.TypeOf(Uint64(0))
+	bytesT  = reflect.TypeOf(Bytes(nil))
+	bigT    = reflect.TypeOf((*Big)(nil))
+	uintT   = reflect.TypeOf(Uint(0))
+	uint64T = reflect.TypeOf(Uint64(0))
 )
 
 // Bytes marshals/unmarshals as a JSON string with 0x prefix.
@@ -224,7 +223,7 @@ func (b *Uint64) UnmarshalText(input []byte) error {
 			return ErrSyntax
 		}
 		dec *= 16
-		dec += uint64(nib)
+		dec += nib
 	}
 	*b = Uint64(dec)
 	return nil

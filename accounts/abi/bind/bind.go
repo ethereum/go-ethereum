@@ -122,7 +122,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 	}
 	// For Go bindings pass the code through gofmt to clean it up
 	if lang == LangGo {
-		code, err := format.Source(buffer.Bytes())
+		code, err := imports.Process(".", buffer.Bytes(), nil)
 		if err != nil {
 			return "", fmt.Errorf("%v\n%s", err, buffer)
 		}

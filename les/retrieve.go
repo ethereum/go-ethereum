@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"fmt"
 	"sync"
 	"time"
 
@@ -111,12 +112,14 @@ func newRetrieveManager(peers *peerSet, dist *requestDistributor, serverPool pee
 // that is delivered through the deliver function and successfully validated by the
 // validator callback. It returns when a valid answer is delivered or the context is
 // cancelled.
-func (rm *retrieveManager) retrieve(ctx context.Context, reqID uint64, req *distReq, val validatorFunc) error {
+func (rm *retrieveManager) retrieve(ctx context.Context, reqID uint64, req *distReq, val validatorFunc, shutdown chan struct{}) error {
 	sentReq := rm.sendReq(reqID, req, val)
 	select {
 	case <-sentReq.stopCh:
 	case <-ctx.Done():
 		sentReq.stop(ctx.Err())
+	case <-shutdown:
+		sentReq.stop(fmt.Errorf("Client is shutting down"))
 	}
 	return sentReq.getError()
 }

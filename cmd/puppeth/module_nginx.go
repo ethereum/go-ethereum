@@ -43,6 +43,11 @@ services:
       - "{{.Port}}:80"
     volumes:
       - /var/run/docker.sock:/tmp/docker.sock:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "10"
     restart: always
 `
 

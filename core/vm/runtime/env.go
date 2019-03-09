@@ -21,11 +21,10 @@ import (
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core"
-	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/vm"
 )
 
-func NewEnv(cfg *Config, state *state.StateDB) *vm.EVM {
+func NewEnv(cfg *Config) *vm.EVM {
 	context := vm.Context{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
@@ -37,7 +36,7 @@ func NewEnv(cfg *Config, state *state.StateDB) *vm.EVM {
 		Time:        cfg.Time,
 		Difficulty:  cfg.Difficulty,
 		GasLimit:    new(big.Int).SetUint64(cfg.GasLimit),
-		GasPrice:    new(big.Int),
+		GasPrice:    cfg.GasPrice,
 	}
 
 	return vm.NewEVM(context, cfg.State, cfg.ChainConfig, cfg.EVMConfig)

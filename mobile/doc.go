@@ -17,7 +17,7 @@
 // Package gubiq contains the simplified mobile APIs to go-ethereum.
 //
 // The scope of this package is *not* to allow writing a custom Ubiq client
-// with pieces plucked from go-ethereum, rather to allow writing native dapps on
+// with pieces plucked from go-ubiq, rather to allow writing native dapps on
 // mobile platforms. Keep this in mind when using or extending this package!
 //
 // API limitations

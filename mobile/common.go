@@ -35,7 +35,7 @@ type Hash struct {
 // NewHashFromBytes converts a slice of bytes to a hash value.
 func NewHashFromBytes(binary []byte) (hash *Hash, _ error) {
 	h := new(Hash)
-	if err := h.SetBytes(binary); err != nil {
+	if err := h.SetBytes(common.CopyBytes(binary)); err != nil {
 		return nil, err
 	}
 	return h, nil
@@ -136,7 +136,7 @@ type Address struct {
 // NewAddressFromBytes converts a slice of bytes to a hash value.
 func NewAddressFromBytes(binary []byte) (address *Address, _ error) {
 	a := new(Address)
-	if err := a.SetBytes(binary); err != nil {
+	if err := a.SetBytes(common.CopyBytes(binary)); err != nil {
 		return nil, err
 	}
 	return a, nil

@@ -28,7 +28,6 @@ import (
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/vm"
 	"github.com/ubiq/go-ubiq/ethdb"
-	"github.com/ubiq/go-ubiq/event"
 	"github.com/ubiq/go-ubiq/params"
 	"github.com/ubiq/go-ubiq/trie"
 )
@@ -41,7 +40,7 @@ func TestNodeIterator(t *testing.T) {
 		genesis    = gspec.MustCommit(fulldb)
 	)
 	gspec.MustCommit(lightdb)
-	blockchain, _ := core.NewBlockChain(fulldb, params.TestChainConfig, ubqhash.NewFullFaker(), new(event.TypeMux), vm.Config{})
+	blockchain, _ := core.NewBlockChain(fulldb, params.TestChainConfig, ubqhash.NewFullFaker(), vm.Config{})
 	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, fulldb, 4, testChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		panic(err)

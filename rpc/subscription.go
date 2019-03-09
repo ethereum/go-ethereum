@@ -53,7 +53,6 @@ type notifierKey struct{}
 type Notifier struct {
 	codec    ServerCodec
 	subMu    sync.RWMutex // guards active and inactive maps
-	stopped  bool
 	active   map[ID]*Subscription
 	inactive map[ID]*Subscription
 }

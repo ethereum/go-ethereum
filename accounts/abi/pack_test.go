@@ -322,12 +322,12 @@ func TestPack(t *testing.T) {
 	} {
 		typ, err := NewType(test.typ)
 		if err != nil {
-			t.Fatal("unexpected parse error:", err)
+			t.Fatalf("%v failed. Unexpected parse error: %v", i, err)
 		}
 
 		output, err := typ.pack(reflect.ValueOf(test.input))
 		if err != nil {
-			t.Fatal("unexpected pack error:", err)
+			t.Fatalf("%v failed. Unexpected pack error: %v", i, err)
 		}
 
 		if !bytes.Equal(output, test.output) {
@@ -434,8 +434,5 @@ func TestPackNumber(t *testing.T) {
 		if !bytes.Equal(packed, tt.packed) {
 			t.Errorf("test %d: pack mismatch: have %x, want %x", i, packed, tt.packed)
 		}
-	}
-	if packed := packNum(reflect.ValueOf("string")); packed != nil {
-		t.Errorf("expected 'string' to pack to nil. got %x instead", packed)
 	}
 }

@@ -20,7 +20,6 @@
 package les
 
 import (
-	"crypto/ecdsa"
 	"crypto/rand"
 	"math/big"
 	"sync"
@@ -44,7 +43,7 @@ import (
 var (
 	testBankKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
-	testBankFunds   = big.NewInt(1000000)
+	testBankFunds   = big.NewInt(1000000000000000000)
 
 	acc1Key, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 	acc2Key, _ = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
@@ -140,16 +139,16 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 			Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
 		}
 		genesis = gspec.MustCommit(db)
-		chain       BlockChain
+		chain   BlockChain
 	)
 	if peers == nil {
 		peers = newPeerSet()
 	}
 
 	if lightSync {
-		chain, _ = light.NewLightChain(odr, gspec.Config, engine, evmux)
+		chain, _ = light.NewLightChain(odr, gspec.Config, engine)
 	} else {
-		blockchain, _ := core.NewBlockChain(db, gspec.Config, engine, evmux, vm.Config{})
+		blockchain, _ := core.NewBlockChain(db, gspec.Config, engine, vm.Config{})
 		gchain, _ := core.GenerateChain(gspec.Config, genesis, db, blocks, generator)
 		if _, err := blockchain.InsertChain(gchain); err != nil {
 			panic(err)
@@ -157,7 +156,13 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		chain = blockchain
 	}
 
-	pm, err := NewProtocolManager(gspec.Config, lightSync, NetworkId, evmux, engine, peers, chain, nil, db, odr, nil, make(chan struct{}), new(sync.WaitGroup))
+	var protocolVersions []uint
+	if lightSync {
+		protocolVersions = ClientProtocolVersions
+	} else {
+		protocolVersions = ServerProtocolVersions
+	}
+	pm, err := NewProtocolManager(gspec.Config, lightSync, protocolVersions, NetworkId, evmux, engine, peers, chain, nil, db, odr, nil, make(chan struct{}), new(sync.WaitGroup))
 	if err != nil {
 		return nil, err
 	}
@@ -187,45 +192,6 @@ func newTestProtocolManagerMust(t *testing.T, lightSync bool, blocks int, genera
 		t.Fatalf("Failed to create protocol manager: %v", err)
 	}
 	return pm
-}
-
-// testTxPool is a fake, helper transaction pool for testing purposes
-type testTxPool struct {
-	pool  []*types.Transaction        // Collection of all transactions
-	added chan<- []*types.Transaction // Notification channel for new transactions
-
-	lock sync.RWMutex // Protects the transaction pool
-}
-
-// AddTransactions appends a batch of transactions to the pool, and notifies any
-// listeners if the addition channel is non nil
-func (p *testTxPool) AddBatch(txs []*types.Transaction) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	p.pool = append(p.pool, txs...)
-	if p.added != nil {
-		p.added <- txs
-	}
-}
-
-// GetTransactions returns all the transactions known to the pool
-func (p *testTxPool) GetTransactions() types.Transactions {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	txs := make([]*types.Transaction, len(p.pool))
-	copy(txs, p.pool)
-
-	return txs
-}
-
-// newTestTransaction create a new dummy transaction.
-func newTestTransaction(from *ecdsa.PrivateKey, nonce uint64, datasize int) *types.Transaction {
-	tx := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), big.NewInt(100000), big.NewInt(0), make([]byte, datasize))
-	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, from)
-
-	return tx
 }
 
 // testPeer is a simulated peer to allow testing direct network calls.

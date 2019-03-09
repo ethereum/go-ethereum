@@ -30,7 +30,7 @@ import (
 
 // nodeDockerfile is the Dockerfile required to run an Ethereum node.
 var nodeDockerfile = `
-FROM ethereum/client-go:alpine-develop
+FROM ethereum/client-go:latest
 
 ADD genesis.json /genesis.json
 {{if .Unlock}}
@@ -38,9 +38,9 @@ ADD genesis.json /genesis.json
 	ADD signer.pass /signer.pass
 {{end}}
 RUN \
-  echo '/gubiq init /genesis.json' > gubiq.sh && \{{if .Unlock}}
+  echo 'gubiq init /genesis.json' > gubiq.sh && \{{if .Unlock}}
 	echo 'mkdir -p /root/.ubiq/keystore/ && cp /signer.json /root/.ubiq/keystore/' >> gubiq.sh && \{{end}}
-	echo $'/gubiq --networkid {{.NetworkID}} --cache 512 --port {{.Port}} --maxpeers {{.Peers}} {{.LightFlag}} --ethstats \'{{.Ethstats}}\' {{if .BootV4}}--bootnodesv4 {{.BootV4}}{{end}} {{if .BootV5}}--bootnodesv5 {{.BootV5}}{{end}} {{if .Etherbase}}--etherbase {{.Etherbase}} --mine{{end}}{{if .Unlock}}--unlock 0 --password /signer.pass --mine{{end}} --targetgaslimit {{.GasTarget}} --gasprice {{.GasPrice}}' >> gubiq.sh
+	echo $'gubiq --networkid {{.NetworkID}} --cache 512 --port {{.Port}} --maxpeers {{.Peers}} {{.LightFlag}} --ethstats \'{{.Ethstats}}\' {{if .BootV4}}--bootnodesv4 {{.BootV4}}{{end}} {{if .BootV5}}--bootnodesv5 {{.BootV5}}{{end}} {{if .Etherbase}}--etherbase {{.Etherbase}} --mine{{end}}{{if .Unlock}}--unlock 0 --password /signer.pass --mine{{end}} --targetgaslimit {{.GasTarget}} --gasprice {{.GasPrice}}' >> gubiq.sh
 
 ENTRYPOINT ["/bin/sh", "gubiq.sh"]
 `
@@ -68,6 +68,11 @@ services:
       - MINER_NAME={{.Etherbase}}
       - GAS_TARGET={{.GasTarget}}
       - GAS_PRICE={{.GasPrice}}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "10"
     restart: always
 `
 
@@ -123,7 +128,7 @@ func deployNode(client *sshClient, network string, bootv4, bootv5 []string, conf
 	files[filepath.Join(workdir, "docker-compose.yaml")] = composefile.Bytes()
 
 	//genesisfile, _ := json.MarshalIndent(config.genesis, "", "  ")
-	files[filepath.Join(workdir, "genesis.json")] = []byte(config.genesis)
+	files[filepath.Join(workdir, "genesis.json")] = config.genesis
 
 	if config.keyJSON != "" {
 		files[filepath.Join(workdir, "signer.json")] = []byte(config.keyJSON)
@@ -192,7 +197,7 @@ func checkNode(client *sshClient, network string, boot bool) (*nodeInfos, error)
 
 	// Container available, retrieve its node ID and its genesis json
 	var out []byte
-	if out, err = client.Run(fmt.Sprintf("docker exec %s_%s_1 /gubiq --exec admin.nodeInfo.id attach", network, kind)); err != nil {
+	if out, err = client.Run(fmt.Sprintf("docker exec %s_%s_1 gubiq --exec admin.nodeInfo.id attach", network, kind)); err != nil {
 		return nil, ErrServiceUnreachable
 	}
 	id := bytes.Trim(bytes.TrimSpace(out), "\"")

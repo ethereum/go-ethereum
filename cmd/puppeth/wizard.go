@@ -22,12 +22,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core"
@@ -106,17 +106,15 @@ func (w *wizard) readString() string {
 // readDefaultString reads a single line from stdin, trimming if from spaces. If
 // an empty line is entered, the default value is returned.
 func (w *wizard) readDefaultString(def string) string {
-	for {
-		fmt.Printf("> ")
-		text, err := w.in.ReadString('\n')
-		if err != nil {
-			log.Crit("Failed to read user input", "err", err)
-		}
-		if text = strings.TrimSpace(text); text != "" {
-			return text
-		}
-		return def
+	fmt.Printf("> ")
+	text, err := w.in.ReadString('\n')
+	if err != nil {
+		log.Crit("Failed to read user input", "err", err)
 	}
+	if text = strings.TrimSpace(text); text != "" {
+		return text
+	}
+	return def
 }
 
 // readInt reads a single line from stdin, trimming if from spaces, enforcing it
@@ -162,6 +160,29 @@ func (w *wizard) readDefaultInt(def int) int {
 	}
 }
 
+// readDefaultBigInt reads a single line from stdin, trimming if from spaces,
+// enforcing it to parse into a big integer. If an empty line is entered, the
+// default value is returned.
+func (w *wizard) readDefaultBigInt(def *big.Int) *big.Int {
+	for {
+		fmt.Printf("> ")
+		text, err := w.in.ReadString('\n')
+		if err != nil {
+			log.Crit("Failed to read user input", "err", err)
+		}
+		if text = strings.TrimSpace(text); text == "" {
+			return def
+		}
+		val, ok := new(big.Int).SetString(text, 0)
+		if !ok {
+			log.Error("Invalid input, expected big integer")
+			continue
+		}
+		return val
+	}
+}
+
+/*
 // readFloat reads a single line from stdin, trimming if from spaces, enforcing it
 // to parse into a float.
 func (w *wizard) readFloat() float64 {
@@ -182,6 +203,7 @@ func (w *wizard) readFloat() float64 {
 		return val
 	}
 }
+*/
 
 // readDefaultFloat reads a single line from stdin, trimming if from spaces, enforcing
 // it to parse into a float. If an empty line is entered, the default value is returned.
@@ -207,15 +229,13 @@ func (w *wizard) readDefaultFloat(def float64) float64 {
 // readPassword reads a single line from stdin, trimming it from the trailing new
 // line and returns it. The input will not be echoed.
 func (w *wizard) readPassword() string {
-	for {
-		fmt.Printf("> ")
-		text, err := terminal.ReadPassword(int(syscall.Stdin))
-		if err != nil {
-			log.Crit("Failed to read password", "err", err)
-		}
-		fmt.Println()
-		return string(text)
+	fmt.Printf("> ")
+	text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+	if err != nil {
+		log.Crit("Failed to read password", "err", err)
 	}
+	fmt.Println()
+	return string(text)
 }
 
 // readAddress reads a single line from stdin, trimming if from spaces and converts
@@ -277,5 +297,29 @@ func (w *wizard) readJSON() string {
 			continue
 		}
 		return string(blob)
+	}
+}
+
+// readIPAddress reads a single line from stdin, trimming if from spaces and
+// returning it if it's convertible to an IP address. The reason for keeping
+// the user input format instead of returning a Go net.IP is to match with
+// weird formats used by ethstats, which compares IPs textually, not by value.
+func (w *wizard) readIPAddress() string {
+	for {
+		// Read the IP address from the user
+		fmt.Printf("> ")
+		text, err := w.in.ReadString('\n')
+		if err != nil {
+			log.Crit("Failed to read user input", "err", err)
+		}
+		if text = strings.TrimSpace(text); text == "" {
+			return ""
+		}
+		// Make sure it looks ok and return it if so
+		if ip := net.ParseIP(text); ip == nil {
+			log.Error("Invalid IP address, please retry")
+			continue
+		}
+		return text
 	}
 }

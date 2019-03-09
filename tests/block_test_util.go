@@ -33,7 +33,6 @@ import (
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/core/vm"
 	"github.com/ubiq/go-ubiq/ethdb"
-	"github.com/ubiq/go-ubiq/event"
 	"github.com/ubiq/go-ubiq/params"
 	"github.com/ubiq/go-ubiq/rlp"
 )
@@ -53,6 +52,7 @@ type btJSON struct {
 	Pre       core.GenesisAlloc     `json:"pre"`
 	Post      core.GenesisAlloc     `json:"postState"`
 	BestBlock common.UnprefixedHash `json:"lastblockhash"`
+	Network   string                `json:"network"`
 }
 
 type btBlock struct {
@@ -91,7 +91,12 @@ type btHeaderMarshaling struct {
 	Timestamp  *math.HexOrDecimal256
 }
 
-func (t *BlockTest) Run(config *params.ChainConfig) error {
+func (t *BlockTest) Run() error {
+	config, ok := Forks[t.json.Network]
+	if !ok {
+		return UnsupportedForkError{t.json.Network}
+	}
+
 	// import pre accounts & construct test genesis block & state root
 	db, _ := ethdb.NewMemDatabase()
 	gblock, err := t.genesis(config).Commit(db)
@@ -105,7 +110,7 @@ func (t *BlockTest) Run(config *params.ChainConfig) error {
 		return fmt.Errorf("genesis block state root does not match test: computed=%x, test=%x", gblock.Root().Bytes()[:6], t.json.Genesis.StateRoot[:6])
 	}
 
-	chain, err := core.NewBlockChain(db, config, ubqhash.NewShared(), new(event.TypeMux), vm.Config{})
+	chain, err := core.NewBlockChain(db, config, ubqhash.NewShared(), vm.Config{})
 	if err != nil {
 		return err
 	}

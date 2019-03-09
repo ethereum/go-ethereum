@@ -191,7 +191,7 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 	for (len(d.peers) > 0 || elem == d.reqQueue.Front()) && elem != nil {
 		req := elem.Value.(*distReq)
 		canSend := false
-		for peer, _ := range d.peers {
+		for peer := range d.peers {
 			if _, ok := checkedPeers[peer]; !ok && peer.canQueue() && req.canSend(peer) {
 				canSend = true
 				cost := req.getCost(peer)

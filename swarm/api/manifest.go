@@ -22,6 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -63,7 +65,7 @@ func (a *Api) NewManifest() (storage.Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	return a.Store(bytes.NewReader(data), int64(len(data)), nil)
+	return a.Store(bytes.NewReader(data), int64(len(data)), &sync.WaitGroup{})
 }
 
 // ManifestWriter is used to add and remove entries from an underlying manifest
@@ -236,7 +238,7 @@ func (self *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
 		return
 	}
 
-	b := byte(entry.Path[0])
+	b := entry.Path[0]
 	oldentry := self.entries[b]
 	if (oldentry == nil) || (oldentry.Path == entry.Path && oldentry.ContentType != ManifestType) {
 		self.entries[b] = entry
@@ -292,7 +294,7 @@ func (self *manifestTrie) deleteEntry(path string, quitC chan bool) {
 		return
 	}
 
-	b := byte(path[0])
+	b := path[0]
 	entry := self.entries[b]
 	if entry == nil {
 		return
@@ -422,25 +424,47 @@ func (self *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *man
 		return self.entries[256], 0
 	}
 
-	b := byte(path[0])
+	//see if first char is in manifest entries
+	b := path[0]
 	entry = self.entries[b]
 	if entry == nil {
 		return self.entries[256], 0
 	}
+
 	epl := len(entry.Path)
 	log.Trace(fmt.Sprintf("path = %v  entry.Path = %v  epl = %v", path, entry.Path, epl))
-	if (len(path) >= epl) && (path[:epl] == entry.Path) {
+	if len(path) <= epl {
+		if entry.Path[:len(path)] == path {
+			if entry.ContentType == ManifestType {
+				entry.Status = http.StatusMultipleChoices
+			}
+			pos = len(path)
+			return
+		}
+		return nil, 0
+	}
+	if path[:epl] == entry.Path {
 		log.Trace(fmt.Sprintf("entry.ContentType = %v", entry.ContentType))
-		if entry.ContentType == ManifestType {
+		//the subentry is a manifest, load subtrie
+		if entry.ContentType == ManifestType && (strings.Contains(entry.Path, path) || strings.Contains(path, entry.Path)) {
 			err := self.loadSubTrie(entry, quitC)
 			if err != nil {
 				return nil, 0
 			}
-			entry, pos = entry.subtrie.findPrefixOf(path[epl:], quitC)
-			if entry != nil {
+			sub, pos := entry.subtrie.findPrefixOf(path[epl:], quitC)
+			if sub != nil {
+				entry = sub
 				pos += epl
+				return sub, pos
+			} else if path == entry.Path {
+				entry.Status = http.StatusMultipleChoices
 			}
+
 		} else {
+			//entry is not a manifest, return it
+			if path != entry.Path {
+				return nil, 0
+			}
 			pos = epl
 		}
 	}

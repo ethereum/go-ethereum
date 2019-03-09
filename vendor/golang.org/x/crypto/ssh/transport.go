@@ -254,7 +254,7 @@ func newPacketCipher(d direction, algs directionAlgorithms, kex *kexResult) (pac
 	iv, key, macKey := generateKeys(d, algs, kex)
 
 	if algs.Cipher == gcmCipherID {
-		return newGCMCipher(iv, key, macKey)
+		return newGCMCipher(iv, key)
 	}
 
 	if algs.Cipher == aes128cbcID {

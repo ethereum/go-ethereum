@@ -19,7 +19,6 @@ package eth
 
 import (
 	"bytes"
-	"fmt"
 	"time"
 
 	"github.com/ubiq/go-ubiq/common"
@@ -46,7 +45,7 @@ func upgradeDeduplicateData(db ethdb.Database) func() error {
 		return nil
 	}
 	// Start the deduplication upgrade on a new goroutine
-	log.Info("Upgrading database to use lookup entries")
+	log.Warn("Upgrading database to use lookup entries")
 	stop := make(chan chan error)
 
 	go func() {
@@ -104,7 +103,7 @@ func upgradeDeduplicateData(db ethdb.Database) func() error {
 				it = db.(*ethdb.LDBDatabase).NewIterator()
 				it.Seek(key)
 
-				log.Info("Deduplicating database entries", converted)
+				log.Info("Deduplicating database entries", "deduped", converted)
 			}
 			// Check for termination, or continue after a bit of a timeout
 			select {
@@ -116,10 +115,10 @@ func upgradeDeduplicateData(db ethdb.Database) func() error {
 		}
 		// Upgrade finished, mark a such and terminate
 		if failed == nil {
-			log.Info("Database deduplication successful", converted)
+			log.Info("Database deduplication successful", "deduped", converted)
 			db.Put(deduplicateData, []byte{42})
 		} else {
-			log.Error("Database deduplication failed.", converted, "err", failed)
+			log.Error("Database deduplication failed", "deduped", converted, "err", failed)
 		}
 		it.Release()
 		it = nil
@@ -133,47 +132,4 @@ func upgradeDeduplicateData(db ethdb.Database) func() error {
 		stop <- errc
 		return <-errc
 	}
-}
-
-func addMipmapBloomBins(db ethdb.Database) (err error) {
-	const mipmapVersion uint = 2
-
-	// check if the version is set. We ignore data for now since there's
-	// only one version so we can easily ignore it for now
-	var data []byte
-	data, _ = db.Get([]byte("setting-mipmap-version"))
-	if len(data) > 0 {
-		var version uint
-		if err := rlp.DecodeBytes(data, &version); err == nil && version == mipmapVersion {
-			return nil
-		}
-	}
-
-	defer func() {
-		if err == nil {
-			var val []byte
-			val, err = rlp.EncodeToBytes(mipmapVersion)
-			if err == nil {
-				err = db.Put([]byte("setting-mipmap-version"), val)
-			}
-			return
-		}
-	}()
-	latestHash := core.GetHeadBlockHash(db)
-	latestBlock := core.GetBlock(db, latestHash, core.GetBlockNumber(db, latestHash))
-	if latestBlock == nil { // clean database
-		return
-	}
-
-	tstart := time.Now()
-	log.Warn("Upgrading db log bloom bins")
-	for i := uint64(0); i <= latestBlock.NumberU64(); i++ {
-		hash := core.GetCanonicalHash(db, i)
-		if (hash == common.Hash{}) {
-			return fmt.Errorf("chain db corrupted. Could not find block %d.", i)
-		}
-		core.WriteMipmapBloom(db, i, core.GetBlockReceipts(db, hash, i))
-	}
-	log.Info("Bloom-bin upgrade completed", "elapsed", common.PrettyDuration(time.Since(tstart)))
-	return nil
 }

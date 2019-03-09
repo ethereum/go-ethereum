@@ -33,7 +33,6 @@ import (
 	"github.com/ubiq/go-ubiq/core/vm"
 	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/ethdb"
-	"github.com/ubiq/go-ubiq/event"
 	"github.com/ubiq/go-ubiq/params"
 	"github.com/ubiq/go-ubiq/rlp"
 	"github.com/ubiq/go-ubiq/trie"
@@ -78,7 +77,9 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 		req.Receipts = core.GetBlockReceipts(odr.sdb, req.Hash, core.GetBlockNumber(odr.sdb, req.Hash))
 	case *TrieRequest:
 		t, _ := trie.New(req.Id.Root, odr.sdb)
-		req.Proof = t.Prove(req.Key)
+		nodes := NewNodeSet()
+		t.Prove(req.Key, 0, nodes)
+		req.Proof = nodes
 	case *CodeRequest:
 		req.Data, _ = odr.sdb.Get(req.Hash[:])
 	}
@@ -181,7 +182,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 		context := core.NewEVMContext(msg, header, chain, nil)
 		vmenv := vm.NewEVM(context, st, config, vm.Config{})
 		gp := new(core.GasPool).AddGas(math.MaxBig256)
-		ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
+		ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp)
 		res = append(res, ret...)
 		if st.Error() != nil {
 			return res, st.Error()
@@ -233,7 +234,6 @@ func testChainGen(i int, block *core.BlockGen) {
 
 func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 	var (
-		evmux   = new(event.TypeMux)
 		sdb, _  = ethdb.NewMemDatabase()
 		ldb, _  = ethdb.NewMemDatabase()
 		gspec   = core.Genesis{Alloc: core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}}}
@@ -241,14 +241,14 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 	)
 	gspec.MustCommit(ldb)
 	// Assemble the test environment
-	blockchain, _ := core.NewBlockChain(sdb, params.TestChainConfig, ubqhash.NewFullFaker(), evmux, vm.Config{})
+	blockchain, _ := core.NewBlockChain(sdb, params.TestChainConfig, ubqhash.NewFullFaker(), vm.Config{})
 	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, sdb, 4, testChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		t.Fatal(err)
 	}
 
 	odr := &testOdr{sdb: sdb, ldb: ldb}
-	lightchain, err := NewLightChain(odr, params.TestChainConfig, ubqhash.NewFullFaker(), evmux)
+	lightchain, err := NewLightChain(odr, params.TestChainConfig, ubqhash.NewFullFaker())
 	if err != nil {
 		t.Fatal(err)
 	}

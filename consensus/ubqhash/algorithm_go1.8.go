@@ -31,7 +31,7 @@ func cacheSize(block uint64) uint64 {
 		return cacheSizes[epoch]
 	}
 	// No known cache size, calculate manually (sanity branch only)
-	size := uint64(cacheInitBytes + cacheGrowthBytes*uint64(epoch) - hashBytes)
+	size := cacheInitBytes + cacheGrowthBytes*uint64(epoch) - hashBytes
 	for !new(big.Int).SetUint64(size / hashBytes).ProbablyPrime(1) { // Always accurate for n < 2^64
 		size -= 2 * hashBytes
 	}
@@ -49,7 +49,7 @@ func datasetSize(block uint64) uint64 {
 		return datasetSizes[epoch]
 	}
 	// No known dataset size, calculate manually (sanity branch only)
-	size := uint64(datasetInitBytes + datasetGrowthBytes*uint64(epoch) - mixBytes)
+	size := datasetInitBytes + datasetGrowthBytes*uint64(epoch) - mixBytes
 	for !new(big.Int).SetUint64(size / mixBytes).ProbablyPrime(1) { // Always accurate for n < 2^64
 		size -= 2 * mixBytes
 	}
