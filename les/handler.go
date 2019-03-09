@@ -329,6 +329,11 @@ func (pm *ProtocolManager) handle(p *peer) error {
 // handleMsg is invoked whenever an inbound message is received from a remote
 // peer. The remote connection is torn down upon returning any error.
 func (pm *ProtocolManager) handleMsg(p *peer) error {
+	select {
+	case err := <-p.errCh:
+		return err
+	default:
+	}
 	// Read the next message from the remote peer, and ensure it's fully consumed
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
@@ -389,7 +394,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if reply != nil {
 			p.queueSend(func() {
 				if err := reply.send(bv); err != nil {
-					p.errCh <- err
+					select {
+					case p.errCh <- err:
+					default:
+					}
 				}
 			})
 		}
