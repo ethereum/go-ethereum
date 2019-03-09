@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/tracing"
 	opentracing "github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 const (
@@ -145,6 +146,8 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 	ctx, osp = spancontext.StartSpan(
 		ctx,
 		"stream.handle.retrieve")
+
+	osp.LogFields(olog.String("ref", req.Addr.String()))
 
 	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, "", true))
 	if err != nil {
