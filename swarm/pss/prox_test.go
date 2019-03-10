@@ -232,7 +232,7 @@ func testProxNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3) // todo: increase
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20) // todo: review
 	defer cancel()
 	snap := readSnapshot(t, nodeCount)
 	err = sim.WaitTillSnapshotRecreated(ctx, snap)
