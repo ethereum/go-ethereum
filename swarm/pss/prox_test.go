@@ -47,10 +47,11 @@ var (
 	mu    sync.Mutex // keeps handlerDone in sync
 	sim   *simulation.Simulation
 
-	handlerDone bool // set to true on termination of the simulation run
+	mx               sync.Mutex // prevents data race for the test variables
+	handlerDone      bool       // set to true on termination of the simulation run
 	requiredMessages int
-	allowedMessages int
-	messageCount int
+	allowedMessages  int
+	messageCount     int
 
 	kademlias    map[enode.ID]*network.Kademlia
 	nodeAddrs    map[enode.ID][]byte      // make predictable overlay addresses from the generated random enode ids
@@ -70,10 +71,9 @@ func resetTestVariables() {
 	handlerDone = false
 	requiredMessages = 0
 	allowedMessages = 0
-	messageCount = 0
 	msgs = nil
 	sim = nil
-
+	resetMsgCount()
 	kademlias = make(map[enode.ID]*network.Kademlia)
 	nodeAddrs = make(map[enode.ID][]byte)
 	recipients = make(map[int][]enode.ID)
@@ -85,6 +85,25 @@ func resetTestVariables() {
 	doneC = make(chan struct{})
 	errC = make(chan error)
 	msgC = make(chan handlerNotification)
+}
+
+func getMsgCount() int {
+	mx.Lock()
+	defer mx.Unlock()
+	return messageCount
+}
+
+func resetMsgCount() {
+	mx.Lock()
+	messageCount = 0
+	mx.Unlock()
+}
+
+func incrementMsgCount() int {
+	mx.Lock()
+	defer mx.Unlock()
+	messageCount++
+	return messageCount
 }
 
 func isDone() bool {
@@ -226,8 +245,9 @@ func testProxNetwork(t *testing.T) {
 		// context deadline exceeded
 		// however, it might just mean that not all possible messages are received
 		// now we must check if all required messages are received
-		log.Debug("TestProxNetwork finnished", "rcv", messageCount)
-		if messageCount < requiredMessages {
+		cnt := getMsgCount()
+		log.Debug("TestProxNetwork finnished", "rcv", cnt)
+		if cnt < requiredMessages {
 			t.Fatal(result.Error)
 		}
 	}
@@ -319,8 +339,8 @@ func handlerChannelListener(ctx context.Context) {
 func nodeMsgHandler(config *adapters.NodeConfig) *handler {
 	return &handler{
 		f: func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
-			messageCount++
-			log.Debug("nodeMsgHandler rcv", "cnt", messageCount)
+			cnt := incrementMsgCount()
+			log.Debug("nodeMsgHandler rcv", "cnt", cnt)
 
 			// using simple serial in message body, makes it easy to keep track of who's getting what
 			serial, c := binary.Uvarint(msg)
