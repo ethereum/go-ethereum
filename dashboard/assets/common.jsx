@@ -88,9 +88,5 @@ export const simplifyBytes = (x: number) => {
 };
 
 // hues contains predefined colors for gradient stop colors.
-// export const hues     = ['#00FF00', '#FFFF00', '#FF0000'];
-// export const hueScale = [0, 1 << 16, 1 << 20];
-
-// Rainbow colors.
-export const hues     = ['#8B00FF', '#0000FF', '#00FF00', '#FFFF00', '#FF7F00', '#FF0000'];
-export const hueScale = [0, 1 << 7, 1 << 12, 1 << 14, 1 << 17, 1 << 20];
+export const hues     = ['#00FF00', '#FFFF00', '#FF7F00', '#FF0000'];
+export const hueScale = [0, 2048, 102400, 2097152];
