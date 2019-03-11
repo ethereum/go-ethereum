@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	defaultSearchTimeout = 1 * time.Second
+	defaultSearchTimeout = 3 * time.Second
 	// maximum number of forwarded requests (hops), to make sure requests are not
 	// forwarded forever in peer loops
 	maxHopCount uint8 = 20
@@ -272,7 +272,6 @@ func (f *Fetcher) run(peers *sync.Map) {
 // * the peer's address is removed from prospective sources, and
 // * a go routine is started that reports on the gone channel if the peer is disconnected (or terminated their streamer)
 func (f *Fetcher) doRequest(gone chan *enode.ID, peersToSkip *sync.Map, sources []*enode.ID, hopCount uint8) ([]*enode.ID, error) {
-	log.Trace("fetcher.doRequest", "request addr", f.addr)
 
 	var i int
 	var sourceID *enode.ID
@@ -290,6 +289,7 @@ func (f *Fetcher) doRequest(gone chan *enode.ID, peersToSkip *sync.Map, sources 
 	for i = 0; i < len(sources); i++ {
 		req.Source = sources[i]
 		var err error
+		log.Trace("fetcher.doRequest", "request addr", f.addr, "peer", req.Source.String())
 		sourceID, quit, err = f.protoRequestFunc(f.ctx, req)
 		if err == nil {
 			// remove the peer from known sources

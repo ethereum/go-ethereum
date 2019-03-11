@@ -228,7 +228,7 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 	spanId := fmt.Sprintf("stream.send.request.%v.%v", sp.ID(), req.Addr)
 	span := tracing.ShiftSpanByKey(spanId)
 
-	log.Trace("handle.chunk.delivery", "ref", req.Addr)
+	log.Trace("handle.chunk.delivery", "ref", req.Addr, "from peer", sp.ID())
 
 	go func() {
 		defer osp.Finish()
