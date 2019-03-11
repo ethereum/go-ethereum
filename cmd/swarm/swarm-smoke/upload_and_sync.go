@@ -98,7 +98,7 @@ func trackChunks(testData []byte) error {
 		}
 
 		count := 0
-		for i, info := range hasInfo {
+		for _, info := range hasInfo {
 			if info.Has {
 				hostChunks = append(hostChunks, "1")
 			} else {

@@ -183,6 +183,8 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 	)
 	defer sp.Finish()
 
+	defer metrics.GetOrRegisterResettingTimer("send.offered.hashes", nil).UpdateSince(time.Now())
+
 	hashes, from, to, proof, err := s.setNextBatch(f, t)
 	if err != nil {
 		return err
