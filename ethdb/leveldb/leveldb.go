@@ -38,27 +38,27 @@ import (
 )
 
 const (
-	// leveldbDegradationWarnInterval specifies how often warning should be printed
-	// if the leveldb database cannot keep up with requested writes.
-	leveldbDegradationWarnInterval = time.Minute
+	// degradationWarnInterval specifies how often warning should be printed if the
+	// leveldb database cannot keep up with requested writes.
+	degradationWarnInterval = time.Minute
 
-	// leveldbMinCache is the minimum amount of memory in megabytes to allocate to
-	// leveldb read and write caching, split half and half.
-	leveldbMinCache = 16
+	// minCache is the minimum amount of memory in megabytes to allocate to leveldb
+	// read and write caching, split half and half.
+	minCache = 16
 
-	// leveldbMinHandles is the minimum number of files handles to allocate to the
-	// open database files.
-	leveldbMinHandles = 16
+	// minHandles is the minimum number of files handles to allocate to the open
+	// database files.
+	minHandles = 16
 
 	// metricsGatheringInterval specifies the interval to retrieve leveldb database
 	// compaction, io and pause stats to report to the user.
 	metricsGatheringInterval = 3 * time.Second
 )
 
-// LevelDBDatabase is a persistent key-value store. Apart from basic data storage
+// Database is a persistent key-value store. Apart from basic data storage
 // functionality it also supports batch writes and iterating over the keyspace in
 // binary-alphabetical order.
-type LevelDBDatabase struct {
+type Database struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
 
@@ -78,13 +78,13 @@ type LevelDBDatabase struct {
 
 // New returns a wrapped LevelDB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
-func New(file string, cache int, handles int, namespace string) (*LevelDBDatabase, error) {
+func New(file string, cache int, handles int, namespace string) (*Database, error) {
 	// Ensure we have some minimal caching and file guarantees
-	if cache < leveldbMinCache {
-		cache = leveldbMinCache
+	if cache < minCache {
+		cache = minCache
 	}
-	if handles < leveldbMinHandles {
-		handles = leveldbMinHandles
+	if handles < minHandles {
+		handles = minHandles
 	}
 	logger := log.New("database", file)
 	logger.Info("Allocated cache and file handles", "cache", common.StorageSize(cache*1024*1024), "handles", handles)
@@ -103,7 +103,7 @@ func New(file string, cache int, handles int, namespace string) (*LevelDBDatabas
 		return nil, err
 	}
 	// Assemble the wrapper with all the registered metrics
-	ldb := &LevelDBDatabase{
+	ldb := &Database{
 		fn:       file,
 		db:       db,
 		log:      logger,
@@ -124,7 +124,7 @@ func New(file string, cache int, handles int, namespace string) (*LevelDBDatabas
 
 // Close stops the metrics collection, flushes any pending data to disk and closes
 // all io accesses to the underlying key-value store.
-func (db *LevelDBDatabase) Close() error {
+func (db *Database) Close() error {
 	db.quitLock.Lock()
 	defer db.quitLock.Unlock()
 
@@ -140,12 +140,12 @@ func (db *LevelDBDatabase) Close() error {
 }
 
 // Has retrieves if a key is present in the key-value store.
-func (db *LevelDBDatabase) Has(key []byte) (bool, error) {
+func (db *Database) Has(key []byte) (bool, error) {
 	return db.db.Has(key, nil)
 }
 
 // Get retrieves the given key if it's present in the key-value store.
-func (db *LevelDBDatabase) Get(key []byte) ([]byte, error) {
+func (db *Database) Get(key []byte) ([]byte, error) {
 	dat, err := db.db.Get(key, nil)
 	if err != nil {
 		return nil, err
@@ -154,19 +154,19 @@ func (db *LevelDBDatabase) Get(key []byte) ([]byte, error) {
 }
 
 // Put inserts the given value into the key-value store.
-func (db *LevelDBDatabase) Put(key []byte, value []byte) error {
+func (db *Database) Put(key []byte, value []byte) error {
 	return db.db.Put(key, value, nil)
 }
 
 // Delete removes the key from the key-value store.
-func (db *LevelDBDatabase) Delete(key []byte) error {
+func (db *Database) Delete(key []byte) error {
 	return db.db.Delete(key, nil)
 }
 
 // NewBatch creates a write-only key-value store that buffers changes to its host
 // database until a final write is called.
-func (db *LevelDBDatabase) NewBatch() ethdb.Batch {
-	return &levelDBBatch{
+func (db *Database) NewBatch() ethdb.Batch {
+	return &batch{
 		db: db.db,
 		b:  new(leveldb.Batch),
 	}
@@ -174,18 +174,18 @@ func (db *LevelDBDatabase) NewBatch() ethdb.Batch {
 
 // NewIterator creates a binary-alphabetical iterator over the entire keyspace
 // contained within the leveldb database.
-func (db *LevelDBDatabase) NewIterator() ethdb.Iterator {
+func (db *Database) NewIterator() ethdb.Iterator {
 	return db.NewIteratorWithPrefix(nil)
 }
 
 // NewIteratorWithPrefix creates a binary-alphabetical iterator over a subset
 // of database content with a particular key prefix.
-func (db *LevelDBDatabase) NewIteratorWithPrefix(prefix []byte) ethdb.Iterator {
+func (db *Database) NewIteratorWithPrefix(prefix []byte) ethdb.Iterator {
 	return db.db.NewIterator(util.BytesPrefix(prefix), nil)
 }
 
 // Stat returns a particular internal stat of the database.
-func (db *LevelDBDatabase) Stat(property string) (string, error) {
+func (db *Database) Stat(property string) (string, error) {
 	return db.db.GetProperty(property)
 }
 
@@ -196,12 +196,12 @@ func (db *LevelDBDatabase) Stat(property string) (string, error) {
 // A nil start is treated as a key before all keys in the data store; a nil limit
 // is treated as a key after all keys in the data store. If both is nil then it
 // will compact entire data store.
-func (db *LevelDBDatabase) Compact(start []byte, limit []byte) error {
+func (db *Database) Compact(start []byte, limit []byte) error {
 	return db.db.CompactRange(util.Range{Start: start, Limit: limit})
 }
 
 // Path returns the path to the database directory.
-func (db *LevelDBDatabase) Path() string {
+func (db *Database) Path() string {
 	return db.fn
 }
 
@@ -222,7 +222,7 @@ func (db *LevelDBDatabase) Path() string {
 //
 // This is how the iostats look like (currently):
 // Read(MB):3895.04860 Write(MB):3654.64712
-func (db *LevelDBDatabase) meter(refresh time.Duration) {
+func (db *Database) meter(refresh time.Duration) {
 	// Create the counters to store current and previous compaction values
 	compactions := make([][]float64, 2)
 	for i := 0; i < 2; i++ {
@@ -326,7 +326,7 @@ func (db *LevelDBDatabase) meter(refresh time.Duration) {
 		// If a warning that db is performing compaction has been displayed, any subsequent
 		// warnings will be withheld for one minute not to overwhelm the user.
 		if paused && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&
-			time.Now().After(lastWritePaused.Add(leveldbDegradationWarnInterval)) {
+			time.Now().After(lastWritePaused.Add(degradationWarnInterval)) {
 			db.log.Warn("Database compacting, degraded performance")
 			lastWritePaused = time.Now()
 		}
@@ -379,40 +379,40 @@ func (db *LevelDBDatabase) meter(refresh time.Duration) {
 	errc <- merr
 }
 
-// levelDBBatch is a write-only leveldb batch that commits changes to its host
-// database when Write is called. A batch cannot be used concurrently.
-type levelDBBatch struct {
+// batch is a write-only leveldb batch that commits changes to its host database
+// when Write is called. A batch cannot be used concurrently.
+type batch struct {
 	db   *leveldb.DB
 	b    *leveldb.Batch
 	size int
 }
 
 // Put inserts the given value into the batch for later committing.
-func (b *levelDBBatch) Put(key, value []byte) error {
+func (b *batch) Put(key, value []byte) error {
 	b.b.Put(key, value)
 	b.size += len(value)
 	return nil
 }
 
 // Delete inserts the a key removal into the batch for later committing.
-func (b *levelDBBatch) Delete(key []byte) error {
+func (b *batch) Delete(key []byte) error {
 	b.b.Delete(key)
-	b.size += 1
+	b.size++
 	return nil
 }
 
 // ValueSize retrieves the amount of data queued up for writing.
-func (b *levelDBBatch) ValueSize() int {
+func (b *batch) ValueSize() int {
 	return b.size
 }
 
 // Write flushes any accumulated data to disk.
-func (b *levelDBBatch) Write() error {
+func (b *batch) Write() error {
 	return b.db.Write(b.b, nil)
 }
 
 // Reset resets the batch for reuse.
-func (b *levelDBBatch) Reset() {
+func (b *batch) Reset() {
 	b.b.Reset()
 	b.size = 0
 }

@@ -37,33 +37,33 @@ var (
 	errMemorydbNotFound = errors.New("not found")
 )
 
-// MemoryDatabase is an ephemeral key-value store. Apart from basic data storage
+// Database is an ephemeral key-value store. Apart from basic data storage
 // functionality it also supports batch writes and iterating over the keyspace in
 // binary-alphabetical order.
-type MemoryDatabase struct {
+type Database struct {
 	db   map[string][]byte
 	lock sync.RWMutex
 }
 
 // New returns a wrapped map with all the required database interface methods
 // implemented.
-func New() *MemoryDatabase {
-	return &MemoryDatabase{
+func New() *Database {
+	return &Database{
 		db: make(map[string][]byte),
 	}
 }
 
 // NewWithCap returns a wrapped map pre-allocated to the provided capcity with
 // all the required database interface methods implemented.
-func NewWithCap(size int) *MemoryDatabase {
-	return &MemoryDatabase{
+func NewWithCap(size int) *Database {
+	return &Database{
 		db: make(map[string][]byte, size),
 	}
 }
 
 // Close deallocates the internal map and ensures any consecutive data access op
 // failes with an error.
-func (db *MemoryDatabase) Close() error {
+func (db *Database) Close() error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
@@ -72,7 +72,7 @@ func (db *MemoryDatabase) Close() error {
 }
 
 // Has retrieves if a key is present in the key-value store.
-func (db *MemoryDatabase) Has(key []byte) (bool, error) {
+func (db *Database) Has(key []byte) (bool, error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -84,7 +84,7 @@ func (db *MemoryDatabase) Has(key []byte) (bool, error) {
 }
 
 // Get retrieves the given key if it's present in the key-value store.
-func (db *MemoryDatabase) Get(key []byte) ([]byte, error) {
+func (db *Database) Get(key []byte) ([]byte, error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -98,7 +98,7 @@ func (db *MemoryDatabase) Get(key []byte) ([]byte, error) {
 }
 
 // Put inserts the given value into the key-value store.
-func (db *MemoryDatabase) Put(key []byte, value []byte) error {
+func (db *Database) Put(key []byte, value []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
@@ -110,7 +110,7 @@ func (db *MemoryDatabase) Put(key []byte, value []byte) error {
 }
 
 // Delete removes the key from the key-value store.
-func (db *MemoryDatabase) Delete(key []byte) error {
+func (db *Database) Delete(key []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
@@ -123,21 +123,21 @@ func (db *MemoryDatabase) Delete(key []byte) error {
 
 // NewBatch creates a write-only key-value store that buffers changes to its host
 // database until a final write is called.
-func (db *MemoryDatabase) NewBatch() ethdb.Batch {
-	return &memoryBatch{
+func (db *Database) NewBatch() ethdb.Batch {
+	return &batch{
 		db: db,
 	}
 }
 
 // NewIterator creates a binary-alphabetical iterator over the entire keyspace
 // contained within the memory database.
-func (db *MemoryDatabase) NewIterator() ethdb.Iterator {
+func (db *Database) NewIterator() ethdb.Iterator {
 	return db.NewIteratorWithPrefix(nil)
 }
 
 // NewIteratorWithPrefix creates a binary-alphabetical iterator over a subset
 // of database content with a particular key prefix.
-func (db *MemoryDatabase) NewIteratorWithPrefix(prefix []byte) ethdb.Iterator {
+func (db *Database) NewIteratorWithPrefix(prefix []byte) ethdb.Iterator {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -157,19 +157,19 @@ func (db *MemoryDatabase) NewIteratorWithPrefix(prefix []byte) ethdb.Iterator {
 	for _, key := range keys {
 		values = append(values, db.db[key])
 	}
-	return &memoryIterator{
+	return &iterator{
 		keys:   keys,
 		values: values,
 	}
 }
 
 // Stat returns a particular internal stat of the database.
-func (db *MemoryDatabase) Stat(property string) (string, error) {
+func (db *Database) Stat(property string) (string, error) {
 	return "", errors.New("unknown property")
 }
 
 // Compact is not supported on a memory database.
-func (db *MemoryDatabase) Compact(start []byte, limit []byte) error {
+func (db *Database) Compact(start []byte, limit []byte) error {
 	return errors.New("unsupported operation")
 }
 
@@ -177,7 +177,7 @@ func (db *MemoryDatabase) Compact(start []byte, limit []byte) error {
 //
 // Note, this method is only used for testing (i.e. not public in general) and
 // does not have explicit checks for closed-ness to allow simpler testing code.
-func (db *MemoryDatabase) Len() int {
+func (db *Database) Len() int {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -192,35 +192,35 @@ type keyvalue struct {
 	delete bool
 }
 
-// memoryBatch is a write-only memory batch that commits changes to its host
+// batch is a write-only memory batch that commits changes to its host
 // database when Write is called. A batch cannot be used concurrently.
-type memoryBatch struct {
-	db     *MemoryDatabase
+type batch struct {
+	db     *Database
 	writes []keyvalue
 	size   int
 }
 
 // Put inserts the given value into the batch for later committing.
-func (b *memoryBatch) Put(key, value []byte) error {
+func (b *batch) Put(key, value []byte) error {
 	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), common.CopyBytes(value), false})
 	b.size += len(value)
 	return nil
 }
 
 // Delete inserts the a key removal into the batch for later committing.
-func (b *memoryBatch) Delete(key []byte) error {
+func (b *batch) Delete(key []byte) error {
 	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), nil, true})
 	b.size += 1
 	return nil
 }
 
 // ValueSize retrieves the amount of data queued up for writing.
-func (b *memoryBatch) ValueSize() int {
+func (b *batch) ValueSize() int {
 	return b.size
 }
 
 // Write flushes any accumulated data to the memory database.
-func (b *memoryBatch) Write() error {
+func (b *batch) Write() error {
 	b.db.lock.Lock()
 	defer b.db.lock.Unlock()
 
@@ -235,15 +235,15 @@ func (b *memoryBatch) Write() error {
 }
 
 // Reset resets the batch for reuse.
-func (b *memoryBatch) Reset() {
+func (b *batch) Reset() {
 	b.writes = b.writes[:0]
 	b.size = 0
 }
 
-// memoryIterator can walk over the (potentially partial) keyspace of a memory
-// key value store. Internally it is a deep copy of the entire iterated state,
+// iterator can walk over the (potentially partial) keyspace of a memory key
+// value store. Internally it is a deep copy of the entire iterated state,
 // sorted by keys.
-type memoryIterator struct {
+type iterator struct {
 	inited bool
 	keys   []string
 	values [][]byte
@@ -251,7 +251,7 @@ type memoryIterator struct {
 
 // Next moves the iterator to the next key/value pair. It returns whether the
 // iterator is exhausted.
-func (it *memoryIterator) Next() bool {
+func (it *iterator) Next() bool {
 	// If the iterator was not yet initialized, do it now
 	if !it.inited {
 		it.inited = true
@@ -267,14 +267,14 @@ func (it *memoryIterator) Next() bool {
 
 // Error returns any accumulated error. Exhausting all the key/value pairs
 // is not considered to be an error. A memory iterator cannot encounter errors.
-func (it *memoryIterator) Error() error {
+func (it *iterator) Error() error {
 	return nil
 }
 
 // Key returns the key of the current key/value pair, or nil if done. The caller
 // should not modify the contents of the returned slice, and its contents may
 // change on the next call to Next.
-func (it *memoryIterator) Key() []byte {
+func (it *iterator) Key() []byte {
 	if len(it.keys) > 0 {
 		return []byte(it.keys[0])
 	}
@@ -284,7 +284,7 @@ func (it *memoryIterator) Key() []byte {
 // Value returns the value of the current key/value pair, or nil if done. The
 // caller should not modify the contents of the returned slice, and its contents
 // may change on the next call to Next.
-func (it *memoryIterator) Value() []byte {
+func (it *iterator) Value() []byte {
 	if len(it.values) > 0 {
 		return it.values[0]
 	}
@@ -293,6 +293,6 @@ func (it *memoryIterator) Value() []byte {
 
 // Release releases associated resources. Release should always succeed and can
 // be called multiple times without causing error.
-func (it *memoryIterator) Release() {
+func (it *iterator) Release() {
 	it.keys, it.values = nil, nil
 }

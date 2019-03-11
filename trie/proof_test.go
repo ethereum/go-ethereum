@@ -34,17 +34,17 @@ func init() {
 
 // makeProvers creates Merkle trie provers based on different implementations to
 // test all variations.
-func makeProvers(trie *Trie) []func(key []byte) *memorydb.MemoryDatabase {
-	var provers []func(key []byte) *memorydb.MemoryDatabase
+func makeProvers(trie *Trie) []func(key []byte) *memorydb.Database {
+	var provers []func(key []byte) *memorydb.Database
 
 	// Create a direct trie based Merkle prover
-	provers = append(provers, func(key []byte) *memorydb.MemoryDatabase {
+	provers = append(provers, func(key []byte) *memorydb.Database {
 		proof := memorydb.New()
 		trie.Prove(key, 0, proof)
 		return proof
 	})
 	// Create a leaf iterator based Merkle prover
-	provers = append(provers, func(key []byte) *memorydb.MemoryDatabase {
+	provers = append(provers, func(key []byte) *memorydb.Database {
 		proof := memorydb.New()
 		if it := NewIterator(trie.NodeIterator(key)); it.Next() && bytes.Equal(key, it.Key) {
 			for _, p := range it.Prove() {
@@ -180,7 +180,7 @@ func BenchmarkVerifyProof(b *testing.B) {
 	trie, vals := randomTrie(100)
 	root := trie.Hash()
 	var keys []string
-	var proofs []*memorydb.MemoryDatabase
+	var proofs []*memorydb.Database
 	for k := range vals {
 		keys = append(keys, k)
 		proof := memorydb.New()
