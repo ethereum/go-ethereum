@@ -179,12 +179,15 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 		}
 		if req.SkipCheck {
 			syncing := false
+			osp.LogFields(olog.Bool("skipCheck", true))
+
 			err = sp.Deliver(ctx, chunk, s.priority, syncing)
 			if err != nil {
 				log.Warn("ERROR in handleRetrieveRequestMsg", "err", err)
 			}
 			return
 		}
+		osp.LogFields(olog.Bool("skipCheck", false))
 		select {
 		case streamer.deliveryC <- chunk.Address()[:]:
 		case <-streamer.quit:
