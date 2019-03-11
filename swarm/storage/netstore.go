@@ -103,6 +103,14 @@ func (n *NetStore) Get(rctx context.Context, ref Address) (Chunk, error) {
 		return nil, err
 	}
 	if chunk != nil {
+		// this is not measuring how long it takes to get the chunk for the localstore, but
+		// rather just adding a span for clarity when inspecting traces in Jaeger, in order
+		// to make it easier to reason which is the node that actually delivered a chunk.
+		_, sp := spancontext.StartSpan(
+			rctx,
+			"localstore.get")
+		defer sp.Finish()
+
 		return chunk, nil
 	}
 	return fetch(rctx)

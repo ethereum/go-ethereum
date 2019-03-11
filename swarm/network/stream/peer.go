@@ -167,9 +167,8 @@ func (p *Peer) SendPriority(ctx context.Context, msg interface{}, priority uint8
 		Msg:     msg,
 	}
 	err := p.pq.Push(wmsg, int(priority))
-	if err == pq.ErrContention {
-		log.Warn("dropping peer on priority queue contention", "peer", p.ID())
-		p.Drop(err)
+	if err != nil {
+		log.Error("err on p.pq.Push", "err", err, "peer", p.ID())
 	}
 	return err
 }
@@ -182,6 +181,8 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		"send.offered.hashes",
 	)
 	defer sp.Finish()
+
+	defer metrics.GetOrRegisterResettingTimer("send.offered.hashes", nil).UpdateSince(time.Now())
 
 	hashes, from, to, proof, err := s.setNextBatch(f, t)
 	if err != nil {
