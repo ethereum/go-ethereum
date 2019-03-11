@@ -185,6 +185,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 			if err != nil {
 				log.Warn("ERROR in handleRetrieveRequestMsg", "err", err)
 			}
+			osp.LogFields(olog.Bool("delivered", true))
 			return
 		}
 		osp.LogFields(olog.Bool("skipCheck", false))

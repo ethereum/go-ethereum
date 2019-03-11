@@ -154,7 +154,7 @@ func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8,
 	}
 
 	ctx = context.WithValue(ctx, "stream_send_tag", nil)
-	return p.SendPriority(ctx, msg, priority)
+	return p.Send(ctx, msg)
 }
 
 // SendPriority sends message to the peer using the outgoing priority queue
