@@ -217,6 +217,10 @@ type ChunkDeliveryMsgSyncing ChunkDeliveryMsg
 
 // chunk delivery msg is response to retrieverequest msg
 func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *ChunkDeliveryMsg) error {
+	var osp opentracing.Span
+	ctx, osp = spancontext.StartSpan(
+		ctx,
+		"handle.chunk.delivery")
 
 	processReceivedChunksCount.Inc(1)
 
@@ -225,6 +229,8 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 	span := tracing.ShiftSpanByKey(spanId)
 
 	go func() {
+		defer osp.Finish()
+
 		if span != nil {
 			span.LogFields(olog.String("finish", "from handleChunkDeliveryMsg"))
 			defer span.Finish()
