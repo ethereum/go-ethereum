@@ -167,9 +167,8 @@ func (p *Peer) SendPriority(ctx context.Context, msg interface{}, priority uint8
 		Msg:     msg,
 	}
 	err := p.pq.Push(wmsg, int(priority))
-	if err == pq.ErrContention {
-		log.Warn("dropping peer on priority queue contention", "peer", p.ID())
-		p.Drop(err)
+	if err != nil {
+		log.Error("err on p.pq.Push", "err", err, "peer", p.ID())
 	}
 	return err
 }

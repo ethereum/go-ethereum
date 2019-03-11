@@ -225,7 +225,8 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 
 	go func() {
 		if span != nil {
-			defer span.(opentracing.Span).Finish()
+			span.LogFields(olog.String("finish", "from handleChunkDeliveryMsg"))
+			defer span.Finish()
 		}
 
 		req.peer = sp
