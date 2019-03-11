@@ -6,6 +6,7 @@ accounts/abi                    @gballet
 consensus                       @karalabe
 core/                           @karalabe @holiman
 eth/                            @karalabe
+graphql/                        @gballet
 les/                            @zsfelfoldi
 light/                          @zsfelfoldi
 mobile/                         @karalabe
