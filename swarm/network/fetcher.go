@@ -204,24 +204,24 @@ func (f *Fetcher) run(peers *sync.Map) {
 
 		// incoming request
 		case hopCount = <-f.requestC:
-			log.Trace("new request", "request addr", f.addr)
 			// 2) chunk is requested, set requested flag
 			// launch a request iff none been launched yet
 			doRequest = !requested
+			log.Trace("new request", "request addr", f.addr, "doRequest", doRequest)
 			requested = true
 
 			// peer we requested from is gone. fall back to another
 			// and remove the peer from the peers map
 		case id := <-gone:
-			log.Trace("peer gone", "peer id", id.String(), "request addr", f.addr)
 			peers.Delete(id.String())
 			doRequest = requested
+			log.Trace("peer gone", "peer id", id.String(), "request addr", f.addr, "doRequest", doRequest)
 
 		// search timeout: too much time passed since the last request,
 		// extend the search to a new peer if we can find one
 		case <-waitC:
-			log.Trace("search timed out: requesting", "request addr", f.addr)
 			doRequest = requested
+			log.Trace("search timed out: requesting", "request addr", f.addr, "doRequest", doRequest)
 
 			// all Fetcher context closed, can quit
 		case <-f.ctx.Done():
@@ -272,6 +272,8 @@ func (f *Fetcher) run(peers *sync.Map) {
 // * the peer's address is removed from prospective sources, and
 // * a go routine is started that reports on the gone channel if the peer is disconnected (or terminated their streamer)
 func (f *Fetcher) doRequest(gone chan *enode.ID, peersToSkip *sync.Map, sources []*enode.ID, hopCount uint8) ([]*enode.ID, error) {
+	log.Trace("fetcher.doRequest", "request addr", f.addr)
+
 	var i int
 	var sourceID *enode.ID
 	var quit chan struct{}
