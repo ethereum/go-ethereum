@@ -1077,7 +1077,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 
 	for i, block := range chain {
 		headers[i] = block.Header()
-		seals[i] = true
+		seals[i] = false
 		bc.downloadingBlock.Add(block.Hash(), true)
 	}
 	abort, results := bc.engine.VerifyHeaders(bc, headers, seals)
