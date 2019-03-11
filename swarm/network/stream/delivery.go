@@ -228,6 +228,8 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 	spanId := fmt.Sprintf("stream.send.request.%v.%v", sp.ID(), req.Addr)
 	span := tracing.ShiftSpanByKey(spanId)
 
+	log.Trace("handle.chunk.delivery", "ref", req.Addr)
+
 	go func() {
 		defer osp.Finish()
 
@@ -237,6 +239,7 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 		}
 
 		req.peer = sp
+		log.Trace("handle.chunk.delivery", "put", req.Addr)
 		err := d.chunkStore.Put(ctx, storage.NewChunk(req.Addr, req.SData))
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
@@ -246,6 +249,7 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 				req.peer.Drop(err)
 			}
 		}
+		log.Trace("handle.chunk.delivery", "done put", req.Addr, "err", err)
 	}()
 	return nil
 }
