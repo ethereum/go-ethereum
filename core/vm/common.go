@@ -26,23 +26,10 @@ import (
 // calcMemSize64 calculates the required memory size, and returns
 // the size and whether the result overflowed uint64
 func calcMemSize64(off, l *big.Int) (uint64, bool) {
-	// if length is zero, memsize is always zero, regardless of offset
-	if l.Sign() == 0 {
-		return 0, false
-	}
-	// Check that neither offset nor length overflows
-	if off.BitLen() > 64 || l.BitLen() > 64 {
+	if !l.IsUint64() {
 		return 0, true
 	}
-
-	offset64 := off.Uint64()
-	length64 := l.Uint64()
-	val := offset64 + length64
-	// Check that the total doesn't overflow
-	if val < offset64 {
-		return 0, true
-	}
-	return val, false
+	return calcMemSize64WithUint(off, l.Uint64())
 }
 
 // calcMemSize64WithUint calculates the required memory size, and returns
@@ -54,16 +41,13 @@ func calcMemSize64WithUint(off *big.Int, length64 uint64) (uint64, bool) {
 		return 0, false
 	}
 	// Check that offset doesn't overflow
-	if off.BitLen() > 64 {
+	if !off.IsUint64() {
 		return 0, true
 	}
 	offset64 := off.Uint64()
 	val := offset64 + length64
-	// Check that the total doesn't overflow
-	if val < offset64 {
-		return 0, true
-	}
-	return val, false
+	// if value < either of it's parts, then it overflowed
+	return val, val < offset64
 }
 
 // getData returns a slice from the data based on the start and size and pads
@@ -93,7 +77,7 @@ func getDataBig(data []byte, start *big.Int, size *big.Int) []byte {
 // bigUint64 returns the integer casted to a uint64 and returns whether it
 // overflowed in the process.
 func bigUint64(v *big.Int) (uint64, bool) {
-	return v.Uint64(), v.BitLen() > 64
+	return v.Uint64(), !v.IsUint64()
 }
 
 // toWordSize returns the ceiled word size required for memory expansion.

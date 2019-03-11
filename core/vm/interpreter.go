@@ -204,10 +204,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// Validate stack
 		if sLen := stack.len(); sLen < operation.minStack {
 			return nil, fmt.Errorf("stack underflow (%d <=> %d)", sLen, operation.minStack)
-		} else {
-			if sLen > operation.maxStack {
-				return nil, fmt.Errorf("stack limit reached %d (%d)", sLen, operation.maxStack)
-			}
+		} else if sLen > operation.maxStack {
+			return nil, fmt.Errorf("stack limit reached %d (%d)", sLen, operation.maxStack)
 		}
 		// If the operation is valid, enforce and write restrictions
 		if in.readOnly && in.evm.chainRules.IsByzantium {
@@ -228,6 +226,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		var memorySize uint64
 		// calculate the new memory size and expand the memory to fit
 		// the operation
+		// Memory check needs to be done prior to evaluating the dynamic gas portion,
+		// to detect calculation overflows
 		if operation.memorySize != nil {
 			memSize, overflow := operation.memorySize(stack)
 			if overflow {

@@ -405,7 +405,7 @@ func opSha3(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 }
 
 func opAddress(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(contract.Address().SetBig(interpreter.intPool.get()))
+	stack.push(interpreter.intPool.get().SetBytes(contract.Address().Bytes()))
 	return nil, nil
 }
 
@@ -416,12 +416,12 @@ func opBalance(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memo
 }
 
 func opOrigin(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(interpreter.evm.Origin.SetBig(interpreter.intPool.get()))
+	stack.push(interpreter.intPool.get().SetBytes(interpreter.evm.Origin.Bytes()))
 	return nil, nil
 }
 
 func opCaller(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(contract.Caller().SetBig(interpreter.intPool.get()))
+	stack.push(interpreter.intPool.get().SetBytes(contract.Caller().Bytes()))
 	return nil, nil
 }
 
@@ -572,7 +572,7 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, contract *Contract, me
 }
 
 func opCoinbase(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(interpreter.evm.Coinbase.Big())
+	stack.push(interpreter.intPool.get().SetBytes(interpreter.evm.Coinbase.Bytes()))
 	return nil, nil
 }
 
@@ -709,7 +709,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memor
 	} else if suberr != nil && suberr != ErrCodeStoreOutOfGas {
 		stack.push(interpreter.intPool.getZero())
 	} else {
-		stack.push(addr.Big())
+		stack.push(interpreter.intPool.get().SetBytes(addr.Bytes()))
 	}
 	contract.Gas += returnGas
 	interpreter.intPool.put(value, offset, size)
@@ -737,7 +737,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memo
 	if suberr != nil {
 		stack.push(interpreter.intPool.getZero())
 	} else {
-		stack.push(addr.Big())
+		stack.push(interpreter.intPool.get().SetBytes(addr.Bytes()))
 	}
 	contract.Gas += returnGas
 	interpreter.intPool.put(endowment, offset, size, salt)
@@ -884,21 +884,6 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memo
 	return nil, nil
 }
 
-// opPush1 is a specialized version of pushN
-func opPush1(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	var (
-		codeLen = uint64(len(contract.Code))
-		integer = interpreter.intPool.get()
-	)
-	*pc += 1
-	if *pc < codeLen {
-		stack.push(integer.SetUint64(uint64(contract.Code[*pc])))
-	} else {
-		stack.push(integer.SetUint64(0))
-	}
-	return nil, nil
-}
-
 // following functions are used by the instruction jump  table
 
 // make log instruction function
@@ -923,6 +908,21 @@ func makeLog(size int) executionFunc {
 		interpreter.intPool.put(mStart, mSize)
 		return nil, nil
 	}
+}
+
+// opPush1 is a specialized version of pushN
+func opPush1(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	var (
+		codeLen = uint64(len(contract.Code))
+		integer = interpreter.intPool.get()
+	)
+	*pc += 1
+	if *pc < codeLen {
+		stack.push(integer.SetUint64(uint64(contract.Code[*pc])))
+	} else {
+		stack.push(integer.SetUint64(0))
+	}
+	return nil, nil
 }
 
 // make push instruction function
