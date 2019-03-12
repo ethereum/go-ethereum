@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -98,6 +99,12 @@ type NodeConfig struct {
 	// contained in SimAdapter.services, for other nodes it should be
 	// services registered by calling the RegisterService function)
 	Services []string
+
+	// Enode
+	node *enode.Node
+
+	// ENR Record with entries to overwrite
+	Record enr.Record
 
 	// function to sanction or prevent suggesting a peer
 	Reachable func(id enode.ID) bool
@@ -168,26 +175,27 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 
 // Node returns the node descriptor represented by the config.
 func (n *NodeConfig) Node() *enode.Node {
-	return enode.NewV4(&n.PrivateKey.PublicKey, net.IP{127, 0, 0, 1}, int(n.Port), int(n.Port))
+	return n.node
 }
 
 // RandomNodeConfig returns node configuration with a randomly generated ID and
 // PrivateKey
 func RandomNodeConfig() *NodeConfig {
-	key, err := crypto.GenerateKey()
+	prvkey, err := crypto.GenerateKey()
 	if err != nil {
 		panic("unable to generate key")
 	}
 
-	id := enode.PubkeyToIDV4(&key.PublicKey)
 	port, err := assignTCPPort()
 	if err != nil {
 		panic("unable to assign tcp port")
 	}
+
+	enodId := enode.PubkeyToIDV4(&prvkey.PublicKey)
 	return &NodeConfig{
-		ID:              id,
-		Name:            fmt.Sprintf("node_%s", id.String()),
-		PrivateKey:      key,
+		PrivateKey:      prvkey,
+		ID:              enodId,
+		Name:            fmt.Sprintf("node_%s", enodId.String()),
 		Port:            port,
 		EnableMsgEvents: true,
 	}
