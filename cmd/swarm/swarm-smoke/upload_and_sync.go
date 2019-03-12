@@ -94,14 +94,14 @@ func trackChunks(testData []byte) error {
 
 		rpcClient, err := rpc.Dial(httpHost)
 		if err != nil {
-			log.Error("Error dialing host", "err", err)
+			log.Error("error dialing host", "err", err, "host", httpHost)
 			continue
 		}
 
 		var hasInfo []api.HasInfo
 		err = rpcClient.Call(&hasInfo, "bzz_has", addrs)
 		if err != nil {
-			log.Error("Error calling host", "err", err)
+			log.Error("error calling rpc client", "err", err, "host", httpHost)
 			continue
 		}
 
