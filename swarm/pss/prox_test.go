@@ -218,7 +218,7 @@ func testProxNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3) // todo: increase before commit
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	snap := readSnapshot(t, nodeCount)
 	err = tstdata.sim.WaitTillSnapshotRecreated(ctx, snap)

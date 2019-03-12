@@ -144,3 +144,81 @@ func createSimServiceMap(discovery bool) map[string]ServiceFunc {
 		},
 	}
 }
+
+func TestWaitTillSnapshotRecreated(t *testing.T) {
+	var err error
+	sim := New(createSimServiceMap(true))
+	_, err = sim.AddNodesAndConnectRing(16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	_, err = sim.WaitTillHealthy(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	originalConnections := sim.getActualConnections()
+	snap, err := sim.Net.Snapshot()
+	sim.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	controlSim := New(createSimServiceMap(false))
+	defer controlSim.Close()
+	err = controlSim.Net.Load(snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = controlSim.WaitTillSnapshotRecreated(ctx, *snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	controlConnections := controlSim.getActualConnections()
+
+	for _, c := range originalConnections {
+		if !exist(controlConnections, c) {
+			t.Fatal("connection was not recreated")
+		}
+	}
+}
+
+func exist(arr []uint64, val uint64) bool {
+	for _, c := range arr {
+		if c == val {
+			return true
+		}
+	}
+	return false
+}
+
+func TestRemoveDuplicatesAndSingletons(t *testing.T) {
+	singletons := []uint64{0x3c127c6f6cb026b0, 0x0f45190d72e71fc5, 0xb0184c02449e0bb6, 0xa85c7b84239c54d3, 0xe3b0c44298fc1c14, 0x9afbf4c8996fb924, 0x27ae41e4649b934c, 0xa495991b7852b855}
+	doubles := []uint64{0x1b879f878de7fc7a, 0xc6791470521bdab4, 0xdd34b0ee39bbccc6, 0x4d904fbf0f31da10, 0x6403c2560432c8f8, 0x18954e33cf3ad847, 0x90db00e98dc7a8a6, 0x92886b0dfcc1809b}
+	var arr []uint64
+	arr = append(arr, doubles...)
+	arr = append(arr, singletons...)
+	arr = append(arr, doubles...)
+	arr = removeDuplicatesAndSingletons(arr)
+
+	for _, i := range singletons {
+		if exist(arr, i) {
+			t.Fatalf("singleton not removed: %d", i)
+		}
+	}
+
+	for _, i := range doubles {
+		if !exist(arr, i) {
+			t.Fatalf("wrong value removed: %d", i)
+		}
+	}
+
+	for j := 0; j < len(doubles); j++ {
+		v := doubles[j] + singletons[j]
+		if exist(arr, v) {
+			t.Fatalf("non-existing value found, index: %d", j)
+		}
+	}
+}
