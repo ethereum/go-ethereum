@@ -18,6 +18,8 @@
 // arbitrary data.
 package main
 
+//go:generate go-bindata -o ./bindata.go ./resources/4byte.json
+
 import (
 	"bufio"
 	"context"
