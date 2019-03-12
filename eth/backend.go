@@ -240,9 +240,17 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				return block, false, fmt.Errorf("can't get block validator: %v", err)
 			}
 			if m2 == eb {
-				wallet, _ := eth.accountManager.Find(accounts.Account{Address: eb})
+				wallet, err := eth.accountManager.Find(accounts.Account{Address: eb})
+				if err != nil {
+					log.Error("Can't find coinbase account wallet", "err", err)
+					return block, false, err
+				}
 				header := block.Header()
-				sighash, _ := wallet.SignHash(accounts.Account{Address: eb}, posv.SigHash(header).Bytes())
+				sighash, err := wallet.SignHash(accounts.Account{Address: eb}, posv.SigHash(header).Bytes())
+				if err != nil || sighash == nil {
+					log.Error("Can't get signature hash of m2", "sighash", sighash, "err", err)
+					return block, false, err
+				}
 				header.Validator = sighash
 				return types.NewBlockWithHeader(header).WithBody(block.Transactions(), block.Uncles()), true, nil
 			}
