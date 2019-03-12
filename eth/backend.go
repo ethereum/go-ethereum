@@ -247,8 +247,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				}
 				header := block.Header()
 				sighash, err := wallet.SignHash(accounts.Account{Address: eb}, posv.SigHash(header).Bytes())
-				if err != nil {
-					log.Error("Can't get signature hash of m2", "err", err)
+				if err != nil || sighash == nil {
+					log.Error("Can't get signature hash of m2", "sighash", sighash, "err", err)
 					return block, false, err
 				}
 				header.Validator = sighash
