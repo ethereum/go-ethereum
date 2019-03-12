@@ -2,7 +2,7 @@ pragma solidity ^0.4.21;
 
 import "./libs/SafeMath.sol";
 
-contract XDCValidator {
+contract XDCalidator {
     using SafeMath for uint256;
 
     event Vote(address _voter, address _candidate, uint256 _cap);
@@ -37,7 +37,7 @@ contract XDCValidator {
     uint256 public voterWithdrawDelay;
 
     modifier onlyValidCandidateCap {
-        // anyone can deposit X XDC to become a candidate
+        // anyone can deposit X XDCto become a candidate
         require(msg.value >= minCandidateCap);
         _;
     }
@@ -83,7 +83,7 @@ contract XDCValidator {
         _;
     }
 
-    function XDCValidator (
+    function XDCalidator (
         address[] _candidates,
         uint256[] _caps,
         address _firstOwner,
