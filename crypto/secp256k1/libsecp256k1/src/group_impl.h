@@ -50,7 +50,7 @@ const int CURVE_B = 4;
 const secp256k1_ge secp256k1_ge_const_g = SECP256K1_GE_CONST(
     0xedc60018, 0xa51a786b, 0x2ea91f4d, 0x4c9416c0,
     0x9de54c3b, 0xa1316554, 0x6cf4345c, 0x7277ef15,
-    0x54cb1b6b, 0XDC8c1273, 0x087844ea, 0x43f4603e,
+    0x54cb1b6b, 0xdc8c1273, 0x087844ea, 0x43f4603e,
     0x0eaf9a43, 0xf6effe55, 0x939f806d, 0x37adf8ac
 );
 const int CURVE_B = 2;
