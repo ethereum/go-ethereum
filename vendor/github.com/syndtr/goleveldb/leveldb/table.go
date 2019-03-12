@@ -483,15 +483,15 @@ func (t *tOps) newIterator(f *tFile, slice *util.Range, ro *opt.ReadOptions) ite
 
 // Removes table from persistent storage. It waits until
 // no one use the the table.
-func (t *tOps) remove(f *tFile) {
-	t.cache.Delete(0, uint64(f.fd.Num), func() {
-		if err := t.s.stor.Remove(f.fd); err != nil {
-			t.s.logf("table@remove removing @%d %q", f.fd.Num, err)
+func (t *tOps) remove(fd storage.FileDesc) {
+	t.cache.Delete(0, uint64(fd.Num), func() {
+		if err := t.s.stor.Remove(fd); err != nil {
+			t.s.logf("table@remove removing @%d %q", fd.Num, err)
 		} else {
-			t.s.logf("table@remove removed @%d", f.fd.Num)
+			t.s.logf("table@remove removed @%d", fd.Num)
 		}
 		if t.evictRemoved && t.bcache != nil {
-			t.bcache.EvictNS(uint64(f.fd.Num))
+			t.bcache.EvictNS(uint64(fd.Num))
 		}
 	})
 }

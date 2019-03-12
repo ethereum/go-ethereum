@@ -39,19 +39,154 @@ func (s *session) newTemp() storage.FileDesc {
 	return storage.FileDesc{Type: storage.TypeTemp, Num: num}
 }
 
-func (s *session) addFileRef(fd storage.FileDesc, ref int) int {
-	ref += s.fileRef[fd.Num]
+// addFileRef adds file reference counter with specified file number and
+// reference value; need external synchronization.
+func (s *session) addFileRef(fnum int64, ref int) int {
+	ref += s.fileRef[fnum]
 	if ref > 0 {
-		s.fileRef[fd.Num] = ref
+		s.fileRef[fnum] = ref
 	} else if ref == 0 {
-		delete(s.fileRef, fd.Num)
+		delete(s.fileRef, fnum)
 	} else {
-		panic(fmt.Sprintf("negative ref: %v", fd))
+		panic(fmt.Sprintf("negative ref: %v", fnum))
 	}
 	return ref
 }
 
 // Session state.
+
+const cachedTaskBound = 256
+
+// vDelta indicates the change information between the next version
+// and the currently specified version
+type vDelta struct {
+	vid     int64
+	added   []int64
+	deleted []int64
+}
+
+// vTask defines a version task for either reference or release.
+type vTask struct {
+	vid   int64
+	files []tFiles
+}
+
+func (s *session) refLoop() {
+	var (
+		ref        = make(map[int64][]tFiles)
+		deltas     = make(map[int64]*vDelta)
+		referenced = make(map[int64]struct{})
+		released   = make(map[int64]*vDelta)
+		next, last int64
+	)
+	// processTasks processes version tasks in strict order.
+	//
+	// If we want to use delta to reduce the cost of file references and dereferences,
+	// we must strictly follow the id of the version, otherwise some files that are
+	// being referenced will be deleted.
+	//
+	// In addition, some db operations (such as iterators) may cause a version to be
+	// referenced for a long time. In order to prevent such operations from blocking
+	// the entire processing queue, we will properly convert some of the version tasks
+	// into full file references and releases.
+	processTasks := func() {
+		// Make sure we don't cache too many version tasks.
+		for {
+			if last-next < cachedTaskBound {
+				break
+			}
+			if _, exist := released[next]; exist {
+				break
+			}
+			if _, exist := ref[next]; !exist {
+				break
+			}
+			for _, tt := range ref[next] {
+				for _, t := range tt {
+					s.addFileRef(t.fd.Num, 1)
+				}
+			}
+			referenced[next] = struct{}{}
+			delete(ref, next)
+			delete(deltas, next)
+			next += 1
+		}
+
+		// Use delta information to process all released versions.
+		for {
+			if d, exist := released[next]; exist {
+				if d != nil {
+					for _, t := range d.added {
+						s.addFileRef(t, 1)
+					}
+					for _, t := range d.deleted {
+						if s.addFileRef(t, -1) == 0 {
+							s.tops.remove(storage.FileDesc{Type: storage.TypeTable, Num: t})
+						}
+					}
+				}
+				delete(released, next)
+				next += 1
+				continue
+			}
+			return
+		}
+	}
+
+	for {
+		processTasks()
+
+		select {
+		case t := <-s.refCh:
+			if _, exist := ref[t.vid]; exist {
+				panic("duplicate reference request")
+			}
+			ref[t.vid] = t.files
+			if t.vid > last {
+				last = t.vid
+			}
+
+		case d := <-s.deltaCh:
+			if _, exist := ref[d.vid]; !exist {
+				if _, exist2 := referenced[d.vid]; !exist2 {
+					panic("invalid release request")
+				}
+				continue
+			}
+			deltas[d.vid] = d
+
+		case t := <-s.relCh:
+			if _, exist := referenced[t.vid]; exist {
+				for _, tt := range t.files {
+					for _, t := range tt {
+						if s.addFileRef(t.fd.Num, -1) == 0 {
+							s.tops.remove(t.fd)
+						}
+					}
+				}
+				delete(referenced, t.vid)
+				continue
+			}
+			if _, exist := ref[t.vid]; !exist {
+				panic("invalid release request")
+			}
+			released[t.vid] = deltas[t.vid]
+			delete(deltas, t.vid)
+			delete(ref, t.vid)
+
+		case r := <-s.fileRefCh:
+			ref := make(map[int64]int)
+			for f, c := range s.fileRef {
+				ref[f] = c
+			}
+			r <- ref
+
+		case <-s.closeC:
+			s.closeW.Done()
+			return
+		}
+	}
+}
 
 // Get current version. This will incr version ref, must call
 // version.release (exactly once) after use.
@@ -69,13 +204,30 @@ func (s *session) tLen(level int) int {
 }
 
 // Set current version to v.
-func (s *session) setVersion(v *version) {
+func (s *session) setVersion(r *sessionRecord, v *version) {
 	s.vmu.Lock()
 	defer s.vmu.Unlock()
 	// Hold by session. It is important to call this first before releasing
 	// current version, otherwise the still used files might get released.
 	v.incref()
 	if s.stVersion != nil {
+		if r != nil {
+			var (
+				added   = make([]int64, 0, len(r.addedTables))
+				deleted = make([]int64, 0, len(r.deletedTables))
+			)
+			for _, t := range r.addedTables {
+				added = append(added, t.num)
+			}
+			for _, t := range r.deletedTables {
+				deleted = append(deleted, t.num)
+			}
+			select {
+			case s.deltaCh <- &vDelta{vid: s.stVersion.id, added: added, deleted: deleted}:
+			case <-v.s.closeC:
+				s.log("reference loop already exist")
+			}
+		}
 		// Release current version.
 		s.stVersion.releaseNB()
 	}
