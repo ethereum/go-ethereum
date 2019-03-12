@@ -18,6 +18,7 @@ package miner
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 	"os"
@@ -410,8 +411,10 @@ func (self *worker) wait() {
 					}
 				}
 				// Send tx sign to smart contract blockSigners.
-				if err := contracts.CreateTransactionSign(self.config, self.eth.TxPool(), self.eth.AccountManager(), block, self.chainDb); err != nil {
-					log.Error("Fail to create tx sign for signer", "error", "err")
+				if block.NumberU64()%common.MergeSignRange == 0 || !self.config.IsTIP2019(block.Number()) {
+					if err := contracts.CreateTransactionSign(self.config, self.eth.TxPool(), self.eth.AccountManager(), block, self.chainDb); err != nil {
+						log.Error("Fail to create tx sign for signer", "error", "err")
+					}
 				}
 			}
 		}
@@ -552,6 +555,7 @@ func (self *worker) commitNewWork() {
 	if atomic.LoadInt32(&self.mining) == 1 {
 		header.Coinbase = self.coinbase
 	}
+
 	if err := self.engine.Prepare(self.chain, header); err != nil {
 		log.Error("Failed to prepare header for new block", "err", err)
 		return
@@ -580,12 +584,22 @@ func (self *worker) commitNewWork() {
 	if self.config.DAOForkSupport && self.config.DAOForkBlock != nil && self.config.DAOForkBlock.Cmp(header.Number) == 0 {
 		misc.ApplyDAOHardFork(work.state)
 	}
-	pending, err := self.eth.TxPool().Pending()
-	if err != nil {
-		log.Error("Failed to fetch pending transactions", "err", err)
-		return
+	if common.TIPSigning.Cmp(header.Number) == 0 {
+		work.state.DeleteAddress(common.HexToAddress(common.BlockSigners))
 	}
-	txs, specialTxs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending, signers)
+	// won't grasp txs at checkpoint
+	var (
+		txs        *types.TransactionsByPriceAndNonce
+		specialTxs types.Transactions
+	)
+	if self.config.XDPoS != nil && header.Number.Uint64()%self.config.XDPoS.Epoch != 0 {
+		pending, err := self.eth.TxPool().Pending()
+		if err != nil {
+			log.Error("Failed to fetch pending transactions", "err", err)
+			return
+		}
+		txs, specialTxs = types.NewTransactionsByPriceAndNonce(self.current.signer, pending, signers)
+	}
 	work.commitTransactions(self.mux, txs, specialTxs, self.chain, self.coinbase)
 
 	// compute uncles for the new block.
@@ -618,7 +632,7 @@ func (self *worker) commitNewWork() {
 		return
 	}
 	if atomic.LoadInt32(&self.mining) == 1 {
-		log.Info("Committing new block", "number", work.Block.Number(), "txs", work.tcount, "special txs", len(specialTxs), "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
+		log.Info("Committing new block", "number", work.Block.Number(), "txs", work.tcount, "special-txs", len(specialTxs), "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 		self.lastParentBlockCommit = parent.Hash().Hex()
 	}
@@ -661,6 +675,17 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 			log.Trace("Ignoring reply protected special transaction", "hash", tx.Hash(), "eip155", env.config.EIP155Block)
 			continue
 		}
+		if tx.To().Hex() == common.BlockSigners {
+			if len(tx.Data()) < 68 {
+				log.Trace("Data special transaction invalid length", "hash", tx.Hash(), "data", len(tx.Data()))
+				continue
+			}
+			blkNumber := binary.BigEndian.Uint64(tx.Data()[8:40])
+			if blkNumber >= env.header.Number.Uint64() || blkNumber <= env.header.Number.Uint64()-env.config.XDPoS.Epoch*2 {
+				log.Trace("Data special transaction invalid number", "hash", tx.Hash(), "blkNumber", blkNumber, "miner", env.header.Number)
+				continue
+			}
+		}
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), common.Hash{}, env.tcount)
 		nonce := env.state.GetNonce(from)
@@ -692,6 +717,10 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		// If we don't have enough gas for any further transactions then we're done
 		if gp.Gas() < params.TxGas {
 			log.Trace("Not enough gas for further transactions", "gp", gp)
+			break
+		}
+		if txs == nil {
+			log.Info("this block has no transaction")
 			break
 		}
 		// Retrieve the next transaction and abort if all done

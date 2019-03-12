@@ -190,14 +190,14 @@ func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecO
 		if singleShot {
 			if batch {
 				for _, req := range reqs {
-					if req.callb != nil && req.callb.method.Name == "SendTransaction" {
+					if req.callb != nil && req.callb.method.Name == "EnabledRPCSendTransaction" {
 						codec.Write(codec.CreateErrorResponse(&req.id, &invalidRequestError{message: "Only support send transaction with ipc"}))
 						return nil
 					}
 				}
 				s.execBatch(ctx, codec, reqs)
 			} else {
-				if reqs[0].callb != nil && reqs[0].callb.method.Name == "SendTransaction" {
+				if reqs[0].callb != nil && reqs[0].callb.method.Name == "EnabledRPCSendTransaction" {
 					codec.Write(codec.CreateErrorResponse(&reqs[0].id, &invalidRequestError{message: "Only support send transaction with ipc"}))
 					return nil
 				}
