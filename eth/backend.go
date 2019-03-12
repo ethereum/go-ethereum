@@ -242,11 +242,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			if m2 == eb {
 				wallet, err := eth.accountManager.Find(accounts.Account{Address: eb})
 				if err != nil {
+					log.Error("Can't find coinbase account wallet", "err", err)
 					return block, false, err
 				}
 				header := block.Header()
 				sighash, err := wallet.SignHash(accounts.Account{Address: eb}, posv.SigHash(header).Bytes())
 				if err != nil {
+					log.Error("Can't get signature hash of m2", "err", err)
 					return block, false, err
 				}
 				header.Validator = sighash
