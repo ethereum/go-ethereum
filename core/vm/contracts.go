@@ -67,14 +67,14 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
 // PrecompiledContractsEWASM contains the default set of pre-compiled Ethereum
 // contracts used for Ethereum 1.x release.
 var PrecompiledContractsEWASM = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): newEWASMPrecompile(ewasmEcrecoverCode, 1),
-	common.BytesToAddress([]byte{2}): newEWASMPrecompile(ewasmSha256HashCode, 2),
-	common.BytesToAddress([]byte{3}): newEWASMPrecompile(ewasmRipemd160hashCode, 3),
-	common.BytesToAddress([]byte{4}): newEWASMPrecompile(ewasmIdentityCode, 4),
-	common.BytesToAddress([]byte{5}): newEWASMPrecompile(ewasmExpmodCode, 5),
-	common.BytesToAddress([]byte{6}): newEWASMPrecompile(ewasmEcaddCode, 6),
-	common.BytesToAddress([]byte{7}): newEWASMPrecompile(ewasmEcmulCode, 7),
-	common.BytesToAddress([]byte{8}): newEWASMPrecompile(ewasmEcpairingCode, 8),
+	common.BytesToAddress([]byte{1}): NewAoTContract(ewasmEcrecoverCode, 1),
+	common.BytesToAddress([]byte{2}): NewAoTContract(ewasmSha256HashCode, 2),
+	common.BytesToAddress([]byte{3}): NewAoTContract(ewasmRipemd160hashCode, 3),
+	common.BytesToAddress([]byte{4}): NewAoTContract(ewasmIdentityCode, 4),
+	common.BytesToAddress([]byte{5}): NewAoTContract(ewasmExpmodCode, 5),
+	common.BytesToAddress([]byte{6}): NewAoTContract(ewasmEcaddCode, 6),
+	common.BytesToAddress([]byte{7}): NewAoTContract(ewasmEcmulCode, 7),
+	common.BytesToAddress([]byte{8}): NewAoTContract(ewasmEcpairingCode, 8),
 }
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
