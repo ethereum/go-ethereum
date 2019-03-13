@@ -86,7 +86,6 @@ func NewProtocolTester(prvkey *ecdsa.PrivateKey, nodeCount int, run func(*p2p.Pe
 		}
 		if err := net.Start(peers[i].ID); err != nil {
 			panic(fmt.Sprintf("error starting peer %v: %v", peers[i].ID, err))
-			panic(err.Error())
 		}
 		nodes[i] = peers[i].Node()
 	}
