@@ -74,8 +74,8 @@ const traceErrorLimit = 400000
 // The VM config for state tests that accepts --vm.* command line arguments.
 var testVMConfig = func() vm.Config {
 	vmconfig := vm.Config{}
-	flag.StringVar(&vmconfig.EVMInterpreter, utils.EVMInterpreterFlag.Name, utils.EVMInterpreterFlag.Value, utils.EVMInterpreterFlag.Usage)
-	flag.StringVar(&vmconfig.EWASMInterpreter, utils.EWASMInterpreterFlag.Name, utils.EWASMInterpreterFlag.Value, utils.EWASMInterpreterFlag.Usage)
+	flag.StringVar(&vmconfig.EVMInterpreter, utils.EVMInterpreterFlag.Name, "", utils.EVMInterpreterFlag.Usage)
+	flag.StringVar(&vmconfig.EWASMInterpreter, utils.EWASMInterpreterFlag.Name, "", utils.EWASMInterpreterFlag.Usage)
 	flag.Parse()
 	return vmconfig
 }()

@@ -687,15 +687,17 @@ var (
 		Value: "host=localhost",
 	}
 
-	EWASMInterpreterFlag = cli.StringFlag{
-		Name:  "vm.ewasm",
-		Usage: "External ewasm configuration (default = built-in interpreter)",
-		Value: "",
-	}
-	EVMInterpreterFlag = cli.StringFlag{
+	defaultEVMInterpreter = vm.Selector("")
+	EVMInterpreterFlag    = TextMarshalerFlag{
 		Name:  "vm.evm",
-		Usage: "External EVM configuration (default = built-in interpreter)",
-		Value: "",
+		Usage: "EVM configuration",
+		Value: &defaultEVMInterpreter,
+	}
+	defaultEWASMInterpreter = vm.Selector("")
+	EWASMInterpreterFlag    = TextMarshalerFlag{
+		Name:  "vm.ewasm",
+		Usage: "Ewasm configuration",
+		Value: &defaultEWASMInterpreter,
 	}
 )
 

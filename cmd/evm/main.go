@@ -23,6 +23,7 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -110,10 +111,11 @@ var (
 		Name:  "nostack",
 		Usage: "disable stack output",
 	}
-	EVMInterpreterFlag = cli.StringFlag{
+	defaultEVMInterpreter = vm.Selector("")
+	EVMInterpreterFlag    = utils.TextMarshalerFlag{
 		Name:  "vm.evm",
-		Usage: "External EVM configuration (default = built-in interpreter)",
-		Value: "",
+		Usage: "EVM configuration",
+		Value: &defaultEVMInterpreter,
 	}
 )
 

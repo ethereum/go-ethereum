@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"fmt"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -25,6 +26,34 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
+
+// Selector selects and keeps configuration for VM implementations.
+type Selector string
+
+// String implements stringer interface.
+func (sel Selector) String() string {
+	if sel == "" {
+		return "interpreter"
+	}
+	return "unknown"
+}
+
+// MarshalText implements encoding.TextMarshaler interface.
+func (sel Selector) MarshalText() (text []byte, err error) {
+	if sel == "" {
+		return []byte(string(sel)), nil
+	}
+	return nil, fmt.Errorf("unknown option %q", sel)
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler interface.
+func (sel *Selector) UnmarshalText(text []byte) error {
+	if string(text) == string(*sel) {
+		*sel = ""
+		return nil
+	}
+	return fmt.Errorf(`unknown option %q, want "interpreter"`, text)
+}
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
 // deployed contract addresses (relevant after the account abstraction).
