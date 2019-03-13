@@ -211,7 +211,7 @@ func TestProxNetworkLong(t *testing.T) {
 // passed to the message handlers of these required recipients. Test will fail
 // if a message is handled by recipient which is not listed among the allowed
 // recipients of this particular message. It also fails after timeout, if not
-// all the required recipients have recieved thier respective messages.
+// all the required recipients have received their respective messages.
 //
 // For example, if proximity order of certain msg address is 4, and node X
 // has PO=5 wrt the message address, and nodes Y and Z have PO=6, then:
