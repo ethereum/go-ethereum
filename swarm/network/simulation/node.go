@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
@@ -105,7 +104,7 @@ func (s *Simulation) AddNode(opts ...AddNodeOption) (id enode.ID, err error) {
 	// for now we have no way of setting bootnodes or lightnodes in sims
 	// so we just set them as false
 	// they should perhaps be possible to override them with AddNodeOption
-	bzzKey := bzzapi.PrivateKeyToBzzKey(conf.PrivateKey)
+	bzzKey := network.PrivateKeyToBzzKey(conf.PrivateKey)
 	bzzAddr := network.NewENRAddrEntry(bzzKey)
 
 	var lightnode network.ENRLightNodeEntry

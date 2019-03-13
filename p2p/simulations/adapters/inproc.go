@@ -72,8 +72,13 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	// check a node with the ID doesn't already exist
 	id := config.ID
+	// verify that the node has a private key in the config
+	if config.PrivateKey == nil {
+		return nil, fmt.Errorf("node is missing private key: %s", id)
+	}
+
+	// check a node with the ID doesn't already exist
 	if _, exists := s.nodes[id]; exists {
 		return nil, fmt.Errorf("node already exists: %s", id)
 	}
@@ -103,6 +108,7 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to create enode: %v", err)
 	}
+	log.Trace("simnode new", "record", config.Record)
 	config.node = nod
 
 	n, err := node.New(&node.Config{

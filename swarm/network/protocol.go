@@ -18,6 +18,7 @@ package network
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"net"
@@ -386,4 +387,9 @@ func RandomAddr() *BzzAddr {
 // NewAddr constucts a BzzAddr from a node record.
 func NewAddr(node *enode.Node) *BzzAddr {
 	return &BzzAddr{OAddr: node.ID().Bytes(), UAddr: []byte(node.String())}
+}
+
+func PrivateKeyToBzzKey(prvKey *ecdsa.PrivateKey) []byte {
+	pubkeyBytes := crypto.FromECDSAPub(&prvKey.PublicKey)
+	return crypto.Keccak256Hash(pubkeyBytes).Bytes()
 }

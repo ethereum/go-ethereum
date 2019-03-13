@@ -119,7 +119,7 @@ func (c *Config) Init(prvKey *ecdsa.PrivateKey) {
 	pubkey := crypto.FromECDSAPub(&prvKey.PublicKey)
 	pubkeyhex := common.ToHex(pubkey)
 	//keyhex := crypto.Keccak256Hash(pubkey).Hex()
-	keyhex := hexutil.Encode(PrivateKeyToBzzKey(prvKey))
+	keyhex := hexutil.Encode(network.PrivateKeyToBzzKey(prvKey))
 
 	c.PublicKey = pubkeyhex
 	c.BzzKey = keyhex
@@ -134,11 +134,6 @@ func (c *Config) Init(prvKey *ecdsa.PrivateKey) {
 	c.LocalStoreParams.BaseKey = common.FromHex(keyhex)
 
 	c.Pss = c.Pss.WithPrivateKey(c.privateKey)
-}
-
-func PrivateKeyToBzzKey(prvKey *ecdsa.PrivateKey) []byte {
-	pubkeyBytes := crypto.FromECDSAPub(&prvKey.PublicKey)
-	return crypto.Keccak256Hash(pubkeyBytes).Bytes()
 }
 
 func (c *Config) ShiftPrivateKey() (privKey *ecdsa.PrivateKey) {
