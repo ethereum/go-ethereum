@@ -26,9 +26,6 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
-// Trie cache generation limit after which to evict trie nodes from memory.
-var MaxTrieCacheGen = uint16(120)
-
 const (
 	// Number of past tries to keep. This value is chosen such that
 	// reasonable chain reorg depths will hit an existing trie.
@@ -106,7 +103,7 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 			return cachedTrie{db.pastTries[i].Copy(), db}, nil
 		}
 	}
-	tr, err := trie.NewSecure(root, db.db, MaxTrieCacheGen)
+	tr, err := trie.NewSecure(root, db.db)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +124,7 @@ func (db *cachingDB) pushTrie(t *trie.SecureTrie) {
 
 // OpenStorageTrie opens the storage trie of an account.
 func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
-	return trie.NewSecure(root, db.db, 0)
+	return trie.NewSecure(root, db.db)
 }
 
 // CopyTrie returns an independent copy of the given trie.

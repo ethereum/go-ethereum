@@ -102,7 +102,6 @@ var (
 		utils.CacheDatabaseFlag,
 		utils.CacheTrieFlag,
 		utils.CacheGCFlag,
-		utils.TrieCacheGenFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
