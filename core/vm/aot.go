@@ -69,10 +69,10 @@ func GrowMemory(size int32) {
 
 // AoTContract
 type AoTContract struct {
-	Code []byte
-	Num  int
+	Code         []byte
+	Num          int
 	ImportVector []byte
-	ImportFuncs map[string]importFunc
+	ImportFuncs  map[string]importFunc
 }
 
 func NewAoTContract(code []byte, num int) *AoTContract {
