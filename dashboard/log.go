@@ -94,13 +94,13 @@ func (db *Dashboard) handleLogRequest(r *LogsRequest, c *client) {
 		// The last file is continuously updated, and its chunks are streamed,
 		// so in order to avoid log record duplication on the client side, it is
 		// handled differently. Its actual content is always saved in the history.
-		db.lock.Lock()
+		db.logLock.RLock()
 		if db.history.Logs != nil {
 			c.msg <- &Message{
-				Logs: db.history.Logs,
+				Logs: deepcopy.Copy(db.history.Logs).(*LogsMessage),
 			}
 		}
-		db.lock.Unlock()
+		db.logLock.RUnlock()
 		return
 	case fileNames[idx] == r.Name:
 		idx++
@@ -174,7 +174,7 @@ func (db *Dashboard) streamLogs() {
 		log.Warn("Problem with file", "name", opened.Name(), "err", err)
 		return
 	}
-	db.lock.Lock()
+	db.logLock.Lock()
 	db.history.Logs = &LogsMessage{
 		Source: &LogFile{
 			Name: fi.Name(),
@@ -182,7 +182,7 @@ func (db *Dashboard) streamLogs() {
 		},
 		Chunk: emptyChunk,
 	}
-	db.lock.Unlock()
+	db.logLock.Unlock()
 
 	watcher := make(chan notify.EventInfo, 10)
 	if err := notify.Watch(db.logdir, watcher, notify.Create); err != nil {
@@ -240,10 +240,10 @@ loop:
 				log.Warn("Problem with file", "name", opened.Name(), "err", err)
 				break loop
 			}
-			db.lock.Lock()
+			db.logLock.Lock()
 			db.history.Logs.Source.Name = fi.Name()
 			db.history.Logs.Chunk = emptyChunk
-			db.lock.Unlock()
+			db.logLock.Unlock()
 		case <-ticker.C: // Send log updates to the client.
 			if opened == nil {
 				log.Warn("The last log file is not opened")
@@ -266,7 +266,7 @@ loop:
 
 			var l *LogsMessage
 			// Update the history.
-			db.lock.Lock()
+			db.logLock.Lock()
 			if bytes.Equal(db.history.Logs.Chunk, emptyChunk) {
 				db.history.Logs.Chunk = chunk
 				l = deepcopy.Copy(db.history.Logs).(*LogsMessage)
@@ -278,7 +278,7 @@ loop:
 				db.history.Logs.Chunk = b
 				l = &LogsMessage{Chunk: chunk}
 			}
-			db.lock.Unlock()
+			db.logLock.Unlock()
 
 			db.sendToAll(&Message{Logs: l})
 		case errc = <-db.quit:
