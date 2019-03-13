@@ -147,12 +147,13 @@ func initializeTestData(d *testData, msgCount int) {
 		var targets []enode.ID
 		var closestPO int
 
-		// loop through all nodes and add the message to recipient indices
+		// loop through all nodes and find the required and allowed recipients of each message
+		// (for more information, please see the comment to the main test function)
 		for _, nod := range d.sim.Net.GetNodes() {
 			po, _ := pof(d.msgs[i], d.nodeAddrs[nod.ID()], 0)
 			depth := d.kademlias[nod.ID()].NeighbourhoodDepth()
 
-			// only nodes with closest IDs (wrt msg) will receive the msg
+			// only nodes with closest IDs (wrt the msg address) will be required recipients
 			if po > closestPO {
 				closestPO = po
 				targets = nil
@@ -167,7 +168,8 @@ func initializeTestData(d *testData, msgCount int) {
 				d.allowedMsgs[nod.ID()] = append(d.allowedMsgs[nod.ID()], uint64(i))
 			}
 
-			// a node with the smallest PO (wrt msg) will be the sender
+			// a node with the smallest PO (wrt msg) will be the sender,
+			// in order to increase the distance the msg must travel
 			if po < smallestPo {
 				smallestPo = po
 				d.senders[i] = nod.ID()
@@ -200,11 +202,21 @@ func TestProxNetworkLong(t *testing.T) {
 	t.Run("64/100", testProxNetwork)
 }
 
-// This tests generates a sequenced number of messages with random addresses.
-// It then calculates which nodes in the network have the address of each message
-// within their nearest neighborhood depth, and stores them as recipients.
-// Upon sending the messages, it verifies that the respective message is passed to the message handlers of these recipients.
-// It will fail if a recipient handles a message it should not, or if after propagation not all expected messages are handled (timeout)
+// This tests generates a number of messages with random addresses. Then,
+// for each message it calculates which nodes in the network the msg address
+// within its nearest neighborhood depth, and stores those nodes as possible
+// recipients. Those nodes that are the closest to the message address (nodes
+// belonging to the deepest PO wrt msg address) are stored as required recipients.
+// Upon sending the messages, the test verifies that the respective message is
+// passed to the message handlers of these required recipients. Test will fail
+// if a message is handled by recipient which is not listed among the allowed
+// recipients of this particular message. It also fails after timeout, if not
+// all the required recipients have recieved thier respective messages.
+//
+// For example, if proximity order of certain msg address is 4, and node X
+// has PO=5 wrt the message address, and nodes Y and Z have PO=6, then:
+// nodes Y and Z will be considered required recipients of the msg,
+// whereas nodes X, Y and Z will be allowed recipients.
 func testProxNetwork(t *testing.T) {
 	var tstdata testData
 	msgCount, nodeCount := getCmdParams(t)
@@ -218,7 +230,7 @@ func testProxNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
 	defer cancel()
 	snap := readSnapshot(t, nodeCount)
 	err = tstdata.sim.WaitTillSnapshotRecreated(ctx, snap)
