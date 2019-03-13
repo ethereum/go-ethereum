@@ -45,7 +45,7 @@ type Manager struct {
 
 // NewManager creates a generic account manager to sign transaction via various
 // supported backends.
-func NewManager(insecureUnlockAllowed bool, backends ...Backend) *Manager {
+func NewManager(config *Config, backends ...Backend) *Manager {
 	// Retrieve the initial list of wallets from the backends and sort by URL
 	var wallets []Wallet
 	for _, backend := range backends {
@@ -60,7 +60,7 @@ func NewManager(insecureUnlockAllowed bool, backends ...Backend) *Manager {
 	}
 	// Assemble the account manager and return
 	am := &Manager{
-		config:   &Config{insecureUnlockAllowed},
+		config:   config,
 		backends: make(map[reflect.Type][]Backend),
 		updaters: subs,
 		updates:  updates,

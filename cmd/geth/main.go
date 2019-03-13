@@ -397,18 +397,9 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 
 // unlockAccounts unlocks any account specifically requested.
 func unlockAccounts(ctx *cli.Context, stack *node.Node) {
-	// personalExposed checks whether personal API is exposed by http.
-	personalExposed := func() bool {
-		for _, module := range stack.Config().HTTPModules {
-			if module == "personal" {
-				return true
-			}
-		}
-		return false
-	}
-	// If insecure account unlocking is not allowed and account-related APIs are exposed by http,
-	// print warning log to user and skip unlocking.
-	if !stack.Config().InsecureUnlockAllowed && personalExposed() {
+	// If insecure account unlocking is not allowed if node's APIs are exposed to external.
+	// Print warning log to user and skip unlocking.
+	if !stack.Config().InsecureUnlockAllowed && stack.Config().ExtRPCEnabled() {
 		log.Warn("Not safe to unlock account, please enable `allow-insecure-unlock` flag if necessary")
 		return
 	}

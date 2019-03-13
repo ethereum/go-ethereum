@@ -166,7 +166,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		log.Warn("Ultra light client is enabled", "trustedNodes", len(leth.protocolManager.ulc.trustedKeys), "minTrustedFraction", leth.protocolManager.ulc.minTrustedFraction)
 		leth.blockchain.DisableCheckFreq()
 	}
-	leth.ApiBackend = &LesApiBackend{leth, nil}
+	leth.ApiBackend = &LesApiBackend{ctx.ExtRPCEnabled(), leth, nil}
 
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
