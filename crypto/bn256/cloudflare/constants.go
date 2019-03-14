@@ -38,7 +38,7 @@ var r2 = &gfP{0xf32cfc5b538afa89, 0xb5e71911d44501fb, 0x47ab1eff0a417ff6, 0x06d8
 var r3 = &gfP{0xb1cd6dafda1530df, 0x62f210e6a7283db6, 0xef7f0b0c0ada0afb, 0x20fd6e902d592544}
 
 // xiToPMinus1Over6 is ξ^((p-1)/6) where ξ = i+9.
-var xiToPMinus1Over6 = &gfP2{gfP{0xa222ae234c492d72, 0xd00f02a4565de15b, 0XDC2ff3a253dfc926, 0x10a75716b3899551}, gfP{0xaf9ba69633144907, 0xca6b1d7387afb78a, 0x11bded5ef08a2087, 0x02f34d751a1f3a7c}}
+var xiToPMinus1Over6 = &gfP2{gfP{0xa222ae234c492d72, 0xd00f02a4565de15b, 0xdc2ff3a253dfc926, 0x10a75716b3899551}, gfP{0xaf9ba69633144907, 0xca6b1d7387afb78a, 0x11bded5ef08a2087, 0x02f34d751a1f3a7c}}
 
 // xiToPMinus1Over3 is ξ^((p-1)/3) where ξ = i+9.
 var xiToPMinus1Over3 = &gfP2{gfP{0x6e849f1ea0aa4757, 0xaa1c7b6d89f89141, 0xb6e713cdfae0ca3a, 0x26694fbb4e82ebc3}, gfP{0xb5773b104563ab30, 0x347f91c8a9aa6454, 0x7a007127242e0991, 0x1956bcd8118214ec}}

@@ -195,6 +195,19 @@ func (tx *Transaction) To() *common.Address {
 	return &to
 }
 
+func (tx *Transaction) From() *common.Address {
+	if tx.data.V != nil {
+		signer := deriveSigner(tx.data.V)
+		if f, err := Sender(signer, tx); err != nil {
+			return nil
+		} else {
+			return &f
+		}
+	} else {
+		return nil
+	}
+}
+
 // Hash hashes the RLP encoding of tx.
 // It uniquely identifies the transaction.
 func (tx *Transaction) Hash() common.Hash {
@@ -272,6 +285,66 @@ func (tx *Transaction) IsSpecialTransaction() bool {
 		return false
 	}
 	return tx.To().String() == common.RandomizeSMC || tx.To().String() == common.BlockSigners
+}
+
+func (tx *Transaction) IsSigningTransaction() bool {
+	if tx.To() == nil {
+		return false
+	}
+
+	if tx.To().String() != common.BlockSigners {
+		return false
+	}
+
+	method := common.ToHex(tx.Data()[0:4])
+
+	if method != common.SignMethod {
+		return false
+	}
+
+	if len(tx.Data()) != (32*2 + 4) {
+		return false
+	}
+
+	return true
+}
+
+func (tx *Transaction) IsVotingTransaction() (bool, *common.Address) {
+	if tx.To() == nil {
+		return false, nil
+	}
+	b := (tx.To().String() == common.MasternodeVotingSMC)
+
+	if !b {
+		return b, nil
+	}
+
+	method := common.ToHex(tx.Data()[0:4])
+	if b = (method == common.VoteMethod); b {
+		addr := tx.Data()[len(tx.Data())-20:]
+		m := common.BytesToAddress(addr)
+		return b, &m
+	}
+
+	if b = (method == common.UnvoteMethod); b {
+		addr := tx.Data()[len(tx.Data())-32-20 : len(tx.Data())-32]
+		m := common.BytesToAddress(addr)
+		return b, &m
+	}
+
+	if b = (method == common.ProposeMethod); b {
+		addr := tx.Data()[len(tx.Data())-20:]
+		m := common.BytesToAddress(addr)
+		return b, &m
+	}
+
+	if b = (method == common.ResignMethod); b {
+		addr := tx.Data()[len(tx.Data())-20:]
+		m := common.BytesToAddress(addr)
+		return b, &m
+	}
+
+	return b, nil
 }
 
 func (tx *Transaction) String() string {
