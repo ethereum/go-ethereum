@@ -522,6 +522,8 @@ func (s *Swarm) APIs() []rpc.API {
 
 	apis = append(apis, s.bzz.APIs()...)
 
+	apis = append(apis, s.streamer.APIs()...)
+
 	if s.ps != nil {
 		apis = append(apis, s.ps.APIs()...)
 	}
