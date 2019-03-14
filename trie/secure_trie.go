@@ -160,12 +160,6 @@ func (t *SecureTrie) Hash() common.Hash {
 	return t.trie.Hash()
 }
 
-// Root returns the root hash of SecureTrie.
-// Deprecated: use Hash instead.
-func (t *SecureTrie) Root() []byte {
-	return t.trie.Root()
-}
-
 // Copy returns a copy of SecureTrie.
 func (t *SecureTrie) Copy() *SecureTrie {
 	cpy := *t
