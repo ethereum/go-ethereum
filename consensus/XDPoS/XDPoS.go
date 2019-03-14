@@ -13,15 +13,18 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-// Package XDPoS implements the XinFin-DPoS consensus engine.
+// Package XDPoS implements the delegated-proof-of-stake consensus engine.
 package XDPoS
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"math/rand"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -42,12 +45,12 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/hashicorp/golang-lru"
-
 )
 
 const (
-	inmemorySnapshots = 128 // Number of recent vote snapshots to keep in memory
-	M2ByteLength      = 4
+	inmemorySnapshots      = 128 // Number of recent vote snapshots to keep in memory
+	blockSignersCacheLimit = 9000
+	M2ByteLength           = 4
 )
 
 type Masternode struct {
@@ -55,7 +58,7 @@ type Masternode struct {
 	Stake   *big.Int
 }
 
-// XDPoS XinFin-DPoS protocol constants.
+// XDPoS delegated-proof-of-stake protocol constants.
 var (
 	epochLength = uint64(900) // Default number of blocks after which to checkpoint and reset the pending votes
 
@@ -146,7 +149,7 @@ var (
 // backing account.
 //type SignerFn func(accounts.Account, []byte) ([]byte, error)
 
-// sigHash returns the hash which is used as input for the XinFin-DPoS
+// sigHash returns the hash which is used as input for the delegated-proof-of-stake
 // signing. It is the hash of the entire header apart from the 65 byte signature
 // contained at the end of the extra data.
 //
@@ -206,30 +209,31 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 	return signer, nil
 }
 
-// XDPoS is the XinFin-DPoS consensus engine proposed to support the
+// XDPoS is the delegated-proof-of-stake consensus engine proposed to support the
 // Ethereum testnet following the Ropsten attacks.
 type XDPoS struct {
 	config *params.XDPoSConfig // Consensus engine configuration parameters
-	db     ethdb.Database      // Database to store and retrieve snapshot checkpoints
+	db     ethdb.Database     // Database to store and retrieve snapshot checkpoints
 
 	recents             *lru.ARCCache // Snapshots for recent block to speed up reorgs
 	signatures          *lru.ARCCache // Signatures of recent blocks to speed up mining
 	validatorSignatures *lru.ARCCache // Signatures of recent blocks to speed up mining
 	verifiedHeaders     *lru.ARCCache
-	rewards             *lru.ARCCache
 	proposals           map[common.Address]bool // Current list of proposals we are pushing
 
 	signer common.Address  // Ethereum address of the signing key
 	signFn clique.SignerFn // Signer function to authorize hashes with
 	lock   sync.RWMutex    // Protects the signer fields
 
-	HookReward    func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
-	HookPenalty   func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
-	HookValidator func(header *types.Header, signers []common.Address) ([]byte, error)
-	HookVerifyMNs func(header *types.Header, signers []common.Address) error
+	BlockSigners *lru.Cache
+	HookReward   func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
+	HookPenalty           func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
+	HookPenaltyTIPSigning func(chain consensus.ChainReader, header *types.Header, candidate []common.Address) ([]common.Address, error)
+	HookValidator         func(header *types.Header, signers []common.Address) ([]byte, error)
+	HookVerifyMNs         func(header *types.Header, signers []common.Address) error
 }
 
-// New creates a XDPoS XinFin-DPoS consensus engine with the initial
+// New creates a XDPoS delegated-proof-of-stake consensus engine with the initial
 // signers set to the ones provided by the user.
 func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
 	// Set any missing consensus parameters to their defaults
@@ -238,19 +242,19 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
 		conf.Epoch = epochLength
 	}
 	// Allocate the snapshot caches and create the engine
+	BlockSigners, _ := lru.New(blockSignersCacheLimit)
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySnapshots)
 	validatorSignatures, _ := lru.NewARC(inmemorySnapshots)
 	verifiedHeaders, _ := lru.NewARC(inmemorySnapshots)
-	rewards, _ := lru.NewARC(inmemorySnapshots)
 	return &XDPoS{
 		config:              &conf,
 		db:                  db,
+		BlockSigners:        BlockSigners,
 		recents:             recents,
 		signatures:          signatures,
 		verifiedHeaders:     verifiedHeaders,
 		validatorSignatures: validatorSignatures,
-		rewards:             rewards,
 		proposals:           make(map[common.Address]bool),
 	}
 }
@@ -304,6 +308,9 @@ func (c *XDPoS) verifyHeaderWithCache(chain consensus.ChainReader, header *types
 // looking those up from the database. This is useful for concurrently verifying
 // a batch of new headers.
 func (c *XDPoS) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool) error {
+	if common.IsTestnet {
+		fullVerify = false
+	}
 	if header.Number == nil {
 		return errUnknownBlock
 	}
@@ -391,9 +398,15 @@ func (c *XDPoS) verifyCascadingFields(chain consensus.ChainReader, header *types
 	}
 	// If the block is a checkpoint block, verify the signer list
 	if number%c.config.Epoch == 0 {
+		signers := snap.GetSigners()
 		penPenalties := []common.Address{}
-		if c.HookPenalty != nil {
-			penPenalties, err = c.HookPenalty(chain, number)
+		if c.HookPenalty != nil || c.HookPenaltyTIPSigning != nil {
+			var err error = nil
+			if chain.Config().IsTIPSigning(header.Number) {
+				penPenalties, err = c.HookPenaltyTIPSigning(chain, header, signers)
+			} else {
+				penPenalties, err = c.HookPenalty(chain, number)
+			}
 			if err != nil {
 				return err
 			}
@@ -405,7 +418,6 @@ func (c *XDPoS) verifyCascadingFields(chain consensus.ChainReader, header *types
 				return errInvalidCheckpointPenalties
 			}
 		}
-		signers := snap.GetSigners()
 		signers = common.RemoveItemFromArray(signers, penPenalties)
 		for i := 1; i <= common.LimitPenaltyEpoch; i++ {
 			if number > uint64(i)*c.config.Epoch {
@@ -480,10 +492,16 @@ func whoIsCreator(snap *Snapshot, header *types.Header) (common.Address, error) 
 
 func (c *XDPoS) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (int, int, int, bool, error) {
 	masternodes := c.GetMasternodes(chain, parent)
+
 	if common.IsTestnet {
-		// Only three mns for XDC testnet.
-		masternodes = masternodes[:3]
+		// Only three mns hard code for XDC testnet.
+		masternodes = []common.Address{
+			common.HexToAddress("0xfFC679Dcdf444D2eEb0491A998E7902B411CcF20"),
+			common.HexToAddress("0xd76fd76F7101811726DCE9E43C2617706a4c45c8"),
+			common.HexToAddress("0x8A97753311aeAFACfd76a68Cf2e2a9808d3e65E8"),
+		}
 	}
+
 	snap, err := c.GetSnapshot(chain, parent)
 	if err != nil {
 		log.Warn("Failed when trying to commit new work", "err", err)
@@ -775,9 +793,15 @@ func (c *XDPoS) Prepare(chain consensus.ChainReader, header *types.Header) error
 	}
 	header.Extra = header.Extra[:extraVanity]
 	masternodes := snap.GetSigners()
-	if number > 0 && number%c.config.Epoch == 0 {
-		if c.HookPenalty != nil {
-			penMasternodes, err := c.HookPenalty(chain, number)
+	if number >= c.config.Epoch && number%c.config.Epoch == 0 {
+		if c.HookPenalty != nil || c.HookPenaltyTIPSigning != nil {
+			var penMasternodes []common.Address = nil
+			var err error = nil
+			if chain.Config().IsTIPSigning(header.Number) {
+				penMasternodes, err = c.HookPenaltyTIPSigning(chain, header, masternodes)
+			} else {
+				penMasternodes, err = c.HookPenalty(chain, number)
+			}
 			if err != nil {
 				return err
 			}
@@ -785,7 +809,7 @@ func (c *XDPoS) Prepare(chain consensus.ChainReader, header *types.Header) error
 				// penalize bad masternode(s)
 				masternodes = common.RemoveItemFromArray(masternodes, penMasternodes)
 				for _, address := range penMasternodes {
-					log.Debug("Penalty status", "address", address, "block number", number)
+					log.Debug("Penalty status", "address", address, "number", number)
 				}
 				header.Penalties = common.ExtractAddressToBytes(penMasternodes)
 			}
@@ -850,12 +874,22 @@ func (c *XDPoS) Finalize(chain consensus.ChainReader, header *types.Header, stat
 	number := header.Number.Uint64()
 	rCheckpoint := chain.Config().XDPoS.RewardCheckpoint
 
+	// _ = c.CacheData(header, txs, receipts)
+
 	if c.HookReward != nil && number%rCheckpoint == 0 {
-		err, rewardResults := c.HookReward(chain, state, header)
+		err, rewards := c.HookReward(chain, state, header)
 		if err != nil {
 			return nil, err
 		}
-		c.rewards.Add(header.Hash(), rewardResults)
+		if len(common.StoreRewardFolder) > 0 {
+			data, err := json.Marshal(rewards)
+			if err == nil {
+				err = ioutil.WriteFile(filepath.Join(common.StoreRewardFolder, header.Number.String()+"."+header.Hash().Hex()), data, 0644)
+			}
+			if err != nil {
+				log.Error("Error when save reward info ", "number", header.Number, "hash", header.Hash().Hex(), "err", err)
+			}
+		}
 	}
 
 	// the state remains as is and uncles are dropped
@@ -887,7 +921,8 @@ func (c *XDPoS) Seal(chain consensus.ChainReader, block *types.Block, stop <-cha
 		return nil, errUnknownBlock
 	}
 	// For 0-period chains, refuse to seal empty blocks (no reward but would spin sealing)
-	if c.config.Period == 0 && len(block.Transactions()) == 0 {
+	// checkpoint blocks have no tx
+	if c.config.Period == 0 && len(block.Transactions()) == 0 && number%c.config.Epoch != 0 {
 		return nil, errWaitTransactions
 	}
 	// Don't hold the signer fields for the entire sealing procedure
@@ -923,8 +958,7 @@ func (c *XDPoS) Seal(chain consensus.ChainReader, block *types.Block, stop <-cha
 				if limit := uint64(2); number < limit || seen > number-limit {
 					// Only take into account the non-epoch blocks
 					if number%c.config.Epoch != 0 {
-						log.Info("Length of MasterNodes", "len(masternodes)", len(masternodes), "number", number, "limit", limit, "seen", seen, "recent", recent.String(), "snap.Recents", snap.Recents)
-						log.Info("Signed recently, must wait for others")
+						log.Info("Signed recently, must wait for others ", "len(masternodes)", len(masternodes), "number", number, "limit", limit, "seen", seen, "recent", recent.String(), "snap.Recents", snap.Recents)
 						<-stop
 						return nil, nil
 					}
@@ -1010,7 +1044,54 @@ func (c *XDPoS) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.He
 	for i := 0; i < len(masternodes); i++ {
 		copy(masternodes[i][:], preCheckpointHeader.Extra[extraVanity+i*common.AddressLength:])
 	}
+
 	return masternodes
+}
+
+func (c *XDPoS) CacheData(header *types.Header, txs []*types.Transaction, receipts []*types.Receipt) []*types.Transaction {
+	signTxs := []*types.Transaction{}
+	for _, tx := range txs {
+		if tx.IsSigningTransaction() {
+			var b uint
+			for _, r := range receipts {
+				if r.TxHash == tx.Hash() {
+					if len(r.PostState) > 0 {
+						b = types.ReceiptStatusSuccessful
+					} else {
+						b = r.Status
+					}
+					break
+				}
+			}
+
+			if b == types.ReceiptStatusFailed {
+				continue
+			}
+
+			signTxs = append(signTxs, tx)
+		}
+	}
+
+	log.Debug("Save tx signers to cache", "hash", header.Hash().String(), "number", header.Number, "len(txs)", len(signTxs))
+	c.BlockSigners.Add(header.Hash(), signTxs)
+
+	return signTxs
+}
+
+func (c *XDPoS) CacheSigner(hash common.Hash, txs []*types.Transaction) []*types.Transaction {
+	signTxs := []*types.Transaction{}
+	for _, tx := range txs {
+		if tx.IsSigningTransaction() {
+			signTxs = append(signTxs, tx)
+		}
+	}
+	log.Debug("Save tx signers to cache", "hash", hash.String(), "len(txs)", len(signTxs))
+	c.BlockSigners.Add(hash, signTxs)
+	return signTxs
+}
+
+func (c *XDPoS) GetDb() ethdb.Database {
+	return c.db
 }
 
 // Extract validators from byte array.
@@ -1084,16 +1165,4 @@ func Hop(len, pre, cur int) int {
 	default:
 		return len - 1
 	}
-}
-
-func (c *XDPoS) GetRewards(hash common.Hash) map[string]interface{} {
-	rewards, ok := c.rewards.Get(hash)
-	if !ok {
-		return nil
-	}
-	return rewards.(map[string]interface{})
-}
-
-func (c *XDPoS) InsertRewards(hash common.Hash, rewards map[string]interface{}) {
-	c.rewards.Add(hash, rewards)
 }
