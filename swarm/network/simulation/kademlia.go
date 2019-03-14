@@ -100,7 +100,7 @@ func (s *Simulation) kademlias() (ks map[enode.ID]*network.Kademlia) {
 }
 
 // WaitTillSnapshotRecreated is blocking until all the connections specified
-// in the snapshot are actually up and running.
+// in the snapshot are registered in the kademlia.
 // It differs from WaitTillHealthy, which waits only until all the kademlias are
 // healthy (it might happen even before all the connections are established).
 func (s *Simulation) WaitTillSnapshotRecreated(ctx context.Context, snap simulations.Snapshot) error {
@@ -138,7 +138,6 @@ func (s *Simulation) getActualConnections() (res []uint64) {
 func getSnapshotConnections(conns []simulations.Conn) (res []uint64) {
 	for _, c := range conns {
 		res = append(res, getConnectionHash(c.One, c.Other))
-		c.String()
 	}
 	return res
 }

@@ -145,6 +145,16 @@ func createSimServiceMap(discovery bool) map[string]ServiceFunc {
 	}
 }
 
+// TestWaitTillSnapshotRecreated tests that we indeed have a network
+// configuration specified in the snapshot file, after we wait for it.
+//
+// First we create a first simulation
+// Run it as nodes connected in a ring
+// Wait until the network is healthy
+// Then we create a snapshot
+// With this snapshot we create a new simulation
+// Call WaitTillSnapshotRecreated() function and wait until it returns
+// Iterate the nodes and check if all the connections are successfully recreated
 func TestWaitTillSnapshotRecreated(t *testing.T) {
 	var err error
 	sim := New(createSimServiceMap(true))
@@ -185,6 +195,7 @@ func TestWaitTillSnapshotRecreated(t *testing.T) {
 	}
 }
 
+// exist returns true if val is found in arr
 func exist(arr []uint64, val uint64) bool {
 	for _, c := range arr {
 		if c == val {
@@ -195,8 +206,28 @@ func exist(arr []uint64, val uint64) bool {
 }
 
 func TestRemoveDuplicatesAndSingletons(t *testing.T) {
-	singletons := []uint64{0x3c127c6f6cb026b0, 0x0f45190d72e71fc5, 0xb0184c02449e0bb6, 0xa85c7b84239c54d3, 0xe3b0c44298fc1c14, 0x9afbf4c8996fb924, 0x27ae41e4649b934c, 0xa495991b7852b855}
-	doubles := []uint64{0x1b879f878de7fc7a, 0xc6791470521bdab4, 0xdd34b0ee39bbccc6, 0x4d904fbf0f31da10, 0x6403c2560432c8f8, 0x18954e33cf3ad847, 0x90db00e98dc7a8a6, 0x92886b0dfcc1809b}
+	singletons := []uint64{
+		0x3c127c6f6cb026b0,
+		0x0f45190d72e71fc5,
+		0xb0184c02449e0bb6,
+		0xa85c7b84239c54d3,
+		0xe3b0c44298fc1c14,
+		0x9afbf4c8996fb924,
+		0x27ae41e4649b934c,
+		0xa495991b7852b855,
+	}
+
+	doubles := []uint64{
+		0x1b879f878de7fc7a,
+		0xc6791470521bdab4,
+		0xdd34b0ee39bbccc6,
+		0x4d904fbf0f31da10,
+		0x6403c2560432c8f8,
+		0x18954e33cf3ad847,
+		0x90db00e98dc7a8a6,
+		0x92886b0dfcc1809b,
+	}
+
 	var arr []uint64
 	arr = append(arr, doubles...)
 	arr = append(arr, singletons...)
@@ -220,5 +251,59 @@ func TestRemoveDuplicatesAndSingletons(t *testing.T) {
 		if exist(arr, v) {
 			t.Fatalf("non-existing value found, index: %d", j)
 		}
+	}
+}
+
+func TestIsAllDeployed(t *testing.T) {
+	a := []uint64{
+		0x3c127c6f6cb026b0,
+		0x0f45190d72e71fc5,
+		0xb0184c02449e0bb6,
+		0xa85c7b84239c54d3,
+		0xe3b0c44298fc1c14,
+		0x9afbf4c8996fb924,
+		0x27ae41e4649b934c,
+		0xa495991b7852b855,
+	}
+
+	b := []uint64{
+		0x1b879f878de7fc7a,
+		0xc6791470521bdab4,
+		0xdd34b0ee39bbccc6,
+		0x4d904fbf0f31da10,
+		0x6403c2560432c8f8,
+		0x18954e33cf3ad847,
+		0x90db00e98dc7a8a6,
+		0x92886b0dfcc1809b,
+	}
+
+	var c []uint64
+	c = append(c, a...)
+	c = append(c, b...)
+
+	if !isAllDeployed(a, c) {
+		t.Fatal("isAllDeployed failed")
+	}
+
+	if !isAllDeployed(b, c) {
+		t.Fatal("isAllDeployed failed")
+	}
+
+	if isAllDeployed(c, a) {
+		t.Fatal("isAllDeployed failed: false positive")
+	}
+
+	if isAllDeployed(c, b) {
+		t.Fatal("isAllDeployed failed: false positive")
+	}
+
+	c = c[2:]
+
+	if isAllDeployed(a, c) {
+		t.Fatal("isAllDeployed failed: false positive")
+	}
+
+	if !isAllDeployed(b, c) {
+		t.Fatal("isAllDeployed failed")
 	}
 }

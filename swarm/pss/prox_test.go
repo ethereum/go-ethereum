@@ -64,7 +64,7 @@ type testData struct {
 
 var (
 	pof   = pot.DefaultPof(256) // generate messages and index them
-	topic = BytesToTopic([]byte{0x00, 0x00, 0x06, 0x82})
+	topic = BytesToTopic([]byte{0xf3, 0x9e, 0x06, 0x82})
 )
 
 func (d *testData) getMsgCount() int {
@@ -123,7 +123,7 @@ func readSnapshot(t *testing.T, nodeCount int) simulations.Snapshot {
 	return snap
 }
 
-func initializeTestData(d *testData, msgCount int) {
+func (d *testData) init(msgCount int) {
 	log.Debug("TestProxNetwork start")
 	d.nodeAddrs = make(map[enode.ID][]byte)
 	d.recipients = make(map[int][]enode.ID)
@@ -187,6 +187,24 @@ func initializeTestData(d *testData, msgCount int) {
 	log.Debug("msgs to receive", "count", d.requiredMessages)
 }
 
+// Here we test specific functionality of the pss, setting the prox property of
+// the handler. The tests generate a number of messages with random addresses.
+// Then, for each message it calculates which nodes in the network the msg address
+// within its nearest neighborhood depth, and stores those nodes as possible
+// recipients. Those nodes that are the closest to the message address (nodes
+// belonging to the deepest PO wrt the msg address) are stored as required
+// recipients. The difference between allowed and required recipients results
+// from the fact that the nearest neighbours are not necessarily reciprocal.
+// Upon sending the messages, the test verifies that the respective message is
+// passed to the message handlers of these required recipients. Test will fail
+// if a message is handled by recipient which is not listed among the allowed
+// recipients of this particular message. It also fails after timeout, if not
+// all the required recipients have received their respective messages.
+//
+// For example, if proximity order of certain msg address is 4, and node X
+// has PO=5 wrt the message address, and nodes Y and Z have PO=6, then:
+// nodes Y and Z will be considered required recipients of the msg,
+// whereas nodes X, Y and Z will be allowed recipients.
 func TestProxNetwork(t *testing.T) {
 	t.Run("16/16", testProxNetwork)
 }
@@ -200,23 +218,9 @@ func TestProxNetworkLong(t *testing.T) {
 	t.Run("16/100", testProxNetwork)
 	t.Run("32/100", testProxNetwork)
 	t.Run("64/100", testProxNetwork)
+	t.Run("128/100", testProxNetwork)
 }
 
-// This tests generates a number of messages with random addresses. Then,
-// for each message it calculates which nodes in the network the msg address
-// within its nearest neighborhood depth, and stores those nodes as possible
-// recipients. Those nodes that are the closest to the message address (nodes
-// belonging to the deepest PO wrt msg address) are stored as required recipients.
-// Upon sending the messages, the test verifies that the respective message is
-// passed to the message handlers of these required recipients. Test will fail
-// if a message is handled by recipient which is not listed among the allowed
-// recipients of this particular message. It also fails after timeout, if not
-// all the required recipients have received their respective messages.
-//
-// For example, if proximity order of certain msg address is 4, and node X
-// has PO=5 wrt the message address, and nodes Y and Z have PO=6, then:
-// nodes Y and Z will be considered required recipients of the msg,
-// whereas nodes X, Y and Z will be allowed recipients.
 func testProxNetwork(t *testing.T) {
 	var tstdata testData
 	msgCount, nodeCount := getCmdParams(t)
@@ -237,11 +241,11 @@ func testProxNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to recreate snapshot: %s", err)
 	}
-	initializeTestData(&tstdata, msgCount)
-	wrapper := func(c context.Context, s *simulation.Simulation) error {
-		return runFunc(&tstdata, c, s)
+	tstdata.init(msgCount) // initialize the test data
+	wrapper := func(c context.Context, _ *simulation.Simulation) error {
+		return runFunc(&tstdata, c)
 	}
-	result := tstdata.sim.Run(ctx, wrapper)
+	result := tstdata.sim.Run(ctx, wrapper) // call the main test function
 	if result.Error != nil {
 		// context deadline exceeded
 		// however, it might just mean that not all possible messages are received
@@ -255,12 +259,12 @@ func testProxNetwork(t *testing.T) {
 	t.Logf("completed %d", result.Duration)
 }
 
-func sendAllMsgs(sim *simulation.Simulation, msgs [][]byte, senders map[int]enode.ID) {
-	for i, msg := range msgs {
-		log.Debug("sending msg", "idx", i, "from", senders[i])
-		nodeClient, err := sim.Net.GetNode(senders[i]).Client()
+func sendAllMsgs(tstdata *testData) {
+	for i, msg := range tstdata.msgs {
+		log.Debug("sending msg", "idx", i, "from", tstdata.senders[i])
+		nodeClient, err := tstdata.sim.Net.GetNode(tstdata.senders[i]).Client()
 		if err != nil {
-			log.Crit(err.Error())
+			tstdata.errC <- err
 		}
 		var uvarByte [8]byte
 		binary.PutUvarint(uvarByte[:], uint64(i))
@@ -269,9 +273,10 @@ func sendAllMsgs(sim *simulation.Simulation, msgs [][]byte, senders map[int]enod
 	log.Debug("all messages sent")
 }
 
-func runFunc(tstdata *testData, ctx context.Context, sim *simulation.Simulation) error {
+// runFunc is the main test function, called by Simulation.Run()
+func runFunc(tstdata *testData, ctx context.Context) error {
 	go handlerChannelListener(tstdata, ctx)
-	go sendAllMsgs(sim, tstdata.msgs, tstdata.senders)
+	go sendAllMsgs(tstdata)
 	received := 0
 
 	// collect incoming messages and terminate with corresponding status when message handler listener ends
@@ -283,7 +288,6 @@ func runFunc(tstdata *testData, ctx context.Context, sim *simulation.Simulation)
 			received++
 			log.Debug("msg received", "msgs_received", received, "total_expected", tstdata.requiredMessages, "id", hn.id, "serial", hn.serial)
 			if received == tstdata.allowedMessages {
-				tstdata.doneC <- struct{}{}
 				close(tstdata.doneC)
 				return nil
 			}
@@ -387,12 +391,11 @@ func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[T
 	return map[string]simulation.ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			// normally translation of enode id to swarm address is concealed by the network package
-			// however, we need to keep track of it in the test driver aswell.
-			// if the translation in the network package changes, that can cause thiese tests to unpredictably fail
+			// however, we need to keep track of it in the test driver as well.
+			// if the translation in the network package changes, that can cause these tests to unpredictably fail
 			// therefore we keep a local copy of the translation here
 			addr := network.NewAddr(ctx.Config.Node())
 			addr.OAddr = nodeIDToAddr(ctx.Config.Node().ID())
-
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{
