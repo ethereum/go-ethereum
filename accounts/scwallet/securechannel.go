@@ -25,9 +25,11 @@ import (
 	"crypto/sha512"
 	"fmt"
 
-	"github.com/ebfe/scard"
 	"github.com/ethereum/go-ethereum/crypto"
+	pcsc "github.com/gballet/go-libpcsclite"
 	"github.com/wsddn/go-ecdh"
+	"golang.org/x/crypto/pbkdf2"
+	"golang.org/x/text/unicode/norm"
 )
 
 const (
@@ -42,22 +44,24 @@ const (
 	insMutuallyAuthenticate = 0x11
 	insPair                 = 0x12
 	insUnpair               = 0x13
+
+	pairingSalt = "Keycard Pairing Password Salt"
 )
 
 // SecureChannelSession enables secure communication with a hardware wallet.
 type SecureChannelSession struct {
-	card          *scard.Card // A handle to the smartcard for communication
-	secret        []byte      // A shared secret generated from our ECDSA keys
-	publicKey     []byte      // Our own ephemeral public key
-	PairingKey    []byte      // A permanent shared secret for a pairing, if present
-	sessionEncKey []byte      // The current session encryption key
-	sessionMacKey []byte      // The current session MAC key
-	iv            []byte      // The current IV
-	PairingIndex  uint8       // The pairing index
+	card          *pcsc.Card // A handle to the smartcard for communication
+	secret        []byte     // A shared secret generated from our ECDSA keys
+	publicKey     []byte     // Our own ephemeral public key
+	PairingKey    []byte     // A permanent shared secret for a pairing, if present
+	sessionEncKey []byte     // The current session encryption key
+	sessionMacKey []byte     // The current session MAC key
+	iv            []byte     // The current IV
+	PairingIndex  uint8      // The pairing index
 }
 
 // NewSecureChannelSession creates a new secure channel for the given card and public key.
-func NewSecureChannelSession(card *scard.Card, keyData []byte) (*SecureChannelSession, error) {
+func NewSecureChannelSession(card *pcsc.Card, keyData []byte) (*SecureChannelSession, error) {
 	// Generate an ECDSA keypair for ourselves
 	gen := ecdh.NewEllipticECDH(crypto.S256())
 	private, public, err := gen.GenerateKey(rand.Reader)
@@ -83,8 +87,8 @@ func NewSecureChannelSession(card *scard.Card, keyData []byte) (*SecureChannelSe
 }
 
 // Pair establishes a new pairing with the smartcard.
-func (s *SecureChannelSession) Pair(sharedSecret []byte) error {
-	secretHash := sha256.Sum256(sharedSecret)
+func (s *SecureChannelSession) Pair(pairingPassword []byte) error {
+	secretHash := pbkdf2.Key(norm.NFKD.Bytes([]byte(pairingPassword)), norm.NFKD.Bytes([]byte(pairingSalt)), 50000, 32, sha256.New)
 
 	challenge := make([]byte, 32)
 	if _, err := rand.Read(challenge); err != nil {
@@ -102,10 +106,10 @@ func (s *SecureChannelSession) Pair(sharedSecret []byte) error {
 
 	expectedCryptogram := md.Sum(nil)
 	cardCryptogram := response.Data[:32]
-	cardChallenge := response.Data[32:]
+	cardChallenge := response.Data[32:64]
 
 	if !bytes.Equal(expectedCryptogram, cardCryptogram) {
-		return fmt.Errorf("Invalid card cryptogram")
+		return fmt.Errorf("Invalid card cryptogram %v != %v", expectedCryptogram, cardCryptogram)
 	}
 
 	md.Reset()

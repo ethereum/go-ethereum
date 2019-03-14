@@ -118,9 +118,9 @@ func (b *bridge) OpenWallet(call otto.FunctionCall) (response otto.Value) {
 			throwJSException(err.Error())
 		}
 
-	case strings.HasSuffix(err.Error(), scwallet.ErrPUKNeeded.Error()):
+	case strings.HasSuffix(err.Error(), scwallet.ErrPairingPasswordNeeded.Error()):
 		// PUK input requested, fetch from the user and call open again
-		if input, err := b.prompter.PromptPassword("Please enter current PUK: "); err != nil {
+		if input, err := b.prompter.PromptPassword("Please enter the pairing password: "); err != nil {
 			throwJSException(err.Error())
 		} else {
 			passwd, _ = otto.ToValue(input)

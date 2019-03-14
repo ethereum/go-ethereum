@@ -40,11 +40,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ebfe/scard"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	pcsc "github.com/gballet/go-libpcsclite"
 )
 
 // Scheme is the URI prefix for smartcard wallets.
@@ -70,7 +70,7 @@ type smartcardPairing struct {
 type Hub struct {
 	scheme string // Protocol scheme prefixing account and wallet URLs.
 
-	context  *scard.Context
+	context  *pcsc.Client
 	datadir  string
 	pairings map[string]smartcardPairing
 
@@ -152,7 +152,7 @@ func (hub *Hub) setPairing(wallet *Wallet, pairing *smartcardPairing) error {
 
 // NewHub creates a new hardware wallet manager for smartcards.
 func NewHub(scheme string, datadir string) (*Hub, error) {
-	context, err := scard.EstablishContext()
+	context, err := pcsc.EstablishContext(pcsc.ScopeSystem)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +228,7 @@ func (hub *Hub) refreshWallets() {
 			delete(hub.wallets, reader)
 		}
 		// New card detected, try to connect to it
-		card, err := hub.context.Connect(reader, scard.ShareShared, scard.ProtocolAny)
+		card, err := hub.context.Connect(reader, pcsc.ShareShared, pcsc.ProtocolAny)
 		if err != nil {
 			log.Debug("Failed to open smart card", "reader", reader, "err", err)
 			continue
@@ -236,7 +236,7 @@ func (hub *Hub) refreshWallets() {
 		wallet := NewWallet(hub, card)
 		if err = wallet.connect(); err != nil {
 			log.Debug("Failed to connect to smart card", "reader", reader, "err", err)
-			card.Disconnect(scard.LeaveCard)
+			card.Disconnect(pcsc.LeaveCard)
 			continue
 		}
 		// Card connected, start tracking in amongs the wallets

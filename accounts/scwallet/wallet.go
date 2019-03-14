@@ -32,7 +32,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ebfe/scard"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -40,12 +39,13 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/log"
+	pcsc "github.com/gballet/go-libpcsclite"
 )
 
-// ErrPUKNeeded is returned if opening the smart card requires pairing with a PUK
-// code. In this case, the calling application should request user input to enter
-// the PUK and send it back.
-var ErrPUKNeeded = errors.New("smartcard: puk needed")
+// ErrPairingPasswordNeeded is returned if opening the smart card requires pairing with a pairing
+// password. In this case, the calling application should request user input to enter
+// the pairing password and send it back.
+var ErrPairingPasswordNeeded = errors.New("smartcard: pairing password needed")
 
 // ErrPINNeeded is returned if opening the smart card requires a PIN code. In
 // this case, the calling application should request user input to enter the PIN
@@ -67,7 +67,8 @@ var ErrAlreadyOpen = errors.New("smartcard: already open")
 var ErrPubkeyMismatch = errors.New("smartcard: recovered public key mismatch")
 
 var (
-	appletAID               = []byte{0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x57, 0x61, 0x6C, 0x6C, 0x65, 0x74, 0x41, 0x70, 0x70}
+	// appletAID               = []byte{0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x57, 0x61, 0x6C, 0x6C, 0x65, 0x74, 0x41, 0x70, 0x70}
+	appletAID               = []byte{0xA0, 0x00, 0x00, 0x08, 0x04, 0x00, 0x01, 0x01, 0x01}
 	DerivationSignatureHash = sha256.Sum256([]byte("STATUS KEY DERIVATION"))
 )
 
@@ -108,10 +109,10 @@ type Wallet struct {
 	Hub       *Hub   // A handle to the Hub that instantiated this wallet.
 	PublicKey []byte // The wallet's public key (used for communication and identification, not signing!)
 
-	lock    sync.Mutex  // Lock that gates access to struct fields and communication with the card
-	card    *scard.Card // A handle to the smartcard interface for the wallet.
-	session *Session    // The secure communication session with the card
-	log     log.Logger  // Contextual logger to tag the base with its id
+	lock    sync.Mutex // Lock that gates access to struct fields and communication with the card
+	card    *pcsc.Card // A handle to the smartcard interface for the wallet.
+	session *Session   // The secure communication session with the card
+	log     log.Logger // Contextual logger to tag the base with its id
 
 	deriveNextPath accounts.DerivationPath   // Next derivation path for account auto-discovery
 	deriveNextAddr common.Address            // Next derived account address for auto-discovery
@@ -121,7 +122,7 @@ type Wallet struct {
 }
 
 // NewWallet constructs and returns a new Wallet instance.
-func NewWallet(hub *Hub, card *scard.Card) *Wallet {
+func NewWallet(hub *Hub, card *pcsc.Card) *Wallet {
 	wallet := &Wallet{
 		Hub:  hub,
 		card: card,
@@ -132,13 +133,13 @@ func NewWallet(hub *Hub, card *scard.Card) *Wallet {
 // transmit sends an APDU to the smartcard and receives and decodes the response.
 // It automatically handles requests by the card to fetch the return data separately,
 // and returns an error if the response status code is not success.
-func transmit(card *scard.Card, command *commandAPDU) (*responseAPDU, error) {
+func transmit(card *pcsc.Card, command *commandAPDU) (*responseAPDU, error) {
 	data, err := command.serialize()
 	if err != nil {
 		return nil, err
 	}
 
-	responseData, err := card.Transmit(data)
+	responseData, _, err := card.Transmit(data)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +350,7 @@ func (w *Wallet) Open(passphrase string) error {
 		} else {
 			// If no passphrase was supplied, request the PUK from the user
 			if passphrase == "" {
-				return ErrPUKNeeded
+				return ErrPairingPasswordNeeded
 			}
 			// Attempt to pair the smart card with the user supplied PUK
 			if err := w.pair([]byte(passphrase)); err != nil {
@@ -814,7 +815,7 @@ func (s *Session) unblockPin(pukpin []byte) error {
 
 // release releases resources associated with the channel.
 func (s *Session) release() error {
-	return s.Wallet.card.Disconnect(scard.LeaveCard)
+	return s.Wallet.card.Disconnect(pcsc.LeaveCard)
 }
 
 // paired returns true if a valid pairing exists.
