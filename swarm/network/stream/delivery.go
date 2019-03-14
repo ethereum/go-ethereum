@@ -295,13 +295,12 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 	// this span will finish only when delivery is handled (or times out)
 	ctx = context.WithValue(ctx, tracing.StoreLabelId, "stream.send.request")
 	ctx = context.WithValue(ctx, tracing.StoreLabelMeta, fmt.Sprintf("%v.%v", sp.ID(), req.Addr))
-	ctx = tracing.StartSaveSpan(ctx)
 	log.Trace("request.from.peers", "peer", sp.ID(), "ref", req.Addr)
-	err := sp.Send(ctx, &RetrieveRequestMsg{
+	err := sp.SendPriority(ctx, &RetrieveRequestMsg{
 		Addr:      req.Addr,
 		SkipCheck: req.SkipCheck,
 		HopCount:  req.HopCount,
-	})
+	}, Top)
 	if err != nil {
 		return nil, nil, err
 	}
