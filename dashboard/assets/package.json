@@ -39,7 +39,7 @@
         "react": "16.8.4",
         "react-dom": "16.8.4",
         "react-hot-loader": "4.8.0",
-        "react-transition-group": "2.6.0",
+        "react-transition-group": "2.6.1",
         "recharts": "1.5.0",
         "style-loader": "0.23.1",
         "terser-webpack-plugin": "^1.2.3",
