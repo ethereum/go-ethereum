@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	defaultSearchTimeout = 8 * time.Second
+	defaultSearchTimeout = 4 * time.Second
 	// maximum number of forwarded requests (hops), to make sure requests are not
 	// forwarded forever in peer loops
 	maxHopCount uint8 = 20
@@ -38,7 +38,7 @@ const (
 
 // Time to consider peer to be skipped.
 // Also used in stream delivery.
-var RequestTimeout = 26 * time.Second
+var RequestTimeout = 15 * time.Second
 
 type RequestFunc func(context.Context, *Request) (*enode.ID, chan struct{}, error)
 
