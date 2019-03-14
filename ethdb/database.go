@@ -80,6 +80,13 @@ type AncientReader interface {
 	Ancienter
 }
 
+// AncientStore contains all the methods required to allow handling different
+// ancient data stores backing immutable chain data store.
+type AncientStore interface {
+	Ancienter
+	io.Closer
+}
+
 // Database contains all the methods required by the high level database to not
 // only access the key-value data store but also the chain freezer.
 type Database interface {

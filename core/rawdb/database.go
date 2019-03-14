@@ -17,6 +17,8 @@
 package rawdb
 
 import (
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
@@ -25,7 +27,23 @@ import (
 // freezerdb is a databse wrapper that enabled freezer data retrievals.
 type freezerdb struct {
 	ethdb.KeyValueStore
-	ethdb.Ancienter
+	ethdb.AncientStore
+}
+
+// Close implements io.Closer, closing both the fast key-value store as well as
+// the slow ancient tables.
+func (frdb *freezerdb) Close() error {
+	var errs []error
+	if err := frdb.KeyValueStore.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := frdb.AncientStore.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	if len(errs) != 0 {
+		return fmt.Errorf("%v", errs)
+	}
+	return nil
 }
 
 // nofreezedb is a database wrapper that disables freezer data retrievals.
@@ -58,7 +76,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 
 	return &freezerdb{
 		KeyValueStore: db,
-		Ancienter:     frdb,
+		AncientStore:  frdb,
 	}, nil
 }
 

@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"path/filepath"
 	"sync/atomic"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/prometheus/tsdb/fileutil"
 )
 
 // errUnknownTable is returned if the user attempts to read from a table that is
@@ -57,8 +59,9 @@ const (
 //   reserving it for go-ethereum. This would also reduce the memory requirements
 //   of Geth, and thus also GC overhead.
 type freezer struct {
-	tables map[string]*freezerTable // Data tables for storing everything
-	frozen uint64                   // Number of blocks already frozen
+	tables       map[string]*freezerTable // Data tables for storing everything
+	frozen       uint64                   // Number of blocks already frozen
+	instanceLock fileutil.Releaser        // File-system lock to prevent double opens
 }
 
 // newFreezer creates a chain freezer that moves ancient chain data into
@@ -69,9 +72,14 @@ func newFreezer(datadir string, namespace string) (*freezer, error) {
 		readMeter  = metrics.NewRegisteredMeter(namespace+"ancient/read", nil)
 		writeMeter = metrics.NewRegisteredMeter(namespace+"ancient/write", nil)
 	)
+	lock, _, err := fileutil.Flock(filepath.Join(datadir, "LOCK"))
+	if err != nil {
+		return nil, err
+	}
 	// Open all the supported data tables
 	freezer := &freezer{
-		tables: make(map[string]*freezerTable),
+		tables:       make(map[string]*freezerTable),
+		instanceLock: lock,
 	}
 	for _, name := range []string{"hashes", "headers", "bodies", "receipts", "diffs"} {
 		table, err := newTable(datadir, name, readMeter, writeMeter)
@@ -79,6 +87,7 @@ func newFreezer(datadir string, namespace string) (*freezer, error) {
 			for _, table := range freezer.tables {
 				table.Close()
 			}
+			lock.Release()
 			return nil, err
 		}
 		freezer.tables[name] = table
@@ -95,6 +104,7 @@ func newFreezer(datadir string, namespace string) (*freezer, error) {
 			for _, table := range freezer.tables {
 				table.Close()
 			}
+			lock.Release()
 			return nil, err
 		}
 	}
@@ -108,6 +118,9 @@ func (f *freezer) Close() error {
 		if err := table.Close(); err != nil {
 			errs = append(errs, err)
 		}
+	}
+	if err := f.instanceLock.Release(); err != nil {
+		errs = append(errs, err)
 	}
 	if errs != nil {
 		return fmt.Errorf("%v", errs)
