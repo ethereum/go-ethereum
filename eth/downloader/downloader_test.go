@@ -187,7 +187,7 @@ func (dl *downloadTester) CurrentFastBlock() *types.Block {
 func (dl *downloadTester) FastSyncCommitHead(hash common.Hash) error {
 	// For now only check that the state trie is correct
 	if block := dl.GetBlockByHash(hash); block != nil {
-		_, err := trie.NewSecure(block.Root(), trie.NewDatabase(dl.stateDb), 0)
+		_, err := trie.NewSecure(block.Root(), trie.NewDatabase(dl.stateDb))
 		return err
 	}
 	return fmt.Errorf("non existent block: %x", hash[:4])

@@ -19,7 +19,6 @@ package trie
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -328,38 +327,6 @@ func (db *countingDB) Get(key []byte) ([]byte, error) {
 	return db.KeyValueStore.Get(key)
 }
 
-// TestCacheUnload checks that decoded nodes are unloaded after a
-// certain number of commit operations.
-func TestCacheUnload(t *testing.T) {
-	// Create test trie with two branches.
-	trie := newEmpty()
-	key1 := "---------------------------------"
-	key2 := "---some other branch"
-	updateString(trie, key1, "this is the branch of key1.")
-	updateString(trie, key2, "this is the branch of key2.")
-
-	root, _ := trie.Commit(nil)
-	trie.db.Commit(root, true)
-
-	// Commit the trie repeatedly and access key1.
-	// The branch containing it is loaded from DB exactly two times:
-	// in the 0th and 6th iteration.
-	diskdb := &countingDB{KeyValueStore: trie.db.diskdb, gets: make(map[string]int)}
-	triedb := NewDatabase(diskdb)
-	trie, _ = New(root, triedb)
-	trie.SetCacheLimit(5)
-	for i := 0; i < 12; i++ {
-		getString(trie, key1)
-		trie.Commit(nil)
-	}
-	// Check that it got loaded two times.
-	for dbkey, count := range diskdb.gets {
-		if count != 2 {
-			t.Errorf("db key %x loaded %d times, want %d times", []byte(dbkey), count, 2)
-		}
-	}
-}
-
 // randTest performs random trie operations.
 // Instances of this test are created by Generate.
 type randTest []randTestStep
@@ -379,7 +346,6 @@ const (
 	opHash
 	opReset
 	opItercheckhash
-	opCheckCacheInvariant
 	opMax // boundary value, not an actual op
 )
 
@@ -458,8 +424,6 @@ func runRandTest(rt randTest) bool {
 			if tr.Hash() != checktr.Hash() {
 				rt[i].err = fmt.Errorf("hash mismatch in opItercheckhash")
 			}
-		case opCheckCacheInvariant:
-			rt[i].err = checkCacheInvariant(tr.root, nil, tr.cachegen, false, 0)
 		}
 		// Abort the test on error.
 		if rt[i].err != nil {
@@ -467,40 +431,6 @@ func runRandTest(rt randTest) bool {
 		}
 	}
 	return true
-}
-
-func checkCacheInvariant(n, parent node, parentCachegen uint16, parentDirty bool, depth int) error {
-	var children []node
-	var flag nodeFlag
-	switch n := n.(type) {
-	case *shortNode:
-		flag = n.flags
-		children = []node{n.Val}
-	case *fullNode:
-		flag = n.flags
-		children = n.Children[:]
-	default:
-		return nil
-	}
-
-	errorf := func(format string, args ...interface{}) error {
-		msg := fmt.Sprintf(format, args...)
-		msg += fmt.Sprintf("\nat depth %d node %s", depth, spew.Sdump(n))
-		msg += fmt.Sprintf("parent: %s", spew.Sdump(parent))
-		return errors.New(msg)
-	}
-	if flag.gen > parentCachegen {
-		return errorf("cache invariant violation: %d > %d\n", flag.gen, parentCachegen)
-	}
-	if depth > 0 && !parentDirty && flag.dirty {
-		return errorf("cache invariant violation: %d > %d\n", flag.gen, parentCachegen)
-	}
-	for _, child := range children {
-		if err := checkCacheInvariant(child, n, flag.gen, flag.dirty, depth+1); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func TestRandom(t *testing.T) {
@@ -626,6 +556,6 @@ func TestDecodeNode(t *testing.T) {
 	for i := 0; i < 5000000; i++ {
 		rand.Read(hash)
 		rand.Read(elems)
-		decodeNode(hash, elems, 1)
+		decodeNode(hash, elems)
 	}
 }

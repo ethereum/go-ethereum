@@ -65,7 +65,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.Writer) error {
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
 	}
-	hasher := newHasher(0, 0, nil)
+	hasher := newHasher(nil)
 	defer returnHasherToPool(hasher)
 
 	for i, n := range nodes {
@@ -112,7 +112,7 @@ func VerifyProof(rootHash common.Hash, key []byte, proofDb ethdb.Reader) (value 
 		if buf == nil {
 			return nil, i, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash)
 		}
-		n, err := decodeNode(wantHash[:], buf, 0)
+		n, err := decodeNode(wantHash[:], buf)
 		if err != nil {
 			return nil, i, fmt.Errorf("bad proof node %d: %v", i, err)
 		}
