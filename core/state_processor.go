@@ -17,6 +17,8 @@
 package core
 
 import (
+	"runtime"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -65,13 +67,73 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
+
+	txs := block.Transactions()
+	signer := types.MakeSigner(p.config, header.Number)
+
+	// Spawn as many workers as allowed threads
+	workers := runtime.GOMAXPROCS(0)
+	if len(txs) < workers {
+		workers = len(txs)
+	}
+
+	var (
+		inputs = make(chan int)
+		done   = make(chan int, workers)
+		errs   = make([]error, len(txs))
+	)
+	for i := 0; i < workers; i++ {
+		go func() {
+			for index := range inputs {
+				_, err := types.Sender(signer, txs[index])
+				errs[index] = err
+				done <- index
+			}
+		}()
+	}
+
+	var (
+		abort     = make(chan struct{})
+		errorsOut = make(chan error, len(txs))
+	)
+	go func() {
+		defer close(inputs)
+
+		var (
+			in, out = 0, 0
+			checked = make([]bool, len(txs))
+			inputs  = inputs
+		)
+
+		for {
+			select {
+			case inputs <- in:
+				if in++; in == len(txs) {
+					// Reached end of txs. Stop sending to workers.
+					inputs = nil
+				}
+			case index := <-done:
+				for checked[index] = true; checked[out]; out++ {
+					errorsOut <- errs[out]
+					if out == len(txs)-1 {
+						return
+					}
+				}
+			case <-abort:
+				return
+			}
+		}
+	}()
+
+	defer close(abort)
 	// Iterate over and process the individual transactions
-	for i, tx := range block.Transactions() {
+	for i, tx := range txs {
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
-		receipt, _, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
+		err := <-errorsOut
 		if err != nil {
 			return nil, nil, 0, err
 		}
+		receipt, _, _ := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
