@@ -78,22 +78,22 @@ func TestManualCidDecode(t *testing.T) {
 	}{
 		{
 			name:        "values correct, should not fail",
-			headerBytes: []byte{0xe4, 0x01, 0x99, 0x1b, 0x20},
+			headerBytes: []byte{0xe4, 0x01, 0xfa, 0xd6, 0x20},
 			fails:       false,
 		},
 		{
 			name:        "cid version wrong, should fail",
-			headerBytes: []byte{0xe4, 0x00, 0x99, 0x1b, 0x20},
+			headerBytes: []byte{0xe4, 0x00, 0xfa, 0xd6, 0x20},
 			fails:       true,
 		},
 		{
 			name:        "hash length wrong, should fail",
-			headerBytes: []byte{0xe4, 0x01, 0x99, 0x1b, 0x1f},
+			headerBytes: []byte{0xe4, 0x01, 0xfa, 0xd6, 0x1f},
 			fails:       true,
 		},
 		{
 			name:        "values correct for ipfs, should fail",
-			headerBytes: []byte{0xe3, 0x01, 0x99, 0x1b, 0x20},
+			headerBytes: []byte{0xe3, 0x01, 0x70, 0x12, 0x20},
 			fails:       true,
 		},
 	} {

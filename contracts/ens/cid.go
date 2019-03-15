@@ -30,8 +30,8 @@ const (
 	ns_ipfs  = 0xe3
 	ns_swarm = 0xe4
 
-	swarm_typecode = 0x99 //todo change
-	swarm_hashtype = 0x1b //todo change
+	swarm_typecode = 0xfa //swarm manifest
+	swarm_hashtype = 0xd6 // BMT
 
 	ipfs_hashtype = 0x12
 
@@ -82,11 +82,11 @@ func extractContentHash(buf []byte) (common.Hash, error) {
 		return common.Hash{}, errors.New("unknown storage system")
 	}
 
-	if contentType != swarm_typecode { //todo pending pr
+	if contentType != swarm_typecode {
 		return common.Hash{}, errors.New("unknown content type")
 	}
 
-	if hashType != swarm_hashtype { //todo: should be bmt
+	if hashType != swarm_hashtype {
 		return common.Hash{}, errors.New("unknown multihash type")
 	}
 
@@ -106,8 +106,8 @@ func encodeSwarmHash(hash common.Hash) ([]byte, error) {
 	var headerBytes = []byte{
 		ns_swarm,       //swarm namespace
 		cidv1,          // CIDv1
-		swarm_typecode, // the swarm type-code
-		swarm_hashtype, // swarm hash type. todo BMT
+		swarm_typecode, // swarm hash
+		swarm_hashtype, // swarm bmt hash
 		hash_length,    //hash length. 32 bytes
 	}
 
