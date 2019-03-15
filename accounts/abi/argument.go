@@ -102,7 +102,7 @@ func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 	return arguments.unpackAtomic(v, marshalledValues[0])
 }
 
-// Unpack performs the operation hexdata -> mapping of argument name to argument value
+// UnpackIntoMap performs the operation hexdata -> mapping of argument name to argument value
 func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) error {
 	marshalledValues, err := arguments.UnpackValues(data)
 	if err != nil {
@@ -170,7 +170,7 @@ func unpack(t *Type, dst interface{}, src interface{}) error {
 	return nil
 }
 
-// Unpack arguments into map
+// unpackIntoMap unpacks marshalledValues into the provided map[string]interface{}
 func (arguments Arguments) unpackIntoMap(v map[string]interface{}, marshalledValues []interface{}) error {
 	// Make sure map is not nil
 	if v == nil {

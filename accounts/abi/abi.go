@@ -72,37 +72,39 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 }
 
 // Unpack output in v according to the abi specification
-func (abi ABI) Unpack(v interface{}, name string, output []byte) (err error) {
-	if len(output) == 0 {
+func (abi ABI) Unpack(v interface{}, name string, data []byte) (err error) {
+	if len(data) == 0 {
 		return fmt.Errorf("abi: unmarshalling empty output")
 	}
 	// since there can't be naming collisions with contracts and events,
 	// we need to decide whether we're calling a method or an event
 	if method, ok := abi.Methods[name]; ok {
-		if len(output)%32 != 0 {
-			return fmt.Errorf("abi: improperly formatted output: %s - Bytes: [%+v]", string(output), output)
+		if len(data)%32 != 0 {
+			return fmt.Errorf("abi: improperly formatted output: %s - Bytes: [%+v]", string(data), data)
 		}
-		return method.Outputs.Unpack(v, output)
-	} else if event, ok := abi.Events[name]; ok {
-		return event.Inputs.Unpack(v, output)
+		return method.Outputs.Unpack(v, data)
+	}
+	if event, ok := abi.Events[name]; ok {
+		return event.Inputs.Unpack(v, data)
 	}
 	return fmt.Errorf("abi: could not locate named method or event")
 }
 
-// Unpack output into a map according to the abi specification
-func (abi ABI) UnpackIntoMap(v map[string]interface{}, name string, output []byte) (err error) {
-	if len(output) == 0 {
+// UnpackIntoMap unpacks a log into the provided map[string]interface{}
+func (abi ABI) UnpackIntoMap(v map[string]interface{}, name string, data []byte) (err error) {
+	if len(data) == 0 {
 		return fmt.Errorf("abi: unmarshalling empty output")
 	}
 	// since there can't be naming collisions with contracts and events,
 	// we need to decide whether we're calling a method or an event
 	if method, ok := abi.Methods[name]; ok {
-		if len(output)%32 != 0 {
+		if len(data)%32 != 0 {
 			return fmt.Errorf("abi: improperly formatted output")
 		}
-		return method.Outputs.UnpackIntoMap(v, output)
-	} else if event, ok := abi.Events[name]; ok {
-		return event.Inputs.UnpackIntoMap(v, output)
+		return method.Outputs.UnpackIntoMap(v, data)
+	}
+	if event, ok := abi.Events[name]; ok {
+		return event.Inputs.UnpackIntoMap(v, data)
 	}
 	return fmt.Errorf("abi: could not locate named method or event")
 }
