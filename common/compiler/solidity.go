@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -27,8 +27,6 @@ import (
 	"strconv"
 	"strings"
 )
-
-var solVersionRegexp = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
 
 // Solidity contains information about the solidity compiler.
 type Solidity struct {
@@ -69,7 +67,7 @@ func SolidityVersion(solc string) (*Solidity, error) {
 	if err != nil {
 		return nil, err
 	}
-	matches := solVersionRegexp.FindStringSubmatch(out.String())
+	matches := versionRegexp.FindStringSubmatch(out.String())
 	if len(matches) != 4 {
 		return nil, fmt.Errorf("can't parse solc version %q", out.String())
 	}
