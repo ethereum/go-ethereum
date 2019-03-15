@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
@@ -229,16 +230,12 @@ func (a *Addresses) Append(address *Address) {
 	a.addresses = append(a.addresses, address.address)
 }
 
-// ToHex returns the hex representation of b, prefixed with '0x'.
-// For empty slices, the return value is "0x0".
-//
-// Deprecated: use hexutil.Encode instead.
-func ToHex(b []byte) string {
-	return common.ToHex(b)
+// EncodeToHex encodes b as a hex string with 0x prefix.
+func EncodeToHex(b []byte) string {
+	return hexutil.Encode(b)
 }
 
-// FromHex returns the bytes represented by the hexadecimal string s.
-// s may be prefixed with "0x".
-func FromHex(s string) []byte {
-	return common.FromHex(s)
+// DecodeFromHex decodes a hex string with 0x prefix.
+func DecodeFromHex(s string) ([]byte, error) {
+	return hexutil.Decode(s)
 }

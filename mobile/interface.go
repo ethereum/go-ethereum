@@ -115,16 +115,12 @@ func (i *Interface) GetBigInts() *BigInts { return &BigInts{*i.object.(*[]*big.I
 
 // Interfaces is a slices of wrapped generic objects.
 type Interfaces struct {
-	objects []*Interface // Notably, each element in the objects is not nil
+	objects []interface{}
 }
 
 // NewInterfaces creates a slice of uninitialized interfaces.
 func NewInterfaces(size int) *Interfaces {
-	ifaces := &Interfaces{objects: make([]*Interface, size)}
-	for i := 0; i < ifaces.Size(); i++ {
-		ifaces.objects[i] = NewInterface()
-	}
-	return ifaces
+	return &Interfaces{objects: make([]interface{}, size)}
 }
 
 // Size returns the number of interfaces in the slice.
@@ -133,11 +129,13 @@ func (i *Interfaces) Size() int {
 }
 
 // Get returns the bigint at the given index from the slice.
+// Notably the returned value can be changed without affecting the
+// interfaces itself.
 func (i *Interfaces) Get(index int) (iface *Interface, _ error) {
 	if index < 0 || index >= len(i.objects) {
 		return nil, errors.New("index out of bounds")
 	}
-	return i.objects[index], nil
+	return &Interface{object: i.objects[index]}, nil
 }
 
 // Set sets the big int at the given index in the slice.
@@ -145,17 +143,6 @@ func (i *Interfaces) Set(index int, object *Interface) error {
 	if index < 0 || index >= len(i.objects) {
 		return errors.New("index out of bounds")
 	}
-	i.objects[index].object = object.object
+	i.objects[index] = object.object
 	return nil
-}
-
-// value returns a batch of embedded values.
-//
-// Notably, this function won't be exposed.
-func (i *Interfaces) value() []interface{} {
-	values := make([]interface{}, 0, i.Size())
-	for index := 0; index < i.Size(); index += 1 {
-		values = append(values, i.objects[index].object)
-	}
-	return values
 }

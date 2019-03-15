@@ -67,10 +67,16 @@ func TestInterfaceGetSet(t *testing.T) {
 	}
 
 	for index, c := range tests {
+		// In theory the change of iface shouldn't effect the args value
 		iface, _ := args.Get(index)
 		result := callFn(iface, c.method, c.input)
 		if !reflect.DeepEqual(result, c.expect) {
 			t.Errorf("Interface get/set mismatch, want %v, got %v", c.expect, result)
+		}
+		// Check whether the underlying value in args is still zero
+		iface, _ = args.Get(index)
+		if iface.object != nil {
+			t.Error("Get operation is not write safe")
 		}
 	}
 }

@@ -19,16 +19,16 @@
 package geth
 
 import (
+	"errors"
 	"math/big"
 	"strings"
-	"errors"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 )
 
 // Signer is an interface defining the callback when a contract requires a
@@ -151,7 +151,7 @@ func DeployContract(opts *TransactOpts, abiJSON string, bytecode []byte, client 
 	if err != nil {
 		return nil, err
 	}
-	addr, tx, bound, err := bind.DeployContract(&opts.opts, parsed, common.CopyBytes(bytecode), client.client, args.value()...)
+	addr, tx, bound, err := bind.DeployContract(&opts.opts, parsed, common.CopyBytes(bytecode), client.client, args.objects...)
 	if err != nil {
 		return nil, err
 	}
@@ -187,27 +187,25 @@ func (c *BoundContract) GetDeployer() *Transaction {
 // sets the output to result.
 func (c *BoundContract) Call(opts *CallOpts, out *Interfaces, method string, args *Interfaces) error {
 	if len(out.objects) == 1 {
-		result := out.objects[0].object
-		if err := c.contract.Call(&opts.opts, &result, method, args.value()...); err != nil {
+		result := out.objects[0]
+		if err := c.contract.Call(&opts.opts, result, method, args.objects...); err != nil {
 			return err
 		}
-		out.objects[0].object = result
+		out.objects[0] = result
 	} else {
 		results := make([]interface{}, len(out.objects))
-		copy(results, out.value())
-		if err := c.contract.Call(&opts.opts, &results, method, args.value()...); err != nil {
+		copy(results, out.objects)
+		if err := c.contract.Call(&opts.opts, &results, method, args.objects...); err != nil {
 			return err
 		}
-		for index, result := range results {
-			out.objects[index].object = result
-		}
+		copy(out.objects, results)
 	}
 	return nil
 }
 
 // Transact invokes the (paid) contract method with params as input values.
 func (c *BoundContract) Transact(opts *TransactOpts, method string, args *Interfaces) (tx *Transaction, _ error) {
-	rawTx, err := c.contract.Transact(&opts.opts, method, args.value()...)
+	rawTx, err := c.contract.Transact(&opts.opts, method, args.objects...)
 	if err != nil {
 		return nil, err
 	}
