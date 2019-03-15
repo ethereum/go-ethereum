@@ -48,9 +48,8 @@ type Config struct {
 	*storage.FileStoreParams
 	*storage.LocalStoreParams
 	*network.HiveParams
-	Swap *swap.LocalProfile
-	Pss  *pss.PssParams
-	//*network.SyncParams
+	Swap                 *swap.LocalProfile
+	Pss                  *pss.PssParams
 	Contract             common.Address
 	EnsRoot              common.Address
 	EnsAPIs              []string
@@ -80,10 +79,9 @@ type Config struct {
 func NewConfig() (c *Config) {
 
 	c = &Config{
-		LocalStoreParams: storage.NewDefaultLocalStoreParams(),
-		FileStoreParams:  storage.NewFileStoreParams(),
-		HiveParams:       network.NewHiveParams(),
-		//SyncParams:    network.NewDefaultSyncParams(),
+		LocalStoreParams:     storage.NewDefaultLocalStoreParams(),
+		FileStoreParams:      storage.NewFileStoreParams(),
+		HiveParams:           network.NewHiveParams(),
 		Swap:                 swap.NewDefaultSwapParams(),
 		Pss:                  pss.NewPssParams(),
 		ListenAddr:           DefaultHTTPListenAddr,
@@ -118,7 +116,6 @@ func (c *Config) Init(prvKey *ecdsa.PrivateKey) {
 
 	pubkey := crypto.FromECDSAPub(&prvKey.PublicKey)
 	pubkeyhex := common.ToHex(pubkey)
-	//keyhex := crypto.Keccak256Hash(pubkey).Hex()
 	keyhex := hexutil.Encode(network.PrivateKeyToBzzKey(prvKey))
 
 	c.PublicKey = pubkeyhex
