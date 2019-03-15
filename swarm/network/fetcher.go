@@ -18,12 +18,15 @@ package network
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/tracing"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 const (
@@ -317,6 +320,15 @@ func (f *Fetcher) doRequest(gone chan *enode.ID, peersToSkip *sync.Map, sources 
 		case <-quit:
 			gone <- sourceID
 		case <-f.ctx.Done():
+		}
+
+		// finish the request span
+		spanId := fmt.Sprintf("stream.send.request.%v.%v", *sourceID, req.Addr)
+		span := tracing.ShiftSpanByKey(spanId)
+
+		if span != nil {
+			span.LogFields(olog.String("finish", "from doRequest"))
+			span.Finish()
 		}
 	}()
 	return sources, nil

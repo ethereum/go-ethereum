@@ -145,6 +145,17 @@ func (f Index) Get(keyFields Item) (out Item, err error) {
 	return out.Merge(keyFields), nil
 }
 
+// Has accepts key fields represented as Item to check
+// if there this Item's encoded key is stored in
+// the index.
+func (f Index) Has(keyFields Item) (bool, error) {
+	key, err := f.encodeKeyFunc(keyFields)
+	if err != nil {
+		return false, err
+	}
+	return f.db.Has(key)
+}
+
 // Put accepts Item to encode information from it
 // and save it to the database.
 func (f Index) Put(i Item) (err error) {

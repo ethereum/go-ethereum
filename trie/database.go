@@ -55,20 +55,11 @@ var secureKeyPrefix = []byte("secure-key-")
 // secureKeyLength is the length of the above prefix + 32byte hash.
 const secureKeyLength = 11 + 32
 
-// DatabaseReader wraps the Get and Has method of a backing store for the trie.
-type DatabaseReader interface {
-	// Get retrieves the value associated with key from the database.
-	Get(key []byte) (value []byte, err error)
-
-	// Has retrieves whether a key is present in the database.
-	Has(key []byte) (bool, error)
-}
-
 // Database is an intermediate write layer between the trie data structures and
 // the disk database. The aim is to accumulate trie writes in-memory and only
 // periodically flush a couple tries to disk, garbage collecting the remainder.
 type Database struct {
-	diskdb ethdb.Database // Persistent storage for matured trie nodes
+	diskdb ethdb.KeyValueStore // Persistent storage for matured trie nodes
 
 	cleans  *bigcache.BigCache          // GC friendly memory cache of clean node RLPs
 	dirties map[common.Hash]*cachedNode // Data and references relationships of dirty nodes
@@ -163,11 +154,11 @@ func (n *cachedNode) rlp() []byte {
 
 // obj returns the decoded and expanded trie node, either directly from the cache,
 // or by regenerating it from the rlp encoded blob.
-func (n *cachedNode) obj(hash common.Hash, cachegen uint16) node {
+func (n *cachedNode) obj(hash common.Hash) node {
 	if node, ok := n.node.(rawNode); ok {
-		return mustDecodeNode(hash[:], node, cachegen)
+		return mustDecodeNode(hash[:], node)
 	}
-	return expandNode(hash[:], n.node, cachegen)
+	return expandNode(hash[:], n.node)
 }
 
 // childs returns all the tracked children of this node, both the implicit ones
@@ -232,16 +223,15 @@ func simplifyNode(n node) node {
 
 // expandNode traverses the node hierarchy of a collapsed storage node and converts
 // all fields and keys into expanded memory form.
-func expandNode(hash hashNode, n node, cachegen uint16) node {
+func expandNode(hash hashNode, n node) node {
 	switch n := n.(type) {
 	case *rawShortNode:
 		// Short nodes need key and child expansion
 		return &shortNode{
 			Key: compactToHex(n.Key),
-			Val: expandNode(nil, n.Val, cachegen),
+			Val: expandNode(nil, n.Val),
 			flags: nodeFlag{
 				hash: hash,
-				gen:  cachegen,
 			},
 		}
 
@@ -250,12 +240,11 @@ func expandNode(hash hashNode, n node, cachegen uint16) node {
 		node := &fullNode{
 			flags: nodeFlag{
 				hash: hash,
-				gen:  cachegen,
 			},
 		}
 		for i := 0; i < len(node.Children); i++ {
 			if n[i] != nil {
-				node.Children[i] = expandNode(nil, n[i], cachegen)
+				node.Children[i] = expandNode(nil, n[i])
 			}
 		}
 		return node
@@ -271,14 +260,14 @@ func expandNode(hash hashNode, n node, cachegen uint16) node {
 // NewDatabase creates a new trie database to store ephemeral trie content before
 // its written out to disk or garbage collected. No read cache is created, so all
 // data retrievals will hit the underlying disk database.
-func NewDatabase(diskdb ethdb.Database) *Database {
+func NewDatabase(diskdb ethdb.KeyValueStore) *Database {
 	return NewDatabaseWithCache(diskdb, 0)
 }
 
 // NewDatabaseWithCache creates a new trie database to store ephemeral trie content
 // before its written out to disk or garbage collected. It also acts as a read cache
 // for nodes loaded from disk.
-func NewDatabaseWithCache(diskdb ethdb.Database, cache int) *Database {
+func NewDatabaseWithCache(diskdb ethdb.KeyValueStore, cache int) *Database {
 	var cleans *bigcache.BigCache
 	if cache > 0 {
 		cleans, _ = bigcache.NewBigCache(bigcache.Config{
@@ -298,7 +287,7 @@ func NewDatabaseWithCache(diskdb ethdb.Database, cache int) *Database {
 }
 
 // DiskDB retrieves the persistent storage backing the trie database.
-func (db *Database) DiskDB() DatabaseReader {
+func (db *Database) DiskDB() ethdb.Reader {
 	return db.diskdb
 }
 
@@ -358,13 +347,13 @@ func (db *Database) insertPreimage(hash common.Hash, preimage []byte) {
 
 // node retrieves a cached trie node from memory, or returns nil if none can be
 // found in the memory cache.
-func (db *Database) node(hash common.Hash, cachegen uint16) node {
+func (db *Database) node(hash common.Hash) node {
 	// Retrieve the node from the clean cache if available
 	if db.cleans != nil {
 		if enc, err := db.cleans.Get(string(hash[:])); err == nil && enc != nil {
 			memcacheCleanHitMeter.Mark(1)
 			memcacheCleanReadMeter.Mark(int64(len(enc)))
-			return mustDecodeNode(hash[:], enc, cachegen)
+			return mustDecodeNode(hash[:], enc)
 		}
 	}
 	// Retrieve the node from the dirty cache if available
@@ -373,7 +362,7 @@ func (db *Database) node(hash common.Hash, cachegen uint16) node {
 	db.lock.RUnlock()
 
 	if dirty != nil {
-		return dirty.obj(hash, cachegen)
+		return dirty.obj(hash)
 	}
 	// Content unavailable in memory, attempt to retrieve from disk
 	enc, err := db.diskdb.Get(hash[:])
@@ -385,7 +374,7 @@ func (db *Database) node(hash common.Hash, cachegen uint16) node {
 		memcacheCleanMissMeter.Mark(1)
 		memcacheCleanWriteMeter.Mark(int64(len(enc)))
 	}
-	return mustDecodeNode(hash[:], enc, cachegen)
+	return mustDecodeNode(hash[:], enc)
 }
 
 // Node retrieves an encoded cached trie node from memory. If it cannot be found

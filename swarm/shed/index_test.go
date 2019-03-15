@@ -49,7 +49,7 @@ var retrievalIndexFuncs = IndexFuncs{
 	},
 }
 
-// TestIndex validates put, get and delete functions of the Index implementation.
+// TestIndex validates put, get, has and delete functions of the Index implementation.
 func TestIndex(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
@@ -175,6 +175,41 @@ func TestIndex(t *testing.T) {
 			t.Fatal(err)
 		}
 		checkItem(t, got, want)
+	})
+
+	t.Run("has", func(t *testing.T) {
+		want := Item{
+			Address:        []byte("has-hash"),
+			Data:           []byte("DATA"),
+			StoreTimestamp: time.Now().UTC().UnixNano(),
+		}
+
+		dontWant := Item{
+			Address:        []byte("do-not-has-hash"),
+			Data:           []byte("DATA"),
+			StoreTimestamp: time.Now().UTC().UnixNano(),
+		}
+
+		err := index.Put(want)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		has, err := index.Has(want)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !has {
+			t.Error("item is not found")
+		}
+
+		has, err = index.Has(dontWant)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if has {
+			t.Error("unwanted item is found")
+		}
 	})
 
 	t.Run("delete", func(t *testing.T) {

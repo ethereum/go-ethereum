@@ -14,20 +14,22 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package rawdb
+const webpack = require('webpack');
+const merge = require('webpack-merge');
+const WebpackDashboard = require('webpack-dashboard/plugin');
+const common = require('./webpack.config.common.js');
 
-// DatabaseReader wraps the Has and Get method of a backing data store.
-type DatabaseReader interface {
-	Has(key []byte) (bool, error)
-	Get(key []byte) ([]byte, error)
-}
-
-// DatabaseWriter wraps the Put method of a backing data store.
-type DatabaseWriter interface {
-	Put(key []byte, value []byte) error
-}
-
-// DatabaseDeleter wraps the Delete method of a backing data store.
-type DatabaseDeleter interface {
-	Delete(key []byte) error
-}
+module.exports = merge(common, {
+	mode:    'development',
+	plugins: [
+		new WebpackDashboard(),
+		new webpack.HotModuleReplacementPlugin(),
+	],
+	// devtool:   'eval',
+	devtool:   'source-map',
+	devServer: {
+		port:     8081,
+		hot:      true,
+		compress: true,
+	},
+});

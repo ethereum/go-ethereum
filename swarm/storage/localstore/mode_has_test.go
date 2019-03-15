@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,12 +14,42 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build js
-
-package ethdb_test
+package localstore
 
 import (
-	"github.com/ethereum/go-ethereum/ethdb"
+	"testing"
 )
 
-var _ ethdb.Database = &ethdb.LDBDatabase{}
+// TestHas validates that Hasser is returning true for
+// the stored chunk and false for one that is not stored.
+func TestHas(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, nil)
+	defer cleanupFunc()
+
+	chunk := generateTestRandomChunk()
+
+	err := db.NewPutter(ModePutUpload).Put(chunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hasser := db.NewHasser()
+
+	has, err := hasser.Has(chunk.Address())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !has {
+		t.Error("chunk not found")
+	}
+
+	missingChunk := generateTestRandomChunk()
+
+	has, err = hasser.Has(missingChunk.Address())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if has {
+		t.Error("unexpected chunk is found")
+	}
+}

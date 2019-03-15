@@ -82,6 +82,18 @@ func TestMain(m *testing.M) {
 func runSwarm(t *testing.T, args ...string) *cmdtest.TestCmd {
 	tt := cmdtest.NewTestCmd(t, nil)
 
+	found := false
+	for _, v := range args {
+		if v == "--bootnodes" {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		args = append([]string{"--bootnodes", ""}, args...)
+	}
+
 	// Boot "swarm". This actually runs the test binary but the TestMain
 	// function will prevent any tests from running.
 	tt.Run("swarm-test", args...)
@@ -252,6 +264,7 @@ func existingTestNode(t *testing.T, dir string, bzzaccount string) *testNode {
 
 	// start the node
 	node.Cmd = runSwarm(t,
+		"--bootnodes", "",
 		"--port", p2pPort,
 		"--nat", "extip:127.0.0.1",
 		"--datadir", dir,
@@ -327,6 +340,7 @@ func newTestNode(t *testing.T, dir string) *testNode {
 
 	// start the node
 	node.Cmd = runSwarm(t,
+		"--bootnodes", "",
 		"--port", p2pPort,
 		"--nat", "extip:127.0.0.1",
 		"--datadir", dir,

@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -67,41 +68,50 @@ func uploadAndSyncCmd(ctx *cli.Context, tuid string) error {
 }
 
 func trackChunks(testData []byte) error {
-	log.Warn("Test timed out; running chunk debug sequence")
+	log.Warn("Test timed out, running chunk debug sequence")
 
 	addrs, err := getAllRefs(testData)
 	if err != nil {
 		return err
 	}
-	log.Trace("All references retrieved")
 
-	// has-chunks
+	for i, ref := range addrs {
+		log.Trace(fmt.Sprintf("ref %d", i), "ref", ref)
+	}
+
 	for _, host := range hosts {
 		httpHost := fmt.Sprintf("ws://%s:%d", host, 8546)
-		log.Trace("Calling `Has` on host", "httpHost", httpHost)
+
+		hostChunks := []string{}
+
 		rpcClient, err := rpc.Dial(httpHost)
 		if err != nil {
-			log.Trace("Error dialing host", "err", err)
+			log.Error("Error dialing host", "err", err)
 			return err
 		}
-		log.Trace("rpc dial ok")
+
 		var hasInfo []api.HasInfo
 		err = rpcClient.Call(&hasInfo, "bzz_has", addrs)
 		if err != nil {
-			log.Trace("Error calling host", "err", err)
+			log.Error("Error calling host", "err", err)
 			return err
 		}
-		log.Trace("rpc call ok")
+
 		count := 0
 		for _, info := range hasInfo {
-			if !info.Has {
+			if info.Has {
+				hostChunks = append(hostChunks, "1")
+			} else {
+				hostChunks = append(hostChunks, "0")
 				count++
-				log.Error("Host does not have chunk", "host", httpHost, "chunk", info.Addr)
 			}
 		}
+
 		if count == 0 {
-			log.Info("Host reported to have all chunks", "host", httpHost)
+			log.Info("host reported to have all chunks", "host", host)
 		}
+
+		log.Trace("chunks", "chunks", strings.Join(hostChunks, ""), "host", host)
 	}
 	return nil
 }
