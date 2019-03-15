@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
 // NodeIDs returns NodeIDs for all nodes in the network.
@@ -96,10 +97,28 @@ func (s *Simulation) AddNode(opts ...AddNodeOption) (id enode.ID, err error) {
 	if len(conf.Services) == 0 {
 		conf.Services = s.serviceNames
 	}
+
+	// add ENR records to the underlying node
+	// most importantly the bzz overlay address
+	//
+	// for now we have no way of setting bootnodes or lightnodes in sims
+	// so we just set them as false
+	// they should perhaps be possible to override them with AddNodeOption
+	bzzKey := network.PrivateKeyToBzzKey(conf.PrivateKey)
+	bzzAddr := network.NewENRAddrEntry(bzzKey)
+
+	var lightnode network.ENRLightNodeEntry
+	var bootnode network.ENRBootNodeEntry
+	conf.Record.Set(bzzAddr)
+	conf.Record.Set(&lightnode)
+	conf.Record.Set(&bootnode)
+
+	// Add the bzz address to the node config
 	node, err := s.Net.NewNodeWithConfig(conf)
 	if err != nil {
 		return id, err
 	}
+
 	return node.ID(), s.Net.Start(node.ID())
 }
 
