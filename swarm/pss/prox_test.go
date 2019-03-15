@@ -239,7 +239,7 @@ func testProxNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
 	defer cancel()
 	snap := readSnapshot(t, nodeCount)
 	err = tstdata.sim.WaitTillSnapshotRecreated(ctx, snap)
@@ -415,7 +415,7 @@ func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[T
 			initTest()
 
 			// create keys in whisper and set up the pss object
-			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
+			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second*3)
 			defer cancel()
 			keys, err := wapi.NewKeyPair(ctxlocal)
 			privkey, err := w.GetPrivateKey(keys)
