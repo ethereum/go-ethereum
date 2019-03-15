@@ -62,12 +62,12 @@ func (b ENRBootNodeEntry) ENRKey() string {
 
 func getENRBzzPeer(p *p2p.Peer, rw p2p.MsgReadWriter, spec *protocols.Spec) *BzzPeer {
 	var lightnode ENRLightNodeEntry
-	//var bootnode ENRBootNodeEntry
+	var bootnode ENRBootNodeEntry
 
 	// retrieve the ENR Record data
 	record := p.Node().Record()
 	record.Load(&lightnode)
-	//record.Load(&bootnode)
+	record.Load(&bootnode)
 
 	// get the address; separate function as long as we need swarm/network:NewAddr() to call it
 	addr := getENRBzzAddr(p.Node())
