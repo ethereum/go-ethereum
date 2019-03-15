@@ -44,7 +44,7 @@ func uploadAndSyncCmd(ctx *cli.Context, tuid string) error {
 	errc := make(chan error)
 
 	go func() {
-		errc <- uplaodAndSync(ctx, randomBytes, tuid)
+		errc <- uploadAndSync(ctx, randomBytes, tuid)
 	}()
 
 	select {
@@ -65,6 +65,14 @@ func uploadAndSyncCmd(ctx *cli.Context, tuid string) error {
 
 		return e
 	}
+
+	// trigger debug functionality on randomBytes even on successful runs
+	err := trackChunks(randomBytes[:])
+	if err != nil {
+		log.Error(err.Error())
+	}
+
+	return nil
 }
 
 func trackChunks(testData []byte) error {
@@ -134,7 +142,7 @@ func getAllRefs(testData []byte) (storage.AddressCollection, error) {
 	return fileStore.GetAllReferences(ctx, reader, false)
 }
 
-func uplaodAndSync(c *cli.Context, randomBytes []byte, tuid string) error {
+func uploadAndSync(c *cli.Context, randomBytes []byte, tuid string) error {
 	log.Info("uploading to "+httpEndpoint(hosts[0])+" and syncing", "tuid", tuid, "seed", seed)
 
 	t1 := time.Now()
