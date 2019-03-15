@@ -17,21 +17,15 @@
 package runtime
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 func NewEnv(cfg *Config) *vm.EVM {
-	getHash := cfg.GetHashFn
-	if getHash == nil {
-		getHash = func(uint64) common.Hash { return common.Hash{} }
-	}
-
 	context := vm.Context{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
-		GetHash:     getHash,
+		GetHash:     cfg.GetHashFn,
 		Origin:      cfg.Origin,
 		Coinbase:    cfg.Coinbase,
 		BlockNumber: cfg.BlockNumber,

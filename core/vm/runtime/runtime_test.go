@@ -312,7 +312,7 @@ func TestBlockhash(t *testing.T) {
 	if last.Uint64() != 744 {
 		t.Fatalf("last block should be 744, got %d (%x)", last, ret[64:96])
 	}
-	if chain.counter != 255 {
-		t.Logf("Suboptimal; too much chain iteration, expected 255, got %d", chain.counter)
+	if exp, got := 255, chain.counter; exp != got {
+		t.Errorf("suboptimal; too much chain iteration, expected %d, got %d", exp, got)
 	}
 }
