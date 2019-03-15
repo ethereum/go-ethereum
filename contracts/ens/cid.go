@@ -33,8 +33,6 @@ const (
 	swarm_typecode = 0xfa //swarm manifest
 	swarm_hashtype = 0xd6 // BMT
 
-	ipfs_hashtype = 0x12
-
 	hash_length = 32
 )
 
