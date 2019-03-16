@@ -171,7 +171,7 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.XDPoS.Gap = uint64(w.readDefaultInt(450))
 
 		fmt.Println()
-		fmt.Println("What is foundation wallet address? (default = 0x0000000000000000000000000000000000000068)")
+		fmt.Println("What is foundation wallet address? (default = xdc0000000000000000000000000000000000000068)")
 		genesis.Config.XDPoS.FoudationWalletAddr = w.readDefaultAddress(common.HexToAddress(common.FoudationAddr))
 
 		// Validator Smart Contract Code
