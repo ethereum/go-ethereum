@@ -81,7 +81,11 @@ var (
 
 	ErrZeroGasPrice = errors.New("zero gas price")
 
+	ErrUnderMinGasPrice = errors.New("under min gas price")
+
 	ErrDuplicateSpecialTransaction = errors.New("duplicate a special transaction")
+
+	ErrMinDeploySMC = errors.New("smart contract creation cost is under allowance")
 )
 
 var (
@@ -214,8 +218,8 @@ type TxPool struct {
 
 	wg sync.WaitGroup // for shutdown sync
 
-	homestead    bool
-	IsMasterNode func(address common.Address) bool
+	homestead bool
+	IsSigner  func(address common.Address) bool
 }
 
 // NewTxPool creates a new transaction pool to gather, sort and filter inbound
@@ -587,8 +591,8 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	// Drop non-local transactions under our own minimal accepted gas price
 	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
-	if !local && tx.To() != nil && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
-		if !tx.IsSpecialTransaction() || (pool.IsMasterNode != nil && !pool.IsMasterNode(from)) {
+	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
+		if !tx.IsSpecialTransaction() || (pool.IsSigner != nil && !pool.IsSigner(from)) {
 			return ErrUnderpriced
 		}
 	}
@@ -619,6 +623,16 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		if tx.GasPrice().Cmp(new(big.Int).SetInt64(0)) == 0 {
 			return ErrZeroGasPrice
 		}
+
+		// under min gas price
+		if tx.GasPrice().Cmp(new(big.Int).SetInt64(common.MinGasPrice)) < 0 {
+			return ErrUnderMinGasPrice
+		}
+	}
+
+	minGasDeploySMC := new(big.Int).Mul(new(big.Int).SetUint64(10), new(big.Int).SetUint64(params.Ether))
+	if tx.To() == nil && (tx.Cost().Cmp(minGasDeploySMC) < 0 || tx.GasPrice().Cmp(new(big.Int).SetUint64(10000*params.Shannon)) < 0) {
+		return ErrMinDeploySMC
 	}
 
 	return nil
@@ -647,7 +661,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 		return false, err
 	}
 	from, _ := types.Sender(pool.signer, tx) // already validated
-	if tx.IsSpecialTransaction() && pool.IsMasterNode != nil && pool.IsMasterNode(from) && pool.pendingState.GetNonce(from) == tx.Nonce() {
+	if tx.IsSpecialTransaction() && pool.IsSigner != nil && pool.IsSigner(from) && pool.pendingState.GetNonce(from) == tx.Nonce() {
 		return pool.promoteSpecialTx(from, tx)
 	}
 	// If the transaction pool is full, discard underpriced transactions

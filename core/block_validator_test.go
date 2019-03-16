@@ -48,7 +48,6 @@ func TestHeaderVerification(t *testing.T) {
 	for i := 0; i < len(blocks); i++ {
 		for j, valid := range []bool{true, false} {
 			var results <-chan error
-
 			if valid {
 				engine := ethash.NewFaker()
 				_, results = engine.VerifyHeaders(chain, []*types.Header{headers[i]}, []bool{true})
@@ -104,7 +103,6 @@ func testHeaderConcurrentVerification(t *testing.T, threads int) {
 	// also an invalid chain (enough if one arbitrary block is invalid).
 	for i, valid := range []bool{true, false} {
 		var results <-chan error
-
 		if valid {
 			chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{})
 			_, results = chain.engine.VerifyHeaders(chain, headers, seals)
@@ -175,7 +173,6 @@ func testHeaderConcurrentAbortion(t *testing.T, threads int) {
 	// Start the verifications and immediately abort
 	chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFakeDelayer(time.Millisecond), vm.Config{})
 	defer chain.Stop()
-
 	abort, results := chain.engine.VerifyHeaders(chain, headers, seals)
 	close(abort)
 

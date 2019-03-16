@@ -141,10 +141,9 @@ type BlockChain struct {
 	validator Validator // block and state validator interface
 	vmConfig  vm.Config
 
-	badBlocks        *lru.Cache // Bad block cache
-	IPCEndpoint      string
-	Client           *ethclient.Client // Global ipc client instance.
-	HookWriteRewards func(header *types.Header)
+	badBlocks   *lru.Cache // Bad block cache
+	IPCEndpoint string
+	Client      *ethclient.Client // Global ipc client instance.
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -506,6 +505,12 @@ func (bc *BlockChain) insert(block *types.Block) {
 		log.Crit("Failed to insert head block hash", "err", err)
 	}
 	bc.currentBlock.Store(block)
+
+	// save cache BlockSigners
+	if bc.chainConfig.XDPoS != nil && !bc.chainConfig.IsTIPSigning(block.Number()) {
+		engine := bc.Engine().(*XDPoS.XDPoS)
+		engine.CacheData(block.Header(), block.Transactions(), bc.GetReceiptsByHash(block.Hash()))
+	}
 
 	// If the block is better than our head or is on a different chain, force update heads
 	if updateHeads {
@@ -1014,6 +1019,11 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	if status == CanonStatTy {
 		bc.insert(block)
 	}
+	// save cache BlockSigners
+	if bc.chainConfig.XDPoS != nil && bc.chainConfig.IsTIPSigning(block.Number()) {
+		engine := bc.Engine().(*XDPoS.XDPoS)
+		engine.CacheSigner(block.Header().Hash(), block.Transactions())
+	}
 	bc.futureBlocks.Remove(block.Hash())
 	return status, nil
 }
@@ -1067,7 +1077,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 
 	for i, block := range chain {
 		headers[i] = block.Header()
-		seals[i] = true
+		seals[i] = false
 		bc.downloadingBlock.Add(block.Hash(), true)
 	}
 	abort, results := bc.engine.VerifyHeaders(bc, headers, seals)
@@ -1221,9 +1231,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 					log.Crit("Error when update masternodes set. Stopping node", "err", err)
 				}
 			}
-		}
-		if bc.HookWriteRewards != nil {
-			bc.HookWriteRewards(block.Header())
 		}
 	}
 	// Append a single chain head event if we've progressed the chain
@@ -1430,9 +1437,6 @@ func (bc *BlockChain) insertBlock(block *types.Block) ([]interface{}, []*types.L
 	if status == CanonStatTy && bc.CurrentBlock().Hash() == block.Hash() {
 		events = append(events, ChainHeadEvent{block})
 		log.Debug("New ChainHeadEvent from fetcher ", "number", block.NumberU64(), "hash", block.Hash())
-	}
-	if bc.HookWriteRewards != nil {
-		bc.HookWriteRewards(block.Header())
 	}
 	return events, coalescedLogs, nil
 }
