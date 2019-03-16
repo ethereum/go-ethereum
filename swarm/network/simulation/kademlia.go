@@ -18,12 +18,14 @@ package simulation
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
@@ -95,4 +97,107 @@ func (s *Simulation) kademlias() (ks map[enode.ID]*network.Kademlia) {
 		ks[id] = k
 	}
 	return ks
+}
+
+// WaitTillSnapshotRecreated is blocking until all the connections specified
+// in the snapshot are registered in the kademlia.
+// It differs from WaitTillHealthy, which waits only until all the kademlias are
+// healthy (it might happen even before all the connections are established).
+func (s *Simulation) WaitTillSnapshotRecreated(ctx context.Context, snap simulations.Snapshot) error {
+	expected := getSnapshotConnections(snap.Conns)
+	ticker := time.NewTicker(150 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			actual := s.getActualConnections()
+			if isAllDeployed(expected, actual) {
+				return nil
+			}
+		}
+	}
+}
+
+func (s *Simulation) getActualConnections() (res []uint64) {
+	kademlias := s.kademlias()
+	for base, k := range kademlias {
+		k.EachConn(base[:], 256, func(p *network.Peer, _ int) bool {
+			res = append(res, getConnectionHash(base, p.ID()))
+			return true
+		})
+	}
+
+	// only list those connections that appear twice (both peers should recognize connection as active)
+	res = removeDuplicatesAndSingletons(res)
+	return res
+}
+
+func getSnapshotConnections(conns []simulations.Conn) (res []uint64) {
+	for _, c := range conns {
+		res = append(res, getConnectionHash(c.One, c.Other))
+	}
+	return res
+}
+
+// returns an integer connection identifier (similar to 8-byte hash)
+func getConnectionHash(a, b enode.ID) uint64 {
+	var h [8]byte
+	for i := 0; i < 8; i++ {
+		h[i] = a[i] ^ b[i]
+	}
+	res := binary.LittleEndian.Uint64(h[:])
+	return res
+}
+
+// returns true if all connections in expected are listed in actual
+func isAllDeployed(expected []uint64, actual []uint64) bool {
+	if len(expected) == 0 {
+		return true
+	}
+
+	exp := make([]uint64, len(expected))
+	copy(exp, expected)
+	for _, c := range actual {
+		// remove value c from exp
+		for i := 0; i < len(exp); i++ {
+			if exp[i] == c {
+				exp = removeListElement(exp, i)
+				if len(exp) == 0 {
+					return true
+				}
+			}
+		}
+	}
+	return len(exp) == 0
+}
+
+func removeListElement(arr []uint64, i int) []uint64 {
+	last := len(arr) - 1
+	arr[i] = arr[last]
+	arr = arr[:last]
+	return arr
+}
+
+func removeDuplicatesAndSingletons(arr []uint64) []uint64 {
+	for i := 0; i < len(arr); {
+		found := false
+		for j := i + 1; j < len(arr); j++ {
+			if arr[i] == arr[j] {
+				arr = removeListElement(arr, j) // remove duplicate
+				found = true
+				break
+			}
+		}
+
+		if found {
+			i++
+		} else {
+			arr = removeListElement(arr, i) // remove singleton
+		}
+	}
+
+	return arr
 }
