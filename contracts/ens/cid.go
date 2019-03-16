@@ -27,13 +27,13 @@ import (
 const (
 	cidv1 = 0x1
 
-	ns_ipfs  = 0xe3
-	ns_swarm = 0xe4
+	nsIpfs  = 0xe3
+	nsSwarm = 0xe4
 
-	swarm_typecode = 0xfa //swarm manifest
-	swarm_hashtype = 0xd6 // BMT
+	swarmTypecode = 0xfa //swarm manifest, see https://github.com/multiformats/multicodec/blob/master/table.csv
+	swarmHashtype = 0xd6 // BMT, see https://github.com/multiformats/multicodec/blob/master/table.csv
 
-	hash_length = 32
+	hashLength = 32
 )
 
 // deocodeEIP1577ContentHash decodes a chain-stored content hash from an ENS record according to EIP-1577
@@ -41,7 +41,7 @@ const (
 // Note: only CIDv1 is supported
 func decodeEIP1577ContentHash(buf []byte) (storageNs, contentType, hashType, hashLength uint64, hash []byte, err error) {
 	if len(buf) < 10 {
-		return 0, 0, 0, 0, nil, fmt.Errorf("buffer too short")
+		return 0, 0, 0, 0, nil, errors.New("buffer too short")
 	}
 
 	storageNs, n := binary.Uvarint(buf)
@@ -76,19 +76,19 @@ func extractContentHash(buf []byte) (common.Hash, error) {
 		return common.Hash{}, err
 	}
 
-	if storageNs != ns_swarm {
+	if storageNs != nsSwarm {
 		return common.Hash{}, errors.New("unknown storage system")
 	}
 
-	if contentType != swarm_typecode {
+	if contentType != swarmTypecode {
 		return common.Hash{}, errors.New("unknown content type")
 	}
 
-	if hashType != swarm_hashtype {
+	if hashType != swarmHashtype {
 		return common.Hash{}, errors.New("unknown multihash type")
 	}
 
-	if hashLength != hash_length {
+	if hashLength != hashLength {
 		return common.Hash{}, errors.New("odd hash length, swarm expects 32 bytes")
 	}
 
@@ -102,11 +102,11 @@ func extractContentHash(buf []byte) (common.Hash, error) {
 func encodeSwarmHash(hash common.Hash) ([]byte, error) {
 	var cidBytes []byte
 	var headerBytes = []byte{
-		ns_swarm,       //swarm namespace
-		cidv1,          // CIDv1
-		swarm_typecode, // swarm hash
-		swarm_hashtype, // swarm bmt hash
-		hash_length,    //hash length. 32 bytes
+		nsSwarm,       //swarm namespace
+		cidv1,         // CIDv1
+		swarmTypecode, // swarm hash
+		swarmHashtype, // swarm bmt hash
+		hashLength,    //hash length. 32 bytes
 	}
 
 	varintbuf := make([]byte, binary.MaxVarintLen64)

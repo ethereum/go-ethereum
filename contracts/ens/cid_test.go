@@ -26,16 +26,16 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-const (
-	eipSpecHash = "e3010170122029f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f"
-	eipHash     = "29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f"
-
-	dag_pb   = 0x70
-	sha2_256 = 0x12
-)
+const ()
 
 // Tests for the decoding of the example ENS
 func TestEIPSpecCidDecode(t *testing.T) {
+	const (
+		eipSpecHash = "e3010170122029f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f"
+		eipHash     = "29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f"
+		dagPb       = 0x70
+		sha2256     = 0x12
+	)
 	b, err := hex.DecodeString(eipSpecHash)
 	if err != nil {
 		t.Fatal(err)
@@ -46,24 +46,24 @@ func TestEIPSpecCidDecode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	storageNs, contentType, hashType, hashLength, hashBytes, err := decodeEIP1577ContentHash(b)
+	storageNs, contentType, hashType, hashLength, decodedHashBytes, err := decodeEIP1577ContentHash(b)
 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if storageNs != ns_ipfs {
+	if storageNs != nsIpfs {
 		t.Fatal("wrong ns")
 	}
-	if contentType != dag_pb {
-		t.Fatal("should be swarm typecode")
+	if contentType != dagPb {
+		t.Fatal("should be ipfs typecode")
 	}
-	if hashType != sha2_256 {
+	if hashType != sha2256 {
 		t.Fatal("should be sha2-256")
 	}
 	if hashLength != 32 {
 		t.Fatal("should be 32")
 	}
-	if !bytes.Equal(hashBytes, hashBytes) {
+	if !bytes.Equal(hashBytes, decodedHashBytes) {
 		t.Fatal("should be equal")
 	}
 
@@ -74,30 +74,32 @@ func TestManualCidDecode(t *testing.T) {
 	for _, v := range []struct {
 		name        string
 		headerBytes []byte
-		fails       bool
+		wantErr     bool
 	}{
 		{
 			name:        "values correct, should not fail",
 			headerBytes: []byte{0xe4, 0x01, 0xfa, 0xd6, 0x20},
-			fails:       false,
+			wantErr:     false,
 		},
 		{
 			name:        "cid version wrong, should fail",
 			headerBytes: []byte{0xe4, 0x00, 0xfa, 0xd6, 0x20},
-			fails:       true,
+			wantErr:     true,
 		},
 		{
 			name:        "hash length wrong, should fail",
 			headerBytes: []byte{0xe4, 0x01, 0xfa, 0xd6, 0x1f},
-			fails:       true,
+			wantErr:     true,
 		},
 		{
 			name:        "values correct for ipfs, should fail",
 			headerBytes: []byte{0xe3, 0x01, 0x70, 0x12, 0x20},
-			fails:       true,
+			wantErr:     true,
 		},
 	} {
 		t.Run(v.name, func(t *testing.T) {
+			const eipHash = "29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f"
+
 			var bb []byte
 			buf := make([]byte, binary.MaxVarintLen64)
 			for _, vv := range v.headerBytes {
@@ -110,7 +112,7 @@ func TestManualCidDecode(t *testing.T) {
 			str := hex.EncodeToString(bb)
 			fmt.Println(str)
 			decodedHash, e := extractContentHash(bb)
-			switch v.fails {
+			switch v.wantErr {
 			case true:
 				if e == nil {
 					t.Fatal("the decode should fail")
@@ -122,15 +124,14 @@ func TestManualCidDecode(t *testing.T) {
 				if !bytes.Equal(decodedHash[:], h[:]) {
 					t.Fatal("hashes not equal")
 				}
-
 			}
-
 		})
 	}
 }
 
 func TestManuelCidEncode(t *testing.T) {
 	// call cid encode method with hash. expect byte slice returned, compare according to spec
+	const eipHash = "29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f"
 	cidBytes, err := encodeSwarmHash(common.HexToHash(eipHash))
 	if err != nil {
 		t.Fatal(err)
