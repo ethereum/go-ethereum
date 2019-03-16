@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/XDPoS"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/core"
@@ -123,6 +124,7 @@ var (
 		configFileFlag,
 		utils.AnnounceTxsFlag,
 		utils.StoreRewardFlag,
+		utils.RollbackFlag,
 	}
 
 	rpcFlags = []cli.Flag{
@@ -291,9 +293,18 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 	if _, ok := ethereum.Engine().(*XDPoS.XDPoS); ok {
 		go func() {
 			started := false
-			ok, err := ethereum.ValidateMasternode()
-			if err != nil {
-				utils.Fatalf("Can't verify masternode permission: %v", err)
+			ok := false
+			var err error
+			if common.IsTestnet {
+				ok, err = ethereum.ValidateMasternodeTestnet()
+				if err != nil {
+					utils.Fatalf("Can't verify masternode permission: %v", err)
+				}
+			} else {
+				ok, err = ethereum.ValidateMasternode()
+				if err != nil {
+					utils.Fatalf("Can't verify masternode permission: %v", err)
+				}
 			}
 			if ok {
 				log.Info("Masternode found. Enabling staking mode...")
@@ -317,9 +328,16 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 			defer close(core.CheckpointCh)
 			for range core.CheckpointCh {
 				log.Info("Checkpoint!!! It's time to reconcile node's state...")
-				ok, err := ethereum.ValidateMasternode()
-				if err != nil {
-					utils.Fatalf("Can't verify masternode permission: %v", err)
+				if common.IsTestnet {
+					ok, err = ethereum.ValidateMasternodeTestnet()
+					if err != nil {
+						utils.Fatalf("Can't verify masternode permission: %v", err)
+					}
+				} else {
+					ok, err = ethereum.ValidateMasternode()
+					if err != nil {
+						utils.Fatalf("Can't verify masternode permission: %v", err)
+					}
 				}
 				if !ok {
 					if started {

@@ -1,22 +1,22 @@
-	FROM golang:1.10-alpine as builder
+FROM golang:1.10-alpine as builder
 
- RUN apk add --no-cache make gcc musl-dev linux-headers
+RUN apk add --no-cache make gcc musl-dev linux-headers
 
- ADD . /XDCchain
+ADD . /XDChain
 
- RUN cd /XDCchain \
-    && make XDC \
+RUN cd /XDChain \
+    && make XDC\
     && chmod +x /XDCchain/build/bin/XDC
 
- FROM alpine:latest
+FROM alpine:latest
 
- LABEL maintainer="admin@xinfin.org"
+LABEL maintainer="anil@xinfin.org"
 
- WORKDIR /XDCchain
+WORKDIR /XDChain
 
- COPY --from=builder /XDCchain/build/bin/XDC /usr/local/bin/XDC
+COPY --from=builder /XDCchain/build/bin/XDC /usr/local/bin/XDC
 
- ENV IDENTITY ''
+ENV IDENTITY ''
 ENV PASSWORD ''
 ENV PRIVATE_KEY ''
 ENV BOOTNODES ''
@@ -29,11 +29,11 @@ ENV NETSTATS_HOST 'netstats-server'
 ENV NETSTATS_PORT '3000'
 ENV ANNOUNCE_TXS ''
 
- RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates
 
- COPY docker/XDCchain ./
+COPY docker/XDChain ./
 COPY genesis/ ./
 
- EXPOSE 8545 8546 30303 30303/udp
+EXPOSE 8545 8546 30303 30303/udp
 
- ENTRYPOINT ["./entrypoint.sh"]
+ENTRYPOINT ["./entrypoint.sh"]

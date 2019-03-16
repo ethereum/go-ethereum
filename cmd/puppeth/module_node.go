@@ -184,7 +184,7 @@ func (info *nodeInfos) Report() map[string]string {
 			report["Miner account"] = info.etherbase
 		}
 		if info.keyJSON != "" {
-			// XDPoS XinFin-DPoS signer
+			// XDPoS delegated-proof-of-stake signer
 			var key struct {
 				Address string `json:"address"`
 			}

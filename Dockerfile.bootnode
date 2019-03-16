@@ -9,7 +9,7 @@ RUN chmod +x /XDCchain/build/bin/bootnode
 
 FROM alpine:latest
 
-LABEL maintainer="admin@xinfin.org"
+LABEL maintainer="anil@xinfin.org"
 
 WORKDIR /XDCchain
 
@@ -21,4 +21,4 @@ EXPOSE 30301
 
 ENTRYPOINT ["./entrypoint.sh"]
 
-CMD ["-verbosity", "6", "-nodekey", "bootnode.key", "--addr", ":30301"
+CMD ["-verbosity", "6", "-nodekey", "bootnode.key", "--addr", ":30301"]
