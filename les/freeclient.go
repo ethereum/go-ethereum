@@ -69,7 +69,7 @@ const (
 )
 
 // newFreeClientPool creates a new free client pool
-func newFreeClientPool(db ethdb.Database, freeClientCap uint64, totalLimit int, clock mclock.Clock, removePeer func(string), logger *csvlogger.Logger) *freeClientPool {
+func newFreeClientPool(db ethdb.Database, freeClientCap uint64, totalLimit int, clock mclock.Clock, removePeer func(string), metricsLogger, eventLogger *csvlogger.Logger) *freeClientPool {
 	pool := &freeClientPool{
 		db:               db,
 		clock:            clock,
@@ -78,8 +78,8 @@ func newFreeClientPool(db ethdb.Database, freeClientCap uint64, totalLimit int, 
 		disconnPool:      prque.New(poolSetIndex),
 		freeClientCap:    freeClientCap,
 		totalLimit:       totalLimit,
-		logger:           logger,
-		logTotalFreeConn: logger.NewChannel("totalFreeConn", 0),
+		logger:           eventLogger,
+		logTotalFreeConn: metricsLogger.NewChannel("totalFreeConn", 0),
 		removePeer:       removePeer,
 	}
 	pool.loadFromDb()

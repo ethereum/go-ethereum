@@ -177,6 +177,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 	if !lightSync {
 		srv := &LesServer{lesCommons: lesCommons{protocolManager: pm}}
 		pm.server = srv
+		pm.servingQueue = newServingQueue(int64(time.Millisecond*10), 1, nil)
 		pm.servingQueue.setThreads(4)
 
 		srv.defParams = flowcontrol.ServerParams{

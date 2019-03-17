@@ -20,7 +20,9 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -45,6 +47,12 @@ const maxResponseErrors = 50 // number of invalid responses tolerated (makes the
 const (
 	allowedUpdateBytes = 100000                // initial/maximum allowed update size
 	allowedUpdateRate  = time.Millisecond * 10 // time constant for recharging one byte of allowance
+)
+
+const (
+	freezeTimeBase    = time.Millisecond * 700 // fixed component of client freeze time
+	freezeTimeRandom  = time.Millisecond * 600 // random component of client freeze time
+	freezeCheckPeriod = time.Millisecond * 100 // buffer value recheck period after initial freeze time has elapsed
 )
 
 // if the total encoded size of a sent transaction batch is over txSizeCostLimit
@@ -86,6 +94,7 @@ type peer struct {
 	responseErrors int
 	updateCounter  uint64
 	updateTime     mclock.AbsTime
+	frozen         uint32 // 1 if client is in frozen state
 
 	fcClient *flowcontrol.ClientNode // nil if the peer is server only
 	fcServer *flowcontrol.ServerNode // nil if the peer is client only
@@ -129,8 +138,52 @@ func (p *peer) rejectUpdate(size uint64) bool {
 	return p.updateCounter > allowedUpdateBytes
 }
 
+// freezeClient temporarily puts the client in a frozen state which means all
+// unprocessed and subsequent requests are dropped. Unfreezing happens automatically
+// after a short time if the client's buffer value is at least in the slightly positive
+// region. The client is also notified about being frozen/unfrozen with a Stop/Resume
+// message.
+func (p *peer) freezeClient() {
+	if atomic.SwapUint32(&p.frozen, 1) == 0 {
+		go func() {
+			p.SendStop()
+			time.Sleep(freezeTimeBase + time.Duration(rand.Int63n(int64(freezeTimeRandom))))
+			for {
+				bufValue, bufLimit := p.fcClient.BufferStatus()
+				if bufLimit == 0 {
+					return
+				}
+				if bufValue <= bufLimit/8 {
+					time.Sleep(freezeCheckPeriod)
+				} else {
+					atomic.StoreUint32(&p.frozen, 0)
+					p.SendResume(bufValue)
+					break
+				}
+			}
+		}()
+	}
+}
+
+// freezeServer processes Stop/Resume messages from the given server
+func (p *peer) freezeServer(frozen bool) {
+	var f uint32
+	if frozen {
+		f = 1
+	}
+	if atomic.SwapUint32(&p.frozen, f) != f && frozen {
+		p.sendQueue.clear()
+	}
+}
+
+// isFrozen returns true if the client is frozen or the server has put our
+// client in frozen state
+func (p *peer) isFrozen() bool {
+	return atomic.LoadUint32(&p.frozen) != 0
+}
+
 func (p *peer) canQueue() bool {
-	return p.sendQueue.canQueue()
+	return p.sendQueue.canQueue() && !p.isFrozen()
 }
 
 func (p *peer) queueSend(f func()) {
@@ -275,6 +328,16 @@ func (p *peer) HasBlock(hash common.Hash, number uint64, hasState bool) bool {
 // a hash notification.
 func (p *peer) SendAnnounce(request announceData) error {
 	return p2p.Send(p.rw, AnnounceMsg, request)
+}
+
+// SendStop notifies the client about being in frozen state
+func (p *peer) SendStop() error {
+	return p2p.Send(p.rw, StopMsg, struct{}{})
+}
+
+// SendResume notifies the client about getting out of frozen state
+func (p *peer) SendResume(bv uint64) error {
+	return p2p.Send(p.rw, ResumeMsg, bv)
 }
 
 // ReplyBlockHeaders creates a reply with a batch of block headers

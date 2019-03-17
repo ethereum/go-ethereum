@@ -168,14 +168,14 @@ type priorityClientInfo struct {
 }
 
 // newPriorityClientPool creates a new priority client pool
-func newPriorityClientPool(freeClientCap uint64, ps *peerSet, child clientPool, logger *csvlogger.Logger) *priorityClientPool {
+func newPriorityClientPool(freeClientCap uint64, ps *peerSet, child clientPool, metricsLogger, eventLogger *csvlogger.Logger) *priorityClientPool {
 	return &priorityClientPool{
 		clients:         make(map[enode.ID]priorityClientInfo),
 		freeClientCap:   freeClientCap,
 		ps:              ps,
 		child:           child,
-		logger:          logger,
-		logTotalPriConn: logger.NewChannel("totalPriConn", 0),
+		logger:          eventLogger,
+		logTotalPriConn: metricsLogger.NewChannel("totalPriConn", 0),
 	}
 }
 

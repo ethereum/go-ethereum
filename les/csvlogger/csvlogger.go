@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// Logger is a metrics/events logger that writes logged values and events into a comma separated file
 type Logger struct {
 	file            *os.File
 	started         mclock.AbsTime
@@ -36,7 +37,11 @@ type Logger struct {
 	eventHeader     string
 }
 
-func NewLogger(fileName string, period time.Duration, eventHeader string) *Logger {
+// NewLogger creates a new Logger
+func NewLogger(fileName string, updatePeriod time.Duration, eventHeader string) *Logger {
+	if fileName == "" {
+		return nil
+	}
 	f, err := os.Create(fileName)
 	if err != nil {
 		log.Error("Error creating log file", "name", fileName, "error", err)
@@ -44,13 +49,16 @@ func NewLogger(fileName string, period time.Duration, eventHeader string) *Logge
 	}
 	return &Logger{
 		file:        f,
-		period:      period,
+		period:      updatePeriod,
 		stopCh:      make(chan struct{}),
 		storeCh:     make(chan string, 1),
 		eventHeader: eventHeader,
 	}
 }
 
+// NewChannel creates a new value logger channel that writes values in a single
+// column. If the relative change of the value is bigger than the given threshold
+// then a new line is added immediately (threshold can also be 0).
 func (l *Logger) NewChannel(name string, threshold float64) *Channel {
 	if l == nil {
 		return nil
@@ -64,6 +72,11 @@ func (l *Logger) NewChannel(name string, threshold float64) *Channel {
 	return c
 }
 
+// NewMinMaxChannel creates a new value logger channel that writes the minimum and
+// maximum of the tracked value in two columns. It never triggers adding a new line.
+// If zeroDefault is true then 0 is written to both min and max columns if no update
+// was given during the last period. If it is false then the last update will appear
+// in both columns.
 func (l *Logger) NewMinMaxChannel(name string, zeroDefault bool) *Channel {
 	if l == nil {
 		return nil
@@ -89,6 +102,7 @@ func (l *Logger) store(event string) {
 	l.file.WriteString(s + "\n")
 }
 
+// Start writes the header line and starts the logger
 func (l *Logger) Start() {
 	if l == nil {
 		return
@@ -102,7 +116,6 @@ func (l *Logger) Start() {
 		s += ", " + l.eventHeader
 	}
 	l.file.WriteString(s + "\n")
-	fmt.Println(s)
 	go func() {
 		timer := time.NewTimer(l.period)
 		for {
@@ -124,6 +137,7 @@ func (l *Logger) Start() {
 	}()
 }
 
+// Stop stops the logger and closes the file
 func (l *Logger) Stop() {
 	if l == nil {
 		return
@@ -134,6 +148,7 @@ func (l *Logger) Stop() {
 	l.file.Close()
 }
 
+// Event immediately adds a new line and adds the given event string in the last column
 func (l *Logger) Event(event string) {
 	if l == nil {
 		return
@@ -144,6 +159,7 @@ func (l *Logger) Event(event string) {
 	}
 }
 
+// Channel represents a logger channel tracking a single value
 type Channel struct {
 	logger                                             *Logger
 	lock                                               sync.Mutex
@@ -152,6 +168,7 @@ type Channel struct {
 	minmax, mmSet, mmZeroDefault                       bool
 }
 
+// Update updates the tracked value
 func (lc *Channel) Update(value float64) {
 	if lc == nil {
 		return
