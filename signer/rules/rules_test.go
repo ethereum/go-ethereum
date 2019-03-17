@@ -84,19 +84,11 @@ func (alwaysDenyUI) OnSignerStartup(info core.StartupInfo) {
 }
 
 func (alwaysDenyUI) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
-	return core.SignTxResponse{Transaction: request.Transaction, Approved: false, Password: ""}, nil
+	return core.SignTxResponse{Transaction: request.Transaction, Approved: false}, nil
 }
 
 func (alwaysDenyUI) ApproveSignData(request *core.SignDataRequest) (core.SignDataResponse, error) {
-	return core.SignDataResponse{Approved: false, Password: ""}, nil
-}
-
-func (alwaysDenyUI) ApproveExport(request *core.ExportRequest) (core.ExportResponse, error) {
-	return core.ExportResponse{Approved: false}, nil
-}
-
-func (alwaysDenyUI) ApproveImport(request *core.ImportRequest) (core.ImportResponse, error) {
-	return core.ImportResponse{Approved: false, OldPassword: "", NewPassword: ""}, nil
+	return core.SignDataResponse{Approved: false}, nil
 }
 
 func (alwaysDenyUI) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
@@ -104,7 +96,7 @@ func (alwaysDenyUI) ApproveListing(request *core.ListRequest) (core.ListResponse
 }
 
 func (alwaysDenyUI) ApproveNewAccount(request *core.NewAccountRequest) (core.NewAccountResponse, error) {
-	return core.NewAccountResponse{Approved: false, Password: ""}, nil
+	return core.NewAccountResponse{Approved: false}, nil
 }
 
 func (alwaysDenyUI) ShowError(message string) {
@@ -120,7 +112,7 @@ func (alwaysDenyUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 }
 
 func initRuleEngine(js string) (*rulesetUI, error) {
-	r, err := NewRuleEvaluator(&alwaysDenyUI{}, storage.NewEphemeralStorage(), storage.NewEphemeralStorage())
+	r, err := NewRuleEvaluator(&alwaysDenyUI{}, storage.NewEphemeralStorage())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create js engine: %v", err)
 	}
@@ -225,16 +217,6 @@ func (d *dummyUI) ApproveSignData(request *core.SignDataRequest) (core.SignDataR
 	return core.SignDataResponse{}, core.ErrRequestDenied
 }
 
-func (d *dummyUI) ApproveExport(request *core.ExportRequest) (core.ExportResponse, error) {
-	d.calls = append(d.calls, "ApproveExport")
-	return core.ExportResponse{}, core.ErrRequestDenied
-}
-
-func (d *dummyUI) ApproveImport(request *core.ImportRequest) (core.ImportResponse, error) {
-	d.calls = append(d.calls, "ApproveImport")
-	return core.ImportResponse{}, core.ErrRequestDenied
-}
-
 func (d *dummyUI) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
 	d.calls = append(d.calls, "ApproveListing")
 	return core.ListResponse{}, core.ErrRequestDenied
@@ -266,8 +248,7 @@ func TestForwarding(t *testing.T) {
 	js := ""
 	ui := &dummyUI{make([]string, 0)}
 	jsBackend := storage.NewEphemeralStorage()
-	credBackend := storage.NewEphemeralStorage()
-	r, err := NewRuleEvaluator(ui, jsBackend, credBackend)
+	r, err := NewRuleEvaluator(ui, jsBackend)
 	if err != nil {
 		t.Fatalf("Failed to create js engine: %v", err)
 	}
@@ -276,17 +257,15 @@ func TestForwarding(t *testing.T) {
 	}
 	r.ApproveSignData(nil)
 	r.ApproveTx(nil)
-	r.ApproveImport(nil)
 	r.ApproveNewAccount(nil)
 	r.ApproveListing(nil)
-	r.ApproveExport(nil)
 	r.ShowError("test")
 	r.ShowInfo("test")
 
 	//This one is not forwarded
 	r.OnApprovedTx(ethapi.SignTransactionResult{})
 
-	expCalls := 8
+	expCalls := 6
 	if len(ui.calls) != expCalls {
 
 		t.Errorf("Expected %d forwarded calls, got %d: %s", expCalls, len(ui.calls), strings.Join(ui.calls, ","))
@@ -545,16 +524,6 @@ func (d *dontCallMe) ApproveSignData(request *core.SignDataRequest) (core.SignDa
 	return core.SignDataResponse{}, core.ErrRequestDenied
 }
 
-func (d *dontCallMe) ApproveExport(request *core.ExportRequest) (core.ExportResponse, error) {
-	d.t.Fatalf("Did not expect next-handler to be called")
-	return core.ExportResponse{}, core.ErrRequestDenied
-}
-
-func (d *dontCallMe) ApproveImport(request *core.ImportRequest) (core.ImportResponse, error) {
-	d.t.Fatalf("Did not expect next-handler to be called")
-	return core.ImportResponse{}, core.ErrRequestDenied
-}
-
 func (d *dontCallMe) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
 	d.t.Fatalf("Did not expect next-handler to be called")
 	return core.ListResponse{}, core.ErrRequestDenied
@@ -597,7 +566,7 @@ func TestContextIsCleared(t *testing.T) {
 	}
 	`
 	ui := &dontCallMe{t}
-	r, err := NewRuleEvaluator(ui, storage.NewEphemeralStorage(), storage.NewEphemeralStorage())
+	r, err := NewRuleEvaluator(ui, storage.NewEphemeralStorage())
 	if err != nil {
 		t.Fatalf("Failed to create js engine: %v", err)
 	}

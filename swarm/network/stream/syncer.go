@@ -107,6 +107,11 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 
 		metrics.GetOrRegisterCounter("syncer.setnextbatch.iterator", nil).Inc(1)
 		err := s.store.Iterator(from, to, s.po, func(key storage.Address, idx uint64) bool {
+			select {
+			case <-s.quit:
+				return false
+			default:
+			}
 			batch = append(batch, key[:]...)
 			i++
 			to = idx

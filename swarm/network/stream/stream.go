@@ -75,7 +75,7 @@ const (
 // subscriptionFunc is used to determine what to do in order to perform subscriptions
 // usually we would start to really subscribe to nodes, but for tests other functionality may be needed
 // (see TestRequestPeerSubscriptions in streamer_test.go)
-var subscriptionFunc func(r *Registry, p *network.Peer, bin uint8, subs map[enode.ID]map[Stream]struct{}) bool = doRequestSubscription
+var subscriptionFunc = doRequestSubscription
 
 // Registry registry for outgoing and incoming streamer constructors
 type Registry struct {
@@ -95,6 +95,7 @@ type Registry struct {
 	spec           *protocols.Spec   //this protocol's spec
 	balance        protocols.Balance //implements protocols.Balance, for accounting
 	prices         protocols.Prices  //implements protocols.Prices, provides prices to accounting
+	quit           chan struct{}     // terminates registry goroutines
 }
 
 // RegistryOptions holds optional values for NewRegistry constructor.
@@ -117,6 +118,8 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 	// check if retrieval has been disabled
 	retrieval := options.Retrieval != RetrievalDisabled
 
+	quit := make(chan struct{})
+
 	streamer := &Registry{
 		addr:           localID,
 		skipCheck:      options.SkipCheck,
@@ -128,6 +131,7 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 		autoRetrieval:  retrieval,
 		maxPeerServers: options.MaxPeerServers,
 		balance:        balance,
+		quit:           quit,
 	}
 
 	streamer.setupSpec()
@@ -172,25 +176,41 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 			go func() {
 				defer close(out)
 
-				for i := range in {
+				for {
 					select {
-					case <-out:
-					default:
+					case i, ok := <-in:
+						if !ok {
+							return
+						}
+						select {
+						case <-out:
+						default:
+						}
+						out <- i
+					case <-quit:
+						return
 					}
-					out <- i
 				}
 			}()
 
 			return out
 		}
 
+		kad := streamer.delivery.kad
+		// get notification channels from Kademlia before returning
+		// from this function to avoid race with Close method and
+		// the goroutine created below
+		depthC := latestIntC(kad.NeighbourhoodDepthC())
+		addressBookSizeC := latestIntC(kad.AddrCountC())
+
 		go func() {
 			// wait for kademlia table to be healthy
-			time.Sleep(options.SyncUpdateDelay)
-
-			kad := streamer.delivery.kad
-			depthC := latestIntC(kad.NeighbourhoodDepthC())
-			addressBookSizeC := latestIntC(kad.AddrCountC())
+			// but return if Registry is closed before
+			select {
+			case <-time.After(options.SyncUpdateDelay):
+			case <-quit:
+				return
+			}
 
 			// initial requests for syncing subscription to peers
 			streamer.updateSyncing()
@@ -229,6 +249,8 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 							<-timer.C
 						}
 						timer.Reset(options.SyncUpdateDelay)
+					case <-quit:
+						break loop
 					}
 				}
 				timer.Stop()
@@ -359,7 +381,7 @@ func (r *Registry) Subscribe(peerId enode.ID, s Stream, h *Range, priority uint8
 	}
 	log.Debug("Subscribe ", "peer", peerId, "stream", s, "history", h)
 
-	return peer.SendPriority(context.TODO(), msg, priority, "")
+	return peer.SendPriority(context.TODO(), msg, priority)
 }
 
 func (r *Registry) Unsubscribe(peerId enode.ID, s Stream) error {
@@ -398,6 +420,11 @@ func (r *Registry) Quit(peerId enode.ID, s Stream) error {
 }
 
 func (r *Registry) Close() error {
+	// Stop sending neighborhood depth change and address count
+	// change from Kademlia that were initiated in NewRegistry constructor.
+	r.delivery.kad.CloseNeighbourhoodDepthC()
+	r.delivery.kad.CloseAddrCountC()
+	close(r.quit)
 	return r.intervalsStore.Close()
 }
 
@@ -570,6 +597,16 @@ func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 // HandleMsg is the message handler that delegates incoming messages
 func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
+	select {
+	case <-p.streamer.quit:
+		log.Trace("message received after the streamer is closed", "peer", p.ID())
+		// return without an error since streamer is closed and
+		// no messages should be handled as other subcomponents like
+		// storage leveldb may be closed
+		return nil
+	default:
+	}
+
 	switch msg := msg.(type) {
 
 	case *SubscribeMsg:
@@ -730,7 +767,7 @@ func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error 
 			return err
 		}
 
-		if err := p.SendPriority(context.TODO(), tp, c.priority, ""); err != nil {
+		if err := p.SendPriority(context.TODO(), tp, c.priority); err != nil {
 			return err
 		}
 		if c.to > 0 && tp.Takeover.End >= c.to {

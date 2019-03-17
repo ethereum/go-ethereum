@@ -159,8 +159,9 @@ func TestAccountingSimulation(t *testing.T) {
 // (n entries in the array will not be filled -
 //  the balance of a node with itself)
 type matrix struct {
-	n int     //number of nodes
-	m []int64 //array of balances
+	n    int     //number of nodes
+	m    []int64 //array of balances
+	lock sync.Mutex
 }
 
 // create a new matrix
@@ -177,7 +178,9 @@ func (m *matrix) add(i, j int, v int64) error {
 	// i * number of nodes + remote node
 	mi := i*m.n + j
 	// register that balance
+	m.lock.Lock()
 	m.m[mi] += v
+	m.lock.Unlock()
 	return nil
 }
 

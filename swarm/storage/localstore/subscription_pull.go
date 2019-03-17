@@ -24,8 +24,9 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/shed"
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // SubscribePull returns a channel that provides chunk addresses and stored times from pull syncing index.
@@ -158,10 +159,27 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkD
 	return chunkDescriptors, stop
 }
 
+// LastPullSubscriptionChunk returns ChunkDescriptor of the latest Chunk
+// in pull syncing index for a provided bin. If there are no chunks in
+// that bin, chunk.ErrChunkNotFound is returned.
+func (db *DB) LastPullSubscriptionChunk(bin uint8) (c *ChunkDescriptor, err error) {
+	item, err := db.pullIndex.Last([]byte{bin})
+	if err != nil {
+		if err == leveldb.ErrNotFound {
+			return nil, chunk.ErrChunkNotFound
+		}
+		return nil, err
+	}
+	return &ChunkDescriptor{
+		Address:        item.Address,
+		StoreTimestamp: item.StoreTimestamp,
+	}, nil
+}
+
 // ChunkDescriptor holds information required for Pull syncing. This struct
 // is provided by subscribing to pull index.
 type ChunkDescriptor struct {
-	Address        storage.Address
+	Address        chunk.Address
 	StoreTimestamp int64
 }
 

@@ -28,7 +28,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	ch "github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
 	ldberrors "github.com/syndtr/goleveldb/leveldb/errors"
@@ -103,7 +103,7 @@ func TestMarkAccessed(t *testing.T) {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 
-	h := GenerateRandomChunk(ch.DefaultSize)
+	h := GenerateRandomChunk(chunk.DefaultSize)
 
 	db.Put(context.Background(), h)
 
@@ -189,11 +189,11 @@ func TestMockDbStoreNotFound(t *testing.T) {
 }
 
 func testIterator(t *testing.T, mock bool) {
-	var chunkcount int = 32
 	var i int
 	var poc uint
+	chunkcount := 32
 	chunkkeys := NewAddressCollection(chunkcount)
-	chunkkeys_results := NewAddressCollection(chunkcount)
+	chunkkeysResults := NewAddressCollection(chunkcount)
 
 	db, cleanup, err := newTestDbStore(mock, false)
 	defer cleanup()
@@ -201,7 +201,7 @@ func testIterator(t *testing.T, mock bool) {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 
-	chunks := GenerateRandomChunks(ch.DefaultSize, chunkcount)
+	chunks := GenerateRandomChunks(chunk.DefaultSize, chunkcount)
 
 	for i = 0; i < len(chunks); i++ {
 		chunkkeys[i] = chunks[i].Address()
@@ -218,7 +218,7 @@ func testIterator(t *testing.T, mock bool) {
 	for poc = 0; poc <= 255; poc++ {
 		err := db.SyncIterator(0, uint64(chunkkeys.Len()), uint8(poc), func(k Address, n uint64) bool {
 			log.Trace(fmt.Sprintf("Got key %v number %d poc %d", k, n, uint8(poc)))
-			chunkkeys_results[n] = k
+			chunkkeysResults[n] = k
 			i++
 			return true
 		})
@@ -228,8 +228,8 @@ func testIterator(t *testing.T, mock bool) {
 	}
 
 	for i = 0; i < chunkcount; i++ {
-		if !bytes.Equal(chunkkeys[i], chunkkeys_results[i]) {
-			t.Fatalf("Chunk put #%d key '%v' does not match iterator's key '%v'", i, chunkkeys[i], chunkkeys_results[i])
+		if !bytes.Equal(chunkkeys[i], chunkkeysResults[i]) {
+			t.Fatalf("Chunk put #%d key '%v' does not match iterator's key '%v'", i, chunkkeys[i], chunkkeysResults[i])
 		}
 	}
 
@@ -468,7 +468,7 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	// put capacity count number of chunks
 	chunks := make([]Chunk, n)
 	for i := 0; i < n; i++ {
-		c := GenerateRandomChunk(ch.DefaultSize)
+		c := GenerateRandomChunk(chunk.DefaultSize)
 		chunks[i] = c
 		log.Trace("generate random chunk", "idx", i, "chunk", c)
 	}

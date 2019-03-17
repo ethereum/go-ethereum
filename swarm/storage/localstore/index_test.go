@@ -21,7 +21,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 // TestDB_pullIndex validates the ordering of keys in pull index.
@@ -43,7 +43,7 @@ func TestDB_pullIndex(t *testing.T) {
 
 	// upload random chunks
 	for i := 0; i < chunkCount; i++ {
-		chunk := generateRandomChunk()
+		chunk := generateTestRandomChunk()
 
 		err := uploader.Put(chunk)
 		if err != nil {
@@ -62,8 +62,8 @@ func TestDB_pullIndex(t *testing.T) {
 	}
 
 	testItemsOrder(t, db.pullIndex, chunks, func(i, j int) (less bool) {
-		poi := storage.Proximity(db.baseKey, chunks[i].Address())
-		poj := storage.Proximity(db.baseKey, chunks[j].Address())
+		poi := chunk.Proximity(db.baseKey, chunks[i].Address())
+		poj := chunk.Proximity(db.baseKey, chunks[j].Address())
 		if poi < poj {
 			return true
 		}
@@ -95,7 +95,7 @@ func TestDB_gcIndex(t *testing.T) {
 
 	// upload random chunks
 	for i := 0; i < chunkCount; i++ {
-		chunk := generateRandomChunk()
+		chunk := generateTestRandomChunk()
 
 		err := uploader.Put(chunk)
 		if err != nil {

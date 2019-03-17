@@ -140,6 +140,7 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 	defer k.lock.Unlock()
 	var known, size int
 	for _, p := range peers {
+		log.Trace("kademlia trying to register", "addr", p)
 		// error if self received, peer should know better
 		// and should be punished for this
 		if bytes.Equal(p.Address(), k.base) {
@@ -149,10 +150,22 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 		k.addrs, _, found, _ = pot.Swap(k.addrs, p, Pof, func(v pot.Val) pot.Val {
 			// if not found
 			if v == nil {
+				log.Trace("registering new peer", "addr", p)
 				// insert new offline peer into conns
 				return newEntry(p)
 			}
-			// found among known peers, do nothing
+
+			e := v.(*entry)
+
+			// if underlay address is different, still add
+			if !bytes.Equal(e.BzzAddr.UAddr, p.UAddr) {
+				log.Trace("underlay addr is different, so add again", "new", p, "old", e.BzzAddr)
+				// insert new offline peer into conns
+				return newEntry(p)
+			}
+
+			log.Trace("found among known peers, underlay addr is same, do nothing", "new", p, "old", e.BzzAddr)
+
 			return v
 		})
 		if found {
@@ -333,6 +346,18 @@ func (k *Kademlia) NeighbourhoodDepthC() <-chan int {
 	return k.nDepthC
 }
 
+// CloseNeighbourhoodDepthC closes the channel returned by
+// NeighbourhoodDepthC and stops sending neighbourhood change.
+func (k *Kademlia) CloseNeighbourhoodDepthC() {
+	k.lock.Lock()
+	defer k.lock.Unlock()
+
+	if k.nDepthC != nil {
+		close(k.nDepthC)
+		k.nDepthC = nil
+	}
+}
+
 // sendNeighbourhoodDepthChange sends new neighbourhood depth to k.nDepth channel
 // if it is initialized.
 func (k *Kademlia) sendNeighbourhoodDepthChange() {
@@ -360,6 +385,18 @@ func (k *Kademlia) AddrCountC() <-chan int {
 		k.addrCountC = make(chan int)
 	}
 	return k.addrCountC
+}
+
+// CloseAddrCountC closes the channel returned by
+// AddrCountC and stops sending address count change.
+func (k *Kademlia) CloseAddrCountC() {
+	k.lock.Lock()
+	defer k.lock.Unlock()
+
+	if k.addrCountC != nil {
+		close(k.addrCountC)
+		k.addrCountC = nil
+	}
 }
 
 // Off removes a peer from among live peers
@@ -391,6 +428,18 @@ func (k *Kademlia) Off(p *Peer) {
 		}
 		k.sendNeighbourhoodDepthChange()
 	}
+}
+
+func (k *Kademlia) ListKnown() []*BzzAddr {
+	res := []*BzzAddr{}
+
+	k.addrs.Each(func(val pot.Val) bool {
+		e := val.(*entry)
+		res = append(res, e.BzzAddr)
+		return true
+	})
+
+	return res
 }
 
 // EachConn is an iterator with args (base, po, f) applies f to each live peer

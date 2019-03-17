@@ -22,17 +22,36 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"runtime"
 	"sort"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
 
-	ch "github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/shed"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/syndtr/goleveldb/leveldb"
 )
+
+func init() {
+	// Some of the tests in localstore package rely on the same ordering of
+	// items uploaded or accessed compared to the ordering of items in indexes
+	// that contain StoreTimestamp or AccessTimestamp in keys. In tests
+	// where the same order is required from the database as the order
+	// in which chunks are put or accessed, if the StoreTimestamp or
+	// AccessTimestamp are the same for two or more sequential items
+	// their order in database will be based on the chunk address value,
+	// in which case the ordering of items/chunks stored in a test slice
+	// will not be the same. To ensure the same ordering in database on such
+	// indexes on windows systems, an additional short sleep is added to
+	// the now function.
+	if runtime.GOOS == "windows" {
+		setNow(func() int64 {
+			time.Sleep(time.Microsecond)
+			return time.Now().UTC().UnixNano()
+		})
+	}
+}
 
 // TestDB validates if the chunk can be uploaded and
 // correctly retrieved.
@@ -40,7 +59,7 @@ func TestDB(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	chunk := generateRandomChunk()
+	chunk := generateTestRandomChunk()
 
 	err := db.NewPutter(ModePutUpload).Put(chunk)
 	if err != nil {
@@ -94,7 +113,7 @@ func TestDB_updateGCSem(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	chunk := generateRandomChunk()
+	chunk := generateTestRandomChunk()
 
 	err := db.NewPutter(ModePutUpload).Put(chunk)
 	if err != nil {
@@ -114,88 +133,6 @@ func TestDB_updateGCSem(t *testing.T) {
 
 	if max != maxParallelUpdateGC {
 		t.Errorf("got max %v, want %v", max, maxParallelUpdateGC)
-	}
-}
-
-// BenchmarkNew measures the time that New function
-// needs to initialize and count the number of key/value
-// pairs in GC index.
-// This benchmark generates a number of chunks, uploads them,
-// sets them to synced state for them to enter the GC index,
-// and measures the execution time of New function by creating
-// new databases with the same data directory.
-//
-// This benchmark takes significant amount of time.
-//
-// Measurements on MacBook Pro (Retina, 15-inch, Mid 2014) show
-// that New function executes around 1s for database with 1M chunks.
-//
-// # go test -benchmem -run=none github.com/ethereum/go-ethereum/swarm/storage/localstore -bench BenchmarkNew -v -timeout 20m
-// goos: darwin
-// goarch: amd64
-// pkg: github.com/ethereum/go-ethereum/swarm/storage/localstore
-// BenchmarkNew/1000-8         	     200	  11672414 ns/op	 9570960 B/op	   10008 allocs/op
-// BenchmarkNew/10000-8        	     100	  14890609 ns/op	10490118 B/op	    7759 allocs/op
-// BenchmarkNew/100000-8       	      20	  58334080 ns/op	17763157 B/op	   22978 allocs/op
-// BenchmarkNew/1000000-8      	       2	 748595153 ns/op	45297404 B/op	  253242 allocs/op
-// PASS
-func BenchmarkNew(b *testing.B) {
-	if testing.Short() {
-		b.Skip("skipping benchmark in short mode")
-	}
-	for _, count := range []int{
-		1000,
-		10000,
-		100000,
-		1000000,
-	} {
-		b.Run(strconv.Itoa(count), func(b *testing.B) {
-			dir, err := ioutil.TempDir("", "localstore-new-benchmark")
-			if err != nil {
-				b.Fatal(err)
-			}
-			defer os.RemoveAll(dir)
-			baseKey := make([]byte, 32)
-			if _, err := rand.Read(baseKey); err != nil {
-				b.Fatal(err)
-			}
-			db, err := New(dir, baseKey, nil)
-			if err != nil {
-				b.Fatal(err)
-			}
-			uploader := db.NewPutter(ModePutUpload)
-			syncer := db.NewSetter(ModeSetSync)
-			for i := 0; i < count; i++ {
-				chunk := generateFakeRandomChunk()
-				err := uploader.Put(chunk)
-				if err != nil {
-					b.Fatal(err)
-				}
-				err = syncer.Set(chunk.Address())
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-			err = db.Close()
-			if err != nil {
-				b.Fatal(err)
-			}
-			b.ResetTimer()
-
-			for n := 0; n < b.N; n++ {
-				b.StartTimer()
-				db, err := New(dir, baseKey, nil)
-				b.StopTimer()
-
-				if err != nil {
-					b.Fatal(err)
-				}
-				err = db.Close()
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-		})
 	}
 }
 
@@ -229,53 +166,47 @@ func newTestDB(t testing.TB, o *Options) (db *DB, cleanupFunc func()) {
 	return db, cleanupFunc
 }
 
-// generateRandomChunk generates a valid Chunk with
-// data size of default chunk size.
-func generateRandomChunk() storage.Chunk {
-	return storage.GenerateRandomChunk(ch.DefaultSize)
-}
-
 func init() {
-	// needed for generateFakeRandomChunk
+	// needed for generateTestRandomChunk
 	rand.Seed(time.Now().UnixNano())
 }
 
-// generateFakeRandomChunk generates a Chunk that is not
+// generateTestRandomChunk generates a Chunk that is not
 // valid, but it contains a random key and a random value.
-// This function is faster then storage.GenerateRandomChunk
+// This function is faster then storage.generateTestRandomChunk
 // which generates a valid chunk.
 // Some tests in this package do not need valid chunks, just
 // random data, and their execution time can be decreased
 // using this function.
-func generateFakeRandomChunk() storage.Chunk {
-	data := make([]byte, ch.DefaultSize)
+func generateTestRandomChunk() chunk.Chunk {
+	data := make([]byte, chunk.DefaultSize)
 	rand.Read(data)
 	key := make([]byte, 32)
 	rand.Read(key)
-	return storage.NewChunk(key, data)
+	return chunk.NewChunk(key, data)
 }
 
-// TestGenerateFakeRandomChunk validates that
-// generateFakeRandomChunk returns random data by comparing
+// TestGenerateTestRandomChunk validates that
+// generateTestRandomChunk returns random data by comparing
 // two generated chunks.
-func TestGenerateFakeRandomChunk(t *testing.T) {
-	c1 := generateFakeRandomChunk()
-	c2 := generateFakeRandomChunk()
+func TestGenerateTestRandomChunk(t *testing.T) {
+	c1 := generateTestRandomChunk()
+	c2 := generateTestRandomChunk()
 	addrLen := len(c1.Address())
 	if addrLen != 32 {
 		t.Errorf("first chunk address length %v, want %v", addrLen, 32)
 	}
 	dataLen := len(c1.Data())
-	if dataLen != ch.DefaultSize {
-		t.Errorf("first chunk data length %v, want %v", dataLen, ch.DefaultSize)
+	if dataLen != chunk.DefaultSize {
+		t.Errorf("first chunk data length %v, want %v", dataLen, chunk.DefaultSize)
 	}
 	addrLen = len(c2.Address())
 	if addrLen != 32 {
 		t.Errorf("second chunk address length %v, want %v", addrLen, 32)
 	}
 	dataLen = len(c2.Data())
-	if dataLen != ch.DefaultSize {
-		t.Errorf("second chunk data length %v, want %v", dataLen, ch.DefaultSize)
+	if dataLen != chunk.DefaultSize {
+		t.Errorf("second chunk data length %v, want %v", dataLen, chunk.DefaultSize)
 	}
 	if bytes.Equal(c1.Address(), c2.Address()) {
 		t.Error("fake chunks addresses do not differ")
@@ -287,7 +218,7 @@ func TestGenerateFakeRandomChunk(t *testing.T) {
 
 // newRetrieveIndexesTest returns a test function that validates if the right
 // chunk values are in the retrieval indexes.
-func newRetrieveIndexesTest(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
+func newRetrieveIndexesTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
 		item, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
 		if err != nil {
@@ -306,7 +237,7 @@ func newRetrieveIndexesTest(db *DB, chunk storage.Chunk, storeTimestamp, accessT
 
 // newRetrieveIndexesTestWithAccess returns a test function that validates if the right
 // chunk values are in the retrieval indexes when access time must be stored.
-func newRetrieveIndexesTestWithAccess(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
+func newRetrieveIndexesTestWithAccess(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
 		item, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
 		if err != nil {
@@ -326,7 +257,7 @@ func newRetrieveIndexesTestWithAccess(db *DB, chunk storage.Chunk, storeTimestam
 
 // newPullIndexTest returns a test function that validates if the right
 // chunk values are in the pull index.
-func newPullIndexTest(db *DB, chunk storage.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
+func newPullIndexTest(db *DB, chunk chunk.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
 		item, err := db.pullIndex.Get(shed.Item{
 			Address:        chunk.Address(),
@@ -343,7 +274,7 @@ func newPullIndexTest(db *DB, chunk storage.Chunk, storeTimestamp int64, wantErr
 
 // newPushIndexTest returns a test function that validates if the right
 // chunk values are in the push index.
-func newPushIndexTest(db *DB, chunk storage.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
+func newPushIndexTest(db *DB, chunk chunk.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
 		item, err := db.pushIndex.Get(shed.Item{
 			Address:        chunk.Address(),
@@ -360,7 +291,7 @@ func newPushIndexTest(db *DB, chunk storage.Chunk, storeTimestamp int64, wantErr
 
 // newGCIndexTest returns a test function that validates if the right
 // chunk values are in the push index.
-func newGCIndexTest(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
+func newGCIndexTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
 		item, err := db.gcIndex.Get(shed.Item{
 			Address:         chunk.Address(),
@@ -396,7 +327,7 @@ func newItemsCountTest(i shed.Index, want int) func(t *testing.T) {
 // value is the same as the number of items in DB.gcIndex.
 func newIndexGCSizeTest(db *DB) func(t *testing.T) {
 	return func(t *testing.T) {
-		var want int64
+		var want uint64
 		err := db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 			want++
 			return
@@ -404,7 +335,10 @@ func newIndexGCSizeTest(db *DB) func(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := db.getGCSize()
+		got, err := db.gcSize.Get()
+		if err != nil {
+			t.Fatal(err)
+		}
 		if got != want {
 			t.Errorf("got gc size %v, want %v", got, want)
 		}
@@ -414,7 +348,7 @@ func newIndexGCSizeTest(db *DB) func(t *testing.T) {
 // testIndexChunk embeds storageChunk with additional data that is stored
 // in database. It is used for index values validations.
 type testIndexChunk struct {
-	storage.Chunk
+	chunk.Chunk
 	storeTimestamp int64
 }
 

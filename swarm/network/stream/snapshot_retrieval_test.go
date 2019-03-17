@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/swarm/testutil"
+
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -43,23 +45,24 @@ const (
 //Files are uploaded to nodes, other nodes try to retrieve the file
 //Number of nodes can be provided via commandline too.
 func TestFileRetrieval(t *testing.T) {
+	var nodeCount []int
+
 	if *nodes != 0 {
-		err := runFileRetrievalTest(*nodes)
-		if err != nil {
-			t.Fatal(err)
-		}
+		nodeCount = []int{*nodes}
 	} else {
-		nodeCnt := []int{16}
-		//if the `longrunning` flag has been provided
-		//run more test combinations
+		nodeCount = []int{16}
+
 		if *longrunning {
-			nodeCnt = append(nodeCnt, 32, 64, 128)
+			nodeCount = append(nodeCount, 32, 64)
+		} else if testutil.RaceEnabled {
+			nodeCount = []int{4}
 		}
-		for _, n := range nodeCnt {
-			err := runFileRetrievalTest(n)
-			if err != nil {
-				t.Fatal(err)
-			}
+
+	}
+
+	for _, nc := range nodeCount {
+		if err := runFileRetrievalTest(nc); err != nil {
+			t.Error(err)
 		}
 	}
 }
@@ -79,18 +82,17 @@ func TestRetrieval(t *testing.T) {
 			t.Fatal(err)
 		}
 	} else {
-		var nodeCnt []int
-		var chnkCnt []int
-		//if the `longrunning` flag has been provided
-		//run more test combinations
+		nodeCnt := []int{16}
+		chnkCnt := []int{32}
+
 		if *longrunning {
-			nodeCnt = []int{16, 32, 128}
+			nodeCnt = []int{16, 32, 64}
 			chnkCnt = []int{4, 32, 256}
-		} else {
-			//default test
-			nodeCnt = []int{16}
-			chnkCnt = []int{32}
+		} else if testutil.RaceEnabled {
+			nodeCnt = []int{4}
+			chnkCnt = []int{4}
 		}
+
 		for _, n := range nodeCnt {
 			for _, c := range chnkCnt {
 				t.Run(fmt.Sprintf("TestRetrieval_%d_%d", n, c), func(t *testing.T) {
@@ -111,10 +113,15 @@ var retrievalSimServiceMap = map[string]simulation.ServiceFunc{
 			return nil, nil, err
 		}
 
+		syncUpdateDelay := 1 * time.Second
+		if *longrunning {
+			syncUpdateDelay = 3 * time.Second
+		}
+
 		r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 			Retrieval:       RetrievalEnabled,
 			Syncing:         SyncingAutoSubscribe,
-			SyncUpdateDelay: 3 * time.Second,
+			SyncUpdateDelay: syncUpdateDelay,
 		}, nil)
 
 		cleanup = func() {
@@ -138,7 +145,7 @@ func runFileRetrievalTest(nodeCount int) error {
 	sim := simulation.New(retrievalSimServiceMap)
 	defer sim.Close()
 
-	log.Info("Initializing test config")
+	log.Info("Initializing test config", "node count", nodeCount)
 
 	conf := &synctestConfig{}
 	//map of discover ID to indexes of chunks expected at that ID
@@ -155,6 +162,8 @@ func runFileRetrievalTest(nodeCount int) error {
 
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancelSimRun()
+
+	log.Info("Starting simulation")
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
@@ -183,6 +192,8 @@ func runFileRetrievalTest(nodeCount int) error {
 			return err
 		}
 
+		log.Info("network healthy, start file checks")
+
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
 	REPEAT:
@@ -209,6 +220,8 @@ func runFileRetrievalTest(nodeCount int) error {
 			return nil
 		}
 	})
+
+	log.Info("Simulation terminated")
 
 	if result.Error != nil {
 		return result.Error

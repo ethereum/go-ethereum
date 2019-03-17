@@ -17,7 +17,7 @@
 package localstore
 
 import (
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -53,7 +53,7 @@ func (db *DB) NewSetter(mode ModeSet) *Setter {
 
 // Set updates database indexes for a specific
 // chunk represented by the address.
-func (s *Setter) Set(addr storage.Address) (err error) {
+func (s *Setter) Set(addr chunk.Address) (err error) {
 	return s.db.set(s.mode, addr)
 }
 
@@ -61,13 +61,10 @@ func (s *Setter) Set(addr storage.Address) (err error) {
 // chunk represented by the address.
 // It acquires lockAddr to protect two calls
 // of this function for the same address in parallel.
-func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
+func (db *DB) set(mode ModeSet, addr chunk.Address) (err error) {
 	// protect parallel updates
-	unlock, err := db.lockAddr(addr)
-	if err != nil {
-		return err
-	}
-	defer unlock()
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
 
 	batch := new(leveldb.Batch)
 
@@ -113,7 +110,6 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		db.pullIndex.PutInBatch(batch, item)
 		triggerPullFeed = true
 		db.gcIndex.PutInBatch(batch, item)
-		db.gcUncountedHashesIndex.PutInBatch(batch, item)
 		gcSizeChange++
 
 	case ModeSetSync:
@@ -151,7 +147,6 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		db.retrievalAccessIndex.PutInBatch(batch, item)
 		db.pushIndex.DeleteInBatch(batch, item)
 		db.gcIndex.PutInBatch(batch, item)
-		db.gcUncountedHashesIndex.PutInBatch(batch, item)
 		gcSizeChange++
 
 	case modeSetRemove:
@@ -179,7 +174,6 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		db.retrievalAccessIndex.DeleteInBatch(batch, item)
 		db.pullIndex.DeleteInBatch(batch, item)
 		db.gcIndex.DeleteInBatch(batch, item)
-		db.gcUncountedHashesIndex.DeleteInBatch(batch, item)
 		// a check is needed for decrementing gcSize
 		// as delete is not reporting if the key/value pair
 		// is deleted or not
@@ -191,12 +185,14 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		return ErrInvalidMode
 	}
 
-	err = db.shed.WriteBatch(batch)
+	err = db.incGCSizeInBatch(batch, gcSizeChange)
 	if err != nil {
 		return err
 	}
-	if gcSizeChange != 0 {
-		db.incGCSize(gcSizeChange)
+
+	err = db.shed.WriteBatch(batch)
+	if err != nil {
+		return err
 	}
 	if triggerPullFeed {
 		db.triggerPullSubscriptions(db.po(item.Address))

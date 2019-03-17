@@ -661,7 +661,7 @@ OBS! A slight deviation from `json` standard is in place: every request and resp
 Whereas the `json` specification allows for linebreaks, linebreaks __should not__ be used in this communication channel, to make
 things simpler for both parties.
 
-### ApproveTx
+### ApproveTx / `ui_approveTx`
 
 Invoked when there's a transaction for approval.
 
@@ -673,13 +673,13 @@ Here's a method invocation:
 
 curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_signTransaction","params":[{"from":"0x694267f14675d7e1b9494fd8d72fefe1755710fa","gas":"0x333","gasPrice":"0x1","nonce":"0x0","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value":"0x0", "data":"0x4401a6e40000000000000000000000000000000000000000000000000000000000000012"},"safeSend(address)"],"id":67}' http://localhost:8550/
 ```
-
+Results in the following invocation on the UI:
 ```json
 
 {
   "jsonrpc": "2.0",
   "id": 1,
-  "method": "ApproveTx",
+  "method": "ui_approveTx",
   "params": [
     {
       "transaction": {
@@ -724,7 +724,7 @@ curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","me
 {
   "jsonrpc": "2.0",
   "id": 1,
-  "method": "ApproveTx",
+  "method": "ui_approveTx",
   "params": [
     {
       "transaction": {
@@ -767,7 +767,7 @@ One which has missing `to`, but with no `data`:
 {
   "jsonrpc": "2.0",
   "id": 3,
-  "method": "ApproveTx",
+  "method": "ui_approveTx",
   "params": [
     {
       "transaction": {
@@ -796,33 +796,7 @@ One which has missing `to`, but with no `data`:
 }
 ```
 
-### ApproveExport
-
-Invoked when a request to export an account has been made.
-
-#### Sample call
-
-```json
-
-{
-  "jsonrpc": "2.0",
-  "id": 7,
-  "method": "ApproveExport",
-  "params": [
-    {
-      "address": "0x0000000000000000000000000000000000000000",
-      "meta": {
-        "remote": "signer binary",
-        "local": "main",
-        "scheme": "in-proc"
-      }
-    }
-  ]
-}
-
-```
-
-### ApproveListing
+### ApproveListing / `ui_approveListing`
 
 Invoked when a request for account listing has been made.
 
@@ -833,7 +807,7 @@ Invoked when a request for account listing has been made.
 {
   "jsonrpc": "2.0",
   "id": 5,
-  "method": "ApproveListing",
+  "method": "ui_approveListing",
   "params": [
     {
       "accounts": [
@@ -860,7 +834,7 @@ Invoked when a request for account listing has been made.
 ```
 
 
-### ApproveSignData
+### ApproveSignData / `ui_approveSignData`
 
 #### Sample call
 
@@ -868,7 +842,7 @@ Invoked when a request for account listing has been made.
 {
   "jsonrpc": "2.0",
   "id": 4,
-  "method": "ApproveSignData",
+  "method": "ui_approveSignData",
   "params": [
     {
       "address": "0x123409812340981234098123409812deadbeef42",
@@ -886,7 +860,7 @@ Invoked when a request for account listing has been made.
 
 ```
 
-### ShowInfo
+### ShowInfo / `ui_showInfo`
 
 The UI should show the info to the user. Does not expect response.
 
@@ -896,7 +870,7 @@ The UI should show the info to the user. Does not expect response.
 {
   "jsonrpc": "2.0",
   "id": 9,
-  "method": "ShowInfo",
+  "method": "ui_showInfo",
   "params": [
     {
       "text": "Tests completed"
@@ -906,7 +880,7 @@ The UI should show the info to the user. Does not expect response.
 
 ```
 
-### ShowError
+### ShowError / `ui_showError`
 
 The UI should show the info to the user. Does not expect response.
 
@@ -925,7 +899,7 @@ The UI should show the info to the user. Does not expect response.
 
 ```
 
-### OnApproved
+### OnApprovedTx / `ui_onApprovedTx`
 
 `OnApprovedTx` is called when a transaction has been approved and signed. The call contains the return value that will be sent to the external caller.  The return value from this method is ignored - the reason for having this callback is to allow the ruleset to keep track of approved transactions.
 
@@ -933,7 +907,7 @@ When implementing rate-limited rules, this callback should be used.
 
 TLDR; Use this method to keep track of signed transactions, instead of using the data in `ApproveTx`.
 
-### OnSignerStartup
+### OnSignerStartup / `ui_onSignerStartup`
 
 This method provide the UI with information about what API version the signer uses (both internal and external) aswell as build-info and external api,
 in k/v-form.
@@ -944,7 +918,7 @@ Example call:
 {
   "jsonrpc": "2.0",
   "id": 1,
-  "method": "OnSignerStartup",
+  "method": "ui_onSignerStartup",
   "params": [
     {
       "info": {

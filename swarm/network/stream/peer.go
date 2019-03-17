@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/tracing"
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
@@ -65,7 +66,6 @@ type Peer struct {
 	// on creating a new client in offered hashes handler.
 	clientParams map[Stream]*clientParams
 	quit         chan struct{}
-	spans        sync.Map
 }
 
 type WrappedPriorityMsg struct {
@@ -83,16 +83,10 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 		clients:      make(map[Stream]*client),
 		clientParams: make(map[Stream]*clientParams),
 		quit:         make(chan struct{}),
-		spans:        sync.Map{},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	go p.pq.Run(ctx, func(i interface{}) {
 		wmsg := i.(WrappedPriorityMsg)
-		defer p.spans.Delete(wmsg.Context)
-		sp, ok := p.spans.Load(wmsg.Context)
-		if ok {
-			defer sp.(opentracing.Span).Finish()
-		}
 		err := p.Send(wmsg.Context, wmsg.Msg)
 		if err != nil {
 			log.Error("Message send error, dropping peer", "peer", p.ID(), "err", err)
@@ -107,20 +101,20 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 		for {
 			select {
 			case <-ticker.C:
-				var len_maxi int
-				var cap_maxi int
+				var lenMaxi int
+				var capMaxi int
 				for k := range pq.Queues {
-					if len_maxi < len(pq.Queues[k]) {
-						len_maxi = len(pq.Queues[k])
+					if lenMaxi < len(pq.Queues[k]) {
+						lenMaxi = len(pq.Queues[k])
 					}
 
-					if cap_maxi < cap(pq.Queues[k]) {
-						cap_maxi = cap(pq.Queues[k])
+					if capMaxi < cap(pq.Queues[k]) {
+						capMaxi = cap(pq.Queues[k])
 					}
 				}
 
-				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_len_%s", p.ID().TerminalString()), nil).Update(int64(len_maxi))
-				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_cap_%s", p.ID().TerminalString()), nil).Update(int64(cap_maxi))
+				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_len_%s", p.ID().TerminalString()), nil).Update(int64(lenMaxi))
+				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_cap_%s", p.ID().TerminalString()), nil).Update(int64(capMaxi))
 			case <-p.quit:
 				return
 			}
@@ -129,6 +123,7 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 
 	go func() {
 		<-p.quit
+
 		cancel()
 	}()
 	return p
@@ -158,29 +153,22 @@ func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8,
 		spanName += ".retrieval"
 	}
 
-	return p.SendPriority(ctx, msg, priority, spanName)
+	ctx = context.WithValue(ctx, "stream_send_tag", nil)
+	return p.SendPriority(ctx, msg, priority)
 }
 
 // SendPriority sends message to the peer using the outgoing priority queue
-func (p *Peer) SendPriority(ctx context.Context, msg interface{}, priority uint8, traceId string) error {
+func (p *Peer) SendPriority(ctx context.Context, msg interface{}, priority uint8) error {
 	defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("peer.sendpriority_t.%d", priority), nil).UpdateSince(time.Now())
+	ctx = tracing.StartSaveSpan(ctx)
 	metrics.GetOrRegisterCounter(fmt.Sprintf("peer.sendpriority.%d", priority), nil).Inc(1)
-	if traceId != "" {
-		var sp opentracing.Span
-		ctx, sp = spancontext.StartSpan(
-			ctx,
-			traceId,
-		)
-		p.spans.Store(ctx, sp)
-	}
 	wmsg := WrappedPriorityMsg{
 		Context: ctx,
 		Msg:     msg,
 	}
 	err := p.pq.Push(wmsg, int(priority))
-	if err == pq.ErrContention {
-		log.Warn("dropping peer on priority queue contention", "peer", p.ID())
-		p.Drop(err)
+	if err != nil {
+		log.Error("err on p.pq.Push", "err", err, "peer", p.ID())
 	}
 	return err
 }
@@ -190,8 +178,11 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 	var sp opentracing.Span
 	ctx, sp := spancontext.StartSpan(
 		context.TODO(),
-		"send.offered.hashes")
+		"send.offered.hashes",
+	)
 	defer sp.Finish()
+
+	defer metrics.GetOrRegisterResettingTimer("send.offered.hashes", nil).UpdateSince(time.Now())
 
 	hashes, from, to, proof, err := s.setNextBatch(f, t)
 	if err != nil {
@@ -215,7 +206,8 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		Stream:        s.stream,
 	}
 	log.Trace("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "len", len(hashes), "from", from, "to", to)
-	return p.SendPriority(ctx, msg, s.priority, "send.offered.hashes")
+	ctx = context.WithValue(ctx, "stream_send_tag", "send.offered.hashes")
+	return p.SendPriority(ctx, msg, s.priority)
 }
 
 func (p *Peer) getServer(s Stream) (*server, error) {

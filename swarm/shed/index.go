@@ -20,6 +20,7 @@ import (
 	"bytes"
 
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/iterator"
 )
 
 // Item holds fields relevant to Swarm Chunk data and metadata.
@@ -144,6 +145,17 @@ func (f Index) Get(keyFields Item) (out Item, err error) {
 	return out.Merge(keyFields), nil
 }
 
+// Has accepts key fields represented as Item to check
+// if there this Item's encoded key is stored in
+// the index.
+func (f Index) Has(keyFields Item) (bool, error) {
+	key, err := f.encodeKeyFunc(keyFields)
+	if err != nil {
+		return false, err
+	}
+	return f.db.Has(key)
+}
+
 // Put accepts Item to encode information from it
 // and save it to the database.
 func (f Index) Put(i Item) (err error) {
@@ -245,21 +257,14 @@ func (f Index) Iterate(fn IndexIterFunc, options *IterateOptions) (err error) {
 		ok = it.Next()
 	}
 	for ; ok; ok = it.Next() {
-		key := it.Key()
-		if !bytes.HasPrefix(key, prefix) {
-			break
-		}
-		// create a copy of key byte slice not to share leveldb underlaying slice array
-		keyItem, err := f.decodeKeyFunc(append([]byte(nil), key...))
+		item, err := f.itemFromIterator(it, prefix)
 		if err != nil {
+			if err == leveldb.ErrNotFound {
+				break
+			}
 			return err
 		}
-		// create a copy of value byte slice not to share leveldb underlaying slice array
-		valueItem, err := f.decodeValueFunc(keyItem, append([]byte(nil), it.Value()...))
-		if err != nil {
-			return err
-		}
-		stop, err := fn(keyItem.Merge(valueItem))
+		stop, err := fn(item)
 		if err != nil {
 			return err
 		}
@@ -268,6 +273,87 @@ func (f Index) Iterate(fn IndexIterFunc, options *IterateOptions) (err error) {
 		}
 	}
 	return it.Error()
+}
+
+// First returns the first item in the Index which encoded key starts with a prefix.
+// If the prefix is nil, the first element of the whole index is returned.
+// If Index has no elements, a leveldb.ErrNotFound error is returned.
+func (f Index) First(prefix []byte) (i Item, err error) {
+	it := f.db.NewIterator()
+	defer it.Release()
+
+	totalPrefix := append(f.prefix, prefix...)
+	it.Seek(totalPrefix)
+
+	return f.itemFromIterator(it, totalPrefix)
+}
+
+// itemFromIterator returns the Item from the current iterator position.
+// If the complete encoded key does not start with totalPrefix,
+// leveldb.ErrNotFound is returned. Value for totalPrefix must start with
+// Index prefix.
+func (f Index) itemFromIterator(it iterator.Iterator, totalPrefix []byte) (i Item, err error) {
+	key := it.Key()
+	if !bytes.HasPrefix(key, totalPrefix) {
+		return i, leveldb.ErrNotFound
+	}
+	// create a copy of key byte slice not to share leveldb underlaying slice array
+	keyItem, err := f.decodeKeyFunc(append([]byte(nil), key...))
+	if err != nil {
+		return i, err
+	}
+	// create a copy of value byte slice not to share leveldb underlaying slice array
+	valueItem, err := f.decodeValueFunc(keyItem, append([]byte(nil), it.Value()...))
+	if err != nil {
+		return i, err
+	}
+	return keyItem.Merge(valueItem), it.Error()
+}
+
+// Last returns the last item in the Index which encoded key starts with a prefix.
+// If the prefix is nil, the last element of the whole index is returned.
+// If Index has no elements, a leveldb.ErrNotFound error is returned.
+func (f Index) Last(prefix []byte) (i Item, err error) {
+	it := f.db.NewIterator()
+	defer it.Release()
+
+	// get the next prefix in line
+	// since leveldb iterator Seek seeks to the
+	// next key if the key that it seeks to is not found
+	// and by getting the previous key, the last one for the
+	// actual prefix is found
+	nextPrefix := incByteSlice(prefix)
+	l := len(prefix)
+
+	if l > 0 && nextPrefix != nil {
+		it.Seek(append(f.prefix, nextPrefix...))
+		it.Prev()
+	} else {
+		it.Last()
+	}
+
+	totalPrefix := append(f.prefix, prefix...)
+	return f.itemFromIterator(it, totalPrefix)
+}
+
+// incByteSlice returns the byte slice of the same size
+// of the provided one that is by one incremented in its
+// total value. If all bytes in provided slice are equal
+// to 255 a nil slice would be returned indicating that
+// increment can not happen for the same length.
+func incByteSlice(b []byte) (next []byte) {
+	l := len(b)
+	next = make([]byte, l)
+	copy(next, b)
+	for i := l - 1; i >= 0; i-- {
+		if b[i] == 255 {
+			next[i] = 0
+		} else {
+			next[i] = b[i] + 1
+			return next
+		}
+	}
+	return nil
 }
 
 // Count returns the number of items in index.

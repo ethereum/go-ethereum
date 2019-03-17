@@ -27,7 +27,9 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/tracing"
 	opentracing "github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 const (
@@ -143,7 +145,9 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 	var osp opentracing.Span
 	ctx, osp = spancontext.StartSpan(
 		ctx,
-		"retrieve.request")
+		"stream.handle.retrieve")
+
+	osp.LogFields(olog.String("ref", req.Addr.String()))
 
 	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, "", true))
 	if err != nil {
@@ -175,12 +179,15 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 		}
 		if req.SkipCheck {
 			syncing := false
+			osp.LogFields(olog.Bool("skipCheck", true))
+
 			err = sp.Deliver(ctx, chunk, s.priority, syncing)
 			if err != nil {
 				log.Warn("ERROR in handleRetrieveRequestMsg", "err", err)
 			}
 			return
 		}
+		osp.LogFields(olog.Bool("skipCheck", false))
 		select {
 		case streamer.deliveryC <- chunk.Address()[:]:
 		case <-streamer.quit:
@@ -207,17 +214,20 @@ type ChunkDeliveryMsgRetrieval ChunkDeliveryMsg
 //defines a chunk delivery for syncing (without accounting)
 type ChunkDeliveryMsgSyncing ChunkDeliveryMsg
 
-// TODO: Fix context SNAFU
+// chunk delivery msg is response to retrieverequest msg
 func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *ChunkDeliveryMsg) error {
-	var osp opentracing.Span
-	ctx, osp = spancontext.StartSpan(
-		ctx,
-		"chunk.delivery")
 
 	processReceivedChunksCount.Inc(1)
 
+	// retrieve the span for the originating retrieverequest
+	spanId := fmt.Sprintf("stream.send.request.%v.%v", sp.ID(), req.Addr)
+	span := tracing.ShiftSpanByKey(spanId)
+
 	go func() {
-		defer osp.Finish()
+		if span != nil {
+			span.LogFields(olog.String("finish", "from handleChunkDeliveryMsg"))
+			defer span.Finish()
+		}
 
 		req.peer = sp
 		err := d.chunkStore.Put(ctx, storage.NewChunk(req.Addr, req.SData))
@@ -233,7 +243,9 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 	return nil
 }
 
-// RequestFromPeers sends a chunk retrieve request to
+// RequestFromPeers sends a chunk retrieve request to a peer
+// The most eligible peer that hasn't already been sent to is chosen
+// TODO: define "eligible"
 func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (*enode.ID, chan struct{}, error) {
 	requestFromPeersCount.Inc(1)
 	var sp *Peer
@@ -268,11 +280,15 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 		}
 	}
 
+	// setting this value in the context creates a new span that can persist across the sendpriority queue and the network roundtrip
+	// this span will finish only when delivery is handled (or times out)
+	ctx = context.WithValue(ctx, tracing.StoreLabelId, "stream.send.request")
+	ctx = context.WithValue(ctx, tracing.StoreLabelMeta, fmt.Sprintf("%v.%v", sp.ID(), req.Addr))
 	err := sp.SendPriority(ctx, &RetrieveRequestMsg{
 		Addr:      req.Addr,
 		SkipCheck: req.SkipCheck,
 		HopCount:  req.HopCount,
-	}, Top, "request.from.peers")
+	}, Top)
 	if err != nil {
 		return nil, nil, err
 	}

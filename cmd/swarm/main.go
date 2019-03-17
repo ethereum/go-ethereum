@@ -76,8 +76,8 @@ var gitCommit string
 
 //declare a few constant error messages, useful for later error check comparisons in test
 var (
-	SWARM_ERR_NO_BZZACCOUNT   = "bzzaccount option is required but not set; check your config file, command line or environment variables"
-	SWARM_ERR_SWAP_SET_NO_API = "SWAP is enabled but --swap-api is not set"
+	SwarmErrNoBZZAccount = "bzzaccount option is required but not set; check your config file, command line or environment variables"
+	SwarmErrSwapSetNoAPI = "SWAP is enabled but --swap-api is not set"
 )
 
 // this help command gets added to any subcommand that does not define it explicitly
@@ -287,8 +287,8 @@ func bzzd(ctx *cli.Context) error {
 	//setup the ethereum node
 	utils.SetNodeConfig(ctx, &cfg)
 
-	//always disable discovery from p2p package - swarm discovery is done with the `hive` protocol
-	cfg.P2P.NoDiscovery = true
+	//disable dynamic dialing from p2p/discovery
+	cfg.P2P.NoDial = true
 
 	stack, err := node.New(&cfg)
 	if err != nil {
@@ -351,7 +351,7 @@ func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) {
 func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
 	//an account is mandatory
 	if bzzaccount == "" {
-		utils.Fatalf(SWARM_ERR_NO_BZZACCOUNT)
+		utils.Fatalf(SwarmErrNoBZZAccount)
 	}
 	// Try to load the arg as a hex key file.
 	if key, err := crypto.LoadECDSA(bzzaccount); err == nil {

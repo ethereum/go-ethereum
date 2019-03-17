@@ -24,10 +24,10 @@ import (
 )
 
 const (
-	Swarmfs_Version = "0.1"
-	mountTimeout    = time.Second * 5
-	unmountTimeout  = time.Second * 10
-	maxFuseMounts   = 5
+	SwarmFSVersion = "0.1"
+	mountTimeout   = time.Second * 5
+	unmountTimeout = time.Second * 10
+	maxFUSEMounts  = 5
 )
 
 var (
