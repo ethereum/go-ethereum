@@ -45,6 +45,7 @@ import (
 )
 
 var OnlyOnMainChainError = errors.New("This operation is only available for blocks on the canonical chain.")
+var BlockInvariantError = errors.New("Block objects must be instantiated with at least one of num or hash.")
 
 // Account represents an Ethereum account at a particular block.
 type Account struct {
@@ -344,7 +345,7 @@ const (
 	notCanonical
 )
 
-// Block represennts an Ethereum block.
+// Block represents an Ethereum block.
 // backend, and either num or hash are mandatory. All other fields are lazily fetched
 // when required.
 type Block struct {
@@ -357,15 +358,15 @@ type Block struct {
 	canonical BlockType // Indicates if this block is on the main chain or not.
 }
 
-func (b *Block) onMainChain(ctx context.Context) (bool, error) {
+func (b *Block) onMainChain(ctx context.Context) error {
 	if b.canonical == unknown {
 		header, err := b.resolveHeader(ctx)
 		if err != nil {
-			return false, err
+			return err
 		}
 		canonHeader, err := b.backend.HeaderByNumber(ctx, rpc.BlockNumber(header.Number.Uint64()))
 		if err != nil {
-			return false, err
+			return err
 		}
 		if header.Hash() == canonHeader.Hash() {
 			b.canonical = isCanonical
@@ -373,7 +374,10 @@ func (b *Block) onMainChain(ctx context.Context) (bool, error) {
 			b.canonical = notCanonical
 		}
 	}
-	return b.canonical == isCanonical, nil
+	if b.canonical != isCanonical {
+		return OnlyOnMainChainError
+	}
+	return nil
 }
 
 // resolve returns the internal Block object representing this block, fetching
@@ -399,6 +403,10 @@ func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 // if necessary. Call this function instead of `resolve` unless you need the
 // additional data (transactions and uncles).
 func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
+	if b.num == nil && b.hash == (common.Hash{}) {
+		return nil, BlockInvariantError
+	}
+
 	if b.header == nil {
 		if _, err := b.resolve(ctx); err != nil {
 			return nil, err
@@ -484,7 +492,8 @@ func (b *Block) Parent(ctx context.Context) (*Block, error) {
 			hash:      b.header.ParentHash,
 			canonical: unknown,
 		}, nil
-	} else if b.num != nil && *b.num != 0 {
+	}
+	if b.num != nil && *b.num != 0 {
 		num := *b.num - 1
 		return &Block{
 			backend:   b.backend,
@@ -783,12 +792,9 @@ func (b *Block) Logs(ctx context.Context, args struct{ Filter BlockFilterCriteri
 func (b *Block) Account(ctx context.Context, args struct {
 	Address common.Address
 }) (*Account, error) {
-	canon, err := b.onMainChain(ctx)
+	err := b.onMainChain(ctx)
 	if err != nil {
 		return nil, err
-	}
-	if !canon {
-		return nil, OnlyOnMainChainError
 	}
 
 	if b.num == nil {
@@ -838,12 +844,9 @@ func (c *CallResult) Status() hexutil.Uint64 {
 func (b *Block) Call(ctx context.Context, args struct {
 	Data ethapi.CallArgs
 }) (*CallResult, error) {
-	canon, err := b.onMainChain(ctx)
+	err := b.onMainChain(ctx)
 	if err != nil {
 		return nil, err
-	}
-	if !canon {
-		return nil, OnlyOnMainChainError
 	}
 
 	if b.num == nil {
@@ -868,12 +871,9 @@ func (b *Block) Call(ctx context.Context, args struct {
 func (b *Block) EstimateGas(ctx context.Context, args struct {
 	Data ethapi.CallArgs
 }) (hexutil.Uint64, error) {
-	canon, err := b.onMainChain(ctx)
+	err := b.onMainChain(ctx)
 	if err != nil {
 		return hexutil.Uint64(0), err
-	}
-	if !canon {
-		return hexutil.Uint64(0), OnlyOnMainChainError
 	}
 
 	if b.num == nil {
