@@ -46,7 +46,7 @@ func DeployValidator(transactOpts *bind.TransactOpts, contractBackend bind.Contr
 	minDeposit := new(big.Int)
 	minDeposit.SetString("10000000000000000000000000", 10)
 	minVoterCap := new(big.Int)
-	minVoterCap.SetString("10000000000000000000", 10)
+	minVoterCap.SetString("25000000000000000000000", 10)
 	// Deposit 50K XDC
 	// Min Voter Cap 10 XDC
 	// 150 masternodes
