@@ -39,6 +39,11 @@ import (
 )
 
 func uploadAndSyncCmd(ctx *cli.Context, tuid string) error {
+	// use input seed if it has been set
+	if inputSeed != 0 {
+		seed = inputSeed
+	}
+
 	randomBytes := testutil.RandomBytes(seed, filesize*1000)
 
 	errc := make(chan error)
