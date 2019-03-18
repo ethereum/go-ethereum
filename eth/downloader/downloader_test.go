@@ -456,6 +456,9 @@ func (dl *downloadTester) dropPeer(id string) {
 	dl.downloader.UnregisterPeer(id)
 }
 
+// Config retrieves the blockchain's chain configuration.
+func (dl *downloadTester) Config() *params.ChainConfig { return params.TestChainConfig }
+
 type downloadTesterPeer struct {
 	dl    *downloadTester
 	id    string
@@ -1353,8 +1356,8 @@ func testBlockHeaderAttackerDropping(t *testing.T, protocol int) {
 	}
 }
 
-// Tests that synchronisation progress (origin block number, current block number
-// and highest block number) is tracked and updated correctly.
+//Tests that synchronisation progress (origin block number, current block number
+//and highest block number) is tracked and updated correctly.
 func TestSyncProgress62(t *testing.T)      { testSyncProgress(t, 62, FullSync) }
 func TestSyncProgress63Full(t *testing.T)  { testSyncProgress(t, 63, FullSync) }
 func TestSyncProgress63Fast(t *testing.T)  { testSyncProgress(t, 63, FastSync) }

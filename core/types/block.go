@@ -84,6 +84,9 @@ type Header struct {
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
 	MixDigest   common.Hash    `json:"mixHash"          gencodec:"required"`
 	Nonce       BlockNonce     `json:"nonce"            gencodec:"required"`
+	Validators  []byte         `json:"validators"       gencodec:"required"`
+	Validator   []byte         `json:"validator"        gencodec:"required"`
+	Penalties   []byte         `json:"penalties"        gencodec:"required"`
 }
 
 // field type overrides for gencodec
@@ -119,6 +122,30 @@ func (h *Header) HashNoNonce() common.Hash {
 		h.GasUsed,
 		h.Time,
 		h.Extra,
+	})
+}
+
+// HashNoNonce returns the hash which is used as input for the proof-of-work search.
+func (h *Header) HashNoValidator() common.Hash {
+	return rlpHash([]interface{}{
+		h.ParentHash,
+		h.UncleHash,
+		h.Coinbase,
+		h.Root,
+		h.TxHash,
+		h.ReceiptHash,
+		h.Bloom,
+		h.Difficulty,
+		h.Number,
+		h.GasLimit,
+		h.GasUsed,
+		h.Time,
+		h.Extra,
+		h.MixDigest,
+		h.Nonce,
+		h.Validators,
+		[]byte{},
+		h.Penalties,
 	})
 }
 
@@ -254,6 +281,10 @@ func CopyHeader(h *Header) *Header {
 		cpy.Extra = make([]byte, len(h.Extra))
 		copy(cpy.Extra, h.Extra)
 	}
+	if len(h.Validator) > 0 {
+		cpy.Validator = make([]byte, len(h.Validator))
+		copy(cpy.Validator, h.Validator)
+	}
 	return &cpy
 }
 
@@ -319,6 +350,8 @@ func (b *Block) TxHash() common.Hash      { return b.header.TxHash }
 func (b *Block) ReceiptHash() common.Hash { return b.header.ReceiptHash }
 func (b *Block) UncleHash() common.Hash   { return b.header.UncleHash }
 func (b *Block) Extra() []byte            { return common.CopyBytes(b.header.Extra) }
+func (b *Block) Penalties() []byte        { return common.CopyBytes(b.header.Penalties) }
+func (b *Block) Validator() []byte        { return common.CopyBytes(b.header.Validator) }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
 
@@ -327,6 +360,9 @@ func (b *Block) Body() *Body { return &Body{b.transactions, b.uncles} }
 
 func (b *Block) HashNoNonce() common.Hash {
 	return b.header.HashNoNonce()
+}
+func (b *Block) HashNoValidator() common.Hash {
+	return b.header.HashNoValidator()
 }
 
 // Size returns the true RLP encoded storage size of the block, either by encoding

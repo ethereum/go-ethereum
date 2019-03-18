@@ -140,6 +140,12 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 		price = new(big.Int).Set(maxPrice)
 	}
 
+	// Check gas price min.
+	minGasPrice := big.NewInt(common.MinGasPrice)
+	if price.Cmp(minGasPrice) < 0 {
+		price = new(big.Int).Set(minGasPrice)
+	}
+
 	gpo.cacheLock.Lock()
 	gpo.lastHead = headHash
 	gpo.lastPrice = price

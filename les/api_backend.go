@@ -18,11 +18,15 @@ package les
 
 import (
 	"context"
+	"encoding/json"
+	"io/ioutil"
 	"math/big"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -30,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/light"
@@ -189,4 +194,35 @@ func (b *LesApiBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	for i := 0; i < bloomFilterThreads; i++ {
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}
+}
+
+func (b *LesApiBackend) GetIPCClient() (*ethclient.Client, error) {
+	return nil, nil
+}
+
+func (b *LesApiBackend) GetEngine() consensus.Engine {
+	return b.eth.engine
+}
+func (s *LesApiBackend) GetRewardByHash(hash common.Hash) map[string]interface{} {
+	header := s.eth.blockchain.GetHeaderByHash(hash)
+	if header != nil {
+		data, err := ioutil.ReadFile(filepath.Join(common.StoreRewardFolder, header.Number.String()+"."+header.Hash().Hex()))
+		if err == nil {
+			rewards := make(map[string]interface{})
+			err = json.Unmarshal(data, &rewards)
+			if err == nil {
+				return rewards
+			}
+		} else {
+			data, err = ioutil.ReadFile(filepath.Join(common.StoreRewardFolder, header.Number.String()+"."+header.HashNoValidator().Hex()))
+			if err == nil {
+				rewards := make(map[string]interface{})
+				err = json.Unmarshal(data, &rewards)
+				if err == nil {
+					return rewards
+				}
+			}
+		}
+	}
+	return make(map[string]interface{})
 }

@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -47,10 +47,10 @@ var (
 
 	MaxForkAncestry  = 3 * params.EpochDuration // Maximum chain reorganisation
 	rttMinEstimate   = 2 * time.Second          // Minimum round-trip time to target for download requests
-	rttMaxEstimate   = 20 * time.Second         // Maximum rount-trip time to target for download requests
+	rttMaxEstimate   = 5 * time.Second          // Maximum rount-trip time to target for download requests
 	rttMinConfidence = 0.1                      // Worse confidence factor in our estimated RTT value
-	ttlScaling       = 3                        // Constant scaling factor for RTT -> TTL conversion
-	ttlLimit         = time.Minute              // Maximum TTL allowance to prevent reaching crazy timeouts
+	ttlScaling       = 2                        // Constant scaling factor for RTT -> TTL conversion
+	ttlLimit         = 5 * time.Second          // Maximum TTL allowance to prevent reaching crazy timeouts
 
 	qosTuningPeers   = 5    // Number of peers to tune based on (best peers)
 	qosConfidenceCap = 10   // Number of peers above which not to modify RTT confidence
@@ -172,6 +172,7 @@ type LightChain interface {
 
 // BlockChain encapsulates functions required to sync a (full or fast) blockchain.
 type BlockChain interface {
+	Config() *params.ChainConfig
 	LightChain
 
 	// HasBlock verifies a block's presence in the local chain.
@@ -294,7 +295,7 @@ func (d *Downloader) UnregisterPeer(id string) error {
 	logger := log.New("peer", id)
 	logger.Trace("Unregistering sync peer")
 	if err := d.peers.Unregister(id); err != nil {
-		logger.Error("Failed to unregister sync peer", "err", err)
+		logger.Warn("Failed to unregister sync peer", "err", err)
 		return err
 	}
 	d.queue.Revoke(id)
@@ -1322,11 +1323,40 @@ func (d *Downloader) processFullSyncContent() error {
 		if len(results) == 0 {
 			return nil
 		}
-		if d.chainInsertHook != nil {
-			d.chainInsertHook(results)
-		}
-		if err := d.importBlockResults(results); err != nil {
-			return err
+		if d.blockchain.Config() != nil && d.blockchain.Config().XDPoS != nil {
+			epoch := d.blockchain.Config().XDPoS.Epoch
+			gap := d.blockchain.Config().XDPoS.Gap
+			inserts := []*fetchResult{}
+			for i := 0; i < len(results); i++ {
+				number := results[i].Header.Number.Uint64() % epoch
+				if number == 0 || number == epoch-1 || number == epoch-gap {
+					inserts = append(inserts, results[i])
+					if d.chainInsertHook != nil {
+						d.chainInsertHook(inserts)
+					}
+					if err := d.importBlockResults(inserts); err != nil {
+						return err
+					}
+					inserts = []*fetchResult{}
+				} else {
+					inserts = append(inserts, results[i])
+				}
+			}
+			if len(inserts) > 0 {
+				if d.chainInsertHook != nil {
+					d.chainInsertHook(inserts)
+				}
+				if err := d.importBlockResults(inserts); err != nil {
+					return err
+				}
+			}
+		} else {
+			if d.chainInsertHook != nil {
+				d.chainInsertHook(results)
+			}
+			if err := d.importBlockResults(results); err != nil {
+				return err
+			}
 		}
 	}
 }
@@ -1355,6 +1385,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
 		return errInvalidChain
 	}
+
 	return nil
 }
 

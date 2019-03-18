@@ -157,6 +157,19 @@ func (b *SimulatedBackend) StorageAt(ctx context.Context, contract common.Addres
 	return val[:], nil
 }
 
+// ForEachStorageAt returns func to read all keys, values in the storage
+func (b *SimulatedBackend) ForEachStorageAt(ctx context.Context, contract common.Address, blockNumber *big.Int, f func(key, val common.Hash) bool) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if blockNumber != nil && blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) != 0 {
+		return errBlockNumberUnsupported
+	}
+	statedb, _ := b.blockchain.State()
+	statedb.ForEachStorage(contract, f)
+	return nil
+}
+
 // TransactionReceipt returns the receipt of a transaction.
 func (b *SimulatedBackend) TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
 	receipt, _, _, _ := core.GetReceipt(b.database, txHash)
