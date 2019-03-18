@@ -341,10 +341,15 @@ type AccountRangeResult struct {
 	Next      common.Address   `json:"next"`
 }
 
-func accountRange(st state.Trie, start *common.Address, maxResult int) (AccountRangeResult, error) {
+func accountRange(st state.Trie, start *common.Address, maxResults int) (AccountRangeResult, error) {
 	it := trie.NewIterator(st.NodeIterator(crypto.Keccak256(start[:])))
 	result := AccountRangeResult{Addresses: []common.Address{}, Next: common.Address{}}
-	for i := 0; i < maxResult && it.Next(); i++ {
+
+	if maxResults > AccountRangeAtMaxResults {
+		maxResults = AccountRangeAtMaxResults
+	}
+
+	for i := 0; i < maxResults && it.Next(); i++ {
 		if preimage := st.GetKey(it.Key); preimage != nil {
 			result.Addresses = append(result.Addresses, common.BytesToAddress(preimage))
 		} else {
@@ -373,9 +378,6 @@ func (api *PrivateDebugAPI) AccountRangeAt(ctx context.Context, startAddr *commo
 	var err error
 	block := api.eth.blockchain.CurrentBlock()
 
-	if maxResults > AccountRangeAtMaxResults {
-		maxResults = AccountRangeAtMaxResults
-	}
 
 	if len(block.Transactions()) == 0 {
 		parent := api.eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)

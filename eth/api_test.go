@@ -17,6 +17,8 @@
 package eth
 
 import (
+	"math/big"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -27,6 +29,31 @@ import (
 )
 
 var dumper = spew.ConfigState{Indent: "    "}
+
+func TestAccountRangeAt(t *testing.T) {
+	var (
+		state, _ = state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()))
+		addrs = [512]common.Address{}
+	)
+
+	for i := 0; i < 512; i++ {
+		addr := fmt.Sprintf("%x", i)
+		addrs[i] = common.HexToAddress(addr)
+	}
+
+	for i := range addrs {
+		state.SetBalance(addrs[i], big.NewInt(1))
+	}
+
+	// test retrieving less than max results
+
+/*
+	result := accountRangeAt(state.Trie(), common.Address{0x0}, 128)
+	if len(result.Addresses) != 128 {
+		t.Fatalf("expected 128 results.  Got %d", len(result.Addresses))
+	}
+*/
+}
 
 func TestStorageRangeAt(t *testing.T) {
 	// Create a state where account 0x010000... has a few storage entries.
