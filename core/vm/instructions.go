@@ -559,40 +559,40 @@ func opGasprice(pc *uint64, interpreter *EVMInterpreter, contract *Contract, mem
 }
 
 func opBlockhash(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	num := stack.pop()
+	num := stack.peek()
 
-	n := interpreter.intPool.get().Sub(interpreter.evm.BlockNumber, common.Big257)
-	if num.Cmp(n) > 0 && num.Cmp(interpreter.evm.BlockNumber) < 0 {
-		stack.push(interpreter.evm.GetHash(num.Uint64()).Big())
+	n := interpreter.intPool.get().Sub(interpreter.evm.BlockContext.BlockNumber, common.Big257)
+	if num.Cmp(n) > 0 && num.Cmp(interpreter.evm.BlockContext.BlockNumber) < 0 {
+		h := interpreter.evm.GetHash(num.Uint64())
+		num.SetBytes(h.Bytes())
 	} else {
-		stack.push(interpreter.intPool.getZero())
+		num.SetUint64(0)
 	}
-	interpreter.intPool.put(num, n)
 	return nil, nil
 }
 
 func opCoinbase(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(interpreter.intPool.get().SetBytes(interpreter.evm.Coinbase.Bytes()))
+	stack.push(interpreter.intPool.get().SetBytes(interpreter.evm.BlockContext.Coinbase.Bytes()))
 	return nil, nil
 }
 
 func opTimestamp(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(math.U256(interpreter.intPool.get().Set(interpreter.evm.Time)))
+	stack.push(math.U256(interpreter.intPool.get().Set(interpreter.evm.BlockContext.Time)))
 	return nil, nil
 }
 
 func opNumber(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(math.U256(interpreter.intPool.get().Set(interpreter.evm.BlockNumber)))
+	stack.push(math.U256(interpreter.intPool.get().Set(interpreter.evm.BlockContext.BlockNumber)))
 	return nil, nil
 }
 
 func opDifficulty(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(math.U256(interpreter.intPool.get().Set(interpreter.evm.Difficulty)))
+	stack.push(math.U256(interpreter.intPool.get().Set(interpreter.evm.BlockContext.Difficulty)))
 	return nil, nil
 }
 
 func opGasLimit(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(math.U256(interpreter.intPool.get().SetUint64(interpreter.evm.GasLimit)))
+	stack.push(math.U256(interpreter.intPool.get().SetUint64(interpreter.evm.BlockContext.GasLimit)))
 	return nil, nil
 }
 
@@ -694,7 +694,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memor
 		input        = memory.Get(offset.Int64(), size.Int64())
 		gas          = contract.Gas
 	)
-	if interpreter.evm.ChainConfig().IsEIP150(interpreter.evm.BlockNumber) {
+	if interpreter.evm.ChainConfig().IsEIP150(interpreter.evm.BlockContext.BlockNumber) {
 		gas -= gas / 64
 	}
 
@@ -704,7 +704,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memor
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must
 	// ignore this error and pretend the operation was successful.
-	if interpreter.evm.ChainConfig().IsHomestead(interpreter.evm.BlockNumber) && suberr == ErrCodeStoreOutOfGas {
+	if interpreter.evm.ChainConfig().IsHomestead(interpreter.evm.BlockContext.BlockNumber) && suberr == ErrCodeStoreOutOfGas {
 		stack.push(interpreter.intPool.getZero())
 	} else if suberr != nil && suberr != ErrCodeStoreOutOfGas {
 		stack.push(interpreter.intPool.getZero())
@@ -902,7 +902,7 @@ func makeLog(size int) executionFunc {
 			Data:    d,
 			// This is a non-consensus field, but assigned here because
 			// core/state doesn't know the current block number.
-			BlockNumber: interpreter.evm.BlockNumber.Uint64(),
+			BlockNumber: interpreter.evm.BlockContext.BlockNumber.Uint64(),
 		})
 
 		interpreter.intPool.put(mStart, mSize)

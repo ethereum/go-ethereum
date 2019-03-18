@@ -144,15 +144,17 @@ func TestPrestateTracerCreate2(t *testing.T) {
 	*/
 	origin, _ := signer.Sender(tx)
 	context := vm.Context{
-		CanTransfer: core.CanTransfer,
-		Transfer:    core.Transfer,
-		Origin:      origin,
-		Coinbase:    common.Address{},
-		BlockNumber: new(big.Int).SetUint64(8000000),
-		Time:        new(big.Int).SetUint64(5),
-		Difficulty:  big.NewInt(0x30000),
-		GasLimit:    uint64(6000000),
-		GasPrice:    big.NewInt(1),
+		BlockContext: &vm.BlockContext{
+			CanTransfer: core.CanTransfer,
+			Transfer:    core.Transfer,
+			Coinbase:    common.Address{},
+			BlockNumber: new(big.Int).SetUint64(8000000),
+			Time:        new(big.Int).SetUint64(5),
+			Difficulty:  big.NewInt(0x30000),
+			GasLimit:    uint64(6000000),
+		},
+		Origin:   origin,
+		GasPrice: big.NewInt(1),
 	}
 	alloc := core.GenesisAlloc{}
 
@@ -232,15 +234,17 @@ func TestCallTracer(t *testing.T) {
 			origin, _ := signer.Sender(tx)
 
 			context := vm.Context{
-				CanTransfer: core.CanTransfer,
-				Transfer:    core.Transfer,
-				Origin:      origin,
-				Coinbase:    test.Context.Miner,
-				BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
-				Time:        new(big.Int).SetUint64(uint64(test.Context.Time)),
-				Difficulty:  (*big.Int)(test.Context.Difficulty),
-				GasLimit:    uint64(test.Context.GasLimit),
-				GasPrice:    tx.GasPrice(),
+				BlockContext: &vm.BlockContext{
+					CanTransfer: core.CanTransfer,
+					Transfer:    core.Transfer,
+					Coinbase:    test.Context.Miner,
+					BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
+					Time:        new(big.Int).SetUint64(uint64(test.Context.Time)),
+					Difficulty:  (*big.Int)(test.Context.Difficulty),
+					GasLimit:    uint64(test.Context.GasLimit),
+				},
+				Origin:   origin,
+				GasPrice: tx.GasPrice(),
 			}
 			statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc)
 

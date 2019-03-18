@@ -23,22 +23,26 @@ import (
 )
 
 func NewEnv(cfg *Config) *vm.EVM {
+
 	getHash := cfg.GetHashFn
 	if getHash == nil {
 		getHash = func(uint64) common.Hash { return common.Hash{} }
 	}
 
-	context := vm.Context{
+	blockCtx := &vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
 		GetHash:     getHash,
-		Origin:      cfg.Origin,
 		Coinbase:    cfg.Coinbase,
 		BlockNumber: cfg.BlockNumber,
 		Time:        cfg.Time,
 		Difficulty:  cfg.Difficulty,
 		GasLimit:    cfg.GasLimit,
-		GasPrice:    cfg.GasPrice,
+	}
+	context := vm.Context{
+		BlockContext: blockCtx,
+		Origin:       cfg.Origin,
+		GasPrice:     cfg.GasPrice,
 	}
 
 	return vm.NewEVM(context, cfg.State, cfg.ChainConfig, cfg.EVMConfig)

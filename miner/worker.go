@@ -690,8 +690,9 @@ func (w *worker) updateSnapshot() {
 
 func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
 	snap := w.current.state.Snapshot()
-
-	receipt, _, err := core.ApplyTransaction(w.config, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
+	signer := types.MakeSigner(w.config, w.current.header.Number)
+	blockContext := core.NewBlockContext(w.current.header, w.chain, &coinbase)
+	receipt, _, err := core.ApplyTransaction(w.config, signer, blockContext, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
 		return nil, err
