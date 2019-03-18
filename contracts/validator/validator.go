@@ -44,7 +44,7 @@ func NewValidator(transactOpts *bind.TransactOpts, contractAddr common.Address, 
 
 func DeployValidator(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend, validatorAddress []common.Address, caps []*big.Int, ownerAddress common.Address) (common.Address, *Validator, error) {
 	minDeposit := new(big.Int)
-	minDeposit.SetString("50000000000000000000000", 10)
+	minDeposit.SetString("10000000000000000000000000", 10)
 	minVoterCap := new(big.Int)
 	minVoterCap.SetString("10000000000000000000", 10)
 	// Deposit 50K XDC
