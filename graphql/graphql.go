@@ -19,6 +19,7 @@ package graphql
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -42,6 +43,9 @@ import (
 	graphqlgo "github.com/graph-gophers/graphql-go"
 	"github.com/graph-gophers/graphql-go/relay"
 )
+
+var OnlyOnMainChainError = errors.New("This operation is only available for blocks on the canonical chain.")
+var BlockInvariantError = errors.New("Block objects must be instantiated with at least one of num or hash.")
 
 // Account represents an Ethereum account at a particular block.
 type Account struct {
@@ -144,8 +148,9 @@ func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, error) {
 		if tx != nil {
 			t.tx = tx
 			t.block = &Block{
-				backend: t.backend,
-				hash:    blockHash,
+				backend:   t.backend,
+				hash:      blockHash,
+				canonical: unknown,
 			}
 			t.index = index
 		} else {
@@ -332,16 +337,47 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 	return &ret, nil
 }
 
-// Block represennts an Ethereum block.
+type BlockType int
+
+const (
+	unknown BlockType = iota
+	isCanonical
+	notCanonical
+)
+
+// Block represents an Ethereum block.
 // backend, and either num or hash are mandatory. All other fields are lazily fetched
 // when required.
 type Block struct {
-	backend  *eth.EthAPIBackend
-	num      *rpc.BlockNumber
-	hash     common.Hash
-	header   *types.Header
-	block    *types.Block
-	receipts []*types.Receipt
+	backend   *eth.EthAPIBackend
+	num       *rpc.BlockNumber
+	hash      common.Hash
+	header    *types.Header
+	block     *types.Block
+	receipts  []*types.Receipt
+	canonical BlockType // Indicates if this block is on the main chain or not.
+}
+
+func (b *Block) onMainChain(ctx context.Context) error {
+	if b.canonical == unknown {
+		header, err := b.resolveHeader(ctx)
+		if err != nil {
+			return err
+		}
+		canonHeader, err := b.backend.HeaderByNumber(ctx, rpc.BlockNumber(header.Number.Uint64()))
+		if err != nil {
+			return err
+		}
+		if header.Hash() == canonHeader.Hash() {
+			b.canonical = isCanonical
+		} else {
+			b.canonical = notCanonical
+		}
+	}
+	if b.canonical != isCanonical {
+		return OnlyOnMainChainError
+	}
+	return nil
 }
 
 // resolve returns the internal Block object representing this block, fetching
@@ -367,6 +403,10 @@ func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 // if necessary. Call this function instead of `resolve` unless you need the
 // additional data (transactions and uncles).
 func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
+	if b.num == nil && b.hash == (common.Hash{}) {
+		return nil, BlockInvariantError
+	}
+
 	if b.header == nil {
 		if _, err := b.resolve(ctx); err != nil {
 			return nil, err
@@ -447,15 +487,18 @@ func (b *Block) Parent(ctx context.Context) (*Block, error) {
 	if b.header != nil && b.block.NumberU64() > 0 {
 		num := rpc.BlockNumber(b.header.Number.Uint64() - 1)
 		return &Block{
-			backend: b.backend,
-			num:     &num,
-			hash:    b.header.ParentHash,
+			backend:   b.backend,
+			num:       &num,
+			hash:      b.header.ParentHash,
+			canonical: unknown,
 		}, nil
-	} else if b.num != nil && *b.num != 0 {
+	}
+	if b.num != nil && *b.num != 0 {
 		num := *b.num - 1
 		return &Block{
-			backend: b.backend,
-			num:     &num,
+			backend:   b.backend,
+			num:       &num,
+			canonical: isCanonical,
 		}, nil
 	}
 	return nil, nil
@@ -544,10 +587,11 @@ func (b *Block) Ommers(ctx context.Context) (*[]*Block, error) {
 	for _, uncle := range block.Uncles() {
 		blockNumber := rpc.BlockNumber(uncle.Number.Uint64())
 		ret = append(ret, &Block{
-			backend: b.backend,
-			num:     &blockNumber,
-			hash:    uncle.Hash(),
-			header:  uncle,
+			backend:   b.backend,
+			num:       &blockNumber,
+			hash:      uncle.Hash(),
+			header:    uncle,
+			canonical: notCanonical,
 		})
 	}
 	return &ret, nil
@@ -672,10 +716,11 @@ func (b *Block) OmmerAt(ctx context.Context, args struct{ Index int32 }) (*Block
 	uncle := uncles[args.Index]
 	blockNumber := rpc.BlockNumber(uncle.Number.Uint64())
 	return &Block{
-		backend: b.backend,
-		num:     &blockNumber,
-		hash:    uncle.Hash(),
-		header:  uncle,
+		backend:   b.backend,
+		num:       &blockNumber,
+		hash:      uncle.Hash(),
+		header:    uncle,
+		canonical: notCanonical,
 	}, nil
 }
 
@@ -744,6 +789,162 @@ func (b *Block) Logs(ctx context.Context, args struct{ Filter BlockFilterCriteri
 	return runFilter(ctx, b.backend, filter)
 }
 
+func (b *Block) Account(ctx context.Context, args struct {
+	Address common.Address
+}) (*Account, error) {
+	err := b.onMainChain(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if b.num == nil {
+		_, err := b.resolveHeader(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &Account{
+		backend:     b.backend,
+		address:     args.Address,
+		blockNumber: *b.num,
+	}, nil
+}
+
+// CallData encapsulates arguments to `call` or `estimateGas`.
+// All arguments are optional.
+type CallData struct {
+	From     *common.Address // The Ethereum address the call is from.
+	To       *common.Address // The Ethereum address the call is to.
+	Gas      *hexutil.Uint64 // The amount of gas provided for the call.
+	GasPrice *hexutil.Big    // The price of each unit of gas, in wei.
+	Value    *hexutil.Big    // The value sent along with the call.
+	Data     *hexutil.Bytes  // Any data sent with the call.
+}
+
+// CallResult encapsulates the result of an invocation of the `call` accessor.
+type CallResult struct {
+	data    hexutil.Bytes  // The return data from the call
+	gasUsed hexutil.Uint64 // The amount of gas used
+	status  hexutil.Uint64 // The return status of the call - 0 for failure or 1 for success.
+}
+
+func (c *CallResult) Data() hexutil.Bytes {
+	return c.data
+}
+
+func (c *CallResult) GasUsed() hexutil.Uint64 {
+	return c.gasUsed
+}
+
+func (c *CallResult) Status() hexutil.Uint64 {
+	return c.status
+}
+
+func (b *Block) Call(ctx context.Context, args struct {
+	Data ethapi.CallArgs
+}) (*CallResult, error) {
+	err := b.onMainChain(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if b.num == nil {
+		_, err := b.resolveHeader(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	result, gas, failed, err := ethapi.DoCall(ctx, b.backend, args.Data, *b.num, vm.Config{}, 5*time.Second)
+	status := hexutil.Uint64(1)
+	if failed {
+		status = 0
+	}
+	return &CallResult{
+		data:    hexutil.Bytes(result),
+		gasUsed: hexutil.Uint64(gas),
+		status:  status,
+	}, err
+}
+
+func (b *Block) EstimateGas(ctx context.Context, args struct {
+	Data ethapi.CallArgs
+}) (hexutil.Uint64, error) {
+	err := b.onMainChain(ctx)
+	if err != nil {
+		return hexutil.Uint64(0), err
+	}
+
+	if b.num == nil {
+		_, err := b.resolveHeader(ctx)
+		if err != nil {
+			return hexutil.Uint64(0), err
+		}
+	}
+
+	gas, err := ethapi.DoEstimateGas(ctx, b.backend, args.Data, *b.num)
+	return gas, err
+}
+
+type Pending struct {
+	backend *eth.EthAPIBackend
+}
+
+func (p *Pending) TransactionCount(ctx context.Context) (int32, error) {
+	txs, err := p.backend.GetPoolTransactions()
+	return int32(len(txs)), err
+}
+
+func (p *Pending) Transactions(ctx context.Context) (*[]*Transaction, error) {
+	txs, err := p.backend.GetPoolTransactions()
+	if err != nil {
+		return nil, err
+	}
+
+	ret := make([]*Transaction, 0, len(txs))
+	for i, tx := range txs {
+		ret = append(ret, &Transaction{
+			backend: p.backend,
+			hash:    tx.Hash(),
+			tx:      tx,
+			index:   uint64(i),
+		})
+	}
+	return &ret, nil
+}
+
+func (p *Pending) Account(ctx context.Context, args struct {
+	Address common.Address
+}) *Account {
+	return &Account{
+		backend:     p.backend,
+		address:     args.Address,
+		blockNumber: rpc.PendingBlockNumber,
+	}
+}
+
+func (p *Pending) Call(ctx context.Context, args struct {
+	Data ethapi.CallArgs
+}) (*CallResult, error) {
+	result, gas, failed, err := ethapi.DoCall(ctx, p.backend, args.Data, rpc.PendingBlockNumber, vm.Config{}, 5*time.Second)
+	status := hexutil.Uint64(1)
+	if failed {
+		status = 0
+	}
+	return &CallResult{
+		data:    hexutil.Bytes(result),
+		gasUsed: hexutil.Uint64(gas),
+		status:  status,
+	}, err
+}
+
+func (p *Pending) EstimateGas(ctx context.Context, args struct {
+	Data ethapi.CallArgs
+}) (hexutil.Uint64, error) {
+	return ethapi.DoEstimateGas(ctx, p.backend, args.Data, rpc.PendingBlockNumber)
+}
+
 // Resolver is the top-level object in the GraphQL hierarchy.
 type Resolver struct {
 	backend *eth.EthAPIBackend
@@ -757,19 +958,22 @@ func (r *Resolver) Block(ctx context.Context, args struct {
 	if args.Number != nil {
 		num := rpc.BlockNumber(uint64(*args.Number))
 		block = &Block{
-			backend: r.backend,
-			num:     &num,
+			backend:   r.backend,
+			num:       &num,
+			canonical: isCanonical,
 		}
 	} else if args.Hash != nil {
 		block = &Block{
-			backend: r.backend,
-			hash:    *args.Hash,
+			backend:   r.backend,
+			hash:      *args.Hash,
+			canonical: unknown,
 		}
 	} else {
 		num := rpc.LatestBlockNumber
 		block = &Block{
-			backend: r.backend,
-			num:     &num,
+			backend:   r.backend,
+			num:       &num,
+			canonical: isCanonical,
 		}
 	}
 
@@ -804,27 +1008,16 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 	for i := from; i <= to; i++ {
 		num := i
 		ret = append(ret, &Block{
-			backend: r.backend,
-			num:     &num,
+			backend:   r.backend,
+			num:       &num,
+			canonical: isCanonical,
 		})
 	}
 	return ret, nil
 }
 
-func (r *Resolver) Account(ctx context.Context, args struct {
-	Address     common.Address
-	BlockNumber *hexutil.Uint64
-}) *Account {
-	blockNumber := rpc.LatestBlockNumber
-	if args.BlockNumber != nil {
-		blockNumber = rpc.BlockNumber(*args.BlockNumber)
-	}
-
-	return &Account{
-		backend:     r.backend,
-		address:     args.Address,
-		blockNumber: blockNumber,
-	}
+func (r *Resolver) Pending(ctx context.Context) *Pending {
+	return &Pending{r.backend}
 }
 
 func (r *Resolver) Transaction(ctx context.Context, args struct{ Hash common.Hash }) (*Transaction, error) {
@@ -850,70 +1043,6 @@ func (r *Resolver) SendRawTransaction(ctx context.Context, args struct{ Data hex
 	}
 	hash, err := ethapi.SubmitTransaction(ctx, r.backend, tx)
 	return hash, err
-}
-
-// CallData encapsulates arguments to `call` or `estimateGas`.
-// All arguments are optional.
-type CallData struct {
-	From     *common.Address // The Ethereum address the call is from.
-	To       *common.Address // The Ethereum address the call is to.
-	Gas      *hexutil.Uint64 // The amount of gas provided for the call.
-	GasPrice *hexutil.Big    // The price of each unit of gas, in wei.
-	Value    *hexutil.Big    // The value sent along with the call.
-	Data     *hexutil.Bytes  // Any data sent with the call.
-}
-
-// CallResult encapsulates the result of an invocation of the `call` accessor.
-type CallResult struct {
-	data    hexutil.Bytes  // The return data from the call
-	gasUsed hexutil.Uint64 // The amount of gas used
-	status  hexutil.Uint64 // The return status of the call - 0 for failure or 1 for success.
-}
-
-func (c *CallResult) Data() hexutil.Bytes {
-	return c.data
-}
-
-func (c *CallResult) GasUsed() hexutil.Uint64 {
-	return c.gasUsed
-}
-
-func (c *CallResult) Status() hexutil.Uint64 {
-	return c.status
-}
-
-func (r *Resolver) Call(ctx context.Context, args struct {
-	Data        ethapi.CallArgs
-	BlockNumber *hexutil.Uint64
-}) (*CallResult, error) {
-	blockNumber := rpc.LatestBlockNumber
-	if args.BlockNumber != nil {
-		blockNumber = rpc.BlockNumber(*args.BlockNumber)
-	}
-
-	result, gas, failed, err := ethapi.DoCall(ctx, r.backend, args.Data, blockNumber, vm.Config{}, 5*time.Second)
-	status := hexutil.Uint64(1)
-	if failed {
-		status = 0
-	}
-	return &CallResult{
-		data:    hexutil.Bytes(result),
-		gasUsed: hexutil.Uint64(gas),
-		status:  status,
-	}, err
-}
-
-func (r *Resolver) EstimateGas(ctx context.Context, args struct {
-	Data        ethapi.CallArgs
-	BlockNumber *hexutil.Uint64
-}) (hexutil.Uint64, error) {
-	blockNumber := rpc.LatestBlockNumber
-	if args.BlockNumber != nil {
-		blockNumber = rpc.BlockNumber(*args.BlockNumber)
-	}
-
-	gas, err := ethapi.DoEstimateGas(ctx, r.backend, args.Data, blockNumber)
-	return gas, err
 }
 
 // FilterCriteria encapsulates the arguments to `logs` on the root resolver object.
