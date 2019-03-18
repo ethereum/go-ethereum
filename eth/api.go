@@ -19,8 +19,8 @@ package eth
 import (
 	"compress/gzip"
 	"context"
-	"errors"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -363,11 +363,19 @@ func accountRange(st state.Trie, start *common.Address, maxResult int) (AccountR
 	return result, nil
 }
 
-// enumerate all accounts in the latest state
+const (
+	AccountRangeAtMaxResults = 256
+)
+
+// AccountRangeAt enumerates all accounts in the latest state
 func (api *PrivateDebugAPI) AccountRangeAt(ctx context.Context, startAddr *common.Address, maxResults int) (AccountRangeResult, error) {
-	var statedb *state.StateDB = nil
-	var err error = nil
-	var block = api.eth.blockchain.CurrentBlock()
+	var statedb *state.StateDB
+	var err error
+	block := api.eth.blockchain.CurrentBlock()
+
+	if maxResults > AccountRangeAtMaxResults {
+		maxResults = AccountRangeAtMaxResults
+	}
 
 	if len(block.Transactions()) == 0 {
 		parent := api.eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
