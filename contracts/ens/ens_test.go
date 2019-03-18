@@ -59,14 +59,14 @@ func TestENS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("can't deploy resolver: %v", err)
 	}
+
 	if _, err := ens.SetResolver(EnsNode(name), resolverAddr); err != nil {
 		t.Fatalf("can't set resolver: %v", err)
 	}
 	contractBackend.Commit()
 
 	// Set the content hash for the name.
-
-	cid, err := encodeSwarmHash(hash)
+	cid, err := EncodeSwarmHash(hash)
 	if err != nil {
 		t.Fatal(err)
 	}

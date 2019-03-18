@@ -132,7 +132,7 @@ func TestManualCidDecode(t *testing.T) {
 func TestManuelCidEncode(t *testing.T) {
 	// call cid encode method with hash. expect byte slice returned, compare according to spec
 	const eipHash = "29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f"
-	cidBytes, err := encodeSwarmHash(common.HexToHash(eipHash))
+	cidBytes, err := EncodeSwarmHash(common.HexToHash(eipHash))
 	if err != nil {
 		t.Fatal(err)
 	}

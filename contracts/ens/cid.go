@@ -99,7 +99,7 @@ func extractContentHash(buf []byte) (common.Hash, error) {
 	return common.BytesToHash(buf), nil
 }
 
-func encodeSwarmHash(hash common.Hash) ([]byte, error) {
+func EncodeSwarmHash(hash common.Hash) ([]byte, error) {
 	var cidBytes []byte
 	var headerBytes = []byte{
 		nsSwarm,       //swarm namespace
