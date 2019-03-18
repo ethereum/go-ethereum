@@ -52,7 +52,7 @@ func DeployValidator(transactOpts *bind.TransactOpts, contractBackend bind.Contr
 	// 150 masternodes
 	// Candidate Delay Withdraw 30 days = 1296000 blocks
 	// Voter Delay Withdraw 2 days = 86400 blocks
-	validatorAddr, _, _, err := contract.DeployXDCValidator(transactOpts, contractBackend, validatorAddress, caps, ownerAddress, minDeposit, minVoterCap, big.NewInt(18), big.NewInt(129600), big.NewInt(86400))
+	validatorAddr, _, _, err := contract.DeployXDCValidator(transactOpts, contractBackend, validatorAddress, caps, ownerAddress, minDeposit, minVoterCap, big.NewInt(18), big.NewInt(129600), big.NewInt(43200))
 	if err != nil {
 		return validatorAddr, nil, err
 	}
