@@ -395,10 +395,10 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 
 			// handle cases where rem or add could come up nil
 			if rem == nil || add == nil {
-				if rem != nil{
+				if rem != nil {
 					discarded = append(discarded, rem.Transactions()...)
 				}
-				if add != nil{
+				if add != nil {
 					included = append(included, add.Transactions()...)
 				}
 				return
