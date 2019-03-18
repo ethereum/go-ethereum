@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/services/swap"
@@ -49,18 +48,17 @@ type Config struct {
 	*storage.FileStoreParams
 	*storage.LocalStoreParams
 	*network.HiveParams
-	Swap       *swap.LocalProfile
-	Pss        *pss.PssParams
-	Contract   common.Address
-	EnsRoot    common.Address
-	EnsAPIs    []string
-	Path       string
-	ListenAddr string
-	Port       string
-	PublicKey  string
-	BzzKey     string
-	//NodeID               string
-	Enode                *enode.Node `toml:",omit"`
+	Swap                 *swap.LocalProfile
+	Pss                  *pss.PssParams
+	Contract             common.Address
+	EnsRoot              common.Address
+	EnsAPIs              []string
+	Path                 string
+	ListenAddr           string
+	Port                 string
+	PublicKey            string
+	BzzKey               string
+	Enode                *enode.Node `toml:"-"`
 	NetworkID            uint64
 	SwapEnabled          bool
 	SyncEnabled          bool
@@ -89,7 +87,6 @@ func NewConfig() (c *Config) {
 		ListenAddr:           DefaultHTTPListenAddr,
 		Port:                 DefaultHTTPPort,
 		Path:                 node.DefaultDataDir(),
-		Enode:                &enode.Node{},
 		EnsAPIs:              nil,
 		EnsRoot:              ens.TestNetAddress,
 		NetworkID:            network.DefaultNetworkID,
@@ -123,7 +120,7 @@ func (c *Config) Init(prvKey *ecdsa.PrivateKey) error {
 
 	c.PublicKey = pubkeyhex
 	c.BzzKey = keyhex
-	//c.NodeID = enode.PubkeyToIDV4(&prvKey.PublicKey).String()
+
 	var record enr.Record
 	record.Set(network.NewENRAddrEntry(bzzkeybytes))
 	record.Set(network.ENRLightNodeEntry(c.LightNodeEnabled))
@@ -136,7 +133,6 @@ func (c *Config) Init(prvKey *ecdsa.PrivateKey) error {
 	if err != nil {
 		return fmt.Errorf("Enode create fail: %v", err)
 	}
-	log.Warn("setting enode record", "node", c.Enode)
 
 	if c.SwapEnabled {
 		c.Swap.Init(c.Contract, prvKey)

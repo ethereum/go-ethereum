@@ -170,12 +170,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
 	}
 
-	//	var nodeID enode.ID
-	//	if err := nodeID.UnmarshalText([]byte(config.NodeID)); err != nil {
-	//		return nil, err
-	//	}
 	nodeID := config.Enode.ID()
-	bzzconfig.UnderlayAddr = []byte(nodeID.String())
 
 	syncing := stream.SyncingAutoSubscribe
 	if !config.SyncEnabled || config.LightNodeEnabled {

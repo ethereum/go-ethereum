@@ -96,7 +96,6 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Warn("set default enr", "e", config)
 	// generate the config
 	conf := &execNodeConfig{
 		Stack: node.DefaultConfig,
@@ -415,6 +414,8 @@ func startExecNodeStack() (*node.Node, error) {
 	if err := json.Unmarshal([]byte(confEnv), &conf); err != nil {
 		return nil, fmt.Errorf("error decoding %s: %v", envNodeConfig, err)
 	}
+	// TODO verify that ListenAddr will contain the corrent tcp addr
+	// if we should start using exec adapters with other host than local
 	nodeTcpConn, err := net.ResolveTCPAddr("tcp", conf.Stack.P2P.ListenAddr)
 	if err != nil {
 		conf.Node.initDefaultEnode()

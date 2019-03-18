@@ -272,14 +272,11 @@ func (n *NodeConfig) initDefaultEnode() error {
 }
 
 func (n *NodeConfig) initEnode(ip net.IP, tcpport int, udpport int) error {
-
-	// dialer in simulations based on ENR records
-	// doesn't work unless we explicitly set localhost record
-	enrIp := enr.IP(net.IPv4(127, 0, 0, 1))
+	enrIp := enr.IP(ip)
 	n.Record.Set(&enrIp)
-	enrTcpPort := enr.TCP(0)
+	enrTcpPort := enr.TCP(tcpport)
 	n.Record.Set(&enrTcpPort)
-	enrUdpPort := enr.UDP(0)
+	enrUdpPort := enr.UDP(tcpport)
 	n.Record.Set(&enrUdpPort)
 
 	err := enode.SignV4(&n.Record, n.PrivateKey)
