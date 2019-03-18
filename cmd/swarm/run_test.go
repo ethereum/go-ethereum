@@ -222,12 +222,7 @@ type testNode struct {
 const testPassphrase = "swarm-test-passphrase"
 
 func getTestAccount(t *testing.T, dir string) (conf *node.Config, account accounts.Account) {
-	conf, account, _ = getTestAccountWithPrivateKey(t, dir)
-	return
-}
-
-func getTestAccountWithPrivateKey(t *testing.T, dir string) (conf *node.Config, account accounts.Account, pk *ecdsa.PrivateKey) {
-	// create kej
+	// create key
 	conf = &node.Config{
 		DataDir: dir,
 		IPCPath: "bzzd.ipc",
@@ -237,19 +232,17 @@ func getTestAccountWithPrivateKey(t *testing.T, dir string) (conf *node.Config, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	ks := n.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-	account, err = ks.NewAccount(testPassphrase)
+	account, err = n.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore).NewAccount(testPassphrase)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pk = decryptStoreAccount(ks, account.Address.String(), []string{testPassphrase})
 
 	// use a unique IPCPath when running tests on Windows
 	if runtime.GOOS == "windows" {
 		conf.IPCPath = fmt.Sprintf("bzzd-%s.ipc", account.Address.String())
 	}
 
-	return conf, account, pk
+	return conf, account
 }
 
 func existingTestNode(t *testing.T, dir string, bzzaccount string) *testNode {
