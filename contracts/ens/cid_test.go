@@ -26,8 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-const ()
-
 // Tests for the decoding of the example ENS
 func TestEIPSpecCidDecode(t *testing.T) {
 	const (
