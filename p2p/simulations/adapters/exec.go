@@ -118,6 +118,9 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 	// listen on a localhost port, which we set when we
 	// initialise NodeConfig (usually a random port)
 	conf.Stack.P2P.ListenAddr = fmt.Sprintf(":%d", config.Port)
+	if err != nil {
+		return nil, err
+	}
 
 	node := &ExecNode{
 		ID:      config.ID,

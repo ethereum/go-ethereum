@@ -47,17 +47,18 @@ type Config struct {
 	*storage.FileStoreParams
 	*storage.LocalStoreParams
 	*network.HiveParams
-	Swap                 *swap.LocalProfile
-	Pss                  *pss.PssParams
-	Contract             common.Address
-	EnsRoot              common.Address
-	EnsAPIs              []string
-	Path                 string
-	ListenAddr           string
-	Port                 string
-	PublicKey            string
-	BzzKey               string
-	Enode                *enode.Node `toml:"-"`
+	Swap       *swap.LocalProfile
+	Pss        *pss.PssParams
+	Contract   common.Address
+	EnsRoot    common.Address
+	EnsAPIs    []string
+	Path       string
+	ListenAddr string
+	Port       string
+	PublicKey  string
+	BzzKey     string
+	//NodeID               string
+	Enode                *enode.Node `toml:",omit"`
 	NetworkID            uint64
 	SwapEnabled          bool
 	SyncEnabled          bool
@@ -86,6 +87,7 @@ func NewConfig() (c *Config) {
 		ListenAddr:           DefaultHTTPListenAddr,
 		Port:                 DefaultHTTPPort,
 		Path:                 node.DefaultDataDir(),
+		Enode:                &enode.Node{},
 		EnsAPIs:              nil,
 		EnsRoot:              ens.TestNetAddress,
 		NetworkID:            network.DefaultNetworkID,

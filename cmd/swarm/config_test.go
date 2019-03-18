@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
 func TestConfigDump(t *testing.T) {
@@ -161,6 +162,16 @@ func TestConfigFileOverrides(t *testing.T) {
 	defaultConf.HiveParams.KeepAliveInterval = 6000000000
 	defaultConf.Swap.Params.Strategy.AutoCashInterval = 600 * time.Second
 	//defaultConf.SyncParams.KeyBufferSize = 512
+
+	dir, err := ioutil.TempDir("", "bzztest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	conf, account, pk := getTestAccountWithPrivateKey(t, dir)
+	node := &testNode{Dir: dir}
+	defaultConf.Init(pk)
+
 	//create a TOML string
 	out, err := tomlSettings.Marshal(&defaultConf)
 	if err != nil {
@@ -177,14 +188,6 @@ func TestConfigFileOverrides(t *testing.T) {
 		t.Fatalf("Error writing TOML file in TestFileOverride: %v", err)
 	}
 	f.Sync()
-
-	dir, err := ioutil.TempDir("", "bzztest")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	conf, account := getTestAccount(t, dir)
-	node := &testNode{Dir: dir}
 
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmTomlConfigPathFlag.Name), f.Name(),
@@ -372,6 +375,19 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 	defaultConf.HiveParams.KeepAliveInterval = 6000000000
 	defaultConf.Swap.Params.Strategy.AutoCashInterval = 600 * time.Second
 	//defaultConf.SyncParams.KeyBufferSize = 512
+
+	dir, err := ioutil.TempDir("", "bzztest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	conf, account, pk := getTestAccountWithPrivateKey(t, dir)
+	node := &testNode{Dir: dir}
+
+	expectNetworkId := uint64(77)
+
+	defaultConf.Init(pk)
+
 	//create a TOML file
 	out, err := tomlSettings.Marshal(&defaultConf)
 	if err != nil {
@@ -391,16 +407,6 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 	}
 	f.Sync()
 
-	dir, err := ioutil.TempDir("", "bzztest")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	conf, account := getTestAccount(t, dir)
-	node := &testNode{Dir: dir}
-
-	expectNetworkId := uint64(77)
-
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "77",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
@@ -411,6 +417,7 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
 		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
 	}
+	log.Warn("exec with flags", "f", flags)
 	node.Cmd = runSwarm(t, flags...)
 	node.Cmd.InputLine(testPassphrase)
 	defer func() {

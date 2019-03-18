@@ -171,6 +171,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 
 	nodeID := config.Enode.ID()
+	bzzconfig.UnderlayAddr = []byte(nodeID.String())
 
 	syncing := stream.SyncingAutoSubscribe
 	if !config.SyncEnabled || config.LightNodeEnabled {

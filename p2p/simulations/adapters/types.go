@@ -267,14 +267,15 @@ func RegisterServices(services Services) {
 	}
 }
 
-// adds the host part to the configuration's ENR, signs it
-// creates and  the corresponding enode object to the configuration
 func (n *NodeConfig) initEnode(ip net.IP, tcpport int, udpport int) error {
-	enrIp := enr.IP(ip)
+
+	// dialer in simulations based on ENR records
+	// doesn't work unless we explicitly set localhost record
+	enrIp := enr.IP(net.IPv4(127, 0, 0, 1))
 	n.Record.Set(&enrIp)
-	enrTcpPort := enr.TCP(tcpport)
+	enrTcpPort := enr.TCP(0)
 	n.Record.Set(&enrTcpPort)
-	enrUdpPort := enr.UDP(tcpport)
+	enrUdpPort := enr.UDP(0)
 	n.Record.Set(&enrUdpPort)
 
 	err := enode.SignV4(&n.Record, n.PrivateKey)

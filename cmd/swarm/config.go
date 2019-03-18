@@ -135,9 +135,9 @@ func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context, no
 		return err
 	}
 	//configuration phase completed here
-	log.Debug("Starting Swarm with the following parameters:")
+	log.Info("Starting Swarm with the following parameters:")
 	//after having created the config, print it to screen
-	log.Debug(printConfig(config))
+	log.Info(printConfig(config))
 	return nil
 }
 
