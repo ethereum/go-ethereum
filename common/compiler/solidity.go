@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
 )
