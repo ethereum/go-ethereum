@@ -21,45 +21,38 @@ import (
 	"testing"
 )
 
-const (
-	testSource = `
-pragma solidity >0.0.0;
-contract test {
-   /// @notice Will multiply ` + "`a`" + ` by 7.
-   function multiply(uint a) public returns(uint d) {
-       return a * 7;
-   }
-}
-`
-)
-
-func skipWithoutSolc(t *testing.T) {
-	if _, err := exec.LookPath("solc"); err != nil {
+func skipWithoutVyper(t *testing.T) {
+	if _, err := exec.LookPath("vyper"); err != nil {
 		t.Skip(err)
 	}
 }
 
-func TestSolidityCompiler(t *testing.T) {
-	skipWithoutSolc(t)
+func TestVyperCompiler(t *testing.T) {
+	skipWithoutVyper(t)
 
-	contracts, err := CompileSolidityString("", testSource)
+	testSource := []string{"test.v.py"}
+	source, err := slurpFiles(testSource)
 	if err != nil {
-		t.Fatalf("error compiling source. result %v: %v", contracts, err)
+		t.Error("couldn't read test files")
+	}
+	contracts, err := CompileVyper("", testSource...)
+	if err != nil {
+		t.Fatalf("error compiling test.v.py. result %v: %v", contracts, err)
 	}
 	if len(contracts) != 1 {
 		t.Errorf("one contract expected, got %d", len(contracts))
 	}
-	c, ok := contracts["test"]
+	c, ok := contracts["test.v.py"]
 	if !ok {
 		c, ok = contracts["<stdin>:test"]
 		if !ok {
-			t.Fatal("info for contract 'test' not present in result")
+			t.Fatal("info for contract 'test.v.py' not present in result")
 		}
 	}
 	if c.Code == "" {
 		t.Error("empty code")
 	}
-	if c.Info.Source != testSource {
+	if c.Info.Source != source {
 		t.Error("wrong source")
 	}
 	if c.Info.CompilerVersion == "" {
@@ -67,12 +60,12 @@ func TestSolidityCompiler(t *testing.T) {
 	}
 }
 
-func TestSolidityCompileError(t *testing.T) {
-	skipWithoutSolc(t)
+func TestVyperCompileError(t *testing.T) {
+	skipWithoutVyper(t)
 
-	contracts, err := CompileSolidityString("", testSource[4:])
+	contracts, err := CompileVyper("", "test_bad.v.py")
 	if err == nil {
-		t.Errorf("error expected compiling source. got none. result %v", contracts)
+		t.Errorf("error expected compiling test_bad.v.py. got none. result %v", contracts)
 	}
 	t.Logf("error: %v", err)
 }
