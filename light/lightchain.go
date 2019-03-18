@@ -211,9 +211,8 @@ func (lc *LightChain) Genesis() *types.Block {
 	return lc.genesisBlock
 }
 
-// State returns a new mutable state based on the current HEAD block.
-func (lc *LightChain) State() (*state.StateDB, error) {
-	return nil, errors.New("not implemented, needs client/server interface split")
+func (lc *LightChain) StateCache() state.Database {
+	panic("not implemented")
 }
 
 // GetBody retrieves a block body (transactions and uncles) from the database
