@@ -3,11 +3,8 @@ package pss
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
@@ -103,24 +99,6 @@ func getCmdParams(t *testing.T) (int, int) {
 		t.Fatal(err)
 	}
 	return int(msgCount), int(nodeCount)
-}
-
-func readSnapshot(t *testing.T, nodeCount int) simulations.Snapshot {
-	f, err := os.Open(fmt.Sprintf("testdata/snapshot_%d.json", nodeCount))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	jsonbyte, err := ioutil.ReadAll(f)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var snap simulations.Snapshot
-	err = json.Unmarshal(jsonbyte, &snap)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return snap
 }
 
 func newTestData() *testData {
@@ -241,7 +219,10 @@ func testProxNetwork(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
 	defer cancel()
-	snap := readSnapshot(t, nodeCount)
+	snap, err := simulation.ReadSnapshot(fmt.Sprintf("testdata/snapshot_%d.json", nodeCount))
+	if err != nil {
+		t.Fatalf("failed to read snapshot: %s", err)
+	}
 	err = tstdata.sim.WaitTillSnapshotRecreated(ctx, snap)
 	if err != nil {
 		t.Fatalf("failed to recreate snapshot: %s", err)

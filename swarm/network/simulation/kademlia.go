@@ -20,6 +20,9 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
+	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -103,7 +106,7 @@ func (s *Simulation) kademlias() (ks map[enode.ID]*network.Kademlia) {
 // in the snapshot are registered in the kademlia.
 // It differs from WaitTillHealthy, which waits only until all the kademlias are
 // healthy (it might happen even before all the connections are established).
-func (s *Simulation) WaitTillSnapshotRecreated(ctx context.Context, snap simulations.Snapshot) error {
+func (s *Simulation) WaitTillSnapshotRecreated(ctx context.Context, snap *simulations.Snapshot) error {
 	expected := getSnapshotConnections(snap.Conns)
 	ticker := time.NewTicker(150 * time.Millisecond)
 	defer ticker.Stop()
@@ -200,4 +203,22 @@ func removeDuplicatesAndSingletons(arr []uint64) []uint64 {
 	}
 
 	return arr
+}
+
+func ReadSnapshot(filename string) (*simulations.Snapshot, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	jsonbyte, err := ioutil.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+	var snap simulations.Snapshot
+	err = json.Unmarshal(jsonbyte, &snap)
+	if err != nil {
+		return nil, err
+	}
+	return &snap, nil
 }

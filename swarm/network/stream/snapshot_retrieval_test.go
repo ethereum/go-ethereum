@@ -22,8 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/testutil"
-
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -31,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 //constants for random file generation
@@ -155,7 +154,8 @@ func runFileRetrievalTest(nodeCount int) error {
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
-	err := sim.UploadSnapshot(fmt.Sprintf("testing/snapshot_%d.json", nodeCount))
+	filename := fmt.Sprintf("testing/snapshot_%d.json", nodeCount)
+	err := sim.UploadSnapshot(filename)
 	if err != nil {
 		return err
 	}
@@ -188,7 +188,11 @@ func runFileRetrievalTest(nodeCount int) error {
 		if err != nil {
 			return err
 		}
-		if _, err := sim.WaitTillHealthy(ctx); err != nil {
+		snap, err := simulation.ReadSnapshot(filename)
+		if err != nil {
+			return err
+		}
+		if err := sim.WaitTillSnapshotRecreated(ctx, snap); err != nil {
 			return err
 		}
 
@@ -253,7 +257,8 @@ func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) error {
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
-	err := sim.UploadSnapshot(fmt.Sprintf("testing/snapshot_%d.json", nodeCount))
+	filename := fmt.Sprintf("testing/snapshot_%d.json", nodeCount)
+	err := sim.UploadSnapshot(filename)
 	if err != nil {
 		return err
 	}
@@ -283,7 +288,11 @@ func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) error {
 		if err != nil {
 			return err
 		}
-		if _, err := sim.WaitTillHealthy(ctx); err != nil {
+		snap, err := simulation.ReadSnapshot(filename)
+		if err != nil {
+			t.Fatalf("failed to read snapshot: %s", err)
+		}
+		if err := sim.WaitTillSnapshotRecreated(ctx, snap); err != nil {
 			return err
 		}
 
