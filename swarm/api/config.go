@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/pss"
@@ -48,17 +49,18 @@ type Config struct {
 	*storage.FileStoreParams
 	*storage.LocalStoreParams
 	*network.HiveParams
-	Swap                 *swap.LocalProfile
-	Pss                  *pss.PssParams
-	Contract             common.Address
-	EnsRoot              common.Address
-	EnsAPIs              []string
-	Path                 string
-	ListenAddr           string
-	Port                 string
-	PublicKey            string
-	BzzKey               string
-	NodeID               string
+	Swap       *swap.LocalProfile
+	Pss        *pss.PssParams
+	Contract   common.Address
+	EnsRoot    common.Address
+	EnsAPIs    []string
+	Path       string
+	ListenAddr string
+	Port       string
+	PublicKey  string
+	BzzKey     string
+	//NodeID               string
+	Enode                *enode.Node `toml:",omit"`
 	NetworkID            uint64
 	SwapEnabled          bool
 	SyncEnabled          bool
@@ -87,6 +89,7 @@ func NewConfig() (c *Config) {
 		ListenAddr:           DefaultHTTPListenAddr,
 		Port:                 DefaultHTTPPort,
 		Path:                 node.DefaultDataDir(),
+		Enode:                &enode.Node{},
 		EnsAPIs:              nil,
 		EnsRoot:              ens.TestNetAddress,
 		NetworkID:            network.DefaultNetworkID,
@@ -104,23 +107,36 @@ func NewConfig() (c *Config) {
 
 //some config params need to be initialized after the complete
 //config building phase is completed (e.g. due to overriding flags)
-func (c *Config) Init(prvKey *ecdsa.PrivateKey) {
+func (c *Config) Init(prvKey *ecdsa.PrivateKey) error {
 
 	address := crypto.PubkeyToAddress(prvKey.PublicKey)
 	c.Path = filepath.Join(c.Path, "bzz-"+common.Bytes2Hex(address.Bytes()))
 	err := os.MkdirAll(c.Path, os.ModePerm)
 	if err != nil {
-		log.Error(fmt.Sprintf("Error creating root swarm data directory: %v", err))
-		return
+		return fmt.Errorf("Error creating root swarm data directory: %v", err)
 	}
 
 	pubkey := crypto.FromECDSAPub(&prvKey.PublicKey)
 	pubkeyhex := common.ToHex(pubkey)
-	keyhex := hexutil.Encode(network.PrivateKeyToBzzKey(prvKey))
+	bzzkeybytes := network.PrivateKeyToBzzKey(prvKey)
+	keyhex := hexutil.Encode(bzzkeybytes)
 
 	c.PublicKey = pubkeyhex
 	c.BzzKey = keyhex
-	c.NodeID = enode.PubkeyToIDV4(&prvKey.PublicKey).String()
+	//c.NodeID = enode.PubkeyToIDV4(&prvKey.PublicKey).String()
+	var record enr.Record
+	record.Set(network.NewENRAddrEntry(bzzkeybytes))
+	record.Set(network.ENRLightNodeEntry(c.LightNodeEnabled))
+	record.Set(network.ENRBootNodeEntry(c.BootnodeMode))
+	err = enode.SignV4(&record, prvKey)
+	if err != nil {
+		return fmt.Errorf("ENR create fail: %v", err)
+	}
+	c.Enode, err = enode.New(enode.V4ID{}, &record)
+	if err != nil {
+		return fmt.Errorf("Enode create fail: %v", err)
+	}
+	log.Warn("setting enode record", "node", c.Enode)
 
 	if c.SwapEnabled {
 		c.Swap.Init(c.Contract, prvKey)
@@ -131,6 +147,7 @@ func (c *Config) Init(prvKey *ecdsa.PrivateKey) {
 	c.LocalStoreParams.BaseKey = common.FromHex(keyhex)
 
 	c.Pss = c.Pss.WithPrivateKey(c.privateKey)
+	return nil
 }
 
 func (c *Config) ShiftPrivateKey() (privKey *ecdsa.PrivateKey) {

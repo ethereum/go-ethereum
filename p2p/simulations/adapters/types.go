@@ -27,6 +27,7 @@ import (
 
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -264,4 +265,32 @@ func RegisterServices(services Services) {
 	if reexec.Init() {
 		os.Exit(0)
 	}
+}
+
+func (n *NodeConfig) initDefaultEnode() error {
+	return n.initEnode(net.IPv4(127, 0, 0, 1), 0, 0)
+}
+
+func (n *NodeConfig) initEnode(ip net.IP, tcpport int, udpport int) error {
+
+	// dialer in simulations based on ENR records
+	// doesn't work unless we explicitly set localhost record
+	enrIp := enr.IP(net.IPv4(127, 0, 0, 1))
+	n.Record.Set(&enrIp)
+	enrTcpPort := enr.TCP(0)
+	n.Record.Set(&enrTcpPort)
+	enrUdpPort := enr.UDP(0)
+	n.Record.Set(&enrUdpPort)
+
+	err := enode.SignV4(&n.Record, n.PrivateKey)
+	if err != nil {
+		return fmt.Errorf("unable to generate ENR: %v", err)
+	}
+	nod, err := enode.New(enode.V4ID{}, &n.Record)
+	if err != nil {
+		return fmt.Errorf("unable to create enode: %v", err)
+	}
+	log.Trace("simnode new", "record", n.Record)
+	n.node = nod
+	return nil
 }

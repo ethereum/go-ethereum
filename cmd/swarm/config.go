@@ -123,18 +123,22 @@ func buildConfig(ctx *cli.Context) (config *bzzapi.Config, err error) {
 }
 
 //finally, after the configuration build phase is finished, initialize
-func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context) {
+func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context) error {
 	//at this point, all vars should be set in the Config
 	//get the account for the provided swarm account
 	prvkey := getAccount(config.BzzAccount, ctx, stack)
 	//set the resolved config path (geth --datadir)
 	config.Path = expandPath(stack.InstanceDir())
 	//finally, initialize the configuration
-	config.Init(prvkey)
+	err := config.Init(prvkey)
+	if err != nil {
+		return err
+	}
 	//configuration phase completed here
-	log.Debug("Starting Swarm with the following parameters:")
+	log.Info("Starting Swarm with the following parameters:")
 	//after having created the config, print it to screen
-	log.Debug(printConfig(config))
+	log.Info(printConfig(config))
+	return nil
 }
 
 //configFileOverride overrides the current config with the config file, if a config file has been provided

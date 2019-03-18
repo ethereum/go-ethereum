@@ -92,6 +92,11 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 		return nil, fmt.Errorf("error creating node directory: %s", err)
 	}
 
+	err := config.initDefaultEnode()
+	if err != nil {
+		return nil, err
+	}
+	log.Warn("set default enr", "e", config)
 	// generate the config
 	conf := &execNodeConfig{
 		Stack: node.DefaultConfig,
@@ -114,6 +119,9 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 	// listen on a localhost port, which we set when we
 	// initialise NodeConfig (usually a random port)
 	conf.Stack.P2P.ListenAddr = fmt.Sprintf(":%d", config.Port)
+	if err != nil {
+		return nil, err
+	}
 
 	node := &ExecNode{
 		ID:      config.ID,
@@ -406,6 +414,12 @@ func startExecNodeStack() (*node.Node, error) {
 	var conf execNodeConfig
 	if err := json.Unmarshal([]byte(confEnv), &conf); err != nil {
 		return nil, fmt.Errorf("error decoding %s: %v", envNodeConfig, err)
+	}
+	nodeTcpConn, err := net.ResolveTCPAddr("tcp", conf.Stack.P2P.ListenAddr)
+	if err != nil {
+		conf.Node.initDefaultEnode()
+	} else {
+		conf.Node.initEnode(nodeTcpConn.IP, nodeTcpConn.Port, nodeTcpConn.Port)
 	}
 	conf.Stack.P2P.PrivateKey = conf.Node.PrivateKey
 	conf.Stack.Logger = log.New("node.id", conf.Node.ID.String())
