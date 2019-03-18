@@ -116,9 +116,9 @@ func TestDialStateDynDial(t *testing.T) {
 					}},
 				},
 				new: []task{
+					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(2)}},
 					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(3)}},
 					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(4)}},
-					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(5)}},
 				},
 			},
 			// Some of the dials complete but no new ones are launched yet because
@@ -164,9 +164,7 @@ func TestDialStateDynDial(t *testing.T) {
 					{rw: &conn{flags: dynDialedConn, id: uintID(4)}},
 					{rw: &conn{flags: dynDialedConn, id: uintID(5)}},
 				},
-				new: []task{
-					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(6)}},
-				},
+				new: []task{},
 			},
 			// More peers (3,4) drop off and dial for ID 6 completes.
 			// The last query result from the discovery lookup is reused
@@ -181,8 +179,8 @@ func TestDialStateDynDial(t *testing.T) {
 					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(6)}},
 				},
 				new: []task{
+					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(5)}},
 					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(7)}},
-					&discoverTask{},
 				},
 			},
 			// Peer 7 is connected, but there still aren't enough dynamic peers
@@ -212,7 +210,7 @@ func TestDialStateDynDial(t *testing.T) {
 					&discoverTask{},
 				},
 				new: []task{
-					&discoverTask{},
+					&waitExpireTask{Duration: 14 * time.Second},
 				},
 			},
 		},
@@ -302,6 +300,9 @@ func TestDialStateDynDialBootnode(t *testing.T) {
 					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(4)}},
 					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(5)}},
 				},
+				new: []task{
+					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(4)}},
+				},
 			},
 		},
 	})
@@ -351,10 +352,11 @@ func TestDialStateDynDialFromTable(t *testing.T) {
 					}},
 				},
 				new: []task{
+					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(1)}},
+					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(2)}},
 					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(10)}},
 					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(11)}},
 					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(12)}},
-					&discoverTask{},
 				},
 			},
 			// Dialing nodes 3,4,5 fails. The dials from the lookup succeed.
@@ -373,6 +375,9 @@ func TestDialStateDynDialFromTable(t *testing.T) {
 					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(10)}},
 					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(11)}},
 					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(12)}},
+				},
+				new: []task{
+					&discoverTask{},
 				},
 			},
 			// Waiting for expiry. No waitExpireTask is launched because the
@@ -453,6 +458,8 @@ func TestDialStateStaticDial(t *testing.T) {
 					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
 				},
 				new: []task{
+					&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(1)}},
+					&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(2)}},
 					&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(3)}},
 					&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(4)}},
 					&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(5)}},
@@ -465,6 +472,9 @@ func TestDialStateStaticDial(t *testing.T) {
 					{rw: &conn{flags: dynDialedConn, id: uintID(1)}},
 					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
 					{rw: &conn{flags: staticDialedConn, id: uintID(3)}},
+				},
+				new: []task{
+					&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(3)}},
 				},
 				done: []task{
 					&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(3)}},
@@ -485,7 +495,8 @@ func TestDialStateStaticDial(t *testing.T) {
 					&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(5)}},
 				},
 				new: []task{
-					&waitExpireTask{Duration: 14 * time.Second},
+					&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(4)}},
+					&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(5)}},
 				},
 			},
 			// Wait a round for dial history to expire, no new tasks should spawn.
@@ -506,10 +517,7 @@ func TestDialStateStaticDial(t *testing.T) {
 					{rw: &conn{flags: staticDialedConn, id: uintID(3)}},
 					{rw: &conn{flags: staticDialedConn, id: uintID(5)}},
 				},
-				new: []task{
-					&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(2)}},
-					&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(4)}},
-				},
+				new: []task{},
 			},
 		},
 	})
@@ -542,7 +550,8 @@ func TestDialStaticAfterReset(t *testing.T) {
 				&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(2)}},
 			},
 			new: []task{
-				&waitExpireTask{Duration: 30 * time.Second},
+				&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(1)}},
+				&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(2)}},
 			},
 		},
 	}
@@ -554,7 +563,9 @@ func TestDialStaticAfterReset(t *testing.T) {
 	for _, n := range wantStatic {
 		dTest.init.removeStatic(n)
 		dTest.init.addStatic(n)
+		delete(dTest.init.dialing, n.ID)
 	}
+
 	// without removing peers they will be considered recently dialed
 	runDialTest(t, dTest)
 }
@@ -591,6 +602,10 @@ func TestDialStateCache(t *testing.T) {
 					&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(1)}},
 					&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(2)}},
 				},
+				new: []task{
+					&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(1)}},
+					&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(2)}},
+				},
 			},
 			// A salvage task is launched to wait for node 3's history
 			// entry to expire.
@@ -601,9 +616,6 @@ func TestDialStateCache(t *testing.T) {
 				},
 				done: []task{
 					&dialTask{flags: staticDialedConn, dest: &discover.Node{ID: uintID(3)}},
-				},
-				new: []task{
-					&waitExpireTask{Duration: 14 * time.Second},
 				},
 			},
 			// Still waiting for node 3's entry to expire in the cache.

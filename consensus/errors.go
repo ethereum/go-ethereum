@@ -34,4 +34,8 @@ var (
 	// ErrInvalidNumber is returned if a block's number doesn't equal it's parent's
 	// plus one.
 	ErrInvalidNumber = errors.New("invalid block number")
+
+	ErrFailValidatorSignature = errors.New("missing validator in header")
+
+	ErrNoValidatorSignature = errors.New("no validator in header")
 )

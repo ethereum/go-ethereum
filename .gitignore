@@ -25,7 +25,7 @@ build/_vendor/pkg
 # used by the Makefile
 /build/_workspace/
 /build/bin/
-/geth*.zip
+/XDC*.zip
 
 # travis
 profile.tmp
@@ -36,6 +36,9 @@ profile.cov
 
 # VS Code
 .vscode
+
+# Vim
+.*.sw*
 
 # dashboard
 /dashboard/assets/flow-typed

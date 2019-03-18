@@ -44,6 +44,14 @@ func (b Bytes) MarshalText() ([]byte, error) {
 	return result, nil
 }
 
+// MarshalXDCText implements encoding.TextMarshaler
+func (b Bytes) MarshalXDCText() ([]byte, error) {
+	result := make([]byte, len(b)*2+3)
+	copy(result, `xdc`)
+	hex.Encode(result[3:], b)
+	return result, nil
+}
+
 // UnmarshalJSON implements json.Unmarshaler.
 func (b *Bytes) UnmarshalJSON(input []byte) error {
 	if !isString(input) {
@@ -277,12 +285,18 @@ func bytesHave0xPrefix(input []byte) bool {
 	return len(input) >= 2 && input[0] == '0' && (input[1] == 'x' || input[1] == 'X')
 }
 
+func bytesHaveXDCPrefix(input []byte) bool {
+	return len(input) >= 3 && (input[0] == 'x' || input[0] == 'X') && (input[1] == 'd' || input[1] == 'D') && (input[2] == 'c' || input[2] == 'C')
+}
+
 func checkText(input []byte, wantPrefix bool) ([]byte, error) {
 	if len(input) == 0 {
 		return nil, nil // empty strings are allowed
 	}
-	if bytesHave0xPrefix(input) {
-		input = input[2:]
+	if bytesHaveXDCPrefix(input) {
+		input = input[3:]
+	} else if bytesHave0xPrefix(input) {
+	input = input[2:]
 	} else if wantPrefix {
 		return nil, ErrMissingPrefix
 	}

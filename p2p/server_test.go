@@ -153,7 +153,6 @@ func TestServerDial(t *testing.T) {
 	select {
 	case conn := <-accepted:
 		defer conn.Close()
-
 		select {
 		case peer := <-connected:
 			if peer.ID() != remid {
@@ -174,6 +173,21 @@ func TestServerDial(t *testing.T) {
 			t.Error("server did not launch peer within one second")
 		}
 
+		select {
+		case peer := <-connected:
+			if peer.ID() != remid {
+				t.Errorf("peer has wrong id")
+			}
+			if peer.Name() != "test" {
+				t.Errorf("peer has wrong name")
+			}
+			if peer.RemoteAddr().String() != conn.LocalAddr().String() {
+				t.Errorf("peer started with wrong conn: got %v, want %v",
+					peer.RemoteAddr(), conn.LocalAddr())
+			}
+		case <-time.After(1 * time.Second):
+			t.Error("server did not launch peer within one second")
+		}
 	case <-time.After(1 * time.Second):
 		t.Error("server did not connect within one second")
 	}

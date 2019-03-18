@@ -22,18 +22,23 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	mrand "math/rand"
+	"os"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/XDPoS"
+	contractValidator "github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -47,8 +52,8 @@ import (
 
 var (
 	blockInsertTimer = metrics.NewRegisteredTimer("chain/inserts", nil)
-
-	ErrNoGenesis = errors.New("Genesis not found in chain")
+	CheckpointCh     = make(chan int)
+	ErrNoGenesis     = errors.New("Genesis not found in chain")
 )
 
 const (
@@ -69,6 +74,13 @@ type CacheConfig struct {
 	Disabled      bool          // Whether to disable trie write caching (archive node)
 	TrieNodeLimit int           // Memory limit (MB) at which to flush the current in-memory trie to disk
 	TrieTimeLimit time.Duration // Time limit after which to flush the current in-memory trie to disk
+}
+type ResultProcessBlock struct {
+	logs     []*types.Log
+	receipts []*types.Receipt
+	state    *state.StateDB
+	proctime time.Duration
+	usedGas  uint64
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -110,14 +122,16 @@ type BlockChain struct {
 	currentBlock     atomic.Value // Current head of the block chain
 	currentFastBlock atomic.Value // Current head of the fast-sync chain (may be above the block chain!)
 
-	stateCache   state.Database // State database to reuse between imports (contains state cache)
-	bodyCache    *lru.Cache     // Cache for the most recent block bodies
-	bodyRLPCache *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
-	blockCache   *lru.Cache     // Cache for the most recent entire blocks
-	futureBlocks *lru.Cache     // future blocks are blocks added for later processing
-
-	quit    chan struct{} // blockchain quit channel
-	running int32         // running must be called atomically
+	stateCache       state.Database // State database to reuse between imports (contains state cache)
+	bodyCache        *lru.Cache     // Cache for the most recent block bodies
+	bodyRLPCache     *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
+	blockCache       *lru.Cache     // Cache for the most recent entire blocks
+	futureBlocks     *lru.Cache     // future blocks are blocks added for later processing
+	resultProcess    *lru.Cache     // Cache for processed blocks
+	calculatingBlock *lru.Cache     // Cache for processing blocks
+	downloadingBlock *lru.Cache     // Cache for downloading blocks (avoid duplication from fetcher)
+	quit             chan struct{}  // blockchain quit channel
+	running          int32          // running must be called atomically
 	// procInterrupt must be atomically called
 	procInterrupt int32          // interrupt signaler for block processing
 	wg            sync.WaitGroup // chain processing wait group for shutting down
@@ -127,7 +141,9 @@ type BlockChain struct {
 	validator Validator // block and state validator interface
 	vmConfig  vm.Config
 
-	badBlocks *lru.Cache // Bad block cache
+	badBlocks   *lru.Cache // Bad block cache
+	IPCEndpoint string
+	Client      *ethclient.Client // Global ipc client instance.
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -145,21 +161,26 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	blockCache, _ := lru.New(blockCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 	badBlocks, _ := lru.New(badBlockLimit)
-
+	resultProcess, _ := lru.New(blockCacheLimit)
+	preparingBlock, _ := lru.New(blockCacheLimit)
+	downloadingBlock, _ := lru.New(blockCacheLimit)
 	bc := &BlockChain{
-		chainConfig:  chainConfig,
-		cacheConfig:  cacheConfig,
-		db:           db,
-		triegc:       prque.New(),
-		stateCache:   state.NewDatabase(db),
-		quit:         make(chan struct{}),
-		bodyCache:    bodyCache,
-		bodyRLPCache: bodyRLPCache,
-		blockCache:   blockCache,
-		futureBlocks: futureBlocks,
-		engine:       engine,
-		vmConfig:     vmConfig,
-		badBlocks:    badBlocks,
+		chainConfig:      chainConfig,
+		cacheConfig:      cacheConfig,
+		db:               db,
+		triegc:           prque.New(),
+		stateCache:       state.NewDatabase(db),
+		quit:             make(chan struct{}),
+		bodyCache:        bodyCache,
+		bodyRLPCache:     bodyRLPCache,
+		blockCache:       blockCache,
+		futureBlocks:     futureBlocks,
+		resultProcess:    resultProcess,
+		calculatingBlock: preparingBlock,
+		downloadingBlock: downloadingBlock,
+		engine:           engine,
+		vmConfig:         vmConfig,
+		badBlocks:        badBlocks,
 	}
 	bc.SetValidator(NewBlockValidator(chainConfig, bc, engine))
 	bc.SetProcessor(NewStateProcessor(chainConfig, bc, engine))
@@ -484,6 +505,12 @@ func (bc *BlockChain) insert(block *types.Block) {
 		log.Crit("Failed to insert head block hash", "err", err)
 	}
 	bc.currentBlock.Store(block)
+
+	// save cache BlockSigners
+	if bc.chainConfig.XDPoS != nil && !bc.chainConfig.IsTIPSigning(block.Number()) {
+		engine := bc.Engine().(*XDPoS.XDPoS)
+		engine.CacheData(block.Header(), block.Transactions(), bc.GetReceiptsByHash(block.Hash()))
+	}
 
 	// If the block is better than our head or is on a different chain, force update heads
 	if updateHeads {
@@ -962,8 +989,8 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	reorg := externTd.Cmp(localTd) > 0
 	currentBlock = bc.CurrentBlock()
 	if !reorg && externTd.Cmp(localTd) == 0 {
-		// Split same-difficulty blocks by number, then at random
-		reorg = block.NumberU64() < currentBlock.NumberU64() || (block.NumberU64() == currentBlock.NumberU64() && mrand.Float64() < 0.5)
+		// Split same-difficulty blocks by number
+		reorg = block.NumberU64() > currentBlock.NumberU64()
 	}
 	if reorg {
 		// Reorganise the chain if the parent is not the head block
@@ -991,6 +1018,11 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	// Set new head.
 	if status == CanonStatTy {
 		bc.insert(block)
+	}
+	// save cache BlockSigners
+	if bc.chainConfig.XDPoS != nil && bc.chainConfig.IsTIPSigning(block.Number()) {
+		engine := bc.Engine().(*XDPoS.XDPoS)
+		engine.CacheSigner(block.Header().Hash(), block.Transactions())
 	}
 	bc.futureBlocks.Remove(block.Hash())
 	return status, nil
@@ -1045,7 +1077,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 
 	for i, block := range chain {
 		headers[i] = block.Header()
-		seals[i] = true
+		seals[i] = false
+		bc.downloadingBlock.Add(block.Hash(), true)
 	}
 	abort, results := bc.engine.VerifyHeaders(bc, headers, seals)
 	defer close(abort)
@@ -1117,6 +1150,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			for j := 0; j < len(winner)/2; j++ {
 				winner[j], winner[len(winner)-1-j] = winner[len(winner)-1-j], winner[j]
 			}
+			log.Debug("Number block need calculated again", "number", block.NumberU64(), "hash", block.Hash().Hex(), "winners", len(winner))
 			// Import all the pruned blocks to make the state available
 			bc.chainmu.Unlock()
 			_, evs, logs, err := bc.insertChain(winner)
@@ -1164,7 +1198,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		}
 		switch status {
 		case CanonStatTy:
-			log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(), "uncles", len(block.Uncles()),
+			log.Debug("Inserted new block from downloader", "number", block.Number(), "hash", block.Hash(), "uncles", len(block.Uncles()),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(), "elapsed", common.PrettyDuration(time.Since(bstart)))
 
 			coalescedLogs = append(coalescedLogs, logs...)
@@ -1176,7 +1210,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			bc.gcproc += proctime
 
 		case SideStatTy:
-			log.Debug("Inserted forked block", "number", block.Number(), "hash", block.Hash(), "diff", block.Difficulty(), "elapsed",
+			log.Debug("Inserted forked block from downloader", "number", block.Number(), "hash", block.Hash(), "diff", block.Difficulty(), "elapsed",
 				common.PrettyDuration(time.Since(bstart)), "txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()))
 
 			blockInsertTimer.UpdateSince(bstart)
@@ -1185,12 +1219,226 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		stats.processed++
 		stats.usedGas += usedGas
 		stats.report(chain, i, bc.stateCache.TrieDB().Size())
+		if status == CanonStatTy && bc.chainConfig.XDPoS != nil {
+			// epoch block
+			if (chain[i].NumberU64() % bc.chainConfig.XDPoS.Epoch) == 0 {
+				CheckpointCh <- 1
+			}
+			// prepare set of masternodes for the next epoch
+			if (chain[i].NumberU64() % bc.chainConfig.XDPoS.Epoch) == (bc.chainConfig.XDPoS.Epoch - bc.chainConfig.XDPoS.Gap) {
+				err := bc.UpdateM1()
+				if err != nil {
+					log.Crit("Error when update masternodes set. Stopping node", "err", err)
+				}
+			}
+		}
 	}
 	// Append a single chain head event if we've progressed the chain
 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
+		log.Debug("New ChainHeadEvent ", "number", lastCanon.NumberU64(), "hash", lastCanon.Hash())
 		events = append(events, ChainHeadEvent{lastCanon})
 	}
 	return 0, events, coalescedLogs, nil
+}
+
+func (bc *BlockChain) InsertBlock(block *types.Block) error {
+	events, logs, err := bc.insertBlock(block)
+	bc.PostChainEvents(events, logs)
+	return err
+}
+
+func (bc *BlockChain) PrepareBlock(block *types.Block) (err error) {
+	defer log.Debug("Done prepare block ", "number", block.NumberU64(), "hash", block.Hash(), "validator", block.Header().Validator, "err", err)
+	if _, check := bc.resultProcess.Get(block.Hash()); check {
+		log.Debug("Stop prepare a block because the result cached", "number", block.NumberU64(), "hash", block.Hash(), "validator", block.Header().Validator)
+		return nil
+	}
+	if _, check := bc.calculatingBlock.Get(block.Hash()); check {
+		log.Debug("Stop prepare a block because inserting", "number", block.NumberU64(), "hash", block.Hash(), "validator", block.Header().Validator)
+		return nil
+	}
+	err = bc.engine.VerifyHeader(bc, block.Header(), false)
+	if err != nil {
+		return err
+	}
+	result, err := bc.getResultBlock(block, false)
+	if err == nil {
+		bc.resultProcess.Add(block.Hash(), result)
+		return nil
+	} else if err == ErrKnownBlock {
+		return nil
+	} else if err == ErrStopPreparingBlock {
+		log.Debug("Stop prepare a block because calculating", "number", block.NumberU64(), "hash", block.Hash(), "validator", block.Header().Validator)
+		return nil
+	}
+	return err
+}
+
+func (bc *BlockChain) getResultBlock(block *types.Block, verifiedM2 bool) (*ResultProcessBlock, error) {
+	var calculatedBlock *CalculatedBlock
+	if verifiedM2 {
+		if result, check := bc.resultProcess.Get(block.HashNoValidator()); check {
+			log.Debug("Get result block from cache ", "number", block.NumberU64(), "hash", block.Hash(), "hash no validator", block.HashNoValidator())
+			return result.(*ResultProcessBlock), nil
+		}
+		log.Debug("Not found cache prepare block ", "number", block.NumberU64(), "hash", block.Hash(), "validator", block.HashNoValidator())
+		if calculatedBlock, _ := bc.calculatingBlock.Get(block.HashNoValidator()); calculatedBlock != nil {
+			calculatedBlock.(*CalculatedBlock).stop = true
+		}
+	}
+	calculatedBlock = &CalculatedBlock{block, false}
+	bc.calculatingBlock.Add(block.HashNoValidator(), calculatedBlock)
+	// Start the parallel header verifier
+	// If the chain is terminating, stop processing blocks
+	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
+		log.Debug("Premature abort during blocks processing")
+		return nil, ErrBlacklistedHash
+	}
+	// If the header is a banned one, straight out abort
+	if BadHashes[block.Hash()] {
+		bc.reportBlock(block, nil, ErrBlacklistedHash)
+		return nil, ErrBlacklistedHash
+	}
+	// Wait for the block's verification to complete
+	bstart := time.Now()
+	err := bc.Validator().ValidateBody(block)
+	switch {
+	case err == ErrKnownBlock:
+		// Block and state both already known. However if the current block is below
+		// this number we did a rollback and we should reimport it nonetheless.
+		if bc.CurrentBlock().NumberU64() >= block.NumberU64() {
+			return nil, ErrKnownBlock
+		}
+	case err == consensus.ErrPrunedAncestor:
+		// Block competing with the canonical chain, store in the db, but don't process
+		// until the competitor TD goes above the canonical TD
+		currentBlock := bc.CurrentBlock()
+		localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
+		externTd := new(big.Int).Add(bc.GetTd(block.ParentHash(), block.NumberU64()-1), block.Difficulty())
+		if localTd.Cmp(externTd) > 0 {
+			return nil, err
+		}
+		// Competitor chain beat canonical, gather all blocks from the common ancestor
+		var winner []*types.Block
+
+		parent := bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+		for !bc.HasState(parent.Root()) {
+			winner = append(winner, parent)
+			parent = bc.GetBlock(parent.ParentHash(), parent.NumberU64()-1)
+		}
+		for j := 0; j < len(winner)/2; j++ {
+			winner[j], winner[len(winner)-1-j] = winner[len(winner)-1-j], winner[j]
+		}
+		log.Debug("Number block need calculated again", "number", block.NumberU64(), "hash", block.Hash().Hex(), "winners", len(winner))
+		// Import all the pruned blocks to make the state available
+		_, _, _, err := bc.insertChain(winner)
+		if err != nil {
+			return nil, err
+		}
+	case err != nil:
+		bc.reportBlock(block, nil, err)
+		return nil, err
+	}
+	// Create a new statedb using the parent block and report an
+	// error if it fails.
+	var parent = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	state, err := state.New(parent.Root(), bc.stateCache)
+	if err != nil {
+		return nil, err
+	}
+	// Process block using the parent state as reference point.
+	receipts, logs, usedGas, err := bc.processor.ProcessBlockNoValidator(calculatedBlock, state, bc.vmConfig)
+	process := time.Since(bstart)
+	if err != nil {
+		if err != ErrStopPreparingBlock {
+			bc.reportBlock(block, receipts, err)
+		}
+		return nil, err
+	}
+	// Validate the state using the default validator
+	err = bc.Validator().ValidateState(block, parent, state, receipts, usedGas)
+	if err != nil {
+		bc.reportBlock(block, receipts, err)
+		return nil, err
+	}
+	proctime := time.Since(bstart)
+	log.Debug("Calculate new block", "number", block.Number(), "hash", block.Hash(), "uncles", len(block.Uncles()),
+		"txs", len(block.Transactions()), "gas", block.GasUsed(), "elapsed", common.PrettyDuration(time.Since(bstart)), "process", process)
+	return &ResultProcessBlock{receipts: receipts, logs: logs, state: state, proctime: proctime, usedGas: usedGas}, nil
+}
+
+// insertChain will execute the actual chain insertion and event aggregation. The
+// only reason this method exists as a separate one is to make locking cleaner
+// with deferred statements.
+func (bc *BlockChain) insertBlock(block *types.Block) ([]interface{}, []*types.Log, error) {
+	var (
+		stats         = insertStats{startTime: mclock.Now()}
+		events        = make([]interface{}, 0, 1)
+		coalescedLogs []*types.Log
+	)
+	if _, check := bc.downloadingBlock.Get(block.Hash()); check {
+		log.Debug("Stop fetcher a block because downloading", "number", block.NumberU64(), "hash", block.Hash())
+		return events, coalescedLogs, nil
+	}
+	result, err := bc.getResultBlock(block, true)
+	if err != nil {
+		return events, coalescedLogs, err
+	}
+	defer bc.resultProcess.Remove(block.HashNoValidator())
+	bc.wg.Add(1)
+	defer bc.wg.Done()
+	// Write the block to the chain and get the status.
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
+	if bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
+		return events, coalescedLogs, nil
+	}
+	status, err := bc.WriteBlockWithState(block, result.receipts, result.state)
+
+	if err != nil {
+		return events, coalescedLogs, err
+	}
+	switch status {
+	case CanonStatTy:
+		log.Debug("Inserted new block from fetcher", "number", block.Number(), "hash", block.Hash(), "uncles", len(block.Uncles()),
+			"txs", len(block.Transactions()), "gas", block.GasUsed(), "elapsed", common.PrettyDuration(time.Since(block.ReceivedAt)))
+
+		coalescedLogs = append(coalescedLogs, result.logs...)
+		events = append(events, ChainEvent{block, block.Hash(), result.logs})
+
+		// Only count canonical blocks for GC processing time
+		bc.gcproc += result.proctime
+
+	case SideStatTy:
+		log.Debug("Inserted forked block from fetcher", "number", block.Number(), "hash", block.Hash(), "diff", block.Difficulty(), "elapsed",
+			common.PrettyDuration(time.Since(block.ReceivedAt)), "txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()))
+
+		blockInsertTimer.Update(result.proctime)
+		events = append(events, ChainSideEvent{block})
+	}
+	stats.processed++
+	stats.usedGas += result.usedGas
+	stats.report(types.Blocks{block}, 0, bc.stateCache.TrieDB().Size())
+	if status == CanonStatTy && bc.chainConfig.XDPoS != nil {
+		// epoch block
+		if (block.NumberU64() % bc.chainConfig.XDPoS.Epoch) == 0 {
+			CheckpointCh <- 1
+		}
+		// prepare set of masternodes for the next epoch
+		if (block.NumberU64() % bc.chainConfig.XDPoS.Epoch) == (bc.chainConfig.XDPoS.Epoch - bc.chainConfig.XDPoS.Gap) {
+			err := bc.UpdateM1()
+			if err != nil {
+				log.Error("Error when update masternodes set. Stopping node", "err", err)
+				os.Exit(1)
+			}
+		}
+	}
+	// Append a single chain head event if we've progressed the chain
+	if status == CanonStatTy && bc.CurrentBlock().Hash() == block.Hash() {
+		events = append(events, ChainHeadEvent{block})
+		log.Debug("New ChainHeadEvent from fetcher ", "number", block.NumberU64(), "hash", block.Hash())
+	}
+	return events, coalescedLogs, nil
 }
 
 // insertStats tracks and reports on block insertion.
@@ -1231,7 +1479,6 @@ func (st *insertStats) report(chain []*types.Block, index int, cache common.Stor
 			context = append(context, []interface{}{"ignored", st.ignored}...)
 		}
 		log.Info("Imported new chain segment", context...)
-
 		*st = insertStats{startTime: now, lastIndex: index + 1}
 	}
 }
@@ -1376,7 +1623,7 @@ func (bc *BlockChain) PostChainEvents(events []interface{}, logs []*types.Log) {
 }
 
 func (bc *BlockChain) update() {
-	futureTimer := time.NewTicker(5 * time.Second)
+	futureTimer := time.NewTicker(10 * time.Millisecond)
 	defer futureTimer.Stop()
 	for {
 		select {
@@ -1561,4 +1808,77 @@ func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Su
 // SubscribeLogsEvent registers a subscription of []*types.Log.
 func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return bc.scope.Track(bc.logsFeed.Subscribe(ch))
+}
+
+// Get current IPC Client.
+func (bc *BlockChain) GetClient() (*ethclient.Client, error) {
+	if bc.Client == nil {
+		// Inject ipc client global instance.
+		client, err := ethclient.Dial(bc.IPCEndpoint)
+		if err != nil {
+			log.Error("Fail to connect IPC", "error", err)
+			return nil, err
+		}
+		bc.Client = client
+	}
+
+	return bc.Client, nil
+}
+
+func (bc *BlockChain) UpdateM1() error {
+	if bc.Config().XDPoS == nil {
+		return ErrNotXDPoS
+	}
+	engine := bc.Engine().(*XDPoS.XDPoS)
+	log.Info("It's time to update new set of masternodes for the next epoch...")
+	// get masternodes information from smart contract
+	client, err := bc.GetClient()
+	if err != nil {
+		return err
+	}
+	addr := common.HexToAddress(common.MasternodeVotingSMC)
+	validator, err := contractValidator.NewXDCValidator(addr, client)
+	if err != nil {
+		return err
+	}
+	opts := new(bind.CallOpts)
+	candidates, err := validator.GetCandidates(opts)
+	if err != nil {
+		return err
+	}
+	var ms []XDPoS.Masternode
+	for _, candidate := range candidates {
+		v, err := validator.GetCandidateCap(opts, candidate)
+		if err != nil {
+			return err
+		}
+		//TODO: smart contract shouldn't return "0x0000000000000000000000000000000000000000"
+		if candidate.String() != "xdc0000000000000000000000000000000000000000" {
+			ms = append(ms, XDPoS.Masternode{Address: candidate, Stake: v})
+		}
+	}
+	if len(ms) == 0 {
+		log.Error("No masternode found. Stopping node")
+		os.Exit(1)
+	} else {
+		sort.Slice(ms, func(i, j int) bool {
+			return ms[i].Stake.Cmp(ms[j].Stake) >= 0
+		})
+		log.Info("Ordered list of masternode candidates")
+		for _, m := range ms {
+			log.Info("", "address", m.Address.String(), "stake", m.Stake)
+		}
+		// update masternodes
+		log.Info("Updating new set of masternodes")
+		if len(ms) > common.MaxMasternodes {
+			err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms[:common.MaxMasternodes])
+		} else {
+			err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms)
+		}
+		if err != nil {
+			return err
+		}
+		log.Info("Masternodes are ready for the next epoch")
+	}
+	return nil
 }

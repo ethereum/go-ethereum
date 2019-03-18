@@ -1,0 +1,24 @@
+FROM golang:1.10-alpine as builder
+
+RUN apk add --no-cache make gcc musl-dev linux-headers
+
+ADD . /XDCchain
+RUN cd /XDCchain && make bootnode
+
+RUN chmod +x /XDCchain/build/bin/bootnode
+
+FROM alpine:latest
+
+LABEL maintainer="anil@xinfin.org"
+
+WORKDIR /XDCchain
+
+COPY --from=builder /XDCchain/build/bin/bootnode /usr/local/bin/bootnode
+
+COPY docker/bootnode ./
+
+EXPOSE 30301
+
+ENTRYPOINT ["./entrypoint.sh"]
+
+CMD ["-verbosity", "6", "-nodekey", "bootnode.key", "--addr", ":30301"]

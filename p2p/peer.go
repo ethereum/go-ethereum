@@ -108,7 +108,8 @@ type Peer struct {
 	disc     chan DiscReason
 
 	// events receives message send / receive events if set
-	events *event.Feed
+	events   *event.Feed
+	PairPeer *Peer
 }
 
 // NewPeer returns a peer for testing purposes.
@@ -157,7 +158,7 @@ func (p *Peer) Disconnect(reason DiscReason) {
 
 // String implements fmt.Stringer.
 func (p *Peer) String() string {
-	return fmt.Sprintf("Peer %x %v", p.rw.id[:8], p.RemoteAddr())
+	return fmt.Sprintf("Peer %x %v ", p.rw.id[:8], p.RemoteAddr())
 }
 
 // Inbound returns true if the peer is an inbound connection
@@ -225,10 +226,12 @@ loop:
 			break loop
 		}
 	}
-
 	close(p.closed)
 	p.rw.close(reason)
 	p.wg.Wait()
+	if p.PairPeer != nil {
+		go func() { p.PairPeer.Disconnect(DiscPairPeerStop) }()
+	}
 	return remoteRequested, err
 }
 
@@ -345,6 +348,7 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 			rw = newMsgEventer(rw, p.events, p.ID(), proto.Name)
 		}
 		p.log.Trace(fmt.Sprintf("Starting protocol %s/%d", proto.Name, proto.Version))
+
 		go func() {
 			err := proto.Run(p, rw)
 			if err == nil {

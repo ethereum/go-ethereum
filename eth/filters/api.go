@@ -537,7 +537,14 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func hasXDCPrefix(str string) bool {
+	return len(str) >= 3 && (str[0] == 'x' || str[0] == 'X') && (str[1] == 'd' || str[1] == 'D') && (str[2] == 'c' || str[2] == 'C')
+}
+
 func decodeAddress(s string) (common.Address, error) {
+if hasXDCPrefix(s) {
+	s = "0x" + s[3:]
+}
 	b, err := hexutil.Decode(s)
 	if err == nil && len(b) != common.AddressLength {
 		err = fmt.Errorf("hex has invalid length %d after decoding", len(b))
