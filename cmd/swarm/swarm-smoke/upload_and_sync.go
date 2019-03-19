@@ -74,8 +74,6 @@ func uploadAndSyncCmd(ctx *cli.Context, tuid string) error {
 }
 
 func trackChunks(testData []byte) error {
-	log.Warn("Test timed out, running chunk debug sequence")
-
 	addrs, err := getAllRefs(testData)
 	if err != nil {
 		return err
@@ -123,7 +121,6 @@ func trackChunks(testData []byte) error {
 }
 
 func getAllRefs(testData []byte) (storage.AddressCollection, error) {
-	log.Trace("Getting all references for given root hash")
 	datadir, err := ioutil.TempDir("", "chunk-debug")
 	if err != nil {
 		return nil, fmt.Errorf("unable to create temp dir: %v", err)
