@@ -203,7 +203,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 			for task := range tasks {
 				signer := types.MakeSigner(api.config, task.block.Number())
 
-				blockCtx := core.NewBlockContext(task.block.Header(),  api.eth.blockchain, nil)
+				blockCtx := core.NewBlockContext(task.block.Header(), api.eth.blockchain, nil)
 				// Trace all the transactions contained within
 				for i, tx := range task.block.Transactions() {
 					msg, _ := tx.AsMessage(signer)
@@ -477,12 +477,12 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 		pend.Add(1)
 		go func() {
 			defer pend.Done()
-			blockCtx := core.NewBlockContext(block.Header(),  api.eth.blockchain, nil)
+			blockCtx := core.NewBlockContext(block.Header(), api.eth.blockchain, nil)
 
 			// Fetch and execute the next transaction trace tasks
 			for task := range jobs {
 				msg, _ := txs[task.index].AsMessage(signer)
-				vmctx := core.NewEVMContext(msg,blockCtx)
+				vmctx := core.NewEVMContext(msg, blockCtx)
 
 				res, err := api.traceTx(ctx, msg, vmctx, task.statedb, config)
 				if err != nil {
@@ -498,11 +498,11 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 	for i, tx := range txs {
 		// Send the trace task over for execution
 		jobs <- &txTraceTask{statedb: statedb.Copy(), index: i}
-		blockCtx := core.NewBlockContext(block.Header(),  api.eth.blockchain, nil)
+		blockCtx := core.NewBlockContext(block.Header(), api.eth.blockchain, nil)
 
 		// Generate the next state snapshot fast without tracing
 		msg, _ := tx.AsMessage(signer)
-		vmctx := core.NewEVMContext(msg,blockCtx)
+		vmctx := core.NewEVMContext(msg, blockCtx)
 
 		vmenv := vm.NewEVM(vmctx, statedb, api.config, vm.Config{})
 		if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
@@ -567,7 +567,7 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 		signer = types.MakeSigner(api.config, block.Number())
 		dumps  []string
 	)
-	blockCtx := core.NewBlockContext(block.Header(),  api.eth.blockchain, nil)
+	blockCtx := core.NewBlockContext(block.Header(), api.eth.blockchain, nil)
 	for i, tx := range block.Transactions() {
 		// Prepare the trasaction for un-traced execution
 		var (
@@ -801,7 +801,7 @@ func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, ree
 	}
 	// Recompute transactions up to the target index.
 	signer := types.MakeSigner(api.config, block.Number())
-	blockCtx := core.NewBlockContext(block.Header(),  api.eth.blockchain, nil)
+	blockCtx := core.NewBlockContext(block.Header(), api.eth.blockchain, nil)
 	for idx, tx := range block.Transactions() {
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := tx.AsMessage(signer)

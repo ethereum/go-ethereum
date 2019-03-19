@@ -44,15 +44,14 @@ func NewBlockContext(header *types.Header, chain ChainContext, author *common.Ad
 		beneficiary = *author
 	}
 	return &vm.BlockContext{
-		GetHash:      GetHashFn(header, chain),
-		CanTransfer:  CanTransfer,
-		Transfer:     Transfer,
-		Coinbase:     beneficiary,
-		BlockNumber:  new(big.Int).Set(header.Number),
-		Time:         new(big.Int).Set(header.Time),
-		Difficulty:   new(big.Int).Set(header.Difficulty),
-		GasLimit:     header.GasLimit,
-
+		GetHash:     GetHashFn(header, chain),
+		CanTransfer: CanTransfer,
+		Transfer:    Transfer,
+		Coinbase:    beneficiary,
+		BlockNumber: new(big.Int).Set(header.Number),
+		Time:        new(big.Int).Set(header.Time),
+		Difficulty:  new(big.Int).Set(header.Difficulty),
+		GasLimit:    header.GasLimit,
 	}
 }
 

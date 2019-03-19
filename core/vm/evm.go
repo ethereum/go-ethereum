@@ -76,7 +76,7 @@ type Context struct {
 	GasPrice *big.Int       // Provides information for GASPRICE
 }
 
-func (c *Context) GetHash(n uint64) common.Hash{
+func (c *Context) GetHash(n uint64) common.Hash {
 	return c.BlockContext.GetHash(n)
 }
 
@@ -88,7 +88,7 @@ type BlockContext struct {
 	CanTransfer CanTransferFunc
 	// Transfer transfers ether from one account to the other
 	Transfer TransferFunc
-	GetHash GetHashFunc
+	GetHash  GetHashFunc
 	// Block information
 	Coinbase    common.Address // Provides information for COINBASE
 	GasLimit    uint64         // Provides information for GASLIMIT
