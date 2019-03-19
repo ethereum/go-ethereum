@@ -102,7 +102,7 @@ func (c *Client) DownloadRaw(hash string) (io.ReadCloser, bool, error) {
 		res.Body.Close()
 		return nil, false, fmt.Errorf("unexpected HTTP status: %s", res.Status)
 	}
-	isEncrypted := (res.Header.Get("X-Decrypted") == "true")
+	isEncrypted := res.Header.Get("X-Decrypted") == "true"
 	return res.Body, isEncrypted, nil
 }
 

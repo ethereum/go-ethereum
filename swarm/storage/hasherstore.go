@@ -99,7 +99,7 @@ func (h *hasherStore) Get(ctx context.Context, ref Reference) (ChunkData, error)
 	}
 
 	chunkData := ChunkData(chunk.Data())
-	toDecrypt := (encryptionKey != nil)
+	toDecrypt := encryptionKey != nil
 	if toDecrypt {
 		var err error
 		chunkData, err = h.decryptChunkData(chunkData, encryptionKey)

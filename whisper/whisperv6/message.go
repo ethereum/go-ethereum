@@ -160,7 +160,7 @@ func (msg *sentMessage) sign(key *ecdsa.PrivateKey) error {
 	hash := crypto.Keccak256(msg.Raw)
 	signature, err := crypto.Sign(hash, key)
 	if err != nil {
-		msg.Raw[0] &= (0xFF ^ signatureFlag) // clear the flag
+		msg.Raw[0] &= 0xFF ^ signatureFlag   // clear the flag
 		return err
 	}
 	msg.Raw = append(msg.Raw, signature...)

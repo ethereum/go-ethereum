@@ -418,7 +418,7 @@ func TestPeerBasic(t *testing.T) {
 func checkPowExchangeForNodeZero(t *testing.T) {
 	const iterations = 200
 	for j := 0; j < iterations; j++ {
-		lastCycle := (j == iterations-1)
+		lastCycle := j == iterations-1
 		ok := checkPowExchangeForNodeZeroOnce(t, lastCycle)
 		if ok {
 			break
@@ -485,7 +485,7 @@ func checkBloomFilterExchangeOnce(t *testing.T, mustPass bool) bool {
 func checkBloomFilterExchange(t *testing.T) {
 	const iterations = 200
 	for j := 0; j < iterations; j++ {
-		lastCycle := (j == iterations-1)
+		lastCycle := j == iterations-1
 		ok := checkBloomFilterExchangeOnce(t, lastCycle)
 		if ok {
 			break

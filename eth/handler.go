@@ -392,7 +392,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					unknown = true
 				} else {
 					query.Origin.Hash, query.Origin.Number = pm.blockchain.GetAncestor(query.Origin.Hash, query.Origin.Number, ancestor, &maxNonCanonical)
-					unknown = (query.Origin.Hash == common.Hash{})
+					unknown = query.Origin.Hash == common.Hash{}
 				}
 			case hashMode && !query.Reverse:
 				// Hash based traversal towards the leaf block

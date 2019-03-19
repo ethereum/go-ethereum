@@ -386,7 +386,7 @@ func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 		return nil
 	}
 	if p.checkFwdCache(pssmsg) {
-		log.Trace("pss relay block-cache match (process)", "from", common.ToHex(p.Kademlia.BaseAddr()), "to", (common.ToHex(pssmsg.To)))
+		log.Trace("pss relay block-cache match (process)", "from", common.ToHex(p.Kademlia.BaseAddr()), "to", common.ToHex(pssmsg.To))
 		return nil
 	}
 	p.addFwdCache(pssmsg)

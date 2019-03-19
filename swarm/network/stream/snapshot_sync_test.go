@@ -314,7 +314,7 @@ func uploadFileToSingleNodeStore(id enode.ID, chunkCount int, lstore *storage.Lo
 		if err != nil {
 			return nil, err
 		}
-		rootAddrs = append(rootAddrs, (rk))
+		rootAddrs = append(rootAddrs, rk)
 	}
 
 	return rootAddrs, nil

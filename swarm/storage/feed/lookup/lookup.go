@@ -75,12 +75,12 @@ func Hint(last uint64) Epoch {
 func GetNextLevel(last Epoch, now uint64) uint8 {
 	// First XOR the last epoch base time with the current clock.
 	// This will set all the common most significant bits to zero.
-	mix := (last.Base() ^ now)
+	mix := last.Base() ^ now
 
 	// Then, make sure we stop the below loop before one level below the current, by setting
 	// that level's bit to 1.
 	// If the next level is lower than the current one, it must be exactly level-1 and not lower.
-	mix |= (1 << (last.Level - 1))
+	mix |= 1 << (last.Level - 1)
 
 	// if the last update was more than 2^highestLevel seconds ago, choose the highest level
 	if mix > (maxuint64 >> (64 - HighestLevel - 1)) {
