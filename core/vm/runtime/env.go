@@ -23,11 +23,15 @@ import (
 )
 
 func NewEnv(cfg *Config) *vm.EVM {
+	getHash := cfg.GetHashFn
+	if getHash == nil {
+		getHash = func(uint64) common.Hash { return common.Hash{} }
+	}
+
 	context := vm.Context{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
-		GetHash:     func(uint64) common.Hash { return common.Hash{} },
-
+		GetHash:     getHash,
 		Origin:      cfg.Origin,
 		Coinbase:    cfg.Coinbase,
 		BlockNumber: cfg.BlockNumber,
