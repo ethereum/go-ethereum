@@ -139,11 +139,19 @@ func newTestData() *testData {
 	}
 }
 
-func (d *testData) init(msgCount int) {
+func (d *testData) init(msgCount int) error {
 	log.Debug("TestProxNetwork start")
 
 	for _, nodeId := range d.sim.NodeIDs() {
-		d.nodeAddrs[nodeId] = nodeIDToAddr(nodeId)
+		kadif, ok := d.sim.NodeItem(nodeId, simulation.BucketKeyKademlia)
+		if !ok {
+			return fmt.Errorf("no kademlia entry for %v", nodeId)
+		}
+		kad, ok := kadif.(*network.Kademlia)
+		if !ok {
+			return fmt.Errorf("invalid kademlia entry for %v", nodeId)
+		}
+		d.nodeAddrs[nodeId] = kad.BaseAddr()
 	}
 
 	for i := 0; i < int(msgCount); i++ {
@@ -191,6 +199,7 @@ func (d *testData) init(msgCount int) {
 		log.Debug("nn for msg", "targets", len(d.recipients[i]), "msgidx", i, "msg", common.Bytes2Hex(msgAddr[:8]), "sender", d.senders[i], "senderpo", smallestPo)
 	}
 	log.Debug("msgs to receive", "count", d.requiredMessages)
+	return nil
 }
 
 // Here we test specific functionality of the pss, setting the prox property of
@@ -246,7 +255,10 @@ func testProxNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to recreate snapshot: %s", err)
 	}
-	tstdata.init(msgCount) // initialize the test data
+	err = tstdata.init(msgCount) // initialize the test data
+	if err != nil {
+		t.Fatal(err)
+	}
 	wrapper := func(c context.Context, _ *simulation.Simulation) error {
 		return testRoutine(tstdata, c)
 	}
@@ -256,7 +268,7 @@ func testProxNetwork(t *testing.T) {
 		// however, it might just mean that not all possible messages are received
 		// now we must check if all required messages are received
 		cnt := tstdata.getMsgCount()
-		log.Debug("TestProxNetwork finnished", "rcv", cnt)
+		log.Debug("TestProxNetwork finished", "rcv", cnt)
 		if cnt < tstdata.requiredMessages {
 			t.Fatal(result.Error)
 		}
@@ -380,7 +392,7 @@ func nodeMsgHandler(tstdata *testData, config *adapters.NodeConfig) *handler {
 // replaces pss_test.go when those tests are rewritten to the new swarm/network/simulation package
 func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[Topic]handlerContextFunc, kademlias map[enode.ID]*network.Kademlia) map[string]simulation.ServiceFunc {
 	stateStore := state.NewInmemoryStore()
-	kademlia := func(id enode.ID) *network.Kademlia {
+	kademlia := func(id enode.ID, bzzkey []byte) *network.Kademlia {
 		if k, ok := kademlias[id]; ok {
 			return k
 		}
@@ -390,17 +402,21 @@ func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[T
 		params.MaxRetries = 1000
 		params.RetryExponent = 2
 		params.RetryInterval = 1000000
-		kademlias[id] = network.NewKademlia(id[:], params)
+		kademlias[id] = network.NewKademlia(bzzkey, params)
 		return kademlias[id]
 	}
 	return map[string]simulation.ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
+			var err error
 			// normally translation of enode id to swarm address is concealed by the network package
 			// however, we need to keep track of it in the test driver as well.
 			// if the translation in the network package changes, that can cause these tests to unpredictably fail
 			// therefore we keep a local copy of the translation here
 			addr := network.NewAddr(ctx.Config.Node())
-			addr.OAddr = nodeIDToAddr(ctx.Config.Node().ID())
+			addr.OAddr, err = simulation.BzzKeyFromConfig(ctx.Config)
+			if err != nil {
+				return nil, nil, err
+			}
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{
@@ -408,7 +424,7 @@ func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[T
 				UnderlayAddr: addr.Under(),
 				HiveParams:   hp,
 			}
-			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil), nil, nil
+			return network.NewBzz(config, kademlia(ctx.Config.ID, addr.OAddr), stateStore, nil, nil), nil, nil
 		},
 		"pss": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			// execadapter does not exec init()
@@ -421,7 +437,11 @@ func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[T
 			privkey, err := w.GetPrivateKey(keys)
 			pssp := NewPssParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
-			pskad := kademlia(ctx.Config.ID)
+			bzzKey, err := simulation.BzzKeyFromConfig(ctx.Config)
+			if err != nil {
+				return nil, nil, err
+			}
+			pskad := kademlia(ctx.Config.ID, bzzKey)
 			ps, err := NewPss(pskad, pssp)
 			if err != nil {
 				return nil, nil, err

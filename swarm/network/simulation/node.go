@@ -17,6 +17,8 @@
 package simulation
 
 import (
+	"bytes"
+	"crypto/ecdsa"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -24,6 +26,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
@@ -325,4 +328,16 @@ func (s *Simulation) StopRandomNodes(count int) (ids []enode.ID, err error) {
 // seed the random generator for Simulation.randomNode.
 func init() {
 	rand.Seed(time.Now().UnixNano())
+}
+
+// derive a private key for swarm for the node key
+func BzzKeyFromConfig(conf *adapters.NodeConfig) ([]byte, error) {
+	// ecdsa.GenerateKey takes 40 bytes entropy
+	privKeyBuf := append(crypto.FromECDSA(conf.PrivateKey), []byte{0x62, 0x7a, 0x7a, 0x62, 0x7a, 0x7a, 0x62, 0x7a}...)
+	bzzPrivateKey, err := ecdsa.GenerateKey(crypto.S256(), bytes.NewReader(privKeyBuf))
+	if err != nil {
+		return nil, err
+	}
+	bzzKey := network.PrivateKeyToBzzKey(bzzPrivateKey)
+	return bzzKey, nil
 }
