@@ -1,5 +1,7 @@
 repository: ethereum/go-ethereum
 
+theme: minima
+
 exclude:
   - Gemfile
   - Gemfile.lock
