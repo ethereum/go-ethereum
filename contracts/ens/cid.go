@@ -70,7 +70,7 @@ func decodeEIP1577ContentHash(buf []byte) (storageNs, contentType, hashType, has
 }
 
 func extractContentHash(buf []byte) (common.Hash, error) {
-	storageNs, contentType, hashType, hashLength, hashBytes, err := decodeEIP1577ContentHash(buf)
+	storageNs, _ /*contentType*/, _ /* hashType*/, decodedHashLength, hashBytes, err := decodeEIP1577ContentHash(buf)
 
 	if err != nil {
 		return common.Hash{}, err
@@ -80,15 +80,16 @@ func extractContentHash(buf []byte) (common.Hash, error) {
 		return common.Hash{}, errors.New("unknown storage system")
 	}
 
-	if contentType != swarmTypecode {
+	//todo: for the time being we implement loose enforcement for the EIP rules until ENS manager is updated
+	/*if contentType != swarmTypecode {
 		return common.Hash{}, errors.New("unknown content type")
 	}
 
 	if hashType != swarmHashtype {
 		return common.Hash{}, errors.New("unknown multihash type")
-	}
+	}*/
 
-	if hashLength != hashLength {
+	if decodedHashLength != hashLength {
 		return common.Hash{}, errors.New("odd hash length, swarm expects 32 bytes")
 	}
 

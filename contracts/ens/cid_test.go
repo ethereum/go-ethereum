@@ -94,6 +94,16 @@ func TestManualCidDecode(t *testing.T) {
 			headerBytes: []byte{0xe3, 0x01, 0x70, 0x12, 0x20},
 			wantErr:     true,
 		},
+		{
+			name:        "loose values for swarm, todo remove, should not fail",
+			headerBytes: []byte{0xe4, 0x01, 0x70, 0x12, 0x20},
+			wantErr:     false,
+		},
+		{
+			name:        "loose values for swarm, todo remove, should not fail",
+			headerBytes: []byte{0xe4, 0x01, 0x99, 0x99, 0x20},
+			wantErr:     false,
+		},
 	} {
 		t.Run(v.name, func(t *testing.T) {
 			const eipHash = "29f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f"
