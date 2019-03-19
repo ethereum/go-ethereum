@@ -93,7 +93,7 @@ func (d *testData) setDone() {
 	d.handlerDone = true
 }
 
-func getCmdParams(t *testing.T) (int, int) {
+func getCmdParams(t *testing.T) (int, int, time.Duration) {
 	args := strings.Split(t.Name(), "/")
 	msgCount, err := strconv.ParseInt(args[2], 10, 16)
 	if err != nil {
@@ -103,7 +103,12 @@ func getCmdParams(t *testing.T) (int, int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return int(msgCount), int(nodeCount)
+	timeoutStr := fmt.Sprintf("%ss", args[3])
+	timeoutDur, err := time.ParseDuration(timeoutStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return int(msgCount), int(nodeCount), timeoutDur
 }
 
 func readSnapshot(t *testing.T, nodeCount int) simulations.Snapshot {
@@ -222,7 +227,7 @@ func (d *testData) init(msgCount int) error {
 // nodes Y and Z will be considered required recipients of the msg,
 // whereas nodes X, Y and Z will be allowed recipients.
 func TestProxNetwork(t *testing.T) {
-	t.Run("16/16", testProxNetwork)
+	t.Run("16/16/10", testProxNetwork)
 }
 
 // params in run name: nodes/msgs
@@ -230,16 +235,16 @@ func TestProxNetworkLong(t *testing.T) {
 	if !*longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
-	t.Run("8/100", testProxNetwork)
-	t.Run("16/100", testProxNetwork)
-	t.Run("32/100", testProxNetwork)
-	t.Run("64/100", testProxNetwork)
-	t.Run("128/100", testProxNetwork)
+	t.Run("8/100/30", testProxNetwork)
+	t.Run("16/100/30", testProxNetwork)
+	t.Run("32/100/60", testProxNetwork)
+	t.Run("64/100/60", testProxNetwork)
+	t.Run("128/100/120", testProxNetwork)
 }
 
 func testProxNetwork(t *testing.T) {
 	tstdata := newTestData()
-	msgCount, nodeCount := getCmdParams(t)
+	msgCount, nodeCount, timeout := getCmdParams(t)
 	handlerContextFuncs := make(map[Topic]handlerContextFunc)
 	handlerContextFuncs[topic] = nodeMsgHandler
 	services := newProxServices(tstdata, true, handlerContextFuncs, tstdata.kademlias)
@@ -249,7 +254,7 @@ func testProxNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	snap := readSnapshot(t, nodeCount)
 	err = tstdata.sim.WaitTillSnapshotRecreated(ctx, snap)
