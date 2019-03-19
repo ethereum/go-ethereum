@@ -147,6 +147,12 @@ func main() {
 			Usage:   "measure network aggregate capacity",
 			Action:  wrapCliCommand("sliding-window", slidingWindowCmd),
 		},
+		{
+			Name:    "pss",
+			Aliases: []string{"p"},
+			Usage:   "pss send and receive checks",
+			Action:  wrapCliCommand("pss", pssChecks),
+		},
 	}
 
 	sort.Sort(cli.FlagsByName(app.Flags))
