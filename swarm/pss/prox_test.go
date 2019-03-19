@@ -453,8 +453,3 @@ func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[T
 		},
 	}
 }
-
-// makes sure we create the addresses the same way in driver and service setup
-func nodeIDToAddr(id enode.ID) []byte {
-	return id.Bytes()
-}
