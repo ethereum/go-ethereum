@@ -205,7 +205,7 @@ func (d *testData) init(msgCount int) error {
 // nodes Y and Z will be considered required recipients of the msg,
 // whereas nodes X, Y and Z will be allowed recipients.
 func TestProxNetwork(t *testing.T) {
-	t.Run("16/16/20", testProxNetwork)
+	t.Run("16/16/15", testProxNetwork)
 }
 
 // params in run name: nodes/msgs
