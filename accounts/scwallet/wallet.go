@@ -81,23 +81,26 @@ const (
 	sw1GetResponse = 0x61
 	sw1Ok          = 0x90
 
-	insVerifyPin          = 0x20
-	insUnblockPin         = 0x22
-	insExportKey          = 0xC2
-	insSign               = 0xC0
-	insLoadKey            = 0xD0
-	insDeriveKey          = 0xD1
-	insStatus             = 0xF2
-	deriveP1Assisted      = uint8(0x01)
-	deriveP1Append        = uint8(0x80)
-	deriveP2KeyPath       = uint8(0x00)
-	deriveP2PublicKey     = uint8(0x01)
-	statusP1WalletStatus  = uint8(0x00)
-	statusP1Path          = uint8(0x01)
-	signP1PrecomputedHash = uint8(0x01)
-	signP2OnlyBlock       = uint8(0x81)
-	exportP1Any           = uint8(0x00)
-	exportP2Pubkey        = uint8(0x01)
+	insVerifyPin           = 0x20
+	insUnblockPin          = 0x22
+	insExportKey           = 0xC2
+	insSign                = 0xC0
+	insLoadKey             = 0xD0
+	insDeriveKey           = 0xD1
+	insStatus              = 0xF2
+	P1DeriveKeyFromMaster  = uint8(0x00)
+	P1DeriveKeyFromParent  = uint8(0x01)
+	P1DeriveKeyFromCurrent = uint8(0x10)
+	deriveP1Assisted       = uint8(0x01)
+	deriveP1Append         = uint8(0x80)
+	deriveP2KeyPath        = uint8(0x00)
+	deriveP2PublicKey      = uint8(0x01)
+	statusP1WalletStatus   = uint8(0x00)
+	statusP1Path           = uint8(0x01)
+	signP1PrecomputedHash  = uint8(0x01)
+	signP2OnlyBlock        = uint8(0x81)
+	exportP1Any            = uint8(0x00)
+	exportP2Pubkey         = uint8(0x01)
 
 	// Minimum time to wait between self derivation attempts, even it the user is
 	// requesting accounts like crazy.
@@ -859,11 +862,11 @@ func (s *Session) walletStatus() (*walletStatus, error) {
 	if response.Data[2] != 2 || response.Data[3] != 1 || response.Data[5] != 2 || response.Data[6] != 1 || response.Data[8] != 1 || response.Data[9] != 1 {
 		return nil, fmt.Errorf("invalid response tag format")
 	}
-	fmt.Println("asn1 response", response)
 	status := &walletStatus{
-		PinRetryCount: int(response.Data[4]),
-		PukRetryCount: int(response.Data[7]),
-		Initialized:   (response.Data[10] == 0xff),
+		PinRetryCount:        int(response.Data[4]),
+		PukRetryCount:        int(response.Data[7]),
+		Initialized:          (response.Data[10] == 0xff),
+		SupportsPKDerivation: true, /* Cards that don't aren't supported */
 	}
 
 	/*
