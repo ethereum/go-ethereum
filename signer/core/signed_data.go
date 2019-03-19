@@ -894,8 +894,10 @@ func (domain *TypedDataDomain) validate() error {
 
 // Map is a helper function to generate a map version of the domain
 func (domain *TypedDataDomain) Map() map[string]interface{} {
-	dataMap := map[string]interface{}{
-		"chainId": domain.ChainId,
+	dataMap := map[string]interface{}{}
+
+	if domain.ChainId != nil {
+		dataMap["chainId"] = domain.ChainId
 	}
 
 	if len(domain.Name) > 0 {

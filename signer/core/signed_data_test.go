@@ -225,6 +225,40 @@ func TestSignData(t *testing.T) {
 	}
 }
 
+func TestDomainChainId(t *testing.T) {
+	withoutChainID := TypedData{
+		Types: Types{
+			"EIP712Domain": []Type{
+				{Name: "name", Type: "string"},
+			},
+		},
+		Domain: TypedDataDomain{
+			Name: "test",
+		},
+	}
+
+	if _, ok := withoutChainID.Domain.Map()["chainId"]; ok {
+		t.Errorf("Expected the chainId key to not be present in the domain map")
+	}
+
+	withChainID := TypedData{
+		Types: Types{
+			"EIP712Domain": []Type{
+				{Name: "name", Type: "string"},
+				{Name: "chainId", Type: "uint256"},
+			},
+		},
+		Domain: TypedDataDomain{
+			Name:    "test",
+			ChainId: big.NewInt(1),
+		},
+	}
+
+	if _, ok := withChainID.Domain.Map()["chainId"]; !ok {
+		t.Errorf("Expected the chainId key be present in the domain map")
+	}
+}
+
 func TestHashStruct(t *testing.T) {
 	hash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
 	if err != nil {
