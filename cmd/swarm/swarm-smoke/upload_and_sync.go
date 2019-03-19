@@ -52,32 +52,25 @@ func uploadAndSyncCmd(ctx *cli.Context, tuid string) error {
 		errc <- uploadAndSync(ctx, randomBytes, tuid)
 	}()
 
+	var err error
 	select {
-	case err := <-errc:
+	case err = <-errc:
 		if err != nil {
 			metrics.GetOrRegisterCounter(fmt.Sprintf("%s.fail", commandName), nil).Inc(1)
 		}
-		return err
 	case <-time.After(time.Duration(timeout) * time.Second):
 		metrics.GetOrRegisterCounter(fmt.Sprintf("%s.timeout", commandName), nil).Inc(1)
 
-		e := fmt.Errorf("timeout after %v sec", timeout)
-		// trigger debug functionality on randomBytes
-		err := trackChunks(randomBytes[:])
-		if err != nil {
-			e = fmt.Errorf("%v; triggerChunkDebug failed: %v", e, err)
-		}
-
-		return e
+		err = fmt.Errorf("timeout after %v sec", timeout)
 	}
 
-	// trigger debug functionality on randomBytes even on successful runs
-	err := trackChunks(randomBytes[:])
-	if err != nil {
-		log.Error(err.Error())
+	// trigger debug functionality on randomBytes
+	e := trackChunks(randomBytes[:])
+	if e != nil {
+		log.Error(e.Error())
 	}
 
-	return nil
+	return err
 }
 
 func trackChunks(testData []byte) error {
