@@ -85,7 +85,11 @@ func New(services map[string]ServiceFunc) (s *Simulation) {
 		name, serviceFunc := name, serviceFunc
 		s.serviceNames = append(s.serviceNames, name)
 		adapterServices[name] = func(ctx *adapters.ServiceContext) (node.Service, error) {
-			b := new(sync.Map)
+			var b *sync.Map
+			var ok bool
+			if b, ok = s.buckets[ctx.Config.ID]; !ok {
+				b = new(sync.Map)
+			}
 			service, cleanup, err := serviceFunc(ctx, b)
 			if err != nil {
 				return nil, err

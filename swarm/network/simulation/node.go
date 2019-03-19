@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -32,6 +33,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
+)
+
+var (
+	BucketKeyBzzPrivateKey BucketKey = "bzzprivkey"
 )
 
 // NodeIDs returns NodeIDs for all nodes in the network.
@@ -111,6 +116,8 @@ func (s *Simulation) AddNode(opts ...AddNodeOption) (id enode.ID, err error) {
 		PrivateKey: conf.PrivateKey,
 	}
 	record, err := network.NewEnodeRecord(enodeParams)
+
+	bzzPrivateKey, bzzKey, err := BzzKeyFromConfig(conf)
 	if err != nil {
 		return enode.ID{}, err
 	}
@@ -121,6 +128,8 @@ func (s *Simulation) AddNode(opts ...AddNodeOption) (id enode.ID, err error) {
 	if err != nil {
 		return id, err
 	}
+	s.buckets[node.ID()] = new(sync.Map)
+	s.SetNodeItem(node.ID(), BucketKeyBzzPrivateKey, bzzPrivateKey)
 
 	return node.ID(), s.Net.Start(node.ID())
 }
@@ -331,13 +340,14 @@ func init() {
 }
 
 // derive a private key for swarm for the node key
-func BzzKeyFromConfig(conf *adapters.NodeConfig) ([]byte, error) {
+// returns the private key used to generate the bzz key AND the generated bzz key
+func BzzKeyFromConfig(conf *adapters.NodeConfig) (*ecdsa.PrivateKey, []byte, error) {
 	// ecdsa.GenerateKey takes 40 bytes entropy
 	privKeyBuf := append(crypto.FromECDSA(conf.PrivateKey), []byte{0x62, 0x7a, 0x7a, 0x62, 0x7a, 0x7a, 0x62, 0x7a}...)
 	bzzPrivateKey, err := ecdsa.GenerateKey(crypto.S256(), bytes.NewReader(privKeyBuf))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	bzzKey := network.PrivateKeyToBzzKey(bzzPrivateKey)
-	return bzzKey, nil
+	return bzzPrivateKey, bzzKey, nil
 }

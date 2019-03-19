@@ -2,6 +2,7 @@ package pss
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -408,15 +409,17 @@ func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[T
 	return map[string]simulation.ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			var err error
+			var bzzPrivateKey *ecdsa.PrivateKey
 			// normally translation of enode id to swarm address is concealed by the network package
 			// however, we need to keep track of it in the test driver as well.
 			// if the translation in the network package changes, that can cause these tests to unpredictably fail
 			// therefore we keep a local copy of the translation here
 			addr := network.NewAddr(ctx.Config.Node())
-			addr.OAddr, err = simulation.BzzKeyFromConfig(ctx.Config)
+			bzzPrivateKey, addr.OAddr, err = simulation.BzzKeyFromConfig(ctx.Config)
 			if err != nil {
 				return nil, nil, err
 			}
+			b.Store(simulation.BucketKeyBzzPrivateKey, bzzPrivateKey)
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{
@@ -437,7 +440,7 @@ func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[T
 			privkey, err := w.GetPrivateKey(keys)
 			pssp := NewPssParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
-			bzzKey, err := simulation.BzzKeyFromConfig(ctx.Config)
+			_, bzzKey, err := simulation.BzzKeyFromConfig(ctx.Config)
 			if err != nil {
 				return nil, nil, err
 			}
