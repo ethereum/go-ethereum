@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/log"
 	pcsc "github.com/gballet/go-libpcsclite"
+	"github.com/status-im/keycard-go/derivationpath"
 )
 
 // ErrPairingPasswordNeeded is returned if opening the smart card requires pairing with a pairing
@@ -67,9 +68,9 @@ var ErrAlreadyOpen = errors.New("smartcard: already open")
 var ErrPubkeyMismatch = errors.New("smartcard: recovered public key mismatch")
 
 var (
-	// appletAID               = []byte{0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x57, 0x61, 0x6C, 0x6C, 0x65, 0x74, 0x41, 0x70, 0x70}
-	appletAID               = []byte{0xA0, 0x00, 0x00, 0x08, 0x04, 0x00, 0x01, 0x01, 0x01}
-	DerivationSignatureHash = sha256.Sum256([]byte("STATUS KEY DERIVATION"))
+	appletAID = []byte{0xA0, 0x00, 0x00, 0x08, 0x04, 0x00, 0x01, 0x01, 0x01}
+	// DerivationSignatureHash is used to derive the public key from the signature of this hash
+	DerivationSignatureHash = sha256.Sum256(common.Hash{}.Bytes())
 )
 
 const (
@@ -926,93 +927,59 @@ func (s *Session) initialize(seed []byte) error {
 
 // derive derives a new HD key path on the card.
 func (s *Session) derive(path accounts.DerivationPath) (accounts.Account, error) {
-	// If the current path is a prefix of the desired path, we don't have to
-	// start again.
-	remainingPath := path
-
-	pubkey, err := s.publicKey()
-	if err != nil {
-		return accounts.Account{}, err
-	}
-	currentPath, err := s.derivationPath()
+	startingPoint, path, err := derivationpath.Decode(path.String())
 	if err != nil {
 		return accounts.Account{}, err
 	}
 
-	reset := false
-	if len(currentPath) <= len(path) {
-		for i := 0; i < len(currentPath); i++ {
-			if path[i] != currentPath[i] {
-				reset = true
-				break
-			}
-		}
-		if !reset {
-			remainingPath = path[len(currentPath):]
-		}
-	} else {
-		reset = true
+	var p1 uint8
+	switch startingPoint {
+	case derivationpath.StartingPointMaster:
+		p1 = P1DeriveKeyFromMaster
+	case derivationpath.StartingPointParent:
+		p1 = P1DeriveKeyFromParent
+	case derivationpath.StartingPointCurrent:
+		p1 = P1DeriveKeyFromCurrent
+	default:
+		return accounts.Account{}, fmt.Errorf("invalid startingPoint %d", startingPoint)
 	}
 
-	for _, pathComponent := range remainingPath {
-		pubkey, err = s.deriveKeyAssisted(reset, pathComponent)
-		reset = false
-		if err != nil {
+	data := new(bytes.Buffer)
+	for _, segment := range path {
+		if err := binary.Write(data, binary.BigEndian, segment); err != nil {
 			return accounts.Account{}, err
 		}
 	}
+
+	_, err = s.Channel.TransmitEncrypted(claSCWallet, insDeriveKey, p1, 0, data.Bytes())
+	if err != nil {
+		return accounts.Account{}, err
+	}
+
+	response, err := s.Channel.TransmitEncrypted(claSCWallet, insSign, 0, 0, DerivationSignatureHash[:])
+	if err != nil {
+		return accounts.Account{}, err
+	}
+
+	sigdata := new(signatureData)
+	if _, err := asn1.UnmarshalWithParams(response.Data, sigdata, "tag:0"); err != nil {
+		return accounts.Account{}, err
+	}
+	rbytes, sbytes := sigdata.Signature.R.Bytes(), sigdata.Signature.S.Bytes()
+	sig := make([]byte, 65)
+	copy(sig[32-len(rbytes):32], rbytes)
+	copy(sig[64-len(sbytes):64], sbytes)
+
+	pubkey, err := determinePublicKey(sig, sigdata.PublicKey)
+	if err != nil {
+		return accounts.Account{}, err
+	}
+
 	pub, err := crypto.UnmarshalPubkey(pubkey)
 	if err != nil {
 		return accounts.Account{}, err
 	}
 	return s.Wallet.makeAccount(crypto.PubkeyToAddress(*pub), path), nil
-}
-
-// keyDerivationInfo contains information on the current key derivation step.
-type keyDerivationInfo struct {
-	PublicKeyX []byte `asn1:"tag:3"` // The X coordinate of the current public key
-	Signature  struct {
-		R *big.Int
-		S *big.Int
-	}
-}
-
-// deriveKeyAssisted does one step of assisted key generation, asking the card to generate
-// a specific path, and performing the necessary computations to finish the public key
-// generation step.
-func (s *Session) deriveKeyAssisted(reset bool, pathComponent uint32) ([]byte, error) {
-	p1 := deriveP1Assisted
-	if !reset {
-		p1 |= deriveP1Append
-	}
-
-	buf := new(bytes.Buffer)
-	if err := binary.Write(buf, binary.BigEndian, pathComponent); err != nil {
-		return nil, err
-	}
-	response, err := s.Channel.TransmitEncrypted(claSCWallet, insDeriveKey, p1, deriveP2KeyPath, buf.Bytes())
-	if err != nil {
-		return nil, err
-	}
-
-	keyinfo := new(keyDerivationInfo)
-	if _, err := asn1.UnmarshalWithParams(response.Data, keyinfo, "tag:2"); err != nil {
-		return nil, err
-	}
-	rbytes, sbytes := keyinfo.Signature.R.Bytes(), keyinfo.Signature.S.Bytes()
-	sig := make([]byte, 65)
-	copy(sig[32-len(rbytes):32], rbytes)
-	copy(sig[64-len(sbytes):64], sbytes)
-
-	pubkey, err := determinePublicKey(sig, keyinfo.PublicKeyX)
-	if err != nil {
-		return nil, err
-	}
-	_, err = s.Channel.TransmitEncrypted(claSCWallet, insDeriveKey, deriveP1Assisted|deriveP1Append, deriveP2PublicKey, pubkey)
-	if err != nil {
-		return nil, err
-	}
-	return pubkey, nil
 }
 
 // keyExport contains information on an exported keypair.
@@ -1085,7 +1052,7 @@ func determinePublicKey(sig, pubkeyX []byte) ([]byte, error) {
 		sig[64] = byte(v)
 		pubkey, err := crypto.Ecrecover(DerivationSignatureHash[:], sig)
 		if err == nil {
-			if bytes.Equal(pubkey[1:33], pubkeyX) {
+			if bytes.Equal(pubkey, pubkeyX) {
 				return pubkey, nil
 			}
 		} else if v == 1 || err != secp256k1.ErrRecoverFailed {
