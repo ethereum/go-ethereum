@@ -267,10 +267,8 @@ func RegisterServices(services Services) {
 	}
 }
 
-func (n *NodeConfig) initDefaultEnode() error {
-	return n.initEnode(net.IPv4(127, 0, 0, 1), 0, 0)
-}
-
+// adds the host part to the configuration's ENR, signs it
+// creates and  the corresponding enode object to the configuration
 func (n *NodeConfig) initEnode(ip net.IP, tcpport int, udpport int) error {
 	enrIp := enr.IP(ip)
 	n.Record.Set(&enrIp)
@@ -290,4 +288,8 @@ func (n *NodeConfig) initEnode(ip net.IP, tcpport int, udpport int) error {
 	log.Trace("simnode new", "record", n.Record)
 	n.node = nod
 	return nil
+}
+
+func (n *NodeConfig) initDefaultEnode() error {
+	return n.initEnode(net.IPv4(127, 0, 0, 1), 0, 0)
 }

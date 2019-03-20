@@ -92,8 +92,6 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 		}
 	}
 
-	// set up ENR record
-	//
 	err := config.initDefaultEnode()
 	if err != nil {
 		return nil, err
