@@ -442,6 +442,12 @@
 			"revisionTime": "2016-06-18T19:32:21Z"
 		},
 		{
+			"checksumSHA1": "I7gkZEZn9PKJ+dzuBYLbFIUzNO4=",
+			"path": "github.com/status-im/keycard-go/derivationpath",
+			"revision": "8537d3370df43a30a3d450c023783d2e43432b89",
+			"revisionTime": "2019-03-16T09:03:35Z"
+		},
+		{
 			"checksumSHA1": "mGbTYZ8dHVTiPTTJu3ktp+84pPI=",
 			"path": "github.com/stretchr/testify/assert",
 			"revision": "890a5c3458b43e6104ff5da8dfa139d013d77544",
