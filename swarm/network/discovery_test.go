@@ -160,7 +160,6 @@ WAIT_PIVOT:
 	if err != nil {
 		t.Fatal(err)
 	}
-	return
 }
 
 // add the BzzAddr to the hive
