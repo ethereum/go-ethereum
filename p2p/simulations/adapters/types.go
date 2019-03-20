@@ -274,7 +274,7 @@ func (n *NodeConfig) initEnode(ip net.IP, tcpport int, udpport int) error {
 	n.Record.Set(&enrIp)
 	enrTcpPort := enr.TCP(tcpport)
 	n.Record.Set(&enrTcpPort)
-	enrUdpPort := enr.UDP(tcpport)
+	enrUdpPort := enr.UDP(udpport)
 	n.Record.Set(&enrUdpPort)
 
 	err := enode.SignV4(&n.Record, n.PrivateKey)
