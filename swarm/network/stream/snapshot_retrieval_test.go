@@ -154,14 +154,14 @@ func runFileRetrievalTest(nodeCount int) error {
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
+	ctx, cancelSimRun := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancelSimRun()
+
 	filename := fmt.Sprintf("testing/snapshot_%d.json", nodeCount)
-	err := sim.UploadSnapshot(filename)
+	err := sim.UploadSnapshot(ctx, filename)
 	if err != nil {
 		return err
 	}
-
-	ctx, cancelSimRun := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancelSimRun()
 
 	log.Info("Starting simulation")
 
@@ -186,13 +186,6 @@ func runFileRetrievalTest(nodeCount int) error {
 
 		conf.hashes, randomFiles, err = uploadFilesToNodes(sim)
 		if err != nil {
-			return err
-		}
-		snap, err := simulation.ReadSnapshot(filename)
-		if err != nil {
-			return err
-		}
-		if err := sim.WaitTillSnapshotRecreated(ctx, snap); err != nil {
 			return err
 		}
 
@@ -257,13 +250,15 @@ func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) error {
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
 	filename := fmt.Sprintf("testing/snapshot_%d.json", nodeCount)
-	err := sim.UploadSnapshot(filename)
+	err := sim.UploadSnapshot(ctx, filename)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
 		for _, n := range nodeIDs {
@@ -286,13 +281,6 @@ func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) error {
 		lstore := item.(*storage.LocalStore)
 		conf.hashes, err = uploadFileToSingleNodeStore(node.ID(), chunkCount, lstore)
 		if err != nil {
-			return err
-		}
-		snap, err := simulation.ReadSnapshot(filename)
-		if err != nil {
-			t.Fatalf("failed to read snapshot: %s", err)
-		}
-		if err := sim.WaitTillSnapshotRecreated(ctx, snap); err != nil {
 			return err
 		}
 

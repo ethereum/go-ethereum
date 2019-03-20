@@ -147,25 +147,16 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
-	filename := fmt.Sprintf("testing/snapshot_%d.json", nodeCount)
-	err := sim.UploadSnapshot(filename)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ctx, cancelSimRun := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancelSimRun := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancelSimRun()
 
-	snap, err := simulation.ReadSnapshot(filename)
+	filename := fmt.Sprintf("testing/snapshot_%d.json", nodeCount)
+	err := sim.UploadSnapshot(ctx, filename)
 	if err != nil {
-		t.Fatalf("failed to read snapshot: %s", err)
-	}
-	if err := sim.WaitTillSnapshotRecreated(ctx, snap); err != nil {
 		t.Fatal(err)
 	}
 
 	result := runSim(conf, ctx, sim, chunkCount)
-
 	if result.Error != nil {
 		t.Fatal(result.Error)
 	}

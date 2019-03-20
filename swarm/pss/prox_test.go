@@ -213,20 +213,12 @@ func testProxNetwork(t *testing.T) {
 	services := newProxServices(tstdata, true, handlerContextFuncs, tstdata.kademlias)
 	tstdata.sim = simulation.New(services)
 	defer tstdata.sim.Close()
-	filename := fmt.Sprintf("testdata/snapshot_%d.json", nodeCount)
-	err := tstdata.sim.UploadSnapshot(filename)
-	if err != nil {
-		t.Fatal(err)
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
 	defer cancel()
-	snap, err := simulation.ReadSnapshot(filename)
+	filename := fmt.Sprintf("testdata/snapshot_%d.json", nodeCount)
+	err := tstdata.sim.UploadSnapshot(ctx, filename)
 	if err != nil {
-		t.Fatalf("failed to read snapshot: %s", err)
-	}
-	err = tstdata.sim.WaitTillSnapshotRecreated(ctx, snap)
-	if err != nil {
-		t.Fatalf("failed to recreate snapshot: %s", err)
+		t.Fatal(err)
 	}
 	tstdata.init(msgCount) // initialize the test data
 	wrapper := func(c context.Context, _ *simulation.Simulation) error {

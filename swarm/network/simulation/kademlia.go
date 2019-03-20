@@ -20,9 +20,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
-	"io/ioutil"
-	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -203,22 +200,4 @@ func removeDuplicatesAndSingletons(arr []uint64) []uint64 {
 	}
 
 	return arr
-}
-
-func ReadSnapshot(filename string) (*simulations.Snapshot, error) {
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	jsonbyte, err := ioutil.ReadAll(f)
-	if err != nil {
-		return nil, err
-	}
-	var snap simulations.Snapshot
-	err = json.Unmarshal(jsonbyte, &snap)
-	if err != nil {
-		return nil, err
-	}
-	return &snap, nil
 }

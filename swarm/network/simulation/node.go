@@ -17,6 +17,7 @@
 package simulation
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -217,7 +218,7 @@ func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (i
 // UploadSnapshot uploads a snapshot to the simulation
 // This method tries to open the json file provided, applies the config to all nodes
 // and then loads the snapshot into the Simulation network
-func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) error {
+func (s *Simulation) UploadSnapshot(ctx context.Context, snapshotFile string, opts ...AddNodeOption) error {
 	f, err := os.Open(snapshotFile)
 	if err != nil {
 		return err
@@ -256,8 +257,14 @@ func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) 
 	if err != nil {
 		return err
 	}
-	log.Info("Snapshot loaded")
-	return nil
+
+	err = s.WaitTillSnapshotRecreated(ctx, &snap)
+	if err == nil {
+		log.Info("Snapshot loaded")
+	} else {
+		log.Warn("Snapshot load failed", "error", err.Error())
+	}
+	return err
 }
 
 // StartNode starts a node by NodeID.
