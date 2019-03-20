@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	defaultSearchTimeout = 4 * time.Second
+	defaultSearchTimeout = 1 * time.Second
 	// maximum number of forwarded requests (hops), to make sure requests are not
 	// forwarded forever in peer loops
 	maxHopCount uint8 = 20
@@ -38,7 +38,7 @@ const (
 
 // Time to consider peer to be skipped.
 // Also used in stream delivery.
-var RequestTimeout = 15 * time.Second
+var RequestTimeout = 10 * time.Second
 
 type RequestFunc func(context.Context, *Request) (*enode.ID, chan struct{}, error)
 
@@ -272,7 +272,6 @@ func (f *Fetcher) run(peers *sync.Map) {
 // * the peer's address is removed from prospective sources, and
 // * a go routine is started that reports on the gone channel if the peer is disconnected (or terminated their streamer)
 func (f *Fetcher) doRequest(gone chan *enode.ID, peersToSkip *sync.Map, sources []*enode.ID, hopCount uint8) ([]*enode.ID, error) {
-
 	var i int
 	var sourceID *enode.ID
 	var quit chan struct{}
