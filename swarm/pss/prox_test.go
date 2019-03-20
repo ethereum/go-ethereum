@@ -123,17 +123,25 @@ func newTestData() *testData {
 	}
 }
 
+func (d *testData) getKademlia(nodeId *enode.ID) (*network.Kademlia, error) {
+	kadif, ok := d.sim.NodeItem(*nodeId, simulation.BucketKeyKademlia)
+	if !ok {
+		return nil, fmt.Errorf("no kademlia entry for %v", nodeId)
+	}
+	kad, ok := kadif.(*network.Kademlia)
+	if !ok {
+		return nil, fmt.Errorf("invalid kademlia entry for %v", nodeId)
+	}
+	return kad, nil
+}
+
 func (d *testData) init(msgCount int) error {
 	log.Debug("TestProxNetwork start")
 
 	for _, nodeId := range d.sim.NodeIDs() {
-		kadif, ok := d.sim.NodeItem(nodeId, simulation.BucketKeyKademlia)
-		if !ok {
-			return fmt.Errorf("no kademlia entry for %v", nodeId)
-		}
-		kad, ok := kadif.(*network.Kademlia)
-		if !ok {
-			return fmt.Errorf("invalid kademlia entry for %v", nodeId)
+		kad, err := d.getKademlia(&nodeId)
+		if err != nil {
+			return err
 		}
 		d.nodeAddrs[nodeId] = kad.BaseAddr()
 	}
