@@ -352,10 +352,10 @@
 			"revisionTime": "2017-01-28T05:05:32Z"
 		},
 		{
-			"checksumSHA1": "wIcN7tZiF441h08RHAm4NV8cYO4=",
+			"checksumSHA1": "a/DHmc9bdsYlZZcwp6i3xhvV7Pk=",
 			"path": "github.com/opentracing/opentracing-go",
-			"revision": "bd9c3193394760d98b2fa6ebb2291f0cd1d06a7d",
-			"revisionTime": "2018-06-06T20:41:48Z"
+			"revision": "25a84ff92183e2f8ac018ba1db54f8a07b3c0e04",
+			"revisionTime": "2019-02-18T02:30:34Z"
 		},
 		{
 			"checksumSHA1": "uhDxBvLEqRAMZKgpTZ8MFuLIIM8=",

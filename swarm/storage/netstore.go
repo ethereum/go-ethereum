@@ -87,7 +87,9 @@ func (n *NetStore) Put(ctx context.Context, ch Chunk) error {
 
 	// if chunk is now put in the store, check if there was an active fetcher and call deliver on it
 	// (this delivers the chunk to requestors via the fetcher)
+	log.Trace("n.getFetcher", "ref", ch.Address())
 	if f := n.getFetcher(ch.Address()); f != nil {
+		log.Trace("n.getFetcher deliver", "ref", ch.Address())
 		f.deliver(ctx, ch)
 	}
 	return nil
@@ -341,5 +343,6 @@ func (f *fetcher) deliver(ctx context.Context, ch Chunk) {
 		f.chunk = ch
 		// closing the deliveredC channel will terminate ongoing requests
 		close(f.deliveredC)
+		log.Trace("n.getFetcher close deliveredC", "ref", ch.Address())
 	})
 }

@@ -536,7 +536,6 @@ func (r *LazyChunkReader) join(ctx context.Context, b []byte, off int64, eoff in
 			chunkData, err := r.getter.Get(ctx, Reference(childAddress))
 			if err != nil {
 				metrics.GetOrRegisterResettingTimer("lcr.getter.get.err", nil).UpdateSince(startTime)
-				log.Debug("lazychunkreader.join", "key", fmt.Sprintf("%x", childAddress), "err", err)
 				select {
 				case errC <- fmt.Errorf("chunk %v-%v not found; key: %s", off, off+treeSize, fmt.Sprintf("%x", childAddress)):
 				case <-quitC:
@@ -561,12 +560,12 @@ func (r *LazyChunkReader) join(ctx context.Context, b []byte, off int64, eoff in
 
 // Read keeps a cursor so cannot be called simulateously, see ReadAt
 func (r *LazyChunkReader) Read(b []byte) (read int, err error) {
-	log.Debug("lazychunkreader.read", "key", r.addr)
+	log.Trace("lazychunkreader.read", "key", r.addr)
 	metrics.GetOrRegisterCounter("lazychunkreader.read", nil).Inc(1)
 
 	read, err = r.ReadAt(b, r.off)
 	if err != nil && err != io.EOF {
-		log.Debug("lazychunkreader.readat", "read", read, "err", err)
+		log.Trace("lazychunkreader.readat", "read", read, "err", err)
 		metrics.GetOrRegisterCounter("lazychunkreader.read.err", nil).Inc(1)
 	}
 

@@ -185,6 +185,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 			if err != nil {
 				log.Warn("ERROR in handleRetrieveRequestMsg", "err", err)
 			}
+			osp.LogFields(olog.Bool("delivered", true))
 			return
 		}
 		osp.LogFields(olog.Bool("skipCheck", false))
@@ -216,6 +217,10 @@ type ChunkDeliveryMsgSyncing ChunkDeliveryMsg
 
 // chunk delivery msg is response to retrieverequest msg
 func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *ChunkDeliveryMsg) error {
+	var osp opentracing.Span
+	ctx, osp = spancontext.StartSpan(
+		ctx,
+		"handle.chunk.delivery")
 
 	processReceivedChunksCount.Inc(1)
 
@@ -223,13 +228,18 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 	spanId := fmt.Sprintf("stream.send.request.%v.%v", sp.ID(), req.Addr)
 	span := tracing.ShiftSpanByKey(spanId)
 
+	log.Trace("handle.chunk.delivery", "ref", req.Addr, "from peer", sp.ID())
+
 	go func() {
+		defer osp.Finish()
+
 		if span != nil {
 			span.LogFields(olog.String("finish", "from handleChunkDeliveryMsg"))
 			defer span.Finish()
 		}
 
 		req.peer = sp
+		log.Trace("handle.chunk.delivery", "put", req.Addr)
 		err := d.chunkStore.Put(ctx, storage.NewChunk(req.Addr, req.SData))
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
@@ -239,6 +249,7 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 				req.peer.Drop(err)
 			}
 		}
+		log.Trace("handle.chunk.delivery", "done put", req.Addr, "err", err)
 	}()
 	return nil
 }
@@ -284,6 +295,7 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 	// this span will finish only when delivery is handled (or times out)
 	ctx = context.WithValue(ctx, tracing.StoreLabelId, "stream.send.request")
 	ctx = context.WithValue(ctx, tracing.StoreLabelMeta, fmt.Sprintf("%v.%v", sp.ID(), req.Addr))
+	log.Trace("request.from.peers", "peer", sp.ID(), "ref", req.Addr)
 	err := sp.SendPriority(ctx, &RetrieveRequestMsg{
 		Addr:      req.Addr,
 		SkipCheck: req.SkipCheck,
