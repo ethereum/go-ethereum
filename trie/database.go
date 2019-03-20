@@ -81,7 +81,8 @@ type Database struct {
 	dirtiesSize   common.StorageSize // Storage size of the dirty node cache (exc. flushlist)
 	preimagesSize common.StorageSize // Storage size of the preimages cache
 
-	lock sync.RWMutex
+	lock        sync.RWMutex
+	batchLogger *BatchEventLogger
 }
 
 // rawNode is a simple binary blob used to differentiate between collapsed trie
@@ -293,12 +294,14 @@ func NewDatabaseWithCache(diskdb ethdb.KeyValueStore, cache int) *Database {
 			Hasher:             trienodeHasher{},
 		})
 	}
-	return &Database{
+	db := &Database{
 		diskdb:    diskdb,
 		cleans:    cleans,
 		dirties:   map[common.Hash]*cachedNode{{}: {}},
 		preimages: make(map[common.Hash][]byte),
 	}
+	db.batchLogger = newBatchEventLogger(db)
+	return db
 }
 
 // DiskDB retrieves the persistent storage backing the trie database.
@@ -660,6 +663,61 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	return nil
 }
 
+type BatchEventLogger struct {
+	db *Database
+}
+
+func newBatchEventLogger(db *Database) *BatchEventLogger {
+	return &BatchEventLogger{db}
+}
+
+// Put reacts to batch writes, and implements uncache:
+// is the post-processing step of a commit operation where the already
+// persisted trie is removed from the cache. The reason behind the two-phase
+// commit is to ensure consistent data availability while moving from memory
+// to disk.
+func (p *BatchEventLogger) Put(key []byte, value []byte) error {
+	// key is hash
+	// value is rlp
+	//log.Info("proxybatch", "key", fmt.Sprintf("0x%x", key))
+	hash := common.BytesToHash(key)
+	db := p.db
+	rlp := value
+	// If the node does not exist, we're done on this path
+	node, ok := db.dirties[hash]
+	if !ok {
+		return nil
+	}
+	// Node still exists, remove it from the flush-list
+	switch hash {
+	case db.oldest:
+		db.oldest = node.flushNext
+		db.dirties[node.flushNext].flushPrev = common.Hash{}
+	case db.newest:
+		db.newest = node.flushPrev
+		db.dirties[node.flushPrev].flushNext = common.Hash{}
+	default:
+		db.dirties[node.flushPrev].flushNext = node.flushNext
+		db.dirties[node.flushNext].flushPrev = node.flushPrev
+	}
+	// Uncache the node's subtries and remove the node itself too
+	//for _, child := range node.childs() {
+	//	db.uncache(child)
+	//}
+	delete(db.dirties, hash)
+	db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
+
+	// Move the flushed node into the clean cache to prevent insta-reloads
+	if db.cleans != nil {
+		db.cleans.Set(string(hash[:]), rlp)
+	}
+	return nil
+}
+
+func (p *BatchEventLogger) Delete(key []byte) error {
+	panic("Not implemented")
+}
+
 // Commit iterates over all the children of a particular node, writes them out
 // to disk, forcefully tearing down all references in both directions.
 //
@@ -673,7 +731,6 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 
 	start := time.Now()
 	batch := db.diskdb.NewBatch()
-
 	// Move all of the accumulated preimages into a write batch
 	for hash, preimage := range db.preimages {
 		if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
@@ -689,6 +746,11 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 			batch.Reset()
 		}
 	}
+	if err := batch.Write(); err != nil {
+		db.lock.RUnlock()
+		return err
+	}
+	batch.Reset()
 	// Move the trie itself into the batch, flushing if enough data is accumulated
 	nodes, storage := len(db.dirties), db.dirtiesSize
 	if err := db.commit(node, batch); err != nil {
@@ -703,15 +765,14 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 		return err
 	}
 	db.lock.RUnlock()
-
 	// Write successful, clear out the flushed data
 	db.lock.Lock()
 	defer db.lock.Unlock()
+	batch.Replay(db.batchLogger)
+	batch.Reset()
 
 	db.preimages = make(map[common.Hash][]byte)
 	db.preimagesSize = 0
-
-	db.uncache(node)
 
 	memcacheCommitTimeTimer.Update(time.Since(start))
 	memcacheCommitSizeMeter.Mark(int64(storage - db.dirtiesSize))
@@ -751,44 +812,16 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch) error {
 		if err := batch.Write(); err != nil {
 			return err
 		}
-		batch.Reset()
+		db.lock.RUnlock()
+		{
+			db.lock.Lock()
+			batch.Replay(db.batchLogger)
+			batch.Reset()
+			db.lock.Unlock()
+		}
+		db.lock.RLock()
 	}
 	return nil
-}
-
-// uncache is the post-processing step of a commit operation where the already
-// persisted trie is removed from the cache. The reason behind the two-phase
-// commit is to ensure consistent data availability while moving from memory
-// to disk.
-func (db *Database) uncache(hash common.Hash) {
-	// If the node does not exist, we're done on this path
-	node, ok := db.dirties[hash]
-	if !ok {
-		return
-	}
-	// Node still exists, remove it from the flush-list
-	switch hash {
-	case db.oldest:
-		db.oldest = node.flushNext
-		db.dirties[node.flushNext].flushPrev = common.Hash{}
-	case db.newest:
-		db.newest = node.flushPrev
-		db.dirties[node.flushPrev].flushNext = common.Hash{}
-	default:
-		db.dirties[node.flushPrev].flushNext = node.flushNext
-		db.dirties[node.flushNext].flushPrev = node.flushPrev
-	}
-	// Uncache the node's subtries and remove the node itself too
-	for _, child := range node.childs() {
-		db.uncache(child)
-	}
-	delete(db.dirties, hash)
-	db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
-
-	// Move the flushed node into the clean cache to prevent insta-reloads
-	if db.cleans != nil {
-		db.cleans.Set(string(hash[:]), node.rlp())
-	}
 }
 
 // Size returns the current storage size of the memory cache in front of the

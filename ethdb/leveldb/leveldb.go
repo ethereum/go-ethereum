@@ -172,6 +172,23 @@ func (db *Database) NewBatch() ethdb.Batch {
 	}
 }
 
+type dbWrapper struct {
+	wrapped ethdb.DbEventLogger
+}
+
+func (dbw *dbWrapper) Put(key, value []byte) {
+	dbw.wrapped.Put(key, value)
+}
+
+func (dbw *dbWrapper) Delete(key []byte) {
+	dbw.wrapped.Delete(key)
+}
+
+// Replay replays batch contents.
+func (b *batch) Replay(r ethdb.DbEventLogger) error {
+	return b.b.Replay(&dbWrapper{r})
+}
+
 // NewIterator creates a binary-alphabetical iterator over the entire keyspace
 // contained within the leveldb database.
 func (db *Database) NewIterator() ethdb.Iterator {

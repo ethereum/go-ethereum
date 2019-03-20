@@ -40,6 +40,13 @@ type Deleter interface {
 	Delete(key []byte) error
 }
 
+// DbEventLogger wraps Put and Delete to serve as a recipient
+// for batch replays
+type DbEventLogger interface {
+	Writer
+	Deleter
+}
+
 // Stater wraps the Stat method of a backing data store.
 type Stater interface {
 	// Stat returns a particular internal stat of the database.

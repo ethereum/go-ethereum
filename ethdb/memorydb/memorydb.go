@@ -200,6 +200,17 @@ type batch struct {
 	size   int
 }
 
+func (b *batch) Replay(replay ethdb.DbEventLogger) error {
+	for _, keyvalue := range b.writes {
+		if keyvalue.delete {
+			replay.Delete(keyvalue.key)
+			continue
+		}
+		replay.Put(keyvalue.key, keyvalue.value)
+	}
+	return nil
+}
+
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
 	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), common.CopyBytes(value), false})

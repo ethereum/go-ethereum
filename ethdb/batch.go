@@ -34,6 +34,9 @@ type Batch interface {
 
 	// Reset resets the batch for reuse
 	Reset()
+
+	// Replay replays the batch into another batch
+	Replay(logger DbEventLogger) error
 }
 
 // Batcher wraps the NewBatch method of a backing data store.
