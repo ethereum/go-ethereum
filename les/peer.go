@@ -98,15 +98,14 @@ type peer struct {
 }
 
 func newPeer(version int, network uint64, isTrusted bool, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
-	id := p.ID()
-
 	return &peer{
 		Peer:      p,
 		rw:        rw,
 		version:   version,
 		network:   network,
-		id:        fmt.Sprintf("%x", id),
+		id:        fmt.Sprintf("%x", p.ID().Bytes()),
 		isTrusted: isTrusted,
+		errCh:     make(chan error, 1),
 	}
 }
 
