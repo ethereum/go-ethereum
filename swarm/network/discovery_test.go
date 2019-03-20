@@ -75,7 +75,10 @@ func TestSubpeersMsg(t *testing.T) {
 
 	// construct ProtocolTester and hive
 	params := NewHiveParams()
-	s, hive := newHiveTester(t, params, 1, nil)
+	s, hive, err := newHiveTester(t, params, 1, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// register some addresses in specific bins (must coincide with testDepth)
 	registerBzzAddr(0, hive, true)  // bin 0
@@ -121,7 +124,7 @@ WAIT_PIVOT:
 		if po < testDepth {
 			// don't add the pivot node itself to expectedPeers;
 			// the pivot node was not added as
-			if !bytes.Equal(p.BzzAddr.Over(), b) {
+			if !bytes.Equal(p.BzzAddr.Over(), pivotBzz) {
 				expectedPeers = append(expectedPeers, p.BzzAddr)
 			}
 		}
@@ -131,7 +134,7 @@ WAIT_PIVOT:
 	// the test exchange is as follows:
 	// 1. Trigger a subPeersMsg from pivot to our hive
 	// 2. Hive will respond with peersMsg with the set of expected peers
-	err := s.TestExchanges(p2ptest.Exchange{
+	err = s.TestExchanges(p2ptest.Exchange{
 		Label: "incoming subPeersMsg",
 		Triggers: []p2ptest.Trigger{
 			{
@@ -178,13 +181,12 @@ func registerBzzAddr(po int, hive *Hive, on bool) {
 // we need to create the discovery peer objects for the additional kademlia
 // nodes manually
 func newDiscPeer(bzzAddr *BzzAddr, name string, hive *Hive) *Peer {
-	p2pPeer := p2p.NewPeer(adapters.RandomNodeConfig().Node().ID(), name, nil)
-	peer := NewPeer(&BzzPeer{
+	p2pPeer := p2p.NewPeer(adapters.RandomNodeConfig().ID, name, nil)
+	return NewPeer(&BzzPeer{
 		Peer:      protocols.NewPeer(p2pPeer, &dummyMsgRW{}, DiscoverySpec),
 		BzzAddr:   bzzAddr,
 		LightNode: false},
 		hive.Kademlia)
-	return peer
 }
 
 // we also need this dummy object otherwise at hive.Stop(),
