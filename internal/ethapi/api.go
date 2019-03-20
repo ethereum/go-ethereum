@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sort"
 	"strings"
 	"time"
 
@@ -704,7 +705,7 @@ func (s *PublicBlockChainAPI) GetMasternodes(ctx context.Context, b *types.Block
 func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAddress common.Address, epochNumber rpc.EpochNumber) (string, error) {
 	var (
 		block *types.Block
-		masternodes, penaltyList, candidates, proposedList []common.Address
+		masternodes, penaltyList []common.Address
 		penalties []byte
 		err error
 	)
@@ -735,6 +736,53 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 		}
 	}
 
+	// read smart contract to get candidate list
+	client, err := s.b.GetIPCClient()
+	if err != nil {
+		return "", err
+	}
+	addr := common.HexToAddress(common.MasternodeVotingSMC)
+	validator, err := contractValidator.NewTomoValidator(addr, client)
+	if err != nil {
+		return "", err
+	}
+	opts := new(bind.CallOpts)
+	var (
+		candidateAddresses []common.Address
+		candidates []posv.Masternode
+	)
+
+	candidateAddresses, err = validator.GetCandidates(opts)
+	if err != nil {
+		return "", err
+	}
+	for _, address := range candidateAddresses {
+		v, err := validator.GetCandidateCap(opts, address)
+		if err != nil {
+			return "", err
+		}
+		if address.String() != "0x0000000000000000000000000000000000000000" {
+			candidates = append(candidates, posv.Masternode{Address: address, Stake: v})
+		}
+	}
+	// sort candidates by stake descending
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].Stake.Cmp(candidates[j].Stake) >= 0
+	})
+	isTopCandidate := false // is candidates in top 150
+	status := ""
+	for i := 0; i < len(candidates); i++ {
+		if candidates[i].Address == coinbaseAddress {
+			status = statusProposed
+			if i < common.MaxMasternodes {
+				isTopCandidate = true
+			}
+			break
+		}
+	}
+	if isTopCandidate == false {
+		return status, nil
+	}
 	// look up recent checkpoint headers to get penalty list
 	for i := 0; i <= common.LimitPenaltyEpoch; i++ {
 		if blockNum > uint64(i) * epoch {
@@ -747,6 +795,7 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 			penalties = append(penalties, blockCheckpoint.Penalties()...)
 		}
 	}
+
 	if len(penalties) > 0 {
 		penaltyList = common.ExtractAddressFromBytes(penalties)
 		for _, pen := range penaltyList {
@@ -755,33 +804,7 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 			}
 		}
 	}
-
-	// read smart contract to get candidate list
-	client, err := s.b.GetIPCClient()
-	if err != nil {
-		return "", err
-	}
-	addr := common.HexToAddress(common.MasternodeVotingSMC)
-	validator, err := contractValidator.NewTomoValidator(addr, client)
-	if err != nil {
-		return "", err
-	}
-	opts := new(bind.CallOpts)
-	candidates, err = validator.GetCandidates(opts)
-	if err != nil {
-		return "", err
-	}
-	// exclude masternodes
-	proposedList = common.RemoveItemFromArray(candidates, masternodes)
-	// exclude penalties
-	proposedList = common.RemoveItemFromArray(proposedList, penaltyList)
-
-	for _, proposed := range proposedList {
-		if coinbaseAddress == proposed {
-			return statusProposed, nil
-		}
-	}
-	return "", nil
+	return status, nil
 }
 
 // CallArgs represents the arguments for a call.
