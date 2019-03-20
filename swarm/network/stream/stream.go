@@ -910,7 +910,7 @@ func (r *Registry) APIs() []rpc.API {
 			Namespace: "stream",
 			Version:   "3.0",
 			Service:   r.api,
-			Public:    true,
+			Public:    false,
 		},
 	}
 }
