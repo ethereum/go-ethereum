@@ -17,11 +17,14 @@
 package network
 
 import (
-	"fmt"
+	"net"
 	"testing"
-	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/protocols"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/swarm/pot"
 )
@@ -64,25 +67,35 @@ func TestDiscovery(t *testing.T) {
 }
 
 func TestSubpeersMsg(t *testing.T) {
+
+	testDepth := 2
+
 	params := NewHiveParams()
-	s, hive, err := newHiveTester(t, params, 7, nil)
+	key, err := crypto.GenerateKey()
 	if err != nil {
-		t.Fatal(err)
+		panic("unable to generate key")
 	}
+	node := enode.NewV4(&key.PublicKey, net.IP{127, 0, 0, 1}, 30303, 30303)
+	addr := NewAddr(node)
+	kad := NewKademlia(addr.OAddr, NewKadParams())
+	hive := NewHive(params, kad, nil) // hive
+	s := newBzzBaseTester(t, 1, addr, DiscoverySpec, hive.Run)
+	pivot := s.Nodes[0]
 
-	base := "11111111"
-	hive.Kademlia = NewKademlia(pot.NewAddressFromString(base), NewKadParams())
-	fmt.Println(hive)
+	registerBzzAddr(0, hive, true)  // bin 0
+	registerBzzAddr(1, hive, true)  // bin 1
+	registerBzzAddr(3, hive, true)  // bin 3
+	registerBzzAddr(4, hive, true)  // bin 4
+	registerBzzAddr(3, hive, false) // add a known but not connected peer
+	registerBzzAddr(1, hive, false) // add a known but not connected peer
 
-	registerBzzAddr(s.Nodes[0], "00000011", hive, true)  // bin 0
-	registerBzzAddr(s.Nodes[1], "10000000", hive, true)  // bin 1
-	registerBzzAddr(s.Nodes[2], "11100000", hive, true)  // bin 3
-	registerBzzAddr(s.Nodes[3], "11110000", hive, true)  // bin 4
-	registerBzzAddr(s.Nodes[4], "10000001", hive, false) // add a known but not connected
-	registerBzzAddr(s.Nodes[5], "11000001", hive, false) // add a known but not connected
-
-	pivot := s.Nodes[6]
-	registerBzzAddr(pivot, "11000000", hive, true) // bin 2
+	var expectedPeers []*BzzAddr
+	hive.EachConn(hive.BaseAddr(), 256, func(p *Peer, po int) bool {
+		if po < testDepth {
+			expectedPeers = append(expectedPeers, p.BzzAddr)
+		}
+		return true
+	})
 
 	// start the hive and wait for the connection
 	hive.Start(s.Server)
@@ -90,31 +103,54 @@ func TestSubpeersMsg(t *testing.T) {
 
 	err = s.TestExchanges(p2ptest.Exchange{
 		Label: "incoming subPeersMsg",
+		Expects: []p2ptest.Expect{
+			{
+				Code: 0,
+				Msg:  &peersMsg{Peers: expectedPeers},
+				Peer: pivot.ID(),
+			},
+		},
 		Triggers: []p2ptest.Trigger{
 			{
-				Code:    1,
-				Msg:     &subPeersMsg{Depth: 2},
-				Peer:    pivot.ID(),
-				Timeout: 1 * time.Second,
+				Code: 1,
+				Msg:  &subPeersMsg{Depth: uint8(testDepth)},
+				Peer: pivot.ID(),
 			},
 		},
 	})
 
-	fmt.Println(hive.Kademlia)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return
-
 }
 
-func registerBzzAddr(node *enode.Node, kad string, hive *Hive, on bool) {
-	a := pot.NewAddressFromString(kad)
-	bzzAddr := &BzzAddr{OAddr: a, UAddr: []byte(node.String())}
+func registerBzzAddr(po int, hive *Hive, on bool) {
+	a := pot.RandomAddressAt(pot.NewAddressFromBytes(hive.BaseAddr()), po)
+	bzzAddr := &BzzAddr{OAddr: a.Bytes(), UAddr: a.Bytes()}
 	if on {
-		peer := NewPeer(&BzzPeer{BzzAddr: bzzAddr, LightNode: false}, hive.Kademlia)
+		peer := newDiscPeer(bzzAddr, a.String(), hive)
 		hive.On(peer)
 	} else {
 		hive.Register(bzzAddr)
 	}
+}
+
+func newDiscPeer(bzzAddr *BzzAddr, name string, hive *Hive) *Peer {
+	p2pPeer := p2p.NewPeer(adapters.RandomNodeConfig().Node().ID(), name, nil)
+	peer := NewPeer(&BzzPeer{
+		Peer:      protocols.NewPeer(p2pPeer, &dummyMsgRW{}, DiscoverySpec),
+		BzzAddr:   bzzAddr,
+		LightNode: false},
+		hive.Kademlia)
+	return peer
+}
+
+type dummyMsgRW struct{}
+
+func (d *dummyMsgRW) ReadMsg() (p2p.Msg, error) {
+	return p2p.Msg{}, nil
+}
+func (d *dummyMsgRW) WriteMsg(msg p2p.Msg) error {
+	return nil
 }
