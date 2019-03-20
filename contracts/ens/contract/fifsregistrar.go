@@ -4,19 +4,34 @@
 package contract
 
 import (
+	"math/big"
 	"strings"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/event"
+)
+
+// Reference imports to suppress errors if they are not otherwise used.
+var (
+	_ = big.NewInt
+	_ = strings.NewReader
+	_ = ethereum.NotFound
+	_ = abi.U256
+	_ = bind.Bind
+	_ = common.Big1
+	_ = types.BloomLookup
+	_ = event.NewSubscription
 )
 
 // FIFSRegistrarABI is the input ABI used to generate the binding from.
-const FIFSRegistrarABI = "[{\"constant\":false,\"inputs\":[{\"name\":\"subnode\",\"type\":\"bytes32\"},{\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"register\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"name\":\"ensAddr\",\"type\":\"address\"},{\"name\":\"node\",\"type\":\"bytes32\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"}]"
+const FIFSRegistrarABI = "[{\"constant\":false,\"inputs\":[{\"name\":\"label\",\"type\":\"bytes32\"},{\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"register\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"name\":\"ensAddr\",\"type\":\"address\"},{\"name\":\"node\",\"type\":\"bytes32\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"}]"
 
 // FIFSRegistrarBin is the compiled bytecode used for deploying new contracts.
-const FIFSRegistrarBin = `0x6060604052341561000f57600080fd5b604051604080610224833981016040528080519190602001805160008054600160a060020a03909516600160a060020a03199095169490941790935550506001556101c58061005f6000396000f3006060604052600436106100275763ffffffff60e060020a600035041663d22057a9811461002c575b600080fd5b341561003757600080fd5b61004e600435600160a060020a0360243516610050565b005b816000806001548360405191825260208201526040908101905190819003902060008054919350600160a060020a03909116906302571be39084906040516020015260405160e060020a63ffffffff84160281526004810191909152602401602060405180830381600087803b15156100c857600080fd5b6102c65a03f115156100d957600080fd5b5050506040518051915050600160a060020a0381161580159061010e575033600160a060020a031681600160a060020a031614155b1561011857600080fd5b600054600154600160a060020a03909116906306ab592390878760405160e060020a63ffffffff861602815260048101939093526024830191909152600160a060020a03166044820152606401600060405180830381600087803b151561017e57600080fd5b6102c65a03f1151561018f57600080fd5b50505050505050505600a165627a7a723058206fb963cb168d5e3a51af12cd6bb23e324dbd32dd4954f43653ba27e66b68ea650029`
+const FIFSRegistrarBin = `0x608060405234801561001057600080fd5b506040516040806102cc8339810180604052604081101561003057600080fd5b50805160209091015160008054600160a060020a031916600160a060020a0390931692909217825560015561026190819061006b90396000f3fe6080604052600436106100405763ffffffff7c0100000000000000000000000000000000000000000000000000000000600035041663d22057a98114610045575b600080fd5b34801561005157600080fd5b5061008b6004803603604081101561006857600080fd5b508035906020013573ffffffffffffffffffffffffffffffffffffffff1661008d565b005b6000805460015460408051602080820193909352808201879052815180820383018152606082018084528151918501919091207f02571be3000000000000000000000000000000000000000000000000000000009091526064820152905186949373ffffffffffffffffffffffffffffffffffffffff16926302571be39260848082019391829003018186803b15801561012657600080fd5b505afa15801561013a573d6000803e3d6000fd5b505050506040513d602081101561015057600080fd5b5051905073ffffffffffffffffffffffffffffffffffffffff8116158061018c575073ffffffffffffffffffffffffffffffffffffffff811633145b151561019757600080fd5b60008054600154604080517f06ab592300000000000000000000000000000000000000000000000000000000815260048101929092526024820188905273ffffffffffffffffffffffffffffffffffffffff878116604484015290519216926306ab59239260648084019382900301818387803b15801561021757600080fd5b505af115801561022b573d6000803e3d6000fd5b505050505050505056fea165627a7a723058200f21424d48c6fc6f2bc79f5b36b3a0e3067a97d4ce084ab0e0f9106303a3ee520029`
 
 // DeployFIFSRegistrar deploys a new Ethereum contract, binding an instance of FIFSRegistrar to it.
 func DeployFIFSRegistrar(auth *bind.TransactOpts, backend bind.ContractBackend, ensAddr common.Address, node [32]byte) (common.Address, *types.Transaction, *FIFSRegistrar, error) {
@@ -175,21 +190,21 @@ func (_FIFSRegistrar *FIFSRegistrarTransactorRaw) Transact(opts *bind.TransactOp
 
 // Register is a paid mutator transaction binding the contract method 0xd22057a9.
 //
-// Solidity: function register(subnode bytes32, owner address) returns()
-func (_FIFSRegistrar *FIFSRegistrarTransactor) Register(opts *bind.TransactOpts, subnode [32]byte, owner common.Address) (*types.Transaction, error) {
-	return _FIFSRegistrar.contract.Transact(opts, "register", subnode, owner)
+// Solidity: function register(bytes32 label, address owner) returns()
+func (_FIFSRegistrar *FIFSRegistrarTransactor) Register(opts *bind.TransactOpts, label [32]byte, owner common.Address) (*types.Transaction, error) {
+	return _FIFSRegistrar.contract.Transact(opts, "register", label, owner)
 }
 
 // Register is a paid mutator transaction binding the contract method 0xd22057a9.
 //
-// Solidity: function register(subnode bytes32, owner address) returns()
-func (_FIFSRegistrar *FIFSRegistrarSession) Register(subnode [32]byte, owner common.Address) (*types.Transaction, error) {
-	return _FIFSRegistrar.Contract.Register(&_FIFSRegistrar.TransactOpts, subnode, owner)
+// Solidity: function register(bytes32 label, address owner) returns()
+func (_FIFSRegistrar *FIFSRegistrarSession) Register(label [32]byte, owner common.Address) (*types.Transaction, error) {
+	return _FIFSRegistrar.Contract.Register(&_FIFSRegistrar.TransactOpts, label, owner)
 }
 
 // Register is a paid mutator transaction binding the contract method 0xd22057a9.
 //
-// Solidity: function register(subnode bytes32, owner address) returns()
-func (_FIFSRegistrar *FIFSRegistrarTransactorSession) Register(subnode [32]byte, owner common.Address) (*types.Transaction, error) {
-	return _FIFSRegistrar.Contract.Register(&_FIFSRegistrar.TransactOpts, subnode, owner)
+// Solidity: function register(bytes32 label, address owner) returns()
+func (_FIFSRegistrar *FIFSRegistrarTransactorSession) Register(label [32]byte, owner common.Address) (*types.Transaction, error) {
+	return _FIFSRegistrar.Contract.Register(&_FIFSRegistrar.TransactOpts, label, owner)
 }
