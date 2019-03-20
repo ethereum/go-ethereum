@@ -41,7 +41,10 @@ func TestConfig(t *testing.T) {
 		t.Fatal("Two default configs are not equal")
 	}
 
-	one.Init(prvkey)
+	err := one.Init(prvkey)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	//the init function should set the following fields
 	if one.BzzKey == "" {
