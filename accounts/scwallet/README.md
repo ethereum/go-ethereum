@@ -27,4 +27,4 @@ personal.openWallet("pcsc://a4d73015")
 
 ## Known issues
 
-  * Starting geth with a valid card seems to make firefox crash
+  * Starting geth with a valid card seems to make firefox crash.

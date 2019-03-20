@@ -21,8 +21,8 @@
 // to other types of hardware wallet. The process works like this:
 //
 // 1. (First use with a given client) Establish a pairing between hardware
-//    wallet and client. This requires a secret value called a 'PUK'. You can
-//    pair with an unpaired wallet with `personal.openWallet(URI, PUK)`.
+//    wallet and client. This requires a secret value called a 'pairing password'.
+//    You can pair with an unpaired wallet with `personal.openWallet(URI, pairing password)`.
 // 2. (First use only) Initialize the wallet, which generates a keypair, stores
 //    it on the wallet, and returns it so the user can back it up. You can
 //    initialize a wallet with `personal.initializeWallet(URI)`.
