@@ -73,6 +73,7 @@ var (
 	DerivationSignatureHash = sha256.Sum256(common.Hash{}.Bytes())
 )
 
+// List of APDU command-related constants
 const (
 	claISO7816  = 0
 	claSCWallet = 0x80
@@ -82,13 +83,17 @@ const (
 	sw1GetResponse = 0x61
 	sw1Ok          = 0x90
 
-	insVerifyPin           = 0x20
-	insUnblockPin          = 0x22
-	insExportKey           = 0xC2
-	insSign                = 0xC0
-	insLoadKey             = 0xD0
-	insDeriveKey           = 0xD1
-	insStatus              = 0xF2
+	insVerifyPin  = 0x20
+	insUnblockPin = 0x22
+	insExportKey  = 0xC2
+	insSign       = 0xC0
+	insLoadKey    = 0xD0
+	insDeriveKey  = 0xD1
+	insStatus     = 0xF2
+)
+
+// List of ADPU command parameters
+const (
 	P1DeriveKeyFromMaster  = uint8(0x00)
 	P1DeriveKeyFromParent  = uint8(0x01)
 	P1DeriveKeyFromCurrent = uint8(0x10)
@@ -102,11 +107,11 @@ const (
 	signP2OnlyBlock        = uint8(0x81)
 	exportP1Any            = uint8(0x00)
 	exportP2Pubkey         = uint8(0x01)
-
-	// Minimum time to wait between self derivation attempts, even it the user is
-	// requesting accounts like crazy.
-	selfDeriveThrottling = time.Second
 )
+
+// Minimum time to wait between self derivation attempts, even it the user is
+// requesting accounts like crazy.
+const selfDeriveThrottling = time.Second
 
 // Wallet represents a smartcard wallet instance.
 type Wallet struct {
