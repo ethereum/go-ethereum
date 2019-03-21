@@ -15,6 +15,21 @@ defaults:
       path: ""
     values:
       layout: sidebar
+  -
+    scope:
+      path: "*"
+    values:
+      root: "."
+  -
+    scope:
+      path: "*/*"
+    values:
+      root: ".."
+  -
+    scope:
+      path: "*/*/*"
+    values:
+      root: "../.."
 
 collections_dir: docs
 collections:

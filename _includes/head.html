@@ -5,28 +5,28 @@
 
     <title>{% if page.title %}{{ page.title }} | {% endif %}Go Ethereum</title>
 
-    <link rel="icon" type="image/png" href="{{ site.favicon | prepend: site.baseurl | replace: '//', '/'}}" />
+    <link rel="icon" type="image/png" href="{% include link.html url=site.favicon %}" />
     {% if layout.common-css %}
         {% for css in layout.common-css %}
-    <link rel="stylesheet" href="{{ css | prepend: site.baseurl | replace: '//', '/' }}" />
+    <link rel="stylesheet" href="{% include link.html url=css %}"" />
         {% endfor %}
     {% endif %}
 
     {% if page.css %}
         {% for css in page.css %}
-    <link rel="stylesheet" href="{{ css | prepend: site.baseurl | replace: '//', '/' }}" />
+    <link rel="stylesheet" href="{% include link.html url=css %}"" />
         {% endfor %}
     {% endif %}
 
     {% if layout.common-js %}
         {% for js in layout.common-js %}
-    <script src="{{ js | prepend: site.baseurl | replace: '//', '/' }}"></script>
+    <script src="{% include link.html url=js %}"></script>
         {% endfor %}
     {% endif %}
   
     {% if page.js %}
         {% for js in page.js %}
-    <script src="{{ js | prepend: site.baseurl | replace: '//', '/' }}"></script>
+    <script src="{% include link.html url=js %}"></script>
         {% endfor %}
     {% endif %}
 
