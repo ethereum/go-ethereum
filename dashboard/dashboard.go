@@ -27,13 +27,17 @@ package dashboard
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"sync"
 	"sync/atomic"
-	"time"
 
-	"io"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/les"
+
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/event"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -67,6 +71,14 @@ type Dashboard struct {
 
 	quit chan chan error // Channel used for graceful exit
 	wg   sync.WaitGroup  // Wait group used to close the data collector threads
+
+	peerCh  chan p2p.MeteredPeerEvent // Peer event channel.
+	subPeer event.Subscription        // Peer event subscription.
+
+	syncMode downloader.SyncMode
+
+	ethServ *eth.Ethereum
+	lesServ *les.LightEthereum
 }
 
 // client represents active websocket connection with a remote browser.
@@ -77,8 +89,13 @@ type client struct {
 }
 
 // New creates a new dashboard instance with the given configuration.
-func New(config *Config, commit string, logdir string) *Dashboard {
-	now := time.Now()
+func New(config *Config, ethServ *eth.Ethereum, lesServ *les.LightEthereum, syncMode downloader.SyncMode, commit string, logdir string) *Dashboard {
+	// There is a data race between the network layer and the dashboard, which
+	// can cause some lost peer events, therefore some peers might not appear
+	// on the dashboard.
+	// In order to solve this problem, the peer event subscription is registered
+	// here, before the network layer starts.
+	peerCh := make(chan p2p.MeteredPeerEvent, p2p.MeteredPeerLimit)
 	versionMeta := ""
 	if len(params.VersionMeta) > 0 {
 		versionMeta = fmt.Sprintf(" (%s)", params.VersionMeta)
@@ -89,26 +106,32 @@ func New(config *Config, commit string, logdir string) *Dashboard {
 		quit:   make(chan chan error),
 		history: &Message{
 			General: &GeneralMessage{
-				Commit:  commit,
-				Version: fmt.Sprintf("v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
+				Commit:   commit,
+				Version:  fmt.Sprintf("v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
+				SyncMode: syncMode.String(),
 			},
 			System: &SystemMessage{
-				ActiveMemory:   emptyChartEntries(now, sampleLimit),
-				VirtualMemory:  emptyChartEntries(now, sampleLimit),
-				NetworkIngress: emptyChartEntries(now, sampleLimit),
-				NetworkEgress:  emptyChartEntries(now, sampleLimit),
-				ProcessCPU:     emptyChartEntries(now, sampleLimit),
-				SystemCPU:      emptyChartEntries(now, sampleLimit),
-				DiskRead:       emptyChartEntries(now, sampleLimit),
-				DiskWrite:      emptyChartEntries(now, sampleLimit),
+				ActiveMemory:   emptyChartEntries(sampleLimit),
+				VirtualMemory:  emptyChartEntries(sampleLimit),
+				NetworkIngress: emptyChartEntries(sampleLimit),
+				NetworkEgress:  emptyChartEntries(sampleLimit),
+				ProcessCPU:     emptyChartEntries(sampleLimit),
+				SystemCPU:      emptyChartEntries(sampleLimit),
+				DiskRead:       emptyChartEntries(sampleLimit),
+				DiskWrite:      emptyChartEntries(sampleLimit),
 			},
 		},
-		logdir: logdir,
+		logdir:   logdir,
+		peerCh:   peerCh,
+		subPeer:  p2p.SubscribeMeteredPeerEvent(peerCh),
+		syncMode: syncMode,
+		ethServ:  ethServ,
+		lesServ:  lesServ,
 	}
 }
 
 // emptyChartEntries returns a ChartEntry array containing limit number of empty samples.
-func emptyChartEntries(t time.Time, limit int) ChartEntries {
+func emptyChartEntries(limit int) ChartEntries {
 	ce := make(ChartEntries, limit)
 	for i := 0; i < limit; i++ {
 		ce[i] = new(ChartEntry)
@@ -141,7 +164,24 @@ func (db *Dashboard) Start(server *p2p.Server) error {
 	}
 	db.listener = listener
 
-	go http.Serve(listener, nil)
+	go func() {
+		if err := http.Serve(listener, nil); err != http.ErrServerClosed {
+			log.Warn("Could not accept incoming HTTP connections", "err", err)
+		}
+	}()
+
+	//s, _ := json.MarshalIndent(server.NodeInfo(), "", " ")
+	//fmt.Println(string(s))
+	switch {
+	case db.ethServ != nil:
+		if db.ethServ.IsLesServer() {
+			//	fmt.Printf("%+v\n", db.ethServ)
+		}
+	case db.lesServ != nil:
+		//fmt.Println(db.lesServ.LesVersion())
+	default:
+		log.Error("Neither eth nor les")
+	}
 
 	return nil
 }

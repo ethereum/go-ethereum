@@ -83,8 +83,9 @@ const appender = <T>(limit: number, mapper = replacer) => (update: Array<T>, pre
 // the execution of unnecessary operations (e.g. copy of the log array).
 const defaultContent: () => Content = () => ({
 	general: {
-		version: null,
-		commit:  null,
+		version:  null,
+		commit:   null,
+		syncMode: '',
 	},
 	home:    {},
 	chain:   {},
@@ -119,8 +120,9 @@ const defaultContent: () => Content = () => ({
 // TODO (kurkomisi): Define a tricky type which embraces the content and the updaters.
 const updaters = {
 	general: {
-		version: replacer,
-		commit:  replacer,
+		version:  replacer,
+		commit:   replacer,
+		syncMode: replacer,
 	},
 	home:    null,
 	chain:   null,
@@ -241,6 +243,7 @@ class Dashboard extends Component<Props, State> {
 			<div className={this.props.classes.dashboard} style={styles.dashboard}>
 				<Header
 					switchSideBar={this.switchSideBar}
+					syncMode={this.state.content.general.syncMode}
 				/>
 				<Body
 					opened={this.state.sideBar}
