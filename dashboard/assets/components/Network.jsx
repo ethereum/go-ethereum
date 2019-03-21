@@ -36,8 +36,13 @@ import type {Network as NetworkType, PeerEvent} from '../types/content';
 import {styles as commonStyles, chartStrokeWidth, hues, hueScale} from '../common';
 
 // Peer chart dimensions.
-const trafficChartHeight = 18;
-const trafficChartWidth  = 400;
+const trafficChartHeight = 15;
+const trafficChartWidth  = 300;
+
+// attemptSeparator separates the peer connection attempts
+// such as the peers from the addresses with more attempts
+// go to the beginning of the table, and the rest go to the end.
+const attemptSeparator = 9;
 
 // setMaxIngress adjusts the peer chart's gradient values based on the given value.
 const setMaxIngress = (peer, value) => {
@@ -120,6 +125,43 @@ const setEgressChartAttributes = (peer) => {
 	setMaxEgress(peer, max);
 };
 
+// shortName adds some heuristics to the node name in order to make it look meaningful.
+const shortName = (name: string) => {
+	const parts = name.split('/');
+	if (parts[0].substring(0, 'parity'.length).toLowerCase() === 'parity') {
+		// Merge Parity and Parity-Ethereum under the same name.
+		parts[0] = 'Parity';
+	}
+	// Cutting anything from the version after the first - or +.
+	parts[1] = parts[1].split('-')[0].split('+')[0];
+	return `${parts[0]}/${parts[1]}`;
+};
+
+// shortLocation returns a shortened version of the given location object.
+const shortLocation = (location: Object) => {
+	if (!location) {
+		return '';
+	}
+	return `${location.city ? `${location.city}/` : ''}${location.country ? location.country : ''}`;
+};
+
+// ethProtocol returns a shortened version of the eth protocol values.
+const ethProtocol = (protocols: Object) => {
+	const {eth} = protocols;
+	if (typeof eth === 'string') {
+		return eth;
+	}
+	if (!(eth instanceof Object)) {
+		console.error('Wrong protocol type', eth, typeof eth);
+		return '';
+	}
+	if (!eth.hasOwnProperty('version') || !eth.hasOwnProperty('difficulty') || !eth.hasOwnProperty('head')) {
+		console.error('Missing protocol attributes', eth);
+		return '';
+	}
+	return `h=${eth.head.substring(0, 10)} v=${eth.version} td=${eth.difficulty}`;
+};
+
 // inserter is a state updater function for the main component, which handles the peers.
 export const inserter = (sampleLimit: number) => (update: NetworkType, prev: NetworkType) => {
 	// The first message contains the metered peer history.
@@ -134,84 +176,101 @@ export const inserter = (sampleLimit: number) => (update: NetworkType, prev: Net
 					if (!peer.maxEgress) {
 						setEgressChartAttributes(peer);
 					}
+					if (!peer.name) {
+						peer.name = '';
+						peer.shortName = '';
+					} else if (!peer.shortName) {
+						peer.shortName = shortName(peer.name);
+					}
+					if (!peer.enode) {
+						peer.enode = '';
+					}
+					if (!peer.protocols) {
+						peer.protocols = {};
+					}
+					peer.eth = ethProtocol(peer.protocols);
 				});
 			}
+			bundle.shortLocation = shortLocation(bundle.location);
 		});
 	}
 	if (Array.isArray(update.diff)) {
 		update.diff.forEach((event: PeerEvent) => {
-			if (!event.ip) {
-				console.error('Peer event without IP', event);
+			if (!event.addr) {
+				console.error('Peer event without TCP address', event);
 				return;
 			}
 			switch (event.remove) {
 			case 'bundle': {
-				delete prev.peers.bundles[event.ip];
+				delete prev.peers.bundles[event.addr];
 				return;
 			}
 			case 'known': {
-				if (!event.id) {
-					console.error('Remove known peer event without ID', event.ip);
+				if (!event.enode) {
+					console.error('Remove known peer event without node URL', event.addr);
 					return;
 				}
-				const bundle = prev.peers.bundles[event.ip];
-				if (!bundle || !bundle.knownPeers || !bundle.knownPeers[event.id]) {
-					console.error('No known peer to remove', event.ip, event.id);
+				const bundle = prev.peers.bundles[event.addr];
+				if (!bundle || !bundle.knownPeers || !bundle.knownPeers[event.enode]) {
+					console.error('No known peer to remove', event.addr, event.enode);
 					return;
 				}
-				delete bundle.knownPeers[event.id];
-				return;
-			}
-			case 'attempt': {
-				const bundle = prev.peers.bundles[event.ip];
-				if (!bundle || !Array.isArray(bundle.attempts) || bundle.attempts.length < 1) {
-					console.error('No unknown peer to remove', event.ip);
-					return;
-				}
-				bundle.attempts.splice(0, 1);
+				delete bundle.knownPeers[event.enode];
 				return;
 			}
 			}
-			if (!prev.peers.bundles[event.ip]) {
-				prev.peers.bundles[event.ip] = {
+			if (!prev.peers.bundles[event.addr]) {
+				prev.peers.bundles[event.addr] = {
 					location: {
 						country:   '',
 						city:      '',
 						latitude:  0,
 						longitude: 0,
 					},
+					shortLocation: '',
 					knownPeers: {},
-					attempts:   [],
+					attempts:   0,
 				};
 			}
-			const bundle = prev.peers.bundles[event.ip];
+			const bundle = prev.peers.bundles[event.addr];
 			if (event.location) {
 				bundle.location = event.location;
+				bundle.shortLocation = shortLocation(bundle.location);
 				return;
 			}
-			if (!event.id) {
-				if (!bundle.attempts) {
-					bundle.attempts = [];
-				}
-				bundle.attempts.push({
-					connected:    event.connected,
-					disconnected: event.disconnected,
-				});
+			if (!event.enode) {
+				bundle.attempts++;
 				return;
 			}
 			if (!bundle.knownPeers) {
 				bundle.knownPeers = {};
 			}
-			if (!bundle.knownPeers[event.id]) {
-				bundle.knownPeers[event.id] = {
+			if (!bundle.knownPeers[event.enode]) {
+				bundle.knownPeers[event.enode] = {
 					connected:    [],
 					disconnected: [],
 					ingress:      [],
 					egress:       [],
 					active:       false,
+					name:         '',
+					shortName:    '',
+					enode:        '',
+					protocols:    {},
+					eth:          '',
 				};
 			}
-			const peer = bundle.knownPeers[event.id];
+			const peer = bundle.knownPeers[event.enode];
+			if (event.name) {
+				peer.name = event.name;
+				peer.shortName = shortName(event.name);
+			}
+			if (event.enode) {
+				peer.enode = event.enode;
+			}
+			if (event.protocols) {
+				peer.protocols = event.protocols;
+				peer.eth = ethProtocol(peer.protocols);
+			}
 			if (!peer.maxIngress) {
 				setIngressChartAttributes(peer);
 			}
@@ -305,6 +364,11 @@ export const inserter = (sampleLimit: number) => (update: NetworkType, prev: Net
 
 // styles contains the constant styles of the component.
 const styles = {
+	table: {
+		background:     '#212121',
+		borderCollapse: 'unset',
+		padding:        5,
+	},
 	tableHead: {
 		height: 'auto',
 	},
@@ -317,7 +381,19 @@ const styles = {
 		paddingBottom: 0,
 		paddingLeft:   5,
 		border:        'none',
+		fontFamily:    'monospace',
+		fontSize:      10,
 	},
+};
+
+// limitedWidthStyle returns a style object which cuts the long text with three dots.
+const limitedWidthStyle = (width) => {
+	return {
+		textOverflow: 'ellipsis',
+		maxWidth:     width,
+		overflow:     'hidden',
+		whiteSpace:   'nowrap',
+	};
 };
 
 export type Props = {
@@ -351,33 +427,53 @@ class Network extends Component<Props, State> {
 		return `${month}/${date}/${hours}:${minutes}:${seconds}`;
 	};
 
-	copyToClipboard = (id) => (event) => {
+	copyToClipboard = (text: string) => (event) => {
 		event.preventDefault();
-		navigator.clipboard.writeText(id).then(() => {}, () => {
-			console.error("Failed to copy node id", id);
+		navigator.clipboard.writeText(text).then(() => {}, () => {
+			console.error("Failed to copy", text);
 		});
 	};
 
-	peerTableRow = (ip, id, bundle, peer) => {
+	knownPeerTableRow = (addr, enode, bundle, peer) => {
 		const ingressValues = peer.ingress.map(({value}) => ({ingress: value || 0.001}));
 		const egressValues = peer.egress.map(({value}) => ({egress: -value || -0.001}));
-
 		return (
-			<TableRow key={`known_${ip}_${id}`} style={styles.tableRow}>
+			<TableRow key={`known_${addr}_${enode}`} style={styles.tableRow}>
 				<TableCell style={styles.tableCell}>
 					{peer.active
 						? <FontAwesomeIcon icon={fasCircle} color='green' />
 						: <FontAwesomeIcon icon={farCircle} style={commonStyles.light} />
 					}
 				</TableCell>
-				<TableCell style={{fontFamily: 'monospace', cursor: 'copy', ...styles.tableCell, ...commonStyles.light}} onClick={this.copyToClipboard(id)}>
-					{id.substring(0, 10)}
+				<TableCell
+					style={{
+						cursor: 'copy',
+						...styles.tableCell,
+						...commonStyles.light,
+					}}
+					onClick={this.copyToClipboard(enode)}
+				>
+					{enode.substring(8, 16)}
 				</TableCell>
-				<TableCell style={styles.tableCell}>
-					{bundle.location ? (() => {
-						const l = bundle.location;
-						return `${l.country ? l.country : ''}${l.city ? `/${l.city}` : ''}`;
-					})() : ''}
+				<TableCell
+					style={{
+						cursor: 'copy',
+						...limitedWidthStyle(120),
+						...styles.tableCell,
+					}}
+					onClick={this.copyToClipboard(peer.name)}
+				>
+					{peer.shortName}
+				</TableCell>
+				<TableCell
+					style={{
+						cursor: 'copy',
+						...limitedWidthStyle(120),
+						...styles.tableCell,
+					}}
+					onClick={this.copyToClipboard(JSON.stringify(bundle.location))}
+				>
+					{bundle.shortLocation}
 				</TableCell>
 				<TableCell style={styles.tableCell}>
 					<AreaChart
@@ -385,14 +481,14 @@ class Network extends Component<Props, State> {
 						height={trafficChartHeight}
 						data={ingressValues}
 						margin={{top: 5, right: 5, bottom: 0, left: 5}}
-						syncId={`peerIngress_${ip}_${id}`}
+						syncId={`peerIngress_${addr}_${enode}`}
 					>
 						<defs>
-							<linearGradient id={`ingressGradient_${ip}_${id}`} x1='0' y1='1' x2='0' y2='0'>
+							<linearGradient id={`ingressGradient_${addr}_${enode}`} x1='0' y1='1' x2='0' y2='0'>
 								{peer.ingressGradient
 								&& peer.ingressGradient.map(({offset, color}, i) => (
 									<stop
-										key={`ingressStop_${ip}_${id}_${i}`}
+										key={`ingressStop_${addr}_${enode}_${i}`}
 										offset={`${offset}%`}
 										stopColor={color}
 									/>
@@ -405,7 +501,7 @@ class Network extends Component<Props, State> {
 							dataKey='ingress'
 							isAnimationActive={false}
 							type='monotone'
-							fill={`url(#ingressGradient_${ip}_${id})`}
+							fill={`url(#ingressGradient_${addr}_${enode})`}
 							stroke={peer.ingressGradient[peer.ingressGradient.length - 1].color}
 							strokeWidth={chartStrokeWidth}
 						/>
@@ -415,14 +511,14 @@ class Network extends Component<Props, State> {
 						height={trafficChartHeight}
 						data={egressValues}
 						margin={{top: 0, right: 5, bottom: 5, left: 5}}
-						syncId={`peerIngress_${ip}_${id}`}
+						syncId={`peerIngress_${addr}_${enode}`}
 					>
 						<defs>
-							<linearGradient id={`egressGradient_${ip}_${id}`} x1='0' y1='1' x2='0' y2='0'>
+							<linearGradient id={`egressGradient_${addr}_${enode}`} x1='0' y1='1' x2='0' y2='0'>
 								{peer.egressGradient
 								&& peer.egressGradient.map(({offset, color}, i) => (
 									<stop
-										key={`egressStop_${ip}_${id}_${i}`}
+										key={`egressStop_${addr}_${enode}_${i}`}
 										offset={`${offset}%`}
 										stopColor={color}
 									/>
@@ -435,91 +531,116 @@ class Network extends Component<Props, State> {
 							dataKey='egress'
 							isAnimationActive={false}
 							type='monotone'
-							fill={`url(#egressGradient_${ip}_${id})`}
+							fill={`url(#egressGradient_${addr}_${enode})`}
 							stroke={peer.egressGradient[0].color}
 							strokeWidth={chartStrokeWidth}
 						/>
 					</AreaChart>
 				</TableCell>
+				<TableCell
+					style={{cursor: 'copy', ...styles.tableCell}}
+					onClick={this.copyToClipboard(JSON.stringify(peer.protocols.eth))}
+				>
+					{peer.eth}
+				</TableCell>
 			</TableRow>
 		);
 	};
+
+	connectionAttemptTableRow = (addr, bundle) => (
+		<TableRow key={`attempt_${addr}`} style={styles.tableRow}>
+			<TableCell
+				style={{cursor: 'copy', ...styles.tableCell}}
+				onClick={this.copyToClipboard(addr)}
+			>
+				{addr}
+			</TableCell>
+			<TableCell
+				style={{cursor: 'copy', ...limitedWidthStyle(120), ...styles.tableCell}}
+				onClick={this.copyToClipboard(JSON.stringify(bundle.location))}
+			>
+				{bundle.shortLocation}
+			</TableCell>
+			<TableCell style={styles.tableCell}>
+				{bundle.attempts}
+			</TableCell>
+		</TableRow>
+	);
 
 	render() {
 		return (
 			<Grid container direction='row' justify='space-between'>
 				<Grid item>
-					<Table>
+					<Table style={styles.table}>
 						<TableHead style={styles.tableHead}>
 							<TableRow style={styles.tableRow}>
 								<TableCell style={styles.tableCell} />
-								<TableCell style={styles.tableCell}>Node ID</TableCell>
+								<TableCell style={styles.tableCell}>Node URL</TableCell>
+								<TableCell style={styles.tableCell}>Name</TableCell>
 								<TableCell style={styles.tableCell}>Location</TableCell>
 								<TableCell style={styles.tableCell}>Traffic</TableCell>
+								<TableCell style={styles.tableCell}>ETH protocol</TableCell>
 							</TableRow>
 						</TableHead>
 						<TableBody>
-							{Object.entries(this.props.content.peers.bundles).map(([ip, bundle]) => {
+							{Object.entries(this.props.content.peers.bundles).map(([addr, bundle]) => {
 								if (!bundle.knownPeers || Object.keys(bundle.knownPeers).length < 1) {
 									return null;
 								}
-								return Object.entries(bundle.knownPeers).map(([id, peer]) => {
+								return Object.entries(bundle.knownPeers).map(([enode, peer]) => {
 									if (peer.active === false) {
 										return null;
 									}
-									return this.peerTableRow(ip, id, bundle, peer);
+									return this.knownPeerTableRow(addr, enode, bundle, peer);
 								});
 							})}
 						</TableBody>
 						<TableBody>
-							{Object.entries(this.props.content.peers.bundles).map(([ip, bundle]) => {
+							{Object.entries(this.props.content.peers.bundles).map(([addr, bundle]) => {
 								if (!bundle.knownPeers || Object.keys(bundle.knownPeers).length < 1) {
 									return null;
 								}
-								return Object.entries(bundle.knownPeers).map(([id, peer]) => {
+								return Object.entries(bundle.knownPeers).map(([enode, peer]) => {
 									if (peer.active === true) {
 										return null;
 									}
-									return this.peerTableRow(ip, id, bundle, peer);
+									return this.knownPeerTableRow(addr, enode, bundle, peer);
 								});
 							})}
 						</TableBody>
 					</Table>
 				</Grid>
 				<Grid item>
-					<Typography variant='subtitle1' gutterBottom>
-						Connection attempts
-					</Typography>
-					<Table>
-						<TableHead style={styles.tableHead}>
-							<TableRow style={styles.tableRow}>
-								<TableCell style={styles.tableCell}>IP</TableCell>
-								<TableCell style={styles.tableCell}>Location</TableCell>
-								<TableCell style={styles.tableCell}>Nr</TableCell>
-							</TableRow>
-						</TableHead>
-						<TableBody>
-							{Object.entries(this.props.content.peers.bundles).map(([ip, bundle]) => {
-								if (!bundle.attempts || bundle.attempts.length < 1) {
-									return null;
-								}
-								return (
-									<TableRow key={`attempt_${ip}`} style={styles.tableRow}>
-										<TableCell style={styles.tableCell}>{ip}</TableCell>
-										<TableCell style={styles.tableCell}>
-											{bundle.location ? (() => {
-												const l = bundle.location;
-												return `${l.country ? l.country : ''}${l.city ? `/${l.city}` : ''}`;
-											})() : ''}
-										</TableCell>
-										<TableCell style={styles.tableCell}>
-											{Object.values(bundle.attempts).length}
-										</TableCell>
-									</TableRow>
-								);
-							})}
-						</TableBody>
-					</Table>
+					<div style={styles.table}>
+						<Typography variant='subtitle1' gutterBottom>
+							Connection attempts
+						</Typography>
+						<Table>
+							<TableHead style={styles.tableHead}>
+								<TableRow style={styles.tableRow}>
+									<TableCell style={styles.tableCell}>TCP address</TableCell>
+									<TableCell style={styles.tableCell}>Location</TableCell>
+									<TableCell style={styles.tableCell}>Nr</TableCell>
+								</TableRow>
+							</TableHead>
+							<TableBody>
+								{Object.entries(this.props.content.peers.bundles).map(([addr, bundle]) => {
+									if (!bundle.attempts || bundle.attempts <= attemptSeparator) {
+										return null;
+									}
+									return this.connectionAttemptTableRow(addr, bundle);
+								})}
+							</TableBody>
+							<TableBody>
+								{Object.entries(this.props.content.peers.bundles).map(([addr, bundle]) => {
+									if (!bundle.attempts || bundle.attempts < 1 || bundle.attempts > attemptSeparator) {
+										return null;
+									}
+									return this.connectionAttemptTableRow(addr, bundle);
+								})}
+							</TableBody>
+						</Table>
+					</div>
 				</Grid>
 			</Grid>
 		);
