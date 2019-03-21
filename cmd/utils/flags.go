@@ -1461,9 +1461,9 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 }
 
 // RegisterDashboardService adds a dashboard to the stack.
-func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config, commit string) {
+func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config, commit string, peerEventBridge chan p2p.MeteredPeerEvent, closePeerEventBridge chan struct{}) {
 	stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return dashboard.New(cfg, commit, ctx.ResolvePath("logs")), nil
+		return dashboard.New(cfg, commit, ctx.ResolvePath("logs"), peerEventBridge, closePeerEventBridge), nil
 	})
 }
 

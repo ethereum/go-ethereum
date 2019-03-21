@@ -80,6 +80,11 @@ type MeteredPeerEvent struct {
 	Egress  uint64               // Egress count at the moment of the event
 }
 
+// Equal reports whether event and e are equal.
+func (event *MeteredPeerEvent) Equal(e MeteredPeerEvent) bool {
+	return event.Type == e.Type && event.IP.Equal(e.IP) && event.ID == e.ID && event.Elapsed == e.Elapsed && event.Ingress == e.Ingress && event.Egress == e.Egress
+}
+
 // SubscribeMeteredPeerEvent registers a subscription for peer life-cycle events
 // if metrics collection is enabled.
 func SubscribeMeteredPeerEvent(ch chan<- MeteredPeerEvent) event.Subscription {

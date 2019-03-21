@@ -67,6 +67,9 @@ type Dashboard struct {
 
 	quit chan chan error // Channel used for graceful exit
 	wg   sync.WaitGroup  // Wait group used to close the data collector threads
+
+	peerEventBridge      chan p2p.MeteredPeerEvent // Channel for the initial peer events.
+	closePeerEventBridge chan struct{}             // Channel to signal, that the initial peer event collection can be stopped.
 }
 
 // client represents active websocket connection with a remote browser.
@@ -77,7 +80,7 @@ type client struct {
 }
 
 // New creates a new dashboard instance with the given configuration.
-func New(config *Config, commit string, logdir string) *Dashboard {
+func New(config *Config, commit string, logdir string, peerEventBridge chan p2p.MeteredPeerEvent, closePeerEventBridge chan struct{}) *Dashboard {
 	now := time.Now()
 	versionMeta := ""
 	if len(params.VersionMeta) > 0 {
@@ -103,7 +106,9 @@ func New(config *Config, commit string, logdir string) *Dashboard {
 				DiskWrite:      emptyChartEntries(now, sampleLimit),
 			},
 		},
-		logdir: logdir,
+		logdir:               logdir,
+		peerEventBridge:      peerEventBridge,
+		closePeerEventBridge: closePeerEventBridge,
 	}
 }
 

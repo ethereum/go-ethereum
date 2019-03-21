@@ -380,10 +380,6 @@ func (db *Dashboard) collectPeerData() {
 	}
 	defer db.geodb.close()
 
-	peerCh := make(chan p2p.MeteredPeerEvent, eventBufferLimit) // Peer event channel.
-	subPeer := p2p.SubscribeMeteredPeerEvent(peerCh)            // Subscribe to peer events.
-	defer subPeer.Unsubscribe()                                 // Unsubscribe at the end.
-
 	ticker := time.NewTicker(db.config.Refresh)
 	defer ticker.Stop()
 
@@ -428,43 +424,79 @@ func (db *Dashboard) collectPeerData() {
 	ingress, egress := new(trafficMap), new(trafficMap)
 	*ingress, *egress = make(trafficMap), make(trafficMap)
 
+	// handlePeerEvent handles a metered peer event.
+	handlePeerEvent := func(event p2p.MeteredPeerEvent) {
+		now := time.Now()
+		switch event.Type {
+		case p2p.PeerConnected:
+			connected := now.Add(-event.Elapsed)
+			newPeerEvents = append(newPeerEvents, &peerEvent{
+				IP:        event.IP.String(),
+				ID:        event.ID.String(),
+				Connected: &connected,
+			})
+		case p2p.PeerDisconnected:
+			ip, id := event.IP.String(), event.ID.String()
+			newPeerEvents = append(newPeerEvents, &peerEvent{
+				IP:           ip,
+				ID:           id,
+				Disconnected: &now,
+			})
+			// The disconnect event comes with the last metered traffic count,
+			// because after the disconnection the peer's meter is removed
+			// from the registry. It can happen, that between two metering
+			// period the same peer disconnects multiple times, and appending
+			// all the samples to the traffic arrays would shift the metering,
+			// so only the last metering is stored, overwriting the previous one.
+			ingress.insert(ip, id, float64(event.Ingress))
+			egress.insert(ip, id, float64(event.Egress))
+		case p2p.PeerHandshakeFailed:
+			connected := now.Add(-event.Elapsed)
+			newPeerEvents = append(newPeerEvents, &peerEvent{
+				IP:           event.IP.String(),
+				Connected:    &connected,
+				Disconnected: &now,
+			})
+		default:
+			log.Error("Unknown metered peer event type", "type", event.Type)
+		}
+	}
+
+	peerCh := make(chan p2p.MeteredPeerEvent, eventBufferLimit) // Peer event channel.
+	subPeer := p2p.SubscribeMeteredPeerEvent(peerCh)            // Subscribe to peer events.
+	defer subPeer.Unsubscribe()                                 // Unsubscribe at the end.
+
+	firstEvent := true // denotes whether the delivered peer event is the first one for the dashboard.
 	for {
 		select {
 		case event := <-peerCh:
-			now := time.Now()
-			switch event.Type {
-			case p2p.PeerConnected:
-				connected := now.Add(-event.Elapsed)
-				newPeerEvents = append(newPeerEvents, &peerEvent{
-					IP:        event.IP.String(),
-					ID:        event.ID.String(),
-					Connected: &connected,
-				})
-			case p2p.PeerDisconnected:
-				ip, id := event.IP.String(), event.ID.String()
-				newPeerEvents = append(newPeerEvents, &peerEvent{
-					IP:           ip,
-					ID:           id,
-					Disconnected: &now,
-				})
-				// The disconnect event comes with the last metered traffic count,
-				// because after the disconnection the peer's meter is removed
-				// from the registry. It can happen, that between two metering
-				// period the same peer disconnects multiple times, and appending
-				// all the samples to the traffic arrays would shift the metering,
-				// so only the last metering is stored, overwriting the previous one.
-				ingress.insert(ip, id, float64(event.Ingress))
-				egress.insert(ip, id, float64(event.Egress))
-			case p2p.PeerHandshakeFailed:
-				connected := now.Add(-event.Elapsed)
-				newPeerEvents = append(newPeerEvents, &peerEvent{
-					IP:           event.IP.String(),
-					Connected:    &connected,
-					Disconnected: &now,
-				})
-			default:
-				log.Error("Unknown metered peer event type", "type", event.Type)
+			if firstEvent {
+				// There is a data race between the network layer and the dashboard, which
+				// can cause some lost peer events, therefore some peers might not appear
+				// on the dashboard.
+				// In order to solve this problem, a peer event subscription is registered
+				// before the network layer starts, and when the dashboard is ready, the
+				// stored events are passed to it.
+				//
+				// In order to synchronize the two subscriptions, the stored events are
+				// processed until the first event of the dashboard is found. After that
+				// all the events will be delivered to the dashboard too.
+			sync:
+				for {
+					select {
+					case e := <-db.peerEventBridge:
+						if event.Equal(e) {
+							db.closePeerEventBridge <- struct{}{}
+							break sync
+						}
+						handlePeerEvent(e)
+					default: // There were no events before the dashboard started.
+						break sync
+					}
+				}
+				firstEvent = false
 			}
+			handlePeerEvent(event)
 		case <-ticker.C:
 			// Collect the traffic samples from the registry.
 			p2p.PeerIngressRegistry.Each(collectIngress(ingress))
