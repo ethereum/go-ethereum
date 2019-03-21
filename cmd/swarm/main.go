@@ -298,7 +298,7 @@ func bzzd(ctx *cli.Context) error {
 
 	//a few steps need to be done after the config phase is completed,
 	//due to overriding behavior
-	err = initSwarmNode(bzzconfig, stack, ctx)
+	err = initSwarmNode(bzzconfig, stack, ctx, &cfg)
 	if err != nil {
 		return err
 	}
