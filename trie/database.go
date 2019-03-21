@@ -723,13 +723,24 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch) error {
 	if !ok {
 		return nil
 	}
+	// Commit all the children and then the current node too
 	for _, child := range node.childs() {
 		if err := db.commit(child, batch); err != nil {
 			return err
 		}
 	}
-	if err := batch.Put(hash[:], node.rlp()); err != nil {
+	blob := node.rlp()
+	if err := batch.Put(hash[:], blob); err != nil {
 		return err
+	}
+	// Move the flushed node into the clean cache to prevent insta-reloads. This
+	// move should really be done **after** flushing the batch. The issue is that
+	// the RLP of the data is lost at that point, requiring reencoding everything.
+	// By doing the move here we open a window of opportunity for failure **if**
+	// writing the data errors out, but at that point we might have bigger issues
+	// anyway.
+	if db.cleans != nil {
+		db.cleans.Set(string(hash[:]), blob)
 	}
 	// If we've reached an optimal batch size, commit and start over
 	if batch.ValueSize() >= ethdb.IdealBatchSize {
@@ -769,11 +780,6 @@ func (db *Database) uncache(hash common.Hash) {
 	}
 	delete(db.dirties, hash)
 	db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
-
-	// Move the flushed node into the clean cache to prevent insta-reloads
-	if db.cleans != nil {
-		db.cleans.Set(string(hash[:]), node.rlp())
-	}
 }
 
 // Size returns the current storage size of the memory cache in front of the
