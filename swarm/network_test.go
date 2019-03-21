@@ -311,8 +311,12 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 			if err != nil {
 				return nil, cleanup, err
 			}
+			nodekey, err := crypto.GenerateKey()
+			if err != nil {
+				return nil, cleanup, err
+			}
 
-			config.Init(privkey)
+			config.Init(privkey, nodekey)
 			config.DeliverySkipCheck = o.SkipCheck
 			config.Port = ""
 

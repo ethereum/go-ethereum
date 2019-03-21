@@ -92,7 +92,7 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 		}
 	}
 
-	err := config.initDefaultEnode()
+	err := config.initDummyEnode()
 	if err != nil {
 		return nil, err
 	}

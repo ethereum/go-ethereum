@@ -92,7 +92,7 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 		return nil, fmt.Errorf("error creating node directory: %s", err)
 	}
 
-	err := config.initDefaultEnode()
+	err := config.initDummyEnode()
 	if err != nil {
 		return nil, err
 	}
@@ -411,11 +411,11 @@ func startExecNodeStack() (*node.Node, error) {
 	if err := json.Unmarshal([]byte(confEnv), &conf); err != nil {
 		return nil, fmt.Errorf("error decoding %s: %v", envNodeConfig, err)
 	}
-	// TODO verify that ListenAddr will contain the corrent tcp addr
+	// TODO verify that ListenAddr will contain the correct tcp addr
 	// if we should start using exec adapters with other host than local
 	nodeTcpConn, err := net.ResolveTCPAddr("tcp", conf.Stack.P2P.ListenAddr)
 	if err != nil {
-		conf.Node.initDefaultEnode()
+		conf.Node.initDummyEnode()
 	} else {
 		conf.Node.initEnode(nodeTcpConn.IP, nodeTcpConn.Port, nodeTcpConn.Port)
 	}

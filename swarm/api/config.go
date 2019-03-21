@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/services/swap"
@@ -104,43 +103,35 @@ func NewConfig() (c *Config) {
 
 //some config params need to be initialized after the complete
 //config building phase is completed (e.g. due to overriding flags)
-func (c *Config) Init(prvKey *ecdsa.PrivateKey) error {
+func (c *Config) Init(prvKey *ecdsa.PrivateKey, nodeKey *ecdsa.PrivateKey) error {
 
-	address := crypto.PubkeyToAddress(prvKey.PublicKey)
-	c.Path = filepath.Join(c.Path, "bzz-"+common.Bytes2Hex(address.Bytes()))
-	err := os.MkdirAll(c.Path, os.ModePerm)
+	// create swarm dir and record key
+	err := c.createAndSetPath(c.Path, prvKey)
 	if err != nil {
 		return fmt.Errorf("Error creating root swarm data directory: %v", err)
 	}
+	c.setKey(prvKey)
 
-	pubkey := crypto.FromECDSAPub(&prvKey.PublicKey)
-	pubkeyhex := common.ToHex(pubkey)
-	bzzkeybytes := network.PrivateKeyToBzzKey(prvKey)
-	keyhex := hexutil.Encode(bzzkeybytes)
-
-	c.PublicKey = pubkeyhex
-	c.BzzKey = keyhex
-
-	var record enr.Record
-	record.Set(network.NewENRAddrEntry(bzzkeybytes))
-	record.Set(network.ENRLightNodeEntry(c.LightNodeEnabled))
-	record.Set(network.ENRBootNodeEntry(c.BootnodeMode))
-	err = enode.SignV4(&record, prvKey)
-	if err != nil {
-		return fmt.Errorf("ENR create fail: %v", err)
+	// create the new enode record
+	// signed with the ephemeral node key
+	enodeParams := &network.EnodeParams{
+		PrivateKey: prvKey,
+		EnodeKey:   nodeKey,
+		Lightnode:  c.LightNodeEnabled,
+		Bootnode:   c.BootnodeMode,
 	}
-	c.Enode, err = enode.New(enode.V4ID{}, &record)
+	c.Enode, err = network.NewEnode(enodeParams)
 	if err != nil {
-		return fmt.Errorf("Enode create fail: %v", err)
+		return fmt.Errorf("Error creating enode: %v", err)
 	}
 
+	// initialize components that depend on the swarm instance's private key
 	if c.SwapEnabled {
 		c.Swap.Init(c.Contract, prvKey)
 	}
 
-	c.privateKey = prvKey
 	c.LocalStoreParams.Init(c.Path)
-	c.LocalStoreParams.BaseKey = common.FromHex(keyhex)
+	c.LocalStoreParams.BaseKey = common.FromHex(c.BzzKey)
 
 	c.Pss = c.Pss.WithPrivateKey(c.privateKey)
 	return nil
@@ -152,4 +143,26 @@ func (c *Config) ShiftPrivateKey() (privKey *ecdsa.PrivateKey) {
 		c.privateKey = nil
 	}
 	return privKey
+}
+
+func (c *Config) setKey(prvKey *ecdsa.PrivateKey) {
+	bzzkeybytes := network.PrivateKeyToBzzKey(prvKey)
+	pubkey := crypto.FromECDSAPub(&prvKey.PublicKey)
+	pubkeyhex := hexutil.Encode(pubkey)
+	keyhex := hexutil.Encode(bzzkeybytes)
+
+	c.privateKey = prvKey
+	c.PublicKey = pubkeyhex
+	c.BzzKey = keyhex
+}
+
+func (c *Config) createAndSetPath(datadirPath string, prvKey *ecdsa.PrivateKey) error {
+	address := crypto.PubkeyToAddress(prvKey.PublicKey)
+	bzzdirPath := filepath.Join(datadirPath, "bzz-"+common.Bytes2Hex(address.Bytes()))
+	err := os.MkdirAll(bzzdirPath, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	c.Path = bzzdirPath
+	return nil
 }

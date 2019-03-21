@@ -130,7 +130,7 @@ func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context) er
 	//set the resolved config path (geth --datadir)
 	config.Path = expandPath(stack.InstanceDir())
 	//finally, initialize the configuration
-	err := config.Init(prvkey)
+	err := config.Init(prvkey, stack.Server().PrivateKey)
 	if err != nil {
 		return err
 	}

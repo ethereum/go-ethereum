@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
 // BzzAddr implements the PeerAddr interface
@@ -67,4 +68,38 @@ func NewAddr(node *enode.Node) *BzzAddr {
 func PrivateKeyToBzzKey(prvKey *ecdsa.PrivateKey) []byte {
 	pubkeyBytes := crypto.FromECDSAPub(&prvKey.PublicKey)
 	return crypto.Keccak256Hash(pubkeyBytes).Bytes()
+}
+
+type EnodeParams struct {
+	PrivateKey *ecdsa.PrivateKey
+	EnodeKey   *ecdsa.PrivateKey
+	Lightnode  bool
+	Bootnode   bool
+}
+
+func NewEnodeRecord(params *EnodeParams) (*enr.Record, error) {
+
+	if params.PrivateKey == nil {
+		return nil, fmt.Errorf("all param private keys must be defined")
+	}
+
+	bzzkeybytes := PrivateKeyToBzzKey(params.PrivateKey)
+
+	var record enr.Record
+	record.Set(NewENRAddrEntry(bzzkeybytes))
+	record.Set(ENRLightNodeEntry(params.Lightnode))
+	record.Set(ENRBootNodeEntry(params.Bootnode))
+	return &record, nil
+}
+
+func NewEnode(params *EnodeParams) (*enode.Node, error) {
+	record, err := NewEnodeRecord(params)
+	if err != nil {
+		return nil, err
+	}
+	err = enode.SignV4(record, params.EnodeKey)
+	if err != nil {
+		return nil, fmt.Errorf("ENR create fail: %v", err)
+	}
+	return enode.New(enode.V4ID{}, record)
 }
