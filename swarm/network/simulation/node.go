@@ -223,25 +223,19 @@ func (s *Simulation) UploadSnapshot(ctx context.Context, snapshotFile string, op
 	if err != nil {
 		return err
 	}
-	defer func() {
-		err := f.Close()
-		if err != nil {
-			log.Error("Error closing snapshot file", "err", err)
-		}
-	}()
+	defer f.Close()
+
 	jsonbyte, err := ioutil.ReadAll(f)
 	if err != nil {
 		return err
 	}
 	var snap simulations.Snapshot
-	err = json.Unmarshal(jsonbyte, &snap)
-	if err != nil {
+	if err := json.Unmarshal(jsonbyte, &snap); err != nil {
 		return err
 	}
 
 	//the snapshot probably has the property EnableMsgEvents not set
-	//just in case, set it to true!
-	//(we need this to wait for messages before uploading)
+	//set it to true (we need this to wait for messages before uploading)
 	for i := range snap.Nodes {
 		snap.Nodes[i].Node.Config.EnableMsgEvents = true
 		snap.Nodes[i].Node.Config.Services = s.serviceNames
@@ -250,21 +244,10 @@ func (s *Simulation) UploadSnapshot(ctx context.Context, snapshotFile string, op
 		}
 	}
 
-	log.Info("Waiting for p2p connections to be established...")
-
-	//now we can load the snapshot
-	err = s.Net.Load(&snap)
-	if err != nil {
+	if err := s.Net.Load(&snap); err != nil {
 		return err
 	}
-
-	err = s.WaitTillSnapshotRecreated(ctx, &snap)
-	if err == nil {
-		log.Info("Snapshot loaded")
-	} else {
-		log.Warn("Snapshot load failed", "error", err.Error())
-	}
-	return err
+	return s.WaitTillSnapshotRecreated(ctx, &snap)
 }
 
 // StartNode starts a node by NodeID.
