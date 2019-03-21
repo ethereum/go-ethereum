@@ -406,10 +406,11 @@ func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[T
 			// if the translation in the network package changes, that can cause these tests to unpredictably fail
 			// therefore we keep a local copy of the translation here
 			addr := network.NewAddr(ctx.Config.Node())
-			bzzPrivateKey, addr.OAddr, err = simulation.BzzKeyFromConfig(ctx.Config)
+			bzzPrivateKey, err = simulation.BzzKeyFromConfig(ctx.Config)
 			if err != nil {
 				return nil, nil, err
 			}
+			addr.OAddr = network.PrivateKeyToBzzKey(bzzPrivateKey)
 			b.Store(simulation.BucketKeyBzzPrivateKey, bzzPrivateKey)
 			hp := network.NewHiveParams()
 			hp.Discovery = false
@@ -431,10 +432,11 @@ func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[T
 			privkey, err := w.GetPrivateKey(keys)
 			pssp := NewPssParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
-			_, bzzKey, err := simulation.BzzKeyFromConfig(ctx.Config)
+			bzzPrivateKey, err := simulation.BzzKeyFromConfig(ctx.Config)
 			if err != nil {
 				return nil, nil, err
 			}
+			bzzKey := network.PrivateKeyToBzzKey(bzzPrivateKey)
 			pskad := kademlia(ctx.Config.ID, bzzKey)
 			ps, err := NewPss(pskad, pssp)
 			if err != nil {
