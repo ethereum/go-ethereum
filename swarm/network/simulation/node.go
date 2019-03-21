@@ -112,15 +112,15 @@ func (s *Simulation) AddNode(opts ...AddNodeOption) (id enode.ID, err error) {
 	// for now we have no way of setting bootnodes or lightnodes in sims
 	// so we just let them be set to false
 	// they should perhaps be possible to override them with AddNodeOption
-	enodeParams := &network.EnodeParams{
-		PrivateKey: conf.PrivateKey,
-	}
-	record, err := network.NewEnodeRecord(enodeParams)
-
-	bzzPrivateKey, bzzKey, err := BzzKeyFromConfig(conf)
+	bzzPrivateKey, err := BzzKeyFromConfig(conf)
 	if err != nil {
 		return enode.ID{}, err
 	}
+
+	enodeParams := &network.EnodeParams{
+		PrivateKey: bzzPrivateKey,
+	}
+	record, err := network.NewEnodeRecord(enodeParams)
 	conf.Record = *record
 
 	// Add the bzz address to the node config
@@ -330,13 +330,12 @@ func init() {
 
 // derive a private key for swarm for the node key
 // returns the private key used to generate the bzz key AND the generated bzz key
-func BzzKeyFromConfig(conf *adapters.NodeConfig) (*ecdsa.PrivateKey, []byte, error) {
+func BzzKeyFromConfig(conf *adapters.NodeConfig) (*ecdsa.PrivateKey, error) {
 	// ecdsa.GenerateKey takes 40 bytes entropy
 	privKeyBuf := append(crypto.FromECDSA(conf.PrivateKey), []byte{0x62, 0x7a, 0x7a, 0x62, 0x7a, 0x7a, 0x62, 0x7a}...)
 	bzzPrivateKey, err := ecdsa.GenerateKey(crypto.S256(), bytes.NewReader(privKeyBuf))
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	bzzKey := network.PrivateKeyToBzzKey(bzzPrivateKey)
-	return bzzPrivateKey, bzzKey, nil
+	return bzzPrivateKey, nil
 }
