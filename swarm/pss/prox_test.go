@@ -213,7 +213,7 @@ func testProxNetwork(t *testing.T) {
 	services := newProxServices(tstdata, true, handlerContextFuncs, tstdata.kademlias)
 	tstdata.sim = simulation.New(services)
 	defer tstdata.sim.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 	filename := fmt.Sprintf("testdata/snapshot_%d.json", nodeCount)
 	err := tstdata.sim.UploadSnapshot(ctx, filename)
@@ -400,7 +400,6 @@ func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[T
 			if err != nil {
 				return nil, nil, err
 			}
-			b.Store(simulation.BucketKeyKademlia, pskad)
 
 			// register the handlers we've been passed
 			var deregisters []func()
@@ -421,6 +420,8 @@ func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[T
 				Service:   NewAPITest(ps),
 				Public:    false,
 			})
+
+			b.Store(simulation.BucketKeyKademlia, pskad)
 
 			// return Pss and cleanups
 			return ps, func() {
