@@ -19,9 +19,11 @@ package network
 import (
 	"bytes"
 	"context"
+	"math/rand"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -71,11 +73,20 @@ func TestDiscovery(t *testing.T) {
 func TestSubpeersMsg(t *testing.T) {
 
 	// This is the defined depth
-	testDepth := 2
+	testDepth := rand.Intn(4) + 1
 
 	// construct ProtocolTester and hive
 	params := NewHiveParams()
-	s, hive, err := newHiveTester(t, params, 1, nil)
+	// setup
+	prvkey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := PrivateKeyToBzzKey(prvkey)
+	to := NewKademlia(addr, NewKadParams())
+	hive := NewHive(params, to, nil) // hive
+
+	s, err := newBzzBaseTester(t, 1, prvkey, DiscoverySpec, hive.Run)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,68 +105,76 @@ func TestSubpeersMsg(t *testing.T) {
 	hive.Start(s.Server)
 	defer hive.Stop()
 
-	// the pivot node is the only one from the ProtocolTester
-	pivot := s.Nodes[0]
+	// the remote node is the only one from the ProtocolTester
+	remote := s.Nodes[0]
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// we need to wait until the pivot node is actually connected to our hive
+	// we need to wait until the remote node is actually connected to our hive
 WAIT_PIVOT:
 	for {
 		select {
 		case <-ctx.Done():
-			t.Fatal("Timed out waiting for the pivot node to connect")
+			t.Fatal("Timed out waiting for the remote node to connect")
 		case <-time.After(100 * time.Millisecond):
-			if _, ok := hive.peers[pivot.ID()]; ok {
+			if _, ok := hive.peers[remote.ID()]; ok {
 				break WAIT_PIVOT
 			}
 		}
 	}
 
-	// get BzzAddr of the pivot
-	pivotAddress := hive.peers[pivot.ID()]
-	pivotBzz := pivotAddress.BzzAddr.Over()
+	// get BzzAddr of the remote
+	remoteAddress := hive.peers[remote.ID()]
+	remoteBzz := remoteAddress.BzzAddr.Over()
 
 	// now we need to identify which peers are expected
 	// iterate the hive's connection and only add peers below testDepth
 	var expectedPeers []*BzzAddr
-	hive.EachConn(hive.BaseAddr(), 256, func(p *Peer, po int) bool {
+	hive.EachConn(remoteBzz, 255, func(p *Peer, po int) bool {
 		if po < testDepth {
-			// don't add the pivot node itself to expectedPeers;
-			// the pivot node was not added as
-			if !bytes.Equal(p.BzzAddr.Over(), pivotBzz) {
-				expectedPeers = append(expectedPeers, p.BzzAddr)
-			}
+			return false
+		}
+		// don't add the remote node itself to expectedPeers;
+		// the remote node was not added as
+		if !bytes.Equal(p.BzzAddr.Over(), remoteBzz) {
+			expectedPeers = append(expectedPeers, p.BzzAddr)
 		}
 		return true
 	})
 
 	// the test exchange is as follows:
-	// 1. Trigger a subPeersMsg from pivot to our hive
+	// 1. Trigger a subPeersMsg from remote to our hive
 	// 2. Hive will respond with peersMsg with the set of expected peers
 	err = s.TestExchanges(p2ptest.Exchange{
 		Label: "incoming subPeersMsg",
-		Triggers: []p2ptest.Trigger{
-			{
-				Code: 1,
-				Msg:  &subPeersMsg{Depth: uint8(testDepth)},
-				Peer: pivot.ID(),
-			},
-		},
 		Expects: []p2ptest.Expect{
 			{
 				Code: 1,
-				Msg:  &subPeersMsg{Depth: uint8(testDepth)},
-				Peer: pivot.ID(),
-			},
-			{
-				Code: 0,
-				Msg:  &peersMsg{Peers: expectedPeers},
-				Peer: pivot.ID(),
+				Msg:  &subPeersMsg{Depth: uint8(2)},
+				Peer: remote.ID(),
 			},
 		},
-	})
+	},
+		p2ptest.Exchange{
+			Label: "trigger subPeers and receive peersMsg",
+			Triggers: []p2ptest.Trigger{
+				{
+					Code:    1,
+					Msg:     &subPeersMsg{Depth: uint8(testDepth)},
+					Peer:    remote.ID(),
+					Timeout: 3 * time.Second,
+				},
+			},
+			Expects: []p2ptest.Expect{
+				{
+					Code:    0,
+					Msg:     &peersMsg{Peers: expectedPeers},
+					Peer:    remote.ID(),
+					Timeout: 3 * time.Second,
+				},
+			},
+		})
 
 	if err != nil {
 		t.Fatal(err)

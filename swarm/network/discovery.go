@@ -160,11 +160,12 @@ func (d *Peer) handleSubPeersMsg(msg *subPeersMsg) error {
 	if !d.sentPeers {
 		d.setDepth(msg.Depth)
 		var peers []*BzzAddr
-		d.kad.EachConn(d.kad.BaseAddr(), 255, func(p *Peer, po int) bool {
+		d.kad.EachConn(d.Over(), 255, func(p *Peer, po int) bool {
 			if uint8(po) < msg.Depth {
-				if !d.seen(p.BzzAddr) {
-					peers = append(peers, p.BzzAddr)
-				}
+				return false
+			}
+			if !d.seen(p.BzzAddr) {
+				peers = append(peers, p.BzzAddr)
 			}
 			return true
 		})
