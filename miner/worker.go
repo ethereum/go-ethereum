@@ -569,7 +569,7 @@ func (w *worker) resultLoop() {
 				// add block location fields
 				receipt.BlockHash = hash
 				receipt.BlockNumber = block.Number()
-				receipt.TransactionIndex = big.NewInt(int64(i))
+				receipt.TransactionIndex = uint(i)
 
 				receipts[i] = new(types.Receipt)
 				*receipts[i] = *receipt

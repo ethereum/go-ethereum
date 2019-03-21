@@ -802,7 +802,7 @@ func SetReceiptsData(config *params.ChainConfig, block *types.Block, receipts ty
 		// block location fields
 		receipts[j].BlockHash = block.Hash()
 		receipts[j].BlockNumber = block.Number()
-		receipts[j].TransactionIndex = big.NewInt(int64(j))
+		receipts[j].TransactionIndex = uint(j)
 
 		// The contract address can be derived from the transaction itself
 		if transactions[j].To() == nil {
