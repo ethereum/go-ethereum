@@ -5,6 +5,25 @@
   * A USB smartcard reader
   * A keycard that supports the status app
 
+## Preparing the smartcard
+
+  You can use status' [keycard-cli](https://github.com/status-im/keycard-cli) and you should get version 2.1 (**NOT** 2.1.1, this will be supported in a later update) of their [smartcard application](https://github.com/status-im/status-keycard/releases/download/2.1/keycard_v2.1.cap)
+
+  You also need to make sure that the PCSC daemon is running on your system.
+
+  Then, you can install the application to the card by typing:
+
+  ```
+  keycard install -a keycard_v2.1.cap
+  ```
+
+  Then you can initialize the application by typing:
+
+  ```
+  keycard init
+  ```
+
+
 ## Usage
 
   1. Start `geth` with the `console` command
