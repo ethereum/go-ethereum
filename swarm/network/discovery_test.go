@@ -19,7 +19,10 @@ package network
 import (
 	"bytes"
 	"context"
-	"math/rand"
+	"crypto/ecdsa"
+	"crypto/rand"
+	"fmt"
+	"net"
 	"testing"
 	"time"
 
@@ -72,9 +75,6 @@ func TestDiscovery(t *testing.T) {
 // to another peer with a given depth and kademlia
 func TestSubpeersMsg(t *testing.T) {
 
-	// This is the defined depth
-	testDepth := rand.Intn(4) + 1
-
 	// construct ProtocolTester and hive
 	params := NewHiveParams()
 	// setup
@@ -86,73 +86,78 @@ func TestSubpeersMsg(t *testing.T) {
 	to := NewKademlia(addr, NewKadParams())
 	hive := NewHive(params, to, nil) // hive
 
-	s, err := newBzzBaseTester(t, 1, prvkey, DiscoverySpec, hive.Run)
+	numOfTestNodes := 12
+
+	s, err := newBzzBaseTester(t, numOfTestNodes, prvkey, DiscoverySpec, hive.Run)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// register some addresses in specific bins (must coincide with testDepth)
-	registerBzzAddr(0, hive, true)  // bin 0
-	registerBzzAddr(0, hive, true)  // bin 0
-	registerBzzAddr(1, hive, true)  // bin 1
-	registerBzzAddr(1, hive, true)  // bin 1
-	registerBzzAddr(3, hive, true)  // bin 3
-	registerBzzAddr(4, hive, true)  // bin 4
-	registerBzzAddr(3, hive, false) // add a known but not connected peer
-	registerBzzAddr(1, hive, false) // add a known but not connected peer
+	// the control node is the only one from the ProtocolTester
+	control := s.Nodes[numOfTestNodes-1]
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	// start the hive
 	hive.Start(s.Server)
 	defer hive.Stop()
 
-	// the remote node is the only one from the ProtocolTester
-	remote := s.Nodes[0]
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// we need to wait until the remote node is actually connected to our hive
+	// we need to wait until the control node is actually connected to our hive
 WAIT_PIVOT:
 	for {
 		select {
 		case <-ctx.Done():
-			t.Fatal("Timed out waiting for the remote node to connect")
+			t.Fatal("Timed out waiting for the control node to connect")
 		case <-time.After(100 * time.Millisecond):
-			if _, ok := hive.peers[remote.ID()]; ok {
+			if len(hive.peers) == len(s.BzzAddrs) {
 				break WAIT_PIVOT
 			}
 		}
 	}
 
-	// get BzzAddr of the remote
-	remoteAddress := hive.peers[remote.ID()]
-	remoteBzz := remoteAddress.BzzAddr.Over()
+	// get BzzAddr of the control
+	controlBzz := s.BzzAddrs[control.ID()].Over()
+
+	controlKad := NewKademlia(controlBzz, NewKadParams())
+	for _, p := range s.BzzAddrs {
+		if !bytes.Equal(p.Over(), controlBzz) {
+			controlKad.On(NewPeer(&BzzPeer{nil, p, time.Now(), false}, controlKad))
+		}
+	}
+	controlDepth := controlKad.NeighbourhoodDepth()
 
 	// now we need to identify which peers are expected
 	// iterate the hive's connection and only add peers below testDepth
 	var expectedPeers []*BzzAddr
-	hive.EachConn(remoteBzz, 255, func(p *Peer, po int) bool {
-		if po < testDepth {
+	hive.EachConn(controlBzz, 255, func(p *Peer, po int) bool {
+		if po < controlDepth {
 			return false
 		}
-		// don't add the remote node itself to expectedPeers;
-		// the remote node was not added as
-		if !bytes.Equal(p.BzzAddr.Over(), remoteBzz) {
+		// don't add the control node itself to expectedPeers;
+		// the control node was not added as
+		if !bytes.Equal(p.BzzAddr.Over(), controlBzz) {
 			expectedPeers = append(expectedPeers, p.BzzAddr)
 		}
 		return true
 	})
 
+	hiveDepth := hive.NeighbourhoodDepth()
+
 	// the test exchange is as follows:
-	// 1. Trigger a subPeersMsg from remote to our hive
+	// 1. Trigger a subPeersMsg from control to our hive
 	// 2. Hive will respond with peersMsg with the set of expected peers
+	if controlDepth == 0 {
+		controlDepth = 1
+	}
+
 	err = s.TestExchanges(p2ptest.Exchange{
 		Label: "incoming subPeersMsg",
 		Expects: []p2ptest.Expect{
 			{
 				Code: 1,
-				Msg:  &subPeersMsg{Depth: uint8(2)},
-				Peer: remote.ID(),
+				Msg:  &subPeersMsg{Depth: uint8(hiveDepth)},
+				Peer: control.ID(),
 			},
 		},
 	},
@@ -161,8 +166,8 @@ WAIT_PIVOT:
 			Triggers: []p2ptest.Trigger{
 				{
 					Code:    1,
-					Msg:     &subPeersMsg{Depth: uint8(testDepth)},
-					Peer:    remote.ID(),
+					Msg:     &subPeersMsg{Depth: uint8(controlDepth)},
+					Peer:    control.ID(),
 					Timeout: 3 * time.Second,
 				},
 			},
@@ -170,11 +175,22 @@ WAIT_PIVOT:
 				{
 					Code:    0,
 					Msg:     &peersMsg{Peers: expectedPeers},
-					Peer:    remote.ID(),
+					Peer:    control.ID(),
 					Timeout: 3 * time.Second,
 				},
 			},
 		})
+
+	// for some configurations, there will be no advertised peers due to the
+	// distance of the control peer to the hive and the set of connected peers
+	// in this case, no peersMsg will be sent out, and we would run into a time out
+	// catch this edge case
+	if len(expectedPeers) == 0 {
+		if err == nil || !strings.Contains(err.Error(), "timed out") {
+			t.Fatal("expected timeout but didn't")
+		}
+		return
+	}
 
 	if err != nil {
 		t.Fatal(err)

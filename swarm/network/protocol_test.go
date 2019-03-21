@@ -72,6 +72,7 @@ func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id enode.ID) []p2ptest.Exchang
 
 func newBzzBaseTester(t *testing.T, n int, prvkey *ecdsa.PrivateKey, spec *protocols.Spec, run func(*BzzPeer) error) (*bzzTester, error) {
 	cs := make(map[string]chan bool)
+	bzzAddrs := make(map[enode.ID]*BzzAddr)
 
 	srv := func(p *BzzPeer) error {
 		defer func() {
@@ -83,7 +84,9 @@ func newBzzBaseTester(t *testing.T, n int, prvkey *ecdsa.PrivateKey, spec *proto
 	}
 
 	protocol := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-		return srv(&BzzPeer{Peer: protocols.NewPeer(p, rw, spec), BzzAddr: NewAddr(p.Node())})
+		bzzAddr := NewAddr(p.Node())
+		bzzAddrs[p.Node().ID()] = bzzAddr
+		return srv(&BzzPeer{Peer: protocols.NewPeer(p, rw, spec), BzzAddr: bzzAddr})
 	}
 
 	s := p2ptest.NewProtocolTester(prvkey, n, protocol)
@@ -109,14 +112,16 @@ func newBzzBaseTester(t *testing.T, n int, prvkey *ecdsa.PrivateKey, spec *proto
 		addr:           addr,
 		ProtocolTester: s,
 		cs:             cs,
+		BzzAddrs:       bzzAddrs,
 	}, nil
 }
 
 type bzzTester struct {
 	*p2ptest.ProtocolTester
-	addr *BzzAddr
-	cs   map[string]chan bool
-	bzz  *Bzz
+	BzzAddrs map[enode.ID]*BzzAddr
+	addr     *BzzAddr
+	cs       map[string]chan bool
+	bzz      *Bzz
 }
 
 func newBzz(addr *BzzAddr, lightNode bool) *Bzz {
