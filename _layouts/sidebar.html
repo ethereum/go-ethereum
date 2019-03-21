@@ -1,0 +1,38 @@
+---
+layout: default
+---
+<div class="container" style="padding-top: 24px;">
+    <div class="row">
+          <div class="col-md-3" id="toc" style="padding-top: 16px;">
+            {% assign collections = site.collections | sort: "sidebar_index" %}
+            {% for coll in collections %}
+                {% if coll.sidebar_index %}
+                    {% assign count = coll.docs | size %}
+                    {% if count <= 5 %}
+                        <div class="list-group">
+                            <a class="list-group-item active">{{ coll.caption }}</a>
+                            {% for doc in coll.docs %}
+                                <a class="list-group-item" 
+                                    href="{% include link.html url=doc.url %}">
+                                    {% include title.html doc=doc coll=coll %}</a>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        {% capture url %}/{{ coll.label }}{% endcapture %}
+                        <div class="list-group">
+                            <a class="list-group-item active"
+                               href="{% include link.html url=url %}">{{ coll.caption }}</a>
+                        </div>
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+          </div>
+          <div class="col-md-9" id="content">
+            {% if page.title %}
+            <h1 class="featurette-heading">{% include title.html doc=page coll=page.collection %}</h1>
+            {% endif %}
+
+            {{ content }}
+          </div>
+    </div>
+</div>
