@@ -330,7 +330,7 @@ func (self *worker) wait() {
 				continue
 			}
 			block := result.Block
-			if self.config.Posv != nil && block.NumberU64() >= self.config.Posv.Epoch {
+			if self.config.Posv != nil && block.NumberU64() >= self.config.Posv.Epoch && len(block.Validator()) == 0 {
 				self.mux.Post(core.NewMinedBlockEvent{Block: block})
 				continue
 			}
