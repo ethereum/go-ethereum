@@ -387,11 +387,26 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 		} else {
 			// Reorg seems shallow enough to pull in all transactions into memory
 			var discarded, included types.Transactions
-
 			var (
 				rem = pool.chain.GetBlock(oldHead.Hash(), oldHead.Number.Uint64())
 				add = pool.chain.GetBlock(newHead.Hash(), newHead.Number.Uint64())
 			)
+			if rem == nil {
+				// This can happen if a setHead is performed, where we simply discard the old
+				// head from the chain.
+				// If that is the case, we don't have the lost transactions any more, and
+				// there's nothing to add
+				if newNum < oldNum {
+					// If the reorg ended up on a lower number, it's indicative of setHead being the cause
+					log.Debug("Skipping transaction reset caused by setHead",
+						"old", oldHead.Hash(), "oldnum", oldNum, "new", newHead.Hash(), "newnum", newNum)
+				} else {
+					// If we reorged to a same or higher number, then it's not a case of setHead
+					log.Warn("Transaction pool reset with missing oldhead",
+						"old", oldHead.Hash(), "oldnum", oldNum, "new", newHead.Hash(), "newnum", newNum)
+				}
+				return
+			}
 			for rem.NumberU64() > add.NumberU64() {
 				discarded = append(discarded, rem.Transactions()...)
 				if rem = pool.chain.GetBlock(rem.ParentHash(), rem.NumberU64()-1); rem == nil {
