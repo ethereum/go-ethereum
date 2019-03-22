@@ -132,7 +132,7 @@ func newPreconnectedBzzBaseTester(t *testing.T, waitC chan struct{}, preConns []
 	s := p2ptest.NewProtocolTester(prvkey, n, protocol)
 
 	for _, node := range s.Nodes {
-		log.Warn("node", "node", node)
+		log.Debug("node", "node", node)
 		cs[node.ID().String()] = make(chan bool)
 	}
 

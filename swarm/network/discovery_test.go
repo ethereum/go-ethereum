@@ -130,7 +130,9 @@ func testSubpeersMsg(t *testing.T) {
 	control := s.Nodes[0]
 
 	// get BzzAddr of the control
+	hive.lock.Lock()
 	controlBzz := hive.peers[control.ID()].Over()
+	hive.lock.Unlock()
 	// build a control kademlia for the control node from the address pool
 	// we use this so we can identify the actual `controlDepth` of the control node
 	controlKad := NewKademlia(controlBzz, NewKadParams())
@@ -155,9 +157,6 @@ func testSubpeersMsg(t *testing.T) {
 		return true
 	})
 
-	// this is the hive's depth, which will be sent first to the control node initiating the test exchanges
-	hiveDepth := hive.NeighbourhoodDepth()
-
 	// if the controlDepth is 0, nothing will happen, so in this case artificially set it to 2
 	if controlDepth == 0 {
 		controlDepth = 2
@@ -172,7 +171,7 @@ func testSubpeersMsg(t *testing.T) {
 		Expects: []p2ptest.Expect{
 			{
 				Code: 1,
-				Msg:  &subPeersMsg{Depth: uint8(hiveDepth)},
+				Msg:  &subPeersMsg{Depth: uint8(hive.depth)},
 				Peer: control.ID(),
 			},
 		},
