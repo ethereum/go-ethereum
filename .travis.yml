@@ -11,7 +11,7 @@ jobs:
     git:
       submodules: false
       script:
-        - go run build/ci.go lint
+        - go run build/ci.go lint && make gofmt
 
   - stage: Build and test
     go: '1.11'
