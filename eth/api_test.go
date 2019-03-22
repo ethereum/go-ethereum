@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"bytes"
 	"math/big"
 	"fmt"
 	"reflect"
@@ -29,6 +30,25 @@ import (
 )
 
 var dumper = spew.ConfigState{Indent: "    "}
+
+func accountRangeExpect(t *testing.T, trie *state.Trie, statedb *state.StateDB, start *common.Address, requestedNum int, expectedNum int) AccountRangeResult {
+	result, err := accountRange(*trie, start, requestedNum)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result.Addresses) != expectedNum {
+		t.Fatalf("expected %d results.  Got %d", expectedNum, len(result.Addresses))
+	}
+
+	for i := range result.Addresses {
+		if !statedb.Exist(result.Addresses[i]) {
+			t.Fatalf("account not found in state %s", result.Addresses[i].String())
+		}
+	}
+
+	return result
+}
 
 func TestAccountRangeAt(t *testing.T) {
 	var (
@@ -53,30 +73,24 @@ func TestAccountRangeAt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	// test getting number of results less than max
-
-	result, err := accountRange(trie, &common.Address{0x0}, 128)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(result.Addresses) != 128 {
-		t.Fatalf("expected 128 results.  Got %d", len(result.Addresses))
-	}
+	accountRangeExpect(t, &trie, state, &common.Address{0x0}, 128, 128)
 
 	// test getting number of results greater than max
+	accountRangeExpect(t, &trie, state, &common.Address{0x0}, 512, 256)
 
-	result, err = accountRange(trie, &common.Address{0x0}, 512)
-	if err != nil {
-		t.Fatal(err)
+	// test pagination
+	firstResult := accountRangeExpect(t, &trie, state, &common.Address{0x0}, 128, 128)
+	secondResult := accountRangeExpect(t, &trie, state, &firstResult.Next, 128, 128)
+
+	for i := range firstResult.Addresses {
+		for j := range secondResult.Addresses {
+			if bytes.Equal(firstResult.Addresses[i].Bytes(), secondResult.Addresses[j].Bytes()) {
+				t.Fatalf("pagination test failed:  results should not overlap")
+			}
+		}
 	}
-
-	if len(result.Addresses) != 256 {
-		t.Fatalf("expected 256 results.  Got %d", len(result.Addresses))
-	}
-
-	// test pagination TODO
 }
 
 func TestStorageRangeAt(t *testing.T) {
