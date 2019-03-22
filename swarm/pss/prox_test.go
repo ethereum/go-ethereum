@@ -402,7 +402,7 @@ func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[T
 			// if the translation in the network package changes, that can cause these tests to unpredictably fail
 			// therefore we keep a local copy of the translation here
 			addr := network.NewAddr(ctx.Config.Node())
-			bzzPrivateKey, err = simulation.BzzKeyFromConfig(ctx.Config)
+			bzzPrivateKey, err = simulation.BzzPrivateKeyFromConfig(ctx.Config)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -428,7 +428,7 @@ func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[T
 			privkey, err := w.GetPrivateKey(keys)
 			pssp := NewPssParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
-			bzzPrivateKey, err := simulation.BzzKeyFromConfig(ctx.Config)
+			bzzPrivateKey, err := simulation.BzzPrivateKeyFromConfig(ctx.Config)
 			if err != nil {
 				return nil, nil, err
 			}

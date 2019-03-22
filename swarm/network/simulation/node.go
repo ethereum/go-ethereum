@@ -112,7 +112,7 @@ func (s *Simulation) AddNode(opts ...AddNodeOption) (id enode.ID, err error) {
 	// for now we have no way of setting bootnodes or lightnodes in sims
 	// so we just let them be set to false
 	// they should perhaps be possible to override them with AddNodeOption
-	bzzPrivateKey, err := BzzKeyFromConfig(conf)
+	bzzPrivateKey, err := BzzPrivateKeyFromConfig(conf)
 	if err != nil {
 		return enode.ID{}, err
 	}
@@ -330,7 +330,7 @@ func init() {
 
 // derive a private key for swarm for the node key
 // returns the private key used to generate the bzz key
-func BzzKeyFromConfig(conf *adapters.NodeConfig) (*ecdsa.PrivateKey, error) {
+func BzzPrivateKeyFromConfig(conf *adapters.NodeConfig) (*ecdsa.PrivateKey, error) {
 	// pad the seed key some arbitrary data as ecdsa.GenerateKey takes 40 bytes seed data
 	privKeyBuf := append(crypto.FromECDSA(conf.PrivateKey), []byte{0x62, 0x7a, 0x7a, 0x62, 0x7a, 0x7a, 0x62, 0x7a}...)
 	bzzPrivateKey, err := ecdsa.GenerateKey(crypto.S256(), bytes.NewReader(privKeyBuf))
