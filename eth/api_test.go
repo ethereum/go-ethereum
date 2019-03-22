@@ -18,8 +18,8 @@ package eth
 
 import (
 	"bytes"
-	"math/big"
 	"fmt"
+	"math/big"
 	"reflect"
 	"testing"
 
@@ -52,9 +52,9 @@ func accountRangeExpect(t *testing.T, trie *state.Trie, statedb *state.StateDB, 
 
 func TestAccountRangeAt(t *testing.T) {
 	var (
-		statedb = state.NewDatabase(ethdb.NewMemDatabase())
+		statedb  = state.NewDatabase(ethdb.NewMemDatabase())
 		state, _ = state.New(common.Hash{}, statedb)
-		addrs = [512]common.Address{}
+		addrs    = [512]common.Address{}
 	)
 
 	for i := 0; i < 512; i++ {
