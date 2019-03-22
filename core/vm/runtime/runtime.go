@@ -22,10 +22,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -52,7 +52,7 @@ type Config struct {
 func setDefaults(cfg *Config) {
 	if cfg.ChainConfig == nil {
 		cfg.ChainConfig = &params.ChainConfig{
-			ChainID:        big.NewInt(1),
+			ChainId:        big.NewInt(1),
 			HomesteadBlock: new(big.Int),
 			DAOForkBlock:   new(big.Int),
 			DAOForkSupport: false,
@@ -99,10 +99,11 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	setDefaults(cfg)
 
 	if cfg.State == nil {
-		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
+		db, _ := ethdb.NewMemDatabase()
+		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(db))
 	}
 	var (
-		address = common.BytesToAddress([]byte("contract"))
+		address = common.StringToAddress("contract")
 		vmenv   = NewEnv(cfg)
 		sender  = vm.AccountRef(cfg.Origin)
 	)
@@ -112,7 +113,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	// Call the code with the given configuration.
 	ret, _, err := vmenv.Call(
 		sender,
-		common.BytesToAddress([]byte("contract")),
+		common.StringToAddress("contract"),
 		input,
 		cfg.GasLimit,
 		cfg.Value,
@@ -129,7 +130,8 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	setDefaults(cfg)
 
 	if cfg.State == nil {
-		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
+		db, _ := ethdb.NewMemDatabase()
+		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(db))
 	}
 	var (
 		vmenv  = NewEnv(cfg)
