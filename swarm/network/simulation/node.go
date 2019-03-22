@@ -329,9 +329,9 @@ func init() {
 }
 
 // derive a private key for swarm for the node key
-// returns the private key used to generate the bzz key AND the generated bzz key
+// returns the private key used to generate the bzz key
 func BzzKeyFromConfig(conf *adapters.NodeConfig) (*ecdsa.PrivateKey, error) {
-	// ecdsa.GenerateKey takes 40 bytes entropy
+	// pad the seed key some arbitrary data as ecdsa.GenerateKey takes 40 bytes seed data
 	privKeyBuf := append(crypto.FromECDSA(conf.PrivateKey), []byte{0x62, 0x7a, 0x7a, 0x62, 0x7a, 0x7a, 0x62, 0x7a}...)
 	bzzPrivateKey, err := ecdsa.GenerateKey(crypto.S256(), bytes.NewReader(privKeyBuf))
 	if err != nil {
