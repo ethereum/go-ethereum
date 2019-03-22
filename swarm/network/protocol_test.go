@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -70,9 +71,9 @@ func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id enode.ID) []p2ptest.Exchang
 	}
 }
 
-func newBzzBaseTester(t *testing.T, n int, prvkey *ecdsa.PrivateKey, spec *protocols.Spec, run func(*BzzPeer) error) (*bzzTester, error) {
+// get some protocol entities
+func getProtocolAttrs(run func(*BzzPeer) error) (map[string]chan bool, func(p *BzzPeer) error) {
 	cs := make(map[string]chan bool)
-	bzzAddrs := make(map[enode.ID]*BzzAddr)
 
 	srv := func(p *BzzPeer) error {
 		defer func() {
@@ -83,13 +84,11 @@ func newBzzBaseTester(t *testing.T, n int, prvkey *ecdsa.PrivateKey, spec *proto
 		return run(p)
 	}
 
-	protocol := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-		bzzAddr := NewAddr(p.Node())
-		bzzAddrs[p.Node().ID()] = bzzAddr
-		return srv(&BzzPeer{Peer: protocols.NewPeer(p, rw, spec), BzzAddr: bzzAddr})
-	}
+	return cs, srv
+}
 
-	s := p2ptest.NewProtocolTester(prvkey, n, protocol)
+// get a BzzAddr for the hive
+func getBzzAddr(prvkey *ecdsa.PrivateKey) (*BzzAddr, error) {
 	var record enr.Record
 	bzzKey := PrivateKeyToBzzKey(prvkey)
 	record.Set(NewENRAddrEntry(bzzKey))
@@ -101,7 +100,65 @@ func newBzzBaseTester(t *testing.T, n int, prvkey *ecdsa.PrivateKey, spec *proto
 	if err != nil {
 		return nil, fmt.Errorf("unable to create enode: %v", err)
 	}
-	addr := getENRBzzAddr(nod)
+	return getENRBzzAddr(nod), nil
+
+}
+
+// this is a custom version of the bzzBaseTester, which we can use to
+// associate preconstructed BzzAddr addresses to the `enode.ID` created in the `ProtocolTester`
+// this allows control over the address space in tests needing the protocol agnostic `ProtocolTester`
+func newPreconnectedBzzBaseTester(t *testing.T, waitC chan struct{}, preConns []*BzzAddr, n int, prvkey *ecdsa.PrivateKey, spec *protocols.Spec, run func(*BzzPeer) error) (*bzzTester, error) {
+	var lock sync.Mutex
+	cs, srv := getProtocolAttrs(run)
+
+	// in this custom version of the protocol, we can associate the preconstructed BzzAddr to `enode.ID`s
+	protocol := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+		lock.Lock()
+		// take one address from the "stack"
+		n := len(preConns) - 1
+		// associate it to bzzAddr, which is used further down to create the BzzPeer
+		bzzAddr := preConns[n]
+		// pop the address from the "stack"
+		preConns = preConns[:n]
+		// if there are no more addresses left, inform the caller
+		if len(preConns) == 0 {
+			waitC <- struct{}{}
+		}
+		lock.Unlock()
+		// run the protocol, create the protocol node
+		return srv(&BzzPeer{Peer: protocols.NewPeer(p, rw, spec), BzzAddr: bzzAddr})
+	}
+
+	s := p2ptest.NewProtocolTester(prvkey, n, protocol)
+
+	for _, node := range s.Nodes {
+		log.Warn("node", "node", node)
+		cs[node.ID().String()] = make(chan bool)
+	}
+
+	return &bzzTester{
+		// this version of the bzzTester assumes that the hive has been built outside of this function already
+		addr:           nil, // ...so no need to create a new address
+		ProtocolTester: s,
+		cs:             cs,
+	}, nil
+}
+
+// standard bzzTester
+func newBzzBaseTester(t *testing.T, n int, prvkey *ecdsa.PrivateKey, spec *protocols.Spec, run func(*BzzPeer) error) (*bzzTester, error) {
+
+	cs, srv := getProtocolAttrs(run)
+
+	protocol := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+		return srv(&BzzPeer{Peer: protocols.NewPeer(p, rw, spec), BzzAddr: NewAddr(p.Node())})
+	}
+
+	s := p2ptest.NewProtocolTester(prvkey, n, protocol)
+
+	addr, err := getBzzAddr(prvkey)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for _, node := range s.Nodes {
 		log.Warn("node", "node", node)
@@ -112,16 +169,14 @@ func newBzzBaseTester(t *testing.T, n int, prvkey *ecdsa.PrivateKey, spec *proto
 		addr:           addr,
 		ProtocolTester: s,
 		cs:             cs,
-		BzzAddrs:       bzzAddrs,
 	}, nil
 }
 
 type bzzTester struct {
 	*p2ptest.ProtocolTester
-	BzzAddrs map[enode.ID]*BzzAddr
-	addr     *BzzAddr
-	cs       map[string]chan bool
-	bzz      *Bzz
+	addr *BzzAddr
+	cs   map[string]chan bool
+	bzz  *Bzz
 }
 
 func newBzz(addr *BzzAddr, lightNode bool) *Bzz {
