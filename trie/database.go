@@ -266,7 +266,7 @@ func expandNode(hash hashNode, n node) node {
 // map shard id.
 type trienodeHasher struct{}
 
-// Sum64 implements the bigcache.Hasher interface
+// Sum64 implements the bigcache.Hasher interface.
 func (t trienodeHasher) Sum64(key string) uint64 {
 	return binary.BigEndian.Uint64([]byte(key))
 }
