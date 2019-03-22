@@ -322,7 +322,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		c.HookPenaltyTIPSigning = func(chain consensus.ChainReader, header *types.Header, candidates []common.Address) ([]common.Address, error) {
 			prevEpoc := header.Number.Uint64() - chain.Config().Posv.Epoch
 			combackEpoch := uint64(0)
-			comebackLength := uint64((common.LimitPenaltyEpoch + 1) * chain.Config().Posv.Epoch)
+			comebackLength := (common.LimitPenaltyEpoch + 1) * chain.Config().Posv.Epoch
 			if header.Number.Uint64() > comebackLength {
 				combackEpoch = header.Number.Uint64() - comebackLength
 			}
@@ -367,7 +367,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 						penalties = append(penalties, addr)
 					}
 				}
-				
+
 				// get list check penalties signing block & list master nodes wil comeback
 				penComebacks := []common.Address{}
 				if combackEpoch > 0 {
