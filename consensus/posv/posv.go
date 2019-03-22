@@ -977,7 +977,13 @@ func (c *Posv) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan
 		return nil, err
 	}
 	copy(header.Extra[len(header.Extra)-extraSeal:], sighash)
-
+	m2, err := c.GetValidator(signer, chain, header)
+	if err != nil {
+		return nil, fmt.Errorf("can't get block validator: %v", err)
+	}
+	if m2 == signer {
+		header.Validator = sighash
+	}
 	return block.WithSeal(header), nil
 }
 
