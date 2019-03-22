@@ -162,6 +162,10 @@ func testSubpeersMsg(t *testing.T) {
 		controlDepth = 2
 	}
 
+	hive.lock.Lock()
+	hiveDepth := hive.depth
+	hive.lock.Unlock()
+
 	// the test exchange is as follows:
 	// 1. Wait for a `subPeersMsg` advertizing the hive's depth from our hive to our control node
 	// 2. Trigger a `suPeersMsg` from the control node advertizing its own depth
@@ -171,7 +175,7 @@ func testSubpeersMsg(t *testing.T) {
 		Expects: []p2ptest.Expect{
 			{
 				Code: 1,
-				Msg:  &subPeersMsg{Depth: uint8(hive.depth)},
+				Msg:  &subPeersMsg{Depth: uint8(hiveDepth)},
 				Peer: control.ID(),
 			},
 		},
