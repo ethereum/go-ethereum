@@ -47,6 +47,16 @@ import (
 )
 
 var (
+	accountReadTimer   = metrics.NewRegisteredTimer("chain/account/reads", nil)
+	accountHashTimer   = metrics.NewRegisteredTimer("chain/account/hashes", nil)
+	accountUpdateTimer = metrics.NewRegisteredTimer("chain/account/updates", nil)
+	accountCommitTimer = metrics.NewRegisteredTimer("chain/account/commits", nil)
+
+	storageReadTimer   = metrics.NewRegisteredTimer("chain/storage/reads", nil)
+	storageHashTimer   = metrics.NewRegisteredTimer("chain/storage/hashes", nil)
+	storageUpdateTimer = metrics.NewRegisteredTimer("chain/storage/updates", nil)
+	storageCommitTimer = metrics.NewRegisteredTimer("chain/storage/commits", nil)
+
 	blockInsertTimer     = metrics.NewRegisteredTimer("chain/inserts", nil)
 	blockValidationTimer = metrics.NewRegisteredTimer("chain/validation", nil)
 	blockExecutionTimer  = metrics.NewRegisteredTimer("chain/execution", nil)
@@ -1249,10 +1259,26 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		if err != nil {
 			return it.index, events, coalescedLogs, err
 		}
+
+		// Update the metrics subsystem with all the measurements
+		accountReadTimer.Update(state.AccountReads)
+		accountHashTimer.Update(state.AccountHashes)
+		accountUpdateTimer.Update(state.AccountUpdates)
+		accountCommitTimer.Update(state.AccountCommits)
+
+		storageReadTimer.Update(state.StorageReads)
+		storageHashTimer.Update(state.StorageHashes)
+		storageUpdateTimer.Update(state.StorageUpdates)
+		storageCommitTimer.Update(state.StorageCommits)
+
+		trieAccess := state.AccountReads + state.AccountHashes + state.AccountUpdates + state.AccountCommits
+		trieAccess += state.StorageReads + state.StorageHashes + state.StorageUpdates + state.StorageCommits
+
 		blockInsertTimer.UpdateSince(start)
-		blockExecutionTimer.Update(t1.Sub(t0))
+		blockExecutionTimer.Update(t1.Sub(t0) - trieAccess)
 		blockValidationTimer.Update(t2.Sub(t1))
 		blockWriteTimer.Update(t3.Sub(t2))
+
 		switch status {
 		case CanonStatTy:
 			log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
@@ -1274,7 +1300,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 				"root", block.Root())
 			events = append(events, ChainSideEvent{block})
 		}
-		blockInsertTimer.UpdateSince(start)
 		stats.processed++
 		stats.usedGas += usedGas
 

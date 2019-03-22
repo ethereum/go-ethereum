@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -177,6 +178,9 @@ func (self *stateObject) GetCommittedState(db Database, key common.Hash) common.
 	if cached {
 		return value
 	}
+	// Track the amount of time wasted on reading the storge trie
+	defer func(start time.Time) { self.db.StorageReads += time.Since(start) }(time.Now())
+
 	// Otherwise load the value from the database
 	enc, err := self.getTrie(db).TryGet(key[:])
 	if err != nil {
@@ -216,6 +220,9 @@ func (self *stateObject) setState(key, value common.Hash) {
 
 // updateTrie writes cached storage modifications into the object's storage trie.
 func (self *stateObject) updateTrie(db Database) Trie {
+	// Track the amount of time wasted on updating the storge trie
+	defer func(start time.Time) { self.db.StorageUpdates += time.Since(start) }(time.Now())
+
 	tr := self.getTrie(db)
 	for key, value := range self.dirtyStorage {
 		delete(self.dirtyStorage, key)
@@ -240,6 +247,9 @@ func (self *stateObject) updateTrie(db Database) Trie {
 // UpdateRoot sets the trie root to the current root hash of
 func (self *stateObject) updateRoot(db Database) {
 	self.updateTrie(db)
+
+	// Track the amount of time wasted on hashing the storge trie
+	defer func(start time.Time) { self.db.StorageHashes += time.Since(start) }(time.Now())
 	self.data.Root = self.trie.Hash()
 }
 
@@ -250,6 +260,9 @@ func (self *stateObject) CommitTrie(db Database) error {
 	if self.dbErr != nil {
 		return self.dbErr
 	}
+	// Track the amount of time wasted on committing the storge trie
+	defer func(start time.Time) { self.db.StorageCommits += time.Since(start) }(time.Now())
+
 	root, err := self.trie.Commit(nil)
 	if err == nil {
 		self.data.Root = root
