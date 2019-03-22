@@ -31,7 +31,7 @@ import (
 
 var dumper = spew.ConfigState{Indent: "    "}
 
-func accountRangeExpect(t *testing.T, trie *state.Trie, statedb *state.StateDB, start *common.Address, requestedNum int, expectedNum int) AccountRangeResult {
+func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, start *common.Address, requestedNum int, expectedNum int) AccountRangeResult {
 	result, err := accountRange(*trie, start, requestedNum)
 	if err != nil {
 		t.Fatal(err)
@@ -54,15 +54,12 @@ func TestAccountRangeAt(t *testing.T) {
 	var (
 		statedb  = state.NewDatabase(ethdb.NewMemDatabase())
 		state, _ = state.New(common.Hash{}, statedb)
-		addrs    = [512]common.Address{}
+		addrs    = [AccountRangeMaxResults * 2]common.Address{}
 	)
 
-	for i := 0; i < 512; i++ {
+	for i := range addrs {
 		addr := fmt.Sprintf("%x", i)
 		addrs[i] = common.HexToAddress(addr)
-	}
-
-	for i := range addrs {
 		state.SetBalance(addrs[i], big.NewInt(1))
 	}
 
@@ -74,15 +71,19 @@ func TestAccountRangeAt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// test getting number of results less than max
-	accountRangeExpect(t, &trie, state, &common.Address{0x0}, 128, 128)
+	t.Logf("test getting number of results less than max")
+	accountRangeTest(t, &trie, state, &common.Address{0x0}, AccountRangeMaxResults / 2, AccountRangeMaxResults / 2)
 
-	// test getting number of results greater than max
-	accountRangeExpect(t, &trie, state, &common.Address{0x0}, 512, 256)
+	t.Logf("test getting number of results greater than max %d", AccountRangeMaxResults)
+	accountRangeTest(t, &trie, state, &common.Address{0x0}, AccountRangeMaxResults * 2, AccountRangeMaxResults)
+
+	t.Logf("test pagination")
 
 	// test pagination
-	firstResult := accountRangeExpect(t, &trie, state, &common.Address{0x0}, 128, 128)
-	secondResult := accountRangeExpect(t, &trie, state, &firstResult.Next, 128, 128)
+	firstResult := accountRangeTest(t, &trie, state, &common.Address{0x0}, AccountRangeMaxResults, AccountRangeMaxResults)
+
+	t.Logf("test pagination 2")
+	secondResult := accountRangeTest(t, &trie, state, &firstResult.Next, AccountRangeMaxResults, AccountRangeMaxResults)
 
 	for i := range firstResult.Addresses {
 		for j := range secondResult.Addresses {

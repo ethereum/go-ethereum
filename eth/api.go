@@ -345,8 +345,8 @@ func accountRange(st state.Trie, start *common.Address, maxResults int) (Account
 	it := trie.NewIterator(st.NodeIterator(crypto.Keccak256(start[:])))
 	result := AccountRangeResult{Addresses: []common.Address{}, Next: common.Address{}}
 
-	if maxResults > AccountRangeAtMaxResults {
-		maxResults = AccountRangeAtMaxResults
+	if maxResults > AccountRangeMaxResults {
+		maxResults = AccountRangeMaxResults
 	}
 
 	for i := 0; i < maxResults && it.Next(); i++ {
@@ -369,7 +369,7 @@ func accountRange(st state.Trie, start *common.Address, maxResults int) (Account
 }
 
 const (
-	AccountRangeAtMaxResults = 256
+	AccountRangeMaxResults = 256
 )
 
 // AccountRangeAt enumerates all accounts in the latest state
