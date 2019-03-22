@@ -17,6 +17,7 @@
 package simulation
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -24,7 +25,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -217,30 +217,24 @@ func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (i
 // UploadSnapshot uploads a snapshot to the simulation
 // This method tries to open the json file provided, applies the config to all nodes
 // and then loads the snapshot into the Simulation network
-func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) error {
+func (s *Simulation) UploadSnapshot(ctx context.Context, snapshotFile string, opts ...AddNodeOption) error {
 	f, err := os.Open(snapshotFile)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		err := f.Close()
-		if err != nil {
-			log.Error("Error closing snapshot file", "err", err)
-		}
-	}()
+	defer f.Close()
+
 	jsonbyte, err := ioutil.ReadAll(f)
 	if err != nil {
 		return err
 	}
 	var snap simulations.Snapshot
-	err = json.Unmarshal(jsonbyte, &snap)
-	if err != nil {
+	if err := json.Unmarshal(jsonbyte, &snap); err != nil {
 		return err
 	}
 
 	//the snapshot probably has the property EnableMsgEvents not set
-	//just in case, set it to true!
-	//(we need this to wait for messages before uploading)
+	//set it to true (we need this to wait for messages before uploading)
 	for i := range snap.Nodes {
 		snap.Nodes[i].Node.Config.EnableMsgEvents = true
 		snap.Nodes[i].Node.Config.Services = s.serviceNames
@@ -249,15 +243,10 @@ func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) 
 		}
 	}
 
-	log.Info("Waiting for p2p connections to be established...")
-
-	//now we can load the snapshot
-	err = s.Net.Load(&snap)
-	if err != nil {
+	if err := s.Net.Load(&snap); err != nil {
 		return err
 	}
-	log.Info("Snapshot loaded")
-	return nil
+	return s.WaitTillSnapshotRecreated(ctx, &snap)
 }
 
 // StartNode starts a node by NodeID.

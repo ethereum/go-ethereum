@@ -103,7 +103,7 @@ func (s *Simulation) kademlias() (ks map[enode.ID]*network.Kademlia) {
 // in the snapshot are registered in the kademlia.
 // It differs from WaitTillHealthy, which waits only until all the kademlias are
 // healthy (it might happen even before all the connections are established).
-func (s *Simulation) WaitTillSnapshotRecreated(ctx context.Context, snap simulations.Snapshot) error {
+func (s *Simulation) WaitTillSnapshotRecreated(ctx context.Context, snap *simulations.Snapshot) error {
 	expected := getSnapshotConnections(snap.Conns)
 	ticker := time.NewTicker(150 * time.Millisecond)
 	defer ticker.Stop()

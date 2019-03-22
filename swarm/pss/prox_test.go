@@ -3,11 +3,8 @@ package pss
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
@@ -103,24 +99,6 @@ func getCmdParams(t *testing.T) (int, int) {
 		t.Fatal(err)
 	}
 	return int(msgCount), int(nodeCount)
-}
-
-func readSnapshot(t *testing.T, nodeCount int) simulations.Snapshot {
-	f, err := os.Open(fmt.Sprintf("testdata/snapshot_%d.json", nodeCount))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	jsonbyte, err := ioutil.ReadAll(f)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var snap simulations.Snapshot
-	err = json.Unmarshal(jsonbyte, &snap)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return snap
 }
 
 func newTestData() *testData {
@@ -235,16 +213,12 @@ func testProxNetwork(t *testing.T) {
 	services := newProxServices(tstdata, true, handlerContextFuncs, tstdata.kademlias)
 	tstdata.sim = simulation.New(services)
 	defer tstdata.sim.Close()
-	err := tstdata.sim.UploadSnapshot(fmt.Sprintf("testdata/snapshot_%d.json", nodeCount))
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+	filename := fmt.Sprintf("testdata/snapshot_%d.json", nodeCount)
+	err := tstdata.sim.UploadSnapshot(ctx, filename)
 	if err != nil {
 		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
-	defer cancel()
-	snap := readSnapshot(t, nodeCount)
-	err = tstdata.sim.WaitTillSnapshotRecreated(ctx, snap)
-	if err != nil {
-		t.Fatalf("failed to recreate snapshot: %s", err)
 	}
 	tstdata.init(msgCount) // initialize the test data
 	wrapper := func(c context.Context, _ *simulation.Simulation) error {
@@ -426,7 +400,6 @@ func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[T
 			if err != nil {
 				return nil, nil, err
 			}
-			b.Store(simulation.BucketKeyKademlia, pskad)
 
 			// register the handlers we've been passed
 			var deregisters []func()
@@ -447,6 +420,8 @@ func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[T
 				Service:   NewAPITest(ps),
 				Public:    false,
 			})
+
+			b.Store(simulation.BucketKeyKademlia, pskad)
 
 			// return Pss and cleanups
 			return ps, func() {

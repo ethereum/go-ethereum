@@ -182,7 +182,7 @@ func TestWaitTillSnapshotRecreated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = controlSim.WaitTillSnapshotRecreated(ctx, *snap)
+	err = controlSim.WaitTillSnapshotRecreated(ctx, snap)
 	if err != nil {
 		t.Fatal(err)
 	}
