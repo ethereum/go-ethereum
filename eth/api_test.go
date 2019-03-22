@@ -32,7 +32,8 @@ var dumper = spew.ConfigState{Indent: "    "}
 
 func TestAccountRangeAt(t *testing.T) {
 	var (
-		state, _ = state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()))
+		statedb = state.NewDatabase(ethdb.NewMemDatabase())
+		state, _ = state.New(common.Hash{}, statedb)
 		addrs = [512]common.Address{}
 	)
 
@@ -45,12 +46,37 @@ func TestAccountRangeAt(t *testing.T) {
 		state.SetBalance(addrs[i], big.NewInt(1))
 	}
 
-	state.CommitTrie() // is this needed?
+	state.Commit(true)
+	root := state.IntermediateRoot(true)
 
-	result := accountRange(state.Database().OpenTrie(/* root ??? */), common.Address{0x0}, 128)
+	trie, err := statedb.OpenTrie(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	
+	// test getting number of results less than max
+
+	result, err := accountRange(trie, &common.Address{0x0}, 128)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	if len(result.Addresses) != 128 {
 		t.Fatalf("expected 128 results.  Got %d", len(result.Addresses))
 	}
+
+	// test getting number of results greater than max
+
+	result, err = accountRange(trie, &common.Address{0x0}, 512)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result.Addresses) != 256 {
+		t.Fatalf("expected 256 results.  Got %d", len(result.Addresses))
+	}
+
+	// test pagination TODO
 }
 
 func TestStorageRangeAt(t *testing.T) {
