@@ -80,7 +80,32 @@ type client struct {
 }
 
 // New creates a new dashboard instance with the given configuration.
-func New(config *Config, commit string, logdir string, peerEventBridge chan p2p.MeteredPeerEvent, closePeerEventBridge chan struct{}) *Dashboard {
+func New(config *Config, commit string, logdir string) *Dashboard {
+	// There is a data race between the network layer and the dashboard, which
+	// can cause some lost peer events, therefore some peers might not appear
+	// on the dashboard.
+	// In order to solve this problem, a peer event subscription is registered
+	// before the network layer starts, and when the dashboard is ready, the
+	// stored events are passed to it.
+	peerEventBridge := make(chan p2p.MeteredPeerEvent, 1000) // The events are stored by and passed through this channel.
+	closePeerEventBridge := make(chan struct{})              // This channel gets a signal from the dashboard when it is ready.
+	go func() {
+		peerCh := make(chan p2p.MeteredPeerEvent, 200)   // Channel for the initial peer events.
+		subPeer := p2p.SubscribeMeteredPeerEvent(peerCh) // Subscribe to the peer events.
+		for {
+			select {
+			case event := <-peerCh:
+				select {
+				case peerEventBridge <- event:
+				default:
+					log.Warn("Too many peer events before the dashboard starts")
+				}
+			case <-closePeerEventBridge:
+				subPeer.Unsubscribe()
+				return
+			}
+		}
+	}()
 	now := time.Now()
 	versionMeta := ""
 	if len(params.VersionMeta) > 0 {

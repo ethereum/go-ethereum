@@ -25,9 +25,6 @@ import (
 	"reflect"
 	"unicode"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-
 	cli "gopkg.in/urfave/cli.v1"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -163,32 +160,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	utils.RegisterEthService(stack, &cfg.Eth)
 
 	if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
-		// There is a data race between the network layer and the dashboard, which
-		// can cause some lost peer events, therefore some peers might not appear
-		// on the dashboard.
-		// In order to solve this problem, a peer event subscription is registered
-		// before the network layer starts, and when the dashboard is ready, the
-		// stored events are passed to it.
-		peerEventBridge := make(chan p2p.MeteredPeerEvent, 1000) // The events are stored by and passed through this channel.
-		closePeerEventBridge := make(chan struct{})              // This channel gets a signal from the dashboard when it is ready.
-		go func() {
-			peerCh := make(chan p2p.MeteredPeerEvent, 200)   // Channel for the initial peer events.
-			subPeer := p2p.SubscribeMeteredPeerEvent(peerCh) // Subscribe to the peer events.
-			for {
-				select {
-				case event := <-peerCh:
-					select {
-					case peerEventBridge <- event:
-					default:
-						log.Warn("Too many peer events before the dashboard starts")
-					}
-				case <-closePeerEventBridge:
-					subPeer.Unsubscribe()
-					return
-				}
-			}
-		}()
-		utils.RegisterDashboardService(stack, &cfg.Dashboard, gitCommit, peerEventBridge, closePeerEventBridge)
+		utils.RegisterDashboardService(stack, &cfg.Dashboard, gitCommit)
 	}
 	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode
 	shhEnabled := enableWhisper(ctx)
