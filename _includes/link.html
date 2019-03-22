@@ -1,1 +1,2 @@
-{{ include.url | remove: ".html" | prepend: page.root | replace: '//', '/' }}
+{% capture root %}{{ page.root or site.default_root }}{% endcapture %}
+{{ include.url | remove: ".html" | prepend: root | replace: '//', '/' }}

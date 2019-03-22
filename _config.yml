@@ -2,34 +2,26 @@ repository: ethereum/go-ethereum
 
 theme: minima
 
-exclude:
-  - Gemfile
-  - Gemfile.lock
-  - .gitignore
+keep_files:
+  - static
 
 favicon: /static/images/favicon.png
 
 defaults:
-  -
-    scope:
+  - scope:
       path: ""
     values:
       layout: sidebar
-  -
-    scope:
+  - scope:
       path: "*"
     values:
       root: "."
-  -
-    scope:
+  - scope:
       path: "*/*"
     values:
       root: ".."
-  -
-    scope:
-      path: "*/*/*"
-    values:
-      root: "../.."
+
+default_root: ".."
 
 collections_dir: docs
 collections:
