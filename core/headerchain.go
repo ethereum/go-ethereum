@@ -60,6 +60,8 @@ type HeaderChain struct {
 	tdCache     *lru.Cache // Cache for the most recent block total difficulties
 	numberCache *lru.Cache // Cache for the most recent block numbers
 
+	hashHistory *hashBuffer // Cache for recent hashes
+
 	procInterrupt func() bool
 
 	rand   *mrand.Rand
@@ -96,6 +98,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 	if hc.genesisHeader == nil {
 		return nil, ErrNoGenesis
 	}
+	hc.hashHistory = newHashBuffer(hc.genesisHeader)
 
 	hc.currentHeader.Store(hc.genesisHeader)
 	if head := rawdb.ReadHeadBlockHash(chainDb); head != (common.Hash{}) {
@@ -287,6 +290,7 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, writeHeader WhCa
 		if err := writeHeader(header); err != nil {
 			return i, err
 		}
+		hc.hashHistory.Set(header)
 		stats.processed++
 	}
 	// Report some public statistics so the user has a clue what's going on
@@ -339,35 +343,19 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 	if ancestor > number {
 		return common.Hash{}, 0
 	}
-	if ancestor == 1 {
-		// in this case it is cheaper to just read the header
-		if header := hc.GetHeader(hash, number); header != nil {
-			return header.ParentHash, number - 1
-		} else {
-			return common.Hash{}, 0
-		}
+	ref := hc.GetHeader(hash, number)
+	if ref == nil {
+		return common.Hash{}, 0
 	}
-	for ancestor != 0 {
-		if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
-			ancestorHash := rawdb.ReadCanonicalHash(hc.chainDb, number-ancestor)
-			if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
-				number -= ancestor
-				return ancestorHash, number
-			}
-		}
-		if *maxNonCanonical == 0 {
-			return common.Hash{}, 0
-		}
-		*maxNonCanonical--
-		ancestor--
-		header := hc.GetHeader(hash, number)
-		if header == nil {
-			return common.Hash{}, 0
-		}
-		hash = header.ParentHash
-		number--
+	if number == 0 {
+		return ref.Hash(), number
 	}
-	return hash, number
+	target := number - ancestor
+	ancestorHash := hc.GetAncestorHash(ref, target)
+	if ancestorHash == (common.Hash{}) {
+		return common.Hash{}, 0
+	}
+	return ancestorHash, target
 }
 
 // GetTd retrieves a block's total difficulty in the canonical chain from the
@@ -464,6 +452,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) {
 
 	hc.currentHeader.Store(head)
 	hc.currentHeaderHash = head.Hash()
+	hc.hashHistory.Set(head)
 	headHeaderGauge.Update(head.Number.Int64())
 }
 
@@ -542,4 +531,50 @@ func (hc *HeaderChain) Engine() consensus.Engine { return hc.engine }
 // a header chain does not have blocks available for retrieval.
 func (hc *HeaderChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	return nil
+}
+
+// GetAncestorHash return the hash of ancestor at the given number
+func (hc *HeaderChain) GetAncestorHash(ref *types.Header, target uint64) common.Hash {
+	number := ref.Number.Uint64() - 1
+	hash := ref.ParentHash
+	if target == number {
+		return hash
+	}
+	if target > number {
+		// Should never happen
+		log.Error("Ancestor number must be <= descendant", "target", target, "descendant", number)
+		return common.Hash{}
+	}
+	var (
+		maxNonCanonLookups = uint64(100)
+	)
+	if hashHistoryTail, _ := hc.hashHistory.Oldest(); hashHistoryTail <= target {
+		// Iterate the chain until we hit the target or we hit a ancestor
+		// within the storage
+		for ; !hc.hashHistory.Contains(number, hash); maxNonCanonLookups-- {
+			if maxNonCanonLookups == 0 {
+				return common.Hash{}
+			}
+			header := hc.GetHeader(hash, number)
+			if header == nil {
+				return common.Hash{}
+			}
+			number, hash = header.Number.Uint64()-1, header.ParentHash
+			if number == target {
+				return hash
+			}
+		}
+		// The hash storage has the right ancestor chain
+		if h, ok := hc.hashHistory.Get(target); ok {
+			return h
+		}
+	}
+	// At this point, we have failed to find the ancestor in our hash history lookup.
+	// Either it's some very long sidefork, or the 'ref' is a very old header, too
+	// old to be in the history. In that case, it should exist in the canon chain.
+	if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
+		return rawdb.ReadCanonicalHash(hc.chainDb, target)
+	}
+	// They are requesting a very old header which is not in the canon chain,
+	return common.Hash{}
 }

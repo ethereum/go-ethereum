@@ -1679,6 +1679,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 
 		switch status {
 		case CanonStatTy:
+			bc.hc.hashHistory.Set(block.Header())
 			log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
 				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
@@ -1967,6 +1968,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// Write lookup entries for hash based transaction/receipt searches
 		rawdb.WriteTxLookupEntries(bc.db, newChain[i])
 		addedTxs = append(addedTxs, newChain[i].Transactions()...)
+		// Add to hash history
+		bc.hc.hashHistory.Set(newChain[i].Header())
 	}
 	// When transactions get deleted from the database, the receipts that were
 	// created in the fork must also be deleted
@@ -2223,4 +2226,9 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // block processing has started while false means it has stopped.
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
+}
+
+//GetAncestorHash return the hash of ancestor at the given number
+func (bc *BlockChain) GetAncestorHash(ref *types.Header, target uint64) common.Hash {
+	return bc.hc.GetAncestorHash(ref, target)
 }

@@ -542,3 +542,12 @@ func (lc *LightChain) DisableCheckFreq() {
 func (lc *LightChain) EnableCheckFreq() {
 	atomic.StoreInt32(&lc.disableCheckFreq, 0)
 }
+
+// GetAncestorHash return the hash of ancestor at the given number
+// This implementation is slow, since it does not use a hashstorage
+// lookup like blockchain. However, the light clients does not require
+// fast lookups for EVM execution. This should probably be improved if this
+// method becomes more used.
+func (lc *LightChain) GetAncestorHash(ref *types.Header, target uint64) common.Hash {
+	return lc.hc.GetAncestorHash(ref, target)
+}
