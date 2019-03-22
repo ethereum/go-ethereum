@@ -45,14 +45,12 @@ func TestAccountRangeAt(t *testing.T) {
 		state.SetBalance(addrs[i], big.NewInt(1))
 	}
 
-	// test retrieving less than max results
+	state.CommitTrie() // is this needed?
 
-/*
-	result := accountRangeAt(state.Trie(), common.Address{0x0}, 128)
+	result := accountRange(state.Database().OpenTrie(/* root ??? */), common.Address{0x0}, 128)
 	if len(result.Addresses) != 128 {
 		t.Fatalf("expected 128 results.  Got %d", len(result.Addresses))
 	}
-*/
 }
 
 func TestStorageRangeAt(t *testing.T) {
