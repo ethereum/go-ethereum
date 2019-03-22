@@ -321,10 +321,8 @@ func (w *Wallet) Status() (string, error) {
 		return fmt.Sprintf("Locked, waiting for PIN (%d attempts left)", status.PinRetryCount), nil
 	case !status.Initialized:
 		return fmt.Sprintf("Empty, waiting for initialization"), nil
-	case status.SupportsPKDerivation:
-		return fmt.Sprintf("Online, can derive public keys"), nil
 	default:
-		return fmt.Sprintf("Online, cannot derive public keys"), nil
+		return fmt.Sprintf("Online"), nil
 	}
 }
 
@@ -844,10 +842,9 @@ func (s *Session) authenticate(pairing smartcardPairing) error {
 
 // walletStatus describes a smartcard wallet's status information.
 type walletStatus struct {
-	PinRetryCount        int  // Number of remaining PIN retries
-	PukRetryCount        int  // Number of remaining PUK retries
-	Initialized          bool // Whether the card has been initialized with a private key
-	SupportsPKDerivation bool // Whether the card supports doing public key derivation itself
+	PinRetryCount int  // Number of remaining PIN retries
+	PukRetryCount int  // Number of remaining PUK retries
+	Initialized   bool // Whether the card has been initialized with a private key
 }
 
 // walletStatus fetches the wallet's status from the card.
@@ -869,10 +866,9 @@ func (s *Session) walletStatus() (*walletStatus, error) {
 		return nil, fmt.Errorf("invalid response tag format")
 	}
 	status := &walletStatus{
-		PinRetryCount:        int(response.Data[4]),
-		PukRetryCount:        int(response.Data[7]),
-		Initialized:          (response.Data[10] == 0xff),
-		SupportsPKDerivation: true, /* Cards that don't aren't supported */
+		PinRetryCount: int(response.Data[4]),
+		PukRetryCount: int(response.Data[7]),
+		Initialized:   (response.Data[10] == 0xff),
 	}
 
 	/*
