@@ -419,7 +419,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 				log.Debug("Time Calculated HookPenaltyTIPSigning ", "block", header.Number, "hash", header.Hash().Hex(), "pen comeback nodes", len(penComebacks), "not enough miner", len(penalties), "time", common.PrettyDuration(time.Since(start)))
 				penalties = append(penalties, penComebacks...)
-				return penComebacks, nil
+				return penalties, nil
 
 			}
 			return []common.Address{}, nil
