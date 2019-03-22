@@ -102,16 +102,16 @@ func (s *Simulation) AddNode(opts ...AddNodeOption) (id enode.ID, err error) {
 	// most importantly the bzz overlay address
 	//
 	// for now we have no way of setting bootnodes or lightnodes in sims
-	// so we just set them as false
+	// so we just let them be set to false
 	// they should perhaps be possible to override them with AddNodeOption
-	bzzKey := network.PrivateKeyToBzzKey(conf.PrivateKey)
-	bzzAddr := network.NewENRAddrEntry(bzzKey)
-
-	var lightnode network.ENRLightNodeEntry
-	var bootnode network.ENRBootNodeEntry
-	conf.Record.Set(bzzAddr)
-	conf.Record.Set(&lightnode)
-	conf.Record.Set(&bootnode)
+	enodeParams := &network.EnodeParams{
+		PrivateKey: conf.PrivateKey,
+	}
+	record, err := network.NewEnodeRecord(enodeParams)
+	if err != nil {
+		return enode.ID{}, err
+	}
+	conf.Record = *record
 
 	// Add the bzz address to the node config
 	node, err := s.Net.NewNodeWithConfig(conf)

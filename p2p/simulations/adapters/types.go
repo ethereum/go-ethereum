@@ -27,6 +27,7 @@ import (
 
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -264,4 +265,31 @@ func RegisterServices(services Services) {
 	if reexec.Init() {
 		os.Exit(0)
 	}
+}
+
+// adds the host part to the configuration's ENR, signs it
+// creates and  the corresponding enode object to the configuration
+func (n *NodeConfig) initEnode(ip net.IP, tcpport int, udpport int) error {
+	enrIp := enr.IP(ip)
+	n.Record.Set(&enrIp)
+	enrTcpPort := enr.TCP(tcpport)
+	n.Record.Set(&enrTcpPort)
+	enrUdpPort := enr.UDP(tcpport)
+	n.Record.Set(&enrUdpPort)
+
+	err := enode.SignV4(&n.Record, n.PrivateKey)
+	if err != nil {
+		return fmt.Errorf("unable to generate ENR: %v", err)
+	}
+	nod, err := enode.New(enode.V4ID{}, &n.Record)
+	if err != nil {
+		return fmt.Errorf("unable to create enode: %v", err)
+	}
+	log.Trace("simnode new", "record", n.Record)
+	n.node = nod
+	return nil
+}
+
+func (n *NodeConfig) initDummyEnode() error {
+	return n.initEnode(net.IPv4(127, 0, 0, 1), 0, 0)
 }
