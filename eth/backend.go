@@ -419,8 +419,10 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 				log.Debug("Time Calculated HookPenaltyTIPSigning ", "block", header.Number, "hash", header.Hash().Hex(), "pen comeback nodes", len(penComebacks), "not enough miner", len(penalties), "time", common.PrettyDuration(time.Since(start)))
 				penalties = append(penalties, penComebacks...)
-				return penalties, nil
-
+				if chain.Config().IsTIPRandomize(header.Number) {
+					return penalties, nil
+				}
+				return penComebacks, nil
 			}
 			return []common.Address{}, nil
 		}
