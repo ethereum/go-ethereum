@@ -236,10 +236,6 @@ func testProxNetwork(t *testing.T) {
 	services := newProxServices(tstdata, true, handlerContextFuncs, tstdata.kademlias)
 	tstdata.sim = simulation.New(services)
 	defer tstdata.sim.Close()
-	err := tstdata.sim.UploadSnapshot(fmt.Sprintf("testdata/snapshot_%d.json", nodeCount))
-	if err != nil {
-		t.Fatal(err)
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	filename := fmt.Sprintf("testdata/snapshot_%d.json", nodeCount)
