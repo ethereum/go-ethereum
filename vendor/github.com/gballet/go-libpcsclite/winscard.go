@@ -34,6 +34,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"sync"
 	"unsafe"
 )
 
@@ -46,6 +47,8 @@ type Client struct {
 	major uint32
 
 	ctx uint32
+
+	mutex sync.Mutex
 
 	readerStateDescriptors [MaxReaderStateDescriptors]ReaderState
 }
@@ -117,6 +120,9 @@ func EstablishContext(scope uint32) (*Client, error) {
 // ReleaseContext tells the daemon that the client will no longer
 // need the context.
 func (client *Client) ReleaseContext() error {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+
 	data := [8]byte{}
 	binary.LittleEndian.PutUint32(data[:], client.ctx)
 	binary.LittleEndian.PutUint32(data[4:], SCardSuccess)
@@ -183,6 +189,9 @@ func getReaderState(data []byte) (ReaderState, error) {
 
 // ListReaders gets the list of readers from the daemon
 func (client *Client) ListReaders() ([]string, error) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+
 	err := messageSendWithHeader(CommandGetReaderState, client.conn, []byte{})
 	if err != nil {
 		return nil, err
@@ -230,6 +239,9 @@ type Card struct {
 
 // Connect asks the daemon to connect to the card
 func (client *Client) Connect(name string, shareMode uint32, preferredProtocol uint32) (*Card, error) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+
 	request := make([]byte, ReaderStateNameLength+4*6)
 	binary.LittleEndian.PutUint32(request, client.ctx)
 	copy(request[SCardConnectReaderNameOffset:], []byte(name))
@@ -289,6 +301,9 @@ const (
 
 // Transmit sends request data to a card and returns the response
 func (card *Card) Transmit(adpu []byte) ([]byte, *SCardIoRequest, error) {
+	card.client.mutex.Lock()
+	defer card.client.mutex.Unlock()
+
 	request := [TransmitRequestLength]byte{}
 	binary.LittleEndian.PutUint32(request[:], card.handle)
 	binary.LittleEndian.PutUint32(request[4:] /*card.activeProto*/, 2)
@@ -346,6 +361,9 @@ func (card *Card) Transmit(adpu []byte) ([]byte, *SCardIoRequest, error) {
 // Disconnect tells the PCSC daemon that the client is no longer
 // interested in communicating with the card.
 func (card *Card) Disconnect(disposition uint32) error {
+	card.client.mutex.Lock()
+	defer card.client.mutex.Unlock()
+
 	data := [12]byte{}
 	binary.LittleEndian.PutUint32(data[:], card.handle)
 	binary.LittleEndian.PutUint32(data[4:], disposition)
