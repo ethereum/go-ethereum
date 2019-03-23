@@ -7,7 +7,7 @@
 
 ## Preparing the smartcard
 
-  You can use status' [keycard-cli](https://github.com/status-im/keycard-cli) and you should get version 2.1 (**NOT** 2.1.1, this will be supported in a later update) of their [smartcard application](https://github.com/status-im/status-keycard/releases/download/2.1/keycard_v2.1.cap)
+  You can use status' [keycard-cli](https://github.com/status-im/keycard-cli) and you should get version 2.1.1 of their [smartcard application](https://github.com/status-im/status-keycard/releases/download/2.1.1/keycard_v2.1.1.cap)
 
   You also need to make sure that the PCSC daemon is running on your system.
 
@@ -23,6 +23,17 @@
   keycard init
   ```
 
+  Finally, you need to have the card generate a new master key:
+
+  ```
+  keycard shell <<END
+  keycard-select
+  keycard-set-pairing PAIRING_KEY PAIRING_INDEX
+  keycard-open-secure-channel
+  keycard-verify-pin CARD_PIN
+  keycard-generate-key
+  END
+  ```
 
 ## Usage
 

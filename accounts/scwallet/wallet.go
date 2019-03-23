@@ -849,30 +849,11 @@ func (s *Session) walletStatus() (*walletStatus, error) {
 	if err != nil {
 		return nil, err
 	}
-	// There is an issue with ASN1 decoding that I am struggling with,
-	// so I unpack it manually, like is being done in the status-im
-	// card management code.
-	if len(response.Data) != int(response.Data[1])-1 {
-		return nil, fmt.Errorf("invalid response length %d", len(response.Data))
-	}
-	if response.Data[0] != 0xA3 {
-		return nil, fmt.Errorf("invalid tag %v, expected 0xA3", response.Data[0])
-	}
-	if response.Data[2] != 2 || response.Data[3] != 1 || response.Data[5] != 2 || response.Data[6] != 1 || response.Data[8] != 1 || response.Data[9] != 1 {
-		return nil, fmt.Errorf("invalid response tag format")
-	}
-	status := &walletStatus{
-		PinRetryCount: int(response.Data[4]),
-		PukRetryCount: int(response.Data[7]),
-		Initialized:   (response.Data[10] == 0xff),
-	}
 
-	/*
-		if _, err := asn1.Unmarshal(response.Data, status); err != nil {
-			//if _, err := asn1.UnmarshalWithParams(response.Data, status, "tag:3"); err != nil {
-			fmt.Println("###### asn1 err", err)
-			return nil, err
-		}*/
+	status := new(walletStatus)
+	if _, err := asn1.UnmarshalWithParams(response.Data, status, "tag:3"); err != nil {
+		return nil, err
+	}
 	return status, nil
 }
 
