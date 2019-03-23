@@ -135,7 +135,7 @@ func (s *SecureChannelSession) Unpair() error {
 		return fmt.Errorf("Cannot unpair: not paired")
 	}
 
-	_, err := s.TransmitEncrypted(claSCWallet, insUnpair, s.PairingIndex, 0, []byte{})
+	_, err := s.transmitEncrypted(claSCWallet, insUnpair, s.PairingIndex, 0, []byte{})
 	if err != nil {
 		return err
 	}
@@ -180,7 +180,7 @@ func (s *SecureChannelSession) mutuallyAuthenticate() error {
 		return err
 	}
 
-	response, err := s.TransmitEncrypted(claSCWallet, insMutuallyAuthenticate, 0, 0, data)
+	response, err := s.transmitEncrypted(claSCWallet, insMutuallyAuthenticate, 0, 0, data)
 	if err != nil {
 		return err
 	}
@@ -219,8 +219,8 @@ func (s *SecureChannelSession) pair(p1 uint8, data []byte) (*responseAPDU, error
 	})
 }
 
-// TransmitEncrypted sends an encrypted message, and decrypts and returns the response.
-func (s *SecureChannelSession) TransmitEncrypted(cla, ins, p1, p2 byte, data []byte) (*responseAPDU, error) {
+// transmitEncrypted sends an encrypted message, and decrypts and returns the response.
+func (s *SecureChannelSession) transmitEncrypted(cla, ins, p1, p2 byte, data []byte) (*responseAPDU, error) {
 	if s.iv == nil {
 		return nil, fmt.Errorf("Channel not open")
 	}
