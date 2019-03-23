@@ -27,6 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var dumper = spew.ConfigState{Indent: "    "}
@@ -55,12 +57,19 @@ func TestAccountRangeAt(t *testing.T) {
 		statedb  = state.NewDatabase(ethdb.NewMemDatabase())
 		state, _ = state.New(common.Hash{}, statedb)
 		addrs    = [AccountRangeMaxResults * 2]common.Address{}
+		m	 = map[common.Address]bool{}
 	)
 
 	for i := range addrs {
-		addr := fmt.Sprintf("%x", i)
-		addrs[i] = common.HexToAddress(addr)
+		hash := common.HexToHash(fmt.Sprintf("%x", i))
+		addr := common.BytesToAddress(crypto.Keccak256Hash(hash.Bytes()).Bytes())
+		addrs[i] = addr
 		state.SetBalance(addrs[i], big.NewInt(1))
+		if _, ok := m[addr]; ok {
+			t.Fatalf("bad")
+		} else {
+			m[addr] = true
+		}
 	}
 
 	state.Commit(true)
