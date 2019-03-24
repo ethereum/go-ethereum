@@ -88,7 +88,7 @@ func NewSecureChannelSession(card *pcsc.Card, keyData []byte) (*SecureChannelSes
 
 // Pair establishes a new pairing with the smartcard.
 func (s *SecureChannelSession) Pair(pairingPassword []byte) error {
-	secretHash := pbkdf2.Key(norm.NFKD.Bytes([]byte(pairingPassword)), norm.NFKD.Bytes([]byte(pairingSalt)), 50000, 32, sha256.New)
+	secretHash := pbkdf2.Key(norm.NFKD.Bytes(pairingPassword), norm.NFKD.Bytes([]byte(pairingSalt)), 50000, 32, sha256.New)
 
 	challenge := make([]byte, 32)
 	if _, err := rand.Read(challenge); err != nil {
