@@ -123,8 +123,9 @@ func pssSetup() *pssSession {
 
 	// set up the necessary info for each pss node
 	for i, host := range hosts {
-		httpHost := fmt.Sprintf("ws://%s:%d", host, 8546)
-		rpcClient, err := rpc.Dial(httpHost)
+		wsHost := wsEndpoint(host)
+
+		rpcClient, err := rpc.Dial(wsHost)
 		if err != nil {
 			log.Error("Error dialing host", "err", err)
 			continue

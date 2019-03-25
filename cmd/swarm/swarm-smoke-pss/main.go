@@ -17,7 +17,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"sort"
 
@@ -37,23 +36,20 @@ var (
 )
 
 var (
-	allhosts     string
-	hosts        []string
-	filesize     int
-	inputSeed    int
-	syncDelay    int
-	httpPort     int
-	wsPort       int
-	verbosity    int
-	timeout      int
-	single       bool
-	trackTimeout int
+	allhosts        string
+	hosts           []string
+	filesize        int
+	inputSeed       int
+	wsPort          int
+	verbosity       int
+	timeout         int
+	pssMessageCount int
 )
 
 func main() {
 
 	app := cli.NewApp()
-	app.Name = "smoke-test"
+	app.Name = "smoke-test-pss"
 	app.Usage = ""
 
 	app.Flags = []cli.Flag{
@@ -62,12 +58,6 @@ func main() {
 			Value:       "",
 			Usage:       "comma-separated list of swarm hosts",
 			Destination: &allhosts,
-		},
-		cli.IntFlag{
-			Name:        "http-port",
-			Value:       80,
-			Usage:       "http port",
-			Destination: &httpPort,
 		},
 		cli.IntFlag{
 			Name:        "ws-port",
@@ -82,18 +72,6 @@ func main() {
 			Destination: &inputSeed,
 		},
 		cli.IntFlag{
-			Name:        "filesize",
-			Value:       1024,
-			Usage:       "file size for generated random file in KB",
-			Destination: &filesize,
-		},
-		cli.IntFlag{
-			Name:        "sync-delay",
-			Value:       5,
-			Usage:       "duration of delay in seconds to wait for content to be synced",
-			Destination: &syncDelay,
-		},
-		cli.IntFlag{
 			Name:        "verbosity",
 			Value:       1,
 			Usage:       "verbosity",
@@ -105,16 +83,11 @@ func main() {
 			Usage:       "timeout in seconds after which kill the process",
 			Destination: &timeout,
 		},
-		cli.BoolFlag{
-			Name:        "single",
-			Usage:       "whether to fetch content from a single node or from all nodes",
-			Destination: &single,
-		},
 		cli.IntFlag{
-			Name:        "track-timeout",
-			Value:       5,
-			Usage:       "timeout in seconds to wait for GetAllReferences to return",
-			Destination: &trackTimeout,
+			Name:        "pss-messages",
+			Value:       10,
+			Usage:       "number of pss messages that should be send in the pss smoke test",
+			Destination: &pssMessageCount,
 		},
 	}
 
@@ -131,28 +104,10 @@ func main() {
 
 	app.Commands = []cli.Command{
 		{
-			Name:    "upload_and_sync",
-			Aliases: []string{"c"},
-			Usage:   "upload and sync",
-			Action:  wrapCliCommand("upload-and-sync", uploadAndSyncCmd),
-		},
-		{
-			Name:    "feed_sync",
-			Aliases: []string{"f"},
-			Usage:   "feed update generate, upload and sync",
-			Action:  wrapCliCommand("feed-and-sync", feedUploadAndSyncCmd),
-		},
-		{
-			Name:    "upload_speed",
-			Aliases: []string{"u"},
-			Usage:   "measure upload speed",
-			Action:  wrapCliCommand("upload-speed", uploadSpeedCmd),
-		},
-		{
-			Name:    "sliding_window",
-			Aliases: []string{"s"},
-			Usage:   "measure network aggregate capacity",
-			Action:  wrapCliCommand("sliding-window", slidingWindowCmd),
+			Name:    "pss-asym",
+			Aliases: []string{"pa"},
+			Usage:   "PSS: send and receive multiple messages across random nodes using asymmetric encryption",
+			Action:  wrapCliCommand("pss-asym", pssAsymCheck),
 		},
 	}
 
@@ -171,7 +126,6 @@ func main() {
 	err := app.Run(os.Args)
 	if err != nil {
 		log.Error(err.Error())
-
 		os.Exit(1)
 	}
 }
@@ -188,9 +142,8 @@ func emitMetrics(ctx *cli.Context) error {
 
 		tagsMap := utils.SplitTagsFlag(tags)
 		tagsMap["version"] = gitCommit
-		tagsMap["filesize"] = fmt.Sprintf("%v", filesize)
 
-		return influxdb.InfluxDBWithTagsOnce(gethmetrics.DefaultRegistry, endpoint, database, username, password, "swarm-smoke.", tagsMap)
+		return influxdb.InfluxDBWithTagsOnce(gethmetrics.DefaultRegistry, endpoint, database, username, password, "swarm-smoke-pss.", tagsMap)
 	}
 
 	return nil
