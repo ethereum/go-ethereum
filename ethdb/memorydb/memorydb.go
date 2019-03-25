@@ -200,17 +200,6 @@ type batch struct {
 	size   int
 }
 
-func (b *batch) Replay(replay ethdb.DbEventLogger) error {
-	for _, keyvalue := range b.writes {
-		if keyvalue.delete {
-			replay.Delete(keyvalue.key)
-			continue
-		}
-		replay.Put(keyvalue.key, keyvalue.value)
-	}
-	return nil
-}
-
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
 	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), common.CopyBytes(value), false})
@@ -249,6 +238,18 @@ func (b *batch) Write() error {
 func (b *batch) Reset() {
 	b.writes = b.writes[:0]
 	b.size = 0
+}
+
+// Replay replays the batch contents.
+func (b *batch) Replay(r ethdb.Replayee) error {
+	for _, keyvalue := range b.writes {
+		if keyvalue.delete {
+			r.Delete(keyvalue.key)
+			continue
+		}
+		r.Put(keyvalue.key, keyvalue.value)
+	}
+	return nil
 }
 
 // iterator can walk over the (potentially partial) keyspace of a memory key

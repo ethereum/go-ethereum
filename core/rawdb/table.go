@@ -124,10 +124,6 @@ type tableBatch struct {
 	prefix string
 }
 
-func (b *tableBatch) Replay(replay ethdb.DbEventLogger) error {
-	panic("implement me")
-}
-
 // Put inserts the given value into the batch for later committing.
 func (b *tableBatch) Put(key, value []byte) error {
 	return b.batch.Put(append([]byte(b.prefix), key...), value)
@@ -151,4 +147,9 @@ func (b *tableBatch) Write() error {
 // Reset resets the batch for reuse.
 func (b *tableBatch) Reset() {
 	b.batch.Reset()
+}
+
+// Replay replays the batch contents.
+func (b *tableBatch) Replay(r ethdb.Replayee) error {
+	return b.batch.Replay(r)
 }

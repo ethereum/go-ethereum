@@ -32,11 +32,11 @@ type Batch interface {
 	// Write flushes any accumulated data to disk.
 	Write() error
 
-	// Reset resets the batch for reuse
+	// Reset resets the batch for reuse.
 	Reset()
 
-	// Replay replays the batch into another batch
-	Replay(logger DbEventLogger) error
+	// Replay replays the batch contents.
+	Replay(replayer Replayee) error
 }
 
 // Batcher wraps the NewBatch method of a backing data store.

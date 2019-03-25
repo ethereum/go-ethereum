@@ -172,23 +172,6 @@ func (db *Database) NewBatch() ethdb.Batch {
 	}
 }
 
-type dbWrapper struct {
-	wrapped ethdb.DbEventLogger
-}
-
-func (dbw *dbWrapper) Put(key, value []byte) {
-	dbw.wrapped.Put(key, value)
-}
-
-func (dbw *dbWrapper) Delete(key []byte) {
-	dbw.wrapped.Delete(key)
-}
-
-// Replay replays batch contents.
-func (b *batch) Replay(r ethdb.DbEventLogger) error {
-	return b.b.Replay(&dbWrapper{r})
-}
-
 // NewIterator creates a binary-alphabetical iterator over the entire keyspace
 // contained within the leveldb database.
 func (db *Database) NewIterator() ethdb.Iterator {
@@ -432,4 +415,33 @@ func (b *batch) Write() error {
 func (b *batch) Reset() {
 	b.b.Reset()
 	b.size = 0
+}
+
+// Replay replays the batch contents.
+func (b *batch) Replay(r ethdb.Replayee) error {
+	return b.b.Replay(&replayer{replayer: r})
+}
+
+// replayer is a small wrapper to implement the correct replay methods.
+type replayer struct {
+	replayer ethdb.Replayee
+	failure  error
+}
+
+// Put inserts the given value into the key-value data store.
+func (r *replayer) Put(key, value []byte) {
+	// If the replay already failed, stop executing ops
+	if r.failure != nil {
+		return
+	}
+	r.failure = r.replayer.Put(key, value)
+}
+
+// Delete removes the key from the key-value data store.
+func (r *replayer) Delete(key []byte) {
+	// If the replay already failed, stop executing ops
+	if r.failure != nil {
+		return
+	}
+	r.failure = r.replayer.Delete(key)
 }
