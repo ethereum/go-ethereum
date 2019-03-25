@@ -31,7 +31,7 @@ const (
 	nsSwarm = 0xe4
 
 	swarmTypecode = 0xfa //swarm manifest, see https://github.com/multiformats/multicodec/blob/master/table.csv
-	swarmHashtype = 0xd6 // BMT, see https://github.com/multiformats/multicodec/blob/master/table.csv
+	swarmHashtype = 0x1b // BMT, see https://github.com/multiformats/multicodec/blob/master/table.csv
 
 	hashLength = 32
 )
@@ -106,7 +106,7 @@ func EncodeSwarmHash(hash common.Hash) ([]byte, error) {
 		nsSwarm,       //swarm namespace
 		cidv1,         // CIDv1
 		swarmTypecode, // swarm hash
-		swarmHashtype, // swarm bmt hash
+		swarmHashtype, // keccak256 hash
 		hashLength,    //hash length. 32 bytes
 	}
 

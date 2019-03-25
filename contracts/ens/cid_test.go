@@ -76,17 +76,17 @@ func TestManualCidDecode(t *testing.T) {
 	}{
 		{
 			name:        "values correct, should not fail",
-			headerBytes: []byte{0xe4, 0x01, 0xfa, 0xd6, 0x20},
+			headerBytes: []byte{0xe4, 0x01, 0xfa, 0x1b, 0x20},
 			wantErr:     false,
 		},
 		{
 			name:        "cid version wrong, should fail",
-			headerBytes: []byte{0xe4, 0x00, 0xfa, 0xd6, 0x20},
+			headerBytes: []byte{0xe4, 0x00, 0xfa, 0x1b, 0x20},
 			wantErr:     true,
 		},
 		{
 			name:        "hash length wrong, should fail",
-			headerBytes: []byte{0xe4, 0x01, 0xfa, 0xd6, 0x1f},
+			headerBytes: []byte{0xe4, 0x01, 0xfa, 0x1b, 0x1f},
 			wantErr:     true,
 		},
 		{
