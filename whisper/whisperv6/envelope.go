@@ -130,13 +130,14 @@ func (e *Envelope) PoW() float64 {
 
 func (e *Envelope) calculatePoW(diff uint32) {
 	buf := make([]byte, 64)
-	h := crypto.Keccak256(e.rlpWithoutNonce())
+	rlp := e.rlpWithoutNonce()
+	h := crypto.Keccak256(rlp)
 	copy(buf[:32], h)
 	binary.BigEndian.PutUint64(buf[56:], e.Nonce)
-	d := new(big.Int).SetBytes(crypto.Keccak256(buf))
-	firstBit := math.FirstBitSet(d)
-	x := gmath.Pow(2, float64(firstBit))
-	x /= float64(e.size())
+	powHash := new(big.Int).SetBytes(crypto.Keccak256(buf))
+	leadingZeroes := 256 - powHash.BitLen()
+	x := gmath.Pow(2, float64(leadingZeroes))
+	x /= float64(len(rlp))
 	x /= float64(e.TTL + diff)
 	e.pow = x
 }
