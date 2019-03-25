@@ -104,10 +104,16 @@ func main() {
 
 	app.Commands = []cli.Command{
 		{
-			Name:    "pss-asym",
-			Aliases: []string{"pa"},
+			Name:    "asym",
+			Aliases: []string{"a"},
 			Usage:   "PSS: send and receive multiple messages across random nodes using asymmetric encryption",
-			Action:  wrapCliCommand("pss-asym", pssAsymCheck),
+			Action:  wrapCliCommand("asym", pssAsymCheck),
+		},
+		{
+			Name:    "sym",
+			Aliases: []string{"s"},
+			Usage:   "PSS: send and receive multiple messages across random nodes using symmetric encryption",
+			Action:  wrapCliCommand("sym", pssSymCheck),
 		},
 	}
 
