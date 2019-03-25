@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -399,8 +400,9 @@ func (self *StateDB) Suicide(addr common.Address) bool {
 // updateStateObject writes the given object to the trie.
 func (s *StateDB) updateStateObject(stateObject *stateObject) {
 	// Track the amount of time wasted on updating the account from the trie
-	defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
-
+	if metrics.EnabledExpensive {
+		defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
+	}
 	// Encode the account and update the account trie
 	addr := stateObject.Address()
 
@@ -414,8 +416,9 @@ func (s *StateDB) updateStateObject(stateObject *stateObject) {
 // deleteStateObject removes the given object from the state trie.
 func (s *StateDB) deleteStateObject(stateObject *stateObject) {
 	// Track the amount of time wasted on deleting the account from the trie
-	defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
-
+	if metrics.EnabledExpensive {
+		defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
+	}
 	// Delete the account from the trie
 	stateObject.deleted = true
 
@@ -433,8 +436,9 @@ func (s *StateDB) getStateObject(addr common.Address) (stateObject *stateObject)
 		return obj
 	}
 	// Track the amount of time wasted on loading the object from the database
-	defer func(start time.Time) { s.AccountReads += time.Since(start) }(time.Now())
-
+	if metrics.EnabledExpensive {
+		defer func(start time.Time) { s.AccountReads += time.Since(start) }(time.Now())
+	}
 	// Load the object from the database
 	enc, err := s.trie.TryGet(addr[:])
 	if len(enc) == 0 {
@@ -625,7 +629,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	s.Finalise(deleteEmptyObjects)
 
 	// Track the amount of time wasted on hashing the account trie
-	defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
+	if metrics.EnabledExpensive {
+		defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
+	}
 	return s.trie.Hash()
 }
 
@@ -674,8 +680,9 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		delete(s.stateObjectsDirty, addr)
 	}
 	// Write the account trie changes, measuing the amount of wasted time
-	defer func(start time.Time) { s.AccountCommits += time.Since(start) }(time.Now())
-
+	if metrics.EnabledExpensive {
+		defer func(start time.Time) { s.AccountCommits += time.Since(start) }(time.Now())
+	}
 	root, err = s.trie.Commit(func(leaf []byte, parent common.Hash) error {
 		var account Account
 		if err := rlp.DecodeBytes(leaf, &account); err != nil {
