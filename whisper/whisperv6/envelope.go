@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -82,7 +81,7 @@ func (e *Envelope) Seal(options *MessageParams) error {
 		return nil
 	}
 
-	var target, bestBit int
+	var target, bestLeadingZeros int
 	if options.PoW < 0 {
 		// target is not set - the function should run for a period
 		// of time specified in WorkTime param. Since we can predict
@@ -101,10 +100,10 @@ func (e *Envelope) Seal(options *MessageParams) error {
 		for i := 0; i < 1024; i++ {
 			binary.BigEndian.PutUint64(buf[56:], nonce)
 			d := new(big.Int).SetBytes(crypto.Keccak256(buf))
-			firstBit := math.FirstBitSet(d)
-			if firstBit > bestBit {
-				e.Nonce, bestBit = nonce, firstBit
-				if target > 0 && bestBit >= target {
+			leadingZeros := 256 - d.BitLen()
+			if leadingZeros > bestLeadingZeros {
+				e.Nonce, bestLeadingZeros = nonce, leadingZeros
+				if target > 0 && bestLeadingZeros >= target {
 					return nil
 				}
 			}
@@ -112,7 +111,7 @@ func (e *Envelope) Seal(options *MessageParams) error {
 		}
 	}
 
-	if target > 0 && bestBit < target {
+	if target > 0 && bestLeadingZeros < target {
 		return fmt.Errorf("failed to reach the PoW target, specified pow time (%d seconds) was insufficient", options.WorkTime)
 	}
 
