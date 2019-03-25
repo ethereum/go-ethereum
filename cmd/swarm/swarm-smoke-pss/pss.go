@@ -31,7 +31,6 @@ type pssNode struct {
 	pubkey         string
 	client         *rpc.Client
 	deregisterFunc func()
-	msgC           chan pss.APIMsg
 }
 
 type pssSession struct {
@@ -162,17 +161,21 @@ func pssSetup() *pssSession {
 			log.Error("error calling host for subscribe", "err", err)
 			continue
 		}
+
+		var dFn = func() {
+			sub.Unsubscribe()
+			rpcClient.Close()
+		}
 		session.nodes = append(session.nodes,
 			&pssNode{
 				hostIdx:        i,
 				addr:           []byte(addr),
 				client:         rpcClient,
 				pubkey:         pubkey,
-				deregisterFunc: sub.Unsubscribe,
+				deregisterFunc: dFn,
 			},
 		)
 	}
-
 	return session
 }
 
