@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-// Package XDPoS implements the delegated-proof-of-stake consensus engine.
+// Package XDPoS implements the proof-of-stake-voting consensus engine.
 package XDPoS
 
 import (
@@ -58,7 +58,7 @@ type Masternode struct {
 	Stake   *big.Int
 }
 
-// XDPoS delegated-proof-of-stake protocol constants.
+// XDPoS proof-of-stake-voting protocol constants.
 var (
 	epochLength = uint64(900) // Default number of blocks after which to checkpoint and reset the pending votes
 
@@ -149,7 +149,7 @@ var (
 // backing account.
 //type SignerFn func(accounts.Account, []byte) ([]byte, error)
 
-// sigHash returns the hash which is used as input for the delegated-proof-of-stake
+// sigHash returns the hash which is used as input for the proof-of-stake-voting
 // signing. It is the hash of the entire header apart from the 65 byte signature
 // contained at the end of the extra data.
 //
@@ -209,7 +209,7 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 	return signer, nil
 }
 
-// XDPoS is the delegated-proof-of-stake consensus engine proposed to support the
+// XDPoS is the proof-of-stake-voting consensus engine proposed to support the
 // Ethereum testnet following the Ropsten attacks.
 type XDPoS struct {
 	config *params.XDPoSConfig // Consensus engine configuration parameters
@@ -225,15 +225,15 @@ type XDPoS struct {
 	signFn clique.SignerFn // Signer function to authorize hashes with
 	lock   sync.RWMutex    // Protects the signer fields
 
-	BlockSigners *lru.Cache
-	HookReward func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
+	BlockSigners          *lru.Cache
+	HookReward            func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
 	HookPenalty           func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
 	HookPenaltyTIPSigning func(chain consensus.ChainReader, header *types.Header, candidate []common.Address) ([]common.Address, error)
 	HookValidator         func(header *types.Header, signers []common.Address) ([]byte, error)
 	HookVerifyMNs         func(header *types.Header, signers []common.Address) error
 }
 
-// New creates a XDPoS delegated-proof-of-stake consensus engine with the initial
+// New creates a XDPoS proof-of-stake-voting consensus engine with the initial
 // signers set to the ones provided by the user.
 func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
 	// Set any missing consensus parameters to their defaults
@@ -1129,31 +1129,35 @@ func GetM1M2FromCheckpointHeader(checkpointHeader *types.Header, currentHeader *
 	if checkpointHeader.Number.Uint64()%common.EpocBlockRandomize != 0 {
 		return nil, errors.New("This block is not checkpoint block epoc.")
 	}
-	m1m2 := map[common.Address]common.Address{}
 	// Get signers from this block.
 	masternodes := GetMasternodesFromCheckpointHeader(checkpointHeader)
 	validators := ExtractValidatorsFromBytes(checkpointHeader.Validators)
+	m1m2, _, err := getM1M2(masternodes, validators, currentHeader, config)
+	if err != nil {
+		return map[common.Address]common.Address{}, err
+	}
+	return m1m2, nil
+}
 
+func getM1M2(masternodes []common.Address, validators []int64, currentHeader *types.Header, config *params.ChainConfig) (map[common.Address]common.Address, uint64, error) {
+	m1m2 := map[common.Address]common.Address{}
 	maxMNs := len(masternodes)
+	moveM2 := uint64(0)
 	if len(validators) < maxMNs {
-		    return nil, errors.New("len(m2) is less than len(m1)")
+		return nil, moveM2, errors.New("len(m2) is less than len(m1)")
 	}
 	if maxMNs > 0 {
 		isForked := config.IsTIPRandomize(currentHeader.Number)
-		moveM2 := uint64(0)
 		if isForked {
 			moveM2 = (currentHeader.Number.Uint64() % config.XDPoS.Epoch) / uint64(maxMNs)
 		}
-	for i, m1 := range masternodes {
-		m2Index := uint64(validators[i] % int64(maxMNs))
-		m2Index = m2Index + moveM2
-		if m2Index >= common.MaxMasternodes {
-			m2Index = m2Index - common.MaxMasternodes
+		for i, m1 := range masternodes {
+			m2Index := uint64(validators[i] % int64(maxMNs))
+			m2Index = (m2Index + moveM2) % uint64(maxMNs)
+			m1m2[m1] = masternodes[m2Index]
 		}
-		m1m2[m1] = masternodes[m2Index]
-     	}
 	}
-	return m1m2, nil
+	return m1m2, moveM2, nil
 }
 
 // Extract validators from byte array.
