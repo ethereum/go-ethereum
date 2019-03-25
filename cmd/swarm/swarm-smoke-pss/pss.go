@@ -130,7 +130,7 @@ func pssSetup() *pssSession {
 
 		rpcClient, err := rpc.Dial(wsHost)
 		if err != nil {
-			log.Error("Error dialing host", "err", err)
+			log.Error("error dialing host", "err", err)
 			continue
 		}
 
@@ -138,7 +138,7 @@ func pssSetup() *pssSession {
 		var addr hexutil.Bytes
 		err = rpcClient.Call(&addr, "pss_baseAddr")
 		if err != nil {
-			log.Error("Error calling host for addr", "err", err)
+			log.Error("error calling host for addr", "err", err)
 			continue
 		}
 
@@ -146,7 +146,7 @@ func pssSetup() *pssSession {
 		var pubkey string
 		err = rpcClient.Call(&pubkey, "pss_getPublicKey")
 		if err != nil {
-			log.Error("Error calling host for pubkey", "err", err)
+			log.Error("error calling host for pubkey", "err", err)
 			continue
 		}
 
@@ -157,7 +157,7 @@ func pssSetup() *pssSession {
 		defer cancel()
 		sub, err := rpcClient.Subscribe(ctx, "pss", session.msgC, "receive", session.topic, true, false)
 		if err != nil {
-			log.Error("Error calling host for subscribe", "err", err)
+			log.Error("error calling host for subscribe", "err", err)
 			continue
 		}
 		session.nodes = append(session.nodes,
@@ -242,7 +242,7 @@ func pssSymDo(ctx *cli.Context, session *pssSession, tuid string) error {
 	var senderSymKeyID string
 	err = j.sender.client.Call(&senderSymKeyID, "pss_setSymmetricKey", symkey, session.topic, hexutil.Encode(j.receiver.addr), true)
 	if err != nil {
-		log.Error("erro setting sym key on the sender", "err", err)
+		log.Error("error setting sym key on the sender", "err", err)
 		return err
 	}
 
@@ -268,6 +268,7 @@ func pssAsymDo(ctx *cli.Context, session *pssSession, tuid string) error {
 
 	err := j.sender.client.Call(nil, "pss_sendAsym", j.receiver.pubkey, session.topic, hexutil.Encode(j.msg))
 	if err != nil {
+		log.Error("error sending message using asym encryption", "err", err)
 		return err
 	}
 
