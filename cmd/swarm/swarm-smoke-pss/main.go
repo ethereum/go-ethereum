@@ -115,6 +115,12 @@ func main() {
 			Usage:   "PSS: send and receive multiple messages across random nodes using symmetric encryption",
 			Action:  wrapCliCommand("sym", pssSymCheck),
 		},
+		{
+			Name:    "raw",
+			Aliases: []string{"r"},
+			Usage:   "PSS: send and receive multiple raw messages across random nodes",
+			Action:  wrapCliCommand("sym", pssRawCheck),
+		},
 	}
 
 	sort.Sort(cli.FlagsByName(app.Flags))

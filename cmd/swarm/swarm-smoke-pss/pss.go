@@ -50,9 +50,11 @@ func pssAsymCheck(ctx *cli.Context, tuid string) error {
 func pssSymCheck(ctx *cli.Context, tuid string) error {
 	return pssCheck(ctx, tuid, "sym", pssSymDo)
 }
+func pssRawCheck(ctx *cli.Context, tuid string) error {
+	return pssCheck(ctx, tuid, "raw", pssRawDo)
+}
 
 func pssCheck(ctx *cli.Context, tuid string, tag string, fn pssTestFn) error {
-
 	// use input seed if it has been set
 	if inputSeed != 0 {
 		seed = inputSeed
@@ -269,6 +271,18 @@ func pssAsymDo(ctx *cli.Context, session *pssSession, tuid string) error {
 	err := j.sender.client.Call(nil, "pss_sendAsym", j.receiver.pubkey, session.topic, hexutil.Encode(j.msg))
 	if err != nil {
 		log.Error("error sending message using asym encryption", "err", err)
+		return err
+	}
+
+	return session.waitForMsg()
+}
+
+func pssRawDo(ctx *cli.Context, session *pssSession, tuid string) error {
+	j := session.genJob()
+
+	err := j.sender.client.Call(nil, "pss_sendRaw", hexutil.Encode(j.receiver.addr), session.topic, hexutil.Encode(j.msg))
+	if err != nil {
+		log.Error("error sending raw message", "err", err)
 		return err
 	}
 
