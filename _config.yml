@@ -1,4 +1,5 @@
 repository: ethereum/go-ethereum
+url: https://geth.ethereum.org
 
 theme: minima
 
