@@ -1271,13 +1271,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		storageUpdateTimer.Update(state.StorageUpdates)
 		storageCommitTimer.Update(state.StorageCommits)
 
-		trieAccess := state.AccountReads + state.AccountHashes + state.AccountUpdates + state.AccountCommits
-		trieAccess += state.StorageReads + state.StorageHashes + state.StorageUpdates + state.StorageCommits
-
 		blockInsertTimer.UpdateSince(start)
-		blockExecutionTimer.Update(t1.Sub(t0) - trieAccess)
-		blockValidationTimer.Update(t2.Sub(t1))
-		blockWriteTimer.Update(t3.Sub(t2))
+		blockExecutionTimer.Update(t1.Sub(t0) - state.AccountReads - state.AccountUpdates - state.StorageReads - state.StorageUpdates)
+		blockValidationTimer.Update(t2.Sub(t1) - state.AccountHashes - state.StorageHashes)
+		blockWriteTimer.Update(t3.Sub(t2) - state.AccountCommits - state.StorageCommits)
 
 		switch status {
 		case CanonStatTy:
