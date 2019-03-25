@@ -1,2 +1,0 @@
-{% capture root %}{% if page.root %}{{ page.root }}{% else %}{{ site.default_root }}{% endif %}{% endcapture %}
-{{ include.url | remove: ".html" | prepend: root | replace: '//', '/' }}

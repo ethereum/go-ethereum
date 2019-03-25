@@ -1,1 +1,0 @@
-See [Installing Geth](doc/Installing-Geth).
