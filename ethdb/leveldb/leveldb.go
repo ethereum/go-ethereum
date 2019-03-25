@@ -418,14 +418,14 @@ func (b *batch) Reset() {
 }
 
 // Replay replays the batch contents.
-func (b *batch) Replay(r ethdb.Replayee) error {
-	return b.b.Replay(&replayer{replayer: r})
+func (b *batch) Replay(w ethdb.Writer) error {
+	return b.b.Replay(&replayer{writer: w})
 }
 
 // replayer is a small wrapper to implement the correct replay methods.
 type replayer struct {
-	replayer ethdb.Replayee
-	failure  error
+	writer  ethdb.Writer
+	failure error
 }
 
 // Put inserts the given value into the key-value data store.
@@ -434,7 +434,7 @@ func (r *replayer) Put(key, value []byte) {
 	if r.failure != nil {
 		return
 	}
-	r.failure = r.replayer.Put(key, value)
+	r.failure = r.writer.Put(key, value)
 }
 
 // Delete removes the key from the key-value data store.
@@ -443,5 +443,5 @@ func (r *replayer) Delete(key []byte) {
 	if r.failure != nil {
 		return
 	}
-	r.failure = r.replayer.Delete(key)
+	r.failure = r.writer.Delete(key)
 }

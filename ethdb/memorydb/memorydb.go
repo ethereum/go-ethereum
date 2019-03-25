@@ -241,13 +241,17 @@ func (b *batch) Reset() {
 }
 
 // Replay replays the batch contents.
-func (b *batch) Replay(r ethdb.Replayee) error {
+func (b *batch) Replay(w ethdb.Writer) error {
 	for _, keyvalue := range b.writes {
 		if keyvalue.delete {
-			r.Delete(keyvalue.key)
+			if err := w.Delete(keyvalue.key); err != nil {
+				return err
+			}
 			continue
 		}
-		r.Put(keyvalue.key, keyvalue.value)
+		if err := w.Put(keyvalue.key, keyvalue.value); err != nil {
+			return err
+		}
 	}
 	return nil
 }

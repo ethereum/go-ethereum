@@ -32,19 +32,9 @@ type Reader interface {
 type Writer interface {
 	// Put inserts the given value into the key-value data store.
 	Put(key []byte, value []byte) error
-}
 
-// Deleter wraps the Delete method of a backing data store.
-type Deleter interface {
 	// Delete removes the key from the key-value data store.
 	Delete(key []byte) error
-}
-
-// Replayee wraps basic batch operations to allow replaying an existing batch
-// on top of multiple databases.
-type Replayee interface {
-	Writer
-	Deleter
 }
 
 // Stater wraps the Stat method of a backing data store.
@@ -70,7 +60,6 @@ type Compacter interface {
 type KeyValueStore interface {
 	Reader
 	Writer
-	Deleter
 	Batcher
 	Iteratee
 	Stater
@@ -83,7 +72,6 @@ type KeyValueStore interface {
 type Database interface {
 	Reader
 	Writer
-	Deleter
 	Batcher
 	Iteratee
 	Stater

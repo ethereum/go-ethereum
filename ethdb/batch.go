@@ -24,7 +24,6 @@ const IdealBatchSize = 100 * 1024
 // when Write is called. A batch cannot be used concurrently.
 type Batch interface {
 	Writer
-	Deleter
 
 	// ValueSize retrieves the amount of data queued up for writing.
 	ValueSize() int
@@ -36,7 +35,7 @@ type Batch interface {
 	Reset()
 
 	// Replay replays the batch contents.
-	Replay(replayer Replayee) error
+	Replay(w Writer) error
 }
 
 // Batcher wraps the NewBatch method of a backing data store.

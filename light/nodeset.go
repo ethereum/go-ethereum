@@ -60,6 +60,15 @@ func (db *NodeSet) Put(key []byte, value []byte) error {
 	return nil
 }
 
+// Delete removes a node from the set
+func (db *NodeSet) Delete(key []byte) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	delete(db.nodes, string(key))
+	return nil
+}
+
 // Get returns a stored node
 func (db *NodeSet) Get(key []byte) ([]byte, error) {
 	db.lock.RLock()
@@ -136,6 +145,11 @@ func (n NodeList) NodeSet() *NodeSet {
 func (n *NodeList) Put(key []byte, value []byte) error {
 	*n = append(*n, value)
 	return nil
+}
+
+// Delete panics as there's no reason to remove a node from the list.
+func (n *NodeList) Delete(key []byte) error {
+	panic("not supported")
 }
 
 // DataSize returns the aggregated data size of nodes in the list

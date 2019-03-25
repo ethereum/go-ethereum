@@ -150,6 +150,6 @@ func (b *tableBatch) Reset() {
 }
 
 // Replay replays the batch contents.
-func (b *tableBatch) Replay(r ethdb.Replayee) error {
-	return b.batch.Replay(r)
+func (b *tableBatch) Replay(w ethdb.Writer) error {
+	return b.batch.Replay(w)
 }

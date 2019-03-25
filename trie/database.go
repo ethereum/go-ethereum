@@ -293,13 +293,12 @@ func NewDatabaseWithCache(diskdb ethdb.KeyValueStore, cache int) *Database {
 			Hasher:             trienodeHasher{},
 		})
 	}
-	db := &Database{
+	return &Database{
 		diskdb:    diskdb,
 		cleans:    cleans,
 		dirties:   map[common.Hash]*cachedNode{{}: {}},
 		preimages: make(map[common.Hash][]byte),
 	}
-	return db
 }
 
 // DiskDB retrieves the persistent storage backing the trie database.
