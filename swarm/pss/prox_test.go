@@ -6,8 +6,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -87,24 +85,6 @@ func (d *testData) setDone() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.handlerDone = true
-}
-
-func getCmdParams(t *testing.T) (int, int, time.Duration) {
-	args := strings.Split(t.Name(), "/")
-	msgCount, err := strconv.ParseInt(args[2], 10, 16)
-	if err != nil {
-		t.Fatal(err)
-	}
-	nodeCount, err := strconv.ParseInt(args[1], 10, 16)
-	if err != nil {
-		t.Fatal(err)
-	}
-	timeoutStr := fmt.Sprintf("%ss", args[3])
-	timeoutDur, err := time.ParseDuration(timeoutStr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return int(msgCount), int(nodeCount), timeoutDur
 }
 
 func newTestData() *testData {
@@ -213,7 +193,9 @@ func (d *testData) init(msgCount int) error {
 // nodes Y and Z will be considered required recipients of the msg,
 // whereas nodes X, Y and Z will be allowed recipients.
 func TestProxNetwork(t *testing.T) {
-	t.Run("16/16/15", testProxNetwork)
+	t.Run("short", func(t *testing.T) {
+		testProxNetwork(t, 16, 16, 16)
+	})
 }
 
 // params in run name: nodes/msgs
@@ -221,22 +203,31 @@ func TestProxNetworkLong(t *testing.T) {
 	if !*longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
-	t.Run("8/100/30", testProxNetwork)
-	t.Run("16/100/30", testProxNetwork)
-	t.Run("32/100/60", testProxNetwork)
-	t.Run("64/100/60", testProxNetwork)
-	t.Run("128/100/120", testProxNetwork)
+	t.Run("longrunning1", func(t *testing.T) {
+		testProxNetwork(t, 8, 100, 30)
+	})
+	t.Run("longrunning2", func(t *testing.T) {
+		testProxNetwork(t, 16, 100, 30)
+	})
+	t.Run("longrunning3", func(t *testing.T) {
+		testProxNetwork(t, 32, 100, 60)
+	})
+	t.Run("longrunning4", func(t *testing.T) {
+		testProxNetwork(t, 64, 100, 60)
+	})
+	t.Run("longrunning5", func(t *testing.T) {
+		testProxNetwork(t, 128, 100, 120)
+	})
 }
 
-func testProxNetwork(t *testing.T) {
+func testProxNetwork(t *testing.T, msgCount int, nodeCount  int, timeout int) {
 	tstdata := newTestData()
-	msgCount, nodeCount, timeout := getCmdParams(t)
 	handlerContextFuncs := make(map[Topic]handlerContextFunc)
 	handlerContextFuncs[topic] = nodeMsgHandler
 	services := newProxServices(tstdata, true, handlerContextFuncs, tstdata.kademlias)
 	tstdata.sim = simulation.New(services)
 	defer tstdata.sim.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second * time.Duration(timeout))
 	defer cancel()
 	filename := fmt.Sprintf("testdata/snapshot_%d.json", nodeCount)
 	err := tstdata.sim.UploadSnapshot(ctx, filename)
