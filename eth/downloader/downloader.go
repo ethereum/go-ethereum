@@ -90,6 +90,7 @@ var (
 	errCancelContentProcessing = errors.New("content processing canceled (requested)")
 	errNoSyncActive            = errors.New("no sync active")
 	errTooOld                  = errors.New("peer doesn't speak recent enough protocol version (need version >= 62)")
+	errEnoughBlock             = errors.New("downloader download enough block")
 )
 
 type Downloader struct {
@@ -421,7 +422,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 	}(time.Now())
 
 	// Look up the sync boundaries: the common ancestor and the target block
-	latest, err := d.fetchHeight(p)
+	latest, err := d.fetchHeight(p,hash)
 	if err != nil {
 		return err
 	}
@@ -469,7 +470,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 	if d.mode == FastSync {
 		fetchers = append(fetchers, func() error { return d.processFastSyncContent(latest) })
 	} else if d.mode == FullSync {
-		fetchers = append(fetchers, d.processFullSyncContent)
+		fetchers = append(fetchers, func() error { return d.processFullSyncContent(height) })
 	}
 	return d.spawnSync(fetchers)
 }
@@ -500,6 +501,9 @@ func (d *Downloader) spawnSync(fetchers []func() error) error {
 	d.queue.Close()
 	d.Cancel()
 	wg.Wait()
+	if err == errEnoughBlock {
+		return nil
+	}
 	return err
 }
 
@@ -537,12 +541,10 @@ func (d *Downloader) Terminate() {
 
 // fetchHeight retrieves the head header of the remote peer to aid in estimating
 // the total time a pending synchronisation would take.
-func (d *Downloader) fetchHeight(p *peerConnection) (*types.Header, error) {
-	p.log.Debug("Retrieving remote chain height")
+func (d *Downloader) fetchHeight(p *peerConnection,hash common.Hash) (*types.Header, error) {
 
 	// Request the advertised remote head block and wait for the response
-	head, _ := p.peer.Head()
-	go p.peer.RequestHeadersByHash(head, 1, 0, false)
+	go p.peer.RequestHeadersByHash(hash, 1, 0, false)
 
 	ttl := d.requestTTL()
 	timeout := time.After(ttl)
@@ -1317,7 +1319,7 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 }
 
 // processFullSyncContent takes fetch results from the queue and imports them into the chain.
-func (d *Downloader) processFullSyncContent() error {
+func (d *Downloader) processFullSyncContent(height uint64) error {
 	for {
 		results := d.queue.Results(true)
 		if len(results) == 0 {
@@ -1357,6 +1359,11 @@ func (d *Downloader) processFullSyncContent() error {
 			if err := d.importBlockResults(results); err != nil {
 				return err
 			}
+		}
+		latest := results[len(results)-1]
+		if latest.Header != nil && latest.Header.Number.Uint64() > height {
+			log.Debug("Force stop because downloading enough block", "height", height, "latest", latest.Header.Number.Uint64())
+			return errEnoughBlock
 		}
 	}
 }
