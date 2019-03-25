@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -34,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/posv"
 	"github.com/ethereum/go-ethereum/contracts"
+	contractValidator "github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -45,17 +47,14 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	contractValidator "github.com/ethereum/go-ethereum/contracts/validator/contract"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 )
 
 const (
-	defaultGasPrice 		= 50 * params.Shannon
+	defaultGasPrice = 50 * params.Shannon
 	// statuses of candidates
-	statusMasternode 		= "MASTERNODE"
-	statusSlashed			= "SLASHED"
-	statusProposed			= "PROPOSED"
-
+	statusMasternode = "MASTERNODE"
+	statusSlashed    = "SLASHED"
+	statusProposed   = "PROPOSED"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -700,14 +699,13 @@ func (s *PublicBlockChainAPI) GetMasternodes(ctx context.Context, b *types.Block
 	return masternodes, nil
 }
 
-
 // GetCandidateStatus returns status of the given candidate at a specified epochNumber
 func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAddress common.Address, epochNumber rpc.EpochNumber) (string, error) {
 	var (
-		block *types.Block
+		block                    *types.Block
 		masternodes, penaltyList []common.Address
-		penalties []byte
-		err error
+		penalties                []byte
+		err                      error
 	)
 	block = s.b.CurrentBlock()
 	epoch := s.b.ChainConfig().Posv.Epoch
@@ -749,7 +747,7 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 	opts := new(bind.CallOpts)
 	var (
 		candidateAddresses []common.Address
-		candidates []posv.Masternode
+		candidates         []posv.Masternode
 	)
 
 	candidateAddresses, err = validator.GetCandidates(opts)
@@ -780,12 +778,12 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 			break
 		}
 	}
-	if isTopCandidate == false {
+	if !isTopCandidate {
 		return status, nil
 	}
 	// look up recent checkpoint headers to get penalty list
 	for i := 0; i <= common.LimitPenaltyEpoch; i++ {
-		if blockNum > uint64(i) * epoch {
+		if blockNum > uint64(i)*epoch {
 			blockCheckpointNumber := rpc.BlockNumber(blockNum - (blockNum % epoch) - (uint64(i) * epoch))
 			blockCheckpoint, err := s.b.BlockByNumber(ctx, blockCheckpointNumber)
 			if err != nil {

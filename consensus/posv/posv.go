@@ -225,8 +225,8 @@ type Posv struct {
 	signFn clique.SignerFn // Signer function to authorize hashes with
 	lock   sync.RWMutex    // Protects the signer fields
 
-	BlockSigners *lru.Cache
-	HookReward   func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
+	BlockSigners          *lru.Cache
+	HookReward            func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
 	HookPenalty           func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
 	HookPenaltyTIPSigning func(chain consensus.ChainReader, header *types.Header, candidate []common.Address) ([]common.Address, error)
 	HookValidator         func(header *types.Header, signers []common.Address) ([]byte, error)
@@ -739,7 +739,7 @@ func (c *Posv) GetValidator(creator common.Address, chain consensus.ChainReader,
 			return common.Address{}, fmt.Errorf("couldn't find checkpoint header")
 		}
 	}
-	m, err := GetM1M2FromCheckpointHeader(cpHeader)
+	m, err := GetM1M2FromCheckpointHeader(cpHeader, header, chain.Config())
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -1125,24 +1125,39 @@ func GetMasternodesFromCheckpointHeader(checkpointHeader *types.Header) []common
 }
 
 // Get m2 list from checkpoint block.
-func GetM1M2FromCheckpointHeader(checkpointHeader *types.Header) (map[common.Address]common.Address, error) {
+func GetM1M2FromCheckpointHeader(checkpointHeader *types.Header, currentHeader *types.Header, config *params.ChainConfig) (map[common.Address]common.Address, error) {
 	if checkpointHeader.Number.Uint64()%common.EpocBlockRandomize != 0 {
 		return nil, errors.New("This block is not checkpoint block epoc.")
 	}
-	m1m2 := map[common.Address]common.Address{}
 	// Get signers from this block.
 	masternodes := GetMasternodesFromCheckpointHeader(checkpointHeader)
 	validators := ExtractValidatorsFromBytes(checkpointHeader.Validators)
-
-	if len(validators) < len(masternodes) {
-		return nil, errors.New("len(m2) is less than len(m1)")
-	}
-	if len(masternodes) > 0 {
-		for i, m1 := range masternodes {
-			m1m2[m1] = masternodes[validators[i]%int64(len(masternodes))]
-		}
+	m1m2, _, err := getM1M2(masternodes, validators, currentHeader, config)
+	if err != nil {
+		return map[common.Address]common.Address{}, err
 	}
 	return m1m2, nil
+}
+
+func getM1M2(masternodes []common.Address, validators []int64, currentHeader *types.Header, config *params.ChainConfig) (map[common.Address]common.Address, uint64, error) {
+	m1m2 := map[common.Address]common.Address{}
+	maxMNs := len(masternodes)
+	moveM2 := uint64(0)
+	if len(validators) < maxMNs {
+		return nil, moveM2, errors.New("len(m2) is less than len(m1)")
+	}
+	if maxMNs > 0 {
+		isForked := config.IsTIPRandomize(currentHeader.Number)
+		if isForked {
+			moveM2 = (currentHeader.Number.Uint64() % config.Posv.Epoch) / uint64(maxMNs)
+		}
+		for i, m1 := range masternodes {
+			m2Index := uint64(validators[i] % int64(maxMNs))
+			m2Index = (m2Index + moveM2) % uint64(maxMNs)
+			m1m2[m1] = masternodes[m2Index]
+		}
+	}
+	return m1m2, moveM2, nil
 }
 
 // Extract validators from byte array.
