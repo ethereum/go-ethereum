@@ -37,17 +37,18 @@ var (
 )
 
 var (
-	allhosts     string
-	hosts        []string
-	filesize     int
-	inputSeed    int
-	syncDelay    int
-	httpPort     int
-	wsPort       int
-	verbosity    int
-	timeout      int
-	single       bool
-	trackTimeout int
+	allhosts        string
+	hosts           []string
+	filesize        int
+	inputSeed       int
+	syncDelay       int
+	httpPort        int
+	wsPort          int
+	verbosity       int
+	timeout         int
+	single          bool
+	trackTimeout    int
+	pssMessageCount int
 )
 
 func main() {
@@ -116,6 +117,12 @@ func main() {
 			Usage:       "timeout in seconds to wait for GetAllReferences to return",
 			Destination: &trackTimeout,
 		},
+		cli.IntFlag{
+			Name:        "pss-messages",
+			Value:       10,
+			Usage:       "number of pss messages that should be send in the pss smoke test",
+			Destination: &pssMessageCount,
+		},
 	}
 
 	app.Flags = append(app.Flags, []cli.Flag{
@@ -155,10 +162,10 @@ func main() {
 			Action:  wrapCliCommand("sliding-window", slidingWindowCmd),
 		},
 		{
-			Name:    "pss",
-			Aliases: []string{"p"},
-			Usage:   "pss send and receive checks",
-			Action:  wrapCliCommand("pss", pssChecks),
+			Name:    "pss-asym",
+			Aliases: []string{"pa"},
+			Usage:   "PSS: send and receive multiple messages across random nodes using asymmetric encryption",
+			Action:  wrapCliCommand("pss-asym", pssAsymCheck),
 		},
 	}
 

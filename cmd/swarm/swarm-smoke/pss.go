@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha1"
+	"errors"
 	"fmt"
 	"math/rand"
 	"time"
@@ -27,7 +28,6 @@ const (
 type pssJob struct {
 	msg  []byte
 	mode int
-	prox bool
 }
 
 type pssNode struct {
@@ -39,24 +39,33 @@ type pssNode struct {
 	msgC           chan pss.APIMsg
 }
 
-// keyed by hex representation of overlay address
 type pssSession struct {
 	topic        pss.Topic
 	msgC         chan pss.APIMsg
 	nodes        []*pssNode
 	requiredJobs map[string]*pssJob
-	allowedJobs  map[string]*pssJob
 }
 
-func pssChecks(ctx *cli.Context, tuid string) error {
-	return pssAsym(ctx, tuid)
-}
+// pssAsymCheck sends one or more messages (depending on pssMessageCount)
+// using asymmetric encryption across random nodes.
+func pssAsymCheck(ctx *cli.Context, tuid string) error {
 
-func pssAsym(ctx *cli.Context, tuid string) error {
+	// use input seed if it has been set
+	if inputSeed != 0 {
+		seed = inputSeed
+	}
+	rand.Seed(int64(seed))
+	if pssMessageCount <= 0 {
+		pssMessageCount = 1
+		log.Warn(fmt.Sprintf("message count should be a positive number. Defaulting to %d", pssMessageCount))
+	}
+	log.Info("pss-asym test started", "msgCount", pssMessageCount)
 
 	errc := make(chan error)
-
 	session := pssSetup()
+	if len(session.nodes) <= 1 {
+		return errors.New("at least 2 nodes are required to be working")
+	}
 	defer func() {
 		for _, n := range session.nodes {
 			n.deregisterFunc()
@@ -64,37 +73,54 @@ func pssAsym(ctx *cli.Context, tuid string) error {
 	}()
 
 	go func() {
-		errc <- pssAsymDo(ctx, session, tuid)
+		var failCount, successCount int64
+		for i := 0; i < pssMessageCount; i++ {
+			err := pssAsymDo(ctx, session, tuid)
+			if err != nil {
+				failCount++
+				log.Error("error sending pss msg", "err", err)
+			} else {
+				successCount++
+			}
+		}
+
+		metrics.GetOrRegisterCounter("pss.asym.failMsg", nil).Inc(failCount)
+		metrics.GetOrRegisterCounter("pss.asym.successMsg", nil).Inc(successCount)
+
+		log.Info("pss-asym test ended", "success", successCount, "failures", failCount)
+
+		if failCount > 0 {
+			errc <- errors.New("some messages were not delivered")
+		} else {
+			errc <- nil
+		}
 	}()
 
 	select {
 	case err := <-errc:
 		if err != nil {
-			metrics.GetOrRegisterCounter(fmt.Sprintf("%s.fail", commandName), nil).Inc(1)
+			metrics.GetOrRegisterCounter("pss.asym.fail", nil).Inc(1)
 		}
 		return err
 	case <-time.After(time.Duration(timeout) * time.Second):
-		metrics.GetOrRegisterCounter(fmt.Sprintf("%s.timeout", commandName), nil).Inc(1)
-
-		e := fmt.Errorf("timeout after %v sec", timeout)
-		return e
+		metrics.GetOrRegisterCounter("pss.asym.timeout", nil).Inc(1)
+		return fmt.Errorf("timeout after %v sec", timeout)
 	}
 
 }
 
 func pssSetup() *pssSession {
-
 	// random topic, one per session,  same for all msgs
 	topic := pss.BytesToTopic(testutil.RandomBytes(seed, 4))
+
+	log.Trace("pss random topic", "topic", topic.String())
 
 	session := &pssSession{
 		msgC:         make(chan pss.APIMsg),
 		requiredJobs: make(map[string]*pssJob),
-		allowedJobs:  make(map[string]*pssJob),
 		topic:        topic,
 	}
 
-	// hosts is global :/
 	// set up the necessary info for each pss node
 	for i, host := range hosts {
 		httpHost := fmt.Sprintf("ws://%s:%d", host, 8546)
@@ -105,7 +131,6 @@ func pssSetup() *pssSession {
 		}
 
 		// get overlay address
-		// TODO this should be done automatically for all nodes anyway in all smokes perhaps?
 		var addr hexutil.Bytes
 		err = rpcClient.Call(&addr, "pss_baseAddr")
 		if err != nil {
@@ -124,7 +149,6 @@ func pssSetup() *pssSession {
 		// subscribe to the topic for the session
 		// this creates the incoming message handler automatically
 		// any message received with this topic comes on the channel
-		//msgC := make(chan pss.APIMsg)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 		sub, err := rpcClient.Subscribe(ctx, "pss", session.msgC, "receive", session.topic, true, false)
@@ -134,8 +158,7 @@ func pssSetup() *pssSession {
 		}
 		session.nodes = append(session.nodes,
 			&pssNode{
-				hostIdx: i,
-				//msgC:           msgC,
+				hostIdx:        i,
 				addr:           []byte(addr),
 				client:         rpcClient,
 				pubkey:         pubkey,
@@ -147,14 +170,20 @@ func pssSetup() *pssSession {
 	return session
 }
 
+// pssAsymDo sends a single PSS message between two random nodes using asymetric encryption
 func pssAsymDo(ctx *cli.Context, session *pssSession, tuid string) error {
 
-	// can we choose? if so, change
-	senderNode := session.nodes[0]
+	senderNodeIdx := rand.Intn(len(session.nodes))
+	senderNode := session.nodes[senderNodeIdx]
+	log.Trace("sender node", "pss_baseAddr", hexutil.Encode(senderNode.addr), "host", hosts[senderNodeIdx])
 
-	// add if single blah blah...
-	recvNodeIdx := rand.Intn(len(session.nodes)-1) + 1
+	// receiving node has to be different than sender
+	recvNodeIdx := senderNodeIdx
+	for recvNodeIdx == senderNodeIdx {
+		recvNodeIdx = rand.Intn(len(session.nodes))
+	}
 	recvNode := session.nodes[recvNodeIdx]
+	log.Trace("recv node", "pss_baseAddr", hexutil.Encode(recvNode.addr), "host", hosts[recvNodeIdx])
 
 	// set recipient in pivot node
 	err := senderNode.client.Call(nil, "pss_setPeerPublicKey", recvNode.pubkey, session.topic, "0x")
@@ -162,46 +191,39 @@ func pssAsymDo(ctx *cli.Context, session *pssSession, tuid string) error {
 		return err
 	}
 
-	// for asym it's not necessary to set recipient, but for sym we must
-	//	err = recvNode.client.Call(nil, "pss_setPeerPublicKey", senderNode.pubkey, session.topic, "0x")
-	//	if err != nil {
-	//		return err
-	//	}
-
 	// create new message and add it to job index to check for receives
 	randomMsg := testutil.RandomBytes(seed, 128)
+	// change seed so that the next random message is different
+	seed = seed + 1
+
 	msgIdx := toMsgIdx(randomMsg)
 	session.requiredJobs[msgIdx] = &pssJob{
 		msg:  randomMsg,
 		mode: pssModeAsym,
 	}
 
-	// send the msg
+	// send the message
 	hostIdx := session.nodes[recvNodeIdx].hostIdx
-	log.Info("sending pss", "sender", hosts[0], "recv", hosts[hostIdx])
+	log.Debug("sending msg", "job", hexutil.Encode([]byte(msgIdx)), "sender", hosts[senderNodeIdx], "recv", hosts[hostIdx])
 	err = senderNode.client.Call(nil, "pss_sendAsym", recvNode.pubkey, session.topic, hexutil.Encode(randomMsg))
 	if err != nil {
 		return err
 	}
 
-	// receive the msg or timeout and fail
-	// and check its validity
-	pctx, cancel := context.WithTimeout(context.TODO(), time.Second)
-	defer cancel()
+	// receive the message and check for its content
 	select {
-	//case res := <-(recvNode.msgC):
-	case res := <-(session.msgC):
+	case res := <-session.msgC:
 		resIdx := toMsgIdx(res.Msg)
 		resJob, ok := session.requiredJobs[resIdx]
 		if !ok {
-			return fmt.Errorf("corrupt message", "job", resIdx)
+			return fmt.Errorf("corrupt message for job %s", resIdx)
 		}
 		if !bytes.Equal(res.Msg, resJob.msg) {
-			return fmt.Errorf("message mismatch", "job", resIdx)
+			return fmt.Errorf("message mismatch. expected: %s got: %s", resJob.msg, res.Msg)
 		}
-		log.Info("got msg", "job", hexutil.Encode([]byte(resIdx)))
-	case <-pctx.Done():
-		return pctx.Err()
+		log.Debug("got msg", "job", hexutil.Encode([]byte(resIdx)))
+	case <-time.After(1 * time.Second):
+		return errors.New("msg timeout after 1 sec")
 	}
 	return nil
 }
