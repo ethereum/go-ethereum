@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -93,23 +92,10 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 		}
 	}
 
-	// dialer in simulations based on ENR records
-	// doesn't work unless we explicitly set localhost record
-	ip := enr.IP(net.IPv4(127, 0, 0, 1))
-	config.Record.Set(&ip)
-	tcpPort := enr.TCP(0)
-	config.Record.Set(&tcpPort)
-
-	err := enode.SignV4(&config.Record, config.PrivateKey)
+	err := config.initDummyEnode()
 	if err != nil {
-		return nil, fmt.Errorf("unable to generate ENR: %v", err)
+		return nil, err
 	}
-	nod, err := enode.New(enode.V4ID{}, &config.Record)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create enode: %v", err)
-	}
-	log.Trace("simnode new", "record", config.Record)
-	config.node = nod
 
 	n, err := node.New(&node.Config{
 		P2P: p2p.Config{

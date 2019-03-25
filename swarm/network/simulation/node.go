@@ -17,18 +17,26 @@
 package simulation
 
 import (
+	"bytes"
+	"context"
+	"crypto/ecdsa"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
+)
+
+var (
+	BucketKeyBzzPrivateKey BucketKey = "bzzprivkey"
 )
 
 // NodeIDs returns NodeIDs for all nodes in the network.
@@ -102,22 +110,26 @@ func (s *Simulation) AddNode(opts ...AddNodeOption) (id enode.ID, err error) {
 	// most importantly the bzz overlay address
 	//
 	// for now we have no way of setting bootnodes or lightnodes in sims
-	// so we just set them as false
+	// so we just let them be set to false
 	// they should perhaps be possible to override them with AddNodeOption
-	bzzKey := network.PrivateKeyToBzzKey(conf.PrivateKey)
-	bzzAddr := network.NewENRAddrEntry(bzzKey)
+	bzzPrivateKey, err := BzzPrivateKeyFromConfig(conf)
+	if err != nil {
+		return enode.ID{}, err
+	}
 
-	var lightnode network.ENRLightNodeEntry
-	var bootnode network.ENRBootNodeEntry
-	conf.Record.Set(bzzAddr)
-	conf.Record.Set(&lightnode)
-	conf.Record.Set(&bootnode)
+	enodeParams := &network.EnodeParams{
+		PrivateKey: bzzPrivateKey,
+	}
+	record, err := network.NewEnodeRecord(enodeParams)
+	conf.Record = *record
 
 	// Add the bzz address to the node config
 	node, err := s.Net.NewNodeWithConfig(conf)
 	if err != nil {
 		return id, err
 	}
+	s.buckets[node.ID()] = new(sync.Map)
+	s.SetNodeItem(node.ID(), BucketKeyBzzPrivateKey, bzzPrivateKey)
 
 	return node.ID(), s.Net.Start(node.ID())
 }
@@ -217,30 +229,24 @@ func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (i
 // UploadSnapshot uploads a snapshot to the simulation
 // This method tries to open the json file provided, applies the config to all nodes
 // and then loads the snapshot into the Simulation network
-func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) error {
+func (s *Simulation) UploadSnapshot(ctx context.Context, snapshotFile string, opts ...AddNodeOption) error {
 	f, err := os.Open(snapshotFile)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		err := f.Close()
-		if err != nil {
-			log.Error("Error closing snapshot file", "err", err)
-		}
-	}()
+	defer f.Close()
+
 	jsonbyte, err := ioutil.ReadAll(f)
 	if err != nil {
 		return err
 	}
 	var snap simulations.Snapshot
-	err = json.Unmarshal(jsonbyte, &snap)
-	if err != nil {
+	if err := json.Unmarshal(jsonbyte, &snap); err != nil {
 		return err
 	}
 
 	//the snapshot probably has the property EnableMsgEvents not set
-	//just in case, set it to true!
-	//(we need this to wait for messages before uploading)
+	//set it to true (we need this to wait for messages before uploading)
 	for i := range snap.Nodes {
 		snap.Nodes[i].Node.Config.EnableMsgEvents = true
 		snap.Nodes[i].Node.Config.Services = s.serviceNames
@@ -249,15 +255,10 @@ func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) 
 		}
 	}
 
-	log.Info("Waiting for p2p connections to be established...")
-
-	//now we can load the snapshot
-	err = s.Net.Load(&snap)
-	if err != nil {
+	if err := s.Net.Load(&snap); err != nil {
 		return err
 	}
-	log.Info("Snapshot loaded")
-	return nil
+	return s.WaitTillSnapshotRecreated(ctx, &snap)
 }
 
 // StartNode starts a node by NodeID.
@@ -325,4 +326,16 @@ func (s *Simulation) StopRandomNodes(count int) (ids []enode.ID, err error) {
 // seed the random generator for Simulation.randomNode.
 func init() {
 	rand.Seed(time.Now().UnixNano())
+}
+
+// derive a private key for swarm for the node key
+// returns the private key used to generate the bzz key
+func BzzPrivateKeyFromConfig(conf *adapters.NodeConfig) (*ecdsa.PrivateKey, error) {
+	// pad the seed key some arbitrary data as ecdsa.GenerateKey takes 40 bytes seed data
+	privKeyBuf := append(crypto.FromECDSA(conf.PrivateKey), []byte{0x62, 0x7a, 0x7a, 0x62, 0x7a, 0x7a, 0x62, 0x7a}...)
+	bzzPrivateKey, err := ecdsa.GenerateKey(crypto.S256(), bytes.NewReader(privKeyBuf))
+	if err != nil {
+		return nil, err
+	}
+	return bzzPrivateKey, nil
 }

@@ -39,6 +39,11 @@ import (
 )
 
 func uploadAndSyncCmd(ctx *cli.Context, tuid string) error {
+	// use input seed if it has been set
+	if inputSeed != 0 {
+		seed = inputSeed
+	}
+
 	randomBytes := testutil.RandomBytes(seed, filesize*1000)
 
 	errc := make(chan error)
@@ -47,37 +52,28 @@ func uploadAndSyncCmd(ctx *cli.Context, tuid string) error {
 		errc <- uploadAndSync(ctx, randomBytes, tuid)
 	}()
 
+	var err error
 	select {
-	case err := <-errc:
+	case err = <-errc:
 		if err != nil {
 			metrics.GetOrRegisterCounter(fmt.Sprintf("%s.fail", commandName), nil).Inc(1)
 		}
-		return err
 	case <-time.After(time.Duration(timeout) * time.Second):
 		metrics.GetOrRegisterCounter(fmt.Sprintf("%s.timeout", commandName), nil).Inc(1)
 
-		e := fmt.Errorf("timeout after %v sec", timeout)
-		// trigger debug functionality on randomBytes
-		err := trackChunks(randomBytes[:])
-		if err != nil {
-			e = fmt.Errorf("%v; triggerChunkDebug failed: %v", e, err)
-		}
-
-		return e
+		err = fmt.Errorf("timeout after %v sec", timeout)
 	}
 
-	// trigger debug functionality on randomBytes even on successful runs
-	err := trackChunks(randomBytes[:])
-	if err != nil {
-		log.Error(err.Error())
+	// trigger debug functionality on randomBytes
+	e := trackChunks(randomBytes[:])
+	if e != nil {
+		log.Error(e.Error())
 	}
 
-	return nil
+	return err
 }
 
 func trackChunks(testData []byte) error {
-	log.Warn("Test timed out, running chunk debug sequence")
-
 	addrs, err := getAllRefs(testData)
 	if err != nil {
 		return err
@@ -94,14 +90,14 @@ func trackChunks(testData []byte) error {
 
 		rpcClient, err := rpc.Dial(httpHost)
 		if err != nil {
-			log.Error("Error dialing host", "err", err)
+			log.Error("error dialing host", "err", err, "host", httpHost)
 			continue
 		}
 
 		var hasInfo []api.HasInfo
 		err = rpcClient.Call(&hasInfo, "bzz_has", addrs)
 		if err != nil {
-			log.Error("Error calling host", "err", err)
+			log.Error("error calling rpc client", "err", err, "host", httpHost)
 			continue
 		}
 
@@ -125,7 +121,6 @@ func trackChunks(testData []byte) error {
 }
 
 func getAllRefs(testData []byte) (storage.AddressCollection, error) {
-	log.Trace("Getting all references for given root hash")
 	datadir, err := ioutil.TempDir("", "chunk-debug")
 	if err != nil {
 		return nil, fmt.Errorf("unable to create temp dir: %v", err)

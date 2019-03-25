@@ -1257,9 +1257,10 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 		simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(subscribeMsgCode),
 	)
 
-	// upload a snapshot
-	err := sim.UploadSnapshot(fmt.Sprintf("testing/snapshot_%d.json", nodeCount))
-	if err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	filename := fmt.Sprintf("testing/snapshot_%d.json", nodeCount)
+	if err := sim.UploadSnapshot(ctx, filename); err != nil {
 		t.Fatal(err)
 	}
 

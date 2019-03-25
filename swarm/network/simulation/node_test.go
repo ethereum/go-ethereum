@@ -289,6 +289,7 @@ func TestUploadSnapshot(t *testing.T) {
 				HiveParams:   hp,
 			}
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+			b.Store(BucketKeyKademlia, kad)
 			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
 		},
 	})
@@ -296,12 +297,13 @@ func TestUploadSnapshot(t *testing.T) {
 
 	nodeCount := 16
 	log.Debug("Uploading snapshot")
-	err := s.UploadSnapshot(fmt.Sprintf("../stream/testing/snapshot_%d.json", nodeCount))
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	err := s.UploadSnapshot(ctx, fmt.Sprintf("../stream/testing/snapshot_%d.json", nodeCount))
 	if err != nil {
 		t.Fatalf("Error uploading snapshot to simulation network: %v", err)
 	}
 
-	ctx := context.Background()
 	log.Debug("Starting simulation...")
 	s.Run(ctx, func(ctx context.Context, sim *Simulation) error {
 		log.Debug("Checking")

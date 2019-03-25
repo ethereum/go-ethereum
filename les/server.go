@@ -280,8 +280,8 @@ func (pm *ProtocolManager) blockLoop() {
 						)
 
 						for _, p := range peers {
+							p := p
 							switch p.announceType {
-
 							case announceTypeSimple:
 								p.queueSend(func() { p.SendAnnounce(announce) })
 							case announceTypeSigned:
@@ -290,7 +290,6 @@ func (pm *ProtocolManager) blockLoop() {
 									signedAnnounce.sign(pm.server.privateKey)
 									signed = true
 								}
-
 								p.queueSend(func() { p.SendAnnounce(signedAnnounce) })
 							}
 						}
