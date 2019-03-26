@@ -336,7 +336,5 @@ func (s *pssSession) sendSymMessage(sender *pssNode, receiver *pssNode, msg []by
 }
 
 func toMsgIdx(msg []byte) string {
-	h := sha1.New()
-	h.Write(msg)
-	return string(h.Sum(nil))
+	return fmt.Sprintf("%x", sha1.Sum(msg))
 }

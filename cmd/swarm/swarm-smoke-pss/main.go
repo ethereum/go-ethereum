@@ -39,7 +39,6 @@ var (
 var (
 	allhosts        string
 	hosts           []string
-	filesize        int
 	inputSeed       int
 	wsPort          int
 	verbosity       int
