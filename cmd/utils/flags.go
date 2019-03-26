@@ -127,6 +127,10 @@ var (
 		Name:  "nousb",
 		Usage: "Disables monitoring for and managing USB hardware wallets",
 	}
+	LedgerLegacyHDDerivationPath = cli.BoolFlag{
+		Name:  "ledgerlegacyhdderivationpath",
+		Usage: "For Ledger Hardware Wallet Use BIP32 to access old derivation path (not supported by Ledger Live anymore) ",
+	}
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
 		Usage: "Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten, 4=Rinkeby)",
@@ -1125,6 +1129,9 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.GlobalIsSet(NoUSBFlag.Name) {
 		cfg.NoUSB = ctx.GlobalBool(NoUSBFlag.Name)
+	}
+	if ctx.GlobalIsSet(LedgerLegacyHDDerivationPath.Name) {
+		cfg.LedgerLegacyHDDerivationPath = ctx.GlobalBool(LedgerLegacyHDDerivationPath.Name)
 	}
 }
 

@@ -91,6 +91,10 @@ type Config struct {
 	// NoUSB disables hardware wallet monitoring and connectivity.
 	NoUSB bool `toml:",omitempty"`
 
+	// LedgerLegacyHDDerivationPath uses older BIP-32 HD derivation path that has
+	// dropped from Ledger Live in favor of BIP-44.
+	LedgerLegacyHDDerivationPath bool `toml:",omitempty"`
+
 	// IPCPath is the requested location to place the IPC endpoint. If the path is
 	// a simple file name, it is placed inside the data directory (or on the root
 	// pipe path on Windows), whereas if it's a resolvable path name (absolute or

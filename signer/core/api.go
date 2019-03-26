@@ -234,13 +234,13 @@ var ErrRequestDenied = errors.New("Request denied")
 // key that is generated when a new Account is created.
 // noUSB disables USB support that is required to support hardware devices such as
 // ledger and trezor.
-func NewSignerAPI(am *accounts.Manager, chainID int64, noUSB bool, ui UIClientAPI, abidb *AbiDb, advancedMode bool, credentials storage.Storage) *SignerAPI {
+func NewSignerAPI(am *accounts.Manager, chainID int64, noUSB bool, ldgrLeg bool, ui UIClientAPI, abidb *AbiDb, advancedMode bool, credentials storage.Storage) *SignerAPI {
 	if advancedMode {
 		log.Info("Clef is in advanced mode: will warn instead of reject")
 	}
 	signer := &SignerAPI{big.NewInt(chainID), am, ui, NewValidator(abidb), !advancedMode, credentials}
 	if !noUSB {
-		signer.startUSBListener()
+		signer.startUSBListener(ldgrLeg)
 	}
 	return signer
 }
@@ -276,7 +276,7 @@ func (api *SignerAPI) openTrezor(url accounts.URL) {
 }
 
 // startUSBListener starts a listener for USB events, for hardware wallet interaction
-func (api *SignerAPI) startUSBListener() {
+func (api *SignerAPI) startUSBListener(ldgrLeg bool) {
 	events := make(chan accounts.WalletEvent, 16)
 	am := api.am
 	am.Subscribe(events)
@@ -306,8 +306,8 @@ func (api *SignerAPI) startUSBListener() {
 				log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
 
 				derivationPath := accounts.DefaultBaseDerivationPath
-				if event.Wallet.URL().Scheme == "ledger" {
-					derivationPath = accounts.DefaultLedgerBaseDerivationPath
+				if event.Wallet.URL().Scheme == "ledger" && ldgrLeg {
+					derivationPath = accounts.DefaultLegacyLedgerBaseDerivationPath
 				}
 				var nextPath = derivationPath
 				// Derive first N accounts, hardcoded for now

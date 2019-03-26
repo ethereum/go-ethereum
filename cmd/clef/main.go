@@ -421,11 +421,12 @@ func signer(c *cli.Context) error {
 		lightKdf = c.GlobalBool(utils.LightKDFFlag.Name)
 		advanced = c.GlobalBool(advancedMode.Name)
 		nousb    = c.GlobalBool(utils.NoUSBFlag.Name)
+		ldgrLeg  = c.GlobalBool(utils.LedgerLegacyHDDerivationPath.Name)
 	)
 	log.Info("Starting signer", "chainid", chainId, "keystore", ksLoc,
 		"light-kdf", lightKdf, "advanced", advanced)
 	am := core.StartClefAccountManager(ksLoc, nousb, lightKdf)
-	apiImpl := core.NewSignerAPI(am, chainId, nousb, ui, db, advanced, pwStorage)
+	apiImpl := core.NewSignerAPI(am, chainId, nousb, ldgrLeg, ui, db, advanced, pwStorage)
 
 	// Establish the bidirectional communication, by creating a new UI backend and registering
 	// it with the UI.
