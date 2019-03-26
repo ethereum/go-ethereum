@@ -163,6 +163,7 @@ func emitMetrics(ctx *cli.Context) error {
 		tagsMap := utils.SplitTagsFlag(tags)
 		tagsMap["version"] = gitCommit
 		tagsMap["msgbytes"] = strconv.Itoa(pssMessageSize)
+		tagsMap["msgcount"] = strconv.Itoa(pssMessageCount)
 
 		return influxdb.InfluxDBWithTagsOnce(gethmetrics.DefaultRegistry, endpoint, database, username, password, "swarm-smoke-pss.", tagsMap)
 	}
