@@ -27,8 +27,9 @@ func TestGetM1M2FromCheckpointHeader(t *testing.T) {
 			Epoch: uint64(epoch),
 		},
 	}
-	//try from block 900 to 909
-	for i := uint64(3410001); i < 3411027; i++ {
+	testMoveM2 := []uint64{0,0,0,1,1,1,2,2,2,0,0,0,1,1,1,2,2,2}
+	//try from block 3410001 to 3410018
+	for i := uint64(3410001); i <= 3410018; i++ {
 		currentNumber := int64(i)
 		currentHeader := &types.Header{
 			Number: big.NewInt(currentNumber),
@@ -41,9 +42,7 @@ func TestGetM1M2FromCheckpointHeader(t *testing.T) {
 		for _, k := range masternodes {
 			fmt.Printf("m1: %v - m2: %v\n", k.Str(), m1m2[k].Str())
 		}
-		maxMNs := len(masternodes)
-		testMoveM2 := ((uint64(currentNumber) % config.XDPoS.Epoch) / uint64(maxMNs)) % uint64(maxMNs)
-		if moveM2 != testMoveM2 { //3 = len(masternodes)
+		if moveM2 != testMoveM2[i-3410001] {
 			t.Error("wrong moveM2", "currentNumber", currentNumber, "want", testMoveM2, "have", moveM2)
 		}
 	}
