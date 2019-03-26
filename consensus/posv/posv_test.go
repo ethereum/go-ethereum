@@ -1,9 +1,9 @@
 package posv
 
 import (
-	"testing"
-	"math/big"
 	"fmt"
+	"math/big"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -21,27 +21,30 @@ func TestGetM1M2FromCheckpointHeader(t *testing.T) {
 		1,
 		0,
 	}
-	epoch := int64(900)
+	epoch := uint64(900)
 	config := &params.ChainConfig{
 		Posv: &params.PosvConfig{
 			Epoch: uint64(epoch),
 		},
 	}
 	//try from block 900 to 909
-	for i:=int64(0); i<9; i++ {
+	for i := uint64(3410001); i < 3411027; i++ {
+		currentNumber := int64(i)
 		currentHeader := &types.Header{
-			Number: big.NewInt(epoch+i),
+			Number: big.NewInt(currentNumber),
 		}
 		m1m2, moveM2, err := getM1M2(masternodes, validators, currentHeader, config)
 		if err != nil {
 			t.Error("can't get m1m2", "err", err)
 		}
 		fmt.Printf("block: %v, moveM2: %v\n", currentHeader.Number.Int64(), moveM2)
-		for _,k := range masternodes {
+		for _, k := range masternodes {
 			fmt.Printf("m1: %v - m2: %v\n", k.Str(), m1m2[k].Str())
 		}
-		if moveM2 != uint64(i/3) { //3 = len(masternodes)
-			t.Error("wrong moveM2", "want", uint64(i/3), "have", moveM2)
+		maxMNs := len(masternodes)
+		testMoveM2 := ((uint64(currentNumber) % config.Posv.Epoch) / uint64(maxMNs)) % uint64(maxMNs)
+		if moveM2 != testMoveM2 { //3 = len(masternodes)
+			t.Error("wrong moveM2", "currentNumber", currentNumber, "want", testMoveM2, "have", moveM2)
 		}
 	}
 }
