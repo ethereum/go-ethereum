@@ -234,9 +234,9 @@ func (s *Simulation) UploadSnapshot(ctx context.Context, snapshotFile string, op
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
 	jsonbyte, err := ioutil.ReadAll(f)
+	f.Close()
 	if err != nil {
 		return err
 	}
