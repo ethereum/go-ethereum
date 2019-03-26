@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/pborman/uuid"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -34,21 +33,14 @@ var (
 	seed        = int(time.Now().UTC().UnixNano())
 )
 
-func init() {
-	rand.Seed(int64(seed))
-}
-
 func wsEndpoint(host string) string {
 	return fmt.Sprintf("ws://%s:%d", host, wsPort)
 }
 
-func wrapCliCommand(name string, command func(*cli.Context, string) error) func(*cli.Context) error {
+func wrapCliCommand(name string, command func(*cli.Context) error) func(*cli.Context) error {
 	return func(ctx *cli.Context) error {
 		log.PrintOrigins(true)
 		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(os.Stdout, log.TerminalFormat(false))))
-
-		// test uuid
-		tuid := uuid.New()[:8]
 
 		commandName = name
 
@@ -66,13 +58,13 @@ func wrapCliCommand(name string, command func(*cli.Context, string) error) func(
 
 		defer func(now time.Time) {
 			totalTime := time.Since(now)
-			log.Info("total time", "tuid", tuid, "time", totalTime)
+			log.Info("total time", "time", totalTime)
 			metrics.GetOrRegisterResettingTimer(name+".total-time", nil).Update(totalTime)
 		}(time.Now())
 
-		log.Info("smoke test starting", "tuid", tuid, "task", name, "timeout", timeout)
+		log.Info("pss smoke test starting", "task", name, "timeout", timeout)
 		metrics.GetOrRegisterCounter(name, nil).Inc(1)
 
-		return command(ctx, tuid)
+		return command(ctx)
 	}
 }

@@ -53,19 +53,39 @@ type pssSession struct {
 	jobs  map[string]*pssJob
 }
 
-func pssAsymCheck(ctx *cli.Context, tuid string) error {
-	return runCheck(pssModeAsym, pssMessageCount)
+func pssAsymCheck(ctx *cli.Context) error {
+	return runCheck(pssModeAsym, pssMessageCount, pssMessageSize)
 }
 
-func pssSymCheck(ctx *cli.Context, tuid string) error {
-	return runCheck(pssModeSym, pssMessageCount)
+func pssSymCheck(ctx *cli.Context) error {
+	return runCheck(pssModeSym, pssMessageCount, pssMessageSize)
 }
-func pssRawCheck(ctx *cli.Context, tuid string) error {
-	return runCheck(pssModeRaw, pssMessageCount)
+func pssRawCheck(ctx *cli.Context) error {
+	return runCheck(pssModeRaw, pssMessageCount, pssMessageSize)
 }
 
-func runCheck(mode pssMode, count int) error {
-	log.Info(fmt.Sprintf("pss.%s test started", mode), "msgCount", count)
+func pssAllCheck(ctx *cli.Context) error {
+	gotErr := false
+	if err := pssRawCheck(ctx); err != nil {
+		log.Error("error when running raw tests", "err", err)
+		gotErr = true
+	}
+	if err := pssSymCheck(ctx); err != nil {
+		log.Error("error when running sym tests", "err", err)
+		gotErr = true
+	}
+	if err := pssAsymCheck(ctx); err != nil {
+		log.Error("error when running asym tests", "err", err)
+		gotErr = true
+	}
+	if gotErr {
+		return errors.New("some tests failed")
+	}
+	return nil
+}
+
+func runCheck(mode pssMode, count int, msgSizeBytes int) error {
+	log.Info(fmt.Sprintf("pss.%s test started", mode), "msgCount", count, "msgBytes", msgSizeBytes)
 
 	session := pssSetup()
 
@@ -79,11 +99,12 @@ func runCheck(mode pssMode, count int) error {
 		return errors.New("at least 2 nodes are required to be working")
 	}
 
-	jobs := session.genJobs(count, mode)
+	jobs := session.genJobs(count, mode, msgSizeBytes)
 
 	errc := make(chan error)
 	go func() {
 		var failCount, successCount int64
+		t := time.Now()
 		sc, err := session.processJobs(jobs)
 		if err != nil {
 			log.Error("error processing some jobs", "err", err)
@@ -91,10 +112,13 @@ func runCheck(mode pssMode, count int) error {
 		successCount = int64(sc)
 		failCount = int64(count - sc)
 
-		metrics.GetOrRegisterCounter(fmt.Sprintf("pss.%s.failMsg", mode), nil).Inc(failCount)
-		metrics.GetOrRegisterCounter(fmt.Sprintf("pss.%s.successMsg", mode), nil).Inc(successCount)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("pss.%s.msgs.fail", mode), nil).Inc(failCount)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("pss.%s.msgs.success", mode), nil).Inc(successCount)
 
-		log.Info(fmt.Sprintf("pss.%s test ended", mode), "success", successCount, "failures", failCount)
+		totalTime := time.Since(t)
+
+		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("pss.%s.total-time", mode), nil).Update(totalTime)
+		log.Info(fmt.Sprintf("pss.%s test ended", mode), "time", totalTime, "success", successCount, "failures", failCount)
 
 		if failCount > 0 {
 			errc <- errors.New("some messages were not delivered")
@@ -223,17 +247,17 @@ func (s *pssSession) processJobs(jobs []pssJob) (int, error) {
 	return len(jobs), nil
 }
 
-func (s *pssSession) genJobs(count int, mode pssMode) []pssJob {
+func (s *pssSession) genJobs(count int, mode pssMode, msgSizeBytes int) []pssJob {
 	jobs := make([]pssJob, count)
 	for i := 0; i < count; i++ {
-		jobs[i] = s.genJob(mode)
+		jobs[i] = s.genJob(mode, msgSizeBytes)
 	}
 	return jobs
 }
 
 // genJob generates a pssJob with random message that will be sent
 // from a random sending node to a random receiving node
-func (s *pssSession) genJob(mode pssMode) pssJob {
+func (s *pssSession) genJob(mode pssMode, msgSizeBytes int) pssJob {
 	senderNodeIdx := rand.Intn(len(s.nodes))
 	senderNode := s.nodes[senderNodeIdx]
 	log.Trace("sender node", "pss_baseAddr", hexutil.Encode(senderNode.addr), "host", hosts[senderNodeIdx])
@@ -247,9 +271,9 @@ func (s *pssSession) genJob(mode pssMode) pssJob {
 	log.Trace("recv node", "pss_baseAddr", hexutil.Encode(recvNode.addr), "host", hosts[recvNodeIdx])
 
 	// create new message and add it to job index to check for receives
-	randomMsg := testutil.RandomBytes(seed, pssMessageSize)
+	randomMsg := testutil.RandomBytes(seed, msgSizeBytes)
 	// change seed so that the next random message is different
-	seed = seed + 1
+	seed++
 
 	j := pssJob{
 		sender:   senderNode,
@@ -261,12 +285,12 @@ func (s *pssSession) genJob(mode pssMode) pssJob {
 	msgIdx := toMsgIdx(randomMsg)
 	s.jobs[msgIdx] = &j
 
-	log.Debug("generated job", "job", hexutil.Encode([]byte(msgIdx)), "sender", hosts[j.sender.hostIdx], "recv", hosts[j.receiver.hostIdx])
+	log.Debug("gen job", "job", hexutil.Encode([]byte(msgIdx)), "sender", hosts[j.sender.hostIdx], "recv", hosts[j.receiver.hostIdx])
 
 	return j
 }
 
-// waitForJob blocks until a msg is received or a timeout is reached
+// waitForMsg blocks until a msg is received or a timeout is reached
 func (s *pssSession) waitForMsg() error {
 	select {
 	case res := <-s.msgC:
