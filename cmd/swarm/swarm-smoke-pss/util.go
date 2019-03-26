@@ -54,6 +54,16 @@ func wrapCliCommand(name string, command func(*cli.Context, string) error) func(
 
 		hosts = strings.Split(allhosts, ",")
 
+		if inputSeed != 0 {
+			seed = inputSeed
+		}
+		rand.Seed(int64(seed))
+
+		if pssMessageCount <= 0 {
+			pssMessageCount = 1
+			log.Warn(fmt.Sprintf("message count should be a positive number. Defaulting to %d", pssMessageCount))
+		}
+
 		defer func(now time.Time) {
 			totalTime := time.Since(now)
 			log.Info("total time", "tuid", tuid, "time", totalTime)

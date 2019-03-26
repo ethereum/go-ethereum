@@ -19,9 +19,22 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
+type pssMode int
+
+const (
+	pssModeRaw = iota
+	pssModeAsym
+	pssModeSym
+)
+
+func (m pssMode) String() string {
+	return [...]string{"raw", "asym", "sym"}[m]
+}
+
 type pssJob struct {
 	sender   *pssNode
 	receiver *pssNode
+	mode     pssMode
 	msg      []byte
 }
 
@@ -40,58 +53,48 @@ type pssSession struct {
 	jobs  map[string]*pssJob
 }
 
-type pssTestFn func(ctx *cli.Context, session *pssSession, tuid string) error
-
 func pssAsymCheck(ctx *cli.Context, tuid string) error {
-	return pssCheck(ctx, tuid, "asym", pssAsymDo)
+	return runCheck(pssModeAsym, pssMessageCount)
 }
 
 func pssSymCheck(ctx *cli.Context, tuid string) error {
-	return pssCheck(ctx, tuid, "sym", pssSymDo)
+	return runCheck(pssModeSym, pssMessageCount)
 }
 func pssRawCheck(ctx *cli.Context, tuid string) error {
-	return pssCheck(ctx, tuid, "raw", pssRawDo)
+	return runCheck(pssModeRaw, pssMessageCount)
 }
 
-func pssCheck(ctx *cli.Context, tuid string, tag string, fn pssTestFn) error {
-	// use input seed if it has been set
-	if inputSeed != 0 {
-		seed = inputSeed
-	}
-	rand.Seed(int64(seed))
-	if pssMessageCount <= 0 {
-		pssMessageCount = 1
-		log.Warn(fmt.Sprintf("message count should be a positive number. Defaulting to %d", pssMessageCount))
-	}
-	log.Info(fmt.Sprintf("pss.%s test started", tag), "msgCount", pssMessageCount)
+func runCheck(mode pssMode, count int) error {
+	log.Info(fmt.Sprintf("pss.%s test started", mode), "msgCount", count)
 
 	session := pssSetup()
-	if len(session.nodes) <= 1 {
-		return errors.New("at least 2 nodes are required to be working")
-	}
+
 	defer func() {
 		for _, n := range session.nodes {
 			n.deregisterFunc()
 		}
 	}()
 
+	if len(session.nodes) <= 1 {
+		return errors.New("at least 2 nodes are required to be working")
+	}
+
+	jobs := session.genJobs(count, mode)
+
 	errc := make(chan error)
 	go func() {
 		var failCount, successCount int64
-		for i := 0; i < pssMessageCount; i++ {
-			err := fn(ctx, session, tuid)
-			if err != nil {
-				failCount++
-				log.Error("error sending pss msg", "err", err)
-			} else {
-				successCount++
-			}
+		sc, err := session.processJobs(jobs)
+		if err != nil {
+			log.Error("error processing some jobs", "err", err)
 		}
+		successCount = int64(sc)
+		failCount = int64(count - sc)
 
-		metrics.GetOrRegisterCounter(fmt.Sprintf("pss.%s.failMsg", tag), nil).Inc(failCount)
-		metrics.GetOrRegisterCounter(fmt.Sprintf("pss.%s.successMsg", tag), nil).Inc(successCount)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("pss.%s.failMsg", mode), nil).Inc(failCount)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("pss.%s.successMsg", mode), nil).Inc(successCount)
 
-		log.Info(fmt.Sprintf("pss.%s test ended", tag), "success", successCount, "failures", failCount)
+		log.Info(fmt.Sprintf("pss.%s test ended", mode), "success", successCount, "failures", failCount)
 
 		if failCount > 0 {
 			errc <- errors.New("some messages were not delivered")
@@ -103,11 +106,11 @@ func pssCheck(ctx *cli.Context, tuid string, tag string, fn pssTestFn) error {
 	select {
 	case err := <-errc:
 		if err != nil {
-			metrics.GetOrRegisterCounter(fmt.Sprintf("pss.%s.fail", tag), nil).Inc(1)
+			metrics.GetOrRegisterCounter(fmt.Sprintf("pss.%s.fail", mode), nil).Inc(1)
 		}
 		return err
 	case <-time.After(time.Duration(timeout) * time.Second):
-		metrics.GetOrRegisterCounter(fmt.Sprintf("pss.%s.timeout", tag), nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("pss.%s.timeout", mode), nil).Inc(1)
 		return fmt.Errorf("timeout after %v sec", timeout)
 	}
 
@@ -179,9 +182,58 @@ func pssSetup() *pssSession {
 	return session
 }
 
-// genJob generates a random message that will be sent
+// processJobs processes the given jobs and returns the success count and an error
+func (s *pssSession) processJobs(jobs []pssJob) (int, error) {
+	errs := []error{}
+	for _, j := range jobs {
+		var err error
+		switch mode := j.mode; mode {
+		case pssModeRaw:
+			err = s.sendRawMessage(j.sender, j.receiver, j.msg)
+			if err != nil {
+				log.Error("error sending raw message", "err", err)
+			}
+		case pssModeSym:
+			err = s.sendSymMessage(j.sender, j.receiver, j.msg)
+			if err != nil {
+				log.Error("error sending sym message", "err", err)
+			}
+		case pssModeAsym:
+			err = s.sendAsymMessage(j.sender, j.receiver, j.msg)
+			if err != nil {
+				log.Error("error sending asym message", "err", err)
+			}
+		default:
+			err = fmt.Errorf("invalid pssMode %d", mode)
+			log.Error("error processing job type", "err", err)
+		}
+
+		err = s.waitForMsg()
+		if err != nil {
+			log.Error("error while waiting for msg", "err", err)
+		}
+		if err != nil {
+			errs = append(errs, err)
+		}
+
+	}
+	if len(errs) > 0 {
+		return len(jobs) - len(errs), fmt.Errorf("%d/%d jobs failed processing", len(errs), len(jobs))
+	}
+	return len(jobs), nil
+}
+
+func (s *pssSession) genJobs(count int, mode pssMode) []pssJob {
+	jobs := make([]pssJob, count)
+	for i := 0; i < count; i++ {
+		jobs[i] = s.genJob(mode)
+	}
+	return jobs
+}
+
+// genJob generates a pssJob with random message that will be sent
 // from a random sending node to a random receiving node
-func (s *pssSession) genJob() pssJob {
+func (s *pssSession) genJob(mode pssMode) pssJob {
 	senderNodeIdx := rand.Intn(len(s.nodes))
 	senderNode := s.nodes[senderNodeIdx]
 	log.Trace("sender node", "pss_baseAddr", hexutil.Encode(senderNode.addr), "host", hosts[senderNodeIdx])
@@ -202,6 +254,7 @@ func (s *pssSession) genJob() pssJob {
 	j := pssJob{
 		sender:   senderNode,
 		receiver: recvNode,
+		mode:     mode,
 		msg:      randomMsg,
 	}
 
@@ -232,10 +285,29 @@ func (s *pssSession) waitForMsg() error {
 	return nil
 }
 
-// pssSymDo sends a single PSS message between two random nodes using symmetric encryption
-func pssSymDo(ctx *cli.Context, session *pssSession, tuid string) error {
-	j := session.genJob()
+func (s *pssSession) sendRawMessage(sender *pssNode, receiver *pssNode, msg []byte) error {
+	return sender.client.Call(nil, "pss_sendRaw", hexutil.Encode(receiver.addr), s.topic, hexutil.Encode(msg))
+}
 
+func (s *pssSession) sendAsymMessage(sender *pssNode, receiver *pssNode, msg []byte) error {
+
+	// share public keys between nodes
+	err := sender.client.Call(nil, "pss_setPeerPublicKey", receiver.pubkey, s.topic, hexutil.Encode(receiver.addr))
+	if err != nil {
+		log.Error("error setting receivers public key on the sender side", "err", err)
+		return err
+	}
+	err = receiver.client.Call(nil, "pss_setPeerPublicKey", sender.pubkey, s.topic, hexutil.Encode(sender.addr))
+	if err != nil {
+		log.Error("error setting senders public key on the receiver side", "err", err)
+		return err
+	}
+	// send asym message
+	return sender.client.Call(nil, "pss_sendAsym", receiver.pubkey, s.topic, hexutil.Encode(msg))
+}
+
+func (s *pssSession) sendSymMessage(sender *pssNode, receiver *pssNode, msg []byte) error {
+	// create a shared secret for the symmetric encryption
 	symkey := make([]byte, 32)
 	c, err := rand.Read(symkey)
 	if err != nil {
@@ -244,52 +316,23 @@ func pssSymDo(ctx *cli.Context, session *pssSession, tuid string) error {
 		return fmt.Errorf("symkey size mismatch, expected 32 got %d", c)
 	}
 
+	// set the secret on both nodes
 	var senderSymKeyID string
-	err = j.sender.client.Call(&senderSymKeyID, "pss_setSymmetricKey", symkey, session.topic, hexutil.Encode(j.receiver.addr), true)
+	err = sender.client.Call(&senderSymKeyID, "pss_setSymmetricKey", symkey, s.topic, hexutil.Encode(receiver.addr), true)
 	if err != nil {
 		log.Error("error setting sym key on the sender", "err", err)
 		return err
 	}
 
 	var recvSymKeyID string
-	err = j.receiver.client.Call(&recvSymKeyID, "pss_setSymmetricKey", symkey, session.topic, hexutil.Encode(j.sender.addr), true)
+	err = receiver.client.Call(&recvSymKeyID, "pss_setSymmetricKey", symkey, s.topic, hexutil.Encode(sender.addr), true)
 	if err != nil {
 		log.Error("error setting sym key on the receiver", "err", err)
 		return err
 	}
 
-	err = j.sender.client.Call(nil, "pss_sendSym", senderSymKeyID, session.topic, hexutil.Encode(j.msg))
-	if err != nil {
-		log.Error("error sending message using sym encryption", "err", err)
-		return err
-	}
-
-	return session.waitForMsg()
-}
-
-// pssAsymDo sends a single PSS message between two random nodes using asymmetric encryption
-func pssAsymDo(ctx *cli.Context, session *pssSession, tuid string) error {
-	j := session.genJob()
-
-	err := j.sender.client.Call(nil, "pss_sendAsym", j.receiver.pubkey, session.topic, hexutil.Encode(j.msg))
-	if err != nil {
-		log.Error("error sending message using asym encryption", "err", err)
-		return err
-	}
-
-	return session.waitForMsg()
-}
-
-func pssRawDo(ctx *cli.Context, session *pssSession, tuid string) error {
-	j := session.genJob()
-
-	err := j.sender.client.Call(nil, "pss_sendRaw", hexutil.Encode(j.receiver.addr), session.topic, hexutil.Encode(j.msg))
-	if err != nil {
-		log.Error("error sending raw message", "err", err)
-		return err
-	}
-
-	return session.waitForMsg()
+	// send sym message
+	return sender.client.Call(nil, "pss_sendSym", senderSymKeyID, s.topic, hexutil.Encode(msg))
 }
 
 func toMsgIdx(msg []byte) string {

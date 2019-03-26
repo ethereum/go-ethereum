@@ -119,7 +119,7 @@ func main() {
 			Name:    "raw",
 			Aliases: []string{"r"},
 			Usage:   "PSS: send and receive multiple raw messages across random nodes",
-			Action:  wrapCliCommand("sym", pssRawCheck),
+			Action:  wrapCliCommand("raw", pssRawCheck),
 		},
 	}
 
