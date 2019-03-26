@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package database defines the interfaces for an Ethereum data store.
+// Package ethdb defines the interfaces for an Ethereum data store.
 package ethdb
 
 import "io"
@@ -32,10 +32,7 @@ type Reader interface {
 type Writer interface {
 	// Put inserts the given value into the key-value data store.
 	Put(key []byte, value []byte) error
-}
 
-// Deleter wraps the Delete method of a backing data store.
-type Deleter interface {
 	// Delete removes the key from the key-value data store.
 	Delete(key []byte) error
 }
@@ -63,7 +60,6 @@ type Compacter interface {
 type KeyValueStore interface {
 	Reader
 	Writer
-	Deleter
 	Batcher
 	Iteratee
 	Stater
@@ -76,7 +72,6 @@ type KeyValueStore interface {
 type Database interface {
 	Reader
 	Writer
-	Deleter
 	Batcher
 	Iteratee
 	Stater

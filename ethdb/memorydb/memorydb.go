@@ -240,6 +240,22 @@ func (b *batch) Reset() {
 	b.size = 0
 }
 
+// Replay replays the batch contents.
+func (b *batch) Replay(w ethdb.Writer) error {
+	for _, keyvalue := range b.writes {
+		if keyvalue.delete {
+			if err := w.Delete(keyvalue.key); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := w.Put(keyvalue.key, keyvalue.value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // iterator can walk over the (potentially partial) keyspace of a memory key
 // value store. Internally it is a deep copy of the entire iterated state,
 // sorted by keys.

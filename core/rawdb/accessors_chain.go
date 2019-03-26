@@ -45,7 +45,7 @@ func WriteCanonicalHash(db ethdb.Writer, hash common.Hash, number uint64) {
 }
 
 // DeleteCanonicalHash removes the number to hash canonical mapping.
-func DeleteCanonicalHash(db ethdb.Deleter, number uint64) {
+func DeleteCanonicalHash(db ethdb.Writer, number uint64) {
 	if err := db.Delete(headerHashKey(number)); err != nil {
 		log.Crit("Failed to delete number to hash mapping", "err", err)
 	}
@@ -180,7 +180,7 @@ func WriteHeader(db ethdb.Writer, header *types.Header) {
 }
 
 // DeleteHeader removes all block header data associated with a hash.
-func DeleteHeader(db ethdb.Deleter, hash common.Hash, number uint64) {
+func DeleteHeader(db ethdb.Writer, hash common.Hash, number uint64) {
 	deleteHeaderWithoutNumber(db, hash, number)
 	if err := db.Delete(headerNumberKey(hash)); err != nil {
 		log.Crit("Failed to delete hash to number mapping", "err", err)
@@ -189,7 +189,7 @@ func DeleteHeader(db ethdb.Deleter, hash common.Hash, number uint64) {
 
 // deleteHeaderWithoutNumber removes only the block header but does not remove
 // the hash to number mapping.
-func deleteHeaderWithoutNumber(db ethdb.Deleter, hash common.Hash, number uint64) {
+func deleteHeaderWithoutNumber(db ethdb.Writer, hash common.Hash, number uint64) {
 	if err := db.Delete(headerKey(number, hash)); err != nil {
 		log.Crit("Failed to delete header", "err", err)
 	}
@@ -240,7 +240,7 @@ func WriteBody(db ethdb.Writer, hash common.Hash, number uint64, body *types.Bod
 }
 
 // DeleteBody removes all block body data associated with a hash.
-func DeleteBody(db ethdb.Deleter, hash common.Hash, number uint64) {
+func DeleteBody(db ethdb.Writer, hash common.Hash, number uint64) {
 	if err := db.Delete(blockBodyKey(number, hash)); err != nil {
 		log.Crit("Failed to delete block body", "err", err)
 	}
@@ -278,7 +278,7 @@ func WriteTd(db ethdb.Writer, hash common.Hash, number uint64, td *big.Int) {
 }
 
 // DeleteTd removes all block total difficulty data associated with a hash.
-func DeleteTd(db ethdb.Deleter, hash common.Hash, number uint64) {
+func DeleteTd(db ethdb.Writer, hash common.Hash, number uint64) {
 	if err := db.Delete(headerTDKey(number, hash)); err != nil {
 		log.Crit("Failed to delete block total difficulty", "err", err)
 	}
@@ -347,7 +347,7 @@ func WriteReceipts(db ethdb.Writer, hash common.Hash, number uint64, receipts ty
 }
 
 // DeleteReceipts removes all receipt data associated with a block hash.
-func DeleteReceipts(db ethdb.Deleter, hash common.Hash, number uint64) {
+func DeleteReceipts(db ethdb.Writer, hash common.Hash, number uint64) {
 	if err := db.Delete(blockReceiptsKey(number, hash)); err != nil {
 		log.Crit("Failed to delete block receipts", "err", err)
 	}
@@ -378,7 +378,7 @@ func WriteBlock(db ethdb.Writer, block *types.Block) {
 }
 
 // DeleteBlock removes all block data associated with a hash.
-func DeleteBlock(db ethdb.Deleter, hash common.Hash, number uint64) {
+func DeleteBlock(db ethdb.Writer, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
 	DeleteHeader(db, hash, number)
 	DeleteBody(db, hash, number)
@@ -387,7 +387,7 @@ func DeleteBlock(db ethdb.Deleter, hash common.Hash, number uint64) {
 
 // deleteBlockWithoutNumber removes all block data associated with a hash, except
 // the hash to number mapping.
-func deleteBlockWithoutNumber(db ethdb.Deleter, hash common.Hash, number uint64) {
+func deleteBlockWithoutNumber(db ethdb.Writer, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
 	deleteHeaderWithoutNumber(db, hash, number)
 	DeleteBody(db, hash, number)

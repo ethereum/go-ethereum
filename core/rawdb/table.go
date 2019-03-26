@@ -148,3 +148,8 @@ func (b *tableBatch) Write() error {
 func (b *tableBatch) Reset() {
 	b.batch.Reset()
 }
+
+// Replay replays the batch contents.
+func (b *tableBatch) Replay(w ethdb.Writer) error {
+	return b.batch.Replay(w)
+}
