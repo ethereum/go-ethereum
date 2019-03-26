@@ -21,6 +21,7 @@ COPY --from=builder /go/bin/swarm-smoke /
 COPY --from=builder /go/bin/swarm-smoke-pss /
 ADD run-smoke.sh /run-smoke.sh
 ENTRYPOINT ["/run-smoke.sh"]
+CMD [ "/swarm-smoke"]
 
 FROM alpine:3.8 as swarm-global-store
 WORKDIR /
