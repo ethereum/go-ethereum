@@ -59,6 +59,11 @@ const secureKeyLength = 11 + 32
 // Database is an intermediate write layer between the trie data structures and
 // the disk database. The aim is to accumulate trie writes in-memory and only
 // periodically flush a couple tries to disk, garbage collecting the remainder.
+//
+// Note, the trie Database is **not** thread safe in its mutations, but it **is**
+// thread safe in providing individual, independent node access. The rationale
+// behind this split design is to provide read access to RPC handlers and sync
+// servers even while the trie is executing expensive garbage collection.
 type Database struct {
 	diskdb ethdb.KeyValueStore // Persistent storage for matured trie nodes
 
@@ -465,8 +470,8 @@ func (db *Database) Nodes() []common.Hash {
 
 // Reference adds a new reference from a parent node to a child node.
 func (db *Database) Reference(child common.Hash, parent common.Hash) {
-	db.lock.RLock()
-	defer db.lock.RUnlock()
+	db.lock.Lock()
+	defer db.lock.Unlock()
 
 	db.reference(child, parent)
 }
@@ -561,13 +566,14 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 
 // Cap iteratively flushes old but still referenced trie nodes until the total
 // memory usage goes below the given threshold.
+//
+// Note, this method is a non-synchronized mutator. It is unsafe to call this
+// concurrently with other mutators.
 func (db *Database) Cap(limit common.StorageSize) error {
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
 	// memory cache during commit but not yet in persistent storage). This is ensured
 	// by only uncaching existing data when the database write finalizes.
-	db.lock.RLock()
-
 	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
 	batch := db.diskdb.NewBatch()
 
@@ -583,12 +589,10 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		for hash, preimage := range db.preimages {
 			if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
 				log.Error("Failed to commit preimage from trie database", "err", err)
-				db.lock.RUnlock()
 				return err
 			}
 			if batch.ValueSize() > ethdb.IdealBatchSize {
 				if err := batch.Write(); err != nil {
-					db.lock.RUnlock()
 					return err
 				}
 				batch.Reset()
@@ -601,14 +605,12 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		// Fetch the oldest referenced node and push into the batch
 		node := db.dirties[oldest]
 		if err := batch.Put(oldest[:], node.rlp()); err != nil {
-			db.lock.RUnlock()
 			return err
 		}
 		// If we exceeded the ideal batch size, commit and reset
 		if batch.ValueSize() >= ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
 				log.Error("Failed to write flush list to disk", "err", err)
-				db.lock.RUnlock()
 				return err
 			}
 			batch.Reset()
@@ -623,11 +625,8 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	// Flush out any remainder data from the last batch
 	if err := batch.Write(); err != nil {
 		log.Error("Failed to write flush list to disk", "err", err)
-		db.lock.RUnlock()
 		return err
 	}
-	db.lock.RUnlock()
-
 	// Write successful, clear out the flushed data
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -661,16 +660,16 @@ func (db *Database) Cap(limit common.StorageSize) error {
 }
 
 // Commit iterates over all the children of a particular node, writes them out
-// to disk, forcefully tearing down all references in both directions.
+// to disk, forcefully tearing down all references in both directions. As a side
+// effect, all pre-images accumulated up to this point are also written.
 //
-// As a side effect, all pre-images accumulated up to this point are also written.
+// Note, this method is a non-synchronized mutator. It is unsafe to call this
+// concurrently with other mutators.
 func (db *Database) Commit(node common.Hash, report bool) error {
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
 	// memory cache during commit but not yet in persistent storage). This is ensured
 	// by only uncaching existing data when the database write finalizes.
-	db.lock.RLock()
-
 	start := time.Now()
 	batch := db.diskdb.NewBatch()
 
@@ -678,13 +677,11 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	for hash, preimage := range db.preimages {
 		if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
 			log.Error("Failed to commit preimage from trie database", "err", err)
-			db.lock.RUnlock()
 			return err
 		}
 		// If the batch is too large, flush to disk
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
-				db.lock.RUnlock()
 				return err
 			}
 			batch.Reset()
@@ -693,7 +690,6 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	// Since we're going to replay trie node writes into the clean cache, flush out
 	// any batched pre-images before continuing.
 	if err := batch.Write(); err != nil {
-		db.lock.RUnlock()
 		return err
 	}
 	batch.Reset()
@@ -704,17 +700,13 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	uncacher := &cleaner{db}
 	if err := db.commit(node, batch, uncacher); err != nil {
 		log.Error("Failed to commit trie from trie database", "err", err)
-		db.lock.RUnlock()
 		return err
 	}
 	// Trie mostly committed to disk, flush any batch leftovers
 	if err := batch.Write(); err != nil {
 		log.Error("Failed to write trie to disk", "err", err)
-		db.lock.RUnlock()
 		return err
 	}
-	db.lock.RUnlock()
-
 	// Uncache any leftovers in the last batch
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -764,14 +756,10 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 		if err := batch.Write(); err != nil {
 			return err
 		}
-		db.lock.RUnlock()
-		{
-			db.lock.Lock()
-			batch.Replay(uncacher)
-			db.lock.Unlock()
-			batch.Reset()
-		}
-		db.lock.RLock()
+		db.lock.Lock()
+		batch.Replay(uncacher)
+		batch.Reset()
+		db.lock.Unlock()
 	}
 	return nil
 }
