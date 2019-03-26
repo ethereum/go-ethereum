@@ -1149,7 +1149,7 @@ func getM1M2(masternodes []common.Address, validators []int64, currentHeader *ty
 	if maxMNs > 0 {
 		isForked := config.IsTIPRandomize(currentHeader.Number)
 		if isForked {
-			moveM2 = (currentHeader.Number.Uint64() % config.XDPoS.Epoch) / uint64(maxMNs)
+			moveM2 = ((currentHeader.Number.Uint64() % config.XDPoS.Epoch) / uint64(maxMNs)) % uint64(maxMNs)
 		}
 		for i, m1 := range masternodes {
 			m2Index := uint64(validators[i] % int64(maxMNs))
