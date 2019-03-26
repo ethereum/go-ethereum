@@ -247,7 +247,7 @@ func (s *pssSession) genJob(mode pssMode) pssJob {
 	log.Trace("recv node", "pss_baseAddr", hexutil.Encode(recvNode.addr), "host", hosts[recvNodeIdx])
 
 	// create new message and add it to job index to check for receives
-	randomMsg := testutil.RandomBytes(seed, 128)
+	randomMsg := testutil.RandomBytes(seed, pssMessageSize)
 	// change seed so that the next random message is different
 	seed = seed + 1
 

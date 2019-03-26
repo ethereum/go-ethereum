@@ -19,6 +19,7 @@ package main
 import (
 	"os"
 	"sort"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	gethmetrics "github.com/ethereum/go-ethereum/metrics"
@@ -44,6 +45,7 @@ var (
 	verbosity       int
 	timeout         int
 	pssMessageCount int
+	pssMessageSize  int
 )
 
 func main() {
@@ -84,10 +86,16 @@ func main() {
 			Destination: &timeout,
 		},
 		cli.IntFlag{
-			Name:        "pss-messages",
+			Name:        "msgcount",
 			Value:       10,
 			Usage:       "number of pss messages that should be send in the pss smoke test",
 			Destination: &pssMessageCount,
+		},
+		cli.IntFlag{
+			Name:        "msgbytes",
+			Value:       128,
+			Usage:       "size of a randomly generated message. defined in bytes",
+			Destination: &pssMessageSize,
 		},
 	}
 
@@ -154,6 +162,7 @@ func emitMetrics(ctx *cli.Context) error {
 
 		tagsMap := utils.SplitTagsFlag(tags)
 		tagsMap["version"] = gitCommit
+		tagsMap["msgbytes"] = strconv.Itoa(pssMessageSize)
 
 		return influxdb.InfluxDBWithTagsOnce(gethmetrics.DefaultRegistry, endpoint, database, username, password, "swarm-smoke-pss.", tagsMap)
 	}
