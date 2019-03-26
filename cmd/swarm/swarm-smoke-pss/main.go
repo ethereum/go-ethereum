@@ -37,14 +37,15 @@ var (
 )
 
 var (
-	allhosts        string
-	hosts           []string
-	inputSeed       int
-	wsPort          int
-	verbosity       int
-	timeout         int
-	pssMessageCount int
-	pssMessageSize  int
+	allhosts          string
+	hosts             []string
+	inputSeed         int
+	wsPort            int
+	verbosity         int
+	timeout           int
+	pssMessageTimeout int
+	pssMessageCount   int
+	pssMessageSize    int
 )
 
 func main() {
@@ -83,6 +84,12 @@ func main() {
 			Value:       120,
 			Usage:       "timeout in seconds after which kill the process",
 			Destination: &timeout,
+		},
+		cli.IntFlag{
+			Name:        "msgtimeout",
+			Value:       1,
+			Usage:       "timeout in seconds until a message is received",
+			Destination: &pssMessageTimeout,
 		},
 		cli.IntFlag{
 			Name:        "msgcount",
@@ -128,7 +135,7 @@ func main() {
 		{
 			Name:   "all",
 			Usage:  "send and receive raw, sym and asym messages across randome nodes",
-			Action: wrapCliCommand("raw", pssAllCheck),
+			Action: wrapCliCommand("all", pssAllCheck),
 		},
 	}
 

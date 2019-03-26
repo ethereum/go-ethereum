@@ -303,8 +303,8 @@ func (s *pssSession) waitForMsg() error {
 			return fmt.Errorf("message mismatch. expected: %s got: %s", resJob.msg, res.Msg)
 		}
 		log.Debug("got msg", "job", hexutil.Encode([]byte(resIdx)))
-	case <-time.After(1 * time.Second):
-		return errors.New("msg timeout after 1 sec")
+	case <-time.After(time.Duration(pssMessageTimeout) * time.Second):
+		return fmt.Errorf("message timeout after %d sec", pssMessageTimeout)
 	}
 	return nil
 }
