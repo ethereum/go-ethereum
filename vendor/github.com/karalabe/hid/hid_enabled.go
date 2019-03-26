@@ -58,11 +58,6 @@ import (
 //   > "subsequent calls will cause the hid manager to release previously enumerated devices"
 var enumerateLock sync.Mutex
 
-func init() {
-	// Initialize the HIDAPI library
-	C.hid_init()
-}
-
 // Supported returns whether this platform is supported by the HID library or not.
 // The goal of this method is to allow programatically handling platforms that do
 // not support USB HID and not having to fall back to build constraints.

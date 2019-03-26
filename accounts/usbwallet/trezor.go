@@ -180,7 +180,7 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 		AddressN:   derivationPath,
 		Nonce:      new(big.Int).SetUint64(tx.Nonce()).Bytes(),
 		GasPrice:   tx.GasPrice().Bytes(),
-		GasLimit:   tx.Gas().Bytes(),
+		GasLimit:   new(big.Int).SetUint64(tx.Gas()).Bytes(),
 		Value:      tx.Value().Bytes(),
 		DataLength: &length,
 	}
@@ -221,7 +221,7 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 		signer = new(types.HomesteadSigner)
 	} else {
 		signer = types.NewEIP155Signer(chainID)
-		signature[64] = signature[64] - byte(chainID.Uint64()*2+35)
+		signature[64] -= byte(chainID.Uint64()*2 + 35)
 	}
 	// Inject the final signature into the transaction and sanity check the sender
 	signed, err := tx.WithSignature(signer, signature)

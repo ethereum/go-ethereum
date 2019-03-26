@@ -86,7 +86,7 @@ from the rpc package in logfmt to standard out. The other prints records at Erro
 or above in JSON formatted output to the file /var/log/service.json
 
     handler := log.MultiHandler(
-        log.LvlFilterHandler(log.LvlError, log.Must.FileHandler("/var/log/service.json", log.JsonFormat())),
+        log.LvlFilterHandler(log.LvlError, log.Must.FileHandler("/var/log/service.json", log.JSONFormat())),
         log.MatchFilterHandler("pkg", "app/rpc" log.StdoutHandler())
     )
 
@@ -304,8 +304,8 @@ For all Handler functions which can return an error, there is a version of that
 function which will return no error but panics on failure. They are all available
 on the Must object. For example:
 
-    log.Must.FileHandler("/path", log.JsonFormat)
-    log.Must.NetHandler("tcp", ":1234", log.JsonFormat)
+    log.Must.FileHandler("/path", log.JSONFormat)
+    log.Must.NetHandler("tcp", ":1234", log.JSONFormat)
 
 Inspiration and Credit
 

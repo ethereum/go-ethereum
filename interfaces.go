@@ -115,7 +115,7 @@ type ChainSyncReader interface {
 type CallMsg struct {
 	From     common.Address  // the sender of the 'transaction'
 	To       *common.Address // the destination contract (nil for contract creation)
-	Gas      *big.Int        // if nil, the call executes with near-infinite gas
+	Gas      uint64          // if 0, the call executes with near-infinite gas
 	GasPrice *big.Int        // wei <-> gas exchange ratio
 	Value    *big.Int        // amount of wei sent along with the call
 	Data     []byte          // input data, usually an ABI-encoded contract method invocation
@@ -131,6 +131,7 @@ type ContractCaller interface {
 
 // FilterQuery contains options for contract log filtering.
 type FilterQuery struct {
+	BlockHash *common.Hash     // used by eth_getLogs, return logs only from block with this hash
 	FromBlock *big.Int         // beginning of the queried range, nil means genesis block
 	ToBlock   *big.Int         // end of the range, nil means latest block
 	Addresses []common.Address // restricts matches to events created by specific contracts
@@ -144,8 +145,8 @@ type FilterQuery struct {
 	// {} or nil          matches any topic list
 	// {{A}}              matches topic A in first position
 	// {{}, {B}}          matches any topic in first position, B in second position
-	// {{A}}, {B}}        matches topic A in first position, B in second position
-	// {{A, B}}, {C, D}}  matches topic (A OR B) in first position, (C OR D) in second position
+	// {{A}, {B}}         matches topic A in first position, B in second position
+	// {{A, B}, {C, D}}   matches topic (A OR B) in first position, (C OR D) in second position
 	Topics [][]common.Hash
 }
 
@@ -200,7 +201,7 @@ type PendingContractCaller interface {
 // true gas limit requirement as other transactions may be added or removed by miners, but
 // it should provide a basis for setting a reasonable default.
 type GasEstimator interface {
-	EstimateGas(ctx context.Context, call CallMsg) (usedGas *big.Int, err error)
+	EstimateGas(ctx context.Context, call CallMsg) (uint64, error)
 }
 
 // A PendingStateEventer provides access to real time notifications about changes to the

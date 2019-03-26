@@ -57,3 +57,15 @@ func PGPSignFile(input string, output string, pgpkey string) error {
 	// Generate the signature and return
 	return openpgp.ArmoredDetachSign(out, keys[0], in, nil)
 }
+
+// PGPKeyID parses an armored key and returns the key ID.
+func PGPKeyID(pgpkey string) (string, error) {
+	keys, err := openpgp.ReadArmoredKeyRing(bytes.NewBufferString(pgpkey))
+	if err != nil {
+		return "", err
+	}
+	if len(keys) != 1 {
+		return "", fmt.Errorf("key count mismatch: have %d, want %d", len(keys), 1)
+	}
+	return keys[0].PrimaryKey.KeyIdString(), nil
+}

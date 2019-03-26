@@ -53,25 +53,38 @@ func NewEVMContext(msg Message, header *types.Header, chain ChainContext, author
 		BlockNumber: new(big.Int).Set(header.Number),
 		Time:        new(big.Int).Set(header.Time),
 		Difficulty:  new(big.Int).Set(header.Difficulty),
-		GasLimit:    new(big.Int).Set(header.GasLimit),
+		GasLimit:    header.GasLimit,
 		GasPrice:    new(big.Int).Set(msg.GasPrice()),
 	}
 }
 
 // GetHashFn returns a GetHashFunc which retrieves header hashes by number
 func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash {
+	var cache map[uint64]common.Hash
+
 	return func(n uint64) common.Hash {
-		for header := chain.GetHeader(ref.ParentHash, ref.Number.Uint64()-1); header != nil; header = chain.GetHeader(header.ParentHash, header.Number.Uint64()-1) {
-			if header.Number.Uint64() == n {
-				return header.Hash()
+		// If there's no hash cache yet, make one
+		if cache == nil {
+			cache = map[uint64]common.Hash{
+				ref.Number.Uint64() - 1: ref.ParentHash,
 			}
 		}
-
+		// Try to fulfill the request from the cache
+		if hash, ok := cache[n]; ok {
+			return hash
+		}
+		// Not cached, iterate the blocks and cache the hashes
+		for header := chain.GetHeader(ref.ParentHash, ref.Number.Uint64()-1); header != nil; header = chain.GetHeader(header.ParentHash, header.Number.Uint64()-1) {
+			cache[header.Number.Uint64()-1] = header.ParentHash
+			if n == header.Number.Uint64()-1 {
+				return header.ParentHash
+			}
+		}
 		return common.Hash{}
 	}
 }
 
-// CanTransfer checks wether there are enough funds in the address' account to make a transfer.
+// CanTransfer checks whether there are enough funds in the address' account to make a transfer.
 // This does not take the necessary gas in to account to make the transfer valid.
 func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int) bool {
 	return db.GetBalance(addr).Cmp(amount) >= 0

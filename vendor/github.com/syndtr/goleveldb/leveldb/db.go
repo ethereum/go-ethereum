@@ -974,10 +974,6 @@ func (db *DB) GetProperty(name string) (value string, err error) {
 				level, len(tables), float64(tables.size())/1048576.0, duration.Seconds(),
 				float64(read)/1048576.0, float64(write)/1048576.0)
 		}
-		value += "-------+------------+---------------+---------------+---------------+---------------\n"
-		value += fmt.Sprintf(" Total | %10d | %13.5f | %13.5f | %13.5f | %13.5f\n",
-			totalTables, float64(totalSize)/1048576.0, totalDuration.Seconds(),
-			float64(totalRead)/1048576.0, float64(totalWrite)/1048576.0)
 	case p == "iostats":
 		value = fmt.Sprintf("Read(MB):%.5f Write(MB):%.5f",
 			float64(db.s.stor.reads())/1048576.0,
@@ -1029,10 +1025,10 @@ type DBStats struct {
 	BlockCacheSize    int
 	OpenedTablesCount int
 
-	LevelSizes        Sizes
+	LevelSizes        []int64
 	LevelTablesCounts []int
-	LevelRead         Sizes
-	LevelWrite        Sizes
+	LevelRead         []int64
+	LevelWrite        []int64
 	LevelDurations    []time.Duration
 }
 

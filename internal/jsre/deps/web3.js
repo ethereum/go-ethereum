@@ -1021,7 +1021,7 @@ var formatOutputInt = function (param) {
     var value = param.staticPart() || "0";
 
     // check if it's negative number
-    // it it is, return two's complement
+    // it is, return two's complement
     if (signedIsNegative(value)) {
         return new BigNumber(value, 16).minus(new BigNumber('ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', 16)).minus(1);
     }
@@ -2150,7 +2150,7 @@ var getValueOfUnit = function (unit) {
  * - ether      --             --
  * - kether                    --           grand
  * - mether
- * - gether
+ * - gubiqer
  * - tether
  *
  * @method fromWei
@@ -2178,7 +2178,7 @@ var fromWei = function(number, unit) {
  * - ether      --             --
  * - kether                    --           grand
  * - mether
- * - gether
+ * - gubiqer
  * - tether
  *
  * @method toWei
@@ -2193,7 +2193,7 @@ var toWei = function(number, unit) {
 };
 
 /**
- * Takes an input and transforms it into an bignumber
+ * Takes an input and transforms it into a bignumber
  *
  * @method toBigNumber
  * @param {Number|String|BigNumber} a number, string, HEX string or BigNumber
@@ -2250,7 +2250,7 @@ var isAddress = function (address) {
         // check if it has the basic requirements of an address
         return false;
     } else if (/^(0x)?[0-9a-f]{40}$/.test(address) || /^(0x)?[0-9A-F]{40}$/.test(address)) {
-        // If it's all small caps or all all caps, return true
+        // If it's all small caps or all caps, return true
         return true;
     } else {
         // Otherwise check each case
@@ -2609,7 +2609,7 @@ var properties = function () {
             inputFormatter: utils.toDecimal
         }),
         new Property({
-            name: 'version.ethereum',
+            name: 'version.ubiq',
             getter: 'eth_protocolVersion',
             inputFormatter: utils.toDecimal
         }),

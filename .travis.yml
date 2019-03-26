@@ -14,17 +14,6 @@ matrix:
       - go run build/ci.go install
       - go run build/ci.go test -coverage $TEST_PACKAGES
 
-    - os: linux
-      dist: trusty
-      sudo: required
-      go: 1.11.x
-      script:
-        - sudo modprobe fuse
-        - sudo chmod 666 /dev/fuse
-        - sudo chown root:$USER /etc/fuse.conf
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
-
     # These are the latest Go versions.
     - os: linux
       dist: trusty
@@ -64,7 +53,7 @@ matrix:
         - go run build/ci.go lint
 
     # This builder does the Ubuntu PPA upload
-    - if: repo = ubiq/go-ubiq AND type = push
+    - if: type = push
       os: linux
       dist: trusty
       go: 1.12.x
@@ -83,10 +72,10 @@ matrix:
             - python-paramiko
       script:
         - echo '|1|7SiYPr9xl3uctzovOTj4gMwAC1M=|t6ReES75Bo/PxlOPJ6/GsGbTrM0= ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA0aKz5UTUndYgIGG7dQBV+HaeuEZJ2xPHo2DS2iSKvUL4xNMSAY4UguNW+pX56nAQmZKIZZ8MaEvSj6zMEDiq6HFfn5JcTlM80UwlnyKe8B8p7Nk06PPQLrnmQt5fh0HmEcZx+JU9TZsfCHPnX7MNz4ELfZE6cFsclClrKim3BHUIGq//t93DllB+h4O9LHjEUsQ1Sr63irDLSutkLJD6RXchjROXkNirlcNVHH/jwLWR5RcYilNX7S5bIkK8NlWPjsn/8Ua5O7I9/YoE97PpO6i73DTGLh5H9JN/SITwCKBkgSDWUt61uPK3Y11Gty7o2lWsBjhBUm2Y38CBsoGmBw==' >> ~/.ssh/known_hosts
-        - go run build/ci.go debsrc -upload ubiq/ubiq -sftp-user gubiq-ci -signer "Go Ethereum Linux Builder <gubiq-ci@ethereum.org>"
+        - go run build/ci.go debsrc -upload ubiq/ubiq -sftp-user gubiq-ci -signer "Go Ubiq Linux Builder <gubiq-ci@ethereum.org>"
 
     # This builder does the Linux Azure uploads
-    - if: repo = ubiq/go-ubiq AND type = push
+    - if: type = push
       os: linux
       dist: trusty
       sudo: required
@@ -120,7 +109,7 @@ matrix:
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gubiqstore/builds
 
     # This builder does the Linux Azure MIPS xgo uploads
-    - if: repo = ubiq/go-ubiq AND type = push
+    - if: type = push
       os: linux
       dist: trusty
       services:
@@ -148,7 +137,7 @@ matrix:
         - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload gubiqstore/builds
 
     # This builder does the Android Maven and Azure uploads
-    - if: repo = ubiq/go-ubiq AND type = push
+    - if: type = push
       os: linux
       dist: trusty
       addons:
@@ -170,22 +159,23 @@ matrix:
       git:
         submodules: false # avoid cloning ubiq/tests
       before_install:
-        - curl https://dl.google.com/go/go1.12.linux-amd64.tar.gz | tar -xz
+        - curl https://storage.googleapis.com/golang/go1.12.5.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
       script:
         # Build the Android archive and upload it to Maven Central and Azure
-        - curl https://dl.google.com/android/repository/android-ndk-r19b-linux-x86_64.zip -o android-ndk-r19b.zip
-        - unzip -q android-ndk-r19b.zip && rm android-ndk-r19b.zip
-        - mv android-ndk-r19b $ANDROID_HOME/ndk-bundle
+        - curl https://dl.google.com/android/repository/android-ndk-r17b-linux-x86_64.zip -o android-ndk-r17b.zip
+        - unzip -q android-ndk-r17b.zip && rm android-ndk-r17b.zip
+        - mv android-ndk-r17b $HOME
+        - export ANDROID_NDK=$HOME/android-ndk-r17b
 
         - mkdir -p $GOPATH/src/github.com/ubiq
         - ln -s `pwd` $GOPATH/src/github.com/ubiq/go-ubiq
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gubiqstore/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
-    - if: repo = ubiq/go-ubiq AND type = push
+    - if: type = push
       os: osx
       go: 1.12.x
       env:
@@ -214,7 +204,7 @@ matrix:
         - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gubiqstore/builds
 
     # This builder does the Azure archive purges to avoid accumulating junk
-    - if: repo = ubiq/go-ubiq AND type = cron
+    - if: type = cron
       os: linux
       dist: trusty
       go: 1.12.x
@@ -224,12 +214,3 @@ matrix:
         submodules: false # avoid cloning ubiq/tests
       script:
         - go run build/ci.go purge -store gubiqstore/builds -days 14
-
-    - name: Race Detector for Swarm
-      if: repo = ethersphere/go-ubiq
-      os: linux
-      dist: trusty
-      go: 1.12.x
-      git:
-        submodules: false # avoid cloning ubiq/tests
-      script: ./build/travis_keepalive.sh go test -v -timeout 20m -race ./swarm...

@@ -62,6 +62,16 @@ func (bi *BigInt) SetInt64(x int64) {
 	bi.bigint.SetInt64(x)
 }
 
+// Sign returns:
+//
+//	-1 if x <  0
+//	 0 if x == 0
+//	+1 if x >  0
+//
+func (bi *BigInt) Sign() int {
+	return bi.bigint.Sign()
+}
+
 // SetString sets the big int to x.
 //
 // The string prefix determines the actual conversion base. A prefix of "0x" or
@@ -73,6 +83,13 @@ func (bi *BigInt) SetString(x string, base int) {
 
 // BigInts represents a slice of big ints.
 type BigInts struct{ bigints []*big.Int }
+
+// NewBigInts creates a slice of uninitialized big numbers.
+func NewBigInts(size int) *BigInts {
+	return &BigInts{
+		bigints: make([]*big.Int, size),
+	}
+}
 
 // Size returns the number of big ints in the slice.
 func (bi *BigInts) Size() int {

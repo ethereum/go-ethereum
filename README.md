@@ -15,7 +15,7 @@ For prerequisites and detailed build instructions please read the [Ubiq's Instal
 
 *Note*: Keep in mind that Ubiq aims to be 100% compatible with Ethereum, so mostly all the documentation you can find on Ethereum wiki, will apply for sure to Ubiq.
 
-Building gubiq requires both a Go and a C compiler (version 1.7 or later). You can install them using your favourite package manager. Once the dependencies are installed, run
+Building gubiq requires both a Go and a C compiler (version 1.10 or later). You can install them using your favourite package manager. Once the dependencies are installed, run
 
     make gubiq
 
@@ -29,12 +29,14 @@ The go-ubiq project comes with several wrappers/executables found in the `cmd` d
 
 | Command    | Description |
 |:----------:|-------------|
-| **`gubiq`** | Our main Ubiq CLI client. It is the entry point into the Ubiq network (main-, test- or private net), capable of running as a full node (default) archive node (retaining all historical state) or a light node (retrieving data live). It can be used by other processes as a gateway into the Ubiq network via JSON RPC endpoints exposed on top of HTTP, WebSocket and/or IPC transports. `gubiq --help` and the [CLI Wiki page](https://github.com/ubiq/go-ubiq/wiki/Command-Line-Options) for command line options. |
-| `abigen` | Source code generator to convert Ubiq contract definitions into easy to use, compile-time type-safe Go packages. It operates on plain [Ethereum contract ABIs](https://github.com/ubiq/wiki/wiki/Ethereum-Contract-ABI) with expanded functionality if the contract bytecode is also available. However it also accepts Solidity source files, making development much more streamlined. Please see our [Native DApps](https://github.com/ubiq/go-ubiq/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts) wiki page for details. |
+| **`gubiq`** | Our main Ubiq CLI client. It is the entry point into the Ubiq network (main-, test- or private net), capable of running as a full node (default), archive node (retaining all historical state) or a light node (retrieving data live). It can be used by other processes as a gateway into the Ubiq network via JSON RPC endpoints exposed on top of HTTP, WebSocket and/or IPC transports. `gubiq --help` and the [CLI Wiki page](https://github.com/ubiq/go-ubiq/wiki/Command-Line-Options) for command line options. |
+| `abigen` | Source code generator to convert Ubiq contract definitions into easy to use, compile-time type-safe Go packages. It operates on plain [Ubiq contract ABIs](https://github.com/ethereum/wiki/wiki/Ethereum-Contract-ABI) with expanded functionality if the contract bytecode is also available. However it also accepts Solidity source files, making development much more streamlined. Please see our [Native DApps](https://github.com/ubiq/go-ubiq/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts) wiki page for details. |
 | `bootnode` | Stripped down version of our Ubiq client implementation that only takes part in the network node discovery protocol, but does not run any of the higher level application protocols. It can be used as a lightweight bootstrap node to aid in finding peers in private networks. |
 | `evm` | Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode. Its purpose is to allow isolated, fine-grained debugging of EVM opcodes (e.g. `evm --code 60ff60ff --debug`). |
-| `gubiqrpctest` | Developer utility tool to support our [ubiq/rpc-test](https://github.com/ubiq/rpc-tests) test suite which validates baseline conformity to the [Ethereum JSON RPC](https://github.com/ubiq/wiki/wiki/JSON-RPC) specs. Please see the [test suite's readme](https://github.com/ubiq/rpc-tests/blob/master/README.md) for details. |
-| `rlpdump` | Developer utility tool to convert binary RLP ([Recursive Length Prefix](https://github.com/ubiq/wiki/wiki/RLP)) dumps (data encoding used by the Ubiq protocol both network as well as consensus wise) to user friendlier hierarchical representation (e.g. `rlpdump --hex CE0183FFFFFFC4C304050583616263`). |
+| `gubiqrpctest` | Developer utility tool to support our [ethereum/rpc-test](https://github.com/ethereum/rpc-tests) test suite which validates baseline conformity to the [Ethereum JSON RPC](https://github.com/ethereum/wiki/wiki/JSON-RPC) specs. Please see the [test suite's readme](https://github.com/ethereum/rpc-tests/blob/master/README.md) for details. |
+| `rlpdump` | Developer utility tool to convert binary RLP ([Recursive Length Prefix](https://github.com/ethereum/wiki/wiki/RLP)) dumps (data encoding used by the Ubiq protocol both network as well as consensus wise) to user friendlier hierarchical representation (e.g. `rlpdump --hex CE0183FFFFFFC4C304050583616263`). |
+| `swarm`    | Swarm daemon and tools. This is the entrypoint for the Swarm network. `swarm --help` for command line options and subcommands. See [Swarm README](https://github.com/ubiq/go-ubiq/tree/master/swarm) for more information. |
+| `puppeth`    | a CLI wizard that aids in creating a new Ubiq network. |
 
 ## Running gubiq
 
@@ -51,20 +53,18 @@ the user doesn't care about years-old historical data, so we can fast-sync quick
 state of the network. To do so:
 
 ```
-$ gubiq --fast --cache=512 console
+$ gubiq console
 ```
 
 This command will:
 
- * Start gubiq in fast sync mode (`--fast`), causing it to download more data in exchange for avoiding
-   processing the entire history of the Ubiq network, which is very CPU intensive.
- * Bump the memory allowance of the database to 512MB (`--cache=512`), which can help significantly in
-   sync times especially for HDD users. This flag is optional and you can set it as high or as low as
-   you'd like, though we'd recommend the 512MB - 2GB range.
+ * Start gubiq in fast sync mode (default, can be changed with the `--syncmode` flag), causing it to
+   download more data in exchange for avoiding processing the entire history of the Ubiq network,
+   which is very CPU intensive.
  * Start up Gubiq's built-in interactive [JavaScript console](https://github.com/ubiq/go-ubiq/wiki/JavaScript-Console),
-   (via the trailing `console` subcommand) through which you can invoke all official [`web3` methods](https://github.com/ubiq/wiki/wiki/JavaScript-API)
+   (via the trailing `console` subcommand) through which you can invoke all official [`web3` methods](https://github.com/ethereum/wiki/wiki/JavaScript-API)
    as well as Gubiq's own [management APIs](https://github.com/ubiq/go-ubiq/wiki/Management-APIs).
-   This too is optional and if you leave it out you can always attach to an already running Gubiq instance
+   This tool is optional and if you leave it out you can always attach to an already running Gubiq instance
    with `gubiq attach`.
 
 ### Full node on the Ubiq test network
@@ -75,12 +75,11 @@ entire system. In other words, instead of attaching to the main network, you wan
 network with your node, which is fully equivalent to the main network, but with play-Ether only.
 
 ```
-$ gubiq --testnet --fast --cache=512 console
+$ gubiq --testnet console
 ```
 
-The `--fast`, `--cache` flags and `console` subcommand have the exact same meaning as above and they
-are equally useful on the testnet too. Please see above for their explanations if you've skipped to
-here.
+The `console` subcommand have the exact same meaning as above and they are equally useful on the
+testnet too. Please see above for their explanations if you've skipped to here.
 
 Specifying the `--testnet` flag however will reconfigure your Gubiq instance a bit:
 
@@ -119,19 +118,19 @@ One of the quickest ways to get Ubiq up and running on your machine is by using 
 
 ```
 docker run -d --name ubiq-node -v /Users/alice/ubiq:/root \
-           -p 8588:8588 -p 30388:30388 \
-           ubiqsmart/gubiq --fast --cache=512
+           -p 8545:8545 -p 30388:30388 \
+           ubiq/client-go
 ```
 
-This will start gubiq in fast sync mode with a DB memory allowance of 512MB just as the above command does.  It will also create a persistent volume in your home directory for saving your blockchain as well as map the default ports.
+This will start gubiq in fast-sync mode with a DB memory allowance of 1GB just as the above command does.  It will also create a persistent volume in your home directory for saving your blockchain as well as map the default ports. There is also an `alpine` tag available for a slim version of the image.
 
 Do not forget `--rpcaddr 0.0.0.0`, if you want to access RPC from other containers and/or hosts. By default, `gubiq` binds to the local interface and RPC endpoints is not accessible from the outside.
 
 ### Programatically interfacing Gubiq nodes
 
 As a developer, sooner rather than later you'll want to start interacting with Gubiq and the Ubiq
-network via your own programs and not manually through the console. To aid this, Gubiq has built in
-support for a JSON-RPC based APIs ([standard APIs](https://github.com/ubiq/wiki/wiki/JSON-RPC) and
+network via your own programs and not manually through the console. To aid this, Gubiq has built-in
+support for a JSON-RPC based APIs ([standard APIs](https://github.com/ethereum/wiki/wiki/JSON-RPC) and
 [Gubiq specific APIs](https://github.com/ubiq/go-ubiq/wiki/Management-APIs)). These can be
 exposed via HTTP, WebSockets and IPC (unix sockets on unix based platforms, and named pipes on Windows).
 
@@ -156,7 +155,7 @@ HTTP based JSON-RPC API options:
   * `--ipcpath` Filename for IPC socket/pipe within the datadir (explicit paths escape it)
 
 You'll need to use your own programming environments' capabilities (libraries, tools, etc) to connect
-via HTTP, WS or IPC to a Gubiq node configured with the above flags and you'll need to speak [JSON-RPC](http://www.jsonrpc.org/specification)
+via HTTP, WS or IPC to a Gubiq node configured with the above flags and you'll need to speak [JSON-RPC](https://www.jsonrpc.org/specification)
 on all transports. You can reuse the same connection for multiple requests!
 
 **Note: Please understand the security implications of opening up an HTTP/WS based transport before

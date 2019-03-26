@@ -32,7 +32,7 @@ An example method:
  func (s *CalcService) Add(a, b int) (int, error)
 
 When the returned error isn't nil the returned integer is ignored and the error is
-send back to the client. Otherwise the returned integer is send back to the client.
+sent back to the client. Otherwise the returned integer is sent back to the client.
 
 Optional arguments are supported by accepting pointer values as arguments. E.g.
 if we want to do the addition in an optional finite field we can accept a mod
@@ -58,7 +58,7 @@ An example server which uses the JSON codec:
 	return a + b
  }
 
- func (s *CalculatorService Div(a, b int) (int, error) {
+ func (s *CalculatorService) Div(a, b int) (int, error) {
 	if b == 0 {
 		return 0, errors.New("divide by zero")
 	}
@@ -92,7 +92,7 @@ An example method:
 Subscriptions are deleted when:
  - the user sends an unsubscribe request
  - the connection which was used to create the subscription is closed. This can be initiated
-   by the client and server. The server will close the connection on an write error or when
+   by the client and server. The server will close the connection on a write error or when
    the queue of buffered notifications gets too big.
 */
 package rpc
