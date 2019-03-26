@@ -24,7 +24,7 @@ const (
 
 var TIP2019Block = big.NewInt(1050000)
 var TIPSigning = big.NewInt(3000000)
-var TIPRandomize = big.NewInt(3374780)
+var TIPRandomize = big.NewInt(3410000)
 var IsTestnet bool = false
 var StoreRewardFolder string
 var RollbackHash Hash
