@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/swarm/state"
 )
@@ -111,7 +112,7 @@ func TestHiveStatePersistance(t *testing.T) {
 
 	dir, err := ioutil.TempDir("", "hive_test_store")
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
 
@@ -121,6 +122,8 @@ func TestHiveStatePersistance(t *testing.T) {
 	}
 
 	params := NewHiveParams()
+	params.Discovery = false
+
 	s, pp, err := newHiveTester(t, params, 5, store)
 	if err != nil {
 		t.Fatal(err)
@@ -129,6 +132,7 @@ func TestHiveStatePersistance(t *testing.T) {
 	for _, node := range s.Nodes {
 		raddr := NewAddr(node)
 		pp.Register(raddr)
+		log.Warn("add", "addr", raddr.String())
 		peers[raddr.String()] = true
 	}
 
@@ -156,12 +160,11 @@ func TestHiveStatePersistance(t *testing.T) {
 	pp.Start(s1.Server)
 	i := 0
 	pp.Kademlia.EachAddr(nil, 256, func(addr *BzzAddr, po int) bool {
+		log.Warn("check", "addr", addr.String())
 		delete(peers, addr.String())
 		i++
 		return true
 	})
-	// TODO remove this line when verified that test passes
-	time.Sleep(time.Second)
 	if i != 5 {
 		t.Fatalf("invalid number of entries: got %v, want %v", i, 5)
 	}

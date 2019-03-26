@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -36,6 +37,8 @@ const (
 	// timeout for waiting
 	bzzHandshakeTimeout = 3000 * time.Millisecond
 )
+
+var DefaultTestNetworkID = rand.Uint64()
 
 // BzzSpec is the spec of the generic swarm handshake
 var BzzSpec = &protocols.Spec{

@@ -36,9 +36,10 @@ import (
 )
 
 const (
-	TestProtocolVersion   = 8
-	TestProtocolNetworkID = 3
+	TestProtocolVersion = 8
 )
+
+var TestProtocolNetworkID = DefaultTestNetworkID
 
 var (
 	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
@@ -149,7 +150,7 @@ func newBzz(addr *BzzAddr, lightNode bool) *Bzz {
 		OverlayAddr:  addr.Over(),
 		UnderlayAddr: addr.Under(),
 		HiveParams:   NewHiveParams(),
-		NetworkID:    DefaultNetworkID,
+		NetworkID:    DefaultTestNetworkID,
 		LightNode:    lightNode,
 	}
 	kad := NewKademlia(addr.OAddr, NewKadParams())
@@ -232,7 +233,7 @@ func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
 		&HandshakeMsg{Version: TestProtocolVersion, NetworkID: 321, Addr: NewAddr(node)},
-		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): network id mismatch 321 (!= 3)")},
+		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): network id mismatch 321 (!= %v)", TestProtocolNetworkID)},
 	)
 
 	if err != nil {
