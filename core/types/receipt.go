@@ -82,8 +82,15 @@ type receiptRLP struct {
 	Logs              []*Log
 }
 
-// receiptStorageRLP is the storage encoding of a receipt.
-type receiptStorageRLP struct {
+// storedReceiptRLP is the storage encoding of a receipt.
+type storedReceiptRLP struct {
+	PostStateOrStatus []byte
+	CumulativeGasUsed uint64
+	Logs              []*LogForStorage
+}
+
+// v4StoredReceiptRLP is the storage encoding of a receipt used in database version 4.
+type v4StoredReceiptRLP struct {
 	PostStateOrStatus []byte
 	CumulativeGasUsed uint64
 	TxHash            common.Hash
@@ -92,8 +99,8 @@ type receiptStorageRLP struct {
 	GasUsed           uint64
 }
 
-// LegacyReceiptStorageRLP is the previous storage encoding of a receipt including some unnecessary fields.
-type LegacyReceiptStorageRLP struct {
+// legacyStoredReceiptRLP is the original storage encoding of a receipt including some unnecessary fields.
+type legacyStoredReceiptRLP struct {
 	PostStateOrStatus []byte
 	CumulativeGasUsed uint64
 	Bloom             Bloom
@@ -177,13 +184,10 @@ type ReceiptForStorage Receipt
 // EncodeRLP implements rlp.Encoder, and flattens all content fields of a receipt
 // into an RLP stream.
 func (r *ReceiptForStorage) EncodeRLP(w io.Writer) error {
-	enc := &receiptStorageRLP{
+	enc := &storedReceiptRLP{
 		PostStateOrStatus: (*Receipt)(r).statusEncoding(),
 		CumulativeGasUsed: r.CumulativeGasUsed,
-		TxHash:            r.TxHash,
-		ContractAddress:   r.ContractAddress,
 		Logs:              make([]*LogForStorage, len(r.Logs)),
-		GasUsed:           r.GasUsed,
 	}
 	for i, log := range r.Logs {
 		enc.Logs[i] = (*LogForStorage)(log)
@@ -198,32 +202,81 @@ func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 	if err != nil {
 		return err
 	}
-	var dec receiptStorageRLP
-	if err := rlp.DecodeBytes(blob, &dec); err != nil {
-		var sdec LegacyReceiptStorageRLP
-		if err := rlp.DecodeBytes(blob, &sdec); err != nil {
-			return err
-		}
-		dec.PostStateOrStatus = common.CopyBytes(sdec.PostStateOrStatus)
-		dec.CumulativeGasUsed = sdec.CumulativeGasUsed
-		dec.TxHash = sdec.TxHash
-		dec.ContractAddress = sdec.ContractAddress
-		dec.Logs = sdec.Logs
-		dec.GasUsed = sdec.GasUsed
+
+	if err := decodeStoredReceiptRLP(r, blob); err == nil {
+		return nil
 	}
-	if err := (*Receipt)(r).setStatus(dec.PostStateOrStatus); err != nil {
+
+	if err := decodeV4StoredReceiptRLP(r, blob); err == nil {
+		return nil
+	}
+
+	return decodeLegacyStoredReceiptRLP(r, blob)
+}
+
+func decodeStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
+	var stored storedReceiptRLP
+	if err := rlp.DecodeBytes(blob, &stored); err != nil {
 		return err
 	}
-	// Assign the consensus fields
-	r.CumulativeGasUsed = dec.CumulativeGasUsed
-	r.Logs = make([]*Log, len(dec.Logs))
-	for i, log := range dec.Logs {
+
+	if err := (*Receipt)(r).setStatus(stored.PostStateOrStatus); err != nil {
+		return err
+	}
+
+	r.CumulativeGasUsed = stored.CumulativeGasUsed
+	r.Logs = make([]*Log, len(stored.Logs))
+	for i, log := range stored.Logs {
+		r.Logs[i] = (*Log)(log)
+	}
+	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
+
+	return nil
+}
+
+func decodeV4StoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
+	var stored v4StoredReceiptRLP
+	if err := rlp.DecodeBytes(blob, &stored); err != nil {
+		return err
+	}
+
+	if err := (*Receipt)(r).setStatus(stored.PostStateOrStatus); err != nil {
+		return err
+	}
+
+	r.CumulativeGasUsed = stored.CumulativeGasUsed
+	r.TxHash = stored.TxHash
+	r.ContractAddress = stored.ContractAddress
+	r.GasUsed = stored.GasUsed
+	r.Logs = make([]*Log, len(stored.Logs))
+	for i, log := range stored.Logs {
+		r.Logs[i] = (*Log)(log)
+	}
+	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
+
+	return nil
+}
+
+func decodeLegacyStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
+	var stored legacyStoredReceiptRLP
+	if err := rlp.DecodeBytes(blob, &stored); err != nil {
+		return err
+	}
+
+	if err := (*Receipt)(r).setStatus(stored.PostStateOrStatus); err != nil {
+		return err
+	}
+
+	r.CumulativeGasUsed = stored.GasUsed
+	r.Bloom = stored.Bloom
+	r.TxHash = stored.TxHash
+	r.ContractAddress = stored.ContractAddress
+	r.GasUsed = stored.GasUsed
+	r.Logs = make([]*Log, len(stored.Logs))
+	for i, log := range stored.Logs {
 		r.Logs[i] = (*Log)(log)
 	}
 
-	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
-	// Assign the implementation fields
-	r.TxHash, r.ContractAddress, r.GasUsed = dec.TxHash, dec.ContractAddress, dec.GasUsed
 	return nil
 }
 

@@ -19,12 +19,15 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -299,37 +302,110 @@ func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawVa
 	return data
 }
 
-// ReadReceipts retrieves all the transaction receipts belonging to a block.
-func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Receipts {
+// ReadRawReceipts retrieves all the transaction receipts belonging to a block.
+// The receipt metadata fields are not guaranteed to be populated, so they
+// should not be used. Use ReadReceipts instead if the metadata is needed.
+func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Receipts {
 	// Retrieve the flattened receipt slice
 	data := ReadReceiptsRLP(db, hash, number)
 	if len(data) == 0 {
 		return nil
 	}
+
 	// Convert the receipts from their storage form to their internal representation
 	storageReceipts := []*types.ReceiptForStorage{}
 	if err := rlp.DecodeBytes(data, &storageReceipts); err != nil {
 		log.Error("Invalid receipt array RLP", "hash", hash, "err", err)
 		return nil
 	}
-	receipts := make(types.Receipts, len(storageReceipts))
-	logIndex := uint(0)
-	for i, receipt := range storageReceipts {
-		// Assemble deriving fields for log.
-		for _, log := range receipt.Logs {
-			log.TxHash = receipt.TxHash
-			log.BlockHash = hash
-			log.BlockNumber = number
-			log.TxIndex = uint(i)
-			log.Index = logIndex
-			logIndex += 1
-		}
-		receipts[i] = (*types.Receipt)(receipt)
-		receipts[i].BlockHash = hash
-		receipts[i].BlockNumber = big.NewInt(0).SetUint64(number)
-		receipts[i].TransactionIndex = uint(i)
+
+	var receipts types.Receipts
+	for _, storageReceipt := range storageReceipts {
+		receipt := (*types.Receipt)(storageReceipt)
+		receipts = append(receipts, receipt)
 	}
+
 	return receipts
+}
+
+// ReadReceipts retrieves all the transaction receipts belonging to a block, including
+// its correspoinding metadata fields. If it is unable to populate these metadata
+// fields then nil is returned.
+//
+// The current implementation populates these metadata fields by reading the receipts'
+// corresponding block body, so if the block body is not found it will return nil even
+// if the receipt itself is stored.
+func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Receipts {
+	receipts := ReadRawReceipts(db, hash, number)
+	if receipts == nil {
+		return receipts
+	}
+
+	// Retrieve the block body to populate missing fields for receipts and logs
+	body := ReadBody(db, hash, number)
+	if body == nil {
+		log.Error("Missing body but have receipt", "hash", hash, "number", number)
+		return nil
+	}
+
+	genesisHash := ReadCanonicalHash(db, 0)
+	if genesisHash == (common.Hash{}) {
+		log.Error("Missing genesis hash")
+		return nil
+	}
+
+	config := ReadChainConfig(db, genesisHash)
+	if config == nil {
+		log.Error("Missing chain config ", "hash", hash)
+		return nil
+	}
+
+	SetReceiptsData(config, hash, big.NewInt(int64(number)), body, receipts)
+
+	return receipts
+}
+
+// SetReceiptsData computes all the non-consensus fields of the receipts
+func SetReceiptsData(config *params.ChainConfig, blockHash common.Hash, blockNumber *big.Int, body *types.Body, receipts types.Receipts) error {
+	signer := types.MakeSigner(config, blockNumber)
+
+	transactions, logIndex := body.Transactions, uint(0)
+	if len(transactions) != len(receipts) {
+		return errors.New("transaction and receipt count mismatch")
+	}
+
+	for j := 0; j < len(receipts); j++ {
+		// The transaction hash can be retrieved from the transaction itself
+		receipts[j].TxHash = transactions[j].Hash()
+
+		// block location fields
+		receipts[j].BlockHash = blockHash
+		receipts[j].BlockNumber = blockNumber
+		receipts[j].TransactionIndex = uint(j)
+
+		// The contract address can be derived from the transaction itself
+		if transactions[j].To() == nil {
+			// Deriving the signer is expensive, only do if it's actually needed
+			from, _ := types.Sender(signer, transactions[j])
+			receipts[j].ContractAddress = crypto.CreateAddress(from, transactions[j].Nonce())
+		}
+		// The used gas can be calculated based on previous receipts
+		if j == 0 {
+			receipts[j].GasUsed = receipts[j].CumulativeGasUsed
+		} else {
+			receipts[j].GasUsed = receipts[j].CumulativeGasUsed - receipts[j-1].CumulativeGasUsed
+		}
+		// The derived log fields can simply be set from the block and transaction
+		for k := 0; k < len(receipts[j].Logs); k++ {
+			receipts[j].Logs[k].BlockNumber = blockNumber.Uint64()
+			receipts[j].Logs[k].BlockHash = blockHash
+			receipts[j].Logs[k].TxHash = receipts[j].TxHash
+			receipts[j].Logs[k].TxIndex = uint(j)
+			receipts[j].Logs[k].Index = logIndex
+			logIndex++
+		}
+	}
+	return nil
 }
 
 // WriteReceipts stores all the transaction receipts belonging to a block.

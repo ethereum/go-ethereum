@@ -18,6 +18,11 @@ package rawdb
 
 import (
 	"bytes"
+	"encoding/hex"
+	"fmt"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"math/big"
 	"testing"
 
@@ -267,6 +272,11 @@ func TestHeadStorage(t *testing.T) {
 func TestBlockReceiptStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
+	tx1 := types.NewTransaction(1, common.HexToAddress("0x1"), big.NewInt(1), 1, big.NewInt(1), nil)
+	tx2 := types.NewTransaction(2, common.HexToAddress("0x2"), big.NewInt(2), 2, big.NewInt(2), nil)
+	// Include block needed to read metadata.
+	body := &types.Body{Transactions: types.Transactions{tx1, tx2}}
+
 	receipt1 := &types.Receipt{
 		Status:            types.ReceiptStatusFailed,
 		CumulativeGasUsed: 1,
@@ -274,7 +284,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 			{Address: common.BytesToAddress([]byte{0x11})},
 			{Address: common.BytesToAddress([]byte{0x01, 0x11})},
 		},
-		TxHash:          common.BytesToHash([]byte{0x11, 0x11}),
+		TxHash:          tx1.Hash(),
 		ContractAddress: common.BytesToAddress([]byte{0x01, 0x11, 0x11}),
 		GasUsed:         111111,
 	}
@@ -286,7 +296,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 			{Address: common.BytesToAddress([]byte{0x22})},
 			{Address: common.BytesToAddress([]byte{0x02, 0x22})},
 		},
-		TxHash:          common.BytesToHash([]byte{0x22, 0x22}),
+		TxHash:          tx2.Hash(),
 		ContractAddress: common.BytesToAddress([]byte{0x02, 0x22, 0x22}),
 		GasUsed:         222222,
 	}
@@ -298,23 +308,205 @@ func TestBlockReceiptStorage(t *testing.T) {
 	if rs := ReadReceipts(db, hash, 0); len(rs) != 0 {
 		t.Fatalf("non existent receipts returned: %v", rs)
 	}
+	// Insert the body that corresponds to the receipts.
+	WriteBody(db, hash, 0, body)
 	// Insert the receipt slice into the database and check presence
 	WriteReceipts(db, hash, 0, receipts)
+	// Insert canonical hash that the chain configuration will be mapped to.
+	WriteCanonicalHash(db, hash, 0)
+	// Insert the chain configuration.
+	WriteChainConfig(db, hash, params.MainnetChainConfig)
 	if rs := ReadReceipts(db, hash, 0); len(rs) == 0 {
 		t.Fatalf("no receipts returned")
 	} else {
-		for i := 0; i < len(receipts); i++ {
-			rlpHave, _ := rlp.EncodeToBytes(rs[i])
-			rlpWant, _ := rlp.EncodeToBytes(receipts[i])
-
-			if !bytes.Equal(rlpHave, rlpWant) {
-				t.Fatalf("receipt #%d: receipt mismatch: have %v, want %v", i, rs[i], receipts[i])
-			}
+		if err := checkReceiptsRLP(rs, receipts); err != nil {
+			t.Fatalf(err.Error())
 		}
 	}
+
+	DeleteBody(db, hash, 0)
+	// Check that receipts are no longer returned when metadata cannot be recomputed.
+	if rs := ReadReceipts(db, hash, 0); rs != nil {
+		t.Fatalf("receipts returned when body was deleted: %v", rs)
+	}
+	// Check that receipts without metadata can be returned when specifically
+	rs := ReadRawReceipts(db, hash, 0)
+	if err := checkReceiptsRLP(rs, receipts); err != nil {
+		t.Fatalf(err.Error())
+	}
+	// Re-insert the body that corresponds to the receipts.
+	WriteBody(db, hash, 0, body)
+
 	// Delete the receipt slice and check purge
 	DeleteReceipts(db, hash, 0)
 	if rs := ReadReceipts(db, hash, 0); len(rs) != 0 {
 		t.Fatalf("deleted receipts returned: %v", rs)
 	}
+}
+
+func checkReceiptsRLP(have, want types.Receipts) error {
+	if len(have) != len(want) {
+		return fmt.Errorf("receipts sizes mismatch: have %d, want %d", len(have), len(want))
+	}
+
+	for i := 0; i < len(want); i++ {
+		rlpHave, err := rlp.EncodeToBytes(have[i])
+		if err != nil {
+			return err
+		}
+		rlpWant, err := rlp.EncodeToBytes(want[i])
+		if err != nil {
+			return err
+		}
+
+		if !bytes.Equal(rlpHave, rlpWant) {
+			return fmt.Errorf("receipt #%d: receipt mismatch: have %s, want %s", i, hex.EncodeToString(rlpHave), hex.EncodeToString(rlpWant))
+		}
+	}
+
+	return nil
+}
+
+// Tests that receipts associated with a single block can be stored and retrieved.
+func TestSetReceiptsData(t *testing.T) {
+	tx0 := types.NewContractCreation(1, big.NewInt(1), 1, big.NewInt(1), nil)
+	tx1 := types.NewTransaction(2, common.HexToAddress("0x2"), big.NewInt(2), 2, big.NewInt(2), nil)
+	txs := types.Transactions{tx0, tx1}
+	// Include block needed to read metadata.
+	body := &types.Body{Transactions: txs}
+
+	receipt1 := &types.Receipt{
+		Status:            types.ReceiptStatusFailed,
+		CumulativeGasUsed: 1,
+		Logs: []*types.Log{
+			{Address: common.BytesToAddress([]byte{0x11})},
+			{Address: common.BytesToAddress([]byte{0x01, 0x11})},
+		},
+		TxHash:          tx0.Hash(),
+		ContractAddress: common.BytesToAddress([]byte{0x01, 0x11, 0x11}),
+		GasUsed:         1,
+	}
+	receipt2 := &types.Receipt{
+		PostState:         common.Hash{2}.Bytes(),
+		CumulativeGasUsed: 3,
+		Logs: []*types.Log{
+			{Address: common.BytesToAddress([]byte{0x22})},
+			{Address: common.BytesToAddress([]byte{0x02, 0x22})},
+		},
+		TxHash:          tx1.Hash(),
+		ContractAddress: common.BytesToAddress([]byte{0x02, 0x22, 0x22}),
+		GasUsed:         2,
+	}
+	receipt2.Bloom = types.CreateBloom(types.Receipts{receipt2})
+	receipts := []*types.Receipt{receipt1, receipt2}
+
+	blockNumber := big.NewInt(1)
+	blockHash := common.BytesToHash([]byte{0x03, 0x14})
+
+	clearComputedFieldsOnReceipts(t, receipts)
+
+	if err := SetReceiptsData(params.MainnetChainConfig, blockHash, blockNumber, body, receipts); err != nil {
+		t.Fatalf("SetReceiptsData(...) = %v, want <nil>", err)
+	}
+
+	signer := types.MakeSigner(params.MainnetChainConfig, blockNumber)
+	logIndex := uint(0)
+	for i := range receipts {
+		if receipts[i].TxHash != txs[i].Hash() {
+			t.Errorf("receipts[%d].TxHash = %s, want %s", i, receipts[i].TxHash.String(), txs[i].Hash().String())
+		}
+
+		if receipts[i].BlockHash != blockHash {
+			t.Errorf("receipts[%d].BlockHash = %s, want %s", i, receipts[i].BlockHash.String(), blockHash.String())
+		}
+
+		if receipts[i].BlockNumber.Cmp(blockNumber) != 0 {
+			t.Errorf("receipts[%c].BlockNumber = %s, want %s", i, receipts[i].BlockNumber.String(), blockNumber.String())
+		}
+
+		if receipts[i].TransactionIndex != uint(i) {
+			t.Errorf("receipts[%d].TransactionIndex = %d, want %d", i, receipts[i].TransactionIndex, i)
+		}
+
+		if receipts[i].GasUsed != txs[i].Gas() {
+			t.Errorf("receipts[%d].GasUsed = %d, want %d", i, receipts[i].GasUsed, txs[i].Gas())
+		}
+
+		if txs[i].To() != nil && receipts[i].ContractAddress != (common.Address{}) {
+			t.Errorf("receipts[%d].ContractAddress = %s, want %s", i, receipts[i].ContractAddress, (common.Address{}).String())
+		}
+
+		from, _ := types.Sender(signer, txs[i])
+		contractAddress := crypto.CreateAddress(from, txs[i].Nonce())
+		if txs[i].To() == nil && receipts[i].ContractAddress != contractAddress {
+			t.Errorf("receipts[%d].ContractAddress = %s, want %s", i, receipts[i].ContractAddress.String(), contractAddress.String())
+		}
+
+		for j := range receipts[i].Logs {
+			if receipts[i].Logs[j].BlockNumber != blockNumber.Uint64() {
+				t.Errorf("receipts[%d].Logs[%d].BlockNumber = %d, want %d", i, j, receipts[i].Logs[j].BlockNumber, blockNumber.Uint64())
+			}
+
+			if receipts[i].Logs[j].BlockHash != blockHash {
+				t.Errorf("receipts[%d].Logs[%d].BlockHash = %s, want %s", i, j, receipts[i].Logs[j].BlockHash.String(), blockHash.String())
+			}
+
+			if receipts[i].Logs[j].TxHash != txs[i].Hash() {
+				t.Errorf("receipts[%d].Logs[%d].TxHash = %s, want %s", i, j, receipts[i].Logs[j].TxHash.String(), txs[i].Hash().String())
+			}
+
+			if receipts[i].Logs[j].TxHash != txs[i].Hash() {
+				t.Errorf("receipts[%d].Logs[%d].TxHash = %s, want %s", i, j, receipts[i].Logs[j].TxHash.String(), txs[i].Hash().String())
+			}
+
+			if receipts[i].Logs[j].TxIndex != uint(i) {
+				t.Errorf("receipts[%d].Logs[%d].TransactionIndex = %d, want %d", i, j, receipts[i].Logs[j].TxIndex, i)
+			}
+
+			if receipts[i].Logs[j].Index != logIndex {
+				t.Errorf("receipts[%d].Logs[%d].Index = %d, want %d", i, j, receipts[i].Logs[j].Index, logIndex)
+			}
+
+			logIndex++
+		}
+	}
+}
+
+func clearComputedFieldsOnReceipts(t *testing.T, receipts types.Receipts) {
+	t.Helper()
+
+	for _, receipt := range receipts {
+		clearComputedFieldsOnReceipt(t, receipt)
+	}
+}
+
+func clearComputedFieldsOnReceipt(t *testing.T, receipt *types.Receipt) {
+	t.Helper()
+
+	receipt.TxHash = common.Hash{}
+	receipt.BlockHash = common.Hash{}
+	receipt.BlockNumber = big.NewInt(math.MaxUint32)
+	receipt.TransactionIndex = math.MaxUint32
+	receipt.ContractAddress = common.Address{}
+	receipt.GasUsed = 0
+
+	clearComputedFieldsOnLogs(t, receipt.Logs)
+}
+
+func clearComputedFieldsOnLogs(t *testing.T, logs []*types.Log) {
+	t.Helper()
+
+	for _, log := range logs {
+		clearComputedFieldsOnLog(t, log)
+	}
+}
+
+func clearComputedFieldsOnLog(t *testing.T, log *types.Log) {
+	t.Helper()
+
+	log.BlockNumber = math.MaxUint32
+	log.BlockHash = common.Hash{}
+	log.TxHash = common.Hash{}
+	log.TxIndex = math.MaxUint32
+	log.Index = math.MaxUint32
 }
