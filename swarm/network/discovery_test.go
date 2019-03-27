@@ -37,7 +37,7 @@ import (
  * - after connect, that outgoing subpeersmsg is sent
  *
  */
-func TestDiscovery(t *testing.T) {
+func TestSubPeersMsg(t *testing.T) {
 	params := NewHiveParams()
 	s, pp, err := newHiveTester(t, params, 1, nil)
 	if err != nil {
@@ -70,24 +70,24 @@ func TestDiscovery(t *testing.T) {
 }
 
 const (
-	maxPO     = 10
-	maxPeerPO = 8
+	maxPO     = 8 // PO of pivot and control; chosen to test enough cases but not run too long
+	maxPeerPO = 6 // pivot has no peers closer than this to the control peer
 )
 
 // TestInitialPeersMsg tests if peersMsg response to incoming subPeersMsg is correct
-func TestSubPeersMsg(t *testing.T) {
+func TestInitialPeersMsg(t *testing.T) {
 	for po := 0; po < maxPO; po++ {
 		for depth := 0; depth < maxPO; depth++ {
-			t.Run(fmt.Sprintf("PO=%d,advetised depth=%d", po, depth), func(t *testing.T) {
-				testSubPeersMsg(t, po, depth)
+			t.Run(fmt.Sprintf("PO=%d,advertised depth=%d", po, depth), func(t *testing.T) {
+				testInitialPeersMsg(t, po, depth)
 			})
 		}
 	}
 }
 
-// testSubPeersMsg tests that the correct set of peer info is sent
+// testInitialPeersMsg tests that the correct set of peer info is sent
 // to another peer after receiving their subPeersMsg request
-func testSubPeersMsg(t *testing.T, peerPO, peerDepth int) {
+func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	// generate random pivot address
 	prvkey, err := crypto.GenerateKey()
 	if err != nil {
@@ -102,20 +102,17 @@ func testSubPeersMsg(t *testing.T, peerPO, peerDepth int) {
 
 	// expected addrs in peersMsg response
 	var expBzzAddrs []*BzzAddr
-	addrAt := func(a pot.Address, po int) []byte {
-		b := pot.RandomAddressAt(a, po)
-		return b[:]
-	}
-	connect := func(base pot.Address, po int) *BzzAddr {
-		on := addrAt(base, po)
-		peer := newDiscPeer(on)
+	connect := func(a pot.Address, po int) *BzzAddr {
+		peer := newDiscPeer(pot.RandomAddressAt(a, po))
 		hive.On(peer)
 		return peer.BzzAddr
 	}
-	register := func(base pot.Address, po int) {
-		hive.Register(&BzzAddr{OAddr: addrAt(base, po)})
+	register := func(a pot.Address, po int) {
+		addr := pot.RandomAddressAt(a, po)
+		hive.Register(&BzzAddr{OAddr: addr[:]})
 	}
 
+	// generate connected and just registered peers
 	for po := maxPeerPO; po >= 0; po-- {
 		// create a fake connected peer at po from peerAddr
 		on := connect(peerAddr, po)
@@ -136,19 +133,17 @@ func testSubPeersMsg(t *testing.T, peerPO, peerDepth int) {
 
 	// peerID to use in the protocol tester testExchange expect/trigger
 	peerID := s.Nodes[0].ID()
-
-	// now we need to wait until the tester's control peer appears in the hive
-	// so the protocol started
-	ticker := time.NewTicker(10 * time.Millisecond)
-	attempts := 100
-	for range ticker.C {
-		if _, found := hive.peers[peerID]; found {
+	// block until control peer is found among hive peers
+	found := false
+	for attempts := 0; attempts < 20; attempts++ {
+		if _, found = hive.peers[peerID]; found {
 			break
 		}
-		attempts--
-		if attempts == 0 {
-			t.Fatal("timeout waiting for control peer to be in kademlia")
-		}
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	if !found {
+		t.Fatal("timeout waiting for peer connection to start")
 	}
 
 	// pivotDepth is the advertised depth of the pivot node we expect in the outgoing subPeersMsg
@@ -189,30 +184,32 @@ func testSubPeersMsg(t *testing.T, peerPO, peerDepth int) {
 
 	// for values MaxPeerPO < peerPO < MaxPO the pivot has no peers to offer to the control peer
 	// in this case, no peersMsg will be sent out, and we would run into a time out
+	if len(expBzzAddrs) == 0 {
+		if err != nil {
+			if err.Error() != "exchange #1 \"trigger subPeersMsg and expect peersMsg\": timed out" {
+				t.Fatalf("expected timeout, got %v", err)
+			}
+			return
+		}
+		t.Fatalf("expected timeout, got no error")
+	}
+
 	if err != nil {
-		if len(expBzzAddrs) > 0 {
-			t.Fatal(err)
-		} else if err.Error() != "exchange #1 \"trigger subPeersMsg and expect peersMsg\": timed out" {
-			t.Fatalf("expected timeout, got %v", err)
-		}
-	} else {
-		if len(expBzzAddrs) == 0 {
-			t.Fatalf("expected timeout, got no error")
-		}
+		t.Fatal(err)
 	}
 }
 
 // as we are not creating a real node via the protocol,
 // we need to create the discovery peer objects for the additional kademlia
 // nodes manually
-func newDiscPeer(addr []byte) *Peer {
+func newDiscPeer(addr pot.Address) *Peer {
 	pKey, err := ecdsa.GenerateKey(crypto.S256(), rand.Reader)
 	if err != nil {
 		panic(err.Error())
 	}
 	pubKey := pKey.PublicKey
 	nod := enode.NewV4(&pubKey, net.IPv4(127, 0, 0, 1), 0, 0)
-	bzzAddr := &BzzAddr{OAddr: addr, UAddr: []byte(nod.String())}
+	bzzAddr := &BzzAddr{OAddr: addr[:], UAddr: []byte(nod.String())}
 	id := nod.ID()
 	p2pPeer := p2p.NewPeer(id, id.String(), nil)
 	return NewPeer(&BzzPeer{

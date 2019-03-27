@@ -164,8 +164,8 @@ func (msg subPeersMsg) String() string {
 // otherwise this depth is just recorded on the peer, so that
 // subsequent new connections are sent iff they fall within the radius
 func (d *Peer) handleSubPeersMsg(msg *subPeersMsg) error {
-	// only do this once
 	d.setDepth(msg.Depth)
+	// only send peers after the initial subPeersMsg
 	if !d.sentPeers {
 		var peers []*BzzAddr
 		// iterate connection in ascending order of disctance from the remote address
