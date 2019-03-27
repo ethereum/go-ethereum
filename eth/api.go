@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
@@ -70,7 +69,7 @@ func (api *PublicEthereumAPI) Hashrate() hexutil.Uint64 {
 // ChainId is the EIP-155 replay-protection chain id for the current ethereum chain config.
 func (api *PublicEthereumAPI) ChainId() hexutil.Uint64 {
 	chainID := new(big.Int)
-	if config := api.e.chainConfig; config.IsEIP155(api.e.blockchain.CurrentBlock().Number()) {
+	if config := api.e.blockchain.Config(); config.IsEIP155(api.e.blockchain.CurrentBlock().Number()) {
 		chainID = config.ChainID
 	}
 	return (hexutil.Uint64)(chainID.Uint64())
@@ -288,14 +287,13 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 // PrivateDebugAPI is the collection of Ethereum full node APIs exposed over
 // the private debugging endpoint.
 type PrivateDebugAPI struct {
-	config *params.ChainConfig
-	eth    *Ethereum
+	eth *Ethereum
 }
 
 // NewPrivateDebugAPI creates a new API definition for the full node-related
 // private debug methods of the Ethereum service.
-func NewPrivateDebugAPI(config *params.ChainConfig, eth *Ethereum) *PrivateDebugAPI {
-	return &PrivateDebugAPI{config: config, eth: eth}
+func NewPrivateDebugAPI(eth *Ethereum) *PrivateDebugAPI {
+	return &PrivateDebugAPI{eth: eth}
 }
 
 // Preimage is a debug API function that returns the preimage for a sha3 hash, if known.

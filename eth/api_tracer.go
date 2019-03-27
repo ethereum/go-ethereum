@@ -201,7 +201,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 
 			// Fetch and execute the next block trace tasks
 			for task := range tasks {
-				signer := types.MakeSigner(api.config, task.block.Number())
+				signer := types.MakeSigner(api.eth.blockchain.Config(), task.block.Number())
 
 				// Trace all the transactions contained within
 				for i, tx := range task.block.Transactions() {
@@ -295,7 +295,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				break
 			}
 			// Finalize the state so any modifications are written to the trie
-			root, err := statedb.Commit(api.eth.chainConfig.IsEIP158(block.Number()))
+			root, err := statedb.Commit(api.eth.blockchain.Config().IsEIP158(block.Number()))
 			if err != nil {
 				failed = err
 				break
@@ -460,7 +460,7 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 	}
 	// Execute all the transaction contained within the block concurrently
 	var (
-		signer = types.MakeSigner(api.config, block.Number())
+		signer = types.MakeSigner(api.eth.blockchain.Config(), block.Number())
 
 		txs     = block.Transactions()
 		results = make([]*txTraceResult, len(txs))
@@ -501,7 +501,7 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 		msg, _ := tx.AsMessage(signer)
 		vmctx := core.NewEVMContext(msg, block.Header(), api.eth.blockchain, nil)
 
-		vmenv := vm.NewEVM(vmctx, statedb, api.config, vm.Config{})
+		vmenv := vm.NewEVM(vmctx, statedb, api.eth.blockchain.Config(), vm.Config{})
 		if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
 			failed = err
 			break
@@ -561,7 +561,7 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 
 	// Execute transaction, either tracing all or just the requested one
 	var (
-		signer = types.MakeSigner(api.config, block.Number())
+		signer = types.MakeSigner(api.eth.blockchain.Config(), block.Number())
 		dumps  []string
 	)
 	for i, tx := range block.Transactions() {
@@ -595,7 +595,7 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 			}
 		}
 		// Execute the transaction and flush any traces to disk
-		vmenv := vm.NewEVM(vmctx, statedb, api.config, vmConf)
+		vmenv := vm.NewEVM(vmctx, statedb, api.eth.blockchain.Config(), vmConf)
 		_, _, _, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
 		if writer != nil {
 			writer.Flush()
@@ -756,7 +756,7 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 		tracer = vm.NewStructLogger(config.LogConfig)
 	}
 	// Run the transaction with tracing enabled.
-	vmenv := vm.NewEVM(vmctx, statedb, api.config, vm.Config{Debug: true, Tracer: tracer})
+	vmenv := vm.NewEVM(vmctx, statedb, api.eth.blockchain.Config(), vm.Config{Debug: true, Tracer: tracer})
 
 	ret, gas, failed, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()))
 	if err != nil {
@@ -796,7 +796,7 @@ func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, ree
 		return nil, vm.Context{}, nil, err
 	}
 	// Recompute transactions up to the target index.
-	signer := types.MakeSigner(api.config, block.Number())
+	signer := types.MakeSigner(api.eth.blockchain.Config(), block.Number())
 
 	for idx, tx := range block.Transactions() {
 		// Assemble the transaction call message and return if the requested offset
@@ -806,7 +806,7 @@ func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, ree
 			return msg, context, statedb, nil
 		}
 		// Not yet the searched for transaction, execute on top of the current state
-		vmenv := vm.NewEVM(context, statedb, api.config, vm.Config{})
+		vmenv := vm.NewEVM(context, statedb, api.eth.blockchain.Config(), vm.Config{})
 		if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 			return nil, vm.Context{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
