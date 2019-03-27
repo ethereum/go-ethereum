@@ -30,8 +30,8 @@ const (
 	nsIpfs  = 0xe3
 	nsSwarm = 0xe4
 
-	swarmTypecode = 0xfa //swarm manifest, see https://github.com/multiformats/multicodec/blob/master/table.csv
-	swarmHashtype = 0x1b // BMT, see https://github.com/multiformats/multicodec/blob/master/table.csv
+	swarmTypecode = 0xfa // swarm manifest, see https://github.com/multiformats/multicodec/blob/master/table.csv
+	swarmHashtype = 0x1b // keccak256, see https://github.com/multiformats/multicodec/blob/master/table.csv
 
 	hashLength = 32
 )
