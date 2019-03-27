@@ -29,7 +29,7 @@ func TestGetM1M2FromCheckpointHeader(t *testing.T) {
 	}
 	testMoveM2 := []uint64{0,0,0,1,1,1,2,2,2,0,0,0,1,1,1,2,2,2}
 	//try from block 3410001 to 3410018
-	for i := uint64(3410001); i <= 3410018; i++ {
+	for i := uint64(3464001); i <= 3464018; i++ {
 		currentNumber := int64(i)
 		currentHeader := &types.Header{
 			Number: big.NewInt(currentNumber),
@@ -42,8 +42,8 @@ func TestGetM1M2FromCheckpointHeader(t *testing.T) {
 		for _, k := range masternodes {
 			fmt.Printf("m1: %v - m2: %v\n", k.Str(), m1m2[k].Str())
 		}
-		if moveM2 != testMoveM2[i-3410001] {
-			t.Error("wrong moveM2", "currentNumber", currentNumber, "want", testMoveM2, "have", moveM2)
+		if moveM2 != testMoveM2[i-3464001] {
+			t.Error("wrong moveM2", "currentNumber", currentNumber, "want", testMoveM2[i-3464001], "have", moveM2)
 		}
 	}
 }
