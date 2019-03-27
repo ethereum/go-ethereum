@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/swarm/state"
@@ -146,7 +145,6 @@ func TestHiveStatePersistance(t *testing.T) {
 	for i := 0; i < peersCount; i++ {
 		raddr := RandomAddr()
 		h1.Register(raddr)
-		log.Trace("add", "addr", raddr.String())
 		peers[raddr.String()] = true
 	}
 	if err = h1.Stop(); err != nil {
@@ -163,7 +161,6 @@ func TestHiveStatePersistance(t *testing.T) {
 
 	i := 0
 	h2.Kademlia.EachAddr(nil, 256, func(addr *BzzAddr, po int) bool {
-		log.Trace("check", "addr", addr.String())
 		delete(peers, addr.String())
 		i++
 		return true
