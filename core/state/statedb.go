@@ -237,6 +237,16 @@ func (self *StateDB) GetNonce(addr common.Address) uint64 {
 	return 0
 }
 
+// TxIndex returns the current transaction index set by Prepare.
+func (self *StateDB) TxIndex() int {
+	return self.txIndex
+}
+
+// BlockHash returns the current block hash set by Prepare.
+func (self *StateDB) BlockHash() common.Hash {
+	return self.bhash
+}
+
 func (self *StateDB) GetCode(addr common.Address) []byte {
 	stateObject := self.getStateObject(addr)
 	if stateObject != nil {

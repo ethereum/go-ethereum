@@ -566,6 +566,11 @@ func (w *worker) resultLoop() {
 				logs     []*types.Log
 			)
 			for i, receipt := range task.receipts {
+				// add block location fields
+				receipt.BlockHash = hash
+				receipt.BlockNumber = block.Number()
+				receipt.TransactionIndex = uint(i)
+
 				receipts[i] = new(types.Receipt)
 				*receipts[i] = *receipt
 				// Update the block hash in all logs since it is now available and not when the
