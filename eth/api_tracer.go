@@ -295,7 +295,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				break
 			}
 			// Finalize the state so any modifications are written to the trie
-			root, err := statedb.Commit(true)
+			root, err := statedb.Commit(api.eth.chainConfig.IsEIP158(block.Number()))
 			if err != nil {
 				failed = err
 				break
