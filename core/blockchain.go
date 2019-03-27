@@ -1238,43 +1238,50 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			return it.index, events, coalescedLogs, err
 		}
 		// Process block using the parent state as reference point.
-		t0 := time.Now()
+		substart := time.Now()
 		receipts, logs, usedGas, err := bc.processor.Process(block, state, bc.vmConfig)
-		t1 := time.Now()
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return it.index, events, coalescedLogs, err
 		}
+		// Update the metrics touched during block processing
+		accountReadTimer.Update(state.AccountReads)     // Account reads are complete, we can mark them
+		storageReadTimer.Update(state.StorageReads)     // Storage reads are complete, we can mark them
+		accountUpdateTimer.Update(state.AccountUpdates) // Account updates are complete, we can mark them
+		storageUpdateTimer.Update(state.StorageUpdates) // Storage updates are complete, we can mark them
+
+		triehash := state.AccountHashes + state.StorageHashes // Save to not double count in validation
+		trieproc := state.AccountReads + state.AccountUpdates
+		trieproc += state.StorageReads + state.StorageUpdates
+
+		blockExecutionTimer.Update(time.Since(substart) - trieproc - triehash)
+
 		// Validate the state using the default validator
+		substart = time.Now()
 		if err := bc.Validator().ValidateState(block, state, receipts, usedGas); err != nil {
 			bc.reportBlock(block, receipts, err)
 			return it.index, events, coalescedLogs, err
 		}
-		t2 := time.Now()
 		proctime := time.Since(start)
 
+		// Update the metrics touched during block validation
+		accountHashTimer.Update(state.AccountHashes) // Account hashes are complete, we can mark them
+		storageHashTimer.Update(state.StorageHashes) // Storage hashes are complete, we can mark them
+
+		blockValidationTimer.Update(time.Since(substart) - (state.AccountHashes + state.StorageHashes - triehash))
+
 		// Write the block to the chain and get the status.
+		substart = time.Now()
 		status, err := bc.writeBlockWithState(block, receipts, state)
-		t3 := time.Now()
 		if err != nil {
 			return it.index, events, coalescedLogs, err
 		}
+		// Update the metrics touched during block commit
+		accountCommitTimer.Update(state.AccountCommits) // Account commits are complete, we can mark them
+		storageCommitTimer.Update(state.StorageCommits) // Storage commits are complete, we can mark them
 
-		// Update the metrics subsystem with all the measurements
-		accountReadTimer.Update(state.AccountReads)
-		accountHashTimer.Update(state.AccountHashes)
-		accountUpdateTimer.Update(state.AccountUpdates)
-		accountCommitTimer.Update(state.AccountCommits)
-
-		storageReadTimer.Update(state.StorageReads)
-		storageHashTimer.Update(state.StorageHashes)
-		storageUpdateTimer.Update(state.StorageUpdates)
-		storageCommitTimer.Update(state.StorageCommits)
-
+		blockWriteTimer.Update(time.Since(substart) - state.AccountCommits - state.StorageCommits)
 		blockInsertTimer.UpdateSince(start)
-		blockExecutionTimer.Update(t1.Sub(t0) - state.AccountReads - state.AccountUpdates - state.StorageReads - state.StorageUpdates)
-		blockValidationTimer.Update(t2.Sub(t1) - state.AccountHashes - state.StorageHashes)
-		blockWriteTimer.Update(t3.Sub(t2) - state.AccountCommits - state.StorageCommits)
 
 		switch status {
 		case CanonStatTy:
