@@ -20,7 +20,10 @@ so they can be found
 */
 package lookup
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 const maxuint64 = ^uint64(0)
 
@@ -43,7 +46,7 @@ type Algorithm func(ctx context.Context, now uint64, hint Epoch, read ReadFunc) 
 // read() will be called on each lookup attempt
 // Returns an error only if read() returns an error
 // Returns nil if an update was not found
-var Lookup Algorithm = FluzCapacitorAlgorithm
+var Lookup Algorithm = LongEarthAlgorithm
 
 // ReadFunc is a handler called by Lookup each time it attempts to find a value
 // It should return <nil> if a value is not found
@@ -179,5 +182,134 @@ func FluzCapacitorAlgorithm(ctx context.Context, now uint64, hint Epoch, read Re
 			return nil, nil
 		}
 		t = base - 1
+	}
+
+}
+
+type StepFunc func(ctx context.Context, t uint64, hint Epoch) interface{}
+
+func LongEarthAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFunc) (interface{}, error) {
+
+	errc := make(chan error)
+
+	var step StepFunc
+	step = func(ctxS context.Context, t uint64, hint Epoch) interface{} {
+		var valueA, valueB, valueR interface{}
+
+		ctxR, cancelR := context.WithCancel(ctxS)
+		ctxA, cancelA := context.WithCancel(ctxS)
+		ctxB, cancelB := context.WithCancel(ctxS)
+
+		epoch := GetNextEpoch(hint, t)
+
+		lookAhead := func() {
+			valueA = step(ctxA, t, epoch)
+			if valueA != nil {
+				cancelB()
+				cancelR()
+			}
+		}
+
+		lookBack := func() {
+			var err error
+			if epoch.Base() == hint.Base() {
+				// we have reached the hint itself
+				if hint == worstHint {
+					valueB = nil
+					return
+				}
+				// check it out
+				valueB, err = read(ctxB, hint, now)
+				if valueB != nil || err == context.Canceled {
+					return
+				}
+				if err != nil {
+					errc <- err
+					return
+				}
+				// bad hint.
+				valueB = step(ctxB, hint.Base(), worstHint)
+				return
+			}
+			base := epoch.Base()
+			if base == 0 {
+				return
+			}
+			valueB = step(ctxB, base-1, hint)
+		}
+
+		go func() {
+			defer cancelR()
+			var err error
+			valueR, err = read(ctxR, epoch, now)
+			if valueR == nil {
+				cancelA()
+			} else {
+				cancelB()
+			}
+			if err != nil && err != context.Canceled {
+				errc <- err
+			}
+		}()
+
+		go func() {
+			defer cancelA()
+
+			if epoch.Level == LowestLevel || epoch.Equals(hint) {
+				return
+			}
+
+			select {
+			case <-time.After(250 * time.Millisecond):
+				lookAhead()
+			case <-ctxR.Done():
+				if valueR != nil {
+					lookAhead()
+				}
+			case <-ctxA.Done():
+			}
+		}()
+
+		go func() {
+			defer cancelB()
+
+			select {
+			case <-time.After(250 * time.Millisecond):
+				lookBack()
+			case <-ctxR.Done():
+				if valueR == nil {
+					lookBack()
+				}
+			case <-ctxB.Done():
+			}
+		}()
+
+		<-ctxA.Done()
+		if valueA != nil {
+			return valueA
+		}
+
+		<-ctxR.Done()
+		if valueR != nil {
+			return valueR
+		}
+		<-ctxB.Done()
+		return valueB
+	}
+
+	var value interface{}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go func() {
+		value = step(ctx, now, hint)
+		cancel()
+	}()
+
+	select {
+	case <-ctx.Done():
+		return value, nil
+	case err := <-errc:
+		return nil, err
 	}
 }

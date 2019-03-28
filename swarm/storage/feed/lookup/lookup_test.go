@@ -20,7 +20,9 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
@@ -29,6 +31,10 @@ import (
 type Data struct {
 	Payload uint64
 	Time    uint64
+}
+
+func (d *Data) String() string {
+	return fmt.Sprintf("%d-%d", d.Payload, d.Time)
 }
 
 type Store map[lookup.EpochID]*Data
@@ -50,15 +56,21 @@ const Day = 60 * 60 * 24
 const Year = Day * 365
 const Month = Day * 30
 
-func makeReadFunc(store Store, counter *int) lookup.ReadFunc {
+func makeReadFunc(store Store, counter *int32) lookup.ReadFunc {
 	return func(ctx context.Context, epoch lookup.Epoch, now uint64) (interface{}, error) {
-		*counter++
+		atomic.AddInt32(counter, 1)
+		select {
+		case <-time.After(1000 * time.Millisecond):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 		data := store[epoch.ID()]
 		var valueStr string
 		if data != nil {
 			valueStr = fmt.Sprintf("%d", data.Payload)
 		}
 		log.Debug("Read: %d-%d, value='%s'\n", epoch.Base(), epoch.Level, valueStr)
+		//fmt.Printf("Read: %d-%d, value='%s'\n", epoch.Base(), epoch.Level, valueStr)
 		if data != nil && data.Time <= now {
 			return data, nil
 		}
@@ -67,9 +79,8 @@ func makeReadFunc(store Store, counter *int) lookup.ReadFunc {
 }
 
 func TestLookup(t *testing.T) {
-
 	store := make(Store)
-	readCount := 0
+	var readCount int32 = 0
 	readFunc := makeReadFunc(store, &readCount)
 
 	// write an update every month for 12 months 3 years ago and then silence for two years
@@ -93,6 +104,7 @@ func TestLookup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fmt.Printf("readcount=%d\n", readCount)
 
 	readCountWithoutHint := readCount
 
@@ -142,7 +154,7 @@ func TestLookup(t *testing.T) {
 func TestOneUpdateAt0(t *testing.T) {
 
 	store := make(Store)
-	readCount := 0
+	var readCount int32 = 0
 
 	readFunc := makeReadFunc(store, &readCount)
 	now := uint64(1533903729)
@@ -167,7 +179,7 @@ func TestOneUpdateAt0(t *testing.T) {
 func TestBadHint(t *testing.T) {
 
 	store := make(Store)
-	readCount := 0
+	var readCount int32 = 0
 
 	readFunc := makeReadFunc(store, &readCount)
 	now := uint64(1533903729)
@@ -299,7 +311,7 @@ func TestContextCancellation(t *testing.T) {
 func TestLookupFail(t *testing.T) {
 
 	store := make(Store)
-	readCount := 0
+	var readCount int32 = 0
 
 	readFunc := makeReadFunc(store, &readCount)
 	now := uint64(1533903729)
@@ -324,7 +336,7 @@ func TestLookupFail(t *testing.T) {
 func TestHighFreqUpdates(t *testing.T) {
 
 	store := make(Store)
-	readCount := 0
+	var readCount int32 = 0
 
 	readFunc := makeReadFunc(store, &readCount)
 	now := uint64(1533903729)
@@ -388,7 +400,7 @@ func TestHighFreqUpdates(t *testing.T) {
 func TestSparseUpdates(t *testing.T) {
 
 	store := make(Store)
-	readCount := 0
+	var readCount int32 = 0
 	readFunc := makeReadFunc(store, &readCount)
 
 	// write an update every 5 years 3 times starting in Jan 1st 1970 and then silence
@@ -512,4 +524,15 @@ func CookGetNextLevelTests(t *testing.T) {
 		st = fmt.Sprintf("%s,testG{e:lookup.Epoch{Time:%d, Level:%d}, n:%d, x:%d}", st, last.Time, last.Level, now, expected)
 	}
 	fmt.Println(st)
+}
+
+func TestTest(t *testing.T) {
+	hint := lookup.Epoch{
+		Time:  20,
+		Level: 2,
+	}
+
+	e := lookup.GetNextEpoch(hint, 21)
+
+	fmt.Println(e)
 }
