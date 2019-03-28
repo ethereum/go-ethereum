@@ -188,6 +188,7 @@ func NewType(t string, components []ArgumentMarshaling) (typ Type, err error) {
 			fields = append(fields, reflect.StructField{
 				Name: ToCamelCase(c.Name), // reflect.StructOf will panic for any exported field.
 				Type: cType.Type,
+				Tag:  reflect.StructTag("json:\"" + c.Name + "\""),
 			})
 			elems = append(elems, &cType)
 			names = append(names, c.Name)
