@@ -17,8 +17,10 @@
 package trie
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/math"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
@@ -44,6 +46,23 @@ type request struct {
 	deps    int        // Number of dependencies before allowed to commit this node
 
 	callback LeafCallback // Callback to invoke if a leaf node it reached on this branch
+}
+
+// priority returns the request priority in the trie scheduler.
+func (r *request) priority() int64 {
+	// Priority is meant to sort requests according to their depth and
+	// lexigraphic ordering within LevelDB, so that they can be retrieved
+	// from peers more efficiently and also stored more efficiently.
+	prefix := binary.BigEndian.Uint64(r.hash[:8])
+	// The prefix is inverted so that keys with a lower lexigraphic ordering
+	// have a larger number than keys with a higher lexigraphic ordering.
+	invertedPrefix := uint64(math.MaxUint64) - prefix
+	// Priority format: depth[:8] || invertedPrefix[:7]
+	// Note: the maximum number of nodes from the account state trie root to any
+	// account storage trie leaf is 128, which fits into a signed byte
+	// (with zero indexing)
+	priority := uint64(r.depth) << 56 | invertedPrefix >> 8
+	return int64(priority)
 }
 
 // SyncResult is a simple list to return missing nodes along with their request
@@ -242,7 +261,7 @@ func (s *Sync) schedule(req *request) {
 		return
 	}
 	// Schedule the request for future retrieval
-	s.queue.Push(req.hash, int64(req.depth))
+	s.queue.Push(req.hash, req.priority())
 	s.requests[req.hash] = req
 }
 
