@@ -445,6 +445,11 @@ web3._extend({
 			params: 2,
 			inputFormatter:[null, null],
 		}),
+		new web3._extend.Method({
+			name: 'freezeClient',
+			call: 'debug_freezeClient',
+			params: 1,
+		}),
 	],
 	properties: []
 });
@@ -772,6 +777,16 @@ web3._extend({
 			call: 'les_getCheckpoint',
 			params: 1
 		}),
+		new web3._extend.Method({
+			name: 'clientInfo',
+			call: 'les_clientInfo',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'setClientParams',
+			call: 'les_setClientParams',
+			params: 3
+		}),
 	],
 	properties: 
 	[
@@ -782,6 +797,10 @@ web3._extend({
 		new web3._extend.Property({
 			name: 'checkpointContractAddress',
 			getter: 'les_getCheckpointContractAddress'
+		}),
+		new web3._extend.Property({
+			name: 'serverInfo',
+			getter: 'les_serverInfo'
 		}),
 	]
 });
