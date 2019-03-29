@@ -246,6 +246,56 @@ func TestBadHintNextToUpdate(t *testing.T) {
 	}
 }
 
+func TestContextCancellation(t *testing.T) {
+
+	readFunc := func(ctx context.Context, epoch lookup.Epoch, now uint64) (interface{}, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	errc := make(chan error)
+
+	go func() {
+		_, err := lookup.Lookup(ctx, 1200000000, lookup.NoClue, readFunc)
+		errc <- err
+	}()
+
+	cancel()
+
+	if err := <-errc; err != context.Canceled {
+		t.Fatalf("Expected lookup to return a context Cancelled error, got %v", err)
+	}
+
+	// text context cancellation during hint lookup:
+	ctx, cancel = context.WithCancel(context.Background())
+	errc = make(chan error)
+	someHint := lookup.Epoch{
+		Level: 25,
+		Time:  300,
+	}
+
+	readFunc = func(ctx context.Context, epoch lookup.Epoch, now uint64) (interface{}, error) {
+		if epoch == someHint {
+			go cancel()
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}
+		return nil, nil
+	}
+
+	go func() {
+		_, err := lookup.Lookup(ctx, 301, someHint, readFunc)
+		errc <- err
+	}()
+
+	if err := <-errc; err != context.Canceled {
+		t.Fatalf("Expected lookup to return a context Cancelled error, got %v", err)
+	}
+
+}
+
 func TestLookupFail(t *testing.T) {
 
 	store := make(Store)
