@@ -196,6 +196,56 @@ func TestBadHint(t *testing.T) {
 	}
 }
 
+// Tests whether the update is found when the bad hint is exactly below the last update
+func TestBadHintNextToUpdate(t *testing.T) {
+	store := make(Store)
+	readCount := 0
+
+	readFunc := makeReadFunc(store, &readCount)
+	now := uint64(1533903729)
+	var last *Data
+
+	/*  the following loop places updates in the following epochs:
+	Update# Time       Base       Level
+	0       1200000000 1174405120 25
+	1       1200000001 1191182336 24
+	2       1200000002 1199570944 23
+	3       1200000003 1199570944 22
+	4       1200000004 1199570944 21
+
+	The situation we want to trigger is to give a bad hint exactly
+	in T=1200000005, B=1199570944 and L=20, which is where the next
+	update would have logically been.
+	This affects only when the bad hint's base == previous update's base,
+	in this case 1199570944
+
+	*/
+	var epoch lookup.Epoch
+	for i := uint64(0); i < 5; i++ {
+		data := Data{
+			Payload: i,
+			Time:    0,
+		}
+		last = &data
+		epoch = update(store, epoch, 1200000000+i, &data)
+	}
+
+	// come up with some evil hint:
+	// put it where the next update would have been
+	badHint := lookup.Epoch{
+		Level: 20,
+		Time:  1200000005,
+	}
+
+	value, err := lookup.Lookup(context.Background(), now, badHint, readFunc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value != last {
+		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", last, value)
+	}
+}
+
 func TestLookupFail(t *testing.T) {
 
 	store := make(Store)
