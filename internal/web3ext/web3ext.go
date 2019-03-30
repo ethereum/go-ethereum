@@ -234,7 +234,7 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'testSignCliqueBlock',
 			call: 'debug_testSignCliqueBlock',
-			params: 2, 
+			params: 2,
 			inputFormatters: [web3._extend.formatters.inputAddressFormatter, null],
 		}),
 		new web3._extend.Method({
@@ -251,6 +251,12 @@ web3._extend({
 			name: 'dumpBlock',
 			call: 'debug_dumpBlock',
 			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'listAccounts',
+			call: 'debug_listAccounts',
+			params: 3,
+			inputFormatter: [null, null, web3._extend.formatters.inputDefaultBlockNumberFormatter],
 		}),
 		new web3._extend.Method({
 			name: 'chaindbProperty',

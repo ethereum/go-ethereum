@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -282,6 +283,50 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 		return state.Dump{}, err
 	}
 	return stateDb.RawDump(), nil
+}
+
+// ListAccounts retrieves accounts of the database at a given block.
+func (api *PublicDebugAPI) ListAccounts(count uint64, offset *common.Address, blockNr *rpc.BlockNumber) ([]common.Address, error) {
+	var block *types.Block = nil
+	var tr state.Trie
+
+	if blockNr == nil || *blockNr == rpc.LatestBlockNumber {
+		block = api.eth.blockchain.CurrentBlock()
+	} else if *blockNr != rpc.PendingBlockNumber {
+		block = api.eth.blockchain.GetBlockByNumber(uint64(*blockNr))
+	}
+	if block != nil {
+		stateDb, err := api.eth.BlockChain().StateAt(block.Root())
+		if err != nil {
+			return nil, err
+		}
+		tr, err = stateDb.Database().OpenTrie(block.Root())
+		if err != nil {
+			return nil, err
+		}
+	} else if *blockNr != rpc.PendingBlockNumber {
+		return nil, fmt.Errorf("block #%d not found", *blockNr)
+	} else {
+		// Get the pending state
+		_, stateDb := api.eth.miner.Pending()
+		tr = stateDb.GetTrie()
+	}
+
+	var accounts []common.Address
+	var it *trie.Iterator
+
+	if offset != nil && *offset != (common.Address{}) {
+		it = trie.NewIterator(tr.NodeIterator(crypto.Keccak256(offset[:])))
+		it.Next()
+	} else {
+		it = trie.NewIterator(tr.NodeIterator(nil))
+	}
+
+	for ; count > 0 && it.Next(); count-- {
+		addr := tr.GetKey(it.Key)
+		accounts = append(accounts, common.BytesToAddress(addr))
+	}
+	return accounts, nil
 }
 
 // PrivateDebugAPI is the collection of Ethereum full node APIs exposed over
