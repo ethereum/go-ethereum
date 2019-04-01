@@ -18,9 +18,12 @@ package network
 
 import (
 	"crypto/ecdsa"
-	"crypto/rand"
+	crand "crypto/rand"
+	"encoding/binary"
 	"fmt"
+	"math/rand"
 	"net"
+	"sort"
 	"testing"
 	"time"
 
@@ -39,7 +42,7 @@ import (
  */
 func TestSubPeersMsg(t *testing.T) {
 	params := NewHiveParams()
-	s, pp, err := newHiveTester(t, params, 1, nil)
+	s, pp, err := newHiveTester(params, 1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,8 +73,9 @@ func TestSubPeersMsg(t *testing.T) {
 }
 
 const (
-	maxPO     = 8 // PO of pivot and control; chosen to test enough cases but not run too long
-	maxPeerPO = 6 // pivot has no peers closer than this to the control peer
+	maxPO         = 8 // PO of pivot and control; chosen to test enough cases but not run too long
+	maxPeerPO     = 6 // pivot has no peers closer than this to the control peer
+	maxPeersPerPO = 3
 )
 
 // TestInitialPeersMsg tests if peersMsg response to incoming subPeersMsg is correct
@@ -93,6 +97,11 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	defer func(orig func([]*BzzAddr) []*BzzAddr) {
+		sortPeers = orig
+	}(sortPeers)
+	sortPeers = testSortPeers
 	pivotAddr := pot.NewAddressFromBytes(PrivateKeyToBzzKey(prvkey))
 	// generate control peers address at peerPO wrt pivot
 	peerAddr := pot.RandomAddressAt(pivotAddr, peerPO)
@@ -102,10 +111,17 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 
 	// expected addrs in peersMsg response
 	var expBzzAddrs []*BzzAddr
-	connect := func(a pot.Address, po int) *BzzAddr {
-		peer := newDiscPeer(pot.RandomAddressAt(a, po))
-		hive.On(peer)
-		return peer.BzzAddr
+	connect := func(a pot.Address, po int) (addrs []*BzzAddr) {
+		n := rand.Intn(maxPeersPerPO)
+		for i := 0; i < n; i++ {
+			peer, err := newDiscPeer(pot.RandomAddressAt(a, po))
+			if err != nil {
+				t.Fatal(err)
+			}
+			hive.On(peer)
+			addrs = append(addrs, peer.BzzAddr)
+		}
+		return addrs
 	}
 	register := func(a pot.Address, po int) {
 		addr := pot.RandomAddressAt(a, po)
@@ -115,18 +131,26 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	// generate connected and just registered peers
 	for po := maxPeerPO; po >= 0; po-- {
 		// create a fake connected peer at po from peerAddr
-		on := connect(peerAddr, po)
+		ons := connect(peerAddr, po)
 		// create a fake registered address at po from peerAddr
 		register(peerAddr, po)
 		// we collect expected peer addresses only up till peerPO
 		if po < peerDepth {
 			continue
 		}
-		expBzzAddrs = append(expBzzAddrs, on)
+		expBzzAddrs = append(expBzzAddrs, ons...)
+	}
+
+	// add extra connections closer to pivot than control
+	for po := peerPO + 1; po < maxPO; po++ {
+		ons := connect(pivotAddr, po)
+		if peerDepth <= peerPO {
+			expBzzAddrs = append(expBzzAddrs, ons...)
+		}
 	}
 
 	// create a special bzzBaseTester in which we can associate `enode.ID` to the `bzzAddr` we created above
-	s, _, err := newBzzBaseTesterWithAddrs(t, prvkey, [][]byte{peerAddr[:]}, DiscoverySpec, hive.Run)
+	s, _, err := newBzzBaseTesterWithAddrs(prvkey, [][]byte{peerAddr[:]}, DiscoverySpec, hive.Run)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +199,7 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 			Expects: []p2ptest.Expect{
 				{
 					Code:    0,
-					Msg:     &peersMsg{Peers: expBzzAddrs},
+					Msg:     &peersMsg{Peers: testSortPeers(expBzzAddrs)},
 					Peer:    peerID,
 					Timeout: 100 * time.Millisecond,
 				},
@@ -199,13 +223,23 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	}
 }
 
+func testSortPeers(peers []*BzzAddr) []*BzzAddr {
+	comp := func(i, j int) bool {
+		vi := binary.BigEndian.Uint64(peers[i].OAddr)
+		vj := binary.BigEndian.Uint64(peers[j].OAddr)
+		return vi < vj
+	}
+	sort.Slice(peers, comp)
+	return peers
+}
+
 // as we are not creating a real node via the protocol,
 // we need to create the discovery peer objects for the additional kademlia
 // nodes manually
-func newDiscPeer(addr pot.Address) *Peer {
-	pKey, err := ecdsa.GenerateKey(crypto.S256(), rand.Reader)
+func newDiscPeer(addr pot.Address) (*Peer, error) {
+	pKey, err := ecdsa.GenerateKey(crypto.S256(), crand.Reader)
 	if err != nil {
-		panic(err.Error())
+		return nil, err
 	}
 	pubKey := pKey.PublicKey
 	nod := enode.NewV4(&pubKey, net.IPv4(127, 0, 0, 1), 0, 0)
@@ -215,7 +249,7 @@ func newDiscPeer(addr pot.Address) *Peer {
 	return NewPeer(&BzzPeer{
 		Peer:    protocols.NewPeer(p2pPeer, &dummyMsgRW{}, DiscoverySpec),
 		BzzAddr: bzzAddr,
-	}, nil)
+	}, nil), nil
 }
 
 type dummyMsgRW struct{}

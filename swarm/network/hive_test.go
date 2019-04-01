@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/state"
 )
 
-func newHiveTester(t *testing.T, params *HiveParams, n int, store state.Store) (*bzzTester, *Hive, error) {
+func newHiveTester(params *HiveParams, n int, store state.Store) (*bzzTester, *Hive, error) {
 	// setup
 	prvkey, err := crypto.GenerateKey()
 	if err != nil {
@@ -38,7 +38,7 @@ func newHiveTester(t *testing.T, params *HiveParams, n int, store state.Store) (
 	to := NewKademlia(addr, NewKadParams())
 	pp := NewHive(params, to, store) // hive
 
-	bt, err := newBzzBaseTester(t, n, prvkey, DiscoverySpec, pp.Run)
+	bt, err := newBzzBaseTester(n, prvkey, DiscoverySpec, pp.Run)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -49,7 +49,7 @@ func newHiveTester(t *testing.T, params *HiveParams, n int, store state.Store) (
 // and that the peer connection exists afterwards
 func TestRegisterAndConnect(t *testing.T) {
 	params := NewHiveParams()
-	s, pp, err := newHiveTester(t, params, 1, nil)
+	s, pp, err := newHiveTester(params, 1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

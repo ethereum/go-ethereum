@@ -73,17 +73,17 @@ func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id enode.ID) []p2ptest.Exchang
 	}
 }
 
-func newBzzBaseTester(t *testing.T, n int, prvkey *ecdsa.PrivateKey, spec *protocols.Spec, run func(*BzzPeer) error) (*bzzTester, error) {
+func newBzzBaseTester(n int, prvkey *ecdsa.PrivateKey, spec *protocols.Spec, run func(*BzzPeer) error) (*bzzTester, error) {
 	var addrs [][]byte
 	for i := 0; i < n; i++ {
 		addr := pot.RandomAddress()
 		addrs = append(addrs, addr[:])
 	}
-	pt, _, err := newBzzBaseTesterWithAddrs(t, prvkey, addrs, spec, run)
+	pt, _, err := newBzzBaseTesterWithAddrs(prvkey, addrs, spec, run)
 	return pt, err
 }
 
-func newBzzBaseTesterWithAddrs(t *testing.T, prvkey *ecdsa.PrivateKey, addrs [][]byte, spec *protocols.Spec, run func(*BzzPeer) error) (*bzzTester, [][]byte, error) {
+func newBzzBaseTesterWithAddrs(prvkey *ecdsa.PrivateKey, addrs [][]byte, spec *protocols.Spec, run func(*BzzPeer) error) (*bzzTester, [][]byte, error) {
 	n := len(addrs)
 	cs := make(map[enode.ID]chan bool)
 

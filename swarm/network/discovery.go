@@ -26,6 +26,8 @@ import (
 
 // discovery bzz extension for requesting and relaying node address records
 
+var sortPeers = noSortPeers
+
 // Peer wraps BzzPeer and embeds Kademlia overlay connectivity driver
 type Peer struct {
 	*BzzPeer
@@ -181,7 +183,7 @@ func (d *Peer) handleSubPeersMsg(msg *subPeersMsg) error {
 		})
 		// if useful  peers are found, send them over
 		if len(peers) > 0 {
-			go d.Send(context.TODO(), &peersMsg{Peers: peers})
+			go d.Send(context.TODO(), &peersMsg{Peers: sortPeers(peers)})
 		}
 	}
 	d.sentPeers = true
@@ -211,4 +213,8 @@ func (d *Peer) setDepth(depth uint8) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 	d.depth = depth
+}
+
+func noSortPeers(peers []*BzzAddr) []*BzzAddr {
+	return peers
 }
