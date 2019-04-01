@@ -465,8 +465,7 @@ import org.ethereum.geth.*;
 			// deploy deploys a new Ethereum contract, binding an instance of {{.Type}} to it.
 			public static {{.Type}} deploy(TransactOpts auth, EthereumClient client{{range .Constructor.Inputs}}, {{bindtype .Type}} {{.Name}}{{end}}) throws Exception {
 				Interfaces args = Geth.newInterfaces({{(len .Constructor.Inputs)}});
-				{{range $index, $element := .Constructor.Inputs}}
-                  args.set({{$index}}, Geth.new{{namedtype (bindtype .Type) .Type}}({{.Name}});
+				{{range $index, $element := .Constructor.Inputs}}Interface arg{{$index}} = Geth.newInterface();arg{{$index}}.set{{namedtype (bindtype .Type) .Type}}({{.Name}});args.set({{$index}},arg{{$index}});
 				{{end}}
 				return new {{.Type}}(Geth.deployContract(auth, ABI, Geth.decodeFromHex(BYTECODE), client, args));
 			}
