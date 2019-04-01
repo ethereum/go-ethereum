@@ -167,7 +167,7 @@ var (
 	}
 	ExitWhenSyncedFlag = cli.BoolFlag{
 		Name:  "exitwhensynced",
-		Usage: "Exists syncing after block synchronisation",
+		Usage: "Exits after block synchronisation completes",
 	}
 	ULCModeConfigFlag = cli.StringFlag{
 		Name:  "ulc.config",
