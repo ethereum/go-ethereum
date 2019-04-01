@@ -189,6 +189,9 @@ func bindBasicTypeGo(kind abi.Type) string {
 	}
 }
 
+// bindTypeGo converts solidity types to Go ones. Since there is no clear mapping
+// from all Solidity types to Go ones (e.g. uint17), those that cannot be exactly
+// mapped will use an upscaled type (e.g. BigDecimal).
 func bindTypeGo(kind abi.Type) string {
 	// todo(rjl493456442) tuple
 	switch kind.T {
@@ -251,6 +254,7 @@ func bindBasicTypeJava(kind abi.Type) string {
 func bindTypeJava(kind abi.Type) string {
 	switch kind.T {
 	case abi.ArrayTy, abi.SliceTy:
+		// Explicitly convert multidimensional types to predefined type in go side.
 		inner := bindTypeJava(*kind.Elem)
 		switch inner {
 		case "boolean":
