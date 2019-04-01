@@ -269,7 +269,7 @@ func lengthPrefixPointsTo(index int, output []byte) (start int, length int, err 
 	totalSize.Add(totalSize, bigOffsetEnd)
 	totalSize.Add(totalSize, lengthBig)
 	if totalSize.BitLen() > 63 {
-		return 0, 0, fmt.Errorf("abi length larger than int64: %v", totalSize)
+		return 0, 0, fmt.Errorf("abi: length larger than int64: %v", totalSize)
 	}
 
 	if totalSize.Cmp(outputLength) > 0 {
