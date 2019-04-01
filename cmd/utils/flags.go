@@ -349,6 +349,10 @@ var (
 		Usage: "Percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode)",
 		Value: 25,
 	}
+	CacheNoPrefetchFlag = cli.BoolFlag{
+		Name:  "cache.noprefetch",
+		Usage: "Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)",
+	}
 	// Miner settings
 	MiningEnabledFlag = cli.BoolFlag{
 		Name:  "mine",
@@ -1336,6 +1340,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
 	cfg.NoPruning = ctx.GlobalString(GCModeFlag.Name) == "archive"
+	cfg.NoPrefetch = ctx.GlobalBool(CacheNoPrefetchFlag.Name)
 
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheTrieFlag.Name) {
 		cfg.TrieCleanCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheTrieFlag.Name) / 100
@@ -1595,10 +1600,11 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
 	cache := &core.CacheConfig{
-		Disabled:       ctx.GlobalString(GCModeFlag.Name) == "archive",
-		TrieCleanLimit: eth.DefaultConfig.TrieCleanCache,
-		TrieDirtyLimit: eth.DefaultConfig.TrieDirtyCache,
-		TrieTimeLimit:  eth.DefaultConfig.TrieTimeout,
+		TrieCleanLimit:      eth.DefaultConfig.TrieCleanCache,
+		TrieCleanNoPrefetch: ctx.GlobalBool(CacheNoPrefetchFlag.Name),
+		TrieDirtyLimit:      eth.DefaultConfig.TrieDirtyCache,
+		TrieDirtyDisabled:   ctx.GlobalString(GCModeFlag.Name) == "archive",
+		TrieTimeLimit:       eth.DefaultConfig.TrieTimeout,
 	}
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheTrieFlag.Name) {
 		cache.TrieCleanLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheTrieFlag.Name) / 100

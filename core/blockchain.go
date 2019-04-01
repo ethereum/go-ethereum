@@ -90,10 +90,11 @@ const (
 // CacheConfig contains the configuration values for the trie caching/pruning
 // that's resident in a blockchain.
 type CacheConfig struct {
-	Disabled       bool          // Whether to disable trie write caching (archive node)
-	TrieCleanLimit int           // Memory allowance (MB) to use for caching trie nodes in memory
-	TrieDirtyLimit int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
-	TrieTimeLimit  time.Duration // Time limit after which to flush the current in-memory trie to disk
+	TrieCleanLimit      int           // Memory allowance (MB) to use for caching trie nodes in memory
+	TrieCleanNoPrefetch bool          // Whether to disable heuristic state prefetching for followup blocks
+	TrieDirtyLimit      int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
+	TrieDirtyDisabled   bool          // Whether to disable trie write caching and GC altogether (archive node)
+	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -708,7 +709,7 @@ func (bc *BlockChain) Stop() {
 	//  - HEAD:     So we don't need to reprocess any blocks in the general case
 	//  - HEAD-1:   So we don't do large reorgs if our HEAD becomes an uncle
 	//  - HEAD-127: So we have a hard limit on the number of blocks reexecuted
-	if !bc.cacheConfig.Disabled {
+	if !bc.cacheConfig.TrieDirtyDisabled {
 		triedb := bc.stateCache.TrieDB()
 
 		for _, offset := range []uint64{0, 1, triesInMemory - 1} {
@@ -968,7 +969,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	triedb := bc.stateCache.TrieDB()
 
 	// If we're running an archive node, always flush
-	if bc.cacheConfig.Disabled {
+	if bc.cacheConfig.TrieDirtyDisabled {
 		if err := triedb.Commit(root, false); err != nil {
 			return NonStatTy, err
 		}
@@ -1232,16 +1233,18 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		// transactions and probabilistically some of the account/storage trie nodes.
 		var followupInterrupt uint32
 
-		if followup, err := it.peek(); followup != nil && err == nil {
-			go func(start time.Time) {
-				throwaway, _ := state.New(parent.Root, bc.stateCache)
-				bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)
+		if !bc.cacheConfig.TrieCleanNoPrefetch {
+			if followup, err := it.peek(); followup != nil && err == nil {
+				go func(start time.Time) {
+					throwaway, _ := state.New(parent.Root, bc.stateCache)
+					bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)
 
-				blockPrefetchExecuteTimer.Update(time.Since(start))
-				if atomic.LoadUint32(&followupInterrupt) == 1 {
-					blockPrefetchInterruptMeter.Mark(1)
-				}
-			}(time.Now())
+					blockPrefetchExecuteTimer.Update(time.Since(start))
+					if atomic.LoadUint32(&followupInterrupt) == 1 {
+						blockPrefetchInterruptMeter.Mark(1)
+					}
+				}(time.Now())
+			}
 		}
 		// Process block using the parent state as reference point
 		substart := time.Now()
