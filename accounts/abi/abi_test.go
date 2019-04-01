@@ -745,3 +745,30 @@ func TestABI_MethodById(t *testing.T) {
 		t.Errorf("Expected error, nil is short to decode data")
 	}
 }
+
+func TestABI_EventById(t *testing.T) {
+	const abiJSON = `[
+		{"type":"event","name":"received","anonymous":false,"inputs":[
+			{"indexed":false,"name":"sender","type":"address"},
+			{"indexed":false,"name":"amount","type":"uint256"},
+			{"indexed":false,"name":"memo","type":"bytes"}
+			]
+		}]`
+
+	abi, err := JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	topic := "received(address,uint256,bytes)"
+	topicID := crypto.Keccak256Hash([]byte(topic))
+
+	event, err := abi.EventById(topicID)
+	if err != nil {
+		t.Fatalf("Failed to look up ABI event: %v", err)
+	}
+
+	if event.Id() != topicID {
+		t.Errorf("topic %v (id %v) not 'findable' by id in ABI", topic, topicID)
+	}
+}
