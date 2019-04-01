@@ -28,6 +28,25 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 )
 
+type AlgorithmInfo struct {
+	Lookup lookup.Algorithm
+	Name   string
+}
+
+var algorithms = []AlgorithmInfo{
+	{lookup.FluzCapacitorAlgorithm, "FluzCapacitor"},
+	{lookup.LongEarthAlgorithm, "LongEarth"},
+}
+
+const enablePrintMetrics = true // set to true to display algorithm benchmarking stats
+
+func printMetric(metric string, reads int32, elapsed time.Duration) {
+	if !enablePrintMetrics {
+		return
+	}
+	fmt.Printf("metric=%s, readcount=%d, elapsed=%s\n", metric, reads, elapsed)
+}
+
 type Data struct {
 	Payload uint64
 	Time    uint64
@@ -60,7 +79,7 @@ func makeReadFunc(store Store, counter *int32) lookup.ReadFunc {
 	return func(ctx context.Context, epoch lookup.Epoch, now uint64) (interface{}, error) {
 		atomic.AddInt32(counter, 1)
 		select {
-		case <-time.After(1000 * time.Millisecond):
+		case <-lookup.TimeAfter(1000 * time.Millisecond):
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
@@ -70,7 +89,7 @@ func makeReadFunc(store Store, counter *int32) lookup.ReadFunc {
 			valueStr = fmt.Sprintf("%d", data.Payload)
 		}
 		log.Debug("Read: %d-%d, value='%s'\n", epoch.Base(), epoch.Level, valueStr)
-		//fmt.Printf("Read: %d-%d, value='%s'\n", epoch.Base(), epoch.Level, valueStr)
+
 		if data != nil && data.Time <= now {
 			return data, nil
 		}
@@ -79,6 +98,10 @@ func makeReadFunc(store Store, counter *int32) lookup.ReadFunc {
 }
 
 func TestLookup(t *testing.T) {
+	stopwatch := NewStopwatch(50 * time.Millisecond)
+	lookup.TimeAfter = stopwatch.TimeAfter()
+	defer stopwatch.Stop()
+
 	store := make(Store)
 	var readCount int32 = 0
 	readFunc := makeReadFunc(store, &readCount)
@@ -98,60 +121,78 @@ func TestLookup(t *testing.T) {
 		lastData = &data
 	}
 
-	// try to get the last value
+	for _, algo := range algorithms {
+		t.Run(algo.Name, func(t *testing.T) {
+			readCount = 0
+			stopwatch.Reset()
+			stopwatch.Run()
 
-	value, err := lookup.Lookup(context.Background(), now, lookup.NoClue, readFunc)
-	if err != nil {
-		t.Fatal(err)
+			// try to get the last value
+			value, err := algo.Lookup(context.Background(), now, lookup.NoClue, readFunc)
+			stopwatch.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
+			timeElapsedWithoutHint := stopwatch.Elapsed()
+			printMetric("SIMPLE READ", readCount, timeElapsedWithoutHint)
+
+			if value != lastData {
+				t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
+			}
+
+			// reset the read count for the next test
+			readCount = 0
+			stopwatch.Reset()
+			stopwatch.Run()
+			// Provide a hint to get a faster lookup. In particular, we give the exact location of the last update
+			value, err = algo.Lookup(context.Background(), now, epoch, readFunc)
+			stopwatch.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
+			printMetric("WITH HINT", readCount, stopwatch.Elapsed())
+
+			if value != lastData {
+				t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
+			}
+
+			if stopwatch.Elapsed() > timeElapsedWithoutHint {
+				t.Fatalf("Expected lookup to complete faster than %s since we provided a hint. Took %s", timeElapsedWithoutHint, stopwatch.Elapsed())
+			}
+
+			// try to get an intermediate value
+			// if we look for a value in now - Year*3 + 6*Month, we should get that value
+			// Since the "payload" is the timestamp itself, we can check this.
+
+			expectedTime := now - Year*3 + 6*Month
+			// reset the read count for the next test
+			readCount = 0
+			stopwatch.Reset()
+			stopwatch.Run()
+			value, err = algo.Lookup(context.Background(), expectedTime, lookup.NoClue, readFunc)
+			stopwatch.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
+			printMetric("INTERMEDIATE READ", readCount, stopwatch.Elapsed())
+
+			data, ok := value.(*Data)
+
+			if !ok {
+				t.Fatal("Expected value to contain data")
+			}
+
+			if data.Time != expectedTime {
+				t.Fatalf("Expected value timestamp to be %d, got %d", data.Time, expectedTime)
+			}
+		})
 	}
-	fmt.Printf("readcount=%d\n", readCount)
-
-	readCountWithoutHint := readCount
-
-	if value != lastData {
-		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
-	}
-
-	// reset the read count for the next test
-	readCount = 0
-	// Provide a hint to get a faster lookup. In particular, we give the exact location of the last update
-	value, err = lookup.Lookup(context.Background(), now, epoch, readFunc)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if value != lastData {
-		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
-	}
-
-	if readCount > readCountWithoutHint {
-		t.Fatalf("Expected lookup to complete with fewer or same reads than %d since we provided a hint. Did %d reads.", readCountWithoutHint, readCount)
-	}
-
-	// try to get an intermediate value
-	// if we look for a value in now - Year*3 + 6*Month, we should get that value
-	// Since the "payload" is the timestamp itself, we can check this.
-
-	expectedTime := now - Year*3 + 6*Month
-
-	value, err = lookup.Lookup(context.Background(), expectedTime, lookup.NoClue, readFunc)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	data, ok := value.(*Data)
-
-	if !ok {
-		t.Fatal("Expected value to contain data")
-	}
-
-	if data.Time != expectedTime {
-		t.Fatalf("Expected value timestamp to be %d, got %d", data.Time, expectedTime)
-	}
-
 }
 
 func TestOneUpdateAt0(t *testing.T) {
+	stopwatch := NewStopwatch(50 * time.Millisecond)
+	lookup.TimeAfter = stopwatch.TimeAfter()
+	defer stopwatch.Stop()
 
 	store := make(Store)
 	var readCount int32 = 0
@@ -166,17 +207,29 @@ func TestOneUpdateAt0(t *testing.T) {
 	}
 	update(store, epoch, 0, &data)
 
-	value, err := lookup.Lookup(context.Background(), now, lookup.NoClue, readFunc)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if value != &data {
-		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", data, value)
+	for _, algo := range algorithms {
+		stopwatch.Reset()
+		t.Run(algo.Name, func(t *testing.T) {
+			readCount = 0
+			stopwatch.Run()
+			value, err := algo.Lookup(context.Background(), now, lookup.NoClue, readFunc)
+			stopwatch.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if value != &data {
+				t.Fatalf("Expected lookup to return the last written value: %v. Got %v", data, value)
+			}
+			printMetric("SIMPLE", readCount, stopwatch.Elapsed())
+		})
 	}
 }
 
 // Tests the update is found even when a bad hint is given
 func TestBadHint(t *testing.T) {
+	stopwatch := NewStopwatch(50 * time.Millisecond)
+	lookup.TimeAfter = stopwatch.TimeAfter()
+	defer stopwatch.Stop()
 
 	store := make(Store)
 	var readCount int32 = 0
@@ -199,19 +252,32 @@ func TestBadHint(t *testing.T) {
 		Time:  1200000000,
 	}
 
-	value, err := lookup.Lookup(context.Background(), now, badHint, readFunc)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if value != &data {
-		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", data, value)
+	for _, algo := range algorithms {
+		stopwatch.Reset()
+		t.Run(algo.Name, func(t *testing.T) {
+			readCount = 0
+			stopwatch.Run()
+			value, err := algo.Lookup(context.Background(), now, badHint, readFunc)
+			stopwatch.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if value != &data {
+				t.Fatalf("Expected lookup to return the last written value: %v. Got %v", data, value)
+			}
+			printMetric("SIMPLE", readCount, stopwatch.Elapsed())
+		})
 	}
 }
 
 // Tests whether the update is found when the bad hint is exactly below the last update
 func TestBadHintNextToUpdate(t *testing.T) {
+	stopwatch := NewStopwatch(50 * time.Millisecond)
+	lookup.TimeAfter = stopwatch.TimeAfter()
+	defer stopwatch.Stop()
+
 	store := make(Store)
-	readCount := 0
+	var readCount int32 = 0
 
 	readFunc := makeReadFunc(store, &readCount)
 	now := uint64(1533903729)
@@ -248,13 +314,22 @@ func TestBadHintNextToUpdate(t *testing.T) {
 		Level: 20,
 		Time:  1200000005,
 	}
+	for _, algo := range algorithms {
+		stopwatch.Reset()
+		t.Run(algo.Name, func(t *testing.T) {
+			readCount = 0
+			stopwatch.Run()
 
-	value, err := lookup.Lookup(context.Background(), now, badHint, readFunc)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if value != last {
-		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", last, value)
+			value, err := algo.Lookup(context.Background(), now, badHint, readFunc)
+			stopwatch.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if value != last {
+				t.Fatalf("Expected lookup to return the last written value: %v. Got %v", last, value)
+			}
+			printMetric("SIMPLE", readCount, stopwatch.Elapsed())
+		})
 	}
 }
 
@@ -265,50 +340,58 @@ func TestContextCancellation(t *testing.T) {
 		return nil, ctx.Err()
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	for _, algo := range algorithms {
+		t.Run(algo.Name, func(t *testing.T) {
 
-	errc := make(chan error)
+			ctx, cancel := context.WithCancel(context.Background())
 
-	go func() {
-		_, err := lookup.Lookup(ctx, 1200000000, lookup.NoClue, readFunc)
-		errc <- err
-	}()
+			errc := make(chan error)
 
-	cancel()
+			go func() {
+				_, err := lookup.Lookup(ctx, 1200000000, lookup.NoClue, readFunc)
+				errc <- err
+			}()
 
-	if err := <-errc; err != context.Canceled {
-		t.Fatalf("Expected lookup to return a context Cancelled error, got %v", err)
-	}
+			cancel()
 
-	// text context cancellation during hint lookup:
-	ctx, cancel = context.WithCancel(context.Background())
-	errc = make(chan error)
-	someHint := lookup.Epoch{
-		Level: 25,
-		Time:  300,
-	}
+			if err := <-errc; err != context.Canceled {
+				t.Fatalf("Expected lookup to return a context Cancelled error, got %v", err)
+			}
 
-	readFunc = func(ctx context.Context, epoch lookup.Epoch, now uint64) (interface{}, error) {
-		if epoch == someHint {
-			go cancel()
-			<-ctx.Done()
-			return nil, ctx.Err()
-		}
-		return nil, nil
-	}
+			// text context cancellation during hint lookup:
+			ctx, cancel = context.WithCancel(context.Background())
+			errc = make(chan error)
+			someHint := lookup.Epoch{
+				Level: 25,
+				Time:  300,
+			}
 
-	go func() {
-		_, err := lookup.Lookup(ctx, 301, someHint, readFunc)
-		errc <- err
-	}()
+			readFunc = func(ctx context.Context, epoch lookup.Epoch, now uint64) (interface{}, error) {
+				if epoch == someHint {
+					go cancel()
+					<-ctx.Done()
+					return nil, ctx.Err()
+				}
+				return nil, nil
+			}
 
-	if err := <-errc; err != context.Canceled {
-		t.Fatalf("Expected lookup to return a context Cancelled error, got %v", err)
+			go func() {
+				_, err := algo.Lookup(ctx, 301, someHint, readFunc)
+				errc <- err
+			}()
+
+			if err := <-errc; err != context.Canceled {
+				t.Fatalf("Expected lookup to return a context Cancelled error, got %v", err)
+			}
+		})
 	}
 
 }
 
 func TestLookupFail(t *testing.T) {
+	stopwatch := NewStopwatch(50 * time.Millisecond)
+	lookup.TimeAfter = stopwatch.TimeAfter()
+	defer stopwatch.Stop()
 
 	store := make(Store)
 	var readCount int32 = 0
@@ -316,24 +399,33 @@ func TestLookupFail(t *testing.T) {
 	readFunc := makeReadFunc(store, &readCount)
 	now := uint64(1533903729)
 
-	// don't write anything and try to look up.
-	// we're testing we don't get stuck in a loop
+	for _, algo := range algorithms {
+		stopwatch.Reset()
+		t.Run(algo.Name, func(t *testing.T) {
+			readCount = 0
+			stopwatch.Run()
 
-	value, err := lookup.Lookup(context.Background(), now, lookup.NoClue, readFunc)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if value != nil {
-		t.Fatal("Expected value to be nil, since the update should've failed")
-	}
+			// don't write anything and try to look up.
+			// we're testing we don't get stuck in a loop
 
-	expectedReads := now/(1<<lookup.HighestLevel) + 1
-	if uint64(readCount) != expectedReads {
-		t.Fatalf("Expected lookup to fail after %d reads. Did %d reads.", expectedReads, readCount)
+			value, err := algo.Lookup(context.Background(), now, lookup.NoClue, readFunc)
+			stopwatch.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if value != nil {
+				t.Fatal("Expected value to be nil, since the update should've failed")
+			}
+
+			printMetric("SIMPLE", readCount, stopwatch.Elapsed())
+		})
 	}
 }
 
 func TestHighFreqUpdates(t *testing.T) {
+	stopwatch := NewStopwatch(50 * time.Millisecond)
+	lookup.TimeAfter = stopwatch.TimeAfter()
+	defer stopwatch.Stop()
 
 	store := make(Store)
 	var readCount int32 = 0
@@ -355,49 +447,71 @@ func TestHighFreqUpdates(t *testing.T) {
 		lastData = &data
 	}
 
-	value, err := lookup.Lookup(context.Background(), lastData.Time, lookup.NoClue, readFunc)
-	if err != nil {
-		t.Fatal(err)
-	}
+	for _, algo := range algorithms {
+		stopwatch.Reset()
+		t.Run(algo.Name, func(t *testing.T) {
+			readCount = 0
+			stopwatch.Run()
 
-	if value != lastData {
-		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
-	}
+			value, err := algo.Lookup(context.Background(), lastData.Time, lookup.NoClue, readFunc)
+			stopwatch.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	readCountWithoutHint := readCount
-	// reset the read count for the next test
-	readCount = 0
-	// Provide a hint to get a faster lookup. In particular, we give the exact location of the last update
-	value, err = lookup.Lookup(context.Background(), now, epoch, readFunc)
-	if err != nil {
-		t.Fatal(err)
-	}
+			if value != lastData {
+				t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
+			}
+			timeElapsedWithoutHint := stopwatch.Elapsed()
+			printMetric("SIMPLE", readCount, timeElapsedWithoutHint)
 
-	if value != lastData {
-		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
-	}
+			// reset the read count for the next test
+			readCount = 0
+			stopwatch.Reset()
+			stopwatch.Run()
+			// Provide a hint to get a faster lookup. In particular, we give the exact location of the last update
+			value, err = algo.Lookup(context.Background(), now, epoch, readFunc)
+			stopwatch.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	if readCount > readCountWithoutHint {
-		t.Fatalf("Expected lookup to complete with fewer or equal reads than %d since we provided a hint. Did %d reads.", readCountWithoutHint, readCount)
-	}
+			if value != lastData {
+				t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
+			}
 
-	for i := uint64(0); i <= 994; i++ {
-		T := uint64(now - 1000 + i) // update every second for the last 1000 seconds
-		value, err := lookup.Lookup(context.Background(), T, lookup.NoClue, readFunc)
-		if err != nil {
-			t.Fatal(err)
-		}
-		data, _ := value.(*Data)
-		if data == nil {
-			t.Fatalf("Expected lookup to return %d, got nil", T)
-		}
-		if data.Payload != T {
-			t.Fatalf("Expected lookup to return %d, got %d", T, data.Time)
-		}
+			if stopwatch.Elapsed() > timeElapsedWithoutHint {
+				t.Fatalf("Expected lookup to complete faster than %s since we provided a hint. Took %s", timeElapsedWithoutHint, stopwatch.Elapsed())
+			}
+			printMetric("WITH HINT", readCount, stopwatch.Elapsed())
+
+			readCount = 0
+			stopwatch.Reset()
+			stopwatch.Run()
+			for i := uint64(0); i <= 10; i++ {
+				T := uint64(now - 1000 + i) // update every second for the last 1000 seconds
+				value, err := algo.Lookup(context.Background(), T, lookup.NoClue, readFunc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				data, _ := value.(*Data)
+				if data == nil {
+					t.Fatalf("Expected lookup to return %d, got nil", T)
+				}
+				if data.Payload != T {
+					t.Fatalf("Expected lookup to return %d, got %d", T, data.Time)
+				}
+			}
+			stopwatch.Stop()
+			printMetric("MULTIPLE", readCount, stopwatch.Elapsed())
+		})
 	}
 }
 
 func TestSparseUpdates(t *testing.T) {
+	stopwatch := NewStopwatch(50 * time.Millisecond)
+	lookup.TimeAfter = stopwatch.TimeAfter()
+	defer stopwatch.Stop()
 
 	store := make(Store)
 	var readCount int32 = 0
@@ -419,35 +533,49 @@ func TestSparseUpdates(t *testing.T) {
 		lastData = &data
 	}
 
-	// try to get the last value
+	for _, algo := range algorithms {
+		stopwatch.Reset()
+		t.Run(algo.Name, func(t *testing.T) {
+			readCount = 0
+			stopwatch.Run()
 
-	value, err := lookup.Lookup(context.Background(), now, lookup.NoClue, readFunc)
-	if err != nil {
-		t.Fatal(err)
+			// try to get the last value
+			value, err := algo.Lookup(context.Background(), now, lookup.NoClue, readFunc)
+			stopwatch.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if value != lastData {
+				t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
+			}
+
+			timeElapsedWithoutHint := stopwatch.Elapsed()
+			printMetric("SIMPLE", readCount, timeElapsedWithoutHint)
+
+			// reset the read count for the next test
+			readCount = 0
+			stopwatch.Reset()
+			stopwatch.Run()
+			// Provide a hint to get a faster lookup. In particular, we give the exact location of the last update
+			value, err = algo.Lookup(context.Background(), now, epoch, readFunc)
+			stopwatch.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if value != lastData {
+				t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
+			}
+
+			if stopwatch.Elapsed() > timeElapsedWithoutHint {
+				t.Fatalf("Expected lookup to complete faster than %s since we provided a hint. Took %s", timeElapsedWithoutHint, stopwatch.Elapsed())
+			}
+
+			printMetric("WITH HINT", readCount, stopwatch.Elapsed())
+
+		})
 	}
-
-	readCountWithoutHint := readCount
-
-	if value != lastData {
-		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
-	}
-
-	// reset the read count for the next test
-	readCount = 0
-	// Provide a hint to get a faster lookup. In particular, we give the exact location of the last update
-	value, err = lookup.Lookup(context.Background(), now, epoch, readFunc)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if value != lastData {
-		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
-	}
-
-	if readCount > readCountWithoutHint {
-		t.Fatalf("Expected lookup to complete with fewer reads than %d since we provided a hint. Did %d reads.", readCountWithoutHint, readCount)
-	}
-
 }
 
 // testG will hold precooked test results
@@ -524,15 +652,4 @@ func CookGetNextLevelTests(t *testing.T) {
 		st = fmt.Sprintf("%s,testG{e:lookup.Epoch{Time:%d, Level:%d}, n:%d, x:%d}", st, last.Time, last.Level, now, expected)
 	}
 	fmt.Println(st)
-}
-
-func TestTest(t *testing.T) {
-	hint := lookup.Epoch{
-		Time:  20,
-		Level: 2,
-	}
-
-	e := lookup.GetNextEpoch(hint, 21)
-
-	fmt.Println(e)
 }
