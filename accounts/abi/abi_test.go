@@ -771,4 +771,9 @@ func TestABI_EventById(t *testing.T) {
 	if event.Id() != topicID {
 		t.Errorf("topic %v (id %v) not 'findable' by id in ABI", topic, topicID)
 	}
+
+	UnknowntopicID := crypto.Keccak256Hash([]byte("unkownEvent"))
+	if _, err := abi.EventById(UnknowntopicID); err == nil {
+		t.Errorf("Expected error, no matching event id")
+	}
 }
