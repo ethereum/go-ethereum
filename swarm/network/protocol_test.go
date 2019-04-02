@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,12 +32,14 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
+	"github.com/ethereum/go-ethereum/swarm/pot"
 )
 
 const (
-	TestProtocolVersion   = 8
-	TestProtocolNetworkID = 3
+	TestProtocolVersion = 8
 )
+
+var TestProtocolNetworkID = DefaultTestNetworkID
 
 var (
 	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
@@ -70,20 +73,37 @@ func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id enode.ID) []p2ptest.Exchang
 	}
 }
 
-func newBzzBaseTester(t *testing.T, n int, prvkey *ecdsa.PrivateKey, spec *protocols.Spec, run func(*BzzPeer) error) (*bzzTester, error) {
-	cs := make(map[string]chan bool)
+func newBzzBaseTester(n int, prvkey *ecdsa.PrivateKey, spec *protocols.Spec, run func(*BzzPeer) error) (*bzzTester, error) {
+	var addrs [][]byte
+	for i := 0; i < n; i++ {
+		addr := pot.RandomAddress()
+		addrs = append(addrs, addr[:])
+	}
+	pt, _, err := newBzzBaseTesterWithAddrs(prvkey, addrs, spec, run)
+	return pt, err
+}
+
+func newBzzBaseTesterWithAddrs(prvkey *ecdsa.PrivateKey, addrs [][]byte, spec *protocols.Spec, run func(*BzzPeer) error) (*bzzTester, [][]byte, error) {
+	n := len(addrs)
+	cs := make(map[enode.ID]chan bool)
 
 	srv := func(p *BzzPeer) error {
 		defer func() {
-			if cs[p.ID().String()] != nil {
-				close(cs[p.ID().String()])
+			if cs[p.ID()] != nil {
+				close(cs[p.ID()])
 			}
 		}()
 		return run(p)
 	}
-
+	mu := &sync.Mutex{}
+	nodeToAddr := make(map[enode.ID][]byte)
 	protocol := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-		return srv(&BzzPeer{Peer: protocols.NewPeer(p, rw, spec), BzzAddr: NewAddr(p.Node())})
+		mu.Lock()
+		defer mu.Unlock()
+		nodeToAddr[p.ID()] = addrs[0]
+		bzzAddr := &BzzAddr{addrs[0], []byte(p.Node().String())}
+		addrs = addrs[1:]
+		return srv(&BzzPeer{Peer: protocols.NewPeer(p, rw, spec), BzzAddr: bzzAddr})
 	}
 
 	s := p2ptest.NewProtocolTester(prvkey, n, protocol)
@@ -92,30 +112,36 @@ func newBzzBaseTester(t *testing.T, n int, prvkey *ecdsa.PrivateKey, spec *proto
 	record.Set(NewENRAddrEntry(bzzKey))
 	err := enode.SignV4(&record, prvkey)
 	if err != nil {
-		return nil, fmt.Errorf("unable to generate ENR: %v", err)
+		return nil, nil, fmt.Errorf("unable to generate ENR: %v", err)
 	}
 	nod, err := enode.New(enode.V4ID{}, &record)
 	if err != nil {
-		return nil, fmt.Errorf("unable to create enode: %v", err)
+		return nil, nil, fmt.Errorf("unable to create enode: %v", err)
 	}
 	addr := getENRBzzAddr(nod)
 
 	for _, node := range s.Nodes {
 		log.Warn("node", "node", node)
-		cs[node.ID().String()] = make(chan bool)
+		cs[node.ID()] = make(chan bool)
 	}
 
-	return &bzzTester{
+	var nodeAddrs [][]byte
+	pt := &bzzTester{
 		addr:           addr,
 		ProtocolTester: s,
 		cs:             cs,
-	}, nil
+	}
+	for _, n := range pt.Nodes {
+		nodeAddrs = append(nodeAddrs, nodeToAddr[n.ID()])
+	}
+
+	return pt, nodeAddrs, nil
 }
 
 type bzzTester struct {
 	*p2ptest.ProtocolTester
 	addr *BzzAddr
-	cs   map[string]chan bool
+	cs   map[enode.ID]chan bool
 	bzz  *Bzz
 }
 
@@ -124,7 +150,7 @@ func newBzz(addr *BzzAddr, lightNode bool) *Bzz {
 		OverlayAddr:  addr.Over(),
 		UnderlayAddr: addr.Under(),
 		HiveParams:   NewHiveParams(),
-		NetworkID:    DefaultNetworkID,
+		NetworkID:    DefaultTestNetworkID,
 		LightNode:    lightNode,
 	}
 	kad := NewKademlia(addr.OAddr, NewKadParams())
@@ -207,7 +233,7 @@ func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 	err = s.testHandshake(
 		correctBzzHandshake(s.addr, lightNode),
 		&HandshakeMsg{Version: TestProtocolVersion, NetworkID: 321, Addr: NewAddr(node)},
-		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): network id mismatch 321 (!= 3)")},
+		&p2ptest.Disconnect{Peer: node.ID(), Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): network id mismatch 321 (!= %v)", TestProtocolNetworkID)},
 	)
 
 	if err != nil {

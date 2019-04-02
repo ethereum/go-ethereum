@@ -26,6 +26,8 @@ import (
 
 // discovery bzz extension for requesting and relaying node address records
 
+var sortPeers = noSortPeers
+
 // Peer wraps BzzPeer and embeds Kademlia overlay connectivity driver
 type Peer struct {
 	*BzzPeer
@@ -156,28 +158,39 @@ func (msg subPeersMsg) String() string {
 	return fmt.Sprintf("%T: request peers > PO%02d. ", msg, msg.Depth)
 }
 
+// handleSubPeersMsg handles incoming subPeersMsg
+// this message represents the saturation depth of the remote peer
+// saturation depth is the radius within which the peer subscribes to peers
+// the first time this is received we send peer info on all
+// our connected peers that fall within peers saturation depth
+// otherwise this depth is just recorded on the peer, so that
+// subsequent new connections are sent iff they fall within the radius
 func (d *Peer) handleSubPeersMsg(msg *subPeersMsg) error {
+	d.setDepth(msg.Depth)
+	// only send peers after the initial subPeersMsg
 	if !d.sentPeers {
-		d.setDepth(msg.Depth)
 		var peers []*BzzAddr
+		// iterate connection in ascending order of disctance from the remote address
 		d.kad.EachConn(d.Over(), 255, func(p *Peer, po int) bool {
-			if pob, _ := Pof(d, d.kad.BaseAddr(), 0); pob > po {
+			// terminate if we are beyond the radius
+			if uint8(po) < msg.Depth {
 				return false
 			}
-			if !d.seen(p.BzzAddr) {
+			if !d.seen(p.BzzAddr) { // here just records the peer sent
 				peers = append(peers, p.BzzAddr)
 			}
 			return true
 		})
+		// if useful  peers are found, send them over
 		if len(peers) > 0 {
-			go d.Send(context.TODO(), &peersMsg{Peers: peers})
+			go d.Send(context.TODO(), &peersMsg{Peers: sortPeers(peers)})
 		}
 	}
 	d.sentPeers = true
 	return nil
 }
 
-// seen takes an peer address and checks if it was sent to a peer already
+// seen takes a peer address and checks if it was sent to a peer already
 // if not, marks the peer as sent
 func (d *Peer) seen(p *BzzAddr) bool {
 	d.mtx.Lock()
@@ -200,4 +213,8 @@ func (d *Peer) setDepth(depth uint8) {
 	d.mtx.Lock()
 	defer d.mtx.Unlock()
 	d.depth = depth
+}
+
+func noSortPeers(peers []*BzzAddr) []*BzzAddr {
+	return peers
 }
