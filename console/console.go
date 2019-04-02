@@ -18,6 +18,7 @@ package console
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"io"
 	"io/ioutil"
 	"os"
@@ -276,12 +277,16 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 func (c *Console) Welcome() {
 	// Print some generic Geth metadata
 	fmt.Fprintf(c.printer, "Welcome to the Geth JavaScript console!\n\n")
-	c.jsre.Run(`
-		console.log("instance: " + web3.version.node);
-		console.log("coinbase: " + eth.coinbase);
-		console.log("at block: " + eth.blockNumber + " (" + new Date(1000 * eth.getBlock(eth.blockNumber).timestamp) + ")");
-		console.log(" datadir: " + admin.datadir);
-	`)
+	for _, command := range []string{
+		`console.log("instance: " + web3.version.node);`,
+		`console.log("coinbase: " + eth.coinbase);`,
+		`console.log("at block: " + eth.blockNumber + " (" + new Date(1000 * eth.getBlock(eth.blockNumber).timestamp) + ")");`,
+		`console.log("datadir:  " + admin.datadir);`,
+	} {
+		if _, err := c.jsre.Run(command); err != nil {
+			log.Error("Geth JavaScript console error", "err", err)
+		}
+	}
 	// List all the supported modules for the user to call
 	if apis, err := c.client.SupportedModules(); err == nil {
 		modules := make([]string, 0, len(apis))
@@ -289,7 +294,7 @@ func (c *Console) Welcome() {
 			modules = append(modules, fmt.Sprintf("%s:%s", api, version))
 		}
 		sort.Strings(modules)
-		fmt.Fprintln(c.printer, " modules:", strings.Join(modules, " "))
+		fmt.Fprintln(c.printer, "modules: ", strings.Join(modules, " "))
 	}
 	fmt.Fprintln(c.printer)
 }
