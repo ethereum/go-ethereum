@@ -5,7 +5,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/binary"
 	"fmt"
-	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -37,22 +37,25 @@ type handlerNotification struct {
 }
 
 type testData struct {
-	mu               sync.Mutex
-	sim              *simulation.Simulation
-	handlerDone      bool // set to true on termination of the simulation run
-	requiredMessages int
-	allowedMessages  int
-	messageCount     int
-	kademlias        map[enode.ID]*network.Kademlia
-	nodeAddrs        map[enode.ID][]byte      // make predictable overlay addresses from the generated random enode ids
-	expectedMsgs     map[enode.ID][]uint64    // message serials we expect respective nodes to receive
-	allowedMsgs      map[enode.ID][]uint64    // message serials we expect respective nodes to receive
-	senders          map[int]enode.ID         // originating nodes of the messages (intention is to choose as far as possible from the receiving neighborhood)
-	handlerC         chan handlerNotification // passes message from pss message handler to simulation driver
-	doneC            chan struct{}            // terminates the handler channel listener
-	errC             chan error               // error to pass to main sim thread
-	msgC             chan handlerNotification // message receipt notification to main sim thread
-	msgs             [][]byte                 // recipient addresses of messages
+	sim       *simulation.Simulation
+	kademlias map[enode.ID]*network.Kademlia
+	nodeAddrs map[enode.ID][]byte // make predictable overlay addresses from the generated random enode ids
+	senders   map[int]enode.ID    // originating nodes of the messages (intention is to choose as far as possible from the receiving neighborhood)
+	msgs      [][]byte            // recipient addresses of messages
+
+	requiredMsgCount int
+	allowedMsgCount  int
+	requiredMsgs     map[enode.ID][]uint64 // message serials we expect respective nodes to receive
+	allowedMsgs      map[enode.ID][]uint64 // message serials we expect respective nodes to receive
+
+	notifications []handlerNotification // notification queue
+	totalMsgCount int
+	handlerDone   bool // set to true on termination of the simulation run
+	mu            sync.Mutex
+
+	doneC chan struct{}            // terminates the handler channel listener
+	errC  chan error               // error to pass to main sim thread
+	msgC  chan handlerNotification // message receipt notification to main sim thread
 }
 
 var (
@@ -60,17 +63,34 @@ var (
 	topic = BytesToTopic([]byte{0xf3, 0x9e, 0x06, 0x82})
 )
 
+func (d *testData) pushNotification(val handlerNotification) {
+	d.mu.Lock()
+	d.notifications = append(d.notifications, val)
+	d.mu.Unlock()
+}
+
+func (d *testData) popNotification() (ret handlerNotification, found bool) {
+	d.mu.Lock()
+	if len(d.notifications) > 0 {
+		found = true
+		ret = d.notifications[0]
+		d.notifications = d.notifications[1:]
+	}
+	d.mu.Unlock()
+	return ret, found
+}
+
 func (d *testData) getMsgCount() int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.messageCount
+	return d.totalMsgCount
 }
 
 func (d *testData) incrementMsgCount() int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.messageCount++
-	return d.messageCount
+	d.totalMsgCount++
+	return d.totalMsgCount
 }
 
 func (d *testData) isDone() bool {
@@ -89,10 +109,9 @@ func newTestData() *testData {
 	return &testData{
 		kademlias:    make(map[enode.ID]*network.Kademlia),
 		nodeAddrs:    make(map[enode.ID][]byte),
-		expectedMsgs: make(map[enode.ID][]uint64),
+		requiredMsgs: make(map[enode.ID][]uint64),
 		allowedMsgs:  make(map[enode.ID][]uint64),
 		senders:      make(map[int]enode.ID),
-		handlerC:     make(chan handlerNotification),
 		doneC:        make(chan struct{}),
 		errC:         make(chan error),
 		msgC:         make(chan handlerNotification),
@@ -145,7 +164,7 @@ func (d *testData) init(msgCount int) error {
 			}
 
 			if po >= depth {
-				d.allowedMessages++
+				d.allowedMsgCount++
 				d.allowedMsgs[nod.ID()] = append(d.allowedMsgs[nod.ID()], uint64(i))
 			}
 
@@ -157,14 +176,14 @@ func (d *testData) init(msgCount int) error {
 			}
 		}
 
-		d.requiredMessages += len(targets)
+		d.requiredMsgCount += len(targets)
 		for _, id := range targets {
-			d.expectedMsgs[id] = append(d.expectedMsgs[id], uint64(i))
+			d.requiredMsgs[id] = append(d.requiredMsgs[id], uint64(i))
 		}
 
 		log.Debug("nn for msg", "targets", len(targets), "msgidx", i, "msg", common.Bytes2Hex(msgAddr[:8]), "sender", d.senders[i], "senderpo", smallestPo)
 	}
-	log.Debug("msgs to receive", "count", d.requiredMessages)
+	log.Debug("msgs to receive", "count", d.requiredMsgCount)
 	return nil
 }
 
@@ -187,7 +206,7 @@ func (d *testData) init(msgCount int) error {
 // nodes Y and Z will be considered required recipients of the msg,
 // whereas nodes X, Y and Z will be allowed recipients.
 func TestProxNetwork(t *testing.T) {
-	t.Run("short", func(t *testing.T) {
+	t.Run("16_nodes,_16_messages,_16_seconds", func(t *testing.T) {
 		testProxNetwork(t, 16, 16, 16)
 	})
 }
@@ -197,226 +216,158 @@ func TestProxNetworkLong(t *testing.T) {
 	if !*longrunning {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
-	t.Run("longrunning1", func(t *testing.T) {
+	t.Run("8_nodes,_100_messages,_30_seconds", func(t *testing.T) {
 		testProxNetwork(t, 8, 100, 30)
 	})
-	t.Run("longrunning2", func(t *testing.T) {
+	t.Run("16_nodes,_100_messages,_30_seconds", func(t *testing.T) {
 		testProxNetwork(t, 16, 100, 30)
 	})
-	t.Run("longrunning3", func(t *testing.T) {
+	t.Run("32_nodes,_100_messages,_60_seconds", func(t *testing.T) {
 		testProxNetwork(t, 32, 100, 60)
 	})
-	t.Run("longrunning4", func(t *testing.T) {
+	t.Run("64_nodes,_100_messages,_60_seconds", func(t *testing.T) {
 		testProxNetwork(t, 64, 100, 60)
 	})
-	t.Run("longrunning5", func(t *testing.T) {
+	t.Run("128_nodes,_100_messages,_120_seconds", func(t *testing.T) {
 		testProxNetwork(t, 128, 100, 120)
 	})
 }
 
-func testProxNetwork(t *testing.T, msgCount int, nodeCount int, timeout int) {
-	tstdata := newTestData()
+func testProxNetwork(t *testing.T, nodeCount int, msgCount int, timeout int) {
+	td := newTestData()
 	handlerContextFuncs := make(map[Topic]handlerContextFunc)
 	handlerContextFuncs[topic] = nodeMsgHandler
-	services := newProxServices(tstdata, true, handlerContextFuncs, tstdata.kademlias)
-	tstdata.sim = simulation.New(services)
-	defer tstdata.sim.Close()
+	services := newProxServices(td, true, handlerContextFuncs, td.kademlias)
+	td.sim = simulation.New(services)
+	defer td.sim.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(timeout))
 	defer cancel()
 	filename := fmt.Sprintf("testdata/snapshot_%d.json", nodeCount)
-	err := tstdata.sim.UploadSnapshot(ctx, filename)
+	err := td.sim.UploadSnapshot(ctx, filename)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// sleep is required here, in order to make sure that network saturates
-	// and does not change any more, since it might affect our expectations
-	time.Sleep(time.Second)
-	err = tstdata.init(msgCount) // initialize the test data
+	err = td.init(msgCount) // initialize the test data
 	if err != nil {
 		t.Fatal(err)
 	}
 	wrapper := func(c context.Context, _ *simulation.Simulation) error {
-		return testRoutine(tstdata, c)
+		return testRoutine(td, c)
 	}
-	result := tstdata.sim.Run(ctx, wrapper) // call the main test function
+	result := td.sim.Run(ctx, wrapper) // call the main test function
 	if result.Error != nil {
-		// context deadline exceeded
-		// however, it might just mean that not all possible messages are received
-		// now we must check if all required messages are received
-		log.Debug("TestProxNetwork finished", "rcv", tstdata.getMsgCount())
-		if !isSuccess(tstdata) {
+		timedOut := strings.Compare(result.Error.Error(), "context deadline exceeded") == 0
+		if !timedOut || td.getMsgCount() < td.requiredMsgCount {
 			t.Fatal(result.Error)
 		}
 	}
 }
 
-func isSuccess(d *testData) bool {
-	cnt := d.getMsgCount()
-	if cnt < d.requiredMessages {
-		if d.isExpectationsChanged() {
-			// network configuration has changed since beginning of
-			// the test, which invalidates our original expectations
-			log.Warn("expectations changed")
-			return true
-		} else {
-			return false
-		}
-	} else {
-		return true
-	}
-}
-
-func (d *testData) isExpectationsChanged() bool {
-	expected := make(map[enode.ID][]uint64)
-	for i := 0; i < len(d.msgs); i++ {
-		var targets []enode.ID
-		var closestPO int
-		for _, nod := range d.sim.Net.GetNodes() {
-			po, _ := pof(d.msgs[i], d.nodeAddrs[nod.ID()], 0)
-			if po > closestPO {
-				closestPO = po
-				targets = nil
-				targets = append(targets, nod.ID())
-			} else if po == closestPO {
-				targets = append(targets, nod.ID())
-			}
-		}
-		for _, id := range targets {
-			expected[id] = append(expected[id], uint64(i))
-		}
-	}
-	changed := !reflect.DeepEqual(d.requiredMessages, expected)
-	if changed {
-		log.Warn("expectations changed")
-	}
-	return changed
-}
-
-func (tstdata *testData) sendAllMsgs(nodes map[int]*rpc.Client) {
-	for i, msg := range tstdata.msgs {
-		log.Debug("sending msg", "idx", i, "from", tstdata.senders[i])
-		nodeClient := nodes[i]
-		var uvarByte [8]byte
-		binary.PutUvarint(uvarByte[:], uint64(i))
-		nodeClient.Call(nil, "pss_sendRaw", hexutil.Encode(msg), hexutil.Encode(topic[:]), hexutil.Encode(uvarByte[:]))
-	}
-}
-
-// testRoutine is the main test function, called by Simulation.Run()
-func testRoutine(d *testData, ctx context.Context) error {
-	go handlerChannelListener(d)
-
+func (td *testData) sendAllMsgs() error {
 	nodes := make(map[int]*rpc.Client)
-	for i := range d.msgs {
-		nodeClient, err := d.sim.Net.GetNode(d.senders[i]).Client()
+	for i := range td.msgs {
+		nodeClient, err := td.sim.Net.GetNode(td.senders[i]).Client()
 		if err != nil {
 			return err
 		}
 		nodes[i] = nodeClient
 	}
 
-	go d.sendAllMsgs(nodes)
+	for i, msg := range td.msgs {
+		log.Debug("sending msg", "idx", i, "from", td.senders[i])
+		nodeClient := nodes[i]
+		var uvarByte [8]byte
+		binary.PutUvarint(uvarByte[:], uint64(i))
+		nodeClient.Call(nil, "pss_sendRaw", hexutil.Encode(msg), hexutil.Encode(topic[:]), hexutil.Encode(uvarByte[:]))
+	}
+	return nil
+}
 
-	var res error
-	var done bool
-	received := 0
+// testRoutine is the main test function, called by Simulation.Run()
+func testRoutine(td *testData, ctx context.Context) error {
+	go handlerChannelListener(td)
 
-	// collect incoming messages and terminate with corresponding status when message handler listener ends
-	for !done {
-		select {
-		case <-ctx.Done(): // timeout or cancel
-			res = ctx.Err()
-			done = true
-		case err := <-d.errC:
-			// only first error matters
-			if res == nil {
-				res = err
-			}
-			done = (res != nil)
-		case hn := <-d.msgC:
-			received++
-			log.Debug("msg received", "msgs_received", received, "total_expected", d.requiredMessages, "id", hn.id, "serial", hn.serial)
-		}
+	res := td.sendAllMsgs()
+	if res != nil {
+		return res
 	}
 
-	d.setDone()
-	time.Sleep(time.Millisecond * 16) // allow the nodeMsgHandlers to complete if running
-	close(d.doneC)
+	received := 0
 
 	for {
 		select {
-		case <-d.errC:
-			// channel is closed, now function can return
-			return res
-		case <-d.msgC:
+		case <-ctx.Done(): // timeout or cancel
+			td.setDone()
+			if td.getMsgCount() < td.requiredMsgCount {
+				res = ctx.Err()
+			}
+		case err := <-td.errC:
+			// only the first error matters
+			if res == nil && err != nil {
+				res = err
+				td.setDone()
+			}
+		case hn := <-td.msgC:
 			received++
+			log.Debug("msg received", "msgs_received", received, "total_expected", td.requiredMsgCount, "id", hn.id, "serial", hn.serial)
+		case <-td.doneC:
+			return res
 		}
 	}
-	return res
 }
 
 func handlerChannelListener(d *testData) {
-	for {
-		select {
-		case <-d.doneC: // graceful exit
-			close(d.errC)
-			return
-
-		// incoming message from pss message handler
-		case handlerNotification := <-d.handlerC:
-			// check if recipient has already received all its messages and notify to fail the test if so
-			h := handlerNotification.id
-			if len(d.allowedMsgs[h]) == 0 {
-				d.errC <- fmt.Errorf("too many messages received by recipient %x", handlerNotification.id)
+	for !d.isDone() {
+		notification, exist := d.popNotification()
+		if exist {
+			if d.isAllowedMessage(notification) {
+				d.msgC <- notification //notify the main sim thread
+			} else {
+				log.Error("message received by wrong recipient", "num", notification.serial)
+				d.errC <- fmt.Errorf("message %d received by wrong recipient %v", notification.serial, notification.id)
 				break
 			}
-
-			// check if message serial is in expected messages for this recipient and notify to fail the test if not
-			idx := -1
-			for i, s := range d.allowedMsgs[h] {
-				if handlerNotification.serial == s {
-					idx = i
-					break
-				}
-			}
-			if idx == -1 {
-				d.errC <- fmt.Errorf("message %d received by wrong recipient %v", handlerNotification.serial, handlerNotification.id)
-				break
-			}
-
-			// message is ok, so remove that message serial from the recipient expectation array
-			last := len(d.allowedMsgs[h]) - 1
-			d.allowedMsgs[h][idx] = d.allowedMsgs[h][last]
-			d.allowedMsgs[h] = d.allowedMsgs[h][:last]
-			//notify the main sim thread
-			d.msgC <- handlerNotification
+		} else {
+			time.Sleep(time.Millisecond * 32)
 		}
 	}
+	close(d.doneC)
+	close(d.errC)
+	close(d.msgC)
 }
 
-func nodeMsgHandler(tstdata *testData, config *adapters.NodeConfig) *handler {
+func (d *testData) isAllowedMessage(n handlerNotification) bool {
+	// check if message serial is in expected messages for this recipient
+	for _, s := range d.allowedMsgs[n.id] {
+		if n.serial == s {
+			return true
+		}
+	}
+	return false
+}
+
+func (d *testData) removeAllowedMessage(id enode.ID, index int) {
+	last := len(d.allowedMsgs[id]) - 1
+	d.allowedMsgs[id][index] = d.allowedMsgs[id][last]
+	d.allowedMsgs[id] = d.allowedMsgs[id][:last]
+}
+
+func nodeMsgHandler(td *testData, config *adapters.NodeConfig) *handler {
 	return &handler{
 		f: func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
-			cnt := tstdata.incrementMsgCount()
+			if td.isDone() {
+				return nil // terminate if simulation is over
+			}
+
+			td.incrementMsgCount()
 
 			// using simple serial in message body, makes it easy to keep track of who's getting what
 			serial, c := binary.Uvarint(msg)
 			if c <= 0 {
 				log.Crit(fmt.Sprintf("corrupt message received by %x (uvarint parse returned %d)", config.ID, c))
-			} else {
-				log.Debug("nodeMsgHandler rcv", "cnt", cnt, "serial", serial)
 			}
 
-			if tstdata.isDone() {
-				return nil // terminate if simulation is over
-			}
-
-			// pass message context to the listener in the simulation
-			tstdata.handlerC <- handlerNotification{
-				id:     config.ID,
-				serial: serial,
-			}
-
+			td.pushNotification(handlerNotification{id: config.ID, serial: serial})
 			return nil
 		},
 		caps: &handlerCaps{
@@ -428,7 +379,7 @@ func nodeMsgHandler(tstdata *testData, config *adapters.NodeConfig) *handler {
 
 // an adaptation of the same services setup as in pss_test.go
 // replaces pss_test.go when those tests are rewritten to the new swarm/network/simulation package
-func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[Topic]handlerContextFunc, kademlias map[enode.ID]*network.Kademlia) map[string]simulation.ServiceFunc {
+func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[Topic]handlerContextFunc, kademlias map[enode.ID]*network.Kademlia) map[string]simulation.ServiceFunc {
 	stateStore := state.NewInmemoryStore()
 	kademlia := func(id enode.ID, bzzkey []byte) *network.Kademlia {
 		if k, ok := kademlias[id]; ok {
@@ -496,7 +447,7 @@ func newProxServices(tstdata *testData, allowRaw bool, handlerContextFuncs map[T
 			// register the handlers we've been passed
 			var deregisters []func()
 			for tpc, hndlrFunc := range handlerContextFuncs {
-				deregisters = append(deregisters, ps.Register(&tpc, hndlrFunc(tstdata, ctx.Config)))
+				deregisters = append(deregisters, ps.Register(&tpc, hndlrFunc(td, ctx.Config)))
 			}
 
 			// if handshake mode is set, add the controller
