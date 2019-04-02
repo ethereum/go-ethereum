@@ -589,9 +589,8 @@ func (w *Wallet) Contains(account accounts.Account) bool {
 
 // Initialize installs a keypair generated from the provided key into the wallet.
 func (w *Wallet) Initialize(seed []byte) error {
-	w.lock.Lock()
-	defer w.lock.Unlock()
-
+	// DO NOT lock at this stage, as the initialize
+	// function relies on Status()
 	return w.session.initialize(seed)
 }
 
@@ -877,6 +876,19 @@ type initializeData struct {
 
 // initialize initializes the card with new key data.
 func (s *Session) initialize(seed []byte) error {
+	// Check that the wallet isn't currently initialized,
+	// otherwise the key would be overwritten.
+	status, err := s.Wallet.Status()
+	if err != nil {
+		return err
+	}
+	if status == "Online" {
+		return fmt.Errorf("card is already initialized, cowardly refusing to proceed")
+	}
+
+	s.Wallet.lock.Lock()
+	defer s.Wallet.lock.Unlock()
+
 	// HMAC the seed to produce the private key and chain code
 	mac := hmac.New(sha512.New, []byte("Bitcoin seed"))
 	mac.Write(seed)
