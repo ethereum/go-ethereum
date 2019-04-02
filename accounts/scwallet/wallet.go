@@ -589,6 +589,7 @@ func (w *Wallet) Contains(account accounts.Account) bool {
 
 // Initialize installs a keypair generated from the provided key into the wallet.
 func (w *Wallet) Initialize(seed []byte) error {
+	go w.selfDerive()
 	// DO NOT lock at this stage, as the initialize
 	// function relies on Status()
 	return w.session.initialize(seed)
