@@ -512,12 +512,12 @@ func (b *Block) Difficulty(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*header.Difficulty), nil
 }
 
-func (b *Block) Timestamp(ctx context.Context) (hexutil.Big, error) {
+func (b *Block) Timestamp(ctx context.Context) (hexutil.Uint64, error) {
 	header, err := b.resolveHeader(ctx)
 	if err != nil {
-		return hexutil.Big{}, err
+		return 0, err
 	}
-	return hexutil.Big(*header.Time), nil
+	return hexutil.Uint64(header.Time), nil
 }
 
 func (b *Block) Nonce(ctx context.Context) (hexutil.Bytes, error) {

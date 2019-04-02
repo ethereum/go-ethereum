@@ -290,7 +290,7 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, writeHeader WhCa
 		"count", stats.processed, "elapsed", common.PrettyDuration(time.Since(start)),
 		"number", last.Number, "hash", last.Hash(),
 	}
-	if timestamp := time.Unix(last.Time.Int64(), 0); time.Since(timestamp) > time.Minute {
+	if timestamp := time.Unix(int64(last.Time), 0); time.Since(timestamp) > time.Minute {
 		context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
 	}
 	if stats.ignored > 0 {

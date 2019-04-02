@@ -690,7 +690,7 @@ func testExternalUI(api *core.SignerAPI) {
 			big.NewInt(1337),
 			1338,
 			1338,
-			big.NewInt(1338),
+			1338,
 			[]byte("Extra data Extra data Extra data  Extra data  Extra data  Extra data  Extra data Extra data"),
 			common.HexToHash("0x0000H45H"),
 			types.BlockNonce{},

@@ -158,7 +158,7 @@ func (lc *LightChain) loadLastState() error {
 	// Issue a status log and return
 	header := lc.hc.CurrentHeader()
 	headerTd := lc.GetTd(header.Hash(), header.Number.Uint64())
-	log.Info("Loaded most recent local header", "number", header.Number, "hash", header.Hash(), "td", headerTd, "age", common.PrettyAge(time.Unix(header.Time.Int64(), 0)))
+	log.Info("Loaded most recent local header", "number", header.Number, "hash", header.Hash(), "td", headerTd, "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
 
 	return nil
 }
@@ -485,7 +485,7 @@ func (lc *LightChain) SyncCht(ctx context.Context) bool {
 
 		// Ensure the chain didn't move past the latest block while retrieving it
 		if lc.hc.CurrentHeader().Number.Uint64() < header.Number.Uint64() {
-			log.Info("Updated latest header based on CHT", "number", header.Number, "hash", header.Hash(), "age", common.PrettyAge(time.Unix(header.Time.Int64(), 0)))
+			log.Info("Updated latest header based on CHT", "number", header.Number, "hash", header.Hash(), "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
 			lc.hc.SetCurrentHeader(header)
 		}
 		return true
