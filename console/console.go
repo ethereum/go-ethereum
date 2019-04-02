@@ -18,7 +18,6 @@ package console
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
 	"io"
 	"io/ioutil"
 	"os"
@@ -283,9 +282,7 @@ func (c *Console) Welcome() {
 		`console.log("at block: " + eth.blockNumber + " (" + new Date(1000 * eth.getBlock(eth.blockNumber).timestamp) + ")");`,
 		`console.log("datadir:  " + admin.datadir);`,
 	} {
-		if _, err := c.jsre.Run(command); err != nil {
-			log.Error("Geth JavaScript console error", "err", err)
-		}
+		c.jsre.Run(command)
 	}
 	// List all the supported modules for the user to call
 	if apis, err := c.client.SupportedModules(); err == nil {
