@@ -1138,7 +1138,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	return n, err
 }
 
-// insertChain is the internal implementation of insertChain, which assumes that
+// insertChain is the internal implementation of InsertChain, which assumes that
 // 1) chains are contiguous, and 2) The chain mutex is held.
 //
 // This method is split out so that import batches that require re-injecting
