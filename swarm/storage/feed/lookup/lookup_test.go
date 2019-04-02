@@ -40,8 +40,8 @@ const enablePrintMetrics = true // set to true to display algorithm benchmarking
 
 func printMetric(metric string, store *Store, elapsed time.Duration) {
 	if enablePrintMetrics {
-		fmt.Printf("metric=%s, readcount=%d (successful=%d, failed=%d), cached=%d, canceled=%d, elapsed=%s\n", metric,
-			store.reads, store.sucessful, store.failed, store.cacheHits, store.canceled, elapsed)
+		fmt.Printf("metric=%s, readcount=%d (successful=%d, failed=%d), cached=%d, canceled=%d, maxSimult=%d, elapsed=%s\n", metric,
+			store.reads, store.sucessful, store.failed, store.cacheHits, store.canceled, store.maxSimultaneous, elapsed)
 	}
 }
 

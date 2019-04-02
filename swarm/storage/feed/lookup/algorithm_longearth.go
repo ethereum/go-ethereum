@@ -6,43 +6,66 @@ import (
 	"time"
 )
 
-type StepFunc func(ctx context.Context, t uint64, hint Epoch) interface{}
+type stepFunc func(ctx context.Context, t uint64, hint Epoch) interface{}
 
+// LongEarthLookaheadDelay is the headstart the lookahead gives R before it launches
+var LongEarthLookaheadDelay = 250 * time.Millisecond
+
+// LongEarthLookbackDelay is the headstart the lookback gives R before it launches
+var LongEarthLookbackDelay = 250 * time.Millisecond
+
+// LongEarthAlgorithm explores possible lookup paths in parallel, pruning paths as soon
+// as a more promising lookup path is found. As a result, this lookup algorithm is an order
+// of magnitude faster than the FluzCapacitor algorithm, but at the expense of more exploratory reads.
+// This algorithm works as follows. On each step, the next epoch is immediately looked up (R)
+// and given a head start, while two parallel "steps" are launched a short time after:
+// look ahead (A) is the path the algorithm would take if the R lookup returns a value, whereas
+// look back (B) is the path the algorithm would take if the R lookup failed.
+// as soon as R is actually finished, the A or B paths are pruned depending on the value of R.
+// if A returns earlier than R, then R and B read operations can be safely canceled, saving time.
+// The maximum number of active read operations is calculated as 2^(timeout/headstart).
+// If headstart is infinite, this algorithm behaves as FluzCapacitor.
+// timeout is the maximum execution time of the passed `read` function.
+// the two head starts can be configured by changing LongEarthLookaheadDelay or LongEarthLookbackDelay
 func LongEarthAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFunc) (interface{}, error) {
-	var stepCounter int32
+	var stepCounter int32 // for debugging, stepCounter allows to give an ID to each step instance
 
-	errc := make(chan struct{})
-	var gerr error
+	errc := make(chan struct{}) // errc will help as an error shortcut signal
+	var gerr error              // in case of error, this variable will be set
 
-	var step StepFunc
+	var step stepFunc // For efficiency, the algorithm step is defined as a closure
 	step = func(ctxS context.Context, t uint64, hint Epoch) interface{} {
-		stepID := atomic.AddInt32(&stepCounter, 1)
+		stepID := atomic.AddInt32(&stepCounter, 1) // give an ID to this call instance
 		trace(stepID, "init: t=%d, hint=%s", t, hint.String())
 		var valueA, valueB, valueR interface{}
 
-		ctxR, cancelR := context.WithCancel(ctxS)
-		ctxA, cancelA := context.WithCancel(ctxS)
-		ctxB, cancelB := context.WithCancel(ctxS)
+		// initialize the three read contexts
+		ctxR, cancelR := context.WithCancel(ctxS) // will handle the current read operation
+		ctxA, cancelA := context.WithCancel(ctxS) // will handle the lookahead path
+		ctxB, cancelB := context.WithCancel(ctxS) // will handle the lookback path
 
-		epoch := GetNextEpoch(hint, t)
+		epoch := GetNextEpoch(hint, t) // calculate the epoch to look up in this step instance
 
+		// define the lookAhead function, which will follow the path as if R was successful
 		lookAhead := func() {
-			valueA = step(ctxA, t, epoch)
-			if valueA != nil {
+			valueA = step(ctxA, t, epoch) // launch the next step, recursively.
+			if valueA != nil {            // if this path is successful, we don't need R or B.
 				cancelB()
 				cancelR()
 			}
 		}
 
+		// define the lookBack function, which will follow the path as if R was unsuccessful
 		lookBack := func() {
-			var err error
 			if epoch.Base() == hint.Base() {
 				// we have reached the hint itself
 				if hint == worstHint {
 					valueB = nil
 					return
 				}
-				// check it out
+				var err error
+				// check the hint. If successful, this is it. Otherwise
+				// we've been given a bad hint!
 				valueB, err = read(ctxB, hint, now)
 				if valueB != nil || err == context.Canceled {
 					return
@@ -63,11 +86,11 @@ func LongEarthAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFu
 			valueB = step(ctxB, base-1, hint)
 		}
 
-		go func() {
+		go func() { //goroutine to read the current epoch (R)
 			defer cancelR()
 			var err error
-			valueR, err = read(ctxR, epoch, now)
-			if valueR == nil {
+			valueR, err = read(ctxR, epoch, now) // read this epoch
+			if valueR == nil {                   // if unsuccessful, cancel lookahead, otherwise cancel lookback.
 				cancelA()
 			} else {
 				cancelB()
@@ -78,15 +101,17 @@ func LongEarthAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFu
 			}
 		}()
 
-		go func() {
+		go func() { // goroutine to give a headstart to R and then launch lookahead.
 			defer cancelA()
 
+			// if we are at the lowest level or this is the hint, then we cannot lookahead
 			if epoch.Level == LowestLevel || epoch.Equals(hint) {
 				return
 			}
 
+			// give a head start to R, or launch immediately if R finishes early enough
 			select {
-			case <-TimeAfter(250 * time.Millisecond):
+			case <-TimeAfter(LongEarthLookaheadDelay):
 				lookAhead()
 			case <-ctxR.Done():
 				if valueR != nil {
@@ -96,11 +121,12 @@ func LongEarthAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFu
 			}
 		}()
 
-		go func() {
+		go func() { // goroutine to give a headstart to R and then launch lookback.
 			defer cancelB()
 
+			// give a head start to R, or launch immediately if R finishes early enough
 			select {
-			case <-TimeAfter(250 * time.Millisecond):
+			case <-TimeAfter(LongEarthLookbackDelay):
 				lookBack()
 			case <-ctxR.Done():
 				if valueR == nil {
@@ -130,11 +156,13 @@ func LongEarthAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFu
 	stepCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	go func() {
+	go func() { // launch the root step in its own goroutine to allow cancellation
 		value = step(stepCtx, now, hint)
 		cancel()
 	}()
 
+	// wait for the algorithm to finish, but shortcut in case
+	// of errors
 	select {
 	case <-stepCtx.Done():
 		return value, ctx.Err()
