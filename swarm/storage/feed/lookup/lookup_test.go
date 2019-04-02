@@ -20,11 +20,9 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 )
 
@@ -40,60 +38,25 @@ var algorithms = []AlgorithmInfo{
 
 const enablePrintMetrics = true // set to true to display algorithm benchmarking stats
 
-func printMetric(metric string, reads int32, elapsed time.Duration) {
+func printMetric(metric string, store *Store, elapsed time.Duration) {
 	if enablePrintMetrics {
-		fmt.Printf("metric=%s, readcount=%d, elapsed=%s\n", metric, reads, elapsed)
+		fmt.Printf("metric=%s, readcount=%d (successful=%d, failed=%d), cached=%d, canceled=%d, elapsed=%s\n", metric,
+			store.reads, store.sucessful, store.failed, store.cacheHits, store.canceled, elapsed)
 	}
-}
-
-type Data struct {
-	Payload uint64
-	Time    uint64
-}
-
-func (d *Data) String() string {
-	return fmt.Sprintf("%d-%d", d.Payload, d.Time)
-}
-
-type Store map[lookup.EpochID]*Data
-
-func write(store Store, epoch lookup.Epoch, value *Data) {
-	log.Debug("Write: %d-%d, value='%d'\n", epoch.Base(), epoch.Level, value.Payload)
-	store[epoch.ID()] = value
-}
-
-func update(store Store, last lookup.Epoch, now uint64, value *Data) lookup.Epoch {
-	epoch := lookup.GetNextEpoch(last, now)
-
-	write(store, epoch, value)
-
-	return epoch
 }
 
 const Day = 60 * 60 * 24
 const Year = Day * 365
 const Month = Day * 30
 
-func makeReadFunc(store Store, counter *int32) lookup.ReadFunc {
-	return func(ctx context.Context, epoch lookup.Epoch, now uint64) (interface{}, error) {
-		atomic.AddInt32(counter, 1)
-		select {
-		case <-lookup.TimeAfter(1000 * time.Millisecond):
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-		data := store[epoch.ID()]
-		var valueStr string
-		if data != nil {
-			valueStr = fmt.Sprintf("%d", data.Payload)
-		}
-		log.Debug("Read: %d-%d, value='%s'\n", epoch.Base(), epoch.Level, valueStr)
-
-		if data != nil && data.Time <= now {
-			return data, nil
-		}
-		return nil, nil
-	}
+// DefaultStoreConfig indicates the time the different read
+// operations will take in the simulation
+// This allows to measure an algorithm performance relative
+// to other
+var DefaultStoreConfig = &StoreConfig{
+	CacheReadTime:      50 * time.Millisecond,
+	FailedReadTime:     1000 * time.Millisecond,
+	SuccessfulReadTime: 500 * time.Millisecond,
 }
 
 // TestLookup verifies if the last update and intermediates are
@@ -105,9 +68,8 @@ func TestLookup(t *testing.T) {
 	defer stopwatch.Stop()
 
 	// ### 2.- Setup mock storage and generate updates
-	store := make(Store)
-	var readCount int32 = 0
-	readFunc := makeReadFunc(store, &readCount)
+	store := NewStore(DefaultStoreConfig)
+	readFunc := store.MakeReadFunc()
 
 	// write an update every month for 12 months 3 years ago and then silence for two years
 	now := uint64(1533799046)
@@ -120,14 +82,15 @@ func TestLookup(t *testing.T) {
 			Payload: t, //our "payload" will be the timestamp itself.
 			Time:    t,
 		}
-		epoch = update(store, epoch, t, &data)
+		epoch = store.Update(epoch, t, &data)
 		lastData = &data
 	}
 
 	// ### 3.- Test all algorithms
 	for _, algo := range algorithms {
 		t.Run(algo.Name, func(t *testing.T) {
-			readCount = 0
+
+			store.Reset() // reset the store read counters
 
 			// ### 3.1.- Test how long it takes to find the last update without a hint:
 			timeElapsedWithoutHint := stopwatch.Measure(func() {
@@ -142,10 +105,9 @@ func TestLookup(t *testing.T) {
 				}
 
 			})
-			printMetric("SIMPLE READ", readCount, timeElapsedWithoutHint)
+			printMetric("SIMPLE READ", store, timeElapsedWithoutHint)
 
-			// reset the read count for the next test
-			readCount = 0
+			store.Reset() // reset the read counters for the next test
 
 			// ### 3.2.- Test how long it takes to find the last update *with* a hint.
 			// it should take less time!
@@ -159,14 +121,13 @@ func TestLookup(t *testing.T) {
 					t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
 				}
 			})
-			printMetric("WITH HINT", readCount, stopwatch.Elapsed())
+			printMetric("WITH HINT", store, stopwatch.Elapsed())
 
 			if timeElapsed > timeElapsedWithoutHint {
 				t.Fatalf("Expected lookup to complete faster than %s since we provided a hint. Took %s", timeElapsedWithoutHint, timeElapsed)
 			}
 
-			// reset the read count for the next test
-			readCount = 0
+			store.Reset() // reset the read counters for the next test
 
 			// ### 3.3.- try to get an intermediate value
 			// if we look for a value in, e.g., now - Year*3 + 6*Month, we should get that value
@@ -188,7 +149,7 @@ func TestLookup(t *testing.T) {
 					t.Fatalf("Expected value timestamp to be %d, got %d", data.Time, expectedTime)
 				}
 			})
-			printMetric("INTERMEDIATE READ", readCount, timeElapsed)
+			printMetric("INTERMEDIATE READ", store, timeElapsed)
 		})
 	}
 }
@@ -202,10 +163,9 @@ func TestOneUpdateAt0(t *testing.T) {
 	defer stopwatch.Stop()
 
 	// ### 2.- Setup mock storage and generate updates
-	store := make(Store)
-	var readCount int32 = 0
+	store := NewStore(DefaultStoreConfig)
+	readFunc := store.MakeReadFunc()
 
-	readFunc := makeReadFunc(store, &readCount)
 	now := uint64(1533903729)
 
 	var epoch lookup.Epoch
@@ -213,12 +173,12 @@ func TestOneUpdateAt0(t *testing.T) {
 		Payload: 79,
 		Time:    0,
 	}
-	update(store, epoch, 0, &data) //place 1 update in t=0
+	store.Update(epoch, 0, &data) //place 1 update in t=0
 
 	// ### 3.- Test all algorithms
 	for _, algo := range algorithms {
 		t.Run(algo.Name, func(t *testing.T) {
-			readCount = 0
+			store.Reset() // reset the read counters for the next test
 			timeElapsed := stopwatch.Measure(func() {
 				value, err := algo.Lookup(context.Background(), now, lookup.NoClue, readFunc)
 				if err != nil {
@@ -228,7 +188,7 @@ func TestOneUpdateAt0(t *testing.T) {
 					t.Fatalf("Expected lookup to return the last written value: %v. Got %v", data, value)
 				}
 			})
-			printMetric("SIMPLE", readCount, timeElapsed)
+			printMetric("SIMPLE", store, timeElapsed)
 		})
 	}
 }
@@ -241,10 +201,9 @@ func TestBadHint(t *testing.T) {
 	defer stopwatch.Stop()
 
 	// ### 2.- Setup mock storage and generate updates
-	store := make(Store)
-	var readCount int32 = 0
+	store := NewStore(DefaultStoreConfig)
+	readFunc := store.MakeReadFunc()
 
-	readFunc := makeReadFunc(store, &readCount)
 	now := uint64(1533903729)
 
 	var epoch lookup.Epoch
@@ -254,7 +213,7 @@ func TestBadHint(t *testing.T) {
 	}
 
 	// place an update for t=1200
-	update(store, epoch, 1200, &data)
+	store.Update(epoch, 1200, &data)
 
 	// come up with some evil hint
 	badHint := lookup.Epoch{
@@ -265,7 +224,7 @@ func TestBadHint(t *testing.T) {
 	// ### 3.- Test all algorithms
 	for _, algo := range algorithms {
 		t.Run(algo.Name, func(t *testing.T) {
-			readCount = 0
+			store.Reset()
 			timeElapsed := stopwatch.Measure(func() {
 				value, err := algo.Lookup(context.Background(), now, badHint, readFunc)
 				if err != nil {
@@ -275,7 +234,7 @@ func TestBadHint(t *testing.T) {
 					t.Fatalf("Expected lookup to return the last written value: %v. Got %v", data, value)
 				}
 			})
-			printMetric("SIMPLE", readCount, timeElapsed)
+			printMetric("SIMPLE", store, timeElapsed)
 		})
 	}
 }
@@ -288,10 +247,9 @@ func TestBadHintNextToUpdate(t *testing.T) {
 	defer stopwatch.Stop()
 
 	// ### 2.- Setup mock storage and generate updates
-	store := make(Store)
-	var readCount int32 = 0
+	store := NewStore(DefaultStoreConfig)
+	readFunc := store.MakeReadFunc()
 
-	readFunc := makeReadFunc(store, &readCount)
 	now := uint64(1533903729)
 	var last *Data
 
@@ -317,7 +275,7 @@ func TestBadHintNextToUpdate(t *testing.T) {
 			Time:    0,
 		}
 		last = &data
-		epoch = update(store, epoch, 1200000000+i, &data)
+		epoch = store.Update(epoch, 1200000000+i, &data)
 	}
 
 	// come up with some evil hint:
@@ -330,7 +288,7 @@ func TestBadHintNextToUpdate(t *testing.T) {
 	// ### 3.- Test all algorithms
 	for _, algo := range algorithms {
 		t.Run(algo.Name, func(t *testing.T) {
-			readCount = 0
+			store.Reset() // reset read counters for next test
 
 			timeElapsed := stopwatch.Measure(func() {
 				value, err := algo.Lookup(context.Background(), now, badHint, readFunc)
@@ -341,12 +299,12 @@ func TestBadHintNextToUpdate(t *testing.T) {
 					t.Fatalf("Expected lookup to return the last written value: %v. Got %v", last, value)
 				}
 			})
-			printMetric("SIMPLE", readCount, timeElapsed)
+			printMetric("SIMPLE", store, timeElapsed)
 		})
 	}
 }
 
-// TestContextCancellation checks whether a lookup can be cancelled
+// TestContextCancellation checks whether a lookup can be canceled
 func TestContextCancellation(t *testing.T) {
 
 	// ### 1.- Test all algorithms
@@ -370,7 +328,7 @@ func TestContextCancellation(t *testing.T) {
 			cancel() //actually cancel the lookup
 
 			if err := <-errc; err != context.Canceled {
-				t.Fatalf("Expected lookup to return a context Cancelled error, got %v", err)
+				t.Fatalf("Expected lookup to return a context canceled error, got %v", err)
 			}
 
 			// ### 2.2.- Test context cancellation during hint lookup:
@@ -380,7 +338,7 @@ func TestContextCancellation(t *testing.T) {
 				Level: 25,
 				Time:  300,
 			}
-			// put up a read function that gets cancelled only on hint lookup
+			// put up a read function that gets canceled only on hint lookup
 			readFunc = func(ctx context.Context, epoch lookup.Epoch, now uint64) (interface{}, error) {
 				if epoch == someHint {
 					go cancel()
@@ -396,7 +354,7 @@ func TestContextCancellation(t *testing.T) {
 			}()
 
 			if err := <-errc; err != context.Canceled {
-				t.Fatalf("Expected lookup to return a context Cancelled error, got %v", err)
+				t.Fatalf("Expected lookup to return a context canceled error, got %v", err)
 			}
 		})
 	}
@@ -415,17 +373,15 @@ func TestLookupFail(t *testing.T) {
 	// don't write anything and try to look up.
 	// we're testing we don't get stuck in a loop and that the lookup
 	// function converges in a timely fashion
+	store := NewStore(DefaultStoreConfig)
+	readFunc := store.MakeReadFunc()
 
-	store := make(Store)
-	var readCount int32 = 0
-
-	readFunc := makeReadFunc(store, &readCount)
 	now := uint64(1533903729)
 
 	// ### 3.- Test all algorithms
 	for _, algo := range algorithms {
 		t.Run(algo.Name, func(t *testing.T) {
-			readCount = 0
+			store.Reset()
 
 			stopwatch.Measure(func() {
 				value, err := algo.Lookup(context.Background(), now, lookup.NoClue, readFunc)
@@ -437,7 +393,7 @@ func TestLookupFail(t *testing.T) {
 				}
 			})
 
-			printMetric("SIMPLE", readCount, stopwatch.Elapsed())
+			printMetric("SIMPLE", store, stopwatch.Elapsed())
 		})
 	}
 }
@@ -450,10 +406,9 @@ func TestHighFreqUpdates(t *testing.T) {
 
 	// ### 2.- Setup mock storage and add one update per second
 	// for the last 1000 seconds:
-	store := make(Store)
-	var readCount int32 = 0
+	store := NewStore(DefaultStoreConfig)
+	readFunc := store.MakeReadFunc()
 
-	readFunc := makeReadFunc(store, &readCount)
 	now := uint64(1533903729)
 
 	var epoch lookup.Epoch
@@ -465,14 +420,14 @@ func TestHighFreqUpdates(t *testing.T) {
 			Payload: T, //our "payload" will be the timestamp itself.
 			Time:    T,
 		}
-		epoch = update(store, epoch, T, &data)
+		epoch = store.Update(epoch, T, &data)
 		lastData = &data
 	}
 
 	// ### 3.- Test all algorithms
 	for _, algo := range algorithms {
 		t.Run(algo.Name, func(t *testing.T) {
-			readCount = 0
+			store.Reset() // reset read counters for next test
 
 			// ### 3.1.- Test how long it takes to find the last update without a hint:
 			timeElapsedWithoutHint := stopwatch.Measure(func() {
@@ -486,10 +441,10 @@ func TestHighFreqUpdates(t *testing.T) {
 					t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
 				}
 			})
-			printMetric("SIMPLE", readCount, timeElapsedWithoutHint)
+			printMetric("SIMPLE", store, timeElapsedWithoutHint)
 
 			// reset the read count for the next test
-			readCount = 0
+			store.Reset()
 
 			// ### 3.2.- Now test how long it takes to find the last update *with* a hint,
 			// it should take less time!
@@ -509,9 +464,9 @@ func TestHighFreqUpdates(t *testing.T) {
 			if timeElapsed > timeElapsedWithoutHint {
 				t.Fatalf("Expected lookup to complete faster than %s since we provided a hint. Took %s", timeElapsedWithoutHint, timeElapsed)
 			}
-			printMetric("WITH HINT", readCount, timeElapsed)
+			printMetric("WITH HINT", store, timeElapsed)
 
-			readCount = 0
+			store.Reset() // reset read counters
 
 			// ### 3.3.- Test multiple lookups at different intervals
 			timeElapsed = stopwatch.Measure(func() {
@@ -530,41 +485,44 @@ func TestHighFreqUpdates(t *testing.T) {
 					}
 				}
 			})
-			printMetric("MULTIPLE", readCount, timeElapsed)
+			printMetric("MULTIPLE", store, timeElapsed)
 		})
 	}
 }
 
+// TestSparseUpdates checks the lookup algorithm when
+// updates come sparsely and in bursts
 func TestSparseUpdates(t *testing.T) {
 	// ### 1.- Initialize stopwatch time sim
 	stopwatch := NewStopwatch(50 * time.Millisecond)
 	lookup.TimeAfter = stopwatch.TimeAfter()
 	defer stopwatch.Stop()
 
-	// ### 2.- Setup mock storage and write an update sparsely,
+	// ### 2.- Setup mock storage and write an updates sparsely in bursts,
 	// every 5 years 3 times starting in Jan 1st 1970 and then silence
-	store := make(Store)
-	var readCount int32 = 0
-	readFunc := makeReadFunc(store, &readCount)
+	store := NewStore(DefaultStoreConfig)
+	readFunc := store.MakeReadFunc()
 
-	now := uint64(1533799046)
+	now := uint64(633799046)
 	var epoch lookup.Epoch
 
 	var lastData *Data
-	for i := uint64(0); i < 5; i++ {
-		T := uint64(Year * 5 * i) // write an update every 5 years 3 times starting in Jan 1st 1970 and then silence
-		data := Data{
-			Payload: T, //our "payload" will be the timestamp itself.
-			Time:    T,
+	for i := uint64(0); i < 3; i++ {
+		for j := uint64(0); j < 10; j++ {
+			T := uint64(Year*5*i + j) // write a burst of 10 updates every 5 years 3 times starting in Jan 1st 1970 and then silence
+			data := Data{
+				Payload: T, //our "payload" will be the timestamp itself.
+				Time:    T,
+			}
+			epoch = store.Update(epoch, T, &data)
+			lastData = &data
 		}
-		epoch = update(store, epoch, T, &data)
-		lastData = &data
 	}
 
 	// ### 3.- Test all algorithms
 	for _, algo := range algorithms {
 		t.Run(algo.Name, func(t *testing.T) {
-			readCount = 0
+			store.Reset() // reset read counters for next test
 
 			// ### 3.1.- Test how long it takes to find the last update without a hint:
 			timeElapsedWithoutHint := stopwatch.Measure(func() {
@@ -578,16 +536,15 @@ func TestSparseUpdates(t *testing.T) {
 					t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
 				}
 			})
-			printMetric("SIMPLE", readCount, timeElapsedWithoutHint)
+			printMetric("SIMPLE", store, timeElapsedWithoutHint)
 
 			// reset the read count for the next test
-			readCount = 0
+			store.Reset()
 
 			// ### 3.2.- Now test how long it takes to find the last update *with* a hint,
 			// it should take less time!
 			timeElapsed := stopwatch.Measure(func() {
 				value, err := algo.Lookup(context.Background(), now, epoch, readFunc)
-				stopwatch.Stop()
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -600,7 +557,7 @@ func TestSparseUpdates(t *testing.T) {
 				t.Fatalf("Expected lookup to complete faster than %s since we provided a hint. Took %s", timeElapsedWithoutHint, timeElapsed)
 			}
 
-			printMetric("WITH HINT", readCount, stopwatch.Elapsed())
+			printMetric("WITH HINT", store, stopwatch.Elapsed())
 
 		})
 	}
