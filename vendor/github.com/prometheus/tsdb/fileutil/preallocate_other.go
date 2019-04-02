@@ -1,4 +1,5 @@
-// Copyright 2016 The Prometheus Authors
+// Copyright 2015 The etcd Authors
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -11,26 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package flock
+// +build !linux,!darwin
 
-import "syscall"
+package fileutil
 
-type windowsLock struct {
-	fd syscall.Handle
+import "os"
+
+func preallocExtend(f *os.File, sizeInBytes int64) error {
+	return preallocExtendTrunc(f, sizeInBytes)
 }
 
-func (fl *windowsLock) Release() error {
-	return syscall.Close(fl.fd)
-}
-
-func newLock(fileName string) (Releaser, error) {
-	pathp, err := syscall.UTF16PtrFromString(fileName)
-	if err != nil {
-		return nil, err
-	}
-	fd, err := syscall.CreateFile(pathp, syscall.GENERIC_READ|syscall.GENERIC_WRITE, 0, nil, syscall.CREATE_ALWAYS, syscall.FILE_ATTRIBUTE_NORMAL, 0)
-	if err != nil {
-		return nil, err
-	}
-	return &windowsLock{fd}, nil
-}
+func preallocFixed(f *os.File, sizeInBytes int64) error { return nil }

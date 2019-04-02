@@ -11,49 +11,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build solaris
+package fileutil
 
-package flock
+import "syscall"
 
-import (
-	"os"
-	"syscall"
-)
-
-type unixLock struct {
-	f *os.File
+type windowsLock struct {
+	fd syscall.Handle
 }
 
-func (l *unixLock) Release() error {
-	if err := l.set(false); err != nil {
-		return err
-	}
-	return l.f.Close()
-}
-
-func (l *unixLock) set(lock bool) error {
-	flock := syscall.Flock_t{
-		Type:   syscall.F_UNLCK,
-		Start:  0,
-		Len:    0,
-		Whence: 1,
-	}
-	if lock {
-		flock.Type = syscall.F_WRLCK
-	}
-	return syscall.FcntlFlock(l.f.Fd(), syscall.F_SETLK, &flock)
+func (fl *windowsLock) Release() error {
+	return syscall.Close(fl.fd)
 }
 
 func newLock(fileName string) (Releaser, error) {
-	f, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0644)
+	pathp, err := syscall.UTF16PtrFromString(fileName)
 	if err != nil {
 		return nil, err
 	}
-	l := &unixLock{f}
-	err = l.set(true)
+	fd, err := syscall.CreateFile(pathp, syscall.GENERIC_READ|syscall.GENERIC_WRITE, 0, nil, syscall.CREATE_ALWAYS, syscall.FILE_ATTRIBUTE_NORMAL, 0)
 	if err != nil {
-		f.Close()
 		return nil, err
 	}
-	return l, nil
+	return &windowsLock{fd}, nil
 }

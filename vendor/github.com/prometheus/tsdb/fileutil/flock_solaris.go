@@ -11,9 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build darwin dragonfly freebsd linux netbsd openbsd
+// +build solaris
 
-package flock
+package fileutil
 
 import (
 	"os"
@@ -32,11 +32,16 @@ func (l *unixLock) Release() error {
 }
 
 func (l *unixLock) set(lock bool) error {
-	how := syscall.LOCK_UN
-	if lock {
-		how = syscall.LOCK_EX
+	flock := syscall.Flock_t{
+		Type:   syscall.F_UNLCK,
+		Start:  0,
+		Len:    0,
+		Whence: 1,
 	}
-	return syscall.Flock(int(l.f.Fd()), how|syscall.LOCK_NB)
+	if lock {
+		flock.Type = syscall.F_WRLCK
+	}
+	return syscall.FcntlFlock(l.f.Fd(), syscall.F_SETLK, &flock)
 }
 
 func newLock(fileName string) (Releaser, error) {
