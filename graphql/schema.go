@@ -165,7 +165,7 @@ const schema string = `
         # GasUsed is the amount of gas that was used executing transactions in this block.
         gasUsed: Long!
         # Timestamp is the unix timestamp at which this block was mined.
-        timestamp: BigInt!
+        timestamp: Long!
         # LogsBloom is a bloom filter that can be used to check if a block may
         # contain log entries matching a filter.
         logsBloom: Bytes!
