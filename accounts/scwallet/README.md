@@ -4,8 +4,11 @@
 
   * A USB smartcard reader
   * A keycard that supports the status app
+  * PCSCD version 4.3 running on your system **Only version 4.3 is currently supported**
 
 ## Preparing the smartcard
+
+  **WARNING: FOILLOWING THESE INSTRUCTIONS WILL DESTROY THE MASTER KEY ON YOUR CARD. ONLY PROCEED IF NO FUNDS ARE ASSOCIATED WITH THESE ACCOUNTS**
 
   You can use status' [keycard-cli](https://github.com/status-im/keycard-cli) and you should get version 2.1.1 of their [smartcard application](https://github.com/status-im/status-keycard/releases/download/2.1.1/keycard_v2.1.1.cap)
 
@@ -21,6 +24,12 @@
 
   ```
   keycard init
+  ```
+
+  Then the card needs to be paired:
+
+  ```
+  keycard pair
   ```
 
   Finally, you need to have the card generate a new master key:
