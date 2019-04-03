@@ -49,8 +49,12 @@ collections:
     output: true
     caption: Clef
     sidebar_index: 6
+  whisper:
+    output: true
+    caption: Whisper
+    sidebar_index: 7
   doc:
     output: true
     caption: Other
-    sidebar_index: 7
+    sidebar_index: 8
 
