@@ -1,3 +1,7 @@
+---
+title: Communication APIs
+---
+
 ## Communication
 
 ### External API

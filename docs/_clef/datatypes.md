@@ -1,3 +1,8 @@
+---
+title: Communication data types
+---
+
+
 ## UI Client interface
 
 These data types are defined in the channel between clef and the UI
