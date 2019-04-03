@@ -1,3 +1,8 @@
+---
+title: Advanced setup
+---
+
+
 # Setting up Clef
 
 This document describes how Clef can be used in a more secure manner than executing it from your everyday laptop, 

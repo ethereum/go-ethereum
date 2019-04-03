@@ -1,3 +1,7 @@
+---
+title: Tutorial
+---
+
 ## Initializing the signer
 
 First, initialize the master seed.
