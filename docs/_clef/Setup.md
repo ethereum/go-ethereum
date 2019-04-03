@@ -1,4 +1,7 @@
-#  Advanced setup
+---
+title: Advanced setup
+---
+
 
 This document describes how Clef can be used in a more secure manner than executing it from your everyday laptop, 
 in order to ensure that the keys remain safe in the event that your computer should get compromised. 
