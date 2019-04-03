@@ -293,12 +293,28 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 	return suggestedPeer, 0, false
 }
 
+func (k *Kademlia) PoOfPeer(peer *BzzPeer) (int, error) {
+	peerPo := -1
+	k.EachConn(nil, 255, func(p *Peer, po int) bool {
+		if p.BzzPeer == peer {
+			peerPo = po
+			return false
+		}
+		return true
+	})
+	if peerPo == -1 {
+		return peerPo, fmt.Errorf("peer not in kademlia")
+	}
+	return peerPo, nil
+}
+
 // On inserts the peer as a kademlia peer into the live peers
 func (k *Kademlia) On(p *Peer) (uint8, bool) {
+	var change bool
 	k.lock.Lock()
 	defer k.lock.Unlock()
 	var ins bool
-	k.conns, _, _, _ = pot.Swap(k.conns, p, Pof, func(v pot.Val) pot.Val {
+	k.conns, _, _, change = pot.Swap(k.conns, p, Pof, func(v pot.Val) pot.Val {
 		// if not found live
 		if v == nil {
 			ins = true
@@ -308,6 +324,9 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 		// found among live peers, do nothing
 		return v
 	})
+	if change {
+		go p.NotifyChanged()
+	}
 	if ins && !p.BzzPeer.LightNode {
 		a := newEntry(p.BzzAddr)
 		a.conn = p

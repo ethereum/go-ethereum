@@ -119,7 +119,7 @@ var retrievalSimServiceMap = map[string]simulation.ServiceFunc{
 
 		r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 			Retrieval:       RetrievalEnabled,
-			Syncing:         SyncingAutoSubscribe,
+			Syncing:         SyncingRegisterOnly,
 			SyncUpdateDelay: syncUpdateDelay,
 		}, nil)
 

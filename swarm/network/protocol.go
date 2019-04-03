@@ -247,14 +247,28 @@ func (b *Bzz) runBzz(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 // BzzPeer is the bzz protocol view of a protocols.Peer (itself an extension of p2p.Peer)
 // implements the Peer interface and all interfaces Peer implements: Addr, OverlayPeer
 type BzzPeer struct {
-	*protocols.Peer           // represents the connection for online peers
-	*BzzAddr                  // remote address -> implements Addr interface = protocols.Peer
+	*protocols.Peer // represents the connection for online peers
+	*BzzAddr        // remote address -> implements Addr interface = protocols.Peer
+	ChangeC         chan struct{}
 	lastActive      time.Time // time is updated whenever mutexes are releasing
 	LightNode       bool
 }
 
 func NewBzzPeer(p *protocols.Peer) *BzzPeer {
-	return &BzzPeer{Peer: p, BzzAddr: NewAddr(p.Node())}
+	return &BzzPeer{
+		Peer:    p,
+		BzzAddr: NewAddr(p.Node()),
+		ChangeC: make(chan struct{}, 1),
+	}
+}
+
+func (p *BzzPeer) NotifyChanged() {
+	p.ChangeC <- struct{}{}
+}
+
+// TODO: call this function from somewhere
+func (p *BzzPeer) Close() {
+	close(p.ChangeC)
 }
 
 // ID returns the peer's underlay node identifier.

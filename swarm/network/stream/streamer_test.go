@@ -1063,7 +1063,7 @@ func TestRequestPeerSubscriptions(t *testing.T) {
 	defer func() { subscriptionFunc = doRequestSubscription }()
 	// define the function which should run for each connection
 	// instead of doing real subscriptions, we just store the bin numbers
-	subscriptionFunc = func(r *Registry, p *network.Peer, bin uint8, subs map[enode.ID]map[Stream]struct{}) bool {
+	subscriptionFunc = func(r *Registry, p *network.BzzPeer, bin uint8) error {
 		// get the peer ID
 		peerstr := fmt.Sprintf("%x", p.Over())
 		// create the array of bins per peer
@@ -1073,11 +1073,11 @@ func TestRequestPeerSubscriptions(t *testing.T) {
 		// store the (fake) bin subscription
 		log.Debug(fmt.Sprintf("Adding fake subscription for peer %s with bin %d", peerstr, bin))
 		fakeSubscriptions[peerstr] = append(fakeSubscriptions[peerstr], int(bin))
-		return true
+		return nil
 	}
 	// create just a simple Registry object in order to be able to call...
-	r := &Registry{}
-	r.requestPeerSubscriptions(k, nil)
+	//r := &Registry{}
+	//r.requestPeerSubscriptions(k, nil)
 	// calculate the kademlia depth
 	kdepth := k.NeighbourhoodDepth()
 
@@ -1206,15 +1206,15 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 	defer func() { subscriptionFunc = doRequestSubscription }()
 
 	// we use this subscriptionFunc for this test: just increases count and calls the actual subscription
-	subscriptionFunc = func(r *Registry, p *network.Peer, bin uint8, subs map[enode.ID]map[Stream]struct{}) bool {
+	subscriptionFunc = func(r *Registry, p *network.BzzPeer, bin uint8) error {
 		// syncing starts after syncUpdateDelay and loops after that Duration; we only want to count at the first iteration
 		// in the first iteration, subs will be empty (no existing subscriptions), thus we can use this check
 		// this avoids flakyness
-		if len(subs) == 0 {
-			expectedMsgCount.inc()
-		}
-		doRequestSubscription(r, p, bin, subs)
-		return true
+		//if len(subs) == 0 {
+		expectedMsgCount.inc()
+		//}
+		doRequestSubscription(r, p, bin)
+		return nil
 	}
 	// create a standard sim
 	sim := simulation.New(map[string]simulation.ServiceFunc{
@@ -1341,9 +1341,7 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 			log.Debug("All node streams counted", "realCount", realCount)
 		}
 		emc := expectedMsgCount.count()
-		// after a subscription request, internally a live AND a history stream will be subscribed,
-		// thus the real count should be half of the actual request subscriptions sent
-		if realCount/2 != emc {
+		if realCount != emc {
 			return fmt.Errorf("Real subscriptions and expected amount don't match; real: %d, expected: %d", realCount/2, emc)
 		}
 		return nil
