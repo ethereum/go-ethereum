@@ -2,8 +2,6 @@
 title: Rules
 ---
 
-# Rules
-
 The `signer` binary contains a ruleset engine, implemented with [OttoVM](https://github.com/robertkrimen/otto)
 
 It enables usecases like the following:

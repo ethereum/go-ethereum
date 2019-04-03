@@ -3,8 +3,6 @@ title: Clef overview
 ---
 
 
-Clef
-===
 _A reasonably secure wallet_
 
 Goal: Accommodate arbitrary high requirements for security (through _isolation_ and _separation_), while still providing _usability_.
