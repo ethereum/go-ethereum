@@ -3,6 +3,8 @@ title: Mining
 ---
 * [Introduction to Ethereum mining](https://github.com/ethereum/wiki/wiki/Mining#introduction) _(main wiki)_
 
+**This page is heavily outdated**
+
 # CPU Mining with Geth
 
 At Frontier, the first release of Ethereum, you'll just need a) a GPU and b) an Ethereum client, Geth. CPU mining will be possible but too inefficient to hold any value.
