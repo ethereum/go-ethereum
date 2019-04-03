@@ -45,9 +45,12 @@ collections:
     output: true
     caption: Developers
     sidebar_index: 5
+  clef:
+    output: true
+    caption: Clef
+    sidebar_index: 6
   doc:
     output: true
     caption: Other
-    sidebar_index: 6
- 
- 
+    sidebar_index: 7
+
