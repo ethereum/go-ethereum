@@ -24,10 +24,10 @@ or a separate VM in a [QubesOS](https://www.qubes-os.org/) type os setup.
 
 Check out 
 
-* the [tutorial](Tutorial.md) for some concrete examples on how the signer works.
-* the [setup docs](Setup.md) for some information on how to configure it to work on QubesOS or USBArmory. 
-* more info about [rules](Rules.md)
-* the [data types](datatypes.md) for detailed information on the json types used in the communication between
+* the [tutorial](Tutorial) for some concrete examples on how the signer works.
+* the [setup docs](Setup) for some information on how to configure it to work on QubesOS or USBArmory. 
+* more info about [rules](Rules)
+* the [data types](datatypes) for detailed information on the json types used in the communication between
   clef and an external UI 
 
 ## Security model

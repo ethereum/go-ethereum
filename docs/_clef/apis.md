@@ -37,7 +37,7 @@ process output for confirmation-requests.
 
 * Changelog for [External API](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/extapi_changelog.md)
 * Changelog for [UI API](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/intapi_changelog.md)
-* Documentation about [Datatypes](datatypes.md)
+* Documentation about [Datatypes](datatypes)
 
 
 ## External API
