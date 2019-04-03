@@ -34,9 +34,16 @@ process output for confirmation-requests.
 * The UI app prompts the user accordingly, and responds to the `signer`
 * The `signer` signs (or not), and responds to the original request.
 
+### More resoruces
+
+* Changelog for [External API](developers/extapi_changelog.md)
+* Changelog for [UI API](developers/intapi_changelog.md)
+* Documentation about [Datatypes](developers/datatypes.md)
+
+
 ## External API
 
-See the [external api changelog](extapi_changelog.md) for information about changes to this API.
+See the [external api changelog](developers/extapi_changelog.md) for information about changes to this API.
 
 ### Encoding
 - number: positive integers that are hex encoded
@@ -529,7 +536,7 @@ See `pythonsigner`, which can be invoked via `python3 pythonsigner.py test` to p
 
 All methods in this API uses object-based parameters, so that there can be no mixups of parameters: each piece of data is accessed by key.
 
-See the [ui api changelog](intapi_changelog.md) for information about changes to this API.
+See the [ui api changelog](developers/intapi_changelog.md) for information about changes to this API.
 
 OBS! A slight deviation from `json` standard is in place: every request and response should be confined to a single line.
 Whereas the `json` specification allows for linebreaks, linebreaks __should not__ be used in this communication channel, to make
