@@ -29,7 +29,7 @@ Clone the repository to a directory of your choosing:
 ```shell
 git clone https://github.com/ethereum/go-ethereum
 ```
-Install latest distribution of Go (v1.7) if you don't have it already:
+Install latest distribution of Go (v1.12.1) if you don't have it already:
 
 [See instructions](Installing-Go#ubuntu-1404)
 
