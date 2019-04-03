@@ -34,6 +34,7 @@ process output for confirmation-requests.
 
 ### More resoruces
 
+
 * Changelog for [External API](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/extapi_changelog.md)
 * Changelog for [UI API](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/intapi_changelog.md)
 * Documentation about [Datatypes](datatypes.md)
@@ -42,6 +43,7 @@ process output for confirmation-requests.
 ## External API
 
 See the [external api changelog](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/extapi_changelog.md) for information about changes to this API.
+
 
 ### Encoding
 - number: positive integers that are hex encoded
