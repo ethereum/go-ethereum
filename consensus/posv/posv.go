@@ -428,14 +428,7 @@ func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.
 		}
 		extraSuffix := len(header.Extra) - extraSeal
 		masternodesFromCheckpointHeader := common.ExtractAddressFromBytes(header.Extra[extraVanity:extraSuffix])
-		validSigners := true
-		sort.Slice(masternodesFromCheckpointHeader, func(i, j int) bool {
-			return masternodesFromCheckpointHeader[i].String() <= masternodesFromCheckpointHeader[j].String()
-		})
-		sort.Slice(signers, func(i, j int) bool {
-			return signers[i].String() <= signers[j].String()
-		})
-		validSigners = reflect.DeepEqual(masternodesFromCheckpointHeader, signers)
+		validSigners := compareSignersLists(masternodesFromCheckpointHeader, signers)
 		if !validSigners {
 			log.Error("Masternodes lists are different in checkpoint header and snapshot", "number", number, "masternodes_from_checkpoint_header", masternodesFromCheckpointHeader, "masternodes_in_snapshot", signers, "penList", penPenalties)
 			return errInvalidCheckpointSigners
@@ -449,6 +442,18 @@ func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.
 	}
 	// All basic checks passed, verify the seal and return
 	return c.verifySeal(chain, header, parents, fullVerify)
+}
+
+// compare 2 signers lists
+// return true if they are same elements, otherwise return false
+func compareSignersLists(list1 []common.Address, list2 []common.Address) bool {
+	sort.Slice(list1, func(i, j int) bool {
+		return list1[i].String() <= list1[j].String()
+	})
+	sort.Slice(list2, func(i, j int) bool {
+		return list2[i].String() <= list2[j].String()
+	})
+	return reflect.DeepEqual(list1, list2)
 }
 
 func (c *Posv) GetSnapshot(chain consensus.ChainReader, header *types.Header) (*Snapshot, error) {
