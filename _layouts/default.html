@@ -30,10 +30,9 @@ common-js:
         </div>
         <div id="navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
-              {% for link in site.data.navbar %}
-              <li>
-                  <a href="{% include link.html url=link.last %}">{{ link.first }}</a>
-              </li>
+            {% for link in site.data.navbar %}
+	    {% capture target %}{% include link.html url=link.last %}{% endcapture %}
+              <li><a href="{{target |strip }}">{{ link.first }}</a></li>
               {% endfor %}
           </ul>
         </div>

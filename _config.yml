@@ -29,32 +29,41 @@ collections:
     output: true
     caption: Install and build
     sidebar_index: 1
-  how-to:
-    output: true
-    caption: How to use
-    sidebar_index: 2
+    frontpage: _install-and-build/Installing-Geth.md
   interface:
-    output: true
-    caption: Interface documentation
-    sidebar_index: 3
+    output: true  
+    caption: Interacting with Geth
+    sidebar_index: 2
   support:
     output: true
     caption: Issues and support
-    sidebar_index: 4
+    sidebar_index: 3
   developers:
     output: true
-    caption: Developers
-    sidebar_index: 5
+    caption: Developer docs
+    sidebar_index: 4
   clef:
     output: true
     caption: Clef
-    sidebar_index: 6
+    sidebar_index: 5
+    frontpage: _clef/Overview.md
   whisper:
     output: true
     caption: Whisper
+    sidebar_index: 6
+    frontpage: _whisper/Whisper-Overview.md
+  swarm:
+    output: true
+    caption: Swarm
     sidebar_index: 7
   doc:
     output: true
     caption: Other
     sidebar_index: 8
+  legacy:
+    output: true
+    caption: Legacy content
+    sidebar_index: 9
+
+
 

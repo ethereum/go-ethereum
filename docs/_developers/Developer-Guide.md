@@ -13,12 +13,3 @@ title: Developer guide
 
 [Account management](Mobile:-Account-management)
 
-### Transaction tracing
-
-[Introduction and basics](Tracing:-Introduction)
-
-[Custom in-node tracers](Tracing:-Custom-tracers)
-
-[Full blockchain tracing](Tracing:-Blockchain-tracing)
-
-[Dependency exfiltration](Tracing:-Exfiltration)

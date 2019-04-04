@@ -1,16 +1,18 @@
 ---
 title: FAQ
 ---
-***
+
 **Q.**  I noticed my peercount slowly decrease, and now it is at 0.  Restarting doesn't get any peers.
 
 **A.**  Check and sync your clock with ntp.  [Example](http://askubuntu.com/questions/254826/how-to-force-a-clock-update-using-ntp) `sudo ntpdate -s time.nist.gov`
 
-***
+---
 
 **Q.**  I would like to run multiple geth instances but got the error "Fatal: blockchain db err: resource temporarily unavailable".
 
 **A.**  Geth uses a datadir to store the blockchain, accounts and some additional information. This directory cannot be shared between running instances. If you would like to run multiple instances follow [these](../doc/Setting-up-private-network-or-local-cluster) instructions.
+
+---
 
 **Q.** How do Ethereum syncing work?
 
@@ -22,7 +24,9 @@ So, what's the state trie? In the Ethereum mainnet, there are a ton of accounts 
 
 Ok, so why does this pose a problem? This trie data structure is an intricate interlink of hundreds of millions of tiny cryptographic proofs (trie nodes). To truly have a synchronized node, you need to download all the account data, as well as all the tiny cryptographic proofs to verify that noone in the network is trying to cheat you. This itself is already a crazy number of data items. The part where it gets even messier is that this data is constantly morphing: at every block (15s), about 1000 nodes are deleted from this trie and about 2000 new ones are added. This means your node needs to synchronize a dataset that is changing 200 times per second. The worst part is that while you are synchronizing, the network is moving forward, and state that you begun to download might disappear while you're downloading, so your node needs to constantly follow the network while trying to gather all the recent data. But until you actually do gather all the data, your local node is not usable since it cannot cryptographically prove anything about any accounts.
 
-If you see that you are 64 blocks behind mainnet, you aren't yet synchronized, not even close. You are just done with the block download phase and still running the state downloads. You can see this yourself via the seemingly endless Imported state entries [...] stream of logs. You'll need to wait that out too before your node comes truly online.
+If you see that you are 64 blocks behind mainnet, you aren't yet synchronized, not even close. You are just done with the block download phase and still running the state downloads. You can see this yourself via the seemingly endless `Imported state entries [...]` stream of logs. You'll need to wait that out too before your node comes truly online.
+
+---
 
 **Q: The node just hangs on importing state enties?!**
 
@@ -30,9 +34,13 @@ If you see that you are 64 blocks behind mainnet, you aren't yet synchronized, n
 
 The reason is that a block in Ethereum only contains the state root, a single hash of the root node. When the node begins synchronizing, it knows about exactly 1 node and tries to download it. That node, can refer up to 16 new nodes, so in the next step, we'll know about 16 new nodes and try to download those. As we go along the download, most of the nodes will reference new ones that we didn't know about until then. This is why you might be tempted to think it's stuck on the same numbers. It is not, rather it's discovering and downloading the trie as it goes along.
 
+---
+
 **Q: I'm stuck at 64 blocks behind mainnet?!**
 
 *A:* As explained above, you are not stuck, just finished with the block download phase, waiting for the state download phase to complete too. This latter phase nowadays take a lot longer than just getting the blocks.
+
+---
 
 **Q: Why does downloading the state take so long, I have good bandwidth?**
 
@@ -41,6 +49,8 @@ The reason is that a block in Ethereum only contains the state root, a single ha
 The state trie in Ethereum contains hundreds of millions of nodes, most of which take the form of a single hash referencing up to 16 other hashes. This is a horrible way to store data on a disk, because there's almost no structure in it, just random numbers referencing even more random numbers. This makes any underlying database weep, as it cannot optimize storing and looking up the data in any meaningful way.
 
 Not only is storing the data very suboptimal, but due to the 200 modification / second and pruning of past data, we cannot even download it is a properly pre-processed way to make it import faster without the underlying database shuffling it around too much. The end result is that even a fast sync nowadays incurs a huge disk IO cost, which is too much for a mechanical hard drive.
+
+---
 
 **Q: Wait, so I can't run a full node on an HDD?**
 

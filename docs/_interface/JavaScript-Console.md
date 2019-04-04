@@ -14,7 +14,7 @@ The `ethereum CLI` executable `geth` has a JavaScript console (a **Read, Evaluat
 
 The attach node accepts an endpoint in case the geth node is running with a non default ipc endpoint or you would like to connect over the rpc interface.
 
-    $ geth attach ipc:/some/custom/path
+    $ geth attach /some/custom/path.ipc
     $ geth attach http://191.168.1.1:8545
     $ geth attach ws://191.168.1.1:8546
 
@@ -26,7 +26,7 @@ If you need log information, start with:
 
 Otherwise mute your logs, so that it does not pollute your console:
 
-    $ geth console 2>> /dev/null
+    $ geth console 2> /dev/null
 
 or 
 
@@ -59,7 +59,7 @@ You can exit the console cleanly by typing `exit` or simply with `CTRL-C`.
 
 The go-ethereum JSRE uses the [Otto JS VM](https://github.com/robertkrimen/otto) which has some limitations:
 
-* "use strict" will parse, but does nothing.
+* `"use strict"` will parse, but does nothing.
 * The regular expression engine (re2/regexp) is not fully compatible with the ECMA5 specification.
 
 Note that the other known limitation of Otto (namely the lack of timers) is taken care of. Ethereum JSRE implements both `setTimeout` and `setInterval`. In addition to this, the console provides `admin.sleep(seconds)` as well as a "blocktime sleep" method `admin.sleepBlocks(number)`. 

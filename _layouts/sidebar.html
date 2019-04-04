@@ -1,37 +1,37 @@
 ---
 layout: default
 ---
+
+{% assign toplevels = site.collections| where_exp: "item", "item.sidebar_index" | sort:"sidebar_index" %}
 <div class="container" style="padding-top: 24px;">
-    <div class="row">
-          <div class="col-md-3" id="toc" style="padding-top: 16px;">
-            {% assign collections = site.collections | sort: "sidebar_index" %}
-            {% for coll in collections %}
-                {% if coll.sidebar_index %}
-                    {% assign count = coll.docs | size %}
-                    {% if count <= 8 %}
-                        <div class="list-group">
-                            <a class="list-group-item active">{{ coll.caption }}</a>
-                            {% for doc in coll.docs %}
-                                <a class="list-group-item" 
-                                    href="{% include link.html url=doc.url %}">
-                                    {% include title.html doc=doc coll=coll %}</a>
-                            {% endfor %}
-                        </div>
-                    {% else %}
-                        {% capture url %}/{{ coll.label }}{% endcapture %}
-                        <div class="list-group">
-                            <a class="list-group-item active"
-                               href="{% include link.html url=url %}">{{ coll.caption }}</a>
-                        </div>
-                    {% endif %}
-                {% endif %}
-            {% endfor %}
-          </div>
-          <div class="col-md-9" id="content">
-            {% if page.title %}
-            <h1 class="featurette-heading">{% include title.html doc=page coll=page.collection %}</h1>
-            {% endif %}
-            {{ content }}
-          </div>
+  <div class="row">
+    <div class="col-md-3" id="toc" style="padding-top: 16px;">      
+{% for group in toplevels %}
+    {% assign frontdoc=group.docs| where_exp: "doc","doc.path == group.frontpage"|first %}
+    {% unless frontdoc %}
+      {% assign frontdoc=group.docs[0] %}      
+    {% endunless  %}
+  {% capture target %}{% include link.html url=frontdoc.url %}{% endcapture %}
+    <div class="list-group">
+      <a class="list-group-item active" href="{{ target |strip }}">{{ group.caption }}</a>
+  {% if page.collection == group.label  %}
+    {% for doc in group.docs %}
+      {% assign classmodifier="" %}
+      {% if doc.url == page.url %}
+        {% assign classmodifier="disabled" %}
+	{% endif %}
+	{% capture target %}{% include link.html url=doc.url %}{% endcapture %}
+        <a class="list-group-item {{classmodifier}}" href="{{ target |strip }}">{% include title.html doc=doc coll=group %}</a>
+    {% endfor %}
+  {% endif %}
+      </div>
+{% endfor %}
     </div>
+    <div class="col-md-9" id="content">
+{% if page.title %}
+  <h1 class="featurette-heading">{% include title.html doc=page coll=page.collection %}</h1>
+{% endif %}
+  {{ content }}
+    </div>
+  </div>
 </div>
