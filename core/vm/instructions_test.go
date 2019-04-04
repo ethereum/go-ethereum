@@ -248,7 +248,7 @@ func xTestWriteExpectedValues(t *testing.T) {
 
 // TestJsonTestcases runs through all the testcases defined as json-files
 func TestJsonTestcases(t *testing.T) {
-	for name, _ := range twoOpMethods {
+	for name := range twoOpMethods {
 		data, err := ioutil.ReadFile(fmt.Sprintf("testdata/testcases_%v.json", name))
 		if err != nil {
 			t.Fatal("Failed to read file", err)
