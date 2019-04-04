@@ -25,6 +25,8 @@ import (
 	"math/big"
 	"math/rand"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -424,9 +426,18 @@ func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.
 				signers = RemovePenaltiesFromBlock(chain, signers, number-uint64(i)*c.config.Epoch)
 			}
 		}
-		byteMasterNodes := common.ExtractAddressToBytes(signers)
 		extraSuffix := len(header.Extra) - extraSeal
-		if !bytes.Equal(header.Extra[extraVanity:extraSuffix], byteMasterNodes) {
+		masternodesFromCheckpointHeader := common.ExtractAddressFromBytes(header.Extra[extraVanity:extraSuffix])
+		validSigners := true
+		sort.Slice(masternodesFromCheckpointHeader, func(i, j int) bool {
+			return masternodesFromCheckpointHeader[i].String() <= masternodesFromCheckpointHeader[j].String()
+		})
+		sort.Slice(signers, func(i, j int) bool {
+			return signers[i].String() <= signers[j].String()
+		})
+		validSigners = reflect.DeepEqual(masternodesFromCheckpointHeader, signers)
+		if !validSigners {
+			log.Error("Masternodes lists are different in checkpoint header and snapshot", "number", number, "masternodes_from_checkpoint_header", masternodesFromCheckpointHeader, "masternodes_in_snapshot", signers, "penList", penPenalties)
 			return errInvalidCheckpointSigners
 		}
 		if c.HookVerifyMNs != nil {
