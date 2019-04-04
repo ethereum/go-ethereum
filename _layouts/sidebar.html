@@ -8,7 +8,7 @@ layout: default
             {% for coll in collections %}
                 {% if coll.sidebar_index %}
                     {% assign count = coll.docs | size %}
-                    {% if count <= 6 %}
+                    {% if count <= 8 %}
                         <div class="list-group">
                             <a class="list-group-item active">{{ coll.caption }}</a>
                             {% for doc in coll.docs %}
