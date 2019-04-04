@@ -184,7 +184,6 @@ func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
 	// Invoke the lookup engine.
 	// The callback will be called every time the lookup algorithm needs to guess
 	requestPtr, err := lookup.Lookup(ctx, timeLimit, query.Hint, func(ctx context.Context, epoch lookup.Epoch, now uint64) (interface{}, error) {
-		fmt.Printf("Epoch query: %s\n", epoch.String())
 		atomic.AddInt32(&readCount, 1)
 		id := ID{
 			Feed:  query.Feed,

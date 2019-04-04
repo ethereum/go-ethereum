@@ -31,8 +31,8 @@ const maxuint64 = ^uint64(0)
 const LowestLevel uint8 = 0 // default is 0 (1 second)
 
 // HighestLevel sets the lowest frequency the algorithm will operate at, as a power of 2.
-// 25 -> 2^25 equals to roughly one year.
-const HighestLevel = 25 // default is 25 (~1 year)
+// 31 -> 2^31 equals to roughly 38 years.
+const HighestLevel = 31
 
 // DefaultLevel sets what level will be chosen to search when there is no hint
 const DefaultLevel = HighestLevel
