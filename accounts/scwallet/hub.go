@@ -87,7 +87,7 @@ type Hub struct {
 
 func (hub *Hub) readPairings() error {
 	hub.pairings = make(map[string]smartcardPairing)
-	pairingFile, err := os.Open(hub.datadir + "/smartcards.json")
+	pairingFile, err := os.Open(filepath.Join(hub.datadir, "smartcards.json"))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -111,7 +111,7 @@ func (hub *Hub) readPairings() error {
 }
 
 func (hub *Hub) writePairings() error {
-	pairingFile, err := os.OpenFile(hub.datadir+"/smartcards.json", os.O_RDWR|os.O_CREATE, 0755)
+	pairingFile, err := os.OpenFile(filepath.Join(hub.datadir,"smartcards.json"), os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,10 @@ func (hub *Hub) writePairings() error {
 }
 
 func (hub *Hub) pairing(wallet *Wallet) *smartcardPairing {
-	pairing, ok := hub.pairings[string(wallet.PublicKey)]
+	if pairing, ok := hub.pairings[string(wallet.PublicKey)]; ok{
+		return &pairing
+	}
+	return nil
 	if ok {
 		return &pairing
 	}
