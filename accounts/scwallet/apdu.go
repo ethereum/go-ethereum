@@ -19,6 +19,7 @@ package scwallet
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 )
 
 // commandAPDU represents an application data unit sent to a smartcard.
@@ -66,6 +67,10 @@ type responseAPDU struct {
 
 // deserialize deserializes a response APDU.
 func (ra *responseAPDU) deserialize(data []byte) error {
+	if len(data) < 2 {
+		return fmt.Errorf("can not deserialize data: payload too short (%d < 2)", len(data))
+	}
+
 	ra.Data = make([]byte, len(data)-2)
 
 	buf := bytes.NewReader(data)
