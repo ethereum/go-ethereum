@@ -215,7 +215,7 @@ Of course, you can also switch to asymmetric encryption by providing 'asym' flag
 
 #### Mail Server & Client
 
-Whisper protocol allows you to exchange messages with other peers only if you are online. But what if you go offline? Will important messages be lost forever? The golang implementation of Whisper v5 has a built-in support for Mail Client/Server functionality, which allows to create very secure (and even dark) anonymous email-like system. Wnode is designed to demonstrate the viability of such project.
+Whisper protocol allows you to exchange messages with other peers only if you are online. But what if you go offline? Will important messages be lost forever? The golang implementation of Whisper v6 has a built-in support for Mail Client/Server functionality, which allows to create very secure (and even dark) anonymous email-like system. Wnode is designed to demonstrate the viability of such project.
 
 Mail Server and Client must have direct connection, since they exchange special kind of messages, which are not propagated any further. The reason for that is simple: if you receive the old (expired) message from the Server, and try to send it to other peers, they will recognise the message as expired, and drop connection with you.
 

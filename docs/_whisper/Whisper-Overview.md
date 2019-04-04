@@ -114,7 +114,7 @@ Thus, we can use PoW as a single aggregated parameter for the message rating. In
 ### Packet Codes (ÐΞVp2p level)
 
 As a sub-protocol of [ÐΞVp2p](https://github.com/ethereum/wiki/wiki/%C3%90%CE%9EVp2p-Wire-Protocol), Whisper sends and receives its messages within ÐΞVp2p packets. 
-Whisper v5 supports the following packet codes:
+Whisper v6 supports the following packet codes:
 
 <code>Status (0x0)</code>
 
