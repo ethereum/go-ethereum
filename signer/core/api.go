@@ -139,7 +139,8 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool) *accounts.
 			log.Debug("Trezor support enabled")
 		}
 	}
-	return accounts.NewManager(backends...)
+	// Clef doesn't allow insecure http account unlock.
+	return accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: false}, backends...)
 }
 
 // MetadataFromContext extracts Metadata from a given context.Context

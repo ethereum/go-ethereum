@@ -39,8 +39,9 @@ import (
 )
 
 type LesApiBackend struct {
-	eth *LightEthereum
-	gpo *gasprice.Oracle
+	extRPCEnabled bool
+	eth           *LightEthereum
+	gpo           *gasprice.Oracle
 }
 
 func (b *LesApiBackend) ChainConfig() *params.ChainConfig {
@@ -185,6 +186,10 @@ func (b *LesApiBackend) EventMux() *event.TypeMux {
 
 func (b *LesApiBackend) AccountManager() *accounts.Manager {
 	return b.eth.accountManager
+}
+
+func (b *LesApiBackend) ExtRPCEnabled() bool {
+	return b.extRPCEnabled
 }
 
 func (b *LesApiBackend) BloomStatus() (uint64, uint64) {
