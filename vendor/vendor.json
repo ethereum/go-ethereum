@@ -400,10 +400,10 @@
 			"revisionTime": "2016-01-10T10:55:54Z"
 		},
 		{
-			"checksumSHA1": "WbbxCn2jUYIL5viqLo0BKXEdPrQ=",
-			"path": "github.com/prometheus/prometheus/util/flock",
-			"revision": "3101606756c53221ed58ba94ecba6b26adf89dcc",
-			"revisionTime": "2017-08-14T17:01:13Z"
+			"checksumSHA1": "hOxzP9VnSzMLzqDtuW5Bhjn2DWU=",
+			"path": "github.com/prometheus/tsdb/fileutil",
+			"revision": "4f204dcbc15056cdd047b06ac6111becda5c2915",
+			"revisionTime": "2019-04-02T12:16:29Z"
 		},
 		{
 			"checksumSHA1": "lU41NL1TEDtsrr0yUdp3SMB4Y9o=",
