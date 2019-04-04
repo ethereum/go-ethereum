@@ -233,7 +233,7 @@ func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common
 		log.Error("Fail to parse json holders", "error", err)
 		return nil, err
 	}
-	log.Info("Holders reward", "holders", string(jsonHolders), "master node", masterAddr.String())
+	log.Info("Holders reward", "holders", string(jsonHolders), "masternode", masterAddr.String())
 
 	return balances, nil
 }
