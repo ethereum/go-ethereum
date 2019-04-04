@@ -136,7 +136,7 @@ func (path DerivationPath) String() string {
 }
 
 func (path DerivationPath) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf("\"%s\"", path.String())), nil
+	return json.Marshal(fmt.Sprintf("\"%s\"", path.String()))
 }
 
 func (path *DerivationPath) UnmarshalJSON(b []byte) error {
