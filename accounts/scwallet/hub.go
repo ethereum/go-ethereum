@@ -36,6 +36,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 	"time"
@@ -111,10 +112,11 @@ func (hub *Hub) readPairings() error {
 }
 
 func (hub *Hub) writePairings() error {
-	pairingFile, err := os.OpenFile(filepath.Join(hub.datadir,"smartcards.json"), os.O_RDWR|os.O_CREATE, 0755)
+	pairingFile, err := os.OpenFile(filepath.Join(hub.datadir, "smartcards.json"), os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		return err
 	}
+	defer pairingFile.Close()
 
 	pairings := make([]smartcardPairing, 0, len(hub.pairings))
 	for _, pairing := range hub.pairings {
@@ -130,15 +132,11 @@ func (hub *Hub) writePairings() error {
 		return err
 	}
 
-	return pairingFile.Close()
+	return nil
 }
 
 func (hub *Hub) pairing(wallet *Wallet) *smartcardPairing {
-	if pairing, ok := hub.pairings[string(wallet.PublicKey)]; ok{
-		return &pairing
-	}
-	return nil
-	if ok {
+	if pairing, ok := hub.pairings[string(wallet.PublicKey)]; ok {
 		return &pairing
 	}
 	return nil
@@ -209,6 +207,7 @@ func (hub *Hub) refreshWallets() {
 		// want to fill the user's log with errors, so filter those out.
 		if err.Error() != "scard: Cannot find a smart card reader." {
 			log.Error("Failed to enumerate smart card readers", "err", err)
+			return
 		}
 	}
 	// Transform the current list of wallets into the new one

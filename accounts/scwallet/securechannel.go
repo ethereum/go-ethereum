@@ -229,8 +229,8 @@ func (s *SecureChannelSession) transmitEncrypted(cla, ins, p1, p2 byte, data []b
 	if err != nil {
 		return nil, err
 	}
-	meta := []byte{cla, ins, p1, p2, byte(len(data) + scBlockSize), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-	if err = s.updateIV(meta, data); err != nil {
+	meta := [16]byte{cla, ins, p1, p2, byte(len(data) + scBlockSize)}
+	if err = s.updateIV(meta[:], data); err != nil {
 		return nil, err
 	}
 
@@ -249,7 +249,7 @@ func (s *SecureChannelSession) transmitEncrypted(cla, ins, p1, p2 byte, data []b
 		return nil, err
 	}
 
-	rmeta := []byte{byte(len(response.Data)), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+	rmeta := [16]byte{byte(len(response.Data))}
 	rmac := response.Data[:len(s.iv)]
 	rdata := response.Data[len(s.iv):]
 	plainData, err := s.decryptAPDU(rdata)
@@ -257,7 +257,7 @@ func (s *SecureChannelSession) transmitEncrypted(cla, ins, p1, p2 byte, data []b
 		return nil, err
 	}
 
-	if err = s.updateIV(rmeta, rdata); err != nil {
+	if err = s.updateIV(rmeta[:], rdata); err != nil {
 		return nil, err
 	}
 	if !bytes.Equal(s.iv, rmac) {
