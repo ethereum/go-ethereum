@@ -28,6 +28,10 @@ var LongEarthLookbackDelay = 250 * time.Millisecond
 // timeout is the maximum execution time of the passed `read` function.
 // the two head starts can be configured by changing LongEarthLookaheadDelay or LongEarthLookbackDelay
 func LongEarthAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFunc) (interface{}, error) {
+	if hint == NoClue {
+		hint = worstHint
+	}
+
 	var stepCounter int32 // for debugging, stepCounter allows to give an ID to each step instance
 
 	errc := make(chan struct{}) // errc will help as an error shortcut signal
@@ -58,25 +62,6 @@ func LongEarthAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFu
 		// define the lookBack function, which will follow the path as if R was unsuccessful
 		lookBack := func() {
 			if epoch.Base() == hint.Base() {
-				// we have reached the hint itself
-				if hint == worstHint {
-					valueB = nil
-					return
-				}
-				var err error
-				// check the hint. If successful, this is it. Otherwise
-				// we've been given a bad hint!
-				valueB, err = read(ctxB, hint, now)
-				if valueB != nil || err == context.Canceled {
-					return
-				}
-				if err != nil {
-					gerr = err
-					close(errc)
-					return
-				}
-				// bad hint.
-				valueB = step(ctxB, hint.Base(), worstHint)
 				return
 			}
 			base := epoch.Base()
@@ -154,19 +139,40 @@ func LongEarthAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFu
 
 	var value interface{}
 	stepCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
 	go func() { // launch the root step in its own goroutine to allow cancellation
+		defer cancel()
 		value = step(stepCtx, now, hint)
-		cancel()
 	}()
 
 	// wait for the algorithm to finish, but shortcut in case
 	// of errors
 	select {
 	case <-stepCtx.Done():
-		return value, ctx.Err()
 	case <-errc:
+		cancel()
 		return nil, gerr
 	}
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	if value != nil || hint == worstHint {
+		return value, nil
+	}
+
+	value, err := read(ctx, hint, now)
+	if err != nil {
+		return nil, err
+	}
+	if value != nil {
+		return value, nil
+	}
+	now = hint.Base()
+	if hint.Level == HighestLevel {
+		now--
+	}
+
+	return LongEarthAlgorithm(ctx, now, NoClue, read)
 }
