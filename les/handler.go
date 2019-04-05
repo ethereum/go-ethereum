@@ -772,80 +772,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			Obj:     resp.Receipts,
 		}
 
-	case GetProofsV1Msg:
-		p.Log().Trace("Received proofs request")
-		// Decode the retrieval message
-		var req struct {
-			ReqID uint64
-			Reqs  []ProofReq
-		}
-		if err := msg.Decode(&req); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
-		}
-		// Gather state data until the fetch or network limits is reached
-		var (
-			bytes  int
-			proofs proofsData
-		)
-		reqCnt := len(req.Reqs)
-		if !accept(req.ReqID, uint64(reqCnt), MaxProofsFetch) {
-			return errResp(ErrRequestRejected, "")
-		}
-		go func() {
-			for i, req := range req.Reqs {
-				if i != 0 && !task.waitOrStop() {
-					return
-				}
-				// Look up the root hash belonging to the request
-				number := rawdb.ReadHeaderNumber(pm.chainDb, req.BHash)
-				if number == nil {
-					p.Log().Warn("Failed to retrieve block num for proof", "hash", req.BHash)
-					continue
-				}
-				header := rawdb.ReadHeader(pm.chainDb, req.BHash, *number)
-				if header == nil {
-					p.Log().Warn("Failed to retrieve header for proof", "block", *number, "hash", req.BHash)
-					continue
-				}
-				// Open the account or storage trie for the request
-				statedb := pm.blockchain.StateCache()
-
-				var trie state.Trie
-				switch len(req.AccKey) {
-				case 0:
-					// No account key specified, open an account trie
-					trie, err = statedb.OpenTrie(header.Root)
-					if trie == nil || err != nil {
-						p.Log().Warn("Failed to open storage trie for proof", "block", header.Number, "hash", header.Hash(), "root", header.Root, "err", err)
-						continue
-					}
-				default:
-					// Account key specified, open a storage trie
-					account, err := pm.getAccount(statedb.TrieDB(), header.Root, common.BytesToHash(req.AccKey))
-					if err != nil {
-						p.Log().Warn("Failed to retrieve account for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(req.AccKey), "err", err)
-						continue
-					}
-					trie, err = statedb.OpenStorageTrie(common.BytesToHash(req.AccKey), account.Root)
-					if trie == nil || err != nil {
-						p.Log().Warn("Failed to open storage trie for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(req.AccKey), "root", account.Root, "err", err)
-						continue
-					}
-				}
-				// Prove the user's request from the account or stroage trie
-				var proof light.NodeList
-				if err := trie.Prove(req.Key, 0, &proof); err != nil {
-					p.Log().Warn("Failed to prove state request", "block", header.Number, "hash", header.Hash(), "err", err)
-					continue
-				}
-				proofs = append(proofs, proof)
-				if bytes += proof.DataSize(); bytes >= softResponseLimit {
-					break
-				}
-			}
-			sendResponse(req.ReqID, uint64(reqCnt), p.ReplyProofs(req.ReqID, proofs), task.done())
-		}()
-
 	case GetProofsV2Msg:
 		p.Log().Trace("Received les/2 proofs request")
 		// Decode the retrieval message
@@ -927,27 +853,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			sendResponse(req.ReqID, uint64(reqCnt), p.ReplyProofsV2(req.ReqID, nodes.NodeList()), task.done())
 		}()
 
-	case ProofsV1Msg:
-		if pm.odr == nil {
-			return errResp(ErrUnexpectedResponse, "")
-		}
-
-		p.Log().Trace("Received proofs response")
-		// A batch of merkle proofs arrived to one of our previous requests
-		var resp struct {
-			ReqID, BV uint64
-			Data      []light.NodeList
-		}
-		if err := msg.Decode(&resp); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
-		}
-		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
-		deliverMsg = &Msg{
-			MsgType: MsgProofsV1,
-			ReqID:   resp.ReqID,
-			Obj:     resp.Data,
-		}
-
 	case ProofsV2Msg:
 		if pm.odr == nil {
 			return errResp(ErrUnexpectedResponse, "")
@@ -968,54 +873,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			ReqID:   resp.ReqID,
 			Obj:     resp.Data,
 		}
-
-	case GetHeaderProofsMsg:
-		p.Log().Trace("Received headers proof request")
-		// Decode the retrieval message
-		var req struct {
-			ReqID uint64
-			Reqs  []ChtReq
-		}
-		if err := msg.Decode(&req); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
-		}
-		// Gather state data until the fetch or network limits is reached
-		var (
-			bytes  int
-			proofs []ChtResp
-		)
-		reqCnt := len(req.Reqs)
-		if !accept(req.ReqID, uint64(reqCnt), MaxHelperTrieProofsFetch) {
-			return errResp(ErrRequestRejected, "")
-		}
-		go func() {
-			trieDb := trie.NewDatabase(rawdb.NewTable(pm.chainDb, light.ChtTablePrefix))
-			for i, req := range req.Reqs {
-				if i != 0 && !task.waitOrStop() {
-					return
-				}
-				if header := pm.blockchain.GetHeaderByNumber(req.BlockNum); header != nil {
-					sectionHead := rawdb.ReadCanonicalHash(pm.chainDb, req.ChtNum*pm.iConfig.ChtSize-1)
-					if root := light.GetChtRoot(pm.chainDb, req.ChtNum-1, sectionHead); root != (common.Hash{}) {
-						trie, err := trie.New(root, trieDb)
-						if err != nil {
-							continue
-						}
-						var encNumber [8]byte
-						binary.BigEndian.PutUint64(encNumber[:], req.BlockNum)
-
-						var proof light.NodeList
-						trie.Prove(encNumber[:], 0, &proof)
-
-						proofs = append(proofs, ChtResp{Header: header, Proof: proof})
-						if bytes += proof.DataSize() + estHeaderRlpSize; bytes >= softResponseLimit {
-							break
-						}
-					}
-				}
-			}
-			sendResponse(req.ReqID, uint64(reqCnt), p.ReplyHeaderProofs(req.ReqID, proofs), task.done())
-		}()
 
 	case GetHelperTrieProofsMsg:
 		p.Log().Trace("Received helper trie proof request")
@@ -1081,26 +938,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			sendResponse(req.ReqID, uint64(reqCnt), p.ReplyHelperTrieProofs(req.ReqID, HelperTrieResps{Proofs: nodes.NodeList(), AuxData: auxData}), task.done())
 		}()
 
-	case HeaderProofsMsg:
-		if pm.odr == nil {
-			return errResp(ErrUnexpectedResponse, "")
-		}
-
-		p.Log().Trace("Received headers proof response")
-		var resp struct {
-			ReqID, BV uint64
-			Data      []ChtResp
-		}
-		if err := msg.Decode(&resp); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
-		}
-		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
-		deliverMsg = &Msg{
-			MsgType: MsgHeaderProofs,
-			ReqID:   resp.ReqID,
-			Obj:     resp.Data,
-		}
-
 	case HelperTrieProofsMsg:
 		if pm.odr == nil {
 			return errResp(ErrUnexpectedResponse, "")
@@ -1121,29 +958,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			ReqID:   resp.ReqID,
 			Obj:     resp.Data,
 		}
-
-	case SendTxMsg:
-		if pm.txpool == nil {
-			return errResp(ErrRequestRejected, "")
-		}
-		// Transactions arrived, parse all of them and deliver to the pool
-		var txs []*types.Transaction
-		if err := msg.Decode(&txs); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
-		}
-		reqCnt := len(txs)
-		if !accept(0, uint64(reqCnt), MaxTxSend) {
-			return errResp(ErrRequestRejected, "")
-		}
-		go func() {
-			for i, tx := range txs {
-				if i != 0 && !task.waitOrStop() {
-					return
-				}
-				pm.txpool.AddRemotes([]*types.Transaction{tx})
-			}
-			sendResponse(0, uint64(reqCnt), nil, task.done())
-		}()
 
 	case SendTxV2Msg:
 		if pm.txpool == nil {

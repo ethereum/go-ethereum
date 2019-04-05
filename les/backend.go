@@ -179,8 +179,6 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 func lesTopic(genesisHash common.Hash, protocolVersion uint) discv5.Topic {
 	var name string
 	switch protocolVersion {
-	case lpv1:
-		name = "LES"
 	case lpv2:
 		name = "LES2"
 	default:
