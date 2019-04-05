@@ -234,7 +234,7 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'testSignCliqueBlock',
 			call: 'debug_testSignCliqueBlock',
-			params: 2, 
+			params: 2,
 			inputFormatters: [web3._extend.formatters.inputAddressFormatter, null],
 		}),
 		new web3._extend.Method({
@@ -261,11 +261,6 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'chaindbCompact',
 			call: 'debug_chaindbCompact',
-		}),
-		new web3._extend.Method({
-			name: 'metrics',
-			call: 'debug_metrics',
-			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'verbosity',
