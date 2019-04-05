@@ -52,18 +52,14 @@ collections:
     caption: Whisper
     sidebar_index: 6
     frontpage: _whisper/Whisper-Overview.md
-  swarm:
-    output: true
-    caption: Swarm
-    sidebar_index: 7
   doc:
     output: true
     caption: Other
-    sidebar_index: 8
+    sidebar_index: 7
   legacy:
     output: true
     caption: Legacy content
-    sidebar_index: 9
+    sidebar_index: 8
 
 
 
