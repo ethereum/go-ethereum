@@ -752,8 +752,22 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNr rpc.BlockNumb
 // Call executes the given transaction on the state for the given block number.
 // It doesn't make and changes in the state/blockchain and is useful to execute and retrieve values.
 func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNr rpc.BlockNumber) (hexutil.Bytes, error) {
-	result, _, _, err := DoCall(ctx, s.b, args, blockNr, vm.Config{}, 5*time.Second)
-	return (hexutil.Bytes)(result), err
+	if gasCap := s.b.RPCGasCap(); gasCap != nil {
+		if new(big.Int).SetUint64(uint64(*args.Gas)).Cmp(gasCap) > 0 {
+			log.Warn("Applying cap on gas, caller requested amount above limit", "cap", gasCap, "requested", args.Gas)
+			newGas := hexutil.Uint64(gasCap.Uint64())
+			*args.Gas = newGas
+		}
+		result, _, _, err := DoCall(ctx, s.b, args, blockNr, vm.Config{}, 5*time.Second)
+		if err != nil {
+			err = fmt.Errorf("%v (gas capped at: %d)", err, *args.Gas)
+		}
+		return (hexutil.Bytes)(result), err
+	} else {
+		result, _, _, err := DoCall(ctx, s.b, args, blockNr, vm.Config{}, 5*time.Second)
+		return (hexutil.Bytes)(result), err
+	}
+
 }
 
 func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNr rpc.BlockNumber) (hexutil.Uint64, error) {
@@ -797,7 +811,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNr rpc.Bl
 	// Reject the transaction as invalid if it still fails at the highest allowance
 	if hi == cap {
 		if !executable(hi) {
-			return 0, fmt.Errorf("gas required exceeds allowance or always failing transaction")
+			return 0, fmt.Errorf("gas required exceeds allowance (%d) or always failing transaction", cap)
 		}
 	}
 	return hexutil.Uint64(hi), nil
@@ -806,6 +820,13 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNr rpc.Bl
 // EstimateGas returns an estimate of the amount of gas needed to execute the
 // given transaction against the current pending block.
 func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (hexutil.Uint64, error) {
+	if gasCap := s.b.RPCGasCap(); gasCap != nil {
+		if new(big.Int).SetUint64(uint64(*args.Gas)).Cmp(gasCap) > 0 {
+			log.Warn("Applying cap on gas, caller requested amount above limit", "cap", gasCap, "requested", args.Gas)
+			newGas := hexutil.Uint64(gasCap.Uint64())
+			*args.Gas = newGas
+		}
+	}
 	return DoEstimateGas(ctx, s.b, args, rpc.PendingBlockNumber)
 }
 

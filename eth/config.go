@@ -151,6 +151,9 @@ type Config struct {
 
 	// Constantinople block override (TODO: remove after the fork)
 	ConstantinopleOverride *big.Int
+
+	// RPCGasCap is the global gas cap for eth-call variants.
+	RPCGasCap *big.Int `toml:",omitempty"`
 }
 
 type configMarshaling struct {
