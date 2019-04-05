@@ -30,7 +30,6 @@ func Handler(reg metrics.Registry) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Aggregate all the metris into a Prometheus collector
 		c := newCollector()
-		defer c.close()
 
 		reg.Each(func(name string, i interface{}) {
 			switch m := i.(type) {
@@ -52,12 +51,9 @@ func Handler(reg metrics.Registry) http.Handler {
 				log.Warn("Unknown Prometheus metric type", "type", fmt.Sprintf("%T", i))
 			}
 		})
-		// Aggregate the results into a single buffer and send to the user
-		res := c.aggregate()
-		defer giveBuf(res)
 
 		w.Header().Add("Content-Type", "text/plain")
-		w.Header().Add("Content-Length", fmt.Sprint(res.Len()))
-		w.Write(res.Bytes())
+		w.Header().Add("Content-Length", fmt.Sprint(c.buff.Len()))
+		w.Write(c.buff.Bytes())
 	})
 }

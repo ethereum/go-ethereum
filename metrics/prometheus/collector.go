@@ -19,150 +19,65 @@ package prometheus
 import (
 	"bytes"
 	"fmt"
-	"sync"
+	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
 var (
-	countersKey        = []byte("counters")
-	gaugesKey          = []byte("gauges")
-	metersKey          = []byte("meters")
-	histogramsKey      = []byte("histograms")
-	timersKey          = []byte("timers")
-	resettingTimersKey = []byte("resettingTimers")
-
-	countersHeader       = []byte("# HELP counters is set of geth counters\n# TYPE counters gauge\n")
-	gaugesHeader         = []byte("# HELP gauges is set of geth gauges\n# TYPE gauges gauge\n")
-	meterHeader          = []byte("# HELP meters is set of geth meters\n# TYPE meters counter\n")
-	histogramHeader      = []byte("# HELP histograms is set of geth histograms\n# TYPE histograms summary\n")
-	timerHeader          = []byte("# HELP timers is set of geth timers\n# TYPE timers summary\n")
-	resettingTimerHeader = []byte("# HELP resetting_timers is set of geth resetting timers\n# TYPE resetting_timers summary\n")
-
-	counterSuffix           = []byte("_count")
-	nameTagTemplate         = "{name=\"%s\"} %v\n"
-	nameQuantileTagTemplate = "{name=\"%s\",quantile=\"%s\"} %v\n"
+	typeGuageTpl           = "# TYPE %s gauge\n"
+	typeCounterTpl         = "# TYPE %s counter\n"
+	typeSummaryTpl         = "# TYPE %s summary\n"
+	keyValueTpl            = "%s %v\n"
+	keyQuantileTagValueTpl = "%s {quantile=\"%s\"} %v\n"
 )
-
-// bufPool is a global pool of byte buffers to avoid constant reallocations.
-var bufPool sync.Pool
-
-// getBuf retrieves a new empty (but possibly non-0 capacity) buffer.
-func getBuf() *bytes.Buffer {
-	if item := bufPool.Get(); item != nil {
-		buf := item.(*bytes.Buffer)
-		buf.Reset()
-		return buf
-	}
-	return &bytes.Buffer{}
-}
-
-// giveBuf returns a used byte buffer to the pool.
-func giveBuf(buf *bytes.Buffer) {
-	bufPool.Put(buf)
-}
 
 // collector is a collection of byte buffers that aggregate Prometheus reports
 // for different metric types.
 type collector struct {
-	counters        *bytes.Buffer
-	gauges          *bytes.Buffer
-	histograms      *bytes.Buffer
-	meters          *bytes.Buffer
-	timers          *bytes.Buffer
-	resettingTimers *bytes.Buffer
+	buff *bytes.Buffer
 }
 
 // newCollector createa a new Prometheus metric aggregator.
 func newCollector() *collector {
 	return &collector{
-		counters:        getBuf(),
-		gauges:          getBuf(),
-		histograms:      getBuf(),
-		meters:          getBuf(),
-		timers:          getBuf(),
-		resettingTimers: getBuf(),
+		buff: &bytes.Buffer{},
 	}
-}
-
-// close releases all internally held byte buffers to be reused by subsequent
-// metrics collection runs.
-func (c *collector) close() {
-	giveBuf(c.counters)
-	giveBuf(c.gauges)
-	giveBuf(c.histograms)
-	giveBuf(c.meters)
-	giveBuf(c.timers)
-	giveBuf(c.resettingTimers)
-}
-
-// aggregate iterates over the different metric types and aggregates them into
-// a single byte buffer.
-func (c *collector) aggregate() *bytes.Buffer {
-	buf := getBuf()
-	if c.counters.Len() > 0 {
-		buf.Write(countersHeader)
-		buf.Write(c.counters.Bytes())
-	}
-	if c.gauges.Len() > 0 {
-		buf.Write(gaugesHeader)
-		buf.Write(c.gauges.Bytes())
-	}
-	if c.meters.Len() > 0 {
-		buf.Write(meterHeader)
-		buf.Write(c.meters.Bytes())
-	}
-	if c.histograms.Len() > 0 {
-		buf.Write(histogramHeader)
-		buf.Write(c.histograms.Bytes())
-	}
-	if c.timers.Len() > 0 {
-		buf.Write(timerHeader)
-		buf.Write(c.timers.Bytes())
-	}
-	if c.resettingTimers.Len() > 0 {
-		buf.Write(resettingTimerHeader)
-		buf.Write(c.resettingTimers.Bytes())
-	}
-	return buf
 }
 
 func (c *collector) addCounter(name string, m metrics.Counter) {
-	writeGuageCounter(c.counters, countersKey, name, m.Count())
+	c.writeGuageCounter(name, m.Count())
 }
 
 func (c *collector) addGuage(name string, m metrics.Gauge) {
-	writeGuageCounter(c.gauges, gaugesKey, name, m.Value())
+	c.writeGuageCounter(name, m.Value())
 }
 
 func (c *collector) addGuageFloat64(name string, m metrics.GaugeFloat64) {
-	writeGuageCounter(c.gauges, gaugesKey, name, m.Value())
+	c.writeGuageCounter(name, m.Value())
 }
 
 func (c *collector) addHistogram(name string, m metrics.Histogram) {
-	ps := m.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999})
-	writeSummaryCounter(c.histograms, histogramsKey, name, m.Count())
-	writeSummaryPercentile(c.histograms, histogramsKey, name, "0.5", ps[0])
-	writeSummaryPercentile(c.histograms, histogramsKey, name, "0.75", ps[1])
-	writeSummaryPercentile(c.histograms, histogramsKey, name, "0.95", ps[2])
-	writeSummaryPercentile(c.histograms, histogramsKey, name, "0.99", ps[3])
-	writeSummaryPercentile(c.histograms, histogramsKey, name, "0.999", ps[4])
-	writeSummaryPercentile(c.histograms, histogramsKey, name, "0.9999", ps[5])
+	pv := []float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999}
+	ps := m.Percentiles(pv)
+	c.writeSummaryCounter(name, m.Count())
+	for i := range pv {
+		c.writeSummaryPercentile(name, strconv.FormatFloat(pv[i], 'f', -1, 64), ps[i])
+	}
 }
 
 func (c *collector) addMeter(name string, m metrics.Meter) {
-	writeGuageCounter(c.meters, metersKey, name, m.Count())
+	c.writeGuageCounter(name, m.Count())
 }
 
 func (c *collector) addTimer(name string, m metrics.Timer) {
-	ps := m.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999})
-	writeSummaryCounter(c.timers, timersKey, name, m.Count())
-	writeSummaryPercentile(c.timers, timersKey, name, "0.50", ps[0])
-	writeSummaryPercentile(c.timers, timersKey, name, "0.75", ps[1])
-	writeSummaryPercentile(c.timers, timersKey, name, "0.95", ps[2])
-	writeSummaryPercentile(c.timers, timersKey, name, "0.99", ps[3])
-	writeSummaryPercentile(c.timers, timersKey, name, "0.999", ps[4])
-	writeSummaryPercentile(c.timers, timersKey, name, "0.9999", ps[5])
+	pv := []float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999}
+	ps := m.Percentiles(pv)
+	c.writeSummaryCounter(name, m.Count())
+	for i := range pv {
+		c.writeSummaryPercentile(name, strconv.FormatFloat(pv[i], 'f', -1, 64), ps[i])
+	}
 }
 
 func (c *collector) addResettingTimer(name string, m metrics.ResettingTimer) {
@@ -171,23 +86,30 @@ func (c *collector) addResettingTimer(name string, m metrics.ResettingTimer) {
 	}
 	ps := m.Percentiles([]float64{50, 95, 99})
 	val := m.Values()
-	writeSummaryCounter(c.resettingTimers, resettingTimersKey, name, len(val))
-	writeSummaryPercentile(c.resettingTimers, resettingTimersKey, name, "0.50", ps[0])
-	writeSummaryPercentile(c.resettingTimers, resettingTimersKey, name, "0.95", ps[1])
-	writeSummaryPercentile(c.resettingTimers, resettingTimersKey, name, "0.99", ps[2])
+	c.writeSummaryCounter(name, len(val))
+	c.writeSummaryPercentile(name, "0.50", ps[0])
+	c.writeSummaryPercentile(name, "0.95", ps[1])
+	c.writeSummaryPercentile(name, "0.99", ps[2])
 }
 
-func writeGuageCounter(buf *bytes.Buffer, key []byte, name string, value interface{}) {
-	buf.Write(key)
-	buf.WriteString(fmt.Sprintf(nameTagTemplate, name, value))
+func (c *collector) writeGuageCounter(name string, value interface{}) {
+	name = mutateKey(name)
+	c.buff.WriteString(fmt.Sprintf(typeGuageTpl, name))
+	c.buff.WriteString(fmt.Sprintf(keyValueTpl, name, value))
 }
 
-func writeSummaryCounter(buf *bytes.Buffer, key []byte, name string, value interface{}) {
-	buf.Write(append(key, counterSuffix...))
-	buf.WriteString(fmt.Sprintf(nameTagTemplate, name, value))
+func (c *collector) writeSummaryCounter(name string, value interface{}) {
+	name = mutateKey(name + "_count")
+	c.buff.WriteString(fmt.Sprintf(typeCounterTpl, name))
+	c.buff.WriteString(fmt.Sprintf(keyValueTpl, name, value))
 }
 
-func writeSummaryPercentile(buf *bytes.Buffer, key []byte, name, p string, value interface{}) {
-	buf.Write(key)
-	buf.WriteString(fmt.Sprintf(nameQuantileTagTemplate, name, p, value))
+func (c *collector) writeSummaryPercentile(name, p string, value interface{}) {
+	name = mutateKey(name)
+	c.buff.WriteString(fmt.Sprintf(typeSummaryTpl, name))
+	c.buff.WriteString(fmt.Sprintf(keyQuantileTagValueTpl, name, p, value))
+}
+
+func mutateKey(key string) string {
+	return strings.Replace(key, "/", "_", -1)
 }
