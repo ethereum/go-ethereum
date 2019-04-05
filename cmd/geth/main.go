@@ -212,7 +212,6 @@ func init() {
 		makecacheCommand,
 		makedagCommand,
 		versionCommand,
-		bugCommand,
 		licenseCommand,
 		// See config.go
 		dumpConfigCommand,
