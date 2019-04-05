@@ -80,28 +80,16 @@ func (c *lesCommons) nodeInfo() interface{} {
 	sections, _, _ := c.chtIndexer.Sections()
 	sections2, _, _ := c.bloomTrieIndexer.Sections()
 
-	if !c.protocolManager.lightSync {
-		// convert to client section size if running in server mode
-		sections /= c.iConfig.PairChtSize / c.iConfig.ChtSize
-	}
-
 	if sections2 < sections {
 		sections = sections2
 	}
 	if sections > 0 {
 		sectionIndex := sections - 1
 		sectionHead := c.bloomTrieIndexer.SectionHead(sectionIndex)
-		var chtRoot common.Hash
-		if c.protocolManager.lightSync {
-			chtRoot = light.GetChtRoot(c.chainDb, sectionIndex, sectionHead)
-		} else {
-			idxV2 := (sectionIndex+1)*c.iConfig.PairChtSize/c.iConfig.ChtSize - 1
-			chtRoot = light.GetChtRoot(c.chainDb, idxV2, sectionHead)
-		}
 		cht = params.TrustedCheckpoint{
 			SectionIndex: sectionIndex,
 			SectionHead:  sectionHead,
-			CHTRoot:      chtRoot,
+			CHTRoot:      light.GetChtRoot(c.chainDb, sectionIndex, sectionHead),
 			BloomRoot:    light.GetBloomTrieRoot(c.chainDb, sectionIndex, sectionHead),
 		}
 	}

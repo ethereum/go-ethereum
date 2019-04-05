@@ -342,43 +342,37 @@ func TestGetCHTProofsLes2(t *testing.T) { testGetCHTProofs(t, 2) }
 
 func testGetCHTProofs(t *testing.T, protocol int) {
 	config := light.TestServerIndexerConfig
-	frequency := config.ChtSize
-	if protocol == 2 { //qqq
-		frequency = config.PairChtSize
-	}
 
 	waitIndexers := func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
-		expectSections := frequency / config.ChtSize
 		for {
 			cs, _, _ := cIndexer.Sections()
-			bs, _, _ := bIndexer.Sections()
-			if cs >= expectSections && bs >= expectSections {
+			if cs >= 1 {
 				break
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
-	server, tearDown := newServerEnv(t, int(frequency+config.ChtConfirms), protocol, waitIndexers)
+	server, tearDown := newServerEnv(t, int(config.ChtSize+config.ChtConfirms), protocol, waitIndexers)
 	defer tearDown()
 	bc := server.pm.blockchain.(*core.BlockChain)
 
 	// Assemble the proofs from the different protocols
-	header := bc.GetHeaderByNumber(frequency - 1)
+	header := bc.GetHeaderByNumber(config.ChtSize - 1)
 	rlp, _ := rlp.EncodeToBytes(header)
 
 	key := make([]byte, 8)
-	binary.BigEndian.PutUint64(key, frequency-1)
+	binary.BigEndian.PutUint64(key, config.ChtSize-1)
 
 	proofsV2 := HelperTrieResps{
 		AuxData: [][]byte{rlp},
 	}
-	root := light.GetChtRoot(server.db, (frequency/config.ChtSize)-1, bc.GetHeaderByNumber(frequency-1).Hash())
+	root := light.GetChtRoot(server.db, 0, bc.GetHeaderByNumber(config.ChtSize-1).Hash())
 	trie, _ := trie.New(root, trie.NewDatabase(rawdb.NewTable(server.db, light.ChtTablePrefix)))
 	trie.Prove(key, 0, &proofsV2.Proofs)
 	// Assemble the requests for the different protocols
 	requestsV2 := []HelperTrieReq{{
 		Type:    htCanonical,
-		TrieIdx: frequency/config.PairChtSize - 1,
+		TrieIdx: 0,
 		Key:     key,
 		AuxReq:  auxHeader,
 	}}
@@ -396,10 +390,8 @@ func TestGetBloombitsProofs(t *testing.T) {
 
 	waitIndexers := func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
 		for {
-			cs, _, _ := cIndexer.Sections()
-			bs, _, _ := bIndexer.Sections()
 			bts, _, _ := btIndexer.Sections()
-			if cs >= 8 && bs >= 8 && bts >= 1 {
+			if bts >= 1 {
 				break
 			}
 			time.Sleep(10 * time.Millisecond)
