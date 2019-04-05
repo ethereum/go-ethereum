@@ -221,8 +221,7 @@ func TestProtocolHandshake(t *testing.T) {
 	wg.Wait()
 }
 
-func TestProtocolHandshakeErrors(t *testing.T) {
-	our := &protoHandshake{Version: 3, Caps: []Cap{{"foo", 2}, {"bar", 3}}, Name: "quux"}
+func TestProtocolHandshakeErrors(t *testing.T) {	
 	tests := []struct {
 		code uint64
 		msg  interface{}
