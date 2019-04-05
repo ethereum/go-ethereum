@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package prometheus
 
 import (
@@ -43,21 +44,26 @@ var (
 	nameQuantileTagTemplate = "{name=\"%s\",quantile=\"%s\"} %v\n"
 )
 
+// bufPool is a global pool of byte buffers to avoid constant reallocations.
 var bufPool sync.Pool
 
+// getBuf retrieves a new empty (but possibly non-0 capacity) buffer.
 func getBuf() *bytes.Buffer {
-	buf := bufPool.Get()
-	if buf == nil {
-		return &bytes.Buffer{}
+	if item := bufPool.Get(); item != nil {
+		buf := item.(*bytes.Buffer)
+		buf.Reset()
+		return buf
 	}
-	return buf.(*bytes.Buffer)
+	return &bytes.Buffer{}
 }
 
+// giveBuf returns a used byte buffer to the pool.
 func giveBuf(buf *bytes.Buffer) {
-	buf.Reset()
 	bufPool.Put(buf)
 }
 
+// collector is a collection of byte buffers that aggregate Prometheus reports
+// for different metric types.
 type collector struct {
 	counters        *bytes.Buffer
 	gauges          *bytes.Buffer
@@ -67,6 +73,7 @@ type collector struct {
 	resettingTimers *bytes.Buffer
 }
 
+// newCollector createa a new Prometheus metric aggregator.
 func newCollector() *collector {
 	return &collector{
 		counters:        getBuf(),
@@ -78,7 +85,9 @@ func newCollector() *collector {
 	}
 }
 
-func (c *collector) reset() {
+// close releases all internally held byte buffers to be reused by subsequent
+// metrics collection runs.
+func (c *collector) close() {
 	giveBuf(c.counters)
 	giveBuf(c.gauges)
 	giveBuf(c.histograms)
@@ -87,38 +96,34 @@ func (c *collector) reset() {
 	giveBuf(c.resettingTimers)
 }
 
-func (c *collector) result() *bytes.Buffer {
+// aggregate iterates over the different metric types and aggregates them into
+// a single byte buffer.
+func (c *collector) aggregate() *bytes.Buffer {
 	buf := getBuf()
 	if c.counters.Len() > 0 {
 		buf.Write(countersHeader)
 		buf.Write(c.counters.Bytes())
 	}
-
 	if c.gauges.Len() > 0 {
 		buf.Write(gaugesHeader)
 		buf.Write(c.gauges.Bytes())
 	}
-
 	if c.meters.Len() > 0 {
 		buf.Write(meterHeader)
 		buf.Write(c.meters.Bytes())
 	}
-
 	if c.histograms.Len() > 0 {
 		buf.Write(histogramHeader)
 		buf.Write(c.histograms.Bytes())
 	}
-
 	if c.timers.Len() > 0 {
 		buf.Write(timerHeader)
 		buf.Write(c.timers.Bytes())
 	}
-
 	if c.resettingTimers.Len() > 0 {
 		buf.Write(resettingTimerHeader)
 		buf.Write(c.resettingTimers.Bytes())
 	}
-
 	return buf
 }
 

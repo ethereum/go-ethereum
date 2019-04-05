@@ -13,48 +13,47 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+// Package prometheus exposes go-metrics into a Prometheus format.
 package prometheus
 
 import (
 	"fmt"
 	"net/http"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
-// Handler returns http handler which dump metrics in prometheus format
+// Handler returns an HTTP handler which dump metrics in Prometheus format.
 func Handler(reg metrics.Registry) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Aggregate all the metris into a Prometheus collector
 		c := newCollector()
-		defer c.reset()
+		defer c.close()
 
 		reg.Each(func(name string, i interface{}) {
 			switch m := i.(type) {
 			case metrics.Counter:
-				ms := m.Snapshot()
-				c.addCounter(name, ms)
+				c.addCounter(name, m.Snapshot())
 			case metrics.Gauge:
-				ms := m.Snapshot()
-				c.addGuage(name, ms)
+				c.addGuage(name, m.Snapshot())
 			case metrics.GaugeFloat64:
-				ms := m.Snapshot()
-				c.addGuageFloat64(name, ms)
+				c.addGuageFloat64(name, m.Snapshot())
 			case metrics.Histogram:
-				ms := m.Snapshot()
-				c.addHistogram(name, ms)
+				c.addHistogram(name, m.Snapshot())
 			case metrics.Meter:
-				ms := m.Snapshot()
-				c.addMeter(name, ms)
+				c.addMeter(name, m.Snapshot())
 			case metrics.Timer:
-				ms := m.Snapshot()
-				c.addTimer(name, ms)
+				c.addTimer(name, m.Snapshot())
 			case metrics.ResettingTimer:
-				ms := m.Snapshot()
-				c.addResettingTimer(name, ms)
+				c.addResettingTimer(name, m.Snapshot())
+			default:
+				log.Warn("Unknown Prometheus metric type", "type", fmt.Sprintf("%T", i))
 			}
 		})
-
-		res := c.result()
+		// Aggregate the results into a single buffer and send to the user
+		res := c.aggregate()
 		defer giveBuf(res)
 
 		w.Header().Add("Content-Type", "text/plain")
