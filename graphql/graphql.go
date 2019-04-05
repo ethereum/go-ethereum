@@ -945,6 +945,20 @@ func (p *Pending) EstimateGas(ctx context.Context, args struct {
 	return ethapi.DoEstimateGas(ctx, p.backend, args.Data, rpc.PendingBlockNumber)
 }
 
+func (p *Pending) EstimateGases(ctx context.Context, args struct {
+	Data *[]ethapi.CallArgs
+}) (*[]hexutil.Uint64, error) {
+	ret := make([]hexutil.Uint64, 0, len(*args.Data))
+	for _, call := range *args.Data {
+		estimatedGas, err := ethapi.DoEstimateGas(ctx, p.backend, call, rpc.PendingBlockNumber)
+		if err != nil {
+			return &ret, nil
+		}
+		ret = append(ret, estimatedGas)
+	}
+	return &ret, nil
+}
+
 // Resolver is the top-level object in the GraphQL hierarchy.
 type Resolver struct {
 	backend *eth.EthAPIBackend

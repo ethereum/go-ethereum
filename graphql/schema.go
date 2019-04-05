@@ -289,6 +289,7 @@ const schema string = `
       # EstimateGas estimates the amount of gas that will be required for
       # successful execution of a transaction for the pending state.
       estimateGas(data: CallData!): Long!
+      estimateGases(data: [CallData!]): [Long!]
     }
 
     type Query {
