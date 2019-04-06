@@ -54,7 +54,7 @@ var (
 		GetCodeMsg:             {0, 80},
 		GetProofsV2Msg:         {0, 80},
 		GetHelperTrieProofsMsg: {0, 20},
-		SendTxV2Msg:            {0, 66000},
+		SendTxV2Msg:            {0, 16500},
 		GetTxStatusMsg:         {0, 50},
 	}
 	// maximum outgoing message size estimates
@@ -68,8 +68,18 @@ var (
 		SendTxV2Msg:            {0, 100},
 		GetTxStatusMsg:         {0, 100},
 	}
-	minBufLimit = uint64(50000000 * maxCostFactor)  // minimum buffer limit allowed for a client
-	minCapacity = (minBufLimit-1)/bufLimitRatio + 1 // minimum capacity allowed for a client
+	// request amounts that have to fit into the minimum buffer size minBufferMultiplier times
+	minBufferReqAmount = map[uint64]uint64{
+		GetBlockHeadersMsg:     192,
+		GetBlockBodiesMsg:      1,
+		GetReceiptsMsg:         1,
+		GetCodeMsg:             1,
+		GetProofsV2Msg:         1,
+		GetHelperTrieProofsMsg: 16,
+		SendTxV2Msg:            8,
+		GetTxStatusMsg:         64,
+	}
+	minBufferMultiplier = 3
 )
 
 const (
@@ -107,7 +117,7 @@ type costTracker struct {
 }
 
 // newCostTracker creates a cost tracker and loads the cost factor statistics from the database
-func newCostTracker(db ethdb.Database, config *eth.Config, logger *csvlogger.Logger) *costTracker {
+func newCostTracker(db ethdb.Database, config *eth.Config, logger *csvlogger.Logger) (*costTracker, uint64) {
 	utilTarget := float64(config.LightServ) * flowcontrol.FixedPointMultiplier / 100
 	ct := &costTracker{
 		db:               db,
@@ -131,7 +141,18 @@ func newCostTracker(db ethdb.Database, config *eth.Config, logger *csvlogger.Log
 		}
 	}
 	ct.gfLoop()
-	return ct
+	costList := ct.makeCostList(ct.globalFactor() * 1.25)
+	var minBufLimit uint64
+	for _, c := range costList {
+		amount := minBufferReqAmount[c.MsgCode]
+		cost := c.BaseCost + amount*c.ReqCost
+		if cost > minBufLimit {
+			minBufLimit = cost
+		}
+	}
+	minBufLimit *= uint64(minBufferMultiplier)
+	minCapacity := (minBufLimit-1)/bufLimitRatio + 1
+	return ct, minCapacity
 }
 
 // stop stops the cost tracker and saves the cost factor statistics to the database
@@ -146,16 +167,14 @@ func (ct *costTracker) stop() {
 
 // makeCostList returns upper cost estimates based on the hardcoded cost estimate
 // tables and the optionally specified incoming/outgoing bandwidth limits
-func (ct *costTracker) makeCostList() RequestCostList {
+func (ct *costTracker) makeCostList(globalFactor float64) RequestCostList {
 	maxCost := func(avgTime, inSize, outSize uint64) uint64 {
-		globalFactor := ct.globalFactor()
-
 		cost := avgTime * maxCostFactor
-		inSizeCost := uint64(float64(inSize) * ct.inSizeFactor * globalFactor * maxCostFactor)
+		inSizeCost := uint64(float64(inSize) * ct.inSizeFactor * globalFactor)
 		if inSizeCost > cost {
 			cost = inSizeCost
 		}
-		outSizeCost := uint64(float64(outSize) * ct.outSizeFactor * globalFactor * maxCostFactor)
+		outSizeCost := uint64(float64(outSize) * ct.outSizeFactor * globalFactor)
 		if outSizeCost > cost {
 			cost = outSizeCost
 		}

@@ -63,10 +63,10 @@ type LesServer struct {
 
 	thcNormal, thcBlockProcessing int // serving thread count for normal operation and block processing mode
 
-	maxPeers           int
-	freeClientCap      uint64
-	freeClientPool     *freeClientPool
-	priorityClientPool *priorityClientPool
+	maxPeers                   int
+	minCapacity, freeClientCap uint64
+	freeClientPool             *freeClientPool
+	priorityClientPool         *priorityClientPool
 }
 
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
@@ -119,13 +119,13 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 			bloomTrieIndexer: light.NewBloomTrieIndexer(eth.ChainDb(), nil, params.BloomBitsBlocks, params.BloomTrieFrequency),
 			protocolManager:  pm,
 		},
-		costTracker:  newCostTracker(eth.ChainDb(), config, requestLogger),
 		quitSync:     quitSync,
 		lesTopics:    lesTopics,
 		onlyAnnounce: config.OnlyAnnounce,
 		csvLogger:    csvLogger,
 		logTotalCap:  requestLogger.NewChannel("totalCapacity", 0.01),
 	}
+	srv.costTracker, srv.minCapacity = newCostTracker(eth.ChainDb(), config, requestLogger)
 
 	logger := log.New()
 	pm.server = srv
@@ -229,9 +229,9 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 	s.maxPeers = s.config.LightPeers
 	totalRecharge := s.costTracker.totalRecharge()
 	if s.maxPeers > 0 {
-		s.freeClientCap = minCapacity //totalRecharge / uint64(s.maxPeers)
-		if s.freeClientCap < minCapacity {
-			s.freeClientCap = minCapacity
+		s.freeClientCap = s.minCapacity //totalRecharge / uint64(s.maxPeers)
+		if s.freeClientCap < s.minCapacity {
+			s.freeClientCap = s.minCapacity
 		}
 		if s.freeClientCap > 0 {
 			s.defParams = flowcontrol.ServerParams{

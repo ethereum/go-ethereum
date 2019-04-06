@@ -58,7 +58,7 @@ const (
 // if the total encoded size of a sent transaction batch is over txSizeCostLimit
 // per transaction then the request cost is calculated as proportional to the
 // encoded size instead of the transaction count
-const txSizeCostLimit = 0x10000
+const txSizeCostLimit = 0x4000
 
 const (
 	announceTypeNone = iota
@@ -537,7 +537,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		send = send.add("flowControl/MRR", server.defParams.MinRecharge)
 		var costList RequestCostList
 		if server.costTracker != nil {
-			costList = server.costTracker.makeCostList()
+			costList = server.costTracker.makeCostList(server.costTracker.globalFactor())
 		} else {
 			costList = testCostList()
 		}

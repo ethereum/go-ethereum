@@ -101,7 +101,7 @@ func (s tcSubs) send(tc uint64, underrun bool) {
 
 // MinimumCapacity queries minimum assignable capacity for a single client
 func (api *PrivateLightServerAPI) MinimumCapacity() hexutil.Uint64 {
-	return hexutil.Uint64(minCapacity)
+	return hexutil.Uint64(api.server.minCapacity)
 }
 
 // FreeClientCapacity queries the capacity provided for free clients
@@ -117,7 +117,7 @@ func (api *PrivateLightServerAPI) FreeClientCapacity() hexutil.Uint64 {
 // Note: assigned capacity can be changed while the client is connected with
 // immediate effect.
 func (api *PrivateLightServerAPI) SetClientCapacity(id enode.ID, cap uint64) error {
-	if cap != 0 && cap < minCapacity {
+	if cap != 0 && cap < api.server.minCapacity {
 		return ErrMinCap
 	}
 	return api.server.priorityClientPool.setClientCapacity(id, cap)
