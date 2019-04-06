@@ -126,7 +126,7 @@ func validateEvents(events chan NewTxsEvent, count int) error {
 		case ev := <-events:
 			received = append(received, ev.Txs...)
 		case <-time.After(time.Second):
-			return fmt.Errorf("event #%d not fired", len(received))
+			return fmt.Errorf("timeout: only %d events fired,expect %d", len(received), count)
 		}
 	}
 	if len(received) > count {
