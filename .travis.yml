@@ -4,7 +4,7 @@ sudo: false
 matrix:
   include:
     - os: linux
-      dist: trusty
+      dist: xenial
       sudo: required
       go: 1.10.x
       script:
@@ -15,7 +15,7 @@ matrix:
       - go run build/ci.go test -coverage $TEST_PACKAGES
 
     - os: linux
-      dist: trusty
+      dist: xenial
       sudo: required
       go: 1.11.x
       script:
@@ -27,7 +27,7 @@ matrix:
 
     # These are the latest Go versions.
     - os: linux
-      dist: trusty
+      dist: xenial
       sudo: required
       go: 1.12.x
       script:
@@ -54,7 +54,7 @@ matrix:
 
     # This builder only tests code linters on latest version of Go
     - os: linux
-      dist: trusty
+      dist: xenial
       go: 1.12.x
       env:
         - lint
@@ -66,7 +66,7 @@ matrix:
     # This builder does the Ubuntu PPA upload
     - if: repo = ethereum/go-ethereum AND type = push
       os: linux
-      dist: trusty
+      dist: xenial
       go: 1.12.x
       env:
         - ubuntu-ppa
@@ -88,7 +88,7 @@ matrix:
     # This builder does the Linux Azure uploads
     - if: repo = ethereum/go-ethereum AND type = push
       os: linux
-      dist: trusty
+      dist: xenial
       sudo: required
       go: 1.12.x
       env:
@@ -122,7 +122,7 @@ matrix:
     # This builder does the Linux Azure MIPS xgo uploads
     - if: repo = ethereum/go-ethereum AND type = push
       os: linux
-      dist: trusty
+      dist: xenial
       services:
         - docker
       go: 1.12.x
@@ -150,7 +150,7 @@ matrix:
     # This builder does the Android Maven and Azure uploads
     - if: repo = ethereum/go-ethereum AND type = push
       os: linux
-      dist: trusty
+      dist: xenial
       addons:
         apt:
           packages:
@@ -216,7 +216,7 @@ matrix:
     # This builder does the Azure archive purges to avoid accumulating junk
     - if: repo = ethereum/go-ethereum AND type = cron
       os: linux
-      dist: trusty
+      dist: xenial
       go: 1.12.x
       env:
         - azure-purge
@@ -228,7 +228,7 @@ matrix:
     - name: Race Detector for Swarm
       if: repo = ethersphere/go-ethereum
       os: linux
-      dist: trusty
+      dist: xenial
       go: 1.12.x
       git:
         submodules: false # avoid cloning ethereum/tests
