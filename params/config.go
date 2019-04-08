@@ -94,7 +94,7 @@ var (
 		EIP158Block:         big.NewInt(3),
 		ByzantiumBlock:      big.NewInt(1035301),
 		ConstantinopleBlock: big.NewInt(3660663),
-		PetersburgBlock:     big.NewInt(9999999), //TODO! Insert Rinkeby block number
+		PetersburgBlock:     big.NewInt(4321234),
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
