@@ -38,8 +38,6 @@ import (
 
 type odrTestFn func(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte
 
-func TestOdrGetBlockLes1(t *testing.T) { testOdr(t, 1, 1, odrGetBlock) }
-
 func TestOdrGetBlockLes2(t *testing.T) { testOdr(t, 2, 1, odrGetBlock) }
 
 func odrGetBlock(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
@@ -55,8 +53,6 @@ func odrGetBlock(ctx context.Context, db ethdb.Database, config *params.ChainCon
 	rlp, _ := rlp.EncodeToBytes(block)
 	return rlp
 }
-
-func TestOdrGetReceiptsLes1(t *testing.T) { testOdr(t, 1, 1, odrGetReceipts) }
 
 func TestOdrGetReceiptsLes2(t *testing.T) { testOdr(t, 2, 1, odrGetReceipts) }
 
@@ -77,8 +73,6 @@ func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.Chain
 	rlp, _ := rlp.EncodeToBytes(receipts)
 	return rlp
 }
-
-func TestOdrAccountsLes1(t *testing.T) { testOdr(t, 1, 1, odrAccounts) }
 
 func TestOdrAccountsLes2(t *testing.T) { testOdr(t, 2, 1, odrAccounts) }
 
@@ -107,8 +101,6 @@ func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainCon
 	}
 	return res
 }
-
-func TestOdrContractCallLes1(t *testing.T) { testOdr(t, 1, 2, odrContractCall) }
 
 func TestOdrContractCallLes2(t *testing.T) { testOdr(t, 2, 2, odrContractCall) }
 

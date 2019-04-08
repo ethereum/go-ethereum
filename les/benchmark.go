@@ -135,8 +135,7 @@ func (b *benchmarkHelperTrie) init(pm *ProtocolManager, count int) error {
 		b.sectionCount, b.headNum, _ = pm.server.bloomTrieIndexer.Sections()
 	} else {
 		b.sectionCount, _, _ = pm.server.chtIndexer.Sections()
-		b.sectionCount /= (params.CHTFrequencyClient / params.CHTFrequencyServer)
-		b.headNum = b.sectionCount*params.CHTFrequencyClient - 1
+		b.headNum = b.sectionCount*params.CHTFrequency - 1
 	}
 	if b.sectionCount == 0 {
 		return fmt.Errorf("no processed sections available")

@@ -119,7 +119,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool)
 
 	leth.odr = NewLesOdr(chainDb, light.DefaultClientIndexerConfig, leth.retriever)
-	leth.chtIndexer = light.NewChtIndexer(chainDb, leth.odr, params.CHTFrequencyClient, params.HelperTrieConfirmations)
+	leth.chtIndexer = light.NewChtIndexer(chainDb, leth.odr, params.CHTFrequency, params.HelperTrieConfirmations)
 	leth.bloomTrieIndexer = light.NewBloomTrieIndexer(chainDb, leth.odr, params.BloomBitsBlocksClient, params.BloomTrieFrequency)
 	leth.odr.SetIndexers(leth.chtIndexer, leth.bloomTrieIndexer, leth.bloomIndexer)
 
@@ -179,8 +179,6 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 func lesTopic(genesisHash common.Hash, protocolVersion uint) discv5.Topic {
 	var name string
 	switch protocolVersion {
-	case lpv1:
-		name = "LES"
 	case lpv2:
 		name = "LES2"
 	default:

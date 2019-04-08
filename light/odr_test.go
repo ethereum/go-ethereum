@@ -99,7 +99,7 @@ func (odr *testOdr) IndexerConfig() *IndexerConfig {
 
 type odrTestFn func(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc *LightChain, bhash common.Hash) ([]byte, error)
 
-func TestOdrGetBlockLes1(t *testing.T) { testChainOdr(t, 1, odrGetBlock) }
+func TestOdrGetBlockLes2(t *testing.T) { testChainOdr(t, 1, odrGetBlock) }
 
 func odrGetBlock(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc *LightChain, bhash common.Hash) ([]byte, error) {
 	var block *types.Block
@@ -115,7 +115,7 @@ func odrGetBlock(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc
 	return rlp, nil
 }
 
-func TestOdrGetReceiptsLes1(t *testing.T) { testChainOdr(t, 1, odrGetReceipts) }
+func TestOdrGetReceiptsLes2(t *testing.T) { testChainOdr(t, 1, odrGetReceipts) }
 
 func odrGetReceipts(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc *LightChain, bhash common.Hash) ([]byte, error) {
 	var receipts types.Receipts
@@ -137,7 +137,7 @@ func odrGetReceipts(ctx context.Context, db ethdb.Database, bc *core.BlockChain,
 	return rlp, nil
 }
 
-func TestOdrAccountsLes1(t *testing.T) { testChainOdr(t, 1, odrAccounts) }
+func TestOdrAccountsLes2(t *testing.T) { testChainOdr(t, 1, odrAccounts) }
 
 func odrAccounts(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc *LightChain, bhash common.Hash) ([]byte, error) {
 	dummyAddr := common.HexToAddress("1234567812345678123456781234567812345678")
@@ -161,7 +161,7 @@ func odrAccounts(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc
 	return res, st.Error()
 }
 
-func TestOdrContractCallLes1(t *testing.T) { testChainOdr(t, 1, odrContractCall) }
+func TestOdrContractCallLes2(t *testing.T) { testChainOdr(t, 1, odrContractCall) }
 
 type callmsg struct {
 	types.Message
