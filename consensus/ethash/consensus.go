@@ -191,6 +191,9 @@ func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 	if len(block.Uncles()) > maxUncles {
 		return errTooManyUncles
 	}
+	if len(block.Uncles()) == 0 {
+		return nil
+	}
 	// Gather the set of past uncles and ancestors
 	uncles, ancestors := mapset.NewSet(), make(map[common.Hash]*types.Header)
 

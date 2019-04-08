@@ -34,7 +34,7 @@ import (
 
 var (
 	EmptyRootHash  = DeriveSha(Transactions{})
-	EmptyUncleHash = CalcUncleHash(nil)
+	EmptyUncleHash = rlpHash([]*Header(nil))
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -324,6 +324,9 @@ func (c *writeCounter) Write(b []byte) (int, error) {
 }
 
 func CalcUncleHash(uncles []*Header) common.Hash {
+	if len(uncles) == 0 {
+		return EmptyUncleHash
+	}
 	return rlpHash(uncles)
 }
 
