@@ -104,12 +104,6 @@
 			"revisionTime": "2018-06-25T18:44:42Z"
 		},
 		{
-			"checksumSHA1": "B1sVd5XOmjuSFYivGhBd+vPlc1w=",
-			"path": "github.com/ebfe/scard",
-			"revision": "0147d7ead790ac8a5ecc91ee6de68beb7b17c4e9",
-			"revisionTime": "2017-12-31T19:32:11Z"
-		},
-		{
 			"checksumSHA1": "zYnPsNAVm1/ViwCkN++dX2JQhBo=",
 			"path": "github.com/edsrzf/mmap-go",
 			"revision": "935e0e8a636ca4ba70b713f3e38a19e1b77739e8",
@@ -532,10 +526,10 @@
 			"revisionTime": "2018-11-28T10:09:59Z"
 		},
 		{
-			"checksumSHA1": "vW7IiPtoA4hQQ/ScHlbmRktY89U=",
+			"checksumSHA1": "SsMMqb3xn7hg1ZX5ugwZz5rzpx0=",
 			"path": "github.com/tyler-smith/go-bip39",
-			"revision": "8e7a99b3e716f36d3b080a9a70f9eb45abe4edcc",
-			"revisionTime": "2016-06-29T16:38:56Z"
+			"revision": "dbb3b84ba2ef14e894f5e33d6c6e43641e665738",
+			"revisionTime": "2018-10-17T06:06:43Z"
 		},
 		{
 			"checksumSHA1": "nD6S4KB0S+YHxVMDDE+w3PyXaMk=",
