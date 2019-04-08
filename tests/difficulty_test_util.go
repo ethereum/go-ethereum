@@ -30,18 +30,18 @@ import (
 //go:generate gencodec -type DifficultyTest -field-override difficultyTestMarshaling -out gen_difficultytest.go
 
 type DifficultyTest struct {
-	ParentTimestamp    *big.Int    `json:"parentTimestamp"`
+	ParentTimestamp    uint64      `json:"parentTimestamp"`
 	ParentDifficulty   *big.Int    `json:"parentDifficulty"`
 	UncleHash          common.Hash `json:"parentUncles"`
-	CurrentTimestamp   *big.Int    `json:"currentTimestamp"`
+	CurrentTimestamp   uint64      `json:"currentTimestamp"`
 	CurrentBlockNumber uint64      `json:"currentBlockNumber"`
 	CurrentDifficulty  *big.Int    `json:"currentDifficulty"`
 }
 
 type difficultyTestMarshaling struct {
-	ParentTimestamp    *math.HexOrDecimal256
+	ParentTimestamp    math.HexOrDecimal64
 	ParentDifficulty   *math.HexOrDecimal256
-	CurrentTimestamp   *math.HexOrDecimal256
+	CurrentTimestamp   math.HexOrDecimal64
 	CurrentDifficulty  *math.HexOrDecimal256
 	UncleHash          common.Hash
 	CurrentBlockNumber math.HexOrDecimal64
@@ -56,7 +56,7 @@ func (test *DifficultyTest) Run(config *params.ChainConfig) error {
 		UncleHash:  test.UncleHash,
 	}
 
-	actual := ethash.CalcDifficulty(config, test.CurrentTimestamp.Uint64(), parent)
+	actual := ethash.CalcDifficulty(config, test.CurrentTimestamp, parent)
 	exp := test.CurrentDifficulty
 
 	if actual.Cmp(exp) != 0 {

@@ -4,7 +4,7 @@ sudo: false
 matrix:
   include:
     - os: linux
-      dist: trusty
+      dist: xenial
       sudo: required
       go: 1.10.x
       script:
@@ -16,7 +16,7 @@ matrix:
 
     # These are the latest Go versions.
     - os: linux
-      dist: trusty
+      dist: xenial
       sudo: required
       go: 1.11.x
       script:
@@ -43,7 +43,7 @@ matrix:
 
     # This builder only tests code linters on latest version of Go
     - os: linux
-      dist: trusty
+      dist: xenial
       go: 1.11.x
       env:
         - lint
@@ -55,7 +55,7 @@ matrix:
     # This builder does the Ubuntu PPA upload
     - if: type = push
       os: linux
-      dist: trusty
+      dist: xenial
       go: 1.11.x
       env:
         - ubuntu-ppa
@@ -77,7 +77,7 @@ matrix:
     # This builder does the Linux Azure uploads
     - if: type = push
       os: linux
-      dist: trusty
+      dist: xenial
       sudo: required
       go: 1.11.x
       env:
@@ -111,7 +111,7 @@ matrix:
     # This builder does the Linux Azure MIPS xgo uploads
     - if: type = push
       os: linux
-      dist: trusty
+      dist: xenial
       services:
         - docker
       go: 1.11.x
@@ -139,7 +139,7 @@ matrix:
     # This builder does the Android Maven and Azure uploads
     - if: type = push
       os: linux
-      dist: trusty
+      dist: xenial
       addons:
         apt:
           packages:
@@ -206,7 +206,7 @@ matrix:
     # This builder does the Azure archive purges to avoid accumulating junk
     - if: type = cron
       os: linux
-      dist: trusty
+      dist: xenial
       go: 1.11.x
       env:
         - azure-purge
