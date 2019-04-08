@@ -532,6 +532,12 @@
 			"revisionTime": "2018-11-28T10:09:59Z"
 		},
 		{
+			"checksumSHA1": "vW7IiPtoA4hQQ/ScHlbmRktY89U=",
+			"path": "github.com/tyler-smith/go-bip39",
+			"revision": "8e7a99b3e716f36d3b080a9a70f9eb45abe4edcc",
+			"revisionTime": "2016-06-29T16:38:56Z"
+		},
+		{
 			"checksumSHA1": "nD6S4KB0S+YHxVMDDE+w3PyXaMk=",
 			"path": "github.com/uber/jaeger-client-go",
 			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
@@ -632,12 +638,6 @@
 			"path": "github.com/uber/jaeger-lib/metrics",
 			"revision": "a51202d6f4a7e5a219e3841a43614ff7187ae7f1",
 			"revisionTime": "2018-06-15T20:27:29Z"
-		},
-		{
-			"checksumSHA1": "vW7IiPtoA4hQQ/ScHlbmRktY89U=",
-			"path": "github.com/tyler-smith/go-bip39",
-			"revision": "8e7a99b3e716f36d3b080a9a70f9eb45abe4edcc",
-			"revisionTime": "2016-06-29T16:38:56Z"
 		},
 		{
 			"checksumSHA1": "GLCPuvePAkWT+opcWq3mNdhOfGM=",
@@ -914,6 +914,12 @@
 			"path": "golang.org/x/text/transform",
 			"revision": "e3703dcdd614d2d7488fff034c75c551ea25da95",
 			"revisionTime": "2018-12-15T16:57:46Z"
+		},
+		{
+			"checksumSHA1": "lBB8oUHgIK0RUuDchkQVfMXJQh0=",
+			"path": "golang.org/x/text/unicode/norm",
+			"revision": "31e7599a6c37728c25ca34167be099d072ad335d",
+			"revisionTime": "2019-04-05T05:38:27Z"
 		},
 		{
 			"checksumSHA1": "CEFTYXtWmgSh+3Ik1NmDaJcz4E0=",
