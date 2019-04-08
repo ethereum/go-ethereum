@@ -100,7 +100,7 @@ func LongEarthAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFu
 				lookAhead()
 			case <-ctxR.Done():
 				if valueR != nil {
-					lookAhead()
+					lookAhead() // only look ahead if R was successful
 				}
 			case <-ctxA.Done():
 			}
@@ -115,7 +115,7 @@ func LongEarthAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFu
 				lookBack()
 			case <-ctxR.Done():
 				if valueR == nil {
-					lookBack()
+					lookBack() // only look back in case R failed
 				}
 			case <-ctxB.Done():
 			}
@@ -162,13 +162,18 @@ func LongEarthAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFu
 		return value, nil
 	}
 
+	// at this point the algorithm did not return a value,
+	// so we challenge the hint given.
 	value, err := read(ctx, hint, now)
 	if err != nil {
 		return nil, err
 	}
 	if value != nil {
-		return value, nil
+		return value, nil // hint is valid, return it.
 	}
+
+	// hint is invalid. Invoke the algorithm
+	// without hint.
 	now = hint.Base()
 	if hint.Level == HighestLevel {
 		now--
