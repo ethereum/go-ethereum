@@ -532,6 +532,12 @@
 			"revisionTime": "2018-10-17T06:06:43Z"
 		},
 		{
+			"checksumSHA1": "xa+UUbqD3zPfa8mKAxWabRsqSzM=",
+			"path": "github.com/tyler-smith/go-bip39/wordlists",
+			"revision": "dbb3b84ba2ef14e894f5e33d6c6e43641e665738",
+			"revisionTime": "2018-10-17T06:06:43Z"
+		},
+		{
 			"checksumSHA1": "nD6S4KB0S+YHxVMDDE+w3PyXaMk=",
 			"path": "github.com/uber/jaeger-client-go",
 			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
