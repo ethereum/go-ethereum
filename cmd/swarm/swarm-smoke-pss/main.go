@@ -134,11 +134,13 @@ func main() {
 		},
 		{
 			Name:   "all",
-			Usage:  "send and receive raw, sym and asym messages across randome nodes",
+			Usage:  "send and receive raw, sym and asym messages across random nodes",
 			Action: wrapCliCommand("all", pssAllCheck),
 		},
 	}
 
+	// Sort flags and commands so that they appear
+	// ordered when running the help command
 	sort.Sort(cli.FlagsByName(app.Flags))
 	sort.Sort(cli.CommandsByName(app.Commands))
 
