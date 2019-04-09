@@ -17,6 +17,7 @@
 package accounts
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -132,4 +133,20 @@ func (path DerivationPath) String() string {
 		}
 	}
 	return result
+}
+
+// MarshalJSON turns a derivation path into its json-serialized string
+func (path DerivationPath) MarshalJSON() ([]byte, error) {
+	return json.Marshal(path.String())
+}
+
+// UnmarshalJSON a json-serialized string back into a derivation path
+func (path *DerivationPath) UnmarshalJSON(b []byte) error {
+	var dp string
+	var err error
+	if err = json.Unmarshal(b, &dp); err != nil {
+		return err
+	}
+	*path, err = ParseDerivationPath(dp)
+	return err
 }

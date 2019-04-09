@@ -2,6 +2,7 @@
 # Each line is a file pattern followed by one or more owners.
 
 accounts/usbwallet              @karalabe
+accounts/scwallet               @gballet
 accounts/abi                    @gballet
 consensus                       @karalabe
 core/                           @karalabe @holiman

@@ -613,6 +613,16 @@ web3._extend({
 			params: 2,
 			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, null]
 		}),
+		new web3._extend.Method({
+			name: 'unpair',
+			call: 'personal_unpair',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'initializeWallet',
+			call: 'personal_initializeWallet',
+			params: 1
+		})
 	],
 	properties: [
 		new web3._extend.Property({
