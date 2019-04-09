@@ -58,7 +58,20 @@ var (
 	homesteadInstructionSet      = newHomesteadInstructionSet()
 	byzantiumInstructionSet      = newByzantiumInstructionSet()
 	constantinopleInstructionSet = newConstantinopleInstructionSet()
+	istanbulInstructionSet       = newIstanbulInstructionSet()
 )
+
+func newIstanbulInstructionSet() [256]operation {
+	instructionSet := newConstantinopleInstructionSet()
+	instructionSet[SELFBALANCE] = operation{
+		execute:     opSelfBalance,
+		constantGas: GasFastStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+		valid:       true,
+	}
+	return instructionSet
+}
 
 // NewConstantinopleInstructionSet returns the frontier, homestead
 // byzantium and contantinople instructions.

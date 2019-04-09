@@ -90,4 +90,16 @@ var (
 
 		CreateBySuicide: 25000,
 	}
+	// GasTableEipIstanbul contain the gas re-prices for EIP 1884
+	GasTableEipIstanbul = GasTable{
+		ExtcodeSize:     700,
+		ExtcodeCopy:     700,
+		ExtcodeHash:     400,
+		Balance:         700, // Increase from 400 to 700
+		SLoad:           800,
+		Calls:           700,
+		Suicide:         5000,
+		ExpByte:         50,
+		CreateBySuicide: 25000,
+	}
 )
