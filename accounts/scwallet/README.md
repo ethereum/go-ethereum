@@ -53,7 +53,7 @@
   }
   ```
 
-  So the communication with the card is working, but there is no key associated to this wallet. Let's create it:
+  So the communication with the card is working, but there is no key associated with this wallet. Let's create it:
 
   ```
   > personal.initializeWallet("pcsc://044def09")
