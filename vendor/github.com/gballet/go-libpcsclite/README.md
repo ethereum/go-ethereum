@@ -6,18 +6,38 @@ A golang implementation of the [libpcpsclite](http://github.com/LudovicRousseau/
 
 The goal is for major open source projects to distribute a single binary that doesn't depend on `libpcsclite`. It provides an extra function `CheckPCSCDaemon` that will tell the user if `pcscd` is running.
 
-## Building
-
-TODO
-
 ## Example
 
-TODO
+```golang
+func main() {
+	client, err := EstablishContext(2)
+	if err != nil {
+    fmt.Printf("Error establishing context: %v\n", err)
+    os.Exit(1)
+	}
+
+	_, err = client.ListReaders()
+	if err != nil {
+    fmt.Printf("Error getting the list of readers: %v\n", err)
+    os.Exit(1)
+	}
+
+	card, err := client.Connect(client.readerStateDescriptors[0].Name, ShareShared, ProtocolT0|ProtocolT1)
+	if err != nil {
+    fmt.Printf("Error connecting: %v\n", err)
+    os.Exit(1)
+	}
+
+	resp, _, err := card.Transmit([]byte{0, 0xa4, 4, 0, 0xA0, 0, 0, 8, 4, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0})
+
+	card.Disconnect(LeaveCard)
+}
+```
 
 ## TODO
 
-  - [ ] Finish this README
-  - [ ] Lock context
+  - [x] Finish this README
+  - [x] Lock context
   - [ ] implement missing functions
 
 ## License

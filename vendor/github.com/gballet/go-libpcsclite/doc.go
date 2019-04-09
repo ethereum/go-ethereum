@@ -31,8 +31,6 @@
 package pcsc
 
 const (
-	SCardSuccess                   = 0x00000000 /* No error was encountered. */
-
 	AutoAllocate  = -1     /* see SCardFreeMemory() */
 	ScopeUser     = 0x0000 /* Scope in user space */
 	ScopeTerminal = 0x0001 /* Scope in terminal */
@@ -94,6 +92,6 @@ const (
 
 // Protocol information
 const (
-	ProtocolVersionMajor = 4 /* IPC major */
-	ProtocolVersionMinor = 3 /* IPC minor */
+	ProtocolVersionMajor = uint32(4) /* IPC major */
+	ProtocolVersionMinor = uint32(3) /* IPC minor */
 )
