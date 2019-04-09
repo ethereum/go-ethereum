@@ -1144,13 +1144,23 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			stats.ignored++
 			block, err = it.next()
 		}
+		// First block is still known block, the only scenario here is:
+		// We did a roll-back, and we want to re-import a batch of known blocks while a part
+		// of known blocks are higher than current head block.
+		if err == ErrKnownBlock {
+			block, err = bc.insertKnownChain(block, it)
+
+			if bc.CurrentBlock().NumberU64() != current {
+				lastCanon = bc.CurrentBlock()
+			}
+		}
 		// Falls through to the block import
 	}
 
 	switch {
 	// First block is pruned, insert as sidechain and reorg only if TD grows enough
 	case err == consensus.ErrPrunedAncestor:
-		return bc.insertSidechain(block, it)
+		return bc.insertSideChain(block, it)
 
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
 	case err == consensus.ErrFutureBlock || (err == consensus.ErrUnknownAncestor && bc.futureBlocks.Contains(it.first().ParentHash())):
@@ -1313,13 +1323,44 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	return it.index, events, coalescedLogs, err
 }
 
-// insertSidechain is called when an import batch hits upon a pruned ancestor
+// insertKnownChain inserts a batch of known blocks which are higher than current
+// head block.
+func (bc *BlockChain) insertKnownChain(block *types.Block, it *insertIterator) (*types.Block, error) {
+	var (
+		externTd    *big.Int
+		knownBlocks []*types.Block
+
+		err     = ErrKnownBlock
+		current = bc.CurrentBlock()
+		localTd = bc.GetTd(current.Hash(), current.NumberU64())
+	)
+	for ; block != nil && (err == ErrKnownBlock); block, err = it.next() {
+		if externTd == nil {
+			externTd = bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+		}
+		externTd = new(big.Int).Add(externTd, block.Difficulty())
+
+		// Short circuit if the known block cannot be imported as a new
+		// canonical block.
+		if block.ParentHash() != current.Hash() || externTd.Cmp(localTd) <= 0 {
+			break
+		}
+		knownBlocks = append(knownBlocks, block)
+		localTd, current = new(big.Int).Add(localTd, block.Difficulty()), block
+	}
+	if len(knownBlocks) > 0 {
+		bc.insert(knownBlocks[len(knownBlocks)-1])
+	}
+	return block, err
+}
+
+// insertSideChain is called when an import batch hits upon a pruned ancestor
 // error, which happens when a sidechain with a sufficiently old fork-block is
 // found.
 //
 // The method writes all (header-and-body-valid) blocks to disk, then tries to
 // switch over to the new chain if the TD exceeded the current chain.
-func (bc *BlockChain) insertSidechain(block *types.Block, it *insertIterator) (int, []interface{}, []*types.Log, error) {
+func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (int, []interface{}, []*types.Log, error) {
 	var (
 		externTd *big.Int
 		current  = bc.CurrentBlock()

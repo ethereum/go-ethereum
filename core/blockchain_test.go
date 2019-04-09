@@ -1564,117 +1564,6 @@ func TestLargeReorgTrieGC(t *testing.T) {
 	}
 }
 
-// Benchmarks large blocks with value transfers to non-existing accounts
-func benchmarkLargeNumberOfValueToNonexisting(b *testing.B, numTxs, numBlocks int, recipientFn func(uint64) common.Address, dataFn func(uint64) []byte) {
-	var (
-		signer          = types.HomesteadSigner{}
-		testBankKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
-		bankFunds       = big.NewInt(100000000000000000)
-		gspec           = Genesis{
-			Config: params.TestChainConfig,
-			Alloc: GenesisAlloc{
-				testBankAddress: {Balance: bankFunds},
-				common.HexToAddress("0xc0de"): {
-					Code:    []byte{0x60, 0x01, 0x50},
-					Balance: big.NewInt(0),
-				}, // push 1, pop
-			},
-			GasLimit: 100e6, // 100 M
-		}
-	)
-	// Generate the original common chain segment and the two competing forks
-	engine := ethash.NewFaker()
-	db := rawdb.NewMemoryDatabase()
-	genesis := gspec.MustCommit(db)
-
-	blockGenerator := func(i int, block *BlockGen) {
-		block.SetCoinbase(common.Address{1})
-		for txi := 0; txi < numTxs; txi++ {
-			uniq := uint64(i*numTxs + txi)
-			recipient := recipientFn(uniq)
-			//recipient := common.BigToAddress(big.NewInt(0).SetUint64(1337 + uniq))
-			tx, err := types.SignTx(types.NewTransaction(uniq, recipient, big.NewInt(1), params.TxGas, big.NewInt(1), nil), signer, testBankKey)
-			if err != nil {
-				b.Error(err)
-			}
-			block.AddTx(tx)
-		}
-	}
-
-	shared, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, numBlocks, blockGenerator)
-	b.StopTimer()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		// Import the shared chain and the original canonical one
-		diskdb := rawdb.NewMemoryDatabase()
-		gspec.MustCommit(diskdb)
-
-		chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil)
-		if err != nil {
-			b.Fatalf("failed to create tester chain: %v", err)
-		}
-		b.StartTimer()
-		if _, err := chain.InsertChain(shared); err != nil {
-			b.Fatalf("failed to insert shared chain: %v", err)
-		}
-		b.StopTimer()
-		if got := chain.CurrentBlock().Transactions().Len(); got != numTxs*numBlocks {
-			b.Fatalf("Transactions were not included, expected %d, got %d", numTxs*numBlocks, got)
-
-		}
-	}
-}
-func BenchmarkBlockChain_1x1000ValueTransferToNonexisting(b *testing.B) {
-	var (
-		numTxs    = 1000
-		numBlocks = 1
-	)
-
-	recipientFn := func(nonce uint64) common.Address {
-		return common.BigToAddress(big.NewInt(0).SetUint64(1337 + nonce))
-	}
-	dataFn := func(nonce uint64) []byte {
-		return nil
-	}
-
-	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn, dataFn)
-}
-func BenchmarkBlockChain_1x1000ValueTransferToExisting(b *testing.B) {
-	var (
-		numTxs    = 1000
-		numBlocks = 1
-	)
-	b.StopTimer()
-	b.ResetTimer()
-
-	recipientFn := func(nonce uint64) common.Address {
-		return common.BigToAddress(big.NewInt(0).SetUint64(1337))
-	}
-	dataFn := func(nonce uint64) []byte {
-		return nil
-	}
-
-	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn, dataFn)
-}
-func BenchmarkBlockChain_1x1000Executions(b *testing.B) {
-	var (
-		numTxs    = 1000
-		numBlocks = 1
-	)
-	b.StopTimer()
-	b.ResetTimer()
-
-	recipientFn := func(nonce uint64) common.Address {
-		return common.BigToAddress(big.NewInt(0).SetUint64(0xc0de))
-	}
-	dataFn := func(nonce uint64) []byte {
-		return nil
-	}
-
-	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn, dataFn)
-}
-
 // Tests that importing a very large side fork, which is larger than the canon chain,
 // but where the difficulty per block is kept low: this means that it will not
 // overtake the 'canon' chain until after it's passed canon by about 200 blocks.
@@ -1812,6 +1701,181 @@ func TestPrunedImportSide(t *testing.T) {
 	testSideImport(t, 1, -10)
 }
 
+func TestInsertKnownHeaders(t *testing.T)      { testInsertKnownChainData(t, "headers") }
+func TestInsertKnownReceiptChain(t *testing.T) { testInsertKnownChainData(t, "receiptChain") }
+func TestInsertKnownBlocks(t *testing.T)       { testInsertKnownChainData(t, "blocks") }
+
+func testInsertKnownChainData(t *testing.T, typ string) {
+	// Generate the original common chain segment and the two competing forks
+	engine := ethash.NewFaker()
+
+	db := rawdb.NewMemoryDatabase()
+	genesis := new(Genesis).MustCommit(db)
+
+	blocks, receipts := GenerateChain(params.TestChainConfig, genesis, engine, db, 64, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+	blocks2, receipts2 := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], engine, db, 64, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+
+	// Import the shared chain and the original canonical one
+	diskdb := rawdb.NewMemoryDatabase()
+	new(Genesis).MustCommit(diskdb)
+
+	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+
+	var rollback []common.Hash
+	for i := len(blocks) / 2; i < len(blocks); i++ {
+		rollback = append(rollback, blocks[i].Hash())
+	}
+
+	if typ == "blocks" {
+		if _, err := chain.InsertChain(blocks); err != nil {
+			t.Fatalf("failed to insert chain: %v", err)
+		}
+
+		// The imported blocks are all known blocks and not higher than
+		// head block.
+		if _, err := chain.InsertChain(blocks); err != nil {
+			t.Fatalf("failed to insert known chain: %v", err)
+		}
+
+		// A part of imported blocks are known blocks. Besides a part of
+		// known blocks are higher than head blocks.
+		chain.Rollback(rollback)
+		if _, err := chain.InsertChain(append(blocks, blocks2...)); err != nil {
+			t.Fatalf("failed to insert chain with known block as prefix: %v", err)
+		}
+		if chain.CurrentBlock().Hash() != blocks2[len(blocks2)-1].Hash() {
+			t.Fatalf("failed to insert chain with known block as prefix, want head block %v, have head block %v",
+				blocks2[len(blocks2)-1].Hash().Hex(), chain.CurrentBlock().Hash().Hex())
+		}
+	} else if typ == "headers" {
+		headers, headers2 := make([]*types.Header, 0, len(blocks)), make([]*types.Header, 0, len(blocks2))
+		for _, block := range blocks {
+			headers = append(headers, block.Header())
+		}
+		for _, block := range blocks2 {
+			headers2 = append(headers2, block.Header())
+		}
+		if _, err := chain.InsertHeaderChain(headers, 1); err != nil {
+			t.Fatalf("failed to insert header chain: %v", err)
+		}
+
+		// The imported headers are all known headers and not higher than
+		// head block.
+		if _, err := chain.InsertHeaderChain(headers, 1); err != nil {
+			t.Fatalf("failed to insert known header chain: %v", err)
+		}
+
+		// A part of imported headers are known headers. Besides a part of
+		// known headers are higher than head headers.
+		chain.Rollback(rollback)
+		if _, err := chain.InsertHeaderChain(append(headers, headers2...), 1); err != nil {
+			t.Fatalf("failed to insert header chain with known headers as prefix: %v", err)
+		}
+		if chain.CurrentHeader().Hash() != headers2[len(headers2)-1].Hash() {
+			t.Fatalf("failed to insert header chain with known header as prefix, want head header %v, have head header %v",
+				headers2[len(headers2)-1].Hash().Hex(), chain.CurrentBlock().Hash().Hex())
+		}
+	} else {
+		headers, headers2 := make([]*types.Header, 0, len(blocks)), make([]*types.Header, 0, len(blocks2))
+		for _, block := range blocks {
+			headers = append(headers, block.Header())
+		}
+		for _, block := range blocks2 {
+			headers2 = append(headers2, block.Header())
+		}
+		if _, err := chain.InsertHeaderChain(headers, 1); err != nil {
+			t.Fatalf("failed to insert header chain: %v", err)
+		}
+		if _, err := chain.InsertReceiptChain(blocks, receipts); err != nil {
+			t.Fatalf("failed to insert receipt chain: %v", err)
+		}
+
+		// The imported receipt chain are all known and not higher than
+		// head fast block.
+		if _, err := chain.InsertReceiptChain(blocks, receipts); err != nil {
+			t.Fatalf("failed to insert receipt chain: %v", err)
+		}
+		// A part of imported headers are known headers. Besides a part of
+		// known headers are higher than head headers.
+		chain.Rollback(rollback)
+		if _, err := chain.InsertHeaderChain(append(headers, headers2...), 1); err != nil {
+			t.Fatalf("failed to insert header chain with known headers as prefix: %v", err)
+		}
+		if _, err := chain.InsertReceiptChain(append(blocks, blocks2...), append(receipts, receipts2...)); err != nil {
+			t.Fatalf("failed to insert header chain with known headers as prefix: %v", err)
+		}
+		if chain.CurrentFastBlock().Hash() != blocks2[len(blocks2)-1].Hash() {
+			t.Fatalf("failed to insert header chain with known header as prefix, want head header %v, have head header %v",
+				blocks2[len(blocks2)-1].Hash().Hex(), chain.CurrentFastBlock().Hash().Hex())
+		}
+	}
+}
+
+// Benchmarks large blocks with value transfers to non-existing accounts
+func benchmarkLargeNumberOfValueToNonexisting(b *testing.B, numTxs, numBlocks int, recipientFn func(uint64) common.Address, dataFn func(uint64) []byte) {
+	var (
+		signer          = types.HomesteadSigner{}
+		testBankKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
+		bankFunds       = big.NewInt(100000000000000000)
+		gspec           = Genesis{
+			Config: params.TestChainConfig,
+			Alloc: GenesisAlloc{
+				testBankAddress: {Balance: bankFunds},
+				common.HexToAddress("0xc0de"): {
+					Code:    []byte{0x60, 0x01, 0x50},
+					Balance: big.NewInt(0),
+				}, // push 1, pop
+			},
+			GasLimit: 100e6, // 100 M
+		}
+	)
+	// Generate the original common chain segment and the two competing forks
+	engine := ethash.NewFaker()
+	db := rawdb.NewMemoryDatabase()
+	genesis := gspec.MustCommit(db)
+
+	blockGenerator := func(i int, block *BlockGen) {
+		block.SetCoinbase(common.Address{1})
+		for txi := 0; txi < numTxs; txi++ {
+			uniq := uint64(i*numTxs + txi)
+			recipient := recipientFn(uniq)
+			//recipient := common.BigToAddress(big.NewInt(0).SetUint64(1337 + uniq))
+			tx, err := types.SignTx(types.NewTransaction(uniq, recipient, big.NewInt(1), params.TxGas, big.NewInt(1), nil), signer, testBankKey)
+			if err != nil {
+				b.Error(err)
+			}
+			block.AddTx(tx)
+		}
+	}
+
+	shared, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, numBlocks, blockGenerator)
+	b.StopTimer()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Import the shared chain and the original canonical one
+		diskdb := rawdb.NewMemoryDatabase()
+		gspec.MustCommit(diskdb)
+
+		chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil)
+		if err != nil {
+			b.Fatalf("failed to create tester chain: %v", err)
+		}
+		b.StartTimer()
+		if _, err := chain.InsertChain(shared); err != nil {
+			b.Fatalf("failed to insert shared chain: %v", err)
+		}
+		b.StopTimer()
+		if got := chain.CurrentBlock().Transactions().Len(); got != numTxs*numBlocks {
+			b.Fatalf("Transactions were not included, expected %d, got %d", numTxs*numBlocks, got)
+
+		}
+	}
+}
+
 // getLongAndShortChains returns two chains,
 // A is longer, B is heavier
 func getLongAndShortChains() (*BlockChain, []*types.Block, []*types.Block, error) {
@@ -1930,4 +1994,56 @@ func TestReorgToShorterRemovesCanonMappingHeaderChain(t *testing.T) {
 	if headerByNum := chain.GetHeaderByNumber(canonNum); headerByNum != nil {
 		t.Errorf("expected header to be gone: %v", headerByNum.Number.Uint64())
 	}
+}
+
+func BenchmarkBlockChain_1x1000ValueTransferToNonexisting(b *testing.B) {
+	var (
+		numTxs    = 1000
+		numBlocks = 1
+	)
+
+	recipientFn := func(nonce uint64) common.Address {
+		return common.BigToAddress(big.NewInt(0).SetUint64(1337 + nonce))
+	}
+	dataFn := func(nonce uint64) []byte {
+		return nil
+	}
+
+	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn, dataFn)
+}
+
+func BenchmarkBlockChain_1x1000ValueTransferToExisting(b *testing.B) {
+	var (
+		numTxs    = 1000
+		numBlocks = 1
+	)
+	b.StopTimer()
+	b.ResetTimer()
+
+	recipientFn := func(nonce uint64) common.Address {
+		return common.BigToAddress(big.NewInt(0).SetUint64(1337))
+	}
+	dataFn := func(nonce uint64) []byte {
+		return nil
+	}
+
+	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn, dataFn)
+}
+
+func BenchmarkBlockChain_1x1000Executions(b *testing.B) {
+	var (
+		numTxs    = 1000
+		numBlocks = 1
+	)
+	b.StopTimer()
+	b.ResetTimer()
+
+	recipientFn := func(nonce uint64) common.Address {
+		return common.BigToAddress(big.NewInt(0).SetUint64(0xc0de))
+	}
+	dataFn := func(nonce uint64) []byte {
+		return nil
+	}
+
+	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn, dataFn)
 }
