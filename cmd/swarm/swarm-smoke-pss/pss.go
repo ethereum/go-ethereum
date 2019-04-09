@@ -60,6 +60,7 @@ func pssAsymCheck(ctx *cli.Context) error {
 func pssSymCheck(ctx *cli.Context) error {
 	return runCheck(pssModeSym, pssMessageCount, pssMessageSize)
 }
+
 func pssRawCheck(ctx *cli.Context) error {
 	return runCheck(pssModeRaw, pssMessageCount, pssMessageSize)
 }
@@ -101,7 +102,7 @@ func runCheck(mode pssMode, count int, msgSizeBytes int) error {
 
 	jobs := session.genJobs(count, mode, msgSizeBytes)
 
-	errc := make(chan error)
+	errC := make(chan error)
 	go func() {
 		var failCount, successCount int64
 		t := time.Now()
@@ -121,14 +122,14 @@ func runCheck(mode pssMode, count int, msgSizeBytes int) error {
 		log.Info(fmt.Sprintf("pss.%s test ended", mode), "time", totalTime, "success", successCount, "failures", failCount)
 
 		if failCount > 0 {
-			errc <- errors.New("some messages were not delivered")
+			errC <- errors.New("some messages were not delivered")
 		} else {
-			errc <- nil
+			errC <- nil
 		}
 	}()
 
 	select {
-	case err := <-errc:
+	case err := <-errC:
 		if err != nil {
 			metrics.GetOrRegisterCounter(fmt.Sprintf("pss.%s.fail", mode), nil).Inc(1)
 		}
