@@ -42,8 +42,24 @@ type pssNode struct {
 	hostIdx        int
 	addr           []byte
 	pubkey         string
+	peerPubKeys    map[string]bool
 	client         *rpc.Client
 	deregisterFunc func()
+}
+
+func (n *pssNode) addPeerPublicKey(peer *pssNode, topic pss.Topic) error {
+	err := n.client.Call(nil, "pss_setPeerPublicKey", peer.pubkey, topic, hexutil.Encode(peer.addr))
+	if err != nil {
+		log.Error("error setting receivers public key on the sender side", "err", err)
+		return err
+	}
+	n.peerPubKeys[peer.pubkey] = true
+	return nil
+}
+
+func (n *pssNode) knowsPeerPublicKey(peer *pssNode) bool {
+	_, ok := n.peerPubKeys[peer.pubkey]
+	return ok
 }
 
 type pssSession struct {
@@ -198,8 +214,9 @@ func pssSetup() *pssSession {
 			&pssNode{
 				hostIdx:        i,
 				addr:           []byte(addr),
-				client:         rpcClient,
 				pubkey:         pubkey,
+				peerPubKeys:    make(map[string]bool),
+				client:         rpcClient,
 				deregisterFunc: dFn,
 			},
 		)
@@ -317,16 +334,22 @@ func (s *pssSession) sendRawMessage(sender *pssNode, receiver *pssNode, msg []by
 func (s *pssSession) sendAsymMessage(sender *pssNode, receiver *pssNode, msg []byte) error {
 
 	// share public keys between nodes
-	err := sender.client.Call(nil, "pss_setPeerPublicKey", receiver.pubkey, s.topic, hexutil.Encode(receiver.addr))
-	if err != nil {
-		log.Error("error setting receivers public key on the sender side", "err", err)
-		return err
+	if !sender.knowsPeerPublicKey(receiver) {
+		err := sender.addPeerPublicKey(receiver, s.topic)
+		if err != nil {
+			log.Error("error setting receivers public key on the sender side", "err", err)
+			return err
+		}
 	}
-	err = receiver.client.Call(nil, "pss_setPeerPublicKey", sender.pubkey, s.topic, hexutil.Encode(sender.addr))
-	if err != nil {
-		log.Error("error setting senders public key on the receiver side", "err", err)
-		return err
+
+	if !receiver.knowsPeerPublicKey(sender) {
+		err := receiver.addPeerPublicKey(sender, s.topic)
+		if err != nil {
+			log.Error("error setting senders public key on the receiver side", "err", err)
+			return err
+		}
 	}
+
 	// send asym message
 	return sender.client.Call(nil, "pss_sendAsym", receiver.pubkey, s.topic, hexutil.Encode(msg))
 }
