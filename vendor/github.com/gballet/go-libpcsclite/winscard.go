@@ -260,7 +260,6 @@ func (client *Client) Connect(name string, shareMode uint32, preferredProtocol u
 		if err != nil {
 			return nil, err
 		}
-		fmt.Println("total, n", total, n, response)
 		total += n
 	}
 	code := binary.LittleEndian.Uint32(response[148:])
