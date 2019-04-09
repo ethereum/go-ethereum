@@ -65,16 +65,55 @@ func EstablishContext(scope uint32) (*Client, error) {
 	}
 	client.conn = conn
 
-	/* Exchange version information */
 	payload := make([]byte, 12)
-	binary.LittleEndian.PutUint32(payload, ProtocolVersionMajor)
-	binary.LittleEndian.PutUint32(payload[4:], ProtocolVersionMinor)
-	binary.LittleEndian.PutUint32(payload[8:], SCardSuccess)
-	err = messageSendWithHeader(CommandVersion, conn, payload)
+	response := make([]byte, 12)
+
+	var code uint32
+	var minor uint32
+	for minor = ProtocolVersionMinor; minor <= ProtocolVersionMinor+1; minor++ {
+		/* Exchange version information */
+		binary.LittleEndian.PutUint32(payload, ProtocolVersionMajor)
+		binary.LittleEndian.PutUint32(payload[4:], minor)
+		binary.LittleEndian.PutUint32(payload[8:], SCardSuccess.Code())
+		err = messageSendWithHeader(CommandVersion, conn, payload)
+		if err != nil {
+			return nil, err
+		}
+		n, err := conn.Read(response)
+		if err != nil {
+			return nil, err
+		}
+		if n != len(response) {
+			return nil, fmt.Errorf("invalid response length: expected %d, got %d", len(response), n)
+		}
+		code = binary.LittleEndian.Uint32(response[8:])
+		if code != SCardSuccess.Code() {
+			continue
+		}
+		client.major = binary.LittleEndian.Uint32(response)
+		client.minor = binary.LittleEndian.Uint32(response[4:])
+		if client.major != ProtocolVersionMajor || client.minor != minor {
+			continue
+		}
+		break
+	}
+
+	if code != SCardSuccess.Code() {
+		return nil, fmt.Errorf("invalid response code: expected %d, got %d (%v)", SCardSuccess, code, ErrorCode(code).Error())
+	}
+	if client.major != ProtocolVersionMajor || (client.minor != minor && client.minor+1 != minor) {
+		return nil, fmt.Errorf("invalid version found: expected %d.%d, got %d.%d", ProtocolVersionMajor, ProtocolVersionMinor, client.major, client.minor)
+	}
+
+	/* Establish the context proper */
+	binary.LittleEndian.PutUint32(payload, scope)
+	binary.LittleEndian.PutUint32(payload[4:], 0)
+	binary.LittleEndian.PutUint32(payload[8:], SCardSuccess.Code())
+	err = messageSendWithHeader(SCardEstablishContext, conn, payload)
 	if err != nil {
 		return nil, err
 	}
-	response := make([]byte, 12)
+	response = make([]byte, 12)
 	n, err := conn.Read(response)
 	if err != nil {
 		return nil, err
@@ -82,35 +121,9 @@ func EstablishContext(scope uint32) (*Client, error) {
 	if n != len(response) {
 		return nil, fmt.Errorf("invalid response length: expected %d, got %d", len(response), n)
 	}
-	code := binary.LittleEndian.Uint32(response[8:])
-	if code != SCardSuccess {
-		return nil, fmt.Errorf("invalid response code: expected %d, got %d", SCardSuccess, code)
-	}
-	client.major = binary.LittleEndian.Uint32(response)
-	client.minor = binary.LittleEndian.Uint32(response[4:])
-	if client.major != ProtocolVersionMajor || client.minor != ProtocolVersionMinor {
-		return nil, fmt.Errorf("invalid version found: expected %d.%d, got %d.%d", ProtocolVersionMajor, ProtocolVersionMinor, client.major, client.minor)
-	}
-
-	/* Establish the context proper */
-	binary.LittleEndian.PutUint32(payload, scope)
-	binary.LittleEndian.PutUint32(payload[4:], 0)
-	binary.LittleEndian.PutUint32(payload[8:], SCardSuccess)
-	err = messageSendWithHeader(SCardEstablishContext, conn, payload)
-	if err != nil {
-		return nil, err
-	}
-	response = make([]byte, 12)
-	n, err = conn.Read(response)
-	if err != nil {
-		return nil, err
-	}
-	if n != len(response) {
-		return nil, fmt.Errorf("invalid response length: expected %d, got %d", len(response), n)
-	}
 	code = binary.LittleEndian.Uint32(response[8:])
-	if code != SCardSuccess {
-		return nil, fmt.Errorf("invalid response code: expected %d, got %d", SCardSuccess, code)
+	if code != SCardSuccess.Code() {
+		return nil, fmt.Errorf("invalid response code: expected %d, got %d (%v)", SCardSuccess, code, ErrorCode(code).Error())
 	}
 	client.ctx = binary.LittleEndian.Uint32(response[4:])
 
@@ -125,7 +138,7 @@ func (client *Client) ReleaseContext() error {
 
 	data := [8]byte{}
 	binary.LittleEndian.PutUint32(data[:], client.ctx)
-	binary.LittleEndian.PutUint32(data[4:], SCardSuccess)
+	binary.LittleEndian.PutUint32(data[4:], SCardSuccess.Code())
 	err := messageSendWithHeader(SCardReleaseContext, client.conn, data[:])
 	if err != nil {
 		return err
@@ -139,8 +152,8 @@ func (client *Client) ReleaseContext() error {
 		total += n
 	}
 	code := binary.LittleEndian.Uint32(data[4:])
-	if code != SCardSuccess {
-		return fmt.Errorf("invalid return code: %x", code)
+	if code != SCardSuccess.Code() {
+		return fmt.Errorf("invalid return code: %x, %v", code, ErrorCode(code).Error())
 	}
 
 	return nil
@@ -247,7 +260,7 @@ func (client *Client) Connect(name string, shareMode uint32, preferredProtocol u
 	copy(request[SCardConnectReaderNameOffset:], []byte(name))
 	binary.LittleEndian.PutUint32(request[SCardConnectShareModeOffset:], shareMode)
 	binary.LittleEndian.PutUint32(request[SCardConnectPreferredProtocolOffset:], preferredProtocol)
-	binary.LittleEndian.PutUint32(request[SCardConnectReturnValueOffset:], SCardSuccess)
+	binary.LittleEndian.PutUint32(request[SCardConnectReturnValueOffset:], SCardSuccess.Code())
 
 	err := messageSendWithHeader(SCardConnect, client.conn, request)
 	if err != nil {
@@ -260,12 +273,12 @@ func (client *Client) Connect(name string, shareMode uint32, preferredProtocol u
 		if err != nil {
 			return nil, err
 		}
-		fmt.Println("total, n", total, n, response)
+		// fmt.Println("total, n", total, n, response)
 		total += n
 	}
 	code := binary.LittleEndian.Uint32(response[148:])
-	if code != SCardSuccess {
-		return nil, fmt.Errorf("invalid return code: %x", code)
+	if code != SCardSuccess.Code() {
+		return nil, fmt.Errorf("invalid return code: %x (%v)", code, ErrorCode(code).Error())
 	}
 	handle := binary.LittleEndian.Uint32(response[140:])
 	active := binary.LittleEndian.Uint32(response[SCardConnectPreferredProtocolOffset:])
@@ -312,7 +325,7 @@ func (card *Card) Transmit(adpu []byte) ([]byte, *SCardIoRequest, error) {
 	binary.LittleEndian.PutUint32(request[16:], 0)
 	binary.LittleEndian.PutUint32(request[20:], 0)
 	binary.LittleEndian.PutUint32(request[24:], 0x10000)
-	binary.LittleEndian.PutUint32(request[28:], SCardSuccess)
+	binary.LittleEndian.PutUint32(request[28:], SCardSuccess.Code())
 	err := messageSendWithHeader(SCardTransmit, card.client.conn, request[:])
 	if err != nil {
 		return nil, nil, err
@@ -336,8 +349,8 @@ func (card *Card) Transmit(adpu []byte) ([]byte, *SCardIoRequest, error) {
 	}
 
 	code := binary.LittleEndian.Uint32(response[28:])
-	if code != SCardSuccess {
-		return nil, nil, fmt.Errorf("invalid return code: %x", code)
+	if code != SCardSuccess.Code() {
+		return nil, nil, fmt.Errorf("invalid return code: %x (%v)", code, ErrorCode(code).Error())
 	}
 
 	// Recover the response data
@@ -367,7 +380,7 @@ func (card *Card) Disconnect(disposition uint32) error {
 	data := [12]byte{}
 	binary.LittleEndian.PutUint32(data[:], card.handle)
 	binary.LittleEndian.PutUint32(data[4:], disposition)
-	binary.LittleEndian.PutUint32(data[8:], SCardSuccess)
+	binary.LittleEndian.PutUint32(data[8:], SCardSuccess.Code())
 	err := messageSendWithHeader(SCardDisConnect, card.client.conn, data[:])
 	if err != nil {
 		return err
@@ -381,8 +394,8 @@ func (card *Card) Disconnect(disposition uint32) error {
 		total += n
 	}
 	code := binary.LittleEndian.Uint32(data[8:])
-	if code != SCardSuccess {
-		return fmt.Errorf("invalid return code: %x", code)
+	if code != SCardSuccess.Code() {
+		return fmt.Errorf("invalid return code: %x (%v)", code, ErrorCode(code).Error())
 	}
 
 	return nil
