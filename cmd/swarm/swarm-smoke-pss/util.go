@@ -33,10 +33,6 @@ var (
 	seed        = int(time.Now().UTC().UnixNano())
 )
 
-func wsEndpoint(host string) string {
-	return fmt.Sprintf("ws://%s:%d", host, wsPort)
-}
-
 func wrapCliCommand(name string, command func(*cli.Context) error) func(*cli.Context) error {
 	return func(ctx *cli.Context) error {
 		log.PrintOrigins(true)
