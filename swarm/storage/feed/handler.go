@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/swarm/chunk"
+
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -189,7 +191,7 @@ func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
 		ctx, cancel := context.WithTimeout(ctx, defaultRetrieveTimeout)
 		defer cancel()
 
-		chunk, err := h.chunkStore.Get(ctx, id.Addr())
+		ch, err := h.chunkStore.Get(ctx, chunk.ModeGetLookup, id.Addr())
 		if err != nil {
 			if err == context.DeadlineExceeded { // chunk not found
 				return nil, nil
@@ -198,7 +200,7 @@ func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
 		}
 
 		var request Request
-		if err := request.fromChunk(chunk); err != nil {
+		if err := request.fromChunk(ch); err != nil {
 			return nil, nil
 		}
 		if request.Time <= timeLimit {
@@ -257,14 +259,14 @@ func (h *Handler) Update(ctx context.Context, r *Request) (updateAddr storage.Ad
 		return nil, NewError(ErrInvalidValue, "A former update in this epoch is already known to exist")
 	}
 
-	chunk, err := r.toChunk() // Serialize the update into a chunk. Fails if data is too big
+	ch, err := r.toChunk() // Serialize the update into a chunk. Fails if data is too big
 	if err != nil {
 		return nil, err
 	}
 
 	// send the chunk
-	h.chunkStore.Put(ctx, chunk)
-	log.Trace("feed update", "updateAddr", r.idAddr, "epoch time", r.Epoch.Time, "epoch level", r.Epoch.Level, "data", chunk.Data())
+	h.chunkStore.Put(ctx, chunk.ModePutUpload, ch)
+	log.Trace("feed update", "updateAddr", r.idAddr, "epoch time", r.Epoch.Time, "epoch level", r.Epoch.Level, "data", ch.Data())
 	// update our feed updates map cache entry if the new update is older than the one we have, if we have it.
 	if feedUpdate != nil && r.Epoch.After(feedUpdate.Epoch) {
 		feedUpdate.Epoch = r.Epoch

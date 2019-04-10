@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
@@ -47,12 +48,12 @@ var (
 )
 
 type Delivery struct {
-	chunkStore storage.SyncChunkStore
+	chunkStore chunk.FetchStore
 	kad        *network.Kademlia
 	getPeer    func(enode.ID) *Peer
 }
 
-func NewDelivery(kad *network.Kademlia, chunkStore storage.SyncChunkStore) *Delivery {
+func NewDelivery(kad *network.Kademlia, chunkStore chunk.FetchStore) *Delivery {
 	return &Delivery{
 		chunkStore: chunkStore,
 		kad:        kad,
@@ -122,13 +123,13 @@ func (s *SwarmChunkServer) Close() {
 	close(s.quit)
 }
 
-// GetData retrives chunk data from db store
+// GetData retrieves chunk data from db store
 func (s *SwarmChunkServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
-	chunk, err := s.chunkStore.Get(ctx, storage.Address(key))
+	ch, err := s.chunkStore.Get(ctx, chunk.ModeGetRequest, storage.Address(key))
 	if err != nil {
 		return nil, err
 	}
-	return chunk.Data(), nil
+	return ch.Data(), nil
 }
 
 // RetrieveRequestMsg is the protocol msg for chunk retrieve requests
@@ -171,7 +172,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 
 	go func() {
 		defer osp.Finish()
-		chunk, err := d.chunkStore.Get(ctx, req.Addr)
+		ch, err := d.chunkStore.Get(ctx, chunk.ModeGetRequest, req.Addr)
 		if err != nil {
 			retrieveChunkFail.Inc(1)
 			log.Debug("ChunkStore.Get can not retrieve chunk", "peer", sp.ID().String(), "addr", req.Addr, "hopcount", req.HopCount, "err", err)
@@ -181,7 +182,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 			syncing := false
 			osp.LogFields(olog.Bool("skipCheck", true))
 
-			err = sp.Deliver(ctx, chunk, s.priority, syncing)
+			err = sp.Deliver(ctx, ch, s.priority, syncing)
 			if err != nil {
 				log.Warn("ERROR in handleRetrieveRequestMsg", "err", err)
 			}
@@ -190,7 +191,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 		}
 		osp.LogFields(olog.Bool("skipCheck", false))
 		select {
-		case streamer.deliveryC <- chunk.Address()[:]:
+		case streamer.deliveryC <- ch.Address()[:]:
 		case <-streamer.quit:
 		}
 
@@ -216,7 +217,7 @@ type ChunkDeliveryMsgRetrieval ChunkDeliveryMsg
 type ChunkDeliveryMsgSyncing ChunkDeliveryMsg
 
 // chunk delivery msg is response to retrieverequest msg
-func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *ChunkDeliveryMsg) error {
+func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req interface{}) error {
 	var osp opentracing.Span
 	ctx, osp = spancontext.StartSpan(
 		ctx,
@@ -224,11 +225,32 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 
 	processReceivedChunksCount.Inc(1)
 
-	// retrieve the span for the originating retrieverequest
-	spanId := fmt.Sprintf("stream.send.request.%v.%v", sp.ID(), req.Addr)
-	span := tracing.ShiftSpanByKey(spanId)
+	var msg *ChunkDeliveryMsg
+	var mode chunk.ModePut
+	switch r := req.(type) {
+	case *ChunkDeliveryMsgRetrieval:
+		msg = (*ChunkDeliveryMsg)(r)
+		peerPO := chunk.Proximity(sp.ID().Bytes(), msg.Addr)
+		po := chunk.Proximity(d.kad.BaseAddr(), msg.Addr)
+		depth := d.kad.NeighbourhoodDepth()
+		// chunks within the area of responsibility should always sync
+		// https://github.com/ethersphere/go-ethereum/pull/1282#discussion_r269406125
+		if po >= depth || peerPO < po {
+			mode = chunk.ModePutSync
+		} else {
+			// do not sync if peer that is sending us a chunk is closer to the chunk then we are
+			mode = chunk.ModePutRequest
+		}
+	case *ChunkDeliveryMsgSyncing:
+		msg = (*ChunkDeliveryMsg)(r)
+		mode = chunk.ModePutSync
+	}
 
-	log.Trace("handle.chunk.delivery", "ref", req.Addr, "from peer", sp.ID())
+	// retrieve the span for the originating retrieverequest
+	spanID := fmt.Sprintf("stream.send.request.%v.%v", sp.ID(), msg.Addr)
+	span := tracing.ShiftSpanByKey(spanID)
+
+	log.Trace("handle.chunk.delivery", "ref", msg.Addr, "from peer", sp.ID())
 
 	go func() {
 		defer osp.Finish()
@@ -238,18 +260,18 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 			defer span.Finish()
 		}
 
-		req.peer = sp
-		log.Trace("handle.chunk.delivery", "put", req.Addr)
-		err := d.chunkStore.Put(ctx, storage.NewChunk(req.Addr, req.SData))
+		msg.peer = sp
+		log.Trace("handle.chunk.delivery", "put", msg.Addr)
+		_, err := d.chunkStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
 				// we removed this log because it spams the logs
 				// TODO: Enable this log line
-				// log.Warn("invalid chunk delivered", "peer", sp.ID(), "chunk", req.Addr, )
-				req.peer.Drop(err)
+				// log.Warn("invalid chunk delivered", "peer", sp.ID(), "chunk", msg.Addr, )
+				msg.peer.Drop(err)
 			}
 		}
-		log.Trace("handle.chunk.delivery", "done put", req.Addr, "err", err)
+		log.Trace("handle.chunk.delivery", "done put", msg.Addr, "err", err)
 	}()
 	return nil
 }

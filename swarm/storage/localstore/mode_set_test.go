@@ -17,9 +17,11 @@
 package localstore
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -28,23 +30,23 @@ func TestModeSetAccess(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	chunk := generateTestRandomChunk()
+	ch := generateTestRandomChunk()
 
 	wantTimestamp := time.Now().UTC().UnixNano()
 	defer setNow(func() (t int64) {
 		return wantTimestamp
 	})()
 
-	err := db.NewSetter(ModeSetAccess).Set(chunk.Address())
+	err := db.Set(context.Background(), chunk.ModeSetAccess, ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Run("pull index", newPullIndexTest(db, chunk, wantTimestamp, nil))
+	t.Run("pull index", newPullIndexTest(db, ch, 1, nil))
 
 	t.Run("pull index count", newItemsCountTest(db.pullIndex, 1))
 
-	t.Run("gc index", newGCIndexTest(db, chunk, wantTimestamp, wantTimestamp))
+	t.Run("gc index", newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, 1))
 
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
@@ -56,28 +58,28 @@ func TestModeSetSync(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	chunk := generateTestRandomChunk()
+	ch := generateTestRandomChunk()
 
 	wantTimestamp := time.Now().UTC().UnixNano()
 	defer setNow(func() (t int64) {
 		return wantTimestamp
 	})()
 
-	err := db.NewPutter(ModePutUpload).Put(chunk)
+	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = db.NewSetter(ModeSetSync).Set(chunk.Address())
+	err = db.Set(context.Background(), chunk.ModeSetSync, ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, wantTimestamp, wantTimestamp))
+	t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp))
 
-	t.Run("push index", newPushIndexTest(db, chunk, wantTimestamp, leveldb.ErrNotFound))
+	t.Run("push index", newPushIndexTest(db, ch, wantTimestamp, leveldb.ErrNotFound))
 
-	t.Run("gc index", newGCIndexTest(db, chunk, wantTimestamp, wantTimestamp))
+	t.Run("gc index", newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, 1))
 
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
@@ -89,40 +91,39 @@ func TestModeSetRemove(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	chunk := generateTestRandomChunk()
+	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(ModePutUpload).Put(chunk)
+	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = db.NewSetter(modeSetRemove).Set(chunk.Address())
+	err = db.Set(context.Background(), chunk.ModeSetRemove, ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Run("retrieve indexes", func(t *testing.T) {
 		wantErr := leveldb.ErrNotFound
-		_, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
+		_, err := db.retrievalDataIndex.Get(addressToItem(ch.Address()))
 		if err != wantErr {
 			t.Errorf("got error %v, want %v", err, wantErr)
 		}
 		t.Run("retrieve data index count", newItemsCountTest(db.retrievalDataIndex, 0))
 
 		// access index should not be set
-		_, err = db.retrievalAccessIndex.Get(addressToItem(chunk.Address()))
+		_, err = db.retrievalAccessIndex.Get(addressToItem(ch.Address()))
 		if err != wantErr {
 			t.Errorf("got error %v, want %v", err, wantErr)
 		}
 		t.Run("retrieve access index count", newItemsCountTest(db.retrievalAccessIndex, 0))
 	})
 
-	t.Run("pull index", newPullIndexTest(db, chunk, 0, leveldb.ErrNotFound))
+	t.Run("pull index", newPullIndexTest(db, ch, 0, leveldb.ErrNotFound))
 
 	t.Run("pull index count", newItemsCountTest(db.pullIndex, 0))
 
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, 0))
 
 	t.Run("gc size", newIndexGCSizeTest(db))
-
 }

@@ -17,23 +17,12 @@
 package localstore
 
 import (
+	"context"
+
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
-// Hasser provides Has method to retrieve Chunks
-// from database.
-type Hasser struct {
-	db *DB
-}
-
-// NewHasser returns a new Hasser on database.
-func (db *DB) NewHasser() *Hasser {
-	return &Hasser{
-		db: db,
-	}
-}
-
 // Has returns true if the chunk is stored in database.
-func (h *Hasser) Has(addr chunk.Address) (bool, error) {
-	return h.db.retrievalDataIndex.Has(addressToItem(addr))
+func (db *DB) Has(_ context.Context, addr chunk.Address) (bool, error) {
+	return db.retrievalDataIndex.Has(addressToItem(addr))
 }

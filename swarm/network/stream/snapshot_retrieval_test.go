@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
@@ -278,8 +279,8 @@ func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) error {
 		if !ok {
 			return fmt.Errorf("No localstore")
 		}
-		lstore := item.(*storage.LocalStore)
-		conf.hashes, err = uploadFileToSingleNodeStore(node.ID(), chunkCount, lstore)
+		store := item.(chunk.Store)
+		conf.hashes, err = uploadFileToSingleNodeStore(node.ID(), chunkCount, store)
 		if err != nil {
 			return err
 		}

@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -30,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 )
 
 var sourcePeerID = enode.HexID("99d8594b52298567d2ca3f4c441a5ba0140ee9245e26460d01102a52773c73b9")
@@ -76,45 +78,43 @@ func (m *mockNetFetchFuncFactory) newMockNetFetcher(ctx context.Context, _ Addre
 	return m.fetcher
 }
 
-func mustNewNetStore(t *testing.T) *NetStore {
-	netStore, _ := mustNewNetStoreWithFetcher(t)
-	return netStore
-}
-
-func mustNewNetStoreWithFetcher(t *testing.T) (*NetStore, *mockNetFetcher) {
+func newTestNetStore(t *testing.T) (netStore *NetStore, fetcher *mockNetFetcher, cleanup func()) {
 	t.Helper()
 
-	datadir, err := ioutil.TempDir("", "netstore")
+	dir, err := ioutil.TempDir("", "swarm-storage-")
 	if err != nil {
 		t.Fatal(err)
 	}
-	naddr := make([]byte, 32)
-	params := NewDefaultLocalStoreParams()
-	params.Init(datadir)
-	params.BaseKey = naddr
-	localStore, err := NewTestLocalStoreForAddr(params)
+	localStore, err := localstore.New(dir, make([]byte, 32), nil)
 	if err != nil {
+		os.RemoveAll(dir)
 		t.Fatal(err)
+	}
+	cleanup = func() {
+		localStore.Close()
+		os.RemoveAll(dir)
 	}
 
-	fetcher := &mockNetFetcher{}
+	fetcher = new(mockNetFetcher)
 	mockNetFetchFuncFactory := &mockNetFetchFuncFactory{
 		fetcher: fetcher,
 	}
-	netStore, err := NewNetStore(localStore, mockNetFetchFuncFactory.newMockNetFetcher)
+	netStore, err = NewNetStore(localStore, mockNetFetchFuncFactory.newMockNetFetcher)
 	if err != nil {
+		cleanup()
 		t.Fatal(err)
 	}
-	return netStore, fetcher
+	return netStore, fetcher, cleanup
 }
 
 // TestNetStoreGetAndPut tests calling NetStore.Get which is blocked until the same chunk is Put.
 // After the Put there should no active fetchers, and the context created for the fetcher should
 // be cancelled.
 func TestNetStoreGetAndPut(t *testing.T) {
-	netStore, fetcher := mustNewNetStoreWithFetcher(t)
+	netStore, fetcher, cleanup := newTestNetStore(t)
+	defer cleanup()
 
-	chunk := GenerateRandomChunk(chunk.DefaultSize)
+	ch := GenerateRandomChunk(chunk.DefaultSize)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -126,12 +126,12 @@ func TestNetStoreGetAndPut(t *testing.T) {
 		time.Sleep(200 * time.Millisecond) // and a little more so it is surely called
 
 		// check if netStore created a fetcher in the Get call for the unavailable chunk
-		if netStore.fetchers.Len() != 1 || netStore.getFetcher(chunk.Address()) == nil {
+		if netStore.fetchers.Len() != 1 || netStore.getFetcher(ch.Address()) == nil {
 			putErrC <- errors.New("Expected netStore to use a fetcher for the Get call")
 			return
 		}
 
-		err := netStore.Put(ctx, chunk)
+		_, err := netStore.Put(ctx, chunk.ModePutRequest, ch)
 		if err != nil {
 			putErrC <- fmt.Errorf("Expected no err got %v", err)
 			return
@@ -141,7 +141,7 @@ func TestNetStoreGetAndPut(t *testing.T) {
 	}()
 
 	close(c)
-	recChunk, err := netStore.Get(ctx, chunk.Address()) // this is blocked until the Put above is done
+	recChunk, err := netStore.Get(ctx, chunk.ModeGetRequest, ch.Address()) // this is blocked until the Put above is done
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)
 	}
@@ -150,7 +150,7 @@ func TestNetStoreGetAndPut(t *testing.T) {
 		t.Fatal(err)
 	}
 	// the retrieved chunk should be the same as what we Put
-	if !bytes.Equal(recChunk.Address(), chunk.Address()) || !bytes.Equal(recChunk.Data(), chunk.Data()) {
+	if !bytes.Equal(recChunk.Address(), ch.Address()) || !bytes.Equal(recChunk.Data(), ch.Data()) {
 		t.Fatalf("Different chunk received than what was put")
 	}
 	// the chunk is already available locally, so there should be no active fetchers waiting for it
@@ -172,26 +172,27 @@ func TestNetStoreGetAndPut(t *testing.T) {
 // After the Put the chunk is available locally, so the Get can just retrieve it from LocalStore,
 // there is no need to create fetchers.
 func TestNetStoreGetAfterPut(t *testing.T) {
-	netStore, fetcher := mustNewNetStoreWithFetcher(t)
+	netStore, fetcher, cleanup := newTestNetStore(t)
+	defer cleanup()
 
-	chunk := GenerateRandomChunk(chunk.DefaultSize)
+	ch := GenerateRandomChunk(chunk.DefaultSize)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
 	// First we Put the chunk, so the chunk will be available locally
-	err := netStore.Put(ctx, chunk)
+	_, err := netStore.Put(ctx, chunk.ModePutRequest, ch)
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)
 	}
 
 	// Get should retrieve the chunk from LocalStore, without creating fetcher
-	recChunk, err := netStore.Get(ctx, chunk.Address())
+	recChunk, err := netStore.Get(ctx, chunk.ModeGetRequest, ch.Address())
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)
 	}
 	// the retrieved chunk should be the same as what we Put
-	if !bytes.Equal(recChunk.Address(), chunk.Address()) || !bytes.Equal(recChunk.Data(), chunk.Data()) {
+	if !bytes.Equal(recChunk.Address(), ch.Address()) || !bytes.Equal(recChunk.Data(), ch.Data()) {
 		t.Fatalf("Different chunk received than what was put")
 	}
 	// no fetcher offer or request should be created for a locally available chunk
@@ -207,9 +208,10 @@ func TestNetStoreGetAfterPut(t *testing.T) {
 
 // TestNetStoreGetTimeout tests a Get call for an unavailable chunk and waits for timeout
 func TestNetStoreGetTimeout(t *testing.T) {
-	netStore, fetcher := mustNewNetStoreWithFetcher(t)
+	netStore, fetcher, cleanup := newTestNetStore(t)
+	defer cleanup()
 
-	chunk := GenerateRandomChunk(chunk.DefaultSize)
+	ch := GenerateRandomChunk(chunk.DefaultSize)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
@@ -221,7 +223,7 @@ func TestNetStoreGetTimeout(t *testing.T) {
 		time.Sleep(200 * time.Millisecond) // and a little more so it is surely called
 
 		// check if netStore created a fetcher in the Get call for the unavailable chunk
-		if netStore.fetchers.Len() != 1 || netStore.getFetcher(chunk.Address()) == nil {
+		if netStore.fetchers.Len() != 1 || netStore.getFetcher(ch.Address()) == nil {
 			fetcherErrC <- errors.New("Expected netStore to use a fetcher for the Get call")
 			return
 		}
@@ -232,7 +234,7 @@ func TestNetStoreGetTimeout(t *testing.T) {
 	close(c)
 	// We call Get on this chunk, which is not in LocalStore. We don't Put it at all, so there will
 	// be a timeout
-	_, err := netStore.Get(ctx, chunk.Address())
+	_, err := netStore.Get(ctx, chunk.ModeGetRequest, ch.Address())
 
 	// Check if the timeout happened
 	if err != context.DeadlineExceeded {
@@ -259,9 +261,10 @@ func TestNetStoreGetTimeout(t *testing.T) {
 // TestNetStoreGetCancel tests a Get call for an unavailable chunk, then cancels the context and checks
 // the errors
 func TestNetStoreGetCancel(t *testing.T) {
-	netStore, fetcher := mustNewNetStoreWithFetcher(t)
+	netStore, fetcher, cleanup := newTestNetStore(t)
+	defer cleanup()
 
-	chunk := GenerateRandomChunk(chunk.DefaultSize)
+	ch := GenerateRandomChunk(chunk.DefaultSize)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 
@@ -271,7 +274,7 @@ func TestNetStoreGetCancel(t *testing.T) {
 		<-c                                // wait for the Get to be called
 		time.Sleep(200 * time.Millisecond) // and a little more so it is surely called
 		// check if netStore created a fetcher in the Get call for the unavailable chunk
-		if netStore.fetchers.Len() != 1 || netStore.getFetcher(chunk.Address()) == nil {
+		if netStore.fetchers.Len() != 1 || netStore.getFetcher(ch.Address()) == nil {
 			fetcherErrC <- errors.New("Expected netStore to use a fetcher for the Get call")
 			return
 		}
@@ -283,7 +286,7 @@ func TestNetStoreGetCancel(t *testing.T) {
 	close(c)
 
 	// We call Get with an unavailable chunk, so it will create a fetcher and wait for delivery
-	_, err := netStore.Get(ctx, chunk.Address())
+	_, err := netStore.Get(ctx, chunk.ModeGetRequest, ch.Address())
 
 	if err := <-fetcherErrC; err != nil {
 		t.Fatal(err)
@@ -311,9 +314,10 @@ func TestNetStoreGetCancel(t *testing.T) {
 // delivered with a Put, we have to make sure all Get calls return, and they use a single fetcher
 // for the chunk retrieval
 func TestNetStoreMultipleGetAndPut(t *testing.T) {
-	netStore, fetcher := mustNewNetStoreWithFetcher(t)
+	netStore, fetcher, cleanup := newTestNetStore(t)
+	defer cleanup()
 
-	chunk := GenerateRandomChunk(chunk.DefaultSize)
+	ch := GenerateRandomChunk(chunk.DefaultSize)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -327,7 +331,7 @@ func TestNetStoreMultipleGetAndPut(t *testing.T) {
 			putErrC <- errors.New("Expected netStore to use one fetcher for all Get calls")
 			return
 		}
-		err := netStore.Put(ctx, chunk)
+		_, err := netStore.Put(ctx, chunk.ModePutRequest, ch)
 		if err != nil {
 			putErrC <- fmt.Errorf("Expected no err got %v", err)
 			return
@@ -340,11 +344,11 @@ func TestNetStoreMultipleGetAndPut(t *testing.T) {
 	errC := make(chan error)
 	for i := 0; i < count; i++ {
 		go func() {
-			recChunk, err := netStore.Get(ctx, chunk.Address())
+			recChunk, err := netStore.Get(ctx, chunk.ModeGetRequest, ch.Address())
 			if err != nil {
 				errC <- fmt.Errorf("Expected no err got %v", err)
 			}
-			if !bytes.Equal(recChunk.Address(), chunk.Address()) || !bytes.Equal(recChunk.Data(), chunk.Data()) {
+			if !bytes.Equal(recChunk.Address(), ch.Address()) || !bytes.Equal(recChunk.Data(), ch.Data()) {
 				errC <- errors.New("Different chunk received than what was put")
 			}
 			errC <- nil
@@ -385,7 +389,8 @@ func TestNetStoreMultipleGetAndPut(t *testing.T) {
 
 // TestNetStoreFetchFuncTimeout tests a FetchFunc call for an unavailable chunk and waits for timeout
 func TestNetStoreFetchFuncTimeout(t *testing.T) {
-	netStore, fetcher := mustNewNetStoreWithFetcher(t)
+	netStore, fetcher, cleanup := newTestNetStore(t)
+	defer cleanup()
 
 	chunk := GenerateRandomChunk(chunk.DefaultSize)
 
@@ -424,21 +429,22 @@ func TestNetStoreFetchFuncTimeout(t *testing.T) {
 
 // TestNetStoreFetchFuncAfterPut tests that the FetchFunc should return nil for a locally available chunk
 func TestNetStoreFetchFuncAfterPut(t *testing.T) {
-	netStore := mustNewNetStore(t)
+	netStore, _, cleanup := newTestNetStore(t)
+	defer cleanup()
 
-	chunk := GenerateRandomChunk(chunk.DefaultSize)
+	ch := GenerateRandomChunk(chunk.DefaultSize)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
 	// We deliver the created the chunk with a Put
-	err := netStore.Put(ctx, chunk)
+	_, err := netStore.Put(ctx, chunk.ModePutRequest, ch)
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)
 	}
 
 	// FetchFunc should return nil, because the chunk is available locally, no need to fetch it
-	wait := netStore.FetchFunc(ctx, chunk.Address())
+	wait := netStore.FetchFunc(ctx, ch.Address())
 	if wait != nil {
 		t.Fatal("Expected wait to be nil")
 	}
@@ -451,16 +457,17 @@ func TestNetStoreFetchFuncAfterPut(t *testing.T) {
 
 // TestNetStoreGetCallsRequest tests if Get created a request on the NetFetcher for an unavailable chunk
 func TestNetStoreGetCallsRequest(t *testing.T) {
-	netStore, fetcher := mustNewNetStoreWithFetcher(t)
+	netStore, fetcher, cleanup := newTestNetStore(t)
+	defer cleanup()
 
-	chunk := GenerateRandomChunk(chunk.DefaultSize)
+	ch := GenerateRandomChunk(chunk.DefaultSize)
 
 	ctx := context.WithValue(context.Background(), "hopcount", uint8(5))
 	ctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
 
 	// We call get for a not available chunk, it will timeout because the chunk is not delivered
-	_, err := netStore.Get(ctx, chunk.Address())
+	_, err := netStore.Get(ctx, chunk.ModeGetRequest, ch.Address())
 
 	if err != context.DeadlineExceeded {
 		t.Fatalf("Expected context.DeadlineExceeded err got %v", err)
@@ -479,9 +486,10 @@ func TestNetStoreGetCallsRequest(t *testing.T) {
 // TestNetStoreGetCallsOffer tests if Get created a request on the NetFetcher for an unavailable chunk
 // in case of a source peer provided in the context.
 func TestNetStoreGetCallsOffer(t *testing.T) {
-	netStore, fetcher := mustNewNetStoreWithFetcher(t)
+	netStore, fetcher, cleanup := newTestNetStore(t)
+	defer cleanup()
 
-	chunk := GenerateRandomChunk(chunk.DefaultSize)
+	ch := GenerateRandomChunk(chunk.DefaultSize)
 
 	//  If a source peer is added to the context, NetStore will handle it as an offer
 	ctx := context.WithValue(context.Background(), "source", sourcePeerID.String())
@@ -489,7 +497,7 @@ func TestNetStoreGetCallsOffer(t *testing.T) {
 	defer cancel()
 
 	// We call get for a not available chunk, it will timeout because the chunk is not delivered
-	_, err := netStore.Get(ctx, chunk.Address())
+	_, err := netStore.Get(ctx, chunk.ModeGetRequest, ch.Address())
 
 	if err != context.DeadlineExceeded {
 		t.Fatalf("Expect error %v got %v", context.DeadlineExceeded, err)
@@ -513,8 +521,8 @@ func TestNetStoreGetCallsOffer(t *testing.T) {
 // TestNetStoreFetcherCountPeers tests multiple NetStore.Get calls with peer in the context.
 // There is no Put call, so the Get calls timeout
 func TestNetStoreFetcherCountPeers(t *testing.T) {
-
-	netStore, fetcher := mustNewNetStoreWithFetcher(t)
+	netStore, fetcher, cleanup := newTestNetStore(t)
+	defer cleanup()
 
 	addr := randomAddr()
 	peers := []string{randomAddr().Hex(), randomAddr().Hex(), randomAddr().Hex()}
@@ -529,7 +537,7 @@ func TestNetStoreFetcherCountPeers(t *testing.T) {
 		peer := peers[i]
 		go func() {
 			ctx := context.WithValue(ctx, "peer", peer)
-			_, err := netStore.Get(ctx, addr)
+			_, err := netStore.Get(ctx, chunk.ModeGetRequest, addr)
 			errC <- err
 		}()
 	}
@@ -565,21 +573,22 @@ func TestNetStoreFetcherCountPeers(t *testing.T) {
 // and checks there is still exactly one fetcher for one chunk. Afthe chunk is delivered, it checks
 // if the fetcher is closed.
 func TestNetStoreFetchFuncCalledMultipleTimes(t *testing.T) {
-	netStore, fetcher := mustNewNetStoreWithFetcher(t)
+	netStore, fetcher, cleanup := newTestNetStore(t)
+	defer cleanup()
 
-	chunk := GenerateRandomChunk(chunk.DefaultSize)
+	ch := GenerateRandomChunk(chunk.DefaultSize)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
 	// FetchFunc should return a non-nil wait function, because the chunk is not available
-	wait := netStore.FetchFunc(ctx, chunk.Address())
+	wait := netStore.FetchFunc(ctx, ch.Address())
 	if wait == nil {
 		t.Fatal("Expected wait function to be not nil")
 	}
 
 	// There should be exactly one fetcher for the chunk
-	if netStore.fetchers.Len() != 1 || netStore.getFetcher(chunk.Address()) == nil {
+	if netStore.fetchers.Len() != 1 || netStore.getFetcher(ch.Address()) == nil {
 		t.Fatalf("Expected netStore to have one fetcher for the requested chunk")
 	}
 
@@ -596,12 +605,12 @@ func TestNetStoreFetchFuncCalledMultipleTimes(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// there should be still only one fetcher, because all wait calls are for the same chunk
-	if netStore.fetchers.Len() != 1 || netStore.getFetcher(chunk.Address()) == nil {
+	if netStore.fetchers.Len() != 1 || netStore.getFetcher(ch.Address()) == nil {
 		t.Fatal("Expected netStore to have one fetcher for the requested chunk")
 	}
 
 	// Deliver the chunk with a Put
-	err := netStore.Put(ctx, chunk)
+	_, err := netStore.Put(ctx, chunk.ModePutRequest, ch)
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)
 	}
@@ -630,7 +639,8 @@ func TestNetStoreFetchFuncCalledMultipleTimes(t *testing.T) {
 // TestNetStoreFetcherLifeCycleWithTimeout is similar to TestNetStoreFetchFuncCalledMultipleTimes,
 // the only difference is that we don't deilver the chunk, just wait for timeout
 func TestNetStoreFetcherLifeCycleWithTimeout(t *testing.T) {
-	netStore, fetcher := mustNewNetStoreWithFetcher(t)
+	netStore, fetcher, cleanup := newTestNetStore(t)
+	defer cleanup()
 
 	chunk := GenerateRandomChunk(chunk.DefaultSize)
 

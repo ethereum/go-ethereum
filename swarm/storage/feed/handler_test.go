@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
+	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 )
 
 var (
@@ -400,9 +401,7 @@ func TestValidatorInStore(t *testing.T) {
 	}
 	defer os.RemoveAll(datadir)
 
-	handlerParams := storage.NewDefaultLocalStoreParams()
-	handlerParams.Init(datadir)
-	store, err := storage.NewLocalStore(handlerParams, nil)
+	localstore, err := localstore.New(datadir, make([]byte, 32), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -410,7 +409,7 @@ func TestValidatorInStore(t *testing.T) {
 	// set up Swarm feeds handler and add is as a validator to the localstore
 	fhParams := &HandlerParams{}
 	fh := NewHandler(fhParams)
-	store.Validators = append(store.Validators, fh)
+	store := chunk.NewValidatorStore(localstore, fh)
 
 	// create content addressed chunks, one good, one faulty
 	chunks := storage.GenerateRandomChunks(chunk.DefaultSize, 2)
@@ -447,15 +446,15 @@ func TestValidatorInStore(t *testing.T) {
 	}
 
 	// put the chunks in the store and check their error status
-	err = store.Put(context.Background(), goodChunk)
+	_, err = store.Put(context.Background(), chunk.ModePutUpload, goodChunk)
 	if err == nil {
 		t.Fatal("expected error on good content address chunk with feed update validator only, but got nil")
 	}
-	err = store.Put(context.Background(), badChunk)
+	_, err = store.Put(context.Background(), chunk.ModePutUpload, badChunk)
 	if err == nil {
 		t.Fatal("expected error on bad content address chunk with feed update validator only, but got nil")
 	}
-	err = store.Put(context.Background(), uglyChunk)
+	_, err = store.Put(context.Background(), chunk.ModePutUpload, uglyChunk)
 	if err != nil {
 		t.Fatalf("expected no error on feed update chunk with feed update validator only, but got: %s", err)
 	}

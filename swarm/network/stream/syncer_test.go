@@ -21,22 +21,20 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
@@ -53,24 +51,6 @@ func TestSyncerSimulation(t *testing.T) {
 		testSyncBetweenNodes(t, 8, dataChunkCount, true, 1)
 		testSyncBetweenNodes(t, 16, dataChunkCount, true, 1)
 	}
-}
-
-func createMockStore(globalStore mock.GlobalStorer, id enode.ID, addr *network.BzzAddr) (lstore storage.ChunkStore, datadir string, err error) {
-	address := common.BytesToAddress(id.Bytes())
-	mockStore := globalStore.NewNodeStore(address)
-	params := storage.NewDefaultLocalStoreParams()
-
-	datadir, err = ioutil.TempDir("", "localMockStore-"+id.TerminalString())
-	if err != nil {
-		return nil, "", err
-	}
-	params.Init(datadir)
-	params.BaseKey = addr.Over()
-	lstore, err = storage.NewLocalStore(params, mockStore)
-	if err != nil {
-		return nil, "", err
-	}
-	return lstore, datadir, nil
 }
 
 func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, po uint8) {
@@ -181,17 +161,32 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			if i < nodes-1 {
 				hashCounts[i] = hashCounts[i+1]
 			}
-			item, ok := sim.NodeItem(nodeIDs[i], bucketKeyDB)
+			item, ok := sim.NodeItem(nodeIDs[i], bucketKeyStore)
 			if !ok {
 				return fmt.Errorf("No DB")
 			}
-			netStore := item.(*storage.NetStore)
-			netStore.Iterator(0, math.MaxUint64, po, func(addr storage.Address, index uint64) bool {
-				hashes[i] = append(hashes[i], addr)
-				totalHashes++
-				hashCounts[i]++
-				return true
-			})
+			store := item.(chunk.Store)
+			until, err := store.LastPullSubscriptionBinID(po)
+			if err != nil {
+				return err
+			}
+			if until > 0 {
+				c, _ := store.SubscribePull(ctx, po, 0, until)
+				for iterate := true; iterate; {
+					select {
+					case cd, ok := <-c:
+						if !ok {
+							iterate = false
+							break
+						}
+						hashes[i] = append(hashes[i], cd.Address)
+						totalHashes++
+						hashCounts[i]++
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
+			}
 		}
 		var total, found int
 		for _, node := range nodeIDs {
@@ -200,12 +195,12 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			for j := i; j < nodes; j++ {
 				total += len(hashes[j])
 				for _, key := range hashes[j] {
-					item, ok := sim.NodeItem(nodeIDs[j], bucketKeyDB)
+					item, ok := sim.NodeItem(nodeIDs[j], bucketKeyStore)
 					if !ok {
 						return fmt.Errorf("No DB")
 					}
-					db := item.(*storage.NetStore)
-					_, err := db.Get(ctx, key)
+					db := item.(chunk.Store)
+					_, err := db.Get(ctx, chunk.ModeGetRequest, key)
 					if err == nil {
 						found++
 					}
@@ -216,7 +211,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 		if total == found && total > 0 {
 			return nil
 		}
-		return fmt.Errorf("Total not equallying found: total is %d", total)
+		return fmt.Errorf("Total not equallying found %v: total is %d", found, total)
 	})
 
 	if result.Error != nil {

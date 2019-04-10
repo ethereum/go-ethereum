@@ -235,7 +235,6 @@ func loadManifest(ctx context.Context, fileStore *storage.FileStore, addr storag
 }
 
 func readManifest(mr storage.LazySectionReader, addr storage.Address, fileStore *storage.FileStore, isEncrypted bool, quitC chan bool, decrypt DecryptFunc) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
-
 	// TODO check size for oversized manifests
 	size, err := mr.Size(mr.Context(), quitC)
 	if err != nil { // size == 0

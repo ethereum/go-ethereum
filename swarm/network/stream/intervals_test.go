@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -287,11 +288,11 @@ func enableNotifications(r *Registry, peerID enode.ID, s Stream) error {
 
 type testExternalClient struct {
 	hashes               chan []byte
-	store                storage.SyncChunkStore
+	store                chunk.FetchStore
 	enableNotificationsC chan struct{}
 }
 
-func newTestExternalClient(store storage.SyncChunkStore) *testExternalClient {
+func newTestExternalClient(store chunk.FetchStore) *testExternalClient {
 	return &testExternalClient{
 		hashes:               make(chan []byte),
 		store:                store,

@@ -34,8 +34,6 @@ func TestDB_SubscribePush(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(ModePutUpload)
-
 	chunks := make([]chunk.Chunk, 0)
 	var chunksMu sync.Mutex
 
@@ -44,14 +42,14 @@ func TestDB_SubscribePush(t *testing.T) {
 		defer chunksMu.Unlock()
 
 		for i := 0; i < count; i++ {
-			chunk := generateTestRandomChunk()
+			ch := generateTestRandomChunk()
 
-			err := uploader.Put(chunk)
+			_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			chunks = append(chunks, chunk)
+			chunks = append(chunks, ch)
 		}
 	}
 
@@ -122,8 +120,6 @@ func TestDB_SubscribePush_multiple(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(ModePutUpload)
-
 	addrs := make([]chunk.Address, 0)
 	var addrsMu sync.Mutex
 
@@ -132,14 +128,14 @@ func TestDB_SubscribePush_multiple(t *testing.T) {
 		defer addrsMu.Unlock()
 
 		for i := 0; i < count; i++ {
-			chunk := generateTestRandomChunk()
+			ch := generateTestRandomChunk()
 
-			err := uploader.Put(chunk)
+			_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			addrs = append(addrs, chunk.Address())
+			addrs = append(addrs, ch.Address())
 		}
 	}
 

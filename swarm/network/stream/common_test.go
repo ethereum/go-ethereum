@@ -30,16 +30,19 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	mockmem "github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
+	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 	colorable "github.com/mattn/go-colorable"
 )
@@ -51,7 +54,6 @@ var (
 	useMockStore = flag.Bool("mockstore", false, "disabled mock store (default: enabled)")
 	longrunning  = flag.Bool("longrunning", false, "do run long-running tests")
 
-	bucketKeyDB        = simulation.BucketKey("db")
 	bucketKeyStore     = simulation.BucketKey("store")
 	bucketKeyFileStore = simulation.BucketKey("filestore")
 	bucketKeyNetStore  = simulation.BucketKey("netstore")
@@ -113,16 +115,15 @@ func newNetStoreAndDeliveryWithRequestFunc(ctx *adapters.ServiceContext, bucket 
 func netStoreAndDeliveryWithAddr(ctx *adapters.ServiceContext, bucket *sync.Map, addr *network.BzzAddr) (*storage.NetStore, *Delivery, func(), error) {
 	n := ctx.Config.Node()
 
-	store, datadir, err := createTestLocalStorageForID(n.ID(), addr)
-	if *useMockStore {
-		store, datadir, err = createMockStore(mockmem.NewGlobalStore(), n.ID(), addr)
-	}
+	localStore, localStoreCleanup, err := newTestLocalStore(n.ID(), addr, nil)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	localStore := store.(*storage.LocalStore)
+
 	netStore, err := storage.NewNetStore(localStore, nil)
 	if err != nil {
+		localStore.Close()
+		localStoreCleanup()
 		return nil, nil, nil, err
 	}
 
@@ -131,8 +132,7 @@ func netStoreAndDeliveryWithAddr(ctx *adapters.ServiceContext, bucket *sync.Map,
 	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 	delivery := NewDelivery(kad, netStore)
 
-	bucket.Store(bucketKeyStore, store)
-	bucket.Store(bucketKeyDB, netStore)
+	bucket.Store(bucketKeyStore, localStore)
 	bucket.Store(bucketKeyDelivery, delivery)
 	bucket.Store(bucketKeyFileStore, fileStore)
 	// for the kademlia object, we use the global key from the simulation package,
@@ -141,13 +141,13 @@ func netStoreAndDeliveryWithAddr(ctx *adapters.ServiceContext, bucket *sync.Map,
 
 	cleanup := func() {
 		netStore.Close()
-		os.RemoveAll(datadir)
+		localStoreCleanup()
 	}
 
 	return netStore, delivery, cleanup, nil
 }
 
-func newStreamerTester(registryOptions *RegistryOptions) (*p2ptest.ProtocolTester, *Registry, *storage.LocalStore, func(), error) {
+func newStreamerTester(registryOptions *RegistryOptions) (*p2ptest.ProtocolTester, *Registry, *localstore.DB, func(), error) {
 	// setup
 	addr := network.RandomAddr() // tested peers peer address
 	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
@@ -161,11 +161,7 @@ func newStreamerTester(registryOptions *RegistryOptions) (*p2ptest.ProtocolTeste
 		os.RemoveAll(datadir)
 	}
 
-	params := storage.NewDefaultLocalStoreParams()
-	params.Init(datadir)
-	params.BaseKey = addr.Over()
-
-	localStore, err := storage.NewTestLocalStoreForAddr(params)
+	localStore, err := localstore.New(datadir, addr.Over(), nil)
 	if err != nil {
 		removeDataDir()
 		return nil, nil, nil, nil, err
@@ -173,15 +169,19 @@ func newStreamerTester(registryOptions *RegistryOptions) (*p2ptest.ProtocolTeste
 
 	netStore, err := storage.NewNetStore(localStore, nil)
 	if err != nil {
+		localStore.Close()
 		removeDataDir()
 		return nil, nil, nil, nil, err
 	}
 
 	delivery := NewDelivery(to, netStore)
 	netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
-	streamer := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), registryOptions, nil)
+	intervalsStore := state.NewInmemoryStore()
+	streamer := NewRegistry(addr.ID(), delivery, netStore, intervalsStore, registryOptions, nil)
 	teardown := func() {
 		streamer.Close()
+		intervalsStore.Close()
+		netStore.Close()
 		removeDataDir()
 	}
 	prvkey, err := crypto.GenerateKey()
@@ -228,24 +228,37 @@ func newRoundRobinStore(stores ...storage.ChunkStore) *roundRobinStore {
 }
 
 // not used in this context, only to fulfill ChunkStore interface
-func (rrs *roundRobinStore) Has(ctx context.Context, addr storage.Address) bool {
-	panic("RoundRobinStor doesn't support HasChunk")
+func (rrs *roundRobinStore) Has(_ context.Context, _ storage.Address) (bool, error) {
+	return false, errors.New("roundRobinStore doesn't support Has")
 }
 
-func (rrs *roundRobinStore) Get(ctx context.Context, addr storage.Address) (storage.Chunk, error) {
-	return nil, errors.New("get not well defined on round robin store")
+func (rrs *roundRobinStore) Get(_ context.Context, _ chunk.ModeGet, _ storage.Address) (storage.Chunk, error) {
+	return nil, errors.New("roundRobinStore doesn't support Get")
 }
 
-func (rrs *roundRobinStore) Put(ctx context.Context, chunk storage.Chunk) error {
+func (rrs *roundRobinStore) Put(ctx context.Context, mode chunk.ModePut, ch storage.Chunk) (bool, error) {
 	i := atomic.AddUint32(&rrs.index, 1)
 	idx := int(i) % len(rrs.stores)
-	return rrs.stores[idx].Put(ctx, chunk)
+	return rrs.stores[idx].Put(ctx, mode, ch)
 }
 
-func (rrs *roundRobinStore) Close() {
+func (rrs *roundRobinStore) Set(ctx context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
+	return errors.New("roundRobinStore doesn't support Set")
+}
+
+func (rrs *roundRobinStore) LastPullSubscriptionBinID(bin uint8) (id uint64, err error) {
+	return 0, errors.New("roundRobinStore doesn't support LastPullSubscriptionBinID")
+}
+
+func (rrs *roundRobinStore) SubscribePull(ctx context.Context, bin uint8, since, until uint64) (c <-chan chunk.Descriptor, stop func()) {
+	return nil, nil
+}
+
+func (rrs *roundRobinStore) Close() error {
 	for _, store := range rrs.stores {
 		store.Close()
 	}
+	return nil
 }
 
 func readAll(fileStore *storage.FileStore, hash []byte) (int64, error) {
@@ -311,24 +324,28 @@ func generateRandomFile() (string, error) {
 	return string(b), nil
 }
 
-//create a local store for the given node
-func createTestLocalStorageForID(id enode.ID, addr *network.BzzAddr) (storage.ChunkStore, string, error) {
-	var datadir string
-	var err error
-	datadir, err = ioutil.TempDir("", fmt.Sprintf("syncer-test-%s", id.TerminalString()))
+func newTestLocalStore(id enode.ID, addr *network.BzzAddr, globalStore mock.GlobalStorer) (localStore *localstore.DB, cleanup func(), err error) {
+	dir, err := ioutil.TempDir("", "swarm-stream-")
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
-	var store storage.ChunkStore
-	params := storage.NewDefaultLocalStoreParams()
-	params.ChunkDbPath = datadir
-	params.BaseKey = addr.Over()
-	store, err = storage.NewTestLocalStoreForAddr(params)
+	cleanup = func() {
+		os.RemoveAll(dir)
+	}
+
+	var mockStore *mock.NodeStore
+	if globalStore != nil {
+		mockStore = globalStore.NewNodeStore(common.BytesToAddress(id.Bytes()))
+	}
+
+	localStore, err = localstore.New(dir, addr.Over(), &localstore.Options{
+		MockStore: mockStore,
+	})
 	if err != nil {
-		os.RemoveAll(datadir)
-		return nil, "", err
+		cleanup()
+		return nil, nil, err
 	}
-	return store, datadir, nil
+	return localStore, cleanup, nil
 }
 
 // watchDisconnections receives simulation peer events in a new goroutine and sets atomic value

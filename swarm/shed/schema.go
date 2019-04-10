@@ -52,7 +52,7 @@ type indexSpec struct {
 	Name string `json:"name"`
 }
 
-// schemaFieldKey retrives the complete LevelDB key for
+// schemaFieldKey retrieves the complete LevelDB key for
 // a particular field form the schema definition.
 func (db *DB) schemaFieldKey(name, fieldType string) (key []byte, err error) {
 	if name == "" {

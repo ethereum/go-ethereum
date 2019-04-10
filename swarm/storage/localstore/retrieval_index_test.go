@@ -17,6 +17,7 @@
 package localstore
 
 import (
+	"context"
 	"strconv"
 	"testing"
 
@@ -61,17 +62,14 @@ func benchmarkRetrievalIndexes(b *testing.B, o *Options, count int) {
 	b.StopTimer()
 	db, cleanupFunc := newTestDB(b, o)
 	defer cleanupFunc()
-	uploader := db.NewPutter(ModePutUpload)
-	syncer := db.NewSetter(ModeSetSync)
-	requester := db.NewGetter(ModeGetRequest)
 	addrs := make([]chunk.Address, count)
 	for i := 0; i < count; i++ {
-		chunk := generateTestRandomChunk()
-		err := uploader.Put(chunk)
+		ch := generateTestRandomChunk()
+		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 		if err != nil {
 			b.Fatal(err)
 		}
-		addrs[i] = chunk.Address()
+		addrs[i] = ch.Address()
 	}
 	// set update gc test hook to signal when
 	// update gc goroutine is done by sending to
@@ -85,12 +83,12 @@ func benchmarkRetrievalIndexes(b *testing.B, o *Options, count int) {
 	b.StartTimer()
 
 	for i := 0; i < count; i++ {
-		err := syncer.Set(addrs[i])
+		err := db.Set(context.Background(), chunk.ModeSetSync, addrs[i])
 		if err != nil {
 			b.Fatal(err)
 		}
 
-		_, err = requester.Get(addrs[i])
+		_, err = db.Get(context.Background(), chunk.ModeGetRequest, addrs[i])
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -133,7 +131,6 @@ func benchmarkUpload(b *testing.B, o *Options, count int) {
 	b.StopTimer()
 	db, cleanupFunc := newTestDB(b, o)
 	defer cleanupFunc()
-	uploader := db.NewPutter(ModePutUpload)
 	chunks := make([]chunk.Chunk, count)
 	for i := 0; i < count; i++ {
 		chunk := generateTestRandomChunk()
@@ -142,7 +139,7 @@ func benchmarkUpload(b *testing.B, o *Options, count int) {
 	b.StartTimer()
 
 	for i := 0; i < count; i++ {
-		err := uploader.Put(chunks[i])
+		_, err := db.Put(context.Background(), chunk.ModePutUpload, chunks[i])
 		if err != nil {
 			b.Fatal(err)
 		}

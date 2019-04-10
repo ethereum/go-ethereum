@@ -178,9 +178,7 @@ func (c ChunkData) Size() uint64 {
 	return binary.LittleEndian.Uint64(c[:8])
 }
 
-type ChunkValidator interface {
-	Validate(chunk Chunk) bool
-}
+type ChunkValidator = chunk.Validator
 
 // Provides method for validation of content address in chunks
 // Holds the corresponding hasher to create the address
@@ -211,20 +209,7 @@ func (v *ContentAddressValidator) Validate(ch Chunk) bool {
 	return bytes.Equal(hash, ch.Address())
 }
 
-type ChunkStore interface {
-	Put(ctx context.Context, ch Chunk) (err error)
-	Get(rctx context.Context, ref Address) (ch Chunk, err error)
-	Has(rctx context.Context, ref Address) bool
-	Close()
-}
-
-// SyncChunkStore is a ChunkStore which supports syncing
-type SyncChunkStore interface {
-	ChunkStore
-	BinIndex(po uint8) uint64
-	Iterator(from uint64, to uint64, po uint8, f func(Address, uint64) bool) error
-	FetchFunc(ctx context.Context, ref Address) func(context.Context) error
-}
+type ChunkStore = chunk.Store
 
 // FakeChunkStore doesn't store anything, just implements the ChunkStore interface
 // It can be used to inject into a hasherStore if you don't want to actually store data just do the
@@ -233,20 +218,33 @@ type FakeChunkStore struct {
 }
 
 // Put doesn't store anything it is just here to implement ChunkStore
-func (f *FakeChunkStore) Put(_ context.Context, ch Chunk) error {
-	return nil
+func (f *FakeChunkStore) Put(_ context.Context, _ chunk.ModePut, ch Chunk) (bool, error) {
+	return false, nil
 }
 
 // Has doesn't do anything it is just here to implement ChunkStore
-func (f *FakeChunkStore) Has(_ context.Context, ref Address) bool {
-	panic("FakeChunkStore doesn't support HasChunk")
+func (f *FakeChunkStore) Has(_ context.Context, ref Address) (bool, error) {
+	panic("FakeChunkStore doesn't support Has")
 }
 
 // Get doesn't store anything it is just here to implement ChunkStore
-func (f *FakeChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
+func (f *FakeChunkStore) Get(_ context.Context, _ chunk.ModeGet, ref Address) (Chunk, error) {
 	panic("FakeChunkStore doesn't support Get")
 }
 
+func (f *FakeChunkStore) Set(ctx context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
+	panic("FakeChunkStore doesn't support Set")
+}
+
+func (f *FakeChunkStore) LastPullSubscriptionBinID(bin uint8) (id uint64, err error) {
+	panic("FakeChunkStore doesn't support LastPullSubscriptionBinID")
+}
+
+func (f *FakeChunkStore) SubscribePull(ctx context.Context, bin uint8, since, until uint64) (c <-chan chunk.Descriptor, stop func()) {
+	panic("FakeChunkStore doesn't support SubscribePull")
+}
+
 // Close doesn't store anything it is just here to implement ChunkStore
-func (f *FakeChunkStore) Close() {
+func (f *FakeChunkStore) Close() error {
+	return nil
 }

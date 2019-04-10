@@ -17,6 +17,10 @@
 package main
 
 import (
+	"archive/tar"
+	"bytes"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -25,9 +29,21 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 	"gopkg.in/urfave/cli.v1"
 )
+
+var legacyKeyIndex = byte(0)
+var keyData = byte(6)
+
+type dpaDBIndex struct {
+	Idx    uint64
+	Access uint64
+}
 
 var dbCommand = cli.Command{
 	Name:               "db",
@@ -67,6 +83,9 @@ The import may be quite large, consider piping the input through the Unix
 pv(1) tool to get a progress bar:
 
     pv chunks.tar | swarm db import ~/.ethereum/swarm/bzz-KEY/chunks -`,
+			Flags: []cli.Flag{
+				SwarmLegacyFlag,
+			},
 		},
 	},
 }
@@ -76,12 +95,6 @@ func dbExport(ctx *cli.Context) {
 	if len(args) != 3 {
 		utils.Fatalf("invalid arguments, please specify both <chunkdb> (path to a local chunk database), <file> (path to write the tar archive to, - for stdout) and the base key")
 	}
-
-	store, err := openLDBStore(args[0], common.Hex2Bytes(args[2]))
-	if err != nil {
-		utils.Fatalf("error opening local chunk database: %s", err)
-	}
-	defer store.Close()
 
 	var out io.Writer
 	if args[1] == "-" {
@@ -94,6 +107,23 @@ func dbExport(ctx *cli.Context) {
 		defer f.Close()
 		out = f
 	}
+
+	isLegacy := localstore.IsLegacyDatabase(args[0])
+	if isLegacy {
+		count, err := exportLegacy(args[0], common.Hex2Bytes(args[2]), out)
+		if err != nil {
+			utils.Fatalf("error exporting legacy local chunk database: %s", err)
+		}
+
+		log.Info(fmt.Sprintf("successfully exported %d chunks from legacy db", count))
+		return
+	}
+
+	store, err := openLDBStore(args[0], common.Hex2Bytes(args[2]))
+	if err != nil {
+		utils.Fatalf("error opening local chunk database: %s", err)
+	}
+	defer store.Close()
 
 	count, err := store.Export(out)
 	if err != nil {
@@ -108,6 +138,8 @@ func dbImport(ctx *cli.Context) {
 	if len(args) != 3 {
 		utils.Fatalf("invalid arguments, please specify both <chunkdb> (path to a local chunk database), <file> (path to read the tar archive from, - for stdin) and the base key")
 	}
+
+	legacy := ctx.IsSet(SwarmLegacyFlag.Name)
 
 	store, err := openLDBStore(args[0], common.Hex2Bytes(args[2]))
 	if err != nil {
@@ -127,7 +159,7 @@ func dbImport(ctx *cli.Context) {
 		in = f
 	}
 
-	count, err := store.Import(in)
+	count, err := store.Import(in, legacy)
 	if err != nil {
 		utils.Fatalf("error importing local chunk database: %s", err)
 	}
@@ -135,13 +167,73 @@ func dbImport(ctx *cli.Context) {
 	log.Info(fmt.Sprintf("successfully imported %d chunks", count))
 }
 
-func openLDBStore(path string, basekey []byte) (*storage.LDBStore, error) {
+func openLDBStore(path string, basekey []byte) (*localstore.DB, error) {
 	if _, err := os.Stat(filepath.Join(path, "CURRENT")); err != nil {
 		return nil, fmt.Errorf("invalid chunkdb path: %s", err)
 	}
 
-	storeparams := storage.NewDefaultStoreParams()
-	ldbparams := storage.NewLDBStoreParams(storeparams, path)
-	ldbparams.BaseKey = basekey
-	return storage.NewLDBStore(ldbparams)
+	return localstore.New(path, basekey, nil)
+}
+
+func decodeIndex(data []byte, index *dpaDBIndex) error {
+	dec := rlp.NewStream(bytes.NewReader(data), 0)
+	return dec.Decode(index)
+}
+
+func getDataKey(idx uint64, po uint8) []byte {
+	key := make([]byte, 10)
+	key[0] = keyData
+	key[1] = po
+	binary.BigEndian.PutUint64(key[2:], idx)
+
+	return key
+}
+
+func exportLegacy(path string, basekey []byte, out io.Writer) (int64, error) {
+	tw := tar.NewWriter(out)
+	defer tw.Close()
+	db, err := leveldb.OpenFile(path, &opt.Options{OpenFilesCacheCapacity: 128})
+	if err != nil {
+		return 0, err
+	}
+	defer db.Close()
+
+	it := db.NewIterator(nil, nil)
+	defer it.Release()
+	var count int64
+	for ok := it.Seek([]byte{legacyKeyIndex}); ok; ok = it.Next() {
+		key := it.Key()
+		if (key == nil) || (key[0] != legacyKeyIndex) {
+			break
+		}
+
+		var index dpaDBIndex
+
+		hash := key[1:]
+		decodeIndex(it.Value(), &index)
+
+		po := uint8(chunk.Proximity(basekey, hash))
+
+		datakey := getDataKey(index.Idx, po)
+		data, err := db.Get(datakey, nil)
+		if err != nil {
+			log.Crit(fmt.Sprintf("Chunk %x found but could not be accessed: %v, %x", key, err, datakey))
+			continue
+		}
+
+		hdr := &tar.Header{
+			Name: hex.EncodeToString(hash),
+			Mode: 0644,
+			Size: int64(len(data)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return count, err
+		}
+		if _, err := tw.Write(data); err != nil {
+			return count, err
+		}
+		count++
+	}
+
+	return count, nil
 }

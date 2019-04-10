@@ -30,11 +30,11 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/state"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const (
@@ -108,7 +108,7 @@ type RegistryOptions struct {
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.SyncChunkStore, intervalsStore state.Store, options *RegistryOptions, balance protocols.Balance) *Registry {
+func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore chunk.FetchStore, intervalsStore state.Store, options *RegistryOptions, balance protocols.Balance) *Registry {
 	if options == nil {
 		options = &RegistryOptions{}
 	}
@@ -627,13 +627,8 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 	case *WantedHashesMsg:
 		return p.handleWantedHashesMsg(ctx, msg)
 
-	case *ChunkDeliveryMsgRetrieval:
-		// handling chunk delivery is the same for retrieval and syncing, so let's cast the msg
-		return p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
-
-	case *ChunkDeliveryMsgSyncing:
-		// handling chunk delivery is the same for retrieval and syncing, so let's cast the msg
-		return p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
+	case *ChunkDeliveryMsgRetrieval, *ChunkDeliveryMsgSyncing:
+		return p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, msg)
 
 	case *RetrieveRequestMsg:
 		return p.streamer.delivery.handleRetrieveRequestMsg(ctx, p, msg)

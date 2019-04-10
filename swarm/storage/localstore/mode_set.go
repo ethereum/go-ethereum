@@ -17,51 +17,25 @@
 package localstore
 
 import (
+	"context"
+
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// ModeSet enumerates different Setter modes.
-type ModeSet int
-
-// Setter modes.
-const (
-	// ModeSetAccess: when an update request is received for a chunk or chunk is retrieved for delivery
-	ModeSetAccess ModeSet = iota
-	// ModeSetSync: when push sync receipt is received
-	ModeSetSync
-	// modeSetRemove: when GC-d
-	// unexported as no external packages should remove chunks from database
-	modeSetRemove
-)
-
-// Setter sets the state of a particular
-// Chunk in database by changing indexes.
-type Setter struct {
-	db   *DB
-	mode ModeSet
-}
-
-// NewSetter returns a new Setter on database
-// with a specific Mode.
-func (db *DB) NewSetter(mode ModeSet) *Setter {
-	return &Setter{
-		mode: mode,
-		db:   db,
-	}
-}
-
 // Set updates database indexes for a specific
 // chunk represented by the address.
-func (s *Setter) Set(addr chunk.Address) (err error) {
-	return s.db.set(s.mode, addr)
+// Set is required to implement chunk.Store
+// interface.
+func (db *DB) Set(_ context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
+	return db.set(mode, addr)
 }
 
 // set updates database indexes for a specific
 // chunk represented by the address.
 // It acquires lockAddr to protect two calls
 // of this function for the same address in parallel.
-func (db *DB) set(mode ModeSet, addr chunk.Address) (err error) {
+func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 	// protect parallel updates
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
@@ -76,7 +50,7 @@ func (db *DB) set(mode ModeSet, addr chunk.Address) (err error) {
 	item := addressToItem(addr)
 
 	switch mode {
-	case ModeSetAccess:
+	case chunk.ModeSetAccess:
 		// add to pull, insert to gc
 
 		// need to get access timestamp here as it is not
@@ -87,9 +61,14 @@ func (db *DB) set(mode ModeSet, addr chunk.Address) (err error) {
 		switch err {
 		case nil:
 			item.StoreTimestamp = i.StoreTimestamp
+			item.BinID = i.BinID
 		case leveldb.ErrNotFound:
 			db.pushIndex.DeleteInBatch(batch, item)
 			item.StoreTimestamp = now()
+			item.BinID, err = db.binIDs.Inc(uint64(db.po(item.Address)))
+			if err != nil {
+				return err
+			}
 		default:
 			return err
 		}
@@ -112,7 +91,7 @@ func (db *DB) set(mode ModeSet, addr chunk.Address) (err error) {
 		db.gcIndex.PutInBatch(batch, item)
 		gcSizeChange++
 
-	case ModeSetSync:
+	case chunk.ModeSetSync:
 		// delete from push, insert to gc
 
 		// need to get access timestamp here as it is not
@@ -131,6 +110,7 @@ func (db *DB) set(mode ModeSet, addr chunk.Address) (err error) {
 			return err
 		}
 		item.StoreTimestamp = i.StoreTimestamp
+		item.BinID = i.BinID
 
 		i, err = db.retrievalAccessIndex.Get(item)
 		switch err {
@@ -149,7 +129,7 @@ func (db *DB) set(mode ModeSet, addr chunk.Address) (err error) {
 		db.gcIndex.PutInBatch(batch, item)
 		gcSizeChange++
 
-	case modeSetRemove:
+	case chunk.ModeSetRemove:
 		// delete from retrieve, pull, gc
 
 		// need to get access timestamp here as it is not
@@ -169,6 +149,7 @@ func (db *DB) set(mode ModeSet, addr chunk.Address) (err error) {
 			return err
 		}
 		item.StoreTimestamp = i.StoreTimestamp
+		item.BinID = i.BinID
 
 		db.retrievalDataIndex.DeleteInBatch(batch, item)
 		db.retrievalAccessIndex.DeleteInBatch(batch, item)
