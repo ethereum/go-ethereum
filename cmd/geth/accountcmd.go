@@ -307,12 +307,13 @@ func accountCreate(ctx *cli.Context) error {
 
 	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
-	address, err := keystore.StoreKey(keydir, password, scryptN, scryptP)
+	account, err := keystore.StoreKey(keydir, password, scryptN, scryptP)
 
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)
 	}
-	fmt.Printf("Address: {%x}\n", address)
+	fmt.Printf("Your new key is generated. Please backup the key file: %s\n", account.URL.Path)
+	fmt.Printf("Address: {%x}\n", account.Address)
 	return nil
 }
 
