@@ -92,9 +92,13 @@ type Wallet interface {
 	// opposed to decending into a child path to allow discovering accounts starting
 	// from non zero components.
 	//
+	// Some hardware wallets switched derivation paths through their evolution, so
+	// this method supports providing multiple bases to discover old user accounts
+	// too. Only the last base will be used to derive the next empty account.
+	//
 	// You can disable automatic account discovery by calling SelfDerive with a nil
 	// chain state reader.
-	SelfDerive(base DerivationPath, chain ethereum.ChainStateReader)
+	SelfDerive(bases []DerivationPath, chain ethereum.ChainStateReader)
 
 	// SignData requests the wallet to sign the hash of the given data
 	// It looks up the account specified either solely via its address contained within,
