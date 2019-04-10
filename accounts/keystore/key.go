@@ -179,6 +179,8 @@ func storeNewKey(ks keyStore, rand io.Reader, auth string) (*Key, accounts.Accou
 		zeroKey(key.PrivateKey)
 		return nil, a, err
 	}
+	fmt.Printf("Your new key is generated. Please backup the key file: %s\n", a.URL)
+
 	return key, a, err
 }
 
