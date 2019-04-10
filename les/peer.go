@@ -42,6 +42,11 @@ var (
 
 const maxResponseErrors = 50 // number of invalid responses tolerated (makes the protocol less brittle but still avoids spam)
 
+// if the total encoded size of a sent transaction batch is over txSizeCostLimit
+// per transaction then the request cost is calculated as proportional to the
+// encoded size instead of the transaction count
+const txSizeCostLimit = 0x4000
+
 const (
 	announceTypeNone = iota
 	announceTypeSimple
@@ -164,6 +169,32 @@ func (p *peer) GetRequestCost(msgcode uint64, amount int) uint64 {
 	defer p.lock.RUnlock()
 
 	cost := p.fcCosts[msgcode].baseCost + p.fcCosts[msgcode].reqCost*uint64(amount)
+	if cost > p.fcServerParams.BufLimit {
+		cost = p.fcServerParams.BufLimit
+	}
+	return cost
+}
+
+func (p *peer) GetTxRelayCost(amount, size int) uint64 {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	var msgcode uint64
+	switch p.version {
+	case lpv1:
+		msgcode = SendTxMsg
+	case lpv2:
+		msgcode = SendTxV2Msg
+	default:
+		panic(nil)
+	}
+
+	cost := p.fcCosts[msgcode].baseCost + p.fcCosts[msgcode].reqCost*uint64(amount)
+	sizeCost := p.fcCosts[msgcode].baseCost + p.fcCosts[msgcode].reqCost*uint64(size)/txSizeCostLimit
+	if sizeCost > cost {
+		cost = sizeCost
+	}
+
 	if cost > p.fcServerParams.BufLimit {
 		cost = p.fcServerParams.BufLimit
 	}
@@ -307,9 +338,9 @@ func (p *peer) RequestTxStatus(reqID, cost uint64, txHashes []common.Hash) error
 	return sendRequest(p.rw, GetTxStatusMsg, reqID, cost, txHashes)
 }
 
-// SendTxStatus sends a batch of transactions to be added to the remote transaction pool.
-func (p *peer) SendTxs(reqID, cost uint64, txs types.Transactions) error {
-	p.Log().Debug("Fetching batch of transactions", "count", len(txs))
+// SendTxs sends a batch of transactions to be added to the remote transaction pool.
+func (p *peer) SendTxs(reqID, cost uint64, txs rlp.RawValue) error {
+	p.Log().Debug("Fetching batch of transactions", "size", len(txs))
 	switch p.version {
 	case lpv1:
 		return p2p.Send(p.rw, SendTxMsg, txs) // old message format does not include reqID
