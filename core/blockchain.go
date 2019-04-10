@@ -883,10 +883,10 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 var lastWrite uint64
 
-// WriteBlockWithoutState writes only the block and its metadata to the database,
+// writeBlockWithoutState writes only the block and its metadata to the database,
 // but does not write any state. This is used to construct competing side forks
 // up to the point where they exceed the canonical total difficulty.
-func (bc *BlockChain) WriteBlockWithoutState(block *types.Block, td *big.Int) (err error) {
+func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (err error) {
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
@@ -895,6 +895,26 @@ func (bc *BlockChain) WriteBlockWithoutState(block *types.Block, td *big.Int) (e
 	}
 	rawdb.WriteBlock(bc.db, block)
 
+	return nil
+}
+
+// writeKnownBlock updates the head block flag with a known block
+// and introduces chain reorg if necessary.
+func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
+	bc.wg.Add(1)
+	defer bc.wg.Done()
+
+	current := bc.CurrentBlock()
+	if block.ParentHash() != current.Hash() {
+		if err := bc.reorg(current, block); err != nil {
+			return err
+		}
+	}
+	// Write the positional metadata for transaction/receipt lookups.
+	// Preimages here is empty, ignore it.
+	rawdb.WriteTxLookupEntries(bc.db, block)
+
+	bc.insert(block)
 	return nil
 }
 
@@ -1139,19 +1159,36 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		//   2. The block is stored as a sidechain, and is lying about it's stateroot, and passes a stateroot
 		// 	    from the canonical chain, which has not been verified.
 		// Skip all known blocks that are behind us
-		current := bc.CurrentBlock().NumberU64()
-		for block != nil && err == ErrKnownBlock && current >= block.NumberU64() {
+		var (
+			current  = bc.CurrentBlock()
+			localTd  = bc.GetTd(current.Hash(), current.NumberU64())
+			externTd = bc.GetTd(block.ParentHash(), block.NumberU64()-1) // The first block can't be nil
+		)
+		externTd = new(big.Int).Add(externTd, block.Difficulty())
+		for block != nil && err == ErrKnownBlock && localTd.Cmp(externTd) >= 0 {
 			stats.ignored++
 			block, err = it.next()
-		}
-		// First block is still known block, the only scenario here is:
-		// We did a roll-back, and we want to re-import a batch of known blocks while a part
-		// of known blocks are higher than current head block.
-		if err == ErrKnownBlock {
-			block, err = bc.insertKnownChain(block, it)
 
-			if bc.CurrentBlock().NumberU64() != current {
-				lastCanon = bc.CurrentBlock()
+			if block != nil {
+				externTd = new(big.Int).Add(externTd, block.Difficulty())
+			}
+		}
+		// The remaining blocks are still known blocks, the only scenario here is:
+		// During the fast sync, the pivot point is already submitted but rollback
+		// happens. Then node resets the head full block to a lower height via `rollback`
+		// and leaves a few known blocks in the database.
+		//
+		// When node runs a fast sync again, it can re-import a batch of known blocks via
+		// `insertChain` while a part of them have higher total difficulty than current
+		// head full block(new pivot point).
+		if err == ErrKnownBlock {
+			for block != nil && err == ErrKnownBlock {
+				if err := bc.writeKnownBlock(block); err != nil {
+					return it.index, nil, nil, err
+				}
+				lastCanon = block
+
+				block, err = it.next()
 			}
 		}
 		// Falls through to the block import
@@ -1323,37 +1360,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	return it.index, events, coalescedLogs, err
 }
 
-// insertKnownChain inserts a batch of known blocks which are higher than current
-// head block.
-func (bc *BlockChain) insertKnownChain(block *types.Block, it *insertIterator) (*types.Block, error) {
-	var (
-		externTd    *big.Int
-		knownBlocks []*types.Block
-
-		err     = ErrKnownBlock
-		current = bc.CurrentBlock()
-		localTd = bc.GetTd(current.Hash(), current.NumberU64())
-	)
-	for ; block != nil && (err == ErrKnownBlock); block, err = it.next() {
-		if externTd == nil {
-			externTd = bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-		}
-		externTd = new(big.Int).Add(externTd, block.Difficulty())
-
-		// Short circuit if the known block cannot be imported as a new
-		// canonical block.
-		if block.ParentHash() != current.Hash() || externTd.Cmp(localTd) <= 0 {
-			break
-		}
-		knownBlocks = append(knownBlocks, block)
-		localTd, current = new(big.Int).Add(localTd, block.Difficulty()), block
-	}
-	if len(knownBlocks) > 0 {
-		bc.insert(knownBlocks[len(knownBlocks)-1])
-	}
-	return block, err
-}
-
 // insertSideChain is called when an import batch hits upon a pruned ancestor
 // error, which happens when a sidechain with a sufficiently old fork-block is
 // found.
@@ -1401,7 +1407,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 
 		if !bc.HasBlock(block.Hash(), block.NumberU64()) {
 			start := time.Now()
-			if err := bc.WriteBlockWithoutState(block, externTd); err != nil {
+			if err := bc.writeBlockWithoutState(block, externTd); err != nil {
 				return it.index, nil, nil, err
 			}
 			log.Debug("Injected sidechain block", "number", block.Number(), "hash", block.Hash(),

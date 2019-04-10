@@ -1702,116 +1702,113 @@ func TestPrunedImportSide(t *testing.T) {
 }
 
 func TestInsertKnownHeaders(t *testing.T)      { testInsertKnownChainData(t, "headers") }
-func TestInsertKnownReceiptChain(t *testing.T) { testInsertKnownChainData(t, "receiptChain") }
+func TestInsertKnownReceiptChain(t *testing.T) { testInsertKnownChainData(t, "receipts") }
 func TestInsertKnownBlocks(t *testing.T)       { testInsertKnownChainData(t, "blocks") }
 
 func testInsertKnownChainData(t *testing.T, typ string) {
-	// Generate the original common chain segment and the two competing forks
 	engine := ethash.NewFaker()
 
 	db := rawdb.NewMemoryDatabase()
 	genesis := new(Genesis).MustCommit(db)
 
-	blocks, receipts := GenerateChain(params.TestChainConfig, genesis, engine, db, 64, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
-	blocks2, receipts2 := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], engine, db, 64, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+	blocks, receipts := GenerateChain(params.TestChainConfig, genesis, engine, db, 32, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+	blocks2, receipts2 := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], engine, db, 32, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+	blocks3, receipts3 := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], engine, db, 33, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+		b.OffsetTime(-9) // A higher difficulty
+	})
 
 	// Import the shared chain and the original canonical one
-	diskdb := rawdb.NewMemoryDatabase()
-	new(Genesis).MustCommit(diskdb)
+	chaindb := rawdb.NewMemoryDatabase()
+	new(Genesis).MustCommit(chaindb)
 
-	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil)
+	chain, err := NewBlockChain(chaindb, nil, params.TestChainConfig, engine, vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
 
+	var (
+		inserter func(blocks []*types.Block, receipts []types.Receipts) error
+		asserter func(t *testing.T, block *types.Block)
+	)
+	headers, headers2 := make([]*types.Header, 0, len(blocks)), make([]*types.Header, 0, len(blocks2))
+	for _, block := range blocks {
+		headers = append(headers, block.Header())
+	}
+	for _, block := range blocks2 {
+		headers2 = append(headers2, block.Header())
+	}
+	if typ == "headers" {
+		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
+			headers := make([]*types.Header, 0, len(blocks))
+			for _, block := range blocks {
+				headers = append(headers, block.Header())
+			}
+			_, err := chain.InsertHeaderChain(headers, 1)
+			return err
+		}
+		asserter = func(t *testing.T, block *types.Block) {
+			if chain.CurrentHeader().Hash() != block.Hash() {
+				t.Fatalf("current head header mismatch, have %v, want %v", chain.CurrentHeader().Hash().Hex(), block.Hash().Hex())
+			}
+		}
+	} else if typ == "receipts" {
+		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
+			headers := make([]*types.Header, 0, len(blocks))
+			for _, block := range blocks {
+				headers = append(headers, block.Header())
+			}
+			_, err := chain.InsertHeaderChain(headers, 1)
+			if err != nil {
+				return err
+			}
+			_, err = chain.InsertReceiptChain(blocks, receipts)
+			return err
+		}
+		asserter = func(t *testing.T, block *types.Block) {
+			if chain.CurrentFastBlock().Hash() != block.Hash() {
+				t.Fatalf("current head fast block mismatch, have %v, want %v", chain.CurrentFastBlock().Hash().Hex(), block.Hash().Hex())
+			}
+		}
+	} else {
+		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
+			_, err := chain.InsertChain(blocks)
+			return err
+		}
+		asserter = func(t *testing.T, block *types.Block) {
+			if chain.CurrentBlock().Hash() != block.Hash() {
+				t.Fatalf("current head block mismatch, have %v, want %v", chain.CurrentBlock().Hash().Hex(), block.Hash().Hex())
+			}
+		}
+	}
+
+	if err := inserter(blocks, receipts); err != nil {
+		t.Fatalf("failed to insert chain data: %v", err)
+	}
+
+	// Reimport the chain data again. All the imported
+	// chain data are regarded "known" data.
+	if err := inserter(blocks, receipts); err != nil {
+		t.Fatalf("failed to insert chain data: %v", err)
+	}
+	asserter(t, blocks[len(blocks)-1])
+
+	// Import a long canonical chain with some known data as prefix.
 	var rollback []common.Hash
 	for i := len(blocks) / 2; i < len(blocks); i++ {
 		rollback = append(rollback, blocks[i].Hash())
 	}
-
-	if typ == "blocks" {
-		if _, err := chain.InsertChain(blocks); err != nil {
-			t.Fatalf("failed to insert chain: %v", err)
-		}
-
-		// The imported blocks are all known blocks and not higher than
-		// head block.
-		if _, err := chain.InsertChain(blocks); err != nil {
-			t.Fatalf("failed to insert known chain: %v", err)
-		}
-
-		// A part of imported blocks are known blocks. Besides a part of
-		// known blocks are higher than head blocks.
-		chain.Rollback(rollback)
-		if _, err := chain.InsertChain(append(blocks, blocks2...)); err != nil {
-			t.Fatalf("failed to insert chain with known block as prefix: %v", err)
-		}
-		if chain.CurrentBlock().Hash() != blocks2[len(blocks2)-1].Hash() {
-			t.Fatalf("failed to insert chain with known block as prefix, want head block %v, have head block %v",
-				blocks2[len(blocks2)-1].Hash().Hex(), chain.CurrentBlock().Hash().Hex())
-		}
-	} else if typ == "headers" {
-		headers, headers2 := make([]*types.Header, 0, len(blocks)), make([]*types.Header, 0, len(blocks2))
-		for _, block := range blocks {
-			headers = append(headers, block.Header())
-		}
-		for _, block := range blocks2 {
-			headers2 = append(headers2, block.Header())
-		}
-		if _, err := chain.InsertHeaderChain(headers, 1); err != nil {
-			t.Fatalf("failed to insert header chain: %v", err)
-		}
-
-		// The imported headers are all known headers and not higher than
-		// head block.
-		if _, err := chain.InsertHeaderChain(headers, 1); err != nil {
-			t.Fatalf("failed to insert known header chain: %v", err)
-		}
-
-		// A part of imported headers are known headers. Besides a part of
-		// known headers are higher than head headers.
-		chain.Rollback(rollback)
-		if _, err := chain.InsertHeaderChain(append(headers, headers2...), 1); err != nil {
-			t.Fatalf("failed to insert header chain with known headers as prefix: %v", err)
-		}
-		if chain.CurrentHeader().Hash() != headers2[len(headers2)-1].Hash() {
-			t.Fatalf("failed to insert header chain with known header as prefix, want head header %v, have head header %v",
-				headers2[len(headers2)-1].Hash().Hex(), chain.CurrentBlock().Hash().Hex())
-		}
-	} else {
-		headers, headers2 := make([]*types.Header, 0, len(blocks)), make([]*types.Header, 0, len(blocks2))
-		for _, block := range blocks {
-			headers = append(headers, block.Header())
-		}
-		for _, block := range blocks2 {
-			headers2 = append(headers2, block.Header())
-		}
-		if _, err := chain.InsertHeaderChain(headers, 1); err != nil {
-			t.Fatalf("failed to insert header chain: %v", err)
-		}
-		if _, err := chain.InsertReceiptChain(blocks, receipts); err != nil {
-			t.Fatalf("failed to insert receipt chain: %v", err)
-		}
-
-		// The imported receipt chain are all known and not higher than
-		// head fast block.
-		if _, err := chain.InsertReceiptChain(blocks, receipts); err != nil {
-			t.Fatalf("failed to insert receipt chain: %v", err)
-		}
-		// A part of imported headers are known headers. Besides a part of
-		// known headers are higher than head headers.
-		chain.Rollback(rollback)
-		if _, err := chain.InsertHeaderChain(append(headers, headers2...), 1); err != nil {
-			t.Fatalf("failed to insert header chain with known headers as prefix: %v", err)
-		}
-		if _, err := chain.InsertReceiptChain(append(blocks, blocks2...), append(receipts, receipts2...)); err != nil {
-			t.Fatalf("failed to insert header chain with known headers as prefix: %v", err)
-		}
-		if chain.CurrentFastBlock().Hash() != blocks2[len(blocks2)-1].Hash() {
-			t.Fatalf("failed to insert header chain with known header as prefix, want head header %v, have head header %v",
-				blocks2[len(blocks2)-1].Hash().Hex(), chain.CurrentFastBlock().Hash().Hex())
-		}
+	chain.Rollback(rollback)
+	if err := inserter(append(blocks, blocks2...), append(receipts, receipts2...)); err != nil {
+		t.Fatalf("failed to insert chain data: %v", err)
 	}
+	asserter(t, blocks2[len(blocks2)-1])
+
+	// Import a heavier forked chain with some known data as prefix.
+	if err := inserter(append(blocks, blocks3...), append(receipts, receipts3...)); err != nil {
+		t.Fatalf("failed to insert chain data: %v", err)
+	}
+	asserter(t, blocks3[len(blocks3)-1])
 }
 
 // Benchmarks large blocks with value transfers to non-existing accounts
