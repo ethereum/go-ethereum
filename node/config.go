@@ -95,6 +95,9 @@ type Config struct {
 	// NoUSB disables hardware wallet monitoring and connectivity.
 	NoUSB bool `toml:",omitempty"`
 
+	// SmartCard activates smartcard wallet monitoring and connectivity.
+	SmartCard bool `toml:",omitempty"`
+
 	// IPCPath is the requested location to place the IPC endpoint. If the path is
 	// a simple file name, it is placed inside the data directory (or on the root
 	// pipe path on Windows), whereas if it's a resolvable path name (absolute or
@@ -505,11 +508,13 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 				backends = append(backends, trezorhub)
 			}
 		}
-		// Start a smart card hub
-		if schub, err := scwallet.NewHub(scwallet.Scheme, keydir); err != nil {
-			log.Warn(fmt.Sprintf("Failed to start smart card hub, disabling: %v", err))
-		} else {
-			backends = append(backends, schub)
+		if conf.SmartCard {
+			// Start a smart card hub
+			if schub, err := scwallet.NewHub(scwallet.Scheme, keydir); err != nil {
+				log.Warn(fmt.Sprintf("Failed to start smart card hub, disabling: %v", err))
+			} else {
+				backends = append(backends, schub)
+			}
 		}
 	}
 

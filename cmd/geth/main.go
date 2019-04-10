@@ -64,6 +64,7 @@ var (
 		utils.KeyStoreDirFlag,
 		utils.ExternalSignerFlag,
 		utils.NoUSBFlag,
+		utils.SmartCardFlag,
 		utils.DashboardEnabledFlag,
 		utils.DashboardAddrFlag,
 		utils.DashboardPortFlag,
