@@ -59,12 +59,15 @@ import (
 const legalWarning = `
 WARNING! 
 
-Clef is alpha software, and not yet publically released. This software has _not_ been audited, and there
-are no guarantees about the workings of this software. It may contain severe flaws. You should not use this software
-unless you agree to take full responsibility for doing so, and know what you are doing. 
+Clef is an account management tool. It may, like any software, contain bugs. 
 
-TLDR; THIS IS NOT PRODUCTION-READY SOFTWARE! 
+Please take care to
+- backup your keystore files, 
+- verify that the keystore(s) can be opened with your password.
 
+Clef is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+PURPOSE. See the GNU General Public License for more details.
 `
 
 var (
