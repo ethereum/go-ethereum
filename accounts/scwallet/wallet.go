@@ -390,7 +390,7 @@ func (w *Wallet) Open(passphrase string) error {
 	w.deriveReq = make(chan chan struct{})
 	w.deriveQuit = make(chan chan error)
 
-	go w.selfDerive(0)
+	go w.selfDerive()
 
 	// Notify anyone listening for wallet events that a new device is accessible
 	go w.Hub.updateFeed.Send(accounts.WalletEvent{Wallet: w, Kind: accounts.WalletOpened})
@@ -426,9 +426,8 @@ func (w *Wallet) Close() error {
 }
 
 // selfDerive is an account derivation loop that upon request attempts to find
-// new non-zero accounts. maxEmpty specifies the number of empty accounts that
-// should be derived once an initial empty account has been found.
-func (w *Wallet) selfDerive(maxEmpty int) {
+// new non-zero accounts.
+func (w *Wallet) selfDerive() {
 	w.log.Debug("Smart card wallet self-derivation started")
 	defer w.log.Debug("Smart card wallet self-derivation stopped")
 
@@ -466,7 +465,7 @@ func (w *Wallet) selfDerive(maxEmpty int) {
 
 			context = context.Background()
 		)
-		for empty, emptyCount := false, maxEmpty+1; !empty || emptyCount > 0; {
+		for empty := false; !empty; {
 			// Retrieve the next derived Ethereum account
 			if nextAddr == (common.Address{}) {
 				if nextAcc, err = w.session.derive(nextPath); err != nil {
@@ -490,11 +489,9 @@ func (w *Wallet) selfDerive(maxEmpty int) {
 				w.log.Warn("Smartcard wallet nonce retrieval failed", "err", err)
 				break
 			}
-			// If the next account is empty and no more empty accounts are
-			// allowed, stop self-derivation. Add the current one nonetheless.
+			// If the next account is empty, stop self-derivation, but add it nonetheless
 			if balance.Sign() == 0 && nonce == 0 {
 				empty = true
-				emptyCount--
 			}
 			// We've just self-derived a new account, start tracking it locally
 			path := make(accounts.DerivationPath, len(nextPath))
@@ -508,7 +505,7 @@ func (w *Wallet) selfDerive(maxEmpty int) {
 			pairing.Accounts[nextAddr] = path
 
 			// Fetch the next potential account
-			if !empty || emptyCount > 0 {
+			if !empty {
 				nextAddr = common.Address{}
 				nextPath[len(nextPath)-1]++
 			}
@@ -592,7 +589,7 @@ func (w *Wallet) Contains(account accounts.Account) bool {
 
 // Initialize installs a keypair generated from the provided key into the wallet.
 func (w *Wallet) Initialize(seed []byte) error {
-	go w.selfDerive(0)
+	go w.selfDerive()
 	// DO NOT lock at this stage, as the initialize
 	// function relies on Status()
 	return w.session.initialize(seed)
