@@ -151,8 +151,8 @@ func (h *handler) handleMsg(msg *jsonrpcMessage) {
 // call goroutines to shut down.
 func (h *handler) close(err error, inflightReq *requestOp) {
 	h.cancelAllRequests(err, inflightReq)
-	h.cancelRoot()
 	h.callWG.Wait()
+	h.cancelRoot()
 	h.cancelServerSubscriptions(err)
 }
 
