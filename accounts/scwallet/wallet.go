@@ -303,7 +303,7 @@ func (w *Wallet) Status() (string, error) {
 
 	// If the card is not paired, we can only wait
 	if !w.session.paired() {
-		return "Unpaired, waiting for PUK", nil
+		return "Unpaired, waiting for pairing password", nil
 	}
 	// Yay, we have an encrypted session, retrieve the actual status
 	status, err := w.session.walletStatus()
