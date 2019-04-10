@@ -59,7 +59,7 @@ import (
 const legalWarning = `
 WARNING! 
 
-Clef is an account management tool. It may, like any sofware, contain bugs. 
+Clef is an account management tool. It may, like any software, contain bugs. 
 
 Please take care to
 - backup your keystore files, 
