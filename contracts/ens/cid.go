@@ -80,7 +80,7 @@ func extractContentHash(buf []byte) (common.Hash, error) {
 		return common.Hash{}, errors.New("unknown storage system")
 	}
 
-	//todo: for the time being we implement loose enforcement for the EIP rules until ENS manager is updated
+	// todo: for the time being we implement loose enforcement for the EIP rules until ENS manager is updated
 	/*if contentType != swarmTypecode {
 		return common.Hash{}, errors.New("unknown content type")
 	}
@@ -103,11 +103,11 @@ func extractContentHash(buf []byte) (common.Hash, error) {
 func EncodeSwarmHash(hash common.Hash) ([]byte, error) {
 	var cidBytes []byte
 	var headerBytes = []byte{
-		nsSwarm,       //swarm namespace
+		nsSwarm,       // swarm namespace
 		cidv1,         // CIDv1
 		swarmTypecode, // swarm hash
 		swarmHashtype, // keccak256 hash
-		hashLength,    //hash length. 32 bytes
+		hashLength,    // hash length. 32 bytes
 	}
 
 	varintbuf := make([]byte, binary.MaxVarintLen64)

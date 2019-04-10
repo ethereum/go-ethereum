@@ -33,6 +33,7 @@ type decodedArgument struct {
 	soltype abi.Argument
 	value   interface{}
 }
+
 type decodedCallData struct {
 	signature string
 	name      string
@@ -63,7 +64,6 @@ func (cd decodedCallData) String() string {
 // parseCallData matches the provided call data against the abi definition,
 // and returns a struct containing the actual go-typed values
 func parseCallData(calldata []byte, abidata string) (*decodedCallData, error) {
-
 	if len(calldata) < 4 {
 		return nil, fmt.Errorf("Invalid ABI-data, incomplete method signature of (%d bytes)", len(calldata))
 	}
@@ -105,9 +105,8 @@ func parseCallData(calldata []byte, abidata string) (*decodedCallData, error) {
 	// original data. If we didn't do that, it would e.g. be possible to stuff extra data into the arguments, which
 	// is not detected by merely decoding the data.
 
-	var (
-		encoded []byte
-	)
+	var encoded []byte
+
 	encoded, err = method.Inputs.PackValues(v)
 
 	if err != nil {
@@ -125,7 +124,6 @@ func parseCallData(calldata []byte, abidata string) (*decodedCallData, error) {
 // MethodSelectorToAbi converts a method selector into an ABI struct. The returned data is a valid json string
 // which can be consumed by the standard abi package.
 func MethodSelectorToAbi(selector string) ([]byte, error) {
-
 	re := regexp.MustCompile(`^([^\)]+)\(([a-z0-9,\[\]]*)\)`)
 
 	type fakeArg struct {
@@ -152,7 +150,6 @@ func MethodSelectorToAbi(selector string) ([]byte, error) {
 		name, "function", arguments,
 	}
 	return json.Marshal([]fakeABI{abicheat})
-
 }
 
 type AbiDb struct {
@@ -186,7 +183,6 @@ func NewAbiDBFromFile(path string) (*AbiDb, error) {
 // NewAbiDBFromFiles loads both the standard signature database and a custom database. The latter will be used
 // to write new values into if they are submitted via the API
 func NewAbiDBFromFiles(standard, custom string) (*AbiDb, error) {
-
 	db := &AbiDb{make(map[string]string), make(map[string]string), custom}
 	db.customdbPath = custom
 
@@ -226,6 +222,7 @@ func (db *AbiDb) LookupMethodSelector(id []byte) (string, error) {
 	}
 	return "", fmt.Errorf("Signature %v not found", sig)
 }
+
 func (db *AbiDb) Size() int {
 	return len(db.db)
 }
@@ -234,7 +231,7 @@ func (db *AbiDb) Size() int {
 func (db *AbiDb) saveCustomAbi(selector, signature string) error {
 	db.customdb[signature] = selector
 	if db.customdbPath == "" {
-		return nil //Not an error per se, just not used
+		return nil // Not an error per se, just not used
 	}
 	d, err := json.Marshal(db.customdb)
 	if err != nil {

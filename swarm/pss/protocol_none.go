@@ -18,6 +18,4 @@
 
 package pss
 
-const (
-	IsActiveProtocol = false
-)
+const IsActiveProtocol = false

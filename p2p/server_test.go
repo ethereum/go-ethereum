@@ -331,11 +331,14 @@ type taskgen struct {
 func (tg taskgen) newTasks(running int, peers map[enode.ID]*Peer, now time.Time) []task {
 	return tg.newFunc(running, peers)
 }
+
 func (tg taskgen) taskDone(t task, now time.Time) {
 	tg.doneFunc(t)
 }
+
 func (tg taskgen) addStatic(*enode.Node) {
 }
+
 func (tg taskgen) removeStatic(*enode.Node) {
 }
 
@@ -589,6 +592,7 @@ func (c *setupTransport) doProtoHandshake(our *protoHandshake) (*protoHandshake,
 	}
 	return &c.phs, nil
 }
+
 func (c *setupTransport) close(err error) {
 	c.calls += "close,"
 	c.closeErr = err
@@ -598,6 +602,7 @@ func (c *setupTransport) close(err error) {
 func (c *setupTransport) WriteMsg(Msg) error {
 	panic("WriteMsg called on setupTransport")
 }
+
 func (c *setupTransport) ReadMsg() (Msg, error) {
 	panic("ReadMsg called on setupTransport")
 }

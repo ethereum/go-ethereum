@@ -33,7 +33,7 @@ type mockRequester struct {
 	// requests []Request
 	requestC  chan *Request   // when a request is coming it is pushed to requestC
 	waitTimes []time.Duration // with waitTimes[i] you can define how much to wait on the ith request (optional)
-	count     int             //counts the number of requests
+	count     int             // counts the number of requests
 	quitC     chan struct{}
 }
 
@@ -344,7 +344,6 @@ func TestFetcherFactory(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 		t.Fatalf("fetch timeout")
 	}
-
 }
 
 func TestFetcherRequestQuitRetriesRequest(t *testing.T) {

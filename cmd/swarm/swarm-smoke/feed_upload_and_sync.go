@@ -22,9 +22,7 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
-const (
-	feedRandomDataLength = 8
-)
+const feedRandomDataLength = 8
 
 func feedUploadAndSyncCmd(ctx *cli.Context, tuid string) error {
 	errc := make(chan error)
@@ -265,7 +263,6 @@ func feedUploadAndSync(c *cli.Context, tuid string) error {
 	time.Sleep(3 * time.Second)
 
 	for _, host := range hosts {
-
 		// manifest retrieve, topic only
 		for _, url := range []string{manifestWithTopic, manifestWithSubTopic, manifestWithMergedTopic} {
 			wg.Add(1)
@@ -282,7 +279,6 @@ func feedUploadAndSync(c *cli.Context, tuid string) error {
 				}
 			}(url, httpEndpoint(host), ruid)
 		}
-
 	}
 	wg.Wait()
 	log.Info("all endpoints synced random file successfully")

@@ -92,7 +92,6 @@ func initTest() {
 
 // test that topic conversion functions give predictable results
 func TestTopic(t *testing.T) {
-
 	api := &API{}
 
 	topicstr := strings.Join([]string{PingProtocol.Name, strconv.Itoa(int(PingProtocol.Version))}, ":")
@@ -255,7 +254,6 @@ func TestCache(t *testing.T) {
 
 // matching of address hints; whether a message could be or is for the node
 func TestAddressMatch(t *testing.T) {
-
 	localaddr := network.RandomAddr().Over()
 	copy(localaddr[:8], []byte("deadbeef"))
 	remoteaddr := []byte("feedbeef")
@@ -303,12 +301,10 @@ func TestAddressMatch(t *testing.T) {
 	if !ps.isSelfPossibleRecipient(pssmsg, false) {
 		t.Fatalf("isSelfPossibleRecipient false but %x == %x", remoteaddr[:8], localaddr[:8])
 	}
-
 }
 
 // test that message is handled by sender if a prox handler exists and sender is in prox of message
 func TestProxShortCircuit(t *testing.T) {
-
 	// sender node address
 	localAddr := network.RandomAddr().Over()
 	localPotAddr := pot.NewAddressFromBytes(localAddr)
@@ -448,7 +444,6 @@ func TestProxShortCircuit(t *testing.T) {
 // verify that node can be set as recipient regardless of explicit message address match if minimum one handler of a topic is explicitly set to allow it
 // note that in these tests we use the raw capability on handlers for convenience
 func TestAddressMatchProx(t *testing.T) {
-
 	// recipient node address
 	localAddr := network.RandomAddr().Over()
 	localPotAddr := pot.NewAddressFromBytes(localAddr)
@@ -636,7 +631,6 @@ func TestAddressMatchProx(t *testing.T) {
 
 // verify that message queueing happens when it should, and that expired and corrupt messages are dropped
 func TestMessageProcessing(t *testing.T) {
-
 	t.Skip("Disabled due to probable faulty logic for outbox expectations")
 	// setup
 	privkey, err := crypto.GenerateKey()
@@ -824,7 +818,6 @@ func TestKeys(t *testing.T) {
 
 // check that we can retrieve previously added public key entires per topic and peer
 func TestGetPublickeyEntries(t *testing.T) {
-
 	privkey, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatal(err)
@@ -884,7 +877,6 @@ OUTER:
 
 // forwarding should skip peers that do not have matching pss capabilities
 func TestPeerCapabilityMismatch(t *testing.T) {
-
 	// create privkey for forwarder node
 	privkey, err := crypto.GenerateKey()
 	if err != nil {
@@ -939,12 +931,10 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 	// run the forward
 	// it is enough that it completes; trying to send to incapable peers would create segfault
 	ps.forward(pssmsg)
-
 }
 
 // verifies that message handlers for raw messages only are invoked when minimum one handler for the topic exists in which raw messages are explicitly allowed
 func TestRawAllow(t *testing.T) {
-
 	// set up pss like so many times before
 	privKey, err := crypto.GenerateKey()
 	if err != nil {
@@ -1048,7 +1038,6 @@ func TestSendRaw(t *testing.T) {
 }
 
 func testSendRaw(t *testing.T) {
-
 	var addrsize int64
 	var err error
 
@@ -1131,7 +1120,6 @@ func TestSendSym(t *testing.T) {
 }
 
 func testSendSym(t *testing.T) {
-
 	// address hint size
 	var addrsize int64
 	var err error
@@ -1246,7 +1234,6 @@ func TestSendAsym(t *testing.T) {
 }
 
 func testSendAsym(t *testing.T) {
-
 	// address hint size
 	var addrsize int64
 	var err error
@@ -1447,8 +1434,8 @@ func testNetwork(t *testing.T) {
 	}
 	err = net.Load(&snap)
 	if err != nil {
-		//TODO: Fix p2p simulation framework to not crash when loading 32-nodes
-		//t.Fatal(err)
+		// TODO: Fix p2p simulation framework to not crash when loading 32-nodes
+		// t.Fatal(err)
 	}
 
 	time.Sleep(1 * time.Second)
@@ -1573,7 +1560,6 @@ outer:
 	if finalmsgcount != int(msgcount) {
 		t.Fatalf("%d messages were not received", int(msgcount)-finalmsgcount)
 	}
-
 }
 
 // check that in a network of a -> b -> c -> a
@@ -1746,12 +1732,13 @@ func benchmarkAsymKeySend(b *testing.B) {
 		ps.SendAsym(common.ToHex(crypto.FromECDSAPub(&privkey.PublicKey)), topic, msg)
 	}
 }
+
 func BenchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	for i := 100; i < 100000; i = i * 10 {
 		for j := 32; j < 10000; j = j * 8 {
 			b.Run(fmt.Sprintf("%d/%d", i, j), benchmarkSymkeyBruteforceChangeaddr)
 		}
-		//b.Run(fmt.Sprintf("%d", i), benchmarkSymkeyBruteforceChangeaddr)
+		// b.Run(fmt.Sprintf("%d", i), benchmarkSymkeyBruteforceChangeaddr)
 	}
 }
 
@@ -2075,7 +2062,6 @@ func NewAPITest(ps *Pss) *APITest {
 }
 
 func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymkey []byte, limit uint16, topic Topic, to hexutil.Bytes) ([2]string, error) {
-
 	recvsymkeyid, err := apitest.SetSymmetricKey(recvsymkey, topic, PssAddress(to), true)
 	if err != nil {
 		return [2]string{}, err

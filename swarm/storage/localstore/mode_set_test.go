@@ -124,5 +124,4 @@ func TestModeSetRemove(t *testing.T) {
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, 0))
 
 	t.Run("gc size", newIndexGCSizeTest(db))
-
 }

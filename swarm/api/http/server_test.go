@@ -75,7 +75,6 @@ func newTestSigner() (*feed.GenericSigner, error) {
 // Retrieving the update with the Swarm hash should return the manifest pointing directly to the data
 // and raw retrieve of that hash should return the data
 func TestBzzWithFeed(t *testing.T) {
-
 	signer, _ := newTestSigner()
 
 	// Initialize Swarm test server
@@ -205,7 +204,7 @@ func TestBzzFeed(t *testing.T) {
 	// data of update 1
 	update1Data := testutil.RandomBytes(1, 666)
 	update1Timestamp := srv.CurrentTime
-	//data for update 2
+	// data for update 2
 	update2Data := []byte("foo")
 
 	topic, _ := feed.NewTopic("foo.eth", nil)
@@ -444,7 +443,6 @@ func TestBzzFeed(t *testing.T) {
 	if !bytes.Equal(update1Data, b) {
 		t.Fatalf("Expected body '%x', got '%x'", update1Data, b)
 	}
-
 }
 
 func TestBzzGetPath(t *testing.T) {
@@ -745,7 +743,7 @@ func testBzzTar(encrypted bool, t *testing.T) {
 		}
 	}
 
-	//post tar stream
+	// post tar stream
 	url := srv.URL + "/bzz:/"
 	if encrypted {
 		url = url + "encrypt"
@@ -842,6 +840,7 @@ func testBzzTar(encrypted bool, t *testing.T) {
 func TestBzzRootRedirect(t *testing.T) {
 	testBzzRootRedirect(false, t)
 }
+
 func TestBzzRootRedirectEncrypted(t *testing.T) {
 	testBzzRootRedirect(true, t)
 }
@@ -926,7 +925,6 @@ func TestMethodsNotAllowed(t *testing.T) {
 			t.Fatalf("should have failed. requested url: %s, expected code %d, got %d", c.url, c.code, res.StatusCode)
 		}
 	}
-
 }
 
 func httpDo(httpMethod string, url string, reqBody io.Reader, headers map[string]string, verbose bool, t *testing.T) (*http.Response, string) {
@@ -1030,7 +1028,8 @@ func TestGet(t *testing.T) {
 			headers:            map[string]string{},
 			expectedStatusCode: http.StatusNotFound,
 			verbose:            false,
-		}} {
+		},
+	} {
 		t.Run("GET "+testCase.uri, func(t *testing.T) {
 			res, body := httpDo(testCase.method, testCase.uri, nil, testCase.headers, testCase.verbose, t)
 			if res.StatusCode != testCase.expectedStatusCode {
@@ -1212,7 +1211,7 @@ func TestBzzGetFileWithResolver(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//post tar stream
+	// post tar stream
 	url := srv.URL + "/bzz:/"
 
 	req, err := http.NewRequest("POST", url, buf)
@@ -1308,6 +1307,7 @@ func (t *testResolveValidator) Resolve(addr string) (common.Hash, error) {
 func (t *testResolveValidator) Owner(node [32]byte) (addr common.Address, err error) {
 	return
 }
+
 func (t *testResolveValidator) HeaderByNumber(context.Context, *big.Int) (header *types.Header, err error) {
 	return
 }

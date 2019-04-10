@@ -32,9 +32,8 @@ import (
 )
 
 // Common errors that are returned by functions in this package.
-var (
-	ErrNodeNotFound = errors.New("node not found")
-)
+
+var ErrNodeNotFound = errors.New("node not found")
 
 // Simulation provides methods on network, nodes and services
 // to manage them.
@@ -51,9 +50,9 @@ type Simulation struct {
 	mu                sync.RWMutex
 	neighbourhoodSize int
 
-	httpSrv *http.Server        //attach a HTTP server via SimulationOptions
-	handler *simulations.Server //HTTP handler for the server
-	runC    chan struct{}       //channel where frontend signals it is ready
+	httpSrv *http.Server        // attach a HTTP server via SimulationOptions
+	handler *simulations.Server // HTTP handler for the server
+	runC    chan struct{}       // channel where frontend signals it is ready
 }
 
 // ServiceFunc is used in New to declare new service constructor.
@@ -124,12 +123,12 @@ type Result struct {
 // Run calls the RunFunc function while taking care of
 // cancellation provided through the Context.
 func (s *Simulation) Run(ctx context.Context, f RunFunc) (r Result) {
-	//if the option is set to run a HTTP server with the simulation,
-	//init the server and start it
+	// if the option is set to run a HTTP server with the simulation,
+	// init the server and start it
 	start := time.Now()
 	if s.httpSrv != nil {
 		log.Info("Waiting for frontend to be ready...(send POST /runsim to HTTP server)")
-		//wait for the frontend to connect
+		// wait for the frontend to connect
 		select {
 		case <-s.runC:
 		case <-ctx.Done():

@@ -18,13 +18,9 @@
 
 package fuse
 
-import (
-	"bazil.org/fuse/fs"
-)
+import "bazil.org/fuse/fs"
 
-var (
-	_ fs.Node = (*SwarmDir)(nil)
-)
+var _ fs.Node = (*SwarmDir)(nil)
 
 type SwarmRoot struct {
 	root *SwarmDir

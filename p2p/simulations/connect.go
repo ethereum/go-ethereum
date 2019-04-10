@@ -23,9 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-var (
-	ErrNodeNotFound = errors.New("node not found")
-)
+var ErrNodeNotFound = errors.New("node not found")
 
 // ConnectToLastNode connects the node with provided NodeID
 // to the last node that is up, and avoiding connection to self.

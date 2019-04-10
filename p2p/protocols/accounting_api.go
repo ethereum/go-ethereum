@@ -1,8 +1,6 @@
 package protocols
 
-import (
-	"errors"
-)
+import "errors"
 
 // Textual version number of accounting API
 const AccountingVersion = "1.0"

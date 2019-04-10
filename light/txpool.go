@@ -34,10 +34,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const (
-	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
-	chainHeadChanSize = 10
-)
+// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
+const chainHeadChanSize = 10
 
 // txPermanent is the number of mined blocks after a mined transaction is
 // considered permanent and no rollback is expected
@@ -436,7 +434,7 @@ func (pool *TxPool) Add(ctx context.Context, tx *types.Transaction) error {
 	if err := pool.add(ctx, tx); err != nil {
 		return err
 	}
-	//fmt.Println("Send", tx.Hash())
+	// fmt.Println("Send", tx.Hash())
 	pool.relay.Send(types.Transactions{tx})
 
 	pool.chainDb.Put(tx.Hash().Bytes(), data)

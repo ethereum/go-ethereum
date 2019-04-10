@@ -58,9 +58,7 @@ const (
 	hasherCount                = 8
 )
 
-var (
-	addressLength = len(pot.Address{})
-)
+var addressLength = len(pot.Address{})
 
 // cache is used for preventing backwards routing
 // will also be instrumental in flood guard mechanism
@@ -511,7 +509,6 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 	// if a partial address matches we are possible recipient regardless of prox
 	// if not and prox is not set, we are surely not
 	if bytes.Equal(msg.To, local[:len(msg.To)]) {
-
 		return true
 	} else if !prox {
 		return false

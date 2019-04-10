@@ -39,7 +39,7 @@ import (
 )
 
 var (
-	//flag definition for the dumpconfig command
+	// flag definition for the dumpconfig command
 	DumpConfigCommand = cli.Command{
 		Action:      utils.MigrateFlags(dumpConfig),
 		Name:        "dumpconfig",
@@ -50,14 +50,14 @@ var (
 		Description: `The dumpconfig command shows configuration values.`,
 	}
 
-	//flag definition for the config file command
+	// flag definition for the config file command
 	SwarmTomlConfigPathFlag = cli.StringFlag{
 		Name:  "config",
 		Usage: "TOML configuration file",
 	}
 )
 
-//constants for environment variables
+// constants for environment variables
 const (
 	SwarmEnvChequebookAddr       = "SWARM_CHEQUEBOOK_ADDR"
 	SwarmEnvAccount              = "SWARM_ACCOUNT"
@@ -103,49 +103,49 @@ var tomlSettings = toml.Config{
 	},
 }
 
-//before booting the swarm node, build the configuration
+// before booting the swarm node, build the configuration
 func buildConfig(ctx *cli.Context) (config *bzzapi.Config, err error) {
-	//start by creating a default config
+	// start by creating a default config
 	config = bzzapi.NewConfig()
-	//first load settings from config file (if provided)
+	// first load settings from config file (if provided)
 	config, err = configFileOverride(config, ctx)
 	if err != nil {
 		return nil, err
 	}
-	//override settings provided by environment variables
+	// override settings provided by environment variables
 	config = envVarsOverride(config)
-	//override settings provided by command line
+	// override settings provided by command line
 	config = cmdLineOverride(config, ctx)
-	//validate configuration parameters
+	// validate configuration parameters
 	err = validateConfig(config)
 
 	return
 }
 
-//finally, after the configuration build phase is finished, initialize
+// finally, after the configuration build phase is finished, initialize
 func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context, nodeconfig *node.Config) error {
-	//at this point, all vars should be set in the Config
-	//get the account for the provided swarm account
+	// at this point, all vars should be set in the Config
+	// get the account for the provided swarm account
 	prvkey := getAccount(config.BzzAccount, ctx, stack)
-	//set the resolved config path (geth --datadir)
+	// set the resolved config path (geth --datadir)
 	config.Path = expandPath(stack.InstanceDir())
-	//finally, initialize the configuration
+	// finally, initialize the configuration
 	err := config.Init(prvkey, nodeconfig.NodeKey())
 	if err != nil {
 		return err
 	}
-	//configuration phase completed here
+	// configuration phase completed here
 	log.Debug("Starting Swarm with the following parameters:")
-	//after having created the config, print it to screen
+	// after having created the config, print it to screen
 	log.Debug(printConfig(config))
 	return nil
 }
 
-//configFileOverride overrides the current config with the config file, if a config file has been provided
+// configFileOverride overrides the current config with the config file, if a config file has been provided
 func configFileOverride(config *bzzapi.Config, ctx *cli.Context) (*bzzapi.Config, error) {
 	var err error
 
-	//only do something if the -config flag has been set
+	// only do something if the -config flag has been set
 	if ctx.GlobalIsSet(SwarmTomlConfigPathFlag.Name) {
 		var filepath string
 		if filepath = ctx.GlobalString(SwarmTomlConfigPathFlag.Name); filepath == "" {
@@ -158,9 +158,9 @@ func configFileOverride(config *bzzapi.Config, ctx *cli.Context) (*bzzapi.Config
 		}
 		defer f.Close()
 
-		//decode the TOML file into a Config struct
-		//note that we are decoding into the existing defaultConfig;
-		//if an entry is not present in the file, the default entry is kept
+		// decode the TOML file into a Config struct
+		// note that we are decoding into the existing defaultConfig;
+		// if an entry is not present in the file, the default entry is kept
 		err = tomlSettings.NewDecoder(f).Decode(&config)
 		// Add file name to errors that have a line number.
 		if _, ok := err.(*toml.LineError); ok {
@@ -272,7 +272,6 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 	}
 
 	return currentConfig
-
 }
 
 // envVarsOverride overrides the current config with whatver is provided in environment variables
@@ -408,7 +407,7 @@ func dumpConfig(ctx *cli.Context) error {
 	return nil
 }
 
-//validate configuration parameters
+// validate configuration parameters
 func validateConfig(cfg *bzzapi.Config) (err error) {
 	for _, ensAPI := range cfg.EnsAPIs {
 		if ensAPI != "" {
@@ -420,7 +419,7 @@ func validateConfig(cfg *bzzapi.Config) (err error) {
 	return nil
 }
 
-//validate EnsAPIs configuration parameter
+// validate EnsAPIs configuration parameter
 func validateEnsAPIs(s string) (err error) {
 	// missing contract address
 	if strings.HasPrefix(s, "@") {
@@ -441,7 +440,7 @@ func validateEnsAPIs(s string) (err error) {
 	return nil
 }
 
-//print a Config as string
+// print a Config as string
 func printConfig(config *bzzapi.Config) string {
 	out, err := tomlSettings.Marshal(&config)
 	if err != nil {

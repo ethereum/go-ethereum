@@ -382,6 +382,7 @@ func (t *discoverTask) String() string {
 func (t waitExpireTask) Do(*Server) {
 	time.Sleep(t.Duration)
 }
+
 func (t waitExpireTask) String() string {
 	return fmt.Sprintf("wait for dial hist expire (%v)", t.Duration)
 }
@@ -390,10 +391,11 @@ func (t waitExpireTask) String() string {
 func (h dialHistory) min() pastDial {
 	return h[0]
 }
+
 func (h *dialHistory) add(id enode.ID, exp time.Time) {
 	heap.Push(h, pastDial{id, exp})
-
 }
+
 func (h *dialHistory) remove(id enode.ID) bool {
 	for i, v := range *h {
 		if v.id == id {
@@ -403,6 +405,7 @@ func (h *dialHistory) remove(id enode.ID) bool {
 	}
 	return false
 }
+
 func (h dialHistory) contains(id enode.ID) bool {
 	for _, v := range h {
 		if v.id == id {
@@ -411,6 +414,7 @@ func (h dialHistory) contains(id enode.ID) bool {
 	}
 	return false
 }
+
 func (h *dialHistory) expire(now time.Time) {
 	for h.Len() > 0 && h.min().exp.Before(now) {
 		heap.Pop(h)
@@ -424,6 +428,7 @@ func (h dialHistory) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
 func (h *dialHistory) Push(x interface{}) {
 	*h = append(*h, x.(pastDial))
 }
+
 func (h *dialHistory) Pop() interface{} {
 	old := *h
 	n := len(old)

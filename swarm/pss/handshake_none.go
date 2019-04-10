@@ -18,9 +18,7 @@
 
 package pss
 
-const (
-	IsActiveHandshake = false
-)
+const IsActiveHandshake = false
 
 func NewHandshakeParams() interface{} {
 	return nil

@@ -34,7 +34,6 @@ func TestHandshake(t *testing.T) {
 }
 
 func testHandshake(t *testing.T) {
-
 	// how much of the address we will use
 	useHandshake = true
 	var addrsize int64

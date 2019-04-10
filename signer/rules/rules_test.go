@@ -77,6 +77,7 @@ type alwaysDenyUI struct{}
 func (alwaysDenyUI) OnInputRequired(info core.UserInputRequest) (core.UserInputResponse, error) {
 	return core.UserInputResponse{}, nil
 }
+
 func (alwaysDenyUI) RegisterUIServer(api *core.UIServerAPI) {
 }
 
@@ -151,7 +152,6 @@ func TestListRequest(t *testing.T) {
 }
 
 func TestSignTxRequest(t *testing.T) {
-
 	js := `
 	function ApproveTx(r){
 		console.log("transaction.from", r.transaction.from);
@@ -182,7 +182,8 @@ func TestSignTxRequest(t *testing.T) {
 	resp, err := r.ApproveTx(&core.SignTxRequest{
 		Transaction: core.SendTxArgs{
 			From: *from,
-			To:   to},
+			To:   to,
+		},
 		Callinfo: nil,
 		Meta:     core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
 	})
@@ -242,9 +243,8 @@ func (d *dummyUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 func (d *dummyUI) OnSignerStartup(info core.StartupInfo) {
 }
 
-//TestForwarding tests that the rule-engine correctly dispatches requests to the next caller
+// TestForwarding tests that the rule-engine correctly dispatches requests to the next caller
 func TestForwarding(t *testing.T) {
-
 	js := ""
 	ui := &dummyUI{make([]string, 0)}
 	jsBackend := storage.NewEphemeralStorage()
@@ -262,16 +262,13 @@ func TestForwarding(t *testing.T) {
 	r.ShowError("test")
 	r.ShowInfo("test")
 
-	//This one is not forwarded
+	// This one is not forwarded
 	r.OnApprovedTx(ethapi.SignTransactionResult{})
 
 	expCalls := 6
 	if len(ui.calls) != expCalls {
-
 		t.Errorf("Expected %d forwarded calls, got %d: %s", expCalls, len(ui.calls), strings.Join(ui.calls, ","))
-
 	}
-
 }
 
 func TestMissingFunc(t *testing.T) {
@@ -295,10 +292,9 @@ func TestMissingFunc(t *testing.T) {
 		t.Errorf("Expected missing method to cause non-approval")
 	}
 	fmt.Printf("Err %v", err)
-
 }
-func TestStorage(t *testing.T) {
 
+func TestStorage(t *testing.T) {
 	js := `
 	function testStorage(){
 		storage.Put("mykey", "myvalue")
@@ -348,7 +344,6 @@ func TestStorage(t *testing.T) {
 		t.Errorf("Unexpected data, expected '%v', got '%v'", exp, retval)
 	}
 	fmt.Printf("Err %v", err)
-
 }
 
 const ExampleTxWindow = `
@@ -426,7 +421,6 @@ const ExampleTxWindow = `
 `
 
 func dummyTx(value hexutil.Big) *core.SignTxRequest {
-
 	to, _ := mixAddr("000000000000000000000000000000000000dead")
 	from, _ := mixAddr("000000000000000000000000000000000000dead")
 	n := hexutil.Uint64(3)
@@ -448,22 +442,22 @@ func dummyTx(value hexutil.Big) *core.SignTxRequest {
 		Meta: core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
 	}
 }
-func dummyTxWithV(value uint64) *core.SignTxRequest {
 
+func dummyTxWithV(value uint64) *core.SignTxRequest {
 	v := big.NewInt(0).SetUint64(value)
 	h := hexutil.Big(*v)
 	return dummyTx(h)
 }
+
 func dummySigned(value *big.Int) *types.Transaction {
 	to := common.HexToAddress("000000000000000000000000000000000000dead")
 	gas := uint64(21000)
 	gasPrice := big.NewInt(2000000)
 	data := make([]byte, 0)
 	return types.NewTransaction(3, to, value, gas, gasPrice, data)
-
 }
-func TestLimitWindow(t *testing.T) {
 
+func TestLimitWindow(t *testing.T) {
 	r, err := initRuleEngine(ExampleTxWindow)
 	if err != nil {
 		t.Errorf("Couldn't create evaluator %v", err)
@@ -496,7 +490,6 @@ func TestLimitWindow(t *testing.T) {
 	if resp.Approved {
 		t.Errorf("Expected check to resolve to 'Reject'")
 	}
-
 }
 
 // dontCallMe is used as a next-handler that does not want to be called - it invokes test failure
@@ -508,6 +501,7 @@ func (d *dontCallMe) OnInputRequired(info core.UserInputRequest) (core.UserInput
 	d.t.Fatalf("Did not expect next-handler to be called")
 	return core.UserInputResponse{}, nil
 }
+
 func (d *dontCallMe) RegisterUIServer(api *core.UIServerAPI) {
 }
 
@@ -546,11 +540,10 @@ func (d *dontCallMe) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	d.t.Fatalf("Did not expect next-handler to be called")
 }
 
-//TestContextIsCleared tests that the rule-engine does not retain variables over several requests.
+// TestContextIsCleared tests that the rule-engine does not retain variables over several requests.
 // if it does, that would be bad since developers may rely on that to store data,
 // instead of using the disk-based data storage
 func TestContextIsCleared(t *testing.T) {
-
 	js := `
 	function ApproveTx(){
 		if (typeof foobar == 'undefined') {
@@ -582,7 +575,6 @@ func TestContextIsCleared(t *testing.T) {
 }
 
 func TestSignData(t *testing.T) {
-
 	js := `function ApproveListing(){
     return "Approve"
 }

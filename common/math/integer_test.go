@@ -16,9 +16,7 @@
 
 package math
 
-import (
-	"testing"
-)
+import "testing"
 
 type operation byte
 

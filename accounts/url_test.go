@@ -16,9 +16,7 @@
 
 package accounts
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestURLParsing(t *testing.T) {
 	url, err := parseURL("https://ethereum.org")

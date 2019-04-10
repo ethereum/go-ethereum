@@ -35,9 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
-var (
-	BucketKeyBzzPrivateKey BucketKey = "bzzprivkey"
-)
+var BucketKeyBzzPrivateKey BucketKey = "bzzprivkey"
 
 // NodeIDs returns NodeIDs for all nodes in the network.
 func (s *Simulation) NodeIDs() (ids []enode.ID) {
@@ -245,8 +243,8 @@ func (s *Simulation) UploadSnapshot(ctx context.Context, snapshotFile string, op
 		return err
 	}
 
-	//the snapshot probably has the property EnableMsgEvents not set
-	//set it to true (we need this to wait for messages before uploading)
+	// the snapshot probably has the property EnableMsgEvents not set
+	// set it to true (we need this to wait for messages before uploading)
 	for i := range snap.Nodes {
 		snap.Nodes[i].Node.Config.EnableMsgEvents = true
 		snap.Nodes[i].Node.Config.Services = s.serviceNames

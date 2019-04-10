@@ -32,9 +32,7 @@ particularly the notion of singular endpoints.
 
 package whisperv6
 
-import (
-	"time"
-)
+import "time"
 
 // Whisper protocol parameters
 const (

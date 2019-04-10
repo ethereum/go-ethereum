@@ -34,9 +34,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
-type (
-	NewNetFetcherFunc func(ctx context.Context, addr Address, peers *sync.Map) NetFetcher
-)
+type NewNetFetcherFunc func(ctx context.Context, addr Address, peers *sync.Map) NetFetcher
 
 type NetFetcher interface {
 	Request(hopCount uint8)

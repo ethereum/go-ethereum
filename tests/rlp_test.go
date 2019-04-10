@@ -16,9 +16,7 @@
 
 package tests
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestRLP(t *testing.T) {
 	t.Parallel()

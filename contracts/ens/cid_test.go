@@ -64,8 +64,8 @@ func TestEIPSpecCidDecode(t *testing.T) {
 	if !bytes.Equal(hashBytes, decodedHashBytes) {
 		t.Fatal("should be equal")
 	}
-
 }
+
 func TestManualCidDecode(t *testing.T) {
 	// call cid encode method with hash. expect byte slice returned, compare according to spec
 

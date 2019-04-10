@@ -27,9 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var (
-	zerosBin = Address{}.Bin()
-)
+var zerosBin = Address{}.Bin()
 
 // Address is an alias for common.Hash
 type Address common.Hash

@@ -1098,9 +1098,9 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	defer bc.blockProcFeed.Send(false)
 
 	// Remove already known canon-blocks
-	var (
-		block, prev *types.Block
-	)
+
+	var block, prev *types.Block
+
 	// Do a sanity check that the provided chain is actually ordered and linked
 	for i := 1; i < len(chain); i++ {
 		block = chain[i]

@@ -42,7 +42,6 @@ import (
 		* If all kademlias are healthy, the test succeeded, otherwise it failed
 */
 func TestWaitTillHealthy(t *testing.T) {
-
 	testNodesNum := 10
 
 	// create the first simulation
@@ -58,9 +57,9 @@ func TestWaitTillHealthy(t *testing.T) {
 	var addrs [][]byte
 	// iterate once to be able to build the peer map
 	for _, node := range nodeIDs {
-		//get the kademlia overlay address from this ID
+		// get the kademlia overlay address from this ID
 		a := node.Bytes()
-		//append it to the array of all overlay addresses
+		// append it to the array of all overlay addresses
 		addrs = append(addrs, a)
 	}
 	// build a PeerPot only once
@@ -111,7 +110,7 @@ func TestWaitTillHealthy(t *testing.T) {
 		// get its base address
 		kid := common.Bytes2Hex(kad.BaseAddr())
 
-		//get the health info
+		// get the health info
 		info := kad.GetHealthInfo(pp[kid])
 		log.Trace("Health info", "info", info)
 		// check that it is healthy

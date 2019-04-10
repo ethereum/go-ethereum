@@ -239,7 +239,7 @@ func (tc *TreeChunker) Split(ctx context.Context) (k Address, wait func(context.
 	key := make([]byte, tc.hashSize)
 	// this waitgroup member is released after the root hash is calculated
 	tc.wg.Add(1)
-	//launch actual recursive function passing the waitgroups
+	// launch actual recursive function passing the waitgroups
 	go tc.split(ctx, depth, treeSize/tc.branches, key, tc.dataSize, tc.wg)
 
 	// closes internal error channel if all subprocesses in the workgroup finished
@@ -264,7 +264,6 @@ func (tc *TreeChunker) Split(ctx context.Context) (k Address, wait func(context.
 }
 
 func (tc *TreeChunker) split(ctx context.Context, depth int, treeSize int64, addr Address, size int64, parentWg *sync.WaitGroup) {
-
 	//
 
 	for depth > 0 && size < treeSize {
@@ -326,7 +325,6 @@ func (tc *TreeChunker) split(ctx context.Context, depth int, treeSize int64, add
 	worker := tc.getWorkerCount()
 	if int64(len(tc.jobC)) > worker && worker < ChunkProcessors {
 		tc.runWorker(ctx)
-
 	}
 	select {
 	case tc.jobC <- &hashJob{addr, chunk, size, parentWg}:
@@ -555,7 +553,7 @@ func (r *LazyChunkReader) join(ctx context.Context, b []byte, off int64, eoff in
 			}
 			r.join(ctx, b[soff-off:seoff-off], soff-roff, seoff-roff, depth-1, treeSize/r.branches, chunkData, wg, errC, quitC)
 		}(i)
-	} //for
+	} // for
 }
 
 // Read keeps a cursor so cannot be called simulateously, see ReadAt
@@ -595,7 +593,7 @@ func (r *LazyChunkReader) Seek(offset int64, whence int) (int64, error) {
 		offset += r.off
 	case 2:
 
-		if r.chunkData == nil { //seek from the end requires rootchunk for size. call Size first
+		if r.chunkData == nil { // seek from the end requires rootchunk for size. call Size first
 			_, err := r.Size(cctx, nil)
 			if err != nil {
 				return 0, fmt.Errorf("can't get size: %v", err)

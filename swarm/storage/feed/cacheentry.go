@@ -42,7 +42,7 @@ func (r *cacheEntry) Size(ctx context.Context, _ chan bool) (int64, error) {
 	return int64(len(r.Update.data)), nil
 }
 
-//returns the feed's topic
+// returns the feed's topic
 func (r *cacheEntry) Topic() Topic {
 	return r.Feed.Topic
 }

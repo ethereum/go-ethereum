@@ -51,9 +51,7 @@ const (
 	wAccessCnt = 1 << 2
 )
 
-var (
-	dbEntryCount = metrics.NewRegisteredCounter("ldbstore.entryCnt", nil)
-)
+var dbEntryCount = metrics.NewRegisteredCounter("ldbstore.entryCnt", nil)
 
 var (
 	keyIndex       = byte(0)
@@ -66,9 +64,7 @@ var (
 	keyGCIdx       = byte(9) // access to chunk data index, used by garbage collection in ascending order from first entry
 )
 
-var (
-	ErrDBClosed = errors.New("LDBStore closed")
-)
+var ErrDBClosed = errors.New("LDBStore closed")
 
 type LDBStoreParams struct {
 	*StoreParams
@@ -201,7 +197,6 @@ func (s *LDBStore) MarkAccessed(addr Address) {
 
 // initialize and set values for processing of gc round
 func (s *LDBStore) startGC(c int) {
-
 	s.gc.count = 0
 	// calculate the target number of deletions
 	if c >= s.gc.maxRound {
@@ -852,7 +847,6 @@ func (s *LDBStore) writeBatches() {
 			}
 		}
 	}
-
 }
 
 func (s *LDBStore) writeCurrentBatch() error {

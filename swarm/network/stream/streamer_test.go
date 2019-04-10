@@ -641,7 +641,6 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 	case <-timeout2.C:
 		t.Fatal("timeout waiting batchdone call")
 	}
-
 }
 
 func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
@@ -936,7 +935,7 @@ func TestMaxPeerServersWithoutUnsubscribe(t *testing.T) {
 	}
 }
 
-//TestHasPriceImplementation is to check that the Registry has a
+// TestHasPriceImplementation is to check that the Registry has a
 //`Price` interface implementation
 func TestHasPriceImplementation(t *testing.T) {
 	_, r, _, teardown, err := newStreamerTester(&RegistryOptions{
@@ -1059,7 +1058,7 @@ func TestRequestPeerSubscriptions(t *testing.T) {
 
 	// simulate that we would do subscriptions: just store the bin numbers
 	fakeSubscriptions := make(map[string][]int)
-	//after the test, we need to reset the subscriptionFunc to the default
+	// after the test, we need to reset the subscriptionFunc to the default
 	defer func() { subscriptionFunc = doRequestSubscription }()
 	// define the function which should run for each connection
 	// instead of doing real subscriptions, we just store the bin numbers
@@ -1098,7 +1097,7 @@ func TestRequestPeerSubscriptions(t *testing.T) {
 						t.Fatalf("Did not get expected subscription for bin < depth; bin of peer %s: %d, subscription: %d", peer, bin, subbin)
 					}
 				}
-			} else { //if the peer's bin is equal or higher than the kademlia depth...
+			} else { // if the peer's bin is equal or higher than the kademlia depth...
 				// (iterate all (fake) subscriptions)
 				for i, subbin := range fakeSubsForPeer {
 					// ...each bin from the peer's bin number up to k.MaxProxDisplay should be "subscribed"
@@ -1180,7 +1179,6 @@ starts the simulation, waits for SyncUpdateDelay in order to kick off
 stream registration, then tests that there are subscriptions.
 */
 func TestGetSubscriptionsRPC(t *testing.T) {
-
 	if testutil.RaceEnabled && os.Getenv("TRAVIS") == "true" {
 		t.Skip("flaky with -race on Travis")
 		// Note: related ticket https://github.com/ethersphere/go-ethereum/issues/1234
@@ -1227,7 +1225,7 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 			// configure so that sync registrations actually happen
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				Retrieval:       RetrievalEnabled,
-				Syncing:         SyncingAutoSubscribe, //enable sync registrations
+				Syncing:         SyncingAutoSubscribe, // enable sync registrations
 				SyncUpdateDelay: syncUpdateDelay,
 			}, nil)
 
@@ -1272,7 +1270,7 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 	// or times out after 1 second, which signals that we are not receiving
 	// any new subscriptions any more
 	go func() {
-		//for long running sims, waiting 1 sec will not be enough
+		// for long running sims, waiting 1 sec will not be enough
 		waitDuration := 1 * time.Second
 		if *longrunning {
 			waitDuration = 3 * time.Second
@@ -1297,12 +1295,12 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 		}
 	}()
 
-	//run the simulation
+	// run the simulation
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		log.Info("Simulation running")
 		nodes := sim.Net.Nodes
 
-		//wait until all subscriptions are done
+		// wait until all subscriptions are done
 		select {
 		case <-allSubscriptionsDone:
 		case <-ctx.Done():
@@ -1310,22 +1308,22 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 		}
 
 		log.Debug("Expected message count: ", "expectedMsgCount", expectedMsgCount.count())
-		//now iterate again, this time we call each node via RPC to get its subscriptions
+		// now iterate again, this time we call each node via RPC to get its subscriptions
 		realCount := 0
 		for _, node := range nodes {
-			//create rpc client
+			// create rpc client
 			client, err := node.Client()
 			if err != nil {
 				return fmt.Errorf("create node 1 rpc client fail: %v", err)
 			}
 
-			//ask it for subscriptions
+			// ask it for subscriptions
 			pstreams := make(map[string][]string)
 			err = client.Call(&pstreams, "stream_getPeerSubscriptions")
 			if err != nil {
 				return fmt.Errorf("client call stream_getPeerSubscriptions: %v", err)
 			}
-			//length of the subscriptions can not be smaller than number of peers
+			// length of the subscriptions can not be smaller than number of peers
 			log.Debug("node subscriptions", "node", node.String())
 			for p, ps := range pstreams {
 				log.Debug("... with", "peer", p)

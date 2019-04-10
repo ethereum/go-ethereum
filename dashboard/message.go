@@ -16,9 +16,7 @@
 
 package dashboard
 
-import (
-	"encoding/json"
-)
+import "encoding/json"
 
 type Message struct {
 	General *GeneralMessage `json:"general,omitempty"`

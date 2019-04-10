@@ -187,7 +187,7 @@ func (tab *Table) closest(target common.Hash, nresults int) *nodesByDistance {
 // bucket has space available, adding the node succeeds immediately.
 // Otherwise, the node is added to the replacement cache for the bucket.
 func (tab *Table) add(n *Node) (contested *Node) {
-	//fmt.Println("add", n.addr().String(), n.ID.String(), n.sha.Hex())
+	// fmt.Println("add", n.addr().String(), n.ID.String(), n.sha.Hex())
 	if n.ID == tab.self.ID {
 		return
 	}
@@ -244,7 +244,7 @@ outer:
 // delete removes an entry from the node table (used to evacuate
 // failed/non-bonded discovery peers).
 func (tab *Table) delete(node *Node) {
-	//fmt.Println("delete", node.addr().String(), node.ID.String(), node.sha.Hex())
+	// fmt.Println("delete", node.addr().String(), node.ID.String(), node.sha.Hex())
 	bucket := tab.buckets[logdist(tab.self.sha, node.sha)]
 	for i := range bucket.entries {
 		if bucket.entries[i].ID == node.ID {

@@ -62,7 +62,6 @@ type testResponse struct {
 }
 
 func checkResponse(t *testing.T, resp *testResponse, exp *Response) {
-
 	if resp.MimeType != exp.MimeType {
 		t.Errorf("incorrect mimeType. expected '%s', got '%s'", exp.MimeType, resp.MimeType)
 	}
@@ -157,6 +156,7 @@ func (t *testResolveValidator) Resolve(addr string) (common.Hash, error) {
 func (t *testResolveValidator) Owner(node [32]byte) (addr common.Address, err error) {
 	return
 }
+
 func (t *testResolveValidator) HeaderByNumber(context.Context, *big.Int) (header *types.Header, err error) {
 	return
 }
@@ -496,7 +496,6 @@ func TestDetectContentType(t *testing.T) {
 			if detected != tc.expectedContentType {
 				t.Fatalf("File: %s, Expected mime type %s, got %s", tc.file, tc.expectedContentType, detected)
 			}
-
 		})
 	}
 }

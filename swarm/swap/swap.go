@@ -33,9 +33,9 @@ import (
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	stateStore state.Store        //stateStore is needed in order to keep balances across sessions
-	lock       sync.RWMutex       //lock the balances
-	balances   map[enode.ID]int64 //map of balances for each peer
+	stateStore state.Store        // stateStore is needed in order to keep balances across sessions
+	lock       sync.RWMutex       // lock the balances
+	balances   map[enode.ID]int64 // map of balances for each peer
 }
 
 // New - swap constructor
@@ -47,21 +47,21 @@ func New(stateStore state.Store) (swap *Swap) {
 	return
 }
 
-//Swap implements the protocols.Balance interface
-//Add is the (sole) accounting function
+// Swap implements the protocols.Balance interface
+// Add is the (sole) accounting function
 func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	//load existing balances from the state store
+	// load existing balances from the state store
 	err = s.loadState(peer)
 	if err != nil && err != state.ErrNotFound {
 		return
 	}
-	//adjust the balance
-	//if amount is negative, it will decrease, otherwise increase
+	// adjust the balance
+	// if amount is negative, it will decrease, otherwise increase
 	s.balances[peer.ID()] += amount
-	//save the new balance to the state store
+	// save the new balance to the state store
 	peerBalance := s.balances[peer.ID()]
 	err = s.stateStore.Put(peer.ID().String(), &peerBalance)
 
@@ -69,7 +69,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	return err
 }
 
-//GetPeerBalance returns the balance for a given peer
+// GetPeerBalance returns the balance for a given peer
 func (swap *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 	swap.lock.RLock()
 	defer swap.lock.RUnlock()
@@ -79,12 +79,12 @@ func (swap *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 	return 0, errors.New("Peer not found")
 }
 
-//load balances from the state store (persisted)
+// load balances from the state store (persisted)
 func (s *Swap) loadState(peer *protocols.Peer) (err error) {
 	var peerBalance int64
 	peerID := peer.ID()
-	//only load if the current instance doesn't already have this peer's
-	//balance in memory
+	// only load if the current instance doesn't already have this peer's
+	// balance in memory
 	if _, ok := s.balances[peerID]; !ok {
 		err = s.stateStore.Get(peerID.String(), &peerBalance)
 		s.balances[peerID] = peerBalance
@@ -92,7 +92,7 @@ func (s *Swap) loadState(peer *protocols.Peer) (err error) {
 	return
 }
 
-//Clean up Swap
+// Clean up Swap
 func (swap *Swap) Close() {
 	swap.stateStore.Close()
 }

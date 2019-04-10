@@ -72,7 +72,6 @@ func (f *fakeTimeProvider) Now() Timestamp {
 
 // make updates and retrieve them based on periods and versions
 func TestFeedsHandler(t *testing.T) {
-
 	// make fake timeProvider
 	clock := &fakeTimeProvider{
 		currentTime: startTime.Time, // clock starts at t=4200
@@ -236,7 +235,6 @@ func TestFeedsHandler(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected previous to fail, returned epoch %s data %v", update.Epoch.String(), update.data)
 	}
-
 }
 
 const Day = 60 * 60 * 24
@@ -248,7 +246,6 @@ func generateData(x uint64) []byte {
 }
 
 func TestSparseUpdates(t *testing.T) {
-
 	// make fake timeProvider
 	timeProvider := &fakeTimeProvider{
 		currentTime: startTime.Time,
@@ -330,7 +327,6 @@ func TestSparseUpdates(t *testing.T) {
 }
 
 func TestValidator(t *testing.T) {
-
 	// make fake timeProvider
 	timeProvider := &fakeTimeProvider{
 		currentTime: startTime.Time,
@@ -384,7 +380,6 @@ func TestValidator(t *testing.T) {
 // there is some redundancy in this test as it also tests content addressed chunks,
 // which should be evaluated as invalid chunks by this validator
 func TestValidatorInStore(t *testing.T) {
-
 	// make fake timeProvider
 	TimestampProvider = &fakeTimeProvider{
 		currentTime: startTime.Time,
@@ -425,7 +420,8 @@ func TestValidatorInStore(t *testing.T) {
 
 	// create a feed update chunk with correct publickey
 	id := ID{
-		Epoch: lookup.Epoch{Time: 42,
+		Epoch: lookup.Epoch{
+			Time:  42,
 			Level: 1,
 		},
 		Feed: fd,
@@ -463,7 +459,6 @@ func TestValidatorInStore(t *testing.T) {
 
 // create rpc and feeds Handler
 func setupTest(timeProvider timestampProvider, signer Signer) (fh *TestHandler, datadir string, teardown func(), err error) {
-
 	var fsClean func()
 	var rpcClean func()
 	cleanF = func() {

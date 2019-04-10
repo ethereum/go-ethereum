@@ -2,9 +2,7 @@
 
 package prque
 
-import (
-	"container/heap"
-)
+import "container/heap"
 
 // Priority queue data structure.
 type Prque struct {

@@ -24,65 +24,65 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-//dummy Balance implementation
+// dummy Balance implementation
 type dummyBalance struct {
 	amount int64
 	peer   *Peer
 }
 
-//dummy Prices implementation
+// dummy Prices implementation
 type dummyPrices struct{}
 
-//a dummy message which needs size based accounting
-//sender pays
+// a dummy message which needs size based accounting
+// sender pays
 type perBytesMsgSenderPays struct {
 	Content string
 }
 
-//a dummy message which needs size based accounting
-//receiver pays
+// a dummy message which needs size based accounting
+// receiver pays
 type perBytesMsgReceiverPays struct {
 	Content string
 }
 
-//a dummy message which is paid for per unit
-//sender pays
+// a dummy message which is paid for per unit
+// sender pays
 type perUnitMsgSenderPays struct{}
 
-//receiver pays
+// receiver pays
 type perUnitMsgReceiverPays struct{}
 
-//a dummy message which has zero as its price
+// a dummy message which has zero as its price
 type zeroPriceMsg struct{}
 
-//a dummy message which has no accounting
+// a dummy message which has no accounting
 type nilPriceMsg struct{}
 
-//return the price for the defined messages
+// return the price for the defined messages
 func (d *dummyPrices) Price(msg interface{}) *Price {
 	switch msg.(type) {
-	//size based message cost, receiver pays
+	// size based message cost, receiver pays
 	case *perBytesMsgReceiverPays:
 		return &Price{
 			PerByte: true,
 			Value:   uint64(100),
 			Payer:   Receiver,
 		}
-	//size based message cost, sender pays
+	// size based message cost, sender pays
 	case *perBytesMsgSenderPays:
 		return &Price{
 			PerByte: true,
 			Value:   uint64(100),
 			Payer:   Sender,
 		}
-		//unitary cost, receiver pays
+		// unitary cost, receiver pays
 	case *perUnitMsgReceiverPays:
 		return &Price{
 			PerByte: false,
 			Value:   uint64(99),
 			Payer:   Receiver,
 		}
-		//unitary cost, sender pays
+		// unitary cost, sender pays
 	case *perUnitMsgSenderPays:
 		return &Price{
 			PerByte: false,
@@ -101,7 +101,7 @@ func (d *dummyPrices) Price(msg interface{}) *Price {
 	return nil
 }
 
-//dummy accounting implementation, only stores values for later check
+// dummy accounting implementation, only stores values for later check
 func (d *dummyBalance) Add(amount int64, peer *Peer) error {
 	d.amount = amount
 	d.peer = peer
@@ -115,20 +115,20 @@ type testCase struct {
 	recvResult int64
 }
 
-//lowest level unit test
+// lowest level unit test
 func TestBalance(t *testing.T) {
-	//create instances
+	// create instances
 	balance := &dummyBalance{}
 	prices := &dummyPrices{}
-	//create the spec
+	// create the spec
 	spec := createTestSpec()
-	//create the accounting hook for the spec
+	// create the accounting hook for the spec
 	acc := NewAccounting(balance, prices)
-	//create a peer
+	// create a peer
 	id := adapters.RandomNodeConfig().ID
 	p := p2p.NewPeer(id, "testPeer", nil)
 	peer := NewPeer(p, &dummyRW{}, spec)
-	//price depends on size, receiver pays
+	// price depends on size, receiver pays
 	msg := &perBytesMsgReceiverPays{Content: "testBalance"}
 	size, _ := rlp.EncodeToBytes(msg)
 
@@ -178,7 +178,7 @@ func checkAccountingTestCases(t *testing.T, cases []testCase, acc *Accounting, p
 	for _, c := range cases {
 		var err error
 		var expectedResult int64
-		//reset balance before every check
+		// reset balance before every check
 		balance.amount = 0
 		if send {
 			err = acc.Send(peer, c.size, c.msg)
@@ -204,7 +204,7 @@ func checkResults(t *testing.T, err error, balance *dummyBalance, peer *Peer, re
 	}
 }
 
-//create a test spec
+// create a test spec
 func createTestSpec() *Spec {
 	spec := &Spec{
 		Name:       "test",

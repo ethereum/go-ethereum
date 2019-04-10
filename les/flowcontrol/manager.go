@@ -281,7 +281,6 @@ func (cm *ClientManager) updateNodeRc(node *ClientNode, bvc int64, params *Serve
 		cm.updateCapFactor(now, true)
 		cm.sumRecharge = sumRecharge
 	}
-
 }
 
 // updateCapFactor updates the total capacity factor. The capacity factor allows

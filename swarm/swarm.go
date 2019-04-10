@@ -349,8 +349,8 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	newaddr := s.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 	// set chequebook
-	//TODO: Currently if swap is enabled and no chequebook (or inexistent) contract is provided, the node would crash.
-	//Once we integrate back the contracts, this check MUST be revisited
+	// TODO: Currently if swap is enabled and no chequebook (or inexistent) contract is provided, the node would crash.
+	// Once we integrate back the contracts, this check MUST be revisited
 	if s.config.SwapEnabled && s.config.SwapAPI != "" {
 		ctx := context.Background() // The initial setup has no deadline.
 		err := s.SetChequebook(ctx)
@@ -480,7 +480,6 @@ func (s *Swarm) Protocols() (protos []p2p.Protocol) {
 // implements node.Service
 // APIs returns the RPC API descriptors the Swarm implementation offers
 func (s *Swarm) APIs() []rpc.API {
-
 	apis := []rpc.API{
 		// public APIs
 		{

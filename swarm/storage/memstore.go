@@ -29,8 +29,8 @@ type MemStore struct {
 	disabled bool
 }
 
-//NewMemStore is instantiating a MemStore cache keeping all frequently requested
-//chunks in the `cache` LRU cache.
+// NewMemStore is instantiating a MemStore cache keeping all frequently requested
+// chunks in the `cache` LRU cache.
 func NewMemStore(params *StoreParams, _ *LDBStore) (m *MemStore) {
 	if params.CacheCapacity == 0 {
 		return &MemStore{

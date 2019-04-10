@@ -192,9 +192,9 @@ func (_ENSRegistry *ENSRegistryTransactorRaw) Transact(opts *bind.TransactOpts, 
 //
 // Solidity: function owner(bytes32 node) constant returns(address)
 func (_ENSRegistry *ENSRegistryCaller) Owner(opts *bind.CallOpts, node [32]byte) (common.Address, error) {
-	var (
-		ret0 = new(common.Address)
-	)
+
+	var ret0 = new(common.Address)
+
 	out := ret0
 	err := _ENSRegistry.contract.Call(opts, out, "owner", node)
 	return *ret0, err
@@ -218,9 +218,9 @@ func (_ENSRegistry *ENSRegistryCallerSession) Owner(node [32]byte) (common.Addre
 //
 // Solidity: function resolver(bytes32 node) constant returns(address)
 func (_ENSRegistry *ENSRegistryCaller) Resolver(opts *bind.CallOpts, node [32]byte) (common.Address, error) {
-	var (
-		ret0 = new(common.Address)
-	)
+
+	var ret0 = new(common.Address)
+
 	out := ret0
 	err := _ENSRegistry.contract.Call(opts, out, "resolver", node)
 	return *ret0, err
@@ -244,9 +244,9 @@ func (_ENSRegistry *ENSRegistryCallerSession) Resolver(node [32]byte) (common.Ad
 //
 // Solidity: function ttl(bytes32 node) constant returns(uint64)
 func (_ENSRegistry *ENSRegistryCaller) Ttl(opts *bind.CallOpts, node [32]byte) (uint64, error) {
-	var (
-		ret0 = new(uint64)
-	)
+
+	var ret0 = new(uint64)
+
 	out := ret0
 	err := _ENSRegistry.contract.Call(opts, out, "ttl", node)
 	return *ret0, err
@@ -429,7 +429,6 @@ type ENSRegistryNewOwner struct {
 //
 // Solidity: event NewOwner(bytes32 indexed node, bytes32 indexed label, address owner)
 func (_ENSRegistry *ENSRegistryFilterer) FilterNewOwner(opts *bind.FilterOpts, node [][32]byte, label [][32]byte) (*ENSRegistryNewOwnerIterator, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -450,7 +449,6 @@ func (_ENSRegistry *ENSRegistryFilterer) FilterNewOwner(opts *bind.FilterOpts, n
 //
 // Solidity: event NewOwner(bytes32 indexed node, bytes32 indexed label, address owner)
 func (_ENSRegistry *ENSRegistryFilterer) WatchNewOwner(opts *bind.WatchOpts, sink chan<- *ENSRegistryNewOwner, node [][32]byte, label [][32]byte) (event.Subscription, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -570,7 +568,6 @@ type ENSRegistryNewResolver struct {
 //
 // Solidity: event NewResolver(bytes32 indexed node, address resolver)
 func (_ENSRegistry *ENSRegistryFilterer) FilterNewResolver(opts *bind.FilterOpts, node [][32]byte) (*ENSRegistryNewResolverIterator, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -587,7 +584,6 @@ func (_ENSRegistry *ENSRegistryFilterer) FilterNewResolver(opts *bind.FilterOpts
 //
 // Solidity: event NewResolver(bytes32 indexed node, address resolver)
 func (_ENSRegistry *ENSRegistryFilterer) WatchNewResolver(opts *bind.WatchOpts, sink chan<- *ENSRegistryNewResolver, node [][32]byte) (event.Subscription, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -703,7 +699,6 @@ type ENSRegistryNewTTL struct {
 //
 // Solidity: event NewTTL(bytes32 indexed node, uint64 ttl)
 func (_ENSRegistry *ENSRegistryFilterer) FilterNewTTL(opts *bind.FilterOpts, node [][32]byte) (*ENSRegistryNewTTLIterator, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -720,7 +715,6 @@ func (_ENSRegistry *ENSRegistryFilterer) FilterNewTTL(opts *bind.FilterOpts, nod
 //
 // Solidity: event NewTTL(bytes32 indexed node, uint64 ttl)
 func (_ENSRegistry *ENSRegistryFilterer) WatchNewTTL(opts *bind.WatchOpts, sink chan<- *ENSRegistryNewTTL, node [][32]byte) (event.Subscription, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -836,7 +830,6 @@ type ENSRegistryTransfer struct {
 //
 // Solidity: event Transfer(bytes32 indexed node, address owner)
 func (_ENSRegistry *ENSRegistryFilterer) FilterTransfer(opts *bind.FilterOpts, node [][32]byte) (*ENSRegistryTransferIterator, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -853,7 +846,6 @@ func (_ENSRegistry *ENSRegistryFilterer) FilterTransfer(opts *bind.FilterOpts, n
 //
 // Solidity: event Transfer(bytes32 indexed node, address owner)
 func (_ENSRegistry *ENSRegistryFilterer) WatchTransfer(opts *bind.WatchOpts, sink chan<- *ENSRegistryTransfer, node [][32]byte) (event.Subscription, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)

@@ -26,14 +26,14 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-//AccountMetrics abstracts away the metrics DB and
-//the reporter to persist metrics
+// AccountMetrics abstracts away the metrics DB and
+// the reporter to persist metrics
 type AccountingMetrics struct {
 	reporter *reporter
 }
 
-//Close will be called when the node is being shutdown
-//for a graceful cleanup
+// Close will be called when the node is being shutdown
+// for a graceful cleanup
 func (am *AccountingMetrics) Close() {
 	close(am.reporter.quit)
 	// wait for reporter loop to finish saving metrics
@@ -46,32 +46,32 @@ func (am *AccountingMetrics) Close() {
 	am.reporter.db.Close()
 }
 
-//reporter is an internal structure used to write p2p accounting related
-//metrics to a LevelDB. It will periodically write the accrued metrics to the DB.
+// reporter is an internal structure used to write p2p accounting related
+// metrics to a LevelDB. It will periodically write the accrued metrics to the DB.
 type reporter struct {
-	reg      metrics.Registry //the registry for these metrics (independent of other metrics)
-	interval time.Duration    //duration at which the reporter will persist metrics
-	db       *leveldb.DB      //the actual DB
-	quit     chan struct{}    //quit the reporter loop
-	done     chan struct{}    //signal that reporter loop is done
+	reg      metrics.Registry // the registry for these metrics (independent of other metrics)
+	interval time.Duration    // duration at which the reporter will persist metrics
+	db       *leveldb.DB      // the actual DB
+	quit     chan struct{}    // quit the reporter loop
+	done     chan struct{}    // signal that reporter loop is done
 }
 
-//NewMetricsDB creates a new LevelDB instance used to persist metrics defined
-//inside p2p/protocols/accounting.go
+// NewMetricsDB creates a new LevelDB instance used to persist metrics defined
+// inside p2p/protocols/accounting.go
 func NewAccountingMetrics(r metrics.Registry, d time.Duration, path string) *AccountingMetrics {
 	var val = make([]byte, 8)
 	var err error
 
-	//Create the LevelDB
+	// Create the LevelDB
 	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
 		log.Error(err.Error())
 		return nil
 	}
 
-	//Check for all defined metrics that there is a value in the DB
-	//If there is, assign it to the metric. This means that the node
-	//has been running before and that metrics have been persisted.
+	// Check for all defined metrics that there is a value in the DB
+	// If there is, assign it to the metric. This means that the node
+	// has been running before and that metrics have been persisted.
 	metricsMap := map[string]metrics.Counter{
 		"account.balance.credit": mBalanceCredit,
 		"account.balance.debit":  mBalanceDebit,
@@ -82,19 +82,19 @@ func NewAccountingMetrics(r metrics.Registry, d time.Duration, path string) *Acc
 		"account.peerdrops":      mPeerDrops,
 		"account.selfdrops":      mSelfDrops,
 	}
-	//iterate the map and get the values
+	// iterate the map and get the values
 	for key, metric := range metricsMap {
 		val, err = db.Get([]byte(key), nil)
-		//until the first time a value is being written,
-		//this will return an error.
-		//it could be beneficial though to log errors later,
-		//but that would require a different logic
+		// until the first time a value is being written,
+		// this will return an error.
+		// it could be beneficial though to log errors later,
+		// but that would require a different logic
 		if err == nil {
 			metric.Inc(int64(binary.BigEndian.Uint64(val)))
 		}
 	}
 
-	//create the reporter
+	// create the reporter
 	rep := &reporter{
 		reg:      r,
 		interval: d,
@@ -103,7 +103,7 @@ func NewAccountingMetrics(r metrics.Registry, d time.Duration, path string) *Acc
 		done:     make(chan struct{}),
 	}
 
-	//run the go routine
+	// run the go routine
 	go rep.run()
 
 	m := &AccountingMetrics{
@@ -113,7 +113,7 @@ func NewAccountingMetrics(r metrics.Registry, d time.Duration, path string) *Acc
 	return m
 }
 
-//run is the goroutine which periodically sends the metrics to the configured LevelDB
+// run is the goroutine which periodically sends the metrics to the configured LevelDB
 func (r *reporter) run() {
 	// signal that the reporter loop is done
 	defer close(r.done)
@@ -123,16 +123,16 @@ func (r *reporter) run() {
 	for {
 		select {
 		case <-intervalTicker.C:
-			//at each tick send the metrics
+			// at each tick send the metrics
 			if err := r.save(); err != nil {
 				log.Error("unable to send metrics to LevelDB", "err", err)
-				//If there is an error in writing, exit the routine; we assume here that the error is
-				//severe and don't attempt to write again.
-				//Also, this should prevent leaking when the node is stopped
+				// If there is an error in writing, exit the routine; we assume here that the error is
+				// severe and don't attempt to write again.
+				// Also, this should prevent leaking when the node is stopped
 				return
 			}
 		case <-r.quit:
-			//graceful shutdown
+			// graceful shutdown
 			if err := r.save(); err != nil {
 				log.Error("unable to send metrics to LevelDB", "err", err)
 			}
@@ -141,15 +141,15 @@ func (r *reporter) run() {
 	}
 }
 
-//send the metrics to the DB
+// send the metrics to the DB
 func (r *reporter) save() error {
-	//create a LevelDB Batch
+	// create a LevelDB Batch
 	batch := leveldb.Batch{}
-	//for each metric in the registry (which is independent)...
+	// for each metric in the registry (which is independent)...
 	r.reg.Each(func(name string, i interface{}) {
 		metric, ok := i.(metrics.Counter)
 		if ok {
-			//assuming every metric here to be a Counter (separate registry)
+			// assuming every metric here to be a Counter (separate registry)
 			//...create a snapshot...
 			ms := metric.Snapshot()
 			byteVal := make([]byte, 8)

@@ -63,7 +63,7 @@ func testConstantTotalCapacity(t *testing.T, nodeCount, maxCapacityNodes, random
 	}
 	m := NewClientManager(PieceWiseLinear{{0, totalCapacity}}, clock)
 	for _, n := range nodes {
-		n.bufLimit = n.capacity * 6000 //uint64(2000+rand.Intn(10000))
+		n.bufLimit = n.capacity * 6000 // uint64(2000+rand.Intn(10000))
 		n.node = NewClientNode(m, ServerParams{BufLimit: n.bufLimit, MinRecharge: n.capacity})
 	}
 	maxNodes := make([]int, maxCapacityNodes)
@@ -101,7 +101,6 @@ func testConstantTotalCapacity(t *testing.T, nodeCount, maxCapacityNodes, random
 	if ratio < 0.98 || ratio > 1.02 {
 		t.Errorf("totalCost/totalCapacity/testLength ratio incorrect (expected: 1, got: %f)", ratio)
 	}
-
 }
 
 func (n *testNode) send(t *testing.T, now mclock.AbsTime) bool {
@@ -117,7 +116,7 @@ func (n *testNode) send(t *testing.T, now mclock.AbsTime) bool {
 	if bv < testMaxCost {
 		n.waitUntil = now + mclock.AbsTime((testMaxCost-bv)*1001000/n.capacity)
 	}
-	//n.waitUntil = now + mclock.AbsTime(float64(testMaxCost)*1001000/float64(n.capacity)*(1-float64(bv)/float64(n.bufLimit)))
+	// n.waitUntil = now + mclock.AbsTime(float64(testMaxCost)*1001000/float64(n.capacity)*(1-float64(bv)/float64(n.bufLimit)))
 	n.totalCost += rcost
 	return true
 }

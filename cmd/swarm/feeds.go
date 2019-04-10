@@ -136,7 +136,6 @@ func feedCreateManifest(ctx *cli.Context) {
 		return
 	}
 	fmt.Println(manifestAddress) // output manifest address to the user in a single line (useful for other commands to pick up)
-
 }
 
 func feedUpdate(ctx *cli.Context) {
@@ -234,5 +233,4 @@ func feedGetUser(ctx *cli.Context) common.Address {
 		utils.Fatalf("Cannot read private key. Must specify --user or --bzzaccount")
 	}
 	return crypto.PubkeyToAddress(pk.PublicKey)
-
 }

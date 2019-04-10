@@ -46,5 +46,4 @@ func TestTopic(t *testing.T) {
 	if topic2 != topic {
 		t.Fatal("Expected recovered topic to be equal to original one")
 	}
-
 }

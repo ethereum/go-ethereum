@@ -18,9 +18,7 @@
 
 package fetcher
 
-import (
-	"github.com/ethereum/go-ethereum/metrics"
-)
+import "github.com/ethereum/go-ethereum/metrics"
 
 var (
 	propAnnounceInMeter   = metrics.NewRegisteredMeter("eth/fetcher/prop/announces/in", nil)

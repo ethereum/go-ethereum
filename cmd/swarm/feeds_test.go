@@ -65,7 +65,8 @@ func TestCLIFeedUpdate(t *testing.T) {
 		"feed", "update",
 		"--topic", topic.Hex(),
 		"--name", name,
-		hexData}
+		hexData,
+	}
 
 	// create an update and expect an exit without errors
 	log.Info("updating a feed with 'swarm feed update'")
@@ -183,7 +184,8 @@ func TestCLIFeedUpdate(t *testing.T) {
 		"--bzzaccount", pkFileName,
 		"feed", "update",
 		"--manifest", manifestAddress,
-		hexData}
+		hexData,
+	}
 
 	// create an update and expect an error given there is a user mismatch
 	log.Info("updating a feed with 'swarm feed update'")

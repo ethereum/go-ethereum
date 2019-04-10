@@ -165,7 +165,6 @@ func TestNetStoreGetAndPut(t *testing.T) {
 	default:
 		t.Fatal("Expected fetcher context to be cancelled")
 	}
-
 }
 
 // TestNetStoreGetAndPut tests calling NetStore.Put and then NetStore.Get.
@@ -202,7 +201,6 @@ func TestNetStoreGetAfterPut(t *testing.T) {
 	if netStore.fetchers.Len() != 0 {
 		t.Fatal("Expected netStore to not have fetcher")
 	}
-
 }
 
 // TestNetStoreGetTimeout tests a Get call for an unavailable chunk and waits for timeout
@@ -380,7 +378,6 @@ func TestNetStoreMultipleGetAndPut(t *testing.T) {
 	default:
 		t.Fatal("Expected fetcher context to be cancelled")
 	}
-
 }
 
 // TestNetStoreFetchFuncTimeout tests a FetchFunc call for an unavailable chunk and waits for timeout
@@ -507,13 +504,11 @@ func TestNetStoreGetCallsOffer(t *testing.T) {
 	if fetcher.sources[0].String() != sourcePeerID.String() {
 		t.Fatalf("Expected fetcher source %v got %v", sourcePeerID, fetcher.sources[0])
 	}
-
 }
 
 // TestNetStoreFetcherCountPeers tests multiple NetStore.Get calls with peer in the context.
 // There is no Put call, so the Get calls timeout
 func TestNetStoreFetcherCountPeers(t *testing.T) {
-
 	netStore, fetcher := mustNewNetStoreWithFetcher(t)
 
 	addr := randomAddr()

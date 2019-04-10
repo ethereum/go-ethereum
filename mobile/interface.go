@@ -101,12 +101,15 @@ func (i *Interface) GetInt64() int64          { return *i.object.(*int64) }
 func (i *Interface) GetUint8() *BigInt {
 	return &BigInt{new(big.Int).SetUint64(uint64(*i.object.(*uint8)))}
 }
+
 func (i *Interface) GetUint16() *BigInt {
 	return &BigInt{new(big.Int).SetUint64(uint64(*i.object.(*uint16)))}
 }
+
 func (i *Interface) GetUint32() *BigInt {
 	return &BigInt{new(big.Int).SetUint64(uint64(*i.object.(*uint32)))}
 }
+
 func (i *Interface) GetUint64() *BigInt {
 	return &BigInt{new(big.Int).SetUint64(*i.object.(*uint64))}
 }

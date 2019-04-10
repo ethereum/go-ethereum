@@ -123,7 +123,6 @@ var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Z](\w*)(\[\])?$`)
 // Note, the produced signature conforms to the secp256k1 curve R, S and V values,
 // where the V value will be 27 or 28 for legacy reasons, if legacyV==true.
 func (api *SignerAPI) sign(addr common.MixedcaseAddress, req *SignDataRequest, legacyV bool) (hexutil.Bytes, error) {
-
 	// We make the request prior to looking up if we actually have the account, to prevent
 	// account-enumeration via the API
 	res, err := api.UI.ApproveSignData(req)
@@ -267,7 +266,6 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 	req.Address = addr
 	req.Meta = MetadataFromContext(ctx)
 	return req, useEthereumV, nil
-
 }
 
 // SignTextWithValidator signs the given message which can be further recovered
@@ -465,7 +463,6 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 // EncodePrimitiveValue deals with the primitive values found
 // while searching through the typed data
 func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interface{}, depth int) ([]byte, error) {
-
 	switch encType {
 	case "address":
 		stringValue, ok := encValue.(string)
@@ -539,7 +536,6 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 		return abi.U256(bigIntValue), nil
 	}
 	return nil, fmt.Errorf("unrecognized type '%s'", encType)
-
 }
 
 // dataMismatchError generates an error for a mismatch between

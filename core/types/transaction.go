@@ -31,9 +31,7 @@ import (
 
 //go:generate gencodec -type txdata -field-override txdataMarshaling -out gen_tx_json.go
 
-var (
-	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
-)
+var ErrInvalidSig = errors.New("invalid transaction v, r, s values")
 
 type Transaction struct {
 	data txdata

@@ -176,14 +176,16 @@ Clef that the file is 'safe' to execute.`,
 		Description: `
 The setpw command stores a password for a given address (keyfile). If you enter a blank passphrase, it will 
 remove any stored credential for that address (keyfile)
-`}
+`,
+	}
 	gendocCommand = cli.Command{
 		Action: GenDoc,
 		Name:   "gendoc",
 		Usage:  "Generate documentation about json-rpc format",
 		Description: `
 The gendoc generates example structures of the json-rpc communication types.
-`}
+`,
+	}
 )
 
 func init() {
@@ -213,8 +215,8 @@ func init() {
 	}
 	app.Action = signer
 	app.Commands = []cli.Command{initCommand, attestCommand, setCredentialCommand, gendocCommand}
-
 }
+
 func main() {
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -281,6 +283,7 @@ NOTE: This file does not contain your accounts. Those need to be backed up separ
 `)
 	return nil
 }
+
 func attestFile(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
@@ -352,9 +355,9 @@ func signer(c *cli.Context) error {
 	if err := initialize(c); err != nil {
 		return err
 	}
-	var (
-		ui core.UIClientAPI
-	)
+
+	var ui core.UIClientAPI
+
 	if c.GlobalBool(stdiouiFlag.Name) {
 		log.Info("Using stdin/stdout as UI-channel")
 		ui = core.NewStdIOUI()
@@ -391,7 +394,7 @@ func signer(c *cli.Context) error {
 		jsStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "jsstorage.json"), jskey)
 		configStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "config.json"), confkey)
 
-		//Do we have a rule-file?
+		// Do we have a rule-file?
 		if ruleFile := c.GlobalString(ruleFlag.Name); ruleFile != "" {
 			ruleJS, err := ioutil.ReadFile(c.GlobalString(ruleFile))
 			if err != nil {
@@ -449,7 +452,8 @@ func signer(c *cli.Context) error {
 			Namespace: "account",
 			Public:    true,
 			Service:   api,
-			Version:   "1.0"},
+			Version:   "1.0",
+		},
 	}
 	if c.GlobalBool(utils.RPCEnabledFlag.Name) {
 
@@ -554,6 +558,7 @@ func homeDir() string {
 	}
 	return ""
 }
+
 func readMasterKey(ctx *cli.Context, ui core.UIClientAPI) ([]byte, error) {
 	var (
 		file      string
@@ -577,7 +582,8 @@ func readMasterKey(ctx *cli.Context, ui core.UIClientAPI) ([]byte, error) {
 		resp, err := ui.OnInputRequired(core.UserInputRequest{
 			Title:      "Master Password",
 			Prompt:     "Please enter the password to decrypt the master seed",
-			IsPassword: true})
+			IsPassword: true,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -634,7 +640,6 @@ func confirm(text string) bool {
 }
 
 func testExternalUI(api *core.SignerAPI) {
-
 	ctx := context.WithValue(context.Background(), "remote", "clef binary")
 	ctx = context.WithValue(ctx, "scheme", "in-proc")
 	ctx = context.WithValue(ctx, "local", "main")
@@ -755,7 +760,6 @@ func testExternalUI(api *core.SignerAPI) {
 	}
 	result := fmt.Sprintf("Tests completed. %d errors:\n%s\n", len(errs), strings.Join(errs, "\n"))
 	api.UI.ShowInfo(result)
-
 }
 
 // getPassPhrase retrieves the password associated with clef, either fetched
@@ -813,7 +817,6 @@ func decryptSeed(keyjson []byte, auth string) ([]byte, error) {
 
 // GenDoc outputs examples of all structures used in json-rpc communication
 func GenDoc(ctx *cli.Context) {
-
 	var (
 		a    = common.HexToAddress("0xdeadbeef000000000000000000000000deadbeef")
 		b    = common.HexToAddress("0x1111111122222222222233333333334444444444")
@@ -848,7 +851,8 @@ func GenDoc(ctx *cli.Context) {
 			ContentType: accounts.MimetypeTextPlain,
 			Rawdata:     []byte(msg),
 			Message:     message,
-			Hash:        sighash})
+			Hash:        sighash,
+		})
 	}
 	{ // Sign plain text response
 		add("SignDataResponse - approve", "Response to SignDataRequest",
@@ -883,13 +887,15 @@ func GenDoc(ctx *cli.Context) {
 				GasPrice: hexutil.Big(*big.NewInt(5)),
 				Gas:      1000,
 				Input:    nil,
-			}})
+			},
+		})
 	}
 	{ // Sign tx response
 		data := hexutil.Bytes([]byte{0x04, 0x03, 0x02, 0x01})
 		add("SignTxResponse - approve", "Response to request to sign a transaction. This response needs to contain the `transaction`"+
 			", because the UI is free to make modifications to the transaction.",
-			&core.SignTxResponse{Approved: true,
+			&core.SignTxResponse{
+				Approved: true,
 				Transaction: core.SendTxArgs{
 					Data:     &data,
 					Nonce:    0x4,
@@ -899,7 +905,8 @@ func GenDoc(ctx *cli.Context) {
 					GasPrice: hexutil.Big(*big.NewInt(5)),
 					Gas:      1000,
 					Input:    nil,
-				}})
+				},
+			})
 		add("SignTxResponse - deny", "Response to SignTxRequest. When denying a request, there's no need to "+
 			"provide the transaction in return",
 			&core.SignTxResponse{})
@@ -939,7 +946,8 @@ func GenDoc(ctx *cli.Context) {
 				Meta: meta,
 				Accounts: []accounts.Account{
 					{a, accounts.URL{Scheme: "keystore", Path: "/path/to/keyfile/a"}},
-					{b, accounts.URL{Scheme: "keystore", Path: "/path/to/keyfile/b"}}},
+					{b, accounts.URL{Scheme: "keystore", Path: "/path/to/keyfile/b"}},
+				},
 			})
 
 		add("ListResponse", "Response to list request. The response contains a list of all addresses to show to the caller. "+
@@ -948,7 +956,8 @@ func GenDoc(ctx *cli.Context) {
 				Accounts: []accounts.Account{
 					{common.HexToAddress("0xcowbeef000000cowbeef00000000000000000c0w"), accounts.URL{Path: ".. ignored .."}},
 					{common.HexToAddress("0xffffffffffffffffffffffffffffffffffffffff"), accounts.URL{}},
-				}})
+				},
+			})
 	}
 
 	fmt.Println(`## UI Client interface

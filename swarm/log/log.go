@@ -5,11 +5,9 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
-const (
-	// CallDepth is set to 1 in order to influence to reported line number of
-	// the log message with 1 skipped stack frame of calling l.Output()
-	CallDepth = 1
-)
+// CallDepth is set to 1 in order to influence to reported line number of
+// the log message with 1 skipped stack frame of calling l.Output()
+const CallDepth = 1
 
 // Warn is a convenient alias for log.Warn with stats
 func Warn(msg string, ctx ...interface{}) {

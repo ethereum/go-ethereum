@@ -16,9 +16,7 @@
 
 package bloombits
 
-import (
-	"sync"
-)
+import "sync"
 
 // request represents a bloom retrieval task to prioritize and pull from the local
 // database or remotely from the network.

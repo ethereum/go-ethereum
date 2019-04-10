@@ -16,9 +16,7 @@
 
 package shed
 
-import (
-	"github.com/syndtr/goleveldb/leveldb"
-)
+import "github.com/syndtr/goleveldb/leveldb"
 
 // StringField is the most simple field implementation
 // that stores an arbitrary string under a specific LevelDB key.

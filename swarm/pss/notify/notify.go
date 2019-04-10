@@ -33,10 +33,8 @@ const (
 	symKeyLength         = 32 // this should be gotten from source
 )
 
-var (
-	// control topic is used before symmetric key issuance completes
-	controlTopic = pss.Topic{0x00, 0x00, 0x00, 0x01}
-)
+// control topic is used before symmetric key issuance completes
+var controlTopic = pss.Topic{0x00, 0x00, 0x00, 0x01}
 
 // when code is MsgCodeStart, Payload is address
 // when code is MsgCodeNotifyWithKey, Payload is notification | symkey
@@ -182,7 +180,7 @@ func (c *Controller) Unsubscribe(name string) error {
 // It takes a name as identifier for the resource, a threshold indicating the granularity of the subscription address bin
 // It then starts an event loop which listens to the supplied update channel and executes notifications on channel receives
 // Fails if a notifier already is registered on the name
-//func (c *Controller) NewNotifier(name string, threshold int, contentFunc func(string) ([]byte, error)) error {
+// func (c *Controller) NewNotifier(name string, threshold int, contentFunc func(string) ([]byte, error)) error {
 func (c *Controller) NewNotifier(name string, threshold int, updateC <-chan []byte) (func(), error) {
 	c.mu.Lock()
 	if c.isActive(name) {
@@ -196,7 +194,7 @@ func (c *Controller) NewNotifier(name string, threshold int, updateC <-chan []by
 		threshold: threshold,
 		updateC:   updateC,
 		quitC:     quitC,
-		//contentFunc: contentFunc,
+		// contentFunc: contentFunc,
 	}
 	c.mu.Unlock()
 	go func() {
@@ -258,7 +256,6 @@ func (c *Controller) notify(name string, data []byte) error {
 // if we do, retrieve the symkey from it and increment the count
 // if we dont make a new symkey and a new bin entry
 func (c *Controller) addToBin(ntfr *notifier, address []byte) (symKeyId string, pssAddress pss.PssAddress, err error) {
-
 	// parse the address from the message and truncate if longer than our bins threshold
 	if len(address) > ntfr.threshold {
 		address = address[:ntfr.threshold]
@@ -285,7 +282,6 @@ func (c *Controller) addToBin(ntfr *notifier, address []byte) (symKeyId string, 
 }
 
 func (c *Controller) handleStartMsg(msg *Msg, keyid string) (err error) {
-
 	keyidbytes, err := hexutil.Decode(keyid)
 	if err != nil {
 		return err

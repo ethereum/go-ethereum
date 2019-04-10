@@ -34,13 +34,9 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
-const (
-	IsActiveHandshake = true
-)
+const IsActiveHandshake = true
 
-var (
-	ctrlSingleton *HandshakeController
-)
+var ctrlSingleton *HandshakeController
 
 const (
 	defaultSymKeyRequestTimeout = 1000 * 8  // max wait ms to receive a response to a handshake symkey request
@@ -183,7 +179,6 @@ func (ctl *HandshakeController) updateKeys(pubkeyid string, topic *Topic, in boo
 	defer ctl.lock.Unlock()
 	if _, ok := ctl.handshakes[pubkeyid]; !ok {
 		ctl.handshakes[pubkeyid] = make(map[Topic]*handshake)
-
 	}
 	if ctl.handshakes[pubkeyid][*topic] == nil {
 		ctl.handshakes[pubkeyid][*topic] = &handshake{}
@@ -380,7 +375,6 @@ func (ctl *HandshakeController) handleKeys(pubkeyid string, keymsg *handshakeMsg
 // amount, a request is sent for the amount of keys to make up
 // the difference
 func (ctl *HandshakeController) sendKey(pubkeyid string, topic *Topic, keycount uint8) ([]string, error) {
-
 	var requestcount uint8
 	to := PssAddress{}
 	if _, ok := ctl.pss.pubKeyPool[pubkeyid]; !ok {
@@ -400,7 +394,7 @@ func (ctl *HandshakeController) sendKey(pubkeyid string, topic *Topic, keycount 
 	// check if buffer is not full
 	outkeys := ctl.validKeys(pubkeyid, topic, false)
 	if len(outkeys) < int(ctl.symKeyCapacity) {
-		//requestcount = uint8(self.symKeyCapacity - uint8(len(outkeys)))
+		// requestcount = uint8(self.symKeyCapacity - uint8(len(outkeys)))
 		requestcount = ctl.symKeyCapacity
 	}
 	// return if there's nothing to be accomplished

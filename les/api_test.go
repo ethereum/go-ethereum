@@ -315,7 +315,7 @@ func getHead(ctx context.Context, t *testing.T, client *rpc.Client) (uint64, com
 }
 
 func testRequest(ctx context.Context, t *testing.T, client *rpc.Client) bool {
-	//res := make(map[string]interface{})
+	// res := make(map[string]interface{})
 	var res string
 	var addr common.Address
 	rand.Read(addr[:])

@@ -29,9 +29,7 @@ import (
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 )
 
-const (
-	defaultWhisperTTL = 6000
-)
+const defaultWhisperTTL = 6000
 
 const (
 	pssControlSym = 1

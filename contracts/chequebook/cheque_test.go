@@ -105,7 +105,6 @@ func TestIssueAndReceive(t *testing.T) {
 	if received.Cmp(big.NewInt(43)) != 0 {
 		t.Errorf("expected: %v, got %v", "43", received)
 	}
-
 }
 
 func TestCheckbookFile(t *testing.T) {
@@ -216,7 +215,6 @@ func TestVerifyErrors(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected incorrect amount error, got none and value %v", received)
 	}
-
 }
 
 func TestDeposit(t *testing.T) {
@@ -355,7 +353,6 @@ func TestDeposit(t *testing.T) {
 	if chbook.Balance().Cmp(exp) != 0 {
 		t.Fatalf("expected balance %v, got %v", exp, chbook.Balance())
 	}
-
 }
 
 func TestCash(t *testing.T) {
@@ -483,5 +480,4 @@ func TestCash(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	backend.Commit()
-
 }

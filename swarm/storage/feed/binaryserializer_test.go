@@ -30,6 +30,7 @@ type KV map[string]string
 func (kv KV) Get(key string) string {
 	return kv[key]
 }
+
 func (kv KV) Set(key, value string) {
 	kv[key] = value
 }

@@ -411,7 +411,6 @@ func (mt *manifestTrie) recalcAndStore() error {
 			}
 			list.Entries = append(list.Entries, entry.ManifestEntry)
 		}
-
 	}
 
 	manifest, err := json.Marshal(list)
@@ -506,7 +505,7 @@ func (mt *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *manif
 		return mt.entries[256], 0
 	}
 
-	//see if first char is in manifest entries
+	// see if first char is in manifest entries
 	b := path[0]
 	entry = mt.entries[b]
 	if entry == nil {
@@ -537,7 +536,7 @@ func (mt *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *manif
 	}
 	if path[:epl] == entry.Path {
 		log.Trace(fmt.Sprintf("entry.ContentType = %v", entry.ContentType))
-		//the subentry is a manifest, load subtrie
+		// the subentry is a manifest, load subtrie
 		if entry.ContentType == ManifestType && (strings.Contains(entry.Path, path) || strings.Contains(path, entry.Path)) {
 			err := mt.loadSubTrie(entry, quitC)
 			if err != nil {
@@ -553,7 +552,7 @@ func (mt *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *manif
 			}
 
 		} else {
-			//entry is not a manifest, return it
+			// entry is not a manifest, return it
 			if path != entry.Path {
 				return nil, 0
 			}

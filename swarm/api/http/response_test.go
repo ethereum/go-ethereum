@@ -103,6 +103,7 @@ func Test500Page(t *testing.T) {
 		t.Fatalf("HTML validation failed for error page returned!")
 	}
 }
+
 func Test500PageWith0xHashPrefix(t *testing.T) {
 	srv := NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
@@ -161,7 +162,6 @@ func TestJsonResponse(t *testing.T) {
 	if !isJSON(string(respbody)) {
 		t.Fatalf("Expected response to be JSON, received invalid JSON: %s", string(respbody))
 	}
-
 }
 
 func isJSON(s string) bool {

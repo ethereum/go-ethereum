@@ -46,13 +46,13 @@ var (
 
 func init() {
 	flag.Parse()
-	//initialize the logger
-	//this is a demonstration on how to use Vmodule for filtering logs
-	//provide -vmodule as param, and comma-separated values, e.g.:
+	// initialize the logger
+	// this is a demonstration on how to use Vmodule for filtering logs
+	// provide -vmodule as param, and comma-separated values, e.g.:
 	//-vmodule overlay_test.go=4,simulations=3
-	//above examples sets overlay_test.go logs to level 4, while packages ending with "simulations" to 3
+	// above examples sets overlay_test.go logs to level 4, while packages ending with "simulations" to 3
 	if *vmodule != "" {
-		//only enable the pattern matching handler if the flag has been provided
+		// only enable the pattern matching handler if the flag has been provided
 		glogger := log.NewGlogHandler(log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true)))
 		if *verbosity > 0 {
 			glogger.Verbosity(log.Lvl(*verbosity))
@@ -106,9 +106,8 @@ func (s *Simulation) NewService(ctx *adapters.ServiceContext) (node.Service, err
 	return network.NewBzz(config, kad, store, nil, nil), nil
 }
 
-//create the simulation network
+// create the simulation network
 func newSimulationNetwork() *simulations.Network {
-
 	s := NewSimulation()
 	services := adapters.Services{
 		"overlay": s.NewService,
@@ -120,25 +119,25 @@ func newSimulationNetwork() *simulations.Network {
 	return simNetwork
 }
 
-//return a new http server
+// return a new http server
 func newOverlaySim(sim *simulations.Network) *simulations.Server {
 	return simulations.NewServer(sim)
 }
 
 // var server
 func main() {
-	//cpu optimization
+	// cpu optimization
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	//run the sim
+	// run the sim
 	runOverlaySim()
 }
 
 func runOverlaySim() {
-	//create the simulation network
+	// create the simulation network
 	net := newSimulationNetwork()
-	//create a http server with it
+	// create a http server with it
 	sim := newOverlaySim(net)
 	log.Info(fmt.Sprintf("starting simulation server on 0.0.0.0:%d...", httpSimPort))
-	//start the HTTP server
+	// start the HTTP server
 	http.ListenAndServe(fmt.Sprintf(":%d", httpSimPort), sim)
 }

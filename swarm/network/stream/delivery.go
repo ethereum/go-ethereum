@@ -193,13 +193,12 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 		case streamer.deliveryC <- chunk.Address()[:]:
 		case <-streamer.quit:
 		}
-
 	}()
 
 	return nil
 }
 
-//Chunk delivery always uses the same message type....
+// Chunk delivery always uses the same message type....
 type ChunkDeliveryMsg struct {
 	Addr  storage.Address
 	SData []byte // the stored chunk Data (incl size)
@@ -207,12 +206,12 @@ type ChunkDeliveryMsg struct {
 }
 
 //...but swap accounting needs to disambiguate if it is a delivery for syncing or for retrieval
-//as it decides based on message type if it needs to account for this message or not
+// as it decides based on message type if it needs to account for this message or not
 
-//defines a chunk delivery for retrieval (with accounting)
+// defines a chunk delivery for retrieval (with accounting)
 type ChunkDeliveryMsgRetrieval ChunkDeliveryMsg
 
-//defines a chunk delivery for syncing (without accounting)
+// defines a chunk delivery for syncing (without accounting)
 type ChunkDeliveryMsgSyncing ChunkDeliveryMsg
 
 // chunk delivery msg is response to retrieverequest msg

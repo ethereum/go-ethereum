@@ -100,7 +100,7 @@ func respond(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
 	} else if strings.Contains(acceptHeader, "text/html") {
 		respondHTML(w, r, params)
 	} else {
-		respondPlaintext(w, r, params) //returns nice errors for curl
+		respondPlaintext(w, r, params) // returns nice errors for curl
 	}
 }
 

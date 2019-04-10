@@ -15,9 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 package feed
 
-import (
-	"testing"
-)
+import "testing"
 
 func getTestFeed() *Feed {
 	topic, _ := NewTopic("world news report, every hour", nil)

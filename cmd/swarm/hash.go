@@ -63,7 +63,8 @@ var hashCommand = cli.Command{
 				},
 			},
 		},
-	}}
+	},
+}
 
 func hash(ctx *cli.Context) {
 	args := ctx.Args()
@@ -85,6 +86,7 @@ func hash(ctx *cli.Context) {
 		fmt.Printf("%v\n", addr)
 	}
 }
+
 func ensNodeHash(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) < 1 {
@@ -97,6 +99,7 @@ func ensNodeHash(ctx *cli.Context) {
 	stringHex := hex.EncodeToString(hash[:])
 	fmt.Println(stringHex)
 }
+
 func encodeEipHash(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) < 1 {

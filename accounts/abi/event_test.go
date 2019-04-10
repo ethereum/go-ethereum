@@ -165,7 +165,6 @@ func TestEventMultiValueWithArrayUnpack(t *testing.T) {
 }
 
 func TestEventTupleUnpack(t *testing.T) {
-
 	type EventTransfer struct {
 		Value *big.Int
 	}
@@ -269,7 +268,8 @@ func TestEventTupleUnpack(t *testing.T) {
 		&EventPledge{
 			addr,
 			bigintExpected2,
-			[3]byte{'u', 's', 'd'}},
+			[3]byte{'u', 's', 'd'},
+		},
 		jsonEventPledge,
 		"",
 		"Can unpack Pledge event into structure",
@@ -279,7 +279,8 @@ func TestEventTupleUnpack(t *testing.T) {
 		&[]interface{}{
 			&addr,
 			&bigintExpected2,
-			&[3]byte{'u', 's', 'd'}},
+			&[3]byte{'u', 's', 'd'},
+		},
 		jsonEventPledge,
 		"",
 		"Can unpack Pledge event into slice",
@@ -289,7 +290,8 @@ func TestEventTupleUnpack(t *testing.T) {
 		&[3]interface{}{
 			&addr,
 			&bigintExpected2,
-			&[3]byte{'u', 's', 'd'}},
+			&[3]byte{'u', 's', 'd'},
+		},
 		jsonEventPledge,
 		"",
 		"Can unpack Pledge event into an array",

@@ -27,9 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-var (
-	errInsufficientBalanceForGas = errors.New("insufficient balance to pay for gas")
-)
+var errInsufficientBalanceForGas = errors.New("insufficient balance to pay for gas")
 
 /*
 The State Transitioning Model
@@ -63,7 +61,7 @@ type StateTransition struct {
 // Message represents a message sent to a contract.
 type Message interface {
 	From() common.Address
-	//FromFrontier() (common.Address, error)
+	// FromFrontier() (common.Address, error)
 	To() *common.Address
 
 	GasPrice() *big.Int

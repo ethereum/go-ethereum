@@ -41,9 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
-const (
-	content = "123456789"
-)
+const content = "123456789"
 
 var (
 	nodes    = flag.Int("nodes", 30, "number of nodes to create (default 30)")
@@ -58,31 +56,31 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(!*rawlog))))
 }
 
-//TestAccountingSimulation runs a p2p/simulations simulation
-//It creates a *nodes number of nodes, connects each one with each other,
-//then sends out a random selection of messages up to *msgs amount of messages
-//from the test protocol spec.
-//The spec has some accounted messages defined through the Prices interface.
-//The test does accounting for all the message exchanged, and then checks
-//that every node has the same balance with a peer, but with opposite signs.
-//Balance(AwithB) = 0 - Balance(BwithA) or Abs|Balance(AwithB)| == Abs|Balance(BwithA)|
+// TestAccountingSimulation runs a p2p/simulations simulation
+// It creates a *nodes number of nodes, connects each one with each other,
+// then sends out a random selection of messages up to *msgs amount of messages
+// from the test protocol spec.
+// The spec has some accounted messages defined through the Prices interface.
+// The test does accounting for all the message exchanged, and then checks
+// that every node has the same balance with a peer, but with opposite signs.
+// Balance(AwithB) = 0 - Balance(BwithA) or Abs|Balance(AwithB)| == Abs|Balance(BwithA)|
 func TestAccountingSimulation(t *testing.T) {
-	//setup the balances objects for every node
+	// setup the balances objects for every node
 	bal := newBalances(*nodes)
-	//setup the metrics system or tests will fail trying to write metrics
+	// setup the metrics system or tests will fail trying to write metrics
 	dir, err := ioutil.TempDir("", "account-sim")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
 	SetupAccountingMetrics(1*time.Second, filepath.Join(dir, "metrics.db"))
-	//define the node.Service for this test
+	// define the node.Service for this test
 	services := adapters.Services{
 		"accounting": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			return bal.newNode(), nil
 		},
 	}
-	//setup the simulation
+	// setup the simulation
 	adapter := adapters.NewSimAdapter(services)
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{DefaultService: "accounting"})
 	defer net.Shutdown()
@@ -159,8 +157,8 @@ func TestAccountingSimulation(t *testing.T) {
 // (n entries in the array will not be filled -
 //  the balance of a node with itself)
 type matrix struct {
-	n    int     //number of nodes
-	m    []int64 //array of balances
+	n    int     // number of nodes
+	m    []int64 // array of balances
 	lock sync.Mutex
 }
 
@@ -187,9 +185,9 @@ func (m *matrix) add(i, j int, v int64) error {
 // check that the balances are symmetric:
 // balance of node i with node j is the same as j with i but with inverted signs
 func (m *matrix) symmetric() error {
-	//iterate all nodes
+	// iterate all nodes
 	for i := 0; i < m.n; i++ {
-		//iterate starting +1
+		// iterate starting +1
 		for j := i + 1; j < m.n; j++ {
 			log.Debug("bal", "1", i, "2", j, "i,j", m.m[i*m.n+j], "j,i", m.m[j*m.n+i])
 			if m.m[i*m.n+j] != -m.m[j*m.n+i] {
@@ -222,7 +220,7 @@ func (b *balances) newNode() *testNode {
 	return &testNode{
 		bal:   b,
 		i:     b.i,
-		peers: make([]*testPeer, b.n), //a node will be connected to n-1 peers
+		peers: make([]*testPeer, b.n), // a node will be connected to n-1 peers
 	}
 }
 
@@ -237,26 +235,26 @@ type testNode struct {
 // do the accounting for the peer's test protocol
 // testNode implements protocols.Balance
 func (t *testNode) Add(a int64, p *Peer) error {
-	//get the index for the remote peer
+	// get the index for the remote peer
 	remote := t.bal.id2n[p.ID()]
 	log.Debug("add", "local", t.i, "remote", remote, "amount", a)
 	return t.bal.add(t.i, remote, a)
 }
 
-//run the p2p protocol
-//for every node, represented by testNode, create a remote testPeer
+// run the p2p protocol
+// for every node, represented by testNode, create a remote testPeer
 func (t *testNode) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	spec := createTestSpec()
-	//create accounting hook
+	// create accounting hook
 	spec.Hook = NewAccounting(t, &dummyPrices{})
 
-	//create a peer for this node
+	// create a peer for this node
 	tp := &testPeer{NewPeer(p, rw, spec), t.i, t.bal.id2n[p.ID()], t.bal.wg}
 	t.lock.Lock()
 	t.peers[t.bal.id2n[p.ID()]] = tp
 	t.peerCount++
 	if t.peerCount == t.bal.n-1 {
-		//when all peer connections are established, start sending messages from this peer
+		// when all peer connections are established, start sending messages from this peer
 		go t.send()
 	}
 	t.lock.Unlock()
@@ -279,7 +277,7 @@ type testPeer struct {
 func (t *testNode) send() {
 	log.Debug("start sending")
 	for i := 0; i < *msgs; i++ {
-		//determine randomly to which peer to send
+		// determine randomly to which peer to send
 		whom := rand.Intn(t.bal.n - 1)
 		if whom >= t.i {
 			whom++
@@ -288,7 +286,7 @@ func (t *testNode) send() {
 		p := t.peers[whom]
 		t.lock.Unlock()
 
-		//determine a random message from the spec's messages to be sent
+		// determine a random message from the spec's messages to be sent
 		which := rand.Intn(len(p.spec.Messages))
 		msg := p.spec.Messages[which]
 		switch msg.(type) {

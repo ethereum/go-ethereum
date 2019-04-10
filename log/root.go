@@ -1,8 +1,6 @@
 package log
 
-import (
-	"os"
-)
+import "os"
 
 var (
 	root          = &logger{[]interface{}{}, new(swapHandler)}

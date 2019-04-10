@@ -216,9 +216,9 @@ func (_PublicResolver *PublicResolverCallerSession) ABI(node [32]byte, contentTy
 //
 // Solidity: function addr(node bytes32) constant returns(ret address)
 func (_PublicResolver *PublicResolverCaller) Addr(opts *bind.CallOpts, node [32]byte) (common.Address, error) {
-	var (
-		ret0 = new(common.Address)
-	)
+
+	var ret0 = new(common.Address)
+
 	out := ret0
 	err := _PublicResolver.contract.Call(opts, out, "addr", node)
 	return *ret0, err
@@ -242,9 +242,9 @@ func (_PublicResolver *PublicResolverCallerSession) Addr(node [32]byte) (common.
 //
 // Solidity: function content(node bytes32) constant returns(ret bytes32)
 func (_PublicResolver *PublicResolverCaller) Content(opts *bind.CallOpts, node [32]byte) ([32]byte, error) {
-	var (
-		ret0 = new([32]byte)
-	)
+
+	var ret0 = new([32]byte)
+
 	out := ret0
 	err := _PublicResolver.contract.Call(opts, out, "content", node)
 	return *ret0, err
@@ -268,9 +268,9 @@ func (_PublicResolver *PublicResolverCallerSession) Content(node [32]byte) ([32]
 //
 // Solidity: function name(node bytes32) constant returns(ret string)
 func (_PublicResolver *PublicResolverCaller) Name(opts *bind.CallOpts, node [32]byte) (string, error) {
-	var (
-		ret0 = new(string)
-	)
+
+	var ret0 = new(string)
+
 	out := ret0
 	err := _PublicResolver.contract.Call(opts, out, "name", node)
 	return *ret0, err
@@ -330,9 +330,9 @@ func (_PublicResolver *PublicResolverCallerSession) Pubkey(node [32]byte) (struc
 //
 // Solidity: function supportsInterface(interfaceID bytes4) constant returns(bool)
 func (_PublicResolver *PublicResolverCaller) SupportsInterface(opts *bind.CallOpts, interfaceID [4]byte) (bool, error) {
-	var (
-		ret0 = new(bool)
-	)
+
+	var ret0 = new(bool)
+
 	out := ret0
 	err := _PublicResolver.contract.Call(opts, out, "supportsInterface", interfaceID)
 	return *ret0, err
@@ -356,9 +356,9 @@ func (_PublicResolver *PublicResolverCallerSession) SupportsInterface(interfaceI
 //
 // Solidity: function text(node bytes32, key string) constant returns(ret string)
 func (_PublicResolver *PublicResolverCaller) Text(opts *bind.CallOpts, node [32]byte, key string) (string, error) {
-	var (
-		ret0 = new(string)
-	)
+
+	var ret0 = new(string)
+
 	out := ret0
 	err := _PublicResolver.contract.Call(opts, out, "text", node, key)
 	return *ret0, err
@@ -582,7 +582,6 @@ type PublicResolverABIChanged struct {
 //
 // Solidity: event ABIChanged(node indexed bytes32, contentType indexed uint256)
 func (_PublicResolver *PublicResolverFilterer) FilterABIChanged(opts *bind.FilterOpts, node [][32]byte, contentType []*big.Int) (*PublicResolverABIChangedIterator, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -603,7 +602,6 @@ func (_PublicResolver *PublicResolverFilterer) FilterABIChanged(opts *bind.Filte
 //
 // Solidity: event ABIChanged(node indexed bytes32, contentType indexed uint256)
 func (_PublicResolver *PublicResolverFilterer) WatchABIChanged(opts *bind.WatchOpts, sink chan<- *PublicResolverABIChanged, node [][32]byte, contentType []*big.Int) (event.Subscription, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -723,7 +721,6 @@ type PublicResolverAddrChanged struct {
 //
 // Solidity: event AddrChanged(node indexed bytes32, a address)
 func (_PublicResolver *PublicResolverFilterer) FilterAddrChanged(opts *bind.FilterOpts, node [][32]byte) (*PublicResolverAddrChangedIterator, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -740,7 +737,6 @@ func (_PublicResolver *PublicResolverFilterer) FilterAddrChanged(opts *bind.Filt
 //
 // Solidity: event AddrChanged(node indexed bytes32, a address)
 func (_PublicResolver *PublicResolverFilterer) WatchAddrChanged(opts *bind.WatchOpts, sink chan<- *PublicResolverAddrChanged, node [][32]byte) (event.Subscription, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -856,7 +852,6 @@ type PublicResolverContentChanged struct {
 //
 // Solidity: event ContentChanged(node indexed bytes32, hash bytes32)
 func (_PublicResolver *PublicResolverFilterer) FilterContentChanged(opts *bind.FilterOpts, node [][32]byte) (*PublicResolverContentChangedIterator, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -873,7 +868,6 @@ func (_PublicResolver *PublicResolverFilterer) FilterContentChanged(opts *bind.F
 //
 // Solidity: event ContentChanged(node indexed bytes32, hash bytes32)
 func (_PublicResolver *PublicResolverFilterer) WatchContentChanged(opts *bind.WatchOpts, sink chan<- *PublicResolverContentChanged, node [][32]byte) (event.Subscription, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -989,7 +983,6 @@ type PublicResolverNameChanged struct {
 //
 // Solidity: event NameChanged(node indexed bytes32, name string)
 func (_PublicResolver *PublicResolverFilterer) FilterNameChanged(opts *bind.FilterOpts, node [][32]byte) (*PublicResolverNameChangedIterator, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -1006,7 +999,6 @@ func (_PublicResolver *PublicResolverFilterer) FilterNameChanged(opts *bind.Filt
 //
 // Solidity: event NameChanged(node indexed bytes32, name string)
 func (_PublicResolver *PublicResolverFilterer) WatchNameChanged(opts *bind.WatchOpts, sink chan<- *PublicResolverNameChanged, node [][32]byte) (event.Subscription, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -1123,7 +1115,6 @@ type PublicResolverPubkeyChanged struct {
 //
 // Solidity: event PubkeyChanged(node indexed bytes32, x bytes32, y bytes32)
 func (_PublicResolver *PublicResolverFilterer) FilterPubkeyChanged(opts *bind.FilterOpts, node [][32]byte) (*PublicResolverPubkeyChangedIterator, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -1140,7 +1131,6 @@ func (_PublicResolver *PublicResolverFilterer) FilterPubkeyChanged(opts *bind.Fi
 //
 // Solidity: event PubkeyChanged(node indexed bytes32, x bytes32, y bytes32)
 func (_PublicResolver *PublicResolverFilterer) WatchPubkeyChanged(opts *bind.WatchOpts, sink chan<- *PublicResolverPubkeyChanged, node [][32]byte) (event.Subscription, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -1257,7 +1247,6 @@ type PublicResolverTextChanged struct {
 //
 // Solidity: event TextChanged(node indexed bytes32, indexedKey indexed string, key string)
 func (_PublicResolver *PublicResolverFilterer) FilterTextChanged(opts *bind.FilterOpts, node [][32]byte, indexedKey []string) (*PublicResolverTextChangedIterator, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -1278,7 +1267,6 @@ func (_PublicResolver *PublicResolverFilterer) FilterTextChanged(opts *bind.Filt
 //
 // Solidity: event TextChanged(node indexed bytes32, indexedKey indexed string, key string)
 func (_PublicResolver *PublicResolverFilterer) WatchTextChanged(opts *bind.WatchOpts, sink chan<- *PublicResolverTextChanged, node [][32]byte, indexedKey []string) (event.Subscription, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)

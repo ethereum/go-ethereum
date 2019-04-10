@@ -25,10 +25,8 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
-const (
-	// Number of codehash->size associations to keep.
-	codeSizeCacheSize = 100000
-)
+// Number of codehash->size associations to keep.
+const codeSizeCacheSize = 100000
 
 // Database wraps access to tries and contract code.
 type Database interface {

@@ -21,8 +21,7 @@ import (
 	"testing"
 )
 
-const (
-	testSource = `
+const testSource = `
 pragma solidity >0.0.0;
 contract test {
    /// @notice Will multiply ` + "`a`" + ` by 7.
@@ -31,7 +30,6 @@ contract test {
    }
 }
 `
-)
 
 func skipWithoutSolc(t *testing.T) {
 	if _, err := exec.LookPath("solc"); err != nil {

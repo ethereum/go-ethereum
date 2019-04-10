@@ -275,7 +275,7 @@ func TestAddNodesAndConnectStar(t *testing.T) {
 	simulations.VerifyStar(t, sim.Net, ids, 0)
 }
 
-//To test that uploading a snapshot works
+// To test that uploading a snapshot works
 func TestUploadSnapshot(t *testing.T) {
 	log.Debug("Creating simulation")
 	s := New(map[string]ServiceFunc{

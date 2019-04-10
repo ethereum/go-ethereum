@@ -31,6 +31,7 @@ type ValidationInfo struct {
 	Typ     string `json:"type"`
 	Message string `json:"message"`
 }
+
 type ValidationMessages struct {
 	Messages []ValidationInfo
 }
@@ -44,9 +45,11 @@ const (
 func (vs *ValidationMessages) crit(msg string) {
 	vs.Messages = append(vs.Messages, ValidationInfo{CRIT, msg})
 }
+
 func (vs *ValidationMessages) warn(msg string) {
 	vs.Messages = append(vs.Messages, ValidationInfo{WARN, msg})
 }
+
 func (vs *ValidationMessages) info(msg string) {
 	vs.Messages = append(vs.Messages, ValidationInfo{INFO, msg})
 }

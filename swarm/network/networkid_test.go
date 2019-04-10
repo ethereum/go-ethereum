@@ -67,26 +67,26 @@ expected node connections (excluding those not sharing the network ID).
 */
 func TestNetworkID(t *testing.T) {
 	log.Debug("Start test")
-	//arbitrarily set the number of nodes. It could be any number
+	// arbitrarily set the number of nodes. It could be any number
 	numNodes := 24
-	//the nodeMap maps all nodes (slice value) with the same network ID (key)
+	// the nodeMap maps all nodes (slice value) with the same network ID (key)
 	nodeMap = make(map[int][]enode.ID)
-	//set up the network and connect nodes
+	// set up the network and connect nodes
 	net, err := setupNetwork(numNodes)
 	if err != nil {
 		t.Fatalf("Error setting up network: %v", err)
 	}
-	//let's sleep to ensure all nodes are connected
+	// let's sleep to ensure all nodes are connected
 	time.Sleep(1 * time.Second)
 	// shutdown the the network to avoid race conditions
 	// on accessing kademlias global map while network nodes
 	// are accepting messages
 	net.Shutdown()
-	//for each group sharing the same network ID...
+	// for each group sharing the same network ID...
 	for _, netIDGroup := range nodeMap {
 		log.Trace("netIDGroup size", "size", len(netIDGroup))
 		//...check that their size of the kademlia is of the expected size
-		//the assumption is that it should be the size of the group minus 1 (the node itself)
+		// the assumption is that it should be the size of the group minus 1 (the node itself)
 		for _, node := range netIDGroup {
 			if kademlias[node].addrs.Size() != len(netIDGroup)-1 {
 				t.Fatalf("Kademlia size has not expected peer size. Kademlia size: %d, expected size: %d", kademlias[node].addrs.Size(), len(netIDGroup)-1)
@@ -120,7 +120,7 @@ func setupNetwork(numnodes int) (net *simulations.Network, err error) {
 		return nil, fmt.Errorf("Minimum sixteen nodes in network")
 	}
 	adapter := adapters.NewSimAdapter(newServices())
-	//create the network
+	// create the network
 	net = simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID:             "NetworkIdTestNet",
 		DefaultService: "bzz",
@@ -129,7 +129,7 @@ func setupNetwork(numnodes int) (net *simulations.Network, err error) {
 
 	var connCount int
 
-	//create nodes and connect them to each other
+	// create nodes and connect them to each other
 	for i := 0; i < numnodes; i++ {
 		log.Trace("iteration: ", "i", i)
 		nodeconf := adapters.RandomNodeConfig()
@@ -145,11 +145,11 @@ func setupNetwork(numnodes int) (net *simulations.Network, err error) {
 		if err != nil {
 			return nil, fmt.Errorf("create node %d rpc client fail: %v", i, err)
 		}
-		//now setup and start event watching in order to know when we can upload
+		// now setup and start event watching in order to know when we can upload
 		ctx, watchCancel := context.WithTimeout(context.Background(), MaxTimeout)
 		defer watchCancel()
 		watchSubscriptionEvents(ctx, nodes[i].ID(), client, errc, quitC)
-		//on every iteration we connect to all previous ones
+		// on every iteration we connect to all previous ones
 		for k := i - 1; k >= 0; k-- {
 			connCount++
 			log.Debug(fmt.Sprintf("Connecting node %d with node %d; connection count is %d", i, k, connCount))
@@ -161,7 +161,7 @@ func setupNetwork(numnodes int) (net *simulations.Network, err error) {
 			}
 		}
 	}
-	//now wait until the number of expected subscriptions has been finished
+	// now wait until the number of expected subscriptions has been finished
 	//`watchSubscriptionEvents` will write with a `nil` value to errc
 	for err := range errc {
 		if err != nil {
@@ -170,7 +170,7 @@ func setupNetwork(numnodes int) (net *simulations.Network, err error) {
 		//`nil` received, decrement count
 		connCount--
 		log.Trace("count down", "cnt", connCount)
-		//all subscriptions received
+		// all subscriptions received
 		if connCount == 0 {
 			close(quitC)
 			break
@@ -202,12 +202,12 @@ func newServices() adapters.Services {
 			hp := NewHiveParams()
 			hp.Discovery = false
 			cnt++
-			//assign the network ID
+			// assign the network ID
 			currentNetworkID = cnt % NumberOfNets
 			if ok := nodeMap[currentNetworkID]; ok == nil {
 				nodeMap[currentNetworkID] = make([]enode.ID, 0)
 			}
-			//add this node to the group sharing the same network ID
+			// add this node to the group sharing the same network ID
 			nodeMap[currentNetworkID] = append(nodeMap[currentNetworkID], ctx.Config.ID)
 			log.Debug("current network ID:", "id", currentNetworkID)
 			config := &BzzConfig{

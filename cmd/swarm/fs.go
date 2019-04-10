@@ -110,7 +110,7 @@ func unmount(cliContext *cli.Context) {
 	if err != nil {
 		utils.Fatalf("encountered an error calling the RPC endpoint while unmounting: %v", err)
 	}
-	fmt.Printf("%s\n", mf.LatestManifest) //print the latest manifest hash for user reference
+	fmt.Printf("%s\n", mf.LatestManifest) // print the latest manifest hash for user reference
 }
 
 func listMounts(cliContext *cli.Context) {

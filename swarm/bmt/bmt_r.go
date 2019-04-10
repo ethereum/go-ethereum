@@ -25,9 +25,7 @@
 // * testBMTHasherCorrectness function
 package bmt
 
-import (
-	"hash"
-)
+import "hash"
 
 // RefHasher is the non-optimized easy-to-read reference implementation of BMT
 type RefHasher struct {

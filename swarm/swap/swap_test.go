@@ -33,9 +33,7 @@ import (
 	colorable "github.com/mattn/go-colorable"
 )
 
-var (
-	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
-)
+var loglevel = flag.Int("loglevel", 2, "verbosity of logs")
 
 func init() {
 	flag.Parse()
@@ -45,13 +43,13 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
-//Test getting a peer's balance
+// Test getting a peer's balance
 func TestGetPeerBalance(t *testing.T) {
-	//create a test swap account
+	// create a test swap account
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
-	//test for correct value
+	// test for correct value
 	testPeer := newDummyPeer()
 	swap.balances[testPeer.ID()] = 888
 	b, err := swap.GetPeerBalance(testPeer.ID())
@@ -62,7 +60,7 @@ func TestGetPeerBalance(t *testing.T) {
 		t.Fatalf("Expected peer's balance to be %d, but is %d", 888, b)
 	}
 
-	//test for inexistent node
+	// test for inexistent node
 	id := adapters.RandomNodeConfig().ID
 	_, err = swap.GetPeerBalance(id)
 	if err == nil {
@@ -73,9 +71,9 @@ func TestGetPeerBalance(t *testing.T) {
 	}
 }
 
-//Test that repeated bookings do correct accounting
+// Test that repeated bookings do correct accounting
 func TestRepeatedBookings(t *testing.T) {
-	//create a test swap account
+	// create a test swap account
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
@@ -103,7 +101,7 @@ func TestRepeatedBookings(t *testing.T) {
 		t.Fatal(fmt.Sprintf("After %d debits of %d, expected balance to be: %d, but is: %d", cnt, amount, expectedBalance, realBalance))
 	}
 
-	//mixed debits and credits
+	// mixed debits and credits
 	amount1 := mrand.Intn(100)
 	amount2 := mrand.Intn(55)
 	amount3 := mrand.Intn(999)
@@ -119,14 +117,14 @@ func TestRepeatedBookings(t *testing.T) {
 	}
 }
 
-//try restoring a balance from state store
-//this is simulated by creating a node,
-//assigning it an arbitrary balance,
-//then closing the state store.
-//Then we re-open the state store and check that
-//the balance is still the same
+// try restoring a balance from state store
+// this is simulated by creating a node,
+// assigning it an arbitrary balance,
+// then closing the state store.
+// Then we re-open the state store and check that
+// the balance is still the same
 func TestRestoreBalanceFromStateStore(t *testing.T) {
-	//create a test swap account
+	// create a test swap account
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
@@ -147,15 +145,15 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 	var newBalance int64
 	stateStore.Get(testPeer.ID().String(), &newBalance)
 
-	//compare the balances
+	// compare the balances
 	if tmpBalance != newBalance {
 		t.Fatal(fmt.Sprintf("Unexpected balance value after sending cheap message test. Expected balance: %d, balance is: %d",
 			tmpBalance, newBalance))
 	}
 }
 
-//create a test swap account
-//creates a stateStore for persistence and a Swap account
+// create a test swap account
+// creates a stateStore for persistence and a Swap account
 func createTestSwap(t *testing.T) (*Swap, string) {
 	dir, err := ioutil.TempDir("", "swap_test_store")
 	if err != nil {
@@ -173,7 +171,7 @@ type dummyPeer struct {
 	*protocols.Peer
 }
 
-//creates a dummy protocols.Peer with dummy MsgReadWriter
+// creates a dummy protocols.Peer with dummy MsgReadWriter
 func newDummyPeer() *dummyPeer {
 	id := adapters.RandomNodeConfig().ID
 	protoPeer := protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), nil, nil)

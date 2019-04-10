@@ -30,6 +30,7 @@ type noopChainRetriever struct{}
 func (r *noopChainRetriever) GetHeaderByNumber(number uint64) *types.Header {
 	return nil
 }
+
 func (r *noopChainRetriever) GetBlockByNumber(number uint64) *types.Block {
 	return nil
 }

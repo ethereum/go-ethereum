@@ -101,7 +101,6 @@ type Payment struct {
 
 // New - swap constructor
 func New(local *Params, pm Payment, proto Protocol) (swap *Swap, err error) {
-
 	swap = &Swap{
 		local:   local,
 		Payment: pm,
@@ -129,7 +128,6 @@ func (swap *Swap) SetRemote(remote *Profile) {
 	}
 
 	log.Debug(fmt.Sprintf("<%v> remote profile set: pay at: %v, drop at: %v, buy at: %v, sell at: %v", swap.proto, remote.PayAt, remote.DropAt, remote.BuyAt, remote.SellAt))
-
 }
 
 // SetParams - to set strategy dynamically
@@ -142,7 +140,6 @@ func (swap *Swap) SetParams(local *Params) {
 
 // setParams - caller holds the lock
 func (swap *Swap) setParams(local *Params) {
-
 	if swap.Sells {
 		swap.In.AutoCash(local.AutoCashInterval, local.AutoCashThreshold)
 		log.Info(fmt.Sprintf("<%v> set autocash to every %v, max uncashed limit: %v", swap.proto, local.AutoCashInterval, local.AutoCashThreshold))

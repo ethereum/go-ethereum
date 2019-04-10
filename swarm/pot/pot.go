@@ -22,9 +22,7 @@ import (
 	"sync"
 )
 
-const (
-	maxkeylen = 256
-)
+const maxkeylen = 256
 
 // Pot is the node type (same for root, branching node and leaf)
 type Pot struct {
@@ -536,7 +534,6 @@ func (t *Pot) eachBin(val Val, pof Pof, po int, f func(int, int, func(func(val V
 	if n.po == spr {
 		n.eachBin(val, pof, po, f)
 	}
-
 }
 
 // EachNeighbour is a synchronous iterator over neighbours of any target val

@@ -661,7 +661,7 @@ func writeMessageToFile(dir string, msg *whisper.ReceivedMessage, show bool) {
 	}
 
 	// this is a sample code; uncomment if you don't want to save your own messages.
-	//if whisper.IsPubKeyEqual(msg.Src, &asymKey.PublicKey) {
+	// if whisper.IsPubKeyEqual(msg.Src, &asymKey.PublicKey) {
 	//	fmt.Printf("\n%s <%x>: message from myself received, not saved: '%s'\n", timestamp, address, name)
 	//	return
 	//}

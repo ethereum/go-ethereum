@@ -84,9 +84,7 @@ var (
 	logFlag    = flag.Int("loglevel", 3, "Log level to use for Ethereum and the faucet")
 )
 
-var (
-	ether = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
-)
+var ether = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
 
 func main() {
 	// Parse the flags and set up the logger to print everything requested

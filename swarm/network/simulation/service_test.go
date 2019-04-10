@@ -16,9 +16,7 @@
 
 package simulation
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestService(t *testing.T) {
 	sim := New(noopServiceFuncMap)

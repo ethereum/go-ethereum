@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-//matches hex swarm hashes
+// matches hex swarm hashes
 // TODO: this is bad, it should not be hardcoded how long is a hash
 var hashMatcher = regexp.MustCompile("^([0-9A-Fa-f]{64})([0-9A-Fa-f]{64})?$")
 
@@ -108,6 +108,7 @@ func Parse(rawuri string) (*URI, error) {
 	}
 	return uri, nil
 }
+
 func (u *URI) Feed() bool {
 	return u.Scheme == "bzz-feed"
 }

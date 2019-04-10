@@ -106,7 +106,6 @@ func TestSwarmNetwork(t *testing.T) {
 		tests = append(tests, longRunningCases()...)
 	} else if testutil.RaceEnabled {
 		tests = shortCaseForRace()
-
 	}
 
 	for _, tc := range tests {

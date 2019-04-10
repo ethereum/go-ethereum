@@ -39,9 +39,7 @@ const (
 	blockLimit    = 64                     // Maximum number of unique blocks a peer may have delivered
 )
 
-var (
-	errTerminated = errors.New("terminated")
-)
+var errTerminated = errors.New("terminated")
 
 // blockRetrievalFn is a callback type for retrieving a block from the local chain.
 type blockRetrievalFn func(common.Hash) *types.Block

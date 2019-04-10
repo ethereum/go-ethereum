@@ -53,7 +53,6 @@ func NewSwarmFS(api *api.API) *SwarmFS {
 		}
 	})
 	return swarmfs
-
 }
 
 // Inode numbers need to be unique, they are used for caching inside fuse

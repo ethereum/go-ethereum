@@ -121,7 +121,7 @@ func (t *topicTable) checkDeleteTopic(topic Topic) {
 func (t *topicTable) getOrNewNode(node *Node) *nodeInfo {
 	n := t.nodes[node]
 	if n == nil {
-		//fmt.Printf("newNode %016x %016x\n", t.self.sha[:8], node.sha[:8])
+		// fmt.Printf("newNode %016x %016x\n", t.self.sha[:8], node.sha[:8])
 		var issued, used uint32
 		if t.db != nil {
 			issued, used = t.db.fetchTopicRegTickets(node.ID)
@@ -138,7 +138,7 @@ func (t *topicTable) getOrNewNode(node *Node) *nodeInfo {
 
 func (t *topicTable) checkDeleteNode(node *Node) {
 	if n, ok := t.nodes[node]; ok && len(n.entries) == 0 && n.noRegUntil < mclock.Now() {
-		//fmt.Printf("deleteNode %016x %016x\n", t.self.sha[:8], node.sha[:8])
+		// fmt.Printf("deleteNode %016x %016x\n", t.self.sha[:8], node.sha[:8])
 		delete(t.nodes, node)
 	}
 }
@@ -237,7 +237,7 @@ func (t *topicTable) deleteEntry(e *topicEntry) {
 // It is assumed that topics and waitPeriods have the same length.
 func (t *topicTable) useTicket(node *Node, serialNo uint32, topics []Topic, idx int, issueTime uint64, waitPeriods []uint32) (registered bool) {
 	log.Trace("Using discovery ticket", "serial", serialNo, "topics", topics, "waits", waitPeriods)
-	//fmt.Println("useTicket", serialNo, topics, waitPeriods)
+	// fmt.Println("useTicket", serialNo, topics, waitPeriods)
 	t.collectGarbage()
 
 	n := t.getOrNewNode(node)

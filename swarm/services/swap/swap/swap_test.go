@@ -94,7 +94,6 @@ func (test *testProtocol) Pay(amount int, promise Promise) {
 }
 
 func TestSwap(t *testing.T) {
-
 	strategy := &Strategy{
 		AutoCashInterval:     1 * time.Second,
 		AutoCashThreshold:    big.NewInt(20),
@@ -190,5 +189,4 @@ func TestSwap(t *testing.T) {
 			AutoDepositBuffer:    big.NewInt(60),
 		},
 	})
-
 }

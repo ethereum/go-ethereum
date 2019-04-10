@@ -648,18 +648,23 @@ func benchmarkEachNeighbourAsync(t *testing.B, max, count int, d time.Duration) 
 func BenchmarkEachNeighbourSync_3_1_0(t *testing.B) {
 	benchmarkEachNeighbourSync(t, 1000, 10, 1*time.Microsecond)
 }
+
 func BenchmarkEachNeighboursAsync_3_1_0(t *testing.B) {
 	benchmarkEachNeighbourAsync(t, 1000, 10, 1*time.Microsecond)
 }
+
 func BenchmarkEachNeighbourSync_3_2_0(t *testing.B) {
 	benchmarkEachNeighbourSync(t, 1000, 100, 1*time.Microsecond)
 }
+
 func BenchmarkEachNeighboursAsync_3_2_0(t *testing.B) {
 	benchmarkEachNeighbourAsync(t, 1000, 100, 1*time.Microsecond)
 }
+
 func BenchmarkEachNeighbourSync_3_3_0(t *testing.B) {
 	benchmarkEachNeighbourSync(t, 1000, 1000, 1*time.Microsecond)
 }
+
 func BenchmarkEachNeighboursAsync_3_3_0(t *testing.B) {
 	benchmarkEachNeighbourAsync(t, 1000, 1000, 1*time.Microsecond)
 }
@@ -667,18 +672,23 @@ func BenchmarkEachNeighboursAsync_3_3_0(t *testing.B) {
 func BenchmarkEachNeighbourSync_3_1_1(t *testing.B) {
 	benchmarkEachNeighbourSync(t, 1000, 10, 2*time.Microsecond)
 }
+
 func BenchmarkEachNeighboursAsync_3_1_1(t *testing.B) {
 	benchmarkEachNeighbourAsync(t, 1000, 10, 2*time.Microsecond)
 }
+
 func BenchmarkEachNeighbourSync_3_2_1(t *testing.B) {
 	benchmarkEachNeighbourSync(t, 1000, 100, 2*time.Microsecond)
 }
+
 func BenchmarkEachNeighboursAsync_3_2_1(t *testing.B) {
 	benchmarkEachNeighbourAsync(t, 1000, 100, 2*time.Microsecond)
 }
+
 func BenchmarkEachNeighbourSync_3_3_1(t *testing.B) {
 	benchmarkEachNeighbourSync(t, 1000, 1000, 2*time.Microsecond)
 }
+
 func BenchmarkEachNeighboursAsync_3_3_1(t *testing.B) {
 	benchmarkEachNeighbourAsync(t, 1000, 1000, 2*time.Microsecond)
 }
@@ -686,18 +696,23 @@ func BenchmarkEachNeighboursAsync_3_3_1(t *testing.B) {
 func BenchmarkEachNeighbourSync_3_1_2(t *testing.B) {
 	benchmarkEachNeighbourSync(t, 1000, 10, 4*time.Microsecond)
 }
+
 func BenchmarkEachNeighboursAsync_3_1_2(t *testing.B) {
 	benchmarkEachNeighbourAsync(t, 1000, 10, 4*time.Microsecond)
 }
+
 func BenchmarkEachNeighbourSync_3_2_2(t *testing.B) {
 	benchmarkEachNeighbourSync(t, 1000, 100, 4*time.Microsecond)
 }
+
 func BenchmarkEachNeighboursAsync_3_2_2(t *testing.B) {
 	benchmarkEachNeighbourAsync(t, 1000, 100, 4*time.Microsecond)
 }
+
 func BenchmarkEachNeighbourSync_3_3_2(t *testing.B) {
 	benchmarkEachNeighbourSync(t, 1000, 1000, 4*time.Microsecond)
 }
+
 func BenchmarkEachNeighboursAsync_3_3_2(t *testing.B) {
 	benchmarkEachNeighbourAsync(t, 1000, 1000, 4*time.Microsecond)
 }
@@ -705,18 +720,23 @@ func BenchmarkEachNeighboursAsync_3_3_2(t *testing.B) {
 func BenchmarkEachNeighbourSync_3_1_3(t *testing.B) {
 	benchmarkEachNeighbourSync(t, 1000, 10, 8*time.Microsecond)
 }
+
 func BenchmarkEachNeighboursAsync_3_1_3(t *testing.B) {
 	benchmarkEachNeighbourAsync(t, 1000, 10, 8*time.Microsecond)
 }
+
 func BenchmarkEachNeighbourSync_3_2_3(t *testing.B) {
 	benchmarkEachNeighbourSync(t, 1000, 100, 8*time.Microsecond)
 }
+
 func BenchmarkEachNeighboursAsync_3_2_3(t *testing.B) {
 	benchmarkEachNeighbourAsync(t, 1000, 100, 8*time.Microsecond)
 }
+
 func BenchmarkEachNeighbourSync_3_3_3(t *testing.B) {
 	benchmarkEachNeighbourSync(t, 1000, 1000, 8*time.Microsecond)
 }
+
 func BenchmarkEachNeighboursAsync_3_3_3(t *testing.B) {
 	benchmarkEachNeighbourAsync(t, 1000, 1000, 8*time.Microsecond)
 }
@@ -724,18 +744,23 @@ func BenchmarkEachNeighboursAsync_3_3_3(t *testing.B) {
 func BenchmarkEachNeighbourSync_3_1_4(t *testing.B) {
 	benchmarkEachNeighbourSync(t, 1000, 10, 16*time.Microsecond)
 }
+
 func BenchmarkEachNeighboursAsync_3_1_4(t *testing.B) {
 	benchmarkEachNeighbourAsync(t, 1000, 10, 16*time.Microsecond)
 }
+
 func BenchmarkEachNeighbourSync_3_2_4(t *testing.B) {
 	benchmarkEachNeighbourSync(t, 1000, 100, 16*time.Microsecond)
 }
+
 func BenchmarkEachNeighboursAsync_3_2_4(t *testing.B) {
 	benchmarkEachNeighbourAsync(t, 1000, 100, 16*time.Microsecond)
 }
+
 func BenchmarkEachNeighbourSync_3_3_4(t *testing.B) {
 	benchmarkEachNeighbourSync(t, 1000, 1000, 16*time.Microsecond)
 }
+
 func BenchmarkEachNeighboursAsync_3_3_4(t *testing.B) {
 	benchmarkEachNeighbourAsync(t, 1000, 1000, 16*time.Microsecond)
 }

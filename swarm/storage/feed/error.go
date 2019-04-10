@@ -16,9 +16,7 @@
 
 package feed
 
-import (
-	"fmt"
-)
+import "fmt"
 
 const (
 	ErrInit = iota

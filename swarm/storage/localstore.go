@@ -38,8 +38,8 @@ func NewDefaultLocalStoreParams() *LocalStoreParams {
 	}
 }
 
-//this can only finally be set after all config options (file, cmd line, env vars)
-//have been evaluated
+// this can only finally be set after all config options (file, cmd line, env vars)
+// have been evaluated
 func (p *LocalStoreParams) Init(path string) {
 	if p.ChunkDbPath == "" {
 		p.ChunkDbPath = filepath.Join(path, "chunks")

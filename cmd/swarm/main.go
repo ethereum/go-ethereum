@@ -74,7 +74,7 @@ OPTIONS:
 // e.g.: go install -ldflags "-X main.gitCommit=ed1312d01b19e04ef578946226e5d8069d5dfd5a" ./cmd/swarm
 var gitCommit string
 
-//declare a few constant error messages, useful for later error check comparisons in test
+// declare a few constant error messages, useful for later error check comparisons in test
 var (
 	SwarmErrNoBZZAccount = "bzzaccount option is required but not set; check your config file, command line or environment variables"
 	SwarmErrSwapSetNoAPI = "SWAP is enabled but --swap-api is not set"
@@ -262,8 +262,8 @@ func version(ctx *cli.Context) error {
 }
 
 func bzzd(ctx *cli.Context) error {
-	//build a valid bzzapi.Config from all available sources:
-	//default config, file config, command line and env vars
+	// build a valid bzzapi.Config from all available sources:
+	// default config, file config, command line and env vars
 
 	bzzconfig, err := buildConfig(ctx)
 	if err != nil {
@@ -272,22 +272,22 @@ func bzzd(ctx *cli.Context) error {
 
 	cfg := defaultNodeConfig
 
-	//pss operates on ws
+	// pss operates on ws
 	cfg.WSModules = append(cfg.WSModules, "pss")
 
-	//geth only supports --datadir via command line
-	//in order to be consistent within swarm, if we pass --datadir via environment variable
-	//or via config file, we get the same directory for geth and swarm
+	// geth only supports --datadir via command line
+	// in order to be consistent within swarm, if we pass --datadir via environment variable
+	// or via config file, we get the same directory for geth and swarm
 	if _, err := os.Stat(bzzconfig.Path); err == nil {
 		cfg.DataDir = bzzconfig.Path
 	}
 
-	//optionally set the bootnodes before configuring the node
+	// optionally set the bootnodes before configuring the node
 	setSwarmBootstrapNodes(ctx, &cfg)
-	//setup the ethereum node
+	// setup the ethereum node
 	utils.SetNodeConfig(ctx, &cfg)
 
-	//disable dynamic dialing from p2p/discovery
+	// disable dynamic dialing from p2p/discovery
 	cfg.P2P.NoDial = true
 
 	stack, err := node.New(&cfg)
@@ -296,15 +296,15 @@ func bzzd(ctx *cli.Context) error {
 	}
 	defer stack.Close()
 
-	//a few steps need to be done after the config phase is completed,
-	//due to overriding behavior
+	// a few steps need to be done after the config phase is completed,
+	// due to overriding behavior
 	err = initSwarmNode(bzzconfig, stack, ctx, &cfg)
 	if err != nil {
 		return err
 	}
-	//register BZZ as node.Service in the ethereum node
+	// register BZZ as node.Service in the ethereum node
 	registerBzzService(bzzconfig, stack)
-	//start the node
+	// start the node
 	utils.StartNode(stack)
 
 	go func() {
@@ -330,7 +330,7 @@ func bzzd(ctx *cli.Context) error {
 }
 
 func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) {
-	//define the swarm service boot function
+	// define the swarm service boot function
 	boot := func(_ *node.ServiceContext) (node.Service, error) {
 		var nodeStore *mock.NodeStore
 		if bzzconfig.GlobalStoreAPI != "" {
@@ -345,14 +345,14 @@ func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) {
 		}
 		return swarm.NewSwarm(bzzconfig, nodeStore)
 	}
-	//register within the ethereum node
+	// register within the ethereum node
 	if err := stack.Register(boot); err != nil {
 		utils.Fatalf("Failed to register the Swarm service: %v", err)
 	}
 }
 
 func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
-	//an account is mandatory
+	// an account is mandatory
 	if bzzaccount == "" {
 		utils.Fatalf(SwarmErrNoBZZAccount)
 	}
@@ -471,5 +471,4 @@ func setSwarmBootstrapNodes(ctx *cli.Context, cfg *node.Config) {
 		}
 		cfg.P2P.BootstrapNodes = append(cfg.P2P.BootstrapNodes, node)
 	}
-
 }

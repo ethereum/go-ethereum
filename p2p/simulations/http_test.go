@@ -38,9 +38,7 @@ import (
 	"github.com/mattn/go-colorable"
 )
 
-var (
-	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
-)
+var loglevel = flag.Int("loglevel", 2, "verbosity of logs")
 
 func init() {
 	flag.Parse()
@@ -202,6 +200,7 @@ func (t *testService) RunDum(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		}
 	}
 }
+
 func (t *testService) RunPrb(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := t.peer(p.ID())
 

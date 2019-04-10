@@ -455,7 +455,7 @@ func (f *lightFetcher) findBestRequest() (bestHash common.Hash, bestAmount uint6
 				continue
 			}
 
-			//if ulc mode is disabled, isTrustedHash returns true
+			// if ulc mode is disabled, isTrustedHash returns true
 			amount := f.requestAmount(p, n)
 			if (bestTd == nil || n.td.Cmp(bestTd) > 0 || amount < bestAmount) && (f.isTrustedHash(hash) || f.maxConfirmedTd.Int64() == 0) {
 				bestHash = hash
@@ -508,7 +508,7 @@ func (f *lightFetcher) newFetcherDistReqForSync(bestHash common.Hash) *distReq {
 		},
 		request: func(dp distPeer) func() {
 			if f.pm.isULCEnabled() {
-				//keep last trusted header before sync
+				// keep last trusted header before sync
 				f.setLastTrustedHeader(f.chain.CurrentHeader())
 			}
 			go func() {
@@ -718,13 +718,13 @@ func (f *lightFetcher) checkSyncedHeaders(p *peer) {
 		var unapprovedHashes []common.Hash
 		// Overwrite last announced for ULC mode
 		h, unapprovedHashes = f.lastTrustedTreeNode(p)
-		//rollback untrusted blocks
+		// rollback untrusted blocks
 		f.chain.Rollback(unapprovedHashes)
-		//overwrite to last trusted
+		// overwrite to last trusted
 		n = fp.nodeByHash[h.Hash()]
 	}
 
-	//find last valid block
+	// find last valid block
 	for n != nil {
 		if td = f.chain.GetTd(n.hash, n.number); td != nil {
 			break

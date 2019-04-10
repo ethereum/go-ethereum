@@ -65,5 +65,4 @@ func TestRoundTripper(t *testing.T) {
 	if string(content) != "/HTTP/1.1:/test.com/path" {
 		t.Errorf("incorrect response from http server: expected '%v', got '%v'", "/HTTP/1.1:/test.com/path", string(content))
 	}
-
 }

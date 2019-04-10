@@ -7,7 +7,6 @@ import (
 )
 
 func TestMarshallers(t *testing.T) {
-
 	for i := uint64(1); i < lookup.MaxTime; i *= 3 {
 		e := lookup.Epoch{
 			Time:  i,
@@ -25,7 +24,6 @@ func TestMarshallers(t *testing.T) {
 			t.Fatal("Expected unmarshalled epoch to be equal to marshalled onet.Fatal(err)")
 		}
 	}
-
 }
 
 func TestAfter(t *testing.T) {
@@ -53,5 +51,4 @@ func TestAfter(t *testing.T) {
 	if !b.After(c) {
 		t.Fatal("Expected 'after' to be true when both epochs have the same time but the level is lower in the first one, but got false")
 	}
-
 }

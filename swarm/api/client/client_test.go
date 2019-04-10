@@ -43,6 +43,7 @@ func serverFunc(api *api.API) swarmhttp.TestServer {
 func TestClientUploadDownloadRaw(t *testing.T) {
 	testClientUploadDownloadRaw(false, t)
 }
+
 func TestClientUploadDownloadRawEncrypted(t *testing.T) {
 	testClientUploadDownloadRaw(true, t)
 }
@@ -375,7 +376,6 @@ func newTestSigner() (*feed.GenericSigner, error) {
 // Retrieving the update with the Swarm hash should return the manifest pointing directly to the data
 // and raw retrieve of that hash should return the data
 func TestClientBzzWithFeed(t *testing.T) {
-
 	signer, _ := newTestSigner()
 
 	// Initialize a Swarm test server
@@ -470,7 +470,7 @@ func TestClientBzzWithFeed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//Check that indeed the **manifest hash** is retrieved
+	// Check that indeed the **manifest hash** is retrieved
 	if !bytes.Equal(manifestAddress, gotData) {
 		t.Fatalf("Expected: %v, got %v", manifestAddress, gotData)
 	}
@@ -494,7 +494,6 @@ func TestClientBzzWithFeed(t *testing.T) {
 
 // TestClientCreateUpdateFeed will check that feeds can be created and updated via the HTTP client.
 func TestClientCreateUpdateFeed(t *testing.T) {
-
 	signer, _ := newTestSigner()
 
 	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)

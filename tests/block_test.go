@@ -16,9 +16,7 @@
 
 package tests
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestBlockchain(t *testing.T) {
 	t.Parallel()
@@ -39,10 +37,10 @@ func TestBlockchain(t *testing.T) {
 	bt.slow(`^bcWalletTest/`)
 
 	// Still failing tests that we need to look into
-	//bt.fails(`^bcStateTests/suicideThenCheckBalance.json/suicideThenCheckBalance_Constantinople`, "TODO: investigate")
-	//bt.fails(`^bcStateTests/suicideStorageCheckVCreate2.json/suicideStorageCheckVCreate2_Constantinople`, "TODO: investigate")
-	//bt.fails(`^bcStateTests/suicideStorageCheckVCreate.json/suicideStorageCheckVCreate_Constantinople`, "TODO: investigate")
-	//bt.fails(`^bcStateTests/suicideStorageCheck.json/suicideStorageCheck_Constantinople`, "TODO: investigate")
+	// bt.fails(`^bcStateTests/suicideThenCheckBalance.json/suicideThenCheckBalance_Constantinople`, "TODO: investigate")
+	// bt.fails(`^bcStateTests/suicideStorageCheckVCreate2.json/suicideStorageCheckVCreate2_Constantinople`, "TODO: investigate")
+	// bt.fails(`^bcStateTests/suicideStorageCheckVCreate.json/suicideStorageCheckVCreate_Constantinople`, "TODO: investigate")
+	// bt.fails(`^bcStateTests/suicideStorageCheck.json/suicideStorageCheck_Constantinople`, "TODO: investigate")
 
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
 		if err := bt.checkFailure(t, name, test.Run()); err != nil {

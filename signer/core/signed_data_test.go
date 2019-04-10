@@ -176,7 +176,7 @@ var typedData = TypedData{
 
 func TestSignData(t *testing.T) {
 	api, control := setup(t)
-	//Create two accounts
+	// Create two accounts
 	createAccount(control, api, t)
 	createAccount(control, api, t)
 	control.approveCh <- "1"
@@ -792,7 +792,6 @@ func TestCustomTypeAsArray(t *testing.T) {
 }
 
 func TestFormatter(t *testing.T) {
-
 	var d TypedData
 	err := json.Unmarshal([]byte(jsonTypedData), &d)
 	if err != nil {

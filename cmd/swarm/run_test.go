@@ -71,6 +71,7 @@ func initCluster(t *testing.T) {
 func serverFunc(api *api.API) swarmhttp.TestServer {
 	return swarmhttp.NewServer(api, "")
 }
+
 func TestMain(m *testing.M) {
 	// check if we have been reexec'd
 	if reexec.Init() {
@@ -322,7 +323,6 @@ func existingTestNode(t *testing.T, dir string, bzzaccount string) *testNode {
 }
 
 func newTestNode(t *testing.T, dir string) *testNode {
-
 	conf, account := getTestAccount(t, dir)
 	ks := keystore.NewKeyStore(path.Join(dir, "keystore"), 1<<18, 1)
 

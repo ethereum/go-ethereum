@@ -25,22 +25,21 @@ import (
 )
 
 // Package defaults.
-var (
-	DefaultHTTPSimAddr = ":8888"
-)
 
-//WithServer implements the builder pattern constructor for Simulation to
-//start with a HTTP server
+var DefaultHTTPSimAddr = ":8888"
+
+// WithServer implements the builder pattern constructor for Simulation to
+// start with a HTTP server
 func (s *Simulation) WithServer(addr string) *Simulation {
-	//assign default addr if nothing provided
+	// assign default addr if nothing provided
 	if addr == "" {
 		addr = DefaultHTTPSimAddr
 	}
 	log.Info(fmt.Sprintf("Initializing simulation server on %s...", addr))
-	//initialize the HTTP server
+	// initialize the HTTP server
 	s.handler = simulations.NewServer(s.Net)
 	s.runC = make(chan struct{})
-	//add swarm specific routes to the HTTP server
+	// add swarm specific routes to the HTTP server
 	s.addSimulationRoutes()
 	s.httpSrv = &http.Server{
 		Addr:    addr,
@@ -55,7 +54,7 @@ func (s *Simulation) WithServer(addr string) *Simulation {
 	return s
 }
 
-//register additional HTTP routes
+// register additional HTTP routes
 func (s *Simulation) addSimulationRoutes() {
 	s.handler.POST("/runsim", s.RunSimulation)
 }

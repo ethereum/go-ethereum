@@ -33,9 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var (
-	ErrShuttingDown = errors.New("shutting down")
-)
+var ErrShuttingDown = errors.New("shutting down")
 
 const (
 	baseProtocolVersion    = 5

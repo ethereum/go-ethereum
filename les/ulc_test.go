@@ -61,7 +61,7 @@ func TestULCReceiveAnnounce(t *testing.T) {
 
 	l.PM.synchronise(fPeer)
 
-	//check that the sync is finished correctly
+	// check that the sync is finished correctly
 	if !reflect.DeepEqual(f.PM.blockchain.CurrentHeader().Hash(), l.PM.blockchain.CurrentHeader().Hash()) {
 		t.Fatal("sync doesn't work")
 	}
@@ -73,7 +73,7 @@ func TestULCReceiveAnnounce(t *testing.T) {
 	l.PM.peers.lock.Unlock()
 
 	time.Sleep(time.Second)
-	//send a signed announce message(payload doesn't matter)
+	// send a signed announce message(payload doesn't matter)
 	td := f.PM.blockchain.GetTd(l.PM.blockchain.CurrentHeader().Hash(), l.PM.blockchain.CurrentHeader().Number.Uint64())
 	announce := announceData{
 		Number: l.PM.blockchain.CurrentHeader().Number.Uint64() + 1,

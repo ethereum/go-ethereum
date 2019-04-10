@@ -32,9 +32,7 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
-var (
-	gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
-)
+var gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
 
 var (
 	allhosts     string
@@ -51,7 +49,6 @@ var (
 )
 
 func main() {
-
 	app := cli.NewApp()
 	app.Name = "smoke-test"
 	app.Usage = ""

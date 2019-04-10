@@ -35,7 +35,6 @@ import (
 // Tests that a created snapshot with a minimal service only contains the expected connections
 // and that a network when loaded with this snapshot only contains those same connections
 func TestSnapshot(t *testing.T) {
-
 	// PART I
 	// create snapshot from ring network
 
@@ -420,7 +419,6 @@ func BenchmarkMinimalService(b *testing.B) {
 }
 
 func benchmarkMinimalServiceTmp(b *testing.B) {
-
 	// stop timer to discard setup time pollution
 	args := strings.Split(b.Name(), "/")
 	nodeCount, err := strconv.ParseInt(args[2], 10, 16)

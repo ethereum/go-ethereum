@@ -40,7 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
-//Tests initializing a retrieve request
+// Tests initializing a retrieve request
 func TestStreamerRetrieveRequest(t *testing.T) {
 	regOpts := &RegistryOptions{
 		Retrieval: RetrievalClientOnly,
@@ -67,7 +67,7 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
 		Expects: []p2ptest.Expect{
-			{ //start expecting a subscription for RETRIEVE_REQUEST due to `RetrievalClientOnly`
+			{ // start expecting a subscription for RETRIEVE_REQUEST due to `RetrievalClientOnly`
 				Code: 4,
 				Msg: &SubscribeMsg{
 					Stream:   stream,
@@ -76,7 +76,7 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 				},
 				Peer: node.ID(),
 			},
-			{ //expect a retrieve request message for the given hash
+			{ // expect a retrieve request message for the given hash
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
 					Addr:      hash0[:],
@@ -92,12 +92,12 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 	}
 }
 
-//Test requesting a chunk from a peer then issuing a "empty" OfferedHashesMsg (no hashes available yet)
-//Should time out as the peer does not have the chunk (no syncing happened previously)
+// Test requesting a chunk from a peer then issuing a "empty" OfferedHashesMsg (no hashes available yet)
+// Should time out as the peer does not have the chunk (no syncing happened previously)
 func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(&RegistryOptions{
 		Retrieval: RetrievalEnabled,
-		Syncing:   SyncingDisabled, //do no syncing
+		Syncing:   SyncingDisabled, // do no syncing
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -111,17 +111,17 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 	peer := streamer.getPeer(node.ID())
 
 	stream := NewStream(swarmChunkServerStreamName, "", true)
-	//simulate pre-subscription to RETRIEVE_REQUEST stream on peer
+	// simulate pre-subscription to RETRIEVE_REQUEST stream on peer
 	peer.handleSubscribeMsg(context.TODO(), &SubscribeMsg{
 		Stream:   stream,
 		History:  nil,
 		Priority: Top,
 	})
 
-	//test the exchange
+	// test the exchange
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Expects: []p2ptest.Expect{
-			{ //first expect a subscription to the RETRIEVE_REQUEST stream
+			{ // first expect a subscription to the RETRIEVE_REQUEST stream
 				Code: 4,
 				Msg: &SubscribeMsg{
 					Stream:   stream,
@@ -134,7 +134,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 	}, p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
 		Triggers: []p2ptest.Trigger{
-			{ //then the actual RETRIEVE_REQUEST....
+			{ // then the actual RETRIEVE_REQUEST....
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
 					Addr: chunk.Address()[:],
@@ -143,7 +143,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 			},
 		},
 		Expects: []p2ptest.Expect{
-			{ //to which the peer responds with offered hashes
+			{ // to which the peer responds with offered hashes
 				Code: 1,
 				Msg: &OfferedHashesMsg{
 					HandoverProof: nil,
@@ -156,8 +156,8 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 		},
 	})
 
-	//should fail with a timeout as the peer we are requesting
-	//the chunk from does not have the chunk
+	// should fail with a timeout as the peer we are requesting
+	// the chunk from does not have the chunk
 	expectedError := `exchange #1 "RetrieveRequestMsg": timed out`
 	if err == nil || err.Error() != expectedError {
 		t.Fatalf("Expected error %v, got %v", expectedError, err)
@@ -374,7 +374,7 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 
 	node := tester.Nodes[0]
 
-	//subscribe to custom stream
+	// subscribe to custom stream
 	stream := NewStream("foo", "", true)
 	err = streamer.Subscribe(node.ID(), stream, NewRange(5, 8), Top)
 	if err != nil {
@@ -387,7 +387,7 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "Subscribe message",
 		Expects: []p2ptest.Expect{
-			{ //first expect subscription to the custom stream...
+			{ // first expect subscription to the custom stream...
 				Code: 4,
 				Msg: &SubscribeMsg{
 					Stream:   stream,
@@ -402,7 +402,7 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 			Label: "ChunkDelivery message",
 			Triggers: []p2ptest.Trigger{
 				{ //...then trigger a chunk delivery for the given chunk from peer in order for
-					//local node to get the chunk delivered
+					// local node to get the chunk delivered
 					Code: 6,
 					Msg: &ChunkDeliveryMsg{
 						Addr:  chunkKey,
@@ -438,7 +438,6 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 	if !bytes.Equal(storedChunk.Data(), chunkData) {
 		t.Fatal("Retrieved chunk has different data than original")
 	}
-
 }
 
 func TestDeliveryFromNodes(t *testing.T) {
@@ -496,17 +495,17 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 		defer cancel()
 		result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 			nodeIDs := sim.UpNodeIDs()
-			//determine the pivot node to be the first node of the simulation
+			// determine the pivot node to be the first node of the simulation
 			pivot := nodeIDs[0]
 
-			//distribute chunks of a random file into Stores of nodes 1 to nodes
-			//we will do this by creating a file store with an underlying round-robin store:
-			//the file store will create a hash for the uploaded file, but every chunk will be
-			//distributed to different nodes via round-robin scheduling
+			// distribute chunks of a random file into Stores of nodes 1 to nodes
+			// we will do this by creating a file store with an underlying round-robin store:
+			// the file store will create a hash for the uploaded file, but every chunk will be
+			// distributed to different nodes via round-robin scheduling
 			log.Debug("Writing file to round-robin file store")
-			//to do this, we create an array for chunkstores (length minus one, the pivot node)
+			// to do this, we create an array for chunkstores (length minus one, the pivot node)
 			stores := make([]storage.ChunkStore, len(nodeIDs)-1)
-			//we then need to get all stores from the sim....
+			// we then need to get all stores from the sim....
 			lStores := sim.NodesItems(bucketKeyStore)
 			i := 0
 			//...iterate the buckets...
@@ -515,13 +514,13 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 				if id == pivot {
 					continue
 				}
-				//the other ones are added to the array...
+				// the other ones are added to the array...
 				stores[i] = bucketVal.(storage.ChunkStore)
 				i++
 			}
 			//...which then gets passed to the round-robin file store
 			roundRobinFileStore := storage.NewFileStore(newRoundRobinStore(stores...), storage.NewFileStoreParams())
-			//now we can actually upload a (random) file to the round-robin store
+			// now we can actually upload a (random) file to the round-robin store
 			size := chunkCount * chunkSize
 			log.Debug("Storing data to file store")
 			fileHash, wait, err := roundRobinFileStore.Store(ctx, testutil.RandomReader(1, size), int64(size), false)
@@ -534,7 +533,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 				return err
 			}
 
-			//get the pivot node's filestore
+			// get the pivot node's filestore
 			item, ok := sim.NodeItem(pivot, bucketKeyFileStore)
 			if !ok {
 				return fmt.Errorf("No filestore")
@@ -557,7 +556,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 				}
 			}()
 
-			//finally check that the pivot node gets all chunks via the root hash
+			// finally check that the pivot node gets all chunks via the root hash
 			log.Debug("Check retrieval")
 			success := true
 			var total int64
@@ -730,5 +729,4 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck b
 	if result.Error != nil {
 		b.Fatal(result.Error)
 	}
-
 }

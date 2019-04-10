@@ -55,10 +55,8 @@ import (
 // * depositing ether to the chequebook
 // * watching incoming ether
 
-var (
-	gasToCash = uint64(2000000) // gas cost of a cash transaction using chequebook
-	// gasToDeploy = uint64(3000000)
-)
+var gasToCash = uint64(2000000) // gas cost of a cash transaction using chequebook
+// gasToDeploy = uint64(3000000)
 
 // Backend wraps all methods required for chequebook operation.
 type Backend interface {
@@ -100,7 +98,7 @@ type Chequebook struct {
 	// persisted fields
 	balance      *big.Int                    // not synced with blockchain
 	contractAddr common.Address              // contract address
-	sent         map[common.Address]*big.Int //tallies for beneficiaries
+	sent         map[common.Address]*big.Int // tallies for beneficiaries
 
 	txhash    string   // tx hash of last deposit tx
 	threshold *big.Int // threshold that triggers autodeposit if not nil

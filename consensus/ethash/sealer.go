@@ -36,10 +36,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const (
-	// staleThreshold is the maximum depth of the acceptable stale but valid ethash solution.
-	staleThreshold = 7
-)
+// staleThreshold is the maximum depth of the acceptable stale but valid ethash solution.
+const staleThreshold = 7
 
 var (
 	errNoMiningWork      = errors.New("no mining work available yet")

@@ -87,7 +87,6 @@ func (ui *CommandlineUI) readPasswordText(inputstring string) string {
 }
 
 func (ui *CommandlineUI) OnInputRequired(info UserInputRequest) (UserInputResponse, error) {
-
 	fmt.Printf("## %s\n\n%s\n", info.Title, info.Prompt)
 	if info.IsPassword {
 		fmt.Printf("> ")
@@ -141,7 +140,6 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	if request.Transaction.Data != nil {
 		d := *request.Transaction.Data
 		if len(d) > 0 {
-
 			fmt.Printf("data:     %v\n", hexutil.Encode(d))
 		}
 	}
@@ -173,7 +171,7 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 	for _, nvt := range request.Message {
 		fmt.Printf("%v\n", nvt.Pprint(1))
 	}
-	//fmt.Printf("message:  \n%v\n", request.Message)
+	// fmt.Printf("message:  \n%v\n", request.Message)
 	fmt.Printf("raw data:  \n%q\n", request.Rawdata)
 	fmt.Printf("message hash:  %v\n", request.Hash)
 	fmt.Printf("-------------------------------------------\n")
@@ -187,7 +185,6 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 // ApproveListing prompt the user for confirmation to list accounts
 // the list of accounts to list can be modified by the UI
 func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListResponse, error) {
-
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
 
@@ -208,7 +205,6 @@ func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListResponse, err
 
 // ApproveNewAccount prompt the user for confirmation to create new Account, and reveal to caller
 func (ui *CommandlineUI) ApproveNewAccount(request *NewAccountRequest) (NewAccountResponse, error) {
-
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
 
@@ -244,7 +240,6 @@ func (ui *CommandlineUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 }
 
 func (ui *CommandlineUI) OnSignerStartup(info StartupInfo) {
-
 	fmt.Printf("------- Signer info -------\n")
 	for k, v := range info.Info {
 		fmt.Printf("* %v : %v\n", k, v)

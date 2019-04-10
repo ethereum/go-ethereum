@@ -35,9 +35,7 @@ import (
 	"github.com/pborman/uuid"
 )
 
-const (
-	version = 3
-)
+const version = 3
 
 type Key struct {
 	Id uuid.UUID // Version 4 "random" for unique id not derived from key data

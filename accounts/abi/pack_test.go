@@ -530,7 +530,8 @@ func TestPack(t *testing.T) {
 					FieldA *big.Int `abi:"a"` // Test whether abi tag works for nested tuple
 					B      []*big.Int
 				}{big.NewInt(1), []*big.Int{big.NewInt(1), big.NewInt(0)}},
-				B: []*big.Int{big.NewInt(1), big.NewInt(0)}},
+				B: []*big.Int{big.NewInt(1), big.NewInt(0)},
+			},
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000040" + // a offset
 				"00000000000000000000000000000000000000000000000000000000000000e0" + // b offset
 				"0000000000000000000000000000000000000000000000000000000000000001" + // a.a value

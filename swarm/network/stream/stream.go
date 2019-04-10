@@ -92,9 +92,9 @@ type Registry struct {
 	intervalsStore state.Store
 	autoRetrieval  bool // automatically subscribe to retrieve request stream
 	maxPeerServers int
-	spec           *protocols.Spec   //this protocol's spec
-	balance        protocols.Balance //implements protocols.Balance, for accounting
-	prices         protocols.Prices  //implements protocols.Prices, provides prices to accounting
+	spec           *protocols.Spec   // this protocol's spec
+	balance        protocols.Balance // implements protocols.Balance, for accounting
+	prices         protocols.Prices  // implements protocols.Prices, provides prices to accounting
 	quit           chan struct{}     // terminates registry goroutines
 }
 
@@ -532,7 +532,6 @@ func (r *Registry) updateSyncing() {
 //   * the actual function to subscribe
 //     (in case of the test, it doesn't do real subscriptions)
 func (r *Registry) requestPeerSubscriptions(kad *network.Kademlia, subs map[enode.ID]map[Stream]struct{}) {
-
 	var startPo int
 	var endPo int
 	var ok bool
@@ -548,20 +547,20 @@ func (r *Registry) requestPeerSubscriptions(kad *network.Kademlia, subs map[enod
 		if !p.HasCap("stream") {
 			return true
 		}
-		//if the peer's bin is shallower than the kademlia depth,
-		//only the peer's bin should be subscribed
+		// if the peer's bin is shallower than the kademlia depth,
+		// only the peer's bin should be subscribed
 		if po < kadDepth {
 			startPo = po
 			endPo = po
 		} else {
-			//if the peer's bin is equal or deeper than the kademlia depth,
-			//each bin from the depth up to k.MaxProxDisplay should be subscribed
+			// if the peer's bin is equal or deeper than the kademlia depth,
+			// each bin from the depth up to k.MaxProxDisplay should be subscribed
 			startPo = kadDepth
 			endPo = kad.MaxProxDisplay
 		}
 
 		for bin := startPo; bin <= endPo; bin++ {
-			//do the actual subscription
+			// do the actual subscription
 			ok = subscriptionFunc(r, p, uint8(bin), subs)
 		}
 		return ok
@@ -974,25 +973,25 @@ It can be called via RPC.
 It returns a map of node IDs with an array of string representations of Stream objects.
 */
 func (api *API) GetPeerSubscriptions() map[string][]string {
-	//create the empty map
+	// create the empty map
 	pstreams := make(map[string][]string)
 
-	//iterate all streamer peers
+	// iterate all streamer peers
 	api.streamer.peersMu.RLock()
 	defer api.streamer.peersMu.RUnlock()
 
 	for id, p := range api.streamer.peers {
 		var streams []string
-		//every peer has a map of stream servers
-		//every stream server represents a subscription
+		// every peer has a map of stream servers
+		// every stream server represents a subscription
 		p.serverMu.RLock()
 		for s := range p.servers {
-			//append the string representation of the stream
-			//to the list for this peer
+			// append the string representation of the stream
+			// to the list for this peer
 			streams = append(streams, s.String())
 		}
 		p.serverMu.RUnlock()
-		//set the array of stream servers to the map
+		// set the array of stream servers to the map
 		pstreams[id.String()] = streams
 	}
 	return pstreams

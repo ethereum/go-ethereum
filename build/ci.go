@@ -1007,9 +1007,9 @@ func newPodMetadata(env build.Environment, archive string) podMetadata {
 // Cross compilation
 
 func doXgo(cmdline []string) {
-	var (
-		alltools = flag.Bool("alltools", false, `Flag whether we're building all known tools, or only on in particular`)
-	)
+
+	var alltools = flag.Bool("alltools", false, `Flag whether we're building all known tools, or only on in particular`)
+
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
 

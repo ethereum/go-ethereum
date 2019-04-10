@@ -36,9 +36,8 @@ func init() {
 }
 
 // shared test variables
-var (
-	testLocal = rpcEndpoint{IP: net.ParseIP("3.3.3.3").To4(), UDP: 5, TCP: 6}
-)
+
+var testLocal = rpcEndpoint{IP: net.ParseIP("3.3.3.3").To4(), UDP: 5, TCP: 6}
 
 // type udpTest struct {
 // 	t                   *testing.T

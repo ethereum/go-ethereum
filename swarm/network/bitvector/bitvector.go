@@ -16,9 +16,7 @@
 
 package bitvector
 
-import (
-	"errors"
-)
+import "errors"
 
 var errInvalidLength = errors.New("invalid length")
 

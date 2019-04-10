@@ -74,11 +74,10 @@ func createMockStore(globalStore mock.GlobalStorer, id enode.ID, addr *network.B
 }
 
 func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, po uint8) {
-
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			addr := network.NewAddr(ctx.Config.Node())
-			//hack to put addresses in same space
+			// hack to put addresses in same space
 			addr.OAddr[0] = byte(0)
 
 			netStore, delivery, clean, err := newNetStoreAndDeliveryWithBzzAddr(ctx, bucket, addr)
@@ -224,10 +223,10 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 	}
 }
 
-//TestSameVersionID just checks that if the version is not changed,
-//then streamer peers see each other
+// TestSameVersionID just checks that if the version is not changed,
+// then streamer peers see each other
 func TestSameVersionID(t *testing.T) {
-	//test version ID
+	// test version ID
 	v := uint(1)
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
@@ -242,7 +241,7 @@ func TestSameVersionID(t *testing.T) {
 			}, nil)
 			bucket.Store(bucketKeyRegistry, r)
 
-			//assign to each node the same version ID
+			// assign to each node the same version ID
 			r.spec.Version = v
 
 			cleanup = func() {
@@ -255,7 +254,7 @@ func TestSameVersionID(t *testing.T) {
 	})
 	defer sim.Close()
 
-	//connect just two nodes
+	// connect just two nodes
 	log.Info("Adding nodes to simulation")
 	_, err := sim.AddNodesAndConnectChain(2)
 	if err != nil {
@@ -264,10 +263,10 @@ func TestSameVersionID(t *testing.T) {
 
 	log.Info("Starting simulation")
 	ctx := context.Background()
-	//make sure they have time to connect
+	// make sure they have time to connect
 	time.Sleep(200 * time.Millisecond)
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
-		//get the pivot node's filestore
+		// get the pivot node's filestore
 		nodes := sim.UpNodeIDs()
 
 		item, ok := sim.NodeItem(nodes[0], bucketKeyRegistry)
@@ -276,7 +275,7 @@ func TestSameVersionID(t *testing.T) {
 		}
 		registry := item.(*Registry)
 
-		//the peers should connect, thus getting the peer should not return nil
+		// the peers should connect, thus getting the peer should not return nil
 		if registry.getPeer(nodes[1]) == nil {
 			return errors.New("Expected the peer to not be nil, but it is")
 		}
@@ -288,10 +287,10 @@ func TestSameVersionID(t *testing.T) {
 	log.Info("Simulation ended")
 }
 
-//TestDifferentVersionID proves that if the streamer protocol version doesn't match,
-//then the peers are not connected at streamer level
+// TestDifferentVersionID proves that if the streamer protocol version doesn't match,
+// then the peers are not connected at streamer level
 func TestDifferentVersionID(t *testing.T) {
-	//create a variable to hold the version ID
+	// create a variable to hold the version ID
 	v := uint(0)
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
@@ -306,7 +305,7 @@ func TestDifferentVersionID(t *testing.T) {
 			}, nil)
 			bucket.Store(bucketKeyRegistry, r)
 
-			//increase the version ID for each node
+			// increase the version ID for each node
 			v++
 			r.spec.Version = v
 
@@ -320,7 +319,7 @@ func TestDifferentVersionID(t *testing.T) {
 	})
 	defer sim.Close()
 
-	//connect the nodes
+	// connect the nodes
 	log.Info("Adding nodes to simulation")
 	_, err := sim.AddNodesAndConnectChain(2)
 	if err != nil {
@@ -329,10 +328,10 @@ func TestDifferentVersionID(t *testing.T) {
 
 	log.Info("Starting simulation")
 	ctx := context.Background()
-	//make sure they have time to connect
+	// make sure they have time to connect
 	time.Sleep(200 * time.Millisecond)
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
-		//get the pivot node's filestore
+		// get the pivot node's filestore
 		nodes := sim.UpNodeIDs()
 
 		item, ok := sim.NodeItem(nodes[0], bucketKeyRegistry)
@@ -341,7 +340,7 @@ func TestDifferentVersionID(t *testing.T) {
 		}
 		registry := item.(*Registry)
 
-		//getting the other peer should fail due to the different version numbers
+		// getting the other peer should fail due to the different version numbers
 		if registry.getPeer(nodes[1]) != nil {
 			return errors.New("Expected the peer to be nil, but it is not")
 		}
@@ -351,5 +350,4 @@ func TestDifferentVersionID(t *testing.T) {
 		t.Fatal(result.Error)
 	}
 	log.Info("Simulation ended")
-
 }

@@ -48,9 +48,7 @@ const (
 
 const testTopic = "foo"
 
-const (
-	printTestImgLogs = false
-)
+const printTestImgLogs = false
 
 // Network manages the table and all protocol interaction.
 type Network struct {
@@ -419,7 +417,7 @@ loop:
 
 		// Ingress packet handling.
 		case pkt := <-net.read:
-			//fmt.Println("read", pkt.ev)
+			// fmt.Println("read", pkt.ev)
 			log.Trace("<-net.read")
 			n := net.internNode(&pkt)
 			prestate := n.state
@@ -513,7 +511,7 @@ loop:
 		case <-nextRegisterTime:
 			log.Trace("<-nextRegisterTime")
 			net.ticketStore.ticketRegistered(*nextTicket)
-			//fmt.Println("sendTopicRegister", nextTicket.t.node.addr().String(), nextTicket.t.topics, nextTicket.idx, nextTicket.t.pong)
+			// fmt.Println("sendTopicRegister", nextTicket.t.node.addr().String(), nextTicket.t.topics, nextTicket.idx, nextTicket.t.pong)
 			net.conn.sendTopicRegister(nextTicket.t.node, nextTicket.t.topics, nextTicket.idx, nextTicket.t.pong)
 
 		case req := <-net.topicSearchReq:
@@ -1027,10 +1025,10 @@ func init() {
 
 // handle processes packets sent by n and events related to n.
 func (net *Network) handle(n *Node, ev nodeEvent, pkt *ingressPacket) error {
-	//fmt.Println("handle", n.addr().String(), n.state, ev)
+	// fmt.Println("handle", n.addr().String(), n.state, ev)
 	if pkt != nil {
 		if err := net.checkPacket(n, ev, pkt); err != nil {
-			//fmt.Println("check err:", err)
+			// fmt.Println("check err:", err)
 			return err
 		}
 		// Start the background expiration goroutine after the first
@@ -1047,7 +1045,7 @@ func (net *Network) handle(n *Node, ev nodeEvent, pkt *ingressPacket) error {
 	}
 	next, err := n.state.handle(net, n, ev, pkt)
 	net.transition(n, next)
-	//fmt.Println("new state:", n.state)
+	// fmt.Println("new state:", n.state)
 	return err
 }
 
@@ -1103,9 +1101,9 @@ func (net *Network) abortTimedEvent(n *Node, ev nodeEvent) {
 }
 
 func (net *Network) ping(n *Node, addr *net.UDPAddr) {
-	//fmt.Println("ping", n.addr().String(), n.ID.String(), n.sha.Hex())
+	// fmt.Println("ping", n.addr().String(), n.ID.String(), n.sha.Hex())
 	if n.pingEcho != nil || n.ID == net.tab.self.ID {
-		//fmt.Println(" not sent")
+		// fmt.Println(" not sent")
 		return
 	}
 	log.Trace("Pinging remote node", "node", n.ID)
@@ -1173,11 +1171,11 @@ func (net *Network) handleQueryEvent(n *Node, ev nodeEvent, pkt *ingressPacket) 
 		net.conn.sendNeighbours(n, results)
 		return n.state, nil
 	case topicRegisterPacket:
-		//fmt.Println("got topicRegisterPacket")
+		// fmt.Println("got topicRegisterPacket")
 		regdata := pkt.data.(*topicRegister)
 		pong, err := net.checkTopicRegister(regdata)
 		if err != nil {
-			//fmt.Println(err)
+			// fmt.Println(err)
 			return n.state, fmt.Errorf("bad waiting ticket: %v", err)
 		}
 		net.topictab.useTicket(n, pong.TicketSerial, regdata.Topics, int(regdata.Idx), pong.Expiration, pong.WaitPeriods)

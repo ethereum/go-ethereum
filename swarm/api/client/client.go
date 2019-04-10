@@ -45,9 +45,7 @@ import (
 	"github.com/pborman/uuid"
 )
 
-var (
-	ErrUnauthorized = errors.New("unauthorized")
-)
+var ErrUnauthorized = errors.New("unauthorized")
 
 func NewClient(gateway string) *Client {
 	return &Client{
@@ -289,7 +287,7 @@ func (c *Client) DownloadFile(hash, path, dest, credentials string) error {
 	case 0:
 		return fmt.Errorf("could not find path requested at manifest address. make sure the path you've specified is correct")
 	case 1:
-		//continue
+		// continue
 	default:
 		return fmt.Errorf("got too many matches for this path")
 	}
@@ -319,7 +317,7 @@ func (c *Client) DownloadFile(hash, path, dest, credentials string) error {
 		filename = dest
 	} else {
 		// try to assert
-		re := regexp.MustCompile("[^/]+$") //everything after last slash
+		re := regexp.MustCompile("[^/]+$") // everything after last slash
 
 		if results := re.FindAllString(path, -1); len(results) > 0 {
 			filename = results[len(results)-1]
@@ -691,7 +689,7 @@ func (c *Client) queryFeed(query *feed.Query, manifestAddressOrDomain string, me
 	URL.Path = "/bzz-feed:/" + manifestAddressOrDomain
 	values := URL.Query()
 	if query != nil {
-		query.AppendValues(values) //adds query parameters
+		query.AppendValues(values) // adds query parameters
 	}
 	if meta {
 		values.Set("meta", "1")
@@ -723,7 +721,6 @@ func (c *Client) queryFeed(query *feed.Query, manifestAddressOrDomain string, me
 // manifestAddressOrDomain is the address you obtained in CreateFeedWithManifest or an ENS domain whose Resolver
 // points to that address
 func (c *Client) GetFeedRequest(query *feed.Query, manifestAddressOrDomain string) (*feed.Request, error) {
-
 	responseStream, err := c.queryFeed(query, manifestAddressOrDomain, true)
 	if err != nil {
 		return nil, err

@@ -24,6 +24,7 @@ type bitvec []byte
 func (bits *bitvec) set(pos uint64) {
 	(*bits)[pos/8] |= 0x80 >> (pos % 8)
 }
+
 func (bits *bitvec) set8(pos uint64) {
 	(*bits)[pos/8] |= 0xFF >> (pos % 8)
 	(*bits)[pos/8+1] |= ^(0xFF >> (pos % 8))

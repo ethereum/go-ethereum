@@ -31,9 +31,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-const (
-	MaxAppendFileSize = 10485760 // 10Mb
-)
+const MaxAppendFileSize = 10485760 // 10Mb
 
 var (
 	errInvalidOffset           = errors.New("Invalid offset during write")
@@ -78,7 +76,7 @@ func (sf *SwarmFile) Attr(ctx context.Context, a *fuse.Attr) error {
 	sf.lock.Lock()
 	defer sf.lock.Unlock()
 	a.Inode = sf.inode
-	//TODO: need to get permission as argument
+	// TODO: need to get permission as argument
 	a.Mode = 0700
 	a.Uid = uint32(os.Getuid())
 	a.Gid = uint32(os.Getegid())

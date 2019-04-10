@@ -710,7 +710,7 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 		if contentType == "" {
 			contentType = mime.TypeByExtension(filepath.Ext(hdr.Name))
 		}
-		//DetectContentType("")
+		// DetectContentType("")
 		entry := &ManifestEntry{
 			Path:        manifestPath,
 			ContentType: contentType,
@@ -818,9 +818,9 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 	totalSize := int64(len(buf))
 
 	// TODO(jmozah): to append using pyramid chunker when it is ready
-	//oldReader := a.Retrieve(oldKey)
-	//newReader := bytes.NewReader(content)
-	//combinedReader := io.MultiReader(oldReader, newReader)
+	// oldReader := a.Retrieve(oldKey)
+	// newReader := bytes.NewReader(content)
+	// combinedReader := io.MultiReader(oldReader, newReader)
 
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
@@ -876,7 +876,6 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 
 // BuildDirectoryTree used by swarmfs_unix
 func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver bool) (addr storage.Address, manifestEntryMap map[string]*manifestTrieEntry, err error) {
-
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
 		return nil, nil, err
@@ -980,7 +979,6 @@ func (a *API) ResolveFeed(ctx context.Context, uri *URI, values feed.Values) (*f
 		var f feed.Feed
 		if err := f.FromValues(values); err != nil {
 			return nil, ErrCannotResolveFeed
-
 		}
 		fd = &f
 	}

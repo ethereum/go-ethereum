@@ -180,9 +180,9 @@ func (_Chequebook *ChequebookTransactorRaw) Transact(opts *bind.TransactOpts, me
 //
 // Solidity: function sent( address) constant returns(uint256)
 func (_Chequebook *ChequebookCaller) Sent(opts *bind.CallOpts, arg0 common.Address) (*big.Int, error) {
-	var (
-		ret0 = new(*big.Int)
-	)
+
+	var ret0 = new(*big.Int)
+
 	out := ret0
 	err := _Chequebook.contract.Call(opts, out, "sent", arg0)
 	return *ret0, err
@@ -321,7 +321,6 @@ type ChequebookOverdraft struct {
 //
 // Solidity: event Overdraft(deadbeat address)
 func (_Chequebook *ChequebookFilterer) FilterOverdraft(opts *bind.FilterOpts) (*ChequebookOverdraftIterator, error) {
-
 	logs, sub, err := _Chequebook.contract.FilterLogs(opts, "Overdraft")
 	if err != nil {
 		return nil, err
@@ -333,7 +332,6 @@ func (_Chequebook *ChequebookFilterer) FilterOverdraft(opts *bind.FilterOpts) (*
 //
 // Solidity: event Overdraft(deadbeat address)
 func (_Chequebook *ChequebookFilterer) WatchOverdraft(opts *bind.WatchOpts, sink chan<- *ChequebookOverdraft) (event.Subscription, error) {
-
 	logs, sub, err := _Chequebook.contract.WatchLogs(opts, "Overdraft")
 	if err != nil {
 		return nil, err

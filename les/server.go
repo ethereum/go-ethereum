@@ -189,7 +189,7 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 	s.maxPeers = s.config.LightPeers
 	totalRecharge := s.costTracker.totalRecharge()
 	if s.maxPeers > 0 {
-		s.freeClientCap = minCapacity //totalRecharge / uint64(s.maxPeers)
+		s.freeClientCap = minCapacity // totalRecharge / uint64(s.maxPeers)
 		if s.freeClientCap < minCapacity {
 			s.freeClientCap = minCapacity
 		}

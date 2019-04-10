@@ -328,5 +328,5 @@ func Example_store() {
 
 	fmt.Println(bytes.Equal(got.Data(), ch.Data()))
 
-	//Output: true
+	// Output: true
 }

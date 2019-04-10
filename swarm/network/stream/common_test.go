@@ -268,25 +268,25 @@ func uploadFilesToNodes(sim *simulation.Simulation) ([]storage.Address, []string
 	nodes := sim.UpNodeIDs()
 	nodeCnt := len(nodes)
 	log.Debug(fmt.Sprintf("Uploading %d files to nodes", nodeCnt))
-	//array holding generated files
+	// array holding generated files
 	rfiles := make([]string, nodeCnt)
-	//array holding the root hashes of the files
+	// array holding the root hashes of the files
 	rootAddrs := make([]storage.Address, nodeCnt)
 
 	var err error
-	//for every node, generate a file and upload
+	// for every node, generate a file and upload
 	for i, id := range nodes {
 		item, ok := sim.NodeItem(id, bucketKeyFileStore)
 		if !ok {
 			return nil, nil, fmt.Errorf("Error accessing localstore")
 		}
 		fileStore := item.(*storage.FileStore)
-		//generate a file
+		// generate a file
 		rfiles[i], err = generateRandomFile()
 		if err != nil {
 			return nil, nil, err
 		}
-		//store it (upload it) on the FileStore
+		// store it (upload it) on the FileStore
 		ctx := context.TODO()
 		rk, wait, err := fileStore.Store(ctx, strings.NewReader(rfiles[i]), int64(len(rfiles[i])), false)
 		log.Debug("Uploaded random string file to node")
@@ -302,16 +302,16 @@ func uploadFilesToNodes(sim *simulation.Simulation) ([]storage.Address, []string
 	return rootAddrs, rfiles, nil
 }
 
-//generate a random file (string)
+// generate a random file (string)
 func generateRandomFile() (string, error) {
-	//generate a random file size between minFileSize and maxFileSize
+	// generate a random file size between minFileSize and maxFileSize
 	fileSize := rand.Intn(maxFileSize-minFileSize) + minFileSize
 	log.Debug(fmt.Sprintf("Generated file with filesize %d kB", fileSize))
 	b := testutil.RandomBytes(1, fileSize*1024)
 	return string(b), nil
 }
 
-//create a local store for the given node
+// create a local store for the given node
 func createTestLocalStorageForID(id enode.ID, addr *network.BzzAddr) (storage.ChunkStore, string, error) {
 	var datadir string
 	var err error

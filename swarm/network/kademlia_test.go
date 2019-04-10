@@ -211,7 +211,6 @@ func TestHighMinBinSize(t *testing.T) {
 // TestHealthStrict tests the simplest definition of health
 // Which means whether we are connected to all neighbors we know of
 func TestHealthStrict(t *testing.T) {
-
 	// base address is all zeros
 	// no peers
 	// unhealthy (and lonely)
@@ -444,7 +443,6 @@ func TestSuggestPeerFindPeers(t *testing.T) {
 	tk.checkSuggestPeer("00000010", 0, false)
 	tk.checkSuggestPeer("00000001", 0, false)
 	tk.checkSuggestPeer("<nil>", 0, false)
-
 }
 
 // a node should stay in the address book if it's removed from the kademlia

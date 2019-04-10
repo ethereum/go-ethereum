@@ -43,9 +43,7 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-const (
-	sampleLimit = 200 // Maximum number of data samples
-)
+const sampleLimit = 200 // Maximum number of data samples
 
 // Dashboard contains the dashboard internals.
 type Dashboard struct {

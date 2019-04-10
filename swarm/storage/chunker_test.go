@@ -159,7 +159,6 @@ func TestSha3ForCorrectness(t *testing.T) {
 	if !bytes.Equal(rawSha3Output, sha3FromMakeFuncOutput) {
 		tester.t.Fatalf("Original SHA3 and abstracted Sha3 mismatch %v:%v\n", rawSha3Output, sha3FromMakeFuncOutput)
 	}
-
 }
 
 func TestDataAppend(t *testing.T) {
@@ -196,7 +195,7 @@ func TestDataAppend(t *testing.T) {
 		if err != nil {
 			tester.t.Fatalf(err.Error())
 		}
-		//create a append data stream
+		// create a append data stream
 		appendInput, found := tester.inputs[uint64(m)]
 		var appendData io.Reader
 		if !found {
@@ -234,7 +233,7 @@ func TestDataAppend(t *testing.T) {
 func TestRandomData(t *testing.T) {
 	// This test can validate files up to a relatively short length, as tree chunker slows down drastically.
 	// Validation of longer files is done by TestLocalStoreAndRetrieve in swarm package.
-	//sizes := []int{1, 60, 83, 179, 253, 1024, 4095, 4096, 4097, 8191, 8192, 8193, 12287, 12288, 12289, 524288, 524288 + 1, 524288 + 4097, 7 * 524288, 7*524288 + 1, 7*524288 + 4097}
+	// sizes := []int{1, 60, 83, 179, 253, 1024, 4095, 4096, 4097, 8191, 8192, 8193, 12287, 12288, 12289, 524288, 524288 + 1, 524288 + 4097, 7 * 524288, 7*524288 + 1, 7*524288 + 4097}
 	sizes := []int{1, 60, 83, 179, 253, 1024, 4095, 4097, 8191, 8192, 12288, 12289, 524288}
 	tester := &chunkerTester{t: t}
 

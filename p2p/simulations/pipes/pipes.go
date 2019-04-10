@@ -16,9 +16,7 @@
 
 package pipes
 
-import (
-	"net"
-)
+import "net"
 
 // NetPipe wraps net.Pipe in a signature returning an error
 func NetPipe() (net.Conn, net.Conn, error) {

@@ -16,9 +16,7 @@
 
 package params
 
-import (
-	"fmt"
-)
+import "fmt"
 
 const (
 	VersionMajor = 1          // Major version component of the current release

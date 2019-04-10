@@ -257,6 +257,7 @@ type dummyMsgRW struct{}
 func (d *dummyMsgRW) ReadMsg() (p2p.Msg, error) {
 	return p2p.Msg{}, nil
 }
+
 func (d *dummyMsgRW) WriteMsg(msg p2p.Msg) error {
 	return nil
 }

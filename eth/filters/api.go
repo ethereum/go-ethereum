@@ -34,9 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-var (
-	deadline = 5 * time.Minute // consider a filter inactive if it has not been polled for within deadline
-)
+var deadline = 5 * time.Minute // consider a filter inactive if it has not been polled for within deadline
 
 // filter is a helper struct that holds meta information over the filter type
 // and associated subscription in the event system.
@@ -251,7 +249,6 @@ func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc
 	}
 
 	go func() {
-
 		for {
 			select {
 			case logs := <-matchedLogs:

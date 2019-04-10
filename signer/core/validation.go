@@ -38,6 +38,7 @@ type Validator struct {
 func NewValidator(db *AbiDb) *Validator {
 	return &Validator{db}
 }
+
 func testSelector(selector string, data []byte) (*decodedCallData, error) {
 	if selector == "" {
 		return nil, fmt.Errorf("selector not found")
@@ -51,7 +52,6 @@ func testSelector(selector string, data []byte) (*decodedCallData, error) {
 		return nil, err
 	}
 	return info, nil
-
 }
 
 // validateCallData checks if the ABI-data + methodselector (if given) can be parsed and seems to match
@@ -77,7 +77,7 @@ func (v *Validator) validateCallData(msgs *ValidationMessages, data []byte, meth
 			msgs.warn(fmt.Sprintf("Tx contains data, but provided ABI signature could not be matched: %v", err))
 		} else {
 			msgs.info(info.String())
-			//Successfull match. add to db if not there already (ignore errors there)
+			// Successfull match. add to db if not there already (ignore errors there)
 			v.db.AddSignature(*methodSelector, data[:4])
 		}
 		return
@@ -103,9 +103,9 @@ func (v *Validator) validate(msgs *ValidationMessages, txargs *SendTxArgs, metho
 		// This is a showstopper
 		return errors.New(`Ambiguous request: both "data" and "input" are set and are not identical`)
 	}
-	var (
-		data []byte
-	)
+
+	var data []byte
+
 	// Place data on 'data', and nil 'input'
 	if txargs.Input != nil {
 		txargs.Data = txargs.Input
@@ -116,7 +116,7 @@ func (v *Validator) validate(msgs *ValidationMessages, txargs *SendTxArgs, metho
 	}
 
 	if txargs.To == nil {
-		//Contract creation should contain sufficient data to deploy a contract
+		// Contract creation should contain sufficient data to deploy a contract
 		// A typical error is omitting sender due to some quirk in the javascript call
 		// e.g. https://github.com/ethereum/go-ethereum/issues/16106
 		if len(data) == 0 {
@@ -126,7 +126,7 @@ func (v *Validator) validate(msgs *ValidationMessages, txargs *SendTxArgs, metho
 			}
 			// No value submitted at least
 			msgs.crit("Tx will create contract with empty code!")
-		} else if len(data) < 40 { //Arbitrary limit
+		} else if len(data) < 40 { // Arbitrary limit
 			msgs.warn(fmt.Sprintf("Tx will will create contract, but payload is suspiciously small (%d b)", len(data)))
 		}
 		// methodSelector should be nil for contract creation

@@ -107,7 +107,7 @@ func fetchFeed(topic string, user string, endpoint string, original []byte, ruid
 	req = req.WithContext(httptrace.WithClientTrace(ctx, trace))
 	transport := http.DefaultTransport
 
-	//transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	// transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
 	tn = time.Now()
 	res, err := transport.RoundTrip(req)
@@ -162,7 +162,7 @@ func fetch(hash string, endpoint string, original []byte, ruid string, tuid stri
 	req = req.WithContext(httptrace.WithClientTrace(ctx, trace))
 	transport := http.DefaultTransport
 
-	//transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	// transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
 	tn = time.Now()
 	res, err := transport.RoundTrip(req)

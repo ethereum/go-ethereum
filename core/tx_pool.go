@@ -35,10 +35,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-const (
-	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
-	chainHeadChanSize = 10
-)
+// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
+const chainHeadChanSize = 10
 
 var (
 	// ErrInvalidSender is returned if the transaction contains an invalid signature.

@@ -62,12 +62,12 @@ func (s *Simulation) WaitTillHealthy(ctx context.Context) (ill map[enode.ID]*net
 			}
 			log.Debug("kademlia health check", "addr count", len(addrs), "kad len", len(kademlias))
 			for id, k := range kademlias {
-				//PeerPot for this node
+				// PeerPot for this node
 				addr := common.Bytes2Hex(k.BaseAddr())
 				pp := ppmap[addr]
-				//call Healthy RPC
+				// call Healthy RPC
 				h := k.GetHealthInfo(pp)
-				//print info
+				// print info
 				log.Debug(k.String())
 				log.Debug("kademlia", "connectNN", h.ConnectNN, "knowNN", h.KnowNN)
 				log.Debug("kademlia", "health", h.ConnectNN && h.KnowNN, "addr", hex.EncodeToString(k.BaseAddr()), "node", id)

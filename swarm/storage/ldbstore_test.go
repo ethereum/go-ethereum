@@ -133,7 +133,6 @@ func TestMarkAccessed(t *testing.T) {
 	if index.Access != 1 {
 		t.Fatalf("Expected the access index to be %d, but it is %d", 1, index.Access)
 	}
-
 }
 
 func TestDbStoreRandom_1(t *testing.T) {
@@ -184,6 +183,7 @@ func testDbStoreNotFound(t *testing.T, mock bool) {
 func TestDbStoreNotFound(t *testing.T) {
 	testDbStoreNotFound(t, false)
 }
+
 func TestMockDbStoreNotFound(t *testing.T) {
 	testDbStoreNotFound(t, true)
 }
@@ -232,12 +232,12 @@ func testIterator(t *testing.T, mock bool) {
 			t.Fatalf("Chunk put #%d key '%v' does not match iterator's key '%v'", i, chunkkeys[i], chunkkeysResults[i])
 		}
 	}
-
 }
 
 func TestIterator(t *testing.T) {
 	testIterator(t, false)
 }
+
 func TestMockIterator(t *testing.T) {
 	testIterator(t, true)
 }
@@ -317,7 +317,6 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 // retrieve only some of them, because garbage collection must have partially cleared the store
 // Also tests that we can delete chunks and that we can trigger garbage collection
 func TestLDBStoreCollectGarbage(t *testing.T) {
-
 	// below max ronud
 	initialCap := defaultMaxGCRound / 100
 	cap := initialCap / 2
@@ -333,7 +332,6 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 	cap = initialCap + 500
 	t.Run(fmt.Sprintf("A/%d/%d", cap, cap*4), testLDBStoreCollectGarbage)
 	t.Run(fmt.Sprintf("B/%d/%d", cap, cap*4), testLDBStoreRemoveThenCollectGarbage)
-
 }
 
 func testLDBStoreCollectGarbage(t *testing.T) {
@@ -552,7 +550,6 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 
 // TestLDBStoreCollectGarbageAccessUnlikeIndex tests garbage collection where accesscount differs from indexcount
 func TestLDBStoreCollectGarbageAccessUnlikeIndex(t *testing.T) {
-
 	capacity := defaultMaxGCRound / 100 * 2
 	n := capacity - 1
 

@@ -137,7 +137,6 @@ func TestSnapshotCreate(t *testing.T) {
 					t.Errorf("got services %v for node %v, want %v", gotServices, i, wantServices)
 				}
 			}
-
 		})
 	}
 }

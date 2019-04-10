@@ -18,9 +18,7 @@
 
 package fuse
 
-import (
-	"errors"
-)
+import "errors"
 
 var errNoFUSE = errors.New("FUSE is not supported on this platform")
 

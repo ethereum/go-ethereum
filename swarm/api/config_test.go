@@ -25,7 +25,6 @@ import (
 )
 
 func TestConfig(t *testing.T) {
-
 	var hexprvkey = "65138b2aa745041b372153550584587da326ab440576b2a1191dd95cee30039c"
 	var hexnodekey = "75138b2aa745041b372153550584587da326ab440576b2a1191dd95cee30039c"
 
@@ -51,7 +50,7 @@ func TestConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//the init function should set the following fields
+	// the init function should set the following fields
 	if one.BzzKey == "" {
 		t.Fatal("Expected BzzKey to be set")
 	}

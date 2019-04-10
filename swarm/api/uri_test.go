@@ -124,12 +124,14 @@ func TestParseURI(t *testing.T) {
 		},
 		{
 			uri: "bzz-raw://4378d19c26590f1a818ed7d6a62c3809e149b0999cab5ce5f26233b3b423bf8c",
-			expectURI: &URI{Scheme: "bzz-raw",
-				Addr: "4378d19c26590f1a818ed7d6a62c3809e149b0999cab5ce5f26233b3b423bf8c",
+			expectURI: &URI{
+				Scheme: "bzz-raw",
+				Addr:   "4378d19c26590f1a818ed7d6a62c3809e149b0999cab5ce5f26233b3b423bf8c",
 			},
 			expectValidKey: true,
 			expectRaw:      true,
-			expectAddr: storage.Address{67, 120, 209, 156, 38, 89, 15, 26,
+			expectAddr: storage.Address{
+				67, 120, 209, 156, 38, 89, 15, 26,
 				129, 142, 215, 214, 166, 44, 56, 9,
 				225, 73, 176, 153, 156, 171, 92, 229,
 				242, 98, 51, 179, 180, 35, 191, 140,

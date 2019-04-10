@@ -206,7 +206,6 @@ func TestStart(t *testing.T) {
 	if !bytes.Equal(dMsg.Payload, updateMsg) {
 		t.Fatalf("expected payload '%x', got '%x'", updateMsg, dMsg.Payload)
 	}
-
 }
 
 func newServices(allowRaw bool) adapters.Services {
@@ -246,7 +245,7 @@ func newServices(allowRaw bool) adapters.Services {
 			if err != nil {
 				return nil, err
 			}
-			//psses[common.ToHex(crypto.FromECDSAPub(&privkey.PublicKey))] = ps
+			// psses[common.ToHex(crypto.FromECDSAPub(&privkey.PublicKey))] = ps
 			psses[hexutil.Encode(crypto.FromECDSAPub(&privkey.PublicKey))] = ps
 			return ps, nil
 		},

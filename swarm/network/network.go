@@ -78,7 +78,6 @@ type EnodeParams struct {
 }
 
 func NewEnodeRecord(params *EnodeParams) (*enr.Record, error) {
-
 	if params.PrivateKey == nil {
 		return nil, fmt.Errorf("all param private keys must be defined")
 	}

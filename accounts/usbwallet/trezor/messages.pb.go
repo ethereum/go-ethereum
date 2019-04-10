@@ -167,6 +167,7 @@ var MessageType_name = map[int32]string{
 	112: "MessageType_DebugLinkMemoryWrite",
 	113: "MessageType_DebugLinkFlashErase",
 }
+
 var MessageType_value = map[string]int32{
 	"MessageType_Initialize":               0,
 	"MessageType_Ping":                     1,
@@ -248,9 +249,11 @@ func (x MessageType) Enum() *MessageType {
 	*p = x
 	return p
 }
+
 func (x MessageType) String() string {
 	return proto.EnumName(MessageType_name, int32(x))
 }
+
 func (x *MessageType) UnmarshalJSON(data []byte) error {
 	value, err := proto.UnmarshalJSONEnum(MessageType_value, data, "MessageType")
 	if err != nil {

@@ -142,17 +142,16 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 }
 
 func TestConfigFileOverrides(t *testing.T) {
-
 	// assign ports
 	httpPort, err := assignTCPPort()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	//create a config file
-	//first, create a default conf
+	// create a config file
+	// first, create a default conf
 	defaultConf := api.NewConfig()
-	//change some values in order to test if they have been loaded
+	// change some values in order to test if they have been loaded
 	defaultConf.SyncEnabled = false
 	defaultConf.DeliverySkipCheck = true
 	defaultConf.NetworkID = 54
@@ -160,18 +159,18 @@ func TestConfigFileOverrides(t *testing.T) {
 	defaultConf.DbCapacity = 9000000
 	defaultConf.HiveParams.KeepAliveInterval = 6000000000
 	defaultConf.Swap.Params.Strategy.AutoCashInterval = 600 * time.Second
-	//defaultConf.SyncParams.KeyBufferSize = 512
-	//create a TOML string
+	// defaultConf.SyncParams.KeyBufferSize = 512
+	// create a TOML string
 	out, err := tomlSettings.Marshal(&defaultConf)
 	if err != nil {
 		t.Fatalf("Error creating TOML file in TestFileOverride: %v", err)
 	}
-	//create file
+	// create file
 	f, err := ioutil.TempFile("", "testconfig.toml")
 	if err != nil {
 		t.Fatalf("Error writing TOML file in TestFileOverride: %v", err)
 	}
-	//write file
+	// write file
 	_, err = f.WriteString(string(out))
 	if err != nil {
 		t.Fatalf("Error writing TOML file in TestFileOverride: %v", err)
@@ -280,9 +279,9 @@ func TestConfigEnvVars(t *testing.T) {
 		"--ipcpath", conf.IPCPath,
 	}
 
-	//node.Cmd = runSwarm(t,flags...)
-	//node.Cmd.cmd.Env = envVars
-	//the above assignment does not work, so we need a custom Cmd here in order to pass envVars:
+	// node.Cmd = runSwarm(t,flags...)
+	// node.Cmd.cmd.Env = envVars
+	// the above assignment does not work, so we need a custom Cmd here in order to pass envVars:
 	cmd := &exec.Cmd{
 		Path:   reexec.Self(),
 		Args:   append([]string{"swarm-test"}, flags...),
@@ -290,11 +289,11 @@ func TestConfigEnvVars(t *testing.T) {
 		Stdout: os.Stdout,
 	}
 	cmd.Env = envVars
-	//stdout, err := cmd.StdoutPipe()
-	//if err != nil {
+	// stdout, err := cmd.StdoutPipe()
+	// if err != nil {
 	//	t.Fatal(err)
 	//}
-	//stdout = bufio.NewReader(stdout)
+	// stdout = bufio.NewReader(stdout)
 	var stdin io.WriteCloser
 	if stdin, err = cmd.StdinPipe(); err != nil {
 		t.Fatal(err)
@@ -303,7 +302,7 @@ func TestConfigEnvVars(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//cmd.InputLine(testPassphrase)
+	// cmd.InputLine(testPassphrase)
 	io.WriteString(stdin, testPassphrase+"\n")
 	defer func() {
 		if t.Failed() {
@@ -354,37 +353,36 @@ func TestConfigEnvVars(t *testing.T) {
 }
 
 func TestConfigCmdLineOverridesFile(t *testing.T) {
-
 	// assign ports
 	httpPort, err := assignTCPPort()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	//create a config file
-	//first, create a default conf
+	// create a config file
+	// first, create a default conf
 	defaultConf := api.NewConfig()
-	//change some values in order to test if they have been loaded
+	// change some values in order to test if they have been loaded
 	defaultConf.SyncEnabled = true
 	defaultConf.NetworkID = 54
 	defaultConf.Port = "8588"
 	defaultConf.DbCapacity = 9000000
 	defaultConf.HiveParams.KeepAliveInterval = 6000000000
 	defaultConf.Swap.Params.Strategy.AutoCashInterval = 600 * time.Second
-	//defaultConf.SyncParams.KeyBufferSize = 512
-	//create a TOML file
+	// defaultConf.SyncParams.KeyBufferSize = 512
+	// create a TOML file
 	out, err := tomlSettings.Marshal(&defaultConf)
 	if err != nil {
 		t.Fatalf("Error creating TOML file in TestFileOverride: %v", err)
 	}
-	//write file
+	// write file
 	fname := "testconfig.toml"
 	f, err := ioutil.TempFile("", fname)
 	if err != nil {
 		t.Fatalf("Error writing TOML file in TestFileOverride: %v", err)
 	}
 	defer os.Remove(fname)
-	//write file
+	// write file
 	_, err = f.WriteString(string(out))
 	if err != nil {
 		t.Fatalf("Error writing TOML file in TestFileOverride: %v", err)

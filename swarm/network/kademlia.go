@@ -687,7 +687,6 @@ type PeerPot struct {
 // used for testing only
 // TODO move to separate testing tools file
 func NewPeerPotMap(neighbourhoodSize int, addrs [][]byte) map[string]*PeerPot {
-
 	// create a table of all nodes for health check
 	np := pot.NewPot(nil, 0)
 	for _, addr := range addrs {
@@ -769,7 +768,6 @@ func (k *Kademlia) isSaturated(peersPerBin []int, depth int) bool {
 	}
 	unsaturatedBins := make([]int, 0)
 	k.conns.EachBin(k.base, Pof, 0, func(po, size int, f func(func(val pot.Val) bool) bool) bool {
-
 		if po >= depth {
 			return false
 		}

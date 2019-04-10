@@ -206,11 +206,10 @@ func (pc *PyramidChunker) Split(ctx context.Context) (k Address, wait func(conte
 
 	// closes internal error channel if all subprocesses in the workgroup finished
 	go func() {
-
 		// waiting for all chunks to finish
 		pc.wg.Wait()
 
-		//We close errC here because this is passed down to 8 parallel routines underneath.
+		// We close errC here because this is passed down to 8 parallel routines underneath.
 		// if a error happens in one of them.. that particular routine raises error...
 		// once they all complete successfully, the control comes back and we can safely close this here.
 		close(pc.errC)
@@ -229,7 +228,6 @@ func (pc *PyramidChunker) Split(ctx context.Context) (k Address, wait func(conte
 		return nil, nil, ctx.Err()
 	}
 	return pc.rootAddress, pc.putter.Wait, nil
-
 }
 
 func (pc *PyramidChunker) Append(ctx context.Context) (k Address, wait func(context.Context) error, err error) {
@@ -241,7 +239,6 @@ func (pc *PyramidChunker) Append(ctx context.Context) (k Address, wait func(cont
 
 	// closes internal error channel if all subprocesses in the workgroup finished
 	go func() {
-
 		// waiting for all chunks to finish
 		pc.wg.Wait()
 
@@ -260,7 +257,6 @@ func (pc *PyramidChunker) Append(ctx context.Context) (k Address, wait func(cont
 	}
 
 	return pc.rootAddress, pc.putter.Wait, nil
-
 }
 
 func (pc *PyramidChunker) processor(ctx context.Context, id int64) {
@@ -304,7 +300,7 @@ func (pc *PyramidChunker) loadTree(ctx context.Context) error {
 	chunkSize := int64(chunkData.Size())
 	log.Trace("pyramid.chunker: root chunk", "chunk.Size", chunkSize, "pc.chunkSize", pc.chunkSize)
 
-	//if data size is less than a chunk... add a parent with update as pending
+	// if data size is less than a chunk... add a parent with update as pending
 	if chunkSize <= pc.chunkSize {
 		newEntry := &TreeEntry{
 			level:         0,
@@ -343,9 +339,8 @@ func (pc *PyramidChunker) loadTree(ctx context.Context) error {
 
 	// Add the rest of the tree
 	for lvl := depth - 1; lvl >= 1; lvl-- {
-
-		//TODO(jmozah): instead of loading finished branches and then trim in the end,
-		//avoid loading them in the first place
+		// TODO(jmozah): instead of loading finished branches and then trim in the end,
+		// avoid loading them in the first place
 		for _, ent := range pc.chunkLevel[lvl] {
 			branchCount = int64(len(ent.chunk)-8) / pc.hashSize
 			for i := int64(0); i < branchCount; i++ {
@@ -522,7 +517,6 @@ func (pc *PyramidChunker) prepareChunks(ctx context.Context, isAppend bool) {
 		}
 
 	}
-
 }
 
 func (pc *PyramidChunker) buildTree(isAppend bool, ent *TreeEntry, chunkWG *sync.WaitGroup, last bool, lonelyChunkKey []byte) {
@@ -626,7 +620,6 @@ func (pc *PyramidChunker) buildTree(isAppend bool, ent *TreeEntry, chunkWG *sync
 			}
 		}
 	}
-
 }
 
 func (pc *PyramidChunker) enqueueTreeChunk(ent *TreeEntry, chunkWG *sync.WaitGroup, last bool) {
@@ -667,7 +660,6 @@ func (pc *PyramidChunker) enqueueDataChunk(chunkData []byte, size uint64, parent
 	}
 
 	return pkey
-
 }
 
 // depth returns the number of chunk levels.

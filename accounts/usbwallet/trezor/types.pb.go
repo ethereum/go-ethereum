@@ -146,6 +146,7 @@ var FailureType_name = map[int32]string{
 	11: "Failure_NotInitialized",
 	99: "Failure_FirmwareError",
 }
+
 var FailureType_value = map[string]int32{
 	"Failure_UnexpectedMessage": 1,
 	"Failure_ButtonExpected":    2,
@@ -166,9 +167,11 @@ func (x FailureType) Enum() *FailureType {
 	*p = x
 	return p
 }
+
 func (x FailureType) String() string {
 	return proto.EnumName(FailureType_name, int32(x))
 }
+
 func (x *FailureType) UnmarshalJSON(data []byte) error {
 	value, err := proto.UnmarshalJSONEnum(FailureType_value, data, "FailureType")
 	if err != nil {
@@ -201,6 +204,7 @@ var OutputScriptType_name = map[int32]string{
 	4: "PAYTOWITNESS",
 	5: "PAYTOP2SHWITNESS",
 }
+
 var OutputScriptType_value = map[string]int32{
 	"PAYTOADDRESS":     0,
 	"PAYTOSCRIPTHASH":  1,
@@ -215,9 +219,11 @@ func (x OutputScriptType) Enum() *OutputScriptType {
 	*p = x
 	return p
 }
+
 func (x OutputScriptType) String() string {
 	return proto.EnumName(OutputScriptType_name, int32(x))
 }
+
 func (x *OutputScriptType) UnmarshalJSON(data []byte) error {
 	value, err := proto.UnmarshalJSONEnum(OutputScriptType_value, data, "OutputScriptType")
 	if err != nil {
@@ -248,6 +254,7 @@ var InputScriptType_name = map[int32]string{
 	3: "SPENDWITNESS",
 	4: "SPENDP2SHWITNESS",
 }
+
 var InputScriptType_value = map[string]int32{
 	"SPENDADDRESS":     0,
 	"SPENDMULTISIG":    1,
@@ -261,9 +268,11 @@ func (x InputScriptType) Enum() *InputScriptType {
 	*p = x
 	return p
 }
+
 func (x InputScriptType) String() string {
 	return proto.EnumName(InputScriptType_name, int32(x))
 }
+
 func (x *InputScriptType) UnmarshalJSON(data []byte) error {
 	value, err := proto.UnmarshalJSONEnum(InputScriptType_value, data, "InputScriptType")
 	if err != nil {
@@ -294,6 +303,7 @@ var RequestType_name = map[int32]string{
 	3: "TXFINISHED",
 	4: "TXEXTRADATA",
 }
+
 var RequestType_value = map[string]int32{
 	"TXINPUT":     0,
 	"TXOUTPUT":    1,
@@ -307,9 +317,11 @@ func (x RequestType) Enum() *RequestType {
 	*p = x
 	return p
 }
+
 func (x RequestType) String() string {
 	return proto.EnumName(RequestType_name, int32(x))
 }
+
 func (x *RequestType) UnmarshalJSON(data []byte) error {
 	value, err := proto.UnmarshalJSONEnum(RequestType_value, data, "RequestType")
 	if err != nil {
@@ -352,6 +364,7 @@ var ButtonRequestType_name = map[int32]string{
 	10: "ButtonRequest_Address",
 	11: "ButtonRequest_PublicKey",
 }
+
 var ButtonRequestType_value = map[string]int32{
 	"ButtonRequest_Other":            1,
 	"ButtonRequest_FeeOverThreshold": 2,
@@ -371,9 +384,11 @@ func (x ButtonRequestType) Enum() *ButtonRequestType {
 	*p = x
 	return p
 }
+
 func (x ButtonRequestType) String() string {
 	return proto.EnumName(ButtonRequestType_name, int32(x))
 }
+
 func (x *ButtonRequestType) UnmarshalJSON(data []byte) error {
 	value, err := proto.UnmarshalJSONEnum(ButtonRequestType_value, data, "ButtonRequestType")
 	if err != nil {
@@ -400,6 +415,7 @@ var PinMatrixRequestType_name = map[int32]string{
 	2: "PinMatrixRequestType_NewFirst",
 	3: "PinMatrixRequestType_NewSecond",
 }
+
 var PinMatrixRequestType_value = map[string]int32{
 	"PinMatrixRequestType_Current":   1,
 	"PinMatrixRequestType_NewFirst":  2,
@@ -411,9 +427,11 @@ func (x PinMatrixRequestType) Enum() *PinMatrixRequestType {
 	*p = x
 	return p
 }
+
 func (x PinMatrixRequestType) String() string {
 	return proto.EnumName(PinMatrixRequestType_name, int32(x))
 }
+
 func (x *PinMatrixRequestType) UnmarshalJSON(data []byte) error {
 	value, err := proto.UnmarshalJSONEnum(PinMatrixRequestType_value, data, "PinMatrixRequestType")
 	if err != nil {
@@ -445,6 +463,7 @@ var RecoveryDeviceType_name = map[int32]string{
 	0: "RecoveryDeviceType_ScrambledWords",
 	1: "RecoveryDeviceType_Matrix",
 }
+
 var RecoveryDeviceType_value = map[string]int32{
 	"RecoveryDeviceType_ScrambledWords": 0,
 	"RecoveryDeviceType_Matrix":         1,
@@ -455,9 +474,11 @@ func (x RecoveryDeviceType) Enum() *RecoveryDeviceType {
 	*p = x
 	return p
 }
+
 func (x RecoveryDeviceType) String() string {
 	return proto.EnumName(RecoveryDeviceType_name, int32(x))
 }
+
 func (x *RecoveryDeviceType) UnmarshalJSON(data []byte) error {
 	value, err := proto.UnmarshalJSONEnum(RecoveryDeviceType_value, data, "RecoveryDeviceType")
 	if err != nil {
@@ -484,6 +505,7 @@ var WordRequestType_name = map[int32]string{
 	1: "WordRequestType_Matrix9",
 	2: "WordRequestType_Matrix6",
 }
+
 var WordRequestType_value = map[string]int32{
 	"WordRequestType_Plain":   0,
 	"WordRequestType_Matrix9": 1,
@@ -495,9 +517,11 @@ func (x WordRequestType) Enum() *WordRequestType {
 	*p = x
 	return p
 }
+
 func (x WordRequestType) String() string {
 	return proto.EnumName(WordRequestType_name, int32(x))
 }
+
 func (x *WordRequestType) UnmarshalJSON(data []byte) error {
 	value, err := proto.UnmarshalJSONEnum(WordRequestType_value, data, "WordRequestType")
 	if err != nil {

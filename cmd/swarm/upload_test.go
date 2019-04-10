@@ -93,14 +93,16 @@ func testDefault(toEncrypt bool, t *testing.T) {
 	flags := []string{
 		"--bzzapi", cluster.Nodes[0].URL,
 		"up",
-		tmpFileName}
+		tmpFileName,
+	}
 	if toEncrypt {
 		hashRegexp = `[a-f\d]{128}`
 		flags = []string{
 			"--bzzapi", cluster.Nodes[0].URL,
 			"up",
 			"--encrypt",
-			tmpFileName}
+			tmpFileName,
+		}
 	}
 	// upload the file with 'swarm up' and expect a hash
 	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
@@ -131,7 +133,7 @@ func testDefault(toEncrypt bool, t *testing.T) {
 			t.Fatalf("expected HTTP body %q, got %q", data, reply)
 		}
 		log.Debug("verifying uploaded file using `swarm down`")
-		//try to get the content with `swarm down`
+		// try to get the content with `swarm down`
 		tmpDownload, err := ioutil.TempDir("", "swarm-test")
 		tmpDownload = path.Join(tmpDownload, "tmpfile.tmp")
 		if err != nil {
@@ -207,7 +209,8 @@ func testRecursive(toEncrypt bool, t *testing.T) {
 		"--bzzapi", cluster.Nodes[0].URL,
 		"--recursive",
 		"up",
-		tmpUploadDir}
+		tmpUploadDir,
+	}
 	if toEncrypt {
 		hashRegexp = `[a-f\d]{128}`
 		flags = []string{
@@ -215,7 +218,8 @@ func testRecursive(toEncrypt bool, t *testing.T) {
 			"--recursive",
 			"up",
 			"--encrypt",
-			tmpUploadDir}
+			tmpUploadDir,
+		}
 	}
 	// upload the file with 'swarm up' and expect a hash
 	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
@@ -228,7 +232,7 @@ func testRecursive(toEncrypt bool, t *testing.T) {
 	// get the file from the HTTP API of each node
 	for _, node := range cluster.Nodes {
 		log.Info("getting file from node", "node", node.Name)
-		//try to get the content with `swarm down`
+		// try to get the content with `swarm down`
 		tmpDownload, err := ioutil.TempDir("", "swarm-test")
 		if err != nil {
 			t.Fatal(err)

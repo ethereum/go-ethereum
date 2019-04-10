@@ -26,9 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-const (
-	testDbDirName = "feeds"
-)
+const testDbDirName = "feeds"
 
 type TestHandler struct {
 	*Handler
@@ -42,6 +40,7 @@ type mockNetFetcher struct{}
 
 func (m *mockNetFetcher) Request(hopCount uint8) {
 }
+
 func (m *mockNetFetcher) Offer(source *enode.ID) {
 }
 

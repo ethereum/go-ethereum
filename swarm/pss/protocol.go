@@ -30,9 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
-const (
-	IsActiveProtocol = true
-)
+const IsActiveProtocol = true
 
 // Convenience wrapper for devp2p protocol messages for transport over pss
 type ProtocolMsg struct {
@@ -44,7 +42,6 @@ type ProtocolMsg struct {
 
 // Creates a ProtocolMsg
 func NewProtocolMsg(code uint64, msg interface{}) ([]byte, error) {
-
 	rlpdata, err := rlp.EncodeToBytes(msg)
 	if err != nil {
 		return nil, err

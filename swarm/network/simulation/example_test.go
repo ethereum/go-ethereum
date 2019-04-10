@@ -33,7 +33,6 @@ import (
 // BucketKeyKademlia key. This allows to use WaitTillHealthy to block until
 // all nodes have the their Kademlias healthy.
 func ExampleSimulation_WaitTillHealthy() {
-
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			addr := network.NewAddr(ctx.Config.Node())
@@ -72,7 +71,6 @@ func ExampleSimulation_WaitTillHealthy() {
 	}
 
 	// continue with the test
-
 }
 
 // Watch all peer events in the simulation network, buy receiving from a channel.

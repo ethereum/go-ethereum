@@ -50,7 +50,6 @@ const minimumSignedUpdateLength = minimumUpdateDataLength + signatureLength
 
 // NewFirstRequest returns a ready to sign request to publish a first feed update
 func NewFirstRequest(topic Topic) *Request {
-
 	request := new(Request)
 
 	// get the current time
@@ -106,7 +105,7 @@ func (r *Request) Verify() (err error) {
 // Sign executes the signature to validate the update message
 func (r *Request) Sign(signer Signer) error {
 	r.Feed.User = signer.Address()
-	r.binaryData = nil           //invalidate serialized data
+	r.binaryData = nil           // invalidate serialized data
 	digest, err := r.GetDigest() // computes digest and serializes into .binaryData
 	if err != nil {
 		return err
@@ -146,14 +145,13 @@ func (r *Request) GetDigest() (result common.Hash, err error) {
 			return result, err
 		}
 	}
-	hasher.Write(r.binaryData[:dataLength]) //everything except the signature.
+	hasher.Write(r.binaryData[:dataLength]) // everything except the signature.
 
 	return common.BytesToHash(hasher.Sum(nil)), nil
 }
 
 // create an update chunk.
 func (r *Request) toChunk() (storage.Chunk, error) {
-
 	// Check that the update is signed and serialized
 	// For efficiency, data is serialized during signature and cached in
 	// the binaryData field when computing the signature digest in .getDigest()
@@ -176,7 +174,7 @@ func (r *Request) fromChunk(chunk storage.Chunk) error {
 
 	chunkdata := chunk.Data()
 
-	//deserialize the feed update portion
+	// deserialize the feed update portion
 	if err := r.Update.binaryGet(chunkdata[:len(chunkdata)-signatureLength]); err != nil {
 		return err
 	}
@@ -195,7 +193,6 @@ func (r *Request) fromChunk(chunk storage.Chunk) error {
 	r.binaryData = chunkdata
 
 	return nil
-
 }
 
 // FromValues deserializes this instance from a string key-value store
@@ -230,7 +227,6 @@ func (r *Request) AppendValues(values Values) []byte {
 
 // fromJSON takes an update request JSON and populates an UpdateRequest
 func (r *Request) fromJSON(j *updateRequestJSON) error {
-
 	r.ID = j.ID
 	r.Header.Version = j.ProtocolVersion
 

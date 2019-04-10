@@ -16,9 +16,7 @@
 
 package feed
 
-import (
-	"testing"
-)
+import "testing"
 
 func getTestQuery() *Query {
 	id := getTestID()
@@ -34,5 +32,4 @@ func TestQueryValues(t *testing.T) {
 
 	query := getTestQuery()
 	testValueSerializer(t, query, expected)
-
 }

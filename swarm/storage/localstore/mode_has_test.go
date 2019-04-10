@@ -16,9 +16,7 @@
 
 package localstore
 
-import (
-	"testing"
-)
+import "testing"
 
 // TestHas validates that Hasser is returning true for
 // the stored chunk and false for one that is not stored.

@@ -50,7 +50,7 @@ func slidingWindowCmd(ctx *cli.Context, tuid string) error {
 }
 
 func slidingWindow(ctx *cli.Context, tuid string) error {
-	var hashes []uploadResult //swarm hashes of the uploads
+	var hashes []uploadResult // swarm hashes of the uploads
 	nodes := len(hosts)
 	log.Info("sliding window test started", "tuid", tuid, "nodes", nodes, "filesize(kb)", filesize, "timeout", timeout)
 	uploadedBytes := 0

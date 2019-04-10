@@ -180,7 +180,6 @@ func (pssapi *API) SendRaw(addr hexutil.Bytes, topic Topic, msg hexutil.Bytes) e
 func (pssapi *API) GetPeerTopics(pubkeyhex string) ([]Topic, error) {
 	topics, _, err := pssapi.Pss.GetPublickeyPeers(pubkeyhex)
 	return topics, err
-
 }
 
 func (pssapi *API) GetPeerAddress(pubkeyhex string, topic Topic) (PssAddress, error) {

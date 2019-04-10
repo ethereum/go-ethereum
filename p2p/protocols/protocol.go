@@ -122,13 +122,13 @@ type WrappedMsg struct {
 	Payload []byte
 }
 
-//For accounting, the design is to allow the Spec to describe which and how its messages are priced
-//To access this functionality, we provide a Hook interface which will call accounting methods
-//NOTE: there could be more such (horizontal) hooks in the future
+// For accounting, the design is to allow the Spec to describe which and how its messages are priced
+// To access this functionality, we provide a Hook interface which will call accounting methods
+// NOTE: there could be more such (horizontal) hooks in the future
 type Hook interface {
-	//A hook for sending messages
+	// A hook for sending messages
 	Send(peer *Peer, size uint32, msg interface{}) error
-	//A hook for receiving messages
+	// A hook for receiving messages
 	Receive(peer *Peer, size uint32, msg interface{}) error
 }
 
@@ -151,7 +151,7 @@ type Spec struct {
 	// each message must have a single unique data type
 	Messages []interface{}
 
-	//hook for accounting (could be extended to multiple hooks in the future)
+	// hook for accounting (could be extended to multiple hooks in the future)
 	Hook Hook
 
 	initOnce sync.Once
@@ -287,7 +287,7 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 		Payload: r,
 	}
 
-	//if the accounting hook is set, call it
+	// if the accounting hook is set, call it
 	if p.spec.Hook != nil {
 		err := p.spec.Hook.Send(p, wmsg.Size, msg)
 		if err != nil {
@@ -358,7 +358,7 @@ func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) 
 		return errorf(ErrDecode, "<= %v: %v", msg, err)
 	}
 
-	//if the accounting hook is set, call it
+	// if the accounting hook is set, call it
 	if p.spec.Hook != nil {
 		err := p.spec.Hook.Receive(p, wmsg.Size, val)
 		if err != nil {

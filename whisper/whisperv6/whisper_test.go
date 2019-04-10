@@ -693,7 +693,6 @@ func TestSymmetricSendCycle(t *testing.T) {
 	if len(mail1) == 0 {
 		t.Fatalf("did not receive any email for filter 1")
 	}
-
 }
 
 func TestSymmetricSendWithoutAKey(t *testing.T) {

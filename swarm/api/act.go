@@ -46,7 +46,6 @@ type AccessEntry struct {
 type DecryptFunc func(*ManifestEntry) error
 
 func (a *AccessEntry) MarshalJSON() (out []byte, err error) {
-
 	return json.Marshal(struct {
 		Type      AccessType `json:"type,omitempty"`
 		Publisher string     `json:"publisher,omitempty"`
@@ -60,7 +59,6 @@ func (a *AccessEntry) MarshalJSON() (out []byte, err error) {
 		Act:       a.Act,
 		KdfParams: a.KdfParams,
 	})
-
 }
 
 func (a *AccessEntry) UnmarshalJSON(value []byte) error {
@@ -157,7 +155,6 @@ var DefaultKdfParams = NewKdfParams(262144, 1, 8)
 
 // NewKdfParams returns a KdfParams struct with the given scrypt params
 func NewKdfParams(n, p, r int) *KdfParams {
-
 	return &KdfParams{
 		N: n,
 		P: p,
@@ -170,7 +167,6 @@ func NewKdfParams(n, p, r int) *KdfParams {
 func NewSessionKeyPassword(password string, accessEntry *AccessEntry) ([]byte, error) {
 	if accessEntry.Type != AccessTypePass && accessEntry.Type != AccessTypeACT {
 		return nil, errors.New("incorrect access entry type")
-
 	}
 	return sessionKeyPassword(password, accessEntry.Salt, accessEntry.KdfParams)
 }

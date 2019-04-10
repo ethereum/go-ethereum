@@ -23,18 +23,18 @@ var (
 	td      = big.NewInt(123)
 )
 
-//ulc connects to trusted peer and send announceType=announceTypeSigned
+// ulc connects to trusted peer and send announceType=announceTypeSigned
 func TestPeerHandshakeSetAnnounceTypeToAnnounceTypeSignedForTrustedPeer(t *testing.T) {
 	id := newNodeID(t).ID()
 
-	//peer to connect(on ulc side)
+	// peer to connect(on ulc side)
 	p := peer{
 		Peer:      p2p.NewPeer(id, "test peer", []p2p.Cap{}),
 		version:   protocol_version,
 		isTrusted: true,
 		rw: &rwStub{
 			WriteHook: func(recvList keyValueList) {
-				//checking that ulc sends to peer allowedRequests=onlyAnnounceRequests and announceType = announceTypeSigned
+				// checking that ulc sends to peer allowedRequests=onlyAnnounceRequests and announceType = announceTypeSigned
 				recv, _ := recvList.decode()
 				var reqType uint64
 
@@ -79,7 +79,7 @@ func TestPeerHandshakeAnnounceTypeSignedForTrustedPeersPeerNotInTrusted(t *testi
 		version: protocol_version,
 		rw: &rwStub{
 			WriteHook: func(recvList keyValueList) {
-				//checking that ulc sends to peer allowedRequests=noRequests and announceType != announceTypeSigned
+				// checking that ulc sends to peer allowedRequests=noRequests and announceType != announceTypeSigned
 				recv, _ := recvList.decode()
 				var reqType uint64
 
@@ -179,6 +179,7 @@ func TestPeerHandshakeServerSendOnlyAnnounceRequestsHeaders(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
 func TestPeerHandshakeClientReceiveOnlyAnnounceRequestsHeaders(t *testing.T) {
 	id := newNodeID(t).ID()
 

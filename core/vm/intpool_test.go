@@ -16,9 +16,7 @@
 
 package vm
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestIntPoolPoolGet(t *testing.T) {
 	poolOfIntPools.pools = make([]*intPool, 0, poolDefaultCap)

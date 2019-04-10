@@ -894,7 +894,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrRequestRejected, "")
 		}
 		go func() {
-
 			var (
 				lastIdx  uint64
 				lastType uint

@@ -84,14 +84,14 @@ func TestSimTopics(t *testing.T) {
 				stop := make(chan struct{})
 				go net.RegisterTopic(testTopic, stop)
 				go func() {
-					//time.Sleep(time.Second * 36000)
+					// time.Sleep(time.Second * 36000)
 					time.Sleep(time.Second * 40000)
 					close(stop)
 				}()
 				time.Sleep(time.Millisecond * 100)
 			}
 			//			time.Sleep(time.Second * 10)
-			//time.Sleep(time.Second)
+			// time.Sleep(time.Second)
 			/*if i%500 == 499 {
 				time.Sleep(time.Second * 9501)
 			} else {
@@ -125,10 +125,10 @@ func TestSimTopics(t *testing.T) {
 		}()
 	*/
 	time.Sleep(55000 * time.Second)
-	//launcher.Stop()
+	// launcher.Stop()
 	sim.shutdown()
-	//sim.printStats()
-	//printNet.log.printLogs()
+	// sim.printStats()
+	// printNet.log.printLogs()
 }
 
 /*func testHierarchicalTopics(i int) []Topic {
@@ -170,9 +170,9 @@ func TestSimTopicHierarchy(t *testing.T) {
 
 		stop := make(chan struct{})
 		for i, net := range nets {
-			//if i < 256 {
+			// if i < 256 {
 			for _, topic := range testHierarchicalTopics(i)[:5] {
-				//fmt.Println("reg", topic)
+				// fmt.Println("reg", topic)
 				go net.RegisterTopic(topic, stop)
 			}
 			time.Sleep(time.Millisecond * 100)
@@ -252,7 +252,6 @@ func (s *simulation) printStats() {
 		fmt.Printf("*** Node %x\n", n.tab.self.ID[:8])
 		n.log.printLogs()
 	}*/
-
 }
 
 func (s *simulation) randomNode() *Network {
@@ -388,7 +387,7 @@ func (st *simTransport) sendFindnodeHash(remote *Node, target common.Hash) {
 }
 
 func (st *simTransport) sendTopicRegister(remote *Node, topics []Topic, idx int, pong []byte) {
-	//fmt.Println("send", topics, pong)
+	// fmt.Println("send", topics, pong)
 	st.sendPacket(remote.ID, ingressPacket{
 		remoteID:   st.sender,
 		remoteAddr: st.senderAddr,

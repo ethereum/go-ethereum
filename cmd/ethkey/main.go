@@ -24,9 +24,7 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-const (
-	defaultKeyfileName = "keyfile.json"
-)
+const defaultKeyfileName = "keyfile.json"
 
 // Git SHA1 commit hash of the release (set via linker flags)
 var gitCommit = ""

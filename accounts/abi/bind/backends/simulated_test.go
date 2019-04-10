@@ -78,5 +78,4 @@ func TestSimulatedBackend(t *testing.T) {
 	if isPending {
 		t.Fatal("transaction should not have pending status")
 	}
-
 }

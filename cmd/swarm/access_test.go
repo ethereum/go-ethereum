@@ -204,7 +204,7 @@ func testPassword(t *testing.T) {
 	wrongPasswordFilename := testutil.TempFileWithContent(t, "just wr0ng")
 	defer os.RemoveAll(wrongPasswordFilename)
 
-	//download file with 'swarm down' with wrong password
+	// download file with 'swarm down' with wrong password
 	up = runSwarm(t,
 		"--bzzapi",
 		cluster.Nodes[0].URL,
@@ -282,7 +282,7 @@ func testPK(t *testing.T) {
 		t.Fatalf("stdout not matched")
 	}
 
-	//get the public key from the publisher directory
+	// get the public key from the publisher directory
 	publicKeyFromDataDir := runSwarm(t,
 		"--bzzaccount",
 		publisherAccount.Address.String(),
@@ -464,7 +464,7 @@ func testACT(t *testing.T, bogusEntries int) {
 		t.Fatalf("stdout not matched")
 	}
 
-	//get the public key from the publisher directory
+	// get the public key from the publisher directory
 	publicKeyFromDataDir := runSwarm(t,
 		"--bzzaccount",
 		publisherAccount.Address.String(),

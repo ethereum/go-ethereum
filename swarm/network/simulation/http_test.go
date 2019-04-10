@@ -50,11 +50,11 @@ func TestSimulationWithHTTPServer(t *testing.T) {
 	}
 
 	log.Debug("Starting sim round and let it time out...")
-	//first test that running without sending to the channel will actually
-	//block the simulation, so let it time out
+	// first test that running without sending to the channel will actually
+	// block the simulation, so let it time out
 	result := sim.Run(ctx, func(ctx context.Context, sim *Simulation) error {
 		log.Debug("Just start the sim without any action and wait for the timeout")
-		//ensure with a Sleep that simulation doesn't terminate before the timeout
+		// ensure with a Sleep that simulation doesn't terminate before the timeout
 		time.Sleep(2 * time.Second)
 		return nil
 	})
@@ -67,17 +67,17 @@ func TestSimulationWithHTTPServer(t *testing.T) {
 		}
 	}
 
-	//now run it again and send the expected signal on the waiting channel,
-	//then close the simulation
+	// now run it again and send the expected signal on the waiting channel,
+	// then close the simulation
 	log.Debug("Starting sim round and wait for frontend signal...")
-	//this time the timeout should be long enough so that it doesn't kick in too early
+	// this time the timeout should be long enough so that it doesn't kick in too early
 	ctx, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel2()
 	errC := make(chan error, 1)
 	go triggerSimulationRun(t, errC)
 	result = sim.Run(ctx, func(ctx context.Context, sim *Simulation) error {
 		log.Debug("This run waits for the run signal from `frontend`...")
-		//ensure with a Sleep that simulation doesn't terminate before the signal is received
+		// ensure with a Sleep that simulation doesn't terminate before the signal is received
 		time.Sleep(2 * time.Second)
 		return nil
 	})
@@ -91,9 +91,9 @@ func TestSimulationWithHTTPServer(t *testing.T) {
 }
 
 func triggerSimulationRun(t *testing.T, errC chan error) {
-	//We need to first wait for the sim HTTP server to start running...
+	// We need to first wait for the sim HTTP server to start running...
 	time.Sleep(2 * time.Second)
-	//then we can send the signal
+	// then we can send the signal
 
 	log.Debug("Sending run signal to simulation: POST /runsim...")
 	resp, err := http.Post(fmt.Sprintf("http://localhost%s/runsim", DefaultHTTPSimAddr), "application/json", nil)

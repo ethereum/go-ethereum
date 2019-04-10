@@ -11,7 +11,7 @@ var (
 			LastGC Gauge
 			NumGC  Gauge
 			Pause  Histogram
-			//PauseQuantiles Histogram
+			// PauseQuantiles Histogram
 			PauseTotal Gauge
 		}
 		ReadGCStats Timer
@@ -46,7 +46,7 @@ func CaptureDebugGCStatsOnce(r Registry) {
 	if lastGC != gcStats.LastGC && 0 < len(gcStats.Pause) {
 		debugMetrics.GCStats.Pause.Update(int64(gcStats.Pause[0]))
 	}
-	//debugMetrics.GCStats.PauseQuantiles.Update(gcStats.PauseQuantiles)
+	// debugMetrics.GCStats.PauseQuantiles.Update(gcStats.PauseQuantiles)
 	debugMetrics.GCStats.PauseTotal.Update(int64(gcStats.PauseTotal))
 }
 
@@ -57,14 +57,14 @@ func RegisterDebugGCStats(r Registry) {
 	debugMetrics.GCStats.LastGC = NewGauge()
 	debugMetrics.GCStats.NumGC = NewGauge()
 	debugMetrics.GCStats.Pause = NewHistogram(NewExpDecaySample(1028, 0.015))
-	//debugMetrics.GCStats.PauseQuantiles = NewHistogram(NewExpDecaySample(1028, 0.015))
+	// debugMetrics.GCStats.PauseQuantiles = NewHistogram(NewExpDecaySample(1028, 0.015))
 	debugMetrics.GCStats.PauseTotal = NewGauge()
 	debugMetrics.ReadGCStats = NewTimer()
 
 	r.Register("debug.GCStats.LastGC", debugMetrics.GCStats.LastGC)
 	r.Register("debug.GCStats.NumGC", debugMetrics.GCStats.NumGC)
 	r.Register("debug.GCStats.Pause", debugMetrics.GCStats.Pause)
-	//r.Register("debug.GCStats.PauseQuantiles", debugMetrics.GCStats.PauseQuantiles)
+	// r.Register("debug.GCStats.PauseQuantiles", debugMetrics.GCStats.PauseQuantiles)
 	r.Register("debug.GCStats.PauseTotal", debugMetrics.GCStats.PauseTotal)
 	r.Register("debug.ReadGCStats", debugMetrics.ReadGCStats)
 }

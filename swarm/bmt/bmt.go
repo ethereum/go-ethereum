@@ -54,11 +54,9 @@ Two implementations are provided:
 	* AsyncWriter - concurrent section writes and asynchronous Sum call
 */
 
-const (
-	// PoolSize is the maximum number of bmt trees used by the hashers, i.e,
-	// the maximum number of concurrent BMT hashing operations performed by the same hasher
-	PoolSize = 8
-)
+// PoolSize is the maximum number of bmt trees used by the hashers, i.e,
+// the maximum number of concurrent BMT hashing operations performed by the same hasher
+const PoolSize = 8
 
 // BaseHasherFunc is a hash.Hash constructor function used for the base hash of the BMT.
 // implemented by Keccak256 SHA3 sha3.NewLegacyKeccak256
@@ -591,7 +589,6 @@ func (h *Hasher) writeNode(n *node, bh hash.Hash, isLeft bool, s []byte) {
 // the pool's lookup table for BMT subtree root hashes for all-zero sections
 // otherwise behaves like `writeNode`
 func (h *Hasher) writeFinalNode(level int, n *node, bh hash.Hash, isLeft bool, s []byte) {
-
 	for {
 		// at the root of the bmt just write the result to the result channel
 		if n == nil {

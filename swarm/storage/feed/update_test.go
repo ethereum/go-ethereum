@@ -16,9 +16,7 @@
 
 package feed
 
-import (
-	"testing"
-)
+import "testing"
 
 func getTestFeedUpdate() *Update {
 	return &Update{

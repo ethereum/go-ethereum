@@ -16,9 +16,7 @@
 
 package localstore
 
-import (
-	"github.com/ethereum/go-ethereum/swarm/chunk"
-)
+import "github.com/ethereum/go-ethereum/swarm/chunk"
 
 // Hasser provides Has method to retrieve Chunks
 // from database.

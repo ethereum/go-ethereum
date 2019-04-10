@@ -30,9 +30,7 @@ import (
 	"github.com/robertkrimen/otto"
 )
 
-var (
-	BigNumber_JS = deps.MustAsset("bignumber.js")
-)
+var BigNumber_JS = deps.MustAsset("bignumber.js")
 
 // consoleOutput is an override for the console.log and console.error methods to
 // stream the output into the configured output stream instead of stdout.
@@ -62,6 +60,7 @@ func NewRuleEvaluator(next core.UIClientAPI, jsbackend storage.Storage) (*rulese
 
 	return c, nil
 }
+
 func (r *rulesetUI) RegisterUIServer(api *core.UIServerAPI) {
 	// TODO, make it possible to query from js
 }
@@ -70,8 +69,8 @@ func (r *rulesetUI) Init(javascriptRules string) error {
 	r.jsRules = javascriptRules
 	return nil
 }
-func (r *rulesetUI) execute(jsfunc string, jsarg interface{}) (otto.Value, error) {
 
+func (r *rulesetUI) execute(jsfunc string, jsarg interface{}) (otto.Value, error) {
 	// Instantiate a fresh vm engine every time
 	vm := otto.New()
 	// Set the native callbacks
@@ -150,7 +149,8 @@ func (r *rulesetUI) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse,
 	if approved {
 		return core.SignTxResponse{
 				Transaction: request.Transaction,
-				Approved:    true},
+				Approved:    true,
+			},
 			nil
 	}
 	return core.SignTxResponse{Approved: false}, err

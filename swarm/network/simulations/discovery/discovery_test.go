@@ -67,7 +67,6 @@ func cleanDbStores() error {
 		}
 	}
 	return nil
-
 }
 
 func getDbStore(nodeID string) (*state.DBStore, error) {
@@ -349,7 +348,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 		for range ticker.C {
 			isHealthy := true
 			for _, id := range ids {
-				//call Healthy RPC
+				// call Healthy RPC
 				node := net.GetNode(id)
 				if node == nil {
 					return fmt.Errorf("unknown node: %s", id)

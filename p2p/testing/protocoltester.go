@@ -121,7 +121,6 @@ func (t *ProtocolTester) Connect(selfID enode.ID, peers ...*adapters.NodeConfig)
 			panic(fmt.Sprintf("error connecting to peer %v: %v", peer.ID, err))
 		}
 	}
-
 }
 
 // testNode wraps a protocol run function and implements the node.Service

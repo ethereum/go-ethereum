@@ -44,7 +44,6 @@ func (p *TestPeerPool) Add(peer TestPeer) {
 	defer p.lock.Unlock()
 	log.Trace(fmt.Sprintf("pp add peer  %v", peer.ID()))
 	p.peers[peer.ID()] = peer
-
 }
 
 func (p *TestPeerPool) Remove(peer TestPeer) {

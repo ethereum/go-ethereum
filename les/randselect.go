@@ -16,9 +16,7 @@
 
 package les
 
-import (
-	"math/rand"
-)
+import "math/rand"
 
 // wrsItem interface should be implemented by any entries that are to be selected from
 // a weightedRandomSelect set. Note that recalculating monotonously decreasing item

@@ -16,9 +16,7 @@
 
 package vm
 
-import (
-	"fmt"
-)
+import "fmt"
 
 // OpCode is an EVM opcode
 type OpCode byte
@@ -280,8 +278,8 @@ var opCodeToString = map[OpCode]string{
 
 	// 0x50 range - 'storage' and execution.
 	POP: "POP",
-	//DUP:     "DUP",
-	//SWAP:    "SWAP",
+	// DUP:     "DUP",
+	// SWAP:    "SWAP",
 	MLOAD:    "MLOAD",
 	MSTORE:   "MSTORE",
 	MSTORE8:  "MSTORE8",

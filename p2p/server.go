@@ -807,6 +807,7 @@ func (srv *Server) encHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int
 func (srv *Server) maxInboundConns() int {
 	return srv.MaxPeers - srv.maxDialedConns()
 }
+
 func (srv *Server) maxDialedConns() int {
 	if srv.NoDiscovery || srv.NoDial {
 		return 0

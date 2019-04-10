@@ -69,6 +69,7 @@ func sumSquares(s metrics.Sample) float64 {
 	}
 	return sumSquares
 }
+
 func sumSquaresTimer(t metrics.Timer) float64 {
 	count := float64(t.Count())
 	sumSquared := math.Pow(count*t.Mean(), 2)

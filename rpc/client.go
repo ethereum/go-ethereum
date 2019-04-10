@@ -46,19 +46,17 @@ const (
 	subscribeTimeout     = 5 * time.Second  // overall timeout eth_subscribe, rpc_modules calls
 )
 
-const (
-	// Subscriptions are removed when the subscriber cannot keep up.
-	//
-	// This can be worked around by supplying a channel with sufficiently sized buffer,
-	// but this can be inconvenient and hard to explain in the docs. Another issue with
-	// buffered channels is that the buffer is static even though it might not be needed
-	// most of the time.
-	//
-	// The approach taken here is to maintain a per-subscription linked list buffer
-	// shrinks on demand. If the buffer reaches the size below, the subscription is
-	// dropped.
-	maxClientSubscriptionBuffer = 20000
-)
+// Subscriptions are removed when the subscriber cannot keep up.
+//
+// This can be worked around by supplying a channel with sufficiently sized buffer,
+// but this can be inconvenient and hard to explain in the docs. Another issue with
+// buffered channels is that the buffer is static even though it might not be needed
+// most of the time.
+//
+// The approach taken here is to maintain a per-subscription linked list buffer
+// shrinks on demand. If the buffer reaches the size below, the subscription is
+// dropped.
+const maxClientSubscriptionBuffer = 20000
 
 // BatchElem is an element in a batch request.
 type BatchElem struct {

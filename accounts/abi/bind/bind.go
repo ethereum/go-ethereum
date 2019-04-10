@@ -174,11 +174,11 @@ var bindType = map[Lang]func(kind abi.Type) string{
 // Array sizes may also be "", indicating a dynamic array.
 func wrapArray(stringKind string, innerLen int, innerMapping string) (string, []string) {
 	remainder := stringKind[innerLen:]
-	//find all the sizes
+	// find all the sizes
 	matches := regexp.MustCompile(`\[(\d*)\]`).FindAllStringSubmatch(remainder, -1)
 	parts := make([]string, 0, len(matches))
 	for _, match := range matches {
-		//get group 1 from the regex match
+		// get group 1 from the regex match
 		parts = append(parts, match[1])
 	}
 	return innerMapping, parts
@@ -188,7 +188,7 @@ func wrapArray(stringKind string, innerLen int, innerMapping string) (string, []
 // Simply returns the inner type if arraySizes is empty.
 func arrayBindingGo(inner string, arraySizes []string) string {
 	out := ""
-	//prepend all array sizes, from outer (end arraySizes) to inner (start arraySizes)
+	// prepend all array sizes, from outer (end arraySizes) to inner (start arraySizes)
 	for i := len(arraySizes) - 1; i >= 0; i-- {
 		out += "[" + arraySizes[i] + "]"
 	}
@@ -209,7 +209,6 @@ func bindTypeGo(kind abi.Type) string {
 // (Or just the type itself if it is not an array or slice)
 // The length of the matched part is returned, with the translated type.
 func bindUnnestedTypeGo(stringKind string) (int, string) {
-
 	switch {
 	case strings.HasPrefix(stringKind, "address"):
 		return len("address"), "common.Address"
@@ -257,7 +256,6 @@ func bindTypeJava(kind abi.Type) string {
 // (Or just the type itself if it is not an array or slice)
 // The length of the matched part is returned, with the translated type.
 func bindUnnestedTypeJava(stringKind string) (int, string) {
-
 	switch {
 	case strings.HasPrefix(stringKind, "address"):
 		parts := regexp.MustCompile(`address(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
@@ -277,7 +275,7 @@ func bindUnnestedTypeJava(stringKind string) (int, string) {
 		return len(parts[0]), "byte[]"
 
 	case strings.HasPrefix(stringKind, "int") || strings.HasPrefix(stringKind, "uint"):
-		//Note that uint and int (without digits) are also matched,
+		// Note that uint and int (without digits) are also matched,
 		// these are size 256, and will translate to BigInt (the default).
 		parts := regexp.MustCompile(`(u)?int([0-9]*)`).FindStringSubmatch(stringKind)
 		if len(parts) != 3 {
@@ -291,7 +289,7 @@ func bindUnnestedTypeJava(stringKind string) (int, string) {
 			"64": "long",
 		}[parts[2]]
 
-		//default to BigInt
+		// default to BigInt
 		if namedSize == "" {
 			namedSize = "BigInt"
 		}

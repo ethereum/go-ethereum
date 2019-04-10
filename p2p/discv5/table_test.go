@@ -172,6 +172,7 @@ func (t *pingRecorder) close() {}
 func (t *pingRecorder) waitping(from NodeID) error {
 	return nil // remote always pings
 }
+
 func (t *pingRecorder) ping(toid NodeID, toaddr *net.UDPAddr) error {
 	t.pinged[toid] = true
 	if t.responding[toid] {

@@ -184,7 +184,7 @@ type (
 	}
 	// SignTxResponse result from SignTxRequest
 	SignTxResponse struct {
-		//The UI may make changes to the TX
+		// The UI may make changes to the TX
 		Transaction SendTxArgs `json:"transaction"`
 		Approved    bool       `json:"approved"`
 	}
@@ -245,6 +245,7 @@ func NewSignerAPI(am *accounts.Manager, chainID int64, noUSB bool, ui UIClientAP
 	}
 	return signer
 }
+
 func (api *SignerAPI) openTrezor(url accounts.URL) {
 	resp, err := api.UI.OnInputRequired(UserInputRequest{
 		Prompt: "Pin required to open Trezor wallet\n" +
@@ -273,7 +274,6 @@ func (api *SignerAPI) openTrezor(url accounts.URL) {
 		log.Warn("failed to open wallet", "wallet", url, "err", err)
 		return
 	}
-
 }
 
 // startUSBListener starts a listener for USB events, for hardware wallet interaction
@@ -282,7 +282,6 @@ func (api *SignerAPI) startUSBListener() {
 	am := api.am
 	am.Subscribe(events)
 	go func() {
-
 		// Open any wallets already attached
 		for _, wallet := range am.Wallets() {
 			if err := wallet.Open(""); err != nil {
@@ -342,7 +341,6 @@ func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
 	}
 	if result.Accounts == nil {
 		return nil, ErrRequestDenied
-
 	}
 	addresses := make([]common.Address, 0)
 	for _, acc := range result.Accounts {
@@ -371,7 +369,8 @@ func (api *SignerAPI) New(ctx context.Context) (common.Address, error) {
 		resp, err := api.UI.OnInputRequired(UserInputRequest{
 			"New account password",
 			fmt.Sprintf("Please enter a password for the new account to be created (attempt %d of 3)", i),
-			true})
+			true,
+		})
 		if err != nil {
 			log.Warn("error obtaining password", "attempt", i, "error", err)
 			continue
@@ -437,6 +436,7 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 func (api *SignerAPI) lookupPassword(address common.Address) string {
 	return api.credentials.Get(strings.ToLower(address.String()))
 }
+
 func (api *SignerAPI) lookupOrQueryPassword(address common.Address, title, prompt string) (string, error) {
 	if pw := api.lookupPassword(address); pw != "" {
 		return pw, nil
@@ -515,7 +515,6 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 	api.UI.OnApprovedTx(response)
 	// ...and to the external caller
 	return &response, nil
-
 }
 
 // Returns the external api version. This method does not require user acceptance. Available methods are

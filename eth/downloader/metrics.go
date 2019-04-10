@@ -18,9 +18,7 @@
 
 package downloader
 
-import (
-	"github.com/ethereum/go-ethereum/metrics"
-)
+import "github.com/ethereum/go-ethereum/metrics"
 
 var (
 	headerInMeter      = metrics.NewRegisteredMeter("eth/downloader/headers/in", nil)

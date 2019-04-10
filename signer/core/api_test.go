@@ -37,7 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/signer/storage"
 )
 
-//Used for testing
+// Used for testing
 type headlessUi struct {
 	approveCh chan string // to send approve/deny
 	inputCh   chan string // to send password
@@ -53,7 +53,6 @@ func (ui *headlessUi) RegisterUIServer(api *UIServerAPI)            {}
 func (ui *headlessUi) OnApprovedTx(tx ethapi.SignTransactionResult) {}
 
 func (ui *headlessUi) ApproveTx(request *SignTxRequest) (SignTxResponse, error) {
-
 	switch <-ui.approveCh {
 	case "Y":
 		return SignTxResponse{request.Transaction, true}, nil
@@ -75,7 +74,7 @@ func (ui *headlessUi) ApproveSignData(request *SignDataRequest) (SignDataRespons
 
 func (ui *headlessUi) ApproveListing(request *ListRequest) (ListResponse, error) {
 	approval := <-ui.approveCh
-	//fmt.Printf("approval %s\n", approval)
+	// fmt.Printf("approval %s\n", approval)
 	switch approval {
 	case "A":
 		return ListResponse{request.Accounts}, nil
@@ -96,12 +95,12 @@ func (ui *headlessUi) ApproveNewAccount(request *NewAccountRequest) (NewAccountR
 }
 
 func (ui *headlessUi) ShowError(message string) {
-	//stdout is used by communication
+	// stdout is used by communication
 	fmt.Fprintln(os.Stderr, message)
 }
 
 func (ui *headlessUi) ShowInfo(message string) {
-	//stdout is used by communication
+	// stdout is used by communication
 	fmt.Fprintln(os.Stderr, message)
 }
 
@@ -126,8 +125,8 @@ func setup(t *testing.T) (*SignerAPI, *headlessUi) {
 	am := StartClefAccountManager(tmpDirName(t), true, true)
 	api := NewSignerAPI(am, 1337, true, ui, db, true, &storage.NoStorage{})
 	return api, ui
-
 }
+
 func createAccount(ui *headlessUi, api *SignerAPI, t *testing.T) {
 	ui.approveCh <- "Y"
 	ui.inputCh <- "a_long_password"
@@ -140,7 +139,6 @@ func createAccount(ui *headlessUi, api *SignerAPI, t *testing.T) {
 }
 
 func failCreateAccountWithPassword(ui *headlessUi, api *SignerAPI, password string, t *testing.T) {
-
 	ui.approveCh <- "Y"
 	// We will be asked three times to provide a suitable password
 	ui.inputCh <- password
@@ -170,7 +168,6 @@ func failCreateAccount(ui *headlessUi, api *SignerAPI, t *testing.T) {
 func list(ui *headlessUi, api *SignerAPI, t *testing.T) ([]common.Address, error) {
 	ui.approveCh <- "A"
 	return api.List(context.Background())
-
 }
 
 func TestNewAcc(t *testing.T) {
@@ -235,7 +232,8 @@ func mkTestTx(from common.MixedcaseAddress) SendTxArgs {
 		GasPrice: gasPrice,
 		Value:    value,
 		Data:     &data,
-		Nonce:    nonce}
+		Nonce:    nonce,
+	}
 	return tx
 }
 
@@ -286,7 +284,7 @@ func TestSignTx(t *testing.T) {
 	parsedTx := &types.Transaction{}
 	rlp.Decode(bytes.NewReader(res.Raw), parsedTx)
 
-	//The tx should NOT be modified by the UI
+	// The tx should NOT be modified by the UI
 	if parsedTx.Value().Cmp(tx.Value.ToInt()) != 0 {
 		t.Errorf("Expected value to be unchanged, expected %v got %v", tx.Value, parsedTx.Value())
 	}
@@ -301,7 +299,7 @@ func TestSignTx(t *testing.T) {
 		t.Error("Expected tx to be unmodified by UI")
 	}
 
-	//The tx is modified by the UI
+	// The tx is modified by the UI
 	control.approveCh <- "M"
 	control.inputCh <- "a_long_password"
 
@@ -312,12 +310,11 @@ func TestSignTx(t *testing.T) {
 	parsedTx2 := &types.Transaction{}
 	rlp.Decode(bytes.NewReader(res.Raw), parsedTx2)
 
-	//The tx should be modified by the UI
+	// The tx should be modified by the UI
 	if parsedTx2.Value().Cmp(tx.Value.ToInt()) != 0 {
 		t.Errorf("Expected value to be unchanged, got %v", parsedTx.Value())
 	}
 	if bytes.Equal(res.Raw, res2.Raw) {
 		t.Error("Expected tx to be modified by UI")
 	}
-
 }

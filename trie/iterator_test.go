@@ -377,6 +377,7 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 func TestIteratorContinueAfterSeekErrorDisk(t *testing.T) {
 	testIteratorContinueAfterSeekError(t, false)
 }
+
 func TestIteratorContinueAfterSeekErrorMemonly(t *testing.T) {
 	testIteratorContinueAfterSeekError(t, true)
 }

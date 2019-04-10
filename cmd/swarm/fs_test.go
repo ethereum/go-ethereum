@@ -137,7 +137,7 @@ func TestCLISwarmFs(t *testing.T) {
 	}
 	log.Debug("swarmfs cli test: asserting no files in mount point")
 
-	//check that there's nothing in the mount folder
+	// check that there's nothing in the mount folder
 	filesInDir, err := ioutil.ReadDir(mountPoint)
 	if err != nil {
 		t.Fatalf("had an error reading the directory: %v", err)
@@ -156,7 +156,7 @@ func TestCLISwarmFs(t *testing.T) {
 
 	log.Debug("swarmfs cli test: remounting at second mount point", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
 
-	//remount, check files
+	// remount, check files
 	newMount := runSwarm(t, []string{
 		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
 		"fs",
@@ -222,7 +222,8 @@ func doUploadEmptyDir(t *testing.T, node *testNode) string {
 		"--bzzapi", node.URL,
 		"--recursive",
 		"up",
-		tmpDir}
+		tmpDir,
+	}
 
 	log.Info("swarmfs cli test: uploading dir with 'swarm up'")
 	up := runSwarm(t, flags...)

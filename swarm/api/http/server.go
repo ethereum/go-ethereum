@@ -796,8 +796,8 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//the request results in ambiguous files
-	//e.g. /read with readme.md and readinglist.txt available in manifest
+	// the request results in ambiguous files
+	// e.g. /read with readme.md and readinglist.txt available in manifest
 	if status == http.StatusMultipleChoices {
 		list, err := s.api.GetManifestList(r.Context(), s.api.Decryptor(r.Context(), credentials), manifestAddr, uri.Path)
 		if err != nil {
@@ -812,7 +812,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 		}
 
 		log.Debug(fmt.Sprintf("Multiple choices! --> %v", list), "ruid", ruid)
-		//show a nice page links to available entries
+		// show a nice page links to available entries
 		ShowMultipleChoices(w, r, list)
 		return
 	}

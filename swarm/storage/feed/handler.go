@@ -158,7 +158,6 @@ func (h *Handler) NewRequest(ctx context.Context, feed *Feed) (request *Request,
 // See the `query` documentation and helper functions:
 // `NewQueryLatest` and `NewQuery`
 func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error) {
-
 	timeLimit := query.TimeLimit
 	if timeLimit == 0 { // if time limit is set to zero, the user wants to get the latest update
 		timeLimit = TimestampProvider.Now().Time
@@ -213,12 +212,10 @@ func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
 		return nil, NewError(ErrNotFound, "no feed updates found")
 	}
 	return h.updateCache(request)
-
 }
 
 // update feed updates cache with specified content
 func (h *Handler) updateCache(request *Request) (*cacheEntry, error) {
-
 	updateAddr := request.Addr()
 	log.Trace("feed cache update", "topic", request.Topic.Hex(), "updateaddr", updateAddr, "epoch time", request.Epoch.Time, "epoch level", request.Epoch.Level)
 
@@ -242,7 +239,6 @@ func (h *Handler) updateCache(request *Request) (*cacheEntry, error) {
 // Update can only check if the caller is trying to overwrite the very last known version, otherwise it just puts the update
 // on the network.
 func (h *Handler) Update(ctx context.Context, r *Request) (updateAddr storage.Address, err error) {
-
 	// we can't update anything without a store
 	if h.chunkStore == nil {
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before updating")

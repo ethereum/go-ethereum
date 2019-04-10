@@ -29,12 +29,12 @@ import (
 // downloading hashes and blocks as well as handling the announcement handler.
 func (pm *ProtocolManager) syncer() {
 	// Start and ensure cleanup of sync mechanisms
-	//pm.fetcher.Start()
-	//defer pm.fetcher.Stop()
+	// pm.fetcher.Start()
+	// defer pm.fetcher.Stop()
 	defer pm.downloader.Terminate()
 
 	// Wait for different events to fire synchronisation operations
-	//forceSync := time.Tick(forceSyncCycle)
+	// forceSync := time.Tick(forceSyncCycle)
 	for {
 		select {
 		case <-pm.newPeerCh:

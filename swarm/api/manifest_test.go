@@ -115,7 +115,6 @@ func TestExactMatch(t *testing.T) {
 }
 
 func TestDeleteEntry(t *testing.T) {
-
 }
 
 // TestAddFileWithManifestPath tests that adding an entry at a path which

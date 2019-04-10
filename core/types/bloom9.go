@@ -78,7 +78,6 @@ func (b Bloom) Test(test *big.Int) bool {
 
 func (b Bloom) TestBytes(test []byte) bool {
 	return b.Test(new(big.Int).SetBytes(test))
-
 }
 
 // MarshalText encodes b as a hex string with 0x prefix.

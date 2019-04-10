@@ -120,7 +120,7 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 
 	log.Trace("swarmfs mount: traversing manifest map")
 	for suffix, entry := range manifestEntryMap {
-		if suffix == "" { //empty suffix means that the file has no name - i.e. this is the default entry in a manifest. Since we cannot have files without a name, let us ignore this entry
+		if suffix == "" { // empty suffix means that the file has no name - i.e. this is the default entry in a manifest. Since we cannot have files without a name, let us ignore this entry
 			log.Warn("Manifest has an empty-path (default) entry which will be ignored in FUSE mount.")
 			continue
 		}
@@ -166,7 +166,7 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 	go func() {
 		log.Info("swarmfs", "serving hash", mhash, "at", cleanedMountPoint)
 		filesys := &SwarmRoot{root: rootDir}
-		//start serving the actual file system; see note below
+		// start serving the actual file system; see note below
 		if err := fs.Serve(fconn, filesys); err != nil {
 			log.Warn("swarmfs could not serve the requested hash", "error", err)
 			serverr <- err
@@ -214,8 +214,8 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		return nil, err
 
 	case <-fconn.Ready:
-		//this signals that the actual mount point from the fuse.Mount call is ready;
-		//it does not signal though that the file system from fs.Serve is actually fully built up
+		// this signals that the actual mount point from the fuse.Mount call is ready;
+		// it does not signal though that the file system from fs.Serve is actually fully built up
 		if err := fconn.MountError; err != nil {
 			log.Error("Mounting error from fuse driver: ", "err", err)
 			return nil, err

@@ -257,7 +257,6 @@ func (arguments Arguments) unpackTuple(v interface{}, marshalledValues []interfa
 		}
 	}
 	return nil
-
 }
 
 // UnpackValues can be used to unpack ABI-encoded hexdata according to the ABI-specification,

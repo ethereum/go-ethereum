@@ -32,9 +32,8 @@ import (
 )
 
 // Constants to match up protocol versions and messages
-const (
-	lpv2 = 2
-)
+
+const lpv2 = 2
 
 // Supported versions of the les protocol (first is primary)
 var (

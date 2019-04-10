@@ -163,7 +163,6 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 // retry and synchronicity wrapper for handshake api call
 // returns first new symkeyid upon successful execution
 func (rw *pssRPCRW) handshake(retries int, sync bool, flush bool) (string, error) {
-
 	var symkeyids []string
 	var i int
 	// request new keys

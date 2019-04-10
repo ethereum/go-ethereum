@@ -16,9 +16,7 @@
 
 package storage
 
-import (
-	"hash"
-)
+import "hash"
 
 const (
 	BMTHash     = "BMT"

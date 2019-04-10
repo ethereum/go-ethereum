@@ -16,9 +16,7 @@
 
 package common
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestStorageSizeString(t *testing.T) {
 	tests := []struct {

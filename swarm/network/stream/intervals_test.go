@@ -51,7 +51,6 @@ func TestIntervalsLiveAndHistory(t *testing.T) {
 }
 
 func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
-
 	nodes := 2
 	chunkCount := dataChunkCount
 	externalStreamName := "externalStream"

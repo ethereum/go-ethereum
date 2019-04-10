@@ -32,17 +32,17 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
-//constants for random file generation
+// constants for random file generation
 const (
 	minFileSize = 2
 	maxFileSize = 40
 )
 
-//This test is a retrieval test for nodes.
-//A configurable number of nodes can be
-//provided to the test.
-//Files are uploaded to nodes, other nodes try to retrieve the file
-//Number of nodes can be provided via commandline too.
+// This test is a retrieval test for nodes.
+// A configurable number of nodes can be
+// provided to the test.
+// Files are uploaded to nodes, other nodes try to retrieve the file
+// Number of nodes can be provided via commandline too.
 func TestFileRetrieval(t *testing.T) {
 	var nodeCount []int
 
@@ -66,15 +66,15 @@ func TestFileRetrieval(t *testing.T) {
 	}
 }
 
-//This test is a retrieval test for nodes.
-//One node is randomly selected to be the pivot node.
-//A configurable number of chunks and nodes can be
-//provided to the test, the number of chunks is uploaded
-//to the pivot node and other nodes try to retrieve the chunk(s).
-//Number of chunks and nodes can be provided via commandline too.
+// This test is a retrieval test for nodes.
+// One node is randomly selected to be the pivot node.
+// A configurable number of chunks and nodes can be
+// provided to the test, the number of chunks is uploaded
+// to the pivot node and other nodes try to retrieve the chunk(s).
+// Number of chunks and nodes can be provided via commandline too.
 func TestRetrieval(t *testing.T) {
-	//if nodes/chunks have been provided via commandline,
-	//run the tests with these values
+	// if nodes/chunks have been provided via commandline,
+	// run the tests with these values
 	if *nodes != 0 && *chunks != 0 {
 		err := runRetrievalTest(t, *chunks, *nodes)
 		if err != nil {
@@ -147,11 +147,11 @@ func runFileRetrievalTest(nodeCount int) error {
 	log.Info("Initializing test config", "node count", nodeCount)
 
 	conf := &synctestConfig{}
-	//map of discover ID to indexes of chunks expected at that ID
+	// map of discover ID to indexes of chunks expected at that ID
 	conf.idToChunksMap = make(map[enode.ID][]int)
-	//map of overlay address to discover ID
+	// map of overlay address to discover ID
 	conf.addrToIDMap = make(map[string]enode.ID)
-	//array where the generated chunk hashes will be stored
+	// array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 3*time.Minute)
@@ -168,21 +168,21 @@ func runFileRetrievalTest(nodeCount int) error {
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
 		for _, n := range nodeIDs {
-			//get the kademlia overlay address from this ID
+			// get the kademlia overlay address from this ID
 			a := n.Bytes()
-			//append it to the array of all overlay addresses
+			// append it to the array of all overlay addresses
 			conf.addrs = append(conf.addrs, a)
-			//the proximity calculation is on overlay addr,
-			//the p2p/simulations check func triggers on enode.ID,
-			//so we need to know which overlay addr maps to which nodeID
+			// the proximity calculation is on overlay addr,
+			// the p2p/simulations check func triggers on enode.ID,
+			// so we need to know which overlay addr maps to which nodeID
 			conf.addrToIDMap[string(a)] = n
 		}
 
-		//an array for the random files
+		// an array for the random files
 		var randomFiles []string
-		//channel to signal when the upload has finished
-		//uploadFinished := make(chan struct{})
-		//channel to trigger new node checks
+		// channel to signal when the upload has finished
+		// uploadFinished := make(chan struct{})
+		// channel to trigger new node checks
 
 		conf.hashes, randomFiles, err = uploadFilesToNodes(sim)
 		if err != nil {
@@ -196,16 +196,16 @@ func runFileRetrievalTest(nodeCount int) error {
 	REPEAT:
 		for {
 			for _, id := range nodeIDs {
-				//for each expected file, check if it is in the local store
+				// for each expected file, check if it is in the local store
 				item, ok := sim.NodeItem(id, bucketKeyFileStore)
 				if !ok {
 					return fmt.Errorf("No filestore")
 				}
 				fileStore := item.(*storage.FileStore)
-				//check all chunks
+				// check all chunks
 				for i, hash := range conf.hashes {
 					reader, _ := fileStore.Retrieve(context.TODO(), hash)
-					//check that we can read the file size and that it corresponds to the generated file size
+					// check that we can read the file size and that it corresponds to the generated file size
 					if s, err := reader.Size(ctx, nil); err != nil || s != int64(len(randomFiles[i])) {
 						log.Debug("Retrieve error", "err", err, "hash", hash, "nodeId", id)
 						time.Sleep(500 * time.Millisecond)
@@ -243,11 +243,11 @@ func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) error {
 	defer sim.Close()
 
 	conf := &synctestConfig{}
-	//map of discover ID to indexes of chunks expected at that ID
+	// map of discover ID to indexes of chunks expected at that ID
 	conf.idToChunksMap = make(map[enode.ID][]int)
-	//map of overlay address to discover ID
+	// map of overlay address to discover ID
 	conf.addrToIDMap = make(map[string]enode.ID)
-	//array where the generated chunk hashes will be stored
+	// array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -262,17 +262,17 @@ func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) error {
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
 		for _, n := range nodeIDs {
-			//get the kademlia overlay address from this ID
+			// get the kademlia overlay address from this ID
 			a := n.Bytes()
-			//append it to the array of all overlay addresses
+			// append it to the array of all overlay addresses
 			conf.addrs = append(conf.addrs, a)
-			//the proximity calculation is on overlay addr,
-			//the p2p/simulations check func triggers on enode.ID,
-			//so we need to know which overlay addr maps to which nodeID
+			// the proximity calculation is on overlay addr,
+			// the p2p/simulations check func triggers on enode.ID,
+			// so we need to know which overlay addr maps to which nodeID
 			conf.addrToIDMap[string(a)] = n
 		}
 
-		//this is the node selected for upload
+		// this is the node selected for upload
 		node := sim.Net.GetRandomUpNode()
 		item, ok := sim.NodeItem(node.ID(), bucketKeyStore)
 		if !ok {
@@ -289,17 +289,17 @@ func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) error {
 	REPEAT:
 		for {
 			for _, id := range nodeIDs {
-				//for each expected chunk, check if it is in the local store
-				//check on the node's FileStore (netstore)
+				// for each expected chunk, check if it is in the local store
+				// check on the node's FileStore (netstore)
 				item, ok := sim.NodeItem(id, bucketKeyFileStore)
 				if !ok {
 					return fmt.Errorf("No filestore")
 				}
 				fileStore := item.(*storage.FileStore)
-				//check all chunks
+				// check all chunks
 				for _, hash := range conf.hashes {
 					reader, _ := fileStore.Retrieve(context.TODO(), hash)
-					//check that we can read the chunk size and that it corresponds to the generated chunk size
+					// check that we can read the chunk size and that it corresponds to the generated chunk size
 					if s, err := reader.Size(ctx, nil); err != nil || s != int64(chunkSize) {
 						log.Debug("Retrieve error", "err", err, "hash", hash, "nodeId", id, "size", s)
 						time.Sleep(500 * time.Millisecond)

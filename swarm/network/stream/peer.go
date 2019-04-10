@@ -136,9 +136,9 @@ func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8,
 
 	spanName := "send.chunk.delivery"
 
-	//we send different types of messages if delivery is for syncing or retrievals,
-	//even if handling and content of the message are the same,
-	//because swap accounting decides which messages need accounting based on the message type
+	// we send different types of messages if delivery is for syncing or retrievals,
+	// even if handling and content of the message are the same,
+	// because swap accounting decides which messages need accounting based on the message type
 	if syncing {
 		msg = &ChunkDeliveryMsgSyncing{
 			Addr:  chunk.Address(),
@@ -277,7 +277,7 @@ func (p *Peer) getClient(ctx context.Context, s Stream) (c *client, err error) {
 	}
 
 	if params != nil {
-		//debug.PrintStack()
+		// debug.PrintStack()
 		if err := params.waitClient(ctx); err != nil {
 			return nil, err
 		}

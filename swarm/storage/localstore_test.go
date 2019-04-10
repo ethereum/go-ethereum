@@ -26,9 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
-var (
-	hashfunc = MakeHashFunc(DefaultHash)
-)
+var hashfunc = MakeHashFunc(DefaultHash)
 
 // tests that the content address validator correctly checks the data
 // tests that feed update chunks are passed through content address validator
@@ -113,7 +111,6 @@ func TestValidator(t *testing.T) {
 	if errs[1] != nil {
 		t.Fatalf("expected no error on bad content address chunk in spite of no validation, but got: %s", err)
 	}
-
 }
 
 type boolTestValidator bool
@@ -179,7 +176,6 @@ func TestGetFrequentlyAccessedChunkWontGetGarbageCollected(t *testing.T) {
 		t.Logf("most frequntly accessed chunk not found on disk (key: %v)", mostAccessed)
 		t.Fatal(err)
 	}
-
 }
 
 func setupLocalStore(t *testing.T, ldbCap int) (ls *LocalStore, cleanup func()) {
@@ -235,10 +231,9 @@ func TestHas(t *testing.T) {
 		}
 	}
 
-	//let's be paranoic and test again that the non-existent chunk returns false
+	// let's be paranoic and test again that the non-existent chunk returns false
 	has = store.Has(context.Background(), nonStoredAddr)
 	if has {
 		t.Fatal("Expected Has() to return false, but returned true!")
 	}
-
 }

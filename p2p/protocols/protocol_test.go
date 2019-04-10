@@ -153,7 +153,6 @@ func protocolTester(pp *p2ptest.TestPeerPool) *p2ptest.ProtocolTester {
 }
 
 func protoHandshakeExchange(id enode.ID, proto *protoHandshake) []p2ptest.Exchange {
-
 	return []p2ptest.Exchange{
 		{
 			Expects: []p2ptest.Expect{
@@ -251,7 +250,8 @@ func TestProtocolHook(t *testing.T) {
 		peer := NewPeer(p, rw, spec)
 		ctx := context.TODO()
 		err := peer.Send(ctx, &dummyMsg{
-			Content: "handshake"})
+			Content: "handshake",
+		})
 
 		if err != nil {
 			t.Fatal(err)
@@ -294,7 +294,7 @@ func TestProtocolHook(t *testing.T) {
 	if peerId := testHook.peer.ID(); peerId != tester.Nodes[0].ID() && peerId != tester.Nodes[1].ID() {
 		t.Fatalf("Expected peer ID to be set correctly, but it is not (got %v, exp %v or %v", peerId, tester.Nodes[0].ID(), tester.Nodes[1].ID())
 	}
-	if testHook.size != 11 { //11 is the length of the encoded message
+	if testHook.size != 11 { // 11 is the length of the encoded message
 		t.Fatalf("Expected size to be %d, but it is %d ", 1, testHook.size)
 	}
 	testHook.mu.Unlock()
@@ -325,7 +325,7 @@ func TestProtocolHook(t *testing.T) {
 	if testHook.peer == nil || testHook.peer.ID() != tester.Nodes[1].ID() {
 		t.Fatal("Expected peer ID to be set correctly, but it is not")
 	}
-	if testHook.size != 10 { //11 is the length of the encoded message
+	if testHook.size != 10 { // 11 is the length of the encoded message
 		t.Fatalf("Expected size to be %d, but it is %d ", 1, testHook.size)
 	}
 	testHook.mu.Unlock()
@@ -350,25 +350,25 @@ func TestProtocolHook(t *testing.T) {
 	}
 }
 
-//We need to test that if the hook is not defined, then message infrastructure
+// We need to test that if the hook is not defined, then message infrastructure
 //(send,receive) still works
 func TestNoHook(t *testing.T) {
-	//create a test spec
+	// create a test spec
 	spec := createTestSpec()
-	//a random node
+	// a random node
 	id := adapters.RandomNodeConfig().ID
-	//a peer
+	// a peer
 	p := p2p.NewPeer(id, "testPeer", nil)
 	rw := &dummyRW{}
 	peer := NewPeer(p, rw, spec)
 	ctx := context.TODO()
 	msg := &perBytesMsgSenderPays{Content: "testBalance"}
-	//send a message
+	// send a message
 
 	if err := peer.Send(ctx, msg); err != nil {
 		t.Fatal(err)
 	}
-	//simulate receiving a message
+	// simulate receiving a message
 	rw.msg = msg
 	handler := func(ctx context.Context, msg interface{}) error {
 		return nil
@@ -392,7 +392,6 @@ func TestProtoHandshakeSuccess(t *testing.T) {
 }
 
 func moduleHandshakeExchange(id enode.ID, resp uint) []p2ptest.Exchange {
-
 	return []p2ptest.Exchange{
 		{
 			Expects: []p2ptest.Expect{
@@ -447,7 +446,6 @@ func TestModuleHandshakeSuccess(t *testing.T) {
 
 // testing complex interactions over multiple peers, relaying, dropping
 func testMultiPeerSetup(a, b enode.ID) []p2ptest.Exchange {
-
 	return []p2ptest.Exchange{
 		{
 			Label: "primary handshake",
@@ -492,10 +490,13 @@ func testMultiPeerSetup(a, b enode.ID) []p2ptest.Exchange {
 			},
 		},
 
-		{Label: "alternative module handshake", Triggers: []p2ptest.Trigger{{Code: 1, Msg: &hs0{41}, Peer: a},
-			{Code: 1, Msg: &hs0{41}, Peer: b}}},
+		{Label: "alternative module handshake", Triggers: []p2ptest.Trigger{
+			{Code: 1, Msg: &hs0{41}, Peer: a},
+			{Code: 1, Msg: &hs0{41}, Peer: b},
+		}},
 		{Label: "repeated module handshake", Triggers: []p2ptest.Trigger{{Code: 1, Msg: &hs0{1}, Peer: a}}},
-		{Label: "receiving repeated module handshake", Expects: []p2ptest.Expect{{Code: 1, Msg: &hs0{43}, Peer: a}}}}
+		{Label: "receiving repeated module handshake", Expects: []p2ptest.Expect{{Code: 1, Msg: &hs0{43}, Peer: a}}},
+	}
 }
 
 func runMultiplePeers(t *testing.T, peer int, errs ...error) {
@@ -570,8 +571,8 @@ WAIT:
 	if pp.Has(s.Nodes[peer].ID()) {
 		t.Fatalf("peer test-%v not dropped: %v (%v)", peer, pp, s.Nodes)
 	}
-
 }
+
 func TestMultiplePeersDropSelf(t *testing.T) {
 	runMultiplePeers(t, 0,
 		fmt.Errorf("subprotocol error"),
@@ -586,9 +587,9 @@ func TestMultiplePeersDropOther(t *testing.T) {
 	)
 }
 
-//dummy implementation of a MsgReadWriter
-//this allows for quick and easy unit tests without
-//having to build up the complete protocol
+// dummy implementation of a MsgReadWriter
+// this allows for quick and easy unit tests without
+// having to build up the complete protocol
 type dummyRW struct {
 	msg  interface{}
 	size uint32

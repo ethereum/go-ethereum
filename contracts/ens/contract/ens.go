@@ -192,9 +192,9 @@ func (_ENS *ENSTransactorRaw) Transact(opts *bind.TransactOpts, method string, p
 //
 // Solidity: function owner(bytes32 node) constant returns(address)
 func (_ENS *ENSCaller) Owner(opts *bind.CallOpts, node [32]byte) (common.Address, error) {
-	var (
-		ret0 = new(common.Address)
-	)
+
+	var ret0 = new(common.Address)
+
 	out := ret0
 	err := _ENS.contract.Call(opts, out, "owner", node)
 	return *ret0, err
@@ -218,9 +218,9 @@ func (_ENS *ENSCallerSession) Owner(node [32]byte) (common.Address, error) {
 //
 // Solidity: function resolver(bytes32 node) constant returns(address)
 func (_ENS *ENSCaller) Resolver(opts *bind.CallOpts, node [32]byte) (common.Address, error) {
-	var (
-		ret0 = new(common.Address)
-	)
+
+	var ret0 = new(common.Address)
+
 	out := ret0
 	err := _ENS.contract.Call(opts, out, "resolver", node)
 	return *ret0, err
@@ -244,9 +244,9 @@ func (_ENS *ENSCallerSession) Resolver(node [32]byte) (common.Address, error) {
 //
 // Solidity: function ttl(bytes32 node) constant returns(uint64)
 func (_ENS *ENSCaller) Ttl(opts *bind.CallOpts, node [32]byte) (uint64, error) {
-	var (
-		ret0 = new(uint64)
-	)
+
+	var ret0 = new(uint64)
+
 	out := ret0
 	err := _ENS.contract.Call(opts, out, "ttl", node)
 	return *ret0, err
@@ -429,7 +429,6 @@ type ENSNewOwner struct {
 //
 // Solidity: event NewOwner(bytes32 indexed node, bytes32 indexed label, address owner)
 func (_ENS *ENSFilterer) FilterNewOwner(opts *bind.FilterOpts, node [][32]byte, label [][32]byte) (*ENSNewOwnerIterator, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -450,7 +449,6 @@ func (_ENS *ENSFilterer) FilterNewOwner(opts *bind.FilterOpts, node [][32]byte, 
 //
 // Solidity: event NewOwner(bytes32 indexed node, bytes32 indexed label, address owner)
 func (_ENS *ENSFilterer) WatchNewOwner(opts *bind.WatchOpts, sink chan<- *ENSNewOwner, node [][32]byte, label [][32]byte) (event.Subscription, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -570,7 +568,6 @@ type ENSNewResolver struct {
 //
 // Solidity: event NewResolver(bytes32 indexed node, address resolver)
 func (_ENS *ENSFilterer) FilterNewResolver(opts *bind.FilterOpts, node [][32]byte) (*ENSNewResolverIterator, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -587,7 +584,6 @@ func (_ENS *ENSFilterer) FilterNewResolver(opts *bind.FilterOpts, node [][32]byt
 //
 // Solidity: event NewResolver(bytes32 indexed node, address resolver)
 func (_ENS *ENSFilterer) WatchNewResolver(opts *bind.WatchOpts, sink chan<- *ENSNewResolver, node [][32]byte) (event.Subscription, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -703,7 +699,6 @@ type ENSNewTTL struct {
 //
 // Solidity: event NewTTL(bytes32 indexed node, uint64 ttl)
 func (_ENS *ENSFilterer) FilterNewTTL(opts *bind.FilterOpts, node [][32]byte) (*ENSNewTTLIterator, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -720,7 +715,6 @@ func (_ENS *ENSFilterer) FilterNewTTL(opts *bind.FilterOpts, node [][32]byte) (*
 //
 // Solidity: event NewTTL(bytes32 indexed node, uint64 ttl)
 func (_ENS *ENSFilterer) WatchNewTTL(opts *bind.WatchOpts, sink chan<- *ENSNewTTL, node [][32]byte) (event.Subscription, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -836,7 +830,6 @@ type ENSTransfer struct {
 //
 // Solidity: event Transfer(bytes32 indexed node, address owner)
 func (_ENS *ENSFilterer) FilterTransfer(opts *bind.FilterOpts, node [][32]byte) (*ENSTransferIterator, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)
@@ -853,7 +846,6 @@ func (_ENS *ENSFilterer) FilterTransfer(opts *bind.FilterOpts, node [][32]byte) 
 //
 // Solidity: event Transfer(bytes32 indexed node, address owner)
 func (_ENS *ENSFilterer) WatchTransfer(opts *bind.WatchOpts, sink chan<- *ENSTransfer, node [][32]byte) (event.Subscription, error) {
-
 	var nodeRule []interface{}
 	for _, nodeItem := range node {
 		nodeRule = append(nodeRule, nodeItem)

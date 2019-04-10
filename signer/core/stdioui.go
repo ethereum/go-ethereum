@@ -100,6 +100,7 @@ func (ui *StdIOUI) ShowInfo(message string) {
 		log.Info("Error calling 'ui_showInfo'", "exc", err.Error(), "msg", message)
 	}
 }
+
 func (ui *StdIOUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	err := ui.notify("ui_onApprovedTx", tx)
 	if err != nil {
@@ -113,6 +114,7 @@ func (ui *StdIOUI) OnSignerStartup(info StartupInfo) {
 		log.Info("Error calling 'ui_onSignerStartup'", "exc", err.Error(), "info", info)
 	}
 }
+
 func (ui *StdIOUI) OnInputRequired(info UserInputRequest) (UserInputResponse, error) {
 	var result UserInputResponse
 	err := ui.dispatch("ui_onInputRequired", info, &result)

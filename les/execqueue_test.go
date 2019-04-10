@@ -16,9 +16,7 @@
 
 package les
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestExecQueue(t *testing.T) {
 	var (

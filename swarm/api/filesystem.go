@@ -139,7 +139,6 @@ func (fs *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error
 				errors[i] = err
 				return
 			}
-
 		}(i, entry)
 	}
 	for i := 0; i < cap(sem); i++ {
@@ -187,7 +186,7 @@ func (fs *FileSystem) Download(bzzpath, localpath string) error {
 		return err
 	}
 
-	//resolving host and port
+	// resolving host and port
 	uri, err := Parse(path.Join("bzz:/", bzzpath))
 	if err != nil {
 		return err

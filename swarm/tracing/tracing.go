@@ -35,9 +35,7 @@ const (
 	StoreLabelMeta = "span_save_meta"
 )
 
-var (
-	Closer io.Closer
-)
+var Closer io.Closer
 
 var (
 	TracingFlag = cli.BoolFlag{
@@ -102,15 +100,15 @@ func initTracer(endpoint, svc string) (closer io.Closer) {
 	// Example logger and metrics factory. Use github.com/uber/jaeger-client-go/log
 	// and github.com/uber/jaeger-lib/metrics respectively to bind to real logging and metrics
 	// frameworks.
-	//jLogger := jaegerlog.StdLogger
-	//jMetricsFactory := metrics.NullFactory
+	// jLogger := jaegerlog.StdLogger
+	// jMetricsFactory := metrics.NullFactory
 
 	// Initialize tracer with a logger and a metrics factory
 	closer, err := cfg.InitGlobalTracer(
 		svc,
-		//jaegercfg.Logger(jLogger),
-		//jaegercfg.Metrics(jMetricsFactory),
-		//jaegercfg.Observer(rpcmetrics.NewObserver(jMetricsFactory, rpcmetrics.DefaultNameNormalizer)),
+		// jaegercfg.Logger(jLogger),
+		// jaegercfg.Metrics(jMetricsFactory),
+		// jaegercfg.Observer(rpcmetrics.NewObserver(jMetricsFactory, rpcmetrics.DefaultNameNormalizer)),
 	)
 	if err != nil {
 		log.Error("Could not initialize Jaeger tracer", "err", err)

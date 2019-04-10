@@ -35,15 +35,11 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pot"
 )
 
-const (
-	TestProtocolVersion = 8
-)
+const TestProtocolVersion = 8
 
 var TestProtocolNetworkID = DefaultTestNetworkID
 
-var (
-	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
-)
+var loglevel = flag.Int("loglevel", 2, "verbosity of logs")
 
 func init() {
 	flag.Parse()
@@ -159,7 +155,6 @@ func newBzz(addr *BzzAddr, lightNode bool) *Bzz {
 }
 
 func newBzzHandshakeTester(n int, prvkey *ecdsa.PrivateKey, lightNode bool) (*bzzTester, error) {
-
 	var record enr.Record
 	bzzkey := PrivateKeyToBzzKey(prvkey)
 	record.Set(NewENRAddrEntry(bzzkey))

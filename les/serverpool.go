@@ -492,7 +492,7 @@ func (pool *serverPool) loadNodes() {
 // added to either the known or new selection pools. They are connected/reconnected
 // by p2p.Server whenever possible.
 func (pool *serverPool) connectToTrustedNodes() {
-	//connect to trusted nodes
+	// connect to trusted nodes
 	for _, node := range pool.trustedNodes {
 		pool.server.AddTrustedPeer(node)
 		pool.server.AddPeer(node)

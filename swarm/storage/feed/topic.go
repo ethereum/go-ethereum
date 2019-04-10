@@ -89,7 +89,6 @@ func (t *Topic) Name(relatedContent []byte) string {
 		z = TopicLength
 	}
 	return string(nameBytes[:z])
-
 }
 
 // UnmarshalJSON implements the json.Unmarshaller interface

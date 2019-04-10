@@ -803,7 +803,6 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt) (int,
 func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header, taskQueue *prque.Prque,
 	pendPool map[string]*fetchRequest, donePool map[common.Hash]struct{}, reqTimer metrics.Timer,
 	results int, reconstruct func(header *types.Header, index int, result *fetchResult) error) (int, error) {
-
 	// Short circuit if the data was never requested
 	request := pendPool[id]
 	if request == nil {

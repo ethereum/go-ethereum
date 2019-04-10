@@ -45,7 +45,6 @@ func TestProtocol(t *testing.T) {
 }
 
 func testProtocol(t *testing.T) {
-
 	// address hint size
 	var addrsize int64
 	paramstring := strings.Split(t.Name(), "/")

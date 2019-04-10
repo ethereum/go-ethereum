@@ -328,10 +328,10 @@ func (t *udp) sendTopicNodes(remote *Node, queryHash common.Hash, nodes []*Node)
 }
 
 func (t *udp) sendPacket(toid NodeID, toaddr *net.UDPAddr, ptype byte, req interface{}) (hash []byte, err error) {
-	//fmt.Println("sendPacket", nodeEvent(ptype), toaddr.String(), toid.String())
+	// fmt.Println("sendPacket", nodeEvent(ptype), toaddr.String(), toid.String())
 	packet, hash, err := encodePacket(t.priv, ptype, req)
 	if err != nil {
-		//fmt.Println(err)
+		// fmt.Println(err)
 		return hash, err
 	}
 	log.Trace(fmt.Sprintf(">>> %v to %x@%v", nodeEvent(ptype), toid[:8], toaddr))
@@ -340,7 +340,7 @@ func (t *udp) sendPacket(toid NodeID, toaddr *net.UDPAddr, ptype byte, req inter
 	} else {
 		egressTrafficMeter.Mark(int64(nbytes))
 	}
-	//fmt.Println(err)
+	// fmt.Println(err)
 	return hash, err
 }
 
@@ -395,7 +395,7 @@ func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error {
 	pkt := ingressPacket{remoteAddr: from}
 	if err := decodePacket(buf, &pkt); err != nil {
 		log.Debug(fmt.Sprintf("Bad packet from %v: %v", from, err))
-		//fmt.Println("bad packet", err)
+		// fmt.Println("bad packet", err)
 		return err
 	}
 	t.net.reqReadPacket(pkt)

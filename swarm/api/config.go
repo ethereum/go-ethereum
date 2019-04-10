@@ -74,9 +74,8 @@ type Config struct {
 	privateKey           *ecdsa.PrivateKey
 }
 
-//create a default config with all parameters to set to defaults
+// create a default config with all parameters to set to defaults
 func NewConfig() (c *Config) {
-
 	c = &Config{
 		LocalStoreParams:     storage.NewDefaultLocalStoreParams(),
 		FileStoreParams:      storage.NewFileStoreParams(),
@@ -101,10 +100,9 @@ func NewConfig() (c *Config) {
 	return
 }
 
-//some config params need to be initialized after the complete
-//config building phase is completed (e.g. due to overriding flags)
+// some config params need to be initialized after the complete
+// config building phase is completed (e.g. due to overriding flags)
 func (c *Config) Init(prvKey *ecdsa.PrivateKey, nodeKey *ecdsa.PrivateKey) error {
-
 	// create swarm dir and record key
 	err := c.createAndSetPath(c.Path, prvKey)
 	if err != nil {

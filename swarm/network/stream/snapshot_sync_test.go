@@ -45,7 +45,7 @@ type synctestConfig struct {
 	addrs         [][]byte
 	hashes        []storage.Address
 	idToChunksMap map[enode.ID][]int
-	//chunksToNodesMap map[string][]int
+	// chunksToNodesMap map[string][]int
 	addrToIDMap map[string]enode.ID
 }
 
@@ -66,13 +66,13 @@ func dummyRequestFromPeers(_ context.Context, req *network.Request) (*enode.ID, 
 	panic(fmt.Sprintf("unexpected request: address %s, source %s", req.Addr.String(), req.Source.String()))
 }
 
-//This test is a syncing test for nodes.
-//One node is randomly selected to be the pivot node.
-//A configurable number of chunks and nodes can be
-//provided to the test, the number of chunks is uploaded
-//to the pivot node, and we check that nodes get the chunks
-//they are expected to store based on the syncing protocol.
-//Number of chunks and nodes can be provided via commandline too.
+// This test is a syncing test for nodes.
+// One node is randomly selected to be the pivot node.
+// A configurable number of chunks and nodes can be
+// provided to the test, the number of chunks is uploaded
+// to the pivot node, and we check that nodes get the chunks
+// they are expected to store based on the syncing protocol.
+// Number of chunks and nodes can be provided via commandline too.
 func TestSyncingViaGlobalSync(t *testing.T) {
 	if runtime.GOOS == "darwin" && os.Getenv("TRAVIS") == "true" {
 		t.Skip("Flaky on mac on travis")
@@ -82,8 +82,8 @@ func TestSyncingViaGlobalSync(t *testing.T) {
 		t.Skip("Segfaults on Travis with -race")
 	}
 
-	//if nodes/chunks have been provided via commandline,
-	//run the tests with these values
+	// if nodes/chunks have been provided via commandline,
+	// run the tests with these values
 	if *nodes != 0 && *chunks != 0 {
 		log.Info(fmt.Sprintf("Running test with %d chunks and %d nodes...", *chunks, *nodes))
 		testSyncingViaGlobalSync(t, *chunks, *nodes)
@@ -91,8 +91,8 @@ func TestSyncingViaGlobalSync(t *testing.T) {
 		chunkCounts := []int{4, 32}
 		nodeCounts := []int{32, 16}
 
-		//if the `longrunning` flag has been provided
-		//run more test combinations
+		// if the `longrunning` flag has been provided
+		// run more test combinations
 		if *longrunning {
 			chunkCounts = []int{64, 128}
 			nodeCounts = []int{32, 64}
@@ -140,11 +140,11 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 	log.Info("Initializing test config")
 
 	conf := &synctestConfig{}
-	//map of discover ID to indexes of chunks expected at that ID
+	// map of discover ID to indexes of chunks expected at that ID
 	conf.idToChunksMap = make(map[enode.ID][]int)
-	//map of overlay address to discover ID
+	// map of overlay address to discover ID
 	conf.addrToIDMap = make(map[string]enode.ID)
-	//array where the generated chunk hashes will be stored
+	// array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 3*time.Minute)
@@ -164,7 +164,6 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 }
 
 func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulation, chunkCount int) simulation.Result {
-
 	return sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		disconnected := watchDisconnections(ctx, sim)
 		defer func() {
@@ -175,18 +174,18 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 
 		nodeIDs := sim.UpNodeIDs()
 		for _, n := range nodeIDs {
-			//get the kademlia overlay address from this ID
+			// get the kademlia overlay address from this ID
 			a := n.Bytes()
-			//append it to the array of all overlay addresses
+			// append it to the array of all overlay addresses
 			conf.addrs = append(conf.addrs, a)
-			//the proximity calculation is on overlay addr,
-			//the p2p/simulations check func triggers on enode.ID,
-			//so we need to know which overlay addr maps to which nodeID
+			// the proximity calculation is on overlay addr,
+			// the p2p/simulations check func triggers on enode.ID,
+			// so we need to know which overlay addr maps to which nodeID
 			conf.addrToIDMap[string(a)] = n
 		}
 
-		//get the node at that index
-		//this is the node selected for upload
+		// get the node at that index
+		// this is the node selected for upload
 		node := sim.Net.GetRandomUpNode()
 		item, ok := sim.NodeItem(node.ID(), bucketKeyStore)
 		if !ok {
@@ -217,20 +216,20 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 	REPEAT:
 		for {
 			for _, id := range nodeIDs {
-				//for each expected chunk, check if it is in the local store
+				// for each expected chunk, check if it is in the local store
 				localChunks := conf.idToChunksMap[id]
 				for _, ch := range localChunks {
-					//get the real chunk by the index in the index array
+					// get the real chunk by the index in the index array
 					chunk := conf.hashes[ch]
 					log.Trace(fmt.Sprintf("node has chunk: %s:", chunk))
-					//check if the expected chunk is indeed in the localstore
+					// check if the expected chunk is indeed in the localstore
 					var err error
 					if *useMockStore {
-						//use the globalStore if the mockStore should be used; in that case,
-						//the complete localStore stack is bypassed for getting the chunk
+						// use the globalStore if the mockStore should be used; in that case,
+						// the complete localStore stack is bypassed for getting the chunk
 						_, err = globalStore.Get(common.BytesToAddress(id.Bytes()), chunk)
 					} else {
-						//use the actual localstore
+						// use the actual localstore
 						item, ok := sim.NodeItem(id, bucketKeyStore)
 						if !ok {
 							return fmt.Errorf("Error accessing localstore")
@@ -258,10 +257,10 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 	})
 }
 
-//map chunk keys to addresses which are responsible
+// map chunk keys to addresses which are responsible
 func mapKeysToNodes(conf *synctestConfig) {
 	nodemap := make(map[string][]int)
-	//build a pot for chunk hashes
+	// build a pot for chunk hashes
 	np := pot.NewPot(nil, 0)
 	indexmap := make(map[string]int)
 	for i, a := range conf.addrs {
@@ -271,7 +270,7 @@ func mapKeysToNodes(conf *synctestConfig) {
 
 	ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, conf.addrs)
 
-	//for each address, run EachNeighbour on the chunk hashes pot to identify closest nodes
+	// for each address, run EachNeighbour on the chunk hashes pot to identify closest nodes
 	log.Trace(fmt.Sprintf("Generated hash chunk(s): %v", conf.hashes))
 	for i := 0; i < len(conf.hashes); i++ {
 		var a []byte
@@ -289,13 +288,13 @@ func mapKeysToNodes(conf *synctestConfig) {
 		}
 	}
 	for addr, chunks := range nodemap {
-		//this selects which chunks are expected to be found with the given node
+		// this selects which chunks are expected to be found with the given node
 		conf.idToChunksMap[conf.addrToIDMap[addr]] = chunks
 	}
 	log.Debug(fmt.Sprintf("Map of expected chunks by ID: %v", conf.idToChunksMap))
 }
 
-//upload a file(chunks) to a single local node store
+// upload a file(chunks) to a single local node store
 func uploadFileToSingleNodeStore(id enode.ID, chunkCount int, lstore *storage.LocalStore) ([]storage.Address, error) {
 	log.Debug(fmt.Sprintf("Uploading to node id: %s", id))
 	fileStore := storage.NewFileStore(lstore, storage.NewFileStoreParams())

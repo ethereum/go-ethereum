@@ -190,7 +190,6 @@ func (s *ProtocolSession) expect(exps []Expect) error {
 			case <-alarm.C:
 				errc <- errTimedOut
 			}
-
 		}()
 	}
 

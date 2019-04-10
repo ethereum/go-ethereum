@@ -147,25 +147,41 @@ func newAlethGenesisSpec(network string, genesis *core.Genesis) (*alethGenesisSp
 		spec.setAccount(address, account)
 	}
 
-	spec.setPrecompile(1, &alethGenesisSpecBuiltin{Name: "ecrecover",
-		Linear: &alethGenesisSpecLinearPricing{Base: 3000}})
-	spec.setPrecompile(2, &alethGenesisSpecBuiltin{Name: "sha256",
-		Linear: &alethGenesisSpecLinearPricing{Base: 60, Word: 12}})
-	spec.setPrecompile(3, &alethGenesisSpecBuiltin{Name: "ripemd160",
-		Linear: &alethGenesisSpecLinearPricing{Base: 600, Word: 120}})
-	spec.setPrecompile(4, &alethGenesisSpecBuiltin{Name: "identity",
-		Linear: &alethGenesisSpecLinearPricing{Base: 15, Word: 3}})
+	spec.setPrecompile(1, &alethGenesisSpecBuiltin{
+		Name:   "ecrecover",
+		Linear: &alethGenesisSpecLinearPricing{Base: 3000},
+	})
+	spec.setPrecompile(2, &alethGenesisSpecBuiltin{
+		Name:   "sha256",
+		Linear: &alethGenesisSpecLinearPricing{Base: 60, Word: 12},
+	})
+	spec.setPrecompile(3, &alethGenesisSpecBuiltin{
+		Name:   "ripemd160",
+		Linear: &alethGenesisSpecLinearPricing{Base: 600, Word: 120},
+	})
+	spec.setPrecompile(4, &alethGenesisSpecBuiltin{
+		Name:   "identity",
+		Linear: &alethGenesisSpecLinearPricing{Base: 15, Word: 3},
+	})
 	if genesis.Config.ByzantiumBlock != nil {
-		spec.setPrecompile(5, &alethGenesisSpecBuiltin{Name: "modexp",
-			StartingBlock: (hexutil.Uint64)(genesis.Config.ByzantiumBlock.Uint64())})
-		spec.setPrecompile(6, &alethGenesisSpecBuiltin{Name: "alt_bn128_G1_add",
+		spec.setPrecompile(5, &alethGenesisSpecBuiltin{
+			Name:          "modexp",
 			StartingBlock: (hexutil.Uint64)(genesis.Config.ByzantiumBlock.Uint64()),
-			Linear:        &alethGenesisSpecLinearPricing{Base: 500}})
-		spec.setPrecompile(7, &alethGenesisSpecBuiltin{Name: "alt_bn128_G1_mul",
+		})
+		spec.setPrecompile(6, &alethGenesisSpecBuiltin{
+			Name:          "alt_bn128_G1_add",
 			StartingBlock: (hexutil.Uint64)(genesis.Config.ByzantiumBlock.Uint64()),
-			Linear:        &alethGenesisSpecLinearPricing{Base: 40000}})
-		spec.setPrecompile(8, &alethGenesisSpecBuiltin{Name: "alt_bn128_pairing_product",
-			StartingBlock: (hexutil.Uint64)(genesis.Config.ByzantiumBlock.Uint64())})
+			Linear:        &alethGenesisSpecLinearPricing{Base: 500},
+		})
+		spec.setPrecompile(7, &alethGenesisSpecBuiltin{
+			Name:          "alt_bn128_G1_mul",
+			StartingBlock: (hexutil.Uint64)(genesis.Config.ByzantiumBlock.Uint64()),
+			Linear:        &alethGenesisSpecLinearPricing{Base: 40000},
+		})
+		spec.setPrecompile(8, &alethGenesisSpecBuiltin{
+			Name:          "alt_bn128_pairing_product",
+			StartingBlock: (hexutil.Uint64)(genesis.Config.ByzantiumBlock.Uint64()),
+		})
 	}
 	return spec, nil
 }
@@ -193,7 +209,6 @@ func (spec *alethGenesisSpec) setAccount(address common.Address, account core.Ge
 	}
 	a.Balance = (*math2.HexOrDecimal256)(account.Balance)
 	a.Nonce = account.Nonce
-
 }
 
 func (spec *alethGenesisSpec) setByzantium(num *big.Int) {
@@ -385,8 +400,10 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 			Nonce:   math2.HexOrDecimal64(account.Nonce),
 		}
 	}
-	spec.setPrecompile(1, &parityChainSpecBuiltin{Name: "ecrecover",
-		Pricing: &parityChainSpecPricing{Linear: &parityChainSpecLinearPricing{Base: 3000}}})
+	spec.setPrecompile(1, &parityChainSpecBuiltin{
+		Name:    "ecrecover",
+		Pricing: &parityChainSpecPricing{Linear: &parityChainSpecLinearPricing{Base: 3000}},
+	})
 
 	spec.setPrecompile(2, &parityChainSpecBuiltin{
 		Name: "sha256", Pricing: &parityChainSpecPricing{Linear: &parityChainSpecLinearPricing{Base: 60, Word: 12}},

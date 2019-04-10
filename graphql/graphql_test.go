@@ -16,9 +16,7 @@
 
 package graphql
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestBuildSchema(t *testing.T) {
 	// Make sure the schema can be parsed and matched up to the object model.
