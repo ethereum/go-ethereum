@@ -482,7 +482,7 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 		if extapi, err := external.NewExternalBackend(conf.ExternalSigner); err == nil {
 			backends = append(backends, extapi)
 		} else {
-			log.Info("Error configuring external signer", "error", err)
+			return nil, "", fmt.Errorf("error connecting to external signer: %v", err)
 		}
 	}
 	if len(backends) == 0 {
