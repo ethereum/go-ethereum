@@ -168,7 +168,11 @@ func (p *peer) GetRequestCost(msgcode uint64, amount int) uint64 {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	cost := p.fcCosts[msgcode].baseCost + p.fcCosts[msgcode].reqCost*uint64(amount)
+	costs := p.fcCosts[msgcode]
+	if costs == nil {
+		return 0
+	}
+	cost := costs.baseCost + costs.reqCost*uint64(amount)
 	if cost > p.fcServerParams.BufLimit {
 		cost = p.fcServerParams.BufLimit
 	}
@@ -189,8 +193,12 @@ func (p *peer) GetTxRelayCost(amount, size int) uint64 {
 		panic(nil)
 	}
 
-	cost := p.fcCosts[msgcode].baseCost + p.fcCosts[msgcode].reqCost*uint64(amount)
-	sizeCost := p.fcCosts[msgcode].baseCost + p.fcCosts[msgcode].reqCost*uint64(size)/txSizeCostLimit
+	costs := p.fcCosts[msgcode]
+	if costs == nil {
+		return 0
+	}
+	cost := costs.baseCost + costs.reqCost*uint64(amount)
+	sizeCost := costs.baseCost + costs.reqCost*uint64(size)/txSizeCostLimit
 	if sizeCost > cost {
 		cost = sizeCost
 	}
@@ -516,6 +524,20 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		p.fcServerParams = params
 		p.fcServer = flowcontrol.NewServerNode(params)
 		p.fcCosts = MRC.decode()
+		var checkList []uint64
+		switch p.version {
+		case lpv1:
+			checkList = reqListV1
+		case lpv2:
+			checkList = reqListV2
+		default:
+			panic(nil)
+		}
+		for _, msgCode := range checkList {
+			if p.fcCosts[msgCode] == nil {
+				return errResp(ErrUselessPeer, "peer does not support message %d", msgCode)
+			}
+		}
 	}
 
 	p.headInfo = &announceData{Td: rTd, Hash: rHash, Number: rNum}
