@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
+	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 )
 
 type TestServer interface {
@@ -37,15 +38,12 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, reso
 	if err != nil {
 		t.Fatal(err)
 	}
-	storeparams := storage.NewDefaultLocalStoreParams()
-	storeparams.DbCapacity = 5000000
-	storeparams.CacheCapacity = 5000
-	storeparams.Init(dir)
-	localStore, err := storage.NewLocalStore(storeparams, nil)
+	localStore, err := localstore.New(dir, make([]byte, 32), nil)
 	if err != nil {
 		os.RemoveAll(dir)
 		t.Fatal(err)
 	}
+
 	fileStore := storage.NewFileStore(localStore, storage.NewFileStoreParams())
 
 	// Swarm feeds test setup

@@ -22,8 +22,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -59,30 +57,6 @@ func brokenLimitReader(data io.Reader, size int, errAt int) *brokenLimitedReader
 	}
 }
 
-func newLDBStore(t *testing.T) (*LDBStore, func()) {
-	dir, err := ioutil.TempDir("", "bzz-storage-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	log.Trace("memstore.tempdir", "dir", dir)
-
-	ldbparams := NewLDBStoreParams(NewDefaultStoreParams(), dir)
-	db, err := NewLDBStore(ldbparams)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cleanup := func() {
-		db.Close()
-		err := os.RemoveAll(dir)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	return db, cleanup
-}
-
 func mputRandomChunks(store ChunkStore, n int) ([]Chunk, error) {
 	return mput(store, n, GenerateRandomChunk)
 }
@@ -94,14 +68,15 @@ func mput(store ChunkStore, n int, f func(i int64) Chunk) (hs []Chunk, err error
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	for i := int64(0); i < int64(n); i++ {
-		chunk := f(chunk.DefaultSize)
+		ch := f(chunk.DefaultSize)
 		go func() {
+			_, err := store.Put(ctx, chunk.ModePutUpload, ch)
 			select {
-			case errc <- store.Put(ctx, chunk):
+			case errc <- err:
 			case <-ctx.Done():
 			}
 		}()
-		hs = append(hs, chunk)
+		hs = append(hs, ch)
 	}
 
 	// wait for all chunks to be stored
@@ -123,13 +98,13 @@ func mget(store ChunkStore, hs []Address, f func(h Address, chunk Chunk) error) 
 		go func(h Address) {
 			defer wg.Done()
 			// TODO: write timeout with context
-			chunk, err := store.Get(context.TODO(), h)
+			ch, err := store.Get(context.TODO(), chunk.ModeGetRequest, h)
 			if err != nil {
 				errc <- err
 				return
 			}
 			if f != nil {
-				err = f(h, chunk)
+				err = f(h, ch)
 				if err != nil {
 					errc <- err
 					return
@@ -250,14 +225,15 @@ func NewMapChunkStore() *MapChunkStore {
 	}
 }
 
-func (m *MapChunkStore) Put(_ context.Context, ch Chunk) error {
+func (m *MapChunkStore) Put(_ context.Context, _ chunk.ModePut, ch Chunk) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	_, exists := m.chunks[ch.Address().Hex()]
 	m.chunks[ch.Address().Hex()] = ch
-	return nil
+	return exists, nil
 }
 
-func (m *MapChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
+func (m *MapChunkStore) Get(_ context.Context, _ chunk.ModeGet, ref Address) (Chunk, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	chunk := m.chunks[ref.Hex()]
@@ -268,15 +244,28 @@ func (m *MapChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
 }
 
 // Need to implement Has from SyncChunkStore
-func (m *MapChunkStore) Has(ctx context.Context, ref Address) bool {
+func (m *MapChunkStore) Has(ctx context.Context, ref Address) (has bool, err error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	_, has := m.chunks[ref.Hex()]
-	return has
+	_, has = m.chunks[ref.Hex()]
+	return has, nil
 }
 
-func (m *MapChunkStore) Close() {
+func (m *MapChunkStore) Set(ctx context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
+	return nil
+}
+
+func (m *MapChunkStore) LastPullSubscriptionBinID(bin uint8) (id uint64, err error) {
+	return 0, nil
+}
+
+func (m *MapChunkStore) SubscribePull(ctx context.Context, bin uint8, since, until uint64) (c <-chan chunk.Descriptor, stop func()) {
+	return nil, nil
+}
+
+func (m *MapChunkStore) Close() error {
+	return nil
 }
 
 func chunkAddresses(chunks []Chunk) []Address {

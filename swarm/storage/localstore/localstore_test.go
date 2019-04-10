@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -59,23 +60,23 @@ func TestDB(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	chunk := generateTestRandomChunk()
+	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(ModePutUpload).Put(chunk)
+	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := db.NewGetter(ModeGetRequest).Get(chunk.Address())
+	got, err := db.Get(context.Background(), chunk.ModeGetRequest, ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !bytes.Equal(got.Address(), chunk.Address()) {
-		t.Errorf("got address %x, want %x", got.Address(), chunk.Address())
+	if !bytes.Equal(got.Address(), ch.Address()) {
+		t.Errorf("got address %x, want %x", got.Address(), ch.Address())
 	}
-	if !bytes.Equal(got.Data(), chunk.Data()) {
-		t.Errorf("got data %x, want %x", got.Data(), chunk.Data())
+	if !bytes.Equal(got.Data(), ch.Data()) {
+		t.Errorf("got data %x, want %x", got.Data(), ch.Data())
 	}
 }
 
@@ -113,19 +114,17 @@ func TestDB_updateGCSem(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	chunk := generateTestRandomChunk()
+	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(ModePutUpload).Put(chunk)
+	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	getter := db.NewGetter(ModeGetRequest)
-
 	// get more chunks then maxParallelUpdateGC
 	// in time shorter then updateGCSleep
 	for i := 0; i < 5; i++ {
-		_, err = getter.Get(chunk.Address())
+		_, err = db.Get(context.Background(), chunk.ModeGetRequest, ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -237,71 +236,71 @@ func newRetrieveIndexesTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTim
 
 // newRetrieveIndexesTestWithAccess returns a test function that validates if the right
 // chunk values are in the retrieval indexes when access time must be stored.
-func newRetrieveIndexesTestWithAccess(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
+func newRetrieveIndexesTestWithAccess(db *DB, ch chunk.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
-		item, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
+		item, err := db.retrievalDataIndex.Get(addressToItem(ch.Address()))
 		if err != nil {
 			t.Fatal(err)
 		}
-		validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, 0)
+		validateItem(t, item, ch.Address(), ch.Data(), storeTimestamp, 0)
 
 		if accessTimestamp > 0 {
-			item, err = db.retrievalAccessIndex.Get(addressToItem(chunk.Address()))
+			item, err = db.retrievalAccessIndex.Get(addressToItem(ch.Address()))
 			if err != nil {
 				t.Fatal(err)
 			}
-			validateItem(t, item, chunk.Address(), nil, 0, accessTimestamp)
+			validateItem(t, item, ch.Address(), nil, 0, accessTimestamp)
 		}
 	}
 }
 
 // newPullIndexTest returns a test function that validates if the right
 // chunk values are in the pull index.
-func newPullIndexTest(db *DB, chunk chunk.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
+func newPullIndexTest(db *DB, ch chunk.Chunk, binID uint64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
 		item, err := db.pullIndex.Get(shed.Item{
-			Address:        chunk.Address(),
-			StoreTimestamp: storeTimestamp,
+			Address: ch.Address(),
+			BinID:   binID,
 		})
 		if err != wantError {
 			t.Errorf("got error %v, want %v", err, wantError)
 		}
 		if err == nil {
-			validateItem(t, item, chunk.Address(), nil, storeTimestamp, 0)
+			validateItem(t, item, ch.Address(), nil, 0, 0)
 		}
 	}
 }
 
 // newPushIndexTest returns a test function that validates if the right
 // chunk values are in the push index.
-func newPushIndexTest(db *DB, chunk chunk.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
+func newPushIndexTest(db *DB, ch chunk.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
 		item, err := db.pushIndex.Get(shed.Item{
-			Address:        chunk.Address(),
+			Address:        ch.Address(),
 			StoreTimestamp: storeTimestamp,
 		})
 		if err != wantError {
 			t.Errorf("got error %v, want %v", err, wantError)
 		}
 		if err == nil {
-			validateItem(t, item, chunk.Address(), nil, storeTimestamp, 0)
+			validateItem(t, item, ch.Address(), nil, storeTimestamp, 0)
 		}
 	}
 }
 
 // newGCIndexTest returns a test function that validates if the right
 // chunk values are in the push index.
-func newGCIndexTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
+func newGCIndexTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp int64, binID uint64) func(t *testing.T) {
 	return func(t *testing.T) {
 		item, err := db.gcIndex.Get(shed.Item{
 			Address:         chunk.Address(),
-			StoreTimestamp:  storeTimestamp,
+			BinID:           binID,
 			AccessTimestamp: accessTimestamp,
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		validateItem(t, item, chunk.Address(), nil, storeTimestamp, accessTimestamp)
+		validateItem(t, item, chunk.Address(), nil, 0, accessTimestamp)
 	}
 }
 
@@ -349,7 +348,7 @@ func newIndexGCSizeTest(db *DB) func(t *testing.T) {
 // in database. It is used for index values validations.
 type testIndexChunk struct {
 	chunk.Chunk
-	storeTimestamp int64
+	binID uint64
 }
 
 // testItemsOrder tests the order of chunks in the index. If sortFunc is not nil,

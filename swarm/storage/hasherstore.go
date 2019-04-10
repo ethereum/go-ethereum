@@ -93,7 +93,7 @@ func (h *hasherStore) Get(ctx context.Context, ref Reference) (ChunkData, error)
 		return nil, err
 	}
 
-	chunk, err := h.store.Get(ctx, addr)
+	chunk, err := h.store.Get(ctx, chunk.ModeGetRequest, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -239,11 +239,12 @@ func (h *hasherStore) newDataEncryption(key encryption.Key) encryption.Encryptio
 	return encryption.New(key, int(chunk.DefaultSize), 0, sha3.NewLegacyKeccak256)
 }
 
-func (h *hasherStore) storeChunk(ctx context.Context, chunk Chunk) {
+func (h *hasherStore) storeChunk(ctx context.Context, ch Chunk) {
 	atomic.AddUint64(&h.nrChunks, 1)
 	go func() {
+		_, err := h.store.Put(ctx, chunk.ModePutUpload, ch)
 		select {
-		case h.errC <- h.store.Put(ctx, chunk):
+		case h.errC <- err:
 		case <-h.quitC:
 		}
 	}()

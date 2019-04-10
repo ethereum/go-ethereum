@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	pq "github.com/ethereum/go-ethereum/swarm/network/priorityqueue"
@@ -189,8 +190,8 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	})
 
 	hash := storage.Address(hash0[:])
-	chunk := storage.NewChunk(hash, hash)
-	err = localStore.Put(context.TODO(), chunk)
+	ch := storage.NewChunk(hash, hash)
+	_, err = localStore.Put(context.TODO(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)
 	}
@@ -241,8 +242,8 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	}
 
 	hash = storage.Address(hash1[:])
-	chunk = storage.NewChunk(hash, hash1[:])
-	err = localStore.Put(context.TODO(), chunk)
+	ch = storage.NewChunk(hash, hash1[:])
+	_, err = localStore.Put(context.TODO(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)
 	}
@@ -420,14 +421,14 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 	defer cancel()
 
 	// wait for the chunk to get stored
-	storedChunk, err := localStore.Get(ctx, chunkKey)
+	storedChunk, err := localStore.Get(ctx, chunk.ModeGetRequest, chunkKey)
 	for err != nil {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("Chunk is not in localstore after timeout, err: %v", err)
 		default:
 		}
-		storedChunk, err = localStore.Get(ctx, chunkKey)
+		storedChunk, err = localStore.Get(ctx, chunk.ModeGetRequest, chunkKey)
 		time.Sleep(50 * time.Millisecond)
 	}
 
@@ -700,7 +701,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck b
 			errs := make(chan error)
 			for _, hash := range hashes {
 				go func(h storage.Address) {
-					_, err := netStore.Get(ctx, h)
+					_, err := netStore.Get(ctx, chunk.ModeGetRequest, h)
 					log.Warn("test check netstore get", "hash", h, "err", err)
 					errs <- err
 				}(hash)
