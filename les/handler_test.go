@@ -508,8 +508,9 @@ func TestTransactionStatusLes2(t *testing.T) {
 	test := func(tx *types.Transaction, send bool, expStatus txStatus) {
 		reqID++
 		if send {
-			cost := peer.GetRequestCost(SendTxV2Msg, 1)
-			sendRequest(peer.app, SendTxV2Msg, reqID, cost, types.Transactions{tx})
+			enc, _ := rlp.EncodeToBytes(types.Transactions{tx})
+			cost := peer.GetTxRelayCost(1, len(enc))
+			sendRequest(peer.app, SendTxV2Msg, reqID, cost, rlp.RawValue(enc))
 		} else {
 			cost := peer.GetRequestCost(GetTxStatusMsg, 1)
 			sendRequest(peer.app, GetTxStatusMsg, reqID, cost, []common.Hash{tx.Hash()})
