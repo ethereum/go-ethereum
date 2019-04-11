@@ -977,9 +977,10 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	}
 
 	var (
-		stats = struct{ processed, ignored int32 }{}
-		start = time.Now()
-		size  = 0
+		stats            = struct{ processed, ignored int32 }{}
+		start            = time.Now()
+		size             = 0
+		checkBodyPresent = true
 	)
 	// updateHead updates the head fast sync block if the inserted blocks are better
 	// and returns a indicator whether the inserted blocks are canonical.
@@ -1161,9 +1162,18 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			if !bc.HasHeader(block.Hash(), block.NumberU64()) {
 				return i, fmt.Errorf("containing header #%d [%x…] unknown", block.Number(), block.Hash().Bytes()[:4])
 			}
-			if bc.HasBlock(block.Hash(), block.NumberU64()) {
-				stats.ignored++
-				continue
+
+			// Ignore if the entire data is already known
+			if checkBodyPresent {
+				if bc.HasBlock(block.Hash(), block.NumberU64()) {
+					stats.ignored++
+					continue
+				} else {
+					// If block N is unavailable, so are the next blocks.
+					// This should hold, but if it does not, the shortcut
+					// here will only cause overwriting some existing data
+					checkBodyPresent = false
+				}
 			}
 			// Write all the data out into the database
 			rawdb.WriteBody(batch, block.Hash(), block.NumberU64(), block.Body())
@@ -2103,11 +2113,8 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
-	whFunc := func(header *types.Header) error {
-		_, err := bc.hc.WriteHeader(header)
-		return err
-	}
-	return bc.hc.InsertHeaderChain(chain, whFunc, start)
+	errIndex, _, err := bc.hc.InsertHeaderChain(chain, start, nil)
+	return errIndex, err
 }
 
 // CurrentHeader retrieves the current head header of the canonical chain. The

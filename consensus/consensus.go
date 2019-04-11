@@ -39,6 +39,9 @@ type ChainReader interface {
 	// GetHeader retrieves a block header from the database by hash and number.
 	GetHeader(hash common.Hash, number uint64) *types.Header
 
+	// HasHeader checks presence of header in the database by hash and number.
+	HasHeader(hash common.Hash, number uint64) bool
+
 	// GetHeaderByNumber retrieves a block header from the database by number.
 	GetHeaderByNumber(number uint64) *types.Header
 
