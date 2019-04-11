@@ -18,7 +18,6 @@ package stream
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -30,11 +29,11 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/state"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const (
@@ -49,7 +48,6 @@ const (
 
 // Enumerate options for syncing and retrieval
 type SyncingOption int
-type RetrievalOption int
 
 // Syncing options
 const (
@@ -59,17 +57,6 @@ const (
 	SyncingRegisterOnly
 	// Both client and server funcs are registered, subscribe sent automatically
 	SyncingAutoSubscribe
-)
-
-const (
-	// Retrieval disabled. Used mostly for tests to isolate syncing features (i.e. syncing only)
-	RetrievalDisabled RetrievalOption = iota
-	// Only the client side of the retrieve request is registered.
-	// (light nodes do not serve retrieve requests)
-	// once the client is registered, subscription to retrieve request stream is always sent
-	RetrievalClientOnly
-	// Both client and server funcs are registered, subscribe sent automatically
-	RetrievalEnabled
 )
 
 // subscriptionFunc is used to determine what to do in order to perform subscriptions
@@ -90,7 +77,6 @@ type Registry struct {
 	peers          map[enode.ID]*Peer
 	delivery       *Delivery
 	intervalsStore state.Store
-	autoRetrieval  bool // automatically subscribe to retrieve request stream
 	maxPeerServers int
 	spec           *protocols.Spec   //this protocol's spec
 	balance        protocols.Balance //implements protocols.Balance, for accounting
@@ -101,22 +87,19 @@ type Registry struct {
 // RegistryOptions holds optional values for NewRegistry constructor.
 type RegistryOptions struct {
 	SkipCheck       bool
-	Syncing         SyncingOption   // Defines syncing behavior
-	Retrieval       RetrievalOption // Defines retrieval behavior
+	Syncing         SyncingOption // Defines syncing behavior
 	SyncUpdateDelay time.Duration
 	MaxPeerServers  int // The limit of servers for each peer in registry
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore chunk.FetchStore, intervalsStore state.Store, options *RegistryOptions, balance protocols.Balance) *Registry {
+func NewRegistry(localID enode.ID, delivery *Delivery, netStore *storage.NetStore, intervalsStore state.Store, options *RegistryOptions, balance protocols.Balance) *Registry {
 	if options == nil {
 		options = &RegistryOptions{}
 	}
 	if options.SyncUpdateDelay <= 0 {
 		options.SyncUpdateDelay = 15 * time.Second
 	}
-	// check if retrieval has been disabled
-	retrieval := options.Retrieval != RetrievalDisabled
 
 	quit := make(chan struct{})
 
@@ -128,7 +111,6 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore chunk.Fetc
 		peers:          make(map[enode.ID]*Peer),
 		delivery:       delivery,
 		intervalsStore: intervalsStore,
-		autoRetrieval:  retrieval,
 		maxPeerServers: options.MaxPeerServers,
 		balance:        balance,
 		quit:           quit,
@@ -139,27 +121,10 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore chunk.Fetc
 	streamer.api = NewAPI(streamer)
 	delivery.getPeer = streamer.getPeer
 
-	// if retrieval is enabled, register the server func, so that retrieve requests will be served (non-light nodes only)
-	if options.Retrieval == RetrievalEnabled {
-		streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ string, live bool) (Server, error) {
-			if !live {
-				return nil, errors.New("only live retrieval requests supported")
-			}
-			return NewSwarmChunkServer(delivery.chunkStore), nil
-		})
-	}
-
-	// if retrieval is not disabled, register the client func (both light nodes and normal nodes can issue retrieve requests)
-	if options.Retrieval != RetrievalDisabled {
-		streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, t string, live bool) (Client, error) {
-			return NewSwarmSyncerClient(p, syncChunkStore, NewStream(swarmChunkServerStreamName, t, live))
-		})
-	}
-
 	// If syncing is not disabled, the syncing functions are registered (both client and server)
 	if options.Syncing != SyncingDisabled {
-		RegisterSwarmSyncerServer(streamer, syncChunkStore)
-		RegisterSwarmSyncerClient(streamer, syncChunkStore)
+		RegisterSwarmSyncerServer(streamer, netStore)
+		RegisterSwarmSyncerClient(streamer, netStore)
 	}
 
 	// if syncing is set to automatically subscribe to the syncing stream, start the subscription process
@@ -381,7 +346,7 @@ func (r *Registry) Subscribe(peerId enode.ID, s Stream, h *Range, priority uint8
 	}
 	log.Debug("Subscribe ", "peer", peerId, "stream", s, "history", h)
 
-	return peer.SendPriority(context.TODO(), msg, priority)
+	return peer.Send(context.TODO(), msg)
 }
 
 func (r *Registry) Unsubscribe(peerId enode.ID, s Stream) error {
@@ -422,8 +387,7 @@ func (r *Registry) Quit(peerId enode.ID, s Stream) error {
 func (r *Registry) Close() error {
 	// Stop sending neighborhood depth change and address count
 	// change from Kademlia that were initiated in NewRegistry constructor.
-	r.delivery.kad.CloseNeighbourhoodDepthC()
-	r.delivery.kad.CloseAddrCountC()
+	r.delivery.Close()
 	close(r.quit)
 	return r.intervalsStore.Close()
 }
@@ -463,13 +427,6 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 	defer r.deletePeer(sp)
 	defer close(sp.quit)
 	defer sp.close()
-
-	if r.autoRetrieval && !p.LightNode {
-		err := r.Subscribe(p.ID(), NewStream(swarmChunkServerStreamName, "", true), nil, Top)
-		if err != nil {
-			return err
-		}
-	}
 
 	return sp.Run(sp.HandleMsg)
 }
@@ -619,19 +576,66 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 		return p.handleUnsubscribeMsg(msg)
 
 	case *OfferedHashesMsg:
-		return p.handleOfferedHashesMsg(ctx, msg)
+		go func() {
+			err := p.handleOfferedHashesMsg(ctx, msg)
+			if err != nil {
+				log.Error(err.Error())
+				p.Drop()
+			}
+		}()
+		return nil
 
 	case *TakeoverProofMsg:
-		return p.handleTakeoverProofMsg(ctx, msg)
+		go func() {
+			err := p.handleTakeoverProofMsg(ctx, msg)
+			if err != nil {
+				log.Error(err.Error())
+				p.Drop()
+			}
+		}()
+		return nil
 
 	case *WantedHashesMsg:
-		return p.handleWantedHashesMsg(ctx, msg)
+		go func() {
+			err := p.handleWantedHashesMsg(ctx, msg)
+			if err != nil {
+				log.Error(err.Error())
+				p.Drop()
+			}
+		}()
+		return nil
 
-	case *ChunkDeliveryMsgRetrieval, *ChunkDeliveryMsgSyncing:
-		return p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, msg)
+	case *ChunkDeliveryMsgRetrieval:
+		// handling chunk delivery is the same for retrieval and syncing, so let's cast the msg
+		go func() {
+			err := p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
+			if err != nil {
+				log.Error(err.Error())
+				p.Drop()
+			}
+		}()
+		return nil
+
+	case *ChunkDeliveryMsgSyncing:
+		// handling chunk delivery is the same for retrieval and syncing, so let's cast the msg
+		go func() {
+			err := p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
+			if err != nil {
+				log.Error(err.Error())
+				p.Drop()
+			}
+		}()
+		return nil
 
 	case *RetrieveRequestMsg:
-		return p.streamer.delivery.handleRetrieveRequestMsg(ctx, p, msg)
+		go func() {
+			err := p.streamer.delivery.handleRetrieveRequestMsg(ctx, p, msg)
+			if err != nil {
+				log.Error(err.Error())
+				p.Drop()
+			}
+		}()
+		return nil
 
 	case *RequestSubscriptionMsg:
 		return p.handleRequestSubscription(ctx, msg)
@@ -762,7 +766,7 @@ func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error 
 			return err
 		}
 
-		if err := p.SendPriority(context.TODO(), tp, c.priority); err != nil {
+		if err := p.Send(context.TODO(), tp); err != nil {
 			return err
 		}
 		if c.to > 0 && tp.Takeover.End >= c.to {
@@ -964,15 +968,13 @@ func (api *API) UnsubscribeStream(peerId enode.ID, s Stream) error {
 }
 
 /*
-GetPeerSubscriptions is a API function which allows to query a peer for stream subscriptions it has.
+GetPeerServerSubscriptions is a API function which allows to query a peer for stream subscriptions it has.
 It can be called via RPC.
 It returns a map of node IDs with an array of string representations of Stream objects.
 */
-func (api *API) GetPeerSubscriptions() map[string][]string {
-	//create the empty map
+func (api *API) GetPeerServerSubscriptions() map[string][]string {
 	pstreams := make(map[string][]string)
 
-	//iterate all streamer peers
 	api.streamer.peersMu.RLock()
 	defer api.streamer.peersMu.RUnlock()
 

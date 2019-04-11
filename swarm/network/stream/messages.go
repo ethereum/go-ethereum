@@ -247,7 +247,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			case err := <-errC:
 				if err != nil {
 					log.Debug("client.handleOfferedHashesMsg() error waiting for chunk, dropping peer", "peer", p.ID(), "err", err)
-					p.Drop(err)
+					p.Drop()
 					return
 				}
 			case <-ctx.Done():
@@ -289,7 +289,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		case err := <-c.next:
 			if err != nil {
 				log.Warn("c.next error dropping peer", "err", err)
-				p.Drop(err)
+				p.Drop()
 				return
 			}
 		case <-c.quit:

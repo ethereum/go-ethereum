@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -67,7 +66,6 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			}
 
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
-				Retrieval: RetrievalDisabled,
 				Syncing:   SyncingRegisterOnly,
 				SkipCheck: skipCheck,
 			}, nil)
@@ -288,20 +286,20 @@ func enableNotifications(r *Registry, peerID enode.ID, s Stream) error {
 
 type testExternalClient struct {
 	hashes               chan []byte
-	store                chunk.FetchStore
+	netStore             *storage.NetStore
 	enableNotificationsC chan struct{}
 }
 
-func newTestExternalClient(store chunk.FetchStore) *testExternalClient {
+func newTestExternalClient(netStore *storage.NetStore) *testExternalClient {
 	return &testExternalClient{
 		hashes:               make(chan []byte),
-		store:                store,
+		netStore:             netStore,
 		enableNotificationsC: make(chan struct{}),
 	}
 }
 
 func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func(context.Context) error {
-	wait := c.store.FetchFunc(ctx, storage.Address(hash))
+	wait := c.netStore.FetchFunc(ctx, storage.Address(hash))
 	if wait == nil {
 		return nil
 	}

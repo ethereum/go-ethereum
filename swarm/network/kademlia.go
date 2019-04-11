@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/pot"
 	sv "github.com/ethereum/go-ethereum/swarm/version"
@@ -138,6 +139,9 @@ func (e *entry) Hex() string {
 func (k *Kademlia) Register(peers ...*BzzAddr) error {
 	k.lock.Lock()
 	defer k.lock.Unlock()
+
+	metrics.GetOrRegisterCounter("kad.register", nil).Inc(1)
+
 	var known, size int
 	for _, p := range peers {
 		log.Trace("kademlia trying to register", "addr", p)
@@ -164,8 +168,6 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 				return newEntry(p)
 			}
 
-			log.Trace("found among known peers, underlay addr is same, do nothing", "new", p, "old", e.BzzAddr)
-
 			return v
 		})
 		if found {
@@ -186,6 +188,9 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, changed bool) {
 	k.lock.Lock()
 	defer k.lock.Unlock()
+
+	metrics.GetOrRegisterCounter("kad.suggestpeer", nil).Inc(1)
+
 	radius := neighbourhoodRadiusForPot(k.conns, k.NeighbourhoodSize, k.base)
 	// collect undersaturated bins in ascending order of number of connected peers
 	// and from shallow to deep (ascending order of PO)
@@ -297,6 +302,9 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 func (k *Kademlia) On(p *Peer) (uint8, bool) {
 	k.lock.Lock()
 	defer k.lock.Unlock()
+
+	metrics.GetOrRegisterCounter("kad.on", nil).Inc(1)
+
 	var ins bool
 	k.conns, _, _, _ = pot.Swap(k.conns, p, Pof, func(v pot.Val) pot.Val {
 		// if not found live
@@ -320,7 +328,6 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 			k.addrCountC <- k.addrs.Size()
 		}
 	}
-	log.Trace(k.string())
 	// calculate if depth of saturation changed
 	depth := uint8(k.saturation())
 	var changed bool
@@ -608,7 +615,7 @@ func (k *Kademlia) string() string {
 	if len(sv.GitCommit) > 0 {
 		rows = append(rows, fmt.Sprintf("commit hash: %s", sv.GitCommit))
 	}
-	rows = append(rows, fmt.Sprintf("%v KΛÐΞMLIΛ hive: queen's address: %x", time.Now().UTC().Format(time.UnixDate), k.BaseAddr()[:3]))
+	rows = append(rows, fmt.Sprintf("%v KΛÐΞMLIΛ hive: queen's address: %x", time.Now().UTC().Format(time.UnixDate), k.BaseAddr()))
 	rows = append(rows, fmt.Sprintf("population: %d (%d), NeighbourhoodSize: %d, MinBinSize: %d, MaxBinSize: %d", k.conns.Size(), k.addrs.Size(), k.NeighbourhoodSize, k.MinBinSize, k.MaxBinSize))
 
 	liverows := make([]string, k.MaxProxDisplay)

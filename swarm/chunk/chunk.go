@@ -172,12 +172,6 @@ type Store interface {
 	Close() (err error)
 }
 
-// FetchStore is a Store which supports syncing
-type FetchStore interface {
-	Store
-	FetchFunc(ctx context.Context, addr Address) func(context.Context) error
-}
-
 // Validator validates a chunk.
 type Validator interface {
 	Validate(ch Chunk) bool

@@ -204,15 +204,9 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		syncing = stream.SyncingDisabled
 	}
 
-	retrieval := stream.RetrievalEnabled
-	if config.LightNodeEnabled {
-		retrieval = stream.RetrievalClientOnly
-	}
-
 	registryOptions := &stream.RegistryOptions{
 		SkipCheck:       config.DeliverySkipCheck,
 		Syncing:         syncing,
-		Retrieval:       retrieval,
 		SyncUpdateDelay: config.SyncUpdateDelay,
 		MaxPeerServers:  config.MaxStreamPeerServers,
 	}

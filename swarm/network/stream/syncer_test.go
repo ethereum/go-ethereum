@@ -83,7 +83,6 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			}
 
 			r := NewRegistry(addr.ID(), delivery, netStore, store, &RegistryOptions{
-				Retrieval: RetrievalDisabled,
 				Syncing:   SyncingAutoSubscribe,
 				SkipCheck: skipCheck,
 			}, nil)
@@ -232,8 +231,7 @@ func TestSameVersionID(t *testing.T) {
 			}
 
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
-				Retrieval: RetrievalDisabled,
-				Syncing:   SyncingAutoSubscribe,
+				Syncing: SyncingAutoSubscribe,
 			}, nil)
 			bucket.Store(bucketKeyRegistry, r)
 
@@ -296,8 +294,7 @@ func TestDifferentVersionID(t *testing.T) {
 			}
 
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
-				Retrieval: RetrievalDisabled,
-				Syncing:   SyncingAutoSubscribe,
+				Syncing: SyncingAutoSubscribe,
 			}, nil)
 			bucket.Store(bucketKeyRegistry, r)
 

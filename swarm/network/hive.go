@@ -116,7 +116,7 @@ func (h *Hive) Stop() error {
 	log.Info(fmt.Sprintf("%08x hive stopped, dropping peers", h.BaseAddr()[:4]))
 	h.EachConn(nil, 255, func(p *Peer, _ int) bool {
 		log.Info(fmt.Sprintf("%08x dropping peer %08x", h.BaseAddr()[:4], p.Address()[:4]))
-		p.Drop(nil)
+		p.Drop()
 		return true
 	})
 

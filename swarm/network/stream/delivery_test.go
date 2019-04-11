@@ -41,64 +41,11 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
-//Tests initializing a retrieve request
-func TestStreamerRetrieveRequest(t *testing.T) {
-	regOpts := &RegistryOptions{
-		Retrieval: RetrievalClientOnly,
-		Syncing:   SyncingDisabled,
-	}
-	tester, streamer, _, teardown, err := newStreamerTester(regOpts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer teardown()
-
-	node := tester.Nodes[0]
-
-	ctx := context.Background()
-	req := network.NewRequest(
-		storage.Address(hash0[:]),
-		true,
-		&sync.Map{},
-	)
-	streamer.delivery.RequestFromPeers(ctx, req)
-
-	stream := NewStream(swarmChunkServerStreamName, "", true)
-
-	err = tester.TestExchanges(p2ptest.Exchange{
-		Label: "RetrieveRequestMsg",
-		Expects: []p2ptest.Expect{
-			{ //start expecting a subscription for RETRIEVE_REQUEST due to `RetrievalClientOnly`
-				Code: 4,
-				Msg: &SubscribeMsg{
-					Stream:   stream,
-					History:  nil,
-					Priority: Top,
-				},
-				Peer: node.ID(),
-			},
-			{ //expect a retrieve request message for the given hash
-				Code: 5,
-				Msg: &RetrieveRequestMsg{
-					Addr:      hash0[:],
-					SkipCheck: true,
-				},
-				Peer: node.ID(),
-			},
-		},
-	})
-
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-}
-
 //Test requesting a chunk from a peer then issuing a "empty" OfferedHashesMsg (no hashes available yet)
 //Should time out as the peer does not have the chunk (no syncing happened previously)
 func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
-	tester, streamer, _, teardown, err := newStreamerTester(&RegistryOptions{
-		Retrieval: RetrievalEnabled,
-		Syncing:   SyncingDisabled, //do no syncing
+	tester, _, _, teardown, err := newStreamerTester(&RegistryOptions{
+		Syncing: SyncingDisabled, //do no syncing
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -109,30 +56,8 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 
 	chunk := storage.NewChunk(storage.Address(hash0[:]), nil)
 
-	peer := streamer.getPeer(node.ID())
-
-	stream := NewStream(swarmChunkServerStreamName, "", true)
-	//simulate pre-subscription to RETRIEVE_REQUEST stream on peer
-	peer.handleSubscribeMsg(context.TODO(), &SubscribeMsg{
-		Stream:   stream,
-		History:  nil,
-		Priority: Top,
-	})
-
 	//test the exchange
 	err = tester.TestExchanges(p2ptest.Exchange{
-		Expects: []p2ptest.Expect{
-			{ //first expect a subscription to the RETRIEVE_REQUEST stream
-				Code: 4,
-				Msg: &SubscribeMsg{
-					Stream:   stream,
-					History:  nil,
-					Priority: Top,
-				},
-				Peer: node.ID(),
-			},
-		},
-	}, p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
 		Triggers: []p2ptest.Trigger{
 			{ //then the actual RETRIEVE_REQUEST....
@@ -159,7 +84,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 
 	//should fail with a timeout as the peer we are requesting
 	//the chunk from does not have the chunk
-	expectedError := `exchange #1 "RetrieveRequestMsg": timed out`
+	expectedError := `exchange #0 "RetrieveRequestMsg": timed out`
 	if err == nil || err.Error() != expectedError {
 		t.Fatalf("Expected error %v, got %v", expectedError, err)
 	}
@@ -168,9 +93,8 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 // upstream request server receives a retrieve Request and responds with
 // offered hashes or delivery if skipHash is set to true
 func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
-	tester, streamer, localStore, teardown, err := newStreamerTester(&RegistryOptions{
-		Retrieval: RetrievalEnabled,
-		Syncing:   SyncingDisabled,
+	tester, _, localStore, teardown, err := newStreamerTester(&RegistryOptions{
+		Syncing: SyncingDisabled,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -179,36 +103,14 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 
 	node := tester.Nodes[0]
 
-	peer := streamer.getPeer(node.ID())
-
-	stream := NewStream(swarmChunkServerStreamName, "", true)
-
-	peer.handleSubscribeMsg(context.TODO(), &SubscribeMsg{
-		Stream:   stream,
-		History:  nil,
-		Priority: Top,
-	})
-
-	hash := storage.Address(hash0[:])
-	ch := storage.NewChunk(hash, hash)
+	hash := storage.Address(hash1[:])
+	ch := storage.NewChunk(hash, hash1[:])
 	_, err = localStore.Put(context.TODO(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)
 	}
 
 	err = tester.TestExchanges(p2ptest.Exchange{
-		Expects: []p2ptest.Expect{
-			{
-				Code: 4,
-				Msg: &SubscribeMsg{
-					Stream:   stream,
-					History:  nil,
-					Priority: Top,
-				},
-				Peer: node.ID(),
-			},
-		},
-	}, p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
 		Triggers: []p2ptest.Trigger{
 			{
@@ -221,51 +123,10 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 		},
 		Expects: []p2ptest.Expect{
 			{
-				Code: 1,
-				Msg: &OfferedHashesMsg{
-					HandoverProof: &HandoverProof{
-						Handover: &Handover{},
-					},
-					Hashes: hash,
-					From:   0,
-					// TODO: why is this 32???
-					To:     32,
-					Stream: stream,
-				},
-				Peer: node.ID(),
-			},
-		},
-	})
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	hash = storage.Address(hash1[:])
-	ch = storage.NewChunk(hash, hash1[:])
-	_, err = localStore.Put(context.TODO(), chunk.ModePutUpload, ch)
-	if err != nil {
-		t.Fatalf("Expected no err got %v", err)
-	}
-
-	err = tester.TestExchanges(p2ptest.Exchange{
-		Label: "RetrieveRequestMsg",
-		Triggers: []p2ptest.Trigger{
-			{
-				Code: 5,
-				Msg: &RetrieveRequestMsg{
-					Addr:      hash,
-					SkipCheck: true,
-				},
-				Peer: node.ID(),
-			},
-		},
-		Expects: []p2ptest.Expect{
-			{
 				Code: 6,
 				Msg: &ChunkDeliveryMsg{
-					Addr:  hash,
-					SData: hash,
+					Addr:  ch.Address(),
+					SData: ch.Data(),
 				},
 				Peer: node.ID(),
 			},
@@ -359,8 +220,7 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 
 func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 	tester, streamer, localStore, teardown, err := newStreamerTester(&RegistryOptions{
-		Retrieval: RetrievalDisabled,
-		Syncing:   SyncingDisabled,
+		Syncing: SyncingDisabled,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -472,7 +332,6 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 				r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 					SkipCheck: skipCheck,
 					Syncing:   SyncingDisabled,
-					Retrieval: RetrievalEnabled,
 				}, nil)
 				bucket.Store(bucketKeyRegistry, r)
 
@@ -623,7 +482,6 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck b
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				SkipCheck:       skipCheck,
 				Syncing:         SyncingDisabled,
-				Retrieval:       RetrievalDisabled,
 				SyncUpdateDelay: 0,
 			}, nil)
 			bucket.Store(bucketKeyRegistry, r)

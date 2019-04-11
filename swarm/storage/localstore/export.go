@@ -169,7 +169,7 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 					wg.Done()
 					<-tokenPool
 				default:
-					err := db.Put(ctx, chunk.ModePutUpload, ch)
+					_, err := db.Put(ctx, chunk.ModePutUpload, ch)
 					if err != nil {
 						errC <- err
 					}
