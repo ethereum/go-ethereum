@@ -447,6 +447,9 @@ func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.
 // compare 2 signers lists
 // return true if they are same elements, otherwise return false
 func compareSignersLists(list1 []common.Address, list2 []common.Address) bool {
+	if len(list1) == 0 && len(list2) == 0 {
+		return true
+	}
 	sort.Slice(list1, func(i, j int) bool {
 		return list1[i].String() <= list1[j].String()
 	})

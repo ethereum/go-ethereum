@@ -72,4 +72,13 @@ func TestCompareSignersLists(t *testing.T) {
 	if compareSignersLists(list1, list3) {
 		t.Error("list1 and list3 should not be same", "list1", list1, "list3", list3)
 	}
+	if !compareSignersLists([]common.Address{}, []common.Address{}) {
+		t.Error("Failed with empty list")
+	}
+	if !compareSignersLists([]common.Address{common.StringToAddress("cccccccccccccccccccccccccccccccccccccccc")}, []common.Address{common.StringToAddress("cccccccccccccccccccccccccccccccccccccccc")}) {
+		t.Error("Failed with list has only one signer")
+	}
+	if compareSignersLists([]common.Address{common.StringToAddress("aaaaaaaaaaaaaaaa")}, []common.Address{common.StringToAddress("cccccccccccccccccccccccccccccccccccccccc")}) {
+		t.Error("Failed with list has only one signer")
+	}
 }
