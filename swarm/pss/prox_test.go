@@ -207,7 +207,7 @@ func (d *testData) init(msgCount int) error {
 // whereas nodes X, Y and Z will be allowed recipients.
 func TestProxNetwork(t *testing.T) {
 	t.Run("16_nodes,_16_messages,_16_seconds", func(t *testing.T) {
-		testProxNetwork(t, 16, 16, 16)
+		testProxNetwork(t, 16, 16, 3*time.Second)
 	})
 }
 
@@ -217,30 +217,30 @@ func TestProxNetworkLong(t *testing.T) {
 		t.Skip("run with --longrunning flag to run extensive network tests")
 	}
 	t.Run("8_nodes,_100_messages,_30_seconds", func(t *testing.T) {
-		testProxNetwork(t, 8, 100, 30)
+		testProxNetwork(t, 8, 100, 30*time.Second)
 	})
 	t.Run("16_nodes,_100_messages,_30_seconds", func(t *testing.T) {
-		testProxNetwork(t, 16, 100, 30)
+		testProxNetwork(t, 16, 100, 30*time.Second)
 	})
 	t.Run("32_nodes,_100_messages,_60_seconds", func(t *testing.T) {
-		testProxNetwork(t, 32, 100, 60)
+		testProxNetwork(t, 32, 100, 1*time.Minute)
 	})
 	t.Run("64_nodes,_100_messages,_60_seconds", func(t *testing.T) {
-		testProxNetwork(t, 64, 100, 60)
+		testProxNetwork(t, 64, 100, 1*time.Minute)
 	})
 	t.Run("128_nodes,_100_messages,_120_seconds", func(t *testing.T) {
-		testProxNetwork(t, 128, 100, 120)
+		testProxNetwork(t, 128, 100, 2*time.Minute)
 	})
 }
 
-func testProxNetwork(t *testing.T, nodeCount int, msgCount int, timeout int) {
+func testProxNetwork(t *testing.T, nodeCount int, msgCount int, timeout time.Duration) {
 	td := newTestData()
 	handlerContextFuncs := make(map[Topic]handlerContextFunc)
 	handlerContextFuncs[topic] = nodeMsgHandler
 	services := newProxServices(td, true, handlerContextFuncs, td.kademlias)
 	td.sim = simulation.New(services)
 	defer td.sim.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(timeout))
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	filename := fmt.Sprintf("testdata/snapshot_%d.json", nodeCount)
 	err := td.sim.UploadSnapshot(ctx, filename)
