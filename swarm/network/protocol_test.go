@@ -131,9 +131,11 @@ func newBzzBaseTesterWithAddrs(prvkey *ecdsa.PrivateKey, addrs [][]byte, spec *p
 		ProtocolTester: s,
 		cs:             cs,
 	}
+	mu.Lock()
 	for _, n := range pt.Nodes {
 		nodeAddrs = append(nodeAddrs, nodeToAddr[n.ID()])
 	}
+	mu.Unlock()
 
 	return pt, nodeAddrs, nil
 }
