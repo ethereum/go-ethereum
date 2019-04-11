@@ -744,9 +744,6 @@ func (k *Kademlia) Saturation() int {
 	return k.saturation()
 }
 
-// saturation returns the smallest po value in which the node has less than MinBinSize peers
-// if the iterator reaches neighbourhood radius, then the last bin + 1 is returned.
-// This function is safe to use in Kademlia methods that use the lock.
 func (k *Kademlia) saturation() int {
 	prev := -1
 	radius := neighbourhoodRadiusForPot(k.conns, k.NeighbourhoodSize, k.base)
