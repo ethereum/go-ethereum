@@ -14,12 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// signer is a utility that can be used so sign transactions and
-// arbitrary data.
 package main
-
-//go:generate go-bindata -o bindata.go resources/4byte.json
-//go:generate gofmt -s -w bindata.go
 
 import (
 	"bufio"
@@ -54,6 +49,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/signer/core"
+	"github.com/ethereum/go-ethereum/signer/fourbyte"
 	"github.com/ethereum/go-ethereum/signer/rules"
 	"github.com/ethereum/go-ethereum/signer/storage"
 	"gopkg.in/urfave/cli.v1"
@@ -364,15 +360,12 @@ func signer(c *cli.Context) error {
 	}
 	// 4bytedb data
 	fourByteLocal := c.GlobalString(customDBFlag.Name)
-	data, err := Asset("resources/4byte.json")
+	db, err := fourbyte.NewWithFile(fourByteLocal)
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
-	db, err := core.NewAbiDBFromFiles(data, fourByteLocal)
-	if err != nil {
-		utils.Fatalf(err.Error())
-	}
-	log.Info("Loaded 4byte db", "signatures", db.Size(), "local", fourByteLocal)
+	embeds, locals := db.Size()
+	log.Info("Loaded 4byte database", "embeds", embeds, "locals", locals, "local", fourByteLocal)
 
 	var (
 		api       core.ExternalAPI
