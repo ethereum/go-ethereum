@@ -205,7 +205,7 @@ func TestCustomABI(t *testing.T) {
 		t.Fatal(err)
 	}
 	filename := fmt.Sprintf("%s/4byte_custom.json", d)
-	abidb, err := NewAbiDBFromFiles("../../cmd/clef/4byte.json", filename)
+	abidb, err := NewAbiDBFromFiles([]byte(""), filename)
 	if err != nil {
 		t.Fatal(err)
 	}
