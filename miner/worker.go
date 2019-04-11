@@ -56,7 +56,7 @@ const (
 	// timeout waiting for M1
 	waitPeriod = 10
 	// timeout for checkpoint.
-	waitPeriodCheckpoint = 120 // 2 mins
+	waitPeriodCheckpoint = 20
 )
 
 // Agent can register themself with the worker
