@@ -209,6 +209,15 @@ func (h *Hive) PeerInfo(id enode.ID) interface{} {
 	}
 }
 
+// Peer returns a bzz peer from the Hive. If there is no peer
+// with the provided enode id, a nil value is returned.
+func (h *Hive) Peer(id enode.ID) *BzzPeer {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	return h.peers[id]
+}
+
 // loadPeers, savePeer implement persistence callback/
 func (h *Hive) loadPeers() error {
 	var as []*BzzAddr
