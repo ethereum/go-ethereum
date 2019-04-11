@@ -174,9 +174,7 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	}
 
 	// pivotDepth is the advertised depth of the pivot node we expect in the outgoing subPeersMsg
-	hive.Kademlia.lock.RLock() // protect Kademlia.conns that are read in Kademlia.saturation()
-	pivotDepth := hive.saturation()
-	hive.Kademlia.lock.RUnlock()
+	pivotDepth := hive.Saturation()
 	// the test exchange is as follows:
 	// 1. pivot sends to the control peer a `subPeersMsg` advertising its depth (ignored)
 	// 2. peer sends to pivot a `subPeersMsg` advertising its own depth (arbitrarily chosen)
