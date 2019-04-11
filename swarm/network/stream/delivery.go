@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -45,6 +46,8 @@ var (
 
 	requestFromPeersCount     = metrics.NewRegisteredCounter("network.stream.request_from_peers.count", nil)
 	requestFromPeersEachCount = metrics.NewRegisteredCounter("network.stream.request_from_peers_each.count", nil)
+
+	lastReceivedChunksMsg = metrics.GetOrRegisterGauge("network.stream.received_chunks", nil)
 )
 
 type Delivery struct {
@@ -224,6 +227,9 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req int
 		"handle.chunk.delivery")
 
 	processReceivedChunksCount.Inc(1)
+
+	// record the last time we received a chunk delivery message
+	lastReceivedChunksMsg.Update(time.Now().UnixNano())
 
 	var msg *ChunkDeliveryMsg
 	var mode chunk.ModePut

@@ -37,17 +37,17 @@ var (
 )
 
 var (
-	allhosts     string
-	hosts        []string
-	filesize     int
-	inputSeed    int
-	syncDelay    int
-	httpPort     int
-	wsPort       int
-	verbosity    int
-	timeout      int
-	single       bool
-	trackTimeout int
+	allhosts   string
+	hosts      []string
+	filesize   int
+	syncDelay  int
+	inputSeed  int
+	httpPort   int
+	wsPort     int
+	verbosity  int
+	timeout    int
+	single     bool
+	onlyUpload bool
 )
 
 func main() {
@@ -101,7 +101,7 @@ func main() {
 		},
 		cli.IntFlag{
 			Name:        "timeout",
-			Value:       120,
+			Value:       180,
 			Usage:       "timeout in seconds after which kill the process",
 			Destination: &timeout,
 		},
@@ -110,11 +110,10 @@ func main() {
 			Usage:       "whether to fetch content from a single node or from all nodes",
 			Destination: &single,
 		},
-		cli.IntFlag{
-			Name:        "track-timeout",
-			Value:       5,
-			Usage:       "timeout in seconds to wait for GetAllReferences to return",
-			Destination: &trackTimeout,
+		cli.BoolFlag{
+			Name:        "only-upload",
+			Usage:       "whether to only upload content to a single node without fetching",
+			Destination: &onlyUpload,
 		},
 	}
 
