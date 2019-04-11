@@ -18,6 +18,9 @@
 // arbitrary data.
 package main
 
+//go:generate go-bindata -o bindata.go resources/4byte.json
+//go:generate gofmt -s -w bindata.go
+
 import (
 	"bufio"
 	"context"
@@ -57,14 +60,17 @@ import (
 )
 
 const legalWarning = `
-WARNING! 
+WARNING!
 
-Clef is alpha software, and not yet publically released. This software has _not_ been audited, and there
-are no guarantees about the workings of this software. It may contain severe flaws. You should not use this software
-unless you agree to take full responsibility for doing so, and know what you are doing. 
+Clef is an account management tool. It may, like any software, contain bugs.
 
-TLDR; THIS IS NOT PRODUCTION-READY SOFTWARE! 
+Please take care to
+- backup your keystore files,
+- verify that the keystore(s) can be opened with your password.
 
+Clef is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
 `
 
 var (
@@ -100,11 +106,6 @@ var (
 	signerSecretFlag = cli.StringFlag{
 		Name:  "signersecret",
 		Usage: "A file containing the (encrypted) master seed to encrypt Clef data, e.g. keystore credentials and ruleset hash",
-	}
-	dBFlag = cli.StringFlag{
-		Name:  "4bytedb",
-		Usage: "File containing 4byte-identifiers",
-		Value: "./4byte.json",
 	}
 	customDBFlag = cli.StringFlag{
 		Name:  "4bytedb-custom",
@@ -142,7 +143,7 @@ var (
 			configdirFlag,
 		},
 		Description: `
-The init command generates a master seed which Clef can use to store credentials and data needed for 
+The init command generates a master seed which Clef can use to store credentials and data needed for
 the rule-engine to work.`,
 	}
 	attestCommand = cli.Command{
@@ -156,10 +157,10 @@ the rule-engine to work.`,
 			signerSecretFlag,
 		},
 		Description: `
-The attest command stores the sha256 of the rule.js-file that you want to use for automatic processing of 
-incoming requests. 
+The attest command stores the sha256 of the rule.js-file that you want to use for automatic processing of
+incoming requests.
 
-Whenever you make an edit to the rule file, you need to use attestation to tell 
+Whenever you make an edit to the rule file, you need to use attestation to tell
 Clef that the file is 'safe' to execute.`,
 	}
 
@@ -174,7 +175,7 @@ Clef that the file is 'safe' to execute.`,
 			signerSecretFlag,
 		},
 		Description: `
-The setpw command stores a password for a given address (keyfile). If you enter a blank passphrase, it will 
+The setpw command stores a password for a given address (keyfile). If you enter a blank passphrase, it will
 remove any stored credential for that address (keyfile)
 `}
 	gendocCommand = cli.Command{
@@ -203,7 +204,6 @@ func init() {
 		utils.RPCEnabledFlag,
 		rpcPortFlag,
 		signerSecretFlag,
-		dBFlag,
 		customDBFlag,
 		auditLogFlag,
 		ruleFlag,
@@ -270,12 +270,12 @@ func initializeSecrets(c *cli.Context) error {
 	}
 	fmt.Printf("A master seed has been generated into %s\n", location)
 	fmt.Printf(`
-This is required to be able to store credentials, such as : 
+This is required to be able to store credentials, such as :
 * Passwords for keystores (used by rule engine)
 * Storage for javascript rules
 * Hash of rule-file
 
-You should treat that file with utmost secrecy, and make a backup of it. 
+You should treat that file with utmost secrecy, and make a backup of it.
 NOTE: This file does not contain your accounts. Those need to be backed up separately!
 
 `)
@@ -362,13 +362,17 @@ func signer(c *cli.Context) error {
 		log.Info("Using CLI as UI-channel")
 		ui = core.NewCommandlineUI()
 	}
-	fourByteDb := c.GlobalString(dBFlag.Name)
+	// 4bytedb data
 	fourByteLocal := c.GlobalString(customDBFlag.Name)
-	db, err := core.NewAbiDBFromFiles(fourByteDb, fourByteLocal)
+	data, err := Asset("resources/4byte.json")
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
-	log.Info("Loaded 4byte db", "signatures", db.Size(), "file", fourByteDb, "local", fourByteLocal)
+	db, err := core.NewAbiDBFromFiles(data, fourByteLocal)
+	if err != nil {
+		utils.Fatalf(err.Error())
+	}
+	log.Info("Loaded 4byte db", "signatures", db.Size(), "local", fourByteLocal)
 
 	var (
 		api       core.ExternalAPI

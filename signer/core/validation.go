@@ -38,6 +38,7 @@ type Validator struct {
 func NewValidator(db *AbiDb) *Validator {
 	return &Validator{db}
 }
+
 func testSelector(selector string, data []byte) (*decodedCallData, error) {
 	if selector == "" {
 		return nil, fmt.Errorf("selector not found")
