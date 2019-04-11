@@ -26,11 +26,11 @@ import (
 )
 
 var (
-	typeGuageTpl           = "# TYPE %s gauge\n"
+	typeGaugeTpl           = "# TYPE %s gauge\n"
 	typeCounterTpl         = "# TYPE %s counter\n"
 	typeSummaryTpl         = "# TYPE %s summary\n"
-	keyValueTpl            = "%s %v\n"
-	keyQuantileTagValueTpl = "%s {quantile=\"%s\"} %v\n"
+	keyValueTpl            = "%s %v\n\n"
+	keyQuantileTagValueTpl = "%s {quantile=\"%s\"} %v\n\n"
 )
 
 // collector is a collection of byte buffers that aggregate Prometheus reports
@@ -47,15 +47,15 @@ func newCollector() *collector {
 }
 
 func (c *collector) addCounter(name string, m metrics.Counter) {
-	c.writeGuageCounter(name, m.Count())
+	c.writeGaugeCounter(name, m.Count())
 }
 
-func (c *collector) addGuage(name string, m metrics.Gauge) {
-	c.writeGuageCounter(name, m.Value())
+func (c *collector) addGauge(name string, m metrics.Gauge) {
+	c.writeGaugeCounter(name, m.Value())
 }
 
-func (c *collector) addGuageFloat64(name string, m metrics.GaugeFloat64) {
-	c.writeGuageCounter(name, m.Value())
+func (c *collector) addGaugeFloat64(name string, m metrics.GaugeFloat64) {
+	c.writeGaugeCounter(name, m.Value())
 }
 
 func (c *collector) addHistogram(name string, m metrics.Histogram) {
@@ -68,7 +68,7 @@ func (c *collector) addHistogram(name string, m metrics.Histogram) {
 }
 
 func (c *collector) addMeter(name string, m metrics.Meter) {
-	c.writeGuageCounter(name, m.Count())
+	c.writeGaugeCounter(name, m.Count())
 }
 
 func (c *collector) addTimer(name string, m metrics.Timer) {
@@ -92,9 +92,9 @@ func (c *collector) addResettingTimer(name string, m metrics.ResettingTimer) {
 	c.writeSummaryPercentile(name, "0.99", ps[2])
 }
 
-func (c *collector) writeGuageCounter(name string, value interface{}) {
+func (c *collector) writeGaugeCounter(name string, value interface{}) {
 	name = mutateKey(name)
-	c.buff.WriteString(fmt.Sprintf(typeGuageTpl, name))
+	c.buff.WriteString(fmt.Sprintf(typeGaugeTpl, name))
 	c.buff.WriteString(fmt.Sprintf(keyValueTpl, name, value))
 }
 
