@@ -86,9 +86,12 @@ func newBzzBaseTester(n int, prvkey *ecdsa.PrivateKey, spec *protocols.Spec, run
 func newBzzBaseTesterWithAddrs(prvkey *ecdsa.PrivateKey, addrs [][]byte, spec *protocols.Spec, run func(*BzzPeer) error) (*bzzTester, [][]byte, error) {
 	n := len(addrs)
 	cs := make(map[enode.ID]chan bool)
+	var csMu sync.Mutex
 
 	srv := func(p *BzzPeer) error {
 		defer func() {
+			csMu.Lock()
+			defer csMu.Unlock()
 			if cs[p.ID()] != nil {
 				close(cs[p.ID()])
 			}
@@ -120,10 +123,12 @@ func newBzzBaseTesterWithAddrs(prvkey *ecdsa.PrivateKey, addrs [][]byte, spec *p
 	}
 	addr := getENRBzzAddr(nod)
 
+	csMu.Lock()
 	for _, node := range s.Nodes {
 		log.Warn("node", "node", node)
 		cs[node.ID()] = make(chan bool)
 	}
+	csMu.Unlock()
 
 	var nodeAddrs [][]byte
 	pt := &bzzTester{
