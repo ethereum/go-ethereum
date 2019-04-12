@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strings"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -44,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/tyler-smith/go-bip39"
 )
 
@@ -1583,50 +1581,6 @@ func (api *PublicDebugAPI) SeedHash(ctx context.Context, number uint64) (string,
 		return "", fmt.Errorf("block #%d not found", number)
 	}
 	return fmt.Sprintf("0x%x", ethash.SeedHash(number)), nil
-}
-
-// PrivateDebugAPI is the collection of Ethereum APIs exposed over the private
-// debugging endpoint.
-type PrivateDebugAPI struct {
-	b Backend
-}
-
-// NewPrivateDebugAPI creates a new API definition for the private debug methods
-// of the Ethereum service.
-func NewPrivateDebugAPI(b Backend) *PrivateDebugAPI {
-	return &PrivateDebugAPI{b: b}
-}
-
-// ChaindbProperty returns leveldb properties of the chain database.
-func (api *PrivateDebugAPI) ChaindbProperty(property string) (string, error) {
-	ldb, ok := api.b.ChainDb().(interface {
-		LDB() *leveldb.DB
-	})
-	if !ok {
-		return "", fmt.Errorf("chaindbProperty does not work for memory databases")
-	}
-	if property == "" {
-		property = "leveldb.stats"
-	} else if !strings.HasPrefix(property, "leveldb.") {
-		property = "leveldb." + property
-	}
-	return ldb.LDB().GetProperty(property)
-}
-
-func (api *PrivateDebugAPI) ChaindbCompact() error {
-	for b := byte(0); b < 255; b++ {
-		log.Info("Compacting chain database", "range", fmt.Sprintf("0x%0.2X-0x%0.2X", b, b+1))
-		if err := api.b.ChainDb().Compact([]byte{b}, []byte{b + 1}); err != nil {
-			log.Error("Database compaction failed", "err", err)
-			return err
-		}
-	}
-	return nil
-}
-
-// SetHead rewinds the head of the blockchain to a previous block.
-func (api *PrivateDebugAPI) SetHead(number hexutil.Uint64) {
-	api.b.SetHead(uint64(number))
 }
 
 // PublicNetAPI offers network related RPC methods
