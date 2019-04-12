@@ -46,17 +46,17 @@ var (
 )
 
 type Delivery struct {
-	chunkStore chunk.FetchStore
-	kad        *network.Kademlia
-	getPeer    func(enode.ID) *Peer
-	quit       chan struct{}
+	netStore *storage.NetStore
+	kad      *network.Kademlia
+	getPeer  func(enode.ID) *Peer
+	quit     chan struct{}
 }
 
-func NewDelivery(kad *network.Kademlia, chunkStore chunk.FetchStore) *Delivery {
+func NewDelivery(kad *network.Kademlia, netStore *storage.NetStore) *Delivery {
 	return &Delivery{
-		chunkStore: chunkStore,
-		kad:        kad,
-		quit:       make(chan struct{}),
+		netStore: netStore,
+		kad:      kad,
+		quit:     make(chan struct{}),
 	}
 }
 
@@ -94,7 +94,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 
 	go func() {
 		defer osp.Finish()
-		ch, err := d.chunkStore.Get(ctx, chunk.ModeGetRequest, req.Addr)
+		ch, err := d.netStore.Get(ctx, chunk.ModeGetRequest, req.Addr)
 		if err != nil {
 			retrieveChunkFail.Inc(1)
 			log.Debug("ChunkStore.Get can not retrieve chunk", "peer", sp.ID().String(), "addr", req.Addr, "hopcount", req.HopCount, "err", err)
@@ -171,7 +171,7 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req int
 
 		msg.peer = sp
 		log.Trace("handle.chunk.delivery", "put", msg.Addr)
-		_, err := d.chunkStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
+		_, err := d.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
 				// we removed this log because it spams the logs
