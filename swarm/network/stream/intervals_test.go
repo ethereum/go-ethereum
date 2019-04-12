@@ -67,7 +67,6 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			}
 
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
-				Retrieval: RetrievalDisabled,
 				Syncing:   SyncingRegisterOnly,
 				SkipCheck: skipCheck,
 			}, nil)

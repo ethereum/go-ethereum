@@ -118,7 +118,6 @@ var simServiceMap = map[string]simulation.ServiceFunc{
 		store := state.NewInmemoryStore()
 
 		r := NewRegistry(addr.ID(), delivery, netStore, store, &RegistryOptions{
-			Retrieval:       RetrievalDisabled,
 			Syncing:         SyncingAutoSubscribe,
 			SyncUpdateDelay: 3 * time.Second,
 		}, nil)
