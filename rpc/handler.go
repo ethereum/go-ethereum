@@ -71,6 +71,7 @@ type callProc struct {
 	notifiers []*Notifier
 }
 
+// minhdoan: RPC handler
 func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry) *handler {
 	rootCtx, cancelRoot := context.WithCancel(connCtx)
 	h := &handler{
@@ -93,6 +94,7 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 }
 
 // handleBatch executes all messages in a batch and returns the responses.
+// minhdoan: handle a list of rpc messages.
 func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	// Emit error response for empty batches:
 	if len(msgs) == 0 {
@@ -131,6 +133,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 }
 
 // handleMsg handles a single message.
+// minhdoan: handle a single rpc json message.
 func (h *handler) handleMsg(msg *jsonrpcMessage) {
 	if ok := h.handleImmediate(msg); ok {
 		return

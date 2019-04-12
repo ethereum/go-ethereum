@@ -110,6 +110,7 @@ type clientConn struct {
 	handler *handler
 }
 
+// minhdoan: create a client connection with ServerCodec.
 func (c *Client) newClientConn(conn ServerCodec) *clientConn {
 	ctx := context.WithValue(context.Background(), clientContextKey{}, c)
 	handler := newHandler(ctx, conn, c.idgen, c.services)
@@ -165,6 +166,7 @@ func Dial(rawurl string) (*Client, error) {
 //
 // The context is used to cancel or time out the initial connection establishment. It does
 // not affect subsequent interactions with the client.
+// minhdoan: Dial with context and different rpc types.
 func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 	u, err := url.Parse(rawurl)
 	if err != nil {
@@ -518,6 +520,7 @@ func (c *Client) reconnect(ctx context.Context) error {
 // dispatch is the main loop of the client.
 // It sends read messages to waiting calls to Call and BatchCall
 // and subscription notifications to registered subscriptions.
+// minhdoan: main loop of client.
 func (c *Client) dispatch(codec ServerCodec) {
 	var (
 		lastOp      *requestOp  // tracks last send operation
