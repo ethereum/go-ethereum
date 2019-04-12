@@ -154,6 +154,7 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer s.Stop()
 
 	// peerID to use in the protocol tester testExchange expect/trigger
 	peerID := s.Nodes[0].ID()
