@@ -56,13 +56,13 @@ const ExternalAPIVersion = "4.0.0"
 const InternalAPIVersion = "3.0.0"
 
 const legalWarning = `
-WARNING! 
+WARNING!
 
 Clef is alpha software, and not yet publically released. This software has _not_ been audited, and there
 are no guarantees about the workings of this software. It may contain severe flaws. You should not use this software
-unless you agree to take full responsibility for doing so, and know what you are doing. 
+unless you agree to take full responsibility for doing so, and know what you are doing.
 
-TLDR; THIS IS NOT PRODUCTION-READY SOFTWARE! 
+TLDR; THIS IS NOT PRODUCTION-READY SOFTWARE!
 
 `
 
@@ -136,7 +136,7 @@ var (
 			configdirFlag,
 		},
 		Description: `
-The init command generates a master seed which Clef can use to store credentials and data needed for 
+The init command generates a master seed which Clef can use to store credentials and data needed for
 the rule-engine to work.`,
 	}
 	attestCommand = cli.Command{
@@ -150,10 +150,10 @@ the rule-engine to work.`,
 			signerSecretFlag,
 		},
 		Description: `
-The attest command stores the sha256 of the rule.js-file that you want to use for automatic processing of 
-incoming requests. 
+The attest command stores the sha256 of the rule.js-file that you want to use for automatic processing of
+incoming requests.
 
-Whenever you make an edit to the rule file, you need to use attestation to tell 
+Whenever you make an edit to the rule file, you need to use attestation to tell
 Clef that the file is 'safe' to execute.`,
 	}
 
@@ -168,7 +168,7 @@ Clef that the file is 'safe' to execute.`,
 			signerSecretFlag,
 		},
 		Description: `
-		The setpw command stores a password for a given address (keyfile). If you enter a blank passphrase, it will 
+		The setpw command stores a password for a given address (keyfile). If you enter a blank passphrase, it will
 remove any stored credential for that address (keyfile)
 `,
 	}
@@ -258,12 +258,12 @@ func initializeSecrets(c *cli.Context) error {
 	}
 	fmt.Printf("A master seed has been generated into %s\n", location)
 	fmt.Printf(`
-This is required to be able to store credentials, such as : 
+This is required to be able to store credentials, such as :
 * Passwords for keystores (used by rule engine)
 * Storage for javascript rules
 * Hash of rule-file
 
-You should treat that file with utmost secrecy, and make a backup of it. 
+You should treat that file with utmost secrecy, and make a backup of it.
 NOTE: This file does not contain your accounts. Those need to be backed up separately!
 
 `)

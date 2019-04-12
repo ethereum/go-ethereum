@@ -109,7 +109,7 @@ func (h *Header) GetDifficulty() *BigInt { return &BigInt{h.header.Difficulty} }
 func (h *Header) GetNumber() int64       { return h.header.Number.Int64() }
 func (h *Header) GetGasLimit() int64     { return int64(h.header.GasLimit) }
 func (h *Header) GetGasUsed() int64      { return int64(h.header.GasUsed) }
-func (h *Header) GetTime() int64         { return h.header.Time.Int64() }
+func (h *Header) GetTime() int64         { return int64(h.header.Time) }
 func (h *Header) GetExtra() []byte       { return h.header.Extra }
 func (h *Header) GetMixDigest() *Hash    { return &Hash{h.header.MixDigest} }
 func (h *Header) GetNonce() *Nonce       { return &Nonce{h.header.Nonce} }
@@ -180,7 +180,7 @@ func (b *Block) GetDifficulty() *BigInt         { return &BigInt{b.block.Difficu
 func (b *Block) GetNumber() int64               { return b.block.Number().Int64() }
 func (b *Block) GetGasLimit() int64             { return int64(b.block.GasLimit()) }
 func (b *Block) GetGasUsed() int64              { return int64(b.block.GasUsed()) }
-func (b *Block) GetTime() int64                 { return b.block.Time().Int64() }
+func (b *Block) GetTime() int64                 { return int64(b.block.Time()) }
 func (b *Block) GetExtra() []byte               { return b.block.Extra() }
 func (b *Block) GetMixDigest() *Hash            { return &Hash{b.block.MixDigest()} }
 func (b *Block) GetNonce() int64                { return int64(b.block.Nonce()) }
