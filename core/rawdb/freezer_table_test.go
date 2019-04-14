@@ -19,12 +19,13 @@ package rawdb
 import (
 	"bytes"
 	"fmt"
-	"github.com/ethereum/go-ethereum/metrics"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 func init() {
@@ -32,10 +33,10 @@ func init() {
 }
 
 // Gets a chunk of data, filled with 'b'
-func getChunk(size int, b byte) []byte {
+func getChunk(size int, b int) []byte {
 	data := make([]byte, size)
 	for i, _ := range data {
-		data[i] = b
+		data[i] = byte(b)
 	}
 	return data
 }
@@ -61,7 +62,7 @@ func TestFreezerBasics(t *testing.T) {
 	}
 	defer f.Close()
 	// Write 15 bytes 255 times, results in 85 files
-	for x := byte(0); x < 255; x++ {
+	for x := 0; x < 255; x++ {
 		data := getChunk(15, x)
 		f.Append(uint64(x), data)
 	}
@@ -74,7 +75,7 @@ func TestFreezerBasics(t *testing.T) {
 	//db[1] =  010101010101010101010101010101
 	//db[2] =  020202020202020202020202020202
 
-	for y := byte(0); y < 255; y++ {
+	for y := 0; y < 255; y++ {
 		exp := getChunk(15, y)
 		got, err := f.Retrieve(uint64(y))
 		if err != nil {
@@ -83,6 +84,11 @@ func TestFreezerBasics(t *testing.T) {
 		if !bytes.Equal(got, exp) {
 			t.Fatalf("test %d, got \n%x != \n%x", y, got, exp)
 		}
+	}
+	// Check that we cannot read too far
+	_, err = f.Retrieve(uint64(255))
+	if err != errOutOfBounds {
+		t.Fatal(err)
 	}
 }
 
@@ -102,18 +108,15 @@ func TestFreezerBasicsClosing(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Write 15 bytes 255 times, results in 85 files
-	for x := byte(0); x < 255; x++ {
+	for x := 0; x < 255; x++ {
 		data := getChunk(15, x)
 		f.Append(uint64(x), data)
 		f.Close()
 		f, err = newCustomTable(os.TempDir(), fname, m1, m2, 50, true)
-		if err != nil {
-			t.Fatal(err)
-		}
 	}
 	defer f.Close()
 
-	for y := byte(0); y < 255; y++ {
+	for y := 0; y < 255; y++ {
 		exp := getChunk(15, y)
 		got, err := f.Retrieve(uint64(y))
 		if err != nil {
@@ -142,7 +145,7 @@ func TestFreezerRepairDanglingHead(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Write 15 bytes 255 times
-		for x := byte(0); x < 0xff; x++ {
+		for x := 0; x < 255; x++ {
 			data := getChunk(15, x)
 			f.Append(uint64(x), data)
 		}
@@ -190,7 +193,7 @@ func TestFreezerRepairDanglingHeadLarge(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Write 15 bytes 255 times
-		for x := byte(0); x < 0xff; x++ {
+		for x := 0; x < 0xff; x++ {
 			data := getChunk(15, x)
 			f.Append(uint64(x), data)
 		}
@@ -223,7 +226,7 @@ func TestFreezerRepairDanglingHeadLarge(t *testing.T) {
 			t.Errorf("Expected error for missing index entry")
 		}
 		// We should now be able to store items again, from item = 1
-		for x := byte(1); x < 0xff; x++ {
+		for x := 1; x < 0xff; x++ {
 			data := getChunk(15, ^x)
 			f.Append(uint64(x), data)
 		}
@@ -232,7 +235,7 @@ func TestFreezerRepairDanglingHeadLarge(t *testing.T) {
 	// And if we open it, we should now be able to read all of them (new values)
 	{
 		f, _ := newCustomTable(os.TempDir(), fname, rm, wm, 50, true)
-		for y := byte(1); y < 255; y++ {
+		for y := 1; y < 255; y++ {
 			exp := getChunk(15, ^y)
 			got, err := f.Retrieve(uint64(y))
 			if err != nil {
@@ -257,7 +260,7 @@ func TestSnappyDetection(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Write 15 bytes 255 times
-		for x := byte(0); x < 0xff; x++ {
+		for x := 0; x < 0xff; x++ {
 			data := getChunk(15, x)
 			f.Append(uint64(x), data)
 		}
@@ -308,7 +311,7 @@ func TestFreezerRepairDanglingIndex(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Write 15 bytes 9 times : 150 bytes
-		for x := byte(0); x < 9; x++ {
+		for x := 0; x < 9; x++ {
 			data := getChunk(15, x)
 			f.Append(uint64(x), data)
 		}
@@ -321,7 +324,7 @@ func TestFreezerRepairDanglingIndex(t *testing.T) {
 		// File sizes should be 45, 45, 45 : items[3, 3, 3)
 	}
 	// Crop third file
-	fileToCrop := filepath.Join(os.TempDir(), fmt.Sprintf("%s.2.rdat", fname))
+	fileToCrop := filepath.Join(os.TempDir(), fmt.Sprintf("%s.0002.rdat", fname))
 	// Truncate third file: 45 ,45, 20
 	{
 		if err := assertFileSize(fileToCrop, 45); err != nil {
@@ -365,7 +368,7 @@ func TestFreezerTruncate(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Write 15 bytes 30 times
-		for x := byte(0); x < 30; x++ {
+		for x := 0; x < 30; x++ {
 			data := getChunk(15, x)
 			f.Append(uint64(x), data)
 		}
@@ -416,7 +419,7 @@ func TestFreezerRepairFirstFile(t *testing.T) {
 		f.Close()
 	}
 	// Truncate the file in half
-	fileToCrop := filepath.Join(os.TempDir(), fmt.Sprintf("%s.1.rdat", fname))
+	fileToCrop := filepath.Join(os.TempDir(), fmt.Sprintf("%s.0001.rdat", fname))
 	{
 		if err := assertFileSize(fileToCrop, 40); err != nil {
 			t.Fatal(err)
@@ -463,7 +466,7 @@ func TestFreezerReadAndTruncate(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Write 15 bytes 30 times
-		for x := byte(0); x < 30; x++ {
+		for x := 0; x < 30; x++ {
 			data := getChunk(15, x)
 			f.Append(uint64(x), data)
 		}
@@ -489,13 +492,108 @@ func TestFreezerReadAndTruncate(t *testing.T) {
 		// Now, truncate back to zero
 		f.truncate(0)
 		// Write the data again
-		for x := byte(0); x < 30; x++ {
+		for x := 0; x < 30; x++ {
 			data := getChunk(15, ^x)
 			if err := f.Append(uint64(x), data); err != nil {
 				t.Fatalf("error %v", err)
 			}
 		}
 		f.Close()
+	}
+}
+
+func TestOffset(t *testing.T) {
+	t.Parallel()
+	wm, rm := metrics.NewMeter(), metrics.NewMeter()
+	fname := fmt.Sprintf("offset-%d", rand.Uint64())
+	{ // Fill table
+		f, err := newCustomTable(os.TempDir(), fname, rm, wm, 40, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Write 6 x 20 bytes, splitting out into three files
+		f.Append(0, getChunk(20, 0xFF))
+		f.Append(1, getChunk(20, 0xEE))
+
+		f.Append(2, getChunk(20, 0xdd))
+		f.Append(3, getChunk(20, 0xcc))
+
+		f.Append(4, getChunk(20, 0xbb))
+		f.Append(5, getChunk(20, 0xaa))
+		f.printIndex()
+		f.Close()
+	}
+	// Now crop it.
+	{
+		// delete files 0 and 1
+		for i := 0; i < 2; i++ {
+			p := filepath.Join(os.TempDir(), fmt.Sprintf("%v.%04d.rdat", fname, i))
+			if err := os.Remove(p); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// Read the index file
+		p := filepath.Join(os.TempDir(), fmt.Sprintf("%v.ridx", fname))
+		indexFile, err := os.OpenFile(p, os.O_RDWR, 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		indexBuf := make([]byte, 7*indexEntrySize)
+		indexFile.Read(indexBuf)
+
+		// Update the index file, so that we store
+		// [ file = 2, offset = 4 ] at index zero
+
+		tailId := uint32(2)     // First file is 2
+		itemOffset := uint32(4) // We have removed four items
+		zeroIndex := indexEntry{
+			offset:  tailId,
+			filenum: itemOffset,
+		}
+		buf := zeroIndex.marshallBinary()
+		// Overwrite index zero
+		copy(indexBuf, buf)
+		// Remove the four next indices by overwriting
+		copy(indexBuf[indexEntrySize:], indexBuf[indexEntrySize*5:])
+		indexFile.WriteAt(indexBuf, 0)
+		// Need to truncate the moved index items
+		indexFile.Truncate(indexEntrySize * (1 + 2))
+		indexFile.Close()
+
+	}
+	// Now open again
+	{
+		f, err := newCustomTable(os.TempDir(), fname, rm, wm, 40, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.printIndex()
+		// It should allow writing item 6
+		f.Append(6, getChunk(20, 0x99))
+
+		// It should be fine to fetch 4,5,6
+		if got, err := f.Retrieve(4); err != nil {
+			t.Fatal(err)
+		} else if exp := getChunk(20, 0xbb); !bytes.Equal(got, exp) {
+			t.Fatalf("expected %x got %x", exp, got)
+		}
+		if got, err := f.Retrieve(5); err != nil {
+			t.Fatal(err)
+		} else if exp := getChunk(20, 0xaa); !bytes.Equal(got, exp) {
+			t.Fatalf("expected %x got %x", exp, got)
+		}
+		if got, err := f.Retrieve(6); err != nil {
+			t.Fatal(err)
+		} else if exp := getChunk(20, 0x99); !bytes.Equal(got, exp) {
+			t.Fatalf("expected %x got %x", exp, got)
+		}
+
+		// It should error at 0, 1,2,3
+		for i := 0; i < 4; i++ {
+			if _, err := f.Retrieve(uint64(i)); err == nil {
+				t.Fatal("expected err")
+			}
+		}
 	}
 }
 
