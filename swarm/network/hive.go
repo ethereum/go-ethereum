@@ -192,9 +192,7 @@ func (h *Hive) NodeInfo() interface{} {
 // PeerInfo function is used by the p2p.server RPC interface to display
 // protocol specific information any connected peer referred to by their NodeID
 func (h *Hive) PeerInfo(id enode.ID) interface{} {
-	h.lock.Lock()
-	p := h.peers[id]
-	h.lock.Unlock()
+	p := h.Peer(id)
 
 	if p == nil {
 		return nil
