@@ -105,6 +105,24 @@ contract OpCodes {
      //signextend
      assembly { pop(signextend(1, 10)) }
 
+     //sha3
+     assembly { pop(calldataload(0)) }
+
+     //blockhash
+     assembly { pop(blockhash(sub(number(), 1))) }
+
+     //balance
+     assembly { pop(balance(0x0)) }
+
+     //caller
+     assembly { pop(caller()) }
+
+     //codesize
+     assembly { pop(codesize()) }
+
+     //extcodesize
+     assembly { pop(extcodesize(0x1)) }
+
      //origin
      assembly { pop(origin()) }
 

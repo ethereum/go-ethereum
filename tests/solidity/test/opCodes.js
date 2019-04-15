@@ -9,18 +9,26 @@ contract('OpCodes', (accounts) => {
    beforeEach(async () => {
       contractInstance = await TodoList.deployed()
    })
-   it('should add a to-do note successfully with a short text of 20 letters', async () => {
+   it('Should run without errors the majorit of opcodes', async () => {
      await contractInstance.test()
-    //  await contractInstance.test_revert()
-    //  await contractInstance.test_invalid()
      await contractInstance.test_stop()
 
    })
-//   it('should mark one of your to-dos as completed', async () => {
-//    await contractInstance.addTodo('example')
-//    await contractInstance.markTodoAsCompleted(0)
-//    const lastTodoAdded = await contractInstance.todos(accounts[0], 0)
-//    const isTodoCompleted = lastTodoAdded[3] // 3 is the bool isCompleted value of the todo note
-//    assert(isTodoCompleted, 'The todo should be true as completed')
-// })
+
+   it('Should throw invalid op code', async () => {
+    try{
+      await contractInstance.test_invalid()
+    }
+    catch(error) {
+      console.error(error);
+    }
+   })
+
+   it('Should revert', async () => {
+    try{
+      await contractInstance.test_revert()    }
+    catch(error) {
+      console.error(error);
+    }
+   })
 })
