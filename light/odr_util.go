@@ -135,7 +135,6 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 		}
 		receipts = r.Receipts
 	}
-
 	// If the receipts are incomplete, fill the derived fields
 	if len(receipts) > 0 && receipts[0].TxHash == (common.Hash{}) {
 		block, err := GetBlock(ctx, odr, hash, number)
@@ -145,12 +144,11 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 		genesis := rawdb.ReadCanonicalHash(odr.Database(), 0)
 		config := rawdb.ReadChainConfig(odr.Database(), genesis)
 
-		if err := rawdb.SetReceiptsData(config, block.Hash(), block.Number(), block.Body(), receipts); err != nil {
+		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Transactions()); err != nil {
 			return nil, err
 		}
 		rawdb.WriteReceipts(odr.Database(), hash, number, receipts)
 	}
-
 	return receipts, nil
 }
 
@@ -162,7 +160,6 @@ func GetBlockLogs(ctx context.Context, odr OdrBackend, hash common.Hash, number 
 	if err != nil {
 		return nil, err
 	}
-
 	// Return the logs without deriving any computed fields on the receipts
 	logs := make([][]*types.Log, len(receipts))
 	for i, receipt := range receipts {
