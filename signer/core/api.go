@@ -92,12 +92,25 @@ type UIClientAPI interface {
 	RegisterUIServer(api *UIServerAPI)
 }
 
+// Validator defines the methods required to validate a transaction against some
+// sanity defaults as well as any underlying 4byte method database.
+//
+// Use fourbyte.Database as an implementation. It is separated out of this package
+// to allow pieces of the signer package to be used without having to load the
+// 7MB embedded 4byte dump.
+type Validator interface {
+	// ValidateTransaction does a number of checks on the supplied transaction, and
+	// returns either a list of warnings, or an error (indicating that the transaction
+	// should be immediately rejected).
+	ValidateTransaction(selector *string, tx *SendTxArgs) (*ValidationMessages, error)
+}
+
 // SignerAPI defines the actual implementation of ExternalAPI
 type SignerAPI struct {
 	chainID     *big.Int
 	am          *accounts.Manager
 	UI          UIClientAPI
-	validator   *Validator
+	validator   Validator
 	rejectMode  bool
 	credentials storage.Storage
 }
@@ -235,11 +248,11 @@ var ErrRequestDenied = errors.New("Request denied")
 // key that is generated when a new Account is created.
 // noUSB disables USB support that is required to support hardware devices such as
 // ledger and trezor.
-func NewSignerAPI(am *accounts.Manager, chainID int64, noUSB bool, ui UIClientAPI, abidb *AbiDb, advancedMode bool, credentials storage.Storage) *SignerAPI {
+func NewSignerAPI(am *accounts.Manager, chainID int64, noUSB bool, ui UIClientAPI, validator Validator, advancedMode bool, credentials storage.Storage) *SignerAPI {
 	if advancedMode {
 		log.Info("Clef is in advanced mode: will warn instead of reject")
 	}
-	signer := &SignerAPI{big.NewInt(chainID), am, ui, NewValidator(abidb), !advancedMode, credentials}
+	signer := &SignerAPI{big.NewInt(chainID), am, ui, validator, !advancedMode, credentials}
 	if !noUSB {
 		signer.startUSBListener()
 	}
@@ -458,7 +471,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 		err    error
 		result SignTxResponse
 	)
-	msgs, err := api.validator.ValidateTransaction(&args, methodSelector)
+	msgs, err := api.validator.ValidateTransaction(methodSelector, &args)
 	if err != nil {
 		return nil, err
 	}

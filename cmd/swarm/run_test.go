@@ -59,15 +59,6 @@ func init() {
 
 const clusterSize = 3
 
-var clusteronce sync.Once
-var cluster *testCluster
-
-func initCluster(t *testing.T) {
-	clusteronce.Do(func() {
-		cluster = newTestCluster(t, clusterSize)
-	})
-}
-
 func serverFunc(api *api.API) swarmhttp.TestServer {
 	return swarmhttp.NewServer(api, "")
 }
@@ -165,10 +156,8 @@ outer:
 }
 
 func (c *testCluster) Shutdown() {
-	for _, node := range c.Nodes {
-		node.Shutdown()
-	}
-	os.RemoveAll(c.TmpDir)
+	c.Stop()
+	c.Cleanup()
 }
 
 func (c *testCluster) Stop() {
@@ -179,16 +168,35 @@ func (c *testCluster) Stop() {
 
 func (c *testCluster) StartNewNodes(t *testing.T, size int) {
 	c.Nodes = make([]*testNode, 0, size)
+
+	errors := make(chan error, size)
+	nodes := make(chan *testNode, size)
 	for i := 0; i < size; i++ {
-		dir := filepath.Join(c.TmpDir, fmt.Sprintf("swarm%02d", i))
-		if err := os.Mkdir(dir, 0700); err != nil {
-			t.Fatal(err)
+		go func(nodeIndex int) {
+			dir := filepath.Join(c.TmpDir, fmt.Sprintf("swarm%02d", nodeIndex))
+			if err := os.Mkdir(dir, 0700); err != nil {
+				errors <- err
+				return
+			}
+
+			node := newTestNode(t, dir)
+			node.Name = fmt.Sprintf("swarm%02d", nodeIndex)
+			nodes <- node
+		}(i)
+	}
+
+	for i := 0; i < size; i++ {
+		select {
+		case node := <-nodes:
+			c.Nodes = append(c.Nodes, node)
+		case err := <-errors:
+			t.Error(err)
 		}
+	}
 
-		node := newTestNode(t, dir)
-		node.Name = fmt.Sprintf("swarm%02d", i)
-
-		c.Nodes = append(c.Nodes, node)
+	if t.Failed() {
+		c.Shutdown()
+		t.FailNow()
 	}
 }
 
