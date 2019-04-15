@@ -18,10 +18,9 @@ package types
 
 import (
 	"bytes"
-	"encoding/hex"
-	"encoding/json"
 	"math"
 	"math/big"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -54,8 +53,16 @@ func TestLegacyReceiptDecoding(t *testing.T) {
 		Status:            ReceiptStatusFailed,
 		CumulativeGasUsed: 1,
 		Logs: []*Log{
-			{Address: common.BytesToAddress([]byte{0x11})},
-			{Address: common.BytesToAddress([]byte{0x01, 0x11})},
+			{
+				Address: common.BytesToAddress([]byte{0x11}),
+				Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
+				Data:    []byte{0x01, 0x00, 0xff},
+			},
+			{
+				Address: common.BytesToAddress([]byte{0x01, 0x11}),
+				Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
+				Data:    []byte{0x01, 0x00, 0xff},
+			},
 		},
 		TxHash:          tx.Hash(),
 		ContractAddress: common.BytesToAddress([]byte{0x01, 0x11, 0x11}),
@@ -63,30 +70,39 @@ func TestLegacyReceiptDecoding(t *testing.T) {
 	}
 	receipt.Bloom = CreateBloom(Receipts{receipt})
 
-	want, err := json.Marshal(receipt)
-	if err != nil {
-		t.Fatalf("Error encoding reference receipt to JSON: %v", err)
-	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			enc, err := tc.encode(receipt)
 			if err != nil {
 				t.Fatalf("Error encoding receipt: %v", err)
 			}
-
 			var dec ReceiptForStorage
 			if err := rlp.DecodeBytes(enc, &dec); err != nil {
 				t.Fatalf("Error decoding RLP receipt: %v", err)
 			}
-
-			have, err := rlp.EncodeToBytes((*Receipt)(receipt))
-			if err != nil {
-				t.Fatalf("Error encoding receipt: %v", err)
+			// Check whether all consensus fields are correct.
+			if dec.Status != receipt.Status {
+				t.Fatalf("Receipt status mismatch, want %v, have %v", receipt.Status, dec.Status)
 			}
-
-			if !bytes.Equal(have, want) {
-				t.Fatalf("receipt mismatch: have %s, want %s", hex.EncodeToString(have), hex.EncodeToString(want))
+			if dec.CumulativeGasUsed != receipt.CumulativeGasUsed {
+				t.Fatalf("Receipt CumulativeGasUsed mismatch, want %v, have %v", receipt.CumulativeGasUsed, dec.CumulativeGasUsed)
+			}
+			if dec.Bloom != receipt.Bloom {
+				t.Fatalf("Bloom data mismatch, want %v, have %v", receipt.Bloom, dec.Bloom)
+			}
+			if len(dec.Logs) != len(receipt.Logs) {
+				t.Fatalf("Receipt log number mismatch, want %v, have %v", len(receipt.Logs), len(dec.Logs))
+			}
+			for i := 0; i < len(dec.Logs); i++ {
+				if dec.Logs[i].Address != receipt.Logs[i].Address {
+					t.Fatalf("Receipt log %d address mismatch, want %v, have %v", i, receipt.Logs[i].Address, dec.Logs[i].Address)
+				}
+				if !reflect.DeepEqual(dec.Logs[i].Topics, receipt.Logs[i].Topics) {
+					t.Fatalf("Receipt log %d topics mismatch, want %v, have %v", i, receipt.Logs[i].Topics, dec.Logs[i].Topics)
+				}
+				if !bytes.Equal(dec.Logs[i].Data, receipt.Logs[i].Data) {
+					t.Fatalf("Receipt log %d data mismatch, want %v, have %v", i, receipt.Logs[i].Data, dec.Logs[i].Data)
+				}
 			}
 		})
 	}
@@ -136,7 +152,7 @@ func encodeAsV3StoredReceiptRLP(want *Receipt) ([]byte, error) {
 }
 
 // Tests that receipt data can be correctly derived from the contextual infos
-func TestSetReceiptsData(t *testing.T) {
+func TestDeriveFields(t *testing.T) {
 	// Create a few transactions to have receipts for
 	txs := Transactions{
 		NewContractCreation(1, big.NewInt(1), 1, big.NewInt(1), nil),
@@ -167,8 +183,6 @@ func TestSetReceiptsData(t *testing.T) {
 			GasUsed:         2,
 		},
 	}
-	receipts[1].Bloom = CreateBloom(Receipts{receipts[1]})
-
 	// Clear all the computed fields and re-derive them
 	number := big.NewInt(1)
 	hash := common.BytesToHash([]byte{0x03, 0x14})
@@ -198,7 +212,7 @@ func TestSetReceiptsData(t *testing.T) {
 			t.Errorf("receipts[%d].GasUsed = %d, want %d", i, receipts[i].GasUsed, txs[i].Gas())
 		}
 		if txs[i].To() != nil && receipts[i].ContractAddress != (common.Address{}) {
-			t.Errorf("receipts[%d].ContractAddress = %s, want %s", i, receipts[i].ContractAddress, (common.Address{}).String())
+			t.Errorf("receipts[%d].ContractAddress = %s, want %s", i, receipts[i].ContractAddress.String(), (common.Address{}).String())
 		}
 		from, _ := Sender(signer, txs[i])
 		contractAddress := crypto.CreateAddress(from, txs[i].Nonce())
