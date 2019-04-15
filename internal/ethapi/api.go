@@ -295,6 +295,7 @@ func (s *PrivateAccountAPI) DeriveAccount(url string, path string, pin *bool) (a
 func (s *PrivateAccountAPI) NewAccount(password string) (common.Address, error) {
 	acc, err := fetchKeystore(s.am).NewAccount(password)
 	if err == nil {
+		log.Info("Your new key is generated. Please backup the key file", "path", acc.URL.Path)
 		return acc.Address, nil
 	}
 	return common.Address{}, err

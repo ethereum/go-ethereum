@@ -392,6 +392,7 @@ func (api *SignerAPI) New(ctx context.Context) (common.Address, error) {
 		} else {
 			// No error
 			acc, err := be[0].(*keystore.KeyStore).NewAccount(resp.Text)
+			log.Info("Your new key is generated. Please backup the key file", "path", acc.URL.Path)
 			return acc.Address, err
 		}
 	}
