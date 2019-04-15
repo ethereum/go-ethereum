@@ -160,7 +160,7 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	peerID := s.Nodes[0].ID()
 	// block until control peer is found among hive peers
 	found := false
-	for attempts := 0; attempts < 20; attempts++ {
+	for attempts := 0; attempts < 2000; attempts++ {
 		found = hive.Peer(peerID) != nil
 		if found {
 			break
