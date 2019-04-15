@@ -102,8 +102,8 @@ func newBzzBaseTesterWithAddrs(prvkey *ecdsa.PrivateKey, addrs [][]byte, spec *p
 	nodeToAddr := make(map[enode.ID][]byte)
 	protocol := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		mu.Lock()
-		defer mu.Unlock()
 		nodeToAddr[p.ID()] = addrs[0]
+		mu.Unlock()
 		bzzAddr := &BzzAddr{addrs[0], []byte(p.Node().String())}
 		addrs = addrs[1:]
 		return srv(&BzzPeer{Peer: protocols.NewPeer(p, rw, spec), BzzAddr: bzzAddr})
