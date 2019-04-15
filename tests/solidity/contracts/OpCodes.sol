@@ -24,6 +24,8 @@ contract OpCodes {
      //for_statement
      assembly { for { let i := 1 } lt(i, 5) { i := add(i, 1) } {} }
      assembly { for { let i := 6 } gt(i, 5) { i := add(i, 1) } {} }
+     assembly { for { let i := 1 } slt(i, 5) { i := add(i, 1) } {} }
+     assembly { for { let i := 6 } sgt(i, 5) { i := add(i, 1) } {} }
 
      //no_opcodes_in_strict
      assembly { pop(callvalue()) }
@@ -64,6 +66,45 @@ contract OpCodes {
      assembly { pop(sar(10, 32)) }*/
 
 
+     //not
+     assembly { pop( not(0x1f)) }
+
+     //exp
+     assembly { pop( exp(2, 226)) }
+
+     //mod
+     assembly { pop( mod(3, 9)) }
+
+     //smod
+     assembly { pop( smod(3, 9)) }
+
+     //div
+     assembly { pop( div(4, 2)) }
+
+     //sdiv
+     assembly { pop( sdiv(4, 2)) }
+
+     //iszero
+     assembly { pop(iszero(1)) }
+
+     //and
+     assembly { pop(and(2,3)) }
+
+     //or
+     assembly { pop(or(3,3)) }
+
+     //xor
+     assembly { pop(xor(3,3)) }
+
+     //addmod
+     assembly { pop(addmod(3,3,6)) }
+
+     //mulmod
+     assembly { pop(mulmod(3,3,3)) }
+
+     //signextend
+     assembly { pop(signextend(1, 10)) }
+
      //origin
      assembly { pop(origin()) }
 
@@ -72,6 +113,9 @@ contract OpCodes {
 
      //msize
      assembly {  pop(msize())}
+
+     //pc
+     assembly {  pop(pc())}
 
      //gasprice
      assembly {  pop(gasprice())}
