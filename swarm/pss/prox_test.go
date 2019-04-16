@@ -63,15 +63,15 @@ func (td *testData) pushNotification(val handlerNotification) {
 	td.mu.Unlock()
 }
 
-func (td *testData) popNotification() (first handlerNotification, ok bool) {
+func (td *testData) popNotification() (first handlerNotification, exist bool) {
 	td.mu.Lock()
 	if len(td.notifications) > 0 {
-		ok = true
+		exist = true
 		first = td.notifications[0]
 		td.notifications = td.notifications[1:]
 	}
 	td.mu.Unlock()
-	return first, ok
+	return first, exist
 }
 
 func (td *testData) getMsgCount() int {
@@ -272,33 +272,34 @@ func (td *testData) sendAllMsgs() error {
 	return nil
 }
 
+func isMoreTimeLeft(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	default:
+		return true
+	}
+}
+
 // testRoutine is the main test function, called by Simulation.Run()
 func testRoutine(td *testData, ctx context.Context) error {
+
+	hasMoreRound := func(err error, hadMessage bool) bool {
+		return err == nil && (hadMessage || isMoreTimeLeft(ctx))
+	}
 
 	if err := td.sendAllMsgs(); err != nil {
 		return err
 	}
 
-	isMoreTimeLeft := func() bool {
-		select {
-		case <-ctx.Done():
-			return false
-		default:
-			return true
-		}
-	}
-
-	hasMoreRound := func(err error, hadMessage bool) bool {
-		return err == nil && (hadMessage || isMoreTimeLeft())
-	}
-
 	var err error
 	received := 0
 	hadMessage := false
+
 	for oneMoreRound := true; oneMoreRound; oneMoreRound = hasMoreRound(err, hadMessage) {
 		message, hadMessage := td.popNotification()
 
-		if !isMoreTimeLeft() {
+		if !isMoreTimeLeft(ctx) {
 			// Stop handlers from sending more messages.
 			// Note: only best effort, race is possible.
 			td.setDone()
@@ -314,8 +315,6 @@ func testRoutine(td *testData, ctx context.Context) error {
 		} else {
 			time.Sleep(32 * time.Millisecond)
 		}
-
-		oneMoreRound = err == nil && (hadMessage || isMoreTimeLeft())
 	}
 
 	if err != nil {
@@ -326,7 +325,6 @@ func testRoutine(td *testData, ctx context.Context) error {
 		return ctx.Err()
 	}
 	return nil
-
 }
 
 func (td *testData) isAllowedMessage(n handlerNotification) bool {
