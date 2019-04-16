@@ -1,5 +1,19 @@
 pragma solidity >=0.4.21 <0.6.0;
+
+contract Test1 {
+  function isSameAddress(address a, address b) public returns(bool){  //Simply add the two arguments and return
+      if (a == b) return true;
+      return false;
+  }
+}
+
 contract OpCodes {
+
+    Test1 test1;
+
+    constructor() public {  //Constructor function
+      test1 = new Test1();  //Create new "Test1" function
+    }
 
    modifier onlyOwner(address _owner) {
       require(msg.sender == _owner);
@@ -42,6 +56,35 @@ contract OpCodes {
      //function_definitions_multiple_args
      assembly { function f(a, d){ mstore(a, d) } function g(a, d) -> x, y {}}
 
+     //sstore
+     assembly { function f(a, d){ sstore(a, d) } function g(a, d) -> x, y {}}
+
+     //mstore8
+     assembly { function f(a, d){ mstore8(a, d) } function g(a, d) -> x, y {}}
+
+     //calldatacopy
+     assembly {
+       let a := mload(0x40)
+       let b := add(a, 32)
+       calldatacopy(a, 4, 32)
+       /*calldatacopy(b, add(4, 32), 32)*/
+       /*result := add(mload(a), mload(b))*/
+     }
+
+     //codecopy
+     assembly {
+       let a := mload(0x40)
+       let b := add(a, 32)
+       codecopy(a, 4, 32)
+     }
+
+     //codecopy
+     assembly {
+       let a := mload(0x40)
+       let b := add(a, 32)
+       extcodecopy(0, a, 4, 32)
+     }
+
      //for_statement
      assembly { let x := calldatasize() for { let i := 0} lt(i, x) { i := add(i, 1) } { mstore(i, 2) } }
 
@@ -59,6 +102,9 @@ contract OpCodes {
 
      /*//create2 Constantinople
      assembly { pop(create2(10, 0x123, 32, 64)) }*/
+
+     //create Constantinople
+     assembly { pop(create(10, 0x123, 32)) }
 
      //shift Constantinople
      /*assembly { pop(shl(10, 32)) }
@@ -152,6 +198,104 @@ contract OpCodes {
 
      //gaslimit
      assembly {  pop(gaslimit())}
+
+     //call
+     address contractAddr = address(test1);
+     bytes4 sig = bytes4(keccak256("isSameAddress(address,address)")); //Function signature
+     address a = msg.sender;
+
+     assembly {
+         let x := mload(0x40)   //Find empty storage location using "free memory pointer"
+         mstore(x,sig) //Place signature at begining of empty storage
+         mstore(add(x,0x04),a) // first address parameter. just after signature
+         mstore(add(x,0x24),a) // 2nd address parameter - first padded. add 32 bytes (not 20 bytes)
+         mstore(0x40,add(x,0x64)) // this is missing in other examples. Set free pointer before function call. so it is used by called function.
+          // new free pointer position after the output values of the called function.
+
+         let success := call(
+                         5000, //5k gas
+                         contractAddr, //To addr
+                         0,    //No wei passed
+                         x,    // Inputs are at location x
+                         0x44, //Inputs size two padded, so 68 bytes
+                         x,    //Store output over input
+                         0x20) //Output is 32 bytes long
+     }
+
+     //callcode
+     assembly {
+         let x := mload(0x40)   //Find empty storage location using "free memory pointer"
+         mstore(x,sig) //Place signature at begining of empty storage
+         mstore(add(x,0x04),a) // first address parameter. just after signature
+         mstore(add(x,0x24),a) // 2nd address parameter - first padded. add 32 bytes (not 20 bytes)
+         mstore(0x40,add(x,0x64)) // this is missing in other examples. Set free pointer before function call. so it is used by called function.
+          // new free pointer position after the output values of the called function.
+
+         let success := callcode(
+                         5000, //5k gas
+                         contractAddr, //To addr
+                         0,    //No wei passed
+                         x,    // Inputs are at location x
+                         0x44, //Inputs size two padded, so 68 bytes
+                         x,    //Store output over input
+                         0x20) //Output is 32 bytes long
+     }
+
+     //delegatecall
+     assembly {
+         let x := mload(0x40)   //Find empty storage location using "free memory pointer"
+         mstore(x,sig) //Place signature at begining of empty storage
+         mstore(add(x,0x04),a) // first address parameter. just after signature
+         mstore(add(x,0x24),a) // 2nd address parameter - first padded. add 32 bytes (not 20 bytes)
+         mstore(0x40,add(x,0x64)) // this is missing in other examples. Set free pointer before function call. so it is used by called function.
+          // new free pointer position after the output values of the called function.
+
+         let success := delegatecall(
+                         5000, //5k gas
+                         contractAddr, //To addr
+                         x,    // Inputs are at location x
+                         0x44, //Inputs size two padded, so 68 bytes
+                         x,    //Store output over input
+                         0x20) //Output is 32 bytes long
+     }
+
+     uint256 _id = 0x420042;
+
+     //log0
+     log0(
+         bytes32(0x50cb9fe53daa9737b786ab3646f04d0150dc50ef4e75f59509d83667ad5adb20)
+     );
+
+     //log1
+     log1(
+         bytes32(0x50cb9fe53daa9737b786ab3646f04d0150dc50ef4e75f59509d83667ad5adb20),
+         bytes32(0x50cb9fe53daa9737b786ab3646f04d0150dc50ef4e75f59509d83667ad5adb20)
+     );
+
+     //log2
+     log2(
+         bytes32(0x50cb9fe53daa9737b786ab3646f04d0150dc50ef4e75f59509d83667ad5adb20),
+         bytes32(0x50cb9fe53daa9737b786ab3646f04d0150dc50ef4e75f59509d83667ad5adb20),
+         bytes32(uint256(msg.sender))
+     );
+
+     //log3
+     log3(
+         bytes32(0x50cb9fe53daa9737b786ab3646f04d0150dc50ef4e75f59509d83667ad5adb20),
+         bytes32(0x50cb9fe53daa9737b786ab3646f04d0150dc50ef4e75f59509d83667ad5adb20),
+         bytes32(uint256(msg.sender)),
+         bytes32(_id)
+     );
+
+     //log4
+     log4(
+         bytes32(0x50cb9fe53daa9737b786ab3646f04d0150dc50ef4e75f59509d83667ad5adb20),
+         bytes32(0x50cb9fe53daa9737b786ab3646f04d0150dc50ef4e75f59509d83667ad5adb20),
+         bytes32(uint256(msg.sender)),
+         bytes32(_id),
+         bytes32(_id)
+
+     );
 
      //selfdestruct
      assembly { selfdestruct(0x02) }
