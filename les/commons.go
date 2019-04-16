@@ -64,7 +64,7 @@ func (c *lesCommons) makeProtocols(versions []uint) []p2p.Protocol {
 				return c.protocolManager.runPeer(version, p, rw)
 			},
 			PeerInfo: func(id enode.ID) interface{} {
-				if p := c.protocolManager.peers.Peer(fmt.Sprintf("%x", id[:8])); p != nil {
+				if p := c.protocolManager.peers.Peer(fmt.Sprintf("%x", id.Bytes())); p != nil {
 					return p.Info()
 				}
 				return nil
