@@ -453,78 +453,130 @@ func testGetReceipt(t *testing.T, protocol int) {
 	}
 }
 
-// Tests that post eth protocol handshake, DAO fork-enabled clients also execute
-// a DAO "challenge" verifying each others' DAO fork headers to ensure they're on
-// compatible chains.
-func TestDAOChallengeNoVsNo(t *testing.T)       { testDAOChallenge(t, false, false, false) }
-func TestDAOChallengeNoVsPro(t *testing.T)      { testDAOChallenge(t, false, true, false) }
-func TestDAOChallengeProVsNo(t *testing.T)      { testDAOChallenge(t, true, false, false) }
-func TestDAOChallengeProVsPro(t *testing.T)     { testDAOChallenge(t, true, true, false) }
-func TestDAOChallengeNoVsTimeout(t *testing.T)  { testDAOChallenge(t, false, false, true) }
-func TestDAOChallengeProVsTimeout(t *testing.T) { testDAOChallenge(t, true, true, true) }
+// Tests that post eth protocol handshake, clients perform a mutual checkpoint
+// challenge to validate each other's chains. Hash mismatches, or missing ones
+// during a fast sync should lead to the peer getting dropped.
+func TestCheckpointChallenge(t *testing.T) {
+	tests := []struct {
+		syncmode   downloader.SyncMode
+		checkpoint bool
+		timeout    bool
+		empty      bool
+		match      bool
+		drop       bool
+	}{
+		// If checkpointing is not enabled locally, don't challenge and don't drop
+		{downloader.FullSync, false, false, false, false, false},
+		{downloader.FastSync, false, false, false, false, false},
+		{downloader.LightSync, false, false, false, false, false},
 
-func testDAOChallenge(t *testing.T, localForked, remoteForked bool, timeout bool) {
-	// Reduce the DAO handshake challenge timeout
-	if timeout {
-		defer func(old time.Duration) { daoChallengeTimeout = old }(daoChallengeTimeout)
-		daoChallengeTimeout = 500 * time.Millisecond
+		// If checkpointing is enabled locally and remote response is empty, only drop during fast sync
+		{downloader.FullSync, true, false, true, false, false},
+		{downloader.FastSync, true, false, true, false, true}, // Special case, fast sync, unsynced peer
+		{downloader.LightSync, true, false, true, false, false},
+
+		// If checkpointing is enabled locally and remote response mismatches, always drop
+		{downloader.FullSync, true, false, false, false, true},
+		{downloader.FastSync, true, false, false, false, true},
+		{downloader.LightSync, true, false, false, false, true},
+
+		// If checkpointing is enabled locally and remote response matches, never drop
+		{downloader.FullSync, true, false, false, true, false},
+		{downloader.FastSync, true, false, false, true, false},
+		{downloader.LightSync, true, false, false, true, false},
+
+		// If checkpointing is enabled locally and remote times out, always drop
+		{downloader.FullSync, true, true, false, true, true},
+		{downloader.FastSync, true, true, false, true, true},
+		{downloader.LightSync, true, true, false, true, true},
 	}
-	// Create a DAO aware protocol manager
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("sync %v checkpoint %v timeout %v empty %v match %v", tt.syncmode, tt.checkpoint, tt.timeout, tt.empty, tt.match), func(t *testing.T) {
+			testCheckpointChallenge(t, tt.syncmode, tt.checkpoint, tt.timeout, tt.empty, tt.match, tt.drop)
+		})
+	}
+}
+
+func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpoint bool, timeout bool, empty bool, match bool, drop bool) {
+	// Reduce the checkpoint handshake challenge timeout
+	defer func(old time.Duration) { syncChallengeTimeout = old }(syncChallengeTimeout)
+	syncChallengeTimeout = 250 * time.Millisecond
+
+	// Initialize a chain and generate a fake CHT if checkpointing is enabled
 	var (
-		evmux   = new(event.TypeMux)
-		pow     = ethash.NewFaker()
 		db      = rawdb.NewMemoryDatabase()
-		config  = &params.ChainConfig{DAOForkBlock: big.NewInt(1), DAOForkSupport: localForked}
-		gspec   = &core.Genesis{Config: config}
-		genesis = gspec.MustCommit(db)
+		config  = new(params.ChainConfig)
+		genesis = (&core.Genesis{Config: config}).MustCommit(db)
 	)
-	blockchain, err := core.NewBlockChain(db, nil, config, pow, vm.Config{}, nil)
+	// If checkpointing is enabled, create and inject a fake CHT and the corresponding
+	// chllenge response.
+	var response *types.Header
+	if checkpoint {
+		index := uint64(rand.Intn(500))
+		number := (index+1)*params.CHTFrequency - 1
+		response = &types.Header{Number: big.NewInt(int64(number)), Extra: []byte("valid")}
+
+		cht := &params.TrustedCheckpoint{
+			SectionIndex: index,
+			SectionHead:  response.Hash(),
+		}
+		params.TrustedCheckpoints[genesis.Hash()] = cht
+		defer delete(params.TrustedCheckpoints, genesis.Hash())
+	}
+	// Create a checkpoint aware protocol manager
+	blockchain, err := core.NewBlockChain(db, nil, config, ethash.NewFaker(), vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("failed to create new blockchain: %v", err)
 	}
-	pm, err := NewProtocolManager(config, downloader.FullSync, DefaultConfig.NetworkId, evmux, new(testTxPool), pow, blockchain, db, nil)
+	pm, err := NewProtocolManager(config, syncmode, DefaultConfig.NetworkId, new(event.TypeMux), new(testTxPool), ethash.NewFaker(), blockchain, db, nil)
 	if err != nil {
 		t.Fatalf("failed to start test protocol manager: %v", err)
 	}
 	pm.Start(1000)
 	defer pm.Stop()
 
-	// Connect a new peer and check that we receive the DAO challenge
+	// Connect a new peer and check that we receive the checkpoint challenge
 	peer, _ := newTestPeer("peer", eth63, pm, true)
 	defer peer.close()
 
-	challenge := &getBlockHeadersData{
-		Origin:  hashOrNumber{Number: config.DAOForkBlock.Uint64()},
-		Amount:  1,
-		Skip:    0,
-		Reverse: false,
-	}
-	if err := p2p.ExpectMsg(peer.app, GetBlockHeadersMsg, challenge); err != nil {
-		t.Fatalf("challenge mismatch: %v", err)
-	}
-	// Create a block to reply to the challenge if no timeout is simulated
-	if !timeout {
-		blocks, _ := core.GenerateChain(&params.ChainConfig{}, genesis, ethash.NewFaker(), db, 1, func(i int, block *core.BlockGen) {
-			if remoteForked {
-				block.SetExtra(params.DAOForkBlockExtra)
+	if checkpoint {
+		challenge := &getBlockHeadersData{
+			Origin:  hashOrNumber{Number: response.Number.Uint64()},
+			Amount:  1,
+			Skip:    0,
+			Reverse: false,
+		}
+		if err := p2p.ExpectMsg(peer.app, GetBlockHeadersMsg, challenge); err != nil {
+			t.Fatalf("challenge mismatch: %v", err)
+		}
+		// Create a block to reply to the challenge if no timeout is simulated
+		if !timeout {
+			if empty {
+				if err := p2p.Send(peer.app, BlockHeadersMsg, []*types.Header{}); err != nil {
+					t.Fatalf("failed to answer challenge: %v", err)
+				}
+			} else if match {
+				if err := p2p.Send(peer.app, BlockHeadersMsg, []*types.Header{response}); err != nil {
+					t.Fatalf("failed to answer challenge: %v", err)
+				}
+			} else {
+				if err := p2p.Send(peer.app, BlockHeadersMsg, []*types.Header{{Number: response.Number}}); err != nil {
+					t.Fatalf("failed to answer challenge: %v", err)
+				}
 			}
-		})
-		if err := p2p.Send(peer.app, BlockHeadersMsg, []*types.Header{blocks[0].Header()}); err != nil {
-			t.Fatalf("failed to answer challenge: %v", err)
 		}
-		time.Sleep(100 * time.Millisecond) // Sleep to avoid the verification racing with the drops
-	} else {
-		// Otherwise wait until the test timeout passes
-		time.Sleep(daoChallengeTimeout + 500*time.Millisecond)
 	}
-	// Verify that depending on fork side, the remote peer is maintained or dropped
-	if localForked == remoteForked && !timeout {
-		if peers := pm.peers.Len(); peers != 1 {
-			t.Fatalf("peer count mismatch: have %d, want %d", peers, 1)
-		}
-	} else {
+	// Wait until the test timeout passes to ensure proper cleanup
+	time.Sleep(syncChallengeTimeout + 100*time.Millisecond)
+
+	// Verify that the remote peer is maintained or dropped
+	if drop {
 		if peers := pm.peers.Len(); peers != 0 {
 			t.Fatalf("peer count mismatch: have %d, want %d", peers, 0)
+		}
+	} else {
+		if peers := pm.peers.Len(); peers != 1 {
+			t.Fatalf("peer count mismatch: have %d, want %d", peers, 1)
 		}
 	}
 }
