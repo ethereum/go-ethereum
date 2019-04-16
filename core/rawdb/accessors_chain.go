@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -299,8 +300,10 @@ func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawVa
 	return data
 }
 
-// ReadReceipts retrieves all the transaction receipts belonging to a block.
-func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Receipts {
+// ReadRawReceipts retrieves all the transaction receipts belonging to a block.
+// The receipt metadata fields are not guaranteed to be populated, so they
+// should not be used. Use ReadReceipts instead if the metadata is needed.
+func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Receipts {
 	// Retrieve the flattened receipt slice
 	data := ReadReceiptsRLP(db, hash, number)
 	if len(data) == 0 {
@@ -313,21 +316,33 @@ func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Receip
 		return nil
 	}
 	receipts := make(types.Receipts, len(storageReceipts))
-	logIndex := uint(0)
-	for i, receipt := range storageReceipts {
-		// Assemble deriving fields for log.
-		for _, log := range receipt.Logs {
-			log.TxHash = receipt.TxHash
-			log.BlockHash = hash
-			log.BlockNumber = number
-			log.TxIndex = uint(i)
-			log.Index = logIndex
-			logIndex += 1
-		}
-		receipts[i] = (*types.Receipt)(receipt)
-		receipts[i].BlockHash = hash
-		receipts[i].BlockNumber = big.NewInt(0).SetUint64(number)
-		receipts[i].TransactionIndex = uint(i)
+	for i, storageReceipt := range storageReceipts {
+		receipts[i] = (*types.Receipt)(storageReceipt)
+	}
+	return receipts
+}
+
+// ReadReceipts retrieves all the transaction receipts belonging to a block, including
+// its correspoinding metadata fields. If it is unable to populate these metadata
+// fields then nil is returned.
+//
+// The current implementation populates these metadata fields by reading the receipts'
+// corresponding block body, so if the block body is not found it will return nil even
+// if the receipt itself is stored.
+func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, config *params.ChainConfig) types.Receipts {
+	// We're deriving many fields from the block body, retrieve beside the receipt
+	receipts := ReadRawReceipts(db, hash, number)
+	if receipts == nil {
+		return nil
+	}
+	body := ReadBody(db, hash, number)
+	if body == nil {
+		log.Error("Missing body but have receipt", "hash", hash, "number", number)
+		return nil
+	}
+	if err := receipts.DeriveFields(config, hash, number, body.Transactions); err != nil {
+		log.Error("Failed to derive block receipts fields", "hash", hash, "number", number, "err", err)
+		return nil
 	}
 	return receipts
 }

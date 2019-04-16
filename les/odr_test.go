@@ -60,7 +60,7 @@ func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.Chain
 	var receipts types.Receipts
 	if bc != nil {
 		if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
-			receipts = rawdb.ReadReceipts(db, bhash, *number)
+			receipts = rawdb.ReadReceipts(db, bhash, *number, config)
 		}
 	} else {
 		if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
@@ -159,6 +159,9 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	client.pm.synchronise(client.rPeer)
 
 	test := func(expFail uint64) {
+		// Mark this as a helper to put the failures at the correct lines
+		t.Helper()
+
 		for i := uint64(0); i <= server.pm.blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := rawdb.ReadCanonicalHash(server.db, i)
 			b1 := fn(light.NoOdr, server.db, server.pm.chainConfig, server.pm.blockchain.(*core.BlockChain), nil, bhash)
@@ -170,10 +173,10 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 			eq := bytes.Equal(b1, b2)
 			exp := i < expFail
 			if exp && !eq {
-				t.Errorf("odr mismatch")
+				t.Fatalf("odr mismatch: have %x, want %x", b2, b1)
 			}
 			if !exp && eq {
-				t.Errorf("unexpected odr match")
+				t.Fatalf("unexpected odr match")
 			}
 		}
 	}
@@ -182,6 +185,7 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	client.peers.Unregister(client.rPeer.id)
 	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
 	test(expFail)
+
 	// expect all retrievals to pass
 	client.peers.Register(client.rPeer)
 	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
@@ -189,6 +193,7 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	client.rPeer.hasBlock = func(common.Hash, uint64, bool) bool { return true }
 	client.peers.lock.Unlock()
 	test(5)
+
 	// still expect all retrievals to pass, now data should be cached locally
 	client.peers.Unregister(client.rPeer.id)
 	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
