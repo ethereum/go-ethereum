@@ -20,6 +20,8 @@ so they can be found
 */
 package lookup
 
+import "context"
+
 const maxuint64 = ^uint64(0)
 
 // LowestLevel establishes the frequency resolution of the lookup algorithm as a power of 2.
@@ -33,7 +35,7 @@ const HighestLevel = 25 // default is 25 (~1 year)
 const DefaultLevel = HighestLevel
 
 //Algorithm is the function signature of a lookup algorithm
-type Algorithm func(now uint64, hint Epoch, read ReadFunc) (value interface{}, err error)
+type Algorithm func(ctx context.Context, now uint64, hint Epoch, read ReadFunc) (value interface{}, err error)
 
 // Lookup finds the update with the highest timestamp that is smaller or equal than 'now'
 // It takes a hint which should be the epoch where the last known update was
@@ -48,7 +50,7 @@ var Lookup Algorithm = FluzCapacitorAlgorithm
 // It should return <nil> if a value is found, but its timestamp is higher than "now"
 // It should only return an error in case the handler wants to stop the
 // lookup process entirely.
-type ReadFunc func(epoch Epoch, now uint64) (interface{}, error)
+type ReadFunc func(ctx context.Context, epoch Epoch, now uint64) (interface{}, error)
 
 // NoClue is a hint that can be provided when the Lookup caller does not have
 // a clue about where the last update may be
@@ -128,7 +130,7 @@ var worstHint = Epoch{Time: 0, Level: 63}
 // or the epochs right below. If however, that lookup succeeds, then the update must be
 // that one or within the epochs right below.
 // see the guide for a more graphical representation
-func FluzCapacitorAlgorithm(now uint64, hint Epoch, read ReadFunc) (value interface{}, err error) {
+func FluzCapacitorAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFunc) (value interface{}, err error) {
 	var lastFound interface{}
 	var epoch Epoch
 	if hint == NoClue {
@@ -139,7 +141,7 @@ func FluzCapacitorAlgorithm(now uint64, hint Epoch, read ReadFunc) (value interf
 
 	for {
 		epoch = GetNextEpoch(hint, t)
-		value, err = read(epoch, now)
+		value, err = read(ctx, epoch, now)
 		if err != nil {
 			return nil, err
 		}
@@ -160,7 +162,7 @@ func FluzCapacitorAlgorithm(now uint64, hint Epoch, read ReadFunc) (value interf
 				return nil, nil
 			}
 			// check it out
-			value, err = read(hint, now)
+			value, err = read(ctx, hint, now)
 			if err != nil {
 				return nil, err
 			}
@@ -168,8 +170,9 @@ func FluzCapacitorAlgorithm(now uint64, hint Epoch, read ReadFunc) (value interf
 				return value, nil
 			}
 			// bad hint.
-			epoch = hint
+			t = hint.Base()
 			hint = worstHint
+			continue
 		}
 		base := epoch.Base()
 		if base == 0 {

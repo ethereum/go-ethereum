@@ -17,6 +17,7 @@
 package lookup_test
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -50,7 +51,7 @@ const Year = Day * 365
 const Month = Day * 30
 
 func makeReadFunc(store Store, counter *int) lookup.ReadFunc {
-	return func(epoch lookup.Epoch, now uint64) (interface{}, error) {
+	return func(ctx context.Context, epoch lookup.Epoch, now uint64) (interface{}, error) {
 		*counter++
 		data := store[epoch.ID()]
 		var valueStr string
@@ -88,7 +89,7 @@ func TestLookup(t *testing.T) {
 
 	// try to get the last value
 
-	value, err := lookup.Lookup(now, lookup.NoClue, readFunc)
+	value, err := lookup.Lookup(context.Background(), now, lookup.NoClue, readFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +103,7 @@ func TestLookup(t *testing.T) {
 	// reset the read count for the next test
 	readCount = 0
 	// Provide a hint to get a faster lookup. In particular, we give the exact location of the last update
-	value, err = lookup.Lookup(now, epoch, readFunc)
+	value, err = lookup.Lookup(context.Background(), now, epoch, readFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +122,7 @@ func TestLookup(t *testing.T) {
 
 	expectedTime := now - Year*3 + 6*Month
 
-	value, err = lookup.Lookup(expectedTime, lookup.NoClue, readFunc)
+	value, err = lookup.Lookup(context.Background(), expectedTime, lookup.NoClue, readFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +154,7 @@ func TestOneUpdateAt0(t *testing.T) {
 	}
 	update(store, epoch, 0, &data)
 
-	value, err := lookup.Lookup(now, lookup.NoClue, readFunc)
+	value, err := lookup.Lookup(context.Background(), now, lookup.NoClue, readFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,13 +187,113 @@ func TestBadHint(t *testing.T) {
 		Time:  1200000000,
 	}
 
-	value, err := lookup.Lookup(now, badHint, readFunc)
+	value, err := lookup.Lookup(context.Background(), now, badHint, readFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if value != &data {
 		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", data, value)
 	}
+}
+
+// Tests whether the update is found when the bad hint is exactly below the last update
+func TestBadHintNextToUpdate(t *testing.T) {
+	store := make(Store)
+	readCount := 0
+
+	readFunc := makeReadFunc(store, &readCount)
+	now := uint64(1533903729)
+	var last *Data
+
+	/*  the following loop places updates in the following epochs:
+	Update# Time       Base       Level
+	0       1200000000 1174405120 25
+	1       1200000001 1191182336 24
+	2       1200000002 1199570944 23
+	3       1200000003 1199570944 22
+	4       1200000004 1199570944 21
+
+	The situation we want to trigger is to give a bad hint exactly
+	in T=1200000005, B=1199570944 and L=20, which is where the next
+	update would have logically been.
+	This affects only when the bad hint's base == previous update's base,
+	in this case 1199570944
+
+	*/
+	var epoch lookup.Epoch
+	for i := uint64(0); i < 5; i++ {
+		data := Data{
+			Payload: i,
+			Time:    0,
+		}
+		last = &data
+		epoch = update(store, epoch, 1200000000+i, &data)
+	}
+
+	// come up with some evil hint:
+	// put it where the next update would have been
+	badHint := lookup.Epoch{
+		Level: 20,
+		Time:  1200000005,
+	}
+
+	value, err := lookup.Lookup(context.Background(), now, badHint, readFunc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value != last {
+		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", last, value)
+	}
+}
+
+func TestContextCancellation(t *testing.T) {
+
+	readFunc := func(ctx context.Context, epoch lookup.Epoch, now uint64) (interface{}, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	errc := make(chan error)
+
+	go func() {
+		_, err := lookup.Lookup(ctx, 1200000000, lookup.NoClue, readFunc)
+		errc <- err
+	}()
+
+	cancel()
+
+	if err := <-errc; err != context.Canceled {
+		t.Fatalf("Expected lookup to return a context Cancelled error, got %v", err)
+	}
+
+	// text context cancellation during hint lookup:
+	ctx, cancel = context.WithCancel(context.Background())
+	errc = make(chan error)
+	someHint := lookup.Epoch{
+		Level: 25,
+		Time:  300,
+	}
+
+	readFunc = func(ctx context.Context, epoch lookup.Epoch, now uint64) (interface{}, error) {
+		if epoch == someHint {
+			go cancel()
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}
+		return nil, nil
+	}
+
+	go func() {
+		_, err := lookup.Lookup(ctx, 301, someHint, readFunc)
+		errc <- err
+	}()
+
+	if err := <-errc; err != context.Canceled {
+		t.Fatalf("Expected lookup to return a context Cancelled error, got %v", err)
+	}
+
 }
 
 func TestLookupFail(t *testing.T) {
@@ -206,7 +307,7 @@ func TestLookupFail(t *testing.T) {
 	// don't write anything and try to look up.
 	// we're testing we don't get stuck in a loop
 
-	value, err := lookup.Lookup(now, lookup.NoClue, readFunc)
+	value, err := lookup.Lookup(context.Background(), now, lookup.NoClue, readFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +343,7 @@ func TestHighFreqUpdates(t *testing.T) {
 		lastData = &data
 	}
 
-	value, err := lookup.Lookup(lastData.Time, lookup.NoClue, readFunc)
+	value, err := lookup.Lookup(context.Background(), lastData.Time, lookup.NoClue, readFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +356,7 @@ func TestHighFreqUpdates(t *testing.T) {
 	// reset the read count for the next test
 	readCount = 0
 	// Provide a hint to get a faster lookup. In particular, we give the exact location of the last update
-	value, err = lookup.Lookup(now, epoch, readFunc)
+	value, err = lookup.Lookup(context.Background(), now, epoch, readFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +371,7 @@ func TestHighFreqUpdates(t *testing.T) {
 
 	for i := uint64(0); i <= 994; i++ {
 		T := uint64(now - 1000 + i) // update every second for the last 1000 seconds
-		value, err := lookup.Lookup(T, lookup.NoClue, readFunc)
+		value, err := lookup.Lookup(context.Background(), T, lookup.NoClue, readFunc)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -308,7 +409,7 @@ func TestSparseUpdates(t *testing.T) {
 
 	// try to get the last value
 
-	value, err := lookup.Lookup(now, lookup.NoClue, readFunc)
+	value, err := lookup.Lookup(context.Background(), now, lookup.NoClue, readFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,7 +423,7 @@ func TestSparseUpdates(t *testing.T) {
 	// reset the read count for the next test
 	readCount = 0
 	// Provide a hint to get a faster lookup. In particular, we give the exact location of the last update
-	value, err = lookup.Lookup(now, epoch, readFunc)
+	value, err = lookup.Lookup(context.Background(), now, epoch, readFunc)
 	if err != nil {
 		t.Fatal(err)
 	}

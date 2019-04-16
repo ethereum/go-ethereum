@@ -176,21 +176,25 @@ func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before performing lookups")
 	}
 
-	var id ID
-	id.Feed = query.Feed
 	var readCount int
 
 	// Invoke the lookup engine.
 	// The callback will be called every time the lookup algorithm needs to guess
-	requestPtr, err := lookup.Lookup(timeLimit, query.Hint, func(epoch lookup.Epoch, now uint64) (interface{}, error) {
+	requestPtr, err := lookup.Lookup(ctx, timeLimit, query.Hint, func(ctx context.Context, epoch lookup.Epoch, now uint64) (interface{}, error) {
 		readCount++
-		id.Epoch = epoch
+		id := ID{
+			Feed:  query.Feed,
+			Epoch: epoch,
+		}
 		ctx, cancel := context.WithTimeout(ctx, defaultRetrieveTimeout)
 		defer cancel()
 
 		chunk, err := h.chunkStore.Get(ctx, id.Addr())
-		if err != nil { // TODO: check for catastrophic errors other than chunk not found
-			return nil, nil
+		if err != nil {
+			if err == context.DeadlineExceeded { // chunk not found
+				return nil, nil
+			}
+			return nil, err //something else happened or context was cancelled.
 		}
 
 		var request Request
