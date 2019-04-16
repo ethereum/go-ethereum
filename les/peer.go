@@ -232,7 +232,11 @@ func (p *peer) GetRequestCost(msgcode uint64, amount int) uint64 {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	cost := p.fcCosts[msgcode].baseCost + p.fcCosts[msgcode].reqCost*uint64(amount)
+	costs := p.fcCosts[msgcode]
+	if costs == nil {
+		return 0
+	}
+	cost := costs.baseCost + costs.reqCost*uint64(amount)
 	if cost > p.fcParams.BufLimit {
 		cost = p.fcParams.BufLimit
 	}
@@ -243,8 +247,12 @@ func (p *peer) GetTxRelayCost(amount, size int) uint64 {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	cost := p.fcCosts[SendTxV2Msg].baseCost + p.fcCosts[SendTxV2Msg].reqCost*uint64(amount)
-	sizeCost := p.fcCosts[SendTxV2Msg].baseCost + p.fcCosts[SendTxV2Msg].reqCost*uint64(size)/txSizeCostLimit
+	costs := p.fcCosts[SendTxV2Msg]
+	if costs == nil {
+		return 0
+	}
+	cost := costs.baseCost + costs.reqCost*uint64(amount)
+	sizeCost := costs.baseCost + costs.reqCost*uint64(size)/txSizeCostLimit
 	if sizeCost > cost {
 		cost = sizeCost
 	}
@@ -564,6 +572,13 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		p.fcParams = params
 		p.fcServer = flowcontrol.NewServerNode(params, &mclock.System{})
 		p.fcCosts = MRC.decode()
+		if !p.isOnlyAnnounce {
+			for msgCode := range reqAvgTimeCost {
+				if p.fcCosts[msgCode] == nil {
+					return errResp(ErrUselessPeer, "peer does not support message %d", msgCode)
+				}
+			}
+		}
 	}
 	p.headInfo = &announceData{Td: rTd, Hash: rHash, Number: rNum}
 	return nil
