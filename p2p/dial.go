@@ -65,7 +65,7 @@ func (t TCPDialer) Dial(dest *enode.Node) (net.Conn, error) {
 }
 
 // dialstate schedules dials and discovery lookups.
-// it get's a chance to compute new tasks on every iteration
+// It gets a chance to compute new tasks on every iteration
 // of the main loop in Server.run.
 type dialstate struct {
 	maxDynDials int
