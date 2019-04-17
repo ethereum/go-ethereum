@@ -174,9 +174,12 @@ func NewProtocolManager(
 	if disableClientRemovePeer {
 		removePeer = func(id string) {}
 	}
-
 	if lightSync {
-		manager.downloader = downloader.New(downloader.LightSync, chainDb, manager.eventMux, nil, blockchain, removePeer)
+		var checkpoint uint64
+		if cht, ok := params.TrustedCheckpoints[blockchain.Genesis().Hash()]; ok {
+			checkpoint = (cht.SectionIndex+1)*params.CHTFrequency - 1
+		}
+		manager.downloader = downloader.New(downloader.LightSync, checkpoint, chainDb, manager.eventMux, nil, blockchain, removePeer)
 		manager.peers.notify((*downloaderPeerNotify)(manager))
 		manager.fetcher = newLightFetcher(manager)
 	}
