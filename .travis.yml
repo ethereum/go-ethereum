@@ -1,6 +1,8 @@
 language: go
 go_import_path: github.com/ethereum/go-ethereum
 sudo: false
+git:
+  depth: 1
 matrix:
   include:
     - os: linux
