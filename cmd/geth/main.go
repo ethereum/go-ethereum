@@ -234,6 +234,20 @@ func init() {
 		if err := debug.Setup(ctx, logdir); err != nil {
 			return err
 		}
+		// If we're a full node on mainnet without --cache specified, bump default cache allowance
+		if ctx.GlobalString(utils.SyncModeFlag.Name) != "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) && !ctx.GlobalIsSet(utils.NetworkIdFlag.Name) {
+			// Make sure we're not on any supported preconfigured testnet either
+			if !ctx.GlobalIsSet(utils.TestnetFlag.Name) && !ctx.GlobalIsSet(utils.RinkebyFlag.Name) && !ctx.GlobalIsSet(utils.GoerliFlag.Name) {
+				// Nope, we're really on mainnet. Bump that cache up!
+				log.Info("Bumping default cache on mainnet", "provided", ctx.GlobalInt(utils.CacheFlag.Name), "updated", 4096)
+				ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(4096))
+			}
+		}
+		// If we're running a light client on any network, drop the cache to some meaningfully low amount
+		if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) {
+			log.Info("Dropping default light client cache", "provided", ctx.GlobalInt(utils.CacheFlag.Name), "updated", 128)
+			ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(128))
+		}
 		// Cap the cache allowance and tune the garbage collector
 		var mem gosigar.Mem
 		if err := mem.Get(); err == nil {

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"sync"
 	"time"
 
@@ -84,7 +85,8 @@ type Database struct {
 	flushnodes uint64             // Nodes flushed since last commit
 	flushsize  common.StorageSize // Data storage flushed since last commit
 
-	dirtiesSize   common.StorageSize // Storage size of the dirty node cache (exc. flushlist)
+	dirtiesSize   common.StorageSize // Storage size of the dirty node cache (exc. metadata)
+	childrenSize  common.StorageSize // Storage size of the external children tracking
 	preimagesSize common.StorageSize // Storage size of the preimages cache
 
 	lock sync.RWMutex
@@ -145,6 +147,15 @@ type cachedNode struct {
 	flushPrev common.Hash // Previous node in the flush-list
 	flushNext common.Hash // Next node in the flush-list
 }
+
+// cachedNodeSize is the raw size of a cachedNode data structure without any
+// node data included. It's an approximate size, but should be a lot better
+// than not counting them.
+var cachedNodeSize = int(reflect.TypeOf(cachedNode{}).Size())
+
+// cachedNodeChildrenSize is the raw size of an initialized but empty external
+// reference map.
+const cachedNodeChildrenSize = 48
 
 // rlp returns the raw rlp encoded blob of the cached node, either directly from
 // the cache, or by regenerating it from the collapsed node.
@@ -300,9 +311,11 @@ func NewDatabaseWithCache(diskdb ethdb.KeyValueStore, cache int) *Database {
 		})
 	}
 	return &Database{
-		diskdb:    diskdb,
-		cleans:    cleans,
-		dirties:   map[common.Hash]*cachedNode{{}: {}},
+		diskdb: diskdb,
+		cleans: cleans,
+		dirties: map[common.Hash]*cachedNode{{}: {
+			children: make(map[common.Hash]uint16),
+		}},
 		preimages: make(map[common.Hash][]byte),
 	}
 }
@@ -491,11 +504,15 @@ func (db *Database) reference(child common.Hash, parent common.Hash) {
 	// If the reference already exists, only duplicate for roots
 	if db.dirties[parent].children == nil {
 		db.dirties[parent].children = make(map[common.Hash]uint16)
+		db.childrenSize += cachedNodeChildrenSize
 	} else if _, ok = db.dirties[parent].children[child]; ok && parent != (common.Hash{}) {
 		return
 	}
 	node.parents++
 	db.dirties[parent].children[child]++
+	if db.dirties[parent].children[child] == 1 {
+		db.childrenSize += common.HashLength + 2 // uint16 counter
+	}
 }
 
 // Dereference removes an existing reference from a root node.
@@ -532,6 +549,7 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 		node.children[child]--
 		if node.children[child] == 0 {
 			delete(node.children, child)
+			db.childrenSize -= (common.HashLength + 2) // uint16 counter
 		}
 	}
 	// If the child does not exist, it's a previously committed node.
@@ -566,6 +584,9 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 		}
 		delete(db.dirties, child)
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
+		if node.children != nil {
+			db.childrenSize -= cachedNodeChildrenSize
+		}
 	}
 }
 
@@ -584,8 +605,9 @@ func (db *Database) Cap(limit common.StorageSize) error {
 
 	// db.dirtiesSize only contains the useful data in the cache, but when reporting
 	// the total memory consumption, the maintenance metadata is also needed to be
-	// counted. For every useful node, we track 2 extra hashes as the flushlist.
-	size := db.dirtiesSize + common.StorageSize((len(db.dirties)-1)*2*common.HashLength)
+	// counted.
+	size := db.dirtiesSize + common.StorageSize((len(db.dirties)-1)*cachedNodeSize)
+	size += db.childrenSize - common.StorageSize(len(db.dirties[common.Hash{}].children)*(common.HashLength+2))
 
 	// If the preimage cache got large enough, push to disk. If it's still small
 	// leave for later to deduplicate writes.
@@ -621,10 +643,12 @@ func (db *Database) Cap(limit common.StorageSize) error {
 			batch.Reset()
 		}
 		// Iterate to the next flush item, or abort if the size cap was achieved. Size
-		// is the total size, including both the useful cached data (hash -> blob), as
-		// well as the flushlist metadata (2*hash). When flushing items from the cache,
-		// we need to reduce both.
-		size -= common.StorageSize(3*common.HashLength + int(node.size))
+		// is the total size, including the useful cached data (hash -> blob), the
+		// cache item metadata, as well as external children mappings.
+		size -= common.StorageSize(common.HashLength + int(node.size) + cachedNodeSize)
+		if node.children != nil {
+			size -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
+		}
 		oldest = node.flushNext
 	}
 	// Flush out any remainder data from the last batch
@@ -646,6 +670,9 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		db.oldest = node.flushNext
 
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
+		if node.children != nil {
+			db.childrenSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
+		}
 	}
 	if db.oldest != (common.Hash{}) {
 		db.dirties[db.oldest].flushPrev = common.Hash{}
@@ -803,7 +830,9 @@ func (c *cleaner) Put(key []byte, rlp []byte) error {
 	// Remove the node from the dirty cache
 	delete(c.db.dirties, hash)
 	c.db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
-
+	if node.children != nil {
+		c.db.dirtiesSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
+	}
 	// Move the flushed node into the clean cache to prevent insta-reloads
 	if c.db.cleans != nil {
 		c.db.cleans.Set(string(hash[:]), rlp)
@@ -823,9 +852,10 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 
 	// db.dirtiesSize only contains the useful data in the cache, but when reporting
 	// the total memory consumption, the maintenance metadata is also needed to be
-	// counted. For every useful node, we track 2 extra hashes as the flushlist.
-	var flushlistSize = common.StorageSize((len(db.dirties) - 1) * 2 * common.HashLength)
-	return db.dirtiesSize + flushlistSize, db.preimagesSize
+	// counted.
+	var metadataSize = common.StorageSize((len(db.dirties) - 1) * cachedNodeSize)
+	var metarootRefs = common.StorageSize(len(db.dirties[common.Hash{}].children) * (common.HashLength + 2))
+	return db.dirtiesSize + db.childrenSize + metadataSize - metarootRefs, db.preimagesSize
 }
 
 // verifyIntegrity is a debug method to iterate over the entire trie stored in
