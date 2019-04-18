@@ -127,6 +127,7 @@ type Config struct {
 	MinerGasPrice  *big.Int
 	MinerRecommit  time.Duration
 	MinerNoverify  bool
+	MinerNoAdvance bool
 
 	// Ethash options
 	Ethash ethash.Config
