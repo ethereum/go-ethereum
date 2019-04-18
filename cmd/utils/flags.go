@@ -25,6 +25,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -127,9 +128,10 @@ var (
 		Name:  "nousb",
 		Usage: "Disables monitoring for and managing USB hardware wallets",
 	}
-	SmartCardFlag = cli.BoolTFlag{
-		Name:  "smartcard",
-		Usage: "Enables support for smartcard",
+	SmartCardFlag = cli.StringFlag{
+		Name:  "pcscd-sock",
+		Usage: "Path to the smartcard daemon (pcscd) socket file",
+		Value: "/run/pcscd/pcscd.comm",
 	}
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
@@ -1128,6 +1130,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	setWS(ctx, cfg)
 	setNodeUserIdent(ctx, cfg)
 	setDataDir(ctx, cfg)
+	setSmartCard(ctx, cfg)
 
 	if ctx.GlobalIsSet(ExternalSignerFlag.Name) {
 		cfg.ExternalSigner = ctx.GlobalString(ExternalSignerFlag.Name)
@@ -1142,11 +1145,21 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalIsSet(NoUSBFlag.Name) {
 		cfg.NoUSB = ctx.GlobalBool(NoUSBFlag.Name)
 	}
-	if ctx.GlobalIsSet(SmartCardFlag.Name) {
-		cfg.SmartCard = ctx.GlobalBoolT(SmartCardFlag.Name)
-	}
 	if ctx.GlobalIsSet(InsecureUnlockAllowedFlag.Name) {
 		cfg.InsecureUnlockAllowed = ctx.GlobalBool(InsecureUnlockAllowedFlag.Name)
+	}
+}
+
+func setSmartCard(ctx *cli.Context, cfg *node.Config) {
+	// No support for windows, currently
+	if runtime.GOOS != "windows" {
+		// Check for the existence of the PCSCD socket file. If it exists, then
+		// the smartcard wallet will be enabled. There might still be some issues
+		// e.g. when the daemon is not running. Those issues are meant to be
+		// caught at the daemon initialization level, though.
+		if fi, err := os.Stat(ctx.GlobalString(SmartCardFlag.Name)); err == nil {
+			cfg.SmartCard = fi.Mode()&os.ModeType == os.ModeSocket
+		}
 	}
 }
 
