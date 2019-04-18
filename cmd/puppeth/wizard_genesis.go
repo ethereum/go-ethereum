@@ -312,10 +312,10 @@ func (w *wizard) makeGenesis() {
 		}
 
 		fmt.Println()
-		fmt.Println("What is swap wallet address for fund 55m XDC?")
+		fmt.Println("What is swap wallet address for fund 37.5Billion XDC?")
 		swapAddr := *w.readAddress()
-		baseBalance := big.NewInt(0) // 55m
-		baseBalance.Add(baseBalance, big.NewInt(55*1000*1000))
+		baseBalance := big.NewInt(0) // 37.5Billion 
+		baseBalance.Add(baseBalance, big.NewInt(375*1000*1000*100))
 		baseBalance.Mul(baseBalance, big.NewInt(1000000000000000000))
 		genesis.Alloc[swapAddr] = core.GenesisAccount{
 			Balance: baseBalance,
