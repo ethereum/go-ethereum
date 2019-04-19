@@ -425,10 +425,6 @@ var (
 		Name:  "miner.noverify",
 		Usage: "Disable remote sealing verification",
 	}
-	MinerNoAdvanceFlag = cli.BoolFlag{
-		Name:  "miner.noadvance",
-		Usage: "Disable advance sealing on an empty block",
-	}
 	// Account settings
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
@@ -1266,9 +1262,6 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	}
 	if ctx.GlobalIsSet(MinerNoVerfiyFlag.Name) {
 		cfg.Noverify = ctx.Bool(MinerNoVerfiyFlag.Name)
-	}
-	if ctx.GlobalIsSet(MinerNoAdvanceFlag.Name) {
-		cfg.NoAdvance = ctx.Bool(MinerNoAdvanceFlag.Name)
 	}
 }
 

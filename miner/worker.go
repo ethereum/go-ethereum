@@ -214,7 +214,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	}
 
 	go worker.mainLoop()
-	go worker.newWorkLoop(recommit, worker.config.NoAdvance)
+	go worker.newWorkLoop(recommit)
 	go worker.resultLoop()
 	go worker.taskLoop()
 
@@ -285,7 +285,7 @@ func (w *worker) close() {
 }
 
 // newWorkLoop is a standalone goroutine to submit new mining work upon received events.
-func (w *worker) newWorkLoop(recommit time.Duration, noAdvance bool) {
+func (w *worker) newWorkLoop(recommit time.Duration) {
 	var (
 		interrupt   *int32
 		minRecommit = recommit // minimal resubmit interval specified by user.
@@ -299,10 +299,6 @@ func (w *worker) newWorkLoop(recommit time.Duration, noAdvance bool) {
 	commit := func(noempty bool, s int32) {
 		if interrupt != nil {
 			atomic.StoreInt32(interrupt, s)
-		}
-		// Disable advance sealing explicitly if user require.
-		if noAdvance {
-			noempty = true
 		}
 		interrupt = new(int32)
 		w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}

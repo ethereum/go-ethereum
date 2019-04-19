@@ -203,7 +203,6 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.MinerExtraDataFlag,
 			utils.MinerRecommitIntervalFlag,
 			utils.MinerNoVerfiyFlag,
-			utils.MinerNoAdvanceFlag,
 		},
 	},
 	{
