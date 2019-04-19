@@ -1364,7 +1364,7 @@ func TestNetwork(t *testing.T) {
 }
 
 // params in run name:
-// nodes/msgs/addrbytes/adaptertype
+// nodes/recipientAddresses/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
 func TestNetwork2000(t *testing.T) {
 	if !*longrunning {
