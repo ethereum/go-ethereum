@@ -144,6 +144,13 @@ func (p *peer) rejectUpdate(size uint64) bool {
 // region. The client is also notified about being frozen/unfrozen with a Stop/Resume
 // message.
 func (p *peer) freezeClient() {
+	if p.version < lpv3 {
+		// if Stop/Resume is not supported then just drop the peer after setting
+		// its frozen status permanently
+		atomic.StoreUint32(&p.frozen, 1)
+		p.Peer.Disconnect(p2p.DiscUselessPeer)
+		return
+	}
 	if atomic.SwapUint32(&p.frozen, 1) == 0 {
 		go func() {
 			p.SendStop()
