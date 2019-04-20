@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package rpc_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"time"
@@ -31,11 +32,27 @@ import (
 // eth_getBlockByNumber("latest", {})
 //    returns the latest block object.
 //
-// eth_subscribe("newBlocks")
+// eth_subscribe("newHeads")
 //    creates a subscription which fires block objects when new blocks arrive.
 
 type Block struct {
-	Number *big.Int
+	Number *BigInt
+}
+
+type BigInt struct {
+	big.Int
+}
+
+func (i *BigInt) UnmarshalJSON(b []byte) error {
+	var val string
+	err := json.Unmarshal(b, &val)
+	if err != nil {
+		return err
+	}
+
+	i.SetString(val[2:], 16)
+
+	return nil
 }
 
 func ExampleClientSubscription() {
@@ -75,7 +92,7 @@ func subscribeBlocks(client *rpc.Client, subch chan Block) {
 	// The connection is established now.
 	// Update the channel with the current block.
 	var lastBlock Block
-	if err := client.CallContext(ctx, &lastBlock, "eth_getBlockByNumber", "latest"); err != nil {
+	if err := client.CallContext(ctx, &lastBlock, "eth_getBlockByNumber", "latest", false); err != nil {
 		fmt.Println("can't get latest block:", err)
 		return
 	}
