@@ -120,16 +120,13 @@ func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 	return b.eth.txPool.Add(ctx, signedTx)
 }
 
-func (b *LesApiBackend) RemoveTx(txHash common.Hash) {
-	b.eth.txPool.RemoveTx(txHash)
-}
-
 func (b *LesApiBackend) GetPoolTransactions() (types.Transactions, error) {
-	return b.eth.txPool.GetTransactions()
+	return b.eth.txPool.GetAllPendingTransactions()
 }
 
 func (b *LesApiBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction {
-	return b.eth.txPool.GetTransaction(txHash)
+	tx, _ := b.eth.txPool.GetPendingTransaction(txHash)
+	return tx
 }
 
 func (b *LesApiBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
@@ -141,7 +138,8 @@ func (b *LesApiBackend) GetPoolNonce(ctx context.Context, addr common.Address) (
 }
 
 func (b *LesApiBackend) Stats() (pending int, queued int) {
-	return b.eth.txPool.Stats(), 0
+	pending, _ = b.eth.txPool.GetPending()
+	return pending, 0
 }
 
 func (b *LesApiBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
