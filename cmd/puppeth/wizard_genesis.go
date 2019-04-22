@@ -122,7 +122,7 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.XDPoS.Period = uint64(w.readDefaultInt(2))
 
 		fmt.Println()
-		fmt.Println("How many XDC should be rewarded to masternode? (default = 100)")
+		fmt.Println("How many XDC should be rewarded to masternode? (default = 350)")
 		genesis.Config.XDPoS.Reward = uint64(w.readDefaultInt(100))
 
 		fmt.Println()
