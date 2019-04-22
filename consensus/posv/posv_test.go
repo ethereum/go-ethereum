@@ -27,7 +27,7 @@ func TestGetM1M2FromCheckpointHeader(t *testing.T) {
 			Epoch: uint64(epoch),
 		},
 	}
-	testMoveM2 := []uint64{0,0,0,1,1,1,2,2,2,0,0,0,1,1,1,2,2,2}
+	testMoveM2 := []uint64{0, 0, 0, 1, 1, 1, 2, 2, 2, 0, 0, 0, 1, 1, 1, 2, 2, 2}
 	//try from block 3410001 to 3410018
 	for i := uint64(3464001); i <= 3464018; i++ {
 		currentNumber := int64(i)
