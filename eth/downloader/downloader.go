@@ -422,7 +422,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 	}(time.Now())
 
 	// Look up the sync boundaries: the common ancestor and the target block
-	latest, err := d.fetchHeight(p,hash)
+	latest, err := d.fetchHeight(p, hash)
 	if err != nil {
 		return err
 	}
@@ -541,7 +541,7 @@ func (d *Downloader) Terminate() {
 
 // fetchHeight retrieves the head header of the remote peer to aid in estimating
 // the total time a pending synchronisation would take.
-func (d *Downloader) fetchHeight(p *peerConnection,hash common.Hash) (*types.Header, error) {
+func (d *Downloader) fetchHeight(p *peerConnection, hash common.Hash) (*types.Header, error) {
 
 	// Request the advertised remote head block and wait for the response
 	go p.peer.RequestHeadersByHash(hash, 1, 0, false)
