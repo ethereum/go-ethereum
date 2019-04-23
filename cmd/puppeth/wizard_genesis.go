@@ -123,7 +123,7 @@ func (w *wizard) makeGenesis() {
 
 		fmt.Println()
 		fmt.Println("How many XDC should be rewarded to masternode? (default = 350)")
-		genesis.Config.XDPoS.Reward = uint64(w.readDefaultInt(100))
+		genesis.Config.XDPoS.Reward = uint64(w.readDefaultInt(350))
 
 		fmt.Println()
 		fmt.Println("Who own the first masternodes? (mandatory)")
