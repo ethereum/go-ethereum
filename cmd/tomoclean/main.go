@@ -3,6 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+	"os/signal"
+	"runtime"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -14,17 +21,18 @@ import (
 	"github.com/hashicorp/golang-lru"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"os"
-	"os/signal"
-	"runtime"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 var (
-	dir       = flag.String("dir", "", "dir to mainet chain data")
-	cacheSize = flag.Int("size", 1000000, "dir to mainet chain data")
+	dir          = flag.String("dir", "", "directory to TomoChain chaindata")
+	cacheSize    = flag.Int("size", 1000000, "LRU cache size")
+	sercureKey   = []byte("secure-key-")
+	nWorker      = runtime.NumCPU() / 2
+	cleanAddress = []common.Address{common.HexToAddress(common.BlockSigners)}
+	cache        *lru.Cache
+	finish       = int32(0)
+	running      = true
+	stateRoots   = make(chan TrieRoot)
 )
 
 type TrieRoot struct {
@@ -41,14 +49,6 @@ type ResultProcessNode struct {
 	newNodes [17]*StateNode
 	keys     [17]*[]byte
 }
-
-var sercureKey = []byte("secure-key-")
-var nWorker = runtime.NumCPU() / 2
-var cleanAddress = []common.Address{common.HexToAddress(common.BlockSigners)}
-var cache *lru.Cache
-var finish = int32(0)
-var running = true
-var stateRoots = make(chan TrieRoot)
 
 func main() {
 	flag.Parse()
