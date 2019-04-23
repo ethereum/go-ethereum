@@ -61,7 +61,7 @@ type stateSyncStats struct {
 func (d *Downloader) syncState(root common.Hash) *stateSync {
 	// The downloader was requested to start a state sync. If the state sync bloom
 	// filter was not yet initialized, create it now. This lazy creation ensures we
-	// only allocate if if really really really needed.
+	// only allocate if really really really needed.
 	if d.stateBloom == nil {
 		d.stateBloom = trie.NewSyncBloom(d.stateBloomSize, d.stateDatabase)
 	}

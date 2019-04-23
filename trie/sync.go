@@ -101,10 +101,14 @@ func (s *Sync) AddSubTrie(root common.Hash, depth int, parent common.Hash, callb
 	if _, ok := s.membatch.batch[root]; ok {
 		return
 	}
-	key := root.Bytes()
-	blob, _ := s.database.Get(key)
-	if local, err := decodeNode(key, blob); local != nil && err == nil {
-		return
+	if s.bloom.Contains(root[:]) {
+		// Bloom filter says this might be a duplicate, double check
+		blob, _ := s.database.Get(root[:])
+		if local, err := decodeNode(root[:], blob); local != nil && err == nil {
+			return
+		}
+		// False positive, bump fault meter
+		bloomFaultMeter.Mark(1)
 	}
 	// Assemble the new sub-trie sync request
 	req := &request{
@@ -136,8 +140,13 @@ func (s *Sync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) {
 	if _, ok := s.membatch.batch[hash]; ok {
 		return
 	}
-	if ok, _ := s.database.Has(hash.Bytes()); ok {
-		return
+	if s.bloom.Contains(hash[:]) {
+		// Bloom filter says this might be a duplicate, double check
+		if ok, _ := s.database.Has(hash[:]); ok {
+			return
+		}
+		// False positive, bump fault meter
+		bloomFaultMeter.Mark(1)
 	}
 	// Assemble the new sub-trie sync request
 	req := &request{
@@ -300,6 +309,8 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 				if ok, _ := s.database.Has(node); ok {
 					continue
 				}
+				// False positive, bump fault meter
+				bloomFaultMeter.Mark(1)
 			}
 			// Locally unknown node, schedule for retrieval
 			requests = append(requests, &request{

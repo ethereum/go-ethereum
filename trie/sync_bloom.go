@@ -36,6 +36,7 @@ var (
 	bloomLoadMeter  = metrics.NewRegisteredMeter("trie/bloom/load", nil)
 	bloomTestMeter  = metrics.NewRegisteredMeter("trie/bloom/test", nil)
 	bloomMissMeter  = metrics.NewRegisteredMeter("trie/bloom/miss", nil)
+	bloomFaultMeter = metrics.NewRegisteredMeter("trie/bloom/fault", nil)
 	bloomErrorGauge = metrics.NewRegisteredGauge("trie/bloom/error", nil)
 )
 
@@ -94,16 +95,17 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 	it := database.NewIterator()
 	defer it.Release()
 
+	start := time.Now()
 	for it.Next() && atomic.LoadUint32(&b.closed) == 0 {
 		if key := it.Key(); len(key) == common.HashLength {
 			b.bloom.Add(syncBloomHasher(key))
 			bloomLoadMeter.Mark(1)
 		}
 	}
-	log.Info("Initialized fast sync bloom", "items", b.bloom.N(), "errorrate", b.errorRate())
+	log.Info("Initialized fast sync bloom", "items", b.bloom.N(), "errorrate", b.errorRate(), "elapsed", time.Since(start))
 
 	// Mark the bloom filter inited and return
-	defer atomic.StoreUint32(&b.inited, 1)
+	atomic.StoreUint32(&b.inited, 1)
 }
 
 // meter periodically recalculates the false positive error rate of the bloom
@@ -118,7 +120,7 @@ func (b *SyncBloom) meter() {
 			if atomic.LoadUint32(&b.closed) == 1 {
 				return
 			}
-			time.Sleep(100 * time.Second)
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
@@ -149,7 +151,7 @@ func (b *SyncBloom) Add(hash []byte) {
 	bloomAddMeter.Mark(1)
 }
 
-// Contains tests if the bloom filter contains  the given hash:
+// Contains tests if the bloom filter contains the given hash:
 //   - false: the bloom definitely does not contain hash
 //   - true:  the bloom maybe contains hash
 //
@@ -174,7 +176,7 @@ func (b *SyncBloom) Contains(hash []byte) bool {
 // false positive.
 //
 // We're calculating it ourselves because the bloom library we used missed a
-// paranthesis in the formula and calculates it wrong. And it's discontinued...
+// parentheses in the formula and calculates it wrong. And it's discontinued...
 func (b *SyncBloom) errorRate() float64 {
 	k := float64(b.bloom.K())
 	n := float64(b.bloom.N())
