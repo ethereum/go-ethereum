@@ -15,10 +15,10 @@ tomo:
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/tomo\" to launch tomo."
 
-tomoclean:
-	build/env.sh go run build/ci.go install ./cmd/tomoclean
+gc:
+	build/env.sh go run build/ci.go install ./cmd/gc
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/tomoclean\" to launch tomoclean."
+	@echo "Run \"$(GOBIN)/gc\" to launch gc."
 
 bootnode:
 	build/env.sh go run build/ci.go install ./cmd/bootnode
