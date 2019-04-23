@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
@@ -104,7 +105,10 @@ type Downloader struct {
 	genesis    uint64   // Genesis block number to limit sync to (e.g. light client CHT)
 	queue      *queue   // Scheduler for selecting the hashes to download
 	peers      *peerSet // Set of active peers from which download can proceed
-	stateDB    ethdb.Database
+
+	stateDatabase  ethdb.Database  // Database to state sync into (and deduplicate via)
+	stateBloomSize uint64          // Number of bytes (in MB) to allocate for the bloom
+	stateBloom     *trie.SyncBloom // Bloom filter for fast trie node existence checks
 
 	rttEstimate   uint64 // Round trip time to target for download requests
 	rttConfidence uint64 // Confidence in the estimated RTT (unit: millionths to allow atomic ops)
@@ -207,13 +211,14 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(mode SyncMode, checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn) *Downloader {
+func New(mode SyncMode, checkpoint uint64, stateDb ethdb.Database, stateBloomSize uint64, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn) *Downloader {
 	if lightchain == nil {
 		lightchain = chain
 	}
 	dl := &Downloader{
 		mode:           mode,
-		stateDB:        stateDb,
+		stateDatabase:  stateDb,
+		stateBloomSize: stateBloomSize,
 		mux:            mux,
 		checkpoint:     checkpoint,
 		queue:          newQueue(),
@@ -1662,6 +1667,8 @@ func (d *Downloader) commitFastSyncData(results []*fetchResult, stateSync *state
 func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	block := types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
 	log.Debug("Committing fast sync pivot as new head", "number", block.Number(), "hash", block.Hash())
+
+	// Commit the pivot block as the new head, will require full sync from here on
 	if _, err := d.blockchain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{result.Receipts}); err != nil {
 		return err
 	}
@@ -1669,6 +1676,11 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 		return err
 	}
 	atomic.StoreInt32(&d.committed, 1)
+
+	// If we had a bloom filter for the state sync, deallocate it now
+	if d.stateBloom != nil {
+		d.stateBloom.Close()
+	}
 	return nil
 }
 

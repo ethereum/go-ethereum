@@ -437,6 +437,18 @@
 			"revisionTime": "2019-03-16T09:03:35Z"
 		},
 		{
+			"checksumSHA1": "1mI7DMaBgFAsU0aCrW5yCKyAPdM=",
+			"path": "github.com/steakknife/bloomfilter",
+			"revision": "6819c0d2a57025e1700378ee59b7382d71987f14",
+			"revisionTime": "2018-09-22T17:46:46Z"
+		},
+		{
+			"checksumSHA1": "uuF97bplG/+iQ/nfNSQGZOmTKBE=",
+			"path": "github.com/steakknife/hamming",
+			"revision": "c99c65617cd3d686aea8365fe563d6542f01d940",
+			"revisionTime": "2018-09-06T05:59:17Z"
+		},
+		{
 			"checksumSHA1": "mGbTYZ8dHVTiPTTJu3ktp+84pPI=",
 			"path": "github.com/stretchr/testify/assert",
 			"revision": "890a5c3458b43e6104ff5da8dfa139d013d77544",

@@ -59,6 +59,13 @@ type stateSyncStats struct {
 
 // syncState starts downloading state with the given root hash.
 func (d *Downloader) syncState(root common.Hash) *stateSync {
+	// The downloader was requested to start a state sync. If the state sync bloom
+	// filter was not yet initialized, create it now. This lazy creation ensures we
+	// only allocate if if really really really needed.
+	if d.stateBloom == nil {
+		d.stateBloom = trie.NewSyncBloom(d.stateBloomSize, d.stateDatabase)
+	}
+	// Create the state sync
 	s := newStateSync(d, root)
 	select {
 	case d.stateSyncStart <- s:
@@ -239,7 +246,7 @@ type stateTask struct {
 func newStateSync(d *Downloader, root common.Hash) *stateSync {
 	return &stateSync{
 		d:       d,
-		sched:   state.NewStateSync(root, d.stateDB),
+		sched:   state.NewStateSync(root, d.stateDatabase, d.stateBloom),
 		keccak:  sha3.NewLegacyKeccak256(),
 		tasks:   make(map[common.Hash]*stateTask),
 		deliver: make(chan *stateReq),
@@ -335,7 +342,7 @@ func (s *stateSync) commit(force bool) error {
 		return nil
 	}
 	start := time.Now()
-	b := s.d.stateDB.NewBatch()
+	b := s.d.stateDatabase.NewBatch()
 	if written, err := s.sched.Commit(b); written == 0 || err != nil {
 		return err
 	}
@@ -482,6 +489,6 @@ func (s *stateSync) updateStats(written, duplicate, unexpected int, duration tim
 		log.Info("Imported new state entries", "count", written, "elapsed", common.PrettyDuration(duration), "processed", s.d.syncStatsState.processed, "pending", s.d.syncStatsState.pending, "retry", len(s.tasks), "duplicate", s.d.syncStatsState.duplicate, "unexpected", s.d.syncStatsState.unexpected)
 	}
 	if written > 0 {
-		rawdb.WriteFastTrieProgress(s.d.stateDB, s.d.syncStatsState.processed)
+		rawdb.WriteFastTrieProgress(s.d.stateDatabase, s.d.syncStatsState.processed)
 	}
 }

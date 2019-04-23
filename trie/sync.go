@@ -76,15 +76,17 @@ type Sync struct {
 	membatch *syncMemBatch            // Memory buffer to avoid frequent database writes
 	requests map[common.Hash]*request // Pending requests pertaining to a key hash
 	queue    *prque.Prque             // Priority queue with the pending requests
+	bloom    *SyncBloom               // Bloom filter for fast node existence checks
 }
 
 // NewSync creates a new trie data download scheduler.
-func NewSync(root common.Hash, database ethdb.Reader, callback LeafCallback) *Sync {
+func NewSync(root common.Hash, database ethdb.Reader, callback LeafCallback, bloom *SyncBloom) *Sync {
 	ts := &Sync{
 		database: database,
 		membatch: newSyncMemBatch(),
 		requests: make(map[common.Hash]*request),
 		queue:    prque.New(nil),
+		bloom:    bloom,
 	}
 	ts.AddSubTrie(root, 0, common.Hash{}, callback)
 	return ts
@@ -219,8 +221,9 @@ func (s *Sync) Commit(dbw ethdb.Writer) (int, error) {
 		if err := dbw.Put(key[:], s.membatch.batch[key]); err != nil {
 			return i, err
 		}
+		s.bloom.Add(key[:])
 	}
-	written := len(s.membatch.order)
+	written := len(s.membatch.order) // TODO(karalabe): could an order change improve write performance?
 
 	// Drop the membatch data and return
 	s.membatch = newSyncMemBatch()
@@ -292,8 +295,11 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 			if _, ok := s.membatch.batch[hash]; ok {
 				continue
 			}
-			if ok, _ := s.database.Has(node); ok {
-				continue
+			if s.bloom.Contains(node) {
+				// Bloom filter says this might be a duplicate, double check
+				if ok, _ := s.database.Has(node); ok {
+					continue
+				}
 			}
 			// Locally unknown node, schedule for retrieval
 			requests = append(requests, &request{
