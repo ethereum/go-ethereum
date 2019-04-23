@@ -58,9 +58,9 @@ func (s *Stopwatch) Tick() {
 	}
 }
 
-// GetTimer returns a new timer that will trigger after `duration` elapses in the
+// NewTimer returns a new timer that will trigger after `duration` elapses in the
 // simulation
-func (s *Stopwatch) GetTimer(duration time.Duration) <-chan time.Time {
+func (s *Stopwatch) NewTimer(duration time.Duration) <-chan time.Time {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -78,7 +78,7 @@ func (s *Stopwatch) GetTimer(duration time.Duration) <-chan time.Time {
 // TimeAfter returns a simulated timer factory that can replace `time.After`
 func (s *Stopwatch) TimeAfter() func(d time.Duration) <-chan time.Time {
 	return func(d time.Duration) <-chan time.Time {
-		return s.GetTimer(d)
+		return s.NewTimer(d)
 	}
 }
 

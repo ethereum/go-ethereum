@@ -42,7 +42,7 @@ type StoreCounters struct {
 	reads           int
 	cacheHits       int
 	failed          int
-	sucessful       int
+	successful      int
 	canceled        int
 	maxSimultaneous int
 }
@@ -122,7 +122,7 @@ func (s *Store) Get(ctx context.Context, epoch lookup.Epoch, now uint64) (value 
 	if item != nil {
 		s.cacheHits++
 		if item.Time <= now {
-			s.sucessful++
+			s.successful++
 			return item, nil
 		}
 		return nil, nil
@@ -133,7 +133,7 @@ func (s *Store) Get(ctx context.Context, epoch lookup.Epoch, now uint64) (value 
 	item = s.data[epochID]
 	if item != nil {
 		operationTime += s.SuccessfulReadTime
-		s.sucessful++
+		s.successful++
 		s.cache[epochID] = item
 		if item.Time <= now {
 			return item, nil
