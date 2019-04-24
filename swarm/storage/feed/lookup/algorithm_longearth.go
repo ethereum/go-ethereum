@@ -38,9 +38,9 @@ func LongEarthAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFu
 	var gerr error              // in case of error, this variable will be set
 
 	var step stepFunc // For efficiency, the algorithm step is defined as a closure
-	step = func(ctxS context.Context, t uint64, hint Epoch) interface{} {
+	step = func(ctxS context.Context, t uint64, last Epoch) interface{} {
 		stepID := atomic.AddInt32(&stepCounter, 1) // give an ID to this call instance
-		trace(stepID, "init: t=%d, hint=%s", t, hint.String())
+		trace(stepID, "init: t=%d, last=%s", t, last.String())
 		var valueA, valueB, valueR interface{}
 
 		// initialize the three read contexts
@@ -48,7 +48,7 @@ func LongEarthAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFu
 		ctxA, cancelA := context.WithCancel(ctxS) // will handle the lookahead path
 		ctxB, cancelB := context.WithCancel(ctxS) // will handle the lookback path
 
-		epoch := GetNextEpoch(hint, t) // calculate the epoch to look up in this step instance
+		epoch := GetNextEpoch(last, t) // calculate the epoch to look up in this step instance
 
 		// define the lookAhead function, which will follow the path as if R was successful
 		lookAhead := func() {
@@ -61,14 +61,14 @@ func LongEarthAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFu
 
 		// define the lookBack function, which will follow the path as if R was unsuccessful
 		lookBack := func() {
-			if epoch.Base() == hint.Base() {
+			if epoch.Base() == last.Base() {
 				return
 			}
 			base := epoch.Base()
 			if base == 0 {
 				return
 			}
-			valueB = step(ctxB, base-1, hint)
+			valueB = step(ctxB, base-1, last)
 		}
 
 		go func() { //goroutine to read the current epoch (R)
@@ -89,8 +89,10 @@ func LongEarthAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFu
 		go func() { // goroutine to give a headstart to R and then launch lookahead.
 			defer cancelA()
 
-			// if we are at the lowest level or this is the hint, then we cannot lookahead
-			if epoch.Level == LowestLevel || epoch.Equals(hint) {
+			// if we are at the lowest level or the epoch to look up equals the last one,
+			// then we cannot lookahead (can't go lower or repeat the same lookup, this would
+			// cause an infinite loop)
+			if epoch.Level == LowestLevel || epoch.Equals(last) {
 				return
 			}
 
