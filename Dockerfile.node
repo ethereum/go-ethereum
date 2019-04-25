@@ -2,17 +2,17 @@ FROM golang:1.10-alpine as builder
 
 RUN apk add --no-cache make gcc musl-dev linux-headers
 
-ADD . /XDChain
+ADD . /XDCchain
 
-RUN cd /XDChain \
-    && make XDC\
+RUN cd /XDCchain \
+    && make XDC \
     && chmod +x /XDCchain/build/bin/XDC
 
 FROM alpine:latest
 
 LABEL maintainer="anil@xinfin.org"
 
-WORKDIR /XDChain
+WORKDIR /XDCchain
 
 COPY --from=builder /XDCchain/build/bin/XDC /usr/local/bin/XDC
 
@@ -31,7 +31,7 @@ ENV ANNOUNCE_TXS ''
 
 RUN apk add --no-cache ca-certificates
 
-COPY docker/XDChain ./
+COPY docker/XDCchain ./
 COPY genesis/ ./
 
 EXPOSE 8545 8546 30303 30303/udp

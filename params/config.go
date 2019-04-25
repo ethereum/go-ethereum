@@ -89,7 +89,7 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllXDPoSProtocolChanges  = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XDPoSConfig{Period: 0, Epoch: 30000}}
+	AllXDPoSProtocolChanges   = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XDPoSConfig{Period: 0, Epoch: 30000}}
 	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
 	TestChainConfig          = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
 	TestRules                = TestChainConfig.Rules(new(big.Int))
@@ -121,7 +121,7 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
-	XDPoS  *XDPoSConfig  `json:"XDPoS,omitempty"`
+	XDPoS   *XDPoSConfig   `json:"XDPoS,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -219,6 +219,10 @@ func (c *ChainConfig) IsTIP2019(num *big.Int) bool {
 
 func (c *ChainConfig) IsTIPSigning(num *big.Int) bool {
 	return isForked(common.TIPSigning, num)
+}
+
+func (c *ChainConfig) IsTIPRandomize(num *big.Int) bool {
+	return isForked(common.TIPRandomize, num)
 }
 
 // GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).

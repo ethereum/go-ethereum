@@ -56,7 +56,7 @@ const (
 	// timeout waiting for M1
 	waitPeriod = 10
 	// timeout for checkpoint.
-	waitPeriodCheckpoint = 120 // 2 mins
+	waitPeriodCheckpoint = 20
 )
 
 // Agent can register themself with the worker
@@ -330,7 +330,7 @@ func (self *worker) wait() {
 				continue
 			}
 			block := result.Block
-			if self.config.XDPoS != nil && block.NumberU64() >= self.config.XDPoS.Epoch {
+			if self.config.XDPoS != nil && block.NumberU64() >= self.config.XDPoS.Epoch && len(block.Validator()) == 0 {
 				self.mux.Post(core.NewMinedBlockEvent{Block: block})
 				continue
 			}

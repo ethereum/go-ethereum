@@ -123,7 +123,7 @@ const (
 	PendingBlockNumber  = BlockNumber(-2)
 	LatestBlockNumber   = BlockNumber(-1)
 	EarliestBlockNumber = BlockNumber(0)
-	LatestEpochNumber	= EpochNumber(-1)
+	LatestEpochNumber   = EpochNumber(-1)
 )
 
 // UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:

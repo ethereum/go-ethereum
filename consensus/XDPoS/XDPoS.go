@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-// Package XDPoS implements the delegated-proof-of-stake consensus engine.
+// Package XDPoS implements the proof-of-stake-voting consensus engine.
 package XDPoS
 
 import (
@@ -25,6 +25,8 @@ import (
 	"math/big"
 	"math/rand"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -58,7 +60,7 @@ type Masternode struct {
 	Stake   *big.Int
 }
 
-// XDPoS delegated-proof-of-stake protocol constants.
+// XDPoS proof-of-stake-voting protocol constants.
 var (
 	epochLength = uint64(900) // Default number of blocks after which to checkpoint and reset the pending votes
 
@@ -149,7 +151,7 @@ var (
 // backing account.
 //type SignerFn func(accounts.Account, []byte) ([]byte, error)
 
-// sigHash returns the hash which is used as input for the delegated-proof-of-stake
+// sigHash returns the hash which is used as input for the proof-of-stake-voting
 // signing. It is the hash of the entire header apart from the 65 byte signature
 // contained at the end of the extra data.
 //
@@ -209,7 +211,7 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 	return signer, nil
 }
 
-// XDPoS is the delegated-proof-of-stake consensus engine proposed to support the
+// XDPoS is the proof-of-stake-voting consensus engine proposed to support the
 // Ethereum testnet following the Ropsten attacks.
 type XDPoS struct {
 	config *params.XDPoSConfig // Consensus engine configuration parameters
@@ -225,15 +227,15 @@ type XDPoS struct {
 	signFn clique.SignerFn // Signer function to authorize hashes with
 	lock   sync.RWMutex    // Protects the signer fields
 
-	BlockSigners *lru.Cache
-	HookReward   func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
+	BlockSigners          *lru.Cache
+	HookReward            func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
 	HookPenalty           func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
 	HookPenaltyTIPSigning func(chain consensus.ChainReader, header *types.Header, candidate []common.Address) ([]common.Address, error)
 	HookValidator         func(header *types.Header, signers []common.Address) ([]byte, error)
 	HookVerifyMNs         func(header *types.Header, signers []common.Address) error
 }
 
-// New creates a XDPoS delegated-proof-of-stake consensus engine with the initial
+// New creates a XDPoS proof-of-stake-voting consensus engine with the initial
 // signers set to the ones provided by the user.
 func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
 	// Set any missing consensus parameters to their defaults
@@ -424,9 +426,11 @@ func (c *XDPoS) verifyCascadingFields(chain consensus.ChainReader, header *types
 				signers = RemovePenaltiesFromBlock(chain, signers, number-uint64(i)*c.config.Epoch)
 			}
 		}
-		byteMasterNodes := common.ExtractAddressToBytes(signers)
 		extraSuffix := len(header.Extra) - extraSeal
-		if !bytes.Equal(header.Extra[extraVanity:extraSuffix], byteMasterNodes) {
+		masternodesFromCheckpointHeader := common.ExtractAddressFromBytes(header.Extra[extraVanity:extraSuffix])
+		validSigners := compareSignersLists(masternodesFromCheckpointHeader, signers)
+		if !validSigners {
+			log.Error("Masternodes lists are different in checkpoint header and snapshot", "number", number, "masternodes_from_checkpoint_header", masternodesFromCheckpointHeader, "masternodes_in_snapshot", signers, "penList", penPenalties)
 			return errInvalidCheckpointSigners
 		}
 		if c.HookVerifyMNs != nil {
@@ -438,6 +442,21 @@ func (c *XDPoS) verifyCascadingFields(chain consensus.ChainReader, header *types
 	}
 	// All basic checks passed, verify the seal and return
 	return c.verifySeal(chain, header, parents, fullVerify)
+}
+
+// compare 2 signers lists
+// return true if they are same elements, otherwise return false
+func compareSignersLists(list1 []common.Address, list2 []common.Address) bool {
+	if len(list1) == 0 && len(list2) == 0 {
+		return true
+	}
+	sort.Slice(list1, func(i, j int) bool {
+		return list1[i].String() <= list1[j].String()
+	})
+	sort.Slice(list2, func(i, j int) bool {
+		return list2[i].String() <= list2[j].String()
+	})
+	return reflect.DeepEqual(list1, list2)
 }
 
 func (c *XDPoS) GetSnapshot(chain consensus.ChainReader, header *types.Header) (*Snapshot, error) {
@@ -739,7 +758,7 @@ func (c *XDPoS) GetValidator(creator common.Address, chain consensus.ChainReader
 			return common.Address{}, fmt.Errorf("couldn't find checkpoint header")
 		}
 	}
-	m, err := GetM1M2FromCheckpointHeader(cpHeader)
+	m, err := GetM1M2FromCheckpointHeader(cpHeader, header, chain.Config())
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -977,7 +996,13 @@ func (c *XDPoS) Seal(chain consensus.ChainReader, block *types.Block, stop <-cha
 		return nil, err
 	}
 	copy(header.Extra[len(header.Extra)-extraSeal:], sighash)
-
+	m2, err := c.GetValidator(signer, chain, header)
+	if err != nil {
+		return nil, fmt.Errorf("can't get block validator: %v", err)
+	}
+	if m2 == signer {
+		header.Validator = sighash
+	}
 	return block.WithSeal(header), nil
 }
 
@@ -1119,24 +1144,39 @@ func GetMasternodesFromCheckpointHeader(checkpointHeader *types.Header) []common
 }
 
 // Get m2 list from checkpoint block.
-func GetM1M2FromCheckpointHeader(checkpointHeader *types.Header) (map[common.Address]common.Address, error) {
+func GetM1M2FromCheckpointHeader(checkpointHeader *types.Header, currentHeader *types.Header, config *params.ChainConfig) (map[common.Address]common.Address, error) {
 	if checkpointHeader.Number.Uint64()%common.EpocBlockRandomize != 0 {
 		return nil, errors.New("This block is not checkpoint block epoc.")
 	}
-	m1m2 := map[common.Address]common.Address{}
 	// Get signers from this block.
 	masternodes := GetMasternodesFromCheckpointHeader(checkpointHeader)
 	validators := ExtractValidatorsFromBytes(checkpointHeader.Validators)
-
-	if len(validators) < len(masternodes) {
-		return nil, errors.New("len(m2) is less than len(m1)")
-	}
-	if len(masternodes) > 0 {
-		for i, m1 := range masternodes {
-			m1m2[m1] = masternodes[validators[i]%int64(len(masternodes))]
-		}
+	m1m2, _, err := getM1M2(masternodes, validators, currentHeader, config)
+	if err != nil {
+		return map[common.Address]common.Address{}, err
 	}
 	return m1m2, nil
+}
+
+func getM1M2(masternodes []common.Address, validators []int64, currentHeader *types.Header, config *params.ChainConfig) (map[common.Address]common.Address, uint64, error) {
+	m1m2 := map[common.Address]common.Address{}
+	maxMNs := len(masternodes)
+	moveM2 := uint64(0)
+	if len(validators) < maxMNs {
+		return nil, moveM2, errors.New("len(m2) is less than len(m1)")
+	}
+	if maxMNs > 0 {
+		isForked := config.IsTIPRandomize(currentHeader.Number)
+		if isForked {
+			moveM2 = ((currentHeader.Number.Uint64() % config.XDPoS.Epoch) / uint64(maxMNs)) % uint64(maxMNs)
+		}
+		for i, m1 := range masternodes {
+			m2Index := uint64(validators[i] % int64(maxMNs))
+			m2Index = (m2Index + moveM2) % uint64(maxMNs)
+			m1m2[m1] = masternodes[m2Index]
+		}
+	}
+	return m1m2, moveM2, nil
 }
 
 // Extract validators from byte array.

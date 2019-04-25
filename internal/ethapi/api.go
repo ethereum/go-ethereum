@@ -22,10 +22,12 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -33,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/XDPoS"
 	"github.com/ethereum/go-ethereum/contracts"
+	contractValidator "github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -44,17 +47,14 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	contractValidator "github.com/ethereum/go-ethereum/contracts/validator/contract"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 )
 
 const (
-	defaultGasPrice 		= 50 * params.Shannon
+	defaultGasPrice = 50 * params.Shannon
 	// statuses of candidates
-	statusMasternode 		= "MASTERNODE"
-	statusSlashed			= "SLASHED"
-	statusProposed			= "PROPOSED"
-
+	statusMasternode = "MASTERNODE"
+	statusSlashed    = "SLASHED"
+	statusProposed   = "PROPOSED"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -699,14 +699,13 @@ func (s *PublicBlockChainAPI) GetMasternodes(ctx context.Context, b *types.Block
 	return masternodes, nil
 }
 
-
 // GetCandidateStatus returns status of the given candidate at a specified epochNumber
 func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAddress common.Address, epochNumber rpc.EpochNumber) (string, error) {
 	var (
-		block *types.Block
-		masternodes, penaltyList, candidates, proposedList []common.Address
-		penalties []byte
-		err error
+		block                    *types.Block
+		masternodes, penaltyList []common.Address
+		penalties                []byte
+		err                      error
 	)
 	block = s.b.CurrentBlock()
 	epoch := s.b.ChainConfig().XDPoS.Epoch
@@ -735,27 +734,6 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 		}
 	}
 
-	// look up recent checkpoint headers to get penalty list
-	for i := 0; i <= common.LimitPenaltyEpoch; i++ {
-		if blockNum > uint64(i) * epoch {
-			blockCheckpointNumber := rpc.BlockNumber(blockNum - (blockNum % epoch) - (uint64(i) * epoch))
-			blockCheckpoint, err := s.b.BlockByNumber(ctx, blockCheckpointNumber)
-			if err != nil {
-				log.Error("Failed to get block  by number", "num", blockCheckpointNumber, "err", err)
-				continue
-			}
-			penalties = append(penalties, blockCheckpoint.Penalties()...)
-		}
-	}
-	if len(penalties) > 0 {
-		penaltyList = common.ExtractAddressFromBytes(penalties)
-		for _, pen := range penaltyList {
-			if coinbaseAddress == pen {
-				return statusSlashed, nil
-			}
-		}
-	}
-
 	// read smart contract to get candidate list
 	client, err := s.b.GetIPCClient()
 	if err != nil {
@@ -767,21 +745,64 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 		return "", err
 	}
 	opts := new(bind.CallOpts)
-	candidates, err = validator.GetCandidates(opts)
+	var (
+		candidateAddresses []common.Address
+		candidates []XDPoS.Masternode
+	)
+
+	candidateAddresses, err = validator.GetCandidates(opts)
 	if err != nil {
 		return "", err
 	}
-	// exclude masternodes
-	proposedList = common.RemoveItemFromArray(candidates, masternodes)
-	// exclude penalties
-	proposedList = common.RemoveItemFromArray(proposedList, penaltyList)
-
-	for _, proposed := range proposedList {
-		if coinbaseAddress == proposed {
-			return statusProposed, nil
+	for _, address := range candidateAddresses {
+		v, err := validator.GetCandidateCap(opts, address)
+		if err != nil {
+			return "", err
+		}
+		if address.String() != "xdc0000000000000000000000000000000000000000" {
+			candidates = append(candidates, XDPoS.Masternode{Address: address, Stake: v})
 		}
 	}
-	return "", nil
+	// sort candidates by stake descending
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].Stake.Cmp(candidates[j].Stake) >= 0
+	})
+	isTopCandidate := false // is candidates in top 150
+	status := ""
+	for i := 0; i < len(candidates); i++ {
+		if candidates[i].Address == coinbaseAddress {
+			status = statusProposed
+			if i < common.MaxMasternodes {
+				isTopCandidate = true
+			}
+			break
+		}
+	}
+	if isTopCandidate == false {
+		return status, nil
+	}
+	// look up recent checkpoint headers to get penalty list
+	for i := 0; i <= common.LimitPenaltyEpoch; i++ {
+		if blockNum > uint64(i)*epoch {
+			blockCheckpointNumber := rpc.BlockNumber(blockNum - (blockNum % epoch) - (uint64(i) * epoch))
+			blockCheckpoint, err := s.b.BlockByNumber(ctx, blockCheckpointNumber)
+			if err != nil {
+				log.Error("Failed to get block  by number", "num", blockCheckpointNumber, "err", err)
+				continue
+			}
+			penalties = append(penalties, blockCheckpoint.Penalties()...)
+		}
+	}
+
+	if len(penalties) > 0 {
+		penaltyList = common.ExtractAddressFromBytes(penalties)
+		for _, pen := range penaltyList {
+			if coinbaseAddress == pen {
+				return statusSlashed, nil
+			}
+		}
+	}
+	return status, nil
 }
 
 // CallArgs represents the arguments for a call.
