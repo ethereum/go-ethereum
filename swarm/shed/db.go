@@ -45,16 +45,7 @@ const (
 // It provides a schema functionality to store fields and indexes
 // information about naming and types.
 type DB struct {
-	ldb *leveldb.DB
-
-	compTimeMeter    metrics.Meter // Meter for measuring the total time spent in database compaction
-	compReadMeter    metrics.Meter // Meter for measuring the data read during compaction
-	compWriteMeter   metrics.Meter // Meter for measuring the data written during compaction
-	writeDelayNMeter metrics.Meter // Meter for measuring the write delay number due to database compaction
-	writeDelayMeter  metrics.Meter // Meter for measuring the write delay duration due to database compaction
-	diskReadMeter    metrics.Meter // Meter for measuring the effective amount of data read
-	diskWriteMeter   metrics.Meter // Meter for measuring the effective amount of data written
-
+	ldb  *leveldb.DB
 	quit chan struct{} // Quit channel to stop the metrics collection before closing the database
 }
 
@@ -86,13 +77,10 @@ func NewDB(path string, metricsPrefix string) (db *DB, err error) {
 		}
 	}
 
-	// Configure meters for DB
-	db.configure(metricsPrefix)
-
 	// Create a quit channel for the periodic metrics collector and run it
 	db.quit = make(chan struct{})
 
-	go db.meter(10 * time.Second)
+	go db.meter(metricsPrefix, 10*time.Second)
 
 	return db, nil
 }
@@ -169,19 +157,22 @@ func (db *DB) Close() (err error) {
 	return db.ldb.Close()
 }
 
-// Configure configures the database metrics collectors
-func (db *DB) configure(prefix string) {
-	// Initialize all the metrics collector at the requested prefix
-	db.compTimeMeter = metrics.NewRegisteredMeter(prefix+"compact/time", nil)
-	db.compReadMeter = metrics.NewRegisteredMeter(prefix+"compact/input", nil)
-	db.compWriteMeter = metrics.NewRegisteredMeter(prefix+"compact/output", nil)
-	db.diskReadMeter = metrics.NewRegisteredMeter(prefix+"disk/read", nil)
-	db.diskWriteMeter = metrics.NewRegisteredMeter(prefix+"disk/write", nil)
-	db.writeDelayMeter = metrics.NewRegisteredMeter(prefix+"compact/writedelay/duration", nil)
-	db.writeDelayNMeter = metrics.NewRegisteredMeter(prefix+"compact/writedelay/counter", nil)
-}
+func (db *DB) meter(prefix string, refresh time.Duration) {
+	// Meter for measuring the total time spent in database compaction
+	compTimeMeter := metrics.NewRegisteredMeter(prefix+"compact/time", nil)
+	// Meter for measuring the data read during compaction
+	compReadMeter := metrics.NewRegisteredMeter(prefix+"compact/input", nil)
+	// Meter for measuring the data written during compaction
+	compWriteMeter := metrics.NewRegisteredMeter(prefix+"compact/output", nil)
+	// Meter for measuring the write delay number due to database compaction
+	writeDelayMeter := metrics.NewRegisteredMeter(prefix+"compact/writedelay/duration", nil)
+	// Meter for measuring the write delay duration due to database compaction
+	writeDelayNMeter := metrics.NewRegisteredMeter(prefix+"compact/writedelay/counter", nil)
+	// Meter for measuring the effective amount of data read
+	diskReadMeter := metrics.NewRegisteredMeter(prefix+"disk/read", nil)
+	// Meter for measuring the effective amount of data written
+	diskWriteMeter := metrics.NewRegisteredMeter(prefix+"disk/write", nil)
 
-func (db *DB) meter(refresh time.Duration) {
 	// Create the counters to store current and previous compaction values
 	compactions := make([][]float64, 2)
 	for i := 0; i < 2; i++ {
@@ -234,14 +225,14 @@ func (db *DB) meter(refresh time.Duration) {
 			}
 		}
 		// Update all the requested meters
-		if db.compTimeMeter != nil {
-			db.compTimeMeter.Mark(int64((compactions[i%2][0] - compactions[(i-1)%2][0]) * 1000 * 1000 * 1000))
+		if compTimeMeter != nil {
+			compTimeMeter.Mark(int64((compactions[i%2][0] - compactions[(i-1)%2][0]) * 1000 * 1000 * 1000))
 		}
-		if db.compReadMeter != nil {
-			db.compReadMeter.Mark(int64((compactions[i%2][1] - compactions[(i-1)%2][1]) * 1024 * 1024))
+		if compReadMeter != nil {
+			compReadMeter.Mark(int64((compactions[i%2][1] - compactions[(i-1)%2][1]) * 1024 * 1024))
 		}
-		if db.compWriteMeter != nil {
-			db.compWriteMeter.Mark(int64((compactions[i%2][2] - compactions[(i-1)%2][2]) * 1024 * 1024))
+		if compWriteMeter != nil {
+			compWriteMeter.Mark(int64((compactions[i%2][2] - compactions[(i-1)%2][2]) * 1024 * 1024))
 		}
 
 		// Retrieve the write delay statistic
@@ -265,11 +256,11 @@ func (db *DB) meter(refresh time.Duration) {
 			log.Error("Failed to parse delay duration", "err", err)
 			continue
 		}
-		if db.writeDelayNMeter != nil {
-			db.writeDelayNMeter.Mark(delayN - delaystats[0])
+		if writeDelayNMeter != nil {
+			writeDelayNMeter.Mark(delayN - delaystats[0])
 		}
-		if db.writeDelayMeter != nil {
-			db.writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
+		if writeDelayMeter != nil {
+			writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
 		}
 		// If a warning that db is performing compaction has been displayed, any subsequent
 		// warnings will be withheld for one minute not to overwhelm the user.
@@ -300,11 +291,11 @@ func (db *DB) meter(refresh time.Duration) {
 			log.Error("Bad syntax of write entry", "entry", parts[1])
 			continue
 		}
-		if db.diskReadMeter != nil {
-			db.diskReadMeter.Mark(int64((nRead - iostats[0]) * 1024 * 1024))
+		if diskReadMeter != nil {
+			diskReadMeter.Mark(int64((nRead - iostats[0]) * 1024 * 1024))
 		}
-		if db.diskWriteMeter != nil {
-			db.diskWriteMeter.Mark(int64((nWrite - iostats[1]) * 1024 * 1024))
+		if diskWriteMeter != nil {
+			diskWriteMeter.Mark(int64((nWrite - iostats[1]) * 1024 * 1024))
 		}
 		iostats[0], iostats[1] = nRead, nWrite
 
