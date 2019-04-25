@@ -110,6 +110,7 @@ func NewProtocolTester(prvkey *ecdsa.PrivateKey, nodeCount int, run func(*p2p.Pe
 // Stop stops the p2p server
 func (t *ProtocolTester) Stop() {
 	t.Server.Stop()
+	t.network.Shutdown()
 }
 
 // Connect brings up the remote peer node and connects it using the

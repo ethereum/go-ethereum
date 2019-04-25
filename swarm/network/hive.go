@@ -192,9 +192,7 @@ func (h *Hive) NodeInfo() interface{} {
 // PeerInfo function is used by the p2p.server RPC interface to display
 // protocol specific information any connected peer referred to by their NodeID
 func (h *Hive) PeerInfo(id enode.ID) interface{} {
-	h.lock.Lock()
-	p := h.peers[id]
-	h.lock.Unlock()
+	p := h.Peer(id)
 
 	if p == nil {
 		return nil
@@ -207,6 +205,15 @@ func (h *Hive) PeerInfo(id enode.ID) interface{} {
 		OAddr: addr.OAddr,
 		UAddr: addr.UAddr,
 	}
+}
+
+// Peer returns a bzz peer from the Hive. If there is no peer
+// with the provided enode id, a nil value is returned.
+func (h *Hive) Peer(id enode.ID) *BzzPeer {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	return h.peers[id]
 }
 
 // loadPeers, savePeer implement persistence callback/
