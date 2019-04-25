@@ -17,7 +17,10 @@
 package localstore
 
 import (
+	"time"
+
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/shed"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -75,6 +78,15 @@ func (db *DB) collectGarbageWorker() {
 // the rest of the garbage as the batch size limit is reached.
 // This function is called in collectGarbageWorker.
 func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
+	metricName := "localstore.gc"
+	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
+	defer totalTimeMetric(metricName, time.Now())
+	defer func() {
+		if err != nil {
+			metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
+		}
+	}()
+
 	batch := new(leveldb.Batch)
 	target := db.gcTarget()
 

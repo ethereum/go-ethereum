@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/shed"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
@@ -387,4 +388,13 @@ func init() {
 	now = func() (t int64) {
 		return time.Now().UTC().UnixNano()
 	}
+}
+
+// totalTimeMetric logs a message about time between provided start time
+// and the time when the function is called and sends a resetting timer metric
+// with provided name appended with ".total-time".
+func totalTimeMetric(name string, start time.Time) {
+	totalTime := time.Since(start)
+	log.Trace(name+" total time", "time", totalTime)
+	metrics.GetOrRegisterResettingTimer(name+".total-time", nil).Update(totalTime)
 }

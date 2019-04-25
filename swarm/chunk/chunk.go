@@ -112,6 +112,19 @@ func Proximity(one, other []byte) (ret int) {
 // ModeGet enumerates different Getter modes.
 type ModeGet int
 
+func (m ModeGet) String() string {
+	switch m {
+	case ModeGetRequest:
+		return "Request"
+	case ModeGetSync:
+		return "Sync"
+	case ModeGetLookup:
+		return "Lookup"
+	default:
+		return "Unknown"
+	}
+}
+
 // Getter modes.
 const (
 	// ModeGetRequest: when accessed for retrieval
@@ -125,6 +138,19 @@ const (
 // ModePut enumerates different Putter modes.
 type ModePut int
 
+func (m ModePut) String() string {
+	switch m {
+	case ModePutRequest:
+		return "Request"
+	case ModePutSync:
+		return "Sync"
+	case ModePutUpload:
+		return "Upload"
+	default:
+		return "Unknown"
+	}
+}
+
 // Putter modes.
 const (
 	// ModePutRequest: when a chunk is received as a result of retrieve request and delivery
@@ -137,6 +163,19 @@ const (
 
 // ModeSet enumerates different Setter modes.
 type ModeSet int
+
+func (m ModeSet) String() string {
+	switch m {
+	case ModeSetAccess:
+		return "Access"
+	case ModeSetSync:
+		return "Sync"
+	case ModeSetRemove:
+		return "Remove"
+	default:
+		return "Unknown"
+	}
+}
 
 // Setter modes.
 const (
