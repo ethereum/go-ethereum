@@ -119,11 +119,11 @@ type Wallet struct {
 	session *Session   // The secure communication session with the card
 	log     log.Logger // Contextual logger to tag the base with its id
 
-	deriveNextPath accounts.DerivationPath   // Next derivation path for account auto-discovery
-	deriveNextAddr common.Address            // Next derived account address for auto-discovery
-	deriveChain    ethereum.ChainStateReader // Blockchain state reader to discover used account with
-	deriveReq      chan chan struct{}        // Channel to request a self-derivation on
-	deriveQuit     chan chan error           // Channel to terminate the self-deriver with
+	deriveNextPaths []accounts.DerivationPath // Next derivation paths for account auto-discovery (multiple bases supported)
+	deriveNextAddrs []common.Address          // Next derived account addresses for auto-discovery (multiple bases supported)
+	deriveChain     ethereum.ChainStateReader // Blockchain state reader to discover used account with
+	deriveReq       chan chan struct{}        // Channel to request a self-derivation on
+	deriveQuit      chan chan error           // Channel to terminate the self-deriver with
 }
 
 // NewWallet constructs and returns a new Wallet instance.
@@ -390,7 +390,7 @@ func (w *Wallet) Open(passphrase string) error {
 	w.deriveReq = make(chan chan struct{})
 	w.deriveQuit = make(chan chan error)
 
-	go w.selfDerive(0)
+	go w.selfDerive()
 
 	// Notify anyone listening for wallet events that a new device is accessible
 	go w.Hub.updateFeed.Send(accounts.WalletEvent{Wallet: w, Kind: accounts.WalletOpened})
@@ -426,9 +426,8 @@ func (w *Wallet) Close() error {
 }
 
 // selfDerive is an account derivation loop that upon request attempts to find
-// new non-zero accounts. maxEmpty specifies the number of empty accounts that
-// should be derived once an initial empty account has been found.
-func (w *Wallet) selfDerive(maxEmpty int) {
+// new non-zero accounts.
+func (w *Wallet) selfDerive() {
 	w.log.Debug("Smart card wallet self-derivation started")
 	defer w.log.Debug("Smart card wallet self-derivation stopped")
 
@@ -461,56 +460,59 @@ func (w *Wallet) selfDerive(maxEmpty int) {
 			paths   []accounts.DerivationPath
 			nextAcc accounts.Account
 
-			nextAddr = w.deriveNextAddr
-			nextPath = w.deriveNextPath
+			nextPaths = append([]accounts.DerivationPath{}, w.deriveNextPaths...)
+			nextAddrs = append([]common.Address{}, w.deriveNextAddrs...)
 
 			context = context.Background()
 		)
-		for empty, emptyCount := false, maxEmpty+1; !empty || emptyCount > 0; {
-			// Retrieve the next derived Ethereum account
-			if nextAddr == (common.Address{}) {
-				if nextAcc, err = w.session.derive(nextPath); err != nil {
-					w.log.Warn("Smartcard wallet account derivation failed", "err", err)
+		for i := 0; i < len(nextAddrs); i++ {
+			for empty := false; !empty; {
+				// Retrieve the next derived Ethereum account
+				if nextAddrs[i] == (common.Address{}) {
+					if nextAcc, err = w.session.derive(nextPaths[i]); err != nil {
+						w.log.Warn("Smartcard wallet account derivation failed", "err", err)
+						break
+					}
+					nextAddrs[i] = nextAcc.Address
+				}
+				// Check the account's status against the current chain state
+				var (
+					balance *big.Int
+					nonce   uint64
+				)
+				balance, err = w.deriveChain.BalanceAt(context, nextAddrs[i], nil)
+				if err != nil {
+					w.log.Warn("Smartcard wallet balance retrieval failed", "err", err)
 					break
 				}
-				nextAddr = nextAcc.Address
-			}
-			// Check the account's status against the current chain state
-			var (
-				balance *big.Int
-				nonce   uint64
-			)
-			balance, err = w.deriveChain.BalanceAt(context, nextAddr, nil)
-			if err != nil {
-				w.log.Warn("Smartcard wallet balance retrieval failed", "err", err)
-				break
-			}
-			nonce, err = w.deriveChain.NonceAt(context, nextAddr, nil)
-			if err != nil {
-				w.log.Warn("Smartcard wallet nonce retrieval failed", "err", err)
-				break
-			}
-			// If the next account is empty and no more empty accounts are
-			// allowed, stop self-derivation. Add the current one nonetheless.
-			if balance.Sign() == 0 && nonce == 0 {
-				empty = true
-				emptyCount--
-			}
-			// We've just self-derived a new account, start tracking it locally
-			path := make(accounts.DerivationPath, len(nextPath))
-			copy(path[:], nextPath[:])
-			paths = append(paths, path)
+				nonce, err = w.deriveChain.NonceAt(context, nextAddrs[i], nil)
+				if err != nil {
+					w.log.Warn("Smartcard wallet nonce retrieval failed", "err", err)
+					break
+				}
+				// If the next account is empty, stop self-derivation, but add for the last base path
+				if balance.Sign() == 0 && nonce == 0 {
+					empty = true
+					if i < len(nextAddrs)-1 {
+						break
+					}
+				}
+				// We've just self-derived a new account, start tracking it locally
+				path := make(accounts.DerivationPath, len(nextPaths[i]))
+				copy(path[:], nextPaths[i][:])
+				paths = append(paths, path)
 
-			// Display a log message to the user for new (or previously empty accounts)
-			if _, known := pairing.Accounts[nextAddr]; !known || !empty || nextAddr != w.deriveNextAddr {
-				w.log.Info("Smartcard wallet discovered new account", "address", nextAddr, "path", path, "balance", balance, "nonce", nonce)
-			}
-			pairing.Accounts[nextAddr] = path
+				// Display a log message to the user for new (or previously empty accounts)
+				if _, known := pairing.Accounts[nextAddrs[i]]; !known || !empty || nextAddrs[i] != w.deriveNextAddrs[i] {
+					w.log.Info("Smartcard wallet discovered new account", "address", nextAddrs[i], "path", path, "balance", balance, "nonce", nonce)
+				}
+				pairing.Accounts[nextAddrs[i]] = path
 
-			// Fetch the next potential account
-			if !empty || emptyCount > 0 {
-				nextAddr = common.Address{}
-				nextPath[len(nextPath)-1]++
+				// Fetch the next potential account
+				if !empty {
+					nextAddrs[i] = common.Address{}
+					nextPaths[i][len(nextPaths[i])-1]++
+				}
 			}
 		}
 		// If there are new accounts, write them out
@@ -518,8 +520,8 @@ func (w *Wallet) selfDerive(maxEmpty int) {
 			err = w.Hub.setPairing(w, pairing)
 		}
 		// Shift the self-derivation forward
-		w.deriveNextAddr = nextAddr
-		w.deriveNextPath = nextPath
+		w.deriveNextAddrs = nextAddrs
+		w.deriveNextPaths = nextPaths
 
 		// Self derivation complete, release device lock
 		w.lock.Unlock()
@@ -592,7 +594,7 @@ func (w *Wallet) Contains(account accounts.Account) bool {
 
 // Initialize installs a keypair generated from the provided key into the wallet.
 func (w *Wallet) Initialize(seed []byte) error {
-	go w.selfDerive(0)
+	go w.selfDerive()
 	// DO NOT lock at this stage, as the initialize
 	// function relies on Status()
 	return w.session.initialize(seed)
@@ -629,16 +631,22 @@ func (w *Wallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Accoun
 // opposed to decending into a child path to allow discovering accounts starting
 // from non zero components.
 //
+// Some hardware wallets switched derivation paths through their evolution, so
+// this method supports providing multiple bases to discover old user accounts
+// too. Only the last base will be used to derive the next empty account.
+//
 // You can disable automatic account discovery by calling SelfDerive with a nil
 // chain state reader.
-func (w *Wallet) SelfDerive(base accounts.DerivationPath, chain ethereum.ChainStateReader) {
+func (w *Wallet) SelfDerive(bases []accounts.DerivationPath, chain ethereum.ChainStateReader) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	w.deriveNextPath = make(accounts.DerivationPath, len(base))
-	copy(w.deriveNextPath[:], base[:])
-
-	w.deriveNextAddr = common.Address{}
+	w.deriveNextPaths = make([]accounts.DerivationPath, len(bases))
+	for i, base := range bases {
+		w.deriveNextPaths[i] = make(accounts.DerivationPath, len(base))
+		copy(w.deriveNextPaths[i][:], base[:])
+	}
+	w.deriveNextAddrs = make([]common.Address, len(bases))
 	w.deriveChain = chain
 }
 

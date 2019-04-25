@@ -319,12 +319,10 @@ func (api *SignerAPI) startUSBListener() {
 				status, _ := event.Wallet.Status()
 				log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
 
-				derivationPath := accounts.DefaultBaseDerivationPath
-				if event.Wallet.URL().Scheme == "ledger" {
-					derivationPath = accounts.DefaultLedgerBaseDerivationPath
-				}
-				var nextPath = derivationPath
 				// Derive first N accounts, hardcoded for now
+				var nextPath = make(accounts.DerivationPath, len(accounts.DefaultBaseDerivationPath))
+				copy(nextPath[:], accounts.DefaultBaseDerivationPath[:])
+
 				for i := 0; i < numberOfAccountsToDerive; i++ {
 					acc, err := event.Wallet.Derive(nextPath, true)
 					if err != nil {
