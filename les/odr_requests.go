@@ -514,7 +514,7 @@ func (r *TxStatusRequest) Validate(db ethdb.Database, msg *Msg) error {
 // readTraceDB stores the keys of database reads. We use this to check that received node
 // sets contain only the trie nodes necessary to make proofs pass.
 type readTraceDB struct {
-	db    ethdb.Reader
+	db    ethdb.KeyValueReader
 	reads map[string]struct{}
 }
 

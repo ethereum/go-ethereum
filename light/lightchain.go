@@ -165,12 +165,12 @@ func (lc *LightChain) loadLastState() error {
 
 // SetHead rewinds the local chain to a new head. Everything above the new
 // head will be deleted and the new one set.
-func (lc *LightChain) SetHead(head uint64) {
+func (lc *LightChain) SetHead(head uint64) error {
 	lc.chainmu.Lock()
 	defer lc.chainmu.Unlock()
 
-	lc.hc.SetHead(head, nil)
-	lc.loadLastState()
+	lc.hc.SetHead(head, nil, nil)
+	return lc.loadLastState()
 }
 
 // GasLimit returns the gas limit of the current HEAD block.

@@ -39,6 +39,9 @@ var (
 	// errOutOfBounds is returned if the item requested is not contained within the
 	// freezer table.
 	errOutOfBounds = errors.New("out of bounds")
+
+	// errNotSupported is returned if the database doesn't support the required operation.
+	errNotSupported = errors.New("this operation is not supported")
 )
 
 // indexEntry contains the number/id of the file that the data resides in, aswell as the
@@ -451,7 +454,6 @@ func (t *freezerTable) getBounds(item uint64) (uint32, uint32, uint32, error) {
 // Retrieve looks up the data offset of an item with the given number and retrieves
 // the raw binary blob from the data file.
 func (t *freezerTable) Retrieve(item uint64) ([]byte, error) {
-
 	// Ensure the table and the item is accessible
 	if t.index == nil || t.head == nil {
 		return nil, errClosed
@@ -481,6 +483,12 @@ func (t *freezerTable) Retrieve(item uint64) ([]byte, error) {
 		return blob, nil
 	}
 	return snappy.Decode(nil, blob)
+}
+
+// has returns an indicator whether the specified number data
+// exists in the freezer table.
+func (t *freezerTable) has(number uint64) bool {
+	return atomic.LoadUint64(&t.items) > number
 }
 
 // Sync pushes any pending data from memory out to disk. This is an expensive
