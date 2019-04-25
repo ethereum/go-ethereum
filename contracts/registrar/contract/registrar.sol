@@ -95,15 +95,19 @@ contract Registrar {
     public
     returns(bool)
     {
-        // Checkpoint register/modification time window: [(secIndex+1)*size + confirms, (secIndex+2)*size)
-        if (block.number < (_sectionIndex+1)*sectionSize+processConfirms || block.number >= (_sectionIndex+2)*sectionSize) {
+        // Filter out "future" checkpoint.
+        if (block.number < (_sectionIndex+1)*sectionSize+processConfirms) {
             return false;
         }
-        // Filter out stale announcement
-        if (_sectionIndex == sectionIndex && (sectionIndex != 0 || height != 0)) {
+        // Filter out "old" announcement
+        if (_sectionIndex < sectionIndex) {
             return false;
         }
-        // Filter out invalid announcement
+        // Filter out "stale" announcement
+        if (_sectionIndex == sectionIndex && (_sectionIndex != 0 || height != 0)) {
+            return false;
+        }
+        // Filter out "invalid" announcement
         if (_hash == "" || _sig.length == 0) {
             return false;
         }

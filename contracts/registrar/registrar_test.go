@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/registrar/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 const signatureLen = 65
@@ -39,19 +39,19 @@ const signatureLen = 65
 var (
 	emptyHash = [32]byte{}
 
-	checkpoint0 = light.TrustedCheckpoint{
+	checkpoint0 = params.TrustedCheckpoint{
 		SectionIndex: 0,
 		SectionHead:  common.HexToHash("0x7fa3c32f996c2bfb41a1a65b3d8ea3e0a33a1674cde43678ad6f4235e764d17d"),
 		CHTRoot:      common.HexToHash("0x98fc5d3de23a0fecebad236f6655533c157d26a1aedcd0852a514dc1169e6350"),
 		BloomRoot:    common.HexToHash("0x99b5adb52b337fe25e74c1c6d3835b896bd638611b3aebddb2317cce27a3f9fa"),
 	}
-	checkpoint1 = light.TrustedCheckpoint{
+	checkpoint1 = params.TrustedCheckpoint{
 		SectionIndex: 1,
 		SectionHead:  common.HexToHash("0x2d4dee68102125e59b0cc61b176bd89f0d12b3b91cfaf52ef8c2c82fb920c2d2"),
 		CHTRoot:      common.HexToHash("0x7d428008ece3b4c4ef5439f071930aad0bb75108d381308df73beadcd01ded95"),
 		BloomRoot:    common.HexToHash("0x652571f7736de17e7bbb427ac881474da684c6988a88bf51b10cca9a2ee148f4"),
 	}
-	checkpoint2 = light.TrustedCheckpoint{
+	checkpoint2 = params.TrustedCheckpoint{
 		SectionIndex: 2,
 		SectionHead:  common.HexToHash("0x61c0de578c0115b1dff8ef39aa600588c7c6ecb8a2f102003d7cf4c4146e9291"),
 		CHTRoot:      common.HexToHash("0x407a08a407a2bc3838b74ca3eb206903c9c8a186ccf5ef14af07794efff1970b"),
@@ -178,14 +178,7 @@ func TestCheckpointRegister(t *testing.T) {
 	validateOperation(t, c, contractBackend, func() {
 		c.SetCheckpoint(transactOpts, big.NewInt(0), checkpoint0.Hash(), signCheckpoint(accounts[0].key, checkpoint0.Hash()))
 	}, func(events <-chan *contract.ContractNewCheckpointEvent) error {
-		hash, _, err := c.GetCheckpoint(nil, big.NewInt(0))
-		if err != nil {
-			return errors.New("get checkpoint failed")
-		}
-		if hash != emptyHash {
-			return errors.New("unstable checkpoint should be rejected")
-		}
-		return nil
+		return assert(c, 0, nil, nil)
 	}, "register unstable checkpoint")
 
 	contractBackend.InsertEmptyBlocks(int(sectionSize.Uint64() + processConfirms.Uint64()))
@@ -196,14 +189,7 @@ func TestCheckpointRegister(t *testing.T) {
 		unauthorized := bind.NewKeyedTransactor(u)
 		c.SetCheckpoint(unauthorized, big.NewInt(0), checkpoint0.Hash(), signCheckpoint(u, checkpoint0.Hash()))
 	}, func(events <-chan *contract.ContractNewCheckpointEvent) error {
-		hash, _, err := c.GetCheckpoint(nil, big.NewInt(0))
-		if err != nil {
-			return errors.New("get checkpoint failed")
-		}
-		if hash != emptyHash {
-			return errors.New("checkpoint from unauthorized user should be rejected")
-		}
-		return nil
+		return assert(c, 0, nil, nil)
 	}, "register by unauthorized user")
 
 	// Submit a new checkpoint announcement
@@ -297,6 +283,13 @@ func TestCheckpointRegister(t *testing.T) {
 		}
 		return assert(c, 0, nil, nil)
 	}, "uncontinuous checkpoint announcement")
+
+	// submit a stale checkpoint announcement
+	validateOperation(t, c, contractBackend, func() {
+		c.SetCheckpoint(transactOpts, big.NewInt(2), checkpoint2.Hash(), signCheckpoint(accounts[0].key, checkpoint2.Hash()))
+	}, func(events <-chan *contract.ContractNewCheckpointEvent) error {
+		return assert(c, 0, nil, nil)
+	}, "submit stale checkpoint announcement")
 }
 
 func assert(c *contract.Contract, index uint64, signers []common.Address, hashes []common.Hash) error {

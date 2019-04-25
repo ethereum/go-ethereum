@@ -143,9 +143,9 @@ func registerCheckpoint(ctx *cli.Context) error {
 	}
 	headNumber := head.Number.Uint64()
 	if headNumber < ((checkpoint.SectionIndex+1)*params.CheckpointFrequency + params.CheckpointProcessConfirmations) {
-		utils.Fatalf("Checkpoint is not stable enough")
+		utils.Fatalf("Invalid future checkpoint")
 	}
-	if headNumber >= ((checkpoint.SectionIndex + 2) * params.CheckpointFrequency) {
+	if checkpoint.SectionIndex < latest.Uint64() {
 		utils.Fatalf("Checkpoint is too old")
 	}
 	if checkpoint.SectionIndex == latest.Uint64() && (latest.Uint64() != 0 || h.Uint64() != 0) {
@@ -157,13 +157,13 @@ func registerCheckpoint(ctx *cli.Context) error {
 		return err
 	}
 	key := getPrivateKey(ctx)
-	isTrusted := false
+	trusted := false
 	for _, signer := range signers {
 		if signer == key.Address {
-			isTrusted = true
+			trusted = true
 		}
 	}
-	if !isTrusted {
+	if !trusted {
 		utils.Fatalf("Address %s is not a trusted signer", key.Address)
 	}
 	// Register the checkpoint
