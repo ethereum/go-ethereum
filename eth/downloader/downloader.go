@@ -580,7 +580,7 @@ func (d *Downloader) fetchHeight(p *peerConnection) (*types.Header, error) {
 				return nil, errBadPeer
 			}
 			head := headers[0]
-			if d.mode == FastSync && head.Number.Uint64() < d.checkpoint {
+			if (d.mode == FastSync || d.mode == LightSync) && head.Number.Uint64() < d.checkpoint {
 				p.log.Warn("Remote head below checkpoint", "number", head.Number, "hash", head.Hash())
 				return nil, errUnsyncedPeer
 			}
