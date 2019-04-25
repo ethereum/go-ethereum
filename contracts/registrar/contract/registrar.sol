@@ -68,22 +68,7 @@ contract Registrar {
     view
     public
     returns(uint, bytes32, uint) {
-        (bytes32 hash, uint height) = GetCheckpoint(latest);
-        return (latest, hash, height);
-    }
-
-    /**
-     * @dev Get a stable checkpoint information with specified section index.
-     * @param _sectionIndex section index
-     * @return checkpoint hash
-     * @return the associated register block height
-     */
-    function GetCheckpoint(uint _sectionIndex)
-    view
-    public
-    returns(bytes32, uint)
-    {
-        return (checkpoints[_sectionIndex], register_height[_sectionIndex]);
+        return (sectionIndex, hash, height);
     }
 
     /**
@@ -115,7 +100,7 @@ contract Registrar {
             return false;
         }
         // Filter out stale announcement
-        if (_sectionIndex == latest && (latest != 0 || register_height[0] != 0)) {
+        if (_sectionIndex == sectionIndex && (sectionIndex != 0 || height != 0)) {
             return false;
         }
         // Filter out invalid announcement
@@ -134,7 +119,15 @@ contract Registrar {
         bool isNew = (old == "");
         pending_proposal.usermap[msg.sender] = _hash;
 
-        if (!isNew) {
+        if (isNew) {
+            // New checkpoint announcement
+            pending_proposal.count += 1;
+            pending_proposal.index = _sectionIndex;
+            pending_proposal.votemap[_hash].push(Vote({
+                addr: msg.sender,
+                sig:  _sig
+            }));
+        } else {
             // Checkpoint modification
             Vote[] storage votes = pending_proposal.votemap[old];
             for (uint i = 0; i < votes.length - 1; i++) {
@@ -149,21 +142,14 @@ contract Registrar {
                 addr: msg.sender,
                 sig:  _sig
             }));
-        } else {
-            // New checkpoint announcement
-            pending_proposal.count += 1;
-            pending_proposal.index = _sectionIndex;
-            pending_proposal.votemap[_hash].push(Vote({
-                addr: msg.sender,
-                sig:  _sig
-            }));
         }
         if (pending_proposal.votemap[_hash].length < threshold) {
            return true;
         }
-        checkpoints[_sectionIndex] = _hash;
-        register_height[_sectionIndex] = block.number;
-        latest = _sectionIndex;
+        // Update latest checkpoint
+        hash = _hash;
+        height = block.number;
+        sectionIndex = _sectionIndex;
 
         bytes memory sigs;
         for (uint idx = 0; idx < threshold; idx++) {
@@ -243,15 +229,15 @@ contract Registrar {
     // A list of admin users so that we can obtain all admin users.
     address[] adminList;
 
-    // Registered checkpoint information
-    mapping(uint => bytes32) checkpoints;
-
     // Latest stored section id
     // Note all registered checkpoint information should continuous with previous one.
-    uint latest;
+    uint sectionIndex;
 
     // The block height associated with latest registered checkpoint.
-    mapping(uint => uint) register_height;
+    uint height;
+
+    // The hash of latest registered checkpoint.
+    bytes32 hash;
 
     // The frequency for creating a checkpoint
     //

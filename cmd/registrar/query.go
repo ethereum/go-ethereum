@@ -19,7 +19,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -46,7 +45,6 @@ var commandQueryCheckpoint = cli.Command{
 Fetch the registered checkpoint with the specified index.
 `,
 	Flags: []cli.Flag{
-		checkpointIndexFlag,
 		clientURLFlag,
 	},
 	Action: utils.MigrateFlags(queryCheckpoint),
@@ -84,20 +82,11 @@ func queryAdmin(ctx *cli.Context) error {
 // registrar contract.
 func queryCheckpoint(ctx *cli.Context) error {
 	contract := setupContract(setupDialContext(ctx))
-	if ctx.GlobalIsSet(checkpointIndexFlag.Name) {
-		index := ctx.GlobalInt64(checkpointIndexFlag.Name)
-		checkpoint, height, err := contract.Contract().GetCheckpoint(nil, big.NewInt(index))
-		if err != nil {
-			return err
-		}
-		fmt.Printf("Checkpoint(registered at height #%d) %d => %s\n", height, index, common.Hash(checkpoint).Hex())
-	} else {
-		index, checkpoint, height, err := contract.Contract().GetLatestCheckpoint(nil)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("Latest checkpoint(registered at height #%d) %d => %s\n", height, index, common.Hash(checkpoint).Hex())
+	index, checkpoint, height, err := contract.Contract().GetLatestCheckpoint(nil)
+	if err != nil {
+		return err
 	}
+	fmt.Printf("Latest checkpoint(registered at height #%d) %d => %s\n", height, index, common.Hash(checkpoint).Hex())
 	return nil
 }
 
