@@ -34,18 +34,16 @@ func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
 	if len(data) == 0 {
 		return nil
 	}
-	//
+	// Database v6 tx lookup just stores the block number
 	if len(data) < common.HashLength {
-		var number big.Int
-		number.SetBytes(data)
-		numberU64 := number.Uint64()
-		return &numberU64
+		number := new(big.Int).SetBytes(data).Uint64()
+		return &number
 	}
-	// Database v4 tx lookup format just stores the hash.
+	// Database v4-v5 tx lookup format just stores the hash
 	if len(data) == common.HashLength {
 		return ReadHeaderNumber(db, common.BytesToHash(data))
 	}
-	// Finally try database v3 tx lookup format.
+	// Finally try database v3 tx lookup format
 	var entry LegacyTxLookupEntry
 	if err := rlp.DecodeBytes(data, &entry); err != nil {
 		log.Error("Invalid transaction lookup entry RLP", "hash", hash, "blob", data, "err", err)

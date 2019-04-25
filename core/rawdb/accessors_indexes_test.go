@@ -39,7 +39,7 @@ func TestLookupStorage(t *testing.T) {
 			},
 		},
 		{
-			"DatabaseV4",
+			"DatabaseV4-V5",
 			func(db ethdb.Writer, block *types.Block) {
 				for _, tx := range block.Transactions() {
 					db.Put(txLookupKey(tx.Hash()), block.Hash().Bytes())
@@ -64,7 +64,6 @@ func TestLookupStorage(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-
 			db := NewMemoryDatabase()
 
 			tx1 := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
