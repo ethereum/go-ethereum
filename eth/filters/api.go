@@ -542,9 +542,9 @@ func hasXDCPrefix(str string) bool {
 }
 
 func decodeAddress(s string) (common.Address, error) {
-if hasXDCPrefix(s) {
-	s = "0x" + s[3:]
-}
+	if hasXDCPrefix(s) {
+		s = "0x" + s[3:]
+	}
 	b, err := hexutil.Decode(s)
 	if err == nil && len(b) != common.AddressLength {
 		err = fmt.Errorf("hex has invalid length %d after decoding", len(b))

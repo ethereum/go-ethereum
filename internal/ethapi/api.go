@@ -46,16 +46,15 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/util"	
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 const (
 	defaultGasPrice = 50 * params.Shannon
 	// statuses of candidates
 	statusMasternode = "MASTERNODE"
-	statusSlashed = "SLASHED"
-	statusProposed = "PROPOSED"
-
+	statusSlashed    = "SLASHED"
+	statusProposed   = "PROPOSED"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -748,7 +747,7 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 	opts := new(bind.CallOpts)
 	var (
 		candidateAddresses []common.Address
-		candidates         []XDPoS.Masternode
+		candidates []XDPoS.Masternode
 	)
 
 	candidateAddresses, err = validator.GetCandidates(opts)
@@ -779,13 +778,13 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 			break
 		}
 	}
-	if !isTopCandidate {
-	return status, nil
+	if isTopCandidate == false {
+		return status, nil
 	}
 	// look up recent checkpoint headers to get penalty list
 	for i := 0; i <= common.LimitPenaltyEpoch; i++ {
 		if blockNum > uint64(i)*epoch {
-		blockCheckpointNumber := rpc.BlockNumber(blockNum - (blockNum % epoch) - (uint64(i) * epoch))
+			blockCheckpointNumber := rpc.BlockNumber(blockNum - (blockNum % epoch) - (uint64(i) * epoch))
 			blockCheckpoint, err := s.b.BlockByNumber(ctx, blockCheckpointNumber)
 			if err != nil {
 				log.Error("Failed to get block  by number", "num", blockCheckpointNumber, "err", err)

@@ -464,7 +464,7 @@ func GetRewardBalancesRate(foundationWalletAddr common.Address, state *state.Sta
 		log.Error("Fail to parse json holders", "error", err)
 		return nil, err
 	}
-	log.Info("Holders reward", "holders", string(jsonHolders), "master node", masterAddr.String())
+	log.Trace("Holders reward", "holders", string(jsonHolders), "masternode", masterAddr.String())
 
 	return balances, nil
 }
@@ -503,7 +503,8 @@ func Encrypt(key []byte, text string) string {
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		panic(err)
+		log.Error("Fail to encrypt", "err", err)
+		return ""
 	}
 
 	// The IV needs to be unique, but not secure. Therefore it's common to
@@ -511,7 +512,8 @@ func Encrypt(key []byte, text string) string {
 	ciphertext := make([]byte, aes.BlockSize+len(plaintext))
 	iv := ciphertext[:aes.BlockSize]
 	if _, err := io.ReadFull(cryptoRand.Reader, iv); err != nil {
-		panic(err)
+		log.Error("Fail to encrypt iv", "err", err)
+		return ""
 	}
 
 	stream := cipher.NewCFBEncrypter(block, iv)
@@ -527,13 +529,15 @@ func Decrypt(key []byte, cryptoText string) string {
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		panic(err)
+		log.Error("Fail to decrypt", "err", err)
+		return ""
 	}
 
 	// The IV needs to be unique, but not secure. Therefore it's common to
 	// include it at the beginning of the ciphertext.
 	if len(ciphertext) < aes.BlockSize {
-		panic("ciphertext too short")
+		log.Error("ciphertext too short")
+		return ""
 	}
 	iv := ciphertext[:aes.BlockSize]
 	ciphertext = ciphertext[aes.BlockSize:]

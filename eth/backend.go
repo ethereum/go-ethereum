@@ -367,7 +367,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 						penalties = append(penalties, addr)
 					}
 				}
-				
+
 				// get list check penalties signing block & list master nodes wil comeback
 				penComebacks := []common.Address{}
 				if combackEpoch > 0 {
@@ -423,7 +423,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					return penalties, nil
 				}
 				return penComebacks, nil
-            }
+			}
 			return []common.Address{}, nil
 		}
 
