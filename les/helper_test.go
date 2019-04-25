@@ -202,10 +202,10 @@ func newTestProtocolManager(lightSync bool, blocks int, odr *LesOdr, indexers []
 	}
 	var reg *checkpointRegistrar
 	if indexers != nil {
-		getLocal := func(index uint64) light.TrustedCheckpoint {
+		getLocal := func(index uint64) params.TrustedCheckpoint {
 			chtIndexer := indexers[0]
 			sectionHead := chtIndexer.SectionHead(index)
-			return light.TrustedCheckpoint{
+			return params.TrustedCheckpoint{
 				SectionIndex: index,
 				SectionHead:  sectionHead,
 				CHTRoot:      light.GetChtRoot(db, index, sectionHead),

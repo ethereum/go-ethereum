@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestCheckpointSyncingLes2(t *testing.T) { testCheckpointSyncing(t, 2) }
@@ -49,13 +50,14 @@ func testCheckpointSyncing(t *testing.T, protocol int) {
 	chtRoot := light.GetChtRoot(server.db, 7, head)
 	btRoot := light.GetBloomTrieRoot(server.db, bts-1, head)
 
-	cp := &light.TrustedCheckpoint{
+	cp := &params.TrustedCheckpoint{
 		SectionIndex: 0,
 		SectionHead:  head,
 		CHTRoot:      chtRoot,
 		BloomRoot:    btRoot,
 	}
-	if _, err := server.pm.reg.contract.SetCheckpoint(signerKey, big.NewInt(int64(cp.SectionIndex)), cp.Hash().Bytes()); err != nil {
+	header := server.backend.Blockchain().CurrentHeader()
+	if _, err := server.pm.reg.contract.SetCheckpoint(signerKey, big.NewInt(int64(cp.SectionIndex)), cp.Hash().Bytes(), header.Number.Uint64(), header.Hash()); err != nil {
 		t.Error("register checkpoint failed", err)
 	}
 	server.backend.Commit()
@@ -63,7 +65,7 @@ func testCheckpointSyncing(t *testing.T, protocol int) {
 
 	// Wait for the checkpoint registration
 	for {
-		hash, _, err := server.pm.reg.contract.Contract().GetCheckpoint(nil, big.NewInt(0))
+		_, hash, _, err := server.pm.reg.contract.Contract().GetLatestCheckpoint(nil)
 		if err != nil || hash == [32]byte{} {
 			time.Sleep(100 * time.Millisecond)
 			continue

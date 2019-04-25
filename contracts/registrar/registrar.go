@@ -66,12 +66,12 @@ func (registrar *Registrar) LookupCheckpointEvent(blockLogs [][]*types.Log, sect
 }
 
 // SetCheckpoint creates a signature for given checkpoint with specified private key and registers into contract.
-func (registrar *Registrar) SetCheckpoint(key *ecdsa.PrivateKey, sectionIndex *big.Int, hash []byte) (*types.Transaction, error) {
+func (registrar *Registrar) SetCheckpoint(key *ecdsa.PrivateKey, sectionIndex *big.Int, hash []byte, identityNumber uint64, identityHash [32]byte) (*types.Transaction, error) {
 	sig, err := crypto.Sign(hash, key)
 	if err != nil {
 		return nil, err
 	}
 	var h [32]byte
 	copy(h[:], hash)
-	return registrar.contract.SetCheckpoint(bind.NewKeyedTransactor(key), sectionIndex, h, sig)
+	return registrar.contract.SetCheckpoint(bind.NewKeyedTransactor(key), sectionIndex, h, identityNumber, identityHash, sig)
 }

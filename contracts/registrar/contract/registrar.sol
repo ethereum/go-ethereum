@@ -37,6 +37,14 @@ contract Registrar {
         _;
     }
 
+    /**
+     * @dev Check whether the vote truly belongs to local chain.
+     */
+    modifier replayProtection(uint64 _number, bytes32 _hash) {
+        require(blockhash(_number) == _hash);
+        _;
+    }
+
     /*
         Events
     */
@@ -81,6 +89,8 @@ contract Registrar {
      *
      * @param _sectionIndex section index
      * @param _hash checkpoint hash calculated in the client side
+     * @param _identityNumber block number used to protect transaction replay.
+     * @param _identityHash corresponding block hash used to protect transaction replay.
      * @param _sig admin's signature for checkpoint hash
      *         `checkpoint_hash = Hash(index, sectionHead, chtRoot, bloomRoot)`
      *         `_sig = Sign(privateKey, checkpoint_hash)`
@@ -89,8 +99,11 @@ contract Registrar {
     function SetCheckpoint(
         uint _sectionIndex,
         bytes32 _hash,
+        uint64 _identityNumber,
+        bytes32 _identityHash,
         bytes memory _sig
     )
+    replayProtection(_identityNumber, _identityHash)
     OnlyAuthorized
     public
     returns(bool)
@@ -234,7 +247,6 @@ contract Registrar {
     address[] adminList;
 
     // Latest stored section id
-    // Note all registered checkpoint information should continuous with previous one.
     uint sectionIndex;
 
     // The block height associated with latest registered checkpoint.

@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -102,7 +103,7 @@ func registerCheckpoint(ctx *cli.Context) error {
 		var result [3]string
 		index := ctx.GlobalInt64(checkpointIndexFlag.Name)
 		if err := rpcClient.Call(&result, "les_getCheckpoint", index); err != nil {
-			utils.Fatalf("Failed to get local checkpoint %v", err)
+			utils.Fatalf("Failed to get local checkpoint %v, please ensure the les API is exposed", err)
 		}
 		checkpoint = &params.TrustedCheckpoint{
 			SectionIndex: uint64(index),
@@ -116,7 +117,7 @@ func registerCheckpoint(ctx *cli.Context) error {
 		var result [4]string
 		err := rpcClient.Call(&result, "les_latestCheckpoint")
 		if err != nil {
-			utils.Fatalf("Failed to get local checkpoint %v", err)
+			utils.Fatalf("Failed to get local checkpoint %v, please ensure the les API is exposed", err)
 		}
 		index, err := strconv.ParseUint(result[0], 0, 64)
 		if err != nil {
@@ -132,12 +133,15 @@ func registerCheckpoint(ctx *cli.Context) error {
 			"chtroot", checkpoint.CHTRoot, "bloomroot", checkpoint.BloomRoot, "hash", checkpoint.Hash())
 	}
 	contract := setupContract(rpcClient)
-	// Filter out stale checkpoint announcement
+
+	// Ensure the validness of the checkpoint.
 	latest, _, h, err := contract.Contract().GetLatestCheckpoint(nil)
 	if err != nil {
 		return err
 	}
-	head, err := ethclient.NewClient(rpcClient).HeaderByNumber(context.Background(), nil)
+	reqCtx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelFn()
+	head, err := ethclient.NewClient(rpcClient).HeaderByNumber(reqCtx, nil)
 	if err != nil {
 		return err
 	}
@@ -151,7 +155,8 @@ func registerCheckpoint(ctx *cli.Context) error {
 	if checkpoint.SectionIndex == latest.Uint64() && (latest.Uint64() != 0 || h.Uint64() != 0) {
 		utils.Fatalf("Stale checkpoint, latest registered %d, given %d", latest.Uint64(), checkpoint.SectionIndex)
 	}
-	// Ensure the invoker is a trusted signer.
+
+	// Ensure the caller is a trusted signer.
 	signers, err := contract.Contract().GetAllAdmin(nil)
 	if err != nil {
 		return err
@@ -166,8 +171,15 @@ func registerCheckpoint(ctx *cli.Context) error {
 	if !trusted {
 		utils.Fatalf("Address %s is not a trusted signer", key.Address)
 	}
+
+	// Fetch identity information
+	identity, err := ethclient.NewClient(rpcClient).HeaderByNumber(reqCtx, big.NewInt(int64(headNumber-128)))
+	if err != nil {
+		return err
+	}
+
 	// Register the checkpoint
-	tx, err := contract.SetCheckpoint(key.PrivateKey, big.NewInt(int64(checkpoint.SectionIndex)), checkpoint.Hash().Bytes())
+	tx, err := contract.SetCheckpoint(key.PrivateKey, big.NewInt(int64(checkpoint.SectionIndex)), checkpoint.Hash().Bytes(), identity.Number.Uint64(), identity.Hash())
 	if err != nil {
 		return err
 	}

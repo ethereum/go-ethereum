@@ -174,9 +174,26 @@ func TestCheckpointRegister(t *testing.T) {
 	}
 	contractBackend.Commit()
 
+	// getIdentity returns block height and hash of the head parent.
+	getIdentity := func() (uint64, common.Hash) {
+		parentNumber := contractBackend.Blockchain().CurrentHeader().Number.Uint64() - 1
+		parentHash := contractBackend.Blockchain().CurrentHeader().ParentHash
+		return parentNumber, parentHash
+	}
+
 	// Register unstable checkpoint
 	validateOperation(t, c, contractBackend, func() {
-		c.SetCheckpoint(transactOpts, big.NewInt(0), checkpoint0.Hash(), signCheckpoint(accounts[0].key, checkpoint0.Hash()))
+		number, hash := getIdentity()
+		c.SetCheckpoint(transactOpts, big.NewInt(0), checkpoint0.Hash(), number, hash, signCheckpoint(accounts[0].key, checkpoint0.Hash()))
+	}, func(events <-chan *contract.ContractNewCheckpointEvent) error {
+		return assert(c, 0, nil, nil)
+	}, "register unstable checkpoint")
+
+	// Test transaction replay
+	validateOperation(t, c, contractBackend, func() {
+		number, hash := getIdentity()
+		hash = common.HexToHash("deadbeef")
+		c.SetCheckpoint(transactOpts, big.NewInt(0), checkpoint0.Hash(), number, hash, signCheckpoint(accounts[0].key, checkpoint0.Hash()))
 	}, func(events <-chan *contract.ContractNewCheckpointEvent) error {
 		return assert(c, 0, nil, nil)
 	}, "register unstable checkpoint")
@@ -185,51 +202,58 @@ func TestCheckpointRegister(t *testing.T) {
 
 	// Register by unauthorized user
 	validateOperation(t, c, contractBackend, func() {
+		number, hash := getIdentity()
 		u, _ := crypto.GenerateKey()
 		unauthorized := bind.NewKeyedTransactor(u)
-		c.SetCheckpoint(unauthorized, big.NewInt(0), checkpoint0.Hash(), signCheckpoint(u, checkpoint0.Hash()))
+		c.SetCheckpoint(unauthorized, big.NewInt(0), checkpoint0.Hash(), number, hash, signCheckpoint(u, checkpoint0.Hash()))
 	}, func(events <-chan *contract.ContractNewCheckpointEvent) error {
 		return assert(c, 0, nil, nil)
 	}, "register by unauthorized user")
 
 	// Submit a new checkpoint announcement
 	validateOperation(t, c, contractBackend, func() {
-		c.SetCheckpoint(transactOpts, big.NewInt(0), checkpoint0.Hash(), signCheckpoint(accounts[0].key, checkpoint0.Hash()))
+		number, hash := getIdentity()
+		c.SetCheckpoint(transactOpts, big.NewInt(0), checkpoint0.Hash(), number, hash, signCheckpoint(accounts[0].key, checkpoint0.Hash()))
 	}, func(events <-chan *contract.ContractNewCheckpointEvent) error {
 		return assert(c, 0, []common.Address{accounts[0].addr}, []common.Hash{checkpoint0.Hash()})
 	}, "single checkpoint announcement")
 
 	// Submit a duplicate checkpoint announcement
 	validateOperation(t, c, contractBackend, func() {
-		c.SetCheckpoint(transactOpts, big.NewInt(0), checkpoint0.Hash(), signCheckpoint(accounts[0].key, checkpoint0.Hash()))
+		number, hash := getIdentity()
+		c.SetCheckpoint(transactOpts, big.NewInt(0), checkpoint0.Hash(), number, hash, signCheckpoint(accounts[0].key, checkpoint0.Hash()))
 	}, func(events <-chan *contract.ContractNewCheckpointEvent) error {
 		return assert(c, 0, []common.Address{accounts[0].addr}, []common.Hash{checkpoint0.Hash()})
 	}, "duplicate checkpoint announcement")
 
 	// Modification
 	validateOperation(t, c, contractBackend, func() {
-		c.SetCheckpoint(transactOpts, big.NewInt(0), common.HexToHash("deadbeef"), signCheckpoint(accounts[0].key, common.HexToHash("deadbeef")))
+		number, hash := getIdentity()
+		c.SetCheckpoint(transactOpts, big.NewInt(0), common.HexToHash("deadbeef"), number, hash, signCheckpoint(accounts[0].key, common.HexToHash("deadbeef")))
 	}, func(events <-chan *contract.ContractNewCheckpointEvent) error {
 		return assert(c, 0, []common.Address{accounts[0].addr}, []common.Hash{common.HexToHash("deadbeef")})
 	}, "checkpoint modification")
 
 	// Modification
 	validateOperation(t, c, contractBackend, func() {
-		c.SetCheckpoint(transactOpts, big.NewInt(0), common.HexToHash("deadbeef2"), signCheckpoint(accounts[0].key, common.HexToHash("deadbeef2")))
+		number, hash := getIdentity()
+		c.SetCheckpoint(transactOpts, big.NewInt(0), common.HexToHash("deadbeef2"), number, hash, signCheckpoint(accounts[0].key, common.HexToHash("deadbeef2")))
 	}, func(events <-chan *contract.ContractNewCheckpointEvent) error {
 		return assert(c, 0, []common.Address{accounts[0].addr}, []common.Hash{common.HexToHash("deadbeef2")})
 	}, "checkpoint modification")
 
 	// Another correct checkpoint announcement
 	validateOperation(t, c, contractBackend, func() {
-		c.SetCheckpoint(bind.NewKeyedTransactor(accounts[1].key), big.NewInt(0), checkpoint0.Hash(), signCheckpoint(accounts[1].key, checkpoint0.Hash()))
+		number, hash := getIdentity()
+		c.SetCheckpoint(bind.NewKeyedTransactor(accounts[1].key), big.NewInt(0), checkpoint0.Hash(), number, hash, signCheckpoint(accounts[1].key, checkpoint0.Hash()))
 	}, func(events <-chan *contract.ContractNewCheckpointEvent) error {
 		return assert(c, 0, []common.Address{accounts[0].addr, accounts[1].addr}, []common.Hash{common.HexToHash("deadbeef2"), checkpoint0.Hash()})
 	}, "another checkpoint announcement")
 
 	// enough checkpoint announcement
 	validateOperation(t, c, contractBackend, func() {
-		c.SetCheckpoint(bind.NewKeyedTransactor(accounts[2].key), big.NewInt(0), checkpoint0.Hash(), signCheckpoint(accounts[2].key, checkpoint0.Hash()))
+		number, hash := getIdentity()
+		c.SetCheckpoint(bind.NewKeyedTransactor(accounts[2].key), big.NewInt(0), checkpoint0.Hash(), number, hash, signCheckpoint(accounts[2].key, checkpoint0.Hash()))
 	}, func(events <-chan *contract.ContractNewCheckpointEvent) error {
 		if valid, recv := validateEvents(1, events); !valid {
 			return errors.New("receive incorrect number of events")
@@ -249,14 +273,16 @@ func TestCheckpointRegister(t *testing.T) {
 
 	// submit a stale checkpoint announcement
 	validateOperation(t, c, contractBackend, func() {
-		c.SetCheckpoint(transactOpts, big.NewInt(0), checkpoint0.Hash(), signCheckpoint(accounts[0].key, checkpoint0.Hash()))
+		number, hash := getIdentity()
+		c.SetCheckpoint(transactOpts, big.NewInt(0), checkpoint0.Hash(), number, hash, signCheckpoint(accounts[0].key, checkpoint0.Hash()))
 	}, func(events <-chan *contract.ContractNewCheckpointEvent) error {
 		return assert(c, 0, nil, nil)
 	}, "submit stale checkpoint announcement")
 
 	// submit a future checkpoint announcement
 	validateOperation(t, c, contractBackend, func() {
-		c.SetCheckpoint(transactOpts, big.NewInt(1), checkpoint1.Hash(), signCheckpoint(accounts[0].key, checkpoint1.Hash()))
+		number, hash := getIdentity()
+		c.SetCheckpoint(transactOpts, big.NewInt(1), checkpoint1.Hash(), number, hash, signCheckpoint(accounts[0].key, checkpoint1.Hash()))
 	}, func(events <-chan *contract.ContractNewCheckpointEvent) error {
 		return assert(c, 0, nil, nil)
 	}, "submit future checkpoint announcement")
@@ -265,8 +291,9 @@ func TestCheckpointRegister(t *testing.T) {
 	distance := 3*sectionSize.Uint64() + processConfirms.Uint64() - contractBackend.Blockchain().CurrentHeader().Number.Uint64()
 	contractBackend.InsertEmptyBlocks(int(distance))
 	validateOperation(t, c, contractBackend, func() {
-		c.SetCheckpoint(transactOpts, big.NewInt(2), checkpoint2.Hash(), signCheckpoint(accounts[0].key, checkpoint2.Hash()))
-		c.SetCheckpoint(bind.NewKeyedTransactor(accounts[1].key), big.NewInt(2), checkpoint2.Hash(), signCheckpoint(accounts[1].key, checkpoint2.Hash()))
+		number, hash := getIdentity()
+		c.SetCheckpoint(transactOpts, big.NewInt(2), checkpoint2.Hash(), number, hash, signCheckpoint(accounts[0].key, checkpoint2.Hash()))
+		c.SetCheckpoint(bind.NewKeyedTransactor(accounts[1].key), big.NewInt(2), checkpoint2.Hash(), number, hash, signCheckpoint(accounts[1].key, checkpoint2.Hash()))
 	}, func(events <-chan *contract.ContractNewCheckpointEvent) error {
 		if valid, recv := validateEvents(1, events); !valid {
 			return errors.New("receive incorrect number of events")
@@ -286,7 +313,8 @@ func TestCheckpointRegister(t *testing.T) {
 
 	// submit a stale checkpoint announcement
 	validateOperation(t, c, contractBackend, func() {
-		c.SetCheckpoint(transactOpts, big.NewInt(2), checkpoint2.Hash(), signCheckpoint(accounts[0].key, checkpoint2.Hash()))
+		number, hash := getIdentity()
+		c.SetCheckpoint(transactOpts, big.NewInt(2), checkpoint2.Hash(), number, hash, signCheckpoint(accounts[0].key, checkpoint2.Hash()))
 	}, func(events <-chan *contract.ContractNewCheckpointEvent) error {
 		return assert(c, 0, nil, nil)
 	}, "submit stale checkpoint announcement")
