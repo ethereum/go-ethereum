@@ -90,7 +90,10 @@ const (
 	//    * the `TxHash`, `GasCost`, and `ContractAddress` fields are no longer stored for a receipt
 	//    * the `TxHash`, `GasCost`, and `ContractAddress` fields are computed by looking up the
 	//      receipts' corresponding block
-	BlockChainVersion uint64 = 5
+	// - Version 6
+	//  The following incompatible database changes were added:
+	//    * Transaction lookup information stores the corresponding block number instead of block hash
+	BlockChainVersion uint64 = 6
 )
 
 // CacheConfig contains the configuration values for the trie caching/pruning
