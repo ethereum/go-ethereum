@@ -121,9 +121,10 @@ type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
-	db     ethdb.Database // Low level persistent database to store final content in
-	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
-	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
+	db       ethdb.Database // Low level persistent database to store final content in
+	triegc   *prque.Prque   // Priority queue mapping block numbers to tries to gc
+	lastTrie uint64         // The associate block number of recently refreshed trie
+	lastDump time.Time      // Last time for trie dumping
 
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
@@ -185,6 +186,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	bc := &BlockChain{
 		chainConfig:    chainConfig,
 		cacheConfig:    cacheConfig,
+		lastDump:       time.Now(),
 		db:             db,
 		triegc:         prque.New(nil),
 		stateCache:     state.NewDatabaseWithCache(db, cacheConfig.TrieCleanLimit),
@@ -878,8 +880,6 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	return 0, nil
 }
 
-var lastWrite uint64
-
 // WriteBlockWithoutState writes only the block and its metadata to the database,
 // but does not write any state. This is used to construct competing side forks
 // up to the point where they exceed the canonical total difficulty.
@@ -954,7 +954,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			chosen := current - triesInMemory
 
 			// If we exceeded out time allowance, flush an entire trie to disk
-			if bc.gcproc > bc.cacheConfig.TrieTimeLimit {
+			elapsed := time.Since(bc.lastDump)
+			if elapsed > bc.cacheConfig.TrieTimeLimit {
 				// If the header is missing (canonical chain behind), we're reorging a low
 				// diff sidechain. Suspend committing until this operation is completed.
 				header := bc.GetHeaderByNumber(chosen)
@@ -963,13 +964,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				} else {
 					// If we're exceeding limits but haven't reached a large enough memory gap,
 					// warn the user that the system is becoming unstable.
-					if chosen < lastWrite+triesInMemory && bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
-						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
+					if chosen < bc.lastTrie+triesInMemory && elapsed >= 2*bc.cacheConfig.TrieTimeLimit {
+						log.Info("State in memory for too long, committing", "time", elapsed, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-bc.lastTrie)/triesInMemory)
 					}
 					// Flush an entire trie and restart the counters
 					triedb.Commit(header.Root, true)
-					lastWrite = chosen
-					bc.gcproc = 0
+					bc.lastTrie, bc.lastDump = chosen, time.Now()
 				}
 			}
 			// Garbage collect anything below our required write retention
@@ -1236,7 +1236,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			atomic.StoreUint32(&followupInterrupt, 1)
 			return it.index, events, coalescedLogs, err
 		}
-		proctime := time.Since(start)
 
 		// Update the metrics touched during block validation
 		accountHashTimer.Update(statedb.AccountHashes) // Account hashes are complete, we can mark them
@@ -1270,9 +1269,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			coalescedLogs = append(coalescedLogs, logs...)
 			events = append(events, ChainEvent{block, block.Hash(), logs})
 			lastCanon = block
-
-			// Only count canonical blocks for GC processing time
-			bc.gcproc += proctime
 
 		case SideStatTy:
 			log.Debug("Inserted forked block", "number", block.Number(), "hash", block.Hash(),
