@@ -92,19 +92,40 @@ func NewSyncBloom(memory uint64, database ethdb.Iteratee) *SyncBloom {
 
 // init iterates over the database, pushing every trie hash into the bloom filter.
 func (b *SyncBloom) init(database ethdb.Iteratee) {
+	// Iterate over the database, but restart every now and again to avoid holding
+	// a persistent snapshot since fast sync can push a ton of data concurrently,
+	// bloating the disk.
+	//
+	// Note, this is fine, because everything inserted into leveldb by fast sync is
+	// also pushed into the bloom directly, so we're not missing anything when the
+	// iterator is swapped out for a new one.
 	it := database.NewIterator()
-	defer it.Release()
 
-	start := time.Now()
+	var (
+		start = time.Now()
+		swap  = time.Now()
+	)
 	for it.Next() && atomic.LoadUint32(&b.closed) == 0 {
+		// If the database entry is a trie node, add it to the bloom
 		if key := it.Key(); len(key) == common.HashLength {
 			b.bloom.Add(syncBloomHasher(key))
 			bloomLoadMeter.Mark(1)
 		}
+		// If enough time elapsed since the last iterator swap, restart
+		if time.Since(swap) > 8*time.Second {
+			key := common.CopyBytes(it.Key())
+
+			it.Release()
+			it = database.NewIteratorWithStart(key)
+
+			log.Info("Initializing fast sync bloom", "items", b.bloom.N(), "errorrate", b.errorRate(), "elapsed", time.Since(start))
+			swap = time.Now()
+		}
 	}
-	log.Info("Initialized fast sync bloom", "items", b.bloom.N(), "errorrate", b.errorRate(), "elapsed", time.Since(start))
+	it.Release()
 
 	// Mark the bloom filter inited and return
+	log.Info("Initialized fast sync bloom", "items", b.bloom.N(), "errorrate", b.errorRate(), "elapsed", time.Since(start))
 	atomic.StoreUint32(&b.inited, 1)
 }
 

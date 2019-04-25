@@ -132,7 +132,36 @@ func (db *Database) NewBatch() ethdb.Batch {
 // NewIterator creates a binary-alphabetical iterator over the entire keyspace
 // contained within the memory database.
 func (db *Database) NewIterator() ethdb.Iterator {
-	return db.NewIteratorWithPrefix(nil)
+	return db.NewIteratorWithStart(nil)
+}
+
+// NewIteratorWithStart creates a binary-alphabetical iterator over a subset of
+// database content starting at a particular initial key (or after, if it does
+// not exist).
+func (db *Database) NewIteratorWithStart(start []byte) ethdb.Iterator {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
+	var (
+		st     = string(start)
+		keys   = make([]string, 0, len(db.db))
+		values = make([][]byte, 0, len(db.db))
+	)
+	// Collect the keys from the memory database corresponding to the given start
+	for key := range db.db {
+		if key >= st {
+			keys = append(keys, key)
+		}
+	}
+	// Sort the items and retrieve the associated values
+	sort.Strings(keys)
+	for _, key := range keys {
+		values = append(values, db.db[key])
+	}
+	return &iterator{
+		keys:   keys,
+		values: values,
+	}
 }
 
 // NewIteratorWithPrefix creates a binary-alphabetical iterator over a subset
