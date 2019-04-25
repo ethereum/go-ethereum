@@ -312,8 +312,11 @@ func accountCreate(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)
 	}
-	fmt.Printf("Your new key is generated. Please backup the key file: %s\n", account.URL.Path)
+	fmt.Printf("Your new key was generated\n")
 	fmt.Printf("Address: {%x}\n", account.Address)
+	fmt.Printf("Please backup your key file!\n")
+	fmt.Printf("Path:    {%s}\n", account.URL.Path)
+	fmt.Printf("Please remember your password!\n")
 	return nil
 }
 
