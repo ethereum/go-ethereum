@@ -154,13 +154,15 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer s.Stop()
 
 	// peerID to use in the protocol tester testExchange expect/trigger
 	peerID := s.Nodes[0].ID()
 	// block until control peer is found among hive peers
 	found := false
-	for attempts := 0; attempts < 20; attempts++ {
-		if _, found = hive.peers[peerID]; found {
+	for attempts := 0; attempts < 2000; attempts++ {
+		found = hive.Peer(peerID) != nil
+		if found {
 			break
 		}
 		time.Sleep(1 * time.Millisecond)
@@ -171,7 +173,7 @@ func testInitialPeersMsg(t *testing.T, peerPO, peerDepth int) {
 	}
 
 	// pivotDepth is the advertised depth of the pivot node we expect in the outgoing subPeersMsg
-	pivotDepth := hive.saturation()
+	pivotDepth := hive.Saturation()
 	// the test exchange is as follows:
 	// 1. pivot sends to the control peer a `subPeersMsg` advertising its depth (ignored)
 	// 2. peer sends to pivot a `subPeersMsg` advertising its own depth (arbitrarily chosen)

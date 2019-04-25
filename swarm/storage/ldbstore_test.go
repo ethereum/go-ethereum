@@ -27,12 +27,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/swarm/testutil"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 	ldberrors "github.com/syndtr/goleveldb/leveldb/errors"
 )
 
@@ -606,6 +605,10 @@ func TestLDBStoreCollectGarbageAccessUnlikeIndex(t *testing.T) {
 }
 
 func TestCleanIndex(t *testing.T) {
+	if testutil.RaceEnabled {
+		t.Skip("disabled because it times out with race detector")
+	}
+
 	capacity := 5000
 	n := 3
 
