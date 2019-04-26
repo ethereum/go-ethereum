@@ -17,7 +17,7 @@
 // Contains a batch of utility type declarations used by the tests. As the node
 // operates on unique types, a lot of them are needed to check various features.
 
-package builder
+package statediff
 
 import (
 	"github.com/ethereum/go-ethereum/common"
@@ -30,8 +30,9 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+// Builder interface exposes the method for building a state diff between two blocks
 type Builder interface {
-	BuildStateDiff(oldStateRoot, newStateRoot common.Hash, blockNumber int64, blockHash common.Hash) (*StateDiff, error)
+	BuildStateDiff(oldStateRoot, newStateRoot common.Hash, blockNumber int64, blockHash common.Hash) (StateDiff, error)
 }
 
 type builder struct {
@@ -39,27 +40,27 @@ type builder struct {
 	blockChain *core.BlockChain
 }
 
-type AccountsMap map[common.Hash]*state.Account
-
-func NewBuilder(db ethdb.Database, blockChain *core.BlockChain) *builder {
+// NewBuilder is used to create a builder
+func NewBuilder(db ethdb.Database, blockChain *core.BlockChain) Builder {
 	return &builder{
 		chainDB:    db,
 		blockChain: blockChain,
 	}
 }
 
-func (sdb *builder) BuildStateDiff(oldStateRoot, newStateRoot common.Hash, blockNumber int64, blockHash common.Hash) (*StateDiff, error) {
+// BuildStateDiff builds a StateDiff object from two blocks
+func (sdb *builder) BuildStateDiff(oldStateRoot, newStateRoot common.Hash, blockNumber int64, blockHash common.Hash) (StateDiff, error) {
 	// Generate tries for old and new states
 	stateCache := sdb.blockChain.StateCache()
 	oldTrie, err := stateCache.OpenTrie(oldStateRoot)
 	if err != nil {
 		log.Error("Error creating trie for oldStateRoot", "error", err)
-		return nil, err
+		return StateDiff{}, err
 	}
 	newTrie, err := stateCache.OpenTrie(newStateRoot)
 	if err != nil {
 		log.Error("Error creating trie for newStateRoot", "error", err)
-		return nil, err
+		return StateDiff{}, err
 	}
 
 	// Find created accounts
@@ -68,7 +69,7 @@ func (sdb *builder) BuildStateDiff(oldStateRoot, newStateRoot common.Hash, block
 	creations, err := sdb.collectDiffNodes(oldIt, newIt)
 	if err != nil {
 		log.Error("Error collecting creation diff nodes", "error", err)
-		return nil, err
+		return StateDiff{}, err
 	}
 
 	// Find deleted accounts
@@ -77,7 +78,7 @@ func (sdb *builder) BuildStateDiff(oldStateRoot, newStateRoot common.Hash, block
 	deletions, err := sdb.collectDiffNodes(newIt, oldIt)
 	if err != nil {
 		log.Error("Error collecting deletion diff nodes", "error", err)
-		return nil, err
+		return StateDiff{}, err
 	}
 
 	// Find all the diffed keys
@@ -89,20 +90,20 @@ func (sdb *builder) BuildStateDiff(oldStateRoot, newStateRoot common.Hash, block
 	updatedAccounts, err := sdb.buildDiffIncremental(creations, deletions, updatedKeys)
 	if err != nil {
 		log.Error("Error building diff for updated accounts", "error", err)
-		return nil, err
+		return StateDiff{}, err
 	}
 	createdAccounts, err := sdb.buildDiffEventual(creations)
 	if err != nil {
 		log.Error("Error building diff for created accounts", "error", err)
-		return nil, err
+		return StateDiff{}, err
 	}
 	deletedAccounts, err := sdb.buildDiffEventual(deletions)
 	if err != nil {
 		log.Error("Error building diff for deleted accounts", "error", err)
-		return nil, err
+		return StateDiff{}, err
 	}
 
-	return &StateDiff{
+	return StateDiff{
 		BlockNumber:     blockNumber,
 		BlockHash:       blockHash,
 		CreatedAccounts: createdAccounts,
@@ -118,20 +119,31 @@ func (sdb *builder) collectDiffNodes(a, b trie.NodeIterator) (AccountsMap, error
 	for {
 		log.Debug("Current Path and Hash", "path", pathToStr(it), "hashold", it.Hash())
 		if it.Leaf() {
+			leafProof := make([][]byte, len(it.LeafProof()))
+			copy(leafProof, it.LeafProof())
+			leafPath := make([]byte, len(it.Path()))
+			copy(leafPath, it.Path())
 			leafKey := make([]byte, len(it.LeafKey()))
 			copy(leafKey, it.LeafKey())
 			leafKeyHash := common.BytesToHash(leafKey)
-
+			leafValue := make([]byte, len(it.LeafBlob()))
+			copy(leafValue, it.LeafBlob())
 			// lookup account state
 			var account state.Account
-			if err := rlp.DecodeBytes(it.LeafBlob(), &account); err != nil {
+			if err := rlp.DecodeBytes(leafValue, &account); err != nil {
 				log.Error("Error looking up account via address", "address", leafKeyHash, "error", err)
 				return nil, err
 			}
-
+			aw := accountWrapper{
+				Account:  account,
+				RawKey:   leafKey,
+				RawValue: leafValue,
+				Proof:    leafProof,
+				Path:     leafPath,
+			}
 			// record account to diffs (creation if we are looking at new - old; deletion if old - new)
 			log.Debug("Account lookup successful", "address", leafKeyHash, "account", account)
-			diffAccounts[leafKeyHash] = &account
+			diffAccounts[leafKeyHash] = aw
 		}
 		cont := it.Next(true)
 		if !cont {
@@ -144,25 +156,18 @@ func (sdb *builder) collectDiffNodes(a, b trie.NodeIterator) (AccountsMap, error
 
 func (sdb *builder) buildDiffEventual(accounts AccountsMap) (AccountDiffsMap, error) {
 	accountDiffs := make(AccountDiffsMap)
-	for addr, val := range accounts {
-		sr := val.Root
-		storageDiffs, err := sdb.buildStorageDiffsEventual(sr)
+	for _, val := range accounts {
+		storageDiffs, err := sdb.buildStorageDiffsEventual(val.Account.Root)
 		if err != nil {
-			log.Error("Failed building eventual storage diffs", "Address", addr, "error", err)
+			log.Error("Failed building eventual storage diffs", "Address", common.BytesToHash(val.RawKey), "error", err)
 			return nil, err
 		}
-
-		codeHash := hexutil.Encode(val.CodeHash)
-		hexRoot := val.Root.Hex()
-		nonce := DiffUint64{Value: &val.Nonce}
-		balance := DiffBigInt{Value: val.Balance}
-		contractRoot := DiffString{Value: &hexRoot}
-		accountDiffs[addr] = AccountDiff{
-			Nonce:        nonce,
-			Balance:      balance,
-			CodeHash:     codeHash,
-			ContractRoot: contractRoot,
-			Storage:      storageDiffs,
+		accountDiffs[common.BytesToHash(val.RawKey)] = AccountDiff{
+			Key:     val.RawKey,
+			Value:   val.RawValue,
+			Proof:   val.Proof,
+			Path:    val.Path,
+			Storage: storageDiffs,
 		}
 	}
 
@@ -174,34 +179,28 @@ func (sdb *builder) buildDiffIncremental(creations AccountsMap, deletions Accoun
 	for _, val := range updatedKeys {
 		createdAcc := creations[common.HexToHash(val)]
 		deletedAcc := deletions[common.HexToHash(val)]
-		oldSR := deletedAcc.Root
-		newSR := createdAcc.Root
-		if storageDiffs, err := sdb.buildStorageDiffsIncremental(oldSR, newSR); err != nil {
+		oldSR := deletedAcc.Account.Root
+		newSR := createdAcc.Account.Root
+		storageDiffs, err := sdb.buildStorageDiffsIncremental(oldSR, newSR)
+		if err != nil {
 			log.Error("Failed building storage diffs", "Address", val, "error", err)
 			return nil, err
-		} else {
-			nonce := DiffUint64{Value: &createdAcc.Nonce}
-			balance := DiffBigInt{Value: createdAcc.Balance}
-			codeHash := hexutil.Encode(createdAcc.CodeHash)
-
-			nHexRoot := createdAcc.Root.Hex()
-			contractRoot := DiffString{Value: &nHexRoot}
-
-			updatedAccounts[common.HexToHash(val)] = AccountDiff{
-				Nonce:        nonce,
-				Balance:      balance,
-				CodeHash:     codeHash,
-				ContractRoot: contractRoot,
-				Storage:      storageDiffs,
-			}
-			delete(creations, common.HexToHash(val))
-			delete(deletions, common.HexToHash(val))
 		}
+		updatedAccounts[common.HexToHash(val)] = AccountDiff{
+			Key:     createdAcc.RawKey,
+			Value:   createdAcc.RawValue,
+			Proof:   createdAcc.Proof,
+			Path:    createdAcc.Path,
+			Storage: storageDiffs,
+		}
+		delete(creations, common.HexToHash(val))
+		delete(deletions, common.HexToHash(val))
 	}
+
 	return updatedAccounts, nil
 }
 
-func (sdb *builder) buildStorageDiffsEventual(sr common.Hash) (map[string]DiffStorage, error) {
+func (sdb *builder) buildStorageDiffsEventual(sr common.Hash) ([]StorageDiff, error) {
 	log.Debug("Storage Root For Eventual Diff", "root", sr.Hex())
 	stateCache := sdb.blockChain.StateCache()
 	sTrie, err := stateCache.OpenTrie(sr)
@@ -214,7 +213,7 @@ func (sdb *builder) buildStorageDiffsEventual(sr common.Hash) (map[string]DiffSt
 	return storageDiffs, nil
 }
 
-func (sdb *builder) buildStorageDiffsIncremental(oldSR common.Hash, newSR common.Hash) (map[string]DiffStorage, error) {
+func (sdb *builder) buildStorageDiffsIncremental(oldSR common.Hash, newSR common.Hash) ([]StorageDiff, error) {
 	log.Debug("Storage Roots for Incremental Diff", "old", oldSR.Hex(), "new", newSR.Hex())
 	stateCache := sdb.blockChain.StateCache()
 
@@ -235,21 +234,27 @@ func (sdb *builder) buildStorageDiffsIncremental(oldSR common.Hash, newSR common
 	return storageDiffs, nil
 }
 
-func buildStorageDiffsFromTrie(it trie.NodeIterator) map[string]DiffStorage {
-	storageDiffs := make(map[string]DiffStorage)
+func buildStorageDiffsFromTrie(it trie.NodeIterator) []StorageDiff {
+	storageDiffs := make([]StorageDiff, 0)
 	for {
 		log.Debug("Iterating over state at path ", "path", pathToStr(it))
 		if it.Leaf() {
 			log.Debug("Found leaf in storage", "path", pathToStr(it))
-			path := pathToStr(it)
-			storageKey := hexutil.Encode(it.LeafKey())
-			storageValue := hexutil.Encode(it.LeafBlob())
-			storageDiffs[path] = DiffStorage{
-				Key:   &storageKey,
-				Value: &storageValue,
-			}
+			leafProof := make([][]byte, len(it.LeafProof()))
+			copy(leafProof, it.LeafProof())
+			leafPath := make([]byte, len(it.Path()))
+			copy(leafPath, it.Path())
+			leafKey := make([]byte, len(it.LeafKey()))
+			copy(leafKey, it.LeafKey())
+			leafValue := make([]byte, len(it.LeafBlob()))
+			copy(leafValue, it.LeafBlob())
+			storageDiffs = append(storageDiffs, StorageDiff{
+				Key:   leafKey,
+				Value: leafValue,
+				Path:  leafPath,
+				Proof: leafProof,
+			})
 		}
-
 		cont := it.Next(true)
 		if !cont {
 			break
@@ -261,12 +266,12 @@ func buildStorageDiffsFromTrie(it trie.NodeIterator) map[string]DiffStorage {
 
 func (sdb *builder) addressByPath(path []byte) (*common.Address, error) {
 	log.Debug("Looking up address from path", "path", hexutil.Encode(append([]byte("secure-key-"), path...)))
-	if addrBytes, err := sdb.chainDB.Get(append([]byte("secure-key-"), hexToKeyBytes(path)...)); err != nil {
+	addrBytes, err := sdb.chainDB.Get(append([]byte("secure-key-"), hexToKeyBytes(path)...))
+	if err != nil {
 		log.Error("Error looking up address via path", "path", hexutil.Encode(append([]byte("secure-key-"), path...)), "error", err)
 		return nil, err
-	} else {
-		addr := common.BytesToAddress(addrBytes)
-		log.Debug("Address found", "Address", addr)
-		return &addr, nil
 	}
+	addr := common.BytesToAddress(addrBytes)
+	log.Debug("Address found", "Address", addr)
+	return &addr, nil
 }
