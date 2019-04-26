@@ -134,7 +134,7 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8, syncing bool) error {
 	var msg interface{}
 
-	spanName := "send.chunk.delivery"
+	metrics.GetOrRegisterCounter("peer.deliver", nil).Inc(1)
 
 	//we send different types of messages if delivery is for syncing or retrievals,
 	//even if handling and content of the message are the same,
@@ -144,16 +144,13 @@ func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8,
 			Addr:  chunk.Address(),
 			SData: chunk.Data(),
 		}
-		spanName += ".syncing"
 	} else {
 		msg = &ChunkDeliveryMsgRetrieval{
 			Addr:  chunk.Address(),
 			SData: chunk.Data(),
 		}
-		spanName += ".retrieval"
 	}
 
-	ctx = context.WithValue(ctx, "stream_send_tag", nil)
 	return p.SendPriority(ctx, msg, priority)
 }
 
