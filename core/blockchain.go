@@ -109,11 +109,11 @@ const (
 // CacheConfig contains the configuration values for the trie caching/pruning
 // that's resident in a blockchain.
 type CacheConfig struct {
-	TrieCleanLimit      int           // Memory allowance (MB) to use for caching trie nodes in memory
-	TrieCleanNoPrefetch bool          // Whether to disable heuristic state prefetching for followup blocks
-	TrieDirtyLimit      int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
-	TrieDirtyDisabled   bool          // Whether to disable trie write caching and GC altogether (archive node)
-	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
+	TrieCleanLimit       int           // Memory allowance (MB) to use for caching trie nodes in memory
+	TrieCleanNoPrefetch  bool          // Whether to disable heuristic state prefetching for followup blocks
+	TrieDirtyLimit       int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
+	TrieDirtyDisabled    bool          // Whether to disable trie write caching and GC altogether (archive node)
+	TrieTimeLimit        time.Duration // Time limit after which to flush the current in-memory trie to disk
 	ProcessingStateDiffs bool          // Whether statediffs processing should be taken into a account before a trie is pruned
 }
 
@@ -1344,16 +1344,19 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					bc.triegc.Push(root, number)
 					break
 				}
-
 				if bc.cacheConfig.ProcessingStateDiffs {
 					if !bc.allowedRootToBeDereferenced(root.(common.Hash)) {
 						bc.triegc.Push(root, number)
 						break
 					} else {
+						log.Debug("Current root found in stateDiffsProcessed collection with a count of 2, okay to dereference",
+							"root", root.(common.Hash).Hex(),
+							"blockNumber", uint64(-number),
+							"size of stateDiffsProcessed", len(bc.stateDiffsProcessed))
 						delete(bc.stateDiffsProcessed, root.(common.Hash))
 					}
 				}
-
+				log.Debug("Dereferencing", "root", root.(common.Hash).Hex())
 				triedb.Dereference(root.(common.Hash))
 			}
 		}

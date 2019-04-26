@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package mocks
 
 import (
@@ -11,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
+// BlockChain is a mock blockchain for testing
 type BlockChain struct {
 	ParentHashesLookedUp []common.Hash
 	parentBlocksToReturn []*types.Block
@@ -18,34 +35,39 @@ type BlockChain struct {
 	ChainEvents          []core.ChainEvent
 }
 
-func (mc *BlockChain) AddToStateDiffProcessedCollection(hash common.Hash) {}
+// AddToStateDiffProcessedCollection mock method
+func (blockChain *BlockChain) AddToStateDiffProcessedCollection(hash common.Hash) {}
 
-func (mc *BlockChain) SetParentBlocksToReturn(blocks []*types.Block) {
-	mc.parentBlocksToReturn = blocks
+// SetParentBlocksToReturn mock method
+func (blockChain *BlockChain) SetParentBlocksToReturn(blocks []*types.Block) {
+	blockChain.parentBlocksToReturn = blocks
 }
 
-func (mc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
-	mc.ParentHashesLookedUp = append(mc.ParentHashesLookedUp, hash)
+// GetBlockByHash mock method
+func (blockChain *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
+	blockChain.ParentHashesLookedUp = append(blockChain.ParentHashesLookedUp, hash)
 
 	var parentBlock *types.Block
-	if len(mc.parentBlocksToReturn) > 0 {
-		parentBlock = mc.parentBlocksToReturn[mc.callCount]
+	if len(blockChain.parentBlocksToReturn) > 0 {
+		parentBlock = blockChain.parentBlocksToReturn[blockChain.callCount]
 	}
 
-	mc.callCount++
+	blockChain.callCount++
 	return parentBlock
 }
 
-func (bc *BlockChain) SetChainEvents(chainEvents []core.ChainEvent) {
-	bc.ChainEvents = chainEvents
+// SetChainEvents mock method
+func (blockChain *BlockChain) SetChainEvents(chainEvents []core.ChainEvent) {
+	blockChain.ChainEvents = chainEvents
 }
 
-func (bc *BlockChain) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
+// SubscribeChainEvent mock method
+func (blockChain *BlockChain) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	subErr := errors.New("Subscription Error")
 
 	var eventCounter int
 	subscription := event.NewSubscription(func(quit <-chan struct{}) error {
-		for _, chainEvent := range bc.ChainEvents {
+		for _, chainEvent := range blockChain.ChainEvents {
 			if eventCounter > 1 {
 				time.Sleep(250 * time.Millisecond)
 				return subErr
