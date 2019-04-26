@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -338,12 +337,12 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 
 type AccountRangeResult struct {
 	Addresses []common.Address `json:"addresses"`
-	Next      common.Address   `json:"next"`
+	Next      common.Hash      `json:"next"`
 }
 
-func accountRange(st state.Trie, start *common.Address, maxResults int) (AccountRangeResult, error) {
-	it := trie.NewIterator(st.NodeIterator(crypto.Keccak256(start[:])))
-	result := AccountRangeResult{Addresses: []common.Address{}, Next: common.Address{}}
+func accountRange(st state.Trie, start *common.Hash, maxResults int) (AccountRangeResult, error) {
+	it := trie.NewIterator(st.NodeIterator(start.Bytes()))
+	result := AccountRangeResult{Addresses: []common.Address{}, Next: common.Hash{}}
 
 	if maxResults > AccountRangeMaxResults {
 		maxResults = AccountRangeMaxResults
@@ -359,7 +358,7 @@ func accountRange(st state.Trie, start *common.Address, maxResults int) (Account
 
 	if it.Next() {
 		if preimage := st.GetKey(it.Key); preimage != nil {
-			result.Next = common.BytesToAddress(preimage)
+			result.Next = common.BytesToHash(it.Key)
 		} else {
 			return AccountRangeResult{}, fmt.Errorf("preimage not found for 0x%s", hex.EncodeToString(it.Key))
 		}
@@ -373,11 +372,10 @@ const (
 )
 
 // AccountRangeAt enumerates all accounts in the latest state
-func (api *PrivateDebugAPI) AccountRangeAt(ctx context.Context, startAddr *common.Address, maxResults int) (AccountRangeResult, error) {
+func (api *PrivateDebugAPI) AccountRangeAt(ctx context.Context, start *common.Hash, maxResults int) (AccountRangeResult, error) {
 	var statedb *state.StateDB
 	var err error
 	block := api.eth.blockchain.CurrentBlock()
-
 
 	if len(block.Transactions()) == 0 {
 		parent := api.eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
@@ -400,7 +398,7 @@ func (api *PrivateDebugAPI) AccountRangeAt(ctx context.Context, startAddr *commo
 		return AccountRangeResult{}, err
 	}
 
-	return accountRange(trie, startAddr, maxResults)
+	return accountRange(trie, start, maxResults)
 }
 
 // StorageRangeResult is the result of a debug_storageRangeAt API call.

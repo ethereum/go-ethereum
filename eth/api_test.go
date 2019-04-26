@@ -27,13 +27,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 var dumper = spew.ConfigState{Indent: "    "}
 
-func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, start *common.Address, requestedNum int, expectedNum int) AccountRangeResult {
+func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, start *common.Hash, requestedNum int, expectedNum int) AccountRangeResult {
 	result, err := accountRange(*trie, start, requestedNum)
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +57,7 @@ func TestAccountRangeAt(t *testing.T) {
 		statedb  = state.NewDatabase(ethdb.NewMemDatabase())
 		state, _ = state.New(common.Hash{}, statedb)
 		addrs    = [AccountRangeMaxResults * 2]common.Address{}
-		m	 = map[common.Address]bool{}
+		m        = map[common.Address]bool{}
 	)
 
 	for i := range addrs {
@@ -81,15 +81,15 @@ func TestAccountRangeAt(t *testing.T) {
 	}
 
 	t.Logf("test getting number of results less than max")
-	accountRangeTest(t, &trie, state, &common.Address{0x0}, AccountRangeMaxResults / 2, AccountRangeMaxResults / 2)
+	accountRangeTest(t, &trie, state, &common.Hash{0x0}, AccountRangeMaxResults/2, AccountRangeMaxResults/2)
 
 	t.Logf("test getting number of results greater than max %d", AccountRangeMaxResults)
-	accountRangeTest(t, &trie, state, &common.Address{0x0}, AccountRangeMaxResults * 2, AccountRangeMaxResults)
+	accountRangeTest(t, &trie, state, &common.Hash{0x0}, AccountRangeMaxResults*2, AccountRangeMaxResults)
 
 	t.Logf("test pagination")
 
 	// test pagination
-	firstResult := accountRangeTest(t, &trie, state, &common.Address{0x0}, AccountRangeMaxResults, AccountRangeMaxResults)
+	firstResult := accountRangeTest(t, &trie, state, &common.Hash{0x0}, AccountRangeMaxResults, AccountRangeMaxResults)
 
 	t.Logf("test pagination 2")
 	secondResult := accountRangeTest(t, &trie, state, &firstResult.Next, AccountRangeMaxResults, AccountRangeMaxResults)
