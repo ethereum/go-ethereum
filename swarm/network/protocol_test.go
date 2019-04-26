@@ -235,6 +235,7 @@ func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer s.Stop()
 	node := s.Nodes[0]
 
 	err = s.testHandshake(
@@ -258,6 +259,7 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer s.Stop()
 	node := s.Nodes[0]
 
 	err = s.testHandshake(
@@ -281,6 +283,7 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer s.Stop()
 	node := s.Nodes[0]
 
 	err = s.testHandshake(
@@ -312,6 +315,7 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer pt.Stop()
 
 			node := pt.Nodes[0]
 			addr := NewAddr(node)

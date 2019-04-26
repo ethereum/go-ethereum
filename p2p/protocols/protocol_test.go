@@ -269,6 +269,7 @@ func TestProtocolHook(t *testing.T) {
 		panic(err)
 	}
 	tester := p2ptest.NewProtocolTester(prvkey, 2, runFunc)
+	defer tester.Stop()
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Expects: []p2ptest.Expect{
 			{

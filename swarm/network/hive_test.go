@@ -117,7 +117,7 @@ func TestHiveStatePersistance(t *testing.T) {
 
 	const peersCount = 5
 
-	startHive := func(t *testing.T, dir string) (h *Hive) {
+	startHive := func(t *testing.T, dir string) (h *Hive, cleanupFunc func()) {
 		store, err := state.NewDBStore(dir)
 		if err != nil {
 			t.Fatal(err)
@@ -137,27 +137,30 @@ func TestHiveStatePersistance(t *testing.T) {
 		if err := h.Start(s.Server); err != nil {
 			t.Fatal(err)
 		}
-		return h
+
+		cleanupFunc = func() {
+			err := h.Stop()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			s.Stop()
+		}
+		return h, cleanupFunc
 	}
 
-	h1 := startHive(t, dir)
+	h1, cleanup1 := startHive(t, dir)
 	peers := make(map[string]bool)
 	for i := 0; i < peersCount; i++ {
 		raddr := RandomAddr()
 		h1.Register(raddr)
 		peers[raddr.String()] = true
 	}
-	if err = h1.Stop(); err != nil {
-		t.Fatal(err)
-	}
+	cleanup1()
 
 	// start the hive and check that we know of all expected peers
-	h2 := startHive(t, dir)
-	defer func() {
-		if err = h2.Stop(); err != nil {
-			t.Fatal(err)
-		}
-	}()
+	h2, cleanup2 := startHive(t, dir)
+	cleanup2()
 
 	i := 0
 	h2.Kademlia.EachAddr(nil, 256, func(addr *BzzAddr, po int) bool {

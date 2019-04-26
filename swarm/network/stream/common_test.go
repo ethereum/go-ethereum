@@ -178,12 +178,7 @@ func newStreamerTester(registryOptions *RegistryOptions) (*p2ptest.ProtocolTeste
 	netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 	intervalsStore := state.NewInmemoryStore()
 	streamer := NewRegistry(addr.ID(), delivery, netStore, intervalsStore, registryOptions, nil)
-	teardown := func() {
-		streamer.Close()
-		intervalsStore.Close()
-		netStore.Close()
-		removeDataDir()
-	}
+
 	prvkey, err := crypto.GenerateKey()
 	if err != nil {
 		removeDataDir()
@@ -191,7 +186,13 @@ func newStreamerTester(registryOptions *RegistryOptions) (*p2ptest.ProtocolTeste
 	}
 
 	protocolTester := p2ptest.NewProtocolTester(prvkey, 1, streamer.runProtocol)
-
+	teardown := func() {
+		protocolTester.Stop()
+		streamer.Close()
+		intervalsStore.Close()
+		netStore.Close()
+		removeDataDir()
+	}
 	err = waitForPeers(streamer, 10*time.Second, 1)
 	if err != nil {
 		teardown()
