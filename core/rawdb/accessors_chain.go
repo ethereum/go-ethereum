@@ -231,7 +231,7 @@ func ReadBody(db ethdb.Reader, hash common.Hash, number uint64) *types.Body {
 	return body
 }
 
-// WriteBody storea a block body into the database.
+// WriteBody stores a block body into the database.
 func WriteBody(db ethdb.Writer, hash common.Hash, number uint64, body *types.Body) {
 	data, err := rlp.EncodeToBytes(body)
 	if err != nil {
