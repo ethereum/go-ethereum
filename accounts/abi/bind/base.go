@@ -180,9 +180,13 @@ func (c *BoundContract) Transfer(opts *TransactOpts) (*types.Transaction, error)
 	return c.transact(opts, &c.address, nil)
 }
 
-// transact executes an actual transaction invocation, first deriving any missing
-// authorization fields, and then scheduling the transaction for execution.
-func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, input []byte) (*types.Transaction, error) {
+// RawInput returns the raw bytes encoding a method call and its provided arguments
+func (c *BoundContract) RawInput(method string, params ...interface{}) ([]byte, error) {
+	return c.abi.Pack(method, params...)
+}
+
+// RawTransaction creates an unsigned transaction, but does not sign or send the transaction
+func (c *BoundContract) RawTransaction(opts *TransactOpts, contract *common.Address, input []byte) (*types.Transaction, error) {
 	var err error
 
 	// Ensure a valid value field and resolve the account nonce
@@ -231,10 +235,30 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	} else {
 		rawTx = types.NewTransaction(nonce, c.address, value, gasLimit, gasPrice, input)
 	}
+
+	return rawTx, nil
+}
+
+// SignedTransaction creates a transaction and signs it, but does not send the transaction
+func (c *BoundContract) SignedTransaction(opts *TransactOpts, contract *common.Address, input []byte) (*types.Transaction, error) {
+	rawTx, err := c.RawTransaction(opts, contract, input)
+	if err != nil {
+		return nil, err
+	}
 	if opts.Signer == nil {
 		return nil, errors.New("no signer to authorize the transaction with")
 	}
 	signedTx, err := opts.Signer(types.HomesteadSigner{}, opts.From, rawTx)
+	if err != nil {
+		return nil, err
+	}
+	return signedTx, nil
+}
+
+// transact executes an actual transaction invocation, first deriving any missing
+// authorization fields, and then scheduling the transaction for execution.
+func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, input []byte) (*types.Transaction, error) {
+	signedTx, err := c.SignedTransaction(opts, contract, input)
 	if err != nil {
 		return nil, err
 	}

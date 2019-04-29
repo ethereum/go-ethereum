@@ -106,7 +106,7 @@ var (
 		  if err != nil {
 		    return common.Address{}, nil, nil, err
 		  }
-		  return address, tx, &{{.Type}}{ {{.Type}}Caller: {{.Type}}Caller{contract: contract}, {{.Type}}Transactor: {{.Type}}Transactor{contract: contract}, {{.Type}}Filterer: {{.Type}}Filterer{contract: contract} }, nil
+		  return address, tx, &{{.Type}}{ {{.Type}}Caller: {{.Type}}Caller{BoundContract: contract}, {{.Type}}Transactor: {{.Type}}Transactor{BoundContract: contract}, {{.Type}}Filterer: {{.Type}}Filterer{BoundContract: contract} }, nil
 		}
 	{{end}}
 
@@ -119,17 +119,17 @@ var (
 
 	// {{.Type}}Caller is an auto generated read-only Go binding around an Ethereum contract.
 	type {{.Type}}Caller struct {
-	  contract *bind.BoundContract // Generic contract wrapper for the low level calls
+	  BoundContract *bind.BoundContract // Generic contract wrapper for the low level calls
 	}
 
 	// {{.Type}}Transactor is an auto generated write-only Go binding around an Ethereum contract.
 	type {{.Type}}Transactor struct {
-	  contract *bind.BoundContract // Generic contract wrapper for the low level calls
+	  BoundContract *bind.BoundContract // Generic contract wrapper for the low level calls
 	}
 
 	// {{.Type}}Filterer is an auto generated log filtering Go binding around an Ethereum contract events.
 	type {{.Type}}Filterer struct {
-	  contract *bind.BoundContract // Generic contract wrapper for the low level calls
+	  BoundContract *bind.BoundContract // Generic contract wrapper for the low level calls
 	}
 
 	// {{.Type}}Session is an auto generated Go binding around an Ethereum contract,
@@ -154,28 +154,13 @@ var (
 	  TransactOpts bind.TransactOpts    // Transaction auth options to use throughout this session
 	}
 
-	// {{.Type}}Raw is an auto generated low-level Go binding around an Ethereum contract.
-	type {{.Type}}Raw struct {
-	  Contract *{{.Type}} // Generic contract binding to access the raw methods on
-	}
-
-	// {{.Type}}CallerRaw is an auto generated low-level read-only Go binding around an Ethereum contract.
-	type {{.Type}}CallerRaw struct {
-		Contract *{{.Type}}Caller // Generic read-only contract binding to access the raw methods on
-	}
-
-	// {{.Type}}TransactorRaw is an auto generated low-level write-only Go binding around an Ethereum contract.
-	type {{.Type}}TransactorRaw struct {
-		Contract *{{.Type}}Transactor // Generic write-only contract binding to access the raw methods on
-	}
-
 	// New{{.Type}} creates a new instance of {{.Type}}, bound to a specific deployed contract.
 	func New{{.Type}}(address common.Address, backend bind.ContractBackend) (*{{.Type}}, error) {
 	  contract, err := bind{{.Type}}(address, backend, backend, backend)
 	  if err != nil {
 	    return nil, err
 	  }
-	  return &{{.Type}}{ {{.Type}}Caller: {{.Type}}Caller{contract: contract}, {{.Type}}Transactor: {{.Type}}Transactor{contract: contract}, {{.Type}}Filterer: {{.Type}}Filterer{contract: contract} }, nil
+	  return &{{.Type}}{ {{.Type}}Caller: {{.Type}}Caller{BoundContract: contract}, {{.Type}}Transactor: {{.Type}}Transactor{BoundContract: contract}, {{.Type}}Filterer: {{.Type}}Filterer{BoundContract: contract} }, nil
 	}
 
 	// New{{.Type}}Caller creates a new read-only instance of {{.Type}}, bound to a specific deployed contract.
@@ -184,7 +169,7 @@ var (
 	  if err != nil {
 	    return nil, err
 	  }
-	  return &{{.Type}}Caller{contract: contract}, nil
+	  return &{{.Type}}Caller{BoundContract: contract}, nil
 	}
 
 	// New{{.Type}}Transactor creates a new write-only instance of {{.Type}}, bound to a specific deployed contract.
@@ -193,7 +178,7 @@ var (
 	  if err != nil {
 	    return nil, err
 	  }
-	  return &{{.Type}}Transactor{contract: contract}, nil
+	  return &{{.Type}}Transactor{BoundContract: contract}, nil
 	}
 
 	// New{{.Type}}Filterer creates a new log filterer instance of {{.Type}}, bound to a specific deployed contract.
@@ -202,7 +187,7 @@ var (
  	  if err != nil {
  	    return nil, err
  	  }
- 	  return &{{.Type}}Filterer{contract: contract}, nil
+ 	  return &{{.Type}}Filterer{BoundContract: contract}, nil
  	}
 
 	// bind{{.Type}} binds a generic wrapper to an already deployed contract.
@@ -212,44 +197,6 @@ var (
 	    return nil, err
 	  }
 	  return bind.NewBoundContract(address, parsed, caller, transactor, filterer), nil
-	}
-
-	// Call invokes the (constant) contract method with params as input values and
-	// sets the output to result. The result type might be a single field for simple
-	// returns, a slice of interfaces for anonymous returns and a struct for named
-	// returns.
-	func (_{{$contract.Type}} *{{$contract.Type}}Raw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
-		return _{{$contract.Type}}.Contract.{{$contract.Type}}Caller.contract.Call(opts, result, method, params...)
-	}
-
-	// Transfer initiates a plain transaction to move funds to the contract, calling
-	// its default method if one is available.
-	func (_{{$contract.Type}} *{{$contract.Type}}Raw) Transfer(opts *bind.TransactOpts) (*types.Transaction, error) {
-		return _{{$contract.Type}}.Contract.{{$contract.Type}}Transactor.contract.Transfer(opts)
-	}
-
-	// Transact invokes the (paid) contract method with params as input values.
-	func (_{{$contract.Type}} *{{$contract.Type}}Raw) Transact(opts *bind.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
-		return _{{$contract.Type}}.Contract.{{$contract.Type}}Transactor.contract.Transact(opts, method, params...)
-	}
-
-	// Call invokes the (constant) contract method with params as input values and
-	// sets the output to result. The result type might be a single field for simple
-	// returns, a slice of interfaces for anonymous returns and a struct for named
-	// returns.
-	func (_{{$contract.Type}} *{{$contract.Type}}CallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
-		return _{{$contract.Type}}.Contract.contract.Call(opts, result, method, params...)
-	}
-
-	// Transfer initiates a plain transaction to move funds to the contract, calling
-	// its default method if one is available.
-	func (_{{$contract.Type}} *{{$contract.Type}}TransactorRaw) Transfer(opts *bind.TransactOpts) (*types.Transaction, error) {
-		return _{{$contract.Type}}.Contract.contract.Transfer(opts)
-	}
-
-	// Transact invokes the (paid) contract method with params as input values.
-	func (_{{$contract.Type}} *{{$contract.Type}}TransactorRaw) Transact(opts *bind.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
-		return _{{$contract.Type}}.Contract.contract.Transact(opts, method, params...)
 	}
 
 	{{range .Calls}}
@@ -268,7 +215,7 @@ var (
 				{{range $i, $_ := .Normalized.Outputs}}ret{{$i}},
 				{{end}}
 			}{{end}}{{end}}
-			err := _{{$contract.Type}}.contract.Call(opts, out, "{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
+			err := _{{$contract.Type}}.BoundContract.Call(opts, out, "{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
 			return {{if .Structured}}*ret,{{else}}{{range $i, $_ := .Normalized.Outputs}}*ret{{$i}},{{end}}{{end}} err
 		}
 
@@ -292,7 +239,7 @@ var (
 		//
 		// Solidity: {{.Original.String}}
 		func (_{{$contract.Type}} *{{$contract.Type}}Transactor) {{.Normalized.Name}}(opts *bind.TransactOpts {{range .Normalized.Inputs}}, {{.Name}} {{bindtype .Type}} {{end}}) (*types.Transaction, error) {
-			return _{{$contract.Type}}.contract.Transact(opts, "{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
+			return _{{$contract.Type}}.BoundContract.Transact(opts, "{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
 		}
 
 		// {{.Normalized.Name}} is a paid mutator transaction binding the contract method 0x{{printf "%x" .Original.Id}}.
@@ -315,7 +262,7 @@ var (
 		type {{$contract.Type}}{{.Normalized.Name}}Iterator struct {
 			Event *{{$contract.Type}}{{.Normalized.Name}} // Event containing the contract specifics and raw log
 
-			contract *bind.BoundContract // Generic contract to use for unpacking event data
+			BoundContract *bind.BoundContract // Generic contract to use for unpacking event data
 			event    string              // Event name to use for unpacking event data
 
 			logs chan types.Log        // Log channel receiving the found contract events
@@ -336,7 +283,7 @@ var (
 				select {
 				case log := <-it.logs:
 					it.Event = new({{$contract.Type}}{{.Normalized.Name}})
-					if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+					if err := it.BoundContract.UnpackLog(it.Event, it.event, log); err != nil {
 						it.fail = err
 						return false
 					}
@@ -351,7 +298,7 @@ var (
 			select {
 			case log := <-it.logs:
 				it.Event = new({{$contract.Type}}{{.Normalized.Name}})
-				if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+				if err := it.BoundContract.UnpackLog(it.Event, it.event, log); err != nil {
 					it.fail = err
 					return false
 				}
@@ -391,11 +338,11 @@ var (
 				{{.Name}}Rule = append({{.Name}}Rule, {{.Name}}Item)
 			}{{end}}{{end}}
 
-			logs, sub, err := _{{$contract.Type}}.contract.FilterLogs(opts, "{{.Original.Name}}"{{range .Normalized.Inputs}}{{if .Indexed}}, {{.Name}}Rule{{end}}{{end}})
+			logs, sub, err := _{{$contract.Type}}.BoundContract.FilterLogs(opts, "{{.Original.Name}}"{{range .Normalized.Inputs}}{{if .Indexed}}, {{.Name}}Rule{{end}}{{end}})
 			if err != nil {
 				return nil, err
 			}
-			return &{{$contract.Type}}{{.Normalized.Name}}Iterator{contract: _{{$contract.Type}}.contract, event: "{{.Original.Name}}", logs: logs, sub: sub}, nil
+			return &{{$contract.Type}}{{.Normalized.Name}}Iterator{BoundContract: _{{$contract.Type}}.BoundContract, event: "{{.Original.Name}}", logs: logs, sub: sub}, nil
  		}
 
 		// Watch{{.Normalized.Name}} is a free log subscription operation binding the contract event 0x{{printf "%x" .Original.Id}}.
@@ -408,7 +355,7 @@ var (
 				{{.Name}}Rule = append({{.Name}}Rule, {{.Name}}Item)
 			}{{end}}{{end}}
 
-			logs, sub, err := _{{$contract.Type}}.contract.WatchLogs(opts, "{{.Original.Name}}"{{range .Normalized.Inputs}}{{if .Indexed}}, {{.Name}}Rule{{end}}{{end}})
+			logs, sub, err := _{{$contract.Type}}.BoundContract.WatchLogs(opts, "{{.Original.Name}}"{{range .Normalized.Inputs}}{{if .Indexed}}, {{.Name}}Rule{{end}}{{end}})
 			if err != nil {
 				return nil, err
 			}
@@ -419,7 +366,7 @@ var (
 					case log := <-logs:
 						// New log arrived, parse the event and forward to the user
 						event := new({{$contract.Type}}{{.Normalized.Name}})
-						if err := _{{$contract.Type}}.contract.UnpackLog(event, "{{.Original.Name}}", log); err != nil {
+						if err := _{{$contract.Type}}.BoundContract.UnpackLog(event, "{{.Original.Name}}", log); err != nil {
 							return err
 						}
 						event.Raw = log
