@@ -35,7 +35,7 @@ package contracts
 //		"randomSecret":  0,
 //		"randomOpening": 1,
 //	}
-//	datadir   = "/mnt/sgp1_tuna_chaindata3/data/XDCchaindata"
+//	datadir   = "/mnt/sgp1_tuna_chaindata3/data/XDC/chaindata"
 //	candidate = "0xd6fa3e7a89bf8c84f0ccd204a15c0d259daf2091"
 //)
 //

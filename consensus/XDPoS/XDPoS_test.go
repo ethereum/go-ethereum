@@ -27,7 +27,7 @@ func TestGetM1M2FromCheckpointHeader(t *testing.T) {
 			Epoch: uint64(epoch),
 		},
 	}
-	testMoveM2 := []uint64{0,0,0,1,1,1,2,2,2,0,0,0,1,1,1,2,2,2}
+	testMoveM2 := []uint64{0, 0, 0, 1, 1, 1, 2, 2, 2, 0, 0, 0, 1, 1, 1, 2, 2, 2}
 	//try from block 3410001 to 3410018
 	for i := uint64(3464001); i <= 3464018; i++ {
 		currentNumber := int64(i)
@@ -45,5 +45,40 @@ func TestGetM1M2FromCheckpointHeader(t *testing.T) {
 		if moveM2 != testMoveM2[i-3464001] {
 			t.Error("wrong moveM2", "currentNumber", currentNumber, "want", testMoveM2[i-3464001], "have", moveM2)
 		}
+	}
+}
+
+func TestCompareSignersLists(t *testing.T) {
+	list1 := []common.Address{
+		common.StringToAddress("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+		common.StringToAddress("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+		common.StringToAddress("cccccccccccccccccccccccccccccccccccccccc"),
+		common.StringToAddress("dddddddddddddddddddddddddddddddddddddddd"),
+	}
+	list2 := []common.Address{
+		common.StringToAddress("cccccccccccccccccccccccccccccccccccccccc"),
+		common.StringToAddress("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+		common.StringToAddress("dddddddddddddddddddddddddddddddddddddddd"),
+		common.StringToAddress("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+	}
+	list3 := []common.Address{
+		common.StringToAddress("cccccccccccccccccccccccccccccccccccccccc"),
+		common.StringToAddress("dddddddddddddddddddddddddddddddddddddddd"),
+		common.StringToAddress("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+	}
+	if !compareSignersLists(list1, list2) {
+		t.Error("list1 should be equal to list2", "list1", list1, "list2", list2)
+	}
+	if compareSignersLists(list1, list3) {
+		t.Error("list1 and list3 should not be same", "list1", list1, "list3", list3)
+	}
+	if !compareSignersLists([]common.Address{}, []common.Address{}) {
+		t.Error("Failed with empty list")
+	}
+	if !compareSignersLists([]common.Address{common.StringToAddress("cccccccccccccccccccccccccccccccccccccccc")}, []common.Address{common.StringToAddress("cccccccccccccccccccccccccccccccccccccccc")}) {
+		t.Error("Failed with list has only one signer")
+	}
+	if compareSignersLists([]common.Address{common.StringToAddress("aaaaaaaaaaaaaaaa")}, []common.Address{common.StringToAddress("cccccccccccccccccccccccccccccccccccccccc")}) {
+		t.Error("Failed with list has only one signer")
 	}
 }
