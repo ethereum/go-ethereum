@@ -22,7 +22,7 @@ const (
 	MinimunMinerBlockPerEpoch  = 1
 )
 
-var TIP2019Block = big.NewInt(1050000)
+var TIP2019Block = big.NewInt(1)
 var TIPSigning = big.NewInt(3000000)
 var TIPRandomize = big.NewInt(3464000)
 var IsTestnet bool = false
