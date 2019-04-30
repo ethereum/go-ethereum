@@ -17,12 +17,16 @@
 package discover
 
 import (
+	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"net"
+	"sort"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 )
@@ -37,7 +41,7 @@ func init() {
 
 func newTestTable(t transport) (*Table, *enode.DB) {
 	db, _ := enode.OpenDB("")
-	tab, _ := newTable(t, db, nil)
+	tab, _ := newTable(t, db, nil, log.Root())
 	return tab, db
 }
 
@@ -108,24 +112,28 @@ func newPingRecorder() *pingRecorder {
 	}
 }
 
-func (t *pingRecorder) self() *enode.Node {
+func (t *pingRecorder) Self() *enode.Node {
 	return nullNode
 }
 
-func (t *pingRecorder) findnode(toid enode.ID, toaddr *net.UDPAddr, target encPubkey) ([]*node, error) {
-	return nil, nil
-}
-
-func (t *pingRecorder) ping(toid enode.ID, toaddr *net.UDPAddr) error {
+func (t *pingRecorder) ping(n *enode.Node) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.pinged[toid] = true
-	if t.dead[toid] {
+	t.pinged[n.ID()] = true
+	if t.dead[n.ID()] {
 		return errTimeout
 	} else {
 		return nil
 	}
+}
+
+func (t *pingRecorder) lookupSelf() []*enode.Node {
+	return nil
+}
+
+func (t *pingRecorder) lookupRandom() []*enode.Node {
+	return nil
 }
 
 func (t *pingRecorder) close() {}
@@ -145,14 +153,21 @@ func hasDuplicates(slice []*node) bool {
 }
 
 func sortedByDistanceTo(distbase enode.ID, slice []*node) bool {
-	var last enode.ID
-	for i, e := range slice {
-		if i > 0 && enode.DistCmp(distbase, e.ID(), last) < 0 {
-			return false
-		}
-		last = e.ID()
+	return sort.SliceIsSorted(slice, func(i, j int) bool {
+		return enode.DistCmp(distbase, slice[i].ID(), slice[j].ID()) < 0
+	})
+}
+
+func hexEncPrivkey(h string) *ecdsa.PrivateKey {
+	b, err := hex.DecodeString(h)
+	if err != nil {
+		panic(err)
 	}
-	return true
+	key, err := crypto.ToECDSA(b)
+	if err != nil {
+		panic(err)
+	}
+	return key
 }
 
 func hexEncPubkey(h string) (ret encPubkey) {
