@@ -1260,10 +1260,6 @@ type SendTxArgs struct {
 
 // setDefaults is a helper function that fills in default values for unspecified tx fields.
 func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
-	if args.Gas == nil {
-		args.Gas = new(hexutil.Uint64)
-		*(*uint64)(args.Gas) = 90000
-	}
 	if args.GasPrice == nil {
 		price, err := b.SuggestPrice(ctx)
 		if err != nil {
@@ -1296,15 +1292,37 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 			return errors.New(`contract creation without any data provided`)
 		}
 	}
+	// Estimate the gas usage if necessary.
+	if args.Gas == nil {
+		// For backwards-compatibility reason, we try both input and data
+		// but input is preferred.
+		input := args.Input
+		if input == nil {
+			input = args.Data
+		}
+		callArgs := CallArgs{
+			From:     &args.From, // From shouldn't be nil
+			To:       args.To,
+			GasPrice: args.GasPrice,
+			Value:    args.Value,
+			Data:     input,
+		}
+		estimated, err := DoEstimateGas(ctx, b, callArgs, rpc.PendingBlockNumber, b.RPCGasCap())
+		if err != nil {
+			return err
+		}
+		args.Gas = &estimated
+		log.Trace("Estimate gas usage automatically", "gas", args.Gas)
+	}
 	return nil
 }
 
 func (args *SendTxArgs) toTransaction() *types.Transaction {
 	var input []byte
-	if args.Data != nil {
-		input = *args.Data
-	} else if args.Input != nil {
+	if args.Input != nil {
 		input = *args.Input
+	} else if args.Data != nil {
+		input = *args.Data
 	}
 	if args.To == nil {
 		return types.NewContractCreation(uint64(*args.Nonce), (*big.Int)(args.Value), uint64(*args.Gas), (*big.Int)(args.GasPrice), input)
@@ -1334,7 +1352,6 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 // SendTransaction creates a transaction for the given argument, sign it and submit it to the
 // transaction pool.
 func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args SendTxArgs) (common.Hash, error) {
-
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: args.From}
 
