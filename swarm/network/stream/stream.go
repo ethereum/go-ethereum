@@ -66,22 +66,24 @@ var subscriptionFunc = doRequestSubscription
 
 // Registry registry for outgoing and incoming streamer constructors
 type Registry struct {
-	addr           enode.ID
-	api            *API
-	skipCheck      bool
-	clientMu       sync.RWMutex
-	serverMu       sync.RWMutex
-	peersMu        sync.RWMutex
-	serverFuncs    map[string]func(*Peer, string, bool) (Server, error)
-	clientFuncs    map[string]func(*Peer, string, bool) (Client, error)
-	peers          map[enode.ID]*Peer
-	delivery       *Delivery
-	intervalsStore state.Store
-	maxPeerServers int
-	spec           *protocols.Spec   //this protocol's spec
-	balance        protocols.Balance //implements protocols.Balance, for accounting
-	prices         protocols.Prices  //implements protocols.Prices, provides prices to accounting
-	quit           chan struct{}     // terminates registry goroutines
+	addr            enode.ID
+	api             *API
+	skipCheck       bool
+	clientMu        sync.RWMutex
+	serverMu        sync.RWMutex
+	peersMu         sync.RWMutex
+	serverFuncs     map[string]func(*Peer, string, bool) (Server, error)
+	clientFuncs     map[string]func(*Peer, string, bool) (Client, error)
+	peers           map[enode.ID]*Peer
+	delivery        *Delivery
+	intervalsStore  state.Store
+	maxPeerServers  int
+	spec            *protocols.Spec   //this protocol's spec
+	balance         protocols.Balance //implements protocols.Balance, for accounting
+	prices          protocols.Prices  //implements protocols.Prices, provides prices to accounting
+	quit            chan struct{}     // terminates registry goroutines
+	syncMode        SyncingOption
+	syncUpdateDelay time.Duration
 }
 
 // RegistryOptions holds optional values for NewRegistry constructor.
@@ -104,16 +106,18 @@ func NewRegistry(localID enode.ID, delivery *Delivery, netStore *storage.NetStor
 	quit := make(chan struct{})
 
 	streamer := &Registry{
-		addr:           localID,
-		skipCheck:      options.SkipCheck,
-		serverFuncs:    make(map[string]func(*Peer, string, bool) (Server, error)),
-		clientFuncs:    make(map[string]func(*Peer, string, bool) (Client, error)),
-		peers:          make(map[enode.ID]*Peer),
-		delivery:       delivery,
-		intervalsStore: intervalsStore,
-		maxPeerServers: options.MaxPeerServers,
-		balance:        balance,
-		quit:           quit,
+		addr:            localID,
+		skipCheck:       options.SkipCheck,
+		serverFuncs:     make(map[string]func(*Peer, string, bool) (Server, error)),
+		clientFuncs:     make(map[string]func(*Peer, string, bool) (Client, error)),
+		peers:           make(map[enode.ID]*Peer),
+		delivery:        delivery,
+		intervalsStore:  intervalsStore,
+		maxPeerServers:  options.MaxPeerServers,
+		balance:         balance,
+		quit:            quit,
+		syncUpdateDelay: options.SyncUpdateDelay,
+		syncMode:        options.Syncing,
 	}
 
 	streamer.setupSpec()
@@ -125,103 +129,6 @@ func NewRegistry(localID enode.ID, delivery *Delivery, netStore *storage.NetStor
 	if options.Syncing != SyncingDisabled {
 		RegisterSwarmSyncerServer(streamer, netStore)
 		RegisterSwarmSyncerClient(streamer, netStore)
-	}
-
-	// if syncing is set to automatically subscribe to the syncing stream, start the subscription process
-	if options.Syncing == SyncingAutoSubscribe {
-		// latestIntC function ensures that
-		//   - receiving from the in chan is not blocked by processing inside the for loop
-		// 	 - the latest int value is delivered to the loop after the processing is done
-		// In context of NeighbourhoodDepthC:
-		// after the syncing is done updating inside the loop, we do not need to update on the intermediate
-		// depth changes, only to the latest one
-		latestIntC := func(in <-chan int) <-chan int {
-			out := make(chan int, 1)
-
-			go func() {
-				defer close(out)
-
-				for {
-					select {
-					case i, ok := <-in:
-						if !ok {
-							return
-						}
-						select {
-						case <-out:
-						default:
-						}
-						out <- i
-					case <-quit:
-						return
-					}
-				}
-			}()
-
-			return out
-		}
-
-		kad := streamer.delivery.kad
-		// get notification channels from Kademlia before returning
-		// from this function to avoid race with Close method and
-		// the goroutine created below
-		depthC := latestIntC(kad.NeighbourhoodDepthC())
-		addressBookSizeC := latestIntC(kad.AddrCountC())
-
-		go func() {
-			// wait for kademlia table to be healthy
-			// but return if Registry is closed before
-			select {
-			case <-time.After(options.SyncUpdateDelay):
-			case <-quit:
-				return
-			}
-
-			// initial requests for syncing subscription to peers
-			streamer.updateSyncing()
-
-			for depth := range depthC {
-				log.Debug("Kademlia neighbourhood depth change", "depth", depth)
-
-				// Prevent too early sync subscriptions by waiting until there are no
-				// new peers connecting. Sync streams updating will be done after no
-				// peers are connected for at least SyncUpdateDelay period.
-				timer := time.NewTimer(options.SyncUpdateDelay)
-				// Hard limit to sync update delay, preventing long delays
-				// on a very dynamic network
-				maxTimer := time.NewTimer(3 * time.Minute)
-			loop:
-				for {
-					select {
-					case <-maxTimer.C:
-						// force syncing update when a hard timeout is reached
-						log.Trace("Sync subscriptions update on hard timeout")
-						// request for syncing subscription to new peers
-						streamer.updateSyncing()
-						break loop
-					case <-timer.C:
-						// start syncing as no new peers has been added to kademlia
-						// for some time
-						log.Trace("Sync subscriptions update")
-						// request for syncing subscription to new peers
-						streamer.updateSyncing()
-						break loop
-					case size := <-addressBookSizeC:
-						log.Trace("Kademlia address book size changed on depth change", "size", size)
-						// new peers has been added to kademlia,
-						// reset the timer to prevent early sync subscriptions
-						if !timer.Stop() {
-							<-timer.C
-						}
-						timer.Reset(options.SyncUpdateDelay)
-					case <-quit:
-						break loop
-					}
-				}
-				timer.Stop()
-				maxTimer.Stop()
-			}
-		}()
 	}
 
 	return streamer
@@ -422,8 +329,13 @@ func (r *Registry) peersCount() (c int) {
 
 // Run protocol run function
 func (r *Registry) Run(p *network.BzzPeer) error {
-	sp := NewPeer(p.Peer, r)
+	sp := NewPeer(p, r)
 	r.setPeer(sp)
+
+	if r.syncMode == SyncingAutoSubscribe {
+		go sp.runUpdateSyncing()
+	}
+
 	defer r.deletePeer(sp)
 	defer close(sp.quit)
 	defer sp.close()
@@ -431,116 +343,17 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 	return sp.Run(sp.HandleMsg)
 }
 
-// updateSyncing subscribes to SYNC streams by iterating over the
-// kademlia connections and bins. If there are existing SYNC streams
-// and they are no longer required after iteration, request to Quit
-// them will be send to appropriate peers.
-func (r *Registry) updateSyncing() {
-	kad := r.delivery.kad
-	// map of all SYNC streams for all peers
-	// used at the and of the function to remove servers
-	// that are not needed anymore
-	subs := make(map[enode.ID]map[Stream]struct{})
-	r.peersMu.RLock()
-	for id, peer := range r.peers {
-		peer.serverMu.RLock()
-		for stream := range peer.servers {
-			if stream.Name == "SYNC" {
-				if _, ok := subs[id]; !ok {
-					subs[id] = make(map[Stream]struct{})
-				}
-				subs[id][stream] = struct{}{}
-			}
-		}
-		peer.serverMu.RUnlock()
-	}
-	r.peersMu.RUnlock()
-
-	// start requesting subscriptions from peers
-	r.requestPeerSubscriptions(kad, subs)
-
-	// remove SYNC servers that do not need to be subscribed
-	for id, streams := range subs {
-		if len(streams) == 0 {
-			continue
-		}
-		peer := r.getPeer(id)
-		if peer == nil {
-			continue
-		}
-		for stream := range streams {
-			log.Debug("Remove sync server", "peer", id, "stream", stream)
-			err := r.Quit(peer.ID(), stream)
-			if err != nil && err != p2p.ErrShuttingDown {
-				log.Error("quit", "err", err, "peer", peer.ID(), "stream", stream)
-			}
-		}
-	}
-}
-
-// requestPeerSubscriptions calls on each live peer in the kademlia table
-// and sends a `RequestSubscription` to peers according to their bin
-// and their relationship with kademlia's depth.
-// Also check `TestRequestPeerSubscriptions` in order to understand the
-// expected behavior.
-// The function expects:
-//   * the kademlia
-//   * a map of subscriptions
-//   * the actual function to subscribe
-//     (in case of the test, it doesn't do real subscriptions)
-func (r *Registry) requestPeerSubscriptions(kad *network.Kademlia, subs map[enode.ID]map[Stream]struct{}) {
-
-	var startPo int
-	var endPo int
-	var ok bool
-
-	// kademlia's depth
-	kadDepth := kad.NeighbourhoodDepth()
-	// request subscriptions for all nodes and bins
-	// nil as base takes the node's base; we need to pass 255 as `EachConn` runs
-	// from deepest bins backwards
-	kad.EachConn(nil, 255, func(p *network.Peer, po int) bool {
-		// nodes that do not provide stream protocol
-		// should not be subscribed, e.g. bootnodes
-		if !p.HasCap("stream") {
-			return true
-		}
-		//if the peer's bin is shallower than the kademlia depth,
-		//only the peer's bin should be subscribed
-		if po < kadDepth {
-			startPo = po
-			endPo = po
-		} else {
-			//if the peer's bin is equal or deeper than the kademlia depth,
-			//each bin from the depth up to k.MaxProxDisplay should be subscribed
-			startPo = kadDepth
-			endPo = kad.MaxProxDisplay
-		}
-
-		for bin := startPo; bin <= endPo; bin++ {
-			//do the actual subscription
-			ok = subscriptionFunc(r, p, uint8(bin), subs)
-		}
-		return ok
-	})
-}
-
 // doRequestSubscription sends the actual RequestSubscription to the peer
-func doRequestSubscription(r *Registry, p *network.Peer, bin uint8, subs map[enode.ID]map[Stream]struct{}) bool {
-	log.Debug("Requesting subscription by registry:", "registry", r.addr, "peer", p.ID(), "bin", bin)
+func doRequestSubscription(r *Registry, id enode.ID, bin uint8) error {
+	log.Debug("Requesting subscription by registry:", "registry", r.addr, "peer", id, "bin", bin)
 	// bin is always less then 256 and it is safe to convert it to type uint8
 	stream := NewStream("SYNC", FormatSyncBinKey(bin), true)
-	if streams, ok := subs[p.ID()]; ok {
-		// delete live and history streams from the map, so that it won't be removed with a Quit request
-		delete(streams, stream)
-		delete(streams, getHistoryStream(stream))
-	}
-	err := r.RequestSubscription(p.ID(), stream, NewRange(0, 0), High)
+	err := r.RequestSubscription(id, stream, NewRange(0, 0), High)
 	if err != nil {
-		log.Debug("Request subscription", "err", err, "peer", p.ID(), "stream", stream)
-		return false
+		log.Debug("Request subscription", "err", err, "peer", id, "stream", stream)
+		return err
 	}
-	return true
+	return nil
 }
 
 func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {

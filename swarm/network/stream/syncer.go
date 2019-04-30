@@ -88,6 +88,11 @@ func (s *SwarmSyncerServer) SessionIndex() (uint64, error) {
 // are added in batchTimeout period, the batch will be returned. This function
 // will block until new chunks are received from localstore pull subscription.
 func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
+	//TODO: maybe add unit test for intervals usage in netstore/localstore together with SwarmSyncerServer?
+	if from > 0 {
+		from--
+	}
+
 	descriptors, stop := s.netStore.SubscribePull(context.Background(), s.po, from, to)
 	defer stop()
 

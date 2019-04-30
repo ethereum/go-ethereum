@@ -175,7 +175,11 @@ type QuitMsg struct {
 }
 
 func (p *Peer) handleQuitMsg(req *QuitMsg) error {
-	return p.removeClient(req.Stream)
+	err := p.removeClient(req.Stream)
+	if _, ok := err.(*notFoundError); ok {
+		return nil
+	}
+	return err
 }
 
 // OfferedHashesMsg is the protocol msg for offering to hand over a

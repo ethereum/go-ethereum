@@ -156,7 +156,7 @@ func TestRequestFromPeers(t *testing.T) {
 
 	// an empty priorityQueue has to be created to prevent a goroutine being called after the test has finished
 	sp := &Peer{
-		Peer:     protocolsPeer,
+		BzzPeer:  &network.BzzPeer{Peer: protocolsPeer, BzzAddr: addr},
 		pq:       pq.New(int(PriorityQueue), PriorityQueueCap),
 		streamer: r,
 	}
@@ -196,7 +196,7 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 	r := NewRegistry(addr.ID(), delivery, nil, nil, nil, nil)
 	// an empty priorityQueue has to be created to prevent a goroutine being called after the test has finished
 	sp := &Peer{
-		Peer:     protocolsPeer,
+		BzzPeer:  &network.BzzPeer{Peer: protocolsPeer, BzzAddr: addr},
 		pq:       pq.New(int(PriorityQueue), PriorityQueueCap),
 		streamer: r,
 	}
