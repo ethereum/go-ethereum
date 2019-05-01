@@ -202,6 +202,7 @@ func (s *LesServer) startEventLoop() {
 	totalCapacity := s.fcManager.SubscribeTotalCapacity(totalCapacityCh)
 	s.priorityClientPool.setLimits(s.maxPeers, totalCapacity)
 
+	var maxFreePeers uint64
 	go func() {
 		for {
 			select {
@@ -211,6 +212,11 @@ func (s *LesServer) startEventLoop() {
 				updateRecharge()
 			case totalCapacity = <-totalCapacityCh:
 				s.logTotalCap.Update(float64(totalCapacity))
+				newFreePeers := totalCapacity / s.freeClientCap
+				if newFreePeers < maxFreePeers && newFreePeers < uint64(s.maxPeers) {
+					log.Warn("Reduced total capacity", "maxFreePeers", newFreePeers)
+				}
+				maxFreePeers = newFreePeers
 				s.priorityClientPool.setLimits(s.maxPeers, totalCapacity)
 			case <-s.protocolManager.quitSync:
 				s.protocolManager.wg.Done()
