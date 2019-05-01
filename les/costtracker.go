@@ -85,10 +85,10 @@ var (
 const (
 	maxCostFactor    = 2 // ratio of maximum and average cost estimates
 	gfInitWeight     = time.Second * 10
-	gfMaxWeight      = time.Hour
+	gfMaxWeight      = time.Second * 1000
 	gfUsageThreshold = 0.5
 	gfUsageTC        = time.Second
-	gfDbKey          = "_globalCostFactor"
+	gfDbKey          = "__globalCostFactor"
 )
 
 // costTracker is responsible for calculating costs and cost estimates on the
