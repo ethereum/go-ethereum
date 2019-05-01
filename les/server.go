@@ -240,12 +240,12 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 			}
 		}
 	}
-	freePeers := int(totalRecharge / s.freeClientCap)
-	if freePeers < s.maxPeers {
-		log.Warn("Light peer count limited", "specified", s.maxPeers, "allowed", freePeers)
-	}
 
-	s.fcManager.SetCapFactorRaiseThreshold(s.freeClientCap * 2)
+	maxCapacity := s.freeClientCap * uint64(s.maxPeers)
+	if totalRecharge > maxCapacity {
+		maxCapacity = totalRecharge
+	}
+	s.fcManager.SetCapacityLimits(s.freeClientCap, maxCapacity, s.freeClientCap*2)
 	poolMetricsLogger := s.csvLogger
 	if !logClientPoolMetrics {
 		poolMetricsLogger = nil

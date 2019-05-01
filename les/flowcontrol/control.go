@@ -133,7 +133,7 @@ func (node *ClientNode) Freeze() {
 	node.lock.Lock()
 	frozenCap := node.params.MinRecharge
 	node.lock.Unlock()
-	node.cm.reduceTotalCap(frozenCap)
+	node.cm.reduceTotalCapacity(frozenCap)
 }
 
 // update recalculates the buffer value at a specified time while also performing
