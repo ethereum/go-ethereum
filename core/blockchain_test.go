@@ -1870,7 +1870,6 @@ func getLongAndShortChains() (*BlockChain, []*types.Block, []*types.Block, error
 // 2. Reorg to shorter but heavier chain [0 ... N ... Y]
 // 3. Then there should be no canon mapping for the block at height X
 func TestReorgToShorterRemovesCanonMapping(t *testing.T) {
-
 	chain, canonblocks, sideblocks, err := getLongAndShortChains()
 	if err != nil {
 		t.Fatal(err)
@@ -1894,14 +1893,12 @@ func TestReorgToShorterRemovesCanonMapping(t *testing.T) {
 	if headerByNum := chain.GetHeaderByNumber(canonNum); headerByNum != nil {
 		t.Errorf("expected header to be gone: %v", headerByNum.Number.Uint64())
 	}
-
 }
 
 // TestReorgToShorterRemovesCanonMappingHeaderChain is the same scenario
 // as TestReorgToShorterRemovesCanonMapping, but applied on headerchain
 // imports -- that is, for fast sync
 func TestReorgToShorterRemovesCanonMappingHeaderChain(t *testing.T) {
-
 	chain, canonblocks, sideblocks, err := getLongAndShortChains()
 	if err != nil {
 		t.Fatal(err)
@@ -1933,5 +1930,4 @@ func TestReorgToShorterRemovesCanonMappingHeaderChain(t *testing.T) {
 	if headerByNum := chain.GetHeaderByNumber(canonNum); headerByNum != nil {
 		t.Errorf("expected header to be gone: %v", headerByNum.Number.Uint64())
 	}
-
 }
