@@ -284,6 +284,7 @@ func buildFlags(env build.Environment) (flags []string) {
 	var ld []string
 	if env.Commit != "" {
 		ld = append(ld, "-X", "main.gitCommit="+env.Commit)
+		ld = append(ld, "-X", "main.gitDate="+env.Date)
 	}
 	if runtime.GOOS == "darwin" {
 		ld = append(ld, "-s")

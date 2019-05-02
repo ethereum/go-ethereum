@@ -102,7 +102,7 @@ func init() {
 	utils.ListenPortFlag.Value = 30399
 }
 
-var app = utils.NewApp("", "Ethereum Swarm")
+var app = utils.NewApp("", "", "Ethereum Swarm")
 
 // This init function creates the cli.App.
 func init() {
