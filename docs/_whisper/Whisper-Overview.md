@@ -6,7 +6,7 @@ Whisper is a pure identity-based messaging system. Whisper provides a simple low
 
 Basically, all Whisper messages are supposed to be sent to every Whisper node. In order to prevent a DDoS attack, proof-of-work (PoW) algorithm is used. Messages will be processed (and forwarded further) only if their PoW exceeds a certain threshold, otherwise they will be dropped. 
 
-### Encryption in version 5
+### Encryption in version 6
 
 All Whisper messages are encrypted and then sent via underlying ÐΞVp2p Protocol, which in turn uses its own encryption, on top of Whisper encryption. Every Whisper message must be encrypted either symmetrically or asymmetrically. Messages could be decrypted by anyone who possesses the corresponding key. 
 
@@ -53,13 +53,13 @@ Plaintext (unencrypted) message is formed as a concatenation of a single byte fo
 
 Those unable to decrypt the message data are also unable to access the signature. The signature, if provided, is the ECDSA signature of the Keccak-256 hash of the unencrypted data using the secret key of the originator identity. The signature is serialised as the concatenation of the `R`, `S` and `V` parameters of the SECP-256k1 ECDSA signature, in that order. `R` and `S` are both big-endian encoded, fixed-width 256-bit unsigned. `V` is an 8-bit big-endian encoded, non-normalised and should be either 27 or 28. 
 
-The padding is introduced in order to align the message size, since message size alone might reveal important metainformation. The padding is supposed to contain random data (at least this is the default behaviour in version 5). However, it is possible to set arbitrary padding data, which might even be used for steganographic purposes. The API allows easy access to the padding data.
+The padding is introduced in order to align the message size, since message size alone might reveal important metainformation. The padding is supposed to contain random data (at least this is the default behaviour in version 6). However, it is possible to set arbitrary padding data, which might even be used for steganographic purposes. The API allows easy access to the padding data.
 
-Default version 5 implementation ensures the size of the message to be multiple of 256. However, it is possible to set arbitrary padding through Whisper API. It might be useful for private Whisper networks, e.g. in order to ensure that all Whisper messages have the same (arbitrary) size. Incoming Whisper messages might have arbitrary padding size, and still be compatible with version 5.
+Default version 6 implementation ensures the size of the message to be multiple of 256. However, it is possible to set arbitrary padding through Whisper API. It might be useful for private Whisper networks, e.g. in order to ensure that all Whisper messages have the same (arbitrary) size. Incoming Whisper messages might have arbitrary padding size, and still be compatible with version 6.
 
 The first several bytes of padding (up to four bytes) indicate the total size of padding. E.g. if padding is less than 256 bytes, then one byte is enough; if padding is less than 65536 bytes, then 2 bytes; and so on.
 
-Flags byte uses only three bits in v.5. First two bits indicate, how many bytes indicate the padding size. The third byte indicates if signature is present. Other bits must be set to zero for backwards compatibility of future versions. 
+Flags byte uses only three bits in v.6. First two bits indicate, how many bytes indicate the padding size. The third byte indicates if signature is present. Other bits must be set to zero for backwards compatibility of future versions. 
 
 #### Topics
 
@@ -104,7 +104,7 @@ The purpose of PoW is spam prevention, and also reducing the burden on the netwo
 
 After creating the Envelope, its Nonce should be repeatedly incremented, and then its hash should be calculated. This procedure could be run for a specific predefined time, looking for the lowest hash. Alternatively, the node might run the loop until certain predefined PoW is achieved.
 
-In version 5, PoW is defined as average number of iterations, required to find the current BestBit (the number of leading zero bits in the hash), divided by message size and TTL:
+In version 6, PoW is defined as average number of iterations, required to find the current BestBit (the number of leading zero bits in the hash), divided by message size and TTL:
 
 <code>PoW = (2^BestBit) / (size * TTL)</code>
 
@@ -154,7 +154,7 @@ Suppose, a Ðapp waits for messages with certain Topic and suffers an unexpected
 
 One possible way to solve this problem is to run a Mail Server, which would store all the messages, and resend them at the request of the known nodes. Even though the server might repack the old messages and provide sufficient PoW, it's not feasible to resend all of them at whim, because it would tantamount to DDoS attack on the entire network. Instead, the Mail Server should engage in peer-to-peer communication with the node, and resend the expired messages directly. The recipient will consume the messages and will not forward them any further. 
 
-In order to facilitate this task, protocol-level support is provided in version 5. New message types are introduced to Whisper v.5: mailRequestCode and p2pCode.
+In order to facilitate this task, protocol-level support is provided in version 6. New message types are introduced to Whisper v.6: mailRequestCode and p2pCode.
 
 - mailRequestCode is used by the node to request historic (expired) messages from the Mail Server. The payload of this message should be understood by the Server. The Whisper protocol is entirely agnostic about it. It might contain a time frame, the node's authorization details, filtering information, payment details, etc.
 
