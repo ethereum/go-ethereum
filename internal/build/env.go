@@ -89,8 +89,8 @@ func LocalEnv() Environment {
 	env := applyEnvFlags(Environment{Name: "local", Repo: "ethereum/go-ethereum"})
 
 	head := readGitFile("HEAD")
-	if splits := strings.Split(head, " "); len(splits) == 2 {
-		head = splits[1]
+	if fields := strings.Fields(head); len(fields) == 2 {
+		head = fields[1]
 	} else {
 		return env
 	}
