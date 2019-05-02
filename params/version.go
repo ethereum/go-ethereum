@@ -18,6 +18,10 @@ package params
 
 import (
 	"fmt"
+	"log"
+	"os/exec"
+	"strconv"
+	"time"
 )
 
 const (
@@ -60,5 +64,28 @@ func VersionWithCommit(gitCommit string) string {
 	if len(gitCommit) >= 8 {
 		vsn += "-" + gitCommit[:8]
 	}
+	if VersionMeta != "stable" {
+		d := getCommitDate(gitCommit)
+		if d != "" {
+			vsn += "-" + d
+		}
+	}
 	return vsn
+}
+
+func getCommitDate(commit string) string {
+	if commit != "" {
+		out, err := exec.Command("git", "show", "-s", "--format=%ct", commit).CombinedOutput()
+		if err != nil {
+			log.Println("Could not get gitCommit date: " + string(out))
+			return ""
+		}
+		ti, err := strconv.ParseInt(string(out), 10, 64)
+		if err != nil {
+			log.Println("Could not convert gitCommit date. Parsed timestap is: " + string(out))
+			return ""
+		}
+		return time.Unix(ti, 0).Format("20060102")
+	}
+	return ""
 }

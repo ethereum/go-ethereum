@@ -98,11 +98,7 @@ func NewApp(gitCommit, usage string) *cli.App {
 	app.Author = ""
 	//app.Authors = nil
 	app.Email = ""
-	app.Version = params.VersionWithMeta
-	if len(gitCommit) >= 8 {
-		app.Version += "-" + gitCommit[:8]
-	}
-	app.Usage = usage
+	app.Version = params.VersionWithCommit(gitCommit)
 	return app
 }
 
