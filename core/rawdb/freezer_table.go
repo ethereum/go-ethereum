@@ -97,9 +97,9 @@ type freezerTable struct {
 	lock   sync.RWMutex // Mutex protecting the data file descriptors
 }
 
-// newTable opens a freezer table with default settings - 2G files and snappy compression
-func newTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter) (*freezerTable, error) {
-	return newCustomTable(path, name, readMeter, writeMeter, 2*1000*1000*1000, false)
+// newTable opens a freezer table with default settings - 2G files
+func newTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter, disableSnappy bool) (*freezerTable, error) {
+	return newCustomTable(path, name, readMeter, writeMeter, 2*1000*1000*1000, disableSnappy)
 }
 
 // newCustomTable opens a freezer table, creating the data and index files if they are
