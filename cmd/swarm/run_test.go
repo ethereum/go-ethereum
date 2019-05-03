@@ -224,10 +224,9 @@ const testPassphrase = "swarm-test-passphrase"
 func getTestAccount(t *testing.T, dir string) (conf *node.Config, account accounts.Account) {
 	// create key
 	conf = &node.Config{
-		DataDir:   dir,
-		IPCPath:   "bzzd.ipc",
-		NoUSB:     true,
-		SmartCard: false,
+		DataDir: dir,
+		IPCPath: "bzzd.ipc",
+		NoUSB:   true,
 	}
 	n, err := node.New(conf)
 	if err != nil {

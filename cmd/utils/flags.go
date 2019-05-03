@@ -130,7 +130,7 @@ var (
 	}
 	SmartCardFlag = cli.StringFlag{
 		Name:  "pcscd-sock",
-		Usage: "Path to the smartcard daemon (pcscd) socket file",
+		Usage: "Path to the smartcard daemon (pcscd) socket file (linux only)",
 		Value: "/run/pcscd/pcscd.comm",
 	}
 	NetworkIdFlag = cli.Uint64Flag{
@@ -1160,6 +1160,8 @@ func setSmartCard(ctx *cli.Context, cfg *node.Config) {
 		if fi, err := os.Stat(ctx.GlobalString(SmartCardFlag.Name)); err == nil {
 			cfg.SmartCard = fi.Mode()&os.ModeType == os.ModeSocket
 		}
+	} else {
+		log.Info("Smartcard support disabled on this platform")
 	}
 }
 

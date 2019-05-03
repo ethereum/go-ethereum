@@ -114,7 +114,6 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 	conf.Stack.P2P.NoDiscovery = true
 	conf.Stack.P2P.NAT = nil
 	conf.Stack.NoUSB = true
-	conf.Stack.SmartCard = false
 
 	// listen on a localhost port, which we set when we
 	// initialise NodeConfig (usually a random port)
