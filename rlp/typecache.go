@@ -96,9 +96,10 @@ type field struct {
 }
 
 func structFields(typ reflect.Type) (fields []field, err error) {
+	lastPublic := lastPublicField(typ)
 	for i := 0; i < typ.NumField(); i++ {
 		if f := typ.Field(i); f.PkgPath == "" { // exported
-			tags, err := parseStructTag(typ, i)
+			tags, err := parseStructTag(typ, i, lastPublic)
 			if err != nil {
 				return nil, err
 			}
@@ -115,7 +116,7 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 	return fields, nil
 }
 
-func parseStructTag(typ reflect.Type, fi int) (tags, error) {
+func parseStructTag(typ reflect.Type, fi, lastPublic int) (tags, error) {
 	f := typ.Field(fi)
 	var ts tags
 	for _, t := range strings.Split(f.Tag.Get("rlp"), ",") {
@@ -127,7 +128,7 @@ func parseStructTag(typ reflect.Type, fi int) (tags, error) {
 			ts.nilOK = true
 		case "tail":
 			ts.tail = true
-			if fi != typ.NumField()-1 {
+			if fi != lastPublic {
 				return ts, fmt.Errorf(`rlp: invalid struct tag "tail" for %v.%s (must be on last field)`, typ, f.Name)
 			}
 			if f.Type.Kind() != reflect.Slice {
@@ -138,6 +139,16 @@ func parseStructTag(typ reflect.Type, fi int) (tags, error) {
 		}
 	}
 	return ts, nil
+}
+
+func lastPublicField(typ reflect.Type) int {
+	last := 0
+	for i := 0; i < typ.NumField(); i++ {
+		if typ.Field(i).PkgPath == "" {
+			last = i
+		}
+	}
+	return last
 }
 
 func genTypeInfo(typ reflect.Type, tags tags) (info *typeinfo, err error) {

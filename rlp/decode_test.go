@@ -347,6 +347,12 @@ type tailUint struct {
 	Tail []uint `rlp:"tail"`
 }
 
+type tailPrivateFields struct {
+	A    uint
+	Tail []uint `rlp:"tail"`
+	x, y bool
+}
+
 var (
 	veryBigInt = big.NewInt(0).Add(
 		big.NewInt(0).Lsh(big.NewInt(0xFFFFFFFFFFFFFF), 16),
@@ -509,6 +515,11 @@ var decodeTests = []decodeTest{
 		input: "C101",
 		ptr:   new(tailRaw),
 		value: tailRaw{A: 1, Tail: []RawValue{}},
+	},
+	{
+		input: "C3010203",
+		ptr:   new(tailPrivateFields),
+		value: tailPrivateFields{A: 1, Tail: []uint{2, 3}},
 	},
 
 	// struct tag "-"
