@@ -29,8 +29,10 @@ var (
 )
 
 type typeinfo struct {
-	decoder
-	writer
+	decoder    decoder
+	decoderErr error // error from makeDecoder
+	writer     writer
+	writerErr  error // error from makeWriter
 }
 
 // represents struct tags
@@ -56,12 +58,22 @@ type decoder func(*Stream, reflect.Value) error
 
 type writer func(reflect.Value, *encbuf) error
 
-func cachedTypeInfo(typ reflect.Type, tags tags) (*typeinfo, error) {
+func cachedDecoder(typ reflect.Type) (decoder, error) {
+	info := cachedTypeInfo(typ, tags{})
+	return info.decoder, info.decoderErr
+}
+
+func cachedWriter(typ reflect.Type) (writer, error) {
+	info := cachedTypeInfo(typ, tags{})
+	return info.writer, info.writerErr
+}
+
+func cachedTypeInfo(typ reflect.Type, tags tags) *typeinfo {
 	typeCacheMutex.RLock()
 	info := typeCache[typekey{typ, tags}]
 	typeCacheMutex.RUnlock()
 	if info != nil {
-		return info, nil
+		return info
 	}
 	// not in the cache, need to generate info for this type.
 	typeCacheMutex.Lock()
@@ -69,25 +81,20 @@ func cachedTypeInfo(typ reflect.Type, tags tags) (*typeinfo, error) {
 	return cachedTypeInfo1(typ, tags)
 }
 
-func cachedTypeInfo1(typ reflect.Type, tags tags) (*typeinfo, error) {
+func cachedTypeInfo1(typ reflect.Type, tags tags) *typeinfo {
 	key := typekey{typ, tags}
 	info := typeCache[key]
 	if info != nil {
 		// another goroutine got the write lock first
-		return info, nil
+		return info
 	}
 	// put a dummy value into the cache before generating.
 	// if the generator tries to lookup itself, it will get
 	// the dummy value and won't call itself recursively.
-	typeCache[key] = new(typeinfo)
-	info, err := genTypeInfo(typ, tags)
-	if err != nil {
-		// remove the dummy value if the generator fails
-		delete(typeCache, key)
-		return nil, err
-	}
-	*typeCache[key] = *info
-	return typeCache[key], err
+	info = new(typeinfo)
+	typeCache[key] = info
+	info.generate(typ, tags)
+	return info
 }
 
 type field struct {
@@ -106,10 +113,7 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 			if tags.ignored {
 				continue
 			}
-			info, err := cachedTypeInfo1(f.Type, tags)
-			if err != nil {
-				return nil, err
-			}
+			info := cachedTypeInfo1(f.Type, tags)
 			fields = append(fields, field{i, info})
 		}
 	}
@@ -151,15 +155,9 @@ func lastPublicField(typ reflect.Type) int {
 	return last
 }
 
-func genTypeInfo(typ reflect.Type, tags tags) (info *typeinfo, err error) {
-	info = new(typeinfo)
-	if info.decoder, err = makeDecoder(typ, tags); err != nil {
-		return nil, err
-	}
-	if info.writer, err = makeWriter(typ, tags); err != nil {
-		return nil, err
-	}
-	return info, nil
+func (i *typeinfo) generate(typ reflect.Type, tags tags) {
+	i.decoder, i.decoderErr = makeDecoder(typ, tags)
+	i.writer, i.writerErr = makeWriter(typ, tags)
 }
 
 func isUint(k reflect.Kind) bool {

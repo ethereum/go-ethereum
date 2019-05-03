@@ -182,11 +182,11 @@ func (w *encbuf) Write(b []byte) (int, error) {
 
 func (w *encbuf) encode(val interface{}) error {
 	rval := reflect.ValueOf(val)
-	ti, err := cachedTypeInfo(rval.Type(), tags{})
+	writer, err := cachedWriter(rval.Type())
 	if err != nil {
 		return err
 	}
-	return ti.writer(rval, w)
+	return writer(rval, w)
 }
 
 func (w *encbuf) encodeStringHeader(size int) {
@@ -499,17 +499,17 @@ func writeInterface(val reflect.Value, w *encbuf) error {
 		return nil
 	}
 	eval := val.Elem()
-	ti, err := cachedTypeInfo(eval.Type(), tags{})
+	writer, err := cachedWriter(eval.Type())
 	if err != nil {
 		return err
 	}
-	return ti.writer(eval, w)
+	return writer(eval, w)
 }
 
 func makeSliceWriter(typ reflect.Type, ts tags) (writer, error) {
-	etypeinfo, err := cachedTypeInfo1(typ.Elem(), tags{})
-	if err != nil {
-		return nil, err
+	etypeinfo := cachedTypeInfo1(typ.Elem(), tags{})
+	if etypeinfo.writerErr != nil {
+		return nil, etypeinfo.writerErr
 	}
 	writer := func(val reflect.Value, w *encbuf) error {
 		if !ts.tail {
@@ -545,9 +545,9 @@ func makeStructWriter(typ reflect.Type) (writer, error) {
 }
 
 func makePtrWriter(typ reflect.Type) (writer, error) {
-	etypeinfo, err := cachedTypeInfo1(typ.Elem(), tags{})
-	if err != nil {
-		return nil, err
+	etypeinfo := cachedTypeInfo1(typ.Elem(), tags{})
+	if etypeinfo.writerErr != nil {
+		return nil, etypeinfo.writerErr
 	}
 
 	// determine nil pointer handler
@@ -579,7 +579,7 @@ func makePtrWriter(typ reflect.Type) (writer, error) {
 		}
 		return etypeinfo.writer(val.Elem(), w)
 	}
-	return writer, err
+	return writer, nil
 }
 
 // putint writes i to the beginning of b in big endian byte

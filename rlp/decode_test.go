@@ -702,6 +702,27 @@ func TestDecoderInByteSlice(t *testing.T) {
 	}
 }
 
+type unencodableDecoder func()
+
+func (f *unencodableDecoder) DecodeRLP(s *Stream) error {
+	if _, err := s.List(); err != nil {
+		return err
+	}
+	if err := s.ListEnd(); err != nil {
+		return err
+	}
+	*f = func() {}
+	return nil
+}
+
+func TestDecoderFunc(t *testing.T) {
+	var x func()
+	if err := DecodeBytes([]byte{0xC0}, (*unencodableDecoder)(&x)); err != nil {
+		t.Fatal(err)
+	}
+	x()
+}
+
 func ExampleDecode() {
 	input, _ := hex.DecodeString("C90A1486666F6F626172")
 
