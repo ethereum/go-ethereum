@@ -91,19 +91,19 @@ func (test *udpTest) close() {
 }
 
 // handles a packet as if it had been sent to the transport.
-func (test *udpTest) packetIn(wantError error, ptype byte, data packetV4) {
+func (test *udpTest) packetIn(wantError error, data packetV4) {
 	test.t.Helper()
 
-	test.packetInFrom(wantError, test.remotekey, test.remoteaddr, ptype, data)
+	test.packetInFrom(wantError, test.remotekey, test.remoteaddr, data)
 }
 
 // handles a packet as if it had been sent to the transport by the key/endpoint.
-func (test *udpTest) packetInFrom(wantError error, key *ecdsa.PrivateKey, addr *net.UDPAddr, ptype byte, data packetV4) {
+func (test *udpTest) packetInFrom(wantError error, key *ecdsa.PrivateKey, addr *net.UDPAddr, data packetV4) {
 	test.t.Helper()
 
-	enc, _, err := test.udp.encode(key, ptype, data)
+	enc, _, err := test.udp.encode(key, data)
 	if err != nil {
-		test.t.Errorf("packet (%d) encode error: %v", ptype, err)
+		test.t.Errorf("%s encode error: %v", data.name(), err)
 	}
 	test.sent = append(test.sent, enc)
 	if err = test.udp.handlePacket(addr, enc); err != wantError {
@@ -139,10 +139,10 @@ func TestUDPv4_packetErrors(t *testing.T) {
 	test := newUDPTest(t)
 	defer test.close()
 
-	test.packetIn(errExpired, p_pingV4, &pingV4{From: testRemote, To: testLocalAnnounced, Version: 4})
-	test.packetIn(errUnsolicitedReply, p_pongV4, &pongV4{ReplyTok: []byte{}, Expiration: futureExp})
-	test.packetIn(errUnknownNode, p_findnodeV4, &findnodeV4{Expiration: futureExp})
-	test.packetIn(errUnsolicitedReply, p_neighborsV4, &neighborsV4{Expiration: futureExp})
+	test.packetIn(errExpired, &pingV4{From: testRemote, To: testLocalAnnounced, Version: 4})
+	test.packetIn(errUnsolicitedReply, &pongV4{ReplyTok: []byte{}, Expiration: futureExp})
+	test.packetIn(errUnknownNode, &findnodeV4{Expiration: futureExp})
+	test.packetIn(errUnsolicitedReply, &neighborsV4{Expiration: futureExp})
 }
 
 func TestUDPv4_pingTimeout(t *testing.T) {
@@ -156,6 +156,16 @@ func TestUDPv4_pingTimeout(t *testing.T) {
 	if err := test.udp.ping(node); err != errTimeout {
 		t.Error("expected timeout error, got", err)
 	}
+}
+
+type testPacket byte
+
+func (req testPacket) kind() byte   { return byte(req) }
+func (req testPacket) name() string { return "" }
+func (req testPacket) preverify(*UDPv4, *net.UDPAddr, enode.ID, encPubkey) error {
+	return nil
+}
+func (req testPacket) handle(*UDPv4, *net.UDPAddr, enode.ID, []byte) {
 }
 
 func TestUDPv4_responseTimeouts(t *testing.T) {
@@ -192,7 +202,7 @@ func TestUDPv4_responseTimeouts(t *testing.T) {
 			p.errc = nilErr
 			test.udp.addReplyMatcher <- p
 			time.AfterFunc(randomDuration(60*time.Millisecond), func() {
-				if !test.udp.handleReply(p.from, p.ip, p.ptype, nil) {
+				if !test.udp.handleReply(p.from, p.ip, testPacket(p.ptype)) {
 					t.Logf("not matched: %v", p)
 				}
 			})
@@ -277,7 +287,7 @@ func TestUDPv4_findnode(t *testing.T) {
 
 	// check that closest neighbors are returned.
 	expected := test.table.closest(testTarget.id(), bucketSize, true)
-	test.packetIn(nil, p_findnodeV4, &findnodeV4{Target: testTarget, Expiration: futureExp})
+	test.packetIn(nil, &findnodeV4{Target: testTarget, Expiration: futureExp})
 	waitNeighbors := func(want []*node) {
 		test.waitPacketOut(func(p *neighborsV4, to *net.UDPAddr, hash []byte) {
 			if len(p.Nodes) != len(want) {
@@ -340,8 +350,8 @@ func TestUDPv4_findnodeMultiReply(t *testing.T) {
 	for i := range list {
 		rpclist[i] = nodeToRPC(list[i])
 	}
-	test.packetIn(nil, p_neighborsV4, &neighborsV4{Expiration: futureExp, Nodes: rpclist[:2]})
-	test.packetIn(nil, p_neighborsV4, &neighborsV4{Expiration: futureExp, Nodes: rpclist[2:]})
+	test.packetIn(nil, &neighborsV4{Expiration: futureExp, Nodes: rpclist[:2]})
+	test.packetIn(nil, &neighborsV4{Expiration: futureExp, Nodes: rpclist[2:]})
 
 	// check that the sent neighbors are all returned by findnode
 	select {
@@ -364,22 +374,22 @@ func TestUDPv4_pingMatch(t *testing.T) {
 	randToken := make([]byte, 32)
 	crand.Read(randToken)
 
-	test.packetIn(nil, p_pingV4, &pingV4{From: testRemote, To: testLocalAnnounced, Version: 4, Expiration: futureExp})
+	test.packetIn(nil, &pingV4{From: testRemote, To: testLocalAnnounced, Version: 4, Expiration: futureExp})
 	test.waitPacketOut(func(*pongV4, *net.UDPAddr, []byte) {})
 	test.waitPacketOut(func(*pingV4, *net.UDPAddr, []byte) {})
-	test.packetIn(errUnsolicitedReply, p_pongV4, &pongV4{ReplyTok: randToken, To: testLocalAnnounced, Expiration: futureExp})
+	test.packetIn(errUnsolicitedReply, &pongV4{ReplyTok: randToken, To: testLocalAnnounced, Expiration: futureExp})
 }
 
 func TestUDPv4_pingMatchIP(t *testing.T) {
 	test := newUDPTest(t)
 	defer test.close()
 
-	test.packetIn(nil, p_pingV4, &pingV4{From: testRemote, To: testLocalAnnounced, Version: 4, Expiration: futureExp})
+	test.packetIn(nil, &pingV4{From: testRemote, To: testLocalAnnounced, Version: 4, Expiration: futureExp})
 	test.waitPacketOut(func(*pongV4, *net.UDPAddr, []byte) {})
 
 	test.waitPacketOut(func(p *pingV4, to *net.UDPAddr, hash []byte) {
 		wrongAddr := &net.UDPAddr{IP: net.IP{33, 44, 1, 2}, Port: 30000}
-		test.packetInFrom(errUnsolicitedReply, test.remotekey, wrongAddr, p_pongV4, &pongV4{
+		test.packetInFrom(errUnsolicitedReply, test.remotekey, wrongAddr, &pongV4{
 			ReplyTok:   hash,
 			To:         testLocalAnnounced,
 			Expiration: futureExp,
@@ -394,7 +404,7 @@ func TestUDPv4_successfulPing(t *testing.T) {
 	defer test.close()
 
 	// The remote side sends a ping packet to initiate the exchange.
-	go test.packetIn(nil, p_pingV4, &pingV4{From: testRemote, To: testLocalAnnounced, Version: 4, Expiration: futureExp})
+	go test.packetIn(nil, &pingV4{From: testRemote, To: testLocalAnnounced, Version: 4, Expiration: futureExp})
 
 	// the ping is replied to.
 	test.waitPacketOut(func(p *pongV4, to *net.UDPAddr, hash []byte) {
@@ -427,7 +437,7 @@ func TestUDPv4_successfulPing(t *testing.T) {
 		if !reflect.DeepEqual(p.To, wantTo) {
 			t.Errorf("got ping.To %v, want %v", p.To, wantTo)
 		}
-		test.packetIn(nil, p_pongV4, &pongV4{ReplyTok: hash, Expiration: futureExp})
+		test.packetIn(nil, &pongV4{ReplyTok: hash, Expiration: futureExp})
 	})
 
 	// the node should be added to the table shortly after getting the
