@@ -368,6 +368,34 @@ func TestTable_addSeenNode(t *testing.T) {
 	checkIPLimitInvariant(t, tab)
 }
 
+// This test checks that ENR updates happen during revalidation. If a node in the table
+// announces a new sequence number, the new record should be pulled.
+func TestTable_revalidateSyncRecord(t *testing.T) {
+	transport := newPingRecorder()
+	tab, db := newTestTable(transport)
+	<-tab.initDone
+	defer db.Close()
+	defer tab.close()
+
+	// Insert a node.
+	var r enr.Record
+	r.Set(enr.IP(net.IP{127, 0, 0, 1}))
+	id := enode.ID{1}
+	n1 := wrapNode(enode.SignNull(&r, id))
+	tab.addSeenNode(n1)
+
+	// Update the node record.
+	r.Set(enr.WithEntry("foo", "bar"))
+	n2 := enode.SignNull(&r, id)
+	transport.updateRecord(n2)
+
+	tab.doRevalidate(make(chan struct{}, 1))
+	intable := tab.getNode(id)
+	if !reflect.DeepEqual(intable, n2) {
+		t.Fatalf("table contains old record with seq %d, want seq %d", intable.Seq(), n2.Seq())
+	}
+}
+
 // gen wraps quick.Value so it's easier to use.
 // it generates a random value of the given value's type.
 func gen(typ interface{}, rand *rand.Rand) interface{} {

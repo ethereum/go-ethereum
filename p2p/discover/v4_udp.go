@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -69,6 +70,8 @@ const (
 	p_pongV4
 	p_findnodeV4
 	p_neighborsV4
+	p_enrRequestV4
+	p_enrResponseV4
 )
 
 // RPC request structures
@@ -108,6 +111,21 @@ type (
 	neighborsV4 struct {
 		Nodes      []rpcNode
 		Expiration uint64
+		// Ignore additional fields (for forward compatibility).
+		Rest []rlp.RawValue `rlp:"tail"`
+	}
+
+	// enrRequestV4 queries for the remote node's record.
+	enrRequestV4 struct {
+		Expiration uint64
+		// Ignore additional fields (for forward compatibility).
+		Rest []rlp.RawValue `rlp:"tail"`
+	}
+
+	// enrResponseV4 is the reply to enrRequestV4.
+	enrResponseV4 struct {
+		ReplyTok []byte // Hash of the enrRequest packet.
+		Record   enr.Record
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`
 	}
@@ -218,7 +236,11 @@ type replyMatcher struct {
 
 	// errc receives nil when the callback indicates completion or an
 	// error if no further reply is received within the timeout.
-	errc chan<- error
+	errc chan error
+
+	// reply contains the most recent reply. This field is safe for reading after errc has
+	// received a value.
+	reply packetV4
 }
 
 type replyMatchFunc func(interface{}) (matched bool, requestDone bool)
@@ -376,7 +398,8 @@ func (t *UDPv4) lookupWorker(n *node, targetKey encPubkey, reply chan<- []*node)
 			t.tab.delete(n)
 		}
 	} else if fails > 0 {
-		t.db.UpdateFindFails(n.ID(), n.IP(), fails-1)
+		// Reset failure counter because it counts _consecutive_ failures.
+		t.db.UpdateFindFails(n.ID(), n.IP(), 0)
 	}
 
 	// Grab as many nodes as possible. Some of them might not be alive anymore, but we'll
@@ -387,23 +410,34 @@ func (t *UDPv4) lookupWorker(n *node, targetKey encPubkey, reply chan<- []*node)
 	reply <- r
 }
 
-// Resolve searches for a specific node with the given ID.
-// It returns nil if the node could not be found.
+// Resolve searches for a specific node with the given ID and tries to get the most recent
+// version of the node record for it. It returns n if the node could not be resolved.
 func (t *UDPv4) Resolve(n *enode.Node) *enode.Node {
-	// If the node is present in the local table, no
-	// network interaction is required.
-	if intab := t.tab.Resolve(n); intab != nil {
-		return intab
+	// Try asking directly. This works if the node is still responding on the endpoint we have.
+	if rn, err := t.requestENR(n); err == nil {
+		return rn
 	}
-	// Otherwise, do a network lookup.
-	hash := n.ID()
-	result := t.LookupPubkey(n.Pubkey())
-	for _, n := range result {
-		if n.ID() == hash {
-			return n
+	// Check table for the ID, we might have a newer version there.
+	if intable := t.tab.getNode(n.ID()); intable != nil && intable.Seq() > n.Seq() {
+		n = intable
+		if rn, err := t.requestENR(n); err == nil {
+			return rn
 		}
 	}
-	return nil
+	// Otherwise perform a network lookup.
+	var key *enode.Secp256k1
+	if n.Load(key) != nil {
+		return n // no secp256k1 key
+	}
+	result := t.LookupPubkey((*ecdsa.PublicKey)(key))
+	for _, rn := range result {
+		if rn.ID() == n.ID() {
+			if rn, err := t.requestENR(rn); err == nil {
+				return rn
+			}
+		}
+	}
+	return n
 }
 
 func (t *UDPv4) ourEndpoint() rpcEndpoint {
@@ -413,28 +447,27 @@ func (t *UDPv4) ourEndpoint() rpcEndpoint {
 }
 
 // ping sends a ping message to the given node and waits for a reply.
-func (t *UDPv4) ping(n *enode.Node) error {
-	return <-t.sendPing(n.ID(), &net.UDPAddr{IP: n.IP(), Port: n.UDP()}, nil)
+func (t *UDPv4) ping(n *enode.Node) (seq uint64, err error) {
+	rm := t.sendPing(n.ID(), &net.UDPAddr{IP: n.IP(), Port: n.UDP()}, nil)
+	if err = <-rm.errc; err == nil {
+		seq = seqFromTail(rm.reply.(*pongV4).Rest)
+	}
+	return seq, err
 }
 
 // sendPing sends a ping message to the given node and invokes the callback
 // when the reply arrives.
-func (t *UDPv4) sendPing(toid enode.ID, toaddr *net.UDPAddr, callback func()) <-chan error {
-	req := &pingV4{
-		Version:    4,
-		From:       t.ourEndpoint(),
-		To:         makeEndpoint(toaddr, 0), // TODO: maybe use known TCP port from DB
-		Expiration: uint64(time.Now().Add(expiration).Unix()),
-	}
+func (t *UDPv4) sendPing(toid enode.ID, toaddr *net.UDPAddr, callback func()) *replyMatcher {
+	req := t.makePing(toaddr)
 	packet, hash, err := t.encode(t.priv, req)
 	if err != nil {
 		errc := make(chan error, 1)
 		errc <- err
-		return errc
+		return &replyMatcher{errc: errc}
 	}
 	// Add a matcher for the reply to the pending reply queue. Pongs are matched if they
 	// reference the ping we're about to send.
-	errc := t.pending(toid, toaddr.IP, p_pongV4, func(p interface{}) (matched bool, requestDone bool) {
+	rm := t.pending(toid, toaddr.IP, p_pongV4, func(p interface{}) (matched bool, requestDone bool) {
 		matched = bytes.Equal(p.(*pongV4).ReplyTok, hash)
 		if matched && callback != nil {
 			callback()
@@ -444,25 +477,30 @@ func (t *UDPv4) sendPing(toid enode.ID, toaddr *net.UDPAddr, callback func()) <-
 	// Send the packet.
 	t.localNode.UDPContact(toaddr)
 	t.write(toaddr, toid, req.name(), packet)
-	return errc
+	return rm
+}
+
+func (t *UDPv4) makePing(toaddr *net.UDPAddr) *pingV4 {
+	seq, _ := rlp.EncodeToBytes(t.localNode.Node().Seq())
+	return &pingV4{
+		Version:    4,
+		From:       t.ourEndpoint(),
+		To:         makeEndpoint(toaddr, 0),
+		Expiration: uint64(time.Now().Add(expiration).Unix()),
+		Rest:       []rlp.RawValue{seq},
+	}
 }
 
 // findnode sends a findnode request to the given node and waits until
 // the node has sent up to k neighbors.
 func (t *UDPv4) findnode(toid enode.ID, toaddr *net.UDPAddr, target encPubkey) ([]*node, error) {
-	// If we haven't seen a ping from the destination node for a while, it won't remember
-	// our endpoint proof and reject findnode. Solicit a ping first.
-	if time.Since(t.db.LastPingReceived(toid, toaddr.IP)) > bondExpiration {
-		<-t.sendPing(toid, toaddr, nil)
-		// Wait for them to ping back and process our pong.
-		time.Sleep(respTimeout)
-	}
+	t.ensureBond(toid, toaddr)
 
 	// Add a matcher for 'neighbours' replies to the pending reply queue. The matcher is
 	// active until enough nodes have been received.
 	nodes := make([]*node, 0, bucketSize)
 	nreceived := 0
-	errc := t.pending(toid, toaddr.IP, p_neighborsV4, func(r interface{}) (matched bool, requestDone bool) {
+	rm := t.pending(toid, toaddr.IP, p_neighborsV4, func(r interface{}) (matched bool, requestDone bool) {
 		reply := r.(*neighborsV4)
 		for _, rn := range reply.Nodes {
 			nreceived++
@@ -479,12 +517,49 @@ func (t *UDPv4) findnode(toid enode.ID, toaddr *net.UDPAddr, target encPubkey) (
 		Target:     target,
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	})
-	return nodes, <-errc
+	return nodes, <-rm.errc
+}
+
+// requestENR sends enrRequest to the given node and waits for a response.
+func (t *UDPv4) requestENR(n *enode.Node) (*enode.Node, error) {
+	addr := &net.UDPAddr{IP: n.IP(), Port: n.UDP()}
+	t.ensureBond(n.ID(), addr)
+
+	req := &enrRequestV4{
+		Expiration: uint64(time.Now().Add(expiration).Unix()),
+	}
+	packet, hash, err := t.encode(t.priv, req)
+	if err != nil {
+		return nil, err
+	}
+	// Add a matcher for the reply to the pending reply queue. Responses are matched if
+	// they reference the request we're about to send.
+	rm := t.pending(n.ID(), addr.IP, p_enrResponseV4, func(r interface{}) (matched bool, requestDone bool) {
+		matched = bytes.Equal(r.(*enrResponseV4).ReplyTok, hash)
+		return matched, matched
+	})
+	// Send the packet and wait for the reply.
+	t.write(addr, n.ID(), req.name(), packet)
+	if err := <-rm.errc; err != nil {
+		return nil, err
+	}
+	// Verify the response record.
+	respN, err := enode.New(enode.ValidSchemes, &rm.reply.(*enrResponseV4).Record)
+	if err != nil {
+		return nil, err
+	}
+	if respN.ID() != n.ID() {
+		return nil, fmt.Errorf("invalid ID in response record")
+	}
+	if err := netutil.CheckRelayIP(addr.IP, respN.IP()); err != nil {
+		return nil, fmt.Errorf("invalid IP in response record: %v", err)
+	}
+	return respN, nil
 }
 
 // pending adds a reply matcher to the pending reply queue.
 // see the documentation of type replyMatcher for a detailed explanation.
-func (t *UDPv4) pending(id enode.ID, ip net.IP, ptype byte, callback replyMatchFunc) <-chan error {
+func (t *UDPv4) pending(id enode.ID, ip net.IP, ptype byte, callback replyMatchFunc) *replyMatcher {
 	ch := make(chan error, 1)
 	p := &replyMatcher{from: id, ip: ip, ptype: ptype, callback: callback, errc: ch}
 	select {
@@ -493,7 +568,7 @@ func (t *UDPv4) pending(id enode.ID, ip net.IP, ptype byte, callback replyMatchF
 	case <-t.closing:
 		ch <- errClosed
 	}
-	return ch
+	return p
 }
 
 // handleReply dispatches a reply packet, invoking reply matchers. It returns
@@ -569,6 +644,7 @@ func (t *UDPv4) loop() {
 					matched = matched || ok
 					// Remove the matcher if callback indicates that all replies have been received.
 					if requestDone {
+						p.reply = r.data
 						p.errc <- nil
 						plist.Remove(el)
 					}
@@ -743,6 +819,10 @@ func decodeV4(buf []byte) (packetV4, encPubkey, []byte, error) {
 		req = new(findnodeV4)
 	case p_neighborsV4:
 		req = new(neighborsV4)
+	case p_enrRequestV4:
+		req = new(enrRequestV4)
+	case p_enrResponseV4:
+		req = new(enrResponseV4)
 	default:
 		return nil, fromKey, hash, fmt.Errorf("unknown type: %d", ptype)
 	}
@@ -751,7 +831,38 @@ func decodeV4(buf []byte) (packetV4, encPubkey, []byte, error) {
 	return req, fromKey, hash, err
 }
 
-// Packet Handlers
+// checkBond checks if the given node has a recent enough endpoint proof.
+func (t *UDPv4) checkBond(id enode.ID, ip net.IP) bool {
+	return time.Since(t.db.LastPongReceived(id, ip)) < bondExpiration
+}
+
+// ensureBond solicits a ping from a node if we haven't seen a ping from it for a while.
+// This ensures there is a valid endpoint proof on the remote end.
+func (t *UDPv4) ensureBond(toid enode.ID, toaddr *net.UDPAddr) {
+	tooOld := time.Since(t.db.LastPingReceived(toid, toaddr.IP)) > bondExpiration
+	if tooOld || t.db.FindFails(toid, toaddr.IP) > 5 {
+		rm := t.sendPing(toid, toaddr, nil)
+		<-rm.errc
+		// Wait for them to ping back and process our pong.
+		time.Sleep(respTimeout)
+	}
+}
+
+// expired checks whether the given UNIX time stamp is in the past.
+func expired(ts uint64) bool {
+	return time.Unix(int64(ts), 0).Before(time.Now())
+}
+
+func seqFromTail(tail []rlp.RawValue) uint64 {
+	if len(tail) == 0 {
+		return 0
+	}
+	var seq uint64
+	rlp.DecodeBytes(tail[0], &seq)
+	return seq
+}
+
+// PING/v4
 
 func (req *pingV4) name() string { return "PING/v4" }
 func (req *pingV4) kind() byte   { return p_pingV4 }
@@ -770,10 +881,12 @@ func (req *pingV4) preverify(t *UDPv4, from *net.UDPAddr, fromID enode.ID, fromK
 
 func (req *pingV4) handle(t *UDPv4, from *net.UDPAddr, fromID enode.ID, mac []byte) {
 	// Reply.
+	seq, _ := rlp.EncodeToBytes(t.localNode.Node().Seq())
 	t.send(from, fromID, &pongV4{
 		To:         makeEndpoint(from, req.From.TCP),
 		ReplyTok:   mac,
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
+		Rest:       []rlp.RawValue{seq},
 	})
 
 	// Ping back if our last pong on file is too far in the past.
@@ -790,6 +903,8 @@ func (req *pingV4) handle(t *UDPv4, from *net.UDPAddr, fromID enode.ID, mac []by
 	t.db.UpdateLastPingReceived(n.ID(), from.IP, time.Now())
 	t.localNode.UDPEndpointStatement(from, &net.UDPAddr{IP: req.To.IP, Port: int(req.To.UDP)})
 }
+
+// PONG/v4
 
 func (req *pongV4) name() string { return "PONG/v4" }
 func (req *pongV4) kind() byte   { return p_pongV4 }
@@ -809,6 +924,8 @@ func (req *pongV4) handle(t *UDPv4, from *net.UDPAddr, fromID enode.ID, mac []by
 	t.db.UpdateLastPongReceived(fromID, from.IP, time.Now())
 }
 
+// FINDNODE/v4
+
 func (req *findnodeV4) name() string { return "FINDNODE/v4" }
 func (req *findnodeV4) kind() byte   { return p_findnodeV4 }
 
@@ -816,7 +933,7 @@ func (req *findnodeV4) preverify(t *UDPv4, from *net.UDPAddr, fromID enode.ID, f
 	if expired(req.Expiration) {
 		return errExpired
 	}
-	if time.Since(t.db.LastPongReceived(fromID, from.IP)) > bondExpiration {
+	if !t.checkBond(fromID, from.IP) {
 		// No endpoint proof pong exists, we don't process the packet. This prevents an
 		// attack vector where the discovery protocol could be used to amplify traffic in a
 		// DDOS attack. A malicious actor would send a findnode request with the IP address
@@ -854,6 +971,8 @@ func (req *findnodeV4) handle(t *UDPv4, from *net.UDPAddr, fromID enode.ID, mac 
 	}
 }
 
+// NEIGHBORS/v4
+
 func (req *neighborsV4) name() string { return "NEIGHBORS/v4" }
 func (req *neighborsV4) kind() byte   { return p_neighborsV4 }
 
@@ -870,6 +989,39 @@ func (req *neighborsV4) preverify(t *UDPv4, from *net.UDPAddr, fromID enode.ID, 
 func (req *neighborsV4) handle(t *UDPv4, from *net.UDPAddr, fromID enode.ID, mac []byte) {
 }
 
-func expired(ts uint64) bool {
-	return time.Unix(int64(ts), 0).Before(time.Now())
+// ENRREQUEST/v4
+
+func (req *enrRequestV4) name() string { return "ENRREQUEST/v4" }
+func (req *enrRequestV4) kind() byte   { return p_enrRequestV4 }
+
+func (req *enrRequestV4) preverify(t *UDPv4, from *net.UDPAddr, fromID enode.ID, fromKey encPubkey) error {
+	if expired(req.Expiration) {
+		return errExpired
+	}
+	if !t.checkBond(fromID, from.IP) {
+		return errUnknownNode
+	}
+	return nil
+}
+
+func (req *enrRequestV4) handle(t *UDPv4, from *net.UDPAddr, fromID enode.ID, mac []byte) {
+	t.send(from, fromID, &enrResponseV4{
+		ReplyTok: mac,
+		Record:   *t.localNode.Node().Record(),
+	})
+}
+
+// ENRRESPONSE/v4
+
+func (req *enrResponseV4) name() string { return "ENRRESPONSE/v4" }
+func (req *enrResponseV4) kind() byte   { return p_enrResponseV4 }
+
+func (req *enrResponseV4) preverify(t *UDPv4, from *net.UDPAddr, fromID enode.ID, fromKey encPubkey) error {
+	if !t.handleReply(fromID, from.IP, req) {
+		return errUnsolicitedReply
+	}
+	return nil
+}
+
+func (req *enrResponseV4) handle(t *UDPv4, from *net.UDPAddr, fromID enode.ID, mac []byte) {
 }

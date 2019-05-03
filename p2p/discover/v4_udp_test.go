@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -153,7 +154,7 @@ func TestUDPv4_pingTimeout(t *testing.T) {
 	key := newkey()
 	toaddr := &net.UDPAddr{IP: net.ParseIP("1.2.3.4"), Port: 2222}
 	node := enode.NewV4(&key.PublicKey, toaddr.IP, 0, toaddr.Port)
-	if err := test.udp.ping(node); err != errTimeout {
+	if _, err := test.udp.ping(node); err != errTimeout {
 		t.Error("expected timeout error, got", err)
 	}
 }
@@ -367,6 +368,7 @@ func TestUDPv4_findnodeMultiReply(t *testing.T) {
 	}
 }
 
+// This test checks that reply matching of pong verifies the ping hash.
 func TestUDPv4_pingMatch(t *testing.T) {
 	test := newUDPTest(t)
 	defer test.close()
@@ -380,6 +382,7 @@ func TestUDPv4_pingMatch(t *testing.T) {
 	test.packetIn(errUnsolicitedReply, &pongV4{ReplyTok: randToken, To: testLocalAnnounced, Expiration: futureExp})
 }
 
+// This test checks that reply matching of pong verifies the sender IP address.
 func TestUDPv4_pingMatchIP(t *testing.T) {
 	test := newUDPTest(t)
 	defer test.close()
@@ -406,7 +409,7 @@ func TestUDPv4_successfulPing(t *testing.T) {
 	// The remote side sends a ping packet to initiate the exchange.
 	go test.packetIn(nil, &pingV4{From: testRemote, To: testLocalAnnounced, Version: 4, Expiration: futureExp})
 
-	// the ping is replied to.
+	// The ping is replied to.
 	test.waitPacketOut(func(p *pongV4, to *net.UDPAddr, hash []byte) {
 		pinghash := test.sent[0][:macSize]
 		if !bytes.Equal(p.ReplyTok, pinghash) {
@@ -423,7 +426,7 @@ func TestUDPv4_successfulPing(t *testing.T) {
 		}
 	})
 
-	// remote is unknown, the table pings back.
+	// Remote is unknown, the table pings back.
 	test.waitPacketOut(func(p *pingV4, to *net.UDPAddr, hash []byte) {
 		if !reflect.DeepEqual(p.From, test.udp.ourEndpoint()) {
 			t.Errorf("got ping.From %#v, want %#v", p.From, test.udp.ourEndpoint())
@@ -440,7 +443,7 @@ func TestUDPv4_successfulPing(t *testing.T) {
 		test.packetIn(nil, &pongV4{ReplyTok: hash, Expiration: futureExp})
 	})
 
-	// the node should be added to the table shortly after getting the
+	// The node should be added to the table shortly after getting the
 	// pong packet.
 	select {
 	case n := <-added:
@@ -462,6 +465,45 @@ func TestUDPv4_successfulPing(t *testing.T) {
 	}
 }
 
+// This test checks that EIP-868 requests work.
+func TestUDPv4_EIP868(t *testing.T) {
+	test := newUDPTest(t)
+	defer test.close()
+
+	test.udp.localNode.Set(enr.WithEntry("foo", "bar"))
+	wantNode := test.udp.localNode.Node()
+
+	// ENR requests aren't allowed before endpoint proof.
+	test.packetIn(errUnknownNode, &enrRequestV4{Expiration: futureExp})
+
+	// Perform endpoint proof and check for sequence number in packet tail.
+	test.packetIn(nil, &pingV4{Expiration: futureExp})
+	test.waitPacketOut(func(p *pongV4, addr *net.UDPAddr, hash []byte) {
+		if seq := seqFromTail(p.Rest); seq != wantNode.Seq() {
+			t.Errorf("wrong sequence number in pong: %d, want %d", seq, wantNode.Seq())
+		}
+	})
+	test.waitPacketOut(func(p *pingV4, addr *net.UDPAddr, hash []byte) {
+		if seq := seqFromTail(p.Rest); seq != wantNode.Seq() {
+			t.Errorf("wrong sequence number in ping: %d, want %d", seq, wantNode.Seq())
+		}
+		test.packetIn(nil, &pongV4{Expiration: futureExp, ReplyTok: hash})
+	})
+
+	// Request should work now.
+	test.packetIn(nil, &enrRequestV4{Expiration: futureExp})
+	test.waitPacketOut(func(p *enrResponseV4, addr *net.UDPAddr, hash []byte) {
+		n, err := enode.New(enode.ValidSchemes, &p.Record)
+		if err != nil {
+			t.Fatalf("invalid record: %v", err)
+		}
+		if !reflect.DeepEqual(n, wantNode) {
+			t.Fatalf("wrong node in enrResponse: %v", n)
+		}
+	})
+}
+
+// EIP-8 test vectors.
 var testPackets = []struct {
 	input      string
 	wantPacket interface{}
