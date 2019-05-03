@@ -88,7 +88,7 @@ const (
 	gfMaxWeight      = time.Second * 1000
 	gfUsageThreshold = 0.5
 	gfUsageTC        = time.Second
-	gfDbKey          = "__globalCostFactor"
+	gfDbKey          = "_globalCostFactorV2"
 )
 
 // costTracker is responsible for calculating costs and cost estimates on the
@@ -220,6 +220,7 @@ func (ct *costTracker) gfLoop() {
 	}
 	gf := gfSum / gfWeight
 	ct.gf = gf
+	totalRecharge := ct.utilTarget * gf
 	ct.gfUpdateCh = make(chan gfUpdate, 100)
 
 	go func() {
@@ -244,15 +245,13 @@ func (ct *costTracker) gfLoop() {
 				dt := float64(now - expUpdate)
 				expUpdate = now
 				gfUsage = gfUsage*math.Exp(-dt/float64(gfUsageTC)) + max*1000000/float64(gfUsageTC)
-				totalRecharge := ct.utilTarget * gf
-				ct.logRecentUsage.Update(gfUsage)
-				ct.logTotalRecharge.Update(totalRecharge)
 
 				if gfUsage >= gfUsageThreshold*totalRecharge {
 					gfSum += r.avgTime
 					gfWeight += r.servingTime
 					if time.Duration(now-lastUpdate) > time.Second {
 						gf = gfSum / gfWeight
+						totalRecharge = ct.utilTarget * gf
 						if gfWeight >= float64(gfMaxWeight) {
 							gfSum = gf * float64(gfMaxWeight)
 							gfWeight = float64(gfMaxWeight)
@@ -271,6 +270,9 @@ func (ct *costTracker) gfLoop() {
 						log.Debug("global cost factor updated", "gf", gf, "weight", time.Duration(gfWeight))
 					}
 				}
+				ct.logRecentUsage.Update(gfUsage)
+				ct.logTotalRecharge.Update(totalRecharge)
+
 			case stopCh := <-ct.stopCh:
 				var data [16]byte
 				binary.BigEndian.PutUint64(data[0:8], math.Float64bits(gfSum))
