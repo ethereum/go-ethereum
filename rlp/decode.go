@@ -115,15 +115,17 @@ type Decoder interface {
 // type, Decode will return an error. Decode also supports *big.Int.
 // There is no size limit for big integers.
 //
+// To decode into a boolean, the input must contain an unsigned integer
+// of value zero (false) or one (true).
+//
 // To decode into an interface value, Decode stores one of these
 // in the value:
 //
 //	  []interface{}, for RLP lists
 //	  []byte, for RLP strings
 //
-// Non-empty interface types are not supported, nor are booleans,
-// signed integers, floating point numbers, maps, channels and
-// functions.
+// Non-empty interface types are not supported, nor are signed integers,
+// floating point numbers, maps, channels and functions.
 //
 // Note that Decode does not set an input limit for all readers
 // and may be vulnerable to panics cause by huge value sizes. If

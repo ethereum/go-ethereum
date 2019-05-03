@@ -73,10 +73,12 @@ type Encoder interface {
 // An unsigned integer value is encoded as an RLP string. Zero always
 // encodes as an empty RLP string. Encode also supports *big.Int.
 //
+// Boolean values are encoded as unsigned integers zero (false) and one (true).
+//
 // An interface value encodes as the value contained in the interface.
 //
-// Boolean values are not supported, nor are signed integers, floating
-// point numbers, maps, channels and functions.
+// Signed integers are not supported, nor are floating point numbers, maps,
+// channels and functions.
 func Encode(w io.Writer, val interface{}) error {
 	if outer, ok := w.(*encbuf); ok {
 		// Encode was called by some type's EncodeRLP.
