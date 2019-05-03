@@ -1098,6 +1098,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&bv); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
+		p.fcServer.ResumeFreeze(bv)
 		p.freezeServer(false)
 		p.Log().Warn("Service resumed")
 

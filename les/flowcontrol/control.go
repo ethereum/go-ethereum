@@ -396,6 +396,28 @@ func (node *ServerNode) ReceivedReply(reqID, bv uint64) {
 	}
 }
 
+// ResumeFreeze cleans all pending requests and sets the buffer estimate to the
+// reported value after resuming from a frozen state
+func (node *ServerNode) ResumeFreeze(bv uint64) {
+	node.lock.Lock()
+	defer node.lock.Unlock()
+
+	for reqID, _ := range node.pending {
+		delete(node.pending, reqID)
+	}
+	now := node.clock.Now()
+	node.recalcBLE(now)
+	if bv > node.params.BufLimit {
+		bv = node.params.BufLimit
+	}
+	node.bufEstimate = bv
+	node.bufRecharge = node.bufEstimate < node.params.BufLimit
+	node.lastTime = now
+	if node.log != nil {
+		node.log.add(now, fmt.Sprintf("unfreeze  bv=%d  sumCost=%d", bv, node.sumCost))
+	}
+}
+
 // DumpLogs dumps the event log if logging is used
 func (node *ServerNode) DumpLogs() {
 	node.lock.Lock()
