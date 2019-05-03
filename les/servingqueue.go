@@ -196,10 +196,10 @@ func (sq *servingQueue) threadController() {
 type (
 	// peerTasks lists the tasks received from a given peer when selecting peers to freeze
 	peerTasks struct {
-		peer          *peer
-		list          []*servingTask
-		sumTime       uint64
-		worstPriority int64
+		peer     *peer
+		list     []*servingTask
+		sumTime  uint64
+		priority float64
 	}
 	// peerList is a sortable list of peerTasks
 	peerList []*peerTasks
@@ -210,7 +210,7 @@ func (l peerList) Len() int {
 }
 
 func (l peerList) Less(i, j int) bool {
-	return (l[i].worstPriority - l[j].worstPriority) < 0
+	return l[i].priority < l[j].priority
 }
 
 func (l peerList) Swap(i, j int) {
@@ -230,16 +230,16 @@ func (sq *servingQueue) freezePeers() {
 		task := sq.queue.PopItem().(*servingTask)
 		tasks := peerMap[task.peer]
 		if tasks == nil {
+			bufValue, bufLimit := task.peer.fcClient.BufferStatus()
+			if bufLimit < 1 {
+				bufLimit = 1
+			}
 			tasks = &peerTasks{
-				peer:          task.peer,
-				worstPriority: task.priority,
+				peer:     task.peer,
+				priority: float64(bufValue) / float64(bufLimit), // lower value comes first
 			}
 			peerMap[task.peer] = tasks
 			peerList = append(peerList, tasks)
-		} else {
-			if tasks.worstPriority-task.priority > 0 {
-				tasks.worstPriority = task.priority
-			}
 		}
 		tasks.list = append(tasks.list, task)
 		tasks.sumTime += task.expTime
