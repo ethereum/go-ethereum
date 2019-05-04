@@ -29,10 +29,10 @@ var (
 	// databaseVerisionKey tracks the current database version.
 	databaseVerisionKey = []byte("DatabaseVersion")
 
-	// headHeaderKey tracks the latest know header's hash.
+	// headHeaderKey tracks the latest known header's hash.
 	headHeaderKey = []byte("LastHeader")
 
-	// headBlockKey tracks the latest know full block's hash.
+	// headBlockKey tracks the latest known full block's hash.
 	headBlockKey = []byte("LastBlock")
 
 	// headFastBlockKey tracks the latest known incomplete block's hash during fast sync.
