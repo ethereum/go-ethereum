@@ -25,16 +25,14 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/swarm/testutil"
-
-	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 func serverFunc(api *api.API) swarmhttp.TestServer {
@@ -67,6 +65,10 @@ func testClientUploadDownloadRaw(toEncrypt bool, t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// check the tag was created successfully
+	tag := srv.Tags.All()[0]
+	testutil.CheckTag(t, tag, 1, 1, 0, 1)
 
 	// check we can download the same data
 	res, isEncrypted, err := client.DownloadRaw(hash)
@@ -209,6 +211,10 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 		t.Fatalf("error uploading directory: %s", err)
 	}
 
+	// check the tag was created successfully
+	tag := srv.Tags.All()[0]
+	testutil.CheckTag(t, tag, 9, 9, 0, 9)
+
 	// check we can download the individual files
 	checkDownloadFile := func(path string, expected []byte) {
 		file, err := client.Download(hash, path)
@@ -323,6 +329,7 @@ func TestClientMultipartUpload(t *testing.T) {
 	defer srv.Close()
 
 	// define an uploader which uploads testDirFiles with some data
+	// note: this test should result in SEEN chunks. assert accordingly
 	data := []byte("some-data")
 	uploader := UploaderFunc(func(upload UploadFn) error {
 		for _, name := range testDirFiles {
@@ -347,6 +354,10 @@ func TestClientMultipartUpload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// check the tag was created successfully
+	tag := srv.Tags.All()[0]
+	testutil.CheckTag(t, tag, 9, 9, 7, 9)
 
 	// check we can download the individual files
 	checkDownloadFile := func(path string) {

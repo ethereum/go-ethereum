@@ -34,11 +34,11 @@ var (
 type State = uint32
 
 const (
-	SPLIT  State = iota // chunk has been processed by filehasher/swarm safe call
-	STORED              // chunk stored locally
-	SEEN                // chunk previously seen
-	SENT                // chunk sent to neighbourhood
-	SYNCED              // proof is received; chunk removed from sync db; chunk is available everywhere
+	StateSplit  State = iota // chunk has been processed by filehasher/swarm safe call
+	StateStored              // chunk stored locally
+	StateSeen                // chunk previously seen
+	StateSent                // chunk sent to neighbourhood
+	StateSynced              // proof is received; chunk removed from sync db; chunk is available everywhere
 )
 
 // Tag represents info on the status of new chunks
@@ -46,18 +46,18 @@ type Tag struct {
 	Uid       uint32    // a unique identifier for this tag
 	Name      string    // a name tag for this tag
 	Address   Address   // the associated swarm hash for this tag
-	total     uint32    // total chunks belonging to a tag
-	split     uint32    // number of chunks already processed by splitter for hashing
-	seen      uint32    // number of chunks already seen
-	stored    uint32    // number of chunks already stored locally
-	sent      uint32    // number of chunks sent for push syncing
-	synced    uint32    // number of chunks synced with proof
+	total     int64     // total chunks belonging to a tag
+	split     int64     // number of chunks already processed by splitter for hashing
+	seen      int64     // number of chunks already seen
+	stored    int64     // number of chunks already stored locally
+	sent      int64     // number of chunks sent for push syncing
+	synced    int64     // number of chunks synced with proof
 	startedAt time.Time // tag started to calculate ETA
 }
 
 // New creates a new tag, stores it by the name and returns it
 // it returns an error if the tag with this name already exists
-func NewTag(uid uint32, s string, total uint32) *Tag {
+func NewTag(uid uint32, s string, total int64) *Tag {
 	t := &Tag{
 		Uid:       uid,
 		Name:      s,
@@ -69,65 +69,65 @@ func NewTag(uid uint32, s string, total uint32) *Tag {
 
 // Inc increments the count for a state
 func (t *Tag) Inc(state State) {
-	var v *uint32
+	var v *int64
 	switch state {
-	case SPLIT:
+	case StateSplit:
 		v = &t.split
-	case STORED:
+	case StateStored:
 		v = &t.stored
-	case SEEN:
+	case StateSeen:
 		v = &t.seen
-	case SENT:
+	case StateSent:
 		v = &t.sent
-	case SYNCED:
+	case StateSynced:
 		v = &t.synced
 	}
-	atomic.AddUint32(v, 1)
+	atomic.AddInt64(v, 1)
 }
 
 // Get returns the count for a state on a tag
-func (t *Tag) Get(state State) int {
-	var v *uint32
+func (t *Tag) Get(state State) int64 {
+	var v *int64
 	switch state {
-	case SPLIT:
+	case StateSplit:
 		v = &t.split
-	case STORED:
+	case StateStored:
 		v = &t.stored
-	case SEEN:
+	case StateSeen:
 		v = &t.seen
-	case SENT:
+	case StateSent:
 		v = &t.sent
-	case SYNCED:
+	case StateSynced:
 		v = &t.synced
 	}
-	return int(atomic.LoadUint32(v))
+	return atomic.LoadInt64(v)
 }
 
 // GetTotal returns the total count
-func (t *Tag) Total() int {
-	return int(atomic.LoadUint32(&t.total))
+func (t *Tag) Total() int64 {
+	return atomic.LoadInt64(&t.total)
 }
 
 // DoneSplit sets total count to SPLIT count and sets the associated swarm hash for this tag
 // is meant to be called when splitter finishes for input streams of unknown size
-func (t *Tag) DoneSplit(address Address) int {
-	total := atomic.LoadUint32(&t.split)
-	atomic.StoreUint32(&t.total, total)
+func (t *Tag) DoneSplit(address Address) int64 {
+	total := atomic.LoadInt64(&t.split)
+	atomic.StoreInt64(&t.total, total)
 	t.Address = address
-	return int(total)
+	return total
 }
 
 // Status returns the value of state and the total count
-func (t *Tag) Status(state State) (int, int, error) {
-	count, seen, total := t.Get(state), int(atomic.LoadUint32(&t.seen)), int(atomic.LoadUint32(&t.total))
+func (t *Tag) Status(state State) (int64, int64, error) {
+	count, seen, total := t.Get(state), atomic.LoadInt64(&t.seen), atomic.LoadInt64(&t.total)
 	if total == 0 {
 		return count, total, errNA
 	}
 	switch state {
-	case SPLIT, STORED, SEEN:
+	case StateSplit, StateStored, StateSeen:
 		return count, total, nil
-	case SENT, SYNCED:
-		stored := int(atomic.LoadUint32(&t.stored))
+	case StateSent, StateSynced:
+		stored := atomic.LoadInt64(&t.stored)
 		if stored < total {
 			return count, total - seen, errNA
 		}
@@ -152,14 +152,14 @@ func (t *Tag) ETA(state State) (time.Time, error) {
 
 // MarshalBinary marshals the tag into a byte slice
 func (tag *Tag) MarshalBinary() (data []byte, err error) {
-	buffer := make([]byte, 0)
-	encodeUint32Append(&buffer, tag.Uid)
-	encodeUint32Append(&buffer, tag.total)
-	encodeUint32Append(&buffer, tag.split)
-	encodeUint32Append(&buffer, tag.seen)
-	encodeUint32Append(&buffer, tag.stored)
-	encodeUint32Append(&buffer, tag.sent)
-	encodeUint32Append(&buffer, tag.synced)
+	buffer := make([]byte, 4)
+	binary.BigEndian.PutUint32(buffer, tag.Uid)
+	encodeInt64Append(&buffer, tag.total)
+	encodeInt64Append(&buffer, tag.split)
+	encodeInt64Append(&buffer, tag.seen)
+	encodeInt64Append(&buffer, tag.stored)
+	encodeInt64Append(&buffer, tag.sent)
+	encodeInt64Append(&buffer, tag.synced)
 
 	intBuffer := make([]byte, 8)
 
@@ -181,14 +181,15 @@ func (tag *Tag) UnmarshalBinary(buffer []byte) error {
 	if len(buffer) < 13 {
 		return errors.New("buffer too short")
 	}
+	tag.Uid = binary.BigEndian.Uint32(buffer)
+	buffer = buffer[4:]
 
-	tag.Uid = decodeUint32Splice(&buffer)
-	tag.total = decodeUint32Splice(&buffer)
-	tag.split = decodeUint32Splice(&buffer)
-	tag.seen = decodeUint32Splice(&buffer)
-	tag.stored = decodeUint32Splice(&buffer)
-	tag.sent = decodeUint32Splice(&buffer)
-	tag.synced = decodeUint32Splice(&buffer)
+	tag.total = decodeInt64Splice(&buffer)
+	tag.split = decodeInt64Splice(&buffer)
+	tag.seen = decodeInt64Splice(&buffer)
+	tag.stored = decodeInt64Splice(&buffer)
+	tag.sent = decodeInt64Splice(&buffer)
+	tag.synced = decodeInt64Splice(&buffer)
 
 	t, n := binary.Varint(buffer)
 	tag.startedAt = time.Unix(t, 0)
@@ -202,17 +203,16 @@ func (tag *Tag) UnmarshalBinary(buffer []byte) error {
 	tag.Name = string(buffer[t:])
 
 	return nil
-
 }
 
-func encodeUint32Append(buffer *[]byte, val uint32) {
-	intBuffer := make([]byte, 4)
-	binary.BigEndian.PutUint32(intBuffer, val)
-	*buffer = append(*buffer, intBuffer...)
+func encodeInt64Append(buffer *[]byte, val int64) {
+	intBuffer := make([]byte, 8)
+	n := binary.PutVarint(intBuffer, val)
+	*buffer = append(*buffer, intBuffer[:n]...)
 }
 
-func decodeUint32Splice(buffer *[]byte) uint32 {
-	val := binary.BigEndian.Uint32((*buffer)[:4])
-	*buffer = (*buffer)[4:]
+func decodeInt64Splice(buffer *[]byte) int64 {
+	val, n := binary.Varint((*buffer))
+	*buffer = (*buffer)[n:]
 	return val
 }

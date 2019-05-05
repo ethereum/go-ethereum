@@ -127,7 +127,7 @@ func netStoreAndDeliveryWithAddr(ctx *adapters.ServiceContext, bucket *sync.Map,
 		return nil, nil, nil, err
 	}
 
-	fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
+	fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams(), chunk.NewTags())
 
 	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 	delivery := NewDelivery(kad, netStore)

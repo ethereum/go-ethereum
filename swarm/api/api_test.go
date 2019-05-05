@@ -19,6 +19,7 @@ package api
 import (
 	"bytes"
 	"context"
+	crand "crypto/rand"
 	"errors"
 	"flag"
 	"fmt"
@@ -26,13 +27,16 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/sctx"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 func init() {
@@ -41,24 +45,33 @@ func init() {
 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
 }
 
-func testAPI(t *testing.T, f func(*API, bool)) {
-	datadir, err := ioutil.TempDir("", "bzz-test")
-	if err != nil {
-		t.Fatalf("unable to create temp dir: %v", err)
+func testAPI(t *testing.T, f func(*API, *chunk.Tags, bool)) {
+	for _, v := range []bool{true, false} {
+		datadir, err := ioutil.TempDir("", "bzz-test")
+		if err != nil {
+			t.Fatalf("unable to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(datadir)
+		tags := chunk.NewTags()
+		fileStore, err := storage.NewLocalFileStore(datadir, make([]byte, 32), tags)
+		if err != nil {
+			return
+		}
+		api := NewAPI(fileStore, nil, nil, nil, tags)
+		f(api, tags, v)
 	}
-	defer os.RemoveAll(datadir)
-	fileStore, err := storage.NewLocalFileStore(datadir, make([]byte, 32))
-	if err != nil {
-		return
-	}
-	api := NewAPI(fileStore, nil, nil, nil)
-	f(api, false)
-	f(api, true)
 }
 
 type testResponse struct {
 	reader storage.LazySectionReader
 	*Response
+}
+
+type Response struct {
+	MimeType string
+	Status   int
+	Size     int64
+	Content  string
 }
 
 func checkResponse(t *testing.T, resp *testResponse, exp *Response) {
@@ -111,15 +124,14 @@ func testGet(t *testing.T, api *API, bzzhash, path string) *testResponse {
 	}
 	reader.Seek(0, 0)
 	return &testResponse{reader, &Response{mimeType, status, size, string(s)}}
-	// return &testResponse{reader, &Response{mimeType, status, reader.Size(), nil}}
 }
 
 func TestApiPut(t *testing.T) {
-	testAPI(t, func(api *API, toEncrypt bool) {
+	testAPI(t, func(api *API, tags *chunk.Tags, toEncrypt bool) {
 		content := "hello"
 		exp := expResponse(content, "text/plain", 0)
 		ctx := context.TODO()
-		addr, wait, err := api.Put(ctx, content, exp.MimeType, toEncrypt)
+		addr, wait, err := putString(ctx, api, content, exp.MimeType, toEncrypt)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -129,6 +141,40 @@ func TestApiPut(t *testing.T) {
 		}
 		resp := testGet(t, api, addr.Hex(), "")
 		checkResponse(t, resp, exp)
+		tag := tags.All()[0]
+		testutil.CheckTag(t, tag, 2, 2, 0, 2) //1 chunk data, 1 chunk manifest
+	})
+}
+
+// TestApiTagLarge tests that the the number of chunks counted is larger for a larger input
+func TestApiTagLarge(t *testing.T) {
+	const contentLength = 4096 * 4095
+	testAPI(t, func(api *API, tags *chunk.Tags, toEncrypt bool) {
+		randomContentReader := io.LimitReader(crand.Reader, int64(contentLength))
+		tag, err := api.Tags.New("unnamed-tag", 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx := sctx.SetTag(context.Background(), tag.Uid)
+		key, waitContent, err := api.Store(ctx, randomContentReader, int64(contentLength), toEncrypt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = waitContent(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tag.DoneSplit(key)
+
+		if toEncrypt {
+			tag := tags.All()[0]
+			expect := int64(4095 + 64 + 1)
+			testutil.CheckTag(t, tag, expect, expect, 0, expect)
+		} else {
+			tag := tags.All()[0]
+			expect := int64(4095 + 32 + 1)
+			testutil.CheckTag(t, tag, expect, expect, 0, expect)
+		}
 	})
 }
 
@@ -391,7 +437,7 @@ func TestDecryptOriginForbidden(t *testing.T) {
 		Access: &AccessEntry{Type: AccessTypePass},
 	}
 
-	api := NewAPI(nil, nil, nil, nil)
+	api := NewAPI(nil, nil, nil, nil, chunk.NewTags())
 
 	f := api.Decryptor(ctx, "")
 	err := f(me)
@@ -425,7 +471,7 @@ func TestDecryptOrigin(t *testing.T) {
 			Access: &AccessEntry{Type: AccessTypePass},
 		}
 
-		api := NewAPI(nil, nil, nil, nil)
+		api := NewAPI(nil, nil, nil, nil, chunk.NewTags())
 
 		f := api.Decryptor(ctx, "")
 		err := f(me)
@@ -499,4 +545,32 @@ func TestDetectContentType(t *testing.T) {
 
 		})
 	}
+}
+
+// putString provides singleton manifest creation on top of api.API
+func putString(ctx context.Context, a *API, content string, contentType string, toEncrypt bool) (k storage.Address, wait func(context.Context) error, err error) {
+	r := strings.NewReader(content)
+	tag, err := a.Tags.New("unnamed-tag", 0)
+
+	log.Trace("created new tag", "uid", tag.Uid)
+
+	cCtx := sctx.SetTag(ctx, tag.Uid)
+	key, waitContent, err := a.Store(cCtx, r, int64(len(content)), toEncrypt)
+	if err != nil {
+		return nil, nil, err
+	}
+	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
+	r = strings.NewReader(manifest)
+	key, waitManifest, err := a.Store(cCtx, r, int64(len(manifest)), toEncrypt)
+	if err != nil {
+		return nil, nil, err
+	}
+	tag.DoneSplit(key)
+	return key, func(ctx context.Context) error {
+		err := waitContent(ctx)
+		if err != nil {
+			return err
+		}
+		return waitManifest(ctx)
+	}, nil
 }

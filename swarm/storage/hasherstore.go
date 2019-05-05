@@ -28,6 +28,7 @@ import (
 
 type hasherStore struct {
 	store     ChunkStore
+	tag       *chunk.Tag
 	toEncrypt bool
 	hashFunc  SwarmHasher
 	hashSize  int           // content hash size
@@ -44,7 +45,7 @@ type hasherStore struct {
 // NewHasherStore creates a hasherStore object, which implements Putter and Getter interfaces.
 // With the HasherStore you can put and get chunk data (which is just []byte) into a ChunkStore
 // and the hasherStore will take core of encryption/decryption of data if necessary
-func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *hasherStore {
+func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool, tag *chunk.Tag) *hasherStore {
 	hashSize := hashFunc().Size()
 	refSize := int64(hashSize)
 	if toEncrypt {
@@ -53,6 +54,7 @@ func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *has
 
 	h := &hasherStore{
 		store:     store,
+		tag:       tag,
 		toEncrypt: toEncrypt,
 		hashFunc:  hashFunc,
 		hashSize:  hashSize,
@@ -242,7 +244,11 @@ func (h *hasherStore) newDataEncryption(key encryption.Key) encryption.Encryptio
 func (h *hasherStore) storeChunk(ctx context.Context, ch Chunk) {
 	atomic.AddUint64(&h.nrChunks, 1)
 	go func() {
-		_, err := h.store.Put(ctx, chunk.ModePutUpload, ch)
+		seen, err := h.store.Put(ctx, chunk.ModePutUpload, ch)
+		h.tag.Inc(chunk.StateStored)
+		if seen {
+			h.tag.Inc(chunk.StateSeen)
+		}
 		select {
 		case h.errC <- err:
 		case <-h.quitC:

@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/sctx"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
@@ -83,6 +84,54 @@ func InitLoggingResponseWriter(h http.Handler) http.Handler {
 		log.Info("request served", "ruid", GetRUID(r.Context()), "code", writer.statusCode, "time", ts)
 		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).Update(ts)
 		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.%d.time", r.Method, writer.statusCode), nil).Update(ts)
+	})
+}
+
+// InitUploadTag creates a new tag for an upload to the local HTTP proxy
+// if a tag is not named using the SwarmTagHeaderName, a fallback name will be used
+// when the Content-Length header is set, an ETA on chunking will be available since the
+// number of chunks to be split is known in advance (not including enclosing manifest chunks)
+// the tag can later be accessed using the appropriate identifier in the request context
+func InitUploadTag(h http.Handler, tags *chunk.Tags) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var (
+			tagName        string
+			err            error
+			estimatedTotal int64 = 0
+			contentType          = r.Header.Get("Content-Type")
+			headerTag            = r.Header.Get(SwarmTagHeaderName)
+		)
+		if headerTag != "" {
+			tagName = headerTag
+			log.Trace("got tag name from http header", "tagName", tagName)
+		} else {
+			tagName = fmt.Sprintf("unnamed_tag_%d", time.Now().Unix())
+		}
+
+		if !strings.Contains(contentType, "multipart") && r.ContentLength > 0 {
+			log.Trace("calculating tag size", "contentType", contentType, "contentLength", r.ContentLength)
+			uri := GetURI(r.Context())
+			if uri != nil {
+				log.Debug("got uri from context")
+				if uri.Addr == "encrypt" {
+					estimatedTotal = calculateNumberOfChunks(r.ContentLength, true)
+				} else {
+					estimatedTotal = calculateNumberOfChunks(r.ContentLength, false)
+				}
+			}
+		}
+
+		log.Trace("creating tag", "tagName", tagName, "estimatedTotal", estimatedTotal)
+
+		t, err := tags.New(tagName, estimatedTotal)
+		if err != nil {
+			log.Error("error creating tag", "err", err, "tagName", tagName)
+		}
+
+		log.Trace("setting tag id to context", "uid", t.Uid)
+		ctx := sctx.SetTag(r.Context(), t.Uid)
+
+		h.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

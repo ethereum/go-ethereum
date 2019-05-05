@@ -96,12 +96,12 @@ func NewPyramidSplitterParams(addr Address, reader io.Reader, putter Putter, get
 	When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Address), the root hash of the entire content will fill this once processing finishes.
 	New chunks to store are store using the putter which the caller provides.
 */
-func PyramidSplit(ctx context.Context, reader io.Reader, putter Putter, getter Getter) (Address, func(context.Context) error, error) {
-	return NewPyramidSplitter(NewPyramidSplitterParams(nil, reader, putter, getter, chunk.DefaultSize)).Split(ctx)
+func PyramidSplit(ctx context.Context, reader io.Reader, putter Putter, getter Getter, tag *chunk.Tag) (Address, func(context.Context) error, error) {
+	return NewPyramidSplitter(NewPyramidSplitterParams(nil, reader, putter, getter, chunk.DefaultSize), tag).Split(ctx)
 }
 
-func PyramidAppend(ctx context.Context, addr Address, reader io.Reader, putter Putter, getter Getter) (Address, func(context.Context) error, error) {
-	return NewPyramidSplitter(NewPyramidSplitterParams(addr, reader, putter, getter, chunk.DefaultSize)).Append(ctx)
+func PyramidAppend(ctx context.Context, addr Address, reader io.Reader, putter Putter, getter Getter, tag *chunk.Tag) (Address, func(context.Context) error, error) {
+	return NewPyramidSplitter(NewPyramidSplitterParams(addr, reader, putter, getter, chunk.DefaultSize), tag).Append(ctx)
 }
 
 // Entry to create a tree node
@@ -142,6 +142,7 @@ type PyramidChunker struct {
 	putter      Putter
 	getter      Getter
 	key         Address
+	tag         *chunk.Tag
 	workerCount int64
 	workerLock  sync.RWMutex
 	jobC        chan *chunkJob
@@ -152,7 +153,7 @@ type PyramidChunker struct {
 	chunkLevel  [][]*TreeEntry
 }
 
-func NewPyramidSplitter(params *PyramidSplitterParams) (pc *PyramidChunker) {
+func NewPyramidSplitter(params *PyramidSplitterParams, tag *chunk.Tag) (pc *PyramidChunker) {
 	pc = &PyramidChunker{}
 	pc.reader = params.reader
 	pc.hashSize = params.hashSize
@@ -161,6 +162,7 @@ func NewPyramidSplitter(params *PyramidSplitterParams) (pc *PyramidChunker) {
 	pc.putter = params.putter
 	pc.getter = params.getter
 	pc.key = params.addr
+	pc.tag = tag
 	pc.workerCount = 0
 	pc.jobC = make(chan *chunkJob, 2*ChunkProcessors)
 	pc.wg = &sync.WaitGroup{}
@@ -273,6 +275,7 @@ func (pc *PyramidChunker) processor(ctx context.Context, id int64) {
 				return
 			}
 			pc.processChunk(ctx, id, job)
+			pc.tag.Inc(chunk.StateSplit)
 		case <-pc.quitC:
 			return
 		}

@@ -211,9 +211,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		MaxPeerServers:  config.MaxStreamPeerServers,
 	}
 	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, self.stateStore, registryOptions, self.swap)
+	tags := chunk.NewTags() //todo load from state store
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
-	self.fileStore = storage.NewFileStore(self.netStore, self.config.FileStoreParams)
+	self.fileStore = storage.NewFileStore(self.netStore, self.config.FileStoreParams, tags)
 
 	log.Debug("Setup local storage")
 
@@ -228,7 +229,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
-	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey)
+	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, tags)
 
 	self.sfs = fuse.NewSwarmFS(self.api)
 	log.Debug("Initialized FUSE filesystem")

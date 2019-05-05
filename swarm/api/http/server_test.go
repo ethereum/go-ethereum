@@ -44,7 +44,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
-	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
@@ -755,6 +754,7 @@ func testBzzTar(encrypted bool, t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Add("Content-Type", "application/x-tar")
+	req.Header.Add(SwarmTagHeaderName, "test-upload")
 	client := &http.Client{}
 	resp2, err := client.Do(req)
 	if err != nil {
@@ -763,6 +763,11 @@ func testBzzTar(encrypted bool, t *testing.T) {
 	if resp2.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp2.Status)
 	}
+
+	// check that the tag was written correctly
+	tag := srv.Tags.All()[0]
+	testutil.CheckTag(t, tag, 4, 4, 0, 4)
+
 	swarmHash, err := ioutil.ReadAll(resp2.Body)
 	resp2.Body.Close()
 	if err != nil {
@@ -834,6 +839,75 @@ func testBzzTar(encrypted bool, t *testing.T) {
 			t.Fatalf("file %s did not pass content assertion", hdr.Name)
 		}
 	}
+
+	// now check the tags endpoint
+}
+
+// TestBzzCorrectTagEstimate checks that the HTTP middleware sets the total number of chunks
+// in the tag according to an estimate from the HTTP request Content-Length header divided
+// by chunk size (4096). It is needed to be checked BEFORE chunking is done, therefore
+// concurrency was introduced to slow down the HTTP request
+func TestBzzCorrectTagEstimate(t *testing.T) {
+	srv := NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
+	for _, v := range []struct {
+		toEncrypt bool
+		expChunks int64
+	}{
+		{toEncrypt: false, expChunks: 248},
+		{toEncrypt: true, expChunks: 250},
+	} {
+		pr, pw := io.Pipe()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		addr := ""
+		if v.toEncrypt {
+			addr = "encrypt"
+		}
+		req, err := http.NewRequest("POST", srv.URL+"/bzz:/"+addr, pr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		req = req.WithContext(ctx)
+		req.ContentLength = 1000000
+		req.Header.Add(SwarmTagHeaderName, "1000000")
+
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(1 * time.Millisecond):
+					_, err := pw.Write([]byte{0})
+					if err != nil {
+						t.Error(err)
+					}
+				}
+			}
+		}()
+		go func() {
+			transport := http.DefaultTransport
+			_, err := transport.RoundTrip(req)
+			if err != nil {
+				t.Error(err)
+			}
+		}()
+		done := false
+		for !done {
+			switch len(srv.Tags.All()) {
+			case 0:
+				<-time.After(10 * time.Millisecond)
+			case 1:
+				tag := srv.Tags.All()[0]
+				testutil.CheckTag(t, tag, 0, 0, 0, v.expChunks)
+				srv.Tags.Delete(tag.Uid)
+				done = true
+			}
+		}
+	}
 }
 
 // TestBzzRootRedirect tests that getting the root path of a manifest without
@@ -851,19 +925,11 @@ func testBzzRootRedirect(toEncrypt bool, t *testing.T) {
 	defer srv.Close()
 
 	// create a manifest with some data at the root path
-	client := swarm.NewClient(srv.URL)
 	data := []byte("data")
-	file := &swarm.File{
-		ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
-		ManifestEntry: api.ManifestEntry{
-			Path:        "",
-			ContentType: "text/plain",
-			Size:        int64(len(data)),
-		},
-	}
-	hash, err := client.Upload(file, "", toEncrypt)
-	if err != nil {
-		t.Fatal(err)
+	headers := map[string]string{"Content-Type": "text/plain"}
+	res, hash := httpDo("POST", srv.URL+"/bzz:/", bytes.NewReader(data), headers, false, t)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected status code from server %d want %d", res.StatusCode, http.StatusOK)
 	}
 
 	// define a CheckRedirect hook which ensures there is only a single
@@ -1046,21 +1112,10 @@ func TestGet(t *testing.T) {
 func TestModify(t *testing.T) {
 	srv := NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
-
-	swarmClient := swarm.NewClient(srv.URL)
-	data := []byte("data")
-	file := &swarm.File{
-		ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
-		ManifestEntry: api.ManifestEntry{
-			Path:        "",
-			ContentType: "text/plain",
-			Size:        int64(len(data)),
-		},
-	}
-
-	hash, err := swarmClient.Upload(file, "", false)
-	if err != nil {
-		t.Fatal(err)
+	headers := map[string]string{"Content-Type": "text/plain"}
+	res, hash := httpDo("POST", srv.URL+"/bzz:/", bytes.NewReader([]byte("data")), headers, false, t)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected status code from server %d want %d", res.StatusCode, http.StatusOK)
 	}
 
 	for _, testCase := range []struct {
@@ -1283,6 +1338,46 @@ func TestBzzGetFileWithResolver(t *testing.T) {
 	}
 }
 
+// TestCalculateNumberOfChunks is a unit test for the chunk-number-according-to-content-length
+// calculation
+func TestCalculateNumberOfChunks(t *testing.T) {
+
+	//test cases:
+	for _, tc := range []struct{ len, chunks int64 }{
+		{len: 1000, chunks: 1},
+		{len: 5000, chunks: 3},
+		{len: 10000, chunks: 4},
+		{len: 100000, chunks: 26},
+		{len: 1000000, chunks: 248},
+		{len: 325839339210, chunks: 79550620 + 621490 + 4856 + 38 + 1},
+	} {
+		res := calculateNumberOfChunks(tc.len, false)
+		if res != tc.chunks {
+			t.Fatalf("expected result for %d bytes to be %d got %d", tc.len, tc.chunks, res)
+		}
+	}
+}
+
+// TestCalculateNumberOfChunksEncrypted is a unit test for the chunk-number-according-to-content-length
+// calculation with encryption (branching factor=64)
+func TestCalculateNumberOfChunksEncrypted(t *testing.T) {
+
+	//test cases:
+	for _, tc := range []struct{ len, chunks int64 }{
+		{len: 1000, chunks: 1},
+		{len: 5000, chunks: 3},
+		{len: 10000, chunks: 4},
+		{len: 100000, chunks: 26},
+		{len: 1000000, chunks: 245 + 4 + 1},
+		{len: 325839339210, chunks: 79550620 + 1242979 + 19422 + 304 + 5 + 1},
+	} {
+		res := calculateNumberOfChunks(tc.len, true)
+		if res != tc.chunks {
+			t.Fatalf("expected result for %d bytes to be %d got %d", tc.len, tc.chunks, res)
+		}
+	}
+}
+
 // testResolver implements the Resolver interface and either returns the given
 // hash if it is set, or returns a "name not found" error
 type testResolveValidator struct {
@@ -1308,6 +1403,7 @@ func (t *testResolveValidator) Resolve(addr string) (common.Hash, error) {
 func (t *testResolveValidator) Owner(node [32]byte) (addr common.Address, err error) {
 	return
 }
+
 func (t *testResolveValidator) HeaderByNumber(context.Context, *big.Int) (header *types.Header, err error) {
 	return
 }

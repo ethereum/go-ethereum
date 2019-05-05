@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	allStates = []State{SPLIT, STORED, SEEN, SENT, SYNCED}
+	allStates = []State{StateSplit, StateStored, StateSeen, StateSent, StateSynced}
 )
 
 // TestTagSingleIncrements tests if Inc increments the tag state value
@@ -34,14 +34,14 @@ func TestTagSingleIncrements(t *testing.T) {
 	tc := []struct {
 		state    uint32
 		inc      int
-		expcount int
-		exptotal int
+		expcount int64
+		exptotal int64
 	}{
-		{state: SPLIT, inc: 10, expcount: 10, exptotal: 10},
-		{state: STORED, inc: 9, expcount: 9, exptotal: 9},
-		{state: SEEN, inc: 1, expcount: 1, exptotal: 10},
-		{state: SENT, inc: 9, expcount: 9, exptotal: 9},
-		{state: SYNCED, inc: 9, expcount: 9, exptotal: 9},
+		{state: StateSplit, inc: 10, expcount: 10, exptotal: 10},
+		{state: StateStored, inc: 9, expcount: 9, exptotal: 9},
+		{state: StateSeen, inc: 1, expcount: 1, exptotal: 10},
+		{state: StateSent, inc: 9, expcount: 9, exptotal: 9},
+		{state: StateSynced, inc: 9, expcount: 9, exptotal: 9},
 	}
 
 	for _, tc := range tc {
@@ -60,24 +60,24 @@ func TestTagSingleIncrements(t *testing.T) {
 // TestTagStatus is a unit test to cover Tag.Status method functionality
 func TestTagStatus(t *testing.T) {
 	tg := &Tag{total: 10}
-	tg.Inc(SEEN)
-	tg.Inc(SENT)
-	tg.Inc(SYNCED)
+	tg.Inc(StateSeen)
+	tg.Inc(StateSent)
+	tg.Inc(StateSynced)
 
 	for i := 0; i < 10; i++ {
-		tg.Inc(SPLIT)
-		tg.Inc(STORED)
+		tg.Inc(StateSplit)
+		tg.Inc(StateStored)
 	}
 	for _, v := range []struct {
 		state    State
-		expVal   int
-		expTotal int
+		expVal   int64
+		expTotal int64
 	}{
-		{state: STORED, expVal: 10, expTotal: 10},
-		{state: SPLIT, expVal: 10, expTotal: 10},
-		{state: SEEN, expVal: 1, expTotal: 10},
-		{state: SENT, expVal: 1, expTotal: 9},
-		{state: SYNCED, expVal: 1, expTotal: 9},
+		{state: StateStored, expVal: 10, expTotal: 10},
+		{state: StateSplit, expVal: 10, expTotal: 10},
+		{state: StateSeen, expVal: 1, expTotal: 10},
+		{state: StateSent, expVal: 1, expTotal: 9},
+		{state: StateSynced, expVal: 1, expTotal: 9},
 	} {
 		val, total, err := tg.Status(v.state)
 		if err != nil {
@@ -98,8 +98,8 @@ func TestTagETA(t *testing.T) {
 	maxDiff := 100000 // 100 microsecond
 	tg := &Tag{total: 10, startedAt: now}
 	time.Sleep(100 * time.Millisecond)
-	tg.Inc(SPLIT)
-	eta, err := tg.ETA(SPLIT)
+	tg.Inc(StateSplit)
+	eta, err := tg.ETA(StateSplit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestTagConcurrentIncrements(t *testing.T) {
 	wg.Wait()
 	for _, f := range allStates {
 		v := tg.Get(f)
-		if v != n {
+		if v != int64(n) {
 			t.Fatalf("expected state %v to be %v, got %v", f, n, v)
 		}
 	}
@@ -142,7 +142,7 @@ func TestTagsMultipleConcurrentIncrementsSyncMap(t *testing.T) {
 	wg.Add(10 * 5 * n)
 	for i := 0; i < 10; i++ {
 		s := string([]byte{uint8(i)})
-		tag, err := ts.New(s, n)
+		tag, err := ts.New(s, int64(n))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -168,7 +168,7 @@ func TestTagsMultipleConcurrentIncrementsSyncMap(t *testing.T) {
 				t.Fatal(err)
 			}
 			stateVal := tag.Get(f)
-			if stateVal != n {
+			if stateVal != int64(n) {
 				t.Fatalf("expected tag %v state %v to be %v, got %v", uid, f, n, v)
 			}
 		}
