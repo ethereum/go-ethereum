@@ -17,7 +17,6 @@
 package tests
 
 import (
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/params"
@@ -27,26 +26,27 @@ func TestTransaction(t *testing.T) {
 	t.Parallel()
 
 	txt := new(testMatcher)
-	txt.config(`^Homestead/`, params.ChainConfig{
-		HomesteadBlock: big.NewInt(0),
-	})
-	txt.config(`^EIP155/`, params.ChainConfig{
-		HomesteadBlock: big.NewInt(0),
-		EIP150Block:    big.NewInt(0),
-		EIP155Block:    big.NewInt(0),
-		EIP158Block:    big.NewInt(0),
-		ChainID:        big.NewInt(1),
-	})
-	txt.config(`^Byzantium/`, params.ChainConfig{
-		HomesteadBlock: big.NewInt(0),
-		EIP150Block:    big.NewInt(0),
-		EIP155Block:    big.NewInt(0),
-		EIP158Block:    big.NewInt(0),
-		ByzantiumBlock: big.NewInt(0),
-	})
+	// These can't be parsed, invalid hex in RLP
+	txt.skipLoad("^ttWrongRLP/.*")
+	// We don't allow more than uint64 in gas amount
+	// This is a pseudo-consensus vulnerability, but not in practice
+	// because of the gas limit
+	txt.skipLoad("^ttGasLimit/TransactionWithGasLimitxPriceOverflow.json")
+	// We _do_ allow more than uint64 in gas price, as opposed to the tests
+	// This is also not a concern, as long as tx.Cost() uses big.Int for
+	// calculating the final cozt
+	txt.skipLoad(".*TransactionWithGasPriceOverflow.*")
 
+	// The nonce is too large for uint64. Not a concern, it means geth won't
+	// accept transactions at a certain point in the distant future
+	txt.skipLoad("^ttNonce/TransactionWithHighNonce256.json")
+
+	// The value is larger than uint64, which according to the test is invalid.
+	// Geth accepts it, which is not a consensus issue since we use big.Int's
+	// internally to calculate the cost
+	txt.skipLoad("^ttValue/TransactionWithHighValueOverflow.json")
 	txt.walk(t, transactionTestDir, func(t *testing.T, name string, test *TransactionTest) {
-		cfg := txt.findConfig(name)
+		cfg := params.MainnetChainConfig
 		if err := txt.checkFailure(t, name, test.Run(cfg)); err != nil {
 			t.Error(err)
 		}
