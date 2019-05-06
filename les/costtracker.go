@@ -106,6 +106,7 @@ type costTracker struct {
 
 	inSizeFactor, outSizeFactor float64
 	gf, utilTarget              float64
+	minBufLimit                 uint64
 
 	gfUpdateCh      chan gfUpdate
 	gfLock          sync.RWMutex
@@ -116,7 +117,8 @@ type costTracker struct {
 	logRecentUsage, logTotalRecharge, logRelCost *csvlogger.Channel
 }
 
-// newCostTracker creates a cost tracker and loads the cost factor statistics from the database
+// newCostTracker creates a cost tracker and loads the cost factor statistics from the database.
+// It also returns the minimum capacity that can be assigned to any peer.
 func newCostTracker(db ethdb.Database, config *eth.Config, logger *csvlogger.Logger) (*costTracker, uint64) {
 	utilTarget := float64(config.LightServ) * flowcontrol.FixedPointMultiplier / 100
 	ct := &costTracker{
@@ -142,17 +144,15 @@ func newCostTracker(db ethdb.Database, config *eth.Config, logger *csvlogger.Log
 	}
 	ct.gfLoop()
 	costList := ct.makeCostList(ct.globalFactor() * 1.25)
-	var minBufLimit uint64
 	for _, c := range costList {
 		amount := minBufferReqAmount[c.MsgCode]
 		cost := c.BaseCost + amount*c.ReqCost
-		if cost > minBufLimit {
-			minBufLimit = cost
+		if cost > ct.minBufLimit {
+			ct.minBufLimit = cost
 		}
 	}
-	minBufLimit *= uint64(minBufferMultiplier)
-	minCapacity := (minBufLimit-1)/bufLimitRatio + 1
-	return ct, minCapacity
+	ct.minBufLimit *= uint64(minBufferMultiplier)
+	return ct, (ct.minBufLimit-1)/bufLimitRatio + 1
 }
 
 // stop stops the cost tracker and saves the cost factor statistics to the database
@@ -182,10 +182,20 @@ func (ct *costTracker) makeCostList(globalFactor float64) RequestCostList {
 	}
 	var list RequestCostList
 	for code, data := range reqAvgTimeCost {
+		baseCost := maxCost(data.baseCost, reqMaxInSize[code].baseCost, reqMaxOutSize[code].baseCost)
+		reqCost := maxCost(data.reqCost, reqMaxInSize[code].reqCost, reqMaxOutSize[code].reqCost)
+		// always enforce maximum request cost <= minimum buffer limit
+		maxCost := baseCost + reqCost*minBufferReqAmount[code]
+		if maxCost > ct.minBufLimit {
+			mul := 0.999 * float64(ct.minBufLimit) / float64(maxCost)
+			baseCost = uint64(float64(baseCost) * mul)
+			reqCost = uint64(float64(reqCost) * mul)
+		}
+
 		list = append(list, requestCostListItem{
 			MsgCode:  code,
-			BaseCost: maxCost(data.baseCost, reqMaxInSize[code].baseCost, reqMaxOutSize[code].baseCost),
-			ReqCost:  maxCost(data.reqCost, reqMaxInSize[code].reqCost, reqMaxOutSize[code].reqCost),
+			BaseCost: baseCost,
+			ReqCost:  reqCost,
 		})
 	}
 	return list
