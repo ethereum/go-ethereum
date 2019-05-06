@@ -18,7 +18,6 @@ package tests
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -39,10 +38,6 @@ type TransactionTest struct {
 	Homestead      ttFork
 }
 
-type ttJSON struct {
-	RLP hexutil.Bytes `json:"rlp"`
-}
-
 type ttFork struct {
 	Sender common.UnprefixedAddress `json:"sender"`
 	Hash   common.UnprefixedHash    `json:"hash"`
@@ -50,67 +45,64 @@ type ttFork struct {
 
 func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 
-	validateTx := func(rlpData hexutil.Bytes, signer types.Signer, block *big.Int) (*common.Address, error) {
+	validateTx := func(rlpData hexutil.Bytes, signer types.Signer, isHomestead bool) (*common.Address, *common.Hash, error) {
 		tx := new(types.Transaction)
 		if err := rlp.DecodeBytes(rlpData, tx); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		sender, err := types.Sender(signer, tx)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		// Intrinsic gas
-		requiredGas, err := core.IntrinsicGas(tx.Data(), tx.To() == nil, config.IsHomestead(block))
+		requiredGas, err := core.IntrinsicGas(tx.Data(), tx.To() == nil, isHomestead)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if requiredGas > tx.Gas() {
-			return nil, fmt.Errorf("insufficient gas ( %d < %d )", tx.Gas(), requiredGas)
+			return nil, nil, fmt.Errorf("insufficient gas ( %d < %d )", tx.Gas(), requiredGas)
 		}
-		//if signer.Hash(tx) != common.Hash(fork.Hash) {
-		//	return fmt.Errorf("Tx hash mismatch, got %v want %v", signer.Hash(tx), fork.Hash)
-		//}
-		return &sender, nil
+		h := tx.Hash()
+		return &sender, &h, nil
 	}
 
-	checkFork := func(block *big.Int, fork ttFork, rlpData hexutil.Bytes) error {
-		signer := types.MakeSigner(config, block)
-		sender, err := validateTx(rlpData, signer, block)
+	for _, testcase := range []struct {
+		name        string
+		signer      types.Signer
+		fork        ttFork
+		isHomestead bool
+	}{
+		{"Frontier", types.FrontierSigner{}, tt.Frontier, false},
+		{"Homestead", types.HomesteadSigner{}, tt.Homestead, true},
+		{"EIP150", types.HomesteadSigner{}, tt.EIP150, true},
+		{"EIP158", types.NewEIP155Signer(config.ChainID), tt.EIP158, true},
+		{"Byzantium", types.NewEIP155Signer(config.ChainID), tt.Byzantium, true},
+		{"Constantinople", types.NewEIP155Signer(config.ChainID), tt.Constantinople, true},
+	} {
+		sender, txhash, err := validateTx(tt.RLP, testcase.signer, testcase.isHomestead)
 
-		// This testcase has an invalid tx
-		if fork.Sender == (common.UnprefixedAddress{}) {
+		if testcase.fork.Sender == (common.UnprefixedAddress{}) {
 			if err == nil {
 				return fmt.Errorf("Expected error, got none (address %v)", sender.String())
 			}
-
-			return nil
+			continue
 		}
 		// Should resolve the right address
 		if err != nil {
 			return fmt.Errorf("Got error, expected none: %v", err)
 		}
-		if *sender != common.Address(fork.Sender) {
-			return fmt.Errorf("Sender mismatch: got %x, want %x", sender, fork.Sender)
+		if sender == nil {
+			return fmt.Errorf("sender was nil, should be %x", common.Address(testcase.fork.Sender))
 		}
-		return nil
-	}
-	if err := checkFork(new(big.Int), tt.Frontier, tt.RLP); err != nil {
-		return fmt.Errorf("Frontier: %v", err)
-	}
-	if err := checkFork(config.HomesteadBlock, tt.Homestead, tt.RLP); err != nil {
-		return fmt.Errorf("Homestead: %v", err)
-	}
-	if err := checkFork(config.EIP150Block, tt.EIP150, tt.RLP); err != nil {
-		return fmt.Errorf("EIP150: %v", err)
-	}
-	if err := checkFork(config.EIP158Block, tt.EIP158, tt.RLP); err != nil {
-		return fmt.Errorf("EIP158: %v", err)
-	}
-	if err := checkFork(config.ByzantiumBlock, tt.Byzantium, tt.RLP); err != nil {
-		return fmt.Errorf("Byzantium: %v", err)
-	}
-	if err := checkFork(config.ConstantinopleBlock, tt.Constantinople, tt.RLP); err != nil {
-		return fmt.Errorf("Constantinople: %v", err)
+		if *sender != common.Address(testcase.fork.Sender) {
+			return fmt.Errorf("Sender mismatch: got %x, want %x", sender, testcase.fork.Sender)
+		}
+		if txhash == nil {
+			return fmt.Errorf("txhash was nil, should be %x", common.Hash(testcase.fork.Hash))
+		}
+		if *txhash != common.Hash(testcase.fork.Hash) {
+			return fmt.Errorf("Hash mismatch: got %x, want %x", *txhash, testcase.fork.Hash)
+		}
 	}
 	return nil
 }
