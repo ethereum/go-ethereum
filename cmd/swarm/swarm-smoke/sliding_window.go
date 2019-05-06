@@ -81,9 +81,13 @@ outer:
 			return err
 		}
 
-		log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fhash), "sleeping", syncDelay)
+		log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fhash), "wait for sync", syncDelay)
 		hashes = append(hashes, uploadResult{hash: hash, digest: fhash})
-		time.Sleep(time.Duration(syncDelay) * time.Second)
+
+		if syncDelay {
+			waitToSync()
+		}
+
 		uploadedBytes += filesize * 1000
 		q := make(chan struct{}, 1)
 		d := make(chan struct{})

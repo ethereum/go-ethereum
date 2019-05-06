@@ -197,7 +197,8 @@ func getBzzAddrFromHost(client *rpc.Client) (string, error) {
 	// we make an ugly assumption about the output format of the hive.String() method
 	// ideally we should replace this with an API call that returns the bzz addr for a given host,
 	// but this also works for now (provided we don't change the hive.String() method, which we haven't in some time
-	return strings.Split(strings.Split(hive, "\n")[3], " ")[10], nil
+	ss := strings.Split(strings.Split(hive, "\n")[3], " ")
+	return ss[len(ss)-1], nil
 }
 
 // checkChunksVsMostProxHosts is checking:
@@ -284,13 +285,16 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 
 	log.Info("uploaded successfully", "hash", hash, "took", t2, "digest", fmt.Sprintf("%x", fhash))
 
-	waitToSync()
+	// wait to sync and log chunks before fetch attempt, only if syncDelay is set to true
+	if syncDelay {
+		waitToSync()
 
-	log.Debug("chunks before fetch attempt", "hash", hash)
+		log.Debug("chunks before fetch attempt", "hash", hash)
 
-	err = trackChunks(randomBytes, false)
-	if err != nil {
-		log.Error(err.Error())
+		err = trackChunks(randomBytes, false)
+		if err != nil {
+			log.Error(err.Error())
+		}
 	}
 
 	if onlyUpload {

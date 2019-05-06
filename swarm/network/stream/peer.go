@@ -415,9 +415,14 @@ func (p *Peer) removeClientParams(s Stream) error {
 }
 
 func (p *Peer) close() {
+	p.serverMu.Lock()
+	defer p.serverMu.Unlock()
+
 	for _, s := range p.servers {
 		s.Close()
 	}
+
+	p.servers = nil
 }
 
 // runUpdateSyncing is a long running function that creates the initial

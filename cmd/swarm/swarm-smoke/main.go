@@ -40,7 +40,7 @@ var (
 	allhosts   string
 	hosts      []string
 	filesize   int
-	syncDelay  int
+	syncDelay  bool
 	inputSeed  int
 	httpPort   int
 	wsPort     int
@@ -87,10 +87,9 @@ func main() {
 			Usage:       "file size for generated random file in KB",
 			Destination: &filesize,
 		},
-		cli.IntFlag{
+		cli.BoolFlag{
 			Name:        "sync-delay",
-			Value:       5,
-			Usage:       "duration of delay in seconds to wait for content to be synced",
+			Usage:       "wait for content to be synced",
 			Destination: &syncDelay,
 		},
 		cli.IntFlag{

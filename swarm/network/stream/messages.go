@@ -223,6 +223,9 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		return fmt.Errorf("error initiaising bitvector of length %v: %v", lenHashes/HashSize, err)
 	}
 
+	var wantDelaySet bool
+	var wantDelay time.Time
+
 	ctr := 0
 	errC := make(chan error)
 	ctx, cancel := context.WithTimeout(ctx, syncBatchTimeout)
@@ -234,6 +237,13 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		if wait := c.NeedData(ctx, hash); wait != nil {
 			ctr++
 			want.Set(i/HashSize, true)
+
+			// measure how long it takes before we mark chunks for retrieval, and actually send the request
+			if !wantDelaySet {
+				wantDelaySet = true
+				wantDelay = time.Now()
+			}
+
 			// create request and wait until the chunk data arrives and is stored
 			go func(w func(context.Context) error) {
 				select {
@@ -304,6 +314,12 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			return
 		}
 		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
+
+		// record want delay
+		if wantDelaySet {
+			metrics.GetOrRegisterResettingTimer("handleoffered.wantdelay", nil).UpdateSince(wantDelay)
+		}
+
 		err := p.SendPriority(ctx, msg, c.priority)
 		if err != nil {
 			log.Warn("SendPriority error", "err", err)
