@@ -224,6 +224,15 @@ func (ct *costTracker) gfLoop() {
 	ct.gfUpdateCh = make(chan gfUpdate, 100)
 
 	go func() {
+		saveCostFactor := func() {
+			var data [16]byte
+			binary.BigEndian.PutUint64(data[0:8], math.Float64bits(gfSum))
+			binary.BigEndian.PutUint64(data[8:16], math.Float64bits(gfWeight))
+			ct.db.Put([]byte(gfDbKey), data[:])
+			log.Debug("global cost factor saved", "sum", time.Duration(gfSum), "weight", time.Duration(gfWeight))
+		}
+		saveTicker := time.NewTicker(time.Minute * 10)
+
 		for {
 			select {
 			case r := <-ct.gfUpdateCh:
@@ -273,12 +282,11 @@ func (ct *costTracker) gfLoop() {
 				ct.logRecentUsage.Update(gfUsage)
 				ct.logTotalRecharge.Update(totalRecharge)
 
+			case <-saveTicker.C:
+				saveCostFactor()
+
 			case stopCh := <-ct.stopCh:
-				var data [16]byte
-				binary.BigEndian.PutUint64(data[0:8], math.Float64bits(gfSum))
-				binary.BigEndian.PutUint64(data[8:16], math.Float64bits(gfWeight))
-				ct.db.Put([]byte(gfDbKey), data[:])
-				log.Debug("global cost factor saved", "sum", time.Duration(gfSum), "weight", time.Duration(gfWeight))
+				saveCostFactor()
 				close(stopCh)
 				return
 			}
