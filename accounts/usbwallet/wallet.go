@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/karalabe/hid"
+	"github.com/trezor/trezord-go/core"
 )
 
 // Maximum time between wallet health checks to detect USB unplugs.
@@ -77,8 +77,8 @@ type wallet struct {
 	driver driver        // Hardware implementation of the low level device operations
 	url    *accounts.URL // Textual URL uniquely identifying this wallet
 
-	info   hid.DeviceInfo // Known USB device infos about the wallet
-	device *hid.Device    // USB device advertising itself as a hardware wallet
+	info   core.USBInfo   // Known USB device infos about the wallet
+	device core.USBDevice // USB device advertising itself as a hardware wallet
 
 	accounts []accounts.Account                         // List of derive accounts pinned on the hardware wallet
 	paths    map[common.Address]accounts.DerivationPath // Known derivation paths for signing operations
@@ -146,7 +146,7 @@ func (w *wallet) Open(passphrase string) error {
 	}
 	// Make sure the actual device connection is done only once
 	if w.device == nil {
-		device, err := w.info.Open()
+		device, err := w.hub.bus.Connect(w.info.Path, false, true)
 		if err != nil {
 			return err
 		}
@@ -270,7 +270,7 @@ func (w *wallet) close() error {
 		return nil
 	}
 	// Close the device, clear everything, then return
-	w.device.Close()
+	w.device.Close(true)
 	w.device = nil
 
 	w.accounts, w.paths = nil, nil

@@ -58,12 +58,20 @@ type trezorDriver struct {
 	passphrasewait bool          // Flags whether the device is waiting for passphrase entry
 	failure        error         // Any failure that would make the device unusable
 	log            log.Logger    // Contextual logger to tag the trezor with its id
+	webUSB         bool          // If false, the legacy HID method needs to be used
 }
 
 // newTrezorDriver creates a new instance of a Trezor USB protocol driver.
 func newTrezorDriver(logger log.Logger) driver {
 	return &trezorDriver{
 		log: logger,
+	}
+}
+
+func newWebUSBTrezorDriver(logger log.Logger) driver {
+	return &trezorDriver{
+		log:    logger,
+		webUSB: true,
 	}
 }
 
@@ -303,7 +311,7 @@ func (w *trezorDriver) trezorExchange(req proto.Message, results ...proto.Messag
 	)
 	for {
 		// Read the next chunk from the Trezor wallet
-		if _, err := io.ReadFull(w.device, chunk); err != nil {
+		if _, err := io.ReadFull(w.device, chunk[:]); err != nil {
 			return 0, err
 		}
 		w.log.Trace("Data chunk received from the Trezor", "chunk", hexutil.Bytes(chunk))

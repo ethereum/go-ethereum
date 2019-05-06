@@ -504,6 +504,13 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 			} else {
 				backends = append(backends, trezorhub)
 			}
+			// Start a USB hub for WEbUSB-enabled Trezor hardware wallets
+			if trezorwuhub, err := usbwallet.NewWebUSBTrezorHub(); err != nil {
+				log.Warn(fmt.Sprintf("Failed to start Trezor hub, disabling: %v", err))
+			} else {
+				backends = append(backends, trezorwuhub)
+				log.Debug("WebUSB Trezor support enabled")
+			}
 		}
 		// Start a smart card hub
 		if schub, err := scwallet.NewHub(scwallet.Scheme, keydir); err != nil {

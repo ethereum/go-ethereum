@@ -267,13 +267,6 @@
 			"revisionTime": "2017-04-30T22:20:11Z"
 		},
 		{
-			"checksumSHA1": "6XsjAARQFvlW6dS15al0ibTFPOQ=",
-			"path": "github.com/karalabe/hid",
-			"revision": "d815e0c1a2e2082a287a2806bc90bc8fc7b276a9",
-			"revisionTime": "2018-11-28T19:21:57Z",
-			"tree": true
-		},
-		{
 			"checksumSHA1": "SEnjvwVyfuU2xBaOfXfwPD5MZqk=",
 			"path": "github.com/mattn/go-colorable",
 			"revision": "efa589957cd060542a26d2dd7832fd6a6c6c3ade",
@@ -519,6 +512,30 @@
 			"path": "github.com/syndtr/goleveldb/leveldb/util",
 			"revision": "b001fa50d6b27f3f0bb175a87d0cb55426d0a0ae",
 			"revisionTime": "2018-11-28T10:09:59Z"
+		},
+		{
+			"checksumSHA1": "lEHNmektKozsRK0DP9aTrbEYnGw=",
+			"path": "github.com/trezor/trezord-go/core",
+			"revision": "a2d3424409cf8a6d85e6d202cee068a054002926",
+			"revisionTime": "2019-04-26T13:37:49Z"
+		},
+		{
+			"checksumSHA1": "u+yNdeytnW3PFudehX+iRzemass=",
+			"path": "github.com/trezor/trezord-go/usb",
+			"revision": "a2d3424409cf8a6d85e6d202cee068a054002926",
+			"revisionTime": "2019-04-26T13:37:49Z"
+		},
+		{
+			"checksumSHA1": "dClhiEEdvvGwGqrnX135m5rtBb8=",
+			"path": "github.com/trezor/trezord-go/usb/lowlevel/hidapi",
+			"revision": "a2d3424409cf8a6d85e6d202cee068a054002926",
+			"revisionTime": "2019-04-26T13:37:49Z"
+		},
+		{
+			"checksumSHA1": "bygwvMqtbADjO4M3MFcMEuDajEo=",
+			"path": "github.com/trezor/trezord-go/wire",
+			"revision": "a2d3424409cf8a6d85e6d202cee068a054002926",
+			"revisionTime": "2019-04-26T13:37:49Z"
 		},
 		{
 			"checksumSHA1": "SsMMqb3xn7hg1ZX5ugwZz5rzpx0=",

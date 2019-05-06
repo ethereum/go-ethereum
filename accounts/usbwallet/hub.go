@@ -17,15 +17,18 @@
 package usbwallet
 
 import (
-	"errors"
+	"fmt"
 	"runtime"
 	"sync"
 	"time"
 
+	"github.com/trezor/trezord-go/memorywriter"
+	"github.com/trezor/trezord-go/usb"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/karalabe/hid"
+	libusbcore "github.com/trezor/trezord-go/core"
 )
 
 // LedgerScheme is the protocol scheme prefixing account and wallet URLs.
@@ -51,6 +54,8 @@ type Hub struct {
 	endpointID int                     // USB endpoint identifier used for non-macOS device discovery
 	makeDriver func(log.Logger) driver // Factory method to construct a vendor specific driver
 
+	bus libusbcore.USBBus
+
 	refreshed   time.Time               // Time instance when the list of wallets was last refreshed
 	wallets     []accounts.Wallet       // List of USB wallet devices currently tracking
 	updateFeed  event.Feed              // Event feed to notify wallet additions/removals
@@ -73,14 +78,26 @@ func NewLedgerHub() (*Hub, error) {
 
 // NewTrezorHub creates a new hardware wallet manager for Trezor devices.
 func NewTrezorHub() (*Hub, error) {
-	return newHub(TrezorScheme, 0x534c, []uint16{0x0001 /* Trezor 1 */}, 0xff00, 0, newTrezorDriver)
+	return newHub(TrezorScheme, 0x534c, []uint16{0x0001 /* Trezor 1 */}, 0xff00, 0, newWebUSBTrezorDriver)
+}
+
+// NewWebUSBTrezorHub creates a new hardware wallet manager for Trezor devices with
+// firmware version > 1.8.0
+func NewWebUSBTrezorHub() (*Hub, error) {
+	return newHub(TrezorScheme, 0x1209, []uint16{0x53c1 /* Trezor 1 WebUSB */}, 0, 1, newTrezorDriver)
 }
 
 // newHub creates a new hardware wallet manager for generic USB devices.
 func newHub(scheme string, vendorID uint16, productIDs []uint16, usageID uint16, endpointID int, makeDriver func(log.Logger) driver) (*Hub, error) {
-	if !hid.Supported() {
-		return nil, errors.New("unsupported platform")
+	bus, err := usb.InitLibUSB(memorywriter.New(90000, 200, true, nil), true, false, false)
+	if err != nil {
+		return nil, fmt.Errorf("Error initializing libusb: %v", err)
 	}
+
+	// TODO fix this
+	// if !hid.Supported() {
+	// 	return nil, errors.New("unsupported platform")
+	// }
 	hub := &Hub{
 		scheme:     scheme,
 		vendorID:   vendorID,
@@ -89,6 +106,7 @@ func newHub(scheme string, vendorID uint16, productIDs []uint16, usageID uint16,
 		endpointID: endpointID,
 		makeDriver: makeDriver,
 		quit:       make(chan chan error),
+		bus:        bus,
 	}
 	hub.refreshWallets()
 	return hub, nil
@@ -120,7 +138,7 @@ func (hub *Hub) refreshWallets() {
 		return
 	}
 	// Retrieve the current list of USB wallet devices
-	var devices []hid.DeviceInfo
+	var devices []libusbcore.USBInfo
 
 	if runtime.GOOS == "linux" {
 		// hidapi on Linux opens the device during enumeration to retrieve some infos,
@@ -135,9 +153,17 @@ func (hub *Hub) refreshWallets() {
 			return
 		}
 	}
-	for _, info := range hid.Enumerate(hub.vendorID, 0) {
+	enumerated, err := hub.bus.Enumerate()
+	if err != nil {
+		log.Warn("Error enumerating USB bus", err)
+		return
+	}
+	for _, info := range enumerated {
+		if info.VendorID != int(hub.vendorID) {
+			continue
+		}
 		for _, id := range hub.productIDs {
-			if info.ProductID == id && (info.UsagePage == hub.usageID || info.Interface == hub.endpointID) {
+			if info.ProductID == int(id) /*&& TODO fix this (info.UsagePage == hub.usageID || info.Interface == hub.endpointID)*/ {
 				devices = append(devices, info)
 				break
 			}
