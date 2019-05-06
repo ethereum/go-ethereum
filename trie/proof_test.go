@@ -125,6 +125,35 @@ func TestBadProof(t *testing.T) {
 	}
 }
 
+func TestMutateValueProof(t *testing.T) {
+	trie, vals := randomTrie(800)
+	root := trie.Hash()
+	for i, prover := range makeProvers(trie) {
+		for _, kv := range vals {
+			proof := prover(kv.k)
+			if proof == nil {
+				t.Fatalf("prover %d: nil proof", i)
+			}
+			it := proof.NewIterator()
+			for i, d := 0, mrand.Intn(proof.Len()); i <= d; i++ {
+				it.Next()
+			}
+			key := it.Key()
+			val, _ := proof.Get(key)
+			proof.Delete(key)
+			it.Release()
+
+			origin := crypto.Keccak256(val)
+			mutateByte(val)
+			proof.Put(origin, val)
+
+			if _, _, err := VerifyProof(root, kv.k, proof); err == nil {
+				t.Fatalf("prover %d: expected proof to fail for key %x", i, kv.k)
+			}
+		}
+	}
+}
+
 // Tests that missing keys can also be proven. The test explicitly uses a single
 // entry trie and checks for missing keys both before and after the single entry.
 func TestMissingKeyProof(t *testing.T) {

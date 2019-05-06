@@ -112,6 +112,9 @@ func VerifyProof(rootHash common.Hash, key []byte, proofDb ethdb.Reader) (value 
 		if buf == nil {
 			return nil, i, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash)
 		}
+		if bytes.Compare(crypto.Keccak256(buf), wantHash[:]) != 0 {
+			return nil, i, fmt.Errorf("proof node %d (hash %64x) invalid", i, wantHash)
+		}
 		n, err := decodeNode(wantHash[:], buf)
 		if err != nil {
 			return nil, i, fmt.Errorf("bad proof node %d: %v", i, err)
