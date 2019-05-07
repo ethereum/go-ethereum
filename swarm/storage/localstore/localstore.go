@@ -73,7 +73,7 @@ type DB struct {
 	pullTriggers   map[uint8][]chan struct{}
 	pullTriggersMu sync.RWMutex
 
-	// binIDs stores the latest chunk serial ID for very
+	// binIDs stores the latest chunk serial ID for every
 	// proximity order bin
 	binIDs shed.Uint64Vector
 

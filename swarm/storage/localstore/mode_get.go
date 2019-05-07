@@ -47,7 +47,7 @@ func (db *DB) Get(ctx context.Context, mode chunk.ModeGet, addr chunk.Address) (
 
 	defer func() {
 		if err != nil {
-			metrics.GetOrRegisterCounter(fmt.Sprintf(metricName+".error", mode), nil).Inc(1)
+			metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
 		}
 	}()
 

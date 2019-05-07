@@ -36,7 +36,7 @@ import (
 // Pull syncing index can be only subscribed to a particular proximity order bin. If since
 // is not 0, the iteration will start from the first item stored after that id. If until is not 0,
 // only chunks stored up to this id will be sent to the channel, and the returned channel will be
-// closed. The since-until interval is closed on the both sides [since,until]. Returned stop
+// closed. The since-until interval is open on since side, and closed on until side: (since,until] <=> [since+1,until]. Returned stop
 // function will terminate current and further iterations without errors, and also close the returned channel.
 // Make sure that you check the second returned parameter from the channel to stop iteration when its value
 // is false.
