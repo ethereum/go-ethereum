@@ -103,19 +103,15 @@ func (t *SecureTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.Writer) err
 // VerifyProof checks merkle proofs. The given proof must contain the value for
 // key in a trie with the given root hash. VerifyProof returns an error if the
 // proof contains invalid trie nodes or the wrong value.
+//
+// Note, the method assumes that all key-values in proofDb satisfy key = hash(value).
 func VerifyProof(rootHash common.Hash, key []byte, proofDb ethdb.Reader) (value []byte, nodes int, err error) {
-	hasher := newHasher(nil)
-	defer returnHasherToPool(hasher)
-
 	key = keybytesToHex(key)
 	wantHash := rootHash
 	for i := 0; ; i++ {
 		buf, _ := proofDb.Get(wantHash[:])
 		if buf == nil {
 			return nil, i, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash)
-		}
-		if !bytes.Equal(hasher.makeHashNode(buf), wantHash.Bytes()) {
-			return nil, i, fmt.Errorf("proof node %d (hash %064x) invalid", i, wantHash)
 		}
 		n, err := decodeNode(wantHash[:], buf)
 		if err != nil {
