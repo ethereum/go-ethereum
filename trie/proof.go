@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -81,7 +80,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.Writer) error {
 			} else {
 				enc, _ := rlp.EncodeToBytes(n)
 				if !ok {
-					hash = crypto.Keccak256(enc)
+					hash = hasher.makeHashNode(enc)
 				}
 				proofDb.Put(hash, enc)
 			}
@@ -105,6 +104,9 @@ func (t *SecureTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.Writer) err
 // key in a trie with the given root hash. VerifyProof returns an error if the
 // proof contains invalid trie nodes or the wrong value.
 func VerifyProof(rootHash common.Hash, key []byte, proofDb ethdb.Reader) (value []byte, nodes int, err error) {
+	hasher := newHasher(nil)
+	defer returnHasherToPool(hasher)
+
 	key = keybytesToHex(key)
 	wantHash := rootHash
 	for i := 0; ; i++ {
@@ -112,8 +114,8 @@ func VerifyProof(rootHash common.Hash, key []byte, proofDb ethdb.Reader) (value 
 		if buf == nil {
 			return nil, i, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash)
 		}
-		if bytes.Compare(crypto.Keccak256(buf), wantHash[:]) != 0 {
-			return nil, i, fmt.Errorf("proof node %d (hash %64x) invalid", i, wantHash)
+		if !bytes.Equal(hasher.makeHashNode(buf), wantHash.Bytes()) {
+			return nil, i, fmt.Errorf("proof node %d (hash %064x) invalid", i, wantHash)
 		}
 		n, err := decodeNode(wantHash[:], buf)
 		if err != nil {
