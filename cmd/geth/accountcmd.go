@@ -312,11 +312,13 @@ func accountCreate(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)
 	}
-	fmt.Printf("Your new key was generated\n")
-	fmt.Printf("Address: {%x}\n", account.Address)
-	fmt.Printf("Please backup your key file!\n")
-	fmt.Printf("Path:    {%s}\n", account.URL.Path)
-	fmt.Printf("Please remember your password!\n")
+	fmt.Printf("\nYour new key was generated\n\n")
+	fmt.Printf("Public address of the key:   %s\n", account.Address.Hex())
+	fmt.Printf("Path of the secret key file: %s\n\n", account.URL.Path)
+	fmt.Printf("- You can share your public address with anyone. Others need it to interact with you.\n")
+	fmt.Printf("- You must NEVER share the secret key with anyone! The key controls access to your funds!\n")
+	fmt.Printf("- You must BACKUP your key file! Without the key, it's impossible to access account funds!\n")
+	fmt.Printf("- You must REMEMBER your password! Without the password, it's impossible to decrypt the key!\n\n")
 	return nil
 }
 
