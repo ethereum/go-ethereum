@@ -787,7 +787,7 @@ Note that several values are Golang big.Int objects, not JavaScript numbers or J
 
 Usage example, returns the top element of the stack at each CALL opcode only:
 
-    debug.traceTransaction(txhash, {tracer: '{data: [], step: function(log) { if(log.op.toString() == "CALL") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}'});
+    debug.traceTransaction(txhash, {tracer: '{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == "CALL") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}'});
 
 ### debug_verbosity
 
