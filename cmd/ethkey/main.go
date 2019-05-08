@@ -30,11 +30,12 @@ const (
 
 // Git SHA1 commit hash of the release (set via linker flags)
 var gitCommit = ""
+var gitDate = ""
 
 var app *cli.App
 
 func init() {
-	app = utils.NewApp(gitCommit, "an Ethereum key manager")
+	app = utils.NewApp(gitCommit, gitDate, "an Ethereum key manager")
 	app.Commands = []cli.Command{
 		commandGenerate,
 		commandInspect,

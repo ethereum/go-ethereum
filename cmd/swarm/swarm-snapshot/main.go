@@ -25,6 +25,7 @@ import (
 )
 
 var gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
+var gitDate string
 
 // default value for "create" command --nodes flag
 const defaultNodes = 8
@@ -40,7 +41,7 @@ func main() {
 // newApp construct a new instance of Swarm Snapshot Utility.
 // Method Run is called on it in the main function and in tests.
 func newApp() (app *cli.App) {
-	app = utils.NewApp(gitCommit, "Swarm Snapshot Utility")
+	app = utils.NewApp(gitCommit, gitDate, "Swarm Snapshot Utility")
 
 	app.Name = "swarm-snapshot"
 	app.Usage = ""

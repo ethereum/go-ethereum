@@ -26,6 +26,7 @@ import (
 var (
 	version   = "0.1"
 	gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
+	gitDate   string
 )
 
 func main() {
@@ -44,6 +45,9 @@ func newApp() (app *cli.App) {
 	app.Version = version
 	if len(gitCommit) >= 8 {
 		app.Version += "-" + gitCommit[:8]
+	}
+	if gitDate != "" {
+		app.Version += "-" + gitDate
 	}
 	app.Usage = "Swarm Global Store"
 
