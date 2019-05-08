@@ -445,10 +445,14 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 				return
 			}
 			continue
+		case strings.HasPrefix(msg.URL, "https://plus.google.com/"):
+			if err = sendError(conn, errors.New("Google+ authentication discontinued as the service was sunset")); err != nil {
+				log.Warn("Failed to send Google+ deprecation to client", "err", err)
+				return
+			}
+			continue
 		case strings.HasPrefix(msg.URL, "https://twitter.com/"):
 			username, avatar, address, err = authTwitter(msg.URL)
-		case strings.HasPrefix(msg.URL, "https://plus.google.com/"):
-			username, avatar, address, err = authGooglePlus(msg.URL)
 		case strings.HasPrefix(msg.URL, "https://www.facebook.com/"):
 			username, avatar, address, err = authFacebook(msg.URL)
 		case *noauthFlag:
@@ -702,40 +706,6 @@ func authTwitter(url string) (string, string, common.Address, error) {
 		avatar = parts[1]
 	}
 	return username + "@twitter", avatar, address, nil
-}
-
-// authGooglePlus tries to authenticate a faucet request using GooglePlus posts,
-// returning the username, avatar URL and Ethereum address to fund on success.
-func authGooglePlus(url string) (string, string, common.Address, error) {
-	// Ensure the user specified a meaningful URL, no fancy nonsense
-	parts := strings.Split(url, "/")
-	if len(parts) < 4 || parts[len(parts)-2] != "posts" {
-		return "", "", common.Address{}, errors.New("Invalid Google+ post URL")
-	}
-	username := parts[len(parts)-3]
-
-	// Google's API isn't really friendly with direct links. Still, we don't
-	// want to do ask read permissions from users, so just load the public posts and
-	// scrape it for the Ethereum address and profile URL.
-	res, err := http.Get(url)
-	if err != nil {
-		return "", "", common.Address{}, err
-	}
-	defer res.Body.Close()
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return "", "", common.Address{}, err
-	}
-	address := common.HexToAddress(string(regexp.MustCompile("0x[0-9a-fA-F]{40}").Find(body)))
-	if address == (common.Address{}) {
-		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
-	}
-	var avatar string
-	if parts = regexp.MustCompile("src=\"([^\"]+googleusercontent.com[^\"]+photo.jpg)\"").FindStringSubmatch(string(body)); len(parts) == 2 {
-		avatar = parts[1]
-	}
-	return username + "@google+", avatar, address, nil
 }
 
 // authFacebook tries to authenticate a faucet request using Facebook posts,
