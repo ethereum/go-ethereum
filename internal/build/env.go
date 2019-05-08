@@ -19,7 +19,6 @@ package build
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -118,12 +117,14 @@ func getDate(commit string) string {
 		return ""
 	}
 	out := RunGit("show", "-s", "--format=%ct", commit)
-	ti, err := strconv.ParseInt(strings.TrimSpace(out), 10, 64)
-	if err != nil {
-		log.Fatal("Could not convert gitCommit date. Trying to parse: '" + out + "' The error is: " + err.Error())
+	if out == "" {
 		return ""
 	}
-	return time.Unix(ti, 0).Format("20060102")
+	date, err := strconv.ParseInt(strings.TrimSpace(out), 10, 64)
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse git commit date: %v", err))
+	}
+	return time.Unix(date, 0).Format("20060102")
 }
 
 func applyEnvFlags(env Environment) Environment {

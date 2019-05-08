@@ -68,13 +68,14 @@ func RunGit(args ...string) string {
 	cmd := exec.Command("git", args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err == exec.ErrNotFound {
-		if !warnedAboutGit {
-			log.Println("Warning: can't find 'git' in PATH")
-			warnedAboutGit = true
+	if err := cmd.Run(); err != nil {
+		if e, ok := err.(*exec.Error); ok && e.Err == exec.ErrNotFound {
+			if !warnedAboutGit {
+				log.Println("Warning: can't find 'git' in PATH")
+				warnedAboutGit = true
+			}
+			return ""
 		}
-		return ""
-	} else if err != nil {
 		log.Fatal(strings.Join(cmd.Args, " "), ": ", err, "\n", stderr.String())
 	}
 	return strings.TrimSpace(stdout.String())
