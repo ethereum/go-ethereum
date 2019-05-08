@@ -236,6 +236,11 @@ func GetTransaction(ctx context.Context, odr OdrBackend, txHash common.Hash) (*t
 		return nil, common.Hash{}, 0, 0, err
 	} else {
 		pos := r.Status[0].Lookup
+		// first ensure that we have the header, otherwise block body retrieval will fail
+		// also verify if this is a canonical block by getting the header by number and checking its hash
+		if header, err := GetHeaderByNumber(ctx, odr, pos.BlockIndex); err != nil || header.Hash() != pos.BlockHash {
+			return nil, common.Hash{}, 0, 0, err
+		}
 		if body, err := GetBody(ctx, odr, pos.BlockHash, pos.BlockIndex); err != nil || uint64(len(body.Transactions)) <= pos.Index || body.Transactions[pos.Index].Hash() != txHash {
 			return nil, common.Hash{}, 0, 0, err
 		} else {
