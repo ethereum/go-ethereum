@@ -88,6 +88,11 @@ var (
 	ether = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
 )
 
+var (
+	gitCommit = "" // Git SHA1 commit hash of the release (set via linker flags)
+	gitDate   = "" // Git commit date YYYYMMDD of the release (set via linker flags)
+)
+
 func main() {
 	// Parse the flags and set up the logger to print everything requested
 	flag.Parse()
@@ -216,7 +221,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 	// Assemble the raw devp2p protocol stack
 	stack, err := node.New(&node.Config{
 		Name:    "geth",
-		Version: params.VersionWithMeta,
+		Version: params.VersionWithCommit(gitCommit, gitDate),
 		DataDir: filepath.Join(os.Getenv("HOME"), ".faucet"),
 		P2P: p2p.Config{
 			NAT:              nat.Any(),
