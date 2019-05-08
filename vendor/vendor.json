@@ -520,6 +520,12 @@
 			"revisionTime": "2019-04-26T13:37:49Z"
 		},
 		{
+			"checksumSHA1": "TeiwnQhbuEi9oPtyrZ7Fqkw1Zfc=",
+			"path": "github.com/trezor/trezord-go/memorywriter",
+			"revision": "a2d3424409cf8a6d85e6d202cee068a054002926",
+			"revisionTime": "2019-04-26T13:37:49Z"
+		},
+		{
 			"checksumSHA1": "u+yNdeytnW3PFudehX+iRzemass=",
 			"path": "github.com/trezor/trezord-go/usb",
 			"revision": "a2d3424409cf8a6d85e6d202cee068a054002926",
@@ -528,6 +534,12 @@
 		{
 			"checksumSHA1": "dClhiEEdvvGwGqrnX135m5rtBb8=",
 			"path": "github.com/trezor/trezord-go/usb/lowlevel/hidapi",
+			"revision": "a2d3424409cf8a6d85e6d202cee068a054002926",
+			"revisionTime": "2019-04-26T13:37:49Z"
+		},
+		{
+			"checksumSHA1": "D7WRCxl4qghkCjbYi3xM/2VQ0Bo=",
+			"path": "github.com/trezor/trezord-go/usb/lowlevel/libusb",
 			"revision": "a2d3424409cf8a6d85e6d202cee068a054002926",
 			"revisionTime": "2019-04-26T13:37:49Z"
 		},
