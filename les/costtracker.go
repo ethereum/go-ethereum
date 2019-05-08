@@ -184,12 +184,14 @@ func (ct *costTracker) makeCostList(globalFactor float64) RequestCostList {
 	for code, data := range reqAvgTimeCost {
 		baseCost := maxCost(data.baseCost, reqMaxInSize[code].baseCost, reqMaxOutSize[code].baseCost)
 		reqCost := maxCost(data.reqCost, reqMaxInSize[code].reqCost, reqMaxOutSize[code].reqCost)
-		// always enforce maximum request cost <= minimum buffer limit
-		maxCost := baseCost + reqCost*minBufferReqAmount[code]
-		if maxCost > ct.minBufLimit {
-			mul := 0.999 * float64(ct.minBufLimit) / float64(maxCost)
-			baseCost = uint64(float64(baseCost) * mul)
-			reqCost = uint64(float64(reqCost) * mul)
+		if ct.minBufLimit != 0 {
+			// if minBufLimit is set then always enforce maximum request cost <= minBufLimit
+			maxCost := baseCost + reqCost*minBufferReqAmount[code]
+			if maxCost > ct.minBufLimit {
+				mul := 0.999 * float64(ct.minBufLimit) / float64(maxCost)
+				baseCost = uint64(float64(baseCost) * mul)
+				reqCost = uint64(float64(reqCost) * mul)
+			}
 		}
 
 		list = append(list, requestCostListItem{
