@@ -55,11 +55,15 @@ func (env Environment) String() string {
 func Env() Environment {
 	switch {
 	case os.Getenv("CI") == "true" && os.Getenv("TRAVIS") == "true":
+		commit := os.Getenv("TRAVIS_PULL_REQUEST_SHA")
+		if commit == "" {
+			os.Getenv("TRAVIS_COMMIT")
+		}
 		return Environment{
 			Name:          "travis",
 			Repo:          os.Getenv("TRAVIS_REPO_SLUG"),
-			Commit:        os.Getenv("TRAVIS_COMMIT"),
-			Date:          getDate(os.Getenv("TRAVIS_COMMIT")),
+			Commit:        commit,
+			Date:          getDate(commit),
 			Branch:        os.Getenv("TRAVIS_BRANCH"),
 			Tag:           os.Getenv("TRAVIS_TAG"),
 			Buildnum:      os.Getenv("TRAVIS_BUILD_NUMBER"),
@@ -67,11 +71,15 @@ func Env() Environment {
 			IsCronJob:     os.Getenv("TRAVIS_EVENT_TYPE") == "cron",
 		}
 	case os.Getenv("CI") == "True" && os.Getenv("APPVEYOR") == "True":
+		commit := os.Getenv("APPVEYOR_PULL_REQUEST_HEAD_COMMIT")
+		if commit == "" {
+			os.Getenv("APPVEYOR_REPO_COMMIT")
+		}
 		return Environment{
 			Name:          "appveyor",
 			Repo:          os.Getenv("APPVEYOR_REPO_NAME"),
-			Commit:        os.Getenv("APPVEYOR_REPO_COMMIT"),
-			Date:          getDate(os.Getenv("APPVEYOR_REPO_COMMIT")),
+			Commit:        commit,
+			Date:          getDate(commit),
 			Branch:        os.Getenv("APPVEYOR_REPO_BRANCH"),
 			Tag:           os.Getenv("APPVEYOR_REPO_TAG_NAME"),
 			Buildnum:      os.Getenv("APPVEYOR_BUILD_NUMBER"),
