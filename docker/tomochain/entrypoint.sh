@@ -68,6 +68,11 @@ if [[ ! -z $NETWORK_ID ]]; then
   params="$params --networkid $NETWORK_ID"
 fi
 
+# custom genesis path
+if [[ ! -z $GENESIS_PATH ]]; then
+  genesisPath="$GENESIS_PATH"
+fi
+
 # data dir
 if [[ ! -d $DATA_DIR/tomo ]]; then
   echo "No blockchain data, creating genesis block."
