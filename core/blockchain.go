@@ -1164,14 +1164,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			localTd  = bc.GetTd(current.Hash(), current.NumberU64())
 			externTd = bc.GetTd(block.ParentHash(), block.NumberU64()-1) // The first block can't be nil
 		)
-		externTd = new(big.Int).Add(externTd, block.Difficulty())
-		for block != nil && err == ErrKnownBlock && localTd.Cmp(externTd) >= 0 {
+		for block != nil && err == ErrKnownBlock {
+			externTd = new(big.Int).Add(externTd, block.Difficulty())
+			if localTd.Cmp(externTd) < 0 {
+				break
+			}
 			stats.ignored++
 			block, err = it.next()
-
-			if block != nil {
-				externTd = new(big.Int).Add(externTd, block.Difficulty())
-			}
 		}
 		// The remaining blocks are still known blocks, the only scenario here is:
 		// During the fast sync, the pivot point is already submitted but rollback
@@ -1181,15 +1180,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		// When node runs a fast sync again, it can re-import a batch of known blocks via
 		// `insertChain` while a part of them have higher total difficulty than current
 		// head full block(new pivot point).
-		if err == ErrKnownBlock {
-			for block != nil && err == ErrKnownBlock {
-				if err := bc.writeKnownBlock(block); err != nil {
-					return it.index, nil, nil, err
-				}
-				lastCanon = block
-
-				block, err = it.next()
+		for block != nil && err == ErrKnownBlock {
+			if err := bc.writeKnownBlock(block); err != nil {
+				return it.index, nil, nil, err
 			}
+			lastCanon = block
+
+			block, err = it.next()
 		}
 		// Falls through to the block import
 	}
@@ -1571,15 +1568,15 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	} else {
 		log.Error("Impossible reorg, please file an issue", "oldnum", oldBlock.Number(), "oldhash", oldBlock.Hash(), "newnum", newBlock.Number(), "newhash", newBlock.Hash())
 	}
-	// Insert the new chain, taking care of the proper incremental order
-	for i := len(newChain) - 1; i >= 0; i-- {
+	// Insert the new chain(except the head block(reverse order)),
+	// taking care of the proper incremental order.
+	for i := len(newChain) - 1; i >= 1; i-- {
 		// Insert the block in the canonical way, re-writing history
 		bc.insert(newChain[i])
 
-		// Collect reborn logs due to chain reorg (except head block (reverse order))
-		if i != 0 {
-			collectLogs(newChain[i].Hash(), false)
-		}
+		// Collect reborn logs due to chain reorg
+		collectLogs(newChain[i].Hash(), false)
+
 		// Write lookup entries for hash based transaction/receipt searches
 		rawdb.WriteTxLookupEntries(bc.db, newChain[i])
 		addedTxs = append(addedTxs, newChain[i].Transactions()...)
