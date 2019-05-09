@@ -33,7 +33,7 @@ import (
 // It runs a few "create" commands with different flag values and loads generated
 // snapshot files to validate their content.
 func TestSnapshotCreate(t *testing.T) {
-	t.Skip("todo: fix this")
+	t.Skip("test is flaky. disabling until underlying problem is addressed")
 
 	for _, v := range []struct {
 		name     string

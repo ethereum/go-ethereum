@@ -98,12 +98,17 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	if err != nil {
 		return 0, true, err
 	}
+	metrics.GetOrRegisterGauge(metricName+".gcsize", nil).Update(int64(gcSize))
 
 	done = true
 	err = db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 		if gcSize-collectedCount <= target {
 			return true, nil
 		}
+
+		metrics.GetOrRegisterGauge(metricName+".storets", nil).Update(item.StoreTimestamp)
+		metrics.GetOrRegisterGauge(metricName+".accessts", nil).Update(item.AccessTimestamp)
+
 		// delete from retrieve, pull, gc
 		db.retrievalDataIndex.DeleteInBatch(batch, item)
 		db.retrievalAccessIndex.DeleteInBatch(batch, item)
@@ -121,11 +126,13 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	if err != nil {
 		return 0, false, err
 	}
+	metrics.GetOrRegisterCounter(metricName+".collected-count", nil).Inc(int64(collectedCount))
 
 	db.gcSize.PutInBatch(batch, gcSize-collectedCount)
 
 	err = db.shed.WriteBatch(batch)
 	if err != nil {
+		metrics.GetOrRegisterCounter(metricName+".writebatch.err", nil).Inc(1)
 		return 0, false, err
 	}
 	return collectedCount, done, nil

@@ -197,7 +197,7 @@ func (m ModeSet) String() string {
 const (
 	// ModeSetAccess: when an update request is received for a chunk or chunk is retrieved for delivery
 	ModeSetAccess ModeSet = iota
-	// ModeSetSync: when push sync receipt is received
+	// ModeSetSync: when a chunk is added to a pull sync batch or when a push sync receipt is received
 	ModeSetSync
 	// ModeSetRemove: when a chunk is removed
 	ModeSetRemove
