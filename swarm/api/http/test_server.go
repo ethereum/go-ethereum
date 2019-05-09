@@ -39,7 +39,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, reso
 	if err != nil {
 		t.Fatal(err)
 	}
-	localStore, err := localstore.New(dir, make([]byte, 32), nil)
+	localStore, err := localstore.New(swarmDir, make([]byte, 32), nil)
 	if err != nil {
 		os.RemoveAll(swarmDir)
 		t.Fatal(err)

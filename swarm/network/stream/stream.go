@@ -309,6 +309,7 @@ func (r *Registry) getPeer(peerId enode.ID) *Peer {
 func (r *Registry) setPeer(peer *Peer) {
 	r.peersMu.Lock()
 	r.peers[peer.ID()] = peer
+	metrics.GetOrRegisterCounter("registry.setpeer", nil).Inc(1)
 	metrics.GetOrRegisterGauge("registry.peers", nil).Update(int64(len(r.peers)))
 	r.peersMu.Unlock()
 }
@@ -316,6 +317,7 @@ func (r *Registry) setPeer(peer *Peer) {
 func (r *Registry) deletePeer(peer *Peer) {
 	r.peersMu.Lock()
 	delete(r.peers, peer.ID())
+	metrics.GetOrRegisterCounter("registry.deletepeer", nil).Inc(1)
 	metrics.GetOrRegisterGauge("registry.peers", nil).Update(int64(len(r.peers)))
 	r.peersMu.Unlock()
 }

@@ -24,8 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/shed"
-	"github.com/ethereum/go-ethereum/swarm/spancontext"
-	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -35,10 +33,6 @@ import (
 // interface.
 func (db *DB) Put(ctx context.Context, mode chunk.ModePut, ch chunk.Chunk) (exists bool, err error) {
 	metricName := fmt.Sprintf("localstore.Put.%s", mode)
-
-	ctx, sp := spancontext.StartSpan(ctx, metricName)
-	defer sp.Finish()
-	sp.LogFields(olog.String("ref", ch.Address().String()), olog.String("mode-put", mode.String()))
 
 	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
 	defer totalTimeMetric(metricName, time.Now())
