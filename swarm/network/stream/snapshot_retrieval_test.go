@@ -274,44 +274,37 @@ func runPureRetrievalTest(nodeCount int, chunkCount int) error {
 		log.Debug("starting retrieval")
 		cnt := 0
 
-	REPEAT:
-		for {
-			for _, id := range nodeIDs {
-				item, ok := sim.NodeItem(id, bucketKeyFileStore)
-				if !ok {
-					return fmt.Errorf("No filestore")
-				}
-				fileStore := item.(*storage.FileStore)
-				for _, chunk := range chunks {
-					reader, _ := fileStore.Retrieve(context.TODO(), chunk.Address())
-					content := make([]byte, chunkSize)
-					size, err := reader.Read(content)
-					//check chunk size and content
-					ok := true
-					if err != io.EOF {
-						log.Debug("Retrieve error", "err", err, "hash", chunk.Address(), "nodeId", id)
-						ok = false
-					}
-					if size != chunkSize {
-						log.Debug("size not equal chunkSize", "size", size, "hash", chunk.Address(), "nodeId", id)
-						ok = false
-					}
-					// skip chunk "metadata" for chunk.Data()
-					if !bytes.Equal(content, chunk.Data()[8:]) {
-						log.Debug("content not equal chunk data", "hash", chunk.Address(), "nodeId", id)
-						ok = false
-					}
-					if !ok {
-						time.Sleep(500 * time.Millisecond)
-						// we continue trying if it failed
-						continue REPEAT
-					}
-					log.Debug(fmt.Sprintf("chunk with root hash %x successfully retrieved", chunk.Address()))
-					cnt++
-				}
+		for _, id := range nodeIDs {
+			item, ok := sim.NodeItem(id, bucketKeyFileStore)
+			if !ok {
+				return fmt.Errorf("No filestore")
 			}
-			// we iterate sequentially, one after the other, so at this point we got all chunks
-			break
+			fileStore := item.(*storage.FileStore)
+			for _, chunk := range chunks {
+				reader, _ := fileStore.Retrieve(context.TODO(), chunk.Address())
+				content := make([]byte, chunkSize)
+				size, err := reader.Read(content)
+				//check chunk size and content
+				ok := true
+				if err != io.EOF {
+					log.Debug("Retrieve error", "err", err, "hash", chunk.Address(), "nodeId", id)
+					ok = false
+				}
+				if size != chunkSize {
+					log.Debug("size not equal chunkSize", "size", size, "hash", chunk.Address(), "nodeId", id)
+					ok = false
+				}
+				// skip chunk "metadata" for chunk.Data()
+				if !bytes.Equal(content, chunk.Data()[8:]) {
+					log.Debug("content not equal chunk data", "hash", chunk.Address(), "nodeId", id)
+					ok = false
+				}
+				if !ok {
+					return fmt.Errorf("Expected test to succeed at first run, but failed with chunk not found")
+				}
+				log.Debug(fmt.Sprintf("chunk with root hash %x successfully retrieved", chunk.Address()))
+				cnt++
+			}
 		}
 		log.Info("retrieval terminated, chunks retrieved: ", "count", cnt)
 		return nil
