@@ -35,11 +35,11 @@ type uploadResult struct {
 	digest []byte
 }
 
-func slidingWindowCmd(ctx *cli.Context, tuid string) error {
+func slidingWindowCmd(ctx *cli.Context) error {
 	errc := make(chan error)
 
 	go func() {
-		errc <- slidingWindow(ctx, tuid)
+		errc <- slidingWindow(ctx)
 	}()
 
 	err := <-errc
@@ -49,10 +49,10 @@ func slidingWindowCmd(ctx *cli.Context, tuid string) error {
 	return err
 }
 
-func slidingWindow(ctx *cli.Context, tuid string) error {
+func slidingWindow(ctx *cli.Context) error {
 	var hashes []uploadResult //swarm hashes of the uploads
 	nodes := len(hosts)
-	log.Info("sliding window test started", "tuid", tuid, "nodes", nodes, "filesize(kb)", filesize, "timeout", timeout)
+	log.Info("sliding window test started", "nodes", nodes, "filesize(kb)", filesize, "timeout", timeout)
 	uploadedBytes := 0
 	networkDepth := 0
 	errored := false
@@ -81,9 +81,13 @@ outer:
 			return err
 		}
 
-		log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fhash), "sleeping", syncDelay)
+		log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fhash), "wait for sync", syncDelay)
 		hashes = append(hashes, uploadResult{hash: hash, digest: fhash})
-		time.Sleep(time.Duration(syncDelay) * time.Second)
+
+		if syncDelay {
+			waitToSync()
+		}
+
 		uploadedBytes += filesize * 1000
 		q := make(chan struct{}, 1)
 		d := make(chan struct{})
@@ -107,7 +111,7 @@ outer:
 							start = time.Now()
 							// fetch hangs when swarm dies out, so we have to jump through a bit more hoops to actually
 							// catch the timeout, but also allow this retry logic
-							err := fetch(v.hash, httpEndpoint(hosts[idx]), v.digest, ruid, "")
+							err := fetch(v.hash, httpEndpoint(hosts[idx]), v.digest, ruid)
 							if err != nil {
 								log.Error("error fetching hash", "err", err)
 								continue

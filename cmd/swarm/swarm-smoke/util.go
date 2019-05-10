@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	opentracing "github.com/opentracing/opentracing-go"
-	"github.com/pborman/uuid"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -59,13 +58,10 @@ func wsEndpoint(host string) string {
 	return fmt.Sprintf("ws://%s:%d", host, wsPort)
 }
 
-func wrapCliCommand(name string, command func(*cli.Context, string) error) func(*cli.Context) error {
+func wrapCliCommand(name string, command func(*cli.Context) error) func(*cli.Context) error {
 	return func(ctx *cli.Context) error {
 		log.PrintOrigins(true)
 		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(os.Stdout, log.TerminalFormat(false))))
-
-		// test uuid
-		tuid := uuid.New()[:8]
 
 		commandName = name
 
@@ -73,14 +69,14 @@ func wrapCliCommand(name string, command func(*cli.Context, string) error) func(
 
 		defer func(now time.Time) {
 			totalTime := time.Since(now)
-			log.Info("total time", "tuid", tuid, "time", totalTime, "kb", filesize)
+			log.Info("total time", "time", totalTime, "kb", filesize)
 			metrics.GetOrRegisterResettingTimer(name+".total-time", nil).Update(totalTime)
 		}(time.Now())
 
-		log.Info("smoke test starting", "tuid", tuid, "task", name, "timeout", timeout)
+		log.Info("smoke test starting", "task", name, "timeout", timeout)
 		metrics.GetOrRegisterCounter(name, nil).Inc(1)
 
-		return command(ctx, tuid)
+		return command(ctx)
 	}
 }
 
@@ -142,11 +138,11 @@ func fetchFeed(topic string, user string, endpoint string, original []byte, ruid
 }
 
 // fetch is getting the requested `hash` from the `endpoint` and compares it with the `original` file
-func fetch(hash string, endpoint string, original []byte, ruid string, tuid string) error {
+func fetch(hash string, endpoint string, original []byte, ruid string) error {
 	ctx, sp := spancontext.StartSpan(context.Background(), "upload-and-sync.fetch")
 	defer sp.Finish()
 
-	log.Info("http get request", "tuid", tuid, "ruid", ruid, "endpoint", endpoint, "hash", hash)
+	log.Info("http get request", "ruid", ruid, "endpoint", endpoint, "hash", hash)
 
 	var tn time.Time
 	reqUri := endpoint + "/bzz:/" + hash + "/"
@@ -170,7 +166,7 @@ func fetch(hash string, endpoint string, original []byte, ruid string, tuid stri
 		log.Error(err.Error(), "ruid", ruid)
 		return err
 	}
-	log.Info("http get response", "tuid", tuid, "ruid", ruid, "endpoint", endpoint, "hash", hash, "code", res.StatusCode, "len", res.ContentLength)
+	log.Info("http get response", "ruid", ruid, "endpoint", endpoint, "hash", hash, "code", res.StatusCode, "len", res.ContentLength)
 
 	if res.StatusCode != 200 {
 		err := fmt.Errorf("expected status code %d, got %v", 200, res.StatusCode)

@@ -17,45 +17,35 @@
 package localstore
 
 import (
+	"context"
+	"fmt"
+	"time"
+
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/shed"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// ModeGet enumerates different Getter modes.
-type ModeGet int
-
-// Getter modes.
-const (
-	// ModeGetRequest: when accessed for retrieval
-	ModeGetRequest ModeGet = iota
-	// ModeGetSync: when accessed for syncing or proof of custody request
-	ModeGetSync
-)
-
-// Getter provides Get method to retrieve Chunks
-// from database.
-type Getter struct {
-	db   *DB
-	mode ModeGet
-}
-
-// NewGetter returns a new Getter on database
-// with a specific Mode.
-func (db *DB) NewGetter(mode ModeGet) *Getter {
-	return &Getter{
-		mode: mode,
-		db:   db,
-	}
-}
-
 // Get returns a chunk from the database. If the chunk is
 // not found chunk.ErrChunkNotFound will be returned.
 // All required indexes will be updated required by the
-// Getter Mode.
-func (g *Getter) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
-	out, err := g.db.get(g.mode, addr)
+// Getter Mode. Get is required to implement chunk.Store
+// interface.
+func (db *DB) Get(ctx context.Context, mode chunk.ModeGet, addr chunk.Address) (ch chunk.Chunk, err error) {
+	metricName := fmt.Sprintf("localstore.Get.%s", mode)
+
+	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
+	defer totalTimeMetric(metricName, time.Now())
+
+	defer func() {
+		if err != nil {
+			metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
+		}
+	}()
+
+	out, err := db.get(mode, addr)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
 			return nil, chunk.ErrChunkNotFound
@@ -67,7 +57,7 @@ func (g *Getter) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
 
 // get returns Item from the retrieval index
 // and updates other indexes.
-func (db *DB) get(mode ModeGet, addr chunk.Address) (out shed.Item, err error) {
+func (db *DB) get(mode chunk.ModeGet, addr chunk.Address) (out shed.Item, err error) {
 	item := addressToItem(addr)
 
 	out, err = db.retrievalDataIndex.Get(item)
@@ -76,7 +66,7 @@ func (db *DB) get(mode ModeGet, addr chunk.Address) (out shed.Item, err error) {
 	}
 	switch mode {
 	// update the access timestamp and gc index
-	case ModeGetRequest:
+	case chunk.ModeGetRequest:
 		if db.updateGCSem != nil {
 			// wait before creating new goroutines
 			// if updateGCSem buffer id full
@@ -90,8 +80,14 @@ func (db *DB) get(mode ModeGet, addr chunk.Address) (out shed.Item, err error) {
 				// for a new goroutine
 				defer func() { <-db.updateGCSem }()
 			}
+
+			metricName := "localstore.updateGC"
+			metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
+			defer totalTimeMetric(metricName, time.Now())
+
 			err := db.updateGC(out)
 			if err != nil {
+				metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
 				log.Error("localstore update gc", "err", err)
 			}
 			// if gc update hook is defined, call it
@@ -101,7 +97,8 @@ func (db *DB) get(mode ModeGet, addr chunk.Address) (out shed.Item, err error) {
 		}()
 
 	// no updates to indexes
-	case ModeGetSync:
+	case chunk.ModeGetSync:
+	case chunk.ModeGetLookup:
 	default:
 		return out, ErrInvalidMode
 	}

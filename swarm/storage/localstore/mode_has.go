@@ -17,23 +17,23 @@
 package localstore
 
 import (
+	"context"
+	"time"
+
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
-// Hasser provides Has method to retrieve Chunks
-// from database.
-type Hasser struct {
-	db *DB
-}
-
-// NewHasser returns a new Hasser on database.
-func (db *DB) NewHasser() *Hasser {
-	return &Hasser{
-		db: db,
-	}
-}
-
 // Has returns true if the chunk is stored in database.
-func (h *Hasser) Has(addr chunk.Address) (bool, error) {
-	return h.db.retrievalDataIndex.Has(addressToItem(addr))
+func (db *DB) Has(ctx context.Context, addr chunk.Address) (bool, error) {
+	metricName := "localstore.Has"
+
+	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
+	defer totalTimeMetric(metricName, time.Now())
+
+	has, err := db.retrievalDataIndex.Has(addressToItem(addr))
+	if err != nil {
+		metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
+	}
+	return has, err
 }

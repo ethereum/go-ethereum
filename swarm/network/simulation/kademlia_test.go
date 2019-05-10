@@ -156,6 +156,7 @@ func createSimServiceMap(discovery bool) map[string]ServiceFunc {
 // Call WaitTillSnapshotRecreated() function and wait until it returns
 // Iterate the nodes and check if all the connections are successfully recreated
 func TestWaitTillSnapshotRecreated(t *testing.T) {
+	t.Skip("test is flaky. disabling until underlying problem is addressed")
 	var err error
 	sim := New(createSimServiceMap(true))
 	_, err = sim.AddNodesAndConnectRing(16)

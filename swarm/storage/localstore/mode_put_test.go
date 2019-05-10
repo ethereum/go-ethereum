@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -31,9 +32,7 @@ func TestModePutRequest(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	putter := db.NewPutter(ModePutRequest)
-
-	chunk := generateTestRandomChunk()
+	ch := generateTestRandomChunk()
 
 	// keep the record when the chunk is stored
 	var storeTimestamp int64
@@ -46,12 +45,12 @@ func TestModePutRequest(t *testing.T) {
 
 		storeTimestamp = wantTimestamp
 
-		err := putter.Put(chunk)
+		_, err := db.Put(context.Background(), chunk.ModePutRequest, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, wantTimestamp, wantTimestamp))
+		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp))
 
 		t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
@@ -64,12 +63,12 @@ func TestModePutRequest(t *testing.T) {
 			return wantTimestamp
 		})()
 
-		err := putter.Put(chunk)
+		_, err := db.Put(context.Background(), chunk.ModePutRequest, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, storeTimestamp, wantTimestamp))
+		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, ch, storeTimestamp, wantTimestamp))
 
 		t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
@@ -87,16 +86,16 @@ func TestModePutSync(t *testing.T) {
 		return wantTimestamp
 	})()
 
-	chunk := generateTestRandomChunk()
+	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(ModePutSync).Put(chunk)
+	_, err := db.Put(context.Background(), chunk.ModePutSync, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Run("retrieve indexes", newRetrieveIndexesTest(db, chunk, wantTimestamp, 0))
+	t.Run("retrieve indexes", newRetrieveIndexesTest(db, ch, wantTimestamp, 0))
 
-	t.Run("pull index", newPullIndexTest(db, chunk, wantTimestamp, nil))
+	t.Run("pull index", newPullIndexTest(db, ch, 1, nil))
 }
 
 // TestModePutUpload validates ModePutUpload index values on the provided DB.
@@ -109,18 +108,18 @@ func TestModePutUpload(t *testing.T) {
 		return wantTimestamp
 	})()
 
-	chunk := generateTestRandomChunk()
+	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(ModePutUpload).Put(chunk)
+	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Run("retrieve indexes", newRetrieveIndexesTest(db, chunk, wantTimestamp, 0))
+	t.Run("retrieve indexes", newRetrieveIndexesTest(db, ch, wantTimestamp, 0))
 
-	t.Run("pull index", newPullIndexTest(db, chunk, wantTimestamp, nil))
+	t.Run("pull index", newPullIndexTest(db, ch, 1, nil))
 
-	t.Run("push index", newPushIndexTest(db, chunk, wantTimestamp, nil))
+	t.Run("push index", newPushIndexTest(db, ch, wantTimestamp, nil))
 }
 
 // TestModePutUpload_parallel uploads chunks in parallel
@@ -140,14 +139,13 @@ func TestModePutUpload_parallel(t *testing.T) {
 	// start uploader workers
 	for i := 0; i < workerCount; i++ {
 		go func(i int) {
-			uploader := db.NewPutter(ModePutUpload)
 			for {
 				select {
-				case chunk, ok := <-chunkChan:
+				case ch, ok := <-chunkChan:
 					if !ok {
 						return
 					}
-					err := uploader.Put(chunk)
+					_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 					select {
 					case errChan <- err:
 					case <-doneChan:
@@ -188,18 +186,82 @@ func TestModePutUpload_parallel(t *testing.T) {
 	}
 
 	// get every chunk and validate its data
-	getter := db.NewGetter(ModeGetRequest)
-
 	chunksMu.Lock()
 	defer chunksMu.Unlock()
-	for _, chunk := range chunks {
-		got, err := getter.Get(chunk.Address())
+	for _, ch := range chunks {
+		got, err := db.Get(context.Background(), chunk.ModeGetRequest, ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !bytes.Equal(got.Data(), chunk.Data()) {
-			t.Fatalf("got chunk %s data %x, want %x", chunk.Address().Hex(), got.Data(), chunk.Data())
+		if !bytes.Equal(got.Data(), ch.Data()) {
+			t.Fatalf("got chunk %s data %x, want %x", ch.Address().Hex(), got.Data(), ch.Data())
 		}
+	}
+}
+
+// TestModePut_sameChunk puts the same chunk multiple times
+// and validates that all relevant indexes have only one item
+// in them.
+func TestModePut_sameChunk(t *testing.T) {
+	ch := generateTestRandomChunk()
+
+	for _, tc := range []struct {
+		name      string
+		mode      chunk.ModePut
+		pullIndex bool
+		pushIndex bool
+	}{
+		{
+			name:      "ModePutRequest",
+			mode:      chunk.ModePutRequest,
+			pullIndex: false,
+			pushIndex: false,
+		},
+		{
+			name:      "ModePutUpload",
+			mode:      chunk.ModePutUpload,
+			pullIndex: true,
+			pushIndex: true,
+		},
+		{
+			name:      "ModePutSync",
+			mode:      chunk.ModePutSync,
+			pullIndex: true,
+			pushIndex: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanupFunc := newTestDB(t, nil)
+			defer cleanupFunc()
+
+			for i := 0; i < 10; i++ {
+				exists, err := db.Put(context.Background(), tc.mode, ch)
+				if err != nil {
+					t.Fatal(err)
+				}
+				switch exists {
+				case false:
+					if i != 0 {
+						t.Fatal("should not exist only on first Put")
+					}
+				case true:
+					if i == 0 {
+						t.Fatal("should exist on all cases other than the first one")
+					}
+				}
+
+				count := func(b bool) (c int) {
+					if b {
+						return 1
+					}
+					return 0
+				}
+
+				newItemsCountTest(db.retrievalDataIndex, 1)(t)
+				newItemsCountTest(db.pullIndex, count(tc.pullIndex))(t)
+				newItemsCountTest(db.pushIndex, count(tc.pushIndex))(t)
+			}
+		})
 	}
 }
 
@@ -270,7 +332,6 @@ func benchmarkPutUpload(b *testing.B, o *Options, count, maxParallelUploads int)
 	db, cleanupFunc := newTestDB(b, o)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(ModePutUpload)
 	chunks := make([]chunk.Chunk, count)
 	for i := 0; i < count; i++ {
 		chunks[i] = generateTestRandomChunk()
@@ -286,7 +347,8 @@ func benchmarkPutUpload(b *testing.B, o *Options, count, maxParallelUploads int)
 			go func(i int) {
 				defer func() { <-sem }()
 
-				errs <- uploader.Put(chunks[i])
+				_, err := db.Put(context.Background(), chunk.ModePutUpload, chunks[i])
+				errs <- err
 			}(i)
 		}
 	}()

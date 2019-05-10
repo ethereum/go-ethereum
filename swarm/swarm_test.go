@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/sctx"
 )
 
 // TestNewSwarm validates Swarm fields in repsect to the provided configuration.
@@ -352,8 +353,11 @@ func testLocalStoreAndRetrieve(t *testing.T, swarm *Swarm, n int, randomData boo
 		rand.Read(slice)
 	}
 	dataPut := string(slice)
-
-	ctx := context.TODO()
+	tag, err := swarm.api.Tags.New("test-local-store-and-retrieve", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := sctx.SetTag(context.Background(), tag.Uid)
 	k, wait, err := swarm.api.Store(ctx, strings.NewReader(dataPut), int64(len(dataPut)), false)
 	if err != nil {
 		t.Fatal(err)

@@ -17,28 +17,34 @@
 package localstore
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/shed"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
+	"github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // SubscribePull returns a channel that provides chunk addresses and stored times from pull syncing index.
 // Pull syncing index can be only subscribed to a particular proximity order bin. If since
-// is not nil, the iteration will start from the first item stored after that timestamp. If until is not nil,
-// only chunks stored up to this timestamp will be send to the channel, and the returned channel will be
-// closed. The since-until interval is open on the left and closed on the right (since,until]. Returned stop
+// is not 0, the iteration will start from the first item stored after that id. If until is not 0,
+// only chunks stored up to this id will be sent to the channel, and the returned channel will be
+// closed. The since-until interval is open on since side, and closed on until side: (since,until] <=> [since+1,until]. Returned stop
 // function will terminate current and further iterations without errors, and also close the returned channel.
 // Make sure that you check the second returned parameter from the channel to stop iteration when its value
 // is false.
-func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkDescriptor) (c <-chan ChunkDescriptor, stop func()) {
-	chunkDescriptors := make(chan ChunkDescriptor)
+func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64) (c <-chan chunk.Descriptor, stop func()) {
+	metricName := "localstore.SubscribePull"
+	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
+
+	chunkDescriptors := make(chan chunk.Descriptor)
 	trigger := make(chan struct{}, 1)
 
 	db.pullTriggersMu.Lock()
@@ -59,18 +65,20 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkD
 	var errStopSubscription = errors.New("stop subscription")
 
 	go func() {
-		// close the returned ChunkDescriptor channel at the end to
+		defer metrics.GetOrRegisterCounter(metricName+".stop", nil).Inc(1)
+		// close the returned chunk.Descriptor channel at the end to
 		// signal that the subscription is done
 		defer close(chunkDescriptors)
 		// sinceItem is the Item from which the next iteration
 		// should start. The first iteration starts from the first Item.
 		var sinceItem *shed.Item
-		if since != nil {
+		if since > 0 {
 			sinceItem = &shed.Item{
-				Address:        since.Address,
-				StoreTimestamp: since.StoreTimestamp,
+				Address: db.addressInBin(bin),
+				BinID:   since,
 			}
 		}
+		first := true // first iteration flag for SkipStartFromItem
 		for {
 			select {
 			case <-trigger:
@@ -78,17 +86,23 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkD
 				// - last index Item is reached
 				// - subscription stop is called
 				// - context is done
+				metrics.GetOrRegisterCounter(metricName+".iter", nil).Inc(1)
+
+				ctx, sp := spancontext.StartSpan(ctx, metricName+".iter")
+				sp.LogFields(olog.Int("bin", int(bin)), olog.Uint64("since", since), olog.Uint64("until", until))
+
+				iterStart := time.Now()
+				var count int
 				err := db.pullIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 					select {
-					case chunkDescriptors <- ChunkDescriptor{
-						Address:        item.Address,
-						StoreTimestamp: item.StoreTimestamp,
+					case chunkDescriptors <- chunk.Descriptor{
+						Address: item.Address,
+						BinID:   item.BinID,
 					}:
+						count++
 						// until chunk descriptor is sent
 						// break the iteration
-						if until != nil &&
-							(item.StoreTimestamp >= until.StoreTimestamp ||
-								bytes.Equal(item.Address, until.Address)) {
+						if until > 0 && item.BinID >= until {
 							return true, errStopSubscription
 						}
 						// set next iteration start item
@@ -109,19 +123,34 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkD
 				}, &shed.IterateOptions{
 					StartFrom: sinceItem,
 					// sinceItem was sent as the last Address in the previous
-					// iterator call, skip it in this one
-					SkipStartFromItem: true,
+					// iterator call, skip it in this one, but not the item with
+					// the provided since bin id as it should be sent to a channel
+					SkipStartFromItem: !first,
 					Prefix:            []byte{bin},
 				})
+
+				totalTimeMetric(metricName+".iter", iterStart)
+
+				sp.FinishWithOptions(opentracing.FinishOptions{
+					LogRecords: []opentracing.LogRecord{
+						{
+							Timestamp: time.Now(),
+							Fields:    []olog.Field{olog.Int("count", count)},
+						},
+					},
+				})
+
 				if err != nil {
 					if err == errStopSubscription {
 						// stop subscription without any errors
 						// if until is reached
 						return
 					}
+					metrics.GetOrRegisterCounter(metricName+".iter.error", nil).Inc(1)
 					log.Error("localstore pull subscription iteration", "bin", bin, "since", since, "until", until, "err", err)
 					return
 				}
+				first = false
 			case <-stopChan:
 				// terminate the subscription
 				// on stop
@@ -159,35 +188,20 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkD
 	return chunkDescriptors, stop
 }
 
-// LastPullSubscriptionChunk returns ChunkDescriptor of the latest Chunk
+// LastPullSubscriptionBinID returns chunk bin id of the latest Chunk
 // in pull syncing index for a provided bin. If there are no chunks in
-// that bin, chunk.ErrChunkNotFound is returned.
-func (db *DB) LastPullSubscriptionChunk(bin uint8) (c *ChunkDescriptor, err error) {
+// that bin, 0 value is returned.
+func (db *DB) LastPullSubscriptionBinID(bin uint8) (id uint64, err error) {
+	metrics.GetOrRegisterCounter("localstore.LastPullSubscriptionBinID", nil).Inc(1)
+
 	item, err := db.pullIndex.Last([]byte{bin})
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			return nil, chunk.ErrChunkNotFound
+			return 0, nil
 		}
-		return nil, err
+		return 0, err
 	}
-	return &ChunkDescriptor{
-		Address:        item.Address,
-		StoreTimestamp: item.StoreTimestamp,
-	}, nil
-}
-
-// ChunkDescriptor holds information required for Pull syncing. This struct
-// is provided by subscribing to pull index.
-type ChunkDescriptor struct {
-	Address        chunk.Address
-	StoreTimestamp int64
-}
-
-func (c *ChunkDescriptor) String() string {
-	if c == nil {
-		return "none"
-	}
-	return fmt.Sprintf("%s stored at %v", c.Address.Hex(), c.StoreTimestamp)
+	return item.BinID, nil
 }
 
 // triggerPullSubscriptions is used internally for starting iterations
@@ -208,4 +222,13 @@ func (db *DB) triggerPullSubscriptions(bin uint8) {
 		default:
 		}
 	}
+}
+
+// addressInBin returns an address that is in a specific
+// proximity order bin from database base key.
+func (db *DB) addressInBin(bin uint8) (addr chunk.Address) {
+	addr = append([]byte(nil), db.baseKey...)
+	b := bin / 8
+	addr[b] = addr[b] ^ (1 << (7 - bin%8))
+	return addr
 }

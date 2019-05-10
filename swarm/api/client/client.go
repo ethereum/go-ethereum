@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/pborman/uuid"
@@ -75,6 +76,8 @@ func (c *Client) UploadRaw(r io.Reader, size int64, toEncrypt bool) (string, err
 		return "", err
 	}
 	req.ContentLength = size
+	req.Header.Set(swarmhttp.SwarmTagHeaderName, fmt.Sprintf("raw_upload_%d", time.Now().Unix()))
+
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
@@ -111,6 +114,7 @@ func (c *Client) DownloadRaw(hash string) (io.ReadCloser, bool, error) {
 type File struct {
 	io.ReadCloser
 	api.ManifestEntry
+	Tag string
 }
 
 // Open opens a local file which can then be passed to client.Upload to upload
@@ -139,6 +143,7 @@ func Open(path string) (*File, error) {
 			Size:        stat.Size(),
 			ModTime:     stat.ModTime(),
 		},
+		Tag: filepath.Base(path),
 	}, nil
 }
 
@@ -422,6 +427,7 @@ func (c *Client) List(hash, prefix, credentials string) (*api.ManifestList, erro
 // Uploader uploads files to swarm using a provided UploadFn
 type Uploader interface {
 	Upload(UploadFn) error
+	Tag() string
 }
 
 type UploaderFunc func(UploadFn) error
@@ -430,10 +436,21 @@ func (u UploaderFunc) Upload(upload UploadFn) error {
 	return u(upload)
 }
 
+func (u UploaderFunc) Tag() string {
+	return fmt.Sprintf("multipart_upload_%d", time.Now().Unix())
+}
+
+// DirectoryUploader implements Uploader
+var _ Uploader = &DirectoryUploader{}
+
 // DirectoryUploader uploads all files in a directory, optionally uploading
 // a file to the default path
 type DirectoryUploader struct {
 	Dir string
+}
+
+func (d *DirectoryUploader) Tag() string {
+	return filepath.Base(d.Dir)
 }
 
 // Upload performs the upload of the directory and default path
@@ -458,9 +475,15 @@ func (d *DirectoryUploader) Upload(upload UploadFn) error {
 	})
 }
 
+var _ Uploader = &FileUploader{}
+
 // FileUploader uploads a single file
 type FileUploader struct {
 	File *File
+}
+
+func (f *FileUploader) Tag() string {
+	return f.File.Tag
 }
 
 // Upload performs the upload of the file
@@ -508,6 +531,14 @@ func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, t
 		q.Set("defaultpath", defaultPath)
 		req.URL.RawQuery = q.Encode()
 	}
+
+	tag := uploader.Tag()
+	if tag == "" {
+		tag = "unnamed_tag_" + fmt.Sprintf("%d", time.Now().Unix())
+	}
+	log.Trace("setting upload tag", "tag", tag)
+
+	req.Header.Set(swarmhttp.SwarmTagHeaderName, tag)
 
 	// use 'Expect: 100-continue' so we don't send the request body if
 	// the server refuses the request
@@ -574,6 +605,7 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader) (string, error)
 
 	mw := multipart.NewWriter(reqW)
 	req.Header.Set("Content-Type", fmt.Sprintf("multipart/form-data; boundary=%q", mw.Boundary()))
+	req.Header.Set(swarmhttp.SwarmTagHeaderName, fmt.Sprintf("multipart_upload_%d", time.Now().Unix()))
 
 	// define an UploadFn which adds files to the multipart form
 	uploadFn := func(file *File) error {

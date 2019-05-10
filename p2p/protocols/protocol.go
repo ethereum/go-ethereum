@@ -243,7 +243,7 @@ func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) err
 // Drop disconnects a peer.
 // TODO: may need to implement protocol drop only? don't want to kick off the peer
 // if they are useful for other protocols
-func (p *Peer) Drop(err error) {
+func (p *Peer) Drop() {
 	p.Disconnect(p2p.DiscSubprotocolError)
 }
 
@@ -254,6 +254,7 @@ func (p *Peer) Drop(err error) {
 func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 	defer metrics.GetOrRegisterResettingTimer("peer.send_t", nil).UpdateSince(time.Now())
 	metrics.GetOrRegisterCounter("peer.send", nil).Inc(1)
+	metrics.GetOrRegisterCounter(fmt.Sprintf("peer.send.%T", msg), nil).Inc(1)
 
 	var b bytes.Buffer
 	if tracing.Enabled {
@@ -291,7 +292,7 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 	if p.spec.Hook != nil {
 		err := p.spec.Hook.Send(p, wmsg.Size, msg)
 		if err != nil {
-			p.Drop(err)
+			p.Drop()
 			return err
 		}
 	}

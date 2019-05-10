@@ -25,13 +25,14 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 var testDownloadDir, _ = ioutil.TempDir(os.TempDir(), "bzz-test")
 
 func testFileSystem(t *testing.T, f func(*FileSystem, bool)) {
-	testAPI(t, func(api *API, toEncrypt bool) {
+	testAPI(t, func(api *API, _ *chunk.Tags, toEncrypt bool) {
 		f(NewFileSystem(api), toEncrypt)
 	})
 }

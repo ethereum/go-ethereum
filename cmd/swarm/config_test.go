@@ -447,8 +447,8 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 		t.Fatal("Expected Sync to be disabled, but is true")
 	}
 
-	if info.LocalStoreParams.DbCapacity != 9000000 {
-		t.Fatalf("Expected Capacity to be %d, got %d", 9000000, info.LocalStoreParams.DbCapacity)
+	if info.DbCapacity != 9000000 {
+		t.Fatalf("Expected Capacity to be %d, got %d", 9000000, info.DbCapacity)
 	}
 
 	if info.HiveParams.KeepAliveInterval != 6000000000 {

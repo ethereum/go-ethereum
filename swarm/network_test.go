@@ -23,11 +23,13 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/swarm/sctx"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -416,7 +418,7 @@ func uploadFile(swarm *Swarm) (storage.Address, string, error) {
 	// uniqueness is very certain.
 	data := fmt.Sprintf("test content %s %x", time.Now().Round(0), b)
 	ctx := context.TODO()
-	k, wait, err := swarm.api.Put(ctx, data, "text/plain", false)
+	k, wait, err := putString(ctx, swarm.api, data, "text/plain", false)
 	if err != nil {
 		return nil, "", err
 	}
@@ -529,4 +531,32 @@ func retrieve(
 	log.Info("check stats", "total check count", totalCheckCount, "total files found", atomic.LoadUint64(totalFoundCount), "total errors", errCount)
 
 	return uint64(totalCheckCount) - atomic.LoadUint64(totalFoundCount)
+}
+
+// putString provides singleton manifest creation on top of api.API
+func putString(ctx context.Context, a *api.API, content string, contentType string, toEncrypt bool) (k storage.Address, wait func(context.Context) error, err error) {
+	r := strings.NewReader(content)
+	tag, err := a.Tags.New("unnamed-tag", 0)
+
+	log.Trace("created new tag", "uid", tag.Uid)
+
+	cCtx := sctx.SetTag(ctx, tag.Uid)
+	key, waitContent, err := a.Store(cCtx, r, int64(len(content)), toEncrypt)
+	if err != nil {
+		return nil, nil, err
+	}
+	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
+	r = strings.NewReader(manifest)
+	key, waitManifest, err := a.Store(cCtx, r, int64(len(manifest)), toEncrypt)
+	if err != nil {
+		return nil, nil, err
+	}
+	tag.DoneSplit(key)
+	return key, func(ctx context.Context) error {
+		err := waitContent(ctx)
+		if err != nil {
+			return err
+		}
+		return waitManifest(ctx)
+	}, nil
 }

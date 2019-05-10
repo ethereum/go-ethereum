@@ -126,7 +126,7 @@ func newProtocol(pp *p2ptest.TestPeerPool) func(*p2p.Peer, p2p.MsgReadWriter) er
 			case *kill:
 				// demonstrates use of peerPool, killing another peer connection as a response to a message
 				id := msg.C
-				pp.Get(id).Drop(errors.New("killed"))
+				pp.Get(id).Drop()
 				return nil
 
 			case *drop:
@@ -269,6 +269,7 @@ func TestProtocolHook(t *testing.T) {
 		panic(err)
 	}
 	tester := p2ptest.NewProtocolTester(prvkey, 2, runFunc)
+	defer tester.Stop()
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Expects: []p2ptest.Expect{
 			{
