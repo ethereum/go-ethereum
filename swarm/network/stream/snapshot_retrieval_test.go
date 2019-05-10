@@ -41,7 +41,7 @@ const (
 	maxFileSize = 40
 )
 
-// This test is a retrieval test for nodes.
+// TestFileRetrieval is a retrieval test for nodes.
 // A configurable number of nodes can be
 // provided to the test.
 // Files are uploaded to nodes, other nodes try to retrieve the file
@@ -63,9 +63,7 @@ func TestFileRetrieval(t *testing.T) {
 	}
 
 	for _, nc := range nodeCount {
-		if err := runFileRetrievalTest(nc); err != nil {
-			t.Error(err)
-		}
+		runFileRetrievalTest(t, nc)
 	}
 }
 
@@ -100,27 +98,22 @@ func TestPureRetrieval(t *testing.T) {
 
 	for _, nc := range nodeCount {
 		for _, c := range chunkCount {
-			if err := runPureRetrievalTest(nc, c); err != nil {
-				t.Error(err)
-			}
+			runPureRetrievalTest(t, nc, c)
 		}
 	}
 }
 
-//This test is a retrieval test for nodes.
-//One node is randomly selected to be the pivot node.
-//A configurable number of chunks and nodes can be
-//provided to the test, the number of chunks is uploaded
-//to the pivot node and other nodes try to retrieve the chunk(s).
-//Number of chunks and nodes can be provided via commandline too.
+// TestRetrieval tests retrieval of chunks by random nodes.
+// One node is randomly selected to be the pivot node.
+// A configurable number of chunks and nodes can be
+// provided to the test, the number of chunks is uploaded
+// to the pivot node and other nodes try to retrieve the chunk(s).
+// Number of chunks and nodes can be provided via commandline too.
 func TestRetrieval(t *testing.T) {
-	//if nodes/chunks have been provided via commandline,
-	//run the tests with these values
+	// if nodes/chunks have been provided via commandline,
+	// run the tests with these values
 	if *nodes != 0 && *chunks != 0 {
-		err := runRetrievalTest(t, *chunks, *nodes)
-		if err != nil {
-			t.Fatal(err)
-		}
+		runRetrievalTest(t, *chunks, *nodes)
 	} else {
 		nodeCnt := []int{16}
 		chnkCnt := []int{32}
@@ -136,10 +129,7 @@ func TestRetrieval(t *testing.T) {
 		for _, n := range nodeCnt {
 			for _, c := range chnkCnt {
 				t.Run(fmt.Sprintf("TestRetrieval_%d_%d", n, c), func(t *testing.T) {
-					err := runRetrievalTest(t, c, n)
-					if err != nil {
-						t.Fatal(err)
-					}
+					runRetrievalTest(t, c, n)
 				})
 			}
 		}
@@ -176,7 +166,9 @@ var retrievalSimServiceMap = map[string]simulation.ServiceFunc{
 // then starting a simulation, distribute chunks to nodes
 // and start retrieval.
 // The snapshot should have 'streamer' in its service list.
-func runPureRetrievalTest(nodeCount int, chunkCount int) error {
+func runPureRetrievalTest(t *testing.T, nodeCount int, chunkCount int) {
+
+	t.Helper()
 	// the pure retrieval test needs a different service map, as we want
 	// syncing disabled and we don't need to set the syncUpdateDelay
 	sim := simulation.New(map[string]simulation.ServiceFunc{
@@ -187,7 +179,7 @@ func runPureRetrievalTest(nodeCount int, chunkCount int) error {
 			}
 
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
-				Syncing: SyncingDisabled, // disable syncing
+				Syncing: SyncingDisabled,
 			}, nil)
 
 			cleanup = func() {
@@ -217,7 +209,7 @@ func runPureRetrievalTest(nodeCount int, chunkCount int) error {
 	filename := fmt.Sprintf("testing/snapshot_%d.json", nodeCount)
 	err := sim.UploadSnapshot(ctx, filename)
 	if err != nil {
-		return err
+		t.Fatal(err)
 	}
 
 	log.Info("Starting simulation")
@@ -313,12 +305,17 @@ func runPureRetrievalTest(nodeCount int, chunkCount int) error {
 
 	log.Info("Simulation terminated")
 
-	return result.Error
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
 }
 
-// The test loads a snapshot file to construct the swarm network.
+// runFileRetrievalTest loads a snapshot file to construct the swarm network.
 // The snapshot should have 'streamer' in its service list.
-func runFileRetrievalTest(nodeCount int) error {
+func runFileRetrievalTest(t *testing.T, nodeCount int) {
+
+	t.Helper()
+
 	sim := simulation.New(retrievalSimServiceMap)
 	defer sim.Close()
 
@@ -338,7 +335,7 @@ func runFileRetrievalTest(nodeCount int) error {
 	filename := fmt.Sprintf("testing/snapshot_%d.json", nodeCount)
 	err := sim.UploadSnapshot(ctx, filename)
 	if err != nil {
-		return err
+		t.Fatal(err)
 	}
 
 	log.Info("Starting simulation")
@@ -396,17 +393,17 @@ func runFileRetrievalTest(nodeCount int) error {
 	log.Info("Simulation terminated")
 
 	if result.Error != nil {
-		return result.Error
+		t.Fatal(result.Error)
 	}
-
-	return nil
 }
 
-// The test generates the given number of chunks.
+// runRetrievalTest generates the given number of chunks.
 // The test loads a snapshot file to construct the swarm network.
 // The snapshot should have 'streamer' in its service list.
-func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) error {
+func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) {
+
 	t.Helper()
+
 	sim := simulation.New(retrievalSimServiceMap)
 	defer sim.Close()
 
@@ -424,7 +421,7 @@ func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) error {
 	filename := fmt.Sprintf("testing/snapshot_%d.json", nodeCount)
 	err := sim.UploadSnapshot(ctx, filename)
 	if err != nil {
-		return err
+		t.Fatal(err)
 	}
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
@@ -482,8 +479,6 @@ func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) error {
 	})
 
 	if result.Error != nil {
-		return result.Error
+		t.Fatal(result.Error)
 	}
-
-	return nil
 }
