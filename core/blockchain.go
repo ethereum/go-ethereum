@@ -1238,7 +1238,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		// just skip the block (we already validated it once fully (and crashed), since
 		// its header and body was already in the database).
 		if err == ErrKnownBlock {
-			log.Debug("Inserted known block", "number", block.Number(), "hash", block.Hash(),
+			logger := log.Debug
+			if bc.chainConfig.Clique == nil {
+				logger = log.Warn
+			}
+			logger("Inserted known block", "number", block.Number(), "hash", block.Hash(),
 				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
 
