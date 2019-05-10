@@ -270,7 +270,7 @@ resources (consider running on a single thread, no need for multiple ones either
 instance for mining, run it with all your usual flags, extended by:
 
 ```
-$ geth <usual-flags> --mine --minerthreads=1 --etherbase=0x0000000000000000000000000000000000000000
+$ geth <usual-flags> --mine --minerthreads=1 --etherbase=0x0000000000000000000000000000000000000001
 ```
 
 Which will start mining blocks and transactions on a single CPU thread, crediting all proceedings to
