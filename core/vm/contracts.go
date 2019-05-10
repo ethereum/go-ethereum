@@ -44,6 +44,7 @@ var PrecompiledContractsHomestead = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
+	common.BytesToAddress([]byte{5}): &ecrecovered25519{},
 }
 
 // PrecompiledContractsByzantium contains the default set of pre-compiled Ethereum
@@ -99,6 +100,24 @@ func (c *ecrecover) Run(input []byte) ([]byte, error) {
 
 	// the first byte of pubkey is bitcoin heritage
 	return common.LeftPadBytes(crypto.Keccak256(pubKey[1:])[12:], 32), nil
+}
+
+// ECRECOVER_EDDSA implemented as a native contract for Web Authentication support
+type ecrecovered25519 struct{}
+
+func (c *ecrecovered25519) RequiredGas(input []byte) uint64 {
+	return params.EcrecoverEd25519Gas
+}
+
+func (c *ecrecovered25519) Run(input []byte) ([]byte, error) {
+	/**
+		TODO: Read these real good and write this code proper
+		https://godoc.org/golang.org/x/crypto/ed25519
+		https://ed25519.cr.yp.to/
+
+	**/
+	var pubKey []byte
+	return pubKey, nil
 }
 
 // SHA256 implemented as a native contract.
