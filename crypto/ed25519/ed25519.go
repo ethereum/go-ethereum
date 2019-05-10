@@ -24,6 +24,7 @@ var (
 // The caller is responsible for ensuring that msg cannot be chosen
 // directly by an attacker. It is usually preferable to use a cryptographic
 // hash function on any input before handing it to this function.
+// We probably don't care about implementing Sign for now....
 func Sign(msg []byte, seckey []byte) ([]byte, error) {
 	// Lets just use golang.org/x/crypto/ed25519 ??
 	var sig []byte
