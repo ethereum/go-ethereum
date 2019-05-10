@@ -1247,9 +1247,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			}
 			stats.processed++
 
-			// TODO(karalabe): Can we assume canonicalness here? Can we assume no logs?
-			// In theory I can make a block *with* transactions but *no* state change if
-			// the only transactions are miner-self-sends or 0-price-self-sends.
+			// We can assume that logs are empty here, since the only way for consecutive
+			// Clique blocks to have the same state is if there are no transactions.
 			events = append(events, ChainEvent{block, block.Hash(), nil})
 			lastCanon = block
 
