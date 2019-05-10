@@ -111,13 +111,13 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		timerC       <-chan time.Time
 	)
 
-	defer func() {
-		metrics.GetOrRegisterResettingTimer("syncer.set-next-batch.total-time", nil).UpdateSince(batchStart)
+	defer func(start time.Time) {
+		metrics.GetOrRegisterResettingTimer("syncer.set-next-batch.total-time", nil).UpdateSince(start)
 		metrics.GetOrRegisterCounter("syncer.set-next-batch.batch-size", nil).Inc(int64(batchSize))
 		if timer != nil {
 			timer.Stop()
 		}
-	}()
+	}(batchStart)
 
 	for iterate := true; iterate; {
 		select {
@@ -167,7 +167,6 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 			log.Debug("syncer pull subscription timer expired", "correlateId", s.correlateId, "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 		case <-s.quit:
 			iterate = false
-			metrics.GetOrRegisterCounter("syncer.set-next-batch.quit-sig", nil).Inc(1)
 			log.Debug("syncer pull subscription - quit received", "correlateId", s.correlateId, "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 		}
 	}
