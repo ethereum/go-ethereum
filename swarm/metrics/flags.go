@@ -17,6 +17,9 @@
 package metrics
 
 import (
+	"os/exec"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -89,10 +92,14 @@ func Setup(ctx *cli.Context) {
 			password               = ctx.GlobalString(MetricsInfluxDBPasswordFlag.Name)
 			enableExport           = ctx.GlobalBool(MetricsEnableInfluxDBExportFlag.Name)
 			enableAccountingExport = ctx.GlobalBool(MetricsEnableInfluxDBAccountingExportFlag.Name)
+			datadir                = ctx.GlobalString("datadir")
 		)
 
 		// Start system runtime metrics collection
 		go gethmetrics.CollectProcessMetrics(4 * time.Second)
+
+		// Start collecting disk metrics
+		go datadirDiskUsage(datadir, 4*time.Second)
 
 		gethmetrics.RegisterRuntimeMemStats(metrics.DefaultRegistry)
 		go gethmetrics.CaptureRuntimeMemStats(metrics.DefaultRegistry, 4*time.Second)
@@ -108,5 +115,21 @@ func Setup(ctx *cli.Context) {
 			log.Info("Exporting swarm accounting metrics to InfluxDB")
 			go influxdb.InfluxDBWithTags(gethmetrics.AccountingRegistry, 10*time.Second, endpoint, database, username, password, "accounting.", tagsMap)
 		}
+	}
+}
+
+func datadirDiskUsage(dir string, d time.Duration) {
+	for range time.Tick(d) {
+		cmd := exec.Command("du", "-s", dir)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Warn("cannot get disk space", "err", err)
+		}
+		res := strings.Split(string(out), "\t")[0]
+		bytes, err := strconv.ParseInt(res, 10, 64)
+		if err != nil {
+			log.Warn("cannot parse disk space", "err", err, "out", string(out))
+		}
+		metrics.GetOrRegisterGauge("datadir.usage", nil).Update(bytes)
 	}
 }
