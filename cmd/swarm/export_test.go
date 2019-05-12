@@ -276,6 +276,7 @@ func inflateBase64Gzip(t *testing.T, base64File, directory string) {
 			if _, err := io.Copy(file, tarReader); err != nil {
 				t.Fatal(err)
 			}
+			file.Close()
 		default:
 			t.Fatal("shouldn't happen")
 		}
