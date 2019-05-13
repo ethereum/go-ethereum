@@ -513,6 +513,13 @@ func newFrontierInstructionSet() [256]operation {
 			maxStack:   maxStack(1, 1),
 			valid:      true,
 		},
+		SLOADEXT: {
+			execute:    opSload,
+			dynamicGas: gasSLoad,
+			minStack:   minStack(2, 1),
+			maxStack:   maxStack(2, 1),
+			valid:      true,
+		},
 		SSTORE: {
 			execute:    opSstore,
 			dynamicGas: gasSStore,

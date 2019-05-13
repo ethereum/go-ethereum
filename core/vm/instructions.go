@@ -633,6 +633,15 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory
 	return nil, nil
 }
 
+func opSloadExt(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	addr := common.BigToAddress(stack.pop())
+	loc := stack.pop()
+
+	val := interpreter.evm.StateDB.GetState(addr, common.BigToHash(loc))
+	loc.SetBytes(val.Bytes())
+	return nil, nil
+}
+
 func opSstore(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	loc := common.BigToHash(stack.pop())
 	val := stack.pop()

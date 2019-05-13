@@ -365,6 +365,10 @@ func gasSLoad(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, me
 	return gt.SLoad, nil
 }
 
+func gasSLoadExt(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return gt.SLoad, nil
+}
+
 func gasExp(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	expByteLen := uint64((stack.data[stack.len()-2].BitLen() + 7) / 8)
 

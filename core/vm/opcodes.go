@@ -110,6 +110,7 @@ const (
 	MSTORE
 	MSTORE8
 	SLOAD
+	SLOADEXT
 	SSTORE
 	JUMP
 	JUMPI
@@ -286,6 +287,7 @@ var opCodeToString = map[OpCode]string{
 	MSTORE:   "MSTORE",
 	MSTORE8:  "MSTORE8",
 	SLOAD:    "SLOAD",
+	SLOADEXT: "SLOADEXT",
 	SSTORE:   "SSTORE",
 	JUMP:     "JUMP",
 	JUMPI:    "JUMPI",
@@ -449,6 +451,7 @@ var stringToOp = map[string]OpCode{
 	"MSTORE":         MSTORE,
 	"MSTORE8":        MSTORE8,
 	"SLOAD":          SLOAD,
+	"SLOADEXT":       SLOADEXT,
 	"SSTORE":         SSTORE,
 	"JUMP":           JUMP,
 	"JUMPI":          JUMPI,
