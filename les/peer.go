@@ -479,7 +479,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 			costList = testCostList()
 		}
 		send = send.add("flowControl/MRC", costList)
-		p.fcCosts = costList.decode()
+		p.fcCosts = costList.decode(ProtocolLengths[uint(p.version)])
 		p.fcParams = server.defParams
 	} else {
 		//on client node
@@ -571,7 +571,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		}
 		p.fcParams = params
 		p.fcServer = flowcontrol.NewServerNode(params, &mclock.System{})
-		p.fcCosts = MRC.decode()
+		p.fcCosts = MRC.decode(ProtocolLengths[uint(p.version)])
 		if !p.isOnlyAnnounce {
 			for msgCode := range reqAvgTimeCost {
 				if p.fcCosts[msgCode] == nil {
@@ -604,7 +604,10 @@ func (p *peer) updateFlowControl(update keyValueMap) {
 	}
 	var MRC RequestCostList
 	if update.get("flowControl/MRC", &MRC) == nil {
-		p.fcCosts = MRC.decode()
+		costUpdate := MRC.decode(ProtocolLengths[uint(p.version)])
+		for code, cost := range costUpdate {
+			p.fcCosts[code] = cost
+		}
 	}
 }
 
