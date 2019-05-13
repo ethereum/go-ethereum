@@ -119,7 +119,6 @@ func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger
 	tab.seedRand()
 	tab.loadSeedNodes()
 
-	go tab.loop()
 	return tab, nil
 }
 

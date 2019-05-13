@@ -253,6 +253,7 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 		return nil, err
 	}
 	t.tab = tab
+	go tab.loop()
 
 	t.wg.Add(2)
 	go t.loop()
