@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
@@ -104,7 +105,9 @@ type Downloader struct {
 	genesis    uint64   // Genesis block number to limit sync to (e.g. light client CHT)
 	queue      *queue   // Scheduler for selecting the hashes to download
 	peers      *peerSet // Set of active peers from which download can proceed
-	stateDB    ethdb.Database
+
+	stateDB    ethdb.Database  // Database to state sync into (and deduplicate via)
+	stateBloom *trie.SyncBloom // Bloom filter for fast trie node existence checks
 
 	rttEstimate   uint64 // Round trip time to target for download requests
 	rttConfidence uint64 // Confidence in the estimated RTT (unit: millionths to allow atomic ops)
@@ -207,13 +210,13 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(mode SyncMode, checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn) *Downloader {
+func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn) *Downloader {
 	if lightchain == nil {
 		lightchain = chain
 	}
 	dl := &Downloader{
-		mode:           mode,
 		stateDB:        stateDb,
+		stateBloom:     stateBloom,
 		mux:            mux,
 		checkpoint:     checkpoint,
 		queue:          newQueue(),
@@ -255,13 +258,15 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	defer d.syncStatsLock.RUnlock()
 
 	current := uint64(0)
-	switch d.mode {
-	case FullSync:
+	switch {
+	case d.blockchain != nil && d.mode == FullSync:
 		current = d.blockchain.CurrentBlock().NumberU64()
-	case FastSync:
+	case d.blockchain != nil && d.mode == FastSync:
 		current = d.blockchain.CurrentFastBlock().NumberU64()
-	case LightSync:
+	case d.lightchain != nil:
 		current = d.lightchain.CurrentHeader().Number.Uint64()
+	default:
+		log.Error("Unknown downloader chain/mode combo", "light", d.lightchain != nil, "full", d.blockchain != nil, "mode", d.mode)
 	}
 	return ethereum.SyncProgress{
 		StartingBlock: d.syncStatsChainOrigin,
@@ -362,6 +367,12 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 	// Post a user notification of the sync (only once per session)
 	if atomic.CompareAndSwapInt32(&d.notified, 0, 1) {
 		log.Info("Block synchronisation started")
+	}
+	// If we are already full syncing, but have a fast-sync bloom filter laying
+	// around, make sure it does't use memory any more. This is a special case
+	// when the user attempts to fast sync a new empty network.
+	if mode == FullSync && d.stateBloom != nil {
+		d.stateBloom.Close()
 	}
 	// Reset the queue, peer set and wake channels to clean any internal leftover state
 	d.queue.Reset()
@@ -1662,6 +1673,8 @@ func (d *Downloader) commitFastSyncData(results []*fetchResult, stateSync *state
 func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	block := types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
 	log.Debug("Committing fast sync pivot as new head", "number", block.Number(), "hash", block.Hash())
+
+	// Commit the pivot block as the new head, will require full sync from here on
 	if _, err := d.blockchain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{result.Receipts}); err != nil {
 		return err
 	}
@@ -1669,6 +1682,15 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 		return err
 	}
 	atomic.StoreInt32(&d.committed, 1)
+
+	// If we had a bloom filter for the state sync, deallocate it now. Note, we only
+	// deallocate internally, but keep the empty wrapper. This ensures that if we do
+	// a rollback after committing the pivot and restarting fast sync, we don't end
+	// up using a nil bloom. Empty bloom is fine, it just returns that it does not
+	// have the info we need, so reach down to the database instead.
+	if d.stateBloom != nil {
+		d.stateBloom.Close()
+	}
 	return nil
 }
 

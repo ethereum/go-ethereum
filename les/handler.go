@@ -179,7 +179,7 @@ func NewProtocolManager(
 		if cht, ok := params.TrustedCheckpoints[blockchain.Genesis().Hash()]; ok {
 			checkpoint = (cht.SectionIndex+1)*params.CHTFrequency - 1
 		}
-		manager.downloader = downloader.New(downloader.LightSync, checkpoint, chainDb, manager.eventMux, nil, blockchain, removePeer)
+		manager.downloader = downloader.New(checkpoint, chainDb, nil, manager.eventMux, nil, blockchain, removePeer)
 		manager.peers.notify((*downloaderPeerNotify)(manager))
 		manager.fetcher = newLightFetcher(manager)
 	}
