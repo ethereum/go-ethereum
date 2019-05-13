@@ -34,5 +34,5 @@ var (
 	ErrNonceTooHigh = errors.New("nonce too high")
 
 	// ErrNoGenesis is returned when there is no Genesis Block.
-	ErrNoGenesis = errors.New("Genesis not found in chain")
+	ErrNoGenesis = errors.New("genesis not found in chain")
 )
