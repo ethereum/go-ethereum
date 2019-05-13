@@ -66,6 +66,8 @@ func LesRequest(req light.OdrRequest) LesOdrRequest {
 		return (*ChtRequest)(r)
 	case *light.BloomRequest:
 		return (*BloomRequest)(r)
+	case *light.TxStatusRequest:
+		return (*TxStatusRequest)(r)
 	default:
 		return nil
 	}
@@ -468,6 +470,44 @@ func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
 		return errUselessNodes
 	}
 	r.Proofs = nodeSet
+	return nil
+}
+
+// TxStatusRequest is the ODR request type for transaction status
+type TxStatusRequest light.TxStatusRequest
+
+// GetCost returns the cost of the given ODR request according to the serving
+// peer's cost table (implementation of LesOdrRequest)
+func (r *TxStatusRequest) GetCost(peer *peer) uint64 {
+	return peer.GetRequestCost(GetTxStatusMsg, len(r.Hashes))
+}
+
+// CanSend tells if a certain peer is suitable for serving the given request
+func (r *TxStatusRequest) CanSend(peer *peer) bool {
+	return peer.version >= lpv2
+}
+
+// Request sends an ODR request to the LES network (implementation of LesOdrRequest)
+func (r *TxStatusRequest) Request(reqID uint64, peer *peer) error {
+	peer.Log().Debug("Requesting transaction status", "count", len(r.Hashes))
+	return peer.RequestTxStatus(reqID, r.GetCost(peer), r.Hashes)
+}
+
+// Valid processes an ODR request reply message from the LES network
+// returns true and stores results in memory if the message was a valid reply
+// to the request (implementation of LesOdrRequest)
+func (r *TxStatusRequest) Validate(db ethdb.Database, msg *Msg) error {
+	log.Debug("Validating transaction status", "count", len(r.Hashes))
+
+	// Ensure we have a correct message with a single block body
+	if msg.MsgType != MsgTxStatus {
+		return errInvalidMessageType
+	}
+	status := msg.Obj.([]light.TxStatus)
+	if len(status) != len(r.Hashes) {
+		return errInvalidEntryCount
+	}
+	r.Status = status
 	return nil
 }
 
