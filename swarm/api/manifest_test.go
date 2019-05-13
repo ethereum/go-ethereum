@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -39,17 +40,19 @@ func manifest(paths ...string) (manifestReader storage.LazySectionReader) {
 	}
 }
 
-func testGetEntry(t *testing.T, path, match string, paths ...string) *manifestTrie {
+func testGetEntry(t *testing.T, path, match string, multiple bool, paths ...string) *manifestTrie {
 	quitC := make(chan bool)
-	trie, err := readManifest(manifest(paths...), nil, nil, quitC)
+	fileStore := storage.NewFileStore(nil, storage.NewFileStoreParams())
+	ref := make([]byte, fileStore.HashSize())
+	trie, err := readManifest(manifest(paths...), ref, fileStore, false, quitC, NOOPDecrypt)
 	if err != nil {
 		t.Errorf("unexpected error making manifest: %v", err)
 	}
-	checkEntry(t, path, match, trie)
+	checkEntry(t, path, match, multiple, trie)
 	return trie
 }
 
-func checkEntry(t *testing.T, path, match string, trie *manifestTrie) {
+func checkEntry(t *testing.T, path, match string, multiple bool, trie *manifestTrie) {
 	entry, fullpath := trie.getEntry(path)
 	if match == "-" && entry != nil {
 		t.Errorf("expected no match for '%s', got '%s'", path, fullpath)
@@ -60,32 +63,57 @@ func checkEntry(t *testing.T, path, match string, trie *manifestTrie) {
 	} else if fullpath != match {
 		t.Errorf("incorrect entry retrieved for '%s'. expected path '%v', got '%s'", path, match, fullpath)
 	}
+
+	if multiple && entry.Status != http.StatusMultipleChoices {
+		t.Errorf("Expected %d Multiple Choices Status for path %s, match %s, got %d", http.StatusMultipleChoices, path, match, entry.Status)
+	} else if !multiple && entry != nil && entry.Status == http.StatusMultipleChoices {
+		t.Errorf("Were not expecting %d Multiple Choices Status for path %s, match %s, but got it", http.StatusMultipleChoices, path, match)
+	}
 }
 
 func TestGetEntry(t *testing.T) {
 	// file system manifest always contains regularized paths
-	testGetEntry(t, "a", "a", "a")
-	testGetEntry(t, "b", "-", "a")
-	testGetEntry(t, "/a//", "a", "a")
+	testGetEntry(t, "a", "a", false, "a")
+	testGetEntry(t, "b", "-", false, "a")
+	testGetEntry(t, "/a//", "a", false, "a")
 	// fallback
-	testGetEntry(t, "/a", "", "")
-	testGetEntry(t, "/a/b", "a/b", "a/b")
+	testGetEntry(t, "/a", "", false, "")
+	testGetEntry(t, "/a/b", "a/b", false, "a/b")
 	// longest/deepest math
-	testGetEntry(t, "read", "read", "readme.md", "readit.md")
-	testGetEntry(t, "rf", "-", "readme.md", "readit.md")
-	testGetEntry(t, "readme", "readme", "readme.md")
-	testGetEntry(t, "readme", "-", "readit.md")
-	testGetEntry(t, "readme.md", "readme.md", "readme.md")
-	testGetEntry(t, "readme.md", "-", "readit.md")
-	testGetEntry(t, "readmeAmd", "-", "readit.md")
-	testGetEntry(t, "readme.mdffff", "-", "readme.md")
-	testGetEntry(t, "ab", "ab", "ab/cefg", "ab/cedh", "ab/kkkkkk")
-	testGetEntry(t, "ab/ce", "ab/ce", "ab/cefg", "ab/cedh", "ab/ceuuuuuuuuuu")
-	testGetEntry(t, "abc", "abc", "abcd", "abczzzzef", "abc/def", "abc/e/g")
-	testGetEntry(t, "a/b", "a/b", "a", "a/bc", "a/ba", "a/b/c")
-	testGetEntry(t, "a/b", "a/b", "a", "a/b", "a/bb", "a/b/c")
-	testGetEntry(t, "//a//b//", "a/b", "a", "a/b", "a/bb", "a/b/c")
+	testGetEntry(t, "read", "read", true, "readme.md", "readit.md")
+	testGetEntry(t, "rf", "-", false, "readme.md", "readit.md")
+	testGetEntry(t, "readme", "readme", false, "readme.md")
+	testGetEntry(t, "readme", "-", false, "readit.md")
+	testGetEntry(t, "readme.md", "readme.md", false, "readme.md")
+	testGetEntry(t, "readme.md", "-", false, "readit.md")
+	testGetEntry(t, "readmeAmd", "-", false, "readit.md")
+	testGetEntry(t, "readme.mdffff", "-", false, "readme.md")
+	testGetEntry(t, "ab", "ab", true, "ab/cefg", "ab/cedh", "ab/kkkkkk")
+	testGetEntry(t, "ab/ce", "ab/ce", true, "ab/cefg", "ab/cedh", "ab/ceuuuuuuuuuu")
+	testGetEntry(t, "abc", "abc", true, "abcd", "abczzzzef", "abc/def", "abc/e/g")
+	testGetEntry(t, "a/b", "a/b", true, "a", "a/bc", "a/ba", "a/b/c")
+	testGetEntry(t, "a/b", "a/b", false, "a", "a/b", "a/bb", "a/b/c")
+	testGetEntry(t, "//a//b//", "a/b", false, "a", "a/b", "a/bb", "a/b/c")
 }
+
+func TestExactMatch(t *testing.T) {
+	quitC := make(chan bool)
+	mf := manifest("shouldBeExactMatch.css", "shouldBeExactMatch.css.map")
+	fileStore := storage.NewFileStore(nil, storage.NewFileStoreParams())
+	ref := make([]byte, fileStore.HashSize())
+	trie, err := readManifest(mf, ref, fileStore, false, quitC, nil)
+	if err != nil {
+		t.Errorf("unexpected error making manifest: %v", err)
+	}
+	entry, _ := trie.getEntry("shouldBeExactMatch.css")
+	if entry.Path != "" {
+		t.Errorf("Expected entry to match %s, got: %s", "shouldBeExactMatch.css", entry.Path)
+	}
+	if entry.Status == http.StatusMultipleChoices {
+		t.Errorf("Got status %d, which is unexepcted", http.StatusMultipleChoices)
+	}
+}
+
 func TestDeleteEntry(t *testing.T) {
 
 }
@@ -104,19 +132,44 @@ func TestAddFileWithManifestPath(t *testing.T) {
 	reader := &storage.LazyTestSectionReader{
 		SectionReader: io.NewSectionReader(bytes.NewReader(manifest), 0, int64(len(manifest))),
 	}
-	trie, err := readManifest(reader, nil, nil, nil)
+	fileStore := storage.NewFileStore(nil, storage.NewFileStoreParams())
+	ref := make([]byte, fileStore.HashSize())
+	trie, err := readManifest(reader, ref, fileStore, false, nil, NOOPDecrypt)
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkEntry(t, "ab", "ab", trie)
-	checkEntry(t, "ac", "ac", trie)
+	checkEntry(t, "ab", "ab", false, trie)
+	checkEntry(t, "ac", "ac", false, trie)
 
 	// now add path "a" and check we can still get "ab" and "ac"
 	entry := &manifestTrieEntry{}
 	entry.Path = "a"
 	entry.Hash = "a"
 	trie.addEntry(entry, nil)
-	checkEntry(t, "ab", "ab", trie)
-	checkEntry(t, "ac", "ac", trie)
-	checkEntry(t, "a", "a", trie)
+	checkEntry(t, "ab", "ab", false, trie)
+	checkEntry(t, "ac", "ac", false, trie)
+	checkEntry(t, "a", "a", false, trie)
+}
+
+// TestReadManifestOverSizeLimit creates a manifest reader with data longer then
+// manifestSizeLimit and checks if readManifest function will return the exact error
+// message.
+// The manifest data is not in json-encoded format, preventing possbile
+// successful parsing attempts if limit check fails.
+func TestReadManifestOverSizeLimit(t *testing.T) {
+	manifest := make([]byte, manifestSizeLimit+1)
+	reader := &storage.LazyTestSectionReader{
+		SectionReader: io.NewSectionReader(bytes.NewReader(manifest), 0, int64(len(manifest))),
+	}
+	_, err := readManifest(reader, storage.Address{}, nil, false, nil, NOOPDecrypt)
+	if err == nil {
+		t.Fatal("got no error from readManifest")
+	}
+	// Error message is part of the http response body
+	// which justifies exact string validation.
+	got := err.Error()
+	want := fmt.Sprintf("Manifest size of %v bytes exceeds the %v byte limit", len(manifest), manifestSizeLimit)
+	if got != want {
+		t.Fatalf("got error mesage %q, expected %q", got, want)
+	}
 }

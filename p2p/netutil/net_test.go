@@ -17,9 +17,11 @@
 package netutil
 
 import (
+	"fmt"
 	"net"
 	"reflect"
 	"testing"
+	"testing/quick"
 
 	"github.com/davecgh/go-spew/spew"
 )
@@ -169,5 +171,92 @@ func BenchmarkCheckRelayIP(b *testing.B) {
 	addr := parseIP("23.55.1.2")
 	for i := 0; i < b.N; i++ {
 		CheckRelayIP(sender, addr)
+	}
+}
+
+func TestSameNet(t *testing.T) {
+	tests := []struct {
+		ip, other string
+		bits      uint
+		want      bool
+	}{
+		{"0.0.0.0", "0.0.0.0", 32, true},
+		{"0.0.0.0", "0.0.0.1", 0, true},
+		{"0.0.0.0", "0.0.0.1", 31, true},
+		{"0.0.0.0", "0.0.0.1", 32, false},
+		{"0.33.0.1", "0.34.0.2", 8, true},
+		{"0.33.0.1", "0.34.0.2", 13, true},
+		{"0.33.0.1", "0.34.0.2", 15, false},
+	}
+
+	for _, test := range tests {
+		if ok := SameNet(test.bits, parseIP(test.ip), parseIP(test.other)); ok != test.want {
+			t.Errorf("SameNet(%d, %s, %s) == %t, want %t", test.bits, test.ip, test.other, ok, test.want)
+		}
+	}
+}
+
+func ExampleSameNet() {
+	// This returns true because the IPs are in the same /24 network:
+	fmt.Println(SameNet(24, net.IP{127, 0, 0, 1}, net.IP{127, 0, 0, 3}))
+	// This call returns false:
+	fmt.Println(SameNet(24, net.IP{127, 3, 0, 1}, net.IP{127, 5, 0, 3}))
+	// Output:
+	// true
+	// false
+}
+
+func TestDistinctNetSet(t *testing.T) {
+	ops := []struct {
+		add, remove string
+		fails       bool
+	}{
+		{add: "127.0.0.1"},
+		{add: "127.0.0.2"},
+		{add: "127.0.0.3", fails: true},
+		{add: "127.32.0.1"},
+		{add: "127.32.0.2"},
+		{add: "127.32.0.3", fails: true},
+		{add: "127.33.0.1", fails: true},
+		{add: "127.34.0.1"},
+		{add: "127.34.0.2"},
+		{add: "127.34.0.3", fails: true},
+		// Make room for an address, then add again.
+		{remove: "127.0.0.1"},
+		{add: "127.0.0.3"},
+		{add: "127.0.0.3", fails: true},
+	}
+
+	set := DistinctNetSet{Subnet: 15, Limit: 2}
+	for _, op := range ops {
+		var desc string
+		if op.add != "" {
+			desc = fmt.Sprintf("Add(%s)", op.add)
+			if ok := set.Add(parseIP(op.add)); ok != !op.fails {
+				t.Errorf("%s == %t, want %t", desc, ok, !op.fails)
+			}
+		} else {
+			desc = fmt.Sprintf("Remove(%s)", op.remove)
+			set.Remove(parseIP(op.remove))
+		}
+		t.Logf("%s: %v", desc, set)
+	}
+}
+
+func TestDistinctNetSetAddRemove(t *testing.T) {
+	cfg := &quick.Config{}
+	fn := func(ips []net.IP) bool {
+		s := DistinctNetSet{Limit: 3, Subnet: 2}
+		for _, ip := range ips {
+			s.Add(ip)
+		}
+		for _, ip := range ips {
+			s.Remove(ip)
+		}
+		return s.Len() == 0
+	}
+
+	if err := quick.Check(fn, cfg); err != nil {
+		t.Fatal(err)
 	}
 }

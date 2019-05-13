@@ -19,6 +19,7 @@ package ubqhash
 import (
 	"encoding/binary"
 	"hash"
+	"math/big"
 	"reflect"
 	"runtime"
 	"sync"
@@ -29,10 +30,8 @@ import (
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/common/bitutil"
 	"github.com/ubiq/go-ubiq/crypto"
-	"github.com/ubiq/go-ubiq/crypto/sha3"
 	"github.com/ubiq/go-ubiq/log"
-
-	"golang.org/x/crypto/blake2b"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -51,18 +50,71 @@ const (
 	uip1Epoch = 22
 )
 
+// cacheSize returns the size of the ubqhash verification cache that belongs to a certain
+// block number.
+func cacheSize(block uint64) uint64 {
+	epoch := int(block / epochLength)
+	if epoch < maxEpoch {
+		return cacheSizes[epoch]
+	}
+	return calcCacheSize(epoch)
+}
+
+// calcCacheSize calculates the cache size for epoch. The cache size grows linearly,
+// however, we always take the highest prime below the linearly growing threshold in order
+// to reduce the risk of accidental regularities leading to cyclic behavior.
+func calcCacheSize(epoch int) uint64 {
+	size := cacheInitBytes + cacheGrowthBytes*uint64(epoch) - hashBytes
+	for !new(big.Int).SetUint64(size / hashBytes).ProbablyPrime(1) { // Always accurate for n < 2^64
+		size -= 2 * hashBytes
+	}
+	return size
+}
+
+// datasetSize returns the size of the ubqhash mining dataset that belongs to a certain
+// block number.
+func datasetSize(block uint64) uint64 {
+	epoch := int(block / epochLength)
+	if epoch < maxEpoch {
+		return datasetSizes[epoch]
+	}
+	return calcDatasetSize(epoch)
+}
+
+// calcDatasetSize calculates the dataset size for epoch. The dataset size grows linearly,
+// however, we always take the highest prime below the linearly growing threshold in order
+// to reduce the risk of accidental regularities leading to cyclic behavior.
+func calcDatasetSize(epoch int) uint64 {
+	size := datasetInitBytes + datasetGrowthBytes*uint64(epoch) - mixBytes
+	for !new(big.Int).SetUint64(size / mixBytes).ProbablyPrime(1) { // Always accurate for n < 2^64
+		size -= 2 * mixBytes
+	}
+	return size
+}
+
 // hasher is a repetitive hasher allowing the same hash data structures to be
 // reused between hash runs instead of requiring new ones to be created.
 type hasher func(dest []byte, data []byte)
 
-// makeHasher creates a repetitive hasher, allowing the same hash data structures
-// to be reused between hash runs instead of requiring new ones to be created.
-// The returned function is not thread safe!
+// makeHasher creates a repetitive hasher, allowing the same hash data structures to
+// be reused between hash runs instead of requiring new ones to be created. The returned
+// function is not thread safe!
 func makeHasher(h hash.Hash) hasher {
+	// sha3.state supports Read to get the sum, use it to avoid the overhead of Sum.
+	// Read alters the state but we reset the hash before every operation.
+	type readerHash interface {
+		hash.Hash
+		Read([]byte) (int, error)
+	}
+	rh, ok := h.(readerHash)
+	if !ok {
+		panic("can't find Read method on hash")
+	}
+	outputLen := rh.Size()
 	return func(dest []byte, data []byte) {
-		h.Write(data)
-		h.Sum(dest[:0])
-		h.Reset()
+		rh.Reset()
+		rh.Write(data)
+		rh.Read(dest[:outputLen])
 	}
 }
 
@@ -73,7 +125,7 @@ func seedHash(block uint64) []byte {
 	if block < epochLength {
 		return seed
 	}
-	keccak256 := makeHasher(sha3.NewKeccak256())
+	keccak256 := makeHasher(sha3.NewLegacyKeccak256())
 	for i := 0; i < int(block/epochLength); i++ {
 		keccak256(seed, seed)
 	}
@@ -127,7 +179,7 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 		}
 	}()
 	// Create a hasher to reuse between invocations
-	keccak512 := makeHasher(sha3.NewKeccak512())
+	keccak512 := makeHasher(sha3.NewLegacyKeccak512())
 	if epoch >= uip1Epoch {
 		h, _ := blake2b.New512(nil)
 		keccak512 = makeHasher(h)
@@ -165,15 +217,6 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 func swap(buffer []byte) {
 	for i := 0; i < len(buffer); i += 4 {
 		binary.BigEndian.PutUint32(buffer[i:], binary.LittleEndian.Uint32(buffer[i:]))
-	}
-}
-
-// prepare converts an ubqhash cache or dataset from a byte stream into the internal
-// int representation. All ubqhash methods work with ints to avoid constant byte to
-// int conversions as well as to handle both little and big endian systems.
-func prepare(dest []uint32, src []byte) {
-	for i := 0; i < len(dest); i++ {
-		dest[i] = binary.LittleEndian.Uint32(src[i*4:])
 	}
 }
 
@@ -264,7 +307,7 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 			defer pend.Done()
 
 			// Create a hasher to reuse between invocations
-			keccak512 := makeHasher(sha3.NewKeccak512())
+			keccak512 := makeHasher(sha3.NewLegacyKeccak512())
 
 			// Calculate the data segment this thread should generate
 			batch := uint32((size + hashBytes*uint64(threads) - 1) / (hashBytes * uint64(threads)))
@@ -338,7 +381,7 @@ func hashimoto(hash []byte, nonce uint64, size uint64, lookup func(index uint32)
 // in-memory cache) in order to produce our final value for a particular header
 // hash and nonce.
 func hashimotoLight(size uint64, cache []uint32, hash []byte, nonce uint64) ([]byte, []byte) {
-	keccak512 := makeHasher(sha3.NewKeccak512())
+	keccak512 := makeHasher(sha3.NewLegacyKeccak512())
 
 	lookup := func(index uint32) []uint32 {
 		rawData := generateDatasetItem(cache, index, keccak512)
@@ -363,9 +406,11 @@ func hashimotoFull(dataset []uint32, hash []byte, nonce uint64) ([]byte, []byte)
 	return hashimoto(hash, nonce, uint64(len(dataset))*4, lookup)
 }
 
+const maxEpoch = 2048
+
 // datasetSizes is a lookup table for the ubqhash dataset size for the first 2048
 // epochs (i.e. 61440000 blocks).
-var datasetSizes = []uint64{
+var datasetSizes = [maxEpoch]uint64{
 	1073739904, 1082130304, 1090514816, 1098906752, 1107293056,
 	1115684224, 1124070016, 1132461952, 1140849536, 1149232768,
 	1157627776, 1166013824, 1174404736, 1182786944, 1191180416,
@@ -779,7 +824,7 @@ var datasetSizes = []uint64{
 
 // cacheSizes is a lookup table for the ubqhash verification cache size for the
 // first 2048 epochs (i.e. 61440000 blocks).
-var cacheSizes = []uint64{
+var cacheSizes = [maxEpoch]uint64{
 	16776896, 16907456, 17039296, 17170112, 17301056, 17432512, 17563072,
 	17693888, 17824192, 17955904, 18087488, 18218176, 18349504, 18481088,
 	18611392, 18742336, 18874304, 19004224, 19135936, 19267264, 19398208,

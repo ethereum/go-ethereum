@@ -18,9 +18,11 @@
 package web3ext
 
 var Modules = map[string]string{
+	"accounting": Accounting_JS,
 	"admin":      Admin_JS,
 	"chequebook": Chequebook_JS,
 	"clique":     Clique_JS,
+	"ubqhash":     Ubqhash_JS,
 	"debug":      Debug_JS,
 	"eth":        Eth_JS,
 	"miner":      Miner_JS,
@@ -109,6 +111,34 @@ web3._extend({
 });
 `
 
+const Ubqhash_JS = `
+web3._extend({
+	property: 'ubqhash',
+	methods: [
+		new web3._extend.Method({
+			name: 'getWork',
+			call: 'ubqhash_getWork',
+			params: 0
+		}),
+		new web3._extend.Method({
+			name: 'getHashrate',
+			call: 'ubqhash_getHashrate',
+			params: 0
+		}),
+		new web3._extend.Method({
+			name: 'submitWork',
+			call: 'ubqhash_submitWork',
+			params: 3,
+		}),
+		new web3._extend.Method({
+			name: 'submitHashRate',
+			call: 'ubqhash_submitHashRate',
+			params: 2,
+		}),
+	]
+});
+`
+
 const Admin_JS = `
 web3._extend({
 	property: 'admin',
@@ -121,6 +151,16 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'removePeer',
 			call: 'admin_removePeer',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'addTrustedPeer',
+			call: 'admin_addTrustedPeer',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'removeTrustedPeer',
+			call: 'admin_removeTrustedPeer',
 			params: 1
 		}),
 		new web3._extend.Method({
@@ -194,26 +234,6 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'setHead',
 			call: 'debug_setHead',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'traceBlock',
-			call: 'debug_traceBlock',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'traceBlockFromFile',
-			call: 'debug_traceBlockFromFile',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'traceBlockByNumber',
-			call: 'debug_traceBlockByNumber',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'traceBlockByHash',
-			call: 'debug_traceBlockByHash',
 			params: 1
 		}),
 		new web3._extend.Method({
@@ -328,9 +348,66 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'mutexProfile',
+			call: 'debug_mutexProfile',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'setMutexProfileFraction',
+			call: 'debug_setMutexProfileFraction',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'writeMutexProfile',
+			call: 'debug_writeMutexProfile',
+			params: 1
+		}),
+		new web3._extend.Method({
 			name: 'writeMemProfile',
 			call: 'debug_writeMemProfile',
 			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'traceBlock',
+			call: 'debug_traceBlock',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'traceBlockFromFile',
+			call: 'debug_traceBlockFromFile',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'traceBadBlock',
+			call: 'debug_traceBadBlock',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'standardTraceBadBlockToFile',
+			call: 'debug_standardTraceBadBlockToFile',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'standardTraceBlockToFile',
+			call: 'debug_standardTraceBlockToFile',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'traceBlockByNumber',
+			call: 'debug_traceBlockByNumber',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'traceBlockByHash',
+			call: 'debug_traceBlockByHash',
+			params: 2,
+			inputFormatter: [null, null]
 		}),
 		new web3._extend.Method({
 			name: 'traceTransaction',
@@ -376,6 +453,11 @@ web3._extend({
 	property: 'eth',
 	methods: [
 		new web3._extend.Method({
+			name: 'chainId',
+			call: 'eth_chainId',
+			params: 0
+		}),
+		new web3._extend.Method({
 			name: 'sign',
 			call: 'eth_sign',
 			params: 2,
@@ -411,6 +493,12 @@ web3._extend({
 			},
 			params: 2,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, web3._extend.utils.toHex]
+		}),
+		new web3._extend.Method({
+			name: 'getProof',
+			call: 'eth_getProof',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 	],
 	properties: [
@@ -460,6 +548,11 @@ web3._extend({
 			call: 'miner_setGasPrice',
 			params: 1,
 			inputFormatter: [web3._extend.utils.fromDecimal]
+		}),
+		new web3._extend.Method({
+			name: 'setRecommitInterval',
+			call: 'miner_setRecommitInterval',
+			params: 1,
 		}),
 		new web3._extend.Method({
 			name: 'getHashrate',
@@ -512,6 +605,12 @@ web3._extend({
 			name: 'deriveAccount',
 			call: 'personal_deriveAccount',
 			params: 3
+		}),
+		new web3._extend.Method({
+			name: 'signTransaction',
+			call: 'personal_signTransaction',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, null]
 		}),
 	],
 	properties: [
@@ -602,6 +701,50 @@ web3._extend({
 				status.queued = web3._extend.utils.toDecimal(status.queued);
 				return status;
 			}
+		}),
+	]
+});
+`
+
+const Accounting_JS = `
+web3._extend({
+	property: 'accounting',
+	methods: [
+		new web3._extend.Property({
+			name: 'balance',
+			getter: 'account_balance'
+		}),
+		new web3._extend.Property({
+			name: 'balanceCredit',
+			getter: 'account_balanceCredit'
+		}),
+		new web3._extend.Property({
+			name: 'balanceDebit',
+			getter: 'account_balanceDebit'
+		}),
+		new web3._extend.Property({
+			name: 'bytesCredit',
+			getter: 'account_bytesCredit'
+		}),
+		new web3._extend.Property({
+			name: 'bytesDebit',
+			getter: 'account_bytesDebit'
+		}),
+		new web3._extend.Property({
+			name: 'msgCredit',
+			getter: 'account_msgCredit'
+		}),
+		new web3._extend.Property({
+			name: 'msgDebit',
+			getter: 'account_msgDebit'
+		}),
+		new web3._extend.Property({
+			name: 'peerDrops',
+			getter: 'account_peerDrops'
+		}),
+		new web3._extend.Property({
+			name: 'selfDrops',
+			getter: 'account_selfDrops'
 		}),
 	]
 });

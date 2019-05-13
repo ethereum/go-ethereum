@@ -40,7 +40,7 @@ func fastXORBytes(dst, a, b []byte) int {
 			dw[i] = aw[i] ^ bw[i]
 		}
 	}
-	for i := (n - n%wordSize); i < n; i++ {
+	for i := n - n%wordSize; i < n; i++ {
 		dst[i] = a[i] ^ b[i]
 	}
 	return n
@@ -84,7 +84,7 @@ func fastANDBytes(dst, a, b []byte) int {
 			dw[i] = aw[i] & bw[i]
 		}
 	}
-	for i := (n - n%wordSize); i < n; i++ {
+	for i := n - n%wordSize; i < n; i++ {
 		dst[i] = a[i] & b[i]
 	}
 	return n
@@ -128,7 +128,7 @@ func fastORBytes(dst, a, b []byte) int {
 			dw[i] = aw[i] | bw[i]
 		}
 	}
-	for i := (n - n%wordSize); i < n; i++ {
+	for i := n - n%wordSize; i < n; i++ {
 		dst[i] = a[i] | b[i]
 	}
 	return n
@@ -168,7 +168,7 @@ func fastTestBytes(p []byte) bool {
 			}
 		}
 	}
-	for i := (n - n%wordSize); i < n; i++ {
+	for i := n - n%wordSize; i < n; i++ {
 		if p[i] != 0 {
 			return true
 		}

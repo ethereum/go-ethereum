@@ -46,7 +46,7 @@ func newTestBackend() *backends.SimulatedBackend {
 		addr0: {Balance: big.NewInt(1000000000)},
 		addr1: {Balance: big.NewInt(1000000000)},
 		addr2: {Balance: big.NewInt(1000000000)},
-	})
+	}, 10000000)
 }
 
 func deploy(prvKey *ecdsa.PrivateKey, amount *big.Int, backend *backends.SimulatedBackend) (common.Address, error) {
@@ -281,8 +281,8 @@ func TestDeposit(t *testing.T) {
 		t.Fatalf("expected balance %v, got %v", exp, chbook.Balance())
 	}
 
-	// autodeposit every 30ms if new cheque issued
-	interval := 30 * time.Millisecond
+	// autodeposit every 200ms if new cheque issued
+	interval := 200 * time.Millisecond
 	chbook.AutoDeposit(interval, common.Big1, balance)
 	_, err = chbook.Issue(addr1, amount)
 	if err != nil {

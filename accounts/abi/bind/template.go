@@ -32,6 +32,7 @@ type tmplContract struct {
 	Constructor abi.Method             // Contract constructor for deploy parametrization
 	Calls       map[string]*tmplMethod // Contract calls that only read state data
 	Transacts   map[string]*tmplMethod // Contract calls that write state data
+	Events      map[string]*tmplEvent  // Contract events accessors
 }
 
 // tmplMethod is a wrapper around an abi.Method that contains a few preprocessed
@@ -39,7 +40,13 @@ type tmplContract struct {
 type tmplMethod struct {
 	Original   abi.Method // Original method as parsed by the abi package
 	Normalized abi.Method // Normalized version of the parsed method (capitalized names, non-anonymous args/returns)
-	Structured bool       // Whether the returns should be accumulated into a contract
+	Structured bool       // Whether the returns should be accumulated into a struct
+}
+
+// tmplEvent is a wrapper around an a
+type tmplEvent struct {
+	Original   abi.Event // Original event as parsed by the abi package
+	Normalized abi.Event // Normalized version of the parsed fields
 }
 
 // tmplSource is language to template mapping containing all the supported
@@ -58,27 +65,27 @@ const tmplSourceGo = `
 package {{.Package}}
 
 import (
-        "math/big"
-        "strings"
+	"math/big"
+	"strings"
 
-        ethereum "github.com/ubiq/go-ubiq"
-        "github.com/ubiq/go-ubiq/accounts/abi"
-        "github.com/ubiq/go-ubiq/accounts/abi/bind"
-        "github.com/ubiq/go-ubiq/common"
-        "github.com/ubiq/go-ubiq/core/types"
-        "github.com/ubiq/go-ubiq/event"
+	ethereum "github.com/ubiq/go-ubiq"
+	"github.com/ubiq/go-ubiq/accounts/abi"
+	"github.com/ubiq/go-ubiq/accounts/abi/bind"
+	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/core/types"
+	"github.com/ubiq/go-ubiq/event"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
 var (
-        _ = big.NewInt
-        _ = strings.NewReader
-        _ = ethereum.NotFound
-        _ = abi.U256
-        _ = bind.Bind
-        _ = common.Big1
-        _ = types.BloomLookup
-        _ = event.NewSubscription
+	_ = big.NewInt
+	_ = strings.NewReader
+	_ = ethereum.NotFound
+	_ = abi.U256
+	_ = bind.Bind
+	_ = common.Big1
+	_ = types.BloomLookup
+	_ = event.NewSubscription
 )
 
 {{range $contract := .Contracts}}
@@ -99,7 +106,7 @@ var (
 		  if err != nil {
 		    return common.Address{}, nil, nil, err
 		  }
-		  return address, tx, &{{.Type}}{ {{.Type}}Caller: {{.Type}}Caller{contract: contract}, {{.Type}}Transactor: {{.Type}}Transactor{contract: contract} }, nil
+		  return address, tx, &{{.Type}}{ {{.Type}}Caller: {{.Type}}Caller{contract: contract}, {{.Type}}Transactor: {{.Type}}Transactor{contract: contract}, {{.Type}}Filterer: {{.Type}}Filterer{contract: contract} }, nil
 		}
 	{{end}}
 
@@ -107,6 +114,7 @@ var (
 	type {{.Type}} struct {
 	  {{.Type}}Caller     // Read-only binding to the contract
 	  {{.Type}}Transactor // Write-only binding to the contract
+		{{.Type}}Filterer   // Log filterer for contract events
 	}
 
 	// {{.Type}}Caller is an auto generated read-only Go binding around an Ubiq contract.
@@ -116,6 +124,11 @@ var (
 
 	// {{.Type}}Transactor is an auto generated write-only Go binding around an Ubiq contract.
 	type {{.Type}}Transactor struct {
+	  contract *bind.BoundContract // Generic contract wrapper for the low level calls
+	}
+
+	// {{.Type}}Filterer is an auto generated log filtering Go binding around an Ubiq contract events.
+	type {{.Type}}Filterer struct {
 	  contract *bind.BoundContract // Generic contract wrapper for the low level calls
 	}
 
@@ -158,16 +171,16 @@ var (
 
 	// New{{.Type}} creates a new instance of {{.Type}}, bound to a specific deployed contract.
 	func New{{.Type}}(address common.Address, backend bind.ContractBackend) (*{{.Type}}, error) {
-	  contract, err := bind{{.Type}}(address, backend, backend)
+	  contract, err := bind{{.Type}}(address, backend, backend, backend)
 	  if err != nil {
 	    return nil, err
 	  }
-	  return &{{.Type}}{ {{.Type}}Caller: {{.Type}}Caller{contract: contract}, {{.Type}}Transactor: {{.Type}}Transactor{contract: contract} }, nil
+	  return &{{.Type}}{ {{.Type}}Caller: {{.Type}}Caller{contract: contract}, {{.Type}}Transactor: {{.Type}}Transactor{contract: contract}, {{.Type}}Filterer: {{.Type}}Filterer{contract: contract} }, nil
 	}
 
 	// New{{.Type}}Caller creates a new read-only instance of {{.Type}}, bound to a specific deployed contract.
 	func New{{.Type}}Caller(address common.Address, caller bind.ContractCaller) (*{{.Type}}Caller, error) {
-	  contract, err := bind{{.Type}}(address, caller, nil)
+	  contract, err := bind{{.Type}}(address, caller, nil, nil)
 	  if err != nil {
 	    return nil, err
 	  }
@@ -176,20 +189,29 @@ var (
 
 	// New{{.Type}}Transactor creates a new write-only instance of {{.Type}}, bound to a specific deployed contract.
 	func New{{.Type}}Transactor(address common.Address, transactor bind.ContractTransactor) (*{{.Type}}Transactor, error) {
-	  contract, err := bind{{.Type}}(address, nil, transactor)
+	  contract, err := bind{{.Type}}(address, nil, transactor, nil)
 	  if err != nil {
 	    return nil, err
 	  }
 	  return &{{.Type}}Transactor{contract: contract}, nil
 	}
 
+	// New{{.Type}}Filterer creates a new log filterer instance of {{.Type}}, bound to a specific deployed contract.
+ 	func New{{.Type}}Filterer(address common.Address, filterer bind.ContractFilterer) (*{{.Type}}Filterer, error) {
+ 	  contract, err := bind{{.Type}}(address, nil, nil, filterer)
+ 	  if err != nil {
+ 	    return nil, err
+ 	  }
+ 	  return &{{.Type}}Filterer{contract: contract}, nil
+ 	}
+
 	// bind{{.Type}} binds a generic wrapper to an already deployed contract.
-	func bind{{.Type}}(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor) (*bind.BoundContract, error) {
+	func bind{{.Type}}(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, filterer bind.ContractFilterer) (*bind.BoundContract, error) {
 	  parsed, err := abi.JSON(strings.NewReader({{.Type}}ABI))
 	  if err != nil {
 	    return nil, err
 	  }
-	  return bind.NewBoundContract(address, parsed, caller, transactor), nil
+	  return bind.NewBoundContract(address, parsed, caller, transactor, filterer), nil
 	}
 
 	// Call invokes the (constant) contract method with params as input values and
@@ -287,6 +309,137 @@ var (
 		  return _{{$contract.Type}}.Contract.{{.Normalized.Name}}(&_{{$contract.Type}}.TransactOpts {{range $i, $_ := .Normalized.Inputs}}, {{.Name}}{{end}})
 		}
 	{{end}}
+
+	{{range .Events}}
+		// {{$contract.Type}}{{.Normalized.Name}}Iterator is returned from Filter{{.Normalized.Name}} and is used to iterate over the raw logs and unpacked data for {{.Normalized.Name}} events raised by the {{$contract.Type}} contract.
+		type {{$contract.Type}}{{.Normalized.Name}}Iterator struct {
+			Event *{{$contract.Type}}{{.Normalized.Name}} // Event containing the contract specifics and raw log
+
+			contract *bind.BoundContract // Generic contract to use for unpacking event data
+			event    string              // Event name to use for unpacking event data
+
+			logs chan types.Log        // Log channel receiving the found contract events
+			sub  ethereum.Subscription // Subscription for errors, completion and termination
+			done bool                  // Whether the subscription completed delivering logs
+			fail error                 // Occurred error to stop iteration
+		}
+		// Next advances the iterator to the subsequent event, returning whether there
+		// are any more events found. In case of a retrieval or parsing error, false is
+		// returned and Error() can be queried for the exact failure.
+		func (it *{{$contract.Type}}{{.Normalized.Name}}Iterator) Next() bool {
+			// If the iterator failed, stop iterating
+			if (it.fail != nil) {
+				return false
+			}
+			// If the iterator completed, deliver directly whatever's available
+			if (it.done) {
+				select {
+				case log := <-it.logs:
+					it.Event = new({{$contract.Type}}{{.Normalized.Name}})
+					if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+						it.fail = err
+						return false
+					}
+					it.Event.Raw = log
+					return true
+
+				default:
+					return false
+				}
+			}
+			// Iterator still in progress, wait for either a data or an error event
+			select {
+			case log := <-it.logs:
+				it.Event = new({{$contract.Type}}{{.Normalized.Name}})
+				if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+					it.fail = err
+					return false
+				}
+				it.Event.Raw = log
+				return true
+
+			case err := <-it.sub.Err():
+				it.done = true
+				it.fail = err
+				return it.Next()
+			}
+		}
+		// Error returns any retrieval or parsing error occurred during filtering.
+		func (it *{{$contract.Type}}{{.Normalized.Name}}Iterator) Error() error {
+			return it.fail
+		}
+		// Close terminates the iteration process, releasing any pending underlying
+		// resources.
+		func (it *{{$contract.Type}}{{.Normalized.Name}}Iterator) Close() error {
+			it.sub.Unsubscribe()
+			return nil
+		}
+
+		// {{$contract.Type}}{{.Normalized.Name}} represents a {{.Normalized.Name}} event raised by the {{$contract.Type}} contract.
+		type {{$contract.Type}}{{.Normalized.Name}} struct { {{range .Normalized.Inputs}}
+			{{capitalise .Name}} {{if .Indexed}}{{bindtopictype .Type}}{{else}}{{bindtype .Type}}{{end}}; {{end}}
+			Raw types.Log // Blockchain specific contextual infos
+		}
+
+		// Filter{{.Normalized.Name}} is a free log retrieval operation binding the contract event 0x{{printf "%x" .Original.Id}}.
+		//
+		// Solidity: {{.Original.String}}
+ 		func (_{{$contract.Type}} *{{$contract.Type}}Filterer) Filter{{.Normalized.Name}}(opts *bind.FilterOpts{{range .Normalized.Inputs}}{{if .Indexed}}, {{.Name}} []{{bindtype .Type}}{{end}}{{end}}) (*{{$contract.Type}}{{.Normalized.Name}}Iterator, error) {
+			{{range .Normalized.Inputs}}
+			{{if .Indexed}}var {{.Name}}Rule []interface{}
+			for _, {{.Name}}Item := range {{.Name}} {
+				{{.Name}}Rule = append({{.Name}}Rule, {{.Name}}Item)
+			}{{end}}{{end}}
+
+			logs, sub, err := _{{$contract.Type}}.contract.FilterLogs(opts, "{{.Original.Name}}"{{range .Normalized.Inputs}}{{if .Indexed}}, {{.Name}}Rule{{end}}{{end}})
+			if err != nil {
+				return nil, err
+			}
+			return &{{$contract.Type}}{{.Normalized.Name}}Iterator{contract: _{{$contract.Type}}.contract, event: "{{.Original.Name}}", logs: logs, sub: sub}, nil
+ 		}
+
+		// Watch{{.Normalized.Name}} is a free log subscription operation binding the contract event 0x{{printf "%x" .Original.Id}}.
+		//
+		// Solidity: {{.Original.String}}
+		func (_{{$contract.Type}} *{{$contract.Type}}Filterer) Watch{{.Normalized.Name}}(opts *bind.WatchOpts, sink chan<- *{{$contract.Type}}{{.Normalized.Name}}{{range .Normalized.Inputs}}{{if .Indexed}}, {{.Name}} []{{bindtype .Type}}{{end}}{{end}}) (event.Subscription, error) {
+			{{range .Normalized.Inputs}}
+			{{if .Indexed}}var {{.Name}}Rule []interface{}
+			for _, {{.Name}}Item := range {{.Name}} {
+				{{.Name}}Rule = append({{.Name}}Rule, {{.Name}}Item)
+			}{{end}}{{end}}
+
+			logs, sub, err := _{{$contract.Type}}.contract.WatchLogs(opts, "{{.Original.Name}}"{{range .Normalized.Inputs}}{{if .Indexed}}, {{.Name}}Rule{{end}}{{end}})
+			if err != nil {
+				return nil, err
+			}
+			return event.NewSubscription(func(quit <-chan struct{}) error {
+				defer sub.Unsubscribe()
+				for {
+					select {
+					case log := <-logs:
+						// New log arrived, parse the event and forward to the user
+						event := new({{$contract.Type}}{{.Normalized.Name}})
+						if err := _{{$contract.Type}}.contract.UnpackLog(event, "{{.Original.Name}}", log); err != nil {
+							return err
+						}
+						event.Raw = log
+
+						select {
+						case sink <- event:
+						case err := <-sub.Err():
+							return err
+						case <-quit:
+							return nil
+						}
+					case err := <-sub.Err():
+						return err
+					case <-quit:
+						return nil
+					}
+				}
+			}), nil
+		}
+ 	{{end}}
 {{end}}
 `
 
@@ -298,8 +451,8 @@ const tmplSourceJava = `
 
 package {{.Package}};
 
-import org.ethereum.gubiq.*;
-import org.ethereum.gubiq.internal.*;
+import org.ubiq.gubiq.*;
+import org.ubiq.gubiq.internal.*;
 
 {{range $contract := .Contracts}}
 	public class {{.Type}} {

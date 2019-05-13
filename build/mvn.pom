@@ -4,7 +4,7 @@
                       http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>org.ethereum</groupId>
+  <groupId>org.ubiq</groupId>
   <artifactId>gubiq</artifactId>
   <version>{{.Version}}</version>
   <packaging>aar</packaging>

@@ -14,6 +14,7 @@ import (
 
 var _ = (*btHeaderMarshaling)(nil)
 
+// MarshalJSON marshals as JSON.
 func (b btHeader) MarshalJSON() ([]byte, error) {
 	type btHeader struct {
 		Bloom            types.Bloom
@@ -29,9 +30,9 @@ func (b btHeader) MarshalJSON() ([]byte, error) {
 		UncleHash        common.Hash
 		ExtraData        hexutil.Bytes
 		Difficulty       *math.HexOrDecimal256
-		GasLimit         *math.HexOrDecimal256
-		GasUsed          *math.HexOrDecimal256
-		Timestamp        *math.HexOrDecimal256
+		GasLimit         math.HexOrDecimal64
+		GasUsed          math.HexOrDecimal64
+		Timestamp        math.HexOrDecimal64
 	}
 	var enc btHeader
 	enc.Bloom = b.Bloom
@@ -47,12 +48,13 @@ func (b btHeader) MarshalJSON() ([]byte, error) {
 	enc.UncleHash = b.UncleHash
 	enc.ExtraData = b.ExtraData
 	enc.Difficulty = (*math.HexOrDecimal256)(b.Difficulty)
-	enc.GasLimit = (*math.HexOrDecimal256)(b.GasLimit)
-	enc.GasUsed = (*math.HexOrDecimal256)(b.GasUsed)
-	enc.Timestamp = (*math.HexOrDecimal256)(b.Timestamp)
+	enc.GasLimit = math.HexOrDecimal64(b.GasLimit)
+	enc.GasUsed = math.HexOrDecimal64(b.GasUsed)
+	enc.Timestamp = math.HexOrDecimal64(b.Timestamp)
 	return json.Marshal(&enc)
 }
 
+// UnmarshalJSON unmarshals from JSON.
 func (b *btHeader) UnmarshalJSON(input []byte) error {
 	type btHeader struct {
 		Bloom            *types.Bloom
@@ -66,11 +68,11 @@ func (b *btHeader) UnmarshalJSON(input []byte) error {
 		StateRoot        *common.Hash
 		TransactionsTrie *common.Hash
 		UncleHash        *common.Hash
-		ExtraData        hexutil.Bytes
+		ExtraData        *hexutil.Bytes
 		Difficulty       *math.HexOrDecimal256
-		GasLimit         *math.HexOrDecimal256
-		GasUsed          *math.HexOrDecimal256
-		Timestamp        *math.HexOrDecimal256
+		GasLimit         *math.HexOrDecimal64
+		GasUsed          *math.HexOrDecimal64
+		Timestamp        *math.HexOrDecimal64
 	}
 	var dec btHeader
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -110,19 +112,19 @@ func (b *btHeader) UnmarshalJSON(input []byte) error {
 		b.UncleHash = *dec.UncleHash
 	}
 	if dec.ExtraData != nil {
-		b.ExtraData = dec.ExtraData
+		b.ExtraData = *dec.ExtraData
 	}
 	if dec.Difficulty != nil {
 		b.Difficulty = (*big.Int)(dec.Difficulty)
 	}
 	if dec.GasLimit != nil {
-		b.GasLimit = (*big.Int)(dec.GasLimit)
+		b.GasLimit = uint64(*dec.GasLimit)
 	}
 	if dec.GasUsed != nil {
-		b.GasUsed = (*big.Int)(dec.GasUsed)
+		b.GasUsed = uint64(*dec.GasUsed)
 	}
 	if dec.Timestamp != nil {
-		b.Timestamp = (*big.Int)(dec.Timestamp)
+		b.Timestamp = uint64(*dec.Timestamp)
 	}
 	return nil
 }

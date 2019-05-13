@@ -173,7 +173,7 @@ var nodeDBSeedQueryNodes = []struct {
 		),
 		pong: time.Now().Add(-3 * time.Hour),
 	},
-	// This one shouldn't be in in the result set because its
+	// This one shouldn't be in the result set because its
 	// nodeID is the local node's ID.
 	{
 		node: NewNode(

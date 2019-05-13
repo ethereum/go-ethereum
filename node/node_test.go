@@ -454,9 +454,9 @@ func TestProtocolGather(t *testing.T) {
 		Count int
 		Maker InstrumentingWrapper
 	}{
-		"Zero Protocols":  {0, InstrumentedServiceMakerA},
-		"Single Protocol": {1, InstrumentedServiceMakerB},
-		"Many Protocols":  {25, InstrumentedServiceMakerC},
+		"zero": {0, InstrumentedServiceMakerA},
+		"one":  {1, InstrumentedServiceMakerB},
+		"many": {10, InstrumentedServiceMakerC},
 	}
 	for id, config := range services {
 		protocols := make([]p2p.Protocol, config.Count)
@@ -480,7 +480,7 @@ func TestProtocolGather(t *testing.T) {
 	defer stack.Stop()
 
 	protocols := stack.Server().Protocols
-	if len(protocols) != 26 {
+	if len(protocols) != 11 {
 		t.Fatalf("mismatching number of protocols launched: have %d, want %d", len(protocols), 26)
 	}
 	for id, config := range services {
@@ -507,8 +507,8 @@ func TestAPIGather(t *testing.T) {
 	}
 	// Register a batch of services with some configured APIs
 	calls := make(chan string, 1)
-	makeAPI := func(result string) *OneMethodApi {
-		return &OneMethodApi{fun: func() { calls <- result }}
+	makeAPI := func(result string) *OneMethodAPI {
+		return &OneMethodAPI{fun: func() { calls <- result }}
 	}
 	services := map[string]struct {
 		APIs  []rpc.API

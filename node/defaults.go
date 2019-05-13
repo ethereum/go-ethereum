@@ -24,6 +24,7 @@ import (
 
 	"github.com/ubiq/go-ubiq/p2p"
 	"github.com/ubiq/go-ubiq/p2p/nat"
+	"github.com/ubiq/go-ubiq/rpc"
 )
 
 const (
@@ -35,16 +36,17 @@ const (
 
 // DefaultConfig contains reasonable default settings.
 var DefaultConfig = Config{
-	DataDir:     DefaultDataDir(),
-	HTTPPort:    DefaultHTTPPort,
-	HTTPModules: []string{"net", "web3"},
-	WSPort:      DefaultWSPort,
-	WSModules:   []string{"net", "web3"},
+	DataDir:          DefaultDataDir(),
+	HTTPPort:         DefaultHTTPPort,
+	HTTPModules:      []string{"net", "web3"},
+	HTTPVirtualHosts: []string{"localhost"},
+	HTTPTimeouts:     rpc.DefaultHTTPTimeouts,
+	WSPort:           DefaultWSPort,
+	WSModules:        []string{"net", "web3"},
 	P2P: p2p.Config{
-		ListenAddr:      ":30388",
-		DiscoveryV5Addr: ":30389",
-		MaxPeers:        25,
-		NAT:             nat.Any(),
+		ListenAddr: ":30388",
+		MaxPeers:   25,
+		NAT:        nat.Any(),
 	},
 }
 
