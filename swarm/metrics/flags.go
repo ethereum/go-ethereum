@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/metrics"
 	gethmetrics "github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -91,7 +92,10 @@ func Setup(ctx *cli.Context) {
 		)
 
 		// Start system runtime metrics collection
-		go gethmetrics.CollectProcessMetrics(2 * time.Second)
+		go gethmetrics.CollectProcessMetrics(4 * time.Second)
+
+		gethmetrics.RegisterRuntimeMemStats(metrics.DefaultRegistry)
+		go gethmetrics.CaptureRuntimeMemStats(metrics.DefaultRegistry, 4*time.Second)
 
 		tagsMap := utils.SplitTagsFlag(ctx.GlobalString(MetricsInfluxDBTagsFlag.Name))
 
