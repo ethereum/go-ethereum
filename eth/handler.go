@@ -135,7 +135,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 	for i, version := range ProtocolVersions {
 		// Skip protocol version if incompatible with the mode of operation
 		// TODO(karalabe): hard-drop eth/62 from the code base
-		if version < eth63 {
+		if atomic.LoadUint32(&manager.fastSync) == 1 && version < eth63 {
 			continue
 		}
 		// Compatible; initialise the sub-protocol
