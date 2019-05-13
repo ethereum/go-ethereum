@@ -1,0 +1,21 @@
+export ROOT="${GOPATH}/src/github.com/ethereum/go-ethereum"
+export PATH="${ROOT}/swarm/dev/bin:${PATH}"
+
+cd "${ROOT}/swarm/dev"
+
+cat <<WELCOME
+
+=============================================
+
+Welcome to the swarm development environment.
+
+- Run 'make' to build the swarm, geth and bootnode binaries
+- Run 'make test' to run the swarm unit tests
+- Run 'make cluster' to start a swarm cluster
+- Run 'exit' to exit the development environment
+
+See the 'scripts' directory for some useful scripts.
+
+=============================================
+
+WELCOME

@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package p2p
 
 import (
@@ -27,25 +43,27 @@ var discard = Protocol{
 	},
 }
 
-func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan DiscReason) {
+func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan error) {
 	fd1, fd2 := net.Pipe()
-	c1 := &conn{fd: fd1, transport: newTestTransport(randomID(), fd1)}
-	c2 := &conn{fd: fd2, transport: newTestTransport(randomID(), fd2)}
+	c1 := &conn{fd: fd1, node: newNode(randomID(), nil), transport: newTestTransport(&newkey().PublicKey, fd1)}
+	c2 := &conn{fd: fd2, node: newNode(randomID(), nil), transport: newTestTransport(&newkey().PublicKey, fd2)}
 	for _, p := range protos {
 		c1.caps = append(c1.caps, p.cap())
 		c2.caps = append(c2.caps, p.cap())
 	}
 
 	peer := newPeer(c1, protos)
-	errc := make(chan DiscReason, 1)
-	go func() { errc <- peer.run() }()
+	errc := make(chan error, 1)
+	go func() {
+		_, err := peer.run()
+		errc <- err
+	}()
 
 	closer := func() { c2.close(errors.New("close func called")) }
 	return closer, c2, peer, errc
 }
 
 func TestPeerProtoReadMsg(t *testing.T) {
-	done := make(chan struct{})
 	proto := Protocol{
 		Name:   "a",
 		Length: 5,
@@ -59,7 +77,6 @@ func TestPeerProtoReadMsg(t *testing.T) {
 			if err := ExpectMsg(rw, 4, []uint{3}); err != nil {
 				t.Error(err)
 			}
-			close(done)
 			return nil
 		},
 	}
@@ -72,9 +89,10 @@ func TestPeerProtoReadMsg(t *testing.T) {
 	Send(rw, baseProtocolLength+4, []uint{3})
 
 	select {
-	case <-done:
 	case err := <-errc:
-		t.Errorf("peer returned: %v", err)
+		if err != errProtocolReturned {
+			t.Errorf("peer returned error: %v", err)
+		}
 	case <-time.After(2 * time.Second):
 		t.Errorf("receive timeout")
 	}
@@ -122,7 +140,7 @@ func TestPeerDisconnect(t *testing.T) {
 	select {
 	case reason := <-disc:
 		if reason != DiscQuitting {
-			t.Errorf("run returned wrong reason: got %v, want %v", reason, DiscRequested)
+			t.Errorf("run returned wrong reason: got %v, want %v", reason, DiscQuitting)
 		}
 	case <-time.After(500 * time.Millisecond):
 		t.Error("peer did not return")
@@ -195,4 +213,99 @@ func TestNewPeer(t *testing.T) {
 	}
 
 	p.Disconnect(DiscAlreadyConnected) // Should not hang
+}
+
+func TestMatchProtocols(t *testing.T) {
+	tests := []struct {
+		Remote []Cap
+		Local  []Protocol
+		Match  map[string]protoRW
+	}{
+		{
+			// No remote capabilities
+			Local: []Protocol{{Name: "a"}},
+		},
+		{
+			// No local protocols
+			Remote: []Cap{{Name: "a"}},
+		},
+		{
+			// No mutual protocols
+			Remote: []Cap{{Name: "a"}},
+			Local:  []Protocol{{Name: "b"}},
+		},
+		{
+			// Some matches, some differences
+			Remote: []Cap{{Name: "local"}, {Name: "match1"}, {Name: "match2"}},
+			Local:  []Protocol{{Name: "match1"}, {Name: "match2"}, {Name: "remote"}},
+			Match:  map[string]protoRW{"match1": {Protocol: Protocol{Name: "match1"}}, "match2": {Protocol: Protocol{Name: "match2"}}},
+		},
+		{
+			// Various alphabetical ordering
+			Remote: []Cap{{Name: "aa"}, {Name: "ab"}, {Name: "bb"}, {Name: "ba"}},
+			Local:  []Protocol{{Name: "ba"}, {Name: "bb"}, {Name: "ab"}, {Name: "aa"}},
+			Match:  map[string]protoRW{"aa": {Protocol: Protocol{Name: "aa"}}, "ab": {Protocol: Protocol{Name: "ab"}}, "ba": {Protocol: Protocol{Name: "ba"}}, "bb": {Protocol: Protocol{Name: "bb"}}},
+		},
+		{
+			// No mutual versions
+			Remote: []Cap{{Version: 1}},
+			Local:  []Protocol{{Version: 2}},
+		},
+		{
+			// Multiple versions, single common
+			Remote: []Cap{{Version: 1}, {Version: 2}},
+			Local:  []Protocol{{Version: 2}, {Version: 3}},
+			Match:  map[string]protoRW{"": {Protocol: Protocol{Version: 2}}},
+		},
+		{
+			// Multiple versions, multiple common
+			Remote: []Cap{{Version: 1}, {Version: 2}, {Version: 3}, {Version: 4}},
+			Local:  []Protocol{{Version: 2}, {Version: 3}},
+			Match:  map[string]protoRW{"": {Protocol: Protocol{Version: 3}}},
+		},
+		{
+			// Various version orderings
+			Remote: []Cap{{Version: 4}, {Version: 1}, {Version: 3}, {Version: 2}},
+			Local:  []Protocol{{Version: 2}, {Version: 3}, {Version: 1}},
+			Match:  map[string]protoRW{"": {Protocol: Protocol{Version: 3}}},
+		},
+		{
+			// Versions overriding sub-protocol lengths
+			Remote: []Cap{{Version: 1}, {Version: 2}, {Version: 3}, {Name: "a"}},
+			Local:  []Protocol{{Version: 1, Length: 1}, {Version: 2, Length: 2}, {Version: 3, Length: 3}, {Name: "a"}},
+			Match:  map[string]protoRW{"": {Protocol: Protocol{Version: 3}}, "a": {Protocol: Protocol{Name: "a"}, offset: 3}},
+		},
+	}
+
+	for i, tt := range tests {
+		result := matchProtocols(tt.Local, tt.Remote, nil)
+		if len(result) != len(tt.Match) {
+			t.Errorf("test %d: negotiation mismatch: have %v, want %v", i, len(result), len(tt.Match))
+			continue
+		}
+		// Make sure all negotiated protocols are needed and correct
+		for name, proto := range result {
+			match, ok := tt.Match[name]
+			if !ok {
+				t.Errorf("test %d, proto '%s': negotiated but shouldn't have", i, name)
+				continue
+			}
+			if proto.Name != match.Name {
+				t.Errorf("test %d, proto '%s': name mismatch: have %v, want %v", i, name, proto.Name, match.Name)
+			}
+			if proto.Version != match.Version {
+				t.Errorf("test %d, proto '%s': version mismatch: have %v, want %v", i, name, proto.Version, match.Version)
+			}
+			if proto.offset-baseProtocolLength != match.offset {
+				t.Errorf("test %d, proto '%s': offset mismatch: have %v, want %v", i, name, proto.offset-baseProtocolLength, match.offset)
+			}
+		}
+		// Make sure no protocols missed negotiation
+		for name := range tt.Match {
+			if _, ok := result[name]; !ok {
+				t.Errorf("test %d, proto '%s': not negotiated, should have", i, name)
+				continue
+			}
+		}
+	}
 }

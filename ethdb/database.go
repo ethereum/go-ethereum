@@ -1,79 +1,80 @@
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+// Package ethdb defines the interfaces for an Ethereum data store.
 package ethdb
 
-import (
-	"github.com/ethereum/go-ethereum/compression/rle"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/errors"
-	"github.com/syndtr/goleveldb/leveldb/iterator"
-	"github.com/syndtr/goleveldb/leveldb/opt"
-)
+import "io"
 
-var OpenFileLimit = 64
+// Reader wraps the Has and Get method of a backing data store.
+type Reader interface {
+	// Has retrieves if a key is present in the key-value data store.
+	Has(key []byte) (bool, error)
 
-type LDBDatabase struct {
-	// filename for reporting
-	fn string
-	// LevelDB instance
-	db *leveldb.DB
+	// Get retrieves the given key if it's present in the key-value data store.
+	Get(key []byte) ([]byte, error)
 }
 
-// NewLDBDatabase returns a LevelDB wrapped object. LDBDatabase does not persist data by
-// it self but requires a background poller which syncs every X. `Flush` should be called
-// when data needs to be stored and written to disk.
-func NewLDBDatabase(file string) (*LDBDatabase, error) {
-	// Open the db
-	db, err := leveldb.OpenFile(file, &opt.Options{OpenFilesCacheCapacity: OpenFileLimit})
-	// check for curruption and attempt to recover
-	if _, iscorrupted := err.(*errors.ErrCorrupted); iscorrupted {
-		db, err = leveldb.RecoverFile(file, nil)
-	}
-	// (re) check for errors and abort if opening of the db failed
-	if err != nil {
-		return nil, err
-	}
-	database := &LDBDatabase{
-		fn: file,
-		db: db,
-	}
+// Writer wraps the Put method of a backing data store.
+type Writer interface {
+	// Put inserts the given value into the key-value data store.
+	Put(key []byte, value []byte) error
 
-	return database, nil
+	// Delete removes the key from the key-value data store.
+	Delete(key []byte) error
 }
 
-// Put puts the given key / value to the queue
-func (self *LDBDatabase) Put(key []byte, value []byte) {
-	self.db.Put(key, rle.Compress(value), nil)
+// Stater wraps the Stat method of a backing data store.
+type Stater interface {
+	// Stat returns a particular internal stat of the database.
+	Stat(property string) (string, error)
 }
 
-// Get returns the given key if it's present.
-func (self *LDBDatabase) Get(key []byte) ([]byte, error) {
-	dat, err := self.db.Get(key, nil)
-	if err != nil {
-		return nil, err
-	}
-	return rle.Decompress(dat)
+// Compacter wraps the Compact method of a backing data store.
+type Compacter interface {
+	// Compact flattens the underlying data store for the given key range. In essence,
+	// deleted and overwritten versions are discarded, and the data is rearranged to
+	// reduce the cost of operations needed to access them.
+	//
+	// A nil start is treated as a key before all keys in the data store; a nil limit
+	// is treated as a key after all keys in the data store. If both is nil then it
+	// will compact entire data store.
+	Compact(start []byte, limit []byte) error
 }
 
-// Delete deletes the key from the queue and database
-func (self *LDBDatabase) Delete(key []byte) error {
-	return self.db.Delete(key, nil)
+// KeyValueStore contains all the methods required to allow handling different
+// key-value data stores backing the high level database.
+type KeyValueStore interface {
+	Reader
+	Writer
+	Batcher
+	Iteratee
+	Stater
+	Compacter
+	io.Closer
 }
 
-func (self *LDBDatabase) NewIterator() iterator.Iterator {
-	return self.db.NewIterator(nil, nil)
-}
-
-// Flush flushes out the queue to leveldb
-func (self *LDBDatabase) Flush() error {
-	return nil
-}
-
-func (self *LDBDatabase) Close() {
-	if err := self.Flush(); err != nil {
-		glog.V(logger.Error).Infof("error: flush '%s': %v\n", self.fn, err)
-	}
-
-	self.db.Close()
-	glog.V(logger.Error).Infoln("flushed and closed db:", self.fn)
+// Database contains all the methods required by the high level database to not
+// only access the key-value data store but also the chain freezer.
+type Database interface {
+	Reader
+	Writer
+	Batcher
+	Iteratee
+	Stater
+	Compacter
+	io.Closer
 }

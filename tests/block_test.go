@@ -1,114 +1,52 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package tests
 
 import (
-	"path/filepath"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-// TODO: refactor test setup & execution to better align with vm and tx tests
-func TestBcValidBlockTests(t *testing.T) {
-	// SimpleTx3 genesis block does not validate against calculated state root
-	// as of 2015-06-09. unskip once working /Gustav
-	runBlockTestsInFile("files/BlockTests/bcValidBlockTest.json", []string{"SimpleTx3"}, t)
-}
+func TestBlockchain(t *testing.T) {
+	t.Parallel()
 
-func TestBcUncleTests(t *testing.T) {
-	runBlockTestsInFile("files/BlockTests/bcUncleTest.json", []string{}, t)
-	runBlockTestsInFile("files/BlockTests/bcBruncleTest.json", []string{}, t)
-}
+	bt := new(testMatcher)
+	// General state tests are 'exported' as blockchain tests, but we can run them natively.
+	bt.skipLoad(`^GeneralStateTests/`)
+	// Skip random failures due to selfish mining test.
+	bt.skipLoad(`^bcForgedTest/bcForkUncle\.json`)
+	bt.skipLoad(`^bcMultiChainTest/(ChainAtoChainB_blockorder|CallContractFromNotBestBlock)`)
+	bt.skipLoad(`^bcTotalDifficultyTest/(lotsOfLeafs|lotsOfBranches|sideChainWithMoreTransactions)`)
+	// Slow tests
+	bt.slow(`^bcExploitTest/DelegateCallSpam.json`)
+	bt.slow(`^bcExploitTest/ShanghaiLove.json`)
+	bt.slow(`^bcExploitTest/SuicideIssue.json`)
+	bt.slow(`^bcForkStressTest/`)
+	bt.slow(`^bcGasPricerTest/RPC_API_Test.json`)
+	bt.slow(`^bcWalletTest/`)
 
-func TestBcUncleHeaderValidityTests(t *testing.T) {
-	runBlockTestsInFile("files/BlockTests/bcUncleHeaderValiditiy.json", []string{}, t)
-}
+	// Still failing tests that we need to look into
+	//bt.fails(`^bcStateTests/suicideThenCheckBalance.json/suicideThenCheckBalance_Constantinople`, "TODO: investigate")
+	//bt.fails(`^bcStateTests/suicideStorageCheckVCreate2.json/suicideStorageCheckVCreate2_Constantinople`, "TODO: investigate")
+	//bt.fails(`^bcStateTests/suicideStorageCheckVCreate.json/suicideStorageCheckVCreate_Constantinople`, "TODO: investigate")
+	//bt.fails(`^bcStateTests/suicideStorageCheck.json/suicideStorageCheck_Constantinople`, "TODO: investigate")
 
-func TestBcInvalidHeaderTests(t *testing.T) {
-	runBlockTestsInFile("files/BlockTests/bcInvalidHeaderTest.json", []string{}, t)
-}
-
-func TestBcInvalidRLPTests(t *testing.T) {
-	runBlockTestsInFile("files/BlockTests/bcInvalidRLPTest.json", []string{}, t)
-}
-
-func TestBcRPCAPITests(t *testing.T) {
-	runBlockTestsInFile("files/BlockTests/bcRPC_API_Test.json", []string{}, t)
-}
-
-func TestBcForkBlockTests(t *testing.T) {
-	runBlockTestsInFile("files/BlockTests/bcForkBlockTest.json", []string{}, t)
-}
-
-func TestBcTotalDifficulty(t *testing.T) {
-	runBlockTestsInFile("files/BlockTests/bcTotalDifficultyTest.json", []string{}, t)
-}
-
-func TestBcWallet(t *testing.T) {
-	runBlockTestsInFile("files/BlockTests/bcWalletTest.json", []string{}, t)
-}
-
-func runBlockTestsInFile(filepath string, snafus []string, t *testing.T) {
-	bt, err := LoadBlockTests(filepath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	notWorking := make(map[string]bool, 100)
-	for _, name := range snafus {
-		notWorking[name] = true
-	}
-
-	for name, test := range bt {
-		if !notWorking[name] {
-			runBlockTest(name, test, t)
+	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
+		if err := bt.checkFailure(t, name, test.Run()); err != nil {
+			t.Error(err)
 		}
-	}
-}
-
-func runBlockTest(name string, test *BlockTest, t *testing.T) {
-	cfg := testEthConfig()
-	ethereum, err := eth.New(cfg)
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-
-	err = ethereum.Start()
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-
-	// import the genesis block
-	ethereum.ResetWithGenesisBlock(test.Genesis)
-
-	// import pre accounts
-	statedb, err := test.InsertPreState(ethereum)
-	if err != nil {
-		t.Fatalf("InsertPreState: %v", err)
-	}
-
-	err = test.TryBlocksInsert(ethereum.ChainManager())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = test.ValidatePostState(statedb); err != nil {
-		t.Fatal("post state validation failed: %v", err)
-	}
-	t.Log("Test passed: ", name)
-}
-
-func testEthConfig() *eth.Config {
-	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"))
-
-	return &eth.Config{
-		DataDir:        common.DefaultDataDir(),
-		Verbosity:      5,
-		Etherbase:      "primary",
-		AccountManager: accounts.NewManager(ks),
-		NewDB:          func(path string) (common.Database, error) { return ethdb.NewMemDatabase() },
-	}
+	})
 }

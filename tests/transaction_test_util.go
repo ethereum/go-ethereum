@@ -1,160 +1,132 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package tests
 
 import (
 	"bytes"
 	"errors"
 	"fmt"
-	"runtime"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// Transaction Test JSON Format
-type TtTransaction struct {
-	Data     string
-	GasLimit string
-	GasPrice string
-	Nonce    string
-	R        string
-	S        string
-	To       string
-	V        string
-	Value    string
-}
-
+// TransactionTest checks RLP decoding and sender derivation of transactions.
 type TransactionTest struct {
-	Rlp         string
-	Sender      string
-	Transaction TtTransaction
+	json ttJSON
 }
 
-func RunTransactionTests(file string, notWorking map[string]bool) error {
-	bt := make(map[string]TransactionTest)
-	if err := LoadJSON(file, &bt); err != nil {
+type ttJSON struct {
+	BlockNumber math.HexOrDecimal64 `json:"blockNumber"`
+	RLP         hexutil.Bytes       `json:"rlp"`
+	Sender      hexutil.Bytes       `json:"sender"`
+	Transaction *ttTransaction      `json:"transaction"`
+}
+
+//go:generate gencodec -type ttTransaction -field-override ttTransactionMarshaling -out gen_tttransaction.go
+
+type ttTransaction struct {
+	Data     []byte         `gencodec:"required"`
+	GasLimit uint64         `gencodec:"required"`
+	GasPrice *big.Int       `gencodec:"required"`
+	Nonce    uint64         `gencodec:"required"`
+	Value    *big.Int       `gencodec:"required"`
+	R        *big.Int       `gencodec:"required"`
+	S        *big.Int       `gencodec:"required"`
+	V        *big.Int       `gencodec:"required"`
+	To       common.Address `gencodec:"required"`
+}
+
+type ttTransactionMarshaling struct {
+	Data     hexutil.Bytes
+	GasLimit math.HexOrDecimal64
+	GasPrice *math.HexOrDecimal256
+	Nonce    math.HexOrDecimal64
+	Value    *math.HexOrDecimal256
+	R        *math.HexOrDecimal256
+	S        *math.HexOrDecimal256
+	V        *math.HexOrDecimal256
+}
+
+func (tt *TransactionTest) Run(config *params.ChainConfig) error {
+	tx := new(types.Transaction)
+	if err := rlp.DecodeBytes(tt.json.RLP, tx); err != nil {
+		if tt.json.Transaction == nil {
+			return nil
+		}
+		return fmt.Errorf("RLP decoding failed: %v", err)
+	}
+	// Check sender derivation.
+	signer := types.MakeSigner(config, new(big.Int).SetUint64(uint64(tt.json.BlockNumber)))
+	sender, err := types.Sender(signer, tx)
+	if err != nil {
 		return err
 	}
-	for name, in := range bt {
-		var err error
-		// TODO: remove this, we currently ignore some tests which are broken
-		if !notWorking[name] {
-			if err = runTest(in); err != nil {
-				return fmt.Errorf("bad test %s: %v", name, err)
-			}
-			fmt.Println("Test passed:", name)
-		}
+	if sender != common.BytesToAddress(tt.json.Sender) {
+		return fmt.Errorf("Sender mismatch: got %x, want %x", sender, tt.json.Sender)
+	}
+	// Check decoded fields.
+	err = tt.json.Transaction.verify(signer, tx)
+	if tt.json.Sender == nil && err == nil {
+		return errors.New("field validations succeeded but should fail")
+	}
+	if tt.json.Sender != nil && err != nil {
+		return fmt.Errorf("field validations failed after RLP decoding: %s", err)
 	}
 	return nil
 }
 
-func runTest(txTest TransactionTest) (err error) {
-	tx := new(types.Transaction)
-	err = rlp.DecodeBytes(mustConvertBytes(txTest.Rlp), tx)
-
-	if err != nil {
-		if txTest.Sender == "" {
-			// RLP decoding failed and this is expected (test OK)
-			return nil
-		} else {
-			// RLP decoding failed but is expected to succeed (test FAIL)
-			return fmt.Errorf("RLP decoding failed when expected to succeed: ", err)
+func (tt *ttTransaction) verify(signer types.Signer, tx *types.Transaction) error {
+	if !bytes.Equal(tx.Data(), tt.Data) {
+		return fmt.Errorf("Tx input data mismatch: got %x want %x", tx.Data(), tt.Data)
+	}
+	if tx.Gas() != tt.GasLimit {
+		return fmt.Errorf("GasLimit mismatch: got %d, want %d", tx.Gas(), tt.GasLimit)
+	}
+	if tx.GasPrice().Cmp(tt.GasPrice) != 0 {
+		return fmt.Errorf("GasPrice mismatch: got %v, want %v", tx.GasPrice(), tt.GasPrice)
+	}
+	if tx.Nonce() != tt.Nonce {
+		return fmt.Errorf("Nonce mismatch: got %v, want %v", tx.Nonce(), tt.Nonce)
+	}
+	v, r, s := tx.RawSignatureValues()
+	if r.Cmp(tt.R) != 0 {
+		return fmt.Errorf("R mismatch: got %v, want %v", r, tt.R)
+	}
+	if s.Cmp(tt.S) != 0 {
+		return fmt.Errorf("S mismatch: got %v, want %v", s, tt.S)
+	}
+	if v.Cmp(tt.V) != 0 {
+		return fmt.Errorf("V mismatch: got %v, want %v", v, tt.V)
+	}
+	if tx.To() == nil {
+		if tt.To != (common.Address{}) {
+			return fmt.Errorf("To mismatch when recipient is nil (contract creation): %x", tt.To)
 		}
+	} else if *tx.To() != tt.To {
+		return fmt.Errorf("To mismatch: got %x, want %x", *tx.To(), tt.To)
 	}
-
-	validationError := verifyTxFields(txTest, tx)
-	if txTest.Sender == "" {
-		if validationError != nil {
-			// RLP decoding works but validation should fail (test OK)
-			return nil
-		} else {
-			// RLP decoding works but validation should fail (test FAIL)
-			// (this should not be possible but added here for completeness)
-			return errors.New("Field validations succeeded but should fail")
-		}
+	if tx.Value().Cmp(tt.Value) != 0 {
+		return fmt.Errorf("Value mismatch: got %x, want %x", tx.Value(), tt.Value)
 	}
-
-	if txTest.Sender != "" {
-		if validationError == nil {
-			// RLP decoding works and validations pass (test OK)
-			return nil
-		} else {
-			// RLP decoding works and validations pass (test FAIL)
-			return fmt.Errorf("Field validations failed after RLP decoding: ", validationError)
-		}
-	}
-	return errors.New("Should not happen: verify RLP decoding and field validation")
-}
-
-func verifyTxFields(txTest TransactionTest, decodedTx *types.Transaction) (err error) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			buf := make([]byte, 64<<10)
-			buf = buf[:runtime.Stack(buf, false)]
-			err = fmt.Errorf("%v\n%s", recovered, buf)
-		}
-	}()
-
-	decodedSender, err := decodedTx.From()
-	if err != nil {
-		return err
-	}
-
-	expectedSender := mustConvertAddress(txTest.Sender)
-	if expectedSender != decodedSender {
-		return fmt.Errorf("Sender mismatch: %v %v", expectedSender, decodedSender)
-	}
-
-	expectedData := mustConvertBytes(txTest.Transaction.Data)
-	if !bytes.Equal(expectedData, decodedTx.Payload) {
-		return fmt.Errorf("Tx input data mismatch: %#v %#v", expectedData, decodedTx.Payload)
-	}
-
-	expectedGasLimit := mustConvertBigInt(txTest.Transaction.GasLimit, 16)
-	if expectedGasLimit.Cmp(decodedTx.GasLimit) != 0 {
-		return fmt.Errorf("GasLimit mismatch: %v %v", expectedGasLimit, decodedTx.GasLimit)
-	}
-
-	expectedGasPrice := mustConvertBigInt(txTest.Transaction.GasPrice, 16)
-	if expectedGasPrice.Cmp(decodedTx.Price) != 0 {
-		return fmt.Errorf("GasPrice mismatch: %v %v", expectedGasPrice, decodedTx.Price)
-	}
-
-	expectedNonce := mustConvertUint(txTest.Transaction.Nonce, 16)
-	if expectedNonce != decodedTx.AccountNonce {
-		return fmt.Errorf("Nonce mismatch: %v %v", expectedNonce, decodedTx.AccountNonce)
-	}
-
-	expectedR := common.Bytes2Big(mustConvertBytes(txTest.Transaction.R))
-	if expectedR.Cmp(decodedTx.R) != 0 {
-		return fmt.Errorf("R mismatch: %v %v", expectedR, decodedTx.R)
-	}
-
-	expectedS := common.Bytes2Big(mustConvertBytes(txTest.Transaction.S))
-	if expectedS.Cmp(decodedTx.S) != 0 {
-		return fmt.Errorf("S mismatch: %v %v", expectedS, decodedTx.S)
-	}
-
-	expectedV := mustConvertUint(txTest.Transaction.V, 16)
-	if expectedV != uint64(decodedTx.V) {
-		return fmt.Errorf("V mismatch: %v %v", expectedV, uint64(decodedTx.V))
-	}
-
-	expectedTo := mustConvertAddress(txTest.Transaction.To)
-	if decodedTx.Recipient == nil {
-		if expectedTo != common.BytesToAddress([]byte{}) { // "empty" or "zero" address
-			return fmt.Errorf("To mismatch when recipient is nil (contract creation): %v", expectedTo)
-		}
-	} else {
-		if expectedTo != *decodedTx.Recipient {
-			return fmt.Errorf("To mismatch: %v %v", expectedTo, *decodedTx.Recipient)
-		}
-	}
-
-	expectedValue := mustConvertBigInt(txTest.Transaction.Value, 16)
-	if expectedValue.Cmp(decodedTx.Amount) != 0 {
-		return fmt.Errorf("Value mismatch: %v %v", expectedValue, decodedTx.Amount)
-	}
-
 	return nil
 }

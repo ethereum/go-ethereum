@@ -1,12 +1,26 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package core
 
 import (
 	"container/list"
-	"fmt"
 
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	// "github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 )
@@ -16,30 +30,30 @@ type TestManager struct {
 	// stateManager *StateManager
 	eventMux *event.TypeMux
 
-	db         common.Database
+	db         ethdb.Database
 	txPool     *TxPool
-	blockChain *ChainManager
+	blockChain *BlockChain
 	Blocks     []*types.Block
 }
 
-func (s *TestManager) IsListening() bool {
+func (tm *TestManager) IsListening() bool {
 	return false
 }
 
-func (s *TestManager) IsMining() bool {
+func (tm *TestManager) IsMining() bool {
 	return false
 }
 
-func (s *TestManager) PeerCount() int {
+func (tm *TestManager) PeerCount() int {
 	return 0
 }
 
-func (s *TestManager) Peers() *list.List {
+func (tm *TestManager) Peers() *list.List {
 	return list.New()
 }
 
-func (s *TestManager) ChainManager() *ChainManager {
-	return s.blockChain
+func (tm *TestManager) BlockChain() *BlockChain {
+	return tm.blockChain
 }
 
 func (tm *TestManager) TxPool() *TxPool {
@@ -58,23 +72,16 @@ func (tm *TestManager) EventMux() *event.TypeMux {
 // 	return nil
 // }
 
-func (tm *TestManager) Db() common.Database {
+func (tm *TestManager) Db() ethdb.Database {
 	return tm.db
 }
 
 func NewTestManager() *TestManager {
-	db, err := ethdb.NewMemDatabase()
-	if err != nil {
-		fmt.Println("Could not create mem-db, failing")
-		return nil
-	}
-
 	testManager := &TestManager{}
 	testManager.eventMux = new(event.TypeMux)
-	testManager.db = db
+	testManager.db = rawdb.NewMemoryDatabase()
 	// testManager.txPool = NewTxPool(testManager)
-	// testManager.blockChain = NewChainManager(testManager)
+	// testManager.blockChain = NewBlockChain(testManager)
 	// testManager.stateManager = NewStateManager(testManager)
-
 	return testManager
 }
