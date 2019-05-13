@@ -27,9 +27,9 @@ import (
 // If the method is `Const` no transaction needs to be created for this
 // particular Method call. It can easily be simulated using a local VM.
 // For example a `Balance()` method only needs to retrieve something
-// from the storage and therefor requires no Tx to be send to the
+// from the storage and therefore requires no Tx to be send to the
 // network. A method such as `Transact` does require a Tx and thus will
-// be flagged `true`.
+// be flagged `false`.
 // Input specifies the required input parameters for this gives method.
 type Method struct {
 	Name    string
