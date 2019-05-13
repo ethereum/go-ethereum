@@ -26,6 +26,19 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 )
 
+// Subscription struct holds our subscription channels
+type Subscription struct {
+	PayloadChan chan<- Payload
+	QuitChan    chan<- bool
+}
+
+// Payload packages the data to send to StateDiffingService subscriptions
+type Payload struct {
+	BlockRlp  []byte `json:"blockRlp"     gencodec:"required"`
+	StateDiff []byte `json:"stateDiff"    gencodec:"required"`
+	Err       error  `json:"error"`
+}
+
 // AccountsMap is a mapping of keccak256(address) => accountWrapper
 type AccountsMap map[common.Hash]accountWrapper
 

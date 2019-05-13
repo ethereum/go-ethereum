@@ -18,11 +18,9 @@ package statediff
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"sync"
-
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -30,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -66,25 +65,12 @@ type Service struct {
 	Subscriptions map[rpc.ID]Subscription
 }
 
-// Subscription struct holds our subscription channels
-type Subscription struct {
-	PayloadChan chan<- Payload
-	QuitChan    chan<- bool
-}
-
-// Payload packages the data to send to StateDiffingService subscriptions
-type Payload struct {
-	BlockRlp     []byte `json:"blockRlp"     gencodec:"required"`
-	StateDiffRlp []byte `json:"stateDiffRlp" gencodec:"required"`
-	Err          error  `json:"error"`
-}
-
 // NewStateDiffService creates a new StateDiffingService
-func NewStateDiffService(db ethdb.Database, blockChain *core.BlockChain) (*Service, error) {
+func NewStateDiffService(db ethdb.Database, blockChain *core.BlockChain, config Config) (*Service, error) {
 	return &Service{
 		Mutex:         sync.Mutex{},
 		BlockChain:    blockChain,
-		Builder:       NewBuilder(db, blockChain),
+		Builder:       NewBuilder(db, blockChain, config),
 		QuitChan:      make(chan bool),
 		Subscriptions: make(map[rpc.ID]Subscription),
 	}, nil
@@ -109,68 +95,59 @@ func (sds *Service) APIs() []rpc.API {
 
 // Loop is the main processing method
 func (sds *Service) Loop(chainEventCh chan core.ChainEvent) {
-
 	chainEventSub := sds.BlockChain.SubscribeChainEvent(chainEventCh)
 	defer chainEventSub.Unsubscribe()
-
-	blocksCh := make(chan *types.Block, 10)
 	errCh := chainEventSub.Err()
 
-	go func() {
-	HandleChainEventChLoop:
-		for {
-			select {
-			//Notify chain event channel of events
-			case chainEvent := <-chainEventCh:
-				log.Debug("Event received from chainEventCh", "event", chainEvent)
-				blocksCh <- chainEvent.Block
-				//if node stopped
-			case err := <-errCh:
-				log.Warn("Error from chain event subscription, breaking loop.", "error", err)
-				close(sds.QuitChan)
-				break HandleChainEventChLoop
-			case <-sds.QuitChan:
-				break HandleChainEventChLoop
-			}
-		}
-	}()
-
-	//loop through chain events until no more
-HandleBlockChLoop:
 	for {
 		select {
-		case block := <-blocksCh:
-			currentBlock := block
+		//Notify chain event channel of events
+		case chainEvent := <-chainEventCh:
+			log.Debug("Event received from chainEventCh", "event", chainEvent)
+			currentBlock := chainEvent.Block
 			parentHash := currentBlock.ParentHash()
 			parentBlock := sds.BlockChain.GetBlockByHash(parentHash)
 			if parentBlock == nil {
 				log.Error("Parent block is nil, skipping this block",
 					"parent block hash", parentHash.String(),
 					"current block number", currentBlock.Number())
-				break HandleBlockChLoop
+				continue
 			}
-
-			stateDiff, err := sds.Builder.BuildStateDiff(parentBlock.Root(), currentBlock.Root(), currentBlock.Number().Int64(), currentBlock.Hash())
-			if err != nil {
+			if err := sds.process(currentBlock, parentBlock); err != nil {
 				log.Error("Error building statediff", "block number", currentBlock.Number(), "error", err)
 			}
-			rlpBuff := new(bytes.Buffer)
-			currentBlock.EncodeRLP(rlpBuff)
-			blockRlp := rlpBuff.Bytes()
-			stateDiffRlp, _ := rlp.EncodeToBytes(stateDiff)
-			payload := Payload{
-				BlockRlp:     blockRlp,
-				StateDiffRlp: stateDiffRlp,
-				Err:          err,
-			}
-			// If we have any websocket subscription listening in, send the data to them
-			sds.send(payload)
+		case err := <-errCh:
+			log.Warn("Error from chain event subscription, breaking loop.", "error", err)
+			sds.close()
+			return
 		case <-sds.QuitChan:
-			log.Debug("Quitting the statediff block channel")
+			log.Info("Quitting the statediff block channel")
 			sds.close()
 			return
 		}
 	}
+}
+
+// process method builds the state diff payload from the current and parent block and streams it to listening subscriptions
+func (sds *Service) process(currentBlock, parentBlock *types.Block) error {
+	stateDiff, err := sds.Builder.BuildStateDiff(parentBlock.Root(), currentBlock.Root(), currentBlock.Number().Int64(), currentBlock.Hash())
+	if err != nil {
+		return err
+	}
+
+	rlpBuff := new(bytes.Buffer)
+	currentBlock.EncodeRLP(rlpBuff)
+	blockRlp := rlpBuff.Bytes()
+	stateDiffBytes, _ := json.Marshal(stateDiff)
+	payload := Payload{
+		BlockRlp:  blockRlp,
+		StateDiff: stateDiffBytes,
+		Err:       err,
+	}
+
+	// If we have any websocket subscription listening in, send the data to them
+	sds.send(payload)
+	return nil
 }
 
 // Subscribe is used by the API to subscribe to the StateDiffingService loop

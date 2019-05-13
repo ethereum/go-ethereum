@@ -56,7 +56,10 @@ func TestBuilder(t *testing.T) {
 	block1 = blockMap[block1Hash]
 	block2 = blockMap[block2Hash]
 	block3 = blockMap[block3Hash]
-	builder = statediff.NewBuilder(testhelpers.Testdb, chain)
+	config := statediff.Config{
+		PathsAndProofs: true,
+	}
+	builder = statediff.NewBuilder(testhelpers.Testdb, chain, config)
 
 	type arguments struct {
 		oldStateRoot common.Hash

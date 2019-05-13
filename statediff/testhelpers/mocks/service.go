@@ -18,6 +18,7 @@ package mocks
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -26,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/statediff"
 )
@@ -63,7 +63,6 @@ func (sds *MockStateDiffService) APIs() []rpc.API {
 // Loop mock method
 func (sds *MockStateDiffService) Loop(chan core.ChainEvent) {
 	//loop through chain events until no more
-HandleBlockChLoop:
 	for {
 		select {
 		case block := <-sds.BlockChan:
@@ -74,7 +73,7 @@ HandleBlockChLoop:
 				log.Error("Parent block is nil, skipping this block",
 					"parent block hash", parentHash.String(),
 					"current block number", currentBlock.Number())
-				break HandleBlockChLoop
+				continue
 			}
 
 			stateDiff, err := sds.Builder.BuildStateDiff(parentBlock.Root(), currentBlock.Root(), currentBlock.Number().Int64(), currentBlock.Hash())
@@ -84,11 +83,11 @@ HandleBlockChLoop:
 			rlpBuff := new(bytes.Buffer)
 			currentBlock.EncodeRLP(rlpBuff)
 			blockRlp := rlpBuff.Bytes()
-			stateDiffRlp, _ := rlp.EncodeToBytes(stateDiff)
+			stateDiffBytes, _ := json.Marshal(stateDiff)
 			payload := statediff.Payload{
-				BlockRlp:     blockRlp,
-				StateDiffRlp: stateDiffRlp,
-				Err:          err,
+				BlockRlp:  blockRlp,
+				StateDiff: stateDiffBytes,
+				Err:       err,
 			}
 			// If we have any websocket subscription listening in, send the data to them
 			sds.send(payload)

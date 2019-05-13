@@ -18,6 +18,7 @@ package mocks
 
 import (
 	"bytes"
+	"encoding/json"
 	"math/big"
 	"sync"
 	"testing"
@@ -63,9 +64,12 @@ func TestAPI(t *testing.T) {
 	blockChan := make(chan *types.Block)
 	parentBlockChain := make(chan *types.Block)
 	serviceQuitChan := make(chan bool)
+	config := statediff.Config{
+		PathsAndProofs: true,
+	}
 	mockService := MockStateDiffService{
 		Mutex:           sync.Mutex{},
-		Builder:         statediff.NewBuilder(testhelpers.Testdb, chain),
+		Builder:         statediff.NewBuilder(testhelpers.Testdb, chain, config),
 		BlockChan:       blockChan,
 		ParentBlockChan: parentBlockChain,
 		QuitChan:        serviceQuitChan,
@@ -79,7 +83,7 @@ func TestAPI(t *testing.T) {
 	blockChan <- block1
 	parentBlockChain <- block0
 	expectedBlockRlp, _ := rlp.EncodeToBytes(block1)
-	expectedStateDiff := &statediff.StateDiff{
+	expectedStateDiff := statediff.StateDiff{
 		BlockNumber: block1.Number().Int64(),
 		BlockHash:   block1.Hash(),
 		CreatedAccounts: statediff.AccountDiffsMap{
@@ -112,14 +116,20 @@ func TestAPI(t *testing.T) {
 			},
 		},
 	}
-	expectedStateDiffRlp, _ := rlp.EncodeToBytes(expectedStateDiff)
+	expectedStateDiffBytes, err := json.Marshal(expectedStateDiff)
+	if err != nil {
+		t.Error(err)
+	}
 	select {
 	case payload := <-payloadChan:
 		if !bytes.Equal(payload.BlockRlp, expectedBlockRlp) {
 			t.Errorf("payload does not have expected block\r\actual: %v\r\nexpected: %v", payload.BlockRlp, expectedBlockRlp)
 		}
-		if !bytes.Equal(payload.StateDiffRlp, expectedStateDiffRlp) {
-			t.Errorf("payload does not have expected state diff\r\actual: %v\r\nexpected: %v", payload.StateDiffRlp, expectedStateDiffRlp)
+		if !bytes.Equal(payload.StateDiff, expectedStateDiffBytes) {
+			t.Errorf("payload does not have expected state diff\r\actual: %v\r\nexpected: %v", payload.StateDiff, expectedStateDiffBytes)
+		}
+		if payload.Err != nil {
+			t.Errorf("payload should not contain an error, but does: %v", payload.Err)
 		}
 	case <-quitChan:
 		t.Errorf("channel quit before delivering payload")

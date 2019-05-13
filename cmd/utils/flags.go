@@ -763,6 +763,14 @@ var (
 		Name:  "statediff",
 		Usage: "Enables the calculation of state diffs between each block, persists these state diffs the configured persistence mode.",
 	}
+	StateDiffPathsAndProofs = cli.BoolFlag{
+		Name:  "statediff.pathsandproofs",
+		Usage: "Path and proof sets for the state and storage nodes are generated",
+	}
+	StateDiffLeafNodesOnly = cli.BoolFlag{
+		Name:  "statediff.leafs",
+		Usage: "Consider only leaf nodes of the storage and state tries",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1623,12 +1631,16 @@ func RegisterGraphQLService(stack *node.Node, endpoint string, cors, vhosts []st
 
 // RegisterStateDiffService configures and registers a service to stream state diff data over RPC
 func RegisterStateDiffService(stack *node.Node, ctx *cli.Context) {
+	config := statediff.Config{
+		PathsAndProofs: ctx.GlobalBool(StateDiffPathsAndProofs.Name),
+		LeafsOnly:      ctx.GlobalBool(StateDiffLeafNodesOnly.Name),
+	}
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		var ethServ *eth.Ethereum
 		ctx.Service(&ethServ)
 		chainDb := ethServ.ChainDb()
 		blockChain := ethServ.BlockChain()
-		return statediff.NewStateDiffService(chainDb, blockChain)
+		return statediff.NewStateDiffService(chainDb, blockChain, config)
 	}); err != nil {
 		Fatalf("Failed to register State Diff Service", err)
 	}
