@@ -102,8 +102,10 @@ type peer struct {
 	fcParams flowcontrol.ServerParams
 	fcCosts  requestCostTable
 
-	isTrusted      bool
-	isOnlyAnnounce bool
+	isTrusted               bool
+	isOnlyAnnounce          bool
+	chainSince, chainRecent uint64
+	stateSince, stateRecent uint64
 }
 
 func newPeer(version int, network uint64, isTrusted bool, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -326,10 +328,21 @@ func (p *peer) GetTxRelayCost(amount, size int) uint64 {
 
 // HasBlock checks if the peer has a given block
 func (p *peer) HasBlock(hash common.Hash, number uint64, hasState bool) bool {
+	var head, since, recent uint64
 	p.lock.RLock()
+	if p.headInfo != nil {
+		head = p.headInfo.Number
+	}
+	if hasState {
+		since = p.stateSince
+		recent = p.stateRecent
+	} else {
+		since = p.chainSince
+		recent = p.chainRecent
+	}
 	hasBlock := p.hasBlock
 	p.lock.RUnlock()
-	return hasBlock != nil && hasBlock(hash, number, hasState)
+	return head >= number && number >= since && (recent == 0 || number+recent+4 > head) && hasBlock != nil && hasBlock(hash, number, hasState)
 }
 
 // SendAnnounce announces the availability of a number of blocks through
@@ -615,11 +628,17 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		p.fcClient = flowcontrol.NewClientNode(server.fcManager, server.defParams)
 	} else {
 		//mark OnlyAnnounce server if "serveHeaders", "serveChainSince", "serveStateSince" or "txRelay" fields don't exist
-		if recv.get("serveChainSince", nil) != nil {
+		if recv.get("serveChainSince", &p.chainSince) != nil {
 			p.isOnlyAnnounce = true
 		}
-		if recv.get("serveStateSince", nil) != nil {
+		if recv.get("serveRecentChain", &p.chainRecent) != nil {
+			p.chainRecent = 0
+		}
+		if recv.get("serveStateSince", &p.stateSince) != nil {
 			p.isOnlyAnnounce = true
+		}
+		if recv.get("serveRecentState", &p.stateRecent) != nil {
+			p.stateRecent = 0
 		}
 		if recv.get("txRelay", nil) != nil {
 			p.isOnlyAnnounce = true
