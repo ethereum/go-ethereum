@@ -296,6 +296,7 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 	expList = expList.add("serveHeaders", nil)
 	expList = expList.add("serveChainSince", uint64(0))
 	expList = expList.add("serveStateSince", uint64(0))
+	expList = expList.add("serveRecentState", uint64(core.TriesInMemory-4))
 	expList = expList.add("txRelay", nil)
 	expList = expList.add("flowControl/BL", testBufLimit)
 	expList = expList.add("flowControl/MRR", uint64(1))
