@@ -205,12 +205,12 @@ var (
 	}
 	LightBandwidthInFlag = cli.IntFlag{
 		Name:  "lightbwin",
-		Usage: "Incoming bandwidth limit for light server (1000 bytes/sec, 0 = unlimited)",
+		Usage: "Incoming bandwidth limit for light server (kilobytes/sec, 0 = unlimited)",
 		Value: 0,
 	}
 	LightBandwidthOutFlag = cli.IntFlag{
 		Name:  "lightbwout",
-		Usage: "Outgoing bandwidth limit for light server (1000 bytes/sec, 0 = unlimited)",
+		Usage: "Outgoing bandwidth limit for light server (kilobytes/sec, 0 = unlimited)",
 		Value: 0,
 	}
 	LightPeersFlag = cli.IntFlag{
