@@ -31,6 +31,8 @@ import (
 	"github.com/ubiq/go-ubiq/common/bitutil"
 	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/log"
+
+	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/sha3"
 )
 
