@@ -48,12 +48,12 @@ var (
 	errClosed           = errors.New("socket closed")
 )
 
-// Timeouts
 const (
 	respTimeout    = 500 * time.Millisecond
 	expiration     = 20 * time.Second
 	bondExpiration = 24 * time.Hour
 
+	maxFindnodeFailures = 5                // nodes exceeding this limit are dropped
 	ntpFailureThreshold = 32               // Continuous timeouts after which to check NTP
 	ntpWarningCooldown  = 10 * time.Minute // Minimum amount of time to pass before repeating NTP warning
 	driftThreshold      = 10 * time.Second // Allowed clock drift before warning user
@@ -840,7 +840,7 @@ func (t *UDPv4) checkBond(id enode.ID, ip net.IP) bool {
 // This ensures there is a valid endpoint proof on the remote end.
 func (t *UDPv4) ensureBond(toid enode.ID, toaddr *net.UDPAddr) {
 	tooOld := time.Since(t.db.LastPingReceived(toid, toaddr.IP)) > bondExpiration
-	if tooOld || t.db.FindFails(toid, toaddr.IP) > 5 {
+	if tooOld || t.db.FindFails(toid, toaddr.IP) > maxFindnodeFailures {
 		rm := t.sendPing(toid, toaddr, nil)
 		<-rm.errc
 		// Wait for them to ping back and process our pong.

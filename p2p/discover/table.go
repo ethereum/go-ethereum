@@ -53,13 +53,12 @@ const (
 	bucketIPLimit, bucketSubnet = 2, 24 // at most 2 addresses from the same /24
 	tableIPLimit, tableSubnet   = 10, 24
 
-	maxFindnodeFailures = 5 // Nodes exceeding this limit are dropped
-	refreshInterval     = 30 * time.Minute
-	revalidateInterval  = 10 * time.Second
-	copyNodesInterval   = 30 * time.Second
-	seedMinTableTime    = 5 * time.Minute
-	seedCount           = 30
-	seedMaxAge          = 5 * 24 * time.Hour
+	refreshInterval    = 30 * time.Minute
+	revalidateInterval = 10 * time.Second
+	copyNodesInterval  = 30 * time.Second
+	seedMinTableTime   = 5 * time.Minute
+	seedCount          = 30
+	seedMaxAge         = 5 * 24 * time.Hour
 )
 
 // Table is the 'node table', a Kademlia-like index of neighbor nodes. The table keeps
