@@ -48,7 +48,7 @@ func callGas(gasTable params.GasTable, availableGas, base uint64, callCost *big.
 		}
 	}
 	if !callCost.IsUint64() {
-		return 0, errGasUintOverflow
+		return 0, ErrGasUintOverflow
 	}
 
 	return callCost.Uint64(), nil

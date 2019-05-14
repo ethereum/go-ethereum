@@ -18,7 +18,6 @@ package vm
 
 import (
 	"crypto/sha256"
-	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -317,9 +316,6 @@ var (
 
 	// false32Byte is returned if the bn256 pairing check fails.
 	false32Byte = make([]byte, 32)
-
-	// errBadPairingInput is returned if the bn256 pairing input is invalid.
-	errBadPairingInput = errors.New("bad elliptic curve pairing size")
 )
 
 // bn256Pairing implements a pairing pre-compile for the bn256 curve
@@ -333,7 +329,7 @@ func (c *bn256Pairing) RequiredGas(input []byte) uint64 {
 func (c *bn256Pairing) Run(input []byte) ([]byte, error) {
 	// Handle some corner cases cheaply
 	if len(input)%192 > 0 {
-		return nil, errBadPairingInput
+		return nil, ErrBadPairingInput
 	}
 	// Convert the input into a set of coordinates
 	var (

@@ -20,11 +20,45 @@ import "errors"
 
 // List execution errors
 var (
-	ErrOutOfGas                 = errors.New("out of gas")
-	ErrCodeStoreOutOfGas        = errors.New("contract creation code storage out of gas")
-	ErrDepth                    = errors.New("max call depth exceeded")
-	ErrTraceLimitReached        = errors.New("the number of logs reached the specified limit")
-	ErrInsufficientBalance      = errors.New("insufficient balance for transfer")
+	// ErrOutOfGas is returned when
+	ErrOutOfGas = errors.New("out of gas")
+
+	// ErrCodeStoreOutOfGas is returned when
+	ErrCodeStoreOutOfGas = errors.New("contract creation code storage out of gas")
+
+	// ErrDepth is returned when
+	ErrDepth = errors.New("max call depth exceeded")
+
+	// ErrTraceLimitReached is returned when
+	ErrTraceLimitReached = errors.New("the number of logs reached the specified limit")
+
+	// ErrInsufficientBalance is returned when
+	ErrInsufficientBalance = errors.New("insufficient balance for transfer")
+
+	// ErrContractAddressCollision is returned when
 	ErrContractAddressCollision = errors.New("contract address collision")
-	ErrNoCompatibleInterpreter  = errors.New("no compatible interpreter")
+
+	// ErrNoCompatibleInterpreter is returned when
+	ErrNoCompatibleInterpreter = errors.New("no compatible interpreter")
+
+	// ErrBadPairingInput is returned if the bn256 pairing input is invalid.
+	ErrBadPairingInput = errors.New("bad elliptic curve pairing size")
+
+	// ErrWriteProtection is returned when
+	ErrWriteProtection = errors.New("evm: write protection")
+
+	// ErrReturnDataOutOfBounds is returned when
+	ErrReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
+
+	// ErrExecutionReverted is returned when
+	ErrExecutionReverted = errors.New("evm: execution reverted")
+
+	// ErrMaxCodeSizeExceeded is returned when
+	ErrMaxCodeSizeExceeded = errors.New("evm: max code size exceeded")
+
+	// ErrInvalidJump is returned when
+	ErrInvalidJump = errors.New("evm: invalid jump destination")
+
+	// ErrGasUintOverflow is returned when
+	ErrGasUintOverflow = errors.New("gas uint64 overflow")
 )
