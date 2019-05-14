@@ -551,6 +551,9 @@ func (t *UDPv4) requestENR(n *enode.Node) (*enode.Node, error) {
 	if respN.ID() != n.ID() {
 		return nil, fmt.Errorf("invalid ID in response record")
 	}
+	if respN.Seq() < n.Seq() {
+		return n, nil // response record is older
+	}
 	if err := netutil.CheckRelayIP(addr.IP, respN.IP()); err != nil {
 		return nil, fmt.Errorf("invalid IP in response record: %v", err)
 	}
