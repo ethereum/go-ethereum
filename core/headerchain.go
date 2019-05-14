@@ -18,7 +18,6 @@ package core
 
 import (
 	crand "crypto/rand"
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -240,7 +239,7 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int)
 		// If the chain is terminating, stop processing blocks
 		if hc.procInterrupt() {
 			log.Debug("Premature abort during headers verification")
-			return 0, errors.New("aborted")
+			return 0, ErrPrematureAbort
 		}
 		// If the header is a banned one, straight out abort
 		if BadHashes[header.Hash()] {
@@ -271,7 +270,7 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, writeHeader WhCa
 		// Short circuit insertion if shutting down
 		if hc.procInterrupt() {
 			log.Debug("Premature abort during headers import")
-			return i, errors.New("aborted")
+			return i, ErrPrematureAbort
 		}
 		// If the header's already known, skip it, otherwise store
 		if hc.HasHeader(header.Hash(), header.Number.Uint64()) {

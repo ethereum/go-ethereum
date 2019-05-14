@@ -35,4 +35,61 @@ var (
 
 	// ErrNoGenesis is returned when there is no Genesis Block.
 	ErrNoGenesis = errors.New("genesis not found in chain")
+
+	// ErrGenesisNoConfig is retrurned when setup Genensis Block, if there is no
+	// ChainConfig.
+	ErrGenesisNoConfig = errors.New("genesis has no chain configuration")
+
+	// ErrInsufficientBalanceForGas is returned if balance is insufficient to pay
+	// for gas
+	ErrInsufficientBalanceForGas = errors.New("insufficient balance to pay for gas")
+
+	// ErrInvalidSender is returned if the transaction contains an invalid signature.
+	ErrInvalidSender = errors.New("invalid sender")
+
+	// ErrNonceTooLow is returned if the nonce of a transaction is lower than the
+	// one present in the local chain.
+	ErrNonceTooLow = errors.New("nonce too low")
+
+	// ErrUnderpriced is returned if a transaction's gas price is below the minimum
+	// configured for the transaction pool.
+	ErrUnderpriced = errors.New("transaction underpriced")
+
+	// ErrReplaceUnderpriced is returned if a transaction is attempted to be replaced
+	// with a different one without the required price bump.
+	ErrReplaceUnderpriced = errors.New("replacement transaction underpriced")
+
+	// ErrInsufficientFunds is returned if the total cost of executing a transaction
+	// is higher than the balance of the user's account.
+	ErrInsufficientFunds = errors.New("insufficient funds for gas * price + value")
+
+	// ErrIntrinsicGas is returned if the transaction is specified to use less gas
+	// than required to start the invocation.
+	ErrIntrinsicGas = errors.New("intrinsic gas too low")
+
+	// ErrGasLimit is returned if a transaction's requested gas limit exceeds the
+	// maximum allowance of the current block.
+	ErrGasLimit = errors.New("exceeds block gas limit")
+
+	// ErrNegativeValue is a sanity error to ensure noone is able to specify a
+	// transaction with a negative value.
+	ErrNegativeValue = errors.New("negative value")
+
+	// ErrOversizedData is returned if the input data of a transaction is greater
+	// than some meaningful limit a user might use. This is not a consensus error
+	// making the transaction invalid, rather a DOS protection.
+	ErrOversizedData = errors.New("oversized data")
+
+	// ErrNoActiveJournal is returned if a transaction is attempted to be inserted
+	// into the journal, but no such file is currently open.
+	ErrNoActiveJournal = errors.New("no active journal")
+
+	// ErrGhostStateAttack is returned when sidechain ghost-state attack
+	ErrGhostStateAttack = errors.New("sidechain ghost-state attack")
+
+	// ErrMissingParent is returned when parent block is nil
+	ErrMissingParent = errors.New("missing parent")
+
+	// ErrPrematureAbort is returned when chain is terminating
+	ErrPrematureAbort = errors.New("aborted")
 )

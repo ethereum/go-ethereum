@@ -17,7 +17,6 @@
 package core
 
 import (
-	"errors"
 	"io"
 	"os"
 
@@ -26,10 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
-
-// errNoActiveJournal is returned if a transaction is attempted to be inserted
-// into the journal, but no such file is currently open.
-var errNoActiveJournal = errors.New("no active journal")
 
 // devNull is a WriteCloser that just discards anything written into it. Its
 // goal is to allow the transaction journal to write into a fake journal when
@@ -119,7 +114,7 @@ func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
 // insert adds the specified transaction to the local disk journal.
 func (journal *txJournal) insert(tx *types.Transaction) error {
 	if journal.writer == nil {
-		return errNoActiveJournal
+		return ErrNoActiveJournal
 	}
 	if err := rlp.Encode(journal.writer, tx); err != nil {
 		return err
