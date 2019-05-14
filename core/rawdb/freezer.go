@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"sync/atomic"
 	"time"
@@ -39,6 +40,10 @@ var (
 	// errOutOrderInsertion is returned if the user attempts to inject out-of-order
 	// binary blobs into the freezer.
 	errOutOrderInsertion = errors.New("the append operation is out-order")
+
+	// errSymlinkDatadir is returned if the ancient directory specified by user
+	// is a symbolic link.
+	errSymlinkDatadir = errors.New("symbolic link datadir is not supported")
 )
 
 const (
@@ -78,6 +83,13 @@ func newFreezer(datadir string, namespace string) (*freezer, error) {
 		readMeter  = metrics.NewRegisteredMeter(namespace+"ancient/read", nil)
 		writeMeter = metrics.NewRegisteredMeter(namespace+"ancient/write", nil)
 	)
+	// Ensure the datadir is not a symbolic link if it exists.
+	if info, err := os.Lstat(datadir); !os.IsNotExist(err) {
+		if info.Mode()&os.ModeSymlink != 0 {
+			log.Warn("Symbolic link ancient database is not supported", "path", datadir)
+			return nil, errSymlinkDatadir
+		}
+	}
 	// Leveldb uses LOCK as the filelock filename. To prevent the
 	// name collision, we use FLOCK as the lock name.
 	lock, _, err := fileutil.Flock(filepath.Join(datadir, "FLOCK"))
@@ -107,6 +119,7 @@ func newFreezer(datadir string, namespace string) (*freezer, error) {
 		lock.Release()
 		return nil, err
 	}
+	log.Info("Opened ancient database", "database", datadir)
 	return freezer, nil
 }
 
@@ -147,6 +160,14 @@ func (f *freezer) Ancient(kind string, number uint64) ([]byte, error) {
 // Ancients returns the length of the frozen items.
 func (f *freezer) Ancients() (uint64, error) {
 	return atomic.LoadUint64(&f.frozen), nil
+}
+
+// AncientSize returns the ancient size of the specified category.
+func (f *freezer) AncientSize(kind string) (uint64, error) {
+	if table := f.tables[kind]; table != nil {
+		return table.size()
+	}
+	return 0, errUnknownTable
 }
 
 // AppendAncient injects all binary blobs belong to block at the end of the

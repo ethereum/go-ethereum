@@ -716,6 +716,20 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	height := uint64(1024)
 	blocks, receipts := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), gendb, int(height), nil)
 
+	// makeDb creates a db instance for testing.
+	makeDb := func() (ethdb.Database, func()) {
+		dir, err := ioutil.TempDir("", "")
+		if err != nil {
+			t.Fatalf("failed to create temp freezer dir: %v", err)
+		}
+		defer os.Remove(dir)
+		db, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), dir, "")
+		if err != nil {
+			t.Fatalf("failed to create temp freezer db: %v", err)
+		}
+		gspec.MustCommit(db)
+		return db, func() { os.RemoveAll(dir) }
+	}
 	// Configure a subchain to roll back
 	remove := []common.Hash{}
 	for _, block := range blocks[height/2:] {
@@ -734,9 +748,8 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 		}
 	}
 	// Import the chain as an archive node and ensure all pointers are updated
-	archiveDb := rawdb.NewMemoryDatabase()
-	gspec.MustCommit(archiveDb)
-
+	archiveDb, delfn := makeDb()
+	defer delfn()
 	archive, _ := NewBlockChain(archiveDb, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil)
 	if n, err := archive.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to process block %d: %v", n, err)
@@ -748,8 +761,8 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	assert(t, "archive", archive, height/2, height/2, height/2)
 
 	// Import the chain as a non-archive node and ensure all pointers are updated
-	fastDb := rawdb.NewMemoryDatabase()
-	gspec.MustCommit(fastDb)
+	fastDb, delfn := makeDb()
+	defer delfn()
 	fast, _ := NewBlockChain(fastDb, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil)
 	defer fast.Stop()
 
@@ -768,16 +781,8 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	assert(t, "fast", fast, height/2, height/2, 0)
 
 	// Import the chain as a ancient-first node and ensure all pointers are updated
-	frdir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("failed to create temp freezer dir: %v", err)
-	}
-	defer os.Remove(frdir)
-	ancientDb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "")
-	if err != nil {
-		t.Fatalf("failed to create temp freezer db: %v", err)
-	}
-	gspec.MustCommit(ancientDb)
+	ancientDb, delfn := makeDb()
+	defer delfn()
 	ancient, _ := NewBlockChain(ancientDb, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil)
 	defer ancient.Stop()
 
@@ -795,9 +800,8 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	}
 
 	// Import the chain as a light node and ensure all pointers are updated
-	lightDb := rawdb.NewMemoryDatabase()
-	gspec.MustCommit(lightDb)
-
+	lightDb, delfn := makeDb()
+	defer delfn()
 	light, _ := NewBlockChain(lightDb, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil)
 	if n, err := light.InsertHeaderChain(headers, 1); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
@@ -1892,10 +1896,18 @@ func testInsertKnownChainData(t *testing.T, typ string) {
 		b.SetCoinbase(common.Address{1})
 		b.OffsetTime(-9) // A higher difficulty
 	})
-
 	// Import the shared chain and the original canonical one
-	chaindb := rawdb.NewMemoryDatabase()
+	dir, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatalf("failed to create temp freezer dir: %v", err)
+	}
+	defer os.Remove(dir)
+	chaindb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), dir, "")
+	if err != nil {
+		t.Fatalf("failed to create temp freezer db: %v", err)
+	}
 	new(Genesis).MustCommit(chaindb)
+	defer os.RemoveAll(dir)
 
 	chain, err := NewBlockChain(chaindb, nil, params.TestChainConfig, engine, vm.Config{}, nil)
 	if err != nil {
@@ -1992,18 +2004,16 @@ func testInsertKnownChainData(t *testing.T, typ string) {
 	// The head shouldn't change.
 	asserter(t, blocks3[len(blocks3)-1])
 
-	if typ != "headers" {
-		// Rollback the heavier chain and re-insert the longer chain again
-		for i := 0; i < len(blocks3); i++ {
-			rollback = append(rollback, blocks3[i].Hash())
-		}
-		chain.Rollback(rollback)
-
-		if err := inserter(append(blocks, blocks2...), append(receipts, receipts2...)); err != nil {
-			t.Fatalf("failed to insert chain data: %v", err)
-		}
-		asserter(t, blocks2[len(blocks2)-1])
+	// Rollback the heavier chain and re-insert the longer chain again
+	for i := 0; i < len(blocks3); i++ {
+		rollback = append(rollback, blocks3[i].Hash())
 	}
+	chain.Rollback(rollback)
+
+	if err := inserter(append(blocks, blocks2...), append(receipts, receipts2...)); err != nil {
+		t.Fatalf("failed to insert chain data: %v", err)
+	}
+	asserter(t, blocks2[len(blocks2)-1])
 }
 
 // getLongAndShortChains returns two chains,

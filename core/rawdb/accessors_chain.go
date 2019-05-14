@@ -89,7 +89,16 @@ func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
 	return &number
 }
 
-// DeleteHeaderNumber removes hash to number mapping.
+// WriteHeaderNumber stores the hash->number mapping.
+func WriteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+	key := headerNumberKey(hash)
+	enc := encodeBlockNumber(number)
+	if err := db.Put(key, enc); err != nil {
+		log.Crit("Failed to store hash to number mapping", "err", err)
+	}
+}
+
+// DeleteHeaderNumber removes hash->number mapping.
 func DeleteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(headerNumberKey(hash)); err != nil {
 		log.Crit("Failed to delete hash to number mapping", "err", err)
@@ -206,22 +215,19 @@ func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header 
 // WriteHeader stores a block header into the database and also stores the hash-
 // to-number mapping.
 func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
-	// Write the hash -> number mapping
 	var (
-		hash    = header.Hash()
-		number  = header.Number.Uint64()
-		encoded = encodeBlockNumber(number)
+		hash   = header.Hash()
+		number = header.Number.Uint64()
 	)
-	key := headerNumberKey(hash)
-	if err := db.Put(key, encoded); err != nil {
-		log.Crit("Failed to store hash to number mapping", "err", err)
-	}
+	// Write the hash -> number mapping
+	WriteHeaderNumber(db, hash, number)
+
 	// Write the encoded header
 	data, err := rlp.EncodeToBytes(header)
 	if err != nil {
 		log.Crit("Failed to RLP encode header", "err", err)
 	}
-	key = headerKey(number, hash)
+	key := headerKey(number, hash)
 	if err := db.Put(key, data); err != nil {
 		log.Crit("Failed to store header", "err", err)
 	}

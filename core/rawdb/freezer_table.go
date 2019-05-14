@@ -515,6 +515,19 @@ func (t *freezerTable) has(number uint64) bool {
 	return atomic.LoadUint64(&t.items) > number
 }
 
+// size returns the total data size in the freezer table.
+func (t *freezerTable) size() (uint64, error) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	stat, err := t.index.Stat()
+	if err != nil {
+		return 0, err
+	}
+	total := uint64(t.maxFileSize)*uint64(t.headId-t.tailId) + uint64(t.headBytes) + uint64(stat.Size())
+	return total, nil
+}
+
 // Sync pushes any pending data from memory out to disk. This is an expensive
 // operation, so use it with care.
 func (t *freezerTable) Sync() error {

@@ -68,6 +68,12 @@ func (t *table) Ancients() (uint64, error) {
 	return t.db.Ancients()
 }
 
+// AncientSize is a noop passthrough that just forwards the request to the underlying
+// database.
+func (t *table) AncientSize(kind string) (uint64, error) {
+	return t.db.AncientSize(kind)
+}
+
 // AppendAncient is a noop passthrough that just forwards the request to the underlying
 // database.
 func (t *table) AppendAncient(number uint64, hash, header, body, receipts, td []byte) error {

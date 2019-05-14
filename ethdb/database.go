@@ -76,8 +76,11 @@ type AncientReader interface {
 	// Ancient retrieves an ancient binary blob from the append-only immutable files.
 	Ancient(kind string, number uint64) ([]byte, error)
 
-	// Ancients returns the ancient store length
+	// Ancients returns the ancient item numbers in the ancient store.
 	Ancients() (uint64, error)
+
+	// AncientSize returns the ancient size of the specified category.
+	AncientSize(kind string) (uint64, error)
 }
 
 // AncientWriter contains the methods required to write to immutable ancient data.

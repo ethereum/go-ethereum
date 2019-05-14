@@ -93,7 +93,10 @@ const (
 	// - Version 6
 	//  The following incompatible database changes were added:
 	//    * Transaction lookup information stores the corresponding block number instead of block hash
-	BlockChainVersion uint64 = 6
+	// - Version 7
+	//  The following incompatible database changes were added:
+	//    * Use freezer as the ancient database to maintain all ancient data
+	BlockChainVersion uint64 = 7
 )
 
 // CacheConfig contains the configuration values for the trie caching/pruning
@@ -215,10 +218,35 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	if bc.genesisBlock == nil {
 		return nil, ErrNoGenesis
 	}
+	// Initialize the chain with ancient data if it isn't empty.
+	if bc.empty() {
+		if frozen, err := bc.db.Ancients(); err == nil && frozen > 0 {
+			for i := uint64(0); i < frozen; i++ {
+				// Inject hash<->number mapping.
+				hash := rawdb.ReadCanonicalHash(bc.db, i)
+				if hash == (common.Hash{}) {
+					return nil, errors.New("broken ancient database")
+				}
+				rawdb.WriteHeaderNumber(bc.db, hash, i)
+
+				// Inject txlookup indexes.
+				block := rawdb.ReadBlock(bc.db, hash, i)
+				if block == nil {
+					return nil, errors.New("broken ancient database")
+				}
+				rawdb.WriteTxLookupEntries(bc.db, block)
+			}
+			hash := rawdb.ReadCanonicalHash(bc.db, frozen-1)
+			rawdb.WriteHeadHeaderHash(bc.db, hash)
+			rawdb.WriteHeadFastBlockHash(bc.db, hash)
+
+			log.Info("Initialized chain with ancients", "number", frozen-1, "hash", hash)
+		}
+	}
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
-	if frozen, err := bc.db.Ancients(); err == nil && frozen >= 1 {
+	if frozen, err := bc.db.Ancients(); err == nil && frozen > 0 {
 		var (
 			needRewind bool
 			low        uint64
@@ -276,6 +304,20 @@ func (bc *BlockChain) getProcInterrupt() bool {
 // GetVMConfig returns the block chain VM config.
 func (bc *BlockChain) GetVMConfig() *vm.Config {
 	return &bc.vmConfig
+}
+
+// empty returns an indicator whether the blockchain is empty.
+// Note, it's a special case that we connect a non-empty ancient
+// database with an empty node, so that we can plugin the ancient
+// into node seamlessly.
+func (bc *BlockChain) empty() bool {
+	genesis := bc.genesisBlock.Hash()
+	for _, hash := range []common.Hash{rawdb.ReadHeadBlockHash(bc.db), rawdb.ReadHeadHeaderHash(bc.db), rawdb.ReadHeadFastBlockHash(bc.db)} {
+		if hash != genesis {
+			return false
+		}
+	}
+	return true
 }
 
 // loadLastState loads the last known chain state from the database. This method
@@ -383,7 +425,9 @@ func (bc *BlockChain) SetHead(head uint64) error {
 		if num+1 <= frozen {
 			// Truncate all relative data(header, total difficulty, body, receipt
 			// and canonical hash) from ancient store.
-			bc.db.TruncateAncients(num + 1)
+			if err := bc.db.TruncateAncients(num + 1); err != nil {
+				log.Crit("Failed to truncate ancient data", "number", num, "err", err)
+			}
 
 			// Remove the hash <-> number mapping from the active store.
 			rawdb.DeleteHeaderNumber(db, hash)
@@ -948,6 +992,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				}
 			}
 		}()
+		var deleted types.Blocks
 		for i, block := range blockChain {
 			// Short circuit insertion if shutting down or processing failed
 			if atomic.LoadInt32(&bc.procInterrupt) == 1 {
@@ -961,16 +1006,38 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			if !bc.HasHeader(block.Hash(), block.NumberU64()) {
 				return i, fmt.Errorf("containing header #%d [%x…] unknown", block.Number(), block.Hash().Bytes()[:4])
 			}
-			// Compute all the non-consensus fields of the receipts
-			if err := receiptChain[i].DeriveFields(bc.chainConfig, block.Hash(), block.NumberU64(), block.Transactions()); err != nil {
-				return i, fmt.Errorf("failed to derive receipts data: %v", err)
+			var (
+				start  = time.Now()
+				logged = time.Now()
+				count  int
+			)
+			// Migrate all ancient blocks. This can happen if someone upgrades from Geth
+			// 1.8.x to 1.9.x mid-fast-sync. Perhaps we can get rid of this path in the
+			// long term.
+			for {
+				// We can ignore the error here since light client won't hit this code path.
+				frozen, _ := bc.db.Ancients()
+				if frozen >= block.NumberU64() {
+					break
+				}
+				h := rawdb.ReadCanonicalHash(bc.db, frozen)
+				b := rawdb.ReadBlock(bc.db, h, frozen)
+				size += rawdb.WriteAncientBlock(bc.db, b, rawdb.ReadReceipts(bc.db, h, frozen, bc.chainConfig), rawdb.ReadTd(bc.db, h, frozen))
+				count += 1
+
+				// Always keep genesis block in active database.
+				if b.NumberU64() != 0 {
+					deleted = append(deleted, b)
+				}
+				if time.Since(logged) > 8*time.Second {
+					log.Info("Migrating ancient blocks", "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
+					logged = time.Now()
+				}
 			}
-			// Initialize freezer with genesis block first
-			if frozen, err := bc.db.Ancients(); err == nil && frozen == 0 && block.NumberU64() == 1 {
-				genesisBlock := rawdb.ReadBlock(bc.db, rawdb.ReadCanonicalHash(bc.db, 0), 0)
-				size += rawdb.WriteAncientBlock(bc.db, genesisBlock, nil, genesisBlock.Difficulty())
+			if count > 0 {
+				log.Info("Migrated ancient blocks", "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
 			}
-			// Flush data into ancient store.
+			// Flush data into ancient database.
 			size += rawdb.WriteAncientBlock(bc.db, block, receiptChain[i], bc.GetTd(block.Hash(), block.NumberU64()))
 			rawdb.WriteTxLookupEntries(batch, block)
 
@@ -992,15 +1059,8 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		}
 		previous = nil // disable rollback explicitly
 
-		// Remove the ancient data from the active store
-		cleanGenesis := len(blockChain) > 0 && blockChain[0].NumberU64() == 1
-		if cleanGenesis {
-			// Migrate genesis block to ancient store too.
-			rawdb.DeleteBlockWithoutNumber(batch, rawdb.ReadCanonicalHash(bc.db, 0), 0)
-			rawdb.DeleteCanonicalHash(batch, 0)
-		}
 		// Wipe out canonical block data.
-		for _, block := range blockChain {
+		for _, block := range append(deleted, blockChain...) {
 			rawdb.DeleteBlockWithoutNumber(batch, block.Hash(), block.NumberU64())
 			rawdb.DeleteCanonicalHash(batch, block.NumberU64())
 		}
@@ -1008,8 +1068,9 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			return 0, err
 		}
 		batch.Reset()
+
 		// Wipe out side chain too.
-		for _, block := range blockChain {
+		for _, block := range append(deleted, blockChain...) {
 			for _, hash := range rawdb.ReadAllHashes(bc.db, block.NumberU64()) {
 				rawdb.DeleteBlock(batch, hash, block.NumberU64())
 			}
@@ -1034,10 +1095,6 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			if bc.HasBlock(block.Hash(), block.NumberU64()) {
 				stats.ignored++
 				continue
-			}
-			// Compute all the non-consensus fields of the receipts
-			if err := receiptChain[i].DeriveFields(bc.chainConfig, block.Hash(), block.NumberU64(), block.Transactions()); err != nil {
-				return i, fmt.Errorf("failed to derive receipts data: %v", err)
 			}
 			// Write all the data out into the database
 			rawdb.WriteBody(batch, block.Hash(), block.NumberU64(), block.Body())
