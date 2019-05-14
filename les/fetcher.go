@@ -55,7 +55,8 @@ type lightFetcher struct {
 	requested         map[uint64]fetchRequest
 	deliverChn        chan fetchResponse
 	timeoutChn        chan uint64
-	requestChn        chan bool // true if initiated from outside
+	requesting        bool
+	requestTrigger    chan struct{}
 	lastTrustedHeader *types.Header
 }
 
@@ -122,7 +123,7 @@ func newLightFetcher(pm *ProtocolManager) *lightFetcher {
 		deliverChn:     make(chan fetchResponse, 100),
 		requested:      make(map[uint64]fetchRequest),
 		timeoutChn:     make(chan uint64),
-		requestChn:     make(chan bool, 100),
+		requestTrigger: make(chan struct{}, 1),
 		syncDone:       make(chan *peer),
 		maxConfirmedTd: big.NewInt(0),
 	}
@@ -135,34 +136,30 @@ func newLightFetcher(pm *ProtocolManager) *lightFetcher {
 
 // syncLoop is the main event loop of the light fetcher
 func (f *lightFetcher) syncLoop() {
-	requesting := false
 	defer f.pm.wg.Done()
 	for {
 		select {
 		case <-f.pm.quitSync:
 			return
-		// when a new announce is received, request loop keeps running until
-		// no further requests are necessary or possible
-		case newAnnounce := <-f.requestChn:
+		// request loop keeps running until no further requests are necessary or possible
+		case <-f.requestTrigger:
 			f.lock.Lock()
-			s := requesting
-			requesting = false
 			var (
 				rq      *distReq
 				reqID   uint64
 				syncing bool
 			)
-
-			if !f.syncing && !(newAnnounce && s) {
+			if !f.syncing {
 				rq, reqID, syncing = f.nextRequest()
 			}
+			f.requesting = rq != nil
 			f.lock.Unlock()
 
 			if rq != nil {
-				requesting = true
 				if _, ok := <-f.pm.reqDist.queue(rq); ok {
 					if syncing {
 						f.lock.Lock()
+						f.requesting = false
 						f.syncing = true
 						f.lock.Unlock()
 					} else {
@@ -176,11 +173,11 @@ func (f *lightFetcher) syncLoop() {
 							}
 							f.reqMu.Unlock()
 							// keep starting new requests while possible
-							f.requestChn <- false
+							f.requestTrigger <- struct{}{}
 						}()
 					}
 				} else {
-					f.requestChn <- false
+					f.requestTrigger <- struct{}{}
 				}
 			}
 		case reqID := <-f.timeoutChn:
@@ -219,8 +216,12 @@ func (f *lightFetcher) syncLoop() {
 			p.Log().Debug("Done synchronising with peer")
 			f.checkSyncedHeaders(p)
 			f.syncing = false
+			r := f.requesting
+			f.requesting = true
 			f.lock.Unlock()
-			f.requestChn <- false
+			if !r {
+				f.requestTrigger <- struct{}{}
+			}
 		}
 	}
 }
@@ -354,7 +355,10 @@ func (f *lightFetcher) announce(p *peer, head *announceData) {
 	fp.lastAnnounced = n
 	p.lock.Unlock()
 	f.checkUpdateStats(p, nil)
-	f.requestChn <- true
+	if !f.requesting {
+		f.requesting = true
+		f.requestTrigger <- struct{}{}
+	}
 }
 
 // peerHasBlock returns true if we can assume the peer knows the given block
