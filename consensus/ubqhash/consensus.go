@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"time"
 
+  mapset "github.com/deckarep/golang-set"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/common/math"
 	"github.com/ubiq/go-ubiq/consensus"
@@ -32,7 +33,6 @@ import (
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/params"
-	set "gopkg.in/fatih/set.v0"
 )
 
 // Ubqhash proof-of-work protocol constants.
@@ -197,7 +197,7 @@ func (ubqhash *Ubqhash) VerifyUncles(chain consensus.ChainReader, block *types.B
 		return errTooManyUncles
 	}
 	// Gather the set of past uncles and ancestors
-	uncles, ancestors := set.New(), make(map[common.Hash]*types.Header)
+	uncles, ancestors := mapset.NewSet(), make(map[common.Hash]*types.Header)
 
 	number, parent := block.NumberU64()-1, block.ParentHash()
 	for i := 0; i < 7; i++ {
@@ -218,7 +218,7 @@ func (ubqhash *Ubqhash) VerifyUncles(chain consensus.ChainReader, block *types.B
 	for _, uncle := range block.Uncles() {
 		// Make sure every uncle is rewarded only once
 		hash := uncle.Hash()
-		if uncles.Has(hash) {
+		if uncles.Contains(hash) {
 			return errDuplicateUncle
 		}
 		uncles.Add(hash)
