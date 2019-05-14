@@ -173,6 +173,19 @@ type newBlockData struct {
 	TD    *big.Int
 }
 
+// sanityCheck verifies that the values are reasonable, as a DoS protection
+func (request *newBlockData) sanityCheck() error {
+	if err := request.Block.SanityCheck(); err != nil {
+		return err
+	}
+	//TD at mainnet block #7753254 is 76 bits. If it becomes 100 million times
+	// larger, it will still fit within 100 bits
+	if tdlen := request.TD.BitLen(); tdlen > 100 {
+		return fmt.Errorf("too large block TD: bitlen %d", tdlen)
+	}
+	return nil
+}
+
 // blockBody represents the data content of a single block.
 type blockBody struct {
 	Transactions []*types.Transaction // Transactions contained within a block
