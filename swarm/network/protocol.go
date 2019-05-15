@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	DefaultNetworkID = 3
+	DefaultNetworkID = 4
 	// timeout for waiting
 	bzzHandshakeTimeout = 3000 * time.Millisecond
 )
