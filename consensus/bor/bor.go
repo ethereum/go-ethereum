@@ -365,7 +365,7 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 		return err
 	}
 	// If the block is a checkpoint block, verify the signer list
-	if number%c.config.ProducerInterval == 0 {
+	if number%c.config.Epoch == 0 {
 		signers := make([]byte, len(snap.Signers)*common.AddressLength)
 		for i, signer := range snap.signers() {
 			copy(signers[i*common.AddressLength:], signer[:])
