@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/bor"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -57,6 +58,10 @@ var (
 	ApplicationClique = SigFormat{
 		accounts.MimetypeClique,
 		0x02,
+	}
+	ApplicationBor = SigFormat{
+		accounts.MimetypeBor,
+		0x10,
 	}
 	TextPlain = SigFormat{
 		accounts.MimetypeTextPlain,
@@ -242,6 +247,42 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		// Clique uses V on the form 0 or 1
 		useEthereumV = false
 		req = &SignDataRequest{ContentType: mediaType, Rawdata: cliqueRlp, Message: message, Hash: sighash}
+	case ApplicationBor.Mime:
+		// Clique is the Ethereum PoA standard
+		stringData, ok := data.(string)
+		if !ok {
+			return nil, useEthereumV, fmt.Errorf("input for %v must be an hex-encoded string", ApplicationBor.Mime)
+		}
+		borData, err := hexutil.Decode(stringData)
+		if err != nil {
+			return nil, useEthereumV, err
+		}
+		header := &types.Header{}
+		if err := rlp.DecodeBytes(borData, header); err != nil {
+			return nil, useEthereumV, err
+		}
+		// The incoming clique header is already truncated, sent to us with a extradata already shortened
+		if len(header.Extra) < 65 {
+			// Need to add it back, to get a suitable length for hashing
+			newExtra := make([]byte, len(header.Extra)+65)
+			copy(newExtra, header.Extra)
+			header.Extra = newExtra
+		}
+		// Get back the rlp data, encoded by us
+		sighash, borRlp, err := borHeaderHashAndRlp(header)
+		if err != nil {
+			return nil, useEthereumV, err
+		}
+		message := []*NameValueType{
+			{
+				Name:  "Bor header",
+				Typ:   "bor",
+				Value: fmt.Sprintf("bor header %d [0x%x]", header.Number, header.Hash()),
+			},
+		}
+		// Bor uses V on the form 0 or 1
+		useEthereumV = false
+		req = &SignDataRequest{ContentType: mediaType, Rawdata: borRlp, Message: message, Hash: sighash}
 	default: // also case TextPlain.Mime:
 		// Calculates an Ethereum ECDSA signature for:
 		// hash = keccak256("\x19${byteVersion}Ethereum Signed Message:\n${message length}${message}")
@@ -293,6 +334,23 @@ func cliqueHeaderHashAndRlp(header *types.Header) (hash, rlp []byte, err error) 
 	}
 	rlp = clique.CliqueRLP(header)
 	hash = clique.SealHash(header).Bytes()
+	return hash, rlp, err
+}
+
+// borHeaderHashAndRlp returns the hash which is used as input for the proof-of-authority
+// signing. It is the hash of the entire header apart from the 65 byte signature
+// contained at the end of the extra data.
+//
+// The method requires the extra data to be at least 65 bytes -- the original implementation
+// in bor.go panics if this is the case, thus it's been reimplemented here to avoid the panic
+// and simply return an error instead
+func borHeaderHashAndRlp(header *types.Header) (hash, rlp []byte, err error) {
+	if len(header.Extra) < 65 {
+		err = fmt.Errorf("bor header extradata too short, %d < 65", len(header.Extra))
+		return
+	}
+	rlp = bor.BorRLP(header)
+	hash = bor.SealHash(header).Bytes()
 	return hash, rlp, err
 }
 
