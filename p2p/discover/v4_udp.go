@@ -426,11 +426,11 @@ func (t *UDPv4) Resolve(n *enode.Node) *enode.Node {
 		}
 	}
 	// Otherwise perform a network lookup.
-	var key *enode.Secp256k1
-	if n.Load(key) != nil {
+	var key enode.Secp256k1
+	if n.Load(&key) != nil {
 		return n // no secp256k1 key
 	}
-	result := t.LookupPubkey((*ecdsa.PublicKey)(key))
+	result := t.LookupPubkey((*ecdsa.PublicKey)(&key))
 	for _, rn := range result {
 		if rn.ID() == n.ID() {
 			if rn, err := t.requestENR(rn); err == nil {
