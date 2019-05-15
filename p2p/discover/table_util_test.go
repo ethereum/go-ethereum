@@ -98,6 +98,7 @@ func fillTable(tab *Table, nodes []*node) {
 type pingRecorder struct {
 	mu           sync.Mutex
 	dead, pinged map[enode.ID]bool
+	records      map[enode.ID]*enode.Node
 	n            *enode.Node
 }
 
@@ -107,37 +108,52 @@ func newPingRecorder() *pingRecorder {
 	n := enode.SignNull(&r, enode.ID{})
 
 	return &pingRecorder{
-		dead:   make(map[enode.ID]bool),
-		pinged: make(map[enode.ID]bool),
-		n:      n,
+		dead:    make(map[enode.ID]bool),
+		pinged:  make(map[enode.ID]bool),
+		records: make(map[enode.ID]*enode.Node),
+		n:       n,
 	}
 }
 
-func (t *pingRecorder) Self() *enode.Node {
-	return nullNode
+// setRecord updates a node record. Future calls to ping and
+// requestENR will return this record.
+func (t *pingRecorder) updateRecord(n *enode.Node) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.records[n.ID()] = n
 }
 
-func (t *pingRecorder) ping(n *enode.Node) error {
+// Stubs to satisfy the transport interface.
+func (t *pingRecorder) Self() *enode.Node           { return nullNode }
+func (t *pingRecorder) lookupSelf() []*enode.Node   { return nil }
+func (t *pingRecorder) lookupRandom() []*enode.Node { return nil }
+func (t *pingRecorder) close()                      {}
+
+// ping simulates a ping request.
+func (t *pingRecorder) ping(n *enode.Node) (seq uint64, err error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	t.pinged[n.ID()] = true
 	if t.dead[n.ID()] {
-		return errTimeout
-	} else {
-		return nil
+		return 0, errTimeout
 	}
+	if t.records[n.ID()] != nil {
+		seq = t.records[n.ID()].Seq()
+	}
+	return seq, nil
 }
 
-func (t *pingRecorder) lookupSelf() []*enode.Node {
-	return nil
-}
+// requestENR simulates an ENR request.
+func (t *pingRecorder) requestENR(n *enode.Node) (*enode.Node, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
-func (t *pingRecorder) lookupRandom() []*enode.Node {
-	return nil
+	if t.dead[n.ID()] || t.records[n.ID()] == nil {
+		return nil, errTimeout
+	}
+	return t.records[n.ID()], nil
 }
-
-func (t *pingRecorder) close() {}
 
 func hasDuplicates(slice []*node) bool {
 	seen := make(map[enode.ID]bool)

@@ -53,15 +53,17 @@ const (
 	bucketIPLimit, bucketSubnet = 2, 24 // at most 2 addresses from the same /24
 	tableIPLimit, tableSubnet   = 10, 24
 
-	maxFindnodeFailures = 5 // Nodes exceeding this limit are dropped
-	refreshInterval     = 30 * time.Minute
-	revalidateInterval  = 10 * time.Second
-	copyNodesInterval   = 30 * time.Second
-	seedMinTableTime    = 5 * time.Minute
-	seedCount           = 30
-	seedMaxAge          = 5 * 24 * time.Hour
+	refreshInterval    = 30 * time.Minute
+	revalidateInterval = 10 * time.Second
+	copyNodesInterval  = 30 * time.Second
+	seedMinTableTime   = 5 * time.Minute
+	seedCount          = 30
+	seedMaxAge         = 5 * 24 * time.Hour
 )
 
+// Table is the 'node table', a Kademlia-like index of neighbor nodes. The table keeps
+// itself up-to-date by verifying the liveness of neighbors and requesting their node
+// records when announcements of a new record version are received.
 type Table struct {
 	mutex   sync.Mutex        // protects buckets, bucket content, nursery, rand
 	buckets [nBuckets]*bucket // index of known nodes by distance
@@ -80,12 +82,13 @@ type Table struct {
 	nodeAddedHook func(*node) // for testing
 }
 
-// transport is implemented by UDP transports.
+// transport is implemented by the UDP transports.
 type transport interface {
 	Self() *enode.Node
 	lookupRandom() []*enode.Node
 	lookupSelf() []*enode.Node
-	ping(*enode.Node) error
+	ping(*enode.Node) (seq uint64, err error)
+	requestENR(*enode.Node) (*enode.Node, error)
 }
 
 // bucket contains nodes, ordered by their last activity. the entry
@@ -175,14 +178,16 @@ func (tab *Table) ReadRandomNodes(buf []*enode.Node) (n int) {
 	return i + 1
 }
 
-// Resolve searches for a specific node with the given ID.
-// It returns nil if the node could not be found.
-func (tab *Table) Resolve(n *enode.Node) *enode.Node {
+// getNode returns the node with the given ID or nil if it isn't in the table.
+func (tab *Table) getNode(id enode.ID) *enode.Node {
 	tab.mutex.Lock()
-	cl := tab.closest(n.ID(), 1, false)
-	tab.mutex.Unlock()
-	if len(cl.entries) > 0 && cl.entries[0].ID() == n.ID() {
-		return unwrapNode(cl.entries[0])
+	defer tab.mutex.Unlock()
+
+	b := tab.bucket(id)
+	for _, e := range b.entries {
+		if e.ID() == id {
+			return unwrapNode(e)
+		}
 	}
 	return nil
 }
@@ -226,7 +231,7 @@ func (tab *Table) refresh() <-chan struct{} {
 	return done
 }
 
-// loop schedules refresh, revalidate runs and coordinates shutdown.
+// loop schedules runs of doRefresh, doRevalidate and copyLiveNodes.
 func (tab *Table) loop() {
 	var (
 		revalidate     = time.NewTimer(tab.nextRevalidateTime())
@@ -288,9 +293,8 @@ loop:
 	close(tab.closed)
 }
 
-// doRefresh performs a lookup for a random target to keep buckets
-// full. seed nodes are inserted if the table is empty (initial
-// bootstrap or discarded faulty peers).
+// doRefresh performs a lookup for a random target to keep buckets full. seed nodes are
+// inserted if the table is empty (initial bootstrap or discarded faulty peers).
 func (tab *Table) doRefresh(done chan struct{}) {
 	defer close(done)
 
@@ -324,8 +328,8 @@ func (tab *Table) loadSeedNodes() {
 	}
 }
 
-// doRevalidate checks that the last node in a random bucket is still live
-// and replaces or deletes the node if it isn't.
+// doRevalidate checks that the last node in a random bucket is still live and replaces or
+// deletes the node if it isn't.
 func (tab *Table) doRevalidate(done chan<- struct{}) {
 	defer func() { done <- struct{}{} }()
 
@@ -336,7 +340,17 @@ func (tab *Table) doRevalidate(done chan<- struct{}) {
 	}
 
 	// Ping the selected node and wait for a pong.
-	err := tab.net.ping(unwrapNode(last))
+	remoteSeq, err := tab.net.ping(unwrapNode(last))
+
+	// Also fetch record if the node replied and returned a higher sequence number.
+	if last.Seq() < remoteSeq {
+		n, err := tab.net.requestENR(unwrapNode(last))
+		if err != nil {
+			tab.log.Debug("ENR request failed", "id", last.ID(), "addr", last.addr(), "err", err)
+		} else {
+			last = &node{Node: *n, addedAt: last.addedAt, livenessChecks: last.livenessChecks}
+		}
+	}
 
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
