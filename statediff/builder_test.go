@@ -58,6 +58,7 @@ func TestBuilder(t *testing.T) {
 	block3 = blockMap[block3Hash]
 	config := statediff.Config{
 		PathsAndProofs: true,
+		LeafsOnly:      true,
 	}
 	builder = statediff.NewBuilder(testhelpers.Testdb, chain, config)
 

@@ -20,4 +20,5 @@ package statediff
 type Config struct {
 	PathsAndProofs bool
 	LeafsOnly      bool
+	WatchedAddress []string
 }

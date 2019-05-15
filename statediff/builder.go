@@ -21,6 +21,7 @@ package statediff
 
 import (
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
@@ -40,6 +41,7 @@ type builder struct {
 	chainDB    ethdb.Database
 	config     Config
 	blockChain *core.BlockChain
+	stateCache state.Database
 }
 
 // NewBuilder is used to create a state diff builder
@@ -54,12 +56,12 @@ func NewBuilder(db ethdb.Database, blockChain *core.BlockChain, config Config) B
 // BuildStateDiff builds a StateDiff object from two blocks
 func (sdb *builder) BuildStateDiff(oldStateRoot, newStateRoot common.Hash, blockNumber int64, blockHash common.Hash) (StateDiff, error) {
 	// Generate tries for old and new states
-	stateCache := sdb.blockChain.StateCache()
-	oldTrie, err := stateCache.OpenTrie(oldStateRoot)
+	sdb.stateCache = sdb.blockChain.StateCache()
+	oldTrie, err := sdb.stateCache.OpenTrie(oldStateRoot)
 	if err != nil {
 		return StateDiff{}, fmt.Errorf("error creating trie for oldStateRoot: %v", err)
 	}
-	newTrie, err := stateCache.OpenTrie(newStateRoot)
+	newTrie, err := sdb.stateCache.OpenTrie(newStateRoot)
 	if err != nil {
 		return StateDiff{}, fmt.Errorf("error creating trie for newStateRoot: %v", err)
 	}
@@ -114,7 +116,7 @@ func (sdb *builder) collectDiffNodes(a, b trie.NodeIterator) (AccountsMap, error
 
 	if sdb.config.PathsAndProofs {
 		for {
-			log.Debug("Current Path and Hash", "path", pathToStr(it), "hashold", it.Hash())
+			log.Debug("Current Path and Hash", "path", pathToStr(it), "old hash", it.Hash())
 			if it.Leaf() {
 				leafProof := make([][]byte, len(it.LeafProof()))
 				copy(leafProof, it.LeafProof())
@@ -128,10 +130,10 @@ func (sdb *builder) collectDiffNodes(a, b trie.NodeIterator) (AccountsMap, error
 				// lookup account state
 				var account state.Account
 				if err := rlp.DecodeBytes(leafValue, &account); err != nil {
-					return nil, fmt.Errorf("error looking up account via address: %s, error: %v", leafKeyHash.Hex(), err)
+					return nil, fmt.Errorf("error looking up account via address %s\r\nerror: %v", leafKeyHash.Hex(), err)
 				}
 				aw := accountWrapper{
-					Account:  account,
+					Account:  &account,
 					RawKey:   leafKey,
 					RawValue: leafValue,
 					Proof:    leafProof,
@@ -147,33 +149,80 @@ func (sdb *builder) collectDiffNodes(a, b trie.NodeIterator) (AccountsMap, error
 			}
 		}
 	} else {
-		for {
-			log.Debug("Current Path and Hash", "path", pathToStr(it), "old hash", it.Hash())
-			if it.Leaf() {
-				leafKey := make([]byte, len(it.LeafKey()))
-				copy(leafKey, it.LeafKey())
-				leafKeyHash := common.BytesToHash(leafKey)
-				leafValue := make([]byte, len(it.LeafBlob()))
-				copy(leafValue, it.LeafBlob())
-				// lookup account state
-				var account state.Account
-				if err := rlp.DecodeBytes(leafValue, &account); err != nil {
-					return nil, fmt.Errorf("error looking up account via address: %s, error: %v", leafKeyHash.Hex(), err)
+		if sdb.config.LeafsOnly {
+			for {
+				log.Debug("Current Path and Hash", "path", pathToStr(it), "old hash", it.Hash())
+				if it.Leaf() {
+					leafKey := make([]byte, len(it.LeafKey()))
+					copy(leafKey, it.LeafKey())
+					leafKeyHash := common.BytesToHash(leafKey)
+					leafValue := make([]byte, len(it.LeafBlob()))
+					copy(leafValue, it.LeafBlob())
+					// lookup account state
+					var account state.Account
+					if err := rlp.DecodeBytes(leafValue, &account); err != nil {
+						return nil, fmt.Errorf("error looking up account via address %s\r\nerror: %v", leafKeyHash.Hex(), err)
+					}
+					aw := accountWrapper{
+						Account:  &account,
+						RawKey:   leafKey,
+						RawValue: leafValue,
+						Proof:    nil,
+						Path:     nil,
+					}
+					// record account to diffs (creation if we are looking at new - old; deletion if old - new)
+					log.Debug("Account lookup successful", "address", leafKeyHash, "account", account)
+					diffAccounts[leafKeyHash] = aw
 				}
-				aw := accountWrapper{
-					Account:  account,
-					RawKey:   leafKey,
-					RawValue: leafValue,
-					Proof:    nil,
-					Path:     nil,
+				cont := it.Next(true)
+				if !cont {
+					break
 				}
-				// record account to diffs (creation if we are looking at new - old; deletion if old - new)
-				log.Debug("Account lookup successful", "address", leafKeyHash, "account", account)
-				diffAccounts[leafKeyHash] = aw
 			}
-			cont := it.Next(true)
-			if !cont {
-				break
+		} else {
+			for {
+				log.Debug("Current Path and Hash", "path", pathToStr(it), "old hash", it.Hash())
+				if it.Leaf() {
+					leafKey := make([]byte, len(it.LeafKey()))
+					copy(leafKey, it.LeafKey())
+					leafKeyHash := common.BytesToHash(leafKey)
+					leafValue := make([]byte, len(it.LeafBlob()))
+					copy(leafValue, it.LeafBlob())
+					// lookup account state
+					var account state.Account
+					if err := rlp.DecodeBytes(leafValue, &account); err != nil {
+						return nil, fmt.Errorf("error looking up account via address %s\r\nerror: %v", leafKeyHash.Hex(), err)
+					}
+					aw := accountWrapper{
+						Account:  &account,
+						RawKey:   leafKey,
+						RawValue: leafValue,
+						Proof:    nil,
+						Path:     nil,
+					}
+					// record account to diffs (creation if we are looking at new - old; deletion if old - new)
+					log.Debug("Account lookup successful", "address", leafKeyHash, "account", account)
+					diffAccounts[leafKeyHash] = aw
+				} else {
+					nodeKey := it.Hash()
+					node, err := sdb.stateCache.TrieDB().Node(nodeKey)
+					if err != nil {
+						return nil, fmt.Errorf("error looking up intermediate state trie node %s\r\nerror: %v", nodeKey.Hex(), err)
+					}
+					aw := accountWrapper{
+						Account:  nil,
+						RawKey:   nodeKey.Bytes(),
+						RawValue: node,
+						Proof:    nil,
+						Path:     nil,
+					}
+					log.Debug("intermediate state trie node lookup successful", "key", nodeKey.Hex(), "value", node)
+					diffAccounts[nodeKey] = aw
+				}
+				cont := it.Next(true)
+				if !cont {
+					break
+				}
 			}
 		}
 	}
@@ -183,10 +232,15 @@ func (sdb *builder) collectDiffNodes(a, b trie.NodeIterator) (AccountsMap, error
 
 func (sdb *builder) buildDiffEventual(accounts AccountsMap) (AccountDiffsMap, error) {
 	accountDiffs := make(AccountDiffsMap)
+	var err error
 	for _, val := range accounts {
-		storageDiffs, err := sdb.buildStorageDiffsEventual(val.Account.Root)
-		if err != nil {
-			return nil, fmt.Errorf("failed building eventual storage diffs for address: %s, error: %v", common.BytesToHash(val.RawKey), err)
+		// If account is not nil, we need to process storage diffs
+		var storageDiffs []StorageDiff
+		if val.Account != nil {
+			storageDiffs, err = sdb.buildStorageDiffsEventual(val.Account.Root)
+			if err != nil {
+				return nil, fmt.Errorf("failed building eventual storage diffs for %s\r\nerror: %v", common.BytesToHash(val.RawKey), err)
+			}
 		}
 		accountDiffs[common.BytesToHash(val.RawKey)] = AccountDiff{
 			Key:     val.RawKey,
@@ -202,15 +256,19 @@ func (sdb *builder) buildDiffEventual(accounts AccountsMap) (AccountDiffsMap, er
 
 func (sdb *builder) buildDiffIncremental(creations AccountsMap, deletions AccountsMap, updatedKeys []string) (AccountDiffsMap, error) {
 	updatedAccounts := make(AccountDiffsMap)
+	var err error
 	for _, val := range updatedKeys {
-		createdAcc := creations[common.HexToHash(val)]
-		deletedAcc := deletions[common.HexToHash(val)]
-		oldSR := deletedAcc.Account.Root
-		newSR := createdAcc.Account.Root
-		storageDiffs, err := sdb.buildStorageDiffsIncremental(oldSR, newSR)
-		if err != nil {
-			log.Error("Failed building storage diffs", "Address", val, "error", err)
-			return nil, err
+		hashKey := common.HexToHash(val)
+		createdAcc := creations[hashKey]
+		deletedAcc := deletions[hashKey]
+		var storageDiffs []StorageDiff
+		if deletedAcc.Account != nil && createdAcc.Account != nil {
+			oldSR := deletedAcc.Account.Root
+			newSR := createdAcc.Account.Root
+			storageDiffs, err = sdb.buildStorageDiffsIncremental(oldSR, newSR)
+			if err != nil {
+				return nil, fmt.Errorf("failed building incremental storage diffs for %s\r\nerror: %v", hashKey.Hex(), err)
+			}
 		}
 		updatedAccounts[common.HexToHash(val)] = AccountDiff{
 			Key:     createdAcc.RawKey,
@@ -235,8 +293,7 @@ func (sdb *builder) buildStorageDiffsEventual(sr common.Hash) ([]StorageDiff, er
 		return nil, err
 	}
 	it := sTrie.NodeIterator(make([]byte, 0))
-	storageDiffs := sdb.buildStorageDiffsFromTrie(it)
-	return storageDiffs, nil
+	return sdb.buildStorageDiffsFromTrie(it)
 }
 
 func (sdb *builder) buildStorageDiffsIncremental(oldSR common.Hash, newSR common.Hash) ([]StorageDiff, error) {
@@ -255,12 +312,10 @@ func (sdb *builder) buildStorageDiffsIncremental(oldSR common.Hash, newSR common
 	oldIt := oldTrie.NodeIterator(make([]byte, 0))
 	newIt := newTrie.NodeIterator(make([]byte, 0))
 	it, _ := trie.NewDifferenceIterator(oldIt, newIt)
-	storageDiffs := sdb.buildStorageDiffsFromTrie(it)
-
-	return storageDiffs, nil
+	return sdb.buildStorageDiffsFromTrie(it)
 }
 
-func (sdb *builder) buildStorageDiffsFromTrie(it trie.NodeIterator) []StorageDiff {
+func (sdb *builder) buildStorageDiffsFromTrie(it trie.NodeIterator) ([]StorageDiff, error) {
 	storageDiffs := make([]StorageDiff, 0)
 	if sdb.config.PathsAndProofs {
 		for {
@@ -288,29 +343,65 @@ func (sdb *builder) buildStorageDiffsFromTrie(it trie.NodeIterator) []StorageDif
 			}
 		}
 	} else {
-		for {
-			log.Debug("Iterating over state at path ", "path", pathToStr(it))
-			if it.Leaf() {
-				log.Debug("Found leaf in storage", "path", pathToStr(it))
-				leafKey := make([]byte, len(it.LeafKey()))
-				copy(leafKey, it.LeafKey())
-				leafValue := make([]byte, len(it.LeafBlob()))
-				copy(leafValue, it.LeafBlob())
-				storageDiffs = append(storageDiffs, StorageDiff{
-					Key:   leafKey,
-					Value: leafValue,
-					Path:  nil,
-					Proof: nil,
-				})
+		if sdb.config.LeafsOnly {
+			for {
+				log.Debug("Iterating over state at path ", "path", pathToStr(it))
+				if it.Leaf() {
+					log.Debug("Found leaf in storage", "path", pathToStr(it))
+					leafKey := make([]byte, len(it.LeafKey()))
+					copy(leafKey, it.LeafKey())
+					leafValue := make([]byte, len(it.LeafBlob()))
+					copy(leafValue, it.LeafBlob())
+					storageDiffs = append(storageDiffs, StorageDiff{
+						Key:   leafKey,
+						Value: leafValue,
+						Path:  nil,
+						Proof: nil,
+					})
+				}
+				cont := it.Next(true)
+				if !cont {
+					break
+				}
 			}
-			cont := it.Next(true)
-			if !cont {
-				break
+		} else {
+			for {
+				log.Debug("Iterating over state at path ", "path", pathToStr(it))
+				if it.Leaf() {
+					log.Debug("Found leaf in storage", "path", pathToStr(it))
+					leafKey := make([]byte, len(it.LeafKey()))
+					copy(leafKey, it.LeafKey())
+					leafValue := make([]byte, len(it.LeafBlob()))
+					copy(leafValue, it.LeafBlob())
+					storageDiffs = append(storageDiffs, StorageDiff{
+						Key:   leafKey,
+						Value: leafValue,
+						Path:  nil,
+						Proof: nil,
+					})
+				} else {
+					nodeKey := it.Hash()
+					node, err := sdb.stateCache.TrieDB().Node(nodeKey)
+					if err != nil {
+						return nil, fmt.Errorf("error looking up intermediate storage trie node %s\r\nerror: %v", nodeKey.Hex(), err)
+					}
+					storageDiffs = append(storageDiffs, StorageDiff{
+						Key:   nodeKey.Bytes(),
+						Value: node,
+						Path:  nil,
+						Proof: nil,
+					})
+					log.Debug("intermediate storage trie node lookup successful", "key", nodeKey.Hex(), "value", node)
+				}
+				cont := it.Next(true)
+				if !cont {
+					break
+				}
 			}
 		}
 	}
 
-	return storageDiffs
+	return storageDiffs, nil
 }
 
 func (sdb *builder) addressByPath(path []byte) (*common.Address, error) {

@@ -44,7 +44,7 @@ type AccountsMap map[common.Hash]accountWrapper
 
 // AccountWrapper is used to temporary associate the unpacked account with its raw values
 type accountWrapper struct {
-	Account  state.Account
+	Account  *state.Account
 	RawKey   []byte
 	RawValue []byte
 	Proof    [][]byte

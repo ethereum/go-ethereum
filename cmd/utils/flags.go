@@ -765,11 +765,15 @@ var (
 	}
 	StateDiffPathsAndProofs = cli.BoolFlag{
 		Name:  "statediff.pathsandproofs",
-		Usage: "Path and proof sets for the state and storage nodes are generated",
+		Usage: "Path and proof sets for the state and storage nodes are generated; only works with leaf nodes",
 	}
 	StateDiffLeafNodesOnly = cli.BoolFlag{
 		Name:  "statediff.leafs",
 		Usage: "Consider only leaf nodes of the storage and state tries",
+	}
+	StateDiffWatchedAddresses = cli.StringSliceFlag{
+		Name:  "statediff.watchedaddresses",
+		Usage: "If provided, state diffing process is restricted to these addresses",
 	}
 )
 
@@ -1634,6 +1638,7 @@ func RegisterStateDiffService(stack *node.Node, ctx *cli.Context) {
 	config := statediff.Config{
 		PathsAndProofs: ctx.GlobalBool(StateDiffPathsAndProofs.Name),
 		LeafsOnly:      ctx.GlobalBool(StateDiffLeafNodesOnly.Name),
+		WatchedAddress: ctx.GlobalStringSlice(StateDiffWatchedAddresses.Name),
 	}
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		var ethServ *eth.Ethereum
