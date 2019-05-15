@@ -13,7 +13,7 @@ func bigFromBase10(s string) *big.Int {
 	return n
 }
 
-// u is the BN parameter that determines the prime: 1868033³.
+// u is the BN parameter
 var u = bigFromBase10("4965661367192848881")
 
 // Order is the number of elements in both G₁ and G₂: 36u⁴+36u³+18u²+6u+1.
