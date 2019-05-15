@@ -88,7 +88,7 @@ func (ubqhash *Ubqhash) Author(header *types.Header) (common.Address, error) {
 // stock Ethereum ubqhash engine.
 func (ubqhash *Ubqhash) VerifyHeader(chain consensus.ChainReader, header *types.Header, seal bool) error {
 	// If we're running a full engine faking, accept any input as valid
-	if ubqhash.fakeFull {
+	if ubqhash.config.PowMode == ModeFullFake {
 		return nil
 	}
 	// Short circuit if the header is known, or it's parent not
@@ -109,7 +109,7 @@ func (ubqhash *Ubqhash) VerifyHeader(chain consensus.ChainReader, header *types.
 // a results channel to retrieve the async verifications.
 func (ubqhash *Ubqhash) VerifyHeaders(chain consensus.ChainReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
 	// If we're running a full engine faking, accept any input as valid
-	if ubqhash.fakeFull || len(headers) == 0 {
+	if ubqhash.config.PowMode == ModeFullFake || len(headers) == 0 {
 		abort, results := make(chan struct{}), make(chan error, len(headers))
 		for i := 0; i < len(headers); i++ {
 			results <- nil
@@ -189,7 +189,7 @@ func (ubqhash *Ubqhash) verifyHeaderWorker(chain consensus.ChainReader, headers 
 // rules of the stock Ethereum ubqhash engine.
 func (ubqhash *Ubqhash) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
 	// If we're running a full engine faking, accept any input as valid
-	if ubqhash.fakeFull {
+	if ubqhash.config.PowMode == ModeFullFake {
 		return nil
 	}
 	// Verify that there are at most 2 uncles included in this block
