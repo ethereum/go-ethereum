@@ -17,9 +17,8 @@
 package metrics
 
 import (
-	"os/exec"
-	"strconv"
-	"strings"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -118,18 +117,27 @@ func Setup(ctx *cli.Context) {
 	}
 }
 
-func datadirDiskUsage(dir string, d time.Duration) {
+func datadirDiskUsage(path string, d time.Duration) {
 	for range time.Tick(d) {
-		cmd := exec.Command("du", "-s", dir)
-		out, err := cmd.CombinedOutput()
+		bytes, err := dirSize(path)
 		if err != nil {
 			log.Warn("cannot get disk space", "err", err)
 		}
-		res := strings.Split(string(out), "\t")[0]
-		bytes, err := strconv.ParseInt(res, 10, 64)
-		if err != nil {
-			log.Warn("cannot parse disk space", "err", err, "out", string(out))
-		}
+
 		metrics.GetOrRegisterGauge("datadir.usage", nil).Update(bytes)
 	}
+}
+
+func dirSize(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	return size, err
 }
