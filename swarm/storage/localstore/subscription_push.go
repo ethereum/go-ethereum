@@ -25,9 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/shed"
-	"github.com/ethereum/go-ethereum/swarm/spancontext"
-	"github.com/opentracing/opentracing-go"
-	olog "github.com/opentracing/opentracing-go/log"
 )
 
 // SubscribePush returns a channel that provides storage chunks with ordering from push syncing index.
@@ -68,8 +65,6 @@ func (db *DB) SubscribePush(ctx context.Context) (c <-chan chunk.Chunk, stop fun
 				// - context is done
 				metrics.GetOrRegisterCounter(metricName+".iter", nil).Inc(1)
 
-				ctx, sp := spancontext.StartSpan(ctx, metricName+".iter")
-
 				iterStart := time.Now()
 				var count int
 				err := db.pushIndex.Iterate(func(item shed.Item) (stop bool, err error) {
@@ -105,15 +100,6 @@ func (db *DB) SubscribePush(ctx context.Context) (c <-chan chunk.Chunk, stop fun
 				})
 
 				totalTimeMetric(metricName+".iter", iterStart)
-
-				sp.FinishWithOptions(opentracing.FinishOptions{
-					LogRecords: []opentracing.LogRecord{
-						{
-							Timestamp: time.Now(),
-							Fields:    []olog.Field{olog.Int("count", count)},
-						},
-					},
-				})
 
 				if err != nil {
 					metrics.GetOrRegisterCounter(metricName+".iter.error", nil).Inc(1)
