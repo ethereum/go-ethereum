@@ -35,7 +35,7 @@ func init() {
 // Gets a chunk of data, filled with 'b'
 func getChunk(size int, b int) []byte {
 	data := make([]byte, size)
-	for i, _ := range data {
+	for i := range data {
 		data[i] = byte(b)
 	}
 	return data

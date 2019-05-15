@@ -221,6 +221,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// Initialize the chain with ancient data if it isn't empty.
 	if bc.empty() {
 		if frozen, err := bc.db.Ancients(); err == nil && frozen > 0 {
+			var (
+				start  = time.Now()
+				logged time.Time
+			)
 			for i := uint64(0); i < frozen; i++ {
 				// Inject hash<->number mapping.
 				hash := rawdb.ReadCanonicalHash(bc.db, i)
@@ -235,12 +239,23 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 					return nil, errors.New("broken ancient database")
 				}
 				rawdb.WriteTxLookupEntries(bc.db, block)
+
+				// If we've spent too much time already, notify the user of what we're doing
+				if time.Since(logged) > 8*time.Second {
+					log.Info("Initializing chain from ancient data", "number", i, "hash", hash, "total", frozen-1, "elapsed", common.PrettyDuration(time.Since(start)))
+					logged = time.Now()
+				}
 			}
 			hash := rawdb.ReadCanonicalHash(bc.db, frozen-1)
 			rawdb.WriteHeadHeaderHash(bc.db, hash)
 			rawdb.WriteHeadFastBlockHash(bc.db, hash)
 
-			log.Info("Initialized chain with ancients", "number", frozen-1, "hash", hash)
+			// The first thing the node will do is reconstruct the verification data for
+			// the head block (ethash cache or clique voting snapshot). Might as well do
+			// it in advance.
+			bc.engine.VerifyHeader(bc, rawdb.ReadHeader(bc.db, hash, frozen-1), true)
+
+			log.Info("Initialized chain from ancient data", "number", frozen-1, "hash", hash, "elapsed", common.PrettyDuration(time.Since(start)))
 		}
 	}
 	if err := bc.loadLastState(); err != nil {

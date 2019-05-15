@@ -179,17 +179,18 @@ func InspectDatabase(db ethdb.Database) error {
 		logged = time.Now()
 
 		// Key-value store statistics
-		total          common.StorageSize
-		headerSize     common.StorageSize
-		bodySize       common.StorageSize
-		receiptSize    common.StorageSize
-		tdSize         common.StorageSize
-		numHashPairing common.StorageSize
-		hashNumPairing common.StorageSize
-		trieSize       common.StorageSize
-		txlookupSize   common.StorageSize
-		preimageSize   common.StorageSize
-		bloomBitsSize  common.StorageSize
+		total           common.StorageSize
+		headerSize      common.StorageSize
+		bodySize        common.StorageSize
+		receiptSize     common.StorageSize
+		tdSize          common.StorageSize
+		numHashPairing  common.StorageSize
+		hashNumPairing  common.StorageSize
+		trieSize        common.StorageSize
+		txlookupSize    common.StorageSize
+		preimageSize    common.StorageSize
+		bloomBitsSize   common.StorageSize
+		cliqueSnapsSize common.StorageSize
 
 		// Ancient store statistics
 		ancientHeaders  common.StorageSize
@@ -199,8 +200,12 @@ func InspectDatabase(db ethdb.Database) error {
 		ancientTds      common.StorageSize
 
 		// Les statistic
-		ChtTrieNodes   common.StorageSize
-		BloomTrieNodes common.StorageSize
+		chtTrieNodes   common.StorageSize
+		bloomTrieNodes common.StorageSize
+
+		// Meta- and unaccounted data
+		metadata    common.StorageSize
+		unaccounted common.StorageSize
 	)
 	// Inspect key-value database first.
 	for it.Next() {
@@ -228,12 +233,26 @@ func InspectDatabase(db ethdb.Database) error {
 			preimageSize += size
 		case bytes.HasPrefix(key, bloomBitsPrefix) && len(key) == (len(bloomBitsPrefix)+10+common.HashLength):
 			bloomBitsSize += size
+		case bytes.HasPrefix(key, []byte("clique-")) && len(key) == 7+common.HashLength:
+			cliqueSnapsSize += size
 		case bytes.HasPrefix(key, []byte("cht-")) && len(key) == 4+common.HashLength:
-			ChtTrieNodes += size
+			chtTrieNodes += size
 		case bytes.HasPrefix(key, []byte("blt-")) && len(key) == 4+common.HashLength:
-			BloomTrieNodes += size
+			bloomTrieNodes += size
 		case len(key) == common.HashLength:
 			trieSize += size
+		default:
+			var accounted bool
+			for _, meta := range [][]byte{databaseVerisionKey, headHeaderKey, headBlockKey, headFastBlockKey, fastTrieProgressKey, ancientKey} {
+				if bytes.Equal(key, meta) {
+					metadata += size
+					accounted = true
+					break
+				}
+			}
+			if !accounted {
+				unaccounted += size
+			}
 		}
 		count += 1
 		if count%1000 == 0 && time.Since(logged) > 8*time.Second {
@@ -261,18 +280,24 @@ func InspectDatabase(db ethdb.Database) error {
 		{"Key-Value store", "Bloombit index", bloomBitsSize.String()},
 		{"Key-Value store", "Trie nodes", trieSize.String()},
 		{"Key-Value store", "Trie preimages", preimageSize.String()},
+		{"Key-Value store", "Clique snapshots", cliqueSnapsSize.String()},
+		{"Key-Value store", "Singleton metadata", metadata.String()},
 		{"Ancient store", "Headers", ancientHeaders.String()},
 		{"Ancient store", "Bodies", ancientBodies.String()},
 		{"Ancient store", "Receipts", ancientReceipts.String()},
 		{"Ancient store", "Difficulties", ancientTds.String()},
 		{"Ancient store", "Block number->hash", ancientHashes.String()},
-		{"Light client", "CHT trie nodes", ChtTrieNodes.String()},
-		{"Light client", "Bloom trie nodes", BloomTrieNodes.String()},
+		{"Light client", "CHT trie nodes", chtTrieNodes.String()},
+		{"Light client", "Bloom trie nodes", bloomTrieNodes.String()},
 	}
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Database", "Category", "Size"})
 	table.SetFooter([]string{"", "Total", total.String()})
 	table.AppendBulk(stats)
 	table.Render()
+
+	if unaccounted > 0 {
+		log.Error("Database contains unaccounted data", "size", unaccounted)
+	}
 	return nil
 }

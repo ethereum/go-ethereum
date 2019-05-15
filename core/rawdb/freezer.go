@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/prometheus/tsdb/fileutil"
 )
 
@@ -51,11 +52,6 @@ const (
 	// chain progression that might permit new blocks to be frozen into immutable
 	// storage.
 	freezerRecheckInterval = time.Minute
-
-	// freezerBlockGraduation is the number of confirmations a block must achieve
-	// before it becomes elligible for chain freezing. This must exceed any chain
-	// reorg depth, since the freezer also deletes all block siblings.
-	freezerBlockGraduation = 90000
 
 	// freezerBatchLimit is the maximum number of blocks to freeze in one batch
 	// before doing an fsync and deleting it from the key-value store.
@@ -268,12 +264,12 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			time.Sleep(freezerRecheckInterval)
 			continue
 
-		case *number < freezerBlockGraduation:
-			log.Debug("Current full block not old enough", "number", *number, "hash", hash, "delay", freezerBlockGraduation)
+		case *number < params.ImmutabilityThreshold:
+			log.Debug("Current full block not old enough", "number", *number, "hash", hash, "delay", params.ImmutabilityThreshold)
 			time.Sleep(freezerRecheckInterval)
 			continue
 
-		case *number-freezerBlockGraduation <= f.frozen:
+		case *number-params.ImmutabilityThreshold <= f.frozen:
 			log.Debug("Ancient blocks frozen already", "number", *number, "hash", hash, "frozen", f.frozen)
 			time.Sleep(freezerRecheckInterval)
 			continue
@@ -285,7 +281,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			continue
 		}
 		// Seems we have data ready to be frozen, process in usable batches
-		limit := *number - freezerBlockGraduation
+		limit := *number - params.ImmutabilityThreshold
 		if limit-f.frozen > freezerBatchLimit {
 			limit = f.frozen + freezerBatchLimit
 		}
