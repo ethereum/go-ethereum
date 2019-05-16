@@ -18,10 +18,7 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -170,21 +167,6 @@ Remove blockchain and state databases`,
 		Description: `
 The arguments are interpreted as block numbers or hashes.
 Use "ethereum dump 0" to dump the genesis block.`,
-	}
-	migrateAncientCommand = cli.Command{
-		Action:    utils.MigrateFlags(migrateAncient),
-		Name:      "migrate-ancient",
-		Usage:     "migrate ancient database forcibly",
-		ArgsUsage: " ",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.AncientFlag,
-			utils.CacheFlag,
-			utils.TestnetFlag,
-			utils.RinkebyFlag,
-			utils.GoerliFlag,
-		},
-		Category: "BLOCKCHAIN COMMANDS",
 	}
 	inspectCommand = cli.Command{
 		Action:    utils.MigrateFlags(inspect),
@@ -460,49 +442,61 @@ func copyDb(ctx *cli.Context) error {
 func removeDB(ctx *cli.Context) error {
 	stack, config := makeConfigNode(ctx)
 
-	for i, name := range []string{"chaindata", "lightchaindata"} {
-		// Ensure the database exists in the first place
-		logger := log.New("database", name)
-
-		var (
-			dbdirs  []string
-			freezer string
-		)
-		dbdir := stack.ResolvePath(name)
-		if !common.FileExist(dbdir) {
-			logger.Info("Database doesn't exist, skipping", "path", dbdir)
-			continue
-		}
-		dbdirs = append(dbdirs, dbdir)
-		if i == 0 {
-			freezer = config.Eth.DatabaseFreezer
-			switch {
-			case freezer == "":
-				freezer = filepath.Join(dbdir, "ancient")
-			case !filepath.IsAbs(freezer):
-				freezer = config.Node.ResolvePath(freezer)
-			}
-			if common.FileExist(freezer) {
-				dbdirs = append(dbdirs, freezer)
-			}
-		}
-		for i := len(dbdirs) - 1; i >= 0; i-- {
-			// Confirm removal and execute
-			fmt.Println(dbdirs[i])
-			confirm, err := console.Stdin.PromptConfirm("Remove this database?")
-			switch {
-			case err != nil:
-				utils.Fatalf("%v", err)
-			case !confirm:
-				logger.Warn("Database deletion aborted")
-			default:
-				start := time.Now()
-				os.RemoveAll(dbdirs[i])
-				logger.Info("Database successfully deleted", "elapsed", common.PrettyDuration(time.Since(start)))
-			}
-		}
+	// Remove the full node state database
+	path := stack.ResolvePath("chaindata")
+	if common.FileExist(path) {
+		confirmAndRemoveDB(path, "full node state database")
+	} else {
+		log.Info("Full node state database missing", "path", path)
+	}
+	// Remove the full node ancient database
+	path = config.Eth.DatabaseFreezer
+	switch {
+	case path == "":
+		path = filepath.Join(stack.ResolvePath("chaindata"), "ancient")
+	case !filepath.IsAbs(path):
+		path = config.Node.ResolvePath(path)
+	}
+	if common.FileExist(path) {
+		confirmAndRemoveDB(path, "full node ancient database")
+	} else {
+		log.Info("Full node ancient database missing", "path", path)
+	}
+	// Remove the light node database
+	path = stack.ResolvePath("lightchaindata")
+	if common.FileExist(path) {
+		confirmAndRemoveDB(path, "light node database")
+	} else {
+		log.Info("Light node database missing", "path", path)
 	}
 	return nil
+}
+
+// confirmAndRemoveDB prompts the user for a last confirmation and removes the
+// folder if accepted.
+func confirmAndRemoveDB(database string, kind string) {
+	confirm, err := console.Stdin.PromptConfirm(fmt.Sprintf("Remove %s (%s)?", kind, database))
+	switch {
+	case err != nil:
+		utils.Fatalf("%v", err)
+	case !confirm:
+		log.Info("Database deletion skipped", "path", database)
+	default:
+		start := time.Now()
+		filepath.Walk(database, func(path string, info os.FileInfo, err error) error {
+			// If we're at the top level folder, recurse into
+			if path == database {
+				return nil
+			}
+			// Delete all the files, but not subfolders
+			if !info.IsDir() {
+				os.Remove(path)
+				return nil
+			}
+			return filepath.SkipDir
+		})
+		log.Info("Database successfully deleted", "path", database, "elapsed", common.PrettyDuration(time.Since(start)))
+	}
 }
 
 func dump(ctx *cli.Context) error {
@@ -533,47 +527,6 @@ func dump(ctx *cli.Context) error {
 	return nil
 }
 
-func migrateAncient(ctx *cli.Context) error {
-	node, config := makeConfigNode(ctx)
-	defer node.Close()
-
-	dbdir := config.Node.ResolvePath("chaindata")
-	kvdb, err := rawdb.NewLevelDBDatabase(dbdir, 128, 1024, "")
-	if err != nil {
-		return err
-	}
-	defer kvdb.Close()
-
-	freezer := config.Eth.DatabaseFreezer
-	switch {
-	case freezer == "":
-		freezer = filepath.Join(dbdir, "ancient")
-	case !filepath.IsAbs(freezer):
-		freezer = config.Node.ResolvePath(freezer)
-	}
-	stored := rawdb.ReadAncientPath(kvdb)
-	if stored != freezer && stored != "" {
-		confirm, err := console.Stdin.PromptConfirm(fmt.Sprintf("Are you sure to migrate ancient database from %s to %s?", stored, freezer))
-		switch {
-		case err != nil:
-			utils.Fatalf("%v", err)
-		case !confirm:
-			log.Warn("Ancient database migration aborted")
-		default:
-			if err := rename(stored, freezer); err != nil {
-				// Renaming a file can fail if the source and destination
-				// are on different file systems.
-				if err := moveAncient(stored, freezer); err != nil {
-					utils.Fatalf("Migrate ancient database failed, %v", err)
-				}
-			}
-			rawdb.WriteAncientPath(kvdb, freezer)
-			log.Info("Ancient database successfully migrated")
-		}
-	}
-	return nil
-}
-
 func inspect(ctx *cli.Context) error {
 	node, _ := makeConfigNode(ctx)
 	defer node.Close()
@@ -588,85 +541,4 @@ func inspect(ctx *cli.Context) error {
 func hashish(x string) bool {
 	_, err := strconv.Atoi(x)
 	return err != nil
-}
-
-// copyFileSynced copies data from source file to destination
-// and synces the dest file forcibly.
-func copyFileSynced(src string, dest string, info os.FileInfo) error {
-	srcf, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer srcf.Close()
-
-	destf, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm())
-	if err != nil {
-		return err
-	}
-	// The maximum size of ancient file is 2GB, 4MB buffer is suitable here.
-	buff := make([]byte, 4*1024*1024)
-	for {
-		rn, err := srcf.Read(buff)
-		if err != nil && err != io.EOF {
-			return err
-		}
-		if rn == 0 {
-			break
-		}
-		if wn, err := destf.Write(buff[:rn]); err != nil || wn != rn {
-			return err
-		}
-	}
-	if err1 := destf.Sync(); err == nil {
-		err = err1
-	}
-	if err1 := destf.Close(); err == nil {
-		err = err1
-	}
-	return err
-}
-
-// copyDirSynced recursively copies files under the specified dir
-// to dest and synces the dest dir forcibly.
-func copyDirSynced(src string, dest string, info os.FileInfo) error {
-	if err := os.MkdirAll(dest, os.ModePerm); err != nil {
-		return err
-	}
-	defer os.Chmod(dest, info.Mode())
-
-	objects, err := ioutil.ReadDir(src)
-	if err != nil {
-		return err
-	}
-	for _, obj := range objects {
-		// All files in ancient database should be flatten files.
-		if !obj.Mode().IsRegular() {
-			continue
-		}
-		subsrc, subdest := filepath.Join(src, obj.Name()), filepath.Join(dest, obj.Name())
-		if err := copyFileSynced(subsrc, subdest, obj); err != nil {
-			return err
-		}
-	}
-	return syncDir(dest)
-}
-
-// moveAncient migrates ancient database from source to destination.
-func moveAncient(src string, dest string) error {
-	srcinfo, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-	if !srcinfo.IsDir() {
-		return errors.New("ancient directory expected")
-	}
-	if destinfo, err := os.Lstat(dest); !os.IsNotExist(err) {
-		if destinfo.Mode()&os.ModeSymlink != 0 {
-			return errors.New("symbolic link datadir is not supported")
-		}
-	}
-	if err := copyDirSynced(src, dest, srcinfo); err != nil {
-		return err
-	}
-	return os.RemoveAll(src)
 }

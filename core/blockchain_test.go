@@ -1717,10 +1717,7 @@ func TestIncompleteAncientReceiptChainInsertion(t *testing.T) {
 	}
 	// Abort ancient receipt chain insertion deliberately
 	ancient.terminateInsert = func(hash common.Hash, number uint64) bool {
-		if number == blocks[len(blocks)/2].NumberU64() {
-			return true
-		}
-		return false
+		return number == blocks[len(blocks)/2].NumberU64()
 	}
 	previousFastBlock := ancient.CurrentFastBlock()
 	if n, err := ancient.InsertReceiptChain(blocks, receipts, uint64(3*len(blocks)/4)); err == nil {

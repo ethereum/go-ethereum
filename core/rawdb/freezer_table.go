@@ -259,7 +259,7 @@ func (t *freezerTable) preopen() (err error) {
 	// The repair might have already opened (some) files
 	t.releaseFilesAfter(0, false)
 	// Open all except head in RDONLY
-	for i := uint32(t.tailId); i < t.headId; i++ {
+	for i := t.tailId; i < t.headId; i++ {
 		if _, err = t.openFile(i, os.O_RDONLY); err != nil {
 			return err
 		}

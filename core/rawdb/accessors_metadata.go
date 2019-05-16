@@ -80,20 +80,6 @@ func WriteChainConfig(db ethdb.KeyValueWriter, hash common.Hash, cfg *params.Cha
 	}
 }
 
-// ReadAncientPath retrieves ancient database path which is recorded during the
-// first node setup or forcibly changed by user.
-func ReadAncientPath(db ethdb.KeyValueReader) string {
-	data, _ := db.Get(ancientKey)
-	return string(data)
-}
-
-// WriteAncientPath writes ancient database path into the key-value database.
-func WriteAncientPath(db ethdb.KeyValueWriter, path string) {
-	if err := db.Put(ancientKey, []byte(path)); err != nil {
-		log.Crit("Failed to store ancient path", "err", err)
-	}
-}
-
 // ReadPreimage retrieves a single preimage of the provided hash.
 func ReadPreimage(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(preimageKey(hash))
