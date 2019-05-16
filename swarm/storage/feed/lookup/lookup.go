@@ -20,7 +20,10 @@ so they can be found
 */
 package lookup
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 const maxuint64 = ^uint64(0)
 
@@ -28,8 +31,8 @@ const maxuint64 = ^uint64(0)
 const LowestLevel uint8 = 0 // default is 0 (1 second)
 
 // HighestLevel sets the lowest frequency the algorithm will operate at, as a power of 2.
-// 25 -> 2^25 equals to roughly one year.
-const HighestLevel = 25 // default is 25 (~1 year)
+// 31 -> 2^31 equals to roughly 38 years.
+const HighestLevel = 31
 
 // DefaultLevel sets what level will be chosen to search when there is no hint
 const DefaultLevel = HighestLevel
@@ -43,7 +46,12 @@ type Algorithm func(ctx context.Context, now uint64, hint Epoch, read ReadFunc) 
 // read() will be called on each lookup attempt
 // Returns an error only if read() returns an error
 // Returns nil if an update was not found
-var Lookup Algorithm = FluzCapacitorAlgorithm
+var Lookup Algorithm = LongEarthAlgorithm
+
+// TimeAfter must point to a function that returns a timer
+// This is here so that tests can replace it with
+// a mock up timer factory to simulate time deterministically
+var TimeAfter = time.After
 
 // ReadFunc is a handler called by Lookup each time it attempts to find a value
 // It should return <nil> if a value is not found
@@ -123,61 +131,6 @@ func GetFirstEpoch(now uint64) Epoch {
 
 var worstHint = Epoch{Time: 0, Level: 63}
 
-// FluzCapacitorAlgorithm works by narrowing the epoch search area if an update is found
-// going back and forth in time
-// First, it will attempt to find an update where it should be now if the hint was
-// really the last update. If that lookup fails, then the last update must be either the hint itself
-// or the epochs right below. If however, that lookup succeeds, then the update must be
-// that one or within the epochs right below.
-// see the guide for a more graphical representation
-func FluzCapacitorAlgorithm(ctx context.Context, now uint64, hint Epoch, read ReadFunc) (value interface{}, err error) {
-	var lastFound interface{}
-	var epoch Epoch
-	if hint == NoClue {
-		hint = worstHint
-	}
-
-	t := now
-
-	for {
-		epoch = GetNextEpoch(hint, t)
-		value, err = read(ctx, epoch, now)
-		if err != nil {
-			return nil, err
-		}
-		if value != nil {
-			lastFound = value
-			if epoch.Level == LowestLevel || epoch.Equals(hint) {
-				return value, nil
-			}
-			hint = epoch
-			continue
-		}
-		if epoch.Base() == hint.Base() {
-			if lastFound != nil {
-				return lastFound, nil
-			}
-			// we have reached the hint itself
-			if hint == worstHint {
-				return nil, nil
-			}
-			// check it out
-			value, err = read(ctx, hint, now)
-			if err != nil {
-				return nil, err
-			}
-			if value != nil {
-				return value, nil
-			}
-			// bad hint.
-			t = hint.Base()
-			hint = worstHint
-			continue
-		}
-		base := epoch.Base()
-		if base == 0 {
-			return nil, nil
-		}
-		t = base - 1
-	}
+var trace = func(id int32, formatString string, a ...interface{}) {
+	//fmt.Printf("Step ID #%d "+formatString+"\n", append([]interface{}{id}, a...)...)
 }
