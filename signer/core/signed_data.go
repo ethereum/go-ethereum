@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/big"
 	"mime"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -109,11 +110,11 @@ type TypePriority struct {
 type TypedDataMessage = map[string]interface{}
 
 type TypedDataDomain struct {
-	Name              string   `json:"name"`
-	Version           string   `json:"version"`
-	ChainId           *big.Int `json:"chainId"`
-	VerifyingContract string   `json:"verifyingContract"`
-	Salt              string   `json:"salt"`
+	Name              string                `json:"name"`
+	Version           string                `json:"version"`
+	ChainId           *math.HexOrDecimal256 `json:"chainId"`
+	VerifyingContract string                `json:"verifyingContract"`
+	Salt              string                `json:"salt"`
 }
 
 var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Z](\w*)(\[\])?$`)
@@ -476,10 +477,54 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 	return buffer.Bytes(), nil
 }
 
+func parseIntegerType(encType string, encValue interface{}) (*big.Int, error) {
+	length := 0
+	if encType == "int" || encType == "uint" {
+		length = 256
+	} else {
+		lengthStr := ""
+		if strings.HasPrefix(encType, "uint") {
+			lengthStr = strings.TrimPrefix(encType, "uint")
+		} else {
+			lengthStr = strings.TrimPrefix(encType, "int")
+		}
+		atoiSize, err := strconv.Atoi(lengthStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid size on integer: %v", lengthStr)
+		}
+		length = atoiSize
+	}
+	var b *big.Int
+	switch v := encValue.(type) {
+	case *math.HexOrDecimal256:
+		b = (*big.Int)(v)
+	case string:
+		var hexIntValue math.HexOrDecimal256
+		if err := hexIntValue.UnmarshalText([]byte(v)); err != nil {
+			return nil, err
+		}
+		b = (*big.Int)(&hexIntValue)
+	case float64:
+		// JSON parses non-strings as float64. Fail if we cannot
+		// convert it losslessly
+		if float64(int64(v)) == v {
+			b = big.NewInt(int64(v))
+		} else {
+			return nil, fmt.Errorf("invalid float value %v for type %v", v, encType)
+		}
+	}
+	if b == nil {
+		return nil, fmt.Errorf("invalid integer value %v/%v for type %v", encValue, reflect.TypeOf(encValue), encType)
+	}
+	if b.BitLen() > length {
+		return nil, fmt.Errorf("integer larger than '%v'", encType)
+	}
+	return b, nil
+}
+
 // EncodePrimitiveValue deals with the primitive values found
 // while searching through the typed data
 func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interface{}, depth int) ([]byte, error) {
-
 	switch encType {
 	case "address":
 		stringValue, ok := encValue.(string)
@@ -527,30 +572,11 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 		}
 	}
 	if strings.HasPrefix(encType, "int") || strings.HasPrefix(encType, "uint") {
-		length := 0
-		if encType == "int" || encType == "uint" {
-			length = 256
-		} else {
-			lengthStr := ""
-			if strings.HasPrefix(encType, "uint") {
-				lengthStr = strings.TrimPrefix(encType, "uint")
-			} else {
-				lengthStr = strings.TrimPrefix(encType, "int")
-			}
-			atoiSize, err := strconv.Atoi(lengthStr)
-			if err != nil {
-				return nil, fmt.Errorf("invalid size on integer: %v", lengthStr)
-			}
-			length = atoiSize
+		b, err := parseIntegerType(encType, encValue)
+		if err != nil {
+			return nil, err
 		}
-		bigIntValue, ok := encValue.(*big.Int)
-		if bigIntValue.BitLen() > length {
-			return nil, fmt.Errorf("integer larger than '%v'", encType)
-		}
-		if !ok {
-			return nil, dataMismatchError(encType, encValue)
-		}
-		return abi.U256(bigIntValue), nil
+		return abi.U256(b), nil
 	}
 	return nil, fmt.Errorf("unrecognized type '%s'", encType)
 
@@ -728,8 +754,11 @@ func formatPrimitiveValue(encType string, encValue interface{}) string {
 	if strings.HasPrefix(encType, "bytes") {
 		return fmt.Sprintf("%s", encValue)
 	} else if strings.HasPrefix(encType, "uint") || strings.HasPrefix(encType, "int") {
-		bigIntValue, _ := encValue.(*big.Int)
-		return fmt.Sprintf("%d (0x%x)", bigIntValue, bigIntValue)
+		b, err := parseIntegerType(encType, encValue)
+		if err != nil {
+			return fmt.Sprintf("ERROR: %v", err)
+		}
+		return fmt.Sprintf("%d (0x%x)", b, b)
 	}
 	return "NA"
 }
@@ -767,7 +796,7 @@ func (t Types) validate() error {
 				return fmt.Errorf("type '%s' cannot reference itself", typeObj.Type)
 			}
 			if typeObj.isReferenceType() {
-				if _, exist := t[typeObj.Type]; !exist {
+				if _, exist := t[typeObj.typeName()]; !exist {
 					return fmt.Errorf("reference type '%s' is undefined", typeObj.Type)
 				}
 				if !typedDataReferenceTypeRegexp.MatchString(typeObj.Type) {
@@ -895,7 +924,7 @@ func isPrimitiveTypeValid(primitiveType string) bool {
 // validate checks if the given domain is valid, i.e. contains at least
 // the minimum viable keys and values
 func (domain *TypedDataDomain) validate() error {
-	if domain.ChainId == big.NewInt(0) {
+	if domain.ChainId == nil {
 		return errors.New("chainId must be specified according to EIP-155")
 	}
 

@@ -482,7 +482,6 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 			return nil, err
 		}
 	}
-
 	req := SignTxRequest{
 		Transaction: args,
 		Meta:        MetadataFromContext(ctx),
