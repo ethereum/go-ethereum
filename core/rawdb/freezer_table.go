@@ -73,6 +73,11 @@ func (i *indexEntry) marshallBinary() []byte {
 // It consists of a data file (snappy encoded arbitrary data blobs) and an indexEntry
 // file (uncompressed 64 bit indices into the data file).
 type freezerTable struct {
+	// WARNING: The `items` field is accessed atomically. On 32 bit platforms, only
+	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
+	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
+	items uint64 // Number of items stored in the table (including items removed from tail)
+
 	noCompression bool   // if true, disables snappy compression. Note: does not work retroactively
 	maxFileSize   uint32 // Max file size for data-files
 	name          string
@@ -86,7 +91,6 @@ type freezerTable struct {
 
 	// In the case that old items are deleted (from the tail), we use itemOffset
 	// to count how many historic items have gone missing.
-	items      uint64 // Number of items stored in the table (including items removed from tail)
 	itemOffset uint32 // Offset (number of discarded items)
 
 	headBytes  uint32        // Number of bytes written to the head file

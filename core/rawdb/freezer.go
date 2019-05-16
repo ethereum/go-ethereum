@@ -66,8 +66,12 @@ const (
 //   reserving it for go-ethereum. This would also reduce the memory requirements
 //   of Geth, and thus also GC overhead.
 type freezer struct {
+	// WARNING: The `frozen` field is accessed atomically. On 32 bit platforms, only
+	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
+	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
+	frozen uint64 // Number of blocks already frozen
+
 	tables       map[string]*freezerTable // Data tables for storing everything
-	frozen       uint64                   // Number of blocks already frozen
 	instanceLock fileutil.Releaser        // File-system lock to prevent double opens
 }
 
