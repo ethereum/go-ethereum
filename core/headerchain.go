@@ -24,6 +24,7 @@ import (
 	"math/big"
 	mrand "math/rand"
 	"sync/atomic"
+	"sort"
 	"time"
 
 	"github.com/ubiq/go-ubiq/common"
@@ -397,7 +398,7 @@ func (hc *HeaderChain) CalcPastMedianTime(number uint64, parent *types.Header) *
 
 	// Genesis block.
 	if number == 0 {
-		return hc.GetHeaderByNumber(0).Time
+		return big.NewInt(int64(hc.GetHeaderByNumber(0).Time))
 	}
 
 	timestamps := make([]*big.Int, medianTimeBlocks)
@@ -409,10 +410,10 @@ func (hc *HeaderChain) CalcPastMedianTime(number uint64, parent *types.Header) *
 
 	for i := number; i >= limit; i-- {
 		if parent != nil && i == number {
-			timestamps[numNodes] = parent.Time
+			timestamps[numNodes] = big.NewInt(int64(parent.Time))
 		} else {
 			header := hc.GetHeaderByNumber(i)
-			timestamps[numNodes] = header.Time
+			timestamps[numNodes] = big.NewInt(int64(header.Time))
 		}
 		numNodes++
 		if i == 0 {
