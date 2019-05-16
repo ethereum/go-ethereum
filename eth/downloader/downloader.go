@@ -98,6 +98,13 @@ var (
 )
 
 type Downloader struct {
+	// WARNING: The `rttEstimate` and `rttConfidence` fields are accessed atomically.
+	// On 32 bit platforms, only 64-bit aligned fields can be atomic. The struct is
+	// guaranteed to be so aligned, so take advantage of that. For more information,
+	// see https://golang.org/pkg/sync/atomic/#pkg-note-BUG.
+	rttEstimate   uint64 // Round trip time to target for download requests
+	rttConfidence uint64 // Confidence in the estimated RTT (unit: millionths to allow atomic ops)
+
 	mode SyncMode       // Synchronisation mode defining the strategy used (per sync cycle)
 	mux  *event.TypeMux // Event multiplexer to announce sync operation events
 
@@ -108,9 +115,6 @@ type Downloader struct {
 
 	stateDB    ethdb.Database  // Database to state sync into (and deduplicate via)
 	stateBloom *trie.SyncBloom // Bloom filter for fast trie node existence checks
-
-	rttEstimate   uint64 // Round trip time to target for download requests
-	rttConfidence uint64 // Confidence in the estimated RTT (unit: millionths to allow atomic ops)
 
 	// Statistics
 	syncStatsChainOrigin uint64 // Origin block number where syncing started at
