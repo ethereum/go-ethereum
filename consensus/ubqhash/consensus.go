@@ -26,19 +26,21 @@ import (
 
   mapset "github.com/deckarep/golang-set"
 	"github.com/ubiq/go-ubiq/common"
-	"github.com/ubiq/go-ubiq/common/math"
 	"github.com/ubiq/go-ubiq/consensus"
 	"github.com/ubiq/go-ubiq/consensus/misc"
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/params"
+	"github.com/ubiq/go-ubiq/rlp"
+	"golang.org/x/crypto/sha3"
 )
 
 // Ubqhash proof-of-work protocol constants.
 var (
 	blockReward *big.Int = big.NewInt(8e+18) // Block reward in wei for successfully mining a block
 	maxUncles            = 2                 // Maximum number of uncles allowed in a single block
+	allowedFutureBlockTime    = 15 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
 )
 
 // Diff algo constants.
@@ -246,42 +248,39 @@ func (ubqhash *Ubqhash) verifyHeader(chain consensus.ChainReader, header, parent
 		return fmt.Errorf("extra-data too long: %d > %d", len(header.Extra), params.MaximumExtraDataSize)
 	}
 	// Verify the header's timestamp
-	if uncle {
-		if header.Time.Cmp(math.MaxBig256) > 0 {
-			return errLargeBlockTime
-		}
-	} else {
-		if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
+	if !uncle {
+		if header.Time > uint64(time.Now().Add(allowedFutureBlockTime).Unix()) {
 			return consensus.ErrFutureBlock
 		}
 	}
-	if header.Time.Cmp(parent.Time) <= 0 {
+	if header.Time <= parent.Time {
 		return errZeroBlockTime
 	}
 	// Verify the block's difficulty based in it's timestamp and parent's difficulty
-	expected := CalcDifficulty(chain, header.Time.Uint64(), parent)
+	expected := CalcDifficulty(chain, header.Time, parent)
+
 	if expected.Cmp(header.Difficulty) != 0 {
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, expected)
 	}
 	// Verify that the gas limit is <= 2^63-1
-	if header.GasLimit.Cmp(math.MaxBig63) > 0 {
-		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, math.MaxBig63)
+	cap := uint64(0x7fffffffffffffff)
+	if header.GasLimit > cap {
+		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, cap)
 	}
 	// Verify that the gasUsed is <= gasLimit
-	if header.GasUsed.Cmp(header.GasLimit) > 0 {
-		return fmt.Errorf("invalid gasUsed: have %v, gasLimit %v", header.GasUsed, header.GasLimit)
+	if header.GasUsed > header.GasLimit {
+		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
 	}
 
 	// Verify that the gas limit remains within allowed bounds
-	diff := new(big.Int).Set(parent.GasLimit)
-	diff = diff.Sub(diff, header.GasLimit)
-	diff.Abs(diff)
+	diff := int64(parent.GasLimit) - int64(header.GasLimit)
+	if diff < 0 {
+		diff *= -1
+	}
+	limit := parent.GasLimit / params.GasLimitBoundDivisor
 
-	limit := new(big.Int).Set(parent.GasLimit)
-	limit = limit.Div(limit, params.GasLimitBoundDivisor)
-
-	if diff.Cmp(limit) >= 0 || header.GasLimit.Cmp(params.MinGasLimit) < 0 {
-		return fmt.Errorf("invalid gas limit: have %v, want %v += %v", header.GasLimit, parent.GasLimit, limit)
+	if uint64(diff) >= limit || header.GasLimit < params.MinGasLimit {
+		return fmt.Errorf("invalid gas limit: have %d, want %d += %d", header.GasLimit, parent.GasLimit, limit)
 	}
 	// Verify that the block number is parent's +1
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
@@ -401,7 +400,7 @@ func CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Head
 		return calcDifficulty2(chain, parentNumber, parentDiff, parent)
 	} else {
 		// (chain consensus.ChainReader, time, parentTime, parentNumber, parentDiff *big.Int, parent *types.Header)
-		return fluxDifficulty(chain, big.NewInt(int64(time)), parentTime, parentNumber, parentDiff, parent)
+		return fluxDifficulty(chain, big.NewInt(int64(time)), big.NewInt(int64(parentTime)), parentNumber, parentDiff, parent)
 	}
 }
 
@@ -580,8 +579,15 @@ func fluxDifficulty(chain consensus.ChainReader, time, parentTime, parentNumber,
 // VerifySeal implements consensus.Engine, checking whether the given block satisfies
 // the PoW difficulty requirements.
 func (ubqhash *Ubqhash) VerifySeal(chain consensus.ChainReader, header *types.Header) error {
+	return ubqhash.verifySeal(chain, header, false)
+}
+
+// verifySeal checks whether a block satisfies the PoW difficulty requirements,
+// either using the usual ethash cache for it, or alternatively using a full DAG
+// to make remote mining fast.
+func (ubqhash *Ubqhash) verifySeal(chain consensus.ChainReader, header *types.Header, fulldag bool) error {
 	// If we're running a fake PoW, accept any seal as valid
-	if ubqhash.fakeMode {
+	if ubqhash.config.PowMode == ModeFake || ubqhash.config.PowMode == ModeFullFake {
 		time.Sleep(ubqhash.fakeDelay)
 		if ubqhash.fakeFail == header.Number.Uint64() {
 			return errInvalidPoW
@@ -590,30 +596,52 @@ func (ubqhash *Ubqhash) VerifySeal(chain consensus.ChainReader, header *types.He
 	}
 	// If we're running a shared PoW, delegate verification to it
 	if ubqhash.shared != nil {
-		return ubqhash.shared.VerifySeal(chain, header)
-	}
-	// Sanity check that the block number is below the lookup table size (60M blocks)
-	number := header.Number.Uint64()
-	if number/epochLength >= uint64(len(cacheSizes)) {
-		// Go < 1.7 cannot calculate new cache/dataset sizes (no fast prime check)
-		return errNonceOutOfRange
+		return ubqhash.shared.verifySeal(chain, header, fulldag)
 	}
 	// Ensure that we have a valid difficulty for the block
 	if header.Difficulty.Sign() <= 0 {
 		return errInvalidDifficulty
 	}
-	// Recompute the digest and PoW value and verify against the header
-	cache := ubqhash.cache(number)
+	// Recompute the digest and PoW values
+	number := header.Number.Uint64()
 
-	size := datasetSize(number)
-	if ubqhash.tester {
-		size = 32 * 1024
+	var (
+		digest []byte
+		result []byte
+	)
+	// If fast-but-heavy PoW verification was requested, use an ethash dataset
+	if fulldag {
+		dataset := ubqhash.dataset(number, true)
+		if dataset.generated() {
+			digest, result = hashimotoFull(dataset.dataset, ubqhash.SealHash(header).Bytes(), header.Nonce.Uint64())
+
+			// Datasets are unmapped in a finalizer. Ensure that the dataset stays alive
+			// until after the call to hashimotoFull so it's not unmapped while being used.
+			runtime.KeepAlive(dataset)
+		} else {
+			// Dataset not yet generated, don't hang, use a cache instead
+			fulldag = false
+		}
 	}
-	digest, result := hashimotoLight(size, cache, header.HashNoNonce().Bytes(), header.Nonce.Uint64())
+	// If slow-but-light PoW verification was requested (or DAG not yet ready), use an ethash cache
+	if !fulldag {
+		cache := ubqhash.cache(number)
+
+		size := datasetSize(number)
+		if ubqhash.config.PowMode == ModeTest {
+			size = 32 * 1024
+		}
+		digest, result = hashimotoLight(size, cache.cache, ubqhash.SealHash(header).Bytes(), header.Nonce.Uint64())
+
+		// Caches are unmapped in a finalizer. Ensure that the cache stays alive
+		// until after the call to hashimotoLight so it's not unmapped while being used.
+		runtime.KeepAlive(cache)
+	}
+	// Verify the calculated values against the ones provided in the header
 	if !bytes.Equal(header.MixDigest[:], digest) {
 		return errInvalidMixDigest
 	}
-	target := new(big.Int).Div(maxUint256, header.Difficulty)
+	target := new(big.Int).Div(two256, header.Difficulty)
 	if new(big.Int).SetBytes(result).Cmp(target) > 0 {
 		return errInvalidPoW
 	}
@@ -627,7 +655,7 @@ func (ubqhash *Ubqhash) Prepare(chain consensus.ChainReader, header *types.Heade
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	header.Difficulty = CalcDifficulty(chain, header.Time.Uint64(), parent)
+	header.Difficulty = CalcDifficulty(chain, header.Time, parent)
 
 	return nil
 }
@@ -649,6 +677,29 @@ var (
 	big8  = big.NewInt(8)
 	big32 = big.NewInt(32)
 )
+
+// SealHash returns the hash of a block prior to it being sealed.
+func (ubqhash *Ubqhash) SealHash(header *types.Header) (hash common.Hash) {
+	hasher := sha3.NewLegacyKeccak256()
+
+	rlp.Encode(hasher, []interface{}{
+		header.ParentHash,
+		header.UncleHash,
+		header.Coinbase,
+		header.Root,
+		header.TxHash,
+		header.ReceiptHash,
+		header.Bloom,
+		header.Difficulty,
+		header.Number,
+		header.GasLimit,
+		header.GasUsed,
+		header.Time,
+		header.Extra,
+	})
+	hasher.Sum(hash[:0])
+	return hash
+}
 
 // AccumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
