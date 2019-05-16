@@ -151,6 +151,13 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool) *accounts.
 			backends = append(backends, trezorhub)
 			log.Debug("Trezor support enabled")
 		}
+		// Start a USB hub for Trezor hardware wallets (WebUSB version)
+		if trezorhub, err := usbwallet.NewWebUSBTrezorHub(); err != nil {
+			log.Warn(fmt.Sprintf("Failed to start Trezor hub, disabling: %v", err))
+		} else {
+			backends = append(backends, trezorhub)
+			log.Debug("Trezor support enabled")
+		}
 	}
 	// Clef doesn't allow insecure http account unlock.
 	return accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: false}, backends...)

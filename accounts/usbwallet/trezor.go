@@ -36,6 +36,8 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
+var ErrInvalidDeviceType = errors.New("trezor: invalid device type")
+
 // ErrTrezorPINNeeded is returned if opening the trezor requires a PIN code. In
 // this case, the calling application should display a pinpad and send back the
 // encoded passphrase.

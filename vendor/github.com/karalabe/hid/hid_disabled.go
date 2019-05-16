@@ -4,7 +4,7 @@
 // This file is released under the 3-clause BSD license. Note however that Linux
 // support depends on libusb, released under GNU LGPL 2.1 or later.
 
-// +build !linux,!darwin,!windows ios !cgo
+// +build !freebsd,!linux,!darwin,!windows ios !cgo
 
 package hid
 
@@ -22,30 +22,55 @@ func Enumerate(vendorID uint16, productID uint16) []DeviceInfo {
 	return nil
 }
 
-// Device is a live HID USB connected device handle. On platforms that this file
+// HidDevice is a live HID USB connected device handle. On platforms that this file
 // implements the type lacks the actual HID device and all methods are noop.
-type Device struct {
-	DeviceInfo // Embed the infos for easier access
+type HidDevice struct {
+	HidDeviceInfo // Embed the infos for easier access
 }
 
 // Open connects to an HID device by its path name. On platforms that this file
 // implements the method just returns an error.
-func (info DeviceInfo) Open() (*Device, error) {
+func (info HidDeviceInfo) Open() (*Device, error) {
 	return nil, ErrUnsupportedPlatform
 }
 
 // Close releases the HID USB device handle. On platforms that this file implements
 // the method is just a noop.
-func (dev *Device) Close() error { return nil }
+func (dev *HidDevice) Close() error { return ErrUnsupportedPlatform }
 
 // Write sends an output report to a HID device. On platforms that this file
 // implements the method just returns an error.
-func (dev *Device) Write(b []byte) (int, error) {
+func (dev *HidDevice) Write(b []byte) (int, error) {
 	return 0, ErrUnsupportedPlatform
 }
 
 // Read retrieves an input report from a HID device. On platforms that this file
 // implements the method just returns an error.
-func (dev *Device) Read(b []byte) (int, error) {
+func (dev *HidDevice) Read(b []byte) (int, error) {
 	return 0, ErrUnsupportedPlatform
+}
+
+// Open tries to open the USB device represented by the current DeviceInfo
+func (gdi *GenericDeviceInfo) Open() (Device, error) {
+	return nil, ErrUnsupportedPlatform
+}
+
+// GenericDevice represents a generic USB device
+type GenericDevice struct {
+	*GenericDeviceInfo // Embed the infos for easier access
+}
+
+// Write implements io.ReaderWriter
+func (gd *GenericDevice) Write(b []byte) (int, error) {
+	return 0, ErrUnsupportedPlatform
+}
+
+// Read implements io.ReaderWriter
+func (gd *GenericDevice) Read(b []byte) (int, error) {
+	return 0, ErrUnsupportedPlatform
+}
+
+// Close a previously opened generic USB device
+func (gd *GenericDevice) Close() error {
+	return ErrUnsupportedPlatform
 }

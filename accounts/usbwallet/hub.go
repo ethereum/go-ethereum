@@ -89,6 +89,12 @@ func NewTrezorHub() (*Hub, error) {
 	return newHub(TrezorScheme, 0x534c, []uint16{0x0001 /* Trezor 1 */}, 0xff00, 0, newTrezorDriver)
 }
 
+// NewWebUSBTrezorHub creates a new hardware wallet manager for Trezor devices with
+// firmware version > 1.8.0
+func NewWebUSBTrezorHub() (*Hub, error) {
+	return newHub(TrezorScheme, 0x1209, []uint16{0x53c1 /* Trezor 1 WebUSB */}, 0, 0, newTrezorDriver)
+}
+
 // newHub creates a new hardware wallet manager for generic USB devices.
 func newHub(scheme string, vendorID uint16, productIDs []uint16, usageID uint16, endpointID int, makeDriver func(log.Logger) driver) (*Hub, error) {
 	if !hid.Supported() {
@@ -148,9 +154,19 @@ func (hub *Hub) refreshWallets() {
 			return
 		}
 	}
-	for _, info := range hid.Enumerate(hub.vendorID, 0) {
+	infos, err := hid.Enumerate(hub.vendorID, 0)
+	if err != nil {
+		if runtime.GOOS == "linux" {
+			// See rationale before the enumeration why this is needed and only on Linux.
+			hub.commsLock.Unlock()
+		}
+		log.Error("error enumerating USB enumeration: ", "code", err)
+		return
+	}
+	for _, info := range infos {
 		for _, id := range hub.productIDs {
-			if info.ProductID == id && (info.UsagePage == hub.usageID || info.Interface == hub.endpointID) {
+			_, pid, endpoint, _ /* FIXME usageID */ := info.IDs()
+			if pid == id && ( /* FIXME usageID == hub.usageID || */ endpoint == hub.endpointID) {
 				devices = append(devices, info)
 				break
 			}
@@ -169,7 +185,7 @@ func (hub *Hub) refreshWallets() {
 	)
 
 	for _, device := range devices {
-		url := accounts.URL{Scheme: hub.scheme, Path: device.Path}
+		url := accounts.URL{Scheme: hub.scheme, Path: device.GetPath()}
 
 		// Drop wallets in front of the next device or those that failed for some reason
 		for len(hub.wallets) > 0 {

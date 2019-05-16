@@ -78,7 +78,7 @@ type wallet struct {
 	url    *accounts.URL // Textual URL uniquely identifying this wallet
 
 	info   hid.DeviceInfo // Known USB device infos about the wallet
-	device *hid.Device    // USB device advertising itself as a hardware wallet
+	device hid.Device     // USB device advertising itself as a hardware wallet
 
 	accounts []accounts.Account                         // List of derive accounts pinned on the hardware wallet
 	paths    map[common.Address]accounts.DerivationPath // Known derivation paths for signing operations

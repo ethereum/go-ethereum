@@ -17,8 +17,8 @@ var ErrDeviceClosed = errors.New("hid: device closed")
 // operating system is not supported by the library.
 var ErrUnsupportedPlatform = errors.New("hid: unsupported platform")
 
-// DeviceInfo is a hidapi info structure.
-type DeviceInfo struct {
+// HidDeviceInfo is a hidapi info structure.
+type HidDeviceInfo struct {
 	Path         string // Platform-specific device path
 	VendorID     uint16 // Device Vendor ID
 	ProductID    uint16 // Device Product ID
@@ -34,4 +34,19 @@ type DeviceInfo struct {
 	// in all cases, and valid on the Windows implementation
 	// only if the device contains more than one interface.
 	Interface int
+}
+
+// GetPath returns the system-dependent path to the device
+func (hdi *HidDeviceInfo) GetPath() string {
+	return hdi.Path
+}
+
+// IDs returns the vendor and product id of the device
+func (hdi *HidDeviceInfo) IDs() (uint16, uint16, int, uint16) {
+	return hdi.VendorID, hdi.ProductID, hdi.Interface, hdi.UsagePage
+}
+
+// Type returns the type of the device (HID or generic)
+func (hdi *HidDeviceInfo) Type() DeviceType {
+	return DeviceTypeHID
 }
