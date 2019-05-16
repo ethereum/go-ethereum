@@ -114,6 +114,7 @@ type Config struct {
 	SkipBcVersionCheck bool `toml:"-"`
 	DatabaseHandles    int  `toml:"-"`
 	DatabaseCache      int
+	DatabaseFreezer    string
 
 	TrieCleanCache int
 	TrieDirtyCache int
