@@ -18,10 +18,11 @@ package mocks
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -76,18 +77,21 @@ func (sds *MockStateDiffService) Loop(chan core.ChainEvent) {
 				continue
 			}
 
-			stateDiff, err := sds.Builder.BuildStateDiff(parentBlock.Root(), currentBlock.Root(), currentBlock.Number().Int64(), currentBlock.Hash())
+			stateDiff, err := sds.Builder.BuildStateDiff(parentBlock.Root(), currentBlock.Root(), currentBlock.Number(), currentBlock.Hash())
 			if err != nil {
 				log.Error("Error building statediff", "block number", currentBlock.Number(), "error", err)
 			}
 			rlpBuff := new(bytes.Buffer)
 			currentBlock.EncodeRLP(rlpBuff)
 			blockRlp := rlpBuff.Bytes()
-			stateDiffBytes, _ := json.Marshal(stateDiff)
+			stateDiffRlp, err := rlp.EncodeToBytes(stateDiff)
+			if err != nil {
+				log.Error("Error encoding statediff", "block number", currentBlock.Number(), "error", err)
+			}
 			payload := statediff.Payload{
-				BlockRlp:  blockRlp,
-				StateDiff: stateDiffBytes,
-				Err:       err,
+				BlockRlp:     blockRlp,
+				StateDiffRlp: stateDiffRlp,
+				Err:          err,
 			}
 			// If we have any websocket subscription listening in, send the data to them
 			sds.send(payload)

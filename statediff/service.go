@@ -18,9 +18,10 @@ package statediff
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -63,6 +64,8 @@ type Service struct {
 	QuitChan chan bool
 	// A mapping of rpc.IDs to their subscription channels
 	Subscriptions map[rpc.ID]Subscription
+	// Cache the last block so that we can avoid having to lookup the next block's parent
+	lastBlock *types.Block
 }
 
 // NewStateDiffService creates a new StateDiffingService
@@ -106,7 +109,13 @@ func (sds *Service) Loop(chainEventCh chan core.ChainEvent) {
 			log.Debug("Event received from chainEventCh", "event", chainEvent)
 			currentBlock := chainEvent.Block
 			parentHash := currentBlock.ParentHash()
-			parentBlock := sds.BlockChain.GetBlockByHash(parentHash)
+			var parentBlock *types.Block
+			if sds.lastBlock != nil && bytes.Equal(sds.lastBlock.Hash().Bytes(), currentBlock.ParentHash().Bytes()) {
+				parentBlock = sds.lastBlock
+			} else {
+				parentBlock = sds.BlockChain.GetBlockByHash(parentHash)
+			}
+			sds.lastBlock = currentBlock
 			if parentBlock == nil {
 				log.Error("Parent block is nil, skipping this block",
 					"parent block hash", parentHash.String(),
@@ -130,7 +139,7 @@ func (sds *Service) Loop(chainEventCh chan core.ChainEvent) {
 
 // process method builds the state diff payload from the current and parent block and streams it to listening subscriptions
 func (sds *Service) process(currentBlock, parentBlock *types.Block) error {
-	stateDiff, err := sds.Builder.BuildStateDiff(parentBlock.Root(), currentBlock.Root(), currentBlock.Number().Int64(), currentBlock.Hash())
+	stateDiff, err := sds.Builder.BuildStateDiff(parentBlock.Root(), currentBlock.Root(), currentBlock.Number(), currentBlock.Hash())
 	if err != nil {
 		return err
 	}
@@ -138,11 +147,14 @@ func (sds *Service) process(currentBlock, parentBlock *types.Block) error {
 	rlpBuff := new(bytes.Buffer)
 	currentBlock.EncodeRLP(rlpBuff)
 	blockRlp := rlpBuff.Bytes()
-	stateDiffBytes, _ := json.Marshal(stateDiff)
+	stateDiffRlp, err := rlp.EncodeToBytes(stateDiff)
+	if err != nil {
+		return err
+	}
 	payload := Payload{
-		BlockRlp:  blockRlp,
-		StateDiff: stateDiffBytes,
-		Err:       err,
+		BlockRlp:     blockRlp,
+		StateDiffRlp: stateDiffRlp,
+		Err:          err,
 	}
 
 	// If we have any websocket subscription listening in, send the data to them

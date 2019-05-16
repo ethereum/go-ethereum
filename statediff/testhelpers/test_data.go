@@ -36,7 +36,7 @@ func AddressToLeafKey(address common.Address) common.Hash {
 
 // Test variables
 var (
-	BlockNumber     = rand.Int63()
+	BlockNumber     = big.NewInt(rand.Int63())
 	BlockHash       = "0xfa40fbe2d98d98b3363a778d52f2bcd29d6790b9b3f3cab2b167fd12d3550f73"
 	CodeHash        = common.Hex2Bytes("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
 	NewNonceValue   = rand.Uint64()
@@ -63,26 +63,26 @@ var (
 		CodeHash: CodeHash,
 	}
 	valueBytes, _       = rlp.EncodeToBytes(testAccount)
-	CreatedAccountDiffs = statediff.AccountDiffsMap{
-		ContractLeafKey: {
+	CreatedAccountDiffs = []statediff.AccountDiff{
+		{
 			Key:     ContractLeafKey.Bytes(),
 			Value:   valueBytes,
 			Storage: storage,
 		},
-		AnotherContractLeafKey: {
+		{
 			Key:     AnotherContractLeafKey.Bytes(),
 			Value:   valueBytes,
 			Storage: emptyStorage,
 		},
 	}
 
-	UpdatedAccountDiffs = statediff.AccountDiffsMap{ContractLeafKey: {
+	UpdatedAccountDiffs = []statediff.AccountDiff{{
 		Key:     ContractLeafKey.Bytes(),
 		Value:   valueBytes,
 		Storage: storage,
 	}}
 
-	DeletedAccountDiffs = statediff.AccountDiffsMap{ContractLeafKey: {
+	DeletedAccountDiffs = []statediff.AccountDiff{{
 		Key:     ContractLeafKey.Bytes(),
 		Value:   valueBytes,
 		Storage: storage,

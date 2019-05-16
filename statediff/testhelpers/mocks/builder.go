@@ -17,6 +17,8 @@
 package mocks
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/statediff"
 )
@@ -25,14 +27,14 @@ import (
 type Builder struct {
 	OldStateRoot common.Hash
 	NewStateRoot common.Hash
-	BlockNumber  int64
+	BlockNumber  *big.Int
 	BlockHash    common.Hash
 	stateDiff    statediff.StateDiff
 	builderError error
 }
 
 // BuildStateDiff mock method
-func (builder *Builder) BuildStateDiff(oldStateRoot, newStateRoot common.Hash, blockNumber int64, blockHash common.Hash) (statediff.StateDiff, error) {
+func (builder *Builder) BuildStateDiff(oldStateRoot, newStateRoot common.Hash, blockNumber *big.Int, blockHash common.Hash) (statediff.StateDiff, error) {
 	builder.OldStateRoot = oldStateRoot
 	builder.NewStateRoot = newStateRoot
 	builder.BlockNumber = blockNumber

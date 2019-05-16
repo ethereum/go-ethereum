@@ -21,6 +21,7 @@ package statediff
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -34,7 +35,7 @@ import (
 
 // Builder interface exposes the method for building a state diff between two blocks
 type Builder interface {
-	BuildStateDiff(oldStateRoot, newStateRoot common.Hash, blockNumber int64, blockHash common.Hash) (StateDiff, error)
+	BuildStateDiff(oldStateRoot, newStateRoot common.Hash, blockNumber *big.Int, blockHash common.Hash) (StateDiff, error)
 }
 
 type builder struct {
@@ -54,7 +55,7 @@ func NewBuilder(db ethdb.Database, blockChain *core.BlockChain, config Config) B
 }
 
 // BuildStateDiff builds a StateDiff object from two blocks
-func (sdb *builder) BuildStateDiff(oldStateRoot, newStateRoot common.Hash, blockNumber int64, blockHash common.Hash) (StateDiff, error) {
+func (sdb *builder) BuildStateDiff(oldStateRoot, newStateRoot common.Hash, blockNumber *big.Int, blockHash common.Hash) (StateDiff, error) {
 	// Generate tries for old and new states
 	sdb.stateCache = sdb.blockChain.StateCache()
 	oldTrie, err := sdb.stateCache.OpenTrie(oldStateRoot)
@@ -230,8 +231,8 @@ func (sdb *builder) collectDiffNodes(a, b trie.NodeIterator) (AccountsMap, error
 	return diffAccounts, nil
 }
 
-func (sdb *builder) buildDiffEventual(accounts AccountsMap) (AccountDiffsMap, error) {
-	accountDiffs := make(AccountDiffsMap)
+func (sdb *builder) buildDiffEventual(accounts AccountsMap) ([]AccountDiff, error) {
+	accountDiffs := make([]AccountDiff, 0)
 	var err error
 	for _, val := range accounts {
 		// If account is not nil, we need to process storage diffs
@@ -242,20 +243,20 @@ func (sdb *builder) buildDiffEventual(accounts AccountsMap) (AccountDiffsMap, er
 				return nil, fmt.Errorf("failed building eventual storage diffs for %s\r\nerror: %v", common.BytesToHash(val.RawKey), err)
 			}
 		}
-		accountDiffs[common.BytesToHash(val.RawKey)] = AccountDiff{
+		accountDiffs = append(accountDiffs, AccountDiff{
 			Key:     val.RawKey,
 			Value:   val.RawValue,
 			Proof:   val.Proof,
 			Path:    val.Path,
 			Storage: storageDiffs,
-		}
+		})
 	}
 
 	return accountDiffs, nil
 }
 
-func (sdb *builder) buildDiffIncremental(creations AccountsMap, deletions AccountsMap, updatedKeys []string) (AccountDiffsMap, error) {
-	updatedAccounts := make(AccountDiffsMap)
+func (sdb *builder) buildDiffIncremental(creations AccountsMap, deletions AccountsMap, updatedKeys []string) ([]AccountDiff, error) {
+	updatedAccounts := make([]AccountDiff, 0)
 	var err error
 	for _, val := range updatedKeys {
 		hashKey := common.HexToHash(val)
@@ -270,13 +271,13 @@ func (sdb *builder) buildDiffIncremental(creations AccountsMap, deletions Accoun
 				return nil, fmt.Errorf("failed building incremental storage diffs for %s\r\nerror: %v", hashKey.Hex(), err)
 			}
 		}
-		updatedAccounts[common.HexToHash(val)] = AccountDiff{
+		updatedAccounts = append(updatedAccounts, AccountDiff{
 			Key:     createdAcc.RawKey,
 			Value:   createdAcc.RawValue,
 			Proof:   createdAcc.Proof,
 			Path:    createdAcc.Path,
 			Storage: storageDiffs,
-		}
+		})
 		delete(creations, common.HexToHash(val))
 		delete(deletions, common.HexToHash(val))
 	}

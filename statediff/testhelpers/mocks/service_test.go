@@ -18,8 +18,8 @@ package mocks
 
 import (
 	"bytes"
-	"encoding/json"
 	"math/big"
+	"sort"
 	"sync"
 	"testing"
 
@@ -34,7 +34,7 @@ import (
 
 var block0, block1 *types.Block
 var burnLeafKey = testhelpers.AddressToLeafKey(common.HexToAddress("0x0"))
-var emptyAccountDiffEventualMap = make(statediff.AccountDiffsMap)
+var emptyAccountDiffEventualMap = make([]statediff.AccountDiff, 0)
 var account1, _ = rlp.EncodeToBytes(state.Account{
 	Nonce:    uint64(0),
 	Balance:  big.NewInt(10000),
@@ -84,18 +84,10 @@ func TestAPI(t *testing.T) {
 	parentBlockChain <- block0
 	expectedBlockRlp, _ := rlp.EncodeToBytes(block1)
 	expectedStateDiff := statediff.StateDiff{
-		BlockNumber: block1.Number().Int64(),
+		BlockNumber: block1.Number(),
 		BlockHash:   block1.Hash(),
-		CreatedAccounts: statediff.AccountDiffsMap{
-			testhelpers.Account1LeafKey: {
-				Key:   testhelpers.Account1LeafKey.Bytes(),
-				Value: account1,
-				Proof: [][]byte{{248, 113, 160, 87, 118, 82, 182, 37, 183, 123, 219, 91, 247, 123, 196, 63, 49, 37, 202, 215, 70, 77, 103, 157, 21, 117, 86, 82, 119, 211, 97, 27, 128, 83, 231, 128, 128, 128, 128, 160, 254, 136, 159, 16, 229, 219, 143, 44, 43, 243, 85, 146, 129, 82, 161, 127, 110, 59, 185, 154, 146, 65, 172, 109, 132, 199, 126, 98, 100, 80, 156, 121, 128, 128, 128, 128, 128, 128, 128, 128, 160, 17, 219, 12, 218, 52, 168, 150, 218, 190, 182, 131, 155, 176, 106, 56, 244, 149, 20, 207, 164, 134, 67, 89, 132, 235, 1, 59, 125, 249, 238, 133, 197, 128, 128},
-					{248, 107, 160, 57, 38, 219, 105, 170, 206, 213, 24, 233, 185, 240, 244, 52, 164, 115, 231, 23, 65, 9, 201, 67, 84, 139, 184, 242, 59, 228, 28, 167, 109, 154, 210, 184, 72, 248, 70, 128, 130, 39, 16, 160, 86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33, 160, 197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112}},
-				Path:    []byte{14, 9, 2, 6, 13, 11, 6, 9, 10, 10, 12, 14, 13, 5, 1, 8, 14, 9, 11, 9, 15, 0, 15, 4, 3, 4, 10, 4, 7, 3, 14, 7, 1, 7, 4, 1, 0, 9, 12, 9, 4, 3, 5, 4, 8, 11, 11, 8, 15, 2, 3, 11, 14, 4, 1, 12, 10, 7, 6, 13, 9, 10, 13, 2, 16},
-				Storage: []statediff.StorageDiff{},
-			},
-			burnLeafKey: {
+		CreatedAccounts: []statediff.AccountDiff{
+			{
 				Key:   burnLeafKey.Bytes(),
 				Value: burnAccount1,
 				Proof: [][]byte{{248, 113, 160, 87, 118, 82, 182, 37, 183, 123, 219, 91, 247, 123, 196, 63, 49, 37, 202, 215, 70, 77, 103, 157, 21, 117, 86, 82, 119, 211, 97, 27, 128, 83, 231, 128, 128, 128, 128, 160, 254, 136, 159, 16, 229, 219, 143, 44, 43, 243, 85, 146, 129, 82, 161, 127, 110, 59, 185, 154, 146, 65, 172, 109, 132, 199, 126, 98, 100, 80, 156, 121, 128, 128, 128, 128, 128, 128, 128, 128, 160, 17, 219, 12, 218, 52, 168, 150, 218, 190, 182, 131, 155, 176, 106, 56, 244, 149, 20, 207, 164, 134, 67, 89, 132, 235, 1, 59, 125, 249, 238, 133, 197, 128, 128},
@@ -103,10 +95,18 @@ func TestAPI(t *testing.T) {
 				Path:    []byte{5, 3, 8, 0, 12, 7, 11, 7, 10, 14, 8, 1, 10, 5, 8, 14, 11, 9, 8, 13, 9, 12, 7, 8, 13, 14, 4, 10, 1, 15, 13, 7, 15, 13, 9, 5, 3, 5, 15, 12, 9, 5, 3, 14, 13, 2, 11, 14, 6, 0, 2, 13, 10, 10, 10, 4, 1, 7, 6, 7, 3, 1, 2, 10, 16},
 				Storage: []statediff.StorageDiff{},
 			},
+			{
+				Key:   testhelpers.Account1LeafKey.Bytes(),
+				Value: account1,
+				Proof: [][]byte{{248, 113, 160, 87, 118, 82, 182, 37, 183, 123, 219, 91, 247, 123, 196, 63, 49, 37, 202, 215, 70, 77, 103, 157, 21, 117, 86, 82, 119, 211, 97, 27, 128, 83, 231, 128, 128, 128, 128, 160, 254, 136, 159, 16, 229, 219, 143, 44, 43, 243, 85, 146, 129, 82, 161, 127, 110, 59, 185, 154, 146, 65, 172, 109, 132, 199, 126, 98, 100, 80, 156, 121, 128, 128, 128, 128, 128, 128, 128, 128, 160, 17, 219, 12, 218, 52, 168, 150, 218, 190, 182, 131, 155, 176, 106, 56, 244, 149, 20, 207, 164, 134, 67, 89, 132, 235, 1, 59, 125, 249, 238, 133, 197, 128, 128},
+					{248, 107, 160, 57, 38, 219, 105, 170, 206, 213, 24, 233, 185, 240, 244, 52, 164, 115, 231, 23, 65, 9, 201, 67, 84, 139, 184, 242, 59, 228, 28, 167, 109, 154, 210, 184, 72, 248, 70, 128, 130, 39, 16, 160, 86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33, 160, 197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112}},
+				Path:    []byte{14, 9, 2, 6, 13, 11, 6, 9, 10, 10, 12, 14, 13, 5, 1, 8, 14, 9, 11, 9, 15, 0, 15, 4, 3, 4, 10, 4, 7, 3, 14, 7, 1, 7, 4, 1, 0, 9, 12, 9, 4, 3, 5, 4, 8, 11, 11, 8, 15, 2, 3, 11, 14, 4, 1, 12, 10, 7, 6, 13, 9, 10, 13, 2, 16},
+				Storage: []statediff.StorageDiff{},
+			},
 		},
 		DeletedAccounts: emptyAccountDiffEventualMap,
-		UpdatedAccounts: statediff.AccountDiffsMap{
-			testhelpers.BankLeafKey: {
+		UpdatedAccounts: []statediff.AccountDiff{
+			{
 				Key:   testhelpers.BankLeafKey.Bytes(),
 				Value: bankAccount1,
 				Proof: [][]byte{{248, 113, 160, 87, 118, 82, 182, 37, 183, 123, 219, 91, 247, 123, 196, 63, 49, 37, 202, 215, 70, 77, 103, 157, 21, 117, 86, 82, 119, 211, 97, 27, 128, 83, 231, 128, 128, 128, 128, 160, 254, 136, 159, 16, 229, 219, 143, 44, 43, 243, 85, 146, 129, 82, 161, 127, 110, 59, 185, 154, 146, 65, 172, 109, 132, 199, 126, 98, 100, 80, 156, 121, 128, 128, 128, 128, 128, 128, 128, 128, 160, 17, 219, 12, 218, 52, 168, 150, 218, 190, 182, 131, 155, 176, 106, 56, 244, 149, 20, 207, 164, 134, 67, 89, 132, 235, 1, 59, 125, 249, 238, 133, 197, 128, 128},
@@ -116,17 +116,20 @@ func TestAPI(t *testing.T) {
 			},
 		},
 	}
-	expectedStateDiffBytes, err := json.Marshal(expectedStateDiff)
+	expectedStateDiffBytes, err := rlp.EncodeToBytes(expectedStateDiff)
 	if err != nil {
 		t.Error(err)
 	}
+	sort.Slice(expectedStateDiffBytes, func(i, j int) bool { return expectedStateDiffBytes[i] < expectedStateDiffBytes[j] })
+
 	select {
 	case payload := <-payloadChan:
 		if !bytes.Equal(payload.BlockRlp, expectedBlockRlp) {
-			t.Errorf("payload does not have expected block\r\actual: %v\r\nexpected: %v", payload.BlockRlp, expectedBlockRlp)
+			t.Errorf("payload does not have expected block\r\actual block rlp: %v\r\nexpected block rlp: %v", payload.BlockRlp, expectedBlockRlp)
 		}
-		if !bytes.Equal(payload.StateDiff, expectedStateDiffBytes) {
-			t.Errorf("payload does not have expected state diff\r\actual: %v\r\nexpected: %v", payload.StateDiff, expectedStateDiffBytes)
+		sort.Slice(payload.StateDiffRlp, func(i, j int) bool { return payload.StateDiffRlp[i] < payload.StateDiffRlp[j] })
+		if !bytes.Equal(payload.StateDiffRlp, expectedStateDiffBytes) {
+			t.Errorf("payload does not have expected state diff\r\actual state diff rlp: %v\r\nexpected state diff rlp: %v", payload.StateDiffRlp, expectedStateDiffBytes)
 		}
 		if payload.Err != nil {
 			t.Errorf("payload should not contain an error, but does: %v", payload.Err)
