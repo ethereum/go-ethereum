@@ -17,7 +17,6 @@
 package miner
 
 import (
-	"bytes"
 	"errors"
 	"math/big"
 	"sync"
@@ -27,7 +26,6 @@ import (
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/consensus"
-	"github.com/ubiq/go-ubiq/consensus/misc"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/types"
