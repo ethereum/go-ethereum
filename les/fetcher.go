@@ -55,7 +55,7 @@ type lightFetcher struct {
 	requested         map[uint64]fetchRequest
 	deliverChn        chan fetchResponse
 	timeoutChn        chan uint64
-	requesting        bool
+	requestTriggered  bool
 	requestTrigger    chan struct{}
 	lastTrustedHeader *types.Header
 }
@@ -152,14 +152,13 @@ func (f *lightFetcher) syncLoop() {
 			if !f.syncing {
 				rq, reqID, syncing = f.nextRequest()
 			}
-			f.requesting = rq != nil
+			f.requestTriggered = rq != nil
 			f.lock.Unlock()
 
 			if rq != nil {
 				if _, ok := <-f.pm.reqDist.queue(rq); ok {
 					if syncing {
 						f.lock.Lock()
-						f.requesting = false
 						f.syncing = true
 						f.lock.Unlock()
 					} else {
@@ -216,12 +215,8 @@ func (f *lightFetcher) syncLoop() {
 			p.Log().Debug("Done synchronising with peer")
 			f.checkSyncedHeaders(p)
 			f.syncing = false
-			r := f.requesting
-			f.requesting = true
 			f.lock.Unlock()
-			if !r {
-				f.requestTrigger <- struct{}{}
-			}
+			f.requestTrigger <- struct{}{} // f.requestTriggered is always true here
 		}
 	}
 }
@@ -355,8 +350,8 @@ func (f *lightFetcher) announce(p *peer, head *announceData) {
 	fp.lastAnnounced = n
 	p.lock.Unlock()
 	f.checkUpdateStats(p, nil)
-	if !f.requesting {
-		f.requesting = true
+	if !f.requestTriggered {
+		f.requestTriggered = true
 		f.requestTrigger <- struct{}{}
 	}
 }
