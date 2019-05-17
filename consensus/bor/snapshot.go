@@ -218,7 +218,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		}
 		for _, recent := range snap.Recents {
 			if recent == signer {
-				return nil, errRecentlySigned
+				// return nil, errRecentlySigned
 			}
 		}
 		snap.Recents[number] = signer
@@ -303,10 +303,10 @@ func (s *Snapshot) signers() []common.Address {
 }
 
 // inturn returns if a signer at a given block height is in-turn or not.
-func (s *Snapshot) inturn(number uint64, signer common.Address) bool {
+func (s *Snapshot) inturn(number uint64, signer common.Address, producerPeriod uint64) bool {
 	signers, offset := s.signers(), 0
 	for offset < len(signers) && signers[offset] != signer {
 		offset++
 	}
-	return (number % uint64(len(signers))) == uint64(offset)
+	return ((number / producerPeriod) % uint64(len(signers))) == uint64(offset)
 }

@@ -228,7 +228,7 @@ func (c *CliqueConfig) String() string {
 
 // BorConfig is the consensus engine configs for Matic bor based sealing.
 type BorConfig struct {
-	BlockInterval    uint64 `json:"blockInterval"`    // Number of seconds between blocks to enforce
+	Period           uint64 `json:"period"`           // Number of seconds between blocks to enforce
 	ProducerInterval uint64 `json:"producerInterval"` // Number of seconds between change in block producer interval to enforce
 	Epoch            uint64 `json:"epoch"`            // Epoch length to reset votes and checkpoint
 }

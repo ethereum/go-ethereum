@@ -183,8 +183,8 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 // CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
-func CalcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
-	if snap.inturn(snap.Number+1, signer) {
+func CalcDifficulty(snap *Snapshot, signer common.Address, producerPeriod uint64) *big.Int {
+	if snap.inturn(snap.Number+1, signer, producerPeriod) {
 		return new(big.Int).Set(diffInTurn)
 	}
 	return new(big.Int).Set(diffNoTurn)
@@ -356,7 +356,7 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
-	if parent.Time+c.config.BlockInterval > header.Time {
+	if parent.Time+c.config.Period > header.Time {
 		return ErrInvalidTimestamp
 	}
 	// Retrieve the snapshot needed to verify this header and cache it
@@ -500,13 +500,13 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 		if recent == signer {
 			// Signer is among recents, only fail if the current block doesn't shift it out
 			if limit := uint64(len(snap.Signers)/2 + 1); seen > number-limit {
-				return errRecentlySigned
+				// return errRecentlySigned
 			}
 		}
 	}
 	// Ensure that the difficulty corresponds to the turn-ness of the signer
 	if !c.fakeDiff {
-		inturn := snap.inturn(header.Number.Uint64(), signer)
+		inturn := snap.inturn(header.Number.Uint64(), signer, c.config.ProducerInterval)
 		if inturn && header.Difficulty.Cmp(diffInTurn) != 0 {
 			return errWrongDifficulty
 		}
@@ -514,6 +514,7 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 			return errWrongDifficulty
 		}
 	}
+
 	return nil
 }
 
@@ -552,7 +553,7 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 		c.lock.RUnlock()
 	}
 	// Set the correct difficulty
-	header.Difficulty = CalcDifficulty(snap, c.signer)
+	header.Difficulty = CalcDifficulty(snap, c.signer, c.config.ProducerInterval)
 
 	// Ensure the extra data has all it's components
 	if len(header.Extra) < extraVanity {
@@ -575,7 +576,7 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	header.Time = parent.Time + c.config.BlockInterval
+	header.Time = parent.Time + c.config.Period
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
 	}
@@ -622,7 +623,7 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 		return errUnknownBlock
 	}
 	// For 0-period chains, refuse to seal empty blocks (no reward but would spin sealing)
-	if c.config.BlockInterval == 0 && len(block.Transactions()) == 0 {
+	if c.config.Period == 0 && len(block.Transactions()) == 0 {
 		log.Info("Sealing paused, waiting for transactions")
 		return nil
 	}
@@ -645,7 +646,7 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 			// Signer is among recents, only wait if the current block doesn't shift it out
 			if limit := uint64(len(snap.Signers)/2 + 1); number < limit || seen > number-limit {
 				log.Info("Signed recently, must wait for others")
-				return nil
+				// return nil
 			}
 		}
 	}
@@ -687,7 +688,11 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
 func (c *Bor) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
-	return big.NewInt(0)
+	snap, err := c.snapshot(chain, parent.Number.Uint64(), parent.Hash(), nil)
+	if err != nil {
+		return nil
+	}
+	return CalcDifficulty(snap, c.signer, c.config.ProducerInterval)
 }
 
 // SealHash returns the hash of a block prior to it being sealed.

@@ -107,7 +107,7 @@ func (w *wizard) makeGenesis() {
 		genesis.Difficulty = big.NewInt(1)
 		genesis.GasLimit = 10000000
 		genesis.Config.Bor = &params.BorConfig{
-			BlockInterval:    1,
+			Period:           1,
 			ProducerInterval: 60,
 			Epoch:            30000,
 		}
