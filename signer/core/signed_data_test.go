@@ -373,3 +373,37 @@ func TestJsonFiles(t *testing.T) {
 		}
 	}
 }
+
+// TestFuzzerFiles tests some files that have been found by fuzzing to cause
+// crashes or hangs.
+func TestFuzzerFiles(t *testing.T) {
+	corpusdir := path.Join("testdata", "fuzzing")
+	testfiles, err := ioutil.ReadDir(corpusdir)
+	if err != nil {
+		t.Fatalf("failed reading files: %v", err)
+	}
+	verbose := false
+	for i, fInfo := range testfiles {
+		data, err := ioutil.ReadFile(path.Join(corpusdir, fInfo.Name()))
+		if err != nil {
+			t.Errorf("Failed to read file %v: %v", fInfo.Name(), err)
+			continue
+		}
+		var typedData core.TypedData
+		err = json.Unmarshal([]byte(data), &typedData)
+		if err != nil {
+			t.Errorf("Test %d, file %v, json unmarshalling failed: %v", i, fInfo.Name(), err)
+			continue
+		}
+		_, err = typedData.EncodeData("EIP712Domain", typedData.Domain.Map(), 1)
+		if verbose && err != nil {
+			fmt.Printf("%d, EncodeData[1] err: %v\n", i, err)
+		}
+		_, err = typedData.EncodeData(typedData.PrimaryType, typedData.Message, 1)
+		if verbose && err != nil {
+			fmt.Printf("%d, EncodeData[2] err: %v\n", i, err)
+		}
+		typedData.PrettyPrint()
+		typedData.Format()
+	}
+}

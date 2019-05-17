@@ -96,6 +96,9 @@ func (t *Type) typeName() string {
 }
 
 func (t *Type) isReferenceType() bool {
+	if len(t.Type) == 0 {
+		return false
+	}
 	// Reference types must have a leading uppercase characer
 	return unicode.IsUpper([]rune(t.Type)[0])
 }
@@ -378,9 +381,11 @@ func (typedData *TypedData) Dependencies(primaryType string, found []string) []s
 func (typedData *TypedData) EncodeType(primaryType string) hexutil.Bytes {
 	// Get dependencies primary first, then alphabetical
 	deps := typedData.Dependencies(primaryType, []string{})
-	slicedDeps := deps[1:]
-	sort.Strings(slicedDeps)
-	deps = append([]string{primaryType}, slicedDeps...)
+	if len(deps) > 0 {
+		slicedDeps := deps[1:]
+		sort.Strings(slicedDeps)
+		deps = append([]string{primaryType}, slicedDeps...)
+	}
 
 	// Format as a string with fields
 	var buffer bytes.Buffer
@@ -728,9 +733,12 @@ func (typedData *TypedData) formatData(primaryType string, data map[string]inter
 				}
 			}
 		} else if typedData.Types[field.Type] != nil {
-			mapValue, _ := encValue.(map[string]interface{})
-			mapOutput := typedData.formatData(field.Type, mapValue)
-			item.Value = mapOutput
+			if mapValue, ok := encValue.(map[string]interface{}); ok {
+				mapOutput := typedData.formatData(field.Type, mapValue)
+				item.Value = mapOutput
+			} else {
+				item.Value = "<nil>"
+			}
 		} else {
 			primitiveOutput := formatPrimitiveValue(field.Type, encValue)
 			item.Value = primitiveOutput
@@ -791,7 +799,16 @@ func (nvt *NameValueType) Pprint(depth int) string {
 // Validate checks if the types object is conformant to the specs
 func (t Types) validate() error {
 	for typeKey, typeArr := range t {
-		for _, typeObj := range typeArr {
+		if len(typeKey) == 0 {
+			return fmt.Errorf("empty type key")
+		}
+		for i, typeObj := range typeArr {
+			if len(typeObj.Type) == 0 {
+				return fmt.Errorf("type %v:%d: empty Type", typeKey, i)
+			}
+			if len(typeObj.Name) == 0 {
+				return fmt.Errorf("type %v:%d: empty Name", typeKey, i)
+			}
 			if typeKey == typeObj.Type {
 				return fmt.Errorf("type '%s' cannot reference itself", typeObj.Type)
 			}
