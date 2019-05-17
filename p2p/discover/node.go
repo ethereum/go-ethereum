@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
@@ -64,7 +63,7 @@ func (e encPubkey) id() enode.ID {
 // recoverNodeKey computes the public key used to sign the
 // given hash from the signature.
 func recoverNodeKey(hash, sig []byte) (key encPubkey, err error) {
-	pubkey, err := secp256k1.RecoverPubkey(hash, sig)
+	pubkey, err := crypto.Ecrecover(hash, sig)
 	if err != nil {
 		return key, err
 	}
