@@ -1159,6 +1159,10 @@ func setSmartCard(ctx *cli.Context, cfg *node.Config) {
 		// caught at the daemon initialization level, though.
 		if fi, err := os.Stat(ctx.GlobalString(SmartCardFlag.Name)); err == nil {
 			cfg.SmartCard = fi.Mode()&os.ModeType == os.ModeSocket
+			cfg.SmartCardDaemonPath = ctx.GlobalString(SmartCardFlag.Name)
+			fmt.Println(ctx.GlobalString(SmartCardFlag.Name))
+		} else {
+			log.Error(ctx.GlobalString(SmartCardFlag.Name), "doesn't seem to be a socket file")
 		}
 	} else {
 		log.Info("Smartcard support disabled on this platform")

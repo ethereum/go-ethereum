@@ -56,10 +56,10 @@ type Client struct {
 // EstablishContext asks the PCSC daemon to create a context
 // handle for further communication with connected cards and
 // readers.
-func EstablishContext(scope uint32) (*Client, error) {
+func EstablishContext(path string, scope uint32) (*Client, error) {
 	client := &Client{}
 
-	conn, err := clientSetupSession()
+	conn, err := clientSetupSession(path)
 	if err != nil {
 		return nil, err
 	}

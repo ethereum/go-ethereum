@@ -62,7 +62,7 @@ func messageSendWithHeader(command uint32, conn net.Conn, data []byte) error {
 	return err
 }
 
-// ClientSetupSession prepares a communication channel for the client to talk to the server.
+// clientSetupSession prepares a communication channel for the client to talk to the server.
 // This is called by the application to create a socket for local IPC with the
 // server. The socket is associated to the file \c PCSCLITE_CSOCK_NAME.
 /*
@@ -73,6 +73,10 @@ func messageSendWithHeader(command uint32, conn net.Conn, data []byte) error {
  * @retval -1 The socket can not open a connection.
  * @retval -1 Can not set the socket to non-blocking.
  */
-func clientSetupSession() (net.Conn, error) {
-	return net.Dial("unix", PCSCDSockName)
+func clientSetupSession(daemonPath string) (net.Conn, error) {
+	path := PCSCDSockName
+	if len(daemonPath) > 0 {
+		path = daemonPath
+	}
+	return net.Dial("unix", path)
 }
