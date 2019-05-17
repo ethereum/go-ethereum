@@ -66,6 +66,7 @@ func TestAPI(t *testing.T) {
 	serviceQuitChan := make(chan bool)
 	config := statediff.Config{
 		PathsAndProofs: true,
+		AllNodes:       false,
 	}
 	mockService := MockStateDiffService{
 		Mutex:           sync.Mutex{},
@@ -74,6 +75,7 @@ func TestAPI(t *testing.T) {
 		ParentBlockChan: parentBlockChain,
 		QuitChan:        serviceQuitChan,
 		Subscriptions:   make(map[rpc.ID]statediff.Subscription),
+		streamBlock:     true,
 	}
 	mockService.Start(nil)
 	id := rpc.NewID()
@@ -88,6 +90,7 @@ func TestAPI(t *testing.T) {
 		BlockHash:   block1.Hash(),
 		CreatedAccounts: []statediff.AccountDiff{
 			{
+				Leaf:  true,
 				Key:   burnLeafKey.Bytes(),
 				Value: burnAccount1,
 				Proof: [][]byte{{248, 113, 160, 87, 118, 82, 182, 37, 183, 123, 219, 91, 247, 123, 196, 63, 49, 37, 202, 215, 70, 77, 103, 157, 21, 117, 86, 82, 119, 211, 97, 27, 128, 83, 231, 128, 128, 128, 128, 160, 254, 136, 159, 16, 229, 219, 143, 44, 43, 243, 85, 146, 129, 82, 161, 127, 110, 59, 185, 154, 146, 65, 172, 109, 132, 199, 126, 98, 100, 80, 156, 121, 128, 128, 128, 128, 128, 128, 128, 128, 160, 17, 219, 12, 218, 52, 168, 150, 218, 190, 182, 131, 155, 176, 106, 56, 244, 149, 20, 207, 164, 134, 67, 89, 132, 235, 1, 59, 125, 249, 238, 133, 197, 128, 128},
@@ -96,6 +99,7 @@ func TestAPI(t *testing.T) {
 				Storage: []statediff.StorageDiff{},
 			},
 			{
+				Leaf:  true,
 				Key:   testhelpers.Account1LeafKey.Bytes(),
 				Value: account1,
 				Proof: [][]byte{{248, 113, 160, 87, 118, 82, 182, 37, 183, 123, 219, 91, 247, 123, 196, 63, 49, 37, 202, 215, 70, 77, 103, 157, 21, 117, 86, 82, 119, 211, 97, 27, 128, 83, 231, 128, 128, 128, 128, 160, 254, 136, 159, 16, 229, 219, 143, 44, 43, 243, 85, 146, 129, 82, 161, 127, 110, 59, 185, 154, 146, 65, 172, 109, 132, 199, 126, 98, 100, 80, 156, 121, 128, 128, 128, 128, 128, 128, 128, 128, 160, 17, 219, 12, 218, 52, 168, 150, 218, 190, 182, 131, 155, 176, 106, 56, 244, 149, 20, 207, 164, 134, 67, 89, 132, 235, 1, 59, 125, 249, 238, 133, 197, 128, 128},
@@ -107,6 +111,7 @@ func TestAPI(t *testing.T) {
 		DeletedAccounts: emptyAccountDiffEventualMap,
 		UpdatedAccounts: []statediff.AccountDiff{
 			{
+				Leaf:  true,
 				Key:   testhelpers.BankLeafKey.Bytes(),
 				Value: bankAccount1,
 				Proof: [][]byte{{248, 113, 160, 87, 118, 82, 182, 37, 183, 123, 219, 91, 247, 123, 196, 63, 49, 37, 202, 215, 70, 77, 103, 157, 21, 117, 86, 82, 119, 211, 97, 27, 128, 83, 231, 128, 128, 128, 128, 160, 254, 136, 159, 16, 229, 219, 143, 44, 43, 243, 85, 146, 129, 82, 161, 127, 110, 59, 185, 154, 146, 65, 172, 109, 132, 199, 126, 98, 100, 80, 156, 121, 128, 128, 128, 128, 128, 128, 128, 128, 160, 17, 219, 12, 218, 52, 168, 150, 218, 190, 182, 131, 155, 176, 106, 56, 244, 149, 20, 207, 164, 134, 67, 89, 132, 235, 1, 59, 125, 249, 238, 133, 197, 128, 128},

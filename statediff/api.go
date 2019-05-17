@@ -18,8 +18,6 @@ package statediff
 
 import (
 	"context"
-	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -36,17 +34,12 @@ const APIVersion = "0.0.1"
 // are produced by a full node
 type PublicStateDiffAPI struct {
 	sds IService
-
-	mu       sync.Mutex
-	lastUsed map[string]time.Time // keeps track when a filter was polled for the last time.
 }
 
 // NewPublicStateDiffAPI create a new state diff websocket streaming service.
 func NewPublicStateDiffAPI(sds IService) *PublicStateDiffAPI {
 	return &PublicStateDiffAPI{
-		sds:      sds,
-		lastUsed: make(map[string]time.Time),
-		mu:       sync.Mutex{},
+		sds: sds,
 	}
 }
 

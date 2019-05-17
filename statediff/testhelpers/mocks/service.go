@@ -42,6 +42,7 @@ type MockStateDiffService struct {
 	ParentBlockChan chan *types.Block
 	QuitChan        chan bool
 	Subscriptions   map[rpc.ID]statediff.Subscription
+	streamBlock     bool
 }
 
 // Protocols mock method
@@ -76,31 +77,44 @@ func (sds *MockStateDiffService) Loop(chan core.ChainEvent) {
 					"current block number", currentBlock.Number())
 				continue
 			}
-
-			stateDiff, err := sds.Builder.BuildStateDiff(parentBlock.Root(), currentBlock.Root(), currentBlock.Number(), currentBlock.Hash())
-			if err != nil {
+			if err := sds.process(currentBlock, parentBlock); err != nil {
+				println(err.Error())
 				log.Error("Error building statediff", "block number", currentBlock.Number(), "error", err)
 			}
-			rlpBuff := new(bytes.Buffer)
-			currentBlock.EncodeRLP(rlpBuff)
-			blockRlp := rlpBuff.Bytes()
-			stateDiffRlp, err := rlp.EncodeToBytes(stateDiff)
-			if err != nil {
-				log.Error("Error encoding statediff", "block number", currentBlock.Number(), "error", err)
-			}
-			payload := statediff.Payload{
-				BlockRlp:     blockRlp,
-				StateDiffRlp: stateDiffRlp,
-				Err:          err,
-			}
-			// If we have any websocket subscription listening in, send the data to them
-			sds.send(payload)
 		case <-sds.QuitChan:
 			log.Debug("Quitting the statediff block channel")
 			sds.close()
 			return
 		}
 	}
+}
+
+// process method builds the state diff payload from the current and parent block and streams it to listening subscriptions
+func (sds *MockStateDiffService) process(currentBlock, parentBlock *types.Block) error {
+	stateDiff, err := sds.Builder.BuildStateDiff(parentBlock.Root(), currentBlock.Root(), currentBlock.Number(), currentBlock.Hash())
+	if err != nil {
+		return err
+	}
+
+	stateDiffRlp, err := rlp.EncodeToBytes(stateDiff)
+	if err != nil {
+		return err
+	}
+	payload := statediff.Payload{
+		StateDiffRlp: stateDiffRlp,
+		Err:          err,
+	}
+	if sds.streamBlock {
+		rlpBuff := new(bytes.Buffer)
+		if err = currentBlock.EncodeRLP(rlpBuff); err != nil {
+			return err
+		}
+		payload.BlockRlp = rlpBuff.Bytes()
+	}
+
+	// If we have any websocket subscription listening in, send the data to them
+	sds.send(payload)
+	return nil
 }
 
 // Subscribe mock method

@@ -765,15 +765,19 @@ var (
 	}
 	StateDiffPathsAndProofs = cli.BoolFlag{
 		Name:  "statediff.pathsandproofs",
-		Usage: "Path and proof sets for the state and storage nodes are generated; only works with leaf nodes",
+		Usage: "Set to true to generate paths and proof sets for diffed state and storage trie lead nodes",
 	}
-	StateDiffLeafNodesOnly = cli.BoolFlag{
-		Name:  "statediff.leafs",
-		Usage: "Consider only leaf nodes of the storage and state tries",
+	StateDiffAllNodeTypes = cli.BoolFlag{
+		Name:  "statediff.allnodes",
+		Usage: "Set to true to consider all node types: leaf, branch, and extension; default (false) processes leaf nodes only",
 	}
 	StateDiffWatchedAddresses = cli.StringSliceFlag{
 		Name:  "statediff.watchedaddresses",
 		Usage: "If provided, state diffing process is restricted to these addresses",
+	}
+	StateDiffStreamBlock = cli.BoolFlag{
+		Name:  "statediff.streamblock",
+		Usage: "Set to true to stream the block data alongside state diff data",
 	}
 )
 
@@ -1636,9 +1640,10 @@ func RegisterGraphQLService(stack *node.Node, endpoint string, cors, vhosts []st
 // RegisterStateDiffService configures and registers a service to stream state diff data over RPC
 func RegisterStateDiffService(stack *node.Node, ctx *cli.Context) {
 	config := statediff.Config{
-		PathsAndProofs: ctx.GlobalBool(StateDiffPathsAndProofs.Name),
-		LeafsOnly:      ctx.GlobalBool(StateDiffLeafNodesOnly.Name),
-		WatchedAddress: ctx.GlobalStringSlice(StateDiffWatchedAddresses.Name),
+		StreamBlock:      ctx.GlobalBool(StateDiffStreamBlock.Name),
+		PathsAndProofs:   ctx.GlobalBool(StateDiffPathsAndProofs.Name),
+		AllNodes:         ctx.GlobalBool(StateDiffAllNodeTypes.Name),
+		WatchedAddresses: ctx.GlobalStringSlice(StateDiffWatchedAddresses.Name),
 	}
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		var ethServ *eth.Ethereum
