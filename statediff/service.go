@@ -129,11 +129,11 @@ func (sds *Service) Loop(chainEventCh chan core.ChainEvent) {
 				log.Error("Error building statediff", "block number", currentBlock.Number(), "error", err)
 			}
 		case err := <-errCh:
-			log.Warn("Error from chain event subscription, breaking loop.", "error", err)
+			log.Warn("Error from chain event subscription, breaking loop", "error", err)
 			sds.close()
 			return
 		case <-sds.QuitChan:
-			log.Info("Quitting the statediff block channel")
+			log.Info("Quitting the statediffing process")
 			sds.close()
 			return
 		}
@@ -214,9 +214,9 @@ func (sds *Service) send(payload Payload) {
 	for id, sub := range sds.Subscriptions {
 		select {
 		case sub.PayloadChan <- payload:
-			log.Info("sending state diff payload to subscription %s", id)
+			log.Info(fmt.Sprintf("sending state diff payload to subscription %s", id))
 		default:
-			log.Info("unable to send payload to subscription %s; channel has no receiver", id)
+			log.Info(fmt.Sprintf("unable to send payload to subscription %s", id))
 		}
 	}
 	sds.Unlock()
@@ -229,9 +229,9 @@ func (sds *Service) close() {
 		select {
 		case sub.QuitChan <- true:
 			delete(sds.Subscriptions, id)
-			log.Info("closing subscription %s", id)
+			log.Info(fmt.Sprintf("closing subscription %s", id))
 		default:
-			log.Info("unable to close subscription %s; channel has no receiver", id)
+			log.Info(fmt.Sprintf("unable to close subscription %s; channel has no receiver", id))
 		}
 	}
 	sds.Unlock()

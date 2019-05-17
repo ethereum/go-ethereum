@@ -44,7 +44,7 @@ func NewPublicStateDiffAPI(sds IService) *PublicStateDiffAPI {
 }
 
 // Subscribe is the public method to setup a subscription that fires off state-diff payloads as they are created
-func (api *PublicStateDiffAPI) Subscribe(ctx context.Context) (*rpc.Subscription, error) {
+func (api *PublicStateDiffAPI) Subscribe(ctx context.Context, payloadChan chan Payload) (*rpc.Subscription, error) {
 	// ensure that the RPC connection supports subscriptions
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
@@ -56,19 +56,21 @@ func (api *PublicStateDiffAPI) Subscribe(ctx context.Context) (*rpc.Subscription
 
 	go func() {
 		// subscribe to events from the state diff service
-		payloadChannel := make(chan Payload)
+		payloadChannel := make(chan Payload, 10)
 		quitChan := make(chan bool)
 		api.sds.Subscribe(rpcSub.ID, payloadChannel, quitChan)
-
-		// loop and await state diff payloads and relay them to the subscriber with then notifier
+		// loop and await state diff payloads and relay them to the subscriber with the notifier
 		for {
 			select {
 			case packet := <-payloadChannel:
 				if err := notifier.Notify(rpcSub.ID, packet); err != nil {
 					log.Error("Failed to send state diff packet", "err", err)
 				}
-			case <-rpcSub.Err():
-				err := api.sds.Unsubscribe(rpcSub.ID)
+			case err := <-rpcSub.Err():
+				log.Error("State diff service rpcSub error", err)
+				println("err")
+				println(err.Error())
+				err = api.sds.Unsubscribe(rpcSub.ID)
 				if err != nil {
 					log.Error("Failed to unsubscribe from the state diff service", err)
 				}

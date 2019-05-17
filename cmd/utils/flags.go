@@ -765,11 +765,11 @@ var (
 	}
 	StateDiffPathsAndProofs = cli.BoolFlag{
 		Name:  "statediff.pathsandproofs",
-		Usage: "Set to true to generate paths and proof sets for diffed state and storage trie lead nodes",
+		Usage: "Set to true to generate paths and proof sets for diffed state and storage trie leaf nodes",
 	}
-	StateDiffAllNodeTypes = cli.BoolFlag{
-		Name:  "statediff.allnodes",
-		Usage: "Set to true to consider all node types: leaf, branch, and extension; default (false) processes leaf nodes only",
+	StateDiffIntermediateNodes = cli.BoolFlag{
+		Name:  "statediff.intermediatenodes",
+		Usage: "Set to include intermediate (branch and extension) nodes; default (false) processes leaf nodes only",
 	}
 	StateDiffWatchedAddresses = cli.StringSliceFlag{
 		Name:  "statediff.watchedaddresses",
@@ -777,7 +777,7 @@ var (
 	}
 	StateDiffStreamBlock = cli.BoolFlag{
 		Name:  "statediff.streamblock",
-		Usage: "Set to true to stream the block data alongside state diff data",
+		Usage: "Set to true to stream the block data alongside state diff data in the same subscription payload",
 	}
 )
 
@@ -1642,7 +1642,7 @@ func RegisterStateDiffService(stack *node.Node, ctx *cli.Context) {
 	config := statediff.Config{
 		StreamBlock:      ctx.GlobalBool(StateDiffStreamBlock.Name),
 		PathsAndProofs:   ctx.GlobalBool(StateDiffPathsAndProofs.Name),
-		AllNodes:         ctx.GlobalBool(StateDiffAllNodeTypes.Name),
+		AllNodes:         ctx.GlobalBool(StateDiffIntermediateNodes.Name),
 		WatchedAddresses: ctx.GlobalStringSlice(StateDiffWatchedAddresses.Name),
 	}
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
