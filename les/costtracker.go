@@ -422,7 +422,7 @@ func (list RequestCostList) decode(protocolLength uint64) requestCostTable {
 }
 
 // testCostList returns a dummy request cost list used by tests
-func testCostList() RequestCostList {
+func testCostList(testCost uint64) RequestCostList {
 	cl := make(RequestCostList, len(reqAvgTimeCost))
 	var max uint64
 	for code := range reqAvgTimeCost {
@@ -434,7 +434,7 @@ func testCostList() RequestCostList {
 	for code := uint64(0); code <= max; code++ {
 		if _, ok := reqAvgTimeCost[code]; ok {
 			cl[i].MsgCode = code
-			cl[i].BaseCost = 0
+			cl[i].BaseCost = testCost
 			cl[i].ReqCost = 0
 			i++
 		}

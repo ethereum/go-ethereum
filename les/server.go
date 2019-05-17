@@ -53,6 +53,7 @@ type LesServer struct {
 
 	fcManager    *flowcontrol.ClientManager // nil if our node is client only
 	costTracker  *costTracker
+	testCost     uint64
 	defParams    flowcontrol.ServerParams
 	lesTopics    []discv5.Topic
 	privateKey   *ecdsa.PrivateKey

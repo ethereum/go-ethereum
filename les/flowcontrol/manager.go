@@ -258,9 +258,11 @@ func (cm *ClientManager) updateRecharge(now mclock.AbsTime) {
 		if sumRecharge > cm.totalRecharge {
 			sumRecharge = cm.totalRecharge
 		}
-		bonusRatio := cm.curve.ValueAt(sumRecharge) / float64(sumRecharge)
-		if bonusRatio < 1 {
-			bonusRatio = 1
+		bonusRatio := float64(1)
+		v := cm.curve.ValueAt(sumRecharge)
+		s := float64(sumRecharge)
+		if v > s && s > 0 {
+			bonusRatio = v / s
 		}
 		dt := now - lastUpdate
 		// fetch the client that finishes first
