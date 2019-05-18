@@ -115,15 +115,17 @@ type Decoder interface {
 // type, Decode will return an error. Decode also supports *big.Int.
 // There is no size limit for big integers.
 //
+// To decode into a boolean, the input must contain an unsigned integer
+// of value zero (false) or one (true).
+//
 // To decode into an interface value, Decode stores one of these
 // in the value:
 //
 //	  []interface{}, for RLP lists
 //	  []byte, for RLP strings
 //
-// Non-empty interface types are not supported, nor are booleans,
-// signed integers, floating point numbers, maps, channels and
-// functions.
+// Non-empty interface types are not supported, nor are signed integers,
+// floating point numbers, maps, channels and functions.
 //
 // Note that Decode does not set an input limit for all readers
 // and may be vulnerable to panics cause by huge value sizes. If
@@ -306,9 +308,9 @@ func makeListDecoder(typ reflect.Type, tag tags) (decoder, error) {
 		}
 		return decodeByteSlice, nil
 	}
-	etypeinfo, err := cachedTypeInfo1(etype, tags{})
-	if err != nil {
-		return nil, err
+	etypeinfo := cachedTypeInfo1(etype, tags{})
+	if etypeinfo.decoderErr != nil {
+		return nil, etypeinfo.decoderErr
 	}
 	var dec decoder
 	switch {
@@ -467,9 +469,9 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 // the pointer's element type.
 func makePtrDecoder(typ reflect.Type) (decoder, error) {
 	etype := typ.Elem()
-	etypeinfo, err := cachedTypeInfo1(etype, tags{})
-	if err != nil {
-		return nil, err
+	etypeinfo := cachedTypeInfo1(etype, tags{})
+	if etypeinfo.decoderErr != nil {
+		return nil, etypeinfo.decoderErr
 	}
 	dec := func(s *Stream, val reflect.Value) (err error) {
 		newval := val
@@ -491,9 +493,9 @@ func makePtrDecoder(typ reflect.Type) (decoder, error) {
 // This decoder is used for pointer-typed struct fields with struct tag "nil".
 func makeOptionalPtrDecoder(typ reflect.Type) (decoder, error) {
 	etype := typ.Elem()
-	etypeinfo, err := cachedTypeInfo1(etype, tags{})
-	if err != nil {
-		return nil, err
+	etypeinfo := cachedTypeInfo1(etype, tags{})
+	if etypeinfo.decoderErr != nil {
+		return nil, etypeinfo.decoderErr
 	}
 	dec := func(s *Stream, val reflect.Value) (err error) {
 		kind, size, err := s.Kind()
@@ -814,12 +816,12 @@ func (s *Stream) Decode(val interface{}) error {
 	if rval.IsNil() {
 		return errDecodeIntoNil
 	}
-	info, err := cachedTypeInfo(rtyp.Elem(), tags{})
+	decoder, err := cachedDecoder(rtyp.Elem())
 	if err != nil {
 		return err
 	}
 
-	err = info.decoder(s, rval.Elem())
+	err = decoder(s, rval.Elem())
 	if decErr, ok := err.(*decodeError); ok && len(decErr.ctx) > 0 {
 		// add decode target type to error so context has more meaning
 		decErr.ctx = append(decErr.ctx, fmt.Sprint("(", rtyp.Elem(), ")"))

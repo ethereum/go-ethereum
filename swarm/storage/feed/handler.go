@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 
@@ -178,12 +179,12 @@ func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before performing lookups")
 	}
 
-	var readCount int
+	var readCount int32
 
 	// Invoke the lookup engine.
 	// The callback will be called every time the lookup algorithm needs to guess
 	requestPtr, err := lookup.Lookup(ctx, timeLimit, query.Hint, func(ctx context.Context, epoch lookup.Epoch, now uint64) (interface{}, error) {
-		readCount++
+		atomic.AddInt32(&readCount, 1)
 		id := ID{
 			Feed:  query.Feed,
 			Epoch: epoch,
@@ -228,17 +229,17 @@ func (h *Handler) updateCache(request *Request) (*cacheEntry, error) {
 	updateAddr := request.Addr()
 	log.Trace("feed cache update", "topic", request.Topic.Hex(), "updateaddr", updateAddr, "epoch time", request.Epoch.Time, "epoch level", request.Epoch.Level)
 
-	feedUpdate := h.get(&request.Feed)
-	if feedUpdate == nil {
-		feedUpdate = &cacheEntry{}
-		h.set(&request.Feed, feedUpdate)
+	entry := h.get(&request.Feed)
+	if entry == nil {
+		entry = &cacheEntry{}
+		h.set(&request.Feed, entry)
 	}
 
 	// update our rsrcs entry map
-	feedUpdate.lastKey = updateAddr
-	feedUpdate.Update = request.Update
-	feedUpdate.Reader = bytes.NewReader(feedUpdate.data)
-	return feedUpdate, nil
+	entry.lastKey = updateAddr
+	entry.Update = request.Update
+	entry.Reader = bytes.NewReader(entry.data)
+	return entry, nil
 }
 
 // Update publishes a feed update

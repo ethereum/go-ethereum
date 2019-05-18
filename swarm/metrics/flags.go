@@ -17,9 +17,12 @@
 package metrics
 
 import (
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/metrics"
 	gethmetrics "github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -88,10 +91,17 @@ func Setup(ctx *cli.Context) {
 			password               = ctx.GlobalString(MetricsInfluxDBPasswordFlag.Name)
 			enableExport           = ctx.GlobalBool(MetricsEnableInfluxDBExportFlag.Name)
 			enableAccountingExport = ctx.GlobalBool(MetricsEnableInfluxDBAccountingExportFlag.Name)
+			datadir                = ctx.GlobalString("datadir")
 		)
 
 		// Start system runtime metrics collection
-		go gethmetrics.CollectProcessMetrics(2 * time.Second)
+		go gethmetrics.CollectProcessMetrics(4 * time.Second)
+
+		// Start collecting disk metrics
+		go datadirDiskUsage(datadir, 4*time.Second)
+
+		gethmetrics.RegisterRuntimeMemStats(metrics.DefaultRegistry)
+		go gethmetrics.CaptureRuntimeMemStats(metrics.DefaultRegistry, 4*time.Second)
 
 		tagsMap := utils.SplitTagsFlag(ctx.GlobalString(MetricsInfluxDBTagsFlag.Name))
 
@@ -105,4 +115,29 @@ func Setup(ctx *cli.Context) {
 			go influxdb.InfluxDBWithTags(gethmetrics.AccountingRegistry, 10*time.Second, endpoint, database, username, password, "accounting.", tagsMap)
 		}
 	}
+}
+
+func datadirDiskUsage(path string, d time.Duration) {
+	for range time.Tick(d) {
+		bytes, err := dirSize(path)
+		if err != nil {
+			log.Warn("cannot get disk space", "err", err)
+		}
+
+		metrics.GetOrRegisterGauge("datadir.usage", nil).Update(bytes)
+	}
+}
+
+func dirSize(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	return size, err
 }

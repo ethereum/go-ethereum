@@ -346,12 +346,14 @@ func (table requestCostTable) getCost(code, amount uint64) uint64 {
 }
 
 // decode converts a cost list to a cost table
-func (list RequestCostList) decode() requestCostTable {
+func (list RequestCostList) decode(protocolLength uint64) requestCostTable {
 	table := make(requestCostTable)
 	for _, e := range list {
-		table[e.MsgCode] = &requestCosts{
-			baseCost: e.BaseCost,
-			reqCost:  e.ReqCost,
+		if e.MsgCode < protocolLength {
+			table[e.MsgCode] = &requestCosts{
+				baseCost: e.BaseCost,
+				reqCost:  e.ReqCost,
+			}
 		}
 	}
 	return table

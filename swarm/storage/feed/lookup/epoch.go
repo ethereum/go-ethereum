@@ -87,5 +87,5 @@ func (e *Epoch) Equals(epoch Epoch) bool {
 
 // String implements the Stringer interface.
 func (e *Epoch) String() string {
-	return fmt.Sprintf("Epoch{Time:%d, Level:%d}", e.Time, e.Level)
+	return fmt.Sprintf("Epoch{Base: %d, Time:%d, Level:%d}", e.Base(), e.Time, e.Level)
 }

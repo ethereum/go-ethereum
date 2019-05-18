@@ -62,6 +62,7 @@ var (
 		utils.BootnodesV4Flag,
 		utils.BootnodesV5Flag,
 		utils.DataDirFlag,
+		utils.AncientFlag,
 		utils.KeyStoreDirFlag,
 		utils.ExternalSignerFlag,
 		utils.NoUSBFlag,
@@ -203,6 +204,7 @@ func init() {
 		copydbCommand,
 		removedbCommand,
 		dumpCommand,
+		inspectCommand,
 		// See accountcmd.go:
 		accountCommand,
 		walletCommand,

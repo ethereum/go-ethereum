@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	DefaultNetworkID = 3
+	DefaultNetworkID = 4
 	// timeout for waiting
 	bzzHandshakeTimeout = 3000 * time.Millisecond
 )
@@ -43,7 +43,7 @@ var DefaultTestNetworkID = rand.Uint64()
 // BzzSpec is the spec of the generic swarm handshake
 var BzzSpec = &protocols.Spec{
 	Name:       "bzz",
-	Version:    8,
+	Version:    9,
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
 		HandshakeMsg{},

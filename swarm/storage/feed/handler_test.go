@@ -177,8 +177,8 @@ func TestFeedsHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request.Epoch.Base() != 0 || request.Epoch.Level != 22 {
-		t.Fatalf("Expected epoch base time to be %d, got %d. Expected epoch level to be %d, got %d", 0, request.Epoch.Base(), 22, request.Epoch.Level)
+	if request.Epoch.Base() != 0 || request.Epoch.Level != 28 {
+		t.Fatalf("Expected epoch base time to be %d, got %d. Expected epoch level to be %d, got %d", 0, request.Epoch.Base(), 28, request.Epoch.Level)
 	}
 	data = []byte(updates[3])
 	request.SetData(data)
@@ -213,8 +213,8 @@ func TestFeedsHandler(t *testing.T) {
 	if !bytes.Equal(update2.data, []byte(updates[len(updates)-1])) {
 		t.Fatalf("feed update data was %v, expected %v", string(update2.data), updates[len(updates)-1])
 	}
-	if update2.Level != 22 {
-		t.Fatalf("feed update epoch level was %d, expected 22", update2.Level)
+	if update2.Level != 28 {
+		t.Fatalf("feed update epoch level was %d, expected 28", update2.Level)
 	}
 	if update2.Base() != 0 {
 		t.Fatalf("feed update epoch base time was %d, expected 0", update2.Base())

@@ -13,7 +13,7 @@ import (
 
 const (
 	test_networkid   = 10
-	protocol_version = 2123
+	protocol_version = lpv2
 )
 
 var (

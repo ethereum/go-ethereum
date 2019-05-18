@@ -54,11 +54,11 @@ func TestUDPv4_Lookup(t *testing.T) {
 			n, key := lookupTestnet.nodeByAddr(to)
 			switch p.(type) {
 			case *pingV4:
-				test.packetInFrom(nil, key, to, p_pongV4, &pongV4{Expiration: futureExp, ReplyTok: hash})
+				test.packetInFrom(nil, key, to, &pongV4{Expiration: futureExp, ReplyTok: hash})
 			case *findnodeV4:
 				dist := enode.LogDist(n.ID(), lookupTestnet.target.id())
 				nodes := lookupTestnet.nodesAtDistance(dist - 1)
-				test.packetInFrom(nil, key, to, p_neighborsV4, &neighborsV4{Expiration: futureExp, Nodes: nodes})
+				test.packetInFrom(nil, key, to, &neighborsV4{Expiration: futureExp, Nodes: nodes})
 			}
 		})
 	}

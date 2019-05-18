@@ -148,6 +148,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		}
 		genesis = gspec.MustCommit(db)
 		chain   BlockChain
+		pool    txPool
 	)
 	if peers == nil {
 		peers = newPeerSet()
@@ -162,13 +163,14 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 			panic(err)
 		}
 		chain = blockchain
+		pool = core.NewTxPool(core.DefaultTxPoolConfig, gspec.Config, blockchain)
 	}
 
 	indexConfig := light.TestServerIndexerConfig
 	if lightSync {
 		indexConfig = light.TestClientIndexerConfig
 	}
-	pm, err := NewProtocolManager(gspec.Config, indexConfig, lightSync, NetworkId, evmux, engine, peers, chain, nil, db, odr, nil, nil, make(chan struct{}), new(sync.WaitGroup), ulcConfig)
+	pm, err := NewProtocolManager(gspec.Config, indexConfig, lightSync, NetworkId, evmux, engine, peers, chain, pool, db, odr, nil, nil, make(chan struct{}), new(sync.WaitGroup), ulcConfig)
 	if err != nil {
 		return nil, err
 	}
