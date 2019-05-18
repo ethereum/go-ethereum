@@ -190,6 +190,16 @@ func CalcDifficulty(snap *Snapshot, signer common.Address, producerPeriod uint64
 	return new(big.Int).Set(diffNoTurn)
 }
 
+// CalcProducerDelay is the producer delay algorithm based on block time.
+func CalcProducerDelay(snap *Snapshot, producerInterval uint64, producerDelay uint64) uint64 {
+	isFirstBlock := (snap.Number + 1) % producerInterval
+	if isFirstBlock == 0 {
+		return producerDelay
+	}
+
+	return 0
+}
+
 // BorRLP returns the rlp bytes which needs to be signed for the bor
 // sealing. The RLP to sign consists of the entire header apart from the 65 byte signature
 // contained at the end of the extra data.
@@ -576,7 +586,7 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	header.Time = parent.Time + c.config.Period
+	header.Time = parent.Time + c.config.Period + CalcProducerDelay(snap, c.config.ProducerInterval, c.config.ProducerDelay)
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
 	}

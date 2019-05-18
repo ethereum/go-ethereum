@@ -109,6 +109,7 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.Bor = &params.BorConfig{
 			Period:           1,
 			ProducerInterval: 60,
+			ProducerDelay:    5,
 			Epoch:            30000,
 		}
 	default:
