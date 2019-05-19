@@ -431,6 +431,12 @@
 			"revisionTime": "2016-06-18T19:32:21Z"
 		},
 		{
+			"checksumSHA1": "So+ok+Fp2ztieiuZXD/wp8UJhS0=",
+			"path": "github.com/spf13/cast",
+			"revision": "8c9545af88b134710ab1cd196795e7f2388358d7",
+			"revisionTime": "2018-10-24T22:49:29Z"
+		},
+		{
 			"checksumSHA1": "I7gkZEZn9PKJ+dzuBYLbFIUzNO4=",
 			"path": "github.com/status-im/keycard-go/derivationpath",
 			"revision": "8537d3370df43a30a3d450c023783d2e43432b89",

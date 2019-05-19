@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pborman/uuid"
+	"github.com/spf13/cast"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/scrypt"
 )
@@ -323,16 +324,16 @@ func getKDFKey(cryptoJSON CryptoJSON, auth string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	dkLen := ensureInt(cryptoJSON.KDFParams["dklen"])
+	dkLen := cast.ToInt(cryptoJSON.KDFParams["dklen"])
 
 	if cryptoJSON.KDF == keyHeaderKDF {
-		n := ensureInt(cryptoJSON.KDFParams["n"])
-		r := ensureInt(cryptoJSON.KDFParams["r"])
-		p := ensureInt(cryptoJSON.KDFParams["p"])
+		n := cast.ToInt(cryptoJSON.KDFParams["n"])
+		r := cast.ToInt(cryptoJSON.KDFParams["r"])
+		p := cast.ToInt(cryptoJSON.KDFParams["p"])
 		return scrypt.Key(authArray, salt, n, r, p, dkLen)
 
 	} else if cryptoJSON.KDF == "pbkdf2" {
-		c := ensureInt(cryptoJSON.KDFParams["c"])
+		c := cast.ToInt(cryptoJSON.KDFParams["c"])
 		prf := cryptoJSON.KDFParams["prf"].(string)
 		if prf != "hmac-sha256" {
 			return nil, fmt.Errorf("Unsupported PBKDF2 PRF: %s", prf)
@@ -342,15 +343,4 @@ func getKDFKey(cryptoJSON CryptoJSON, auth string) ([]byte, error) {
 	}
 
 	return nil, fmt.Errorf("Unsupported KDF: %s", cryptoJSON.KDF)
-}
-
-// TODO: can we do without this when unmarshalling dynamic JSON?
-// why do integers in KDF params end up as float64 and not int after
-// unmarshal?
-func ensureInt(x interface{}) int {
-	res, ok := x.(int)
-	if !ok {
-		res = int(x.(float64))
-	}
-	return res
 }
