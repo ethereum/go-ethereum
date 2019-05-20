@@ -1,11 +1,27 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package core
 
 import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/vm"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 func Disassemble(script []byte) (asm []string) {
@@ -28,7 +44,7 @@ func Disassemble(script []byte) (asm []string) {
 			vm.PUSH16, vm.PUSH17, vm.PUSH18, vm.PUSH19, vm.PUSH20, vm.PUSH21, vm.PUSH22,
 			vm.PUSH23, vm.PUSH24, vm.PUSH25, vm.PUSH26, vm.PUSH27, vm.PUSH28, vm.PUSH29,
 			vm.PUSH30, vm.PUSH31, vm.PUSH32:
-			pc.Add(pc, ethutil.Big1)
+			pc.Add(pc, common.Big1)
 			a := int64(op) - int64(vm.PUSH1) + 1
 			if int(pc.Int64()+a) > len(script) {
 				return
@@ -43,7 +59,7 @@ func Disassemble(script []byte) (asm []string) {
 			pc.Add(pc, big.NewInt(a-1))
 		}
 
-		pc.Add(pc, ethutil.Big1)
+		pc.Add(pc, common.Big1)
 	}
 
 	return asm

@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package nat
 
 import (
@@ -7,10 +23,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fjl/goupnp"
-	"github.com/fjl/goupnp/dcps/internetgateway1"
-	"github.com/fjl/goupnp/dcps/internetgateway2"
+	"github.com/huin/goupnp"
+	"github.com/huin/goupnp/dcps/internetgateway1"
+	"github.com/huin/goupnp/dcps/internetgateway2"
 )
+
+const soapRequestTimeout = 3 * time.Second
 
 type upnp struct {
 	dev     *goupnp.RootDevice
@@ -131,6 +149,7 @@ func discover(out chan<- *upnp, target string, matcher func(*goupnp.RootDevice, 
 			}
 			// check for a matching IGD service
 			sc := goupnp.ServiceClient{service.NewSOAPClient(), devs[i].Root, service}
+			sc.SOAPClient.HTTPClient.Timeout = soapRequestTimeout
 			upnp := matcher(devs[i].Root, sc)
 			if upnp == nil {
 				return

@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package xeth
 
 import (
@@ -5,27 +21,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/state"
 )
-
-func toHex(b []byte) string {
-	return "0x" + ethutil.Bytes2Hex(b)
-}
-func fromHex(s string) []byte {
-	if len(s) > 1 {
-		if s[0:2] == "0x" {
-			s = s[2:]
-		}
-		return ethutil.Hex2Bytes(s)
-	}
-	return nil
-}
 
 type Object struct {
 	*state.StateObject
@@ -35,20 +38,20 @@ func NewObject(state *state.StateObject) *Object {
 	return &Object{state}
 }
 
-func (self *Object) StorageString(str string) *ethutil.Value {
-	if ethutil.IsHex(str) {
-		return self.storage(ethutil.Hex2Bytes(str[2:]))
+func (self *Object) StorageString(str string) []byte {
+	if common.IsHex(str) {
+		return self.storage(common.Hex2Bytes(str[2:]))
 	} else {
-		return self.storage(ethutil.RightPadBytes([]byte(str), 32))
+		return self.storage(common.RightPadBytes([]byte(str), 32))
 	}
 }
 
-func (self *Object) StorageValue(addr *ethutil.Value) *ethutil.Value {
+func (self *Object) StorageValue(addr *common.Value) []byte {
 	return self.storage(addr.Bytes())
 }
 
-func (self *Object) storage(addr []byte) *ethutil.Value {
-	return self.StateObject.GetStorage(ethutil.BigD(addr))
+func (self *Object) storage(addr []byte) []byte {
+	return self.StateObject.GetState(common.BytesToHash(addr)).Bytes()
 }
 
 func (self *Object) Storage() (storage map[string]string) {
@@ -58,7 +61,7 @@ func (self *Object) Storage() (storage map[string]string) {
 	for it.Next() {
 		var data []byte
 		rlp.Decode(bytes.NewReader(it.Value), &data)
-		storage[toHex(it.Key)] = toHex(data)
+		storage[common.ToHex(self.Trie().GetKey(it.Key))] = common.ToHex(data)
 	}
 
 	return
@@ -68,19 +71,19 @@ func (self *Object) Storage() (storage map[string]string) {
 type Block struct {
 	//Transactions string `json:"transactions"`
 	ref          *types.Block
-	Size         string        `json:"size"`
-	Number       int           `json:"number"`
-	Hash         string        `json:"hash"`
-	Transactions *ethutil.List `json:"transactions"`
-	Uncles       *ethutil.List `json:"uncles"`
-	Time         int64         `json:"time"`
-	Coinbase     string        `json:"coinbase"`
-	Name         string        `json:"name"`
-	GasLimit     string        `json:"gasLimit"`
-	GasUsed      string        `json:"gasUsed"`
-	PrevHash     string        `json:"prevHash"`
-	Bloom        string        `json:"bloom"`
-	Raw          string        `json:"raw"`
+	Size         string       `json:"size"`
+	Number       int          `json:"number"`
+	Hash         string       `json:"hash"`
+	Transactions *common.List `json:"transactions"`
+	Uncles       *common.List `json:"uncles"`
+	Time         uint64       `json:"time"`
+	Coinbase     string       `json:"coinbase"`
+	Name         string       `json:"name"`
+	GasLimit     string       `json:"gasLimit"`
+	GasUsed      string       `json:"gasUsed"`
+	PrevHash     string       `json:"prevHash"`
+	Bloom        string       `json:"bloom"`
+	Raw          string       `json:"raw"`
 }
 
 // Creates a new QML Block from a chain block
@@ -90,26 +93,30 @@ func NewBlock(block *types.Block) *Block {
 	}
 
 	ptxs := make([]*Transaction, len(block.Transactions()))
-	for i, tx := range block.Transactions() {
-		ptxs[i] = NewTx(tx)
-	}
-	txlist := ethutil.NewList(ptxs)
+	/*
+		for i, tx := range block.Transactions() {
+			ptxs[i] = NewTx(tx)
+		}
+	*/
+	txlist := common.NewList(ptxs)
 
 	puncles := make([]*Block, len(block.Uncles()))
-	for i, uncle := range block.Uncles() {
-		puncles[i] = NewBlock(types.NewBlockWithHeader(uncle))
-	}
-	ulist := ethutil.NewList(puncles)
+	/*
+		for i, uncle := range block.Uncles() {
+			puncles[i] = NewBlock(types.NewBlockWithHeader(uncle))
+		}
+	*/
+	ulist := common.NewList(puncles)
 
 	return &Block{
 		ref: block, Size: block.Size().String(),
 		Number: int(block.NumberU64()), GasUsed: block.GasUsed().String(),
-		GasLimit: block.GasLimit().String(), Hash: toHex(block.Hash()),
+		GasLimit: block.GasLimit().String(), Hash: block.Hash().Hex(),
 		Transactions: txlist, Uncles: ulist,
 		Time:     block.Time(),
-		Coinbase: toHex(block.Coinbase()),
-		PrevHash: toHex(block.ParentHash()),
-		Bloom:    toHex(block.Bloom()),
+		Coinbase: block.Coinbase().Hex(),
+		PrevHash: block.ParentHash().Hex(),
+		Bloom:    common.ToHex(block.Bloom().Bytes()),
 		Raw:      block.String(),
 	}
 }
@@ -123,7 +130,7 @@ func (self *Block) ToString() string {
 }
 
 func (self *Block) GetTransaction(hash string) *Transaction {
-	tx := self.ref.Transaction(fromHex(hash))
+	tx := self.ref.Transaction(common.HexToHash(hash))
 	if tx == nil {
 		return nil
 	}
@@ -148,36 +155,33 @@ type Transaction struct {
 }
 
 func NewTx(tx *types.Transaction) *Transaction {
-	hash := toHex(tx.Hash())
-	receiver := toHex(tx.To())
-	if receiver == "0000000000000000000000000000000000000000" {
-		receiver = toHex(core.AddressFromMessage(tx))
+	sender, err := tx.From()
+	if err != nil {
+		return nil
 	}
-	sender := toHex(tx.From())
+	hash := tx.Hash().Hex()
+
+	var receiver string
+	if to := tx.To(); to != nil {
+		receiver = to.Hex()
+	} else {
+		from, _ := tx.From()
+		receiver = crypto.CreateAddress(from, tx.Nonce()).Hex()
+	}
 	createsContract := core.MessageCreatesContract(tx)
 
 	var data string
 	if createsContract {
 		data = strings.Join(core.Disassemble(tx.Data()), "\n")
 	} else {
-		data = toHex(tx.Data())
+		data = common.ToHex(tx.Data())
 	}
 
-	return &Transaction{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value()), Address: receiver, Contract: createsContract, Gas: tx.Gas().String(), GasPrice: tx.GasPrice().String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: toHex(tx.Data())}
+	return &Transaction{ref: tx, Hash: hash, Value: common.CurrencyToString(tx.Value()), Address: receiver, Contract: createsContract, Gas: tx.Gas().String(), GasPrice: tx.GasPrice().String(), Data: data, Sender: sender.Hex(), CreatesContract: createsContract, RawData: common.ToHex(tx.Data())}
 }
 
 func (self *Transaction) ToString() string {
 	return self.ref.String()
-}
-
-type Key struct {
-	Address    string `json:"address"`
-	PrivateKey string `json:"privateKey"`
-	PublicKey  string `json:"publicKey"`
-}
-
-func NewKey(key *crypto.KeyPair) *Key {
-	return &Key{toHex(key.Address()), toHex(key.PrivateKey), toHex(key.PublicKey)}
 }
 
 type PReceipt struct {
@@ -190,9 +194,9 @@ type PReceipt struct {
 func NewPReciept(contractCreation bool, creationAddress, hash, address []byte) *PReceipt {
 	return &PReceipt{
 		contractCreation,
-		toHex(creationAddress),
-		toHex(hash),
-		toHex(address),
+		common.ToHex(creationAddress),
+		common.ToHex(hash),
+		common.ToHex(address),
 	}
 }
 
@@ -229,8 +233,8 @@ type Receipt struct {
 func NewReciept(contractCreation bool, creationAddress, hash, address []byte) *Receipt {
 	return &Receipt{
 		contractCreation,
-		toHex(creationAddress),
-		toHex(hash),
-		toHex(address),
+		common.ToHex(creationAddress),
+		common.ToHex(hash),
+		common.ToHex(address),
 	}
 }

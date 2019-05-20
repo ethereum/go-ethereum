@@ -1,17 +1,40 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package trie
+
+import (
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/syndtr/goleveldb/leveldb"
+)
 
 type Backend interface {
 	Get([]byte) ([]byte, error)
-	Put([]byte, []byte)
+	Put([]byte, []byte) error
 }
 
 type Cache struct {
+	batch   *leveldb.Batch
 	store   map[string][]byte
 	backend Backend
 }
 
 func NewCache(backend Backend) *Cache {
-	return &Cache{make(map[string][]byte), backend}
+	return &Cache{new(leveldb.Batch), make(map[string][]byte), backend}
 }
 
 func (self *Cache) Get(key []byte) []byte {
@@ -24,17 +47,24 @@ func (self *Cache) Get(key []byte) []byte {
 }
 
 func (self *Cache) Put(key []byte, data []byte) {
+	// write the data to the ldb batch
+	//self.batch.Put(key, rle.Compress(data))
+	self.batch.Put(key, data)
 	self.store[string(key)] = data
 }
 
+// Flush flushes the trie to the backing layer. If this is a leveldb instance
+// we'll use a batched write, otherwise we'll use regular put.
 func (self *Cache) Flush() {
-	for k, v := range self.store {
-		self.backend.Put([]byte(k), v)
+	if db, ok := self.backend.(*ethdb.LDBDatabase); ok {
+		if err := db.LDB().Write(self.batch, nil); err != nil {
+			glog.Fatal("db write err:", err)
+		}
+	} else {
+		for k, v := range self.store {
+			self.backend.Put([]byte(k), v)
+		}
 	}
-
-	// This will eventually grow too large. We'd could
-	// do a make limit on storage and push out not-so-popular nodes.
-	//self.Reset()
 }
 
 func (self *Cache) Copy() *Cache {

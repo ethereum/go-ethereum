@@ -1,9 +1,25 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package ethdb
 
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 /*
@@ -19,8 +35,10 @@ func NewMemDatabase() (*MemDatabase, error) {
 	return db, nil
 }
 
-func (db *MemDatabase) Put(key []byte, value []byte) {
+func (db *MemDatabase) Put(key []byte, value []byte) error {
 	db.db[string(key)] = value
+
+	return nil
 }
 
 func (db *MemDatabase) Set(key []byte, value []byte) {
@@ -32,10 +50,10 @@ func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 }
 
 /*
-func (db *MemDatabase) GetKeys() []*ethutil.Key {
+func (db *MemDatabase) GetKeys() []*common.Key {
 	data, _ := db.Get([]byte("KeyRing"))
 
-	return []*ethutil.Key{ethutil.NewKeyFromBytes(data)}
+	return []*common.Key{common.NewKeyFromBytes(data)}
 }
 */
 
@@ -48,8 +66,8 @@ func (db *MemDatabase) Delete(key []byte) error {
 func (db *MemDatabase) Print() {
 	for key, val := range db.db {
 		fmt.Printf("%x(%d): ", key, len(key))
-		node := ethutil.NewValueFromBytes(val)
-		fmt.Printf("%q\n", node.Interface())
+		node := common.NewValueFromBytes(val)
+		fmt.Printf("%q\n", node.Val)
 	}
 }
 
@@ -64,4 +82,8 @@ func (db *MemDatabase) LastKnownTD() []byte {
 	}
 
 	return data
+}
+
+func (db *MemDatabase) Flush() error {
+	return nil
 }

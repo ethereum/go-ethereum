@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package dagger
 
 import (
@@ -6,8 +22,8 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 )
 
@@ -44,13 +60,13 @@ func (dag *Dagger) Find(obj *big.Int, resChan chan int64) {
 	resChan <- 0
 }
 
-func (dag *Dagger) Search(hash, diff *big.Int) *big.Int {
+func (dag *Dagger) Search(hash, diff *big.Int) (uint64, []byte) {
 	// TODO fix multi threading. Somehow it results in the wrong nonce
 	amountOfRoutines := 1
 
 	dag.hash = hash
 
-	obj := ethutil.BigPow(2, 256)
+	obj := common.BigPow(2, 256)
 	obj = obj.Div(obj, diff)
 
 	Found = false
@@ -69,13 +85,13 @@ func (dag *Dagger) Search(hash, diff *big.Int) *big.Int {
 		}
 	}
 
-	return big.NewInt(res)
+	return uint64(res), nil
 }
 
 func (dag *Dagger) Verify(hash, diff, nonce *big.Int) bool {
 	dag.hash = hash
 
-	obj := ethutil.BigPow(2, 256)
+	obj := common.BigPow(2, 256)
 	obj = obj.Div(obj, diff)
 
 	return dag.Eval(nonce).Cmp(obj) < 0
@@ -85,7 +101,7 @@ func DaggerVerify(hash, diff, nonce *big.Int) bool {
 	dagger := &Dagger{}
 	dagger.hash = hash
 
-	obj := ethutil.BigPow(2, 256)
+	obj := common.BigPow(2, 256)
 	obj = obj.Div(obj, diff)
 
 	return dagger.Eval(nonce).Cmp(obj) < 0
@@ -133,7 +149,7 @@ func Sum(sha hash.Hash) []byte {
 }
 
 func (dag *Dagger) Eval(N *big.Int) *big.Int {
-	pow := ethutil.BigPow(2, 26)
+	pow := common.BigPow(2, 26)
 	dag.xn = pow.Div(N, pow)
 
 	sha := sha3.NewKeccak256()

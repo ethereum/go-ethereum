@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package crypto
 
 import (
@@ -9,6 +25,8 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"math/big"
 	"os"
 
 	"encoding/hex"
@@ -16,17 +34,21 @@ import (
 	"errors"
 
 	"code.google.com/p/go-uuid/uuid"
-	"code.google.com/p/go.crypto/pbkdf2"
-	"code.google.com/p/go.crypto/ripemd160"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/obscuren/ecies"
+	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/crypto/pbkdf2"
+	"golang.org/x/crypto/ripemd160"
 )
+
+var secp256k1n *big.Int
 
 func init() {
 	// specify the params for the s256 curve
 	ecies.AddParamsForCurve(S256(), ecies.ECIES_AES128_SHA256)
+	secp256k1n = common.String2Big("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141")
 }
 
 func Sha3(data ...[]byte) []byte {
@@ -37,9 +59,20 @@ func Sha3(data ...[]byte) []byte {
 	return d.Sum(nil)
 }
 
+func Sha3Hash(data ...[]byte) (h common.Hash) {
+	d := sha3.NewKeccak256()
+	for _, b := range data {
+		d.Write(b)
+	}
+	d.Sum(h[:0])
+	return h
+}
+
 // Creates an ethereum address given the bytes and the nonce
-func CreateAddress(b []byte, nonce uint64) []byte {
-	return Sha3(ethutil.NewValue([]interface{}{b, nonce}).Encode())[12:]
+func CreateAddress(b common.Address, nonce uint64) common.Address {
+	data, _ := rlp.EncodeToBytes([]interface{}{b, nonce})
+	return common.BytesToAddress(Sha3(data)[12:])
+	//return Sha3(common.NewValue([]interface{}{b, nonce}).Encode())[12:]
 }
 
 func Sha256(data []byte) []byte {
@@ -55,15 +88,8 @@ func Ripemd160(data []byte) []byte {
 	return ripemd.Sum(nil)
 }
 
-func Ecrecover(data []byte) []byte {
-	var in = struct {
-		hash []byte
-		sig  []byte
-	}{data[:32], data[32:]}
-
-	r, _ := secp256k1.RecoverPubkey(in.hash, in.sig)
-
-	return r
+func Ecrecover(hash, sig []byte) ([]byte, error) {
+	return secp256k1.RecoverPubkey(hash, sig)
 }
 
 // New methods using proper ecdsa keys from the stdlib
@@ -74,7 +100,7 @@ func ToECDSA(prv []byte) *ecdsa.PrivateKey {
 
 	priv := new(ecdsa.PrivateKey)
 	priv.PublicKey.Curve = S256()
-	priv.D = ethutil.BigD(prv)
+	priv.D = common.BigD(prv)
 	priv.PublicKey.X, priv.PublicKey.Y = S256().ScalarBaseMult(prv)
 	return priv
 }
@@ -114,8 +140,9 @@ func HexToECDSA(hexkey string) (*ecdsa.PrivateKey, error) {
 }
 
 // LoadECDSA loads a secp256k1 private key from the given file.
+// The key data is expected to be hex-encoded.
 func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
-	buf := make([]byte, 32)
+	buf := make([]byte, 64)
 	fd, err := os.Open(file)
 	if err != nil {
 		return nil, err
@@ -124,18 +151,46 @@ func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
 	if _, err := io.ReadFull(fd, buf); err != nil {
 		return nil, err
 	}
-	return ToECDSA(buf), nil
+
+	key, err := hex.DecodeString(string(buf))
+	if err != nil {
+		return nil, err
+	}
+
+	return ToECDSA(key), nil
+}
+
+// SaveECDSA saves a secp256k1 private key to the given file with
+// restrictive permissions. The key data is saved hex-encoded.
+func SaveECDSA(file string, key *ecdsa.PrivateKey) error {
+	k := hex.EncodeToString(FromECDSA(key))
+	return ioutil.WriteFile(file, []byte(k), 0600)
 }
 
 func GenerateKey() (*ecdsa.PrivateKey, error) {
 	return ecdsa.GenerateKey(S256(), rand.Reader)
 }
 
-func SigToPub(hash, sig []byte) *ecdsa.PublicKey {
-	s := Ecrecover(append(hash, sig...))
-	x, y := elliptic.Unmarshal(S256(), s)
+func ValidateSignatureValues(v byte, r, s *big.Int) bool {
+	vint := uint32(v)
+	if r.Cmp(common.Big0) == 0 || s.Cmp(common.Big0) == 0 {
+		return false
+	}
+	if r.Cmp(secp256k1n) < 0 && s.Cmp(secp256k1n) < 0 && (vint == 27 || vint == 28) {
+		return true
+	} else {
+		return false
+	}
+}
 
-	return &ecdsa.PublicKey{S256(), x, y}
+func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
+	s, err := Ecrecover(hash, sig)
+	if err != nil {
+		return nil, err
+	}
+
+	x, y := elliptic.Unmarshal(S256(), s)
+	return &ecdsa.PublicKey{S256(), x, y}, nil
 }
 
 func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
@@ -143,7 +198,7 @@ func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
 		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(hash))
 	}
 
-	sig, err = secp256k1.Sign(hash, ethutil.LeftPadBytes(prv.D.Bytes(), prv.Params().BitSize/8))
+	sig, err = secp256k1.Sign(hash, common.LeftPadBytes(prv.D.Bytes(), prv.Params().BitSize/8))
 	return
 }
 
@@ -156,8 +211,21 @@ func Decrypt(prv *ecdsa.PrivateKey, ct []byte) ([]byte, error) {
 	return key.Decrypt(rand.Reader, ct, nil, nil)
 }
 
+// Used only by block tests.
+func ImportBlockTestKey(privKeyBytes []byte) error {
+	ks := NewKeyStorePassphrase(common.DefaultDataDir() + "/keystore")
+	ecKey := ToECDSA(privKeyBytes)
+	key := &Key{
+		Id:         uuid.NewRandom(),
+		Address:    PubkeyToAddress(ecKey.PublicKey),
+		PrivateKey: ecKey,
+	}
+	err := ks.StoreKey(key, "")
+	return err
+}
+
 // creates a Key and stores that in the given KeyStore by decrypting a presale key JSON
-func ImportPreSaleKey(keyStore KeyStore2, keyJSON []byte, password string) (*Key, error) {
+func ImportPreSaleKey(keyStore KeyStore, keyJSON []byte, password string) (*Key, error) {
 	key, err := decryptPreSaleKey(keyJSON, password)
 	if err != nil {
 		return nil, err
@@ -198,27 +266,39 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 		Address:    PubkeyToAddress(ecKey.PublicKey),
 		PrivateKey: ecKey,
 	}
-	derivedAddr := ethutil.Bytes2Hex(key.Address)
+	derivedAddr := hex.EncodeToString(key.Address.Bytes()) // needed because .Hex() gives leading "0x"
 	expectedAddr := preSaleKeyStruct.EthAddr
 	if derivedAddr != expectedAddr {
-		err = errors.New("decrypted addr not equal to expected addr")
+		err = errors.New(fmt.Sprintf("decrypted addr not equal to expected addr ", derivedAddr, expectedAddr))
 	}
 	return key, err
 }
 
-func aesCBCDecrypt(key []byte, cipherText []byte, iv []byte) (plainText []byte, err error) {
+// AES-128 is selected due to size of encryptKey
+func aesCTRXOR(key, inText, iv []byte) ([]byte, error) {
 	aesBlock, err := aes.NewCipher(key)
 	if err != nil {
-		return plainText, err
+		return nil, err
+	}
+	stream := cipher.NewCTR(aesBlock, iv)
+	outText := make([]byte, len(inText))
+	stream.XORKeyStream(outText, inText)
+	return outText, err
+}
+
+func aesCBCDecrypt(key, cipherText, iv []byte) ([]byte, error) {
+	aesBlock, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
 	}
 	decrypter := cipher.NewCBCDecrypter(aesBlock, iv)
-	paddedPlainText := make([]byte, len(cipherText))
-	decrypter.CryptBlocks(paddedPlainText, cipherText)
-	plainText = PKCS7Unpad(paddedPlainText)
-	if plainText == nil {
-		err = errors.New("Decryption failed: PKCS7Unpad failed after decryption")
+	paddedPlaintext := make([]byte, len(cipherText))
+	decrypter.CryptBlocks(paddedPlaintext, cipherText)
+	plaintext := PKCS7Unpad(paddedPlaintext)
+	if plaintext == nil {
+		err = errors.New("Decryption failed: PKCS7Unpad failed after AES decryption")
 	}
-	return plainText, err
+	return plaintext, err
 }
 
 // From https://leanpub.com/gocrypto/read#leanpub-auto-block-cipher-modes
@@ -253,7 +333,7 @@ func PKCS7Unpad(in []byte) []byte {
 	return in[:len(in)-int(padding)]
 }
 
-func PubkeyToAddress(p ecdsa.PublicKey) []byte {
+func PubkeyToAddress(p ecdsa.PublicKey) common.Address {
 	pubBytes := FromECDSAPub(&p)
-	return Sha3(pubBytes[1:])[12:]
+	return common.BytesToAddress(Sha3(pubBytes[1:])[12:])
 }

@@ -1,138 +1,214 @@
-/*
-	This file is part of go-ethereum
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-	go-ethereum is free software: you can redistribute it and/or modify
-	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation, either version 3 of the License, or
-	(at your option) any later version.
-
-	go-ethereum is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	GNU General Public License for more details.
-
-	You should have received a copy of the GNU General Public License
-	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/**
- * @authors:
- * 	Jeffrey Wilcke <i@jev.io>
- */
-
+// ethtest executes Ethereum JSON tests.
 package main
 
 import (
-	"bytes"
-	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethereum/go-ethereum/tests/helper"
+	"github.com/codegangsta/cli"
+	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/tests"
 )
 
-type Account struct {
-	Balance string
-	Code    string
-	Nonce   string
-	Storage map[string]string
-}
+var (
+	continueOnError = false
+	testExtension   = ".json"
+	defaultTest     = "all"
+	defaultDir      = "."
+	allTests        = []string{"BlockTests", "StateTests", "TransactionTests", "VMTests", "RLPTests"}
+	skipTests       = []string{}
 
-func StateObjectFromAccount(db ethutil.Database, addr string, account Account) *state.StateObject {
-	obj := state.NewStateObject(ethutil.Hex2Bytes(addr), db)
-	obj.SetBalance(ethutil.Big(account.Balance))
-
-	if ethutil.IsHex(account.Code) {
-		account.Code = account.Code[2:]
+	TestFlag = cli.StringFlag{
+		Name:  "test",
+		Usage: "Test type (string): VMTests, TransactionTests, StateTests, BlockTests",
+		Value: defaultTest,
 	}
-	obj.Code = ethutil.Hex2Bytes(account.Code)
-	obj.Nonce = ethutil.Big(account.Nonce).Uint64()
+	FileFlag = cli.StringFlag{
+		Name:   "file",
+		Usage:  "Test file or directory. Directories are searched for .json files 1 level deep",
+		Value:  defaultDir,
+		EnvVar: "ETHEREUM_TEST_PATH",
+	}
+	ContinueOnErrorFlag = cli.BoolFlag{
+		Name:  "continue",
+		Usage: "Continue running tests on error (true) or [default] exit immediately (false)",
+	}
+	ReadStdInFlag = cli.BoolFlag{
+		Name:  "stdin",
+		Usage: "Accept input from stdin instead of reading from file",
+	}
+	SkipTestsFlag = cli.StringFlag{
+		Name:  "skip",
+		Usage: "Tests names to skip",
+	}
+)
 
-	return obj
-}
+func runTestWithReader(test string, r io.Reader) error {
+	glog.Infoln("runTest", test)
+	var err error
+	switch strings.ToLower(test) {
+	case "bk", "block", "blocktest", "blockchaintest", "blocktests", "blockchaintests":
+		err = tests.RunBlockTestWithReader(r, skipTests)
+	case "st", "state", "statetest", "statetests":
+		err = tests.RunStateTestWithReader(r, skipTests)
+	case "tx", "transactiontest", "transactiontests":
+		err = tests.RunTransactionTestsWithReader(r, skipTests)
+	case "vm", "vmtest", "vmtests":
+		err = tests.RunVmTestWithReader(r, skipTests)
+	case "rlp", "rlptest", "rlptests":
+		err = tests.RunRLPTestWithReader(r, skipTests)
+	default:
+		err = fmt.Errorf("Invalid test type specified: %v", test)
+	}
 
-type VmTest struct {
-	Callcreates interface{}
-	Env         map[string]string
-	Exec        map[string]string
-	Gas         string
-	Out         string
-	Post        map[string]Account
-	Pre         map[string]Account
-}
-
-func RunVmTest(r io.Reader) (failed int) {
-	tests := make(map[string]VmTest)
-
-	data, _ := ioutil.ReadAll(r)
-	err := json.Unmarshal(data, &tests)
 	if err != nil {
-		log.Fatalln(err)
+		return err
 	}
 
-	for name, test := range tests {
-		db, _ := ethdb.NewMemDatabase()
-		state := state.New(nil, db)
-		for addr, account := range test.Pre {
-			obj := StateObjectFromAccount(db, addr, account)
-			state.SetStateObject(obj)
-		}
+	return nil
+}
 
-		ret, _, gas, err := helper.RunVm(state, test.Env, test.Exec)
-		// When an error is returned it doesn't always mean the tests fails.
-		// Have to come up with some conditional failing mechanism.
-		if err != nil {
-			log.Println(err)
-		}
+func getFiles(path string) ([]string, error) {
+	glog.Infoln("getFiles", path)
+	var files []string
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
 
-		rexp := helper.FromHex(test.Out)
-		if bytes.Compare(rexp, ret) != 0 {
-			log.Printf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
-			failed = 1
-		}
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
 
-		if len(test.Gas) == 0 && err == nil {
-			log.Printf("0 gas indicates error but no error given by VM")
-			failed = 1
-		} else {
-			gexp := ethutil.Big(test.Gas)
-			if gexp.Cmp(gas) != 0 {
-				log.Printf("%s's gas failed. Expected %v, got %v\n", name, gexp, gas)
-				failed = 1
+	switch mode := fi.Mode(); {
+	case mode.IsDir():
+		fi, _ := ioutil.ReadDir(path)
+		files = make([]string, len(fi))
+		for i, v := range fi {
+			// only go 1 depth and leave directory entires blank
+			if !v.IsDir() && v.Name()[len(v.Name())-len(testExtension):len(v.Name())] == testExtension {
+				files[i] = filepath.Join(path, v.Name())
+				glog.Infoln("Found file", files[i])
 			}
 		}
+	case mode.IsRegular():
+		files = make([]string, 1)
+		files[0] = path
+	}
 
-		for addr, account := range test.Post {
-			obj := state.GetStateObject(helper.FromHex(addr))
-			for addr, value := range account.Storage {
-				v := obj.GetState(helper.FromHex(addr)).Bytes()
-				vexp := helper.FromHex(value)
+	return files, nil
+}
 
-				if bytes.Compare(v, vexp) != 0 {
-					log.Printf("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address()[0:4], addr, vexp, v, ethutil.BigD(vexp), ethutil.BigD(v))
-					failed = 1
+func runSuite(test, file string) {
+	var tests []string
+
+	if test == defaultTest {
+		tests = allTests
+	} else {
+		tests = []string{test}
+	}
+
+	for _, curTest := range tests {
+		glog.Infoln("runSuite", curTest, file)
+		var err error
+		var files []string
+		if test == defaultTest {
+			files, err = getFiles(filepath.Join(file, curTest))
+
+		} else {
+			files, err = getFiles(file)
+		}
+		if err != nil {
+			glog.Fatalln(err)
+		}
+
+		if len(files) == 0 {
+			glog.Warningln("No files matched path")
+		}
+		for _, curFile := range files {
+			// Skip blank entries
+			if len(curFile) == 0 {
+				continue
+			}
+
+			r, err := os.Open(curFile)
+			if err != nil {
+				glog.Fatalln(err)
+			}
+			defer r.Close()
+
+			err = runTestWithReader(curTest, r)
+			if err != nil {
+				if continueOnError {
+					glog.Errorln(err)
+				} else {
+					glog.Fatalln(err)
 				}
 			}
+
+		}
+	}
+}
+
+func setupApp(c *cli.Context) {
+	flagTest := c.GlobalString(TestFlag.Name)
+	flagFile := c.GlobalString(FileFlag.Name)
+	continueOnError = c.GlobalBool(ContinueOnErrorFlag.Name)
+	useStdIn := c.GlobalBool(ReadStdInFlag.Name)
+	skipTests = strings.Split(c.GlobalString(SkipTestsFlag.Name), " ")
+
+	if !useStdIn {
+		runSuite(flagTest, flagFile)
+	} else {
+		if err := runTestWithReader(flagTest, os.Stdin); err != nil {
+			glog.Fatalln(err)
 		}
 
-		logger.Flush()
 	}
-
-	return
 }
 
 func main() {
-	helper.Logger.SetLogLevel(5)
+	glog.SetToStderr(true)
 
-	if len(os.Args) > 1 {
-		os.Exit(RunVmTest(strings.NewReader(os.Args[1])))
-	} else {
-		os.Exit(RunVmTest(os.Stdin))
+	app := cli.NewApp()
+	app.Name = "ethtest"
+	app.Usage = "go-ethereum test interface"
+	app.Action = setupApp
+	app.Version = "0.2.0"
+	app.Author = "go-ethereum team"
+
+	app.Flags = []cli.Flag{
+		TestFlag,
+		FileFlag,
+		ContinueOnErrorFlag,
+		ReadStdInFlag,
+		SkipTestsFlag,
 	}
+
+	if err := app.Run(os.Args); err != nil {
+		glog.Fatalln(err)
+	}
+
 }
