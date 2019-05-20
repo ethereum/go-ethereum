@@ -2,23 +2,25 @@
 - name: update C++ client
   docker_image:
       path: /home/{{ ansible_ssh_user }}/git/ansible/test-files/docker-cppjit
-      name: ethereum/cppjit-testrunner
+      name: cppjit
       state: build
+#  command: docker build -t cpp /home/{{ ansible_ssh_user }}/git/ansible/test-files/docker-cpp
   async: 1200
   poll: 5
 
 - name: update Go client
   docker_image:
       path: /home/{{ ansible_ssh_user }}/git/ansible/test-files/docker-go
-      name: ethereum/go-testrunner
+      name: go
       state: build
+#  command: docker build -t go /home/{{ ansible_ssh_user }}/git/ansible/test-files/docker-go 
   async: 1200
   poll: 5
 
 - name: update Python client
   docker_image:
       path: /home/{{ ansible_ssh_user }}/git/ansible/test-files/docker-python
-      name: ethereum/python-testrunner
+      name: python
       state: build
   async: 1200
   poll: 5

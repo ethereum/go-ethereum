@@ -1,33 +1,8 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package core
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
-
-	"github.com/ethereum/go-ethereum/common"
-)
-
-var (
-	BlockNumberErr  = errors.New("block number invalid")
-	BlockFutureErr  = errors.New("block time is in the future")
-	BlockEqualTSErr = errors.New("block time stamp equal to previous")
 )
 
 // Parent error. In case a parent is unknown this error will be thrown
@@ -40,12 +15,13 @@ func (err *ParentErr) Error() string {
 	return err.Message
 }
 
-func ParentError(hash common.Hash) error {
-	return &ParentErr{Message: fmt.Sprintf("Block's parent unknown %x", hash)}
+func ParentError(hash []byte) error {
+	return &ParentErr{Message: fmt.Sprintf("Block's parent unkown %x", hash)}
 }
 
 func IsParentErr(err error) bool {
 	_, ok := err.(*ParentErr)
+
 	return ok
 }
 
@@ -57,12 +33,13 @@ func (err *UncleErr) Error() string {
 	return err.Message
 }
 
-func UncleError(format string, v ...interface{}) error {
-	return &UncleErr{Message: fmt.Sprintf(format, v...)}
+func UncleError(str string) error {
+	return &UncleErr{Message: str}
 }
 
 func IsUncleErr(err error) bool {
 	_, ok := err.(*UncleErr)
+
 	return ok
 }
 
@@ -81,7 +58,25 @@ func ValidationError(format string, v ...interface{}) *ValidationErr {
 
 func IsValidationErr(err error) bool {
 	_, ok := err.(*ValidationErr)
+
 	return ok
+}
+
+type GasLimitErr struct {
+	Message string
+	Is, Max *big.Int
+}
+
+func IsGasLimitErr(err error) bool {
+	_, ok := err.(*GasLimitErr)
+
+	return ok
+}
+func (err *GasLimitErr) Error() string {
+	return err.Message
+}
+func GasLimitError(is, max *big.Int) *GasLimitErr {
+	return &GasLimitErr{Message: fmt.Sprintf("GasLimit error. Max %s, transaction would take it to %s", max, is), Is: is, Max: max}
 }
 
 type NonceErr struct {
@@ -94,45 +89,29 @@ func (err *NonceErr) Error() string {
 }
 
 func NonceError(is, exp uint64) *NonceErr {
-	return &NonceErr{Message: fmt.Sprintf("Transaction w/ invalid nonce. tx=%d  state=%d)", is, exp), Is: is, Exp: exp}
+	return &NonceErr{Message: fmt.Sprintf("Nonce err. Is %d, expected %d", is, exp), Is: is, Exp: exp}
 }
 
 func IsNonceErr(err error) bool {
 	_, ok := err.(*NonceErr)
+
 	return ok
 }
 
-// BlockNonceErr indicates that a block's nonce is invalid.
-type BlockNonceErr struct {
-	Number *big.Int
-	Hash   common.Hash
-	Nonce  uint64
-}
-
-func (err *BlockNonceErr) Error() string {
-	return fmt.Sprintf("block %d (%v) nonce is invalid (got %d)", err.Number, err.Hash, err.Nonce)
-}
-
-// IsBlockNonceErr returns true for invalid block nonce errors.
-func IsBlockNonceErr(err error) bool {
-	_, ok := err.(*BlockNonceErr)
-	return ok
-}
-
-type InvalidTxErr struct {
+type OutOfGasErr struct {
 	Message string
 }
 
-func (err *InvalidTxErr) Error() string {
-	return err.Message
+func OutOfGasError() *OutOfGasErr {
+	return &OutOfGasErr{Message: "Out of gas"}
+}
+func (self *OutOfGasErr) Error() string {
+	return self.Message
 }
 
-func InvalidTxError(err error) *InvalidTxErr {
-	return &InvalidTxErr{fmt.Sprintf("%v", err)}
-}
+func IsOutOfGasErr(err error) bool {
+	_, ok := err.(*OutOfGasErr)
 
-func IsInvalidTxErr(err error) bool {
-	_, ok := err.(*InvalidTxErr)
 	return ok
 }
 
@@ -150,7 +129,7 @@ func IsTDError(e error) bool {
 
 type KnownBlockError struct {
 	number *big.Int
-	hash   common.Hash
+	hash   []byte
 }
 
 func (self *KnownBlockError) Error() string {
@@ -158,21 +137,5 @@ func (self *KnownBlockError) Error() string {
 }
 func IsKnownBlockErr(e error) bool {
 	_, ok := e.(*KnownBlockError)
-	return ok
-}
-
-type ValueTransferError struct {
-	message string
-}
-
-func ValueTransferErr(str string, v ...interface{}) *ValueTransferError {
-	return &ValueTransferError{fmt.Sprintf(str, v...)}
-}
-
-func (self *ValueTransferError) Error() string {
-	return self.message
-}
-func IsValueTransferErr(e error) bool {
-	_, ok := e.(*ValueTransferError)
 	return ok
 }

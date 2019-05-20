@@ -1,5 +1,6 @@
 venv/
 *~
-*.sw?
+*.swp
+*.swo
 .vagrant/
-*.pem
+client-tests.pem

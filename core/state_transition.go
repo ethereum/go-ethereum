@@ -1,32 +1,16 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package core
 
 import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/vm"
 )
+
+const tryJit = false
 
 /*
  * The State transitioning model
@@ -45,7 +29,7 @@ import (
  * 6) Derive new state root
  */
 type StateTransition struct {
-	coinbase      common.Address
+	coinbase      []byte
 	msg           Message
 	gas, gasPrice *big.Int
 	initialGas    *big.Int
@@ -58,10 +42,11 @@ type StateTransition struct {
 	env vm.Environment
 }
 
-// Message represents a message sent to a contract.
 type Message interface {
-	From() (common.Address, error)
-	To() *common.Address
+	Hash() []byte
+
+	From() []byte
+	To() []byte
 
 	GasPrice() *big.Int
 	Gas() *big.Int
@@ -71,33 +56,17 @@ type Message interface {
 	Data() []byte
 }
 
+func AddressFromMessage(msg Message) []byte {
+	// Generate a new address
+	return crypto.Sha3(ethutil.NewValue([]interface{}{msg.From(), msg.Nonce()}).Encode())[12:]
+}
+
 func MessageCreatesContract(msg Message) bool {
-	return msg.To() == nil
+	return len(msg.To()) == 0
 }
 
-// IntrinsicGas computes the 'intrisic gas' for a message
-// with the given data.
-func IntrinsicGas(data []byte) *big.Int {
-	igas := new(big.Int).Set(params.TxGas)
-	if len(data) > 0 {
-		var nz int64
-		for _, byt := range data {
-			if byt != 0 {
-				nz++
-			}
-		}
-		m := big.NewInt(nz)
-		m.Mul(m, params.TxDataNonZeroGas)
-		igas.Add(igas, m)
-		m.SetInt64(int64(len(data)) - nz)
-		m.Mul(m, params.TxDataZeroGas)
-		igas.Add(igas, m)
-	}
-	return igas
-}
-
-func ApplyMessage(env vm.Environment, msg Message, coinbase *state.StateObject) ([]byte, *big.Int, error) {
-	return NewStateTransition(env, msg, coinbase).transitionState()
+func MessageGasValue(msg Message) *big.Int {
+	return new(big.Int).Mul(msg.Gas(), msg.GasPrice())
 }
 
 func NewStateTransition(env vm.Environment, msg Message, coinbase *state.StateObject) *StateTransition {
@@ -106,7 +75,7 @@ func NewStateTransition(env vm.Environment, msg Message, coinbase *state.StateOb
 		env:        env,
 		msg:        msg,
 		gas:        new(big.Int),
-		gasPrice:   msg.GasPrice(),
+		gasPrice:   new(big.Int).Set(msg.GasPrice()),
 		initialGas: new(big.Int),
 		value:      msg.Value(),
 		data:       msg.Data(),
@@ -118,27 +87,19 @@ func NewStateTransition(env vm.Environment, msg Message, coinbase *state.StateOb
 func (self *StateTransition) Coinbase() *state.StateObject {
 	return self.state.GetOrNewStateObject(self.coinbase)
 }
-func (self *StateTransition) From() (*state.StateObject, error) {
-	f, err := self.msg.From()
-	if err != nil {
-		return nil, err
-	}
-	return self.state.GetOrNewStateObject(f), nil
+func (self *StateTransition) From() *state.StateObject {
+	return self.state.GetOrNewStateObject(self.msg.From())
 }
 func (self *StateTransition) To() *state.StateObject {
-	if self.msg == nil {
+	if self.msg != nil && MessageCreatesContract(self.msg) {
 		return nil
 	}
-	to := self.msg.To()
-	if to == nil {
-		return nil // contract creation
-	}
-	return self.state.GetOrNewStateObject(*to)
+	return self.state.GetOrNewStateObject(self.msg.To())
 }
 
 func (self *StateTransition) UseGas(amount *big.Int) error {
 	if self.gas.Cmp(amount) < 0 {
-		return vm.OutOfGasError
+		return OutOfGasError()
 	}
 	self.gas.Sub(self.gas, amount)
 
@@ -150,117 +111,157 @@ func (self *StateTransition) AddGas(amount *big.Int) {
 }
 
 func (self *StateTransition) BuyGas() error {
-	mgas := self.msg.Gas()
-	mgval := new(big.Int).Mul(mgas, self.gasPrice)
+	var err error
 
-	sender, err := self.From()
+	sender := self.From()
+	if sender.Balance().Cmp(MessageGasValue(self.msg)) < 0 {
+		return fmt.Errorf("insufficient ETH for gas (%x). Req %v, has %v", sender.Address()[:4], MessageGasValue(self.msg), sender.Balance())
+	}
+
+	coinbase := self.Coinbase()
+	err = coinbase.BuyGas(self.msg.Gas(), self.msg.GasPrice())
 	if err != nil {
 		return err
 	}
-	if sender.Balance().Cmp(mgval) < 0 {
-		return fmt.Errorf("insufficient ETH for gas (%x). Req %v, has %v", sender.Address().Bytes()[:4], mgval, sender.Balance())
-	}
-	if err = self.Coinbase().SubGas(mgas, self.gasPrice); err != nil {
-		return err
-	}
-	self.AddGas(mgas)
-	self.initialGas.Set(mgas)
-	sender.SubBalance(mgval)
+
+	self.AddGas(self.msg.Gas())
+	self.initialGas.Set(self.msg.Gas())
+	sender.SubAmount(MessageGasValue(self.msg))
+
 	return nil
 }
 
 func (self *StateTransition) preCheck() (err error) {
-	msg := self.msg
-	sender, err := self.From()
-	if err != nil {
-		return err
-	}
+	var (
+		msg    = self.msg
+		sender = self.From()
+	)
 
 	// Make sure this transaction's nonce is correct
-	if sender.Nonce() != msg.Nonce() {
-		return NonceError(msg.Nonce(), sender.Nonce())
+	if sender.Nonce != msg.Nonce() {
+		return NonceError(msg.Nonce(), sender.Nonce)
 	}
 
 	// Pre-pay gas / Buy gas of the coinbase account
 	if err = self.BuyGas(); err != nil {
-		if state.IsGasLimitErr(err) {
-			return err
-		}
-		return InvalidTxError(err)
+		return err
 	}
 
 	return nil
 }
 
-func (self *StateTransition) transitionState() (ret []byte, usedGas *big.Int, err error) {
+func (self *StateTransition) TransitionState() (ret []byte, err error) {
+	statelogger.Debugf("(~) %x\n", self.msg.Hash())
+
+	// XXX Transactions after this point are considered valid.
 	if err = self.preCheck(); err != nil {
 		return
 	}
 
-	msg := self.msg
-	sender, _ := self.From() // err checked in preCheck
+	var (
+		msg    = self.msg
+		sender = self.From()
+	)
 
-	// Pay intrinsic gas
-	if err = self.UseGas(IntrinsicGas(self.data)); err != nil {
-		return nil, nil, InvalidTxError(err)
+	defer self.RefundGas()
+
+	// Increment the nonce for the next transaction
+	sender.Nonce += 1
+
+	// Transaction gas
+	if err = self.UseGas(vm.GasTx); err != nil {
+		return
 	}
 
+	// Pay data gas
+	var dgas int64
+	for _, byt := range self.data {
+		if byt != 0 {
+			dgas += vm.GasData.Int64()
+		} else {
+			dgas += 1 // This is 1/5. If GasData changes this fails
+		}
+	}
+	if err = self.UseGas(big.NewInt(dgas)); err != nil {
+		return
+	}
+
+	//stateCopy := self.env.State().Copy()
 	vmenv := self.env
 	var ref vm.ContextRef
 	if MessageCreatesContract(msg) {
-		ret, err, ref = vmenv.Create(sender, self.data, self.gas, self.gasPrice, self.value)
+		contract := MakeContract(msg, self.state)
+		ret, err, ref = vmenv.Create(sender, contract.Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
 		if err == nil {
 			dataGas := big.NewInt(int64(len(ret)))
-			dataGas.Mul(dataGas, params.CreateDataGas)
+			dataGas.Mul(dataGas, vm.GasCreateByte)
 			if err := self.UseGas(dataGas); err == nil {
 				ref.SetCode(ret)
-			} else {
-				ret = nil // does not affect consensus but useful for StateTests validations
-				glog.V(logger.Core).Infoln("Insufficient gas for creating code. Require", dataGas, "and have", self.gas)
 			}
 		}
-		glog.V(logger.Core).Infoln("VM create err:", err)
+
+		/*
+			if vmenv, ok := vmenv.(*VMEnv); ok && tryJit {
+				statelogger.Infof("CREATE: re-running using JIT (PH=%x)\n", stateCopy.Root()[:4])
+				// re-run using the JIT (validation for the JIT)
+				goodState := vmenv.State().Copy()
+				vmenv.state = stateCopy
+				vmenv.SetVmType(vm.JitVmTy)
+				vmenv.Create(sender, contract.Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
+				statelogger.Infof("DONE PH=%x STD_H=%x JIT_H=%x\n", stateCopy.Root()[:4], goodState.Root()[:4], vmenv.State().Root()[:4])
+				self.state.Set(goodState)
+			}
+		*/
 	} else {
-		// Increment the nonce for the next transaction
-		self.state.SetNonce(sender.Address(), sender.Nonce()+1)
-		ret, err = vmenv.Call(sender, self.To().Address(), self.data, self.gas, self.gasPrice, self.value)
-		glog.V(logger.Core).Infoln("VM call err:", err)
+		ret, err = vmenv.Call(self.From(), self.To().Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
+
+		/*
+			if vmenv, ok := vmenv.(*VMEnv); ok && tryJit {
+				statelogger.Infof("CALL: re-running using JIT (PH=%x)\n", stateCopy.Root()[:4])
+				// re-run using the JIT (validation for the JIT)
+				goodState := vmenv.State().Copy()
+				vmenv.state = stateCopy
+				vmenv.SetVmType(vm.JitVmTy)
+				vmenv.Call(self.From(), self.To().Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
+				statelogger.Infof("DONE PH=%x STD_H=%x JIT_H=%x\n", stateCopy.Root()[:4], goodState.Root()[:4], vmenv.State().Root()[:4])
+				self.state.Set(goodState)
+			}
+		*/
 	}
 
-	if err != nil && IsValueTransferErr(err) {
-		return nil, nil, InvalidTxError(err)
-	}
-
-	// We aren't interested in errors here. Errors returned by the VM are non-consensus errors and therefor shouldn't bubble up
 	if err != nil {
-		err = nil
+		self.UseGas(self.gas)
 	}
 
-	if vm.Debug {
-		vm.StdErrFormat(vmenv.StructLogs())
-	}
-
-	self.refundGas()
-	self.state.AddBalance(self.coinbase, new(big.Int).Mul(self.gasUsed(), self.gasPrice))
-
-	return ret, self.gasUsed(), err
+	return
 }
 
-func (self *StateTransition) refundGas() {
-	coinbase := self.Coinbase()
-	sender, _ := self.From() // err already checked
+// Converts an transaction in to a state object
+func MakeContract(msg Message, state *state.StateDB) *state.StateObject {
+	addr := AddressFromMessage(msg)
+
+	contract := state.GetOrNewStateObject(addr)
+	contract.InitCode = msg.Data()
+
+	return contract
+}
+
+func (self *StateTransition) RefundGas() {
+	coinbase, sender := self.Coinbase(), self.From()
 	// Return remaining gas
-	remaining := new(big.Int).Mul(self.gas, self.gasPrice)
-	sender.AddBalance(remaining)
+	remaining := new(big.Int).Mul(self.gas, self.msg.GasPrice())
+	sender.AddAmount(remaining)
 
-	uhalf := remaining.Div(self.gasUsed(), common.Big2)
-	refund := common.BigMin(uhalf, self.state.Refunds())
-	self.gas.Add(self.gas, refund)
-	self.state.AddBalance(sender.Address(), refund.Mul(refund, self.gasPrice))
+	uhalf := new(big.Int).Div(self.GasUsed(), ethutil.Big2)
+	for addr, ref := range self.state.Refunds() {
+		refund := ethutil.BigMin(uhalf, ref)
+		self.gas.Add(self.gas, refund)
+		self.state.AddBalance([]byte(addr), refund.Mul(refund, self.msg.GasPrice()))
+	}
 
-	coinbase.AddGas(self.gas, self.gasPrice)
+	coinbase.RefundGas(self.gas, self.msg.GasPrice())
 }
 
-func (self *StateTransition) gasUsed() *big.Int {
+func (self *StateTransition) GasUsed() *big.Int {
 	return new(big.Int).Sub(self.initialGas, self.gas)
 }

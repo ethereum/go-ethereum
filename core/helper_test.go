@@ -1,19 +1,3 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package core
 
 import (
@@ -21,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	// "github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 )
 
@@ -32,7 +16,7 @@ type TestManager struct {
 	// stateManager *StateManager
 	eventMux *event.TypeMux
 
-	db         common.Database
+	db         ethutil.Database
 	txPool     *TxPool
 	blockChain *ChainManager
 	Blocks     []*types.Block
@@ -69,16 +53,17 @@ func (tm *TestManager) TxPool() *TxPool {
 func (tm *TestManager) EventMux() *event.TypeMux {
 	return tm.eventMux
 }
+func (tm *TestManager) KeyManager() *crypto.KeyManager {
+	return nil
+}
 
-// func (tm *TestManager) KeyManager() *crypto.KeyManager {
-// 	return nil
-// }
-
-func (tm *TestManager) Db() common.Database {
+func (tm *TestManager) Db() ethutil.Database {
 	return tm.db
 }
 
 func NewTestManager() *TestManager {
+	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "ETH")
+
 	db, err := ethdb.NewMemDatabase()
 	if err != nil {
 		fmt.Println("Could not create mem-db, failing")
@@ -91,6 +76,9 @@ func NewTestManager() *TestManager {
 	// testManager.txPool = NewTxPool(testManager)
 	// testManager.blockChain = NewChainManager(testManager)
 	// testManager.stateManager = NewStateManager(testManager)
+
+	// Start the tx pool
+	testManager.txPool.Start()
 
 	return testManager
 }

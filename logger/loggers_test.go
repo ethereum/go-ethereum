@@ -1,19 +1,3 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package logger
 
 import (
@@ -31,11 +15,9 @@ type TestLogSystem struct {
 	level  LogLevel
 }
 
-func (ls *TestLogSystem) LogPrint(msg LogMsg) {
+func (ls *TestLogSystem) LogPrint(level LogLevel, msg string) {
 	ls.mutex.Lock()
-	if ls.level >= msg.Level() {
-		ls.output += msg.String()
-	}
+	ls.output += msg
 	ls.mutex.Unlock()
 }
 
@@ -65,9 +47,9 @@ type blockedLogSystem struct {
 	unblock chan struct{}
 }
 
-func (ls blockedLogSystem) LogPrint(msg LogMsg) {
+func (ls blockedLogSystem) LogPrint(level LogLevel, msg string) {
 	<-ls.unblock
-	ls.LogSystem.LogPrint(msg)
+	ls.LogSystem.LogPrint(level, msg)
 }
 
 func TestLoggerFlush(t *testing.T) {

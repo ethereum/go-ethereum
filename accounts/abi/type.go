@@ -1,19 +1,3 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package abi
 
 import (
@@ -22,7 +6,7 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethutil"
 )
 
 const (
@@ -173,7 +157,7 @@ func (t Type) pack(v interface{}) ([]byte, error) {
 		if t.Size > -1 && value.Len() > t.Size {
 			return nil, fmt.Errorf("%v out of bound. %d for %d", value.Kind(), value.Len(), t.Size)
 		}
-		return []byte(common.LeftPadString(t.String(), 32)), nil
+		return []byte(ethutil.LeftPadString(t.String(), 32)), nil
 	case reflect.Slice:
 		if t.Size > -1 && value.Len() > t.Size {
 			return nil, fmt.Errorf("%v out of bound. %d for %d", value.Kind(), value.Len(), t.Size)
@@ -181,7 +165,7 @@ func (t Type) pack(v interface{}) ([]byte, error) {
 
 		// Address is a special slice. The slice acts as one rather than a list of elements.
 		if t.T == AddressTy {
-			return common.LeftPadBytes(v.([]byte), 32), nil
+			return ethutil.LeftPadBytes(v.([]byte), 32), nil
 		}
 
 		// Signed / Unsigned check
@@ -196,9 +180,9 @@ func (t Type) pack(v interface{}) ([]byte, error) {
 		return packed, nil
 	case reflect.Bool:
 		if value.Bool() {
-			return common.LeftPadBytes(common.Big1.Bytes(), 32), nil
+			return ethutil.LeftPadBytes(ethutil.Big1.Bytes(), 32), nil
 		} else {
-			return common.LeftPadBytes(common.Big0.Bytes(), 32), nil
+			return ethutil.LeftPadBytes(ethutil.Big0.Bytes(), 32), nil
 		}
 	}
 

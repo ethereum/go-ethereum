@@ -1,19 +1,3 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 /*
 Package logger implements a multi-output leveled logger.
 
@@ -44,6 +28,7 @@ const (
 	InfoLevel
 	DebugLevel
 	DebugDetailLevel
+	JsonLevel = 1000
 )
 
 // A Logger prints messages prefixed by a given tag. It provides named
@@ -57,74 +42,74 @@ func NewLogger(tag string) *Logger {
 	return &Logger{"[" + tag + "] "}
 }
 
-func (logger *Logger) Sendln(level LogLevel, v ...interface{}) {
-	logMessageC <- stdMsg{level, logger.tag + fmt.Sprintln(v...)}
+func (logger *Logger) sendln(level LogLevel, v ...interface{}) {
+	logMessageC <- message{level, logger.tag + fmt.Sprintln(v...)}
 }
 
-func (logger *Logger) Sendf(level LogLevel, format string, v ...interface{}) {
-	logMessageC <- stdMsg{level, logger.tag + fmt.Sprintf(format, v...)}
+func (logger *Logger) sendf(level LogLevel, format string, v ...interface{}) {
+	logMessageC <- message{level, logger.tag + fmt.Sprintf(format, v...)}
 }
 
 // Errorln writes a message with ErrorLevel.
 func (logger *Logger) Errorln(v ...interface{}) {
-	logger.Sendln(ErrorLevel, v...)
+	logger.sendln(ErrorLevel, v...)
 }
 
 // Warnln writes a message with WarnLevel.
 func (logger *Logger) Warnln(v ...interface{}) {
-	logger.Sendln(WarnLevel, v...)
+	logger.sendln(WarnLevel, v...)
 }
 
 // Infoln writes a message with InfoLevel.
 func (logger *Logger) Infoln(v ...interface{}) {
-	logger.Sendln(InfoLevel, v...)
+	logger.sendln(InfoLevel, v...)
 }
 
 // Debugln writes a message with DebugLevel.
 func (logger *Logger) Debugln(v ...interface{}) {
-	logger.Sendln(DebugLevel, v...)
+	logger.sendln(DebugLevel, v...)
 }
 
 // DebugDetailln writes a message with DebugDetailLevel.
 func (logger *Logger) DebugDetailln(v ...interface{}) {
-	logger.Sendln(DebugDetailLevel, v...)
+	logger.sendln(DebugDetailLevel, v...)
 }
 
 // Errorf writes a message with ErrorLevel.
 func (logger *Logger) Errorf(format string, v ...interface{}) {
-	logger.Sendf(ErrorLevel, format, v...)
+	logger.sendf(ErrorLevel, format, v...)
 }
 
 // Warnf writes a message with WarnLevel.
 func (logger *Logger) Warnf(format string, v ...interface{}) {
-	logger.Sendf(WarnLevel, format, v...)
+	logger.sendf(WarnLevel, format, v...)
 }
 
 // Infof writes a message with InfoLevel.
 func (logger *Logger) Infof(format string, v ...interface{}) {
-	logger.Sendf(InfoLevel, format, v...)
+	logger.sendf(InfoLevel, format, v...)
 }
 
 // Debugf writes a message with DebugLevel.
 func (logger *Logger) Debugf(format string, v ...interface{}) {
-	logger.Sendf(DebugLevel, format, v...)
+	logger.sendf(DebugLevel, format, v...)
 }
 
 // DebugDetailf writes a message with DebugDetailLevel.
 func (logger *Logger) DebugDetailf(format string, v ...interface{}) {
-	logger.Sendf(DebugDetailLevel, format, v...)
+	logger.sendf(DebugDetailLevel, format, v...)
 }
 
 // Fatalln writes a message with ErrorLevel and exits the program.
 func (logger *Logger) Fatalln(v ...interface{}) {
-	logger.Sendln(ErrorLevel, v...)
+	logger.sendln(ErrorLevel, v...)
 	Flush()
 	os.Exit(0)
 }
 
 // Fatalf writes a message with ErrorLevel and exits the program.
 func (logger *Logger) Fatalf(format string, v ...interface{}) {
-	logger.Sendf(ErrorLevel, format, v...)
+	logger.sendf(ErrorLevel, format, v...)
 	Flush()
 	os.Exit(0)
 }
@@ -144,6 +129,6 @@ func (logger *JsonLogger) LogJson(v JsonLog) {
 	}
 
 	jsontxt, _ := json.Marshal(obj)
-	logMessageC <- (jsonMsg(jsontxt))
+	logMessageC <- message{JsonLevel, string(jsontxt)}
 
 }
