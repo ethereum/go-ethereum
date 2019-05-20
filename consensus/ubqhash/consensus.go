@@ -257,7 +257,7 @@ func (ubqhash *Ubqhash) verifyHeader(chain consensus.ChainReader, header, parent
 		return errZeroBlockTime
 	}
 	// Verify the block's difficulty based in it's timestamp and parent's difficulty
-	expected := CalcDifficulty(chain, header.Time, parent)
+	expected := ubqhash.CalcDifficulty(chain, header.Time, parent)
 
 	if expected.Cmp(header.Difficulty) != 0 {
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, expected)
@@ -385,8 +385,10 @@ func maxActualTimespanFlux(dampen bool) *big.Int {
 // CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 // that a new block should have when created at time given the parent block's time
 // and difficulty.
-//
-// TODO (karalabe): Move the chain maker into this package and make this private!
+func (ubqhash *Ubqhash) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
+	return CalcDifficulty(chain, time, parent)
+}
+
 func CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
 	parentTime := parent.Time
 	parentNumber := parent.Number
@@ -664,7 +666,7 @@ func (ubqhash *Ubqhash) Prepare(chain consensus.ChainReader, header *types.Heade
 // setting the final state and assembling the block.
 func (ubqhash *Ubqhash) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// Accumulate any block and uncle rewards and commit the final state root
-	AccumulateRewards(state, header, uncles)
+	accumulateRewards(state, header, uncles)
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 	// Header seems complete, assemble into a block and return
@@ -704,8 +706,7 @@ func (ubqhash *Ubqhash) SealHash(header *types.Header) (hash common.Hash) {
 // AccumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
-// TODO (karalabe): Move the chain maker into this package and make this private!
-func AccumulateRewards(state *state.StateDB, header *types.Header, uncles []*types.Header) {
+func accumulateRewards(state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	reward := new(big.Int).Set(blockReward)
 
 	if header.Number.Cmp(big.NewInt(358363)) > 0 {
