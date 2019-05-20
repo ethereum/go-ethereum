@@ -91,10 +91,12 @@ func New(file string, cache int, handles int, namespace string) (*Database, erro
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, &opt.Options{
-		OpenFilesCacheCapacity: handles,
-		BlockCacheCapacity:     cache / 2 * opt.MiB,
-		WriteBuffer:            cache / 4 * opt.MiB, // Two of these are used internally
-		Filter:                 filter.NewBloomFilter(10),
+		OpenFilesCacheCapacity:                handles,
+		BlockCacheCapacity:                    cache / 2 * opt.MiB,
+		WriteBuffer:                           cache / 4 * opt.MiB, // Two of these are used internally
+		Filter:                                filter.NewBloomFilter(10),
+		CompactionTableSize:                   4 * opt.MiB,
+		CompactionTableSizeMultiplierPerLevel: []float64{1, 2, 4, 8, 8, 8, 8}, // Cap at 32MB files, higher explodes disk IO
 	})
 	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
 		db, err = leveldb.RecoverFile(file, nil)
