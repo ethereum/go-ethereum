@@ -319,7 +319,7 @@ func TestFormatter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unmarshalling failed '%v'", err)
 	}
-	formatted := d.Format()
+	formatted, _ := d.Format()
 	for _, item := range formatted {
 		fmt.Printf("'%v'\n", item.Pprint(0))
 	}
@@ -403,7 +403,6 @@ func TestFuzzerFiles(t *testing.T) {
 		if verbose && err != nil {
 			fmt.Printf("%d, EncodeData[2] err: %v\n", i, err)
 		}
-		typedData.PrettyPrint()
 		typedData.Format()
 	}
 }

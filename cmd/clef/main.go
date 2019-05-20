@@ -671,7 +671,7 @@ func testExternalUI(api *core.SignerAPI) {
 		}
 	}
 	var delay = 1 * time.Second
-	//Test display of info and error
+	// Test display of info and error
 	{
 		api.UI.ShowInfo("If you see this message, enter 'yes' to next question")
 		time.Sleep(delay)
