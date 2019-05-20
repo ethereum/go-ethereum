@@ -1,19 +1,3 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package p2p
 
 import (
@@ -21,17 +5,39 @@ import (
 )
 
 const (
-	errInvalidMsgCode = iota
+	errMagicTokenMismatch = iota
+	errRead
+	errWrite
+	errMisc
+	errInvalidMsgCode
 	errInvalidMsg
+	errP2PVersionMismatch
+	errPubkeyInvalid
+	errPubkeyForbidden
+	errProtocolBreach
+	errPingTimeout
+	errInvalidNetworkId
+	errInvalidProtocolVersion
 )
 
 var errorToString = map[int]string{
-	errInvalidMsgCode: "invalid message code",
-	errInvalidMsg:     "invalid message",
+	errMagicTokenMismatch:     "magic token mismatch",
+	errRead:                   "read error",
+	errWrite:                  "write error",
+	errMisc:                   "misc error",
+	errInvalidMsgCode:         "invalid message code",
+	errInvalidMsg:             "invalid message",
+	errP2PVersionMismatch:     "P2P Version Mismatch",
+	errPubkeyInvalid:          "public key invalid",
+	errPubkeyForbidden:        "public key forbidden",
+	errProtocolBreach:         "protocol Breach",
+	errPingTimeout:            "ping timeout",
+	errInvalidNetworkId:       "invalid network id",
+	errInvalidProtocolVersion: "invalid protocol version",
 }
 
 type peerError struct {
-	code    int
+	Code    int
 	message string
 }
 
@@ -51,7 +57,7 @@ func (self *peerError) Error() string {
 	return self.message
 }
 
-type DiscReason uint
+type DiscReason byte
 
 const (
 	DiscRequested DiscReason = iota
@@ -92,22 +98,34 @@ func (d DiscReason) String() string {
 	return discReasonToString[d]
 }
 
-func (d DiscReason) Error() string {
-	return d.String()
+type discRequestedError DiscReason
+
+func (err discRequestedError) Error() string {
+	return fmt.Sprintf("disconnect requested: %v", DiscReason(err))
 }
 
 func discReasonForError(err error) DiscReason {
-	if reason, ok := err.(DiscReason); ok {
-		return reason
+	if reason, ok := err.(discRequestedError); ok {
+		return DiscReason(reason)
 	}
 	peerError, ok := err.(*peerError)
-	if ok {
-		switch peerError.code {
-		case errInvalidMsgCode, errInvalidMsg:
-			return DiscProtocolError
-		default:
-			return DiscSubprotocolError
-		}
+	if !ok {
+		return DiscSubprotocolError
 	}
-	return DiscSubprotocolError
+	switch peerError.Code {
+	case errP2PVersionMismatch:
+		return DiscIncompatibleVersion
+	case errPubkeyInvalid:
+		return DiscInvalidIdentity
+	case errPubkeyForbidden:
+		return DiscUselessPeer
+	case errInvalidMsgCode, errMagicTokenMismatch, errProtocolBreach:
+		return DiscProtocolError
+	case errPingTimeout:
+		return DiscReadTimeout
+	case errRead, errWrite:
+		return DiscNetworkError
+	default:
+		return DiscSubprotocolError
+	}
 }

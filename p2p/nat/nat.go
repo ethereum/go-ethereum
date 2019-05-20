@@ -1,20 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
-// Package nat provides access to common network port mapping protocols.
+// Package nat provides access to common port mapping protocols.
 package nat
 
 import (
@@ -26,9 +10,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/jackpal/go-nat-pmp"
 )
+
+var log = logger.NewLogger("P2P NAT")
 
 // An implementation of nat.Interface can map local ports to ports
 // accessible from the Internet.
@@ -102,13 +87,12 @@ func Map(m Interface, c chan struct{}, protocol string, extport, intport int, na
 	refresh := time.NewTimer(mapUpdateInterval)
 	defer func() {
 		refresh.Stop()
-		glog.V(logger.Debug).Infof("deleting port mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
+		log.Debugf("Deleting port mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
 		m.DeleteMapping(protocol, extport, intport)
 	}()
+	log.Debugf("add mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
 	if err := m.AddMapping(protocol, intport, extport, name, mapTimeout); err != nil {
-		glog.V(logger.Debug).Infof("network port %s:%d could not be mapped: %v\n", protocol, intport, err)
-	} else {
-		glog.V(logger.Info).Infof("mapped network port %s:%d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
+		log.Errorf("mapping error: %v\n", err)
 	}
 	for {
 		select {
@@ -117,9 +101,9 @@ func Map(m Interface, c chan struct{}, protocol string, extport, intport int, na
 				return
 			}
 		case <-refresh.C:
-			glog.V(logger.Detail).Infof("refresh port mapping %s:%d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
+			log.DebugDetailf("refresh mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
 			if err := m.AddMapping(protocol, intport, extport, name, mapTimeout); err != nil {
-				glog.V(logger.Debug).Infof("network port %s:%d could not be mapped: %v\n", protocol, intport, err)
+				log.Errorf("mapping error: %v\n", err)
 			}
 			refresh.Reset(mapUpdateInterval)
 		}
@@ -187,9 +171,8 @@ func PMP(gateway net.IP) Interface {
 // This type is useful because discovery can take a while but we
 // want return an Interface value from UPnP, PMP and Auto immediately.
 type autodisc struct {
-	what string // type of interface being autodiscovered
-	once sync.Once
-	doit func() Interface
+	what string
+	done <-chan Interface
 
 	mu    sync.Mutex
 	found Interface
@@ -197,10 +180,9 @@ type autodisc struct {
 
 func startautodisc(what string, doit func() Interface) Interface {
 	// TODO: monitor network configuration and rerun doit when it changes.
-	ad := &autodisc{what: what, doit: doit}
-	// Start the auto discovery as early as possible so it is already
-	// in progress when the rest of the stack calls the methods.
-	go ad.wait()
+	done := make(chan Interface)
+	ad := &autodisc{what: what, done: done}
+	go func() { done <- doit(); close(done) }()
 	return ad
 }
 
@@ -235,15 +217,19 @@ func (n *autodisc) String() string {
 	}
 }
 
-// wait blocks until auto-discovery has been performed.
 func (n *autodisc) wait() error {
-	n.once.Do(func() {
-		n.mu.Lock()
-		n.found = n.doit()
-		n.mu.Unlock()
-	})
-	if n.found == nil {
-		return fmt.Errorf("no %s router discovered", n.what)
+	n.mu.Lock()
+	found := n.found
+	n.mu.Unlock()
+	if found != nil {
+		// already discovered
+		return nil
 	}
+	if found = <-n.done; found == nil {
+		return errors.New("no devices discovered")
+	}
+	n.mu.Lock()
+	n.found = found
+	n.mu.Unlock()
 	return nil
 }

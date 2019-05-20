@@ -1,30 +1,6 @@
 // Copyright 2013 The Go Authors. All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are
-// met:
-//
-//    * Redistributions of source code must retain the above copyright
-// notice, this list of conditions and the following disclaimer.
-//    * Redistributions in binary form must reproduce the above
-// copyright notice, this list of conditions and the following disclaimer
-// in the documentation and/or other materials provided with the
-// distribution.
-//    * Neither the name of Google Inc. nor the names of its
-// contributors may be used to endorse or promote products derived from
-// this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 
 // Package sha3 implements the SHA3 hash algorithm (formerly called Keccak) chosen by NIST in 2012.
 // This file provides a SHA3 implementation which implements the standard hash.Hash interface.
@@ -62,10 +38,13 @@ const stateSize = laneSize * numLanes
 // O(2^{outputSize/2}) computations (the birthday lower bound). Future standards may modify the
 // capacity/outputSize ratio to allow for more output with lower cryptographic security.
 type digest struct {
-	a          [numLanes]uint64 // main state of the hash
-	outputSize int              // desired output size in bytes
-	capacity   int              // number of bytes to leave untouched during squeeze/absorb
-	absorbed   int              // number of bytes absorbed thus far
+	a          [numLanes]uint64  // main state of the hash
+	b          [numLanes]uint64  // intermediate states
+	c          [sliceSize]uint64 // intermediate states
+	d          [sliceSize]uint64 // intermediate states
+	outputSize int               // desired output size in bytes
+	capacity   int               // number of bytes to leave untouched during squeeze/absorb
+	absorbed   int               // number of bytes absorbed thus far
 }
 
 // minInt returns the lesser of two integer arguments, to simplify the absorption routine.
@@ -137,7 +116,7 @@ func (d *digest) Write(p []byte) (int, error) {
 
 		// For every rate() bytes absorbed, the state must be permuted via the F Function.
 		if (d.absorbed)%d.rate() == 0 {
-			keccakF1600(&d.a)
+			d.keccakF()
 		}
 	}
 
@@ -155,7 +134,7 @@ func (d *digest) Write(p []byte) (int, error) {
 		d.absorbed += (lastLane - firstLane) * laneSize
 		// For every rate() bytes absorbed, the state must be permuted via the F Function.
 		if (d.absorbed)%d.rate() == 0 {
-			keccakF1600(&d.a)
+			d.keccakF()
 		}
 
 		offset = 0
@@ -188,7 +167,7 @@ func (d *digest) pad() {
 // finalize prepares the hash to output data by padding and one final permutation of the state.
 func (d *digest) finalize() {
 	d.pad()
-	keccakF1600(&d.a)
+	d.keccakF()
 }
 
 // squeeze outputs an arbitrary number of bytes from the hash state.
@@ -213,7 +192,7 @@ func (d *digest) squeeze(in []byte, toSqueeze int) []byte {
 			out = out[laneSize:]
 		}
 		if len(out) > 0 {
-			keccakF1600(&d.a)
+			d.keccakF()
 		}
 	}
 	return in[:len(in)+toSqueeze] // Re-slice in case we wrote extra data.

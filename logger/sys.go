@@ -1,56 +1,16 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package logger
 
 import (
-	"fmt"
 	"sync"
 )
 
-type stdMsg struct {
+type message struct {
 	level LogLevel
 	msg   string
 }
 
-type jsonMsg []byte
-
-func (m jsonMsg) Level() LogLevel {
-	return 0
-}
-
-func (m jsonMsg) String() string {
-	return string(m)
-}
-
-type LogMsg interface {
-	Level() LogLevel
-	fmt.Stringer
-}
-
-func (m stdMsg) Level() LogLevel {
-	return m.level
-}
-
-func (m stdMsg) String() string {
-	return m.msg
-}
-
 var (
-	logMessageC = make(chan LogMsg)
+	logMessageC = make(chan message)
 	addSystemC  = make(chan LogSystem)
 	flushC      = make(chan chan struct{})
 	resetC      = make(chan chan struct{})
@@ -67,11 +27,11 @@ const sysBufferSize = 500
 func dispatchLoop() {
 	var (
 		systems  []LogSystem
-		systemIn []chan LogMsg
+		systemIn []chan message
 		systemWG sync.WaitGroup
 	)
 	bootSystem := func(sys LogSystem) {
-		in := make(chan LogMsg, sysBufferSize)
+		in := make(chan message, sysBufferSize)
 		systemIn = append(systemIn, in)
 		systemWG.Add(1)
 		go sysLoop(sys, in, &systemWG)
@@ -113,9 +73,19 @@ func dispatchLoop() {
 	}
 }
 
-func sysLoop(sys LogSystem, in <-chan LogMsg, wg *sync.WaitGroup) {
+func sysLoop(sys LogSystem, in <-chan message, wg *sync.WaitGroup) {
 	for msg := range in {
-		sys.LogPrint(msg)
+		switch sys.(type) {
+		case *rawLogSystem:
+			// This is a semantic hack since rawLogSystem has little to do with JsonLevel
+			if msg.level == JsonLevel {
+				sys.LogPrint(msg.level, msg.msg)
+			}
+		default:
+			if sys.GetLogLevel() >= msg.level {
+				sys.LogPrint(msg.level, msg.msg)
+			}
+		}
 	}
 	wg.Done()
 }

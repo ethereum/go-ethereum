@@ -1,19 +1,3 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package secp256k1
 
 import (
@@ -21,8 +5,6 @@ import (
 	"fmt"
 	"log"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/crypto/randentropy"
 )
 
 const TESTS = 10000 // how many tests
@@ -30,7 +12,7 @@ const SigSize = 65  //64+1
 
 func Test_Secp256_00(t *testing.T) {
 
-	var nonce []byte = randentropy.GetEntropyCSPRNG(32) //going to get bitcoins stolen!
+	var nonce []byte = RandByte(32) //going to get bitcoins stolen!
 
 	if len(nonce) != 32 {
 		t.Fatal()
@@ -68,7 +50,7 @@ func Test_Secp256_01(t *testing.T) {
 //test size of messages
 func Test_Secp256_02s(t *testing.T) {
 	pubkey, seckey := GenerateKeyPair()
-	msg := randentropy.GetEntropyCSPRNG(32)
+	msg := RandByte(32)
 	sig, _ := Sign(msg, seckey)
 	CompactSigTest(sig)
 	if sig == nil {
@@ -91,7 +73,7 @@ func Test_Secp256_02s(t *testing.T) {
 //test signing message
 func Test_Secp256_02(t *testing.T) {
 	pubkey1, seckey := GenerateKeyPair()
-	msg := randentropy.GetEntropyCSPRNG(32)
+	msg := RandByte(32)
 	sig, _ := Sign(msg, seckey)
 	if sig == nil {
 		t.Fatal("Signature nil")
@@ -114,7 +96,7 @@ func Test_Secp256_02(t *testing.T) {
 //test pubkey recovery
 func Test_Secp256_02a(t *testing.T) {
 	pubkey1, seckey1 := GenerateKeyPair()
-	msg := randentropy.GetEntropyCSPRNG(32)
+	msg := RandByte(32)
 	sig, _ := Sign(msg, seckey1)
 
 	if sig == nil {
@@ -143,7 +125,7 @@ func Test_Secp256_02a(t *testing.T) {
 func Test_Secp256_03(t *testing.T) {
 	_, seckey := GenerateKeyPair()
 	for i := 0; i < TESTS; i++ {
-		msg := randentropy.GetEntropyCSPRNG(32)
+		msg := RandByte(32)
 		sig, _ := Sign(msg, seckey)
 		CompactSigTest(sig)
 
@@ -159,7 +141,7 @@ func Test_Secp256_03(t *testing.T) {
 func Test_Secp256_04(t *testing.T) {
 	for i := 0; i < TESTS; i++ {
 		pubkey1, seckey := GenerateKeyPair()
-		msg := randentropy.GetEntropyCSPRNG(32)
+		msg := RandByte(32)
 		sig, _ := Sign(msg, seckey)
 		CompactSigTest(sig)
 
@@ -182,7 +164,7 @@ func Test_Secp256_04(t *testing.T) {
 //	-SIPA look at this
 
 func randSig() []byte {
-	sig := randentropy.GetEntropyCSPRNG(65)
+	sig := RandByte(65)
 	sig[32] &= 0x70
 	sig[64] %= 4
 	return sig
@@ -190,7 +172,7 @@ func randSig() []byte {
 
 func Test_Secp256_06a_alt0(t *testing.T) {
 	pubkey1, seckey := GenerateKeyPair()
-	msg := randentropy.GetEntropyCSPRNG(32)
+	msg := RandByte(32)
 	sig, _ := Sign(msg, seckey)
 
 	if sig == nil {
@@ -221,12 +203,12 @@ func Test_Secp256_06a_alt0(t *testing.T) {
 
 func Test_Secp256_06b(t *testing.T) {
 	pubkey1, seckey := GenerateKeyPair()
-	msg := randentropy.GetEntropyCSPRNG(32)
+	msg := RandByte(32)
 	sig, _ := Sign(msg, seckey)
 
 	fail_count := 0
 	for i := 0; i < TESTS; i++ {
-		msg = randentropy.GetEntropyCSPRNG(32)
+		msg = RandByte(32)
 		pubkey2, _ := RecoverPubkey(msg, sig)
 		if bytes.Equal(pubkey1, pubkey2) == true {
 			t.Fail()
@@ -242,13 +224,5 @@ func Test_Secp256_06b(t *testing.T) {
 	}
 	if fail_count != 0 {
 		fmt.Printf("ERROR: Accepted signature for %v of %v random messages\n", fail_count, TESTS)
-	}
-}
-
-func TestInvalidKey(t *testing.T) {
-	p1 := make([]byte, 32)
-	err := VerifySeckeyValidity(p1)
-	if err == nil {
-		t.Errorf("pvk %x varify sec key should have returned error", p1)
 	}
 }

@@ -1,49 +1,77 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
-//
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// go-ethereum is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+/*
+	This file is part of go-ethereum
 
-// Package utils contains internal helper functions for go-ethereum commands.
+	go-ethereum is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	go-ethereum is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @authors
+ * 	Jeffrey Wilcke <i@jev.io>
+ * 	Viktor Tron <viktor@ethdev.com>
+ */
 package utils
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
+	"path"
+	"path/filepath"
 	"regexp"
-	"strings"
+	"runtime"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
+	"bitbucket.org/kardianos/osext"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/peterh/liner"
+	rpchttp "github.com/ethereum/go-ethereum/rpc/http"
+	rpcws "github.com/ethereum/go-ethereum/rpc/ws"
+	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/xeth"
 )
 
-const (
-	importBatchSize = 2500
-)
-
+var clilogger = logger.NewLogger("CLI")
 var interruptCallbacks = []func(os.Signal){}
 
+// Register interrupt handlers callbacks
+func RegisterInterrupt(cb func(os.Signal)) {
+	interruptCallbacks = append(interruptCallbacks, cb)
+}
+
+// go routine that call interrupt handlers in order of registering
+func HandleInterrupt() {
+	c := make(chan os.Signal, 1)
+	go func() {
+		signal.Notify(c, os.Interrupt)
+		for sig := range c {
+			clilogger.Errorf("Shutting down (%v) ... \n", sig)
+			RunInterruptCallbacks(sig)
+		}
+	}()
+}
+
+func RunInterruptCallbacks(sig os.Signal) {
+	for _, cb := range interruptCallbacks {
+		cb(sig)
+	}
+}
+
 func openLogFile(Datadir string, filename string) *os.File {
-	path := common.AbsolutePath(Datadir, filename)
+	path := ethutil.AbsolutePath(Datadir, filename)
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		panic(fmt.Sprintf("error opening log file '%s': %v", filename, err))
@@ -51,103 +79,169 @@ func openLogFile(Datadir string, filename string) *os.File {
 	return file
 }
 
-func PromptConfirm(prompt string) (bool, error) {
-	var (
-		input string
-		err   error
-	)
-	prompt = prompt + " [y/N] "
-
-	// if liner.TerminalSupported() {
-	// 	fmt.Println("term")
-	// 	lr := liner.NewLiner()
-	// 	defer lr.Close()
-	// 	input, err = lr.Prompt(prompt)
-	// } else {
-	fmt.Print(prompt)
-	input, err = bufio.NewReader(os.Stdin).ReadString('\n')
-	fmt.Println()
-	// }
-
-	if len(input) > 0 && strings.ToUpper(input[:1]) == "Y" {
-		return true, nil
-	} else {
-		return false, nil
+func confirm(message string) bool {
+	fmt.Println(message, "Are you sure? (y/n)")
+	var r string
+	fmt.Scanln(&r)
+	for ; ; fmt.Scanln(&r) {
+		if r == "n" || r == "y" {
+			break
+		} else {
+			fmt.Printf("Yes or no? (%s)", r)
+		}
 	}
-
-	return false, err
+	return r == "y"
 }
 
-func PromptPassword(prompt string, warnTerm bool) (string, error) {
-	if liner.TerminalSupported() {
-		lr := liner.NewLiner()
-		defer lr.Close()
-		return lr.PasswordPrompt(prompt)
-	}
-	if warnTerm {
-		fmt.Println("!! Unsupported terminal, password will be echoed.")
-	}
-	fmt.Print(prompt)
-	input, err := bufio.NewReader(os.Stdin).ReadString('\n')
-	fmt.Println()
-	return input, err
-}
-
-func CheckLegalese(datadir string) {
-	// check "first run"
-	if !common.FileExist(datadir) {
-		r, _ := PromptConfirm(legalese)
-		if !r {
-			Fatalf("Must accept to continue. Shutting down...\n")
+func initDataDir(Datadir string) {
+	_, err := os.Stat(Datadir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Printf("Data directory '%s' doesn't exist, creating it\n", Datadir)
+			os.Mkdir(Datadir, 0777)
 		}
 	}
 }
 
-// Fatalf formats a message to standard error and exits the program.
-// The message is also printed to standard output if standard error
-// is redirected to a different file.
-func Fatalf(format string, args ...interface{}) {
-	w := io.MultiWriter(os.Stdout, os.Stderr)
-	outf, _ := os.Stdout.Stat()
-	errf, _ := os.Stderr.Stat()
-	if outf != nil && errf != nil && os.SameFile(outf, errf) {
-		w = os.Stderr
+func InitConfig(vmType int, ConfigFile string, Datadir string, EnvPrefix string) *ethutil.ConfigManager {
+	initDataDir(Datadir)
+	cfg := ethutil.ReadConfig(ConfigFile, Datadir, EnvPrefix)
+	cfg.VmType = vmType
+
+	return cfg
+}
+
+func exit(err error) {
+	status := 0
+	if err != nil {
+		clilogger.Errorln("Fatal: ", err)
+		status = 1
 	}
-	fmt.Fprintf(w, "Fatal: "+format+"\n", args...)
 	logger.Flush()
-	os.Exit(1)
+	os.Exit(status)
 }
 
 func StartEthereum(ethereum *eth.Ethereum) {
-	glog.V(logger.Info).Infoln("Starting", ethereum.Name())
+	clilogger.Infoln("Starting ", ethereum.Name())
 	if err := ethereum.Start(); err != nil {
-		Fatalf("Error starting Ethereum: %v", err)
+		exit(err)
 	}
-	go func() {
-		sigc := make(chan os.Signal, 1)
-		signal.Notify(sigc, os.Interrupt)
-		defer signal.Stop(sigc)
-		<-sigc
-		glog.V(logger.Info).Infoln("Got interrupt, shutting down...")
-		go ethereum.Stop()
+	RegisterInterrupt(func(sig os.Signal) {
+		ethereum.Stop()
 		logger.Flush()
-		for i := 10; i > 0; i-- {
-			<-sigc
-			if i > 1 {
-				glog.V(logger.Info).Infoln("Already shutting down, please be patient.")
-				glog.V(logger.Info).Infoln("Interrupt", i-1, "more times to induce panic.")
-			}
+	})
+}
+
+func DefaultAssetPath() string {
+	var assetPath string
+	// If the current working directory is the go-ethereum dir
+	// assume a debug build and use the source directory as
+	// asset directory.
+	pwd, _ := os.Getwd()
+	if pwd == path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist") {
+		assetPath = path.Join(pwd, "assets")
+	} else {
+		switch runtime.GOOS {
+		case "darwin":
+			// Get Binary Directory
+			exedir, _ := osext.ExecutableFolder()
+			assetPath = filepath.Join(exedir, "../Resources")
+		case "linux":
+			assetPath = "/usr/share/mist"
+		case "windows":
+			assetPath = "./assets"
+		default:
+			assetPath = "."
 		}
-		glog.V(logger.Error).Infof("Force quitting: this might not end so well.")
-		panic("boom")
-	}()
+	}
+	return assetPath
+}
+
+func KeyTasks(keyManager *crypto.KeyManager, KeyRing string, GenAddr bool, SecretFile string, ExportDir string, NonInteractive bool) {
+
+	var err error
+	switch {
+	case GenAddr:
+		if NonInteractive || confirm("This action overwrites your old private key.") {
+			err = keyManager.Init(KeyRing, 0, true)
+		}
+		exit(err)
+	case len(SecretFile) > 0:
+		SecretFile = ethutil.ExpandHomePath(SecretFile)
+
+		if NonInteractive || confirm("This action overwrites your old private key.") {
+			err = keyManager.InitFromSecretsFile(KeyRing, 0, SecretFile)
+		}
+		exit(err)
+	case len(ExportDir) > 0:
+		err = keyManager.Init(KeyRing, 0, false)
+		if err == nil {
+			err = keyManager.Export(ExportDir)
+		}
+		exit(err)
+	default:
+		// Creates a keypair if none exists
+		err = keyManager.Init(KeyRing, 0, false)
+		if err != nil {
+			exit(err)
+		}
+	}
+	clilogger.Infof("Main address %x\n", keyManager.Address())
+}
+
+func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
+	var err error
+	ethereum.RpcServer, err = rpchttp.NewRpcHttpServer(xeth.New(ethereum), RpcPort)
+	if err != nil {
+		clilogger.Errorf("Could not start RPC interface (port %v): %v", RpcPort, err)
+	} else {
+		go ethereum.RpcServer.Start()
+	}
+}
+
+func StartWebSockets(eth *eth.Ethereum, wsPort int) {
+	clilogger.Infoln("Starting WebSockets")
+
+	var err error
+	eth.WsServer, err = rpcws.NewWebSocketServer(xeth.New(eth), wsPort)
+	if err != nil {
+		clilogger.Errorf("Could not start RPC interface (port %v): %v", wsPort, err)
+	} else {
+		go eth.WsServer.Start()
+	}
+}
+
+var gminer *miner.Miner
+
+func GetMiner() *miner.Miner {
+	return gminer
+}
+
+func StartMining(ethereum *eth.Ethereum) bool {
+	if !ethereum.Mining {
+		ethereum.Mining = true
+		addr := ethereum.KeyManager().Address()
+
+		go func() {
+			clilogger.Infoln("Start mining")
+			if gminer == nil {
+				gminer = miner.New(addr, ethereum)
+			}
+			gminer.Start()
+		}()
+		RegisterInterrupt(func(os.Signal) {
+			StopMining(ethereum)
+		})
+		return true
+	}
+	return false
 }
 
 func FormatTransactionData(data string) []byte {
-	d := common.StringToByteFunc(data, func(s string) (ret []byte) {
+	d := ethutil.StringToByteFunc(data, func(s string) (ret []byte) {
 		slice := regexp.MustCompile("\\n|\\s").Split(s, 1000000000)
 		for _, dataItem := range slice {
-			d := common.FormatData(dataItem)
+			d := ethutil.FormatData(dataItem)
 			ret = append(ret, d...)
 		}
 		return
@@ -156,109 +250,55 @@ func FormatTransactionData(data string) []byte {
 	return d
 }
 
-func ImportChain(chain *core.ChainManager, fn string) error {
-	// Watch for Ctrl-C while the import is running.
-	// If a signal is received, the import will stop at the next batch.
-	interrupt := make(chan os.Signal, 1)
-	stop := make(chan struct{})
-	signal.Notify(interrupt, os.Interrupt)
-	defer signal.Stop(interrupt)
-	defer close(interrupt)
-	go func() {
-		if _, ok := <-interrupt; ok {
-			glog.Info("caught interrupt during import, will stop at next batch")
-		}
-		close(stop)
-	}()
-	checkInterrupt := func() bool {
-		select {
-		case <-stop:
-			return true
-		default:
-			return false
-		}
+func StopMining(ethereum *eth.Ethereum) bool {
+	if ethereum.Mining && gminer != nil {
+		gminer.Stop()
+		clilogger.Infoln("Stopped mining")
+		ethereum.Mining = false
+
+		return true
 	}
 
-	glog.Infoln("Importing blockchain", fn)
-	fh, err := os.Open(fn)
+	return false
+}
+
+// Replay block
+func BlockDo(ethereum *eth.Ethereum, hash []byte) error {
+	block := ethereum.ChainManager().GetBlock(hash)
+	if block == nil {
+		return fmt.Errorf("unknown block %x", hash)
+	}
+
+	parent := ethereum.ChainManager().GetBlock(block.ParentHash())
+
+	statedb := state.New(parent.Root(), ethereum.Db())
+	_, err := ethereum.BlockProcessor().TransitionState(statedb, parent, block)
 	if err != nil {
 		return err
 	}
-	defer fh.Close()
-	stream := rlp.NewStream(fh, 0)
 
-	// Run actual the import.
-	blocks := make(types.Blocks, importBatchSize)
-	n := 0
-	for batch := 0; ; batch++ {
-		// Load a batch of RLP blocks.
-		if checkInterrupt() {
-			return fmt.Errorf("interrupted")
-		}
-		i := 0
-		for ; i < importBatchSize; i++ {
-			var b types.Block
-			if err := stream.Decode(&b); err == io.EOF {
-				break
-			} else if err != nil {
-				return fmt.Errorf("at block %d: %v", n, err)
-			}
-			blocks[i] = &b
-			n++
-		}
-		if i == 0 {
-			break
-		}
-		// Import the batch.
-		if checkInterrupt() {
-			return fmt.Errorf("interrupted")
-		}
-		if hasAllBlocks(chain, blocks[:i]) {
-			glog.Infof("skipping batch %d, all blocks present [%x / %x]",
-				batch, blocks[0].Hash().Bytes()[:4], blocks[i-1].Hash().Bytes()[:4])
-			continue
-		}
-		if _, err := chain.InsertChain(blocks[:i]); err != nil {
-			return fmt.Errorf("invalid block %d: %v", n, err)
-		}
-	}
 	return nil
+
 }
 
-func hasAllBlocks(chain *core.ChainManager, bs []*types.Block) bool {
-	for _, b := range bs {
-		if !chain.HasBlock(b.Hash()) {
-			return false
-		}
-	}
-	return true
-}
-
-func ExportChain(chainmgr *core.ChainManager, fn string) error {
-	glog.Infoln("Exporting blockchain to", fn)
-	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+func ImportChain(ethereum *eth.Ethereum, fn string) error {
+	clilogger.Infof("importing chain '%s'\n", fn)
+	fh, err := os.OpenFile(fn, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		return err
 	}
 	defer fh.Close()
-	if err := chainmgr.Export(fh); err != nil {
-		return err
-	}
-	glog.Infoln("Exported blockchain to", fn)
-	return nil
-}
 
-func ExportAppendChain(chainmgr *core.ChainManager, fn string, first uint64, last uint64) error {
-	glog.Infoln("Exporting blockchain to", fn)
-	// TODO verify mode perms
-	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
-	if err != nil {
+	var chain types.Blocks
+	if err := rlp.Decode(fh, &chain); err != nil {
 		return err
 	}
-	defer fh.Close()
-	if err := chainmgr.ExportN(fh, first, last); err != nil {
+
+	ethereum.ChainManager().Reset()
+	if err := ethereum.ChainManager().InsertChain(chain); err != nil {
 		return err
 	}
-	glog.Infoln("Exported blockchain to", fn)
+	clilogger.Infof("imported %d blocks\n", len(chain))
+
 	return nil
 }

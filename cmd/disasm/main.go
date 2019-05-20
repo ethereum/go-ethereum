@@ -1,20 +1,3 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
-//
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// go-ethereum is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
-
-// disasm is a pretty-printer for EVM bytecode.
 package main
 
 import (
@@ -22,8 +5,8 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/vm"
 )
 
 func main() {
@@ -32,7 +15,7 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	code = common.Hex2Bytes(string(code[:len(code)-1]))
+	code = ethutil.Hex2Bytes(string(code[:len(code)-1]))
 	fmt.Printf("%x\n", code)
 
 	for pc := uint64(0); pc < uint64(len(code)); pc++ {
