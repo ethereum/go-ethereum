@@ -120,6 +120,20 @@ func makeHasher(h hash.Hash) hasher {
 	}
 }
 
+// blakeHasher creates a repetitive hasher, allowing the same hash data structures
+// to be reused between hash runs instead of requiring new ones to be created.
+// The returned function is not thread safe!
+// based on previous Sum based makeHasher as blake2b lacks a Read function - iquidus
+func blakeHasher(h hash.Hash) hasher {
+	return func(dest []byte, data []byte) {
+		h.Write(data)
+		h.Sum(dest[:0])
+		h.Reset()
+	}
+}
+
+
+
 // seedHash is the seed to use for generating a verification cache and the mining
 // dataset.
 func seedHash(block uint64) []byte {
@@ -184,7 +198,7 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 	keccak512 := makeHasher(sha3.NewLegacyKeccak512())
 	if epoch >= uip1Epoch {
 		h, _ := blake2b.New512(nil)
-		keccak512 = makeHasher(h)
+		keccak512 = blakeHasher(h) // use blakeHasher instead of makeHasher here.
 	}
 
 	// Sequentially produce the initial dataset
