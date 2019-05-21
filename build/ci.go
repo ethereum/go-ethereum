@@ -333,6 +333,7 @@ func doLint(cmdline []string) {
 		packages = flag.CommandLine.Args()
 	}
 	// Get metalinter and install all supported linters
+	os.Setenv("GO111MODULE", "on")
 	build.MustRun(goTool("get", "gopkg.in/alecthomas/kingpin.v3-unstable@63abe20a23e29e80bbef8089bd3dee3ac25e5306"))
 	build.MustRun(goTool("get", "github.com/alecthomas/gometalinter@v3.0.0"))
 	build.MustRunCommand(filepath.Join(GOBIN, "gometalinter"), "--install")
