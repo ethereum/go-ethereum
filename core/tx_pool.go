@@ -99,6 +99,10 @@ var (
 	// General tx metrics
 	invalidTxCounter     = metrics.NewRegisteredCounter("txpool/invalid", nil)
 	underpricedTxCounter = metrics.NewRegisteredCounter("txpool/underpriced", nil)
+
+	// Lock contention metrics
+	addTxTimer     = metrics.NewRegisteredTimer("txpool/lock/addtx", nil)
+	headResetTimer = metrics.NewRegisteredTimer("txpool/lock/headreset", nil)
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.
@@ -307,7 +311,9 @@ func (pool *TxPool) loop() {
 		// Handle ChainHeadEvent
 		case ev := <-pool.chainHeadCh:
 			if ev.Block != nil {
+				t := time.Now()
 				pool.mu.Lock()
+				headResetTimer.UpdateSince(t)
 				if pool.chainconfig.IsHomestead(ev.Block.Number()) {
 					pool.homestead = true
 				}
@@ -818,9 +824,11 @@ func (pool *TxPool) AddRemotes(txs []*types.Transaction) []error {
 
 // addTx enqueues a single transaction into the pool if it is valid.
 func (pool *TxPool) addTx(tx *types.Transaction, local bool) error {
+	t := time.Now()
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
+	addTxTimer.UpdateSince(t)
 	// Try to inject the transaction and update any state
 	replace, err := pool.add(tx, local)
 	if err != nil {
@@ -836,9 +844,11 @@ func (pool *TxPool) addTx(tx *types.Transaction, local bool) error {
 
 // addTxs attempts to queue a batch of transactions if they are valid.
 func (pool *TxPool) addTxs(txs []*types.Transaction, local bool) []error {
+	t := time.Now()
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
+	addTxTimer.UpdateSince(t)
 	return pool.addTxsLocked(txs, local)
 }
 

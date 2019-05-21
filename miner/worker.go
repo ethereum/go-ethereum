@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -74,6 +75,13 @@ const (
 
 	// staleThreshold is the maximum depth of the acceptable stale block.
 	staleThreshold = 7
+)
+
+var (
+	txFetchingTimer             = metrics.NewRegisteredTimer("miner/fetching", nil)
+	blockExecutionTimer         = metrics.NewRegisteredTimer("miner/execution", nil)
+	newHeadInterruptionCounter  = metrics.NewRegisteredCounter("miner/interruption/newHead", nil)
+	resubmitInterruptionCounter = metrics.NewRegisteredCounter("miner/interruption/resubmit", nil)
 )
 
 // environment is the worker's current environment and holds all of the current state information.
@@ -347,6 +355,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(false, commitInterruptNewHead)
 
 		case head := <-w.chainHeadCh:
+			log.Info("New chain event", "number", head.Block.NumberU64())
 			clearPending(head.Block.NumberU64())
 			timestamp = time.Now().Unix()
 			commit(false, commitInterruptNewHead)
@@ -595,7 +604,10 @@ func (w *worker) resultLoop() {
 			case core.SideStatTy:
 				events = append(events, core.ChainSideEvent{Block: block})
 			}
+
+			t := time.Now()
 			w.chain.PostChainEvents(events, logs)
+			log.Info("Post chain events", "elapsed", common.PrettyDuration(time.Since(t)))
 
 			// Insert the block into the set of pending ones to resultLoop for confirmations
 			w.unconfirmed.Insert(block.NumberU64(), block.Hash())
@@ -732,6 +744,9 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 					ratio: ratio,
 					inc:   true,
 				}
+				resubmitInterruptionCounter.Inc(1)
+			} else {
+				newHeadInterruptionCounter.Inc(1)
 			}
 			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
 		}
@@ -908,6 +923,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		w.commit(uncles, nil, false, tstart)
 	}
 
+	t := time.Now()
 	// Fill the block with all available pending transactions.
 	pending, err := w.eth.TxPool().Pending()
 	if err != nil {
@@ -927,18 +943,26 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			localTxs[account] = txs
 		}
 	}
+	txFetchingTimer.UpdateSince(t)
+	log.Info("Fetching pending transaction finish", "elapsed", common.PrettyDuration(time.Since(t)))
+
+	t = time.Now()
+	defer blockExecutionTimer.UpdateSince(t)
 	if len(localTxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs)
 		if w.commitTransactions(txs, w.coinbase, interrupt) {
+			log.Info("Execution interrupted by new chain head", "elapsed", common.PrettyDuration(time.Since(t)))
 			return
 		}
 	}
 	if len(remoteTxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs)
 		if w.commitTransactions(txs, w.coinbase, interrupt) {
+			log.Info("Execution interrupted by new chain head", "elapsed", common.PrettyDuration(time.Since(t)))
 			return
 		}
 	}
+	log.Info("Execution transaction finish", "elapsed", common.PrettyDuration(time.Since(t)))
 	w.commit(uncles, w.fullTaskHook, true, tstart)
 }
 
