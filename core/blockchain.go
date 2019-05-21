@@ -220,53 +220,16 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 	// Initialize the chain with ancient data if it isn't empty.
 	if bc.empty() {
-		if frozen, err := bc.db.Ancients(); err == nil && frozen > 0 {
-			var (
-				batch  = bc.db.NewBatch()
-				start  = time.Now()
-				logged time.Time
-			)
-			for i := uint64(0); i < frozen; i++ {
-				// Retrieve the canonical hash and block for tx index
-				hash := rawdb.ReadCanonicalHash(bc.db, i)
-				if hash == (common.Hash{}) {
-					return nil, errors.New("broken ancient database")
-				}
-				block := rawdb.ReadBlock(bc.db, hash, i)
-				if block == nil {
-					return nil, errors.New("broken ancient database")
-				}
-				// Inject hash<->number mapping and txlookup indexes
-				rawdb.WriteHeaderNumber(batch, hash, i)
-				rawdb.WriteTxLookupEntries(batch, block)
-
-				if batch.ValueSize() > ethdb.IdealBatchSize || i == frozen-1 {
-					if err := batch.Write(); err != nil {
-						return nil, err
-					}
-					batch.Reset()
-				}
-				// If we've spent too much time already, notify the user of what we're doing
-				if time.Since(logged) > 8*time.Second {
-					log.Info("Initializing chain from ancient data", "number", i, "hash", hash, "total", frozen-1, "elapsed", common.PrettyDuration(time.Since(start)))
-					logged = time.Now()
-				}
-			}
-			hash := rawdb.ReadCanonicalHash(bc.db, frozen-1)
-			rawdb.WriteHeadHeaderHash(bc.db, hash)
-			rawdb.WriteHeadFastBlockHash(bc.db, hash)
-
-			// The first thing the node will do is reconstruct the verification data for
-			// the head block (ethash cache or clique voting snapshot). Might as well do
-			// it in advance.
-			bc.engine.VerifyHeader(bc, rawdb.ReadHeader(bc.db, hash, frozen-1), true)
-
-			log.Info("Initialized chain from ancient data", "number", frozen-1, "hash", hash, "elapsed", common.PrettyDuration(time.Since(start)))
-		}
+		rawdb.InitDatabaseFromFreezer(bc.db)
 	}
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
+	// The first thing the node will do is reconstruct the verification data for
+	// the head block (ethash cache or clique voting snapshot). Might as well do
+	// it in advance.
+	bc.engine.VerifyHeader(bc, bc.CurrentHeader(), true)
+
 	if frozen, err := bc.db.Ancients(); err == nil && frozen > 0 {
 		var (
 			needRewind bool

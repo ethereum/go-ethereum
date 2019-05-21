@@ -55,8 +55,9 @@ func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
 // WriteTxLookupEntries stores a positional metadata for every transaction from
 // a block, enabling hash based transaction and receipt lookups.
 func WriteTxLookupEntries(db ethdb.KeyValueWriter, block *types.Block) {
+	number := block.Number().Bytes()
 	for _, tx := range block.Transactions() {
-		if err := db.Put(txLookupKey(tx.Hash()), block.Number().Bytes()); err != nil {
+		if err := db.Put(txLookupKey(tx.Hash()), number); err != nil {
 			log.Crit("Failed to store transaction lookup entry", "err", err)
 		}
 	}
