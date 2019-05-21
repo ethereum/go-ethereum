@@ -222,24 +222,30 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	if bc.empty() {
 		if frozen, err := bc.db.Ancients(); err == nil && frozen > 0 {
 			var (
+				batch  = bc.db.NewBatch()
 				start  = time.Now()
 				logged time.Time
 			)
 			for i := uint64(0); i < frozen; i++ {
-				// Inject hash<->number mapping.
+				// Retrieve the canonical hash and block for tx index
 				hash := rawdb.ReadCanonicalHash(bc.db, i)
 				if hash == (common.Hash{}) {
 					return nil, errors.New("broken ancient database")
 				}
-				rawdb.WriteHeaderNumber(bc.db, hash, i)
-
-				// Inject txlookup indexes.
 				block := rawdb.ReadBlock(bc.db, hash, i)
 				if block == nil {
 					return nil, errors.New("broken ancient database")
 				}
-				rawdb.WriteTxLookupEntries(bc.db, block)
+				// Inject hash<->number mapping and txlookup indexes
+				rawdb.WriteHeaderNumber(batch, hash, i)
+				rawdb.WriteTxLookupEntries(batch, block)
 
+				if batch.ValueSize() > ethdb.IdealBatchSize || i == frozen-1 {
+					if err := batch.Write(); err != nil {
+						return nil, err
+					}
+					batch.Reset()
+				}
 				// If we've spent too much time already, notify the user of what we're doing
 				if time.Since(logged) > 8*time.Second {
 					log.Info("Initializing chain from ancient data", "number", i, "hash", hash, "total", frozen-1, "elapsed", common.PrettyDuration(time.Since(start)))
