@@ -78,12 +78,22 @@ type encryptedKeyJSONV1 struct {
 	Version string     `json:"version"`
 }
 
+type kdfparamsJSON struct {
+	Salt  string `json:"salt"`
+	Prf   string `json:"prf"`
+	DKLen int    `json:"dklen"`
+	C     int    `json:"c"`
+	N     int    `json:"n"`
+	P     int    `json:"p"`
+	R     int    `json:"r"`
+}
+
 type CryptoJSON struct {
 	Cipher       string                 `json:"cipher"`
 	CipherText   string                 `json:"ciphertext"`
 	CipherParams cipherparamsJSON       `json:"cipherparams"`
 	KDF          string                 `json:"kdf"`
-	KDFParams    map[string]interface{} `json:"kdfparams"`
+	KDFParams    kdfparamsJSON 			`json:"kdfparams"`
 	MAC          string                 `json:"mac"`
 }
 

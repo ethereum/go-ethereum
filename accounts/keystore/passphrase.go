@@ -159,12 +159,14 @@ func EncryptDataV3(data, auth []byte, scryptN, scryptP int) (CryptoJSON, error) 
 	}
 	mac := crypto.Keccak256(derivedKey[16:32], cipherText)
 
-	scryptParamsJSON := make(map[string]interface{}, 5)
-	scryptParamsJSON["n"] = scryptN
-	scryptParamsJSON["r"] = scryptR
-	scryptParamsJSON["p"] = scryptP
-	scryptParamsJSON["dklen"] = scryptDKLen
-	scryptParamsJSON["salt"] = hex.EncodeToString(salt)
+	scryptParamsJSON := kdfparamsJSON{
+		N:     scryptN,
+		R:     scryptR,
+		P:     scryptP,
+		DKLen: scryptDKLen,
+		Salt:  hex.EncodeToString(salt),
+	}
+
 	cipherParamsJSON := cipherparamsJSON{
 		IV: hex.EncodeToString(iv),
 	}
@@ -319,38 +321,28 @@ func decryptKeyV1(keyProtected *encryptedKeyJSONV1, auth string) (keyBytes []byt
 
 func getKDFKey(cryptoJSON CryptoJSON, auth string) ([]byte, error) {
 	authArray := []byte(auth)
-	salt, err := hex.DecodeString(cryptoJSON.KDFParams["salt"].(string))
+	salt, err := hex.DecodeString(cryptoJSON.KDFParams.Salt)
 	if err != nil {
 		return nil, err
 	}
-	dkLen := ensureInt(cryptoJSON.KDFParams["dklen"])
 
 	if cryptoJSON.KDF == keyHeaderKDF {
-		n := ensureInt(cryptoJSON.KDFParams["n"])
-		r := ensureInt(cryptoJSON.KDFParams["r"])
-		p := ensureInt(cryptoJSON.KDFParams["p"])
-		return scrypt.Key(authArray, salt, n, r, p, dkLen)
+		return scrypt.Key(
+			authArray,
+			salt,
+			cryptoJSON.KDFParams.N,
+			cryptoJSON.KDFParams.R,
+			cryptoJSON.KDFParams.P,
+			cryptoJSON.KDFParams.DKLen,
+		)
 
 	} else if cryptoJSON.KDF == "pbkdf2" {
-		c := ensureInt(cryptoJSON.KDFParams["c"])
-		prf := cryptoJSON.KDFParams["prf"].(string)
-		if prf != "hmac-sha256" {
-			return nil, fmt.Errorf("Unsupported PBKDF2 PRF: %s", prf)
+		if cryptoJSON.KDFParams.Prf != "hmac-sha256" {
+			return nil, fmt.Errorf("unsupported PBKDF2 PRF: %s", cryptoJSON.KDFParams.Prf)
 		}
-		key := pbkdf2.Key(authArray, salt, c, dkLen, sha256.New)
+		key := pbkdf2.Key(authArray, salt, cryptoJSON.KDFParams.C, cryptoJSON.KDFParams.DKLen, sha256.New)
 		return key, nil
 	}
 
-	return nil, fmt.Errorf("Unsupported KDF: %s", cryptoJSON.KDF)
-}
-
-// TODO: can we do without this when unmarshalling dynamic JSON?
-// why do integers in KDF params end up as float64 and not int after
-// unmarshal?
-func ensureInt(x interface{}) int {
-	res, ok := x.(int)
-	if !ok {
-		res = int(x.(float64))
-	}
-	return res
+	return nil, fmt.Errorf("unsupported KDF: %s", cryptoJSON.KDF)
 }
