@@ -130,8 +130,8 @@ var (
 	}
 	SmartCardFlag = cli.StringFlag{
 		Name:  "pcscd-sock",
-		Usage: "Path to the smartcard daemon (pcscd) socket file (linux only)",
-		Value: "/run/pcscd/pcscd.comm",
+		Usage: "Path to the smartcard daemon (pcscd) socket file (unix only, leave empty for platform default)",
+		Value: "",
 	}
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
@@ -1153,16 +1153,20 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 func setSmartCard(ctx *cli.Context, cfg *node.Config) {
 	// No support for windows, currently
 	if runtime.GOOS != "windows" {
-		// Check for the existence of the PCSCD socket file. If it exists, then
-		// the smartcard wallet will be enabled. There might still be some issues
-		// e.g. when the daemon is not running. Those issues are meant to be
-		// caught at the daemon initialization level, though.
-		if fi, err := os.Stat(ctx.GlobalString(SmartCardFlag.Name)); err == nil {
-			cfg.SmartCard = fi.Mode()&os.ModeType == os.ModeSocket
-			cfg.SmartCardDaemonPath = ctx.GlobalString(SmartCardFlag.Name)
-			fmt.Println(ctx.GlobalString(SmartCardFlag.Name))
-		} else {
-			log.Error(ctx.GlobalString(SmartCardFlag.Name), "doesn't seem to be a socket file")
+	fmt.Println("setting smartcard")
+		cfg.SmartCard = true
+
+		// Use the platform default unless specified on the command line
+		if len(ctx.GlobalString(SmartCardFlag.Name)) > 0 {
+			if fi, err := os.Stat(ctx.GlobalString(SmartCardFlag.Name)); err == nil {
+				if fi.Mode()&os.ModeType == os.ModeSocket {
+					cfg.SmartCardDaemonPath = ctx.GlobalString(SmartCardFlag.Name)
+				} else {
+					log.Error(ctx.GlobalString(SmartCardFlag.Name), "doesn't seem to be a socket file")
+				}
+			} else {
+				log.Error(ctx.GlobalString(SmartCardFlag.Name), "doesn't exist")
+			}
 		}
 	} else {
 		log.Info("Smartcard support disabled on this platform")
