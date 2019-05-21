@@ -1153,7 +1153,6 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 func setSmartCard(ctx *cli.Context, cfg *node.Config) {
 	// No support for windows, currently
 	if runtime.GOOS != "windows" {
-	fmt.Println("setting smartcard")
 		cfg.SmartCard = true
 
 		// Use the platform default unless specified on the command line
@@ -1162,10 +1161,10 @@ func setSmartCard(ctx *cli.Context, cfg *node.Config) {
 				if fi.Mode()&os.ModeType == os.ModeSocket {
 					cfg.SmartCardDaemonPath = ctx.GlobalString(SmartCardFlag.Name)
 				} else {
-					log.Error(ctx.GlobalString(SmartCardFlag.Name), "doesn't seem to be a socket file")
+					log.Error(fmt.Sprintf("%s doesn't seem to be a socket file", ctx.GlobalString(SmartCardFlag.Name)))
 				}
 			} else {
-				log.Error(ctx.GlobalString(SmartCardFlag.Name), "doesn't exist")
+				log.Error(fmt.Sprintf("%s doesn't exist", ctx.GlobalString(SmartCardFlag.Name)))
 			}
 		}
 	} else {
