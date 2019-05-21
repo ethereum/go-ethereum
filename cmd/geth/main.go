@@ -193,6 +193,7 @@ var (
 		utils.IterativeOutputFlag,
 		utils.ExcludeCodeFlag,
 		utils.ExcludeStorageFlag,
+		utils.IncludeMissingPreimagesFlag,
 	}
 )
 

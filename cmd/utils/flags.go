@@ -204,6 +204,10 @@ var (
 		Name:  "dump.nostorage",
 		Usage: "When set, exclude storage entries (saves db lookups)",
 	}
+	IncludeMissingPreimagesFlag = cli.BoolFlag{
+		Name:  "dump.includeincomplete",
+		Usage: "When set, include also those we do not have address of (missing preimage)",
+	}
 	ExcludeCodeFlag = cli.BoolFlag{
 		Name:  "dump.nocode",
 		Usage: "When set, exclude contract code (saves db lookups)",

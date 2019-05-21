@@ -165,6 +165,7 @@ Remove blockchain and state databases`,
 			utils.IterativeOutputFlag,
 			utils.ExcludeCodeFlag,
 			utils.ExcludeStorageFlag,
+			utils.IncludeMissingPreimagesFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -507,6 +508,7 @@ func dump(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chain, chainDb := utils.MakeChain(ctx, stack)
+	defer chainDb.Close()
 	for _, arg := range ctx.Args() {
 		var block *types.Block
 		if hashish(arg) {
@@ -525,14 +527,18 @@ func dump(ctx *cli.Context) error {
 			}
 			excludeCode := ctx.GlobalBool(utils.ExcludeCodeFlag.Name)
 			excludeStorage := ctx.GlobalBool(utils.ExcludeStorageFlag.Name)
+			includeMissing := ctx.GlobalBool(utils.IncludeMissingPreimagesFlag.Name)
 			if ctx.GlobalBool(utils.IterativeOutputFlag.Name) {
-				state.IterativeDump(excludeCode, excludeStorage, json.NewEncoder(os.Stdout))
+				state.IterativeDump(excludeCode, excludeStorage, !includeMissing, json.NewEncoder(os.Stdout))
 			} else {
-				fmt.Printf("%s\n", state.Dump(excludeCode, excludeStorage))
+				if includeMissing {
+					fmt.Printf("If you want to include accounts with missing preimages, you need iterative output, since" +
+						" otherwise the accounts will overwrite each other in the resulting mapping.")
+				}
+				fmt.Printf("%v %s\n", includeMissing, state.Dump(excludeCode, excludeStorage, false))
 			}
 		}
 	}
-	chainDb.Close()
 	return nil
 }
 
