@@ -762,10 +762,9 @@ func TestABI_EventById(t *testing.T) {
 
 	topic := "received(address,uint256,bytes)"
 	topicID := crypto.Keccak256Hash([]byte(topic))
-
-	event, err := abi.EventById(topicID)
-	if err != nil {
-		t.Fatalf("Failed to look up ABI event: %v", err)
+	event := abi.EventById(topicID)
+	if event == nil {
+		t.Fatalf("Failed to look up ABI event for topic %s", topicID.Hex())
 	}
 
 	if event.Id() != topicID {
@@ -773,7 +772,8 @@ func TestABI_EventById(t *testing.T) {
 	}
 
 	unknowntopicID := crypto.Keccak256Hash([]byte("unknownEvent"))
-	if _, err := abi.EventById(unknowntopicID); err == nil {
-		t.Errorf("Expected error, no matching event id")
+	unknownEvent := abi.EventById(unknowntopicID)
+	if unknownEvent != nil {
+		t.Fatalf("We should not find any event for the topic %s", unknowntopicID.Hex())
 	}
 }
