@@ -150,11 +150,11 @@ func (abi *ABI) MethodById(sigdata []byte) (*Method, error) {
 
 // EventById looks up a event by the topic hash
 // returns nil if none found
-func (abi *ABI) EventById(topic common.Hash) (*Event, error) {
+func (abi *ABI) EventById(topic common.Hash) *Event {
 	for _, event := range abi.Events {
 		if event.Id() == topic {
-			return &event, nil
+			return &event
 		}
 	}
-	return nil, fmt.Errorf("no event with topic: %#x", topic.Hex())
+	return nil
 }

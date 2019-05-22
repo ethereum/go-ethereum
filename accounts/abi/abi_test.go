@@ -757,23 +757,24 @@ func TestABI_EventById(t *testing.T) {
 
 	abi, err := JSON(strings.NewReader(abiJSON))
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
 	}
 
 	topic := "received(address,uint256,bytes)"
 	topicID := crypto.Keccak256Hash([]byte(topic))
 
-	event, err := abi.EventById(topicID)
-	if err != nil {
-		t.Fatalf("Failed to look up ABI event: %v", err)
+	event := abi.EventById(topicID)
+	if event == nil {
+		t.Errorf("we should find a event for topic %s", topicID.Hex())
 	}
 
 	if event.Id() != topicID {
-		t.Errorf("topic %v (id %v) not 'findable' by id in ABI", topic, topicID)
+		t.Errorf("event id %s does not match topic %s", event.Id().Hex(), topicID.Hex())
 	}
 
 	unknowntopicID := crypto.Keccak256Hash([]byte("unknownEvent"))
-	if _, err := abi.EventById(unknowntopicID); err == nil {
-		t.Errorf("Expected error, no matching event id")
+	unknownEvent := abi.EventById(unknowntopicID)
+	if unknownEvent != nil {
+		t.Errorf("we should not find any event for topic %s", unknowntopicID.Hex())
 	}
 }
