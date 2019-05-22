@@ -28,20 +28,19 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-/*
-#include <sys/un.h>
-
-int max_socket_path_size() {
-struct sockaddr_un s;
-return sizeof(s.sun_path);
-}
-*/
-import "C"
+// maxIPCPathLength is a conservative estimate of the OS-dependent IPC
+// path length limit. If we are built with CGO enabled, we will use
+// an OS-specific limit from <sys/un.h>.
+// See:
+//   https://unix.stackexchange.com/questions/367008/why-is-socket-path-length-limited-to-a-hundred-chars/367012#367012
+// and
+//   https://github.com/ethereum/go-ethereum/issues/16342
+var maxIPCPathLength = 103
 
 // ipcListen will create a Unix socket on the given endpoint.
 func ipcListen(endpoint string) (net.Listener, error) {
-	if len(endpoint) > int(C.max_socket_path_size()) {
-		log.Warn(fmt.Sprintf("The ipc endpoint is longer than %d characters. ", C.max_socket_path_size()),
+	if len(endpoint) > maxIPCPathLength {
+		log.Warn(fmt.Sprintf("The ipc endpoint is longer than %d characters. ", maxIPCPathLength),
 			"endpoint", endpoint)
 	}
 
