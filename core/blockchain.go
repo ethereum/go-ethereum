@@ -1040,7 +1040,9 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				if time.Since(logged) > 8*time.Second {
 					log.Info("Migrating ancient blocks", "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
 					logged = time.Now()
-					// Don't collect too much in-memory
+				}
+				// Don't collect too much in-memory, write it out every 100K blocks
+				if len(deleted) > 100000 {
 
 					// Sync the ancient store explicitly to ensure all data has been flushed to disk.
 					if err := bc.db.Sync(); err != nil {
@@ -1051,12 +1053,20 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 						rawdb.DeleteBlockWithoutNumber(batch, nh.hash, nh.number)
 						rawdb.DeleteCanonicalHash(batch, nh.number)
 					}
+					if err := batch.Write(); err != nil {
+						return 0, err
+					}
+					batch.Reset()
 					// Wipe out side chain too.
 					for _, nh := range deleted {
 						for _, hash := range rawdb.ReadAllHashes(bc.db, nh.number) {
 							rawdb.DeleteBlock(batch, hash, nh.number)
 						}
 					}
+					if err := batch.Write(); err != nil {
+						return 0, err
+					}
+					batch.Reset()
 					deleted = deleted[0:]
 				}
 			}
@@ -1087,11 +1097,8 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 		// Wipe out canonical block data.
 		for _, nh := range deleted {
-			// Always keep genesis block in active database.
-			if nh.number != 0 {
-				rawdb.DeleteBlockWithoutNumber(batch, nh.hash, nh.number)
-				rawdb.DeleteCanonicalHash(batch, nh.number)
-			}
+			rawdb.DeleteBlockWithoutNumber(batch, nh.hash, nh.number)
+			rawdb.DeleteCanonicalHash(batch, nh.number)
 		}
 		for _, block := range blockChain {
 			// Always keep genesis block in active database.
@@ -1107,11 +1114,8 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 		// Wipe out side chain too.
 		for _, nh := range deleted {
-			// Always keep genesis block in active database.
-			if nh.number != 0 {
-				for _, hash := range rawdb.ReadAllHashes(bc.db, nh.number) {
-					rawdb.DeleteBlock(batch, hash, nh.number)
-				}
+			for _, hash := range rawdb.ReadAllHashes(bc.db, nh.number) {
+				rawdb.DeleteBlock(batch, hash, nh.number)
 			}
 		}
 		for _, block := range blockChain {
