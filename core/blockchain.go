@@ -1040,6 +1040,24 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				if time.Since(logged) > 8*time.Second {
 					log.Info("Migrating ancient blocks", "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
 					logged = time.Now()
+					// Don't collect too much in-memory
+
+					// Sync the ancient store explicitly to ensure all data has been flushed to disk.
+					if err := bc.db.Sync(); err != nil {
+						return 0, err
+					}
+					// Wipe out canonical block data.
+					for _, nh := range deleted {
+						rawdb.DeleteBlockWithoutNumber(batch, nh.hash, nh.number)
+						rawdb.DeleteCanonicalHash(batch, nh.number)
+					}
+					// Wipe out side chain too.
+					for _, nh := range deleted {
+						for _, hash := range rawdb.ReadAllHashes(bc.db, nh.number) {
+							rawdb.DeleteBlock(batch, hash, nh.number)
+						}
+					}
+					deleted = deleted[0:]
 				}
 			}
 			if count > 0 {
