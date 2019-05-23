@@ -77,6 +77,13 @@ func pricedTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key *ec
 	return tx
 }
 
+func pricedDataTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key *ecdsa.PrivateKey, numDataBytes uint64) *types.Transaction {
+	data := make([]byte, numDataBytes)
+	rand.Read(data)
+	tx, _ := types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(100), gaslimit, gasprice, data), types.HomesteadSigner{}, key)
+	return tx
+}
+
 func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed)}
@@ -112,6 +119,15 @@ func validateTxPoolInternals(pool *TxPool) error {
 		if nonce := pool.Nonce(addr); nonce != last+1 {
 			return fmt.Errorf("pending nonce mismatch: have %v, want %v", nonce, last+1)
 		}
+	}
+	// Ensure the total size of the transactions match the running counter
+	memory := common.StorageSize(0)
+	for _, tx := range pool.all.all {
+		memory += tx.Size()
+	}
+	if pool.all.memory != memory {
+		return fmt.Errorf("tracked total transaction size %d != calculated total size %d",
+			uint64(pool.all.memory), uint64(memory))
 	}
 	return nil
 }
@@ -999,6 +1015,59 @@ func TestTransactionPendingGlobalLimiting(t *testing.T) {
 	}
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
+	}
+}
+
+// Tests that if the total transaction size in the pool goes above some
+// hard threshold, the higher transactions are dropped to prevent DOS attacks.
+func TestTransactionTotalSizeLimiting(t *testing.T) {
+	t.Parallel()
+
+	// Create the pool to test the limit enforcement with
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
+	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed)}
+
+	config := testTxPoolConfig
+	config.MemoryLimit = common.StorageSize(10 * 1000)
+
+	pool := NewTxPool(config, params.TestChainConfig, blockchain)
+	defer pool.Stop()
+
+	// Create a number of test accounts and fund them
+	keys := make([]*ecdsa.PrivateKey, 5)
+	for i := 0; i < len(keys); i++ {
+		keys[i], _ = crypto.GenerateKey()
+		pool.currentState.AddBalance(crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
+	}
+	// Generate and queue a batch of transactions
+	nonces := make(map[common.Address]uint64)
+
+	txs := types.Transactions{}
+	for _, key := range keys {
+		addr := crypto.PubkeyToAddress(key.PublicKey)
+		for j := 0; j < int(config.GlobalSlots)/len(keys)*2; j++ {
+			datalen := uint64(rand.Intn(1000))
+			price := big.NewInt(int64(rand.Intn(10)))
+			tx := pricedDataTransaction(nonces[addr], 100000, price, key, datalen)
+			txs = append(txs, tx)
+			nonces[addr]++
+		}
+	}
+	// Import the batch and verify that limits have been enforced
+	pool.AddRemotes(txs)
+
+	if pool.all.memory > config.MemoryLimit {
+		t.Fatalf("Pool size too large: %d. Expected at most %d", uint64(pool.all.memory), uint64(config.MemoryLimit))
+	}
+	if err := validateTxPoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
+	}
+
+	for _, tx := range pool.all.all {
+		// Remaining transactions should all have high price. The highest in our range is 9.
+		if tx.GasPrice().Int64() < 9 {
+			t.Fatalf("Remaining transaction with low price")
+		}
 	}
 }
 

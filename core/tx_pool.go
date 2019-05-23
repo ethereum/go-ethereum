@@ -48,6 +48,10 @@ var (
 	// one present in the local chain.
 	ErrNonceTooLow = errors.New("nonce too low")
 
+	// ErrOverflown is returned if a transaction's size will overflow the allowed memory
+	// usage.
+	ErrOverflown = errors.New("transaction overflows memory")
+
 	// ErrUnderpriced is returned if a transaction's gas price is below the minimum
 	// configured for the transaction pool.
 	ErrUnderpriced = errors.New("transaction underpriced")
@@ -99,6 +103,7 @@ var (
 	// General tx metrics
 	validMeter         = metrics.NewRegisteredMeter("txpool/valid", nil)
 	invalidTxMeter     = metrics.NewRegisteredMeter("txpool/invalid", nil)
+	overflownTxMeter   = metrics.NewRegisteredMeter("txpool/overflown", nil)
 	underpricedTxMeter = metrics.NewRegisteredMeter("txpool/underpriced", nil)
 
 	pendingCounter = metrics.NewRegisteredCounter("txpool/pending", nil)
@@ -141,6 +146,8 @@ type TxPoolConfig struct {
 	AccountQueue uint64 // Maximum number of non-executable transaction slots permitted per account
 	GlobalQueue  uint64 // Maximum number of non-executable transaction slots for all accounts
 
+	MemoryLimit common.StorageSize // Limit on the total size of transactions in the pool.
+
 	Lifetime time.Duration // Maximum amount of time non-executable transaction are queued
 }
 
@@ -157,6 +164,9 @@ var DefaultTxPoolConfig = TxPoolConfig{
 	GlobalSlots:  4096,
 	AccountQueue: 64,
 	GlobalQueue:  1024,
+
+	// Default 160MB total tx size limit
+	MemoryLimit: common.StorageSize(160 * 1024 * 1024),
 
 	Lifetime: 3 * time.Hour,
 }
@@ -507,8 +517,8 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
-	// Heuristic limit, reject transactions over 32KB to prevent DOS attacks
-	if tx.Size() > 32*1024 {
+	// Heuristic limit, reject transactions over 120KB to prevent DOS attacks
+	if tx.Size() > 120*1024 {
 		return ErrOversizedData
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
@@ -585,6 +595,32 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		for _, tx := range drop {
 			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash(), "price", tx.GasPrice())
 			underpricedTxMeter.Mark(1)
+			pool.removeTx(tx.Hash(), false)
+		}
+	}
+	// If there isn't enough free size in pool, discard underpriced transactions
+	if pool.all.memory+tx.Size() > pool.config.MemoryLimit {
+		sizeToFree := pool.all.memory + tx.Size() - pool.config.MemoryLimit
+		gasPrice := tx.GasPrice()
+		if local {
+			// TODO: infinity.
+			gasPrice = big.NewInt(1000000000)
+		}
+		drop, success := pool.priced.FreeSize(sizeToFree, gasPrice, pool.locals)
+		if !local && !success {
+			log.Trace("Discarding underpriced transaction", "hash", hash, "price", tx.GasPrice())
+			overflownTxMeter.Mark(1)
+
+			// Bring back freed transactions
+			for _, tx := range drop {
+				pool.priced.Put(tx)
+			}
+			return false, ErrOverflown
+		}
+		// New transaction is better than our worse ones, make room for it
+		for _, tx := range drop {
+			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash(), "price", tx.GasPrice())
+			overflownTxMeter.Mark(1)
 			pool.removeTx(tx.Hash(), false)
 		}
 	}
@@ -1461,8 +1497,9 @@ func (as *accountSet) merge(other *accountSet) {
 // peeking into the pool in TxPool.Get without having to acquire the widely scoped
 // TxPool.mu mutex.
 type txLookup struct {
-	all  map[common.Hash]*types.Transaction
-	lock sync.RWMutex
+	all    map[common.Hash]*types.Transaction
+	memory common.StorageSize
+	lock   sync.RWMutex
 }
 
 // newTxLookup returns a new txLookup structure.
@@ -1505,6 +1542,7 @@ func (t *txLookup) Add(tx *types.Transaction) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
+	t.memory += tx.Size()
 	t.all[tx.Hash()] = tx
 }
 
@@ -1513,5 +1551,6 @@ func (t *txLookup) Remove(hash common.Hash) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
+	t.memory -= t.all[hash].Size()
 	delete(t.all, hash)
 }
