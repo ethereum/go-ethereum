@@ -158,7 +158,8 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		leth.serverPool,
 		quitSync,
 		&leth.wg,
-		config.ULC); err != nil {
+		config.ULC,
+		nil); err != nil {
 		return nil, err
 	}
 
