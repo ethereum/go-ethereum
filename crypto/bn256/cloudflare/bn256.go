@@ -388,6 +388,7 @@ func (e *GT) Marshal() []byte {
 
 	if e.p == nil {
 		e.p = &gfP12{}
+		e.p.SetOne()
 	}
 
 	ret := make([]byte, numBytes*12)
