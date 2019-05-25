@@ -152,7 +152,7 @@ func (w *wizard) makeGenesis() {
 			}
 		}
 		validatorCap := new(big.Int)
-		validatorCap.SetString("50000000000000000000000", 10)
+		validatorCap.SetString("10000000000000000000000000", 10)
 		var validatorCaps []*big.Int
 		genesis.ExtraData = make([]byte, 32+len(signers)*common.AddressLength+65)
 		for i, signer := range signers {
@@ -302,7 +302,7 @@ func (w *wizard) makeGenesis() {
         balance.Add(balance, big.NewInt(20*1000*1000*1000))
         balance.Mul(balance, big.NewInt(1000000000000000000))
         subBalance := big.NewInt(0) // i * 50k
-        subBalance.Add(subBalance, big.NewInt(int64(len(signers))*50*1000))
+        subBalance.Add(subBalance, big.NewInt(int64(len(signers))*10*1000*1000))
         subBalance.Mul(subBalance, big.NewInt(1000000000000000000))
         balance.Sub(balance, subBalance) // 12m - i * 50k
         genesis.Alloc[common.HexToAddress(common.TeamAddr)] = core.GenesisAccount{
