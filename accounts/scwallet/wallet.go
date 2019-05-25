@@ -37,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/log"
 	pcsc "github.com/gballet/go-libpcsclite"
 	"github.com/status-im/keycard-go/derivationpath"
@@ -1050,33 +1049,25 @@ func (s *Session) sign(path accounts.DerivationPath, hash []byte) ([]byte, error
 // determinePublicKey uses a signature and the X component of a public key to
 // recover the entire public key.
 func determinePublicKey(sig, pubkeyX []byte) ([]byte, error) {
-	for v := 0; v < 2; v++ {
-		sig[64] = byte(v)
-		pubkey, err := crypto.Ecrecover(DerivationSignatureHash[:], sig)
-		if err == nil {
-			if bytes.Equal(pubkey, pubkeyX) {
-				return pubkey, nil
-			}
-		} else if v == 1 || err != secp256k1.ErrRecoverFailed {
-			return nil, err
-		}
-	}
-	return nil, ErrPubkeyMismatch
+	return makeRecoverableSignature(DerivationSignatureHash[:], sig, pubkeyX)
 }
 
 // makeRecoverableSignature uses a signature and an expected public key to
 // recover the v value and produce a recoverable signature.
 func makeRecoverableSignature(hash, sig, expectedPubkey []byte) ([]byte, error) {
+	var libraryError error
 	for v := 0; v < 2; v++ {
 		sig[64] = byte(v)
-		pubkey, err := crypto.Ecrecover(hash, sig)
-		if err == nil {
+		if pubkey, err := crypto.Ecrecover(hash, sig); err == nil {
 			if bytes.Equal(pubkey, expectedPubkey) {
 				return sig, nil
 			}
-		} else if v == 1 || err != secp256k1.ErrRecoverFailed {
-			return nil, err
+		} else {
+			libraryError = err
 		}
+	}
+	if libraryError != nil {
+		return nil, libraryError
 	}
 	return nil, ErrPubkeyMismatch
 }
