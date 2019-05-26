@@ -170,8 +170,8 @@ type priorityClientInfo struct {
 }
 
 // newPriorityClientPool creates a new priority client pool
-func newPriorityClientPool(freeClientCap uint64, ps *peerSet, child clientPool, metricsLogger, eventLogger *csvlogger.Logger) *priorityClientPool {
-	return &priorityClientPool{
+func newPriorityClientPool(freeClientCap uint64, ps *peerSet, child clientPool, eventLogger *csvlogger.Logger, metricsLogger *csvlogger.Logger) *priorityClientPool {
+	pool := &priorityClientPool{
 		clients:         make(map[enode.ID]priorityClientInfo),
 		freeClientCap:   freeClientCap,
 		ps:              ps,
@@ -179,6 +179,8 @@ func newPriorityClientPool(freeClientCap uint64, ps *peerSet, child clientPool, 
 		logger:          eventLogger,
 		logTotalPriConn: metricsLogger.NewChannel("totalPriConn", 0),
 	}
+	ps.notify(pool)
+	return pool
 }
 
 // registerPeer is called when a new client is connected. If the client has no
@@ -456,7 +458,7 @@ func (api *PrivateLightServerAPI) Benchmark(setups []map[string]interface{}, pas
 			return nil, ErrUnknownBenchmarkType
 		}
 	}
-	rs := api.server.protocolManager.runBenchmark(benchmarks, passCount, time.Millisecond*time.Duration(length))
+	rs := api.server.handler.runBenchmark(benchmarks, passCount, time.Millisecond*time.Duration(length))
 	result := make([]map[string]interface{}, len(setups))
 	for i, r := range rs {
 		res := make(map[string]interface{})
@@ -476,14 +478,12 @@ func (api *PrivateLightServerAPI) Benchmark(setups []map[string]interface{}, pas
 // PrivateLightAPI provides an API to access the LES light server or light client.
 type PrivateLightAPI struct {
 	backend *lesCommons
-	reg     *checkpointRegistrar
 }
 
 // NewPrivateLightAPI creates a new LES service API.
-func NewPrivateLightAPI(backend *lesCommons, reg *checkpointRegistrar) *PrivateLightAPI {
+func NewPrivateLightAPI(backend *lesCommons) *PrivateLightAPI {
 	return &PrivateLightAPI{
 		backend: backend,
-		reg:     reg,
 	}
 }
 
@@ -513,7 +513,7 @@ func (api *PrivateLightAPI) LatestCheckpoint() ([4]string, error) {
 //   result[2], 32 bytes hex encoded latest section bloom trie root hash
 func (api *PrivateLightAPI) GetCheckpoint(index uint64) ([3]string, error) {
 	var res [3]string
-	cp := api.backend.getLocalCheckpoint(index)
+	cp := api.backend.localCheckpoint(index)
 	if cp.Empty() {
 		return res, ErrNoCheckpoint
 	}
@@ -523,8 +523,8 @@ func (api *PrivateLightAPI) GetCheckpoint(index uint64) ([3]string, error) {
 
 // GetCheckpointContractAddress returns the contract contract address in hex format.
 func (api *PrivateLightAPI) GetCheckpointContractAddress() (string, error) {
-	if api.reg == nil {
+	if api.backend.registrar == nil {
 		return "", ErrNotActivated
 	}
-	return api.reg.config.ContractAddr.Hex(), nil
+	return api.backend.registrar.config.ContractAddr.Hex(), nil
 }

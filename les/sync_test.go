@@ -29,6 +29,7 @@ import (
 )
 
 func TestCheckpointSyncingLes2(t *testing.T) { testCheckpointSyncing(t, 2) }
+func TestCheckpointSyncingLes3(t *testing.T) { testCheckpointSyncing(t, 3) }
 
 func testCheckpointSyncing(t *testing.T, protocol int) {
 	config := light.TestServerIndexerConfig
@@ -44,7 +45,7 @@ func testCheckpointSyncing(t *testing.T, protocol int) {
 		}
 	}
 	// Generate 512+4 blocks (totally 1 CHT sections)
-	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), protocol, waitIndexers, false)
+	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), protocol, waitIndexers, nil, false, false)
 	defer tearDown()
 
 	// Register checkpoint 0 into the contract at block (512+4)+1
@@ -63,7 +64,7 @@ func testCheckpointSyncing(t *testing.T, protocol int) {
 	data := append([]byte{0x19, 0x00}, append(registrarAddr.Bytes(), append([]byte{0, 0, 0, 0, 0, 0, 0, 0}, cp.Hash().Bytes()...)...)...)
 	sig, _ := crypto.Sign(crypto.Keccak256(data), signerKey)
 	sig[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
-	if _, err := server.pm.reg.contract.RegisterCheckpoint(signerKey, cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(header.Number, big.NewInt(1)), header.ParentHash, [][]byte{sig}); err != nil {
+	if _, err := server.handler.server.registrar.contract.RegisterCheckpoint(signerKey, cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(header.Number, big.NewInt(1)), header.ParentHash, [][]byte{sig}); err != nil {
 		t.Error("register checkpoint failed", err)
 	}
 	server.backend.Commit()
@@ -71,7 +72,7 @@ func testCheckpointSyncing(t *testing.T, protocol int) {
 
 	// Wait for the checkpoint registration
 	for {
-		_, hash, _, err := server.pm.reg.contract.Contract().GetLatestCheckpoint(nil)
+		_, hash, _, err := server.handler.server.registrar.contract.Contract().GetLatestCheckpoint(nil)
 		if err != nil || hash == [32]byte{} {
 			time.Sleep(100 * time.Millisecond)
 			continue
@@ -80,8 +81,8 @@ func testCheckpointSyncing(t *testing.T, protocol int) {
 	}
 
 	done := make(chan error)
-	client.pm.reg.syncDoneHook = func() {
-		header := client.pm.blockchain.CurrentHeader()
+	client.handler.backend.registrar.syncDoneHook = func() {
+		header := client.handler.backend.blockchain.CurrentHeader()
 		if header.Number.Uint64() == config.ChtSize+config.ChtConfirms+2 {
 			done <- nil
 		} else {
@@ -90,7 +91,7 @@ func testCheckpointSyncing(t *testing.T, protocol int) {
 	}
 
 	// Create connected peer pair.
-	peer, err1, lPeer, err2 := newTestPeerPair("peer", protocol, server.pm, client.pm)
+	_, err1, _, err2 := newTestPeerPair("peer", protocol, server.handler, client.handler)
 	select {
 	case <-time.After(time.Millisecond * 100):
 	case err := <-err1:
@@ -98,7 +99,6 @@ func testCheckpointSyncing(t *testing.T, protocol int) {
 	case err := <-err2:
 		t.Fatalf("peer 2 handshake error: %v", err)
 	}
-	server.rPeer, client.rPeer = peer, lPeer
 
 	select {
 	case err := <-done:

@@ -84,6 +84,7 @@ var (
 
 const (
 	maxCostFactor    = 2 // ratio of maximum and average cost estimates
+	bufLimitRatio    = 6000 // fixed bufLimit/MRR ratio
 	gfUsageThreshold = 0.5
 	gfUsageTC        = time.Second
 	gfRaiseTC        = time.Second * 200
@@ -115,6 +116,10 @@ type costTracker struct {
 	stats                                                     map[uint64][]uint64
 	logger                                                    *csvlogger.Logger
 	logRecentTime, logRecentAvg, logTotalRecharge, logRelCost *csvlogger.Channel
+
+	// TestHooks
+	disableRealCost bool                   // Disable real cost evaluation for testing purpose.
+	costListHook    func() RequestCostList // Return customized cost table for testing purpose.
 }
 
 // newCostTracker creates a cost tracker and loads the cost factor statistics from the database.

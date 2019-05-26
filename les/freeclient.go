@@ -69,7 +69,7 @@ const (
 )
 
 // newFreeClientPool creates a new free client pool
-func newFreeClientPool(db ethdb.Database, freeClientCap uint64, totalLimit int, clock mclock.Clock, removePeer func(string), metricsLogger, eventLogger *csvlogger.Logger) *freeClientPool {
+func newFreeClientPool(db ethdb.Database, freeClientCap uint64, totalLimit int, clock mclock.Clock, removePeer func(string), eventLogger *csvlogger.Logger, metricsLogger *csvlogger.Logger) *freeClientPool {
 	pool := &freeClientPool{
 		db:               db,
 		clock:            clock,

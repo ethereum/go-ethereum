@@ -108,21 +108,21 @@ type peer struct {
 	fcParams flowcontrol.ServerParams
 	fcCosts  requestCostTable
 
-	isTrusted               bool
-	isOnlyAnnounce          bool
+	trusted                 bool
+	announceOnly            bool
 	chainSince, chainRecent uint64
 	stateSince, stateRecent uint64
 }
 
-func newPeer(version int, network uint64, isTrusted bool, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
+func newPeer(version int, network uint64, trusted bool, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	return &peer{
-		Peer:      p,
-		rw:        rw,
-		version:   version,
-		network:   network,
-		id:        fmt.Sprintf("%x", p.ID().Bytes()),
-		isTrusted: isTrusted,
-		errCh:     make(chan error, 1),
+		Peer:    p,
+		rw:      rw,
+		version: version,
+		network: network,
+		id:      fmt.Sprintf("%x", p.ID().Bytes()),
+		trusted: trusted,
+		errCh:   make(chan error, 1),
 	}
 }
 
@@ -266,6 +266,14 @@ func (p *peer) updateCapacity(cap uint64) {
 	p.queueSend(func() { p.SendAnnounce(announceData{Update: kvList}) })
 }
 
+func (p *peer) responseID() uint64 {
+	p.responseLock.Lock()
+	defer p.responseLock.Unlock()
+
+	p.responseCount += 1
+	return p.responseCount
+}
+
 func sendRequest(w p2p.MsgWriter, msgcode, reqID, cost uint64, data interface{}) error {
 	type req struct {
 		ReqID uint64
@@ -348,6 +356,7 @@ func (p *peer) HasBlock(hash common.Hash, number uint64, hasState bool) bool {
 	}
 	hasBlock := p.hasBlock
 	p.lock.RUnlock()
+
 	return head >= number && number >= since && (recent == 0 || number+recent+4 > head) && hasBlock != nil && hasBlock(hash, number, hasState)
 }
 
@@ -546,6 +555,8 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 	defer p.lock.Unlock()
 
 	var send keyValueList
+
+	// Add some basic handshake fields
 	send = send.add("protocolVersion", uint64(p.version))
 	send = send.add("networkId", p.network)
 	send = send.add("headTd", td)
@@ -553,7 +564,8 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 	send = send.add("headNum", headNum)
 	send = send.add("genesisHash", genesis)
 	if server != nil {
-		if !server.onlyAnnounce {
+		// Add some information which services server can offer.
+		if !server.config.OnlyAnnounce {
 			send = send.add("serveHeaders", nil)
 			send = send.add("serveChainSince", uint64(0))
 			send = send.add("serveStateSince", uint64(0))
@@ -562,27 +574,29 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		}
 		send = send.add("flowControl/BL", server.defParams.BufLimit)
 		send = send.add("flowControl/MRR", server.defParams.MinRecharge)
-		var costList RequestCostList
-		if server.costTracker != nil {
-			costList = server.costTracker.makeCostList(server.costTracker.globalFactor())
-		} else {
-			costList = testCostList(server.testCost)
+
+		costList := server.costTracker.makeCostList(server.costTracker.globalFactor())
+		// Generate some fake cost list for testing purpose.
+		if server.costTracker.costListHook != nil {
+			costList = server.costTracker.costListHook()
 		}
 		send = send.add("flowControl/MRC", costList)
 		p.fcCosts = costList.decode(ProtocolLengths[uint(p.version)])
 		p.fcParams = server.defParams
 
-		if server.protocolManager != nil && server.protocolManager.reg != nil && server.protocolManager.reg.isRunning() {
-			cp, height := server.protocolManager.reg.stableCheckpoint()
+		// Add advertised checkpoint and register block height which
+		// client can verify the checkpoint validity.
+		if server.registrar != nil && server.registrar.isRunning() {
+			cp, height := server.registrar.stableCheckpoint()
 			if cp != nil {
 				send = send.add("checkpoint/value", cp)
 				send = send.add("checkpoint/registerHeight", height)
 			}
 		}
 	} else {
-		//on client node
+		// Add some client-specific handshake fields
 		p.announceType = announceTypeSimple
-		if p.isTrusted {
+		if p.trusted {
 			p.announceType = announceTypeSigned
 		}
 		send = send.add("announceType", p.announceType)
@@ -631,34 +645,29 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 	}
 
 	if server != nil {
-		// until we have a proper peer connectivity API, allow LES connection to other servers
-		/*if recv.get("serveStateSince", nil) == nil {
-			return errResp(ErrUselessPeer, "wanted client, got server")
-		}*/
 		if recv.get("announceType", &p.announceType) != nil {
-			//set default announceType on server side
+			// set default announceType on server side
 			p.announceType = announceTypeSimple
 		}
 		p.fcClient = flowcontrol.NewClientNode(server.fcManager, server.defParams)
 	} else {
-		//mark OnlyAnnounce server if "serveHeaders", "serveChainSince", "serveStateSince" or "txRelay" fields don't exist
 		if recv.get("serveChainSince", &p.chainSince) != nil {
-			p.isOnlyAnnounce = true
+			p.announceOnly = true
 		}
 		if recv.get("serveRecentChain", &p.chainRecent) != nil {
 			p.chainRecent = 0
 		}
 		if recv.get("serveStateSince", &p.stateSince) != nil {
-			p.isOnlyAnnounce = true
+			p.announceOnly = true
 		}
 		if recv.get("serveRecentState", &p.stateRecent) != nil {
 			p.stateRecent = 0
 		}
 		if recv.get("txRelay", nil) != nil {
-			p.isOnlyAnnounce = true
+			p.announceOnly = true
 		}
 
-		if p.isOnlyAnnounce && !p.isTrusted {
+		if p.announceOnly && !p.trusted {
 			return errResp(ErrUselessPeer, "peer cannot serve requests")
 		}
 
@@ -696,7 +705,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		}
 		recv.get("checkpoint/registerHeight", &p.registeredHeight)
 
-		if !p.isOnlyAnnounce {
+		if !p.announceOnly {
 			for msgCode := range reqAvgTimeCost {
 				if p.fcCosts[msgCode] == nil {
 					return errResp(ErrUselessPeer, "peer does not support message %d", msgCode)
@@ -714,15 +723,10 @@ func (p *peer) updateFlowControl(update keyValueMap) {
 	if p.fcServer == nil {
 		return
 	}
-	params := p.fcParams
-	updateParams := false
-	if update.get("flowControl/BL", &params.BufLimit) == nil {
-		updateParams = true
-	}
-	if update.get("flowControl/MRR", &params.MinRecharge) == nil {
-		updateParams = true
-	}
-	if updateParams {
+	// If any of the flow control params is nil, refuse to update.
+	var params flowcontrol.ServerParams
+	if update.get("flowControl/BL", &params.BufLimit) == nil && update.get("flowControl/MRR", &params.MinRecharge) == nil {
+		// todo can light client set a minimal acceptable flow control params?
 		p.fcParams = params
 		p.fcServer.UpdateParams(params)
 	}

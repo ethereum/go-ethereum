@@ -19,8 +19,6 @@ package les
 
 import (
 	"fmt"
-	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -42,7 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -50,33 +48,23 @@ import (
 type LightEthereum struct {
 	lesCommons
 
-	odr         *LesOdr
-	chainConfig *params.ChainConfig
-	// Channel for shutting down the service
-	shutdownChan chan bool
-
-	// Handlers
-	peers      *peerSet
+	reqDist    *requestDistributor
+	retriever  *retrieveManager
+	odr        *LesOdr
+	relay      *lesTxRelay
+	handler    *clientHandler
 	txPool     *light.TxPool
 	blockchain *light.LightChain
 	serverPool *serverPool
-	reqDist    *requestDistributor
-	retriever  *retrieveManager
-	relay      *lesTxRelay
 
 	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
-	bloomIndexer  *core.ChainIndexer
+	bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
 
-	ApiBackend *LesApiBackend
-
+	ApiBackend     *LesApiBackend
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
 	accountManager *accounts.Manager
-
-	networkId     uint64
-	netRPCService *ethapi.PublicNetAPI
-
-	wg sync.WaitGroup
+	netRPCService  *ethapi.PublicNetAPI
 }
 
 func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
@@ -91,31 +79,24 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	log.Info("Initialised chain configuration", "config", chainConfig)
 
 	peers := newPeerSet()
-	quitSync := make(chan struct{})
-
 	leth := &LightEthereum{
 		lesCommons: lesCommons{
-			chainDb: chainDb,
-			config:  config,
-			iConfig: light.DefaultClientIndexerConfig,
+			genesis:     genesisHash,
+			config:      config,
+			chainConfig: chainConfig,
+			iConfig:     light.DefaultClientIndexerConfig,
+			chainDb:     chainDb,
+			peers:       peers,
+			closeCh:     make(chan struct{}),
 		},
-		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
-		peers:          peers,
-		reqDist:        newRequestDistributor(peers, quitSync, &mclock.System{}),
+		reqDist:        newRequestDistributor(peers, &mclock.System{}),
 		accountManager: ctx.AccountManager,
 		engine:         eth.CreateConsensusEngine(ctx, chainConfig, &config.Ethash, nil, false, chainDb),
-		shutdownChan:   make(chan bool),
-		networkId:      config.NetworkId,
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   eth.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
+		serverPool:     newServerPool(chainDb, config.ULC),
 	}
-
-	var trustedNodes []string
-	if leth.config.ULC != nil {
-		trustedNodes = leth.config.ULC.TrustedServers
-	}
-	leth.serverPool = newServerPool(chainDb, quitSync, &leth.wg, trustedNodes)
 	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool)
 	leth.relay = newLesTxRelay(peers, leth.retriever)
 
@@ -129,11 +110,20 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine); err != nil {
 		return nil, err
 	}
+	leth.chainReader = leth.blockchain
+	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
+	leth.registrar = newCheckpointRegistrar(chainConfig.CheckpointContract, leth.localCheckpoint)
+
 	// Note: AddChildIndexer starts the update process for the child
 	leth.bloomIndexer.AddChildIndexer(leth.bloomTrieIndexer)
 	leth.chtIndexer.Start(leth.blockchain)
 	leth.bloomIndexer.Start(leth.blockchain)
 
+	leth.handler = newClientHandler(config.ULC, leth)
+	if leth.handler.isULCEnabled() {
+		log.Warn("Ultra light client is enabled", "trustedNodes", len(leth.handler.ulc.trustedKeys), "minTrustedFraction", leth.handler.ulc.minTrustedFraction)
+		leth.blockchain.DisableCheckFreq()
+	}
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
@@ -141,35 +131,14 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
 
-	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
 	leth.ApiBackend = &LesApiBackend{ctx.ExtRPCEnabled(), leth, nil}
-
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.Miner.GasPrice
 	}
 	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
 
-	registrar := newCheckpointRegistrar(chainConfig.CheckpointContract, leth.getLocalCheckpoint)
-	if leth.protocolManager, err = NewProtocolManager(leth.chainConfig, light.DefaultClientIndexerConfig, config.ULC, true, config.NetworkId, leth.eventMux, leth.peers, leth.blockchain, nil, chainDb, leth.odr, leth.serverPool, registrar, quitSync, &leth.wg, nil); err != nil {
-		return nil, err
-	}
-	if leth.protocolManager.isULCEnabled() {
-		log.Warn("Ultra light client is enabled", "trustedNodes", len(leth.protocolManager.ulc.trustedKeys), "minTrustedFraction", leth.protocolManager.ulc.minTrustedFraction)
-		leth.blockchain.DisableCheckFreq()
-	}
 	return leth, nil
-}
-
-func lesTopic(genesisHash common.Hash, protocolVersion uint) discv5.Topic {
-	var name string
-	switch protocolVersion {
-	case lpv2:
-		name = "LES2"
-	default:
-		panic(nil)
-	}
-	return discv5.Topic(name + "@" + common.Bytes2Hex(genesisHash.Bytes()[0:8]))
 }
 
 type LightDummyAPI struct{}
@@ -206,7 +175,7 @@ func (s *LightEthereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   downloader.NewPublicDownloaderAPI(s.protocolManager.downloader, s.eventMux),
+			Service:   downloader.NewPublicDownloaderAPI(s.handler.downloader, s.eventMux),
 			Public:    true,
 		}, {
 			Namespace: "eth",
@@ -221,7 +190,7 @@ func (s *LightEthereum) APIs() []rpc.API {
 		}, {
 			Namespace: "les",
 			Version:   "1.0",
-			Service:   NewPrivateLightAPI(&s.lesCommons, s.protocolManager.reg),
+			Service:   NewPrivateLightAPI(&s.lesCommons),
 			Public:    false,
 		},
 	}...)
@@ -235,54 +204,62 @@ func (s *LightEthereum) BlockChain() *light.LightChain      { return s.blockchai
 func (s *LightEthereum) TxPool() *light.TxPool              { return s.txPool }
 func (s *LightEthereum) Engine() consensus.Engine           { return s.engine }
 func (s *LightEthereum) LesVersion() int                    { return int(ClientProtocolVersions[0]) }
-func (s *LightEthereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
+func (s *LightEthereum) Downloader() *downloader.Downloader { return s.handler.downloader }
 func (s *LightEthereum) EventMux() *event.TypeMux           { return s.eventMux }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.
 func (s *LightEthereum) Protocols() []p2p.Protocol {
-	return s.makeProtocols(ClientProtocolVersions)
+	return s.makeProtocols(ClientProtocolVersions, s.handler.runPeer, func(id enode.ID) interface{} {
+		if p := s.peers.Peer(fmt.Sprintf("%x", id.Bytes())); p != nil {
+			return p.Info()
+		}
+		return nil
+	})
 }
 
 // Start implements node.Service, starting all internal goroutines needed by the
-// Ethereum protocol implementation.
+// light ethereum protocol implementation.
 func (s *LightEthereum) Start(srvr *p2p.Server) error {
 	log.Warn("Light client mode is an experimental feature")
+
+	// Start bloom request workers.
+	s.wg.Add(bloomServiceThreads)
 	s.startBloomHandlers(params.BloomBitsBlocksClient)
-	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.networkId)
+
+	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.config.NetworkId)
+
 	// clients are searching for the first advertised protocol in the list
 	protocolVersion := AdvertiseProtocolVersions[0]
 	s.serverPool.start(srvr, lesTopic(s.blockchain.Genesis().Hash(), protocolVersion))
-	s.protocolManager.Start(s.config.LightPeers)
 	return nil
 }
 
 // Stop implements node.Service, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *LightEthereum) Stop() error {
+	close(s.closeCh)
+	s.peers.Close()
+	s.reqDist.close()
 	s.odr.Stop()
 	s.relay.Stop()
 	s.bloomIndexer.Close()
 	s.chtIndexer.Close()
 	s.blockchain.Stop()
-	s.protocolManager.Stop()
+	s.handler.stop()
 	s.txPool.Stop()
 	s.engine.Close()
-
 	s.eventMux.Stop()
-
-	time.Sleep(time.Millisecond * 200)
+	s.serverPool.stop()
 	s.chainDb.Close()
-	close(s.shutdownChan)
-
+	s.wg.Wait()
+	log.Info("Light ethereum stopped")
 	return nil
 }
 
 // SetClient sets the rpc client and binds the registrar contract.
 func (s *LightEthereum) SetContractBackend(backend bind.ContractBackend) {
-	// Short circuit if registrar is nil
-	if s.protocolManager.reg == nil {
-		return
+	if s.registrar != nil {
+		s.registrar.start(backend)
 	}
-	s.protocolManager.reg.start(backend)
 }

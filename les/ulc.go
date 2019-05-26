@@ -44,7 +44,7 @@ func newULC(ulcConfig *eth.ULCConfig) *ulc {
 	return &ulc{m, ulcConfig.MinTrustedFraction}
 }
 
-// isTrusted return an indicator that whether the specified peer is trusted.
+// trusted return an indicator that whether the specified peer is trusted.
 func (u *ulc) isTrusted(p enode.ID) bool {
 	if u.trustedKeys == nil {
 		return false
