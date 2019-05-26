@@ -91,7 +91,7 @@ type ProtocolManager struct {
 	chainConfig *params.ChainConfig
 	iConfig     *light.IndexerConfig
 
-	light     bool   // The indicator whether the node is light client
+	client    bool   // The indicator whether the node is light client
 	maxPeers  int    // The maximum number peers allowed to connect.
 	networkId uint64 // The identity of network.
 
@@ -120,7 +120,7 @@ type ProtocolManager struct {
 	eventMux *event.TypeMux
 
 	// Callbacks
-	isSynced func() bool
+	synced func() bool
 }
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
@@ -128,7 +128,7 @@ type ProtocolManager struct {
 func NewProtocolManager(
 	chainConfig *params.ChainConfig,
 	indexerConfig *light.IndexerConfig,
-	light bool,
+	client bool,
 	networkId uint64,
 	mux *event.TypeMux,
 	engine consensus.Engine,
@@ -141,10 +141,10 @@ func NewProtocolManager(
 	serverPool *serverPool,
 	quitSync chan struct{},
 	wg *sync.WaitGroup,
-	ulcConfig *eth.ULCConfig, isSynced func() bool) (*ProtocolManager, error) {
+	ulcConfig *eth.ULCConfig, synced func() bool) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
-		light:       light,
+		client:      client,
 		eventMux:    mux,
 		blockchain:  blockchain,
 		chainConfig: chainConfig,
@@ -160,7 +160,7 @@ func NewProtocolManager(
 		quitSync:    quitSync,
 		wg:          wg,
 		noMorePeers: make(chan struct{}),
-		isSynced:    isSynced,
+		synced:      synced,
 	}
 	if odr != nil {
 		manager.retriever = odr.retriever
@@ -177,7 +177,7 @@ func NewProtocolManager(
 	if disableClientRemovePeer {
 		removePeer = func(id string) {}
 	}
-	if light {
+	if client {
 		var checkpoint uint64
 		if cht, ok := params.TrustedCheckpoints[blockchain.Genesis().Hash()]; ok {
 			checkpoint = (cht.SectionIndex+1)*params.CHTFrequency - 1
@@ -196,7 +196,7 @@ func (pm *ProtocolManager) removePeer(id string) {
 
 func (pm *ProtocolManager) Start(maxPeers int) {
 	pm.maxPeers = maxPeers
-	if pm.light {
+	if pm.client {
 		go pm.syncer()
 	} else {
 		go func() {
@@ -271,11 +271,11 @@ func (pm *ProtocolManager) newPeer(pv int, nv uint64, p *p2p.Peer, rw p2p.MsgRea
 func (pm *ProtocolManager) handle(p *peer) error {
 	// Ignore maxPeers if this is a trusted peer
 	// In server mode we try to check into the client pool after handshake
-	if pm.light && pm.peers.Len() >= pm.maxPeers && !p.Peer.Info().Network.Trusted {
+	if pm.client && pm.peers.Len() >= pm.maxPeers && !p.Peer.Info().Network.Trusted {
 		return p2p.DiscTooManyPeers
 	}
 	// Reject light clients if server is not synced.
-	if !pm.light && pm.isSynced != nil && !pm.isSynced() {
+	if !pm.client && !pm.synced() {
 		return p2p.DiscRequested
 	}
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
@@ -310,7 +310,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	}()
 
 	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
-	if pm.light {
+	if pm.client {
 		p.lock.Lock()
 		head := p.headInfo
 		p.lock.Unlock()

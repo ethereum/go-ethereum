@@ -74,7 +74,7 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		nil,
 		quitSync,
 		new(sync.WaitGroup),
-		config.ULC, eth.IsSynced)
+		config.ULC, eth.Synced)
 	if err != nil {
 		return nil, err
 	}
