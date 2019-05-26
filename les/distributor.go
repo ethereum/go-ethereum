@@ -28,14 +28,17 @@ import (
 // suitable peers, obeying flow control rules and prioritizing them in creation
 // order (even when a resend is necessary).
 type requestDistributor struct {
-	clock            mclock.Clock
-	reqQueue         *list.List
-	lastReqOrder     uint64
-	peers            map[distPeer]struct{}
-	peerLock         sync.RWMutex
-	stopChn, loopChn chan struct{}
-	loopNextSent     bool
-	lock             sync.Mutex
+	clock        mclock.Clock
+	reqQueue     *list.List
+	lastReqOrder uint64
+	peers        map[distPeer]struct{}
+	peerLock     sync.RWMutex
+	loopChn      chan struct{}
+	loopNextSent bool
+	lock         sync.Mutex
+
+	closeCh chan struct{}
+	wg      sync.WaitGroup
 }
 
 // distPeer is an LES server peer interface for the request distributor.
@@ -66,20 +69,22 @@ type distReq struct {
 	sentChn      chan distPeer
 	element      *list.Element
 	waitForPeers mclock.AbsTime
+	enterQueue   mclock.AbsTime
 }
 
 // newRequestDistributor creates a new request distributor
-func newRequestDistributor(peers *peerSet, stopChn chan struct{}, clock mclock.Clock) *requestDistributor {
+func newRequestDistributor(peers *peerSet, clock mclock.Clock) *requestDistributor {
 	d := &requestDistributor{
 		clock:    clock,
 		reqQueue: list.New(),
 		loopChn:  make(chan struct{}, 2),
-		stopChn:  stopChn,
+		closeCh:  make(chan struct{}),
 		peers:    make(map[distPeer]struct{}),
 	}
 	if peers != nil {
 		peers.notify(d)
 	}
+	d.wg.Add(1)
 	go d.loop()
 	return d
 }
@@ -115,9 +120,10 @@ const waitForPeers = time.Second * 3
 
 // main event loop
 func (d *requestDistributor) loop() {
+	defer d.wg.Done()
 	for {
 		select {
-		case <-d.stopChn:
+		case <-d.closeCh:
 			d.lock.Lock()
 			elem := d.reqQueue.Front()
 			for elem != nil {
@@ -140,6 +146,7 @@ func (d *requestDistributor) loop() {
 					send := req.request(peer)
 					if send != nil {
 						peer.queueSend(send)
+						requestSendDelay.Update(time.Duration(d.clock.Now() - req.enterQueue))
 					}
 					chn <- peer
 					close(chn)
@@ -249,6 +256,9 @@ func (d *requestDistributor) queue(r *distReq) chan distPeer {
 		r.reqOrder = d.lastReqOrder
 		r.waitForPeers = d.clock.Now() + mclock.AbsTime(waitForPeers)
 	}
+	// Assign the timestamp when the request is queued no matter it's
+	// a new one or re-queued one.
+	r.enterQueue = d.clock.Now()
 
 	back := d.reqQueue.Back()
 	if back == nil || r.reqOrder > back.Value.(*distReq).reqOrder {
@@ -293,4 +303,9 @@ func (d *requestDistributor) remove(r *distReq) {
 		d.reqQueue.Remove(r.element)
 		r.element = nil
 	}
+}
+
+func (d *requestDistributor) close() {
+	close(d.closeCh)
+	d.wg.Wait()
 }
