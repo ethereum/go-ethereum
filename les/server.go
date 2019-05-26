@@ -74,7 +74,7 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		nil,
 		quitSync,
 		new(sync.WaitGroup),
-		config.ULC)
+		config.ULC, eth.Synced)
 	if err != nil {
 		return nil, err
 	}
@@ -243,6 +243,7 @@ func (s *LesServer) Stop() {
 	s.protocolManager.Stop()
 }
 
+// todo(rjl493456442) separate client and server implementation.
 func (pm *ProtocolManager) blockLoop() {
 	pm.wg.Add(1)
 	headCh := make(chan core.ChainHeadEvent, 10)

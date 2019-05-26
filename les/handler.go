@@ -87,12 +87,16 @@ type txPool interface {
 }
 
 type ProtocolManager struct {
-	lightSync    bool
+	// Configs
+	chainConfig *params.ChainConfig
+	iConfig     *light.IndexerConfig
+
+	client    bool   // The indicator whether the node is light client
+	maxPeers  int    // The maximum number peers allowed to connect.
+	networkId uint64 // The identity of network.
+
 	txpool       txPool
 	txrelay      *LesTxRelay
-	networkId    uint64
-	chainConfig  *params.ChainConfig
-	iConfig      *light.IndexerConfig
 	blockchain   BlockChain
 	chainDb      ethdb.Database
 	odr          *LesOdr
@@ -102,23 +106,21 @@ type ProtocolManager struct {
 	reqDist      *requestDistributor
 	retriever    *retrieveManager
 	servingQueue *servingQueue
-
-	downloader *downloader.Downloader
-	fetcher    *lightFetcher
-	peers      *peerSet
-	maxPeers   int
-
-	eventMux *event.TypeMux
+	downloader   *downloader.Downloader
+	fetcher      *lightFetcher
+	ulc          *ulc
+	peers        *peerSet
 
 	// channels for fetcher, syncer, txsyncLoop
 	newPeerCh   chan *peer
 	quitSync    chan struct{}
 	noMorePeers chan struct{}
 
-	// wait group is used for graceful shutdowns during downloading
-	// and processing
-	wg  *sync.WaitGroup
-	ulc *ulc
+	wg       *sync.WaitGroup
+	eventMux *event.TypeMux
+
+	// Callbacks
+	synced func() bool
 }
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
@@ -126,7 +128,7 @@ type ProtocolManager struct {
 func NewProtocolManager(
 	chainConfig *params.ChainConfig,
 	indexerConfig *light.IndexerConfig,
-	lightSync bool,
+	client bool,
 	networkId uint64,
 	mux *event.TypeMux,
 	engine consensus.Engine,
@@ -139,10 +141,10 @@ func NewProtocolManager(
 	serverPool *serverPool,
 	quitSync chan struct{},
 	wg *sync.WaitGroup,
-	ulcConfig *eth.ULCConfig) (*ProtocolManager, error) {
+	ulcConfig *eth.ULCConfig, synced func() bool) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
-		lightSync:   lightSync,
+		client:      client,
 		eventMux:    mux,
 		blockchain:  blockchain,
 		chainConfig: chainConfig,
@@ -158,6 +160,7 @@ func NewProtocolManager(
 		quitSync:    quitSync,
 		wg:          wg,
 		noMorePeers: make(chan struct{}),
+		synced:      synced,
 	}
 	if odr != nil {
 		manager.retriever = odr.retriever
@@ -174,7 +177,7 @@ func NewProtocolManager(
 	if disableClientRemovePeer {
 		removePeer = func(id string) {}
 	}
-	if lightSync {
+	if client {
 		var checkpoint uint64
 		if cht, ok := params.TrustedCheckpoints[blockchain.Genesis().Hash()]; ok {
 			checkpoint = (cht.SectionIndex+1)*params.CHTFrequency - 1
@@ -193,7 +196,7 @@ func (pm *ProtocolManager) removePeer(id string) {
 
 func (pm *ProtocolManager) Start(maxPeers int) {
 	pm.maxPeers = maxPeers
-	if pm.lightSync {
+	if pm.client {
 		go pm.syncer()
 	} else {
 		go func() {
@@ -268,10 +271,13 @@ func (pm *ProtocolManager) newPeer(pv int, nv uint64, p *p2p.Peer, rw p2p.MsgRea
 func (pm *ProtocolManager) handle(p *peer) error {
 	// Ignore maxPeers if this is a trusted peer
 	// In server mode we try to check into the client pool after handshake
-	if pm.lightSync && pm.peers.Len() >= pm.maxPeers && !p.Peer.Info().Network.Trusted {
+	if pm.client && pm.peers.Len() >= pm.maxPeers && !p.Peer.Info().Network.Trusted {
 		return p2p.DiscTooManyPeers
 	}
-
+	// Reject light clients if server is not synced.
+	if !pm.client && !pm.synced() {
+		return p2p.DiscRequested
+	}
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
 
 	// Execute the LES handshake
@@ -304,7 +310,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	}()
 
 	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
-	if pm.lightSync {
+	if pm.client {
 		p.lock.Lock()
 		head := p.headInfo
 		p.lock.Unlock()
