@@ -501,8 +501,6 @@ func (db *Dashboard) collectPeerData() {
 								Protocols: peer.Protocols,
 							})
 						}
-						//s, _ := json.Marshal(info.Protocols)
-						//fmt.Println(string(s))
 					}
 				}
 			}
