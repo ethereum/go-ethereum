@@ -61,7 +61,7 @@ const (
 	PeerHandshakeSucceeded MeteredPeerEventType = iota
 
 	// PeerHandshakeFailed is the type of event emitted when a peer fails to
-	// make the encryption handshake or disconnects before it.
+	// make the handshake or disconnects before it.
 	PeerHandshakeFailed
 
 	// PeerDisconnected is the type of event emitted when a peer disconnects.

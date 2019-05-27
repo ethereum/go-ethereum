@@ -170,19 +170,6 @@ func (db *Dashboard) Start(server *p2p.Server) error {
 		}
 	}()
 
-	//s, _ := json.MarshalIndent(server.NodeInfo(), "", " ")
-	//fmt.Println(string(s))
-	switch {
-	case db.ethServ != nil:
-		if db.ethServ.IsLesServer() {
-			//	fmt.Printf("%+v\n", db.ethServ)
-		}
-	case db.lesServ != nil:
-		//fmt.Println(db.lesServ.LesVersion())
-	default:
-		log.Error("Neither eth nor les")
-	}
-
 	return nil
 }
 
