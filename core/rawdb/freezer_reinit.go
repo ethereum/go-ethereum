@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -75,6 +76,9 @@ func InitDatabaseFromFreezer(db ethdb.Database) error {
 	}
 	// Reassemble the blocks into a contiguous stream and push them out to disk
 	var (
+		queue = prque.New(nil)
+		next  = int64(0)
+
 		batch  = db.NewBatch()
 		start  = time.Now()
 		logged time.Time
@@ -85,20 +89,33 @@ func InitDatabaseFromFreezer(db ethdb.Database) error {
 		if block == nil {
 			return errors.New("broken ancient database")
 		}
-		// Inject hash<->number mapping and txlookup indexes
-		WriteHeaderNumber(batch, block.Hash(), block.NumberU64())
-		WriteTxLookupEntries(batch, block)
-
-		if batch.ValueSize() > ethdb.IdealBatchSize || i == frozen-1 {
-			if err := batch.Write(); err != nil {
-				return err
+		// Push the block into the import queue and process contiguous ranges
+		queue.Push(block, -int64(block.NumberU64()))
+		for !queue.Empty() {
+			// If the next available item is gapped, return
+			if _, priority := queue.Peek(); -priority != next {
+				break
 			}
-			batch.Reset()
-		}
-		// If we've spent too much time already, notify the user of what we're doing
-		if time.Since(logged) > 8*time.Second {
-			log.Info("Initializing chain from ancient data", "number", block.Number(), "hash", block.Hash(), "total", frozen-1, "elapsed", common.PrettyDuration(time.Since(start)))
-			logged = time.Now()
+			// Next block available, pop it off and index it
+			block = queue.PopItem().(*types.Block)
+			next++
+
+			// Inject hash<->number mapping and txlookup indexes
+			WriteHeaderNumber(batch, block.Hash(), block.NumberU64())
+			WriteTxLookupEntries(batch, block)
+
+			// If enough data was accumulated in memory or we're at the last block, dump to disk
+			if batch.ValueSize() > ethdb.IdealBatchSize || uint64(next) == frozen {
+				if err := batch.Write(); err != nil {
+					return err
+				}
+				batch.Reset()
+			}
+			// If we've spent too much time already, notify the user of what we're doing
+			if time.Since(logged) > 8*time.Second {
+				log.Info("Initializing chain from ancient data", "number", block.Number(), "hash", block.Hash(), "total", frozen-1, "elapsed", common.PrettyDuration(time.Since(start)))
+				logged = time.Now()
+			}
 		}
 	}
 	hash := ReadCanonicalHash(db, frozen-1)
