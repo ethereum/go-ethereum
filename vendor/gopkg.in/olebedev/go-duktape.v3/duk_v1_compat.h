@@ -3,6 +3,10 @@
 
 #include "duktape.h"
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 /* Straight flag rename */
 #if !defined(DUK_ENUM_INCLUDE_INTERNAL)
 #define DUK_ENUM_INCLUDE_INTERNAL DUK_ENUM_INCLUDE_HIDDEN
@@ -24,5 +28,9 @@ extern void duk_to_defaultvalue(duk_context *ctx, duk_idx_t idx, duk_int_t hint)
 
 #define duk_push_string_file(ctx,path) \
 	duk_push_string_file_raw((ctx), (path), 0)
+
+#if defined(__cplusplus)
+}
+#endif  /* end 'extern "C"' wrapper */
 
 #endif  /* DUK_V1_COMPAT_INCLUDED */
