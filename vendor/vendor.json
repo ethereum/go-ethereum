@@ -941,10 +941,10 @@
 			"revisionTime": "2016-06-21T03:49:01Z"
 		},
 		{
-			"checksumSHA1": "vndxs5Tv09/8S+Dr2PBAiM557lI=",
+			"checksumSHA1": "h+m6mYCZIKnMQI24faKak5o19es=",
 			"path": "gopkg.in/olebedev/go-duktape.v3",
-			"revision": "abf0ba0be5d5d36b1f9266463cc320b9a5ab224e",
-			"revisionTime": "2018-03-02T12:15:09Z"
+			"revision": "ec84240a7772c7a122b1c58a13398210659f7c40",
+			"revisionTime": "2019-02-13T23:42:57Z"
 		},
 		{
 			"checksumSHA1": "4BwmmgQUhWtizsR2soXND0nqZ1I=",
