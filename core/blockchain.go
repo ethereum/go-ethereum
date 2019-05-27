@@ -1076,8 +1076,11 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 		// Wipe out canonical block data.
 		for _, block := range append(deleted, blockChain...) {
-			rawdb.DeleteBlockWithoutNumber(batch, block.Hash(), block.NumberU64())
-			rawdb.DeleteCanonicalHash(batch, block.NumberU64())
+			// Always keep genesis block in active database.
+			if block.NumberU64() != 0 {
+				rawdb.DeleteBlockWithoutNumber(batch, block.Hash(), block.NumberU64())
+				rawdb.DeleteCanonicalHash(batch, block.NumberU64())
+			}
 		}
 		if err := batch.Write(); err != nil {
 			return 0, err
@@ -1086,8 +1089,11 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 		// Wipe out side chain too.
 		for _, block := range append(deleted, blockChain...) {
-			for _, hash := range rawdb.ReadAllHashes(bc.db, block.NumberU64()) {
-				rawdb.DeleteBlock(batch, hash, block.NumberU64())
+			// Always keep genesis block in active database.
+			if block.NumberU64() != 0 {
+				for _, hash := range rawdb.ReadAllHashes(bc.db, block.NumberU64()) {
+					rawdb.DeleteBlock(batch, hash, block.NumberU64())
+				}
 			}
 		}
 		if err := batch.Write(); err != nil {
