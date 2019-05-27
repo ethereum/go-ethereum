@@ -18,6 +18,7 @@
 
 import React, {Component} from 'react';
 
+import withStyles from '@material-ui/core/styles/withStyles';
 import Table from '@material-ui/core/Table';
 import TableHead from '@material-ui/core/TableHead';
 import TableBody from '@material-ui/core/TableBody';
@@ -27,10 +28,11 @@ import Grid from '@material-ui/core/Grid/Grid';
 import Typography from '@material-ui/core/Typography';
 import {AreaChart, Area, Tooltip, YAxis} from 'recharts';
 import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
-import {faCircle as fasCircle} from '@fortawesome/free-solid-svg-icons';
+import {faCircle as fasCircle} from '@fortawesome/free-solid-svg-icons'; // More icons at fontawesome.com/icons
 import {faCircle as farCircle} from '@fortawesome/free-regular-svg-icons';
+import {faClipboard as farClipboard} from '@fortawesome/free-regular-svg-icons';
 import convert from 'color-convert';
-import ScrollArea from 'react-scrollbar';
+import {Scrollbars} from 'react-custom-scrollbars';
 
 import CustomTooltip, {bytePlotter, multiplier} from 'CustomTooltip';
 import type {Network as NetworkType, PeerEvent} from '../types/content';
@@ -386,7 +388,6 @@ const styles = {
 		marginLeft: 5,
 	},
 	table: {
-		background:     '#212121',
 		borderCollapse: 'unset',
 		padding:        5,
 	},
@@ -410,6 +411,16 @@ const styles = {
 	},
 };
 
+// themeStyles returns the styles generated from the theme for the component.
+const themeStyles = theme => ({
+	title: {
+		color: theme.palette.common.white,
+	},
+	table: {
+		background: theme.palette.grey[900],
+	},
+});
+
 // limitedWidthStyle returns a style object which cuts the long text with three dots.
 const limitedWidthStyle = (width) => {
 	return {
@@ -421,6 +432,7 @@ const limitedWidthStyle = (width) => {
 };
 
 export type Props = {
+	classes:      Object, // injected by withStyles()
 	container:    Object,
 	content:      NetworkType,
 	shouldUpdate: Object,
@@ -456,6 +468,49 @@ class Network extends Component<Props, State> {
 		navigator.clipboard.writeText(text).then(() => {}, () => {
 			console.error("Failed to copy", text);
 		});
+	};
+
+	lesList = () => {
+		const list = [];
+		Object.values(this.props.content.peers.bundles).forEach((bundle) => {
+			if (!bundle.knownPeers || Object.keys(bundle.knownPeers).length < 1) {
+				return;
+			}
+			Object.entries(bundle.knownPeers).forEach(([enode, peer]) => {
+				if (peer.les === '' || peer.eth !== '') {
+					return;
+				}
+				list.push({enode, name: peer.name, location: bundle.location, protocols: peer.protocols});
+			});
+		});
+		return list;
+	};
+
+	ethList = () => {
+		const list = [];
+		Object.values(this.props.content.peers.bundles).forEach((bundle) => {
+			if (!bundle.knownPeers || Object.keys(bundle.knownPeers).length < 1) {
+				return;
+			}
+			Object.entries(bundle.knownPeers).forEach(([enode, peer]) => {
+				if (peer.eth === '' && peer.les !== '') {
+					return;
+				}
+				list.push({enode, name: peer.name, location: bundle.location, protocols: peer.protocols});
+			});
+		});
+		return list;
+	};
+
+	attemptList = () => {
+		const list = [];
+		Object.entries(this.props.content.peers.bundles).forEach(([addr, bundle]) => {
+			if (!bundle.attempts) {
+				return;
+			}
+			list.push({addr, location: bundle.location, attempts: bundle.attempts});
+		});
+		return list;
 	};
 
 	knownPeerTableRow = (addr, enode, bundle, peer, showTraffic, proto) => {
@@ -500,95 +555,103 @@ class Network extends Component<Props, State> {
 					{bundle.shortLocation}
 				</TableCell>
 				<TableCell style={styles.tableCell}>
-					<AreaChart
-						width={trafficChartWidth}
-						height={trafficChartHeight}
-						data={ingressValues}
-						margin={{top: 5, right: 5, bottom: 0, left: 5}}
-						syncId={`peerIngress_${addr}_${enode}`}
-					>
-						<defs>
-							<linearGradient id={`ingressGradient_${addr}_${enode}`} x1='0' y1='1' x2='0' y2='0'>
-								{peer.ingressGradient
-								&& peer.ingressGradient.map(({offset, color}, i) => (
-									<stop
-										key={`ingressStop_${addr}_${enode}_${i}`}
-										offset={`${offset}%`}
-										stopColor={color}
-									/>
-								))}
-							</linearGradient>
-						</defs>
-						<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Download')} />} />
-						<YAxis hide scale='sqrt' domain={[0.001, dataMax => Math.max(dataMax, 0)]} />
-						<Area
-							dataKey='ingress'
-							isAnimationActive={false}
-							type='monotone'
-							fill={`url(#ingressGradient_${addr}_${enode})`}
-							stroke={peer.ingressGradient[peer.ingressGradient.length - 1].color}
-							strokeWidth={chartStrokeWidth}
-						/>
-					</AreaChart>
-					<AreaChart
-						width={trafficChartWidth}
-						height={trafficChartHeight}
-						data={egressValues}
-						margin={{top: 0, right: 5, bottom: 5, left: 5}}
-						syncId={`peerIngress_${addr}_${enode}`}
-					>
-						<defs>
-							<linearGradient id={`egressGradient_${addr}_${enode}`} x1='0' y1='1' x2='0' y2='0'>
-								{peer.egressGradient
-								&& peer.egressGradient.map(({offset, color}, i) => (
-									<stop
-										key={`egressStop_${addr}_${enode}_${i}`}
-										offset={`${offset}%`}
-										stopColor={color}
-									/>
-								))}
-							</linearGradient>
-						</defs>
-						<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Upload', multiplier(-1))} />} />
-						<YAxis hide scale='sqrt' domain={[dataMin => Math.min(dataMin, 0), -0.001]} />
-						<Area
-							dataKey='egress'
-							isAnimationActive={false}
-							type='monotone'
-							fill={`url(#egressGradient_${addr}_${enode})`}
-							stroke={peer.egressGradient[0].color}
-							strokeWidth={chartStrokeWidth}
-						/>
-					</AreaChart>
+					{showTraffic ? (
+						<>
+							<AreaChart
+								width={trafficChartWidth}
+								height={trafficChartHeight}
+								data={ingressValues}
+								margin={{top: 5, right: 5, bottom: 0, left: 5}}
+								syncId={`peerIngress_${addr}_${enode}`}
+							>
+								<defs>
+									<linearGradient id={`ingressGradient_${addr}_${enode}`} x1='0' y1='1' x2='0' y2='0'>
+										{peer.ingressGradient
+										&& peer.ingressGradient.map(({offset, color}, i) => (
+											<stop
+												key={`ingressStop_${addr}_${enode}_${i}`}
+												offset={`${offset}%`}
+												stopColor={color}
+											/>
+										))}
+									</linearGradient>
+								</defs>
+								<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Download')} />} />
+								<YAxis hide scale='sqrt' domain={[0.001, dataMax => Math.max(dataMax, 0)]} />
+								<Area
+									dataKey='ingress'
+									isAnimationActive={false}
+									type='monotone'
+									fill={`url(#ingressGradient_${addr}_${enode})`}
+									stroke={peer.ingressGradient[peer.ingressGradient.length - 1].color}
+									strokeWidth={chartStrokeWidth}
+								/>
+							</AreaChart>
+							<AreaChart
+								width={trafficChartWidth}
+								height={trafficChartHeight}
+								data={egressValues}
+								margin={{top: 0, right: 5, bottom: 5, left: 5}}
+								syncId={`peerIngress_${addr}_${enode}`}
+							>
+								<defs>
+									<linearGradient id={`egressGradient_${addr}_${enode}`} x1='0' y1='1' x2='0' y2='0'>
+										{peer.egressGradient
+										&& peer.egressGradient.map(({offset, color}, i) => (
+											<stop
+												key={`egressStop_${addr}_${enode}_${i}`}
+												offset={`${offset}%`}
+												stopColor={color}
+											/>
+										))}
+									</linearGradient>
+								</defs>
+								<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Upload', multiplier(-1))} />} />
+								<YAxis hide scale='sqrt' domain={[dataMin => Math.min(dataMin, 0), -0.001]} />
+								<Area
+									dataKey='egress'
+									isAnimationActive={false}
+									type='monotone'
+									fill={`url(#egressGradient_${addr}_${enode})`}
+									stroke={peer.egressGradient[0].color}
+									strokeWidth={chartStrokeWidth}
+								/>
+							</AreaChart>
+						</>
+					) : null}
 				</TableCell>
-				<TableCell
-					style={{
-						cursor: 'copy',
-						...styles.tableCell,
-						...limitedWidthStyle(80),
-					}}
-					onClick={this.copyToClipboard(JSON.stringify(proto.head))}
-				>
-					{proto.head}
-				</TableCell>
-				<TableCell
-					style={{
-						cursor: 'copy',
-						...styles.tableCell,
-					}}
-					onClick={this.copyToClipboard(JSON.stringify(proto.difficulty))}
-				>
-					{proto.difficulty}
-				</TableCell>
-				<TableCell
-					style={{
-						cursor: 'copy',
-						...styles.tableCell,
-					}}
-					onClick={this.copyToClipboard(JSON.stringify(proto.version))}
-				>
-					{proto.version}
-				</TableCell>
+				{typeof proto === 'object' ? (
+					<>
+						<TableCell
+							style={{
+								cursor: 'copy',
+								...styles.tableCell,
+								...limitedWidthStyle(80),
+							}}
+							onClick={this.copyToClipboard(JSON.stringify(proto.head))}
+						>
+							{proto.head}
+						</TableCell>
+						<TableCell
+							style={{
+								cursor: 'copy',
+								...styles.tableCell,
+							}}
+							onClick={this.copyToClipboard(JSON.stringify(proto.difficulty))}
+						>
+							{proto.difficulty}
+						</TableCell>
+						<TableCell
+							style={{
+								cursor: 'copy',
+								...styles.tableCell,
+							}}
+							onClick={this.copyToClipboard(JSON.stringify(proto.version))}
+						>
+							{proto.version}
+						</TableCell>
+					</>
+				) : null }
 			</TableRow>
 		);
 	};
@@ -614,15 +677,21 @@ class Network extends Component<Props, State> {
 	);
 
 	render() {
+		const {classes} = this.props;
 		return (
-			<Grid container direction='row' spacing={24}>
-				<Grid item xs style={{width: '40%'}}>
-					<div style={styles.table}>
-						<Typography variant='subtitle1' gutterBottom style={styles.title}>
+			<Grid container direction='row' spacing={3}>
+				<Grid item style={{width: '40%'}}>
+					<div className={classes.table} style={styles.table}>
+						<Typography variant='subtitle1' gutterBottom className={classes.title} style={styles.title}>
 							ETH peers
+							<FontAwesomeIcon
+								icon={farClipboard}
+								onClick={this.copyToClipboard(JSON.stringify(this.ethList()))}
+								style={{float: 'right'}}
+							/>
 						</Typography>
-						<ScrollArea speed={0.8} style={styles.content}>
-							<Table style={styles.table}>
+						<Scrollbars style={styles.content}>
+							<Table>
 								<TableHead style={styles.tableHead}>
 									<TableRow style={styles.tableRow}>
 										<TableCell style={styles.tableCell} />
@@ -668,16 +737,21 @@ class Network extends Component<Props, State> {
 									})}
 								</TableBody>
 							</Table>
-						</ScrollArea>
+						</Scrollbars>
 					</div>
 				</Grid>
-				<Grid item xs style={{width: '40%'}}>
-					<div style={styles.table}>
-						<Typography variant='subtitle1' gutterBottom style={styles.title}>
+				<Grid item style={{width: '40%'}}>
+					<div className={classes.table} style={styles.table}>
+						<Typography variant='subtitle1' gutterBottom className={classes.title} style={styles.title}>
 							LES peers
+							<FontAwesomeIcon
+								icon={farClipboard}
+								onClick={this.copyToClipboard(JSON.stringify(this.lesList()))}
+								style={{float: 'right'}}
+							/>
 						</Typography>
-						<ScrollArea speed={0.8} style={styles.content}>
-							<Table style={styles.table}>
+						<Scrollbars style={styles.content}>
+							<Table>
 								<TableHead style={styles.tableHead}>
 									<TableRow style={styles.tableRow}>
 										<TableCell style={styles.tableCell} />
@@ -723,15 +797,20 @@ class Network extends Component<Props, State> {
 									})}
 								</TableBody>
 							</Table>
-						</ScrollArea>
+						</Scrollbars>
 					</div>
 				</Grid>
 				<Grid item xs>
-					<div style={styles.table}>
-						<Typography variant='subtitle1' gutterBottom style={styles.title}>
+					<div className={classes.table} style={styles.table}>
+						<Typography variant='subtitle1' gutterBottom className={classes.title} style={styles.title}>
 							Connection attempts
+							<FontAwesomeIcon
+								icon={farClipboard}
+								onClick={this.copyToClipboard(JSON.stringify(this.attemptList()))}
+								style={{float: 'right'}}
+							/>
 						</Typography>
-						<ScrollArea speed={0.8} style={styles.content}>
+						<Scrollbars style={styles.content}>
 							<Table>
 								<TableHead style={styles.tableHead}>
 									<TableRow style={styles.tableRow}>
@@ -757,7 +836,7 @@ class Network extends Component<Props, State> {
 									})}
 								</TableBody>
 							</Table>
-						</ScrollArea>
+						</Scrollbars>
 					</div>
 				</Grid>
 			</Grid>
@@ -765,4 +844,4 @@ class Network extends Component<Props, State> {
 	}
 }
 
-export default Network;
+export default withStyles(themeStyles)(Network);
