@@ -669,7 +669,6 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 
 	// if path is set, interpret <key> as a manifest and return the
 	// raw entry at the given path
-
 	etag := common.Bytes2Hex(addr)
 	noneMatchEtag := r.Header.Get("If-None-Match")
 	w.Header().Set("ETag", fmt.Sprintf("%q", etag)) // set etag to manifest key or raw entry key.
@@ -680,18 +679,18 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// check the root chunk exists by retrieving the file's size
-	reader, isEncrypted := s.api.Retrieve(r.Context(), addr)
-	if _, err := reader.Size(r.Context(), nil); err != nil {
-		getFail.Inc(1)
-		respondError(w, r, fmt.Sprintf("root chunk not found %s: %s", addr, err), http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("X-Decrypted", fmt.Sprintf("%v", isEncrypted))
-
 	switch {
 	case uri.Raw():
+		// check the root chunk exists by retrieving the file's size
+		reader, isEncrypted := s.api.Retrieve(r.Context(), addr)
+		if _, err := reader.Size(r.Context(), nil); err != nil {
+			getFail.Inc(1)
+			respondError(w, r, fmt.Sprintf("root chunk not found %s: %s", addr, err), http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("X-Decrypted", fmt.Sprintf("%v", isEncrypted))
+
 		// allow the request to overwrite the content type using a query
 		// parameter
 		if typ := r.URL.Query().Get("content_type"); typ != "" {
@@ -703,6 +702,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, addr)
 	}
+
 }
 
 // HandleGetList handles a GET request to bzz-list:/<manifest>/<path> and returns
