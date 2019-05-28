@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/paxosglobal/go-ethereum"
 	"math/big"
 	"sync"
 	"time"
@@ -182,7 +183,13 @@ func (b *SimulatedBackend) TransactionReceipt(ctx context.Context, txHash common
 // TransactionByHash returns the transaction with the given hash.
 func (b *SimulatedBackend) TransactionByHash(ctx context.Context, txHash common.Hash) (tx *types.Transaction, isPending bool, err error) {
 	transaction, _, blockNumber, _ := rawdb.ReadTransaction(b.database, txHash)
-	return transaction, blockNumber != 0, nil
+	return transaction, blockNumber == 0, nil
+}
+
+// TransactionByHash returns the transaction with the given hash.
+func (b *SimulatedBackend) TransactionByHashWithBlockNum(ctx context.Context, txHash common.Hash) (tx *types.Transaction, isPending string, err error) {
+	transaction, _, blockNumber, _ := rawdb.ReadTransaction(b.database, txHash)
+	return transaction, string(blockNumber), nil
 }
 
 // BlockByNumber retrieves a block from the database by number, caching it

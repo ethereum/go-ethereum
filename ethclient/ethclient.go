@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/paxosglobal/go-ethereum"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum"
@@ -186,6 +187,28 @@ func (tx *rpcTransaction) UnmarshalJSON(msg []byte) error {
 		return err
 	}
 	return json.Unmarshal(msg, &tx.txExtraInfo)
+}
+
+// TransactionByHash returns the transaction with the given hash.
+func (ec *Client) TransactionByHashWithBlockNum(ctx context.Context, hash common.Hash) (tx *types.Transaction, BlockNumber string, err error) {
+	var json *rpcTransaction
+	err = ec.c.CallContext(ctx, &json, "eth_getTransactionByHash", hash)
+	if err != nil {
+		return nil, false, err
+	} else if json == nil {
+		return nil, false, ethereum.NotFound
+	} else if _, r, _ := json.tx.RawSignatureValues(); r == nil {
+		return nil, false, fmt.Errorf("server returned transaction without signature")
+	}
+	if json.From != nil && json.BlockHash != nil {
+		setSenderFromServer(json.tx, *json.From, *json.BlockHash)
+	}
+
+	if json.BlockNumber == nil {
+		return json.tx, "0", nil
+	}
+
+	return json.tx, *json.BlockNumber, nil
 }
 
 // TransactionByHash returns the transaction with the given hash.
