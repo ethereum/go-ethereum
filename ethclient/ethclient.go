@@ -194,11 +194,11 @@ func (ec *Client) TransactionByHashWithBlockNum(ctx context.Context, hash common
 	var json *rpcTransaction
 	err = ec.c.CallContext(ctx, &json, "eth_getTransactionByHash", hash)
 	if err != nil {
-		return nil, false, err
+		return nil, "0", err
 	} else if json == nil {
-		return nil, false, ethereum.NotFound
+		return nil, "0", ethereum.NotFound
 	} else if _, r, _ := json.tx.RawSignatureValues(); r == nil {
-		return nil, false, fmt.Errorf("server returned transaction without signature")
+		return nil, "0", fmt.Errorf("server returned transaction without signature")
 	}
 	if json.From != nil && json.BlockHash != nil {
 		setSenderFromServer(json.tx, *json.From, *json.BlockHash)
