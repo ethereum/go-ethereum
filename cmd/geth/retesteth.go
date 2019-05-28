@@ -513,6 +513,7 @@ func (api *RetestethAPI) mineBlock() error {
 				txCount++
 				if gasPool.Gas() < params.TxGas {
 					blockFull = true
+					break
 				}
 			} else {
 				break // Gap in the nonces
