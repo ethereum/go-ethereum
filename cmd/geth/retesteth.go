@@ -477,44 +477,45 @@ func (api *RetestethAPI) mineBlock() error {
 	var txs []*types.Transaction
 	var receipts []*types.Receipt
 	var coalescedLogs []*types.Log
-	if gasPool.Gas() >= params.TxGas {
-	outer:
-		for address := range api.txSenders {
-			m := api.txMap[address]
-			for nonce := statedb.GetNonce(address); ; nonce++ {
-				if tx, ok := m[nonce]; ok {
-					// Try to apply transactions to the state
-					statedb.Prepare(tx.Hash(), common.Hash{}, txCount)
-					snap := statedb.Snapshot()
+	var blockFull = gasPool.Gas() < params.TxGas
+	for address := range api.txSenders {
+		if blockFull {
+			break
+		}
+		m := api.txMap[address]
+		for nonce := statedb.GetNonce(address); ; nonce++ {
+			if tx, ok := m[nonce]; ok {
+				// Try to apply transactions to the state
+				statedb.Prepare(tx.Hash(), common.Hash{}, txCount)
+				snap := statedb.Snapshot()
 
-					receipt, _, err := core.ApplyTransaction(
-						api.chainConfig,
-						api.blockchain,
-						&api.author,
-						gasPool,
-						statedb,
-						header, tx, &header.GasUsed, *api.blockchain.GetVMConfig(),
-					)
-					if err != nil {
-						statedb.RevertToSnapshot(snap)
-						continue outer
-					}
-					txs = append(txs, tx)
-					receipts = append(receipts, receipt)
-					coalescedLogs = append(coalescedLogs, receipt.Logs...)
-					delete(m, nonce)
-					if len(m) == 0 {
-						// Last tx for the sender
-						delete(api.txMap, address)
-						delete(api.txSenders, address)
-					}
-					txCount++
-					if gasPool.Gas() < params.TxGas {
-						break outer
-					}
-				} else {
-					break // Gap in the nonces
+				receipt, _, err := core.ApplyTransaction(
+					api.chainConfig,
+					api.blockchain,
+					&api.author,
+					gasPool,
+					statedb,
+					header, tx, &header.GasUsed, *api.blockchain.GetVMConfig(),
+				)
+				if err != nil {
+					statedb.RevertToSnapshot(snap)
+					break
 				}
+				txs = append(txs, tx)
+				receipts = append(receipts, receipt)
+				coalescedLogs = append(coalescedLogs, receipt.Logs...)
+				delete(m, nonce)
+				if len(m) == 0 {
+					// Last tx for the sender
+					delete(api.txMap, address)
+					delete(api.txSenders, address)
+				}
+				txCount++
+				if gasPool.Gas() < params.TxGas {
+					blockFull = true
+				}
+			} else {
+				break // Gap in the nonces
 			}
 		}
 	}
@@ -804,7 +805,7 @@ func (api *RetestethAPI) StorageRangeAt(ctx context.Context,
 }
 
 func (api *RetestethAPI) ClientVersion(ctx context.Context) (string, error) {
-	return "Geth/1.8.0", nil
+	return "Geth-" + params.VersionWithCommit(gitCommit, gitDate), nil
 }
 
 // splitAndTrim splits input separated by a comma
