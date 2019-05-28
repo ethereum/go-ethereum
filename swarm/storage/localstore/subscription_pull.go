@@ -31,9 +31,9 @@ import (
 
 // SubscribePull returns a channel that provides chunk addresses and stored times from pull syncing index.
 // Pull syncing index can be only subscribed to a particular proximity order bin. If since
-// is not 0, the iteration will start from the first item stored after that id. If until is not 0,
+// is not 0, the iteration will start from the since item (the item with binID == since). If until is not 0,
 // only chunks stored up to this id will be sent to the channel, and the returned channel will be
-// closed. The since-until interval is open on since side, and closed on until side: (since,until] <=> [since+1,until]. Returned stop
+// closed. The since-until interval is closed on since side, and closed on until side: [since,until]. Returned stop
 // function will terminate current and further iterations without errors, and also close the returned channel.
 // Make sure that you check the second returned parameter from the channel to stop iteration when its value
 // is false.
@@ -135,7 +135,9 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 					log.Error("localstore pull subscription iteration", "bin", bin, "since", since, "until", until, "err", err)
 					return
 				}
-				first = false
+				if count > 0 {
+					first = false
+				}
 			case <-stopChan:
 				// terminate the subscription
 				// on stop
