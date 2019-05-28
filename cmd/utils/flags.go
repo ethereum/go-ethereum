@@ -129,7 +129,7 @@ var (
 		Usage: "Disables monitoring for and managing USB hardware wallets",
 	}
 	SmartCardFlag = cli.StringFlag{
-		Name:  "pcscd-sock",
+		Name:  "pcscdpath",
 		Usage: "Path to the smartcard daemon (pcscd) socket file (unix only, leave empty for platform default)",
 		Value: pcsclite.PCSCDSockName,
 	}
