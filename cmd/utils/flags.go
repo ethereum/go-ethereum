@@ -25,7 +25,6 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -58,6 +57,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+	pcsclite "github.com/gballet/go-libpcsclite"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -131,7 +131,7 @@ var (
 	SmartCardFlag = cli.StringFlag{
 		Name:  "pcscd-sock",
 		Usage: "Path to the smartcard daemon (pcscd) socket file (unix only, leave empty for platform default)",
-		Value: "",
+		Value: pcsclite.PCSCDSockName,
 	}
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
@@ -1151,24 +1151,17 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 }
 
 func setSmartCard(ctx *cli.Context, cfg *node.Config) {
-	// No support for windows, currently
-	if runtime.GOOS != "windows" {
-		cfg.SmartCard = true
-
-		// Use the platform default unless specified on the command line
-		if len(ctx.GlobalString(SmartCardFlag.Name)) > 0 {
-			if fi, err := os.Stat(ctx.GlobalString(SmartCardFlag.Name)); err == nil {
-				if fi.Mode()&os.ModeType == os.ModeSocket {
-					cfg.SmartCardDaemonPath = ctx.GlobalString(SmartCardFlag.Name)
-				} else {
-					log.Error(fmt.Sprintf("%s doesn't seem to be a socket file", ctx.GlobalString(SmartCardFlag.Name)))
-				}
+	// Use the platform default unless specified on the command line
+	if len(ctx.GlobalString(SmartCardFlag.Name)) > 0 {
+		if fi, err := os.Stat(ctx.GlobalString(SmartCardFlag.Name)); err == nil {
+			if fi.Mode()&os.ModeType == os.ModeSocket {
+				cfg.SmartCardDaemonPath = ctx.GlobalString(SmartCardFlag.Name)
 			} else {
-				log.Error(fmt.Sprintf("%s doesn't exist", ctx.GlobalString(SmartCardFlag.Name)))
+				log.Error(fmt.Sprintf("%s doesn't seem to be a socket file", ctx.GlobalString(SmartCardFlag.Name)))
 			}
+		} else {
+			log.Error(fmt.Sprintf("%s doesn't exist", ctx.GlobalString(SmartCardFlag.Name)))
 		}
-	} else {
-		log.Info("Smartcard support disabled on this platform")
 	}
 }
 

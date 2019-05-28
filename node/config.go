@@ -95,9 +95,6 @@ type Config struct {
 	// NoUSB disables hardware wallet monitoring and connectivity.
 	NoUSB bool `toml:",omitempty"`
 
-	// SmartCard activates smartcard wallet monitoring and connectivity.
-	SmartCard bool `toml:",omitempty"`
-
 	// SmartCardDaemonPath is the path to the smartcard daemon's socket
 	SmartCardDaemonPath string `toml:",omitempty"`
 
@@ -511,7 +508,7 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 				backends = append(backends, trezorhub)
 			}
 		}
-		if conf.SmartCard {
+		if len(conf.SmartCardDaemonPath) > 0 {
 			// Start a smart card hub
 			if schub, err := scwallet.NewHub(conf.SmartCardDaemonPath, scwallet.Scheme, keydir); err != nil {
 				log.Warn(fmt.Sprintf("Failed to start smart card hub, disabling: %v", err))
