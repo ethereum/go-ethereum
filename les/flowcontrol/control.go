@@ -402,7 +402,7 @@ func (node *ServerNode) ResumeFreeze(bv uint64) {
 	node.lock.Lock()
 	defer node.lock.Unlock()
 
-	for reqID, _ := range node.pending {
+	for reqID := range node.pending {
 		delete(node.pending, reqID)
 	}
 	now := node.clock.Now()
