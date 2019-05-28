@@ -152,16 +152,30 @@ func enableWhisper(ctx *cli.Context) bool {
 	return false
 }
 
-func makeFullNode(ctx *cli.Context) *node.Node {
+//makeNode initialises a node with various services so that the node and its services can be later started
+func makeNode(ctx *cli.Context) *node.Node {
+
 	stack, cfg := makeConfigNode(ctx)
 	if ctx.GlobalIsSet(utils.ConstantinopleOverrideFlag.Name) {
 		cfg.Eth.ConstantinopleOverride = new(big.Int).SetUint64(ctx.GlobalUint64(utils.ConstantinopleOverrideFlag.Name))
 	}
+
+	//register a Service that handles the Les client if the config permits
+	utils.RegisterLesClientService(stack, &cfg.Eth)
+
+	//register a Service that handles the Eth capability if the config permits
 	utils.RegisterEthService(stack, &cfg.Eth)
 
+	//register a Service that handles the Les client if the config permits
+	//(the Les Server service registration depends on the Eth service being
+	//registered prior)
+	utils.RegisterLesServerService(stack, &cfg.Eth)
+
+	
 	if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
 		utils.RegisterDashboardService(stack, &cfg.Dashboard, gitCommit)
 	}
+
 	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode
 	shhEnabled := enableWhisper(ctx)
 	shhAutoEnabled := !ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DeveloperFlag.Name)
