@@ -84,11 +84,11 @@ var (
 
 const (
 	maxCostFactor    = 2 // ratio of maximum and average cost estimates
-	gfInitWeight     = time.Second * 10
-	gfMaxWeight      = time.Second * 1000
 	gfUsageThreshold = 0.5
 	gfUsageTC        = time.Second
-	gfDbKey          = "_globalCostFactorV2"
+	gfRaiseTC        = time.Second * 200
+	gfDropTC         = time.Second * 50
+	gfDbKey          = "_globalCostFactorV3"
 )
 
 // costTracker is responsible for calculating costs and cost estimates on the
@@ -112,9 +112,9 @@ type costTracker struct {
 	gfLock          sync.RWMutex
 	totalRechargeCh chan uint64
 
-	stats                                        map[uint64][]uint64
-	logger                                       *csvlogger.Logger
-	logRecentUsage, logTotalRecharge, logRelCost *csvlogger.Channel
+	stats                                                     map[uint64][]uint64
+	logger                                                    *csvlogger.Logger
+	logRecentTime, logRecentAvg, logTotalRecharge, logRelCost *csvlogger.Channel
 }
 
 // newCostTracker creates a cost tracker and loads the cost factor statistics from the database.
@@ -127,7 +127,8 @@ func newCostTracker(db ethdb.Database, config *eth.Config, logger *csvlogger.Log
 		utilTarget:       utilTarget,
 		logger:           logger,
 		logRelCost:       logger.NewMinMaxChannel("relativeCost", true),
-		logRecentUsage:   logger.NewMinMaxChannel("recentUsage", true),
+		logRecentTime:    logger.NewMinMaxChannel("recentTime", true),
+		logRecentAvg:     logger.NewMinMaxChannel("recentAvg", true),
 		logTotalRecharge: logger.NewChannel("totalRecharge", 0.01),
 	}
 	if config.LightBandwidthIn > 0 {
@@ -217,31 +218,26 @@ type gfUpdate struct {
 // total allowed serving time per second but nominated in cost units, should
 // also be scaled with the cost factor and is also updated by this loop.
 func (ct *costTracker) gfLoop() {
-	var gfUsage, gfSum, gfWeight float64
+	var gfLog, recentTime, recentAvg float64
 	lastUpdate := mclock.Now()
 	expUpdate := lastUpdate
 
 	data, _ := ct.db.Get([]byte(gfDbKey))
-	if len(data) == 16 {
-		gfSum = math.Float64frombits(binary.BigEndian.Uint64(data[0:8]))
-		gfWeight = math.Float64frombits(binary.BigEndian.Uint64(data[8:16]))
+	if len(data) == 8 {
+		gfLog = math.Float64frombits(binary.BigEndian.Uint64(data[:]))
 	}
-	if gfWeight < float64(gfInitWeight) {
-		gfSum = float64(gfInitWeight)
-		gfWeight = float64(gfInitWeight)
-	}
-	gf := gfSum / gfWeight
+	gf := math.Exp(gfLog)
 	ct.gf = gf
 	totalRecharge := ct.utilTarget * gf
 	ct.gfUpdateCh = make(chan gfUpdate, 100)
+	threshold := gfUsageThreshold * float64(gfUsageTC) * ct.utilTarget / 1000000
 
 	go func() {
 		saveCostFactor := func() {
-			var data [16]byte
-			binary.BigEndian.PutUint64(data[0:8], math.Float64bits(gfSum))
-			binary.BigEndian.PutUint64(data[8:16], math.Float64bits(gfWeight))
+			var data [8]byte
+			binary.BigEndian.PutUint64(data[:], math.Float64bits(gfLog))
 			ct.db.Put([]byte(gfDbKey), data[:])
-			log.Debug("global cost factor saved", "sum", time.Duration(gfSum), "weight", time.Duration(gfWeight))
+			log.Debug("global cost factor saved", "value", gf)
 		}
 		saveTicker := time.NewTicker(time.Minute * 10)
 
@@ -249,34 +245,47 @@ func (ct *costTracker) gfLoop() {
 			select {
 			case r := <-ct.gfUpdateCh:
 				now := mclock.Now()
-				max := r.servingTime * gf
 				if ct.logRelCost != nil && r.avgTime > 1e-20 {
-					ct.logRelCost.Update(max / r.avgTime)
+					ct.logRelCost.Update(r.servingTime * gf / r.avgTime)
 				}
 				if r.servingTime > 1000000000 {
 					ct.logger.Event(fmt.Sprintf("Very long servingTime = %f  avgTime = %f  costFactor = %f", r.servingTime, r.avgTime, gf))
 				}
-				if max > r.avgTime*maxCostFactor {
-					max = r.avgTime * maxCostFactor
-					r.servingTime = max / gf
-				}
-				if r.avgTime > max {
-					max = r.avgTime
-				}
 				dt := float64(now - expUpdate)
 				expUpdate = now
-				gfUsage = gfUsage*math.Exp(-dt/float64(gfUsageTC)) + max*1000000/float64(gfUsageTC)
+				exp := math.Exp(-dt / float64(gfUsageTC))
+				// calculate gf correction until now, based on previous values
+				var gfCorr float64
+				max := recentTime
+				if recentAvg > max {
+					max = recentAvg
+				}
+				// we apply continous correction when MAX(recentTime, recentAvg) > threshold
+				if max > threshold {
+					// calculate correction time between last expUpdate and now
+					if max*exp >= threshold {
+						gfCorr = dt
+					} else {
+						gfCorr = math.Log(max/threshold) * float64(gfUsageTC)
+					}
+					// calculate log(gf) correction with the right direction and time constant
+					if recentTime > recentAvg {
+						// drop gf if actual serving times are larger than average estimates
+						gfCorr /= -float64(gfDropTC)
+					} else {
+						// raise gf if actual serving times are smaller than average estimates
+						gfCorr /= float64(gfRaiseTC)
+					}
+				}
+				// update recent cost values with current request
+				recentTime = recentTime*exp + r.servingTime
+				recentAvg = recentAvg*exp + r.avgTime/gf
 
-				if gfUsage >= gfUsageThreshold*totalRecharge {
-					gfSum += r.avgTime
-					gfWeight += r.servingTime
+				if gfCorr != 0 {
+					gfLog += gfCorr
+					gf = math.Exp(gfLog)
 					if time.Duration(now-lastUpdate) > time.Second {
-						gf = gfSum / gfWeight
 						totalRecharge = ct.utilTarget * gf
-						if gfWeight >= float64(gfMaxWeight) {
-							gfSum = gf * float64(gfMaxWeight)
-							gfWeight = float64(gfMaxWeight)
-						}
 						lastUpdate = now
 						ct.gfLock.Lock()
 						ct.gf = gf
@@ -288,10 +297,11 @@ func (ct *costTracker) gfLoop() {
 							default:
 							}
 						}
-						log.Debug("global cost factor updated", "gf", gf, "weight", time.Duration(gfWeight))
+						log.Debug("global cost factor updated", "gf", gf)
 					}
 				}
-				ct.logRecentUsage.Update(gfUsage)
+				ct.logRecentTime.Update(recentTime)
+				ct.logRecentAvg.Update(recentAvg)
 				ct.logTotalRecharge.Update(totalRecharge)
 
 			case <-saveTicker.C:
