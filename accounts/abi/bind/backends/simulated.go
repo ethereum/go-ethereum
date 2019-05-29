@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/paxosglobal/go-ethereum"
 	"math/big"
 	"sync"
 	"time"

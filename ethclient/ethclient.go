@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/paxosglobal/go-ethereum"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum"
