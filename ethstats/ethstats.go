@@ -644,7 +644,7 @@ func (s *Service) reportPending(conn *websocket.Conn) error {
 	if s.eth != nil {
 		pending, _ = s.eth.TxPool().Stats()
 	} else {
-		pending = s.les.TxPool().Stats()
+		pending, _ = s.les.TxPool().GetPending()
 	}
 	// Assemble the transaction stats and send it to the server
 	log.Trace("Sending pending transactions to ethstats", "count", pending)

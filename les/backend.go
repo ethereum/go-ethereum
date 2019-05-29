@@ -140,7 +140,10 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
 
-	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
+	if config.TxPool.Journal != "" {
+		config.TxPool.Journal = ctx.ResolvePath(config.TxPool.Journal)
+	}
+	leth.txPool = light.NewTxPool(config.TxPool, leth.chainConfig, leth.blockchain, leth.relay)
 
 	if leth.protocolManager, err = NewProtocolManager(
 		leth.chainConfig,

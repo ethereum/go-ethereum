@@ -58,6 +58,13 @@ type testOdr struct {
 	indexerConfig *IndexerConfig
 	sdb, ldb      ethdb.Database
 	disable       bool
+
+	// Test hooks
+	isBlockHookTarget func(common.Hash) bool
+	blockHook         func(common.Hash) []byte
+
+	isStatusHookTarget func(common.Hash) bool
+	StatusHook         func(common.Hash) TxStatus
 }
 
 func (odr *testOdr) Database() ethdb.Database {
@@ -70,11 +77,17 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 	if odr.disable {
 		return ErrOdrDisabled
 	}
+	var nostore bool
 	switch req := req.(type) {
 	case *BlockRequest:
-		number := rawdb.ReadHeaderNumber(odr.sdb, req.Hash)
-		if number != nil {
-			req.Rlp = rawdb.ReadBodyRLP(odr.sdb, req.Hash, *number)
+		if odr.isBlockHookTarget != nil && odr.isBlockHookTarget(req.Hash) && odr.blockHook != nil {
+			req.Rlp = odr.blockHook(req.Hash)
+			nostore = true
+		} else {
+			number := rawdb.ReadHeaderNumber(odr.sdb, req.Hash)
+			if number != nil {
+				req.Rlp = rawdb.ReadBodyRLP(odr.sdb, req.Hash, *number)
+			}
 		}
 	case *ReceiptsRequest:
 		number := rawdb.ReadHeaderNumber(odr.sdb, req.Hash)
@@ -88,8 +101,24 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 		req.Proof = nodes
 	case *CodeRequest:
 		req.Data, _ = odr.sdb.Get(req.Hash[:])
+	case *TxStatusRequest:
+		var status []TxStatus
+		for _, hash := range req.Hashes {
+			if odr.isStatusHookTarget != nil && odr.isStatusHookTarget(hash) && odr.StatusHook != nil {
+				status = append(status, odr.StatusHook(hash))
+			} else {
+				if tx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(odr.sdb, hash); tx != nil {
+					status = append(status, TxStatus{Status: core.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, BlockIndex: blockNumber, Index: txIndex}})
+				} else {
+					status = append(status, TxStatus{Status: core.TxStatusUnknown})
+				}
+			}
+		}
+		req.Status = status
 	}
-	req.StoreResult(odr.ldb)
+	if !nostore {
+		req.StoreResult(odr.ldb)
+	}
 	return nil
 }
 

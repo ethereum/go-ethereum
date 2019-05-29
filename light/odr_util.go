@@ -229,6 +229,15 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bitIdx uint, sectionIdxLi
 	}
 }
 
+// GetTransactionStatus retrieves the status of a batch of transaction.
+func GetTransactionStatus(ctx context.Context, odr OdrBackend, hashes []common.Hash) ([]TxStatus, error) {
+	r := &TxStatusRequest{Hashes: hashes}
+	if err := odr.Retrieve(ctx, r); err != nil {
+		return nil, err
+	}
+	return r.Status, nil
+}
+
 // GetTransaction retrieves a canonical transaction by hash and also returns its position in the chain
 func GetTransaction(ctx context.Context, odr OdrBackend, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
 	r := &TxStatusRequest{Hashes: []common.Hash{txHash}}

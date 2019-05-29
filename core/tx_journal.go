@@ -40,23 +40,23 @@ type devNull struct{}
 func (*devNull) Write(p []byte) (n int, err error) { return len(p), nil }
 func (*devNull) Close() error                      { return nil }
 
-// txJournal is a rotating log of transactions with the aim of storing locally
+// TxJournal is a rotating log of transactions with the aim of storing locally
 // created transactions to allow non-executed ones to survive node restarts.
-type txJournal struct {
+type TxJournal struct {
 	path   string         // Filesystem path to store the transactions at
 	writer io.WriteCloser // Output stream to write new transactions into
 }
 
-// newTxJournal creates a new transaction journal to
-func newTxJournal(path string) *txJournal {
-	return &txJournal{
+// NewTxJournal creates a new transaction journal to
+func NewTxJournal(path string) *TxJournal {
+	return &TxJournal{
 		path: path,
 	}
 }
 
-// load parses a transaction journal dump from disk, loading its contents into
+// Load parses a transaction journal dump from disk, loading its contents into
 // the specified pool.
-func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
+func (journal *TxJournal) Load(add func([]*types.Transaction) []error) error {
 	// Skip the parsing if the journal file doesn't exist at all
 	if _, err := os.Stat(journal.path); os.IsNotExist(err) {
 		return nil
@@ -116,8 +116,8 @@ func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
 	return failure
 }
 
-// insert adds the specified transaction to the local disk journal.
-func (journal *txJournal) insert(tx *types.Transaction) error {
+// Insert adds the specified transaction to the local disk journal.
+func (journal *TxJournal) Insert(tx *types.Transaction) error {
 	if journal.writer == nil {
 		return errNoActiveJournal
 	}
@@ -127,9 +127,9 @@ func (journal *txJournal) insert(tx *types.Transaction) error {
 	return nil
 }
 
-// rotate regenerates the transaction journal based on the current contents of
+// Rotate regenerates the transaction journal based on the current contents of
 // the transaction pool.
-func (journal *txJournal) rotate(all map[common.Address]types.Transactions) error {
+func (journal *TxJournal) Rotate(all map[common.Address]types.Transactions) error {
 	// Close the current journal (if any is open)
 	if journal.writer != nil {
 		if err := journal.writer.Close(); err != nil {
@@ -168,8 +168,8 @@ func (journal *txJournal) rotate(all map[common.Address]types.Transactions) erro
 	return nil
 }
 
-// close flushes the transaction journal contents to disk and closes the file.
-func (journal *txJournal) close() error {
+// Close flushes the transaction journal contents to disk and closes the file.
+func (journal *TxJournal) Close() error {
 	var err error
 
 	if journal.writer != nil {

@@ -464,7 +464,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 	send = send.add("genesisHash", genesis)
 	if server != nil {
 		if !server.onlyAnnounce {
-			//only announce server. It sends only announse requests
+			// only announce server. It sends only announse requests
 			send = send.add("serveHeaders", nil)
 			send = send.add("serveChainSince", uint64(0))
 			send = send.add("serveStateSince", uint64(0))
@@ -482,7 +482,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		p.fcCosts = costList.decode(ProtocolLengths[uint(p.version)])
 		p.fcParams = server.defParams
 	} else {
-		//on client node
+		// on client node
 		p.announceType = announceTypeSimple
 		if p.isTrusted {
 			p.announceType = announceTypeSigned
@@ -538,22 +538,18 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 			return errResp(ErrUselessPeer, "wanted client, got server")
 		}*/
 		if recv.get("announceType", &p.announceType) != nil {
-			//set default announceType on server side
+			// set default announceType on server side
 			p.announceType = announceTypeSimple
 		}
 		p.fcClient = flowcontrol.NewClientNode(server.fcManager, server.defParams)
 	} else {
-		//mark OnlyAnnounce server if "serveHeaders", "serveChainSince", "serveStateSince" or "txRelay" fields don't exist
-		if recv.get("serveChainSince", nil) != nil {
-			p.isOnlyAnnounce = true
+		// mark OnlyAnnounce server if "serveHeaders", "serveChainSince", "serveStateSince" or "txRelay" fields don't exist
+		serviceList := []string{"serveHeaders", "serveChainSince", "serveStateSince", "txRelay"}
+		for i := 0; i < len(serviceList); i++ {
+			if recv.get(serviceList[i], nil) != nil {
+				p.isOnlyAnnounce = true
+			}
 		}
-		if recv.get("serveStateSince", nil) != nil {
-			p.isOnlyAnnounce = true
-		}
-		if recv.get("txRelay", nil) != nil {
-			p.isOnlyAnnounce = true
-		}
-
 		if p.isOnlyAnnounce && !p.isTrusted {
 			return errResp(ErrUselessPeer, "peer cannot serve requests")
 		}
