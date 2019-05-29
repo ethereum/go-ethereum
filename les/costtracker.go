@@ -169,8 +169,8 @@ func (ct *costTracker) stop() {
 // makeCostList returns upper cost estimates based on the hardcoded cost estimate
 // tables and the optionally specified incoming/outgoing bandwidth limits
 func (ct *costTracker) makeCostList(globalFactor float64) RequestCostList {
-	maxCost := func(avgTime, inSize, outSize uint64) uint64 {
-		cost := avgTime * maxCostFactor
+	maxCost := func(avgTimeCost, inSize, outSize uint64) uint64 {
+		cost := avgTimeCost * maxCostFactor
 		inSizeCost := uint64(float64(inSize) * ct.inSizeFactor * globalFactor)
 		if inSizeCost > cost {
 			cost = inSizeCost
@@ -205,7 +205,7 @@ func (ct *costTracker) makeCostList(globalFactor float64) RequestCostList {
 }
 
 type gfUpdate struct {
-	avgTime, servingTime float64
+	avgTimeCost, servingTime float64
 }
 
 // gfLoop starts an event loop which updates the global cost factor which is
@@ -245,11 +245,11 @@ func (ct *costTracker) gfLoop() {
 			select {
 			case r := <-ct.gfUpdateCh:
 				now := mclock.Now()
-				if ct.logRelCost != nil && r.avgTime > 1e-20 {
-					ct.logRelCost.Update(r.servingTime * gf / r.avgTime)
+				if ct.logRelCost != nil && r.avgTimeCost > 1e-20 {
+					ct.logRelCost.Update(r.servingTime * gf / r.avgTimeCost)
 				}
 				if r.servingTime > 1000000000 {
-					ct.logger.Event(fmt.Sprintf("Very long servingTime = %f  avgTime = %f  costFactor = %f", r.servingTime, r.avgTime, gf))
+					ct.logger.Event(fmt.Sprintf("Very long servingTime = %f  avgTimeCost = %f  costFactor = %f", r.servingTime, r.avgTimeCost, gf))
 				}
 				dt := float64(now - expUpdate)
 				expUpdate = now
@@ -279,7 +279,7 @@ func (ct *costTracker) gfLoop() {
 				}
 				// update recent cost values with current request
 				recentTime = recentTime*exp + r.servingTime
-				recentAvg = recentAvg*exp + r.avgTime/gf
+				recentAvg = recentAvg*exp + r.avgTimeCost/gf
 
 				if gfCorr != 0 {
 					gfLog += gfCorr
@@ -347,15 +347,15 @@ func (ct *costTracker) subscribeTotalRecharge(ch chan uint64) uint64 {
 // average estimate statistics
 func (ct *costTracker) updateStats(code, amount, servingTime, realCost uint64) {
 	avg := reqAvgTimeCost[code]
-	avgTime := avg.baseCost + amount*avg.reqCost
+	avgTimeCost := avg.baseCost + amount*avg.reqCost
 	select {
-	case ct.gfUpdateCh <- gfUpdate{float64(avgTime), float64(servingTime)}:
+	case ct.gfUpdateCh <- gfUpdate{float64(avgTimeCost), float64(servingTime)}:
 	default:
 	}
 	if makeCostStats {
 		realCost <<= 4
 		l := 0
-		for l < 9 && realCost > avgTime {
+		for l < 9 && realCost > avgTimeCost {
 			l++
 			realCost >>= 1
 		}
