@@ -290,6 +290,7 @@ func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
 
 // Stop stops the LES service
 func (s *LesServer) Stop() {
+	s.fcManager.Stop()
 	s.chtIndexer.Close()
 	// bloom trie indexer is closed by parent bloombits indexer
 	go func() {

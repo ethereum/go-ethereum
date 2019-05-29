@@ -61,6 +61,7 @@ type ClientManager struct {
 	clock     mclock.Clock
 	lock      sync.Mutex
 	enabledCh chan struct{}
+	stop      chan chan struct{}
 
 	curve                                      PieceWiseLinear
 	sumRecharge, totalRecharge, totalConnected uint64
@@ -109,11 +110,33 @@ func NewClientManager(curve PieceWiseLinear, clock mclock.Clock) *ClientManager 
 		clock:         clock,
 		rcQueue:       prque.New(func(a interface{}, i int) { a.(*ClientNode).queueIndex = i }),
 		capLastUpdate: clock.Now(),
+		stop:          make(chan chan struct{}),
 	}
 	if curve != nil {
 		cm.SetRechargeCurve(curve)
 	}
+	go func() {
+		// regularly recalculate and update total capacity
+		for {
+			select {
+			case <-time.After(time.Minute):
+				cm.lock.Lock()
+				cm.updateTotalCapacity(cm.clock.Now(), true)
+				cm.lock.Unlock()
+			case stop := <-cm.stop:
+				close(stop)
+				return
+			}
+		}
+	}()
 	return cm
+}
+
+// Stop stops the client manager
+func (cm *ClientManager) Stop() {
+	stop := make(chan struct{})
+	cm.stop <- stop
+	<-stop
 }
 
 // SetRechargeCurve updates the recharge curve
