@@ -85,7 +85,7 @@ type TransactionReader interface {
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 
 	// Same as TransactionByHash but returns the BlockNum
-	TransactionByHashWithBlockNum(ctx context.Context, hash common.Hash) (tx *types.Transaction, BlockNumber string, err error)
+	TransactionByHashWithBlockNum(ctx context.Context, hash common.Hash) (tx *types.Transaction, blockHexString string, err error)
 }
 
 // ChainStateReader wraps access to the state trie of the canonical blockchain. Note that
