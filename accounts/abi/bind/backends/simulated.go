@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/paxosglobal/go-ethereum"
 	"github.com/paxosglobal/go-ethereum/common/hexutil"
 	"math/big"
 	"sync"
