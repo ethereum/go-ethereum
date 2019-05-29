@@ -36,47 +36,39 @@ func (t AbsTime) Add(d time.Duration) AbsTime {
 	return t + AbsTime(d)
 }
 
-// Clock interface makes it possible to replace the monotonic system clock with
+// The Clock interface makes it possible to replace the monotonic system clock with
 // a simulated clock.
 type Clock interface {
 	Now() AbsTime
 	Sleep(time.Duration)
 	After(time.Duration) <-chan time.Time
-	AfterFunc(d time.Duration, f func()) Event
+	AfterFunc(d time.Duration, f func()) Timer
 }
 
-// Event represents a cancellable event returned by AfterFunc
-type Event interface {
-	Cancel() bool
+// Timer represents a cancellable event returned by AfterFunc
+type Timer interface {
+	Stop() bool
 }
 
 // System implements Clock using the system clock.
 type System struct{}
 
-// Now implements Clock.
+// Now returns the current monotonic time.
 func (System) Now() AbsTime {
 	return AbsTime(monotime.Now())
 }
 
-// Sleep implements Clock.
+// Sleep blocks for the given duration.
 func (System) Sleep(d time.Duration) {
 	time.Sleep(d)
 }
 
-// After implements Clock.
+// After returns a channel which receives the current time after d has elapsed.
 func (System) After(d time.Duration) <-chan time.Time {
 	return time.After(d)
 }
 
-// AfterFunc implements Clock.
-func (System) AfterFunc(d time.Duration, f func()) Event {
-	return (*SystemEvent)(time.AfterFunc(d, f))
-}
-
-// SystemEvent implements Event using time.Timer.
-type SystemEvent time.Timer
-
-// Cancel implements Event.
-func (e *SystemEvent) Cancel() bool {
-	return (*time.Timer)(e).Stop()
+// AfterFunc runs f on a new goroutine after the duration has elapsed.
+func (System) AfterFunc(d time.Duration, f func()) Timer {
+	return time.AfterFunc(d, f)
 }
