@@ -260,7 +260,7 @@ func (ct *costTracker) gfLoop() {
 				if recentAvg > max {
 					max = recentAvg
 				}
-				// we apply continous correction when MAX(recentTime, recentAvg) > threshold
+				// we apply continuous correction when MAX(recentTime, recentAvg) > threshold
 				if max > threshold {
 					// calculate correction time between last expUpdate and now
 					if max*exp >= threshold {
