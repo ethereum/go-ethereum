@@ -171,7 +171,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 	if lightSync {
 		indexConfig = light.TestClientIndexerConfig
 	}
-	pm, err := NewProtocolManager(gspec.Config, indexConfig, lightSync, NetworkId, evmux, engine, peers, chain, pool, db, odr, nil, nil, make(chan struct{}), new(sync.WaitGroup), ulcConfig, func() bool { return true })
+	pm, err := NewProtocolManager(gspec.Config, indexConfig, lightSync, NetworkID, evmux, engine, peers, chain, pool, db, odr, nil, nil, make(chan struct{}), new(sync.WaitGroup), ulcConfig, func() bool { return true })
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +220,7 @@ func newTestPeer(t *testing.T, name string, version int, pm *ProtocolManager, sh
 	var id enode.ID
 	rand.Read(id[:])
 
-	peer := pm.newPeer(version, NetworkId, p2p.NewPeer(id, name, nil), net)
+	peer := pm.newPeer(version, NetworkID, p2p.NewPeer(id, name, nil), net)
 
 	// Start the peer on a new thread
 	errc := make(chan error, 1)
@@ -257,8 +257,8 @@ func newTestPeerPair(name string, version int, pm, pm2 *ProtocolManager) (*peer,
 	var id enode.ID
 	rand.Read(id[:])
 
-	peer := pm.newPeer(version, NetworkId, p2p.NewPeer(id, name, nil), net)
-	peer2 := pm2.newPeer(version, NetworkId, p2p.NewPeer(id, name, nil), app)
+	peer := pm.newPeer(version, NetworkID, p2p.NewPeer(id, name, nil), net)
+	peer2 := pm2.newPeer(version, NetworkID, p2p.NewPeer(id, name, nil), app)
 
 	// Start the peer on a new thread
 	errc := make(chan error, 1)
@@ -287,7 +287,7 @@ func newTestPeerPair(name string, version int, pm, pm2 *ProtocolManager) (*peer,
 func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, testCost uint64) {
 	var expList keyValueList
 	expList = expList.add("protocolVersion", uint64(p.version))
-	expList = expList.add("networkId", uint64(NetworkId))
+	expList = expList.add("networkId", uint64(NetworkID))
 	expList = expList.add("headTd", td)
 	expList = expList.add("headHash", head)
 	expList = expList.add("headNum", headNum)

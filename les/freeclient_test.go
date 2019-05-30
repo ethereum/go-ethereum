@@ -51,7 +51,7 @@ func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 		peerAddress = func(i int) string {
 			return fmt.Sprintf("addr #%d", i)
 		}
-		peerId = func(i int) string {
+		peerID = func(i int) string {
 			return fmt.Sprintf("id #%d", i)
 		}
 		disconnFn = func(id string) {
@@ -67,14 +67,14 @@ func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 
 	// pool should accept new peers up to its connected limit
 	for i := 0; i < connLimit; i++ {
-		if pool.connect(peerAddress(i), peerId(i)) {
+		if pool.connect(peerAddress(i), peerID(i)) {
 			connected[i] = true
 		} else {
 			t.Fatalf("Test peer #%d rejected", i)
 		}
 	}
 	// since all accepted peers are new and should not be kicked out, the next one should be rejected
-	if pool.connect(peerAddress(connLimit), peerId(connLimit)) {
+	if pool.connect(peerAddress(connLimit), peerID(connLimit)) {
 		connected[connLimit] = true
 		t.Fatalf("Peer accepted over connected limit")
 	}
@@ -89,7 +89,7 @@ func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 			connected[i] = false
 			connTicks[i] += tickCounter
 		} else {
-			if pool.connect(peerAddress(i), peerId(i)) {
+			if pool.connect(peerAddress(i), peerID(i)) {
 				connected[i] = true
 				connTicks[i] -= tickCounter
 			}
@@ -135,7 +135,7 @@ func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 
 	// try connecting all known peers (connLimit should be filled up)
 	for i := 0; i < clientCount; i++ {
-		pool.connect(peerAddress(i), peerId(i))
+		pool.connect(peerAddress(i), peerID(i))
 	}
 	// expect pool to remember known nodes and kick out one of them to accept a new one
 	if !pool.connect("newAddr2", "newId2") {

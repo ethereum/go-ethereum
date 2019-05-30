@@ -39,37 +39,44 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-type LesApiBackend struct {
+// ClientBackend is a backend implementation for the light Client only
+type ClientBackend struct {
 	extRPCEnabled bool
 	eth           *LightEthereum
 	gpo           *gasprice.Oracle
 }
 
-func (b *LesApiBackend) ChainConfig() *params.ChainConfig {
+// ChainConfig returns the LightEthereum service config
+func (b *ClientBackend) ChainConfig() *params.ChainConfig {
 	return b.eth.chainConfig
 }
 
-func (b *LesApiBackend) CurrentBlock() *types.Block {
+// CurrentBlock returns the LightEthereum service chain current header block
+func (b *ClientBackend) CurrentBlock() *types.Block {
 	return types.NewBlockWithHeader(b.eth.BlockChain().CurrentHeader())
 }
 
-func (b *LesApiBackend) SetHead(number uint64) {
+// SetHead cancels the downloader and sets the head to a certain number
+func (b *ClientBackend) SetHead(number uint64) {
 	b.eth.protocolManager.downloader.Cancel()
 	b.eth.blockchain.SetHead(number)
 }
 
-func (b *LesApiBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
+// HeaderByNumber returns either the chain's current header or an on-demand-requested header, given a block number
+func (b *ClientBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
 	if blockNr == rpc.LatestBlockNumber || blockNr == rpc.PendingBlockNumber {
 		return b.eth.blockchain.CurrentHeader(), nil
 	}
 	return b.eth.blockchain.GetHeaderByNumberOdr(ctx, uint64(blockNr))
 }
 
-func (b *LesApiBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
+// HeaderByHash returns a block header for the given block hash
+func (b *ClientBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
 	return b.eth.blockchain.GetHeaderByHash(hash), nil
 }
 
-func (b *LesApiBackend) BlockByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Block, error) {
+// BlockByNumber identifies a header by number and then returns the block with the corresponding block hash
+func (b *ClientBackend) BlockByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Block, error) {
 	header, err := b.HeaderByNumber(ctx, blockNr)
 	if header == nil || err != nil {
 		return nil, err
@@ -77,7 +84,8 @@ func (b *LesApiBackend) BlockByNumber(ctx context.Context, blockNr rpc.BlockNumb
 	return b.GetBlock(ctx, header.Hash())
 }
 
-func (b *LesApiBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
+// StateAndHeaderByNumber identifies a block header by the supplied number, then returns that header's associated state and the header itself
+func (b *ClientBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	header, err := b.HeaderByNumber(ctx, blockNr)
 	if err != nil {
 		return nil, nil, err
@@ -88,123 +96,157 @@ func (b *LesApiBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.
 	return light.NewState(ctx, header, b.eth.odr), header, nil
 }
 
-func (b *LesApiBackend) GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error) {
+// GetBlock returns a block identified by block hash
+func (b *ClientBackend) GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error) {
 	return b.eth.blockchain.GetBlockByHash(ctx, blockHash)
 }
 
-func (b *LesApiBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
+// GetReceipts returns a set of receipts for a block, identified by the supplied hash
+func (b *ClientBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
 		return light.GetBlockReceipts(ctx, b.eth.odr, hash, *number)
 	}
 	return nil, nil
 }
 
-func (b *LesApiBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
+// GetLogs identifies the block header number given the supplied hash and then returns the block logs
+func (b *ClientBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
 	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
 		return light.GetBlockLogs(ctx, b.eth.odr, hash, *number)
 	}
 	return nil, nil
 }
 
-func (b *LesApiBackend) GetTd(hash common.Hash) *big.Int {
+// GetTd retrieves a block's total difficulty in the canonical chain by hash
+func (b *ClientBackend) GetTd(hash common.Hash) *big.Int {
 	return b.eth.blockchain.GetTdByHash(hash)
 }
 
-func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header) (*vm.EVM, func() error, error) {
+// GetEVM creates an EVM initialised with an account and balance from the supplied message
+func (b *ClientBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header) (*vm.EVM, func() error, error) {
 	state.SetBalance(msg.From(), math.MaxBig256)
 	context := core.NewEVMContext(msg, header, b.eth.blockchain, nil)
 	return vm.NewEVM(context, state, b.eth.chainConfig, vm.Config{}), state.Error, nil
 }
 
-func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
+// SendTx add the transaction to the local transaction pool
+func (b *ClientBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	return b.eth.txPool.Add(ctx, signedTx)
 }
 
-func (b *LesApiBackend) RemoveTx(txHash common.Hash) {
+// RemoveTx removes a transaction from the local transaction pool
+func (b *ClientBackend) RemoveTx(txHash common.Hash) {
 	b.eth.txPool.RemoveTx(txHash)
 }
 
-func (b *LesApiBackend) GetPoolTransactions() (types.Transactions, error) {
+// GetPoolTransactions returns all currently processable transactions.
+func (b *ClientBackend) GetPoolTransactions() (types.Transactions, error) {
 	return b.eth.txPool.GetTransactions()
 }
 
-func (b *LesApiBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction {
+// GetPoolTransaction returns a transaction if it is contained in the pool and nil otherwise.
+func (b *ClientBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction {
 	return b.eth.txPool.GetTransaction(txHash)
 }
 
-func (b *LesApiBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+// GetTransaction retrieves a canonical transaction by hash and also returns its position in the chain
+func (b *ClientBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
 	return light.GetTransaction(ctx, b.eth.odr, txHash)
 }
 
-func (b *LesApiBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
+// GetPoolNonce returns the "pending" nonce of a given address. It always queries
+// the nonce belonging to the latest header too in order to detect if another
+// client using the same key sent a transaction.
+func (b *ClientBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
 	return b.eth.txPool.GetNonce(ctx, addr)
 }
 
-func (b *LesApiBackend) Stats() (pending int, queued int) {
+// Stats returns the number of currently pending (locally created) transactions
+func (b *ClientBackend) Stats() (pending int, queued int) {
 	return b.eth.txPool.Stats(), 0
 }
 
-func (b *LesApiBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
+// TxPoolContent retrieves the data content of the transaction pool, returning all the
+// pending as well as queued transactions, grouped by account and nonce.
+func (b *ClientBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
 	return b.eth.txPool.Content()
 }
 
-func (b *LesApiBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+// SubscribeNewTxsEvent registers a subscription of core.NewTxsEvent and
+// starts sending event to the given channel.
+func (b *ClientBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
 	return b.eth.txPool.SubscribeNewTxsEvent(ch)
 }
 
-func (b *LesApiBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
+// SubscribeChainEvent registers a subscription of ChainEvent.
+func (b *ClientBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	return b.eth.blockchain.SubscribeChainEvent(ch)
 }
 
-func (b *LesApiBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
+// SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
+func (b *ClientBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return b.eth.blockchain.SubscribeChainHeadEvent(ch)
 }
 
-func (b *LesApiBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
+// SubscribeChainSideEvent registers a subscription of ChainSideEvent.
+func (b *ClientBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
 	return b.eth.blockchain.SubscribeChainSideEvent(ch)
 }
 
-func (b *LesApiBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
+// SubscribeLogsEvent implements the interface of filters.Backend
+// LightChain does not send logs events, so return an empty subscription.
+func (b *ClientBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return b.eth.blockchain.SubscribeLogsEvent(ch)
 }
 
-func (b *LesApiBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
+// SubscribeRemovedLogsEvent implements the interface of filters.Backend
+// LightChain does not send core.RemovedLogsEvent, so return an empty subscription.
+func (b *ClientBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return b.eth.blockchain.SubscribeRemovedLogsEvent(ch)
 }
 
-func (b *LesApiBackend) Downloader() *downloader.Downloader {
+// Downloader returns the LightEthereum downloader
+func (b *ClientBackend) Downloader() *downloader.Downloader {
 	return b.eth.Downloader()
 }
 
-func (b *LesApiBackend) ProtocolVersion() int {
+// ProtocolVersion return the Les version number offset by 10000
+func (b *ClientBackend) ProtocolVersion() int {
 	return b.eth.LesVersion() + 10000
 }
 
-func (b *LesApiBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
+// SuggestPrice returns the gas price oracle price suggestion
+func (b *ClientBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	return b.gpo.SuggestPrice(ctx)
 }
 
-func (b *LesApiBackend) ChainDb() ethdb.Database {
+// ChainDb returns the ClientBackend db representation
+func (b *ClientBackend) ChainDb() ethdb.Database {
 	return b.eth.chainDb
 }
 
-func (b *LesApiBackend) EventMux() *event.TypeMux {
+// EventMux ...
+func (b *ClientBackend) EventMux() *event.TypeMux {
 	return b.eth.eventMux
 }
 
-func (b *LesApiBackend) AccountManager() *accounts.Manager {
+// AccountManager returns an overarching account manager needed for signing transactions
+func (b *ClientBackend) AccountManager() *accounts.Manager {
 	return b.eth.accountManager
 }
 
-func (b *LesApiBackend) ExtRPCEnabled() bool {
+// ExtRPCEnabled indicates if the external RPC API is enabled
+func (b *ClientBackend) ExtRPCEnabled() bool {
 	return b.extRPCEnabled
 }
 
-func (b *LesApiBackend) RPCGasCap() *big.Int {
+// RPCGasCap - return the  global gas cap for eth_call over rpc (DoS protection)
+func (b *ClientBackend) RPCGasCap() *big.Int {
 	return b.eth.config.RPCGasCap
 }
 
-func (b *LesApiBackend) BloomStatus() (uint64, uint64) {
+// BloomStatus ..
+func (b *ClientBackend) BloomStatus() (uint64, uint64) {
 	if b.eth.bloomIndexer == nil {
 		return 0, 0
 	}
@@ -212,7 +254,8 @@ func (b *LesApiBackend) BloomStatus() (uint64, uint64) {
 	return params.BloomBitsBlocksClient, sections
 }
 
-func (b *LesApiBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
+// ServiceFilter ...
+func (b *ClientBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
 	for i := 0; i < bloomFilterThreads; i++ {
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}

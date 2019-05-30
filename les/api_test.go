@@ -90,15 +90,15 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 		}
 		server := servers[0]
 
-		clientRpcClients := make([]*rpc.Client, len(clients))
+		clientRPCClients := make([]*rpc.Client, len(clients))
 
-		serverRpcClient, err := server.Client()
+		serverRPCClient, err := server.Client()
 		if err != nil {
 			t.Fatalf("Failed to obtain rpc client: %v", err)
 		}
-		headNum, headHash := getHead(ctx, t, serverRpcClient)
-		totalCap := getTotalCap(ctx, t, serverRpcClient)
-		minCap := getMinCap(ctx, t, serverRpcClient)
+		headNum, headHash := getHead(ctx, t, serverRPCClient)
+		totalCap := getTotalCap(ctx, t, serverRPCClient)
+		minCap := getMinCap(ctx, t, serverRPCClient)
 		testCap := totalCap * 3 / 4
 		fmt.Printf("Server testCap: %d  minCap: %d  head number: %d  head hash: %064x\n", testCap, minCap, headNum, headHash)
 		reqMinCap := uint64(float64(testCap) * minRelCap / (minRelCap + float64(len(clients)-1)))
@@ -107,18 +107,18 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 		}
 
 		freeIdx := rand.Intn(len(clients))
-		freeCap := getFreeCap(ctx, t, serverRpcClient)
+		freeCap := getFreeCap(ctx, t, serverRPCClient)
 
 		for i, client := range clients {
 			var err error
-			clientRpcClients[i], err = client.Client()
+			clientRPCClients[i], err = client.Client()
 			if err != nil {
 				t.Fatalf("Failed to obtain rpc client: %v", err)
 			}
 
 			fmt.Println("connecting client", i)
 			if i != freeIdx {
-				setCapacity(ctx, t, serverRpcClient, client.ID(), testCap/uint64(len(clients)))
+				setCapacity(ctx, t, serverRPCClient, client.ID(), testCap/uint64(len(clients)))
 			}
 			net.Connect(client.ID(), server.ID())
 
@@ -128,7 +128,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 					t.Fatalf("Timeout")
 				default:
 				}
-				num, hash := getHead(ctx, t, clientRpcClients[i])
+				num, hash := getHead(ctx, t, clientRPCClients[i])
 				if num == headNum && hash == headHash {
 					fmt.Println("client", i, "synced")
 					break
@@ -140,9 +140,9 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 		var wg sync.WaitGroup
 		stop := make(chan struct{})
 
-		reqCount := make([]uint64, len(clientRpcClients))
+		reqCount := make([]uint64, len(clientRPCClients))
 
-		for i, c := range clientRpcClients {
+		for i, c := range clientRPCClients {
 			wg.Add(1)
 			i, c := i, c
 			go func() {
@@ -194,7 +194,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 
 		weights := make([]float64, len(clients))
 		for c := 0; c < 5; c++ {
-			setCapacity(ctx, t, serverRpcClient, clients[freeIdx].ID(), freeCap)
+			setCapacity(ctx, t, serverRPCClient, clients[freeIdx].ID(), freeCap)
 			freeIdx = rand.Intn(len(clients))
 			var sum float64
 			for i := range clients {
@@ -208,15 +208,15 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 			for i, client := range clients {
 				weights[i] *= float64(testCap-freeCap-100) / sum
 				capacity := uint64(weights[i])
-				if i != freeIdx && capacity < getCapacity(ctx, t, serverRpcClient, client.ID()) {
-					setCapacity(ctx, t, serverRpcClient, client.ID(), capacity)
+				if i != freeIdx && capacity < getCapacity(ctx, t, serverRPCClient, client.ID()) {
+					setCapacity(ctx, t, serverRPCClient, client.ID(), capacity)
 				}
 			}
-			setCapacity(ctx, t, serverRpcClient, clients[freeIdx].ID(), 0)
+			setCapacity(ctx, t, serverRPCClient, clients[freeIdx].ID(), 0)
 			for i, client := range clients {
 				capacity := uint64(weights[i])
-				if i != freeIdx && capacity > getCapacity(ctx, t, serverRpcClient, client.ID()) {
-					setCapacity(ctx, t, serverRpcClient, client.ID(), capacity)
+				if i != freeIdx && capacity > getCapacity(ctx, t, serverRPCClient, client.ID()) {
+					setCapacity(ctx, t, serverRPCClient, client.ID(), capacity)
 				}
 			}
 			weights[freeIdx] = float64(freeCap)
@@ -239,7 +239,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 				default:
 				}
 
-				totalCap = getTotalCap(ctx, t, serverRpcClient)
+				totalCap = getTotalCap(ctx, t, serverRPCClient)
 				if totalCap < testCap {
 					fmt.Println("Total capacity underrun")
 					close(stop)
@@ -520,6 +520,6 @@ func newLesServerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	ethereum.AddLesServer(server)
-	return ethereum, nil
+
+	return server, nil
 }

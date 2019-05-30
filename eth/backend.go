@@ -51,14 +51,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-type LesServer interface {
-	Start(srvr *p2p.Server)
-	Stop()
-	APIs() []rpc.API
-	Protocols() []p2p.Protocol
-	SetBloomBitsIndexer(bbIndexer *core.ChainIndexer)
-}
-
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
 	config *Config
@@ -70,7 +62,6 @@ type Ethereum struct {
 	txPool          *core.TxPool
 	blockchain      *core.BlockChain
 	protocolManager *ProtocolManager
-	lesServer       LesServer
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -92,11 +83,6 @@ type Ethereum struct {
 	netRPCService *ethapi.PublicNetAPI
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
-}
-
-func (s *Ethereum) AddLesServer(ls LesServer) {
-	s.lesServer = ls
-	ls.SetBloomBitsIndexer(s.bloomIndexer)
 }
 
 // New creates a new Ethereum object (including the
@@ -256,15 +242,13 @@ func CreateConsensusEngine(ctx *node.ServiceContext, chainConfig *params.ChainCo
 	}
 }
 
+
+
 // APIs return the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
 	apis := ethapi.GetAPIs(s.APIBackend)
 
-	// Append any APIs exposed explicitly by the les server
-	if s.lesServer != nil {
-		apis = append(apis, s.lesServer.APIs()...)
-	}
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
 
@@ -315,6 +299,11 @@ func (s *Ethereum) APIs() []rpc.API {
 			Public:    true,
 		},
 	}...)
+}
+// GetBloomIndexer returns the bloombits indexer, primarily
+// so that the Les Server service can re-use it
+func (s *Ethereum) GetBloomIndexer() *core.ChainIndexer {
+	return s.bloomIndexer
 }
 
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
@@ -485,10 +474,7 @@ func (s *Ethereum) Synced() bool                       { return atomic.LoadUint3
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.
 func (s *Ethereum) Protocols() []p2p.Protocol {
-	if s.lesServer == nil {
 		return s.protocolManager.SubProtocols
-	}
-	return append(s.protocolManager.SubProtocols, s.lesServer.Protocols()...)
 }
 
 // Start implements node.Service, starting all internal goroutines needed by the
@@ -508,11 +494,10 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 		}
 		maxPeers -= s.config.LightPeers
 	}
+
 	// Start the networking layer and the light server if requested
 	s.protocolManager.Start(maxPeers)
-	if s.lesServer != nil {
-		s.lesServer.Start(srvr)
-	}
+
 	return nil
 }
 
@@ -523,13 +508,9 @@ func (s *Ethereum) Stop() error {
 	s.blockchain.Stop()
 	s.engine.Close()
 	s.protocolManager.Stop()
-	if s.lesServer != nil {
-		s.lesServer.Stop()
-	}
 	s.txPool.Stop()
 	s.miner.Stop()
 	s.eventMux.Stop()
-
 	s.chainDb.Close()
 	close(s.shutdownChan)
 	return nil

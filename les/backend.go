@@ -46,6 +46,7 @@ import (
 	rpc "github.com/ethereum/go-ethereum/rpc"
 )
 
+// LightEthereum is a light client service
 type LightEthereum struct {
 	lesCommons
 
@@ -66,18 +67,19 @@ type LightEthereum struct {
 	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
 	bloomIndexer  *core.ChainIndexer
 
-	ApiBackend *LesApiBackend
+	APIBackend *ClientBackend
 
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
 	accountManager *accounts.Manager
 
-	networkId     uint64
+	networkID     uint64
 	netRPCService *ethapi.PublicNetAPI
 
 	wg sync.WaitGroup
 }
 
+// New constructs a LightEthereum client
 func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	chainDb, err := ctx.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/")
 	if err != nil {
@@ -105,7 +107,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		accountManager: ctx.AccountManager,
 		engine:         eth.CreateConsensusEngine(ctx, chainConfig, &config.Ethash, nil, false, chainDb),
 		shutdownChan:   make(chan bool),
-		networkId:      config.NetworkId,
+		networkID:      config.NetworkId,
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   eth.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
 	}
@@ -167,13 +169,13 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		log.Warn("Ultra light client is enabled", "trustedNodes", len(leth.protocolManager.ulc.trustedKeys), "minTrustedFraction", leth.protocolManager.ulc.minTrustedFraction)
 		leth.blockchain.DisableCheckFreq()
 	}
-	leth.ApiBackend = &LesApiBackend{ctx.ExtRPCEnabled(), leth, nil}
+	leth.APIBackend = &ClientBackend{ctx.ExtRPCEnabled(), leth, nil}
 
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.Miner.GasPrice
 	}
-	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
+	leth.APIBackend.gpo = gasprice.NewOracle(leth.APIBackend, gpoParams)
 	return leth, nil
 }
 
@@ -188,6 +190,7 @@ func lesTopic(genesisHash common.Hash, protocolVersion uint) discv5.Topic {
 	return discv5.Topic(name + "@" + common.Bytes2Hex(genesisHash.Bytes()[0:8]))
 }
 
+// LightDummyAPI is a fake api that serves default values in the role of a light client
 type LightDummyAPI struct{}
 
 // Etherbase is the address that mining rewards will be send to
@@ -213,7 +216,7 @@ func (s *LightDummyAPI) Mining() bool {
 // APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *LightEthereum) APIs() []rpc.API {
-	return append(ethapi.GetAPIs(s.ApiBackend), []rpc.API{
+	return append(ethapi.GetAPIs(s.APIBackend), []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",
@@ -227,7 +230,7 @@ func (s *LightEthereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.ApiBackend, true),
+			Service:   filters.NewPublicFilterAPI(s.APIBackend, true),
 			Public:    true,
 		}, {
 			Namespace: "net",
@@ -238,16 +241,29 @@ func (s *LightEthereum) APIs() []rpc.API {
 	}...)
 }
 
+// ResetWithGenesisBlock purges the entire blockchain, restoring it to the
+// specified genesis state.
 func (s *LightEthereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.blockchain.ResetWithGenesisBlock(gb)
 }
 
-func (s *LightEthereum) BlockChain() *light.LightChain      { return s.blockchain }
-func (s *LightEthereum) TxPool() *light.TxPool              { return s.txPool }
-func (s *LightEthereum) Engine() consensus.Engine           { return s.engine }
-func (s *LightEthereum) LesVersion() int                    { return int(ClientProtocolVersions[0]) }
+// BlockChain returns the light client's blockchain
+func (s *LightEthereum) BlockChain() *light.LightChain { return s.blockchain }
+
+// TxPool the pool of locally created transactions
+func (s *LightEthereum) TxPool() *light.TxPool { return s.txPool }
+
+// Engine is the employed consensus engine
+func (s *LightEthereum) Engine() consensus.Engine { return s.engine }
+
+// LesVersion is the current version of Les used by this light client
+func (s *LightEthereum) LesVersion() int { return int(ClientProtocolVersions[0]) }
+
+// Downloader is the employed downloader
 func (s *LightEthereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
-func (s *LightEthereum) EventMux() *event.TypeMux           { return s.eventMux }
+
+// EventMux is an event subscription notifier
+func (s *LightEthereum) EventMux() *event.TypeMux { return s.eventMux }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.
@@ -260,7 +276,7 @@ func (s *LightEthereum) Protocols() []p2p.Protocol {
 func (s *LightEthereum) Start(srvr *p2p.Server) error {
 	log.Warn("Light client mode is an experimental feature")
 	s.startBloomHandlers(params.BloomBitsBlocksClient)
-	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.networkId)
+	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.networkID)
 	// clients are searching for the first advertised protocol in the list
 	protocolVersion := AdvertiseProtocolVersions[0]
 	s.serverPool.start(srvr, lesTopic(s.blockchain.Genesis().Hash(), protocolVersion))

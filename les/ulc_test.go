@@ -176,8 +176,8 @@ func connectPeers(full, light pairPeer, version int) (*peer, *peer, error) {
 	// Create a message pipe to communicate through
 	app, net := p2p.MsgPipe()
 
-	peerLight := full.PM.newPeer(version, NetworkId, p2p.NewPeer(light.Node.ID(), light.Name, nil), net)
-	peerFull := light.PM.newPeer(version, NetworkId, p2p.NewPeer(full.Node.ID(), full.Name, nil), app)
+	peerLight := full.PM.newPeer(version, NetworkID, p2p.NewPeer(light.Node.ID(), light.Name, nil), net)
+	peerFull := light.PM.newPeer(version, NetworkID, p2p.NewPeer(full.Node.ID(), full.Name, nil), app)
 
 	// Start the peerLight on a new thread
 	errc1 := make(chan error, 1)

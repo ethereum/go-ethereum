@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	test_networkid   = 10
-	protocol_version = lpv2
+	testNetworkID   = 10
+	protocolVersion = lpv2
 )
 
 var (
@@ -30,7 +30,7 @@ func TestPeerHandshakeSetAnnounceTypeToAnnounceTypeSignedForTrustedPeer(t *testi
 	//peer to connect(on ulc side)
 	p := peer{
 		Peer:      p2p.NewPeer(id, "test peer", []p2p.Cap{}),
-		version:   protocol_version,
+		version:   protocolVersion,
 		isTrusted: true,
 		rw: &rwStub{
 			WriteHook: func(recvList keyValueList) {
@@ -59,7 +59,7 @@ func TestPeerHandshakeSetAnnounceTypeToAnnounceTypeSignedForTrustedPeer(t *testi
 				return l
 			},
 		},
-		network: test_networkid,
+		network: testNetworkID,
 	}
 
 	err := p.Handshake(td, hash, headNum, genesis, nil)
@@ -76,7 +76,7 @@ func TestPeerHandshakeAnnounceTypeSignedForTrustedPeersPeerNotInTrusted(t *testi
 	id := newNodeID(t).ID()
 	p := peer{
 		Peer:    p2p.NewPeer(id, "test peer", []p2p.Cap{}),
-		version: protocol_version,
+		version: protocolVersion,
 		rw: &rwStub{
 			WriteHook: func(recvList keyValueList) {
 				//checking that ulc sends to peer allowedRequests=noRequests and announceType != announceTypeSigned
@@ -104,7 +104,7 @@ func TestPeerHandshakeAnnounceTypeSignedForTrustedPeersPeerNotInTrusted(t *testi
 				return l
 			},
 		},
-		network: test_networkid,
+		network: testNetworkID,
 	}
 
 	err := p.Handshake(td, hash, headNum, genesis, nil)
@@ -123,7 +123,7 @@ func TestPeerHandshakeDefaultAllRequests(t *testing.T) {
 
 	p := peer{
 		Peer:    p2p.NewPeer(id, "test peer", []p2p.Cap{}),
-		version: protocol_version,
+		version: protocolVersion,
 		rw: &rwStub{
 			ReadHook: func(l keyValueList) keyValueList {
 				l = l.add("announceType", uint64(announceTypeSigned))
@@ -132,7 +132,7 @@ func TestPeerHandshakeDefaultAllRequests(t *testing.T) {
 				return l
 			},
 		},
-		network: test_networkid,
+		network: testNetworkID,
 	}
 
 	err := p.Handshake(td, hash, headNum, genesis, s)
@@ -153,7 +153,7 @@ func TestPeerHandshakeServerSendOnlyAnnounceRequestsHeaders(t *testing.T) {
 
 	p := peer{
 		Peer:    p2p.NewPeer(id, "test peer", []p2p.Cap{}),
-		version: protocol_version,
+		version: protocolVersion,
 		rw: &rwStub{
 			ReadHook: func(l keyValueList) keyValueList {
 				l = l.add("announceType", uint64(announceTypeSigned))
@@ -171,7 +171,7 @@ func TestPeerHandshakeServerSendOnlyAnnounceRequestsHeaders(t *testing.T) {
 				}
 			},
 		},
-		network: test_networkid,
+		network: testNetworkID,
 	}
 
 	err := p.Handshake(td, hash, headNum, genesis, s)
@@ -184,7 +184,7 @@ func TestPeerHandshakeClientReceiveOnlyAnnounceRequestsHeaders(t *testing.T) {
 
 	p := peer{
 		Peer:    p2p.NewPeer(id, "test peer", []p2p.Cap{}),
-		version: protocol_version,
+		version: protocolVersion,
 		rw: &rwStub{
 			ReadHook: func(l keyValueList) keyValueList {
 				l = l.add("flowControl/BL", uint64(0))
@@ -196,7 +196,7 @@ func TestPeerHandshakeClientReceiveOnlyAnnounceRequestsHeaders(t *testing.T) {
 				return l
 			},
 		},
-		network:   test_networkid,
+		network:   testNetworkID,
 		isTrusted: true,
 	}
 
@@ -215,7 +215,7 @@ func TestPeerHandshakeClientReturnErrorOnUselessPeer(t *testing.T) {
 
 	p := peer{
 		Peer:    p2p.NewPeer(id, "test peer", []p2p.Cap{}),
-		version: protocol_version,
+		version: protocolVersion,
 		rw: &rwStub{
 			ReadHook: func(l keyValueList) keyValueList {
 				l = l.add("flowControl/BL", uint64(0))
@@ -227,7 +227,7 @@ func TestPeerHandshakeClientReturnErrorOnUselessPeer(t *testing.T) {
 				return l
 			},
 		},
-		network: test_networkid,
+		network: testNetworkID,
 	}
 
 	err := p.Handshake(td, hash, headNum, genesis, nil)
@@ -254,8 +254,8 @@ type rwStub struct {
 
 func (s *rwStub) ReadMsg() (p2p.Msg, error) {
 	payload := keyValueList{}
-	payload = payload.add("protocolVersion", uint64(protocol_version))
-	payload = payload.add("networkId", uint64(test_networkid))
+	payload = payload.add("protocolVersion", uint64(protocolVersion))
+	payload = payload.add("networkId", uint64(testNetworkID))
 	payload = payload.add("headTd", td)
 	payload = payload.add("headHash", hash)
 	payload = payload.add("headNum", headNum)

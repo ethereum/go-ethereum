@@ -50,14 +50,22 @@ const (
 
 	ethVersion = 63 // equivalent eth version for the downloader
 
-	MaxHeaderFetch           = 192 // Amount of block headers to be fetched per retrieval request
-	MaxBodyFetch             = 32  // Amount of block bodies to be fetched per retrieval request
-	MaxReceiptFetch          = 128 // Amount of transaction receipts to allow fetching per request
-	MaxCodeFetch             = 64  // Amount of contract codes to allow fetching per request
-	MaxProofsFetch           = 64  // Amount of merkle proofs to be fetched per retrieval request
-	MaxHelperTrieProofsFetch = 64  // Amount of merkle proofs to be fetched per retrieval request
-	MaxTxSend                = 64  // Amount of transactions to be send per request
-	MaxTxStatus              = 256 // Amount of transactions to queried per request
+	// MaxHeaderFetch -  Amount of block headers to be fetched per retrieval request
+	MaxHeaderFetch = 192
+	// MaxBodyFetch - Amount of block bodies to be fetched per retrieval request
+	MaxBodyFetch = 32
+	// MaxReceiptFetch - Amount of transaction receipts to allow fetching per request
+	MaxReceiptFetch = 128
+	// MaxCodeFetch - Amount of contract codes to allow fetching per request
+	MaxCodeFetch = 64
+	// MaxProofsFetch - Amount of merkle proofs to be fetched per retrieval request
+	MaxProofsFetch = 64
+	// MaxHelperTrieProofsFetch - Amount of merkle proofs to be fetched per retrieval request
+	MaxHelperTrieProofsFetch = 64
+	// MaxTxSend - Amount of transactions to be send per request
+	MaxTxSend = 64
+	// MaxTxStatus - Amount of transactions to queried per request
+	MaxTxStatus = 256
 
 	disableClientRemovePeer = false
 )
@@ -66,6 +74,7 @@ func errResp(code errCode, format string, v ...interface{}) error {
 	return fmt.Errorf("%v - %v", code, fmt.Sprintf(format, v...))
 }
 
+// BlockChain - a blockchain
 type BlockChain interface {
 	Config() *params.ChainConfig
 	HasHeader(hash common.Hash, number uint64) bool
@@ -87,6 +96,7 @@ type txPool interface {
 	Status(hashes []common.Hash) []core.TxStatus
 }
 
+// ProtocolManager handles protocol messages and other protocol-specific tasks
 type ProtocolManager struct {
 	// Configs
 	chainConfig *params.ChainConfig
@@ -94,7 +104,7 @@ type ProtocolManager struct {
 
 	client    bool   // The indicator whether the node is light client
 	maxPeers  int    // The maximum number peers allowed to connect.
-	networkId uint64 // The identity of network.
+	networkID uint64 // The identity of network.
 
 	txpool       txPool
 	txrelay      *LesTxRelay
@@ -131,7 +141,7 @@ func NewProtocolManager(
 	chainConfig *params.ChainConfig,
 	indexerConfig *light.IndexerConfig,
 	client bool,
-	networkId uint64,
+	networkID uint64,
 	mux *event.TypeMux,
 	engine consensus.Engine,
 	peers *peerSet,
@@ -153,7 +163,7 @@ func NewProtocolManager(
 		iConfig:     indexerConfig,
 		chainDb:     chainDb,
 		odr:         odr,
-		networkId:   networkId,
+		networkID:   networkID,
 		txpool:      txpool,
 		txrelay:     txrelay,
 		serverPool:  serverPool,
@@ -194,6 +204,7 @@ func (pm *ProtocolManager) removePeer(id string) {
 	pm.peers.Unregister(id)
 }
 
+// Start starts the protocol manager and is called during node startup only
 func (pm *ProtocolManager) Start(maxPeers int) {
 	pm.maxPeers = maxPeers
 	if pm.client {
@@ -206,6 +217,7 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 	}
 }
 
+// Stop stops the protocol manager and is called during node shutdown only
 func (pm *ProtocolManager) Stop() {
 	// Showing a log message. During download / process this could actually
 	// take between 5 to 10 seconds and therefor feedback is required.
@@ -236,7 +248,7 @@ func (pm *ProtocolManager) Stop() {
 // runPeer is the p2p protocol run function for the given version.
 func (pm *ProtocolManager) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	var entry *poolEntry
-	peer := pm.newPeer(int(version), pm.networkId, p, rw)
+	peer := pm.newPeer(int(version), pm.networkID, p, rw)
 	if pm.serverPool != nil {
 		entry = pm.serverPool.connect(peer, peer.Node())
 	}

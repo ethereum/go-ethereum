@@ -42,12 +42,19 @@ var (
 	AdvertiseProtocolVersions = []uint{lpv2} // clients are searching for the first advertised protocol in the list
 )
 
+<<<<<<< HEAD
 // Number of implemented message corresponding to different protocol versions.
 var ProtocolLengths = map[uint]uint64{lpv2: 22, lpv3: 24}
+=======
+// ProtocolLengths - Number of implemented message corresponding to different protocol versions.
+var ProtocolLengths = map[uint]uint64{lpv2: 22}
+>>>>>>> Further LES cleanup
 
 const (
-	NetworkId          = 1
-	ProtocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
+	// NetworkID - the network id
+	NetworkID = 1
+	// ProtocolMaxMsgSize - Maximum cap on the size of a protocol message
+	ProtocolMaxMsgSize = 10 * 1024 * 1024
 )
 
 // les protocol message codes
@@ -95,20 +102,35 @@ var requests = map[uint64]requestInfo{
 type errCode int
 
 const (
+	// ErrMsgTooLarge - message too large
 	ErrMsgTooLarge = iota
+	// ErrDecode - decode error
 	ErrDecode
+	// ErrInvalidMsgCode - invalid message error
 	ErrInvalidMsgCode
+	// ErrProtocolVersionMismatch - mismatched protocol version
 	ErrProtocolVersionMismatch
-	ErrNetworkIdMismatch
+	// ErrNetworkIDMismatch - wrong network id
+	ErrNetworkIDMismatch
+	// ErrGenesisBlockMismatch - incompatible genesis blocks
 	ErrGenesisBlockMismatch
+	// ErrNoStatusMsg -
 	ErrNoStatusMsg
+	// ErrExtraStatusMsg -
 	ErrExtraStatusMsg
+	// ErrSuspendedPeer -
 	ErrSuspendedPeer
+	// ErrUselessPeer -
 	ErrUselessPeer
+	// ErrRequestRejected -
 	ErrRequestRejected
+	// ErrUnexpectedResponse -
 	ErrUnexpectedResponse
+	// ErrInvalidResponse -
 	ErrInvalidResponse
+	// ErrTooManyTimeouts -
 	ErrTooManyTimeouts
+	// ErrMissingKey -
 	ErrMissingKey
 )
 
@@ -122,7 +144,7 @@ var errorToString = map[int]string{
 	ErrDecode:                  "Invalid message",
 	ErrInvalidMsgCode:          "Invalid message code",
 	ErrProtocolVersionMismatch: "Protocol version mismatch",
-	ErrNetworkIdMismatch:       "NetworkId mismatch",
+	ErrNetworkIDMismatch:       "NetworkId mismatch",
 	ErrGenesisBlockMismatch:    "Genesis block mismatch",
 	ErrNoStatusMsg:             "No status message",
 	ErrExtraStatusMsg:          "Extra status message",
