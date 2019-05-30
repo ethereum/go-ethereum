@@ -171,7 +171,7 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.XDPoS.Gap = uint64(w.readDefaultInt(450))
 
 		fmt.Println()
-		fmt.Println("What is foundation wallet address? (default = xdc0000000000000000000000000000000000000068)")
+		fmt.Println("What is foundation wallet address? (default = xdc746249C61f5832C5eEd53172776b460491bDcd5C)")
 		genesis.Config.XDPoS.FoudationWalletAddr = w.readDefaultAddress(common.HexToAddress(common.FoudationAddr))
 
 		// Validator Smart Contract Code
@@ -232,7 +232,7 @@ func (w *wizard) makeGenesis() {
 		storage = make(map[common.Hash]common.Hash)
 		contractBackend.ForEachStorageAt(ctx, multiSignWalletAddr, nil, f)
 		fBalance := big.NewInt(0) // 3 billion
-		fBalance.Add(fBalance, big.NewInt(3*1000*1000*1000))
+		fBalance.Add(fBalance, big.NewInt(0*1000*1000*1000))
 		fBalance.Mul(fBalance, big.NewInt(1000000000000000000))
 		genesis.Alloc[common.HexToAddress(common.FoudationAddr)] = core.GenesisAccount{
 			Balance: fBalance,
@@ -299,7 +299,7 @@ func (w *wizard) makeGenesis() {
 		contractBackend.ForEachStorageAt(ctx, multiSignWalletTeamAddr, nil, f)
 		// Team balance.
 		balance := big.NewInt(0) // 20 billion
-        balance.Add(balance, big.NewInt(20*1000*1000*1000))
+        balance.Add(balance, big.NewInt(30*1000*1000))
         balance.Mul(balance, big.NewInt(1000000000000000000))
         subBalance := big.NewInt(0) // i * 50k
         subBalance.Add(subBalance, big.NewInt(int64(len(signers))*10*1000*1000))
@@ -312,10 +312,10 @@ func (w *wizard) makeGenesis() {
 		}
 
 		fmt.Println()
-		fmt.Println("What is swap wallet address for fund 14.5Billion XDC?")
+		fmt.Println("What is swap wallet address for fund 37.47Billion XDC?")
 		swapAddr := *w.readAddress()
 		baseBalance := big.NewInt(0) // 14.5Billion 
-		baseBalance.Add(baseBalance, big.NewInt(145*1000*1000*100))
+		baseBalance.Add(baseBalance, big.NewInt(3747*1000*1000*10))
 		baseBalance.Mul(baseBalance, big.NewInt(1000000000000000000))
 		genesis.Alloc[swapAddr] = core.GenesisAccount{
 			Balance: baseBalance,
