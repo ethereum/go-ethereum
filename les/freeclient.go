@@ -194,6 +194,9 @@ func (f *freeClientPool) disconnect(address string) {
 		return
 	}
 	e := f.addressMap[address]
+	if e == nil {
+		return
+	}
 	now := f.clock.Now()
 	if !e.connected {
 		log.Debug("Client already disconnected", "address", address)
