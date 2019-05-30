@@ -378,11 +378,7 @@ func (api *PrivateDebugAPI) AccountRangeAt(ctx context.Context, start *common.Ha
 	block := api.eth.blockchain.CurrentBlock()
 
 	if len(block.Transactions()) == 0 {
-		parent := api.eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
-		if parent == nil {
-			return AccountRangeResult{}, fmt.Errorf("parent %x not found", block.ParentHash())
-		}
-		statedb, err = api.computeStateDB(parent, defaultTraceReexec)
+		statedb, err = api.computeStateDB(block, defaultTraceReexec)
 		if err != nil {
 			return AccountRangeResult{}, err
 		}
