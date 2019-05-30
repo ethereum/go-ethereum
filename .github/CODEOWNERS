@@ -7,7 +7,7 @@ accounts/abi                    @gballet
 cmd/clef                        @holiman
 cmd/puppeth                     @karalabe
 consensus                       @karalabe
-consensus/clique                @holiman
+consensus/clique                @holiman @karalabe
 core/                           @karalabe @holiman @rjl493456442
 dashboard/                      @kurkomisi
 eth/                            @karalabe @holiman @rjl493456442
