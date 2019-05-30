@@ -27,14 +27,14 @@ import (
 
 type ltrInfo struct {
 	tx     *types.Transaction
-	sentTo map[*peer]struct{}
+	sentTo map[*serverPeer]struct{}
 }
 
 type lesTxRelay struct {
 	txSent       map[common.Hash]*ltrInfo
 	txPending    map[common.Hash]struct{}
 	ps           *peerSet
-	peerList     []*peer
+	peerList     []*serverPeer
 	peerStartPos int
 	lock         sync.RWMutex
 	stop         chan struct{}
@@ -50,7 +50,7 @@ func newLesTxRelay(ps *peerSet, retriever *retrieveManager) *lesTxRelay {
 		retriever: retriever,
 		stop:      make(chan struct{}),
 	}
-	ps.notify(r)
+	ps.subscribe(r)
 	return r
 }
 
@@ -58,24 +58,24 @@ func (self *lesTxRelay) Stop() {
 	close(self.stop)
 }
 
-func (self *lesTxRelay) registerPeer(p *peer) {
+func (self *lesTxRelay) registerPeer(p *serverPeer) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
-	self.peerList = self.ps.AllPeers()
+	self.peerList = self.ps.allServerPeers()
 }
 
-func (self *lesTxRelay) unregisterPeer(p *peer) {
+func (self *lesTxRelay) unregisterPeer(p *serverPeer) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
-	self.peerList = self.ps.AllPeers()
+	self.peerList = self.ps.allServerPeers()
 }
 
 // send sends a list of transactions to at most a given number of peers at
 // once, never resending any particular transaction to the same peer twice
 func (self *lesTxRelay) send(txs types.Transactions, count int) {
-	sendTo := make(map[*peer]types.Transactions)
+	sendTo := make(map[*serverPeer]types.Transactions)
 
 	self.peerStartPos++ // rotate the starting position of the peer list
 	if self.peerStartPos >= len(self.peerList) {
@@ -88,7 +88,7 @@ func (self *lesTxRelay) send(txs types.Transactions, count int) {
 		if !ok {
 			ltr = &ltrInfo{
 				tx:     tx,
-				sentTo: make(map[*peer]struct{}),
+				sentTo: make(map[*serverPeer]struct{}),
 			}
 			self.txSent[hash] = ltr
 			self.txPending[hash] = struct{}{}
@@ -126,17 +126,17 @@ func (self *lesTxRelay) send(txs types.Transactions, count int) {
 		reqID := genReqID()
 		rq := &distReq{
 			getCost: func(dp distPeer) uint64 {
-				peer := dp.(*peer)
-				return peer.GetTxRelayCost(len(ll), len(enc))
+				peer := dp.(*serverPeer)
+				return peer.getTxRelayCost(len(ll), len(enc))
 			},
 			canSend: func(dp distPeer) bool {
-				return !dp.(*peer).announceOnly && dp.(*peer) == pp
+				return !dp.(*serverPeer).announceOnly && dp.(*serverPeer) == pp
 			},
 			request: func(dp distPeer) func() {
-				peer := dp.(*peer)
-				cost := peer.GetTxRelayCost(len(ll), len(enc))
+				peer := dp.(*serverPeer)
+				cost := peer.getTxRelayCost(len(ll), len(enc))
 				peer.fcServer.QueuedRequest(reqID, cost)
-				return func() { peer.SendTxs(reqID, cost, enc) }
+				return func() { peer.sendTxs(reqID, enc) }
 			},
 		}
 		go self.retriever.retrieve(context.Background(), reqID, rq, func(p distPeer, msg *Msg) error { return nil }, self.stop)

@@ -52,13 +52,13 @@ const (
 // In addition to the checkpoint registered in the registrar contract, there are
 // several legacy hardcoded checkpoints in our codebase. These checkpoints are
 // also considered as valid.
-func (h *clientHandler) validateCheckpoint(peer *peer) error {
+func (h *clientHandler) validateCheckpoint(peer *serverPeer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	// Fetch the block header corresponding to the checkpoint registration.
-	cp := peer.advertisedCheckpoint
-	header, err := light.GetUntrustedHeaderByNumber(ctx, h.backend.odr, peer.registeredHeight, peer.id)
+	cp := peer.checkpoint
+	header, err := light.GetUntrustedHeaderByNumber(ctx, h.backend.odr, peer.height, peer.id)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func (h *clientHandler) validateCheckpoint(peer *peer) error {
 }
 
 // synchronise tries to sync up our local chain with a remote peer.
-func (h *clientHandler) synchronise(peer *peer) {
+func (h *clientHandler) synchronise(peer *serverPeer) {
 	// Short circuit if the peer is nil.
 	if peer == nil {
 		return
@@ -96,7 +96,7 @@ func (h *clientHandler) synchronise(peer *peer) {
 	// Make sure the peer's TD is higher than our own.
 	latest := h.backend.blockchain.CurrentHeader()
 	currentTd := rawdb.ReadTd(h.backend.chainDb, latest.Hash(), latest.Number.Uint64())
-	if currentTd != nil && peer.headBlockInfo().Td.Cmp(currentTd) < 0 {
+	if currentTd != nil && peer.Td().Cmp(currentTd) < 0 {
 		return
 	}
 	// Determine whether we should run checkpoint syncing or normal light syncing.
@@ -107,7 +107,7 @@ func (h *clientHandler) synchronise(peer *peer) {
 	// 2. The latest head block of the local chain is above the checkpoint.
 	// 3. The checkpoint is hardcoded(recap with local hardcoded checkpoint)
 	// 4. For some networks the checkpoint syncing is not activated.
-	cp := &peer.advertisedCheckpoint
+	cp := &peer.checkpoint
 	mode := checkpointSync
 	switch {
 	case cp.Empty():
@@ -116,7 +116,7 @@ func (h *clientHandler) synchronise(peer *peer) {
 	case latest.Number.Uint64() >= (cp.SectionIndex+1)*h.backend.iConfig.ChtSize-1:
 		mode = lightSync
 		log.Debug("Disable checkpoint syncing", "reason", "local chain beyonds the checkpoint")
-	case peer.isHardcode:
+	case peer.hardcode:
 		mode = legacyCheckpointSync
 		log.Debug("Disable checkpoint syncing", "reason", "checkpoint is hardcoded")
 	case h.backend.registrar == nil || !h.backend.registrar.isRunning():

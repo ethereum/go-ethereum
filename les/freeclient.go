@@ -95,7 +95,7 @@ func (f *freeClientPool) stop() {
 
 // freeClientId returns a string identifier for the peer. Multiple peers with the
 // same identifier can not be in the free client pool simultaneously.
-func freeClientId(p *peer) string {
+func freeClientId(p *clientPeer) string {
 	if addr, ok := p.RemoteAddr().(*net.TCPAddr); ok {
 		if addr.IP.IsLoopback() {
 			// using peer id instead of loopback ip address allows multiple free
@@ -109,7 +109,7 @@ func freeClientId(p *peer) string {
 }
 
 // registerPeer implements clientPool
-func (f *freeClientPool) registerPeer(p *peer) {
+func (f *freeClientPool) registerPeer(p *clientPeer) {
 	if freeId := freeClientId(p); freeId != "" {
 		if !f.connect(freeId, p.id) {
 			f.removePeer(p.id)
@@ -177,7 +177,7 @@ func (f *freeClientPool) connect(address, id string) bool {
 }
 
 // unregisterPeer implements clientPool
-func (f *freeClientPool) unregisterPeer(p *peer) {
+func (f *freeClientPool) unregisterPeer(p *clientPeer) {
 	if freeId := freeClientId(p); freeId != "" {
 		f.disconnect(freeId)
 	}

@@ -94,7 +94,7 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 			chainConfig:      e.BlockChain().Config(),
 			iConfig:          light.DefaultServerIndexerConfig,
 			chainDb:          e.ChainDb(),
-			peers:            newPeerSet(),
+			peers:            newPeerSet(false),
 			chainReader:      e.BlockChain(),
 			chtIndexer:       light.NewChtIndexer(e.ChainDb(), nil, params.CHTFrequency, params.HelperTrieProcessConfirmations),
 			bloomTrieIndexer: light.NewBloomTrieIndexer(e.ChainDb(), nil, params.BloomBitsBlocks, params.BloomTrieFrequency),
@@ -140,7 +140,7 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	if !logClientPoolEvents {
 		eventLogger = nil
 	}
-	srv.freeClientPool = newFreeClientPool(srv.chainDb, srv.freeClientCap, 10000, mclock.System{}, func(id string) { go srv.peers.Unregister(id) }, eventLogger, metricsLogger)
+	srv.freeClientPool = newFreeClientPool(srv.chainDb, srv.freeClientCap, 10000, mclock.System{}, func(id string) { go srv.peers.unregister(id) }, eventLogger, metricsLogger)
 	srv.priorityClientPool = newPriorityClientPool(srv.freeClientCap, srv.peers, srv.freeClientPool, eventLogger, metricsLogger)
 
 	checkpoint := srv.latestLocalCheckpoint()
@@ -171,7 +171,7 @@ func (s *LesServer) APIs() []rpc.API {
 
 func (s *LesServer) Protocols() []p2p.Protocol {
 	return s.makeProtocols(ServerProtocolVersions, s.handler.runPeer, func(id enode.ID) interface{} {
-		if p := s.peers.Peer(fmt.Sprintf("%x", id.Bytes())); p != nil {
+		if p := s.peers.clientPeer(fmt.Sprintf("%x", id.Bytes())); p != nil {
 			return p.Info()
 		}
 		return nil
@@ -210,7 +210,7 @@ func (s *LesServer) Stop() {
 	// This also closes the gate for any new registrations on the peer set.
 	// sessions which are already established but not added to pm.peers yet
 	// will exit when they try to register.
-	s.peers.Close()
+	s.peers.close()
 
 	s.fcManager.Stop()
 	s.freeClientPool.stop()

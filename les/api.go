@@ -135,7 +135,7 @@ func (api *PrivateLightServerAPI) GetClientCapacity(id enode.ID) hexutil.Uint64 
 
 // clientPool is implemented by both the free and priority client pools
 type clientPool interface {
-	peerSetNotify
+	clientPeerSubscriber
 	setLimits(count int, totalCap uint64)
 }
 
@@ -166,7 +166,7 @@ type scheduledUpdate struct {
 type priorityClientInfo struct {
 	cap       uint64 // zero for non-priority clients
 	connected bool
-	peer      *peer
+	peer      *clientPeer
 }
 
 // newPriorityClientPool creates a new priority client pool
@@ -179,7 +179,7 @@ func newPriorityClientPool(freeClientCap uint64, ps *peerSet, child clientPool, 
 		logger:          eventLogger,
 		logTotalPriConn: metricsLogger.NewChannel("totalPriConn", 0),
 	}
-	ps.notify(pool)
+	ps.subscribe(pool)
 	return pool
 }
 
@@ -189,7 +189,7 @@ func newPriorityClientPool(freeClientCap uint64, ps *peerSet, child clientPool, 
 //
 // Note: priorityClientPool also stores a record about free clients while they are
 // connected in order to be able to assign priority to them later.
-func (v *priorityClientPool) registerPeer(p *peer) {
+func (v *priorityClientPool) registerPeer(p *clientPeer) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
 
@@ -204,7 +204,7 @@ func (v *priorityClientPool) registerPeer(p *peer) {
 	}
 	if c.cap != 0 && v.totalConnectedCap+c.cap > v.totalCap {
 		v.logger.Event(fmt.Sprintf("priorityClientPool: rejected, %x", id.Bytes()))
-		go v.ps.Unregister(p.id)
+		go v.ps.unregister(p.id)
 		return
 	}
 
@@ -225,7 +225,7 @@ func (v *priorityClientPool) registerPeer(p *peer) {
 
 // unregisterPeer is called when a client is disconnected. If the client has no
 // priority assigned then it is also removed from the child pool.
-func (v *priorityClientPool) unregisterPeer(p *peer) {
+func (v *priorityClientPool) unregisterPeer(p *clientPeer) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
 
@@ -321,7 +321,7 @@ func (v *priorityClientPool) setLimitsNow(count int, totalCap uint64) {
 				v.logTotalPriConn.Update(float64(v.totalConnectedCap))
 				v.priorityCount--
 				v.clients[id] = c
-				go v.ps.Unregister(c.peer.id)
+				go v.ps.unregister(c.peer.id)
 				if v.priorityCount <= count && v.totalConnectedCap <= totalCap {
 					break
 				}

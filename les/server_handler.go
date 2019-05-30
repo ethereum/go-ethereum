@@ -92,13 +92,13 @@ func (h *serverHandler) stop() {
 
 // runPeer is the p2p protocol run function for the given version.
 func (h *serverHandler) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	peer := newPeer(int(version), h.server.config.NetworkId, false, p, rw)
+	peer := newClientPeer(int(version), h.server.config.NetworkId, p, rw)
 	h.wg.Add(1)
 	defer h.wg.Done()
 	return h.handle(peer)
 }
 
-func (h *serverHandler) handle(p *peer) error {
+func (h *serverHandler) handle(p *clientPeer) error {
 	// Reject light clients if server is not synced.
 	if !h.synced() {
 		h.logger.Event("Rejected (server is not synced), " + p.id)
@@ -124,13 +124,13 @@ func (h *serverHandler) handle(p *peer) error {
 		rw.Init(p.version)
 	}
 	// Register the peer locally
-	if err := h.server.peers.Register(p); err != nil {
+	if err := h.server.peers.register(p); err != nil {
 		h.logger.Event("Peer registration error: " + err.Error() + ", " + p.id)
 		p.Log().Error("Light Ethereum peer registration failed", "err", err)
 		return err
 	}
 	defer h.logger.Event("Closed connection, " + p.id)
-	defer h.server.peers.Unregister(p.id)
+	defer h.server.peers.unregister(p.id)
 
 	// Spawn a main loop to handle all incoming messages.
 	for {
@@ -151,7 +151,7 @@ func (h *serverHandler) handle(p *peer) error {
 
 // handleMsg is invoked whenever an inbound message is received from a remote
 // peer. The remote connection is torn down upon returning any error.
-func (h *serverHandler) handleMsg(p *peer) error {
+func (h *serverHandler) handleMsg(p *clientPeer) error {
 	// Read the next message from the remote peer, and ensure it's fully consumed
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
@@ -183,7 +183,7 @@ func (h *serverHandler) handleMsg(p *peer) error {
 		maxCost = p.fcCosts.getMaxCost(msg.Code, reqCnt)
 		accepted, bufShort, priority := p.fcClient.AcceptRequest(reqID, respId, maxCost)
 		if !accepted {
-			p.freezeClient()
+			p.freeze()
 			p.Log().Error("Request came too early", "remaining", common.PrettyDuration(time.Duration(bufShort*1000000/p.fcParams.MinRecharge)))
 			p.fcClient.OneTimeCost(inSizeCost)
 			return false
@@ -331,7 +331,7 @@ func (h *serverHandler) handleMsg(p *peer) error {
 					}
 					first = false
 				}
-				sendResponse(req.ReqID, query.Amount, p.ReplyBlockHeaders(req.ReqID, headers), task.done())
+				sendResponse(req.ReqID, query.Amount, p.replyBlockHeaders(req.ReqID, headers), task.done())
 			}()
 		}
 
@@ -367,7 +367,7 @@ func (h *serverHandler) handleMsg(p *peer) error {
 						}
 					}
 				}
-				sendResponse(req.ReqID, uint64(reqCnt), p.ReplyBlockBodiesRLP(req.ReqID, bodies), task.done())
+				sendResponse(req.ReqID, uint64(reqCnt), p.replyBlockBodiesRLP(req.ReqID, bodies), task.done())
 			}()
 		}
 
@@ -421,7 +421,7 @@ func (h *serverHandler) handleMsg(p *peer) error {
 						break
 					}
 				}
-				sendResponse(req.ReqID, uint64(reqCnt), p.ReplyCode(req.ReqID, data), task.done())
+				sendResponse(req.ReqID, uint64(reqCnt), p.replyCode(req.ReqID, data), task.done())
 			}()
 		}
 
@@ -467,7 +467,7 @@ func (h *serverHandler) handleMsg(p *peer) error {
 						bytes += len(encoded)
 					}
 				}
-				sendResponse(req.ReqID, uint64(reqCnt), p.ReplyReceiptsRLP(req.ReqID, receipts), task.done())
+				sendResponse(req.ReqID, uint64(reqCnt), p.replyReceiptsRLP(req.ReqID, receipts), task.done())
 			}()
 		}
 
@@ -547,7 +547,7 @@ func (h *serverHandler) handleMsg(p *peer) error {
 						break
 					}
 				}
-				sendResponse(req.ReqID, uint64(reqCnt), p.ReplyProofsV2(req.ReqID, nodes.NodeList()), task.done())
+				sendResponse(req.ReqID, uint64(reqCnt), p.replyProofsV2(req.ReqID, nodes.NodeList()), task.done())
 			}()
 		}
 
@@ -609,7 +609,7 @@ func (h *serverHandler) handleMsg(p *peer) error {
 						break
 					}
 				}
-				sendResponse(req.ReqID, uint64(reqCnt), p.ReplyHelperTrieProofs(req.ReqID, HelperTrieResps{Proofs: nodes.NodeList(), AuxData: auxData}), task.done())
+				sendResponse(req.ReqID, uint64(reqCnt), p.replyHelperTrieProofs(req.ReqID, HelperTrieResps{Proofs: nodes.NodeList(), AuxData: auxData}), task.done())
 			}()
 		}
 
@@ -640,7 +640,7 @@ func (h *serverHandler) handleMsg(p *peer) error {
 						stats[i] = h.txStatus(hash)
 					}
 				}
-				sendResponse(req.ReqID, uint64(reqCnt), p.ReplyTxStatus(req.ReqID, stats), task.done())
+				sendResponse(req.ReqID, uint64(reqCnt), p.replyTxStatus(req.ReqID, stats), task.done())
 			}()
 		}
 
@@ -664,7 +664,7 @@ func (h *serverHandler) handleMsg(p *peer) error {
 					}
 					stats[i] = h.txStatus(hash)
 				}
-				sendResponse(req.ReqID, uint64(reqCnt), p.ReplyTxStatus(req.ReqID, stats), task.done())
+				sendResponse(req.ReqID, uint64(reqCnt), p.replyTxStatus(req.ReqID, stats), task.done())
 			}()
 		}
 
@@ -749,7 +749,7 @@ func (h *serverHandler) broadcastHeaders() {
 	for {
 		select {
 		case ev := <-headCh:
-			peers := h.server.peers.AllPeers()
+			peers := h.server.peers.allClientPeers()
 			if len(peers) == 0 {
 				continue
 			}
@@ -775,14 +775,14 @@ func (h *serverHandler) broadcastHeaders() {
 				p := p
 				switch p.announceType {
 				case announceTypeSimple:
-					p.queueSend(func() { p.SendAnnounce(announce) })
+					p.queueSend(func() { p.sendAnnounce(announce) })
 				case announceTypeSigned:
 					if !signed {
 						signedAnnounce = announce
 						signedAnnounce.sign(h.server.privateKey)
 						signed = true
 					}
-					p.queueSend(func() { p.SendAnnounce(signedAnnounce) })
+					p.queueSend(func() { p.sendAnnounce(signedAnnounce) })
 				}
 			}
 		case <-h.closeCh:

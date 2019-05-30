@@ -134,12 +134,6 @@ var errorToString = map[int]string{
 	ErrMissingKey:              "Key missing from list",
 }
 
-type announceBlock struct {
-	Hash   common.Hash // Hash of one particular block being announced
-	Number uint64      // Number of one particular block being announced
-	Td     *big.Int    // Total difficulty of one particular block being announced
-}
-
 // announceData is the network packet for the block announcements.
 type announceData struct {
 	Hash       common.Hash // Hash of one particular block being announced
@@ -151,7 +145,7 @@ type announceData struct {
 
 // sign adds a signature to the block announcement by the given privKey
 func (a *announceData) sign(privKey *ecdsa.PrivateKey) {
-	rlp, _ := rlp.EncodeToBytes(announceBlock{a.Hash, a.Number, a.Td})
+	rlp, _ := rlp.EncodeToBytes(blockInfo{a.Hash, a.Number, a.Td})
 	sig, _ := crypto.Sign(crypto.Keccak256(rlp), privKey)
 	a.Update = a.Update.add("sign", sig)
 }
@@ -162,7 +156,7 @@ func (a *announceData) checkSignature(id enode.ID, update keyValueMap) error {
 	if err := update.get("sign", &sig); err != nil {
 		return err
 	}
-	rlp, _ := rlp.EncodeToBytes(announceBlock{a.Hash, a.Number, a.Td})
+	rlp, _ := rlp.EncodeToBytes(blockInfo{a.Hash, a.Number, a.Td})
 	recPubkey, err := crypto.SigToPub(crypto.Keccak256(rlp), sig)
 	if err != nil {
 		return err
@@ -222,10 +216,3 @@ func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
 	}
 	return err
 }
-
-// CodeData is the network response packet for a node data retrieval.
-type CodeData []struct {
-	Value []byte
-}
-
-type proofsData [][]rlp.RawValue

@@ -337,7 +337,7 @@ func (r *sentReq) tryRequest() {
 
 	defer func() {
 		// send feedback to server pool and remove peer if hard timeout happened
-		pp, ok := p.(*peer)
+		pp, ok := p.(*serverPeer)
 		if ok && r.rm.serverPool != nil {
 			respTime := time.Duration(mclock.Now() - reqSent)
 			r.rm.serverPool.adjustResponseTime(pp.poolEntry, respTime, srto)
@@ -345,7 +345,7 @@ func (r *sentReq) tryRequest() {
 		if hrto {
 			pp.Log().Debug("Request timed out hard")
 			if r.rm.peers != nil {
-				r.rm.peers.Unregister(pp.id)
+				r.rm.peers.unregister(pp.id)
 			}
 		}
 

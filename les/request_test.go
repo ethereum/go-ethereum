@@ -81,7 +81,7 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	// Assemble the test environment
 	server, client, tearDown := newClientServerEnv(t, 4, protocol, nil, nil, false, true)
 	defer tearDown()
-	client.handler.synchronise(client.peer.peer)
+	client.handler.synchronise(client.peer.speer)
 
 	test := func(expFail uint64) {
 		for i := uint64(0); i <= server.handler.blockchain.CurrentHeader().Number.Uint64(); i++ {

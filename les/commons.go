@@ -19,7 +19,6 @@ package les
 import (
 	"fmt"
 	"math/big"
-
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
