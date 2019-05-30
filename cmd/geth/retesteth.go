@@ -219,21 +219,32 @@ func (e *NoRewardEngine) Prepare(chain consensus.ChainReader, header *types.Head
 	return e.inner.Prepare(chain, header)
 }
 
-func (e *NoRewardEngine) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
+func (e *NoRewardEngine) accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+	// Simply touch miner and uncle coinbase accounts
+	reward := big.NewInt(0)
+	for _, uncle := range uncles {
+		state.AddBalance(uncle.Coinbase, reward)
+	}
+	state.AddBalance(header.Coinbase, reward)
+}
+
+func (e *NoRewardEngine) Finalize(chain consensus.ChainReader, header *types.Header, statedb *state.StateDB, txs []*types.Transaction,
 	uncles []*types.Header) {
 	if e.rewardsOn {
-		e.inner.Finalize(chain, header, state, txs, uncles)
+		e.inner.Finalize(chain, header, statedb, txs, uncles)
 	} else {
-		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+		e.accumulateRewards(chain.Config(), statedb, header, uncles)
+		header.Root = statedb.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	}
 }
 
-func (e *NoRewardEngine) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
+func (e *NoRewardEngine) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, statedb *state.StateDB, txs []*types.Transaction,
 	uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	if e.rewardsOn {
-		return e.inner.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts)
+		return e.inner.FinalizeAndAssemble(chain, header, statedb, txs, uncles, receipts)
 	} else {
-		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+		e.accumulateRewards(chain.Config(), statedb, header, uncles)
+		header.Root = statedb.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 		// Header seems complete, assemble into a block and return
 		return types.NewBlock(header, txs, uncles, receipts), nil
@@ -365,7 +376,7 @@ func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainPa
 
 	var inner consensus.Engine
 	switch chainParams.SealEngine {
-	case "NoProof":
+	case "NoProof", "NoReward":
 		inner = ethash.NewFaker()
 	case "Ethash":
 		inner = ethash.New(ethash.Config{
@@ -378,7 +389,7 @@ func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainPa
 	default:
 		return false, fmt.Errorf("unrecognised seal engine: %s", chainParams.SealEngine)
 	}
-	engine := &NoRewardEngine{inner: inner}
+	engine := &NoRewardEngine{inner: inner, rewardsOn: chainParams.SealEngine != "NoReward"}
 
 	blockchain, err := core.NewBlockChain(ethDb, nil, chainConfig, engine, vm.Config{}, nil)
 	if err != nil {
@@ -397,7 +408,6 @@ func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainPa
 	api.txMap = make(map[common.Address]map[uint64]*types.Transaction)
 	api.txSenders = make(map[common.Address]struct{})
 	api.blockInterval = 0
-	api.engine.rewardsOn = true
 	return true, nil
 }
 
@@ -441,10 +451,11 @@ func (api *RetestethAPI) mineBlock() error {
 	} else {
 		timestamp = parent.Time() + api.blockInterval
 	}
+	gasLimit := core.CalcGasLimit(parent, 9223372036854775807, 9223372036854775807)
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     big.NewInt(int64(api.blockNumber + 1)),
-		GasLimit:   core.CalcGasLimit(parent, 0, 8000000),
+		GasLimit:   gasLimit,
 		Extra:      api.extraData,
 		Time:       timestamp,
 	}
@@ -520,15 +531,11 @@ func (api *RetestethAPI) mineBlock() error {
 			}
 		}
 	}
-	api.engine.rewardsOn = false
 	block, err := api.engine.FinalizeAndAssemble(api.blockchain, header, statedb, txs, []*types.Header{}, receipts)
 	return api.importBlock(block)
 }
 
 func (api *RetestethAPI) importBlock(block *types.Block) error {
-	//if _, err := api.blockchain.InsertHeaderChain([]*types.Header{block.Header()}, 0); err != nil {
-	//	return err
-	//}
 	if _, err := api.blockchain.InsertChain([]*types.Block{block}); err != nil {
 		return err
 	}
@@ -565,10 +572,8 @@ func (api *RetestethAPI) RewindToBlock(ctx context.Context, newHead uint64) (boo
 var emptyListHash common.Hash = common.HexToHash("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
 
 func (api *RetestethAPI) GetLogHash(ctx context.Context, txHash common.Hash) (common.Hash, error) {
-	//fmt.Printf("GetLogHash %x\n", txHash)
 	receipt, _, _, _ := rawdb.ReadReceipt(api.ethDb, txHash, api.chainConfig)
 	if receipt == nil {
-		//fmt.Printf("Could not find receipt\n")
 		return emptyListHash, nil
 	} else {
 		if logListRlp, err := rlp.EncodeToBytes(receipt.Logs); err != nil {
