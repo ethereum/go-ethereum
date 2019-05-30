@@ -74,9 +74,9 @@ func (b *benchmarkBlockHeaders) init(pm *ProtocolManager, count int) error {
 func (b *benchmarkBlockHeaders) request(peer *peer, index int) error {
 	if b.byHash {
 		return peer.RequestHeadersByHash(0, 0, b.hashes[index], b.amount, b.skip, b.reverse)
-	} else {
-		return peer.RequestHeadersByNumber(0, 0, uint64(b.offset+rand.Int63n(b.randMax)), b.amount, b.skip, b.reverse)
 	}
+	return peer.RequestHeadersByNumber(0, 0, uint64(b.offset+rand.Int63n(b.randMax)), b.amount, b.skip, b.reverse)
+
 }
 
 // benchmarkBodiesOrReceipts implements requestBenchmark
@@ -97,9 +97,9 @@ func (b *benchmarkBodiesOrReceipts) init(pm *ProtocolManager, count int) error {
 func (b *benchmarkBodiesOrReceipts) request(peer *peer, index int) error {
 	if b.receipts {
 		return peer.RequestReceipts(0, 0, []common.Hash{b.hashes[index]})
-	} else {
-		return peer.RequestBodies(0, 0, []common.Hash{b.hashes[index]})
 	}
+	return peer.RequestBodies(0, 0, []common.Hash{b.hashes[index]})
+
 }
 
 // benchmarkProofsOrCode implements requestBenchmark
@@ -118,9 +118,9 @@ func (b *benchmarkProofsOrCode) request(peer *peer, index int) error {
 	rand.Read(key)
 	if b.code {
 		return peer.RequestCode(0, 0, []CodeReq{{BHash: b.headHash, AccKey: key}})
-	} else {
-		return peer.RequestProofs(0, 0, []ProofReq{{BHash: b.headHash, Key: key}})
 	}
+	return peer.RequestProofs(0, 0, []ProofReq{{BHash: b.headHash, Key: key}})
+
 }
 
 // benchmarkHelperTrie implements requestBenchmark
@@ -281,8 +281,8 @@ func (pm *ProtocolManager) measure(setup *benchmarkSetup, count int) error {
 	serverMeteredPipe := &meteredPipe{rw: serverPipe}
 	var id enode.ID
 	rand.Read(id[:])
-	clientPeer := pm.newPeer(lpv2, NetworkId, p2p.NewPeer(id, "client", nil), clientMeteredPipe)
-	serverPeer := pm.newPeer(lpv2, NetworkId, p2p.NewPeer(id, "server", nil), serverMeteredPipe)
+	clientPeer := pm.newPeer(lpv2, NetworkID, p2p.NewPeer(id, "client", nil), clientMeteredPipe)
+	serverPeer := pm.newPeer(lpv2, NetworkID, p2p.NewPeer(id, "server", nil), serverMeteredPipe)
 	serverPeer.sendQueue = newExecQueue(count)
 	serverPeer.announceType = announceTypeNone
 	serverPeer.fcCosts = make(requestCostTable)

@@ -37,6 +37,7 @@ import (
 
 const bufLimitRatio = 6000 // fixed bufLimit/MRR ratio
 
+// LesServer - a node service running a LES server
 type LesServer struct {
 	lesCommons
 
@@ -56,6 +57,7 @@ type LesServer struct {
 	priorityClientPool *priorityClientPool
 }
 
+// NewLesServer - ctor creating a LES server node service
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	quitSync := make(chan struct{})
 	pm, err := NewProtocolManager(
@@ -124,9 +126,13 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	}
 
 	srv.chtIndexer.Start(eth.BlockChain())
+
+	eth.GetBloomIndexer().AddChildIndexer(srv.bloomTrieIndexer)
+
 	return srv, nil
 }
 
+// APIs - the RPC APIs offered by this server
 func (s *LesServer) APIs() []rpc.API {
 	return []rpc.API{
 		{
@@ -180,12 +186,13 @@ func (s *LesServer) startEventLoop() {
 	}()
 }
 
+// Protocols - rlpx capabilities offered by this LES server
 func (s *LesServer) Protocols() []p2p.Protocol {
 	return s.makeProtocols(ServerProtocolVersions)
 }
 
 // Start starts the LES server
-func (s *LesServer) Start(srvr *p2p.Server) {
+func (s *LesServer) Start(srvr *p2p.Server) error {
 	s.maxPeers = s.config.LightPeers
 	totalRecharge := s.costTracker.totalRecharge()
 	if s.maxPeers > 0 {
@@ -225,22 +232,30 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 	}
 	s.privateKey = srvr.PrivateKey
 	s.protocolManager.blockLoop()
+	return nil
 }
 
+// SetBloomBitsIndexer - adds the bloombits indexer as a child indexer to the bloomtrie indexer
 func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
 	bloomIndexer.AddChildIndexer(s.bloomTrieIndexer)
 }
 
 // Stop stops the LES service
-func (s *LesServer) Stop() {
-	s.chtIndexer.Close()
+func (s *LesServer) Stop() error {
+
+	err := s.chtIndexer.Close()
+
 	// bloom trie indexer is closed by parent bloombits indexer
 	go func() {
 		<-s.protocolManager.noMorePeers
 	}()
+
 	s.freeClientPool.stop()
+
 	s.costTracker.stop()
+
 	s.protocolManager.Stop()
+	return err
 }
 
 // todo(rjl493456442) separate client and server implementation.

@@ -29,8 +29,11 @@ import (
 )
 
 var (
-	ErrMinCap               = errors.New("capacity too small")
-	ErrTotalCap             = errors.New("total capacity exceeded")
+	// ErrMinCap capacity too small
+	ErrMinCap = errors.New("capacity too small")
+	// ErrTotalCap total capacity exceeded
+	ErrTotalCap = errors.New("total capacity exceeded")
+	// ErrUnknownBenchmarkType unknown benchmark type
 	ErrUnknownBenchmarkType = errors.New("unknown benchmark type")
 
 	dropCapacityDelay = time.Second // delay applied to decreasing capacity changes

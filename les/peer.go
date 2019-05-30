@@ -526,7 +526,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		return errResp(ErrGenesisBlockMismatch, "%x (!= %x)", rGenesis[:8], genesis[:8])
 	}
 	if rNetwork != p.network {
-		return errResp(ErrNetworkIdMismatch, "%d (!= %d)", rNetwork, p.network)
+		return errResp(ErrNetworkIDMismatch, "%d (!= %d)", rNetwork, p.network)
 	}
 	if int(rVersion) != p.version {
 		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", rVersion, p.version)

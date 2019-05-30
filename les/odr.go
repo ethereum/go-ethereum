@@ -34,6 +34,7 @@ type LesOdr struct {
 	stop                                       chan struct{}
 }
 
+// NewLesOdr - construct a new LES on demand request
 func NewLesOdr(db ethdb.Database, config *light.IndexerConfig, retriever *retrieveManager) *LesOdr {
 	return &LesOdr{
 		db:            db,
@@ -81,11 +82,17 @@ func (odr *LesOdr) IndexerConfig() *light.IndexerConfig {
 }
 
 const (
+	// MsgBlockBodies - block bodies request
 	MsgBlockBodies = iota
+	// MsgCode - code request
 	MsgCode
+	// MsgReceipts - receipts request
 	MsgReceipts
+	// MsgProofsV2 - proofs request
 	MsgProofsV2
+	// MsgHelperTrieProofs - helper trie proofs request
 	MsgHelperTrieProofs
+	// MsgTxStatus - transaction status request
 	MsgTxStatus
 )
 
