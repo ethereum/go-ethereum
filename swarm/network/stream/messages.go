@@ -265,7 +265,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			}
 		}
 		select {
-		case c.next <- c.batchDone(p, req, hashes):
+		case c.next <- c.AddInterval(req.From, req.To):
 		case <-c.quit:
 			log.Debug("client.handleOfferedHashesMsg() quit")
 		case <-ctx.Done():

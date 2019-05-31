@@ -544,7 +544,6 @@ func (c *client) NextInterval() (start, end uint64, err error) {
 // Client interface for incoming peer Streamer
 type Client interface {
 	NeedData(context.Context, []byte) func(context.Context) error
-	BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error)
 	Close()
 }
 
@@ -572,24 +571,6 @@ func (c *client) nextBatch(from uint64) (nextFrom uint64, nextTo uint64) {
 		nextTo = c.sessionAt
 	}
 	return
-}
-
-func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error {
-	if tf := c.BatchDone(req.Stream, req.From, hashes, req.Root); tf != nil {
-		tp, err := tf()
-		if err != nil {
-			return err
-		}
-
-		if err := p.Send(context.TODO(), tp); err != nil {
-			return err
-		}
-		if c.to > 0 && tp.Takeover.End >= c.to {
-			return p.streamer.Unsubscribe(p.Peer.ID(), req.Stream)
-		}
-		return nil
-	}
-	return c.AddInterval(req.From, req.To)
 }
 
 func (c *client) close() {

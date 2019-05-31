@@ -81,7 +81,6 @@ type testClient struct {
 	t              string
 	wait0          chan bool
 	wait2          chan bool
-	batchDone      chan bool
 	receivedHashes map[string][]byte
 }
 
@@ -90,7 +89,6 @@ func newTestClient(t string) *testClient {
 		t:              t,
 		wait0:          make(chan bool),
 		wait2:          make(chan bool),
-		batchDone:      make(chan bool),
 		receivedHashes: make(map[string][]byte),
 	}
 }
@@ -108,11 +106,6 @@ func (self *testClient) NeedData(ctx context.Context, hash []byte) func(context.
 			return nil
 		}
 	}
-	return nil
-}
-
-func (self *testClient) BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error) {
-	close(self.batchDone)
 	return nil
 }
 
@@ -620,26 +613,9 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 
 	close(tc.wait0)
 
-	timeout := time.NewTimer(100 * time.Millisecond)
-	defer timeout.Stop()
-
-	select {
-	case <-tc.batchDone:
-		t.Fatal("batch done early")
-	case <-timeout.C:
-	}
+	time.Sleep(100 * time.Millisecond)
 
 	close(tc.wait2)
-
-	timeout2 := time.NewTimer(10000 * time.Millisecond)
-	defer timeout2.Stop()
-
-	select {
-	case <-tc.batchDone:
-	case <-timeout2.C:
-		t.Fatal("timeout waiting batchdone call")
-	}
-
 }
 
 func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {

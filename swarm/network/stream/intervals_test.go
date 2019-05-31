@@ -314,10 +314,6 @@ func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func(con
 	return wait
 }
 
-func (c *testExternalClient) BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error) {
-	return nil
-}
-
 func (c *testExternalClient) Close() {}
 
 type testExternalServer struct {
