@@ -128,9 +128,9 @@ var (
 		Name:  "nousb",
 		Usage: "Disables monitoring for and managing USB hardware wallets",
 	}
-	SmartCardFlag = cli.StringFlag{
+	SmartCardDaemonPathFlag = cli.StringFlag{
 		Name:  "pcscdpath",
-		Usage: "Path to the smartcard daemon (pcscd) socket file (unix only, leave empty for platform default)",
+		Usage: "Path to the smartcard daemon (pcscd) socket file",
 		Value: pcsclite.PCSCDSockName,
 	}
 	NetworkIdFlag = cli.Uint64Flag{
@@ -1151,18 +1151,23 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 }
 
 func setSmartCard(ctx *cli.Context, cfg *node.Config) {
-	// Use the platform default unless specified on the command line
-	if len(ctx.GlobalString(SmartCardFlag.Name)) > 0 {
-		if fi, err := os.Stat(ctx.GlobalString(SmartCardFlag.Name)); err == nil {
-			if fi.Mode()&os.ModeType == os.ModeSocket {
-				cfg.SmartCardDaemonPath = ctx.GlobalString(SmartCardFlag.Name)
-			} else {
-				log.Error(fmt.Sprintf("%s doesn't seem to be a socket file", ctx.GlobalString(SmartCardFlag.Name)))
-			}
-		} else {
-			log.Error(fmt.Sprintf("%s doesn't exist", ctx.GlobalString(SmartCardFlag.Name)))
-		}
+	// Skip enabling smartcards if no path is set
+	path := ctx.GlobalString(SmartCardDaemonPathFlag.Name)
+	if path == "" {
+		return
 	}
+	// Sanity check that the smartcard path is valid
+	fi, err := os.Stat(path)
+	if err != nil {
+		log.Error("Failed to verify smartcard daemon path", "path", path, "err", err)
+		return
+	}
+	if fi.Mode()&os.ModeType != os.ModeSocket {
+		log.Error("Invalid smartcard daemon path", "path", path, "type", fi.Mode().String())
+		return
+	}
+	// Smartcard daemon path exists and is a socket, enable it
+	cfg.SmartCardDaemonPath = path
 }
 
 func setDataDir(ctx *cli.Context, cfg *node.Config) {
