@@ -28,6 +28,55 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/shed"
 )
 
+// TestDB_SubscribePull_first is a regression test for the first=false (from-1) bug
+// The bug was that `first=false` was not behind an if-condition `if count > 0`. This resulted in chunks being missed, when
+// the subscription is established before the chunk is actually uploaded. For example if a subscription is established with since=49,
+// which means that the `SubscribePull` method should return chunk with BinID=49 via the channel, and the chunk for BinID=49 is uploaded,
+// after the subscription, then it would have been skipped, where the correct behaviour is to not skip it and return it via the channel.
+func TestDB_SubscribePull_first(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, nil)
+	defer cleanupFunc()
+
+	addrs := make(map[uint8][]chunk.Address)
+	var addrsMu sync.Mutex
+	var wantedChunksCount int
+
+	// prepopulate database with some chunks
+	// before the subscription
+	uploadRandomChunksBin(t, db, addrs, &addrsMu, &wantedChunksCount, 100)
+
+	// any bin should do the trick
+	bin := uint8(1)
+
+	chunksInGivenBin := uint64(len(addrs[bin]))
+
+	errc := make(chan error)
+
+	since := chunksInGivenBin + 1
+
+	go func() {
+		ch, stop := db.SubscribePull(context.TODO(), bin, since, 0)
+		defer stop()
+
+		chnk := <-ch
+
+		if chnk.BinID != since {
+			errc <- fmt.Errorf("expected chunk.BinID to be %v , but got %v", since, chnk.BinID)
+		} else {
+			errc <- nil
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	uploadRandomChunksBin(t, db, addrs, &addrsMu, &wantedChunksCount, 100)
+
+	err := <-errc
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestDB_SubscribePull uploads some chunks before and after
 // pull syncing subscription is created and validates if
 // all addresses are received in the right order
