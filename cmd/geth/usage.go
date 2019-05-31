@@ -72,6 +72,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.AncientFlag,
 			utils.KeyStoreDirFlag,
 			utils.NoUSBFlag,
+			utils.SmartCardDaemonPathFlag,
 			utils.NetworkIdFlag,
 			utils.TestnetFlag,
 			utils.RinkebyFlag,

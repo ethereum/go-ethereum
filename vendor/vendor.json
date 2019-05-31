@@ -135,10 +135,10 @@
 			"revisionTime": "2018-04-18T12:24:29Z"
 		},
 		{
-			"checksumSHA1": "GXqHzd0XkPLX/iulpOncaxbxzZo=",
+			"checksumSHA1": "+fiJGimxPPRSfi9sED4Lp6ytBeo=",
 			"path": "github.com/gballet/go-libpcsclite",
-			"revision": "312b5175032f98274685a4dd81935a92ad2412a5",
-			"revisionTime": "2019-04-03T18:15:18Z"
+			"revision": "2fd9b619dd3c5d74acbd975f997a6441984d74a7",
+			"revisionTime": "2019-05-28T10:50:17Z"
 		},
 		{
 			"checksumSHA1": "gxV/cPPLkByTdY8y172t7v4qcZA=",

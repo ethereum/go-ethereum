@@ -58,6 +58,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+	pcsclite "github.com/gballet/go-libpcsclite"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -128,6 +129,11 @@ var (
 	NoUSBFlag = cli.BoolFlag{
 		Name:  "nousb",
 		Usage: "Disables monitoring for and managing USB hardware wallets",
+	}
+	SmartCardDaemonPathFlag = cli.StringFlag{
+		Name:  "pcscdpath",
+		Usage: "Path to the smartcard daemon (pcscd) socket file",
+		Value: pcsclite.PCSCDSockName,
 	}
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
@@ -1126,6 +1132,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	setWS(ctx, cfg)
 	setNodeUserIdent(ctx, cfg)
 	setDataDir(ctx, cfg)
+	setSmartCard(ctx, cfg)
 
 	if ctx.GlobalIsSet(ExternalSignerFlag.Name) {
 		cfg.ExternalSigner = ctx.GlobalString(ExternalSignerFlag.Name)
@@ -1143,6 +1150,26 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalIsSet(InsecureUnlockAllowedFlag.Name) {
 		cfg.InsecureUnlockAllowed = ctx.GlobalBool(InsecureUnlockAllowedFlag.Name)
 	}
+}
+
+func setSmartCard(ctx *cli.Context, cfg *node.Config) {
+	// Skip enabling smartcards if no path is set
+	path := ctx.GlobalString(SmartCardDaemonPathFlag.Name)
+	if path == "" {
+		return
+	}
+	// Sanity check that the smartcard path is valid
+	fi, err := os.Stat(path)
+	if err != nil {
+		log.Error("Failed to verify smartcard daemon path", "path", path, "err", err)
+		return
+	}
+	if fi.Mode()&os.ModeType != os.ModeSocket {
+		log.Error("Invalid smartcard daemon path", "path", path, "type", fi.Mode().String())
+		return
+	}
+	// Smartcard daemon path exists and is a socket, enable it
+	cfg.SmartCardDaemonPath = path
 }
 
 func setDataDir(ctx *cli.Context, cfg *node.Config) {

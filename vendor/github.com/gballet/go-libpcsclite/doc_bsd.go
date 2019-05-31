@@ -28,55 +28,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+// +build dragonfly darwin freebsd netbsd openbsd solaris
+
 package pcsc
 
-import (
-	"encoding/binary"
-	"net"
-)
-
-/**
- * @brief Wrapper for the MessageSend() function.
- *
- * Called by clients to send messages to the server.
- * The parameters \p command and \p data are set in the \c sharedSegmentMsg
- * struct in order to be sent.
- *
- * @param[in] command Command to be sent.
- * @param[in] dwClientID Client socket handle.
- * @param[in] size Size of the message (\p data).
- * @param[in] data_void Data to be sent.
- *
- * @return Same error codes as MessageSend().
- */
-func messageSendWithHeader(command uint32, conn net.Conn, data []byte) error {
-	/* Translate header into bytes */
-	msgData := make([]byte, 8+len(data))
-	binary.LittleEndian.PutUint32(msgData[4:], command)
-	binary.LittleEndian.PutUint32(msgData, uint32(len(data)))
-
-	/* Copy payload */
-	copy(msgData[8:], data)
-
-	_, err := conn.Write(msgData)
-	return err
-}
-
-// clientSetupSession prepares a communication channel for the client to talk to the server.
-// This is called by the application to create a socket for local IPC with the
-// server. The socket is associated to the file \c PCSCLITE_CSOCK_NAME.
-/*
- * @param[out] pdwClientID Client Connection ID.
- *
- * @retval 0 Success.
- * @retval -1 Can not create the socket.
- * @retval -1 The socket can not open a connection.
- * @retval -1 Can not set the socket to non-blocking.
- */
-func clientSetupSession(daemonPath string) (net.Conn, error) {
-	path := PCSCDSockName
-	if len(daemonPath) > 0 {
-		path = daemonPath
-	}
-	return net.Dial("unix", path)
-}
+const PCSCDSockName string = "/var/run/pcscd/pcscd.comm"
