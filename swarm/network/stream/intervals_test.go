@@ -339,7 +339,7 @@ func (s *testExternalServer) SessionIndex() (uint64, error) {
 	return s.sessionAt, nil
 }
 
-func (s *testExternalServer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
+func (s *testExternalServer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, error) {
 	if to > s.maxKeys {
 		to = s.maxKeys
 	}
@@ -347,7 +347,7 @@ func (s *testExternalServer) SetNextBatch(from uint64, to uint64) ([]byte, uint6
 	for i := from; i <= to; i++ {
 		s.keyFunc(b[(i-from)*HashSize:(i-from+1)*HashSize], i)
 	}
-	return b, from, to, nil, nil
+	return b, from, to, nil
 }
 
 func (s *testExternalServer) GetData(context.Context, []byte) ([]byte, error) {

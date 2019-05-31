@@ -183,7 +183,7 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 
 	defer metrics.GetOrRegisterResettingTimer("send.offered.hashes", nil).UpdateSince(time.Now())
 
-	hashes, from, to, proof, err := s.setNextBatch(f, t)
+	hashes, from, to, err := s.setNextBatch(f, t)
 	if err != nil {
 		return err
 	}
@@ -191,18 +191,12 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 	if len(hashes) == 0 {
 		return nil
 	}
-	if proof == nil {
-		proof = &HandoverProof{
-			Handover: &Handover{},
-		}
-	}
 	s.currentBatch = hashes
 	msg := &OfferedHashesMsg{
-		HandoverProof: proof,
-		Hashes:        hashes,
-		From:          from,
-		To:            to,
-		Stream:        s.stream,
+		Hashes: hashes,
+		From:   from,
+		To:     to,
+		Stream: s.stream,
 	}
 	log.Trace("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "len", len(hashes), "from", from, "to", to)
 	ctx = context.WithValue(ctx, "stream_send_tag", "send.offered.hashes")

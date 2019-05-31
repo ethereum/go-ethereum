@@ -72,10 +72,9 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 			{ //to which the peer responds with offered hashes
 				Code: 1,
 				Msg: &OfferedHashesMsg{
-					HandoverProof: nil,
-					Hashes:        nil,
-					From:          0,
-					To:            0,
+					Hashes: nil,
+					From:   0,
+					To:     0,
 				},
 				Peer: node.ID(),
 			},

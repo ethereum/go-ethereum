@@ -474,7 +474,7 @@ type server struct {
 // setNextBatch adjusts passed interval based on session index and whether
 // stream is live or history. It calls Server SetNextBatch with adjusted
 // interval and returns batch hashes and their interval.
-func (s *server) setNextBatch(from, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
+func (s *server) setNextBatch(from, to uint64) ([]byte, uint64, uint64, error) {
 	if s.stream.Live {
 		if from == 0 {
 			from = s.sessionIndex
@@ -484,7 +484,7 @@ func (s *server) setNextBatch(from, to uint64) ([]byte, uint64, uint64, *Handove
 		}
 	} else {
 		if (to < from && to != 0) || from > s.sessionIndex {
-			return nil, 0, 0, nil, nil
+			return nil, 0, 0, nil
 		}
 		if to == 0 || to > s.sessionIndex {
 			to = s.sessionIndex
@@ -500,7 +500,7 @@ type Server interface {
 	// Based on this index, live and history stream intervals
 	// will be adjusted before calling SetNextBatch.
 	SessionIndex() (uint64, error)
-	SetNextBatch(uint64, uint64) (hashes []byte, from uint64, to uint64, proof *HandoverProof, err error)
+	SetNextBatch(uint64, uint64) (hashes []byte, from uint64, to uint64, err error)
 	GetData(context.Context, []byte) ([]byte, error)
 	Close()
 }

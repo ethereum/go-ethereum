@@ -127,8 +127,8 @@ func (s *testServer) SessionIndex() (uint64, error) {
 	return s.sessionIndex, nil
 }
 
-func (self *testServer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
-	return make([]byte, HashSize), from + 1, to + 1, nil, nil
+func (self *testServer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, error) {
+	return make([]byte, HashSize), from + 1, to + 1, nil
 }
 
 func (self *testServer) GetData(context.Context, []byte) ([]byte, error) {
@@ -179,9 +179,6 @@ func TestStreamerDownstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 				{
 					Code: 1,
 					Msg: &OfferedHashesMsg{
-						HandoverProof: &HandoverProof{
-							Handover: &Handover{},
-						},
 						Hashes: hashes,
 						From:   5,
 						To:     8,
@@ -264,9 +261,6 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 				Code: 1,
 				Msg: &OfferedHashesMsg{
 					Stream: stream,
-					HandoverProof: &HandoverProof{
-						Handover: &Handover{},
-					},
 					Hashes: make([]byte, HashSize),
 					From:   6,
 					To:     9,
@@ -330,9 +324,6 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchangeLive(t *testing.T) {
 				Code: 1,
 				Msg: &OfferedHashesMsg{
 					Stream: stream,
-					HandoverProof: &HandoverProof{
-						Handover: &Handover{},
-					},
 					Hashes: make([]byte, HashSize),
 					From:   1,
 					To:     0,
@@ -441,9 +432,6 @@ func TestStreamerUpstreamSubscribeLiveAndHistory(t *testing.T) {
 				Code: 1,
 				Msg: &OfferedHashesMsg{
 					Stream: NewStream("foo", "", false),
-					HandoverProof: &HandoverProof{
-						Handover: &Handover{},
-					},
 					Hashes: make([]byte, HashSize),
 					From:   6,
 					To:     9,
@@ -454,9 +442,6 @@ func TestStreamerUpstreamSubscribeLiveAndHistory(t *testing.T) {
 				Code: 1,
 				Msg: &OfferedHashesMsg{
 					Stream: stream,
-					HandoverProof: &HandoverProof{
-						Handover: &Handover{},
-					},
 					From:   11,
 					To:     0,
 					Hashes: make([]byte, HashSize),
@@ -514,9 +499,6 @@ func TestStreamerDownstreamCorruptHashesMsgExchange(t *testing.T) {
 				{
 					Code: 1,
 					Msg: &OfferedHashesMsg{
-						HandoverProof: &HandoverProof{
-							Handover: &Handover{},
-						},
 						Hashes: corruptHashes,
 						From:   5,
 						To:     8,
@@ -579,9 +561,6 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 				{
 					Code: 1,
 					Msg: &OfferedHashesMsg{
-						HandoverProof: &HandoverProof{
-							Handover: &Handover{},
-						},
 						Hashes: hashes,
 						From:   5,
 						To:     8,
@@ -670,9 +649,6 @@ func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 					Code: 1,
 					Msg: &OfferedHashesMsg{
 						Stream: NewStream("foo", "", false),
-						HandoverProof: &HandoverProof{
-							Handover: &Handover{},
-						},
 						Hashes: make([]byte, HashSize),
 						From:   6,
 						To:     9,
@@ -683,9 +659,6 @@ func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 					Code: 1,
 					Msg: &OfferedHashesMsg{
 						Stream: stream,
-						HandoverProof: &HandoverProof{
-							Handover: &Handover{},
-						},
 						From:   11,
 						To:     0,
 						Hashes: make([]byte, HashSize),
@@ -787,9 +760,6 @@ func TestMaxPeerServersWithUnsubscribe(t *testing.T) {
 					Code: 1,
 					Msg: &OfferedHashesMsg{
 						Stream: stream,
-						HandoverProof: &HandoverProof{
-							Handover: &Handover{},
-						},
 						Hashes: make([]byte, HashSize),
 						From:   1,
 						To:     0,
@@ -891,9 +861,6 @@ func TestMaxPeerServersWithoutUnsubscribe(t *testing.T) {
 					Code: 1,
 					Msg: &OfferedHashesMsg{
 						Stream: stream,
-						HandoverProof: &HandoverProof{
-							Handover: &Handover{},
-						},
 						Hashes: make([]byte, HashSize),
 						From:   1,
 						To:     0,
