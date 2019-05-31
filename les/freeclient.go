@@ -193,7 +193,11 @@ func (f *freeClientPool) disconnect(address string) {
 	if f.closed {
 		return
 	}
+	// Short circuit if the peer hasn't been registered.
 	e := f.addressMap[address]
+	if e == nil {
+		return
+	}
 	now := f.clock.Now()
 	if !e.connected {
 		log.Debug("Client already disconnected", "address", address)
