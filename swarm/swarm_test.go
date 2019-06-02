@@ -28,9 +28,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xProject/go-ethereum/rpc/endpoints"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
 )
 
@@ -52,7 +52,7 @@ func TestNewSwarm(t *testing.T) {
 		ipcEndpoint = `\\.\pipe\TestSwarm-` + hex.EncodeToString(b)
 	}
 
-	_, server, err := rpc.StartIPCEndpoint(ipcEndpoint, nil)
+	_, server, err := endpoints.StartIPCEndpoint(ipcEndpoint, nil)
 	if err != nil {
 		t.Error(err)
 	}

@@ -335,7 +335,7 @@ func (n *Node) startIPC(apis []rpc.API) error {
 	if n.ipcEndpoint == "" {
 		return nil // IPC disabled.
 	}
-	listener, handler, err := rpc.StartIPCEndpoint(n.ipcEndpoint, apis)
+	listener, handler, err := endpoints.StartIPCEndpoint(n.ipcEndpoint, apis)
 	if err != nil {
 		return err
 	}

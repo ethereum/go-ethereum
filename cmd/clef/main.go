@@ -475,7 +475,7 @@ func signer(c *cli.Context) error {
 			ipcapiURL = filepath.Join(configDir, "clef.ipc")
 		}
 
-		listener, _, err := rpc.StartIPCEndpoint(ipcapiURL, rpcAPI)
+		listener, _, err := endpoints.StartIPCEndpoint(ipcapiURL, rpcAPI)
 		if err != nil {
 			utils.Fatalf("Could not start IPC api: %v", err)
 		}
