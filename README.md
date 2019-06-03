@@ -25,7 +25,7 @@ Swarm is a distributed storage platform and content distribution service, a nati
 
 ## Building the source
 
-Building Swarm requires Go (version 1.10 or later).
+Building Swarm requires Go (version 1.11 or later).
 
     go get -d github.com/ethersphere/swarm
 
@@ -173,15 +173,15 @@ Swarm supports an InfluxDB exporter. Consult the help section to learn about the
 swarm --help | grep metrics
 ```
 
-We use Grafana and InfluxDB to visualise metrics reported by Swarm. We keep our Grafana dashboards under version control at `./swarm/grafana_dashboards`. You could use them or design your own.
+We use Grafana and InfluxDB to visualise metrics reported by Swarm. We keep our Grafana dashboards under version control at https://github.com/ethersphere/grafana-dashboards. You could use them or design your own.
 
-We have built a tool to help with automatic start of Grafana and InfluxDB and provisioning of dashboards at https://github.com/nonsense/stateth , which requires that you have Docker installed.
+We have built a tool to help with automatic start of Grafana and InfluxDB and provisioning of dashboards at https://github.com/nonsense/stateth, which requires that you have Docker installed.
 
 Once you have `stateth` installed, and you have Docker running locally, you have to:
 
 1. Run `stateth` and keep it running in the background
 ```
-stateth --rm --grafana-dashboards-folder $GOPATH/src/github.com/ethersphere/swarm/grafana_dashboards --influxdb-database metrics
+stateth --rm --grafana-dashboards-folder $GOPATH/src/github.com/ethersphere/grafana-dashboards --influxdb-database metrics
 ```
 
 2. Run `swarm` with at least the following params:

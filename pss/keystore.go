@@ -25,8 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethersphere/swarm/log"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+	"github.com/ethersphere/swarm/log"
 )
 
 type KeyStore struct {
