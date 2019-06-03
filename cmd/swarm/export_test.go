@@ -34,8 +34,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/swarm/testdata"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/swarm"
-	"github.com/ethereum/go-ethereum/swarm/testutil"
+	"github.com/ethersphere/swarm"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 const (

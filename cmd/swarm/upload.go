@@ -30,7 +30,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/log"
-	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
+	swarm "github.com/ethersphere/swarm/api/client"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"gopkg.in/urfave/cli.v1"

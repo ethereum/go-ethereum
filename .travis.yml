@@ -1,10 +1,10 @@
 language: go
-go_import_path: github.com/ethereum/go-ethereum
+go_import_path: github.com/ethereum/swarm
 sudo: false
 matrix:
   include:
     - os: linux
-      dist: xenial
+      dist: trusty
       sudo: required
       go: 1.10.x
       script:
@@ -15,7 +15,7 @@ matrix:
       - go run build/ci.go test -coverage $TEST_PACKAGES
 
     - os: linux
-      dist: xenial
+      dist: trusty
       sudo: required
       go: 1.11.x
       script:
@@ -27,7 +27,7 @@ matrix:
 
     # These are the latest Go versions.
     - os: linux
-      dist: xenial
+      dist: trusty
       sudo: required
       go: 1.12.x
       script:
@@ -54,24 +54,20 @@ matrix:
 
     # This builder only tests code linters on latest version of Go
     - os: linux
-      dist: xenial
+      dist: trusty
       go: 1.12.x
       env:
         - lint
-      git:
-        submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go lint
 
     # This builder does the Ubuntu PPA upload
-    - if: repo = ethereum/go-ethereum AND type = push
+    - if: type = push
       os: linux
-      dist: xenial
+      dist: trusty
       go: 1.12.x
       env:
         - ubuntu-ppa
-      git:
-        submodules: false # avoid cloning ethereum/tests
       addons:
         apt:
           packages:
@@ -83,18 +79,16 @@ matrix:
             - python-paramiko
       script:
         - echo '|1|7SiYPr9xl3uctzovOTj4gMwAC1M=|t6ReES75Bo/PxlOPJ6/GsGbTrM0= ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA0aKz5UTUndYgIGG7dQBV+HaeuEZJ2xPHo2DS2iSKvUL4xNMSAY4UguNW+pX56nAQmZKIZZ8MaEvSj6zMEDiq6HFfn5JcTlM80UwlnyKe8B8p7Nk06PPQLrnmQt5fh0HmEcZx+JU9TZsfCHPnX7MNz4ELfZE6cFsclClrKim3BHUIGq//t93DllB+h4O9LHjEUsQ1Sr63irDLSutkLJD6RXchjROXkNirlcNVHH/jwLWR5RcYilNX7S5bIkK8NlWPjsn/8Ua5O7I9/YoE97PpO6i73DTGLh5H9JN/SITwCKBkgSDWUt61uPK3Y11Gty7o2lWsBjhBUm2Y38CBsoGmBw==' >> ~/.ssh/known_hosts
-        - go run build/ci.go debsrc -upload ethereum/ethereum -sftp-user geth-ci -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
+        - go run build/ci.go debsrc -upload ethereum/ethereum -sftp-user ethswarm -signer "Ethereum Swarm Linux Builder <swarm@ethereum.org>"
 
     # This builder does the Linux Azure uploads
-    - if: repo = ethereum/go-ethereum AND type = push
+    - if: type = push
       os: linux
-      dist: xenial
+      dist: trusty
       sudo: required
       go: 1.12.x
       env:
         - azure-linux
-      git:
-        submodules: false # avoid cloning ethereum/tests
       addons:
         apt:
           packages:
@@ -102,134 +96,72 @@ matrix:
       script:
         # Build for the primary platforms that Trusty can manage
         - go run build/ci.go install
-        - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -upload ethswarmstorage/builds
         - go run build/ci.go install -arch 386
-        - go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -upload ethswarmstorage/builds
 
         # Switch over GCC to cross compilation (breaks 386, hence why do it here only)
         - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install gcc-arm-linux-gnueabi libc6-dev-armel-cross gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
         - sudo ln -s /usr/include/asm-generic /usr/include/asm
 
         - GOARM=5 go run build/ci.go install -arch arm -cc arm-linux-gnueabi-gcc
-        - GOARM=5 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - GOARM=5 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload ethswarmstorage/builds
         - GOARM=6 go run build/ci.go install -arch arm -cc arm-linux-gnueabi-gcc
-        - GOARM=6 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - GOARM=6 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload ethswarmstorage/builds
         - GOARM=7 go run build/ci.go install -arch arm -cc arm-linux-gnueabihf-gcc
-        - GOARM=7 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - GOARM=7 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload ethswarmstorage/builds
         - go run build/ci.go install -arch arm64 -cc aarch64-linux-gnu-gcc
-        - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload ethswarmstorage/builds
 
     # This builder does the Linux Azure MIPS xgo uploads
-    - if: repo = ethereum/go-ethereum AND type = push
+    - if: type = push
       os: linux
-      dist: xenial
+      dist: trusty
       services:
         - docker
       go: 1.12.x
       env:
         - azure-linux-mips
-      git:
-        submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go xgo --alltools -- --targets=linux/mips --ldflags '-extldflags "-static"' -v
         - for bin in build/bin/*-linux-mips; do mv -f "${bin}" "${bin/-linux-mips/}"; done
-        - go run build/ci.go archive -arch mips -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - go run build/ci.go archive -arch mips -type tar -signer LINUX_SIGNING_KEY -upload ethswarmstorage/builds
 
         - go run build/ci.go xgo --alltools -- --targets=linux/mipsle --ldflags '-extldflags "-static"' -v
         - for bin in build/bin/*-linux-mipsle; do mv -f "${bin}" "${bin/-linux-mipsle/}"; done
-        - go run build/ci.go archive -arch mipsle -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - go run build/ci.go archive -arch mipsle -type tar -signer LINUX_SIGNING_KEY -upload ethswarmstorage/builds
 
         - go run build/ci.go xgo --alltools -- --targets=linux/mips64 --ldflags '-extldflags "-static"' -v
         - for bin in build/bin/*-linux-mips64; do mv -f "${bin}" "${bin/-linux-mips64/}"; done
-        - go run build/ci.go archive -arch mips64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - go run build/ci.go archive -arch mips64 -type tar -signer LINUX_SIGNING_KEY -upload ethswarmstorage/builds
 
         - go run build/ci.go xgo --alltools -- --targets=linux/mips64le --ldflags '-extldflags "-static"' -v
         - for bin in build/bin/*-linux-mips64le; do mv -f "${bin}" "${bin/-linux-mips64le/}"; done
-        - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
-
-    # This builder does the Android Maven and Azure uploads
-    - if: repo = ethereum/go-ethereum AND type = push
-      os: linux
-      dist: xenial
-      addons:
-        apt:
-          packages:
-            - oracle-java8-installer
-            - oracle-java8-set-default
-      language: android
-      android:
-        components:
-          - platform-tools
-          - tools
-          - android-15
-          - android-19
-          - android-24
-      env:
-        - azure-android
-        - maven-android
-      git:
-        submodules: false # avoid cloning ethereum/tests
-      before_install:
-        - curl https://dl.google.com/go/go1.12.linux-amd64.tar.gz | tar -xz
-        - export PATH=`pwd`/go/bin:$PATH
-        - export GOROOT=`pwd`/go
-        - export GOPATH=$HOME/go
-      script:
-        # Build the Android archive and upload it to Maven Central and Azure
-        - curl https://dl.google.com/android/repository/android-ndk-r19b-linux-x86_64.zip -o android-ndk-r19b.zip
-        - unzip -q android-ndk-r19b.zip && rm android-ndk-r19b.zip
-        - mv android-ndk-r19b $ANDROID_HOME/ndk-bundle
-
-        - mkdir -p $GOPATH/src/github.com/ethereum
-        - ln -s `pwd` $GOPATH/src/github.com/ethereum/go-ethereum
-        - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
+        - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload ethswarmstorage/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
-    - if: repo = ethereum/go-ethereum AND type = push
+    - if: type = push
       os: osx
       go: 1.12.x
       env:
         - azure-osx
-        - azure-ios
-        - cocoapods-ios
-      git:
-        submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go install
-        - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload gethstore/builds
+        - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload ethswarmstorage/builds
 
-        # Build the iOS framework and upload it to CocoaPods and Azure
-        - gem uninstall cocoapods -a -x
-        - gem install cocoapods
-
-        - mv ~/.cocoapods/repos/master ~/.cocoapods/repos/master.bak
-        - sed -i '.bak' 's/repo.join/!repo.join/g' $(dirname `gem which cocoapods`)/cocoapods/sources_manager.rb
-        - if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then git clone --depth=1 https://github.com/CocoaPods/Specs.git ~/.cocoapods/repos/master && pod setup --verbose; fi
-
-        - xctool -version
-        - xcrun simctl list
-
-        # Workaround for https://github.com/golang/go/issues/23749
-        - export CGO_CFLAGS_ALLOW='-fmodules|-fblocks|-fobjc-arc'
-        - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
 
     # This builder does the Azure archive purges to avoid accumulating junk
-    - if: repo = ethereum/go-ethereum AND type = cron
+    - if: type = cron
       os: linux
-      dist: xenial
+      dist: trusty
       go: 1.12.x
       env:
         - azure-purge
-      git:
-        submodules: false # avoid cloning ethereum/tests
       script:
-        - go run build/ci.go purge -store gethstore/builds -days 14
+        - go run build/ci.go purge -store ethswarmstorage/builds -days 14
 
     - name: Race Detector for Swarm
-      if: repo = ethersphere/go-ethereum
       os: linux
-      dist: xenial
+      dist: trusty
       go: 1.12.x
-      git:
-        submodules: false # avoid cloning ethereum/tests
-      script: ./build/travis_keepalive.sh go test -timeout 20m -race ./swarm... ./p2p/{protocols,simulations,testing}/...
+      script: ./build/travis_keepalive.sh go test -v -timeout 20m -race ./swarm...

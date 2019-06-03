@@ -31,8 +31,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	swarmapi "github.com/ethereum/go-ethereum/swarm/api/client"
-	"github.com/ethereum/go-ethereum/swarm/testutil"
+	swarmapi "github.com/ethersphere/swarm/api/client"
+	"github.com/ethersphere/swarm/testutil"
 	"github.com/mattn/go-colorable"
 )
 

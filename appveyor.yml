@@ -1,7 +1,7 @@
 os: Visual Studio 2015
 
 # Clone directly into GOPATH.
-clone_folder: C:\gopath\src\github.com\ethereum\go-ethereum
+clone_folder: C:\gopath\src\github.com\ethereum\swarm
 clone_depth: 5
 version: "{branch}.{build}"
 environment:
@@ -9,12 +9,12 @@ environment:
     GOPATH: C:\gopath
     CC: gcc.exe
   matrix:
-    - GETH_ARCH: amd64
+    - APP_ARCH: amd64
       MSYS2_ARCH: x86_64
       MSYS2_BITS: 64
       MSYSTEM: MINGW64
       PATH: C:\msys64\mingw64\bin\;C:\Program Files (x86)\NSIS\;%PATH%
-    - GETH_ARCH: 386
+    - APP_ARCH: 386
       MSYS2_ARCH: i686
       MSYS2_BITS: 32
       MSYSTEM: MINGW32
@@ -23,8 +23,8 @@ environment:
 install:
   - git submodule update --init
   - rmdir C:\go /s /q
-  - appveyor DownloadFile https://dl.google.com/go/go1.12.5.windows-%GETH_ARCH%.zip
-  - 7z x go1.12.5.windows-%GETH_ARCH%.zip -y -oC:\ > NUL
+  - appveyor DownloadFile https://dl.google.com/go/go1.12.windows-%APP_ARCH%.zip
+  - 7z x go1.12.windows-%APP_ARCH%.zip -y -oC:\ > NUL
   - go version
   - gcc --version
 
@@ -32,8 +32,8 @@ build_script:
   - go run build\ci.go install
 
 after_build:
-  - go run build\ci.go archive -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
-  - go run build\ci.go nsis -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+  - go run build\ci.go archive -type zip -signer WINDOWS_SIGNING_KEY -upload ethswarmstorage/builds
+  - go run build\ci.go nsis -signer WINDOWS_SIGNING_KEY -upload ethswarmstorage/builds
 
 test_script:
   - set CGO_ENABLED=1

@@ -26,8 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
-	"github.com/ethereum/go-ethereum/swarm/storage/feed"
+	swarm "github.com/ethersphere/swarm/api/client"
+	"github.com/ethersphere/swarm/storage/feed"
 	"gopkg.in/urfave/cli.v1"
 )
 
