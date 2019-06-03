@@ -27,6 +27,16 @@ Swarm is a distributed storage platform and content distribution service, a nati
 
 Building Swarm requires Go (version 1.11 or later).
 
+To simply compile the `swarm` binary without a `GOPATH`:
+
+    $ git clone https://github.com/ethersphere/swarm
+    $ cd swarm
+    $ make swarm
+
+You will find the binary under `./build/bin/swarm`.
+
+To build a vendored `swarm` using `go get` you must have `GOPATH` set. Then run:
+
     go get -d github.com/ethersphere/swarm
 
     go install github.com/ethersphere/swarm/cmd/swarm
