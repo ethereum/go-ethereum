@@ -4,7 +4,7 @@
 
 Swarm is a distributed storage platform and content distribution service, a native base layer service of the ethereum web3 stack. The primary objective of Swarm is to provide a decentralized and redundant store for dapp code and data as well as block chain and state data. Swarm is also set out to provide various base layer services for web3, including node-to-node messaging, media streaming, decentralised database services and scalable state-channel infrastructure for decentralised service economies.
 
-[![Travis](https://travis-ci.org/ethereum/go-ethereum.svg?branch=master)](https://travis-ci.org/ethereum/go-ethereum)
+[![Travis](https://travis-ci.org/ethersphere/swarm.svg?branch=master)](https://travis-ci.org/ethersphere/swarm)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ethersphere/orange-lounge?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 ## Table of Contents
@@ -27,15 +27,15 @@ Swarm is a distributed storage platform and content distribution service, a nati
 
 Building Swarm requires Go (version 1.10 or later).
 
-    go get -d github.com/ethereum/go-ethereum
+    go get -d github.com/ethersphere/swarm
 
-    go install github.com/ethereum/go-ethereum/cmd/swarm
+    go install github.com/ethersphere/swarm/cmd/swarm
 
 ## Running Swarm
 
 Going through all the possible command line flags is out of scope here, but we've enumerated a few common parameter combos to get you up to speed quickly on how you can run your own Swarm node.
 
-To run Swarm you need an Ethereum account. You can create a new account by running the following command:
+To run Swarm you need an Ethereum account. Download and install [Geth](https://geth.ethereum.org) if you don't have it on your system. You can create a new Ethereum account by running the following command:
 
     geth account new
 
@@ -88,14 +88,14 @@ Swarm documentation can be found at [https://swarm-guide.readthedocs.io](https:/
 
 ### Go Environment
 
-We assume that you have Go v1.10 installed, and `GOPATH` is set.
+We assume that you have Go v1.11 installed, and `GOPATH` is set.
 
-You must have your working copy under `$GOPATH/src/github.com/ethereum/go-ethereum`.
+You must have your working copy under `$GOPATH/src/github.com/ethersphere/swarm`.
 
-Most likely you will be working from your fork of `go-ethereum`, let's say from `github.com/nirname/go-ethereum`. Clone or move your fork into the right place:
+Most likely you will be working from your fork of `swarm`, let's say from `github.com/nirname/swarm`. Clone or move your fork into the right place:
 
 ```
-git clone git@github.com:nirname/go-ethereum.git $GOPATH/src/github.com/ethereum/go-ethereum
+git clone git@github.com:nirname/swarm.git $GOPATH/src/github.com/ethersphere/swarm
 ```
 
 
@@ -115,7 +115,7 @@ This section explains how to run unit, integration, and end-to-end tests in your
 Testing one library:
 
 ```
-go test -v -cpu 4 ./swarm/api
+go test -v -cpu 4 ./api
 ```
 
 Note: Using options -cpu (number of cores allowed) and -v (logging even if no error) is recommended.
@@ -123,7 +123,7 @@ Note: Using options -cpu (number of cores allowed) and -v (logging even if no er
 Testing only some methods:
 
 ```
-go test -v -cpu 4 ./eth -run TestMethod
+go test -v -cpu 4 ./api -run TestMethod
 ```
 
 Note: here all tests with prefix TestMethod will be run, so if you got TestMethod, TestMethod1, then both!
@@ -228,9 +228,9 @@ Please make sure your contributions adhere to our coding guidelines:
  * Code must adhere to the official Go [formatting](https://golang.org/doc/effective_go.html#formatting) guidelines (i.e. uses [gofmt](https://golang.org/cmd/gofmt/)).
  * Code must be documented adhering to the official Go [commentary](https://golang.org/doc/effective_go.html#commentary) guidelines.
  * Pull requests need to be based on and opened against the `master` branch.
- * [Code review guidelines](https://github.com/ethereum/go-ethereum/wiki/Code-Review-Guidelines).
+ * [Code review guidelines](https://github.com/ethersphere/swarm/blob/master/docs/Code-Review-Guidelines.md).
  * Commit messages should be prefixed with the package(s) they modify.
-   * E.g. "swarm/fuse: ignore default manifest entry"
+   * E.g. "fuse: ignore default manifest entry"
 
 
 ## License
