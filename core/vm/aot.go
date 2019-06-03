@@ -133,14 +133,20 @@ func (ac *AoTContract) Run(input []byte, contract *Contract) ([]byte, error) {
 		dumpText  = false
 	)
 
-	progReader := bytes.NewReader(input)
+	progReader := bytes.NewReader(ac.Code)
 
 	vecSize := alignSize(len(ac.ImportVector), os.Getpagesize())
 
 	vecTextMem, err := makeMem(vecSize+textSize, syscall.PROT_READ|syscall.PROT_WRITE, 0)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("error allocating vector+text memory: ", err)
 	}
+	defer func() {
+		err = syscall.Munmap(vecTextMem)
+		if err != nil {
+			log.Fatal("error freeing vector+text memory", err)
+		}
+	}()
 
 	vecMem := vecTextMem[:vecSize]
 	copy(vecMem[vecSize-len(ac.ImportVector):], ac.ImportVector)
@@ -169,19 +175,25 @@ func (ac *AoTContract) Run(input []byte, contract *Contract) ([]byte, error) {
 		}
 	}
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Error compiling the program:", err)
 	}
 
 	binary.LittleEndian.PutUint64(ac.ImportVector[40:], uint64(obj.InitialMemorySize))
 
 	globalsMemory, err := makeMem(obj.MemoryOffset+linearMemoryAddressSpace, syscall.PROT_NONE, 0)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("error allocating memory for globals:", err)
 	}
+	defer func() {
+		err = syscall.Munmap(globalsMemory)
+		if err != nil {
+			log.Fatal("error freeing globals:", err)
+		}
+	}()
 
 	err = syscall.Mprotect(globalsMemory[:obj.MemoryOffset+obj.InitialMemorySize], syscall.PROT_READ|syscall.PROT_WRITE)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("error changing globals mem protection:", err)
 	}
 
 	copy(globalsMemory, obj.GlobalsMemory)
@@ -189,17 +201,23 @@ func (ac *AoTContract) Run(input []byte, contract *Contract) ([]byte, error) {
 	memoryAddr := memAddr(globalsMemory) + uintptr(obj.MemoryOffset)
 
 	if err := syscall.Mprotect(vecMem, syscall.PROT_READ); err != nil {
-		log.Fatal(err)
+		log.Fatal("error changing protection for vector memory:", err)
 	}
 
 	if err := syscall.Mprotect(textMem, syscall.PROT_READ|syscall.PROT_EXEC); err != nil {
-		log.Fatal(err)
+		log.Fatal("error changing text segment protection: ", err)
 	}
 
 	stackMem, err := makeMem(stackSize, syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_STACK)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("error allocating memory for the contract stack: ", err)
 	}
+	defer func() {
+		err = syscall.Munmap(stackMem)
+		if err != nil {
+			log.Fatal("error freeing contract stack:", err)
+		}
+	}()
 	stackOffset := stackSize - len(obj.StackFrame)
 	copy(stackMem[stackOffset:], obj.StackFrame)
 
