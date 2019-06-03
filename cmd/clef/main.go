@@ -33,6 +33,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -638,6 +639,10 @@ func testExternalUI(api *core.SignerAPI) {
 	errs := make([]string, 0)
 
 	a := common.HexToAddress("0xdeadbeef000000000000000000000000deadbeef")
+	addErr := func(errStr string) {
+		log.Info("Test error", "error", errStr)
+		errs = append(errs, errStr)
+	}
 
 	queryUser := func(q string) string {
 		resp, err := api.UI.OnInputRequired(core.UserInputRequest{
@@ -645,36 +650,39 @@ func testExternalUI(api *core.SignerAPI) {
 			Prompt: q,
 		})
 		if err != nil {
-			errs = append(errs, err.Error())
+			addErr(err.Error())
 		}
 		return resp.Text
 	}
 	expectResponse := func(testcase, question, expect string) {
 		if got := queryUser(question); got != expect {
-			errs = append(errs, fmt.Sprintf("%s: got %v, expected %v", testcase, got, expect))
+			addErr(fmt.Sprintf("%s: got %v, expected %v", testcase, got, expect))
 		}
 	}
 	expectApprove := func(testcase string, err error) {
 		if err == nil || err == accounts.ErrUnknownAccount {
 			return
 		}
-		errs = append(errs, fmt.Sprintf("%v: expected no error, got %v", testcase, err.Error()))
+		addErr(fmt.Sprintf("%v: expected no error, got %v", testcase, err.Error()))
 	}
 	expectDeny := func(testcase string, err error) {
 		if err == nil || err != core.ErrRequestDenied {
-			errs = append(errs, fmt.Sprintf("%v: expected ErrRequestDenied, got %v", testcase, err))
+			addErr(fmt.Sprintf("%v: expected ErrRequestDenied, got %v", testcase, err))
 		}
 	}
-
+	var delay = 1 * time.Second
 	// Test display of info and error
 	{
 		api.UI.ShowInfo("If you see this message, enter 'yes' to next question")
+		time.Sleep(delay)
 		expectResponse("showinfo", "Did you see the message? [yes/no]", "yes")
 		api.UI.ShowError("If you see this message, enter 'yes' to the next question")
+		time.Sleep(delay)
 		expectResponse("showerror", "Did you see the message? [yes/no]", "yes")
 	}
 	{ // Sign data test - clique header
 		api.UI.ShowInfo("Please approve the next request for signing a clique header")
+		time.Sleep(delay)
 		cliqueHeader := types.Header{
 			common.HexToHash("0000H45H"),
 			common.HexToHash("0000H45H"),
@@ -700,14 +708,27 @@ func testExternalUI(api *core.SignerAPI) {
 		_, err = api.SignData(ctx, accounts.MimetypeClique, *addr, hexutil.Encode(cliqueRlp))
 		expectApprove("signdata - clique header", err)
 	}
+	{ // Sign data test - typed data
+		api.UI.ShowInfo("Please approve the next request for signing EIP-712 typed data")
+		time.Sleep(delay)
+		addr, _ := common.NewMixedcaseAddressFromString("0x0011223344556677889900112233445566778899")
+		data := `{"types":{"EIP712Domain":[{"name":"name","type":"string"},{"name":"version","type":"string"},{"name":"chainId","type":"uint256"},{"name":"verifyingContract","type":"address"}],"Person":[{"name":"name","type":"string"},{"name":"test","type":"uint8"},{"name":"wallet","type":"address"}],"Mail":[{"name":"from","type":"Person"},{"name":"to","type":"Person"},{"name":"contents","type":"string"}]},"primaryType":"Mail","domain":{"name":"Ether Mail","version":"1","chainId":"1","verifyingContract":"0xCCCcccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"},"message":{"from":{"name":"Cow","test":"3","wallet":"0xcD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"},"to":{"name":"Bob","wallet":"0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB","test":"2"},"contents":"Hello, Bob!"}}`
+		//_, err := api.SignData(ctx, accounts.MimetypeTypedData, *addr, hexutil.Encode([]byte(data)))
+		var typedData core.TypedData
+		err := json.Unmarshal([]byte(data), &typedData)
+		_, err = api.SignTypedData(ctx, *addr, typedData)
+		expectApprove("sign 712 typed data", err)
+	}
 	{ // Sign data test - plain text
 		api.UI.ShowInfo("Please approve the next request for signing text")
+		time.Sleep(delay)
 		addr, _ := common.NewMixedcaseAddressFromString("0x0011223344556677889900112233445566778899")
 		_, err := api.SignData(ctx, accounts.MimetypeTextPlain, *addr, hexutil.Encode([]byte("hello world")))
 		expectApprove("signdata - text", err)
 	}
 	{ // Sign data test - plain text reject
 		api.UI.ShowInfo("Please deny the next request for signing text")
+		time.Sleep(delay)
 		addr, _ := common.NewMixedcaseAddressFromString("0x0011223344556677889900112233445566778899")
 		_, err := api.SignData(ctx, accounts.MimetypeTextPlain, *addr, hexutil.Encode([]byte("hello world")))
 		expectDeny("signdata - text", err)
@@ -715,6 +736,7 @@ func testExternalUI(api *core.SignerAPI) {
 	{ // Sign transaction
 
 		api.UI.ShowInfo("Please reject next transaction")
+		time.Sleep(delay)
 		data := hexutil.Bytes([]byte{})
 		to := common.NewMixedcaseAddress(a)
 		tx := core.SendTxArgs{
@@ -733,16 +755,19 @@ func testExternalUI(api *core.SignerAPI) {
 	}
 	{ // Listing
 		api.UI.ShowInfo("Please reject listing-request")
+		time.Sleep(delay)
 		_, err := api.List(ctx)
 		expectDeny("list", err)
 	}
 	{ // Import
 		api.UI.ShowInfo("Please reject new account-request")
+		time.Sleep(delay)
 		_, err := api.New(ctx)
 		expectDeny("newaccount", err)
 	}
 	{ // Metadata
 		api.UI.ShowInfo("Please check if you see the Origin in next listing (approve or deny)")
+		time.Sleep(delay)
 		api.List(context.WithValue(ctx, "Origin", "origin.com"))
 		expectResponse("metadata - origin", "Did you see origin (origin.com)? [yes/no] ", "yes")
 	}
