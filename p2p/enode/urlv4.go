@@ -81,7 +81,7 @@ func ParseV4(rawurl string) (*Node, error) {
 // contained in the node has a zero-length signature.
 func NewV4(pubkey *ecdsa.PublicKey, ip net.IP, tcp, udp int) *Node {
 	var r enr.Record
-	if ip != nil {
+	if len(ip) > 0 {
 		r.Set(enr.IP(ip))
 	}
 	if udp != 0 {
@@ -125,10 +125,6 @@ func parseComplete(rawurl string) (*Node, error) {
 	}
 	if ip = net.ParseIP(host); ip == nil {
 		return nil, errors.New("invalid IP address")
-	}
-	// Ensure the IP is 4 bytes long for IPv4 addresses.
-	if ipv4 := ip.To4(); ipv4 != nil {
-		ip = ipv4
 	}
 	// Parse the port numbers.
 	if tcpPort, err = strconv.ParseUint(port, 10, 16); err != nil {

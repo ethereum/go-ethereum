@@ -46,7 +46,7 @@ func TestPythonInterop(t *testing.T) {
 	var (
 		wantID  = HexID("a448f24c6d18e575453db13171562b71999873db5b286df957af199ec94617f7")
 		wantSeq = uint64(1)
-		wantIP  = enr.IP{127, 0, 0, 1}
+		wantIP  = enr.IPv4{127, 0, 0, 1}
 		wantUDP = enr.UDP(30303)
 	)
 	if n.Seq() != wantSeq {
@@ -55,7 +55,7 @@ func TestPythonInterop(t *testing.T) {
 	if n.ID() != wantID {
 		t.Errorf("wrong id: got %x, want %x", n.ID(), wantID)
 	}
-	want := map[enr.Entry]interface{}{new(enr.IP): &wantIP, new(enr.UDP): &wantUDP}
+	want := map[enr.Entry]interface{}{new(enr.IPv4): &wantIP, new(enr.UDP): &wantUDP}
 	for k, v := range want {
 		desc := fmt.Sprintf("loading key %q", k.ENRKey())
 		if assert.NoError(t, n.Load(k), desc) {

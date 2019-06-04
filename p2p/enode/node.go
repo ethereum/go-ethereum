@@ -68,11 +68,19 @@ func (n *Node) Load(k enr.Entry) error {
 	return n.r.Load(k)
 }
 
-// IP returns the IP address of the node.
+// IP returns the IP address of the node. This prefers IPv4 addresses.
 func (n *Node) IP() net.IP {
-	var ip net.IP
-	n.Load((*enr.IP)(&ip))
-	return ip
+	var (
+		ip4 enr.IPv4
+		ip6 enr.IPv6
+	)
+	if n.Load(&ip4) == nil {
+		return net.IP(ip4)
+	}
+	if n.Load(&ip6) == nil {
+		return net.IP(ip6)
+	}
+	return nil
 }
 
 // UDP returns the UDP port of the node.
