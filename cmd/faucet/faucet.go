@@ -260,7 +260,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 		return nil, err
 	}
 	for _, boot := range enodes {
-		old, err := enode.ParseV4(boot.String())
+		old, err := enode.Parse(enode.ValidSchemes, boot.String())
 		if err == nil {
 			stack.Server().AddPeer(old)
 		}

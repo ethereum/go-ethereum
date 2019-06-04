@@ -203,7 +203,7 @@ func initialize() {
 		if len(*argEnode) == 0 {
 			argEnode = scanLineA("Please enter the peer's enode: ")
 		}
-		peer := enode.MustParseV4(*argEnode)
+		peer := enode.MustParse(*argEnode)
 		peers = append(peers, peer)
 	}
 
@@ -747,9 +747,9 @@ func requestExpiredMessagesLoop() {
 }
 
 func extractIDFromEnode(s string) []byte {
-	n, err := enode.ParseV4(s)
+	n, err := enode.Parse(enode.ValidSchemes, s)
 	if err != nil {
-		utils.Fatalf("Failed to parse enode: %s", err)
+		utils.Fatalf("Failed to parse node: %s", err)
 	}
 	return n.ID().Bytes()
 }
