@@ -47,8 +47,12 @@ var (
 var ProtocolLengths = map[uint]uint64{lpv2: 22, lpv3: 24}
 =======
 // ProtocolLengths - Number of implemented message corresponding to different protocol versions.
+<<<<<<< HEAD
 var ProtocolLengths = map[uint]uint64{lpv2: 22}
 >>>>>>> Further LES cleanup
+=======
+var ProtocolLengths = map[uint]uint64{lpv2: 22, lpv3: 24}
+>>>>>>> resolving conflicts
 
 const (
 	// NetworkID - the network id
