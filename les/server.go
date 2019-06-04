@@ -39,10 +39,6 @@ import (
 
 const bufLimitRatio = 6000 // fixed bufLimit/MRR ratio
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> resolving conflicts
 const (
 	logFileName          = ""    // csv log file name (disabled if empty)
 	logClientPoolMetrics = true  // log client pool metrics
@@ -52,12 +48,7 @@ const (
 	logProtocolHandler   = true  // log protocol handler events
 )
 
-<<<<<<< HEAD
-=======
-=======
->>>>>>> resolving conflicts
 // LesServer is a node service running a LES server
->>>>>>> Correcting documentation format
 type LesServer struct {
 	lesCommons
 
@@ -310,10 +301,7 @@ func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
 func (s *LesServer) Stop() error {
 	s.fcManager.Stop()
 	s.chtIndexer.Close()
-<<<<<<< HEAD
-=======
 
->>>>>>> resolving conflicts
 	// bloom trie indexer is closed by parent bloombits indexer
 	go func() {
 		<-s.protocolManager.noMorePeers
