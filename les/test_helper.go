@@ -23,6 +23,7 @@ import (
 	"context"
 	"crypto/rand"
 	"math/big"
+	"net"
 	"testing"
 	"time"
 
@@ -221,6 +222,7 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 	if client.registrar != nil {
 		client.registrar.start(backend)
 	}
+	client.handler.start()
 	return client.handler
 }
 
@@ -280,6 +282,8 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 		},
 		fcManager: flowcontrol.NewClientManager(nil, clock),
 	}
+	key, _ := crypto.GenerateKey()
+	server.privateKey = key
 	server.costTracker, server.minCapacity = newCostTracker(db, server.config, nil)
 	server.costTracker.costListHook = func() RequestCostList { return testCostList(0) } // Disable flow control mechanism.
 	server.handler = newServerHandler(server, simulation.Blockchain(), db, txpool, nil, func() bool { return true })
@@ -349,14 +353,13 @@ func (p *testPeer) close() {
 
 func newTestPeerPair(name string, version int, server *serverHandler, client *clientHandler) (*testPeer, <-chan error, *testPeer, <-chan error) {
 	// Create a message pipe to communicate through
-	app, net := p2p.MsgPipe()
+	app, s := p2p.MsgPipe()
 
 	// Generate a random id and create the peer
-	var id enode.ID
-	rand.Read(id[:])
+	en := enode.NewV4(&server.server.privateKey.PublicKey, net.ParseIP("127.0.0.1"), 35000, 35000)
 
-	peer1 := newClientPeer(version, NetworkId, p2p.NewPeer(id, name, nil), net)
-	peer2 := newServerPeer(version, NetworkId, false, p2p.NewPeer(id, name, nil), app)
+	peer1 := newClientPeer(version, NetworkId, p2p.NewPeer(en.ID(), name, nil), s)
+	peer2 := newServerPeer(version, NetworkId, false, p2p.NewPeer(en.ID(), name, nil), app)
 
 	// Start the peer on a new thread
 	errc1 := make(chan error, 1)
@@ -375,7 +378,7 @@ func newTestPeerPair(name string, version int, server *serverHandler, client *cl
 		case errc1 <- client.handle(peer2):
 		}
 	}()
-	return &testPeer{cpeer: peer1, net: net, app: app}, errc1, &testPeer{speer: peer2, net: app, app: net}, errc2
+	return &testPeer{cpeer: peer1, net: s, app: app}, errc1, &testPeer{speer: peer2, net: app, app: s}, errc2
 }
 
 // handshake simulates a trivial handshake that expects the same state from the

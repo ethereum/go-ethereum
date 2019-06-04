@@ -62,14 +62,18 @@ func (self *lesTxRelay) registerPeer(p *serverPeer) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
-	self.peerList = self.ps.allServerPeers()
+	self.peerList = append(self.peerList, p)
 }
 
 func (self *lesTxRelay) unregisterPeer(p *serverPeer) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
-	self.peerList = self.ps.allServerPeers()
+	for index, peer := range self.peerList {
+		if peer == p {
+			self.peerList = append(self.peerList[:index], self.peerList[index+1:]...)
+		}
+	}
 }
 
 // send sends a list of transactions to at most a given number of peers at

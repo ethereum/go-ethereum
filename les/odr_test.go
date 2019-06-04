@@ -213,13 +213,13 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 
 	// expect retrievals to fail (except genesis block) without a les peer
 	client.handler.backend.peers.lock.Lock()
-	client.peer.speer.hasBlock = func(common.Hash, uint64, bool) bool { return false }
+	client.peer.speer.hasBlockCallback = func() bool { return false }
 	client.handler.backend.peers.lock.Unlock()
 	test(expFail)
 
 	// expect all retrievals to pass
 	client.handler.backend.peers.lock.Lock()
-	client.peer.speer.hasBlock = func(common.Hash, uint64, bool) bool { return true }
+	client.peer.speer.hasBlockCallback = nil
 	client.handler.backend.peers.lock.Unlock()
 	test(5)
 

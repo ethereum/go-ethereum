@@ -226,6 +226,7 @@ func (s *LightEthereum) Start(srvr *p2p.Server) error {
 	// Start bloom request workers.
 	s.wg.Add(bloomServiceThreads)
 	s.startBloomHandlers(params.BloomBitsBlocksClient)
+	s.handler.start()
 
 	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.config.NetworkId)
 

@@ -311,8 +311,8 @@ type serverPeer struct {
 	updateCount uint64
 	updateTime  mclock.AbsTime
 
-	// Callbacks
-	hasBlock func(common.Hash, uint64, bool) bool // Used to determine whether the server has the specified block.
+	// Test Hooks
+	hasBlockCallback func() bool
 }
 
 func newServerPeer(version int, network uint64, trusted bool, p *p2p.Peer, rw p2p.MsgReadWriter) *serverPeer {
@@ -475,11 +475,14 @@ func (p *serverPeer) getTxRelayCost(amount, size int) uint64 {
 	return cost
 }
 
-// HasBlock checks if the peer has a given block
-func (p *serverPeer) HasBlock(hash common.Hash, number uint64, hasState bool) bool {
+// hasBlock checks if the peer has a given block
+func (p *serverPeer) hasBlock(hash common.Hash, number uint64, hasState bool) bool {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
+	if p.hasBlockCallback != nil {
+		return p.hasBlockCallback()
+	}
 	head := p.headInfo.Number
 	var since, recent uint64
 	if hasState {
@@ -489,9 +492,7 @@ func (p *serverPeer) HasBlock(hash common.Hash, number uint64, hasState bool) bo
 		since = p.chainSince
 		recent = p.chainRecent
 	}
-	hasBlock := p.hasBlock
-
-	return head >= number && number >= since && (recent == 0 || number+recent+4 > head) && hasBlock != nil && hasBlock(hash, number, hasState)
+	return head >= number && number >= since && (recent == 0 || number+recent+4 > head)
 }
 
 // updateFlowControl updates the flow control parameters belonging to the server
@@ -514,6 +515,15 @@ func (p *serverPeer) updateFlowControl(update keyValueMap) {
 			p.fcCosts[code] = cost
 		}
 	}
+}
+
+// updateHead updates the head information based on the announcement from
+// the peer.
+func (p *serverPeer) updateHead(hash common.Hash, number uint64, td *big.Int) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	p.headInfo = blockInfo{Hash: hash, Number: number, Td: td}
 }
 
 // Handshake executes the les protocol handshake, negotiating version number,
