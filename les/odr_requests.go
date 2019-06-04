@@ -45,7 +45,7 @@ var (
 	errUselessNodes        = errors.New("useless nodes in merkle proof nodeset")
 )
 
-// LesOdrRequest - an on-demand request
+// LesOdrRequest represents an on-demand request from a client
 type LesOdrRequest interface {
 	GetCost(*peer) uint64
 	CanSend(*peer) bool
@@ -53,7 +53,7 @@ type LesOdrRequest interface {
 	Validate(ethdb.Database, *Msg) error
 }
 
-// LesRequest - generate a LES on demand request from a light one
+// LesRequest generates a LES on demand request based on an on-demand request from the 'light' namespace
 func LesRequest(req light.OdrRequest) LesOdrRequest {
 	switch r := req.(type) {
 	case *light.BlockRequest:
@@ -180,14 +180,14 @@ func (r *ReceiptsRequest) Validate(db ethdb.Database, msg *Msg) error {
 	return nil
 }
 
-// ProofReq - a request for a proof
+// ProofReq is a message requesting a proof
 type ProofReq struct {
 	BHash       common.Hash
 	AccKey, Key []byte
 	FromLevel   uint
 }
 
-// TrieRequest -  ODR request type for state/storage trie entries, see LesOdrRequest interface
+// TrieRequest is an ODR request message for state/storage trie entries, see LesOdrRequest interface
 type TrieRequest light.TrieRequest
 
 // GetCost returns the cost of the given ODR request according to the serving
@@ -236,13 +236,13 @@ func (r *TrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 	return nil
 }
 
-// CodeReq - a request for contract code
+// CodeReq a request for contract code
 type CodeReq struct {
 	BHash  common.Hash
 	AccKey []byte
 }
 
-// CodeRequest -  ODR request type for node data (used for retrieving contract code), see LesOdrRequest interface
+// CodeRequest is an ODR request type for code (used for retrieving contract code)
 type CodeRequest light.CodeRequest
 
 // GetCost returns the cost of the given ODR request according to the serving
@@ -301,7 +301,7 @@ const (
 	auxHeader = 2
 )
 
-// HelperTrieReq - a request for part of a trie
+// HelperTrieReq is a request for part of a trie
 type HelperTrieReq struct {
 	Type              uint
 	TrieIdx           uint64
@@ -309,13 +309,13 @@ type HelperTrieReq struct {
 	FromLevel, AuxReq uint
 }
 
-// HelperTrieResps - response to HelperTrieReq, providing merkle proofs
+// HelperTrieResps response to HelperTrieReq, providing merkle proofs
 type HelperTrieResps struct { // describes all responses, not just a single one
 	Proofs  light.NodeList
 	AuxData [][]byte
 }
 
-// ChtRequest - ODR request type for requesting headers by Canonical Hash Trie, see LesOdrRequest interface
+// ChtRequest is an ODR request type for requesting headers by Canonical Hash Trie
 type ChtRequest light.ChtRequest
 
 // GetCost returns the cost of the given ODR request according to the serving
@@ -399,12 +399,10 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 	return nil
 }
 
-// BloomReq -
 type BloomReq struct {
 	BloomTrieNum, BitIdx, SectionIndex, FromLevel uint64
 }
 
-// BloomRequest - ODR request type for requesting headers by Canonical Hash Trie, see LesOdrRequest interface
 type BloomRequest light.BloomRequest
 
 // GetCost returns the cost of the given ODR request according to the serving

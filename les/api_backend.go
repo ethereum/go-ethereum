@@ -225,7 +225,6 @@ func (b *ClientBackend) ChainDb() ethdb.Database {
 	return b.eth.chainDb
 }
 
-// EventMux ...
 func (b *ClientBackend) EventMux() *event.TypeMux {
 	return b.eth.eventMux
 }
@@ -240,12 +239,14 @@ func (b *ClientBackend) ExtRPCEnabled() bool {
 	return b.extRPCEnabled
 }
 
-// RPCGasCap - return the  global gas cap for eth_call over rpc (DoS protection)
+// RPCGasCap return the  global gas cap for eth_call over rpc (DoS protection)
 func (b *ClientBackend) RPCGasCap() *big.Int {
 	return b.eth.config.RPCGasCap
 }
 
-// BloomStatus ..
+// BloomStatus returns the number of BloomBitsBlocksClient (the number of blocks a single bloom bit section vector
+// contains on the light client side) and sections, (which is the number of processed sections maintained by the indexer
+// and also the information about the last header indexed for potential canonical verifications).
 func (b *ClientBackend) BloomStatus() (uint64, uint64) {
 	if b.eth.bloomIndexer == nil {
 		return 0, 0
@@ -254,7 +255,6 @@ func (b *ClientBackend) BloomStatus() (uint64, uint64) {
 	return params.BloomBitsBlocksClient, sections
 }
 
-// ServiceFilter ...
 func (b *ClientBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
 	for i := 0; i < bloomFilterThreads; i++ {
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)

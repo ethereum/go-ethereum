@@ -37,7 +37,7 @@ import (
 
 const bufLimitRatio = 6000 // fixed bufLimit/MRR ratio
 
-// LesServer - a node service running a LES server
+// LesServer is a node service running a LES server
 type LesServer struct {
 	lesCommons
 
@@ -57,7 +57,7 @@ type LesServer struct {
 	priorityClientPool *priorityClientPool
 }
 
-// NewLesServer - ctor creating a LES server node service
+// NewLesServer creates a LES server node service
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	quitSync := make(chan struct{})
 	pm, err := NewProtocolManager(
@@ -132,7 +132,7 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	return srv, nil
 }
 
-// APIs - the RPC APIs offered by this server
+// APIs lists the RPC APIs offered by this server
 func (s *LesServer) APIs() []rpc.API {
 	return []rpc.API{
 		{
@@ -186,7 +186,7 @@ func (s *LesServer) startEventLoop() {
 	}()
 }
 
-// Protocols - rlpx capabilities offered by this LES server
+// Protocols lists the rlpx capabilities offered by this LES server
 func (s *LesServer) Protocols() []p2p.Protocol {
 	return s.makeProtocols(ServerProtocolVersions)
 }
@@ -235,7 +235,7 @@ func (s *LesServer) Start(srvr *p2p.Server) error {
 	return nil
 }
 
-// SetBloomBitsIndexer - adds the bloombits indexer as a child indexer to the bloomtrie indexer
+// SetBloomBitsIndexer adds the bloombits indexer as a child indexer to the bloomtrie indexer
 func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
 	bloomIndexer.AddChildIndexer(s.bloomTrieIndexer)
 }

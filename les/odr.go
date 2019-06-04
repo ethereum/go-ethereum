@@ -82,17 +82,17 @@ func (odr *LesOdr) IndexerConfig() *light.IndexerConfig {
 }
 
 const (
-	// MsgBlockBodies - block bodies request
+	// MsgBlockBodies represents a block bodies request
 	MsgBlockBodies = iota
-	// MsgCode - code request
+	// MsgCode represents a code request
 	MsgCode
-	// MsgReceipts - receipts request
+	// MsgReceipts represents a receipts request
 	MsgReceipts
-	// MsgProofsV2 - proofs request
+	// MsgProofsV2 represents a v2 proofs request
 	MsgProofsV2
-	// MsgHelperTrieProofs - helper trie proofs request
+	// MsgHelperTrieProofs represents a helper trie proofs request
 	MsgHelperTrieProofs
-	// MsgTxStatus - transaction status request
+	// MsgTxStatus represents a transaction status request
 	MsgTxStatus
 )
 
