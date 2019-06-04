@@ -113,6 +113,9 @@ func TestFreezerBasicsClosing(t *testing.T) {
 		f.Append(uint64(x), data)
 		f.Close()
 		f, err = newCustomTable(os.TempDir(), fname, m1, m2, 50, true)
+		if err != nil {
+			t.Fatalf("failed reopening table, attempt %d: %v", x, err)
+		}
 	}
 	defer f.Close()
 
@@ -170,6 +173,10 @@ func TestFreezerRepairDanglingHead(t *testing.T) {
 	// Now open it again
 	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, 50, true)
+		if err != nil {
+			t.Fatalf("failed reopening table: %v", err)
+		}
+		defer f.Close()
 		// The last item should be missing
 		if _, err = f.Retrieve(0xff); err == nil {
 			t.Errorf("Expected error for missing index entry")
@@ -234,7 +241,11 @@ func TestFreezerRepairDanglingHeadLarge(t *testing.T) {
 	}
 	// And if we open it, we should now be able to read all of them (new values)
 	{
-		f, _ := newCustomTable(os.TempDir(), fname, rm, wm, 50, true)
+		f, err := newCustomTable(os.TempDir(), fname, rm, wm, 50, true)
+		if err != nil {
+			t.Fatalf("failed reopening table: %v", err)
+		}
+		defer f.Close()
 		for y := 1; y < 255; y++ {
 			exp := getChunk(15, ^y)
 			got, err := f.Retrieve(uint64(y))
@@ -269,8 +280,11 @@ func TestSnappyDetection(t *testing.T) {
 	// Open without snappy
 	{
 		f, err := newCustomTable(os.TempDir(), fname, wm, rm, 50, false)
+		if err != nil {
+			t.Fatalf("failed reopening table: %v", err)
+		}
+		defer f.Close()
 		if _, err = f.Retrieve(0); err == nil {
-			f.Close()
 			t.Fatalf("expected empty table")
 		}
 	}
@@ -278,9 +292,12 @@ func TestSnappyDetection(t *testing.T) {
 	// Open with snappy
 	{
 		f, err := newCustomTable(os.TempDir(), fname, wm, rm, 50, true)
+		if err != nil {
+			t.Fatalf("failed reopening table: %v", err)
+		}
+		defer f.Close()
 		// There should be 255 items
 		if _, err = f.Retrieve(0xfe); err != nil {
-			f.Close()
 			t.Fatalf("expected no error, got %v", err)
 		}
 	}
@@ -346,8 +363,8 @@ func TestFreezerRepairDanglingIndex(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer f.Close()
 		if f.items != 7 {
-			f.Close()
 			t.Fatalf("expected %d items, got %d", 7, f.items)
 		}
 		if err := assertFileSize(fileToCrop, 15); err != nil {
@@ -482,8 +499,8 @@ func TestFreezerReadAndTruncate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer f.Close()
 		if f.items != 30 {
-			f.Close()
 			t.Fatalf("expected %d items, got %d", 0, f.items)
 		}
 		for y := byte(0); y < 30; y++ {
@@ -498,7 +515,6 @@ func TestFreezerReadAndTruncate(t *testing.T) {
 				t.Fatalf("error %v", err)
 			}
 		}
-		f.Close()
 	}
 }
 
@@ -567,6 +583,7 @@ func TestOffset(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer f.Close()
 		f.printIndex()
 		// It should allow writing item 6
 		f.Append(6, getChunk(20, 0x99))
