@@ -414,7 +414,8 @@ func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainPa
 func (api *RetestethAPI) SendRawTransaction(ctx context.Context, rawTx hexutil.Bytes) (common.Hash, error) {
 	tx := new(types.Transaction)
 	if err := rlp.DecodeBytes(rawTx, tx); err != nil {
-		return common.Hash{}, err
+		// Return nil is not by mistake - some tests include sending transaction where gasLimit overflows uint64
+		return common.Hash{}, nil
 	}
 	signer := types.MakeSigner(api.chainConfig, big.NewInt(int64(api.blockNumber)))
 	sender, err := types.Sender(signer, tx)
