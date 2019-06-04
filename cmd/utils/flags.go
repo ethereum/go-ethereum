@@ -1161,7 +1161,7 @@ func setSmartCard(ctx *cli.Context, cfg *node.Config) {
 	// Sanity check that the smartcard path is valid
 	fi, err := os.Stat(path)
 	if err != nil {
-		log.Info("Smartcard socket not found, disabling", err", err)
+		log.Info("Smartcard socket not found, disabling", "err", err)
 		return
 	}
 	if fi.Mode()&os.ModeType != os.ModeSocket {
