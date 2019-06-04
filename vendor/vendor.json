@@ -549,12 +549,6 @@
 			"revisionTime": "2019-05-31T09:30:28Z"
 		},
 		{
-			"checksumSHA1": "T77w498ZNEY5giuaY6In8CFOSZw=",
-			"path": "github.com/ethereum/go-ethereum/p2p/protocols",
-			"revision": "7a22da98b9f81d206eb65d1fa4f5e773d888bac3",
-			"revisionTime": "2019-05-31T09:30:28Z"
-		},
-		{
 			"checksumSHA1": "F0b72D7R9g/viwLv0a+0aQmJ3ZI=",
 			"path": "github.com/ethereum/go-ethereum/p2p/simulations",
 			"revision": "7a22da98b9f81d206eb65d1fa4f5e773d888bac3",

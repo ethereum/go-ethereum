@@ -29,7 +29,7 @@
 //  	"fmt"
 //  	"os"
 //  	pss "github.com/ethersphere/swarm/pss/client"
-//  	"github.com/ethereum/go-ethereum/p2p/protocols"
+//  	"github.com/ethersphere/swarm/p2p/protocols"
 //  	"github.com/ethereum/go-ethereum/p2p"
 //  	"github.com/ethersphere/swarm/pot"
 //  	"github.com/ethersphere/swarm/log"

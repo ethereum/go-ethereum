@@ -6,9 +6,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/p2p/protocols"
 )
 
 // ENRAddrEntry is the entry type to store the bzz key in the enode

@@ -23,8 +23,8 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
 )
 
