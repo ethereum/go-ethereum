@@ -102,35 +102,20 @@ var requests = map[uint64]requestInfo{
 type errCode int
 
 const (
-	// ErrMsgTooLarge - message too large
 	ErrMsgTooLarge = iota
-	// ErrDecode - decode error
 	ErrDecode
-	// ErrInvalidMsgCode - invalid message error
 	ErrInvalidMsgCode
-	// ErrProtocolVersionMismatch - mismatched protocol version
 	ErrProtocolVersionMismatch
-	// ErrNetworkIDMismatch - wrong network id
 	ErrNetworkIDMismatch
-	// ErrGenesisBlockMismatch - incompatible genesis blocks
 	ErrGenesisBlockMismatch
-	// ErrNoStatusMsg -
 	ErrNoStatusMsg
-	// ErrExtraStatusMsg -
 	ErrExtraStatusMsg
-	// ErrSuspendedPeer -
 	ErrSuspendedPeer
-	// ErrUselessPeer -
 	ErrUselessPeer
-	// ErrRequestRejected -
 	ErrRequestRejected
-	// ErrUnexpectedResponse -
 	ErrUnexpectedResponse
-	// ErrInvalidResponse -
 	ErrInvalidResponse
-	// ErrTooManyTimeouts -
 	ErrTooManyTimeouts
-	// ErrMissingKey -
 	ErrMissingKey
 )
 

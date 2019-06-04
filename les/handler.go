@@ -50,21 +50,21 @@ const (
 
 	ethVersion = 63 // equivalent eth version for the downloader
 
-	// MaxHeaderFetch -  Amount of block headers to be fetched per retrieval request
+	// MaxHeaderFetch is the maximum number of block headers to be fetched per retrieval request
 	MaxHeaderFetch = 192
-	// MaxBodyFetch - Amount of block bodies to be fetched per retrieval request
+	// MaxBodyFetch is the maximum number of block bodies to be fetched per retrieval request
 	MaxBodyFetch = 32
-	// MaxReceiptFetch - Amount of transaction receipts to allow fetching per request
+	// MaxReceiptFetch is the maximum number of transaction receipts to allow to be fetched per request
 	MaxReceiptFetch = 128
-	// MaxCodeFetch - Amount of contract codes to allow fetching per request
+	// MaxCodeFetch is the maximum number of contract codes to allow to be fetched per request
 	MaxCodeFetch = 64
-	// MaxProofsFetch - Amount of merkle proofs to be fetched per retrieval request
+	// MaxProofsFetch is the maximum number of merkle proofs to be fetched per retrieval request
 	MaxProofsFetch = 64
-	// MaxHelperTrieProofsFetch - Amount of merkle proofs to be fetched per retrieval request
+	// MaxHelperTrieProofsFetch is the maximum number of merkle proofs to be fetched per retrieval request
 	MaxHelperTrieProofsFetch = 64
-	// MaxTxSend - Amount of transactions to be send per request
+	// MaxTxSend is the maximum number of transactions to be sent per request
 	MaxTxSend = 64
-	// MaxTxStatus - Amount of transactions to queried per request
+	// MaxTxStatus is the maximum number of transactions to queried per request
 	MaxTxStatus = 256
 
 	disableClientRemovePeer = false
@@ -74,7 +74,7 @@ func errResp(code errCode, format string, v ...interface{}) error {
 	return fmt.Errorf("%v - %v", code, fmt.Sprintf(format, v...))
 }
 
-// BlockChain - a blockchain
+// BlockChain represents a blockchain, offering functions to query and maintain it
 type BlockChain interface {
 	Config() *params.ChainConfig
 	HasHeader(hash common.Hash, number uint64) bool

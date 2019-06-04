@@ -39,6 +39,7 @@ import (
 
 const bufLimitRatio = 6000 // fixed bufLimit/MRR ratio
 
+<<<<<<< HEAD
 const (
 	logFileName          = ""    // csv log file name (disabled if empty)
 	logClientPoolMetrics = true  // log client pool metrics
@@ -48,6 +49,9 @@ const (
 	logProtocolHandler   = true  // log protocol handler events
 )
 
+=======
+// LesServer is a node service running a LES server
+>>>>>>> Correcting documentation format
 type LesServer struct {
 	lesCommons
 
@@ -70,7 +74,7 @@ type LesServer struct {
 	priorityClientPool         *priorityClientPool
 }
 
-// NewLesServer - ctor creating a LES server node service
+// NewLesServer creates a LES server node service
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	var csvLogger *csvlogger.Logger
 	if logFileName != "" {
@@ -160,7 +164,7 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	return srv, nil
 }
 
-// APIs - the RPC APIs offered by this server
+// APIs lists the RPC APIs offered by this server
 func (s *LesServer) APIs() []rpc.API {
 	return []rpc.API{
 		{
@@ -232,7 +236,7 @@ func (s *LesServer) startEventLoop() {
 	}()
 }
 
-// Protocols - rlpx capabilities offered by this LES server
+// Protocols lists the rlpx capabilities offered by this LES server
 func (s *LesServer) Protocols() []p2p.Protocol {
 	return s.makeProtocols(ServerProtocolVersions)
 }
@@ -291,7 +295,7 @@ func (s *LesServer) Start(srvr *p2p.Server) error {
 	return nil
 }
 
-// SetBloomBitsIndexer - adds the bloombits indexer as a child indexer to the bloomtrie indexer
+// SetBloomBitsIndexer adds the bloombits indexer as a child indexer to the bloomtrie indexer
 func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
 	bloomIndexer.AddChildIndexer(s.bloomTrieIndexer)
 }
