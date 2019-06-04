@@ -566,7 +566,7 @@ func (api *RetestethAPI) RewindToBlock(ctx context.Context, newHead uint64) (boo
 	if err := api.blockchain.SetHead(newHead); err != nil {
 		return false, err
 	}
-	api.blockNumber = uint64(newHead)
+	api.blockNumber = newHead
 	return true, nil
 }
 
