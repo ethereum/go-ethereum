@@ -22,36 +22,58 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
 var parseNodeTests = []struct {
-	rawurl     string
+	input      string
 	wantError  string
 	wantResult *Node
 }{
+	// Records
 	{
-		rawurl:    "http://foobar",
-		wantError: `invalid URL scheme, want "enode"`,
+		input: "enr:-IS4QGrdq0ugARp5T2BZ41TrZOqLc_oKvZoPuZP5--anqWE_J-Tucc1xgkOL7qXl0puJgT7qc2KSvcupc4NCb0nr4tdjgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQM6UUF2Rm-oFe1IH_rQkRCi00T2ybeMHRSvw1HDpRvjPYN1ZHCCdl8",
+		wantResult: func() *Node {
+			testKey, _ := crypto.HexToECDSA("45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8")
+			var r enr.Record
+			r.Set(enr.IP{127, 0, 0, 1})
+			r.Set(enr.UDP(30303))
+			r.SetSeq(99)
+			SignV4(&r, testKey)
+			n, _ := New(ValidSchemes, &r)
+			return n
+		}(),
+	},
+	// Invalid Records
+	{
+		input:     "enr:",
+		wantError: "EOF", // could be nicer
 	},
 	{
-		rawurl:    "enode://01010101@123.124.125.126:3",
-		wantError: `invalid node ID (wrong length, want 128 hex chars)`,
+		input:     "enr:x",
+		wantError: "illegal base64 data at input byte 0",
 	},
-	// Complete nodes with IP address.
 	{
-		rawurl:    "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@hostname:3",
+		input:     "enr:-EmGZm9vYmFyY4JpZIJ2NIJpcIR_AAABiXNlY3AyNTZrMaEDOlFBdkZvqBXtSB_60JEQotNE9sm3jB0Ur8NRw6Ub4z2DdWRwgnZf",
+		wantError: enr.ErrInvalidSig.Error(),
+	},
+	// Complete node URLs with IP address and ports
+	{
+		input:     "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@hostname:3",
 		wantError: `invalid IP address`,
 	},
 	{
-		rawurl:    "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@127.0.0.1:foo",
+		input:     "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@127.0.0.1:foo",
 		wantError: `invalid port`,
 	},
 	{
-		rawurl:    "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@127.0.0.1:3?discport=foo",
+		input:     "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@127.0.0.1:3?discport=foo",
 		wantError: `invalid discport in query`,
 	},
 	{
-		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@127.0.0.1:52150",
+		input: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@127.0.0.1:52150",
 		wantResult: NewV4(
 			hexPubkey("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 			net.IP{0x7f, 0x0, 0x0, 0x1},
@@ -60,7 +82,7 @@ var parseNodeTests = []struct {
 		),
 	},
 	{
-		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@[::]:52150",
+		input: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@[::]:52150",
 		wantResult: NewV4(
 			hexPubkey("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 			net.ParseIP("::"),
@@ -69,7 +91,7 @@ var parseNodeTests = []struct {
 		),
 	},
 	{
-		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@[2001:db8:3c4d:15::abcd:ef12]:52150",
+		input: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@[2001:db8:3c4d:15::abcd:ef12]:52150",
 		wantResult: NewV4(
 			hexPubkey("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 			net.ParseIP("2001:db8:3c4d:15::abcd:ef12"),
@@ -78,7 +100,7 @@ var parseNodeTests = []struct {
 		),
 	},
 	{
-		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@127.0.0.1:52150?discport=22334",
+		input: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@127.0.0.1:52150?discport=22334",
 		wantResult: NewV4(
 			hexPubkey("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 			net.IP{0x7f, 0x0, 0x0, 0x1},
@@ -86,16 +108,9 @@ var parseNodeTests = []struct {
 			22334,
 		),
 	},
-	// Incomplete nodes with no address.
+	// Incomplete node URLs with no address
 	{
-		rawurl: "1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439",
-		wantResult: NewV4(
-			hexPubkey("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
-			nil, 0, 0,
-		),
-	},
-	{
-		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439",
+		input: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439",
 		wantResult: NewV4(
 			hexPubkey("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 			nil, 0, 0,
@@ -103,17 +118,32 @@ var parseNodeTests = []struct {
 	},
 	// Invalid URLs
 	{
-		rawurl:    "01010101",
-		wantError: `invalid node ID (wrong length, want 128 hex chars)`,
+		input:     "",
+		wantError: errMissingPrefix.Error(),
 	},
 	{
-		rawurl:    "enode://01010101",
-		wantError: `invalid node ID (wrong length, want 128 hex chars)`,
+		input:     "1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439",
+		wantError: errMissingPrefix.Error(),
 	},
 	{
-		// This test checks that errors from url.Parse are handled.
-		rawurl:    "://foo",
-		wantError: `parse ://foo: missing protocol scheme`,
+		input:     "01010101",
+		wantError: errMissingPrefix.Error(),
+	},
+	{
+		input:     "enode://01010101@123.124.125.126:3",
+		wantError: `invalid public key (wrong length, want 128 hex chars)`,
+	},
+	{
+		input:     "enode://01010101",
+		wantError: `invalid public key (wrong length, want 128 hex chars)`,
+	},
+	{
+		input:     "http://foobar",
+		wantError: errMissingPrefix.Error(),
+	},
+	{
+		input:     "://foo",
+		wantError: errMissingPrefix.Error(),
 	},
 }
 
@@ -127,22 +157,22 @@ func hexPubkey(h string) *ecdsa.PublicKey {
 
 func TestParseNode(t *testing.T) {
 	for _, test := range parseNodeTests {
-		n, err := ParseV4(test.rawurl)
+		n, err := Parse(ValidSchemes, test.input)
 		if test.wantError != "" {
 			if err == nil {
-				t.Errorf("test %q:\n  got nil error, expected %#q", test.rawurl, test.wantError)
+				t.Errorf("test %q:\n  got nil error, expected %#q", test.input, test.wantError)
 				continue
 			} else if err.Error() != test.wantError {
-				t.Errorf("test %q:\n  got error %#q, expected %#q", test.rawurl, err.Error(), test.wantError)
+				t.Errorf("test %q:\n  got error %#q, expected %#q", test.input, err.Error(), test.wantError)
 				continue
 			}
 		} else {
 			if err != nil {
-				t.Errorf("test %q:\n  unexpected error: %v", test.rawurl, err)
+				t.Errorf("test %q:\n  unexpected error: %v", test.input, err)
 				continue
 			}
 			if !reflect.DeepEqual(n, test.wantResult) {
-				t.Errorf("test %q:\n  result mismatch:\ngot:  %#v\nwant: %#v", test.rawurl, n, test.wantResult)
+				t.Errorf("test %q:\n  result mismatch:\ngot:  %#v\nwant: %#v", test.input, n, test.wantResult)
 			}
 		}
 	}
@@ -150,10 +180,10 @@ func TestParseNode(t *testing.T) {
 
 func TestNodeString(t *testing.T) {
 	for i, test := range parseNodeTests {
-		if test.wantError == "" && strings.HasPrefix(test.rawurl, "enode://") {
+		if test.wantError == "" && strings.HasPrefix(test.input, "enode://") {
 			str := test.wantResult.String()
-			if str != test.rawurl {
-				t.Errorf("test %d: Node.String() mismatch:\ngot:  %s\nwant: %s", i, str, test.rawurl)
+			if str != test.input {
+				t.Errorf("test %d: Node.String() mismatch:\ngot:  %s\nwant: %s", i, str, test.input)
 			}
 		}
 	}
