@@ -616,6 +616,33 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 	}, state.Error()
 }
 
+// GetHeaderByNumber returns the requested canonical block header.
+// * When blockNr is -1 the chain head is returned.
+// * When blockNr is -2 the pending chain head is returned.
+func (s *PublicBlockChainAPI) GetHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (map[string]interface{}, error) {
+	header, err := s.b.HeaderByNumber(ctx, blockNr)
+	if header != nil && err == nil {
+		response := rpcMarshalHeader(header)
+		if blockNr == rpc.PendingBlockNumber {
+			// Pending blocks need to nil out a few fields
+			for _, field := range []string{"hash", "nonce", "miner"} {
+				response[field] = nil
+			}
+		}
+		return response, err
+	}
+	return nil, err
+}
+
+// GetHeaderByHash returns the requested header by hash.
+func (s *PublicBlockChainAPI) GetHeaderByHash(ctx context.Context, blockHash common.Hash) map[string]interface{} {
+	header := s.b.GetHeader(ctx, blockHash)
+	if header != nil {
+		return rpcMarshalHeader(header)
+	}
+	return nil
+}
+
 // GetBlockByNumber returns the requested block. When blockNr is -1 the chain head is returned. When fullTx is true all
 // transactions in the block are returned in full detail, otherwise only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, blockNr rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
@@ -933,14 +960,11 @@ func FormatLogs(logs []vm.StructLog) []StructLogRes {
 	return formatted
 }
 
-// RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
-// returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
-// transaction hashes.
-func RPCMarshalBlock(b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
-	head := b.Header() // copies the header once
-	fields := map[string]interface{}{
+// rpcMarshalHeader converts the given header to the RPC output .
+func rpcMarshalHeader(head *types.Header) map[string]interface{} {
+	ret := map[string]interface{}{
 		"number":           (*hexutil.Big)(head.Number),
-		"hash":             b.Hash(),
+		"hash":             head.Hash(),
 		"parentHash":       head.ParentHash,
 		"nonce":            head.Nonce,
 		"mixHash":          head.MixDigest,
@@ -950,13 +974,21 @@ func RPCMarshalBlock(b *types.Block, inclTx bool, fullTx bool) (map[string]inter
 		"miner":            head.Coinbase,
 		"difficulty":       (*hexutil.Big)(head.Difficulty),
 		"extraData":        hexutil.Bytes(head.Extra),
-		"size":             hexutil.Uint64(b.Size()),
+		"size":             hexutil.Uint64(head.Size()),
 		"gasLimit":         hexutil.Uint64(head.GasLimit),
 		"gasUsed":          hexutil.Uint64(head.GasUsed),
 		"timestamp":        hexutil.Uint64(head.Time),
 		"transactionsRoot": head.TxHash,
 		"receiptsRoot":     head.ReceiptHash,
 	}
+	return ret
+}
+
+// RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
+// returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
+// transaction hashes.
+func RPCMarshalBlock(b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
+	fields := rpcMarshalHeader(b.Header())
 
 	if inclTx {
 		formatTx := func(tx *types.Transaction) (interface{}, error) {

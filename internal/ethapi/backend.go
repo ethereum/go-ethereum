@@ -54,6 +54,7 @@ type Backend interface {
 	HeaderByHash(ctx context.Context, blockHash common.Hash) (*types.Header, error)
 	BlockByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Block, error)
 	StateAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*state.StateDB, *types.Header, error)
+	GetHeader(ctx context.Context, blockHash common.Hash) *types.Header
 	GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 	GetTd(blockHash common.Hash) *big.Int

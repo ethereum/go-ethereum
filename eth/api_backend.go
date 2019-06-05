@@ -107,6 +107,10 @@ func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.
 	return stateDb, header, err
 }
 
+func (b *EthAPIBackend) GetHeader(ctx context.Context, blockHash common.Hash) *types.Header {
+	return b.eth.blockchain.GetHeaderByHash(blockHash)
+}
+
 func (b *EthAPIBackend) GetBlock(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.blockchain.GetBlockByHash(hash), nil
 }

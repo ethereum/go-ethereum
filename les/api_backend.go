@@ -88,6 +88,10 @@ func (b *LesApiBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.
 	return light.NewState(ctx, header, b.eth.odr), header, nil
 }
 
+func (b *LesApiBackend) GetHeader(ctx context.Context, blockHash common.Hash) *types.Header {
+	return b.eth.blockchain.GetHeaderByHash(blockHash)
+}
+
 func (b *LesApiBackend) GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error) {
 	return b.eth.blockchain.GetBlockByHash(ctx, blockHash)
 }
