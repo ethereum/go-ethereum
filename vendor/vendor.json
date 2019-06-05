@@ -159,16 +159,16 @@
 			"revisionTime": "2017-07-10T16:04:46Z"
 		},
 		{
-			"checksumSHA1": "yqF125xVSkmfLpIVGrLlfE05IUk=",
+			"checksumSHA1": "CGj8VcI/CpzxaNqlqpEVM7qElD4=",
 			"path": "github.com/golang/protobuf/proto",
-			"revision": "748d386b5c1ea99658fd69fe9f03991ce86a90c1",
-			"revisionTime": "2017-07-26T21:28:29Z"
+			"revision": "b285ee9cfc6c881bb20c0d8dc73370ea9b9ec90f",
+			"revisionTime": "2019-05-17T06:12:10Z"
 		},
 		{
-			"checksumSHA1": "Z1gJ3PKzwBpOoPnTSEM5yd0zHYA=",
+			"checksumSHA1": "WOkXetG3AqJnfVVuqTJvdukcHps=",
 			"path": "github.com/golang/protobuf/protoc-gen-go/descriptor",
-			"revision": "748d386b5c1ea99658fd69fe9f03991ce86a90c1",
-			"revisionTime": "2017-07-26T21:28:29Z"
+			"revision": "b285ee9cfc6c881bb20c0d8dc73370ea9b9ec90f",
+			"revisionTime": "2019-05-17T06:12:10Z"
 		},
 		{
 			"checksumSHA1": "p/8vSviYF91gFflhrt5vkyksroo=",
@@ -267,10 +267,10 @@
 			"revisionTime": "2017-04-30T22:20:11Z"
 		},
 		{
-			"checksumSHA1": "6XsjAARQFvlW6dS15al0ibTFPOQ=",
-			"path": "github.com/karalabe/hid",
-			"revision": "d815e0c1a2e2082a287a2806bc90bc8fc7b276a9",
-			"revisionTime": "2018-11-28T19:21:57Z",
+			"checksumSHA1": "3v8Z4/daUVp9PCcFzEGYVkPadG8=",
+			"path": "github.com/karalabe/usb",
+			"revision": "c012609e094b8a96375fee53cc11f1bcd5cf3aa2",
+			"revisionTime": "2019-06-04T10:57:36Z",
 			"tree": true
 		},
 		{

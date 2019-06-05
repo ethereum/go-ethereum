@@ -20,12 +20,13 @@ import (
 	"errors"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/karalabe/hid"
+	"github.com/karalabe/usb"
 )
 
 // LedgerScheme is the protocol scheme prefixing account and wallet URLs.
@@ -64,6 +65,7 @@ type Hub struct {
 	// TODO(karalabe): remove if hotplug lands on Windows
 	commsPend int        // Number of operations blocking enumeration
 	commsLock sync.Mutex // Lock protecting the pending counter and enumeration
+	enumFails uint32     // Number of times enumeration has failed
 }
 
 // NewLedgerHub creates a new hardware wallet manager for Ledger devices.
@@ -84,14 +86,20 @@ func NewLedgerHub() (*Hub, error) {
 	}, 0xffa0, 0, newLedgerDriver)
 }
 
-// NewTrezorHub creates a new hardware wallet manager for Trezor devices.
-func NewTrezorHub() (*Hub, error) {
-	return newHub(TrezorScheme, 0x534c, []uint16{0x0001 /* Trezor 1 */}, 0xff00, 0, newTrezorDriver)
+// NewTrezorHubWithHID creates a new hardware wallet manager for Trezor devices.
+func NewTrezorHubWithHID() (*Hub, error) {
+	return newHub(TrezorScheme, 0x534c, []uint16{0x0001 /* Trezor HID */}, 0xff00, 0, newTrezorDriver)
+}
+
+// NewTrezorHubWithWebUSB creates a new hardware wallet manager for Trezor devices with
+// firmware version > 1.8.0
+func NewTrezorHubWithWebUSB() (*Hub, error) {
+	return newHub(TrezorScheme, 0x1209, []uint16{0x53c1 /* Trezor WebUSB */}, 0xffff /* No usage id on webusb, don't match unset (0) */, 0, newTrezorDriver)
 }
 
 // newHub creates a new hardware wallet manager for generic USB devices.
 func newHub(scheme string, vendorID uint16, productIDs []uint16, usageID uint16, endpointID int, makeDriver func(log.Logger) driver) (*Hub, error) {
-	if !hid.Supported() {
+	if !usb.Supported() {
 		return nil, errors.New("unsupported platform")
 	}
 	hub := &Hub{
@@ -132,8 +140,12 @@ func (hub *Hub) refreshWallets() {
 	if elapsed < refreshThrottling {
 		return
 	}
+	// If USB enumeration is continually failing, don't keep trying indefinitely
+	if atomic.LoadUint32(&hub.enumFails) > 2 {
+		return
+	}
 	// Retrieve the current list of USB wallet devices
-	var devices []hid.DeviceInfo
+	var devices []usb.DeviceInfo
 
 	if runtime.GOOS == "linux" {
 		// hidapi on Linux opens the device during enumeration to retrieve some infos,
@@ -148,8 +160,22 @@ func (hub *Hub) refreshWallets() {
 			return
 		}
 	}
-	for _, info := range hid.Enumerate(hub.vendorID, 0) {
+	infos, err := usb.Enumerate(hub.vendorID, 0)
+	if err != nil {
+		failcount := atomic.AddUint32(&hub.enumFails, 1)
+		if runtime.GOOS == "linux" {
+			// See rationale before the enumeration why this is needed and only on Linux.
+			hub.commsLock.Unlock()
+		}
+		log.Error("Failed to enumerate USB devices", "hub", hub.scheme,
+			"vendor", hub.vendorID, "failcount", failcount, "err", err)
+		return
+	}
+	atomic.StoreUint32(&hub.enumFails, 0)
+
+	for _, info := range infos {
 		for _, id := range hub.productIDs {
+			// Windows and Macos use UsageID matching, Linux uses Interface matching
 			if info.ProductID == id && (info.UsagePage == hub.usageID || info.Interface == hub.endpointID) {
 				devices = append(devices, info)
 				break
