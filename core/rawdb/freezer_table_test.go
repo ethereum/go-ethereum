@@ -224,8 +224,12 @@ func TestFreezerRepairDanglingHeadLarge(t *testing.T) {
 	// Now open it again
 	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, 50, true)
+		if err != nil {
+			t.Fatalf("failed reopening table: %v", err)
+		}
 		// The first item should be there
 		if _, err = f.Retrieve(0); err != nil {
+			f.Close()
 			t.Fatal(err)
 		}
 		// The second item should be missing
