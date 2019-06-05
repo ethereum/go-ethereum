@@ -65,8 +65,8 @@ func TestAPI(t *testing.T) {
 	parentBlockChain := make(chan *types.Block)
 	serviceQuitChan := make(chan bool)
 	config := statediff.Config{
-		PathsAndProofs: true,
-		AllNodes:       false,
+		PathsAndProofs:    true,
+		IntermediateNodes: false,
 	}
 	mockService := MockStateDiffService{
 		Mutex:           sync.Mutex{},

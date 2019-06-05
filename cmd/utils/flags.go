@@ -771,13 +771,13 @@ var (
 		Name:  "statediff.intermediatenodes",
 		Usage: "Set to include intermediate (branch and extension) nodes; default (false) processes leaf nodes only",
 	}
-	StateDiffWatchedAddresses = cli.StringSliceFlag{
-		Name:  "statediff.watchedaddresses",
-		Usage: "If provided, state diffing process is restricted to these addresses",
-	}
 	StateDiffStreamBlock = cli.BoolFlag{
 		Name:  "statediff.streamblock",
 		Usage: "Set to true to stream the block data alongside state diff data in the same subscription payload",
+	}
+	StateDiffWatchedAddresses = cli.StringSliceFlag{
+		Name:  "statediff.watchedaddresses",
+		Usage: "If provided, state diffing process is restricted to these addresses",
 	}
 )
 
@@ -1640,10 +1640,10 @@ func RegisterGraphQLService(stack *node.Node, endpoint string, cors, vhosts []st
 // RegisterStateDiffService configures and registers a service to stream state diff data over RPC
 func RegisterStateDiffService(stack *node.Node, ctx *cli.Context) {
 	config := statediff.Config{
-		StreamBlock:      ctx.GlobalBool(StateDiffStreamBlock.Name),
-		PathsAndProofs:   ctx.GlobalBool(StateDiffPathsAndProofs.Name),
-		AllNodes:         ctx.GlobalBool(StateDiffIntermediateNodes.Name),
-		WatchedAddresses: ctx.GlobalStringSlice(StateDiffWatchedAddresses.Name),
+		PathsAndProofs:    ctx.GlobalBool(StateDiffPathsAndProofs.Name),
+		IntermediateNodes: ctx.GlobalBool(StateDiffIntermediateNodes.Name),
+		StreamBlock:       ctx.GlobalBool(StateDiffStreamBlock.Name),
+		WatchedAddresses:  ctx.GlobalStringSlice(StateDiffWatchedAddresses.Name),
 	}
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		var ethServ *eth.Ethereum
