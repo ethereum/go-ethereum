@@ -46,7 +46,7 @@ func print(t *testing.T, f *freezerTable, item uint64) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Printf("db[%d] =  %x\n", item, a)
+	t.Logf("db[%d] =  %x\n", item, a)
 }
 
 // TestFreezerBasics test initializing a freezertable from scratch, writing to the table,
