@@ -38,13 +38,13 @@ func TestEncryption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Printf("Ciphertext %x, nonce %x\n", c, iv)
+	t.Logf("Ciphertext %x, nonce %x\n", c, iv)
 
 	p, err := decrypt(key, iv, c, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Printf("Plaintext %v\n", string(p))
+	t.Logf("Plaintext %v\n", string(p))
 	if !bytes.Equal(plaintext, p) {
 		t.Errorf("Failed: expected plaintext recovery, got %v expected %v", string(plaintext), string(p))
 	}
