@@ -59,7 +59,7 @@ var (
 	retestethCommand = cli.Command{
 		Action:      utils.MigrateFlags(retesteth),
 		Name:        "retesteth",
-		Usage:       "",
+		Usage:       "Launches geth in retesteth mode",
 		ArgsUsage:   "",
 		Flags:       []cli.Flag{rpcPortFlag},
 		Category:    "MISCELLANEOUS COMMANDS",
