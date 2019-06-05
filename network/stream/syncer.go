@@ -92,7 +92,7 @@ func (s *SwarmSyncerServer) SessionIndex() (uint64, error) {
 // chunk addresses. If at least one chunk is added to the batch and no new chunks
 // are added in batchTimeout period, the batch will be returned. This function
 // will block until new chunks are received from localstore pull subscription.
-func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
+func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint64, error) {
 	batchStart := time.Now()
 	descriptors, stop := s.netStore.SubscribePull(context.Background(), s.po, from, to)
 	defer stop()
@@ -131,7 +131,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 			if err != nil {
 				metrics.GetOrRegisterCounter("syncer.set-next-batch.set-sync-err", nil).Inc(1)
 				log.Debug("syncer pull subscription - err setting chunk as synced", "correlateId", s.correlateId, "err", err)
-				return nil, 0, 0, nil, err
+				return nil, 0, 0, err
 			}
 			batchSize++
 			if batchStartID == nil {
@@ -171,7 +171,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		// if batch start id is not set, return 0
 		batchStartID = new(uint64)
 	}
-	return batch, *batchStartID, batchEndID, nil, nil
+	return batch, *batchStartID, batchEndID, nil
 }
 
 // SwarmSyncerClient
@@ -201,15 +201,6 @@ func RegisterSwarmSyncerClient(streamer *Registry, netStore *storage.NetStore) {
 // NeedData
 func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func(context.Context) error) {
 	return s.netStore.FetchFunc(ctx, key)
-}
-
-// BatchDone
-func (s *SwarmSyncerClient) BatchDone(stream Stream, from uint64, hashes []byte, root []byte) func() (*TakeoverProof, error) {
-	// TODO: reenable this with putter/getter refactored code
-	// if s.chunker != nil {
-	// 	return func() (*TakeoverProof, error) { return s.TakeoverProof(stream, from, hashes, root) }
-	// }
-	return nil
 }
 
 func (s *SwarmSyncerClient) Close() {}

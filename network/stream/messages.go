@@ -183,10 +183,9 @@ func (p *Peer) handleQuitMsg(req *QuitMsg) error {
 // OfferedHashesMsg is the protocol msg for offering to hand over a
 // stream section
 type OfferedHashesMsg struct {
-	Stream         Stream // name of Stream
-	From, To       uint64 // peer and db-specific entry count
-	Hashes         []byte // stream of hashes (128)
-	*HandoverProof        // HandoverProof
+	Stream   Stream // name of Stream
+	From, To uint64 // peer and db-specific entry count
+	Hashes   []byte // stream of hashes (128)
 }
 
 // String pretty prints OfferedHashesMsg
@@ -265,7 +264,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			}
 		}
 		select {
-		case c.next <- c.batchDone(p, req, hashes):
+		case c.next <- c.AddInterval(req.From, req.To):
 		case <-c.quit:
 			log.Debug("client.handleOfferedHashesMsg() quit")
 		case <-ctx.Done():
@@ -383,12 +382,6 @@ type Handover struct {
 	Stream     Stream // name of stream
 	Start, End uint64 // index of hashes
 	Root       []byte // Root hash for indexed segment inclusion proofs
-}
-
-// HandoverProof represents a signed statement that the upstream peer handed over the stream section
-type HandoverProof struct {
-	Sig []byte // Sign(Hash(Serialisation(Handover)))
-	*Handover
 }
 
 // Takeover represents a statement that downstream peer took over (stored all data)

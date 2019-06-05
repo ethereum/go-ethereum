@@ -474,7 +474,7 @@ type server struct {
 // setNextBatch adjusts passed interval based on session index and whether
 // stream is live or history. It calls Server SetNextBatch with adjusted
 // interval and returns batch hashes and their interval.
-func (s *server) setNextBatch(from, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
+func (s *server) setNextBatch(from, to uint64) ([]byte, uint64, uint64, error) {
 	if s.stream.Live {
 		if from == 0 {
 			from = s.sessionIndex
@@ -484,7 +484,7 @@ func (s *server) setNextBatch(from, to uint64) ([]byte, uint64, uint64, *Handove
 		}
 	} else {
 		if (to < from && to != 0) || from > s.sessionIndex {
-			return nil, 0, 0, nil, nil
+			return nil, 0, 0, nil
 		}
 		if to == 0 || to > s.sessionIndex {
 			to = s.sessionIndex
@@ -500,7 +500,7 @@ type Server interface {
 	// Based on this index, live and history stream intervals
 	// will be adjusted before calling SetNextBatch.
 	SessionIndex() (uint64, error)
-	SetNextBatch(uint64, uint64) (hashes []byte, from uint64, to uint64, proof *HandoverProof, err error)
+	SetNextBatch(uint64, uint64) (hashes []byte, from uint64, to uint64, err error)
 	GetData(context.Context, []byte) ([]byte, error)
 	Close()
 }
@@ -544,7 +544,6 @@ func (c *client) NextInterval() (start, end uint64, err error) {
 // Client interface for incoming peer Streamer
 type Client interface {
 	NeedData(context.Context, []byte) func(context.Context) error
-	BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error)
 	Close()
 }
 
@@ -572,24 +571,6 @@ func (c *client) nextBatch(from uint64) (nextFrom uint64, nextTo uint64) {
 		nextTo = c.sessionAt
 	}
 	return
-}
-
-func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error {
-	if tf := c.BatchDone(req.Stream, req.From, hashes, req.Root); tf != nil {
-		tp, err := tf()
-		if err != nil {
-			return err
-		}
-
-		if err := p.Send(context.TODO(), tp); err != nil {
-			return err
-		}
-		if c.to > 0 && tp.Takeover.End >= c.to {
-			return p.streamer.Unsubscribe(p.Peer.ID(), req.Stream)
-		}
-		return nil
-	}
-	return c.AddInterval(req.From, req.To)
 }
 
 func (c *client) close() {
