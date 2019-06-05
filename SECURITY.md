@@ -2,7 +2,23 @@
 
 ## Supported Versions
 
+Please see Releases. We recommend to use the most recent released version.  
+
+## Audit reports
+
+Audit reports are published in the `docs` folder: https://github.com/ethereum/go-ethereum/tree/master/docs/audits 
+
+
+| Scope | Date | Report Link |
+| ------- | ------- | ----------- |
+| `geth` | 20170425 | [pdf](https://github.com/ethereum/go-ethereum/blob/master/docs/audits/2017-04-25_Geth-audit_Truesec.pdf) |
+| `clef` | 20180914 | [pdf](https://github.com/ethereum/go-ethereum/blob/master/docs/audits/2018-09-14_Clef-audit_NCC.pdf) |
+
+
+
 ## Reporting a Vulnerability
+
+**Please do not file a public ticket** mentioning the vulnerability.
 
 To find out how to disclose a vulnerability in Ethereum visit [https://bounty.ethereum.org](https://bounty.ethereum.org) or email bounty@ethereum.org.
 
