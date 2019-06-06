@@ -416,7 +416,7 @@ func (srv *Server) Start() (err error) {
 	srv.running = true
 	srv.log = srv.Config.Logger
 	if srv.log == nil {
-		srv.log = log.New()
+		srv.log = log.Root()
 	}
 	if srv.NoDial && srv.ListenAddr == "" {
 		srv.log.Warn("P2P server will be useless, neither dialing nor listening")
@@ -542,6 +542,7 @@ func (srv *Server) setupDiscovery() error {
 			NetRestrict: srv.NetRestrict,
 			Bootnodes:   srv.BootstrapNodes,
 			Unhandled:   unhandled,
+			Log:         srv.log,
 		}
 		ntab, err := discover.ListenUDP(conn, srv.localnode, cfg)
 		if err != nil {
@@ -723,7 +724,7 @@ running:
 			err := srv.protoHandshakeChecks(peers, inboundCount, c)
 			if err == nil {
 				// The handshakes are done and it passed all checks.
-				p := newPeer(c, srv.Protocols)
+				p := newPeer(srv.log, c, srv.Protocols)
 				// If message events are enabled, pass the peerFeed
 				// to the peer
 				if srv.EnableMsgEvents {

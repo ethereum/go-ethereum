@@ -120,7 +120,7 @@ func NewPeer(id enode.ID, name string, caps []Cap) *Peer {
 	pipe, _ := net.Pipe()
 	node := enode.SignNull(new(enr.Record), id)
 	conn := &conn{fd: pipe, transport: nil, node: node, caps: caps, name: name}
-	peer := newPeer(conn, nil)
+	peer := newPeer(log.Root(), conn, nil)
 	close(peer.closed) // ensures Disconnect doesn't block
 	return peer
 }
@@ -176,7 +176,7 @@ func (p *Peer) Inbound() bool {
 	return p.rw.is(inboundConn)
 }
 
-func newPeer(conn *conn, protocols []Protocol) *Peer {
+func newPeer(log log.Logger, conn *conn, protocols []Protocol) *Peer {
 	protomap := matchProtocols(protocols, conn.caps, conn)
 	p := &Peer{
 		rw:       conn,

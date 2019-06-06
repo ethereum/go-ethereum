@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -74,6 +75,7 @@ func startTestServer(t *testing.T, remoteKey *ecdsa.PublicKey, pf func(*Peer)) *
 		MaxPeers:   10,
 		ListenAddr: "127.0.0.1:0",
 		PrivateKey: newkey(),
+		Logger:     testlog.Logger(t, log.LvlTrace),
 	}
 	server := &Server{
 		Config:       config,
@@ -359,6 +361,7 @@ func TestServerAtCap(t *testing.T) {
 			PrivateKey:   newkey(),
 			MaxPeers:     10,
 			NoDial:       true,
+			NoDiscovery:  true,
 			TrustedNodes: []*enode.Node{newNode(trustedID, nil)},
 		},
 	}
@@ -430,10 +433,11 @@ func TestServerPeerLimits(t *testing.T) {
 
 	srv := &Server{
 		Config: Config{
-			PrivateKey: srvkey,
-			MaxPeers:   0,
-			NoDial:     true,
-			Protocols:  []Protocol{discard},
+			PrivateKey:  srvkey,
+			MaxPeers:    0,
+			NoDial:      true,
+			NoDiscovery: true,
+			Protocols:   []Protocol{discard},
 		},
 		newTransport: func(fd net.Conn) transport { return tp },
 		log:          log.New(),
@@ -541,29 +545,35 @@ func TestServerSetupConn(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		srv := &Server{
-			Config: Config{
-				PrivateKey: srvkey,
-				MaxPeers:   10,
-				NoDial:     true,
-				Protocols:  []Protocol{discard},
-			},
-			newTransport: func(fd net.Conn) transport { return test.tt },
-			log:          log.New(),
-		}
-		if !test.dontstart {
-			if err := srv.Start(); err != nil {
-				t.Fatalf("couldn't start server: %v", err)
+		t.Run(test.wantCalls, func(t *testing.T) {
+			cfg := Config{
+				PrivateKey:  srvkey,
+				MaxPeers:    10,
+				NoDial:      true,
+				NoDiscovery: true,
+				Protocols:   []Protocol{discard},
+				Logger:      testlog.Logger(t, log.LvlTrace),
 			}
-		}
-		p1, _ := net.Pipe()
-		srv.SetupConn(p1, test.flags, test.dialDest)
-		if !reflect.DeepEqual(test.tt.closeErr, test.wantCloseErr) {
-			t.Errorf("test %d: close error mismatch: got %q, want %q", i, test.tt.closeErr, test.wantCloseErr)
-		}
-		if test.tt.calls != test.wantCalls {
-			t.Errorf("test %d: calls mismatch: got %q, want %q", i, test.tt.calls, test.wantCalls)
-		}
+			srv := &Server{
+				Config:       cfg,
+				newTransport: func(fd net.Conn) transport { return test.tt },
+				log:          cfg.Logger,
+			}
+			if !test.dontstart {
+				if err := srv.Start(); err != nil {
+					t.Fatalf("couldn't start server: %v", err)
+				}
+				defer srv.Stop()
+			}
+			p1, _ := net.Pipe()
+			srv.SetupConn(p1, test.flags, test.dialDest)
+			if !reflect.DeepEqual(test.tt.closeErr, test.wantCloseErr) {
+				t.Errorf("test %d: close error mismatch: got %q, want %q", i, test.tt.closeErr, test.wantCloseErr)
+			}
+			if test.tt.calls != test.wantCalls {
+				t.Errorf("test %d: calls mismatch: got %q, want %q", i, test.tt.calls, test.wantCalls)
+			}
+		})
 	}
 }
 
