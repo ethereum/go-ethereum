@@ -624,7 +624,7 @@ func (s *PublicBlockChainAPI) GetHeaderByNumber(ctx context.Context, blockNr rpc
 	if header != nil && err == nil {
 		response := rpcMarshalHeader(header)
 		if blockNr == rpc.PendingBlockNumber {
-			// Pending blocks need to nil out a few fields
+			// Pending header need to nil out a few fields
 			for _, field := range []string{"hash", "nonce", "miner"} {
 				response[field] = nil
 			}
@@ -989,6 +989,7 @@ func rpcMarshalHeader(head *types.Header) map[string]interface{} {
 // transaction hashes.
 func RPCMarshalBlock(b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
 	fields := rpcMarshalHeader(b.Header())
+	fields["size"] = b.Size()
 
 	if inclTx {
 		formatTx := func(tx *types.Transaction) (interface{}, error) {
