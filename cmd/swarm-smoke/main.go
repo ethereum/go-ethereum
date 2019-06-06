@@ -48,6 +48,7 @@ var (
 	timeout    int
 	single     bool
 	onlyUpload bool
+	debug      bool
 )
 
 func main() {
@@ -113,6 +114,11 @@ func main() {
 			Name:        "only-upload",
 			Usage:       "whether to only upload content to a single node without fetching",
 			Destination: &onlyUpload,
+		},
+		cli.BoolFlag{
+			Name:        "debug",
+			Usage:       "whether to call debug APIs as part of the smoke test",
+			Destination: &debug,
 		},
 	}
 

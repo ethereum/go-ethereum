@@ -65,10 +65,12 @@ func uploadAndSyncCmd(ctx *cli.Context) error {
 		err = fmt.Errorf("timeout after %v sec", timeout)
 	}
 
-	// trigger debug functionality on randomBytes
-	e := trackChunks(randomBytes[:], true)
-	if e != nil {
-		log.Error(e.Error())
+	if debug {
+		// trigger debug functionality on randomBytes
+		e := trackChunks(randomBytes[:], true)
+		if e != nil {
+			log.Error(e.Error())
+		}
 	}
 
 	return err
@@ -291,9 +293,11 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 
 		log.Debug("chunks before fetch attempt", "hash", hash)
 
-		err = trackChunks(randomBytes, false)
-		if err != nil {
-			log.Error(err.Error())
+		if debug {
+			err = trackChunks(randomBytes, false)
+			if err != nil {
+				log.Error(err.Error())
+			}
 		}
 	}
 
