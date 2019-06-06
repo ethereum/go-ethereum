@@ -153,7 +153,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	isLegacy := localstore.IsLegacyDatabase(config.ChunkDbPath)
 
 	if isLegacy {
-		return nil, errors.New("Legacy database format detected! Please read the migration announcement at: https://github.com/ethersphere/go-ethereum/wiki/Swarm-v0.4-local-store-migration")
+		return nil, errors.New("Legacy database format detected! Please read the migration announcement at: https://github.com/ethersphere/swarm/blob/master/docs/Migration-v0.3-to-v0.4.md")
 	}
 
 	var feedsHandler *feed.Handler

@@ -217,7 +217,7 @@ func exportLegacy(path string, basekey []byte, out io.Writer) (int64, error) {
 		datakey := getDataKey(index.Idx, po)
 		data, err := db.Get(datakey, nil)
 		if err != nil {
-			log.Crit(fmt.Sprintf("Chunk %x found but could not be accessed: %v, %x", key, err, datakey))
+			log.Warn(fmt.Sprintf("Chunk %x found but could not be accessed: %v, %x", key, err, datakey))
 			continue
 		}
 
