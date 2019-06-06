@@ -1502,47 +1502,56 @@ func SetDashboardConfig(ctx *cli.Context, cfg *dashboard.Config) {
 func RegisterLesClientService(stack *node.Node, cfg *eth.Config) {
 
 	//if the light client is requested
-	if cfg.SyncMode == downloader.LightSync {
-		//register a light client
-		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return les.New(ctx, cfg)
-		}); err != nil {
-			Fatalf("Failed to register the Light Client service: %v", err)
-		}
+	if cfg.SyncMode != downloader.LightSync {
+		return
 	}
+
+	//register a light client
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		return les.New(ctx, cfg)
+	}); err != nil {
+		Fatalf("Failed to register the Light Client service: %v", err)
+	}
+
 }
 
 // RegisterLesServerService adds a Light Server service to the stack if the config permits
 func RegisterLesServerService(stack *node.Node, cfg *eth.Config) {
 
 	//if the light client is not requested and the light server is requested
-	if cfg.SyncMode != downloader.LightSync && cfg.LightServ > 0 {
-		//register a light server service
-		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			//check if the main Eth protocol service is running
-			var ethService *eth.Ethereum
-			if ctx.Service(&ethService) != nil {
-				return nil, errors.New("Failed to start the Les Server service because Ethereum service is not running")
-			}
-			return les.NewLesServer(ethService, cfg)
-		}); err != nil {
-			Fatalf("Failed to register the Light Server service: %v", err)
-		}
+	if cfg.SyncMode == downloader.LightSync || cfg.LightServ <= 0 {
+		return
 	}
+
+	//register a light server service
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		//check if the main Eth protocol service is running
+		var ethService *eth.Ethereum
+		if ctx.Service(&ethService) != nil {
+			return nil, errors.New("Failed to start the Les Server service because Ethereum service is not running")
+		}
+		return les.NewLesServer(ethService, cfg)
+	}); err != nil {
+		Fatalf("Failed to register the Light Server service: %v", err)
+	}
+
 }
 
 // RegisterEthService adds an Ethereum client to the stack if the config permits
 func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 
 	//if the light client is not requested
-	if cfg.SyncMode != downloader.LightSync {
-		//register a service for the Eth protocol
-		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return eth.New(ctx, cfg)
-		}); err != nil {
-			Fatalf("Failed to register the Ethereum service: %v", err)
-		}
+	if cfg.SyncMode == downloader.LightSync {
+		return
 	}
+
+	//register a service for the Eth protocol
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		return eth.New(ctx, cfg)
+	}); err != nil {
+		Fatalf("Failed to register the Ethereum service: %v", err)
+	}
+
 }
 
 // RegisterDashboardService adds a dashboard to the stack.

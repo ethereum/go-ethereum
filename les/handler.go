@@ -47,25 +47,16 @@ import (
 const (
 	softResponseLimit = 2 * 1024 * 1024 // Target maximum size of returned blocks, headers or node data.
 	estHeaderRlpSize  = 500             // Approximate size of an RLP encoded block header
+	ethVersion        = 63              // equivalent eth version for the downloader
 
-	ethVersion = 63 // equivalent eth version for the downloader
-
-	// MaxHeaderFetch is the maximum number of block headers to be fetched per retrieval request
-	MaxHeaderFetch = 192
-	// MaxBodyFetch is the maximum number of block bodies to be fetched per retrieval request
-	MaxBodyFetch = 32
-	// MaxReceiptFetch is the maximum number of transaction receipts to allow to be fetched per request
-	MaxReceiptFetch = 128
-	// MaxCodeFetch is the maximum number of contract codes to allow to be fetched per request
-	MaxCodeFetch = 64
-	// MaxProofsFetch is the maximum number of merkle proofs to be fetched per retrieval request
-	MaxProofsFetch = 64
-	// MaxHelperTrieProofsFetch is the maximum number of merkle proofs to be fetched per retrieval request
-	MaxHelperTrieProofsFetch = 64
-	// MaxTxSend is the maximum number of transactions to be sent per request
-	MaxTxSend = 64
-	// MaxTxStatus is the maximum number of transactions to queried per request
-	MaxTxStatus = 256
+	MaxHeaderFetch           = 192 // the maximum number of block headers to be fetched per retrieval request
+	MaxBodyFetch             = 32  // the maximum number of block bodies to be fetched per retrieval request
+	MaxReceiptFetch          = 128 // is the maximum number of transaction receipts to allow to be fetched per request
+	MaxCodeFetch             = 64  // is the maximum number of contract codes to allow to be fetched per request
+	MaxProofsFetch           = 64  // is the maximum number of merkle proofs to be fetched per retrieval request
+	MaxHelperTrieProofsFetch = 64  // is the maximum number of merkle proofs to be fetched per retrieval request
+	MaxTxSend                = 64  // is the maximum number of transactions to be sent per request
+	MaxTxStatus              = 256 // is the maximum number of transactions to queried per request
 
 	disableClientRemovePeer = false
 )

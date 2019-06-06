@@ -308,9 +308,7 @@ func (s *LesServer) Stop() error {
 	}()
 
 	s.freeClientPool.stop()
-
 	s.costTracker.stop()
-
 	s.protocolManager.Stop()
 	s.csvLogger.Stop()
 	return nil
