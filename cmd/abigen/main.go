@@ -69,8 +69,6 @@ func main() {
 		lang = bind.LangGo
 	case "java":
 		lang = bind.LangJava
-	case "objc":
-		lang = bind.LangObjC
 	default:
 		fmt.Printf("Unsupported destination language \"%s\" (--lang)\n", *langFlag)
 		os.Exit(-1)

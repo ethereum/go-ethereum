@@ -38,7 +38,6 @@ type Lang int
 const (
 	LangGo Lang = iota
 	LangJava
-	LangObjC
 )
 
 // Bind generates a Go wrapper around a contract ABI. This wrapper isn't meant
