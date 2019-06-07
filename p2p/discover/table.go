@@ -85,10 +85,10 @@ type Table struct {
 // transport is implemented by the UDP transports.
 type transport interface {
 	Self() *enode.Node
+	RequestENR(*enode.Node) (*enode.Node, error)
 	lookupRandom() []*enode.Node
 	lookupSelf() []*enode.Node
 	ping(*enode.Node) (seq uint64, err error)
-	requestENR(*enode.Node) (*enode.Node, error)
 }
 
 // bucket contains nodes, ordered by their last activity. the entry
@@ -344,7 +344,7 @@ func (tab *Table) doRevalidate(done chan<- struct{}) {
 
 	// Also fetch record if the node replied and returned a higher sequence number.
 	if last.Seq() < remoteSeq {
-		n, err := tab.net.requestENR(unwrapNode(last))
+		n, err := tab.net.RequestENR(unwrapNode(last))
 		if err != nil {
 			tab.log.Debug("ENR request failed", "id", last.ID(), "addr", last.addr(), "err", err)
 		} else {

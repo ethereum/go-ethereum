@@ -145,7 +145,7 @@ func (t *pingRecorder) ping(n *enode.Node) (seq uint64, err error) {
 }
 
 // requestENR simulates an ENR request.
-func (t *pingRecorder) requestENR(n *enode.Node) (*enode.Node, error) {
+func (t *pingRecorder) RequestENR(n *enode.Node) (*enode.Node, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
