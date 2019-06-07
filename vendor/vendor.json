@@ -267,10 +267,10 @@
 			"revisionTime": "2017-04-30T22:20:11Z"
 		},
 		{
-			"checksumSHA1": "0ixnoiChdbeva2xNe3z/vYzqcL4=",
+			"checksumSHA1": "wqKuSmlxa4hVZwfs4ZjtKtM5Yp0=",
 			"path": "github.com/karalabe/usb",
-			"revision": "0efdeddd92369dc00d4fb1b9cd56a442bdb61f82",
-			"revisionTime": "2019-06-06T09:23:27Z",
+			"revision": "3eff4807c21acef1c5f1b712a225ab09a8961504",
+			"revisionTime": "2019-06-07T09:24:32Z",
 			"tree": true
 		},
 		{
