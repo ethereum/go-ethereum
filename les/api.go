@@ -286,7 +286,10 @@ type priorityClientInfo struct {
 // matchTags checks whether the client matches the given tags
 func (c *priorityClientInfo) matchTags(tags []string) bool {
 	for _, tag := range tags {
-		if len(tag) > 0 && tag[0] == '$' {
+		if len(tag) == 0 {
+			continue
+		}
+		if tag[0] == '$' {
 			switch tag {
 			case "$all":
 			case "$connected":
