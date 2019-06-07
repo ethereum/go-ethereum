@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/les/csvlogger"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -30,15 +31,15 @@ import (
 )
 
 var (
-	ErrNoCheckpoint         = errors.New("no local checkpoint provided")
-	ErrNotActivated         = errors.New("checkpoint registrar is not activated")
-	ErrInvalidTag           = errors.New("invalid client tag")
-	ErrInvalidParam         = errors.New("invalid client parameter")
-	ErrInvalidValue         = errors.New("invalid parameter value")
-	ErrTotalCap             = errors.New("total capacity exceeded")
-	ErrUnknownBenchmarkType = errors.New("unknown benchmark type")
-	ErrMultiple             = errors.New("multiple errors")
-	ErrClientNotConnected   = errors.New("client is not connected")
+	errNoCheckpoint         = errors.New("no local checkpoint provided")
+	errNotActivated         = errors.New("checkpoint registrar is not activated")
+	errInvalidTag           = errors.New("invalid client tag")
+	errInvalidParam         = errors.New("invalid client parameter")
+	errInvalidValue         = errors.New("invalid parameter value")
+	errTotalCap             = errors.New("total capacity exceeded")
+	errUnknownBenchmarkType = errors.New("unknown benchmark type")
+	errMultiple             = errors.New("multiple errors")
+	errClientNotConnected   = errors.New("client is not connected")
 
 	dropCapacityDelay = time.Second // delay applied to decreasing capacity changes
 )
@@ -90,63 +91,63 @@ func (api *PrivateLightServerAPI) SetClientParams(ids []enode.ID, tags []string,
 						if tt, ok := tag.(string); ok {
 							tags[i] = tt
 						} else {
-							err = ErrInvalidTag
+							err = errInvalidTag
 						}
 					}
 					if err == nil {
 						err = api.server.priorityClientPool.setClientTags(client, tags)
 					}
 				} else {
-					err = ErrInvalidTag
+					err = errInvalidTag
 				}
 			case "capacity":
-				if cap, ok := value.(float64); ok && (cap == 0 || uint64(cap) >= api.server.minCapacity) {
-					err = api.server.priorityClientPool.setClientCapacity(client, uint64(cap))
+				if capacity, ok := value.(float64); ok && (capacity == 0 || uint64(capacity) >= api.server.minCapacity) {
+					err = api.server.priorityClientPool.setClientCapacity(client, uint64(capacity))
 					updatePrice = true
 				} else {
-					err = ErrInvalidValue
+					err = errInvalidValue
 				}
 			case "pricing/timeFactor":
 				if val, ok := value.(float64); ok && val >= 0 {
 					client.timeFactor = val / 1000000000
 					updatePrice = true
 				} else {
-					err = ErrInvalidValue
+					err = errInvalidValue
 				}
 			case "pricing/capacityFactor":
 				if val, ok := value.(float64); ok && val >= 0 {
 					client.capacityFactor = val / 1000000000
 					updatePrice = true
 				} else {
-					err = ErrInvalidValue
+					err = errInvalidValue
 				}
 			case "pricing/requestCostFactor":
 				if val, ok := value.(float64); ok && val >= 0 {
 					client.requestCostFactor = val / 1000000000
 					updatePrice = true
 				} else {
-					err = ErrInvalidValue
+					err = errInvalidValue
 				}
 			case "pricing/alert":
 				if val, ok := value.(float64); ok && val >= 0 {
 					api.server.priorityClientPool.setPriceUpdate(client, uint64(val), false)
 				} else {
-					err = ErrInvalidValue
+					err = errInvalidValue
 				}
 			case "pricing/periodicUpdate":
 				if val, ok := value.(float64); ok && val >= 0 {
 					api.server.priorityClientPool.setPriceUpdate(client, uint64(val), true)
 				} else {
-					err = ErrInvalidValue
+					err = errInvalidValue
 				}
 			default:
-				err = ErrInvalidParam
+				err = errInvalidParam
 			}
 			if err != nil {
 				if finalErr == nil {
 					finalErr = err
 				} else {
-					finalErr = ErrMultiple
+					finalErr = errMultiple
 				}
 			}
 		}
@@ -230,10 +231,10 @@ func (api *PrivateLightServerAPI) Benchmark(setups []map[string]interface{}, pas
 			case "txStatus":
 				benchmarks[i] = &benchmarkTxStatus{}
 			default:
-				return nil, ErrUnknownBenchmarkType
+				return nil, errUnknownBenchmarkType
 			}
 		} else {
-			return nil, ErrUnknownBenchmarkType
+			return nil, errUnknownBenchmarkType
 		}
 	}
 	rs := api.server.protocolManager.runBenchmark(benchmarks, passCount, time.Millisecond*time.Duration(length))
@@ -272,7 +273,7 @@ func (api *PrivateDebugAPI) FreezeClient(id enode.ID) error {
 
 // priorityClientInfo entries exist for all prioritized clients and currently connected non-priority clients
 type priorityClientInfo struct {
-	cap                                           uint64 // zero for non-priority clients
+	capacity                                      uint64 // zero for non-priority clients
 	connected                                     bool
 	userTags                                      map[string]struct{}
 	peer                                          *peer
@@ -297,11 +298,11 @@ func (c *priorityClientInfo) matchTags(tags []string) bool {
 					return false
 				}
 			case "$priority":
-				if c.cap == 0 {
+				if c.capacity == 0 {
 					return false
 				}
 			case "$free":
-				if c.cap != 0 {
+				if c.capacity != 0 {
 					return false
 				}
 			default:
@@ -373,15 +374,15 @@ func (v *priorityClientPool) registerPeer(p *peer) {
 		c = &priorityClientInfo{id: id}
 		v.clients[id] = c
 	}
-	v.logger.Event(fmt.Sprintf("priorityClientPool: registerPeer  cap=%d  connected=%v, %x", c.cap, c.connected, id.Bytes()))
+	v.logger.Event(fmt.Sprintf("priorityClientPool: registerPeer  capacity=%d  connected=%v, %x", c.capacity, c.connected, id.Bytes()))
 	if c.connected {
 		return
 	}
-	if c.cap == 0 && v.child != nil {
+	if c.capacity == 0 && v.child != nil {
 		v.child.registerPeer(p)
 		v.freeCount++
 	}
-	if c.cap != 0 && v.totalConnectedCap+c.cap > v.totalCap {
+	if c.capacity != 0 && v.totalConnectedCap+c.capacity > v.totalCap {
 		v.logger.Event(fmt.Sprintf("priorityClientPool: rejected, %x", id.Bytes()))
 		go v.ps.Unregister(p.id)
 		return
@@ -391,15 +392,15 @@ func (v *priorityClientPool) registerPeer(p *peer) {
 	v.updatePriceFactors(c)
 	c.peer = p
 	p.priceTracker = &c.priceTracker
-	if c.cap != 0 {
+	if c.capacity != 0 {
 		v.priorityCount++
-		v.totalConnectedCap += c.cap
-		v.logger.Event(fmt.Sprintf("priorityClientPool: accepted with %d capacity, %x", c.cap, id.Bytes()))
+		v.totalConnectedCap += c.capacity
+		v.logger.Event(fmt.Sprintf("priorityClientPool: accepted with %d capacity, %x", c.capacity, id.Bytes()))
 		v.logTotalPriConn.Update(float64(v.totalConnectedCap))
 		if v.child != nil {
 			v.child.setLimits(v.maxPeers-v.priorityCount, v.totalCap-v.totalConnectedCap)
 		}
-		p.updateCapacity(c.cap)
+		p.updateCapacity(c.capacity)
 	}
 	v.sendEvent("connect", c)
 }
@@ -415,15 +416,15 @@ func (v *priorityClientPool) unregisterPeer(p *peer) {
 	if c == nil {
 		return
 	}
-	v.logger.Event(fmt.Sprintf("priorityClientPool: unregisterPeer  cap=%d  connected=%v, %x", c.cap, c.connected, id.Bytes()))
+	v.logger.Event(fmt.Sprintf("priorityClientPool: unregisterPeer  capacity=%d  connected=%v, %x", c.capacity, c.connected, id.Bytes()))
 	if !c.connected {
 		return
 	}
 	c.priceTracker.setFactors(0, 0)
-	if c.cap != 0 {
+	if c.capacity != 0 {
 		c.connected = false
 		v.priorityCount--
-		v.totalConnectedCap -= c.cap
+		v.totalConnectedCap -= c.capacity
 		v.logTotalPriConn.Update(float64(v.totalConnectedCap))
 		if v.child != nil {
 			v.child.setLimits(v.maxPeers-v.priorityCount, v.totalCap-v.totalConnectedCap)
@@ -442,13 +443,13 @@ func (v *priorityClientPool) unregisterPeer(p *peer) {
 func (v *priorityClientPool) clientInfo(c *priorityClientInfo) map[string]interface{} {
 	clientInfo := make(map[string]interface{})
 	clientInfo["isConnected"] = c.connected
-	cap := c.cap
+	capacity := c.capacity
 	pri := true
-	if cap == 0 {
-		cap = v.freeClientCap
+	if capacity == 0 {
+		capacity = v.freeClientCap
 		pri = false
 	}
-	clientInfo["capacity"] = cap
+	clientInfo["capacity"] = capacity
 	clientInfo["hasPriority"] = pri
 	tags := make([]string, 0, len(c.userTags))
 	for tag, _ := range c.userTags {
@@ -511,7 +512,7 @@ func (v *priorityClientPool) matchClients(ids []enode.ID, tags []string, cb func
 			v.clients[id] = c
 		}
 		cb(c)
-		if c.cap == 0 && !c.connected {
+		if c.capacity == 0 && !c.connected {
 			delete(v.clients, id)
 		}
 	}
@@ -618,7 +619,7 @@ func (v *priorityClientPool) setLimitsNow(count int, totalCap uint64) {
 			if c.connected {
 				v.logger.Event(fmt.Sprintf("priorityClientPool: setLimitsNow kicked out, %x", id.Bytes()))
 				c.connected = false
-				v.totalConnectedCap -= c.cap
+				v.totalConnectedCap -= c.capacity
 				v.logTotalPriConn.Update(float64(v.totalConnectedCap))
 				v.priorityCount--
 				v.sendEvent("disconnect", c)
@@ -660,7 +661,7 @@ func (v *priorityClientPool) setClientTags(c *priorityClientInfo, tags []string)
 		c.userTags = make(map[string]struct{})
 		for _, tag := range tags {
 			if len(tag) > 0 && tag[0] == '$' {
-				return ErrInvalidTag
+				return errInvalidTag
 			}
 			c.userTags[tag] = struct{}{}
 		}
@@ -669,48 +670,48 @@ func (v *priorityClientPool) setClientTags(c *priorityClientInfo, tags []string)
 }
 
 // setClientCapacity sets the priority capacity assigned to a given client
-func (v *priorityClientPool) setClientCapacity(c *priorityClientInfo, cap uint64) error {
-	if c.cap == cap {
+func (v *priorityClientPool) setClientCapacity(c *priorityClientInfo, capacity uint64) error {
+	if c.capacity == capacity {
 		return nil
 	}
-	v.totalAssignedCap += cap - c.cap
+	v.totalAssignedCap += capacity - c.capacity
 	if c.connected {
-		if v.totalConnectedCap+cap > v.totalCap+c.cap {
-			return ErrTotalCap
+		if v.totalConnectedCap+capacity > v.totalCap+c.capacity {
+			return errTotalCap
 		}
-		if c.cap == 0 {
+		if c.capacity == 0 {
 			if v.child != nil {
 				v.child.unregisterPeer(c.peer)
 				v.freeCount--
 			}
 			v.priorityCount++
 		}
-		if cap == 0 {
+		if capacity == 0 {
 			v.priorityCount--
 		}
-		v.totalConnectedCap += cap - c.cap
+		v.totalConnectedCap += capacity - c.capacity
 		v.logTotalPriConn.Update(float64(v.totalConnectedCap))
 		if v.child != nil {
 			v.child.setLimits(v.maxPeers-v.priorityCount, v.totalCap-v.totalConnectedCap)
 		}
-		if cap == 0 {
+		if capacity == 0 {
 			if v.child != nil {
 				v.child.registerPeer(c.peer)
 				v.freeCount++
 			}
 			c.peer.updateCapacity(v.freeClientCap)
 		} else {
-			c.peer.updateCapacity(cap)
+			c.peer.updateCapacity(capacity)
 		}
 	}
-	if cap != 0 || c.connected {
-		c.cap = cap
+	if capacity != 0 || c.connected {
+		c.capacity = capacity
 	} else {
 		delete(v.clients, c.id)
 	}
 	v.sendEvent("updateCapacity", c)
 	if c.connected {
-		v.logger.Event(fmt.Sprintf("priorityClientPool: changed capacity to %d, %x", cap, c.id.Bytes()))
+		v.logger.Event(fmt.Sprintf("priorityClientPool: changed capacity to %d, %x", capacity, c.id.Bytes()))
 	}
 	return nil
 }
@@ -725,17 +726,17 @@ func (v *priorityClientPool) freezeClient(id enode.ID) error {
 		c.peer.freezeClient()
 		return nil
 	} else {
-		return ErrClientNotConnected
+		return errClientNotConnected
 	}
 }
 
 // updatePriceFactors updates the price tracker for a client based on current parameters
 func (v *priorityClientPool) updatePriceFactors(c *priorityClientInfo) {
-	cap := c.cap
-	if cap == 0 {
-		cap = v.freeClientCap
+	capacity := c.capacity
+	if capacity == 0 {
+		capacity = v.freeClientCap
 	}
-	c.priceTracker.setFactors(c.timeFactor+c.capacityFactor*float64(cap)/1000000, c.requestCostFactor)
+	c.priceTracker.setFactors(c.timeFactor+c.capacityFactor*float64(capacity)/1000000, c.requestCostFactor)
 }
 
 // priceTracker calculates service price for a single client based on connection time
@@ -877,7 +878,7 @@ func (api *PrivateLightAPI) LatestCheckpoint() ([4]string, error) {
 	var res [4]string
 	cp := api.backend.latestLocalCheckpoint()
 	if cp.Empty() {
-		return res, ErrNoCheckpoint
+		return res, errNoCheckpoint
 	}
 	res[0] = hexutil.EncodeUint64(cp.SectionIndex)
 	res[1], res[2], res[3] = cp.SectionHead.Hex(), cp.CHTRoot.Hex(), cp.BloomRoot.Hex()
@@ -894,7 +895,7 @@ func (api *PrivateLightAPI) GetCheckpoint(index uint64) ([3]string, error) {
 	var res [3]string
 	cp := api.backend.getLocalCheckpoint(index)
 	if cp.Empty() {
-		return res, ErrNoCheckpoint
+		return res, errNoCheckpoint
 	}
 	res[0], res[1], res[2] = cp.SectionHead.Hex(), cp.CHTRoot.Hex(), cp.BloomRoot.Hex()
 	return res, nil
@@ -903,7 +904,7 @@ func (api *PrivateLightAPI) GetCheckpoint(index uint64) ([3]string, error) {
 // GetCheckpointContractAddress returns the contract contract address in hex format.
 func (api *PrivateLightAPI) GetCheckpointContractAddress() (string, error) {
 	if api.reg == nil {
-		return "", ErrNotActivated
+		return "", errNotActivated
 	}
 	return api.reg.config.ContractAddr.Hex(), nil
 }
