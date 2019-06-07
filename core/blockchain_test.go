@@ -2227,8 +2227,8 @@ func BenchmarkBlockChain_1x1000ValueTransferToExisting(b *testing.B) {
 
 func BenchmarkBlockChain_1x1000Executions(b *testing.B) {
 	var (
-		numTxs= 1000
-		numBlocks= 1
+		numTxs    = 1000
+		numBlocks = 1
 	)
 	b.StopTimer()
 	b.ResetTimer()

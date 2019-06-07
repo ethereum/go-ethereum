@@ -56,23 +56,30 @@ func (api *PublicStateDiffAPI) Stream(ctx context.Context) (*rpc.Subscription, e
 
 	go func() {
 		// subscribe to events from the state diff service
-		payloadChannel := make(chan Payload, 10)
-		quitChan := make(chan bool)
+		payloadChannel := make(chan Payload, chainEventChanSize)
+		quitChan := make(chan bool, 1)
 		api.sds.Subscribe(rpcSub.ID, payloadChannel, quitChan)
 		// loop and await state diff payloads and relay them to the subscriber with the notifier
 		for {
 			select {
 			case packet := <-payloadChannel:
-				if err := notifier.Notify(rpcSub.ID, packet); err != nil {
-					log.Error("Failed to send state diff packet", "err", err)
+				if notifyErr := notifier.Notify(rpcSub.ID, packet); notifyErr != nil {
+					log.Error("Failed to send state diff packet; error: " + notifyErr.Error())
+					unSubErr := api.sds.Unsubscribe(rpcSub.ID)
+					if unSubErr != nil {
+						log.Error("Failed to unsubscribe from the state diff service; error: " + unSubErr.Error())
+					}
+					return
 				}
 			case err := <-rpcSub.Err():
-				log.Error("State diff service rpcSub error", err)
-				err = api.sds.Unsubscribe(rpcSub.ID)
 				if err != nil {
-					log.Error("Failed to unsubscribe from the state diff service", err)
+					log.Error("State diff service rpcSub error: " + err.Error())
+					err = api.sds.Unsubscribe(rpcSub.ID)
+					if err != nil {
+						log.Error("Failed to unsubscribe from the state diff service; error: " + err.Error())
+					}
+					return
 				}
-				return
 			case <-quitChan:
 				// don't need to unsubscribe, statediff service does so before sending the quit signal
 				return

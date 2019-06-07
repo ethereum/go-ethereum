@@ -34,6 +34,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+const chainEventChanSize = 20000
+
 type blockChain interface {
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	GetBlockByHash(hash common.Hash) *types.Block
@@ -127,13 +129,11 @@ func (sds *Service) Loop(chainEventCh chan core.ChainEvent) {
 			}
 			sds.lastBlock = currentBlock
 			if parentBlock == nil {
-				log.Error("Parent block is nil, skipping this block",
-					"parent block hash", parentHash.String(),
-					"current block number", currentBlock.Number())
+				log.Error(fmt.Sprintf("Parent block is nil, skipping this block (%d)", currentBlock.Number()))
 				continue
 			}
 			if err := sds.processStateDiff(currentBlock, parentBlock); err != nil {
-				log.Error("Error building statediff", "block number", currentBlock.Number(), "error", err)
+				log.Error(fmt.Sprintf("Error building statediff for block %d; error: ", currentBlock.Number()) + err.Error())
 			}
 		case err := <-errCh:
 			log.Warn("Error from chain event subscription, breaking loop", "error", err)
@@ -210,7 +210,7 @@ func (sds *Service) Unsubscribe(id rpc.ID) error {
 func (sds *Service) Start(*p2p.Server) error {
 	log.Info("Starting statediff service")
 
-	chainEventCh := make(chan core.ChainEvent, 10)
+	chainEventCh := make(chan core.ChainEvent, chainEventChanSize)
 	go sds.Loop(chainEventCh)
 
 	return nil
