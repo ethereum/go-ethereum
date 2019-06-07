@@ -34,7 +34,7 @@ func newULC(ulcConfig *eth.ULCConfig) *ulc {
 	}
 	m := make(map[string]struct{}, len(ulcConfig.TrustedServers))
 	for _, id := range ulcConfig.TrustedServers {
-		node, err := enode.ParseV4(id)
+		node, err := enode.Parse(enode.ValidSchemes, id)
 		if err != nil {
 			log.Debug("Failed to parse trusted server", "id", id, "err", err)
 			continue
