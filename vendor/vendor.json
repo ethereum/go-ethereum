@@ -3,24 +3,6 @@
 	"ignore": "test",
 	"package": [
 		{
-			"checksumSHA1": "b5bkSc2hlmUV7PlLY6JlLwiJpiE=",
-			"path": "bazil.org/fuse",
-			"revision": "371fbbdaa8987b715bdd21d6adc4c9b20155f748",
-			"revisionTime": "2016-08-11T21:22:31Z"
-		},
-		{
-			"checksumSHA1": "389JFJTJADMtZkTIfdSnsmHVOUs=",
-			"path": "bazil.org/fuse/fs",
-			"revision": "371fbbdaa8987b715bdd21d6adc4c9b20155f748",
-			"revisionTime": "2016-08-11T21:22:31Z"
-		},
-		{
-			"checksumSHA1": "NPgkh9UWMsaTtsAAs3kPrclHT9Y=",
-			"path": "bazil.org/fuse/fuseutil",
-			"revision": "371fbbdaa8987b715bdd21d6adc4c9b20155f748",
-			"revisionTime": "2016-08-11T21:22:31Z"
-		},
-		{
 			"checksumSHA1": "z+M6FYl9EKsoZZMLcT0Ktwfk8pI=",
 			"path": "github.com/Azure/azure-pipeline-go/pipeline",
 			"revision": "7571e8eb0876932ab505918ff7ed5107773e5ee2",
@@ -73,12 +55,6 @@
 			"path": "github.com/cespare/cp",
 			"revision": "165db2f241fd235aec29ba6d9b1ccd5f1c14637c",
 			"revisionTime": "2015-01-22T07:26:53Z"
-		},
-		{
-			"checksumSHA1": "7gK+lSShSu1NRw83/A95BcgMqsI=",
-			"path": "github.com/codahale/hdrhistogram",
-			"revision": "3a0bb77429bd3a61596f5e8a3172445844342120",
-			"revisionTime": "2016-10-10T02:54:55Z"
 		},
 		{
 			"checksumSHA1": "dvabztWVQX8f6oMLRyv4dLH+TGY=",
@@ -543,108 +519,6 @@
 			"path": "github.com/tyler-smith/go-bip39/wordlists",
 			"revision": "dbb3b84ba2ef14e894f5e33d6c6e43641e665738",
 			"revisionTime": "2018-10-17T06:06:43Z"
-		},
-		{
-			"checksumSHA1": "nD6S4KB0S+YHxVMDDE+w3PyXaMk=",
-			"path": "github.com/uber/jaeger-client-go",
-			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
-			"revisionTime": "2018-06-07T15:18:42Z"
-		},
-		{
-			"checksumSHA1": "cjhPfiQbTqfkHmZM3Bi+Bm8qgN4=",
-			"path": "github.com/uber/jaeger-client-go/config",
-			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
-			"revisionTime": "2018-06-07T15:18:42Z"
-		},
-		{
-			"checksumSHA1": "KM5UXTWkHULmw0dDRNuk8ogWyGs=",
-			"path": "github.com/uber/jaeger-client-go/internal/baggage",
-			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
-			"revisionTime": "2018-06-07T15:18:42Z"
-		},
-		{
-			"checksumSHA1": "tZqlcHV1XoLdZp9jfnydzsZAvYo=",
-			"path": "github.com/uber/jaeger-client-go/internal/baggage/remote",
-			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
-			"revisionTime": "2018-06-07T15:18:42Z"
-		},
-		{
-			"checksumSHA1": "QB0L0GrzyMGQp6ivkkxp7a1DPsE=",
-			"path": "github.com/uber/jaeger-client-go/internal/spanlog",
-			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
-			"revisionTime": "2018-06-07T15:18:42Z"
-		},
-		{
-			"checksumSHA1": "79HRO/+ekkpwqDB/OMiW+AHJtlE=",
-			"path": "github.com/uber/jaeger-client-go/internal/throttler",
-			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
-			"revisionTime": "2018-06-07T15:18:42Z"
-		},
-		{
-			"checksumSHA1": "OVQDWFtFMs+NODe0F/S5kYViQco=",
-			"path": "github.com/uber/jaeger-client-go/internal/throttler/remote",
-			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
-			"revisionTime": "2018-06-07T15:18:42Z"
-		},
-		{
-			"checksumSHA1": "tMP/vxbHwNAbOEaUhic5/meKfac=",
-			"path": "github.com/uber/jaeger-client-go/log",
-			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
-			"revisionTime": "2018-06-07T15:18:42Z"
-		},
-		{
-			"checksumSHA1": "j4WrA/B2SJCqHxttCQ+TYbmtQqE=",
-			"path": "github.com/uber/jaeger-client-go/rpcmetrics",
-			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
-			"revisionTime": "2018-06-07T15:18:42Z"
-		},
-		{
-			"checksumSHA1": "+ffspyTBQLql2UiU6muvfWR/m1o=",
-			"path": "github.com/uber/jaeger-client-go/thrift",
-			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
-			"revisionTime": "2018-06-07T15:18:42Z"
-		},
-		{
-			"checksumSHA1": "fMIQ4sJFCkqFYhXvvLKIlofqxvY=",
-			"path": "github.com/uber/jaeger-client-go/thrift-gen/agent",
-			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
-			"revisionTime": "2018-06-07T15:18:42Z"
-		},
-		{
-			"checksumSHA1": "fRR2p+JAp7paApf32YuQuWU7yzY=",
-			"path": "github.com/uber/jaeger-client-go/thrift-gen/baggage",
-			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
-			"revisionTime": "2018-06-07T15:18:42Z"
-		},
-		{
-			"checksumSHA1": "JZkMEOmiOFFEuGCsDOVLK5RzvMM=",
-			"path": "github.com/uber/jaeger-client-go/thrift-gen/jaeger",
-			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
-			"revisionTime": "2018-06-07T15:18:42Z"
-		},
-		{
-			"checksumSHA1": "0teQUhTqTE1fLs+vbnTTzWOqdEQ=",
-			"path": "github.com/uber/jaeger-client-go/thrift-gen/sampling",
-			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
-			"revisionTime": "2018-06-07T15:18:42Z"
-		},
-		{
-			"checksumSHA1": "Nx5witfz05BSO2YlFzh2Gno6bA0=",
-			"path": "github.com/uber/jaeger-client-go/thrift-gen/zipkincore",
-			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
-			"revisionTime": "2018-06-07T15:18:42Z"
-		},
-		{
-			"checksumSHA1": "DKwwIk9vq53IKO7RKccat9cnqeo=",
-			"path": "github.com/uber/jaeger-client-go/utils",
-			"revision": "f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8",
-			"revisionTime": "2018-06-07T15:18:42Z"
-		},
-		{
-			"checksumSHA1": "k1iaOSBmLp3TpGvHNnRQXyJfwyI=",
-			"path": "github.com/uber/jaeger-lib/metrics",
-			"revision": "a51202d6f4a7e5a219e3841a43614ff7187ae7f1",
-			"revisionTime": "2018-06-15T20:27:29Z"
 		},
 		{
 			"checksumSHA1": "GLCPuvePAkWT+opcWq3mNdhOfGM=",
