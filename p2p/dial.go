@@ -17,7 +17,6 @@
 package p2p
 
 import (
-	"container/heap"
 	"errors"
 	"fmt"
 	"net"
@@ -29,9 +28,10 @@ import (
 )
 
 const (
-	// This is the amount of time spent waiting in between
-	// redialing a certain node.
-	dialHistoryExpiration = 30 * time.Second
+	// This is the amount of time spent waiting in between redialing a certain node. The
+	// limit is a bit higher than inboundThrottleTime to prevent failing dials in small
+	// private networks.
+	dialHistoryExpiration = inboundThrottleTime + 5*time.Second
 
 	// Discovery lookups are throttled and can only run
 	// once every few seconds.
@@ -78,7 +78,7 @@ type dialstate struct {
 	lookupBuf     []*enode.Node // current discovery lookup results
 	randomNodes   []*enode.Node // filled from Table
 	static        map[enode.ID]*dialTask
-	hist          *dialHistory
+	hist          expHeap
 
 	start     time.Time     // time when the dialer was first used
 	bootnodes []*enode.Node // default dials when there are no peers
@@ -89,15 +89,6 @@ type discoverTable interface {
 	Resolve(*enode.Node) *enode.Node
 	LookupRandom() []*enode.Node
 	ReadRandomNodes([]*enode.Node) int
-}
-
-// the dial history remembers recent dials.
-type dialHistory []pastDial
-
-// pastDial is an entry in the dial history.
-type pastDial struct {
-	id  enode.ID
-	exp time.Time
 }
 
 type task interface {
@@ -136,7 +127,6 @@ func newDialState(self enode.ID, static []*enode.Node, bootnodes []*enode.Node, 
 		dialing:     make(map[enode.ID]connFlag),
 		bootnodes:   make([]*enode.Node, len(bootnodes)),
 		randomNodes: make([]*enode.Node, maxdyn/2),
-		hist:        new(dialHistory),
 	}
 	copy(s.bootnodes, bootnodes)
 	for _, n := range static {
@@ -154,9 +144,6 @@ func (s *dialstate) addStatic(n *enode.Node) {
 func (s *dialstate) removeStatic(n *enode.Node) {
 	// This removes a task so future attempts to connect will not be made.
 	delete(s.static, n.ID())
-	// This removes a previous dial timestamp so that application
-	// can force a server to reconnect with chosen peer immediately.
-	s.hist.remove(n.ID())
 }
 
 func (s *dialstate) newTasks(nRunning int, peers map[enode.ID]*Peer, now time.Time) []task {
@@ -246,7 +233,7 @@ func (s *dialstate) newTasks(nRunning int, peers map[enode.ID]*Peer, now time.Ti
 	// This should prevent cases where the dialer logic is not ticked
 	// because there are no pending events.
 	if nRunning == 0 && len(newtasks) == 0 && s.hist.Len() > 0 {
-		t := &waitExpireTask{s.hist.min().exp.Sub(now)}
+		t := &waitExpireTask{s.hist.nextExpiry().Sub(now)}
 		newtasks = append(newtasks, t)
 	}
 	return newtasks
@@ -271,7 +258,7 @@ func (s *dialstate) checkDial(n *enode.Node, peers map[enode.ID]*Peer) error {
 		return errSelf
 	case s.netrestrict != nil && !s.netrestrict.Contains(n.IP()):
 		return errNotWhitelisted
-	case s.hist.contains(n.ID()):
+	case s.hist.contains(string(n.ID().Bytes())):
 		return errRecentlyDialed
 	}
 	return nil
@@ -280,7 +267,7 @@ func (s *dialstate) checkDial(n *enode.Node, peers map[enode.ID]*Peer) error {
 func (s *dialstate) taskDone(t task, now time.Time) {
 	switch t := t.(type) {
 	case *dialTask:
-		s.hist.add(t.dest.ID(), now.Add(dialHistoryExpiration))
+		s.hist.add(string(t.dest.ID().Bytes()), now.Add(dialHistoryExpiration))
 		delete(s.dialing, t.dest.ID())
 	case *discoverTask:
 		s.lookupRunning = false
@@ -384,50 +371,4 @@ func (t waitExpireTask) Do(*Server) {
 }
 func (t waitExpireTask) String() string {
 	return fmt.Sprintf("wait for dial hist expire (%v)", t.Duration)
-}
-
-// Use only these methods to access or modify dialHistory.
-func (h dialHistory) min() pastDial {
-	return h[0]
-}
-func (h *dialHistory) add(id enode.ID, exp time.Time) {
-	heap.Push(h, pastDial{id, exp})
-
-}
-func (h *dialHistory) remove(id enode.ID) bool {
-	for i, v := range *h {
-		if v.id == id {
-			heap.Remove(h, i)
-			return true
-		}
-	}
-	return false
-}
-func (h dialHistory) contains(id enode.ID) bool {
-	for _, v := range h {
-		if v.id == id {
-			return true
-		}
-	}
-	return false
-}
-func (h *dialHistory) expire(now time.Time) {
-	for h.Len() > 0 && h.min().exp.Before(now) {
-		heap.Pop(h)
-	}
-}
-
-// heap.Interface boilerplate
-func (h dialHistory) Len() int           { return len(h) }
-func (h dialHistory) Less(i, j int) bool { return h[i].exp.Before(h[j].exp) }
-func (h dialHistory) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-func (h *dialHistory) Push(x interface{}) {
-	*h = append(*h, x.(pastDial))
-}
-func (h *dialHistory) Pop() interface{} {
-	old := *h
-	n := len(old)
-	x := old[n-1]
-	*h = old[0 : n-1]
-	return x
 }

@@ -525,50 +525,6 @@ func TestDialStateStaticDial(t *testing.T) {
 	})
 }
 
-// This test checks that static peers will be redialed immediately if they were re-added to a static list.
-func TestDialStaticAfterReset(t *testing.T) {
-	wantStatic := []*enode.Node{
-		newNode(uintID(1), nil),
-		newNode(uintID(2), nil),
-	}
-
-	rounds := []round{
-		// Static dials are launched for the nodes that aren't yet connected.
-		{
-			peers: nil,
-			new: []task{
-				&dialTask{flags: staticDialedConn, dest: newNode(uintID(1), nil)},
-				&dialTask{flags: staticDialedConn, dest: newNode(uintID(2), nil)},
-			},
-		},
-		// No new dial tasks, all peers are connected.
-		{
-			peers: []*Peer{
-				{rw: &conn{flags: staticDialedConn, node: newNode(uintID(1), nil)}},
-				{rw: &conn{flags: staticDialedConn, node: newNode(uintID(2), nil)}},
-			},
-			done: []task{
-				&dialTask{flags: staticDialedConn, dest: newNode(uintID(1), nil)},
-				&dialTask{flags: staticDialedConn, dest: newNode(uintID(2), nil)},
-			},
-			new: []task{
-				&waitExpireTask{Duration: 30 * time.Second},
-			},
-		},
-	}
-	dTest := dialtest{
-		init:   newDialState(enode.ID{}, wantStatic, nil, fakeTable{}, 0, nil),
-		rounds: rounds,
-	}
-	runDialTest(t, dTest)
-	for _, n := range wantStatic {
-		dTest.init.removeStatic(n)
-		dTest.init.addStatic(n)
-	}
-	// without removing peers they will be considered recently dialed
-	runDialTest(t, dTest)
-}
-
 // This test checks that past dials are not retried for some time.
 func TestDialStateCache(t *testing.T) {
 	wantStatic := []*enode.Node{
