@@ -262,10 +262,7 @@ func registerCheckpoint(ctx *cli.Context) error {
 	}
 	sigStrs := strings.Split(ctx.GlobalString(signatureFlag.Name), ",")
 	for _, sig := range sigStrs {
-		trimmed := strings.TrimSpace(sig)
-		if strings.HasPrefix(trimmed, "0x") {
-			trimmed = trimmed[2:]
-		}
+		trimmed := strings.TrimPrefix(strings.TrimSpace(sig), "0x")
 		if len(trimmed) != 130 {
 			utils.Fatalf("Invalid signature in --signature: %s", trimmed)
 		} else {

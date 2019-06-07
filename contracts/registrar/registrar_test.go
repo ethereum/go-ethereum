@@ -151,7 +151,7 @@ func assertSignature(addr common.Address, index uint64, hash [32]byte, r, s [32]
 	}
 	var signer common.Address
 	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-	return bytes.Compare(signer.Bytes(), expect.Bytes()) == 0
+	return bytes.Equal(signer.Bytes(), expect.Bytes())
 }
 
 type Account struct {
@@ -213,7 +213,7 @@ func TestCheckpointRegister(t *testing.T) {
 		if lindex != index {
 			return errors.New("latest checkpoint index mismatch")
 		}
-		if bytes.Compare(lhash[:], hash[:]) != 0 {
+		if !bytes.Equal(lhash[:], hash[:]) {
 			return errors.New("latest checkpoint hash mismatch")
 		}
 		if lheight.Cmp(height) != 0 {
