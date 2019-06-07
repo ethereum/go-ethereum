@@ -5,35 +5,23 @@ matrix:
   include:
     - os: linux
       dist: xenial
-      sudo: required
       go: 1.10.x
       script:
-      - sudo modprobe fuse
-      - sudo chmod 666 /dev/fuse
-      - sudo chown root:$USER /etc/fuse.conf
       - go run build/ci.go install
       - go run build/ci.go test -coverage $TEST_PACKAGES
 
     - os: linux
       dist: xenial
-      sudo: required
       go: 1.11.x
       script:
-        - sudo modprobe fuse
-        - sudo chmod 666 /dev/fuse
-        - sudo chown root:$USER /etc/fuse.conf
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
     # These are the latest Go versions.
     - os: linux
       dist: xenial
-      sudo: required
       go: 1.12.x
       script:
-        - sudo modprobe fuse
-        - sudo chmod 666 /dev/fuse
-        - sudo chown root:$USER /etc/fuse.conf
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
