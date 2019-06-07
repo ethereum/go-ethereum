@@ -65,10 +65,10 @@ type LesServer struct {
 
 	thcNormal, thcBlockProcessing int // serving thread count for normal operation and block processing mode
 
-	maxPeers                   int
-	minCapacity, freeClientCap uint64
-	freeClientPool             *freeClientPool
-	priorityClientPool         *priorityClientPool
+	maxPeers                                int
+	minCapacity, maxCapacity, freeClientCap uint64
+	freeClientPool                          *freeClientPool
+	priorityClientPool                      *priorityClientPool
 }
 
 func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
@@ -236,11 +236,11 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 		}
 	}
 
-	maxCapacity := s.freeClientCap * uint64(s.maxPeers)
-	if totalRecharge > maxCapacity {
-		maxCapacity = totalRecharge
+	s.maxCapacity = s.freeClientCap * uint64(s.maxPeers)
+	if totalRecharge > s.maxCapacity {
+		s.maxCapacity = totalRecharge
 	}
-	s.fcManager.SetCapacityLimits(s.freeClientCap, maxCapacity, s.freeClientCap*2)
+	s.fcManager.SetCapacityLimits(s.freeClientCap, s.maxCapacity, s.freeClientCap*2)
 	poolMetricsLogger := s.csvLogger
 	if !logClientPoolMetrics {
 		poolMetricsLogger = nil

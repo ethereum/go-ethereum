@@ -59,7 +59,8 @@ func NewPrivateLightServerAPI(server *LesServer) *PrivateLightServerAPI {
 // ServerInfo returns global server parameters
 func (api *PrivateLightServerAPI) ServerInfo() map[string]interface{} {
 	res := make(map[string]interface{})
-	res["minimumCapacity"] = uint64(api.server.minCapacity)
+	res["minimumCapacity"] = api.server.minCapacity
+	res["maximumCapacity"] = api.server.maxCapacity
 	res["freeClientCapacity"] = api.server.freeClientCap
 	res["totalCapacity"], res["totalConnectedCapacity"], res["priorityConnectedCapacity"], res["totalPriorityCapacity"] = api.server.priorityClientPool.capacityInfo()
 	return res
