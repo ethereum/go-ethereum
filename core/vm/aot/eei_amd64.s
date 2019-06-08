@@ -36,13 +36,15 @@ TEXT ethereumUseGas<>(SB),NOSPLIT,$0
 	// Get pointer to the contract info area into r13
 	MOVQ    -0x20(R15), R13
 
-	MOVQ    8(SP), AX		// Gas required
-	MOVQ	0x8(R13), CX	// Gas left
-	CMPQ	AX, CX
-	JA		oog
+	// Disable gas accounting as it is currently implemented
+	// before calling the precompile.
+	//MOVQ    8(SP), AX		// Gas required
+	//MOVQ	0x8(R13), CX	// Gas left
+	//CMPQ	AX, CX
+	//JA		oog
 	
-	SUBQ	AX, CX
-	MOVQ	CX, 0x8(R13)
+	//SUBQ	AX, CX
+	//MOVQ	CX, 0x8(R13)
 	XORQ	AX, AX
 	XORQ	CX, CX
 	RET
@@ -80,6 +82,10 @@ TEXT ethereumCallDataCopy<>(SB),NOSPLIT,$0
 	CMPQ	AX, R12
 	JA		eei_error
 
+	// Skip copy loop if there are no data to copy
+	CMPQ	AX, $0
+	JZ		calldatacopy_end
+
 	// Load address of the destination buffer
 	MOVQ	0x18(SP), DI
 	ADDQ	R14, DI
@@ -90,6 +96,7 @@ TEXT ethereumCallDataCopy<>(SB),NOSPLIT,$0
 	ADDQ	$1, SI
 	ADDQ	$1, DI
 	LOOP	copy
+calldatacopy_end:
 	RET
 
 	eei_error:

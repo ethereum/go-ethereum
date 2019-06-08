@@ -104,6 +104,7 @@ var (
 		ByzantiumBlock:      big.NewInt(1035301),
 		ConstantinopleBlock: big.NewInt(3660663),
 		PetersburgBlock:     big.NewInt(4321234),
+		EWASMBlock:          nil,
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,

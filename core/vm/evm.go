@@ -45,9 +45,6 @@ func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, err
 	if contract.CodeAddr != nil {
 		precompiles := PrecompiledContractsHomestead
 		if evm.ChainConfig().IsByzantium(evm.BlockNumber) {
-			precompiles = PrecompiledContractsByzantium
-		}
-		if evm.ChainConfig().IsEWASM(evm.BlockNumber) {
 			precompiles = PrecompiledContractsEWASM
 		}
 		if p := precompiles[*contract.CodeAddr]; p != nil {

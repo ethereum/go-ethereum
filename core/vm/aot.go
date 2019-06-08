@@ -24,7 +24,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"log"
+	"math/big"
 	"os"
 	"reflect"
 	"syscall"
@@ -121,8 +123,8 @@ func (ac *AoTContract) ResolveGlobal(module, field string, t wa.Type) (init uint
 	return
 }
 
-func (ac *AoTContract) RequiredGas(code []byte) uint64 {
-	return 0
+func (ac *AoTContract) RequiredGas(input []byte) uint64 {
+	return PrecompiledContractsByzantium[common.BigToAddress(big.NewInt(int64(ac.Num)))].RequiredGas(input)
 }
 
 func (ac *AoTContract) Run(input []byte, contract *Contract) ([]byte, error) {
@@ -231,21 +233,13 @@ func (ac *AoTContract) Run(input []byte, contract *Contract) ([]byte, error) {
 
 	retaddr, retsize := aot.Exec(textAddr, stackLimit, memoryAddr, stackPtr)
 
-	gasLeft := binary.LittleEndian.Uint64(contractData[8:])
-	if gasLeft == 0xffffffffffffffff {
-		fmt.Println("Out of gas")
-		return nil, ErrOutOfGas
-	} else {
-		fmt.Println("gas left: ", gasLeft, "result: ", globalsMemory[retaddr+obj.MemoryOffset:retaddr+obj.MemoryOffset+retsize])
-		contract.Gas = gasLeft
-		if retsize == 0 {
-			return nil, nil
-		}
-
-		retData := make([]byte, retsize)
-		copy(retData, globalsMemory[retaddr+obj.MemoryOffset:retaddr+obj.MemoryOffset+retsize])
-		return retData, nil
+	if retsize == 0 {
+		return nil, nil
 	}
+
+	retData := make([]byte, retsize)
+	copy(retData, globalsMemory[retaddr+obj.MemoryOffset:retaddr+obj.MemoryOffset+retsize])
+	return retData, nil
 
 	// TODO cleanup all protected memory areas
 }
