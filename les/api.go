@@ -40,9 +40,12 @@ var (
 	errUnknownBenchmarkType = errors.New("unknown benchmark type")
 	errMultiple             = errors.New("multiple errors")
 	errClientNotConnected   = errors.New("client is not connected")
+	errBalanceOverflow      = errors.New("balance overflow")
 
 	dropCapacityDelay = time.Second // delay applied to decreasing capacity changes
 )
+
+const maxBalance = 18000000000000000000
 
 // PrivateLightServerAPI provides an API to access the LES light server.
 type PrivateLightServerAPI struct {
@@ -105,6 +108,18 @@ func (api *PrivateLightServerAPI) SetClientParams(ids []enode.ID, tags []string,
 				if capacity, ok := value.(float64); ok && (capacity == 0 || uint64(capacity) >= api.server.minCapacity) {
 					err = api.server.priorityClientPool.setClientCapacity(client, uint64(capacity))
 					updatePrice = true
+				} else {
+					err = errInvalidValue
+				}
+			case "pricing/balance":
+				if val, ok := value.(float64); ok {
+					client.priceTracker.setBalance(val, false)
+				} else {
+					err = errInvalidValue
+				}
+			case "pricing/addBalance":
+				if val, ok := value.(float64); ok {
+					client.priceTracker.setBalance(val, true)
 				} else {
 					err = errInvalidValue
 				}
@@ -460,7 +475,7 @@ func (v *priorityClientPool) clientInfo(c *priorityClientInfo) map[string]interf
 		tags = append(tags, tag)
 	}
 	clientInfo["userTags"] = tags
-	clientInfo["pricing/totalAmount"] = c.priceTracker.getTotalAmount()
+	clientInfo["pricing/balance"] = c.priceTracker.getBalance()
 	return clientInfo
 }
 
@@ -541,7 +556,7 @@ func (v *priorityClientPool) priceUpdate(client *priorityClientInfo) {
 	}
 }
 
-// setPriceUpdate schedules a price update when the total price reaches the given limit.
+// setPriceUpdate schedules a price update when the balance reaches the given limit.
 // If periodic is false then the limit is interpreted as an absolute value while if true
 // it is relative to the current totalAmount value or the its value at the last future update.
 func (v *priorityClientPool) setPriceUpdate(client *priorityClientInfo, value uint64, periodic bool) {
@@ -551,7 +566,7 @@ func (v *priorityClientPool) setPriceUpdate(client *priorityClientInfo, value ui
 	}
 	if periodic {
 		client.priceUpdatePeriod = value
-		value += client.priceTracker.getTotalAmount()
+		value = client.priceTracker.getBalance() - value
 	} else {
 		client.priceUpdatePeriod = 0
 	}
@@ -747,53 +762,55 @@ func (v *priorityClientPool) updatePriceFactors(c *priorityClientInfo) {
 // and/or requests served. It also provides a callback function when a given total
 // price threshold has been reached.
 type priceTracker struct {
-	lock                           sync.Mutex
-	totalAmount, callbackThreshold uint64
-	callback                       func()
-	timeFactor, requestFactor      float64
-	lastUpdate, nextUpdate         mclock.AbsTime
-	updateTimer                    *time.Timer
+	lock                                    sync.Mutex
+	balance, lastBalance, callbackThreshold uint64
+	zeroCallback, userCallback              func()
+	timeFactor, requestFactor               float64
+	lastUpdate, nextUpdate                  mclock.AbsTime
+	updateTimer                             *time.Timer
 }
 
 // update recalculates the total price, calls the callback and/or modifies
 // the next scheduled update if necessary
 func (pt *priceTracker) update() {
 	now := mclock.Now()
-	if pt.lastUpdate != 0 {
+	if pt.lastBalance != 0 && pt.lastUpdate != 0 {
 		dt := now - pt.lastUpdate
 		if dt > 0 {
-			pt.totalAmount += uint64(pt.timeFactor * float64(dt))
-		}
-	}
-	pt.lastUpdate = now
-	if pt.callbackThreshold == 0 || pt.callback == nil {
-		pt.nextUpdate = 0
-		pt.updateAfter(0)
-	} else {
-		if pt.totalAmount >= pt.callbackThreshold {
-			pt.callbackThreshold = 0
-			pt.nextUpdate = 0
-			go pt.callback()
-		} else {
-			if pt.timeFactor > 1e-100 {
-				dt := float64(pt.callbackThreshold-pt.totalAmount) / pt.timeFactor
-				if dt > 1e15 {
-					dt = 1e15
-				}
-				d := time.Duration(dt)
-				if pt.nextUpdate == 0 || pt.nextUpdate > now+mclock.AbsTime(d) {
-					if d > time.Second {
-						d = ((d - time.Second) * 7 / 8) + time.Second
-					}
-					pt.nextUpdate = now + mclock.AbsTime(d)
-					pt.updateAfter(d)
-				}
+			amount := uint64(pt.timeFactor * float64(dt))
+			if pt.balance > amount {
+				pt.balance -= amount
 			} else {
-				pt.nextUpdate = 0
-				pt.updateAfter(0)
+				pt.balance = 0
+				go pt.zeroCallback()
 			}
 		}
 	}
+	pt.lastUpdate = now
+	if pt.userCallback != nil && pt.balance <= pt.callbackThreshold {
+		callback := pt.userCallback
+		pt.userCallback = nil
+		pt.callbackThreshold = 0
+		go callback()
+	}
+	if pt.balance != 0 && pt.timeFactor > 1e-100 {
+		dt := float64(pt.balance-pt.callbackThreshold) / pt.timeFactor
+		if dt > 1e15 {
+			dt = 1e15
+		}
+		d := time.Duration(dt)
+		if pt.nextUpdate == 0 || pt.nextUpdate > now+mclock.AbsTime(d) {
+			if d > time.Second {
+				d = ((d - time.Second) * 7 / 8) + time.Second
+			}
+			pt.nextUpdate = now + mclock.AbsTime(d)
+			pt.updateAfter(d)
+		}
+	} else {
+		pt.nextUpdate = 0
+		pt.updateAfter(0)
+	}
+	pt.lastBalance = pt.balance
 }
 
 // updateAfter schedules an update in the future
@@ -820,18 +837,64 @@ func (pt *priceTracker) requestCost(cost uint64) {
 	defer pt.lock.Unlock()
 
 	if pt.requestFactor != 0 {
-		pt.totalAmount += uint64(float64(cost) * pt.requestFactor)
+		c := uint64(float64(cost) * pt.requestFactor)
+		if pt.balance > c {
+			pt.balance -= c
+		} else {
+			pt.balance = 0
+		}
 		pt.update()
 	}
 }
 
-// getTotalAmount returns the current total cost accumulated.
-func (pt *priceTracker) getTotalAmount() uint64 {
+// getBalance returns the current balance
+func (pt *priceTracker) getBalance() uint64 {
 	pt.lock.Lock()
 	defer pt.lock.Unlock()
 
 	pt.update()
-	return pt.totalAmount
+	return pt.balance
+}
+
+// setBalance sets the balance to the given value or adds the value to it
+// Note: it also performs float to int conversion and overflow check. Adding a negative
+// value bigger than the current balance does not yield an error, just sets the balance
+// to zero and revokes priority status. User balance alert may also be triggered.
+func (pt *priceTracker) setBalance(value float64, add bool) error {
+	pt.lock.Lock()
+	defer pt.lock.Unlock()
+
+	pt.update()
+	neg := false
+	if value < 0 {
+		neg = true
+		value = -value
+	}
+	if value > maxBalance {
+		return errBalanceOverflow
+	}
+	v := uint64(value)
+	if add {
+		if neg {
+			if v < pt.balance {
+				pt.balance -= v
+			} else {
+				pt.balance = 0
+			}
+		} else {
+			if maxBalance-v < pt.balance {
+				return errBalanceOverflow
+			}
+			pt.balance += v
+		}
+	} else {
+		if neg {
+			return errBalanceOverflow
+		}
+		pt.balance = v
+	}
+	pt.update()
+	return nil
 }
 
 // setFactors sets the price factors. timeFactor is the price of a nanosecond of
@@ -853,7 +916,7 @@ func (pt *priceTracker) setCallback(threshold uint64, callback func()) {
 	defer pt.lock.Unlock()
 
 	pt.callbackThreshold = threshold
-	pt.callback = callback
+	pt.userCallback = callback
 	pt.update()
 }
 
