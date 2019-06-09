@@ -107,28 +107,28 @@ func newTable(path string, name string, readMeter metrics.Meter, writeMeter metr
 	return newCustomTable(path, name, readMeter, writeMeter, 2*1000*1000*1000, disableSnappy)
 }
 
-// openFreezerFile opens a freezer table file and seeks to the end
+// openFreezerFileForAppend opens a freezer table file and seeks to the end
 func openFreezerFileForAppend(filename string) (*os.File, error) {
-	//open the file without the O_APPEND flag
-	//because it has differing behaviour during Truncate operations
-	//on different OS's
+	// Open the file without the O_APPEND flag
+	// because it has differing behaviour during Truncate operations
+	// on different OS's
 	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
 		return nil, err
 	}
-	//seek to end for append
+	// Seek to end for append
 	if _, err = file.Seek(0, io.SeekEnd); err != nil {
 		return nil, err
 	}
 	return file, nil
 }
 
-// openFreezerFile opens a freezer table file for read only access
+// openFreezerFileForReadOnly opens a freezer table file for read only access
 func openFreezerFileForReadOnly(filename string) (*os.File, error) {
 	return os.OpenFile(filename, os.O_RDONLY, 0644)
 }
 
-// openFreezerFile opens a freezer table making sure it is truncated
+// openFreezerFileTruncated opens a freezer table making sure it is truncated
 func openFreezerFileTruncated(filename string) (*os.File, error) {
 	return os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 }
@@ -138,7 +138,7 @@ func truncateFreezerFile(file *os.File, size int64) error {
 	if err := file.Truncate(size); err != nil {
 		return err
 	}
-	//seek to end for append
+	// Seek to end for append
 	if _, err := file.Seek(0, io.SeekEnd); err != nil {
 		return err
 	}
@@ -155,10 +155,10 @@ func newCustomTable(path string, name string, readMeter metrics.Meter, writeMete
 	}
 	var idxName string
 	if noCompression {
-		// raw idx
+		// Raw idx
 		idxName = fmt.Sprintf("%s.ridx", name)
 	} else {
-		// compressed idx
+		// Compressed idx
 		idxName = fmt.Sprintf("%s.cidx", name)
 	}
 	offsets, err := openFreezerFileForAppend(filepath.Join(path, idxName))
@@ -260,7 +260,7 @@ func (t *freezerTable) repair() error {
 			newLastIndex.unmarshalBinary(buffer)
 			// We might have slipped back into an earlier head-file here
 			if newLastIndex.filenum != lastIndex.filenum {
-				// release earlier opened file
+				// Release earlier opened file
 				t.releaseFile(lastIndex.filenum)
 				t.head, err = t.openFile(newLastIndex.filenum, openFreezerFileForAppend)
 				if stat, err = t.head.Stat(); err != nil {
@@ -342,10 +342,10 @@ func (t *freezerTable) truncate(items uint64) error {
 		if err != nil {
 			return err
 		}
-		// release any files _after the current head -- both the previous head
+		// Release any files _after the current head -- both the previous head
 		// and any files which may have been opened for reading
 		t.releaseFilesAfter(expected.filenum, true)
-		// set back the historic head
+		// Set back the historic head
 		t.head = newHead
 		atomic.StoreUint32(&t.headId, expected.filenum)
 	}
