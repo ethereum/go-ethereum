@@ -2,26 +2,34 @@ package bor
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/contracts/validatorset"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+
 	lru "github.com/hashicorp/golang-lru"
 	"golang.org/x/crypto/sha3"
 )
@@ -215,7 +223,7 @@ func BorRLP(header *types.Header) []byte {
 
 // Bor is the matic-bor consensus engine
 type Bor struct {
-	config *params.BorConfig // Consensus engine configuration parameters
+	config *params.BorConfig // Consensus engine configuration parameters for bor consensus
 	db     ethdb.Database    // Database to store and retrieve snapshot checkpoints
 
 	recents    *lru.ARCCache // Snapshots for recent block to speed up reorgs
@@ -227,12 +235,14 @@ type Bor struct {
 	signFn SignerFn       // Signer function to authorize hashes with
 	lock   sync.RWMutex   // Protects the signer fields
 
+	ethAPI *ethapi.PublicBlockChainAPI
+
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
 }
 
 // New creates a Matic Bor consensus engine.
-func New(config *params.BorConfig, db ethdb.Database) *Bor {
+func New(config *params.BorConfig, db ethdb.Database, ethAPI *ethapi.PublicBlockChainAPI) *Bor {
 	// Set any missing consensus parameters to their defaults
 	conf := *config
 	if conf.Epoch == 0 {
@@ -245,6 +255,7 @@ func New(config *params.BorConfig, db ethdb.Database) *Bor {
 	return &Bor{
 		config:     &conf,
 		db:         db,
+		ethAPI:     ethAPI,
 		recents:    recents,
 		signatures: signatures,
 		proposals:  make(map[common.Address]bool),
@@ -410,11 +421,16 @@ func (c *Bor) snapshot(chain consensus.ChainReader, number uint64, hash common.H
 				break
 			}
 		}
+
 		// If we're at an checkpoint block, make a snapshot if it's known
 		if number == 0 || (number%c.config.Epoch == 0 && chain.GetHeaderByNumber(number-1) == nil) {
 			checkpoint := chain.GetHeaderByNumber(number)
 			if checkpoint != nil {
 				hash := checkpoint.Hash()
+
+				// validatorSet := new(ValidatorSet)
+				// TODO populate validator set
+				c.GetCurrentValidators(number)
 
 				signers := make([]common.Address, (len(checkpoint.Extra)-extraVanity-extraSeal)/common.AddressLength)
 				for i := 0; i < len(signers); i++ {
@@ -524,6 +540,8 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 			return errWrongDifficulty
 		}
 	}
+
+	log.Info("==> New block", "number", header.Number, "hash", header.Hash().Hex(), "signer", signer.Hex())
 
 	return nil
 }
@@ -652,7 +670,11 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 	}
 	// If we're amongst the recent signers, wait for the next block
 	for seen, recent := range snap.Recents {
+		count := 0
 		if recent == signer {
+			// count on how many times signer has been seen
+			count = count + 1
+
 			// Signer is among recents, only wait if the current block doesn't shift it out
 			if limit := uint64(len(snap.Signers)/2 + 1); number < limit || seen > number-limit {
 				log.Info("Signed recently, must wait for others")
@@ -724,4 +746,57 @@ func (c *Bor) APIs(chain consensus.ChainReader) []rpc.API {
 // Close implements consensus.Engine. It's a noop for bor as there are no background threads.
 func (c *Bor) Close() error {
 	return nil
+}
+
+// GetCurrentValidators get current validators
+func (c *Bor) GetCurrentValidators(number uint64) ([]*Validator, error) {
+	blockNr := rpc.BlockNumber(number)
+
+	// validator set ABI
+	validatorSetABI, _ := abi.JSON(strings.NewReader(validatorset.ValidatorsetABI))
+	data, err := validatorSetABI.Pack("getValidators")
+	if err != nil {
+		fmt.Println("Unable to pack tx for getValidator", "error", err)
+		return nil, err
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // cancel when we are finished consuming integers
+
+	// call
+	msgData := (hexutil.Bytes)(data)
+	toAddress := common.HexToAddress(c.config.ValidatorContract)
+	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
+	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+		Gas:  &gas,
+		To:   &toAddress,
+		Data: &msgData,
+	}, blockNr)
+	if err != nil {
+		fmt.Println("err", err)
+		return nil, err
+	}
+
+	var (
+		ret0 = new([]common.Address)
+		ret1 = new([]*big.Int)
+	)
+	out := &[]interface{}{
+		ret0,
+		ret1,
+	}
+
+	if err := validatorSetABI.Unpack(out, "getValidators", result); err != nil {
+		fmt.Println("err", err)
+		return nil, err
+	}
+
+	valz := make([]*Validator, len(*ret0))
+	for i, a := range *ret0 {
+		valz[i] = &Validator{
+			Address:     a,
+			VotingPower: (*ret1)[i].Int64(),
+		}
+	}
+	return valz, nil
 }
