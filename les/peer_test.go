@@ -54,7 +54,7 @@ func TestPeerHandshakeSetAnnounceTypeToAnnounceTypeSignedForTrustedPeer(t *testi
 				l = l.add("txRelay", nil)
 				l = l.add("flowControl/BL", uint64(0))
 				l = l.add("flowControl/MRR", uint64(0))
-				l = l.add("flowControl/MRC", testCostList())
+				l = l.add("flowControl/MRC", testCostList(0))
 
 				return l
 			},
@@ -99,7 +99,7 @@ func TestPeerHandshakeAnnounceTypeSignedForTrustedPeersPeerNotInTrusted(t *testi
 				l = l.add("txRelay", nil)
 				l = l.add("flowControl/BL", uint64(0))
 				l = l.add("flowControl/MRR", uint64(0))
-				l = l.add("flowControl/MRC", testCostList())
+				l = l.add("flowControl/MRC", testCostList(0))
 
 				return l
 			},

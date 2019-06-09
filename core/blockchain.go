@@ -74,7 +74,7 @@ const (
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
 	badBlockLimit       = 10
-	triesInMemory       = 128
+	TriesInMemory       = 128
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -220,47 +220,16 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 	// Initialize the chain with ancient data if it isn't empty.
 	if bc.empty() {
-		if frozen, err := bc.db.Ancients(); err == nil && frozen > 0 {
-			var (
-				start  = time.Now()
-				logged time.Time
-			)
-			for i := uint64(0); i < frozen; i++ {
-				// Inject hash<->number mapping.
-				hash := rawdb.ReadCanonicalHash(bc.db, i)
-				if hash == (common.Hash{}) {
-					return nil, errors.New("broken ancient database")
-				}
-				rawdb.WriteHeaderNumber(bc.db, hash, i)
-
-				// Inject txlookup indexes.
-				block := rawdb.ReadBlock(bc.db, hash, i)
-				if block == nil {
-					return nil, errors.New("broken ancient database")
-				}
-				rawdb.WriteTxLookupEntries(bc.db, block)
-
-				// If we've spent too much time already, notify the user of what we're doing
-				if time.Since(logged) > 8*time.Second {
-					log.Info("Initializing chain from ancient data", "number", i, "hash", hash, "total", frozen-1, "elapsed", common.PrettyDuration(time.Since(start)))
-					logged = time.Now()
-				}
-			}
-			hash := rawdb.ReadCanonicalHash(bc.db, frozen-1)
-			rawdb.WriteHeadHeaderHash(bc.db, hash)
-			rawdb.WriteHeadFastBlockHash(bc.db, hash)
-
-			// The first thing the node will do is reconstruct the verification data for
-			// the head block (ethash cache or clique voting snapshot). Might as well do
-			// it in advance.
-			bc.engine.VerifyHeader(bc, rawdb.ReadHeader(bc.db, hash, frozen-1), true)
-
-			log.Info("Initialized chain from ancient data", "number", frozen-1, "hash", hash, "elapsed", common.PrettyDuration(time.Since(start)))
-		}
+		rawdb.InitDatabaseFromFreezer(bc.db)
 	}
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
+	// The first thing the node will do is reconstruct the verification data for
+	// the head block (ethash cache or clique voting snapshot). Might as well do
+	// it in advance.
+	bc.engine.VerifyHeader(bc, bc.CurrentHeader(), true)
+
 	if frozen, err := bc.db.Ancients(); err == nil && frozen > 0 {
 		var (
 			needRewind bool
@@ -830,7 +799,7 @@ func (bc *BlockChain) Stop() {
 	if !bc.cacheConfig.TrieDirtyDisabled {
 		triedb := bc.stateCache.TrieDB()
 
-		for _, offset := range []uint64{0, 1, triesInMemory - 1} {
+		for _, offset := range []uint64{0, 1, TriesInMemory - 1} {
 			if number := bc.CurrentBlock().NumberU64(); number > offset {
 				recent := bc.GetBlockByNumber(number - offset)
 
@@ -1076,8 +1045,11 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 		// Wipe out canonical block data.
 		for _, block := range append(deleted, blockChain...) {
-			rawdb.DeleteBlockWithoutNumber(batch, block.Hash(), block.NumberU64())
-			rawdb.DeleteCanonicalHash(batch, block.NumberU64())
+			// Always keep genesis block in active database.
+			if block.NumberU64() != 0 {
+				rawdb.DeleteBlockWithoutNumber(batch, block.Hash(), block.NumberU64())
+				rawdb.DeleteCanonicalHash(batch, block.NumberU64())
+			}
 		}
 		if err := batch.Write(); err != nil {
 			return 0, err
@@ -1086,8 +1058,11 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 		// Wipe out side chain too.
 		for _, block := range append(deleted, blockChain...) {
-			for _, hash := range rawdb.ReadAllHashes(bc.db, block.NumberU64()) {
-				rawdb.DeleteBlock(batch, hash, block.NumberU64())
+			// Always keep genesis block in active database.
+			if block.NumberU64() != 0 {
+				for _, hash := range rawdb.ReadAllHashes(bc.db, block.NumberU64()) {
+					rawdb.DeleteBlock(batch, hash, block.NumberU64())
+				}
 			}
 		}
 		if err := batch.Write(); err != nil {
@@ -1249,7 +1224,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
 		bc.triegc.Push(root, -int64(block.NumberU64()))
 
-		if current := block.NumberU64(); current > triesInMemory {
+		if current := block.NumberU64(); current > TriesInMemory {
 			// If we exceeded our memory allowance, flush matured singleton nodes to disk
 			var (
 				nodes, imgs = triedb.Size()
@@ -1259,7 +1234,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				triedb.Cap(limit - ethdb.IdealBatchSize)
 			}
 			// Find the next state trie we need to commit
-			chosen := current - triesInMemory
+			chosen := current - TriesInMemory
 
 			// If we exceeded out time allowance, flush an entire trie to disk
 			if bc.gcproc > bc.cacheConfig.TrieTimeLimit {
@@ -1271,8 +1246,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				} else {
 					// If we're exceeding limits but haven't reached a large enough memory gap,
 					// warn the user that the system is becoming unstable.
-					if chosen < lastWrite+triesInMemory && bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
-						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
+					if chosen < lastWrite+TriesInMemory && bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
+						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/TriesInMemory)
 					}
 					// Flush an entire trie and restart the counters
 					triedb.Commit(header.Root, true)

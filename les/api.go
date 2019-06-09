@@ -19,11 +19,13 @@ package les
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/les/csvlogger"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -99,7 +101,7 @@ func (s tcSubs) send(tc uint64, underrun bool) {
 
 // MinimumCapacity queries minimum assignable capacity for a single client
 func (api *PrivateLightServerAPI) MinimumCapacity() hexutil.Uint64 {
-	return hexutil.Uint64(minCapacity)
+	return hexutil.Uint64(api.server.minCapacity)
 }
 
 // FreeClientCapacity queries the capacity provided for free clients
@@ -115,7 +117,7 @@ func (api *PrivateLightServerAPI) FreeClientCapacity() hexutil.Uint64 {
 // Note: assigned capacity can be changed while the client is connected with
 // immediate effect.
 func (api *PrivateLightServerAPI) SetClientCapacity(id enode.ID, cap uint64) error {
-	if cap != 0 && cap < minCapacity {
+	if cap != 0 && cap < api.server.minCapacity {
 		return ErrMinCap
 	}
 	return api.server.priorityClientPool.setClientCapacity(id, cap)
@@ -144,6 +146,8 @@ type priorityClientPool struct {
 	totalCap, totalCapAnnounced      uint64
 	totalConnectedCap, freeClientCap uint64
 	maxPeers, priorityCount          int
+	logger                           *csvlogger.Logger
+	logTotalPriConn                  *csvlogger.Channel
 
 	subs            tcSubs
 	updateSchedule  []scheduledUpdate
@@ -164,12 +168,14 @@ type priorityClientInfo struct {
 }
 
 // newPriorityClientPool creates a new priority client pool
-func newPriorityClientPool(freeClientCap uint64, ps *peerSet, child clientPool) *priorityClientPool {
+func newPriorityClientPool(freeClientCap uint64, ps *peerSet, child clientPool, metricsLogger, eventLogger *csvlogger.Logger) *priorityClientPool {
 	return &priorityClientPool{
-		clients:       make(map[enode.ID]priorityClientInfo),
-		freeClientCap: freeClientCap,
-		ps:            ps,
-		child:         child,
+		clients:         make(map[enode.ID]priorityClientInfo),
+		freeClientCap:   freeClientCap,
+		ps:              ps,
+		child:           child,
+		logger:          eventLogger,
+		logTotalPriConn: metricsLogger.NewChannel("totalPriConn", 0),
 	}
 }
 
@@ -185,6 +191,7 @@ func (v *priorityClientPool) registerPeer(p *peer) {
 
 	id := p.ID()
 	c := v.clients[id]
+	v.logger.Event(fmt.Sprintf("priorityClientPool: registerPeer  cap=%d  connected=%v, %x", c.cap, c.connected, id.Bytes()))
 	if c.connected {
 		return
 	}
@@ -192,6 +199,7 @@ func (v *priorityClientPool) registerPeer(p *peer) {
 		v.child.registerPeer(p)
 	}
 	if c.cap != 0 && v.totalConnectedCap+c.cap > v.totalCap {
+		v.logger.Event(fmt.Sprintf("priorityClientPool: rejected, %x", id.Bytes()))
 		go v.ps.Unregister(p.id)
 		return
 	}
@@ -202,6 +210,8 @@ func (v *priorityClientPool) registerPeer(p *peer) {
 	if c.cap != 0 {
 		v.priorityCount++
 		v.totalConnectedCap += c.cap
+		v.logger.Event(fmt.Sprintf("priorityClientPool: accepted with %d capacity, %x", c.cap, id.Bytes()))
+		v.logTotalPriConn.Update(float64(v.totalConnectedCap))
 		if v.child != nil {
 			v.child.setLimits(v.maxPeers-v.priorityCount, v.totalCap-v.totalConnectedCap)
 		}
@@ -217,6 +227,7 @@ func (v *priorityClientPool) unregisterPeer(p *peer) {
 
 	id := p.ID()
 	c := v.clients[id]
+	v.logger.Event(fmt.Sprintf("priorityClientPool: unregisterPeer  cap=%d  connected=%v, %x", c.cap, c.connected, id.Bytes()))
 	if !c.connected {
 		return
 	}
@@ -225,6 +236,7 @@ func (v *priorityClientPool) unregisterPeer(p *peer) {
 		v.clients[id] = c
 		v.priorityCount--
 		v.totalConnectedCap -= c.cap
+		v.logTotalPriConn.Update(float64(v.totalConnectedCap))
 		if v.child != nil {
 			v.child.setLimits(v.maxPeers-v.priorityCount, v.totalCap-v.totalConnectedCap)
 		}
@@ -299,8 +311,10 @@ func (v *priorityClientPool) setLimitsNow(count int, totalCap uint64) {
 	if v.priorityCount > count || v.totalConnectedCap > totalCap {
 		for id, c := range v.clients {
 			if c.connected {
+				v.logger.Event(fmt.Sprintf("priorityClientPool: setLimitsNow kicked out, %x", id.Bytes()))
 				c.connected = false
 				v.totalConnectedCap -= c.cap
+				v.logTotalPriConn.Update(float64(v.totalConnectedCap))
 				v.priorityCount--
 				v.clients[id] = c
 				go v.ps.Unregister(c.peer.id)
@@ -356,6 +370,7 @@ func (v *priorityClientPool) setClientCapacity(id enode.ID, cap uint64) error {
 			v.priorityCount--
 		}
 		v.totalConnectedCap += cap - c.cap
+		v.logTotalPriConn.Update(float64(v.totalConnectedCap))
 		if v.child != nil {
 			v.child.setLimits(v.maxPeers-v.priorityCount, v.totalCap-v.totalConnectedCap)
 		}
@@ -373,6 +388,9 @@ func (v *priorityClientPool) setClientCapacity(id enode.ID, cap uint64) error {
 		v.clients[id] = c
 	} else {
 		delete(v.clients, id)
+	}
+	if c.connected {
+		v.logger.Event(fmt.Sprintf("priorityClientPool: changed capacity to %d, %x", cap, id.Bytes()))
 	}
 	return nil
 }

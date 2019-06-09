@@ -415,13 +415,13 @@ func (t *UDPv4) lookupWorker(n *node, targetKey encPubkey, reply chan<- []*node)
 // version of the node record for it. It returns n if the node could not be resolved.
 func (t *UDPv4) Resolve(n *enode.Node) *enode.Node {
 	// Try asking directly. This works if the node is still responding on the endpoint we have.
-	if rn, err := t.requestENR(n); err == nil {
+	if rn, err := t.RequestENR(n); err == nil {
 		return rn
 	}
 	// Check table for the ID, we might have a newer version there.
 	if intable := t.tab.getNode(n.ID()); intable != nil && intable.Seq() > n.Seq() {
 		n = intable
-		if rn, err := t.requestENR(n); err == nil {
+		if rn, err := t.RequestENR(n); err == nil {
 			return rn
 		}
 	}
@@ -433,7 +433,7 @@ func (t *UDPv4) Resolve(n *enode.Node) *enode.Node {
 	result := t.LookupPubkey((*ecdsa.PublicKey)(&key))
 	for _, rn := range result {
 		if rn.ID() == n.ID() {
-			if rn, err := t.requestENR(rn); err == nil {
+			if rn, err := t.RequestENR(rn); err == nil {
 				return rn
 			}
 		}
@@ -445,6 +445,12 @@ func (t *UDPv4) ourEndpoint() rpcEndpoint {
 	n := t.Self()
 	a := &net.UDPAddr{IP: n.IP(), Port: n.UDP()}
 	return makeEndpoint(a, uint16(n.TCP()))
+}
+
+// Ping sends a ping message to the given node.
+func (t *UDPv4) Ping(n *enode.Node) error {
+	_, err := t.ping(n)
+	return err
 }
 
 // ping sends a ping message to the given node and waits for a reply.
@@ -521,8 +527,8 @@ func (t *UDPv4) findnode(toid enode.ID, toaddr *net.UDPAddr, target encPubkey) (
 	return nodes, <-rm.errc
 }
 
-// requestENR sends enrRequest to the given node and waits for a response.
-func (t *UDPv4) requestENR(n *enode.Node) (*enode.Node, error) {
+// RequestENR sends enrRequest to the given node and waits for a response.
+func (t *UDPv4) RequestENR(n *enode.Node) (*enode.Node, error) {
 	addr := &net.UDPAddr{IP: n.IP(), Port: n.UDP()}
 	t.ensureBond(n.ID(), addr)
 

@@ -66,6 +66,7 @@ var (
 		utils.KeyStoreDirFlag,
 		utils.ExternalSignerFlag,
 		utils.NoUSBFlag,
+		utils.SmartCardDaemonPathFlag,
 		utils.DashboardEnabledFlag,
 		utils.DashboardAddrFlag,
 		utils.DashboardPortFlag,
@@ -219,6 +220,8 @@ func init() {
 		licenseCommand,
 		// See config.go
 		dumpConfigCommand,
+		// See retesteth.go
+		retestethCommand,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 

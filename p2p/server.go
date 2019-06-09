@@ -39,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -602,7 +601,7 @@ type dialer interface {
 }
 
 func (srv *Server) run(dialstate dialer) {
-	srv.log.Info("Started P2P networking", "self", srv.localnode.Node())
+	srv.log.Info("Started P2P networking", "self", srv.localnode.Node().URLv4())
 	defer srv.loopWG.Done()
 	defer srv.nodedb.Close()
 
@@ -1034,7 +1033,7 @@ func (srv *Server) NodeInfo() *NodeInfo {
 	node := srv.Self()
 	info := &NodeInfo{
 		Name:       srv.Name,
-		Enode:      node.String(),
+		Enode:      node.URLv4(),
 		ID:         node.ID().String(),
 		IP:         node.IP().String(),
 		ListenAddr: srv.ListenAddr,
@@ -1042,9 +1041,7 @@ func (srv *Server) NodeInfo() *NodeInfo {
 	}
 	info.Ports.Discovery = node.UDP()
 	info.Ports.Listener = node.TCP()
-	if enc, err := rlp.EncodeToBytes(node.Record()); err == nil {
-		info.ENR = "0x" + hex.EncodeToString(enc)
-	}
+	info.ENR = node.String()
 
 	// Gather all the running protocol infos (only once per protocol type)
 	for _, proto := range srv.Protocols {

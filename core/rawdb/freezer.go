@@ -335,8 +335,11 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		// Wipe out all data from the active database
 		batch := db.NewBatch()
 		for i := 0; i < len(ancients); i++ {
-			DeleteBlockWithoutNumber(batch, ancients[i], first+uint64(i))
-			DeleteCanonicalHash(batch, first+uint64(i))
+			// Always keep the genesis block in active database
+			if first+uint64(i) != 0 {
+				DeleteBlockWithoutNumber(batch, ancients[i], first+uint64(i))
+				DeleteCanonicalHash(batch, first+uint64(i))
+			}
 		}
 		if err := batch.Write(); err != nil {
 			log.Crit("Failed to delete frozen canonical blocks", "err", err)
@@ -344,8 +347,11 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		batch.Reset()
 		// Wipe out side chain also.
 		for number := first; number < f.frozen; number++ {
-			for _, hash := range ReadAllHashes(db, number) {
-				DeleteBlock(batch, hash, number)
+			// Always keep the genesis block in active database
+			if number != 0 {
+				for _, hash := range ReadAllHashes(db, number) {
+					DeleteBlock(batch, hash, number)
+				}
 			}
 		}
 		if err := batch.Write(); err != nil {

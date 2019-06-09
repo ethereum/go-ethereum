@@ -62,7 +62,8 @@ var (
 	testEventEmitterCode = common.Hex2Bytes("60606040523415600e57600080fd5b7f57050ab73f6b9ebdd9f76b8d4997793f48cf956e965ee070551b9ca0bb71584e60405160405180910390a160358060476000396000f3006060604052600080fd00a165627a7a723058203f727efcad8b5811f8cb1fc2620ce5e8c63570d697aef968172de296ea3994140029")
 	testEventEmitterAddr common.Address
 
-	testBufLimit = uint64(100)
+	testBufLimit    = uint64(1000000)
+	testBufRecharge = uint64(1000)
 )
 
 /*
@@ -138,7 +139,7 @@ func testIndexers(db ethdb.Database, odr light.OdrBackend, iConfig *light.Indexe
 // newTestProtocolManager creates a new protocol manager for testing purposes,
 // with the given number of blocks already known, potential notification
 // channels for different events and relative chain indexers array.
-func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *core.BlockGen), odr *LesOdr, peers *peerSet, db ethdb.Database, ulcConfig *eth.ULCConfig) (*ProtocolManager, error) {
+func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *core.BlockGen), odr *LesOdr, peers *peerSet, db ethdb.Database, ulcConfig *eth.ULCConfig, testCost uint64, clock mclock.Clock) (*ProtocolManager, error) {
 	var (
 		evmux  = new(event.TypeMux)
 		engine = ethash.NewFaker()
@@ -170,21 +171,22 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 	if lightSync {
 		indexConfig = light.TestClientIndexerConfig
 	}
-	pm, err := NewProtocolManager(gspec.Config, indexConfig, lightSync, NetworkId, evmux, engine, peers, chain, pool, db, odr, nil, nil, make(chan struct{}), new(sync.WaitGroup), ulcConfig)
+	pm, err := NewProtocolManager(gspec.Config, indexConfig, lightSync, NetworkId, evmux, engine, peers, chain, pool, db, odr, nil, nil, make(chan struct{}), new(sync.WaitGroup), ulcConfig, func() bool { return true })
 	if err != nil {
 		return nil, err
 	}
 	if !lightSync {
 		srv := &LesServer{lesCommons: lesCommons{protocolManager: pm}}
 		pm.server = srv
+		pm.servingQueue = newServingQueue(int64(time.Millisecond*10), 1, nil)
 		pm.servingQueue.setThreads(4)
 
 		srv.defParams = flowcontrol.ServerParams{
 			BufLimit:    testBufLimit,
-			MinRecharge: 1,
+			MinRecharge: testBufRecharge,
 		}
-
-		srv.fcManager = flowcontrol.NewClientManager(nil, &mclock.System{})
+		srv.testCost = testCost
+		srv.fcManager = flowcontrol.NewClientManager(nil, clock)
 	}
 	pm.Start(1000)
 	return pm, nil
@@ -195,7 +197,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 // channels for different events and relative chain indexers array. In case of an error, the constructor force-
 // fails the test.
 func newTestProtocolManagerMust(t *testing.T, lightSync bool, blocks int, generator func(int, *core.BlockGen), odr *LesOdr, peers *peerSet, db ethdb.Database, ulcConfig *eth.ULCConfig) *ProtocolManager {
-	pm, err := newTestProtocolManager(lightSync, blocks, generator, odr, peers, db, ulcConfig)
+	pm, err := newTestProtocolManager(lightSync, blocks, generator, odr, peers, db, ulcConfig, 0, &mclock.System{})
 	if err != nil {
 		t.Fatalf("Failed to create protocol manager: %v", err)
 	}
@@ -210,7 +212,7 @@ type testPeer struct {
 }
 
 // newTestPeer creates a new peer registered at the given protocol manager.
-func newTestPeer(t *testing.T, name string, version int, pm *ProtocolManager, shake bool) (*testPeer, <-chan error) {
+func newTestPeer(t *testing.T, name string, version int, pm *ProtocolManager, shake bool, testCost uint64) (*testPeer, <-chan error) {
 	// Create a message pipe to communicate through
 	app, net := p2p.MsgPipe()
 
@@ -242,7 +244,7 @@ func newTestPeer(t *testing.T, name string, version int, pm *ProtocolManager, sh
 			head    = pm.blockchain.CurrentHeader()
 			td      = pm.blockchain.GetTd(head.Hash(), head.Number.Uint64())
 		)
-		tp.handshake(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash())
+		tp.handshake(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash(), testCost)
 	}
 	return tp, errc
 }
@@ -282,7 +284,7 @@ func newTestPeerPair(name string, version int, pm, pm2 *ProtocolManager) (*peer,
 
 // handshake simulates a trivial handshake that expects the same state from the
 // remote side as we are simulating locally.
-func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNum uint64, genesis common.Hash) {
+func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, testCost uint64) {
 	var expList keyValueList
 	expList = expList.add("protocolVersion", uint64(p.version))
 	expList = expList.add("networkId", uint64(NetworkId))
@@ -295,10 +297,11 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 	expList = expList.add("serveHeaders", nil)
 	expList = expList.add("serveChainSince", uint64(0))
 	expList = expList.add("serveStateSince", uint64(0))
+	expList = expList.add("serveRecentState", uint64(core.TriesInMemory-4))
 	expList = expList.add("txRelay", nil)
 	expList = expList.add("flowControl/BL", testBufLimit)
-	expList = expList.add("flowControl/MRR", uint64(1))
-	expList = expList.add("flowControl/MRC", testCostList())
+	expList = expList.add("flowControl/MRR", testBufRecharge)
+	expList = expList.add("flowControl/MRC", testCostList(testCost))
 
 	if err := p2p.ExpectMsg(p.app, StatusMsg, expList); err != nil {
 		t.Fatalf("status recv: %v", err)
@@ -309,7 +312,7 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 
 	p.fcParams = flowcontrol.ServerParams{
 		BufLimit:    testBufLimit,
-		MinRecharge: 1,
+		MinRecharge: testBufRecharge,
 	}
 }
 
@@ -338,7 +341,7 @@ func newServerEnv(t *testing.T, blocks int, protocol int, waitIndexers func(*cor
 	cIndexer, bIndexer, btIndexer := testIndexers(db, nil, light.TestServerIndexerConfig)
 
 	pm := newTestProtocolManagerMust(t, false, blocks, testChainGen, nil, nil, db, nil)
-	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
+	peer, _ := newTestPeer(t, "peer", protocol, pm, true, 0)
 
 	cIndexer.Start(pm.blockchain.(*core.BlockChain))
 	bIndexer.Start(pm.blockchain.(*core.BlockChain))

@@ -57,7 +57,7 @@ func Env() Environment {
 	case os.Getenv("CI") == "true" && os.Getenv("TRAVIS") == "true":
 		commit := os.Getenv("TRAVIS_PULL_REQUEST_SHA")
 		if commit == "" {
-			os.Getenv("TRAVIS_COMMIT")
+			commit = os.Getenv("TRAVIS_COMMIT")
 		}
 		return Environment{
 			Name:          "travis",
@@ -73,7 +73,7 @@ func Env() Environment {
 	case os.Getenv("CI") == "True" && os.Getenv("APPVEYOR") == "True":
 		commit := os.Getenv("APPVEYOR_PULL_REQUEST_HEAD_COMMIT")
 		if commit == "" {
-			os.Getenv("APPVEYOR_REPO_COMMIT")
+			commit = os.Getenv("APPVEYOR_REPO_COMMIT")
 		}
 		return Environment{
 			Name:          "appveyor",

@@ -22,11 +22,13 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"reflect"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -124,7 +126,7 @@ type Metadata struct {
 	Origin    string `json:"Origin"`
 }
 
-func StartClefAccountManager(ksLocation string, nousb, lightKDF bool) *accounts.Manager {
+func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath string) *accounts.Manager {
 	var (
 		backends []accounts.Backend
 		n, p     = keystore.StandardScryptN, keystore.StandardScryptP
@@ -144,14 +146,41 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool) *accounts.
 			backends = append(backends, ledgerhub)
 			log.Debug("Ledger support enabled")
 		}
-		// Start a USB hub for Trezor hardware wallets
-		if trezorhub, err := usbwallet.NewTrezorHub(); err != nil {
-			log.Warn(fmt.Sprintf("Failed to start Trezor hub, disabling: %v", err))
+		// Start a USB hub for Trezor hardware wallets (HID version)
+		if trezorhub, err := usbwallet.NewTrezorHubWithHID(); err != nil {
+			log.Warn(fmt.Sprintf("Failed to start HID Trezor hub, disabling: %v", err))
 		} else {
 			backends = append(backends, trezorhub)
-			log.Debug("Trezor support enabled")
+			log.Debug("Trezor support enabled via HID")
+		}
+		// Start a USB hub for Trezor hardware wallets (WebUSB version)
+		if trezorhub, err := usbwallet.NewTrezorHubWithWebUSB(); err != nil {
+			log.Warn(fmt.Sprintf("Failed to start WebUSB Trezor hub, disabling: %v", err))
+		} else {
+			backends = append(backends, trezorhub)
+			log.Debug("Trezor support enabled via WebUSB")
 		}
 	}
+
+	// Start a smart card hub
+	if len(scpath) > 0 {
+		// Sanity check that the smartcard path is valid
+		fi, err := os.Stat(scpath)
+		if err != nil {
+			log.Info("Smartcard socket file missing, disabling", "err", err)
+		} else {
+			if fi.Mode()&os.ModeType != os.ModeSocket {
+				log.Error("Invalid smartcard socket file type", "path", scpath, "type", fi.Mode().String())
+			} else {
+				if schub, err := scwallet.NewHub(scpath, scwallet.Scheme, ksLocation); err != nil {
+					log.Warn(fmt.Sprintf("Failed to start smart card hub, disabling: %v", err))
+				} else {
+					backends = append(backends, schub)
+				}
+			}
+		}
+	}
+
 	// Clef doesn't allow insecure http account unlock.
 	return accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: false}, backends...)
 }
@@ -482,7 +511,6 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 			return nil, err
 		}
 	}
-
 	req := SignTxRequest{
 		Transaction: args,
 		Meta:        MetadataFromContext(ctx),

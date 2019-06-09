@@ -301,3 +301,21 @@ func TestBalanceAt(t *testing.T) {
 		})
 	}
 }
+
+func TestTransactionInBlockInterrupted(t *testing.T) {
+	backend, _ := newTestBackend(t)
+	client, _ := backend.Attach()
+	defer backend.Stop()
+	defer client.Close()
+
+	ec := NewClient(client)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	tx, err := ec.TransactionInBlock(ctx, common.Hash{1}, 1)
+	if tx != nil {
+		t.Fatal("transaction should be nil")
+	}
+	if err == nil {
+		t.Fatal("error should not be nil")
+	}
+}
