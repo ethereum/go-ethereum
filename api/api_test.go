@@ -53,10 +53,11 @@ func testAPI(t *testing.T, f func(*API, *chunk.Tags, bool)) {
 		}
 		defer os.RemoveAll(datadir)
 		tags := chunk.NewTags()
-		fileStore, err := storage.NewLocalFileStore(datadir, make([]byte, 32), tags)
+		fileStore, cleanup, err := storage.NewLocalFileStore(datadir, make([]byte, 32), tags)
 		if err != nil {
 			return
 		}
+		defer cleanup()
 		api := NewAPI(fileStore, nil, nil, nil, tags)
 		f(api, tags, v)
 	}

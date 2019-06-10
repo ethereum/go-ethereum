@@ -258,10 +258,11 @@ func getAllRefs(testData []byte) (storage.AddressCollection, error) {
 		return nil, fmt.Errorf("unable to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(datadir)
-	fileStore, err := storage.NewLocalFileStore(datadir, make([]byte, 32), chunk.NewTags())
+	fileStore, cleanup, err := storage.NewLocalFileStore(datadir, make([]byte, 32), chunk.NewTags())
 	if err != nil {
 		return nil, err
 	}
+	defer cleanup()
 
 	reader := bytes.NewReader(testData)
 	return fileStore.GetAllReferences(context.Background(), reader, false)

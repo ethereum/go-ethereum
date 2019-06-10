@@ -17,6 +17,7 @@
 package stream
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
@@ -44,7 +45,6 @@ import (
 	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/ethersphere/swarm/storage/mock"
 	"github.com/ethersphere/swarm/testutil"
-	colorable "github.com/mattn/go-colorable"
 )
 
 var (
@@ -69,7 +69,7 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 
 	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 }
 
 // newNetStoreAndDelivery is a default constructor for BzzAddr, NetStore and Delivery, used in Simulations
@@ -398,4 +398,20 @@ func (b *boolean) bool() bool {
 	defer b.mu.RUnlock()
 
 	return b.v
+}
+
+func getAllRefs(testData []byte) (storage.AddressCollection, error) {
+	datadir, err := ioutil.TempDir("", "chunk-debug")
+	if err != nil {
+		return nil, fmt.Errorf("unable to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(datadir)
+	fileStore, cleanup, err := storage.NewLocalFileStore(datadir, make([]byte, 32), chunk.NewTags())
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
+	reader := bytes.NewReader(testData)
+	return fileStore.GetAllReferences(context.Background(), reader, false)
 }

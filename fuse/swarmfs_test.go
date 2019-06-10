@@ -1615,10 +1615,11 @@ func TestFUSE(t *testing.T) {
 	}
 	defer os.RemoveAll(datadir)
 
-	fileStore, err := storage.NewLocalFileStore(datadir, make([]byte, 32), chunk.NewTags())
+	fileStore, cleanup, err := storage.NewLocalFileStore(datadir, make([]byte, 32), chunk.NewTags())
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer cleanup()
 	ta := &testAPI{api: api.NewAPI(fileStore, nil, nil, nil, chunk.NewTags())}
 
 	//run a short suite of tests

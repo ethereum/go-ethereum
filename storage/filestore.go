@@ -61,12 +61,15 @@ func NewFileStoreParams() *FileStoreParams {
 }
 
 // for testing locally
-func NewLocalFileStore(datadir string, basekey []byte, tags *chunk.Tags) (*FileStore, error) {
+func NewLocalFileStore(datadir string, basekey []byte, tags *chunk.Tags) (*FileStore, func(), error) {
 	localStore, err := localstore.New(datadir, basekey, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return NewFileStore(chunk.NewValidatorStore(localStore, NewContentAddressValidator(MakeHashFunc(DefaultHash))), NewFileStoreParams(), tags), nil
+	cleanup := func() {
+		localStore.Close()
+	}
+	return NewFileStore(chunk.NewValidatorStore(localStore, NewContentAddressValidator(MakeHashFunc(DefaultHash))), NewFileStoreParams(), tags), cleanup, nil
 }
 
 func NewFileStore(store ChunkStore, params *FileStoreParams, tags *chunk.Tags) *FileStore {
