@@ -51,6 +51,8 @@ const (
 type LesServer struct {
 	lesCommons
 
+	archiveMode bool // Flag whether the ethereum node runs in archive mode.
+
 	fcManager    *flowcontrol.ClientManager // nil if our node is client only
 	costTracker  *costTracker
 	testCost     uint64
@@ -93,7 +95,8 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		nil,
 		quitSync,
 		new(sync.WaitGroup),
-		config.ULC, eth.Synced)
+		config.ULC,
+		eth.Synced)
 	if err != nil {
 		return nil, err
 	}
@@ -120,6 +123,7 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 			bloomTrieIndexer: light.NewBloomTrieIndexer(eth.ChainDb(), nil, params.BloomBitsBlocks, params.BloomTrieFrequency),
 			protocolManager:  pm,
 		},
+		archiveMode:  eth.ArchiveMode(),
 		quitSync:     quitSync,
 		lesTopics:    lesTopics,
 		onlyAnnounce: config.OnlyAnnounce,

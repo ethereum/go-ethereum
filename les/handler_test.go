@@ -278,6 +278,31 @@ func testGetCode(t *testing.T, protocol int) {
 	}
 }
 
+// Tests that the stale contract codes can't be retrieved based on account addresses.
+func TestGetStaleCodeLes2(t *testing.T) { testGetStaleCode(t, 2) }
+func TestGetStaleCodeLes3(t *testing.T) { testGetStaleCode(t, 3) }
+
+func testGetStaleCode(t *testing.T, protocol int) {
+	server, tearDown := newServerEnv(t, core.TriesInMemory+4, protocol, nil)
+	defer tearDown()
+	bc := server.pm.blockchain.(*core.BlockChain)
+
+	check := func(number uint64, expected [][]byte) {
+		req := &CodeReq{
+			BHash:  bc.GetHeaderByNumber(number).Hash(),
+			AccKey: crypto.Keccak256(testContractAddr[:]),
+		}
+		cost := server.tPeer.GetRequestCost(GetCodeMsg, 1)
+		sendRequest(server.tPeer.app, GetCodeMsg, 42, cost, []*CodeReq{req})
+		if err := expectResponse(server.tPeer.app, CodeMsg, 42, testBufLimit, expected); err != nil {
+			t.Errorf("codes mismatch: %v", err)
+		}
+	}
+	check(0, [][]byte{})                                                          // Non-exist contract
+	check(testContractDeployed, [][]byte{})                                       // Stale contract
+	check(bc.CurrentHeader().Number.Uint64(), [][]byte{testContractCodeDeployed}) // Fresh contract
+}
+
 // Tests that the transaction receipts can be retrieved based on hashes.
 func TestGetReceiptLes2(t *testing.T) { testGetReceipt(t, 2) }
 
@@ -336,6 +361,43 @@ func testGetProofs(t *testing.T, protocol int) {
 	if err := expectResponse(server.tPeer.app, ProofsV2Msg, 42, testBufLimit, proofsV2.NodeList()); err != nil {
 		t.Errorf("proofs mismatch: %v", err)
 	}
+}
+
+// Tests that the stale contract codes can't be retrieved based on account addresses.
+func TestGetStaleProofLes2(t *testing.T) { testGetStaleProof(t, 2) }
+func TestGetStaleProofLes3(t *testing.T) { testGetStaleProof(t, 3) }
+
+func testGetStaleProof(t *testing.T, protocol int) {
+	server, tearDown := newServerEnv(t, core.TriesInMemory+4, protocol, nil)
+	defer tearDown()
+	bc := server.pm.blockchain.(*core.BlockChain)
+
+	check := func(number uint64, wantOK bool) {
+		var (
+			header  = bc.GetHeaderByNumber(number)
+			account = crypto.Keccak256(testBankAddress.Bytes())
+		)
+		req := &ProofReq{
+			BHash: header.Hash(),
+			Key:   account,
+		}
+		cost := server.tPeer.GetRequestCost(GetProofsV2Msg, 1)
+		sendRequest(server.tPeer.app, GetProofsV2Msg, 42, cost, []*ProofReq{req})
+
+		var expected []rlp.RawValue
+		if wantOK {
+			proofsV2 := light.NewNodeSet()
+			t, _ := trie.New(header.Root, trie.NewDatabase(server.db))
+			t.Prove(crypto.Keccak256(account), 0, proofsV2)
+			expected = proofsV2.NodeList()
+		}
+		if err := expectResponse(server.tPeer.app, ProofsV2Msg, 42, testBufLimit, expected); err != nil {
+			t.Errorf("codes mismatch: %v", err)
+		}
+	}
+	check(0, false)                                 // Non-exist proof
+	check(2, false)                                 // Stale proof
+	check(bc.CurrentHeader().Number.Uint64(), true) // Fresh proof
 }
 
 // Tests that CHT proofs can be correctly retrieved.
