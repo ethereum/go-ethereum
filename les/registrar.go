@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -50,11 +50,11 @@ func newCheckpointRegistrar(config *params.CheckpointContractConfig, getLocal fu
 		log.Info("Checkpoint registrar is not enabled")
 		return nil
 	}
-	if config.ContractAddr == (common.Address{}) || uint64(len(config.Signers)) < config.Threshold {
+	if config.Address == (common.Address{}) || uint64(len(config.Signers)) < config.Threshold {
 		log.Warn("Invalid checkpoint contract config")
 		return nil
 	}
-	log.Info("Setup checkpoint registrar", "contract", config.ContractAddr, "numsigner", len(config.Signers),
+	log.Info("Setup checkpoint registrar", "contract", config.Address, "numsigner", len(config.Signers),
 		"threshold", config.Threshold)
 	return &checkpointRegistrar{
 		config:   config,
@@ -65,7 +65,7 @@ func newCheckpointRegistrar(config *params.CheckpointContractConfig, getLocal fu
 // start binds the registrar contract and start listening to the
 // newCheckpointEvent for the server side.
 func (reg *checkpointRegistrar) start(backend bind.ContractBackend) {
-	contract, err := registrar.NewRegistrar(reg.config.ContractAddr, backend)
+	contract, err := registrar.NewRegistrar(reg.config.Address, backend)
 	if err != nil {
 		log.Info("Registrar contract binding failed", "err", err)
 		return
@@ -134,7 +134,7 @@ func (reg *checkpointRegistrar) verifySigner(index uint64, hash [32]byte, signat
 		//     hash = keccak256(checkpoint_index, section_head, cht_root, bloom_root)
 		buf := make([]byte, 8)
 		binary.BigEndian.PutUint64(buf, index)
-		data := append([]byte{0x19, 0x00}, append(reg.config.ContractAddr.Bytes(), append(buf, hash[:]...)...)...)
+		data := append([]byte{0x19, 0x00}, append(reg.config.Address.Bytes(), append(buf, hash[:]...)...)...)
 		signatures[i][64] -= 27 // Transform V from 27/28 to 0/1 according to the yellow paper for verification.
 		pubkey, err := crypto.Ecrecover(crypto.Keccak256(data), signatures[i])
 		if err != nil {

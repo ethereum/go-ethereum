@@ -184,7 +184,7 @@ func newTestProtocolManager(lightSync bool, blocks int, odr *LesOdr, indexers []
 		peers = newPeerSet()
 	}
 	// create a simulation backend and pre-commit several customized block to the database.
-	simulation := backends.NewSimulatedBackend(db, gspec.Alloc, 100000000)
+	simulation := backends.NewSimulatedBackendWithDatabase(db, gspec.Alloc, 100000000)
 	prepareTestchain(blocks, simulation)
 
 	// initialize empty chain for light client or pre-committed chain for server.
@@ -201,10 +201,10 @@ func newTestProtocolManager(lightSync bool, blocks int, odr *LesOdr, indexers []
 		indexConfig = light.TestClientIndexerConfig
 	}
 	config := &params.CheckpointContractConfig{
-		Name:         "test",
-		ContractAddr: crypto.CreateAddress(bankAddr, 0),
-		Signers:      []common.Address{signerAddr},
-		Threshold:    1,
+		Name:      "test",
+		Address:   crypto.CreateAddress(bankAddr, 0),
+		Signers:   []common.Address{signerAddr},
+		Threshold: 1,
 	}
 	var reg *checkpointRegistrar
 	if indexers != nil {

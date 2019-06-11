@@ -110,9 +110,9 @@ var (
 			Period: 15,
 			Epoch:  30000,
 		},
-		CheckpointContract: &CheckpointContractConfig{
-			Name:         "rinkeby",
-			ContractAddr: common.HexToAddress("0x62652ed8e969ce7bd5e3dd13590efa1e569215f1"),
+		CheckpointConfig: &CheckpointContractConfig{
+			Name:    "rinkeby",
+			Address: common.HexToAddress("0x62652ed8e969ce7bd5e3dd13590efa1e569215f1"),
 			Signers: []common.Address{
 				common.HexToAddress("0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3"), // Peter
 				common.HexToAddress("0x78d1ad571a1a09d60d9bbf25894b44e4c8859595"), // Martin
@@ -215,10 +215,10 @@ func (c *TrustedCheckpoint) Empty() bool {
 // CheckpointContractConfig represents a set of checkpoint contract config
 // which used for light client checkpoint syncing.
 type CheckpointContractConfig struct {
-	Name         string           `json:"-"`
-	ContractAddr common.Address   `json:"contractAddr"`
-	Signers      []common.Address `json:"signers"`
-	Threshold    uint64           `json:"threshold"`
+	Name      string           `json:"-"`
+	Address   common.Address   `json:"contractAddr"`
+	Signers   []common.Address `json:"signers"`
+	Threshold uint64           `json:"threshold"`
 }
 
 // ChainConfig is the core config which determines the blockchain settings.
@@ -251,7 +251,7 @@ type ChainConfig struct {
 	Clique *CliqueConfig `json:"clique,omitempty"`
 
 	// Checkpoint contract configs
-	CheckpointContract *CheckpointContractConfig `json:"checkpointContract,omitempty"`
+	CheckpointConfig *CheckpointContractConfig `json:"checkpointContract,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.

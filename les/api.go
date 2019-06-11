@@ -526,5 +526,5 @@ func (api *PrivateLightAPI) GetCheckpointContractAddress() (string, error) {
 	if api.reg == nil {
 		return "", ErrNotActivated
 	}
-	return api.reg.config.ContractAddr.Hex(), nil
+	return api.reg.config.Address.Hex(), nil
 }

@@ -373,7 +373,7 @@ func testGetStaleProof(t *testing.T, protocol int) {
 	check := func(number uint64, wantOK bool) {
 		var (
 			header  = bc.GetHeaderByNumber(number)
-			account = crypto.Keccak256(testBankAddress.Bytes())
+			account = crypto.Keccak256(userAddr1.Bytes())
 		)
 		req := &ProofReq{
 			BHash: header.Hash(),
@@ -386,7 +386,7 @@ func testGetStaleProof(t *testing.T, protocol int) {
 		if wantOK {
 			proofsV2 := light.NewNodeSet()
 			t, _ := trie.New(header.Root, trie.NewDatabase(server.db))
-			t.Prove(crypto.Keccak256(account), 0, proofsV2)
+			t.Prove(account, 0, proofsV2)
 			expected = proofsV2.NodeList()
 		}
 		if err := expectResponse(server.tPeer.app, ProofsV2Msg, 42, testBufLimit, expected); err != nil {

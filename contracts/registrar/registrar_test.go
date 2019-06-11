@@ -176,7 +176,7 @@ func TestCheckpointRegister(t *testing.T) {
 
 	// Deploy registrar contract
 	transactOpts := bind.NewKeyedTransactor(accounts[0].key)
-	contractBackend := backends.NewSimulatedBackend(nil, core.GenesisAlloc{accounts[0].addr: {Balance: big.NewInt(1000000000)}, accounts[1].addr: {Balance: big.NewInt(1000000000)}, accounts[2].addr: {Balance: big.NewInt(1000000000)}}, 10000000)
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{accounts[0].addr: {Balance: big.NewInt(1000000000)}, accounts[1].addr: {Balance: big.NewInt(1000000000)}, accounts[2].addr: {Balance: big.NewInt(1000000000)}}, 10000000)
 	// 3 trusted signers, threshold 2
 	contractAddr, _, c, err := contract.DeployContract(transactOpts, contractBackend, []common.Address{accounts[0].addr, accounts[1].addr, accounts[2].addr}, sectionSize, processConfirms, big.NewInt(2))
 	if err != nil {
@@ -202,6 +202,12 @@ func TestCheckpointRegister(t *testing.T) {
 			v = append(v, sig[64])
 		}
 		return v, r, s
+	}
+	// insertEmptyBlocks inserts a batch of empty blocks to blockchain.
+	insertEmptyBlocks := func(number int) {
+		for i := 0; i < number; i++ {
+			contractBackend.Commit()
+		}
 	}
 	// assert checks whether the current contract status is same with
 	// the expected.
@@ -231,7 +237,7 @@ func TestCheckpointRegister(t *testing.T) {
 		return assert(0, emptyHash, big.NewInt(0))
 	}, "test future checkpoint registration")
 
-	contractBackend.InsertEmptyBlocks(int(sectionSize.Uint64() + processConfirms.Uint64()))
+	insertEmptyBlocks(int(sectionSize.Uint64() + processConfirms.Uint64()))
 
 	// Test transaction replay protection
 	validateOperation(t, c, contractBackend, func() {
@@ -283,7 +289,7 @@ func TestCheckpointRegister(t *testing.T) {
 	}, "test valid checkpoint registration")
 
 	distance := 3*sectionSize.Uint64() + processConfirms.Uint64() - contractBackend.Blockchain().CurrentHeader().Number.Uint64()
-	contractBackend.InsertEmptyBlocks(int(distance))
+	insertEmptyBlocks(int(distance))
 
 	// Test uncontinuous checkpoint registration
 	validateOperation(t, c, contractBackend, func() {

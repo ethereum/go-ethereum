@@ -67,7 +67,7 @@ func testCheckpointSyncing(t *testing.T, protocol int) {
 		t.Error("register checkpoint failed", err)
 	}
 	server.backend.Commit()
-	server.backend.InsertEmptyBlocks(1)
+	server.backend.Commit() // Inject an empty block
 
 	// Wait for the checkpoint registration
 	for {

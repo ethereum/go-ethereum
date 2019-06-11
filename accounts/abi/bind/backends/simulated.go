@@ -65,13 +65,9 @@ type SimulatedBackend struct {
 	config *params.ChainConfig
 }
 
-// NewSimulatedBackend creates a new binding backend using a simulated blockchain
-// for testing purposes.
-func NewSimulatedBackend(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
-	// Don't panic for the lazy user.
-	if database == nil {
-		database = rawdb.NewMemoryDatabase()
-	}
+// NewSimulatedBackendWithDatabase creates a new binding backend based on the given database
+// and uses a simulated blockchain for testing purposes.
+func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
 	genesis := core.Genesis{Config: params.AllEthashProtocolChanges, GasLimit: gasLimit, Alloc: alloc}
 	genesis.MustCommit(database)
 	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, ethash.NewFaker(), vm.Config{}, nil)
@@ -84,6 +80,12 @@ func NewSimulatedBackend(database ethdb.Database, alloc core.GenesisAlloc, gasLi
 	}
 	backend.rollback()
 	return backend
+}
+
+// NewSimulatedBackend creates a new binding backend using a simulated blockchain
+// for testing purposes.
+func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
+	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit)
 }
 
 // Commit imports all the pending transactions as a single block and starts a
@@ -426,28 +428,6 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), statedb.Database())
 
-	return nil
-}
-
-// InsertEmptyBlocks inserts a batch of empty blocks to blockchain.
-func (b *SimulatedBackend) InsertEmptyBlocks(number int) error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	// Insert a batch of empty blocks and commit to the database
-	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), ethash.NewFaker(), b.database, number, func(i int, block *core.BlockGen) {})
-	if _, err := b.blockchain.InsertChain(blocks); err != nil {
-		panic(err) // This cannot happen unless the simulator is wrong, fail in that case
-	}
-	// Apply all pending transactions to new pending blocks.
-	blocks, _ = core.GenerateChain(b.config, b.blockchain.CurrentBlock(), ethash.NewFaker(), b.database, 1, func(number int, block *core.BlockGen) {
-		for _, tx := range b.pendingBlock.Transactions() {
-			block.AddTx(tx)
-		}
-	})
-
-	statedb, _ := b.blockchain.State()
-	b.pendingBlock = blocks[0]
-	b.pendingState, _ = state.New(b.pendingBlock.Root(), statedb.Database())
 	return nil
 }
 

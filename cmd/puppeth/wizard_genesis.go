@@ -189,11 +189,11 @@ func (w *wizard) makeGenesis() {
 		if err != nil {
 			log.Crit("Failed to iterate contract storage", "err", err)
 		}
-		genesis.Config.CheckpointContract = &params.CheckpointContractConfig{
-			Name:         w.network,
-			ContractAddr: address,
-			Signers:      signers,
-			Threshold:    threshold.Uint64(),
+		genesis.Config.CheckpointConfig = &params.CheckpointContractConfig{
+			Name:      w.network,
+			Address:   address,
+			Signers:   signers,
+			Threshold: threshold.Uint64(),
 		}
 	}
 

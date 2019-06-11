@@ -37,7 +37,7 @@ func TestSimulatedBackend(t *testing.T) {
 	genAlloc := make(core.GenesisAlloc)
 	genAlloc[auth.From] = core.GenesisAccount{Balance: big.NewInt(9223372036854775807)}
 
-	sim := backends.NewSimulatedBackend(nil, genAlloc, gasLimit)
+	sim := backends.NewSimulatedBackend(genAlloc, gasLimit)
 
 	// should return an error if the tx is not found
 	txHash := common.HexToHash("2")
