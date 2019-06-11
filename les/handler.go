@@ -700,8 +700,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					}
 					// Refuse to search stale state data in the database since looking for
 					// a non-exist key is kind of expensive.
-					if !pm.server.archiveMode && header.Number.Uint64()+core.TriesInMemory <= pm.blockchain.CurrentHeader().Number.Uint64() {
-						p.Log().Debug("Reject stale code request", "number", header.Number.Uint64(), "head", pm.blockchain.CurrentHeader().Number.Uint64())
+					local := pm.blockchain.CurrentHeader().Number.Uint64()
+					if !pm.server.archiveMode && header.Number.Uint64()+core.TriesInMemory <= local {
+						p.Log().Debug("Reject stale code request", "number", header.Number.Uint64(), "head", local)
 						continue
 					}
 					triedb := pm.blockchain.StateCache().TrieDB()
@@ -860,8 +861,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 						}
 						// Refuse to search stale state data in the database since looking for
 						// a non-exist key is kind of expensive.
-						if !pm.server.archiveMode && header.Number.Uint64()+core.TriesInMemory <= pm.blockchain.CurrentHeader().Number.Uint64() {
-							p.Log().Debug("Reject stale trie request", "number", header.Number.Uint64(), "head", pm.blockchain.CurrentHeader().Number.Uint64())
+						local := pm.blockchain.CurrentHeader().Number.Uint64()
+						if !pm.server.archiveMode && header.Number.Uint64()+core.TriesInMemory <= local {
+							p.Log().Debug("Reject stale trie request", "number", header.Number.Uint64(), "head", local)
 							continue
 						}
 						root = header.Root
