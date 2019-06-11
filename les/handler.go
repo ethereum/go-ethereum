@@ -698,6 +698,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 						p.Log().Warn("Failed to retrieve header for code", "block", *number, "hash", request.BHash)
 						continue
 					}
+					// Refuse to search stale state data in the database since looking for
+					// a non-exist key is kind of expensive.
+					local := pm.blockchain.CurrentHeader().Number.Uint64()
+					if !pm.server.archiveMode && header.Number.Uint64()+core.TriesInMemory <= local {
+						p.Log().Debug("Reject stale code request", "number", header.Number.Uint64(), "head", local)
+						continue
+					}
 					triedb := pm.blockchain.StateCache().TrieDB()
 
 					account, err := pm.getAccount(triedb, header.Root, common.BytesToHash(request.AccKey))
@@ -850,6 +857,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 						}
 						if header = rawdb.ReadHeader(pm.chainDb, request.BHash, *number); header == nil {
 							p.Log().Warn("Failed to retrieve header for proof", "block", *number, "hash", request.BHash)
+							continue
+						}
+						// Refuse to search stale state data in the database since looking for
+						// a non-exist key is kind of expensive.
+						local := pm.blockchain.CurrentHeader().Number.Uint64()
+						if !pm.server.archiveMode && header.Number.Uint64()+core.TriesInMemory <= local {
+							p.Log().Debug("Reject stale trie request", "number", header.Number.Uint64(), "head", local)
 							continue
 						}
 						root = header.Root
