@@ -67,6 +67,7 @@ type Database struct {
 	compWriteMeter   metrics.Meter // Meter for measuring the data written during compaction
 	writeDelayNMeter metrics.Meter // Meter for measuring the write delay number due to database compaction
 	writeDelayMeter  metrics.Meter // Meter for measuring the write delay duration due to database compaction
+	diskSizeGauge    metrics.Gauge // Gauge for tracking the size of all the levels in the database
 	diskReadMeter    metrics.Meter // Meter for measuring the effective amount of data read
 	diskWriteMeter   metrics.Meter // Meter for measuring the effective amount of data written
 
@@ -112,6 +113,7 @@ func New(file string, cache int, handles int, namespace string) (*Database, erro
 	ldb.compTimeMeter = metrics.NewRegisteredMeter(namespace+"compact/time", nil)
 	ldb.compReadMeter = metrics.NewRegisteredMeter(namespace+"compact/input", nil)
 	ldb.compWriteMeter = metrics.NewRegisteredMeter(namespace+"compact/output", nil)
+	ldb.diskSizeGauge = metrics.NewRegisteredGauge(namespace+"disk/size", nil)
 	ldb.diskReadMeter = metrics.NewRegisteredMeter(namespace+"disk/read", nil)
 	ldb.diskWriteMeter = metrics.NewRegisteredMeter(namespace+"disk/write", nil)
 	ldb.writeDelayMeter = metrics.NewRegisteredMeter(namespace+"compact/writedelay/duration", nil)
@@ -233,7 +235,7 @@ func (db *Database) meter(refresh time.Duration) {
 	// Create the counters to store current and previous compaction values
 	compactions := make([][]float64, 2)
 	for i := 0; i < 2; i++ {
-		compactions[i] = make([]float64, 3)
+		compactions[i] = make([]float64, 4)
 	}
 	// Create storage for iostats.
 	var iostats [2]float64
@@ -279,7 +281,7 @@ func (db *Database) meter(refresh time.Duration) {
 			if len(parts) != 6 {
 				break
 			}
-			for idx, counter := range parts[3:] {
+			for idx, counter := range parts[2:] {
 				value, err := strconv.ParseFloat(strings.TrimSpace(counter), 64)
 				if err != nil {
 					db.log.Error("Compaction entry parsing failed", "err", err)
@@ -290,16 +292,18 @@ func (db *Database) meter(refresh time.Duration) {
 			}
 		}
 		// Update all the requested meters
+		if db.diskSizeGauge != nil {
+			db.diskSizeGauge.Update(int64(compactions[i%2][0] * 1024 * 1024))
+		}
 		if db.compTimeMeter != nil {
-			db.compTimeMeter.Mark(int64((compactions[i%2][0] - compactions[(i-1)%2][0]) * 1000 * 1000 * 1000))
+			db.compTimeMeter.Mark(int64((compactions[i%2][1] - compactions[(i-1)%2][1]) * 1000 * 1000 * 1000))
 		}
 		if db.compReadMeter != nil {
-			db.compReadMeter.Mark(int64((compactions[i%2][1] - compactions[(i-1)%2][1]) * 1024 * 1024))
+			db.compReadMeter.Mark(int64((compactions[i%2][2] - compactions[(i-1)%2][2]) * 1024 * 1024))
 		}
 		if db.compWriteMeter != nil {
-			db.compWriteMeter.Mark(int64((compactions[i%2][2] - compactions[(i-1)%2][2]) * 1024 * 1024))
+			db.compWriteMeter.Mark(int64((compactions[i%2][3] - compactions[(i-1)%2][3]) * 1024 * 1024))
 		}
-
 		// Retrieve the write delay statistic
 		writedelay, err := db.db.GetProperty("leveldb.writedelay")
 		if err != nil {

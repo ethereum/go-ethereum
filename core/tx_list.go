@@ -418,9 +418,9 @@ func (l *txPricedList) Put(tx *types.Transaction) {
 // Removed notifies the prices transaction list that an old transaction dropped
 // from the pool. The list will just keep a counter of stale objects and update
 // the heap if a large enough ratio of transactions go stale.
-func (l *txPricedList) Removed() {
+func (l *txPricedList) Removed(count int) {
 	// Bump the stale counter, but exit if still too low (< 25%)
-	l.stales++
+	l.stales += count
 	if l.stales <= len(*l.items)/4 {
 		return
 	}
