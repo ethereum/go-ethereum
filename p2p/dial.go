@@ -72,16 +72,16 @@ type dialstate struct {
 	ntab        discoverTable
 	netrestrict *netutil.Netlist
 	self        enode.ID
+	bootnodes   []*enode.Node // default dials when there are no peers
+	log         log.Logger
 
+	start         time.Time // time when the dialer was first used
 	lookupRunning bool
 	dialing       map[enode.ID]connFlag
 	lookupBuf     []*enode.Node // current discovery lookup results
 	randomNodes   []*enode.Node // filled from Table
 	static        map[enode.ID]*dialTask
 	hist          expHeap
-
-	start     time.Time     // time when the dialer was first used
-	bootnodes []*enode.Node // default dials when there are no peers
 }
 
 type discoverTable interface {
@@ -117,19 +117,23 @@ type waitExpireTask struct {
 	time.Duration
 }
 
-func newDialState(self enode.ID, static []*enode.Node, bootnodes []*enode.Node, ntab discoverTable, maxdyn int, netrestrict *netutil.Netlist) *dialstate {
+func newDialState(self enode.ID, ntab discoverTable, maxdyn int, cfg *Config) *dialstate {
 	s := &dialstate{
 		maxDynDials: maxdyn,
 		ntab:        ntab,
 		self:        self,
-		netrestrict: netrestrict,
+		netrestrict: cfg.NetRestrict,
+		log:         cfg.Logger,
 		static:      make(map[enode.ID]*dialTask),
 		dialing:     make(map[enode.ID]connFlag),
-		bootnodes:   make([]*enode.Node, len(bootnodes)),
+		bootnodes:   make([]*enode.Node, len(cfg.BootstrapNodes)),
 		randomNodes: make([]*enode.Node, maxdyn/2),
 	}
-	copy(s.bootnodes, bootnodes)
-	for _, n := range static {
+	copy(s.bootnodes, cfg.BootstrapNodes)
+	if s.log == nil {
+		s.log = log.Root()
+	}
+	for _, n := range cfg.StaticNodes {
 		s.addStatic(n)
 	}
 	return s
@@ -154,7 +158,7 @@ func (s *dialstate) newTasks(nRunning int, peers map[enode.ID]*Peer, now time.Ti
 	var newtasks []task
 	addDial := func(flag connFlag, n *enode.Node) bool {
 		if err := s.checkDial(n, peers); err != nil {
-			log.Trace("Skipping dial candidate", "id", n.ID(), "addr", &net.TCPAddr{IP: n.IP(), Port: n.TCP()}, "err", err)
+			s.log.Trace("Skipping dial candidate", "id", n.ID(), "addr", &net.TCPAddr{IP: n.IP(), Port: n.TCP()}, "err", err)
 			return false
 		}
 		s.dialing[n.ID()] = flag
@@ -183,7 +187,7 @@ func (s *dialstate) newTasks(nRunning int, peers map[enode.ID]*Peer, now time.Ti
 		err := s.checkDial(t.dest, peers)
 		switch err {
 		case errNotWhitelisted, errSelf:
-			log.Warn("Removing static dial candidate", "id", t.dest.ID, "addr", &net.TCPAddr{IP: t.dest.IP(), Port: t.dest.TCP()}, "err", err)
+			s.log.Warn("Removing static dial candidate", "id", t.dest.ID, "addr", &net.TCPAddr{IP: t.dest.IP(), Port: t.dest.TCP()}, "err", err)
 			delete(s.static, t.dest.ID())
 		case nil:
 			s.dialing[id] = t.flags
@@ -283,7 +287,7 @@ func (t *dialTask) Do(srv *Server) {
 	}
 	err := t.dial(srv, t.dest)
 	if err != nil {
-		log.Trace("Dial error", "task", t, "err", err)
+		srv.log.Trace("Dial error", "task", t, "err", err)
 		// Try resolving the ID of static nodes if dialing failed.
 		if _, ok := err.(*dialError); ok && t.flags&staticDialedConn != 0 {
 			if t.resolve(srv) {
@@ -301,7 +305,7 @@ func (t *dialTask) Do(srv *Server) {
 // The backoff delay resets when the node is found.
 func (t *dialTask) resolve(srv *Server) bool {
 	if srv.ntab == nil {
-		log.Debug("Can't resolve node", "id", t.dest.ID, "err", "discovery is disabled")
+		srv.log.Debug("Can't resolve node", "id", t.dest.ID, "err", "discovery is disabled")
 		return false
 	}
 	if t.resolveDelay == 0 {
@@ -317,13 +321,13 @@ func (t *dialTask) resolve(srv *Server) bool {
 		if t.resolveDelay > maxResolveDelay {
 			t.resolveDelay = maxResolveDelay
 		}
-		log.Debug("Resolving node failed", "id", t.dest.ID, "newdelay", t.resolveDelay)
+		srv.log.Debug("Resolving node failed", "id", t.dest.ID, "newdelay", t.resolveDelay)
 		return false
 	}
 	// The node was found.
 	t.resolveDelay = initialResolveDelay
 	t.dest = resolved
-	log.Debug("Resolved node", "id", t.dest.ID, "addr", &net.TCPAddr{IP: t.dest.IP(), Port: t.dest.TCP()})
+	srv.log.Debug("Resolved node", "id", t.dest.ID, "addr", &net.TCPAddr{IP: t.dest.IP(), Port: t.dest.TCP()})
 	return true
 }
 
