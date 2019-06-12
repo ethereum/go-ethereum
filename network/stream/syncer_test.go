@@ -242,6 +242,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 //	b. exists on the nodes subscribed on the corresponding chunk PO
 //	c. does not exist on the peers that do not have that PO subscription
 func TestStarNetworkSync(t *testing.T) {
+	t.Skip("flaky test https://github.com/ethersphere/swarm/issues/1457")
 	if testutil.RaceEnabled {
 		return
 	}
