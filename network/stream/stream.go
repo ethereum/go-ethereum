@@ -423,7 +423,7 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 	case *ChunkDeliveryMsgRetrieval:
 		// handling chunk delivery is the same for retrieval and syncing, so let's cast the msg
 		go func() {
-			err := p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
+			err := p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, msg)
 			if err != nil {
 				log.Error(err.Error())
 				p.Drop()
@@ -434,7 +434,7 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 	case *ChunkDeliveryMsgSyncing:
 		// handling chunk delivery is the same for retrieval and syncing, so let's cast the msg
 		go func() {
-			err := p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
+			err := p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, msg)
 			if err != nil {
 				log.Error(err.Error())
 				p.Drop()
