@@ -20,9 +20,6 @@ package graphql
 import (
 	"context"
 	"errors"
-	"fmt"
-	"net"
-	"net/http"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -32,16 +29,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	graphqlgo "github.com/graph-gophers/graphql-go"
-	"github.com/graph-gophers/graphql-go/relay"
 )
 
 var OnlyOnMainChainError = errors.New("This operation is only available for blocks on the canonical chain.")
@@ -49,7 +40,7 @@ var BlockInvariantError = errors.New("Block objects must be instantiated with at
 
 // Account represents an Ethereum account at a particular block.
 type Account struct {
-	backend     *eth.EthAPIBackend
+	backend     ethapi.Backend
 	address     common.Address
 	blockNumber rpc.BlockNumber
 }
@@ -102,7 +93,7 @@ func (a *Account) Storage(ctx context.Context, args struct{ Slot common.Hash }) 
 
 // Log represents an individual log message. All arguments are mandatory.
 type Log struct {
-	backend     *eth.EthAPIBackend
+	backend     ethapi.Backend
 	transaction *Transaction
 	log         *types.Log
 }
@@ -134,7 +125,7 @@ func (l *Log) Data(ctx context.Context) hexutil.Bytes {
 // Transaction represents an Ethereum transaction.
 // backend and hash are mandatory; all others will be fetched when required.
 type Transaction struct {
-	backend *eth.EthAPIBackend
+	backend ethapi.Backend
 	hash    common.Hash
 	tx      *types.Transaction
 	block   *Block
@@ -349,7 +340,7 @@ const (
 // backend, and either num or hash are mandatory. All other fields are lazily fetched
 // when required.
 type Block struct {
-	backend   *eth.EthAPIBackend
+	backend   ethapi.Backend
 	num       *rpc.BlockNumber
 	hash      common.Hash
 	header    *types.Header
@@ -745,7 +736,7 @@ type BlockFilterCriteria struct {
 
 // runFilter accepts a filter and executes it, returning all its results as
 // `Log` objects.
-func runFilter(ctx context.Context, be *eth.EthAPIBackend, filter *filters.Filter) ([]*Log, error) {
+func runFilter(ctx context.Context, be ethapi.Backend, filter *filters.Filter) ([]*Log, error) {
 	logs, err := filter.Logs(ctx)
 	if err != nil || logs == nil {
 		return nil, err
@@ -888,7 +879,7 @@ func (b *Block) EstimateGas(ctx context.Context, args struct {
 }
 
 type Pending struct {
-	backend *eth.EthAPIBackend
+	backend ethapi.Backend
 }
 
 func (p *Pending) TransactionCount(ctx context.Context) (int32, error) {
@@ -947,7 +938,7 @@ func (p *Pending) EstimateGas(ctx context.Context, args struct {
 
 // Resolver is the top-level object in the GraphQL hierarchy.
 type Resolver struct {
-	backend *eth.EthAPIBackend
+	backend ethapi.Backend
 }
 
 func (r *Resolver) Block(ctx context.Context, args struct {
@@ -1088,7 +1079,6 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 
 	// Construct the range filter
 	filter := filters.NewRangeFilter(filters.Backend(r.backend), begin, end, addresses, topics)
-
 	return runFilter(ctx, r.backend, filter)
 }
 
@@ -1144,90 +1134,4 @@ func (r *Resolver) Syncing() (*SyncState, error) {
 	}
 	// Otherwise gather the block sync stats
 	return &SyncState{progress}, nil
-}
-
-// NewHandler returns a new `http.Handler` that will answer GraphQL queries.
-// It additionally exports an interactive query browser on the / endpoint.
-func NewHandler(be *eth.EthAPIBackend) (http.Handler, error) {
-	q := Resolver{be}
-
-	s, err := graphqlgo.ParseSchema(schema, &q)
-	if err != nil {
-		return nil, err
-	}
-	h := &relay.Handler{Schema: s}
-
-	mux := http.NewServeMux()
-	mux.Handle("/", GraphiQL{})
-	mux.Handle("/graphql", h)
-	mux.Handle("/graphql/", h)
-	return mux, nil
-}
-
-// Service encapsulates a GraphQL service.
-type Service struct {
-	endpoint string             // The host:port endpoint for this service.
-	cors     []string           // Allowed CORS domains
-	vhosts   []string           // Recognised vhosts
-	timeouts rpc.HTTPTimeouts   // Timeout settings for HTTP requests.
-	backend  *eth.EthAPIBackend // The backend that queries will operate onn.
-	handler  http.Handler       // The `http.Handler` used to answer queries.
-	listener net.Listener       // The listening socket.
-}
-
-// Protocols returns the list of protocols exported by this service.
-func (s *Service) Protocols() []p2p.Protocol { return nil }
-
-// APIs returns the list of APIs exported by this service.
-func (s *Service) APIs() []rpc.API { return nil }
-
-// Start is called after all services have been constructed and the networking
-// layer was also initialized to spawn any goroutines required by the service.
-func (s *Service) Start(server *p2p.Server) error {
-	var err error
-	s.handler, err = NewHandler(s.backend)
-	if err != nil {
-		return err
-	}
-
-	if s.listener, err = net.Listen("tcp", s.endpoint); err != nil {
-		return err
-	}
-
-	go rpc.NewHTTPServer(s.cors, s.vhosts, s.timeouts, s.handler).Serve(s.listener)
-	log.Info("GraphQL endpoint opened", "url", fmt.Sprintf("http://%s", s.endpoint))
-	return nil
-}
-
-// Stop terminates all goroutines belonging to the service, blocking until they
-// are all terminated.
-func (s *Service) Stop() error {
-	if s.listener != nil {
-		s.listener.Close()
-		s.listener = nil
-		log.Info("GraphQL endpoint closed", "url", fmt.Sprintf("http://%s", s.endpoint))
-	}
-	return nil
-}
-
-// NewService constructs a new service instance.
-func NewService(backend *eth.EthAPIBackend, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) (*Service, error) {
-	return &Service{
-		endpoint: endpoint,
-		cors:     cors,
-		vhosts:   vhosts,
-		timeouts: timeouts,
-		backend:  backend,
-	}, nil
-}
-
-// RegisterGraphQLService is a utility function to construct a new service and register it against a node.
-func RegisterGraphQLService(stack *node.Node, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) error {
-	return stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		var ethereum *eth.Ethereum
-		if err := ctx.Service(&ethereum); err != nil {
-			return nil, err
-		}
-		return NewService(ethereum.APIBackend, endpoint, cors, vhosts, timeouts)
-	})
 }
