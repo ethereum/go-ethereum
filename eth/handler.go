@@ -228,6 +228,8 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 	// start sync handlers
 	go pm.syncer()
 	go pm.txsyncLoop()
+
+	go pm.enableAcceptTxWhenGotNewHead()
 }
 
 func (pm *ProtocolManager) Stop() {
@@ -809,5 +811,24 @@ func (pm *ProtocolManager) NodeInfo() *NodeInfo {
 		Genesis:    pm.blockchain.Genesis().Hash(),
 		Config:     pm.blockchain.Config(),
 		Head:       currentBlock.Hash(),
+	}
+}
+
+func (pm *ProtocolManager) enableAcceptTxWhenGotNewHead() {
+	chainHeadCh := make(chan core.ChainHeadEvent, 10)
+	chainHeadSub := pm.blockchain.SubscribeChainHeadEvent(chainHeadCh)
+	defer chainHeadSub.Unsubscribe()
+
+	for {
+		select {
+		case ev := <-chainHeadCh:
+			if ev.Block != nil {
+				atomic.StoreUint32(&pm.acceptTxs, 1) // enable accept tx
+				return
+			}
+
+		case <-pm.quitSync:
+			return
+		}
 	}
 }
