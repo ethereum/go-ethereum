@@ -99,7 +99,7 @@ func TestRecvTransactions63(t *testing.T) { testRecvTransactions(t, 63) }
 func testRecvTransactions(t *testing.T, protocol int) {
 	txAdded := make(chan []*types.Transaction)
 	pm, _ := newTestProtocolManagerMust(t, downloader.FullSync, 0, nil, txAdded)
-	pm.acceptTxs = 1 // mark synced to accept transactions
+	pm.synced = 1 // mark synced to accept transactions
 	p, _ := newTestPeer("peer", protocol, pm, true)
 	defer pm.Stop()
 	defer p.close()

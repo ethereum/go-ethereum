@@ -411,6 +411,10 @@ func (s *Ethereum) SetEtherbase(etherbase common.Address) {
 // is already running, this method adjust the number of threads allowed to use
 // and updates the minimum price required by the transaction pool.
 func (s *Ethereum) StartMining(threads int) error {
+	// Reject mining request if the node is not synced.
+	if atomic.LoadUint32(&s.protocolManager.synced) == 0 {
+		return errors.New("node is not synced")
+	}
 	// Update the thread count within the consensus engine
 	type threaded interface {
 		SetThreads(threads int)
@@ -444,10 +448,6 @@ func (s *Ethereum) StartMining(threads int) error {
 			}
 			clique.Authorize(eb, wallet.SignData)
 		}
-		// If mining is started, we can disable the transaction rejection mechanism
-		// introduced to speed sync times.
-		atomic.StoreUint32(&s.protocolManager.acceptTxs, 1)
-
 		go s.miner.Start(eb)
 	}
 	return nil
@@ -480,7 +480,7 @@ func (s *Ethereum) IsListening() bool                  { return true } // Always
 func (s *Ethereum) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
 func (s *Ethereum) NetVersion() uint64                 { return s.networkID }
 func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
-func (s *Ethereum) Synced() bool                       { return atomic.LoadUint32(&s.protocolManager.acceptTxs) == 1 }
+func (s *Ethereum) Synced() bool                       { return atomic.LoadUint32(&s.protocolManager.synced) == 1 }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
 
 // Protocols implements node.Service, returning all the currently configured
