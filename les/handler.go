@@ -885,6 +885,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					}
 					// If a header lookup failed (non existent), ignore subsequent requests for the same header
 					if root == (common.Hash{}) {
+						atomic.AddUint32(&p.invalidCount, 1)
 						continue
 					}
 					// Open the account or storage trie for the request
