@@ -597,9 +597,10 @@ func TestStopResumeLes3(t *testing.T) {
 	expBuf := testBufLimit
 	var reqID uint64
 
+	header := pm.blockchain.CurrentHeader()
 	req := func() {
 		reqID++
-		sendRequest(peer.app, GetBlockHeadersMsg, reqID, testCost, &getBlockHeadersData{Origin: hashOrNumber{Hash: common.Hash{1}}, Amount: 1})
+		sendRequest(peer.app, GetBlockHeadersMsg, reqID, testCost, &getBlockHeadersData{Origin: hashOrNumber{Hash: header.Hash()}, Amount: 1})
 	}
 
 	for i := 1; i <= 5; i++ {
@@ -607,8 +608,8 @@ func TestStopResumeLes3(t *testing.T) {
 		for expBuf >= testCost {
 			req()
 			expBuf -= testCost
-			if err := expectResponse(peer.app, BlockHeadersMsg, reqID, expBuf, nil); err != nil {
-				t.Errorf("expected response and failed: %v", err)
+			if err := expectResponse(peer.app, BlockHeadersMsg, reqID, expBuf, []*types.Header{header}); err != nil {
+				t.Fatalf("expected response and failed: %v", err)
 			}
 		}
 		// send some more requests in excess and expect a single StopMsg

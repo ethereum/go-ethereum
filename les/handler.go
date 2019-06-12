@@ -528,7 +528,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 						origin = pm.blockchain.GetHeaderByNumber(query.Origin.Number)
 					}
 					if origin == nil {
-						atomic.AddUint32(&p.invalidReq, 1)
+						atomic.AddUint32(&p.invalidCount, 1)
 						break
 					}
 					headers = append(headers, origin)
@@ -638,7 +638,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					}
 					number := rawdb.ReadHeaderNumber(pm.chainDb, hash)
 					if number == nil {
-						atomic.AddUint32(&p.invalidReq, 1)
+						atomic.AddUint32(&p.invalidCount, 1)
 						continue
 					}
 					if data := rawdb.ReadBodyRLP(pm.chainDb, hash, *number); len(data) != 0 {
@@ -698,7 +698,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					number := rawdb.ReadHeaderNumber(pm.chainDb, request.BHash)
 					if number == nil {
 						p.Log().Warn("Failed to retrieve block num for code", "hash", request.BHash)
-						atomic.AddUint32(&p.invalidReq, 1)
+						atomic.AddUint32(&p.invalidCount, 1)
 						continue
 					}
 					header := rawdb.ReadHeader(pm.chainDb, request.BHash, *number)
@@ -711,7 +711,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					local := pm.blockchain.CurrentHeader().Number.Uint64()
 					if !pm.server.archiveMode && header.Number.Uint64()+core.TriesInMemory <= local {
 						p.Log().Debug("Reject stale code request", "number", header.Number.Uint64(), "head", local)
-						atomic.AddUint32(&p.invalidReq, 1)
+						atomic.AddUint32(&p.invalidCount, 1)
 						continue
 					}
 					triedb := pm.blockchain.StateCache().TrieDB()
@@ -719,7 +719,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					account, err := pm.getAccount(triedb, header.Root, common.BytesToHash(request.AccKey))
 					if err != nil {
 						p.Log().Warn("Failed to retrieve account for code", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
-						atomic.AddUint32(&p.invalidReq, 1)
+						atomic.AddUint32(&p.invalidCount, 1)
 						continue
 					}
 					code, err := triedb.Node(common.BytesToHash(account.CodeHash))
@@ -788,7 +788,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					var results types.Receipts
 					number := rawdb.ReadHeaderNumber(pm.chainDb, hash)
 					if number == nil {
-						atomic.AddUint32(&p.invalidReq, 1)
+						atomic.AddUint32(&p.invalidCount, 1)
 						continue
 					}
 					results = rawdb.ReadRawReceipts(pm.chainDb, hash, *number)
@@ -866,7 +866,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 						if number = rawdb.ReadHeaderNumber(pm.chainDb, request.BHash); number == nil {
 							p.Log().Warn("Failed to retrieve block num for proof", "hash", request.BHash)
-							atomic.AddUint32(&p.invalidReq, 1)
+							atomic.AddUint32(&p.invalidCount, 1)
 							continue
 						}
 						if header = rawdb.ReadHeader(pm.chainDb, request.BHash, *number); header == nil {
@@ -878,7 +878,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 						local := pm.blockchain.CurrentHeader().Number.Uint64()
 						if !pm.server.archiveMode && header.Number.Uint64()+core.TriesInMemory <= local {
 							p.Log().Debug("Reject stale trie request", "number", header.Number.Uint64(), "head", local)
-							atomic.AddUint32(&p.invalidReq, 1)
+							atomic.AddUint32(&p.invalidCount, 1)
 							continue
 						}
 						root = header.Root
@@ -903,7 +903,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 						account, err := pm.getAccount(statedb.TrieDB(), root, common.BytesToHash(request.AccKey))
 						if err != nil {
 							p.Log().Warn("Failed to retrieve account for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
-							atomic.AddUint32(&p.invalidReq, 1)
+							atomic.AddUint32(&p.invalidCount, 1)
 							continue
 						}
 						trie, err = statedb.OpenStorageTrie(common.BytesToHash(request.AccKey), account.Root)
@@ -1152,7 +1152,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	}
 	// If the client has made too much invalid request(e.g. request a non-exist data),
 	// reject them to prevent SPAM attack.
-	if atomic.LoadUint32(&p.invalidReq) > maxRequestErrors {
+	if atomic.LoadUint32(&p.invalidCount) > maxRequestErrors {
 		return errTooManyInvalidRequest
 	}
 	return nil

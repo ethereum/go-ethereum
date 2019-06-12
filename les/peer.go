@@ -91,7 +91,7 @@ type peer struct {
 	// RequestProcessed is called
 	responseLock  sync.Mutex
 	responseCount uint64
-	invalidReq    uint32
+	invalidCount  uint32
 
 	poolEntry      *poolEntry
 	hasBlock       func(common.Hash, uint64, bool) bool
