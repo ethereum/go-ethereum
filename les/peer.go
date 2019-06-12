@@ -42,7 +42,10 @@ var (
 	errNotRegistered     = errors.New("peer is not registered")
 )
 
-const maxResponseErrors = 50 // number of invalid responses tolerated (makes the protocol less brittle but still avoids spam)
+const (
+	maxRequestErrors  = 20 // number of invalid requests tolerated (makes the protocol less brittle but still avoids spam)
+	maxResponseErrors = 50 // number of invalid responses tolerated (makes the protocol less brittle but still avoids spam)
+)
 
 // capacity limitation for parameter updates
 const (
@@ -69,7 +72,6 @@ const (
 
 type peer struct {
 	*p2p.Peer
-
 	rw p2p.MsgReadWriter
 
 	version int    // Protocol version negotiated
@@ -89,6 +91,7 @@ type peer struct {
 	// RequestProcessed is called
 	responseLock  sync.Mutex
 	responseCount uint64
+	invalidCount  uint32
 
 	poolEntry      *poolEntry
 	hasBlock       func(common.Hash, uint64, bool) bool
