@@ -27,6 +27,10 @@ import (
 )
 
 type hasherStore struct {
+	// nrChunks is used with atomic functions
+	// it is required to be at the start of the struct to ensure 64bit alignment for ARM, x86-32, and 32-bit MIPS architectures
+	// see: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	nrChunks  uint64 // number of chunks to store
 	store     ChunkStore
 	tag       *chunk.Tag
 	toEncrypt bool
@@ -36,10 +40,6 @@ type hasherStore struct {
 	errC      chan error    // global error channel
 	doneC     chan struct{} // closed by Close() call to indicate that count is the final number of chunks
 	quitC     chan struct{} // closed to quit unterminated routines
-	// nrChunks is used with atomic functions
-	// it is required to be at the end of the struct to ensure 64bit alignment for arm architecture
-	// see: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	nrChunks uint64 // number of chunks to store
 }
 
 // NewHasherStore creates a hasherStore object, which implements Putter and Getter interfaces.
