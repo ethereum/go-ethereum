@@ -29,8 +29,6 @@ import (
 	"github.com/ethersphere/swarm/storage"
 )
 
-var testDownloadDir, _ = ioutil.TempDir(os.TempDir(), "bzz-test")
-
 func testFileSystem(t *testing.T, f func(*FileSystem, bool)) {
 	testAPI(t, func(api *API, _ *chunk.Tags, toEncrypt bool) {
 		f(NewFileSystem(api), toEncrypt)
@@ -70,8 +68,13 @@ func TestApiDirUpload0(t *testing.T) {
 			t.Fatalf("expected error: %v", err)
 		}
 
+		testDownloadDir, err := ioutil.TempDir(os.TempDir(), "bzz-test")
 		downloadDir := filepath.Join(testDownloadDir, "test0")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		defer os.RemoveAll(downloadDir)
+
 		err = fs.Download(bzzhash, downloadDir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
