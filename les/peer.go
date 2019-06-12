@@ -71,11 +71,6 @@ const (
 )
 
 type peer struct {
-	// WARNING: The `invalidReq` field is accessed atomically. On 32 bit platforms, only
-	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
-	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
-	invalidReq uint64
-
 	*p2p.Peer
 	rw p2p.MsgReadWriter
 
@@ -96,6 +91,7 @@ type peer struct {
 	// RequestProcessed is called
 	responseLock  sync.Mutex
 	responseCount uint64
+	invalidReq    uint32
 
 	poolEntry      *poolEntry
 	hasBlock       func(common.Hash, uint64, bool) bool
