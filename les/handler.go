@@ -868,6 +868,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 						}
 						root = header.Root
 					}
+					// If a header lookup failed (non existent), ignore subsequent requests for the same header
+					if root == (common.Hash{}) {
+						continue
+					}
 					// Open the account or storage trie for the request
 					statedb := pm.blockchain.StateCache()
 
