@@ -43,7 +43,7 @@ var (
 )
 
 const (
-	maxRequesetErrors = 20 // number of invalid requests tolerated (makes the protocol less brittle but still avoids spam)
+	maxRequestErrors  = 20 // number of invalid requests tolerated (makes the protocol less brittle but still avoids spam)
 	maxResponseErrors = 50 // number of invalid responses tolerated (makes the protocol less brittle but still avoids spam)
 )
 
@@ -71,8 +71,12 @@ const (
 )
 
 type peer struct {
-	*p2p.Peer
+	// WARNING: The `invalidReq` field is accessed atomically. On 32 bit platforms, only
+	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
+	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
+	invalidReq uint64
 
+	*p2p.Peer
 	rw p2p.MsgReadWriter
 
 	version int    // Protocol version negotiated
@@ -92,7 +96,6 @@ type peer struct {
 	// RequestProcessed is called
 	responseLock  sync.Mutex
 	responseCount uint64
-	invalidReq    uint64
 
 	poolEntry      *poolEntry
 	hasBlock       func(common.Hash, uint64, bool) bool

@@ -46,7 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-var errTooMuchInvalidRequest = errors.New("too much invalid requests made")
+var errTooManyInvalidRequest = errors.New("too many invalid requests made")
 
 const (
 	softResponseLimit = 2 * 1024 * 1024 // Target maximum size of returned blocks, headers or node data.
@@ -1152,8 +1152,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	}
 	// If the client has made too much invalid request(e.g. request a non-exist data),
 	// reject them to prevent SPAM attack.
-	if atomic.LoadUint64(&p.invalidReq) > maxRequesetErrors {
-		return errTooMuchInvalidRequest
+	if atomic.LoadUint64(&p.invalidReq) > maxRequestErrors {
+		return errTooManyInvalidRequest
 	}
 	return nil
 }
