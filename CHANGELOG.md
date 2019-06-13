@@ -1,3 +1,13 @@
+## v0.4.2 (Unreleased)
+
+### Features
+
+### Improvements
+
+### Bug fixes
+
+### Notes
+
 ## v0.4.1 (June 13, 2019)
 
 ### Improvements
