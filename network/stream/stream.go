@@ -623,7 +623,7 @@ func (r *Registry) createSpec() {
 	// Spec is the spec of the streamer protocol
 	var spec = &protocols.Spec{
 		Name:       "stream",
-		Version:    8,
+		Version:    9,
 		MaxMsgSize: 10 * 1024 * 1024,
 		Messages: []interface{}{
 			UnsubscribeMsg{},
