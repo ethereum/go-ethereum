@@ -107,10 +107,9 @@ func (w *wizard) makeGenesis() {
 		genesis.Difficulty = big.NewInt(1)
 		genesis.GasLimit = 10000000
 		genesis.Config.Bor = &params.BorConfig{
-			Period:           1,
-			ProducerInterval: 60,
-			ProducerDelay:    5,
-			Epoch:            30000,
+			Period:        1,
+			ProducerDelay: 5,
+			Epoch:         60,
 		}
 
 		// We also need the initial list of signers
