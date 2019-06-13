@@ -603,18 +603,6 @@
 			"revisionTime": "2019-05-31T09:30:28Z"
 		},
 		{
-			"checksumSHA1": "xNdgmBmhiTpNkDy8vqvxuUll6SM=",
-			"path": "github.com/ethereum/go-ethereum/swarm/spancontext",
-			"revision": "7a22da98b9f81d206eb65d1fa4f5e773d888bac3",
-			"revisionTime": "2019-05-31T09:30:28Z"
-		},
-		{
-			"checksumSHA1": "w3qoUcgf9BVZofb3kzUhtACSCCo=",
-			"path": "github.com/ethereum/go-ethereum/swarm/tracing",
-			"revision": "7a22da98b9f81d206eb65d1fa4f5e773d888bac3",
-			"revisionTime": "2019-05-31T09:30:28Z"
-		},
-		{
 			"checksumSHA1": "k43RYS4EvI3YvRbZP8pS9OO82QA=",
 			"path": "github.com/ethereum/go-ethereum/trie",
 			"revision": "7a22da98b9f81d206eb65d1fa4f5e773d888bac3",
