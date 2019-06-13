@@ -9,3 +9,5 @@ swarm:
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/swarm\" to launch swarm."
 
+alltools:
+	build/env.sh go run build/ci.go install ./cmd/...
