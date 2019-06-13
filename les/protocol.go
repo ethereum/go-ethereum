@@ -24,8 +24,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -34,17 +32,18 @@ import (
 // Constants to match up protocol versions and messages
 const (
 	lpv2 = 2
+	lpv3 = 3
 )
 
 // Supported versions of the les protocol (first is primary)
 var (
-	ClientProtocolVersions    = []uint{lpv2}
-	ServerProtocolVersions    = []uint{lpv2}
+	ClientProtocolVersions    = []uint{lpv2, lpv3}
+	ServerProtocolVersions    = []uint{lpv2, lpv3}
 	AdvertiseProtocolVersions = []uint{lpv2} // clients are searching for the first advertised protocol in the list
 )
 
 // Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = map[uint]uint64{lpv2: 22}
+var ProtocolLengths = map[uint]uint64{lpv2: 22, lpv3: 24}
 
 const (
 	NetworkId          = 1
@@ -72,6 +71,9 @@ const (
 	SendTxV2Msg            = 0x13
 	GetTxStatusMsg         = 0x14
 	TxStatusMsg            = 0x15
+	// Protocol messages introduced in LPV3
+	StopMsg   = 0x16
+	ResumeMsg = 0x17
 )
 
 type requestInfo struct {
@@ -227,9 +229,3 @@ type CodeData []struct {
 }
 
 type proofsData [][]rlp.RawValue
-
-type txStatus struct {
-	Status core.TxStatus
-	Lookup *rawdb.LegacyTxLookupEntry `rlp:"nil"`
-	Error  string
-}

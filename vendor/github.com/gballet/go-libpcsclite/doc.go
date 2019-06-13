@@ -61,8 +61,6 @@ const (
 	SCardPowever    = 0x0010 /* Card is powered */
 	SCardNegotiable = 0x0020 /* Ready for PTS */
 	SCardSpecific   = 0x0040 /* PTS has been set */
-
-	PCSCDSockName = "/run/pcscd/pcscd.comm"
 )
 
 // List of commands to send to the daemon

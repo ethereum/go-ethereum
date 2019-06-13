@@ -85,7 +85,7 @@ func (w *trezorDriver) Status() (string, error) {
 // Open implements usbwallet.driver, attempting to initialize the connection to
 // the Trezor hardware wallet. Initializing the Trezor is a two or three phase operation:
 //  * The first phase is to initialize the connection and read the wallet's
-//    features. This phase is invoked is the provided passphrase is empty. The
+//    features. This phase is invoked if the provided passphrase is empty. The
 //    device will display the pinpad as a result and will return an appropriate
 //    error to notify the user that a second open phase is needed.
 //  * The second phase is to unlock access to the Trezor, which is done by the
@@ -192,7 +192,13 @@ func (w *trezorDriver) trezorDerive(derivationPath []uint32) (common.Address, er
 	if _, err := w.trezorExchange(&trezor.EthereumGetAddress{AddressN: derivationPath}, address); err != nil {
 		return common.Address{}, err
 	}
-	return common.BytesToAddress(address.GetAddress()), nil
+	if addr := address.GetAddressBin(); len(addr) > 0 { // Older firmwares use binary fomats
+		return common.BytesToAddress(addr), nil
+	}
+	if addr := address.GetAddressHex(); len(addr) > 0 { // Newer firmwares use hexadecimal fomats
+		return common.HexToAddress(addr), nil
+	}
+	return common.Address{}, errors.New("missing derived address")
 }
 
 // trezorSign sends the transaction to the Trezor wallet, and waits for the user
@@ -211,7 +217,10 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 		DataLength: &length,
 	}
 	if to := tx.To(); to != nil {
-		request.To = (*to)[:] // Non contract deploy, set recipient explicitly
+		// Non contract deploy, set recipient explicitly
+		hex := to.Hex()
+		request.ToHex = &hex     // Newer firmwares (old will ignore)
+		request.ToBin = (*to)[:] // Older firmwares (new will ignore)
 	}
 	if length > 1024 { // Send the data chunked if that was requested
 		request.DataInitialChunk, data = data[:1024], data[1024:]

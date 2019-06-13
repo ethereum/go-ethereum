@@ -26,7 +26,7 @@ import (
 
 type TestPeer interface {
 	ID() enode.ID
-	Drop(error)
+	Drop()
 }
 
 // TestPeerPool is an example peerPool to demonstrate registration of peer connections

@@ -301,3 +301,37 @@ func TestBalanceAt(t *testing.T) {
 		})
 	}
 }
+
+func TestTransactionInBlockInterrupted(t *testing.T) {
+	backend, _ := newTestBackend(t)
+	client, _ := backend.Attach()
+	defer backend.Stop()
+	defer client.Close()
+
+	ec := NewClient(client)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	tx, err := ec.TransactionInBlock(ctx, common.Hash{1}, 1)
+	if tx != nil {
+		t.Fatal("transaction should be nil")
+	}
+	if err == nil {
+		t.Fatal("error should not be nil")
+	}
+}
+
+func TestChainID(t *testing.T) {
+	backend, _ := newTestBackend(t)
+	client, _ := backend.Attach()
+	defer backend.Stop()
+	defer client.Close()
+	ec := NewClient(client)
+
+	id, err := ec.ChainID(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if id == nil || id.Cmp(params.AllEthashProtocolChanges.ChainID) != 0 {
+		t.Fatalf("ChainID returned wrong number: %+v", id)
+	}
+}

@@ -95,6 +95,9 @@ type Config struct {
 	// NoUSB disables hardware wallet monitoring and connectivity.
 	NoUSB bool `toml:",omitempty"`
 
+	// SmartCardDaemonPath is the path to the smartcard daemon's socket
+	SmartCardDaemonPath string `toml:",omitempty"`
+
 	// IPCPath is the requested location to place the IPC endpoint. If the path is
 	// a simple file name, it is placed inside the data directory (or on the root
 	// pipe path on Windows), whereas if it's a resolvable path name (absolute or
@@ -422,7 +425,7 @@ func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
 		if url == "" {
 			continue
 		}
-		node, err := enode.ParseV4(url)
+		node, err := enode.Parse(enode.ValidSchemes, url)
 		if err != nil {
 			log.Error(fmt.Sprintf("Node URL %s: %v\n", url, err))
 			continue
@@ -498,18 +501,26 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 			} else {
 				backends = append(backends, ledgerhub)
 			}
-			// Start a USB hub for Trezor hardware wallets
-			if trezorhub, err := usbwallet.NewTrezorHub(); err != nil {
-				log.Warn(fmt.Sprintf("Failed to start Trezor hub, disabling: %v", err))
+			// Start a USB hub for Trezor hardware wallets (HID version)
+			if trezorhub, err := usbwallet.NewTrezorHubWithHID(); err != nil {
+				log.Warn(fmt.Sprintf("Failed to start HID Trezor hub, disabling: %v", err))
+			} else {
+				backends = append(backends, trezorhub)
+			}
+			// Start a USB hub for Trezor hardware wallets (WebUSB version)
+			if trezorhub, err := usbwallet.NewTrezorHubWithWebUSB(); err != nil {
+				log.Warn(fmt.Sprintf("Failed to start WebUSB Trezor hub, disabling: %v", err))
 			} else {
 				backends = append(backends, trezorhub)
 			}
 		}
-		// Start a smart card hub
-		if schub, err := scwallet.NewHub(scwallet.Scheme, keydir); err != nil {
-			log.Warn(fmt.Sprintf("Failed to start smart card hub, disabling: %v", err))
-		} else {
-			backends = append(backends, schub)
+		if len(conf.SmartCardDaemonPath) > 0 {
+			// Start a smart card hub
+			if schub, err := scwallet.NewHub(conf.SmartCardDaemonPath, scwallet.Scheme, keydir); err != nil {
+				log.Warn(fmt.Sprintf("Failed to start smart card hub, disabling: %v", err))
+			} else {
+				backends = append(backends, schub)
+			}
 		}
 	}
 

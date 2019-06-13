@@ -54,16 +54,17 @@ func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
 
 // WriteTxLookupEntries stores a positional metadata for every transaction from
 // a block, enabling hash based transaction and receipt lookups.
-func WriteTxLookupEntries(db ethdb.Writer, block *types.Block) {
+func WriteTxLookupEntries(db ethdb.KeyValueWriter, block *types.Block) {
+	number := block.Number().Bytes()
 	for _, tx := range block.Transactions() {
-		if err := db.Put(txLookupKey(tx.Hash()), block.Number().Bytes()); err != nil {
+		if err := db.Put(txLookupKey(tx.Hash()), number); err != nil {
 			log.Crit("Failed to store transaction lookup entry", "err", err)
 		}
 	}
 }
 
 // DeleteTxLookupEntry removes all transaction data associated with a hash.
-func DeleteTxLookupEntry(db ethdb.Writer, hash common.Hash) {
+func DeleteTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash) {
 	db.Delete(txLookupKey(hash))
 }
 
@@ -117,13 +118,13 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 
 // ReadBloomBits retrieves the compressed bloom bit vector belonging to the given
 // section and bit index from the.
-func ReadBloomBits(db ethdb.Reader, bit uint, section uint64, head common.Hash) ([]byte, error) {
+func ReadBloomBits(db ethdb.KeyValueReader, bit uint, section uint64, head common.Hash) ([]byte, error) {
 	return db.Get(bloomBitsKey(bit, section, head))
 }
 
 // WriteBloomBits stores the compressed bloom bits vector belonging to the given
 // section and bit index.
-func WriteBloomBits(db ethdb.Writer, bit uint, section uint64, head common.Hash, bits []byte) {
+func WriteBloomBits(db ethdb.KeyValueWriter, bit uint, section uint64, head common.Hash, bits []byte) {
 	if err := db.Put(bloomBitsKey(bit, section, head), bits); err != nil {
 		log.Crit("Failed to store bloom bits", "err", err)
 	}

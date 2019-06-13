@@ -21,6 +21,7 @@ import (
 	"context"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -225,5 +226,25 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bitIdx uint, sectionIdxLi
 			result[idx] = r.BloomBits[i]
 		}
 		return result, nil
+	}
+}
+
+// GetTransaction retrieves a canonical transaction by hash and also returns its position in the chain
+func GetTransaction(ctx context.Context, odr OdrBackend, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+	r := &TxStatusRequest{Hashes: []common.Hash{txHash}}
+	if err := odr.Retrieve(ctx, r); err != nil || r.Status[0].Status != core.TxStatusIncluded {
+		return nil, common.Hash{}, 0, 0, err
+	} else {
+		pos := r.Status[0].Lookup
+		// first ensure that we have the header, otherwise block body retrieval will fail
+		// also verify if this is a canonical block by getting the header by number and checking its hash
+		if header, err := GetHeaderByNumber(ctx, odr, pos.BlockIndex); err != nil || header.Hash() != pos.BlockHash {
+			return nil, common.Hash{}, 0, 0, err
+		}
+		if body, err := GetBody(ctx, odr, pos.BlockHash, pos.BlockIndex); err != nil || uint64(len(body.Transactions)) <= pos.Index || body.Transactions[pos.Index].Hash() != txHash {
+			return nil, common.Hash{}, 0, 0, err
+		} else {
+			return body.Transactions[pos.Index], pos.BlockHash, pos.BlockIndex, pos.Index, nil
+		}
 	}
 }

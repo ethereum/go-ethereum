@@ -3,7 +3,11 @@
 
 #include "duktape.h"
 
-/* Log levels */
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
+/* Log levels. */
 #define DUK_LOG_TRACE                     0
 #define DUK_LOG_DEBUG                     1
 #define DUK_LOG_INFO                      2
@@ -16,5 +20,9 @@
 extern void duk_logging_init(duk_context *ctx, duk_uint_t flags);
 extern void duk_log_va(duk_context *ctx, duk_int_t level, const char *fmt, va_list ap);
 extern void duk_log(duk_context *ctx, duk_int_t level, const char *fmt, ...);
+
+#if defined(__cplusplus)
+}
+#endif  /* end 'extern "C"' wrapper */
 
 #endif  /* DUK_LOGGING_H_INCLUDED */
