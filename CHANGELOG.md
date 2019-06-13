@@ -1,4 +1,4 @@
-## v0.4.1 (Unreleased)
+## v0.4.1 (June 13, 2019)
 
 ### Improvements
 
