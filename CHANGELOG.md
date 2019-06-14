@@ -1,12 +1,15 @@
 ## v0.4.2 (Unreleased)
 
+### Notes
+
 ### Features
 
 ### Improvements
 
 ### Bug fixes
+* [#1488](https://github.com/ethersphere/swarm/pull/1488): docker: include git commit hash in swarm version
 
-### Notes
+
 
 ## v0.4.1 (June 13, 2019)
 
