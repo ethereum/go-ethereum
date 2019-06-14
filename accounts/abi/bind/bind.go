@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"go/format"
+	"log"
 	"regexp"
 	"strings"
 	"text/template"
@@ -46,7 +47,7 @@ const (
 // to be used as is in client code, but rather as an intermediate struct which
 // enforces compile time type safety and naming convention opposed to having to
 // manually maintain hard coded strings that break on runtime.
-func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, lang Lang) (string, error) {
+func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, lang Lang, libs map[string]string) (string, error) {
 	// Process each individual contract requested binding
 	contracts := make(map[string]*tmplContract)
 
@@ -142,16 +143,28 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			Calls:       calls,
 			Transacts:   transacts,
 			Events:      events,
+			Libraries:   make(map[string]string),
 			Structs:     structs,
 		}
 		if len(fsigs) > i {
 			contracts[types[i]].FuncSigs = fsigs[i]
+		}
+
+		for pattern, name := range libs {
+			matched, err := regexp.Match("__\\$"+pattern+"\\$__", []byte(contracts[types[i]].InputBin))
+			if err != nil {
+				log.Fatalf("Could not search for pattern %v in %v: %v", pattern, contracts[types[i]], err)
+			}
+			if matched {
+				contracts[types[i]].Libraries[pattern] = name
+			}
 		}
 	}
 	// Generate the contract template data content and render it
 	data := &tmplData{
 		Package:   pkg,
 		Contracts: contracts,
+		Libraries: libs,
 	}
 	buffer := new(bytes.Buffer)
 
