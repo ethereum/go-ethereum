@@ -238,8 +238,6 @@ type TxPool struct {
 	reorgDoneCh     chan chan struct{}
 	reorgShutdownCh chan struct{}  // requests shutdown of scheduleReorgLoop
 	wg              sync.WaitGroup // tracks loop, scheduleReorgLoop
-
-	homestead bool
 }
 
 type txpoolResetRequest struct {
@@ -540,7 +538,8 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
 		return ErrInsufficientFunds
 	}
-	intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
+	// Ensure the transaction has more gas than the basic tx fee.
+	intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, true)
 	if err != nil {
 		return err
 	}
@@ -979,9 +978,6 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 
 	pool.mu.Lock()
 	if reset != nil {
-		if reset.newHead != nil && pool.chainconfig.IsHomestead(reset.newHead.Number) {
-			pool.homestead = true
-		}
 		pool.reset(reset.oldHead, reset.newHead)
 		// Reset needs promote for all addresses.
 		promoteAddrs = promoteAddrs[:0]
