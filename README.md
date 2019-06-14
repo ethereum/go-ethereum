@@ -1,4 +1,4 @@
-## Swarm
+## Swarm  <!-- omit in toc -->
 
 [https://swarm.ethereum.org](https://swarm.ethereum.org)
 
@@ -7,21 +7,28 @@ Swarm is a distributed storage platform and content distribution service, a nati
 [![Travis](https://travis-ci.org/ethersphere/swarm.svg?branch=master)](https://travis-ci.org/ethersphere/swarm)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ethersphere/orange-lounge?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-## Table of Contents
+## Table of Contents  <!-- omit in toc -->
 
-*  [Building the source](#building-the-source)
-*  [Running Swarm](#running-swarm)
-*  [Documentation](#documentation)
-*  [Developers Guide](#developers-guide)
-   *  [Go Environment](#development-environment)
-   *  [Vendored Dependencies](#vendored-dependencies)
-   *  [Testing](#testing)
-   *  [Profiling Swarm](#profiling-swarm)
-   *  [Metrics and Instrumentation in Swarm](#metrics-and-instrumentation-in-swarm)
-*  [Public Gateways](#public-gateways)
-*  [Swarm Dapps](#swarm-dapps)
-*  [Contributing](#contributing)
-*  [License](#license)
+- [Building the source](#building-the-source)
+- [Running Swarm](#running-swarm)
+  - [Verifying that your local Swarm node is running](#verifying-that-your-local-swarm-node-is-running)
+  - [Ethereum Name Service resolution](#ethereum-name-service-resolution)
+- [Documentation](#documentation)
+- [Docker](#docker)
+  - [Docker tags](#docker-tags)
+  - [Environment variables](#environment-variables)
+  - [Swarm command line arguments](#swarm-command-line-arguments)
+- [Developers Guide](#developers-guide)
+  - [Go Environment](#go-environment)
+  - [Vendored Dependencies](#vendored-dependencies)
+  - [Testing](#testing)
+  - [Profiling Swarm](#profiling-swarm)
+  - [Metrics and Instrumentation in Swarm](#metrics-and-instrumentation-in-swarm)
+    - [Visualizing metrics](#visualizing-metrics)
+- [Public Gateways](#public-gateways)
+- [Swarm Dapps](#swarm-dapps)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Building the source
 
@@ -29,17 +36,20 @@ Building Swarm requires Go (version 1.11 or later).
 
 To simply compile the `swarm` binary without a `GOPATH`:
 
-    $ git clone https://github.com/ethersphere/swarm
-    $ cd swarm
-    $ make swarm
+```bash
+$ git clone https://github.com/ethersphere/swarm
+$ cd swarm
+$ make swarm
+```
 
 You will find the binary under `./build/bin/swarm`.
 
 To build a vendored `swarm` using `go get` you must have `GOPATH` set. Then run:
 
-    go get -d github.com/ethersphere/swarm
-
-    go install github.com/ethersphere/swarm/cmd/swarm
+```bash
+$ go get -d github.com/ethersphere/swarm
+$ go install github.com/ethersphere/swarm/cmd/swarm
+```
 
 ## Running Swarm
 
@@ -47,26 +57,32 @@ Going through all the possible command line flags is out of scope here, but we'v
 
 To run Swarm you need an Ethereum account. Download and install [Geth](https://geth.ethereum.org) if you don't have it on your system. You can create a new Ethereum account by running the following command:
 
-    geth account new
+```bash
+$ geth account new
+```
 
 You will be prompted for a password:
 
-    Your new account is locked with a password. Please give a password. Do not forget this password.
-    Passphrase:
-    Repeat passphrase:
+```
+Your new account is locked with a password. Please give a password. Do not forget this password.
+Passphrase:
+Repeat passphrase:
+```
 
 Once you have specified the password, the output will be the Ethereum address representing that account. For example:
 
-    Address: {2f1cd699b0bf461dcfbf0098ad8f5587b038f0f1}
+```
+Address: {2f1cd699b0bf461dcfbf0098ad8f5587b038f0f1}
+```
 
 Using this account, connect to Swarm with
 
-    swarm --bzzaccount <your-account-here>
+```bash
+$ swarm --bzzaccount <your-account-here>
 
-    # in our example
-
-    swarm --bzzaccount 2f1cd699b0bf461dcfbf0098ad8f5587b038f0f1
-
+# in our example
+$ swarm --bzzaccount 2f1cd699b0bf461dcfbf0098ad8f5587b038f0f1
+```
 
 ### Verifying that your local Swarm node is running
 
@@ -78,21 +94,94 @@ Confirm that it is up and running by pointing your browser to http://localhost:8
 
 The Ethereum Name Service is the Ethereum equivalent of DNS in the classic web. In order to use ENS to resolve names to Swarm content hashes (e.g. `bzz://theswarm.eth`), `swarm` has to connect to a `geth` instance, which is synced with the Ethereum mainnet. This is done using the `--ens-api` flag.
 
-    swarm --bzzaccount <your-account-here> \
-          --ens-api '$HOME/.ethereum/geth.ipc'
+```bash
+$ swarm --bzzaccount <your-account-here> \
+        --ens-api '$HOME/.ethereum/geth.ipc'
 
-    # in our example
-
-    swarm --bzzaccount 2f1cd699b0bf461dcfbf0098ad8f5587b038f0f1 \
-          --ens-api '$HOME/.ethereum/geth.ipc'
+# in our example
+$ swarm --bzzaccount 2f1cd699b0bf461dcfbf0098ad8f5587b038f0f1 \
+        --ens-api '$HOME/.ethereum/geth.ipc'
+```
 
 For more information on usage, features or command line flags, please consult the Documentation.
-
 
 ## Documentation
 
 Swarm documentation can be found at [https://swarm-guide.readthedocs.io](https://swarm-guide.readthedocs.io).
 
+## Docker
+
+Swarm container images are available at Docker Hub: [ethersphere/swarm](https://hub.docker.com/r/ethersphere/swarm)
+
+### Docker tags
+
+* `latest` - latest stable release
+* `edge` - latest build from `master`
+* `v0.x.y` - specific stable release
+
+### Environment variables
+
+* `PASSWORD` - *required* - Used to setup a sample Ethereum account in the data directory. If a data directory is mounted with a volume, the first Ethereum account from it is loaded, and Swarm will try to decrypt it non-interactively with `PASSWORD`
+* `DATADIR` - *optional* - Defaults to `/root/.ethereum`
+
+### Swarm command line arguments
+
+All Swarm command line arguments are supported and can be sent as part of the CMD field to the Docker container.
+
+**Examples:**
+
+Running a Swarm container from the command line
+
+```bash
+$ docker run -e PASSWORD=password123 -t ethersphere/swarm \
+                            --debug \
+                            --verbosity 4
+```
+
+Running a Swarm container with custom ENS endpoint
+
+```bash
+$ docker run -e PASSWORD=password123 -t ethersphere/swarm \
+                            --ens-api http://1.2.3.4:8545 \
+                            --debug \
+                            --verbosity 4
+```
+
+Running a Swarm container with metrics enabled
+
+```bash
+$ docker run -e PASSWORD=password123 -t ethersphere/swarm \
+                            --debug \
+                            --metrics \
+                            --metrics.influxdb.export \
+                            --metrics.influxdb.endpoint "http://localhost:8086" \
+                            --metrics.influxdb.username "user" \
+                            --metrics.influxdb.password "pass" \
+                            --metrics.influxdb.database "metrics" \
+                            --metrics.influxdb.host.tag "localhost" \
+                            --verbosity 4
+```
+
+Running a Swarm container with tracing and pprof server enabled
+
+```bash
+$ docker run -e PASSWORD=password123 -t ethersphere/swarm \
+                            --debug \
+                            --tracing \
+                            --tracing.endpoint 127.0.0.1:6831 \
+                            --tracing.svc myswarm \
+                            --pprof \
+                            --pprofaddr 0.0.0.0 \
+                            --pprofport 6060
+```
+
+Running a Swarm container with custom data directory mounted from a volume
+
+```bash
+$ docker run -e DATADIR=/data -e PASSWORD=password123 -v /tmp/hostdata:/data -t ethersphere/swarm \
+                            --debug \
+                            --verbosity 4
+```
 
 ## Developers Guide
 
@@ -104,8 +193,8 @@ You must have your working copy under `$GOPATH/src/github.com/ethersphere/swarm`
 
 Most likely you will be working from your fork of `swarm`, let's say from `github.com/nirname/swarm`. Clone or move your fork into the right place:
 
-```
-git clone git@github.com:nirname/swarm.git $GOPATH/src/github.com/ethersphere/swarm
+```bash
+$ git clone git@github.com:nirname/swarm.git $GOPATH/src/github.com/ethersphere/swarm
 ```
 
 
@@ -124,24 +213,24 @@ This section explains how to run unit, integration, and end-to-end tests in your
 
 Testing one library:
 
-```
-go test -v -cpu 4 ./api
+```bash
+$ go test -v -cpu 4 ./api
 ```
 
 Note: Using options -cpu (number of cores allowed) and -v (logging even if no error) is recommended.
 
 Testing only some methods:
 
-```
-go test -v -cpu 4 ./api -run TestMethod
+```bash
+$ go test -v -cpu 4 ./api -run TestMethod
 ```
 
 Note: here all tests with prefix TestMethod will be run, so if you got TestMethod, TestMethod1, then both!
 
 Running benchmarks:
 
-```
-go test -v -cpu 4 -bench . -run BenchmarkJoin
+```bash
+$ go test -v -cpu 4 -bench . -run BenchmarkJoin
 ```
 
 
@@ -164,11 +253,11 @@ Swarm metrics system is based on the `go-metrics` library.
 
 The most common types of measurements we use in Swarm are `counters` and `resetting timers`. Consult the `go-metrics` documentation for full reference of available types.
 
-```
-# incrementing a counter
+```go
+// incrementing a counter
 metrics.GetOrRegisterCounter("network.stream.received_chunks", nil).Inc(1)
 
-# measuring latency with a resetting timer
+// measuring latency with a resetting timer
 start := time.Now()
 t := metrics.GetOrRegisterResettingTimer("http.request.GET.time"), nil)
 ...
@@ -179,8 +268,8 @@ t := UpdateSince(start)
 
 Swarm supports an InfluxDB exporter. Consult the help section to learn about the command line arguments used to configure it:
 
-```
-swarm --help | grep metrics
+```bash
+$ swarm --help | grep metrics
 ```
 
 We use Grafana and InfluxDB to visualise metrics reported by Swarm. We keep our Grafana dashboards under version control at https://github.com/ethersphere/grafana-dashboards. You could use them or design your own.
@@ -190,12 +279,14 @@ We have built a tool to help with automatic start of Grafana and InfluxDB and pr
 Once you have `stateth` installed, and you have Docker running locally, you have to:
 
 1. Run `stateth` and keep it running in the background
-```
-stateth --rm --grafana-dashboards-folder $GOPATH/src/github.com/ethersphere/grafana-dashboards --influxdb-database metrics
+
+```bash
+$ stateth --rm --grafana-dashboards-folder $GOPATH/src/github.com/ethersphere/grafana-dashboards --influxdb-database metrics
 ```
 
 2. Run `swarm` with at least the following params:
-```
+
+```bash
 --metrics \
 --metrics.influxdb.export \
 --metrics.influxdb.endpoint "http://localhost:8086" \
@@ -245,10 +336,10 @@ Please make sure your contributions adhere to our coding guidelines:
 
 ## License
 
-The go-ethereum library (i.e. all code outside of the `cmd` directory) is licensed under the
+The swarm library (i.e. all code outside of the `cmd` directory) is licensed under the
 [GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.en.html), also
 included in our repository in the `COPYING.LESSER` file.
 
-The go-ethereum binaries (i.e. all code inside of the `cmd` directory) is licensed under the
+The swarm binaries (i.e. all code inside of the `cmd` directory) is licensed under the
 [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html), also included
 in our repository in the `COPYING` file.
