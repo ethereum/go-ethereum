@@ -39,6 +39,8 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
+const trackChunksPageSize = 7500
+
 func uploadAndSyncCmd(ctx *cli.Context) error {
 	// use input seed if it has been set
 	if inputSeed != 0 {
@@ -179,9 +181,20 @@ func trackChunks(testData []byte, submitMetrics bool) error {
 func getChunksBitVectorFromHost(client *rpc.Client, addrs []storage.Address) (string, error) {
 	var hostChunks string
 
-	err := client.Call(&hostChunks, "bzz_has", addrs)
-	if err != nil {
-		return "", err
+	for len(addrs) > 0 {
+		var pageChunks string
+		// get current page size, so that we avoid a slice out of bounds on the last page
+		pagesize := trackChunksPageSize
+		if cap(addrs) < trackChunksPageSize {
+			pagesize = cap(addrs)
+		}
+
+		err := client.Call(&pageChunks, "bzz_has", addrs[:pagesize])
+		if err != nil {
+			return "", err
+		}
+		hostChunks += pageChunks
+		addrs = addrs[pagesize:]
 	}
 
 	return hostChunks, nil
