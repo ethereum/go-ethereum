@@ -737,7 +737,7 @@ func (pool *TxPool) AddLocal(tx *types.Transaction) error {
 // AddRemotes enqueues a batch of transactions into the pool if they are valid. If the
 // senders are not among the locally tracked ones, full pricing constraints will apply.
 //
-// This method is used to add transactions from the p2p and does not wait for pool
+// This method is used to add transactions from the p2p network and does not wait for pool
 // reorganization and internal event propagation.
 func (pool *TxPool) AddRemotes(txs []*types.Transaction) []error {
 	return pool.addTxs(txs, false, false)

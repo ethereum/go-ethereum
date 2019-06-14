@@ -280,7 +280,7 @@ func TestTransactionQueue(t *testing.T) {
 	pool.currentState.SetNonce(from, 2)
 	pool.enqueueTx(tx.Hash(), tx)
 
-	pool.promoteExecutables([]common.Address{from})
+	<-pool.promoteExecutables([]common.Address{from})
 	if _, ok := pool.pending[from].txs.items[tx.Nonce()]; ok {
 		t.Error("expected transaction to be in tx pool")
 	}
