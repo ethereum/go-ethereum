@@ -83,7 +83,7 @@ type peer struct {
 	// Checkpoint relative fields
 	advertisedCheckpoint params.TrustedCheckpoint
 	registeredHeight     uint64
-	isHardcode           bool // Indicator whether the checkpoint is hardcoded
+	hardcodedCheckpoint  bool // Indicator whether the checkpoint is hardcoded
 
 	id string
 
@@ -702,7 +702,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		if err := recv.get("checkpoint/value", &p.advertisedCheckpoint); hardcoded != nil &&
 			(err != nil || p.advertisedCheckpoint.SectionIndex < hardcoded.SectionIndex) {
 			p.advertisedCheckpoint = *hardcoded
-			p.isHardcode = true
+			p.hardcodedCheckpoint = true
 		}
 		recv.get("checkpoint/registerHeight", &p.registeredHeight)
 

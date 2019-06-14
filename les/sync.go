@@ -96,7 +96,7 @@ func (pm *ProtocolManager) validateCheckpoint(peer *peer) error {
 	if err != nil {
 		return err
 	}
-	events := pm.reg.contract.LookupCheckpointEvent(logs, cp.SectionIndex, cp.Hash())
+	events := pm.reg.contract.LookupCheckpointEvents(logs, cp.SectionIndex, cp.Hash())
 	if len(events) == 0 {
 		return errInvalidCheckpoint
 	}
@@ -108,11 +108,11 @@ func (pm *ProtocolManager) validateCheckpoint(peer *peer) error {
 	for _, event := range events {
 		signatures = append(signatures, append(event.R[:], append(event.S[:], event.V)...))
 	}
-	valid, signers := pm.reg.verifySigner(index, hash, signatures)
+	valid, signers := pm.reg.verifySigners(index, hash, signatures)
 	if !valid {
 		return errInvalidCheckpoint
 	}
-	log.Debug("Verify advertised checkpoint successfully", "peer", peer.id, "signernum", len(signers))
+	log.Warn("Verifed advertised checkpoint", "peer", peer.id, "signers", len(signers))
 	return nil
 }
 
@@ -144,8 +144,8 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		log.Debug("Disable checkpoint syncing", "reason", "empty checkpoint")
 	case latest.Number.Uint64() >= (cp.SectionIndex+1)*pm.iConfig.ChtSize-1:
 		mode = lightSync
-		log.Debug("Disable checkpoint syncing", "reason", "local chain beyonds the checkpoint")
-	case peer.isHardcode:
+		log.Debug("Disable checkpoint syncing", "reason", "local chain beyond the checkpoint")
+	case peer.hardcodedCheckpoint:
 		mode = legacyCheckpointSync
 		log.Debug("Disable checkpoint syncing", "reason", "checkpoint is hardcoded")
 	case pm.reg == nil || !pm.reg.isRunning():

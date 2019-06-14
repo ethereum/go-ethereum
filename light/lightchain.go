@@ -131,7 +131,7 @@ func (lc *LightChain) AddTrustedCheckpoint(cp *params.TrustedCheckpoint) {
 	if lc.odr.BloomIndexer() != nil {
 		lc.odr.BloomIndexer().AddCheckpoint(cp.SectionIndex, cp.SectionHead)
 	}
-	log.Info("Added trusted checkpoint", "chain", cp.Name, "block", (cp.SectionIndex+1)*lc.indexerConfig.ChtSize-1, "hash", cp.SectionHead)
+	log.Info("Added trusted checkpoint", "block", (cp.SectionIndex+1)*lc.indexerConfig.ChtSize-1, "hash", cp.SectionHead)
 }
 
 func (lc *LightChain) getProcInterrupt() bool {

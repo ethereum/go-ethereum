@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Package registrar is a an on-chain light client checkpoint oracle.
 package registrar
 
 //go:generate abigen --sol contract/registrar.sol --pkg contract --out contract/registrar.go
@@ -29,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+// Registrar is a Go wrapper around an on-chain light client checkpoint oracle.
 type Registrar struct {
 	contract *contract.Contract
 }
@@ -47,9 +49,9 @@ func (registrar *Registrar) Contract() *contract.Contract {
 	return registrar.contract
 }
 
-// LookupCheckpointEvent searches checkpoint event for specific section in the
+// LookupCheckpointEvents searches checkpoint event for specific section in the
 // given log batches.
-func (registrar *Registrar) LookupCheckpointEvent(blockLogs [][]*types.Log, section uint64, hash common.Hash) []*contract.ContractNewCheckpointVote {
+func (registrar *Registrar) LookupCheckpointEvents(blockLogs [][]*types.Log, section uint64, hash common.Hash) []*contract.ContractNewCheckpointVote {
 	var votes []*contract.ContractNewCheckpointVote
 
 	for _, logs := range blockLogs {

@@ -61,7 +61,6 @@ var (
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
 	MainnetTrustedCheckpoint = &TrustedCheckpoint{
-		Name:         "mainnet",
 		SectionIndex: 227,
 		SectionHead:  common.HexToHash("0xa2e0b25d72c2fc6e35a7f853cdacb193b4b4f95c606accf7f8fa8415283582c7"),
 		CHTRoot:      common.HexToHash("0xf69bdd4053b95b61a27b106a0e86103d791edd8574950dc96aa351ab9b9f1aa0"),
@@ -86,7 +85,6 @@ var (
 
 	// TestnetTrustedCheckpoint contains the light client trusted checkpoint for the Ropsten test network.
 	TestnetTrustedCheckpoint = &TrustedCheckpoint{
-		Name:         "testnet",
 		SectionIndex: 161,
 		SectionHead:  common.HexToHash("0x5378afa734e1feafb34bcca1534c4d96952b754579b96a4afb23d5301ecececc"),
 		CHTRoot:      common.HexToHash("0x1cf2b071e7443a62914362486b613ff30f60cea0d9c268ed8c545f876a3ee60c"),
@@ -111,7 +109,6 @@ var (
 			Epoch:  30000,
 		},
 		CheckpointConfig: &CheckpointContractConfig{
-			Name:    "rinkeby",
 			Address: common.HexToAddress("0x62652ed8e969ce7bd5e3dd13590efa1e569215f1"),
 			Signers: []common.Address{
 				common.HexToAddress("0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3"), // Peter
@@ -125,7 +122,6 @@ var (
 
 	// RinkebyTrustedCheckpoint contains the light client trusted checkpoint for the Rinkeby test network.
 	RinkebyTrustedCheckpoint = &TrustedCheckpoint{
-		Name:         "rinkeby",
 		SectionIndex: 125,
 		SectionHead:  common.HexToHash("0x8a738386f6bb34add15846f8f49c4c519a2f32519096e792b9f43bcb407c831c"),
 		CHTRoot:      common.HexToHash("0xa1e5720a9bad4dce794f129e4ac6744398197b652868011486a6f89c8ec84a75"),
@@ -152,7 +148,6 @@ var (
 
 	// GoerliTrustedCheckpoint contains the light client trusted checkpoint for the Görli test network.
 	GoerliTrustedCheckpoint = &TrustedCheckpoint{
-		Name:         "goerli",
 		SectionIndex: 9,
 		SectionHead:  common.HexToHash("0x8e223d827391eee53b07cb8ee057dbfa11c93e0b45352188c783affd7840a921"),
 		CHTRoot:      common.HexToHash("0xe0a817ac69b36c1e437c5b0cff9e764853f5115702b5f66d451b665d6afb7e78"),
@@ -182,7 +177,6 @@ var (
 // used to start light syncing from this checkpoint and avoid downloading the
 // entire header chain while still being able to securely access old headers/logs.
 type TrustedCheckpoint struct {
-	Name         string      `json:"-"`
 	SectionIndex uint64      `json:"sectionIndex"`
 	SectionHead  common.Hash `json:"sectionHead"`
 	CHTRoot      common.Hash `json:"chtRoot"`
@@ -215,8 +209,7 @@ func (c *TrustedCheckpoint) Empty() bool {
 // CheckpointContractConfig represents a set of checkpoint contract config
 // which used for light client checkpoint syncing.
 type CheckpointContractConfig struct {
-	Name      string           `json:"-"`
-	Address   common.Address   `json:"contractAddr"`
+	Address   common.Address   `json:"address"`
 	Signers   []common.Address `json:"signers"`
 	Threshold uint64           `json:"threshold"`
 }
