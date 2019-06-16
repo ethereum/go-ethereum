@@ -168,15 +168,24 @@ var (
 	testBalance = big.NewInt(2e10)
 )
 
-func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
-	// Generate test chain.
-	genesis, blocks := generateTestChain()
+func newTestBackend(t *testing.T, withTx bool) (*node.Node, []*types.Block) {
+	var (
+		genesis *core.Genesis
+		blocks  []*types.Block
+	)
+
+	// Generate test chain
+	if withTx {
+		genesis, blocks = generateTestChainWithTx(t)
+	} else {
+		genesis, blocks = generateTestChain()
+	}
 
 	// Start Ethereum service.
 	var ethservice *eth.Ethereum
 	n, err := node.New(&node.Config{})
 	n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		config := &eth.Config{Genesis: genesis}
+		config := &eth.Config{Genesis: genesis, NoPrefetch: true}
 		config.Ethash.PowMode = ethash.ModeFake
 		ethservice, err = eth.New(ctx, config)
 		return ethservice, err
@@ -212,8 +221,47 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 	return genesis, blocks
 }
 
+func generateTestChainWithTx(t *testing.T) (*core.Genesis, []*types.Block) {
+	db := rawdb.NewMemoryDatabase()
+	config := params.AllEthashProtocolChanges
+	signer := types.NewEIP155Signer(config.ChainID)
+	genesis := &core.Genesis{
+		Config:    config,
+		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
+		ExtraData: []byte("test genesis"),
+		Timestamp: 9000,
+	}
+	generate := func(i int, g *core.BlockGen) {
+		g.OffsetTime(5)
+		g.SetExtra([]byte("test"))
+
+		switch i {
+		case 0:
+			tx, err := types.SignTx(types.NewTransaction(g.TxNonce(testAddr), common.HexToAddress("0x1"), big.NewInt(1), 21000, big.NewInt(1), nil), signer, testKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			g.AddTx(tx)
+		case 1:
+			tx, err := types.SignTx(types.NewTransaction(g.TxNonce(testAddr), common.HexToAddress("0x2"), big.NewInt(2), 21000, big.NewInt(1), nil), signer, testKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			g.AddTx(tx)
+		}
+	}
+	gblock := genesis.ToBlock(db)
+	engine := ethash.NewFaker()
+	blocks, _ := core.GenerateChain(config, gblock, engine, db, 2, generate)
+	blocks = append([]*types.Block{gblock}, blocks...)
+
+	return genesis, blocks
+}
+
 func TestHeader(t *testing.T) {
-	backend, chain := newTestBackend(t)
+	backend, chain := newTestBackend(t, false)
 	client, _ := backend.Attach()
 	defer backend.Stop()
 	defer client.Close()
@@ -257,7 +305,7 @@ func TestHeader(t *testing.T) {
 }
 
 func TestBalanceAt(t *testing.T) {
-	backend, _ := newTestBackend(t)
+	backend, _ := newTestBackend(t, false)
 	client, _ := backend.Attach()
 	defer backend.Stop()
 	defer client.Close()
@@ -303,7 +351,7 @@ func TestBalanceAt(t *testing.T) {
 }
 
 func TestTransactionInBlockInterrupted(t *testing.T) {
-	backend, _ := newTestBackend(t)
+	backend, _ := newTestBackend(t, false)
 	client, _ := backend.Attach()
 	defer backend.Stop()
 	defer client.Close()
@@ -317,5 +365,48 @@ func TestTransactionInBlockInterrupted(t *testing.T) {
 	}
 	if err == nil {
 		t.Fatal("error should not be nil")
+	}
+}
+
+func TestTransactionInBlock(t *testing.T) {
+	backend, blocks := newTestBackend(t, true)
+	client, _ := backend.Attach()
+	defer backend.Stop()
+	defer client.Close()
+
+	ec := NewClient(client)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	tx, err := ec.TransactionInBlock(ctx, blocks[1].Hash(), 0)
+	if err != nil {
+		t.Fatalf("TransactionInBlock error = %q", err)
+	}
+	if tx == nil {
+		t.Fatal("transaction should not be nil")
+	}
+}
+
+func TestBlockReceipts(t *testing.T) {
+	backend, blocks := newTestBackend(t, true)
+	client, _ := backend.Attach()
+	defer backend.Stop()
+	defer client.Close()
+
+	ec := NewClient(client)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	receipts, err := ec.BlockReceipts(ctx, big.NewInt(1))
+	if err != nil {
+		t.Fatalf("BlockReceipts error = %q", err)
+	}
+
+	if len(receipts) == 0 {
+		t.Fatal("receipts should not be 0 len")
+	}
+
+	if receipts[0].BlockHash != blocks[1].Hash() {
+		t.Fatalf("BlockReceipts block hash mismatch, got %v, want %v", receipts[0].BlockHash, blocks[1].Hash())
 	}
 }
