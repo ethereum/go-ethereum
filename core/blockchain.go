@@ -46,6 +46,10 @@ import (
 )
 
 var (
+	headBlockGauge     = metrics.NewRegisteredGauge("chain/head/block", nil)
+	headHeaderGauge    = metrics.NewRegisteredGauge("chain/head/header", nil)
+	headFastBlockGauge = metrics.NewRegisteredGauge("chain/head/receipt", nil)
+
 	accountReadTimer   = metrics.NewRegisteredTimer("chain/account/reads", nil)
 	accountHashTimer   = metrics.NewRegisteredTimer("chain/account/hashes", nil)
 	accountUpdateTimer = metrics.NewRegisteredTimer("chain/account/updates", nil)
@@ -332,6 +336,7 @@ func (bc *BlockChain) loadLastState() error {
 	}
 	// Everything seems to be fine, set as the head block
 	bc.currentBlock.Store(currentBlock)
+	headBlockGauge.Update(int64(currentBlock.NumberU64()))
 
 	// Restore the last known head header
 	currentHeader := currentBlock.Header()
@@ -344,12 +349,14 @@ func (bc *BlockChain) loadLastState() error {
 
 	// Restore the last known head fast block
 	bc.currentFastBlock.Store(currentBlock)
+	headFastBlockGauge.Update(int64(currentBlock.NumberU64()))
+
 	if head := rawdb.ReadHeadFastBlockHash(bc.db); head != (common.Hash{}) {
 		if block := bc.GetBlockByHash(head); block != nil {
 			bc.currentFastBlock.Store(block)
+			headFastBlockGauge.Update(int64(block.NumberU64()))
 		}
 	}
-
 	// Issue a status log for the user
 	currentFastBlock := bc.CurrentFastBlock()
 
@@ -388,6 +395,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 			}
 			rawdb.WriteHeadBlockHash(db, newHeadBlock.Hash())
 			bc.currentBlock.Store(newHeadBlock)
+			headBlockGauge.Update(int64(newHeadBlock.NumberU64()))
 		}
 
 		// Rewind the fast block in a simpleton way to the target head
@@ -399,6 +407,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 			}
 			rawdb.WriteHeadFastBlockHash(db, newHeadFastBlock.Hash())
 			bc.currentFastBlock.Store(newHeadFastBlock)
+			headFastBlockGauge.Update(int64(newHeadFastBlock.NumberU64()))
 		}
 	}
 
@@ -450,6 +459,7 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	// If all checks out, manually set the head block
 	bc.chainmu.Lock()
 	bc.currentBlock.Store(block)
+	headBlockGauge.Update(int64(block.NumberU64()))
 	bc.chainmu.Unlock()
 
 	log.Info("Committed new head block", "number", block.Number(), "hash", hash)
@@ -522,9 +532,12 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	bc.genesisBlock = genesis
 	bc.insert(bc.genesisBlock)
 	bc.currentBlock.Store(bc.genesisBlock)
+	headBlockGauge.Update(int64(bc.genesisBlock.NumberU64()))
+
 	bc.hc.SetGenesis(bc.genesisBlock.Header())
 	bc.hc.SetCurrentHeader(bc.genesisBlock.Header())
 	bc.currentFastBlock.Store(bc.genesisBlock)
+	headFastBlockGauge.Update(int64(bc.genesisBlock.NumberU64()))
 
 	return nil
 }
@@ -598,6 +611,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 	rawdb.WriteHeadBlockHash(bc.db, block.Hash())
 
 	bc.currentBlock.Store(block)
+	headBlockGauge.Update(int64(block.NumberU64()))
 
 	// If the block is better than our head or is on a different chain, force update heads
 	if updateHeads {
@@ -605,6 +619,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 		rawdb.WriteHeadFastBlockHash(bc.db, block.Hash())
 
 		bc.currentFastBlock.Store(block)
+		headFastBlockGauge.Update(int64(block.NumberU64()))
 	}
 }
 
@@ -862,11 +877,13 @@ func (bc *BlockChain) Rollback(chain []common.Hash) {
 			newFastBlock := bc.GetBlock(currentFastBlock.ParentHash(), currentFastBlock.NumberU64()-1)
 			rawdb.WriteHeadFastBlockHash(bc.db, newFastBlock.Hash())
 			bc.currentFastBlock.Store(newFastBlock)
+			headFastBlockGauge.Update(int64(newFastBlock.NumberU64()))
 		}
 		if currentBlock := bc.CurrentBlock(); currentBlock.Hash() == hash {
 			newBlock := bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
 			rawdb.WriteHeadBlockHash(bc.db, newBlock.Hash())
 			bc.currentBlock.Store(newBlock)
+			headBlockGauge.Update(int64(newBlock.NumberU64()))
 		}
 	}
 	// Truncate ancient data which exceeds the current header.
@@ -952,6 +969,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			if bc.GetTd(currentFastBlock.Hash(), currentFastBlock.NumberU64()).Cmp(td) < 0 {
 				rawdb.WriteHeadFastBlockHash(bc.db, head.Hash())
 				bc.currentFastBlock.Store(head)
+				headFastBlockGauge.Update(int64(head.NumberU64()))
 				isCanonical = true
 			}
 		}

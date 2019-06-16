@@ -42,7 +42,10 @@ var (
 	errNotRegistered     = errors.New("peer is not registered")
 )
 
-const maxResponseErrors = 50 // number of invalid responses tolerated (makes the protocol less brittle but still avoids spam)
+const (
+	maxRequestErrors  = 20 // number of invalid requests tolerated (makes the protocol less brittle but still avoids spam)
+	maxResponseErrors = 50 // number of invalid responses tolerated (makes the protocol less brittle but still avoids spam)
+)
 
 // capacity limitation for parameter updates
 const (
@@ -69,7 +72,6 @@ const (
 
 type peer struct {
 	*p2p.Peer
-
 	rw p2p.MsgReadWriter
 
 	version int    // Protocol version negotiated
@@ -89,6 +91,7 @@ type peer struct {
 	// RequestProcessed is called
 	responseLock  sync.Mutex
 	responseCount uint64
+	invalidCount  uint32
 
 	poolEntry      *poolEntry
 	hasBlock       func(common.Hash, uint64, bool) bool
@@ -551,7 +554,14 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 			send = send.add("serveHeaders", nil)
 			send = send.add("serveChainSince", uint64(0))
 			send = send.add("serveStateSince", uint64(0))
-			send = send.add("serveRecentState", uint64(core.TriesInMemory-4))
+
+			// If local ethereum node is running in archive mode, advertise ourselves we have
+			// all version state data. Otherwise only recent state is available.
+			stateRecent := uint64(core.TriesInMemory - 4)
+			if server.archiveMode {
+				stateRecent = 0
+			}
+			send = send.add("serveRecentState", stateRecent)
 			send = send.add("txRelay", nil)
 		}
 		send = send.add("flowControl/BL", server.defParams.BufLimit)

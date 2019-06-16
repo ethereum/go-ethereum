@@ -94,17 +94,18 @@ type freezerTable struct {
 	// to count how many historic items have gone missing.
 	itemOffset uint32 // Offset (number of discarded items)
 
-	headBytes  uint32        // Number of bytes written to the head file
-	readMeter  metrics.Meter // Meter for measuring the effective amount of data read
-	writeMeter metrics.Meter // Meter for measuring the effective amount of data written
+	headBytes   uint32          // Number of bytes written to the head file
+	readMeter   metrics.Meter   // Meter for measuring the effective amount of data read
+	writeMeter  metrics.Meter   // Meter for measuring the effective amount of data written
+	sizeCounter metrics.Counter // Counter for tracking the combined size of all freezer tables
 
 	logger log.Logger   // Logger with database path and table name ambedded
 	lock   sync.RWMutex // Mutex protecting the data file descriptors
 }
 
 // newTable opens a freezer table with default settings - 2G files
-func newTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter, disableSnappy bool) (*freezerTable, error) {
-	return newCustomTable(path, name, readMeter, writeMeter, 2*1000*1000*1000, disableSnappy)
+func newTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter, sizeCounter metrics.Counter, disableSnappy bool) (*freezerTable, error) {
+	return newCustomTable(path, name, readMeter, writeMeter, sizeCounter, 2*1000*1000*1000, disableSnappy)
 }
 
 // openFreezerFileForAppend opens a freezer table file and seeks to the end
@@ -148,7 +149,7 @@ func truncateFreezerFile(file *os.File, size int64) error {
 // newCustomTable opens a freezer table, creating the data and index files if they are
 // non existent. Both files are truncated to the shortest common length to ensure
 // they don't go out of sync.
-func newCustomTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter, maxFilesize uint32, noCompression bool) (*freezerTable, error) {
+func newCustomTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter, sizeCounter metrics.Counter, maxFilesize uint32, noCompression bool) (*freezerTable, error) {
 	// Ensure the containing directory exists and open the indexEntry file
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return nil, err
@@ -171,6 +172,7 @@ func newCustomTable(path string, name string, readMeter metrics.Meter, writeMete
 		files:         make(map[uint32]*os.File),
 		readMeter:     readMeter,
 		writeMeter:    writeMeter,
+		sizeCounter:   sizeCounter,
 		name:          name,
 		path:          path,
 		logger:        log.New("database", path, "table", name),
@@ -181,6 +183,14 @@ func newCustomTable(path string, name string, readMeter metrics.Meter, writeMete
 		tab.Close()
 		return nil, err
 	}
+	// Initialize the starting size counter
+	size, err := tab.sizeNolock()
+	if err != nil {
+		tab.Close()
+		return nil, err
+	}
+	tab.sizeCounter.Inc(int64(size))
+
 	return tab, nil
 }
 
@@ -321,6 +331,11 @@ func (t *freezerTable) truncate(items uint64) error {
 	if atomic.LoadUint64(&t.items) <= items {
 		return nil
 	}
+	// We need to truncate, save the old size for metrics tracking
+	oldSize, err := t.sizeNolock()
+	if err != nil {
+		return err
+	}
 	// Something's out of sync, truncate the table's offset index
 	t.logger.Warn("Truncating freezer table", "items", t.items, "limit", items)
 	if err := truncateFreezerFile(t.index, int64(items+1)*indexEntrySize); err != nil {
@@ -355,6 +370,14 @@ func (t *freezerTable) truncate(items uint64) error {
 	// All data files truncated, set internal counters and return
 	atomic.StoreUint64(&t.items, items)
 	atomic.StoreUint32(&t.headBytes, expected.offset)
+
+	// Retrieve the new size and update the total size counter
+	newSize, err := t.sizeNolock()
+	if err != nil {
+		return err
+	}
+	t.sizeCounter.Dec(int64(oldSize - newSize))
+
 	return nil
 }
 
@@ -483,7 +506,10 @@ func (t *freezerTable) Append(item uint64, blob []byte) error {
 	}
 	// Write indexEntry
 	t.index.Write(idx.marshallBinary())
+
 	t.writeMeter.Mark(int64(bLen + indexEntrySize))
+	t.sizeCounter.Inc(int64(bLen + indexEntrySize))
+
 	atomic.AddUint64(&t.items, 1)
 	return nil
 }
@@ -562,6 +588,12 @@ func (t *freezerTable) size() (uint64, error) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
+	return t.sizeNolock()
+}
+
+// sizeNolock returns the total data size in the freezer table without obtaining
+// the mutex first.
+func (t *freezerTable) sizeNolock() (uint64, error) {
 	stat, err := t.index.Stat()
 	if err != nil {
 		return 0, err
