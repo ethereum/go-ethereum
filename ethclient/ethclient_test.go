@@ -408,6 +408,8 @@ func TestBlockReceipts(t *testing.T) {
 
 	if receipts[0].BlockHash != blocks[1].Hash() {
 		t.Fatalf("BlockReceipts block hash mismatch, got %v, want %v", receipts[0].BlockHash, blocks[1].Hash())
+	}
+}
 
 func TestChainID(t *testing.T) {
 	backend, _ := newTestBackend(t, false)
