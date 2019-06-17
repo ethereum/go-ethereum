@@ -1158,7 +1158,7 @@ func NewHandler(be *eth.EthAPIBackend) (http.Handler, error) {
 	h := &relay.Handler{Schema: s}
 
 	mux := http.NewServeMux()
-	mux.Handle("/", GraphiQL{})
+	mux.HandleFunc("/", (GraphiQL{}).webHandler)
 	mux.Handle("/graphql", h)
 	mux.Handle("/graphql/", h)
 	return mux, nil
