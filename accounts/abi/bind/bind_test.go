@@ -1170,7 +1170,7 @@ func TestGolangBindings(t *testing.T) {
 	// Generate the test suite for all the contracts
 	for i, tt := range bindTests {
 		// Generate the binding and create a Go source file in the workspace
-		bind, err := Bind([]string{tt.name}, []string{tt.abi}, []string{tt.bytecode}, tt.fsigs, "bindtest", LangGo)
+		bind, err := Bind([]string{tt.name}, []string{tt.abi}, []string{tt.bytecode}, tt.fsigs, "bindtest", LangGo, nil)
 		if err != nil {
 			t.Fatalf("test %d: failed to generate binding: %v", i, err)
 		}
@@ -1591,7 +1591,7 @@ public class Test {
 		},
 	}
 	for i, c := range cases {
-		binding, err := Bind([]string{c.name}, []string{c.abi}, []string{c.bytecode}, nil, "bindtest", LangJava)
+		binding, err := Bind([]string{c.name}, []string{c.abi}, []string{c.bytecode}, nil, "bindtest", LangJava, nil)
 		if err != nil {
 			t.Fatalf("test %d: failed to generate binding: %v", i, err)
 		}
