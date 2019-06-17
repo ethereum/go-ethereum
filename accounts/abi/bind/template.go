@@ -530,9 +530,14 @@ public class {{.Type}} {
 	// deploy deploys a new Ethereum contract, binding an instance of {{.Type}} to it.
 	public static {{.Type}} deploy(TransactOpts auth, EthereumClient client{{range .Constructor.Inputs}}, {{bindtype .Type $structs}} {{.Name}}{{end}}) throws Exception {
 		Interfaces args = Geth.newInterfaces({{(len .Constructor.Inputs)}});
+		// "link" contract to dependent libraries by deploying them first.
+		{{range $pattern, $name := .Libraries}}
+		{{capitalise $name}} {{decapitalise $name}}Inst = {{capitalise $name}}.deploy(auth, client);
+		bytecode.replace("__${{$pattern}}$__", {{decapitalise $name}}Inst.Address);
+		{{end}}
 		{{range $index, $element := .Constructor.Inputs}}Interface arg{{$index}} = Geth.newInterface();arg{{$index}}.set{{namedtype (bindtype .Type $structs) .Type}}({{.Name}});args.set({{$index}},arg{{$index}});
 		{{end}}
-		return new {{.Type}}(Geth.deployContract(auth, ABI, Geth.decodeFromHex(BYTECODE), client, args));
+		return new {{.Type}}(Geth.deployContract(auth, ABI, Geth.decodeFromHex(bytecode), client, args));
 	}
 
 	// Internal constructor used by contract deployment.
