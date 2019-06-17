@@ -1737,26 +1737,6 @@ func benchmarkFuturePromotion(b *testing.B, size int) {
 	}
 }
 
-// Benchmarks the speed of iterative transaction insertion.
-func BenchmarkPoolInsert(b *testing.B) {
-	// Generate a batch of transactions to enqueue into the pool
-	pool, key := setupTxPool()
-	defer pool.Stop()
-
-	account, _ := deriveSender(transaction(0, 0, key))
-	pool.currentState.AddBalance(account, big.NewInt(1000000))
-
-	txs := make(types.Transactions, b.N)
-	for i := 0; i < b.N; i++ {
-		txs[i] = transaction(uint64(i), 100000, key)
-	}
-	// Benchmark importing the transactions into the queue
-	b.ResetTimer()
-	for _, tx := range txs {
-		pool.AddRemote(tx)
-	}
-}
-
 // Benchmarks the speed of batched transaction insertion.
 func BenchmarkPoolBatchInsert100(b *testing.B)   { benchmarkPoolBatchInsert(b, 100) }
 func BenchmarkPoolBatchInsert1000(b *testing.B)  { benchmarkPoolBatchInsert(b, 1000) }
