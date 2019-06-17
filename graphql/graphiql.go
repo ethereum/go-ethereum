@@ -52,7 +52,7 @@ func errorJSON(msg string) []byte {
 	return buf.Bytes()
 }
 
-func (h GraphiQL) webHandler(w http.ResponseWriter, r *http.Request) {
+func (h GraphiQL) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		respond(w, errorJSON("only GET requests are supported"), http.StatusMethodNotAllowed)
 		return
