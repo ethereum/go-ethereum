@@ -24,14 +24,14 @@ import (
 // configured string.
 type table struct {
 	db     ethdb.Database
-	prefix string
+	prefix []byte
 }
 
 // NewTable returns a database object that prefixes all keys with a given string.
 func NewTable(db ethdb.Database, prefix string) ethdb.Database {
 	return &table{
 		db:     db,
-		prefix: prefix,
+		prefix: []byte(prefix),
 	}
 }
 
@@ -42,12 +42,12 @@ func (t *table) Close() error {
 
 // Has retrieves if a prefixed version of a key is present in the database.
 func (t *table) Has(key []byte) (bool, error) {
-	return t.db.Has(append([]byte(t.prefix), key...))
+	return t.db.Has(append(t.prefix, key...))
 }
 
 // Get retrieves the given prefixed key if it's present in the database.
 func (t *table) Get(key []byte) ([]byte, error) {
-	return t.db.Get(append([]byte(t.prefix), key...))
+	return t.db.Get(append(t.prefix, key...))
 }
 
 // HasAncient is a noop passthrough that just forwards the request to the underlying
@@ -95,12 +95,12 @@ func (t *table) Sync() error {
 // Put inserts the given value into the database at a prefixed version of the
 // provided key.
 func (t *table) Put(key []byte, value []byte) error {
-	return t.db.Put(append([]byte(t.prefix), key...), value)
+	return t.db.Put(append(t.prefix, key...), value)
 }
 
 // Delete removes the given prefixed key from the database.
 func (t *table) Delete(key []byte) error {
-	return t.db.Delete(append([]byte(t.prefix), key...))
+	return t.db.Delete(append(t.prefix, key...))
 }
 
 // NewIterator creates a binary-alphabetical iterator over the entire keyspace
@@ -119,7 +119,7 @@ func (t *table) NewIteratorWithStart(start []byte) ethdb.Iterator {
 // NewIteratorWithPrefix creates a binary-alphabetical iterator over a subset
 // of database content with a particular key prefix.
 func (t *table) NewIteratorWithPrefix(prefix []byte) ethdb.Iterator {
-	return t.db.NewIteratorWithPrefix(append([]byte(t.prefix), prefix...))
+	return t.db.NewIteratorWithPrefix(append(t.prefix, prefix...))
 }
 
 // Stat returns a particular internal stat of the database.
@@ -137,12 +137,12 @@ func (t *table) Stat(property string) (string, error) {
 func (t *table) Compact(start []byte, limit []byte) error {
 	// If no start was specified, use the table prefix as the first value
 	if start == nil {
-		start = []byte(t.prefix)
+		start = t.prefix
 	}
 	// If no limit was specified, use the first element not matching the prefix
 	// as the limit
 	if limit == nil {
-		limit = []byte(t.prefix)
+		limit = t.prefix
 		for i := len(limit) - 1; i >= 0; i-- {
 			// Bump the current character, stopping if it doesn't overflow
 			limit[i]++
@@ -170,17 +170,17 @@ func (t *table) NewBatch() ethdb.Batch {
 // with a pre-configured string.
 type tableBatch struct {
 	batch  ethdb.Batch
-	prefix string
+	prefix []byte
 }
 
 // Put inserts the given value into the batch for later committing.
 func (b *tableBatch) Put(key, value []byte) error {
-	return b.batch.Put(append([]byte(b.prefix), key...), value)
+	return b.batch.Put(append(b.prefix, key...), value)
 }
 
 // Delete inserts the a key removal into the batch for later committing.
 func (b *tableBatch) Delete(key []byte) error {
-	return b.batch.Delete(append([]byte(b.prefix), key...))
+	return b.batch.Delete(append(b.prefix, key...))
 }
 
 // ValueSize retrieves the amount of data queued up for writing.
