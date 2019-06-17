@@ -42,7 +42,7 @@ var (
 
 	pkgFlag  = flag.String("pkg", "", "Package name to generate the binding into")
 	outFlag  = flag.String("out", "", "Output file for the generated binding (default = stdout)")
-	langFlag = flag.String("lang", "go", "Destination language for the bindings (go, java, objc)")
+	langFlag = flag.String("lang", "go", "Destination language for the bindings (go, java)")
 )
 
 func main() {
@@ -69,8 +69,6 @@ func main() {
 		lang = bind.LangGo
 	case "java":
 		lang = bind.LangJava
-	case "objc":
-		lang = bind.LangObjC
 	default:
 		fmt.Printf("Unsupported destination language \"%s\" (--lang)\n", *langFlag)
 		os.Exit(-1)
