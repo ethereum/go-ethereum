@@ -93,20 +93,20 @@ func newTestClient(t string) *testClient {
 	}
 }
 
-func (self *testClient) NeedData(ctx context.Context, hash []byte) (bool, func(context.Context) error) {
+func (self *testClient) NeedData(ctx context.Context, hash []byte) func(context.Context) error {
 	self.receivedHashes[string(hash)] = hash
 	if bytes.Equal(hash, hash0[:]) {
-		return false, func(context.Context) error {
+		return func(context.Context) error {
 			<-self.wait0
 			return nil
 		}
 	} else if bytes.Equal(hash, hash2[:]) {
-		return false, func(context.Context) error {
+		return func(context.Context) error {
 			<-self.wait2
 			return nil
 		}
 	}
-	return false, nil
+	return nil
 }
 
 func (self *testClient) Close() {}

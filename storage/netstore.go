@@ -18,291 +18,318 @@ package storage
 
 import (
 	"context"
-	"errors"
+	"encoding/hex"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
-	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/spancontext"
-	lru "github.com/hashicorp/golang-lru"
-
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/opentracing/opentracing-go"
 	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/syndtr/goleveldb/leveldb"
-	"golang.org/x/sync/singleflight"
+
+	lru "github.com/hashicorp/golang-lru"
 )
 
-const (
-	// capacity for the fetchers LRU cache
-	fetchersCapacity = 500000
+type (
+	NewNetFetcherFunc func(ctx context.Context, addr Address, peers *sync.Map) NetFetcher
 )
 
-var (
-	ErrNoSuitablePeer = errors.New("no suitable peer")
-)
-
-// Fetcher is a struct which maintains state of remote requests.
-// Fetchers are stored in fetchers map and signal to all interested parties if a given chunk is delivered
-// the mutex controls who closes the channel, and make sure we close the channel only once
-type Fetcher struct {
-	Delivered chan struct{} // when closed, it means that the chunk this Fetcher refers to is delivered
-
-	// it is possible for multiple actors to be delivering the same chunk,
-	// for example through syncing and through retrieve request. however we want the `Delivered` channel to be closed only
-	// once, even if we put the same chunk multiple times in the NetStore.
-	once sync.Once
-
-	CreatedAt time.Time // timestamp when the fetcher was created, used for metrics measuring lifetime of fetchers
-	CreatedBy string    // who created the fetcher - "request" or "syncing", used for metrics measuring lifecycle of fetchers
-
-	RequestedBySyncer bool // whether we have issued at least once a request through Offered/Wanted hashes flow
+type NetFetcher interface {
+	Request(hopCount uint8)
+	Offer(source *enode.ID)
 }
 
-// NewFetcher is a constructor for a Fetcher
-func NewFetcher() *Fetcher {
-	return &Fetcher{make(chan struct{}), sync.Once{}, time.Now(), "", false}
-}
-
-// SafeClose signals to interested parties (those waiting for a signal on fi.Delivered) that a chunk is delivered.
-// It closes the fi.Delivered channel through the sync.Once object, because it is possible for a chunk to be
-// delivered multiple times concurrently.
-func (fi *Fetcher) SafeClose() {
-	fi.once.Do(func() {
-		close(fi.Delivered)
-	})
-}
-
-type RemoteGetFunc func(ctx context.Context, req *Request, localID enode.ID) (*enode.ID, error)
-
-// NetStore is an extension of LocalStore
+// NetStore is an extension of local storage
 // it implements the ChunkStore interface
-// on request it initiates remote cloud retrieval
+// on request it initiates remote cloud retrieval using a fetcher
+// fetchers are unique to a chunk and are stored in fetchers LRU memory cache
+// fetchFuncFactory is a factory object to create a fetch function for a specific chunk address
 type NetStore struct {
 	chunk.Store
-	localID      enode.ID // our local enode - used when issuing RetrieveRequests
-	fetchers     *lru.Cache
-	putMu        sync.Mutex
-	requestGroup singleflight.Group
-	RemoteGet    RemoteGetFunc
+	mu                sync.Mutex
+	fetchers          *lru.Cache
+	NewNetFetcherFunc NewNetFetcherFunc
+	closeC            chan struct{}
 }
 
-// NewNetStore creates a new NetStore using the provided chunk.Store and localID of the node.
-func NewNetStore(store chunk.Store, localID enode.ID) *NetStore {
-	fetchers, _ := lru.New(fetchersCapacity)
+var fetcherTimeout = 2 * time.Minute // timeout to cancel the fetcher even if requests are coming in
 
-	return &NetStore{
-		fetchers: fetchers,
-		Store:    store,
-		localID:  localID,
+// NewNetStore creates a new NetStore object using the given local store. newFetchFunc is a
+// constructor function that can create a fetch function for a specific chunk address.
+func NewNetStore(store chunk.Store, nnf NewNetFetcherFunc) (*NetStore, error) {
+	fetchers, err := lru.New(defaultChunkRequestsCacheCapacity)
+	if err != nil {
+		return nil, err
 	}
+	return &NetStore{
+		Store:             store,
+		fetchers:          fetchers,
+		NewNetFetcherFunc: nnf,
+		closeC:            make(chan struct{}),
+	}, nil
 }
 
 // Put stores a chunk in localstore, and delivers to all requestor peers using the fetcher stored in
 // the fetchers cache
 func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, ch Chunk) (bool, error) {
-	n.putMu.Lock()
-	defer n.putMu.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 
-	log.Trace("netstore.put", "ref", ch.Address().String(), "mode", mode)
-
-	// put the chunk to the localstore, there should be no error
+	// put to the chunk to the store, there should be no error
 	exists, err := n.Store.Put(ctx, mode, ch)
 	if err != nil {
 		return exists, err
 	}
 
-	// notify RemoteGet (or SwarmSyncerClient) about a chunk delivery and it being stored
-	fi, ok := n.fetchers.Get(ch.Address().String())
-	if ok {
-		// we need SafeClose, because it is possible for a chunk to both be
-		// delivered through syncing and through a retrieve request
-		fii := fi.(*Fetcher)
-		fii.SafeClose()
-		log.Trace("netstore.put chunk delivered and stored", "ref", ch.Address().String())
-
-		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("netstore.fetcher.lifetime.%s", fii.CreatedBy), nil).UpdateSince(fii.CreatedAt)
-
-		// helper snippet to log if a chunk took way to long to be delivered
-		slowChunkDeliveryThreshold := 5 * time.Second
-		if time.Since(fii.CreatedAt) > slowChunkDeliveryThreshold {
-			log.Trace("netstore.put slow chunk delivery", "ref", ch.Address().String())
-		}
-
-		n.fetchers.Remove(ch.Address().String())
+	// if chunk is now put in the store, check if there was an active fetcher and call deliver on it
+	// (this delivers the chunk to requestors via the fetcher)
+	log.Trace("n.getFetcher", "ref", ch.Address())
+	if f := n.getFetcher(ch.Address()); f != nil {
+		log.Trace("n.getFetcher deliver", "ref", ch.Address())
+		f.deliver(ctx, ch)
 	}
-
 	return exists, nil
 }
 
+// Get retrieves the chunk from the NetStore DPA synchronously.
+// It calls NetStore.get, and if the chunk is not in local Storage
+// it calls fetch with the request, which blocks until the chunk
+// arrived or context is done
+func (n *NetStore) Get(rctx context.Context, mode chunk.ModeGet, ref Address) (Chunk, error) {
+	chunk, fetch, err := n.get(rctx, mode, ref)
+	if err != nil {
+		return nil, err
+	}
+	if chunk != nil {
+		// this is not measuring how long it takes to get the chunk for the localstore, but
+		// rather just adding a span for clarity when inspecting traces in Jaeger, in order
+		// to make it easier to reason which is the node that actually delivered a chunk.
+		_, sp := spancontext.StartSpan(
+			rctx,
+			"localstore.get")
+		defer sp.Finish()
+
+		return chunk, nil
+	}
+	return fetch(rctx)
+}
+
+// FetchFunc returns nil if the store contains the given address. Otherwise it returns a wait function,
+// which returns after the chunk is available or the context is done
+func (n *NetStore) FetchFunc(ctx context.Context, ref Address) func(context.Context) error {
+	chunk, fetch, _ := n.get(ctx, chunk.ModeGetRequest, ref)
+	if chunk != nil {
+		return nil
+	}
+	return func(ctx context.Context) error {
+		_, err := fetch(ctx)
+		return err
+	}
+}
+
 // Close chunk store
-func (n *NetStore) Close() error {
+func (n *NetStore) Close() (err error) {
+	close(n.closeC)
+
+	wg := sync.WaitGroup{}
+	for _, key := range n.fetchers.Keys() {
+		if f, ok := n.fetchers.Get(key); ok {
+			if fetch, ok := f.(*fetcher); ok {
+				wg.Add(1)
+				go func(fetch *fetcher) {
+					defer wg.Done()
+					fetch.cancel()
+
+					select {
+					case <-fetch.deliveredC:
+					case <-fetch.cancelledC:
+					}
+				}(fetch)
+			}
+		}
+	}
+	wg.Wait()
+
 	return n.Store.Close()
 }
 
-// Get retrieves a chunk
-// If it is not found in the LocalStore then it uses RemoteGet to fetch from the network.
-func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (Chunk, error) {
-	metrics.GetOrRegisterCounter("netstore.get", nil).Inc(1)
-	start := time.Now()
+// get attempts at retrieving the chunk from LocalStore
+// If it is not found then using getOrCreateFetcher:
+//     1. Either there is already a fetcher to retrieve it
+//     2. A new fetcher is created and saved in the fetchers cache
+// From here on, all Get will hit on this fetcher until the chunk is delivered
+// or all fetcher contexts are done.
+// It returns a chunk, a fetcher function and an error
+// If chunk is nil, the returned fetch function needs to be called with a context to return the chunk.
+func (n *NetStore) get(ctx context.Context, mode chunk.ModeGet, ref Address) (Chunk, func(context.Context) (Chunk, error), error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
 
-	ref := req.Addr
-
-	log.Trace("netstore.get", "ref", ref.String())
-
-	ch, err := n.Store.Get(ctx, mode, ref)
+	chunk, err := n.Store.Get(ctx, mode, ref)
 	if err != nil {
-		// TODO: fix comparison - we should be comparing against leveldb.ErrNotFound, this error should be wrapped.
+		// TODO: Fix comparison - we should be comparing against leveldb.ErrNotFound, this error should be wrapped.
 		if err != ErrChunkNotFound && err != leveldb.ErrNotFound {
-			log.Error("localstore get error", "err", err)
+			log.Debug("Received error from LocalStore other than ErrNotFound", "err", err)
 		}
+		// The chunk is not available in the LocalStore, let's get the fetcher for it, or create a new one
+		// if it doesn't exist yet
+		f := n.getOrCreateFetcher(ctx, ref)
+		// If the caller needs the chunk, it has to use the returned fetch function to get it
+		return nil, f.Fetch, nil
+	}
 
-		log.Trace("netstore.chunk-not-in-localstore", "ref", ref.String())
+	return chunk, nil, nil
+}
 
-		v, err, _ := n.requestGroup.Do(ref.String(), func() (interface{}, error) {
-			// currently we issue a retrieve request if a fetcher
-			// has already been created by a syncer for that particular chunk.
-			// so it is possible to
-			// have 2 in-flight requests for the same chunk - one by a
-			// syncer (offered/wanted/deliver flow) and one from
-			// here - retrieve request
-			fi, _, ok := n.GetOrCreateFetcher(ctx, ref, "request")
-			if ok {
-				err := n.RemoteFetch(ctx, req, fi)
-				if err != nil {
-					return nil, err
-				}
-			}
+// getOrCreateFetcher attempts at retrieving an existing fetchers
+// if none exists, creates one and saves it in the fetchers cache
+// caller must hold the lock
+func (n *NetStore) getOrCreateFetcher(ctx context.Context, ref Address) *fetcher {
+	if f := n.getFetcher(ref); f != nil {
+		return f
+	}
 
-			ch, err := n.Store.Get(ctx, mode, ref)
-			if err != nil {
-				log.Error(err.Error(), "ref", ref)
-				return nil, errors.New("item should have been in localstore, but it is not")
-			}
+	// no fetcher for the given address, we have to create a new one
+	key := hex.EncodeToString(ref)
+	// create the context during which fetching is kept alive
+	cctx, cancel := context.WithTimeout(ctx, fetcherTimeout)
+	// destroy is called when all requests finish
+	destroy := func() {
+		// remove fetcher from fetchers
+		n.fetchers.Remove(key)
+		// stop fetcher by cancelling context called when
+		// all requests cancelled/timedout or chunk is delivered
+		cancel()
+	}
+	// peers always stores all the peers which have an active request for the chunk. It is shared
+	// between fetcher and the NewFetchFunc function. It is needed by the NewFetchFunc because
+	// the peers which requested the chunk should not be requested to deliver it.
+	peers := &sync.Map{}
 
-			// fi could be nil (when ok == false) if the chunk was added to the NetStore between n.store.Get and the call to n.GetOrCreateFetcher
-			if fi != nil {
-				metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher.%s.request", fi.CreatedBy), nil).UpdateSince(start)
-			}
+	cctx, sp := spancontext.StartSpan(
+		cctx,
+		"netstore.fetcher",
+	)
 
-			return ch, nil
-		})
+	sp.LogFields(olog.String("ref", ref.String()))
+	fetcher := newFetcher(sp, ref, n.NewNetFetcherFunc(cctx, ref, peers), destroy, peers, n.closeC)
+	n.fetchers.Add(key, fetcher)
 
-		if err != nil {
-			log.Trace(err.Error(), "ref", ref)
+	return fetcher
+}
+
+// getFetcher retrieves the fetcher for the given address from the fetchers cache if it exists,
+// otherwise it returns nil
+func (n *NetStore) getFetcher(ref Address) *fetcher {
+	key := hex.EncodeToString(ref)
+	f, ok := n.fetchers.Get(key)
+	if ok {
+		return f.(*fetcher)
+	}
+	return nil
+}
+
+// RequestsCacheLen returns the current number of outgoing requests stored in the cache
+func (n *NetStore) RequestsCacheLen() int {
+	return n.fetchers.Len()
+}
+
+// One fetcher object is responsible to fetch one chunk for one address, and keep track of all the
+// peers who have requested it and did not receive it yet.
+type fetcher struct {
+	addr        Address          // address of chunk
+	chunk       Chunk            // fetcher can set the chunk on the fetcher
+	deliveredC  chan struct{}    // chan signalling chunk delivery to requests
+	cancelledC  chan struct{}    // chan signalling the fetcher has been cancelled (removed from fetchers in NetStore)
+	netFetcher  NetFetcher       // remote fetch function to be called with a request source taken from the context
+	cancel      func()           // cleanup function for the remote fetcher to call when all upstream contexts are called
+	peers       *sync.Map        // the peers which asked for the chunk
+	requestCnt  int32            // number of requests on this chunk. If all the requests are done (delivered or context is done) the cancel function is called
+	deliverOnce *sync.Once       // guarantees that we only close deliveredC once
+	span        opentracing.Span // measure retrieve time per chunk
+}
+
+// newFetcher creates a new fetcher object for the fiven addr. fetch is the function which actually
+// does the retrieval (in non-test cases this is coming from the network package). cancel function is
+// called either
+//     1. when the chunk has been fetched all peers have been either notified or their context has been done
+//     2. the chunk has not been fetched but all context from all the requests has been done
+// The peers map stores all the peers which have requested chunk.
+func newFetcher(span opentracing.Span, addr Address, nf NetFetcher, cancel func(), peers *sync.Map, closeC chan struct{}) *fetcher {
+	cancelOnce := &sync.Once{} // cancel should only be called once
+	return &fetcher{
+		addr:        addr,
+		deliveredC:  make(chan struct{}),
+		deliverOnce: &sync.Once{},
+		cancelledC:  closeC,
+		netFetcher:  nf,
+		cancel: func() {
+			cancelOnce.Do(func() {
+				cancel()
+			})
+		},
+		peers: peers,
+		span:  span,
+	}
+}
+
+// Fetch fetches the chunk synchronously, it is called by NetStore.Get is the chunk is not available
+// locally.
+func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
+	atomic.AddInt32(&f.requestCnt, 1)
+	defer func() {
+		// if all the requests are done the fetcher can be cancelled
+		if atomic.AddInt32(&f.requestCnt, -1) == 0 {
+			f.cancel()
+		}
+		f.span.Finish()
+	}()
+
+	// The peer asking for the chunk. Store in the shared peers map, but delete after the request
+	// has been delivered
+	peer := rctx.Value("peer")
+	if peer != nil {
+		f.peers.Store(peer, time.Now())
+		defer f.peers.Delete(peer)
+	}
+
+	// If there is a source in the context then it is an offer, otherwise a request
+	sourceIF := rctx.Value("source")
+
+	hopCount, _ := rctx.Value("hopcount").(uint8)
+
+	if sourceIF != nil {
+		var source enode.ID
+		if err := source.UnmarshalText([]byte(sourceIF.(string))); err != nil {
 			return nil, err
 		}
-
-		c := v.(Chunk)
-
-		log.Trace("netstore.singleflight returned", "ref", ref.String(), "err", err)
-
-		return c, nil
-	}
-
-	ctx, ssp := spancontext.StartSpan(
-		ctx,
-		"localstore.get")
-	defer ssp.Finish()
-
-	return ch, nil
-}
-
-// RemoteFetch is handling the retry mechanism when making a chunk request to our peers.
-// For a given chunk Request, we call RemoteGet, which selects the next eligible peer and
-// issues a RetrieveRequest and we wait for a delivery. If a delivery doesn't arrive within the SearchTimeout
-// we retry.
-func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) error {
-	// while we haven't timed-out, and while we don't have a chunk,
-	// iterate over peers and try to find a chunk
-	metrics.GetOrRegisterCounter("remote.fetch", nil).Inc(1)
-
-	ref := req.Addr
-
-	for {
-		metrics.GetOrRegisterCounter("remote.fetch.inner", nil).Inc(1)
-
-		ctx, osp := spancontext.StartSpan(
-			ctx,
-			"remote.fetch")
-		osp.LogFields(olog.String("ref", ref.String()))
-
-		log.Trace("remote.fetch", "ref", ref)
-
-		currentPeer, err := n.RemoteGet(ctx, req, n.localID)
-		if err != nil {
-			log.Trace(err.Error(), "ref", ref)
-			osp.LogFields(olog.String("err", err.Error()))
-			osp.Finish()
-			return ErrNoSuitablePeer
-		}
-
-		// add peer to the set of peers to skip from now
-		log.Trace("remote.fetch, adding peer to skip", "ref", ref, "peer", currentPeer.String())
-		req.PeersToSkip.Store(currentPeer.String(), time.Now())
-
-		select {
-		case <-fi.Delivered:
-			log.Trace("remote.fetch, chunk delivered", "ref", ref)
-
-			osp.LogFields(olog.Bool("delivered", true))
-			osp.Finish()
-			return nil
-		case <-time.After(timeouts.SearchTimeout):
-			metrics.GetOrRegisterCounter("remote.fetch.timeout.search", nil).Inc(1)
-
-			osp.LogFields(olog.Bool("timeout", true))
-			osp.Finish()
-			break
-		case <-ctx.Done(): // global fetcher timeout
-			log.Trace("remote.fetch, fail", "ref", ref)
-			metrics.GetOrRegisterCounter("remote.fetch.timeout.global", nil).Inc(1)
-
-			osp.LogFields(olog.Bool("fail", true))
-			osp.Finish()
-			return ctx.Err()
-		}
-	}
-}
-
-// Has is the storage layer entry point to query the underlying
-// database to return if it has a chunk or not.
-func (n *NetStore) Has(ctx context.Context, ref Address) (bool, error) {
-	return n.Store.Has(ctx, ref)
-}
-
-// GetOrCreateFetcher returns the Fetcher for a given chunk, if this chunk is not in the LocalStore.
-// If the chunk is in the LocalStore, it returns nil for the Fetcher and ok == false
-func (n *NetStore) GetOrCreateFetcher(ctx context.Context, ref Address, interestedParty string) (f *Fetcher, loaded bool, ok bool) {
-	n.putMu.Lock()
-	defer n.putMu.Unlock()
-
-	has, err := n.Store.Has(ctx, ref)
-	if err != nil {
-		log.Error(err.Error())
-	}
-	if has {
-		return nil, false, false
-	}
-
-	f = NewFetcher()
-	v, loaded := n.fetchers.Get(ref.String())
-	log.Trace("netstore.has-with-callback.loadorstore", "ref", ref.String(), "loaded", loaded)
-	if loaded {
-		f = v.(*Fetcher)
+		f.netFetcher.Offer(&source)
 	} else {
-		f.CreatedBy = interestedParty
-		n.fetchers.Add(ref.String(), f)
+		f.netFetcher.Request(hopCount)
 	}
 
-	// if fetcher created by request, but we get a call from syncer, make sure we issue a second request
-	if f.CreatedBy != interestedParty && !f.RequestedBySyncer {
-		f.RequestedBySyncer = true
-		return f, false, true
+	// wait until either the chunk is delivered or the context is done
+	select {
+	case <-rctx.Done():
+		return nil, rctx.Err()
+	case <-f.deliveredC:
+		return f.chunk, nil
+	case <-f.cancelledC:
+		return nil, fmt.Errorf("fetcher cancelled")
 	}
+}
 
-	return f, loaded, true
+// deliver is called by NetStore.Put to notify all pending requests
+func (f *fetcher) deliver(ctx context.Context, ch Chunk) {
+	f.deliverOnce.Do(func() {
+		f.chunk = ch
+		// closing the deliveredC channel will terminate ongoing requests
+		close(f.deliveredC)
+		log.Trace("n.getFetcher close deliveredC", "ref", ch.Address())
+	})
 }

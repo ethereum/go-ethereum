@@ -192,13 +192,12 @@ func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
 		ctx, cancel := context.WithTimeout(ctx, defaultRetrieveTimeout)
 		defer cancel()
 
-		r := storage.NewRequest(id.Addr())
-		ch, err := h.chunkStore.Get(ctx, chunk.ModeGetLookup, r)
+		ch, err := h.chunkStore.Get(ctx, chunk.ModeGetLookup, id.Addr())
 		if err != nil {
-			if err == context.DeadlineExceeded || err == storage.ErrNoSuitablePeer { // chunk not found
+			if err == context.DeadlineExceeded { // chunk not found
 				return nil, nil
 			}
-			return nil, err
+			return nil, err //something else happened or context was cancelled.
 		}
 
 		var request Request

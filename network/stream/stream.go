@@ -543,7 +543,7 @@ func (c *client) NextInterval() (start, end uint64, err error) {
 
 // Client interface for incoming peer Streamer
 type Client interface {
-	NeedData(context.Context, []byte) (bool, func(context.Context) error)
+	NeedData(context.Context, []byte) func(context.Context) error
 	Close()
 }
 

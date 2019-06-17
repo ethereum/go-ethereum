@@ -1241,12 +1241,6 @@
 			"revisionTime": "2019-04-03T01:06:53Z"
 		},
 		{
-			"checksumSHA1": "FuQoDr6zh5GsiVVyo3oDZcUVC3c=",
-			"path": "golang.org/x/sync/singleflight",
-			"revision": "112230192c580c3556b8cee6403af37a4fc5f28c",
-			"revisionTime": "2019-04-22T22:11:18Z"
-		},
-		{
 			"checksumSHA1": "4TEYFKrAUuwBMqExjQBsnf/CgjQ=",
 			"path": "golang.org/x/sync/syncmap",
 			"revision": "f52d1811a62927559de87708c8913c1650ce4f26",
