@@ -31,10 +31,10 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	cli "gopkg.in/urfave/cli.v1"
@@ -89,7 +89,7 @@ func runCmd(ctx *cli.Context) error {
 		genesisConfig *core.Genesis
 	)
 	if ctx.GlobalBool(MachineFlag.Name) {
-		tracer = NewJSONLogger(logconfig, os.Stdout)
+		tracer = vm.NewJSONLogger(logconfig, os.Stdout)
 	} else if ctx.GlobalBool(DebugFlag.Name) {
 		debugLogger = vm.NewStructLogger(logconfig)
 		tracer = debugLogger
@@ -99,12 +99,12 @@ func runCmd(ctx *cli.Context) error {
 	if ctx.GlobalString(GenesisFlag.Name) != "" {
 		gen := readGenesis(ctx.GlobalString(GenesisFlag.Name))
 		genesisConfig = gen
-		db := ethdb.NewMemDatabase()
+		db := rawdb.NewMemoryDatabase()
 		genesis := gen.ToBlock(db)
 		statedb, _ = state.New(genesis.Root(), state.NewDatabase(db))
 		chainConfig = gen.Config
 	} else {
-		statedb, _ = state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()))
+		statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
 		genesisConfig = new(core.Genesis)
 	}
 	if ctx.GlobalString(SenderFlag.Name) != "" {
@@ -171,8 +171,9 @@ func runCmd(ctx *cli.Context) error {
 		Coinbase:    genesisConfig.Coinbase,
 		BlockNumber: new(big.Int).SetUint64(genesisConfig.Number),
 		EVMConfig: vm.Config{
-			Tracer: tracer,
-			Debug:  ctx.GlobalBool(DebugFlag.Name) || ctx.GlobalBool(MachineFlag.Name),
+			Tracer:         tracer,
+			Debug:          ctx.GlobalBool(DebugFlag.Name) || ctx.GlobalBool(MachineFlag.Name),
+			EVMInterpreter: ctx.GlobalString(EVMInterpreterFlag.Name),
 		},
 	}
 
@@ -206,6 +207,7 @@ func runCmd(ctx *cli.Context) error {
 	execTime := time.Since(tstart)
 
 	if ctx.GlobalBool(DumpFlag.Name) {
+		statedb.Commit(true)
 		statedb.IntermediateRoot(true)
 		fmt.Println(string(statedb.Dump()))
 	}

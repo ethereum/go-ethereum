@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package compiler wraps the Solidity compiler executable (solc).
+// Package compiler wraps the Solidity and Vyper compiler executables (solc; vyper).
 package compiler
 
 import (
@@ -22,37 +22,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
 )
-
-var versionRegexp = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
-
-// Contract contains information about a compiled contract, alongside its code.
-type Contract struct {
-	Code string       `json:"code"`
-	Info ContractInfo `json:"info"`
-}
-
-// ContractInfo contains information about a compiled contract, including access
-// to the ABI definition, user and developer docs, and metadata.
-//
-// Depending on the source, language version, compiler version, and compiler
-// options will provide information about how the contract was compiled.
-type ContractInfo struct {
-	Source          string      `json:"source"`
-	Language        string      `json:"language"`
-	LanguageVersion string      `json:"languageVersion"`
-	CompilerVersion string      `json:"compilerVersion"`
-	CompilerOptions string      `json:"compilerOptions"`
-	AbiDefinition   interface{} `json:"abiDefinition"`
-	UserDoc         interface{} `json:"userDoc"`
-	DeveloperDoc    interface{} `json:"developerDoc"`
-	Metadata        string      `json:"metadata"`
-}
 
 // Solidity contains information about the solidity compiler.
 type Solidity struct {
@@ -63,14 +36,16 @@ type Solidity struct {
 // --combined-output format
 type solcOutput struct {
 	Contracts map[string]struct {
-		Bin, Abi, Devdoc, Userdoc, Metadata string
+		BinRuntime                                  string `json:"bin-runtime"`
+		SrcMapRuntime                               string `json:"srcmap-runtime"`
+		Bin, SrcMap, Abi, Devdoc, Userdoc, Metadata string
 	}
 	Version string
 }
 
 func (s *Solidity) makeArgs() []string {
 	p := []string{
-		"--combined-json", "bin,abi,userdoc,devdoc",
+		"--combined-json", "bin,bin-runtime,srcmap,srcmap-runtime,abi,userdoc,devdoc",
 		"--optimize", // code optimizer switched on
 	}
 	if s.Major > 0 || s.Minor > 4 || s.Patch > 6 {
@@ -157,7 +132,7 @@ func (s *Solidity) run(cmd *exec.Cmd, source string) (map[string]*Contract, erro
 // provided source, language and compiler version, and compiler options are all
 // passed through into the Contract structs.
 //
-// The solc output is expected to contain ABI, user docs, and dev docs.
+// The solc output is expected to contain ABI, source mapping, user docs, and dev docs.
 //
 // Returns an error if the JSON is malformed or missing data, or if the JSON
 // embedded within the JSON is malformed.
@@ -184,13 +159,16 @@ func ParseCombinedJSON(combinedJSON []byte, source string, languageVersion strin
 			return nil, fmt.Errorf("solc: error reading dev doc: %v", err)
 		}
 		contracts[name] = &Contract{
-			Code: "0x" + info.Bin,
+			Code:        "0x" + info.Bin,
+			RuntimeCode: "0x" + info.BinRuntime,
 			Info: ContractInfo{
 				Source:          source,
 				Language:        "Solidity",
 				LanguageVersion: languageVersion,
 				CompilerVersion: compilerVersion,
 				CompilerOptions: compilerOptions,
+				SrcMap:          info.SrcMap,
+				SrcMapRuntime:   info.SrcMapRuntime,
 				AbiDefinition:   abi,
 				UserDoc:         userdoc,
 				DeveloperDoc:    devdoc,
@@ -199,16 +177,4 @@ func ParseCombinedJSON(combinedJSON []byte, source string, languageVersion strin
 		}
 	}
 	return contracts, nil
-}
-
-func slurpFiles(files []string) (string, error) {
-	var concat bytes.Buffer
-	for _, file := range files {
-		content, err := ioutil.ReadFile(file)
-		if err != nil {
-			return "", err
-		}
-		concat.Write(content)
-	}
-	return concat.String(), nil
 }

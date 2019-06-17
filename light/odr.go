@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package light implements on-demand retrieval capable state and chain objects
-// for the Ethereum Light Client.
 package light
 
 import (
@@ -177,3 +175,20 @@ func (req *BloomRequest) StoreResult(db ethdb.Database) {
 		rawdb.WriteBloomBits(db, req.BitIdx, sectionIdx, sectionHead, req.BloomBits[i])
 	}
 }
+
+// TxStatus describes the status of a transaction
+type TxStatus struct {
+	Status core.TxStatus
+	Lookup *rawdb.LegacyTxLookupEntry `rlp:"nil"`
+	Error  string
+}
+
+// TxStatusRequest is the ODR request type for retrieving transaction status
+type TxStatusRequest struct {
+	OdrRequest
+	Hashes []common.Hash
+	Status []TxStatus
+}
+
+// StoreResult stores the retrieved data in local database
+func (req *TxStatusRequest) StoreResult(db ethdb.Database) {}

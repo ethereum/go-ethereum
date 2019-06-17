@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -193,7 +194,7 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 
 		results      chan<- *types.Block
 		currentBlock *types.Block
-		currentWork  [3]string
+		currentWork  [4]string
 
 		notifyTransport = &http.Transport{}
 		notifyClient    = &http.Client{
@@ -234,12 +235,14 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 	//   result[0], 32 bytes hex encoded current block header pow-hash
 	//   result[1], 32 bytes hex encoded seed hash used for DAG
 	//   result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
+	//   result[3], hex encoded block number
 	makeWork := func(block *types.Block) {
 		hash := ethash.SealHash(block.Header())
 
 		currentWork[0] = hash.Hex()
 		currentWork[1] = common.BytesToHash(SeedHash(block.NumberU64())).Hex()
 		currentWork[2] = common.BytesToHash(new(big.Int).Div(two256, block.Difficulty()).Bytes()).Hex()
+		currentWork[3] = hexutil.EncodeBig(block.Number())
 
 		// Trace the seal work fetched by remote sealer.
 		currentBlock = block
@@ -267,7 +270,7 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 		start := time.Now()
 		if !noverify {
 			if err := ethash.verifySeal(nil, header, true); err != nil {
-				log.Warn("Invalid proof-of-work submitted", "sealhash", sealhash, "elapsed", time.Since(start), "err", err)
+				log.Warn("Invalid proof-of-work submitted", "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(start)), "err", err)
 				return false
 			}
 		}
@@ -276,7 +279,7 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 			log.Warn("Ethash result channel is empty, submitted mining result is rejected")
 			return false
 		}
-		log.Trace("Verified correct proof-of-work", "sealhash", sealhash, "elapsed", time.Since(start))
+		log.Trace("Verified correct proof-of-work", "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(start)))
 
 		// Solutions seems to be valid, return to the miner and notify acceptance.
 		solution := block.WithSeal(header)

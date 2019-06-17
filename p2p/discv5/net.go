@@ -27,10 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/crypto/sha3"
 )
 
 var (
@@ -567,12 +567,11 @@ loop:
 			net.ticketStore.searchLookupDone(res.target, res.nodes, func(n *Node, topic Topic) []byte {
 				if n.state != nil && n.state.canQuery {
 					return net.conn.send(n, topicQueryPacket, topicQuery{Topic: topic}) // TODO: set expiration
-				} else {
-					if n.state == unknown {
-						net.ping(n, n.addr())
-					}
-					return nil
 				}
+				if n.state == unknown {
+					net.ping(n, n.addr())
+				}
+				return nil
 			})
 
 		case <-statsDump.C:
@@ -801,7 +800,7 @@ func (n *nodeNetGuts) startNextQuery(net *Network) {
 func (q *findnodeQuery) start(net *Network) bool {
 	// Satisfy queries against the local node directly.
 	if q.remote == net.tab.self {
-		closest := net.tab.closest(crypto.Keccak256Hash(q.target[:]), bucketSize)
+		closest := net.tab.closest(q.target, bucketSize)
 		q.reply <- closest.entries
 		return true
 	}
@@ -1235,7 +1234,7 @@ func (net *Network) checkTopicRegister(data *topicRegister) (*pong, error) {
 }
 
 func rlpHash(x interface{}) (h common.Hash) {
-	hw := sha3.NewKeccak256()
+	hw := sha3.NewLegacyKeccak256()
 	rlp.Encode(hw, x)
 	hw.Sum(h[:0])
 	return h

@@ -32,8 +32,8 @@ import (
 )
 
 var (
-	BigNumber_JS = deps.MustAsset("bignumber.js")
-	Web3_JS      = deps.MustAsset("web3.js")
+	BignumberJs = deps.MustAsset("bignumber.js")
+	Web3Js      = deps.MustAsset("web3.js")
 )
 
 /*

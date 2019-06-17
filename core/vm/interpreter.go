@@ -28,24 +28,15 @@ import (
 
 // Config are the configuration options for the Interpreter
 type Config struct {
-	// Debug enabled debugging Interpreter options
-	Debug bool
-	// Tracer is the op code logger
-	Tracer Tracer
-	// NoRecursion disabled Interpreter call, callcode,
-	// delegate call and create.
-	NoRecursion bool
-	// Enable recording of SHA3/keccak preimages
-	EnablePreimageRecording bool
-	// JumpTable contains the EVM instruction table. This
-	// may be left uninitialised and will be set to the default
-	// table.
-	JumpTable [256]operation
+	Debug                   bool   // Enables debugging
+	Tracer                  Tracer // Opcode logger
+	NoRecursion             bool   // Disables call, callcode, delegate call and create
+	EnablePreimageRecording bool   // Enables recording of SHA3/keccak preimages
 
-	// Type of the EWASM interpreter
-	EWASMInterpreter string
-	// Type of the EVM interpreter
-	EVMInterpreter string
+	JumpTable [256]operation // EVM instruction table, automatically populated if unset
+
+	EWASMInterpreter string // External EWASM interpreter options
+	EVMInterpreter   string // External EVM interpreter options
 }
 
 // Interpreter is used to run Ethereum based contracts and will utilise the
@@ -118,22 +109,6 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	}
 }
 
-func (in *EVMInterpreter) enforceRestrictions(op OpCode, operation operation, stack *Stack) error {
-	if in.evm.chainRules.IsByzantium {
-		if in.readOnly {
-			// If the interpreter is operating in readonly mode, make sure no
-			// state-modifying operation is performed. The 3rd stack item
-			// for a call operation is the value. Transferring value from one
-			// account to the others means the state is modified and should also
-			// return with an error.
-			if operation.writes || (op == CALL && stack.Back(2).BitLen() > 0) {
-				return errWriteProtection
-			}
-		}
-	}
-	return nil
-}
-
 // Run loops and evaluates the contract's code with the given input data and returns
 // the return byte-slice and an error if one occurred.
 //
@@ -182,6 +157,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		pcCopy  uint64 // needed for the deferred Tracer
 		gasCopy uint64 // for Tracer to log gas remaining before execution
 		logged  bool   // deferred Tracer should ignore already logged steps
+		res     []byte // result of the opcode execution function
 	)
 	contract.Input = input
 
@@ -216,19 +192,35 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if !operation.valid {
 			return nil, fmt.Errorf("invalid opcode 0x%x", int(op))
 		}
-		if err := operation.validateStack(stack); err != nil {
-			return nil, err
+		// Validate stack
+		if sLen := stack.len(); sLen < operation.minStack {
+			return nil, fmt.Errorf("stack underflow (%d <=> %d)", sLen, operation.minStack)
+		} else if sLen > operation.maxStack {
+			return nil, fmt.Errorf("stack limit reached %d (%d)", sLen, operation.maxStack)
 		}
 		// If the operation is valid, enforce and write restrictions
-		if err := in.enforceRestrictions(op, operation, stack); err != nil {
-			return nil, err
+		if in.readOnly && in.evm.chainRules.IsByzantium {
+			// If the interpreter is operating in readonly mode, make sure no
+			// state-modifying operation is performed. The 3rd stack item
+			// for a call operation is the value. Transferring value from one
+			// account to the others means the state is modified and should also
+			// return with an error.
+			if operation.writes || (op == CALL && stack.Back(2).Sign() != 0) {
+				return nil, errWriteProtection
+			}
+		}
+		// Static portion of gas
+		if !contract.UseGas(operation.constantGas) {
+			return nil, ErrOutOfGas
 		}
 
 		var memorySize uint64
 		// calculate the new memory size and expand the memory to fit
 		// the operation
+		// Memory check needs to be done prior to evaluating the dynamic gas portion,
+		// to detect calculation overflows
 		if operation.memorySize != nil {
-			memSize, overflow := bigUint64(operation.memorySize(stack))
+			memSize, overflow := operation.memorySize(stack)
 			if overflow {
 				return nil, errGasUintOverflow
 			}
@@ -238,11 +230,14 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 				return nil, errGasUintOverflow
 			}
 		}
+		// Dynamic portion of gas
 		// consume the gas and return an error if not enough gas is available.
 		// cost is explicitly set so that the capture state defer method can get the proper cost
-		cost, err = operation.gasCost(in.gasTable, in.evm, contract, stack, mem, memorySize)
-		if err != nil || !contract.UseGas(cost) {
-			return nil, ErrOutOfGas
+		if operation.dynamicGas != nil {
+			cost, err = operation.dynamicGas(in.gasTable, in.evm, contract, stack, mem, memorySize)
+			if err != nil || !contract.UseGas(cost) {
+				return nil, ErrOutOfGas
+			}
 		}
 		if memorySize > 0 {
 			mem.Resize(memorySize)
@@ -254,7 +249,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 
 		// execute the operation
-		res, err := operation.execute(&pc, in, contract, mem, stack)
+		res, err = operation.execute(&pc, in, contract, mem, stack)
 		// verifyPool is a build flag. Pool verification makes sure the integrity
 		// of the integer pool by comparing values to a default value.
 		if verifyPool {

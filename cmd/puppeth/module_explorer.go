@@ -77,6 +77,7 @@ services:
   explorer:
     build: .
     image: {{.Network}}/explorer
+    container_name: {{.Network}}_explorer_1
     ports:
       - "{{.NodePort}}:{{.NodePort}}"
       - "{{.NodePort}}:{{.NodePort}}/udp"{{if not .VHost}}

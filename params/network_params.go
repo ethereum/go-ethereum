@@ -32,13 +32,8 @@ const (
 	// considered probably final and its rotated bits are calculated.
 	BloomConfirms = 256
 
-	// CHTFrequencyClient is the block frequency for creating CHTs on the client side.
-	CHTFrequencyClient = 32768
-
-	// CHTFrequencyServer is the block frequency for creating CHTs on the server side.
-	// Eventually this can be merged back with the client version, but that requires a
-	// full database upgrade, so that should be left for a suitable moment.
-	CHTFrequencyServer = 4096
+	// CHTFrequency is the block frequency for creating CHTs
+	CHTFrequency = 32768
 
 	// BloomTrieFrequency is the block frequency for creating BloomTrie on both
 	// server/client sides.
@@ -51,4 +46,10 @@ const (
 	// HelperTrieProcessConfirmations is the number of confirmations before a HelperTrie
 	// is generated
 	HelperTrieProcessConfirmations = 256
+
+	// ImmutabilityThreshold is the number of blocks after which a chain segment is
+	// considered immutable (i.e. soft finality). It is used by the downloader as a
+	// hard limit against deep ancestors, by the blockchain against deep reorgs, by
+	// the freezer as the cutoff treshold and by clique as the snapshot trust limit.
+	ImmutabilityThreshold = 90000
 )

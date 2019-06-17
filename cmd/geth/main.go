@@ -31,14 +31,16 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
-	"gopkg.in/urfave/cli.v1"
+	cli "gopkg.in/urfave/cli.v1"
 )
 
 const (
@@ -48,8 +50,9 @@ const (
 var (
 	// Git SHA1 commit hash of the release (set via linker flags)
 	gitCommit = ""
+	gitDate   = ""
 	// The app that holds all commands and flags.
-	app = utils.NewApp(gitCommit, "the go-ethereum command line interface")
+	app = utils.NewApp(gitCommit, gitDate, "the go-ethereum command line interface")
 	// flags that configure the node
 	nodeFlags = []cli.Flag{
 		utils.IdentityFlag,
@@ -59,8 +62,11 @@ var (
 		utils.BootnodesV4Flag,
 		utils.BootnodesV5Flag,
 		utils.DataDirFlag,
+		utils.AncientFlag,
 		utils.KeyStoreDirFlag,
+		utils.ExternalSignerFlag,
 		utils.NoUSBFlag,
+		utils.SmartCardDaemonPathFlag,
 		utils.DashboardEnabledFlag,
 		utils.DashboardAddrFlag,
 		utils.DashboardPortFlag,
@@ -82,15 +88,24 @@ var (
 		utils.TxPoolAccountQueueFlag,
 		utils.TxPoolGlobalQueueFlag,
 		utils.TxPoolLifetimeFlag,
+		utils.ULCModeConfigFlag,
+		utils.OnlyAnnounceModeFlag,
+		utils.ULCTrustedNodesFlag,
+		utils.ULCMinTrustedFractionFlag,
 		utils.SyncModeFlag,
+		utils.ExitWhenSyncedFlag,
 		utils.GCModeFlag,
 		utils.LightServFlag,
+		utils.LightBandwidthInFlag,
+		utils.LightBandwidthOutFlag,
 		utils.LightPeersFlag,
 		utils.LightKDFFlag,
+		utils.WhitelistFlag,
 		utils.CacheFlag,
 		utils.CacheDatabaseFlag,
+		utils.CacheTrieFlag,
 		utils.CacheGCFlag,
-		utils.TrieCacheGenFlag,
+		utils.CacheNoPrefetchFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
@@ -119,12 +134,11 @@ var (
 		utils.DeveloperPeriodFlag,
 		utils.TestnetFlag,
 		utils.RinkebyFlag,
+		utils.GoerliFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
-		utils.RPCCORSDomainFlag,
-		utils.RPCVirtualHostsFlag,
+		utils.ConstantinopleOverrideFlag,
 		utils.EthStatsURLFlag,
-		utils.MetricsEnabledFlag,
 		utils.FakePoWFlag,
 		utils.NoCompactionFlag,
 		utils.GpoBlocksFlag,
@@ -138,6 +152,13 @@ var (
 		utils.RPCEnabledFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
+		utils.RPCCORSDomainFlag,
+		utils.RPCVirtualHostsFlag,
+		utils.GraphQLEnabledFlag,
+		utils.GraphQLListenAddrFlag,
+		utils.GraphQLPortFlag,
+		utils.GraphQLCORSDomainFlag,
+		utils.GraphQLVirtualHostsFlag,
 		utils.RPCApiFlag,
 		utils.WSEnabledFlag,
 		utils.WSListenAddrFlag,
@@ -146,6 +167,8 @@ var (
 		utils.WSAllowedOriginsFlag,
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
+		utils.InsecureUnlockAllowedFlag,
+		utils.RPCGlobalGasCap,
 	}
 
 	whisperFlags = []cli.Flag{
@@ -156,12 +179,14 @@ var (
 	}
 
 	metricsFlags = []cli.Flag{
+		utils.MetricsEnabledFlag,
+		utils.MetricsEnabledExpensiveFlag,
 		utils.MetricsEnableInfluxDBFlag,
 		utils.MetricsInfluxDBEndpointFlag,
 		utils.MetricsInfluxDBDatabaseFlag,
 		utils.MetricsInfluxDBUsernameFlag,
 		utils.MetricsInfluxDBPasswordFlag,
-		utils.MetricsInfluxDBHostTagFlag,
+		utils.MetricsInfluxDBTagsFlag,
 	}
 )
 
@@ -169,7 +194,7 @@ func init() {
 	// Initialize the CLI app and start Geth
 	app.Action = geth
 	app.HideVersion = true // we have a command to print the version
-	app.Copyright = "Copyright 2013-2018 The go-ethereum Authors"
+	app.Copyright = "Copyright 2013-2019 The go-ethereum Authors"
 	app.Commands = []cli.Command{
 		// See chaincmd.go:
 		initCommand,
@@ -180,8 +205,7 @@ func init() {
 		copydbCommand,
 		removedbCommand,
 		dumpCommand,
-		// See monitorcmd.go:
-		monitorCommand,
+		inspectCommand,
 		// See accountcmd.go:
 		accountCommand,
 		walletCommand,
@@ -193,10 +217,11 @@ func init() {
 		makecacheCommand,
 		makedagCommand,
 		versionCommand,
-		bugCommand,
 		licenseCommand,
 		// See config.go
 		dumpConfigCommand,
+		// See retesteth.go
+		retestethCommand,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
@@ -214,6 +239,20 @@ func init() {
 		}
 		if err := debug.Setup(ctx, logdir); err != nil {
 			return err
+		}
+		// If we're a full node on mainnet without --cache specified, bump default cache allowance
+		if ctx.GlobalString(utils.SyncModeFlag.Name) != "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) && !ctx.GlobalIsSet(utils.NetworkIdFlag.Name) {
+			// Make sure we're not on any supported preconfigured testnet either
+			if !ctx.GlobalIsSet(utils.TestnetFlag.Name) && !ctx.GlobalIsSet(utils.RinkebyFlag.Name) && !ctx.GlobalIsSet(utils.GoerliFlag.Name) {
+				// Nope, we're really on mainnet. Bump that cache up!
+				log.Info("Bumping default cache on mainnet", "provided", ctx.GlobalInt(utils.CacheFlag.Name), "updated", 4096)
+				ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(4096))
+			}
+		}
+		// If we're running a light client on any network, drop the cache to some meaningfully low amount
+		if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) {
+			log.Info("Dropping default light client cache", "provided", ctx.GlobalInt(utils.CacheFlag.Name), "updated", 128)
+			ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(128))
 		}
 		// Cap the cache allowance and tune the garbage collector
 		var mem gosigar.Mem
@@ -262,6 +301,7 @@ func geth(ctx *cli.Context) error {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
 	node := makeFullNode(ctx)
+	defer node.Close()
 	startNode(ctx, node)
 	node.Wait()
 	return nil
@@ -277,15 +317,8 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	utils.StartNode(stack)
 
 	// Unlock any account specifically requested
-	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+	unlockAccounts(ctx, stack)
 
-	passwords := utils.MakePasswordList(ctx)
-	unlocks := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
-	for i, account := range unlocks {
-		if trimmed := strings.TrimSpace(account); trimmed != "" {
-			unlockAccount(ctx, ks, trimmed, i, passwords)
-		}
-	}
 	// Register wallet event handlers to open and auto-derive wallets
 	events := make(chan accounts.WalletEvent, 16)
 	stack.AccountManager().Subscribe(events)
@@ -315,11 +348,13 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				status, _ := event.Wallet.Status()
 				log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
 
-				derivationPath := accounts.DefaultBaseDerivationPath
+				var derivationPaths []accounts.DerivationPath
 				if event.Wallet.URL().Scheme == "ledger" {
-					derivationPath = accounts.DefaultLedgerBaseDerivationPath
+					derivationPaths = append(derivationPaths, accounts.LegacyLedgerBaseDerivationPath)
 				}
-				event.Wallet.SelfDerive(derivationPath, stateReader)
+				derivationPaths = append(derivationPaths, accounts.DefaultBaseDerivationPath)
+
+				event.Wallet.SelfDerive(derivationPaths, stateReader)
 
 			case accounts.WalletDropped:
 				log.Info("Old wallet dropped", "url", event.Wallet.URL())
@@ -327,6 +362,32 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 			}
 		}
 	}()
+
+	// Spawn a standalone goroutine for status synchronization monitoring,
+	// close the node when synchronization is complete if user required.
+	if ctx.GlobalBool(utils.ExitWhenSyncedFlag.Name) {
+		go func() {
+			sub := stack.EventMux().Subscribe(downloader.DoneEvent{})
+			defer sub.Unsubscribe()
+			for {
+				event := <-sub.Chan()
+				if event == nil {
+					continue
+				}
+				done, ok := event.Data.(downloader.DoneEvent)
+				if !ok {
+					continue
+				}
+				if timestamp := time.Unix(int64(done.Latest.Time), 0); time.Since(timestamp) < 10*time.Minute {
+					log.Info("Synchronisation completed", "latestnum", done.Latest.Number, "latesthash", done.Latest.Hash(),
+						"age", common.PrettyAge(timestamp))
+					stack.Stop()
+				}
+
+			}
+		}()
+	}
+
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) || ctx.GlobalBool(utils.DeveloperFlag.Name) {
 		// Mining only makes sense if a full Ethereum node is running
@@ -351,5 +412,30 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if err := ethereum.StartMining(threads); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
+	}
+}
+
+// unlockAccounts unlocks any account specifically requested.
+func unlockAccounts(ctx *cli.Context, stack *node.Node) {
+	var unlocks []string
+	inputs := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
+	for _, input := range inputs {
+		if trimmed := strings.TrimSpace(input); trimmed != "" {
+			unlocks = append(unlocks, trimmed)
+		}
+	}
+	// Short circuit if there is no account to unlock.
+	if len(unlocks) == 0 {
+		return
+	}
+	// If insecure account unlocking is not allowed if node's APIs are exposed to external.
+	// Print warning log to user and skip unlocking.
+	if !stack.Config().InsecureUnlockAllowed && stack.Config().ExtRPCEnabled() {
+		utils.Fatalf("Account unlock with HTTP access is forbidden!")
+	}
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+	passwords := utils.MakePasswordList(ctx)
+	for i, account := range unlocks {
+		unlockAccount(ks, account, i, passwords)
 	}
 }

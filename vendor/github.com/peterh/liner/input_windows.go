@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"os"
 	"syscall"
+	"unicode/utf16"
 	"unsafe"
 )
 
@@ -103,7 +104,7 @@ type key_event_record struct {
 	RepeatCount     uint16
 	VirtualKeyCode  uint16
 	VirtualScanCode uint16
-	Char            int16
+	Char            uint16
 	ControlKeyState uint32
 }
 
@@ -111,6 +112,7 @@ type key_event_record struct {
 // what golint suggests)
 const (
 	vk_tab    = 0x09
+	vk_menu   = 0x12 // ALT key
 	vk_prior  = 0x21
 	vk_next   = 0x22
 	vk_end    = 0x23
@@ -134,6 +136,7 @@ const (
 	vk_f11    = 0x7a
 	vk_f12    = 0x7b
 	bKey      = 0x42
+	dKey      = 0x44
 	fKey      = 0x46
 	yKey      = 0x59
 )
@@ -174,6 +177,8 @@ func (s *State) readNext() (interface{}, error) {
 	var rv uint32
 	prv := uintptr(unsafe.Pointer(&rv))
 
+	var surrogate uint16
+
 	for {
 		ok, _, err := procReadConsoleInput.Call(uintptr(s.handle), pbuf, 1, prv)
 
@@ -184,9 +189,6 @@ func (s *State) readNext() (interface{}, error) {
 		if input.eventType == window_buffer_size_event {
 			xy := (*coord)(unsafe.Pointer(&input.blob[0]))
 			s.columns = int(xy.x)
-			if s.columns > 1 {
-				s.columns--
-			}
 			return winch, nil
 		}
 		if input.eventType != key_event {
@@ -194,6 +196,17 @@ func (s *State) readNext() (interface{}, error) {
 		}
 		ke := (*key_event_record)(unsafe.Pointer(&input.blob[0]))
 		if ke.KeyDown == 0 {
+			if ke.VirtualKeyCode == vk_menu && ke.Char > 0 {
+				// paste of unicode (eg. via ALT-numpad)
+				if surrogate > 0 {
+					return utf16.DecodeRune(rune(surrogate), rune(ke.Char)), nil
+				} else if utf16.IsSurrogate(rune(ke.Char)) {
+					surrogate = ke.Char
+					continue
+				} else {
+					return rune(ke.Char), nil
+				}
+			}
 			continue
 		}
 
@@ -202,6 +215,9 @@ func (s *State) readNext() (interface{}, error) {
 		} else if ke.VirtualKeyCode == bKey && (ke.ControlKeyState&modKeys == leftAltPressed ||
 			ke.ControlKeyState&modKeys == rightAltPressed) {
 			s.key = altB
+		} else if ke.VirtualKeyCode == dKey && (ke.ControlKeyState&modKeys == leftAltPressed ||
+			ke.ControlKeyState&modKeys == rightAltPressed) {
+			s.key = altD
 		} else if ke.VirtualKeyCode == fKey && (ke.ControlKeyState&modKeys == leftAltPressed ||
 			ke.ControlKeyState&modKeys == rightAltPressed) {
 			s.key = altF
@@ -209,7 +225,14 @@ func (s *State) readNext() (interface{}, error) {
 			ke.ControlKeyState&modKeys == rightAltPressed) {
 			s.key = altY
 		} else if ke.Char > 0 {
-			s.key = rune(ke.Char)
+			if surrogate > 0 {
+				s.key = utf16.DecodeRune(rune(surrogate), rune(ke.Char))
+			} else if utf16.IsSurrogate(rune(ke.Char)) {
+				surrogate = ke.Char
+				continue
+			} else {
+				s.key = rune(ke.Char)
+			}
 		} else {
 			switch ke.VirtualKeyCode {
 			case vk_prior:
@@ -337,3 +360,5 @@ func TerminalMode() (ModeApplier, error) {
 	}
 	return mode, err
 }
+
+const cursorColumn = true

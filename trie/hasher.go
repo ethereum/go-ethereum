@@ -21,16 +21,14 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/crypto/sha3"
 )
 
 type hasher struct {
-	tmp        sliceBuffer
-	sha        keccakState
-	cachegen   uint16
-	cachelimit uint16
-	onleaf     LeafCallback
+	tmp    sliceBuffer
+	sha    keccakState
+	onleaf LeafCallback
 }
 
 // keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
@@ -57,14 +55,14 @@ var hasherPool = sync.Pool{
 	New: func() interface{} {
 		return &hasher{
 			tmp: make(sliceBuffer, 0, 550), // cap is as large as a full fullNode.
-			sha: sha3.NewKeccak256().(keccakState),
+			sha: sha3.NewLegacyKeccak256().(keccakState),
 		}
 	},
 }
 
-func newHasher(cachegen, cachelimit uint16, onleaf LeafCallback) *hasher {
+func newHasher(onleaf LeafCallback) *hasher {
 	h := hasherPool.Get().(*hasher)
-	h.cachegen, h.cachelimit, h.onleaf = cachegen, cachelimit, onleaf
+	h.onleaf = onleaf
 	return h
 }
 
@@ -80,14 +78,13 @@ func (h *hasher) hash(n node, db *Database, force bool) (node, node, error) {
 		if db == nil {
 			return hash, n, nil
 		}
-		if n.canUnload(h.cachegen, h.cachelimit) {
-			// Unload the node from cache. All of its subnodes will have a lower or equal
-			// cache generation number.
-			cacheUnloadCounter.Inc(1)
-			return hash, hash, nil
-		}
 		if !dirty {
-			return hash, n, nil
+			switch n.(type) {
+			case *fullNode, *shortNode:
+				return hash, hash, nil
+			default:
+				return hash, n, nil
+			}
 		}
 	}
 	// Trie not processed yet or needs storage, walk the children

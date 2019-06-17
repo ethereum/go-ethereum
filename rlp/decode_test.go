@@ -347,6 +347,12 @@ type tailUint struct {
 	Tail []uint `rlp:"tail"`
 }
 
+type tailPrivateFields struct {
+	A    uint
+	Tail []uint `rlp:"tail"`
+	x, y bool
+}
+
 var (
 	veryBigInt = big.NewInt(0).Add(
 		big.NewInt(0).Lsh(big.NewInt(0xFFFFFFFFFFFFFF), 16),
@@ -509,6 +515,11 @@ var decodeTests = []decodeTest{
 		input: "C101",
 		ptr:   new(tailRaw),
 		value: tailRaw{A: 1, Tail: []RawValue{}},
+	},
+	{
+		input: "C3010203",
+		ptr:   new(tailPrivateFields),
+		value: tailPrivateFields{A: 1, Tail: []uint{2, 3}},
 	},
 
 	// struct tag "-"
@@ -689,6 +700,27 @@ func TestDecoderInByteSlice(t *testing.T) {
 	} else if !array[0].called() {
 		t.Errorf("DecodeRLP not called for array element")
 	}
+}
+
+type unencodableDecoder func()
+
+func (f *unencodableDecoder) DecodeRLP(s *Stream) error {
+	if _, err := s.List(); err != nil {
+		return err
+	}
+	if err := s.ListEnd(); err != nil {
+		return err
+	}
+	*f = func() {}
+	return nil
+}
+
+func TestDecoderFunc(t *testing.T) {
+	var x func()
+	if err := DecodeBytes([]byte{0xC0}, (*unencodableDecoder)(&x)); err != nil {
+		t.Fatal(err)
+	}
+	x()
 }
 
 func ExampleDecode() {

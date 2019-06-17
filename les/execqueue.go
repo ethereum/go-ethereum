@@ -44,7 +44,7 @@ func (q *execQueue) loop() {
 
 func (q *execQueue) waitNext(drop bool) (f func()) {
 	q.mu.Lock()
-	if drop {
+	if drop && len(q.funcs) > 0 {
 		// Remove the function that just executed. We do this here instead of when
 		// dequeuing so len(q.funcs) includes the function that is running.
 		q.funcs = append(q.funcs[:0], q.funcs[1:]...)
@@ -82,6 +82,13 @@ func (q *execQueue) queue(f func()) bool {
 	}
 	q.mu.Unlock()
 	return ok
+}
+
+// clear drops all queued functions
+func (q *execQueue) clear() {
+	q.mu.Lock()
+	q.funcs = q.funcs[:0]
+	q.mu.Unlock()
 }
 
 // quit stops the exec queue.

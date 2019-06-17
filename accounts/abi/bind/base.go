@@ -36,10 +36,10 @@ type SignerFn func(types.Signer, common.Address, *types.Transaction) (*types.Tra
 
 // CallOpts is the collection of options to fine tune a contract call request.
 type CallOpts struct {
-	Pending bool           // Whether to operate on the pending state or the last known one
-	From    common.Address // Optional the sender address, otherwise the first account is used
-
-	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
+	Pending     bool            // Whether to operate on the pending state or the last known one
+	From        common.Address  // Optional the sender address, otherwise the first account is used
+	BlockNumber *big.Int        // Optional the block number on which the call should be performed
+	Context     context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 }
 
 // TransactOpts is the collection of authorization data required to create a
@@ -148,10 +148,10 @@ func (c *BoundContract) Call(opts *CallOpts, result interface{}, method string, 
 			}
 		}
 	} else {
-		output, err = c.caller.CallContract(ctx, msg, nil)
+		output, err = c.caller.CallContract(ctx, msg, opts.BlockNumber)
 		if err == nil && len(output) == 0 {
 			// Make sure we have a contract to operate on, and bail out otherwise.
-			if code, err = c.caller.CodeAt(ctx, c.address, nil); err != nil {
+			if code, err = c.caller.CodeAt(ctx, c.address, opts.BlockNumber); err != nil {
 				return err
 			} else if len(code) == 0 {
 				return ErrNoCode
@@ -338,6 +338,22 @@ func (c *BoundContract) UnpackLog(out interface{}, event string, log types.Log) 
 		}
 	}
 	return parseTopics(out, indexed, log.Topics[1:])
+}
+
+// UnpackLogIntoMap unpacks a retrieved log into the provided map.
+func (c *BoundContract) UnpackLogIntoMap(out map[string]interface{}, event string, log types.Log) error {
+	if len(log.Data) > 0 {
+		if err := c.abi.UnpackIntoMap(out, event, log.Data); err != nil {
+			return err
+		}
+	}
+	var indexed abi.Arguments
+	for _, arg := range c.abi.Events[event].Inputs {
+		if arg.Indexed {
+			indexed = append(indexed, arg)
+		}
+	}
+	return parseTopicsIntoMap(out, indexed, log.Topics[1:])
 }
 
 // ensureContext is a helper method to ensure a context is not nil, even if the
