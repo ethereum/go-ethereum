@@ -18,12 +18,14 @@ package vm
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/crypto/ripemd160"
@@ -70,6 +72,7 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
 	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}): &blake2F{},
 }
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
@@ -430,4 +433,68 @@ func (c *bn256PairingByzantium) RequiredGas(input []byte) uint64 {
 
 func (c *bn256PairingByzantium) Run(input []byte) ([]byte, error) {
 	return runBn256Pairing(input)
+}
+
+type blake2F struct{}
+
+func (c *blake2F) RequiredGas(input []byte) uint64 {
+	if len(input) != blake2FInputLength {
+		// Input is malformed, we can't read the number of rounds.
+		// Precompile can't be executed so we set its price to 0.
+		return 0
+	}
+
+	rounds := binary.BigEndian.Uint32(input[0:4])
+	return uint64(rounds)
+}
+
+const blake2FInputLength = 213
+const blake2FFinalBlockBytes = byte(1)
+const blake2FNonFinalBlockBytes = byte(0)
+
+var errBlake2FIncorrectInputLength = errors.New(
+	"input length for Blake2 F precompile should be exactly 213 bytes",
+)
+
+var errBlake2FIncorrectFinalBlockIndicator = errors.New(
+	"incorrect final block indicator flag",
+)
+
+func (c *blake2F) Run(input []byte) ([]byte, error) {
+	if len(input) != blake2FInputLength {
+		return nil, errBlake2FIncorrectInputLength
+	}
+	if input[212] != blake2FNonFinalBlockBytes && input[212] != blake2FFinalBlockBytes {
+		return nil, errBlake2FIncorrectFinalBlockIndicator
+	}
+
+	rounds := binary.BigEndian.Uint32(input[0:4])
+
+	var h [8]uint64
+	for i := 0; i < 8; i++ {
+		offset := 4 + i*8
+		h[i] = binary.LittleEndian.Uint64(input[offset : offset+8])
+	}
+
+	var m [16]uint64
+	for i := 0; i < 16; i++ {
+		offset := 68 + i*8
+		m[i] = binary.LittleEndian.Uint64(input[offset : offset+8])
+	}
+
+	var t [2]uint64
+	t[0] = binary.LittleEndian.Uint64(input[196:204])
+	t[1] = binary.LittleEndian.Uint64(input[204:212])
+
+	f := (input[212] == blake2FFinalBlockBytes)
+
+	blake2b.F(&h, m, t, f, rounds)
+
+	var output [64]byte
+	for i := 0; i < 8; i++ {
+		offset := i * 8
+		binary.LittleEndian.PutUint64(output[offset:offset+8], h[i])
+	}
+
+	return output[:], nil
 }
