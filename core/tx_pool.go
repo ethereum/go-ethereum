@@ -1339,7 +1339,7 @@ func (pool *TxPool) demoteUnexecutables() {
 				log.Error("Demoting invalidated transaction", "hash", hash)
 				pool.enqueueTx(hash, tx)
 			}
-			pendingCounter.Inc(int64(len(gapped)))
+			pendingCounter.Dec(int64(len(gapped)))
 		}
 		// Delete the entire queue entry if it became empty.
 		if list.Empty() {
