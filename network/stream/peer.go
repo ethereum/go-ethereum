@@ -30,11 +30,9 @@ import (
 	"github.com/ethersphere/swarm/network"
 	pq "github.com/ethersphere/swarm/network/priorityqueue"
 	"github.com/ethersphere/swarm/network/stream/intervals"
-	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/tracing"
-	opentracing "github.com/opentracing/opentracing-go"
 )
 
 type notFoundError struct {
@@ -174,13 +172,6 @@ func (p *Peer) SendPriority(ctx context.Context, msg interface{}, priority uint8
 
 // SendOfferedHashes sends OfferedHashesMsg protocol msg
 func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
-	var sp opentracing.Span
-	ctx, sp := spancontext.StartSpan(
-		context.TODO(),
-		"send.offered.hashes",
-	)
-	defer sp.Finish()
-
 	defer metrics.GetOrRegisterResettingTimer("send.offered.hashes", nil).UpdateSince(time.Now())
 
 	hashes, from, to, err := s.setNextBatch(f, t)
@@ -199,8 +190,7 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		Stream: s.stream,
 	}
 	log.Trace("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "len", len(hashes), "from", from, "to", to)
-	ctx = context.WithValue(ctx, "stream_send_tag", "send.offered.hashes")
-	return p.SendPriority(ctx, msg, s.priority)
+	return p.SendPriority(context.TODO(), msg, s.priority)
 }
 
 func (p *Peer) getServer(s Stream) (*server, error) {
