@@ -63,8 +63,8 @@ const (
 
 // Tests in this file should not request chunks from peers.
 // This function will panic indicating that there is a problem if request has been made.
-func dummyRequestFromPeers(_ context.Context, req *network.Request) (*enode.ID, chan struct{}, error) {
-	panic(fmt.Sprintf("unexpected request: address %s, source %s", req.Addr.String(), req.Source.String()))
+func dummyRequestFromPeers(_ context.Context, req *storage.Request, _ enode.ID) (*enode.ID, error) {
+	panic(fmt.Sprintf("unexpected request: address %s", req.Addr.String()))
 }
 
 //This test is a syncing test for nodes.

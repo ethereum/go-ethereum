@@ -58,6 +58,8 @@ var TimeAfter = time.After
 // It should return <nil> if a value is found, but its timestamp is higher than "now"
 // It should only return an error in case the handler wants to stop the
 // lookup process entirely.
+// If the context is canceled, it must return context.Canceled
+
 type ReadFunc func(ctx context.Context, epoch Epoch, now uint64) (interface{}, error)
 
 // NoClue is a hint that can be provided when the Lookup caller does not have

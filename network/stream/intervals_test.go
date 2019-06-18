@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/network/simulation"
+	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/testutil"
@@ -75,7 +76,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 				return newTestExternalClient(netStore), nil
 			})
 			r.RegisterServerFunc(externalStreamName, func(p *Peer, t string, live bool) (Server, error) {
-				return newTestExternalServer(t, externalStreamSessionAt, externalStreamMaxKeys, nil), nil
+				return newTestExternalServer(t, externalStreamSessionAt, externalStreamMaxKeys), nil
 			})
 
 			cleanup := func() {
@@ -298,38 +299,42 @@ func newTestExternalClient(netStore *storage.NetStore) *testExternalClient {
 	}
 }
 
-func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func(context.Context) error {
-	wait := c.netStore.FetchFunc(ctx, storage.Address(hash))
-	if wait == nil {
-		return nil
+func (c *testExternalClient) NeedData(ctx context.Context, key []byte) (bool, func(context.Context) error) {
+	fi, loaded, ok := c.netStore.GetOrCreateFetcher(ctx, key, "syncer")
+	if !ok {
+		return loaded, nil
 	}
+
 	select {
-	case c.hashes <- hash:
+	case c.hashes <- key:
 	case <-ctx.Done():
 		log.Warn("testExternalClient NeedData context", "err", ctx.Err())
-		return func(_ context.Context) error {
+		return false, func(_ context.Context) error {
 			return ctx.Err()
 		}
 	}
-	return wait
+
+	return loaded, func(ctx context.Context) error {
+		select {
+		case <-fi.Delivered:
+		case <-time.After(timeouts.SyncerClientWaitTimeout):
+			return fmt.Errorf("chunk not delivered through syncing after %dsec. ref=%s", timeouts.SyncerClientWaitTimeout, fmt.Sprintf("%x", key))
+		}
+		return nil
+	}
 }
 
 func (c *testExternalClient) Close() {}
 
 type testExternalServer struct {
 	t         string
-	keyFunc   func(key []byte, index uint64)
 	sessionAt uint64
 	maxKeys   uint64
 }
 
-func newTestExternalServer(t string, sessionAt, maxKeys uint64, keyFunc func(key []byte, index uint64)) *testExternalServer {
-	if keyFunc == nil {
-		keyFunc = binary.BigEndian.PutUint64
-	}
+func newTestExternalServer(t string, sessionAt, maxKeys uint64) *testExternalServer {
 	return &testExternalServer{
 		t:         t,
-		keyFunc:   keyFunc,
 		sessionAt: sessionAt,
 		maxKeys:   maxKeys,
 	}
@@ -345,7 +350,7 @@ func (s *testExternalServer) SetNextBatch(from uint64, to uint64) ([]byte, uint6
 	}
 	b := make([]byte, HashSize*(to-from+1))
 	for i := from; i <= to; i++ {
-		s.keyFunc(b[(i-from)*HashSize:(i-from+1)*HashSize], i)
+		binary.BigEndian.PutUint64(b[(i-from)*HashSize:(i-from+1)*HashSize], i)
 	}
 	return b, from, to, nil
 }

@@ -64,7 +64,6 @@ var (
 	startCounter       = metrics.NewRegisteredCounter("stack,start", nil)
 	stopCounter        = metrics.NewRegisteredCounter("stack,stop", nil)
 	uptimeGauge        = metrics.NewRegisteredGauge("stack.uptime", nil)
-	requestsCacheGauge = metrics.NewRegisteredGauge("storage.cache.requests.size", nil)
 )
 
 // the swarm stack
@@ -174,17 +173,15 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		feedsHandler,
 	)
 
-	self.netStore, err = storage.NewNetStore(lstore, nil)
-	if err != nil {
-		return nil, err
-	}
+	nodeID := config.Enode.ID()
+	self.netStore = storage.NewNetStore(lstore, nodeID)
 
 	to := network.NewKademlia(
 		common.FromHex(config.BzzKey),
 		network.NewKadParams(),
 	)
 	delivery := stream.NewDelivery(to, self.netStore)
-	self.netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, config.DeliverySkipCheck).New
+	self.netStore.RemoteGet = delivery.RequestFromPeers
 
 	feedsHandler.SetStore(self.netStore)
 
@@ -196,8 +193,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		self.swap = swap.New(balancesStore)
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
 	}
-
-	nodeID := config.Enode.ID()
 
 	syncing := stream.SyncingAutoSubscribe
 	if !config.SyncEnabled || config.LightNodeEnabled {
@@ -214,7 +209,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	tags := chunk.NewTags() //todo load from state store
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
-	self.fileStore = storage.NewFileStore(self.netStore, self.config.FileStoreParams, tags)
+	lnetStore := storage.NewLNetStore(self.netStore)
+	self.fileStore = storage.NewFileStore(lnetStore, self.config.FileStoreParams, tags)
 
 	log.Debug("Setup local storage")
 
@@ -411,7 +407,6 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 			select {
 			case <-time.After(updateGaugesPeriod):
 				uptimeGauge.Update(time.Since(startTime).Nanoseconds())
-				requestsCacheGauge.Update(int64(s.netStore.RequestsCacheLen()))
 			case <-doneC:
 				return
 			}
