@@ -19,11 +19,17 @@ package storage
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/storage/encryption"
 	"golang.org/x/crypto/sha3"
+)
+
+const (
+	noOfStorageWorkers = 150 // Since we want 128 data chunks to be processed parallel + few for processing tree chunks
+
 )
 
 type hasherStore struct {
@@ -34,12 +40,15 @@ type hasherStore struct {
 	store     ChunkStore
 	tag       *chunk.Tag
 	toEncrypt bool
+	doWait    sync.Once
 	hashFunc  SwarmHasher
 	hashSize  int           // content hash size
 	refSize   int64         // reference size (content hash + possibly encryption key)
 	errC      chan error    // global error channel
+	waitC     chan error    // global wait channel
 	doneC     chan struct{} // closed by Close() call to indicate that count is the final number of chunks
 	quitC     chan struct{} // closed to quit unterminated routines
+	workers   chan Chunk    // back pressure for limiting storage workers goroutines
 }
 
 // NewHasherStore creates a hasherStore object, which implements Putter and Getter interfaces.
@@ -60,10 +69,11 @@ func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool, tag 
 		hashSize:  hashSize,
 		refSize:   refSize,
 		errC:      make(chan error),
+		waitC:     make(chan error),
 		doneC:     make(chan struct{}),
 		quitC:     make(chan struct{}),
+		workers:   make(chan Chunk, noOfStorageWorkers),
 	}
-
 	return h
 }
 
@@ -82,6 +92,11 @@ func (h *hasherStore) Put(ctx context.Context, chunkData ChunkData) (Reference, 
 	}
 	chunk := h.createChunk(c)
 	h.storeChunk(ctx, chunk)
+
+	// Start the wait function which will detect completion of put
+	h.doWait.Do(func() {
+		go h.startWait(ctx)
+	})
 
 	return Reference(append(chunk.Address(), encryptionKey...)), nil
 }
@@ -121,8 +136,15 @@ func (h *hasherStore) Close() {
 // Wait returns when
 //    1) the Close() function has been called and
 //    2) all the chunks which has been Put has been stored
+//    OR
+//    1) if there is error while storing chunk
 func (h *hasherStore) Wait(ctx context.Context) error {
 	defer close(h.quitC)
+	err := <-h.waitC
+	return err
+}
+
+func (h *hasherStore) startWait(ctx context.Context) {
 	var nrStoredChunks uint64 // number of stored chunks
 	var done bool
 	doneC := h.doneC
@@ -130,7 +152,7 @@ func (h *hasherStore) Wait(ctx context.Context) error {
 		select {
 		// if context is done earlier, just return with the error
 		case <-ctx.Done():
-			return ctx.Err()
+			h.waitC <- ctx.Err()
 		// doneC is closed if all chunks have been submitted, from then we just wait until all of them are also stored
 		case <-doneC:
 			done = true
@@ -138,14 +160,15 @@ func (h *hasherStore) Wait(ctx context.Context) error {
 		// a chunk has been stored, if err is nil, then successfully, so increase the stored chunk counter
 		case err := <-h.errC:
 			if err != nil {
-				return err
+				h.waitC <- err
 			}
 			nrStoredChunks++
 		}
 		// if all the chunks have been submitted and all of them are stored, then we can return
 		if done {
 			if nrStoredChunks >= atomic.LoadUint64(&h.nrChunks) {
-				return nil
+				h.waitC <- nil
+				break
 			}
 		}
 	}
@@ -242,8 +265,12 @@ func (h *hasherStore) newDataEncryption(key encryption.Key) encryption.Encryptio
 }
 
 func (h *hasherStore) storeChunk(ctx context.Context, ch Chunk) {
+	h.workers <- ch
 	atomic.AddUint64(&h.nrChunks, 1)
 	go func() {
+		defer func() {
+			<-h.workers
+		}()
 		seen, err := h.store.Put(ctx, chunk.ModePutUpload, ch)
 		h.tag.Inc(chunk.StateStored)
 		if seen {

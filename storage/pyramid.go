@@ -204,7 +204,7 @@ func (pc *PyramidChunker) decrementWorkerCount() {
 
 func (pc *PyramidChunker) Split(ctx context.Context) (k Address, wait func(context.Context) error, err error) {
 	pc.wg.Add(1)
-	pc.prepareChunks(ctx, false)
+	go pc.prepareChunks(ctx, false)
 
 	// closes internal error channel if all subprocesses in the workgroup finished
 	go func() {
@@ -239,7 +239,7 @@ func (pc *PyramidChunker) Append(ctx context.Context) (k Address, wait func(cont
 	pc.loadTree(ctx)
 
 	pc.wg.Add(1)
-	pc.prepareChunks(ctx, true)
+	go pc.prepareChunks(ctx, true)
 
 	// closes internal error channel if all subprocesses in the workgroup finished
 	go func() {
@@ -539,6 +539,15 @@ func (pc *PyramidChunker) buildTree(isAppend bool, ent *TreeEntry, chunkWG *sync
 		if lvlCount >= pc.branches {
 			endLvl = lvl + 1
 			compress = true
+
+			// Move up the chunk level to see if there is any boundary wrapping
+			for uprLvl := endLvl; uprLvl < pc.branches; uprLvl++ {
+				uprLvlCount := int64(len(pc.chunkLevel[uprLvl]))
+				if uprLvlCount >= pc.branches-1 {
+					endLvl = endLvl + 1
+				}
+			}
+
 			break
 		}
 	}
