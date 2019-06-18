@@ -95,6 +95,10 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 			cfg.JumpTable = constantinopleInstructionSet
 		case evm.ChainConfig().IsByzantium(evm.BlockNumber):
 			cfg.JumpTable = byzantiumInstructionSet
+		case evm.ChainConfig().IsEIP158(evm.BlockNumber):
+			cfg.JumpTable = spuriousDragonInstructionSet
+		case evm.ChainConfig().IsEIP150(evm.BlockNumber):
+			cfg.JumpTable = tangerineWhistleInstructionSet
 		case evm.ChainConfig().IsHomestead(evm.BlockNumber):
 			cfg.JumpTable = homesteadInstructionSet
 		default:

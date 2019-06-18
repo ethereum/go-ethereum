@@ -54,10 +54,12 @@ type operation struct {
 }
 
 var (
-	frontierInstructionSet       = newFrontierInstructionSet()
-	homesteadInstructionSet      = newHomesteadInstructionSet()
-	byzantiumInstructionSet      = newByzantiumInstructionSet()
-	constantinopleInstructionSet = newConstantinopleInstructionSet()
+	frontierInstructionSet         = newFrontierInstructionSet()
+	homesteadInstructionSet        = newHomesteadInstructionSet()
+	tangerineWhistleInstructionSet = newTangerineWhistleInstructionSet()
+	spuriousDragonInstructionSet   = newSpuriousDragonInstructionSet()
+	byzantiumInstructionSet        = newByzantiumInstructionSet()
+	constantinopleInstructionSet   = newConstantinopleInstructionSet()
 )
 
 // NewConstantinopleInstructionSet returns the frontier, homestead
@@ -87,11 +89,11 @@ func newConstantinopleInstructionSet() [256]operation {
 		valid:       true,
 	}
 	instructionSet[EXTCODEHASH] = operation{
-		execute:    opExtCodeHash,
-		dynamicGas: gasExtCodeHash,
-		minStack:   minStack(1, 1),
-		maxStack:   maxStack(1, 1),
-		valid:      true,
+		execute:     opExtCodeHash,
+		constantGas: params.ExtcodeHashGas,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+		valid:       true,
 	}
 	instructionSet[CREATE2] = operation{
 		execute:    opCreate2,
@@ -110,7 +112,7 @@ func newConstantinopleInstructionSet() [256]operation {
 // byzantium instructions.
 func newByzantiumInstructionSet() [256]operation {
 	// instructions that can be executed during the homestead phase.
-	instructionSet := newHomesteadInstructionSet()
+	instructionSet := newSpuriousDragonInstructionSet()
 	instructionSet[STATICCALL] = operation{
 		execute:    opStaticCall,
 		dynamicGas: gasStaticCall,
@@ -145,6 +147,20 @@ func newByzantiumInstructionSet() [256]operation {
 		reverts:    true,
 		returns:    true,
 	}
+	return instructionSet
+}
+
+func newSpuriousDragonInstructionSet() [256]operation {
+	instructionSet := newTangerineWhistleInstructionSet()
+	return instructionSet
+
+}
+
+func newTangerineWhistleInstructionSet() [256]operation {
+	instructionSet := newHomesteadInstructionSet()
+	instructionSet[BALANCE].constantGas = params.BalanceGasEip150
+	instructionSet[EXTCODESIZE].constantGas = params.ExtcodeSizeGasEip150
+	instructionSet[SLOAD].constantGas = params.SloadGasEip150
 	return instructionSet
 }
 
@@ -346,11 +362,11 @@ func newFrontierInstructionSet() [256]operation {
 			valid:       true,
 		},
 		BALANCE: {
-			execute:    opBalance,
-			dynamicGas: gasBalance,
-			minStack:   minStack(1, 1),
-			maxStack:   maxStack(1, 1),
-			valid:      true,
+			execute:     opBalance,
+			constantGas: params.BalanceGasFrontier,
+			minStack:    minStack(1, 1),
+			maxStack:    maxStack(1, 1),
+			valid:       true,
 		},
 		ORIGIN: {
 			execute:     opOrigin,
@@ -418,11 +434,11 @@ func newFrontierInstructionSet() [256]operation {
 			valid:       true,
 		},
 		EXTCODESIZE: {
-			execute:    opExtCodeSize,
-			dynamicGas: gasExtCodeSize,
-			minStack:   minStack(1, 1),
-			maxStack:   maxStack(1, 1),
-			valid:      true,
+			execute:     opExtCodeSize,
+			constantGas: params.ExtcodeSizeGasFrontier,
+			minStack:    minStack(1, 1),
+			maxStack:    maxStack(1, 1),
+			valid:       true,
 		},
 		EXTCODECOPY: {
 			execute:    opExtCodeCopy,
@@ -507,11 +523,11 @@ func newFrontierInstructionSet() [256]operation {
 			valid: true,
 		},
 		SLOAD: {
-			execute:    opSload,
-			dynamicGas: gasSLoad,
-			minStack:   minStack(1, 1),
-			maxStack:   maxStack(1, 1),
-			valid:      true,
+			execute:     opSload,
+			constantGas: params.SloadGasFrontier,
+			minStack:    minStack(1, 1),
+			maxStack:    maxStack(1, 1),
+			valid:       true,
 		},
 		SSTORE: {
 			execute:    opSstore,
