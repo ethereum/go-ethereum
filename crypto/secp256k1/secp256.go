@@ -49,6 +49,41 @@ var (
 	ErrRecoverFailed       = errors.New("recovery failed")
 )
 
+func VerifySeckeyValidity(seckey []byte) error {
+	if len(seckey) != 32 {
+		return errors.New("priv key is not 32 bytes")
+	}
+	var seckey_ptr *C.uchar = (*C.uchar)(unsafe.Pointer(&seckey[0]))
+	ret := C.secp256k1_ec_seckey_verify(context, seckey_ptr)
+	if int(ret) != 1 {
+		return errors.New("invalid seckey")
+	}
+	return nil
+}
+
+func GeneratePubKey(seckey []byte) ([]byte, error) {
+	if err := VerifySeckeyValidity(seckey); err != nil {
+		return nil, err
+	}
+
+	var pubkey []byte = make([]byte, 64)
+	var pubkey_ptr *C.secp256k1_pubkey = (*C.secp256k1_pubkey)(unsafe.Pointer(&pubkey[0]))
+
+	var seckey_ptr *C.uchar = (*C.uchar)(unsafe.Pointer(&seckey[0]))
+
+	ret := C.secp256k1_ec_pubkey_create(
+		context,
+		pubkey_ptr,
+		seckey_ptr,
+	)
+
+	if ret != C.int(1) {
+		return nil, errors.New("Unable to generate pubkey from seckey")
+	}
+
+	return pubkey, nil
+}
+
 // Sign creates a recoverable ECDSA signature.
 // The produced signature is in the 65-byte [R || S || V] format where V is 0 or 1.
 //
@@ -165,3 +200,4 @@ func checkSignature(sig []byte) error {
 	}
 	return nil
 }
+

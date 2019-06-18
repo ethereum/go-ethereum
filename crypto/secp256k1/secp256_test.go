@@ -236,3 +236,16 @@ func BenchmarkRecover(b *testing.B) {
 		RecoverPubkey(msg, sig)
 	}
 }
+
+func TestPubkeyCreate(t *testing.T) {
+	seckey, _ := hex.DecodeString("ce0677bb30baa8cf067c88db9811f4333d131bf8bcf12fe7065d211dce971008")
+	pubkey1, _ := hex.DecodeString("12aabd7c2132f6690b4754ebb7a2b0e15baa317920c316c60a0f9bc8bf268c85417fc475b2ba24f402f150537e40c10a56adad27d4d32d9b556c255fd2e15aa0")
+	pubkey2, err := GeneratePubKey(seckey)
+	if err != nil {
+		t.Fatalf("recover error: %s", err)
+	}
+	if !bytes.Equal(pubkey1, pubkey2) {
+		t.Errorf("pubkey mismatch: want: %x have: %x", pubkey1, pubkey2)
+	}
+}
+
