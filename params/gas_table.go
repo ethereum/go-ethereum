@@ -18,10 +18,7 @@ package params
 
 // GasTable organizes gas prices for different ethereum phases.
 type GasTable struct {
-	ExtcodeCopy uint64
-	Calls       uint64
-
-	ExpByte uint64
+	Calls uint64
 }
 
 // Variables containing gas prices for different ethereum phases.
@@ -29,23 +26,17 @@ var (
 	// GasTableHomestead contain the gas prices for
 	// the homestead phase.
 	GasTableHomestead = GasTable{
-		ExtcodeCopy: 20,
-		Calls:       40,
-		ExpByte:     10,
+		Calls: 40,
 	}
 
 	// GasTableEIP150 contain the gas re-prices for
 	// the EIP150 phase (a.k.a TangerineWhistle).
 	GasTableEIP150 = GasTable{
-		ExtcodeCopy: 700,
-		Calls:       700,
-		ExpByte:     10,
+		Calls: 700,
 	}
 	// GasTableEIP158 contain the gas re-prices for
 	// the EIP155/EIP158 phase (a.k.a Spurious Dragon).
 	GasTableEIP158 = GasTable{
-		ExtcodeCopy: 700,
-		Calls:       700,
-		ExpByte:     50,
+		Calls: 700,
 	}
 )

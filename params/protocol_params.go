@@ -78,6 +78,16 @@ const (
 	SloadGasEip150         uint64 = 200
 	ExtcodeHashGas         uint64 = 400  // Cost of EXTCODEHASH (introduced in Constantinople)
 	SuicideGasEip150       uint64 = 5000 // Cost of SELFDESTRUCT post T.W
+
+	// EXP has a dynamic portion depending on the size of the exponent
+	ExpByteFrontier uint64 = 10 // was set to 10 in Frontier
+	ExpByteEip158   uint64 = 50 // was raised to 50 during Eip158 (Spurious Dragon)
+
+	// Extcodecopy has a dynamic AND a static cost. This represents only the
+	// static portion of the gas. It was changed during EIP 150 (Tangerine Whistle)
+	ExtcodeCopyBaseFrontier uint64 = 20
+	ExtcodeCopyBaseEip150   uint64 = 700
+
 	// CreateBySuicide occurs when the refunded account is one that does
 	// not exist. This logic is similar to call.
 	// Introduced in Tangerine Whistle (Eip 150)

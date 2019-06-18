@@ -96,14 +96,15 @@ func newConstantinopleInstructionSet() [256]operation {
 		valid:       true,
 	}
 	instructionSet[CREATE2] = operation{
-		execute:    opCreate2,
-		dynamicGas: gasCreate2,
-		minStack:   minStack(4, 1),
-		maxStack:   maxStack(4, 1),
-		memorySize: memoryCreate2,
-		valid:      true,
-		writes:     true,
-		returns:    true,
+		execute:     opCreate2,
+		constantGas: params.Create2Gas,
+		dynamicGas:  gasCreate2,
+		minStack:    minStack(4, 1),
+		maxStack:    maxStack(4, 1),
+		memorySize:  memoryCreate2,
+		valid:       true,
+		writes:      true,
+		returns:     true,
 	}
 	return instructionSet
 }
@@ -130,12 +131,13 @@ func newByzantiumInstructionSet() [256]operation {
 		valid:       true,
 	}
 	instructionSet[RETURNDATACOPY] = operation{
-		execute:    opReturnDataCopy,
-		dynamicGas: gasReturnDataCopy,
-		minStack:   minStack(3, 0),
-		maxStack:   maxStack(3, 0),
-		memorySize: memoryReturnDataCopy,
-		valid:      true,
+		execute:     opReturnDataCopy,
+		constantGas: GasFastestStep,
+		dynamicGas:  gasReturnDataCopy,
+		minStack:    minStack(3, 0),
+		maxStack:    maxStack(3, 0),
+		memorySize:  memoryReturnDataCopy,
+		valid:       true,
 	}
 	instructionSet[REVERT] = operation{
 		execute:    opRevert,
@@ -152,6 +154,7 @@ func newByzantiumInstructionSet() [256]operation {
 
 func newSpuriousDragonInstructionSet() [256]operation {
 	instructionSet := newTangerineWhistleInstructionSet()
+	instructionSet[EXP].dynamicGas = gasExpEip158
 	return instructionSet
 
 }
@@ -161,6 +164,7 @@ func newTangerineWhistleInstructionSet() [256]operation {
 	instructionSet[BALANCE].constantGas = params.BalanceGasEip150
 	instructionSet[EXTCODESIZE].constantGas = params.ExtcodeSizeGasEip150
 	instructionSet[SLOAD].constantGas = params.SloadGasEip150
+	instructionSet[EXTCODECOPY].constantGas = params.ExtcodeCopyBaseEip150
 	return instructionSet
 }
 
@@ -257,7 +261,7 @@ func newFrontierInstructionSet() [256]operation {
 		},
 		EXP: {
 			execute:    opExp,
-			dynamicGas: gasExp,
+			dynamicGas: gasExpFrontier,
 			minStack:   minStack(2, 1),
 			maxStack:   maxStack(2, 1),
 			valid:      true,
@@ -347,12 +351,13 @@ func newFrontierInstructionSet() [256]operation {
 			valid:       true,
 		},
 		SHA3: {
-			execute:    opSha3,
-			dynamicGas: gasSha3,
-			minStack:   minStack(2, 1),
-			maxStack:   maxStack(2, 1),
-			memorySize: memorySha3,
-			valid:      true,
+			execute:     opSha3,
+			constantGas: params.Sha3Gas,
+			dynamicGas:  gasSha3,
+			minStack:    minStack(2, 1),
+			maxStack:    maxStack(2, 1),
+			memorySize:  memorySha3,
+			valid:       true,
 		},
 		ADDRESS: {
 			execute:     opAddress,
@@ -404,12 +409,13 @@ func newFrontierInstructionSet() [256]operation {
 			valid:       true,
 		},
 		CALLDATACOPY: {
-			execute:    opCallDataCopy,
-			dynamicGas: gasCallDataCopy,
-			minStack:   minStack(3, 0),
-			maxStack:   maxStack(3, 0),
-			memorySize: memoryCallDataCopy,
-			valid:      true,
+			execute:     opCallDataCopy,
+			constantGas: GasFastestStep,
+			dynamicGas:  gasCallDataCopy,
+			minStack:    minStack(3, 0),
+			maxStack:    maxStack(3, 0),
+			memorySize:  memoryCallDataCopy,
+			valid:       true,
 		},
 		CODESIZE: {
 			execute:     opCodeSize,
@@ -419,12 +425,13 @@ func newFrontierInstructionSet() [256]operation {
 			valid:       true,
 		},
 		CODECOPY: {
-			execute:    opCodeCopy,
-			dynamicGas: gasCodeCopy,
-			minStack:   minStack(3, 0),
-			maxStack:   maxStack(3, 0),
-			memorySize: memoryCodeCopy,
-			valid:      true,
+			execute:     opCodeCopy,
+			constantGas: GasFastestStep,
+			dynamicGas:  gasCodeCopy,
+			minStack:    minStack(3, 0),
+			maxStack:    maxStack(3, 0),
+			memorySize:  memoryCodeCopy,
+			valid:       true,
 		},
 		GASPRICE: {
 			execute:     opGasprice,
@@ -441,12 +448,13 @@ func newFrontierInstructionSet() [256]operation {
 			valid:       true,
 		},
 		EXTCODECOPY: {
-			execute:    opExtCodeCopy,
-			dynamicGas: gasExtCodeCopy,
-			minStack:   minStack(4, 0),
-			maxStack:   maxStack(4, 0),
-			memorySize: memoryExtCodeCopy,
-			valid:      true,
+			execute:     opExtCodeCopy,
+			constantGas: params.ExtcodeCopyBaseFrontier,
+			dynamicGas:  gasExtCodeCopy,
+			minStack:    minStack(4, 0),
+			maxStack:    maxStack(4, 0),
+			memorySize:  memoryExtCodeCopy,
+			valid:       true,
 		},
 		BLOCKHASH: {
 			execute:     opBlockhash,
@@ -498,27 +506,30 @@ func newFrontierInstructionSet() [256]operation {
 			valid:       true,
 		},
 		MLOAD: {
-			execute:    opMload,
-			dynamicGas: gasMLoad,
-			minStack:   minStack(1, 1),
-			maxStack:   maxStack(1, 1),
-			memorySize: memoryMLoad,
-			valid:      true,
+			execute:     opMload,
+			constantGas: GasFastestStep,
+			dynamicGas:  gasMLoad,
+			minStack:    minStack(1, 1),
+			maxStack:    maxStack(1, 1),
+			memorySize:  memoryMLoad,
+			valid:       true,
 		},
 		MSTORE: {
-			execute:    opMstore,
-			dynamicGas: gasMStore,
-			minStack:   minStack(2, 0),
-			maxStack:   maxStack(2, 0),
-			memorySize: memoryMStore,
-			valid:      true,
+			execute:     opMstore,
+			constantGas: GasFastestStep,
+			dynamicGas:  gasMStore,
+			minStack:    minStack(2, 0),
+			maxStack:    maxStack(2, 0),
+			memorySize:  memoryMStore,
+			valid:       true,
 		},
 		MSTORE8: {
-			execute:    opMstore8,
-			dynamicGas: gasMStore8,
-			memorySize: memoryMStore8,
-			minStack:   minStack(2, 0),
-			maxStack:   maxStack(2, 0),
+			execute:     opMstore8,
+			constantGas: GasFastestStep,
+			dynamicGas:  gasMStore8,
+			memorySize:  memoryMStore8,
+			minStack:    minStack(2, 0),
+			maxStack:    maxStack(2, 0),
 
 			valid: true,
 		},
@@ -1075,14 +1086,15 @@ func newFrontierInstructionSet() [256]operation {
 			writes:     true,
 		},
 		CREATE: {
-			execute:    opCreate,
-			dynamicGas: gasCreate,
-			minStack:   minStack(3, 1),
-			maxStack:   maxStack(3, 1),
-			memorySize: memoryCreate,
-			valid:      true,
-			writes:     true,
-			returns:    true,
+			execute:     opCreate,
+			constantGas: params.CreateGas,
+			dynamicGas:  gasCreate,
+			minStack:    minStack(3, 1),
+			maxStack:    maxStack(3, 1),
+			memorySize:  memoryCreate,
+			valid:       true,
+			writes:      true,
+			returns:     true,
 		},
 		CALL: {
 			execute:    opCall,
