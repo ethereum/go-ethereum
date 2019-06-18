@@ -24,7 +24,7 @@ import (
 
 type (
 	executionFunc func(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)
-	gasFunc       func(params.GasTable, *EVM, *Contract, *Stack, *Memory, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
+	gasFunc       func(*EVM, *Contract, *Stack, *Memory, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
 	// memorySizeFunc returns the required size, and whether the operation overflowed a uint64
 	memorySizeFunc func(*Stack) (size uint64, overflow bool)
 )
@@ -115,13 +115,14 @@ func newByzantiumInstructionSet() [256]operation {
 	// instructions that can be executed during the homestead phase.
 	instructionSet := newSpuriousDragonInstructionSet()
 	instructionSet[STATICCALL] = operation{
-		execute:    opStaticCall,
-		dynamicGas: gasStaticCall,
-		minStack:   minStack(6, 1),
-		maxStack:   maxStack(6, 1),
-		memorySize: memoryStaticCall,
-		valid:      true,
-		returns:    true,
+		execute:     opStaticCall,
+		constantGas: params.CallGasEip150,
+		dynamicGas:  gasStaticCall,
+		minStack:    minStack(6, 1),
+		maxStack:    maxStack(6, 1),
+		memorySize:  memoryStaticCall,
+		valid:       true,
+		returns:     true,
 	}
 	instructionSet[RETURNDATASIZE] = operation{
 		execute:     opReturnDataSize,
@@ -152,6 +153,7 @@ func newByzantiumInstructionSet() [256]operation {
 	return instructionSet
 }
 
+// EIP 158 a.k.a Spurious Dragon
 func newSpuriousDragonInstructionSet() [256]operation {
 	instructionSet := newTangerineWhistleInstructionSet()
 	instructionSet[EXP].dynamicGas = gasExpEip158
@@ -159,12 +161,16 @@ func newSpuriousDragonInstructionSet() [256]operation {
 
 }
 
+// EIP 150 a.k.a Tangerine Whistle
 func newTangerineWhistleInstructionSet() [256]operation {
 	instructionSet := newHomesteadInstructionSet()
 	instructionSet[BALANCE].constantGas = params.BalanceGasEip150
 	instructionSet[EXTCODESIZE].constantGas = params.ExtcodeSizeGasEip150
 	instructionSet[SLOAD].constantGas = params.SloadGasEip150
 	instructionSet[EXTCODECOPY].constantGas = params.ExtcodeCopyBaseEip150
+	instructionSet[CALL].constantGas = params.CallGasEip150
+	instructionSet[CALLCODE].constantGas = params.CallGasEip150
+	instructionSet[DELEGATECALL].constantGas = params.CallGasEip150
 	return instructionSet
 }
 
@@ -173,13 +179,14 @@ func newTangerineWhistleInstructionSet() [256]operation {
 func newHomesteadInstructionSet() [256]operation {
 	instructionSet := newFrontierInstructionSet()
 	instructionSet[DELEGATECALL] = operation{
-		execute:    opDelegateCall,
-		dynamicGas: gasDelegateCall,
-		minStack:   minStack(6, 1),
-		maxStack:   maxStack(6, 1),
-		memorySize: memoryDelegateCall,
-		valid:      true,
-		returns:    true,
+		execute:     opDelegateCall,
+		dynamicGas:  gasDelegateCall,
+		constantGas: params.CallGasFrontier,
+		minStack:    minStack(6, 1),
+		maxStack:    maxStack(6, 1),
+		memorySize:  memoryDelegateCall,
+		valid:       true,
+		returns:     true,
 	}
 	return instructionSet
 }
@@ -1097,22 +1104,24 @@ func newFrontierInstructionSet() [256]operation {
 			returns:     true,
 		},
 		CALL: {
-			execute:    opCall,
-			dynamicGas: gasCall,
-			minStack:   minStack(7, 1),
-			maxStack:   maxStack(7, 1),
-			memorySize: memoryCall,
-			valid:      true,
-			returns:    true,
+			execute:     opCall,
+			constantGas: params.CallGasFrontier,
+			dynamicGas:  gasCall,
+			minStack:    minStack(7, 1),
+			maxStack:    maxStack(7, 1),
+			memorySize:  memoryCall,
+			valid:       true,
+			returns:     true,
 		},
 		CALLCODE: {
-			execute:    opCallCode,
-			dynamicGas: gasCallCode,
-			minStack:   minStack(7, 1),
-			maxStack:   maxStack(7, 1),
-			memorySize: memoryCall,
-			valid:      true,
-			returns:    true,
+			execute:     opCallCode,
+			constantGas: params.CallGasFrontier,
+			dynamicGas:  gasCallCode,
+			minStack:    minStack(7, 1),
+			maxStack:    maxStack(7, 1),
+			memorySize:  memoryCall,
+			valid:       true,
+			returns:     true,
 		},
 		RETURN: {
 			execute:    opReturn,

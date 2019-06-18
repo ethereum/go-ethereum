@@ -52,9 +52,9 @@ const (
 	NetSstoreResetRefund      uint64 = 4800  // Once per SSTORE operation for resetting to the original non-zero value
 	NetSstoreResetClearRefund uint64 = 19800 // Once per SSTORE operation for resetting to the original zero value
 
-	JumpdestGas      uint64 = 1     // Once per JUMPDEST operation.
-	EpochDuration    uint64 = 30000 // Duration between proof-of-work epochs.
-	CallGas          uint64 = 40    // Once per CALL operation & message call transaction.
+	JumpdestGas   uint64 = 1     // Once per JUMPDEST operation.
+	EpochDuration uint64 = 30000 // Duration between proof-of-work epochs.
+
 	CreateDataGas    uint64 = 200   //
 	CallCreateDepth  uint64 = 1024  // Maximum depth of call/create stack.
 	ExpGas           uint64 = 10    // Once per EXP instruction
@@ -70,6 +70,8 @@ const (
 	TxDataNonZeroGas uint64 = 68    // Per byte of data attached to a transaction that is not equal to zero. NOTE: Not payable on data of calls between transactions.
 
 	// These have been changed during the course of the chain
+	CallGasFrontier        uint64 = 40  // Once per CALL operation & message call transaction.
+	CallGasEip150          uint64 = 700 // Static portion of gas for CALL-derivates after EIP 150 (T.W)
 	BalanceGasFrontier     uint64 = 20  // The cost of a BALANCE operation
 	BalanceGasEip150       uint64 = 400 // The cost of a BALANCE operation after Tangerine Whistle
 	ExtcodeSizeGasFrontier uint64 = 20  // Cost of EXTCODESIZE before EIP 150 (T.W)
