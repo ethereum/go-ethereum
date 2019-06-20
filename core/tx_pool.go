@@ -915,16 +915,20 @@ func (pool *TxPool) scheduleReorgLoop() {
 		launchNextRun bool
 		reset         *txpoolResetRequest
 		dirtyAccounts *accountSet
-		queuedEvents  []*types.Transaction
+		queuedEvents  = make(map[common.Address]*txSortedMap)
 	)
 	for {
-		// Launch next run if needed.
+		// Launch next background reorg if needed
 		if curDone == nil && launchNextRun {
+			// Run the background reorg and announcements
 			go pool.runReorg(nextDone, reset, dirtyAccounts, queuedEvents)
-			curDone = nextDone
-			nextDone = make(chan struct{})
+
+			// Prepare everything for the next round of reorg
+			curDone, nextDone = nextDone, make(chan struct{})
 			launchNextRun = false
-			reset, dirtyAccounts, queuedEvents = nil, nil, nil
+
+			reset, dirtyAccounts = nil, nil
+			queuedEvents = make(map[common.Address]*txSortedMap)
 		}
 
 		select {
@@ -951,7 +955,11 @@ func (pool *TxPool) scheduleReorgLoop() {
 		case tx := <-pool.queueTxEventCh:
 			// Queue up the event, but don't schedule a reorg. It's up to the caller to
 			// request one later if they want the events sent.
-			queuedEvents = append(queuedEvents, tx)
+			addr, _ := types.Sender(pool.signer, tx)
+			if _, ok := queuedEvents[addr]; !ok {
+				queuedEvents[addr] = newTxSortedMap()
+			}
+			queuedEvents[addr].Put(tx)
 
 		case <-curDone:
 			curDone = nil
@@ -968,30 +976,48 @@ func (pool *TxPool) scheduleReorgLoop() {
 }
 
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
-func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events []*types.Transaction) {
+func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.Address]*txSortedMap) {
 	defer close(done)
 
 	var promoteAddrs []common.Address
 	if dirtyAccounts != nil {
 		promoteAddrs = dirtyAccounts.flatten()
 	}
-
 	pool.mu.Lock()
 	if reset != nil {
+		// Reset from the old head to the new, rescheduling any reorged transactions
 		pool.reset(reset.oldHead, reset.newHead)
-		// Reset needs promote for all addresses.
+
+		// Nonces were reset, discard any events that became stale
+		for addr := range events {
+			events[addr].Forward(pool.pendingState.GetNonce(addr))
+			if events[addr].Len() == 0 {
+				delete(events, addr)
+			}
+		}
+		// Reset needs promote for all addresses
 		promoteAddrs = promoteAddrs[:0]
 		for addr := range pool.queue {
 			promoteAddrs = append(promoteAddrs, addr)
 		}
 	}
 	promoted := pool.promoteExecutables(promoteAddrs)
-	events = append(events, promoted...)
+	for _, tx := range promoted {
+		addr, _ := types.Sender(pool.signer, tx)
+		if _, ok := events[addr]; !ok {
+			events[addr] = newTxSortedMap()
+		}
+		events[addr].Put(tx)
+	}
 	pool.mu.Unlock()
 
-	// Notify subsystems for newly added transactions.
+	// Notify subsystems for newly added transactions
 	if len(events) > 0 {
-		pool.txFeed.Send(NewTxsEvent{events})
+		var txs []*types.Transaction
+		for _, set := range events {
+			txs = append(txs, set.Flatten()...)
+		}
+		pool.txFeed.Send(NewTxsEvent{txs})
 	}
 }
 
