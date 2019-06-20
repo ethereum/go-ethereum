@@ -75,6 +75,12 @@
 			"revisionTime": "2018-06-25T18:44:42Z"
 		},
 		{
+			"checksumSHA1": "h5A0DLu0ZXvpW1F0Lh2oNOlKWf0=",
+			"path": "github.com/dop251/goja",
+			"revision": "cc13d3ec34f7c6e4e73dddbfe0a7e868cd3b5c93",
+			"revisionTime": "2019-06-21T10:59:25Z"
+		},
+		{
 			"checksumSHA1": "zYnPsNAVm1/ViwCkN++dX2JQhBo=",
 			"path": "github.com/edsrzf/mmap-go",
 			"revision": "935e0e8a636ca4ba70b713f3e38a19e1b77739e8",
@@ -351,12 +357,6 @@
 			"path": "github.com/rjeczalik/notify",
 			"revision": "0f065fa99b48b842c3fd3e2c8b194c6f2b69f6b8",
 			"revisionTime": "2018-08-27T19:31:19Z"
-		},
-		{
-			"checksumSHA1": "5uqO4ITTDMklKi3uNaE/D9LQ5nM=",
-			"path": "github.com/robertkrimen/otto",
-			"revision": "6a77b7cbc37d0c39f7d5fa5766826e541df31fd5",
-			"revisionTime": "2017-02-05T01:36:59Z"
 		},
 		{
 			"checksumSHA1": "qgziiO3/QDVJMKw2nGrUbC8QldY=",
@@ -775,12 +775,6 @@
 		{
 			"checksumSHA1": "Qk7dljcrEK1BJkAEZguxAbG9dSo=",
 			"path": "golang.org/x/text/internal/utf8internal",
-			"revision": "e3703dcdd614d2d7488fff034c75c551ea25da95",
-			"revisionTime": "2018-12-15T16:57:46Z"
-		},
-		{
-			"checksumSHA1": "oYNlkS+0TimKOScUz3Hn9QWyz6w=",
-			"path": "golang.org/x/text/language",
 			"revision": "e3703dcdd614d2d7488fff034c75c551ea25da95",
 			"revisionTime": "2018-12-15T16:57:46Z"
 		},
