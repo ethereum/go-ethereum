@@ -137,9 +137,11 @@ func (op *requestOp) wait(ctx context.Context, c *Client) (*jsonrpcMessage, erro
 	select {
 	case <-ctx.Done():
 		// Send the timeout to dispatch so it can remove the request IDs.
-		select {
-		case c.reqTimeout <- op:
-		case <-c.closing:
+		if !c.isHTTP {
+			select {
+			case c.reqTimeout <- op:
+			case <-c.closing:
+			}
 		}
 		return nil, ctx.Err()
 	case resp := <-op.resp:
