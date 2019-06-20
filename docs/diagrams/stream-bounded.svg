@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/PR-SVG-20010719/DTD/svg10.dtd">
+<svg width="24cm" height="27cm" viewBox="257 -21 480 532" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" x1="560" y1="55.4873" x2="559.021" y2="498.679"/>
+    <polygon style="fill: #1b1b1b" points="559.005,506.179 554.027,496.168 559.021,498.679 564.027,496.19 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" points="559.005,506.179 554.027,496.168 559.021,498.679 564.027,496.19 "/>
+  </g>
+  <text font-size="12.8" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="372" y="46.5">
+    <tspan x="372" y="46.5">Client</tspan>
+  </text>
+  <text font-size="12.8" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="545" y="46.5">
+    <tspan x="545" y="46.5">Server</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" x1="402.1" y1="80.1" x2="540.364" y2="80.1"/>
+    <polygon style="fill: #1b1b1b" points="547.864,80.1 537.864,85.1 540.364,80.1 537.864,75.1 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" points="547.864,80.1 537.864,85.1 540.364,80.1 537.864,75.1 "/>
+  </g>
+  <text font-size="12.8" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="445.018" y="65.1">
+    <tspan x="445.018" y="65.1">GetRange</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" x1="546.782" y1="183.25" x2="417.618" y2="182.181"/>
+    <polygon style="fill: #1b1b1b" points="410.118,182.119 420.159,177.201 417.618,182.181 420.076,187.201 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" points="410.118,182.119 420.159,177.201 417.618,182.181 420.076,187.201 "/>
+  </g>
+  <text font-size="12.8" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="429.318" y="171.1">
+    <tspan x="429.318" y="171.1">OfferedHashes</tspan>
+  </text>
+  <text font-size="12.8" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="257.05" y="82.1">
+    <tspan x="257.05" y="82.1">1. Client requests</tspan>
+    <tspan x="257.05" y="98.1">an arbitrary</tspan>
+    <tspan x="257.05" y="114.1">range of a stream</tspan>
+    <tspan x="257.05" y="130.1">e.g. From: 1, To: 13</tspan>
+  </text>
+  <text font-size="12.8" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="585.287" y="157.1">
+    <tspan x="585.287" y="157.1">2. Server replies with</tspan>
+    <tspan x="585.287" y="173.1">possible offered hashes</tspan>
+    <tspan x="585.287" y="189.1">in the requested range</tspan>
+  </text>
+  <text font-size="12.8" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="413.05" y="-8.51248">
+    <tspan x="413.05" y="-8.51248">Bounded GetRange</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" x1="407.1" y1="272.25" x2="535.364" y2="272.25"/>
+    <polygon style="fill: #1b1b1b" points="542.864,272.25 532.864,277.25 535.364,272.25 532.864,267.25 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" points="542.864,272.25 532.864,277.25 535.364,272.25 532.864,267.25 "/>
+  </g>
+  <text font-size="12.7998" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="428.893" y="259.25">
+    <tspan x="428.893" y="259.25">WantedHashes</tspan>
+  </text>
+  <text font-size="12.7998" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="273" y="259.25">
+    <tspan x="273" y="259.25">3. Client replies</tspan>
+    <tspan x="273" y="275.25">with a (sub)set</tspan>
+    <tspan x="273" y="291.25">of wanted chunk</tspan>
+    <tspan x="273" y="307.25">hashes</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" x1="546.782" y1="351.185" x2="417.618" y2="350.115"/>
+    <polygon style="fill: #1b1b1b" points="410.118,350.053 420.159,345.136 417.618,350.115 420.076,355.136 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" points="410.118,350.053 420.159,345.136 417.618,350.115 420.076,355.136 "/>
+  </g>
+  <text font-size="12.7998" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="423.518" y="336">
+    <tspan x="423.518" y="336">Chunk Deliveries</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" x1="546.782" y1="370.185" x2="417.618" y2="369.115"/>
+    <polygon style="fill: #1b1b1b" points="410.118,369.053 420.159,364.136 417.618,369.115 420.076,374.136 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" points="410.118,369.053 420.159,364.136 417.618,369.115 420.076,374.136 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" x1="546.782" y1="388.185" x2="417.618" y2="387.115"/>
+    <polygon style="fill: #1b1b1b" points="410.118,387.053 420.159,382.136 417.618,387.115 420.076,392.136 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" points="410.118,387.053 420.159,382.136 417.618,387.115 420.076,392.136 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" x1="546.782" y1="407.185" x2="417.618" y2="406.115"/>
+    <polygon style="fill: #1b1b1b" points="410.118,406.053 420.159,401.136 417.618,406.115 420.076,411.136 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" points="410.118,406.053 420.159,401.136 417.618,406.115 420.076,411.136 "/>
+  </g>
+  <text font-size="12.7998" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="585.287" y="373">
+    <tspan x="585.287" y="373">4. Server delivers</tspan>
+    <tspan x="585.287" y="389">requested chunks</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" x1="546.782" y1="452.185" x2="417.618" y2="451.115"/>
+    <polygon style="fill: #1b1b1b" points="410.118,451.053 420.159,446.136 417.618,451.115 420.076,456.136 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" points="410.118,451.053 420.159,446.136 417.618,451.115 420.076,456.136 "/>
+  </g>
+  <text font-size="12.7998" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="448" y="440">
+    <tspan x="448" y="440">BatchDone</tspan>
+  </text>
+  <text font-size="12.7998" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="585.287" y="446">
+    <tspan x="585.287" y="446">5. Server reports to</tspan>
+    <tspan x="585.287" y="462">client that batch has</tspan>
+    <tspan x="585.287" y="478">completed with the </tspan>
+    <tspan x="585.287" y="494">last delivered bin index</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" x1="388.309" y1="55.4873" x2="387.331" y2="498.679"/>
+    <polygon style="fill: #1b1b1b" points="387.314,506.179 382.336,496.168 387.331,498.679 392.336,496.19 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" points="387.314,506.179 382.336,496.168 387.331,498.679 392.336,496.19 "/>
+  </g>
+</svg>

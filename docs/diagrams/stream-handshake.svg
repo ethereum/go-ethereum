@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/PR-SVG-20010719/DTD/svg10.dtd">
+<svg width="23cm" height="13cm" viewBox="269 -21 460 256" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" x1="560" y1="56.0723" x2="560.992" y2="223.573"/>
+    <polygon style="fill: #1b1b1b" points="561.037,231.073 555.978,221.102 560.992,223.573 565.977,221.043 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" points="561.037,231.073 555.978,221.102 560.992,223.573 565.977,221.043 "/>
+  </g>
+  <text font-size="12.7998" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="372" y="46.5">
+    <tspan x="372" y="46.5">Client</tspan>
+  </text>
+  <text font-size="12.7998" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="545" y="46.5">
+    <tspan x="545" y="46.5">Server</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" x1="402.1" y1="80.1" x2="540.364" y2="80.1"/>
+    <polygon style="fill: #1b1b1b" points="547.864,80.1 537.864,85.1 540.364,80.1 537.864,75.1 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" points="547.864,80.1 537.864,85.1 540.364,80.1 537.864,75.1 "/>
+  </g>
+  <text font-size="12.7998" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="455.1" y="65.1">
+    <tspan x="455.1" y="65.1">Stream</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" x1="553.1" y1="109.1" x2="415.808" y2="177.746"/>
+    <polygon style="fill: #1b1b1b" points="409.1,181.1 415.808,172.156 415.808,177.746 420.28,181.1 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" points="409.1,181.1 415.808,172.156 415.808,177.746 420.28,181.1 "/>
+  </g>
+  <text font-size="12.7998" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="426.1" y="131.1">
+    <tspan x="426.1" y="131.1">StreamAck</tspan>
+  </text>
+  <text font-size="12.7998" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="269.05" y="83.1">
+    <tspan x="269.05" y="83.1">1. Client requests</tspan>
+    <tspan x="269.05" y="99.1">info about</tspan>
+    <tspan x="269.05" y="115.1">streams</tspan>
+  </text>
+  <text font-size="12.7998" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="592.05" y="96.1">
+    <tspan x="592.05" y="96.1">2. Server replies with</tspan>
+    <tspan x="592.05" y="112.1">stream info: names,</tspan>
+    <tspan x="592.05" y="128.1">session indexes and</tspan>
+    <tspan x="592.05" y="144.1">boundedness</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" x1="387.808" y1="56.0723" x2="388.801" y2="223.573"/>
+    <polygon style="fill: #1b1b1b" points="388.845,231.073 383.786,221.102 388.801,223.573 393.786,221.043 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #1b1b1b" points="388.845,231.073 383.786,221.102 388.801,223.573 393.786,221.043 "/>
+  </g>
+  <text font-size="12.7998" style="fill: #1b1b1b;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="413.05" y="-8.51248">
+    <tspan x="413.05" y="-8.51248">Establishing a stream</tspan>
+  </text>
+</svg>
