@@ -339,6 +339,8 @@ func (db *Dashboard) collectPeerData() {
 	db.geodb, err = openGeoDB()
 	if err != nil {
 		log.Warn("Failed to open geodb", "err", err)
+		errc := <-db.quit
+		errc <- nil
 		return
 	}
 	defer db.geodb.close()
@@ -517,6 +519,8 @@ func (db *Dashboard) collectPeerData() {
 			newPeerEvents = newPeerEvents[:0]
 		case err := <-db.subPeer.Err():
 			log.Warn("Peer subscription error", "err", err)
+			errc := <-db.quit
+			errc <- nil
 			return
 		case errc := <-db.quit:
 			errc <- nil

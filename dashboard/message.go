@@ -18,6 +18,7 @@ package dashboard
 
 import (
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type Message struct {
@@ -37,8 +38,9 @@ type ChartEntry struct {
 }
 
 type GeneralMessage struct {
-	Version  string `json:"version,omitempty"`
-	Commit   string `json:"commit,omitempty"`
+	Version string      `json:"version,omitempty"`
+	Commit  string      `json:"commit,omitempty"`
+	Genesis common.Hash `json:"genesis,omitempty"`
 }
 
 type HomeMessage struct {
@@ -46,7 +48,7 @@ type HomeMessage struct {
 }
 
 type ChainMessage struct {
-	/* TODO (kurkomisi) */
+	CurrentBlock *block `json:"currentBlock,omitempty"`
 }
 
 type TxPoolMessage struct {

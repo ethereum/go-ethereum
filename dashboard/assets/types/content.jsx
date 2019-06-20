@@ -33,8 +33,9 @@ export type ChartEntry = {
 };
 
 export type General = {
-	version:  ?string,
-	commit:   ?string,
+	version: ?string,
+	commit:  ?string,
+	genesis: ?string,
 };
 
 export type Home = {
@@ -42,16 +43,22 @@ export type Home = {
 };
 
 export type Chain = {
-	/* TODO (kurkomisi) */
+	currentBlock: Block,
 };
+
+export type Block = {
+	number:    number,
+	timestamp: number,
+}
 
 export type TxPool = {
 	/* TODO (kurkomisi) */
 };
 
 export type Network = {
-	peers: Peers,
-	diff:  Array<PeerEvent>
+	peers:           Peers,
+	diff:            Array<PeerEvent>,
+	activePeerCount: number,
 };
 
 export type PeerEvent = {

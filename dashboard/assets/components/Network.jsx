@@ -379,6 +379,17 @@ export const inserter = (sampleLimit: number) => (update: NetworkType, prev: Net
 			}
 		});
 	}
+	prev.activePeerCount = 0;
+	Object.entries(prev.peers.bundles).forEach(([addr, bundle]) => {
+		if (!bundle.knownPeers || Object.keys(bundle.knownPeers).length < 1) {
+			return;
+		}
+		Object.entries(bundle.knownPeers).forEach(([enode, peer]) => {
+			if (peer.active === true) {
+				prev.activePeerCount++;
+			}
+		});
+	});
 	return prev;
 };
 

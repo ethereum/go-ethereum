@@ -27,6 +27,7 @@ package dashboard
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"io"
 	"net"
 	"net/http"
@@ -46,6 +47,7 @@ import (
 
 const (
 	sampleLimit = 200 // Maximum number of data samples
+	dataCollectorCount = 4
 )
 
 // Dashboard contains the dashboard internals.
@@ -58,10 +60,11 @@ type Dashboard struct {
 
 	history *Message // Stored historical data
 
-	lock     sync.Mutex   // Lock protecting the dashboard's internals
-	sysLock  sync.RWMutex // Lock protecting the stored system data
-	peerLock sync.RWMutex // Lock protecting the stored peer data
-	logLock  sync.RWMutex // Lock protecting the stored log data
+	lock      sync.Mutex   // Lock protecting the dashboard's internals
+	chainLock sync.RWMutex // Lock protecting the stored blockchain data
+	sysLock   sync.RWMutex // Lock protecting the stored system data
+	peerLock  sync.RWMutex // Lock protecting the stored peer data
+	logLock   sync.RWMutex // Lock protecting the stored log data
 
 	geodb  *geoDB // geoip database instance for IP to geographical information conversions
 	logdir string // Directory containing the log files
@@ -95,6 +98,12 @@ func New(config *Config, ethServ *eth.Ethereum, lesServ *les.LightEthereum, comm
 	if len(params.VersionMeta) > 0 {
 		versionMeta = fmt.Sprintf(" (%s)", params.VersionMeta)
 	}
+	var genesis common.Hash
+	if ethServ != nil {
+		genesis = ethServ.BlockChain().Genesis().Hash()
+	} else if lesServ != nil {
+		genesis = lesServ.BlockChain().Genesis().Hash()
+	}
 	return &Dashboard{
 		conns:  make(map[uint32]*client),
 		config: config,
@@ -103,6 +112,7 @@ func New(config *Config, ethServ *eth.Ethereum, lesServ *les.LightEthereum, comm
 			General: &GeneralMessage{
 				Commit:  commit,
 				Version: fmt.Sprintf("v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
+				Genesis: genesis,
 			},
 			System: &SystemMessage{
 				ActiveMemory:   emptyChartEntries(sampleLimit),
@@ -143,7 +153,8 @@ func (db *Dashboard) APIs() []rpc.API { return nil }
 func (db *Dashboard) Start(server *p2p.Server) error {
 	log.Info("Starting dashboard")
 
-	db.wg.Add(3)
+	db.wg.Add(dataCollectorCount)
+	go db.collectChainData()
 	go db.collectSystemData()
 	go db.streamLogs()
 	go db.collectPeerData()
@@ -175,8 +186,8 @@ func (db *Dashboard) Stop() error {
 		errs = append(errs, err)
 	}
 	// Close the collectors.
-	errc := make(chan error, 1)
-	for i := 0; i < 3; i++ {
+	errc := make(chan error, dataCollectorCount)
+	for i := 0; i < dataCollectorCount; i++ {
 		db.quit <- errc
 		if err := <-errc; err != nil {
 			errs = append(errs, err)
@@ -250,20 +261,21 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 	}()
 
 	// Send the past data.
+	db.chainLock.RLock()
 	db.sysLock.RLock()
 	db.peerLock.RLock()
 	db.logLock.RLock()
 
 	h := deepcopy.Copy(db.history).(*Message)
 
+	db.chainLock.RUnlock()
 	db.sysLock.RUnlock()
 	db.peerLock.RUnlock()
 	db.logLock.RUnlock()
 
-	client.msg <- h
-
 	// Start tracking the connection and drop at connection loss.
 	db.lock.Lock()
+	client.msg <- h
 	db.conns[id] = client
 	db.lock.Unlock()
 	defer func() {
