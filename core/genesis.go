@@ -183,7 +183,11 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, constant
 			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
 		}
 		block, err := genesis.Commit(db)
-		return genesis.Config, block.Hash(), err
+		var hash common.Hash
+		if block != nil {
+			hash = block.Hash()
+		}
+		return genesis.Config, hash, err
 	}
 
 	// Check whether the genesis block is already written.
