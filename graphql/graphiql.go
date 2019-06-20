@@ -22,10 +22,17 @@
 
 package graphql
 
+//go:generate go-bindata -nometadata -o assets.go -prefix assets -nocompress -pkg graphql assets/index.html
+//go:generate sh -c "sed 's#var _indexHtml#//nolint:misspell\\\n&#' assets.go > assets.go.tmp && mv assets.go.tmp assets.go"
+//go:generate gofmt -w -s -l assets.go
+
 import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"strings"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // GraphiQL is an in-browser IDE for exploring GraphiQL APIs.
@@ -52,44 +59,18 @@ func (h GraphiQL) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, errorJSON("only GET requests are supported"), http.StatusMethodNotAllowed)
 		return
 	}
-
-	w.Write(graphiql)
+	path := r.URL.String()
+	if path == "/" {
+		path = "/index.html"
+	}
+	blob, err := Asset(path[1:])
+	if err != nil {
+		log.Warn("Failed to load the asset", "path", path, "err", err)
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if strings.HasSuffix(path, ".css") {
+		w.Header().Add("Content-Type", "text/css")
+	}
+	_, _ = w.Write(blob)
 }
-
-var graphiql = []byte(`
-<!DOCTYPE html>
-<html>
-	<head>
-		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/graphiql/0.13.0/graphiql.css"/>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/fetch/3.0.0/fetch.min.js"></script>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/react/16.8.5/umd/react.production.min.js"></script>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/16.8.5/umd/react-dom.production.min.js"></script>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/graphiql/0.13.0/graphiql.min.js"></script>
-	</head>
-	<body style="width: 100%; height: 100%; margin: 0; overflow: hidden;">
-		<div id="graphiql" style="height: 100vh;">Loading...</div>
-		<script>
-			function fetchGQL(params) {
-				return fetch("/graphql", {
-					method: "post",
-					body: JSON.stringify(params),
-					credentials: "include",
-				}).then(function (resp) {
-					return resp.text();
-				}).then(function (body) {
-					try {
-						return JSON.parse(body);
-					} catch (error) {
-						return body;
-					}
-				});
-			}
-
-			ReactDOM.render(
-				React.createElement(GraphiQL, {fetcher: fetchGQL}),
-				document.getElementById("graphiql")
-			)
-		</script>
-	</body>
-</html>
-`)
