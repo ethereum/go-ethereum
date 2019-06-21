@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/ubiq/go-ubiq/cmd/utils"
-	gethmetrics "github.com/ubiq/go-ubiq/metrics"
+	gubiqmetrics "github.com/ubiq/go-ubiq/metrics"
 	"github.com/ubiq/go-ubiq/metrics/influxdb"
 	"github.com/ubiq/go-ubiq/swarm/log"
 	cli "gopkg.in/urfave/cli.v1"
@@ -97,12 +97,12 @@ func Setup(ctx *cli.Context) {
 
 		if enableExport {
 			log.Info("Enabling swarm metrics export to InfluxDB")
-			go influxdb.InfluxDBWithTags(gethmetrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "swarm.", tagsMap)
+			go influxdb.InfluxDBWithTags(gubiqmetrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "swarm.", tagsMap)
 		}
 
 		if enableAccountingExport {
 			log.Info("Exporting swarm accounting metrics to InfluxDB")
-			go influxdb.InfluxDBWithTags(gethmetrics.AccountingRegistry, 10*time.Second, endpoint, database, username, password, "accounting.", tagsMap)
+			go influxdb.InfluxDBWithTags(gubiqmetrics.AccountingRegistry, 10*time.Second, endpoint, database, username, password, "accounting.", tagsMap)
 		}
 	}
 }

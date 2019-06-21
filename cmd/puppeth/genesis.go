@@ -26,9 +26,13 @@ import (
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/common/hexutil"
 	math2 "github.com/ubiq/go-ubiq/common/math"
-	"github.com/ubiq/go-ubiq/consensus/ubqhash"
+	// "github.com/ubiq/go-ubiq/consensus/ubqhash"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/params"
+)
+
+var (
+	blockReward *big.Int = big.NewInt(8e+18) // Block reward in wei for successfully mining a block
 )
 
 // alethGenesisSpec represents the genesis specification format used by the
@@ -130,7 +134,7 @@ func newAlethGenesisSpec(network string, genesis *core.Genesis) (*alethGenesisSp
 	spec.Params.DifficultyBoundDivisor = (*math2.HexOrDecimal256)(params.DifficultyBoundDivisor)
 	spec.Params.GasLimitBoundDivisor = (math2.HexOrDecimal64)(params.GasLimitBoundDivisor)
 	spec.Params.DurationLimit = (*math2.HexOrDecimal256)(params.DurationLimit)
-	spec.Params.BlockReward = (*hexutil.Big)(ubqhash.FrontierBlockReward)
+	spec.Params.BlockReward = (*hexutil.Big)(blockReward)
 
 	spec.Genesis.Nonce = (hexutil.Bytes)(make([]byte, 8))
 	binary.LittleEndian.PutUint64(spec.Genesis.Nonce[:], genesis.Nonce)
@@ -324,7 +328,7 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	spec.Engine.Ubqhash.Params.MinimumDifficulty = (*hexutil.Big)(params.MinimumDifficulty)
 	spec.Engine.Ubqhash.Params.DifficultyBoundDivisor = (*hexutil.Big)(params.DifficultyBoundDivisor)
 	spec.Engine.Ubqhash.Params.DurationLimit = (*hexutil.Big)(params.DurationLimit)
-	spec.Engine.Ubqhash.Params.BlockReward["0x0"] = hexutil.EncodeBig(ubqhash.FrontierBlockReward)
+	spec.Engine.Ubqhash.Params.BlockReward["0x0"] = hexutil.EncodeBig(blockReward)
 
 	// Homestead
 	spec.Engine.Ubqhash.Params.HomesteadTransition = hexutil.Uint64(genesis.Config.HomesteadBlock.Uint64())
@@ -427,7 +431,7 @@ func (spec *parityChainSpec) setPrecompile(address byte, data *parityChainSpecBu
 }
 
 func (spec *parityChainSpec) setByzantium(num *big.Int) {
-	spec.Engine.Ubqhash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(ubqhash.ByzantiumBlockReward)
+	spec.Engine.Ubqhash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(blockReward)
 	spec.Engine.Ubqhash.Params.DifficultyBombDelays[hexutil.EncodeBig(num)] = hexutil.EncodeUint64(3000000)
 	n := hexutil.Uint64(num.Uint64())
 	spec.Engine.Ubqhash.Params.EIP100bTransition = n
@@ -438,7 +442,7 @@ func (spec *parityChainSpec) setByzantium(num *big.Int) {
 }
 
 func (spec *parityChainSpec) setConstantinople(num *big.Int) {
-	spec.Engine.Ubqhash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(ubqhash.ConstantinopleBlockReward)
+	spec.Engine.Ubqhash.Params.BlockReward[hexutil.EncodeBig(num)] = hexutil.EncodeBig(blockReward)
 	spec.Engine.Ubqhash.Params.DifficultyBombDelays[hexutil.EncodeBig(num)] = hexutil.EncodeUint64(2000000)
 	n := hexutil.Uint64(num.Uint64())
 	spec.Params.EIP145Transition = n

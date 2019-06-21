@@ -22,7 +22,7 @@ import (
 	"sort"
 
 	"github.com/ubiq/go-ubiq/cmd/utils"
-	gethmetrics "github.com/ubiq/go-ubiq/metrics"
+	gubiqmetrics "github.com/ubiq/go-ubiq/metrics"
 	"github.com/ubiq/go-ubiq/metrics/influxdb"
 	swarmmetrics "github.com/ubiq/go-ubiq/swarm/metrics"
 	"github.com/ubiq/go-ubiq/swarm/tracing"
@@ -183,7 +183,7 @@ func emitMetrics(ctx *cli.Context) error {
 		tagsMap["version"] = gitCommit
 		tagsMap["filesize"] = fmt.Sprintf("%v", filesize)
 
-		return influxdb.InfluxDBWithTagsOnce(gethmetrics.DefaultRegistry, endpoint, database, username, password, "swarm-smoke.", tagsMap)
+		return influxdb.InfluxDBWithTagsOnce(gubiqmetrics.DefaultRegistry, endpoint, database, username, password, "swarm-smoke.", tagsMap)
 	}
 
 	return nil
