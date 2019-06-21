@@ -8,7 +8,6 @@ import (
 	"io"
 	"math"
 	"math/big"
-	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -39,7 +38,7 @@ const (
 	inmemorySnapshots    = 128  // Number of recent vote snapshots to keep in memory
 	inmemorySignatures   = 4096 // Number of recent block signatures to keep in memory
 
-	wiggleTime = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
+	wiggleTime = 1000 * time.Millisecond // Random delay (per signer) to allow concurrent signers
 )
 
 // Bor protocol constants.
@@ -116,9 +115,9 @@ var (
 	// the previous block's timestamp + the minimum block period.
 	ErrInvalidTimestamp = errors.New("invalid timestamp")
 
-	// errInvalidVotingChain is returned if an authorization list is attempted to
+	// errOutOfRangeChain is returned if an authorization list is attempted to
 	// be modified via out-of-range or non-contiguous headers.
-	errInvalidVotingChain = errors.New("invalid voting chain")
+	errOutOfRangeChain = errors.New("out of range or non-contiguous chain")
 
 	// errUnauthorizedSigner is returned if a header is signed by a non-authorized entity.
 	errUnauthorizedSigner = errors.New("unauthorized signer")
@@ -191,21 +190,26 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 // CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
-func CalcDifficulty(snap *Snapshot, signer common.Address, producerPeriod uint64) *big.Int {
-	if snap.inturn(snap.Number+1, signer, producerPeriod) {
-		return new(big.Int).Set(diffInTurn)
-	}
-	return new(big.Int).Set(diffNoTurn)
+func CalcDifficulty(snap *Snapshot, signer common.Address, epoch uint64) *big.Int {
+	return big.NewInt(0).SetUint64(snap.inturn(snap.Number+1, signer, epoch))
 }
 
 // CalcProducerDelay is the producer delay algorithm based on block time.
-func CalcProducerDelay(snap *Snapshot, producerInterval uint64, producerDelay uint64) uint64 {
-	isFirstBlock := (snap.Number + 1) % producerInterval
-	if isFirstBlock == 0 {
+func CalcProducerDelay(snap *Snapshot, signer common.Address, period uint64, epoch uint64, producerDelay uint64) uint64 {
+	// lastSigner := snap.Recents[snap.Number]
+	// proposer := snap.ValidatorSet.GetProposer()
+
+	// if block is epoch start block, proposer will be inturn signer
+	if (snap.Number+1)%epoch == 0 {
+		fmt.Println("==>", "producerDelay", producerDelay, "(snap.Number+1)%epoch", (snap.Number+1)%epoch)
 		return producerDelay
+
+		// if block is not epoch block, last block signer will be inturn
+		// } else if bytes.Compare(lastSigner.Bytes(), signer.Bytes()) != 0 {
+		// return producerDelay
 	}
 
-	return 0
+	return period
 }
 
 // BorRLP returns the rlp bytes which needs to be signed for the bor
@@ -235,7 +239,8 @@ type Bor struct {
 	signFn SignerFn       // Signer function to authorize hashes with
 	lock   sync.RWMutex   // Protects the signer fields
 
-	ethAPI *ethapi.PublicBlockChainAPI
+	ethAPI          *ethapi.PublicBlockChainAPI
+	validatorSetABI abi.ABI
 
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
@@ -248,18 +253,21 @@ func New(config *params.BorConfig, db ethdb.Database, ethAPI *ethapi.PublicBlock
 	if conf.Epoch == 0 {
 		conf.Epoch = epochLength
 	}
+
 	// Allocate the snapshot caches and create the engine
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySignatures)
-
-	return &Bor{
-		config:     &conf,
-		db:         db,
-		ethAPI:     ethAPI,
-		recents:    recents,
-		signatures: signatures,
-		proposals:  make(map[common.Address]bool),
+	validatorSetABI, _ := abi.JSON(strings.NewReader(validatorset.ValidatorsetABI))
+	c := &Bor{
+		config:          &conf,
+		db:              db,
+		ethAPI:          ethAPI,
+		recents:         recents,
+		signatures:      signatures,
+		proposals:       make(map[common.Address]bool),
+		validatorSetABI: validatorSetABI,
 	}
+	return c
 }
 
 // Author implements consensus.Engine, returning the Ethereum address recovered
@@ -381,20 +389,22 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 		return ErrInvalidTimestamp
 	}
 	// Retrieve the snapshot needed to verify this header and cache it
-	snap, err := c.snapshot(chain, number-1, header.ParentHash, parents)
-	if err != nil {
-		return err
-	}
+	// snap, err := c.snapshot(chain, number-1, header.ParentHash, parents)
+	// if err != nil {
+	// 	return err
+	// }
+
 	// If the block is a checkpoint block, verify the signer list
+	// TODO verify signers
 	if number%c.config.Epoch == 0 {
-		signers := make([]byte, len(snap.Signers)*common.AddressLength)
-		for i, signer := range snap.signers() {
-			copy(signers[i*common.AddressLength:], signer[:])
-		}
-		extraSuffix := len(header.Extra) - extraSeal
-		if !bytes.Equal(header.Extra[extraVanity:extraSuffix], signers) {
-			return errMismatchingCheckpointSigners
-		}
+		// signers := make([]byte, len(snap.Signers)*common.AddressLength)
+		// for i, signer := range snap.signers() {
+		// 	copy(signers[i*common.AddressLength:], signer[:])
+		// }
+		// extraSuffix := len(header.Extra) - extraSeal
+		// if !bytes.Equal(header.Extra[extraVanity:extraSuffix], signers) {
+		// 	return errMismatchingCheckpointSigners
+		// }
 	}
 	// All basic checks passed, verify the seal and return
 	return c.verifySeal(chain, header, parents)
@@ -415,7 +425,7 @@ func (c *Bor) snapshot(chain consensus.ChainReader, number uint64, hash common.H
 		}
 		// If an on-disk checkpoint snapshot can be found, use that
 		if number%voteSnapshotInterval == 0 {
-			if s, err := loadSnapshot(c.config, c.signatures, c.db, hash); err == nil {
+			if s, err := loadSnapshot(c.config, c.signatures, c.db, hash, c.ethAPI); err == nil {
 				log.Trace("Loaded voting snapshot from disk", "number", number, "hash", hash)
 				snap = s
 				break
@@ -428,15 +438,19 @@ func (c *Bor) snapshot(chain consensus.ChainReader, number uint64, hash common.H
 			if checkpoint != nil {
 				hash := checkpoint.Hash()
 
-				// validatorSet := new(ValidatorSet)
-				// TODO populate validator set
-				c.GetCurrentValidators(number)
+				// current validators
+				validators, err := c.GetCurrentValidators(number)
+				if err != nil {
+					// Handle error
+				}
 
+				// TODO remove signer
 				signers := make([]common.Address, (len(checkpoint.Extra)-extraVanity-extraSeal)/common.AddressLength)
 				for i := 0; i < len(signers); i++ {
 					copy(signers[i][:], checkpoint.Extra[extraVanity+i*common.AddressLength:])
 				}
-				snap = newSnapshot(c.config, c.signatures, number, hash, signers)
+
+				snap = newSnapshot(c.config, c.signatures, number, hash, validators, c.ethAPI)
 				if err := snap.store(c.db); err != nil {
 					return nil, err
 				}
@@ -519,30 +533,43 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 	if err != nil {
 		return err
 	}
-	if _, ok := snap.Signers[signer]; !ok {
+
+	if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
 		return errUnauthorizedSigner
 	}
-	for seen, recent := range snap.Recents {
-		if recent == signer {
-			// Signer is among recents, only fail if the current block doesn't shift it out
-			if limit := uint64(len(snap.Signers)/2 + 1); seen > number-limit {
-				// return errRecentlySigned
-			}
+
+	// check if signer is correct
+	validators := snap.ValidatorSet.Validators
+	// proposer will be the last signer if block is not epoch block
+	proposer := snap.ValidatorSet.GetProposer().Address
+	if number%c.config.Epoch != 0 {
+		// proposer = snap.Recents[number-1]
+	}
+	proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
+	signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
+	limit := len(validators) - (len(validators)/2 + 1)
+
+	// temp index
+	tempIndex := signerIndex
+	if proposerIndex != tempIndex && limit > 0 {
+		if tempIndex < proposerIndex {
+			tempIndex = tempIndex + len(validators)
+		}
+
+		if tempIndex-proposerIndex > limit {
+			return errRecentlySigned
 		}
 	}
+
 	// Ensure that the difficulty corresponds to the turn-ness of the signer
 	if !c.fakeDiff {
-		inturn := snap.inturn(header.Number.Uint64(), signer, c.config.ProducerInterval)
-		if inturn && header.Difficulty.Cmp(diffInTurn) != 0 {
-			return errWrongDifficulty
-		}
-		if !inturn && header.Difficulty.Cmp(diffNoTurn) != 0 {
+		difficulty := snap.inturn(header.Number.Uint64(), signer, c.config.Epoch)
+		if header.Difficulty.Uint64() != difficulty {
 			return errWrongDifficulty
 		}
 	}
 
-	log.Info("==> New block", "number", header.Number, "hash", header.Hash().Hex(), "signer", signer.Hex())
-
+	fmt.Println("==> New block", "number", header.Number, "hash", header.Hash().Hex(), "signer", signer.Hex(), "proposer", proposer.Hex())
 	return nil
 }
 
@@ -559,29 +586,9 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	if err != nil {
 		return err
 	}
-	if number%c.config.Epoch != 0 {
-		c.lock.RLock()
 
-		// Gather all the proposals that make sense voting on
-		addresses := make([]common.Address, 0, len(c.proposals))
-		for address, authorize := range c.proposals {
-			if snap.validVote(address, authorize) {
-				addresses = append(addresses, address)
-			}
-		}
-		// If there's pending proposals, cast a vote on them
-		if len(addresses) > 0 {
-			header.Coinbase = addresses[rand.Intn(len(addresses))]
-			if c.proposals[header.Coinbase] {
-				copy(header.Nonce[:], nonceAuthVote)
-			} else {
-				copy(header.Nonce[:], nonceDropVote)
-			}
-		}
-		c.lock.RUnlock()
-	}
 	// Set the correct difficulty
-	header.Difficulty = CalcDifficulty(snap, c.signer, c.config.ProducerInterval)
+	header.Difficulty = CalcDifficulty(snap, c.signer, c.config.Epoch)
 
 	// Ensure the extra data has all it's components
 	if len(header.Extra) < extraVanity {
@@ -604,10 +611,12 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	header.Time = parent.Time + c.config.Period + CalcProducerDelay(snap, c.config.ProducerInterval, c.config.ProducerDelay)
+
+	header.Time = parent.Time + CalcProducerDelay(snap, c.signer, c.config.Period, c.config.Epoch, c.config.ProducerDelay)
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
 	}
+	fmt.Println("parent.Time", parent.Time, "header.Time", header.Time, "number", header.Number)
 	return nil
 }
 
@@ -660,43 +669,52 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 	signer, signFn := c.signer, c.signFn
 	c.lock.RUnlock()
 
-	// Bail out if we're unauthorized to sign a block
 	snap, err := c.snapshot(chain, number-1, header.ParentHash, nil)
 	if err != nil {
 		return err
 	}
-	if _, authorized := snap.Signers[signer]; !authorized {
+
+	// Bail out if we're unauthorized to sign a block
+	if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
 		return errUnauthorizedSigner
 	}
-	// If we're amongst the recent signers, wait for the next block
-	for seen, recent := range snap.Recents {
-		count := 0
-		if recent == signer {
-			// count on how many times signer has been seen
-			count = count + 1
 
-			// Signer is among recents, only wait if the current block doesn't shift it out
-			if limit := uint64(len(snap.Signers)/2 + 1); number < limit || seen > number-limit {
-				log.Info("Signed recently, must wait for others")
-				// return nil
-			}
-		}
+	validators := snap.ValidatorSet.Validators
+	// proposer will be the last signer if block is not epoch block
+	proposer := snap.ValidatorSet.GetProposer().Address
+	if number%c.config.Epoch != 0 {
+		// proposer = snap.Recents[number-1]
 	}
+	proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
+	signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
+	limit := len(validators) - (len(validators)/2 + 1)
+
+	// temp index
+	tempIndex := signerIndex
+	if tempIndex < proposerIndex {
+		tempIndex = tempIndex + len(validators)
+	}
+	fmt.Println("Block temp index", "number", number, "tempIndex", tempIndex, "proposerIndex", proposerIndex)
+	if limit > 0 && tempIndex-proposerIndex > limit {
+		log.Info("Signed recently, must wait for others")
+		return nil
+	}
+
 	// Sweet, the protocol permits us to sign the block, wait for our time
 	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
-	if header.Difficulty.Cmp(diffNoTurn) == 0 {
-		// It's not our turn explicitly to sign, delay it a bit
-		wiggle := time.Duration(len(snap.Signers)/2+1) * wiggleTime
-		delay += time.Duration(rand.Int63n(int64(wiggle)))
+	wiggle := time.Duration(wiggleTime) * time.Duration(tempIndex-proposerIndex)
+	delay += wiggle
 
-		log.Trace("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
-	}
+	fmt.Println("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
+	fmt.Println("--> Sealing block with", "number", number, "delay", delay, "headerDifficulty", header.Difficulty, "signer", signer.Hex(), "proposer", proposer.Hex())
+
 	// Sign all the things!
 	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeBor, BorRLP(header))
 	if err != nil {
 		return err
 	}
 	copy(header.Extra[len(header.Extra)-extraSeal:], sighash)
+
 	// Wait until sealing is terminated or delay timeout.
 	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
 	go func() {
@@ -724,7 +742,7 @@ func (c *Bor) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *t
 	if err != nil {
 		return nil
 	}
-	return CalcDifficulty(snap, c.signer, c.config.ProducerInterval)
+	return CalcDifficulty(snap, c.signer, c.config.Epoch)
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
@@ -750,6 +768,11 @@ func (c *Bor) Close() error {
 
 // GetCurrentValidators get current validators
 func (c *Bor) GetCurrentValidators(number uint64) ([]*Validator, error) {
+	return GetValidators(number, c.config.ValidatorContract, c.ethAPI)
+}
+
+// GetValidators get current validators
+func GetValidators(number uint64, validatorContract string, ethAPI *ethapi.PublicBlockChainAPI) ([]*Validator, error) {
 	blockNr := rpc.BlockNumber(number)
 
 	// validator set ABI
@@ -765,9 +788,9 @@ func (c *Bor) GetCurrentValidators(number uint64) ([]*Validator, error) {
 
 	// call
 	msgData := (hexutil.Bytes)(data)
-	toAddress := common.HexToAddress(c.config.ValidatorContract)
+	toAddress := common.HexToAddress(validatorContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+	result, err := ethAPI.Call(ctx, ethapi.CallArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
@@ -799,4 +822,38 @@ func (c *Bor) GetCurrentValidators(number uint64) ([]*Validator, error) {
 		}
 	}
 	return valz, nil
+}
+
+func validatorContains(a []*Validator, x *Validator) (*Validator, bool) {
+	for _, n := range a {
+		if bytes.Compare(n.Address.Bytes(), x.Address.Bytes()) == 0 {
+			return n, true
+		}
+	}
+	return nil, false
+}
+
+func getUpdatedValidatorSet(oldValidatorSet *ValidatorSet, newVals []*Validator) *ValidatorSet {
+	v := oldValidatorSet
+	oldVals := v.Validators
+
+	var changes []*Validator
+	for _, ov := range oldVals {
+		if f, ok := validatorContains(newVals, ov); ok {
+			ov.VotingPower = f.VotingPower
+		} else {
+			ov.VotingPower = 0
+		}
+
+		changes = append(changes, ov)
+	}
+
+	for _, nv := range newVals {
+		if _, ok := validatorContains(changes, nv); !ok {
+			changes = append(changes, nv)
+		}
+	}
+
+	v.UpdateWithChangeSet(changes)
+	return v
 }

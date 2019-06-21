@@ -183,7 +183,10 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			TrieTimeLimit:       config.TrieTimeout,
 		}
 	)
+
 	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve)
+	eth.engine.VerifyHeader(eth.blockchain, eth.blockchain.CurrentHeader(), true) // TODO think on it
+
 	if err != nil {
 		return nil, err
 	}
