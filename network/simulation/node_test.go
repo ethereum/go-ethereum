@@ -32,7 +32,7 @@ import (
 )
 
 func TestUpDownNodeIDs(t *testing.T) {
-	sim := New(noopServiceFuncMap)
+	sim := NewInProc(noopServiceFuncMap)
 	defer sim.Close()
 
 	ids, err := sim.AddNodes(10)
@@ -99,7 +99,7 @@ func equalNodeIDs(one, other []enode.ID) bool {
 }
 
 func TestAddNode(t *testing.T) {
-	sim := New(noopServiceFuncMap)
+	sim := NewInProc(noopServiceFuncMap)
 	defer sim.Close()
 
 	id, err := sim.AddNode()
@@ -118,7 +118,7 @@ func TestAddNode(t *testing.T) {
 }
 
 func TestAddNodeWithMsgEvents(t *testing.T) {
-	sim := New(noopServiceFuncMap)
+	sim := NewInProc(noopServiceFuncMap)
 	defer sim.Close()
 
 	id, err := sim.AddNode(AddNodeWithMsgEvents(true))
@@ -141,7 +141,7 @@ func TestAddNodeWithMsgEvents(t *testing.T) {
 }
 
 func TestAddNodeWithService(t *testing.T) {
-	sim := New(map[string]ServiceFunc{
+	sim := NewInProc(map[string]ServiceFunc{
 		"noop1": noopServiceFunc,
 		"noop2": noopServiceFunc,
 	})
@@ -162,7 +162,7 @@ func TestAddNodeWithService(t *testing.T) {
 }
 
 func TestAddNodeMultipleServices(t *testing.T) {
-	sim := New(map[string]ServiceFunc{
+	sim := NewInProc(map[string]ServiceFunc{
 		"noop1": noopServiceFunc,
 		"noop2": noopService2Func,
 	})
@@ -183,7 +183,7 @@ func TestAddNodeMultipleServices(t *testing.T) {
 }
 
 func TestAddNodeDuplicateServiceError(t *testing.T) {
-	sim := New(map[string]ServiceFunc{
+	sim := NewInProc(map[string]ServiceFunc{
 		"noop1": noopServiceFunc,
 		"noop2": noopServiceFunc,
 	})
@@ -197,7 +197,7 @@ func TestAddNodeDuplicateServiceError(t *testing.T) {
 }
 
 func TestAddNodes(t *testing.T) {
-	sim := New(noopServiceFuncMap)
+	sim := NewInProc(noopServiceFuncMap)
 	defer sim.Close()
 
 	nodesCount := 12
@@ -219,7 +219,7 @@ func TestAddNodes(t *testing.T) {
 }
 
 func TestAddNodesAndConnectFull(t *testing.T) {
-	sim := New(noopServiceFuncMap)
+	sim := NewInProc(noopServiceFuncMap)
 	defer sim.Close()
 
 	n := 12
@@ -233,7 +233,7 @@ func TestAddNodesAndConnectFull(t *testing.T) {
 }
 
 func TestAddNodesAndConnectChain(t *testing.T) {
-	sim := New(noopServiceFuncMap)
+	sim := NewInProc(noopServiceFuncMap)
 	defer sim.Close()
 
 	_, err := sim.AddNodesAndConnectChain(12)
@@ -252,7 +252,7 @@ func TestAddNodesAndConnectChain(t *testing.T) {
 }
 
 func TestAddNodesAndConnectRing(t *testing.T) {
-	sim := New(noopServiceFuncMap)
+	sim := NewInProc(noopServiceFuncMap)
 	defer sim.Close()
 
 	ids, err := sim.AddNodesAndConnectRing(12)
@@ -264,7 +264,7 @@ func TestAddNodesAndConnectRing(t *testing.T) {
 }
 
 func TestAddNodesAndConnectStar(t *testing.T) {
-	sim := New(noopServiceFuncMap)
+	sim := NewInProc(noopServiceFuncMap)
 	defer sim.Close()
 
 	ids, err := sim.AddNodesAndConnectStar(12)
@@ -278,7 +278,7 @@ func TestAddNodesAndConnectStar(t *testing.T) {
 //To test that uploading a snapshot works
 func TestUploadSnapshot(t *testing.T) {
 	log.Debug("Creating simulation")
-	s := New(map[string]ServiceFunc{
+	s := NewInProc(map[string]ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			addr := network.NewAddr(ctx.Config.Node())
 			hp := network.NewHiveParams()
@@ -317,7 +317,7 @@ func TestUploadSnapshot(t *testing.T) {
 }
 
 func TestStartStopNode(t *testing.T) {
-	sim := New(noopServiceFuncMap)
+	sim := NewInProc(noopServiceFuncMap)
 	defer sim.Close()
 
 	id, err := sim.AddNode()
@@ -353,7 +353,7 @@ func TestStartStopNode(t *testing.T) {
 }
 
 func TestStartStopRandomNode(t *testing.T) {
-	sim := New(noopServiceFuncMap)
+	sim := NewInProc(noopServiceFuncMap)
 	defer sim.Close()
 
 	_, err := sim.AddNodes(3)
@@ -392,7 +392,7 @@ func TestStartStopRandomNode(t *testing.T) {
 }
 
 func TestStartStopRandomNodes(t *testing.T) {
-	sim := New(noopServiceFuncMap)
+	sim := NewInProc(noopServiceFuncMap)
 	defer sim.Close()
 
 	_, err := sim.AddNodes(10)

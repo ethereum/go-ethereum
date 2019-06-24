@@ -43,7 +43,7 @@ func init() {
 
 // TestRun tests if Run method calls RunFunc and if it handles context properly.
 func TestRun(t *testing.T) {
-	sim := New(noopServiceFuncMap)
+	sim := NewInProc(noopServiceFuncMap)
 	defer sim.Close()
 
 	t.Run("call", func(t *testing.T) {
@@ -104,7 +104,7 @@ func TestClose(t *testing.T) {
 
 	sleep := 50 * time.Millisecond
 
-	sim := New(map[string]ServiceFunc{
+	sim := NewInProc(map[string]ServiceFunc{
 		"noop": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			return newNoopService(), func() {
 				time.Sleep(sleep)
@@ -151,7 +151,7 @@ func TestClose(t *testing.T) {
 
 // TestDone checks if Close method triggers the closing of done channel.
 func TestDone(t *testing.T) {
-	sim := New(noopServiceFuncMap)
+	sim := NewInProc(noopServiceFuncMap)
 	sleep := 50 * time.Millisecond
 	timeout := 2 * time.Second
 

@@ -54,7 +54,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 		chunkCount = 1000 //~4mb
 		syncTime   = 5 * time.Second
 	)
-	sim := simulation.New(map[string]simulation.ServiceFunc{
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			addr := network.NewAddr(ctx.Config.Node())
 
@@ -253,7 +253,7 @@ func TestStarNetworkSync(t *testing.T) {
 		syncTime   = 30 * time.Second
 		filesize   = chunkCount * chunkSize
 	)
-	sim := simulation.New(map[string]simulation.ServiceFunc{
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			addr := network.NewAddr(ctx.Config.Node())
 
@@ -466,7 +466,7 @@ type chunkProxData struct {
 func TestSameVersionID(t *testing.T) {
 	//test version ID
 	v := uint(1)
-	sim := simulation.New(map[string]simulation.ServiceFunc{
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			addr, netStore, delivery, clean, err := newNetStoreAndDelivery(ctx, bucket)
 			if err != nil {
@@ -529,7 +529,7 @@ func TestSameVersionID(t *testing.T) {
 func TestDifferentVersionID(t *testing.T) {
 	//create a variable to hold the version ID
 	v := uint(0)
-	sim := simulation.New(map[string]simulation.ServiceFunc{
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			addr, netStore, delivery, clean, err := newNetStoreAndDelivery(ctx, bucket)
 			if err != nil {

@@ -171,7 +171,7 @@ func runPureRetrievalTest(t *testing.T, nodeCount int, chunkCount int) {
 	t.Helper()
 	// the pure retrieval test needs a different service map, as we want
 	// syncing disabled and we don't need to set the syncUpdateDelay
-	sim := simulation.New(map[string]simulation.ServiceFunc{
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			addr, netStore, delivery, clean, err := newNetStoreAndDelivery(ctx, bucket)
 			if err != nil {
@@ -316,7 +316,7 @@ func runFileRetrievalTest(t *testing.T, nodeCount int) {
 
 	t.Helper()
 
-	sim := simulation.New(retrievalSimServiceMap)
+	sim := simulation.NewInProc(retrievalSimServiceMap)
 	defer sim.Close()
 
 	log.Info("Initializing test config", "node count", nodeCount)
@@ -404,7 +404,7 @@ func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) {
 
 	t.Helper()
 
-	sim := simulation.New(retrievalSimServiceMap)
+	sim := simulation.NewInProc(retrievalSimServiceMap)
 	defer sim.Close()
 
 	conf := &synctestConfig{}

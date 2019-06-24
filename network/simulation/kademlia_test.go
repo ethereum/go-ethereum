@@ -46,7 +46,7 @@ func TestWaitTillHealthy(t *testing.T) {
 	testNodesNum := 10
 
 	// create the first simulation
-	sim := New(createSimServiceMap(true))
+	sim := NewInProc(createSimServiceMap(true))
 
 	// connect and...
 	nodeIDs, err := sim.AddNodesAndConnectRing(testNodesNum)
@@ -88,7 +88,7 @@ func TestWaitTillHealthy(t *testing.T) {
 	// close the initial simulation
 	sim.Close()
 	// create a control simulation
-	controlSim := New(createSimServiceMap(false))
+	controlSim := NewInProc(createSimServiceMap(false))
 	defer controlSim.Close()
 
 	// load the snapshot into this control simulation
@@ -158,7 +158,7 @@ func createSimServiceMap(discovery bool) map[string]ServiceFunc {
 func TestWaitTillSnapshotRecreated(t *testing.T) {
 	t.Skip("test is flaky. disabling until underlying problem is addressed")
 	var err error
-	sim := New(createSimServiceMap(true))
+	sim := NewInProc(createSimServiceMap(true))
 	_, err = sim.AddNodesAndConnectRing(16)
 	if err != nil {
 		t.Fatal(err)
@@ -177,7 +177,7 @@ func TestWaitTillSnapshotRecreated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	controlSim := New(createSimServiceMap(false))
+	controlSim := NewInProc(createSimServiceMap(false))
 	defer controlSim.Close()
 	err = controlSim.Net.Load(snap)
 	if err != nil {

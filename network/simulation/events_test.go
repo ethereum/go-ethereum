@@ -28,7 +28,7 @@ import (
 // and waits for the number of connection events to
 // be received.
 func TestPeerEvents(t *testing.T) {
-	sim := New(noopServiceFuncMap)
+	sim := NewInProc(noopServiceFuncMap)
 	defer sim.Close()
 
 	_, err := sim.AddNodes(2)
@@ -68,7 +68,7 @@ func TestPeerEvents(t *testing.T) {
 }
 
 func TestPeerEventsTimeout(t *testing.T) {
-	sim := New(noopServiceFuncMap)
+	sim := NewInProc(noopServiceFuncMap)
 	defer sim.Close()
 
 	_, err := sim.AddNodes(2)

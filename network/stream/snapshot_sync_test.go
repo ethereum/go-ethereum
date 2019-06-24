@@ -134,7 +134,7 @@ var simServiceMap = map[string]simulation.ServiceFunc{
 }
 
 func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
-	sim := simulation.New(simServiceMap)
+	sim := simulation.NewInProc(simServiceMap)
 	defer sim.Close()
 
 	log.Info("Initializing test config")

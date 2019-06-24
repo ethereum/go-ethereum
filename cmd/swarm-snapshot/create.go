@@ -58,7 +58,7 @@ func create(ctx *cli.Context) error {
 func createSnapshot(filename string, nodes int, services []string) (err error) {
 	log.Debug("create snapshot", "filename", filename, "nodes", nodes, "services", services)
 
-	sim := simulation.New(map[string]simulation.ServiceFunc{
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
 			addr := network.NewAddr(ctx.Config.Node())
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())

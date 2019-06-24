@@ -227,7 +227,7 @@ func testProxNetwork(t *testing.T, nodeCount int, msgCount int, timeout time.Dur
 	handlerContextFuncs := make(map[Topic]handlerContextFunc)
 	handlerContextFuncs[topic] = nodeMsgHandler
 	services := newProxServices(td, true, handlerContextFuncs, td.kademlias)
-	td.sim = simulation.New(services)
+	td.sim = simulation.NewInProc(services)
 	defer td.sim.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()

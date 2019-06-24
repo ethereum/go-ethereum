@@ -32,7 +32,7 @@ func TestServiceBucket(t *testing.T) {
 	testKey := "Key"
 	testValue := "Value"
 
-	sim := New(map[string]ServiceFunc{
+	sim := NewInProc(map[string]ServiceFunc{
 		"noop": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			b.Store(testKey, testValue+ctx.Config.ID.String())
 			return newNoopService(), nil, nil

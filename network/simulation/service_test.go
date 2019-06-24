@@ -21,7 +21,7 @@ import (
 )
 
 func TestService(t *testing.T) {
-	sim := New(noopServiceFuncMap)
+	sim := NewInProc(noopServiceFuncMap)
 	defer sim.Close()
 
 	id, err := sim.AddNode()

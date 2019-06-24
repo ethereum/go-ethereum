@@ -292,7 +292,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 		o = new(testSwarmNetworkOptions)
 	}
 
-	sim := simulation.New(map[string]simulation.ServiceFunc{
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"swarm": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			config := api.NewConfig()
 

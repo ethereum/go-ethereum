@@ -130,7 +130,7 @@ func TestSyncSubscriptionsDiff(t *testing.T) {
 // made on initial node connections and that subscriptions are correctly changed
 // when kademlia neighbourhood depth is changed by connecting more nodes.
 func TestUpdateSyncingSubscriptions(t *testing.T) {
-	sim := simulation.New(map[string]simulation.ServiceFunc{
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			addr, netStore, delivery, clean, err := newNetStoreAndDelivery(ctx, bucket)
 			if err != nil {

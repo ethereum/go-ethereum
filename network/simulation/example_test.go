@@ -34,7 +34,7 @@ import (
 // all nodes have the their Kademlias healthy.
 func ExampleSimulation_WaitTillHealthy() {
 
-	sim := simulation.New(map[string]simulation.ServiceFunc{
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			addr := network.NewAddr(ctx.Config.Node())
 			hp := network.NewHiveParams()
@@ -77,7 +77,7 @@ func ExampleSimulation_WaitTillHealthy() {
 
 // Watch all peer events in the simulation network, buy receiving from a channel.
 func ExampleSimulation_PeerEvents() {
-	sim := simulation.New(nil)
+	sim := simulation.NewInProc(nil)
 	defer sim.Close()
 
 	events := sim.PeerEvents(context.Background(), sim.NodeIDs())
@@ -95,7 +95,7 @@ func ExampleSimulation_PeerEvents() {
 
 // Detect when a nodes drop a peer.
 func ExampleSimulation_PeerEvents_disconnections() {
-	sim := simulation.New(nil)
+	sim := simulation.NewInProc(nil)
 	defer sim.Close()
 
 	disconnections := sim.PeerEvents(
@@ -118,7 +118,7 @@ func ExampleSimulation_PeerEvents_disconnections() {
 // Watch multiple types of events or messages. In this case, they differ only
 // by MsgCode, but filters can be set for different types or protocols, too.
 func ExampleSimulation_PeerEvents_multipleFilters() {
-	sim := simulation.New(nil)
+	sim := simulation.NewInProc(nil)
 	defer sim.Close()
 
 	msgs := sim.PeerEvents(

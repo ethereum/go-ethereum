@@ -59,7 +59,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 	externalStreamSessionAt := uint64(50)
 	externalStreamMaxKeys := uint64(100)
 
-	sim := simulation.New(map[string]simulation.ServiceFunc{
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"intervalsStreamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
 			addr, netStore, delivery, clean, err := newNetStoreAndDelivery(ctx, bucket)
 			if err != nil {

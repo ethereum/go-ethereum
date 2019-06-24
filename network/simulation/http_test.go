@@ -35,7 +35,7 @@ func TestSimulationWithHTTPServer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	sim := New(
+	sim := NewInProc(
 		map[string]ServiceFunc{
 			"noop": func(_ *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 				return newNoopService(), nil, nil
