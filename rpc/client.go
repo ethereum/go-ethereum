@@ -412,7 +412,7 @@ func (c *Client) ShhSubscribe(ctx context.Context, channel interface{}, args ...
 // The context argument cancels the RPC request that sets up the subscription but has no
 // effect on the subscription after Subscribe has returned.
 //
-// Slow subscribers will be dropped eventually. Client buffers up to 8000 notifications
+// Slow subscribers will be dropped eventually. Client buffers up to 20000 notifications
 // before considering the subscriber dead. The subscription Err channel will receive
 // ErrSubscriptionQueueOverflow. Use a sufficiently large buffer on the channel or ensure
 // that the channel usually has at least one reader to prevent this issue.
