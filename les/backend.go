@@ -126,7 +126,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 
 	// Note: NewLightChain adds the trusted checkpoint so it needs an ODR with
 	// indexers already set but not started yet
-	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine); err != nil {
+	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine, config.Checkpoint); err != nil {
 		return nil, err
 	}
 	// Note: AddChildIndexer starts the update process for the child
@@ -150,8 +150,8 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	}
 	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
 
-	registrar := newCheckpointRegistrar(chainConfig.CheckpointConfig, leth.getLocalCheckpoint)
-	if leth.protocolManager, err = NewProtocolManager(leth.chainConfig, light.DefaultClientIndexerConfig, config.ULC, true, config.NetworkId, leth.eventMux, leth.peers, leth.blockchain, nil, chainDb, leth.odr, leth.serverPool, registrar, quitSync, &leth.wg, nil); err != nil {
+	registrar := newCheckpointRegistrar(config.CheckpointConfig, leth.getLocalCheckpoint)
+	if leth.protocolManager, err = NewProtocolManager(leth.chainConfig, config.Checkpoint, light.DefaultClientIndexerConfig, config.ULC, true, config.NetworkId, leth.eventMux, leth.peers, leth.blockchain, nil, chainDb, leth.odr, leth.serverPool, registrar, quitSync, &leth.wg, nil); err != nil {
 		return nil, err
 	}
 	if leth.protocolManager.isULCEnabled() {

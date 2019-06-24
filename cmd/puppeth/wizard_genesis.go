@@ -27,17 +27,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/contracts/registrar/contract"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -140,65 +133,6 @@ func (w *wizard) makeGenesis() {
 	fmt.Println("Specify your chain/network ID if you want an explicit one (default = random)")
 	genesis.Config.ChainID = new(big.Int).SetUint64(uint64(w.readDefaultInt(rand.Intn(65536))))
 
-	// Query the user for checkpoint contract config
-	fmt.Println()
-	fmt.Println("Should a checkpoint contract be deployed (y/n)? (default = no)")
-	if w.readDefaultYesNo(false) {
-		// Read the addresses of the trusted signers
-		fmt.Println("Which accounts should be trusted signers? (mandatory at least one)")
-		var (
-			signers   []common.Address
-			threshold uint64
-		)
-		// Get trusted signer addresses
-		for {
-			if address := w.readAddress(); address != nil {
-				signers = append(signers, *address)
-				continue
-			}
-			if len(signers) == 0 {
-				continue
-			}
-			break
-		}
-		// Read the checkpoint signature threshold
-		for {
-			fmt.Printf("What is the minimal approval threshold (maximum %d)?\n", len(signers))
-			threshold = uint64(w.readInt())
-			if threshold <= 0 || threshold > uint64(len(signers)) {
-				log.Error(fmt.Sprintf("Invalid approval threshold, please enter in range [1, %d]\n", len(signers)))
-				continue
-			}
-			break
-		}
-		parsed, err := abi.JSON(strings.NewReader(contract.ContractABI))
-		if err != nil {
-			log.Crit("Parse contract ABI failed", "err", err)
-		}
-		input, err := parsed.Pack("", signers, big.NewInt(params.CheckpointFrequency), big.NewInt(params.CheckpointProcessConfirmations), new(big.Int).SetUint64(threshold))
-		if err != nil {
-			log.Crit("Pack contract constructor arguments failed", "err", err)
-		}
-		config := &runtime.Config{GasLimit: math.MaxInt64}
-		config.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
-		code, address, _, err := runtime.Create(append(common.FromHex(contract.ContractBin), input...), config)
-		if err != nil {
-			log.Crit("Execute contract constructor failed", "err", err)
-		}
-		config.State.Commit(true)
-		genesis.Alloc[address] = core.GenesisAccount{Code: code, Storage: make(map[common.Hash]common.Hash), Balance: big.NewInt(1)}
-		if err = config.State.ForEachStorage(address, func(key, value common.Hash) bool {
-			genesis.Alloc[address].Storage[key] = value
-			return true
-		}); err != nil {
-			log.Crit("Failed to iterate contract storage", "err", err)
-		}
-		genesis.Config.CheckpointConfig = &params.CheckpointContractConfig{
-			Address:   address,
-			Signers:   signers,
-			Threshold: threshold,
-		}
-	}
 	// All done, store the genesis and flush to disk
 	log.Info("Configured new genesis block")
 
@@ -296,77 +230,6 @@ func (w *wizard) manageGenesis() {
 		fmt.Printf("Which block should Petersburg come into effect? (default = %v)\n", w.conf.Genesis.Config.PetersburgBlock)
 		w.conf.Genesis.Config.PetersburgBlock = w.readDefaultBigInt(w.conf.Genesis.Config.PetersburgBlock)
 
-		// The registrar contract might have been deployed
-		fmt.Println()
-		fmt.Printf("Should a checkpoint contract be active (y/n)? (default = %v)\n", w.conf.Genesis.Config.CheckpointConfig != nil)
-		if !w.readDefaultYesNo(w.conf.Genesis.Config.CheckpointConfig != nil) {
-			w.conf.Genesis.Config.CheckpointConfig = nil
-		} else {
-			// Make sure we have a checkpoint config to fill out
-			checkpoint := w.conf.Genesis.Config.CheckpointConfig
-			if checkpoint == nil {
-				checkpoint = new(params.CheckpointContractConfig)
-			}
-			// Read the Ethereum address of the deployed contract
-			fmt.Println()
-			if checkpoint.Address == (common.Address{}) {
-				fmt.Printf("Which address does the checkpoint contract reside at?\n")
-				for checkpoint.Address == (common.Address{}) {
-					if address := w.readAddress(); address != nil {
-						checkpoint.Address = *address
-					}
-				}
-			} else {
-				fmt.Printf("Which address does the checkpoint contract reside at? (default = %s)\n", checkpoint.Address.Hex())
-				checkpoint.Address = w.readDefaultAddress(checkpoint.Address)
-			}
-			// Read the addresses of the trusted signers
-			if len(checkpoint.Signers) > 0 {
-				signers := make([]string, len(checkpoint.Signers))
-				for i, signer := range checkpoint.Signers {
-					signers[i] = signer.Hex()
-				}
-				fmt.Println()
-				fmt.Printf("Keep existing list of authorized signers %s? (default = yes)\n", strings.Join(signers, ","))
-				if !w.readDefaultYesNo(true) {
-					checkpoint.Signers = nil
-				}
-			}
-			if len(checkpoint.Signers) == 0 {
-				fmt.Println()
-				fmt.Println("Which accounts should be trusted signers? (mandatory at least one)")
-				for {
-					if address := w.readAddress(); address != nil {
-						checkpoint.Signers = append(checkpoint.Signers, *address)
-						continue
-					}
-					if len(checkpoint.Signers) == 0 {
-						continue
-					}
-					break
-				}
-			}
-			// Read the checkpoint signature threshold
-			fmt.Println()
-			if checkpoint.Threshold == 0 {
-				fmt.Printf("What is the minimal approval threshold (maximum %d)?\n", len(checkpoint.Signers))
-			} else {
-				fmt.Printf("What is the minimal approval threshold (maximum %d)? (default = %d)\n", len(checkpoint.Signers), checkpoint.Threshold)
-			}
-			for {
-				if checkpoint.Threshold == 0 {
-					checkpoint.Threshold = uint64(w.readInt())
-				} else {
-					checkpoint.Threshold = uint64(w.readDefaultInt(int(checkpoint.Threshold)))
-				}
-				if checkpoint.Threshold <= 0 || checkpoint.Threshold > uint64(len(checkpoint.Signers)) {
-					log.Error(fmt.Sprintf("Invalid approval threshold, please enter in range [1, %d]\n", len(checkpoint.Signers)))
-					continue
-				}
-				break
-			}
-			w.conf.Genesis.Config.CheckpointConfig = checkpoint
-		}
 		out, _ := json.MarshalIndent(w.conf.Genesis.Config, "", "  ")
 		fmt.Printf("Chain configuration updated:\n\n%s\n", out)
 

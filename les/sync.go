@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 var errInvalidCheckpoint = errors.New("invalid advertised checkpoint")
@@ -86,8 +85,8 @@ func (pm *ProtocolManager) validateCheckpoint(peer *peer) error {
 	defer cancel()
 
 	// Fetch the block header corresponding to the checkpoint registration.
-	cp := peer.advertisedCheckpoint
-	header, err := light.GetUntrustedHeaderByNumber(ctx, pm.odr, peer.registeredHeight, peer.id)
+	cp := peer.checkpoint
+	header, err := light.GetUntrustedHeaderByNumber(ctx, pm.odr, peer.checkpointNumber, peer.id)
 	if err != nil {
 		return err
 	}
@@ -128,6 +127,23 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	if currentTd != nil && peer.headBlockInfo().Td.Cmp(currentTd) < 0 {
 		return
 	}
+	// Recap the checkpoint.
+	//
+	// The light client may be connected to several different versions of the server.
+	// (1) Old version server which can not provide stable checkpoint in the handshake packet.
+	//     => Use hardcoded checkpoint or empty checkpoint
+	// (2) New version server but simple checkpoint syncing is not enabled(e.g. mainnet, new testnet or private network)
+	//     => Use hardcoded checkpoint or empty checkpoint
+	// (3) New version server but the provided stable checkpoint is even lower than the hardcoded one.
+	//     => Use hardcoded checkpoint
+	// (4) New version server with valid and higher stable checkpoint
+	//     => Use provided checkpoint
+	var checkpoint = &peer.checkpoint
+	var hardcoded bool
+	if pm.checkpoint != nil && pm.checkpoint.SectionIndex > peer.checkpoint.SectionIndex {
+		checkpoint = pm.checkpoint // Use the hardcoded one.
+		hardcoded = true
+	}
 	// Determine whether we should run checkpoint syncing or normal light syncing.
 	//
 	// Here has four situations that we will disable the checkpoint syncing:
@@ -136,16 +152,15 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	// 2. The latest head block of the local chain is above the checkpoint.
 	// 3. The checkpoint is hardcoded(recap with local hardcoded checkpoint)
 	// 4. For some networks the checkpoint syncing is not activated.
-	cp := &peer.advertisedCheckpoint
 	mode := checkpointSync
 	switch {
-	case cp.Empty():
+	case checkpoint.Empty():
 		mode = lightSync
 		log.Debug("Disable checkpoint syncing", "reason", "empty checkpoint")
-	case latest.Number.Uint64() >= (cp.SectionIndex+1)*pm.iConfig.ChtSize-1:
+	case latest.Number.Uint64() >= (checkpoint.SectionIndex+1)*pm.iConfig.ChtSize-1:
 		mode = lightSync
-		log.Debug("Disable checkpoint syncing", "reason", "local chain beyond the checkpoint")
-	case peer.hardcodedCheckpoint:
+		log.Debug("Disable checkpoint syncing", "reason", "local chain beyonds the checkpoint")
+	case hardcoded:
 		mode = legacyCheckpointSync
 		log.Debug("Disable checkpoint syncing", "reason", "checkpoint is hardcoded")
 	case pm.reg == nil || !pm.reg.isRunning():
@@ -162,16 +177,16 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	if mode == checkpointSync || mode == legacyCheckpointSync {
 		// Validate the advertised checkpoint
 		if mode == legacyCheckpointSync {
-			cp = params.TrustedCheckpoints[pm.blockchain.Genesis().Hash()]
+			checkpoint = pm.checkpoint
 		} else if mode == checkpointSync {
 			if err := pm.validateCheckpoint(peer); err != nil {
 				log.Debug("Failed to validate checkpoint", "reason", err)
 				pm.removePeer(peer.id)
 				return
 			}
-			pm.blockchain.(*light.LightChain).AddTrustedCheckpoint(cp)
+			pm.blockchain.(*light.LightChain).AddTrustedCheckpoint(checkpoint)
 		}
-		log.Debug("Checkpoint syncing start", "peer", peer.id, "checkpoint", cp.SectionIndex)
+		log.Debug("Checkpoint syncing start", "peer", peer.id, "checkpoint", checkpoint.SectionIndex)
 
 		// Fetch the start point block header.
 		//
@@ -182,7 +197,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		// of the latest epoch covered by checkpoint.
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
-		if !cp.Empty() && !pm.blockchain.(*light.LightChain).SyncCheckpoint(ctx, cp) {
+		if !checkpoint.Empty() && !pm.blockchain.(*light.LightChain).SyncCheckpoint(ctx, checkpoint) {
 			log.Debug("Sync checkpoint failed")
 			pm.removePeer(peer.id)
 			return

@@ -189,7 +189,7 @@ func newTestProtocolManager(lightSync bool, blocks int, odr *LesOdr, indexers []
 
 	// initialize empty chain for light client or pre-committed chain for server.
 	if lightSync {
-		chain, _ = light.NewLightChain(odr, gspec.Config, engine)
+		chain, _ = light.NewLightChain(odr, gspec.Config, engine, nil)
 	} else {
 		chain = simulation.Blockchain()
 		pool = core.NewTxPool(core.DefaultTxPoolConfig, gspec.Config, simulation.Blockchain())
@@ -201,7 +201,6 @@ func newTestProtocolManager(lightSync bool, blocks int, odr *LesOdr, indexers []
 		indexConfig = light.TestClientIndexerConfig
 	}
 	config := &params.CheckpointContractConfig{
-		Name:      "test",
 		Address:   crypto.CreateAddress(bankAddr, 0),
 		Signers:   []common.Address{signerAddr},
 		Threshold: 1,
@@ -220,7 +219,7 @@ func newTestProtocolManager(lightSync bool, blocks int, odr *LesOdr, indexers []
 		}
 		reg = newCheckpointRegistrar(config, getLocal)
 	}
-	pm, err := NewProtocolManager(gspec.Config, indexConfig, ulcConfig, lightSync, NetworkId, evmux, peers, chain, pool, db, odr, nil, reg, exitCh, new(sync.WaitGroup), func() bool { return true })
+	pm, err := NewProtocolManager(gspec.Config, nil, indexConfig, ulcConfig, lightSync, NetworkId, evmux, peers, chain, pool, db, odr, nil, reg, exitCh, new(sync.WaitGroup), func() bool { return true })
 	if err != nil {
 		return nil, nil, err
 	}

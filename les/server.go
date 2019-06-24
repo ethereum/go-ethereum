@@ -120,8 +120,8 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 
 	srv.chtIndexer.Start(e.BlockChain())
 
-	registrar := newCheckpointRegistrar(e.BlockChain().Config().CheckpointConfig, srv.getLocalCheckpoint)
-	pm, err := NewProtocolManager(e.BlockChain().Config(), light.DefaultServerIndexerConfig, config.ULC, false, config.NetworkId, e.EventMux(), newPeerSet(), e.BlockChain(), e.TxPool(), e.ChainDb(), nil, nil, registrar, quitSync, new(sync.WaitGroup), e.Synced)
+	registrar := newCheckpointRegistrar(config.CheckpointConfig, srv.getLocalCheckpoint)
+	pm, err := NewProtocolManager(e.BlockChain().Config(), config.Checkpoint, light.DefaultServerIndexerConfig, config.ULC, false, config.NetworkId, e.EventMux(), newPeerSet(), e.BlockChain(), e.TxPool(), e.ChainDb(), nil, nil, registrar, quitSync, new(sync.WaitGroup), e.Synced)
 	if err != nil {
 		return nil, err
 	}
