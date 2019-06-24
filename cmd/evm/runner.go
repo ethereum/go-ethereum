@@ -142,7 +142,6 @@ func runCmd(ctx *cli.Context) error {
 					os.Exit(1)
 				}
 			}
-
 		} else {
 			hexcode = []byte(codeFlag)
 		}
