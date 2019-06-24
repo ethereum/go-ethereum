@@ -122,11 +122,13 @@ func (httpu *HTTPUClient) Do(req *http.Request, timeout time.Duration, numSends 
 		// Parse response.
 		response, err := http.ReadResponse(bufio.NewReader(bytes.NewBuffer(responseBytes[:n])), req)
 		if err != nil {
-			log.Print("httpu: error while parsing response: %v", err)
+			log.Printf("httpu: error while parsing response: %v", err)
 			continue
 		}
 
 		responses = append(responses, response)
 	}
-	return responses, err
+
+	// Timeout reached - return discovered responses.
+	return responses, nil
 }

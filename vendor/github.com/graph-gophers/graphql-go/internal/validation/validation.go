@@ -63,7 +63,7 @@ func newContext(s *schema.Schema, doc *query.Document, maxDepth int) *context {
 	}
 }
 
-func Validate(s *schema.Schema, doc *query.Document, maxDepth int) []*errors.QueryError {
+func Validate(s *schema.Schema, doc *query.Document, variables map[string]interface{}, maxDepth int) []*errors.QueryError {
 	c := newContext(s, doc, maxDepth)
 
 	opNames := make(nameSet)
@@ -95,6 +95,7 @@ func Validate(s *schema.Schema, doc *query.Document, maxDepth int) []*errors.Que
 			if !canBeInput(t) {
 				c.addErr(v.TypeLoc, "VariablesAreInputTypes", "Variable %q cannot be non-input type %q.", "$"+v.Name.Name, t)
 			}
+			validateValue(opc, v, variables[v.Name.Name], t)
 
 			if v.Default != nil {
 				validateLiteral(opc, v.Default)
@@ -176,6 +177,58 @@ func Validate(s *schema.Schema, doc *query.Document, maxDepth int) []*errors.Que
 	}
 
 	return c.errs
+}
+
+func validateValue(c *opContext, v *common.InputValue, val interface{}, t common.Type) {
+	switch t := t.(type) {
+	case *common.NonNull:
+		if val == nil {
+			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value null.\nExpected type \"%s\", found null.", v.Name.Name, t)
+			return
+		}
+		validateValue(c, v, val, t.OfType)
+	case *common.List:
+		if val == nil {
+			return
+		}
+		vv, ok := val.([]interface{})
+		if !ok {
+			// Input coercion rules allow single items without wrapping array
+			validateValue(c, v, val, t.OfType)
+			return
+		}
+		for _, elem := range vv {
+			validateValue(c, v, elem, t.OfType)
+		}
+	case *schema.Enum:
+		if val == nil {
+			return
+		}
+		e, ok := val.(string)
+		if !ok {
+			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid type %T.\nExpected type \"%s\", found %v.", v.Name.Name, val, t, val)
+			return
+		}
+		for _, option := range t.Values {
+			if option.Name == e {
+				return
+			}
+		}
+		c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value %s.\nExpected type \"%s\", found %s.", v.Name.Name, e, t, e)
+	case *schema.InputObject:
+		if val == nil {
+			return
+		}
+		in, ok := val.(map[string]interface{})
+		if !ok {
+			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid type %T.\nExpected type \"%s\", found %s.", v.Name.Name, val, t, val)
+			return
+		}
+		for _, f := range t.Values {
+			fieldVal := in[f.Name.Name]
+			validateValue(c, f, fieldVal, f.Type)
+		}
+	}
 }
 
 // validates the query doesn't go deeper than maxDepth (if set). Returns whether
@@ -686,6 +739,7 @@ func validateLiteral(c *opContext, l common.Literal) {
 				})
 				continue
 			}
+			validateValueType(c, l, resolveType(c.context, v.Type))
 			c.usedVars[op][v] = struct{}{}
 		}
 	}

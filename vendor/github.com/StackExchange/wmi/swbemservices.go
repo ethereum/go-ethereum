@@ -77,7 +77,7 @@ func (s *SWbemServices) process(initError chan error) {
 	//fmt.Println("process: starting background thread initialization")
 	//All OLE/WMI calls must happen on the same initialized thead, so lock this goroutine
 	runtime.LockOSThread()
-	defer runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 
 	err := ole.CoInitializeEx(0, ole.COINIT_MULTITHREADED)
 	if err != nil {

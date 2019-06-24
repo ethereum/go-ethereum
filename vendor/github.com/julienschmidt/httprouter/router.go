@@ -236,16 +236,6 @@ func (r *Router) Handle(method, path string, handle Handle) {
 	root.addRoute(path, handle)
 }
 
-// Handler is an adapter which allows the usage of an http.Handler as a
-// request handle.
-func (r *Router) Handler(method, path string, handler http.Handler) {
-	r.Handle(method, path,
-		func(w http.ResponseWriter, req *http.Request, _ Params) {
-			handler.ServeHTTP(w, req)
-		},
-	)
-}
-
 // HandlerFunc is an adapter which allows the usage of an http.HandlerFunc as a
 // request handle.
 func (r *Router) HandlerFunc(method, path string, handler http.HandlerFunc) {
@@ -376,13 +366,11 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	if req.Method == "OPTIONS" {
+	if req.Method == "OPTIONS" && r.HandleOPTIONS {
 		// Handle OPTIONS requests
-		if r.HandleOPTIONS {
-			if allow := r.allowed(path, req.Method); len(allow) > 0 {
-				w.Header().Set("Allow", allow)
-				return
-			}
+		if allow := r.allowed(path, req.Method); len(allow) > 0 {
+			w.Header().Set("Allow", allow)
+			return
 		}
 	} else {
 		// Handle 405

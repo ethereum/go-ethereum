@@ -25,15 +25,19 @@ Core components:
 Regenerating dcps generated source code:
 ----------------------------------------
 
-1. Install gotasks: `go get -u github.com/jingweno/gotask`
-2. Change to the gotasks directory: `cd gotasks`
-3. Run specgen task: `gotask specgen`
+1. Build code generator:
+
+	`go get -u github.com/huin/goupnp/cmd/goupnpdcpgen`
+
+2. Regenerate the code:
+
+	`go generate ./...`
 
 Supporting additional UPnP devices and services:
 ------------------------------------------------
 
 Supporting additional services is, in the trivial case, simply a matter of
-adding the service to the `dcpMetadata` whitelist in `gotasks/specgen_task.go`,
+adding the service to the `dcpMetadata` whitelist in `cmd/goupnpdcpgen/metadata.go`,
 regenerating the source code (see above), and committing that source code.
 
 However, it would be helpful if anyone needing such a service could test the

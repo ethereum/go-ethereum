@@ -8,11 +8,33 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
-- Added missing runtime import for FreeBSD. #104
-
 ### Changed
 
 ### Deprecated
+
+## [0.10.3]
+
+### Fixed
+- ProcState.Get() doesn't fail under Windows when it cannot obtain process ownership information. #121
+
+## [0.10.2]
+
+### Fixed
+- Fix memory leak when getting process arguments. #119
+
+## [0.10.1]
+
+### Fixed
+- Replaced the WMI queries with win32 apis due to high CPU usage. #116
+
+## [0.10.0]
+
+### Added
+- List filesystems on Windows that have an access path but not an assigned letter. #112
+
+### Fixed
+- Added missing runtime import for FreeBSD. #104
+- Handle nil command line in Windows processes. #110
 
 ## [0.9.0]
 

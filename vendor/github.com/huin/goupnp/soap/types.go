@@ -47,6 +47,15 @@ func UnmarshalUi4(s string) (uint32, error) {
 	return uint32(v), err
 }
 
+func MarshalUi8(v uint64) (string, error) {
+	return strconv.FormatUint(v, 10), nil
+}
+
+func UnmarshalUi8(s string) (uint64, error) {
+	v, err := strconv.ParseUint(s, 10, 64)
+	return uint64(v), err
+}
+
 func MarshalI1(v int8) (string, error) {
 	return strconv.FormatInt(int64(v), 10), nil
 }
@@ -325,7 +334,7 @@ func UnmarshalTimeOfDay(s string) (TimeOfDay, error) {
 	if err != nil {
 		return TimeOfDay{}, err
 	} else if t.HasOffset {
-		return TimeOfDay{}, fmt.Errorf("soap time: value %q contains unexpected timezone")
+		return TimeOfDay{}, fmt.Errorf("soap time: value %q contains unexpected timezone", s)
 	}
 	return t, nil
 }

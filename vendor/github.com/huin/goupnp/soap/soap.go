@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"regexp"
 )
 
 const (
@@ -126,12 +127,47 @@ func encodeRequestArgs(w *bytes.Buffer, inAction interface{}) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("goupnp: SOAP arg %q is not of type string, but of type %v", argName, value.Type())
 		}
-		if err := enc.EncodeElement(value.Interface(), xml.StartElement{xml.Name{"", argName}, nil}); err != nil {
-			return fmt.Errorf("goupnp: error encoding SOAP arg %q: %v", argName, err)
+		elem := xml.StartElement{xml.Name{"", argName}, nil}
+		if err := enc.EncodeToken(elem); err != nil {
+			return fmt.Errorf("goupnp: error encoding start element for SOAP arg %q: %v", argName, err)
+		}
+		if err := enc.Flush(); err != nil {
+			return fmt.Errorf("goupnp: error flushing start element for SOAP arg %q: %v", argName, err)
+		}
+		if _, err := w.Write([]byte(escapeXMLText(value.Interface().(string)))); err != nil {
+			return fmt.Errorf("goupnp: error writing value for SOAP arg %q: %v", argName, err)
+		}
+		if err := enc.EncodeToken(elem.End()); err != nil {
+			return fmt.Errorf("goupnp: error encoding end element for SOAP arg %q: %v", argName, err)
 		}
 	}
 	enc.Flush()
 	return nil
+}
+
+var xmlCharRx = regexp.MustCompile("[<>&]")
+
+// escapeXMLText is used by generated code to escape text in XML, but only
+// escaping the characters `<`, `>`, and `&`.
+//
+// This is provided in order to work around SOAP server implementations that
+// fail to decode XML correctly, specifically failing to decode `"`, `'`. Note
+// that this can only be safely used for injecting into XML text, but not into
+// attributes or other contexts.
+func escapeXMLText(s string) string {
+	return xmlCharRx.ReplaceAllStringFunc(s, replaceEntity)
+}
+
+func replaceEntity(s string) string {
+	switch s {
+	case "<":
+		return "&lt;"
+	case ">":
+		return "&gt;"
+	case "&":
+		return "&amp;"
+	}
+	return s
 }
 
 type soapEnvelope struct {

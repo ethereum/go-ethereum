@@ -37,7 +37,7 @@ func (b *bitmap) isMarked(addr uintptr) bool {
 	return block.isMarked(baddr)
 }
 
-// countRange returns the number of set bits in the range (addr,addr+n).
+// countRange returns the number of set bits in the range [addr, addr+n].
 func (b *bitmap) countRange(addr, n uintptr) uintptr {
 	c := uintptr(0)
 	for end := addr + n; addr < end; {
@@ -92,7 +92,7 @@ func (b *bmBlock) isMarked(i uintptr) bool {
 	return (b[i/uintptrBits] & (1 << (i % uintptrBits))) != 0
 }
 
-// count returns the number of set bits in the range (start,end).
+// count returns the number of set bits in the range [start, end].
 func (b *bmBlock) count(start, end uintptr) (count int) {
 	br := b[start/uintptrBits : end/uintptrBits+1]
 	for i, w := range br {

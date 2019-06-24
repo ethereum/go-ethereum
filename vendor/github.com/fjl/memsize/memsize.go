@@ -101,8 +101,8 @@ func newContext() *context {
 	return &context{seen: newBitmap(), tc: make(typCache), s: newSizes()}
 }
 
-// scan walks all objects below v, determining their size. All scan* functions return the
-// amount of 'extra' memory (e.g. slice data) that is referenced by the object.
+// scan walks all objects below v, determining their size. It returns the size of the
+// previously unscanned parts of the object.
 func (c *context) scan(addr address, v reflect.Value, add bool) (extraSize uintptr) {
 	size := v.Type().Size()
 	var marked uintptr
@@ -117,15 +117,17 @@ func (c *context) scan(addr address, v reflect.Value, add bool) (extraSize uintp
 	if c.tc.needScan(v.Type()) {
 		extraSize = c.scanContent(addr, v)
 	}
+	size -= marked
+	size += extraSize
 	// fmt.Printf("%v: %v %d (add %v, size %d, marked %d, extra %d)\n", addr, v.Type(), size+extraSize, add, v.Type().Size(), marked, extraSize)
 	if add {
-		size -= marked
-		size += extraSize
 		c.s.addValue(v, size)
 	}
-	return extraSize
+	return size
 }
 
+// scanContent and all other scan* functions below return the amount of 'extra' memory
+// (e.g. slice data) that is referenced by the object.
 func (c *context) scanContent(addr address, v reflect.Value) uintptr {
 	switch v.Kind() {
 	case reflect.Array:
@@ -225,8 +227,10 @@ func (c *context) scanMap(v reflect.Value) uintptr {
 			extra += c.scan(invalidAddr, k, false)
 			extra += c.scan(invalidAddr, v.MapIndex(k), false)
 		}
+	} else {
+		extra = len*typ.Key().Size() + len*typ.Elem().Size()
 	}
-	return len*typ.Key().Size() + len*typ.Elem().Size() + extra
+	return extra
 }
 
 func (c *context) scanInterface(v reflect.Value) uintptr {
@@ -234,10 +238,9 @@ func (c *context) scanInterface(v reflect.Value) uintptr {
 	if !elem.IsValid() {
 		return 0 // nil interface
 	}
-	c.scan(invalidAddr, elem, false)
-	if !c.tc.isPointer(elem.Type()) {
-		// Account for non-pointer size of the value.
-		return elem.Type().Size()
+	extra := c.scan(invalidAddr, elem, false)
+	if elem.Type().Kind() == reflect.Ptr {
+		extra -= uintptrBytes
 	}
-	return 0
+	return extra
 }

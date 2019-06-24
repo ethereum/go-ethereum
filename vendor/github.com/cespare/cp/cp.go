@@ -6,14 +6,28 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 var errCopyFileWithDir = errors.New("dir argument to CopyFile")
 
-// CopyFile copies the file with path src to dst. The new file must not exist.
+const (
+	flagDefault   = os.O_WRONLY | os.O_CREATE | os.O_EXCL
+	flagOverwrite = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+)
+
+// CopyFile copies the file at src to dst. The new file must not exist.
 // It is created with the same permissions as src.
 func CopyFile(dst, src string) error {
+	return copyFile(dst, src, flagDefault)
+}
+
+// CopyFileOverwrite is like CopyFile except that it overwrites dst
+// if it already exists.
+func CopyFileOverwrite(dst, src string) error {
+	return copyFile(dst, src, flagOverwrite)
+}
+
+func copyFile(dst, src string, flag int) error {
 	rf, err := os.Open(src)
 	if err != nil {
 		return err
@@ -27,32 +41,62 @@ func CopyFile(dst, src string) error {
 		return errCopyFileWithDir
 	}
 
-	wf, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, rstat.Mode())
+	wf, err := os.OpenFile(dst, flag, rstat.Mode())
 	if err != nil {
 		return err
 	}
+	defer wf.Close()
+	if flag&os.O_EXCL == 0 {
+		// We may be overwriting an existing file.
+		// Ensure the file mode matches.
+		stat, err := wf.Stat()
+		if err != nil {
+			return err
+		}
+		if stat.Mode() != rstat.Mode() {
+			if err := wf.Chmod(rstat.Mode()); err != nil {
+				return err
+			}
+		}
+	}
 	if _, err := io.Copy(wf, rf); err != nil {
-		wf.Close()
 		return err
 	}
 	return wf.Close()
 }
 
 // CopyAll copies the file or (recursively) the directory at src to dst.
-// Permissions are preserved. dst must not already exist.
+// Permissions are preserved. The target directory must not already exist.
 func CopyAll(dst, src string) error {
-	return filepath.Walk(src, makeWalkFn(dst, src))
+	return filepath.Walk(src, makeWalkFn(dst, src, flagDefault))
 }
 
-func makeWalkFn(dst, src string) filepath.WalkFunc {
+// CopyAllOverwrite is like CopyAll except that it recursively overwrites
+// any existing directories or files.
+func CopyAllOverwrite(dst, src string) error {
+	return filepath.Walk(src, makeWalkFn(dst, src, flagOverwrite))
+}
+
+func makeWalkFn(dst, src string, flag int) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		dstPath := filepath.Join(dst, strings.TrimPrefix(path, src))
-		if info.IsDir() {
-			return os.Mkdir(dstPath, info.Mode())
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			// Given the Walk contract, Rel must succeed.
+			panic("shouldn't happen")
 		}
-		return CopyFile(dstPath, path)
+		dstPath := filepath.Join(dst, rel)
+		if info.IsDir() {
+			err := os.Mkdir(dstPath, info.Mode())
+			// In overwrite mode, allow the directory to already exist
+			// (but make sure the permissions match).
+			if os.IsExist(err) && flag&os.O_EXCL == 0 {
+				return os.Chmod(dstPath, info.Mode())
+			}
+			return err
+		}
+		return copyFile(dstPath, path, flag)
 	}
 }

@@ -51,31 +51,6 @@ func (self *LoadAverage) Get() error {
 	return nil
 }
 
-func (self *Mem) Get() error {
-
-	table, err := parseMeminfo()
-	if err != nil {
-		return err
-	}
-
-	self.Total, _ = table["MemTotal"]
-	self.Free, _ = table["MemFree"]
-	buffers, _ := table["Buffers"]
-	cached, _ := table["Cached"]
-
-	if available, ok := table["MemAvailable"]; ok {
-		// MemAvailable is in /proc/meminfo (kernel 3.14+)
-		self.ActualFree = available
-	} else {
-		self.ActualFree = self.Free + buffers + cached
-	}
-
-	self.Used = self.Total - self.Free
-	self.ActualUsed = self.Total - self.ActualFree
-
-	return nil
-}
-
 func (self *Swap) Get() error {
 
 	table, err := parseMeminfo()

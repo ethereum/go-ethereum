@@ -16,7 +16,7 @@ The router is optimized for high performance and a small memory footprint. It sc
 
 **Parameters in your routing pattern:** Stop parsing the requested URL path, just give the path segment a name and the router delivers the dynamic value to you. Because of the design of the router, path parameters are very cheap.
 
-**Zero Garbage:** The matching and dispatching process generates zero bytes of garbage. In fact, the only heap allocations that are made, is by building the slice of the key-value pairs for path parameters. If the request path contains no parameters, not a single heap allocation is necessary.
+**Zero Garbage:** The matching and dispatching process generates zero bytes of garbage. The only heap allocations that are made are building the slice of the key-value pairs for path parameters, and building new context and request objects (the latter only in the standard `Handler`/`HandlerFunc` api). In the 3-argument API, if the request path contains no parameters not a single heap allocation is necessary.
 
 **Best Performance:** [Benchmarks speak for themselves](https://github.com/julienschmidt/go-http-routing-benchmark). See below for technical details of the implementation.
 
@@ -108,7 +108,7 @@ Priority   Path             Handle
 
 Every `*<num>` represents the memory address of a handler function (a pointer). If you follow a path trough the tree from the root to the leaf, you get the complete route path, e.g `\blog\:post\`, where `:post` is just a placeholder ([*parameter*](#named-parameters)) for an actual post name. Unlike hash-maps, a tree structure also allows us to use dynamic parts like the `:post` parameter, since we actually match against the routing patterns instead of just comparing hashes. [As benchmarks show](https://github.com/julienschmidt/go-http-routing-benchmark), this works very well and efficient.
 
-Since URL paths have a hierarchical structure and make use only of a limited set of characters (byte values), it is very likely that there are a lot of common prefixes. This allows us to easily reduce the routing into ever smaller problems. Moreover the router manages a separate tree for every request method. For one thing it is more space efficient than holding a method->handle map in every single node, for another thing is also allows us to greatly reduce the routing problem before even starting the look-up in the prefix-tree.
+Since URL paths have a hierarchical structure and make use only of a limited set of characters (byte values), it is very likely that there are a lot of common prefixes. This allows us to easily reduce the routing into ever smaller problems. Moreover the router manages a separate tree for every request method. For one thing it is more space efficient than holding a method->handle map in every single node, it also allows us to greatly reduce the routing problem before even starting the look-up in the prefix-tree.
 
 For even better scalability, the child nodes on each tree level are ordered by priority, where the priority is just the number of handles registered in sub nodes (children, grandchildren, and so on..). This helps in two ways:
 
@@ -149,14 +149,14 @@ Define a router per host!
 // We just use a map here, in which we map host names (with port) to http.Handlers
 type HostSwitch map[string]http.Handler
 
-// Implement the ServerHTTP method on our new type
+// Implement the ServeHTTP method on our new type
 func (hs HostSwitch) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check if a http.Handler is registered for the given host.
 	// If yes, use it to handle the request.
 	if handler := hs[r.Host]; handler != nil {
 		handler.ServeHTTP(w, r)
 	} else {
-		// Handle host names for wich no handler is registered
+		// Handle host names for which no handler is registered
 		http.Error(w, "Forbidden", 403) // Or Redirect?
 	}
 }

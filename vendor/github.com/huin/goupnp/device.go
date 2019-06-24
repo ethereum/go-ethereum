@@ -147,9 +147,9 @@ func (srv *Service) String() string {
 	return fmt.Sprintf("Service ID %s : %s", srv.ServiceId, srv.ServiceType)
 }
 
-// RequestSCDP requests the SCPD (soap actions and state variables description)
+// RequestSCPD requests the SCPD (soap actions and state variables description)
 // for the service.
-func (srv *Service) RequestSCDP() (*scpd.SCPD, error) {
+func (srv *Service) RequestSCPD() (*scpd.SCPD, error) {
 	if !srv.SCPDURL.Ok {
 		return nil, errors.New("bad/missing SCPD URL, or no URLBase has been set")
 	}
@@ -158,6 +158,12 @@ func (srv *Service) RequestSCDP() (*scpd.SCPD, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+// RequestSCDP is for compatibility only, prefer RequestSCPD. This was a
+// misspelling of RequestSCDP.
+func (srv *Service) RequestSCDP() (*scpd.SCPD, error) {
+	return srv.RequestSCPD()
 }
 
 func (srv *Service) NewSOAPClient() *soap.SOAPClient {

@@ -9,21 +9,27 @@ import (
 	"github.com/graph-gophers/graphql-go/introspection"
 )
 
-var MetaSchema *Object
-var MetaType *Object
+// Meta defines the details of the metadata schema for introspection.
+type Meta struct {
+	FieldSchema   Field
+	FieldType     Field
+	FieldTypename Field
+	Schema        *Object
+	Type          *Object
+}
 
-func init() {
+func newMeta(s *schema.Schema) *Meta {
 	var err error
-	b := newBuilder(schema.Meta)
+	b := newBuilder(s)
 
-	metaSchema := schema.Meta.Types["__Schema"].(*schema.Object)
-	MetaSchema, err = b.makeObjectExec(metaSchema.Name, metaSchema.Fields, nil, false, reflect.TypeOf(&introspection.Schema{}))
+	metaSchema := s.Types["__Schema"].(*schema.Object)
+	so, err := b.makeObjectExec(metaSchema.Name, metaSchema.Fields, nil, false, reflect.TypeOf(&introspection.Schema{}))
 	if err != nil {
 		panic(err)
 	}
 
-	metaType := schema.Meta.Types["__Type"].(*schema.Object)
-	MetaType, err = b.makeObjectExec(metaType.Name, metaType.Fields, nil, false, reflect.TypeOf(&introspection.Type{}))
+	metaType := s.Types["__Type"].(*schema.Object)
+	t, err := b.makeObjectExec(metaType.Name, metaType.Fields, nil, false, reflect.TypeOf(&introspection.Type{}))
 	if err != nil {
 		panic(err)
 	}
@@ -31,28 +37,36 @@ func init() {
 	if err := b.finish(); err != nil {
 		panic(err)
 	}
-}
 
-var MetaFieldTypename = Field{
-	Field: schema.Field{
-		Name: "__typename",
-		Type: &common.NonNull{OfType: schema.Meta.Types["String"]},
-	},
-	TraceLabel: fmt.Sprintf("GraphQL field: __typename"),
-}
+	fieldTypename := Field{
+		Field: schema.Field{
+			Name: "__typename",
+			Type: &common.NonNull{OfType: s.Types["String"]},
+		},
+		TraceLabel: fmt.Sprintf("GraphQL field: __typename"),
+	}
 
-var MetaFieldSchema = Field{
-	Field: schema.Field{
-		Name: "__schema",
-		Type: schema.Meta.Types["__Schema"],
-	},
-	TraceLabel: fmt.Sprintf("GraphQL field: __schema"),
-}
+	fieldSchema := Field{
+		Field: schema.Field{
+			Name: "__schema",
+			Type: s.Types["__Schema"],
+		},
+		TraceLabel: fmt.Sprintf("GraphQL field: __schema"),
+	}
 
-var MetaFieldType = Field{
-	Field: schema.Field{
-		Name: "__type",
-		Type: schema.Meta.Types["__Type"],
-	},
-	TraceLabel: fmt.Sprintf("GraphQL field: __type"),
+	fieldType := Field{
+		Field: schema.Field{
+			Name: "__type",
+			Type: s.Types["__Type"],
+		},
+		TraceLabel: fmt.Sprintf("GraphQL field: __type"),
+	}
+
+	return &Meta{
+		FieldSchema:   fieldSchema,
+		FieldTypename: fieldTypename,
+		FieldType:     fieldType,
+		Schema:        so,
+		Type:          t,
+	}
 }

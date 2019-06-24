@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // The ABI holds information about a contract's context and available
@@ -168,11 +170,11 @@ func (abi *ABI) MethodById(sigdata []byte) (*Method, error) {
 
 // EventById looks up an event by the first topic hash
 // returns nil if none was found
-func (abi *ABI) EventById(topic []byte) (*Event, error) {
+func (abi *ABI) EventById(id common.Hash) (*Event, error) {
 	for _, event := range abi.Events {
-		if bytes.Equal(event.Id().Bytes(), topic) {
+		if bytes.Equal(event.Id().Bytes(), id.Bytes()) {
 			return &event, nil
 		}
 	}
-	return nil, fmt.Errorf("no event with id: %#x", topic)
+	return nil, fmt.Errorf("no event with id: %#x", id)
 }

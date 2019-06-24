@@ -20,6 +20,11 @@ const (
 	ssdpSearchPort = 1900
 	methodSearch   = "M-SEARCH"
 	methodNotify   = "NOTIFY"
+
+	// SSDPAll is a value for searchTarget that searches for all devices and services.
+	SSDPAll = "ssdp:all"
+	// UPNPRootDevice is a value for searchTarget that searches for all root devices.
+	UPNPRootDevice = "upnp:rootdevice"
 )
 
 // SSDPRawSearch performs a fairly raw SSDP search request, and returns the
@@ -54,13 +59,15 @@ func SSDPRawSearch(httpu *httpu.HTTPUClient, searchTarget string, maxWaitSeconds
 	if err != nil {
 		return nil, err
 	}
+
+	isExactSearch := searchTarget != SSDPAll && searchTarget != UPNPRootDevice
+
 	for _, response := range allResponses {
 		if response.StatusCode != 200 {
 			log.Printf("ssdp: got response status code %q in search response", response.Status)
 			continue
 		}
-		if st := response.Header.Get("ST"); st != searchTarget {
-			log.Printf("ssdp: got unexpected search target result %q", st)
+		if st := response.Header.Get("ST"); isExactSearch && st != searchTarget {
 			continue
 		}
 		location, err := response.Location()
