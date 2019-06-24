@@ -266,7 +266,7 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 		// both the pending block as well as the pending state from
 		// the miner and operate on those
 		_, stateDb := api.eth.miner.Pending()
-		return stateDb.RawDump(), nil
+		return stateDb.RawDump(false, false, true), nil
 	}
 	var block *types.Block
 	if blockNr == rpc.LatestBlockNumber {
@@ -281,7 +281,7 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 	if err != nil {
 		return state.Dump{}, err
 	}
-	return stateDb.RawDump(), nil
+	return stateDb.RawDump(false, false, true), nil
 }
 
 // PrivateDebugAPI is the collection of Ethereum full node APIs exposed over
