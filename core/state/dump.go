@@ -33,8 +33,8 @@ type DumpAccount struct {
 	Nonce     uint64                 `json:"nonce"`
 	Root      string                 `json:"root"`
 	CodeHash  string                 `json:"codeHash"`
-	Code      string                 `json:"code"`
-	Storage   map[common.Hash]string `json:"storage"`
+	Code      string                 `json:"code,omitempty"`
+	Storage   map[common.Hash]string `json:"storage,omitempty"`
 	Address   *common.Address        `json:"address,omitempty"` // Address only present in iterative (line-by-line) mode
 	SecureKey hexutil.Bytes          `json:"key,omitempty"`     // If we don't have address, we can output the key
 
