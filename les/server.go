@@ -120,8 +120,13 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 
 	srv.chtIndexer.Start(e.BlockChain())
 
-	registrar := newCheckpointRegistrar(config.CheckpointConfig, srv.getLocalCheckpoint)
-	pm, err := NewProtocolManager(e.BlockChain().Config(), config.Checkpoint, light.DefaultServerIndexerConfig, config.ULC, false, config.NetworkId, e.EventMux(), newPeerSet(), e.BlockChain(), e.TxPool(), e.ChainDb(), nil, nil, registrar, quitSync, new(sync.WaitGroup), e.Synced)
+	oracle := config.CheckpointOracle
+	if oracle == nil {
+		oracle, _ = params.CheckpointOracles[e.BlockChain().Genesis().Hash()]
+	}
+	registrar := newCheckpointRegistrar(oracle, srv.getLocalCheckpoint)
+	// TODO(rjl493456442) Checkpoint is useless for les server, separate handler for client and server.
+	pm, err := NewProtocolManager(e.BlockChain().Config(), nil, light.DefaultServerIndexerConfig, config.ULC, false, config.NetworkId, e.EventMux(), newPeerSet(), e.BlockChain(), e.TxPool(), e.ChainDb(), nil, nil, registrar, quitSync, new(sync.WaitGroup), e.Synced)
 	if err != nil {
 		return nil, err
 	}

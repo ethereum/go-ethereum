@@ -159,7 +159,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		log.Debug("Disable checkpoint syncing", "reason", "empty checkpoint")
 	case latest.Number.Uint64() >= (checkpoint.SectionIndex+1)*pm.iConfig.ChtSize-1:
 		mode = lightSync
-		log.Debug("Disable checkpoint syncing", "reason", "local chain beyonds the checkpoint")
+		log.Debug("Disable checkpoint syncing", "reason", "local chain beyond the checkpoint")
 	case hardcoded:
 		mode = legacyCheckpointSync
 		log.Debug("Disable checkpoint syncing", "reason", "checkpoint is hardcoded")

@@ -33,6 +33,21 @@ var (
 	GoerliGenesisHash  = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
 )
 
+// TrustedCheckpoints associates each known checkpoint with the genesis hash of
+// the chain it belongs to.
+var TrustedCheckpoints = map[common.Hash]*TrustedCheckpoint{
+	MainnetGenesisHash: MainnetTrustedCheckpoint,
+	TestnetGenesisHash: TestnetTrustedCheckpoint,
+	RinkebyGenesisHash: RinkebyTrustedCheckpoint,
+	GoerliGenesisHash:  GoerliTrustedCheckpoint,
+}
+
+// CheckpointOracles associates each known checkpoint oracles with the genesis hash of
+// the chain it belongs to.
+var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
+	RinkebyGenesisHash: RinkebyCheckpointOracleConfig,
+}
+
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
@@ -109,8 +124,8 @@ var (
 		BloomRoot:    common.HexToHash("0xa3048fe8b7e30f77f11bc755a88478363d7d3e71c2bdfe4e8ab9e269cd804ba2"),
 	}
 
-	// RinkebyCheckpointConfig contains a set of checkpoint contract configs for the Rinkeby test network.
-	RinkebyCheckpointConfig = &CheckpointContractConfig{
+	// RinkebyCheckpointOracleConfig contains a set of configs for the Rinkeby test network oracle.
+	RinkebyCheckpointOracleConfig = &CheckpointOracleConfig{
 		Address: common.HexToAddress("0x62652ed8e969ce7bd5e3dd13590efa1e569215f1"),
 		Signers: []common.Address{
 			common.HexToAddress("0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3"), // Peter
@@ -199,9 +214,9 @@ func (c *TrustedCheckpoint) Empty() bool {
 	return c.SectionHead == (common.Hash{}) || c.CHTRoot == (common.Hash{}) || c.BloomRoot == (common.Hash{})
 }
 
-// CheckpointContractConfig represents a set of checkpoint contract config
-// which used for light client checkpoint syncing.
-type CheckpointContractConfig struct {
+// CheckpointOracleConfig represents a set of checkpoint contract(which acts as an oracle)
+// config which used for light client checkpoint syncing.
+type CheckpointOracleConfig struct {
 	Address   common.Address   `json:"address"`
 	Signers   []common.Address `json:"signers"`
 	Threshold uint64           `json:"threshold"`

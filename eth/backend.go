@@ -202,6 +202,10 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit
+	checkpoint := config.Checkpoint
+	if checkpoint == nil {
+		checkpoint, _ = params.TrustedCheckpoints[genesisHash]
+	}
 	if eth.protocolManager, err = NewProtocolManager(chainConfig, config.Checkpoint, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, cacheLimit, config.Whitelist); err != nil {
 		return nil, err
 	}

@@ -200,7 +200,7 @@ func newTestProtocolManager(lightSync bool, blocks int, odr *LesOdr, indexers []
 	if lightSync {
 		indexConfig = light.TestClientIndexerConfig
 	}
-	config := &params.CheckpointContractConfig{
+	config := &params.CheckpointOracleConfig{
 		Address:   crypto.CreateAddress(bankAddr, 0),
 		Signers:   []common.Address{signerAddr},
 		Threshold: 1,

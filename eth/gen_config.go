@@ -48,7 +48,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		ConstantinopleOverride  *big.Int
 		RPCGasCap               *big.Int `toml:",omitempty"`
 		Checkpoint              *params.TrustedCheckpoint
-		CheckpointConfig        *params.CheckpointContractConfig
+		CheckpointOracle        *params.CheckpointOracleConfig
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -81,7 +81,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.ConstantinopleOverride = c.ConstantinopleOverride
 	enc.RPCGasCap = c.RPCGasCap
 	enc.Checkpoint = c.Checkpoint
-	enc.CheckpointConfig = c.CheckpointConfig
+	enc.CheckpointOracle = c.CheckpointOracle
 	return &enc, nil
 }
 
@@ -118,7 +118,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		ConstantinopleOverride  *big.Int
 		RPCGasCap               *big.Int `toml:",omitempty"`
 		Checkpoint              *params.TrustedCheckpoint
-		CheckpointConfig        *params.CheckpointContractConfig
+		CheckpointOracle        *params.CheckpointOracleConfig
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -214,8 +214,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.Checkpoint != nil {
 		c.Checkpoint = dec.Checkpoint
 	}
-	if dec.CheckpointConfig != nil {
-		c.CheckpointConfig = dec.CheckpointConfig
+	if dec.CheckpointOracle != nil {
+		c.CheckpointOracle = dec.CheckpointOracle
 	}
 	return nil
 }

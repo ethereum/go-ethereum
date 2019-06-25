@@ -33,7 +33,7 @@ import (
 // generated and announced by the contract admins on-chain. The checkpoint is
 // verified by clients locally during the checkpoint syncing.
 type checkpointRegistrar struct {
-	config   *params.CheckpointContractConfig
+	config   *params.CheckpointOracleConfig
 	contract *registrar.Registrar
 
 	// Whether the contract backend is set.
@@ -44,7 +44,7 @@ type checkpointRegistrar struct {
 }
 
 // newCheckpointRegistrar returns a checkpoint registrar handler.
-func newCheckpointRegistrar(config *params.CheckpointContractConfig, getLocal func(uint64) params.TrustedCheckpoint) *checkpointRegistrar {
+func newCheckpointRegistrar(config *params.CheckpointOracleConfig, getLocal func(uint64) params.TrustedCheckpoint) *checkpointRegistrar {
 	if config == nil {
 		log.Info("Checkpoint registrar is not enabled")
 		return nil
