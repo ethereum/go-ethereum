@@ -17,7 +17,7 @@
 package les
 
 import (
-	"errors"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -28,9 +28,21 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func TestCheckpointSyncingLes2(t *testing.T) { testCheckpointSyncing(t, 2) }
+// Test light syncing which will download all headers from genesis.
+func TestLightSyncingLes2(t *testing.T) { testCheckpointSyncing(t, 2, 0) }
+func TestLightSyncingLes3(t *testing.T) { testCheckpointSyncing(t, 3, 0) }
 
-func testCheckpointSyncing(t *testing.T, protocol int) {
+// Test legacy checkpoint syncing which will download tail headers
+// based on a hardcoded checkpoint.
+func TestLegacyCheckpointSyncingLes2(t *testing.T) { testCheckpointSyncing(t, 2, 1) }
+func TestLegacyCheckpointSyncingLes3(t *testing.T) { testCheckpointSyncing(t, 3, 1) }
+
+// Test checkpoint syncing which will download tail headers based
+// on a verified checkpoint.
+func TestCheckpointSyncingLes2(t *testing.T) { testCheckpointSyncing(t, 2, 2) }
+func TestCheckpointSyncingLes3(t *testing.T) { testCheckpointSyncing(t, 3, 2) }
+
+func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 	config := light.TestServerIndexerConfig
 
 	waitIndexers := func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
@@ -47,45 +59,54 @@ func testCheckpointSyncing(t *testing.T, protocol int) {
 	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), protocol, waitIndexers, false)
 	defer tearDown()
 
-	// Register checkpoint 0 into the contract at block (512+4)+1
-	s, _, head := server.chtIndexer.Sections()
-	chtRoot := light.GetChtRoot(server.db, s-1, head)
-	btRoot := light.GetBloomTrieRoot(server.db, s-1, head)
+	expected := config.ChtSize + config.ChtConfirms
 
-	cp := &params.TrustedCheckpoint{
-		SectionIndex: 0,
-		SectionHead:  head,
-		CHTRoot:      chtRoot,
-		BloomRoot:    btRoot,
-	}
-	header := server.backend.Blockchain().CurrentHeader()
-
-	data := append([]byte{0x19, 0x00}, append(registrarAddr.Bytes(), append([]byte{0, 0, 0, 0, 0, 0, 0, 0}, cp.Hash().Bytes()...)...)...)
-	sig, _ := crypto.Sign(crypto.Keccak256(data), signerKey)
-	sig[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
-	if _, err := server.pm.reg.contract.RegisterCheckpoint(signerKey, cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(header.Number, big.NewInt(1)), header.ParentHash, [][]byte{sig}); err != nil {
-		t.Error("register checkpoint failed", err)
-	}
-	server.backend.Commit()
-	server.backend.Commit() // Inject an empty block
-
-	// Wait for the checkpoint registration
-	for {
-		_, hash, _, err := server.pm.reg.contract.Contract().GetLatestCheckpoint(nil)
-		if err != nil || hash == [32]byte{} {
-			time.Sleep(100 * time.Millisecond)
-			continue
+	// Checkpoint syncing or legacy checkpoint syncing.
+	if syncMode == 1 || syncMode == 2 {
+		// Assemble checkpoint 0
+		s, _, head := server.chtIndexer.Sections()
+		cp := &params.TrustedCheckpoint{
+			SectionIndex: 0,
+			SectionHead:  head,
+			CHTRoot:      light.GetChtRoot(server.db, s-1, head),
+			BloomRoot:    light.GetBloomTrieRoot(server.db, s-1, head),
 		}
-		break
+		if syncMode == 1 {
+			// Register the assembled checkpoint as hardcoded one.
+			client.pm.checkpoint = cp
+			client.pm.blockchain.(*light.LightChain).AddTrustedCheckpoint(cp)
+		} else {
+			// Register the assembled checkpoint into oracle.
+			header := server.backend.Blockchain().CurrentHeader()
+
+			data := append([]byte{0x19, 0x00}, append(registrarAddr.Bytes(), append([]byte{0, 0, 0, 0, 0, 0, 0, 0}, cp.Hash().Bytes()...)...)...)
+			sig, _ := crypto.Sign(crypto.Keccak256(data), signerKey)
+			sig[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
+			if _, err := server.pm.reg.contract.RegisterCheckpoint(signerKey, cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(header.Number, big.NewInt(1)), header.ParentHash, [][]byte{sig}); err != nil {
+				t.Error("register checkpoint failed", err)
+			}
+			server.backend.Commit()
+
+			// Wait for the checkpoint registration
+			for {
+				_, hash, _, err := server.pm.reg.contract.Contract().GetLatestCheckpoint(nil)
+				if err != nil || hash == [32]byte{} {
+					time.Sleep(100 * time.Millisecond)
+					continue
+				}
+				break
+			}
+			expected += 1
+		}
 	}
 
 	done := make(chan error)
 	client.pm.reg.syncDoneHook = func() {
 		header := client.pm.blockchain.CurrentHeader()
-		if header.Number.Uint64() == config.ChtSize+config.ChtConfirms+2 {
+		if header.Number.Uint64() == expected {
 			done <- nil
 		} else {
-			done <- errors.New("blockchain mismatch")
+			done <- fmt.Errorf("blockchain length mismatch, want %d, got %d", expected, header.Number)
 		}
 	}
 

@@ -111,7 +111,7 @@ func (pm *ProtocolManager) validateCheckpoint(peer *peer) error {
 	if !valid {
 		return errInvalidCheckpoint
 	}
-	log.Warn("Verifed advertised checkpoint", "peer", peer.id, "signers", len(signers))
+	log.Warn("Verified advertised checkpoint", "peer", peer.id, "signers", len(signers))
 	return nil
 }
 
@@ -140,7 +140,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	//     => Use provided checkpoint
 	var checkpoint = &peer.checkpoint
 	var hardcoded bool
-	if pm.checkpoint != nil && pm.checkpoint.SectionIndex > peer.checkpoint.SectionIndex {
+	if pm.checkpoint != nil && pm.checkpoint.SectionIndex >= peer.checkpoint.SectionIndex {
 		checkpoint = pm.checkpoint // Use the hardcoded one.
 		hardcoded = true
 	}

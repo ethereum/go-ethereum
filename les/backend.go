@@ -126,7 +126,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 
 	checkpoint := config.Checkpoint
 	if checkpoint == nil {
-		checkpoint, _ = params.TrustedCheckpoints[genesisHash]
+		checkpoint = params.TrustedCheckpoints[genesisHash]
 	}
 	// Note: NewLightChain adds the trusted checkpoint so it needs an ODR with
 	// indexers already set but not started yet
@@ -156,7 +156,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 
 	oracle := config.CheckpointOracle
 	if oracle == nil {
-		oracle, _ = params.CheckpointOracles[genesisHash]
+		oracle = params.CheckpointOracles[genesisHash]
 	}
 	registrar := newCheckpointRegistrar(oracle, leth.getLocalCheckpoint)
 	if leth.protocolManager, err = NewProtocolManager(leth.chainConfig, checkpoint, light.DefaultClientIndexerConfig, config.ULC, true, config.NetworkId, leth.eventMux, leth.peers, leth.blockchain, nil, chainDb, leth.odr, leth.serverPool, registrar, quitSync, &leth.wg, nil); err != nil {

@@ -45,7 +45,7 @@ var TrustedCheckpoints = map[common.Hash]*TrustedCheckpoint{
 // CheckpointOracles associates each known checkpoint oracles with the genesis hash of
 // the chain it belongs to.
 var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
-	RinkebyGenesisHash: RinkebyCheckpointOracleConfig,
+	RinkebyGenesisHash: RinkebyCheckpointOracle,
 }
 
 var (
@@ -124,8 +124,8 @@ var (
 		BloomRoot:    common.HexToHash("0xa3048fe8b7e30f77f11bc755a88478363d7d3e71c2bdfe4e8ab9e269cd804ba2"),
 	}
 
-	// RinkebyCheckpointOracleConfig contains a set of configs for the Rinkeby test network oracle.
-	RinkebyCheckpointOracleConfig = &CheckpointOracleConfig{
+	// RinkebyCheckpointOracle contains a set of configs for the Rinkeby test network oracle.
+	RinkebyCheckpointOracle = &CheckpointOracleConfig{
 		Address: common.HexToAddress("0x62652ed8e969ce7bd5e3dd13590efa1e569215f1"),
 		Signers: []common.Address{
 			common.HexToAddress("0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3"), // Peter
