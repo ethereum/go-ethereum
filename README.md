@@ -60,85 +60,151 @@ This will open the JavaScript console and let you query the blockchain directly 
 
 ### Running tomo locally
 
-If you would like to run tomo locally to see how it works under the hood and have a copy of the blockchain, you can try it on our Testnet by running the commands below:
+#### Download genesis block
+$GENESIS_PATH : location of genesis file you would like to put
+```bash
+    export GENESIS_PATH=path/to/genesis.json
+```
+   - Testnet
+   ```bash
+        curl -L https://raw.githubusercontent.com/tomochain/tomochain/master/genesis/testnet.json -o $GENESIS_PATH
+   ```
+
+   - Mainnet
+   ```bash
+        curl -L https://raw.githubusercontent.com/tomochain/tomochain/master/genesis/mainnet.json -o $GENESIS_PATH
+   ```
+
+#### Create datadir
+   - create a folder to store tomochain data on your machine
+
+   ```bash
+        export DATA_DIR=/path/to/your/data/folder
+        
+        mkdir -p $DATA_DIR/tomo
+   ```
+#### Initialize the chain from genesis
 
 ```bash
-// 1. create a folder to store tomochain data on your machine
-$ export DATA_DIR=/path/to/your/data/folder
-$ mkdir -p $DATA_DIR/tomo
-
-// 2. download our genesis file
-$ export GENESIS_PATH=$DATA_DIR/genesis.json
-$ curl -L https://raw.githubusercontent.com/tomochain/tomochain/master/genesis/testnet.json -o $GENESIS_PATH
-
-// 3. init the chain from genesis
-$ tomo init $GENESIS_PATH --datadir $DATA_DIR
-
-// 4. get a test account. Create a new one if you don't have any:
-$ export KEYSTORE_DIR=keystore
-$ touch $DATA_DIR/password && echo 'your-password' > $DATA_DIR/password
-$ tomo account new \
-      --datadir $DATA_DIR \
-      --keystore $KEYSTORE_DIR \
-      --password $DATA_DIR/password
-
-// if you already have a test account, import it now
-$ tomo  account import ./private_key \
-      --datadir $DATA_DIR \
-      --keystore $KEYSTORE_DIR \
-      --password $DATA_DIR/password
-
-// get the account
-$ account=$(
-  tomo account list --datadir $DATA_DIR  --keystore $KEYSTORE_DIR \
-  2> /dev/null \
-  | head -n 1 \
-  | cut -d"{" -f 2 | cut -d"}" -f 1
-)
-
-// 5. prepare the bootnodes list
-$ export BOOTNODES="enode://4d3c2cc0ce7135c1778c6f1cfda623ab44b4b6db55289543d48ecfde7d7111fd420c42174a9f2fea511a04cf6eac4ec69b4456bfaaae0e5bd236107d3172b013@52.221.28.223:30301,enode://298780104303fcdb37a84c5702ebd9ec660971629f68a933fd91f7350c54eea0e294b0857f1fd2e8dba2869fcc36b83e6de553c386cf4ff26f19672955d9f312@13.251.101.216:30301,enode://46dba3a8721c589bede3c134d755eb1a38ae7c5a4c69249b8317c55adc8d46a369f98b06514ecec4b4ff150712085176818d18f59a9e6311a52dbe68cff5b2ae@13.250.94.232:30301"
-
-// 6. Start up tomo now
-$ export NAME=YOUR_NODE_NAME
-$ tomo \
-  --verbosity 4 \
-  --datadir $DATA_DIR \
-  --keystore $KEYSTORE_DIR \
-  --identity $NAME \
-  --password $DATA_DIR \
-  --networkid 89 \
-  --port 30303 \
-  --rpc \
-  --rpccorsdomain "*" \
-  --rpcaddr 0.0.0.0 \
-  --rpcport 8545 \
-  --rpcvhosts "*" \
-  --ws \
-  --wsaddr 0.0.0.0 \
-  --wsport 8546 \
-  --wsorigins "*" \
-  --mine \
-  --gasprice "1" \
-  --targetgaslimit "420000000"
+    tomo init $GENESIS_PATH --datadir $DATA_DIR
 ```
 
-*Some explanations on the flags*
+#### Initialize / Import accounts for the nodes's keystore
+If you already had an existing account, import it. Otherwise, please initialize new accounts 
 
+```bash
+    export KEYSTORE_DIR=path/to/keystore
 ```
---verbosity: log level from 1 to 5. Here we're using 4 for debug messages
---datadir: path to your data directory created above.
---keystore: path to your account's keystore created above.
---identity: your full-node's name.
---password: your account's password.
---networkid: our testnet network ID.
---port: your full-node's listening port (default to 30303)
---rpc, --rpccorsdomain, --rpcaddr, --rpcport, --rpcvhosts: your full-node will accept RPC requests at 8545 TCP.
---ws, --wsaddr, --wsport, --wsorigins: your full-node will accept Websocket requests at 8546 TCP.
---mine: your full-node wants to register to be a candidate for masternode selection.
---gasprice: Minimal gas price to accept for mining a transaction.
---targetgaslimit: Target gas limit sets the artificial target gas floor for the blocks to mine (default: 4712388)
+
+##### Initialize new accounts
+   ```bash
+        
+        tomo account new \
+        
+          --password [YOUR_PASSWORD_FILE_TO_LOCK_YOUR_ACCOUNT] \
+        
+          --keystore $KEYSTORE_DIR
+   ```
+    
+##### Import accounts
+   ```bash
+        tomo  account import [PRIVATE_KEY_FILE_OF_YOUR_ACCOUNT] \
+    
+        --keystore $KEYSTORE_DIR \
+    
+        --password [YOUR_PASSWORD_FILE_TO_LOCK_YOUR_ACCOUNT]
+   ```
+
+##### List all available accounts in keystore folder
+
+```bash
+    tomo account list --datadir ./  --keystore $KEYSTORE_DIR
 ```
+
+#### Start a node
+##### Environment variables
+   - $IDENTITY: the name of your node
+   - $PASSWORD: the password file to unlock your account
+   - $YOUR_COINBASE_ADDRESS: address of your account which generated in the previous step
+   - $NETWORK_ID: the networkId. Mainnet: 88. Testnet: 89
+   - $BOOTNODES: The comma separated list of bootnodes. Find them [here](https://docs.tomochain.com/general/networks/)
+   - $WS_SECRET: The password to send data to the stats website. Find them [here](https://docs.tomochain.com/general/networks/)
+   - $NETSTATS_HOST: The stats website to report to, regarding to your environment. Find them [here](https://docs.tomochain.com/general/networks/)
+   - $NETSTATS_PORT: The port used by the stats website (usually 443)
+    
+##### Let's start a node
+```bash
+    tomo  --syncmode "full" \
+        
+        --datadir $DATA_DIR --networkid $NETWORK_ID --port 30303 \
+        
+        --keystore $KEYSTORE_DIR --password $PASSWORD \
+        
+        --rpc --rpccorsdomain "*" --rpcaddr 0.0.0.0 --rpcport 8545 --rpcvhosts "*" \
+        
+        --rpcapi "db,eth,net,web3,personal,debug" \
+        
+        --gcmode "archive" \
+        
+        --ws --wsaddr 0.0.0.0 --wsport 8546 --wsorigins "*" --unlock "$YOUR_COINBASE_ADDRESS" \
+        
+        --identity $IDENTITY \
+        
+        --mine --gasprice 2500 \
+        
+        --bootnodes $BOOTNODES \
+        
+        --ethstats $IDENTITY:$WS_SECRET@$NETSTATS_HOST:$NETSTATS_PORT
+        
+        console
+```
+
+
+##### Some explanations on the flags
+   
+```
+           --verbosity: log level from 1 to 5. Here we're using 4 for debug messages
+           
+           --datadir: path to your data directory created above.
+           
+           --keystore: path to your account's keystore created above.
+           
+           --identity: your full-node's name.
+           
+           --password: your account's password.
+           
+           --networkid: our network ID.
+           
+           --port: your full-node's listening port (default to 30303)
+           
+           --rpc, --rpccorsdomain, --rpcaddr, --rpcport, --rpcvhosts: your full-node will accept RPC requests at 8545 TCP.
+           
+           --ws, --wsaddr, --wsport, --wsorigins: your full-node will accept Websocket requests at 8546 TCP.
+           
+           --mine: your full-node wants to register to be a candidate for masternode selection.
+           
+           --gasprice: Minimal gas price to accept for mining a transaction.
+           
+           --targetgaslimit: Target gas limit sets the artificial target gas floor for the blocks to mine (default: 4712388)
+           
+           --bootnode: bootnode information to help to discover other nodes in the network
+           
+           --gcmode: blockchain garbage collection mode ("full", "archive")
+           
+           --synmode: blockchain sync mode ("fast", "full", or "light". More detail: https://github.com/tomochain/tomochain/blob/master/eth/downloader/modes.go#L24)
+           
+           --ethstats: send data to stats website
+```
+   To see all flags usage
+   
+```bash
+      tomo --help
+```
+
+#### See your node on stats page
+   - Testnet: https://stats.testnet.tomochain.com
+   - Mainnet: http://stats.tomochain.com
+
 
 ## Road map
 
