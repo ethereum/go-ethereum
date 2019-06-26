@@ -353,7 +353,7 @@ func (c *Bor) verifyHeader(chain consensus.ChainReader, header *types.Header, pa
 	}
 	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
 	if number > 0 {
-		if header.Difficulty == nil || (header.Difficulty.Cmp(diffInTurn) != 0 && header.Difficulty.Cmp(diffNoTurn) != 0) {
+		if header.Difficulty == nil {
 			return errInvalidDifficulty
 		}
 	}
