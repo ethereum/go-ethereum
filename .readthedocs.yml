@@ -1,0 +1,14 @@
+# .readthedocs.yml
+# Read the Docs configuration file
+# See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
+
+version: 2
+
+sphinx:
+  configuration: docs/swarm-guide/contents/conf.py
+  builder: html
+
+python:
+  version: 3.7
+  install:
+    - requirements: docs/swarm-guide/requirements.txt
