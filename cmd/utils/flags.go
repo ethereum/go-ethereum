@@ -1534,7 +1534,7 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 }
 
 // RegisterDashboardService adds a dashboard to the stack.
-func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config, syncMode downloader.SyncMode, commit string) {
+func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config, commit string) {
 	err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		var (
 			ethServ *eth.Ethereum
@@ -1542,7 +1542,7 @@ func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config, syncMode 
 		)
 		_ = ctx.Service(&ethServ)
 		_ = ctx.Service(&lesServ)
-		return dashboard.New(cfg, ethServ, lesServ, syncMode, commit, ctx.ResolvePath("logs")), nil
+		return dashboard.New(cfg, ethServ, lesServ, commit, ctx.ResolvePath("logs")), nil
 	})
 	if err != nil {
 		Fatalf("Failed to register the dashboard service: %v", err)

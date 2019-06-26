@@ -34,11 +34,8 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/les"
-
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/event"
-
+	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -75,10 +72,8 @@ type Dashboard struct {
 	peerCh  chan p2p.MeteredPeerEvent // Peer event channel.
 	subPeer event.Subscription        // Peer event subscription.
 
-	syncMode downloader.SyncMode
-
-	ethServ *eth.Ethereum
-	lesServ *les.LightEthereum
+	ethServ *eth.Ethereum      // Ethereum object serving internals.
+	lesServ *les.LightEthereum // LightEthereum object serving internals.
 }
 
 // client represents active websocket connection with a remote browser.
@@ -89,7 +84,7 @@ type client struct {
 }
 
 // New creates a new dashboard instance with the given configuration.
-func New(config *Config, ethServ *eth.Ethereum, lesServ *les.LightEthereum, syncMode downloader.SyncMode, commit string, logdir string) *Dashboard {
+func New(config *Config, ethServ *eth.Ethereum, lesServ *les.LightEthereum, commit string, logdir string) *Dashboard {
 	// There is a data race between the network layer and the dashboard, which
 	// can cause some lost peer events, therefore some peers might not appear
 	// on the dashboard.
@@ -106,9 +101,8 @@ func New(config *Config, ethServ *eth.Ethereum, lesServ *les.LightEthereum, sync
 		quit:   make(chan chan error),
 		history: &Message{
 			General: &GeneralMessage{
-				Commit:   commit,
-				Version:  fmt.Sprintf("v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
-				SyncMode: syncMode.String(),
+				Commit:  commit,
+				Version: fmt.Sprintf("v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
 			},
 			System: &SystemMessage{
 				ActiveMemory:   emptyChartEntries(sampleLimit),
@@ -121,12 +115,11 @@ func New(config *Config, ethServ *eth.Ethereum, lesServ *les.LightEthereum, sync
 				DiskWrite:      emptyChartEntries(sampleLimit),
 			},
 		},
-		logdir:   logdir,
-		peerCh:   peerCh,
-		subPeer:  p2p.SubscribeMeteredPeerEvent(peerCh),
-		syncMode: syncMode,
-		ethServ:  ethServ,
-		lesServ:  lesServ,
+		logdir:  logdir,
+		peerCh:  peerCh,
+		subPeer: p2p.SubscribeMeteredPeerEvent(peerCh),
+		ethServ: ethServ,
+		lesServ: lesServ,
 	}
 }
 

@@ -56,7 +56,6 @@ const themeStyles = (theme: Object) => ({
 export type Props = {
 	classes:       Object, // injected by withStyles()
 	switchSideBar: () => void,
-	syncMode:      string,
 };
 
 // Header renders the header of the dashboard.

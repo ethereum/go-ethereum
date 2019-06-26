@@ -404,12 +404,12 @@ func (db *Dashboard) collectPeerData() {
 				connected := now.Add(-event.Elapsed)
 				newPeerEvents = append(newPeerEvents, &peerEvent{
 					Addr:      event.Addr,
-					Enode:     event.Enode,
+					Enode:     event.Peer.Node().String(),
 					peer:      event.Peer,
 					Connected: &connected,
 				})
 			case p2p.PeerDisconnected:
-				addr, enode := event.Addr, event.Enode
+				addr, enode := event.Addr, event.Peer.Node().String()
 				newPeerEvents = append(newPeerEvents, &peerEvent{
 					Addr:         addr,
 					Enode:        enode,

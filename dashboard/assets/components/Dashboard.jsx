@@ -85,7 +85,6 @@ const defaultContent: () => Content = () => ({
 	general: {
 		version:  null,
 		commit:   null,
-		syncMode: '',
 	},
 	home:    {},
 	chain:   {},
@@ -122,7 +121,6 @@ const updaters = {
 	general: {
 		version:  replacer,
 		commit:   replacer,
-		syncMode: replacer,
 	},
 	home:    null,
 	chain:   null,
@@ -243,7 +241,6 @@ class Dashboard extends Component<Props, State> {
 			<div className={this.props.classes.dashboard} style={styles.dashboard}>
 				<Header
 					switchSideBar={this.switchSideBar}
-					syncMode={this.state.content.general.syncMode}
 				/>
 				<Body
 					opened={this.state.sideBar}
