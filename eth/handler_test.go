@@ -468,27 +468,22 @@ func TestCheckpointChallenge(t *testing.T) {
 		// If checkpointing is not enabled locally, don't challenge and don't drop
 		{downloader.FullSync, false, false, false, false, false},
 		{downloader.FastSync, false, false, false, false, false},
-		{downloader.LightSync, false, false, false, false, false},
 
 		// If checkpointing is enabled locally and remote response is empty, only drop during fast sync
 		{downloader.FullSync, true, false, true, false, false},
 		{downloader.FastSync, true, false, true, false, true}, // Special case, fast sync, unsynced peer
-		{downloader.LightSync, true, false, true, false, false},
 
 		// If checkpointing is enabled locally and remote response mismatches, always drop
 		{downloader.FullSync, true, false, false, false, true},
 		{downloader.FastSync, true, false, false, false, true},
-		{downloader.LightSync, true, false, false, false, true},
 
 		// If checkpointing is enabled locally and remote response matches, never drop
 		{downloader.FullSync, true, false, false, true, false},
 		{downloader.FastSync, true, false, false, true, false},
-		{downloader.LightSync, true, false, false, true, false},
 
 		// If checkpointing is enabled locally and remote times out, always drop
 		{downloader.FullSync, true, true, false, true, true},
 		{downloader.FastSync, true, true, false, true, true},
-		{downloader.LightSync, true, true, false, true, true},
 	}
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("sync %v checkpoint %v timeout %v empty %v match %v", tt.syncmode, tt.checkpoint, tt.timeout, tt.empty, tt.match), func(t *testing.T) {
