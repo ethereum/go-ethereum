@@ -58,7 +58,7 @@ func init() {
 		commandPublish,
 	}
 	app.Flags = []cli.Flag{
-		addressFlag,
+		oracleFlag,
 		keyFileFlag,
 		nodeURLFlag,
 		clefURLFlag,
@@ -77,9 +77,9 @@ var (
 		Name:  "hash",
 		Usage: "Checkpoint hash (query latest from remote node if not specified)",
 	}
-	addressFlag = cli.StringFlag{
-		Name:  "address",
-		Usage: "Checkpoint contract address (query from remote node if not specified)",
+	oracleFlag = cli.StringFlag{
+		Name:  "oracle",
+		Usage: "Checkpoint oracle address (query from remote node if not specified)",
 	}
 	thresholdFlag = cli.Int64Flag{
 		Name:  "threshold",
@@ -98,6 +98,10 @@ var (
 		Name:  "clef",
 		Value: "http://localhost:8550",
 		Usage: "The rpc endpoint of clef",
+	}
+	signerFlag = cli.StringFlag{
+		Name:  "signer",
+		Usage: "Signer address for clef mode signing",
 	}
 	signersFlag = cli.StringFlag{
 		Name:  "signers",

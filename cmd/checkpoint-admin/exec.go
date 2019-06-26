@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -61,9 +62,9 @@ var commandSign = cli.Command{
 		clefURLFlag,
 		indexFlag,
 		hashFlag,
-		addressFlag,
+		oracleFlag,
 		keyFileFlag,
-		signersFlag,
+		signerFlag,
 		utils.PasswordFileFlag,
 	},
 	Action: utils.MigrateFlags(sign),
@@ -148,10 +149,10 @@ func sign(ctx *cli.Context) error {
 		}
 		cindex = ctx.Uint64(indexFlag.Name)
 
-		if !ctx.IsSet(addressFlag.Name) {
-			utils.Fatalf("Please specify oracle address (--address) to sign in offline mode")
+		if !ctx.IsSet(oracleFlag.Name) {
+			utils.Fatalf("Please specify oracle address (--oracle) to sign in offline mode")
 		}
-		address = common.HexToAddress(ctx.String(addressFlag.Name))
+		address = common.HexToAddress(ctx.String(oracleFlag.Name))
 	} else {
 		// Interactive mode signing, retrieve the data from the remote node
 		node = newRPCClient(ctx.GlobalString(nodeURLFlag.Name))
@@ -209,7 +210,7 @@ func sign(ctx *cli.Context) error {
 	switch {
 	case ctx.GlobalIsSet(clefURLFlag.Name):
 		// Sign checkpoint in clef mode.
-		signer = ctx.GlobalString(signersFlag.Name)
+		signer = ctx.String(signerFlag.Name)
 
 		if !offline {
 			if err := isAdmin(common.HexToAddress(signer)); err != nil {
@@ -222,7 +223,7 @@ func sign(ctx *cli.Context) error {
 		binary.BigEndian.PutUint64(buf, cindex)
 		p["address"] = address.Hex()
 		p["message"] = hexutil.Encode(append(buf, chash.Bytes()...))
-		if err := clef.Call(&signature, "account_signData", "data/validator", signer, p); err != nil {
+		if err := clef.Call(&signature, "account_signData", accounts.MimetypeDataWithValidator, signer, p); err != nil {
 			utils.Fatalf("Failed to sign checkpoint, err %v", err)
 		}
 	case ctx.GlobalIsSet(keyFileFlag.Name):
