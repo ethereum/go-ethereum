@@ -126,7 +126,7 @@ var (
 
 	// RinkebyCheckpointOracle contains a set of configs for the Rinkeby test network oracle.
 	RinkebyCheckpointOracle = &CheckpointOracleConfig{
-		Address: common.HexToAddress("0x62652ed8e969ce7bd5e3dd13590efa1e569215f1"),
+		Address: common.HexToAddress("0x087757e605fcad9febaa2f6553768fafda08ac0d"),
 		Signers: []common.Address{
 			common.HexToAddress("0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3"), // Peter
 			common.HexToAddress("0x78d1ad571a1a09d60d9bbf25894b44e4c8859595"), // Martin

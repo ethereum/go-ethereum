@@ -75,7 +75,6 @@ var commandPublish = cli.Command{
 	Flags: []cli.Flag{
 		nodeURLFlag,
 		indexFlag,
-		signersFlag,
 		signaturesFlag,
 		keyFileFlag,
 		utils.PasswordFileFlag,
