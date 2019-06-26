@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/contracts/registrar"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
@@ -35,12 +34,10 @@ import (
 
 // newClient creates a client with specified remote URL.
 func newClient(ctx *cli.Context) *ethclient.Client {
-	url := ctx.GlobalString(nodeURLFlag.Name)
-	client, err := ethclient.Dial(url)
+	client, err := ethclient.Dial(ctx.GlobalString(nodeURLFlag.Name))
 	if err != nil {
-		utils.Fatalf("Failed to setup ethereum client at url %s: %v", url, err)
+		utils.Fatalf("Failed to connect to Ethereum node: %v", err)
 	}
-	log.Info("Setup ethereum client", "URL", url)
 	return client
 }
 
@@ -48,9 +45,8 @@ func newClient(ctx *cli.Context) *ethclient.Client {
 func newRPCClient(url string) *rpc.Client {
 	client, err := rpc.Dial(url)
 	if err != nil {
-		utils.Fatalf("Failed to setup rpc client at url %s: %v", url, err)
+		utils.Fatalf("Failed to connect to Ethereum node: %v", err)
 	}
-	log.Info("Setup rpc client", "URL", url)
 	return client
 }
 
@@ -58,9 +54,8 @@ func newRPCClient(url string) *rpc.Client {
 // rpc request.
 func getContractAddr(client *rpc.Client) common.Address {
 	var addr string
-	err := client.Call(&addr, "les_getCheckpointContractAddress")
-	if err != nil {
-		utils.Fatalf("Failed to fetch checkpoint contract address, err %v", err)
+	if err := client.Call(&addr, "les_getCheckpointContractAddress"); err != nil {
+		utils.Fatalf("Failed to fetch checkpoint oracle address: %v", err)
 	}
 	return common.HexToAddress(addr)
 }
@@ -104,7 +99,7 @@ func getCheckpoint(ctx *cli.Context, client *rpc.Client) *params.TrustedCheckpoi
 
 // newContract creates a registrar contract instance with specified
 // contract address or the default contracts for mainnet or testnet.
-func newContract(client *rpc.Client) *registrar.Registrar {
+func newContract(client *rpc.Client) (common.Address, *registrar.Registrar) {
 	addr := getContractAddr(client)
 	if addr == (common.Address{}) {
 		utils.Fatalf("No specified registrar contract address")
@@ -113,8 +108,7 @@ func newContract(client *rpc.Client) *registrar.Registrar {
 	if err != nil {
 		utils.Fatalf("Failed to setup registrar contract %s: %v", addr, err)
 	}
-	log.Info("Setup registrar contract", "address", addr)
-	return contract
+	return addr, contract
 }
 
 // promptPassphrase prompts the user for a passphrase.

@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// registrar is a utility that can be used to query checkpoint information
-// and register stable checkpoint into the contract.
+// checkpoint-admin is a utility that can be used to query checkpoint information
+// and register stable checkpoints into an oracle contract.
 package main
 
 import (
@@ -52,22 +52,16 @@ var app *cli.App
 func init() {
 	app = utils.NewApp(gitCommit, gitDate, "ethereum checkpoint helper tool")
 	app.Commands = []cli.Command{
-		commandQueryAdmin,
-		commandQueryCheckpoint,
-		commandDeployContract,
-		commandSignCheckpoint,
-		commandRegisterCheckpoint,
+		commandStatus,
+		commandDeploy,
+		commandSign,
+		commandPublish,
 	}
 	app.Flags = []cli.Flag{
-		indexFlag,
-		hashFlag,
 		addressFlag,
-		thresholdFlag,
 		keyFileFlag,
 		nodeURLFlag,
 		clefURLFlag,
-		signerFlag,
-		signatureFlag,
 		utils.PasswordFileFlag,
 	}
 	cli.CommandHelpTemplate = commandHelperTemplate
@@ -105,12 +99,12 @@ var (
 		Value: "http://localhost:8550",
 		Usage: "The rpc endpoint of clef",
 	}
-	signerFlag = cli.StringFlag{
-		Name:  "signer",
+	signersFlag = cli.StringFlag{
+		Name:  "signers",
 		Usage: "Comma separated accounts of trusted checkpoint signers",
 	}
-	signatureFlag = cli.StringFlag{
-		Name:  "signature",
+	signaturesFlag = cli.StringFlag{
+		Name:  "signatures",
 		Usage: "Comma separated checkpoint signatures to submit",
 	}
 )
