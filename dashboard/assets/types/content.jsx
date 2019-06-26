@@ -35,7 +35,6 @@ export type ChartEntry = {
 export type General = {
 	version:  ?string,
 	commit:   ?string,
-	syncMode: string,
 };
 
 export type Home = {

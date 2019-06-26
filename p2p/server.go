@@ -876,15 +876,13 @@ func (srv *Server) listenLoop() {
 			continue
 		}
 		if remoteIP != nil {
-			fd = newMeteredConn(fd, true, remoteIP)
+			var addr *net.TCPAddr
+			if tcp, ok := fd.RemoteAddr().(*net.TCPAddr); ok {
+				addr = tcp
+			}
+			fd = newMeteredConn(fd, true, addr)
+			srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
 		}
-
-		var addr *net.TCPAddr
-		if tcp, ok := fd.RemoteAddr().(*net.TCPAddr); ok {
-			addr = tcp
-		}
-		fd = newMeteredConn(fd, true, addr)
-		srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
 		go func() {
 			srv.SetupConn(fd, inboundConn, nil)
 			slots <- struct{}{}

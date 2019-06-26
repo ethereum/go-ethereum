@@ -29,8 +29,7 @@ import Typography from '@material-ui/core/Typography';
 import {AreaChart, Area, Tooltip, YAxis} from 'recharts';
 import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
 import {faCircle as fasCircle} from '@fortawesome/free-solid-svg-icons'; // More icons at fontawesome.com/icons
-import {faCircle as farCircle} from '@fortawesome/free-regular-svg-icons';
-import {faClipboard as farClipboard} from '@fortawesome/free-regular-svg-icons';
+import {faCircle as farCircle, faClipboard as farClipboard} from '@fortawesome/free-regular-svg-icons';
 import convert from 'color-convert';
 import {Scrollbars} from 'react-custom-scrollbars';
 
@@ -139,9 +138,10 @@ const shortName = (name: string) => {
 		console.error('Incorrect node name', name);
 		return parts[0];
 	}
+	const versionRE = RegExp(/^v?\d+\.\d+\.\d+.*/);
 	// Drop optional custom identifier.
-	if (!RegExp(/^v?\d+\.\d+\.\d+.*/).test(parts[1])) {
-		if (parts.length < 3) {
+	if (!versionRE.test(parts[1])) {
+		if (parts.length < 3 || !versionRE.test(parts[2])) {
 			console.error('Incorrect node name', name);
 			return parts[0];
 		}
@@ -683,7 +683,7 @@ class Network extends Component<Props, State> {
 				<Grid item style={{width: '40%'}}>
 					<div className={classes.table} style={styles.table}>
 						<Typography variant='subtitle1' gutterBottom className={classes.title} style={styles.title}>
-							ETH peers
+							Full peers
 							<FontAwesomeIcon
 								icon={farClipboard}
 								onClick={this.copyToClipboard(JSON.stringify(this.ethList()))}
@@ -743,7 +743,7 @@ class Network extends Component<Props, State> {
 				<Grid item style={{width: '40%'}}>
 					<div className={classes.table} style={styles.table}>
 						<Typography variant='subtitle1' gutterBottom className={classes.title} style={styles.title}>
-							LES peers
+							Light peers
 							<FontAwesomeIcon
 								icon={farClipboard}
 								onClick={this.copyToClipboard(JSON.stringify(this.lesList()))}
