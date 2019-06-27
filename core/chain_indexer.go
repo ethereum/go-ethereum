@@ -243,7 +243,7 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 	// If a reorg happened, invalidate all sections until that point
 	if reorg {
 		// Revert the known section number to the reorg point
-		known := head / c.sectionSize
+		known := (head + 1) / c.sectionSize
 		stored := known
 		if known < c.checkpointSections {
 			known = 0
