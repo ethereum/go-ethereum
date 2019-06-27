@@ -159,7 +159,7 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 	var reqID uint64
 	for i, tt := range tests {
 		// Collect the headers to expect in the response
-		headers := []*types.Header{}
+		var headers []*types.Header
 		for _, hash := range tt.expect {
 			headers = append(headers, bc.GetHeaderByHash(hash))
 		}
@@ -212,8 +212,9 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 	var reqID uint64
 	for i, tt := range tests {
 		// Collect the hashes to request, and the response to expect
-		hashes, seen := []common.Hash{}, make(map[int64]bool)
-		bodies := []*types.Body{}
+		var hashes []common.Hash
+		seen := make(map[int64]bool)
+		var bodies []*types.Body
 
 		for j := 0; j < tt.random; j++ {
 			for {
@@ -313,7 +314,8 @@ func testGetReceipt(t *testing.T, protocol int) {
 	bc := server.pm.blockchain.(*core.BlockChain)
 
 	// Collect the hashes to request, and the response to expect
-	hashes, receipts := []common.Hash{}, []types.Receipts{}
+	var receipts []types.Receipts
+	var hashes []common.Hash
 	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
 		block := bc.GetBlockByNumber(i)
 
