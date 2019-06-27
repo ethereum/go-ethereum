@@ -38,7 +38,6 @@ type Lang int
 const (
 	LangGo Lang = iota
 	LangJava
-	LangObjC
 )
 
 // Bind generates a Go wrapper around a contract ABI. This wrapper isn't meant
@@ -164,124 +163,62 @@ var bindType = map[Lang]func(kind abi.Type) string{
 	LangJava: bindTypeJava,
 }
 
-// Helper function for the binding generators.
-// It reads the unmatched characters after the inner type-match,
-//  (since the inner type is a prefix of the total type declaration),
-//  looks for valid arrays (possibly a dynamic one) wrapping the inner type,
-//  and returns the sizes of these arrays.
-//
-// Returned array sizes are in the same order as solidity signatures; inner array size first.
-// Array sizes may also be "", indicating a dynamic array.
-func wrapArray(stringKind string, innerLen int, innerMapping string) (string, []string) {
-	remainder := stringKind[innerLen:]
-	//find all the sizes
-	matches := regexp.MustCompile(`\[(\d*)\]`).FindAllStringSubmatch(remainder, -1)
-	parts := make([]string, 0, len(matches))
-	for _, match := range matches {
-		//get group 1 from the regex match
-		parts = append(parts, match[1])
-	}
-	return innerMapping, parts
-}
-
-// Translates the array sizes to a Go-lang declaration of a (nested) array of the inner type.
-// Simply returns the inner type if arraySizes is empty.
-func arrayBindingGo(inner string, arraySizes []string) string {
-	out := ""
-	//prepend all array sizes, from outer (end arraySizes) to inner (start arraySizes)
-	for i := len(arraySizes) - 1; i >= 0; i-- {
-		out += "[" + arraySizes[i] + "]"
-	}
-	out += inner
-	return out
-}
-
-// bindTypeGo converts a Solidity type to a Go one. Since there is no clear mapping
-// from all Solidity types to Go ones (e.g. uint17), those that cannot be exactly
-// mapped will use an upscaled type (e.g. *big.Int).
-func bindTypeGo(kind abi.Type) string {
-	stringKind := kind.String()
-	innerLen, innerMapping := bindUnnestedTypeGo(stringKind)
-	return arrayBindingGo(wrapArray(stringKind, innerLen, innerMapping))
-}
-
-// The inner function of bindTypeGo, this finds the inner type of stringKind.
-// (Or just the type itself if it is not an array or slice)
-// The length of the matched part is returned, with the translated type.
-func bindUnnestedTypeGo(stringKind string) (int, string) {
-
-	switch {
-	case strings.HasPrefix(stringKind, "address"):
-		return len("address"), "common.Address"
-
-	case strings.HasPrefix(stringKind, "bytes"):
-		parts := regexp.MustCompile(`bytes([0-9]*)`).FindStringSubmatch(stringKind)
-		return len(parts[0]), fmt.Sprintf("[%s]byte", parts[1])
-
-	case strings.HasPrefix(stringKind, "int") || strings.HasPrefix(stringKind, "uint"):
-		parts := regexp.MustCompile(`(u)?int([0-9]*)`).FindStringSubmatch(stringKind)
+// bindBasicTypeGo converts basic solidity types(except array, slice and tuple) to Go one.
+func bindBasicTypeGo(kind abi.Type) string {
+	switch kind.T {
+	case abi.AddressTy:
+		return "common.Address"
+	case abi.IntTy, abi.UintTy:
+		parts := regexp.MustCompile(`(u)?int([0-9]*)`).FindStringSubmatch(kind.String())
 		switch parts[2] {
 		case "8", "16", "32", "64":
-			return len(parts[0]), fmt.Sprintf("%sint%s", parts[1], parts[2])
+			return fmt.Sprintf("%sint%s", parts[1], parts[2])
 		}
-		return len(parts[0]), "*big.Int"
-
-	case strings.HasPrefix(stringKind, "bool"):
-		return len("bool"), "bool"
-
-	case strings.HasPrefix(stringKind, "string"):
-		return len("string"), "string"
-
+		return "*big.Int"
+	case abi.FixedBytesTy:
+		return fmt.Sprintf("[%d]byte", kind.Size)
+	case abi.BytesTy:
+		return "[]byte"
+	case abi.FunctionTy:
+		// todo(rjl493456442)
+		return ""
 	default:
-		return len(stringKind), stringKind
+		// string, bool types
+		return kind.String()
 	}
 }
 
-// Translates the array sizes to a Java declaration of a (nested) array of the inner type.
-// Simply returns the inner type if arraySizes is empty.
-func arrayBindingJava(inner string, arraySizes []string) string {
-	// Java array type declarations do not include the length.
-	return inner + strings.Repeat("[]", len(arraySizes))
-}
-
-// bindTypeJava converts a Solidity type to a Java one. Since there is no clear mapping
-// from all Solidity types to Java ones (e.g. uint17), those that cannot be exactly
+// bindTypeGo converts solidity types to Go ones. Since there is no clear mapping
+// from all Solidity types to Go ones (e.g. uint17), those that cannot be exactly
 // mapped will use an upscaled type (e.g. BigDecimal).
-func bindTypeJava(kind abi.Type) string {
-	stringKind := kind.String()
-	innerLen, innerMapping := bindUnnestedTypeJava(stringKind)
-	return arrayBindingJava(wrapArray(stringKind, innerLen, innerMapping))
+func bindTypeGo(kind abi.Type) string {
+	// todo(rjl493456442) tuple
+	switch kind.T {
+	case abi.ArrayTy:
+		return fmt.Sprintf("[%d]", kind.Size) + bindTypeGo(*kind.Elem)
+	case abi.SliceTy:
+		return "[]" + bindTypeGo(*kind.Elem)
+	default:
+		return bindBasicTypeGo(kind)
+	}
 }
 
-// The inner function of bindTypeJava, this finds the inner type of stringKind.
-// (Or just the type itself if it is not an array or slice)
-// The length of the matched part is returned, with the translated type.
-func bindUnnestedTypeJava(stringKind string) (int, string) {
-
-	switch {
-	case strings.HasPrefix(stringKind, "address"):
-		parts := regexp.MustCompile(`address(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
-		if len(parts) != 2 {
-			return len(stringKind), stringKind
-		}
-		if parts[1] == "" {
-			return len("address"), "Address"
-		}
-		return len(parts[0]), "Addresses"
-
-	case strings.HasPrefix(stringKind, "bytes"):
-		parts := regexp.MustCompile(`bytes([0-9]*)`).FindStringSubmatch(stringKind)
-		if len(parts) != 2 {
-			return len(stringKind), stringKind
-		}
-		return len(parts[0]), "byte[]"
-
-	case strings.HasPrefix(stringKind, "int") || strings.HasPrefix(stringKind, "uint"):
-		//Note that uint and int (without digits) are also matched,
+// bindBasicTypeJava converts basic solidity types(except array, slice and tuple) to Java one.
+func bindBasicTypeJava(kind abi.Type) string {
+	switch kind.T {
+	case abi.AddressTy:
+		return "Address"
+	case abi.IntTy, abi.UintTy:
+		// Note that uint and int (without digits) are also matched,
 		// these are size 256, and will translate to BigInt (the default).
-		parts := regexp.MustCompile(`(u)?int([0-9]*)`).FindStringSubmatch(stringKind)
+		parts := regexp.MustCompile(`(u)?int([0-9]*)`).FindStringSubmatch(kind.String())
 		if len(parts) != 3 {
-			return len(stringKind), stringKind
+			return kind.String()
+		}
+		// All unsigned integers should be translated to BigInt since gomobile doesn't
+		// support them.
+		if parts[1] == "u" {
+			return "BigInt"
 		}
 
 		namedSize := map[string]string{
@@ -291,20 +228,48 @@ func bindUnnestedTypeJava(stringKind string) (int, string) {
 			"64": "long",
 		}[parts[2]]
 
-		//default to BigInt
+		// default to BigInt
 		if namedSize == "" {
 			namedSize = "BigInt"
 		}
-		return len(parts[0]), namedSize
-
-	case strings.HasPrefix(stringKind, "bool"):
-		return len("bool"), "boolean"
-
-	case strings.HasPrefix(stringKind, "string"):
-		return len("string"), "String"
-
+		return namedSize
+	case abi.FixedBytesTy, abi.BytesTy:
+		return "byte[]"
+	case abi.BoolTy:
+		return "boolean"
+	case abi.StringTy:
+		return "String"
+	case abi.FunctionTy:
+		// todo(rjl493456442)
+		return ""
 	default:
-		return len(stringKind), stringKind
+		return kind.String()
+	}
+}
+
+// bindTypeJava converts a Solidity type to a Java one. Since there is no clear mapping
+// from all Solidity types to Java ones (e.g. uint17), those that cannot be exactly
+// mapped will use an upscaled type (e.g. BigDecimal).
+func bindTypeJava(kind abi.Type) string {
+	switch kind.T {
+	case abi.ArrayTy, abi.SliceTy:
+		// Explicitly convert multidimensional types to predefined type in go side.
+		inner := bindTypeJava(*kind.Elem)
+		switch inner {
+		case "boolean":
+			return "Bools"
+		case "String":
+			return "Strings"
+		case "Address":
+			return "Addresses"
+		case "byte[]":
+			return "Binaries"
+		case "BigInt":
+			return "BigInts"
+		}
+		return inner + "[]"
+	default:
+		return bindBasicTypeJava(kind)
 	}
 }
 
@@ -329,7 +294,7 @@ func bindTopicTypeGo(kind abi.Type) string {
 // funcionality as for simple types, but dynamic types get converted to hashes.
 func bindTopicTypeJava(kind abi.Type) string {
 	bound := bindTypeJava(kind)
-	if bound == "String" || bound == "Bytes" {
+	if bound == "String" || bound == "byte[]" {
 		bound = "Hash"
 	}
 	return bound
@@ -348,18 +313,8 @@ func namedTypeJava(javaKind string, solKind abi.Type) string {
 	switch javaKind {
 	case "byte[]":
 		return "Binary"
-	case "byte[][]":
-		return "Binaries"
-	case "string":
-		return "String"
-	case "string[]":
-		return "Strings"
 	case "boolean":
 		return "Bool"
-	case "boolean[]":
-		return "Bools"
-	case "BigInt[]":
-		return "BigInts"
 	default:
 		parts := regexp.MustCompile(`(u)?int([0-9]*)(\[[0-9]*\])?`).FindStringSubmatch(solKind.String())
 		if len(parts) != 4 {
