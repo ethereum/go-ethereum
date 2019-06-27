@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package registrar
+package checkpointoracle
 
 import (
 	"bytes"
@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/contracts/registrar/contract"
+	"github.com/ethereum/go-ethereum/contracts/checkpointoracle/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -69,11 +69,11 @@ var (
 
 // validateOperation executes the operation, watches and delivers all events fired by the backend and ensures the
 // correctness by assert function.
-func validateOperation(t *testing.T, c *contract.Contract, backend *backends.SimulatedBackend, operation func(),
-	assert func(<-chan *contract.ContractNewCheckpointVote) error, opName string) {
+func validateOperation(t *testing.T, c *contract.CheckpointOracle, backend *backends.SimulatedBackend, operation func(),
+	assert func(<-chan *contract.CheckpointOracleNewCheckpointVote) error, opName string) {
 	// Watch all events and deliver them to assert function
 	var (
-		sink   = make(chan *contract.ContractNewCheckpointVote)
+		sink   = make(chan *contract.CheckpointOracleNewCheckpointVote)
 		sub, _ = c.WatchNewCheckpointVote(nil, sink, nil)
 	)
 	defer func() {
@@ -178,7 +178,7 @@ func TestCheckpointRegister(t *testing.T) {
 	transactOpts := bind.NewKeyedTransactor(accounts[0].key)
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{accounts[0].addr: {Balance: big.NewInt(1000000000)}, accounts[1].addr: {Balance: big.NewInt(1000000000)}, accounts[2].addr: {Balance: big.NewInt(1000000000)}}, 10000000)
 	// 3 trusted signers, threshold 2
-	contractAddr, _, c, err := contract.DeployContract(transactOpts, contractBackend, []common.Address{accounts[0].addr, accounts[1].addr, accounts[2].addr}, sectionSize, processConfirms, big.NewInt(2))
+	contractAddr, _, c, err := contract.DeployCheckpointOracle(transactOpts, contractBackend, []common.Address{accounts[0].addr, accounts[1].addr, accounts[2].addr}, sectionSize, processConfirms, big.NewInt(2))
 	if err != nil {
 		t.Error("Failed to deploy registrar contract", err)
 	}
@@ -233,7 +233,7 @@ func TestCheckpointRegister(t *testing.T) {
 		number, hash := getRecent()
 		v, r, s := collectSig(0, checkpoint0.Hash(), 2, nil)
 		c.SetCheckpoint(transactOpts, number, hash, checkpoint0.Hash(), 0, v, r, s)
-	}, func(events <-chan *contract.ContractNewCheckpointVote) error {
+	}, func(events <-chan *contract.CheckpointOracleNewCheckpointVote) error {
 		return assert(0, emptyHash, big.NewInt(0))
 	}, "test future checkpoint registration")
 
@@ -245,7 +245,7 @@ func TestCheckpointRegister(t *testing.T) {
 		v, r, s := collectSig(0, checkpoint0.Hash(), 2, nil)
 		hash = common.HexToHash("deadbeef")
 		c.SetCheckpoint(transactOpts, number, hash, checkpoint0.Hash(), 0, v, r, s)
-	}, func(events <-chan *contract.ContractNewCheckpointVote) error {
+	}, func(events <-chan *contract.CheckpointOracleNewCheckpointVote) error {
 		return assert(0, emptyHash, big.NewInt(0))
 	}, "test transaction replay protection")
 
@@ -255,7 +255,7 @@ func TestCheckpointRegister(t *testing.T) {
 		u, _ := crypto.GenerateKey()
 		v, r, s := collectSig(0, checkpoint0.Hash(), 2, u)
 		c.SetCheckpoint(transactOpts, number, hash, checkpoint0.Hash(), 0, v, r, s)
-	}, func(events <-chan *contract.ContractNewCheckpointVote) error {
+	}, func(events <-chan *contract.CheckpointOracleNewCheckpointVote) error {
 		return assert(0, emptyHash, big.NewInt(0))
 	}, "test unauthorized signature checking")
 
@@ -264,7 +264,7 @@ func TestCheckpointRegister(t *testing.T) {
 		number, hash := getRecent()
 		v, r, s := collectSig(0, checkpoint0.Hash(), 1, nil)
 		c.SetCheckpoint(transactOpts, number, hash, checkpoint0.Hash(), 0, v, r, s)
-	}, func(events <-chan *contract.ContractNewCheckpointVote) error {
+	}, func(events <-chan *contract.CheckpointOracleNewCheckpointVote) error {
 		return assert(0, emptyHash, big.NewInt(0))
 	}, "test un-multi-signature checkpoint registration")
 
@@ -273,12 +273,12 @@ func TestCheckpointRegister(t *testing.T) {
 		number, hash := getRecent()
 		v, r, s := collectSig(0, checkpoint0.Hash(), 2, nil)
 		c.SetCheckpoint(transactOpts, number, hash, checkpoint0.Hash(), 0, v, r, s)
-	}, func(events <-chan *contract.ContractNewCheckpointVote) error {
+	}, func(events <-chan *contract.CheckpointOracleNewCheckpointVote) error {
 		if valid, recv := validateEvents(2, events); !valid {
 			return errors.New("receive incorrect number of events")
 		} else {
 			for i := 0; i < len(recv); i++ {
-				event := recv[i].Interface().(*contract.ContractNewCheckpointVote)
+				event := recv[i].Interface().(*contract.CheckpointOracleNewCheckpointVote)
 				if !assertSignature(contractAddr, event.Index, event.CheckpointHash, event.R, event.S, event.V, accounts[i].addr) {
 					return errors.New("recover signer failed")
 				}
@@ -296,12 +296,12 @@ func TestCheckpointRegister(t *testing.T) {
 		number, hash := getRecent()
 		v, r, s := collectSig(2, checkpoint2.Hash(), 2, nil)
 		c.SetCheckpoint(transactOpts, number, hash, checkpoint2.Hash(), 2, v, r, s)
-	}, func(events <-chan *contract.ContractNewCheckpointVote) error {
+	}, func(events <-chan *contract.CheckpointOracleNewCheckpointVote) error {
 		if valid, recv := validateEvents(2, events); !valid {
 			return errors.New("receive incorrect number of events")
 		} else {
 			for i := 0; i < len(recv); i++ {
-				event := recv[i].Interface().(*contract.ContractNewCheckpointVote)
+				event := recv[i].Interface().(*contract.CheckpointOracleNewCheckpointVote)
 				if !assertSignature(contractAddr, event.Index, event.CheckpointHash, event.R, event.S, event.V, accounts[i].addr) {
 					return errors.New("recover signer failed")
 				}
@@ -316,7 +316,7 @@ func TestCheckpointRegister(t *testing.T) {
 		number, hash := getRecent()
 		v, r, s := collectSig(1, checkpoint1.Hash(), 2, nil)
 		c.SetCheckpoint(transactOpts, number, hash, checkpoint1.Hash(), 1, v, r, s)
-	}, func(events <-chan *contract.ContractNewCheckpointVote) error {
+	}, func(events <-chan *contract.CheckpointOracleNewCheckpointVote) error {
 		number, _ := getRecent()
 		return assert(2, checkpoint2.Hash(), number)
 	}, "test uncontinuous checkpoint registration")
@@ -326,7 +326,7 @@ func TestCheckpointRegister(t *testing.T) {
 		number, hash := getRecent()
 		v, r, s := collectSig(2, checkpoint2.Hash(), 2, nil)
 		c.SetCheckpoint(transactOpts, number, hash, checkpoint2.Hash(), 2, v, r, s)
-	}, func(events <-chan *contract.ContractNewCheckpointVote) error {
+	}, func(events <-chan *contract.CheckpointOracleNewCheckpointVote) error {
 		number, _ := getRecent()
 		return assert(2, checkpoint2.Hash(), number.Sub(number, big.NewInt(1)))
 	}, "test stale checkpoint registration")

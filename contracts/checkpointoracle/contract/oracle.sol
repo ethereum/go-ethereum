@@ -1,11 +1,11 @@
 pragma solidity ^0.5.10;
 
 /**
- * @title Registrar
+ * @title CheckpointOracle
  * @author Gary Rong<garyrong@ethereum.org>, Martin Swende <martin.swende@ethereum.org>
  * @dev Implementation of the blockchain checkpoint registrar.
  */
-contract Registrar {
+contract CheckpointOracle {
     /*
         Events
     */
@@ -172,4 +172,3 @@ contract Registrar {
     // The required signatures to finalize a stable checkpoint.
     uint threshold;
 }
-

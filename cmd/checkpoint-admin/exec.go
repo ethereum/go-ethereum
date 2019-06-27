@@ -30,8 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/contracts/registrar"
-	"github.com/ethereum/go-ethereum/contracts/registrar/contract"
+	"github.com/ethereum/go-ethereum/contracts/checkpointoracle"
+	"github.com/ethereum/go-ethereum/contracts/checkpointoracle/contract"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
@@ -113,7 +113,7 @@ func deploy(ctx *cli.Context) error {
 	client := newClient(ctx)
 
 	// Deploy the checkpoint oracle
-	oracle, tx, _, err := contract.DeployContract(transactor, client, addrs, big.NewInt(int64(params.CheckpointFrequency)),
+	oracle, tx, _, err := contract.DeployCheckpointOracle(transactor, client, addrs, big.NewInt(int64(params.CheckpointFrequency)),
 		big.NewInt(int64(params.CheckpointProcessConfirmations)), big.NewInt(int64(needed)))
 	if err != nil {
 		utils.Fatalf("Failed to deploy checkpoint oracle %v", err)
@@ -134,7 +134,7 @@ func sign(ctx *cli.Context) error {
 		address common.Address
 
 		node   *rpc.Client
-		oracle *registrar.Registrar
+		oracle *checkpointoracle.CheckpointOracle
 	)
 	if !ctx.GlobalIsSet(nodeURLFlag.Name) {
 		// Offline mode signing

@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/contracts/registrar/contract"
+	"github.com/ethereum/go-ethereum/contracts/checkpointoracle/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -107,7 +107,7 @@ func prepareTestchain(n int, backend *backends.SimulatedBackend) {
 		switch i {
 		case 0:
 			// deploy checkpoint contract
-			registrarAddr, _, _, _ = contract.DeployContract(bind.NewKeyedTransactor(bankKey), backend, []common.Address{signerAddr}, sectionSize, processConfirms, big.NewInt(1))
+			registrarAddr, _, _, _ = contract.DeployCheckpointOracle(bind.NewKeyedTransactor(bankKey), backend, []common.Address{signerAddr}, sectionSize, processConfirms, big.NewInt(1))
 			// bankUser transfers some ether to user1
 			nonce, _ := backend.PendingNonceAt(ctx, bankAddr)
 			tx, _ := types.SignTx(types.NewTransaction(nonce, userAddr1, big.NewInt(10000), params.TxGas, nil, nil), signer, bankKey)
@@ -205,7 +205,7 @@ func newTestProtocolManager(lightSync bool, blocks int, odr *LesOdr, indexers []
 		Signers:   []common.Address{signerAddr},
 		Threshold: 1,
 	}
-	var reg *checkpointRegistrar
+	var reg *checkpointOracle
 	if indexers != nil {
 		getLocal := func(index uint64) params.TrustedCheckpoint {
 			chtIndexer := indexers[0]
@@ -217,7 +217,7 @@ func newTestProtocolManager(lightSync bool, blocks int, odr *LesOdr, indexers []
 				BloomRoot:    light.GetBloomTrieRoot(db, index, sectionHead),
 			}
 		}
-		reg = newCheckpointRegistrar(config, getLocal)
+		reg = newCheckpointOracle(config, getLocal)
 	}
 	pm, err := NewProtocolManager(gspec.Config, nil, indexConfig, ulcConfig, lightSync, NetworkId, evmux, peers, chain, pool, db, odr, nil, reg, exitCh, new(sync.WaitGroup), func() bool { return true })
 	if err != nil {

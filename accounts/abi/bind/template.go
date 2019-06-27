@@ -448,7 +448,7 @@ var (
 			if err := _{{$contract.Type}}.contract.UnpackLog(event, "{{.Original.Name}}", log); err != nil {
 				return nil, err
 			}
-			return event, nil	
+			return event, nil
 		}
 
  	{{end}}

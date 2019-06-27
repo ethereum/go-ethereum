@@ -476,11 +476,11 @@ func (api *PrivateLightServerAPI) Benchmark(setups []map[string]interface{}, pas
 // PrivateLightAPI provides an API to access the LES light server or light client.
 type PrivateLightAPI struct {
 	backend *lesCommons
-	reg     *checkpointRegistrar
+	reg     *checkpointOracle
 }
 
 // NewPrivateLightAPI creates a new LES service API.
-func NewPrivateLightAPI(backend *lesCommons, reg *checkpointRegistrar) *PrivateLightAPI {
+func NewPrivateLightAPI(backend *lesCommons, reg *checkpointOracle) *PrivateLightAPI {
 	return &PrivateLightAPI{
 		backend: backend,
 		reg:     reg,
