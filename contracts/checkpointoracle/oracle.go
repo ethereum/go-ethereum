@@ -20,7 +20,6 @@ package checkpointoracle
 //go:generate abigen --sol contract/oracle.sol --pkg contract --out contract/oracle.go
 
 import (
-	"crypto/ecdsa"
 	"errors"
 	"math/big"
 
@@ -73,7 +72,7 @@ func (oracle *CheckpointOracle) LookupCheckpointEvents(blockLogs [][]*types.Log,
 //
 // Notably all signatures given should be transformed to "ethereum style" which transforms
 // v from 0/1 to 27/28 according to the yellow paper.
-func (oracle *CheckpointOracle) RegisterCheckpoint(key *ecdsa.PrivateKey, index uint64, hash []byte, rnum *big.Int, rhash [32]byte, sigs [][]byte) (*types.Transaction, error) {
+func (oracle *CheckpointOracle) RegisterCheckpoint(opts *bind.TransactOpts, index uint64, hash []byte, rnum *big.Int, rhash [32]byte, sigs [][]byte) (*types.Transaction, error) {
 	var (
 		r [][32]byte
 		s [][32]byte
@@ -87,5 +86,5 @@ func (oracle *CheckpointOracle) RegisterCheckpoint(key *ecdsa.PrivateKey, index 
 		s = append(s, common.BytesToHash(sigs[i][32:64]))
 		v = append(v, sigs[i][64])
 	}
-	return oracle.contract.SetCheckpoint(bind.NewKeyedTransactor(key), rnum, rhash, common.BytesToHash(hash), index, v, r, s)
+	return oracle.contract.SetCheckpoint(opts, rnum, rhash, common.BytesToHash(hash), index, v, r, s)
 }

@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -46,10 +45,9 @@ var commandDeploy = cli.Command{
 	Flags: []cli.Flag{
 		nodeURLFlag,
 		clefURLFlag,
+		signerFlag,
 		signersFlag,
 		thresholdFlag,
-		keyFileFlag,
-		utils.PasswordFileFlag,
 	},
 	Action: utils.MigrateFlags(deploy),
 }
@@ -63,9 +61,7 @@ var commandSign = cli.Command{
 		indexFlag,
 		hashFlag,
 		oracleFlag,
-		keyFileFlag,
 		signerFlag,
-		utils.PasswordFileFlag,
 	},
 	Action: utils.MigrateFlags(sign),
 }
@@ -77,8 +73,8 @@ var commandPublish = cli.Command{
 		nodeURLFlag,
 		indexFlag,
 		signaturesFlag,
-		keyFileFlag,
-		utils.PasswordFileFlag,
+		clefURLFlag,
+		signerFlag,
 	},
 	Action: utils.MigrateFlags(publish),
 }
@@ -108,9 +104,8 @@ func deploy(ctx *cli.Context) error {
 	}
 	fmt.Printf("\nSignatures needed to publish: %d\n", needed)
 
-	// Retrieve the private key, create an abigen transactor and an RPC client
-	transactor := bind.NewKeyedTransactor(getKey(ctx).PrivateKey)
-	client := newClient(ctx)
+	// setup clef signer, create an abigen transactor and an RPC client
+	transactor, client := newClefSigner(ctx), newClient(ctx)
 
 	// Deploy the checkpoint oracle
 	oracle, tx, _, err := contract.DeployCheckpointOracle(transactor, client, addrs, big.NewInt(int64(params.CheckpointFrequency)),
@@ -158,9 +153,7 @@ func sign(ctx *cli.Context) error {
 		node = newRPCClient(ctx.GlobalString(nodeURLFlag.Name))
 
 		checkpoint := getCheckpoint(ctx, node)
-		chash = checkpoint.Hash()
-		cindex = checkpoint.SectionIndex
-		address = getContractAddr(node)
+		chash, cindex, address = checkpoint.Hash(), checkpoint.SectionIndex, getContractAddr(node)
 
 		// Check the validity of checkpoint
 		reqCtx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
@@ -207,43 +200,22 @@ func sign(ctx *cli.Context) error {
 	fmt.Printf("Oracle     => %s\n", address.Hex())
 	fmt.Printf("Index %4d => %s\n", cindex, chash.Hex())
 
-	switch {
-	case ctx.GlobalIsSet(clefURLFlag.Name):
-		// Sign checkpoint in clef mode.
-		signer = ctx.String(signerFlag.Name)
+	// Sign checkpoint in clef mode.
+	signer = ctx.String(signerFlag.Name)
 
-		if !offline {
-			if err := isAdmin(common.HexToAddress(signer)); err != nil {
-				return err
-			}
+	if !offline {
+		if err := isAdmin(common.HexToAddress(signer)); err != nil {
+			return err
 		}
-		clef := newRPCClient(ctx.GlobalString(clefURLFlag.Name))
-		p := make(map[string]string)
-		buf := make([]byte, 8)
-		binary.BigEndian.PutUint64(buf, cindex)
-		p["address"] = address.Hex()
-		p["message"] = hexutil.Encode(append(buf, chash.Bytes()...))
-		if err := clef.Call(&signature, "account_signData", accounts.MimetypeDataWithValidator, signer, p); err != nil {
-			utils.Fatalf("Failed to sign checkpoint, err %v", err)
-		}
-	case ctx.GlobalIsSet(keyFileFlag.Name):
-		// Sign checkpoint in raw private key file mode.
-		key := getKey(ctx)
-		signer = key.Address.Hex()
-
-		if !offline {
-			if err := isAdmin(key.Address); err != nil {
-				return err
-			}
-		}
-		sig, err := crypto.Sign(sighash(cindex, address, chash), key.PrivateKey)
-		if err != nil {
-			utils.Fatalf("Failed to sign checkpoint, err %v", err)
-		}
-		sig[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
-		signature = common.Bytes2Hex(sig)
-	default:
-		utils.Fatalf("Please specify clef URL or private key file path to sign checkpoint")
+	}
+	clef := newRPCClient(ctx.GlobalString(clefURLFlag.Name))
+	p := make(map[string]string)
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, cindex)
+	p["address"] = address.Hex()
+	p["message"] = hexutil.Encode(append(buf, chash.Bytes()...))
+	if err := clef.Call(&signature, "account_signData", accounts.MimetypeDataWithValidator, signer, p); err != nil {
+		utils.Fatalf("Failed to sign checkpoint, err %v", err)
 	}
 	fmt.Printf("Signer     => %s\n", signer)
 	fmt.Printf("Signature  => %s\n", signature)
@@ -326,7 +298,7 @@ func publish(ctx *cli.Context) error {
 	fmt.Printf("Sentry number => %d\nSentry hash   => %s\n", recent.Number, recent.Hash().Hex())
 
 	// Publish the checkpoint into the oracle
-	tx, err := oracle.RegisterCheckpoint(getKey(ctx).PrivateKey, checkpoint.SectionIndex, checkpoint.Hash().Bytes(), recent.Number, recent.Hash(), sigs)
+	tx, err := oracle.RegisterCheckpoint(newClefSigner(ctx), checkpoint.SectionIndex, checkpoint.Hash().Bytes(), recent.Number, recent.Hash(), sigs)
 	if err != nil {
 		utils.Fatalf("Register contract failed %v", err)
 	}
