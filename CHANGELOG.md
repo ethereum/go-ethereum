@@ -8,7 +8,7 @@
 
 ### Bug fixes
 
-## v0.4.2 (28 June 2019)
+## v0.4.2 (June 28, 2019)
 
 ### Notes
 
