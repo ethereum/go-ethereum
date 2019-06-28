@@ -468,7 +468,6 @@ import java.util.*;
 public class {{.Type}} {
 	// ABI is the input ABI used to generate the binding from.
 	public final static String ABI = "{{.InputABI}}";
-
 	{{if $contract.FuncSigs}}
 		// {{.Type}}FuncSigs maps the 4-byte function signature to its string representation.
 		public final static Map<String, String> {{.Type}}FuncSigs;
@@ -480,7 +479,6 @@ public class {{.Type}} {
 			{{.Type}}FuncSigs = Collections.unmodifiableMap(temp);
 		}
 	{{end}}
-
 	{{if .InputBin}}
 	// BYTECODE is the compiled bytecode used for deploying new contracts.
 	public final static String BYTECODE = "0x{{.InputBin}}";
