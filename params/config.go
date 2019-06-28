@@ -17,10 +17,12 @@
 package params
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // Genesis hashes to enforce below configs on.
@@ -38,6 +40,12 @@ var TrustedCheckpoints = map[common.Hash]*TrustedCheckpoint{
 	TestnetGenesisHash: TestnetTrustedCheckpoint,
 	RinkebyGenesisHash: RinkebyTrustedCheckpoint,
 	GoerliGenesisHash:  GoerliTrustedCheckpoint,
+}
+
+// CheckpointOracles associates each known checkpoint oracles with the genesis hash of
+// the chain it belongs to.
+var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
+	RinkebyGenesisHash: RinkebyCheckpointOracle,
 }
 
 var (
@@ -59,7 +67,6 @@ var (
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
 	MainnetTrustedCheckpoint = &TrustedCheckpoint{
-		Name:         "mainnet",
 		SectionIndex: 227,
 		SectionHead:  common.HexToHash("0xa2e0b25d72c2fc6e35a7f853cdacb193b4b4f95c606accf7f8fa8415283582c7"),
 		CHTRoot:      common.HexToHash("0xf69bdd4053b95b61a27b106a0e86103d791edd8574950dc96aa351ab9b9f1aa0"),
@@ -84,7 +91,6 @@ var (
 
 	// TestnetTrustedCheckpoint contains the light client trusted checkpoint for the Ropsten test network.
 	TestnetTrustedCheckpoint = &TrustedCheckpoint{
-		Name:         "testnet",
 		SectionIndex: 161,
 		SectionHead:  common.HexToHash("0x5378afa734e1feafb34bcca1534c4d96952b754579b96a4afb23d5301ecececc"),
 		CHTRoot:      common.HexToHash("0x1cf2b071e7443a62914362486b613ff30f60cea0d9c268ed8c545f876a3ee60c"),
@@ -112,11 +118,22 @@ var (
 
 	// RinkebyTrustedCheckpoint contains the light client trusted checkpoint for the Rinkeby test network.
 	RinkebyTrustedCheckpoint = &TrustedCheckpoint{
-		Name:         "rinkeby",
 		SectionIndex: 125,
 		SectionHead:  common.HexToHash("0x8a738386f6bb34add15846f8f49c4c519a2f32519096e792b9f43bcb407c831c"),
 		CHTRoot:      common.HexToHash("0xa1e5720a9bad4dce794f129e4ac6744398197b652868011486a6f89c8ec84a75"),
 		BloomRoot:    common.HexToHash("0xa3048fe8b7e30f77f11bc755a88478363d7d3e71c2bdfe4e8ab9e269cd804ba2"),
+	}
+
+	// RinkebyCheckpointOracle contains a set of configs for the Rinkeby test network oracle.
+	RinkebyCheckpointOracle = &CheckpointOracleConfig{
+		Address: common.HexToAddress("0xebe8eFA441B9302A0d7eaECc277c09d20D684540"),
+		Signers: []common.Address{
+			common.HexToAddress("0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3"), // Peter
+			common.HexToAddress("0x78d1ad571a1a09d60d9bbf25894b44e4c8859595"), // Martin
+			common.HexToAddress("0x286834935f4A8Cfb4FF4C77D5770C2775aE2b0E7"), // Zsolt
+			common.HexToAddress("0xb86e2B0Ab5A4B1373e40c51A7C712c70Ba2f9f8E"), // Gary
+		},
+		Threshold: 2,
 	}
 
 	// GoerliChainConfig contains the chain parameters to run a node on the Görli test network.
@@ -139,7 +156,6 @@ var (
 
 	// GoerliTrustedCheckpoint contains the light client trusted checkpoint for the Görli test network.
 	GoerliTrustedCheckpoint = &TrustedCheckpoint{
-		Name:         "goerli",
 		SectionIndex: 9,
 		SectionHead:  common.HexToHash("0x8e223d827391eee53b07cb8ee057dbfa11c93e0b45352188c783affd7840a921"),
 		CHTRoot:      common.HexToHash("0xe0a817ac69b36c1e437c5b0cff9e764853f5115702b5f66d451b665d6afb7e78"),
@@ -169,11 +185,41 @@ var (
 // used to start light syncing from this checkpoint and avoid downloading the
 // entire header chain while still being able to securely access old headers/logs.
 type TrustedCheckpoint struct {
-	Name         string      `json:"-"`
 	SectionIndex uint64      `json:"sectionIndex"`
 	SectionHead  common.Hash `json:"sectionHead"`
 	CHTRoot      common.Hash `json:"chtRoot"`
 	BloomRoot    common.Hash `json:"bloomRoot"`
+}
+
+// HashEqual returns an indicator comparing the itself hash with given one.
+func (c *TrustedCheckpoint) HashEqual(hash common.Hash) bool {
+	if c.Empty() {
+		return hash == common.Hash{}
+	}
+	return c.Hash() == hash
+}
+
+// Hash returns the hash of checkpoint's four key fields(index, sectionHead, chtRoot and bloomTrieRoot).
+func (c *TrustedCheckpoint) Hash() common.Hash {
+	buf := make([]byte, 8+3*common.HashLength)
+	binary.BigEndian.PutUint64(buf, c.SectionIndex)
+	copy(buf[8:], c.SectionHead.Bytes())
+	copy(buf[8+common.HashLength:], c.CHTRoot.Bytes())
+	copy(buf[8+2*common.HashLength:], c.BloomRoot.Bytes())
+	return crypto.Keccak256Hash(buf)
+}
+
+// Empty returns an indicator whether the checkpoint is regarded as empty.
+func (c *TrustedCheckpoint) Empty() bool {
+	return c.SectionHead == (common.Hash{}) || c.CHTRoot == (common.Hash{}) || c.BloomRoot == (common.Hash{})
+}
+
+// CheckpointOracleConfig represents a set of checkpoint contract(which acts as an oracle)
+// config which used for light client checkpoint syncing.
+type CheckpointOracleConfig struct {
+	Address   common.Address   `json:"address"`
+	Signers   []common.Address `json:"signers"`
+	Threshold uint64           `json:"threshold"`
 }
 
 // ChainConfig is the core config which determines the blockchain settings.

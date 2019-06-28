@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // MarshalTOML marshals as TOML.
@@ -32,6 +33,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		SkipBcVersionCheck      bool       `toml:"-"`
 		DatabaseHandles         int        `toml:"-"`
 		DatabaseCache           int
+		DatabaseFreezer         string
 		TrieCleanCache          int
 		TrieDirtyCache          int
 		TrieTimeout             time.Duration
@@ -45,6 +47,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		EVMInterpreter          string
 		ConstantinopleOverride  *big.Int
 		RPCGasCap               *big.Int `toml:",omitempty"`
+		Checkpoint              *params.TrustedCheckpoint
+		CheckpointOracle        *params.CheckpointOracleConfig
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -62,6 +66,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.SkipBcVersionCheck = c.SkipBcVersionCheck
 	enc.DatabaseHandles = c.DatabaseHandles
 	enc.DatabaseCache = c.DatabaseCache
+	enc.DatabaseFreezer = c.DatabaseFreezer
 	enc.TrieCleanCache = c.TrieCleanCache
 	enc.TrieDirtyCache = c.TrieDirtyCache
 	enc.TrieTimeout = c.TrieTimeout
@@ -75,6 +80,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.EVMInterpreter = c.EVMInterpreter
 	enc.ConstantinopleOverride = c.ConstantinopleOverride
 	enc.RPCGasCap = c.RPCGasCap
+	enc.Checkpoint = c.Checkpoint
+	enc.CheckpointOracle = c.CheckpointOracle
 	return &enc, nil
 }
 
@@ -96,6 +103,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		SkipBcVersionCheck      *bool      `toml:"-"`
 		DatabaseHandles         *int       `toml:"-"`
 		DatabaseCache           *int
+		DatabaseFreezer         *string
 		TrieCleanCache          *int
 		TrieDirtyCache          *int
 		TrieTimeout             *time.Duration
@@ -109,6 +117,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		EVMInterpreter          *string
 		ConstantinopleOverride  *big.Int
 		RPCGasCap               *big.Int `toml:",omitempty"`
+		Checkpoint              *params.TrustedCheckpoint
+		CheckpointOracle        *params.CheckpointOracleConfig
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -159,6 +169,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.DatabaseCache != nil {
 		c.DatabaseCache = *dec.DatabaseCache
 	}
+	if dec.DatabaseFreezer != nil {
+		c.DatabaseFreezer = *dec.DatabaseFreezer
+	}
 	if dec.TrieCleanCache != nil {
 		c.TrieCleanCache = *dec.TrieCleanCache
 	}
@@ -197,6 +210,12 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.RPCGasCap != nil {
 		c.RPCGasCap = dec.RPCGasCap
+	}
+	if dec.Checkpoint != nil {
+		c.Checkpoint = dec.Checkpoint
+	}
+	if dec.CheckpointOracle != nil {
+		c.CheckpointOracle = dec.CheckpointOracle
 	}
 	return nil
 }

@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -78,6 +79,10 @@ type peer struct {
 	network uint64 // Network ID being on
 
 	announceType uint64
+
+	// Checkpoint relative fields
+	checkpoint       params.TrustedCheckpoint
+	checkpointNumber uint64
 
 	id string
 
@@ -575,6 +580,14 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		send = send.add("flowControl/MRC", costList)
 		p.fcCosts = costList.decode(ProtocolLengths[uint(p.version)])
 		p.fcParams = server.defParams
+
+		if server.protocolManager != nil && server.protocolManager.reg != nil && server.protocolManager.reg.isRunning() {
+			cp, height := server.protocolManager.reg.stableCheckpoint()
+			if cp != nil {
+				send = send.add("checkpoint/value", cp)
+				send = send.add("checkpoint/registerHeight", height)
+			}
+		}
 	} else {
 		//on client node
 		p.announceType = announceTypeSimple
@@ -658,20 +671,24 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 			return errResp(ErrUselessPeer, "peer cannot serve requests")
 		}
 
-		var params flowcontrol.ServerParams
-		if err := recv.get("flowControl/BL", &params.BufLimit); err != nil {
+		var sParams flowcontrol.ServerParams
+		if err := recv.get("flowControl/BL", &sParams.BufLimit); err != nil {
 			return err
 		}
-		if err := recv.get("flowControl/MRR", &params.MinRecharge); err != nil {
+		if err := recv.get("flowControl/MRR", &sParams.MinRecharge); err != nil {
 			return err
 		}
 		var MRC RequestCostList
 		if err := recv.get("flowControl/MRC", &MRC); err != nil {
 			return err
 		}
-		p.fcParams = params
-		p.fcServer = flowcontrol.NewServerNode(params, &mclock.System{})
+		p.fcParams = sParams
+		p.fcServer = flowcontrol.NewServerNode(sParams, &mclock.System{})
 		p.fcCosts = MRC.decode(ProtocolLengths[uint(p.version)])
+
+		recv.get("checkpoint/value", &p.checkpoint)
+		recv.get("checkpoint/registerHeight", &p.checkpointNumber)
+
 		if !p.isOnlyAnnounce {
 			for msgCode := range reqAvgTimeCost {
 				if p.fcCosts[msgCode] == nil {

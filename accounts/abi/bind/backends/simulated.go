@@ -45,8 +45,10 @@ import (
 // This nil assignment ensures compile time that SimulatedBackend implements bind.ContractBackend.
 var _ bind.ContractBackend = (*SimulatedBackend)(nil)
 
-var errBlockNumberUnsupported = errors.New("SimulatedBackend cannot access blocks other than the latest block")
-var errGasEstimationFailed = errors.New("gas required exceeds allowance or always failing transaction")
+var (
+	errBlockNumberUnsupported = errors.New("simulatedBackend cannot access blocks other than the latest block")
+	errGasEstimationFailed    = errors.New("gas required exceeds allowance or always failing transaction")
+)
 
 // SimulatedBackend implements bind.ContractBackend, simulating a blockchain in
 // the background. Its main purpose is to allow easily testing contract bindings.
@@ -63,10 +65,9 @@ type SimulatedBackend struct {
 	config *params.ChainConfig
 }
 
-// NewSimulatedBackend creates a new binding backend using a simulated blockchain
-// for testing purposes.
-func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
-	database := rawdb.NewMemoryDatabase()
+// NewSimulatedBackendWithDatabase creates a new binding backend based on the given database
+// and uses a simulated blockchain for testing purposes.
+func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
 	genesis := core.Genesis{Config: params.AllEthashProtocolChanges, GasLimit: gasLimit, Alloc: alloc}
 	genesis.MustCommit(database)
 	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, ethash.NewFaker(), vm.Config{}, nil)
@@ -79,6 +80,12 @@ func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBac
 	}
 	backend.rollback()
 	return backend
+}
+
+// NewSimulatedBackend creates a new binding backend using a simulated blockchain
+// for testing purposes.
+func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
+	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit)
 }
 
 // Commit imports all the pending transactions as a single block and starts a
@@ -422,6 +429,11 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), statedb.Database())
 
 	return nil
+}
+
+// Blockchain returns the underlying blockchain.
+func (b *SimulatedBackend) Blockchain() *core.BlockChain {
+	return b.blockchain
 }
 
 // callmsg implements core.Message to allow passing it as a transaction simulator.

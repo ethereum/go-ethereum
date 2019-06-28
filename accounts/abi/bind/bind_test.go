@@ -475,11 +475,12 @@ var bindTests = []struct {
 		`
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+			"github.com/ethereum/go-ethereum/core"
 			"github.com/ethereum/go-ethereum/common"
 		`,
 		`
 			// Create a simulator and wrap a non-deployed contract
-			sim := backends.NewSimulatedBackend(nil, uint64(10000000000))
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{}, uint64(10000000000))
 
 			nonexistent, err := NewNonExistent(common.Address{}, sim)
 			if err != nil {

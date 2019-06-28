@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -57,6 +58,7 @@ type LesServer interface {
 	APIs() []rpc.API
 	Protocols() []p2p.Protocol
 	SetBloomBitsIndexer(bbIndexer *core.ChainIndexer)
+	SetContractBackend(bind.ContractBackend)
 }
 
 // Ethereum implements the Ethereum full node service.
@@ -97,6 +99,14 @@ type Ethereum struct {
 func (s *Ethereum) AddLesServer(ls LesServer) {
 	s.lesServer = ls
 	ls.SetBloomBitsIndexer(s.bloomIndexer)
+}
+
+// SetClient sets a rpc client which connecting to our local node.
+func (s *Ethereum) SetContractBackend(backend bind.ContractBackend) {
+	// Pass the rpc client to les server if it is enabled.
+	if s.lesServer != nil {
+		s.lesServer.SetContractBackend(backend)
+	}
 }
 
 // New creates a new Ethereum object (including the
@@ -192,7 +202,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit
-	if eth.protocolManager, err = NewProtocolManager(chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, cacheLimit, config.Whitelist); err != nil {
+	checkpoint := config.Checkpoint
+	if checkpoint == nil {
+		checkpoint = params.TrustedCheckpoints[genesisHash]
+	}
+	if eth.protocolManager, err = NewProtocolManager(chainConfig, checkpoint, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, cacheLimit, config.Whitelist); err != nil {
 		return nil, err
 	}
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
@@ -267,6 +281,11 @@ func (s *Ethereum) APIs() []rpc.API {
 	}
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
+
+	// Append any APIs exposed explicitly by the les server
+	if s.lesServer != nil {
+		apis = append(apis, s.lesServer.APIs()...)
+	}
 
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{

@@ -128,12 +128,13 @@ func (c *ChainIndexer) AddCheckpoint(section uint64, shead common.Hash) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
+	// Short circuit if the given checkpoint is below than local's.
+	if c.checkpointSections >= section+1 || section < c.storedSections {
+		return
+	}
 	c.checkpointSections = section + 1
 	c.checkpointHead = shead
 
-	if section < c.storedSections {
-		return
-	}
 	c.setSectionHead(section, shead)
 	c.setValidSections(section + 1)
 }
