@@ -1,4 +1,4 @@
-## v0.4.2 (Unreleased)
+## v0.4.3 (Unreleased)
 
 ### Notes
 
@@ -7,9 +7,20 @@
 ### Improvements
 
 ### Bug fixes
+
+## v0.4.2 (28 June 2019)
+
+### Notes
+
+This release is not backward compatible with the previous versions of Swarm due to changes to the wire protocol of the Retrieve Request messages. Please update your nodes.
+
+### Bug fixes and Improvements
+
+* [#1503](https://github.com/ethersphere/swarm/pull/1503): network/simulation: add ExecAdapter capability to swarm simulations
+* [#1495](https://github.com/ethersphere/swarm/pull/1495): build: enable ubuntu ppa disco (19.04) builds
+* [#1395](https://github.com/ethersphere/swarm/pull/1395): swarm/storage: support for uploading 100gb files
+* [#1344](https://github.com/ethersphere/swarm/pull/1344): swarm/network, swarm/storage: simplification of fetchers
 * [#1488](https://github.com/ethersphere/swarm/pull/1488): docker: include git commit hash in swarm version
-
-
 
 ## v0.4.1 (June 13, 2019)
 
