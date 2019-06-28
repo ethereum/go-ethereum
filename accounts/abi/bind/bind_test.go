@@ -1457,7 +1457,7 @@ public class Test {
 		},
 	}
 	for i, c := range cases {
-		binding, err := Bind([]string{c.name}, []string{c.abi}, []string{c.bytecode}, "bindtest", LangJava)
+		binding, err := Bind([]string{c.name}, []string{c.abi}, []string{c.bytecode}, nil, "bindtest", LangJava)
 		if err != nil {
 			t.Fatalf("test %d: failed to generate binding: %v", i, err)
 		}
