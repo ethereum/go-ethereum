@@ -930,6 +930,8 @@ func (bc *BlockChain) truncateAncient(head uint64) error {
 // InsertReceiptChain attempts to complete an already existing header chain with
 // transaction and receipt data.
 func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain []types.Receipts, ancientLimit uint64) (int, error) {
+	// We don't require the chainMu here since we want to maximize the
+	// concurrency of header insertion and receipt insertion.
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
@@ -962,19 +964,21 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	// updateHead updates the head fast sync block if the inserted blocks are better
 	// and returns a indicator whether the inserted blocks are canonical.
 	updateHead := func(head *types.Block) bool {
-		var isCanonical bool
 		bc.chainmu.Lock()
-		if td := bc.GetTd(head.Hash(), head.NumberU64()); td != nil { // Rewind may have occurred, skip in that case
-			currentFastBlock := bc.CurrentFastBlock()
+
+		// Rewind may have occurred, skip in that case.
+		if bc.CurrentHeader().Number.Cmp(head.Number()) >= 0 {
+			currentFastBlock, td := bc.CurrentFastBlock(), bc.GetTd(head.Hash(), head.NumberU64())
 			if bc.GetTd(currentFastBlock.Hash(), currentFastBlock.NumberU64()).Cmp(td) < 0 {
 				rawdb.WriteHeadFastBlockHash(bc.db, head.Hash())
 				bc.currentFastBlock.Store(head)
 				headFastBlockGauge.Update(int64(head.NumberU64()))
-				isCanonical = true
+				bc.chainmu.Unlock()
+				return true
 			}
 		}
 		bc.chainmu.Unlock()
-		return isCanonical
+		return false
 	}
 	// writeAncient writes blockchain and corresponding receipt chain into ancient store.
 	//
