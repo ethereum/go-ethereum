@@ -530,6 +530,9 @@ public class {{.Type}} {
 	// deploy deploys a new Ethereum contract, binding an instance of {{.Type}} to it.
 	public static {{.Type}} deploy(TransactOpts auth, EthereumClient client{{range .Constructor.Inputs}}, {{bindtype .Type $structs}} {{.Name}}{{end}}) throws Exception {
 		Interfaces args = Geth.newInterfaces({{(len .Constructor.Inputs)}});
+		String bytecode = BYTECODE;
+		{{if .Libraries}}
+
 		// "link" contract to dependent libraries by deploying them first.
 		{{range $pattern, $name := .Libraries}}
 		{{capitalise $name}} {{decapitalise $name}}Inst = {{capitalise $name}}.deploy(auth, client);
