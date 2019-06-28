@@ -226,8 +226,15 @@ func iterOwnAndConstructorKeys(vm *goja.Runtime, obj *goja.Object, f func(string
 }
 
 func iterOwnKeys(vm *goja.Runtime, obj *goja.Object, f func(string)) {
-	getOwnPropertyNames, _ := goja.AssertFunction(vm.Get("Object.getOwnPropertyNames"))
-	rv, _ := getOwnPropertyNames(obj)
+	Object := vm.Get("Object").ToObject(vm)
+	getOwnPropertyNames, isFunc := goja.AssertFunction(Object.Get("getOwnPropertyNames"))
+	if !isFunc {
+		panic(vm.ToValue("Object.getOwnPropertyNames isn't a function"))
+	}
+	rv, err := getOwnPropertyNames(goja.Null(), obj)
+	if err != nil {
+		panic(vm.ToValue(fmt.Sprintf("Error getting object properties: %v", err)))
+	}
 	gv := rv.Export()
 	switch gv := gv.(type) {
 	case []interface{}:
@@ -251,11 +258,12 @@ func (ctx ppctx) isBigNumber(v *goja.Object) bool {
 		}
 	}
 	// Handle default constructor.
-	BigNumber := ctx.vm.Get("BigNumber.prototype").ToObject(ctx.vm)
+	BigNumber := ctx.vm.Get("BigNumber").ToObject(ctx.vm)
 	if BigNumber == nil {
 		return false
 	}
-	isPrototypeOf, exists := goja.AssertFunction(BigNumber.Get("isPrototypeOf"))
+	prototype := BigNumber.Get("prototype").ToObject(ctx.vm)
+	isPrototypeOf, exists := goja.AssertFunction(prototype.Get("isPrototypeOf"))
 	if !exists {
 		return false
 	}

@@ -320,7 +320,7 @@ func (re *JSRE) Compile(filename string, src string) (err error) {
 }
 
 func compileAndRun(vm *goja.Runtime, filename string, src string) (goja.Value, error) {
-	script, err := goja.Compile(filename, src, true)
+	script, err := goja.Compile(filename, src, false)
 	if err != nil {
 		return goja.Null(), err
 	}
