@@ -136,15 +136,27 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			}
 		// empty defaults to function according to the abi spec
 		case "function", "":
-			abi.Methods[field.Name] = Method{
-				Name:    field.Name,
+			name := field.Name
+			_, ok := abi.Methods[name]
+			for idx := 0; ok; idx++ {
+				name = fmt.Sprintf("%s%d", field.Name, idx)
+				_, ok = abi.Methods[name]
+			}
+			abi.Methods[name] = Method{
+				Name:    name,
 				Const:   field.Constant,
 				Inputs:  field.Inputs,
 				Outputs: field.Outputs,
 			}
 		case "event":
-			abi.Events[field.Name] = Event{
-				Name:      field.Name,
+			name := field.Name
+			_, ok := abi.Events[name]
+			for idx := 0; ok; idx++ {
+				name = fmt.Sprintf("%s%d", field.Name, idx)
+				_, ok = abi.Events[name]
+			}
+			abi.Events[name] = Event{
+				Name:      name,
 				Anonymous: field.Anonymous,
 				Inputs:    field.Inputs,
 			}
