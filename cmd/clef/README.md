@@ -1,26 +1,21 @@
-Clef
-----
-Clef can be used to sign transactions and data and is meant as a replacement for geth's account management.
-This allows DApps not to depend on geth's account management. When a DApp wants to sign data it can send the data to
-the signer, the signer will then provide the user with context and asks the user for permission to sign the data. If
-the users grants the signing request the signer will send the signature back to the DApp.
-  
-This setup allows a DApp to connect to a remote Ethereum node and send transactions that are locally signed. This can
-help in situations when a DApp is connected to a remote node because a local Ethereum node is not available, not
-synchronised with the chain or a particular Ethereum node that has no built-in (or limited) account management.
-  
-Clef can run as a daemon on the same machine, or off a usb-stick like [usb armory](https://inversepath.com/usbarmory),
-or a separate VM in a [QubesOS](https://www.qubes-os.org/) type os setup.
+# Clef
 
-Check out 
+Clef can be used to sign transactions and data and is meant as a(n eventual) replacement for Geth's account management. This allows DApps to not depend on Geth's account management. When a DApp wants to sign data (or a transaction), it can send the content to Clef, which will then provide the user with context and asks for permission to sign the content. If the users grants the signing request, Clef will send the signature back to the DApp.
 
-* the [tutorial](tutorial.md) for some concrete examples on how the signer works.
-* the [setup docs](docs/setup.md) for some information on how to configure it to work on QubesOS or USBArmory. 
-* the [data types](datatypes.md) for detailed information on the json types used in the communication between
-  clef and an external UI 
+This setup allows a DApp to connect to a remote Ethereum node and send transactions that are locally signed. This can help in situations when a DApp is connected to an untrusted remote Ethereum node, because a local one is not available, not synchronised with the chain, or is a node that has no built-in (or limited) account management.
+
+Clef can run as a daemon on the same machine, off a usb-stick like [USB armory](https://inversepath.com/usbarmory), or even a separate VM in a [QubesOS](https://www.qubes-os.org/) type setup.
+
+Check out the
+
+* [CLI tutorial](tutorial.md) for some concrete examples on how Clef works.
+* [Setup docs](docs/setup.md) for infos on how to configure Clef on QubesOS or USB Armory.
+* [Data types](datatypes.md) for details on the communication messages between Clef and an external UI.
 
 ## Command line flags
+
 Clef accepts the following command line options:
+
 ```
 COMMANDS:
    init    Initialize the signer, generate secret storage
@@ -28,7 +23,7 @@ COMMANDS:
    setpw   Store a credential for a keystore file
    gendoc  Generate documentation about json-rpc format
    help    Shows a list of commands or help for one command
-   
+
 GLOBAL OPTIONS:
    --loglevel value        log level to emit to the screen (default: 4)
    --keystore value        Directory for the keystore (default: "$HOME/.ethereum/keystore")
@@ -36,6 +31,7 @@ GLOBAL OPTIONS:
    --chainid value         Chain id to use for signing (1=mainnet, 3=ropsten, 4=rinkeby, 5=Goerli) (default: 1)
    --lightkdf              Reduce key-derivation RAM & CPU usage at some expense of KDF strength
    --nousb                 Disables monitoring for and managing USB hardware wallets
+   --pcscdpath value       Path to the smartcard daemon (pcscd) socket file (default: "/run/pcscd/pcscd.comm")
    --rpcaddr value         HTTP-RPC server listening interface (default: "localhost")
    --rpcvhosts value       Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (default: "localhost")
    --ipcdisable            Disable the IPC-RPC server
@@ -43,24 +39,21 @@ GLOBAL OPTIONS:
    --rpc                   Enable the HTTP-RPC server
    --rpcport value         HTTP-RPC server listening port (default: 8550)
    --signersecret value    A file containing the (encrypted) master seed to encrypt Clef data, e.g. keystore credentials and ruleset hash
-   --4bytedb value         File containing 4byte-identifiers (default: "./4byte.json")
    --4bytedb-custom value  File used for writing new 4byte-identifiers submitted via API (default: "./4byte-custom.json")
    --auditlog value        File used to emit audit logs. Set to "" to disable (default: "audit.log")
-   --rules value           Enable rule-engine (default: "rules.json")
+   --rules value           Enable rule-engine
    --stdio-ui              Use STDIN/STDOUT as a channel for an external UI. This means that an STDIN/STDOUT is used for RPC-communication with a e.g. a graphical user interface, and can be used when Clef is started by an external process.
    --stdio-ui-test         Mechanism to test interface between Clef and UI. Requires 'stdio-ui'.
    --advanced              If enabled, issues warnings instead of rejections for suspicious requests. Default off
    --help, -h              show help
    --version, -v           print the version
-   
 ```
-
 
 Example:
-```
-signer -keystore /my/keystore -chainid 4
-```
 
+```
+clef -keystore /my/keystore -chainid 4
+```
 
 ## Security model
 
@@ -187,7 +180,7 @@ None
 #### Result
   - address [string]: account address that is derived from the generated key
   - url [string]: location of the keyfile
-  
+
 #### Sample call
 ```json
 {
@@ -221,9 +214,9 @@ None
 #### Result
   - array with account records:
      - account.address [string]: account address that is derived from the generated key
-     - account.type [string]: type of the 
+     - account.type [string]: type of the
      - account.url [string]: location of the account
-  
+
 #### Sample call
 ```json
 {
@@ -272,7 +265,7 @@ Response
 
 #### Result
   - signed transaction in RLP encoded form [data]
-  
+
 #### Sample call
 ```json
 {
@@ -372,7 +365,7 @@ Bash example:
 
 #### Result
   - calculated signature [data]
-  
+
 #### Sample call
 ```json
 {
@@ -407,7 +400,7 @@ Response
 
 #### Result
   - calculated signature [data]
-  
+
 #### Sample call
 ```json
 {
@@ -505,7 +498,7 @@ Derive the address from the account that was used to sign data with content type
 
 #### Result
   - derived account [address]
-  
+
 #### Sample call
 ```json
 {
@@ -534,16 +527,16 @@ Response
 #### Import account
    Import a private key into the keystore. The imported key is expected to be encrypted according to the web3 keystore
    format.
-   
+
 #### Arguments
-  - account [object]: key in [web3 keystore format](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) (retrieved with account_export) 
+  - account [object]: key in [web3 keystore format](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) (retrieved with account_export)
 
 #### Result
   - imported key [object]:
      - key.address [address]: address of the imported key
      - key.type [string]: type of the account
      - key.url [string]: key URL
-  
+
 #### Sample call
 ```json
 {
@@ -594,14 +587,14 @@ Response
 #### Export account from keystore
    Export a private key from the keystore. The exported private key is encrypted with the original passphrase. When the
    key is imported later this passphrase is required.
-   
+
 #### Arguments
   - account [address]: export private key that is associated with this account
 
 #### Result
   - exported key, see [web3 keystore format](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) for
   more information
-  
+
 #### Sample call
 ```json
 {
@@ -953,9 +946,9 @@ A UI should conform to the following rules.
 along with the UI.
 
 
-### UI Implementations 
+### UI Implementations
 
-There are a couple of implementation for a UI. We'll try to keep this list up to date. 
+There are a couple of implementation for a UI. We'll try to keep this list up to date.
 
 | Name | Repo | UI type| No external resources| Blocky support| Verifies permissions | Hash information | No secondary storage | Statically linked| Can modify parameters|
 | ---- | ---- | -------| ---- | ---- | ---- |---- | ---- | ---- | ---- |

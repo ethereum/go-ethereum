@@ -75,27 +75,28 @@ func (s *AESEncryptedStorage) Put(key, value string) {
 	}
 }
 
-// Get returns the previously stored value, or the empty string if it does not exist or key is of 0-length
-func (s *AESEncryptedStorage) Get(key string) string {
+// Get returns the previously stored value, or an error if it does not exist or
+// key is of 0-length.
+func (s *AESEncryptedStorage) Get(key string) (string, error) {
 	if len(key) == 0 {
-		return ""
+		return "", ErrZeroKey
 	}
 	data, err := s.readEncryptedStorage()
 	if err != nil {
 		log.Warn("Failed to read encrypted storage", "err", err, "file", s.filename)
-		return ""
+		return "", err
 	}
 	encrypted, exist := data[key]
 	if !exist {
 		log.Warn("Key does not exist", "key", key)
-		return ""
+		return "", ErrNotFound
 	}
 	entry, err := decrypt(s.key, encrypted.Iv, encrypted.CipherText, []byte(key))
 	if err != nil {
 		log.Warn("Failed to decrypt key", "key", key)
-		return ""
+		return "", err
 	}
-	return string(entry)
+	return string(entry), nil
 }
 
 // readEncryptedStorage reads the file with encrypted creds
