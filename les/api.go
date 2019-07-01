@@ -34,6 +34,8 @@ var (
 	ErrMinCap               = errors.New("capacity too small")
 	ErrTotalCap             = errors.New("total capacity exceeded")
 	ErrUnknownBenchmarkType = errors.New("unknown benchmark type")
+	ErrNoCheckpoint         = errors.New("no local checkpoint provided")
+	ErrNotActivated         = errors.New("checkpoint registrar is not activated")
 
 	dropCapacityDelay = time.Second // delay applied to decreasing capacity changes
 )
@@ -469,4 +471,60 @@ func (api *PrivateLightServerAPI) Benchmark(setups []map[string]interface{}, pas
 		result[i] = res
 	}
 	return result, nil
+}
+
+// PrivateLightAPI provides an API to access the LES light server or light client.
+type PrivateLightAPI struct {
+	backend *lesCommons
+	reg     *checkpointOracle
+}
+
+// NewPrivateLightAPI creates a new LES service API.
+func NewPrivateLightAPI(backend *lesCommons, reg *checkpointOracle) *PrivateLightAPI {
+	return &PrivateLightAPI{
+		backend: backend,
+		reg:     reg,
+	}
+}
+
+// LatestCheckpoint returns the latest local checkpoint package.
+//
+// The checkpoint package consists of 4 strings:
+//   result[0], hex encoded latest section index
+//   result[1], 32 bytes hex encoded latest section head hash
+//   result[2], 32 bytes hex encoded latest section canonical hash trie root hash
+//   result[3], 32 bytes hex encoded latest section bloom trie root hash
+func (api *PrivateLightAPI) LatestCheckpoint() ([4]string, error) {
+	var res [4]string
+	cp := api.backend.latestLocalCheckpoint()
+	if cp.Empty() {
+		return res, ErrNoCheckpoint
+	}
+	res[0] = hexutil.EncodeUint64(cp.SectionIndex)
+	res[1], res[2], res[3] = cp.SectionHead.Hex(), cp.CHTRoot.Hex(), cp.BloomRoot.Hex()
+	return res, nil
+}
+
+// GetLocalCheckpoint returns the specific local checkpoint package.
+//
+// The checkpoint package consists of 3 strings:
+//   result[0], 32 bytes hex encoded latest section head hash
+//   result[1], 32 bytes hex encoded latest section canonical hash trie root hash
+//   result[2], 32 bytes hex encoded latest section bloom trie root hash
+func (api *PrivateLightAPI) GetCheckpoint(index uint64) ([3]string, error) {
+	var res [3]string
+	cp := api.backend.getLocalCheckpoint(index)
+	if cp.Empty() {
+		return res, ErrNoCheckpoint
+	}
+	res[0], res[1], res[2] = cp.SectionHead.Hex(), cp.CHTRoot.Hex(), cp.BloomRoot.Hex()
+	return res, nil
+}
+
+// GetCheckpointContractAddress returns the contract contract address in hex format.
+func (api *PrivateLightAPI) GetCheckpointContractAddress() (string, error) {
+	if api.reg == nil {
+		return "", ErrNotActivated
+	}
+	return api.reg.config.Address.Hex(), nil
 }
