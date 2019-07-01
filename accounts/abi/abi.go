@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -129,7 +128,6 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 
 	abi.Methods = make(map[string]Method)
 	abi.Events = make(map[string]Event)
-	functionCnt, eventCnt := 0, 0
 	for _, field := range fields {
 		switch field.Type {
 		case "constructor":
@@ -138,28 +136,30 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			}
 		// empty defaults to function according to the abi spec
 		case "function", "":
-			_, ok := abi.Methods[field.Name]
-			if ok {
-				abi.Methods[field.Name+strconv.Itoa(functionCnt)] = abi.Methods[field.Name]
+			name := field.Name
+			_, ok := abi.Methods[name]
+			for idx := 0; ok; idx++ {
+				name = fmt.Sprintf("%s%d", field.Name, idx)
+				_, ok = abi.Methods[name]
 			}
-			abi.Methods[field.Name] = Method{
-				Name:    field.Name,
+			abi.Methods[name] = Method{
+				Name:    name,
 				Const:   field.Constant,
 				Inputs:  field.Inputs,
 				Outputs: field.Outputs,
 			}
-			functionCnt++
 		case "event":
-			_, ok := abi.Events[field.Name]
-			if ok {
-				abi.Events[field.Name+strconv.Itoa(eventCnt)] = abi.Events[field.Name]
+			name := field.Name
+			_, ok := abi.Events[name]
+			for idx := 0; ok; idx++ {
+				name = fmt.Sprintf("%s%d", field.Name, idx)
+				_, ok = abi.Events[name]
 			}
-			abi.Events[field.Name] = Event{
-				Name:      field.Name,
+			abi.Events[name] = Event{
+				Name:      name,
 				Anonymous: field.Anonymous,
 				Inputs:    field.Inputs,
 			}
-			eventCnt++
 		}
 	}
 
