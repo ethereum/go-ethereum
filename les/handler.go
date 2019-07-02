@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/les/csvlogger"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -124,7 +123,6 @@ type ProtocolManager struct {
 
 	wg       *sync.WaitGroup
 	eventMux *event.TypeMux
-	logger   *csvlogger.Logger
 
 	// Callbacks
 	synced func() bool
@@ -262,11 +260,12 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	// Ignore maxPeers if this is a trusted peer
 	// In server mode we try to check into the client pool after handshake
 	if pm.client && pm.peers.Len() >= pm.maxPeers && !p.Peer.Info().Network.Trusted {
-		pm.logger.Event("Rejected (too many peers), " + p.id)
+		clientRejectedMeter.Mark(1)
 		return p2p.DiscTooManyPeers
 	}
 	// Reject light clients if server is not synced.
 	if !pm.client && !pm.synced() {
+		clientRejectedMeter.Mark(1)
 		return p2p.DiscRequested
 	}
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
@@ -281,7 +280,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	)
 	if err := p.Handshake(td, hash, number, genesis.Hash(), pm.server); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
-		pm.logger.Event("Handshake error: " + err.Error() + ", " + p.id)
+		clientErrorMeter.Mark(1)
 		return err
 	}
 	if p.fcClient != nil {
@@ -294,14 +293,14 @@ func (pm *ProtocolManager) handle(p *peer) error {
 
 	// Register the peer locally
 	if err := pm.peers.Register(p); err != nil {
+		clientErrorMeter.Mark(1)
 		p.Log().Error("Light Ethereum peer registration failed", "err", err)
-		pm.logger.Event("Peer registration error: " + err.Error() + ", " + p.id)
 		return err
 	}
-	pm.logger.Event("Connection established, " + p.id)
+	connectedAt := time.Now()
 	defer func() {
-		pm.logger.Event("Closed connection, " + p.id)
 		pm.removePeer(p.id)
+		connectionTimer.UpdateSince(connectedAt)
 	}()
 
 	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
@@ -317,11 +316,9 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			pm.serverPool.registered(p.poolEntry)
 		}
 	}
-
 	// main loop. handle incoming messages.
 	for {
 		if err := pm.handleMsg(p); err != nil {
-			pm.logger.Event("Message handling error: " + err.Error() + ", " + p.id)
 			p.Log().Debug("Light Ethereum message handling failed", "err", err)
 			if p.fcServer != nil {
 				p.fcServer.DumpLogs()
