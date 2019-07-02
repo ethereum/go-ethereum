@@ -13,6 +13,7 @@ Additional labels for pre-release and build metadata are available as extensions
 ### 7.0.0
 
 - The `message` field was renamed to `messages` in all data signing request methods to better reflect that it's a list, not a value.
+- The `storage.Put` and `storage.Get` methods in the rule execution engine were lower-cased to `storage.put` and `storage.get` to be consistent with JavaScript call conventions.
 
 ### 6.0.0
 
