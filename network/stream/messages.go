@@ -231,7 +231,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			ctr++
 
 			// set the bit, so create a request
-			want.Set(i/HashSize, true)
+			want.Set(i / HashSize)
 			log.Trace("need data", "ref", fmt.Sprintf("%x", hash), "request", true)
 
 			// measure how long it takes before we mark chunks for retrieval, and actually send the request

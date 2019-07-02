@@ -18,6 +18,7 @@ package bitvector
 
 import "testing"
 
+// TestBitvectorNew checks that enforcements of argument length works in the constructors
 func TestBitvectorNew(t *testing.T) {
 	_, err := New(0)
 	if err != errInvalidLength {
@@ -40,6 +41,7 @@ func TestBitvectorNew(t *testing.T) {
 	}
 }
 
+// TestBitvectorGetSet tests correctness of individual Set and Get commands
 func TestBitvectorGetSet(t *testing.T) {
 	for _, length := range []int{
 		1,
@@ -71,7 +73,7 @@ func TestBitvectorGetSet(t *testing.T) {
 		}()
 
 		for i := 0; i < length; i++ {
-			bv.Set(i, true)
+			bv.Set(i)
 			for j := 0; j < length; j++ {
 				if j == i {
 					if !bv.Get(j) {
@@ -84,7 +86,7 @@ func TestBitvectorGetSet(t *testing.T) {
 				}
 			}
 
-			bv.Set(i, false)
+			bv.Unset(i)
 
 			if bv.Get(i) {
 				t.Errorf("element on index %v is not set to false", i)
@@ -93,6 +95,7 @@ func TestBitvectorGetSet(t *testing.T) {
 	}
 }
 
+// TestBitvectorNewFromBytesGet tests that bit vector is initialized correctly from underlying byte slice
 func TestBitvectorNewFromBytesGet(t *testing.T) {
 	bv, err := NewFromBytes([]byte{8}, 8)
 	if err != nil {
@@ -100,5 +103,38 @@ func TestBitvectorNewFromBytesGet(t *testing.T) {
 	}
 	if !bv.Get(3) {
 		t.Fatalf("element 3 is not set to true: state %08b", bv.b[0])
+	}
+}
+
+// TestBitVectorString tests that string representation of bit vector is correct
+func TestBitVectorString(t *testing.T) {
+	b := []byte{0xa5, 0x81}
+	expect := "1010010110000001"
+	bv, err := NewFromBytes(b, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bv.String() != expect {
+		t.Fatalf("bitvector string fail: got %s, expect %s", bv.String(), expect)
+	}
+}
+
+// TestBitVectorSetUnsetBytes tests that setting and unsetting by byte slice modifies the bit vector correctly
+func TestBitVectorSetBytes(t *testing.T) {
+	b := []byte{0xff, 0xff}
+	cb := []byte{0xa5, 0x81}
+	expectUnset := "0101101001111110"
+	expectReset := "1111111111111111"
+	bv, err := NewFromBytes(b, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bv.UnsetBytes(cb)
+	if bv.String() != expectUnset {
+		t.Fatalf("bitvector unset bytes fail: got %s, expect %s", bv.String(), expectUnset)
+	}
+	bv.SetBytes(cb)
+	if bv.String() != expectReset {
+		t.Fatalf("bitvector reset bytes fail: got %s, expect %s", bv.String(), expectReset)
 	}
 }
