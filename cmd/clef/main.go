@@ -93,7 +93,7 @@ var (
 	chainIdFlag = cli.Int64Flag{
 		Name:  "chainid",
 		Value: params.MainnetChainConfig.ChainID.Int64(),
-		Usage: "Chain id to use for signing (1=mainnet, 3=ropsten, 4=rinkeby, 5=Goerli)",
+		Usage: "Chain id to use for signing (1=mainnet, 3=Ropsten, 4=Rinkeby, 5=Goerli)",
 	}
 	rpcPortFlag = cli.IntFlag{
 		Name:  "rpcport",
@@ -116,8 +116,7 @@ var (
 	}
 	ruleFlag = cli.StringFlag{
 		Name:  "rules",
-		Usage: "Enable rule-engine",
-		Value: "",
+		Usage: "Path to the rule file to auto-authorize requests with",
 	}
 	stdiouiFlag = cli.BoolFlag{
 		Name: "stdio-ui",
@@ -160,7 +159,6 @@ incoming requests.
 Whenever you make an edit to the rule file, you need to use attestation to tell
 Clef that the file is 'safe' to execute.`,
 	}
-
 	setCredentialCommand = cli.Command{
 		Action:    utils.MigrateFlags(setCredential),
 		Name:      "setpw",
@@ -173,6 +171,19 @@ Clef that the file is 'safe' to execute.`,
 		},
 		Description: `
 The setpw command stores a password for a given address (keyfile).
+`}
+	delCredentialCommand = cli.Command{
+		Action:    utils.MigrateFlags(removeCredential),
+		Name:      "delpw",
+		Usage:     "Remove a credential for a keystore file",
+		ArgsUsage: "<address>",
+		Flags: []cli.Flag{
+			logLevelFlag,
+			configdirFlag,
+			signerSecretFlag,
+		},
+		Description: `
+The delpw command removes a password for a given address (keyfile).
 `}
 	gendocCommand = cli.Command{
 		Action: GenDoc,
@@ -209,9 +220,9 @@ func init() {
 		advancedMode,
 	}
 	app.Action = signer
-	app.Commands = []cli.Command{initCommand, attestCommand, setCredentialCommand, gendocCommand}
-
+	app.Commands = []cli.Command{initCommand, attestCommand, setCredentialCommand, delCredentialCommand, gendocCommand}
 }
+
 func main() {
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -317,7 +328,6 @@ func setCredential(ctx *cli.Context) error {
 	if err := initialize(ctx); err != nil {
 		return err
 	}
-
 	addr := ctx.Args().First()
 	if !common.IsHexAddress(addr) {
 		utils.Fatalf("Invalid address specified: %s", addr)
@@ -334,10 +344,38 @@ func setCredential(ctx *cli.Context) error {
 	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
 	pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
 
-	// Initialize the encrypted storages
 	pwStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
 	pwStorage.Put(address.Hex(), password)
-	log.Info("Credential store updated", "key", address)
+
+	log.Info("Credential store updated", "set", address)
+	return nil
+}
+
+func removeCredential(ctx *cli.Context) error {
+	if len(ctx.Args()) < 1 {
+		utils.Fatalf("This command requires an address to be passed as an argument")
+	}
+	if err := initialize(ctx); err != nil {
+		return err
+	}
+	addr := ctx.Args().First()
+	if !common.IsHexAddress(addr) {
+		utils.Fatalf("Invalid address specified: %s", addr)
+	}
+	address := common.HexToAddress(addr)
+
+	stretchedKey, err := readMasterKey(ctx, nil)
+	if err != nil {
+		utils.Fatalf(err.Error())
+	}
+	configDir := ctx.GlobalString(configdirFlag.Name)
+	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
+	pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
+
+	pwStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
+	pwStorage.Del(address.Hex())
+
+	log.Info("Credential store updated", "unset", address)
 	return nil
 }
 
@@ -359,6 +397,10 @@ func initialize(c *cli.Context) error {
 }
 
 func signer(c *cli.Context) error {
+	// If we have some unrecognized command, bail out
+	if args := c.Args(); len(args) > 0 {
+		return fmt.Errorf("invalid command: %q", args[0])
+	}
 	if err := initialize(c); err != nil {
 		return err
 	}

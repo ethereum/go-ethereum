@@ -53,7 +53,7 @@ func NewAESEncryptedStorage(filename string, key []byte) *AESEncryptedStorage {
 	}
 }
 
-// Put stores a value by key. 0-length keys results in no-op
+// Put stores a value by key. 0-length keys results in noop.
 func (s *AESEncryptedStorage) Put(key, value string) {
 	if len(key) == 0 {
 		return
@@ -97,6 +97,19 @@ func (s *AESEncryptedStorage) Get(key string) (string, error) {
 		return "", err
 	}
 	return string(entry), nil
+}
+
+// Del removes a key-value pair. If the key doesn't exist, the method is a noop.
+func (s *AESEncryptedStorage) Del(key string) {
+	data, err := s.readEncryptedStorage()
+	if err != nil {
+		log.Warn("Failed to read encrypted storage", "err", err, "file", s.filename)
+		return
+	}
+	delete(data, key)
+	if err = s.writeEncryptedStorage(data); err != nil {
+		log.Warn("Failed to write entry", "err", err)
+	}
 }
 
 // readEncryptedStorage reads the file with encrypted creds

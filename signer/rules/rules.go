@@ -83,7 +83,12 @@ func (r *rulesetUI) execute(jsfunc string, jsarg interface{}) (otto.Value, error
 	vm.Set("storage", struct{}{})
 	storageObj, _ := vm.Get("storage")
 	storageObj.Object().Set("put", func(call otto.FunctionCall) otto.Value {
-		r.storage.Put(call.Argument(0).String(), call.Argument(1).String())
+		key, val := call.Argument(0).String(), call.Argument(1).String()
+		if val == "" {
+			r.storage.Del(key)
+		} else {
+			r.storage.Put(key, val)
+		}
 		return otto.NullValue()
 	})
 	storageObj.Object().Set("get", func(call otto.FunctionCall) otto.Value {

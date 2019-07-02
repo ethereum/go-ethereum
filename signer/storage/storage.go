@@ -28,12 +28,15 @@ var (
 )
 
 type Storage interface {
-	// Put stores a value by key. 0-length keys results in no-op
+	// Put stores a value by key. 0-length keys results in noop.
 	Put(key, value string)
 
 	// Get returns the previously stored value, or an error if the key is 0-length
 	// or unknown.
 	Get(key string) (string, error)
+
+	// Del removes a key-value pair. If the key doesn't exist, the method is a noop.
+	Del(key string)
 }
 
 // EphemeralStorage is an in-memory storage that does
@@ -43,6 +46,7 @@ type EphemeralStorage struct {
 	namespace string
 }
 
+// Put stores a value by key. 0-length keys results in noop.
 func (s *EphemeralStorage) Put(key, value string) {
 	if len(key) == 0 {
 		return
@@ -62,6 +66,11 @@ func (s *EphemeralStorage) Get(key string) (string, error) {
 	return "", ErrNotFound
 }
 
+// Del removes a key-value pair. If the key doesn't exist, the method is a noop.
+func (s *EphemeralStorage) Del(key string) {
+	delete(s.data, key)
+}
+
 func NewEphemeralStorage() Storage {
 	s := &EphemeralStorage{
 		data: make(map[string]string),
@@ -73,6 +82,7 @@ func NewEphemeralStorage() Storage {
 type NoStorage struct{}
 
 func (s *NoStorage) Put(key, value string) {}
+func (s *NoStorage) Del(key string)        {}
 func (s *NoStorage) Get(key string) (string, error) {
 	return "", errors.New("I forgot")
 }
