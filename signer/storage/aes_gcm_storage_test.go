@@ -110,8 +110,8 @@ func TestEnd2End(t *testing.T) {
 	}
 
 	s1.Put("bazonk", "foobar")
-	if v := s2.Get("bazonk"); v != "foobar" {
-		t.Errorf("Expected bazonk->foobar, got '%v'", v)
+	if v, err := s2.Get("bazonk"); v != "foobar" || err != nil {
+		t.Errorf("Expected bazonk->foobar (nil error), got '%v' (%v error)", v, err)
 	}
 }
 
@@ -154,11 +154,11 @@ func TestSwappedKeys(t *testing.T) {
 		}
 	}
 	swap()
-	if v := s1.Get("k1"); v != "" {
+	if v, _ := s1.Get("k1"); v != "" {
 		t.Errorf("swapped value should return empty")
 	}
 	swap()
-	if v := s1.Get("k1"); v != "v1" {
+	if v, _ := s1.Get("k1"); v != "v1" {
 		t.Errorf("double-swapped value should work fine")
 	}
 }

@@ -1,4 +1,15 @@
-### Changelog for external API
+## Changelog for external API
+
+The API uses [semantic versioning](https://semver.org/).
+
+TL;DR: Given a version number MAJOR.MINOR.PATCH, increment the:
+
+* MAJOR version when you make incompatible API changes,
+* MINOR version when you add functionality in a backwards-compatible manner, and
+* PATCH version when you make backwards-compatible bug fixes.
+
+Additional labels for pre-release and build metadata are available as extensions to the MAJOR.MINOR.PATCH format.
+
 
 ### 6.0.0
 
@@ -14,15 +25,15 @@ The addition of `contentType` makes it possible to use the method for different 
   * signing clique headers,
   * signing plain personal messages,
 * The external method `account_signTypedData` implements [EIP-712](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-712.md) and makes it possible to sign typed data.
-  
+
 #### 4.0.0
 
-* The external `account_Ecrecover`-method was removed. 
+* The external `account_Ecrecover`-method was removed.
 * The external `account_Import`-method was removed.
 
 #### 3.0.0
 
-* The external `account_List`-method was changed to not expose `url`, which contained info about the local filesystem. It now returns only a list of addresses. 
+* The external `account_List`-method was changed to not expose `url`, which contained info about the local filesystem. It now returns only a list of addresses.
 
 #### 2.0.0
 
@@ -33,15 +44,3 @@ makes the `accounts_signTransaction` identical to the old `eth_signTransaction`.
 #### 1.0.0
 
 Initial release.
-
-### Versioning
-
-The API uses [semantic versioning](https://semver.org/).
-
-TLDR; Given a version number MAJOR.MINOR.PATCH, increment the:
-
-* MAJOR version when you make incompatible API changes,
-* MINOR version when you add functionality in a backwards-compatible manner, and
-* PATCH version when you make backwards-compatible bug fixes.
-
-Additional labels for pre-release and build metadata are available as extensions to the MAJOR.MINOR.PATCH format.
