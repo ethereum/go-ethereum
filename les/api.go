@@ -17,7 +17,6 @@
 package les
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -31,49 +30,12 @@ import (
 )
 
 var (
-	ErrMinCap               = errors.New("capacity too small")
-	ErrTotalCap             = errors.New("total capacity exceeded")
-	ErrUnknownBenchmarkType = errors.New("unknown benchmark type")
-	ErrNoCheckpoint         = errors.New("no local checkpoint provided")
-	ErrNotActivated         = errors.New("checkpoint registrar is not activated")
+	errTotalCap     = errors.New("total capacity exceeded")
+	errNoCheckpoint = errors.New("no local checkpoint provided")
+	errNotActivated = errors.New("checkpoint registrar is not activated")
 
 	dropCapacityDelay = time.Second // delay applied to decreasing capacity changes
 )
-
-// PrivateLightServerAPI provides an API to access the LES light server.
-// It offers only methods that operate on public data that is freely available to anyone.
-type PrivateLightServerAPI struct {
-	server *LesServer
-}
-
-// NewPrivateLightServerAPI creates a new LES light server API.
-func NewPrivateLightServerAPI(server *LesServer) *PrivateLightServerAPI {
-	return &PrivateLightServerAPI{
-		server: server,
-	}
-}
-
-// TotalCapacity queries total available capacity for all clients
-func (api *PrivateLightServerAPI) TotalCapacity() hexutil.Uint64 {
-	return hexutil.Uint64(api.server.priorityClientPool.totalCapacity())
-}
-
-// SubscribeTotalCapacity subscribes to changed total capacity events.
-// If onlyUnderrun is true then notification is sent only if the total capacity
-// drops under the total capacity of connected priority clients.
-//
-// Note: actually applying decreasing total capacity values is delayed while the
-// notification is sent instantly. This allows lowering the capacity of a priority client
-// or choosing which one to drop before the system drops some of them automatically.
-func (api *PrivateLightServerAPI) SubscribeTotalCapacity(ctx context.Context, onlyUnderrun bool) (*rpc.Subscription, error) {
-	notifier, supported := rpc.NotifierFromContext(ctx)
-	if !supported {
-		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
-	}
-	rpcSub := notifier.CreateSubscription()
-	api.server.priorityClientPool.subscribeTotalCapacity(&tcSubscription{notifier, rpcSub, onlyUnderrun})
-	return rpcSub, nil
-}
 
 type (
 	// tcSubscription represents a total capacity subscription
@@ -99,38 +61,6 @@ func (s tcSubs) send(tc uint64, underrun bool) {
 			}
 		}
 	}
-}
-
-// MinimumCapacity queries minimum assignable capacity for a single client
-func (api *PrivateLightServerAPI) MinimumCapacity() hexutil.Uint64 {
-	return hexutil.Uint64(api.server.minCapacity)
-}
-
-// FreeClientCapacity queries the capacity provided for free clients
-func (api *PrivateLightServerAPI) FreeClientCapacity() hexutil.Uint64 {
-	return hexutil.Uint64(api.server.freeClientCap)
-}
-
-// SetClientCapacity sets the priority capacity assigned to a given client.
-// If the assigned capacity is bigger than zero then connection is always
-// guaranteed. The sum of capacity assigned to priority clients can not exceed
-// the total available capacity.
-//
-// Note: assigned capacity can be changed while the client is connected with
-// immediate effect.
-func (api *PrivateLightServerAPI) SetClientCapacity(id enode.ID, cap uint64) error {
-	if cap != 0 && cap < api.server.minCapacity {
-		return ErrMinCap
-	}
-	return api.server.priorityClientPool.setClientCapacity(id, cap)
-}
-
-// GetClientCapacity returns the capacity assigned to a given client
-func (api *PrivateLightServerAPI) GetClientCapacity(id enode.ID) hexutil.Uint64 {
-	api.server.priorityClientPool.lock.Lock()
-	defer api.server.priorityClientPool.lock.Unlock()
-
-	return hexutil.Uint64(api.server.priorityClientPool.clients[id].cap)
 }
 
 // clientPool is implemented by both the free and priority client pools
@@ -360,7 +290,7 @@ func (v *priorityClientPool) setClientCapacity(id enode.ID, cap uint64) error {
 	}
 	if c.connected {
 		if v.totalConnectedCap+cap > v.totalCap+c.cap {
-			return ErrTotalCap
+			return errTotalCap
 		}
 		if c.cap == 0 {
 			if v.child != nil {
@@ -397,82 +327,6 @@ func (v *priorityClientPool) setClientCapacity(id enode.ID, cap uint64) error {
 	return nil
 }
 
-// Benchmark runs a request performance benchmark with a given set of measurement setups
-// in multiple passes specified by passCount. The measurement time for each setup in each
-// pass is specified in milliseconds by length.
-//
-// Note: measurement time is adjusted for each pass depending on the previous ones.
-// Therefore a controlled total measurement time is achievable in multiple passes.
-func (api *PrivateLightServerAPI) Benchmark(setups []map[string]interface{}, passCount, length int) ([]map[string]interface{}, error) {
-	benchmarks := make([]requestBenchmark, len(setups))
-	for i, setup := range setups {
-		if t, ok := setup["type"].(string); ok {
-			getInt := func(field string, def int) int {
-				if value, ok := setup[field].(float64); ok {
-					return int(value)
-				}
-				return def
-			}
-			getBool := func(field string, def bool) bool {
-				if value, ok := setup[field].(bool); ok {
-					return value
-				}
-				return def
-			}
-			switch t {
-			case "header":
-				benchmarks[i] = &benchmarkBlockHeaders{
-					amount:  getInt("amount", 1),
-					skip:    getInt("skip", 1),
-					byHash:  getBool("byHash", false),
-					reverse: getBool("reverse", false),
-				}
-			case "body":
-				benchmarks[i] = &benchmarkBodiesOrReceipts{receipts: false}
-			case "receipts":
-				benchmarks[i] = &benchmarkBodiesOrReceipts{receipts: true}
-			case "proof":
-				benchmarks[i] = &benchmarkProofsOrCode{code: false}
-			case "code":
-				benchmarks[i] = &benchmarkProofsOrCode{code: true}
-			case "cht":
-				benchmarks[i] = &benchmarkHelperTrie{
-					bloom:    false,
-					reqCount: getInt("amount", 1),
-				}
-			case "bloom":
-				benchmarks[i] = &benchmarkHelperTrie{
-					bloom:    true,
-					reqCount: getInt("amount", 1),
-				}
-			case "txSend":
-				benchmarks[i] = &benchmarkTxSend{}
-			case "txStatus":
-				benchmarks[i] = &benchmarkTxStatus{}
-			default:
-				return nil, ErrUnknownBenchmarkType
-			}
-		} else {
-			return nil, ErrUnknownBenchmarkType
-		}
-	}
-	rs := api.server.protocolManager.runBenchmark(benchmarks, passCount, time.Millisecond*time.Duration(length))
-	result := make([]map[string]interface{}, len(setups))
-	for i, r := range rs {
-		res := make(map[string]interface{})
-		if r.err == nil {
-			res["totalCount"] = r.totalCount
-			res["avgTime"] = r.avgTime
-			res["maxInSize"] = r.maxInSize
-			res["maxOutSize"] = r.maxOutSize
-		} else {
-			res["error"] = r.err.Error()
-		}
-		result[i] = res
-	}
-	return result, nil
-}
-
 // PrivateLightAPI provides an API to access the LES light server or light client.
 type PrivateLightAPI struct {
 	backend *lesCommons
@@ -498,7 +352,7 @@ func (api *PrivateLightAPI) LatestCheckpoint() ([4]string, error) {
 	var res [4]string
 	cp := api.backend.latestLocalCheckpoint()
 	if cp.Empty() {
-		return res, ErrNoCheckpoint
+		return res, errNoCheckpoint
 	}
 	res[0] = hexutil.EncodeUint64(cp.SectionIndex)
 	res[1], res[2], res[3] = cp.SectionHead.Hex(), cp.CHTRoot.Hex(), cp.BloomRoot.Hex()
@@ -515,7 +369,7 @@ func (api *PrivateLightAPI) GetCheckpoint(index uint64) ([3]string, error) {
 	var res [3]string
 	cp := api.backend.getLocalCheckpoint(index)
 	if cp.Empty() {
-		return res, ErrNoCheckpoint
+		return res, errNoCheckpoint
 	}
 	res[0], res[1], res[2] = cp.SectionHead.Hex(), cp.CHTRoot.Hex(), cp.BloomRoot.Hex()
 	return res, nil
@@ -524,7 +378,7 @@ func (api *PrivateLightAPI) GetCheckpoint(index uint64) ([3]string, error) {
 // GetCheckpointContractAddress returns the contract contract address in hex format.
 func (api *PrivateLightAPI) GetCheckpointContractAddress() (string, error) {
 	if api.reg == nil {
-		return "", ErrNotActivated
+		return "", errNotActivated
 	}
 	return api.reg.config.Address.Hex(), nil
 }
