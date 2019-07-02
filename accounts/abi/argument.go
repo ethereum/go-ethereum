@@ -121,14 +121,11 @@ func unpack(t *Type, dst interface{}, src interface{}) error {
 	)
 	tuple, typ := false, t
 	for {
-		if typ.T == TupleTy {
-			tuple = true
-			break
-		}
 		if typ.T == SliceTy || typ.T == ArrayTy {
 			typ = typ.Elem
 			continue
 		}
+		tuple = typ.T == TupleTy
 		break
 	}
 	if !tuple {
