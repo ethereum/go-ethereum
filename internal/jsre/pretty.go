@@ -110,8 +110,8 @@ func (ctx ppctx) printObject(obj *otto.Object, level int, inArray bool) {
 	switch obj.Class() {
 	case "Array", "GoArray":
 		lv, _ := obj.Get("length")
-		len, _ := lv.ToInteger()
-		if len == 0 {
+		length, _ := lv.ToInteger()
+		if length == 0 {
 			fmt.Fprintf(ctx.w, "[]")
 			return
 		}
@@ -120,12 +120,12 @@ func (ctx ppctx) printObject(obj *otto.Object, level int, inArray bool) {
 			return
 		}
 		fmt.Fprint(ctx.w, "[")
-		for i := int64(0); i < len; i++ {
+		for i := int64(0); i < length; i++ {
 			el, err := obj.Get(strconv.FormatInt(i, 10))
 			if err == nil {
 				ctx.printValue(el, level+1, true)
 			}
-			if i < len-1 {
+			if i < length-1 {
 				fmt.Fprintf(ctx.w, ", ")
 			}
 		}

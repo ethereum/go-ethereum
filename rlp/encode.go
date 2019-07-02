@@ -448,9 +448,9 @@ func writeByteArray(val reflect.Value, w *encbuf) error {
 	if !val.CanAddr() {
 		// Slice requires the value to be addressable.
 		// Make it addressable by copying.
-		copy := reflect.New(val.Type()).Elem()
-		copy.Set(val)
-		val = copy
+		cp := reflect.New(val.Type()).Elem()
+		cp.Set(val)
+		val = cp
 	}
 	size := val.Len()
 	slice := val.Slice(0, size).Bytes()

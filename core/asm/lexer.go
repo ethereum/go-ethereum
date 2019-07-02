@@ -116,14 +116,14 @@ func Lex(source []byte, debug bool) <-chan token {
 }
 
 // next returns the next rune in the program's source.
-func (l *lexer) next() (rune rune) {
+func (l *lexer) next() (r rune) {
 	if l.pos >= len(l.input) {
 		l.width = 0
 		return 0
 	}
-	rune, l.width = utf8.DecodeRuneInString(l.input[l.pos:])
+	r, l.width = utf8.DecodeRuneInString(l.input[l.pos:])
 	l.pos += l.width
-	return rune
+	return r
 }
 
 // backup backsup the last parsed element (multi-character)

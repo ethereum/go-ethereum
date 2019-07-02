@@ -28,8 +28,8 @@ var locationTrims = []string{
 
 // PrintOrigins sets or unsets log location (file:line) printing for terminal
 // format output.
-func PrintOrigins(print bool) {
-	if print {
+func PrintOrigins(setPrint bool) {
+	if setPrint {
 		atomic.StoreUint32(&locationEnabled, 1)
 	} else {
 		atomic.StoreUint32(&locationEnabled, 0)
