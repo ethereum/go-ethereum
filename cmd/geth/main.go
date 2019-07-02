@@ -138,7 +138,6 @@ var (
 		utils.GoerliFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
-		utils.ConstantinopleOverrideFlag,
 		utils.EthStatsURLFlag,
 		utils.FakePoWFlag,
 		utils.NoCompactionFlag,
