@@ -171,7 +171,7 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 	fmt.Printf("Account:  %s\n", request.Address.String())
 	fmt.Printf("messages:\n")
 	for _, nvt := range request.Messages {
-		fmt.Printf("%v\n", nvt.Pprint(1))
+		fmt.Printf("\u00a0\u00a0%v\n", strings.TrimSpace(nvt.Pprint(1)))
 	}
 	fmt.Printf("raw data:  \n%q\n", request.Rawdata)
 	fmt.Printf("data hash:  %v\n", request.Hash)

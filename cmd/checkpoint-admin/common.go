@@ -17,14 +17,13 @@
 package main
 
 import (
-	"io/ioutil"
 	"strconv"
-	"strings"
 
-	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/external"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/contracts/checkpointoracle"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/params"
@@ -111,56 +110,11 @@ func newContract(client *rpc.Client) (common.Address, *checkpointoracle.Checkpoi
 	return addr, contract
 }
 
-// promptPassphrase prompts the user for a passphrase.
-// Set confirmation to true to require the user to confirm the passphrase.
-func promptPassphrase(confirmation bool) string {
-	passphrase, err := console.Stdin.PromptPassword("Passphrase: ")
+// newClefSigner sets up a clef backend and returns a clef transaction signer.
+func newClefSigner(ctx *cli.Context) *bind.TransactOpts {
+	clef, err := external.NewExternalSigner(ctx.String(clefURLFlag.Name))
 	if err != nil {
-		utils.Fatalf("Failed to read passphrase: %v", err)
+		utils.Fatalf("Failed to create clef signer %v", err)
 	}
-
-	if confirmation {
-		confirm, err := console.Stdin.PromptPassword("Repeat passphrase: ")
-		if err != nil {
-			utils.Fatalf("Failed to read passphrase confirmation: %v", err)
-		}
-		if passphrase != confirm {
-			utils.Fatalf("Passphrases do not match")
-		}
-	}
-	return passphrase
-}
-
-// getPassphrase obtains a passphrase given by the user. It first checks the
-// --password command line flag and ultimately prompts the user for a
-// passphrase.
-func getPassphrase(ctx *cli.Context) string {
-	passphraseFile := ctx.String(utils.PasswordFileFlag.Name)
-	if passphraseFile != "" {
-		content, err := ioutil.ReadFile(passphraseFile)
-		if err != nil {
-			utils.Fatalf("Failed to read passphrase file '%s': %v",
-				passphraseFile, err)
-		}
-		return strings.TrimRight(string(content), "\r\n")
-	}
-	// Otherwise prompt the user for the passphrase.
-	return promptPassphrase(false)
-}
-
-// getKey retrieves the user key through specified key file.
-func getKey(ctx *cli.Context) *keystore.Key {
-	// Read key from file.
-	keyFile := ctx.GlobalString(keyFileFlag.Name)
-	keyJson, err := ioutil.ReadFile(keyFile)
-	if err != nil {
-		utils.Fatalf("Failed to read the keyfile at '%s': %v", keyFile, err)
-	}
-	// Decrypt key with passphrase.
-	passphrase := getPassphrase(ctx)
-	key, err := keystore.DecryptKey(keyJson, passphrase)
-	if err != nil {
-		utils.Fatalf("Failed to decrypt user key '%s': %v", keyFile, err)
-	}
-	return key
+	return bind.NewClefTransactor(clef, accounts.Account{Address: common.HexToAddress(ctx.String(signerFlag.Name))})
 }
