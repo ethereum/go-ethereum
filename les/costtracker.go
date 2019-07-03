@@ -18,7 +18,6 @@ package les
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -27,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/les/csvlogger"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -96,40 +94,50 @@ const (
 // as the number of cost units per nanosecond of serving time in a single thread.
 // It is based on statistics collected during serving requests in high-load periods
 // and practically acts as a one-dimension request price scaling factor over the
-// pre-defined cost estimate table. Instead of scaling the cost values, the real
-// value of cost units is changed by applying the factor to the serving times. This
-// is more convenient because the changes in the cost factor can be applied immediately
-// without always notifying the clients about the changed cost tables.
+// pre-defined cost estimate table.
+//
+// The reason for dynamically maintaining the global factor on the server side is:
+// the estimated time cost of the request is fixed(hardcoded) but the configuration
+// of the machine running the server is really different. Therefore, the request serving
+// time in different machine will vary greatly. And also, the request serving time
+// in same machine may vary greatly with different request pressure.
+//
+// In order to more effectively limit resources, we apply the global factor to serving
+// time to make the result as close as possible to the estimated time cost no matter
+// the server is slow or fast. And also we scale the totalRecharge with global factor
+// so that fast server can serve more requests than estimation and slow server can
+// reduce request pressure.
+//
+// Instead of scaling the cost values, the real value of cost units is changed by
+// applying the factor to the serving times. This is more convenient because the
+// changes in the cost factor can be applied immediately without always notifying
+// the clients about the changed cost tables.
 type costTracker struct {
 	db     ethdb.Database
 	stopCh chan chan struct{}
 
-	inSizeFactor, outSizeFactor float64
-	gf, utilTarget              float64
-	minBufLimit                 uint64
+	inSizeFactor  float64
+	outSizeFactor float64
+	factor        float64
+	utilTarget    float64
+	minBufLimit   uint64
 
-	gfUpdateCh      chan gfUpdate
 	gfLock          sync.RWMutex
+	reqInfoCh       chan reqInfo
 	totalRechargeCh chan uint64
 
-	stats                                                     map[uint64][]uint64
-	logger                                                    *csvlogger.Logger
-	logRecentTime, logRecentAvg, logTotalRecharge, logRelCost *csvlogger.Channel
+	stats map[uint64][]uint64 // Used for testing purpose.
 }
 
 // newCostTracker creates a cost tracker and loads the cost factor statistics from the database.
 // It also returns the minimum capacity that can be assigned to any peer.
-func newCostTracker(db ethdb.Database, config *eth.Config, logger *csvlogger.Logger) (*costTracker, uint64) {
+func newCostTracker(db ethdb.Database, config *eth.Config) (*costTracker, uint64) {
 	utilTarget := float64(config.LightServ) * flowcontrol.FixedPointMultiplier / 100
 	ct := &costTracker{
-		db:               db,
-		stopCh:           make(chan chan struct{}),
-		utilTarget:       utilTarget,
-		logger:           logger,
-		logRelCost:       logger.NewMinMaxChannel("relativeCost", true),
-		logRecentTime:    logger.NewMinMaxChannel("recentTime", true),
-		logRecentAvg:     logger.NewMinMaxChannel("recentAvg", true),
-		logTotalRecharge: logger.NewChannel("totalRecharge", 0.01),
+		db:         db,
+		stopCh:     make(chan chan struct{}),
+		reqInfoCh:  make(chan reqInfo, 100),
+		utilTarget: utilTarget,
 	}
 	if config.LightBandwidthIn > 0 {
 		ct.inSizeFactor = utilTarget / float64(config.LightBandwidthIn)
@@ -204,8 +212,15 @@ func (ct *costTracker) makeCostList(globalFactor float64) RequestCostList {
 	return list
 }
 
-type gfUpdate struct {
-	avgTimeCost, servingTime float64
+// reqInfo contains the estimated time cost and the actual request serving time
+// which acts as a feed source to update factor maintained by costTracker.
+type reqInfo struct {
+	// avgTimeCost is the estimated time cost corresponding to maxCostTable.
+	avgTimeCost float64
+
+	// servingTime is the CPU time corresponding to the actual processing of
+	// the request.
+	servingTime float64
 }
 
 // gfLoop starts an event loop which updates the global cost factor which is
@@ -218,43 +233,48 @@ type gfUpdate struct {
 // total allowed serving time per second but nominated in cost units, should
 // also be scaled with the cost factor and is also updated by this loop.
 func (ct *costTracker) gfLoop() {
-	var gfLog, recentTime, recentAvg float64
-	lastUpdate := mclock.Now()
-	expUpdate := lastUpdate
+	var (
+		factor, totalRecharge        float64
+		gfLog, recentTime, recentAvg float64
 
+		lastUpdate, expUpdate = mclock.Now(), mclock.Now()
+	)
+
+	// Load historical cost factor statistics from the database.
 	data, _ := ct.db.Get([]byte(gfDbKey))
 	if len(data) == 8 {
 		gfLog = math.Float64frombits(binary.BigEndian.Uint64(data[:]))
 	}
-	gf := math.Exp(gfLog)
-	ct.gf = gf
-	totalRecharge := ct.utilTarget * gf
-	ct.gfUpdateCh = make(chan gfUpdate, 100)
-	threshold := gfUsageThreshold * float64(gfUsageTC) * ct.utilTarget / 1000000
+	ct.factor = math.Exp(gfLog)
+	factor, totalRecharge = ct.factor, ct.utilTarget*ct.factor
+
+	// In order to perform factor data statistics under the high request pressure,
+	// we only adjust factor when recent factor usage beyond the threshold.
+	threshold := gfUsageThreshold * float64(gfUsageTC) * ct.utilTarget / flowcontrol.FixedPointMultiplier
 
 	go func() {
 		saveCostFactor := func() {
 			var data [8]byte
 			binary.BigEndian.PutUint64(data[:], math.Float64bits(gfLog))
 			ct.db.Put([]byte(gfDbKey), data[:])
-			log.Debug("global cost factor saved", "value", gf)
+			log.Debug("global cost factor saved", "value", factor)
 		}
 		saveTicker := time.NewTicker(time.Minute * 10)
 
 		for {
 			select {
-			case r := <-ct.gfUpdateCh:
+			case r := <-ct.reqInfoCh:
+				requestServedMeter.Mark(int64(r.servingTime))
+				requestEstimatedMeter.Mark(int64(r.avgTimeCost / factor))
+				requestServedTimer.Update(time.Duration(r.servingTime))
+				relativeCostHistogram.Update(int64(r.avgTimeCost / factor / r.servingTime))
+
 				now := mclock.Now()
-				if ct.logRelCost != nil && r.avgTimeCost > 1e-20 {
-					ct.logRelCost.Update(r.servingTime * gf / r.avgTimeCost)
-				}
-				if r.servingTime > 1000000000 {
-					ct.logger.Event(fmt.Sprintf("Very long servingTime = %f  avgTimeCost = %f  costFactor = %f", r.servingTime, r.avgTimeCost, gf))
-				}
 				dt := float64(now - expUpdate)
 				expUpdate = now
 				exp := math.Exp(-dt / float64(gfUsageTC))
-				// calculate gf correction until now, based on previous values
+
+				// calculate factor correction until now, based on previous values
 				var gfCorr float64
 				max := recentTime
 				if recentAvg > max {
@@ -268,27 +288,28 @@ func (ct *costTracker) gfLoop() {
 					} else {
 						gfCorr = math.Log(max/threshold) * float64(gfUsageTC)
 					}
-					// calculate log(gf) correction with the right direction and time constant
+					// calculate log(factor) correction with the right direction and time constant
 					if recentTime > recentAvg {
-						// drop gf if actual serving times are larger than average estimates
+						// drop factor if actual serving times are larger than average estimates
 						gfCorr /= -float64(gfDropTC)
 					} else {
-						// raise gf if actual serving times are smaller than average estimates
+						// raise factor if actual serving times are smaller than average estimates
 						gfCorr /= float64(gfRaiseTC)
 					}
 				}
 				// update recent cost values with current request
 				recentTime = recentTime*exp + r.servingTime
-				recentAvg = recentAvg*exp + r.avgTimeCost/gf
+				recentAvg = recentAvg*exp + r.avgTimeCost/factor
 
 				if gfCorr != 0 {
+					// Apply the correction to factor
 					gfLog += gfCorr
-					gf = math.Exp(gfLog)
+					factor = math.Exp(gfLog)
+					// Notify outside modules the new factor and totalRecharge.
 					if time.Duration(now-lastUpdate) > time.Second {
-						totalRecharge = ct.utilTarget * gf
-						lastUpdate = now
+						totalRecharge, lastUpdate = ct.utilTarget*factor, now
 						ct.gfLock.Lock()
-						ct.gf = gf
+						ct.factor = factor
 						ch := ct.totalRechargeCh
 						ct.gfLock.Unlock()
 						if ch != nil {
@@ -297,12 +318,12 @@ func (ct *costTracker) gfLoop() {
 							default:
 							}
 						}
-						log.Debug("global cost factor updated", "gf", gf)
+						log.Debug("global cost factor updated", "factor", factor)
 					}
 				}
-				ct.logRecentTime.Update(recentTime)
-				ct.logRecentAvg.Update(recentAvg)
-				ct.logTotalRecharge.Update(totalRecharge)
+				recentServedGauge.Update(int64(recentTime))
+				recentEstimatedGauge.Update(int64(recentAvg))
+				totalRechargeGauge.Update(int64(totalRecharge))
 
 			case <-saveTicker.C:
 				saveCostFactor()
@@ -321,7 +342,7 @@ func (ct *costTracker) globalFactor() float64 {
 	ct.gfLock.RLock()
 	defer ct.gfLock.RUnlock()
 
-	return ct.gf
+	return ct.factor
 }
 
 // totalRecharge returns the current total recharge parameter which is used by
@@ -330,7 +351,7 @@ func (ct *costTracker) totalRecharge() uint64 {
 	ct.gfLock.RLock()
 	defer ct.gfLock.RUnlock()
 
-	return uint64(ct.gf * ct.utilTarget)
+	return uint64(ct.factor * ct.utilTarget)
 }
 
 // subscribeTotalRecharge returns all future updates to the total recharge value
@@ -340,7 +361,7 @@ func (ct *costTracker) subscribeTotalRecharge(ch chan uint64) uint64 {
 	defer ct.gfLock.Unlock()
 
 	ct.totalRechargeCh = ch
-	return uint64(ct.gf * ct.utilTarget)
+	return uint64(ct.factor * ct.utilTarget)
 }
 
 // updateStats updates the global cost factor and (if enabled) the real cost vs.
@@ -349,7 +370,7 @@ func (ct *costTracker) updateStats(code, amount, servingTime, realCost uint64) {
 	avg := reqAvgTimeCost[code]
 	avgTimeCost := avg.baseCost + amount*avg.reqCost
 	select {
-	case ct.gfUpdateCh <- gfUpdate{float64(avgTimeCost), float64(servingTime)}:
+	case ct.reqInfoCh <- reqInfo{float64(avgTimeCost), float64(servingTime)}:
 	default:
 	}
 	if makeCostStats {
