@@ -44,7 +44,7 @@ func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
 	return NewKeyedTransactor(key.PrivateKey), nil
 }
 
-// NewKeystoreTransactor is a utility method to easily create a transaction signer from
+// NewKeyStoreTransactor is a utility method to easily create a transaction signer from
 // an decrypted key from a keystore
 func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account) (*TransactOpts, error) {
 	return &TransactOpts{
@@ -83,14 +83,14 @@ func NewKeyedTransactor(key *ecdsa.PrivateKey) *TransactOpts {
 
 // NewClefTransactor is a utility method to easily create a transaction signer
 // with a clef backend.
-func NewClefTransactor(clefSigner *external.ExternalSigner, account accounts.Account) *TransactOpts {
+func NewClefTransactor(clef *external.ExternalSigner, account accounts.Account) *TransactOpts {
 	return &TransactOpts{
 		From: account.Address,
 		Signer: func(signer types.Signer, address common.Address, transaction *types.Transaction) (*types.Transaction, error) {
 			if address != account.Address {
 				return nil, errors.New("not authorized to sign this account")
 			}
-			return clefSigner.SignTx(account, transaction, nil) // ChainId is never used here.
+			return clef.SignTx(account, transaction, nil) // Clef enforces its own chain id
 		},
 	}
 }

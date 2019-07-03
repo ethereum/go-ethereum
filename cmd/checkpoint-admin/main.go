@@ -60,7 +60,6 @@ func init() {
 	app.Flags = []cli.Flag{
 		oracleFlag,
 		nodeURLFlag,
-		clefURLFlag,
 	}
 	cli.CommandHelpTemplate = commandHelperTemplate
 }

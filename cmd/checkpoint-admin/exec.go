@@ -58,10 +58,10 @@ var commandSign = cli.Command{
 	Flags: []cli.Flag{
 		nodeURLFlag,
 		clefURLFlag,
+		signerFlag,
 		indexFlag,
 		hashFlag,
 		oracleFlag,
-		signerFlag,
 	},
 	Action: utils.MigrateFlags(sign),
 }
@@ -71,10 +71,10 @@ var commandPublish = cli.Command{
 	Usage: "Publish a checkpoint into the oracle",
 	Flags: []cli.Flag{
 		nodeURLFlag,
-		indexFlag,
-		signaturesFlag,
 		clefURLFlag,
 		signerFlag,
+		indexFlag,
+		signaturesFlag,
 	},
 	Action: utils.MigrateFlags(publish),
 }
@@ -108,6 +108,7 @@ func deploy(ctx *cli.Context) error {
 	transactor, client := newClefSigner(ctx), newClient(ctx)
 
 	// Deploy the checkpoint oracle
+	fmt.Println("Sending deploy request to Clef...")
 	oracle, tx, _, err := contract.DeployCheckpointOracle(transactor, client, addrs, big.NewInt(int64(params.CheckpointFrequency)),
 		big.NewInt(int64(params.CheckpointProcessConfirmations)), big.NewInt(int64(needed)))
 	if err != nil {
@@ -208,12 +209,14 @@ func sign(ctx *cli.Context) error {
 			return err
 		}
 	}
-	clef := newRPCClient(ctx.GlobalString(clefURLFlag.Name))
+	clef := newRPCClient(ctx.String(clefURLFlag.Name))
 	p := make(map[string]string)
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, cindex)
 	p["address"] = address.Hex()
 	p["message"] = hexutil.Encode(append(buf, chash.Bytes()...))
+
+	fmt.Println("Sending signing request to Clef...")
 	if err := clef.Call(&signature, "account_signData", accounts.MimetypeDataWithValidator, signer, p); err != nil {
 		utils.Fatalf("Failed to sign checkpoint, err %v", err)
 	}
@@ -298,6 +301,7 @@ func publish(ctx *cli.Context) error {
 	fmt.Printf("Sentry number => %d\nSentry hash   => %s\n", recent.Number, recent.Hash().Hex())
 
 	// Publish the checkpoint into the oracle
+	fmt.Println("Sending publish request to Clef...")
 	tx, err := oracle.RegisterCheckpoint(newClefSigner(ctx), checkpoint.SectionIndex, checkpoint.Hash().Bytes(), recent.Number, recent.Hash(), sigs)
 	if err != nil {
 		utils.Fatalf("Register contract failed %v", err)
