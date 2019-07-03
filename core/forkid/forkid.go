@@ -20,7 +20,6 @@ package forkid
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"hash/crc32"
 	"math"
 	"math/big"
@@ -45,10 +44,11 @@ var (
 	ErrLocalIncompatibleOrStale = errors.New("local incompatible or needs update")
 )
 
-// ID is a 2x4-byte tuple containing:
-//   - forkhash: CRC32 checksum of the genesis block and passed fork block numbers
-//   - forknext: CRC32 checksum of the next fork block number (or 0, if no known)
-type ID [8]byte
+// ID is a fork identifier as defined by EIP-2124.
+type ID struct {
+	Hash uint32 // CRC32 checksum of the genesis block and passed fork block numbers
+	Next uint64 // Block number of the next upcoming fork, or 0 if no forks are known
+}
 
 // NewID calculates the Ethereum fork ID from the chain config and head.
 func NewID(chain *core.BlockChain) ID {
@@ -64,24 +64,20 @@ func NewID(chain *core.BlockChain) ID {
 // having to simulate an entire blockchain.
 func newID(config *params.ChainConfig, genesis common.Hash, head uint64) ID {
 	// Calculate the starting checksum from the genesis hash
-	forkHash := crc32.ChecksumIEEE(genesis[:])
+	hash := crc32.ChecksumIEEE(genesis[:])
 
 	// Calculate the current fork checksum and the next fork block
-	var forkNext uint32
+	var next uint64
 	for _, fork := range gatherForks(config) {
 		if fork <= head {
 			// Fork already passed, checksum the previous hash and the fork number
-			forkHash = checksumUpdate(forkHash, fork)
+			hash = checksumUpdate(hash, fork)
 			continue
 		}
-		forkNext = checksum(fork)
+		next = fork
 		break
 	}
-	// Aggregate everything into a single binary blob
-	var entry ID
-	binary.BigEndian.PutUint32(entry[0:], forkHash)
-	binary.BigEndian.PutUint32(entry[4:], forkNext)
-	return entry
+	return ID{Hash: hash, Next: next}
 }
 
 // NewFilter creates an filter that returns if a fork ID should be rejected or not
@@ -104,17 +100,14 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() ui
 	var (
 		forks = gatherForks(config)
 		sums  = make([]uint32, len(forks)+1) // 0th is the genesis
-		next  = make([]uint32, len(forks))
 	)
 	sums[0] = crc32.ChecksumIEEE(genesis[:])
 	for i, fork := range forks {
 		sums[i+1] = checksumUpdate(sums[i], fork)
-		next[i] = checksum(fork)
 	}
 	// Add two sentries to simplify the fork checks and don't require special
 	// casing the last one.
 	forks = append(forks, math.MaxUint64) // Last fork will never be passed
-	next = append(next, 0)                // Last fork is all 0
 
 	// Create a validator that will filter out incompatible chains
 	return func(id ID) error {
@@ -134,11 +127,7 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() ui
 		//        the remote, but at this current point in time we don't have enough
 		//        information.
 		//   4. Reject in all other cases.
-		var (
-			head       = headfn()
-			remoteSum  = binary.BigEndian.Uint32(id[0:4])
-			remoteNext = binary.BigEndian.Uint32(id[4:8])
-		)
+		head := headfn()
 		for i, fork := range forks {
 			// If our head is beyond this fork, continue to the next (we have a dummy
 			// fork of maxuint64 as the last item to always fail this check eventually).
@@ -147,16 +136,16 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() ui
 			}
 			// Found the first unpassed fork block, check if our current state matches
 			// the remote checksum (rule #1).
-			if sums[i] == remoteSum {
+			if sums[i] == id.Hash {
 				// Yay, fork checksum matched, ignore any upcoming fork
 				return nil
 			}
 			// The local and remote nodes are in different forks currently, check if the
 			// remote checksum is a subset of our local forks (rule #2).
 			for j := 0; j < i; j++ {
-				if sums[j] == remoteSum {
+				if sums[j] == id.Hash {
 					// Remote checksum is a subset, validate based on the announced next fork
-					if next[j] != remoteNext {
+					if forks[j] != id.Next {
 						return ErrRemoteStale
 					}
 					return nil
@@ -165,7 +154,7 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() ui
 			// Remote chain is not a subset of our local one, check if it's a superset by
 			// any chance, signalling that we're simply out of sync (rule #3).
 			for j := i + 1; j < len(sums); j++ {
-				if sums[j] == remoteSum {
+				if sums[j] == id.Hash {
 					// Yay, remote checksum is a superset, ignore upcoming forks
 					return nil
 				}
@@ -173,7 +162,7 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() ui
 			// No exact, subset or superset match. We are on differing chains, reject.
 			return ErrLocalIncompatibleOrStale
 		}
-		log.Error("Impossible fork ID validation", "id", fmt.Sprintf("%x", id))
+		log.Error("Impossible fork ID validation", "id", id)
 		return nil // Something's very wrong, accept rather than reject
 	}
 }

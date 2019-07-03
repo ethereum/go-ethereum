@@ -20,15 +20,27 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// ENR is the "eth" Ethereum Node Record, holding the fork id as specified by
-// EIP-2124 (https://eips.ethereum.org/EIPS/eip-2124).
-type ENR forkid.ID
+// ENR is the "eth" Ethereum Node Record, advertising various information useful
+// for maintaining the Ethereum computer network.
+//
+// Whilst only one thing is contained here for now, the ENR is a struct to permit
+// future extensibility.
+type ENR struct {
+	ForkID forkid.ID // Fork identifier per EIP-2124
 
-// NewENR calculates the Ethereum network ENR from the fork ID.
+	// Ignore additional fields (for forward compatibility).
+	Rest []rlp.RawValue `rlp:"tail"`
+}
+
+// NewENR calculates the Ethereum network ENR from various information available
+// from the chain.
 func NewENR(chain *core.BlockChain) ENR {
-	return ENR(forkid.NewID(chain))
+	return ENR{
+		ForkID: forkid.NewID(chain),
+	}
 }
 
 // ENRKey implements enr.Entry, returning the key for the chain config.
@@ -46,6 +58,6 @@ func NewENRFilter(chain *core.BlockChain) func(r *enr.Record) error {
 			return nil
 		}
 		// If found, run it across the fork ID validator
-		return filter(forkid.ID(entry))
+		return filter(entry.ForkID)
 	}
 }
