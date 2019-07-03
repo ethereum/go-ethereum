@@ -538,6 +538,7 @@ public class {{.Type}} {
 		{{capitalise $name}} {{decapitalise $name}}Inst = {{capitalise $name}}.deploy(auth, client);
 		bytecode.replace("__${{$pattern}}$__", {{decapitalise $name}}Inst.Address);
 		{{end}}
+		{{end}}
 		{{range $index, $element := .Constructor.Inputs}}Interface arg{{$index}} = Geth.newInterface();arg{{$index}}.set{{namedtype (bindtype .Type $structs) .Type}}({{.Name}});args.set({{$index}},arg{{$index}});
 		{{end}}
 		return new {{.Type}}(Geth.deployContract(auth, ABI, Geth.decodeFromHex(bytecode), client, args));
