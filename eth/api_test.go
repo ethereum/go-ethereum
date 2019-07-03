@@ -102,6 +102,32 @@ func TestAccountRangeAt(t *testing.T) {
 	}
 }
 
+func TestEmptyAccountRangeAt(t *testing.T) {
+	var (
+		statedb  = state.NewDatabase(rawdb.NewMemoryDatabase())
+		state, _ = state.New(common.Hash{}, statedb)
+	)
+
+	state.Commit(true)
+	root := state.IntermediateRoot(true)
+
+	trie, err := statedb.OpenTrie(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	results, err := accountRange(trie, &common.Hash{0x0}, AccountRangeMaxResults)
+	if err != nil {
+		t.Fatalf("Empty results should not trigger an error: %v", err)
+	}
+	if results.Next != common.HexToHash("0") {
+		t.Fatalf("Empty results should not return a second page")
+	}
+	if len(results.Addresses) != 0 {
+		t.Fatalf("Empty state should not return addresses: %v", results.Addresses)
+	}
+}
+
 func TestStorageRangeAt(t *testing.T) {
 	// Create a state where account 0x010000... has a few storage entries.
 	var (
