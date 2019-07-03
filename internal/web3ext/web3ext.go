@@ -32,6 +32,7 @@ var Modules = map[string]string{
 	"shh":        ShhJs,
 	"swarmfs":    SwarmfsJs,
 	"txpool":     TxpoolJs,
+	"les":        LESJs,
 }
 
 const ChequebookJs = `
@@ -234,7 +235,7 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'testSignCliqueBlock',
 			call: 'debug_testSignCliqueBlock',
-			params: 2, 
+			params: 2,
 			inputFormatters: [web3._extend.formatters.inputAddressFormatter, null],
 		}),
 		new web3._extend.Method({
@@ -261,11 +262,6 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'chaindbCompact',
 			call: 'debug_chaindbCompact',
-		}),
-		new web3._extend.Method({
-			name: 'metrics',
-			call: 'debug_metrics',
-			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'verbosity',
@@ -618,6 +614,16 @@ web3._extend({
 			params: 2,
 			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, null]
 		}),
+		new web3._extend.Method({
+			name: 'unpair',
+			call: 'personal_unpair',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'initializeWallet',
+			call: 'personal_initializeWallet',
+			params: 1
+		})
 	],
 	properties: [
 		new web3._extend.Property({
@@ -751,6 +757,31 @@ web3._extend({
 		new web3._extend.Property({
 			name: 'selfDrops',
 			getter: 'account_selfDrops'
+		}),
+	]
+});
+`
+
+const LESJs = `
+web3._extend({
+	property: 'les',
+	methods: 
+	[
+		new web3._extend.Method({
+			name: 'getCheckpoint',
+			call: 'les_getCheckpoint',
+			params: 1
+		}),
+	],
+	properties: 
+	[
+		new web3._extend.Property({
+			name: 'latestCheckpoint',
+			getter: 'les_latestCheckpoint'
+		}),
+		new web3._extend.Property({
+			name: 'checkpointContractAddress',
+			getter: 'les_getCheckpointContractAddress'
 		}),
 	]
 });

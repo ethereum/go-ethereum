@@ -29,6 +29,7 @@ type tmplContract struct {
 	Type        string                 // Type name of the main contract binding
 	InputABI    string                 // JSON ABI used as the input to generate the binding from
 	InputBin    string                 // Optional EVM bytecode used to denetare deploy code from
+	FuncSigs    map[string]string      // Optional map: string signature -> 4-byte signature
 	Constructor abi.Method             // Contract constructor for deploy parametrization
 	Calls       map[string]*tmplMethod // Contract calls that only read state data
 	Transacts   map[string]*tmplMethod // Contract calls that write state data
@@ -91,6 +92,15 @@ var (
 {{range $contract := .Contracts}}
 	// {{.Type}}ABI is the input ABI used to generate the binding from.
 	const {{.Type}}ABI = "{{.InputABI}}"
+
+	{{if $contract.FuncSigs}}
+		// {{.Type}}FuncSigs maps the 4-byte function signature to its string representation.
+		var {{.Type}}FuncSigs = map[string]string{
+			{{range $strsig, $binsig := .FuncSigs}}
+				"{{$binsig}}": "{{$strsig}}",
+			{{end}}
+		}
+	{{end}}
 
 	{{if .InputBin}}
 		// {{.Type}}Bin is the compiled bytecode used for deploying new contracts.
@@ -439,6 +449,18 @@ var (
 				}
 			}), nil
 		}
+
+		// Parse{{.Normalized.Name}} is a log parse operation binding the contract event 0x{{printf "%x" .Original.Id}}.
+		//
+		// Solidity: {{.Original.String}}
+		func (_{{$contract.Type}} *{{$contract.Type}}Filterer) Parse{{.Normalized.Name}}(log types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
+			event := new({{$contract.Type}}{{.Normalized.Name}})
+			if err := _{{$contract.Type}}.contract.UnpackLog(event, "{{.Original.Name}}", log); err != nil {
+				return nil, err
+			}
+			return event, nil
+		}
+
  	{{end}}
 {{end}}
 `
@@ -452,95 +474,103 @@ const tmplSourceJava = `
 package {{.Package}};
 
 import org.ethereum.geth.*;
-import org.ethereum.geth.internal.*;
+import java.util.*;
 
 {{range $contract := .Contracts}}
-	public class {{.Type}} {
-		// ABI is the input ABI used to generate the binding from.
-		public final static String ABI = "{{.InputABI}}";
-
-		{{if .InputBin}}
-			// BYTECODE is the compiled bytecode used for deploying new contracts.
-			public final static byte[] BYTECODE = "{{.InputBin}}".getBytes();
-
-			// deploy deploys a new Ethereum contract, binding an instance of {{.Type}} to it.
-			public static {{.Type}} deploy(TransactOpts auth, EthereumClient client{{range .Constructor.Inputs}}, {{bindtype .Type}} {{.Name}}{{end}}) throws Exception {
-				Interfaces args = Geth.newInterfaces({{(len .Constructor.Inputs)}});
-				{{range $index, $element := .Constructor.Inputs}}
-				  args.set({{$index}}, Geth.newInterface()); args.get({{$index}}).set{{namedtype (bindtype .Type) .Type}}({{.Name}});
-				{{end}}
-				return new {{.Type}}(Geth.deployContract(auth, ABI, BYTECODE, client, args));
-			}
-
-			// Internal constructor used by contract deployment.
-			private {{.Type}}(BoundContract deployment) {
-				this.Address  = deployment.getAddress();
-				this.Deployer = deployment.getDeployer();
-				this.Contract = deployment;
-			}
-		{{end}}
-
-		// Ethereum address where this contract is located at.
-		public final Address Address;
-
-		// Ethereum transaction in which this contract was deployed (if known!).
-		public final Transaction Deployer;
-
-		// Contract instance bound to a blockchain address.
-		private final BoundContract Contract;
-
-		// Creates a new instance of {{.Type}}, bound to a specific deployed contract.
-		public {{.Type}}(Address address, EthereumClient client) throws Exception {
-			this(Geth.bindContract(address, ABI, client));
-		}
-
-		{{range .Calls}}
-			{{if gt (len .Normalized.Outputs) 1}}
-			// {{capitalise .Normalized.Name}}Results is the output of a call to {{.Normalized.Name}}.
-			public class {{capitalise .Normalized.Name}}Results {
-				{{range $index, $item := .Normalized.Outputs}}public {{bindtype .Type}} {{if ne .Name ""}}{{.Name}}{{else}}Return{{$index}}{{end}};
-				{{end}}
-			}
+public class {{.Type}} {
+	// ABI is the input ABI used to generate the binding from.
+	public final static String ABI = "{{.InputABI}}";
+	{{if $contract.FuncSigs}}
+		// {{.Type}}FuncSigs maps the 4-byte function signature to its string representation.
+		public final static Map<String, String> {{.Type}}FuncSigs;
+		static {
+			Hashtable<String, String> temp = new Hashtable<String, String>();
+			{{range $strsig, $binsig := .FuncSigs}}
+				temp.put("{{$binsig}}", "{{$strsig}}");
 			{{end}}
+			{{.Type}}FuncSigs = Collections.unmodifiableMap(temp);
+		}
+	{{end}}
+	{{if .InputBin}}
+	// BYTECODE is the compiled bytecode used for deploying new contracts.
+	public final static String BYTECODE = "0x{{.InputBin}}";
 
-			// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.Id}}.
-			//
-			// Solidity: {{.Original.String}}
-			public {{if gt (len .Normalized.Outputs) 1}}{{capitalise .Normalized.Name}}Results{{else}}{{range .Normalized.Outputs}}{{bindtype .Type}}{{end}}{{end}} {{.Normalized.Name}}(CallOpts opts{{range .Normalized.Inputs}}, {{bindtype .Type}} {{.Name}}{{end}}) throws Exception {
-				Interfaces args = Geth.newInterfaces({{(len .Normalized.Inputs)}});
-				{{range $index, $item := .Normalized.Inputs}}args.set({{$index}}, Geth.newInterface()); args.get({{$index}}).set{{namedtype (bindtype .Type) .Type}}({{.Name}});
-				{{end}}
-
-				Interfaces results = Geth.newInterfaces({{(len .Normalized.Outputs)}});
-				{{range $index, $item := .Normalized.Outputs}}Interface result{{$index}} = Geth.newInterface(); result{{$index}}.setDefault{{namedtype (bindtype .Type) .Type}}(); results.set({{$index}}, result{{$index}});
-				{{end}}
-
-				if (opts == null) {
-					opts = Geth.newCallOpts();
-				}
-				this.Contract.call(opts, results, "{{.Original.Name}}", args);
-				{{if gt (len .Normalized.Outputs) 1}}
-					{{capitalise .Normalized.Name}}Results result = new {{capitalise .Normalized.Name}}Results();
-					{{range $index, $item := .Normalized.Outputs}}result.{{if ne .Name ""}}{{.Name}}{{else}}Return{{$index}}{{end}} = results.get({{$index}}).get{{namedtype (bindtype .Type) .Type}}();
-					{{end}}
-					return result;
-				{{else}}{{range .Normalized.Outputs}}return results.get(0).get{{namedtype (bindtype .Type) .Type}}();{{end}}
-				{{end}}
-			}
+	// deploy deploys a new Ethereum contract, binding an instance of {{.Type}} to it.
+	public static {{.Type}} deploy(TransactOpts auth, EthereumClient client{{range .Constructor.Inputs}}, {{bindtype .Type}} {{.Name}}{{end}}) throws Exception {
+		Interfaces args = Geth.newInterfaces({{(len .Constructor.Inputs)}});
+		{{range $index, $element := .Constructor.Inputs}}Interface arg{{$index}} = Geth.newInterface();arg{{$index}}.set{{namedtype (bindtype .Type) .Type}}({{.Name}});args.set({{$index}},arg{{$index}});
 		{{end}}
+		return new {{.Type}}(Geth.deployContract(auth, ABI, Geth.decodeFromHex(BYTECODE), client, args));
+	}
 
-		{{range .Transacts}}
-			// {{.Normalized.Name}} is a paid mutator transaction binding the contract method 0x{{printf "%x" .Original.Id}}.
-			//
-			// Solidity: {{.Original.String}}
-			public Transaction {{.Normalized.Name}}(TransactOpts opts{{range .Normalized.Inputs}}, {{bindtype .Type}} {{.Name}}{{end}}) throws Exception {
-				Interfaces args = Geth.newInterfaces({{(len .Normalized.Inputs)}});
-				{{range $index, $item := .Normalized.Inputs}}args.set({{$index}}, Geth.newInterface()); args.get({{$index}}).set{{namedtype (bindtype .Type) .Type}}({{.Name}});
-				{{end}}
+	// Internal constructor used by contract deployment.
+	private {{.Type}}(BoundContract deployment) {
+		this.Address  = deployment.getAddress();
+		this.Deployer = deployment.getDeployer();
+		this.Contract = deployment;
+	}
+	{{end}}
 
-				return this.Contract.transact(opts, "{{.Original.Name}}"	, args);
-			}
+	// Ethereum address where this contract is located at.
+	public final Address Address;
+
+	// Ethereum transaction in which this contract was deployed (if known!).
+	public final Transaction Deployer;
+
+	// Contract instance bound to a blockchain address.
+	private final BoundContract Contract;
+
+	// Creates a new instance of {{.Type}}, bound to a specific deployed contract.
+	public {{.Type}}(Address address, EthereumClient client) throws Exception {
+		this(Geth.bindContract(address, ABI, client));
+	}
+
+	{{range .Calls}}
+	{{if gt (len .Normalized.Outputs) 1}}
+	// {{capitalise .Normalized.Name}}Results is the output of a call to {{.Normalized.Name}}.
+	public class {{capitalise .Normalized.Name}}Results {
+		{{range $index, $item := .Normalized.Outputs}}public {{bindtype .Type}} {{if ne .Name ""}}{{.Name}}{{else}}Return{{$index}}{{end}};
 		{{end}}
 	}
+	{{end}}
+
+	// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.Id}}.
+	//
+	// Solidity: {{.Original.String}}
+	public {{if gt (len .Normalized.Outputs) 1}}{{capitalise .Normalized.Name}}Results{{else}}{{range .Normalized.Outputs}}{{bindtype .Type}}{{end}}{{end}} {{.Normalized.Name}}(CallOpts opts{{range .Normalized.Inputs}}, {{bindtype .Type}} {{.Name}}{{end}}) throws Exception {
+		Interfaces args = Geth.newInterfaces({{(len .Normalized.Inputs)}});
+		{{range $index, $item := .Normalized.Inputs}}Interface arg{{$index}} = Geth.newInterface();arg{{$index}}.set{{namedtype (bindtype .Type) .Type}}({{.Name}});args.set({{$index}},arg{{$index}});
+		{{end}}
+
+		Interfaces results = Geth.newInterfaces({{(len .Normalized.Outputs)}});
+		{{range $index, $item := .Normalized.Outputs}}Interface result{{$index}} = Geth.newInterface(); result{{$index}}.setDefault{{namedtype (bindtype .Type) .Type}}(); results.set({{$index}}, result{{$index}});
+		{{end}}
+
+		if (opts == null) {
+			opts = Geth.newCallOpts();
+		}
+		this.Contract.call(opts, results, "{{.Original.Name}}", args);
+		{{if gt (len .Normalized.Outputs) 1}}
+			{{capitalise .Normalized.Name}}Results result = new {{capitalise .Normalized.Name}}Results();
+			{{range $index, $item := .Normalized.Outputs}}result.{{if ne .Name ""}}{{.Name}}{{else}}Return{{$index}}{{end}} = results.get({{$index}}).get{{namedtype (bindtype .Type) .Type}}();
+			{{end}}
+			return result;
+		{{else}}{{range .Normalized.Outputs}}return results.get(0).get{{namedtype (bindtype .Type) .Type}}();{{end}}
+		{{end}}
+	}
+	{{end}}
+
+	{{range .Transacts}}
+	// {{.Normalized.Name}} is a paid mutator transaction binding the contract method 0x{{printf "%x" .Original.Id}}.
+	//
+	// Solidity: {{.Original.String}}
+	public Transaction {{.Normalized.Name}}(TransactOpts opts{{range .Normalized.Inputs}}, {{bindtype .Type}} {{.Name}}{{end}}) throws Exception {
+		Interfaces args = Geth.newInterfaces({{(len .Normalized.Inputs)}});
+		{{range $index, $item := .Normalized.Inputs}}Interface arg{{$index}} = Geth.newInterface();arg{{$index}}.set{{namedtype (bindtype .Type) .Type}}({{.Name}});args.set({{$index}},arg{{$index}});
+		{{end}}
+		return this.Contract.transact(opts, "{{.Original.Name}}"	, args);
+	}
+	{{end}}
+}
 {{end}}
 `

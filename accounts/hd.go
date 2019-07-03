@@ -17,6 +17,7 @@
 package accounts
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -34,10 +35,10 @@ var DefaultRootDerivationPath = DerivationPath{0x80000000 + 44, 0x80000000 + 60,
 // at m/44'/60'/0'/0/1, etc.
 var DefaultBaseDerivationPath = DerivationPath{0x80000000 + 44, 0x80000000 + 60, 0x80000000 + 0, 0, 0}
 
-// DefaultLedgerBaseDerivationPath is the base path from which custom derivation endpoints
-// are incremented. As such, the first account will be at m/44'/60'/0'/0, the second
-// at m/44'/60'/0'/1, etc.
-var DefaultLedgerBaseDerivationPath = DerivationPath{0x80000000 + 44, 0x80000000 + 60, 0x80000000 + 0, 0}
+// LegacyLedgerBaseDerivationPath is the legacy base path from which custom derivation
+// endpoints are incremented. As such, the first account will be at m/44'/60'/0'/0, the
+// second at m/44'/60'/0'/1, etc.
+var LegacyLedgerBaseDerivationPath = DerivationPath{0x80000000 + 44, 0x80000000 + 60, 0x80000000 + 0, 0}
 
 // DerivationPath represents the computer friendly version of a hierarchical
 // deterministic wallet account derivaion path.
@@ -132,4 +133,20 @@ func (path DerivationPath) String() string {
 		}
 	}
 	return result
+}
+
+// MarshalJSON turns a derivation path into its json-serialized string
+func (path DerivationPath) MarshalJSON() ([]byte, error) {
+	return json.Marshal(path.String())
+}
+
+// UnmarshalJSON a json-serialized string back into a derivation path
+func (path *DerivationPath) UnmarshalJSON(b []byte) error {
+	var dp string
+	var err error
+	if err = json.Unmarshal(b, &dp); err != nil {
+		return err
+	}
+	*path, err = ParseDerivationPath(dp)
+	return err
 }

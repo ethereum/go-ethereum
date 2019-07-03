@@ -4,36 +4,24 @@ sudo: false
 matrix:
   include:
     - os: linux
-      dist: trusty
-      sudo: required
+      dist: xenial
       go: 1.10.x
       script:
-      - sudo modprobe fuse
-      - sudo chmod 666 /dev/fuse
-      - sudo chown root:$USER /etc/fuse.conf
       - go run build/ci.go install
       - go run build/ci.go test -coverage $TEST_PACKAGES
 
     - os: linux
-      dist: trusty
-      sudo: required
+      dist: xenial
       go: 1.11.x
       script:
-        - sudo modprobe fuse
-        - sudo chmod 666 /dev/fuse
-        - sudo chown root:$USER /etc/fuse.conf
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
     # These are the latest Go versions.
     - os: linux
-      dist: trusty
-      sudo: required
+      dist: xenial
       go: 1.12.x
       script:
-        - sudo modprobe fuse
-        - sudo chmod 666 /dev/fuse
-        - sudo chown root:$USER /etc/fuse.conf
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
@@ -54,7 +42,7 @@ matrix:
 
     # This builder only tests code linters on latest version of Go
     - os: linux
-      dist: trusty
+      dist: xenial
       go: 1.12.x
       env:
         - lint
@@ -64,9 +52,9 @@ matrix:
         - go run build/ci.go lint
 
     # This builder does the Ubuntu PPA upload
-    - if: repo = ethereum/go-ethereum AND type = push
+    - if: type = push
       os: linux
-      dist: trusty
+      dist: xenial
       go: 1.12.x
       env:
         - ubuntu-ppa
@@ -86,9 +74,9 @@ matrix:
         - go run build/ci.go debsrc -upload ethereum/ethereum -sftp-user geth-ci -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
 
     # This builder does the Linux Azure uploads
-    - if: repo = ethereum/go-ethereum AND type = push
+    - if: type = push
       os: linux
-      dist: trusty
+      dist: xenial
       sudo: required
       go: 1.12.x
       env:
@@ -120,9 +108,9 @@ matrix:
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Linux Azure MIPS xgo uploads
-    - if: repo = ethereum/go-ethereum AND type = push
+    - if: type = push
       os: linux
-      dist: trusty
+      dist: xenial
       services:
         - docker
       go: 1.12.x
@@ -148,9 +136,9 @@ matrix:
         - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Android Maven and Azure uploads
-    - if: repo = ethereum/go-ethereum AND type = push
+    - if: type = push
       os: linux
-      dist: trusty
+      dist: xenial
       addons:
         apt:
           packages:
@@ -185,7 +173,7 @@ matrix:
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
-    - if: repo = ethereum/go-ethereum AND type = push
+    - if: type = push
       os: osx
       go: 1.12.x
       env:
@@ -214,9 +202,9 @@ matrix:
         - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
 
     # This builder does the Azure archive purges to avoid accumulating junk
-    - if: repo = ethereum/go-ethereum AND type = cron
+    - if: type = cron
       os: linux
-      dist: trusty
+      dist: xenial
       go: 1.12.x
       env:
         - azure-purge
@@ -224,12 +212,3 @@ matrix:
         submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go purge -store gethstore/builds -days 14
-
-    - name: Race Detector for Swarm
-      if: repo = ethersphere/go-ethereum
-      os: linux
-      dist: trusty
-      go: 1.12.x
-      git:
-        submodules: false # avoid cloning ethereum/tests
-      script: ./build/travis_keepalive.sh go test -v -timeout 20m -race ./swarm...

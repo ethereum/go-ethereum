@@ -41,13 +41,13 @@ const (
 	INFO = "Info"
 )
 
-func (vs *ValidationMessages) crit(msg string) {
+func (vs *ValidationMessages) Crit(msg string) {
 	vs.Messages = append(vs.Messages, ValidationInfo{CRIT, msg})
 }
-func (vs *ValidationMessages) warn(msg string) {
+func (vs *ValidationMessages) Warn(msg string) {
 	vs.Messages = append(vs.Messages, ValidationInfo{WARN, msg})
 }
-func (vs *ValidationMessages) info(msg string) {
+func (vs *ValidationMessages) Info(msg string) {
 	vs.Messages = append(vs.Messages, ValidationInfo{INFO, msg})
 }
 

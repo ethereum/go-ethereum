@@ -270,7 +270,7 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 		start := time.Now()
 		if !noverify {
 			if err := ethash.verifySeal(nil, header, true); err != nil {
-				log.Warn("Invalid proof-of-work submitted", "sealhash", sealhash, "elapsed", time.Since(start), "err", err)
+				log.Warn("Invalid proof-of-work submitted", "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(start)), "err", err)
 				return false
 			}
 		}
@@ -279,7 +279,7 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 			log.Warn("Ethash result channel is empty, submitted mining result is rejected")
 			return false
 		}
-		log.Trace("Verified correct proof-of-work", "sealhash", sealhash, "elapsed", time.Since(start))
+		log.Trace("Verified correct proof-of-work", "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(start)))
 
 		// Solutions seems to be valid, return to the miner and notify acceptance.
 		solution := block.WithSeal(header)

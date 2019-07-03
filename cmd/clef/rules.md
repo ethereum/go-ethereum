@@ -19,32 +19,30 @@ The section below deals with both of them
 A ruleset file is implemented as a `js` file. Under the hood, the ruleset-engine is a `SignerUI`, implementing the same methods as the `json-rpc` methods
 defined in the UI protocol. Example:
 
-```javascript
-
-function asBig(str){
-    if(str.slice(0,2) == "0x"){ return new BigNumber(str.slice(2),16)}
-    return new BigNumber(str)
+```js
+function asBig(str) {
+	if (str.slice(0, 2) == "0x") {
+		return new BigNumber(str.slice(2), 16)
+	}
+	return new BigNumber(str)
 }
 
 // Approve transactions to a certain contract if value is below a certain limit
-function ApproveTx(req){
-
-    var limit = big.Newint("0xb1a2bc2ec50000")
+function ApproveTx(req) {
+	var limit = big.Newint("0xb1a2bc2ec50000")
 	var value = asBig(req.transaction.value);
 
-	if(req.transaction.to.toLowerCase()=="0xae967917c465db8578ca9024c205720b1a3651a9")
-	    && value.lt(limit) ){
-	    return "Approve"
-	 }
-    // If we return "Reject", it will be rejected.
-    // By not returning anything, it will be passed to the next UI, for manual processing
+	if (req.transaction.to.toLowerCase() == "0xae967917c465db8578ca9024c205720b1a3651a9") && value.lt(limit)) {
+		return "Approve"
+	}
+	// If we return "Reject", it will be rejected.
+	// By not returning anything, it will be passed to the next UI, for manual processing
 }
 
-//Approve listings if request made from IPC
+// Approve listings if request made from IPC
 function ApproveListing(req){
     if (req.metadata.scheme == "ipc"){ return "Approve"}
 }
-
 ```
 
 Whenever the external API is called (and the ruleset is enabled), the `signer` calls the UI, which is an instance of a ruleset-engine. The ruleset-engine
@@ -140,97 +138,97 @@ This is now implemented (with ephemeral non-encrypted storage for now, so not ye
 ## Example 1: ruleset for a rate-limited window
 
 
-```javascript
-
-	function big(str){
-		if(str.slice(0,2) == "0x"){ return new BigNumber(str.slice(2),16)}
-		return new BigNumber(str)
+```js
+function big(str) {
+	if (str.slice(0, 2) == "0x") {
+		return new BigNumber(str.slice(2), 16)
 	}
+	return new BigNumber(str)
+}
 
-	// Time window: 1 week
-	var window = 1000* 3600*24*7;
+// Time window: 1 week
+var window = 1000* 3600*24*7;
 
-	// Limit : 1 ether
-	var limit = new BigNumber("1e18");
+// Limit : 1 ether
+var limit = new BigNumber("1e18");
 
-	function isLimitOk(transaction){
-		var value = big(transaction.value)
-		// Start of our window function
-		var windowstart = new Date().getTime() - window;
+function isLimitOk(transaction) {
+	var value = big(transaction.value)
+	// Start of our window function
+	var windowstart = new Date().getTime() - window;
 
-		var txs = [];
-		var stored = storage.Get('txs');
+	var txs = [];
+	var stored = storage.get('txs');
 
-		if(stored != ""){
-			txs = JSON.parse(stored)
-		}
-		// First, remove all that have passed out of the time-window
-		var newtxs = txs.filter(function(tx){return tx.tstamp > windowstart});
-		console.log(txs, newtxs.length);
-
-		// Secondly, aggregate the current sum
-		sum = new BigNumber(0)
-
-		sum = newtxs.reduce(function(agg, tx){ return big(tx.value).plus(agg)}, sum);
-		console.log("ApproveTx > Sum so far", sum);
-		console.log("ApproveTx > Requested", value.toNumber());
-
-		// Would we exceed weekly limit ?
-		return sum.plus(value).lt(limit)
-
+	if (stored != "") {
+		txs = JSON.parse(stored)
 	}
-	function ApproveTx(r){
-		if (isLimitOk(r.transaction)){
-			return "Approve"
-		}
-		return "Nope"
-	}
+	// First, remove all that have passed out of the time-window
+	var newtxs = txs.filter(function(tx){return tx.tstamp > windowstart});
+	console.log(txs, newtxs.length);
 
-	/**
-	* OnApprovedTx(str) is called when a transaction has been approved and signed. The parameter
- 	* 'response_str' contains the return value that will be sent to the external caller.
-	* The return value from this method is ignore - the reason for having this callback is to allow the
-	* ruleset to keep track of approved transactions.
-	*
-	* When implementing rate-limited rules, this callback should be used.
-	* If a rule responds with neither 'Approve' nor 'Reject' - the tx goes to manual processing. If the user
-	* then accepts the transaction, this method will be called.
-	*
-	* TLDR; Use this method to keep track of signed transactions, instead of using the data in ApproveTx.
-	*/
- 	function OnApprovedTx(resp){
-		var value = big(resp.tx.value)
-		var txs = []
-		// Load stored transactions
-		var stored = storage.Get('txs');
-		if(stored != ""){
-			txs = JSON.parse(stored)
-		}
-		// Add this to the storage
-		txs.push({tstamp: new Date().getTime(), value: value});
-		storage.Put("txs", JSON.stringify(txs));
-	}
+	// Secondly, aggregate the current sum
+	sum = new BigNumber(0)
 
+	sum = newtxs.reduce(function(agg, tx){ return big(tx.value).plus(agg)}, sum);
+	console.log("ApproveTx > Sum so far", sum);
+	console.log("ApproveTx > Requested", value.toNumber());
+
+	// Would we exceed weekly limit ?
+	return sum.plus(value).lt(limit)
+
+}
+function ApproveTx(r) {
+	if (isLimitOk(r.transaction)) {
+		return "Approve"
+	}
+	return "Nope"
+}
+
+/**
+* OnApprovedTx(str) is called when a transaction has been approved and signed. The parameter
+	* 'response_str' contains the return value that will be sent to the external caller.
+* The return value from this method is ignore - the reason for having this callback is to allow the
+* ruleset to keep track of approved transactions.
+*
+* When implementing rate-limited rules, this callback should be used.
+* If a rule responds with neither 'Approve' nor 'Reject' - the tx goes to manual processing. If the user
+* then accepts the transaction, this method will be called.
+*
+* TLDR; Use this method to keep track of signed transactions, instead of using the data in ApproveTx.
+*/
+function OnApprovedTx(resp) {
+	var value = big(resp.tx.value)
+	var txs = []
+	// Load stored transactions
+	var stored = storage.get('txs');
+	if (stored != "") {
+		txs = JSON.parse(stored)
+	}
+	// Add this to the storage
+	txs.push({tstamp: new Date().getTime(), value: value});
+	storage.put("txs", JSON.stringify(txs));
+}
 ```
 
 ## Example 2: allow destination
 
-```javascript
-
-	function ApproveTx(r){
-		if(r.transaction.from.toLowerCase()=="0x0000000000000000000000000000000000001337"){ return "Approve"}
-		if(r.transaction.from.toLowerCase()=="0x000000000000000000000000000000000000dead"){ return "Reject"}
-		// Otherwise goes to manual processing
+```js
+function ApproveTx(r) {
+	if (r.transaction.from.toLowerCase() == "0x0000000000000000000000000000000000001337") {
+		return "Approve"
 	}
-
+	if (r.transaction.from.toLowerCase() == "0x000000000000000000000000000000000000dead") {
+		return "Reject"
+	}
+	// Otherwise goes to manual processing
+}
 ```
 
 ## Example 3: Allow listing
 
-```javascript
-
-    function ApproveListing(){
-        return "Approve"
-    }
-
+```js
+function ApproveListing() {
+	return "Approve"
+}
 ```

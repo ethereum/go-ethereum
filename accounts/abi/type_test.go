@@ -95,8 +95,14 @@ func TestTypeRegexp(t *testing.T) {
 		// {"fixed[2]", nil, Type{}},
 		// {"fixed128x128[]", nil, Type{}},
 		// {"fixed128x128[2]", nil, Type{}},
-		{"tuple", []ArgumentMarshaling{{Name: "a", Type: "int64"}}, Type{Kind: reflect.Struct, T: TupleTy, Type: reflect.TypeOf(struct{ A int64 }{}), stringKind: "(int64)",
+		{"tuple", []ArgumentMarshaling{{Name: "a", Type: "int64"}}, Type{Kind: reflect.Struct, T: TupleTy, Type: reflect.TypeOf(struct {
+			A int64 `json:"a"`
+		}{}), stringKind: "(int64)",
 			TupleElems: []*Type{{Kind: reflect.Int64, T: IntTy, Type: reflect.TypeOf(int64(0)), Size: 64, stringKind: "int64"}}, TupleRawNames: []string{"a"}}},
+		{"tuple with long name", []ArgumentMarshaling{{Name: "aTypicalParamName", Type: "int64"}}, Type{Kind: reflect.Struct, T: TupleTy, Type: reflect.TypeOf(struct {
+			ATypicalParamName int64 `json:"aTypicalParamName"`
+		}{}), stringKind: "(int64)",
+			TupleElems: []*Type{{Kind: reflect.Int64, T: IntTy, Type: reflect.TypeOf(int64(0)), Size: 64, stringKind: "int64"}}, TupleRawNames: []string{"aTypicalParamName"}}},
 	}
 
 	for _, tt := range tests {

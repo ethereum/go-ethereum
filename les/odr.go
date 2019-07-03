@@ -84,10 +84,9 @@ const (
 	MsgBlockBodies = iota
 	MsgCode
 	MsgReceipts
-	MsgProofsV1
 	MsgProofsV2
-	MsgHeaderProofs
 	MsgHelperTrieProofs
+	MsgTxStatus
 )
 
 // Msg encodes a LES message that delivers reply data for a request

@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/les/csvlogger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -52,6 +53,8 @@ type freeClientPool struct {
 
 	connectedLimit, totalLimit int
 	freeClientCap              uint64
+	logger                     *csvlogger.Logger
+	logTotalFreeConn           *csvlogger.Channel
 
 	addressMap            map[string]*freeClientPoolEntry
 	connPool, disconnPool *prque.Prque
@@ -66,16 +69,18 @@ const (
 )
 
 // newFreeClientPool creates a new free client pool
-func newFreeClientPool(db ethdb.Database, freeClientCap uint64, totalLimit int, clock mclock.Clock, removePeer func(string)) *freeClientPool {
+func newFreeClientPool(db ethdb.Database, freeClientCap uint64, totalLimit int, clock mclock.Clock, removePeer func(string), metricsLogger, eventLogger *csvlogger.Logger) *freeClientPool {
 	pool := &freeClientPool{
-		db:            db,
-		clock:         clock,
-		addressMap:    make(map[string]*freeClientPoolEntry),
-		connPool:      prque.New(poolSetIndex),
-		disconnPool:   prque.New(poolSetIndex),
-		freeClientCap: freeClientCap,
-		totalLimit:    totalLimit,
-		removePeer:    removePeer,
+		db:               db,
+		clock:            clock,
+		addressMap:       make(map[string]*freeClientPoolEntry),
+		connPool:         prque.New(poolSetIndex),
+		disconnPool:      prque.New(poolSetIndex),
+		freeClientCap:    freeClientCap,
+		totalLimit:       totalLimit,
+		logger:           eventLogger,
+		logTotalFreeConn: metricsLogger.NewChannel("totalFreeConn", 0),
+		removePeer:       removePeer,
 	}
 	pool.loadFromDb()
 	return pool
@@ -88,10 +93,25 @@ func (f *freeClientPool) stop() {
 	f.lock.Unlock()
 }
 
+// freeClientId returns a string identifier for the peer. Multiple peers with the
+// same identifier can not be in the free client pool simultaneously.
+func freeClientId(p *peer) string {
+	if addr, ok := p.RemoteAddr().(*net.TCPAddr); ok {
+		if addr.IP.IsLoopback() {
+			// using peer id instead of loopback ip address allows multiple free
+			// connections from local machine to own server
+			return p.id
+		} else {
+			return addr.IP.String()
+		}
+	}
+	return ""
+}
+
 // registerPeer implements clientPool
 func (f *freeClientPool) registerPeer(p *peer) {
-	if addr, ok := p.RemoteAddr().(*net.TCPAddr); ok {
-		if !f.connect(addr.IP.String(), p.id) {
+	if freeId := freeClientId(p); freeId != "" {
+		if !f.connect(freeId, p.id) {
 			f.removePeer(p.id)
 		}
 	}
@@ -107,7 +127,9 @@ func (f *freeClientPool) connect(address, id string) bool {
 		return false
 	}
 
+	f.logger.Event("freeClientPool: connecting from " + address + ", " + id)
 	if f.connectedLimit == 0 {
+		f.logger.Event("freeClientPool: rejected, " + id)
 		log.Debug("Client rejected", "address", address)
 		return false
 	}
@@ -119,6 +141,7 @@ func (f *freeClientPool) connect(address, id string) bool {
 		f.addressMap[address] = e
 	} else {
 		if e.connected {
+			f.logger.Event("freeClientPool: already connected, " + id)
 			log.Debug("Client already connected", "address", address)
 			return false
 		}
@@ -131,9 +154,11 @@ func (f *freeClientPool) connect(address, id string) bool {
 		if e.linUsage+int64(connectedBias)-i.linUsage < 0 {
 			// kick it out and accept the new client
 			f.dropClient(i, now)
+			f.logger.Event("freeClientPool: kicked out, " + i.id)
 		} else {
 			// keep the old client and reject the new one
 			f.connPool.Push(i, i.linUsage)
+			f.logger.Event("freeClientPool: rejected, " + id)
 			log.Debug("Client rejected", "address", address)
 			return false
 		}
@@ -142,17 +167,19 @@ func (f *freeClientPool) connect(address, id string) bool {
 	e.connected = true
 	e.id = id
 	f.connPool.Push(e, e.linUsage)
+	f.logTotalFreeConn.Update(float64(uint64(f.connPool.Size()) * f.freeClientCap))
 	if f.connPool.Size()+f.disconnPool.Size() > f.totalLimit {
 		f.disconnPool.Pop()
 	}
+	f.logger.Event("freeClientPool: accepted, " + id)
 	log.Debug("Client accepted", "address", address)
 	return true
 }
 
 // unregisterPeer implements clientPool
 func (f *freeClientPool) unregisterPeer(p *peer) {
-	if addr, ok := p.RemoteAddr().(*net.TCPAddr); ok {
-		f.disconnect(addr.IP.String())
+	if freeId := freeClientId(p); freeId != "" {
+		f.disconnect(freeId)
 	}
 }
 
@@ -166,7 +193,11 @@ func (f *freeClientPool) disconnect(address string) {
 	if f.closed {
 		return
 	}
+	// Short circuit if the peer hasn't been registered.
 	e := f.addressMap[address]
+	if e == nil {
+		return
+	}
 	now := f.clock.Now()
 	if !e.connected {
 		log.Debug("Client already disconnected", "address", address)
@@ -174,9 +205,11 @@ func (f *freeClientPool) disconnect(address string) {
 	}
 
 	f.connPool.Remove(e.index)
+	f.logTotalFreeConn.Update(float64(uint64(f.connPool.Size()) * f.freeClientCap))
 	f.calcLogUsage(e, now)
 	e.connected = false
 	f.disconnPool.Push(e, -e.logUsage)
+	f.logger.Event("freeClientPool: disconnected, " + e.id)
 	log.Debug("Client disconnected", "address", address)
 }
 
@@ -194,6 +227,7 @@ func (f *freeClientPool) setLimits(count int, totalCap uint64) {
 	for f.connPool.Size() > f.connectedLimit {
 		i := f.connPool.PopItem().(*freeClientPoolEntry)
 		f.dropClient(i, now)
+		f.logger.Event("freeClientPool: setLimits kicked out, " + i.id)
 	}
 }
 
@@ -201,6 +235,7 @@ func (f *freeClientPool) setLimits(count int, totalCap uint64) {
 // disconnected pool
 func (f *freeClientPool) dropClient(i *freeClientPoolEntry, now mclock.AbsTime) {
 	f.connPool.Remove(i.index)
+	f.logTotalFreeConn.Update(float64(uint64(f.connPool.Size()) * f.freeClientCap))
 	f.calcLogUsage(i, now)
 	i.connected = false
 	f.disconnPool.Push(i, -i.logUsage)
