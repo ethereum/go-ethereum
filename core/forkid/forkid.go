@@ -46,8 +46,8 @@ var (
 
 // ID is a fork identifier as defined by EIP-2124.
 type ID struct {
-	Hash uint32 // CRC32 checksum of the genesis block and passed fork block numbers
-	Next uint64 // Block number of the next upcoming fork, or 0 if no forks are known
+	Hash [4]byte // CRC32 checksum of the genesis block and passed fork block numbers
+	Next uint64  // Block number of the next upcoming fork, or 0 if no forks are known
 }
 
 // NewID calculates the Ethereum fork ID from the chain config and head.
@@ -77,7 +77,7 @@ func newID(config *params.ChainConfig, genesis common.Hash, head uint64) ID {
 		next = fork
 		break
 	}
-	return ID{Hash: hash, Next: next}
+	return ID{Hash: checksumToBytes(hash), Next: next}
 }
 
 // NewFilter creates an filter that returns if a fork ID should be rejected or not
@@ -99,11 +99,13 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() ui
 	// Calculate the all the valid fork hash and fork next combos
 	var (
 		forks = gatherForks(config)
-		sums  = make([]uint32, len(forks)+1) // 0th is the genesis
+		sums  = make([][4]byte, len(forks)+1) // 0th is the genesis
 	)
-	sums[0] = crc32.ChecksumIEEE(genesis[:])
+	hash := crc32.ChecksumIEEE(genesis[:])
+	sums[0] = checksumToBytes(hash)
 	for i, fork := range forks {
-		sums[i+1] = checksumUpdate(sums[i], fork)
+		hash = checksumUpdate(hash, fork)
+		sums[i+1] = checksumToBytes(hash)
 	}
 	// Add two sentries to simplify the fork checks and don't require special
 	// casing the last one.
@@ -180,6 +182,13 @@ func checksumUpdate(hash uint32, fork uint64) uint32 {
 	var blob [8]byte
 	binary.BigEndian.PutUint64(blob[:], fork)
 	return crc32.Update(hash, crc32.IEEETable, blob[:])
+}
+
+// checksumToBytes converts a uint32 checksum into a [4]byte array.
+func checksumToBytes(hash uint32) [4]byte {
+	var blob [4]byte
+	binary.BigEndian.PutUint32(blob[:], hash)
+	return blob
 }
 
 // gatherForks gathers all the known forks and creates a sorted list out of them.
