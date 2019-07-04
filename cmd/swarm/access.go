@@ -106,7 +106,7 @@ func accessNewPass(ctx *cli.Context) {
 		accessKey []byte
 		err       error
 		ref       = args[0]
-		password  = getPassPhrase("", 0, makePasswordList(ctx))
+		password  = getPassPhrase("", false, 0, makePasswordList(ctx))
 		dryRun    = ctx.Bool(SwarmDryRunFlag.Name)
 	)
 	accessKey, ae, err = api.DoPassword(ctx, password, salt)

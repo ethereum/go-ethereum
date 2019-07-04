@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -28,6 +29,8 @@ import (
 
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm"
 	"github.com/ethersphere/swarm/api"
@@ -48,6 +51,7 @@ func TestConfigFailsSwapEnabledNoSwapApi(t *testing.T) {
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), "54545",
+		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
 		fmt.Sprintf("--%s", SwarmSwapEnabledFlag.Name),
 	}
 
@@ -56,15 +60,161 @@ func TestConfigFailsSwapEnabledNoSwapApi(t *testing.T) {
 	swarm.ExpectExit()
 }
 
-func TestConfigFailsNoBzzAccount(t *testing.T) {
-	flags := []string{
-		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
-		fmt.Sprintf("--%s", SwarmPortFlag.Name), "54545",
+func TestBzzKeyFlag(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal("unable to generate key")
+	}
+	hexKey := hex.EncodeToString(crypto.FromECDSA(key))
+	bzzaccount := crypto.PubkeyToAddress(key.PublicKey).Hex()
+
+	dir, err := ioutil.TempDir("", "bzztest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	conf := &node.Config{
+		DataDir: dir,
+		IPCPath: "testbzzkeyflag.ipc",
+		NoUSB:   true,
 	}
 
-	swarm := runSwarm(t, flags...)
-	swarm.Expect("Fatal: " + SwarmErrNoBZZAccount + "\n")
-	swarm.ExpectExit()
+	node := &testNode{Dir: dir}
+
+	flags := []string{
+		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
+		fmt.Sprintf("--%s", SwarmPortFlag.Name), "0",
+		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
+		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
+		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
+		fmt.Sprintf("--%s", SwarmBzzKeyHexFlag.Name), hexKey,
+	}
+
+	node.Cmd = runSwarm(t, flags...)
+	defer func() {
+		node.Shutdown()
+	}()
+
+	node.Cmd.InputLine(testPassphrase)
+
+	// wait for the node to start
+	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(50 * time.Millisecond) {
+		node.Client, err = rpc.Dial(conf.IPCEndpoint())
+		if err == nil {
+			break
+		}
+	}
+	if node.Client == nil {
+		t.Fatal(err)
+	}
+
+	// load info
+	var info swarm.Info
+	if err := node.Client.Call(&info, "bzz_info"); err != nil {
+		t.Fatal(err)
+	}
+
+	if info.BzzAccount != bzzaccount {
+		t.Fatalf("Expected account to be %s, got %s", bzzaccount, info.BzzAccount)
+	}
+}
+func TestEmptyBzzAccountFlagMultipleAccounts(t *testing.T) {
+	dir, err := ioutil.TempDir("", "bzztest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	// Create two accounts on disk
+	getTestAccount(t, dir)
+	getTestAccount(t, dir)
+
+	node := &testNode{Dir: dir}
+
+	flags := []string{
+		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
+		fmt.Sprintf("--%s", SwarmPortFlag.Name), "0",
+		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
+		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
+	}
+
+	node.Cmd = runSwarm(t, flags...)
+
+	node.Cmd.ExpectRegexp(fmt.Sprintf("Please choose one of the accounts by running swarm with the --%s flag.", SwarmAccountFlag.Name))
+}
+
+func TestEmptyBzzAccountFlagSingleAccount(t *testing.T) {
+	dir, err := ioutil.TempDir("", "bzztest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	conf, account := getTestAccount(t, dir)
+	node := &testNode{Dir: dir}
+
+	flags := []string{
+		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
+		fmt.Sprintf("--%s", SwarmPortFlag.Name), "0",
+		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
+		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
+		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), conf.IPCPath,
+	}
+
+	node.Cmd = runSwarm(t, flags...)
+	defer func() {
+		node.Shutdown()
+	}()
+
+	node.Cmd.InputLine(testPassphrase)
+
+	// wait for the node to start
+	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(50 * time.Millisecond) {
+		node.Client, err = rpc.Dial(conf.IPCEndpoint())
+		if err == nil {
+			break
+		}
+	}
+	if node.Client == nil {
+		t.Fatal(err)
+	}
+
+	// load info
+	var info swarm.Info
+	if err := node.Client.Call(&info, "bzz_info"); err != nil {
+		t.Fatal(err)
+	}
+
+	if info.BzzAccount != account.Address.Hex() {
+		t.Fatalf("Expected account to be %s, got %s", account.Address.Hex(), info.BzzAccount)
+	}
+}
+
+func TestEmptyBzzAccountFlagNoAccountWrongPassword(t *testing.T) {
+	dir, err := ioutil.TempDir("", "bzztest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	node := &testNode{Dir: dir}
+
+	flags := []string{
+		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
+		fmt.Sprintf("--%s", SwarmPortFlag.Name), "0",
+		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
+		fmt.Sprintf("--%s", utils.DataDirFlag.Name), dir,
+	}
+
+	node.Cmd = runSwarm(t, flags...)
+
+	// Set password
+	node.Cmd.InputLine("goodpassword")
+	// Confirm password
+	node.Cmd.InputLine("wrongpassword")
+
+	node.Cmd.ExpectRegexp("Passphrases do not match")
 }
 
 func TestConfigCmdLineOverrides(t *testing.T) {
@@ -86,6 +236,7 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
+		fmt.Sprintf("--%s", utils.ListenPortFlag.Name), "0",
 		fmt.Sprintf("--%s", SwarmSyncDisabledFlag.Name),
 		fmt.Sprintf("--%s", CorsStringFlag.Name), "*",
 		fmt.Sprintf("--%s", SwarmAccountFlag.Name), account.Address.String(),

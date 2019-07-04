@@ -30,6 +30,11 @@ var (
 		Usage:  "Swarm account key file",
 		EnvVar: SwarmEnvAccount,
 	}
+	SwarmBzzKeyHexFlag = cli.StringFlag{
+		Name:   "bzzkeyhex",
+		Usage:  "BzzAccount key in hex (for testing)",
+		EnvVar: SwarmEnvBzzKeyHex,
+	}
 	SwarmListenAddrFlag = cli.StringFlag{
 		Name:   "httpaddr",
 		Usage:  "Swarm HTTP API listening interface",

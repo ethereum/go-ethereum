@@ -9,26 +9,26 @@ Swarm is a distributed storage platform and content distribution service, a nati
 
 ## Table of Contents  <!-- omit in toc -->
 
-- [Building the source](#building-the-source)
-- [Running Swarm](#running-swarm)
-  - [Verifying that your local Swarm node is running](#verifying-that-your-local-swarm-node-is-running)
-  - [Ethereum Name Service resolution](#ethereum-name-service-resolution)
-- [Documentation](#documentation)
-- [Docker](#docker)
-  - [Docker tags](#docker-tags)
-  - [Environment variables](#environment-variables)
-  - [Swarm command line arguments](#swarm-command-line-arguments)
-- [Developers Guide](#developers-guide)
-  - [Go Environment](#go-environment)
-  - [Vendored Dependencies](#vendored-dependencies)
-  - [Testing](#testing)
-  - [Profiling Swarm](#profiling-swarm)
-  - [Metrics and Instrumentation in Swarm](#metrics-and-instrumentation-in-swarm)
-    - [Visualizing metrics](#visualizing-metrics)
-- [Public Gateways](#public-gateways)
-- [Swarm Dapps](#swarm-dapps)
-- [Contributing](#contributing)
-- [License](#license)
+- [Building the source](#Building-the-source)
+- [Running Swarm](#Running-Swarm)
+  - [Verifying that your local Swarm node is running](#Verifying-that-your-local-Swarm-node-is-running)
+  - [Ethereum Name Service resolution](#Ethereum-Name-Service-resolution)
+- [Documentation](#Documentation)
+- [Docker](#Docker)
+  - [Docker tags](#Docker-tags)
+  - [Environment variables](#Environment-variables)
+  - [Swarm command line arguments](#Swarm-command-line-arguments)
+- [Developers Guide](#Developers-Guide)
+  - [Go Environment](#Go-Environment)
+  - [Vendored Dependencies](#Vendored-Dependencies)
+  - [Testing](#Testing)
+  - [Profiling Swarm](#Profiling-Swarm)
+  - [Metrics and Instrumentation in Swarm](#Metrics-and-Instrumentation-in-Swarm)
+    - [Visualizing metrics](#Visualizing-metrics)
+- [Public Gateways](#Public-Gateways)
+- [Swarm Dapps](#Swarm-Dapps)
+- [Contributing](#Contributing)
+- [License](#License)
 
 ## Building the source
 
@@ -53,15 +53,11 @@ $ go install github.com/ethersphere/swarm/cmd/swarm
 
 ## Running Swarm
 
-Going through all the possible command line flags is out of scope here, but we've enumerated a few common parameter combos to get you up to speed quickly on how you can run your own Swarm node.
-
-To run Swarm you need an Ethereum account. Download and install [Geth](https://geth.ethereum.org) if you don't have it on your system. You can create a new Ethereum account by running the following command:
-
 ```bash
-$ geth account new
+$ swarm
 ```
 
-You will be prompted for a password:
+If you don't have an account yet, then you will be prompted to create one and secure it with a password:
 
 ```
 Your new account is locked with a password. Please give a password. Do not forget this password.
@@ -69,18 +65,12 @@ Passphrase:
 Repeat passphrase:
 ```
 
-Once you have specified the password, the output will be the Ethereum address representing that account. For example:
-
-```
-Address: {2f1cd699b0bf461dcfbf0098ad8f5587b038f0f1}
-```
-
-Using this account, connect to Swarm with
+If you have multiple accounts created, then you'll have to choose one of the accounts by using the `--bzzaccount` flag.
 
 ```bash
 $ swarm --bzzaccount <your-account-here>
 
-# in our example
+# example
 $ swarm --bzzaccount 2f1cd699b0bf461dcfbf0098ad8f5587b038f0f1
 ```
 
