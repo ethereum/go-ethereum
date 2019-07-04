@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/les/csvlogger"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -39,15 +38,6 @@ import (
 )
 
 const bufLimitRatio = 6000 // fixed bufLimit/MRR ratio
-
-const (
-	logFileName          = ""    // csv log file name (disabled if empty)
-	logClientPoolMetrics = true  // log client pool metrics
-	logClientPoolEvents  = false // detailed client pool event logging
-	logRequestServing    = true  // log request serving metrics and events
-	logBlockProcEvents   = true  // log block processing events
-	logProtocolHandler   = true  // log protocol handler events
-)
 
 type LesServer struct {
 	lesCommons
@@ -62,26 +52,15 @@ type LesServer struct {
 	privateKey   *ecdsa.PrivateKey
 	quitSync     chan struct{}
 	onlyAnnounce bool
-	csvLogger    *csvlogger.Logger
-	logTotalCap  *csvlogger.Channel
 
 	thcNormal, thcBlockProcessing int // serving thread count for normal operation and block processing mode
 
 	maxPeers                   int
 	minCapacity, freeClientCap uint64
 	freeClientPool             *freeClientPool
-	priorityClientPool         *priorityClientPool
 }
 
 func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
-	var csvLogger *csvlogger.Logger
-	if logFileName != "" {
-		csvLogger = csvlogger.NewLogger(logFileName, time.Second*10, "event, peerId")
-	}
-	requestLogger := csvLogger
-	if !logRequestServing {
-		requestLogger = nil
-	}
 	lesTopics := make([]discv5.Topic, len(AdvertiseProtocolVersions))
 	for i, pv := range AdvertiseProtocolVersions {
 		lesTopics[i] = lesTopic(e.BlockChain().Genesis().Hash(), pv)
@@ -99,10 +78,8 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		quitSync:     quitSync,
 		lesTopics:    lesTopics,
 		onlyAnnounce: config.OnlyAnnounce,
-		csvLogger:    csvLogger,
-		logTotalCap:  requestLogger.NewChannel("totalCapacity", 0.01),
 	}
-	srv.costTracker, srv.minCapacity = newCostTracker(e.ChainDb(), config, requestLogger)
+	srv.costTracker, srv.minCapacity = newCostTracker(e.ChainDb(), config)
 
 	logger := log.New()
 	srv.thcNormal = config.LightServ * 4 / 100
@@ -131,10 +108,7 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		return nil, err
 	}
 	srv.protocolManager = pm
-	if logProtocolHandler {
-		pm.logger = csvLogger
-	}
-	pm.servingQueue = newServingQueue(int64(time.Millisecond*10), float64(config.LightServ)/100, requestLogger)
+	pm.servingQueue = newServingQueue(int64(time.Millisecond*10), float64(config.LightServ)/100)
 	pm.server = srv
 
 	return srv, nil
@@ -142,12 +116,6 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 
 func (s *LesServer) APIs() []rpc.API {
 	return []rpc.API{
-		{
-			Namespace: "les",
-			Version:   "1.0",
-			Service:   NewPrivateLightServerAPI(s),
-			Public:    false,
-		},
 		{
 			Namespace: "les",
 			Version:   "1.0",
@@ -163,11 +131,10 @@ func (s *LesServer) APIs() []rpc.API {
 func (s *LesServer) startEventLoop() {
 	s.protocolManager.wg.Add(1)
 
-	blockProcLogger := s.csvLogger
-	if !logBlockProcEvents {
-		blockProcLogger = nil
-	}
-	var processing, procLast bool
+	var (
+		processing, procLast bool
+		procStarted          time.Time
+	)
 	blockProcFeed := make(chan bool, 100)
 	s.protocolManager.blockchain.(*core.BlockChain).SubscribeBlockProcessingEvent(blockProcFeed)
 	totalRechargeCh := make(chan uint64, 100)
@@ -176,13 +143,13 @@ func (s *LesServer) startEventLoop() {
 	updateRecharge := func() {
 		if processing {
 			if !procLast {
-				blockProcLogger.Event("block processing started")
+				procStarted = time.Now()
 			}
 			s.protocolManager.servingQueue.setThreads(s.thcBlockProcessing)
 			s.fcManager.SetRechargeCurve(flowcontrol.PieceWiseLinear{{0, 0}, {totalRecharge, totalRecharge}})
 		} else {
 			if procLast {
-				blockProcLogger.Event("block processing finished")
+				blockProcessingTimer.UpdateSince(procStarted)
 			}
 			s.protocolManager.servingQueue.setThreads(s.thcNormal)
 			s.fcManager.SetRechargeCurve(flowcontrol.PieceWiseLinear{{0, 0}, {totalRecharge / 16, totalRecharge / 2}, {totalRecharge / 2, totalRecharge / 2}, {totalRecharge, totalRecharge}})
@@ -191,7 +158,7 @@ func (s *LesServer) startEventLoop() {
 	}
 	updateRecharge()
 	totalCapacity := s.fcManager.SubscribeTotalCapacity(totalCapacityCh)
-	s.priorityClientPool.setLimits(s.maxPeers, totalCapacity)
+	s.freeClientPool.setLimits(s.maxPeers, totalCapacity)
 
 	var maxFreePeers uint64
 	go func() {
@@ -202,13 +169,13 @@ func (s *LesServer) startEventLoop() {
 			case totalRecharge = <-totalRechargeCh:
 				updateRecharge()
 			case totalCapacity = <-totalCapacityCh:
-				s.logTotalCap.Update(float64(totalCapacity))
+				totalCapacityGauge.Update(int64(totalCapacity))
 				newFreePeers := totalCapacity / s.freeClientCap
 				if newFreePeers < maxFreePeers && newFreePeers < uint64(s.maxPeers) {
 					log.Warn("Reduced total capacity", "maxFreePeers", newFreePeers)
 				}
 				maxFreePeers = newFreePeers
-				s.priorityClientPool.setLimits(s.maxPeers, totalCapacity)
+				s.freeClientPool.setLimits(s.maxPeers, totalCapacity)
 			case <-s.protocolManager.quitSync:
 				s.protocolManager.wg.Done()
 				return
@@ -243,19 +210,9 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 		maxCapacity = totalRecharge
 	}
 	s.fcManager.SetCapacityLimits(s.freeClientCap, maxCapacity, s.freeClientCap*2)
-	poolMetricsLogger := s.csvLogger
-	if !logClientPoolMetrics {
-		poolMetricsLogger = nil
-	}
-	poolEventLogger := s.csvLogger
-	if !logClientPoolEvents {
-		poolEventLogger = nil
-	}
-	s.freeClientPool = newFreeClientPool(s.chainDb, s.freeClientCap, 10000, mclock.System{}, func(id string) { go s.protocolManager.removePeer(id) }, poolMetricsLogger, poolEventLogger)
-	s.priorityClientPool = newPriorityClientPool(s.freeClientCap, s.protocolManager.peers, s.freeClientPool, poolMetricsLogger, poolEventLogger)
+	s.freeClientPool = newFreeClientPool(s.chainDb, s.freeClientCap, 10000, mclock.System{}, func(id string) { go s.protocolManager.removePeer(id) })
+	s.protocolManager.peers.notify(s.freeClientPool)
 
-	s.protocolManager.peers.notify(s.priorityClientPool)
-	s.csvLogger.Start()
 	s.startEventLoop()
 	s.protocolManager.Start(s.config.LightPeers)
 	if srvr.DiscV5 != nil {
@@ -296,7 +253,6 @@ func (s *LesServer) Stop() {
 	s.freeClientPool.stop()
 	s.costTracker.stop()
 	s.protocolManager.Stop()
-	s.csvLogger.Stop()
 }
 
 // todo(rjl493456442) separate client and server implementation.

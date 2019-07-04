@@ -59,10 +59,7 @@ func init() {
 	}
 	app.Flags = []cli.Flag{
 		oracleFlag,
-		keyFileFlag,
 		nodeURLFlag,
-		clefURLFlag,
-		utils.PasswordFileFlag,
 	}
 	cli.CommandHelpTemplate = commandHelperTemplate
 }
@@ -85,10 +82,6 @@ var (
 		Name:  "threshold",
 		Usage: "Minimal number of signatures required to approve a checkpoint",
 	}
-	keyFileFlag = cli.StringFlag{
-		Name:  "keyfile",
-		Usage: "The private key file (keyfile signature is not recommended)",
-	}
 	nodeURLFlag = cli.StringFlag{
 		Name:  "rpc",
 		Value: "http://localhost:8545",
@@ -101,7 +94,7 @@ var (
 	}
 	signerFlag = cli.StringFlag{
 		Name:  "signer",
-		Usage: "Signer address for clef mode signing",
+		Usage: "Signer address for clef signing",
 	}
 	signersFlag = cli.StringFlag{
 		Name:  "signers",

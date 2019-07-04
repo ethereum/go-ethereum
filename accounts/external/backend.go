@@ -182,18 +182,21 @@ func (api *ExternalSigner) SignText(account accounts.Account, text []byte) ([]by
 
 func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
 	res := ethapi.SignTransactionResult{}
-	to := common.NewMixedcaseAddress(*tx.To())
 	data := hexutil.Bytes(tx.Data())
+	var to *common.MixedcaseAddress
+	if tx.To() != nil {
+		t := common.NewMixedcaseAddress(*tx.To())
+		to = &t
+	}
 	args := &core.SendTxArgs{
 		Data:     &data,
 		Nonce:    hexutil.Uint64(tx.Nonce()),
 		Value:    hexutil.Big(*tx.Value()),
 		Gas:      hexutil.Uint64(tx.Gas()),
 		GasPrice: hexutil.Big(*tx.GasPrice()),
-		To:       &to,
+		To:       to,
 		From:     common.NewMixedcaseAddress(account.Address),
 	}
-
 	if err := api.client.Call(&res, "account_signTransaction", args); err != nil {
 		return nil, err
 	}
