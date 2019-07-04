@@ -309,7 +309,7 @@ var bindTopicType = map[Lang]func(kind abi.Type, structs map[string]*tmplStruct)
 	LangJava: bindTopicTypeJava,
 }
 
-// bindTypeGo converts a Solidity topic type to a Go one. It is almost the same
+// bindTopicTypeGo converts a Solidity topic type to a Go one. It is almost the same
 // funcionality as for simple types, but dynamic types get converted to hashes.
 func bindTopicTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
 	bound := bindTypeGo(kind, structs)
@@ -319,7 +319,7 @@ func bindTopicTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
 	return bound
 }
 
-// bindTypeGo converts a Solidity topic type to a Java one. It is almost the same
+// bindTopicTypeJava converts a Solidity topic type to a Java one. It is almost the same
 // funcionality as for simple types, but dynamic types get converted to hashes.
 func bindTopicTypeJava(kind abi.Type, structs map[string]*tmplStruct) string {
 	bound := bindTypeJava(kind, structs)
