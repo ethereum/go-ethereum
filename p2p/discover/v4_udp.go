@@ -19,6 +19,7 @@ package discover
 import (
 	"bytes"
 	"container/list"
+	"context"
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"errors"
@@ -207,7 +208,8 @@ type UDPv4 struct {
 
 	addReplyMatcher chan *replyMatcher
 	gotreply        chan reply
-	closing         chan struct{}
+	closeCtx        context.Context
+	cancelCloseCtx  func()
 }
 
 // replyMatcher represents a pending reply.
@@ -256,20 +258,23 @@ type reply struct {
 }
 
 func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
+	closeCtx, cancel := context.WithCancel(context.Background())
 	t := &UDPv4{
 		conn:            c,
 		priv:            cfg.PrivateKey,
 		netrestrict:     cfg.NetRestrict,
 		localNode:       ln,
 		db:              ln.Database(),
-		closing:         make(chan struct{}),
 		gotreply:        make(chan reply),
 		addReplyMatcher: make(chan *replyMatcher),
+		closeCtx:        closeCtx,
+		cancelCloseCtx:  cancel,
 		log:             cfg.Log,
 	}
 	if t.log == nil {
 		t.log = log.Root()
 	}
+
 	tab, err := newTable(t, ln.Database(), cfg.Bootnodes, t.log)
 	if err != nil {
 		return nil, err
@@ -291,124 +296,11 @@ func (t *UDPv4) Self() *enode.Node {
 // Close shuts down the socket and aborts any running queries.
 func (t *UDPv4) Close() {
 	t.closeOnce.Do(func() {
-		close(t.closing)
+		t.cancelCloseCtx()
 		t.conn.Close()
 		t.wg.Wait()
 		t.tab.close()
 	})
-}
-
-// ReadRandomNodes reads random nodes from the local table.
-func (t *UDPv4) ReadRandomNodes(buf []*enode.Node) int {
-	return t.tab.ReadRandomNodes(buf)
-}
-
-// LookupRandom finds random nodes in the network.
-func (t *UDPv4) LookupRandom() []*enode.Node {
-	if t.tab.len() == 0 {
-		// All nodes were dropped, refresh. The very first query will hit this
-		// case and run the bootstrapping logic.
-		<-t.tab.refresh()
-	}
-	return t.lookupRandom()
-}
-
-func (t *UDPv4) LookupPubkey(key *ecdsa.PublicKey) []*enode.Node {
-	if t.tab.len() == 0 {
-		// All nodes were dropped, refresh. The very first query will hit this
-		// case and run the bootstrapping logic.
-		<-t.tab.refresh()
-	}
-	return unwrapNodes(t.lookup(encodePubkey(key)))
-}
-
-func (t *UDPv4) lookupRandom() []*enode.Node {
-	var target encPubkey
-	crand.Read(target[:])
-	return unwrapNodes(t.lookup(target))
-}
-
-func (t *UDPv4) lookupSelf() []*enode.Node {
-	return unwrapNodes(t.lookup(encodePubkey(&t.priv.PublicKey)))
-}
-
-// lookup performs a network search for nodes close to the given target. It approaches the
-// target by querying nodes that are closer to it on each iteration. The given target does
-// not need to be an actual node identifier.
-func (t *UDPv4) lookup(targetKey encPubkey) []*node {
-	var (
-		target         = enode.ID(crypto.Keccak256Hash(targetKey[:]))
-		asked          = make(map[enode.ID]bool)
-		seen           = make(map[enode.ID]bool)
-		reply          = make(chan []*node, alpha)
-		pendingQueries = 0
-		result         *nodesByDistance
-	)
-	// Don't query further if we hit ourself.
-	// Unlikely to happen often in practice.
-	asked[t.Self().ID()] = true
-
-	// Generate the initial result set.
-	t.tab.mutex.Lock()
-	result = t.tab.closest(target, bucketSize, false)
-	t.tab.mutex.Unlock()
-
-	for {
-		// ask the alpha closest nodes that we haven't asked yet
-		for i := 0; i < len(result.entries) && pendingQueries < alpha; i++ {
-			n := result.entries[i]
-			if !asked[n.ID()] {
-				asked[n.ID()] = true
-				pendingQueries++
-				go t.lookupWorker(n, targetKey, reply)
-			}
-		}
-		if pendingQueries == 0 {
-			// we have asked all closest nodes, stop the search
-			break
-		}
-		select {
-		case nodes := <-reply:
-			for _, n := range nodes {
-				if n != nil && !seen[n.ID()] {
-					seen[n.ID()] = true
-					result.push(n, bucketSize)
-				}
-			}
-		case <-t.tab.closeReq:
-			return nil // shutdown, no need to continue.
-		}
-		pendingQueries--
-	}
-	return result.entries
-}
-
-func (t *UDPv4) lookupWorker(n *node, targetKey encPubkey, reply chan<- []*node) {
-	fails := t.db.FindFails(n.ID(), n.IP())
-	r, err := t.findnode(n.ID(), n.addr(), targetKey)
-	if err == errClosed {
-		// Avoid recording failures on shutdown.
-		reply <- nil
-		return
-	} else if len(r) == 0 {
-		fails++
-		t.db.UpdateFindFails(n.ID(), n.IP(), fails)
-		t.log.Trace("Findnode failed", "id", n.ID(), "failcount", fails, "err", err)
-		if fails >= maxFindnodeFailures {
-			t.log.Trace("Too many findnode failures, dropping", "id", n.ID(), "failcount", fails)
-			t.tab.delete(n)
-		}
-	} else if fails > 0 {
-		// Reset failure counter because it counts _consecutive_ failures.
-		t.db.UpdateFindFails(n.ID(), n.IP(), 0)
-	}
-
-	// Grab as many nodes as possible. Some of them might not be alive anymore, but we'll
-	// just remove those again during revalidation.
-	for _, n := range r {
-		t.tab.addSeenNode(n)
-	}
-	reply <- r
 }
 
 // Resolve searches for a specific node with the given ID and tries to get the most recent
@@ -498,6 +390,45 @@ func (t *UDPv4) makePing(toaddr *net.UDPAddr) *pingV4 {
 	}
 }
 
+// LookupPubkey finds the closest nodes to the given public key.
+func (t *UDPv4) LookupPubkey(key *ecdsa.PublicKey) []*enode.Node {
+	if t.tab.len() == 0 {
+		// All nodes were dropped, refresh. The very first query will hit this
+		// case and run the bootstrapping logic.
+		<-t.tab.refresh()
+	}
+	return t.newLookup(t.closeCtx, encodePubkey(key)).run()
+}
+
+// RandomNodes is an iterator yielding nodes from a random walk of the DHT.
+func (t *UDPv4) RandomNodes() enode.Iterator {
+	return newLookupIterator(t.closeCtx, t.newRandomLookup)
+}
+
+// lookupRandom implements transport.
+func (t *UDPv4) lookupRandom() []*enode.Node {
+	return t.newRandomLookup(t.closeCtx).run()
+}
+
+// lookupSelf implements transport.
+func (t *UDPv4) lookupSelf() []*enode.Node {
+	return t.newLookup(t.closeCtx, encodePubkey(&t.priv.PublicKey)).run()
+}
+
+func (t *UDPv4) newRandomLookup(ctx context.Context) *lookup {
+	var target encPubkey
+	crand.Read(target[:])
+	return t.newLookup(ctx, target)
+}
+
+func (t *UDPv4) newLookup(ctx context.Context, targetKey encPubkey) *lookup {
+	target := enode.ID(crypto.Keccak256Hash(targetKey[:]))
+	it := newLookup(ctx, t.tab, target, func(n *node) ([]*node, error) {
+		return t.findnode(n.ID(), n.addr(), targetKey)
+	})
+	return it
+}
+
 // findnode sends a findnode request to the given node and waits until
 // the node has sent up to k neighbors.
 func (t *UDPv4) findnode(toid enode.ID, toaddr *net.UDPAddr, target encPubkey) ([]*node, error) {
@@ -575,7 +506,7 @@ func (t *UDPv4) pending(id enode.ID, ip net.IP, ptype byte, callback replyMatchF
 	select {
 	case t.addReplyMatcher <- p:
 		// loop will handle it
-	case <-t.closing:
+	case <-t.closeCtx.Done():
 		ch <- errClosed
 	}
 	return p
@@ -589,7 +520,7 @@ func (t *UDPv4) handleReply(from enode.ID, fromIP net.IP, req packetV4) bool {
 	case t.gotreply <- reply{from, fromIP, req, matched}:
 		// loop will handle it
 		return <-matched
-	case <-t.closing:
+	case <-t.closeCtx.Done():
 		return false
 	}
 }
@@ -635,7 +566,7 @@ func (t *UDPv4) loop() {
 		resetTimeout()
 
 		select {
-		case <-t.closing:
+		case <-t.closeCtx.Done():
 			for el := plist.Front(); el != nil; el = el.Next() {
 				el.Value.(*replyMatcher).errc <- errClosed
 			}
