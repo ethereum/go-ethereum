@@ -202,6 +202,7 @@ type UDPv4 struct {
 	localNode   *enode.LocalNode
 	db          *enode.DB
 	tab         *Table
+	randomWalk  *lookupWalker
 	closeOnce   sync.Once
 	wg          sync.WaitGroup
 
@@ -270,12 +271,15 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 	if t.log == nil {
 		t.log = log.Root()
 	}
+
 	tab, err := newTable(t, ln.Database(), cfg.Bootnodes, t.log)
 	if err != nil {
 		return nil, err
 	}
 	t.tab = tab
 	go tab.loop()
+
+	t.randomWalk = newLookupWalker(t.randomLookupWithCallback)
 
 	t.wg.Add(2)
 	go t.loop()
@@ -295,22 +299,25 @@ func (t *UDPv4) Close() {
 		t.conn.Close()
 		t.wg.Wait()
 		t.tab.close()
+		t.randomWalk.close()
 	})
 }
 
-// ReadRandomNodes reads random nodes from the local table.
-func (t *UDPv4) ReadRandomNodes(buf []*enode.Node) int {
-	return t.tab.ReadRandomNodes(buf)
+// RandomNodes is an iterator yielding nodes from a random walk of the DHT.
+func (t *UDPv4) RandomNodes() Iterator {
+	return t.randomWalk.newIterator()
 }
 
 // LookupRandom finds random nodes in the network.
-func (t *UDPv4) LookupRandom() []*enode.Node {
+func (t *UDPv4) randomLookupWithCallback(callback func(*enode.Node)) {
 	if t.tab.len() == 0 {
 		// All nodes were dropped, refresh. The very first query will hit this
 		// case and run the bootstrapping logic.
 		<-t.tab.refresh()
 	}
-	return t.lookupRandom()
+	var target encPubkey
+	crand.Read(target[:])
+	t.lookup(target, callback)
 }
 
 func (t *UDPv4) LookupPubkey(key *ecdsa.PublicKey) []*enode.Node {
@@ -319,23 +326,23 @@ func (t *UDPv4) LookupPubkey(key *ecdsa.PublicKey) []*enode.Node {
 		// case and run the bootstrapping logic.
 		<-t.tab.refresh()
 	}
-	return unwrapNodes(t.lookup(encodePubkey(key)))
+	return unwrapNodes(t.lookup(encodePubkey(key), nil))
 }
 
 func (t *UDPv4) lookupRandom() []*enode.Node {
 	var target encPubkey
 	crand.Read(target[:])
-	return unwrapNodes(t.lookup(target))
+	return unwrapNodes(t.lookup(target, nil))
 }
 
 func (t *UDPv4) lookupSelf() []*enode.Node {
-	return unwrapNodes(t.lookup(encodePubkey(&t.priv.PublicKey)))
+	return unwrapNodes(t.lookup(encodePubkey(&t.priv.PublicKey), nil))
 }
 
 // lookup performs a network search for nodes close to the given target. It approaches the
 // target by querying nodes that are closer to it on each iteration. The given target does
 // not need to be an actual node identifier.
-func (t *UDPv4) lookup(targetKey encPubkey) []*node {
+func (t *UDPv4) lookup(targetKey encPubkey, nodeCallback func(*enode.Node)) []*node {
 	var (
 		target         = enode.ID(crypto.Keccak256Hash(targetKey[:]))
 		asked          = make(map[enode.ID]bool)
@@ -360,7 +367,7 @@ func (t *UDPv4) lookup(targetKey encPubkey) []*node {
 			if !asked[n.ID()] {
 				asked[n.ID()] = true
 				pendingQueries++
-				go t.lookupWorker(n, targetKey, reply)
+				go t.lookupWorker(n, targetKey, reply, nodeCallback)
 			}
 		}
 		if pendingQueries == 0 {
@@ -383,7 +390,7 @@ func (t *UDPv4) lookup(targetKey encPubkey) []*node {
 	return result.entries
 }
 
-func (t *UDPv4) lookupWorker(n *node, targetKey encPubkey, reply chan<- []*node) {
+func (t *UDPv4) lookupWorker(n *node, targetKey encPubkey, reply chan<- []*node, callback func(*enode.Node)) {
 	fails := t.db.FindFails(n.ID(), n.IP())
 	r, err := t.findnode(n.ID(), n.addr(), targetKey)
 	if err == errClosed {
@@ -407,7 +414,11 @@ func (t *UDPv4) lookupWorker(n *node, targetKey encPubkey, reply chan<- []*node)
 	// just remove those again during revalidation.
 	for _, n := range r {
 		t.tab.addSeenNode(n)
+		if callback != nil {
+			callback(unwrapNode(n))
+		}
 	}
+
 	reply <- r
 }
 
