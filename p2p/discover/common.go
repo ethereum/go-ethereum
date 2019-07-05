@@ -58,13 +58,6 @@ type ReadPacket struct {
 	Addr *net.UDPAddr
 }
 
-// Iterator is an iterator over nodes.
-type Iterator interface {
-	// NextNode returns the next node if one could be discovered before the
-	// passed context was canceled.
-	NextNode(context.Context) *enode.Node
-}
-
 type lookupFunc func(func(*enode.Node))
 
 // lookupWalker performs recursive lookups, walking the DHT.
@@ -72,7 +65,8 @@ type lookupFunc func(func(*enode.Node))
 type lookupWalker struct {
 	lookup lookupFunc
 
-	newIterCh chan *lookupIterator
+	newIterCh chan *Iterator
+	delIterCh chan *Iterator
 	triggerCh chan struct{}
 	closeCh   chan struct{}
 	wg        sync.WaitGroup
@@ -81,7 +75,8 @@ type lookupWalker struct {
 func newLookupWalker(fn lookupFunc) *lookupWalker {
 	w := &lookupWalker{
 		lookup:    fn,
-		newIterCh: make(chan *lookupIterator),
+		newIterCh: make(chan *Iterator),
+		delIterCh: make(chan *Iterator),
 		triggerCh: make(chan struct{}),
 		closeCh:   make(chan struct{}),
 	}
@@ -97,7 +92,7 @@ func (w *lookupWalker) close() {
 
 func (w *lookupWalker) loop() {
 	var (
-		iters      = make(map[*lookupIterator]struct{})
+		iters      = make(map[*Iterator]struct{})
 		foundNode  = make(chan *enode.Node)
 		lookupDone = make(chan struct{}, 1)
 		trigger    = w.triggerCh
@@ -106,6 +101,9 @@ func (w *lookupWalker) loop() {
 		select {
 		case it := <-w.newIterCh:
 			iters[it] = struct{}{}
+
+		case it := <-w.delIterCh:
+			delete(iters, it)
 
 		case <-trigger:
 			trigger = nil // stop listening to trigger until lookupDone
@@ -120,6 +118,9 @@ func (w *lookupWalker) loop() {
 			}
 
 		case <-w.closeCh:
+			for it := range iters {
+				close(it.buf)
+			}
 			w.wg.Done()
 			return
 		}
@@ -136,39 +137,62 @@ func (w *lookupWalker) runLookup(nodes chan<- *enode.Node, done chan struct{}) {
 	done <- struct{}{}
 }
 
-type lookupIterator struct {
-	w   *lookupWalker
-	buf chan *enode.Node
+// Iterator is a sequence of discovered nodes.
+type Iterator struct {
+	w      *lookupWalker
+	buf    chan *enode.Node
+	closed bool
 }
 
 const lookupIteratorBuffer = 100
 
-func (w *lookupWalker) newIterator() Iterator {
-	it := &lookupIterator{w, make(chan *enode.Node, lookupIteratorBuffer)}
+func (w *lookupWalker) newIterator() *Iterator {
+	it := &Iterator{w, make(chan *enode.Node, lookupIteratorBuffer), false}
 	select {
 	case w.newIterCh <- it:
 	case <-w.closeCh:
+		it.closed = true
+		close(it.buf)
 	}
 	return it
 }
 
-// NextNode gets the next node from the buffer.
-// This keeps triggering new lookups until a node is delivered.
-func (it *lookupIterator) NextNode(ctx context.Context) *enode.Node {
+// NextNode retrieves the next node if one could be discovered before the passed context
+// was canceled. This triggers a lookup operation if none is running. The isLive return
+// value says whether the iterator is still open. NextNode returns (nil, false) after Close
+// has been called.
+//
+// NextNode is not safe for concurrent use.
+func (it *Iterator) NextNode(ctx context.Context) (n *enode.Node, isLive bool) {
 	for {
 		select {
 		case it.w.triggerCh <- struct{}{}:
 			// lookup triggered
-		case n := <-it.buf:
-			return n
+		case <-it.w.closeCh:
+			it.closed = true
+			return nil, false
+		case n, ok := <-it.buf:
+			if !ok {
+				it.closed = true
+			}
+			return n, it.closed
 		case <-ctx.Done():
-			return nil
+			return nil, it.closed // TODO: should be permanently closed if channel is closed once.
 		}
 	}
 }
 
+// Close ends the iterator. This can be called concurrently with NextNode.
+func (it *Iterator) Close() {
+	select {
+	case it.w.delIterCh <- it:
+		close(it.buf)
+	case <-it.w.closeCh:
+	}
+}
+
 // deliver sends n to the iterator buffer.
-func (it *lookupIterator) deliver(n *enode.Node) {
+func (it *Iterator) deliver(n *enode.Node) {
 	// We don't want deliver to block and replacing stale results is OK if they're not
 	// being read fast enough. Check whether the buffer is full and enable the select case
 	// which removes an element if so. This doesn't race because deliver is only called by

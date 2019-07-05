@@ -304,7 +304,7 @@ func (t *UDPv4) Close() {
 }
 
 // RandomNodes is an iterator yielding nodes from a random walk of the DHT.
-func (t *UDPv4) RandomNodes() Iterator {
+func (t *UDPv4) RandomNodes() *Iterator {
 	return t.randomWalk.newIterator()
 }
 
