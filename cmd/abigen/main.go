@@ -82,7 +82,7 @@ func main() {
 		bins  []string
 		types []string
 		sigs  []map[string]string
-		libs  map[string]string
+		libs  = make(map[string]string)
 	)
 	if *solFlag != "" || *vyFlag != "" || *abiFlag == "-" {
 		// Generate the list of types to exclude from binding

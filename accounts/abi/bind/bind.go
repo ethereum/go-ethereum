@@ -25,13 +25,13 @@ import (
 	"errors"
 	"fmt"
 	"go/format"
-	"log"
 	"regexp"
 	"strings"
 	"text/template"
 	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // Lang is a target programming language selector to generate bindings for.
@@ -153,7 +153,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		for pattern, name := range libs {
 			matched, err := regexp.Match("__\\$"+pattern+"\\$__", []byte(contracts[types[i]].InputBin))
 			if err != nil {
-				log.Fatalf("Could not search for pattern %v in %v: %v", pattern, contracts[types[i]], err)
+				log.Error("Could not search for pattern", "pattern", pattern, "contract", contracts[types[i]], "err", err)
 			}
 			if matched {
 				contracts[types[i]].Libraries[pattern] = name
