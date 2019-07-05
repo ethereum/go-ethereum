@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"runtime"
 	godebug "runtime/debug"
 	"sort"
 	"strconv"
@@ -256,11 +257,15 @@ func init() {
 		}
 		// Cap the cache allowance and tune the garbage collector
 		var mem gosigar.Mem
-		if err := mem.Get(); err == nil {
-			allowance := int(mem.Total / 1024 / 1024 / 3)
-			if cache := ctx.GlobalInt(utils.CacheFlag.Name); cache > allowance {
-				log.Warn("Sanitizing cache to Go's GC limits", "provided", cache, "updated", allowance)
-				ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(allowance))
+		// Workaround until OpenBSD support lands into gosigar
+		// Check https://github.com/elastic/gosigar#supported-platforms
+		if runtime.GOOS != "openbsd" {
+			if err := mem.Get(); err == nil {
+				allowance := int(mem.Total / 1024 / 1024 / 3)
+				if cache := ctx.GlobalInt(utils.CacheFlag.Name); cache > allowance {
+					log.Warn("Sanitizing cache to Go's GC limits", "provided", cache, "updated", allowance)
+					ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(allowance))
+				}
 			}
 		}
 		// Ensure Go's GC ignores the database cache for trigger percentage
