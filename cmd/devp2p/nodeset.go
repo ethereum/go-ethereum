@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"sort"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -34,8 +35,11 @@ const jsonIndent = "    "
 type nodeSet map[enode.ID]nodeJSON
 
 type nodeJSON struct {
-	Seq uint64      `json:"seq"`
-	N   *enode.Node `json:"record"`
+	Seq       uint64      `json:"seq"`
+	N         *enode.Node `json:"record"`
+	FirstSeen time.Time   `json:"firstSeen,omitempty"`
+	LastSeen  time.Time   `json:"lastSeen,omitempty"`
+	Checks    int         `json:"checks"`
 }
 
 func loadNodesJSON(file string) nodeSet {
@@ -70,7 +74,7 @@ func (ns nodeSet) nodes() []*enode.Node {
 
 func (ns nodeSet) add(nodes ...*enode.Node) {
 	for _, n := range nodes {
-		ns[n.ID()] = nodeJSON{Seq: n.Seq(), N: n}
+		ns[n.ID()] = nodeJSON{Seq: n.Seq(), N: n, FirstSeen: truncNow()}
 	}
 }
 
