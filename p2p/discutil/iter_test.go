@@ -19,6 +19,7 @@ package discutil
 import (
 	"context"
 	"encoding/binary"
+	"runtime"
 	"testing"
 	"time"
 
@@ -77,7 +78,6 @@ func checkNodes(t *testing.T, nodes []*enode.Node, wantLen int) {
 	}
 }
 
-
 // This test checks fairness of FairMix in the happy case where all sources return nodes
 // within the context's deadline.
 func TestFairMix(t *testing.T) {
@@ -93,10 +93,10 @@ func testMixerFairness(t *testing.T) {
 	mix.AddSource(&genIter{index: 3})
 	defer mix.Close()
 
-	nodes := ReadNodes(context.Background(), mix, 500)
-	if len(nodes) != 500 {
-		t.Fatal("wrong count from ReadNodes:", len(nodes), "want:", 500)
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	nodes := ReadNodes(ctx, mix, 500)
+	checkNodes(t, nodes, 500)
 
 	// Verify that the nodes slice contains an approximately equal number of nodes
 	// from each source.
@@ -119,9 +119,8 @@ func TestFairMixNextFromAll(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	nodes := ReadNodes(ctx, mix, 500)
-	if len(nodes) != 500 {
-		t.Fatal("wrong count from ReadNodes:", len(nodes), "want:", 500)
-	}
+	checkNodes(t, nodes, 500)
+
 	d := idPrefixDistribution(nodes)
 	if len(d) > 1 || d[1] != len(nodes) {
 		t.Fatalf("wrong ID distribution: %v", d)
@@ -155,7 +154,7 @@ func TestFairMixRemoveSource(t *testing.T) {
 	close(source.unblock) // first NextNode call will return (nil, false)
 	mix.AddSource(source)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	n, isLive := mix.NextNode(ctx)
 	if n != nil {
@@ -167,6 +166,38 @@ func TestFairMixRemoveSource(t *testing.T) {
 	if len(mix.sources) != 0 {
 		t.Fatalf("have %d sources, want zero", len(mix.sources))
 	}
+}
+
+func TestFairMixClose(t *testing.T) {
+	for i := 0; i < 20 && !t.Failed(); i++ {
+		testMixerClose(t)
+	}
+}
+
+func testMixerClose(t *testing.T) {
+	mix := NewFairMix(-1)
+	mix.AddSource(cycleNodes{})
+	mix.AddSource(cycleNodes{})
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if _, isLive := mix.NextNode(context.Background()); isLive {
+			t.Error("NextNode returned isLive == true")
+		}
+	}()
+	// This call is supposed to make it more likely that NextNode is
+	// actually executing by the time we call Close.
+	runtime.Gosched()
+
+	mix.Close()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("NextNode didn't unblock on Close")
+	}
+
+	mix.Close() // shouldn't crash
 }
 
 func idPrefixDistribution(nodes []*enode.Node) map[uint32]int {
@@ -225,8 +256,9 @@ func (s *blockedIter) NextNode(ctx context.Context) (*enode.Node, bool) {
 // cycleNodes is a never-ending interator that cycles through the given slice.
 type cycleNodes []*enode.Node
 
-func (s cycleNodes) NextNode(context.Context) (*enode.Node, bool) {
+func (s cycleNodes) NextNode(ctx context.Context) (*enode.Node, bool) {
 	if len(s) == 0 {
+		<-ctx.Done()
 		return nil, true
 	}
 	n := s[0]

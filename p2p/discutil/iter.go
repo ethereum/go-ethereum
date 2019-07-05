@@ -25,10 +25,11 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-// Iterator represents a sequence of nodes. The NextNode method returns the next node in
-// the sequence. It may return nil if no next node could be found before the context was
-// canceled. The isLive return value reports whether the iterator is still open. Once
-// closed, iterators keep returning (nil, false).
+// Iterator represents a sequence of nodes.
+//
+// The NextNode method returns the next node in the sequence. It may return nil when no
+// node could be found before the context was canceled. The isLive return value reports
+// whether the iterator is still open. Once closed, iterators should keep returning (nil, false).
 //
 // Implementations are not required to be safe for concurrent use. It is therefore unsafe
 // to call NextNode from multiple goroutines at the same time.
@@ -110,11 +111,10 @@ type mixSource struct {
 
 // NewFairMix creates a mixer.
 //
-// The timeout specifies how long the mixer will wait for the 'fair' choice before giving
-// up and taking a node from any other source. A good way to set the timeout is deciding
-// how long you'd want to wait for a node on average.
-//
-// Timeout zero is special and makes the mixer completely fair.
+// The timeout specifies how long the mixer will wait for the next fairly-chosen source
+// before giving up and taking a node from any other source. A good way to set the timeout
+// is deciding how long you'd want to wait for a node on average. Passing a negative
+// timeout disables the mixer completely fair.
 func NewFairMix(timeout time.Duration) *FairMix {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &FairMix{
@@ -158,25 +158,24 @@ func (m *FairMix) Close() {
 // NextNode returns a node from a random source.
 func (m *FairMix) NextNode(ctx context.Context) (*enode.Node, bool) {
 	var timeout <-chan time.Time
-	if m.timeout > 0 {
+	if m.timeout >= 0 {
 		timer := time.NewTimer(m.timeout)
 		timeout = timer.C
 		defer timer.Stop()
 	}
 	for {
-		// Select a source.
 		source := m.pickSource()
 		if source == nil {
 			return m.nextFromAny(ctx)
 		}
 		select {
 		case n, ok := <-source.next:
-			if ok {
-				return n, true
+			if !ok {
+				// This source has ended.
+				m.deleteSource(source)
+				continue
 			}
-			// This source has ended. Remove it from the list and try again
-			// with another source.
-			m.deleteSource(source)
+			return n, m.isLive()
 		case <-timeout:
 			return m.nextFromAny(ctx)
 		case <-ctx.Done():
@@ -227,13 +226,13 @@ func (m *FairMix) deleteSource(s *mixSource) {
 	}
 }
 
-// runSource runs a single source in a loop.
+// runSource reads a single source in a loop.
 func (m *FairMix) runSource(s *mixSource) {
 	defer m.wg.Done()
+	defer close(s.next)
 	for {
 		n, isLive := s.it.NextNode(m.ctx)
 		if !isLive {
-			close(s.next)
 			return
 		}
 		select {
