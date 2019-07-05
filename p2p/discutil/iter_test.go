@@ -20,39 +20,40 @@ import (
 	"context"
 	"encoding/binary"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
 func TestReadNodes(t *testing.T) {
-	iter := new(genSource)
+	iter := new(genIter)
 	nodes := ReadNodes(context.Background(), iter, 10)
 	checkNodes(t, nodes, 10)
 }
 
 // This test verifies that ReadNodes checks for context cancelation.
 func TestReadNodesCancel(t *testing.T) {
-	iter := &blockedIter{new(genSource), nil}
+	iter := &blockedIter{new(genIter), nil}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	nodes := ReadNodes(ctx, iter, 10)
 	checkNodes(t, nodes, 0)
 }
 
-// This test checks that ReadNodes terminates when reading N nodes from an iterator
-// which returns less than N nodes in an endless cycle.
+// // This test checks that ReadNodes terminates when reading N nodes from an iterator
+// // which returns less than N nodes in an endless cycle.
 func TestReadNodesCycle(t *testing.T) {
 	iter := &callCountIter{
-		child: CycleNodes([]*enode.Node{
+		child: cycleNodes{
 			testNode(0, 0),
 			testNode(1, 0),
 			testNode(2, 0),
-		}),
+		},
 	}
 	nodes := ReadNodes(context.Background(), iter, 10)
 	checkNodes(t, nodes, 3)
-	if iter.count != 100 {
+	if iter.count != 10 {
 		t.Fatalf("%d calls to NextNode, want %d", iter.count, 100)
 	}
 }
@@ -76,58 +77,123 @@ func checkNodes(t *testing.T, nodes []*enode.Node, wantLen int) {
 	}
 }
 
-type callCountIter struct {
-	child Iterator
-	count int
+
+// This test checks fairness of FairMix in the happy case where all sources return nodes
+// within the context's deadline.
+func TestFairMix(t *testing.T) {
+	for i := 0; i < 500; i++ {
+		testMixerFairness(t)
+	}
 }
 
-func (it *callCountIter) NextNode(ctx context.Context) *enode.Node {
-	it.count++
-	return it.child.NextNode(ctx)
-}
+func testMixerFairness(t *testing.T) {
+	mix := NewFairMix(1 * time.Second)
+	mix.AddSource(&genIter{index: 1})
+	mix.AddSource(&genIter{index: 2})
+	mix.AddSource(&genIter{index: 3})
+	defer mix.Close()
 
-// This test ensures Mixer doesn't crash for NextNode with no sources.
-func TestMixerEmpty(t *testing.T) {
-	mix := NewMixer()
-	_ = mix.NextNode(context.Background())
-}
-
-// This test checks fairness of Mixer for the simple case of three non-overlapping sources
-// which return nodes immediately.
-func TestMixerFairSimple(t *testing.T) {
-	sources := []Iterator{&genSource{index: 1}, &genSource{index: 2}, &genSource{index: 3}}
-	mix := NewMixer(sources...)
-	nodes := ReadNodes(context.Background(), mix, 198)
-	if len(nodes) != 198 {
-		t.Fatal("wrong count from ReadNodes:", len(nodes), "want:", 198)
+	nodes := ReadNodes(context.Background(), mix, 500)
+	if len(nodes) != 500 {
+		t.Fatal("wrong count from ReadNodes:", len(nodes), "want:", 500)
 	}
 
-	// Compute distribution.
-	d := make(map[uint32]int)
-	for i, node := range nodes {
-		if node == nil {
-			t.Fatalf("node %d is nil", i)
-		}
-		id := node.ID()
-		d[binary.BigEndian.Uint32(id[:4])]++
-	}
-	// Verify that the nodes slice contains an equal number of nodes from each source.
+	// Verify that the nodes slice contains an approximately equal number of nodes
+	// from each source.
+	d := idPrefixDistribution(nodes)
 	for _, count := range d {
-		if count != len(nodes)/len(sources) {
+		if approxEqual(count, len(nodes)/3, 30) {
 			t.Fatalf("ID distribution is unfair: %v", d)
 		}
 	}
 }
 
-// genSource creates fake nodes with numbered IDs based on 'index' and 'gen'
-type genSource struct {
+// This test checks that FairMix falls back to an alternative source when
+// the 'fair' choice doesn't return a node within the context's deadline.
+func TestFairMixNextFromAll(t *testing.T) {
+	mix := NewFairMix(1 * time.Millisecond)
+	mix.AddSource(&genIter{index: 1})
+	mix.AddSource(&blockedIter{child: &genIter{index: 2}})
+	defer mix.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	nodes := ReadNodes(ctx, mix, 500)
+	if len(nodes) != 500 {
+		t.Fatal("wrong count from ReadNodes:", len(nodes), "want:", 500)
+	}
+	d := idPrefixDistribution(nodes)
+	if len(d) > 1 || d[1] != len(nodes) {
+		t.Fatalf("wrong ID distribution: %v", d)
+	}
+}
+
+// This test ensures FairMix works for NextNode with no sources.
+func TestFairMixEmpty(t *testing.T) {
+	var (
+		mix   = NewFairMix(1 * time.Second)
+		testN = testNode(1, 1)
+		ch    = make(chan *enode.Node)
+	)
+	defer mix.Close()
+
+	go func() {
+		n, _ := mix.NextNode(context.Background())
+		ch <- n
+	}()
+
+	mix.AddSource(cycleNodes{testN})
+	if n := <-ch; n != testN {
+		t.Errorf("got wrong node: %v", n)
+	}
+}
+
+// This test checks closing a source while NextNode runs.
+func TestFairMixRemoveSource(t *testing.T) {
+	mix := NewFairMix(1 * time.Second)
+	source := &blockedIter{child: &genIter{index: 1}, unblock: make(chan struct{})}
+	close(source.unblock) // first NextNode call will return (nil, false)
+	mix.AddSource(source)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100 * time.Millisecond)
+	defer cancel()
+	n, isLive := mix.NextNode(ctx)
+	if n != nil {
+		t.Fatal("NextNode returned a node but shouldn't")
+	}
+	if !isLive {
+		t.Fatal("NextNode returned isLive == false")
+	}
+	if len(mix.sources) != 0 {
+		t.Fatalf("have %d sources, want zero", len(mix.sources))
+	}
+}
+
+func idPrefixDistribution(nodes []*enode.Node) map[uint32]int {
+	d := make(map[uint32]int)
+	for _, node := range nodes {
+		id := node.ID()
+		d[binary.BigEndian.Uint32(id[:4])]++
+	}
+	return d
+}
+
+func approxEqual(x, y, ε int) bool {
+	if y > x {
+		x, y = y, x
+	}
+	return x-y > ε
+}
+
+// genIter creates fake nodes with numbered IDs based on 'index' and 'gen'
+type genIter struct {
 	index, gen uint32
 }
 
-func (s *genSource) NextNode(ctx context.Context) *enode.Node {
+func (s *genIter) NextNode(ctx context.Context) (*enode.Node, bool) {
 	n := testNode(uint64(s.index)<<32|uint64(s.gen), 0)
 	s.gen++
-	return n
+	return n, true
 }
 
 func testNode(id, seq uint64) *enode.Node {
@@ -144,11 +210,38 @@ type blockedIter struct {
 	unblock chan struct{}
 }
 
-func (s *blockedIter) NextNode(ctx context.Context) *enode.Node {
+func (s *blockedIter) NextNode(ctx context.Context) (*enode.Node, bool) {
 	select {
-	case <-s.unblock:
+	case _, ok := <-s.unblock:
+		if !ok {
+			return nil, false
+		}
 		return s.child.NextNode(ctx)
 	case <-ctx.Done():
-		return nil
+		return nil, true
 	}
+}
+
+// cycleNodes is a never-ending interator that cycles through the given slice.
+type cycleNodes []*enode.Node
+
+func (s cycleNodes) NextNode(context.Context) (*enode.Node, bool) {
+	if len(s) == 0 {
+		return nil, true
+	}
+	n := s[0]
+	copy(s[:], s[1:])
+	s[len(s)-1] = n
+	return n, true
+}
+
+// callCountIter counts calls to NextNode.
+type callCountIter struct {
+	child Iterator
+	count int
+}
+
+func (it *callCountIter) NextNode(ctx context.Context) (*enode.Node, bool) {
+	it.count++
+	return it.child.NextNode(ctx)
 }
