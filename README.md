@@ -175,6 +175,8 @@ If you already had an existing account, import it. Otherwise, please initialize 
            
            --networkid: our network ID.
            
+           --tomo-testnet: required when the networkid is testnet(89).
+           
            --port: your full-node's listening port (default to 30303)
            
            --rpc, --rpccorsdomain, --rpcaddr, --rpcport, --rpcvhosts: your full-node will accept RPC requests at 8545 TCP.
