@@ -17,6 +17,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sort"
@@ -38,6 +39,7 @@ var (
 			discv4PingCommand,
 			discv4RequestRecordCommand,
 			discv4ResolveCommand,
+			discv4RandomWalkCommand,
 		},
 	}
 	discv4PingCommand = cli.Command{
@@ -54,6 +56,12 @@ var (
 		Name:   "resolve",
 		Usage:  "Finds a node in the DHT",
 		Action: discv4Resolve,
+		Flags:  []cli.Flag{bootnodesFlag},
+	}
+	discv4RandomWalkCommand = cli.Command{
+		Name:   "randomwalk",
+		Usage:  "Prints random nodes found in the DHT",
+		Action: discv4RandomNodes,
 		Flags:  []cli.Flag{bootnodesFlag},
 	}
 )
@@ -102,6 +110,21 @@ func discv4Resolve(ctx *cli.Context) error {
 
 	fmt.Println(disc.Resolve(n).String())
 	return nil
+}
+
+func discv4RandomNodes(ctx *cli.Context) error {
+	bootnodes, err := parseBootnodes(ctx)
+	if err != nil {
+		return err
+	}
+	disc, err := startV4(bootnodes)
+	if err != nil {
+		return err
+	}
+	iter := disc.RandomNodes()
+	for {
+		fmt.Println(iter.NextNode(context.Background()))
+	}
 }
 
 func getNodeArgAndStartV4(ctx *cli.Context) (*enode.Node, *discover.UDPv4, error) {
