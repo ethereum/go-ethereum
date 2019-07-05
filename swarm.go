@@ -25,7 +25,9 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -383,12 +385,21 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 		server := httpapi.NewServer(s.api, s.config.Cors)
 
 		if s.config.Cors != "" {
-			log.Debug("Swarm HTTP proxy CORS headers", "allowedOrigins", s.config.Cors)
+			log.Info("Swarm HTTP proxy CORS headers", "allowedOrigins", s.config.Cors)
 		}
 
-		log.Debug("Starting Swarm HTTP proxy", "port", s.config.Port)
 		go func() {
-			err := server.ListenAndServe(addr)
+			// We need to use net.Listen because the addr could be on port '0',
+			// which means that the OS will allocate a port for us
+			listener, err := net.Listen("tcp", addr)
+			if err != nil {
+				log.Error("Could not open a port for Swarm HTTP proxy", "err", err.Error())
+				return
+			}
+			s.config.Port = strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
+			log.Info("Starting Swarm HTTP proxy", "port", s.config.Port)
+
+			err = http.Serve(listener, server)
 			if err != nil {
 				log.Error("Could not start Swarm HTTP proxy", "err", err.Error())
 			}
@@ -481,7 +492,6 @@ func (s *Swarm) Protocols() (protos []p2p.Protocol) {
 // implements node.Service
 // APIs returns the RPC API descriptors the Swarm implementation offers
 func (s *Swarm) APIs() []rpc.API {
-
 	apis := []rpc.API{
 		// public APIs
 		{
