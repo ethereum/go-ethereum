@@ -37,6 +37,7 @@ type tmplContract struct {
 	Events      map[string]*tmplEvent  // Contract events accessors
 	Libraries   map[string]string      // Same as tmplData, but filtered to only keep what the contract needs
 	Structs     map[string]*tmplStruct // Contract struct type definitions
+	Library     bool
 }
 
 // tmplMethod is a wrapper around an abi.Method that contains a few preprocessed
@@ -509,7 +510,7 @@ import java.util.*;
 
 {{range $contract := .Contracts}}
 {{$structs := $contract.Structs}}
-public class {{.Type}} {
+{{if not .Library}}public {{end}}class {{.Type}} {
 	// ABI is the input ABI used to generate the binding from.
 	public final static String ABI = "{{.InputABI}}";
 	{{if $contract.FuncSigs}}
@@ -536,7 +537,7 @@ public class {{.Type}} {
 		// "link" contract to dependent libraries by deploying them first.
 		{{range $pattern, $name := .Libraries}}
 		{{capitalise $name}} {{decapitalise $name}}Inst = {{capitalise $name}}.deploy(auth, client);
-		bytecode.replace("__${{$pattern}}$__", {{decapitalise $name}}Inst.Address);
+		bytecode.replace("__${{$pattern}}$__", {{decapitalise $name}}Inst.Address.getHex().substring(2));
 		{{end}}
 		{{end}}
 		{{range $index, $element := .Constructor.Inputs}}Interface arg{{$index}} = Geth.newInterface();arg{{$index}}.set{{namedtype (bindtype .Type $structs) .Type}}({{.Name}});args.set({{$index}},arg{{$index}});

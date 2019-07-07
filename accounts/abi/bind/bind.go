@@ -51,6 +51,9 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 	// Process each individual contract requested binding
 	contracts := make(map[string]*tmplContract)
 
+	// Map used to flag each encountered library as such
+	isLib := make(map[string]struct{})
+
 	for i := 0; i < len(types); i++ {
 		// Parse the actual ABI to generate the binding for
 		evmABI, err := abi.JSON(strings.NewReader(abis[i]))
@@ -146,6 +149,13 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			Libraries:   make(map[string]string),
 			Structs:     structs,
 		}
+
+		// check if that type has already been identified as a library
+		_, ok := isLib[types[i]]
+		contracts[types[i]].Library = ok
+
+		// function 4-byte signatures are stored in the same sequence
+		// as types, if available.
 		if len(fsigs) > i {
 			contracts[types[i]].FuncSigs = fsigs[i]
 		}
@@ -157,6 +167,10 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			}
 			if matched {
 				contracts[types[i]].Libraries[pattern] = name
+				// keep track that this type is a library
+				if _, ok := isLib[name]; !ok {
+					isLib[name] = struct{}{}
+				}
 			}
 		}
 	}
