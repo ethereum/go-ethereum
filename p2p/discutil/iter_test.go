@@ -227,6 +227,8 @@ func (s *genIter) NextNode(ctx context.Context) (*enode.Node, bool) {
 	return n, true
 }
 
+func (s *genIter) Close() { panic("called") }
+
 func testNode(id, seq uint64) *enode.Node {
 	var nodeID enode.ID
 	binary.BigEndian.PutUint64(nodeID[:], id)
@@ -253,6 +255,8 @@ func (s *blockedIter) NextNode(ctx context.Context) (*enode.Node, bool) {
 	}
 }
 
+func (s *blockedIter) Close() { panic("called") }
+
 // cycleNodes is a never-ending interator that cycles through the given slice.
 type cycleNodes []*enode.Node
 
@@ -267,6 +271,8 @@ func (s cycleNodes) NextNode(ctx context.Context) (*enode.Node, bool) {
 	return n, true
 }
 
+func (s cycleNodes) Close() { panic("called") }
+
 // callCountIter counts calls to NextNode.
 type callCountIter struct {
 	child Iterator
@@ -276,4 +282,8 @@ type callCountIter struct {
 func (it *callCountIter) NextNode(ctx context.Context) (*enode.Node, bool) {
 	it.count++
 	return it.child.NextNode(ctx)
+}
+
+func (it *callCountIter) Close() {
+	it.child.Close()
 }

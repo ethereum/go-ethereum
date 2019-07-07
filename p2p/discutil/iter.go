@@ -31,10 +31,13 @@ import (
 // node could be found before the context was canceled. The isLive return value reports
 // whether the iterator is still open. Once closed, iterators should keep returning (nil, false).
 //
-// Implementations are not required to be safe for concurrent use. It is therefore unsafe
-// to call NextNode from multiple goroutines at the same time.
+// Implementations of NextNode are not required to be safe for concurrent use. It is
+// therefore unsafe to call NextNode from multiple goroutines at the same time.
+//
+// Close may be called concurrently with NextNode, and interrupts NextNode.
 type Iterator interface {
 	NextNode(ctx context.Context) (n *enode.Node, isLive bool)
+	Close()
 }
 
 // ReadNodes reads at most n nodes from the given iterator. The return value contains no
@@ -81,6 +84,10 @@ func (f *filterIter) NextNode(ctx context.Context) (*enode.Node, bool) {
 		n = nil
 	}
 	return n, isLive
+}
+
+func (f *filterIter) Close() {
+	f.it.Close()
 }
 
 // FairMix aggregates multiple node iterators. The mixer itself is an iterator which ends
