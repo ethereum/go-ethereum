@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
+// UDPConn is a network connection on which discovery can operate.
 type UDPConn interface {
 	ReadFromUDP(b []byte) (n int, addr *net.UDPAddr, err error)
 	WriteToUDP(b []byte, addr *net.UDPAddr) (n int, err error)
@@ -34,7 +35,7 @@ type UDPConn interface {
 	LocalAddr() net.Addr
 }
 
-// Config holds Table-related settings.
+// Config holds settings for the discovery listener.
 type Config struct {
 	// These settings are required and configure the UDP listener:
 	PrivateKey *ecdsa.PrivateKey
@@ -52,7 +53,7 @@ func ListenUDP(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 }
 
 // ReadPacket is a packet that couldn't be handled. Those packets are sent to the unhandled
-// channel if configured.
+// channel if configured. This is exported for internal use, do not use this type.
 type ReadPacket struct {
 	Data []byte
 	Addr *net.UDPAddr
@@ -61,7 +62,7 @@ type ReadPacket struct {
 type lookupFunc func(func(*enode.Node))
 
 // lookupWalker performs recursive lookups, walking the DHT.
-// It manages a set iterators which receive lookup results in real time.
+// It manages a set iterators which receive lookup results as they are found.
 type lookupWalker struct {
 	lookup lookupFunc
 
@@ -119,7 +120,10 @@ func (w *lookupWalker) loop() {
 
 		case <-w.closeCh:
 			for it := range iters {
-				close(it.buf)
+				it.drainAndClose()
+			}
+			if trigger == nil {
+				<-lookupDone
 			}
 			w.wg.Done()
 			return
@@ -127,7 +131,7 @@ func (w *lookupWalker) loop() {
 	}
 }
 
-func (w *lookupWalker) runLookup(nodes chan<- *enode.Node, done chan struct{}) {
+func (w *lookupWalker) runLookup(nodes chan<- *enode.Node, done chan<- struct{}) {
 	w.lookup(func(n *enode.Node) {
 		select {
 		case nodes <- n:
@@ -139,15 +143,16 @@ func (w *lookupWalker) runLookup(nodes chan<- *enode.Node, done chan struct{}) {
 
 // Iterator is a sequence of discovered nodes.
 type Iterator struct {
-	w      *lookupWalker
-	buf    chan *enode.Node
-	closed bool
+	w         *lookupWalker
+	buf       chan *enode.Node
+	closed    bool
+	closeOnce sync.Once
 }
 
 const lookupIteratorBuffer = 100
 
 func (w *lookupWalker) newIterator() *Iterator {
-	it := &Iterator{w, make(chan *enode.Node, lookupIteratorBuffer), false}
+	it := &Iterator{w: w, buf: make(chan *enode.Node, lookupIteratorBuffer)}
 	select {
 	case w.newIterCh <- it:
 	case <-w.closeCh:
@@ -168,42 +173,50 @@ func (it *Iterator) NextNode(ctx context.Context) (n *enode.Node, isLive bool) {
 		select {
 		case it.w.triggerCh <- struct{}{}:
 			// lookup triggered
-		case <-it.w.closeCh:
-			it.closed = true
-			return nil, false
 		case n, ok := <-it.buf:
 			if !ok {
 				it.closed = true
 			}
-			return n, it.closed
+			return n, !it.closed
 		case <-ctx.Done():
-			return nil, it.closed // TODO: should be permanently closed if channel is closed once.
+			return nil, !it.closed
 		}
 	}
 }
 
 // Close ends the iterator. This can be called concurrently with NextNode.
 func (it *Iterator) Close() {
-	select {
-	case it.w.delIterCh <- it:
-		close(it.buf)
-	case <-it.w.closeCh:
+	it.closeOnce.Do(func() {
+		select {
+		case it.w.delIterCh <- it:
+		case <-it.w.closeCh:
+		}
+		it.drainAndClose()
+	})
+}
+
+// deliver sends a node to the iterator buffer.
+func (it *Iterator) deliver(n *enode.Node) {
+	// We don't want deliver to block and replace stale results when they're not being
+	// read. Check whether the buffer is full and allow one receive from the buffer if so.
+	// This is OK because there is only one writer.
+	var remove chan *enode.Node
+	if len(it.buf) == cap(it.buf) {
+		remove = it.buf
+	}
+	for {
+		select {
+		case it.buf <- n:
+			return
+		case <-remove:
+			remove = nil
+		}
 	}
 }
 
-// deliver sends n to the iterator buffer.
-func (it *Iterator) deliver(n *enode.Node) {
-	// We don't want deliver to block and replacing stale results is OK if they're not
-	// being read fast enough. Check whether the buffer is full and enable the select case
-	// which removes an element if so. This doesn't race because deliver is only called by
-	// a single goroutine at a time.
-	remove := it.buf
-	if len(it.buf) < cap(it.buf) {
-		remove = nil
+func (it *Iterator) drainAndClose() {
+	for len(it.buf) > 0 {
+		<-it.buf
 	}
-	select {
-	case it.buf <- n:
-		return
-	case <-remove:
-	}
+	close(it.buf)
 }

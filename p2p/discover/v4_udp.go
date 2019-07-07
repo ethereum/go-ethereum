@@ -320,6 +320,7 @@ func (t *UDPv4) randomLookupWithCallback(callback func(*enode.Node)) {
 	t.lookup(target, callback)
 }
 
+// LookupPubkey finds the closest nodes to the given public key.
 func (t *UDPv4) LookupPubkey(key *ecdsa.PublicKey) []*enode.Node {
 	if t.tab.len() == 0 {
 		// All nodes were dropped, refresh. The very first query will hit this
@@ -329,12 +330,14 @@ func (t *UDPv4) LookupPubkey(key *ecdsa.PublicKey) []*enode.Node {
 	return unwrapNodes(t.lookup(encodePubkey(key), nil))
 }
 
+// for Table
 func (t *UDPv4) lookupRandom() []*enode.Node {
 	var target encPubkey
 	crand.Read(target[:])
 	return unwrapNodes(t.lookup(target, nil))
 }
 
+// for Table
 func (t *UDPv4) lookupSelf() []*enode.Node {
 	return unwrapNodes(t.lookup(encodePubkey(&t.priv.PublicKey), nil))
 }
