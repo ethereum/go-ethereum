@@ -50,6 +50,7 @@ func ReadNodes(ctx context.Context, it Iterator, n int) []*enode.Node {
 		if node == nil {
 			continue
 		}
+		// Remove duplicates, keeping the node with higher seq.
 		prevNode, ok := seen[node.ID()]
 		if ok && prevNode.Seq() > node.Seq() {
 			continue
