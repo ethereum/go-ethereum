@@ -30,6 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discutil"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
@@ -304,7 +305,7 @@ func (t *UDPv4) Close() {
 }
 
 // RandomNodes is an iterator yielding nodes from a random walk of the DHT.
-func (t *UDPv4) RandomNodes() *Iterator {
+func (t *UDPv4) RandomNodes() discutil.Iterator {
 	return t.randomWalk.newIterator()
 }
 

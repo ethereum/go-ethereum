@@ -66,8 +66,8 @@ type lookupFunc func(func(*enode.Node))
 type lookupWalker struct {
 	lookup lookupFunc
 
-	newIterCh chan *Iterator
-	delIterCh chan *Iterator
+	newIterCh chan *lookupIterator
+	delIterCh chan *lookupIterator
 	triggerCh chan struct{}
 	closeCh   chan struct{}
 	wg        sync.WaitGroup
@@ -76,8 +76,8 @@ type lookupWalker struct {
 func newLookupWalker(fn lookupFunc) *lookupWalker {
 	w := &lookupWalker{
 		lookup:    fn,
-		newIterCh: make(chan *Iterator),
-		delIterCh: make(chan *Iterator),
+		newIterCh: make(chan *lookupIterator),
+		delIterCh: make(chan *lookupIterator),
 		triggerCh: make(chan struct{}),
 		closeCh:   make(chan struct{}),
 	}
@@ -93,7 +93,7 @@ func (w *lookupWalker) close() {
 
 func (w *lookupWalker) loop() {
 	var (
-		iters      = make(map[*Iterator]struct{})
+		iters      = make(map[*lookupIterator]struct{})
 		foundNode  = make(chan *enode.Node)
 		lookupDone = make(chan struct{}, 1)
 		trigger    = w.triggerCh
@@ -141,8 +141,8 @@ func (w *lookupWalker) runLookup(nodes chan<- *enode.Node, done chan<- struct{})
 	done <- struct{}{}
 }
 
-// Iterator is a sequence of discovered nodes.
-type Iterator struct {
+// lookupIterator is a sequence of discovered nodes.
+type lookupIterator struct {
 	w         *lookupWalker
 	buf       chan *enode.Node
 	closed    bool
@@ -151,8 +151,8 @@ type Iterator struct {
 
 const lookupIteratorBuffer = 100
 
-func (w *lookupWalker) newIterator() *Iterator {
-	it := &Iterator{w: w, buf: make(chan *enode.Node, lookupIteratorBuffer)}
+func (w *lookupWalker) newIterator() *lookupIterator {
+	it := &lookupIterator{w: w, buf: make(chan *enode.Node, lookupIteratorBuffer)}
 	select {
 	case w.newIterCh <- it:
 	case <-w.closeCh:
@@ -162,13 +162,7 @@ func (w *lookupWalker) newIterator() *Iterator {
 	return it
 }
 
-// NextNode retrieves the next node if one could be discovered before the passed context
-// was canceled. This triggers a lookup operation if none is running. The isLive return
-// value says whether the iterator is still open. NextNode returns (nil, false) after Close
-// has been called.
-//
-// NextNode is not safe for concurrent use.
-func (it *Iterator) NextNode(ctx context.Context) (n *enode.Node, isLive bool) {
+func (it *lookupIterator) NextNode(ctx context.Context) (n *enode.Node, isLive bool) {
 	for {
 		select {
 		case it.w.triggerCh <- struct{}{}:
@@ -184,8 +178,7 @@ func (it *Iterator) NextNode(ctx context.Context) (n *enode.Node, isLive bool) {
 	}
 }
 
-// Close ends the iterator. This can be called concurrently with NextNode.
-func (it *Iterator) Close() {
+func (it *lookupIterator) Close() {
 	it.closeOnce.Do(func() {
 		select {
 		case it.w.delIterCh <- it:
@@ -196,7 +189,7 @@ func (it *Iterator) Close() {
 }
 
 // deliver sends a node to the iterator buffer.
-func (it *Iterator) deliver(n *enode.Node) {
+func (it *lookupIterator) deliver(n *enode.Node) {
 	// We don't want deliver to block and replace stale results when they're not being
 	// read. Check whether the buffer is full and allow one receive from the buffer if so.
 	// This is OK because there is only one writer.
@@ -214,7 +207,7 @@ func (it *Iterator) deliver(n *enode.Node) {
 	}
 }
 
-func (it *Iterator) drainAndClose() {
+func (it *lookupIterator) drainAndClose() {
 	for len(it.buf) > 0 {
 		<-it.buf
 	}
