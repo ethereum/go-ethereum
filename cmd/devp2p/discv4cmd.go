@@ -121,9 +121,15 @@ func discv4RandomNodes(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	defer disc.Close()
+
 	iter := disc.RandomNodes()
 	for {
-		fmt.Println(iter.NextNode(context.Background()))
+		n, ok := iter.NextNode(context.Background())
+		if !ok {
+			return nil
+		}
+		fmt.Println(n)
 	}
 }
 
