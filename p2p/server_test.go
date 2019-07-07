@@ -234,7 +234,6 @@ func TestServerTaskScheduling(t *testing.T) {
 		localnode: enode.NewLocalNode(db, newkey()),
 		nodedb:    db,
 		quit:      make(chan struct{}),
-		ntab:      fakeTable{},
 		running:   true,
 		log:       log.New(),
 	}
@@ -282,7 +281,6 @@ func TestServerManyTasks(t *testing.T) {
 			quit:      make(chan struct{}),
 			localnode: enode.NewLocalNode(db, newkey()),
 			nodedb:    db,
-			ntab:      fakeTable{},
 			running:   true,
 			log:       log.New(),
 		}

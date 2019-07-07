@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/discutil"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -167,15 +168,17 @@ type Server struct {
 	lock    sync.Mutex // protects running
 	running bool
 
-	nodedb       *enode.DB
-	localnode    *enode.LocalNode
-	ntab         discoverTable
 	listener     net.Listener
 	ourHandshake *protoHandshake
-	DiscV5       *discv5.Network
 	loopWG       sync.WaitGroup // loop, listenLoop
 	peerFeed     event.Feed
 	log          log.Logger
+
+	nodedb    *enode.DB
+	localnode *enode.LocalNode
+	ntab      *discover.UDPv4
+	DiscV5    *discv5.Network
+	discmix   *discutil.FairMix
 
 	// Channels into the run loop.
 	quit                    chan struct{}
@@ -465,7 +468,7 @@ func (srv *Server) Start() (err error) {
 	}
 
 	dynPeers := srv.maxDialedConns()
-	dialer := newDialState(srv.localnode.ID(), srv.ntab, dynPeers, &srv.Config)
+	dialer := newDialState(srv.localnode.ID(), dynPeers, &srv.Config)
 	srv.loopWG.Add(1)
 	go srv.run(dialer)
 	return nil
@@ -517,6 +520,8 @@ func (srv *Server) setupLocalNode() error {
 }
 
 func (srv *Server) setupDiscovery() error {
+	srv.discmix = discutil.NewFairMix(fallbackInterval)
+
 	if srv.NoDiscovery && !srv.DiscoveryV5 {
 		return nil
 	}
@@ -558,7 +563,9 @@ func (srv *Server) setupDiscovery() error {
 			return err
 		}
 		srv.ntab = ntab
+		srv.discmix.AddSource(ntab.RandomNodes())
 	}
+
 	// Discovery V5
 	if srv.DiscoveryV5 {
 		var ntab *discv5.Network

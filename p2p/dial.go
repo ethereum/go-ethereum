@@ -17,12 +17,14 @@
 package p2p
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discutil"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
@@ -33,12 +35,9 @@ const (
 	// private networks.
 	dialHistoryExpiration = inboundThrottleTime + 5*time.Second
 
-	// Discovery lookups are throttled and can only run
-	// once every few seconds.
-	lookupInterval = 4 * time.Second
+	discoveryTimeout = 4 * time.Second
 
-	// If no peers are found for this amount of time, the initial bootnodes are
-	// attempted to be connected.
+	// If no peers are found for this amount of time, the initial bootnodes are dialed.
 	fallbackInterval = 20 * time.Second
 
 	// Endpoint resolution is throttled with bounded backoff.
@@ -69,7 +68,6 @@ func (t TCPDialer) Dial(dest *enode.Node) (net.Conn, error) {
 // of the main loop in Server.run.
 type dialstate struct {
 	maxDynDials int
-	ntab        discoverTable
 	netrestrict *netutil.Netlist
 	self        enode.ID
 	bootnodes   []*enode.Node // default dials when there are no peers
@@ -79,16 +77,8 @@ type dialstate struct {
 	lookupRunning bool
 	dialing       map[enode.ID]connFlag
 	lookupBuf     []*enode.Node // current discovery lookup results
-	randomNodes   []*enode.Node // filled from Table
 	static        map[enode.ID]*dialTask
 	hist          expHeap
-}
-
-type discoverTable interface {
-	Close()
-	Resolve(*enode.Node) *enode.Node
-	LookupRandom() []*enode.Node
-	ReadRandomNodes([]*enode.Node) int
 }
 
 type task interface {
@@ -108,6 +98,7 @@ type dialTask struct {
 // Only one discoverTask is active at any time.
 // discoverTask.Do performs a random lookup.
 type discoverTask struct {
+	want    int
 	results []*enode.Node
 }
 
@@ -117,17 +108,15 @@ type waitExpireTask struct {
 	time.Duration
 }
 
-func newDialState(self enode.ID, ntab discoverTable, maxdyn int, cfg *Config) *dialstate {
+func newDialState(self enode.ID, maxdyn int, cfg *Config) *dialstate {
 	s := &dialstate{
 		maxDynDials: maxdyn,
-		ntab:        ntab,
 		self:        self,
 		netrestrict: cfg.NetRestrict,
 		log:         cfg.Logger,
 		static:      make(map[enode.ID]*dialTask),
 		dialing:     make(map[enode.ID]connFlag),
 		bootnodes:   make([]*enode.Node, len(cfg.BootstrapNodes)),
-		randomNodes: make([]*enode.Node, maxdyn/2),
 	}
 	copy(s.bootnodes, cfg.BootstrapNodes)
 	if s.log == nil {
@@ -206,17 +195,7 @@ func (s *dialstate) newTasks(nRunning int, peers map[enode.ID]*Peer, now time.Ti
 			needDynDials--
 		}
 	}
-	// Use random nodes from the table for half of the necessary
-	// dynamic dials.
-	randomCandidates := needDynDials / 2
-	if randomCandidates > 0 {
-		n := s.ntab.ReadRandomNodes(s.randomNodes)
-		for i := 0; i < randomCandidates && i < n; i++ {
-			if addDial(dynDialedConn, s.randomNodes[i]) {
-				needDynDials--
-			}
-		}
-	}
+
 	// Create dynamic dials from random lookup results, removing tried
 	// items from the result buffer.
 	i := 0
@@ -226,10 +205,11 @@ func (s *dialstate) newTasks(nRunning int, peers map[enode.ID]*Peer, now time.Ti
 		}
 	}
 	s.lookupBuf = s.lookupBuf[:copy(s.lookupBuf, s.lookupBuf[i:])]
+
 	// Launch a discovery lookup if more candidates are needed.
 	if len(s.lookupBuf) < needDynDials && !s.lookupRunning {
 		s.lookupRunning = true
-		newtasks = append(newtasks, &discoverTask{})
+		newtasks = append(newtasks, &discoverTask{want: needDynDials - len(s.lookupBuf)})
 	}
 
 	// Launch a timer to wait for the next node to expire if all
@@ -351,21 +331,17 @@ func (t *dialTask) String() string {
 }
 
 func (t *discoverTask) Do(srv *Server) {
-	// newTasks generates a lookup task whenever dynamic dials are
-	// necessary. Lookups need to take some time, otherwise the
-	// event loop spins too fast.
-	next := srv.lastLookup.Add(lookupInterval)
-	if now := time.Now(); now.Before(next) {
-		time.Sleep(next.Sub(now))
-	}
-	srv.lastLookup = time.Now()
-	t.results = srv.ntab.LookupRandom()
+	ctx, cancel := context.WithTimeout(context.Background(), discoveryTimeout)
+	defer cancel()
+	t.results = discutil.ReadNodes(ctx, srv.discmix, t.want)
 }
 
 func (t *discoverTask) String() string {
 	s := "discovery lookup"
 	if len(t.results) > 0 {
 		s += fmt.Sprintf(" (%d results)", len(t.results))
+	} else {
+		s += fmt.Sprintf(" (want %d)", t.want)
 	}
 	return s
 }
