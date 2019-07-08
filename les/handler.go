@@ -385,7 +385,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&req); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
-
+		if err := req.sanityCheck(); err != nil {
+			return err
+		}
 		if p.requestAnnounceType == announceTypeSigned {
 			if err := req.checkSignature(p.ID()); err != nil {
 				p.Log().Trace("Invalid announcement signature", "err", err)
