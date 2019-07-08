@@ -67,8 +67,8 @@ Wire Protocol Specifications
 
 | Msg Name | From->To | Params   | Example |
 | -------- | -------- | -------- | ------- |
-| StreamInfoReq   | Client->Server  | Streams`[]string` | `SYNC\|6, SYNC\|5` |
-| StreamInfoRes   | Server->Client  | Streams`[]StreamDescriptor` <br>Stream`string`<br>Cursor`uint64`<br>Bounded`bool` | `SYNC\|6;CUR=1632;bounded, SYNC\|7;CUR=18433;bounded` |
+| StreamInfoReq   | Client->Server  | Streams`[]ID` | `SYNC\|6, SYNC\|5` |
+| StreamInfoRes   | Server->Client  | Streams`[]StreamDescriptor` <br>Stream`ID`<br>Cursor`uint64`<br>Bounded`bool` | `SYNC\|6;CUR=1632;bounded, SYNC\|7;CUR=18433;bounded` |
 | GetRange | Client->Server| Ruid`uint`<br>Stream `string`<br>From`uint`<br>To`*uint`(nullable)<br>Roundtrip`bool` | `Ruid: 21321, Stream: SYNC\|6, From: 1, To: 100`(bounded), Roundtrip: true<br>`Stream: SYNC\|7, From: 109, Roundtrip: true`(unbounded) | 
 | OfferedHashes | Server->Client| Ruid`uint`<br>Hashes `[]byte` | `Ruid: 21321, Hashes: [cbcbbaddda, bcbbbdbbdc, ....]` |
 | WantedHashes | Client->Server | Ruid`uint`<br>Bitvector`[]byte` | `Ruid: 21321, Bitvector: [0100100100] ` |
@@ -81,65 +81,120 @@ Notes:
 * two notions of bounded - on the stream level and on the localstore
 * if TO is not specified - we assume unbounded stream, and we just send whatever, until at most, we fill up an entire batch.
 
-### Message struct definitions:
+### Message and interface definitions:
+
+
 ```go
+// StreamProvider interface provides a lightweight abstraction that allows an easily-pluggable
+// stream provider as part of the Stream! protocol specification.
+type StreamProvider interface {
+  NeedData(ctx context.Context, key []byte) (need bool, wait func(context.Context) error)
+	Get(ctx context.Context, addr chunk.Address) ([]byte, error)
+	Put(ctx context.Context, addr chunk.Address, data []byte) (exists bool, err error)
+	Subscribe(ctx context.Context, key interface{}, from, to uint64) (<-chan chunk.Descriptor, func())
+	Cursor(interface{}) (uint64, error)
+	RunUpdateStreams(p *Peer)
+	StreamName() string
+	ParseKey(string) (interface{}, error)
+	EncodeKey(interface{}) (string, error)
+	StreamBehavior() StreamInitBehavior
+	Boundedness() bool
+}
+```
+
+```go
+type StreamInitBehavior int
+```
+
+```go
+// StreamInfoReq is a request to get information about particular streams
 type StreamInfoReq struct {
-  Streams []string
+	Streams []ID
 }
 ```
+
 ```go
+// StreamInfoRes is a response to StreamInfoReq with the corresponding stream descriptors
 type StreamInfoRes struct {
-  Streams []StreamDescriptor
+	Streams []StreamDescriptor
 }
 ```
+
 ```go
+// StreamDescriptor describes an arbitrary stream
 type StreamDescriptor struct {
-  Name      string
-  Cursor    uint
-  Bounded   bool
+	Stream  ID
+	Cursor  uint64
+	Bounded bool
 }
 ```
+
 ```go
+// GetRange is a message sent from the downstream peer to the upstream peer asking for chunks
+// within a particular interval for a certain stream
 type GetRange struct {
-  Ruid      uint
-  Stream    string
-  From      uint
-  To        uint `rlp:nil`
-  BatchSize uint
-  Roundtrip bool
+	Ruid      uint
+	Stream    ID
+	From      uint64
+	To        uint64 `rlp:nil`
+	BatchSize uint
+	Roundtrip bool
 }
 ```
+
 ```go
+// OfferedHashes is a message sent from the upstream peer to the downstream peer allowing the latter
+// to selectively ask for chunks within a particular requested interval
 type OfferedHashes struct {
-  Ruid      uint
-  LastIndex uint
-  Hashes    []byte
+	Ruid      uint
+	LastIndex uint
+	Hashes    []byte
 }
 ```
+
 ```go
+// WantedHashes is a message sent from the downstream peer to the upstream peer in response
+// to OfferedHashes in order to selectively ask for a particular chunks within an interval
 type WantedHashes struct {
-  Ruid        uint
-  BitVector   []byte
+	Ruid      uint
+	BitVector []byte
 }
 ```
+
 ```go
+// ChunkDelivery delivers a frame of chunks in response to a WantedHashes message
 type ChunkDelivery struct {
-  Ruid uint
-  LastIndex uint
-  Chunks [][]byte
+	Ruid      uint
+	LastIndex uint
+	Chunks    []DeliveredChunk
 }
 ```
+
 ```go
-type BatchDone struct {
-  Ruid uint
-  Last uint
+// DeliveredChunk encapsulates a particular chunk's underlying data within a ChunkDelivery message
+type DeliveredChunk struct {
+	Addr storage.Address
+	Data []byte
 }
 ```
+
 ```go
+// StreamState is a message exchanged between two nodes to notify of changes or errors in a stream's state
 type StreamState struct {
-  Stream string
-  Code uint16
-  Message string
+	Stream  ID
+	Code    uint16
+	Message string
+}
+```
+
+```go
+// Stream defines a unique stream identifier in a textual representation
+type ID struct {
+	// Name is used for the Stream provider identification
+	Name string
+	// Key is the name of specific data stream within the stream provider. The semantics of this value
+	// is at the discretion of the stream provider implementation
+	Key string
 }
 ```
 
@@ -147,14 +202,14 @@ Message exchange examples:
 ======
 
 Initial handshake - client queries server for stream states<br>
-![handshake](https://raw.githubusercontent.com/ethersphere/swarm/stream-spec/docs/diagrams/stream-handshake.png)
+![handshake](https://raw.githubusercontent.com/ethersphere/swarm/master/docs/diagrams/stream-handshake.png)
 <br>
 GetRange (bounded) - client requests a bounded range within a stream<br>
-![bounded-range](https://raw.githubusercontent.com/ethersphere/swarm/stream-spec/docs/diagrams/stream-bounded.png)
+![bounded-range](https://raw.githubusercontent.com/ethersphere/swarm/master/docs/diagrams/stream-bounded.png)
 <br>
 GetRange (unbounded) - client requests an unbounded range (specifies only `From` parameter)<br>
-![unbounded-range](https://raw.githubusercontent.com/ethersphere/swarm/stream-spec/docs/diagrams/stream-unbounded.png)
+![unbounded-range](https://raw.githubusercontent.com/ethersphere/swarm/master/docs/diagrams/stream-unbounded.png)
 <br>
 GetRange (no roundtrip) - client requests an unbounded or bounded range with no roundtrip configured<br>
-![unbounded-range](https://raw.githubusercontent.com/ethersphere/swarm/stream-spec/docs/diagrams/stream-no-roundtrip.png)
+![unbounded-range](https://raw.githubusercontent.com/ethersphere/swarm/master/docs/diagrams/stream-no-roundtrip.png)
 
