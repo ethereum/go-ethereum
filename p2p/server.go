@@ -180,6 +180,8 @@ type Server struct {
 	DiscV5    *discv5.Network
 	discmix   *discutil.FairMix
 
+	staticNodeResolver nodeResolver
+
 	// Channels into the run loop.
 	quit                    chan struct{}
 	addstatic               chan *enode.Node
@@ -564,6 +566,7 @@ func (srv *Server) setupDiscovery() error {
 		}
 		srv.ntab = ntab
 		srv.discmix.AddSource(ntab.RandomNodes())
+		srv.staticNodeResolver = ntab
 	}
 
 	// Discovery V5
