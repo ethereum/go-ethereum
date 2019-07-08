@@ -32,12 +32,11 @@ import (
 var explorerDockerfile = `
 FROM puppeth/blockscout:latest
 
-
 ADD genesis.json /genesis.json
 RUN \
   echo 'geth --cache 512 init /genesis.json' > explorer.sh && \
-  echo $'geth --networkid {{.NetworkID}} --syncmode "full" --gcmode "archive" --port {{.NodePort}} --bootnodes {{.Bootnodes}} --ethstats \'{{.Ethstats}}\' --cache=512 --rpc --rpcapi "net,web3,eth,shh,debug" --rpccorsdomain "*" --rpcvhosts "*" --ws --wsorigins "*" --exitwhensynced' >> explorer.sh && \
-  echo $'exec geth --networkid {{.NetworkID}} --syncmode "full" --gcmode "archive" --port {{.NodePort}} --bootnodes {{.Bootnodes}} --ethstats \'{{.Ethstats}}\' --cache=512 --rpc --rpcapi "net,web3,eth,shh,debug" --rpccorsdomain "*" --rpcvhosts "*" --ws --wsorigins "*" &' >> explorer.sh && \
+  echo $'geth --networkid {{.NetworkID}} --syncmode "full" --gcmode "archive" --port {{.EthPort}} --bootnodes {{.Bootnodes}} --ethstats \'{{.Ethstats}}\' --cache=512 --rpc --rpcapi "net,web3,eth,shh,debug" --rpccorsdomain "*" --rpcvhosts "*" --ws --wsorigins "*" --exitwhensynced' >> explorer.sh && \
+  echo $'exec geth --networkid {{.NetworkID}} --syncmode "full" --gcmode "archive" --port {{.EthPort}} --bootnodes {{.Bootnodes}} --ethstats \'{{.Ethstats}}\' --cache=512 --rpc --rpcapi "net,web3,eth,shh,debug" --rpccorsdomain "*" --rpcvhosts "*" --ws --wsorigins "*" &' >> explorer.sh && \
   echo '/usr/local/bin/docker-entrypoint.sh postgres &' >> explorer.sh && \
   echo 'sleep 5' >> explorer.sh && \
   echo 'mix do ecto.drop --force, ecto.create, ecto.migrate' >> explorer.sh && \
@@ -56,18 +55,17 @@ services:
         image: {{.Network}}/explorer
         container_name: {{.Network}}_explorer_1
         ports:
-            - "{{.NodePort}}:{{.NodePort}}"
-            - "{{.NodePort}}:{{.NodePort}}/udp"{{if not .VHost}}
+            - "{{.EthPort}}:{{.EthPort}}"
+            - "{{.EthPort}}:{{.EthPort}}/udp"{{if not .VHost}}
             - "{{.WebPort}}:4000"{{end}}
         environment:
-            - NETWORK={{.NetworkName}}{{if .VHost}}
+            - ETH_PORT={{.EthPort}}
+            - ETH_NAME={{.EthName}}
+            - BLOCK_TRANSFORMER={{.Transformer}}{{if .VHost}}
             - VIRTUAL_HOST={{.VHost}}
             - VIRTUAL_PORT=4000{{end}}
-            - NODE_PORT={{.NodePort}}/tcp
-            - STATS={{.Ethstats}}
-            - BLOCK_TRANSFORMER={{.Transformer}}
         volumes:
-            - {{.Datadir}}:/root/.ethereum
+            - {{.Datadir}}:/opt/app/.ethereum
             - {{.DBDir}}:/var/lib/postgresql/data
         logging:
           driver: "json-file"
@@ -87,10 +85,10 @@ func deployExplorer(client *sshClient, network string, bootnodes []string, confi
 
 	dockerfile := new(bytes.Buffer)
 	template.Must(template.New("").Parse(explorerDockerfile)).Execute(dockerfile, map[string]interface{}{
-		"NetworkID": config.networkId,
+		"NetworkID": config.node.network,
 		"Bootnodes": strings.Join(bootnodes, ","),
-		"Ethstats":  config.ethstats,
-		"NodePort":  config.nodePort,
+		"Ethstats":  config.node.ethstats,
+		"EthPort":   config.node.port,
 	})
 	files[filepath.Join(workdir, "Dockerfile")] = dockerfile.Bytes()
 
@@ -100,18 +98,18 @@ func deployExplorer(client *sshClient, network string, bootnodes []string, confi
 	}
 	composefile := new(bytes.Buffer)
 	template.Must(template.New("").Parse(explorerComposefile)).Execute(composefile, map[string]interface{}{
-		"NetworkName": network,
-		"VHost":       config.webHost,
-		"Ethstats":    config.ethstats,
-		"Datadir":     config.datadir,
-		"DBDir":       config.dbdir,
 		"Network":     network,
-		"NodePort":    config.nodePort,
-		"WebPort":     config.webPort,
+		"VHost":       config.host,
+		"Ethstats":    config.node.ethstats,
+		"Datadir":     config.node.datadir,
+		"DBDir":       config.dbdir,
+		"EthPort":     config.node.port,
+		"EthName":     config.node.ethstats[:strings.Index(config.node.ethstats, ":")],
+		"WebPort":     config.port,
 		"Transformer": transformer,
 	})
 	files[filepath.Join(workdir, "docker-compose.yaml")] = composefile.Bytes()
-	files[filepath.Join(workdir, "genesis.json")] = config.genesis
+	files[filepath.Join(workdir, "genesis.json")] = config.node.genesis
 
 	// Upload the deployment files to the remote server (and clean up afterwards)
 	if out, err := client.Upload(files); err != nil {
@@ -129,25 +127,20 @@ func deployExplorer(client *sshClient, network string, bootnodes []string, confi
 // explorerInfos is returned from a block explorer status check to allow reporting
 // various configuration parameters.
 type explorerInfos struct {
-	genesis   []byte
-	datadir   string
-	dbdir     string
-	ethstats  string
-	nodePort  int
-	webHost   string
-	webPort   int
-	networkId int64
+	node  *nodeInfos
+	dbdir string
+	host  string
+	port  int
 }
 
 // Report converts the typed struct into a plain string->string map, containing
 // most - but not all - fields for reporting to the user.
 func (info *explorerInfos) Report() map[string]string {
 	report := map[string]string{
-		"Data directory":         info.datadir,
-		"Node listener port ":    strconv.Itoa(info.nodePort),
-		"Ethstats username":      info.ethstats,
-		"Website address ":       info.webHost,
-		"Website listener port ": strconv.Itoa(info.webPort),
+		"Website address ":        info.host,
+		"Website listener port ":  strconv.Itoa(info.port),
+		"Ethereum listener port ": strconv.Itoa(info.node.port),
+		"Ethstats username":       info.node.ethstats,
 	}
 	return report
 }
@@ -164,13 +157,13 @@ func checkExplorer(client *sshClient, network string) (*explorerInfos, error) {
 		return nil, ErrServiceOffline
 	}
 	// Resolve the port from the host, or the reverse proxy
-	webPort := infos.portmap["4000/tcp"]
-	if webPort == 0 {
+	port := infos.portmap["4000/tcp"]
+	if port == 0 {
 		if proxy, _ := checkNginx(client, network); proxy != nil {
-			webPort = proxy.port
+			port = proxy.port
 		}
 	}
-	if webPort == 0 {
+	if port == 0 {
 		return nil, ErrNotExposed
 	}
 	// Resolve the host from the reverse-proxy and the config values
@@ -179,18 +172,19 @@ func checkExplorer(client *sshClient, network string) (*explorerInfos, error) {
 		host = client.server
 	}
 	// Run a sanity check to see if the devp2p is reachable
-	nodePort := infos.portmap[infos.envvars["NODE_PORT"]]
-	if err = checkPort(client.server, nodePort); err != nil {
-		log.Warn(fmt.Sprintf("Explorer devp2p port seems unreachable"), "server", client.server, "port", nodePort, "err", err)
+	if err = checkPort(host, port); err != nil {
+		log.Warn("Explorer service seems unreachable", "server", host, "port", port, "err", err)
 	}
 	// Assemble and return the useful infos
 	stats := &explorerInfos{
-		dbdir:    infos.volumes["/var/lib/postgresql/data"],
-		datadir:  infos.volumes["/root/.ethereum"],
-		nodePort: nodePort,
-		webHost:  host,
-		webPort:  webPort,
-		ethstats: infos.envvars["STATS"],
+		node: &nodeInfos{
+			datadir:  infos.volumes["/opt/app/.ethereum"],
+			port:     infos.portmap[infos.envvars["ETH_PORT"]+"/tcp"],
+			ethstats: infos.envvars["ETH_NAME"],
+		},
+		dbdir: infos.volumes["/var/lib/postgresql/data"],
+		host:  host,
+		port:  port,
 	}
 	return stats, nil
 }
