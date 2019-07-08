@@ -141,7 +141,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		contracts[types[i]] = &tmplContract{
 			Type:        capitalise(types[i]),
 			InputABI:    strings.Replace(strippedABI, "\"", "\\\"", -1),
-			InputBin:    strings.TrimSpace(bytecodes[i]),
+			InputBin:    strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x"),
 			Constructor: evmABI.Constructor,
 			Calls:       calls,
 			Transacts:   transacts,
@@ -149,17 +149,12 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			Libraries:   make(map[string]string),
 			Structs:     structs,
 		}
-
-		// check if that type has already been identified as a library
-		_, ok := isLib[types[i]]
-		contracts[types[i]].Library = ok
-
-		// function 4-byte signatures are stored in the same sequence
+		// Function 4-byte signatures are stored in the same sequence
 		// as types, if available.
 		if len(fsigs) > i {
 			contracts[types[i]].FuncSigs = fsigs[i]
 		}
-
+		// Parse library references.
 		for pattern, name := range libs {
 			matched, err := regexp.Match("__\\$"+pattern+"\\$__", []byte(contracts[types[i]].InputBin))
 			if err != nil {
@@ -173,6 +168,11 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 				}
 			}
 		}
+	}
+	// Check if that type has already been identified as a library
+	for i := 0; i < len(types); i++ {
+		_, ok := isLib[types[i]]
+		contracts[types[i]].Library = ok
 	}
 	// Generate the contract template data content and render it
 	data := &tmplData{

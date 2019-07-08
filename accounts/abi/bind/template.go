@@ -116,15 +116,14 @@ var (
 	{{if $contract.FuncSigs}}
 		// {{.Type}}FuncSigs maps the 4-byte function signature to its string representation.
 		var {{.Type}}FuncSigs = map[string]string{
-			{{range $strsig, $binsig := .FuncSigs}}
-				"{{$binsig}}": "{{$strsig}}",
+			{{range $strsig, $binsig := .FuncSigs}}"{{$binsig}}": "{{$strsig}}",
 			{{end}}
 		}
 	{{end}}
 
 	{{if .InputBin}}
 		// {{.Type}}Bin is the compiled bytecode used for deploying new contracts.
-		var {{.Type}}Bin = ` + "`" + `{{.InputBin}}` + "`" + `
+		var {{.Type}}Bin = "0x{{.InputBin}}"
 
 		// Deploy{{.Type}} deploys a new Ethereum contract, binding an instance of {{.Type}} to it.
 		func Deploy{{.Type}}(auth *bind.TransactOpts, backend bind.ContractBackend {{range .Constructor.Inputs}}, {{.Name}} {{bindtype .Type $structs}}{{end}}) (common.Address, *types.Transaction, *{{.Type}}, error) {
@@ -518,8 +517,7 @@ import java.util.*;
 		public final static Map<String, String> {{.Type}}FuncSigs;
 		static {
 			Hashtable<String, String> temp = new Hashtable<String, String>();
-			{{range $strsig, $binsig := .FuncSigs}}
-				temp.put("{{$binsig}}", "{{$strsig}}");
+			{{range $strsig, $binsig := .FuncSigs}}temp.put("{{$binsig}}", "{{$strsig}}");
 			{{end}}
 			{{.Type}}FuncSigs = Collections.unmodifiableMap(temp);
 		}
@@ -537,7 +535,7 @@ import java.util.*;
 		// "link" contract to dependent libraries by deploying them first.
 		{{range $pattern, $name := .Libraries}}
 		{{capitalise $name}} {{decapitalise $name}}Inst = {{capitalise $name}}.deploy(auth, client);
-		bytecode.replace("__${{$pattern}}$__", {{decapitalise $name}}Inst.Address.getHex().substring(2));
+		bytecode = bytecode.replace("__${{$pattern}}$__", {{decapitalise $name}}Inst.Address.getHex().substring(2));
 		{{end}}
 		{{end}}
 		{{range $index, $element := .Constructor.Inputs}}Interface arg{{$index}} = Geth.newInterface();arg{{$index}}.set{{namedtype (bindtype .Type $structs) .Type}}({{.Name}});args.set({{$index}},arg{{$index}});
