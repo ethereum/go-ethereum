@@ -19,45 +19,41 @@ package eth
 import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// ENR is the "eth" Ethereum Node Record, advertising various information useful
-// for maintaining the Ethereum computer network.
-//
-// Whilst only one thing is contained here for now, the ENR is a struct to permit
-// future extensibility.
-type ENR struct {
+// ethEntry is the "eth" ENR entry which advertises eth protocol
+// on the discovery network.
+type ethEntry struct {
 	ForkID forkid.ID // Fork identifier per EIP-2124
 
 	// Ignore additional fields (for forward compatibility).
 	Rest []rlp.RawValue `rlp:"tail"`
 }
 
-// NewENR calculates the Ethereum network ENR from various information available
-// from the chain.
-func NewENR(chain *core.BlockChain) ENR {
-	return ENR{
-		ForkID: forkid.NewID(chain),
+// ENRKey implements enr.Entry.
+func (e ethEntry) ENRKey() string {
+	return "eth"
+}
+
+func (eth *Ethereum) enrUpdateLoop(ln *enode.LocalNode) {
+	var newHead = make(chan core.ChainHeadEvent, 10)
+	sub := eth.blockchain.SubscribeChainHeadEvent(newHead)
+	defer sub.Unsubscribe()
+
+	for {
+		select {
+		case <-newHead:
+			ln.Set(eth.currentEthEntry())
+		case <-sub.Err():
+			// Would be nice to sync with eth.Stop, but there is no
+			// good way to do that.
+			return
+		}
 	}
 }
 
-// ENRKey implements enr.Entry, returning the key for the chain config.
-func (e ENR) ENRKey() string { return "eth" }
-
-// NewENRFilter creates an ENR filter that returns if a record should be rejected
-// or not (may be rejected by another filter).
-func NewENRFilter(chain *core.BlockChain) func(r *enr.Record) error {
-	filter := forkid.NewFilter(chain)
-
-	return func(r *enr.Record) error {
-		// Retrieve the remote chain ENR entry, accept record if not found
-		var entry ENR
-		if err := r.Load(&entry); err != nil {
-			return nil
-		}
-		// If found, run it across the fork ID validator
-		return filter(entry.ForkID)
-	}
+func (eth *Ethereum) currentEthEntry() *ethEntry {
+	return &ethEntry{ForkID: forkid.NewID(eth.blockchain)}
 }
