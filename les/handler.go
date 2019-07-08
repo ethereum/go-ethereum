@@ -442,7 +442,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&req); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
-
+		if err := req.sanityCheck(); err != nil {
+			return err
+		}
 		update, size := req.Update.decode()
 		if p.rejectUpdate(size) {
 			return errResp(ErrRequestRejected, "")

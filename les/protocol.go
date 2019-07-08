@@ -149,6 +149,14 @@ type announceData struct {
 	Update     keyValueList
 }
 
+// sanityCheck verifies that the values are reasonable, as a DoS protection
+func (a *announceData) sanityCheck() error {
+	if tdlen := a.Td.BitLen(); tdlen > 100 {
+		return fmt.Errorf("too large block TD: bitlen %d", tdlen)
+	}
+	return nil
+}
+
 // sign adds a signature to the block announcement by the given privKey
 func (a *announceData) sign(privKey *ecdsa.PrivateKey) {
 	rlp, _ := rlp.EncodeToBytes(announceBlock{a.Hash, a.Number, a.Td})
