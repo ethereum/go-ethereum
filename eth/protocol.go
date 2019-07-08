@@ -35,16 +35,16 @@ const (
 	xdpos2 = 100
 )
 
-// Official short name of the protocol used during capability negotiation.
-var ProtocolName = "eth"
+// protocolName is the official short name of the protocol used during capability negotiation.
+const protocolName = "eth"
 
-// Supported versions of the eth protocol (first is primary).
-var ProtocolVersions = []uint{xdpos2, eth63, eth62}
+// ProtocolVersions are the supported versions of the eth protocol (first is primary).
+var ProtocolVersions = []uint{xdpos2, eth63}
 
-// Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = []uint64{227, 17, 8}
+// protocolLengths are the number of implemented message corresponding to different protocol versions.
+var protocolLengths = map[uint]uint64{xdpos2: 227, eth63: 17, eth62: 8}
 
-const ProtocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
+const protocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
 
 // eth protocol message codes
 const (
