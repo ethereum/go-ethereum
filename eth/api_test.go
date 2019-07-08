@@ -51,7 +51,7 @@ func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, st
 	return result
 }
 
-func TestAccountRangeAt(t *testing.T) {
+func TestAccountRange(t *testing.T) {
 	var (
 		statedb  = state.NewDatabase(rawdb.NewMemoryDatabase())
 		state, _ = state.New(common.Hash{}, statedb)
@@ -102,7 +102,7 @@ func TestAccountRangeAt(t *testing.T) {
 	}
 }
 
-func TestEmptyAccountRangeAt(t *testing.T) {
+func TestEmptyAccountRange(t *testing.T) {
 	var (
 		statedb  = state.NewDatabase(rawdb.NewMemoryDatabase())
 		state, _ = state.New(common.Hash{}, statedb)

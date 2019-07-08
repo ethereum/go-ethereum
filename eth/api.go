@@ -371,8 +371,8 @@ const (
 	AccountRangeMaxResults = 256
 )
 
-// AccountRangeAt enumerates all accounts in the latest state
-func (api *PrivateDebugAPI) AccountRangeAt(ctx context.Context, start *common.Hash, maxResults int) (AccountRangeResult, error) {
+// AccountRange enumerates all accounts in the latest state
+func (api *PrivateDebugAPI) AccountRange(ctx context.Context, start *common.Hash, maxResults int) (AccountRangeResult, error) {
 	var statedb *state.StateDB
 	var err error
 	block := api.eth.blockchain.CurrentBlock()
