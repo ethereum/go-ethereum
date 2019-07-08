@@ -37,21 +37,23 @@ func (e ethEntry) ENRKey() string {
 	return "eth"
 }
 
-func (eth *Ethereum) enrUpdateLoop(ln *enode.LocalNode) {
+func (eth *Ethereum) startEthEntryUpdate(ln *enode.LocalNode) {
 	var newHead = make(chan core.ChainHeadEvent, 10)
 	sub := eth.blockchain.SubscribeChainHeadEvent(newHead)
-	defer sub.Unsubscribe()
 
-	for {
-		select {
-		case <-newHead:
-			ln.Set(eth.currentEthEntry())
-		case <-sub.Err():
-			// Would be nice to sync with eth.Stop, but there is no
-			// good way to do that.
-			return
+	go func() {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case <-newHead:
+				ln.Set(eth.currentEthEntry())
+			case <-sub.Err():
+				// Would be nice to sync with eth.Stop, but there is no
+				// good way to do that.
+				return
+			}
 		}
-	}
+	}()
 }
 
 func (eth *Ethereum) currentEthEntry() *ethEntry {
