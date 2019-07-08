@@ -31,6 +31,7 @@ import (
 	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // Lang is a target programming language selector to generate bindings for.
@@ -46,9 +47,12 @@ const (
 // to be used as is in client code, but rather as an intermediate struct which
 // enforces compile time type safety and naming convention opposed to having to
 // manually maintain hard coded strings that break on runtime.
-func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, lang Lang) (string, error) {
+func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, lang Lang, libs map[string]string) (string, error) {
 	// Process each individual contract requested binding
 	contracts := make(map[string]*tmplContract)
+
+	// Map used to flag each encountered library as such
+	isLib := make(map[string]struct{})
 
 	for i := 0; i < len(types); i++ {
 		// Parse the actual ABI to generate the binding for
@@ -137,21 +141,44 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		contracts[types[i]] = &tmplContract{
 			Type:        capitalise(types[i]),
 			InputABI:    strings.Replace(strippedABI, "\"", "\\\"", -1),
-			InputBin:    strings.TrimSpace(bytecodes[i]),
+			InputBin:    strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x"),
 			Constructor: evmABI.Constructor,
 			Calls:       calls,
 			Transacts:   transacts,
 			Events:      events,
+			Libraries:   make(map[string]string),
 			Structs:     structs,
 		}
+		// Function 4-byte signatures are stored in the same sequence
+		// as types, if available.
 		if len(fsigs) > i {
 			contracts[types[i]].FuncSigs = fsigs[i]
 		}
+		// Parse library references.
+		for pattern, name := range libs {
+			matched, err := regexp.Match("__\\$"+pattern+"\\$__", []byte(contracts[types[i]].InputBin))
+			if err != nil {
+				log.Error("Could not search for pattern", "pattern", pattern, "contract", contracts[types[i]], "err", err)
+			}
+			if matched {
+				contracts[types[i]].Libraries[pattern] = name
+				// keep track that this type is a library
+				if _, ok := isLib[name]; !ok {
+					isLib[name] = struct{}{}
+				}
+			}
+		}
+	}
+	// Check if that type has already been identified as a library
+	for i := 0; i < len(types); i++ {
+		_, ok := isLib[types[i]]
+		contracts[types[i]].Library = ok
 	}
 	// Generate the contract template data content and render it
 	data := &tmplData{
 		Package:   pkg,
 		Contracts: contracts,
+		Libraries: libs,
 	}
 	buffer := new(bytes.Buffer)
 
