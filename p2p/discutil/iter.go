@@ -18,7 +18,6 @@
 package discutil
 
 import (
-	"context"
 	"sync"
 	"time"
 
@@ -27,33 +26,24 @@ import (
 
 // Iterator represents a sequence of nodes.
 //
-// The NextNode method returns the next node in the sequence. It may return nil when no
-// node could be found before the context was canceled. The isLive return value reports
+// The Next method returns the next node in the sequence. The isLive return value reports
 // whether the iterator is still open. Once closed, iterators should keep returning (nil, false).
 //
-// Implementations of NextNode are not required to be safe for concurrent use. It is
-// therefore unsafe to call NextNode from multiple goroutines at the same time.
-//
-// Close may be called concurrently with NextNode, and interrupts NextNode.
+// Close may be called concurrently with Next and Node, and interrupts Next if it is blocked.
 type Iterator interface {
-	NextNode(ctx context.Context) (n *enode.Node, isLive bool)
-	Close()
+	Next() bool        // moves to next node
+	Node() *enode.Node // returns current node
+	Close()            // ends the iterator
 }
 
 // ReadNodes reads at most n nodes from the given iterator. The return value contains no
 // duplicates and no nil values. To prevent looping indefinitely for small repeating node
 // sequences, this function calls NextNode at most n times.
-func ReadNodes(ctx context.Context, it Iterator, n int) []*enode.Node {
+func ReadNodes(it Iterator, n int) []*enode.Node {
 	seen := make(map[enode.ID]*enode.Node, n)
-	for i := 0; i < n && ctx.Err() == nil; i++ {
-		node, isLive := it.NextNode(ctx)
-		if !isLive {
-			break
-		}
-		if node == nil {
-			continue
-		}
+	for i := 0; i < n && it.Next(); i++ {
 		// Remove duplicates, keeping the node with higher seq.
+		node := it.Node()
 		prevNode, ok := seen[node.ID()]
 		if ok && prevNode.Seq() > node.Seq() {
 			continue
@@ -74,20 +64,17 @@ func Filter(it Iterator, check func(*enode.Node) bool) Iterator {
 }
 
 type filterIter struct {
-	it    Iterator
+	Iterator
 	check func(*enode.Node) bool
 }
 
-func (f *filterIter) NextNode(ctx context.Context) (*enode.Node, bool) {
-	n, isLive := f.it.NextNode(ctx)
-	if n != nil && !f.check(n) {
-		n = nil
+func (f *filterIter) Next() bool {
+	for f.Iterator.Next() {
+		if f.check(f.Node()) {
+			return true
+		}
 	}
-	return n, isLive
-}
-
-func (f *filterIter) Close() {
-	f.it.Close()
+	return false
 }
 
 // FairMix aggregates multiple node iterators. The mixer itself is an iterator which ends
@@ -101,13 +88,13 @@ func (f *filterIter) Close() {
 //
 // It's safe to call AddSource and Close concurrently with NextNode.
 type FairMix struct {
-	ctx       context.Context
-	cancelCtx func()
-	wg        sync.WaitGroup
-	fromAny   chan *enode.Node
-	timeout   time.Duration
+	wg      sync.WaitGroup
+	fromAny chan *enode.Node
+	timeout time.Duration
+	cur     *enode.Node
 
 	mu      sync.Mutex
+	closed  chan struct{}
 	sources []*mixSource
 	last    int
 }
@@ -124,12 +111,10 @@ type mixSource struct {
 // is deciding how long you'd want to wait for a node on average. Passing a negative
 // timeout disables the mixer completely fair.
 func NewFairMix(timeout time.Duration) *FairMix {
-	ctx, cancel := context.WithCancel(context.Background())
 	m := &FairMix{
-		ctx:       ctx,
-		cancelCtx: cancel,
-		fromAny:   make(chan *enode.Node),
-		timeout:   timeout,
+		fromAny: make(chan *enode.Node),
+		closed:  make(chan struct{}),
+		timeout: timeout,
 	}
 	return m
 }
@@ -139,32 +124,38 @@ func (m *FairMix) AddSource(it Iterator) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if !m.isLive() {
+	if m.closed == nil {
 		return
 	}
 	m.wg.Add(1)
 	source := &mixSource{it, make(chan *enode.Node)}
 	m.sources = append(m.sources, source)
-	go m.runSource(source)
+	go m.runSource(m.closed, source)
 }
 
-// Close shuts down the mixer. Calling this is required to release resources
-// associated with the mixer.
+// Close shuts down the mixer and all current sources.
+// Calling this is required to release resources associated with the mixer.
 func (m *FairMix) Close() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if !m.isLive() {
+	if m.closed == nil {
 		return
 	}
-	m.cancelCtx()
+	for _, s := range m.sources {
+		s.it.Close()
+	}
+	close(m.closed)
 	m.wg.Wait()
-	m.sources = nil
 	close(m.fromAny)
+	m.sources = nil
+	m.closed = nil
 }
 
 // NextNode returns a node from a random source.
-func (m *FairMix) NextNode(ctx context.Context) (*enode.Node, bool) {
+func (m *FairMix) Next() bool {
+	m.cur = nil
+
 	var timeout <-chan time.Time
 	if m.timeout >= 0 {
 		timer := time.NewTimer(m.timeout)
@@ -174,37 +165,35 @@ func (m *FairMix) NextNode(ctx context.Context) (*enode.Node, bool) {
 	for {
 		source := m.pickSource()
 		if source == nil {
-			return m.nextFromAny(ctx)
+			return m.nextFromAny()
 		}
 		select {
 		case n, ok := <-source.next:
-			if !ok {
-				// This source has ended.
-				m.deleteSource(source)
-				continue
+			if ok {
+				m.cur = n
+				return true
 			}
-			return n, m.isLive()
+			// This source has ended.
+			m.deleteSource(source)
 		case <-timeout:
-			return m.nextFromAny(ctx)
-		case <-ctx.Done():
-			return nil, m.isLive()
+			return m.nextFromAny()
 		}
 	}
+}
+
+// Node returns the current node.
+func (m *FairMix) Node() *enode.Node {
+	return m.cur
 }
 
 // nextFromAny is used when there are no sources or when the 'fair' choice
 // doesn't turn up a node quickly enough.
-func (m *FairMix) nextFromAny(ctx context.Context) (*enode.Node, bool) {
-	select {
-	case n, ok := <-m.fromAny:
-		return n, ok
-	case <-ctx.Done():
-		return nil, m.isLive()
+func (m *FairMix) nextFromAny() bool {
+	n, ok := <-m.fromAny
+	if ok {
+		m.cur = n
 	}
-}
-
-func (m *FairMix) isLive() bool {
-	return m.ctx.Err() == nil
+	return ok
 }
 
 // pickSource chooses the next source to read from, cycling through them in order.
@@ -235,18 +224,15 @@ func (m *FairMix) deleteSource(s *mixSource) {
 }
 
 // runSource reads a single source in a loop.
-func (m *FairMix) runSource(s *mixSource) {
+func (m *FairMix) runSource(closed chan struct{}, s *mixSource) {
 	defer m.wg.Done()
 	defer close(s.next)
-	for {
-		n, isLive := s.it.NextNode(m.ctx)
-		if !isLive {
-			return
-		}
+	for s.it.Next() {
+		n := s.it.Node()
 		select {
 		case s.next <- n:
 		case m.fromAny <- n:
-		case <-m.ctx.Done():
+		case <-closed:
 			return
 		}
 	}
