@@ -17,7 +17,6 @@
 package discover
 
 import (
-	"context"
 	"encoding/binary"
 	"sync"
 	"sync/atomic"
@@ -33,32 +32,33 @@ import (
 func TestLookupIterator(t *testing.T) {
 	var (
 		test      = newLookupWalkerTest()
-		testNodes = make([]*enode.Node, 100)
+		testNodes = makeTestNodes(lookupIteratorBuffer)
 		wg        sync.WaitGroup
 	)
-	for i := range testNodes {
-		testNodes[i] = testNode(i)
-	}
+
 	testIterator := func(it discutil.Iterator) {
 		defer wg.Done()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		nodes := discutil.ReadNodes(ctx, it, 20)
-		sortByID(nodes) // ReadNodes may shuffle results
+		// Check reading nodes:
+		nodes := discutil.ReadNodes(it, 20)
+		sortByID(nodes)
 		if err := checkNodesEqual(nodes, testNodes[:20]); err != nil {
 			t.Error(err)
 		}
+		nodes = discutil.ReadNodes(it, 20)
+		sortByID(nodes)
+		if err := checkNodesEqual(nodes, testNodes[20:40]); err != nil {
+			t.Error(err)
+		}
 
+		// Check close:
 		it.Close()
-		n, isLive := it.NextNode(context.Background())
-		if n != nil {
-			t.Error("iterator returned non-nil node after close")
+		if it.Next() {
+			t.Error("Next returned true after close")
 		}
-		if isLive {
-			t.Error("iterator returned isLive == true after close")
+		if it.Node() != nil {
+			t.Error("iterator has non-nil node after close")
 		}
-
 		it.Close() // shouldn't crash
 	}
 
@@ -68,10 +68,23 @@ func TestLookupIterator(t *testing.T) {
 	}
 
 	test.serveOneLookup(testNodes[:10])
-	test.serveOneLookup(testNodes[10:])
+	test.serveOneLookup(testNodes[10:20])
+	test.serveOneLookup(testNodes[20:])
 	wg.Wait()
 
 	test.close()
+}
+
+func TestLookupIteratorClose(t *testing.T) {
+	test := newLookupWalkerTest()
+	defer test.close()
+	it := test.newIterator()
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		it.Close()
+	}()
+	it.Next()
 }
 
 // This test checks that the lookup iterator drops nodes when they're not being
@@ -79,19 +92,11 @@ func TestLookupIterator(t *testing.T) {
 func TestLookupIteratorDropStale(t *testing.T) {
 	var (
 		test       = newLookupWalkerTest()
-		testNodes  = make([]*enode.Node, 2*lookupIteratorBuffer)
+		testNodes  = makeTestNodes(2 * lookupIteratorBuffer)
 		lookupDone = make(chan struct{})
 	)
 	defer test.close()
-
-	for i := range testNodes {
-		testNodes[i] = testNode(i)
-	}
-
-	// Create iterator first so all found nodes go through its buffer.
 	it := test.newIterator()
-
-	// Serve one lookup.
 	go func() {
 		test.serveOneLookup(testNodes)
 		close(lookupDone)
@@ -99,17 +104,17 @@ func TestLookupIteratorDropStale(t *testing.T) {
 
 	// The first call to NextNode triggers the lookup and receives the first result
 	// as soon as it becomes available.
-	n, _ := it.NextNode(context.Background())
-	if n != testNodes[0] {
-		t.Fatalf("wrong result %d: got %v, want %v", 0, n.ID(), testNodes[0])
+	it.Next()
+	if it.Node() != testNodes[0] {
+		t.Fatalf("wrong result %d: got %v, want %v", 0, it.Node().ID(), testNodes[0])
 	}
 
 	// Now wait for the lookup to finish and read the remaining nodes.
 	<-lookupDone
 	for i := 0; i < lookupIteratorBuffer; i++ {
-		n, _ := it.NextNode(context.Background())
+		it.Next()
 		for _, tn := range testNodes[lookupIteratorBuffer:] {
-			if n == tn {
+			if it.Node() == tn {
 				return
 			}
 		}
@@ -117,10 +122,40 @@ func TestLookupIteratorDropStale(t *testing.T) {
 	t.Fatal("didn't find any node from second half of testNodes")
 }
 
-func testNode(id int) *enode.Node {
-	var nodeID enode.ID
-	binary.BigEndian.PutUint64(nodeID[:], uint64(id))
-	return enode.SignNull(new(enr.Record), nodeID)
+// This test checks that the iterator kicks off a lookup when Next is called.
+func TestLookupIteratorDrained(t *testing.T) {
+	var (
+		test      = newLookupWalkerTest()
+		it        = test.newIterator()
+		testNodes = makeTestNodes(2 * lookupIteratorBuffer)
+	)
+
+	test.serveOneLookup(testNodes[:lookupIteratorBuffer])
+	nodes := discutil.ReadNodes(it, lookupIteratorBuffer)
+	sortByID(nodes)
+	if err := checkNodesEqual(nodes, testNodes[:lookupIteratorBuffer]); err != nil {
+		t.Fatal(err)
+	}
+
+	// Here the iterator buffer is drained and no lookup is running.
+
+	// Request more nodes. This needs to start another lookup.
+	go test.serveOneLookup(testNodes[lookupIteratorBuffer:])
+	nodes = discutil.ReadNodes(it, 10)
+	sortByID(nodes)
+	if err := checkNodesEqual(nodes, testNodes[lookupIteratorBuffer:lookupIteratorBuffer+10]); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func makeTestNodes(n int) []*enode.Node {
+	nodes := make([]*enode.Node, n)
+	for i := range nodes {
+		var nodeID enode.ID
+		binary.BigEndian.PutUint64(nodeID[:], uint64(i))
+		nodes[i] = enode.SignNull(new(enr.Record), nodeID)
+	}
+	return nodes
 }
 
 type lookupWalkerTest struct {
