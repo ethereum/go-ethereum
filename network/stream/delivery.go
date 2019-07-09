@@ -131,6 +131,10 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req int
 	var mode chunk.ModePut
 	switch r := req.(type) {
 	case *ChunkDeliveryMsgRetrieval:
+		// count how many chunks we receive for retrieve requests per peer
+		peermetric := fmt.Sprintf("chunk.delivery.%x", sp.BzzAddr.Over()[:16])
+		metrics.GetOrRegisterCounter(peermetric, nil).Inc(1)
+
 		msg = (*ChunkDeliveryMsg)(r)
 		peerPO := chunk.Proximity(sp.BzzAddr.Over(), msg.Addr)
 		po := chunk.Proximity(d.kad.BaseAddr(), msg.Addr)

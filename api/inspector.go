@@ -63,6 +63,22 @@ func (inspector *Inspector) IsSyncing() bool {
 	return lrct.After(time.Now().Add(-15 * time.Second))
 }
 
+func (inspector *Inspector) DeliveriesPerPeer() map[string]int64 {
+	res := map[string]int64{}
+
+	// iterate connection in kademlia
+	inspector.hive.Kademlia.EachConn(nil, 255, func(p *network.Peer, po int) bool {
+		// get how many chunks we receive for retrieve requests per peer
+		peermetric := fmt.Sprintf("chunk.delivery.%x", p.Over()[:16])
+
+		res[fmt.Sprintf("%x", p.Over()[:16])] = metrics.GetOrRegisterCounter(peermetric, nil).Count()
+
+		return true
+	})
+
+	return res
+}
+
 // Has checks whether each chunk address is present in the underlying datastore,
 // the bool in the returned structs indicates if the underlying datastore has
 // the chunk stored with the given address (true), or not (false)
