@@ -110,21 +110,21 @@ type peer struct {
 	fcParams flowcontrol.ServerParams
 	fcCosts  requestCostTable
 
-	isTrusted               bool
-	isOnlyAnnounce          bool
+	trusted                 bool
+	onlyAnnounce            bool
 	chainSince, chainRecent uint64
 	stateSince, stateRecent uint64
 }
 
-func newPeer(version int, network uint64, isTrusted bool, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
+func newPeer(version int, network uint64, trusted bool, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	return &peer{
-		Peer:      p,
-		rw:        rw,
-		version:   version,
-		network:   network,
-		id:        fmt.Sprintf("%x", p.ID().Bytes()),
-		isTrusted: isTrusted,
-		errCh:     make(chan error, 1),
+		Peer:    p,
+		rw:      rw,
+		version: version,
+		network: network,
+		id:      fmt.Sprintf("%x", p.ID().Bytes()),
+		trusted: trusted,
+		errCh:   make(chan error, 1),
 	}
 }
 
@@ -591,7 +591,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 	} else {
 		//on client node
 		p.announceType = announceTypeSimple
-		if p.isTrusted {
+		if p.trusted {
 			p.announceType = announceTypeSigned
 		}
 		send = send.add("announceType", p.announceType)
@@ -652,22 +652,22 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 	} else {
 		//mark OnlyAnnounce server if "serveHeaders", "serveChainSince", "serveStateSince" or "txRelay" fields don't exist
 		if recv.get("serveChainSince", &p.chainSince) != nil {
-			p.isOnlyAnnounce = true
+			p.onlyAnnounce = true
 		}
 		if recv.get("serveRecentChain", &p.chainRecent) != nil {
 			p.chainRecent = 0
 		}
 		if recv.get("serveStateSince", &p.stateSince) != nil {
-			p.isOnlyAnnounce = true
+			p.onlyAnnounce = true
 		}
 		if recv.get("serveRecentState", &p.stateRecent) != nil {
 			p.stateRecent = 0
 		}
 		if recv.get("txRelay", nil) != nil {
-			p.isOnlyAnnounce = true
+			p.onlyAnnounce = true
 		}
 
-		if p.isOnlyAnnounce && !p.isTrusted {
+		if p.onlyAnnounce && !p.trusted {
 			return errResp(ErrUselessPeer, "peer cannot serve requests")
 		}
 
@@ -689,7 +689,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		recv.get("checkpoint/value", &p.checkpoint)
 		recv.get("checkpoint/registerHeight", &p.checkpointNumber)
 
-		if !p.isOnlyAnnounce {
+		if !p.onlyAnnounce {
 			for msgCode := range reqAvgTimeCost {
 				if p.fcCosts[msgCode] == nil {
 					return errResp(ErrUselessPeer, "peer does not support message %d", msgCode)

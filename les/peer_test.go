@@ -29,9 +29,9 @@ func TestPeerHandshakeSetAnnounceTypeToAnnounceTypeSignedForTrustedPeer(t *testi
 
 	//peer to connect(on ulc side)
 	p := peer{
-		Peer:      p2p.NewPeer(id, "test peer", []p2p.Cap{}),
-		version:   protocol_version,
-		isTrusted: true,
+		Peer:    p2p.NewPeer(id, "test peer", []p2p.Cap{}),
+		version: protocol_version,
+		trusted: true,
 		rw: &rwStub{
 			WriteHook: func(recvList keyValueList) {
 				//checking that ulc sends to peer allowedRequests=onlyAnnounceRequests and announceType = announceTypeSigned
@@ -140,7 +140,7 @@ func TestPeerHandshakeDefaultAllRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if p.isOnlyAnnounce {
+	if p.onlyAnnounce {
 		t.Fatal("Incorrect announceType")
 	}
 }
@@ -196,8 +196,8 @@ func TestPeerHandshakeClientReceiveOnlyAnnounceRequestsHeaders(t *testing.T) {
 				return l
 			},
 		},
-		network:   test_networkid,
-		isTrusted: true,
+		network: test_networkid,
+		trusted: true,
 	}
 
 	err := p.Handshake(td, hash, headNum, genesis, nil)
@@ -205,8 +205,8 @@ func TestPeerHandshakeClientReceiveOnlyAnnounceRequestsHeaders(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !p.isOnlyAnnounce {
-		t.Fatal("isOnlyAnnounce must be true")
+	if !p.onlyAnnounce {
+		t.Fatal("onlyAnnounce must be true")
 	}
 }
 

@@ -108,7 +108,7 @@ func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err erro
 		},
 		canSend: func(dp distPeer) bool {
 			p := dp.(*peer)
-			if !p.isOnlyAnnounce {
+			if !p.onlyAnnounce {
 				return lreq.CanSend(p)
 			}
 			return false

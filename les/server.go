@@ -77,7 +77,7 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		archiveMode:  e.ArchiveMode(),
 		quitSync:     quitSync,
 		lesTopics:    lesTopics,
-		onlyAnnounce: config.OnlyAnnounce,
+		onlyAnnounce: config.UltraLightOnlyAnnounce,
 	}
 	srv.costTracker, srv.minCapacity = newCostTracker(e.ChainDb(), config)
 
@@ -103,7 +103,7 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	}
 	registrar := newCheckpointOracle(oracle, srv.getLocalCheckpoint)
 	// TODO(rjl493456442) Checkpoint is useless for les server, separate handler for client and server.
-	pm, err := NewProtocolManager(e.BlockChain().Config(), nil, light.DefaultServerIndexerConfig, config.ULC, false, config.NetworkId, e.EventMux(), newPeerSet(), e.BlockChain(), e.TxPool(), e.ChainDb(), nil, nil, registrar, quitSync, new(sync.WaitGroup), e.Synced)
+	pm, err := NewProtocolManager(e.BlockChain().Config(), nil, light.DefaultServerIndexerConfig, config.UltraLightServers, config.UltraLightFraction, false, config.NetworkId, e.EventMux(), newPeerSet(), e.BlockChain(), e.TxPool(), e.ChainDb(), nil, nil, registrar, quitSync, new(sync.WaitGroup), e.Synced)
 	if err != nil {
 		return nil, err
 	}
