@@ -335,14 +335,18 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 	return results, nil
 }
 
+// AccountRangeResult returns a mapping from the hash of an account addresses
+// to its preimage. It will return the JSON null if no preimage is found.
+// Since a query can return a limited amount of results, a "next" field is
+// also present for paging.
 type AccountRangeResult struct {
-	Addresses []common.Address `json:"addresses"`
-	Next      common.Hash      `json:"next"`
+	Accounts map[common.Hash]*common.Address `json:"accounts"`
+	Next     common.Hash                     `json:"next"`
 }
 
 func accountRange(st state.Trie, start *common.Hash, maxResults int) (AccountRangeResult, error) {
 	it := trie.NewIterator(st.NodeIterator(start.Bytes()))
-	result := AccountRangeResult{Addresses: []common.Address{}, Next: common.Hash{}}
+	result := AccountRangeResult{Accounts: make(map[common.Hash]*common.Address), Next: common.Hash{}}
 
 	if maxResults > AccountRangeMaxResults {
 		maxResults = AccountRangeMaxResults
@@ -350,9 +354,11 @@ func accountRange(st state.Trie, start *common.Hash, maxResults int) (AccountRan
 
 	for i := 0; i < maxResults && it.Next(); i++ {
 		if preimage := st.GetKey(it.Key); preimage != nil {
-			result.Addresses = append(result.Addresses, common.BytesToAddress(preimage))
+			addr := &common.Address{}
+			addr.SetBytes(preimage)
+			result.Accounts[common.BytesToHash(it.Key)] = addr
 		} else {
-			return AccountRangeResult{}, fmt.Errorf("preimage not found for 0x%s", hex.EncodeToString(it.Key))
+			result.Accounts[common.BytesToHash(it.Key)] = nil
 		}
 	}
 

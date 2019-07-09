@@ -38,13 +38,16 @@ func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, st
 		t.Fatal(err)
 	}
 
-	if len(result.Addresses) != expectedNum {
-		t.Fatalf("expected %d results.  Got %d", expectedNum, len(result.Addresses))
+	if len(result.Accounts) != expectedNum {
+		t.Fatalf("expected %d results.  Got %d", expectedNum, len(result.Accounts))
 	}
 
-	for i := range result.Addresses {
-		if !statedb.Exist(result.Addresses[i]) {
-			t.Fatalf("account not found in state %s", result.Addresses[i].String())
+	for _, address := range result.Accounts {
+		if address == nil {
+			t.Fatalf("null address returned")
+		}
+		if !statedb.Exist(*address) {
+			t.Fatalf("account not found in state %s", address.Hex())
 		}
 	}
 
@@ -93,10 +96,24 @@ func TestAccountRange(t *testing.T) {
 	t.Logf("test pagination 2")
 	secondResult := accountRangeTest(t, &trie, state, &firstResult.Next, AccountRangeMaxResults, AccountRangeMaxResults)
 
-	for i := range firstResult.Addresses {
-		for j := range secondResult.Addresses {
-			if bytes.Equal(firstResult.Addresses[i].Bytes(), secondResult.Addresses[j].Bytes()) {
+	for h1, addr1 := range firstResult.Accounts {
+		for h2, addr2 := range secondResult.Accounts {
+			// Make sure that the hashes aren't the same
+			if bytes.Equal(h1.Bytes(), h2.Bytes()) {
 				t.Fatalf("pagination test failed:  results should not overlap")
+			}
+
+			// If either address is nil, then it makes no sense to compare
+			// them as they might be two different accounts.
+			if addr1 == nil || addr2 == nil {
+				continue
+			}
+
+			// Since the two hashes are different, they should not have
+			// the same preimage, but let's check anyway in case there
+			// is a bug in the (hash, addr) map generation code.
+			if bytes.Equal(addr1.Bytes(), addr2.Bytes()) {
+				t.Fatalf("pagination test failed: addresses should not repeat")
 			}
 		}
 	}
@@ -123,8 +140,8 @@ func TestEmptyAccountRange(t *testing.T) {
 	if results.Next != common.HexToHash("0") {
 		t.Fatalf("Empty results should not return a second page")
 	}
-	if len(results.Addresses) != 0 {
-		t.Fatalf("Empty state should not return addresses: %v", results.Addresses)
+	if len(results.Accounts) != 0 {
+		t.Fatalf("Empty state should not return addresses: %v", results.Accounts)
 	}
 }
 
