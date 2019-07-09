@@ -17,7 +17,6 @@
 package p2p
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -327,13 +326,11 @@ type discoverTask struct {
 }
 
 func (t *discoverTask) Do(srv *Server) {
-	ctx, cancel := context.WithTimeout(context.Background(), discoveryTimeout)
-	defer cancel()
-	t.results = discutil.ReadNodes(ctx, srv.discmix, t.want)
+	t.results = discutil.ReadNodes(srv.discmix, t.want)
 }
 
 func (t *discoverTask) String() string {
-	s := "discovery lookup"
+	s := "discovery query"
 	if len(t.results) > 0 {
 		s += fmt.Sprintf(" (%d results)", len(t.results))
 	} else {
