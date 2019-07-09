@@ -17,7 +17,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"sort"
@@ -123,14 +122,11 @@ func discv4RandomNodes(ctx *cli.Context) error {
 	}
 	defer disc.Close()
 
-	iter := disc.RandomNodes()
-	for {
-		n, ok := iter.NextNode(context.Background())
-		if !ok {
-			return nil
-		}
-		fmt.Println(n)
+	it := disc.RandomNodes()
+	for it.Next() {
+		fmt.Println(it.Node())
 	}
+	return nil
 }
 
 func getNodeArgAndStartV4(ctx *cli.Context) (*enode.Node, *discover.UDPv4, error) {
