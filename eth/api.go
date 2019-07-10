@@ -368,9 +368,8 @@ func accountRange(st state.Trie, start *common.Hash, maxResults int) (AccountRan
 	return result, nil
 }
 
-const (
-	AccountRangeMaxResults = 256
-)
+// AccountRangeMaxResults is the maximum number of results to be returned per call
+const AccountRangeMaxResults = 256
 
 // AccountRange enumerates all accounts in the latest state
 func (api *PrivateDebugAPI) AccountRange(ctx context.Context, start *common.Hash, maxResults int) (AccountRangeResult, error) {
