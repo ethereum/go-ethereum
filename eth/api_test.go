@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
@@ -53,6 +54,12 @@ func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, st
 
 	return result
 }
+
+type resultHash []*common.Hash
+
+func (h resultHash) Len() int           { return len(h) }
+func (h resultHash) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h resultHash) Less(i, j int) bool { return bytes.Compare(h[i].Bytes(), h[j].Bytes()) < 0 }
 
 func TestAccountRange(t *testing.T) {
 	var (
@@ -99,7 +106,11 @@ func TestAccountRange(t *testing.T) {
 	t.Logf("test pagination 2")
 	secondResult := accountRangeTest(t, &trie, state, &firstResult.Next, AccountRangeMaxResults, AccountRangeMaxResults)
 
+	hList := make(resultHash, 0)
 	for h1, addr1 := range firstResult.Accounts {
+		h := &common.Hash{}
+		h.SetBytes(h1.Bytes())
+		hList = append(hList, h)
 		for h2, addr2 := range secondResult.Accounts {
 			// Make sure that the hashes aren't the same
 			if bytes.Equal(h1.Bytes(), h2.Bytes()) {
@@ -119,6 +130,32 @@ func TestAccountRange(t *testing.T) {
 				t.Fatalf("pagination test failed: addresses should not repeat")
 			}
 		}
+	}
+
+	// Test to see if it's possible to recover from the middle of the previous
+	// set and get an even split between the first and second sets.
+	t.Logf("test random access pagination")
+	sort.Sort(hList)
+	middleH := hList[AccountRangeMaxResults/2]
+	middleResult := accountRangeTest(t, &trie, state, middleH, AccountRangeMaxResults, AccountRangeMaxResults)
+	innone, infirst, insecond := 0, 0, 0
+	for h := range middleResult.Accounts {
+		if _, ok := firstResult.Accounts[h]; ok {
+			infirst++
+		} else if _, ok := secondResult.Accounts[h]; ok {
+			insecond++
+		} else {
+			innone++
+		}
+	}
+	if innone != 0 {
+		t.Fatalf("%d hashes in the 'middle' set were neither in the first not the second set", innone)
+	}
+	if infirst != AccountRangeMaxResults/2 {
+		t.Fatalf("Imbalance in the number of first-test results: %d != %d", infirst, AccountRangeMaxResults/2)
+	}
+	if insecond != AccountRangeMaxResults/2 {
+		t.Fatalf("Imbalance in the number of second-test results: %d != %d", insecond, AccountRangeMaxResults/2)
 	}
 }
 
