@@ -19,7 +19,6 @@ package utils
 
 import (
 	"crypto/ecdsa"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -100,7 +99,6 @@ func NewApp(gitCommit, gitDate, usage string) *cli.App {
 	app := cli.NewApp()
 	app.Name = filepath.Base(os.Args[0])
 	app.Author = ""
-	//app.Authors = nil
 	app.Email = ""
 	app.Version = params.VersionWithCommit(gitCommit, gitDate)
 	app.Usage = usage
@@ -176,21 +174,19 @@ var (
 		Name:  "exitwhensynced",
 		Usage: "Exits after block synchronisation completes",
 	}
-	ULCModeConfigFlag = cli.StringFlag{
-		Name:  "ulc.config",
-		Usage: "Config file to use for ultra light client mode",
+	UltraLightServersFlag = cli.StringFlag{
+		Name:  "ulc.servers",
+		Usage: "List of trusted ultra-light servers",
+		Value: strings.Join(eth.DefaultConfig.UltraLightServers, ","),
 	}
-	OnlyAnnounceModeFlag = cli.BoolFlag{
-		Name:  "ulc.onlyannounce",
-		Usage: "ULC server sends announcements only",
-	}
-	ULCMinTrustedFractionFlag = cli.IntFlag{
+	UltraLightFractionFlag = cli.IntFlag{
 		Name:  "ulc.fraction",
-		Usage: "Minimum % of trusted ULC servers required to announce a new head",
+		Usage: "Minimum % of trusted ultra-light servers required to announce a new head",
+		Value: eth.DefaultConfig.UltraLightFraction,
 	}
-	ULCTrustedNodesFlag = cli.StringFlag{
-		Name:  "ulc.trusted",
-		Usage: "List of trusted ULC servers",
+	UltraLightOnlyAnnounceFlag = cli.BoolFlag{
+		Name:  "ulc.onlyannounce",
+		Usage: "Ultra light server sends announcements only",
 	}
 	IterativeOutputFlag = cli.BoolFlag{
 		Name:  "iterative",
@@ -953,37 +949,20 @@ func setIPC(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
-// SetULC setup ULC config from file if given.
-func SetULC(ctx *cli.Context, cfg *eth.Config) {
-	// ULC config isn't loaded from global config and ULC config and ULC trusted nodes are not defined.
-	if cfg.ULC == nil && !(ctx.GlobalIsSet(ULCModeConfigFlag.Name) || ctx.GlobalIsSet(ULCTrustedNodesFlag.Name)) {
-		return
+// setUltraLight configures the ultra light client settings from the command line flags.
+func setUltraLight(ctx *cli.Context, cfg *eth.Config) {
+	if ctx.GlobalIsSet(UltraLightServersFlag.Name) {
+		cfg.UltraLightServers = strings.Split(ctx.GlobalString(UltraLightServersFlag.Name), ",")
 	}
-	cfg.ULC = &eth.ULCConfig{}
-
-	path := ctx.GlobalString(ULCModeConfigFlag.Name)
-	if path != "" {
-		cfgData, err := ioutil.ReadFile(path)
-		if err != nil {
-			Fatalf("Failed to unmarshal ULC configuration: %v", err)
-		}
-
-		err = json.Unmarshal(cfgData, &cfg.ULC)
-		if err != nil {
-			Fatalf("Failed to unmarshal ULC configuration: %s", err.Error())
-		}
+	if ctx.GlobalIsSet(UltraLightFractionFlag.Name) {
+		cfg.UltraLightFraction = ctx.GlobalInt(UltraLightFractionFlag.Name)
 	}
-
-	if trustedNodes := ctx.GlobalString(ULCTrustedNodesFlag.Name); trustedNodes != "" {
-		cfg.ULC.TrustedServers = strings.Split(trustedNodes, ",")
+	if cfg.UltraLightFraction <= 0 && cfg.UltraLightFraction > 100 {
+		log.Error("Ultra light fraction is invalid", "had", cfg.UltraLightFraction, "updated", eth.DefaultConfig.UltraLightFraction)
+		cfg.UltraLightFraction = eth.DefaultConfig.UltraLightFraction
 	}
-
-	if trustedFraction := ctx.GlobalInt(ULCMinTrustedFractionFlag.Name); trustedFraction > 0 {
-		cfg.ULC.MinTrustedFraction = trustedFraction
-	}
-	if cfg.ULC.MinTrustedFraction <= 0 && cfg.ULC.MinTrustedFraction > 100 {
-		log.Error("MinTrustedFraction is invalid", "MinTrustedFraction", cfg.ULC.MinTrustedFraction, "Changed to default", eth.DefaultULCMinTrustedFraction)
-		cfg.ULC.MinTrustedFraction = eth.DefaultULCMinTrustedFraction
+	if ctx.GlobalIsSet(UltraLightOnlyAnnounceFlag.Name) {
+		cfg.UltraLightOnlyAnnounce = ctx.GlobalBool(UltraLightOnlyAnnounceFlag.Name)
 	}
 }
 
@@ -1400,6 +1379,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	setEthash(ctx, cfg)
 	setMiner(ctx, &cfg.Miner)
 	setWhitelist(ctx, cfg)
+	setUltraLight(ctx, cfg)
 
 	if ctx.GlobalIsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
@@ -1411,9 +1391,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	cfg.LightBandwidthOut = ctx.GlobalInt(LightBandwidthOutFlag.Name)
 	if ctx.GlobalIsSet(LightPeersFlag.Name) {
 		cfg.LightPeers = ctx.GlobalInt(LightPeersFlag.Name)
-	}
-	if ctx.GlobalIsSet(OnlyAnnounceModeFlag.Name) {
-		cfg.OnlyAnnounce = ctx.GlobalBool(OnlyAnnounceModeFlag.Name)
 	}
 	if ctx.GlobalIsSet(NetworkIdFlag.Name) {
 		cfg.NetworkId = ctx.GlobalUint64(NetworkIdFlag.Name)
