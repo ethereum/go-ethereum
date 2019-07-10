@@ -82,6 +82,13 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.GCModeFlag,
 			utils.EthStatsURLFlag,
 			utils.IdentityFlag,
+			utils.LightKDFFlag,
+			utils.WhitelistFlag,
+		},
+	},
+	{
+		Name: "LES",
+		Flags: []cli.Flag{
 			utils.LightServFlag,
 			utils.LightBandwidthInFlag,
 			utils.LightBandwidthOutFlag,
@@ -89,8 +96,6 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.UltraLightServersFlag,
 			utils.UltraLightFractionFlag,
 			utils.UltraLightOnlyAnnounceFlag,
-			utils.LightKDFFlag,
-			utils.WhitelistFlag,
 		},
 	},
 	{
