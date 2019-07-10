@@ -87,12 +87,12 @@ var AppHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
-		Name: "LES",
+		Name: "LIGHT CLIENT",
 		Flags: []cli.Flag{
-			utils.LightServFlag,
-			utils.LightBandwidthInFlag,
-			utils.LightBandwidthOutFlag,
-			utils.LightPeersFlag,
+			utils.LightServeFlag,
+			utils.LightIngressFlag,
+			utils.LightEgressFlag,
+			utils.LightMaxPeersFlag,
 			utils.UltraLightServersFlag,
 			utils.UltraLightFractionFlag,
 			utils.UltraLightOnlyAnnounceFlag,
@@ -253,6 +253,8 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "DEPRECATED",
 		Flags: []cli.Flag{
+			utils.LightLegacyServFlag,
+			utils.LightLegacyPeersFlag,
 			utils.MinerLegacyThreadsFlag,
 			utils.MinerLegacyGasTargetFlag,
 			utils.MinerLegacyGasPriceFlag,

@@ -139,11 +139,11 @@ func newCostTracker(db ethdb.Database, config *eth.Config) (*costTracker, uint64
 		reqInfoCh:  make(chan reqInfo, 100),
 		utilTarget: utilTarget,
 	}
-	if config.LightBandwidthIn > 0 {
-		ct.inSizeFactor = utilTarget / float64(config.LightBandwidthIn)
+	if config.LightIngress > 0 {
+		ct.inSizeFactor = utilTarget / float64(config.LightIngress)
 	}
-	if config.LightBandwidthOut > 0 {
-		ct.outSizeFactor = utilTarget / float64(config.LightBandwidthOut)
+	if config.LightEgress > 0 {
+		ct.outSizeFactor = utilTarget / float64(config.LightEgress)
 	}
 	if makeCostStats {
 		ct.stats = make(map[uint64][]uint64)
