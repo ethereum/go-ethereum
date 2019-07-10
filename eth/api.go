@@ -19,7 +19,6 @@ package eth
 import (
 	"compress/gzip"
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -363,11 +362,7 @@ func accountRange(st state.Trie, start *common.Hash, maxResults int) (AccountRan
 	}
 
 	if it.Next() {
-		if preimage := st.GetKey(it.Key); preimage != nil {
-			result.Next = common.BytesToHash(it.Key)
-		} else {
-			return AccountRangeResult{}, fmt.Errorf("preimage not found for 0x%s", hex.EncodeToString(it.Key))
-		}
+		result.Next = common.BytesToHash(it.Key)
 	}
 
 	return result, nil
