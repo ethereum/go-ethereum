@@ -88,6 +88,9 @@ func TestAccountRange(t *testing.T) {
 	t.Logf("test getting number of results greater than max %d", AccountRangeMaxResults)
 	accountRangeTest(t, &trie, state, &common.Hash{0x0}, AccountRangeMaxResults*2, AccountRangeMaxResults)
 
+	t.Logf("test with empty 'start' hash")
+	accountRangeTest(t, &trie, state, nil, AccountRangeMaxResults, AccountRangeMaxResults)
+
 	t.Logf("test pagination")
 
 	// test pagination

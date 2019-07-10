@@ -344,6 +344,9 @@ type AccountRangeResult struct {
 }
 
 func accountRange(st state.Trie, start *common.Hash, maxResults int) (AccountRangeResult, error) {
+	if start == nil {
+		start = &common.Hash{0}
+	}
 	it := trie.NewIterator(st.NodeIterator(start.Bytes()))
 	result := AccountRangeResult{Accounts: make(map[common.Hash]*common.Address), Next: common.Hash{}}
 
