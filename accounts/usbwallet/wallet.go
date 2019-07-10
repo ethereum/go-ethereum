@@ -67,6 +67,10 @@ type driver interface {
 	// SignTx sends the transaction to the USB device and waits for the user to confirm
 	// or deny the transaction.
 	SignTx(path accounts.DerivationPath, tx *types.Transaction, chainID *big.Int) (common.Address, *types.Transaction, error)
+
+	// SignData sends a blob of data to the USB device and waits for the user to confirm
+	// or deny the transaction.
+	SignData(path accounts.DerivationPath, hash []byte) (common.Address, []byte, error)
 }
 
 // wallet represents the common functionality shared by all USB hardware
@@ -515,7 +519,44 @@ func (w *wallet) SelfDerive(bases []accounts.DerivationPath, chain ethereum.Chai
 // signHash implements accounts.Wallet, however signing arbitrary data is not
 // supported for hardware wallets, so this method will always return an error.
 func (w *wallet) signHash(account accounts.Account, hash []byte) ([]byte, error) {
-	return nil, accounts.ErrNotSupported
+	w.stateLock.RLock() // Comms have their own mutex
+	defer w.stateLock.RUnlock()
+
+	// If the wallet is closed, abort
+	if w.device == nil {
+		return nil, accounts.ErrWalletClosed
+	}
+	// Make sure the requested account is contained within
+	path, ok := w.paths[account.Address]
+	if !ok {
+		return nil, accounts.ErrUnknownAccount
+	}
+
+	// All infos gathered and metadata checks out, request signing
+	<-w.commsLock
+	defer func() { w.commsLock <- struct{}{} }()
+
+	// Ensure the device isn't screwed with while user confirmation is pending
+	// TODO(karalabe): remove if hotplug lands on Windows
+	w.hub.commsLock.Lock()
+	w.hub.commsPend++
+	w.hub.commsLock.Unlock()
+
+	defer func() {
+		w.hub.commsLock.Lock()
+		w.hub.commsPend--
+		w.hub.commsLock.Unlock()
+	}()
+
+	// Sign the transaction and verify the sender to avoid hardware fault surprises
+	sender, signed, err := w.driver.SignData(path, hash)
+	if err != nil {
+		return nil, err
+	}
+	if sender != account.Address {
+		return nil, fmt.Errorf("signer mismatch: expected %s, got %s", account.Address.Hex(), sender.Hex())
+	}
+	return signed, nil
 }
 
 // SignData signs keccak256(data). The mimetype parameter describes the type of data being signed

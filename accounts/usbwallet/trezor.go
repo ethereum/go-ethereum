@@ -185,6 +185,29 @@ func (w *trezorDriver) SignTx(path accounts.DerivationPath, tx *types.Transactio
 	return w.trezorSign(path, tx, chainID)
 }
 
+// SignData sends a blob of data to the xUSB device and waits for the user to confirm
+// or deny the transaction.
+func (w *trezorDriver) SignData(path accounts.DerivationPath, hash []byte) (common.Address, []byte, error) {
+	request := &trezor.EthereumSignMessage{
+		AddressN: path,
+		Message:  hash,
+	}
+	response := new(trezor.EthereumMessageSignature)
+	if _, err := w.trezorExchange(request, response); err != nil {
+		return common.Address{}, nil, err
+	}
+
+	var address common.Address
+	if addr := response.GetAddressBin(); len(addr) > 0 { // Older firmwares use binary fomats
+		address = common.BytesToAddress(addr)
+	}
+	if addr := response.GetAddressHex(); len(addr) > 0 { // Newer firmwares use hexadecimal fomats
+		address = common.HexToAddress(addr)
+	}
+
+	return address, response.Signature, nil
+}
+
 // trezorDerive sends a derivation request to the Trezor device and returns the
 // Ethereum address located on that path.
 func (w *trezorDriver) trezorDerive(derivationPath []uint32) (common.Address, error) {

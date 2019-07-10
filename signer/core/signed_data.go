@@ -144,7 +144,7 @@ func (api *SignerAPI) sign(addr common.MixedcaseAddress, req *SignDataRequest, l
 	}
 	pw, err := api.lookupOrQueryPassword(account.Address,
 		"Password for signing",
-		fmt.Sprintf("Please enter password for signing data with account %s", account.Address.Hex()))
+		fmt.Sprintf("Please enter password for signing data with account %s, or just press 'RETURN'", account.Address.Hex()))
 	if err != nil {
 		return nil, err
 	}
