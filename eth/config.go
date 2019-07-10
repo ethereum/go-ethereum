@@ -102,10 +102,10 @@ type Config struct {
 	Whitelist map[uint64]common.Hash `toml:"-"`
 
 	// Light client options
-	LightServ         int `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests
-	LightBandwidthIn  int `toml:",omitempty"` // Incoming bandwidth limit for light servers
-	LightBandwidthOut int `toml:",omitempty"` // Outgoing bandwidth limit for light servers
-	LightPeers        int `toml:",omitempty"` // Maximum number of LES client peers
+	LightServ    int `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests
+	LightIngress int `toml:",omitempty"` // Incoming bandwidth limit for light servers
+	LightEgress  int `toml:",omitempty"` // Outgoing bandwidth limit for light servers
+	LightPeers   int `toml:",omitempty"` // Maximum number of LES client peers
 
 	// Ultra Light client options
 	UltraLightServers      []string `toml:",omitempty"` // List of trusted ultra light servers

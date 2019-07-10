@@ -25,8 +25,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		NoPrefetch              bool
 		Whitelist               map[uint64]common.Hash `toml:"-"`
 		LightServ               int                    `toml:",omitempty"`
-		LightBandwidthIn        int                    `toml:",omitempty"`
-		LightBandwidthOut       int                    `toml:",omitempty"`
+		LightIngress            int                    `toml:",omitempty"`
+		LightEgress             int                    `toml:",omitempty"`
 		LightPeers              int                    `toml:",omitempty"`
 		UltraLightServers       []string               `toml:",omitempty"`
 		UltraLightFraction      int                    `toml:",omitempty"`
@@ -58,8 +58,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.NoPrefetch = c.NoPrefetch
 	enc.Whitelist = c.Whitelist
 	enc.LightServ = c.LightServ
-	enc.LightBandwidthIn = c.LightBandwidthIn
-	enc.LightBandwidthOut = c.LightBandwidthOut
+	enc.LightIngress = c.LightIngress
+	enc.LightEgress = c.LightEgress
 	enc.LightPeers = c.LightPeers
 	enc.UltraLightServers = c.UltraLightServers
 	enc.UltraLightFraction = c.UltraLightFraction
@@ -95,8 +95,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		NoPrefetch              *bool
 		Whitelist               map[uint64]common.Hash `toml:"-"`
 		LightServ               *int                   `toml:",omitempty"`
-		LightBandwidthIn        *int                   `toml:",omitempty"`
-		LightBandwidthOut       *int                   `toml:",omitempty"`
+		LightIngress            *int                   `toml:",omitempty"`
+		LightEgress             *int                   `toml:",omitempty"`
 		LightPeers              *int                   `toml:",omitempty"`
 		UltraLightServers       []string               `toml:",omitempty"`
 		UltraLightFraction      *int                   `toml:",omitempty"`
@@ -145,11 +145,11 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.LightServ != nil {
 		c.LightServ = *dec.LightServ
 	}
-	if dec.LightBandwidthIn != nil {
-		c.LightBandwidthIn = *dec.LightBandwidthIn
+	if dec.LightIngress != nil {
+		c.LightIngress = *dec.LightIngress
 	}
-	if dec.LightBandwidthOut != nil {
-		c.LightBandwidthOut = *dec.LightBandwidthOut
+	if dec.LightEgress != nil {
+		c.LightEgress = *dec.LightEgress
 	}
 	if dec.LightPeers != nil {
 		c.LightPeers = *dec.LightPeers
