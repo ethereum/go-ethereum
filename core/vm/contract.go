@@ -57,8 +57,9 @@ type Contract struct {
 	CodeAddr *common.Address
 	Input    []byte
 
-	Gas   uint64
-	value *big.Int
+	CodeVersion uint64
+	Gas         uint64
+	value       *big.Int
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
@@ -169,16 +170,18 @@ func (c *Contract) Value() *big.Int {
 
 // SetCallCode sets the code of the contract and address of the backing data
 // object
-func (c *Contract) SetCallCode(addr *common.Address, hash common.Hash, code []byte) {
+func (c *Contract) SetCallCode(addr *common.Address, hash common.Hash, code []byte, version uint64) {
 	c.Code = code
 	c.CodeHash = hash
 	c.CodeAddr = addr
+	c.CodeVersion = version
 }
 
 // SetCodeOptionalHash can be used to provide code, but it's optional to provide hash.
 // In case hash is not provided, the jumpdest analysis will not be saved to the parent context
-func (c *Contract) SetCodeOptionalHash(addr *common.Address, codeAndHash *codeAndHash) {
+func (c *Contract) SetCodeOptionalHash(addr *common.Address, codeAndHash *codeAndHash, version uint64) {
 	c.Code = codeAndHash.code
 	c.CodeHash = codeAndHash.hash
 	c.CodeAddr = addr
+	c.CodeVersion = version
 }

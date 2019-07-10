@@ -27,9 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-var (
-	errInsufficientBalanceForGas = errors.New("insufficient balance to pay for gas")
-)
+var errInsufficientBalanceForGas = errors.New("insufficient balance to pay for gas")
 
 /*
 The State Transitioning Model
@@ -206,7 +204,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		vmerr error
 	)
 	if contractCreation {
-		ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value)
+		ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value, st.evm.ChainConfig().LatestCodeVersion)
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)

@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
@@ -51,7 +52,7 @@ func TestUpdateLeaks(t *testing.T) {
 			state.SetState(addr, common.BytesToHash([]byte{i, i, i}), common.BytesToHash([]byte{i, i, i, i}))
 		}
 		if i%3 == 0 {
-			state.SetCode(addr, []byte{i, i, i, i, i})
+			state.SetCode(addr, []byte{i, i, i, i, i}, 0)
 		}
 		state.IntermediateRoot(false)
 	}
@@ -80,7 +81,7 @@ func TestIntermediateLeaks(t *testing.T) {
 			state.SetState(addr, common.Hash{i, i, i, tweak}, common.Hash{i, i, i, i, tweak})
 		}
 		if i%3 == 0 {
-			state.SetCode(addr, []byte{i, i, i, i, i, tweak})
+			state.SetCode(addr, []byte{i, i, i, i, i, tweak}, 0)
 		}
 	}
 
@@ -247,10 +248,10 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			fn: func(a testAction, s *StateDB) {
 				code := make([]byte, 16)
 				binary.BigEndian.PutUint64(code, uint64(a.args[0]))
-				binary.BigEndian.PutUint64(code[8:], uint64(a.args[1]))
-				s.SetCode(addr, code)
+				binary.BigEndian.PutUint64(code[8:16], uint64(a.args[1]))
+				s.SetCode(addr, code, uint64(a.args[2]))
 			},
-			args: make([]int64, 2),
+			args: make([]int64, 3),
 		},
 		{
 			name: "CreateAccount",
@@ -447,5 +448,51 @@ func TestCopyOfCopy(t *testing.T) {
 	}
 	if got := sdb.Copy().Copy().GetBalance(addr).Uint64(); got != 42 {
 		t.Fatalf("2nd copy fail, expected 42, got %v", got)
+	}
+}
+
+func TestStateObjectDecoding(t *testing.T) {
+	var accounts = []Account{
+		{
+			Nonce:    100,
+			Balance:  big.NewInt(100),
+			Root:     common.HexToHash("deadbeef"),
+			CodeHash: []byte{0x01, 0x02, 0x03},
+		},
+		{
+			Nonce:       100,
+			Balance:     big.NewInt(100),
+			Root:        common.HexToHash("deadbeef"),
+			CodeHash:    []byte{0x01, 0x02, 0x03},
+			CodeVersion: 0,
+		},
+		{
+			Nonce:       100,
+			Balance:     big.NewInt(100),
+			Root:        common.HexToHash("deadbeef"),
+			CodeHash:    []byte{0x01, 0x02, 0x03},
+			CodeVersion: 1,
+		},
+		{
+			Nonce:       100,
+			Balance:     big.NewInt(100),
+			Root:        common.HexToHash("deadbeef"),
+			CodeHash:    []byte{0x01, 0x02, 0x03},
+			CodeVersion: math.MaxUint64,
+		},
+	}
+	for _, acct := range accounts {
+		blob, err := rlp.EncodeToBytes(&acct)
+		if err != nil {
+			t.Fatalf("Failed to encode account %v", err)
+		}
+		var dec Account
+		err = rlp.DecodeBytes(blob, &dec)
+		if err != nil {
+			t.Fatalf("Failed to decode account %v", err)
+		}
+		if !reflect.DeepEqual(acct, dec) {
+			t.Fatalf("Mismatch after encoding/decoding, want %v, has %v", acct, dec)
+		}
 	}
 }

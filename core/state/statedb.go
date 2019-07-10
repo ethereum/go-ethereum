@@ -278,6 +278,14 @@ func (self *StateDB) GetCodeHash(addr common.Address) common.Hash {
 	return common.BytesToHash(stateObject.CodeHash())
 }
 
+func (self *StateDB) GetCodeVersion(addr common.Address) uint64 {
+	stateObject := self.getStateObject(addr)
+	if stateObject == nil {
+		return 0
+	}
+	return stateObject.CodeVersion()
+}
+
 // GetState retrieves a value from the given account's storage trie.
 func (self *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := self.getStateObject(addr)
@@ -372,10 +380,10 @@ func (self *StateDB) SetNonce(addr common.Address, nonce uint64) {
 	}
 }
 
-func (self *StateDB) SetCode(addr common.Address, code []byte) {
+func (self *StateDB) SetCode(addr common.Address, code []byte, version uint64) {
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
-		stateObject.SetCode(crypto.Keccak256Hash(code), code)
+		stateObject.SetCode(crypto.Keccak256Hash(code), code, version)
 	}
 }
 
@@ -488,7 +496,6 @@ func (self *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
 func (self *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
 	prev = self.getStateObject(addr)
 	newobj = newObject(self, addr, Account{})
-	newobj.setNonce(0) // sets the object to dirty
 	if prev == nil {
 		self.journal.append(createObjectChange{account: &addr})
 	} else {

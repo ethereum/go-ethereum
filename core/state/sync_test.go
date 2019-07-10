@@ -56,7 +56,7 @@ func makeTestState() (Database, common.Hash, []*testAccount) {
 		acc.nonce = uint64(42 * i)
 
 		if i%3 == 0 {
-			obj.SetCode(crypto.Keccak256Hash([]byte{i, i, i, i, i}), []byte{i, i, i, i, i})
+			obj.SetCode(crypto.Keccak256Hash([]byte{i, i, i, i, i}), []byte{i, i, i, i, i}, 0)
 			acc.code = []byte{i, i, i, i, i}
 		}
 		state.updateStateObject(obj)

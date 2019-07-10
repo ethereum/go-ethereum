@@ -43,7 +43,6 @@ func (s Storage) String() (str string) {
 	for key, value := range s {
 		str += fmt.Sprintf("%X : %X\n", key, value)
 	}
-
 	return
 }
 
@@ -52,7 +51,6 @@ func (s Storage) Copy() Storage {
 	for key, value := range s {
 		cpy[key] = value
 	}
-
 	return cpy
 }
 
@@ -95,13 +93,75 @@ func (s *stateObject) empty() bool {
 	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash)
 }
 
-// Account is the Ethereum consensus representation of accounts.
-// These objects are stored in the main account trie.
+// legacyStoredAccount is the legacy storage encoding of a state object used in
+// database.
+type legacyStoredAccount struct {
+	Nonce    uint64      // The nonce of account.
+	Balance  *big.Int    // The balance of account.
+	Root     common.Hash // Merkle root of the storage trie
+	CodeHash []byte      // The code hash of account.
+}
+
+// storedAccount is the storage encoding of a state object used in database which
+// includes code version field introduced by EIP1702.
+type storedAccount Account
+
+// Account is ethereum consensus representation of accounts. These objects are
+// stored in the main account trie.
 type Account struct {
-	Nonce    uint64
-	Balance  *big.Int
-	Root     common.Hash // merkle root of the storage trie
-	CodeHash []byte
+	Nonce       uint64      // The nonce of account.
+	Balance     *big.Int    // The balance of account.
+	Root        common.Hash // Merkle root of the storage trie.
+	CodeHash    []byte      // The code hash of account.
+	CodeVersion uint64      // The version of account code.
+}
+
+// EncodeRLP implements rlp.Encoder.
+func (a *Account) EncodeRLP(w io.Writer) error {
+	if a.CodeVersion == 0 {
+		return rlp.Encode(w, legacyStoredAccount{a.Nonce, a.Balance, a.Root, a.CodeHash})
+	}
+	return rlp.Encode(w, storedAccount(*a))
+}
+
+// EncodeRLP implements rlp.Decoder.
+func (a *Account) DecodeRLP(r *rlp.Stream) error {
+	blob, err := r.Raw()
+	if err != nil {
+		return err
+	}
+	elems, _, err := rlp.SplitList(blob)
+	if err != nil {
+		return err
+	}
+	switch c, _ := rlp.CountValues(elems); c {
+	case 4:
+		return decodeLegacyAccount(a, blob)
+	case 5:
+		return decodeAccount(a, blob)
+	default:
+		return fmt.Errorf("invalid number of list elements: %v", c)
+	}
+}
+
+// decodeLegacyAccount decodes the account information from legacy format blob.
+func decodeLegacyAccount(a *Account, blob []byte) error {
+	var dec legacyStoredAccount
+	if err := rlp.DecodeBytes(blob, &dec); err != nil {
+		return err
+	}
+	a.Nonce, a.Balance, a.Root, a.CodeHash = dec.Nonce, dec.Balance, dec.Root, dec.CodeHash
+	return nil
+}
+
+// decodeAccount decodes the account information from current format blob.
+func decodeAccount(a *Account, blob []byte) error {
+	var dec storedAccount
+	if err := rlp.DecodeBytes(blob, &dec); err != nil {
+		return err
+	}
+	*a = Account(dec)
+	return nil
 }
 
 // newObject creates a state object.
@@ -124,7 +184,7 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 
 // EncodeRLP implements rlp.Encoder.
 func (s *stateObject) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, s.data)
+	return rlp.Encode(w, &s.data)
 }
 
 // setError remembers the first non-nil error it is called with.
@@ -355,19 +415,21 @@ func (s *stateObject) Code(db Database) []byte {
 	return code
 }
 
-func (s *stateObject) SetCode(codeHash common.Hash, code []byte) {
+func (s *stateObject) SetCode(codeHash common.Hash, code []byte, version uint64) {
 	prevcode := s.Code(s.db.db)
 	s.db.journal.append(codeChange{
 		account:  &s.address,
 		prevhash: s.CodeHash(),
 		prevcode: prevcode,
+		version:  s.data.CodeVersion,
 	})
-	s.setCode(codeHash, code)
+	s.setCode(codeHash, code, version)
 }
 
-func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
+func (s *stateObject) setCode(codeHash common.Hash, code []byte, version uint64) {
 	s.code = code
 	s.data.CodeHash = codeHash[:]
+	s.data.CodeVersion = version
 	s.dirtyCode = true
 }
 
@@ -393,6 +455,10 @@ func (s *stateObject) Balance() *big.Int {
 
 func (s *stateObject) Nonce() uint64 {
 	return s.data.Nonce
+}
+
+func (s *stateObject) CodeVersion() uint64 {
+	return s.data.CodeVersion
 }
 
 // Never called, but must be present to allow stateObject to be used

@@ -41,6 +41,7 @@ type Config struct {
 	GasLimit    uint64
 	GasPrice    *big.Int
 	Value       *big.Int
+	Version     uint64
 	Debug       bool
 	EVMConfig   vm.Config
 
@@ -108,7 +109,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	)
 	cfg.State.CreateAccount(address)
 	// set the receiver's (the executing contract) code for execution.
-	cfg.State.SetCode(address, code)
+	cfg.State.SetCode(address, code, cfg.Version)
 	// Call the code with the given configuration.
 	ret, _, err := vmenv.Call(
 		sender,
@@ -142,6 +143,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		input,
 		cfg.GasLimit,
 		cfg.Value,
+		cfg.Version,
 	)
 	return code, address, leftOverGas, err
 }
