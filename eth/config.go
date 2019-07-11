@@ -150,8 +150,8 @@ type Config struct {
 	RPCGasCap *big.Int `toml:",omitempty"`
 
 	// Checkpoint is a hardcoded checkpoint which can be nil.
-	Checkpoint *params.TrustedCheckpoint
+	Checkpoint *params.TrustedCheckpoint `toml:",omitempty"`
 
 	// CheckpointOracle is the configuration for checkpoint oracle.
-	CheckpointOracle *params.CheckpointOracleConfig
+	CheckpointOracle *params.CheckpointOracleConfig `toml:",omitempty"`
 }
