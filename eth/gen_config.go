@@ -46,9 +46,9 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		DocRoot                 string `toml:"-"`
 		EWASMInterpreter        string
 		EVMInterpreter          string
-		RPCGasCap               *big.Int `toml:",omitempty"`
-		Checkpoint              *params.TrustedCheckpoint
-		CheckpointOracle        *params.CheckpointOracleConfig
+		RPCGasCap               *big.Int                       `toml:",omitempty"`
+		Checkpoint              *params.TrustedCheckpoint      `toml:",omitempty"`
+		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -116,9 +116,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		DocRoot                 *string `toml:"-"`
 		EWASMInterpreter        *string
 		EVMInterpreter          *string
-		RPCGasCap               *big.Int `toml:",omitempty"`
-		Checkpoint              *params.TrustedCheckpoint
-		CheckpointOracle        *params.CheckpointOracleConfig
+		RPCGasCap               *big.Int                       `toml:",omitempty"`
+		Checkpoint              *params.TrustedCheckpoint      `toml:",omitempty"`
+		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
