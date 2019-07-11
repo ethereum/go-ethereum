@@ -32,6 +32,7 @@ var testCases []testCase
 // selects the peers for message forwarding, depending on the message address
 // and kademlia constellation.
 func TestForwardBasic(t *testing.T) {
+	t.Skip("Flaky on macOS on local machines")
 	baseAddrBytes := make([]byte, 32)
 	for i := 0; i < len(baseAddrBytes); i++ {
 		baseAddrBytes[i] = 0xFF
