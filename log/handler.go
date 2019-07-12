@@ -102,29 +102,20 @@ func prepFile(path string) (*countingWriter, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, err = f.Seek(-1, io.SeekEnd)
+	fi, err := f.Stat()
 	if err != nil {
 		return nil, err
 	}
 	buf := make([]byte, 1)
-	var cut int64
-	for {
-		if _, err := f.Read(buf); err != nil {
+	var ns int64
+	for ns = fi.Size(); ns > 0; ns-- {
+		if _, err := f.ReadAt(buf, ns-1); err != nil {
 			return nil, err
 		}
 		if buf[0] == '\n' {
 			break
 		}
-		if _, err = f.Seek(-2, io.SeekCurrent); err != nil {
-			return nil, err
-		}
-		cut++
 	}
-	fi, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	ns := fi.Size() - cut
 	if err = f.Truncate(ns); err != nil {
 		return nil, err
 	}
