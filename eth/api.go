@@ -334,6 +334,72 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 	return results, nil
 }
 
+// AccountRangeResult returns a mapping from the hash of an account addresses
+// to its preimage. It will return the JSON null if no preimage is found.
+// Since a query can return a limited amount of results, a "next" field is
+// also present for paging.
+type AccountRangeResult struct {
+	Accounts map[common.Hash]*common.Address `json:"accounts"`
+	Next     common.Hash                     `json:"next"`
+}
+
+func accountRange(st state.Trie, start *common.Hash, maxResults int) (AccountRangeResult, error) {
+	if start == nil {
+		start = &common.Hash{0}
+	}
+	it := trie.NewIterator(st.NodeIterator(start.Bytes()))
+	result := AccountRangeResult{Accounts: make(map[common.Hash]*common.Address), Next: common.Hash{}}
+
+	if maxResults > AccountRangeMaxResults {
+		maxResults = AccountRangeMaxResults
+	}
+
+	for i := 0; i < maxResults && it.Next(); i++ {
+		if preimage := st.GetKey(it.Key); preimage != nil {
+			addr := &common.Address{}
+			addr.SetBytes(preimage)
+			result.Accounts[common.BytesToHash(it.Key)] = addr
+		} else {
+			result.Accounts[common.BytesToHash(it.Key)] = nil
+		}
+	}
+
+	if it.Next() {
+		result.Next = common.BytesToHash(it.Key)
+	}
+
+	return result, nil
+}
+
+// AccountRangeMaxResults is the maximum number of results to be returned per call
+const AccountRangeMaxResults = 256
+
+// AccountRange enumerates all accounts in the latest state
+func (api *PrivateDebugAPI) AccountRange(ctx context.Context, start *common.Hash, maxResults int) (AccountRangeResult, error) {
+	var statedb *state.StateDB
+	var err error
+	block := api.eth.blockchain.CurrentBlock()
+
+	if len(block.Transactions()) == 0 {
+		statedb, err = api.computeStateDB(block, defaultTraceReexec)
+		if err != nil {
+			return AccountRangeResult{}, err
+		}
+	} else {
+		_, _, statedb, err = api.computeTxEnv(block.Hash(), len(block.Transactions())-1, 0)
+		if err != nil {
+			return AccountRangeResult{}, err
+		}
+	}
+
+	trie, err := statedb.Database().OpenTrie(block.Header().Root)
+	if err != nil {
+		return AccountRangeResult{}, err
+	}
+
+	return accountRange(trie, start, maxResults)
+}
+
 // StorageRangeResult is the result of a debug_storageRangeAt API call.
 type StorageRangeResult struct {
 	Storage storageMap   `json:"storage"`

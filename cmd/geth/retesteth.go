@@ -86,7 +86,7 @@ type RetestethEthAPI interface {
 }
 
 type RetestethDebugAPI interface {
-	AccountRangeAt(ctx context.Context,
+	AccountRange(ctx context.Context,
 		blockHashOrNumber *math.HexOrDecimal256, txIndex uint64,
 		addressHash *math.HexOrDecimal256, maxResults uint64,
 	) (AccountRangeResult, error)
@@ -604,7 +604,7 @@ func (api *RetestethAPI) GetBlockByNumber(ctx context.Context, blockNr math.HexO
 	return nil, fmt.Errorf("block %d not found", blockNr)
 }
 
-func (api *RetestethAPI) AccountRangeAt(ctx context.Context,
+func (api *RetestethAPI) AccountRange(ctx context.Context,
 	blockHashOrNumber *math.HexOrDecimal256, txIndex uint64,
 	addressHash *math.HexOrDecimal256, maxResults uint64,
 ) (AccountRangeResult, error) {
