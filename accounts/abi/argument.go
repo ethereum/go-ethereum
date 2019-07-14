@@ -119,10 +119,21 @@ func unpack(t *Type, dst interface{}, src interface{}) error {
 		dstVal = reflect.ValueOf(dst).Elem()
 		srcVal = reflect.ValueOf(src)
 	)
-
-	if t.T != TupleTy && !((t.T == SliceTy || t.T == ArrayTy) && t.Elem.T == TupleTy) {
+	tuple, typ := false, t
+	for {
+		if typ.T == SliceTy || typ.T == ArrayTy {
+			typ = typ.Elem
+			continue
+		}
+		tuple = typ.T == TupleTy
+		break
+	}
+	if !tuple {
 		return set(dstVal, srcVal)
 	}
+
+	// Dereferences interface or pointer wrapper
+	dstVal = indirectInterfaceOrPtr(dstVal)
 
 	switch t.T {
 	case TupleTy:
@@ -191,7 +202,7 @@ func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues interfac
 	argument := arguments.NonIndexed()[0]
 	elem := reflect.ValueOf(v).Elem()
 
-	if elem.Kind() == reflect.Struct {
+	if elem.Kind() == reflect.Struct && argument.Type.T != TupleTy {
 		fieldmap, err := mapArgNamesToStructFields([]string{argument.Name}, elem)
 		if err != nil {
 			return err

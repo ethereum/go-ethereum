@@ -469,23 +469,18 @@ func (f *lightFetcher) findBestRequest() (bestHash common.Hash, bestAmount uint6
 
 // isTrustedHash checks if the block can be trusted by the minimum trusted fraction.
 func (f *lightFetcher) isTrustedHash(hash common.Hash) bool {
-	if !f.pm.isULCEnabled() {
+	// If ultra light cliet mode is disabled, trust all hashes
+	if f.pm.ulc == nil {
 		return true
 	}
-
-	var numAgreed int
-	for p, fp := range f.peers {
-		if !p.isTrusted {
-			continue
+	// Ultra light enabled, only trust after enough confirmations
+	var agreed int
+	for peer, info := range f.peers {
+		if peer.trusted && info.nodeByHash[hash] != nil {
+			agreed++
 		}
-		if _, ok := fp.nodeByHash[hash]; !ok {
-			continue
-		}
-
-		numAgreed++
 	}
-
-	return 100*numAgreed/len(f.pm.ulc.trustedKeys) >= f.pm.ulc.minTrustedFraction
+	return 100*agreed/len(f.pm.ulc.keys) >= f.pm.ulc.fraction
 }
 
 func (f *lightFetcher) newFetcherDistReqForSync(bestHash common.Hash) *distReq {
@@ -498,16 +493,15 @@ func (f *lightFetcher) newFetcherDistReqForSync(bestHash common.Hash) *distReq {
 			f.lock.Lock()
 			defer f.lock.Unlock()
 
-			if p.isOnlyAnnounce {
+			if p.onlyAnnounce {
 				return false
 			}
-
 			fp := f.peers[p]
 			return fp != nil && fp.nodeByHash[bestHash] != nil
 		},
 		request: func(dp distPeer) func() {
-			if f.pm.isULCEnabled() {
-				//keep last trusted header before sync
+			if f.pm.ulc != nil {
+				// Keep last trusted header before sync
 				f.setLastTrustedHeader(f.chain.CurrentHeader())
 			}
 			go func() {
@@ -533,10 +527,9 @@ func (f *lightFetcher) newFetcherDistReq(bestHash common.Hash, reqID uint64, bes
 			f.lock.Lock()
 			defer f.lock.Unlock()
 
-			if p.isOnlyAnnounce {
+			if p.onlyAnnounce {
 				return false
 			}
-
 			fp := f.peers[p]
 			if fp == nil {
 				return false
@@ -708,36 +701,30 @@ func (f *lightFetcher) checkSyncedHeaders(p *peer) {
 		p.Log().Debug("Unknown peer to check sync headers")
 		return
 	}
-
-	n := fp.lastAnnounced
-	var td *big.Int
-
-	var h *types.Header
-	if f.pm.isULCEnabled() {
-		var unapprovedHashes []common.Hash
-		// Overwrite last announced for ULC mode
-		h, unapprovedHashes = f.lastTrustedTreeNode(p)
-		//rollback untrusted blocks
-		f.chain.Rollback(unapprovedHashes)
-		//overwrite to last trusted
-		n = fp.nodeByHash[h.Hash()]
+	var (
+		node = fp.lastAnnounced
+		td   *big.Int
+	)
+	if f.pm.ulc != nil {
+		// Roll back untrusted blocks
+		h, unapproved := f.lastTrustedTreeNode(p)
+		f.chain.Rollback(unapproved)
+		node = fp.nodeByHash[h.Hash()]
 	}
-
-	//find last valid block
-	for n != nil {
-		if td = f.chain.GetTd(n.hash, n.number); td != nil {
+	// Find last valid block
+	for node != nil {
+		if td = f.chain.GetTd(node.hash, node.number); td != nil {
 			break
 		}
-		n = n.parent
+		node = node.parent
 	}
-
-	// Now n is the latest downloaded/approved header after syncing
-	if n == nil {
+	// Now node is the latest downloaded/approved header after syncing
+	if node == nil {
 		p.Log().Debug("Synchronisation failed")
 		go f.pm.removePeer(p.id)
 		return
 	}
-	header := f.chain.GetHeader(n.hash, n.number)
+	header := f.chain.GetHeader(node.hash, node.number)
 	f.newHeaders([]*types.Header{header}, []*big.Int{td})
 }
 

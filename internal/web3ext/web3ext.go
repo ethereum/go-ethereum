@@ -32,6 +32,7 @@ var Modules = map[string]string{
 	"shh":        ShhJs,
 	"swarmfs":    SwarmfsJs,
 	"txpool":     TxpoolJs,
+	"les":        LESJs,
 }
 
 const ChequebookJs = `
@@ -756,6 +757,31 @@ web3._extend({
 		new web3._extend.Property({
 			name: 'selfDrops',
 			getter: 'account_selfDrops'
+		}),
+	]
+});
+`
+
+const LESJs = `
+web3._extend({
+	property: 'les',
+	methods: 
+	[
+		new web3._extend.Method({
+			name: 'getCheckpoint',
+			call: 'les_getCheckpoint',
+			params: 1
+		}),
+	],
+	properties: 
+	[
+		new web3._extend.Property({
+			name: 'latestCheckpoint',
+			getter: 'les_latestCheckpoint'
+		}),
+		new web3._extend.Property({
+			name: 'checkpointContractAddress',
+			getter: 'les_getCheckpointContractAddress'
 		}),
 	]
 });

@@ -58,7 +58,7 @@ func (db *Database) ValidateTransaction(selector *string, tx *core.SendTxArgs) (
 			// No value submitted at least, critically Warn, but don't blow up
 			messages.Crit("Transaction will create contract with empty code")
 		} else if len(data) < 40 { // arbitrary heuristic limit
-			messages.Warn(fmt.Sprintf("Transaction will will create contract, but payload is suspiciously small (%d bytes)", len(data)))
+			messages.Warn(fmt.Sprintf("Transaction will create contract, but payload is suspiciously small (%d bytes)", len(data)))
 		}
 		// Method selector should be nil for contract creation
 		if selector != nil {

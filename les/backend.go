@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -43,14 +44,13 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/params"
-	rpc "github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 type LightEthereum struct {
 	lesCommons
 
 	odr         *LesOdr
-	relay       *LesTxRelay
 	chainConfig *params.ChainConfig
 	// Channel for shutting down the service
 	shutdownChan chan bool
@@ -62,6 +62,7 @@ type LightEthereum struct {
 	serverPool *serverPool
 	reqDist    *requestDistributor
 	retriever  *retrieveManager
+	relay      *lesTxRelay
 
 	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
 	bloomIndexer  *core.ChainIndexer
@@ -83,7 +84,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.ConstantinopleOverride)
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
 	if _, isCompat := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !isCompat {
 		return nil, genesisErr
 	}
@@ -109,32 +110,22 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   eth.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
 	}
-
-	leth.ApiBackend = &LesApiBackend{ctx.ExtRPCEnabled(), leth, nil}
-
-	gpoParams := config.GPO
-	if gpoParams.Default == nil {
-		gpoParams.Default = config.Miner.GasPrice
-	}
-	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
-	leth.engine = eth.CreateConsensusEngine(ctx, chainConfig, &config.Ethash, nil, false, chainDb, ethapi.NewPublicBlockChainAPI(leth.ApiBackend))
-
-	var trustedNodes []string
-	if leth.config.ULC != nil {
-		trustedNodes = leth.config.ULC.TrustedServers
-	}
-	leth.serverPool = newServerPool(chainDb, quitSync, &leth.wg, trustedNodes)
+	leth.serverPool = newServerPool(chainDb, quitSync, &leth.wg, leth.config.UltraLightServers)
 	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool)
-	leth.relay = NewLesTxRelay(peers, leth.retriever)
+	leth.relay = newLesTxRelay(peers, leth.retriever)
 
 	leth.odr = NewLesOdr(chainDb, light.DefaultClientIndexerConfig, leth.retriever)
 	leth.chtIndexer = light.NewChtIndexer(chainDb, leth.odr, params.CHTFrequency, params.HelperTrieConfirmations)
 	leth.bloomTrieIndexer = light.NewBloomTrieIndexer(chainDb, leth.odr, params.BloomBitsBlocksClient, params.BloomTrieFrequency)
 	leth.odr.SetIndexers(leth.chtIndexer, leth.bloomTrieIndexer, leth.bloomIndexer)
 
+	checkpoint := config.Checkpoint
+	if checkpoint == nil {
+		checkpoint = params.TrustedCheckpoints[genesisHash]
+	}
 	// Note: NewLightChain adds the trusted checkpoint so it needs an ODR with
 	// indexers already set but not started yet
-	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine); err != nil {
+	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine, checkpoint); err != nil {
 		return nil, err
 	}
 	// Note: AddChildIndexer starts the update process for the child
@@ -150,33 +141,26 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	}
 
 	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
+	leth.ApiBackend = &LesApiBackend{ctx.ExtRPCEnabled(), leth, nil}
 
-	if leth.protocolManager, err = NewProtocolManager(
-		leth.chainConfig,
-		light.DefaultClientIndexerConfig,
-		true,
-		config.NetworkId,
-		leth.eventMux,
-		leth.engine,
-		leth.peers,
-		leth.blockchain,
-		nil,
-		chainDb,
-		leth.odr,
-		leth.relay,
-		leth.serverPool,
-		quitSync,
-		&leth.wg,
-		config.ULC,
-		nil); err != nil {
+	gpoParams := config.GPO
+	if gpoParams.Default == nil {
+		gpoParams.Default = config.Miner.GasPrice
+	}
+	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
+
+	oracle := config.CheckpointOracle
+	if oracle == nil {
+		oracle = params.CheckpointOracles[genesisHash]
+	}
+	registrar := newCheckpointOracle(oracle, leth.getLocalCheckpoint)
+	if leth.protocolManager, err = NewProtocolManager(leth.chainConfig, checkpoint, light.DefaultClientIndexerConfig, config.UltraLightServers, config.UltraLightFraction, true, config.NetworkId, leth.eventMux, leth.peers, leth.blockchain, nil, chainDb, leth.odr, leth.serverPool, registrar, quitSync, &leth.wg, nil); err != nil {
 		return nil, err
 	}
-
-	if leth.protocolManager.isULCEnabled() {
-		log.Warn("Ultra light client is enabled", "trustedNodes", len(leth.protocolManager.ulc.trustedKeys), "minTrustedFraction", leth.protocolManager.ulc.minTrustedFraction)
+	if leth.protocolManager.ulc != nil {
+		log.Warn("Ultra light client is enabled", "servers", len(config.UltraLightServers), "fraction", config.UltraLightFraction)
 		leth.blockchain.DisableCheckFreq()
 	}
-
 	return leth, nil
 }
 
@@ -237,6 +221,11 @@ func (s *LightEthereum) APIs() []rpc.API {
 			Version:   "1.0",
 			Service:   s.netRPCService,
 			Public:    true,
+		}, {
+			Namespace: "les",
+			Version:   "1.0",
+			Service:   NewPrivateLightAPI(&s.lesCommons, s.protocolManager.reg),
+			Public:    false,
 		},
 	}...)
 }
@@ -290,4 +279,13 @@ func (s *LightEthereum) Stop() error {
 	close(s.shutdownChan)
 
 	return nil
+}
+
+// SetClient sets the rpc client and binds the registrar contract.
+func (s *LightEthereum) SetContractBackend(backend bind.ContractBackend) {
+	// Short circuit if registrar is nil
+	if s.protocolManager.reg == nil {
+		return
+	}
+	s.protocolManager.reg.start(backend)
 }

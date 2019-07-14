@@ -17,11 +17,26 @@
 
 package storage
 
+import "errors"
+
+var (
+	// ErrZeroKey is returned if an attempt was made to inset a 0-length key.
+	ErrZeroKey = errors.New("0-length key")
+
+	// ErrNotFound is returned if an unknown key is attempted to be retrieved.
+	ErrNotFound = errors.New("not found")
+)
+
 type Storage interface {
-	// Put stores a value by key. 0-length keys results in no-op
+	// Put stores a value by key. 0-length keys results in noop.
 	Put(key, value string)
-	// Get returns the previously stored value, or the empty string if it does not exist or key is of 0-length
-	Get(key string) string
+
+	// Get returns the previously stored value, or an error if the key is 0-length
+	// or unknown.
+	Get(key string) (string, error)
+
+	// Del removes a key-value pair. If the key doesn't exist, the method is a noop.
+	Del(key string)
 }
 
 // EphemeralStorage is an in-memory storage that does
@@ -31,23 +46,29 @@ type EphemeralStorage struct {
 	namespace string
 }
 
+// Put stores a value by key. 0-length keys results in noop.
 func (s *EphemeralStorage) Put(key, value string) {
 	if len(key) == 0 {
 		return
 	}
-	//fmt.Printf("storage: put %v -> %v\n", key, value)
 	s.data[key] = value
 }
 
-func (s *EphemeralStorage) Get(key string) string {
+// Get returns the previously stored value, or an error if the key is 0-length
+// or unknown.
+func (s *EphemeralStorage) Get(key string) (string, error) {
 	if len(key) == 0 {
-		return ""
+		return "", ErrZeroKey
 	}
-	//fmt.Printf("storage: get %v\n", key)
-	if v, exist := s.data[key]; exist {
-		return v
+	if v, ok := s.data[key]; ok {
+		return v, nil
 	}
-	return ""
+	return "", ErrNotFound
+}
+
+// Del removes a key-value pair. If the key doesn't exist, the method is a noop.
+func (s *EphemeralStorage) Del(key string) {
+	delete(s.data, key)
 }
 
 func NewEphemeralStorage() Storage {
@@ -61,6 +82,7 @@ func NewEphemeralStorage() Storage {
 type NoStorage struct{}
 
 func (s *NoStorage) Put(key, value string) {}
-func (s *NoStorage) Get(key string) string {
-	return ""
+func (s *NoStorage) Del(key string)        {}
+func (s *NoStorage) Get(key string) (string, error) {
+	return "", errors.New("I forgot")
 }

@@ -169,13 +169,12 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 
 	fmt.Printf("-------- Sign data request--------------\n")
 	fmt.Printf("Account:  %s\n", request.Address.String())
-	fmt.Printf("message:\n")
-	for _, nvt := range request.Message {
-		fmt.Printf("%v\n", nvt.Pprint(1))
+	fmt.Printf("messages:\n")
+	for _, nvt := range request.Messages {
+		fmt.Printf("\u00a0\u00a0%v\n", strings.TrimSpace(nvt.Pprint(1)))
 	}
-	//fmt.Printf("message:  \n%v\n", request.Message)
 	fmt.Printf("raw data:  \n%q\n", request.Rawdata)
-	fmt.Printf("message hash:  %v\n", request.Hash)
+	fmt.Printf("data hash:  %v\n", request.Hash)
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)
 	if !ui.confirm() {
@@ -187,7 +186,6 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 // ApproveListing prompt the user for confirmation to list accounts
 // the list of accounts to list can be modified by the UI
 func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListResponse, error) {
-
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
 
