@@ -420,9 +420,6 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 // Nonce returns the next nonce of an account, with all transactions executable
 // by the pool already applied on top.
 func (pool *TxPool) Nonce(addr common.Address) uint64 {
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
-
 	return pool.pendingNonces.get(addr)
 }
 
@@ -854,9 +851,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 				pool.enqueueTx(tx.Hash(), tx)
 			}
 			// Update the account nonce if needed
-			if nonce := tx.Nonce(); pool.pendingNonces.get(addr) > nonce {
-				pool.pendingNonces.set(addr, nonce)
-			}
+			pool.pendingNonces.compareAndSet(addr, tx.Nonce(), func(old uint64, new uint64) bool { return old > new })
 			// Reduce the pending counter
 			pendingCounter.Dec(int64(1 + len(invalids)))
 			return
@@ -1232,9 +1227,7 @@ func (pool *TxPool) truncatePending() {
 						pool.all.Remove(hash)
 
 						// Update the account nonce to the dropped transaction
-						if nonce := tx.Nonce(); pool.pendingNonces.get(offenders[i]) > nonce {
-							pool.pendingNonces.set(offenders[i], nonce)
-						}
+						pool.pendingNonces.compareAndSet(offenders[i], tx.Nonce(), func(old uint64, new uint64) bool { return old > new })
 						log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
 					}
 					pool.priced.Removed(len(caps))
@@ -1261,9 +1254,7 @@ func (pool *TxPool) truncatePending() {
 					pool.all.Remove(hash)
 
 					// Update the account nonce to the dropped transaction
-					if nonce := tx.Nonce(); pool.pendingNonces.get(addr) > nonce {
-						pool.pendingNonces.set(addr, nonce)
-					}
+					pool.pendingNonces.compareAndSet(addr, tx.Nonce(), func(old uint64, new uint64) bool { return old > new })
 					log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
 				}
 				pool.priced.Removed(len(caps))
