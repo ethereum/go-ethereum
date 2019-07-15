@@ -305,8 +305,12 @@ func (t *UDPv4) Close() {
 }
 
 // RandomNodes is an iterator yielding nodes from a random walk of the DHT.
-func (t *UDPv4) RandomNodes() discutil.Iterator {
-	return t.randomWalk.newIterator()
+//
+// All iterators share the same random walk to minimize network traffic. Discovered nodes
+// are checked against the filter function and returned by the iterator only when the
+// filter returns true.
+func (t *UDPv4) RandomNodes(filter func(*enode.Node) bool) discutil.Iterator {
+	return t.randomWalk.newIterator(filter)
 }
 
 // LookupRandom finds random nodes in the network.

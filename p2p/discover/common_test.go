@@ -64,7 +64,7 @@ func TestLookupIterator(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
-		go testIterator(test.newIterator())
+		go testIterator(test.newIterator(nil))
 	}
 
 	test.serveOneLookup(testNodes[:10])
@@ -78,7 +78,7 @@ func TestLookupIterator(t *testing.T) {
 func TestLookupIteratorClose(t *testing.T) {
 	test := newLookupWalkerTest()
 	defer test.close()
-	it := test.newIterator()
+	it := test.newIterator(nil)
 
 	go func() {
 		time.Sleep(200 * time.Millisecond)
@@ -96,7 +96,7 @@ func TestLookupIteratorDropStale(t *testing.T) {
 		lookupDone = make(chan struct{})
 	)
 	defer test.close()
-	it := test.newIterator()
+	it := test.newIterator(nil)
 	go func() {
 		test.serveOneLookup(testNodes)
 		close(lookupDone)
@@ -126,7 +126,7 @@ func TestLookupIteratorDropStale(t *testing.T) {
 func TestLookupIteratorDrained(t *testing.T) {
 	var (
 		test      = newLookupWalkerTest()
-		it        = test.newIterator()
+		it        = test.newIterator(nil)
 		testNodes = makeTestNodes(2 * lookupIteratorBuffer)
 	)
 
