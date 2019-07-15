@@ -109,16 +109,16 @@ type storedAccount Account
 // Account is ethereum consensus representation of accounts. These objects are
 // stored in the main account trie.
 type Account struct {
-	Nonce       uint64      // The nonce of account.
-	Balance     *big.Int    // The balance of account.
-	Root        common.Hash // Merkle root of the storage trie.
-	CodeHash    []byte      // The code hash of account.
-	CodeVersion uint64      // The version of account code.
+	Nonce    uint64      // The nonce of account.
+	Balance  *big.Int    // The balance of account.
+	Root     common.Hash // Merkle root of the storage trie.
+	CodeHash []byte      // The code hash of account.
+	Version  uint64      // The version of account as well as the version of code.
 }
 
 // EncodeRLP implements rlp.Encoder.
 func (a *Account) EncodeRLP(w io.Writer) error {
-	if a.CodeVersion == 0 {
+	if a.Version == 0 {
 		return rlp.Encode(w, legacyStoredAccount{a.Nonce, a.Balance, a.Root, a.CodeHash})
 	}
 	return rlp.Encode(w, storedAccount(*a))
@@ -421,7 +421,7 @@ func (s *stateObject) SetCode(codeHash common.Hash, code []byte, version uint64)
 		account:  &s.address,
 		prevhash: s.CodeHash(),
 		prevcode: prevcode,
-		version:  s.data.CodeVersion,
+		version:  s.data.Version,
 	})
 	s.setCode(codeHash, code, version)
 }
@@ -429,7 +429,7 @@ func (s *stateObject) SetCode(codeHash common.Hash, code []byte, version uint64)
 func (s *stateObject) setCode(codeHash common.Hash, code []byte, version uint64) {
 	s.code = code
 	s.data.CodeHash = codeHash[:]
-	s.data.CodeVersion = version
+	s.data.Version = version
 	s.dirtyCode = true
 }
 
@@ -458,7 +458,7 @@ func (s *stateObject) Nonce() uint64 {
 }
 
 func (s *stateObject) CodeVersion() uint64 {
-	return s.data.CodeVersion
+	return s.data.Version
 }
 
 // Never called, but must be present to allow stateObject to be used

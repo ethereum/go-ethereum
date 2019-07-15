@@ -278,7 +278,7 @@ func (self *StateDB) GetCodeHash(addr common.Address) common.Hash {
 	return common.BytesToHash(stateObject.CodeHash())
 }
 
-func (self *StateDB) GetCodeVersion(addr common.Address) uint64 {
+func (self *StateDB) GetVersion(addr common.Address) uint64 {
 	stateObject := self.getStateObject(addr)
 	if stateObject == nil {
 		return 0

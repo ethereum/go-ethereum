@@ -57,9 +57,9 @@ type Contract struct {
 	CodeAddr *common.Address
 	Input    []byte
 
-	CodeVersion uint64
-	Gas         uint64
-	value       *big.Int
+	Version uint64
+	Gas     uint64
+	value   *big.Int
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
@@ -174,7 +174,7 @@ func (c *Contract) SetCallCode(addr *common.Address, hash common.Hash, code []by
 	c.Code = code
 	c.CodeHash = hash
 	c.CodeAddr = addr
-	c.CodeVersion = version
+	c.Version = version
 }
 
 // SetCodeOptionalHash can be used to provide code, but it's optional to provide hash.
@@ -183,5 +183,5 @@ func (c *Contract) SetCodeOptionalHash(addr *common.Address, codeAndHash *codeAn
 	c.Code = codeAndHash.code
 	c.CodeHash = codeAndHash.hash
 	c.CodeAddr = addr
-	c.CodeVersion = version
+	c.Version = version
 }

@@ -61,14 +61,14 @@ func (s *StateSuite) TestDump(c *checker.C) {
             "nonce": 0,
             "root": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
             "codeHash": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
-            "codeVersion": 0
+            "version": 0
         },
         "0x0000000000000000000000000000000000000002": {
             "balance": "44",
             "nonce": 0,
             "root": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
             "codeHash": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
-            "codeVersion": 0
+            "version": 0
         },
         "0x0000000000000000000000000000000000000102": {
             "balance": "0",
@@ -76,7 +76,7 @@ func (s *StateSuite) TestDump(c *checker.C) {
             "root": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
             "codeHash": "87874902497a5bb968da31a2998d8f22e949d1ef6214bcdedd8bae24cca4b9e3",
             "code": "03030303030303",
-            "codeVersion": 0
+            "version": 0
         }
     }
 }`
