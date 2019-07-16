@@ -56,12 +56,16 @@ jobs:
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
-    - os: FreeBSD
-      dist: 12.0-STABLE
+    - os: linux
+      dist: xenial
       go: 1.12.x
       script:
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
+        - sudo apt install -y qemu-system qemu-kvm qemu-utils
+        - wget https://download.freebsd.org/ftp/snapshots/VM-IMAGES/12.0-STABLE/amd64/Latest/FreeBSD-12.0-STABLE-amd64.qcow2.xz
+        - unxz FreeBSD-12.0-STABLE-amd64.qcow2.xz
+        - qemu-system-x86_64 FreeBSD-12.0-STABLE-amd64.qcow2 -daemonize -display none -m 2048 -smp 4 -net user,hostfwd=tcp::10022-:22 -net nic
+        #- go run build/ci.go install
+        #- go run build/ci.go test -coverage $TEST_PACKAGES
 
     # This builder does the Ubuntu PPA upload
     - stage: build
