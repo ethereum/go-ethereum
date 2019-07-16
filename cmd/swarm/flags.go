@@ -45,6 +45,11 @@ var (
 		Usage:  "Swarm local http api port",
 		EnvVar: SwarmEnvPort,
 	}
+	SwarmNATInterfaceFlag = cli.StringFlag{
+		Name:   "natif",
+		Usage:  "Announce the IP address of a given network interface (e.g. eth0)",
+		EnvVar: SwarmEnvNATInterface,
+	}
 	SwarmNetworkIdFlag = cli.IntFlag{
 		Name:   "bzznetworkid",
 		Usage:  "Network identifier (integer, default 3=swarm testnet)",

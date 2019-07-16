@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/signal"
 	"runtime"
@@ -38,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm"
 	bzzapi "github.com/ethersphere/swarm/api"
@@ -170,6 +172,7 @@ func init() {
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
 		utils.PasswordFileFlag,
+		SwarmNATInterfaceFlag,
 		// bzzd-specific flags
 		CorsStringFlag,
 		EnsAPIFlag,
@@ -290,6 +293,9 @@ func bzzd(ctx *cli.Context) error {
 
 	//disable dynamic dialing from p2p/discovery
 	cfg.P2P.NoDial = true
+
+	//optionally set the NAT IP from a network interface
+	setSwarmNATFromInterface(ctx, &cfg)
 
 	stack, err := node.New(&cfg)
 	if err != nil {
@@ -524,4 +530,27 @@ func setSwarmBootstrapNodes(ctx *cli.Context, cfg *node.Config) {
 		cfg.P2P.BootstrapNodes = append(cfg.P2P.BootstrapNodes, node)
 	}
 
+}
+
+func setSwarmNATFromInterface(ctx *cli.Context, cfg *node.Config) {
+	ifacename := ctx.GlobalString(SwarmNATInterfaceFlag.Name)
+
+	if ifacename == "" {
+		return
+	}
+
+	iface, err := net.InterfaceByName(ifacename)
+	if err != nil {
+		utils.Fatalf("can't get network interface %s", ifacename)
+	}
+	addrs, err := iface.Addrs()
+	if err != nil || len(addrs) == 0 {
+		utils.Fatalf("could not get address from interface %s: %v", ifacename, err)
+	}
+
+	ip, _, err := net.ParseCIDR(addrs[0].String())
+	if err != nil {
+		utils.Fatalf("could not parse IP addr from interface %s: %v", ifacename, err)
+	}
+	cfg.P2P.NAT = nat.ExtIP(ip)
 }
