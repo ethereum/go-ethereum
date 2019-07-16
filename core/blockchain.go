@@ -42,7 +42,7 @@ import (
 	"github.com/eth4nos/go-ethereum/params"
 	"github.com/eth4nos/go-ethereum/rlp"
 	"github.com/eth4nos/go-ethereum/trie"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -819,6 +819,7 @@ func (bc *BlockChain) Stop() {
 				recent := bc.GetBlockByNumber(number - offset)
 
 				log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
+				// Commit function: write state trie to (level) db (jmlee)
 				if err := triedb.Commit(recent.Root(), true); err != nil {
 					log.Error("Failed to commit recent state trie", "err", err)
 				}
@@ -1281,6 +1282,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// If we're running an archive node, always flush
 	if bc.cacheConfig.TrieDirtyDisabled {
+		// Commit function: write state trie to (level) db (jmlee)
 		if err := triedb.Commit(root, false); err != nil {
 			return NonStatTy, err
 		}
@@ -1315,6 +1317,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/TriesInMemory)
 					}
 					// Flush an entire trie and restart the counters
+					// Commit function: write state trie to (level) db (jmlee)
 					triedb.Commit(header.Root, true)
 					lastWrite = chosen
 					bc.gcproc = 0
