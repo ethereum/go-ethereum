@@ -35,13 +35,22 @@ import (
 	"github.com/rs/cors"
 )
 
-const (
-	maxRequestContentLength = 1024 * 512
-	contentType             = "application/json"
-)
+const contentType = "application/json"
+
+var maxRequestContentLength = 1024 * 512
 
 // https://www.jsonrpc.org/historical/json-rpc-over-http.html#id13
 var acceptedContentTypes = []string{contentType, "application/json-rpc", "application/jsonrequest"}
+
+// SetMaxRequestContentLength changes the maximum payload size to be accepted
+// by the RPC system. This is only to be changed for tests.
+func SetMaxRequestContentLength(length int) (int, error) {
+	if length < 0 {
+		return maxRequestContentLength, fmt.Errorf("Invalid RPC payload length %d", length)
+	}
+	maxRequestContentLength = length
+	return maxRequestContentLength, nil
+}
 
 type httpConn struct {
 	client    *http.Client
@@ -193,7 +202,7 @@ type httpServerConn struct {
 }
 
 func newHTTPServerConn(r *http.Request, w http.ResponseWriter) ServerCodec {
-	body := io.LimitReader(r.Body, maxRequestContentLength)
+	body := io.LimitReader(r.Body, int64(maxRequestContentLength))
 	conn := &httpServerConn{Reader: body, Writer: w, r: r}
 	return NewJSONCodec(conn)
 }
@@ -275,7 +284,7 @@ func validateRequest(r *http.Request) (int, error) {
 	if r.Method == http.MethodPut || r.Method == http.MethodDelete {
 		return http.StatusMethodNotAllowed, errors.New("method not allowed")
 	}
-	if r.ContentLength > maxRequestContentLength {
+	if r.ContentLength > int64(maxRequestContentLength) {
 		err := fmt.Errorf("content length too large (%d>%d)", r.ContentLength, maxRequestContentLength)
 		return http.StatusRequestEntityTooLarge, err
 	}
