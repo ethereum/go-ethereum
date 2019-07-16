@@ -68,7 +68,6 @@ var (
 )
 
 type RetestethTestAPI interface {
-	SetRPCPayloadSize(ctx context.Context, size int) (int, error)
 	SetChainParams(ctx context.Context, chainParams ChainParams) (bool, error)
 	MineBlocks(ctx context.Context, number uint64) (bool, error)
 	ModifyTimestamp(ctx context.Context, interval uint64) (bool, error)
@@ -270,10 +269,6 @@ func (e *NoRewardEngine) APIs(chain consensus.ChainReader) []rpc.API {
 
 func (e *NoRewardEngine) Close() error {
 	return e.inner.Close()
-}
-
-func (api *RetestethAPI) SetRPCPayloadSize(ctx context.Context, size int) (int, error) {
-	return rpc.SetMaxRequestContentLength(size)
 }
 
 func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainParams) (bool, error) {
@@ -869,6 +864,9 @@ func retesteth(ctx *cli.Context) error {
 	}
 	vhosts := splitAndTrim(ctx.GlobalString(utils.RPCVirtualHostsFlag.Name))
 	cors := splitAndTrim(ctx.GlobalString(utils.RPCCORSDomainFlag.Name))
+
+	// Increase the RPC request size
+	rpc.SetMaxRequestContentLength(10 * 1024 * 1024)
 
 	// start http server
 	httpEndpoint := fmt.Sprintf("%s:%d", ctx.GlobalString(utils.RPCListenAddrFlag.Name), ctx.Int(rpcPortFlag.Name))
