@@ -40,10 +40,10 @@ type DumpAccount struct {
 
 }
 
-// Dump represents the full dump in a collected format, as one large map
+// Dump represents the full state tire dump in a collected format, as one large map (jmlee)
 type Dump struct {
-	Root     string                         `json:"root"`
-	Accounts map[common.Address]DumpAccount `json:"accounts"`
+	Root     string                         `json:"root"`     // state trie's root hash (jmlee)
+	Accounts map[common.Address]DumpAccount `json:"accounts"` // all accounts in state trie (jmlee)
 }
 
 // iterativeDump is a 'collector'-implementation which dump output line-by-line iteratively
@@ -55,10 +55,12 @@ type collector interface {
 	onAccount(common.Address, DumpAccount)
 }
 
+// onRoot sets Dump.Root field (jmlee)
 func (self *Dump) onRoot(root common.Hash) {
 	self.Root = fmt.Sprintf("%x", root)
 }
 
+// onAccount inserts account into Dump.Accounts map field (jmlee)
 func (self *Dump) onAccount(addr common.Address, account DumpAccount) {
 	self.Accounts[addr] = account
 }

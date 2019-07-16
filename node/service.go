@@ -24,6 +24,7 @@ import (
 	"github.com/eth4nos/go-ethereum/core/rawdb"
 	"github.com/eth4nos/go-ethereum/ethdb"
 	"github.com/eth4nos/go-ethereum/event"
+	"github.com/eth4nos/go-ethereum/log"
 	"github.com/eth4nos/go-ethereum/p2p"
 	"github.com/eth4nos/go-ethereum/rpc"
 )
@@ -53,8 +54,13 @@ func (ctx *ServiceContext) OpenDatabase(name string, cache int, handles int, nam
 // also attaching a chain freezer to it that moves ancient chain data from the
 // database to immutable append-only files. If the node is an ephemeral one, a
 // memory database is returned.
+// (if user set datadir, then open or load leveldb. if not, then open new memorydb) (jmlee)
 func (ctx *ServiceContext) OpenDatabaseWithFreezer(name string, cache int, handles int, freezer string, namespace string) (ethdb.Database, error) {
+	log.Info("\n### OpenDatabaseWithFreezer function executed ###\n")
+	log.Info("show params", "ctx.config.DataDir", ctx.config.DataDir, "freezer:", freezer) // (jmlee)
+
 	if ctx.config.DataDir == "" {
+		log.Info("### memory db opened!\n") // (jmlee)
 		return rawdb.NewMemoryDatabase(), nil
 	}
 	root := ctx.config.ResolvePath(name)
