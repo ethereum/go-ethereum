@@ -726,3 +726,10 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 	})
 	return root, err
 }
+
+// Print shows all accounts in state trie (jmlee)
+func (s *StateDB) Print() {
+	stateString := string(s.Dump(false, false, true))
+	log.Info("### print state trie ###")
+	log.Info(stateString)
+}
