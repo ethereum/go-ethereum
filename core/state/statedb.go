@@ -63,8 +63,8 @@ func (n *proofList) Delete(key []byte) error {
 // * Contracts
 // * Accounts
 type StateDB struct {
-	db   Database
-	trie Trie
+	db   Database // actually it's leveldb (jmlee)
+	trie Trie     // state trie from db above (jmlee)
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
 	stateObjects      map[common.Address]*stateObject
