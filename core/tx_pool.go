@@ -854,9 +854,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 				pool.enqueueTx(tx.Hash(), tx)
 			}
 			// Update the account nonce if needed
-			if nonce := tx.Nonce(); pool.pendingNonces.get(addr) > nonce {
-				pool.pendingNonces.set(addr, nonce)
-			}
+			pool.pendingNonces.setIfLower(addr, tx.Nonce())
 			// Reduce the pending counter
 			pendingCounter.Dec(int64(1 + len(invalids)))
 			return
@@ -1232,9 +1230,7 @@ func (pool *TxPool) truncatePending() {
 						pool.all.Remove(hash)
 
 						// Update the account nonce to the dropped transaction
-						if nonce := tx.Nonce(); pool.pendingNonces.get(offenders[i]) > nonce {
-							pool.pendingNonces.set(offenders[i], nonce)
-						}
+						pool.pendingNonces.setIfLower(offenders[i], tx.Nonce())
 						log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
 					}
 					pool.priced.Removed(len(caps))
@@ -1261,9 +1257,7 @@ func (pool *TxPool) truncatePending() {
 					pool.all.Remove(hash)
 
 					// Update the account nonce to the dropped transaction
-					if nonce := tx.Nonce(); pool.pendingNonces.get(addr) > nonce {
-						pool.pendingNonces.set(addr, nonce)
-					}
+					pool.pendingNonces.setIfLower(addr, tx.Nonce())
 					log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
 				}
 				pool.priced.Removed(len(caps))
