@@ -63,16 +63,16 @@ func (txn *txNoncer) set(addr common.Address, nonce uint64) {
 	txn.nonces[addr] = nonce
 }
 
-// compareAndSet inserts or updates a new virtual nonce into the virtual state
-// database if the compare callback is true.
-func (txn *txNoncer) compareAndSet(addr common.Address, nonce uint64, compare func(uint64, uint64) bool) {
+// setIfLower updates a new virtual nonce into the virtual state database if the
+// the new one is lower.
+func (txn *txNoncer) setIfLower(addr common.Address, nonce uint64) {
 	txn.lock.Lock()
 	defer txn.lock.Unlock()
 
 	if _, ok := txn.nonces[addr]; !ok {
 		txn.nonces[addr] = txn.fallback.GetNonce(addr)
 	}
-	if compare == nil || !compare(txn.nonces[addr], nonce) {
+	if txn.nonces[addr] <= nonce {
 		return
 	}
 	txn.nonces[addr] = nonce
