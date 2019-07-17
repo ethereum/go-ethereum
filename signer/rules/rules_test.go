@@ -178,7 +178,7 @@ func TestSignTxRequest(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	fmt.Printf("to %v", to.Address().String())
+	t.Logf("to %v", to.Address().String())
 	resp, err := r.ApproveTx(&core.SignTxRequest{
 		Transaction: core.SendTxArgs{
 			From: *from,
@@ -294,7 +294,7 @@ func TestMissingFunc(t *testing.T) {
 	if approved {
 		t.Errorf("Expected missing method to cause non-approval")
 	}
-	fmt.Printf("Err %v", err)
+	t.Logf("Err %v", err)
 
 }
 func TestStorage(t *testing.T) {
@@ -346,7 +346,7 @@ func TestStorage(t *testing.T) {
 	if retval != exp {
 		t.Errorf("Unexpected data, expected '%v', got '%v'", exp, retval)
 	}
-	fmt.Printf("Err %v", err)
+	t.Logf("Err %v", err)
 
 }
 
@@ -602,7 +602,7 @@ function ApproveSignData(r){
 	hash, rawdata := accounts.TextAndHash([]byte(message))
 	addr, _ := mixAddr("0x694267f14675d7e1b9494fd8d72fefe1755710fa")
 
-	fmt.Printf("address %v %v\n", addr.String(), addr.Original())
+	t.Logf("address %v %v\n", addr.String(), addr.Original())
 
 	nvt := []*core.NameValueType{
 		{

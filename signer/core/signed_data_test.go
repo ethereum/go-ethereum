@@ -321,11 +321,11 @@ func TestFormatter(t *testing.T) {
 	}
 	formatted, _ := d.Format()
 	for _, item := range formatted {
-		fmt.Printf("'%v'\n", item.Pprint(0))
+		t.Logf("'%v'\n", item.Pprint(0))
 	}
 
 	j, _ := json.Marshal(formatted)
-	fmt.Printf("'%v'\n", string(j))
+	t.Logf("'%v'\n", string(j))
 }
 
 func sign(typedData core.TypedData) ([]byte, []byte, error) {
@@ -364,7 +364,7 @@ func TestJsonFiles(t *testing.T) {
 			continue
 		}
 		_, _, err = sign(typedData)
-		fmt.Printf("Error %v\n", err)
+		t.Logf("Error %v\n", err)
 		if err != nil && !expectedFailure {
 			t.Errorf("Test %d failed, file %v: %v", i, fInfo.Name(), err)
 		}
@@ -397,11 +397,11 @@ func TestFuzzerFiles(t *testing.T) {
 		}
 		_, err = typedData.EncodeData("EIP712Domain", typedData.Domain.Map(), 1)
 		if verbose && err != nil {
-			fmt.Printf("%d, EncodeData[1] err: %v\n", i, err)
+			t.Logf("%d, EncodeData[1] err: %v\n", i, err)
 		}
 		_, err = typedData.EncodeData(typedData.PrimaryType, typedData.Message, 1)
 		if verbose && err != nil {
-			fmt.Printf("%d, EncodeData[2] err: %v\n", i, err)
+			t.Logf("%d, EncodeData[2] err: %v\n", i, err)
 		}
 		typedData.Format()
 	}

@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -41,7 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
-	colorable "github.com/mattn/go-colorable"
+	"github.com/mattn/go-colorable"
 )
 
 /*
@@ -100,7 +99,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 		totalCap := getTotalCap(ctx, t, serverRpcClient)
 		minCap := getMinCap(ctx, t, serverRpcClient)
 		testCap := totalCap * 3 / 4
-		fmt.Printf("Server testCap: %d  minCap: %d  head number: %d  head hash: %064x\n", testCap, minCap, headNum, headHash)
+		t.Logf("Server testCap: %d  minCap: %d  head number: %d  head hash: %064x\n", testCap, minCap, headNum, headHash)
 		reqMinCap := uint64(float64(testCap) * minRelCap / (minRelCap + float64(len(clients)-1)))
 		if minCap > reqMinCap {
 			t.Fatalf("Minimum client capacity (%d) bigger than required minimum for this test (%d)", minCap, reqMinCap)
@@ -116,7 +115,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 				t.Fatalf("Failed to obtain rpc client: %v", err)
 			}
 
-			fmt.Println("connecting client", i)
+			t.Log("connecting client", i)
 			if i != freeIdx {
 				setCapacity(ctx, t, serverRpcClient, client.ID(), testCap/uint64(len(clients)))
 			}
@@ -130,7 +129,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 				}
 				num, hash := getHead(ctx, t, clientRpcClients[i])
 				if num == headNum && hash == headHash {
-					fmt.Println("client", i, "synced")
+					t.Log("client", i, "synced")
 					break
 				}
 				time.Sleep(time.Millisecond * 200)
@@ -225,12 +224,12 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 			}
 
 			time.Sleep(flowcontrol.DecParamDelay)
-			fmt.Println("Starting measurement")
-			fmt.Printf("Relative weights:")
+			t.Log("Starting measurement")
+			t.Logf("Relative weights:")
 			for i := range clients {
-				fmt.Printf("  %f", weights[i])
+				t.Logf("  %f", weights[i])
 			}
-			fmt.Println()
+			t.Log()
 			start := processedSince(nil)
 			for {
 				select {
@@ -241,7 +240,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 
 				totalCap = getTotalCap(ctx, t, serverRpcClient)
 				if totalCap < testCap {
-					fmt.Println("Total capacity underrun")
+					t.Log("Total capacity underrun")
 					close(stop)
 					wg.Wait()
 					return false
@@ -249,9 +248,9 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 
 				processed := processedSince(start)
 				var avg uint64
-				fmt.Printf("Processed")
+				t.Logf("Processed")
 				for i, p := range processed {
-					fmt.Printf(" %d", p)
+					t.Logf(" %d", p)
 					processed[i] = uint64(float64(p) / weights[i])
 					avg += processed[i]
 				}
@@ -261,7 +260,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 					var maxDev float64
 					for _, p := range processed {
 						dev := float64(int64(p-avg)) / float64(avg)
-						fmt.Printf(" %7.4f", dev)
+						t.Logf(" %7.4f", dev)
 						if dev < 0 {
 							dev = -dev
 						}
@@ -269,13 +268,13 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 							maxDev = dev
 						}
 					}
-					fmt.Printf("  max deviation: %f  totalCap: %d\n", maxDev, totalCap)
+					t.Logf("  max deviation: %f  totalCap: %d\n", maxDev, totalCap)
 					if maxDev <= testTolerance {
-						fmt.Println("success")
+						t.Log("success")
 						break
 					}
 				} else {
-					fmt.Println()
+					t.Log()
 				}
 				time.Sleep(time.Millisecond * 200)
 			}
@@ -285,11 +284,11 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 		wg.Wait()
 
 		for i, count := range reqCount {
-			fmt.Println("client", i, "processed", count)
+			t.Log("client", i, "processed", count)
 		}
 		return true
 	}) {
-		fmt.Println("restarting test")
+		t.Log("restarting test")
 	}
 }
 
@@ -323,7 +322,7 @@ func testRequest(ctx context.Context, t *testing.T, client *rpc.Client) bool {
 	//	if err := client.CallContext(ctx, &res, "eth_getProof", addr, nil, "latest"); err != nil {
 	err := client.CallContext(c, &res, "eth_getBalance", addr, "latest")
 	if err != nil {
-		fmt.Println("request error:", err)
+		t.Log("request error:", err)
 	}
 	return err == nil
 }
