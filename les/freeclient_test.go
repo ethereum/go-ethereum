@@ -61,7 +61,7 @@ func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 			}
 			disconnCh <- i
 		}
-		pool = newFreeClientPool(db, 1, 10000, &clock, disconnFn, nil, nil)
+		pool = newFreeClientPool(db, 1, 10000, &clock, disconnFn)
 	)
 	pool.setLimits(connLimit, uint64(connLimit))
 
@@ -130,7 +130,7 @@ func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 
 	// close and restart pool
 	pool.stop()
-	pool = newFreeClientPool(db, 1, 10000, &clock, disconnFn, nil, nil)
+	pool = newFreeClientPool(db, 1, 10000, &clock, disconnFn)
 	pool.setLimits(connLimit, uint64(connLimit))
 
 	// try connecting all known peers (connLimit should be filled up)

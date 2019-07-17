@@ -44,3 +44,8 @@ func EnumerateRaw(vendorID uint16, productID uint16) ([]DeviceInfo, error) {
 func EnumerateHid(vendorID uint16, productID uint16) ([]DeviceInfo, error) {
 	return nil, nil
 }
+
+// Open connects to a previsouly discovered USB device.
+func (info DeviceInfo) Open() (Device, error) {
+	return nil, ErrUnsupportedPlatform
+}

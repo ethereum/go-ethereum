@@ -74,12 +74,28 @@ func (r *rulesetUI) execute(jsfunc string, jsarg interface{}) (otto.Value, error
 
 	// Instantiate a fresh vm engine every time
 	vm := otto.New()
+
 	// Set the native callbacks
 	consoleObj, _ := vm.Get("console")
 	consoleObj.Object().Set("log", consoleOutput)
 	consoleObj.Object().Set("error", consoleOutput)
-	vm.Set("storage", r.storage)
 
+	vm.Set("storage", struct{}{})
+	storageObj, _ := vm.Get("storage")
+	storageObj.Object().Set("put", func(call otto.FunctionCall) otto.Value {
+		key, val := call.Argument(0).String(), call.Argument(1).String()
+		if val == "" {
+			r.storage.Del(key)
+		} else {
+			r.storage.Put(key, val)
+		}
+		return otto.NullValue()
+	})
+	storageObj.Object().Set("get", func(call otto.FunctionCall) otto.Value {
+		goval, _ := r.storage.Get(call.Argument(0).String())
+		jsval, _ := otto.ToValue(goval)
+		return jsval
+	})
 	// Load bootstrap libraries
 	script, err := vm.Compile("bignumber.js", BigNumber_JS)
 	if err != nil {

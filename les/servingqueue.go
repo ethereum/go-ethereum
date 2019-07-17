@@ -17,14 +17,12 @@
 package les
 
 import (
-	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
-	"github.com/ethereum/go-ethereum/les/csvlogger"
 )
 
 // servingQueue allows running tasks in a limited number of threads and puts the
@@ -44,10 +42,6 @@ type servingQueue struct {
 	queue       *prque.Prque // priority queue for waiting or suspended tasks
 	best        *servingTask // the highest priority task (not included in the queue)
 	suspendBias int64        // priority bias against suspending an already running task
-
-	logger        *csvlogger.Logger
-	logRecentTime *csvlogger.Channel
-	logQueuedTime *csvlogger.Channel
 }
 
 // servingTask represents a request serving task. Tasks can be implemented to
@@ -127,7 +121,7 @@ func (t *servingTask) waitOrStop() bool {
 }
 
 // newServingQueue returns a new servingQueue
-func newServingQueue(suspendBias int64, utilTarget float64, logger *csvlogger.Logger) *servingQueue {
+func newServingQueue(suspendBias int64, utilTarget float64) *servingQueue {
 	sq := &servingQueue{
 		queue:          prque.New(nil),
 		suspendBias:    suspendBias,
@@ -140,9 +134,6 @@ func newServingQueue(suspendBias int64, utilTarget float64, logger *csvlogger.Lo
 		burstDropLimit: uint64(utilTarget * bufLimitRatio * 1000000),
 		burstDecRate:   utilTarget,
 		lastUpdate:     mclock.Now(),
-		logger:         logger,
-		logRecentTime:  logger.NewMinMaxChannel("recentTime", false),
-		logQueuedTime:  logger.NewMinMaxChannel("queuedTime", false),
 	}
 	sq.wg.Add(2)
 	go sq.queueLoop()
@@ -246,16 +237,13 @@ func (sq *servingQueue) freezePeers() {
 	}
 	sort.Sort(peerList)
 	drop := true
-	sq.logger.Event("freezing peers")
 	for _, tasks := range peerList {
 		if drop {
 			tasks.peer.freezeClient()
 			tasks.peer.fcClient.Freeze()
 			sq.queuedTime -= tasks.sumTime
-			if sq.logQueuedTime != nil {
-				sq.logQueuedTime.Update(float64(sq.queuedTime) / 1000)
-			}
-			sq.logger.Event(fmt.Sprintf("frozen peer  sumTime=%d, %v", tasks.sumTime, tasks.peer.id))
+			sqQueuedGauge.Update(int64(sq.queuedTime))
+			clientFreezeMeter.Mark(1)
 			drop = sq.recentTime+sq.queuedTime > sq.burstDropLimit
 			for _, task := range tasks.list {
 				task.tokenCh <- nil
@@ -299,10 +287,8 @@ func (sq *servingQueue) addTask(task *servingTask) {
 	}
 	sq.updateRecentTime()
 	sq.queuedTime += task.expTime
-	if sq.logQueuedTime != nil {
-		sq.logRecentTime.Update(float64(sq.recentTime) / 1000)
-		sq.logQueuedTime.Update(float64(sq.queuedTime) / 1000)
-	}
+	sqServedGauge.Update(int64(sq.recentTime))
+	sqQueuedGauge.Update(int64(sq.queuedTime))
 	if sq.recentTime+sq.queuedTime > sq.burstLimit {
 		sq.freezePeers()
 	}
@@ -322,10 +308,8 @@ func (sq *servingQueue) queueLoop() {
 				sq.updateRecentTime()
 				sq.queuedTime -= expTime
 				sq.recentTime += expTime
-				if sq.logQueuedTime != nil {
-					sq.logRecentTime.Update(float64(sq.recentTime) / 1000)
-					sq.logQueuedTime.Update(float64(sq.queuedTime) / 1000)
-				}
+				sqServedGauge.Update(int64(sq.recentTime))
+				sqQueuedGauge.Update(int64(sq.queuedTime))
 				if sq.queue.Size() == 0 {
 					sq.best = nil
 				} else {

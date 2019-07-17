@@ -18,7 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/contracts/validatorset"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -32,6 +31,8 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"golang.org/x/crypto/sha3"
 )
+
+const validatorsetABI = "[{\"constant\":false,\"inputs\":[],\"name\":\"finalizeChange\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"getValidators\",\"outputs\":[{\"name\":\"\",\"type\":\"address[]\"},{\"name\":\"\",\"type\":\"uint256[]\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"validator\",\"type\":\"address\"},{\"name\":\"blockNumber\",\"type\":\"uint256\"},{\"name\":\"proof\",\"type\":\"bytes\"}],\"name\":\"reportMalicious\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"validator\",\"type\":\"address\"},{\"name\":\"blockNumber\",\"type\":\"uint256\"}],\"name\":\"reportBenign\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"_parentHash\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"_newSet\",\"type\":\"address[]\"}],\"name\":\"InitiateChange\",\"type\":\"event\"}]"
 
 const (
 	voteSnapshotInterval = 1024 // Number of blocks after which to save the vote snapshot to the database
@@ -257,7 +258,7 @@ func New(config *params.BorConfig, db ethdb.Database, ethAPI *ethapi.PublicBlock
 	// Allocate the snapshot caches and create the engine
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySignatures)
-	validatorSetABI, _ := abi.JSON(strings.NewReader(validatorset.ValidatorsetABI))
+	vABI, _ := abi.JSON(strings.NewReader(validatorsetABI))
 	c := &Bor{
 		config:          &conf,
 		db:              db,
@@ -265,7 +266,7 @@ func New(config *params.BorConfig, db ethdb.Database, ethAPI *ethapi.PublicBlock
 		recents:         recents,
 		signatures:      signatures,
 		proposals:       make(map[common.Address]bool),
-		validatorSetABI: validatorSetABI,
+		validatorSetABI: vABI,
 	}
 	return c
 }
@@ -776,7 +777,7 @@ func GetValidators(number uint64, validatorContract string, ethAPI *ethapi.Publi
 	blockNr := rpc.BlockNumber(number)
 
 	// validator set ABI
-	validatorSetABI, _ := abi.JSON(strings.NewReader(validatorset.ValidatorsetABI))
+	validatorSetABI, _ := abi.JSON(strings.NewReader(validatorsetABI))
 	data, err := validatorSetABI.Pack("getValidators")
 	if err != nil {
 		fmt.Println("Unable to pack tx for getValidator", "error", err)

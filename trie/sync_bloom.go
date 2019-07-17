@@ -70,7 +70,7 @@ func NewSyncBloom(memory uint64, database ethdb.Iteratee) *SyncBloom {
 	// Create the bloom filter to track known trie nodes
 	bloom, err := bloomfilter.New(memory*1024*1024*8, 3)
 	if err != nil {
-		panic(fmt.Sprintf("failed to create bloom: %v", err)) // Can't happen, here for sanity
+		panic(fmt.Sprintf("failed to create bloom: %v", err))
 	}
 	log.Info("Allocated fast sync bloom", "size", common.StorageSize(memory*1024*1024))
 

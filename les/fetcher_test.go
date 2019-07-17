@@ -36,22 +36,22 @@ func TestFetcherULCPeerSelector(t *testing.T) {
 	lf := lightFetcher{
 		pm: &ProtocolManager{
 			ulc: &ulc{
-				trustedKeys: map[string]struct{}{
-					id1.String(): {},
-					id2.String(): {},
-					id3.String(): {},
-					id4.String(): {},
+				keys: map[string]bool{
+					id1.String(): true,
+					id2.String(): true,
+					id3.String(): true,
+					id4.String(): true,
 				},
-				minTrustedFraction: 70,
+				fraction: 70,
 			},
 		},
 		maxConfirmedTd: ftn1.td,
 
 		peers: map[*peer]*fetcherPeerInfo{
 			{
-				id:        "peer1",
-				Peer:      p2p.NewPeer(id1, "peer1", []p2p.Cap{}),
-				isTrusted: true,
+				id:      "peer1",
+				Peer:    p2p.NewPeer(id1, "peer1", []p2p.Cap{}),
+				trusted: true,
 			}: {
 				nodeByHash: map[common.Hash]*fetcherTreeNode{
 					ftn1.hash: ftn1,
@@ -59,9 +59,9 @@ func TestFetcherULCPeerSelector(t *testing.T) {
 				},
 			},
 			{
-				Peer:      p2p.NewPeer(id2, "peer2", []p2p.Cap{}),
-				id:        "peer2",
-				isTrusted: true,
+				Peer:    p2p.NewPeer(id2, "peer2", []p2p.Cap{}),
+				id:      "peer2",
+				trusted: true,
 			}: {
 				nodeByHash: map[common.Hash]*fetcherTreeNode{
 					ftn1.hash: ftn1,
@@ -69,9 +69,9 @@ func TestFetcherULCPeerSelector(t *testing.T) {
 				},
 			},
 			{
-				id:        "peer3",
-				Peer:      p2p.NewPeer(id3, "peer3", []p2p.Cap{}),
-				isTrusted: true,
+				id:      "peer3",
+				Peer:    p2p.NewPeer(id3, "peer3", []p2p.Cap{}),
+				trusted: true,
 			}: {
 				nodeByHash: map[common.Hash]*fetcherTreeNode{
 					ftn1.hash: ftn1,
@@ -80,9 +80,9 @@ func TestFetcherULCPeerSelector(t *testing.T) {
 				},
 			},
 			{
-				id:        "peer4",
-				Peer:      p2p.NewPeer(id4, "peer4", []p2p.Cap{}),
-				isTrusted: true,
+				id:      "peer4",
+				Peer:    p2p.NewPeer(id4, "peer4", []p2p.Cap{}),
+				trusted: true,
 			}: {
 				nodeByHash: map[common.Hash]*fetcherTreeNode{
 					ftn1.hash: ftn1,

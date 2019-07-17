@@ -345,29 +345,3 @@ func TestUnpackIndexedBytesTyLogIntoMap(t *testing.T) {
 		t.Error("unpacked map does not match expected map")
 	}
 }
-
-func TestUnpackIntoMapNamingConflict(t *testing.T) {
-	hash := crypto.Keccak256Hash([]byte("testName"))
-	mockLog := types.Log{
-		Address: common.HexToAddress("0x0"),
-		Topics: []common.Hash{
-			common.HexToHash("0x0"),
-			hash,
-		},
-		Data:        hexutil.MustDecode(hexData),
-		BlockNumber: uint64(26),
-		TxHash:      common.HexToHash("0x0"),
-		TxIndex:     111,
-		BlockHash:   common.BytesToHash([]byte{1, 2, 3, 4, 5}),
-		Index:       7,
-		Removed:     false,
-	}
-
-	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"name","type":"string"},{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"}],"name":"received","type":"event"}]`
-	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
-	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
-	receivedMap := make(map[string]interface{})
-	if err := bc.UnpackLogIntoMap(receivedMap, "received", mockLog); err == nil {
-		t.Error("naming conflict between two events; error expected")
-	}
-}
