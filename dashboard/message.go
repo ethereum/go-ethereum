@@ -37,8 +37,8 @@ type ChartEntry struct {
 }
 
 type GeneralMessage struct {
-	Version  string `json:"version,omitempty"`
-	Commit   string `json:"commit,omitempty"`
+	Version string `json:"version,omitempty"`
+	Commit  string `json:"commit,omitempty"`
 }
 
 type HomeMessage struct {
