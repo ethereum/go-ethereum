@@ -69,7 +69,7 @@ type driver interface {
 	SignTx(path accounts.DerivationPath, tx *types.Transaction, chainID *big.Int) (common.Address, *types.Transaction, error)
 
 	// SignData sends a blob of data to the USB device and waits for the user to confirm
-	// or deny the transaction.
+	// or deny the signing request.
 	SignData(path accounts.DerivationPath, hash []byte) (common.Address, []byte, error)
 }
 

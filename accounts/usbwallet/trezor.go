@@ -185,12 +185,12 @@ func (w *trezorDriver) SignTx(path accounts.DerivationPath, tx *types.Transactio
 	return w.trezorSign(path, tx, chainID)
 }
 
-// SignData sends a blob of data to the xUSB device and waits for the user to confirm
-// or deny the transaction.
-func (w *trezorDriver) SignData(path accounts.DerivationPath, hash []byte) (common.Address, []byte, error) {
+// SignData sends a blob of data to the USB device and waits for the user to confirm
+// or deny the signing request.
+func (w *trezorDriver) SignData(path accounts.DerivationPath, data []byte) (common.Address, []byte, error) {
 	request := &trezor.EthereumSignMessage{
 		AddressN: path,
-		Message:  hash,
+		Message:  data,
 	}
 	response := new(trezor.EthereumMessageSignature)
 	if _, err := w.trezorExchange(request, response); err != nil {

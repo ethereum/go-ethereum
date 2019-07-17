@@ -142,11 +142,15 @@ func (api *SignerAPI) sign(addr common.MixedcaseAddress, req *SignDataRequest, l
 	if err != nil {
 		return nil, err
 	}
-	pw, err := api.lookupOrQueryPassword(account.Address,
-		"Password for signing",
-		fmt.Sprintf("Please enter password for signing data with account %s, or just press 'RETURN'", account.Address.Hex()))
-	if err != nil {
-		return nil, err
+	// Only ask for the passphrase if the account is keystore based
+	pw := ""
+	if strings.Compare(wallet.URL().Scheme, "keystore") == 0 {
+		pw, err = api.lookupOrQueryPassword(account.Address,
+			"Password for signing",
+			fmt.Sprintf("Please enter password for signing data with account %s", account.Address.Hex()))
+		if err != nil {
+			return nil, err
+		}
 	}
 	// Sign the data with the wallet
 	signature, err := wallet.SignDataWithPassphrase(account, pw, req.ContentType, req.Rawdata)

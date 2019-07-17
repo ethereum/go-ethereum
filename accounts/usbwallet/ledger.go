@@ -169,7 +169,7 @@ func (w *ledgerDriver) SignTx(path accounts.DerivationPath, tx *types.Transactio
 }
 
 // SignData sends a blob of data to the USB device and waits for the user to confirm
-// or deny the transaction.
+// or deny the signing request.
 func (w *ledgerDriver) SignData(path accounts.DerivationPath, hash []byte) (common.Address, []byte, error) {
 	return common.Address{}, nil, accounts.ErrNotSupported
 }
