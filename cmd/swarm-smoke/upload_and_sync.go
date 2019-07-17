@@ -35,6 +35,7 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/testutil"
+	"github.com/pborman/uuid"
 
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -232,7 +233,7 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 	for i := range addrs {
 		var foundAt int
 		maxProx := -1
-		var maxProxHost string
+		var maxProxHosts []string
 		for host := range allHostChunks {
 			if allHostChunks[host][i] == '1' {
 				foundAt++
@@ -247,19 +248,43 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 			prox := chunk.Proximity(addrs[i], ba)
 			if prox > maxProx {
 				maxProx = prox
-				maxProxHost = host
+				maxProxHosts = []string{host}
+			} else if prox == maxProx {
+				maxProxHosts = append(maxProxHosts, host)
 			}
 		}
 
-		if allHostChunks[maxProxHost][i] == '0' {
-			log.Error("chunk not found at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
-		} else {
-			log.Trace("chunk present at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
+		log.Debug("sync mode", "sync mode", syncMode)
+
+		if syncMode == "pullsync" || syncMode == "both" {
+			for _, maxProxHost := range maxProxHosts {
+				if allHostChunks[maxProxHost][i] == '0' {
+					log.Error("chunk not found at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
+				} else {
+					log.Trace("chunk present at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
+				}
+			}
+
+			// if chunk found at less than 2 hosts, which is actually less that the min size of a NN
+			if foundAt < 2 {
+				log.Error("chunk found at less than two hosts", "foundAt", foundAt, "ref", addrs[i])
+			}
 		}
 
-		// if chunk found at less than 2 hosts
-		if foundAt < 2 {
-			log.Error("chunk found at less than two hosts", "foundAt", foundAt, "ref", addrs[i])
+		if syncMode == "pushsync" {
+			var found bool
+			for _, maxProxHost := range maxProxHosts {
+				if allHostChunks[maxProxHost][i] == '1' {
+					found = true
+					log.Trace("chunk present at max prox host", "ref", addrs[i], "host", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
+				}
+			}
+
+			if !found {
+				for _, maxProxHost := range maxProxHosts {
+					log.Error("chunk not found at any max prox host", "ref", addrs[i], "hosts", maxProxHost, "bzzAddr", bzzAddrs[maxProxHost])
+				}
+			}
 		}
 	}
 }
@@ -284,7 +309,8 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 	log.Info("uploading to "+httpEndpoint(hosts[0])+" and syncing", "seed", seed)
 
 	t1 := time.Now()
-	hash, err := upload(randomBytes, httpEndpoint(hosts[0]))
+	tag := uuid.New()[:8]
+	hash, err := uploadWithTag(randomBytes, httpEndpoint(hosts[0]), tag)
 	if err != nil {
 		log.Error(err.Error())
 		return err
@@ -299,6 +325,11 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 	}
 
 	log.Info("uploaded successfully", "hash", hash, "took", t2, "digest", fmt.Sprintf("%x", fhash))
+
+	// wait to push sync sync
+	if pushsyncDelay {
+		waitToPushSynced(tag)
+	}
 
 	// wait to sync and log chunks before fetch attempt, only if syncDelay is set to true
 	if syncDelay {
@@ -338,6 +369,29 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 	return nil
 }
 
+func isPushSynced(wsHost string, tagname string) (bool, error) {
+	rpcClient, err := rpc.Dial(wsHost)
+	if rpcClient != nil {
+		defer rpcClient.Close()
+	}
+
+	if err != nil {
+		log.Error("error dialing host", "err", err)
+		return false, err
+	}
+
+	var isSynced bool
+	err = rpcClient.Call(&isSynced, "bzz_isPushSynced", tagname)
+	if err != nil {
+		log.Error("error calling host for isPushSynced", "err", err)
+		return false, err
+	}
+
+	log.Debug("isSynced result", "host", wsHost, "isSynced", isSynced)
+
+	return isSynced, nil
+}
+
 func isSyncing(wsHost string) (bool, error) {
 	rpcClient, err := rpc.Dial(wsHost)
 	if rpcClient != nil {
@@ -359,6 +413,20 @@ func isSyncing(wsHost string) (bool, error) {
 	log.Debug("isSyncing result", "host", wsHost, "isSyncing", isSyncing)
 
 	return isSyncing, nil
+}
+
+func waitToPushSynced(tagname string) {
+	for {
+		synced, err := isPushSynced(wsEndpoint(hosts[0]), tagname)
+		if err != nil {
+			log.Error(err.Error())
+		}
+
+		if synced {
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 }
 
 func waitToSync() {

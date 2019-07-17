@@ -38,6 +38,7 @@ import (
 	"github.com/ethersphere/swarm/api/client"
 	"github.com/ethersphere/swarm/spancontext"
 	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/pborman/uuid"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -193,8 +194,13 @@ func fetch(hash string, endpoint string, original []byte, ruid string) error {
 	return nil
 }
 
-// upload an arbitrary byte as a plaintext file  to `endpoint` using the api client
+// upload an arbitrary byte as a plaintext file to `endpoint` using the api client
 func upload(data []byte, endpoint string) (string, error) {
+	return uploadWithTag(data, endpoint, uuid.New()[:8])
+}
+
+// uploadWithTag an arbitrary byte as a plaintext file to `endpoint` using the api client with a given tag
+func uploadWithTag(data []byte, endpoint string, tag string) (string, error) {
 	swarm := client.NewClient(endpoint)
 	f := &client.File{
 		ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
@@ -203,10 +209,10 @@ func upload(data []byte, endpoint string) (string, error) {
 			Mode:        0660,
 			Size:        int64(len(data)),
 		},
+		Tag: tag,
 	}
 
-	// upload data to bzz:// and retrieve the content-addressed manifest hash, hex-encoded.
-	return swarm.Upload(f, "", false)
+	return swarm.TarUpload("", &client.FileUploader{f}, "", false)
 }
 
 func digest(r io.Reader) ([]byte, error) {
