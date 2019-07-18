@@ -171,6 +171,32 @@ func WriteFastTrieProgress(db ethdb.KeyValueWriter, count uint64) {
 	}
 }
 
+// ReadAncientTxLookupProgress retrieves the number of ancient blocks which
+// txlookup has been inserted to allow reporting correct numbers across restarts.
+func ReadAncientTxLookupProgress(db ethdb.KeyValueReader) *uint64 {
+	data, _ := db.Get(ancientTxLookupProgressKey)
+	if len(data) != 8 {
+		return nil
+	}
+	number := binary.BigEndian.Uint64(data)
+	return &number
+}
+
+// WriteAncientTxLookupProgress stores the ancient txlookup process counter to support
+// retrieving it across restarts.
+func WriteAncientTxLookupProgress(db ethdb.KeyValueWriter, number uint64) {
+	if err := db.Put(ancientTxLookupProgressKey, encodeBlockNumber(number)); err != nil {
+		log.Crit("Failed to store head number of txlookup", "err", err)
+	}
+}
+
+// DeleteAncientTxLookupProgress deletes the ancient txlookup progress.
+func DeleteAncientTxLookupProgress(db ethdb.KeyValueWriter) {
+	if err := db.Delete(ancientTxLookupProgressKey); err != nil {
+		log.Crit("Failed to delete ancient txlookup progress entry", "err", err)
+	}
+}
+
 // ReadHeaderRLP retrieves a block header in its raw RLP database encoding.
 func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	data, _ := db.Ancient(freezerHeaderTable, number)

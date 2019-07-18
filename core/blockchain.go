@@ -230,7 +230,13 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 	// Initialize the chain with ancient data if it isn't empty.
 	if bc.empty() {
-		rawdb.InitDatabaseFromFreezer(bc.db)
+		rawdb.InitBlockIndexFromFreezer(bc.db)
+		rawdb.WriteAncientTxLookupProgress(bc.db, 0) // Explicitly mark the missing of txlookup.
+	}
+	// Re-initialise all ancient txlookup indexes in the background.
+	if number := rawdb.ReadAncientTxLookupProgress(bc.db); number != nil {
+		// Genesis block doesn't have transaction, just ignore it.
+		go rawdb.InitTxsLookupFromFreezer(bc.db, *number+1)
 	}
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
