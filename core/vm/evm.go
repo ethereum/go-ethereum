@@ -23,6 +23,7 @@ import (
 
 	"github.com/eth4nos/go-ethereum/common"
 	"github.com/eth4nos/go-ethereum/crypto"
+	"github.com/eth4nos/go-ethereum/log"
 	"github.com/eth4nos/go-ethereum/params"
 )
 
@@ -224,13 +225,16 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	// old version (jmlee)
 	//evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
 	// new version (jmlee)
-	if addr == common.HexToAddress("0x1111111111111111111111111111111111111111") {
+	if addr == common.HexToAddress("0x0123456789012345678901234567890123456789") {
 		// restoration tx
 		inactiveAddr := common.HexToAddress("0x12345") // temp value for test
 		amount := big.NewInt(12345)                    // temp value for test
 
 		evm.StateDB.CreateAccount(inactiveAddr)        // get inactive account to state trie
 		evm.Restore(evm.StateDB, inactiveAddr, amount) // restore balance
+
+		// delete input field (merkle proofs) to look like a normal value transfer tx (maybe optional)
+		//input = []byte{}
 	} else {
 		// value transfer tx
 		evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
@@ -262,6 +266,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		if err != errExecutionReverted {
 			contract.UseGas(contract.Gas)
 		}
+	}
+
+	if err == nil {
+		log.Info("### at evm.Call(): no error occured") // (jmlee)
 	}
 	return ret, contract.Gas, err
 }
