@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/karalabe/usb"
 )
@@ -518,7 +517,7 @@ func (w *wallet) SelfDerive(bases []accounts.DerivationPath, chain ethereum.Chai
 
 // signHash implements accounts.Wallet, however signing arbitrary data is not
 // supported for hardware wallets, so this method will always return an error.
-func (w *wallet) signHash(account accounts.Account, hash []byte) ([]byte, error) {
+func (w *wallet) signData(account accounts.Account, data []byte) ([]byte, error) {
 	w.stateLock.RLock() // Comms have their own mutex
 	defer w.stateLock.RUnlock()
 
@@ -549,7 +548,7 @@ func (w *wallet) signHash(account accounts.Account, hash []byte) ([]byte, error)
 	}()
 
 	// Sign the transaction and verify the sender to avoid hardware fault surprises
-	sender, signed, err := w.driver.SignData(path, hash)
+	sender, signed, err := w.driver.SignData(path, data)
 	if err != nil {
 		return nil, err
 	}
@@ -561,7 +560,7 @@ func (w *wallet) signHash(account accounts.Account, hash []byte) ([]byte, error)
 
 // SignData signs keccak256(data). The mimetype parameter describes the type of data being signed
 func (w *wallet) SignData(account accounts.Account, mimeType string, data []byte) ([]byte, error) {
-	return w.signHash(account, crypto.Keccak256(data))
+	return w.signData(account, data)
 }
 
 // SignDataWithPassphrase implements accounts.Wallet, attempting to sign the given
@@ -572,7 +571,7 @@ func (w *wallet) SignDataWithPassphrase(account accounts.Account, passphrase, mi
 }
 
 func (w *wallet) SignText(account accounts.Account, text []byte) ([]byte, error) {
-	return w.signHash(account, accounts.TextHash(text))
+	return w.signData(account, accounts.TextHash(text))
 }
 
 // SignTx implements accounts.Wallet. It sends the transaction over to the Ledger
