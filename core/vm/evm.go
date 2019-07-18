@@ -227,9 +227,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if addr == common.HexToAddress("0x1111111111111111111111111111111111111111") {
 		// restoration tx
 		inactiveAddr := common.HexToAddress("0x12345") // temp value for test
-		evm.StateDB.CreateAccount(inactiveAddr)        // temp setting for test
 		amount := big.NewInt(12345)                    // temp value for test
-		evm.Restore(evm.StateDB, inactiveAddr, amount)
+
+		evm.StateDB.CreateAccount(inactiveAddr)        // get inactive account to state trie
+		evm.Restore(evm.StateDB, inactiveAddr, amount) // restore balance
 	} else {
 		// value transfer tx
 		evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
