@@ -35,6 +35,8 @@ type (
 	CanTransferFunc func(StateDB, common.Address, *big.Int) bool
 	// TransferFunc is the signature of a transfer function
 	TransferFunc func(StateDB, common.Address, common.Address, *big.Int)
+	// RestoreFunc is the signature of a restore function (jmlee)
+	RestoreFunc func(StateDB, common.Address, *big.Int)
 	// GetHashFunc returns the nth block hash in the blockchain
 	// and is used by the BLOCKHASH EVM op code.
 	GetHashFunc func(uint64) common.Hash
@@ -75,6 +77,8 @@ type Context struct {
 	CanTransfer CanTransferFunc
 	// Transfer transfers ether from one account to the other
 	Transfer TransferFunc
+	// Restore restores the inactive account (jmlee)
+	Restore RestoreFunc
 	// GetHash returns the hash corresponding to n
 	GetHash GetHashFunc
 
@@ -216,7 +220,21 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
-	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
+
+	// old version (jmlee)
+	//evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
+	// new version (jmlee)
+	if addr == common.HexToAddress("0x1111111111111111111111111111111111111111") {
+		// restoration tx
+		inactiveAddr := common.HexToAddress("0x12345") // temp value for test
+		evm.StateDB.CreateAccount(inactiveAddr)        // temp setting for test
+		amount := big.NewInt(12345)                    // temp value for test
+		evm.Restore(evm.StateDB, inactiveAddr, amount)
+	} else {
+		// value transfer tx
+		evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
+	}
+
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
 	contract := NewContract(caller, to, value, gas)
