@@ -94,6 +94,7 @@ var (
 		utils.SyncModeFlag,
 		utils.ExitWhenSyncedFlag,
 		utils.GCModeFlag,
+		utils.TxLookupLimitFlag,
 		utils.LightServeFlag,
 		utils.LightLegacyServFlag,
 		utils.LightIngressFlag,

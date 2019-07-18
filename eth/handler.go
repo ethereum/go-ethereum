@@ -51,7 +51,7 @@ const (
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
 
-	// minimim number of peers to broadcast new blocks to
+	// minBroadcastPeers is the minimal number of peers to broadcast new blocks to.
 	minBroadcastPeers = 4
 )
 
@@ -75,6 +75,7 @@ type ProtocolManager struct {
 
 	txpool     txPool
 	blockchain *core.BlockChain
+	chaindb    ethdb.Database
 	maxPeers   int
 
 	downloader *downloader.Downloader
@@ -109,6 +110,7 @@ func NewProtocolManager(config *params.ChainConfig, checkpoint *params.TrustedCh
 		eventMux:    mux,
 		txpool:      txpool,
 		blockchain:  blockchain,
+		chaindb:     chaindb,
 		peers:       newPeerSet(),
 		whitelist:   whitelist,
 		newPeerCh:   make(chan *peer),
