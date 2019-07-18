@@ -51,7 +51,7 @@ func (inspector *Inspector) ListKnown() []string {
 	return res
 }
 
-func (inspector *Inspector) IsSyncing() bool {
+func (inspector *Inspector) IsPullSyncing() bool {
 	lastReceivedChunksMsg := metrics.GetOrRegisterGauge("network.stream.received_chunks", nil)
 
 	// last received chunks msg time

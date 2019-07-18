@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,9 +32,11 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/client"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/testutil"
 	"github.com/pborman/uuid"
+	"golang.org/x/sync/errgroup"
 
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -117,14 +118,16 @@ func trackChunks(testData []byte, submitMetrics bool) error {
 				return
 			}
 
-			hostChunks, err := getChunksBitVectorFromHost(rpcClient, addrs)
+			bzzClient := client.NewBzz(rpcClient)
+
+			hostChunks, err := bzzClient.GetChunksBitVector(addrs)
 			if err != nil {
 				log.Error("error getting chunks bit vector from host", "err", err, "host", httpHost)
 				hasErr = true
 				return
 			}
 
-			bzzAddr, err := getBzzAddrFromHost(rpcClient)
+			bzzAddr, err := bzzClient.GetBzzAddr()
 			if err != nil {
 				log.Error("error getting bzz addrs from host", "err", err, "host", httpHost)
 				hasErr = true
@@ -174,46 +177,6 @@ func trackChunks(testData []byte, submitMetrics bool) error {
 	}
 
 	return nil
-}
-
-// getChunksBitVectorFromHost returns a bit vector of presence for a given slice of chunks from a given host
-func getChunksBitVectorFromHost(client *rpc.Client, addrs []storage.Address) (string, error) {
-	var hostChunks string
-	const trackChunksPageSize = 7500
-
-	for len(addrs) > 0 {
-		var pageChunks string
-		// get current page size, so that we avoid a slice out of bounds on the last page
-		pagesize := trackChunksPageSize
-		if len(addrs) < trackChunksPageSize {
-			pagesize = len(addrs)
-		}
-
-		err := client.Call(&pageChunks, "bzz_has", addrs[:pagesize])
-		if err != nil {
-			return "", err
-		}
-		hostChunks += pageChunks
-		addrs = addrs[pagesize:]
-	}
-
-	return hostChunks, nil
-}
-
-// getBzzAddrFromHost returns the bzzAddr for a given host
-func getBzzAddrFromHost(client *rpc.Client) (string, error) {
-	var hive string
-
-	err := client.Call(&hive, "bzz_hive")
-	if err != nil {
-		return "", err
-	}
-
-	// we make an ugly assumption about the output format of the hive.String() method
-	// ideally we should replace this with an API call that returns the bzz addr for a given host,
-	// but this also works for now (provided we don't change the hive.String() method, which we haven't in some time
-	ss := strings.Split(strings.Split(hive, "\n")[3], " ")
-	return ss[len(ss)-1], nil
 }
 
 // checkChunksVsMostProxHosts is checking:
@@ -369,63 +332,30 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 	return nil
 }
 
-func isPushSynced(wsHost string, tagname string) (bool, error) {
-	rpcClient, err := rpc.Dial(wsHost)
-	if rpcClient != nil {
-		defer rpcClient.Close()
-	}
-
-	if err != nil {
-		log.Error("error dialing host", "err", err)
-		return false, err
-	}
-
-	var isSynced bool
-	err = rpcClient.Call(&isSynced, "bzz_isPushSynced", tagname)
-	if err != nil {
-		log.Error("error calling host for isPushSynced", "err", err)
-		return false, err
-	}
-
-	log.Debug("isSynced result", "host", wsHost, "isSynced", isSynced)
-
-	return isSynced, nil
-}
-
-func isSyncing(wsHost string) (bool, error) {
-	rpcClient, err := rpc.Dial(wsHost)
-	if rpcClient != nil {
-		defer rpcClient.Close()
-	}
-
-	if err != nil {
-		log.Error("error dialing host", "err", err)
-		return false, err
-	}
-
-	var isSyncing bool
-	err = rpcClient.Call(&isSyncing, "bzz_isSyncing")
-	if err != nil {
-		log.Error("error calling host for isSyncing", "err", err)
-		return false, err
-	}
-
-	log.Debug("isSyncing result", "host", wsHost, "isSyncing", isSyncing)
-
-	return isSyncing, nil
-}
-
 func waitToPushSynced(tagname string) {
 	for {
-		synced, err := isPushSynced(wsEndpoint(hosts[0]), tagname)
+		time.Sleep(200 * time.Millisecond)
+
+		rpcClient, err := rpc.Dial(wsEndpoint(hosts[0]))
+		if rpcClient != nil {
+			defer rpcClient.Close()
+		}
+		if err != nil {
+			log.Error("error dialing host", "err", err)
+			continue
+		}
+
+		bzzClient := client.NewBzz(rpcClient)
+
+		synced, err := bzzClient.IsPushSynced(tagname)
 		if err != nil {
 			log.Error(err.Error())
+			continue
 		}
 
 		if synced {
 			return
 		}
-		time.Sleep(200 * time.Millisecond)
 	}
 }
 
@@ -438,22 +368,39 @@ func waitToSync() {
 		time.Sleep(3 * time.Second)
 
 		notSynced := uint64(0)
-		var wg sync.WaitGroup
-		wg.Add(len(hosts))
+
+		var g errgroup.Group
 		for i := 0; i < len(hosts); i++ {
 			i := i
-			go func(idx int) {
-				stillSyncing, err := isSyncing(wsEndpoint(hosts[idx]))
+			g.Go(func() error {
+				rpcClient, err := rpc.Dial(wsEndpoint(hosts[i]))
+				if rpcClient != nil {
+					defer rpcClient.Close()
+				}
+				if err != nil {
+					log.Error("error dialing host", "err", err)
+					return err
+				}
 
-				if stillSyncing || err != nil {
+				bzzClient := client.NewBzz(rpcClient)
+
+				stillSyncing, err := bzzClient.IsPullSyncing()
+				if err != nil {
+					return err
+				}
+
+				if stillSyncing {
 					atomic.AddUint64(&notSynced, 1)
 				}
-				wg.Done()
-			}(i)
-		}
-		wg.Wait()
 
-		ns = atomic.LoadUint64(&notSynced)
+				return nil
+			})
+		}
+
+		// Wait for all RPC calls to complete.
+		if err := g.Wait(); err == nil {
+			ns = atomic.LoadUint64(&notSynced)
+		}
 	}
 
 	t2 := time.Since(t1)
