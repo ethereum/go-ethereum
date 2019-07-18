@@ -25,7 +25,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -49,7 +48,7 @@ type builder struct {
 	stateCache state.Database
 }
 
-// NewBuilder is used to create a state diff builder
+// NewBuilder is used to create a statediff builder
 func NewBuilder(db ethdb.Database, blockChain *core.BlockChain, config Config) Builder {
 	return &builder{
 		chainDB:    db,
@@ -58,7 +57,7 @@ func NewBuilder(db ethdb.Database, blockChain *core.BlockChain, config Config) B
 	}
 }
 
-// BuildStateDiff builds a StateDiff object from two blocks
+// BuildStateDiff builds a statediff object from two blocks
 func (sdb *builder) BuildStateDiff(oldStateRoot, newStateRoot common.Hash, blockNumber *big.Int, blockHash common.Hash) (StateDiff, error) {
 	// Generate tries for old and new states
 	sdb.stateCache = sdb.blockChain.StateCache()
@@ -115,8 +114,9 @@ func (sdb *builder) BuildStateDiff(oldStateRoot, newStateRoot common.Hash, block
 	}, nil
 }
 
+// isWatchedAddress is used to check if a state account corresponds to one of the addresses the builder is configured to watch
 func (sdb *builder) isWatchedAddress(hashKey []byte) bool {
-	// If we aren't watching any addresses, we are watching everything
+	// If we aren't watching any specific addresses, we are watching everything
 	if len(sdb.config.WatchedAddresses) == 0 {
 		return true
 	}
@@ -317,16 +317,4 @@ func (sdb *builder) buildStorageDiffsFromTrie(it trie.NodeIterator) ([]StorageDi
 	}
 
 	return storageDiffs, nil
-}
-
-func (sdb *builder) addressByPath(path []byte) (*common.Address, error) {
-	log.Debug("Looking up address from path", "path", hexutil.Encode(append([]byte("secure-key-"), path...)))
-	addrBytes, err := sdb.chainDB.Get(append([]byte("secure-key-"), hexToKeyBytes(path)...))
-	if err != nil {
-		log.Error("Error looking up address via path", "path", hexutil.Encode(append([]byte("secure-key-"), path...)), "error", err)
-		return nil, err
-	}
-	addr := common.BytesToAddress(addrBytes)
-	log.Debug("Address found", "Address", addr)
-	return &addr, nil
 }

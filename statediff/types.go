@@ -34,41 +34,44 @@ type Subscription struct {
 	QuitChan    chan<- bool
 }
 
-// Payload packages the data to send to StateDiffingService subscriptions
+// Payload packages the data to send to statediff subscriptions
 type Payload struct {
-	BlockRlp     []byte `json:"blockRlp"     gencodec:"required"`
+	BlockRlp     []byte `json:"blockRlp"`
+	ReceiptsRlp  []byte `json:"receiptsRlp"`
 	StateDiffRlp []byte `json:"stateDiff"    gencodec:"required"`
-	Err          error  `json:"error"`
+
+	encoded []byte
+	err     error
+}
+
+func (sd *Payload) ensureEncoded() {
+	if sd.encoded == nil && sd.err == nil {
+		sd.encoded, sd.err = json.Marshal(sd)
+	}
+}
+
+// Length to implement Encoder interface for Payload
+func (sd *Payload) Length() int {
+	sd.ensureEncoded()
+	return len(sd.encoded)
+}
+
+// Encode to implement Encoder interface for Payload
+func (sd *Payload) Encode() ([]byte, error) {
+	sd.ensureEncoded()
+	return sd.encoded, sd.err
 }
 
 // StateDiff is the final output structure from the builder
 type StateDiff struct {
-	BlockNumber     *big.Int      `json:"blockNumber"	    gencodec:"required"`
-	BlockHash       common.Hash   `json:"blockHash" 	    gencodec:"required"`
+	BlockNumber     *big.Int      `json:"blockNumber"	  gencodec:"required"`
+	BlockHash       common.Hash   `json:"blockHash" 	  gencodec:"required"`
 	CreatedAccounts []AccountDiff `json:"createdAccounts" gencodec:"required"`
 	DeletedAccounts []AccountDiff `json:"deletedAccounts" gencodec:"required"`
 	UpdatedAccounts []AccountDiff `json:"updatedAccounts" gencodec:"required"`
 
 	encoded []byte
 	err     error
-}
-
-func (sd *StateDiff) ensureEncoded() {
-	if sd.encoded == nil && sd.err == nil {
-		sd.encoded, sd.err = json.Marshal(sd)
-	}
-}
-
-// Length to implement Encoder interface for StateDiff
-func (sd *StateDiff) Length() int {
-	sd.ensureEncoded()
-	return len(sd.encoded)
-}
-
-// Encode to implement Encoder interface for StateDiff
-func (sd *StateDiff) Encode() ([]byte, error) {
-	sd.ensureEncoded()
-	return sd.encoded, sd.err
 }
 
 // AccountDiff holds the data for a single state diff node

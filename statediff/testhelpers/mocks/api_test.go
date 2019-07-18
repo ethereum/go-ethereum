@@ -136,9 +136,6 @@ func TestAPI(t *testing.T) {
 		if !bytes.Equal(payload.StateDiffRlp, expectedStateDiffBytes) {
 			t.Errorf("payload does not have expected state diff\r\actual state diff rlp: %v\r\nexpected state diff rlp: %v", payload.StateDiffRlp, expectedStateDiffBytes)
 		}
-		if payload.Err != nil {
-			t.Errorf("payload should not contain an error, but does: %v", payload.Err)
-		}
 	case <-quitChan:
 		t.Errorf("channel quit before delivering payload")
 	}

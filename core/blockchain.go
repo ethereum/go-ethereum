@@ -1345,7 +1345,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					break
 				}
 				if bc.cacheConfig.ProcessingStateDiffs {
-					if !bc.allowedRootToBeDereferenced(root.(common.Hash)) {
+					if !bc.rootAllowedToBeDereferenced(root.(common.Hash)) {
 						bc.triegc.Push(root, number)
 						break
 					} else {
@@ -1414,7 +1414,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 // since we need the state tries of the current block and its parent in-memory
 // in order to process statediffs, we should avoid dereferencing roots until
 // its statediff and its child have been processed
-func (bc *BlockChain) allowedRootToBeDereferenced(root common.Hash) bool {
+func (bc *BlockChain) rootAllowedToBeDereferenced(root common.Hash) bool {
 	diffProcessedForSelfAndChildCount := 2
 	count := bc.stateDiffsProcessed[root]
 	return count >= diffProcessedForSelfAndChildCount

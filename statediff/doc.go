@@ -15,10 +15,10 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 /*
-This work is adapted from work by Charles Crain at https://github.com/jpmorganchase/quorum/blob/9b7fd9af8082795eeeb6863d9746f12b82dd5078/statediff/statediff.go
-
 Package statediff provides an auxiliary service that processes state diff objects from incoming chain events,
 relaying the objects to any rpc subscriptions.
+
+This work is adapted from work by Charles Crain at https://github.com/jpmorganchase/quorum/blob/9b7fd9af8082795eeeb6863d9746f12b82dd5078/statediff/statediff.go
 
 The service is spun up using the below CLI flags
 --statediff: boolean flag, turns on the service
@@ -27,7 +27,16 @@ The service is spun up using the below CLI flags
 --statediff.pathsandproofs: boolean flag, tells service to generate paths and proofs for the diffed storage and state trie leaf nodes.
 --statediff.watchedaddresses: string slice flag, used to limit the state diffing process to the given addresses. Usage: --statediff.watchedaddresses=addr1 --statediff.watchedaddresses=addr2 --statediff.watchedaddresses=addr3
 
-If you wish to use the websocket endpoint to subscribe to the statediff service, be sure to open up the Websocket RPC server with the `--ws` flag.
+If you wish to use the websocket endpoint to subscribe to the statediff service, be sure to open up the Websocket RPC server with the `--ws` flag. The IPC-RPC server is turned on by default.
+
+The statediffing services works only with `--syncmode="full", but -importantly- does not require garbage collection to be turned off (does not require an archival node).
+
+e.g.
+
+$ ./geth --statediff --statediff.streamblock --ws --syncmode "full"
+
+This starts up the geth node in full sync mode, starts up the statediffing service, and opens up the websocket endpoint to subscribe to the service.
+Because the "streamblock" flag has been turned on, the service will strean out block data (headers, transactions, and receipts) along with the diffed state and storage leafs.
 
 Rpc subscriptions to the service can be created using the rpc.Client.Subscribe() method,
 with the "statediff" namespace, a statediff.Payload channel, and the name of the statediff api's rpc method- "stream".
@@ -41,7 +50,7 @@ for {
 	select {
 	case stateDiffPayload := <- stateDiffPayloadChan:
 		processPayload(stateDiffPayload)
-	case err := <= rpcSub.Err():
+	case err := <- rpcSub.Err():
 		log.Error(err)
 	}
 }

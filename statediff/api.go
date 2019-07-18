@@ -29,21 +29,21 @@ const APIName = "statediff"
 // APIVersion is the version of the state diffing service API
 const APIVersion = "0.0.1"
 
-// PublicStateDiffAPI provides the a websocket service
+// PublicStateDiffAPI provides an RPC subscription interface
 // that can be used to stream out state diffs as they
 // are produced by a full node
 type PublicStateDiffAPI struct {
 	sds IService
 }
 
-// NewPublicStateDiffAPI create a new state diff websocket streaming service.
+// NewPublicStateDiffAPI creates an rpc subscription interface for the underlying statediff service
 func NewPublicStateDiffAPI(sds IService) *PublicStateDiffAPI {
 	return &PublicStateDiffAPI{
 		sds: sds,
 	}
 }
 
-// Stream is the public method to setup a subscription that fires off state-diff payloads as they are created
+// Stream is the public method to setup a subscription that fires off statediff service payloads as they are created
 func (api *PublicStateDiffAPI) Stream(ctx context.Context) (*rpc.Subscription, error) {
 	// ensure that the RPC connection supports subscriptions
 	notifier, supported := rpc.NotifierFromContext(ctx)
@@ -51,19 +51,19 @@ func (api *PublicStateDiffAPI) Stream(ctx context.Context) (*rpc.Subscription, e
 		return nil, rpc.ErrNotificationsUnsupported
 	}
 
-	// create subscription and start waiting for statediff events
+	// create subscription and start waiting for events
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		// subscribe to events from the state diff service
+		// subscribe to events from the statediff service
 		payloadChannel := make(chan Payload, chainEventChanSize)
 		quitChan := make(chan bool, 1)
 		api.sds.Subscribe(rpcSub.ID, payloadChannel, quitChan)
-		// loop and await state diff payloads and relay them to the subscriber with the notifier
+		// loop and await payloads and relay them to the subscriber with the notifier
 		for {
 			select {
-			case packet := <-payloadChannel:
-				if notifyErr := notifier.Notify(rpcSub.ID, packet); notifyErr != nil {
+			case payload := <-payloadChannel:
+				if notifyErr := notifier.Notify(rpcSub.ID, payload); notifyErr != nil {
 					log.Error("Failed to send state diff packet; error: " + notifyErr.Error())
 					unSubErr := api.sds.Unsubscribe(rpcSub.ID)
 					if unSubErr != nil {
@@ -81,7 +81,7 @@ func (api *PublicStateDiffAPI) Stream(ctx context.Context) (*rpc.Subscription, e
 					return
 				}
 			case <-quitChan:
-				// don't need to unsubscribe, statediff service does so before sending the quit signal
+				// don't need to unsubscribe, service does so before sending the quit signal
 				return
 			}
 		}

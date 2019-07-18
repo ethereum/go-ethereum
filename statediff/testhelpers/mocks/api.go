@@ -102,7 +102,6 @@ func (sds *MockStateDiffService) process(currentBlock, parentBlock *types.Block)
 	}
 	payload := statediff.Payload{
 		StateDiffRlp: stateDiffRlp,
-		Err:          err,
 	}
 	if sds.streamBlock {
 		rlpBuff := new(bytes.Buffer)
@@ -119,7 +118,7 @@ func (sds *MockStateDiffService) process(currentBlock, parentBlock *types.Block)
 
 // Subscribe mock method
 func (sds *MockStateDiffService) Subscribe(id rpc.ID, sub chan<- statediff.Payload, quitChan chan<- bool) {
-	log.Info("Subscribing to the statediff service")
+	log.Info("Subscribing to the mock statediff service")
 	sds.Lock()
 	sds.Subscriptions[id] = statediff.Subscription{
 		PayloadChan: sub,
@@ -130,7 +129,7 @@ func (sds *MockStateDiffService) Subscribe(id rpc.ID, sub chan<- statediff.Paylo
 
 // Unsubscribe mock method
 func (sds *MockStateDiffService) Unsubscribe(id rpc.ID) error {
-	log.Info("Unsubscribing from the statediff service")
+	log.Info("Unsubscribing from the mock statediff service")
 	sds.Lock()
 	_, ok := sds.Subscriptions[id]
 	if !ok {
@@ -170,9 +169,9 @@ func (sds *MockStateDiffService) close() {
 
 // Start mock method
 func (sds *MockStateDiffService) Start(server *p2p.Server) error {
-	log.Info("Starting statediff service")
+	log.Info("Starting mock statediff service")
 	if sds.ParentBlockChan == nil || sds.BlockChan == nil {
-		return errors.New("mock StateDiffingService requires preconfiguration with a MockParentBlockChan and MockBlockChan")
+		return errors.New("MockStateDiffingService needs to be configured with a MockParentBlockChan and MockBlockChan")
 	}
 	chainEventCh := make(chan core.ChainEvent, 10)
 	go sds.Loop(chainEventCh)
@@ -182,7 +181,7 @@ func (sds *MockStateDiffService) Start(server *p2p.Server) error {
 
 // Stop mock method
 func (sds *MockStateDiffService) Stop() error {
-	log.Info("Stopping statediff service")
+	log.Info("Stopping mock statediff service")
 	close(sds.QuitChan)
 	return nil
 }

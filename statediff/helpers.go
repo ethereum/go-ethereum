@@ -37,7 +37,7 @@ func sortKeys(data AccountsMap) []string {
 	return keys
 }
 
-// BytesToNiblePath
+// bytesToNiblePath converts the byte representation of a path to its string representation
 func bytesToNiblePath(path []byte) string {
 	if hasTerm(path) {
 		path = path[:len(path)-1]
@@ -53,6 +53,8 @@ func bytesToNiblePath(path []byte) string {
 	return nibblePath
 }
 
+// findIntersection finds the set of strings from both arrays that are equivalent (same key as same index)
+// this is used to find which keys have been both "deleted" and "created" i.e. they were updated
 func findIntersection(a, b []string) []string {
 	lenA := len(a)
 	lenB := len(b)
@@ -63,13 +65,13 @@ func findIntersection(a, b []string) []string {
 	}
 	for {
 		switch strings.Compare(a[iOfA], b[iOfB]) {
-		// a[iOfA] < b[iOfB]
+		// -1 when a[iOfA] < b[iOfB]
 		case -1:
 			iOfA++
 			if iOfA >= lenA {
 				return updates
 			}
-			// a[iOfA] == b[iOfB]
+			// 0 when a[iOfA] == b[iOfB]
 		case 0:
 			updates = append(updates, a[iOfA])
 			iOfA++
@@ -77,7 +79,7 @@ func findIntersection(a, b []string) []string {
 			if iOfA >= lenA || iOfB >= lenB {
 				return updates
 			}
-			// a[iOfA] > b[iOfB]
+			// 1 when a[iOfA] > b[iOfB]
 		case 1:
 			iOfB++
 			if iOfB >= lenB {
@@ -88,28 +90,9 @@ func findIntersection(a, b []string) []string {
 
 }
 
+// pathToStr converts the NodeIterator path to a string representation
 func pathToStr(it trie.NodeIterator) string {
 	return bytesToNiblePath(it.Path())
-}
-
-// Duplicated from trie/encoding.go
-func hexToKeyBytes(hex []byte) []byte {
-	if hasTerm(hex) {
-		hex = hex[:len(hex)-1]
-	}
-	if len(hex)&1 != 0 {
-		panic("can't convert hex key of odd length")
-	}
-	key := make([]byte, (len(hex)+1)/2)
-	decodeNibbles(hex, key)
-
-	return key
-}
-
-func decodeNibbles(nibbles []byte, bytes []byte) {
-	for bi, ni := 0, 0; ni < len(nibbles); bi, ni = bi+1, ni+2 {
-		bytes[bi] = nibbles[ni]<<4 | nibbles[ni+1]
-	}
 }
 
 // hasTerm returns whether a hex key has the terminator flag.

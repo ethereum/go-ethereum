@@ -21,11 +21,13 @@ import (
 	"math/big"
 	"math/rand"
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/statediff"
 	"github.com/ethereum/go-ethereum/statediff/testhelpers/mocks"
@@ -33,7 +35,7 @@ import (
 
 func TestServiceLoop(t *testing.T) {
 	testErrorInChainEventLoop(t)
-	//testErrorInBlockLoop(t)
+	testErrorInBlockLoop(t)
 }
 
 var (
@@ -61,6 +63,12 @@ var (
 	testBlock2 = types.NewBlock(&header2, nil, nil, nil)
 	testBlock3 = types.NewBlock(&header3, nil, nil, nil)
 
+	receiptRoot1  = common.HexToHash("0x05")
+	receiptRoot2  = common.HexToHash("0x06")
+	receiptRoot3  = common.HexToHash("0x07")
+	testReceipts1 = []*types.Receipt{types.NewReceipt(receiptRoot1.Bytes(), false, 1000), types.NewReceipt(receiptRoot2.Bytes(), false, 2000)}
+	testReceipts2 = []*types.Receipt{types.NewReceipt(receiptRoot3.Bytes(), false, 3000)}
+
 	event1 = core.ChainEvent{Block: testBlock1}
 	event2 = core.ChainEvent{Block: testBlock2}
 	event3 = core.ChainEvent{Block: testBlock3}
@@ -71,43 +79,79 @@ func testErrorInChainEventLoop(t *testing.T) {
 	builder := mocks.Builder{}
 	blockChain := mocks.BlockChain{}
 	service := statediff.Service{
+		Mutex:         sync.Mutex{},
 		Builder:       &builder,
 		BlockChain:    &blockChain,
 		QuitChan:      make(chan bool),
 		Subscriptions: make(map[rpc.ID]statediff.Subscription),
+		StreamBlock:   true,
 	}
-	payloadChan := make(chan statediff.Payload)
+	payloadChan := make(chan statediff.Payload, 2)
 	quitChan := make(chan bool)
 	service.Subscribe(rpc.NewID(), payloadChan, quitChan)
 	testRoot2 = common.HexToHash("0xTestRoot2")
-	blockChain.SetParentBlocksToReturn([]*types.Block{parentBlock1, parentBlock2})
+	blockMapping := make(map[common.Hash]*types.Block)
+	blockMapping[parentBlock1.Hash()] = parentBlock1
+	blockMapping[parentBlock2.Hash()] = parentBlock2
+	blockChain.SetParentBlocksToReturn(blockMapping)
 	blockChain.SetChainEvents([]core.ChainEvent{event1, event2, event3})
-	// Need to have listeners on the channels or the subscription will be closed and the processing halted
+	blockChain.SetReceiptsForHash(testBlock1.Hash(), testReceipts1)
+	blockChain.SetReceiptsForHash(testBlock2.Hash(), testReceipts2)
+
+	payloads := make([]statediff.Payload, 0, 2)
+	wg := sync.WaitGroup{}
 	go func() {
-		select {
-		case <-payloadChan:
-		case <-quitChan:
+		wg.Add(1)
+		for i := 0; i < 2; i++ {
+			select {
+			case payload := <-payloadChan:
+				payloads = append(payloads, payload)
+			case <-quitChan:
+			}
 		}
+		wg.Done()
 	}()
+
 	service.Loop(eventsChannel)
+	wg.Wait()
+	if len(payloads) != 2 {
+		t.Error("Test failure:", t.Name())
+		t.Logf("Actual number of payloads does not equal expected.\nactual: %+v\nexpected: 3", len(payloads))
+	}
+
+	testReceipts1Rlp, err := rlp.EncodeToBytes(testReceipts1)
+	if err != nil {
+		t.Error(err)
+	}
+	testReceipts2Rlp, err := rlp.EncodeToBytes(testReceipts2)
+	if err != nil {
+		t.Error(err)
+	}
+	expectedReceiptsRlp := [][]byte{testReceipts1Rlp, testReceipts2Rlp, nil}
+	for i, payload := range payloads {
+		if !bytes.Equal(payload.ReceiptsRlp, expectedReceiptsRlp[i]) {
+			t.Error("Test failure:", t.Name())
+			t.Logf("Actual receipt rlp for payload %d does not equal expected.\nactual: %+v\nexpected: %+v", i, payload.ReceiptsRlp, expectedReceiptsRlp[i])
+		}
+	}
 
 	if !reflect.DeepEqual(builder.BlockHash, testBlock2.Hash()) {
 		t.Error("Test failure:", t.Name())
-		t.Logf("Actual does not equal expected.\nactual:%+v\nexpected: %+v", builder.BlockHash, testBlock2.Hash())
+		t.Logf("Actual blockhash does not equal expected.\nactual:%+v\nexpected: %+v", builder.BlockHash, testBlock2.Hash())
 	}
 	if !bytes.Equal(builder.OldStateRoot.Bytes(), parentBlock2.Root().Bytes()) {
 		t.Error("Test failure:", t.Name())
-		t.Logf("Actual does not equal expected.\nactual:%+v\nexpected: %+v", builder.OldStateRoot, parentBlock2.Root())
+		t.Logf("Actual root does not equal expected.\nactual:%+v\nexpected: %+v", builder.OldStateRoot, parentBlock2.Root())
 	}
 	if !bytes.Equal(builder.NewStateRoot.Bytes(), testBlock2.Root().Bytes()) {
 		t.Error("Test failure:", t.Name())
-		t.Logf("Actual does not equal expected.\nactual:%+v\nexpected: %+v", builder.NewStateRoot, testBlock2.Root())
+		t.Logf("Actual root does not equal expected.\nactual:%+v\nexpected: %+v", builder.NewStateRoot, testBlock2.Root())
 	}
 	//look up the parent block from its hash
 	expectedHashes := []common.Hash{testBlock1.ParentHash(), testBlock2.ParentHash()}
 	if !reflect.DeepEqual(blockChain.ParentHashesLookedUp, expectedHashes) {
 		t.Error("Test failure:", t.Name())
-		t.Logf("Actual does not equal expected.\nactual:%+v\nexpected: %+v", blockChain.ParentHashesLookedUp, expectedHashes)
+		t.Logf("Actual parent hash does not equal expected.\nactual:%+v\nexpected: %+v", blockChain.ParentHashesLookedUp, expectedHashes)
 	}
 }
 
@@ -121,9 +165,20 @@ func testErrorInBlockLoop(t *testing.T) {
 		QuitChan:      make(chan bool),
 		Subscriptions: make(map[rpc.ID]statediff.Subscription),
 	}
-
-	blockChain.SetParentBlocksToReturn([]*types.Block{parentBlock1, nil})
+	payloadChan := make(chan statediff.Payload)
+	quitChan := make(chan bool)
+	service.Subscribe(rpc.NewID(), payloadChan, quitChan)
+	blockMapping := make(map[common.Hash]*types.Block)
+	blockMapping[parentBlock1.Hash()] = parentBlock1
+	blockChain.SetParentBlocksToReturn(blockMapping)
 	blockChain.SetChainEvents([]core.ChainEvent{event1, event2})
+	// Need to have listeners on the channels or the subscription will be closed and the processing halted
+	go func() {
+		select {
+		case <-payloadChan:
+		case <-quitChan:
+		}
+	}()
 	service.Loop(eventsChannel)
 
 	if !bytes.Equal(builder.BlockHash.Bytes(), testBlock1.Hash().Bytes()) {

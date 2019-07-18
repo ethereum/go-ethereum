@@ -30,16 +30,20 @@ import (
 // BlockChain is a mock blockchain for testing
 type BlockChain struct {
 	ParentHashesLookedUp []common.Hash
-	parentBlocksToReturn []*types.Block
+	parentBlocksToReturn map[common.Hash]*types.Block
 	callCount            int
 	ChainEvents          []core.ChainEvent
+	Receipts             map[common.Hash]types.Receipts
 }
 
 // AddToStateDiffProcessedCollection mock method
 func (blockChain *BlockChain) AddToStateDiffProcessedCollection(hash common.Hash) {}
 
 // SetParentBlocksToReturn mock method
-func (blockChain *BlockChain) SetParentBlocksToReturn(blocks []*types.Block) {
+func (blockChain *BlockChain) SetParentBlocksToReturn(blocks map[common.Hash]*types.Block) {
+	if blockChain.parentBlocksToReturn == nil {
+		blockChain.parentBlocksToReturn = make(map[common.Hash]*types.Block)
+	}
 	blockChain.parentBlocksToReturn = blocks
 }
 
@@ -49,10 +53,9 @@ func (blockChain *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
 
 	var parentBlock *types.Block
 	if len(blockChain.parentBlocksToReturn) > 0 {
-		parentBlock = blockChain.parentBlocksToReturn[blockChain.callCount]
+		parentBlock = blockChain.parentBlocksToReturn[hash]
 	}
 
-	blockChain.callCount++
 	return parentBlock
 }
 
@@ -83,4 +86,17 @@ func (blockChain *BlockChain) SubscribeChainEvent(ch chan<- core.ChainEvent) eve
 	})
 
 	return subscription
+}
+
+// SetReceiptsForHash mock method
+func (blockChain *BlockChain) SetReceiptsForHash(hash common.Hash, receipts types.Receipts) {
+	if blockChain.Receipts == nil {
+		blockChain.Receipts = make(map[common.Hash]types.Receipts)
+	}
+	blockChain.Receipts[hash] = receipts
+}
+
+// GetReceiptsByHash mock method
+func (blockChain *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
+	return blockChain.Receipts[hash]
 }
