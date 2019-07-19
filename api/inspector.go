@@ -39,19 +39,16 @@ func NewInspector(api *API, hive *network.Hive, netStore *storage.NetStore) *Ins
 }
 
 // Hive prints the kademlia table
-func (inspector *Inspector) Hive() string {
-	return inspector.hive.String()
+func (i *Inspector) Hive() string {
+	return i.hive.String()
 }
 
-func (inspector *Inspector) ListKnown() []string {
-	res := []string{}
-	for _, v := range inspector.hive.Kademlia.ListKnown() {
-		res = append(res, fmt.Sprintf("%v", v))
-	}
-	return res
+// KademliaInfo returns structured output of the Kademlia state that we can check for equality
+func (i *Inspector) KademliaInfo() network.KademliaInfo {
+	return i.hive.KademliaInfo()
 }
 
-func (inspector *Inspector) IsPullSyncing() bool {
+func (i *Inspector) IsPullSyncing() bool {
 	lastReceivedChunksMsg := metrics.GetOrRegisterGauge("network.stream.received_chunks", nil)
 
 	// last received chunks msg time
@@ -63,11 +60,12 @@ func (inspector *Inspector) IsPullSyncing() bool {
 	return lrct.After(time.Now().Add(-15 * time.Second))
 }
 
-func (inspector *Inspector) DeliveriesPerPeer() map[string]int64 {
+// DeliveriesPerPeer returns the sum of chunks we received from a given peer
+func (i *Inspector) DeliveriesPerPeer() map[string]int64 {
 	res := map[string]int64{}
 
 	// iterate connection in kademlia
-	inspector.hive.Kademlia.EachConn(nil, 255, func(p *network.Peer, po int) bool {
+	i.hive.Kademlia.EachConn(nil, 255, func(p *network.Peer, po int) bool {
 		// get how many chunks we receive for retrieve requests per peer
 		peermetric := fmt.Sprintf("chunk.delivery.%x", p.Over()[:16])
 
@@ -82,10 +80,10 @@ func (inspector *Inspector) DeliveriesPerPeer() map[string]int64 {
 // Has checks whether each chunk address is present in the underlying datastore,
 // the bool in the returned structs indicates if the underlying datastore has
 // the chunk stored with the given address (true), or not (false)
-func (inspector *Inspector) Has(chunkAddresses []storage.Address) string {
+func (i *Inspector) Has(chunkAddresses []storage.Address) string {
 	hostChunks := []string{}
 	for _, addr := range chunkAddresses {
-		has, err := inspector.netStore.Has(context.Background(), addr)
+		has, err := i.netStore.Has(context.Background(), addr)
 		if err != nil {
 			log.Error(err.Error())
 		}

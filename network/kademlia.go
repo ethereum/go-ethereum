@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -91,6 +92,14 @@ type Kademlia struct {
 	nDepth     int             // stores the last neighbourhood depth
 	nDepthMu   sync.RWMutex    // protects neighbourhood depth nDepth
 	nDepthSig  []chan struct{} // signals when neighbourhood depth nDepth is changed
+}
+
+type KademliaInfo struct {
+	Depth            int        `json:"depth"`
+	TotalConnections int        `json:"total_connections"`
+	TotalKnown       int        `json:"total_known"`
+	Connections      [][]string `json:"connections"`
+	Known            [][]string `json:"known"`
 }
 
 // NewKademlia creates a Kademlia table for base address addr
@@ -422,18 +431,6 @@ func (k *Kademlia) Off(p *Peer) {
 	}
 }
 
-func (k *Kademlia) ListKnown() []*BzzAddr {
-	res := []*BzzAddr{}
-
-	k.addrs.Each(func(val pot.Val) bool {
-		e := val.(*entry)
-		res = append(res, e.BzzAddr)
-		return true
-	})
-
-	return res
-}
-
 // EachConn is an iterator with args (base, po, f) applies f to each live peer
 // that has proximity order po or less as measured from the base
 // if base is nil, kademlia base address is used
@@ -574,6 +571,56 @@ func (k *Kademlia) callable(e *entry) bool {
 // BaseAddr return the kademlia base address
 func (k *Kademlia) BaseAddr() []byte {
 	return k.base
+}
+
+func (k *Kademlia) KademliaInfo() KademliaInfo {
+	k.lock.RLock()
+	defer k.lock.RUnlock()
+	return k.kademliaInfo()
+}
+
+func (k *Kademlia) kademliaInfo() (ki KademliaInfo) {
+	ki.Depth = depthForPot(k.conns, k.NeighbourhoodSize, k.base)
+	ki.TotalConnections = k.conns.Size()
+	ki.TotalKnown = k.addrs.Size()
+	ki.Connections = make([][]string, k.MaxProxDisplay)
+	ki.Known = make([][]string, k.MaxProxDisplay)
+
+	k.conns.EachBin(k.base, Pof, 0, func(po, size int, f func(func(val pot.Val) bool) bool) bool {
+		if po >= k.MaxProxDisplay {
+			po = k.MaxProxDisplay - 1
+		}
+
+		row := []string{}
+		f(func(val pot.Val) bool {
+			e := val.(*Peer)
+			row = append(row, fmt.Sprintf("%x", e.Address()))
+			return true
+		})
+		sort.Strings(row)
+		ki.Connections[po] = row
+
+		return true
+	})
+
+	k.addrs.EachBin(k.base, Pof, 0, func(po, size int, f func(func(val pot.Val) bool) bool) bool {
+		if po >= k.MaxProxDisplay {
+			po = k.MaxProxDisplay - 1
+		}
+
+		row := []string{}
+		f(func(val pot.Val) bool {
+			e := val.(*entry)
+			row = append(row, fmt.Sprintf("%x", e.Address()))
+			return true
+		})
+		sort.Strings(row)
+		ki.Known[po] = row
+
+		return true
+	})
+
+	return
 }
 
 // String returns kademlia table + kaddb table displayed with ascii
