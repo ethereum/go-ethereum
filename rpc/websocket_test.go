@@ -31,7 +31,7 @@ import (
 func TestWebsocketClientHeaders(t *testing.T) {
 	t.Parallel()
 
-	endpoint, header, err := wsClientHeaders("wss://testuser:test-PASS_01@example.com:1234", "")
+	endpoint, header, err := wsClientHeaders("wss://testuser:test-PASS_01@example.com:1234", "https://example.com")
 	if err != nil {
 		t.Fatalf("wsGetConfig failed: %s", err)
 	}
@@ -41,7 +41,7 @@ func TestWebsocketClientHeaders(t *testing.T) {
 	if header.Get("authorization") != "Basic dGVzdHVzZXI6dGVzdC1QQVNTXzAx" {
 		t.Fatal("Basic auth header is incorrect")
 	}
-	if header.Get("origin") == "" {
+	if header.Get("origin") != "https://example.com" {
 		t.Fatal("Origin not set")
 	}
 }
