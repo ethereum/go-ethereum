@@ -111,6 +111,19 @@ func wsHandshakeValidator(allowedOrigins []string) func(*http.Request) bool {
 	return f
 }
 
+type wsHandshakeError struct {
+	err    error
+	status string
+}
+
+func (e wsHandshakeError) Error() string {
+	s := e.err.Error()
+	if e.status != "" {
+		s += " (HTTP status " + e.status + ")"
+	}
+	return s
+}
+
 // DialWebsocket creates a new RPC client that communicates with a JSON-RPC server
 // that is listening on the given endpoint.
 //
@@ -127,9 +140,13 @@ func DialWebsocket(ctx context.Context, endpoint, origin string) (*Client, error
 		WriteBufferPool: wsBufferPool,
 	}
 	return newClient(ctx, func(ctx context.Context) (ServerCodec, error) {
-		conn, _, err := dialer.DialContext(ctx, endpoint, header)
+		conn, resp, err := dialer.DialContext(ctx, endpoint, header)
 		if err != nil {
-			return nil, err
+			hErr := wsHandshakeError{err: err}
+			if resp != nil {
+				hErr.status = resp.Status
+			}
+			return nil, hErr
 		}
 		return newWebsocketCodec(conn), nil
 	})

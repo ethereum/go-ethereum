@@ -21,6 +21,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -63,10 +64,12 @@ func TestWebsocketOriginCheck(t *testing.T) {
 		client.Close()
 		t.Fatal("no error for wrong origin")
 	}
-	if err != websocket.ErrBadHandshake {
+	wantErr := wsHandshakeError{websocket.ErrBadHandshake, "403 Forbidden"}
+	if !reflect.DeepEqual(err, wantErr) {
 		t.Fatalf("wrong error for wrong origin: %q", err)
 	}
 
+	// Connections without origin header should work.
 	client, err = DialWebsocket(context.Background(), wsURL, "")
 	if err != nil {
 		t.Fatal("error for empty origin")
