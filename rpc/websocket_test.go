@@ -66,6 +66,12 @@ func TestWebsocketOriginCheck(t *testing.T) {
 	if err != websocket.ErrBadHandshake {
 		t.Fatalf("wrong error for wrong origin: %q", err)
 	}
+
+	client, err = DialWebsocket(context.Background(), wsURL, "")
+	if err != nil {
+		t.Fatal("error for empty origin")
+	}
+	client.Close()
 }
 
 // This test checks whether calls exceeding the request size limit are rejected.
