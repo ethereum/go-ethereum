@@ -515,7 +515,7 @@ func (w *wallet) SelfDerive(bases []accounts.DerivationPath, chain ethereum.Chai
 	w.deriveChain = chain
 }
 
-// signHash implements accounts.Wallet, however signing arbitrary data is not
+// signData implements accounts.Wallet, however signing arbitrary data is not
 // supported for hardware wallets, so this method will always return an error.
 func (w *wallet) signData(account accounts.Account, data []byte) ([]byte, error) {
 	w.stateLock.RLock() // Comms have their own mutex
