@@ -134,9 +134,10 @@ type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
-	db     ethdb.Database // Low level persistent database to store final content in
-	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
-	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
+	db            ethdb.Database // Low level persistent database to store final content in
+	triegc        *prque.Prque   // Priority queue mapping block numbers to tries to gc
+	gcproc        time.Duration  // Accumulates canonical block processing for trie dumping
+	txLookupLimit uint64         // The maximum number of blocks from head whose tx indices are reserved
 
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
@@ -181,7 +182,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(block *types.Block) bool) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(block *types.Block) bool, txLookupLimit uint64) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = &CacheConfig{
 			TrieCleanLimit: 256,
@@ -200,6 +201,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	bc := &BlockChain{
 		chainConfig:    chainConfig,
 		cacheConfig:    cacheConfig,
+		txLookupLimit:  txLookupLimit,
 		db:             db,
 		triegc:         prque.New(nil),
 		stateCache:     state.NewDatabaseWithCache(db, cacheConfig.TrieCleanLimit),
@@ -231,12 +233,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// Initialize the chain with ancient data if it isn't empty.
 	if bc.empty() {
 		rawdb.InitBlockIndexFromFreezer(bc.db)
-		rawdb.WriteAncientTxLookupProgress(bc.db, 0) // Explicitly mark the missing of txlookup.
-	}
-	// Re-initialise all ancient txlookup indexes in the background.
-	if number := rawdb.ReadAncientTxLookupProgress(bc.db); number != nil {
-		// Genesis block doesn't have transaction, just ignore it.
-		go rawdb.InitTxsLookupFromFreezer(bc.db, *number+1)
 	}
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
@@ -294,6 +290,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 	// Take ownership of this particular state
 	go bc.update()
+	go bc.updateTxIndices()
 	return bc, nil
 }
 
@@ -2035,6 +2032,101 @@ func (bc *BlockChain) update() {
 		select {
 		case <-futureTimer.C:
 			bc.procFutureBlocks()
+		case <-bc.quit:
+			return
+		}
+	}
+}
+
+// updateTxIndices is responsible for the construction and deletion of the
+// transaction index.
+//
+// User can use flag `txlookuplimit` to specify a "recentness" block, below
+// which ancient tx indices get deleted. If `txlookuplimit` is 0, it means
+// all tx indices will be reserved.
+//
+// The user can adjust the txlookuplimit value for each launch, Geth will
+// automatically construct the missing indices and delete the extra indices.
+func (bc *BlockChain) updateTxIndices() {
+	var (
+		done   chan struct{} // Non-nil if background unindexing or reindexing routine is active.
+		headCh = make(chan ChainHeadEvent)
+	)
+	sub := bc.SubscribeChainHeadEvent(headCh)
+	defer func() {
+		if sub != nil {
+			sub.Unsubscribe()
+		}
+	}()
+	// initialiseIndices inits txlookup indices into the database.
+	// If there already exists some indices, this function will find
+	// the oldest block which has been indexed and start indexing from
+	// this point.
+	initialiseIndices := func(head uint64) {
+		defer func() { done <- struct{}{} }()
+
+		from, to := uint64(0), head
+		if bc.txLookupLimit != 0 && head > bc.txLookupLimit {
+			from = head - bc.txLookupLimit
+		}
+		// Find oldest indexed block via binary search when we don't
+		// have this flag in database.
+		start := time.Now()
+		oldest := rawdb.FindOldestIndexedBlock(bc.db, from, to)
+		log.Debug("Find oldest indexed block", "oldest", oldest, "elapsed", common.PrettyDuration(time.Since(start)))
+
+		// Re-construct missing tx indices.
+		if oldest == nil {
+			rawdb.IndexTxLookup(bc.db, from, to) // No block has been indexed.
+		} else {
+			rawdb.IndexTxLookup(bc.db, from, *oldest)
+		}
+		// Delete useless tx indices if user requires.
+		if from > 0 {
+			rawdb.RemoveTxsLookup(bc.db, 0, from)
+		}
+		log.Debug("Initialised transaction indices", "elapsed", common.PrettyDuration(time.Since(start)))
+	}
+	// indexBlocks reindex or unindex transaction indices depends
+	// on user's requirement.
+	indexBlocks := func(oldest uint64, head uint64) {
+		defer func() { done <- struct{}{} }()
+
+		// All indices should be reserved.
+		if bc.txLookupLimit == 0 || head <= bc.txLookupLimit {
+			if oldest == 0 {
+				// Short circuit if nothing to delete.
+				return
+			} else {
+				// Reindex all indices if necessary
+				rawdb.IndexTxLookup(bc.db, 0, oldest)
+				return
+			}
+		}
+		if head-bc.txLookupLimit < oldest {
+			// Reindex a part of missing indices and rewind oldest indexed
+			// point to HEAD-limit
+			rawdb.IndexTxLookup(bc.db, head-bc.txLookupLimit, oldest)
+		} else {
+			// Unindex a part of stale indices and forward oldest indexed
+			// point to HEAD-limit
+			rawdb.RemoveTxsLookup(bc.db, oldest, head-bc.txLookupLimit)
+		}
+	}
+
+	for {
+		select {
+		case head := <-headCh:
+			if done == nil {
+				done = make(chan struct{})
+				if number := rawdb.ReadOldestIndexedBlock(bc.db); number == nil {
+					go initialiseIndices(head.Block.NumberU64())
+				} else {
+					go indexBlocks(*number, head.Block.NumberU64())
+				}
+			}
+		case <-done:
+			done = nil
 		case <-bc.quit:
 			return
 		}

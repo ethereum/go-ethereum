@@ -171,10 +171,11 @@ func WriteFastTrieProgress(db ethdb.KeyValueWriter, count uint64) {
 	}
 }
 
-// ReadAncientTxLookupProgress retrieves the number of ancient blocks which
-// txlookup has been inserted to allow reporting correct numbers across restarts.
-func ReadAncientTxLookupProgress(db ethdb.KeyValueReader) *uint64 {
-	data, _ := db.Get(ancientTxLookupProgressKey)
+// ReadOldestIndexedBlock retrieves the number of oldest indexed block
+// whose transaction indices has been indexed. If the corresponding entry
+// is non-existent in database it means the indexing has been finished.
+func ReadOldestIndexedBlock(db ethdb.KeyValueReader) *uint64 {
+	data, _ := db.Get(oldestIndexedBlockKey)
 	if len(data) != 8 {
 		return nil
 	}
@@ -182,18 +183,11 @@ func ReadAncientTxLookupProgress(db ethdb.KeyValueReader) *uint64 {
 	return &number
 }
 
-// WriteAncientTxLookupProgress stores the ancient txlookup process counter to support
-// retrieving it across restarts.
-func WriteAncientTxLookupProgress(db ethdb.KeyValueWriter, number uint64) {
-	if err := db.Put(ancientTxLookupProgressKey, encodeBlockNumber(number)); err != nil {
-		log.Crit("Failed to store head number of txlookup", "err", err)
-	}
-}
-
-// DeleteAncientTxLookupProgress deletes the ancient txlookup progress.
-func DeleteAncientTxLookupProgress(db ethdb.KeyValueWriter) {
-	if err := db.Delete(ancientTxLookupProgressKey); err != nil {
-		log.Crit("Failed to delete ancient txlookup progress entry", "err", err)
+// WriteOldestIndexedBlock stores the number of oldest indexed block
+// into database.
+func WriteOldestIndexedBlock(db ethdb.KeyValueWriter, number uint64) {
+	if err := db.Put(oldestIndexedBlockKey, encodeBlockNumber(number)); err != nil {
+		log.Crit("Failed to store the number of oldest indexed block", "err", err)
 	}
 }
 
@@ -583,4 +577,41 @@ func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 		}
 	}
 	return a
+}
+
+// FindOldestIndexedBlock binary searches the oldest block which has been indexed.
+// We will always ensures that if Bi is indexed, then Bi+1 must has been indexed.
+//
+// If no block has been indexed, then the returned value is to+1.
+//
+// The block doesn't contain any transaction will be regarded as unindexed. It can
+// cause the blocks before this block can be reindexed.
+func FindOldestIndexedBlock(db ethdb.Reader, from uint64, to uint64) *uint64 {
+	low, high := from, to+1
+
+	check := func(number uint64) bool {
+		block := ReadBlock(db, ReadCanonicalHash(db, number), number)
+		if block == nil {
+			log.Crit("Failed to retrieve block from database", "number", number)
+		}
+		if block.Transactions().Len() == 0 {
+			return false
+		}
+		if ReadTxLookupEntry(db, block.Transactions()[0].Hash()) == nil {
+			return false
+		}
+		return true
+	}
+	for low != high {
+		mid := (low + high) / 2
+		if !check(mid) {
+			low = mid + 1
+		} else {
+			high = mid
+		}
+	}
+	if low == to+1 {
+		return nil
+	}
+	return &low
 }

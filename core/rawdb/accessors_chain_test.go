@@ -358,3 +358,52 @@ func checkReceiptsRLP(have, want types.Receipts) error {
 	}
 	return nil
 }
+
+func TestFindOldestIndexedBlock(t *testing.T) {
+	var cases = []struct {
+		empty     bool
+		oldest    uint64
+		height    uint64
+		nilBlocks map[uint64]bool
+		expect    uint64
+	}{
+		{true, 0, 10, nil, 0},  // No block has been indexed
+		{false, 0, 10, nil, 1}, // Genesis block doesn't have indices
+		{false, 1, 10, nil, 1},
+		{false, 4, 10, nil, 4},
+		{false, 5, 10, nil, 5},
+		{false, 6, 10, nil, 6},
+		{false, 10, 10, nil, 10},
+		{false, 3, 10, map[uint64]bool{4: true, 6: true, 8: true}, 5},
+	}
+	for cid, c := range cases {
+		var (
+			db    = NewMemoryDatabase()
+			block *types.Block
+		)
+		for i := uint64(0); i <= c.height; i++ {
+			if i == 0 {
+				block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, nil, nil, nil) // Empty genesis block
+			} else {
+				tx := types.NewTransaction(i, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
+				txset := []*types.Transaction{tx}
+				if c.nilBlocks != nil && c.nilBlocks[i] {
+					txset = nil
+				}
+				block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, txset, nil, nil)
+			}
+			WriteBlock(db, block)
+			WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+			if !c.empty && block.NumberU64() >= c.oldest {
+				WriteTxLookupEntries(db, block)
+			}
+		}
+		res := FindOldestIndexedBlock(db, 0, c.height)
+		if c.empty && res != nil {
+			t.Fatalf("Case %d failed, oldest block mismatch, want nil, have %d", cid, *res)
+		}
+		if !c.empty && *res != c.expect {
+			t.Fatalf("Case %d failed, oldest block mismatch, want %d, have %d", cid, c.expect, *res)
+		}
+	}
+}
