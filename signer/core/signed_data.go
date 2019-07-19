@@ -144,7 +144,7 @@ func (api *SignerAPI) sign(addr common.MixedcaseAddress, req *SignDataRequest, l
 	}
 	// Only ask for the passphrase if the account is keystore based
 	pw := ""
-	if strings.Compare(wallet.URL().Scheme, "keystore") == 0 {
+	if wallet.URL().Scheme == "keystore" {
 		pw, err = api.lookupOrQueryPassword(account.Address,
 			"Password for signing",
 			fmt.Sprintf("Please enter password for signing data with account %s", account.Address.Hex()))
