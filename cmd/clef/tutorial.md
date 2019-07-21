@@ -227,7 +227,7 @@ In this example:
     - Auto-rejected if the message does not contain `bazonk`,
 - Any other requests will be passed along for manual confirmation.
 
-*Note, to make this example work, please use you own accounts. You can create a new account either via Clef or the traditional account CLI tools. If the latter was chosen, make sure both Clef and Geth use the same keystore by specifing `--keystore path/to/your/keystore` when running Clef.*
+*Note, to make this example work, please use you own accounts. You can create a new account either via Clef or the traditional account CLI tools. If the latter was chosen, make sure both Clef and Geth use the same keystore by specifying `--keystore path/to/your/keystore` when running Clef.*
 
 Attest the new rule file so that Clef will accept loading it:
 
