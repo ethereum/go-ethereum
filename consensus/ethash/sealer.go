@@ -269,7 +269,7 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 
 		start := time.Now()
 		if !noverify {
-			if err := ethash.verifySeal(nil, header, true); err != nil {
+			if err := ethash.verifySeal(nil, header, false); err != nil {
 				log.Warn("Invalid proof-of-work submitted", "sealhash", sealhash, "elapsed", common.PrettyDuration(time.Since(start)), "err", err)
 				return false
 			}
