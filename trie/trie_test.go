@@ -52,7 +52,7 @@ func TestEmptyTrie(t *testing.T) {
 	var trie Trie
 	res := trie.Hash()
 	exp := emptyRoot
-	if res != common.Hash(exp) {
+	if res != exp {
 		t.Errorf("expected %x got %x", exp, res)
 	}
 }
