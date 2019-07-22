@@ -768,10 +768,10 @@ func (api *RetestethAPI) StorageRangeAt(ctx context.Context,
 			}
 			// Ensure any modifications are committed to the state
 			// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-			root = statedb.IntermediateRoot(vmenv.ChainConfig().IsEIP158(block.Number()))
+			_ = statedb.IntermediateRoot(vmenv.ChainConfig().IsEIP158(block.Number()))
 			if idx == int(txIndex) {
 				// This is to make sure root can be opened by OpenTrie
-				root, err = statedb.Commit(vmenv.ChainConfig().IsEIP158(block.Number()))
+				_, err = statedb.Commit(vmenv.ChainConfig().IsEIP158(block.Number()))
 				if err != nil {
 					return StorageRangeResult{}, err
 				}
@@ -832,7 +832,7 @@ func retesteth(ctx *cli.Context) error {
 	log.Info("Welcome to retesteth!")
 	// register signer API with server
 	var (
-		extapiURL = "n/a"
+		extapiURL string
 	)
 	apiImpl := &RetestethAPI{}
 	var testApi RetestethTestAPI = apiImpl
