@@ -241,9 +241,9 @@ func TestCheckpointRegister(t *testing.T) {
 
 	// Test transaction replay protection
 	validateOperation(t, c, contractBackend, func() {
-		number, hash := getRecent()
+		number, _ := getRecent()
 		v, r, s := collectSig(0, checkpoint0.Hash(), 2, nil)
-		hash = common.HexToHash("deadbeef")
+		hash := common.HexToHash("deadbeef")
 		c.SetCheckpoint(transactOpts, number, hash, checkpoint0.Hash(), 0, v, r, s)
 	}, func(events <-chan *contract.CheckpointOracleNewCheckpointVote) error {
 		return assert(0, emptyHash, big.NewInt(0))
