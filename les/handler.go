@@ -85,6 +85,7 @@ type BlockChain interface {
 
 type txPool interface {
 	AddRemotes(txs []*types.Transaction) []error
+	AddRemotesSync(txs []*types.Transaction) []error
 	Status(hashes []common.Hash) []core.TxStatus
 }
 
@@ -125,6 +126,9 @@ type ProtocolManager struct {
 
 	// Callbacks
 	synced func() bool
+
+	// Testing fields
+	addTxsSync bool
 }
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
@@ -1044,7 +1048,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					hash := tx.Hash()
 					stats[i] = pm.txStatus(hash)
 					if stats[i].Status == core.TxStatusUnknown {
-						if errs := pm.txpool.AddRemotes([]*types.Transaction{tx}); errs[0] != nil {
+						addFn := pm.txpool.AddRemotes
+						// Add txs synchronously for testing purpose
+						if pm.addTxsSync {
+							addFn = pm.txpool.AddRemotesSync
+						}
+						if errs := addFn([]*types.Transaction{tx}); errs[0] != nil {
 							stats[i].Error = errs[0].Error()
 							continue
 						}
