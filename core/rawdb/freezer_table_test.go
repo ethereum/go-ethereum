@@ -113,6 +113,9 @@ func TestFreezerBasicsClosing(t *testing.T) {
 		f.Append(uint64(x), data)
 		f.Close()
 		f, err = newCustomTable(os.TempDir(), fname, rm, wm, sc, 50, true)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	defer f.Close()
 
@@ -170,6 +173,9 @@ func TestFreezerRepairDanglingHead(t *testing.T) {
 	// Now open it again
 	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sc, 50, true)
+		if err != nil {
+			t.Fatal(err)
+		}
 		// The last item should be missing
 		if _, err = f.Retrieve(0xff); err == nil {
 			t.Errorf("Expected error for missing index entry")
@@ -217,6 +223,9 @@ func TestFreezerRepairDanglingHeadLarge(t *testing.T) {
 	// Now open it again
 	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sc, 50, true)
+		if err != nil {
+			t.Fatal(err)
+		}
 		// The first item should be there
 		if _, err = f.Retrieve(0); err != nil {
 			t.Fatal(err)
@@ -269,6 +278,9 @@ func TestSnappyDetection(t *testing.T) {
 	// Open without snappy
 	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sc, 50, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if _, err = f.Retrieve(0); err == nil {
 			f.Close()
 			t.Fatalf("expected empty table")
@@ -278,6 +290,9 @@ func TestSnappyDetection(t *testing.T) {
 	// Open with snappy
 	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sc, 50, true)
+		if err != nil {
+			t.Fatal(err)
+		}
 		// There should be 255 items
 		if _, err = f.Retrieve(0xfe); err != nil {
 			f.Close()
