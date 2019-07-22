@@ -153,6 +153,12 @@
 			"revisionTime": "2017-02-15T23:32:05Z"
 		},
 		{
+			"checksumSHA1": "hoilQzrHNOxF5Tc6ctXNTDpv4ck=",
+			"path": "github.com/gorilla/websocket",
+			"revision": "ae1634f6a98965ded3b8789c626cb4e0bd78c3de",
+			"revisionTime": "2019-06-29T18:55:28Z"
+		},
+		{
 			"checksumSHA1": "d9PxF1XQGLMJZRct2R8qVM/eYlE=",
 			"path": "github.com/hashicorp/golang-lru",
 			"revision": "0a025b7e63adc15a622f29b0b2c4c3848243bbf6",
@@ -667,8 +673,8 @@
 		{
 			"checksumSHA1": "F+tqxPGFt5x7DKZakbbMmENX1oQ=",
 			"path": "golang.org/x/net/websocket",
-			"revision": "eb5bcb51f2a31c7d5141d810b70815c05d9c9146",
-			"revisionTime": "2019-04-03T01:06:53Z"
+			"revision": "da137c7871d730100384dbcf36e6f8fa493aef5b",
+			"revisionTime": "2019-06-28T18:40:41Z"
 		},
 		{
 			"checksumSHA1": "4TEYFKrAUuwBMqExjQBsnf/CgjQ=",
