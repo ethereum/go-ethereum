@@ -533,6 +533,9 @@ func (api *RetestethAPI) mineBlock() error {
 		}
 	}
 	block, err := api.engine.FinalizeAndAssemble(api.blockchain, header, statedb, txs, []*types.Header{}, receipts)
+	if err != nil {
+		return err
+	}
 	return api.importBlock(block)
 }
 
