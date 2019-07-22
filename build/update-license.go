@@ -275,27 +275,32 @@ func mailmapLookup(authors []string) []string {
 }
 
 func writeAuthors(files []string) {
-	merge := make(map[string]bool)
+	var (
+		dedup = make(map[string]bool)
+		list  []string
+	)
 	// Add authors that Git reports as contributors.
 	// This is the primary source of author information.
 	for _, a := range gitAuthors(files) {
-		merge[a] = true
+		if la := strings.ToLower(a); !dedup[la] {
+			list = append(list, a)
+			dedup[la] = true
+		}
 	}
 	// Add existing authors from the file. This should ensure that we
 	// never lose authors, even if Git stops listing them. We can also
 	// add authors manually this way.
 	for _, a := range readAuthors() {
-		merge[a] = true
+		if la := strings.ToLower(a); !dedup[la] {
+			list = append(list, a)
+			dedup[la] = true
+		}
 	}
 	// Write sorted list of authors back to the file.
-	var result []string
-	for a := range merge {
-		result = append(result, a)
-	}
-	sort.Sort(authors(result))
+	sort.Sort(authors(list))
 	content := new(bytes.Buffer)
 	content.WriteString(authorsFileHeader)
-	for _, a := range result {
+	for _, a := range list {
 		content.WriteString(a)
 		content.WriteString("\n")
 	}
