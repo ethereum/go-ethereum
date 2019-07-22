@@ -62,16 +62,22 @@ var (
 	skipPrefixes = []string{
 		// boring stuff
 		"vendor/", "tests/testdata/", "build/",
+
 		// don't relicense vendored sources
 		"cmd/internal/browser",
+		"common/bitutil/bitutil",
+		"common/prque/",
 		"consensus/ethash/xor.go",
 		"crypto/bn256/",
 		"crypto/ecies/",
-		"crypto/secp256k1/curve.go",
-		"crypto/sha3/",
+		"graphql/graphiql.go",
 		"internal/jsre/deps",
 		"log/",
-		"common/bitutil/bitutil",
+		"metrics/",
+		"signer/rules/deps",
+
+		// skip special licenses
+		"crypto/secp256k1", // Relicensed to BSD-3 via https://github.com/ethereum/go-ethereum/pull/17225
 	}
 
 	// paths with this prefix are licensed as GPL. all other files are LGPL.
@@ -143,6 +149,13 @@ func (i info) gpl() bool {
 	}
 	return false
 }
+
+// authors implements the sort.Interface for strings in case-insensitive mode.
+type authors []string
+
+func (as authors) Len() int           { return len(as) }
+func (as authors) Less(i, j int) bool { return strings.ToLower(as[i]) < strings.ToLower(as[j]) }
+func (as authors) Swap(i, j int)      { as[i], as[j] = as[j], as[i] }
 
 func main() {
 	var (
@@ -263,7 +276,7 @@ func mailmapLookup(authors []string) []string {
 
 func writeAuthors(files []string) {
 	merge := make(map[string]bool)
-	// Add authors that Git reports as contributorxs.
+	// Add authors that Git reports as contributors.
 	// This is the primary source of author information.
 	for _, a := range gitAuthors(files) {
 		merge[a] = true
@@ -279,7 +292,7 @@ func writeAuthors(files []string) {
 	for a := range merge {
 		result = append(result, a)
 	}
-	sort.Strings(result)
+	sort.Sort(authors(result))
 	content := new(bytes.Buffer)
 	content.WriteString(authorsFileHeader)
 	for _, a := range result {
