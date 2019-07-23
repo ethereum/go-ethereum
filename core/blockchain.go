@@ -1881,7 +1881,7 @@ func (bc *BlockChain) UpdateM1() error {
 			// using old masterndoes
 			maxMasternodes = common.MaxMasternodes
 		}
-		if len(ms) > common.MaxMasternodes {
+		if len(ms) > maxMasternodes {
 			err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms[:maxMasternodes])
 		} else {
 			err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms)
