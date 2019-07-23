@@ -53,16 +53,16 @@ func (db *Database) ValidateTransaction(selector *string, tx *core.SendTxArgs) (
 		if len(data) == 0 {
 			// Prevent sending ether into black hole (show stopper)
 			if tx.Value.ToInt().Cmp(big.NewInt(0)) > 0 {
-				return nil, errors.New("tx will create contract with value but empty code")
+				return nil, errors.New("transaction will create a contract with value but empty code")
 			}
 			// No value submitted at least, critically Warn, but don't blow up
-			messages.Crit("Transaction will create contract with empty code")
+			messages.Crit("Transaction will create a contract with empty code")
 		} else if len(data) < 40 { // arbitrary heuristic limit
-			messages.Warn(fmt.Sprintf("Transaction will create contract, but payload is suspiciously small (%d bytes)", len(data)))
+			messages.Warn(fmt.Sprintf("Transaction will create a contract, but the payload is suspiciously small (%d bytes)", len(data)))
 		}
 		// Method selector should be nil for contract creation
 		if selector != nil {
-			messages.Warn("Transaction will create contract, but method selector supplied, indicating intent to call a method")
+			messages.Warn("Transaction will create a contract, but method selector supplied, indicating an intent to call a method")
 		}
 		return messages, nil
 	}
