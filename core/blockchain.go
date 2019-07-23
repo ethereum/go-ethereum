@@ -1090,7 +1090,11 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			}
 			// Flush data into ancient database.
 			size += rawdb.WriteAncientBlock(bc.db, block, receiptChain[i], bc.GetTd(block.Hash(), block.NumberU64()))
-			rawdb.WriteTxLookupEntries(batch, block)
+
+			// We don't write tx lookup indices here because Geth can offer a CLI flag `txlookuplimt`
+			// with which user can choose to drop historical indices data and only keep latest indices.
+			// After the fast sync, we will reconstruct all missing indices even user requires to keep
+			// all historical indices.
 
 			stats.processed++
 		}
@@ -1165,7 +1169,11 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			// Write all the data out into the database
 			rawdb.WriteBody(batch, block.Hash(), block.NumberU64(), block.Body())
 			rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receiptChain[i])
-			rawdb.WriteTxLookupEntries(batch, block)
+
+			// We don't write tx lookup indices here because Geth can offer a CLI flag `txlookuplimt`
+			// with which user can choose to drop historical indices data and only keep latest indices.
+			// After the fast sync, we will reconstruct all missing indices even user requires to keep
+			// all historical indices.
 
 			stats.processed++
 			if batch.ValueSize() >= ethdb.IdealBatchSize {
@@ -2080,10 +2088,14 @@ func (bc *BlockChain) updateTxIndices() {
 			rawdb.IndexTxLookup(bc.db, from, to) // No block has been indexed.
 		} else {
 			rawdb.IndexTxLookup(bc.db, from, *oldest)
-		}
-		// Delete useless tx indices if user requires.
-		if from > 0 {
-			rawdb.RemoveTxsLookup(bc.db, 0, from)
+
+			// Drop all useless tx indices below the HEAD-limit.
+			if from > 0 {
+				oldest := rawdb.FindOldestIndexedBlock(bc.db, 0, from)
+				if oldest != nil {
+					rawdb.RemoveTxsLookup(bc.db, *oldest, from)
+				}
+			}
 		}
 		log.Debug("Initialised transaction indices", "elapsed", common.PrettyDuration(time.Since(start)))
 	}

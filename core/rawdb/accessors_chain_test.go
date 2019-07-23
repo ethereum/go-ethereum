@@ -361,20 +361,24 @@ func checkReceiptsRLP(have, want types.Receipts) error {
 
 func TestFindOldestIndexedBlock(t *testing.T) {
 	var cases = []struct {
-		empty     bool
 		oldest    uint64
 		height    uint64
 		nilBlocks map[uint64]bool
+		start     uint64
+		end       uint64
 		expect    uint64
+		expectNil bool
 	}{
-		{true, 0, 10, nil, 0},  // No block has been indexed
-		{false, 0, 10, nil, 1}, // Genesis block doesn't have indices
-		{false, 1, 10, nil, 1},
-		{false, 4, 10, nil, 4},
-		{false, 5, 10, nil, 5},
-		{false, 6, 10, nil, 6},
-		{false, 10, 10, nil, 10},
-		{false, 3, 10, map[uint64]bool{4: true, 6: true, 8: true}, 5},
+		{11, 10, nil, 0, 10, 0, true}, // No block has been indexed
+		{0, 10, nil, 0, 10, 1, false}, // Genesis block doesn't have indices
+		{1, 10, nil, 0, 10, 1, false},
+		{5, 10, nil, 0, 10, 5, false},
+		{5, 10, nil, 0, 5, 5, false},
+		{5, 10, nil, 0, 4, 0, true},
+		{5, 10, nil, 5, 5, 5, false},
+		{5, 10, nil, 10, 10, 10, false},
+		{10, 10, nil, 0, 10, 10, false},
+		{3, 10, map[uint64]bool{4: true, 6: true, 8: true}, 0, 10, 5, false},
 	}
 	for cid, c := range cases {
 		var (
@@ -394,15 +398,15 @@ func TestFindOldestIndexedBlock(t *testing.T) {
 			}
 			WriteBlock(db, block)
 			WriteCanonicalHash(db, block.Hash(), block.NumberU64())
-			if !c.empty && block.NumberU64() >= c.oldest {
+			if block.NumberU64() >= c.oldest {
 				WriteTxLookupEntries(db, block)
 			}
 		}
-		res := FindOldestIndexedBlock(db, 0, c.height)
-		if c.empty && res != nil {
+		res := FindOldestIndexedBlock(db, c.start, c.end)
+		if c.expectNil && res != nil {
 			t.Fatalf("Case %d failed, oldest block mismatch, want nil, have %d", cid, *res)
 		}
-		if !c.empty && *res != c.expect {
+		if !c.expectNil && *res != c.expect {
 			t.Fatalf("Case %d failed, oldest block mismatch, want %d, have %d", cid, c.expect, *res)
 		}
 	}
