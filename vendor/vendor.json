@@ -3,16 +3,16 @@
 	"ignore": "test",
 	"package": [
 		{
-			"checksumSHA1": "z+M6FYl9EKsoZZMLcT0Ktwfk8pI=",
+			"checksumSHA1": "oKluEwtvvBjw/U7HuxJerq9zM6c=",
 			"path": "github.com/Azure/azure-pipeline-go/pipeline",
-			"revision": "7571e8eb0876932ab505918ff7ed5107773e5ee2",
-			"revisionTime": "2018-06-07T21:19:23Z"
+			"revision": "232aee85e8e3a6223a11c0943f7df2ae0fac00e4",
+			"revisionTime": "2019-07-08T20:54:13Z"
 		},
 		{
-			"checksumSHA1": "5nsGu77r69lloEWbFhMof2UA9rY=",
-			"path": "github.com/Azure/azure-storage-blob-go/2018-03-28/azblob",
-			"revision": "eaae161d9d5e07363f04ddb19d84d57efc66d1a1",
-			"revisionTime": "2018-07-12T00:56:34Z"
+			"checksumSHA1": "w+q8h00Uc7cHkEGeb8KJa6LjGBw=",
+			"path": "github.com/Azure/azure-storage-blob-go/azblob",
+			"revision": "3efca72bd11c050222deab57e25ea90df03b9692",
+			"revisionTime": "2019-06-28T22:37:48Z"
 		},
 		{
 			"checksumSHA1": "QC55lHNOv1+UAL2xtIHw17MJ8J8=",
@@ -261,6 +261,12 @@
 			"revision": "efa589957cd060542a26d2dd7832fd6a6c6c3ade",
 			"revisionTime": "2018-03-10T13:32:14Z",
 			"version": "efa589957cd060542a26d2dd7832fd6a6c6c3ade"
+		},
+		{
+			"checksumSHA1": "hkwfDRrenCt8GFFKMWtweohbWa0=",
+			"path": "github.com/mattn/go-ieproxy",
+			"revision": "6dee0af9227d0863f1508ce7937af3396d6605c1",
+			"revisionTime": "2019-07-02T01:03:15Z"
 		},
 		{
 			"checksumSHA1": "GiVgQkx5acnq+JZtYiuHPlhHoso=",
@@ -671,6 +677,18 @@
 			"revisionTime": "2019-04-03T01:06:53Z"
 		},
 		{
+			"checksumSHA1": "yNR4RokwDc+lYbCL/yOB3ENuKH8=",
+			"path": "golang.org/x/net/http/httpproxy",
+			"revision": "da137c7871d730100384dbcf36e6f8fa493aef5b",
+			"revisionTime": "2019-06-28T18:40:41Z"
+		},
+		{
+			"checksumSHA1": "vL6l4FZWitsxht0uqA/GpDNkNNc=",
+			"path": "golang.org/x/net/idna",
+			"revision": "da137c7871d730100384dbcf36e6f8fa493aef5b",
+			"revisionTime": "2019-06-28T18:40:41Z"
+		},
+		{
 			"checksumSHA1": "F+tqxPGFt5x7DKZakbbMmENX1oQ=",
 			"path": "golang.org/x/net/websocket",
 			"revision": "da137c7871d730100384dbcf36e6f8fa493aef5b",
@@ -699,6 +717,12 @@
 			"path": "golang.org/x/sys/windows",
 			"revision": "e77772198cdc3dbfcf7f2de96630204df9fd3a0b",
 			"revisionTime": "2019-02-14T21:28:15Z"
+		},
+		{
+			"checksumSHA1": "FCBHX83YaM1LmNHtSM30BKmbJQY=",
+			"path": "golang.org/x/sys/windows/registry",
+			"revision": "fae7ac547cb717d141c433a2a173315e216b64c4",
+			"revisionTime": "2019-07-11T09:16:12Z"
 		},
 		{
 			"checksumSHA1": "tqqo7DEeFCclb58XbN44WwdpWww=",
@@ -797,10 +821,22 @@
 			"revisionTime": "2018-12-15T16:57:46Z"
 		},
 		{
+			"checksumSHA1": "CbpjEkkOeh0fdM/V8xKDdI0AA88=",
+			"path": "golang.org/x/text/secure/bidirule",
+			"revision": "342b2e1fbaa52c93f31447ad2c6abc048c63e475",
+			"revisionTime": "2018-12-15T17:52:45Z"
+		},
+		{
 			"checksumSHA1": "o3YChxWLvyCmkAn/ZNBj9HC9zKw=",
 			"path": "golang.org/x/text/transform",
 			"revision": "e3703dcdd614d2d7488fff034c75c551ea25da95",
 			"revisionTime": "2018-12-15T16:57:46Z"
+		},
+		{
+			"checksumSHA1": "vv9EDuekZgHxFbh+0jJhB7jLZXY=",
+			"path": "golang.org/x/text/unicode/bidi",
+			"revision": "342b2e1fbaa52c93f31447ad2c6abc048c63e475",
+			"revisionTime": "2018-12-15T17:52:45Z"
 		},
 		{
 			"checksumSHA1": "lBB8oUHgIK0RUuDchkQVfMXJQh0=",
