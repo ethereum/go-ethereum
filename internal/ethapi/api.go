@@ -32,8 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/XDPoS"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/contracts"
 	contractValidator "github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
@@ -747,7 +747,7 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 	opts := new(bind.CallOpts)
 	var (
 		candidateAddresses []common.Address
-		candidates []XDPoS.Masternode
+		candidates         []XDPoS.Masternode
 	)
 
 	candidateAddresses, err = validator.GetCandidates(opts)
@@ -767,12 +767,18 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 	sort.Slice(candidates, func(i, j int) bool {
 		return candidates[i].Stake.Cmp(candidates[j].Stake) >= 0
 	})
+	var maxMasternodes int
+	if s.b.ChainConfig().IsTIPIncreaseMasternodes(block.Number()) {
+		maxMasternodes = common.MaxMasternodesV2
+	} else {
+		maxMasternodes = common.MaxMasternodes
+	}
 	isTopCandidate := false // is candidates in top 150
 	status := ""
 	for i := 0; i < len(candidates); i++ {
 		if candidates[i].Address == coinbaseAddress {
 			status = statusProposed
-			if i < common.MaxMasternodes {
+			if i < maxMasternodes {
 				isTopCandidate = true
 			}
 			break

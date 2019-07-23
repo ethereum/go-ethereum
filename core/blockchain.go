@@ -46,7 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
@@ -1870,8 +1870,19 @@ func (bc *BlockChain) UpdateM1() error {
 		}
 		// update masternodes
 		log.Info("Updating new set of masternodes")
-		if len(ms) > common.MaxMasternodes {
-			err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms[:common.MaxMasternodes])
+		// get block header
+		header := bc.CurrentHeader()
+		var maxMasternodes int
+		// check if block number is increase ms checkpoint
+		if bc.chainConfig.IsTIPIncreaseMasternodes(header.Number) {
+			// using new masterndoes
+			maxMasternodes = common.MaxMasternodesV2
+		} else {
+			// using old masterndoes
+			maxMasternodes = common.MaxMasternodes
+		}
+		if len(ms) > maxMasternodes {
+			err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms[:maxMasternodes])
 		} else {
 			err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms)
 		}
