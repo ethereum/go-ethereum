@@ -192,7 +192,9 @@ func newTestProtocolManager(lightSync bool, blocks int, odr *LesOdr, indexers []
 		chain, _ = light.NewLightChain(odr, gspec.Config, engine, nil)
 	} else {
 		chain = simulation.Blockchain()
-		pool = core.NewTxPool(core.DefaultTxPoolConfig, gspec.Config, simulation.Blockchain())
+		config := core.DefaultTxPoolConfig
+		config.Journal = ""
+		pool = core.NewTxPool(config, gspec.Config, simulation.Blockchain())
 	}
 
 	// Create contract registrar
