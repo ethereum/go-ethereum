@@ -205,6 +205,9 @@ func downloadBlobToBuffer(ctx context.Context, blobURL BlobURL, offset int64, co
 		parallelism:   o.Parallelism,
 		operation: func(chunkStart int64, count int64) error {
 			dr, err := blobURL.Download(ctx, chunkStart+offset, count, o.AccessConditions, false)
+			if err != nil {
+				return err
+			}
 			body := dr.Body(o.RetryReaderOptionsPerBlock)
 			if o.Progress != nil {
 				rangeProgress := int64(0)

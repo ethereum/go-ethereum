@@ -413,8 +413,8 @@ func (client pageBlobClient) getPageRangesResponder(resp pipeline.Response) (pip
 	return result, nil
 }
 
-// GetPageRangesDiff [Update] The Get Page Ranges Diff operation returns the list of valid page ranges for a page blob
-// that were changed between target blob and previous snapshot.
+// GetPageRangesDiff the Get Page Ranges Diff operation returns the list of valid page ranges for a page blob that were
+// changed between target blob and previous snapshot.
 //
 // snapshot is the snapshot parameter is an opaque DateTime value that, when present, specifies the blob snapshot to
 // retrieve. For more information on working with blob snapshots, see <a
@@ -776,4 +776,121 @@ func (client pageBlobClient) uploadPagesResponder(resp pipeline.Response) (pipel
 	io.Copy(ioutil.Discard, resp.Response().Body)
 	resp.Response().Body.Close()
 	return &PageBlobUploadPagesResponse{rawResponse: resp.Response()}, err
+}
+
+// UploadPagesFromURL the Upload Pages operation writes a range of pages to a page blob where the contents are read
+// from a URL
+//
+// sourceURL is specify a URL to the copy source. sourceRange is bytes of source data in the specified range. The
+// length of this range should match the ContentLength header and x-ms-range/Range destination range header.
+// contentLength is the length of the request. rangeParameter is the range of bytes to which the source range would be
+// written. The range should be 512 aligned and range-end is required. sourceContentMD5 is specify the md5 calculated
+// for the range of bytes that must be read from the copy source. timeout is the timeout parameter is expressed in
+// seconds. For more information, see <a
+// href="https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations">Setting
+// Timeouts for Blob Service Operations.</a> leaseID is if specified, the operation only succeeds if the resource's
+// lease is active and matches this ID. ifSequenceNumberLessThanOrEqualTo is specify this header value to operate only
+// on a blob if it has a sequence number less than or equal to the specified. ifSequenceNumberLessThan is specify this
+// header value to operate only on a blob if it has a sequence number less than the specified. ifSequenceNumberEqualTo
+// is specify this header value to operate only on a blob if it has the specified sequence number. ifModifiedSince is
+// specify this header value to operate only on a blob if it has been modified since the specified date/time.
+// ifUnmodifiedSince is specify this header value to operate only on a blob if it has not been modified since the
+// specified date/time. ifMatch is specify an ETag value to operate only on blobs with a matching value. ifNoneMatch is
+// specify an ETag value to operate only on blobs without a matching value. sourceIfModifiedSince is specify this
+// header value to operate only on a blob if it has been modified since the specified date/time.
+// sourceIfUnmodifiedSince is specify this header value to operate only on a blob if it has not been modified since the
+// specified date/time. sourceIfMatch is specify an ETag value to operate only on blobs with a matching value.
+// sourceIfNoneMatch is specify an ETag value to operate only on blobs without a matching value. requestID is provides
+// a client-generated, opaque value with a 1 KB character limit that is recorded in the analytics logs when storage
+// analytics logging is enabled.
+func (client pageBlobClient) UploadPagesFromURL(ctx context.Context, sourceURL string, sourceRange string, contentLength int64, rangeParameter string, sourceContentMD5 []byte, timeout *int32, leaseID *string, ifSequenceNumberLessThanOrEqualTo *int64, ifSequenceNumberLessThan *int64, ifSequenceNumberEqualTo *int64, ifModifiedSince *time.Time, ifUnmodifiedSince *time.Time, ifMatch *ETag, ifNoneMatch *ETag, sourceIfModifiedSince *time.Time, sourceIfUnmodifiedSince *time.Time, sourceIfMatch *ETag, sourceIfNoneMatch *ETag, requestID *string) (*PageBlobUploadPagesFromURLResponse, error) {
+	if err := validate([]validation{
+		{targetValue: timeout,
+			constraints: []constraint{{target: "timeout", name: null, rule: false,
+				chain: []constraint{{target: "timeout", name: inclusiveMinimum, rule: 0, chain: nil}}}}}}); err != nil {
+		return nil, err
+	}
+	req, err := client.uploadPagesFromURLPreparer(sourceURL, sourceRange, contentLength, rangeParameter, sourceContentMD5, timeout, leaseID, ifSequenceNumberLessThanOrEqualTo, ifSequenceNumberLessThan, ifSequenceNumberEqualTo, ifModifiedSince, ifUnmodifiedSince, ifMatch, ifNoneMatch, sourceIfModifiedSince, sourceIfUnmodifiedSince, sourceIfMatch, sourceIfNoneMatch, requestID)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Pipeline().Do(ctx, responderPolicyFactory{responder: client.uploadPagesFromURLResponder}, req)
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*PageBlobUploadPagesFromURLResponse), err
+}
+
+// uploadPagesFromURLPreparer prepares the UploadPagesFromURL request.
+func (client pageBlobClient) uploadPagesFromURLPreparer(sourceURL string, sourceRange string, contentLength int64, rangeParameter string, sourceContentMD5 []byte, timeout *int32, leaseID *string, ifSequenceNumberLessThanOrEqualTo *int64, ifSequenceNumberLessThan *int64, ifSequenceNumberEqualTo *int64, ifModifiedSince *time.Time, ifUnmodifiedSince *time.Time, ifMatch *ETag, ifNoneMatch *ETag, sourceIfModifiedSince *time.Time, sourceIfUnmodifiedSince *time.Time, sourceIfMatch *ETag, sourceIfNoneMatch *ETag, requestID *string) (pipeline.Request, error) {
+	req, err := pipeline.NewRequest("PUT", client.url, nil)
+	if err != nil {
+		return req, pipeline.NewError(err, "failed to create request")
+	}
+	params := req.URL.Query()
+	if timeout != nil {
+		params.Set("timeout", strconv.FormatInt(int64(*timeout), 10))
+	}
+	params.Set("comp", "page")
+	req.URL.RawQuery = params.Encode()
+	req.Header.Set("x-ms-copy-source", sourceURL)
+	req.Header.Set("x-ms-source-range", sourceRange)
+	if sourceContentMD5 != nil {
+		req.Header.Set("x-ms-source-content-md5", base64.StdEncoding.EncodeToString(sourceContentMD5))
+	}
+	req.Header.Set("Content-Length", strconv.FormatInt(contentLength, 10))
+	req.Header.Set("x-ms-range", rangeParameter)
+	if leaseID != nil {
+		req.Header.Set("x-ms-lease-id", *leaseID)
+	}
+	if ifSequenceNumberLessThanOrEqualTo != nil {
+		req.Header.Set("x-ms-if-sequence-number-le", strconv.FormatInt(*ifSequenceNumberLessThanOrEqualTo, 10))
+	}
+	if ifSequenceNumberLessThan != nil {
+		req.Header.Set("x-ms-if-sequence-number-lt", strconv.FormatInt(*ifSequenceNumberLessThan, 10))
+	}
+	if ifSequenceNumberEqualTo != nil {
+		req.Header.Set("x-ms-if-sequence-number-eq", strconv.FormatInt(*ifSequenceNumberEqualTo, 10))
+	}
+	if ifModifiedSince != nil {
+		req.Header.Set("If-Modified-Since", (*ifModifiedSince).In(gmt).Format(time.RFC1123))
+	}
+	if ifUnmodifiedSince != nil {
+		req.Header.Set("If-Unmodified-Since", (*ifUnmodifiedSince).In(gmt).Format(time.RFC1123))
+	}
+	if ifMatch != nil {
+		req.Header.Set("If-Match", string(*ifMatch))
+	}
+	if ifNoneMatch != nil {
+		req.Header.Set("If-None-Match", string(*ifNoneMatch))
+	}
+	if sourceIfModifiedSince != nil {
+		req.Header.Set("x-ms-source-if-modified-since", (*sourceIfModifiedSince).In(gmt).Format(time.RFC1123))
+	}
+	if sourceIfUnmodifiedSince != nil {
+		req.Header.Set("x-ms-source-if-unmodified-since", (*sourceIfUnmodifiedSince).In(gmt).Format(time.RFC1123))
+	}
+	if sourceIfMatch != nil {
+		req.Header.Set("x-ms-source-if-match", string(*sourceIfMatch))
+	}
+	if sourceIfNoneMatch != nil {
+		req.Header.Set("x-ms-source-if-none-match", string(*sourceIfNoneMatch))
+	}
+	req.Header.Set("x-ms-version", ServiceVersion)
+	if requestID != nil {
+		req.Header.Set("x-ms-client-request-id", *requestID)
+	}
+	req.Header.Set("x-ms-page-write", "update")
+	return req, nil
+}
+
+// uploadPagesFromURLResponder handles the response to the UploadPagesFromURL request.
+func (client pageBlobClient) uploadPagesFromURLResponder(resp pipeline.Response) (pipeline.Response, error) {
+	err := validateResponse(resp, http.StatusOK, http.StatusCreated)
+	if resp == nil {
+		return nil, err
+	}
+	io.Copy(ioutil.Discard, resp.Response().Body)
+	resp.Response().Body.Close()
+	return &PageBlobUploadPagesFromURLResponse{rawResponse: resp.Response()}, err
 }

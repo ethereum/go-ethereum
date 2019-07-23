@@ -27,6 +27,17 @@ func NewServiceURL(primaryURL url.URL, p pipeline.Pipeline) ServiceURL {
 	return ServiceURL{client: client}
 }
 
+//GetUserDelegationCredential obtains a UserDelegationKey object using the base ServiceURL object.
+//OAuth is required for this call, as well as any role that can delegate access to the storage account.
+func (s ServiceURL) GetUserDelegationCredential(ctx context.Context, info KeyInfo, timeout *int32, requestID *string) (UserDelegationCredential, error) {
+	sc := newServiceClient(s.client.url, s.client.p)
+	udk, err := sc.GetUserDelegationKey(ctx, info, timeout, requestID)
+	if err != nil {
+		return UserDelegationCredential{}, err
+	}
+	return NewUserDelegationCredential(strings.Split(s.client.url.Host, ".")[0], *udk), nil
+}
+
 // URL returns the URL endpoint used by the ServiceURL object.
 func (s ServiceURL) URL() url.URL {
 	return s.client.URL()
@@ -80,7 +91,7 @@ func appendToURLPath(u url.URL, name string) url.URL {
 // https://docs.microsoft.com/rest/api/storageservices/list-containers2.
 func (s ServiceURL) ListContainersSegment(ctx context.Context, marker Marker, o ListContainersSegmentOptions) (*ListContainersSegmentResponse, error) {
 	prefix, include, maxResults := o.pointers()
-	return s.client.ListContainersSegment(ctx, prefix, marker.val, maxResults, include, nil, nil)
+	return s.client.ListContainersSegment(ctx, prefix, marker.Val, maxResults, include, nil, nil)
 }
 
 // ListContainersOptions defines options available when calling ListContainers.
