@@ -121,11 +121,9 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		Inputs    []Argument
 		Outputs   []Argument
 	}
-
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return err
 	}
-
 	abi.Methods = make(map[string]Method)
 	abi.Events = make(map[string]Event)
 	for _, field := range fields {
@@ -144,6 +142,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			}
 			abi.Methods[name] = Method{
 				Name:    name,
+				RawName: field.Name,
 				Const:   field.Constant,
 				Inputs:  field.Inputs,
 				Outputs: field.Outputs,
@@ -157,6 +156,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			}
 			abi.Events[name] = Event{
 				Name:      name,
+				RawName:   field.Name,
 				Anonymous: field.Anonymous,
 				Inputs:    field.Inputs,
 			}

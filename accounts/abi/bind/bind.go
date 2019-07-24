@@ -541,7 +541,7 @@ func formatMethod(method abi.Method, structs map[string]*tmplStruct) string {
 	if method.Const {
 		constant = "constant "
 	}
-	return fmt.Sprintf("function %v(%v) %sreturns(%v)", method.Name, strings.Join(inputs, ", "), constant, strings.Join(outputs, ", "))
+	return fmt.Sprintf("function %v(%v) %sreturns(%v)", method.RawName, strings.Join(inputs, ", "), constant, strings.Join(outputs, ", "))
 }
 
 // formatEvent transforms raw event representation into a user friendly one.
@@ -554,5 +554,5 @@ func formatEvent(event abi.Event, structs map[string]*tmplStruct) string {
 			inputs[i] = fmt.Sprintf("%v %v", resolveArgName(input, structs), input.Name)
 		}
 	}
-	return fmt.Sprintf("event %v(%v)", event.Name, strings.Join(inputs, ", "))
+	return fmt.Sprintf("event %v(%v)", event.RawName, strings.Join(inputs, ", "))
 }
