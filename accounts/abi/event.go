@@ -35,7 +35,7 @@ type Event struct {
 	// There are two events have same name:
 	// * foo(int,int)
 	// * foo(uint,uint)
-	// The method name of the first one wll be resolved as foo while the second one
+	// The event name of the first one wll be resolved as foo while the second one
 	// will be resolved as foo0.
 	Name string
 	// RawName is the raw event name parsed from ABI.
@@ -55,7 +55,7 @@ func (e Event) String() string {
 	return fmt.Sprintf("event %v(%v)", e.RawName, strings.Join(inputs, ", "))
 }
 
-// Sig returns the methods string signature according to the ABI spec.
+// Sig returns the event string signature according to the ABI spec.
 //
 // Example
 //
