@@ -2155,7 +2155,7 @@ func TestTransactionIndices(t *testing.T) {
 	blocks2, _ := GenerateChain(gspec.Config, blocks[len(blocks)-1], ethash.NewFaker(), gendb, 10, nil)
 
 	check := func(oldest *uint64, chain *BlockChain) {
-		indexed := rawdb.ReadOldestIndexedBlock(chain.db)
+		indexed := rawdb.ReadTxIndexTail(chain.db)
 		if oldest == nil && indexed != nil {
 			t.Fatalf("Oldest indexded block mismatch, want nil, have %d", *indexed)
 		}

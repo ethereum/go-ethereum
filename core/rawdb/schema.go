@@ -41,8 +41,8 @@ var (
 	// fastTrieProgressKey tracks the number of trie entries imported during fast sync.
 	fastTrieProgressKey = []byte("TrieSync")
 
-	// oldestIndexedBlockKey tracks the oldest block whose transaction indices(txlookup) has been indexed.
-	oldestIndexedBlockKey = []byte("OldestIndexedBlock")
+	// txIndexTailKey tracks the oldest block whose transaction indices(txlookup) has been indexed.
+	txIndexTailKey = []byte("TxIndexTail")
 
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
 	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header

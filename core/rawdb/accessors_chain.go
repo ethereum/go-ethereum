@@ -171,11 +171,11 @@ func WriteFastTrieProgress(db ethdb.KeyValueWriter, count uint64) {
 	}
 }
 
-// ReadOldestIndexedBlock retrieves the number of oldest indexed block
+// ReadTxIndexTail retrieves the number of oldest indexed block
 // whose transaction indices has been indexed. If the corresponding entry
 // is non-existent in database it means the indexing has been finished.
-func ReadOldestIndexedBlock(db ethdb.KeyValueReader) *uint64 {
-	data, _ := db.Get(oldestIndexedBlockKey)
+func ReadTxIndexTail(db ethdb.KeyValueReader) *uint64 {
+	data, _ := db.Get(txIndexTailKey)
 	if len(data) != 8 {
 		return nil
 	}
@@ -183,10 +183,10 @@ func ReadOldestIndexedBlock(db ethdb.KeyValueReader) *uint64 {
 	return &number
 }
 
-// WriteOldestIndexedBlock stores the number of oldest indexed block
+// WriteTxIndexTail stores the number of oldest indexed block
 // into database.
-func WriteOldestIndexedBlock(db ethdb.KeyValueWriter, number uint64) {
-	if err := db.Put(oldestIndexedBlockKey, encodeBlockNumber(number)); err != nil {
+func WriteTxIndexTail(db ethdb.KeyValueWriter, number uint64) {
+	if err := db.Put(txIndexTailKey, encodeBlockNumber(number)); err != nil {
 		log.Crit("Failed to store the number of oldest indexed block", "err", err)
 	}
 }
@@ -579,14 +579,14 @@ func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 	return a
 }
 
-// FindOldestIndexedBlock binary searches the oldest block which has been indexed.
+// FindTxIndexTail binary searches the oldest block which has been indexed.
 // We will always ensures that if Bi is indexed, then Bi+1 must has been indexed.
 //
 // If no block has been indexed, then the returned value is to+1.
 //
 // The block doesn't contain any transaction will be regarded as unindexed. It can
-// cause the blocks before this block can be reindexed.
-func FindOldestIndexedBlock(db ethdb.Reader, from uint64, to uint64) *uint64 {
+// cause the blocks before this block will be reindexed.
+func FindTxIndexTail(db ethdb.Reader, from uint64, to uint64) *uint64 {
 	low, high := from, to+1
 
 	check := func(number uint64) bool {

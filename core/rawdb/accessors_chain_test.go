@@ -402,7 +402,7 @@ func TestFindOldestIndexedBlock(t *testing.T) {
 				WriteTxLookupEntries(db, block)
 			}
 		}
-		res := FindOldestIndexedBlock(db, c.start, c.end)
+		res := FindTxIndexTail(db, c.start, c.end)
 		if c.expectNil && res != nil {
 			t.Fatalf("Case %d failed, oldest block mismatch, want nil, have %d", cid, *res)
 		}

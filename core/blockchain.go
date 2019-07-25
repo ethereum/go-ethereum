@@ -290,7 +290,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 	// Take ownership of this particular state
 	go bc.update()
-	go bc.updateTxIndices()
+	go bc.maintainTxIndex()
 	return bc, nil
 }
 
@@ -2046,7 +2046,7 @@ func (bc *BlockChain) update() {
 	}
 }
 
-// updateTxIndices is responsible for the construction and deletion of the
+// maintainTxIndex is responsible for the construction and deletion of the
 // transaction index.
 //
 // User can use flag `txlookuplimit` to specify a "recentness" block, below
@@ -2055,22 +2055,12 @@ func (bc *BlockChain) update() {
 //
 // The user can adjust the txlookuplimit value for each launch, Geth will
 // automatically construct the missing indices and delete the extra indices.
-func (bc *BlockChain) updateTxIndices() {
-	var (
-		done   chan struct{} // Non-nil if background unindexing or reindexing routine is active.
-		headCh = make(chan ChainHeadEvent)
-	)
-	sub := bc.SubscribeChainHeadEvent(headCh)
-	defer func() {
-		if sub != nil {
-			sub.Unsubscribe()
-		}
-	}()
+func (bc *BlockChain) maintainTxIndex() {
 	// initialiseIndices inits txlookup indices into the database.
 	// If there already exists some indices, this function will find
 	// the oldest block which has been indexed and start indexing from
 	// this point.
-	initialiseIndices := func(head uint64) {
+	initialiseIndices := func(head uint64, done chan struct{}) {
 		defer func() { done <- struct{}{} }()
 
 		from, to := uint64(0), head
@@ -2080,7 +2070,7 @@ func (bc *BlockChain) updateTxIndices() {
 		// Find oldest indexed block via binary search when we don't
 		// have this flag in database.
 		start := time.Now()
-		oldest := rawdb.FindOldestIndexedBlock(bc.db, from, to)
+		oldest := rawdb.FindTxIndexTail(bc.db, from, to)
 		log.Debug("Find oldest indexed block", "oldest", oldest, "elapsed", common.PrettyDuration(time.Since(start)))
 
 		// Re-construct missing tx indices.
@@ -2091,7 +2081,7 @@ func (bc *BlockChain) updateTxIndices() {
 
 			// Drop all useless tx indices below the HEAD-limit.
 			if from > 0 {
-				oldest := rawdb.FindOldestIndexedBlock(bc.db, 0, from)
+				oldest := rawdb.FindTxIndexTail(bc.db, 0, from)
 				if oldest != nil {
 					rawdb.RemoveTxsLookup(bc.db, *oldest, from)
 				}
@@ -2101,7 +2091,7 @@ func (bc *BlockChain) updateTxIndices() {
 	}
 	// indexBlocks reindex or unindex transaction indices depends
 	// on user's requirement.
-	indexBlocks := func(oldest uint64, head uint64) {
+	indexBlocks := func(oldest uint64, head uint64, done chan struct{}) {
 		defer func() { done <- struct{}{} }()
 
 		// All indices should be reserved.
@@ -2125,16 +2115,26 @@ func (bc *BlockChain) updateTxIndices() {
 			rawdb.RemoveTxsLookup(bc.db, oldest, head-bc.txLookupLimit)
 		}
 	}
+	var (
+		done   chan struct{} // Non-nil if background unindexing or reindexing routine is active.
+		headCh = make(chan ChainHeadEvent)
+	)
+	sub := bc.SubscribeChainHeadEvent(headCh)
+	defer func() {
+		if sub != nil {
+			sub.Unsubscribe()
+		}
+	}()
 
 	for {
 		select {
 		case head := <-headCh:
 			if done == nil {
 				done = make(chan struct{})
-				if number := rawdb.ReadOldestIndexedBlock(bc.db); number == nil {
-					go initialiseIndices(head.Block.NumberU64())
+				if number := rawdb.ReadTxIndexTail(bc.db); number == nil {
+					go initialiseIndices(head.Block.NumberU64(), done)
 				} else {
-					go indexBlocks(*number, head.Block.NumberU64())
+					go indexBlocks(*number, head.Block.NumberU64(), done)
 				}
 			}
 		case <-done:

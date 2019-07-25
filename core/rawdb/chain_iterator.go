@@ -200,13 +200,13 @@ func IndexTxLookup(db ethdb.Database, from uint64, to uint64) {
 	writeIndices := func(batch ethdb.Batch, block *types.Block) {
 		WriteTxLookupEntries(batch, block)
 		if block.NumberU64()%1000000 == 0 {
-			WriteOldestIndexedBlock(batch, block.NumberU64())
+			WriteTxIndexTail(batch, block.NumberU64())
 		}
 	}
 	if err := iterateCanonicalChain(db, from, to, "txlookup", hashTxs, writeIndices, true, true); err != nil {
 		log.Crit("Failed to iterate canonical chain", "err", err)
 	}
-	WriteOldestIndexedBlock(db, from)
+	WriteTxIndexTail(db, from)
 	log.Info("Constructed transaction indices", "from", from, "to", to, "count", to-from)
 }
 
@@ -214,7 +214,7 @@ func IndexTxLookup(db ethdb.Database, from uint64, to uint64) {
 func RemoveTxsLookup(db ethdb.Database, from uint64, to uint64) {
 	// Write flag first and then unindex the transaction indices. Some indices
 	// will be left in the database if crash happens but it's fine.
-	WriteOldestIndexedBlock(db, to)
+	WriteTxIndexTail(db, to)
 
 	if from+1 == to {
 		hash := ReadCanonicalHash(db, from)
