@@ -991,7 +991,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 // transaction hashes.
 func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
 	fields := RPCMarshalHeader(block.Header())
-	fields["size"] = block.Size()
+	fields["size"] = hexutil.Uint64(block.Size())
 
 	if inclTx {
 		formatTx := func(tx *types.Transaction) (interface{}, error) {
