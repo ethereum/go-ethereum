@@ -32,18 +32,17 @@ import (
 // be flagged `false`.
 // Input specifies the required input parameters for this gives method.
 type Method struct {
-	// Name the name of the method used for internal representation. which
-	// It's derived from raw name and will be added suffix when function
-	// overload occurs.
+	// Name is the method name used for internal representation. It's derived from
+	// the raw name and a suffix will be added in the case of a function overload.
 	//
 	// e.g.
 	// There are two functions have same name:
 	// * foo(int,int)
 	// * foo(uint,uint)
-	// The method name of the first one can be resolved as foo while the
-	// second one can be resolved as foo0.
+	// The method name of the first one will be resolved as foo while the second one
+	// will be resolved as foo0.
 	Name string
-	// RawName raw method name parsed from ABI
+	// RawName is the raw method name parsed from ABI.
 	RawName string
 	Const   bool
 	Inputs  Arguments
@@ -84,6 +83,8 @@ func (method Method) String() string {
 	return fmt.Sprintf("function %v(%v) %sreturns(%v)", method.RawName, strings.Join(inputs, ", "), constant, strings.Join(outputs, ", "))
 }
 
-func (method Method) Id() []byte {
+// ID returns the canonical representation of the method's signature used by the
+// abi definition to identify method names and types.
+func (method Method) ID() []byte {
 	return crypto.Keccak256([]byte(method.Sig()))[:4]
 }

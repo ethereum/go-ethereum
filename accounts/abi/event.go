@@ -28,18 +28,17 @@ import (
 // holds type information (inputs) about the yielded output. Anonymous events
 // don't get the signature canonical representation as the first LOG topic.
 type Event struct {
-	// Name the name of the event used for internal representation. which
-	// It's derived from raw name and will be added suffix when event
-	// overload occurs.
+	// Name is the event name used for internal representation. It's derived from
+	// the raw name and a suffix will be added in the case of a event overload.
 	//
 	// e.g.
 	// There are two events have same name:
 	// * foo(int,int)
 	// * foo(uint,uint)
-	// The method name of the first one can be resolved as foo while the
-	// second one can be resolved as foo0.
+	// The method name of the first one wll be resolved as foo while the second one
+	// will be resolved as foo0.
 	Name string
-	// RawName raw method name parsed from ABI
+	// RawName is the raw event name parsed from ABI.
 	RawName   string
 	Anonymous bool
 	Inputs    Arguments
@@ -71,8 +70,8 @@ func (e Event) Sig() string {
 	return fmt.Sprintf("%v(%v)", e.RawName, strings.Join(types, ","))
 }
 
-// Id returns the canonical representation of the event's signature used by the
+// ID returns the canonical representation of the event's signature used by the
 // abi definition to identify event names and types.
-func (e Event) Id() common.Hash {
+func (e Event) ID() common.Hash {
 	return common.BytesToHash(crypto.Keccak256([]byte(e.Sig())))
 }

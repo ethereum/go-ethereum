@@ -180,8 +180,8 @@ func TestMethodSignature(t *testing.T) {
 	}
 
 	idexp := crypto.Keccak256([]byte(exp))[:4]
-	if !bytes.Equal(m.Id(), idexp) {
-		t.Errorf("expected ids to match %x != %x", m.Id(), idexp)
+	if !bytes.Equal(m.ID(), idexp) {
+		t.Errorf("expected ids to match %x != %x", m.ID(), idexp)
 	}
 
 	uintt, _ := NewType("uint256", nil)
@@ -921,13 +921,13 @@ func TestABI_MethodById(t *testing.T) {
 	}
 	for name, m := range abi.Methods {
 		a := fmt.Sprintf("%v", m)
-		m2, err := abi.MethodById(m.Id())
+		m2, err := abi.MethodById(m.ID())
 		if err != nil {
 			t.Fatalf("Failed to look up ABI method: %v", err)
 		}
 		b := fmt.Sprintf("%v", m2)
 		if a != b {
-			t.Errorf("Method %v (id %v) not 'findable' by id in ABI", name, common.ToHex(m.Id()))
+			t.Errorf("Method %v (id %v) not 'findable' by id in ABI", name, common.ToHex(m.ID()))
 		}
 	}
 	// Also test empty
@@ -995,8 +995,8 @@ func TestABI_EventById(t *testing.T) {
 			t.Errorf("We should find a event for topic %s, test #%d", topicID.Hex(), testnum)
 		}
 
-		if event.Id() != topicID {
-			t.Errorf("Event id %s does not match topic %s, test #%d", event.Id().Hex(), topicID.Hex(), testnum)
+		if event.ID() != topicID {
+			t.Errorf("Event id %s does not match topic %s, test #%d", event.ID().Hex(), topicID.Hex(), testnum)
 		}
 
 		unknowntopicID := crypto.Keccak256Hash([]byte("unknownEvent"))
