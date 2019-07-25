@@ -1,12 +1,28 @@
-## v0.4.3 (Unreleased)
+## v0.4.3 (July 25, 2019)
 
 ### Notes
 
-### Features
+- **Docker users:** The `$PASSWORD` and `$DATADIR` environment variables are not supported anymore since this release. From now on you should mount the password or data dirctories as a volume. For example:
+  ```bash
+  $ docker run -it -v $PWD/hostdata:/data \
+                   -v $PWD/password:/password \
+                   ethersphere/swarm:0.4.3 \
+                     --datadir /data \
+                     --password /password
+  ```
 
-### Improvements
+### Bug fixes and improvements
 
-### Bug fixes
+* [#1586](https://github.com/ethersphere/swarm/pull/1586): network: structured output for kademlia table
+* [#1582](https://github.com/ethersphere/swarm/pull/1582): client: add bzz client, update smoke tests
+* [#1578](https://github.com/ethersphere/swarm/pull/1578): swarm-smoke: fix check max prox hosts for pull/push sync modes
+* [#1557](https://github.com/ethersphere/swarm/pull/1557): cmd/swarm: allow using a network interface by name for nat purposes
+* [#1534](https://github.com/ethersphere/swarm/pull/1534): api, network: count chunk deliveries per peer
+* [#1537](https://github.com/ethersphere/swarm/pull/1537): swarm: fix bzz_info.port when using dynamic port allocation
+* [#1531](https://github.com/ethersphere/swarm/pull/1531): cmd/swarm: make bzzaccount flag optional and add bzzkeyhex flag
+* [#1536](https://github.com/ethersphere/swarm/pull/1536): cmd/swarm: use only one function to parse flags
+* [#1530](https://github.com/ethersphere/swarm/pull/1530): network/bitvector: Multibit set/unset + string rep
+* [#1555](https://github.com/ethersphere/swarm/pull/1555): PoC: Network simulation framework
 
 ## v0.4.2 (June 28, 2019)
 
@@ -14,7 +30,7 @@
 
 This release is not backward compatible with the previous versions of Swarm due to changes to the wire protocol of the Retrieve Request messages. Please update your nodes.
 
-### Bug fixes and Improvements
+### Bug fixes and improvements
 
 * [#1503](https://github.com/ethersphere/swarm/pull/1503): network/simulation: add ExecAdapter capability to swarm simulations
 * [#1495](https://github.com/ethersphere/swarm/pull/1495): build: enable ubuntu ppa disco (19.04) builds

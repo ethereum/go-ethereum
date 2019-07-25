@@ -16,7 +16,6 @@ Swarm is a distributed storage platform and content distribution service, a nati
 - [Documentation](#Documentation)
 - [Docker](#Docker)
   - [Docker tags](#Docker-tags)
-  - [Environment variables](#Environment-variables)
   - [Swarm command line arguments](#Swarm-command-line-arguments)
 - [Developers Guide](#Developers-Guide)
   - [Go Environment](#Go-Environment)
@@ -109,11 +108,6 @@ Swarm container images are available at Docker Hub: [ethersphere/swarm](https://
 * `edge` - latest build from `master`
 * `v0.x.y` - specific stable release
 
-### Environment variables
-
-* `PASSWORD` - *required* - Used to setup a sample Ethereum account in the data directory. If a data directory is mounted with a volume, the first Ethereum account from it is loaded, and Swarm will try to decrypt it non-interactively with `PASSWORD`
-* `DATADIR` - *optional* - Defaults to `/root/.ethereum`
-
 ### Swarm command line arguments
 
 All Swarm command line arguments are supported and can be sent as part of the CMD field to the Docker container.
@@ -123,15 +117,16 @@ All Swarm command line arguments are supported and can be sent as part of the CM
 Running a Swarm container from the command line
 
 ```bash
-$ docker run -e PASSWORD=password123 -t ethersphere/swarm \
+$ docker run -it ethersphere/swarm \
                             --debug \
                             --verbosity 4
 ```
 
+
 Running a Swarm container with custom ENS endpoint
 
 ```bash
-$ docker run -e PASSWORD=password123 -t ethersphere/swarm \
+$ docker run -it ethersphere/swarm \
                             --ens-api http://1.2.3.4:8545 \
                             --debug \
                             --verbosity 4
@@ -140,7 +135,7 @@ $ docker run -e PASSWORD=password123 -t ethersphere/swarm \
 Running a Swarm container with metrics enabled
 
 ```bash
-$ docker run -e PASSWORD=password123 -t ethersphere/swarm \
+$ docker run -it ethersphere/swarm \
                             --debug \
                             --metrics \
                             --metrics.influxdb.export \
@@ -155,7 +150,7 @@ $ docker run -e PASSWORD=password123 -t ethersphere/swarm \
 Running a Swarm container with tracing and pprof server enabled
 
 ```bash
-$ docker run -e PASSWORD=password123 -t ethersphere/swarm \
+$ docker run -it ethersphere/swarm \
                             --debug \
                             --tracing \
                             --tracing.endpoint 127.0.0.1:6831 \
@@ -165,10 +160,14 @@ $ docker run -e PASSWORD=password123 -t ethersphere/swarm \
                             --pprofport 6060
 ```
 
-Running a Swarm container with custom data directory mounted from a volume
+Running a Swarm container with a custom data directory mounted from a volume and a password file to unlock the swarm account
 
 ```bash
-$ docker run -e DATADIR=/data -e PASSWORD=password123 -v /tmp/hostdata:/data -t ethersphere/swarm \
+$ docker run -it -v $PWD/hostdata:/data \
+                 -v $PWD/password:/password \
+                 ethersphere/swarm \
+                            --datadir /data \
+                            --password /password \
                             --debug \
                             --verbosity 4
 ```
