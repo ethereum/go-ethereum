@@ -99,6 +99,34 @@ func NewInProc(services map[string]ServiceFunc) (s *Simulation) {
 	return s
 }
 
+// NewBzzInProc is the same as NewInProc but injects bzz as a default protocol
+func NewBzzInProc(services map[string]ServiceFunc) (s *Simulation) {
+	services["bzz"] = func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
+		addr := network.NewAddr(ctx.Config.Node())
+		hp := network.NewHiveParams()
+		hp.KeepAliveInterval = time.Duration(200) * time.Millisecond
+		hp.Discovery = false
+		var kad *network.Kademlia
+
+		// check if another kademlia already exists and load it if necessary - we dont want two independent copies of it
+		if kv, ok := bucket.Load(BucketKeyKademlia); ok {
+			kad = kv.(*network.Kademlia)
+		} else {
+			kad = network.NewKademlia(addr.Over(), network.NewKadParams())
+			bucket.Store(BucketKeyKademlia, kad)
+		}
+
+		config := &network.BzzConfig{
+			OverlayAddr:  addr.Over(),
+			UnderlayAddr: addr.Under(),
+			HiveParams:   hp,
+		}
+		return network.NewBzz(config, kad, nil, nil, nil), nil, nil
+	}
+
+	return NewInProc(services)
+}
+
 // NewExec does the same as New but lets the caller specify the adapter to use
 func NewExec(services map[string]ServiceFunc) (s *Simulation, err error) {
 	s = &Simulation{
