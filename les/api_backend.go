@@ -74,7 +74,11 @@ func (b *LesApiBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	if header == nil || err != nil {
 		return nil, err
 	}
-	return b.GetBlock(ctx, header.Hash())
+	return b.BlockByHash(ctx, header.Hash())
+}
+
+func (b *LesApiBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
+	return b.eth.blockchain.GetBlockByHash(ctx, hash)
 }
 
 func (b *LesApiBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
@@ -86,14 +90,6 @@ func (b *LesApiBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.B
 		return nil, nil, errors.New("header not found")
 	}
 	return light.NewState(ctx, header, b.eth.odr), header, nil
-}
-
-func (b *LesApiBackend) GetHeader(ctx context.Context, hash common.Hash) *types.Header {
-	return b.eth.blockchain.GetHeaderByHash(hash)
-}
-
-func (b *LesApiBackend) GetBlock(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return b.eth.blockchain.GetBlockByHash(ctx, hash)
 }
 
 func (b *LesApiBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
