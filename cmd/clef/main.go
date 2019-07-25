@@ -400,7 +400,7 @@ func initialize(c *cli.Context) error {
 		output = colorable.NewColorable(logOutput)
 	}
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int(logLevelFlag.Name)), log.StreamHandler(output, log.TerminalFormat(usecolor))))
-	
+
 	return nil
 }
 
