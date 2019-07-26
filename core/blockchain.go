@@ -2074,10 +2074,15 @@ func (bc *BlockChain) update() {
 func (bc *BlockChain) maintainTxIndex() {
 	// initialiseIndices inits tx indices into the database if `TxIndexTail`
 	// is missing in database.
-	// Note for archive sync or fast sync, this code path will only be triggered
+	//
+	// Note for archive sync or full sync, this code path will only be triggered
 	// after importing the first batch of blocks(e.g. 1024). But these block
 	// actually are already indexed. So a binary search will be performed to
 	// skip reindexing.
+	//
+	// Besides for old node database which actually contains all indices but
+	// without `TxIndexTail` in database, binary search can also help to skip
+	// reindexing.
 	initialiseIndices := func(head uint64, done chan struct{}) {
 		defer func() { done <- struct{}{} }()
 

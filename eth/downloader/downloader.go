@@ -1721,7 +1721,7 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	if _, err := d.blockchain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{result.Receipts}, d.ancientLimit); err != nil {
 		return err
 	}
-	// Use origin block number + 1 as the number of the first inserted block.
+	// Use origin block number + 1 as the first inserted block number
 	d.syncStatsLock.RLock()
 	from := d.syncStatsChainOrigin + 1
 	d.syncStatsLock.RUnlock()
