@@ -17,11 +17,13 @@
 package trie
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"reflect"
+	"sort"
 	"sync"
 	"time"
 
@@ -705,9 +707,26 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	start := time.Now()
 	batch := db.diskdb.NewBatch()
 
+	type kvPair struct {
+		key   []byte
+		value []byte
+	}
+
+	// Sort preimages to ensure they are written out in deterministic order
+	orderedPreimages := make([]kvPair, 0, len(db.preimages))
+	for hash := range db.preimages {
+		orderedPreimages = append(orderedPreimages, kvPair{
+			key:   common.CopyBytes(hash[:]),
+			value: db.preimages[hash],
+		})
+	}
+	sort.Slice(orderedPreimages, func(j, k int) bool {
+		return bytes.Compare(orderedPreimages[j].key, orderedPreimages[k].key) < 0
+	})
+
 	// Move all of the accumulated preimages into a write batch
-	for hash, preimage := range db.preimages {
-		if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
+	for _, preimage := range orderedPreimages {
+		if err := batch.Put(db.secureKey(preimage.key), preimage.value); err != nil {
 			log.Error("Failed to commit preimage from trie database", "err", err)
 			return err
 		}
