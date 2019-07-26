@@ -81,6 +81,7 @@ type stateObject struct {
 
 	originStorage Storage // Storage cache of original entries to dedup rewrites
 	dirtyStorage  Storage // Storage entries that need to be flushed to disk
+	dirtyStorageKeys []common.Hash // Dirty storage keys in order of insertion into dirtyStorage
 
 	// Cache flags.
 	// When an object is marked suicided it will be delete from the trie
@@ -119,6 +120,7 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 		data:          data,
 		originStorage: make(Storage),
 		dirtyStorage:  make(Storage),
+		dirtyStorageKeys: nil,
 	}
 }
 
@@ -218,6 +220,12 @@ func (s *stateObject) SetState(db Database, key, value common.Hash) {
 
 func (s *stateObject) setState(key, value common.Hash) {
 	s.dirtyStorage[key] = value
+	for _, k := range s.dirtyStorageKeys {
+		if k == key {
+			return
+		}
+	}
+	s.dirtyStorageKeys = append(s.dirtyStorageKeys, key)
 }
 
 // updateTrie writes cached storage modifications into the object's storage trie.
@@ -228,7 +236,10 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	}
 	// Update all the dirty slots in the trie
 	tr := s.getTrie(db)
-	for key, value := range s.dirtyStorage {
+	// Iterate through the storage keys in deterministic order to ensure the storage trie is
+	// identical across machines
+	for _, key := range s.dirtyStorageKeys {
+		value := s.dirtyStorage[key]
 		delete(s.dirtyStorage, key)
 
 		// Skip noop changes, persist actual changes
@@ -323,6 +334,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	}
 	stateObject.code = s.code
 	stateObject.dirtyStorage = s.dirtyStorage.Copy()
+	stateObject.dirtyStorageKeys = append([]common.Hash{}, s.dirtyStorageKeys...)
 	stateObject.originStorage = s.originStorage.Copy()
 	stateObject.suicided = s.suicided
 	stateObject.dirtyCode = s.dirtyCode
