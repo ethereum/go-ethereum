@@ -218,7 +218,7 @@ func (dl *downloadTester) CurrentFastBlock() *types.Block {
 }
 
 // FastSyncCommitHead manually sets the head block to a given hash.
-func (dl *downloadTester) FastSyncCommitHead(hash common.Hash) error {
+func (dl *downloadTester) FastSyncCommitHead(hash common.Hash, from uint64, ancient uint64) error {
 	// For now only check that the state trie is correct
 	if block := dl.GetBlockByHash(hash); block != nil {
 		_, err := trie.NewSecure(block.Root(), trie.NewDatabase(dl.stateDb))

@@ -50,7 +50,7 @@ const (
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
 
-	// minimim number of peers to broadcast new blocks to
+	// minBroadcastPeers is the minimal number of peers to broadcast new blocks to.
 	minBroadcastPeers = 4
 )
 

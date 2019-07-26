@@ -200,7 +200,7 @@ type BlockChain interface {
 	CurrentFastBlock() *types.Block
 
 	// FastSyncCommitHead directly commits the head block to a certain entity.
-	FastSyncCommitHead(common.Hash) error
+	FastSyncCommitHead(common.Hash, uint64, uint64) error
 
 	// InsertChain inserts a batch of blocks into the local chain.
 	InsertChain(types.Blocks) (int, error)
@@ -1721,7 +1721,11 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	if _, err := d.blockchain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{result.Receipts}, d.ancientLimit); err != nil {
 		return err
 	}
-	if err := d.blockchain.FastSyncCommitHead(block.Hash()); err != nil {
+	// Use origin block number + 1 as the number of the first inserted block.
+	d.syncStatsLock.RLock()
+	from := d.syncStatsChainOrigin + 1
+	d.syncStatsLock.RUnlock()
+	if err := d.blockchain.FastSyncCommitHead(block.Hash(), from, d.ancientLimit); err != nil {
 		return err
 	}
 	atomic.StoreInt32(&d.committed, 1)

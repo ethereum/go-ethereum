@@ -457,7 +457,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 
 // FastSyncCommitHead sets the current head block to the one defined by the hash
 // irrelevant what the chain contents were prior.
-func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
+func (bc *BlockChain) FastSyncCommitHead(hash common.Hash, from uint64, ancient uint64) error {
 	// Make sure that both the block as well at its state trie exists
 	block := bc.GetBlockByHash(hash)
 	if block == nil {
@@ -472,6 +472,22 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	headBlockGauge.Update(int64(block.NumberU64()))
 	bc.chainmu.Unlock()
 
+	// Write tx indices tail if it doesn't exist in database.
+	// The tx index tail can only be one of the following two options:
+	// * the start point of fast sync:
+	// 	 in this case all blocks imported during fast sync have been indexed
+	// * ancient - limit:
+	//   in this case the block before ancient-limit won't be indexed
+	if tail := rawdb.ReadTxIndexTail(bc.db); tail == nil {
+		if bc.txLookupLimit != 0 && ancient >= bc.txLookupLimit && ancient-bc.txLookupLimit > from {
+			rawdb.WriteTxIndexTail(bc.db, ancient-bc.txLookupLimit)
+		} else {
+			if from == 1 {
+				from = 0
+			}
+			rawdb.WriteTxIndexTail(bc.db, from)
+		}
+	}
 	log.Info("Committed new head block", "number", block.Number(), "hash", hash)
 	return nil
 }
@@ -1091,11 +1107,14 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			// Flush data into ancient database.
 			size += rawdb.WriteAncientBlock(bc.db, block, receiptChain[i], bc.GetTd(block.Hash(), block.NumberU64()))
 
-			// We don't write tx lookup indices here because Geth can offer a CLI flag `txlookuplimt`
-			// with which user can choose to drop historical indices data and only keep latest indices.
-			// After the fast sync, we will reconstruct all missing indices even user requires to keep
-			// all historical indices.
-
+			// Write tx indices if any condition is satisfied:
+			// * If user requires to reserve all tx indices(txlookuplimit=0)
+			// * If all ancient tx indices are required to be reserved(txlookuplimit is even higher than ancientlimit)
+			// * If block number is large enough to be regarded as a recent block
+			// It means blocks below the ancientLimit-txlookupLimit won't be indexed.
+			if bc.txLookupLimit == 0 || ancientLimit <= bc.txLookupLimit || block.NumberU64() >= ancientLimit-bc.txLookupLimit {
+				rawdb.WriteTxLookupEntries(batch, block)
+			}
 			stats.processed++
 		}
 		// Flush all tx-lookup index data.
@@ -1169,11 +1188,8 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			// Write all the data out into the database
 			rawdb.WriteBody(batch, block.Hash(), block.NumberU64(), block.Body())
 			rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receiptChain[i])
-
-			// We don't write tx lookup indices here because Geth can offer a CLI flag `txlookuplimt`
-			// with which user can choose to drop historical indices data and only keep latest indices.
-			// After the fast sync, we will reconstruct all missing indices even user requires to keep
-			// all historical indices.
+			// We always write tx indices for live block since we assume the indices are needed.
+			rawdb.WriteTxLookupEntries(batch, block)
 
 			stats.processed++
 			if batch.ValueSize() >= ethdb.IdealBatchSize {
@@ -2056,10 +2072,12 @@ func (bc *BlockChain) update() {
 // The user can adjust the txlookuplimit value for each launch, Geth will
 // automatically construct the missing indices and delete the extra indices.
 func (bc *BlockChain) maintainTxIndex() {
-	// initialiseIndices inits txlookup indices into the database.
-	// If there already exists some indices, this function will find
-	// the oldest block which has been indexed and start indexing from
-	// this point.
+	// initialiseIndices inits tx indices into the database if `TxIndexTail`
+	// is missing in database.
+	// Note for archive sync or fast sync, this code path will only be triggered
+	// after importing the first batch of blocks(e.g. 1024). But these block
+	// actually are already indexed. So a binary search will be performed to
+	// skip reindexing.
 	initialiseIndices := func(head uint64, done chan struct{}) {
 		defer func() { done <- struct{}{} }()
 
@@ -2067,27 +2085,26 @@ func (bc *BlockChain) maintainTxIndex() {
 		if bc.txLookupLimit != 0 && head > bc.txLookupLimit {
 			from = head - bc.txLookupLimit
 		}
-		// Find oldest indexed block via binary search when we don't
-		// have this flag in database.
-		start := time.Now()
-		oldest := rawdb.FindTxIndexTail(bc.db, from, to)
-		log.Debug("Find oldest indexed block", "oldest", oldest, "elapsed", common.PrettyDuration(time.Since(start)))
+		if tail := rawdb.FindTxIndexTail(bc.db, from, to); tail != nil {
+			// Special case here is genesis block doesn't contain any transaction
+			// that will be regarded as unindexed.
+			if *tail == from || (from == 0 && *tail == 1) {
+				rawdb.WriteTxIndexTail(bc.db, from)
 
-		// Re-construct missing tx indices.
-		if oldest == nil {
-			rawdb.IndexTxLookup(bc.db, from, to) // No block has been indexed.
-		} else {
-			rawdb.IndexTxLookup(bc.db, from, *oldest)
-
-			// Drop all useless tx indices below the HEAD-limit.
-			if from > 0 {
-				oldest := rawdb.FindTxIndexTail(bc.db, 0, from)
-				if oldest != nil {
-					rawdb.RemoveTxsLookup(bc.db, *oldest, from)
+				// Drop all useless tx indices below the HEAD-limit.
+				if from > 0 {
+					rawdb.RemoveTxsLookup(bc.db, 0, from)
 				}
+				return
 			}
 		}
-		log.Debug("Initialised transaction indices", "elapsed", common.PrettyDuration(time.Since(start)))
+		// Re-construct missing tx indices.
+		rawdb.IndexTxLookup(bc.db, from, to)
+
+		// Drop all useless tx indices below the HEAD-limit.
+		if from > 0 {
+			rawdb.RemoveTxsLookup(bc.db, 0, from)
+		}
 	}
 	// indexBlocks reindex or unindex transaction indices depends
 	// on user's requirement.
@@ -2131,10 +2148,10 @@ func (bc *BlockChain) maintainTxIndex() {
 		case head := <-headCh:
 			if done == nil {
 				done = make(chan struct{})
-				if number := rawdb.ReadTxIndexTail(bc.db); number == nil {
+				if tail := rawdb.ReadTxIndexTail(bc.db); tail == nil {
 					go initialiseIndices(head.Block.NumberU64(), done)
 				} else {
-					go indexBlocks(*number, head.Block.NumberU64(), done)
+					go indexBlocks(*tail, head.Block.NumberU64(), done)
 				}
 			}
 		case <-done:

@@ -199,15 +199,16 @@ func IndexTxLookup(db ethdb.Database, from uint64, to uint64) {
 	// writeIndices injects txlookup indices into the database.
 	writeIndices := func(batch ethdb.Batch, block *types.Block) {
 		WriteTxLookupEntries(batch, block)
-		if block.NumberU64()%1000000 == 0 {
+		if block.NumberU64()%100000 == 0 {
 			WriteTxIndexTail(batch, block.NumberU64())
 		}
 	}
+	start := time.Now()
 	if err := iterateCanonicalChain(db, from, to, "txlookup", hashTxs, writeIndices, true, true); err != nil {
 		log.Crit("Failed to iterate canonical chain", "err", err)
 	}
 	WriteTxIndexTail(db, from)
-	log.Info("Constructed transaction indices", "from", from, "to", to, "count", to-from)
+	log.Info("Constructed transaction indices", "from", from, "to", to, "count", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
 }
 
 // RemoveTxsLookup removes txlookup indices of the specified range blocks.
