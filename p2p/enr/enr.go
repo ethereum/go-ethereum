@@ -156,11 +156,21 @@ func (r *Record) Set(e Entry) {
 }
 
 func (r *Record) invalidate() {
-	if r.signature == nil {
+	if r.signature != nil {
 		r.seq++
 	}
 	r.signature = nil
 	r.raw = nil
+}
+
+// Signature returns the signature of the record.
+func (r *Record) Signature() []byte {
+	if r.signature == nil {
+		return nil
+	}
+	cpy := make([]byte, len(r.signature))
+	copy(cpy, r.signature)
+	return cpy
 }
 
 // EncodeRLP implements rlp.Encoder. Encoding fails if
@@ -173,7 +183,7 @@ func (r Record) EncodeRLP(w io.Writer) error {
 	return err
 }
 
-// DecodeRLP implements rlp.Decoder. Decoding verifies the signature.
+// DecodeRLP implements rlp.Decoder. Decoding doesn't verify the signature.
 func (r *Record) DecodeRLP(s *rlp.Stream) error {
 	dec, raw, err := decodeRecord(s)
 	if err != nil {

@@ -25,17 +25,17 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
 func TestNodeIterator(t *testing.T) {
 	var (
-		fulldb  = ethdb.NewMemDatabase()
-		lightdb = ethdb.NewMemDatabase()
+		fulldb  = rawdb.NewMemoryDatabase()
+		lightdb = rawdb.NewMemoryDatabase()
 		gspec   = core.Genesis{Alloc: core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}}}
 		genesis = gspec.MustCommit(fulldb)
 	)
@@ -64,7 +64,7 @@ func diffTries(t1, t2 state.Trie) error {
 			spew.Dump(i2)
 			return fmt.Errorf("tries have different keys %x, %x", i1.Key, i2.Key)
 		}
-		if !bytes.Equal(i2.Value, i2.Value) {
+		if !bytes.Equal(i1.Value, i2.Value) {
 			return fmt.Errorf("tries differ at key %x", i1.Key)
 		}
 	}

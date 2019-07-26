@@ -32,4 +32,7 @@ var (
 	// ErrNonceTooHigh is returned if the nonce of a transaction is higher than the
 	// next one expected based on the local chain.
 	ErrNonceTooHigh = errors.New("nonce too high")
+
+	// ErrNoGenesis is returned when there is no Genesis Block.
+	ErrNoGenesis = errors.New("genesis not found in chain")
 )

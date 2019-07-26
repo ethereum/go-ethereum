@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
 // Protocol represents a P2P subprotocol implementation.
@@ -52,6 +53,9 @@ type Protocol struct {
 	// about a certain peer in the network. If an info retrieval function is set,
 	// but returns nil, it is assumed that the protocol handshake is still running.
 	PeerInfo func(id enode.ID) interface{}
+
+	// Attributes contains protocol specific information for the node record.
+	Attributes []enr.Entry
 }
 
 func (p Protocol) cap() Cap {
@@ -62,10 +66,6 @@ func (p Protocol) cap() Cap {
 type Cap struct {
 	Name    string
 	Version uint
-}
-
-func (cap Cap) RlpData() interface{} {
-	return []interface{}{cap.Name, cap.Version}
 }
 
 func (cap Cap) String() string {

@@ -290,11 +290,12 @@ type Tracer struct {
 	contractWrapper *contractWrapper // Wrapper around the contract object
 	dbWrapper       *dbWrapper       // Wrapper around the VM environment
 
-	pcValue    *uint   // Swappable pc value wrapped by a log accessor
-	gasValue   *uint   // Swappable gas value wrapped by a log accessor
-	costValue  *uint   // Swappable cost value wrapped by a log accessor
-	depthValue *uint   // Swappable depth value wrapped by a log accessor
-	errorValue *string // Swappable error value wrapped by a log accessor
+	pcValue     *uint   // Swappable pc value wrapped by a log accessor
+	gasValue    *uint   // Swappable gas value wrapped by a log accessor
+	costValue   *uint   // Swappable cost value wrapped by a log accessor
+	depthValue  *uint   // Swappable depth value wrapped by a log accessor
+	errorValue  *string // Swappable error value wrapped by a log accessor
+	refundValue *uint   // Swappable refund value wrapped by a log accessor
 
 	ctx map[string]interface{} // Transaction context gathered throughout execution
 	err error                  // Error, if one has occurred
@@ -323,6 +324,7 @@ func New(code string) (*Tracer, error) {
 		gasValue:        new(uint),
 		costValue:       new(uint),
 		depthValue:      new(uint),
+		refundValue:     new(uint),
 	}
 	// Set up builtins for this environment
 	tracer.vm.PushGlobalGoFunction("toHex", func(ctx *duktape.Context) int {
@@ -362,6 +364,28 @@ func New(code string) (*Tracer, error) {
 		ctx.Pop2()
 
 		contract := crypto.CreateAddress(from, nonce)
+		copy(makeSlice(ctx.PushFixedBuffer(20), 20), contract[:])
+		return 1
+	})
+	tracer.vm.PushGlobalGoFunction("toContract2", func(ctx *duktape.Context) int {
+		var from common.Address
+		if ptr, size := ctx.GetBuffer(-3); ptr != nil {
+			from = common.BytesToAddress(makeSlice(ptr, size))
+		} else {
+			from = common.HexToAddress(ctx.GetString(-3))
+		}
+		// Retrieve salt hex string from js stack
+		salt := common.HexToHash(ctx.GetString(-2))
+		// Retrieve code slice from js stack
+		var code []byte
+		if ptr, size := ctx.GetBuffer(-1); ptr != nil {
+			code = common.CopyBytes(makeSlice(ptr, size))
+		} else {
+			code = common.FromHex(ctx.GetString(-1))
+		}
+		codeHash := crypto.Keccak256(code)
+		ctx.Pop3()
+		contract := crypto.CreateAddress2(from, salt, codeHash)
 		copy(makeSlice(ctx.PushFixedBuffer(20), 20), contract[:])
 		return 1
 	})
@@ -441,6 +465,9 @@ func New(code string) (*Tracer, error) {
 
 	tracer.vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushUint(*tracer.depthValue); return 1 })
 	tracer.vm.PutPropString(logObject, "getDepth")
+
+	tracer.vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushUint(*tracer.refundValue); return 1 })
+	tracer.vm.PutPropString(logObject, "getRefund")
 
 	tracer.vm.PushGoFunction(func(ctx *duktape.Context) int {
 		if tracer.errorValue != nil {
@@ -527,6 +554,7 @@ func (jst *Tracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost 
 		*jst.gasValue = uint(gas)
 		*jst.costValue = uint(cost)
 		*jst.depthValue = uint(depth)
+		*jst.refundValue = uint(env.StateDB.GetRefund())
 
 		jst.errorValue = nil
 		if err != nil {

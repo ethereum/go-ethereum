@@ -27,9 +27,9 @@ import (
 // If the method is `Const` no transaction needs to be created for this
 // particular Method call. It can easily be simulated using a local VM.
 // For example a `Balance()` method only needs to retrieve something
-// from the storage and therefor requires no Tx to be send to the
+// from the storage and therefore requires no Tx to be send to the
 // network. A method such as `Transact` does require a Tx and thus will
-// be flagged `true`.
+// be flagged `false`.
 // Input specifies the required input parameters for this gives method.
 type Method struct {
 	Name    string
@@ -56,14 +56,14 @@ func (method Method) Sig() string {
 func (method Method) String() string {
 	inputs := make([]string, len(method.Inputs))
 	for i, input := range method.Inputs {
-		inputs[i] = fmt.Sprintf("%v %v", input.Name, input.Type)
+		inputs[i] = fmt.Sprintf("%v %v", input.Type, input.Name)
 	}
 	outputs := make([]string, len(method.Outputs))
 	for i, output := range method.Outputs {
+		outputs[i] = output.Type.String()
 		if len(output.Name) > 0 {
-			outputs[i] = fmt.Sprintf("%v ", output.Name)
+			outputs[i] += fmt.Sprintf(" %v", output.Name)
 		}
-		outputs[i] += output.Type.String()
 	}
 	constant := ""
 	if method.Const {

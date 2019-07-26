@@ -30,10 +30,6 @@ const (
 	GasMidStep     uint64 = 8
 	GasSlowStep    uint64 = 10
 	GasExtStep     uint64 = 20
-
-	GasReturn       uint64 = 0
-	GasStop         uint64 = 0
-	GasContractByte uint64 = 200
 )
 
 // calcGas returns the actual gas cost of the call.
@@ -47,11 +43,11 @@ func callGas(gasTable params.GasTable, availableGas, base uint64, callCost *big.
 		// If the bit length exceeds 64 bit we know that the newly calculated "gas" for EIP150
 		// is smaller than the requested amount. Therefor we return the new gas instead
 		// of returning an error.
-		if callCost.BitLen() > 64 || gas < callCost.Uint64() {
+		if !callCost.IsUint64() || gas < callCost.Uint64() {
 			return gas, nil
 		}
 	}
-	if callCost.BitLen() > 64 {
+	if !callCost.IsUint64() {
 		return 0, errGasUintOverflow
 	}
 

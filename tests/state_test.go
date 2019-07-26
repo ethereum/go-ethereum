@@ -17,11 +17,14 @@
 package tests
 
 import (
+	"bufio"
 	"bytes"
+	"flag"
 	"fmt"
 	"reflect"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
@@ -43,16 +46,16 @@ func TestState(t *testing.T) {
 	st.skipLoad(`^stTransactionTest/OverflowGasRequire\.json`) // gasLimit > 256 bits
 	st.skipLoad(`^stTransactionTest/zeroSigTransa[^/]*\.json`) // EIP-86 is not supported yet
 	// Expected failures:
-	st.fails(`^stRevertTest/RevertPrecompiledTouch\.json/EIP158`, "bug in test")
-	st.fails(`^stRevertTest/RevertPrecompiledTouch\.json/Byzantium`, "bug in test")
+	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Byzantium/0`, "bug in test")
+	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Byzantium/3`, "bug in test")
+	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Constantinople/0`, "bug in test")
+	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Constantinople/3`, "bug in test")
+	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/ConstantinopleFix/0`, "bug in test")
+	st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/ConstantinopleFix/3`, "bug in test")
 
 	st.walk(t, stateTestDir, func(t *testing.T, name string, test *StateTest) {
 		for _, subtest := range test.Subtests() {
 			subtest := subtest
-			if subtest.Fork == "Constantinople" {
-				// Skipping constantinople due to net sstore gas changes affecting all tests
-				continue
-			}
 			key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
 			name := name + "/" + key
 			t.Run(key, func(t *testing.T) {
@@ -68,8 +71,17 @@ func TestState(t *testing.T) {
 // Transactions with gasLimit above this value will not get a VM trace on failure.
 const traceErrorLimit = 400000
 
+// The VM config for state tests that accepts --vm.* command line arguments.
+var testVMConfig = func() vm.Config {
+	vmconfig := vm.Config{}
+	flag.StringVar(&vmconfig.EVMInterpreter, utils.EVMInterpreterFlag.Name, utils.EVMInterpreterFlag.Value, utils.EVMInterpreterFlag.Usage)
+	flag.StringVar(&vmconfig.EWASMInterpreter, utils.EWASMInterpreterFlag.Name, utils.EWASMInterpreterFlag.Value, utils.EWASMInterpreterFlag.Usage)
+	flag.Parse()
+	return vmconfig
+}()
+
 func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
-	err := test(vm.Config{})
+	err := test(testVMConfig)
 	if err == nil {
 		return
 	}
@@ -78,18 +90,19 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 		t.Log("gas limit too high for EVM trace")
 		return
 	}
-	tracer := vm.NewStructLogger(nil)
+	buf := new(bytes.Buffer)
+	w := bufio.NewWriter(buf)
+	tracer := vm.NewJSONLogger(&vm.LogConfig{DisableMemory: true}, w)
 	err2 := test(vm.Config{Debug: true, Tracer: tracer})
 	if !reflect.DeepEqual(err, err2) {
 		t.Errorf("different error for second run: %v", err2)
 	}
-	buf := new(bytes.Buffer)
-	vm.WriteTrace(buf, tracer.StructLogs())
+	w.Flush()
 	if buf.Len() == 0 {
 		t.Log("no EVM operation logs generated")
 	} else {
 		t.Log("EVM operation log:\n" + buf.String())
 	}
-	t.Logf("EVM output: 0x%x", tracer.Output())
-	t.Logf("EVM error: %v", tracer.Error())
+	//t.Logf("EVM output: 0x%x", tracer.Output())
+	//t.Logf("EVM error: %v", tracer.Error())
 }
