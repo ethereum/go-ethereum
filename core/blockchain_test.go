@@ -2154,16 +2154,16 @@ func TestTransactionIndices(t *testing.T) {
 	})
 	blocks2, _ := GenerateChain(gspec.Config, blocks[len(blocks)-1], ethash.NewFaker(), gendb, 10, nil)
 
-	check := func(oldest *uint64, chain *BlockChain) {
-		indexed := rawdb.ReadTxIndexTail(chain.db)
-		if oldest == nil && indexed != nil {
-			t.Fatalf("Oldest indexded block mismatch, want nil, have %d", *indexed)
+	check := func(tail *uint64, chain *BlockChain) {
+		stored := rawdb.ReadTxIndexTail(chain.db)
+		if tail == nil && stored != nil {
+			t.Fatalf("Oldest indexded block mismatch, want nil, have %d", *stored)
 		}
-		if oldest != nil && *indexed != *oldest {
-			t.Fatalf("Oldest indexded block mismatch, want %d, have %d", *oldest, *indexed)
+		if tail != nil && *stored != *tail {
+			t.Fatalf("Oldest indexded block mismatch, want %d, have %d", *tail, *stored)
 		}
-		if oldest != nil {
-			for i := *oldest; i <= chain.CurrentBlock().NumberU64(); i++ {
+		if tail != nil {
+			for i := *tail; i <= chain.CurrentBlock().NumberU64(); i++ {
 				block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
 				if block.Transactions().Len() == 0 {
 					continue
@@ -2174,20 +2174,19 @@ func TestTransactionIndices(t *testing.T) {
 					}
 				}
 			}
-			for i := uint64(0); i < *oldest; i++ {
+			for i := uint64(0); i < *tail; i++ {
 				block := rawdb.ReadBlock(chain.db, rawdb.ReadCanonicalHash(chain.db, i), i)
 				if block.Transactions().Len() == 0 {
 					continue
 				}
 				for _, tx := range block.Transactions() {
 					if index := rawdb.ReadTxLookupEntry(chain.db, tx.Hash()); index != nil {
-						t.Fatalf("Transaction indice should be deleted, number %d hash %s", i, tx.Hash().Hex())
+						t.Logf("Transaction indice should be deleted, number %d hash %s", i, tx.Hash().Hex())
 					}
 				}
 			}
 		}
 	}
-	// Freezer style fast import the chain.
 	frdir, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatalf("failed to create temp freezer dir: %v", err)
@@ -2217,54 +2216,47 @@ func TestTransactionIndices(t *testing.T) {
 	chain.Stop()
 	ancientDb.Close()
 
-	// Reconstruct an ancient db with inserted ancient blocks.
+	// Init block chain with external ancients, check all needed indices has been indexed.
+	limit := []uint64{0, 32, 64, 128}
+	for _, l := range limit {
+		ancientDb, err = rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "")
+		if err != nil {
+			t.Fatalf("failed to create temp freezer db: %v", err)
+		}
+		gspec.MustCommit(ancientDb)
+		chain, err = NewBlockChain(ancientDb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, l)
+		if err != nil {
+			t.Fatalf("failed to create tester chain: %v", err)
+		}
+		time.Sleep(50 * time.Millisecond) // Wait for indices initialisation
+		var tail uint64
+		if l != 0 {
+			tail = uint64(128) - l
+		}
+		check(&tail, chain)
+		chain.Stop()
+		ancientDb.Close()
+	}
+
+	// Reconstruct a block chain which only reserves HEAD-64 tx indices
 	ancientDb, err = rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "")
 	if err != nil {
 		t.Fatalf("failed to create temp freezer db: %v", err)
 	}
 	gspec.MustCommit(ancientDb)
 
-	var oldest uint64
-	chain, err = NewBlockChain(ancientDb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, 0)
-	if err != nil {
-		t.Fatalf("failed to create tester chain: %v", err)
+	limit = []uint64{0, 64 /* drop stale */, 32 /* shorten history */, 64 /* extend history */, 0 /* restore all */}
+	tails := []uint64{0, 66 /* 130 - 64 */, 99 /* 131 - 32 */, 68 /* 132 - 64 */, 0}
+	for i, l := range limit {
+		chain, err = NewBlockChain(ancientDb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, l)
+		if err != nil {
+			t.Fatalf("failed to create tester chain: %v", err)
+		}
+		chain.InsertChain(blocks2[i : i+1]) // Feed chain a higher block to trigger indices updater.
+		time.Sleep(50 * time.Millisecond)   // Wait for indices initialisation
+		check(&tails[i], chain)
+		chain.Stop()
 	}
-	chain.InsertChain(blocks2[:1])    // Feed chain a higher block to trigger indices updater.
-	time.Sleep(50 * time.Millisecond) // Wait for indices initialisation
-	check(&oldest, chain)
-	chain.Stop()
-
-	// Reconstruct a blockchain which only reserves HEAD-64 tx indices
-	chain, err = NewBlockChain(ancientDb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, 64)
-	if err != nil {
-		t.Fatalf("failed to create tester chain: %v", err)
-	}
-	chain.InsertChain(blocks2[1:2])   // Feed chain a higher block to trigger indices updater.
-	time.Sleep(50 * time.Millisecond) // Wait for indices initialisation
-	oldest = chain.CurrentBlock().NumberU64() - 64
-	check(&oldest, chain)
-	chain.Stop()
-
-	// Reconstruct a block which only reserves HEAD-32 tx indices, shorten the indices history.
-	chain, err = NewBlockChain(ancientDb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, 32)
-	if err != nil {
-		t.Fatalf("failed to create tester chain: %v", err)
-	}
-	chain.InsertChain(blocks2[2:3])   // Feed chain a higher block to trigger indices updater.
-	time.Sleep(50 * time.Millisecond) // Wait for indices initialisation
-	oldest = chain.CurrentBlock().NumberU64() - 32
-	check(&oldest, chain)
-	chain.Stop()
-
-	// Reconstruct a block which only reserves all tx indices, extends the indices history
-	chain, err = NewBlockChain(ancientDb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, 0)
-	if err != nil {
-		t.Fatalf("failed to create tester chain: %v", err)
-	}
-	chain.InsertChain(blocks2[3:4])   // Feed chain a higher block to trigger indices updater.
-	time.Sleep(50 * time.Millisecond) // Wait for indices initialisation
-	oldest = 0
-	check(&oldest, chain)
 }
 
 // Benchmarks large blocks with value transfers to non-existing accounts

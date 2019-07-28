@@ -1727,11 +1727,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 		cache.TrieDirtyLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
 	}
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
-	txLookupLimit := uint64(0)
-	if ctx.GlobalIsSet(TxLookupLimitFlag.Name) {
-		txLookupLimit = ctx.GlobalUint64(TxLookupLimitFlag.Name)
-	}
-	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, txLookupLimit)
+	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, 0)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

@@ -191,6 +191,23 @@ func WriteTxIndexTail(db ethdb.KeyValueWriter, number uint64) {
 	}
 }
 
+// ReadFastTxLookupLimit retrieves the tx lookup limit used in fast sync.
+func ReadFastTxLookupLimit(db ethdb.KeyValueReader) *uint64 {
+	data, _ := db.Get(fastTxLookupLimitKey)
+	if len(data) != 8 {
+		return nil
+	}
+	number := binary.BigEndian.Uint64(data)
+	return &number
+}
+
+// WriteFastTxLookupLimit stores the txlookup limit used in fast sync into database.
+func WriteFastTxLookupLimit(db ethdb.KeyValueWriter, number uint64) {
+	if err := db.Put(fastTxLookupLimitKey, encodeBlockNumber(number)); err != nil {
+		log.Crit("Failed to store txlookup limit for fast sync", "err", err)
+	}
+}
+
 // ReadHeaderRLP retrieves a block header in its raw RLP database encoding.
 func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	data, _ := db.Ancient(freezerHeaderTable, number)
@@ -577,41 +594,4 @@ func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 		}
 	}
 	return a
-}
-
-// FindTxIndexTail binary searches the oldest block which has been indexed.
-// We will always ensures that if Bi is indexed, then Bi+1 must has been indexed.
-//
-// If no block has been indexed, then the returned value is to+1.
-//
-// The block doesn't contain any transaction will be regarded as unindexed. It can
-// cause the blocks before this block will be reindexed.
-func FindTxIndexTail(db ethdb.Reader, from uint64, to uint64) *uint64 {
-	low, high := from, to+1
-
-	check := func(number uint64) bool {
-		block := ReadBlock(db, ReadCanonicalHash(db, number), number)
-		if block == nil {
-			log.Crit("Failed to retrieve block from database", "number", number)
-		}
-		if block.Transactions().Len() == 0 {
-			return false
-		}
-		if ReadTxLookupEntry(db, block.Transactions()[0].Hash()) == nil {
-			return false
-		}
-		return true
-	}
-	for low != high {
-		mid := (low + high) / 2
-		if !check(mid) {
-			low = mid + 1
-		} else {
-			high = mid
-		}
-	}
-	if low == to+1 {
-		return nil
-	}
-	return &low
 }

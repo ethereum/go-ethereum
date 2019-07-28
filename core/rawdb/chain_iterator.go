@@ -35,9 +35,9 @@ type (
 	actionCallback  func(ethdb.Batch, *types.Block) // The callback for customized action.
 )
 
-// iterateCanonicalChain iterates the specified range canonical chain and then apply
-// the given action callback.
-// Note for forward iteration, the range is [from, to), otherwise the range is (from, to].
+// iterateCanonicalChain iterates the specified range canonical chain and then
+// apply the given action callback.
+// Note both for forward and backward iteration, the range is [from, to).
 func iterateCanonicalChain(db ethdb.Database, from uint64, to uint64, typ string, prepare prepareCallback, action actionCallback, reverse bool, report bool) error {
 	// Short circuit if the action is nil.
 	if action == nil {
@@ -56,7 +56,7 @@ func iterateCanonicalChain(db ethdb.Database, from uint64, to uint64, typ string
 	if !reverse {
 		number = int64(from - 1)
 	} else {
-		number = int64(to + 1)
+		number = int64(to)
 	}
 	abort := make(chan struct{})
 	defer close(abort)
@@ -73,7 +73,7 @@ func iterateCanonicalChain(db ethdb.Database, from uint64, to uint64, typ string
 					}
 				} else {
 					n = atomic.AddInt64(&number, -1)
-					if n <= int64(from) {
+					if n < int64(from) {
 						return
 					}
 				}
@@ -102,7 +102,7 @@ func iterateCanonicalChain(db ethdb.Database, from uint64, to uint64, typ string
 	if !reverse {
 		next, first, last = int64(from), int64(from), int64(to)
 	} else {
-		next, first, last = int64(to), int64(to), int64(from)
+		next, first, last = int64(to-1), int64(to-1), int64(from-1)
 	}
 	logFn := log.Debug
 	if report {
@@ -156,8 +156,7 @@ func iterateCanonicalChain(db ethdb.Database, from uint64, to uint64, typ string
 
 // InitBlockIndexFromFreezer reinitializes an empty database from a previous batch
 // of frozen ancient blocks. The method iterates over all the frozen blocks and
-// injects into the database the block hash->number mappings and the transaction
-// lookup entries.
+// injects into the database the block hash->number mappings.
 func InitBlockIndexFromFreezer(db ethdb.Database) {
 	// If we can't access the freezer or it's empty, abort
 	frozen, err := db.Ancients()
@@ -180,14 +179,12 @@ func InitBlockIndexFromFreezer(db ethdb.Database) {
 	log.Info("Initialized chain from ancient data", "number", frozen-1, "hash", hash)
 }
 
-// IndexTxLookup initializes txlookup indices of the specified range blocks into the database.
+// IndexTxLookup initializes txlookup indices of the specified range blocks into
+// the database.
 //
-// This function iterates canonical chain in reverse order, it has two advantages:
-// * If Geth crashes during the indexing without writing the oldest flag, we can
-//   binary search to quickly locate the oldest indexed block
-// * We can write oldest indexed block flag periodically even without the whole
-//   indexing procedure is finished. So that we can resume indexing procedure next
-//   time quickly.
+// This function iterates canonical chain in reverse order, it has one main advantage:
+// We can write tx index tail flag periodically even without the whole indexing
+// procedure is finished. So that we can resume indexing procedure next time quickly.
 func IndexTxLookup(db ethdb.Database, from uint64, to uint64) {
 	// hashTxs calculates transaction hash in advance using the multi-routine's
 	// concurrent computing power.
@@ -199,7 +196,7 @@ func IndexTxLookup(db ethdb.Database, from uint64, to uint64) {
 	// writeIndices injects txlookup indices into the database.
 	writeIndices := func(batch ethdb.Batch, block *types.Block) {
 		WriteTxLookupEntries(batch, block)
-		if block.NumberU64()%100000 == 0 {
+		if block.NumberU64() == to-1 || block.NumberU64()%10000 == 0 {
 			WriteTxIndexTail(batch, block.NumberU64())
 		}
 	}
