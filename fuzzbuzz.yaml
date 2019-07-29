@@ -1,0 +1,10 @@
+base: ubuntu:16.04
+targets:
+  - name: rlp
+    language: go
+    version: "1.11"
+    corpus: ./corpus/rlp
+    harness:
+      function: Fuzz
+      package: github.com/ethereum/go-ethereum/fuzzers/rlp
+      checkout: github.com/ethereum/go-ethereum/
