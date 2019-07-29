@@ -201,7 +201,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		if stored := rawdb.ReadFastTxLookupLimit(pm.chaindb); stored == nil {
 			rawdb.WriteFastTxLookupLimit(pm.chaindb, limit)
 		} else if *stored != limit {
-			pm.blockchain.AdjustTxLookupLimit(*stored)
+			pm.blockchain.SetTxLookupLimit(*stored)
 			log.Warn("Update txLookup limit", "provided", limit, "updated", *stored)
 		}
 	}

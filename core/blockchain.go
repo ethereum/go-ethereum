@@ -1253,10 +1253,10 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	return 0, nil
 }
 
-// AdjustTxLookupLimit is responsible for updating the txlookup limit
+// SetTxLookupLimit is responsible for updating the txlookup limit
 // to the original one stored in db if the new old mismatch with the old
 // one.
-func (bc *BlockChain) AdjustTxLookupLimit(limit uint64) {
+func (bc *BlockChain) SetTxLookupLimit(limit uint64) {
 	bc.txLookupLimit = limit
 }
 
@@ -2107,17 +2107,17 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 			// This is a special case that user upgrades Geth to a new version
 			// which supports tx indices pruning feature but the tx index tail
 			// is missing. So that we can assume all blocks in db are indexed.
-			if bc.txLookupLimit == 0 || head <= bc.txLookupLimit {
+			if bc.txLookupLimit == 0 || head < bc.txLookupLimit {
 				// Nothing to delete, write the tail and return.
 				rawdb.WriteTxIndexTail(bc.db, 0)
 			} else {
 				// Prune all stale tx indices and record the tx index tail.
-				rawdb.RemoveTxsLookup(bc.db, 0, head-bc.txLookupLimit)
+				rawdb.RemoveTxsLookup(bc.db, 0, head-bc.txLookupLimit+1)
 			}
 			return
 		}
 		// All indices should be reserved.
-		if bc.txLookupLimit == 0 || head <= bc.txLookupLimit {
+		if bc.txLookupLimit == 0 || head < bc.txLookupLimit {
 			if *tail == 0 {
 				// Short circuit if nothing to delete.
 			} else {
@@ -2126,14 +2126,14 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 			}
 			return
 		}
-		if head-bc.txLookupLimit < *tail {
+		if head-bc.txLookupLimit+1 < *tail {
 			// Reindex a part of missing indices and rewind oldest indexed
 			// point to HEAD-limit
-			rawdb.IndexTxLookup(bc.db, head-bc.txLookupLimit, *tail)
+			rawdb.IndexTxLookup(bc.db, head-bc.txLookupLimit+1, *tail)
 		} else {
 			// Unindex a part of stale indices and forward oldest indexed
 			// point to HEAD-limit
-			rawdb.RemoveTxsLookup(bc.db, *tail, head-bc.txLookupLimit)
+			rawdb.RemoveTxsLookup(bc.db, *tail, head-bc.txLookupLimit+1)
 		}
 	}
 	// Special case here: user might init Geth with an external ancient database.
@@ -2142,7 +2142,7 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 	if ancients > 0 {
 		var from = uint64(0)
 		if bc.txLookupLimit != 0 && ancients > bc.txLookupLimit {
-			from = ancients - bc.txLookupLimit - 1
+			from = ancients - bc.txLookupLimit
 		}
 		rawdb.IndexTxLookup(bc.db, from, ancients)
 	}
