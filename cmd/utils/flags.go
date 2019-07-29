@@ -1687,7 +1687,7 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 }
 
 // MakeChain creates a chain manager from set command line flags.
-func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb ethdb.Database) {
+func MakeChain(ctx *cli.Context, stack *node.Node, readOnly bool) (chain *core.BlockChain, chainDb ethdb.Database) {
 	var err error
 	chainDb = MakeChainDatabase(ctx, stack)
 	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))
@@ -1727,7 +1727,12 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 		cache.TrieDirtyLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
 	}
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
-	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, 0)
+	var limit *uint64
+	if ctx.GlobalIsSet(TxLookupLimitFlag.Name) && !readOnly {
+		l := ctx.GlobalUint64(TxLookupLimitFlag.Name)
+		limit = &l
+	}
+	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, limit)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

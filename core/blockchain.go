@@ -140,6 +140,7 @@ type BlockChain struct {
 
 	// txLookupLimit is the maximum number of blocks from head whose tx indices
 	// are reserved.
+	// * nil do nothing
 	// * 0 means no limit (and regenerate any missing)
 	// * N means N blocks limit [HEAD-N, HEAD]
 	txLookupLimit uint64
@@ -187,7 +188,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(block *types.Block) bool, txLookupLimit uint64) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(block *types.Block) bool, txLookupLimit *uint64) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = &CacheConfig{
 			TrieCleanLimit: 256,
@@ -206,7 +207,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	bc := &BlockChain{
 		chainConfig:    chainConfig,
 		cacheConfig:    cacheConfig,
-		txLookupLimit:  txLookupLimit,
 		db:             db,
 		triegc:         prque.New(nil),
 		stateCache:     state.NewDatabaseWithCache(db, cacheConfig.TrieCleanLimit),
@@ -302,7 +302,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 	// Take ownership of this particular state
 	go bc.update()
-	go bc.maintainTxIndex(ancients)
+	if txLookupLimit != nil {
+		bc.txLookupLimit = *txLookupLimit
+		go bc.maintainTxIndex(ancients)
+	}
 	return bc, nil
 }
 
