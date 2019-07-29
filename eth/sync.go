@@ -171,7 +171,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	td := pm.blockchain.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
 
 	pHead, pTd := peer.Head()
-	if pTd := nil {
+	if pTd == nil {
 		return
 	}
 	
