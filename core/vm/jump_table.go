@@ -116,7 +116,7 @@ func newByzantiumInstructionSet() [256]operation {
 	instructionSet := newSpuriousDragonInstructionSet()
 	instructionSet[STATICCALL] = operation{
 		execute:     opStaticCall,
-		constantGas: params.CallGasEip150,
+		constantGas: params.CallGasEIP150,
 		dynamicGas:  gasStaticCall,
 		minStack:    minStack(6, 1),
 		maxStack:    maxStack(6, 1),
@@ -156,7 +156,7 @@ func newByzantiumInstructionSet() [256]operation {
 // EIP 158 a.k.a Spurious Dragon
 func newSpuriousDragonInstructionSet() [256]operation {
 	instructionSet := newTangerineWhistleInstructionSet()
-	instructionSet[EXP].dynamicGas = gasExpEip158
+	instructionSet[EXP].dynamicGas = gasExpEIP158
 	return instructionSet
 
 }
@@ -164,13 +164,13 @@ func newSpuriousDragonInstructionSet() [256]operation {
 // EIP 150 a.k.a Tangerine Whistle
 func newTangerineWhistleInstructionSet() [256]operation {
 	instructionSet := newHomesteadInstructionSet()
-	instructionSet[BALANCE].constantGas = params.BalanceGasEip150
-	instructionSet[EXTCODESIZE].constantGas = params.ExtcodeSizeGasEip150
-	instructionSet[SLOAD].constantGas = params.SloadGasEip150
-	instructionSet[EXTCODECOPY].constantGas = params.ExtcodeCopyBaseEip150
-	instructionSet[CALL].constantGas = params.CallGasEip150
-	instructionSet[CALLCODE].constantGas = params.CallGasEip150
-	instructionSet[DELEGATECALL].constantGas = params.CallGasEip150
+	instructionSet[BALANCE].constantGas = params.BalanceGasEIP150
+	instructionSet[EXTCODESIZE].constantGas = params.ExtcodeSizeGasEIP150
+	instructionSet[SLOAD].constantGas = params.SloadGasEIP150
+	instructionSet[EXTCODECOPY].constantGas = params.ExtcodeCopyBaseEIP150
+	instructionSet[CALL].constantGas = params.CallGasEIP150
+	instructionSet[CALLCODE].constantGas = params.CallGasEIP150
+	instructionSet[DELEGATECALL].constantGas = params.CallGasEIP150
 	return instructionSet
 }
 
@@ -1134,7 +1134,7 @@ func newFrontierInstructionSet() [256]operation {
 		},
 		SELFDESTRUCT: {
 			execute:    opSuicide,
-			dynamicGas: gasSuicide,
+			dynamicGas: gasSelfdestruct,
 			minStack:   minStack(1, 0),
 			maxStack:   maxStack(1, 0),
 			halts:      true,
