@@ -20,6 +20,7 @@ import (
 	"math/rand"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -33,6 +34,10 @@ func newLocalNodeForTesting() (*LocalNode, *DB) {
 }
 
 func TestLocalNode(t *testing.T) {
+	// Disable throttling for this test
+	defer func(throttle time.Duration) { recordUpdateThrottle = throttle }(recordUpdateThrottle)
+	recordUpdateThrottle = 0
+
 	ln, db := newLocalNodeForTesting()
 	defer db.Close()
 
@@ -50,14 +55,20 @@ func TestLocalNode(t *testing.T) {
 }
 
 func TestLocalNodeSeqPersist(t *testing.T) {
+	// Disable throttling for this test
+	defer func(throttle time.Duration) { recordUpdateThrottle = throttle }(recordUpdateThrottle)
+	recordUpdateThrottle = 0
+
+	timestamp := uint64(time.Now().Unix())
+
 	ln, db := newLocalNodeForTesting()
 	defer db.Close()
 
-	if s := ln.Node().Seq(); s != 1 {
-		t.Fatalf("wrong initial seq %d, want 1", s)
+	if s := ln.Node().Seq(); s != timestamp+1 {
+		t.Fatalf("wrong initial seq %d, want %d", s, timestamp+1)
 	}
 	ln.Set(enr.WithEntry("x", uint(1)))
-	if s := ln.Node().Seq(); s != 2 {
+	if s := ln.Node().Seq(); s != timestamp+2 {
 		t.Fatalf("wrong seq %d after set, want 2", s)
 	}
 
@@ -65,7 +76,7 @@ func TestLocalNodeSeqPersist(t *testing.T) {
 	// The number increases just after that because a new record is
 	// created without the "x" entry.
 	ln2 := NewLocalNode(db, ln.key)
-	if s := ln2.Node().Seq(); s != 3 {
+	if s := ln2.Node().Seq(); s != timestamp+3 {
 		t.Fatalf("wrong seq %d on new instance, want 3", s)
 	}
 
@@ -73,14 +84,19 @@ func TestLocalNodeSeqPersist(t *testing.T) {
 	// This should reset the sequence number.
 	key, _ := crypto.GenerateKey()
 	ln3 := NewLocalNode(db, key)
-	if s := ln3.Node().Seq(); s != 1 {
+	if s := ln3.Node().Seq(); s != timestamp+1 {
 		t.Fatalf("wrong seq %d on instance with changed key, want 1", s)
 	}
 }
 
 // This test checks behavior of the endpoint predictor.
 func TestLocalNodeEndpoint(t *testing.T) {
+	// Disable throttling for this test
+	defer func(throttle time.Duration) { recordUpdateThrottle = throttle }(recordUpdateThrottle)
+	recordUpdateThrottle = 0
+
 	var (
+		timestamp = uint64(time.Now().Unix())
 		fallback  = &net.UDPAddr{IP: net.IP{127, 0, 0, 1}, Port: 80}
 		predicted = &net.UDPAddr{IP: net.IP{127, 0, 1, 2}, Port: 81}
 		staticIP  = net.IP{127, 0, 1, 2}
@@ -91,20 +107,20 @@ func TestLocalNodeEndpoint(t *testing.T) {
 	// Nothing is set initially.
 	assert.Equal(t, net.IP(nil), ln.Node().IP())
 	assert.Equal(t, 0, ln.Node().UDP())
-	assert.Equal(t, uint64(1), ln.Node().Seq())
+	assert.Equal(t, uint64(timestamp+1), ln.Node().Seq())
 
 	// Set up fallback address.
 	ln.SetFallbackIP(fallback.IP)
 	ln.SetFallbackUDP(fallback.Port)
 	assert.Equal(t, fallback.IP, ln.Node().IP())
 	assert.Equal(t, fallback.Port, ln.Node().UDP())
-	assert.Equal(t, uint64(2), ln.Node().Seq())
+	assert.Equal(t, uint64(timestamp+2), ln.Node().Seq())
 
 	// Add endpoint statements from random hosts.
 	for i := 0; i < iptrackMinStatements; i++ {
 		assert.Equal(t, fallback.IP, ln.Node().IP())
 		assert.Equal(t, fallback.Port, ln.Node().UDP())
-		assert.Equal(t, uint64(2), ln.Node().Seq())
+		assert.Equal(t, uint64(timestamp+2), ln.Node().Seq())
 
 		from := &net.UDPAddr{IP: make(net.IP, 4), Port: 90}
 		rand.Read(from.IP)
@@ -112,11 +128,57 @@ func TestLocalNodeEndpoint(t *testing.T) {
 	}
 	assert.Equal(t, predicted.IP, ln.Node().IP())
 	assert.Equal(t, predicted.Port, ln.Node().UDP())
-	assert.Equal(t, uint64(3), ln.Node().Seq())
+	assert.Equal(t, uint64(timestamp+3), ln.Node().Seq())
 
 	// Static IP overrides prediction.
 	ln.SetStaticIP(staticIP)
 	assert.Equal(t, staticIP, ln.Node().IP())
 	assert.Equal(t, fallback.Port, ln.Node().UDP())
-	assert.Equal(t, uint64(4), ln.Node().Seq())
+	assert.Equal(t, uint64(timestamp+4), ln.Node().Seq())
+}
+
+// Tests that multiple updates to a node record are throttled until the specified
+// timeout expires.
+func TestLocalNodeThrottling(t *testing.T) {
+	var n uint
+
+	// Create and retrieve an initial node record to force an update
+	ln, db := newLocalNodeForTesting()
+	defer db.Close()
+
+	ln.Set(enr.WithEntry("x", uint(3)))
+	ln.Set(enr.WithEntry("y", uint(2)))
+	ln.Set(enr.WithEntry("z", uint(1)))
+
+	timestamp := uint64(time.Now().Unix())
+	if s := ln.Node().Seq(); s != timestamp+1 {
+		t.Fatalf("wrong initial seq %d, want %d", s, timestamp+1)
+	}
+	ln.Node().Load(enr.WithEntry("x", &n))
+	assert.Equal(t, uint(3), n)
+	ln.Node().Load(enr.WithEntry("y", &n))
+	assert.Equal(t, uint(2), n)
+	ln.Node().Load(enr.WithEntry("z", &n))
+	assert.Equal(t, uint(1), n)
+
+	// Trigger a set of updates and ensure they don't publish yet
+	ln.Set(enr.WithEntry("x", uint(1)))
+	ln.Delete(enr.WithEntry("y", uint(2)))
+	ln.Set(enr.WithEntry("z", uint(3)))
+
+	ln.Node().Load(enr.WithEntry("x", &n))
+	assert.Equal(t, uint(3), n)
+	ln.Node().Load(enr.WithEntry("y", &n))
+	assert.Equal(t, uint(2), n)
+	ln.Node().Load(enr.WithEntry("z", &n))
+	assert.Equal(t, uint(1), n)
+
+	// Wait for the timeout to trigger and check again
+	time.Sleep(recordUpdateThrottle)
+
+	ln.Node().Load(enr.WithEntry("x", &n))
+	assert.Equal(t, uint(1), n)
+	ln.Node().Load(enr.WithEntry("z", &n))
+	assert.Equal(t, uint(3), n)
+	assert.EqualError(t, ln.Node().Load(enr.WithEntry("y", &n)), "missing ENR key \"y\"")
 }
