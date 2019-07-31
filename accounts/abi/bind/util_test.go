@@ -59,6 +59,7 @@ func TestWaitDeployed(t *testing.T) {
 			},
 			10000000,
 		)
+		defer backend.Close()
 
 		// Create the transaction.
 		tx := types.NewContractCreation(0, big.NewInt(0), test.gas, big.NewInt(1), common.FromHex(test.code))
