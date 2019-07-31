@@ -422,6 +422,7 @@ func newServerEnv(t *testing.T, blocks int, protocol int, waitIndexers func(*cor
 			// Note bloom trie indexer will be closed by it parent recursively.
 			cIndexer.Close()
 			bIndexer.Close()
+			b.Close()
 		}
 }
 
@@ -503,5 +504,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, waitIndexers fun
 			bIndexer.Close()
 			lcIndexer.Close()
 			lbIndexer.Close()
+			b.Close()
+			lb.Close()
 		}
 }
