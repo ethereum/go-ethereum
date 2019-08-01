@@ -1314,15 +1314,16 @@ var bindTests = []struct {
 		// Initialize test accounts
 		key, _ := crypto.GenerateKey()
 		auth := bind.NewKeyedTransactor(key)
-		backend := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+		sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+		defer sim.Close()
 
 		// deploy the test contract
-		_, _, contract, err := DeployOverload(auth, backend)
+		_, _, contract, err := DeployOverload(auth, sim)
 		if err != nil {
 			t.Fatalf("Failed to deploy contract: %v", err)
 		}
 		// Finish deploy.
-		backend.Commit()
+		sim.Commit()
 
 		resCh, stopCh := make(chan uint64), make(chan struct{})
 
@@ -1347,7 +1348,7 @@ var bindTests = []struct {
 			}
 		}()
 		contract.Foo(auth, big.NewInt(1), big.NewInt(2))
-		backend.Commit()
+		sim.Commit()
 		select {
 		case n := <-resCh:
 			if n != 3 {
@@ -1358,7 +1359,7 @@ var bindTests = []struct {
 		}
 
 		contract.Foo0(auth, big.NewInt(1))
-		backend.Commit()
+		sim.Commit()
 		select {
 		case n := <-resCh:
 			if n != 1 {
