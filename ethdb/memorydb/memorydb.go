@@ -198,7 +198,7 @@ func (db *Database) Stat(property string) (string, error) {
 }
 
 // Compact is not supported on a memory database, but there's no need either as
-// a memory database doens't waste space anyway.
+// a memory database doesn't waste space anyway.
 func (db *Database) Compact(start []byte, limit []byte) error {
 	return nil
 }
