@@ -1280,6 +1280,99 @@ var bindTests = []struct {
 			"b98c933f0a6ececcd167bd4f9d3299b1a0": "Math",
 		},
 		[]string{"UseLibrary", "Math"},
+	}, {
+		"Overload",
+		`
+		pragma solidity ^0.5.10;
+
+		contract overload {
+		  mapping(address => uint256) balances;
+
+		  event bar(uint256 i);
+		  event bar(uint256 i, uint256 j);
+			
+		  function foo(uint256 i) public {
+			  emit bar(i);
+		  }
+		  function foo(uint256 i, uint256 j) public {
+			  emit bar(i, j);
+		  }
+		}
+		`,
+		[]string{`608060405234801561001057600080fd5b50610153806100206000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c806304bc52f81461003b5780632fbebd3814610073575b600080fd5b6100716004803603604081101561005157600080fd5b8101908080359060200190929190803590602001909291905050506100a1565b005b61009f6004803603602081101561008957600080fd5b81019080803590602001909291905050506100e4565b005b7fae42e9514233792a47a1e4554624e83fe852228e1503f63cd383e8a431f4f46d8282604051808381526020018281526020019250505060405180910390a15050565b7f0423a1321222a0a8716c22b92fac42d85a45a612b696a461784d9fa537c81e5c816040518082815260200191505060405180910390a15056fea265627a7a72305820e22b049858b33291cbe67eeaece0c5f64333e439d27032ea8337d08b1de18fe864736f6c634300050a0032`},
+		[]string{`[{"constant":false,"inputs":[{"name":"i","type":"uint256"},{"name":"j","type":"uint256"}],"name":"foo","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[{"name":"i","type":"uint256"}],"name":"foo","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":false,"name":"i","type":"uint256"}],"name":"bar","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"i","type":"uint256"},{"indexed":false,"name":"j","type":"uint256"}],"name":"bar","type":"event"}]`},
+		`
+		"math/big"
+		"time"
+
+		"github.com/ethereum/go-ethereum/accounts/abi/bind"
+		"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+		"github.com/ethereum/go-ethereum/core"
+		"github.com/ethereum/go-ethereum/crypto"
+		`,
+		`
+		// Initialize test accounts
+		key, _ := crypto.GenerateKey()
+		auth := bind.NewKeyedTransactor(key)
+		sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000)
+		defer sim.Close()
+
+		// deploy the test contract
+		_, _, contract, err := DeployOverload(auth, sim)
+		if err != nil {
+			t.Fatalf("Failed to deploy contract: %v", err)
+		}
+		// Finish deploy.
+		sim.Commit()
+
+		resCh, stopCh := make(chan uint64), make(chan struct{})
+
+		go func() {
+			barSink := make(chan *OverloadBar)
+			sub, _ := contract.WatchBar(nil, barSink)
+			defer sub.Unsubscribe()
+
+			bar0Sink := make(chan *OverloadBar0)
+			sub0, _ := contract.WatchBar0(nil, bar0Sink)
+			defer sub0.Unsubscribe()
+
+			for {
+				select {
+				case ev := <-barSink:
+					resCh <- ev.I.Uint64()
+				case ev := <-bar0Sink:
+					resCh <- ev.I.Uint64() + ev.J.Uint64()
+				case <-stopCh:
+					return
+				}
+			}
+		}()
+		contract.Foo(auth, big.NewInt(1), big.NewInt(2))
+		sim.Commit()
+		select {
+		case n := <-resCh:
+			if n != 3 {
+				t.Fatalf("Invalid bar0 event")
+			}
+		case <-time.NewTimer(100 * time.Millisecond).C:
+			t.Fatalf("Wait bar0 event timeout")
+		}
+
+		contract.Foo0(auth, big.NewInt(1))
+		sim.Commit()
+		select {
+		case n := <-resCh:
+			if n != 1 {
+				t.Fatalf("Invalid bar event")
+			}
+		case <-time.NewTimer(100 * time.Millisecond).C:
+			t.Fatalf("Wait bar event timeout")
+		}
+		close(stopCh)
+		`,
+		nil,
+		nil,
+		nil,
 	},
 }
 
