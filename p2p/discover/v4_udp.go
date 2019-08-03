@@ -314,7 +314,7 @@ func (t *UDPv4) RandomNodes(filter func(*enode.Node) bool) discutil.Iterator {
 }
 
 // LookupRandom finds random nodes in the network.
-func (t *UDPv4) randomLookupWithCallback(callback func(*enode.Node)) {
+func (t *UDPv4) randomLookupWithCallback(cancel <-chan struct{}, callback func(*enode.Node)) {
 	if t.tab.len() == 0 {
 		// All nodes were dropped, refresh. The very first query will hit this
 		// case and run the bootstrapping logic.
@@ -322,7 +322,7 @@ func (t *UDPv4) randomLookupWithCallback(callback func(*enode.Node)) {
 	}
 	var target encPubkey
 	crand.Read(target[:])
-	t.lookup(target, callback)
+	t.lookup(target, cancel, callback)
 }
 
 // LookupPubkey finds the closest nodes to the given public key.
@@ -332,25 +332,25 @@ func (t *UDPv4) LookupPubkey(key *ecdsa.PublicKey) []*enode.Node {
 		// case and run the bootstrapping logic.
 		<-t.tab.refresh()
 	}
-	return unwrapNodes(t.lookup(encodePubkey(key), nil))
+	return unwrapNodes(t.lookup(encodePubkey(key), t.tab.closeReq, nil))
 }
 
 // for Table
 func (t *UDPv4) lookupRandom() []*enode.Node {
 	var target encPubkey
 	crand.Read(target[:])
-	return unwrapNodes(t.lookup(target, nil))
+	return unwrapNodes(t.lookup(target, t.tab.closeReq, nil))
 }
 
 // for Table
 func (t *UDPv4) lookupSelf() []*enode.Node {
-	return unwrapNodes(t.lookup(encodePubkey(&t.priv.PublicKey), nil))
+	return unwrapNodes(t.lookup(encodePubkey(&t.priv.PublicKey), t.tab.closeReq, nil))
 }
 
 // lookup performs a network search for nodes close to the given target. It approaches the
 // target by querying nodes that are closer to it on each iteration. The given target does
 // not need to be an actual node identifier.
-func (t *UDPv4) lookup(targetKey encPubkey, nodeCallback func(*enode.Node)) []*node {
+func (t *UDPv4) lookup(targetKey encPubkey, cancel <-chan struct{}, nodeCallback func(*enode.Node)) []*node {
 	var (
 		target         = enode.ID(crypto.Keccak256Hash(targetKey[:]))
 		asked          = make(map[enode.ID]bool)
@@ -390,7 +390,7 @@ func (t *UDPv4) lookup(targetKey encPubkey, nodeCallback func(*enode.Node)) []*n
 					result.push(n, bucketSize)
 				}
 			}
-		case <-t.tab.closeReq:
+		case <-cancel:
 			return nil // shutdown, no need to continue.
 		}
 		pendingQueries--

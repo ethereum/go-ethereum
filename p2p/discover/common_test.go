@@ -69,7 +69,7 @@ func TestLookupIterator(t *testing.T) {
 
 	test.serveOneLookup(testNodes[:10])
 	test.serveOneLookup(testNodes[10:20])
-	test.serveOneLookup(testNodes[20:])
+	test.serveOneLookup(testNodes[20:40])
 	wg.Wait()
 
 	test.close()
@@ -85,41 +85,6 @@ func TestLookupIteratorClose(t *testing.T) {
 		it.Close()
 	}()
 	it.Next()
-}
-
-// This test checks that the lookup iterator drops nodes when they're not being
-// read fast enough.
-func TestLookupIteratorDropStale(t *testing.T) {
-	var (
-		test       = newLookupWalkerTest()
-		testNodes  = makeTestNodes(2 * lookupIteratorBuffer)
-		lookupDone = make(chan struct{})
-	)
-	defer test.close()
-	it := test.newIterator(nil)
-	go func() {
-		test.serveOneLookup(testNodes)
-		close(lookupDone)
-	}()
-
-	// The first call to NextNode triggers the lookup and receives the first result
-	// as soon as it becomes available.
-	it.Next()
-	if it.Node() != testNodes[0] {
-		t.Fatalf("wrong result %d: got %v, want %v", 0, it.Node().ID(), testNodes[0])
-	}
-
-	// Now wait for the lookup to finish and read the remaining nodes.
-	<-lookupDone
-	for i := 0; i < lookupIteratorBuffer; i++ {
-		it.Next()
-		for _, tn := range testNodes[lookupIteratorBuffer:] {
-			if it.Node() == tn {
-				return
-			}
-		}
-	}
-	t.Fatal("didn't find any node from second half of testNodes")
 }
 
 // This test checks that the iterator kicks off a lookup when Next is called.
@@ -177,7 +142,7 @@ func (t *lookupWalkerTest) serveOneLookup(nodes []*enode.Node) {
 	<-t.nodes
 }
 
-func (t *lookupWalkerTest) lookupFunc(callback func(*enode.Node)) {
+func (t *lookupWalkerTest) lookupFunc(cancel <-chan struct{}, callback func(*enode.Node)) {
 	if atomic.AddInt32(&t.running, 1) != 1 {
 		panic("spawned more than one instance of lookupFunc")
 	}
@@ -189,7 +154,7 @@ func (t *lookupWalkerTest) lookupFunc(callback func(*enode.Node)) {
 			callback(n)
 		}
 		t.nodes <- nil
-	case <-t.lookupWalker.closeCh:
+	case <-cancel:
 		return
 	}
 }
