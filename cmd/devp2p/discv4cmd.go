@@ -122,7 +122,7 @@ func discv4RandomNodes(ctx *cli.Context) error {
 	}
 	defer disc.Close()
 
-	it := disc.RandomNodes()
+	it := disc.RandomNodes(nil)
 	for it.Next() {
 		fmt.Println(it.Node())
 	}
