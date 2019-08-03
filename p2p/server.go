@@ -565,7 +565,7 @@ func (srv *Server) setupDiscovery() error {
 			return err
 		}
 		srv.ntab = ntab
-		srv.discmix.AddSource(ntab.RandomNodes())
+		srv.discmix.AddSource(ntab.RandomNodes(nil))
 		srv.staticNodeResolver = ntab
 	}
 
