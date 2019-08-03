@@ -96,17 +96,14 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 			t.Fatalf("Failed to obtain rpc client: %v", err)
 		}
 		headNum, headHash := getHead(ctx, t, serverRpcClient)
-		totalCap := getTotalCap(ctx, t, serverRpcClient)
-		minCap := getMinCap(ctx, t, serverRpcClient)
+		minCap, freeCap, totalCap := getCapacityInfo(ctx, t, serverRpcClient)
 		testCap := totalCap * 3 / 4
 		t.Logf("Server testCap: %d  minCap: %d  head number: %d  head hash: %064x\n", testCap, minCap, headNum, headHash)
 		reqMinCap := uint64(float64(testCap) * minRelCap / (minRelCap + float64(len(clients)-1)))
 		if minCap > reqMinCap {
 			t.Fatalf("Minimum client capacity (%d) bigger than required minimum for this test (%d)", minCap, reqMinCap)
 		}
-
 		freeIdx := rand.Intn(len(clients))
-		freeCap := getFreeCap(ctx, t, serverRpcClient)
 
 		for i, client := range clients {
 			var err error
@@ -146,7 +143,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 			i, c := i, c
 			go func() {
 				queue := make(chan struct{}, 100)
-				var count uint64
+				reqCount[i] = 0
 				for {
 					select {
 					case queue <- struct{}{}:
@@ -164,8 +161,10 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 								wg.Done()
 								<-queue
 								if ok {
-									count++
-									atomic.StoreUint64(&reqCount[i], count)
+									count := atomic.AddUint64(&reqCount[i], 1)
+									if count%10000 == 0 {
+										freezeClient(ctx, t, serverRpcClient, clients[i].ID())
+									}
 								}
 							}()
 						}
@@ -238,7 +237,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 				default:
 				}
 
-				totalCap = getTotalCap(ctx, t, serverRpcClient)
+				_, _, totalCap = getCapacityInfo(ctx, t, serverRpcClient)
 				if totalCap < testCap {
 					t.Log("Total capacity underrun")
 					close(stop)
@@ -327,58 +326,61 @@ func testRequest(ctx context.Context, t *testing.T, client *rpc.Client) bool {
 	return err == nil
 }
 
+func freezeClient(ctx context.Context, t *testing.T, server *rpc.Client, clientID enode.ID) {
+	if err := server.CallContext(ctx, nil, "debug_freezeClient", clientID); err != nil {
+		t.Fatalf("Failed to freeze client: %v", err)
+	}
+
+}
+
 func setCapacity(ctx context.Context, t *testing.T, server *rpc.Client, clientID enode.ID, cap uint64) {
-	if err := server.CallContext(ctx, nil, "les_setClientCapacity", clientID, cap); err != nil {
+	params := make(map[string]interface{})
+	params["capacity"] = cap
+	if err := server.CallContext(ctx, nil, "les_setClientParams", []enode.ID{clientID}, []string{}, params); err != nil {
 		t.Fatalf("Failed to set client capacity: %v", err)
 	}
 }
 
 func getCapacity(ctx context.Context, t *testing.T, server *rpc.Client, clientID enode.ID) uint64 {
-	var s string
-	if err := server.CallContext(ctx, &s, "les_getClientCapacity", clientID); err != nil {
-		t.Fatalf("Failed to get client capacity: %v", err)
+	var res map[enode.ID]map[string]interface{}
+	if err := server.CallContext(ctx, &res, "les_clientInfo", []enode.ID{clientID}, []string{}); err != nil {
+		t.Fatalf("Failed to get client info: %v", err)
 	}
-	cap, err := hexutil.DecodeUint64(s)
-	if err != nil {
-		t.Fatalf("Failed to decode client capacity: %v", err)
+	info, ok := res[clientID]
+	if !ok {
+		t.Fatalf("Missing client info")
 	}
-	return cap
+	v, ok := info["capacity"]
+	if !ok {
+		t.Fatalf("Missing field in client info: capacity")
+	}
+	vv, ok := v.(float64)
+	if !ok {
+		t.Fatalf("Failed to decode capacity field")
+	}
+	return uint64(vv)
 }
 
-func getTotalCap(ctx context.Context, t *testing.T, server *rpc.Client) uint64 {
-	var s string
-	if err := server.CallContext(ctx, &s, "les_totalCapacity"); err != nil {
-		t.Fatalf("Failed to query total capacity: %v", err)
+func getCapacityInfo(ctx context.Context, t *testing.T, server *rpc.Client) (minCap, freeCap, totalCap uint64) {
+	var res map[string]interface{}
+	if err := server.CallContext(ctx, &res, "les_serverInfo"); err != nil {
+		t.Fatalf("Failed to query server info: %v", err)
 	}
-	total, err := hexutil.DecodeUint64(s)
-	if err != nil {
-		t.Fatalf("Failed to decode total capacity: %v", err)
+	decode := func(s string) uint64 {
+		v, ok := res[s]
+		if !ok {
+			t.Fatalf("Missing field in server info: %s", s)
+		}
+		vv, ok := v.(float64)
+		if !ok {
+			t.Fatalf("Failed to decode server info field: %s", s)
+		}
+		return uint64(vv)
 	}
-	return total
-}
-
-func getMinCap(ctx context.Context, t *testing.T, server *rpc.Client) uint64 {
-	var s string
-	if err := server.CallContext(ctx, &s, "les_minimumCapacity"); err != nil {
-		t.Fatalf("Failed to query minimum capacity: %v", err)
-	}
-	min, err := hexutil.DecodeUint64(s)
-	if err != nil {
-		t.Fatalf("Failed to decode minimum capacity: %v", err)
-	}
-	return min
-}
-
-func getFreeCap(ctx context.Context, t *testing.T, server *rpc.Client) uint64 {
-	var s string
-	if err := server.CallContext(ctx, &s, "les_freeClientCapacity"); err != nil {
-		t.Fatalf("Failed to query free client capacity: %v", err)
-	}
-	free, err := hexutil.DecodeUint64(s)
-	if err != nil {
-		t.Fatalf("Failed to decode free client capacity: %v", err)
-	}
-	return free
+	minCap = decode("minimumCapacity")
+	freeCap = decode("freeClientCapacity")
+	totalCap = decode("totalCapacity")
+	return
 }
 
 func init() {
