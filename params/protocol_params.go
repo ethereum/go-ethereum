@@ -52,22 +52,48 @@ const (
 	NetSstoreResetRefund      uint64 = 4800  // Once per SSTORE operation for resetting to the original non-zero value
 	NetSstoreResetClearRefund uint64 = 19800 // Once per SSTORE operation for resetting to the original zero value
 
-	JumpdestGas      uint64 = 1     // Once per JUMPDEST operation.
-	EpochDuration    uint64 = 30000 // Duration between proof-of-work epochs.
-	CallGas          uint64 = 40    // Once per CALL operation & message call transaction.
-	CreateDataGas    uint64 = 200   //
-	CallCreateDepth  uint64 = 1024  // Maximum depth of call/create stack.
-	ExpGas           uint64 = 10    // Once per EXP instruction
-	LogGas           uint64 = 375   // Per LOG* operation.
-	CopyGas          uint64 = 3     //
-	StackLimit       uint64 = 1024  // Maximum size of VM stack allowed.
-	TierStepGas      uint64 = 0     // Once per operation, for a selection of them.
-	LogTopicGas      uint64 = 375   // Multiplied by the * of the LOG*, per LOG transaction. e.g. LOG0 incurs 0 * c_txLogTopicGas, LOG4 incurs 4 * c_txLogTopicGas.
-	CreateGas        uint64 = 32000 // Once per CREATE operation & contract-creation transaction.
-	Create2Gas       uint64 = 32000 // Once per CREATE2 operation
-	SuicideRefundGas uint64 = 24000 // Refunded following a suicide operation.
-	MemoryGas        uint64 = 3     // Times the address of the (highest referenced byte in memory + 1). NOTE: referencing happens on read, write and in instructions such as RETURN and CALL.
-	TxDataNonZeroGas uint64 = 68    // Per byte of data attached to a transaction that is not equal to zero. NOTE: Not payable on data of calls between transactions.
+	JumpdestGas   uint64 = 1     // Once per JUMPDEST operation.
+	EpochDuration uint64 = 30000 // Duration between proof-of-work epochs.
+
+	CreateDataGas         uint64 = 200   //
+	CallCreateDepth       uint64 = 1024  // Maximum depth of call/create stack.
+	ExpGas                uint64 = 10    // Once per EXP instruction
+	LogGas                uint64 = 375   // Per LOG* operation.
+	CopyGas               uint64 = 3     //
+	StackLimit            uint64 = 1024  // Maximum size of VM stack allowed.
+	TierStepGas           uint64 = 0     // Once per operation, for a selection of them.
+	LogTopicGas           uint64 = 375   // Multiplied by the * of the LOG*, per LOG transaction. e.g. LOG0 incurs 0 * c_txLogTopicGas, LOG4 incurs 4 * c_txLogTopicGas.
+	CreateGas             uint64 = 32000 // Once per CREATE operation & contract-creation transaction.
+	Create2Gas            uint64 = 32000 // Once per CREATE2 operation
+	SelfdestructRefundGas uint64 = 24000 // Refunded following a selfdestruct operation.
+	MemoryGas             uint64 = 3     // Times the address of the (highest referenced byte in memory + 1). NOTE: referencing happens on read, write and in instructions such as RETURN and CALL.
+	TxDataNonZeroGas      uint64 = 68    // Per byte of data attached to a transaction that is not equal to zero. NOTE: Not payable on data of calls between transactions.
+
+	// These have been changed during the course of the chain
+	CallGasFrontier        uint64 = 40  // Once per CALL operation & message call transaction.
+	CallGasEIP150          uint64 = 700 // Static portion of gas for CALL-derivates after EIP 150 (Tangerine)
+	BalanceGasFrontier     uint64 = 20  // The cost of a BALANCE operation
+	BalanceGasEIP150       uint64 = 400 // The cost of a BALANCE operation after Tangerine
+	ExtcodeSizeGasFrontier uint64 = 20  // Cost of EXTCODESIZE before EIP 150 (Tangerine)
+	ExtcodeSizeGasEIP150   uint64 = 700 // Cost of EXTCODESIZE after EIP 150 (Tangerine)
+	SloadGasFrontier       uint64 = 50
+	SloadGasEIP150         uint64 = 200
+	ExtcodeHashGas         uint64 = 400  // Cost of EXTCODEHASH (introduced in Constantinople)
+	SelfdestructGasEIP150  uint64 = 5000 // Cost of SELFDESTRUCT post EIP 150 (Tangerine)
+
+	// EXP has a dynamic portion depending on the size of the exponent
+	ExpByteFrontier uint64 = 10 // was set to 10 in Frontier
+	ExpByteEIP158   uint64 = 50 // was raised to 50 during Eip158 (Spurious Dragon)
+
+	// Extcodecopy has a dynamic AND a static cost. This represents only the
+	// static portion of the gas. It was changed during EIP 150 (Tangerine)
+	ExtcodeCopyBaseFrontier uint64 = 20
+	ExtcodeCopyBaseEIP150   uint64 = 700
+
+	// CreateBySelfdestructGas is used when the refunded account is one that does
+	// not exist. This logic is similar to call.
+	// Introduced in Tangerine Whistle (Eip 150)
+	CreateBySelfdestructGas uint64 = 25000
 
 	MaxCodeSize = 24576 // Maximum bytecode to permit for a contract
 
