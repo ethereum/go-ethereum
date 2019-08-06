@@ -188,16 +188,27 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	if cached {
 		return value
 	}
+	// If no live objects are available, attempt to use snapshots
+	var (
+		enc []byte
+		err error
+	)
+	/*	if s.db.snap != nil {
+		if metrics.EnabledExpensive {
+			defer func(start time.Time) { s.db.StorageSnapReads += time.Since(start) }(time.Now())
+		}
+		enc = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key[:]))
+	} else {*/
 	// Track the amount of time wasted on reading the storage trie
 	if metrics.EnabledExpensive {
-		defer func(start time.Time) { s.db.StorageReads += time.Since(start) }(time.Now())
+		defer func(start time.Time) { s.db.StorageTrieReads += time.Since(start) }(time.Now())
 	}
 	// Otherwise load the value from the database
-	enc, err := s.getTrie(db).TryGet(key[:])
-	if err != nil {
+	if enc, err = s.getTrie(db).TryGet(key[:]); err != nil {
 		s.setError(err)
 		return common.Hash{}
 	}
+	//}
 	if len(enc) > 0 {
 		_, content, _, err := rlp.Split(enc)
 		if err != nil {
@@ -269,13 +280,21 @@ func (s *stateObject) updateTrie(db Database) Trie {
 		}
 		s.originStorage[key] = value
 
+		var v []byte
 		if (value == common.Hash{}) {
 			s.setError(tr.TryDelete(key[:]))
-			continue
+		} else {
+			// Encoding []byte cannot fail, ok to ignore the error.
+			v, _ = rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
+			s.setError(tr.TryUpdate(key[:], v))
 		}
-		// Encoding []byte cannot fail, ok to ignore the error.
-		v, _ := rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
-		s.setError(tr.TryUpdate(key[:], v))
+		// If state snapshotting is active, cache the data til commit
+		if s.db.snap != nil {
+			if s.db.snapStorage[s.addrHash] == nil {
+				s.db.snapStorage[s.addrHash] = make(map[common.Hash][]byte)
+			}
+			s.db.snapStorage[s.addrHash][crypto.Keccak256Hash(key[:])] = v // v will be nil if value is 0x00
+		}
 	}
 	return tr
 }

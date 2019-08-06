@@ -98,7 +98,7 @@ Specifying the `--testnet` flag, however, will reconfigure your `geth` instance 
    this.
  * Instead of connecting the main Ethereum network, the client will connect to the test
    network, which uses different P2P bootnodes, different network IDs and genesis states.
-   
+
 *Note: Although there are some internal protective measures to prevent transactions from
 crossing over between the main network and test network, you should make sure to always
 use separate accounts for play-money and real-money. Unless you manually move
@@ -332,6 +332,14 @@ Please make sure your contributions adhere to our coding guidelines:
 Please see the [Developers' Guide](https://github.com/ethereum/go-ethereum/wiki/Developers'-Guide)
 for more details on configuring your environment, managing project dependencies, and
 testing procedures.
+
+## Releases
+
+Instead of batching together features for a new release, or back-porting fixes into an old one, Geth employs a rolling release.
+
+We strive to push a new - backwards compatible - minor version every other week, irrelevant of what's been merged. This ensures that both fixes and features are shipped fast (good for users); and that there's always only one canonical version to maintain (good for devs).
+
+Every now and again we make drastic or breaking changes to the code, which results in a deflection from the regular release schedule until the new version is deemed stable enough. Such releases are tagged with a new major version number to
 
 ## License
 
