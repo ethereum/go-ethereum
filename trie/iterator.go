@@ -29,6 +29,7 @@ import (
 type Iterator struct {
 	nodeIt NodeIterator
 
+	Nodes int    // Number of nodes iterated over
 	Key   []byte // Current data key on which the iterator is positioned on
 	Value []byte // Current data value on which the iterator is positioned on
 	Err   error
@@ -46,6 +47,7 @@ func NewIterator(it NodeIterator) *Iterator {
 // Next moves the iterator forward one key-value entry.
 func (it *Iterator) Next() bool {
 	for it.nodeIt.Next(true) {
+		it.Nodes++
 		if it.nodeIt.Leaf() {
 			it.Key = it.nodeIt.LeafKey()
 			it.Value = it.nodeIt.LeafBlob()
