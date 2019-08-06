@@ -107,16 +107,15 @@ const (
 	IdentityBaseGas     uint64 = 15   // Base price for a data copy operation
 	IdentityPerWordGas  uint64 = 3    // Per-work price for a data copy operation
 	ModExpQuadCoeffDiv  uint64 = 20   // Divisor for the quadratic particle of the big int modular exponentiation
-	// Byzantium precompiled elliptic curve contract gas prices
+
 	Bn256AddGasByzantium             uint64 = 500    // Byzantium gas needed for an elliptic curve addition
+	Bn256AddGasIstanbul              uint64 = 150    // Gas needed for an elliptic curve addition
 	Bn256ScalarMulGasByzantium       uint64 = 40000  // Byzantium gas needed for an elliptic curve scalar multiplication
+	Bn256ScalarMulGasIstanbul        uint64 = 6000   // Gas needed for an elliptic curve scalar multiplication
 	Bn256PairingBaseGasByzantium     uint64 = 100000 // Byzantium base price for an elliptic curve pairing check
+	Bn256PairingBaseGasIstanbul      uint64 = 45000  // Base price for an elliptic curve pairing check
 	Bn256PairingPerPointGasByzantium uint64 = 80000  // Byzantium per-point price for an elliptic curve pairing check
-	// Precompiled elliptic curve contract gas prices were reduced in Istanbul via EIP-1108
-	Bn256AddGasIstanbul             uint64 = 150   // Gas needed for an elliptic curve addition
-	Bn256ScalarMulGasIstanbul       uint64 = 6000  // Gas needed for an elliptic curve scalar multiplication
-	Bn256PairingBaseGasIstanbul     uint64 = 45000 // Base price for an elliptic curve pairing check
-	Bn256PairingPerPointGasIstanbul uint64 = 34000 // Per-point price for an elliptic curve pairing check
+	Bn256PairingPerPointGasIstanbul  uint64 = 34000  // Per-point price for an elliptic curve pairing check
 )
 
 var (
