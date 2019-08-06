@@ -18,8 +18,6 @@ package vm
 
 import "fmt"
 
-
-
 // EnableEIP enables the given EIP on the config.
 // This operation write in-place, and callers need to ensure that the globally
 // defined jumptables are not polluted
@@ -35,11 +33,13 @@ func EnableEIP(eipNum int, jt *JumpTable) error {
 
 // Enable1884 applies EIP-1884 to the given jumptable
 // - Increase cost of BALANCE to 700
+// - Increase cost of EXTCODEHASH to 700
 // - Increase cost of SLOAD to 800
-// - Define SELFBALANCE, with cost GasFastStep
+// - Define SELFBALANCE, with cost GasFastStep (5)
 func enable1884(jt *JumpTable) {
 	// Gas cost changes
 	jt[BALANCE].constantGas = 700
+	jt[EXTCODEHASH].constantGas = 700
 	jt[SLOAD].constantGas = 800
 	// New opcode
 	jt[SELFBALANCE] = operation{

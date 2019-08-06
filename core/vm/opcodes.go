@@ -101,7 +101,7 @@ const (
 	NUMBER
 	DIFFICULTY
 	GASLIMIT
-	SELFBALANCE
+	SELFBALANCE = 0x47
 )
 
 // 0x50 range - 'storage' and execution.
