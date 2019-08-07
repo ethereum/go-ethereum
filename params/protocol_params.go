@@ -70,16 +70,19 @@ const (
 	TxDataNonZeroGas      uint64 = 68    // Per byte of data attached to a transaction that is not equal to zero. NOTE: Not payable on data of calls between transactions.
 
 	// These have been changed during the course of the chain
-	CallGasFrontier        uint64 = 40  // Once per CALL operation & message call transaction.
-	CallGasEIP150          uint64 = 700 // Static portion of gas for CALL-derivates after EIP 150 (Tangerine)
-	BalanceGasFrontier     uint64 = 20  // The cost of a BALANCE operation
-	BalanceGasEIP150       uint64 = 400 // The cost of a BALANCE operation after Tangerine
-	ExtcodeSizeGasFrontier uint64 = 20  // Cost of EXTCODESIZE before EIP 150 (Tangerine)
-	ExtcodeSizeGasEIP150   uint64 = 700 // Cost of EXTCODESIZE after EIP 150 (Tangerine)
-	SloadGasFrontier       uint64 = 50
-	SloadGasEIP150         uint64 = 200
-	ExtcodeHashGas         uint64 = 400  // Cost of EXTCODEHASH (introduced in Constantinople)
-	SelfdestructGasEIP150  uint64 = 5000 // Cost of SELFDESTRUCT post EIP 150 (Tangerine)
+	CallGasFrontier              uint64 = 40  // Once per CALL operation & message call transaction.
+	CallGasEIP150                uint64 = 700 // Static portion of gas for CALL-derivates after EIP 150 (Tangerine)
+	BalanceGasFrontier           uint64 = 20  // The cost of a BALANCE operation
+	BalanceGasEIP150             uint64 = 400 // The cost of a BALANCE operation after Tangerine
+	BalanceGasEIP1884            uint64 = 700 // The cost of a BALANCE operation after EIP 1884 (part of Istanbul)
+	ExtcodeSizeGasFrontier       uint64 = 20  // Cost of EXTCODESIZE before EIP 150 (Tangerine)
+	ExtcodeSizeGasEIP150         uint64 = 700 // Cost of EXTCODESIZE after EIP 150 (Tangerine)
+	SloadGasFrontier             uint64 = 50
+	SloadGasEIP150               uint64 = 200
+	SloadGasEIP1884              uint64 = 800  // Cost of SLOAD after EIP 1884 (part of Istanbul)
+	ExtcodeHashGasConstantinople uint64 = 400  // Cost of EXTCODEHASH (introduced in Constantinople)
+	ExtcodeHashGasEIP1884        uint64 = 700  // Cost of EXTCODEHASH after EIP 1884 (part in Istanbul)
+	SelfdestructGasEIP150        uint64 = 5000 // Cost of SELFDESTRUCT post EIP 150 (Tangerine)
 
 	// EXP has a dynamic portion depending on the size of the exponent
 	ExpByteFrontier uint64 = 10 // was set to 10 in Frontier

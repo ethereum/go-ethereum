@@ -62,6 +62,7 @@ var (
 	constantinopleInstructionSet   = newConstantinopleInstructionSet()
 )
 
+// JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]operation
 
 // NewConstantinopleInstructionSet returns the frontier, homestead
@@ -92,7 +93,7 @@ func newConstantinopleInstructionSet() JumpTable {
 	}
 	instructionSet[EXTCODEHASH] = operation{
 		execute:     opExtCodeHash,
-		constantGas: params.ExtcodeHashGas,
+		constantGas: params.ExtcodeHashGasConstantinople,
 		minStack:    minStack(1, 1),
 		maxStack:    maxStack(1, 1),
 		valid:       true,

@@ -16,11 +16,15 @@
 
 package vm
 
-import "fmt"
+import (
+	"fmt"
+	
+	"github.com/ethereum/go-ethereum/params"
+)
 
 // EnableEIP enables the given EIP on the config.
-// This operation write in-place, and callers need to ensure that the globally
-// defined jumptables are not polluted
+// This operation writes in-place, and callers need to ensure that the globally
+// defined jump tables are not polluted.
 func EnableEIP(eipNum int, jt *JumpTable) error {
 	switch eipNum {
 	case 1884:
@@ -31,16 +35,17 @@ func EnableEIP(eipNum int, jt *JumpTable) error {
 	return nil
 }
 
-// Enable1884 applies EIP-1884 to the given jumptable
+// enable1884 applies EIP-1884 to the given jump table:
 // - Increase cost of BALANCE to 700
 // - Increase cost of EXTCODEHASH to 700
 // - Increase cost of SLOAD to 800
 // - Define SELFBALANCE, with cost GasFastStep (5)
 func enable1884(jt *JumpTable) {
 	// Gas cost changes
-	jt[BALANCE].constantGas = 700
-	jt[EXTCODEHASH].constantGas = 700
-	jt[SLOAD].constantGas = 800
+	jt[BALANCE].constantGas = params.BalanceGasEIP1884
+	jt[EXTCODEHASH].constantGas = params.ExtcodeHashGasEIP1884
+	jt[SLOAD].constantGas = params.SloadGasEIP1884
+
 	// New opcode
 	jt[SELFBALANCE] = operation{
 		execute:     opSelfBalance,
