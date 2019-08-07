@@ -110,7 +110,7 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 			if err := EnableEIP(eip, &jt); err != nil {
 				// Disable it, so caller can check if it's activated or not
 				cfg.ExtraEips = append(cfg.ExtraEips[:i], cfg.ExtraEips[i+1:]...)
-				log.Error("eip activation failed", "eip", eip, "error", err)
+				log.Error("EIP activation failed", "eip", eip, "error", err)
 			}
 		}
 		cfg.JumpTable = jt
