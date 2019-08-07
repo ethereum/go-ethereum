@@ -223,3 +223,19 @@ jobs:
         submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go purge -store gethstore/builds -days 14
+
+    # This builder does continuous fuzz testing
+    - stage: Fuzz-Tests
+      go: 1.12.x
+      services:
+        - docker
+      script:
+        - ./build/fuzzit.sh sanity
+
+    - stage: Fuzzit (Fuzzing)
+      env:
+        secure: "Gd0njFhyjzOSJc1ybygwQ1ObdHUW5ORCnNZSHPwuozMiFdcMbClq4gyJvQoZDWN5moUDCsZ1CFacvf1bUiiJ4N3MydnLpL+SaqKj9JVbk7Vzb32oBaztfmvhRUCDNM7g1jSTSGKcAJ9PA6QYxVQ10R95SzPOelGu5HTDRgL+Kcc="
+      if: branch = master AND type IN (push)
+      go: 1.12.x
+      script:
+        - ./build/fuzzit.sh fuzzing
