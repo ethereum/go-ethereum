@@ -36,25 +36,27 @@ import (
 type alethGenesisSpec struct {
 	SealEngine string `json:"sealEngine"`
 	Params     struct {
-		AccountStartNonce       math2.HexOrDecimal64   `json:"accountStartNonce"`
-		MaximumExtraDataSize    hexutil.Uint64         `json:"maximumExtraDataSize"`
-		HomesteadForkBlock      hexutil.Uint64         `json:"homesteadForkBlock"`
-		DaoHardforkBlock        math2.HexOrDecimal64   `json:"daoHardforkBlock"`
-		EIP150ForkBlock         hexutil.Uint64         `json:"EIP150ForkBlock"`
-		EIP158ForkBlock         hexutil.Uint64         `json:"EIP158ForkBlock"`
-		ByzantiumForkBlock      hexutil.Uint64         `json:"byzantiumForkBlock"`
-		ConstantinopleForkBlock hexutil.Uint64         `json:"constantinopleForkBlock"`
-		MinGasLimit             hexutil.Uint64         `json:"minGasLimit"`
-		MaxGasLimit             hexutil.Uint64         `json:"maxGasLimit"`
-		TieBreakingGas          bool                   `json:"tieBreakingGas"`
-		GasLimitBoundDivisor    math2.HexOrDecimal64   `json:"gasLimitBoundDivisor"`
-		MinimumDifficulty       *hexutil.Big           `json:"minimumDifficulty"`
-		DifficultyBoundDivisor  *math2.HexOrDecimal256 `json:"difficultyBoundDivisor"`
-		DurationLimit           *math2.HexOrDecimal256 `json:"durationLimit"`
-		BlockReward             *hexutil.Big           `json:"blockReward"`
-		NetworkID               hexutil.Uint64         `json:"networkID"`
-		ChainID                 hexutil.Uint64         `json:"chainID"`
-		AllowFutureBlocks       bool                   `json:"allowFutureBlocks"`
+		AccountStartNonce          math2.HexOrDecimal64   `json:"accountStartNonce"`
+		MaximumExtraDataSize       hexutil.Uint64         `json:"maximumExtraDataSize"`
+		HomesteadForkBlock         hexutil.Uint64         `json:"homesteadForkBlock"`
+		DaoHardforkBlock           math2.HexOrDecimal64   `json:"daoHardforkBlock"`
+		EIP150ForkBlock            hexutil.Uint64         `json:"EIP150ForkBlock"`
+		EIP158ForkBlock            hexutil.Uint64         `json:"EIP158ForkBlock"`
+		ByzantiumForkBlock         hexutil.Uint64         `json:"byzantiumForkBlock"`
+		ConstantinopleForkBlock    hexutil.Uint64         `json:"constantinopleForkBlock"`
+		ConstantinopleFixForkBlock hexutil.Uint64         `json:"constantinopleFixForkBlock"`
+		IstanbulForkBlock          hexutil.Uint64         `json:"IstanbulForkBlock"`
+		MinGasLimit                hexutil.Uint64         `json:"minGasLimit"`
+		MaxGasLimit                hexutil.Uint64         `json:"maxGasLimit"`
+		TieBreakingGas             bool                   `json:"tieBreakingGas"`
+		GasLimitBoundDivisor       math2.HexOrDecimal64   `json:"gasLimitBoundDivisor"`
+		MinimumDifficulty          *hexutil.Big           `json:"minimumDifficulty"`
+		DifficultyBoundDivisor     *math2.HexOrDecimal256 `json:"difficultyBoundDivisor"`
+		DurationLimit              *math2.HexOrDecimal256 `json:"durationLimit"`
+		BlockReward                *hexutil.Big           `json:"blockReward"`
+		NetworkID                  hexutil.Uint64         `json:"networkID"`
+		ChainID                    hexutil.Uint64         `json:"chainID"`
+		AllowFutureBlocks          bool                   `json:"allowFutureBlocks"`
 	} `json:"params"`
 
 	Genesis struct {
@@ -112,15 +114,27 @@ func newAlethGenesisSpec(network string, genesis *core.Genesis) (*alethGenesisSp
 	spec.Params.EIP150ForkBlock = (hexutil.Uint64)(genesis.Config.EIP150Block.Uint64())
 	spec.Params.EIP158ForkBlock = (hexutil.Uint64)(genesis.Config.EIP158Block.Uint64())
 
-	// Byzantium
+	if num := genesis.Config.HomesteadBlock; num != nil {
+		spec.Params.HomesteadForkBlock = hexutil.Uint64(num.Uint64())
+	}
+	if num := genesis.Config.EIP150Block; num != nil {
+		spec.Params.EIP150ForkBlock = hexutil.Uint64(num.Uint64())
+	}
+	if num := genesis.Config.EIP158Block; num != nil {
+		spec.Params.EIP158ForkBlock = hexutil.Uint64(num.Uint64())
+	}
 	if num := genesis.Config.ByzantiumBlock; num != nil {
-		spec.setByzantium(num)
+		spec.Params.ByzantiumForkBlock = hexutil.Uint64(num.Uint64())
 	}
-	// Constantinople
 	if num := genesis.Config.ConstantinopleBlock; num != nil {
-		spec.setConstantinople(num)
+		spec.Params.ConstantinopleForkBlock = hexutil.Uint64(num.Uint64())
 	}
-
+	if num := genesis.Config.PetersburgBlock; num != nil {
+		spec.Params.ConstantinopleFixForkBlock = hexutil.Uint64(num.Uint64())
+	}
+	if num := genesis.Config.IstanbulBlock; num != nil {
+		spec.Params.IstanbulForkBlock = hexutil.Uint64(num.Uint64())
+	}
 	spec.Params.NetworkID = (hexutil.Uint64)(genesis.Config.ChainID.Uint64())
 	spec.Params.ChainID = (hexutil.Uint64)(genesis.Config.ChainID.Uint64())
 	spec.Params.MaximumExtraDataSize = (hexutil.Uint64)(params.MaximumExtraDataSize)
@@ -194,14 +208,6 @@ func (spec *alethGenesisSpec) setAccount(address common.Address, account core.Ge
 	a.Balance = (*math2.HexOrDecimal256)(account.Balance)
 	a.Nonce = account.Nonce
 
-}
-
-func (spec *alethGenesisSpec) setByzantium(num *big.Int) {
-	spec.Params.ByzantiumForkBlock = hexutil.Uint64(num.Uint64())
-}
-
-func (spec *alethGenesisSpec) setConstantinople(num *big.Int) {
-	spec.Params.ConstantinopleForkBlock = hexutil.Uint64(num.Uint64())
 }
 
 // parityChainSpec is the chain specification format used by Parity.
