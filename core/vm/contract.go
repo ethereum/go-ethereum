@@ -30,7 +30,7 @@ type ContractRef interface {
 // AccountRef implements ContractRef.
 //
 // Account references are used during EVM initialisation and
-// its primary use is to fetch addresses. Removing this object
+// it's primary use is to fetch addresses. Removing this object
 // proves difficult because of the cached jump destinations which
 // are fetched from the parent contract (i.e. the caller), which
 // is a ContractRef.
