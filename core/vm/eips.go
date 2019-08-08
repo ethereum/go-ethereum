@@ -18,7 +18,7 @@ package vm
 
 import (
 	"fmt"
-	
+
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -64,8 +64,8 @@ func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, contract *Contract, 
 	return nil, nil
 }
 
-// Enable1344 applies EIP-1344 (ChainID Opcode)
-// - Aadds an opcode that returns the current chain’s EIP-155 unique identifier
+// enable1344 applies EIP-1344 (ChainID Opcode)
+// - Adds an opcode that returns the current chain’s EIP-155 unique identifier
 func enable1344(jt *JumpTable) {
 	// New opcode
 	jt[CHAINID] = operation{
