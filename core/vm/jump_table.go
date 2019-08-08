@@ -62,9 +62,12 @@ var (
 	constantinopleInstructionSet   = newConstantinopleInstructionSet()
 )
 
+// JumpTable contains the EVM opcodes supported at a given fork.
+type JumpTable [256]operation
+
 // NewConstantinopleInstructionSet returns the frontier, homestead
 // byzantium and contantinople instructions.
-func newConstantinopleInstructionSet() [256]operation {
+func newConstantinopleInstructionSet() JumpTable {
 	// instructions that can be executed during the byzantium phase.
 	instructionSet := newByzantiumInstructionSet()
 	instructionSet[SHL] = operation{
@@ -90,7 +93,7 @@ func newConstantinopleInstructionSet() [256]operation {
 	}
 	instructionSet[EXTCODEHASH] = operation{
 		execute:     opExtCodeHash,
-		constantGas: params.ExtcodeHashGas,
+		constantGas: params.ExtcodeHashGasConstantinople,
 		minStack:    minStack(1, 1),
 		maxStack:    maxStack(1, 1),
 		valid:       true,
@@ -111,7 +114,7 @@ func newConstantinopleInstructionSet() [256]operation {
 
 // NewByzantiumInstructionSet returns the frontier, homestead and
 // byzantium instructions.
-func newByzantiumInstructionSet() [256]operation {
+func newByzantiumInstructionSet() JumpTable {
 	// instructions that can be executed during the homestead phase.
 	instructionSet := newSpuriousDragonInstructionSet()
 	instructionSet[STATICCALL] = operation{
@@ -154,7 +157,7 @@ func newByzantiumInstructionSet() [256]operation {
 }
 
 // EIP 158 a.k.a Spurious Dragon
-func newSpuriousDragonInstructionSet() [256]operation {
+func newSpuriousDragonInstructionSet() JumpTable {
 	instructionSet := newTangerineWhistleInstructionSet()
 	instructionSet[EXP].dynamicGas = gasExpEIP158
 	return instructionSet
@@ -162,7 +165,7 @@ func newSpuriousDragonInstructionSet() [256]operation {
 }
 
 // EIP 150 a.k.a Tangerine Whistle
-func newTangerineWhistleInstructionSet() [256]operation {
+func newTangerineWhistleInstructionSet() JumpTable {
 	instructionSet := newHomesteadInstructionSet()
 	instructionSet[BALANCE].constantGas = params.BalanceGasEIP150
 	instructionSet[EXTCODESIZE].constantGas = params.ExtcodeSizeGasEIP150
@@ -176,7 +179,7 @@ func newTangerineWhistleInstructionSet() [256]operation {
 
 // NewHomesteadInstructionSet returns the frontier and homestead
 // instructions that can be executed during the homestead phase.
-func newHomesteadInstructionSet() [256]operation {
+func newHomesteadInstructionSet() JumpTable {
 	instructionSet := newFrontierInstructionSet()
 	instructionSet[DELEGATECALL] = operation{
 		execute:     opDelegateCall,
@@ -193,8 +196,8 @@ func newHomesteadInstructionSet() [256]operation {
 
 // NewFrontierInstructionSet returns the frontier instructions
 // that can be executed during the frontier phase.
-func newFrontierInstructionSet() [256]operation {
-	return [256]operation{
+func newFrontierInstructionSet() JumpTable {
+	return JumpTable{
 		STOP: {
 			execute:     opStop,
 			constantGas: 0,
