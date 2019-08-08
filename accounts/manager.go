@@ -148,8 +148,8 @@ func (am *Manager) Wallet(url string) (Wallet, error) {
 	return nil, ErrUnknownWallet
 }
 
-// AllAccounts returns all account addresses of all wallets within the account manager
-func (am *Manager) AllAccounts() []common.Address {
+// Accounts returns all account addresses of all wallets within the account manager
+func (am *Manager) Accounts() []common.Address {
 	am.lock.RLock()
 	defer am.lock.RUnlock()
 
