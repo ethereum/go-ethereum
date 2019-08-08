@@ -230,18 +230,13 @@ func (s *stateObject) SetState(db Database, key, value common.Hash) {
 	s.setState(key, value)
 }
 
-// SetStatesForDebug replaces the entire state storage with the given one.
+// SetStorage replaces the entire state storage with the given one.
 //
 // After this function is called, all original state will be ignored and state
 // lookup only happens in the fake state storage.
 //
 // Note this function should only be used for debugging purpose.
-func (s *stateObject) SetStatesForDebug(storage map[common.Hash]common.Hash) {
-	// Clean the fake storage if debugging is done.
-	if storage == nil {
-		s.fakeStorage = nil
-		return
-	}
+func (s *stateObject) SetStorage(storage map[common.Hash]common.Hash) {
 	// Allocate fake storage if it's nil.
 	if s.fakeStorage == nil {
 		s.fakeStorage = make(Storage)

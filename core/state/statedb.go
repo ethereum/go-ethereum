@@ -386,10 +386,12 @@ func (self *StateDB) SetState(addr common.Address, key, value common.Hash) {
 	}
 }
 
-func (self *StateDB) SetStateForDebug(addr common.Address, storage map[common.Hash]common.Hash) {
+// SetStorage replaces the entire storage for the specified account with given
+// storage. This function should only be used for debugging.
+func (self *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common.Hash) {
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
-		stateObject.SetStatesForDebug(storage)
+		stateObject.SetStorage(storage)
 	}
 }
 
