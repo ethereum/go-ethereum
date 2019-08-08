@@ -43,10 +43,12 @@ type diffLayer struct {
 	number uint64      // Block number to which this snapshot diff belongs to
 	root   common.Hash // Root hash to which this snapshot diff belongs to
 
-	accountOrder []common.Hash                          // Sorted accounts for iterated retrieval
-	accountData  map[common.Hash][]byte                 // Keyed accounts for direct retrival (nil means deleted)
-	storageOrder map[common.Hash][]common.Hash          // Sorted storage slots for iterated retrievals. one per account
-	storageData  map[common.Hash]map[common.Hash][]byte // Keyed storage slots for direct retrival. one per account (nil means deleted)
+	accountList   []common.Hash                          // List of account for iteration, might not be sorted yet (lazy)
+	accountSorted bool                                   // Flag whether the account list has alreayd been sorted or not
+	accountData   map[common.Hash][]byte                 // Keyed accounts for direct retrival (nil means deleted)
+	storageList   map[common.Hash][]common.Hash          // List of storage slots for iterated retrievals, one per account
+	storageSorted map[common.Hash]bool                   // Flag whether the storage slot list has alreayd been sorted or not
+	storageData   map[common.Hash]map[common.Hash][]byte // Keyed storage slots for direct retrival. one per account (nil means deleted)
 
 	lock sync.RWMutex
 }
@@ -65,16 +67,21 @@ func newDiffLayer(parent snapshot, root common.Hash, accounts map[common.Hash][]
 		storageData: storage,
 	}
 	// Fill the account hashes and sort them for the iterator
-	dl.accountOrder = make([]common.Hash, 0, len(accounts))
+	accountList := make([]common.Hash, 0, len(accounts))
 	for hash, data := range accounts {
-		dl.accountOrder = append(dl.accountOrder, hash)
+		accountList = append(accountList, hash)
 		dl.memory += uint64(len(data))
 	}
-	sort.Sort(hashes(dl.accountOrder))
-	dl.memory += uint64(len(dl.accountOrder) * common.HashLength)
+	sort.Sort(hashes(accountList))
+	dl.accountList = accountList
+	dl.accountSorted = true
+
+	dl.memory += uint64(len(dl.accountList) * common.HashLength)
 
 	// Fill the storage hashes and sort them for the iterator
-	dl.storageOrder = make(map[common.Hash][]common.Hash, len(storage))
+	dl.storageList = make(map[common.Hash][]common.Hash, len(storage))
+	dl.storageSorted = make(map[common.Hash]bool, len(storage))
+
 	for accountHash, slots := range storage {
 		// If the slots are nil, sanity check that it's a deleted account
 		if slots == nil {
@@ -83,7 +90,7 @@ func newDiffLayer(parent snapshot, root common.Hash, accounts map[common.Hash][]
 				panic(fmt.Sprintf("storage in %#x nil, but account conflicts (%#x, exists: %v)", accountHash, account, ok))
 			}
 			// Everything ok, store the deletion mark and continue
-			dl.storageOrder[accountHash] = nil
+			dl.storageList[accountHash] = nil
 			continue
 		}
 		// Storage slots are not nil so entire contract was not deleted, ensure the
@@ -93,16 +100,18 @@ func newDiffLayer(parent snapshot, root common.Hash, accounts map[common.Hash][]
 			//panic(fmt.Sprintf("storage in %#x exists, but account nil (exists: %v)", accountHash, ok))
 		}
 		// Fill the storage hashes for this account and sort them for the iterator
-		storageOrder := make([]common.Hash, 0, len(slots))
+		storageList := make([]common.Hash, 0, len(slots))
 		for storageHash, data := range slots {
-			storageOrder = append(storageOrder, storageHash)
+			storageList = append(storageList, storageHash)
 			dl.memory += uint64(len(data))
 		}
-		sort.Sort(hashes(storageOrder))
-		dl.storageOrder[accountHash] = storageOrder
-		dl.memory += uint64(len(storageOrder) * common.HashLength)
+		sort.Sort(hashes(storageList))
+		dl.storageList[accountHash] = storageList
+		dl.storageSorted[accountHash] = true
+
+		dl.memory += uint64(len(storageList) * common.HashLength)
 	}
-	dl.memory += uint64(len(dl.storageOrder) * common.HashLength)
+	dl.memory += uint64(len(dl.storageList) * common.HashLength)
 
 	return dl
 }
@@ -206,9 +215,6 @@ func (dl *diffLayer) Update(blockRoot common.Hash, accounts map[common.Hash][]by
 // the layer limit is reached, memory cap is also enforced (but not before). The
 // block numbers for the disk layer and first diff layer are returned for GC.
 func (dl *diffLayer) Cap(layers int, memory uint64) (uint64, uint64) {
-	dl.lock.Lock()
-	defer dl.lock.Unlock()
-
 	// Dive until we run out of layers or reach the persistent database
 	if layers > 2 {
 		// If we still have diff layers below, recurse
@@ -224,6 +230,9 @@ func (dl *diffLayer) Cap(layers int, memory uint64) (uint64, uint64) {
 	case *diskLayer:
 		return parent.number, dl.number
 	case *diffLayer:
+		dl.lock.Lock()
+		defer dl.lock.Unlock()
+
 		dl.parent = parent.flatten()
 		if dl.parent.(*diffLayer).memory < memory {
 			diskNumber, _ := parent.parent.Info()
@@ -294,14 +303,15 @@ func (dl *diffLayer) flatten() snapshot {
 	for hash, data := range dl.accountData {
 		parent.accountData[hash] = data
 	}
-	parent.accountOrder = merge(parent.accountOrder, dl.accountOrder)
+	parent.accountList = append(parent.accountList, dl.accountList...) // TODO(karalabe): dedup!!
+	parent.accountSorted = false
 
 	// Overwrite all the updates storage slots (individually)
 	for accountHash, storage := range dl.storageData {
 		// If storage didn't exist (or was deleted) in the parent; or if the storage
 		// was freshly deleted in the child, overwrite blindly
 		if parent.storageData[accountHash] == nil || storage == nil {
-			parent.storageOrder[accountHash] = dl.storageOrder[accountHash]
+			parent.storageList[accountHash] = dl.storageList[accountHash]
 			parent.storageData[accountHash] = storage
 			continue
 		}
@@ -310,8 +320,9 @@ func (dl *diffLayer) flatten() snapshot {
 		for storageHash, data := range storage {
 			comboData[storageHash] = data
 		}
-		parent.storageOrder[accountHash] = merge(parent.storageOrder[accountHash], dl.storageOrder[accountHash])
 		parent.storageData[accountHash] = comboData
+		parent.storageList[accountHash] = append(parent.storageList[accountHash], dl.storageList[accountHash]...) // TODO(karalabe): dedup!!
+		parent.storageSorted[accountHash] = false
 	}
 	// Return the combo parent
 	parent.number = dl.number

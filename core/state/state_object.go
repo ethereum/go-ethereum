@@ -193,22 +193,22 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		enc []byte
 		err error
 	)
-	/*	if s.db.snap != nil {
+	if s.db.snap != nil {
 		if metrics.EnabledExpensive {
-			defer func(start time.Time) { s.db.StorageSnapReads += time.Since(start) }(time.Now())
+			defer func(start time.Time) { s.db.SnapshotStorageReads += time.Since(start) }(time.Now())
 		}
 		enc = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key[:]))
-	} else {*/
-	// Track the amount of time wasted on reading the storage trie
-	if metrics.EnabledExpensive {
-		defer func(start time.Time) { s.db.StorageTrieReads += time.Since(start) }(time.Now())
+	} else {
+		// Track the amount of time wasted on reading the storage trie
+		if metrics.EnabledExpensive {
+			defer func(start time.Time) { s.db.StorageReads += time.Since(start) }(time.Now())
+		}
+		// Otherwise load the value from the database
+		if enc, err = s.getTrie(db).TryGet(key[:]); err != nil {
+			s.setError(err)
+			return common.Hash{}
+		}
 	}
-	// Otherwise load the value from the database
-	if enc, err = s.getTrie(db).TryGet(key[:]); err != nil {
-		s.setError(err)
-		return common.Hash{}
-	}
-	//}
 	if len(enc) > 0 {
 		_, content, _, err := rlp.Split(enc)
 		if err != nil {

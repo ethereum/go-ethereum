@@ -100,16 +100,17 @@ type StateDB struct {
 	nextRevisionId int
 
 	// Measurements gathered during execution for debugging purposes
-	AccountSnapReads time.Duration
-	AccountTrieReads time.Duration
-	AccountHashes    time.Duration
-	AccountUpdates   time.Duration
-	AccountCommits   time.Duration
-	StorageSnapReads time.Duration
-	StorageTrieReads time.Duration
-	StorageHashes    time.Duration
-	StorageUpdates   time.Duration
-	StorageCommits   time.Duration
+	AccountReads         time.Duration
+	AccountHashes        time.Duration
+	AccountUpdates       time.Duration
+	AccountCommits       time.Duration
+	StorageReads         time.Duration
+	StorageHashes        time.Duration
+	StorageUpdates       time.Duration
+	StorageCommits       time.Duration
+	SnapshotAccountReads time.Duration
+	SnapshotStorageReads time.Duration
+	SnapshotCommits      time.Duration
 }
 
 // Create a new state from a given trie.
@@ -494,9 +495,9 @@ func (s *StateDB) getStateObject(addr common.Address) (stateObject *stateObject)
 	}
 	// If no live objects are available, attempt to use snapshots
 	var data Account
-	/*if s.snap != nil {
+	if s.snap != nil {
 		if metrics.EnabledExpensive {
-			defer func(start time.Time) { s.AccountSnapReads += time.Since(start) }(time.Now())
+			defer func(start time.Time) { s.SnapshotAccountReads += time.Since(start) }(time.Now())
 		}
 		acc := s.snap.Account(crypto.Keccak256Hash(addr[:]))
 		if acc == nil {
@@ -510,21 +511,21 @@ func (s *StateDB) getStateObject(addr common.Address) (stateObject *stateObject)
 		if data.Root == (common.Hash{}) {
 			data.Root = emptyRoot
 		}
-	} else {*/
-	// Snapshot unavailable, fall back to the trie
-	if metrics.EnabledExpensive {
-		defer func(start time.Time) { s.AccountTrieReads += time.Since(start) }(time.Now())
+	} else {
+		// Snapshot unavailable, fall back to the trie
+		if metrics.EnabledExpensive {
+			defer func(start time.Time) { s.AccountReads += time.Since(start) }(time.Now())
+		}
+		enc, err := s.trie.TryGet(addr[:])
+		if len(enc) == 0 {
+			s.setError(err)
+			return nil
+		}
+		if err := rlp.DecodeBytes(enc, &data); err != nil {
+			log.Error("Failed to decode state object", "addr", addr, "err", err)
+			return nil
+		}
 	}
-	enc, err := s.trie.TryGet(addr[:])
-	if len(enc) == 0 {
-		s.setError(err)
-		return nil
-	}
-	if err := rlp.DecodeBytes(enc, &data); err != nil {
-		log.Error("Failed to decode state object", "addr", addr, "err", err)
-		return nil
-	}
-	//}
 	// Insert into the live set
 	obj := newObject(s, addr, data)
 	s.setStateObject(obj)
@@ -768,8 +769,9 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		delete(s.stateObjectsDirty, addr)
 	}
 	// Write the account trie changes, measuing the amount of wasted time
+	var start time.Time
 	if metrics.EnabledExpensive {
-		defer func(start time.Time) { s.AccountCommits += time.Since(start) }(time.Now())
+		start = time.Now()
 	}
 	root, err = s.trie.Commit(func(leaf []byte, parent common.Hash) error {
 		var account Account
@@ -785,8 +787,14 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		}
 		return nil
 	})
+	if metrics.EnabledExpensive {
+		s.AccountCommits += time.Since(start)
+	}
 	// If snapshotting is enabled, update the snapshot tree with this new version
 	if s.snap != nil {
+		if metrics.EnabledExpensive {
+			defer func(start time.Time) { s.SnapshotCommits += time.Since(start) }(time.Now())
+		}
 		_, parentRoot := s.snap.Info()
 		if err := s.snaps.Update(root, parentRoot, s.snapAccounts, s.snapStorage); err != nil {
 			log.Warn("Failed to update snapshot tree", "from", parentRoot, "to", root, "err", err)

@@ -65,6 +65,8 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 			return // Ugh, something went horribly wrong, bail out
 		}
 	}
+	// All transactions processed, finalize the block to force loading written-only trie paths
+	statedb.Finalise(true) // TODO(karalabe): should we run this on interrupt too?
 }
 
 // precacheTransaction attempts to apply a transaction to the given state database

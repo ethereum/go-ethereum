@@ -158,9 +158,9 @@ func (st *SnapshotTree) Cap(blockRoot common.Hash, layers int, memory uint64) er
 	defer st.lock.Unlock()
 
 	diskNumber, diffNumber := snap.Cap(layers, memory)
-	for hash, snap := range st.layers {
+	for root, snap := range st.layers {
 		if number, _ := snap.Info(); number != diskNumber && number < diffNumber {
-			delete(st.layers, hash)
+			delete(st.layers, root)
 		}
 	}
 	return nil
