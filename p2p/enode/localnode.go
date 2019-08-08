@@ -48,23 +48,32 @@ type LocalNode struct {
 	db  *DB
 
 	// everything below is protected by a lock
-	mu          sync.Mutex
-	seq         uint64
-	entries     map[string]enr.Entry
-	udpTrack    *netutil.IPTracker // predicts external UDP endpoint
-	staticIP    net.IP
-	fallbackIP  net.IP
-	fallbackUDP int
+	mu        sync.Mutex
+	seq       uint64
+	entries   map[string]enr.Entry
+	endpoint4 lnEndpoint
+	endpoint6 lnEndpoint
+}
+
+type lnEndpoint struct {
+	track                *netutil.IPTracker
+	staticIP, fallbackIP net.IP
+	fallbackUDP          int
 }
 
 // NewLocalNode creates a local node.
 func NewLocalNode(db *DB, key *ecdsa.PrivateKey) *LocalNode {
 	ln := &LocalNode{
-		id:       PubkeyToIDV4(&key.PublicKey),
-		db:       db,
-		key:      key,
-		udpTrack: netutil.NewIPTracker(iptrackWindow, iptrackContactWindow, iptrackMinStatements),
-		entries:  make(map[string]enr.Entry),
+		id:      PubkeyToIDV4(&key.PublicKey),
+		db:      db,
+		key:     key,
+		entries: make(map[string]enr.Entry),
+		endpoint4: lnEndpoint{
+			track: netutil.NewIPTracker(iptrackWindow, iptrackContactWindow, iptrackMinStatements),
+		},
+		endpoint6: lnEndpoint{
+			track: netutil.NewIPTracker(iptrackWindow, iptrackContactWindow, iptrackMinStatements),
+		},
 	}
 	ln.seq = db.localSeq(ln.id)
 	ln.invalidate()
@@ -89,13 +98,22 @@ func (ln *LocalNode) Node() *Node {
 	return ln.cur.Load().(*Node)
 }
 
+// Seq returns the current sequence number of the local node record.
+func (ln *LocalNode) Seq() uint64 {
+	ln.mu.Lock()
+	defer ln.mu.Unlock()
+
+	return ln.seq
+}
+
 // ID returns the local node ID.
 func (ln *LocalNode) ID() ID {
 	return ln.id
 }
 
-// Set puts the given entry into the local record, overwriting
-// any existing value.
+// Set puts the given entry into the local record, overwriting any existing value.
+// Use Set*IP and SetFallbackUDP to set IP addresses and UDP port, otherwise they'll
+// be overwritten by the endpoint predictor.
 func (ln *LocalNode) Set(e enr.Entry) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
@@ -127,13 +145,20 @@ func (ln *LocalNode) delete(e enr.Entry) {
 	}
 }
 
+func (ln *LocalNode) endpointForIP(ip net.IP) *lnEndpoint {
+	if ip.To4() != nil {
+		return &ln.endpoint4
+	}
+	return &ln.endpoint6
+}
+
 // SetStaticIP sets the local IP to the given one unconditionally.
 // This disables endpoint prediction.
 func (ln *LocalNode) SetStaticIP(ip net.IP) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
 
-	ln.staticIP = ip
+	ln.endpointForIP(ip).staticIP = ip
 	ln.updateEndpoints()
 }
 
@@ -143,17 +168,18 @@ func (ln *LocalNode) SetFallbackIP(ip net.IP) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
 
-	ln.fallbackIP = ip
+	ln.endpointForIP(ip).fallbackIP = ip
 	ln.updateEndpoints()
 }
 
-// SetFallbackUDP sets the last-resort UDP port. This port is used
+// SetFallbackUDP sets the last-resort UDP-on-IPv4 port. This port is used
 // if no endpoint prediction can be made.
 func (ln *LocalNode) SetFallbackUDP(port int) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
 
-	ln.fallbackUDP = port
+	ln.endpoint4.fallbackUDP = port
+	ln.endpoint6.fallbackUDP = port
 	ln.updateEndpoints()
 }
 
@@ -163,7 +189,7 @@ func (ln *LocalNode) UDPEndpointStatement(fromaddr, endpoint *net.UDPAddr) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
 
-	ln.udpTrack.AddStatement(fromaddr.String(), endpoint.String())
+	ln.endpointForIP(endpoint.IP).track.AddStatement(fromaddr.String(), endpoint.String())
 	ln.updateEndpoints()
 }
 
@@ -173,32 +199,50 @@ func (ln *LocalNode) UDPContact(toaddr *net.UDPAddr) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
 
-	ln.udpTrack.AddContact(toaddr.String())
+	ln.endpointForIP(toaddr.IP).track.AddContact(toaddr.String())
 	ln.updateEndpoints()
 }
 
+// updateEndpoints updates the record with predicted endpoints.
 func (ln *LocalNode) updateEndpoints() {
-	// Determine the endpoints.
-	newIP := ln.fallbackIP
-	newUDP := ln.fallbackUDP
-	if ln.staticIP != nil {
-		newIP = ln.staticIP
-	} else if ip, port := predictAddr(ln.udpTrack); ip != nil {
-		newIP = ip
-		newUDP = port
-	}
+	ip4, udp4 := ln.endpoint4.get()
+	ip6, udp6 := ln.endpoint6.get()
 
-	// Update the record.
-	if newIP != nil && !newIP.IsUnspecified() {
-		ln.set(enr.IP(newIP))
-		if newUDP != 0 {
-			ln.set(enr.UDP(newUDP))
-		} else {
-			ln.delete(enr.UDP(0))
-		}
+	if ip4 != nil && !ip4.IsUnspecified() {
+		ln.set(enr.IPv4(ip4))
 	} else {
-		ln.delete(enr.IP{})
+		ln.delete(enr.IPv4{})
 	}
+	if ip6 != nil && !ip6.IsUnspecified() {
+		ln.set(enr.IPv6(ip6))
+	} else {
+		ln.delete(enr.IPv6{})
+	}
+	if udp4 != 0 {
+		ln.set(enr.UDP(udp4))
+	} else {
+		ln.delete(enr.UDP(0))
+	}
+	if udp6 != 0 && udp6 != udp4 {
+		ln.set(enr.UDP6(udp6))
+	} else {
+		ln.delete(enr.UDP6(0))
+	}
+}
+
+// get returns the endpoint with highest precedence.
+func (e *lnEndpoint) get() (newIP net.IP, newPort int) {
+	newPort = e.fallbackUDP
+	if e.fallbackIP != nil {
+		newIP = e.fallbackIP
+	}
+	if e.staticIP != nil {
+		newIP = e.staticIP
+	} else if ip, port := predictAddr(e.track); ip != nil {
+		newIP = ip
+		newPort = port
+	}
+	return newIP, newPort
 }
 
 // predictAddr wraps IPTracker.PredictEndpoint, converting from its string-based

@@ -19,18 +19,21 @@ package vm
 import "testing"
 
 func TestMemoryGasCost(t *testing.T) {
-	//size := uint64(math.MaxUint64 - 64)
-	size := uint64(0xffffffffe0)
-	v, err := memoryGasCost(&Memory{}, size)
-	if err != nil {
-		t.Error("didn't expect error:", err)
+	tests := []struct {
+		size     uint64
+		cost     uint64
+		overflow bool
+	}{
+		{0x1fffffffe0, 36028809887088637, false},
+		{0x1fffffffe1, 0, true},
 	}
-	if v != 36028899963961341 {
-		t.Errorf("Expected: 36028899963961341, got %d", v)
-	}
-
-	_, err = memoryGasCost(&Memory{}, size+1)
-	if err == nil {
-		t.Error("expected error")
+	for i, tt := range tests {
+		v, err := memoryGasCost(&Memory{}, tt.size)
+		if (err == errGasUintOverflow) != tt.overflow {
+			t.Errorf("test %d: overflow mismatch: have %v, want %v", i, err == errGasUintOverflow, tt.overflow)
+		}
+		if v != tt.cost {
+			t.Errorf("test %d: gas cost mismatch: have %v, want %v", i, v, tt.cost)
+		}
 	}
 }

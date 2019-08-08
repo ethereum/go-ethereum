@@ -65,7 +65,7 @@
         "value": "0x0"
       }
     ],
-    "error": "invalid jump destination (PUSH1) 0",
+    "error": "evm: invalid jump destination",
     "from": "0xe4a13bc304682a903e9472f469c33801dd18d9e8",
     "gas": "0x435c8",
     "gasUsed": "0x435c8",

@@ -44,12 +44,13 @@ func (w *wizard) makeGenesis() {
 		Difficulty: big.NewInt(524288),
 		Alloc:      make(core.GenesisAlloc),
 		Config: &params.ChainConfig{
-			HomesteadBlock:      big.NewInt(1),
-			EIP150Block:         big.NewInt(2),
-			EIP155Block:         big.NewInt(3),
-			EIP158Block:         big.NewInt(3),
-			ByzantiumBlock:      big.NewInt(4),
-			ConstantinopleBlock: big.NewInt(5),
+			HomesteadBlock:      big.NewInt(0),
+			EIP150Block:         big.NewInt(0),
+			EIP155Block:         big.NewInt(0),
+			EIP158Block:         big.NewInt(0),
+			ByzantiumBlock:      big.NewInt(0),
+			ConstantinopleBlock: big.NewInt(0),
+			PetersburgBlock:     big.NewInt(0),
 		},
 	}
 	// Figure out which consensus engine to choose
@@ -191,7 +192,7 @@ func (w *wizard) importGenesis() {
 func (w *wizard) manageGenesis() {
 	// Figure out whether to modify or export the genesis
 	fmt.Println()
-	fmt.Println(" 1. Modify existing fork rules")
+	fmt.Println(" 1. Modify existing configurations")
 	fmt.Println(" 2. Export genesis configurations")
 	fmt.Println(" 3. Remove genesis configuration")
 
@@ -222,9 +223,17 @@ func (w *wizard) manageGenesis() {
 		fmt.Println()
 		fmt.Printf("Which block should Constantinople come into effect? (default = %v)\n", w.conf.Genesis.Config.ConstantinopleBlock)
 		w.conf.Genesis.Config.ConstantinopleBlock = w.readDefaultBigInt(w.conf.Genesis.Config.ConstantinopleBlock)
+		if w.conf.Genesis.Config.PetersburgBlock == nil {
+			w.conf.Genesis.Config.PetersburgBlock = w.conf.Genesis.Config.ConstantinopleBlock
+		}
+		fmt.Println()
+		fmt.Printf("Which block should Petersburg come into effect? (default = %v)\n", w.conf.Genesis.Config.PetersburgBlock)
+		w.conf.Genesis.Config.PetersburgBlock = w.readDefaultBigInt(w.conf.Genesis.Config.PetersburgBlock)
 
 		out, _ := json.MarshalIndent(w.conf.Genesis.Config, "", "  ")
 		fmt.Printf("Chain configuration updated:\n\n%s\n", out)
+
+		w.conf.flush()
 
 	case "2":
 		// Save whatever genesis configuration we currently have

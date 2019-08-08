@@ -42,6 +42,12 @@ type Clock interface {
 	Now() AbsTime
 	Sleep(time.Duration)
 	After(time.Duration) <-chan time.Time
+	AfterFunc(d time.Duration, f func()) Event
+}
+
+// Event represents a cancellable event returned by AfterFunc
+type Event interface {
+	Cancel() bool
 }
 
 // System implements Clock using the system clock.
@@ -60,4 +66,17 @@ func (System) Sleep(d time.Duration) {
 // After implements Clock.
 func (System) After(d time.Duration) <-chan time.Time {
 	return time.After(d)
+}
+
+// AfterFunc implements Clock.
+func (System) AfterFunc(d time.Duration, f func()) Event {
+	return (*SystemEvent)(time.AfterFunc(d, f))
+}
+
+// SystemEvent implements Event using time.Timer.
+type SystemEvent time.Timer
+
+// Cancel implements Event.
+func (e *SystemEvent) Cancel() bool {
+	return (*time.Timer)(e).Stop()
 }

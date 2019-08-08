@@ -29,8 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/karalabe/hid"
+	"github.com/karalabe/usb"
 )
 
 // Maximum time between wallet health checks to detect USB unplugs.
@@ -76,17 +77,17 @@ type wallet struct {
 	driver driver        // Hardware implementation of the low level device operations
 	url    *accounts.URL // Textual URL uniquely identifying this wallet
 
-	info   hid.DeviceInfo // Known USB device infos about the wallet
-	device *hid.Device    // USB device advertising itself as a hardware wallet
+	info   usb.DeviceInfo // Known USB device infos about the wallet
+	device usb.Device     // USB device advertising itself as a hardware wallet
 
 	accounts []accounts.Account                         // List of derive accounts pinned on the hardware wallet
 	paths    map[common.Address]accounts.DerivationPath // Known derivation paths for signing operations
 
-	deriveNextPath accounts.DerivationPath   // Next derivation path for account auto-discovery
-	deriveNextAddr common.Address            // Next derived account address for auto-discovery
-	deriveChain    ethereum.ChainStateReader // Blockchain state reader to discover used account with
-	deriveReq      chan chan struct{}        // Channel to request a self-derivation on
-	deriveQuit     chan chan error           // Channel to terminate the self-deriver with
+	deriveNextPaths []accounts.DerivationPath // Next derivation paths for account auto-discovery (multiple bases supported)
+	deriveNextAddrs []common.Address          // Next derived account addresses for auto-discovery (multiple bases supported)
+	deriveChain     ethereum.ChainStateReader // Blockchain state reader to discover used account with
+	deriveReq       chan chan struct{}        // Channel to request a self-derivation on
+	deriveQuit      chan chan error           // Channel to terminate the self-deriver with
 
 	healthQuit chan chan error
 
@@ -273,9 +274,7 @@ func (w *wallet) close() error {
 	w.device = nil
 
 	w.accounts, w.paths = nil, nil
-	w.driver.Close()
-
-	return nil
+	return w.driver.Close()
 }
 
 // Accounts implements accounts.Wallet, returning the list of accounts pinned to
@@ -340,57 +339,62 @@ func (w *wallet) selfDerive() {
 			accs  []accounts.Account
 			paths []accounts.DerivationPath
 
-			nextAddr = w.deriveNextAddr
-			nextPath = w.deriveNextPath
+			nextPaths = append([]accounts.DerivationPath{}, w.deriveNextPaths...)
+			nextAddrs = append([]common.Address{}, w.deriveNextAddrs...)
 
 			context = context.Background()
 		)
-		for empty := false; !empty; {
-			// Retrieve the next derived Ethereum account
-			if nextAddr == (common.Address{}) {
-				if nextAddr, err = w.driver.Derive(nextPath); err != nil {
-					w.log.Warn("USB wallet account derivation failed", "err", err)
+		for i := 0; i < len(nextAddrs); i++ {
+			for empty := false; !empty; {
+				// Retrieve the next derived Ethereum account
+				if nextAddrs[i] == (common.Address{}) {
+					if nextAddrs[i], err = w.driver.Derive(nextPaths[i]); err != nil {
+						w.log.Warn("USB wallet account derivation failed", "err", err)
+						break
+					}
+				}
+				// Check the account's status against the current chain state
+				var (
+					balance *big.Int
+					nonce   uint64
+				)
+				balance, err = w.deriveChain.BalanceAt(context, nextAddrs[i], nil)
+				if err != nil {
+					w.log.Warn("USB wallet balance retrieval failed", "err", err)
 					break
 				}
-			}
-			// Check the account's status against the current chain state
-			var (
-				balance *big.Int
-				nonce   uint64
-			)
-			balance, err = w.deriveChain.BalanceAt(context, nextAddr, nil)
-			if err != nil {
-				w.log.Warn("USB wallet balance retrieval failed", "err", err)
-				break
-			}
-			nonce, err = w.deriveChain.NonceAt(context, nextAddr, nil)
-			if err != nil {
-				w.log.Warn("USB wallet nonce retrieval failed", "err", err)
-				break
-			}
-			// If the next account is empty, stop self-derivation, but add it nonetheless
-			if balance.Sign() == 0 && nonce == 0 {
-				empty = true
-			}
-			// We've just self-derived a new account, start tracking it locally
-			path := make(accounts.DerivationPath, len(nextPath))
-			copy(path[:], nextPath[:])
-			paths = append(paths, path)
+				nonce, err = w.deriveChain.NonceAt(context, nextAddrs[i], nil)
+				if err != nil {
+					w.log.Warn("USB wallet nonce retrieval failed", "err", err)
+					break
+				}
+				// If the next account is empty, stop self-derivation, but add for the last base path
+				if balance.Sign() == 0 && nonce == 0 {
+					empty = true
+					if i < len(nextAddrs)-1 {
+						break
+					}
+				}
+				// We've just self-derived a new account, start tracking it locally
+				path := make(accounts.DerivationPath, len(nextPaths[i]))
+				copy(path[:], nextPaths[i][:])
+				paths = append(paths, path)
 
-			account := accounts.Account{
-				Address: nextAddr,
-				URL:     accounts.URL{Scheme: w.url.Scheme, Path: fmt.Sprintf("%s/%s", w.url.Path, path)},
-			}
-			accs = append(accs, account)
+				account := accounts.Account{
+					Address: nextAddrs[i],
+					URL:     accounts.URL{Scheme: w.url.Scheme, Path: fmt.Sprintf("%s/%s", w.url.Path, path)},
+				}
+				accs = append(accs, account)
 
-			// Display a log message to the user for new (or previously empty accounts)
-			if _, known := w.paths[nextAddr]; !known || (!empty && nextAddr == w.deriveNextAddr) {
-				w.log.Info("USB wallet discovered new account", "address", nextAddr, "path", path, "balance", balance, "nonce", nonce)
-			}
-			// Fetch the next potential account
-			if !empty {
-				nextAddr = common.Address{}
-				nextPath[len(nextPath)-1]++
+				// Display a log message to the user for new (or previously empty accounts)
+				if _, known := w.paths[nextAddrs[i]]; !known || (!empty && nextAddrs[i] == w.deriveNextAddrs[i]) {
+					w.log.Info("USB wallet discovered new account", "address", nextAddrs[i], "path", path, "balance", balance, "nonce", nonce)
+				}
+				// Fetch the next potential account
+				if !empty {
+					nextAddrs[i] = common.Address{}
+					nextPaths[i][len(nextPaths[i])-1]++
+				}
 			}
 		}
 		// Self derivation complete, release device lock
@@ -407,8 +411,8 @@ func (w *wallet) selfDerive() {
 		}
 		// Shift the self-derivation forward
 		// TODO(karalabe): don't overwrite changes from wallet.SelfDerive
-		w.deriveNextAddr = nextAddr
-		w.deriveNextPath = nextPath
+		w.deriveNextAddrs = nextAddrs
+		w.deriveNextPaths = nextPaths
 		w.stateLock.Unlock()
 
 		// Notify the user of termination and loop after a bit of time (to avoid trashing)
@@ -475,30 +479,59 @@ func (w *wallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Accoun
 
 	if _, ok := w.paths[address]; !ok {
 		w.accounts = append(w.accounts, account)
-		w.paths[address] = path
+		w.paths[address] = make(accounts.DerivationPath, len(path))
+		copy(w.paths[address], path)
 	}
 	return account, nil
 }
 
-// SelfDerive implements accounts.Wallet, trying to discover accounts that the
-// user used previously (based on the chain state), but ones that he/she did not
-// explicitly pin to the wallet manually. To avoid chain head monitoring, self
-// derivation only runs during account listing (and even then throttled).
-func (w *wallet) SelfDerive(base accounts.DerivationPath, chain ethereum.ChainStateReader) {
+// SelfDerive sets a base account derivation path from which the wallet attempts
+// to discover non zero accounts and automatically add them to list of tracked
+// accounts.
+//
+// Note, self derivaton will increment the last component of the specified path
+// opposed to decending into a child path to allow discovering accounts starting
+// from non zero components.
+//
+// Some hardware wallets switched derivation paths through their evolution, so
+// this method supports providing multiple bases to discover old user accounts
+// too. Only the last base will be used to derive the next empty account.
+//
+// You can disable automatic account discovery by calling SelfDerive with a nil
+// chain state reader.
+func (w *wallet) SelfDerive(bases []accounts.DerivationPath, chain ethereum.ChainStateReader) {
 	w.stateLock.Lock()
 	defer w.stateLock.Unlock()
 
-	w.deriveNextPath = make(accounts.DerivationPath, len(base))
-	copy(w.deriveNextPath[:], base[:])
-
-	w.deriveNextAddr = common.Address{}
+	w.deriveNextPaths = make([]accounts.DerivationPath, len(bases))
+	for i, base := range bases {
+		w.deriveNextPaths[i] = make(accounts.DerivationPath, len(base))
+		copy(w.deriveNextPaths[i][:], base[:])
+	}
+	w.deriveNextAddrs = make([]common.Address, len(bases))
 	w.deriveChain = chain
 }
 
-// SignHash implements accounts.Wallet, however signing arbitrary data is not
+// signHash implements accounts.Wallet, however signing arbitrary data is not
 // supported for hardware wallets, so this method will always return an error.
-func (w *wallet) SignHash(account accounts.Account, hash []byte) ([]byte, error) {
+func (w *wallet) signHash(account accounts.Account, hash []byte) ([]byte, error) {
 	return nil, accounts.ErrNotSupported
+}
+
+// SignData signs keccak256(data). The mimetype parameter describes the type of data being signed
+func (w *wallet) SignData(account accounts.Account, mimeType string, data []byte) ([]byte, error) {
+	return w.signHash(account, crypto.Keccak256(data))
+}
+
+// SignDataWithPassphrase implements accounts.Wallet, attempting to sign the given
+// data with the given account using passphrase as extra authentication.
+// Since USB wallets don't rely on passphrases, these are silently ignored.
+func (w *wallet) SignDataWithPassphrase(account accounts.Account, passphrase, mimeType string, data []byte) ([]byte, error) {
+	return w.SignData(account, mimeType, data)
+}
+
+func (w *wallet) SignText(account accounts.Account, text []byte) ([]byte, error) {
+	return w.signHash(account, accounts.TextHash(text))
 }
 
 // SignTx implements accounts.Wallet. It sends the transaction over to the Ledger
@@ -550,8 +583,8 @@ func (w *wallet) SignTx(account accounts.Account, tx *types.Transaction, chainID
 // SignHashWithPassphrase implements accounts.Wallet, however signing arbitrary
 // data is not supported for Ledger wallets, so this method will always return
 // an error.
-func (w *wallet) SignHashWithPassphrase(account accounts.Account, passphrase string, hash []byte) ([]byte, error) {
-	return w.SignHash(account, hash)
+func (w *wallet) SignTextWithPassphrase(account accounts.Account, passphrase string, text []byte) ([]byte, error) {
+	return w.SignText(account, accounts.TextHash(text))
 }
 
 // SignTxWithPassphrase implements accounts.Wallet, attempting to sign the given

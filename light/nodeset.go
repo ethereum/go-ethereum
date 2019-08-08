@@ -60,6 +60,15 @@ func (db *NodeSet) Put(key []byte, value []byte) error {
 	return nil
 }
 
+// Delete removes a node from the set
+func (db *NodeSet) Delete(key []byte) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	delete(db.nodes, string(key))
+	return nil
+}
+
 // Get returns a stored node
 func (db *NodeSet) Get(key []byte) ([]byte, error) {
 	db.lock.RLock()
@@ -106,7 +115,7 @@ func (db *NodeSet) NodeList() NodeList {
 }
 
 // Store writes the contents of the set to the given database
-func (db *NodeSet) Store(target ethdb.Putter) {
+func (db *NodeSet) Store(target ethdb.KeyValueWriter) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -115,11 +124,11 @@ func (db *NodeSet) Store(target ethdb.Putter) {
 	}
 }
 
-// NodeList stores an ordered list of trie nodes. It implements ethdb.Putter.
+// NodeList stores an ordered list of trie nodes. It implements ethdb.KeyValueWriter.
 type NodeList []rlp.RawValue
 
 // Store writes the contents of the list to the given database
-func (n NodeList) Store(db ethdb.Putter) {
+func (n NodeList) Store(db ethdb.KeyValueWriter) {
 	for _, node := range n {
 		db.Put(crypto.Keccak256(node), node)
 	}
@@ -136,6 +145,11 @@ func (n NodeList) NodeSet() *NodeSet {
 func (n *NodeList) Put(key []byte, value []byte) error {
 	*n = append(*n, value)
 	return nil
+}
+
+// Delete panics as there's no reason to remove a node from the list.
+func (n *NodeList) Delete(key []byte) error {
+	panic("not supported")
 }
 
 // DataSize returns the aggregated data size of nodes in the list

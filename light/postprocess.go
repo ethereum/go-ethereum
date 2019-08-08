@@ -41,9 +41,6 @@ type IndexerConfig struct {
 	// The block frequency for creating CHTs.
 	ChtSize uint64
 
-	// A special auxiliary field represents client's chtsize for server config, otherwise represents server's chtsize.
-	PairChtSize uint64
-
 	// The number of confirmations needed to generate/accept a canonical hash help trie.
 	ChtConfirms uint64
 
@@ -64,8 +61,7 @@ type IndexerConfig struct {
 var (
 	// DefaultServerIndexerConfig wraps a set of configs as a default indexer config for server side.
 	DefaultServerIndexerConfig = &IndexerConfig{
-		ChtSize:           params.CHTFrequencyServer,
-		PairChtSize:       params.CHTFrequencyClient,
+		ChtSize:           params.CHTFrequency,
 		ChtConfirms:       params.HelperTrieProcessConfirmations,
 		BloomSize:         params.BloomBitsBlocks,
 		BloomConfirms:     params.BloomConfirms,
@@ -74,8 +70,7 @@ var (
 	}
 	// DefaultClientIndexerConfig wraps a set of configs as a default indexer config for client side.
 	DefaultClientIndexerConfig = &IndexerConfig{
-		ChtSize:           params.CHTFrequencyClient,
-		PairChtSize:       params.CHTFrequencyServer,
+		ChtSize:           params.CHTFrequency,
 		ChtConfirms:       params.HelperTrieConfirmations,
 		BloomSize:         params.BloomBitsBlocksClient,
 		BloomConfirms:     params.HelperTrieConfirmations,
@@ -84,8 +79,7 @@ var (
 	}
 	// TestServerIndexerConfig wraps a set of configs as a test indexer config for server side.
 	TestServerIndexerConfig = &IndexerConfig{
-		ChtSize:           64,
-		PairChtSize:       512,
+		ChtSize:           512,
 		ChtConfirms:       4,
 		BloomSize:         64,
 		BloomConfirms:     4,
@@ -95,7 +89,6 @@ var (
 	// TestClientIndexerConfig wraps a set of configs as a test indexer config for client side.
 	TestClientIndexerConfig = &IndexerConfig{
 		ChtSize:           512,
-		PairChtSize:       64,
 		ChtConfirms:       32,
 		BloomSize:         512,
 		BloomConfirms:     32,
@@ -104,18 +97,11 @@ var (
 	}
 )
 
-// trustedCheckpoints associates each known checkpoint with the genesis hash of the chain it belongs to
-var trustedCheckpoints = map[common.Hash]*params.TrustedCheckpoint{
-	params.MainnetGenesisHash: params.MainnetTrustedCheckpoint,
-	params.TestnetGenesisHash: params.TestnetTrustedCheckpoint,
-	params.RinkebyGenesisHash: params.RinkebyTrustedCheckpoint,
-}
-
 var (
 	ErrNoTrustedCht       = errors.New("no trusted canonical hash trie")
 	ErrNoTrustedBloomTrie = errors.New("no trusted bloom trie")
 	ErrNoHeader           = errors.New("header not found")
-	chtPrefix             = []byte("chtRoot-") // chtPrefix + chtNum (uint64 big endian) -> trie root hash
+	chtPrefix             = []byte("chtRootV2-") // chtPrefix + chtNum (uint64 big endian) -> trie root hash
 	ChtTablePrefix        = "cht-"
 )
 
@@ -126,7 +112,6 @@ type ChtNode struct {
 }
 
 // GetChtRoot reads the CHT root associated to the given section from the database
-// Note that sectionIdx is specified according to LES/1 CHT section size.
 func GetChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) common.Hash {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
@@ -135,7 +120,6 @@ func GetChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) c
 }
 
 // StoreChtRoot writes the CHT root associated to the given section into the database
-// Note that sectionIdx is specified according to LES/1 CHT section size.
 func StoreChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead, root common.Hash) {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
@@ -154,7 +138,7 @@ type ChtIndexerBackend struct {
 
 // NewChtIndexer creates a Cht chain indexer
 func NewChtIndexer(db ethdb.Database, odr OdrBackend, size, confirms uint64) *core.ChainIndexer {
-	trieTable := ethdb.NewTable(db, ChtTablePrefix)
+	trieTable := rawdb.NewTable(db, ChtTablePrefix)
 	backend := &ChtIndexerBackend{
 		diskdb:      db,
 		odr:         odr,
@@ -162,7 +146,7 @@ func NewChtIndexer(db ethdb.Database, odr OdrBackend, size, confirms uint64) *co
 		triedb:      trie.NewDatabaseWithCache(trieTable, 1), // Use a tiny cache only to keep memory down
 		sectionSize: size,
 	}
-	return core.NewChainIndexer(db, ethdb.NewTable(db, "chtIndex-"), backend, size, confirms, time.Millisecond*100, "cht")
+	return core.NewChainIndexer(db, rawdb.NewTable(db, "chtIndexV2-"), backend, size, confirms, time.Millisecond*100, "cht")
 }
 
 // fetchMissingNodes tries to retrieve the last entry of the latest trusted CHT from the
@@ -234,9 +218,7 @@ func (c *ChtIndexerBackend) Commit() error {
 	}
 	c.triedb.Commit(root, false)
 
-	if ((c.section+1)*c.sectionSize)%params.CHTFrequencyClient == 0 {
-		log.Info("Storing CHT", "section", c.section*c.sectionSize/params.CHTFrequencyClient, "head", fmt.Sprintf("%064x", c.lastHash), "root", fmt.Sprintf("%064x", root))
-	}
+	log.Info("Storing CHT", "section", c.section, "head", fmt.Sprintf("%064x", c.lastHash), "root", fmt.Sprintf("%064x", root))
 	StoreChtRoot(c.diskdb, c.section, c.lastHash, root)
 	return nil
 }
@@ -276,7 +258,7 @@ type BloomTrieIndexerBackend struct {
 
 // NewBloomTrieIndexer creates a BloomTrie chain indexer
 func NewBloomTrieIndexer(db ethdb.Database, odr OdrBackend, parentSize, size uint64) *core.ChainIndexer {
-	trieTable := ethdb.NewTable(db, BloomTrieTablePrefix)
+	trieTable := rawdb.NewTable(db, BloomTrieTablePrefix)
 	backend := &BloomTrieIndexerBackend{
 		diskdb:     db,
 		odr:        odr,
@@ -287,7 +269,7 @@ func NewBloomTrieIndexer(db ethdb.Database, odr OdrBackend, parentSize, size uin
 	}
 	backend.bloomTrieRatio = size / parentSize
 	backend.sectionHeads = make([]common.Hash, backend.bloomTrieRatio)
-	return core.NewChainIndexer(db, ethdb.NewTable(db, "bltIndex-"), backend, size, 0, time.Millisecond*100, "bloomtrie")
+	return core.NewChainIndexer(db, rawdb.NewTable(db, "bltIndex-"), backend, size, 0, time.Millisecond*100, "bloomtrie")
 }
 
 // fetchMissingNodes tries to retrieve the last entries of the latest trusted bloom trie from the

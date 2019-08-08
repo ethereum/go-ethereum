@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -34,10 +33,10 @@ import (
 // If the trie does not contain a value for key, the returned proof contains all
 // nodes of the longest existing prefix of the key (at least the root node), ending
 // with the node that proves the absence of the key.
-func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) error {
+func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
 	// Collect all nodes on the path to key.
 	key = keybytesToHex(key)
-	nodes := []node{}
+	var nodes []node
 	tn := t.root
 	for len(key) > 0 && tn != nil {
 		switch n := tn.(type) {
@@ -65,7 +64,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) error {
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
 	}
-	hasher := newHasher(0, 0, nil)
+	hasher := newHasher(nil)
 	defer returnHasherToPool(hasher)
 
 	for i, n := range nodes {
@@ -81,7 +80,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) error {
 			} else {
 				enc, _ := rlp.EncodeToBytes(n)
 				if !ok {
-					hash = crypto.Keccak256(enc)
+					hash = hasher.makeHashNode(enc)
 				}
 				proofDb.Put(hash, enc)
 			}
@@ -97,14 +96,14 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) error {
 // If the trie does not contain a value for key, the returned proof contains all
 // nodes of the longest existing prefix of the key (at least the root node), ending
 // with the node that proves the absence of the key.
-func (t *SecureTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) error {
+func (t *SecureTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
 	return t.trie.Prove(key, fromLevel, proofDb)
 }
 
 // VerifyProof checks merkle proofs. The given proof must contain the value for
 // key in a trie with the given root hash. VerifyProof returns an error if the
 // proof contains invalid trie nodes or the wrong value.
-func VerifyProof(rootHash common.Hash, key []byte, proofDb DatabaseReader) (value []byte, nodes int, err error) {
+func VerifyProof(rootHash common.Hash, key []byte, proofDb ethdb.KeyValueReader) (value []byte, nodes int, err error) {
 	key = keybytesToHex(key)
 	wantHash := rootHash
 	for i := 0; ; i++ {
@@ -112,7 +111,7 @@ func VerifyProof(rootHash common.Hash, key []byte, proofDb DatabaseReader) (valu
 		if buf == nil {
 			return nil, i, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash)
 		}
-		n, err := decodeNode(wantHash[:], buf, 0)
+		n, err := decodeNode(wantHash[:], buf)
 		if err != nil {
 			return nil, i, fmt.Errorf("bad proof node %d: %v", i, err)
 		}
