@@ -157,8 +157,8 @@ func testIterativeStateSync(t *testing.T, batch int) {
 		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
-		if index, err := sched.Commit(dstDb); err != nil {
-			t.Fatalf("failed to commit data #%d: %v", index, err)
+		if err := sched.Commit(dstDb); err != nil {
+			t.Fatalf("failed to commit data: %v", err)
 		}
 		queue = append(queue[:0], sched.Missing(batch)...)
 	}
@@ -190,8 +190,8 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
-		if index, err := sched.Commit(dstDb); err != nil {
-			t.Fatalf("failed to commit data #%d: %v", index, err)
+		if err := sched.Commit(dstDb); err != nil {
+			t.Fatalf("failed to commit data: %v", err)
 		}
 		queue = append(queue[len(results):], sched.Missing(0)...)
 	}
@@ -231,8 +231,8 @@ func testIterativeRandomStateSync(t *testing.T, batch int) {
 		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
-		if index, err := sched.Commit(dstDb); err != nil {
-			t.Fatalf("failed to commit data #%d: %v", index, err)
+		if err := sched.Commit(dstDb); err != nil {
+			t.Fatalf("failed to commit data: %v", err)
 		}
 		queue = make(map[common.Hash]struct{})
 		for _, hash := range sched.Missing(batch) {
@@ -277,8 +277,8 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
-		if index, err := sched.Commit(dstDb); err != nil {
-			t.Fatalf("failed to commit data #%d: %v", index, err)
+		if err := sched.Commit(dstDb); err != nil {
+			t.Fatalf("failed to commit data: %v", err)
 		}
 		for _, hash := range sched.Missing(0) {
 			queue[hash] = struct{}{}
@@ -316,8 +316,8 @@ func TestIncompleteStateSync(t *testing.T) {
 		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
-		if index, err := sched.Commit(dstDb); err != nil {
-			t.Fatalf("failed to commit data #%d: %v", index, err)
+		if err := sched.Commit(dstDb); err != nil {
+			t.Fatalf("failed to commit data: %v", err)
 		}
 		for _, result := range results {
 			added = append(added, result.Hash)
