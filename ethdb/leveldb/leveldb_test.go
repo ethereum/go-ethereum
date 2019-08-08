@@ -14,18 +14,26 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package memorydb
+package leveldb
 
 import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
-func TestMemoryDB(t *testing.T) {
+func TestLevelDB(t *testing.T) {
 	t.Run("DatabaseSuite", func(t *testing.T) {
 		ethdb.TestDatabaseSuite(t, func() ethdb.KeyValueStore {
-			return New()
+			db, err := leveldb.Open(storage.NewMemStorage(), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return &Database{
+				db: db,
+			}
 		})
 	})
 }
