@@ -101,6 +101,7 @@ const (
 	NUMBER
 	DIFFICULTY
 	GASLIMIT
+	CHAINID     = 0x46
 	SELFBALANCE = 0x47
 )
 
@@ -278,6 +279,7 @@ var opCodeToString = map[OpCode]string{
 	NUMBER:      "NUMBER",
 	DIFFICULTY:  "DIFFICULTY",
 	GASLIMIT:    "GASLIMIT",
+	CHAINID:     "CHAINID",
 	SELFBALANCE: "SELFBALANCE",
 
 	// 0x50 range - 'storage' and execution.
@@ -430,6 +432,7 @@ var stringToOp = map[string]OpCode{
 	"CALLDATALOAD":   CALLDATALOAD,
 	"CALLDATASIZE":   CALLDATASIZE,
 	"CALLDATACOPY":   CALLDATACOPY,
+	"CHAINID":        CHAINID,
 	"DELEGATECALL":   DELEGATECALL,
 	"STATICCALL":     STATICCALL,
 	"CODESIZE":       CODESIZE,
