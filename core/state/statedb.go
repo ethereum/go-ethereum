@@ -234,19 +234,19 @@ func (self *StateDB) SubRefund(gas uint64) {
 // Exist reports whether the given account address exists in the state.
 // Notably this also returns true for suicided accounts.
 func (self *StateDB) Exist(addr common.Address) bool {
-	return self.getStateObject(addr) != nil
+	return self.getStateObject(addr, true) != nil
 }
 
 // Empty returns whether the state object is either non-existent
 // or empty according to the EIP161 specification (balance = nonce = code = 0)
 func (self *StateDB) Empty(addr common.Address) bool {
-	so := self.getStateObject(addr)
+	so := self.getStateObject(addr, true)
 	return so == nil || so.empty()
 }
 
 // Retrieve the balance from the given address or 0 if object not found
 func (self *StateDB) GetBalance(addr common.Address) *big.Int {
-	stateObject := self.getStateObject(addr)
+	stateObject := self.getStateObject(addr, true)
 	if stateObject != nil {
 		return stateObject.Balance()
 	}
@@ -254,7 +254,7 @@ func (self *StateDB) GetBalance(addr common.Address) *big.Int {
 }
 
 func (self *StateDB) GetNonce(addr common.Address) uint64 {
-	stateObject := self.getStateObject(addr)
+	stateObject := self.getStateObject(addr, true)
 	if stateObject != nil {
 		return stateObject.Nonce()
 	}
@@ -273,7 +273,7 @@ func (self *StateDB) BlockHash() common.Hash {
 }
 
 func (self *StateDB) GetCode(addr common.Address) []byte {
-	stateObject := self.getStateObject(addr)
+	stateObject := self.getStateObject(addr, true)
 	if stateObject != nil {
 		return stateObject.Code(self.db)
 	}
@@ -281,7 +281,7 @@ func (self *StateDB) GetCode(addr common.Address) []byte {
 }
 
 func (self *StateDB) GetCodeSize(addr common.Address) int {
-	stateObject := self.getStateObject(addr)
+	stateObject := self.getStateObject(addr, true)
 	if stateObject == nil {
 		return 0
 	}
@@ -296,7 +296,7 @@ func (self *StateDB) GetCodeSize(addr common.Address) int {
 }
 
 func (self *StateDB) GetCodeHash(addr common.Address) common.Hash {
-	stateObject := self.getStateObject(addr)
+	stateObject := self.getStateObject(addr, true)
 	if stateObject == nil {
 		return common.Hash{}
 	}
@@ -305,7 +305,7 @@ func (self *StateDB) GetCodeHash(addr common.Address) common.Hash {
 
 // GetState retrieves a value from the given account's storage trie.
 func (self *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
-	stateObject := self.getStateObject(addr)
+	stateObject := self.getStateObject(addr, true)
 	if stateObject != nil {
 		return stateObject.GetState(self.db, hash)
 	}
@@ -330,9 +330,11 @@ func (self *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byt
 	return [][]byte(proof), err
 }
 
-// GetCommittedState retrieves a value from the given account's committed storage trie.
+// GetCommittedState retrieves a value from the given account's committed storage.
+// This method will use the slow trie (opposed to state snapshots) since the value
+// committed is only ever used to avoid writes, so we can pre-load trie nodes.
 func (self *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
-	stateObject := self.getStateObject(addr)
+	stateObject := self.getStateObject(addr, false)
 	if stateObject != nil {
 		return stateObject.GetCommittedState(self.db, hash)
 	}
@@ -347,7 +349,7 @@ func (self *StateDB) Database() Database {
 // StorageTrie returns the storage trie of an account.
 // The return value is a copy and is nil for non-existent accounts.
 func (self *StateDB) StorageTrie(addr common.Address) Trie {
-	stateObject := self.getStateObject(addr)
+	stateObject := self.getStateObject(addr, true)
 	if stateObject == nil {
 		return nil
 	}
@@ -356,7 +358,7 @@ func (self *StateDB) StorageTrie(addr common.Address) Trie {
 }
 
 func (self *StateDB) HasSuicided(addr common.Address) bool {
-	stateObject := self.getStateObject(addr)
+	stateObject := self.getStateObject(addr, true)
 	if stateObject != nil {
 		return stateObject.suicided
 	}
@@ -426,7 +428,7 @@ func (self *StateDB) SetStorage(addr common.Address, storage map[common.Hash]com
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after Suicide.
 func (self *StateDB) Suicide(addr common.Address) bool {
-	stateObject := self.getStateObject(addr)
+	stateObject := self.getStateObject(addr, false)
 	if stateObject == nil {
 		return false
 	}
@@ -485,7 +487,7 @@ func (s *StateDB) deleteStateObject(stateObject *stateObject) {
 }
 
 // Retrieve a state object given by the address. Returns nil if not found.
-func (s *StateDB) getStateObject(addr common.Address) (stateObject *stateObject) {
+func (s *StateDB) getStateObject(addr common.Address, snapshot bool) (stateObject *stateObject) {
 	// Prefer live objects
 	if obj := s.stateObjects[addr]; obj != nil {
 		if obj.deleted {
@@ -495,7 +497,7 @@ func (s *StateDB) getStateObject(addr common.Address) (stateObject *stateObject)
 	}
 	// If no live objects are available, attempt to use snapshots
 	var data Account
-	if s.snap != nil {
+	if snapshot && s.snap != nil {
 		if metrics.EnabledExpensive {
 			defer func(start time.Time) { s.SnapshotAccountReads += time.Since(start) }(time.Now())
 		}
@@ -538,7 +540,7 @@ func (self *StateDB) setStateObject(object *stateObject) {
 
 // Retrieve a state object or create a new state object if nil.
 func (self *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
-	stateObject := self.getStateObject(addr)
+	stateObject := self.getStateObject(addr, true)
 	if stateObject == nil || stateObject.deleted {
 		stateObject, _ = self.createObject(addr)
 	}
@@ -548,7 +550,7 @@ func (self *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
 func (self *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
-	prev = self.getStateObject(addr)
+	prev = self.getStateObject(addr, false)
 	newobj = newObject(self, addr, Account{})
 	newobj.setNonce(0) // sets the object to dirty
 	if prev == nil {
@@ -578,7 +580,7 @@ func (self *StateDB) CreateAccount(addr common.Address) {
 }
 
 func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) error {
-	so := db.getStateObject(addr)
+	so := db.getStateObject(addr, true)
 	if so == nil {
 		return nil
 	}

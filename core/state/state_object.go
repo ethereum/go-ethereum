@@ -162,27 +162,56 @@ func (s *stateObject) getTrie(db Database) Trie {
 	return s.trie
 }
 
-// GetState retrieves a value from the account storage trie.
+// GetState retrieves a value from the account storage. This method will use the
+// state snapshot so retrieve the value (opposed to the trie directly) since the
+// read doesn't need to pull in log(n) trie nodes in addition from disk.
 func (s *stateObject) GetState(db Database, key common.Hash) common.Hash {
-	// If the fake storage is set, only lookup the state here(in the debugging mode)
+	// If the fake storage is set, only lookup the state here (debugging mode)
 	if s.fakeStorage != nil {
 		return s.fakeStorage[key]
 	}
+	// No fake storage, retrieve a real object from the storage trie. We're cheating
+	// a bit here since we know that this method is only using during simple reads.
+	// As such, we possibly will not write this key, so might as well avoid touching
+	// trie nodes and pull it directly from the state snapshot.
+	return s.getState(db, key, true)
+}
+
+// getState retrieves a value from the account's storage, but the caller gets to
+// control whether to use the state snapshot or the state trie as the source. For
+// simple reads, the snapshot should be used as it's faster. For writes however,
+// using the trie will be a bit slower, but will pre-cache nodes needed during
+// commit anyway.
+func (s *stateObject) getState(db Database, key common.Hash, snapshot bool) common.Hash {
 	// If we have a dirty value for this state entry, return it
 	value, dirty := s.dirtyStorage[key]
 	if dirty {
 		return value
 	}
 	// Otherwise return the entry's original value
-	return s.GetCommittedState(db, key)
+	return s.getCommittedState(db, key, snapshot)
 }
 
-// GetCommittedState retrieves a value from the committed account storage trie.
+// GetCommittedState retrieves a value from the committed account storage. This
+// method will use the slow trie (opposed to state snapshots) since the committed
+// value is only ever used to avoid writes, so we can pre-load trie nodes.
 func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Hash {
-	// If the fake storage is set, only lookup the state here(in the debugging mode)
+	// If the fake storage is set, only lookup the state here (debugging mode)
 	if s.fakeStorage != nil {
 		return s.fakeStorage[key]
 	}
+	// No fake storage, retrieve a real object from the storage trie. We're cheating
+	// a bit here since we know that this method is only using during net sstore gas
+	// metering. As such, we probably not only read, but also write this key in the
+	// same transaction, so might as well pre-cache trie nodes on the write path.
+	return s.getCommittedState(db, key, false)
+}
+
+// getCommittedState retrieves a value from the account's storage, but the caller
+// gets to control whether to use the state snapshot or the state trie. For simple
+// reads, the snapshot should be used as it's faster. For pre-writes however, using
+// the trie will be a bit slower, but will pre-cache nodes needed during commit.
+func (s *stateObject) getCommittedState(db Database, key common.Hash, snapshot bool) common.Hash {
 	// If we have the original value cached, return that
 	value, cached := s.originStorage[key]
 	if cached {
@@ -193,7 +222,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		enc []byte
 		err error
 	)
-	if s.db.snap != nil {
+	if snapshot && s.db.snap != nil {
 		if metrics.EnabledExpensive {
 			defer func(start time.Time) { s.db.SnapshotStorageReads += time.Since(start) }(time.Now())
 		}
@@ -227,8 +256,9 @@ func (s *stateObject) SetState(db Database, key, value common.Hash) {
 		s.fakeStorage[key] = value
 		return
 	}
-	// If the new value is the same as old, don't set
-	prev := s.GetState(db, key)
+	// If the new value is the same as old, don't set (use the trie to cache any
+	// nodes if we decide to write)
+	prev := s.getState(db, key, false)
 	if prev == value {
 		return
 	}
