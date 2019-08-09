@@ -566,8 +566,8 @@ Response
 ### account_export
 
 #### Export account from keystore
-   Export a private key from the keystore. The exported private key is encrypted with the original passphrase. When the
-   key is imported later this passphrase is required.
+   Export a private key from the keystore. The exported private key is encrypted with the original password. When the
+   key is imported later this password is required.
 
 #### Arguments
   - account [address]: export private key that is associated with this account
