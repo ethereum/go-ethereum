@@ -22,11 +22,21 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
+	"github.com/allegro/bigcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+)
+
+var (
+	snapshotCleanHitMeter   = metrics.NewRegisteredMeter("state/snapshot/clean/hit", nil)
+	snapshotCleanMissMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/miss", nil)
+	snapshotCleanReadMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/read", nil)
+	snapshotCleanWriteMeter = metrics.NewRegisteredMeter("state/snapshot/clean/write", nil)
 )
 
 // Snapshot represents the functionality supported by a snapshot storage layer.
@@ -190,9 +200,17 @@ func loadSnapshot(db ethdb.KeyValueStore, journal string, headNumber uint64, hea
 	if root == (common.Hash{}) {
 		return nil, errors.New("missing or corrupted snapshot")
 	}
+	cache, _ := bigcache.NewBigCache(bigcache.Config{ // TODO(karalabe): dedup
+		Shards:             1024,
+		LifeWindow:         time.Hour,
+		MaxEntriesInWindow: 512 * 1024,
+		MaxEntrySize:       512,
+		HardMaxCacheSize:   512,
+	})
 	base := &diskLayer{
 		journal: journal,
 		db:      db,
+		cache:   cache,
 		number:  number,
 		root:    root,
 	}

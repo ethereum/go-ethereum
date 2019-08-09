@@ -254,6 +254,8 @@ func (dl *diffLayer) Cap(layers int, memory uint64) (uint64, uint64) {
 	// Push all the accounts into the database
 	for hash, data := range parent.accountData {
 		rawdb.WriteAccountSnapshot(batch, hash, data)
+		base.cache.Set(string(hash[:]), data)
+
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
 				log.Crit("Failed to write account snapshot", "err", err)
@@ -265,6 +267,7 @@ func (dl *diffLayer) Cap(layers int, memory uint64) (uint64, uint64) {
 	for accountHash, storage := range parent.storageData {
 		for storageHash, data := range storage {
 			rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, data)
+			base.cache.Set(string(append(accountHash[:], storageHash[:]...)), data)
 		}
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
