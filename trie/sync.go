@@ -222,7 +222,7 @@ func (s *Sync) Process(results []SyncResult) (bool, int, error) {
 
 // Commit flushes the data stored in the internal membatch out to persistent
 // storage, returning any occurred error.
-func (s *Sync) Commit(dbw ethdb.KeyValueWriter) error {
+func (s *Sync) Commit(dbw ethdb.Batch) error {
 	// Dump the membatch into a database dbw
 	for key, value := range s.membatch.batch {
 		if err := dbw.Put(key[:], value); err != nil {
