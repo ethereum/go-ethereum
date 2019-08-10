@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/trie"
 	"golang.org/x/crypto/sha3"
 )
@@ -41,6 +42,7 @@ type stateReq struct {
 	peer     *peerConnection            // Peer that we're requesting from
 	response [][]byte                   // Response data of the peer (nil for timeouts)
 	dropped  bool                       // Flag whether the peer dropped off early
+	sendAt   time.Time                  // Time when the request was made
 }
 
 // timedOut returns if this request timed out.
@@ -336,6 +338,10 @@ func (s *stateSync) loop() (err error) {
 				return err
 			}
 			req.peer.SetNodeDataIdle(delivered)
+			// Trace average rtt of state request
+			if metrics.EnabledExpensive {
+				stateReqTimer.UpdateSince(req.sendAt)
+			}
 		}
 	}
 	return nil
@@ -375,6 +381,7 @@ func (s *stateSync) assignTasks() {
 			req.peer.log.Trace("Requesting new batch of data", "type", "state", "count", len(req.items))
 			select {
 			case s.d.trackStateReq <- req:
+				req.sendAt = time.Now()
 				req.peer.FetchNodeData(req.items)
 			case <-s.cancel:
 			case <-s.d.cancelCh:
@@ -428,6 +435,7 @@ func (s *stateSync) process(req *stateReq) (int, error) {
 	}(time.Now())
 
 	// Iterate over all the delivered data and inject one-by-one into the trie
+	size := 0
 	for _, blob := range req.response {
 		_, hash, err := s.processNodeData(blob)
 		switch err {
@@ -443,6 +451,12 @@ func (s *stateSync) process(req *stateReq) (int, error) {
 			return successful, fmt.Errorf("invalid state node %s: %v", hash.TerminalString(), err)
 		}
 		delete(req.tasks, hash)
+		size += len(blob)
+	}
+	// Trace the average node size and total response size we receive
+	if metrics.EnabledExpensive && len(req.response) > 0 {
+		stateNodeSizeMeter.Mark(int64(size / len(req.response)))
+		stateRespSizeMeter.Mark(int64(size))
 	}
 	// Put unfulfilled tasks back into the retry queue
 	npeers := s.d.peers.Len()

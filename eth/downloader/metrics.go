@@ -38,6 +38,9 @@ var (
 	receiptDropMeter    = metrics.NewRegisteredMeter("eth/downloader/receipts/drop", nil)
 	receiptTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/receipts/timeout", nil)
 
-	stateInMeter   = metrics.NewRegisteredMeter("eth/downloader/states/in", nil)
-	stateDropMeter = metrics.NewRegisteredMeter("eth/downloader/states/drop", nil)
+	stateInMeter       = metrics.NewRegisteredMeter("eth/downloader/states/in", nil)
+	stateReqTimer      = metrics.NewRegisteredTimer("eth/download/state/req", nil)
+	stateDropMeter     = metrics.NewRegisteredMeter("eth/downloader/states/drop", nil)
+	stateNodeSizeMeter = metrics.NewRegisteredMeter("eth/download/state/nodesize", nil)
+	stateRespSizeMeter = metrics.NewRegisteredMeter("eth/download/state/size", nil)
 )

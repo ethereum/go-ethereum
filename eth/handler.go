@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
@@ -584,6 +585,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			hash  common.Hash
 			bytes int
 			data  [][]byte
+			start = time.Now()
+			count int
 		)
 		for bytes < softResponseLimit && len(data) < downloader.MaxStateFetch {
 			// Retrieve the hash of the next state entry
@@ -597,6 +600,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				data = append(data, entry)
 				bytes += len(entry)
 			}
+			count += 1
+		}
+		// Trace the time cost for looking for a trie node in database.
+		if count > 0 && metrics.EnabledExpensive {
+			reqStateLookupTimer.Update(time.Duration(time.Since(start)) / time.Duration(count))
 		}
 		return p.SendNodeData(data)
 
