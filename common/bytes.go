@@ -17,7 +17,11 @@
 // Package common contains various helper functions.
 package common
 
-import "encoding/hex"
+import (
+	"encoding/hex"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
+)
 
 // ToHex returns the hex representation of b, prefixed with '0x'.
 // For empty slices, the return value is "0x0".
@@ -43,10 +47,8 @@ func ToHexArray(b [][]byte) []string {
 // FromHex returns the bytes represented by the hexadecimal string s.
 // s may be prefixed with "0x".
 func FromHex(s string) []byte {
-	if len(s) > 1 {
-		if s[0:2] == "0x" || s[0:2] == "0X" {
-			s = s[2:]
-		}
+	if hexutil.Has0xPrefix(s) {
+		s = s[2:]
 	}
 	if len(s)%2 == 1 {
 		s = "0" + s
@@ -63,11 +65,6 @@ func CopyBytes(b []byte) (copiedBytes []byte) {
 	copy(copiedBytes, b)
 
 	return
-}
-
-// hasHexPrefix validates str begins with '0x' or '0X'.
-func hasHexPrefix(str string) bool {
-	return len(str) >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')
 }
 
 // isHexCharacter returns bool of c being a valid hexadecimal.

@@ -20,6 +20,8 @@ package math
 import (
 	"fmt"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 // Various big integer limit values.
@@ -75,7 +77,7 @@ func ParseBig256(s string) (*big.Int, bool) {
 	}
 	var bigint *big.Int
 	var ok bool
-	if len(s) >= 2 && (s[:2] == "0x" || s[:2] == "0X") {
+	if hexutil.Has0xPrefix(s) {
 		bigint, ok = new(big.Int).SetString(s[2:], 16)
 	} else {
 		bigint, ok = new(big.Int).SetString(s, 10)
