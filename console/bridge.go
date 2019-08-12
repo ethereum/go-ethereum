@@ -66,7 +66,7 @@ func (b *bridge) NewAccount(call otto.FunctionCall) (response otto.Value) {
 			throwJSException(err.Error())
 		}
 		if password != confirm {
-			throwJSException("Passwords don't match!")
+			throwJSException("passwords don't match!")
 		}
 
 	// A single string password was specified, use that
