@@ -875,12 +875,18 @@ func (bc *BlockChain) Rollback(chain []common.Hash) {
 		}
 		if currentFastBlock := bc.CurrentFastBlock(); currentFastBlock.Hash() == hash {
 			newFastBlock := bc.GetBlock(currentFastBlock.ParentHash(), currentFastBlock.NumberU64()-1)
+			if newFastBlock == nil {
+				log.Crit("Failed to retrieve previous fastBlock during rollback")
+			}
 			rawdb.WriteHeadFastBlockHash(bc.db, newFastBlock.Hash())
 			bc.currentFastBlock.Store(newFastBlock)
 			headFastBlockGauge.Update(int64(newFastBlock.NumberU64()))
 		}
 		if currentBlock := bc.CurrentBlock(); currentBlock.Hash() == hash {
 			newBlock := bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
+			if newBlock == nil {
+				log.Crit("Failed to retrieve previous block during rollback")
+			}
 			rawdb.WriteHeadBlockHash(bc.db, newBlock.Hash())
 			bc.currentBlock.Store(newBlock)
 			headBlockGauge.Update(int64(newBlock.NumberU64()))
