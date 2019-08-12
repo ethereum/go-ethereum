@@ -22,8 +22,8 @@ Enter 'ok' to proceed:
 
 The master seed of clef will be locked with a password.
 Please specify a password. Do not forget this password!
-Passphrase:
-Repeat passphrase:
+Password:
+Repeat password:
 
 A master seed has been generated into /home/martin/.clef/masterseed.json
 
@@ -124,7 +124,7 @@ $ sha256sum rules.js
 
 $ clef attest 645b58e4f945e24d0221714ff29f6aa8e860382ced43490529db1695f5fcc71c
 Decrypt master seed of clef
-Passphrase:
+Password:
 INFO [07-01|13:25:03.290] Ruleset attestation updated              sha256=645b58e4f945e24d0221714ff29f6aa8e860382ced43490529db1695f5fcc71c
 ```
 
@@ -193,12 +193,12 @@ In order to make more useful rules - like signing transactions - the signer need
 ```text
 $ clef setpw 0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3
 
-Please enter a passphrase to store for this address:
-Passphrase:
-Repeat passphrase:
+Please enter a password to store for this address:
+Password:
+Repeat password:
 
 Decrypt master seed of clef
-Passphrase:
+Passpword:
 INFO [07-01|14:05:56.031] Credential store updated                 key=0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3
 ```
 
@@ -237,7 +237,7 @@ f163a1738b649259bb9b369c593fdc4c6b6f86cc87e343c3ba58faee03c2a178  rules.js
 
 $ clef attest f163a1738b649259bb9b369c593fdc4c6b6f86cc87e343c3ba58faee03c2a178
 Decrypt master seed of clef
-Passphrase:
+Password:
 INFO [07-01|14:11:28.509] Ruleset attestation updated              sha256=f163a1738b649259bb9b369c593fdc4c6b6f86cc87e343c3ba58faee03c2a178
 ```
 

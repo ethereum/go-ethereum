@@ -28,15 +28,15 @@ import (
 
 var newPassphraseFlag = cli.StringFlag{
 	Name:  "newpasswordfile",
-	Usage: "the file that contains the new passphrase for the keyfile",
+	Usage: "the file that contains the new password for the keyfile",
 }
 
 var commandChangePassphrase = cli.Command{
-	Name:      "changepassphrase",
-	Usage:     "change the passphrase on a keyfile",
+	Name:      "changepassword",
+	Usage:     "change the password on a keyfile",
 	ArgsUsage: "<keyfile>",
 	Description: `
-Change the passphrase of a keyfile.`,
+Change the password of a keyfile.`,
 	Flags: []cli.Flag{
 		passphraseFlag,
 		newPassphraseFlag,
@@ -58,12 +58,12 @@ Change the passphrase of a keyfile.`,
 		}
 
 		// Get a new passphrase.
-		fmt.Println("Please provide a new passphrase")
+		fmt.Println("Please provide a new password")
 		var newPhrase string
 		if passFile := ctx.String(newPassphraseFlag.Name); passFile != "" {
 			content, err := ioutil.ReadFile(passFile)
 			if err != nil {
-				utils.Fatalf("Failed to read new passphrase file '%s': %v", passFile, err)
+				utils.Fatalf("Failed to read new password file '%s': %v", passFile, err)
 			}
 			newPhrase = strings.TrimRight(string(content), "\r\n")
 		} else {
@@ -73,7 +73,7 @@ Change the passphrase of a keyfile.`,
 		// Encrypt the key with the new passphrase.
 		newJson, err := keystore.EncryptKey(key, newPhrase, keystore.StandardScryptN, keystore.StandardScryptP)
 		if err != nil {
-			utils.Fatalf("Error encrypting with new passphrase: %v", err)
+			utils.Fatalf("Error encrypting with new password: %v", err)
 		}
 
 		// Then write the new keyfile in place of the old one.
