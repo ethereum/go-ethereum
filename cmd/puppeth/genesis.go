@@ -38,14 +38,14 @@ type alethGenesisSpec struct {
 	Params     struct {
 		AccountStartNonce          math2.HexOrDecimal64   `json:"accountStartNonce"`
 		MaximumExtraDataSize       hexutil.Uint64         `json:"maximumExtraDataSize"`
-		HomesteadForkBlock         hexutil.Uint64         `json:"homesteadForkBlock"`
+		HomesteadForkBlock         *hexutil.Big           `json:"homesteadForkBlock,omitempty"`
 		DaoHardforkBlock           math2.HexOrDecimal64   `json:"daoHardforkBlock"`
-		EIP150ForkBlock            hexutil.Uint64         `json:"EIP150ForkBlock"`
-		EIP158ForkBlock            hexutil.Uint64         `json:"EIP158ForkBlock"`
-		ByzantiumForkBlock         hexutil.Uint64         `json:"byzantiumForkBlock"`
-		ConstantinopleForkBlock    hexutil.Uint64         `json:"constantinopleForkBlock"`
-		ConstantinopleFixForkBlock hexutil.Uint64         `json:"constantinopleFixForkBlock"`
-		IstanbulForkBlock          hexutil.Uint64         `json:"IstanbulForkBlock"`
+		EIP150ForkBlock            *hexutil.Big           `json:"EIP150ForkBlock,omitempty"`
+		EIP158ForkBlock            *hexutil.Big           `json:"EIP158ForkBlock,omitempty"`
+		ByzantiumForkBlock         *hexutil.Big           `json:"byzantiumForkBlock,omitempty"`
+		ConstantinopleForkBlock    *hexutil.Big           `json:"constantinopleForkBlock,omitempty"`
+		ConstantinopleFixForkBlock *hexutil.Big           `json:"constantinopleFixForkBlock,omitempty"`
+		IstanbulForkBlock          *hexutil.Big           `json:"istanbulForkBlock,omitempty"`
 		MinGasLimit                hexutil.Uint64         `json:"minGasLimit"`
 		MaxGasLimit                hexutil.Uint64         `json:"maxGasLimit"`
 		TieBreakingGas             bool                   `json:"tieBreakingGas"`
@@ -108,32 +108,32 @@ func newAlethGenesisSpec(network string, genesis *core.Genesis) (*alethGenesisSp
 	spec.Params.AccountStartNonce = 0
 	spec.Params.TieBreakingGas = false
 	spec.Params.AllowFutureBlocks = false
+
+	// Dao hardfork block is a special one. The fork block is listed as 0 in the
+	// config but aleth will sync with ETC clients up until the actual dao hard
+	// fork block.
 	spec.Params.DaoHardforkBlock = 0
 
-	spec.Params.HomesteadForkBlock = (hexutil.Uint64)(genesis.Config.HomesteadBlock.Uint64())
-	spec.Params.EIP150ForkBlock = (hexutil.Uint64)(genesis.Config.EIP150Block.Uint64())
-	spec.Params.EIP158ForkBlock = (hexutil.Uint64)(genesis.Config.EIP158Block.Uint64())
-
 	if num := genesis.Config.HomesteadBlock; num != nil {
-		spec.Params.HomesteadForkBlock = hexutil.Uint64(num.Uint64())
+		spec.Params.HomesteadForkBlock = (*hexutil.Big)(num)
 	}
 	if num := genesis.Config.EIP150Block; num != nil {
-		spec.Params.EIP150ForkBlock = hexutil.Uint64(num.Uint64())
+		spec.Params.EIP150ForkBlock = (*hexutil.Big)(num)
 	}
 	if num := genesis.Config.EIP158Block; num != nil {
-		spec.Params.EIP158ForkBlock = hexutil.Uint64(num.Uint64())
+		spec.Params.EIP158ForkBlock = (*hexutil.Big)(num)
 	}
 	if num := genesis.Config.ByzantiumBlock; num != nil {
-		spec.Params.ByzantiumForkBlock = hexutil.Uint64(num.Uint64())
+		spec.Params.ByzantiumForkBlock = (*hexutil.Big)(num)
 	}
 	if num := genesis.Config.ConstantinopleBlock; num != nil {
-		spec.Params.ConstantinopleForkBlock = hexutil.Uint64(num.Uint64())
+		spec.Params.ConstantinopleForkBlock = (*hexutil.Big)(num)
 	}
 	if num := genesis.Config.PetersburgBlock; num != nil {
-		spec.Params.ConstantinopleFixForkBlock = hexutil.Uint64(num.Uint64())
+		spec.Params.ConstantinopleFixForkBlock = (*hexutil.Big)(num)
 	}
 	if num := genesis.Config.IstanbulBlock; num != nil {
-		spec.Params.IstanbulForkBlock = hexutil.Uint64(num.Uint64())
+		spec.Params.IstanbulForkBlock = (*hexutil.Big)(num)
 	}
 	spec.Params.NetworkID = (hexutil.Uint64)(genesis.Config.ChainID.Uint64())
 	spec.Params.ChainID = (hexutil.Uint64)(genesis.Config.ChainID.Uint64())
