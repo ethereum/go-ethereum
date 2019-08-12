@@ -118,7 +118,7 @@ func (self *StateDB) dump(c collector, excludeCode, excludeStorage, excludeMissi
 			account.Storage = make(map[common.Hash]string)
 			storageIt := trie.NewIterator(obj.getTrie(self.db).NodeIterator(nil))
 			for storageIt.Next() {
-				_, content, _, err := rlp.Split(it.Value)
+				_, content, _, err := rlp.Split(storageIt.Value)
 				if err != nil {
 					log.Error("Failed to decode the value returned by iterator", "error", err)
 					continue
