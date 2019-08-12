@@ -198,7 +198,7 @@ Password:
 Repeat password:
 
 Decrypt master seed of clef
-Passpword:
+Password:
 INFO [07-01|14:05:56.031] Credential store updated                 key=0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3
 ```
 
