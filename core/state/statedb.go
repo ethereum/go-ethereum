@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -681,20 +682,62 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
-	// Finalise all the dirty storage states and write them into the tries
+	// Finalise all the dirty storage states and prepare them for writing
 	s.Finalise(deleteEmptyObjects)
 
+	// Storage tries are independent, so update them in the background
+	var (
+		deleted = make([]*stateObject, 0, len(s.stateObjectsPending))
+		changed = make([]*stateObject, 0, len(s.stateObjectsPending)) // Only account updated
+		updated = make([]*stateObject, 0, len(s.stateObjectsPending)) // Storage updates
+	)
 	for addr := range s.stateObjectsPending {
 		obj := s.stateObjects[addr]
-		if obj.deleted {
-			s.deleteStateObject(obj)
-		} else {
-			obj.updateRoot(s.db)
-			s.updateStateObject(obj)
+		switch {
+		case obj.deleted:
+			deleted = append(deleted, obj)
+		case len(obj.pendingStorage) == 0:
+			changed = append(changed, obj)
+		default:
+			updated = append(updated, obj)
 		}
 	}
 	if len(s.stateObjectsPending) > 0 {
 		s.stateObjectsPending = make(map[common.Address]struct{})
+	}
+	done := make(chan *stateObject, len(updated))
+
+	// Beside running the updates in the background, track the longest running one
+	// so we can report it as a storage update metric.
+	start := time.Now()
+	var end atomic.Value
+	end.Store(start)
+
+	for _, obj := range updated {
+		obj := obj // Closure, take care
+		workers.Schedule(func() {
+			obj.updateRoot(s.db)
+			if metrics.EnabledExpensive {
+				end.Store(time.Now())
+			}
+			done <- obj
+		})
+	}
+	// Storage tries are updating in the background, concurrently remove deleted
+	// and naively updated accounts from the main trie ,then progress to handling
+	// the storage updates as they are finishing.
+	for _, obj := range deleted {
+		s.deleteStateObject(obj)
+	}
+	for _, obj := range changed {
+		s.updateStateObject(obj)
+	}
+	for range updated {
+		s.updateStateObject(<-done)
+	}
+	// Track the amount of time wasted on updating the storge tries
+	if metrics.EnabledExpensive {
+		s.StorageUpdates += end.Load().(time.Time).Sub(start) // TODO(karalabe): StorageHashes is not counted now
 	}
 	// Track the amount of time wasted on hashing the account trie
 	if metrics.EnabledExpensive {

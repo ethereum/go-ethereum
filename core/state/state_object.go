@@ -276,10 +276,6 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	// Make sure all dirty slots are finalized into the pending storage area
 	s.finalise()
 
-	// Track the amount of time wasted on updating the storge trie
-	if metrics.EnabledExpensive {
-		defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
-	}
 	// Insert all the pending updates into the trie
 	tr := s.getTrie(db)
 	for key, value := range s.pendingStorage {
@@ -306,11 +302,6 @@ func (s *stateObject) updateTrie(db Database) Trie {
 // UpdateRoot sets the trie root to the current root hash of
 func (s *stateObject) updateRoot(db Database) {
 	s.updateTrie(db)
-
-	// Track the amount of time wasted on hashing the storge trie
-	if metrics.EnabledExpensive {
-		defer func(start time.Time) { s.db.StorageHashes += time.Since(start) }(time.Now())
-	}
 	s.data.Root = s.trie.Hash()
 }
 
