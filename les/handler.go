@@ -1129,7 +1129,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		p.freezeServer(true)
 		pm.retriever.frozen(p)
-		p.Log().Warn("Service stopped")
+		p.Log().Debug("Service stopped")
 
 	case ResumeMsg:
 		if pm.odr == nil {
@@ -1141,7 +1141,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		p.fcServer.ResumeFreeze(bv)
 		p.freezeServer(false)
-		p.Log().Warn("Service resumed")
+		p.Log().Debug("Service resumed")
 
 	default:
 		p.Log().Trace("Received unknown message", "code", msg.Code)
