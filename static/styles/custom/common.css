@@ -35,3 +35,12 @@ a code {
 	display:       inline-block;
 	margin-bottom: -0.25em;
 }
+
+table {
+	margin-top: 16px;
+	margin-bottom: 16px;
+}
+table thead tr th, table tbody tr td {
+	border-bottom: 1px solid #ddd;
+	padding: 4px;
+}

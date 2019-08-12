@@ -31,7 +31,7 @@ collections:
     sidebar_index: 1
     frontpage: _install-and-build/Installing-Geth.md
   interface:
-    output: true  
+    output: true
     caption: Interacting with Geth
     sidebar_index: 2
   support:
@@ -52,14 +52,15 @@ collections:
     caption: Whisper
     sidebar_index: 6
     frontpage: _whisper/Whisper-Overview.md
+  rpc:
+    output: true
+    caption: JSON RPC APIs
+    sidebar_index: 7
   doc:
     output: true
     caption: Other
-    sidebar_index: 7
+    sidebar_index: 8
   legacy:
     output: true
     caption: Legacy content
-    sidebar_index: 8
-
-
-
+    sidebar_index: 9
