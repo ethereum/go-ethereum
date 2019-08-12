@@ -8,7 +8,7 @@ Executes a new message call immediately, without creating a transaction on the b
 
 The method takes 3 parameters: an unsigned transaction object to execute in read-only mode; the block number to execute the call against; and an optional state override-set to allow executing the call against a modified chain state.
 
-##### 1. `Object` - Transaction call object
+#### 1. `Object` - Transaction call object
 
 The *transaction call object* is mandatory and contains all the necessary parameters to execute a read-only EVM contract method.
 
@@ -32,11 +32,11 @@ Example:
 }
 ```
 
-##### 2. `Quantity | Tag` - Block number or the string `latest` or `pending`
+#### 2. `Quantity | Tag` - Block number or the string `latest` or `pending`
 
 The *block number* is mandatory and defines the context (state) against which the specified transaction should be executed. It is not possible to execute calls against reorged blocks; or blocks older than 128 (unless the node is an archive node).
 
-##### 3. `Object` - Optional - State override set
+#### 3. `Object` - State override set
 
 The *state override set* is an optional address-to-state mapping, where each entry specifies some state to be ephemerally overridden prior to executing the call. Each address maps to an object containing:
 
@@ -126,7 +126,7 @@ contract CheckpointOracle {
 }
 ```
 
-With a synced Rinkeby node with RPC exposed on localhost (`geth --rinkeby --rpc`) we can make a call against the live [Checkpoint Oracle](https://rinkeby.etherscan.io/address/0xebe8efa441b9302a0d7eaecc277c09d20d684540), but override its byte code with our own version that has an accessor for the voting theshold field:
+With a synced Rinkeby node with RPC exposed on localhost (`geth --rinkeby --rpc`) we can make a call against the live [Checkpoint Oracle](https://rinkeby.etherscan.io/address/0xebe8efa441b9302a0d7eaecc277c09d20d684540), but override its byte code with our own version that has an accessor for the voting threshold field:
 
 ```
 $ curl --data '{"method":"eth_call","params":[{"to":"0xebe8efa441b9302a0d7eaecc277c09d20d684540","data":"0x0be5b6ba"}, "latest", {"0xebe8efa441b9302a0d7eaecc277c09d20d684540": {"code":"0x6080604052348015600f57600080fd5b506004361060285760003560e01c80630be5b6ba14602d575b600080fd5b60336045565b60408051918252519081900360200190f35b6007549056fea265627a7a723058206f26bd0433456354d8d1228d8fe524678a8aeeb0594851395bdbd35efc2a65f164736f6c634300050a0032"}}],"id":1,"jsonrpc":"2.0"}' -H "Content-Type: application/json" -X POST localhost:8545
