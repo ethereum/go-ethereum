@@ -76,10 +76,10 @@ type Message interface {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, contractCreation, homestead bool, istanbul bool) (uint64, error) {
+func IntrinsicGas(data []byte, contractCreation, eip155Active bool, eip2028Active bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
-	if contractCreation && homestead {
+	if contractCreation && eip155Active {
 		gas = params.TxGasContractCreation
 	} else {
 		gas = params.TxGas
@@ -95,7 +95,7 @@ func IntrinsicGas(data []byte, contractCreation, homestead bool, istanbul bool) 
 		}
 		// Make sure we don't exceed uint64 for all data combinations
 		nonZeroGas := params.TxDataNonZeroGasFrontier
-		if istanbul {
+		if eip2028Active {
 			nonZeroGas = params.TxDataNonZeroGasEIP2028
 		}
 		if (math.MaxUint64-gas)/nonZeroGas < nz {
