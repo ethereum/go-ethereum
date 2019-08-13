@@ -23,6 +23,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 )
@@ -162,10 +164,8 @@ func TestParseNode(t *testing.T) {
 			if err == nil {
 				t.Errorf("test %q:\n  got nil error, expected %#q", test.input, test.wantError)
 				continue
-			} else if err.Error() != test.wantError {
-				t.Errorf("test %q:\n  got error %#q, expected %#q", test.input, err.Error(), test.wantError)
-				continue
 			}
+			require.Contains(t, err.Error(), test.wantError, "test %q:\n  got error %#q, expected %#q", test.input, err.Error(), test.wantError)
 		} else {
 			if err != nil {
 				t.Errorf("test %q:\n  unexpected error: %v", test.input, err)
