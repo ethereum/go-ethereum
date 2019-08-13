@@ -30,6 +30,13 @@ func TestBlockchain(t *testing.T) {
 	bt.skipLoad(`.*bcForgedTest/bcForkUncle\.json`)
 	bt.skipLoad(`.*bcMultiChainTest/(ChainAtoChainB_blockorder|CallContractFromNotBestBlock)`)
 	bt.skipLoad(`.*bcTotalDifficultyTest/(lotsOfLeafs|lotsOfBranches|sideChainWithMoreTransactions)`)
+
+	// These are not formatted like the rest -- due to the large postState, the postState
+	// was replaced by a hash, instead of a genesisAlloc map
+	// See https://github.com/ethereum/tests/pull/616
+	bt.skipLoad(`.*bcExploitTest/ShanghaiLove.json`)
+	bt.skipLoad(`.*bcExploitTest/SuicideIssue.json`)
+
 	// Slow tests
 	bt.slow(`.*bcExploitTest/DelegateCallSpam.json`)
 	bt.slow(`.*bcExploitTest/ShanghaiLove.json`)
