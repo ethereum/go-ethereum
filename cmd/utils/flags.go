@@ -21,12 +21,15 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"text/tabwriter"
+	"text/template"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -96,6 +99,26 @@ GLOBAL OPTIONS:
 
 // NewApp creates an app with sane defaults.
 func NewApp(gitCommit, gitDate, usage string) *cli.App {
+	// Setup a global printer to fix alignment across commands
+	cli.HelpPrinter = func(out io.Writer, templ string, data interface{}) {
+		funcMap := template.FuncMap{
+			"join": strings.Join,
+		}
+
+		w := tabwriter.NewWriter(out, 40, 8, 2, ' ', 0)
+		t := template.Must(template.New("help").Funcs(funcMap).Parse(templ))
+		err := t.Execute(w, data)
+		if err != nil {
+			// If the writer is closed, t.Execute will fail, and there's nothing
+			// we can do to recover.
+			if os.Getenv("CLI_TEMPLATE_ERROR_DEBUG") != "" {
+				log.Crit("CLI TEMPLATE ERROR: %#v\n", err)
+			}
+			return
+		}
+		w.Flush()
+	}
+
 	app := cli.NewApp()
 	app.Name = filepath.Base(os.Args[0])
 	app.Author = ""
