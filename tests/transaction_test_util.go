@@ -80,13 +80,14 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 		{"EIP158", types.NewEIP155Signer(config.ChainID), tt.EIP158, true, false},
 		{"Byzantium", types.NewEIP155Signer(config.ChainID), tt.Byzantium, true, false},
 		{"Constantinople", types.NewEIP155Signer(config.ChainID), tt.Constantinople, true, false},
-		{"Istanbul", types.NewEIP155Signer(config.ChainID), tt.Istanbul, true, true},
+		//TODO! @holiman or @rjl493456442 : enable this after tests have been updated for Istanbul
+		//{"Istanbul", types.NewEIP155Signer(config.ChainID), tt.Istanbul, true, true},
 	} {
 		sender, txhash, err := validateTx(tt.RLP, testcase.signer, testcase.isHomestead, testcase.isIstanbul)
 
 		if testcase.fork.Sender == (common.UnprefixedAddress{}) {
 			if err == nil {
-				return fmt.Errorf("Expected error, got none (address %v)", sender.String())
+				return fmt.Errorf("Expected error, got none (address %v)[%v]", sender.String(), testcase.name)
 			}
 			continue
 		}
