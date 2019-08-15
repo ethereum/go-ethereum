@@ -48,6 +48,7 @@ func (s *Solidity) makeArgs() []string {
 	p := []string{
 		"--combined-json", "bin,bin-runtime,srcmap,srcmap-runtime,abi,userdoc,devdoc",
 		"--optimize", // code optimizer switched on
+		"--allow-paths", "., ./, ../", //default to support relative path： ./  ../  . 
 	}
 	if s.Major > 0 || s.Minor > 4 || s.Patch > 6 {
 		p[1] += ",metadata,hashes"
