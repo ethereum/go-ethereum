@@ -289,6 +289,24 @@ func (f *Fetcher) loop() {
 	fetchTimer := time.NewTimer(0)
 	completeTimer := time.NewTimer(0)
 
+	scheduleBlockAnnouncement := func(notification *announce) bool {
+		if _, ok := f.fetching[notification.hash]; ok {
+			return false
+		}
+		if _, ok := f.completing[notification.hash]; ok {
+			return false
+		}
+		f.announces[notification.origin]++
+		f.announced[notification.hash] = append(f.announced[notification.hash], notification)
+		if f.announceChangeHook != nil && len(f.announced[notification.hash]) == 1 {
+			f.announceChangeHook(notification.hash, true)
+		}
+		if len(f.announced) == 1 {
+			f.rescheduleFetch(fetchTimer)
+		}
+		return true
+	}
+
 	for {
 		// Clean up any expired block fetches
 		for hash, announce := range f.fetching {
@@ -327,13 +345,17 @@ func (f *Fetcher) loop() {
 					log.Info("Peer lost while fetching for parent", "peer", op.origin)
 					break
 				}
-				go func() {
-					log.Info("Notify of parent hash", "hash", parentHash, "number", op.block.NumberU64()-1, "peer", op.origin)
-					err := f.Notify(op.origin, parentHash, op.block.NumberU64()-1, time.Now(), headerRequestFn, bodyRequestFn)
-					if err != nil {
-						log.Error("Unable to notify of parent block", "error", err)
-					}
-				}()
+				scheduled := scheduleBlockAnnouncement(&announce{
+					hash:        parentHash,
+					number:      op.block.NumberU64() - 1,
+					time:        time.Now(),
+					origin:      op.origin,
+					fetchHeader: headerRequestFn,
+					fetchBodies: bodyRequestFn,
+				})
+				if scheduled {
+					log.Trace("Remote parent hash scheduled", "number", op.block.NumberU64()-1, "hash", parentHash, "peer", op.origin)
+				}
 				break
 			}
 			f.insert(op.origin, op.block)
@@ -363,20 +385,7 @@ func (f *Fetcher) loop() {
 				}
 			}
 			// All is well, schedule the announce if block's not yet downloading
-			if _, ok := f.fetching[notification.hash]; ok {
-				break
-			}
-			if _, ok := f.completing[notification.hash]; ok {
-				break
-			}
-			f.announces[notification.origin] = count
-			f.announced[notification.hash] = append(f.announced[notification.hash], notification)
-			if f.announceChangeHook != nil && len(f.announced[notification.hash]) == 1 {
-				f.announceChangeHook(notification.hash, true)
-			}
-			if len(f.announced) == 1 {
-				f.rescheduleFetch(fetchTimer)
-			}
+			scheduleBlockAnnouncement(notification)
 
 		case op := <-f.inject:
 			// A direct block insertion was requested, try and fill any pending gaps
