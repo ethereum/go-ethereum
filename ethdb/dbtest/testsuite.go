@@ -14,18 +14,20 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package ethdb
+package dbtest
 
 import (
 	"bytes"
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // TestDatabaseSuite runs a suite of tests against a KeyValueStore database
 // implementation.
-func TestDatabaseSuite(t *testing.T, New func() KeyValueStore) {
+func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 	t.Run("Iterator", func(t *testing.T) {
 		tests := []struct {
 			content map[string]string
@@ -166,7 +168,7 @@ func TestDatabaseSuite(t *testing.T, New func() KeyValueStore) {
 
 		if got, err := db.Has(key); err != nil {
 			t.Error(err)
-		} else if got != false {
+		} else if got {
 			t.Errorf("wrong value: %t", got)
 		}
 
@@ -177,13 +179,13 @@ func TestDatabaseSuite(t *testing.T, New func() KeyValueStore) {
 
 		if got, err := db.Has(key); err != nil {
 			t.Error(err)
-		} else if got != true {
+		} else if !got {
 			t.Errorf("wrong value: %t", got)
 		}
 
 		if got, err := db.Get(key); err != nil {
 			t.Error(err)
-		} else if bytes.Compare(got, value) != 0 {
+		} else if !bytes.Equal(got, value) {
 			t.Errorf("wrong value: %q", got)
 		}
 
@@ -193,7 +195,7 @@ func TestDatabaseSuite(t *testing.T, New func() KeyValueStore) {
 
 		if got, err := db.Has(key); err != nil {
 			t.Error(err)
-		} else if got != false {
+		} else if got {
 			t.Errorf("wrong value: %t", got)
 		}
 	})
@@ -279,7 +281,7 @@ func TestDatabaseSuite(t *testing.T, New func() KeyValueStore) {
 
 }
 
-func iterateKeys(it Iterator) []string {
+func iterateKeys(it ethdb.Iterator) []string {
 	keys := []string{}
 	for it.Next() {
 		keys = append(keys, string(it.Key()))
