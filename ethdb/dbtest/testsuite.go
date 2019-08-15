@@ -89,8 +89,8 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			it, idx := db.NewIteratorWithPrefix([]byte(tt.prefix)), 0
 			for it.Next() {
 				if len(tt.order) <= idx {
-					t.Errorf("test %d: more items than expected: checking idx=%d, have len=%d", i, idx, len(tt.order))
-					continue
+					t.Errorf("test %d: prefix=%q more items than expected: checking idx=%d (key %q), expecting len=%d", i, tt.prefix, idx, it.Key(), len(tt.order))
+					break
 				}
 				if !bytes.Equal(it.Key(), []byte(tt.order[idx])) {
 					t.Errorf("test %d: item %d: key mismatch: have %s, want %s", i, idx, string(it.Key()), tt.order[idx])
@@ -114,7 +114,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		db := New()
 		defer db.Close()
 
-		keys := []string{"1", "2", "3", "4", "10", "11", "12", "20", "21", "22"}
+		keys := []string{"1", "2", "3", "4", "6", "10", "11", "12", "20", "21", "22"}
 		sort.Strings(keys) // 1, 10, 11, etc
 
 		for _, k := range keys {
@@ -148,8 +148,32 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		}
 
 		{
+			it := db.NewIteratorWithPrefix([]byte("5"))
+			got, want := iterateKeys(it), []string{}
+			if err := it.Error(); err != nil {
+				t.Fatal(err)
+			}
+			it.Release()
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("IteratorWithPrefix(1): got: %s; want: %s", got, want)
+			}
+		}
+
+		{
 			it := db.NewIteratorWithStart([]byte("2"))
-			got, want := iterateKeys(it), []string{"2", "20", "21", "22", "3", "4"}
+			got, want := iterateKeys(it), []string{"2", "20", "21", "22", "3", "4", "6"}
+			if err := it.Error(); err != nil {
+				t.Fatal(err)
+			}
+			it.Release()
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("IteratorWithStart(2): got: %s; want: %s", got, want)
+			}
+		}
+
+		{
+			it := db.NewIteratorWithStart([]byte("5"))
+			got, want := iterateKeys(it), []string{"6"}
 			if err := it.Error(); err != nil {
 				t.Fatal(err)
 			}
