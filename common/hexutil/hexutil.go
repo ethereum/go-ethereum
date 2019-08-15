@@ -61,7 +61,7 @@ func Decode(input string) ([]byte, error) {
 	if len(input) == 0 {
 		return nil, ErrEmptyString
 	}
-	if !Has0xPrefix(input) {
+	if !has0xPrefix(input) {
 		return nil, ErrMissingPrefix
 	}
 	b, err := hex.DecodeString(input[2:])
@@ -185,8 +185,7 @@ func EncodeBig(bigint *big.Int) string {
 	return fmt.Sprintf("%#x", bigint)
 }
 
-// Has0xPrefix validates input begins with '0x' or '0X'.
-func Has0xPrefix(input string) bool {
+func has0xPrefix(input string) bool {
 	return len(input) >= 2 && input[0] == '0' && (input[1] == 'x' || input[1] == 'X')
 }
 
@@ -194,7 +193,7 @@ func checkNumber(input string) (raw string, err error) {
 	if len(input) == 0 {
 		return "", ErrEmptyString
 	}
-	if !Has0xPrefix(input) {
+	if !has0xPrefix(input) {
 		return "", ErrMissingPrefix
 	}
 	input = input[2:]

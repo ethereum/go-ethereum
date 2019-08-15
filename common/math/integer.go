@@ -19,8 +19,6 @@ package math
 import (
 	"fmt"
 	"strconv"
-
-	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 // Integer limit values.
@@ -63,7 +61,7 @@ func ParseUint64(s string) (uint64, bool) {
 	if s == "" {
 		return 0, true
 	}
-	if hexutil.Has0xPrefix(s) {
+	if len(s) >= 2 && (s[:2] == "0x" || s[:2] == "0X") {
 		v, err := strconv.ParseUint(s[2:], 16, 64)
 		return v, err == nil
 	}
