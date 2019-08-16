@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"errors"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
@@ -160,12 +162,13 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 	return params.NetSstoreDirtyGas, nil
 }
 
+// 0. If *gasleft* is less than or equal to 2300, fail the current call.
 // 1. If current value equals new value (this is a no-op), SSTORE_NOOP_GAS gas is deducted.
 // 2. If current value does not equal new value:
 //   2.1. If original value equals current value (this storage slot has not been changed by the current execution context):
 //     2.1.1. If original value is 0, SSTORE_INIT_GAS gas is deducted.
 //     2.1.2. Otherwise, SSTORE_CLEAN_GAS gas is deducted. If new value is 0, add SSTORE_CLEAR_REFUND to refund counter.
-//   2.2. If original value does not equal current value (this storage slot is dirty), SSTORE_DIRTY_GAS gas is deducted, SSTORE_DIRTY_REFUND is refunded. Apply both of the following clauses:
+//   2.2. If original value does not equal current value (this storage slot is dirty), SSTORE_DIRTY_GAS gas is deducted. Apply both of the following clauses:
 //     2.2.1. If original value is not 0:
 //       2.2.1.1. If current value is 0 (also means that new value is not 0), subtract SSTORE_CLEAR_REFUND gas from refund counter. We can prove that refund counter will never go below 0.
 //       2.2.1.2. If new value is 0 (also means that current value is not 0), add SSTORE_CLEAR_REFUND gas to refund counter.
@@ -173,6 +176,11 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 //       2.2.2.1. If original value is 0, add SSTORE_INIT_REFUND to refund counter.
 //       2.2.2.2. Otherwise, add SSTORE_CLEAN_REFUND gas to refund counter.
 func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	// If we fail the minimum gas availability invariant, fail (0)
+	if contract.Gas <= params.SstoreSentryGasEIP2200 {
+		return 0, errors.New("not enough gas for reentrancy sentry")
+	}
+	// Gas sentry honoured, do the actual gas calculation based on the stored value
 	var (
 		y, x    = stack.Back(1), stack.Back(0)
 		current = evm.StateDB.GetState(contract.Address(), common.BigToHash(x))
@@ -206,7 +214,6 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 			evm.StateDB.AddRefund(params.SstoreCleanRefundEIP2200)
 		}
 	}
-	evm.StateDB.AddRefund(params.SstoreDirtyRefundEIP2200)
 	return params.SstoreDirtyGasEIP2200, nil // dirty update (2.2)
 }
 
