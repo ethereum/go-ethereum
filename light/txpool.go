@@ -204,7 +204,9 @@ func (pool *TxPool) rollbackTxs(hash common.Hash, txc txStateChanges) {
 	if list, ok := pool.mined[hash]; ok {
 		for _, tx := range list {
 			txHash := tx.Hash()
-			rawdb.DeleteTxLookupEntry(batch, txHash)
+			if err := rawdb.DeleteTxLookupEntry(batch, txHash); err != nil {
+				// ignore err
+			}
 			pool.pending[txHash] = tx
 			txc.setState(txHash, false)
 		}

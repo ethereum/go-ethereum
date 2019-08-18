@@ -64,8 +64,8 @@ func WriteTxLookupEntries(db ethdb.KeyValueWriter, block *types.Block) {
 }
 
 // DeleteTxLookupEntry removes all transaction data associated with a hash.
-func DeleteTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash) {
-	db.Delete(txLookupKey(hash))
+func DeleteTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash) error {
+	return db.Delete(txLookupKey(hash))
 }
 
 // ReadTransaction retrieves a specific transaction from the database, along with

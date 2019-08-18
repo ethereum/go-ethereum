@@ -173,12 +173,20 @@ func (api *PrivateAdminAPI) ExportChain(file string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer out.Close()
+	defer func() {
+		if err := out.Close(); err != nil {
+			panic(err)
+		}
+	}()
 
 	var writer io.Writer = out
 	if strings.HasSuffix(file, ".gz") {
 		writer = gzip.NewWriter(writer)
-		defer writer.(*gzip.Writer).Close()
+		defer func() {
+			if err := writer.(*gzip.Writer).Close(); err != nil {
+				panic(err)
+			}
+		}()
 	}
 
 	// Export the blockchain
@@ -205,7 +213,11 @@ func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer in.Close()
+	defer func() {
+		if err := in.Close(); err != nil {
+			panic(err)
+		}
+	}()
 
 	var reader io.Reader = in
 	if strings.HasSuffix(file, ".gz") {

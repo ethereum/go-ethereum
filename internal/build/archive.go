@@ -58,7 +58,11 @@ func AddFile(a Archive, file string) error {
 	if err != nil {
 		return err
 	}
-	defer fd.Close()
+	defer func () {
+		if err := fd.Close(); err != nil {
+			panic(err)
+		}
+	}()
 	fi, err := fd.Stat()
 	if err != nil {
 		return err
@@ -81,10 +85,14 @@ func WriteArchive(name string, files []string) (err error) {
 	}
 
 	defer func() {
-		archfd.Close()
+		if er := archfd.Close(); er != nil {
+			panic(er)
+		}
 		// Remove the half-written archive on failure.
 		if err != nil {
-			os.Remove(name)
+			if e := os.Remove(name); e != nil {
+				// Ignore error
+			}
 		}
 	}()
 	archive, basename := NewArchive(archfd)

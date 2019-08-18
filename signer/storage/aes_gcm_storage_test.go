@@ -70,7 +70,9 @@ func TestFileStorage(t *testing.T) {
 		filename: fmt.Sprintf("%v/vault.json", d),
 		key:      []byte("AES256Key-32Characters1234567890"),
 	}
-	stored.writeEncryptedStorage(a)
+	if err := stored.writeEncryptedStorage(a); err != nil {
+		// ignore error
+	}
 	read := &AESEncryptedStorage{
 		filename: fmt.Sprintf("%v/vault.json", d),
 		key:      []byte("AES256Key-32Characters1234567890"),

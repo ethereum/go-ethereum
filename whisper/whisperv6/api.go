@@ -418,10 +418,14 @@ func (api *PublicWhisperAPI) Messages(ctx context.Context, crit Criteria) (*rpc.
 					}
 				}
 			case <-rpcSub.Err():
-				api.w.Unsubscribe(id)
+				if err := api.w.Unsubscribe(id); err != nil {
+					panic(err)
+				}
 				return
 			case <-notifier.Closed():
-				api.w.Unsubscribe(id)
+				if err := api.w.Unsubscribe(id); err != nil {
+					panic(err)
+				}
 				return
 			}
 		}

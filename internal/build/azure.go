@@ -63,7 +63,11 @@ func AzureBlobstoreUpload(path string, name string, config AzureBlobstoreConfig)
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func () {
+		if err := in.Close(); err != nil {
+			panic(err)
+		}
+	}()
 
 	_, err = blockblob.Upload(context.Background(), in, azblob.BlobHTTPHeaders{}, azblob.Metadata{}, azblob.BlobAccessConditions{})
 	return err

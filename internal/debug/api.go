@@ -90,7 +90,9 @@ func (h *HandlerT) CpuProfile(file string, nsec uint) error {
 		return err
 	}
 	time.Sleep(time.Duration(nsec) * time.Second)
-	h.StopCPUProfile()
+	if err := h.StopCPUProfile(); err != nil {
+		panic(err)
+	}
 	return nil
 }
 
@@ -106,7 +108,10 @@ func (h *HandlerT) StartCPUProfile(file string) error {
 		return err
 	}
 	if err := pprof.StartCPUProfile(f); err != nil {
-		f.Close()
+		if er := f.Close(); er != nil {
+			log.Error("Overridden error", err)
+			return er
+		}
 		return err
 	}
 	h.cpuW = f
@@ -124,7 +129,9 @@ func (h *HandlerT) StopCPUProfile() error {
 		return errors.New("CPU profiling not in progress")
 	}
 	log.Info("Done writing CPU profile", "dump", h.cpuFile)
-	h.cpuW.Close()
+	if err := h.cpuW.Close(); err != nil {
+		panic(err)
+	}
 	h.cpuW = nil
 	h.cpuFile = ""
 	return nil
@@ -137,7 +144,9 @@ func (h *HandlerT) GoTrace(file string, nsec uint) error {
 		return err
 	}
 	time.Sleep(time.Duration(nsec) * time.Second)
-	h.StopGoTrace()
+	if err := h.StopGoTrace(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -192,7 +201,9 @@ func (*HandlerT) WriteMemProfile(file string) error {
 // Stacks returns a printed representation of the stacks of all goroutines.
 func (*HandlerT) Stacks() string {
 	buf := new(bytes.Buffer)
-	pprof.Lookup("goroutine").WriteTo(buf, 2)
+	if err := pprof.Lookup("goroutine").WriteTo(buf, 2); err != nil {
+		panic(err)
+	}
 	return buf.String()
 }
 
@@ -214,7 +225,11 @@ func writeProfile(name, file string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func () {
+		if err := f.Close(); err != nil {
+			panic(err)
+		}
+	}()
 	return p.WriteTo(f, 0)
 }
 

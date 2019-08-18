@@ -153,7 +153,9 @@ func (api *PublicFilterAPI) NewPendingTransactions(ctx context.Context) (*rpc.Su
 				// To keep the original behaviour, send a single tx hash in one notification.
 				// TODO(rjl493456442) Send a batch of tx hashes in one notification
 				for _, h := range hashes {
-					notifier.Notify(rpcSub.ID, h)
+					if err := notifier.Notify(rpcSub.ID, h); err != nil {
+						panic(err)
+					}
 				}
 			case <-rpcSub.Err():
 				pendingTxSub.Unsubscribe()
@@ -219,7 +221,9 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 		for {
 			select {
 			case h := <-headers:
-				notifier.Notify(rpcSub.ID, h)
+				if err := notifier.Notify(rpcSub.ID, h); err != nil {
+					panic(err)
+				}
 			case <-rpcSub.Err():
 				headersSub.Unsubscribe()
 				return
@@ -256,7 +260,9 @@ func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc
 			select {
 			case logs := <-matchedLogs:
 				for _, log := range logs {
-					notifier.Notify(rpcSub.ID, &log)
+					if err := notifier.Notify(rpcSub.ID, &log); err != nil {
+						panic(err)
+					}
 				}
 			case <-rpcSub.Err(): // client send an unsubscribe request
 				logsSub.Unsubscribe()

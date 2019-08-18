@@ -212,7 +212,9 @@ func (ac *accountCache) maybeReload() {
 	ac.watcher.start()
 	ac.throttle.Reset(minReloadInterval)
 	ac.mu.Unlock()
-	ac.scanAccounts()
+	if err := ac.scanAccounts(); err != nil {
+		// ignore error
+	}
 }
 
 func (ac *accountCache) close() {
@@ -253,7 +255,11 @@ func (ac *accountCache) scanAccounts() error {
 			log.Trace("Failed to open keystore file", "path", path, "err", err)
 			return nil
 		}
-		defer fd.Close()
+		defer func() {
+			if err := fd.Close(); err != nil {
+				panic(err)
+			}
+		}()
 		buf.Reset(fd)
 		// Parse the address.
 		key.Address = ""

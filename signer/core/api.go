@@ -362,7 +362,9 @@ func (api *SignerAPI) startUSBListener() {
 				}
 			case accounts.WalletDropped:
 				log.Info("Old wallet dropped", "url", event.Wallet.URL())
-				event.Wallet.Close()
+				if err := event.Wallet.Close(); err != nil {
+					panic(err)
+				}
 			}
 		}
 	}()

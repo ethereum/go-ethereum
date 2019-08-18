@@ -55,7 +55,9 @@ func (b *LesApiBackend) CurrentBlock() *types.Block {
 
 func (b *LesApiBackend) SetHead(number uint64) {
 	b.eth.protocolManager.downloader.Cancel()
-	b.eth.blockchain.SetHead(number)
+	if err := b.eth.blockchain.SetHead(number); err != nil {
+		panic(err)
+	}
 }
 
 func (b *LesApiBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {

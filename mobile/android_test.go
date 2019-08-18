@@ -169,7 +169,9 @@ func TestAndroid(t *testing.T) {
 		if _, err := os.Stat(autopath); err != nil {
 			t.Skip("ANDROID_HOME environment var not set, skipping")
 		}
-		os.Setenv("ANDROID_HOME", autopath)
+		if err := os.Setenv("ANDROID_HOME", autopath); err != nil {
+			panic(err)
+		}
 	}
 	if _, err := exec.Command("which", "gomobile").CombinedOutput(); err != nil {
 		t.Log("gomobile missing, installing it...")
@@ -188,7 +190,11 @@ func TestAndroid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temporary workspace: %v", err)
 	}
-	defer os.RemoveAll(workspace)
+	defer func() {
+		if err := os.RemoveAll(workspace); err != nil {
+			panic(err)
+		}
+	}()
 
 	pwd, err := os.Getwd()
 	if err != nil {
@@ -197,7 +203,11 @@ func TestAndroid(t *testing.T) {
 	if err := os.Chdir(workspace); err != nil {
 		t.Fatalf("failed to switch to temporary workspace: %v", err)
 	}
-	defer os.Chdir(pwd)
+	defer func() {
+		if err := os.Chdir(pwd); err != nil {
+			panic(err)
+		}
+	}()
 
 	// Create the skeleton of the Android project
 	for _, dir := range []string{"src/main", "src/androidTest/java/org/ethereum/gethtest", "libs"} {

@@ -81,7 +81,9 @@ func TestAccountRange(t *testing.T) {
 		}
 	}
 
-	state.Commit(true)
+	if _, err := state.Commit(true); err != nil {
+		panic(err)
+	}
 	root := state.IntermediateRoot(true)
 
 	trie, err := statedb.OpenTrie(root)
@@ -165,7 +167,9 @@ func TestEmptyAccountRange(t *testing.T) {
 		state, _ = state.New(common.Hash{}, statedb)
 	)
 
-	state.Commit(true)
+	if _, err := state.Commit(true); err != nil {
+		panic(err)
+	}
 	root := state.IntermediateRoot(true)
 
 	trie, err := statedb.OpenTrie(root)

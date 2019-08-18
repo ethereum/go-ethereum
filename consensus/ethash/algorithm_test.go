@@ -702,7 +702,11 @@ func TestConcurrentDiskCacheGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temporary cache dir: %v", err)
 	}
-	defer os.RemoveAll(cachedir)
+	defer func() {
+		if err := os.RemoveAll(cachedir); err != nil {
+			panic(err)
+		}
+	}()
 
 	// Define a heavy enough block, one from mainnet should do
 	block := types.NewBlockWithHeader(&types.Header{
@@ -730,7 +734,11 @@ func TestConcurrentDiskCacheGeneration(t *testing.T) {
 		go func(idx int) {
 			defer pend.Done()
 			ethash := New(Config{cachedir, 0, 1, "", 0, 0, ModeNormal}, nil, false)
-			defer ethash.Close()
+			defer func() {
+				if err := ethash.Close(); err != nil {
+					panic(err)
+				}
+			}()
 			if err := ethash.VerifySeal(nil, block.Header()); err != nil {
 				t.Errorf("proc %d: block verification failed: %v", idx, err)
 			}

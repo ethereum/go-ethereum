@@ -99,12 +99,16 @@ func (ui *headlessUi) ApproveNewAccount(request *core.NewAccountRequest) (core.N
 
 func (ui *headlessUi) ShowError(message string) {
 	//stdout is used by communication
-	fmt.Fprintln(os.Stderr, message)
+	if err := fmt.Fprintln(os.Stderr, message); err != nil {
+		panic(err)
+	}
 }
 
 func (ui *headlessUi) ShowInfo(message string) {
 	//stdout is used by communication
-	fmt.Fprintln(os.Stderr, message)
+	if err := fmt.Fprintln(os.Stderr, message); err != nil {
+		panic(err)
+	}
 }
 
 func tmpDirName(t *testing.T) string {
@@ -286,7 +290,9 @@ func TestSignTx(t *testing.T) {
 		t.Fatal(err)
 	}
 	parsedTx := &types.Transaction{}
-	rlp.Decode(bytes.NewReader(res.Raw), parsedTx)
+	if err := rlp.Decode(bytes.NewReader(res.Raw), parsedTx); err != nil {
+		panic(err)
+	}
 
 	//The tx should NOT be modified by the UI
 	if parsedTx.Value().Cmp(tx.Value.ToInt()) != 0 {
@@ -312,7 +318,9 @@ func TestSignTx(t *testing.T) {
 		t.Fatal(err)
 	}
 	parsedTx2 := &types.Transaction{}
-	rlp.Decode(bytes.NewReader(res.Raw), parsedTx2)
+	if err := rlp.Decode(bytes.NewReader(res.Raw), parsedTx2); err != nil {
+		panic(err)
+	}
 
 	//The tx should be modified by the UI
 	if parsedTx2.Value().Cmp(tx.Value.ToInt()) != 0 {

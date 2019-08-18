@@ -116,7 +116,9 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 			if i != freeIdx {
 				setCapacity(ctx, t, serverRpcClient, client.ID(), testCap/uint64(len(clients)))
 			}
-			net.Connect(client.ID(), server.ID())
+			if err := net.Connect(client.ID(), server.ID()); err != nil {
+				panic(err)
+			}
 
 			for {
 				select {
@@ -434,7 +436,11 @@ func NewAdapter(adapterType string, services adapters.Services) (adapter adapter
 		if err0 != nil {
 			return nil, teardown, err0
 		}
-		teardown = func() { os.RemoveAll(baseDir) }
+		teardown = func() {
+			if err := os.RemoveAll(baseDir); err != nil {
+				panic(err)
+			}
+		}
 		adapter = adapters.NewExecAdapter(baseDir)
 	/*case "docker":
 	adapter, err = adapters.NewDockerAdapter()

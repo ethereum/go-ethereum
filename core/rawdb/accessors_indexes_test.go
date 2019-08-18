@@ -56,7 +56,9 @@ func TestLookupStorage(t *testing.T) {
 						Index:      uint64(index),
 					}
 					data, _ := rlp.EncodeToBytes(entry)
-					db.Put(txLookupKey(tx.Hash()), data)
+					if err := db.Put(txLookupKey(tx.Hash()), data); err != nil {
+						// ignore error
+					}
 				}
 			},
 		},

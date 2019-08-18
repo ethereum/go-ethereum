@@ -55,7 +55,11 @@ func TestWatchNewFile(t *testing.T) {
 	t.Parallel()
 
 	dir, ks := tmpKeyStore(t, false)
-	defer os.RemoveAll(dir)
+	defer func() {
+		if err := os.RemoveAll(dir); err != nil {
+			panic(err)
+		}
+	}()
 
 	// Ensure the watcher is started before adding any files.
 	ks.Accounts()
@@ -106,8 +110,14 @@ func TestWatchNoDir(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Create the directory and copy a key file into it.
-	os.MkdirAll(dir, 0700)
-	defer os.RemoveAll(dir)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		panic(err)
+	}
+	defer func() {
+		if err := os.RemoveAll(dir); err != nil {
+			panic(err)
+		}
+	}()
 	file := filepath.Join(dir, "aaa")
 	if err := cp.CopyFile(file, cachetestAccounts[0].URL.Path); err != nil {
 		t.Fatal(err)
@@ -332,8 +342,14 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Create the directory and copy a key file into it.
-	os.MkdirAll(dir, 0700)
-	defer os.RemoveAll(dir)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		panic(err)
+	}
+	defer func() {
+		if err := os.RemoveAll(dir); err != nil {
+			panic(err)
+		}
+	}()
 	file := filepath.Join(dir, "aaa")
 
 	// Place one of our testfiles in there

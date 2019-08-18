@@ -128,7 +128,9 @@ func (api *PrivateAdminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, 
 		for {
 			select {
 			case event := <-events:
-				notifier.Notify(rpcSub.ID, event)
+				if err := notifier.Notify(rpcSub.ID, event); err != nil {
+					panic(err)
+				}
 			case <-sub.Err():
 				return
 			case <-rpcSub.Err():
