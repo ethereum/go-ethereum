@@ -72,7 +72,7 @@ var (
 
 	requestServedMeter    = metrics.NewRegisteredMeter("les/server/req/avgServedTime", nil)
 	requestServedTimer    = metrics.NewRegisteredTimer("les/server/req/servedTime", nil)
-	requestEstimatedMeter = metrics.NewRegisteredMeter("les/server/req/argEstimatedTime", nil)
+	requestEstimatedMeter = metrics.NewRegisteredMeter("les/server/req/avgEstimatedTime", nil)
 	requestEstimatedTimer = metrics.NewRegisteredTimer("les/server/req/estimatedTime", nil)
 	relativeCostHistogram = metrics.NewRegisteredHistogram("les/server/req/relative", nil, metrics.NewExpDecaySample(1028, 0.015))
 

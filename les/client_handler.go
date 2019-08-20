@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/light"
@@ -115,10 +116,10 @@ func (h *clientHandler) handle(p *peer) error {
 	}
 	serverConnectionGauge.Update(int64(h.backend.peers.Len()))
 
-	connectedAt := time.Now()
+	connectedAt := mclock.Now()
 	defer func() {
 		h.backend.peers.Unregister(p.id)
-		connectionTimer.UpdateSince(connectedAt)
+		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 		serverConnectionGauge.Update(int64(h.backend.peers.Len()))
 	}()
 

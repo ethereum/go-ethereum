@@ -221,7 +221,7 @@ func (s *LesServer) capacityManagement() {
 	var (
 		busy         bool
 		freePeers    uint64
-		blockProcess time.Time
+		blockProcess mclock.AbsTime
 	)
 	updateRecharge := func() {
 		if busy {
@@ -238,9 +238,9 @@ func (s *LesServer) capacityManagement() {
 		select {
 		case busy = <-processCh:
 			if busy {
-				blockProcess = time.Now()
+				blockProcess = mclock.Now()
 			} else {
-				blockProcessingTimer.UpdateSince(blockProcess)
+				blockProcessingTimer.Update(time.Duration(mclock.Now() - blockProcess))
 			}
 			updateRecharge()
 		case totalRecharge = <-totalRechargeCh:

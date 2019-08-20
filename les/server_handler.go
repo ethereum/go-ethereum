@@ -137,12 +137,12 @@ func (h *serverHandler) handle(p *peer) error {
 		p.balanceTracker.init(&mclock.System{}, 1)
 	}
 
-	connectedAt := time.Now()
+	connectedAt := mclock.Now()
 	defer func() {
 		p.balanceTracker = nil
 		h.server.peers.Unregister(p.id)
 		clientConnectionGauge.Update(int64(h.server.peers.Len()))
-		connectionTimer.UpdateSince(connectedAt)
+		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 	}()
 
 	// Spawn a main loop to handle all incoming messages.
@@ -180,8 +180,9 @@ func (h *serverHandler) handleMsg(p *peer) error {
 	var (
 		maxCost uint64
 		task    *servingTask
-		respId  = p.responseID()
 	)
+	p.responseCount++
+	responseCount := p.responseCount
 	// accept returns an indicator whether the request can be served.
 	// If so, deduct the max cost from the flow control buffer.
 	accept := func(reqID, reqCnt, maxCnt uint64) bool {
@@ -193,7 +194,7 @@ func (h *serverHandler) handleMsg(p *peer) error {
 		}
 		// Prepaid max cost units before request been serving.
 		maxCost = p.fcCosts.getMaxCost(msg.Code, reqCnt)
-		accepted, bufShort, priority := p.fcClient.AcceptRequest(reqID, respId, maxCost)
+		accepted, bufShort, priority := p.fcClient.AcceptRequest(reqID, responseCount, maxCost)
 		if !accepted {
 			p.freezeClient()
 			p.Log().Error("Request came too early", "remaining", common.PrettyDuration(time.Duration(bufShort*1000000/p.fcParams.MinRecharge)))
@@ -212,7 +213,7 @@ func (h *serverHandler) handleMsg(p *peer) error {
 		if task.start() {
 			return true
 		}
-		p.fcClient.RequestProcessed(reqID, respId, maxCost, inSizeCost)
+		p.fcClient.RequestProcessed(reqID, responseCount, maxCost, inSizeCost)
 		return false
 	}
 	// sendResponse sends back the response and updates the flow control statistic.
@@ -223,7 +224,7 @@ func (h *serverHandler) handleMsg(p *peer) error {
 		// Short circuit if the client is already frozen.
 		if p.isFrozen() {
 			realCost := h.server.costTracker.realCost(servingTime, msg.Size, 0)
-			p.fcClient.RequestProcessed(reqID, respId, maxCost, realCost)
+			p.fcClient.RequestProcessed(reqID, responseCount, maxCost, realCost)
 			return
 		}
 		// Positive correction buffer value with real cost.
@@ -231,12 +232,13 @@ func (h *serverHandler) handleMsg(p *peer) error {
 		if reply != nil {
 			replySize = reply.size()
 		}
-		realCost := h.server.costTracker.realCost(servingTime, msg.Size, replySize)
-		// Assign a fake cost for testing purpose.
+		var realCost uint64
 		if h.server.costTracker.testing {
-			realCost = maxCost
+			realCost = maxCost // Assign a fake cost for testing purpose
+		} else {
+			realCost = h.server.costTracker.realCost(servingTime, msg.Size, replySize)
 		}
-		bv := p.fcClient.RequestProcessed(reqID, respId, maxCost, realCost)
+		bv := p.fcClient.RequestProcessed(reqID, responseCount, maxCost, realCost)
 		if amount != 0 {
 			// Feed cost tracker request serving statistic.
 			h.server.costTracker.updateStats(msg.Code, amount, servingTime, realCost)
