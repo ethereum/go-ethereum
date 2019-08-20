@@ -2281,7 +2281,7 @@ func TestSideImportPrunedBlocks(t *testing.T) {
 		t.Errorf("Block %d pruned", firstNonPrunedBlock.NumberU64())
 	}
 	// Now re-import some old blocks
-	blockToReimport := blocks[5 : 8]
+	blockToReimport := blocks[5:8]
 	_, err = chain.InsertChain(blockToReimport)
 	if err != nil {
 		t.Errorf("Got error, %v", err)
