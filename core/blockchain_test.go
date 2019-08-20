@@ -2242,12 +2242,15 @@ func BenchmarkBlockChain_1x1000Executions(b *testing.B) {
 	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn, dataFn)
 }
 
-// Tests that importing a some old blocks, where the first one is before the
+// Tests that importing a some old blocks, where all blocks are before the
 // pruning point.
 // This internally leads to a sidechain import, since the blocks trigger an
 // ErrPrunedAncestor error.
+// This may e.g. happen if
+//   1. Downloader rollbacks a batch of inserted blocks and exits
+//   2. Downloader starts to sync again
+//   3. The blocks fetched are all known and canonical blocks
 func TestSideImportPrunedBlocks(t *testing.T) {
-
 	// Generate a canonical chain to act as the main dataset
 	engine := ethash.NewFaker()
 	db := rawdb.NewMemoryDatabase()
@@ -2272,15 +2275,13 @@ func TestSideImportPrunedBlocks(t *testing.T) {
 	if chain.HasBlockAndState(lastPrunedBlock.Hash(), lastPrunedBlock.NumberU64()) {
 		t.Errorf("Block %d not pruned", lastPrunedBlock.NumberU64())
 	}
-
 	firstNonPrunedBlock := blocks[len(blocks)-TriesInMemory]
 	// Verify firstNonPrunedBlock is not pruned
 	if !chain.HasBlockAndState(firstNonPrunedBlock.Hash(), firstNonPrunedBlock.NumberU64()) {
 		t.Errorf("Block %d pruned", firstNonPrunedBlock.NumberU64())
 	}
-
 	// Now re-import some old blocks
-	blockToReimport := blocks[5 : len(blocks)-TriesInMemory]
+	blockToReimport := blocks[5 : 8]
 	_, err = chain.InsertChain(blockToReimport)
 	if err != nil {
 		t.Errorf("Got error, %v", err)
