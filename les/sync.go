@@ -43,35 +43,6 @@ const (
 	checkpointSync
 )
 
-// syncer is responsible for periodically synchronising with the network, both
-// downloading hashes and blocks as well as handling the announcement handler.
-func (pm *ProtocolManager) syncer() {
-	// Start and ensure cleanup of sync mechanisms
-	//pm.fetcher.Start()
-	//defer pm.fetcher.Stop()
-	defer pm.downloader.Terminate()
-
-	// Wait for different events to fire synchronisation operations
-	//forceSync := time.Tick(forceSyncCycle)
-	for {
-		select {
-		case <-pm.newPeerCh:
-			/*			// Make sure we have peers to select from, then sync
-						if pm.peers.Len() < minDesiredPeerCount {
-							break
-						}
-						go pm.synchronise(pm.peers.BestPeer())
-			*/
-		/*case <-forceSync:
-		// Force a sync even if not enough peers are present
-		go pm.synchronise(pm.peers.BestPeer())
-		*/
-		case <-pm.noMorePeers:
-			return
-		}
-	}
-}
-
 // validateCheckpoint verifies the advertised checkpoint by peer is valid or not.
 //
 // Each network has several hard-coded checkpoint signer addresses. Only the
@@ -80,22 +51,22 @@ func (pm *ProtocolManager) syncer() {
 // In addition to the checkpoint registered in the registrar contract, there are
 // several legacy hardcoded checkpoints in our codebase. These checkpoints are
 // also considered as valid.
-func (pm *ProtocolManager) validateCheckpoint(peer *peer) error {
+func (h *clientHandler) validateCheckpoint(peer *peer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	// Fetch the block header corresponding to the checkpoint registration.
 	cp := peer.checkpoint
-	header, err := light.GetUntrustedHeaderByNumber(ctx, pm.odr, peer.checkpointNumber, peer.id)
+	header, err := light.GetUntrustedHeaderByNumber(ctx, h.backend.odr, peer.checkpointNumber, peer.id)
 	if err != nil {
 		return err
 	}
 	// Fetch block logs associated with the block header.
-	logs, err := light.GetUntrustedBlockLogs(ctx, pm.odr, header)
+	logs, err := light.GetUntrustedBlockLogs(ctx, h.backend.odr, header)
 	if err != nil {
 		return err
 	}
-	events := pm.reg.contract.LookupCheckpointEvents(logs, cp.SectionIndex, cp.Hash())
+	events := h.backend.oracle.contract.LookupCheckpointEvents(logs, cp.SectionIndex, cp.Hash())
 	if len(events) == 0 {
 		return errInvalidCheckpoint
 	}
@@ -107,7 +78,7 @@ func (pm *ProtocolManager) validateCheckpoint(peer *peer) error {
 	for _, event := range events {
 		signatures = append(signatures, append(event.R[:], append(event.S[:], event.V)...))
 	}
-	valid, signers := pm.reg.verifySigners(index, hash, signatures)
+	valid, signers := h.backend.oracle.verifySigners(index, hash, signatures)
 	if !valid {
 		return errInvalidCheckpoint
 	}
@@ -116,14 +87,14 @@ func (pm *ProtocolManager) validateCheckpoint(peer *peer) error {
 }
 
 // synchronise tries to sync up our local chain with a remote peer.
-func (pm *ProtocolManager) synchronise(peer *peer) {
+func (h *clientHandler) synchronise(peer *peer) {
 	// Short circuit if the peer is nil.
 	if peer == nil {
 		return
 	}
 	// Make sure the peer's TD is higher than our own.
-	latest := pm.blockchain.CurrentHeader()
-	currentTd := rawdb.ReadTd(pm.chainDb, latest.Hash(), latest.Number.Uint64())
+	latest := h.backend.blockchain.CurrentHeader()
+	currentTd := rawdb.ReadTd(h.backend.chainDb, latest.Hash(), latest.Number.Uint64())
 	if currentTd != nil && peer.headBlockInfo().Td.Cmp(currentTd) < 0 {
 		return
 	}
@@ -140,8 +111,8 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	//     => Use provided checkpoint
 	var checkpoint = &peer.checkpoint
 	var hardcoded bool
-	if pm.checkpoint != nil && pm.checkpoint.SectionIndex >= peer.checkpoint.SectionIndex {
-		checkpoint = pm.checkpoint // Use the hardcoded one.
+	if h.checkpoint != nil && h.checkpoint.SectionIndex >= peer.checkpoint.SectionIndex {
+		checkpoint = h.checkpoint // Use the hardcoded one.
 		hardcoded = true
 	}
 	// Determine whether we should run checkpoint syncing or normal light syncing.
@@ -157,34 +128,34 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	case checkpoint.Empty():
 		mode = lightSync
 		log.Debug("Disable checkpoint syncing", "reason", "empty checkpoint")
-	case latest.Number.Uint64() >= (checkpoint.SectionIndex+1)*pm.iConfig.ChtSize-1:
+	case latest.Number.Uint64() >= (checkpoint.SectionIndex+1)*h.backend.iConfig.ChtSize-1:
 		mode = lightSync
 		log.Debug("Disable checkpoint syncing", "reason", "local chain beyond the checkpoint")
 	case hardcoded:
 		mode = legacyCheckpointSync
 		log.Debug("Disable checkpoint syncing", "reason", "checkpoint is hardcoded")
-	case pm.reg == nil || !pm.reg.isRunning():
+	case h.backend.oracle == nil || !h.backend.oracle.isRunning():
 		mode = legacyCheckpointSync
 		log.Debug("Disable checkpoint syncing", "reason", "checkpoint syncing is not activated")
 	}
 	// Notify testing framework if syncing has completed(for testing purpose).
 	defer func() {
-		if pm.reg != nil && pm.reg.syncDoneHook != nil {
-			pm.reg.syncDoneHook()
+		if h.backend.oracle != nil && h.backend.oracle.syncDoneHook != nil {
+			h.backend.oracle.syncDoneHook()
 		}
 	}()
 	start := time.Now()
 	if mode == checkpointSync || mode == legacyCheckpointSync {
 		// Validate the advertised checkpoint
 		if mode == legacyCheckpointSync {
-			checkpoint = pm.checkpoint
+			checkpoint = h.checkpoint
 		} else if mode == checkpointSync {
-			if err := pm.validateCheckpoint(peer); err != nil {
+			if err := h.validateCheckpoint(peer); err != nil {
 				log.Debug("Failed to validate checkpoint", "reason", err)
-				pm.removePeer(peer.id)
+				h.removePeer(peer.id)
 				return
 			}
-			pm.blockchain.(*light.LightChain).AddTrustedCheckpoint(checkpoint)
+			h.backend.blockchain.AddTrustedCheckpoint(checkpoint)
 		}
 		log.Debug("Checkpoint syncing start", "peer", peer.id, "checkpoint", checkpoint.SectionIndex)
 
@@ -197,14 +168,14 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		// of the latest epoch covered by checkpoint.
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
-		if !checkpoint.Empty() && !pm.blockchain.(*light.LightChain).SyncCheckpoint(ctx, checkpoint) {
+		if !checkpoint.Empty() && !h.backend.blockchain.SyncCheckpoint(ctx, checkpoint) {
 			log.Debug("Sync checkpoint failed")
-			pm.removePeer(peer.id)
+			h.removePeer(peer.id)
 			return
 		}
 	}
 	// Fetch the remaining block headers based on the current chain header.
-	if err := pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), downloader.LightSync); err != nil {
+	if err := h.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), downloader.LightSync); err != nil {
 		log.Debug("Synchronise failed", "reason", err)
 		return
 	}

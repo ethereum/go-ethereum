@@ -39,6 +39,7 @@ import (
 type odrTestFn func(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte
 
 func TestOdrGetBlockLes2(t *testing.T) { testOdr(t, 2, 1, true, odrGetBlock) }
+func TestOdrGetBlockLes3(t *testing.T) { testOdr(t, 3, 1, true, odrGetBlock) }
 
 func odrGetBlock(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	var block *types.Block
@@ -55,6 +56,7 @@ func odrGetBlock(ctx context.Context, db ethdb.Database, config *params.ChainCon
 }
 
 func TestOdrGetReceiptsLes2(t *testing.T) { testOdr(t, 2, 1, true, odrGetReceipts) }
+func TestOdrGetReceiptsLes3(t *testing.T) { testOdr(t, 3, 1, true, odrGetReceipts) }
 
 func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	var receipts types.Receipts
@@ -75,6 +77,7 @@ func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.Chain
 }
 
 func TestOdrAccountsLes2(t *testing.T) { testOdr(t, 2, 1, true, odrAccounts) }
+func TestOdrAccountsLes3(t *testing.T) { testOdr(t, 3, 1, true, odrAccounts) }
 
 func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	dummyAddr := common.HexToAddress("1234567812345678123456781234567812345678")
@@ -103,6 +106,7 @@ func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainCon
 }
 
 func TestOdrContractCallLes2(t *testing.T) { testOdr(t, 2, 2, true, odrContractCall) }
+func TestOdrContractCallLes3(t *testing.T) { testOdr(t, 3, 2, true, odrContractCall) }
 
 type callmsg struct {
 	types.Message
@@ -152,6 +156,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 }
 
 func TestOdrTxStatusLes2(t *testing.T) { testOdr(t, 2, 1, false, odrTxStatus) }
+func TestOdrTxStatusLes3(t *testing.T) { testOdr(t, 3, 1, false, odrTxStatus) }
 
 func odrTxStatus(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	var txs types.Transactions
@@ -178,21 +183,22 @@ func odrTxStatus(ctx context.Context, db ethdb.Database, config *params.ChainCon
 // testOdr tests odr requests whose validation guaranteed by block headers.
 func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn odrTestFn) {
 	// Assemble the test environment
-	server, client, tearDown := newClientServerEnv(t, 4, protocol, nil, true)
+	server, client, tearDown := newClientServerEnv(t, 4, protocol, nil, nil, 0, false, true)
 	defer tearDown()
-	client.pm.synchronise(client.rPeer)
+
+	client.handler.synchronise(client.peer.peer)
 
 	test := func(expFail uint64) {
 		// Mark this as a helper to put the failures at the correct lines
 		t.Helper()
 
-		for i := uint64(0); i <= server.pm.blockchain.CurrentHeader().Number.Uint64(); i++ {
+		for i := uint64(0); i <= server.handler.blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := rawdb.ReadCanonicalHash(server.db, i)
-			b1 := fn(light.NoOdr, server.db, server.pm.chainConfig, server.pm.blockchain.(*core.BlockChain), nil, bhash)
+			b1 := fn(light.NoOdr, server.db, server.handler.server.chainConfig, server.handler.blockchain, nil, bhash)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-			defer cancel()
-			b2 := fn(ctx, client.db, client.pm.chainConfig, nil, client.pm.blockchain.(*light.LightChain), bhash)
+			b2 := fn(ctx, client.db, client.handler.backend.chainConfig, nil, client.handler.backend.blockchain, bhash)
+			cancel()
 
 			eq := bytes.Equal(b1, b2)
 			exp := i < expFail
@@ -204,22 +210,22 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 			}
 		}
 	}
-	// temporarily remove peer to test odr fails
+
 	// expect retrievals to fail (except genesis block) without a les peer
-	client.peers.Unregister(client.rPeer.id)
-	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
+	client.handler.backend.peers.lock.Lock()
+	client.peer.peer.hasBlock = func(common.Hash, uint64, bool) bool { return false }
+	client.handler.backend.peers.lock.Unlock()
 	test(expFail)
 
 	// expect all retrievals to pass
-	client.peers.Register(client.rPeer)
-	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
-	client.peers.lock.Lock()
-	client.rPeer.hasBlock = func(common.Hash, uint64, bool) bool { return true }
-	client.peers.lock.Unlock()
+	client.handler.backend.peers.lock.Lock()
+	client.peer.peer.hasBlock = func(common.Hash, uint64, bool) bool { return true }
+	client.handler.backend.peers.lock.Unlock()
 	test(5)
+
+	// still expect all retrievals to pass, now data should be cached locally
 	if checkCached {
-		// still expect all retrievals to pass, now data should be cached locally
-		client.peers.Unregister(client.rPeer.id)
+		client.handler.backend.peers.Unregister(client.peer.peer.id)
 		time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
 		test(5)
 	}

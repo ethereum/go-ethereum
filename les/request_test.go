@@ -37,18 +37,21 @@ func secAddr(addr common.Address) []byte {
 type accessTestFn func(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest
 
 func TestBlockAccessLes2(t *testing.T) { testAccess(t, 2, tfBlockAccess) }
+func TestBlockAccessLes3(t *testing.T) { testAccess(t, 3, tfBlockAccess) }
 
 func tfBlockAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	return &light.BlockRequest{Hash: bhash, Number: number}
 }
 
 func TestReceiptsAccessLes2(t *testing.T) { testAccess(t, 2, tfReceiptsAccess) }
+func TestReceiptsAccessLes3(t *testing.T) { testAccess(t, 3, tfReceiptsAccess) }
 
 func tfReceiptsAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	return &light.ReceiptsRequest{Hash: bhash, Number: number}
 }
 
 func TestTrieEntryAccessLes2(t *testing.T) { testAccess(t, 2, tfTrieEntryAccess) }
+func TestTrieEntryAccessLes3(t *testing.T) { testAccess(t, 3, tfTrieEntryAccess) }
 
 func tfTrieEntryAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
@@ -58,6 +61,7 @@ func tfTrieEntryAccess(db ethdb.Database, bhash common.Hash, number uint64) ligh
 }
 
 func TestCodeAccessLes2(t *testing.T) { testAccess(t, 2, tfCodeAccess) }
+func TestCodeAccessLes3(t *testing.T) { testAccess(t, 3, tfCodeAccess) }
 
 func tfCodeAccess(db ethdb.Database, bhash common.Hash, num uint64) light.OdrRequest {
 	number := rawdb.ReadHeaderNumber(db, bhash)
@@ -75,17 +79,18 @@ func tfCodeAccess(db ethdb.Database, bhash common.Hash, num uint64) light.OdrReq
 
 func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	// Assemble the test environment
-	server, client, tearDown := newClientServerEnv(t, 4, protocol, nil, true)
+	server, client, tearDown := newClientServerEnv(t, 4, protocol, nil, nil, 0, false, true)
 	defer tearDown()
-	client.pm.synchronise(client.rPeer)
+	client.handler.synchronise(client.peer.peer)
 
 	test := func(expFail uint64) {
-		for i := uint64(0); i <= server.pm.blockchain.CurrentHeader().Number.Uint64(); i++ {
+		for i := uint64(0); i <= server.handler.blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := rawdb.ReadCanonicalHash(server.db, i)
 			if req := fn(client.db, bhash, i); req != nil {
 				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-				defer cancel()
-				err := client.pm.odr.Retrieve(ctx, req)
+				err := client.handler.backend.odr.Retrieve(ctx, req)
+				cancel()
+
 				got := err == nil
 				exp := i < expFail
 				if exp && !got {
@@ -97,18 +102,5 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 			}
 		}
 	}
-
-	// temporarily remove peer to test odr fails
-	client.peers.Unregister(client.rPeer.id)
-	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
-	// expect retrievals to fail (except genesis block) without a les peer
-	test(0)
-
-	client.peers.Register(client.rPeer)
-	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
-	client.rPeer.lock.Lock()
-	client.rPeer.hasBlock = func(common.Hash, uint64, bool) bool { return true }
-	client.rPeer.lock.Unlock()
-	// expect all retrievals to pass
 	test(5)
 }

@@ -22,31 +22,73 @@ import (
 )
 
 var (
-	miscInPacketsMeter  = metrics.NewRegisteredMeter("les/misc/in/packets", nil)
-	miscInTrafficMeter  = metrics.NewRegisteredMeter("les/misc/in/traffic", nil)
-	miscOutPacketsMeter = metrics.NewRegisteredMeter("les/misc/out/packets", nil)
-	miscOutTrafficMeter = metrics.NewRegisteredMeter("les/misc/out/traffic", nil)
+	miscInPacketsMeter           = metrics.NewRegisteredMeter("les/misc/in/packets/total", nil)
+	miscInTrafficMeter           = metrics.NewRegisteredMeter("les/misc/in/traffic/total", nil)
+	miscInHeaderPacketsMeter     = metrics.NewRegisteredMeter("les/misc/in/packets/header", nil)
+	miscInHeaderTrafficMeter     = metrics.NewRegisteredMeter("les/misc/in/traffic/header", nil)
+	miscInBodyPacketsMeter       = metrics.NewRegisteredMeter("les/misc/in/packets/body", nil)
+	miscInBodyTrafficMeter       = metrics.NewRegisteredMeter("les/misc/in/traffic/body", nil)
+	miscInCodePacketsMeter       = metrics.NewRegisteredMeter("les/misc/in/packets/code", nil)
+	miscInCodeTrafficMeter       = metrics.NewRegisteredMeter("les/misc/in/traffic/code", nil)
+	miscInReceiptPacketsMeter    = metrics.NewRegisteredMeter("les/misc/in/packets/receipt", nil)
+	miscInReceiptTrafficMeter    = metrics.NewRegisteredMeter("les/misc/in/traffic/receipt", nil)
+	miscInTrieProofPacketsMeter  = metrics.NewRegisteredMeter("les/misc/in/packets/proof", nil)
+	miscInTrieProofTrafficMeter  = metrics.NewRegisteredMeter("les/misc/in/traffic/proof", nil)
+	miscInHelperTriePacketsMeter = metrics.NewRegisteredMeter("les/misc/in/packets/helperTrie", nil)
+	miscInHelperTrieTrafficMeter = metrics.NewRegisteredMeter("les/misc/in/traffic/helperTrie", nil)
+	miscInTxsPacketsMeter        = metrics.NewRegisteredMeter("les/misc/in/packets/txs", nil)
+	miscInTxsTrafficMeter        = metrics.NewRegisteredMeter("les/misc/in/traffic/txs", nil)
+	miscInTxStatusPacketsMeter   = metrics.NewRegisteredMeter("les/misc/in/packets/txStatus", nil)
+	miscInTxStatusTrafficMeter   = metrics.NewRegisteredMeter("les/misc/in/traffic/txStatus", nil)
 
-	connectionTimer = metrics.NewRegisteredTimer("les/connectionTime", nil)
+	miscOutPacketsMeter           = metrics.NewRegisteredMeter("les/misc/out/packets/total", nil)
+	miscOutTrafficMeter           = metrics.NewRegisteredMeter("les/misc/out/traffic/total", nil)
+	miscOutHeaderPacketsMeter     = metrics.NewRegisteredMeter("les/misc/out/packets/header", nil)
+	miscOutHeaderTrafficMeter     = metrics.NewRegisteredMeter("les/misc/out/traffic/header", nil)
+	miscOutBodyPacketsMeter       = metrics.NewRegisteredMeter("les/misc/out/packets/body", nil)
+	miscOutBodyTrafficMeter       = metrics.NewRegisteredMeter("les/misc/out/traffic/body", nil)
+	miscOutCodePacketsMeter       = metrics.NewRegisteredMeter("les/misc/out/packets/code", nil)
+	miscOutCodeTrafficMeter       = metrics.NewRegisteredMeter("les/misc/out/traffic/code", nil)
+	miscOutReceiptPacketsMeter    = metrics.NewRegisteredMeter("les/misc/out/packets/receipt", nil)
+	miscOutReceiptTrafficMeter    = metrics.NewRegisteredMeter("les/misc/out/traffic/receipt", nil)
+	miscOutTrieProofPacketsMeter  = metrics.NewRegisteredMeter("les/misc/out/packets/proof", nil)
+	miscOutTrieProofTrafficMeter  = metrics.NewRegisteredMeter("les/misc/out/traffic/proof", nil)
+	miscOutHelperTriePacketsMeter = metrics.NewRegisteredMeter("les/misc/out/packets/helperTrie", nil)
+	miscOutHelperTrieTrafficMeter = metrics.NewRegisteredMeter("les/misc/out/traffic/helperTrie", nil)
+	miscOutTxsPacketsMeter        = metrics.NewRegisteredMeter("les/misc/out/packets/txs", nil)
+	miscOutTxsTrafficMeter        = metrics.NewRegisteredMeter("les/misc/out/traffic/txs", nil)
+	miscOutTxStatusPacketsMeter   = metrics.NewRegisteredMeter("les/misc/out/packets/txStatus", nil)
+	miscOutTxStatusTrafficMeter   = metrics.NewRegisteredMeter("les/misc/out/traffic/txStatus", nil)
 
-	totalConnectedGauge     = metrics.NewRegisteredGauge("les/server/totalConnected", nil)
-	totalCapacityGauge      = metrics.NewRegisteredGauge("les/server/totalCapacity", nil)
-	totalRechargeGauge      = metrics.NewRegisteredGauge("les/server/totalRecharge", nil)
-	blockProcessingTimer    = metrics.NewRegisteredTimer("les/server/blockProcessingTime", nil)
-	requestServedTimer      = metrics.NewRegisteredTimer("les/server/requestServed", nil)
-	requestServedMeter      = metrics.NewRegisteredMeter("les/server/totalRequestServed", nil)
-	requestEstimatedMeter   = metrics.NewRegisteredMeter("les/server/totalRequestEstimated", nil)
-	relativeCostHistogram   = metrics.NewRegisteredHistogram("les/server/relativeCost", nil, metrics.NewExpDecaySample(1028, 0.015))
-	recentServedGauge       = metrics.NewRegisteredGauge("les/server/recentRequestServed", nil)
-	recentEstimatedGauge    = metrics.NewRegisteredGauge("les/server/recentRequestEstimated", nil)
-	sqServedGauge           = metrics.NewRegisteredGauge("les/server/servingQueue/served", nil)
-	sqQueuedGauge           = metrics.NewRegisteredGauge("les/server/servingQueue/queued", nil)
+	connectionTimer       = metrics.NewRegisteredTimer("les/connection/duration", nil)
+	serverConnectionGauge = metrics.NewRegisteredGauge("les/connection/server", nil)
+	clientConnectionGauge = metrics.NewRegisteredGauge("les/connection/client", nil)
+
+	totalCapacityGauge   = metrics.NewRegisteredGauge("les/server/totalCapacity", nil)
+	totalRechargeGauge   = metrics.NewRegisteredGauge("les/server/totalRecharge", nil)
+	totalConnectedGauge  = metrics.NewRegisteredGauge("les/server/totalConnected", nil)
+	blockProcessingTimer = metrics.NewRegisteredTimer("les/server/blockProcessingTime", nil)
+
+	requestServedMeter    = metrics.NewRegisteredMeter("les/server/req/avgServedTime", nil)
+	requestServedTimer    = metrics.NewRegisteredTimer("les/server/req/servedTime", nil)
+	requestEstimatedMeter = metrics.NewRegisteredMeter("les/server/req/avgEstimatedTime", nil)
+	requestEstimatedTimer = metrics.NewRegisteredTimer("les/server/req/estimatedTime", nil)
+	relativeCostHistogram = metrics.NewRegisteredHistogram("les/server/req/relative", nil, metrics.NewExpDecaySample(1028, 0.015))
+
+	recentServedGauge    = metrics.NewRegisteredGauge("les/server/recentRequestServed", nil)
+	recentEstimatedGauge = metrics.NewRegisteredGauge("les/server/recentRequestEstimated", nil)
+	sqServedGauge        = metrics.NewRegisteredGauge("les/server/servingQueue/served", nil)
+	sqQueuedGauge        = metrics.NewRegisteredGauge("les/server/servingQueue/queued", nil)
+
 	clientConnectedMeter    = metrics.NewRegisteredMeter("les/server/clientEvent/connected", nil)
 	clientRejectedMeter     = metrics.NewRegisteredMeter("les/server/clientEvent/rejected", nil)
 	clientKickedMeter       = metrics.NewRegisteredMeter("les/server/clientEvent/kicked", nil)
 	clientDisconnectedMeter = metrics.NewRegisteredMeter("les/server/clientEvent/disconnected", nil)
 	clientFreezeMeter       = metrics.NewRegisteredMeter("les/server/clientEvent/freeze", nil)
 	clientErrorMeter        = metrics.NewRegisteredMeter("les/server/clientEvent/error", nil)
+
+	requestRTT       = metrics.NewRegisteredTimer("les/client/req/rtt", nil)
+	requestSendDelay = metrics.NewRegisteredTimer("les/client/req/sendDelay", nil)
 )
 
 // meteredMsgReadWriter is a wrapper around a p2p.MsgReadWriter, capable of
@@ -58,17 +100,11 @@ type meteredMsgReadWriter struct {
 
 // newMeteredMsgWriter wraps a p2p MsgReadWriter with metering support. If the
 // metrics system is disabled, this function returns the original object.
-func newMeteredMsgWriter(rw p2p.MsgReadWriter) p2p.MsgReadWriter {
+func newMeteredMsgWriter(rw p2p.MsgReadWriter, version int) p2p.MsgReadWriter {
 	if !metrics.Enabled {
 		return rw
 	}
-	return &meteredMsgReadWriter{MsgReadWriter: rw}
-}
-
-// Init sets the protocol version used by the stream to know which meters to
-// increment in case of overlapping message ids between protocol versions.
-func (rw *meteredMsgReadWriter) Init(version int) {
-	rw.version = version
+	return &meteredMsgReadWriter{MsgReadWriter: rw, version: version}
 }
 
 func (rw *meteredMsgReadWriter) ReadMsg() (p2p.Msg, error) {

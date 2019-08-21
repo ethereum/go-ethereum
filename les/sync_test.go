@@ -57,7 +57,7 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 		}
 	}
 	// Generate 512+4 blocks (totally 1 CHT sections)
-	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), protocol, waitIndexers, false)
+	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), protocol, waitIndexers, nil, 0, false, false)
 	defer tearDown()
 
 	expected := config.ChtSize + config.ChtConfirms
@@ -74,8 +74,8 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 		}
 		if syncMode == 1 {
 			// Register the assembled checkpoint as hardcoded one.
-			client.pm.checkpoint = cp
-			client.pm.blockchain.(*light.LightChain).AddTrustedCheckpoint(cp)
+			client.handler.checkpoint = cp
+			client.handler.backend.blockchain.AddTrustedCheckpoint(cp)
 		} else {
 			// Register the assembled checkpoint into oracle.
 			header := server.backend.Blockchain().CurrentHeader()
@@ -83,14 +83,14 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 			data := append([]byte{0x19, 0x00}, append(registrarAddr.Bytes(), append([]byte{0, 0, 0, 0, 0, 0, 0, 0}, cp.Hash().Bytes()...)...)...)
 			sig, _ := crypto.Sign(crypto.Keccak256(data), signerKey)
 			sig[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
-			if _, err := server.pm.reg.contract.RegisterCheckpoint(bind.NewKeyedTransactor(signerKey), cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(header.Number, big.NewInt(1)), header.ParentHash, [][]byte{sig}); err != nil {
+			if _, err := server.handler.server.oracle.contract.RegisterCheckpoint(bind.NewKeyedTransactor(signerKey), cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(header.Number, big.NewInt(1)), header.ParentHash, [][]byte{sig}); err != nil {
 				t.Error("register checkpoint failed", err)
 			}
 			server.backend.Commit()
 
 			// Wait for the checkpoint registration
 			for {
-				_, hash, _, err := server.pm.reg.contract.Contract().GetLatestCheckpoint(nil)
+				_, hash, _, err := server.handler.server.oracle.contract.Contract().GetLatestCheckpoint(nil)
 				if err != nil || hash == [32]byte{} {
 					time.Sleep(100 * time.Millisecond)
 					continue
@@ -102,8 +102,8 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 	}
 
 	done := make(chan error)
-	client.pm.reg.syncDoneHook = func() {
-		header := client.pm.blockchain.CurrentHeader()
+	client.handler.backend.oracle.syncDoneHook = func() {
+		header := client.handler.backend.blockchain.CurrentHeader()
 		if header.Number.Uint64() == expected {
 			done <- nil
 		} else {
@@ -112,7 +112,7 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 	}
 
 	// Create connected peer pair.
-	peer, err1, lPeer, err2 := newTestPeerPair("peer", protocol, server.pm, client.pm)
+	_, err1, _, err2 := newTestPeerPair("peer", protocol, server.handler, client.handler)
 	select {
 	case <-time.After(time.Millisecond * 100):
 	case err := <-err1:
@@ -120,7 +120,6 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 	case err := <-err2:
 		t.Fatalf("peer 2 handshake error: %v", err)
 	}
-	server.rPeer, client.rPeer = peer, lPeer
 
 	select {
 	case err := <-done:

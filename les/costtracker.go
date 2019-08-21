@@ -81,7 +81,8 @@ var (
 )
 
 const (
-	maxCostFactor    = 2 // ratio of maximum and average cost estimates
+	maxCostFactor    = 2    // ratio of maximum and average cost estimates
+	bufLimitRatio    = 6000 // fixed bufLimit/MRR ratio
 	gfUsageThreshold = 0.5
 	gfUsageTC        = time.Second
 	gfRaiseTC        = time.Second * 200
@@ -127,6 +128,10 @@ type costTracker struct {
 	totalRechargeCh chan uint64
 
 	stats map[uint64][]uint64 // Used for testing purpose.
+
+	// TestHooks
+	testing      bool            // Disable real cost evaluation for testing purpose.
+	testCostList RequestCostList // Customized cost table for testing purpose.
 }
 
 // newCostTracker creates a cost tracker and loads the cost factor statistics from the database.
@@ -265,8 +270,9 @@ func (ct *costTracker) gfLoop() {
 			select {
 			case r := <-ct.reqInfoCh:
 				requestServedMeter.Mark(int64(r.servingTime))
-				requestEstimatedMeter.Mark(int64(r.avgTimeCost / factor))
 				requestServedTimer.Update(time.Duration(r.servingTime))
+				requestEstimatedMeter.Mark(int64(r.avgTimeCost / factor))
+				requestEstimatedTimer.Update(time.Duration(r.avgTimeCost / factor))
 				relativeCostHistogram.Update(int64(r.avgTimeCost / factor / r.servingTime))
 
 				now := mclock.Now()
@@ -323,7 +329,6 @@ func (ct *costTracker) gfLoop() {
 				}
 				recentServedGauge.Update(int64(recentTime))
 				recentEstimatedGauge.Update(int64(recentAvg))
-				totalRechargeGauge.Update(int64(totalRecharge))
 
 			case <-saveTicker.C:
 				saveCostFactor()
