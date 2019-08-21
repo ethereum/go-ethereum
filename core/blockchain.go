@@ -69,6 +69,7 @@ var (
 	blockPrefetchInterruptMeter = metrics.NewRegisteredMeter("chain/prefetch/interrupts", nil)
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
+	errClosed               = errors.New("blockchain is closed")
 )
 
 const (
@@ -157,11 +158,9 @@ type BlockChain struct {
 	blockCache    *lru.Cache     // Cache for the most recent entire blocks
 	futureBlocks  *lru.Cache     // future blocks are blocks added for later processing
 
-	quit    chan struct{} // blockchain quit channel
-	running int32         // running must be called atomically
-	// procInterrupt must be atomically called
-	procInterrupt int32          // interrupt signaler for block processing
-	wg            sync.WaitGroup // chain processing wait group for shutting down
+	quit   chan struct{}  // blockchain quit channel
+	closed int32          // Indicator whether the blockchain is still running.
+	wg     sync.WaitGroup // chain processing wait group for shutting down
 
 	engine     consensus.Engine
 	validator  Validator  // Block and state validator interface
@@ -214,7 +213,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
 
 	var err error
-	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.getProcInterrupt)
+	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.isClosed)
 	if err != nil {
 		return nil, err
 	}
@@ -285,8 +284,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	return bc, nil
 }
 
-func (bc *BlockChain) getProcInterrupt() bool {
-	return atomic.LoadInt32(&bc.procInterrupt) == 1
+func (bc *BlockChain) isClosed() bool {
+	return atomic.LoadInt32(&bc.closed) == 1
 }
 
 // GetVMConfig returns the block chain VM config.
@@ -381,6 +380,13 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
+	bc.wg.Add(1)
+	defer bc.wg.Done()
+
+	// Short circuit if the blockchain is already closed.
+	if bc.isClosed() {
+		return errClosed
+	}
 	updateFn := func(db ethdb.KeyValueWriter, header *types.Header) {
 		// Rewind the block chain, ensuring we don't end up with a stateless head block
 		if currentBlock := bc.CurrentBlock(); currentBlock != nil && header.Number.Uint64() < currentBlock.NumberU64() {
@@ -794,16 +800,14 @@ func (bc *BlockChain) TrieNode(hash common.Hash) ([]byte, error) {
 }
 
 // Stop stops the blockchain service. If any imports are currently in progress
-// it will abort them using the procInterrupt.
+// it will abort them using the closed.
 func (bc *BlockChain) Stop() {
-	if !atomic.CompareAndSwapInt32(&bc.running, 0, 1) {
+	if !atomic.CompareAndSwapInt32(&bc.closed, 0, 1) {
 		return
 	}
 	// Unsubscribe all subscriptions registered from blockchain
 	bc.scope.Close()
 	close(bc.quit)
-	atomic.StoreInt32(&bc.procInterrupt, 1)
-
 	bc.wg.Wait()
 
 	// Ensure the state of a recent block is also stored to disk before exiting.
@@ -866,6 +870,13 @@ func (bc *BlockChain) Rollback(chain []common.Hash) {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
+	bc.wg.Add(1)
+	defer bc.wg.Done()
+
+	// Short circuit if the blockchain is already closed
+	if bc.isClosed() {
+		return
+	}
 	for i := len(chain) - 1; i >= 0; i-- {
 		hash := chain[i]
 
@@ -941,6 +952,10 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
+	// Short circuit is the blockchain is already closed
+	if bc.isClosed() {
+		return 0, errClosed
+	}
 	var (
 		ancientBlocks, liveBlocks     types.Blocks
 		ancientReceipts, liveReceipts []types.Receipts
@@ -1007,7 +1022,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		var deleted []*numberHash
 		for i, block := range blockChain {
 			// Short circuit insertion if shutting down or processing failed
-			if atomic.LoadInt32(&bc.procInterrupt) == 1 {
+			if bc.isClosed() {
 				return 0, errInsertionInterrupted
 			}
 			// Short circuit insertion if it is required(used in testing only)
@@ -1140,7 +1155,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		batch := bc.db.NewBatch()
 		for i, block := range blockChain {
 			// Short circuit insertion if shutting down or processing failed
-			if atomic.LoadInt32(&bc.procInterrupt) == 1 {
+			if bc.isClosed() {
 				return 0, errInsertionInterrupted
 			}
 			// Short circuit if the owner header is unknown
@@ -1212,9 +1227,6 @@ var lastWrite uint64
 // but does not write any state. This is used to construct competing side forks
 // up to the point where they exceed the canonical total difficulty.
 func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (err error) {
-	bc.wg.Add(1)
-	defer bc.wg.Done()
-
 	if err := bc.hc.WriteTd(block.Hash(), block.NumberU64(), td); err != nil {
 		return err
 	}
@@ -1226,9 +1238,6 @@ func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (e
 // writeKnownBlock updates the head block flag with a known block
 // and introduces chain reorg if necessary.
 func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
-	bc.wg.Add(1)
-	defer bc.wg.Done()
-
 	current := bc.CurrentBlock()
 	if block.ParentHash() != current.Hash() {
 		if err := bc.reorg(current, block); err != nil {
@@ -1248,15 +1257,19 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
+	bc.wg.Add(1)
+	defer bc.wg.Done()
+
+	// Short circuit if the blockchain is already closed
+	if bc.isClosed() {
+		return NonStatTy, errClosed
+	}
 	return bc.writeBlockWithState(block, receipts, state)
 }
 
 // writeBlockWithState writes the block and all associated state to the database,
 // but is expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) (status WriteStatus, err error) {
-	bc.wg.Add(1)
-	defer bc.wg.Done()
-
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
@@ -1404,15 +1417,8 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	if len(chain) == 0 {
 		return 0, nil
 	}
-
-	bc.blockProcFeed.Send(true)
-	defer bc.blockProcFeed.Send(false)
-
-	// Remove already known canon-blocks
-	var (
-		block, prev *types.Block
-	)
 	// Do a sanity check that the provided chain is actually ordered and linked
+	var block, prev *types.Block
 	for i := 1; i < len(chain); i++ {
 		block = chain[i]
 		prev = chain[i-1]
@@ -1426,11 +1432,21 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		}
 	}
 	// Pre-checks passed, start the full block imports
-	bc.wg.Add(1)
 	bc.chainmu.Lock()
+	bc.wg.Add(1)
+
+	// Short circuit if the blockchain is already closed.
+	if bc.isClosed() {
+		bc.wg.Done()
+		bc.chainmu.Unlock()
+		return 0, errClosed
+	}
+	bc.blockProcFeed.Send(true)
+	defer bc.blockProcFeed.Send(false)
+
 	n, events, logs, err := bc.insertChain(chain, true)
-	bc.chainmu.Unlock()
 	bc.wg.Done()
+	bc.chainmu.Unlock()
 
 	bc.PostChainEvents(events, logs)
 	return n, err
@@ -1445,10 +1461,6 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
 func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []interface{}, []*types.Log, error) {
-	// If the chain is terminating, don't even bother starting up
-	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
-		return 0, nil, nil, nil
-	}
 	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
 	senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig, chain[0].Number()), chain)
 
@@ -1548,7 +1560,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	// No validation errors for the first block (or chain prefix skipped)
 	for ; block != nil && err == nil || err == ErrKnownBlock; block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
-		if atomic.LoadInt32(&bc.procInterrupt) == 1 {
+		if bc.isClosed() {
 			log.Debug("Premature abort during blocks processing")
 			break
 		}
@@ -1825,7 +1837,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 			blocks, memory = blocks[:0], 0
 
 			// If the chain is terminating, stop processing blocks
-			if atomic.LoadInt32(&bc.procInterrupt) == 1 {
+			if bc.isClosed() {
 				log.Debug("Premature abort during blocks processing")
 				return 0, nil, nil, nil
 			}
@@ -2061,6 +2073,8 @@ Error: %v
 // InsertHeaderChain attempts to insert the given header chain in to the local
 // chain, possibly creating a reorg. If an error is returned, it will return the
 // index number of the failing header as well an error describing what went wrong.
+// If the blockchain is closed, all mutation operations including this function
+// will be rejected.
 //
 // The verify parameter can be used to fine tune whether nonce verification
 // should be done or not. The reason behind the optional check is because some
@@ -2079,6 +2093,10 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
+	// Short circuit if blockchain is already closed.
+	if bc.isClosed() {
+		return 0, errClosed
+	}
 	whFunc := func(header *types.Header) error {
 		_, err := bc.hc.WriteHeader(header)
 		return err
@@ -2134,9 +2152,6 @@ func (bc *BlockChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []com
 //
 // Note: ancestor == 0 returns the same block, 1 returns its parent and so on.
 func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64) {
-	bc.chainmu.RLock()
-	defer bc.chainmu.RUnlock()
-
 	return bc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
 }
 

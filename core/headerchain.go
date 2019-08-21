@@ -60,7 +60,7 @@ type HeaderChain struct {
 	tdCache     *lru.Cache // Cache for the most recent block total difficulties
 	numberCache *lru.Cache // Cache for the most recent block numbers
 
-	procInterrupt func() bool
+	isClosed func() bool // Callback whether the upper level chain is closed.
 
 	rand   *mrand.Rand
 	engine consensus.Engine
@@ -70,7 +70,7 @@ type HeaderChain struct {
 //  getValidator should return the parent's validator
 //  procInterrupt points to the parent's interrupt semaphore
 //  wg points to the parent's shutdown wait group
-func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine consensus.Engine, procInterrupt func() bool) (*HeaderChain, error) {
+func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine consensus.Engine, isClosed func() bool) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	tdCache, _ := lru.New(tdCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
@@ -82,14 +82,14 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 	}
 
 	hc := &HeaderChain{
-		config:        config,
-		chainDb:       chainDb,
-		headerCache:   headerCache,
-		tdCache:       tdCache,
-		numberCache:   numberCache,
-		procInterrupt: procInterrupt,
-		rand:          mrand.New(mrand.NewSource(seed.Int64())),
-		engine:        engine,
+		config:      config,
+		chainDb:     chainDb,
+		headerCache: headerCache,
+		tdCache:     tdCache,
+		numberCache: numberCache,
+		isClosed:    isClosed,
+		rand:        mrand.New(mrand.NewSource(seed.Int64())),
+		engine:      engine,
 	}
 
 	hc.genesisHeader = hc.GetHeaderByNumber(0)
@@ -239,7 +239,7 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int)
 	// Iterate over the headers and ensure they all check out
 	for i, header := range chain {
 		// If the chain is terminating, stop processing blocks
-		if hc.procInterrupt() {
+		if hc.isClosed() {
 			log.Debug("Premature abort during headers verification")
 			return 0, errors.New("aborted")
 		}
@@ -270,7 +270,7 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, writeHeader WhCa
 	// All headers passed verification, import them into the database
 	for i, header := range chain {
 		// Short circuit insertion if shutting down
-		if hc.procInterrupt() {
+		if hc.isClosed() {
 			log.Debug("Premature abort during headers import")
 			return i, errors.New("aborted")
 		}

@@ -43,6 +43,8 @@ import (
 var (
 	bodyCacheLimit  = 256
 	blockCacheLimit = 256
+
+	errClosed = errors.New("lightchain is closed")
 )
 
 // LightChain represents a canonical chain that by default only handles block
@@ -69,8 +71,7 @@ type LightChain struct {
 	wg      sync.WaitGroup
 
 	// Atomic boolean switches:
-	running          int32 // whether LightChain is running or stopped
-	procInterrupt    int32 // interrupts chain insert
+	closed           int32 // whether LightChain is already closed
 	disableCheckFreq int32 // disables header verification
 }
 
@@ -93,7 +94,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		engine:        engine,
 	}
 	var err error
-	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.getProcInterrupt)
+	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.isClosed)
 	if err != nil {
 		return nil, err
 	}
@@ -134,8 +135,8 @@ func (lc *LightChain) AddTrustedCheckpoint(cp *params.TrustedCheckpoint) {
 	log.Info("Added trusted checkpoint", "block", (cp.SectionIndex+1)*lc.indexerConfig.ChtSize-1, "hash", cp.SectionHead)
 }
 
-func (lc *LightChain) getProcInterrupt() bool {
-	return atomic.LoadInt32(&lc.procInterrupt) == 1
+func (lc *LightChain) isClosed() bool {
+	return atomic.LoadInt32(&lc.closed) == 1
 }
 
 // Odr returns the ODR backend of the chain
@@ -302,11 +303,10 @@ func (lc *LightChain) GetBlockByNumber(ctx context.Context, number uint64) (*typ
 // Stop stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt.
 func (lc *LightChain) Stop() {
-	if !atomic.CompareAndSwapInt32(&lc.running, 0, 1) {
+	if !atomic.CompareAndSwapInt32(&lc.closed, 0, 1) {
 		return
 	}
 	close(lc.quit)
-	atomic.StoreInt32(&lc.procInterrupt, 1)
 
 	lc.wg.Wait()
 	log.Info("Blockchain manager stopped")
@@ -370,6 +370,10 @@ func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	lc.wg.Add(1)
 	defer lc.wg.Done()
 
+	// Short circuit if lightchain is already closed
+	if lc.isClosed() {
+		return 0, errClosed
+	}
 	var events []interface{}
 	whFunc := func(header *types.Header) error {
 		status, err := lc.hc.WriteHeader(header)
@@ -438,9 +442,6 @@ func (lc *LightChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []com
 //
 // Note: ancestor == 0 returns the same block, 1 returns its parent and so on.
 func (lc *LightChain) GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64) {
-	lc.chainmu.RLock()
-	defer lc.chainmu.RUnlock()
-
 	return lc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
 }
 
