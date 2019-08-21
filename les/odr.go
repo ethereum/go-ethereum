@@ -106,17 +106,17 @@ func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err erro
 	reqID := genReqID()
 	rq := &distReq{
 		getCost: func(dp distPeer) uint64 {
-			return lreq.GetCost(dp.(*peer))
+			return lreq.GetCost(dp.(*serverPeer))
 		},
 		canSend: func(dp distPeer) bool {
-			p := dp.(*peer)
+			p := dp.(*serverPeer)
 			if !p.onlyAnnounce {
 				return lreq.CanSend(p)
 			}
 			return false
 		},
 		request: func(dp distPeer) func() {
-			p := dp.(*peer)
+			p := dp.(*serverPeer)
 			cost := lreq.GetCost(p)
 			p.fcServer.QueuedRequest(reqID, cost)
 			return func() { lreq.Request(reqID, p) }

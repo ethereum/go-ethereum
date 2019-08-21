@@ -80,7 +80,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	}
 	log.Info("Initialised chain configuration", "config", chainConfig)
 
-	peers := newPeerSet()
+	peers := newPeerSet(true)
 	leth := &LightEthereum{
 		lesCommons: lesCommons{
 			genesis:     genesisHash,
@@ -225,7 +225,7 @@ func (s *LightEthereum) EventMux() *event.TypeMux           { return s.eventMux 
 // network protocols to start.
 func (s *LightEthereum) Protocols() []p2p.Protocol {
 	return s.makeProtocols(ClientProtocolVersions, s.handler.runPeer, func(id enode.ID) interface{} {
-		if p := s.peers.Peer(peerIdToString(id)); p != nil {
+		if p := s.peers.serverPeer(peerIdToString(id)); p != nil {
 			return p.Info()
 		}
 		return nil
@@ -253,7 +253,7 @@ func (s *LightEthereum) Start(srvr *p2p.Server) error {
 // Ethereum protocol.
 func (s *LightEthereum) Stop() error {
 	close(s.closeCh)
-	s.peers.Close()
+	s.peers.close()
 	s.reqDist.close()
 	s.odr.Stop()
 	s.relay.Stop()

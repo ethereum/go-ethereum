@@ -109,7 +109,9 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 	}
 
 	// Create connected peer pair.
-	_, err1, _, err2 := newTestPeerPair("peer", protocol, server.handler, client.handler)
+	peer1, err1, peer2, err2 := newTestPeerPair("peer", protocol, server.handler, client.handler)
+	defer peer1.close()
+	defer peer2.close()
 	select {
 	case <-time.After(time.Millisecond * 100):
 	case err := <-err1:
