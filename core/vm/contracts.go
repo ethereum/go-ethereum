@@ -438,63 +438,60 @@ func (c *bn256PairingByzantium) Run(input []byte) ([]byte, error) {
 type blake2F struct{}
 
 func (c *blake2F) RequiredGas(input []byte) uint64 {
+	// If the input is malformed, we can't calculate the gas, return 0 and let the
+	// actual call choke and fault.
 	if len(input) != blake2FInputLength {
-		// Input is malformed, we can't read the number of rounds.
-		// Precompile can't be executed so we set its price to 0.
 		return 0
 	}
-
-	rounds := binary.BigEndian.Uint32(input[0:4])
-	return uint64(rounds)
+	return uint64(binary.BigEndian.Uint32(input[0:4]))
 }
 
-const blake2FInputLength = 213
-const blake2FFinalBlockBytes = byte(1)
-const blake2FNonFinalBlockBytes = byte(0)
-
-var errBlake2FIncorrectInputLength = errors.New(
-	"input length for Blake2 F precompile should be exactly 213 bytes",
+const (
+	blake2FInputLength        = 213
+	blake2FFinalBlockBytes    = byte(1)
+	blake2FNonFinalBlockBytes = byte(0)
 )
 
-var errBlake2FIncorrectFinalBlockIndicator = errors.New(
-	"incorrect final block indicator flag",
+var (
+	errBlake2FInvalidInputLength = errors.New("invalid input length")
+	errBlake2FInvalidFinalFlag   = errors.New("invalid final flag")
 )
 
 func (c *blake2F) Run(input []byte) ([]byte, error) {
+	// Make sure the input is valid (correct lenth and final flag)
 	if len(input) != blake2FInputLength {
-		return nil, errBlake2FIncorrectInputLength
+		return nil, errBlake2FInvalidInputLength
 	}
 	if input[212] != blake2FNonFinalBlockBytes && input[212] != blake2FFinalBlockBytes {
-		return nil, errBlake2FIncorrectFinalBlockIndicator
+		return nil, errBlake2FInvalidFinalFlag
 	}
+	// Parse the input into the Blake2b call parameters
+	var (
+		rounds = binary.BigEndian.Uint32(input[0:4])
+		final  = (input[212] == blake2FFinalBlockBytes)
 
-	rounds := binary.BigEndian.Uint32(input[0:4])
-
-	var h [8]uint64
+		h [8]uint64
+		m [16]uint64
+		t [2]uint64
+	)
 	for i := 0; i < 8; i++ {
 		offset := 4 + i*8
 		h[i] = binary.LittleEndian.Uint64(input[offset : offset+8])
 	}
-
-	var m [16]uint64
 	for i := 0; i < 16; i++ {
 		offset := 68 + i*8
 		m[i] = binary.LittleEndian.Uint64(input[offset : offset+8])
 	}
-
-	var t [2]uint64
 	t[0] = binary.LittleEndian.Uint64(input[196:204])
 	t[1] = binary.LittleEndian.Uint64(input[204:212])
 
-	f := (input[212] == blake2FFinalBlockBytes)
+	// Execute the compression function, extract and return the result
+	blake2b.F(&h, m, t, final, rounds)
 
-	blake2b.F(&h, m, t, f, rounds)
-
-	var output [64]byte
+	output := make([]byte, 64)
 	for i := 0; i < 8; i++ {
 		offset := i * 8
 		binary.LittleEndian.PutUint64(output[offset:offset+8], h[i])
 	}
-
-	return output[:], nil
+	return output, nil
 }
