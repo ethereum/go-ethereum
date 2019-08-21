@@ -438,8 +438,7 @@ func newServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallba
 	db := rawdb.NewMemoryDatabase()
 	indexers := testIndexers(db, nil, light.TestServerIndexerConfig)
 
-	var clock mclock.Clock
-	clock = &mclock.System{}
+	var clock mclock.Clock = &mclock.System{}
 	if simClock {
 		clock = &mclock.Simulated{}
 	}
@@ -483,8 +482,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 	sdb, cdb := rawdb.NewMemoryDatabase(), rawdb.NewMemoryDatabase()
 	speers, cPeers := newPeerSet(), newPeerSet()
 
-	var clock mclock.Clock
-	clock = &mclock.System{}
+	var clock mclock.Clock = &mclock.System{}
 	if simClock {
 		clock = &mclock.Simulated{}
 	}
