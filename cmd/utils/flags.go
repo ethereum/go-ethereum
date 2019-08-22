@@ -93,32 +93,12 @@ GLOBAL OPTIONS:
    {{range .Flags}}{{.}}
    {{end}}{{end}}
 `
-
 	cli.CommandHelpTemplate = CommandHelpTemplate
+	cli.HelpPrinter = printHelp
 }
 
 // NewApp creates an app with sane defaults.
 func NewApp(gitCommit, gitDate, usage string) *cli.App {
-	// Setup a global printer to fix alignment across commands
-	cli.HelpPrinter = func(out io.Writer, templ string, data interface{}) {
-		funcMap := template.FuncMap{
-			"join": strings.Join,
-		}
-
-		w := tabwriter.NewWriter(out, 40, 8, 2, ' ', 0)
-		t := template.Must(template.New("help").Funcs(funcMap).Parse(templ))
-		err := t.Execute(w, data)
-		if err != nil {
-			// If the writer is closed, t.Execute will fail, and there's nothing
-			// we can do to recover.
-			if os.Getenv("CLI_TEMPLATE_ERROR_DEBUG") != "" {
-				log.Crit("CLI TEMPLATE ERROR: %#v\n", err)
-			}
-			return
-		}
-		w.Flush()
-	}
-
 	app := cli.NewApp()
 	app.Name = filepath.Base(os.Args[0])
 	app.Author = ""
@@ -126,6 +106,17 @@ func NewApp(gitCommit, gitDate, usage string) *cli.App {
 	app.Version = params.VersionWithCommit(gitCommit, gitDate)
 	app.Usage = usage
 	return app
+}
+
+func printHelp(out io.Writer, templ string, data interface{}) {
+	funcMap := template.FuncMap{"join": strings.Join}
+	t := template.Must(template.New("help").Funcs(funcMap).Parse(templ))
+	w := tabwriter.NewWriter(out, 38, 8, 2, ' ', 0)
+	err := t.Execute(w, data)
+	if err != nil {
+		panic(err)
+	}
+	w.Flush()
 }
 
 // These are all the command line flags we support.
@@ -140,7 +131,7 @@ var (
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
 		Usage: "Data directory for the databases and keystore",
-		Value: DirectoryString{node.DefaultDataDir()},
+		Value: DirectoryString(node.DefaultDataDir()),
 	}
 	AncientFlag = DirectoryFlag{
 		Name:  "datadir.ancient",
@@ -191,7 +182,7 @@ var (
 	DocRootFlag = DirectoryFlag{
 		Name:  "docroot",
 		Usage: "Document Root for HTTPClient file scheme",
-		Value: DirectoryString{homeDir()},
+		Value: DirectoryString(homeDir()),
 	}
 	ExitWhenSyncedFlag = cli.BoolFlag{
 		Name:  "exitwhensynced",
@@ -314,8 +305,8 @@ var (
 	}
 	EthashDatasetDirFlag = DirectoryFlag{
 		Name:  "ethash.dagdir",
-		Usage: "Directory to store the ethash mining DAGs (default = inside home folder)",
-		Value: DirectoryString{eth.DefaultConfig.Ethash.DatasetDir},
+		Usage: "Directory to store the ethash mining DAGs",
+		Value: DirectoryString(eth.DefaultConfig.Ethash.DatasetDir),
 	}
 	EthashDatasetsInMemoryFlag = cli.IntFlag{
 		Name:  "ethash.dagsinmem",
