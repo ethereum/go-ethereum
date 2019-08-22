@@ -19,6 +19,7 @@ package vm
 import (
 	"fmt"
 	"math/big"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -30,6 +31,14 @@ type precompiledTest struct {
 	gas             uint64
 	name            string
 	noBenchmark     bool // Benchmark primarily the worst-cases
+}
+
+// precompiledFailureTest defines the input/error pairs for precompiled
+// contract failure tests.
+type precompiledFailureTest struct {
+	input         string
+	expectedError error
+	name          string
 }
 
 // modexpTests are the test and benchmark data for the modexp precompiled contract.
@@ -336,8 +345,61 @@ var bn256PairingTests = []precompiledTest{
 	},
 }
 
+// EIP-152 test vectors
+var blake2FMalformedInputTests = []precompiledFailureTest{
+	{
+		input:         "",
+		expectedError: errBlake2FInvalidInputLength,
+		name:          "vector 0: empty input",
+	},
+	{
+		input:         "00000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001",
+		expectedError: errBlake2FInvalidInputLength,
+		name:          "vector 1: less than 213 bytes input",
+	},
+	{
+		input:         "000000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001",
+		expectedError: errBlake2FInvalidInputLength,
+		name:          "vector 2: more than 213 bytes input",
+	},
+	{
+		input:         "0000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000002",
+		expectedError: errBlake2FInvalidFinalFlag,
+		name:          "vector 3: malformed final block indicator flag",
+	},
+}
+
+// EIP-152 test vectors
+var blake2FTests = []precompiledTest{
+	{
+		input:    "0000000048c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001",
+		expected: "08c9bcf367e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d282e6ad7f520e511f6c3e2b8c68059b9442be0454267ce079217e1319cde05b",
+		name:     "vector 4",
+	},
+	{ // https://tools.ietf.org/html/rfc7693#appendix-A
+		input:    "0000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001",
+		expected: "ba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d17d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923",
+		name:     "vector 5",
+	},
+	{
+		input:    "0000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000",
+		expected: "75ab69d3190a562c51aef8d88f1c2775876944407270c42c9844252c26d2875298743e7f6d5ea2f2d3e8d226039cd31b4e426ac4f2d3d666a610c2116fde4735",
+		name:     "vector 6",
+	},
+	{
+		input:    "0000000148c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001",
+		expected: "b63a380cb2897d521994a85234ee2c181b5f844d2c624c002677e9703449d2fba551b3a8333bcdf5f2f7e08993d53923de3d64fcc68c034e717b9293fed7a421",
+		name:     "vector 7",
+	},
+	{
+		input:    "007A120048c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001",
+		expected: "6d2ce9e534d50e18ff866ae92d70cceba79bbcd14c63819fe48752c8aca87a4bb7dcc230d22a4047f0486cfcfb50a17b24b2899eb8fca370f22240adb5170189",
+		name:     "vector 8",
+	},
+}
+
 func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
-	p := PrecompiledContractsByzantium[common.HexToAddress(addr)]
+	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
 	contract := NewContract(AccountRef(common.HexToAddress("1337")),
 		nil, new(big.Int), p.RequiredGas(in))
@@ -350,11 +412,25 @@ func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
 	})
 }
 
+func testPrecompiledFailure(addr string, test precompiledFailureTest, t *testing.T) {
+	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
+	in := common.Hex2Bytes(test.input)
+	contract := NewContract(AccountRef(common.HexToAddress("31337")),
+		nil, new(big.Int), p.RequiredGas(in))
+
+	t.Run(test.name, func(t *testing.T) {
+		_, err := RunPrecompiledContract(p, in, contract)
+		if !reflect.DeepEqual(err, test.expectedError) {
+			t.Errorf("Expected error [%v], got [%v]", test.expectedError, err)
+		}
+	})
+}
+
 func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 	if test.noBenchmark {
 		return
 	}
-	p := PrecompiledContractsByzantium[common.HexToAddress(addr)]
+	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
 	reqGas := p.RequiredGas(in)
 	contract := NewContract(AccountRef(common.HexToAddress("1337")),
@@ -479,5 +555,22 @@ func TestPrecompiledBn256Pairing(t *testing.T) {
 func BenchmarkPrecompiledBn256Pairing(bench *testing.B) {
 	for _, test := range bn256PairingTests {
 		benchmarkPrecompiled("08", test, bench)
+	}
+}
+func TestPrecompiledBlake2F(t *testing.T) {
+	for _, test := range blake2FTests {
+		testPrecompiled("09", test, t)
+	}
+}
+
+func BenchmarkPrecompiledBlake2F(bench *testing.B) {
+	for _, test := range blake2FTests {
+		benchmarkPrecompiled("09", test, bench)
+	}
+}
+
+func TestPrecompileBlake2FMalformedInput(t *testing.T) {
+	for _, test := range blake2FMalformedInputTests {
+		testPrecompiledFailure("09", test, t)
 	}
 }
