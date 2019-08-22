@@ -35,30 +35,44 @@ type Simulated struct {
 	scheduled []event
 	mu        sync.RWMutex
 	cond      *sync.Cond
+	lastId    uint64
 }
 
 type event struct {
 	do func()
 	at AbsTime
+	id uint64
+}
+
+// SimulatedEvent implements Event for a virtual clock.
+type SimulatedEvent struct {
+	at AbsTime
+	id uint64
+	s  *Simulated
 }
 
 // Run moves the clock by the given duration, executing all timers before that duration.
 func (s *Simulated) Run(d time.Duration) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.init()
 
 	end := s.now + AbsTime(d)
+	var do []func()
 	for len(s.scheduled) > 0 {
 		ev := s.scheduled[0]
 		if ev.at > end {
 			break
 		}
 		s.now = ev.at
-		ev.do()
+		do = append(do, ev.do)
 		s.scheduled = s.scheduled[1:]
 	}
 	s.now = end
+	s.mu.Unlock()
+
+	for _, fn := range do {
+		fn()
+	}
 }
 
 func (s *Simulated) ActiveTimers() int {
@@ -94,23 +108,26 @@ func (s *Simulated) Sleep(d time.Duration) {
 // After implements Clock.
 func (s *Simulated) After(d time.Duration) <-chan time.Time {
 	after := make(chan time.Time, 1)
-	s.insert(d, func() {
+	s.AfterFunc(d, func() {
 		after <- (time.Time{}).Add(time.Duration(s.now))
 	})
 	return after
 }
 
-func (s *Simulated) insert(d time.Duration, do func()) {
+// AfterFunc implements Clock.
+func (s *Simulated) AfterFunc(d time.Duration, do func()) Event {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.init()
 
 	at := s.now + AbsTime(d)
+	s.lastId++
+	id := s.lastId
 	l, h := 0, len(s.scheduled)
 	ll := h
 	for l != h {
 		m := (l + h) / 2
-		if at < s.scheduled[m].at {
+		if (at < s.scheduled[m].at) || ((at == s.scheduled[m].at) && (id < s.scheduled[m].id)) {
 			h = m
 		} else {
 			l = m + 1
@@ -118,12 +135,42 @@ func (s *Simulated) insert(d time.Duration, do func()) {
 	}
 	s.scheduled = append(s.scheduled, event{})
 	copy(s.scheduled[l+1:], s.scheduled[l:ll])
-	s.scheduled[l] = event{do: do, at: at}
+	e := event{do: do, at: at, id: id}
+	s.scheduled[l] = e
 	s.cond.Broadcast()
+	return &SimulatedEvent{at: at, id: id, s: s}
 }
 
 func (s *Simulated) init() {
 	if s.cond == nil {
 		s.cond = sync.NewCond(&s.mu)
 	}
+}
+
+// Cancel implements Event.
+func (e *SimulatedEvent) Cancel() bool {
+	s := e.s
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	l, h := 0, len(s.scheduled)
+	ll := h
+	for l != h {
+		m := (l + h) / 2
+		if e.id == s.scheduled[m].id {
+			l = m
+			break
+		}
+		if (e.at < s.scheduled[m].at) || ((e.at == s.scheduled[m].at) && (e.id < s.scheduled[m].id)) {
+			h = m
+		} else {
+			l = m + 1
+		}
+	}
+	if l >= ll || s.scheduled[l].id != e.id {
+		return false
+	}
+	copy(s.scheduled[l:ll-1], s.scheduled[l+1:])
+	s.scheduled = s.scheduled[:ll-1]
+	return true
 }

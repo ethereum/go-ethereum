@@ -46,6 +46,8 @@ func TestNodeLifeCycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
+	defer stack.Close()
+
 	// Ensure that a stopped node can be stopped again
 	for i := 0; i < 3; i++ {
 		if err := stack.Stop(); err != ErrNodeStopped {
@@ -88,6 +90,8 @@ func TestNodeUsedDataDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create original protocol stack: %v", err)
 	}
+	defer original.Close()
+
 	if err := original.Start(); err != nil {
 		t.Fatalf("failed to start original protocol stack: %v", err)
 	}
@@ -98,6 +102,8 @@ func TestNodeUsedDataDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create duplicate protocol stack: %v", err)
 	}
+	defer duplicate.Close()
+
 	if err := duplicate.Start(); err != ErrDatadirUsed {
 		t.Fatalf("duplicate datadir failure mismatch: have %v, want %v", err, ErrDatadirUsed)
 	}
@@ -109,6 +115,8 @@ func TestServiceRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
+	defer stack.Close()
+
 	// Register a batch of unique services and ensure they start successfully
 	services := []ServiceConstructor{NewNoopServiceA, NewNoopServiceB, NewNoopServiceC}
 	for i, constructor := range services {
@@ -141,6 +149,8 @@ func TestServiceLifeCycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
+	defer stack.Close()
+
 	// Register a batch of life-cycle instrumented services
 	services := map[string]InstrumentingWrapper{
 		"A": InstrumentedServiceMakerA,
@@ -191,6 +201,8 @@ func TestServiceRestarts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
+	defer stack.Close()
+
 	// Define a service that does not support restarts
 	var (
 		running bool
@@ -239,6 +251,8 @@ func TestServiceConstructionAbortion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
+	defer stack.Close()
+
 	// Define a batch of good services
 	services := map[string]InstrumentingWrapper{
 		"A": InstrumentedServiceMakerA,
@@ -286,6 +300,8 @@ func TestServiceStartupAbortion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
+	defer stack.Close()
+
 	// Register a batch of good services
 	services := map[string]InstrumentingWrapper{
 		"A": InstrumentedServiceMakerA,
@@ -339,6 +355,8 @@ func TestServiceTerminationGuarantee(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
+	defer stack.Close()
+
 	// Register a batch of good services
 	services := map[string]InstrumentingWrapper{
 		"A": InstrumentedServiceMakerA,
@@ -414,6 +432,8 @@ func TestServiceRetrieval(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
+	defer stack.Close()
+
 	if err := stack.Register(NewNoopService); err != nil {
 		t.Fatalf("noop service registration failed: %v", err)
 	}
@@ -449,6 +469,8 @@ func TestProtocolGather(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
+	defer stack.Close()
+
 	// Register a batch of services with some configured number of protocols
 	services := map[string]struct {
 		Count int
@@ -505,6 +527,8 @@ func TestAPIGather(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
+	defer stack.Close()
+
 	// Register a batch of services with some configured APIs
 	calls := make(chan string, 1)
 	makeAPI := func(result string) *OneMethodAPI {

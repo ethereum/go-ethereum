@@ -1,6 +1,10 @@
 package liner
 
-import "unicode"
+import (
+	"unicode"
+
+	"github.com/mattn/go-runewidth"
+)
 
 // These character classes are mostly zero width (when combined).
 // A few might not be, depending on the user's font. Fixing this
@@ -11,13 +15,6 @@ var zeroWidth = []*unicode.RangeTable{
 	unicode.Me,
 	unicode.Cc,
 	unicode.Cf,
-}
-
-var doubleWidth = []*unicode.RangeTable{
-	unicode.Han,
-	unicode.Hangul,
-	unicode.Hiragana,
-	unicode.Katakana,
 }
 
 // countGlyphs considers zero-width characters to be zero glyphs wide,
@@ -31,13 +28,7 @@ func countGlyphs(s []rune) int {
 			continue
 		}
 
-		switch {
-		case unicode.IsOneOf(zeroWidth, r):
-		case unicode.IsOneOf(doubleWidth, r):
-			n += 2
-		default:
-			n++
-		}
+		n += runewidth.RuneWidth(r)
 	}
 	return n
 }
@@ -49,17 +40,17 @@ func countMultiLineGlyphs(s []rune, columns int, start int) int {
 			n++
 			continue
 		}
-		switch {
-		case unicode.IsOneOf(zeroWidth, r):
-		case unicode.IsOneOf(doubleWidth, r):
+		switch runewidth.RuneWidth(r) {
+		case 0:
+		case 1:
+			n++
+		case 2:
 			n += 2
 			// no room for a 2-glyphs-wide char in the ending
 			// so skip a column and display it at the beginning
 			if n%columns == 1 {
 				n++
 			}
-		default:
-			n++
 		}
 	}
 	return n

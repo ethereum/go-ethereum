@@ -39,7 +39,7 @@ const statsReportLimit = 8 * time.Second
 
 // report prints statistics if some number of blocks have been processed
 // or more than a few seconds have passed since the last message.
-func (st *insertStats) report(chain []*types.Block, index int, cache common.StorageSize) {
+func (st *insertStats) report(chain []*types.Block, index int, dirty common.StorageSize) {
 	// Fetch the timings for the batch
 	var (
 		now     = mclock.Now()
@@ -60,10 +60,10 @@ func (st *insertStats) report(chain []*types.Block, index int, cache common.Stor
 			"elapsed", common.PrettyDuration(elapsed), "mgasps", float64(st.usedGas) * 1000 / float64(elapsed),
 			"number", end.Number(), "hash", end.Hash(),
 		}
-		if timestamp := time.Unix(end.Time().Int64(), 0); time.Since(timestamp) > time.Minute {
+		if timestamp := time.Unix(int64(end.Time()), 0); time.Since(timestamp) > time.Minute {
 			context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
 		}
-		context = append(context, []interface{}{"cache", cache}...)
+		context = append(context, []interface{}{"dirty", dirty}...)
 
 		if st.queued > 0 {
 			context = append(context, []interface{}{"queued", st.queued}...)
@@ -80,10 +80,13 @@ func (st *insertStats) report(chain []*types.Block, index int, cache common.Stor
 
 // insertIterator is a helper to assist during chain import.
 type insertIterator struct {
-	chain     types.Blocks
-	results   <-chan error
-	index     int
-	validator Validator
+	chain types.Blocks // Chain of blocks being iterated over
+
+	results <-chan error // Verification result sink from the consensus engine
+	errors  []error      // Header verification errors for the blocks
+
+	index     int       // Current offset of the iterator
+	validator Validator // Validator to run if verification succeeds
 }
 
 // newInsertIterator creates a new iterator based on the given blocks, which are
@@ -92,6 +95,7 @@ func newInsertIterator(chain types.Blocks, results <-chan error, validator Valid
 	return &insertIterator{
 		chain:     chain,
 		results:   results,
+		errors:    make([]error, 0, len(chain)),
 		index:     -1,
 		validator: validator,
 	}
@@ -100,31 +104,50 @@ func newInsertIterator(chain types.Blocks, results <-chan error, validator Valid
 // next returns the next block in the iterator, along with any potential validation
 // error for that block. When the end is reached, it will return (nil, nil).
 func (it *insertIterator) next() (*types.Block, error) {
+	// If we reached the end of the chain, abort
 	if it.index+1 >= len(it.chain) {
 		it.index = len(it.chain)
 		return nil, nil
 	}
+	// Advance the iterator and wait for verification result if not yet done
 	it.index++
-	if err := <-it.results; err != nil {
-		return it.chain[it.index], err
+	if len(it.errors) <= it.index {
+		it.errors = append(it.errors, <-it.results)
 	}
+	if it.errors[it.index] != nil {
+		return it.chain[it.index], it.errors[it.index]
+	}
+	// Block header valid, run body validation and return
 	return it.chain[it.index], it.validator.ValidateBody(it.chain[it.index])
 }
 
-// current returns the current block that's being processed.
-func (it *insertIterator) current() *types.Block {
-	if it.index < 0 || it.index+1 >= len(it.chain) {
-		return nil
+// peek returns the next block in the iterator, along with any potential validation
+// error for that block, but does **not** advance the iterator.
+//
+// Both header and body validation errors (nil too) is cached into the iterator
+// to avoid duplicating work on the following next() call.
+func (it *insertIterator) peek() (*types.Block, error) {
+	// If we reached the end of the chain, abort
+	if it.index+1 >= len(it.chain) {
+		return nil, nil
 	}
-	return it.chain[it.index]
+	// Wait for verification result if not yet done
+	if len(it.errors) <= it.index+1 {
+		it.errors = append(it.errors, <-it.results)
+	}
+	if it.errors[it.index+1] != nil {
+		return it.chain[it.index+1], it.errors[it.index+1]
+	}
+	// Block header valid, ignore body validation since we don't have a parent anyway
+	return it.chain[it.index+1], nil
 }
 
-// previous returns the previous block was being processed, or nil
-func (it *insertIterator) previous() *types.Block {
+// previous returns the previous header that was being processed, or nil.
+func (it *insertIterator) previous() *types.Header {
 	if it.index < 1 {
 		return nil
 	}
-	return it.chain[it.index-1]
+	return it.chain[it.index-1].Header()
 }
 
 // first returns the first block in the it.

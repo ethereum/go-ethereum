@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -22,8 +22,7 @@ import (
 
 func TestBuildSchema(t *testing.T) {
 	// Make sure the schema can be parsed and matched up to the object model.
-	_, err := NewHandler(nil)
-	if err != nil {
+	if _, err := newHandler(nil); err != nil {
 		t.Errorf("Could not construct GraphQL handler: %v", err)
 	}
 }

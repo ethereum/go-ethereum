@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -192,7 +193,7 @@ OUTER:
 
 	connEventCount = nodeCount
 
-OUTER_TWO:
+OuterTwo:
 	for {
 		select {
 		case <-ctx.Done():
@@ -210,7 +211,7 @@ OUTER_TWO:
 				connEventCount--
 				log.Debug("ev", "count", connEventCount)
 				if connEventCount == 0 {
-					break OUTER_TWO
+					break OuterTwo
 				}
 			}
 		}
@@ -483,5 +484,139 @@ func benchmarkMinimalServiceTmp(b *testing.B) {
 				}
 			}
 		}
+	}
+}
+
+func TestNode_UnmarshalJSON(t *testing.T) {
+	t.Run(
+		"test unmarshal of Node up field",
+		func(t *testing.T) {
+			runNodeUnmarshalJSON(t, casesNodeUnmarshalJSONUpField())
+		},
+	)
+	t.Run(
+		"test unmarshal of Node Config field",
+		func(t *testing.T) {
+			runNodeUnmarshalJSON(t, casesNodeUnmarshalJSONConfigField())
+		},
+	)
+}
+
+func runNodeUnmarshalJSON(t *testing.T, tests []nodeUnmarshalTestCase) {
+	t.Helper()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got Node
+			if err := got.UnmarshalJSON([]byte(tt.marshaled)); err != nil {
+				expectErrorMessageToContain(t, err, tt.wantErr)
+			}
+			expectNodeEquality(t, got, tt.want)
+		})
+	}
+}
+
+type nodeUnmarshalTestCase struct {
+	name      string
+	marshaled string
+	want      Node
+	wantErr   string
+}
+
+func expectErrorMessageToContain(t *testing.T, got error, want string) {
+	t.Helper()
+	if got == nil && want == "" {
+		return
+	}
+
+	if got == nil && want != "" {
+		t.Errorf("error was expected, got: nil, want: %v", want)
+		return
+	}
+
+	if !strings.Contains(got.Error(), want) {
+		t.Errorf(
+			"unexpected error message, got  %v, want: %v",
+			want,
+			got,
+		)
+	}
+}
+
+func expectNodeEquality(t *testing.T, got Node, want Node) {
+	t.Helper()
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Node.UnmarshalJSON() = %v, want %v", got, want)
+	}
+}
+
+func casesNodeUnmarshalJSONUpField() []nodeUnmarshalTestCase {
+	return []nodeUnmarshalTestCase{
+		{
+			name:      "empty json",
+			marshaled: "{}",
+			want: Node{
+				up: false,
+			},
+		},
+		{
+			name:      "a stopped node",
+			marshaled: "{\"up\": false}",
+			want: Node{
+				up: false,
+			},
+		},
+		{
+			name:      "a running node",
+			marshaled: "{\"up\": true}",
+			want: Node{
+				up: true,
+			},
+		},
+		{
+			name:      "invalid JSON value on valid key",
+			marshaled: "{\"up\": foo}",
+			wantErr:   "invalid character",
+		},
+		{
+			name:      "invalid JSON key and value",
+			marshaled: "{foo: bar}",
+			wantErr:   "invalid character",
+		},
+		{
+			name:      "bool value expected but got something else (string)",
+			marshaled: "{\"up\": \"true\"}",
+			wantErr:   "cannot unmarshal string into Go struct",
+		},
+	}
+}
+
+func casesNodeUnmarshalJSONConfigField() []nodeUnmarshalTestCase {
+	// Don't do a big fuss around testing, as adapters.NodeConfig should
+	// handle it's own serialization. Just do a sanity check.
+	return []nodeUnmarshalTestCase{
+		{
+			name:      "Config field is omitted",
+			marshaled: "{}",
+			want: Node{
+				Config: nil,
+			},
+		},
+		{
+			name:      "Config field is nil",
+			marshaled: "{\"config\": nil}",
+			want: Node{
+				Config: nil,
+			},
+		},
+		{
+			name:      "a non default Config field",
+			marshaled: "{\"config\":{\"name\":\"node_ecdd0\",\"port\":44665}}",
+			want: Node{
+				Config: &adapters.NodeConfig{
+					Name: "node_ecdd0",
+					Port: 44665,
+				},
+			},
+		},
 	}
 }

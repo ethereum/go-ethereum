@@ -9,6 +9,7 @@ package leveldb
 import (
 	"fmt"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -22,7 +23,8 @@ type tSet struct {
 }
 
 type version struct {
-	s *session
+	id int64 // unique monotonous increasing version id
+	s  *session
 
 	levels []tFiles
 
@@ -39,8 +41,11 @@ type version struct {
 	released bool
 }
 
+// newVersion creates a new version with an unique monotonous increasing id.
 func newVersion(s *session) *version {
-	return &version{s: s}
+	id := atomic.AddInt64(&s.ntVersionId, 1)
+	nv := &version{s: s, id: id - 1}
+	return nv
 }
 
 func (v *version) incref() {
@@ -50,11 +55,11 @@ func (v *version) incref() {
 
 	v.ref++
 	if v.ref == 1 {
-		// Incr file ref.
-		for _, tt := range v.levels {
-			for _, t := range tt {
-				v.s.addFileRef(t.fd, 1)
-			}
+		select {
+		case v.s.refCh <- &vTask{vid: v.id, files: v.levels, created: time.Now()}:
+			// We can use v.levels directly here since it is immutable.
+		case <-v.s.closeC:
+			v.s.log("reference loop already exist")
 		}
 	}
 }
@@ -66,13 +71,11 @@ func (v *version) releaseNB() {
 	} else if v.ref < 0 {
 		panic("negative version ref")
 	}
-
-	for _, tt := range v.levels {
-		for _, t := range tt {
-			if v.s.addFileRef(t.fd, -1) == 0 {
-				v.s.tops.remove(t)
-			}
-		}
+	select {
+	case v.s.relCh <- &vTask{vid: v.id, files: v.levels, created: time.Now()}:
+		// We can use v.levels directly here since it is immutable.
+	case <-v.s.closeC:
+		v.s.log("reference loop already exist")
 	}
 
 	v.released = true
@@ -273,10 +276,10 @@ func (v *version) newStaging() *versionStaging {
 }
 
 // Spawn a new version based on this version.
-func (v *version) spawn(r *sessionRecord) *version {
+func (v *version) spawn(r *sessionRecord, trivial bool) *version {
 	staging := v.newStaging()
 	staging.commit(r)
-	return staging.finish()
+	return staging.finish(trivial)
 }
 
 func (v *version) fillRecord(r *sessionRecord) {
@@ -446,7 +449,7 @@ func (p *versionStaging) commit(r *sessionRecord) {
 	}
 }
 
-func (p *versionStaging) finish() *version {
+func (p *versionStaging) finish(trivial bool) *version {
 	// Build new version.
 	nv := newVersion(p.base.s)
 	numLevel := len(p.levels)
@@ -463,6 +466,12 @@ func (p *versionStaging) finish() *version {
 		if level < len(p.levels) {
 			scratch := p.levels[level]
 
+			// Short circuit if there is no change at all.
+			if len(scratch.added) == 0 && len(scratch.deleted) == 0 {
+				nv.levels[level] = baseTabels
+				continue
+			}
+
 			var nt tFiles
 			// Prealloc list if possible.
 			if n := len(baseTabels) + len(scratch.added) - len(scratch.deleted); n > 0 {
@@ -478,6 +487,41 @@ func (p *versionStaging) finish() *version {
 					continue
 				}
 				nt = append(nt, t)
+			}
+
+			// Avoid resort if only files in this level are deleted
+			if len(scratch.added) == 0 {
+				nv.levels[level] = nt
+				continue
+			}
+
+			// For normal table compaction, one compaction will only involve two levels
+			// of files. And the new files generated after merging the source level and
+			// source+1 level related files can be inserted as a whole into source+1 level
+			// without any overlap with the other source+1 files.
+			//
+			// When the amount of data maintained by leveldb is large, the number of files
+			// per level will be very large. While qsort is very inefficient for sorting
+			// already ordered arrays. Therefore, for the normal table compaction, we use
+			// binary search here to find the insert index to insert a batch of new added
+			// files directly instead of using qsort.
+			if trivial && len(scratch.added) > 0 {
+				added := make(tFiles, 0, len(scratch.added))
+				for _, r := range scratch.added {
+					added = append(added, tableFileFromRecord(r))
+				}
+				if level == 0 {
+					added.sortByNum()
+					index := nt.searchNumLess(added[len(added)-1].fd.Num)
+					nt = append(nt[:index], append(added, nt[index:]...)...)
+				} else {
+					added.sortByKey(p.base.s.icmp)
+					_, amax := added.getRange(p.base.s.icmp)
+					index := nt.searchMin(p.base.s.icmp, amax)
+					nt = append(nt[:index], append(added, nt[index:]...)...)
+				}
+				nv.levels[level] = nt
+				continue
 			}
 
 			// New tables.

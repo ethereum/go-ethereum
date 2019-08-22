@@ -69,6 +69,10 @@ func (tr *Transaction) Has(key []byte, ro *opt.ReadOptions) (bool, error) {
 // DB. And a nil Range.Limit is treated as a key after all keys in
 // the DB.
 //
+// WARNING: Any slice returned by interator (e.g. slice returned by calling
+// Iterator.Key() or Iterator.Key() methods), its content should not be modified
+// unless noted otherwise.
+//
 // The iterator must be released after use, by calling Release method.
 //
 // Also read Iterator documentation of the leveldb/iterator package.
@@ -205,7 +209,7 @@ func (tr *Transaction) Commit() error {
 		tr.stats.startTimer()
 		var cerr error
 		for retry := 0; retry < 3; retry++ {
-			cerr = tr.db.s.commit(&tr.rec)
+			cerr = tr.db.s.commit(&tr.rec, false)
 			if cerr != nil {
 				tr.db.logf("transaction@commit error R·%d %q", retry, cerr)
 				select {

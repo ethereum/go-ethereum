@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -82,7 +81,7 @@ func (e *Envelope) Seal(options *MessageParams) error {
 		return nil
 	}
 
-	var target, bestBit int
+	var target, bestLeadingZeros int
 	if options.PoW < 0 {
 		// target is not set - the function should run for a period
 		// of time specified in WorkTime param. Since we can predict
@@ -92,19 +91,21 @@ func (e *Envelope) Seal(options *MessageParams) error {
 		target = e.powToFirstBit(options.PoW)
 	}
 
-	buf := make([]byte, 64)
-	h := crypto.Keccak256(e.rlpWithoutNonce())
-	copy(buf[:32], h)
+	rlp := e.rlpWithoutNonce()
+	buf := make([]byte, len(rlp)+8)
+	copy(buf, rlp)
+	asAnInt := new(big.Int)
 
 	finish := time.Now().Add(time.Duration(options.WorkTime) * time.Second).UnixNano()
 	for nonce := uint64(0); time.Now().UnixNano() < finish; {
 		for i := 0; i < 1024; i++ {
-			binary.BigEndian.PutUint64(buf[56:], nonce)
-			d := new(big.Int).SetBytes(crypto.Keccak256(buf))
-			firstBit := math.FirstBitSet(d)
-			if firstBit > bestBit {
-				e.Nonce, bestBit = nonce, firstBit
-				if target > 0 && bestBit >= target {
+			binary.BigEndian.PutUint64(buf[len(rlp):], nonce)
+			h := crypto.Keccak256(buf)
+			asAnInt.SetBytes(h)
+			leadingZeros := 256 - asAnInt.BitLen()
+			if leadingZeros > bestLeadingZeros {
+				e.Nonce, bestLeadingZeros = nonce, leadingZeros
+				if target > 0 && bestLeadingZeros >= target {
 					return nil
 				}
 			}
@@ -112,7 +113,7 @@ func (e *Envelope) Seal(options *MessageParams) error {
 		}
 	}
 
-	if target > 0 && bestBit < target {
+	if target > 0 && bestLeadingZeros < target {
 		return fmt.Errorf("failed to reach the PoW target, specified pow time (%d seconds) was insufficient", options.WorkTime)
 	}
 
@@ -129,14 +130,14 @@ func (e *Envelope) PoW() float64 {
 }
 
 func (e *Envelope) calculatePoW(diff uint32) {
-	buf := make([]byte, 64)
-	h := crypto.Keccak256(e.rlpWithoutNonce())
-	copy(buf[:32], h)
-	binary.BigEndian.PutUint64(buf[56:], e.Nonce)
-	d := new(big.Int).SetBytes(crypto.Keccak256(buf))
-	firstBit := math.FirstBitSet(d)
-	x := gmath.Pow(2, float64(firstBit))
-	x /= float64(e.size())
+	rlp := e.rlpWithoutNonce()
+	buf := make([]byte, len(rlp)+8)
+	copy(buf, rlp)
+	binary.BigEndian.PutUint64(buf[len(rlp):], e.Nonce)
+	powHash := new(big.Int).SetBytes(crypto.Keccak256(buf))
+	leadingZeroes := 256 - powHash.BitLen()
+	x := gmath.Pow(2, float64(leadingZeroes))
+	x /= float64(len(rlp))
 	x /= float64(e.TTL + diff)
 	e.pow = x
 }

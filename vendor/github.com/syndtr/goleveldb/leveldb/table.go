@@ -7,6 +7,7 @@
 package leveldb
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"sync/atomic"
@@ -150,6 +151,30 @@ func (tf tFiles) searchMax(icmp *iComparer, ikey internalKey) int {
 	})
 }
 
+// Searches smallest index of tables whose its file number
+// is smaller than the given number.
+func (tf tFiles) searchNumLess(num int64) int {
+	return sort.Search(len(tf), func(i int) bool {
+		return tf[i].fd.Num < num
+	})
+}
+
+// Searches smallest index of tables whose its smallest
+// key is after the given key.
+func (tf tFiles) searchMinUkey(icmp *iComparer, umin []byte) int {
+	return sort.Search(len(tf), func(i int) bool {
+		return icmp.ucmp.Compare(tf[i].imin.ukey(), umin) > 0
+	})
+}
+
+// Searches smallest index of tables whose its largest
+// key is after the given key.
+func (tf tFiles) searchMaxUkey(icmp *iComparer, umax []byte) int {
+	return sort.Search(len(tf), func(i int) bool {
+		return icmp.ucmp.Compare(tf[i].imax.ukey(), umax) > 0
+	})
+}
+
 // Returns true if given key range overlaps with one or more
 // tables key range. If unsorted is true then binary search will not be used.
 func (tf tFiles) overlaps(icmp *iComparer, umin, umax []byte, unsorted bool) bool {
@@ -181,6 +206,50 @@ func (tf tFiles) overlaps(icmp *iComparer, umin, umax []byte, unsorted bool) boo
 // expanded.
 // The dst content will be overwritten.
 func (tf tFiles) getOverlaps(dst tFiles, icmp *iComparer, umin, umax []byte, overlapped bool) tFiles {
+	// Short circuit if tf is empty
+	if len(tf) == 0 {
+		return nil
+	}
+	// For non-zero levels, there is no ukey hop across at all.
+	// And what's more, the files in these levels are strictly sorted,
+	// so use binary search instead of heavy traverse.
+	if !overlapped {
+		var begin, end int
+		// Determine the begin index of the overlapped file
+		if umin != nil {
+			index := tf.searchMinUkey(icmp, umin)
+			if index == 0 {
+				begin = 0
+			} else if bytes.Compare(tf[index-1].imax.ukey(), umin) >= 0 {
+				// The min ukey overlaps with the index-1 file, expand it.
+				begin = index - 1
+			} else {
+				begin = index
+			}
+		}
+		// Determine the end index of the overlapped file
+		if umax != nil {
+			index := tf.searchMaxUkey(icmp, umax)
+			if index == len(tf) {
+				end = len(tf)
+			} else if bytes.Compare(tf[index].imin.ukey(), umax) <= 0 {
+				// The max ukey overlaps with the index file, expand it.
+				end = index + 1
+			} else {
+				end = index
+			}
+		} else {
+			end = len(tf)
+		}
+		// Ensure the overlapped file indexes are valid.
+		if begin >= end {
+			return nil
+		}
+		dst = make([]*tFile, end-begin)
+		copy(dst, tf[begin:end])
+		return dst
+	}
+
 	dst = dst[:0]
 	for i := 0; i < len(tf); {
 		t := tf[i]
@@ -193,11 +262,9 @@ func (tf tFiles) getOverlaps(dst tFiles, icmp *iComparer, umin, umax []byte, ove
 			} else if umax != nil && icmp.uCompare(t.imax.ukey(), umax) > 0 {
 				umax = t.imax.ukey()
 				// Restart search if it is overlapped.
-				if overlapped {
-					dst = dst[:0]
-					i = 0
-					continue
-				}
+				dst = dst[:0]
+				i = 0
+				continue
 			}
 
 			dst = append(dst, t)
@@ -416,15 +483,15 @@ func (t *tOps) newIterator(f *tFile, slice *util.Range, ro *opt.ReadOptions) ite
 
 // Removes table from persistent storage. It waits until
 // no one use the the table.
-func (t *tOps) remove(f *tFile) {
-	t.cache.Delete(0, uint64(f.fd.Num), func() {
-		if err := t.s.stor.Remove(f.fd); err != nil {
-			t.s.logf("table@remove removing @%d %q", f.fd.Num, err)
+func (t *tOps) remove(fd storage.FileDesc) {
+	t.cache.Delete(0, uint64(fd.Num), func() {
+		if err := t.s.stor.Remove(fd); err != nil {
+			t.s.logf("table@remove removing @%d %q", fd.Num, err)
 		} else {
-			t.s.logf("table@remove removed @%d", f.fd.Num)
+			t.s.logf("table@remove removed @%d", fd.Num)
 		}
 		if t.evictRemoved && t.bcache != nil {
-			t.bcache.EvictNS(uint64(f.fd.Num))
+			t.bcache.EvictNS(uint64(fd.Num))
 		}
 	})
 }

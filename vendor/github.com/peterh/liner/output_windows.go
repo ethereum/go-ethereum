@@ -69,8 +69,4 @@ func (s *State) getColumns() {
 	var sbi consoleScreenBufferInfo
 	procGetConsoleScreenBufferInfo.Call(uintptr(s.hOut), uintptr(unsafe.Pointer(&sbi)))
 	s.columns = int(sbi.dwSize.x)
-	if s.columns > 1 {
-		// Windows 10 needs a spare column for the cursor
-		s.columns--
-	}
 }

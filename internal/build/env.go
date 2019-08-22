@@ -20,7 +20,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -35,17 +38,17 @@ var (
 
 // Environment contains metadata provided by the build environment.
 type Environment struct {
-	Name                string // name of the environment
-	Repo                string // name of GitHub repo
-	Commit, Branch, Tag string // Git info
-	Buildnum            string
-	IsPullRequest       bool
-	IsCronJob           bool
+	Name                      string // name of the environment
+	Repo                      string // name of GitHub repo
+	Commit, Date, Branch, Tag string // Git info
+	Buildnum                  string
+	IsPullRequest             bool
+	IsCronJob                 bool
 }
 
 func (env Environment) String() string {
-	return fmt.Sprintf("%s env (commit:%s branch:%s tag:%s buildnum:%s pr:%t)",
-		env.Name, env.Commit, env.Branch, env.Tag, env.Buildnum, env.IsPullRequest)
+	return fmt.Sprintf("%s env (commit:%s date:%s branch:%s tag:%s buildnum:%s pr:%t)",
+		env.Name, env.Commit, env.Date, env.Branch, env.Tag, env.Buildnum, env.IsPullRequest)
 }
 
 // Env returns metadata about the current CI environment, falling back to LocalEnv
@@ -53,10 +56,15 @@ func (env Environment) String() string {
 func Env() Environment {
 	switch {
 	case os.Getenv("CI") == "true" && os.Getenv("TRAVIS") == "true":
+		commit := os.Getenv("TRAVIS_PULL_REQUEST_SHA")
+		if commit == "" {
+			commit = os.Getenv("TRAVIS_COMMIT")
+		}
 		return Environment{
 			Name:          "travis",
 			Repo:          os.Getenv("TRAVIS_REPO_SLUG"),
-			Commit:        os.Getenv("TRAVIS_COMMIT"),
+			Commit:        commit,
+			Date:          getDate(commit),
 			Branch:        os.Getenv("TRAVIS_BRANCH"),
 			Tag:           os.Getenv("TRAVIS_TAG"),
 			Buildnum:      os.Getenv("TRAVIS_BUILD_NUMBER"),
@@ -64,10 +72,15 @@ func Env() Environment {
 			IsCronJob:     os.Getenv("TRAVIS_EVENT_TYPE") == "cron",
 		}
 	case os.Getenv("CI") == "True" && os.Getenv("APPVEYOR") == "True":
+		commit := os.Getenv("APPVEYOR_PULL_REQUEST_HEAD_COMMIT")
+		if commit == "" {
+			commit = os.Getenv("APPVEYOR_REPO_COMMIT")
+		}
 		return Environment{
 			Name:          "appveyor",
 			Repo:          os.Getenv("APPVEYOR_REPO_NAME"),
-			Commit:        os.Getenv("APPVEYOR_REPO_COMMIT"),
+			Commit:        commit,
+			Date:          getDate(commit),
 			Branch:        os.Getenv("APPVEYOR_REPO_BRANCH"),
 			Tag:           os.Getenv("APPVEYOR_REPO_TAG_NAME"),
 			Buildnum:      os.Getenv("APPVEYOR_BUILD_NUMBER"),
@@ -84,14 +97,22 @@ func LocalEnv() Environment {
 	env := applyEnvFlags(Environment{Name: "local", Repo: "ethereum/go-ethereum"})
 
 	head := readGitFile("HEAD")
-	if splits := strings.Split(head, " "); len(splits) == 2 {
-		head = splits[1]
+	if fields := strings.Fields(head); len(fields) == 2 {
+		head = fields[1]
 	} else {
+		// In this case we are in "detached head" state
+		// see: https://git-scm.com/docs/git-checkout#_detached_head
+		// Additional check required to verify, that file contains commit hash
+		commitRe, _ := regexp.Compile("^([0-9a-f]{40})$")
+		if commit := commitRe.FindString(head); commit != "" && env.Commit == "" {
+			env.Commit = commit
+		}
 		return env
 	}
 	if env.Commit == "" {
 		env.Commit = readGitFile(head)
 	}
+	env.Date = getDate(env.Commit)
 	if env.Branch == "" {
 		if head != "HEAD" {
 			env.Branch = strings.TrimPrefix(head, "refs/heads/")
@@ -105,6 +126,21 @@ func LocalEnv() Environment {
 
 func firstLine(s string) string {
 	return strings.Split(s, "\n")[0]
+}
+
+func getDate(commit string) string {
+	if commit == "" {
+		return ""
+	}
+	out := RunGit("show", "-s", "--format=%ct", commit)
+	if out == "" {
+		return ""
+	}
+	date, err := strconv.ParseInt(strings.TrimSpace(out), 10, 64)
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse git commit date: %v", err))
+	}
+	return time.Unix(date, 0).Format("20060102")
 }
 
 func applyEnvFlags(env Environment) Environment {

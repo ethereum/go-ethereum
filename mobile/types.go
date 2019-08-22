@@ -109,7 +109,7 @@ func (h *Header) GetDifficulty() *BigInt { return &BigInt{h.header.Difficulty} }
 func (h *Header) GetNumber() int64       { return h.header.Number.Int64() }
 func (h *Header) GetGasLimit() int64     { return int64(h.header.GasLimit) }
 func (h *Header) GetGasUsed() int64      { return int64(h.header.GasUsed) }
-func (h *Header) GetTime() int64         { return h.header.Time.Int64() }
+func (h *Header) GetTime() int64         { return int64(h.header.Time) }
 func (h *Header) GetExtra() []byte       { return h.header.Extra }
 func (h *Header) GetMixDigest() *Hash    { return &Hash{h.header.MixDigest} }
 func (h *Header) GetNonce() *Nonce       { return &Nonce{h.header.Nonce} }
@@ -180,7 +180,7 @@ func (b *Block) GetDifficulty() *BigInt         { return &BigInt{b.block.Difficu
 func (b *Block) GetNumber() int64               { return b.block.Number().Int64() }
 func (b *Block) GetGasLimit() int64             { return int64(b.block.GasLimit()) }
 func (b *Block) GetGasUsed() int64              { return int64(b.block.GasUsed()) }
-func (b *Block) GetTime() int64                 { return b.block.Time().Int64() }
+func (b *Block) GetTime() int64                 { return int64(b.block.Time()) }
 func (b *Block) GetExtra() []byte               { return b.block.Extra() }
 func (b *Block) GetMixDigest() *Hash            { return &Hash{b.block.MixDigest()} }
 func (b *Block) GetNonce() int64                { return int64(b.block.Nonce()) }
@@ -197,8 +197,18 @@ type Transaction struct {
 	tx *types.Transaction
 }
 
-// NewTransaction creates a new transaction with the given properties.
+// NewContractCreation creates a new transaction for deploying a new contract with
+// the given properties.
+func NewContractCreation(nonce int64, amount *BigInt, gasLimit int64, gasPrice *BigInt, data []byte) *Transaction {
+	return &Transaction{types.NewContractCreation(uint64(nonce), amount.bigint, uint64(gasLimit), gasPrice.bigint, common.CopyBytes(data))}
+}
+
+// NewTransaction creates a new transaction with the given properties. Contracts
+// can be created by transacting with a nil recipient.
 func NewTransaction(nonce int64, to *Address, amount *BigInt, gasLimit int64, gasPrice *BigInt, data []byte) *Transaction {
+	if to == nil {
+		return &Transaction{types.NewContractCreation(uint64(nonce), amount.bigint, uint64(gasLimit), gasPrice.bigint, common.CopyBytes(data))}
+	}
 	return &Transaction{types.NewTransaction(uint64(nonce), to.address, amount.bigint, uint64(gasLimit), gasPrice.bigint, common.CopyBytes(data))}
 }
 

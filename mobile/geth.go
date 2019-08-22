@@ -76,9 +76,6 @@ type NodeConfig struct {
 
 	// Listening address of pprof server.
 	PprofAddress string
-
-	// Ultra Light client options
-	ULC *eth.ULCConfig
 }
 
 // defaultNodeConfig contains the default node configuration values to use if all
@@ -190,6 +187,12 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		}
 	}
 	return &Node{rawStack}, nil
+}
+
+// Close terminates a running node along with all it's services, tearing internal
+// state doen too. It's not possible to restart a closed node.
+func (n *Node) Close() error {
+	return n.node.Close()
 }
 
 // Start creates a live P2P node and starts running it.

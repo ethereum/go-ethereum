@@ -181,10 +181,14 @@ func (c *compaction) expand() {
 
 	t0, t1 := c.levels[0], c.levels[1]
 	imin, imax := t0.getRange(c.s.icmp)
-	// We expand t0 here just incase ukey hop across tables.
-	t0 = vt0.getOverlaps(t0, c.s.icmp, imin.ukey(), imax.ukey(), c.sourceLevel == 0)
-	if len(t0) != len(c.levels[0]) {
-		imin, imax = t0.getRange(c.s.icmp)
+
+	// For non-zero levels, the ukey can't hop across tables at all.
+	if c.sourceLevel == 0 {
+		// We expand t0 here just incase ukey hop across tables.
+		t0 = vt0.getOverlaps(t0, c.s.icmp, imin.ukey(), imax.ukey(), c.sourceLevel == 0)
+		if len(t0) != len(c.levels[0]) {
+			imin, imax = t0.getRange(c.s.icmp)
+		}
 	}
 	t1 = vt1.getOverlaps(t1, c.s.icmp, imin.ukey(), imax.ukey(), false)
 	// Get entire range covered by compaction.
