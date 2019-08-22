@@ -129,7 +129,7 @@ func parseComplete(rawurl string) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	ip := ips[0]
+	ip = ips[0]
 	// Ensure the IP is 4 bytes long for IPv4 addresses.
 	if ipv4 := ip.To4(); ipv4 != nil {
 		ip = ipv4
