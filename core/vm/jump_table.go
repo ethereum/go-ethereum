@@ -60,15 +60,27 @@ var (
 	spuriousDragonInstructionSet   = newSpuriousDragonInstructionSet()
 	byzantiumInstructionSet        = newByzantiumInstructionSet()
 	constantinopleInstructionSet   = newConstantinopleInstructionSet()
+	istanbulInstructionSet         = newIstanbulInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]operation
 
-// NewConstantinopleInstructionSet returns the frontier, homestead
+// newIstanbulInstructionSet returns the frontier, homestead
+// byzantium, contantinople and petersburg instructions.
+func newIstanbulInstructionSet() JumpTable {
+	instructionSet := newConstantinopleInstructionSet()
+
+	enable1344(&instructionSet) // ChainID opcode - https://eips.ethereum.org/EIPS/eip-1344
+	enable1884(&instructionSet) // Reprice reader opcodes - https://eips.ethereum.org/EIPS/eip-1884
+	enable2200(&instructionSet) // Net metered SSTORE - https://eips.ethereum.org/EIPS/eip-2200
+
+	return instructionSet
+}
+
+// newConstantinopleInstructionSet returns the frontier, homestead
 // byzantium and contantinople instructions.
 func newConstantinopleInstructionSet() JumpTable {
-	// instructions that can be executed during the byzantium phase.
 	instructionSet := newByzantiumInstructionSet()
 	instructionSet[SHL] = operation{
 		execute:     opSHL,
@@ -112,10 +124,9 @@ func newConstantinopleInstructionSet() JumpTable {
 	return instructionSet
 }
 
-// NewByzantiumInstructionSet returns the frontier, homestead and
+// newByzantiumInstructionSet returns the frontier, homestead and
 // byzantium instructions.
 func newByzantiumInstructionSet() JumpTable {
-	// instructions that can be executed during the homestead phase.
 	instructionSet := newSpuriousDragonInstructionSet()
 	instructionSet[STATICCALL] = operation{
 		execute:     opStaticCall,
@@ -177,7 +188,7 @@ func newTangerineWhistleInstructionSet() JumpTable {
 	return instructionSet
 }
 
-// NewHomesteadInstructionSet returns the frontier and homestead
+// newHomesteadInstructionSet returns the frontier and homestead
 // instructions that can be executed during the homestead phase.
 func newHomesteadInstructionSet() JumpTable {
 	instructionSet := newFrontierInstructionSet()
@@ -194,7 +205,7 @@ func newHomesteadInstructionSet() JumpTable {
 	return instructionSet
 }
 
-// NewFrontierInstructionSet returns the frontier instructions
+// newFrontierInstructionSet returns the frontier instructions
 // that can be executed during the frontier phase.
 func newFrontierInstructionSet() JumpTable {
 	return JumpTable{
