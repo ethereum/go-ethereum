@@ -450,13 +450,23 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 	s.setError(s.trie.TryDelete(addr[:]))
 }
 
-// Retrieve a state object given by the address. Returns nil if not found.
-func (s *StateDB) getStateObject(addr common.Address) (stateObject *stateObject) {
-	// Prefer live objects
+// getStateObject retrieves a state object given by the address, returning nil if
+// the object is not found or was deleted in this execution context. If you need
+// to differentiate between non-existent/just-deleted, use getDeletedStateObject.
+func (s *StateDB) getStateObject(addr common.Address) *stateObject {
+	if obj := s.getDeletedStateObject(addr); obj != nil && !obj.deleted {
+		return obj
+	}
+	return nil
+}
+
+// getDeletedStateObject is similar to getStateObject, but instead of returning
+// nil for a deleted state object, it returns the actual object with the deleted
+// flag set. This is needed by the state journal to revert to the correct self-
+// destructed object instead of wiping all knowledge about the state object.
+func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
+	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
-		if obj.deleted {
-			return nil
-		}
 		return obj
 	}
 	// Track the amount of time wasted on loading the object from the database
@@ -487,7 +497,7 @@ func (self *StateDB) setStateObject(object *stateObject) {
 // Retrieve a state object or create a new state object if nil.
 func (self *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
 	stateObject := self.getStateObject(addr)
-	if stateObject == nil || stateObject.deleted {
+	if stateObject == nil {
 		stateObject, _ = self.createObject(addr)
 	}
 	return stateObject
@@ -496,7 +506,8 @@ func (self *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
 func (self *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
-	prev = self.getStateObject(addr)
+	prev = self.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
+
 	newobj = newObject(self, addr, Account{})
 	newobj.setNonce(0) // sets the object to dirty
 	if prev == nil {
@@ -587,14 +598,14 @@ func (self *StateDB) Copy() *StateDB {
 	for addr := range self.stateObjectsPending {
 		if _, exist := state.stateObjects[addr]; !exist {
 			state.stateObjects[addr] = self.stateObjects[addr].deepCopy(state)
-			state.stateObjectsPending[addr] = struct{}{}
 		}
+		state.stateObjectsPending[addr] = struct{}{}
 	}
 	for addr := range self.stateObjectsDirty {
 		if _, exist := state.stateObjects[addr]; !exist {
 			state.stateObjects[addr] = self.stateObjects[addr].deepCopy(state)
-			state.stateObjectsDirty[addr] = struct{}{}
 		}
+		state.stateObjectsDirty[addr] = struct{}{}
 	}
 	for hash, logs := range self.logs {
 		cpy := make([]*types.Log, len(logs))
