@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -197,9 +197,10 @@ func (db *Database) Stat(property string) (string, error) {
 	return "", errors.New("unknown property")
 }
 
-// Compact is not supported on a memory database.
+// Compact is not supported on a memory database, but there's no need either as
+// a memory database doesn't waste space anyway.
 func (db *Database) Compact(start []byte, limit []byte) error {
-	return errors.New("unsupported operation")
+	return nil
 }
 
 // Len returns the number of entries currently present in the memory database.

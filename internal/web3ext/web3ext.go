@@ -32,6 +32,7 @@ var Modules = map[string]string{
 	"shh":        ShhJs,
 	"swarmfs":    SwarmfsJs,
 	"txpool":     TxpoolJs,
+	"les":        LESJs,
 }
 
 const ChequebookJs = `
@@ -483,6 +484,26 @@ web3._extend({
 			inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
 		}),
 		new web3._extend.Method({
+			name: 'getHeaderByNumber',
+			call: 'eth_getHeaderByNumber',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getHeaderByHash',
+			call: 'eth_getHeaderByHash',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getBlockByNumber',
+			call: 'eth_getBlockByNumber',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'getBlockByHash',
+			call: 'eth_getBlockByHash',
+			params: 2
+		}),
+		new web3._extend.Method({
 			name: 'getRawTransaction',
 			call: 'eth_getRawTransactionByHash',
 			params: 1
@@ -756,6 +777,31 @@ web3._extend({
 		new web3._extend.Property({
 			name: 'selfDrops',
 			getter: 'account_selfDrops'
+		}),
+	]
+});
+`
+
+const LESJs = `
+web3._extend({
+	property: 'les',
+	methods:
+	[
+		new web3._extend.Method({
+			name: 'getCheckpoint',
+			call: 'les_getCheckpoint',
+			params: 1
+		}),
+	],
+	properties:
+	[
+		new web3._extend.Property({
+			name: 'latestCheckpoint',
+			getter: 'les_latestCheckpoint'
+		}),
+		new web3._extend.Property({
+			name: 'checkpointContractAddress',
+			getter: 'les_getCheckpointContractAddress'
 		}),
 	]
 });

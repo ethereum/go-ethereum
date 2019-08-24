@@ -70,7 +70,7 @@ func TestGetSetIPv6(t *testing.T) {
 	assert.Equal(t, ip, ip2)
 }
 
-// TestGetSetDiscPort tests encoding/decoding and setting/getting of the DiscPort key.
+// TestGetSetUDP tests encoding/decoding and setting/getting of the UDP key.
 func TestGetSetUDP(t *testing.T) {
 	port := UDP(30309)
 	var r Record

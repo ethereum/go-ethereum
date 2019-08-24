@@ -997,7 +997,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 				// chain errors.
 				if n := len(headers); n > 0 {
 					// Retrieve the current head we're at
-					head := uint64(0)
+					var head uint64
 					if d.mode == LightSync {
 						head = d.lightchain.CurrentHeader().Number.Uint64()
 					} else {

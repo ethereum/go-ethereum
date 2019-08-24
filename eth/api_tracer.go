@@ -795,6 +795,11 @@ func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, ree
 	if err != nil {
 		return nil, vm.Context{}, nil, err
 	}
+
+	if txIndex == 0 && len(block.Transactions()) == 0 {
+		return nil, vm.Context{}, statedb, nil
+	}
+
 	// Recompute transactions up to the target index.
 	signer := types.MakeSigner(api.eth.blockchain.Config(), block.Number())
 

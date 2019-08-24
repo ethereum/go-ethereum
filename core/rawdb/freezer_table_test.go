@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -46,7 +46,7 @@ func print(t *testing.T, f *freezerTable, item uint64) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Printf("db[%d] =  %x\n", item, a)
+	t.Logf("db[%d] =  %x\n", item, a)
 }
 
 // TestFreezerBasics test initializing a freezertable from scratch, writing to the table,
@@ -113,6 +113,9 @@ func TestFreezerBasicsClosing(t *testing.T) {
 		f.Append(uint64(x), data)
 		f.Close()
 		f, err = newCustomTable(os.TempDir(), fname, rm, wm, sc, 50, true)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	defer f.Close()
 
@@ -170,6 +173,9 @@ func TestFreezerRepairDanglingHead(t *testing.T) {
 	// Now open it again
 	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sc, 50, true)
+		if err != nil {
+			t.Fatal(err)
+		}
 		// The last item should be missing
 		if _, err = f.Retrieve(0xff); err == nil {
 			t.Errorf("Expected error for missing index entry")
@@ -217,6 +223,9 @@ func TestFreezerRepairDanglingHeadLarge(t *testing.T) {
 	// Now open it again
 	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sc, 50, true)
+		if err != nil {
+			t.Fatal(err)
+		}
 		// The first item should be there
 		if _, err = f.Retrieve(0); err != nil {
 			t.Fatal(err)
@@ -269,6 +278,9 @@ func TestSnappyDetection(t *testing.T) {
 	// Open without snappy
 	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sc, 50, false)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if _, err = f.Retrieve(0); err == nil {
 			f.Close()
 			t.Fatalf("expected empty table")
@@ -278,6 +290,9 @@ func TestSnappyDetection(t *testing.T) {
 	// Open with snappy
 	{
 		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sc, 50, true)
+		if err != nil {
+			t.Fatal(err)
+		}
 		// There should be 255 items
 		if _, err = f.Retrieve(0xfe); err != nil {
 			f.Close()

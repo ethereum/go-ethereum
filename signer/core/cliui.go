@@ -1,18 +1,18 @@
 // Copyright 2018 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package core
 
@@ -169,13 +169,12 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 
 	fmt.Printf("-------- Sign data request--------------\n")
 	fmt.Printf("Account:  %s\n", request.Address.String())
-	fmt.Printf("message:\n")
-	for _, nvt := range request.Message {
-		fmt.Printf("%v\n", nvt.Pprint(1))
+	fmt.Printf("messages:\n")
+	for _, nvt := range request.Messages {
+		fmt.Printf("\u00a0\u00a0%v\n", strings.TrimSpace(nvt.Pprint(1)))
 	}
-	//fmt.Printf("message:  \n%v\n", request.Message)
 	fmt.Printf("raw data:  \n%q\n", request.Rawdata)
-	fmt.Printf("message hash:  %v\n", request.Hash)
+	fmt.Printf("data hash:  %v\n", request.Hash)
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)
 	if !ui.confirm() {
@@ -187,7 +186,6 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 // ApproveListing prompt the user for confirmation to list accounts
 // the list of accounts to list can be modified by the UI
 func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListResponse, error) {
-
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
 

@@ -43,12 +43,12 @@ func TestPoWCalculationsWith8LeadingZeros(t *testing.T) {
 	e := Envelope{
 		TTL:   1,
 		Data:  []byte{0xde, 0xad, 0xbe, 0xef},
-		Nonce: 48159,
+		Nonce: 276,
 	}
 	e.calculatePoW(0)
 
-	if e.pow != 40329.846153846156 {
-		t.Fatalf("invalid PoW calculation. Expected 0.07692307692307693, got %v", e.pow)
+	if e.pow != 19.692307692307693 {
+		t.Fatalf("invalid PoW calculation. Expected 19.692307692307693, got %v", e.pow)
 	}
 }
 

@@ -77,7 +77,7 @@ type LightChain struct {
 // NewLightChain returns a fully initialised light chain using information
 // available in the database. It initialises the default Ethereum header
 // validator.
-func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine) (*LightChain, error) {
+func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine, checkpoint *params.TrustedCheckpoint) (*LightChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
@@ -101,8 +101,8 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	if bc.genesisBlock == nil {
 		return nil, core.ErrNoGenesis
 	}
-	if cp, ok := params.TrustedCheckpoints[bc.genesisBlock.Hash()]; ok {
-		bc.addTrustedCheckpoint(cp)
+	if checkpoint != nil {
+		bc.AddTrustedCheckpoint(checkpoint)
 	}
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
@@ -118,8 +118,8 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	return bc, nil
 }
 
-// addTrustedCheckpoint adds a trusted checkpoint to the blockchain
-func (lc *LightChain) addTrustedCheckpoint(cp *params.TrustedCheckpoint) {
+// AddTrustedCheckpoint adds a trusted checkpoint to the blockchain
+func (lc *LightChain) AddTrustedCheckpoint(cp *params.TrustedCheckpoint) {
 	if lc.odr.ChtIndexer() != nil {
 		StoreChtRoot(lc.chainDb, cp.SectionIndex, cp.SectionHead, cp.CHTRoot)
 		lc.odr.ChtIndexer().AddCheckpoint(cp.SectionIndex, cp.SectionHead)
@@ -131,7 +131,7 @@ func (lc *LightChain) addTrustedCheckpoint(cp *params.TrustedCheckpoint) {
 	if lc.odr.BloomIndexer() != nil {
 		lc.odr.BloomIndexer().AddCheckpoint(cp.SectionIndex, cp.SectionHead)
 	}
-	log.Info("Added trusted checkpoint", "chain", cp.Name, "block", (cp.SectionIndex+1)*lc.indexerConfig.ChtSize-1, "hash", cp.SectionHead)
+	log.Info("Added trusted checkpoint", "block", (cp.SectionIndex+1)*lc.indexerConfig.ChtSize-1, "hash", cp.SectionHead)
 }
 
 func (lc *LightChain) getProcInterrupt() bool {
@@ -462,21 +462,21 @@ func (lc *LightChain) GetHeaderByNumberOdr(ctx context.Context, number uint64) (
 // Config retrieves the header chain's chain configuration.
 func (lc *LightChain) Config() *params.ChainConfig { return lc.hc.Config() }
 
-func (lc *LightChain) SyncCht(ctx context.Context) bool {
-	// If we don't have a CHT indexer, abort
-	if lc.odr.ChtIndexer() == nil {
-		return false
-	}
-	// Ensure the remote CHT head is ahead of us
+// SyncCheckpoint fetches the checkpoint point block header according to
+// the checkpoint provided by the remote peer.
+//
+// Note if we are running the clique, fetches the last epoch snapshot header
+// which covered by checkpoint.
+func (lc *LightChain) SyncCheckpoint(ctx context.Context, checkpoint *params.TrustedCheckpoint) bool {
+	// Ensure the remote checkpoint head is ahead of us
 	head := lc.CurrentHeader().Number.Uint64()
-	sections, _, _ := lc.odr.ChtIndexer().Sections()
 
-	latest := sections*lc.indexerConfig.ChtSize - 1
+	latest := (checkpoint.SectionIndex+1)*lc.indexerConfig.ChtSize - 1
 	if clique := lc.hc.Config().Clique; clique != nil {
 		latest -= latest % clique.Epoch // epoch snapshot for clique
 	}
 	if head >= latest {
-		return false
+		return true
 	}
 	// Retrieve the latest useful header and update to it
 	if header, err := GetHeaderByNumber(ctx, lc.odr, latest); header != nil && err == nil {

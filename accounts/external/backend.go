@@ -1,18 +1,18 @@
-// Copyright 2018 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2019 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package external
 
@@ -182,18 +182,21 @@ func (api *ExternalSigner) SignText(account accounts.Account, text []byte) ([]by
 
 func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
 	res := ethapi.SignTransactionResult{}
-	to := common.NewMixedcaseAddress(*tx.To())
 	data := hexutil.Bytes(tx.Data())
+	var to *common.MixedcaseAddress
+	if tx.To() != nil {
+		t := common.NewMixedcaseAddress(*tx.To())
+		to = &t
+	}
 	args := &core.SendTxArgs{
 		Data:     &data,
 		Nonce:    hexutil.Uint64(tx.Nonce()),
 		Value:    hexutil.Big(*tx.Value()),
 		Gas:      hexutil.Uint64(tx.Gas()),
 		GasPrice: hexutil.Big(*tx.GasPrice()),
-		To:       &to,
+		To:       to,
 		From:     common.NewMixedcaseAddress(account.Address),
 	}
-
 	if err := api.client.Call(&res, "account_signTransaction", args); err != nil {
 		return nil, err
 	}
@@ -201,14 +204,14 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 }
 
 func (api *ExternalSigner) SignTextWithPassphrase(account accounts.Account, passphrase string, text []byte) ([]byte, error) {
-	return []byte{}, fmt.Errorf("passphrase-operations not supported on external signers")
+	return []byte{}, fmt.Errorf("password-operations not supported on external signers")
 }
 
 func (api *ExternalSigner) SignTxWithPassphrase(account accounts.Account, passphrase string, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
-	return nil, fmt.Errorf("passphrase-operations not supported on external signers")
+	return nil, fmt.Errorf("password-operations not supported on external signers")
 }
 func (api *ExternalSigner) SignDataWithPassphrase(account accounts.Account, passphrase, mimeType string, data []byte) ([]byte, error) {
-	return nil, fmt.Errorf("passphrase-operations not supported on external signers")
+	return nil, fmt.Errorf("password-operations not supported on external signers")
 }
 
 func (api *ExternalSigner) listAccounts() ([]common.Address, error) {

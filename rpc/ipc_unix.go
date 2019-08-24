@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -50,5 +50,5 @@ func ipcListen(endpoint string) (net.Listener, error) {
 
 // newIPCConnection will connect to a Unix socket on the given endpoint.
 func newIPCConnection(ctx context.Context, endpoint string) (net.Conn, error) {
-	return dialContext(ctx, "unix", endpoint)
+	return new(net.Dialer).DialContext(ctx, "unix", endpoint)
 }

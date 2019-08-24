@@ -506,7 +506,10 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 				Time:    time.Now(),
 				Tx:      signed,
 			})
-			f.timeouts[username] = time.Now().Add(time.Duration(*minutesFlag*int(math.Pow(3, float64(msg.Tier)))) * time.Minute)
+			timeout := time.Duration(*minutesFlag*int(math.Pow(3, float64(msg.Tier)))) * time.Minute
+			grace := timeout / 288 // 24h timeout => 5m grace
+
+			f.timeouts[username] = time.Now().Add(timeout - grace)
 			fund = true
 		}
 		f.lock.Unlock()

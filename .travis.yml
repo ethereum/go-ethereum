@@ -1,16 +1,30 @@
 language: go
 go_import_path: github.com/ethereum/go-ethereum
 sudo: false
-matrix:
+jobs:
   include:
-    - os: linux
+        # This builder only tests code linters on latest version of Go
+    - stage: lint
+      os: linux
+      dist: xenial
+      go: 1.12.x
+      env:
+        - lint
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      script:
+        - go run build/ci.go lint
+
+    - stage: build
+      os: linux
       dist: xenial
       go: 1.10.x
       script:
       - go run build/ci.go install
       - go run build/ci.go test -coverage $TEST_PACKAGES
 
-    - os: linux
+    - stage: build
+      os: linux
       dist: xenial
       go: 1.11.x
       script:
@@ -18,14 +32,16 @@ matrix:
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
     # These are the latest Go versions.
-    - os: linux
+    - stage: build
+      os: linux
       dist: xenial
       go: 1.12.x
       script:
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
-    - os: osx
+    - stage: build
+      os: osx
       go: 1.12.x
       script:
         - echo "Increase the maximum number of open file descriptors on macOS"
@@ -40,19 +56,9 @@ matrix:
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
-    # This builder only tests code linters on latest version of Go
-    - os: linux
-      dist: xenial
-      go: 1.12.x
-      env:
-        - lint
-      git:
-        submodules: false # avoid cloning ethereum/tests
-      script:
-        - go run build/ci.go lint
-
     # This builder does the Ubuntu PPA upload
-    - if: type = push
+    - stage: build
+      if: type = push
       os: linux
       dist: xenial
       go: 1.12.x
@@ -74,7 +80,8 @@ matrix:
         - go run build/ci.go debsrc -upload ethereum/ethereum -sftp-user geth-ci -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
 
     # This builder does the Linux Azure uploads
-    - if: type = push
+    - stage: build
+      if: type = push
       os: linux
       dist: xenial
       sudo: required
@@ -108,7 +115,8 @@ matrix:
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Linux Azure MIPS xgo uploads
-    - if: type = push
+    - stage: build
+      if: type = push
       os: linux
       dist: xenial
       services:
@@ -136,7 +144,8 @@ matrix:
         - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Android Maven and Azure uploads
-    - if: type = push
+    - stage: build
+      if: type = push
       os: linux
       dist: xenial
       addons:
@@ -173,7 +182,8 @@ matrix:
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
-    - if: type = push
+    - stage: build
+      if: type = push
       os: osx
       go: 1.12.x
       env:
@@ -202,7 +212,8 @@ matrix:
         - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
 
     # This builder does the Azure archive purges to avoid accumulating junk
-    - if: type = cron
+    - stage: build
+      if: type = cron
       os: linux
       dist: xenial
       go: 1.12.x

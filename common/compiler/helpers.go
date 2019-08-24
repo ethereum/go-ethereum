@@ -27,9 +27,10 @@ var versionRegexp = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
 
 // Contract contains information about a compiled contract, alongside its code and runtime code.
 type Contract struct {
-	Code        string       `json:"code"`
-	RuntimeCode string       `json:"runtime-code"`
-	Info        ContractInfo `json:"info"`
+	Code        string            `json:"code"`
+	RuntimeCode string            `json:"runtime-code"`
+	Info        ContractInfo      `json:"info"`
+	Hashes      map[string]string `json:"hashes"`
 }
 
 // ContractInfo contains information about a compiled contract, including access

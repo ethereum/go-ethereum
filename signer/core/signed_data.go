@@ -1,19 +1,19 @@
-// Copyright 2018 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2019 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
-//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package core
 
 import (
@@ -123,11 +123,10 @@ type TypedDataDomain struct {
 var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Z](\w*)(\[\])?$`)
 
 // sign receives a request and produces a signature
-
+//
 // Note, the produced signature conforms to the secp256k1 curve R, S and V values,
 // where the V value will be 27 or 28 for legacy reasons, if legacyV==true.
 func (api *SignerAPI) sign(addr common.MixedcaseAddress, req *SignDataRequest, legacyV bool) (hexutil.Bytes, error) {
-
 	// We make the request prior to looking up if we actually have the account, to prevent
 	// account-enumeration via the API
 	res, err := api.UI.ApproveSignData(req)
@@ -169,7 +168,6 @@ func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr com
 	if err != nil {
 		return nil, err
 	}
-
 	signature, err := api.sign(addr, req, transformV)
 	if err != nil {
 		api.UI.ShowError(err.Error())
@@ -202,7 +200,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 			return nil, useEthereumV, err
 		}
 		sighash, msg := SignTextValidator(validatorData)
-		message := []*NameValueType{
+		messages := []*NameValueType{
 			{
 				Name:  "This is a request to sign data intended for a particular validator (see EIP 191 version 0)",
 				Typ:   "description",
@@ -224,7 +222,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 				Value: fmt.Sprintf("0x%x", msg),
 			},
 		}
-		req = &SignDataRequest{ContentType: mediaType, Rawdata: []byte(msg), Message: message, Hash: sighash}
+		req = &SignDataRequest{ContentType: mediaType, Rawdata: []byte(msg), Messages: messages, Hash: sighash}
 	case ApplicationClique.Mime:
 		// Clique is the Ethereum PoA standard
 		stringData, ok := data.(string)
@@ -251,7 +249,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		if err != nil {
 			return nil, useEthereumV, err
 		}
-		message := []*NameValueType{
+		messages := []*NameValueType{
 			{
 				Name:  "Clique header",
 				Typ:   "clique",
@@ -260,7 +258,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		}
 		// Clique uses V on the form 0 or 1
 		useEthereumV = false
-		req = &SignDataRequest{ContentType: mediaType, Rawdata: cliqueRlp, Message: message, Hash: sighash}
+		req = &SignDataRequest{ContentType: mediaType, Rawdata: cliqueRlp, Messages: messages, Hash: sighash}
 	default: // also case TextPlain.Mime:
 		// Calculates an Ethereum ECDSA signature for:
 		// hash = keccak256("\x19${byteVersion}Ethereum Signed Message:\n${message length}${message}")
@@ -272,21 +270,20 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 				return nil, useEthereumV, err
 			} else {
 				sighash, msg := accounts.TextAndHash(textData)
-				message := []*NameValueType{
+				messages := []*NameValueType{
 					{
 						Name:  "message",
 						Typ:   accounts.MimetypeTextPlain,
 						Value: msg,
 					},
 				}
-				req = &SignDataRequest{ContentType: mediaType, Rawdata: []byte(msg), Message: message, Hash: sighash}
+				req = &SignDataRequest{ContentType: mediaType, Rawdata: []byte(msg), Messages: messages, Hash: sighash}
 			}
 		}
 	}
 	req.Address = addr
 	req.Meta = MetadataFromContext(ctx)
 	return req, useEthereumV, nil
-
 }
 
 // SignTextWithValidator signs the given message which can be further recovered
@@ -327,11 +324,11 @@ func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAd
 	}
 	rawData := []byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash)))
 	sighash := crypto.Keccak256(rawData)
-	message, err := typedData.Format()
+	messages, err := typedData.Format()
 	if err != nil {
 		return nil, err
 	}
-	req := &SignDataRequest{ContentType: DataTyped.Mime, Rawdata: rawData, Message: message, Hash: sighash}
+	req := &SignDataRequest{ContentType: DataTyped.Mime, Rawdata: rawData, Messages: messages, Hash: sighash}
 	signature, err := api.sign(addr, req, true)
 	if err != nil {
 		api.UI.ShowError(err.Error())
@@ -487,7 +484,7 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 
 func parseInteger(encType string, encValue interface{}) (*big.Int, error) {
 	var (
-		length = 0
+		length int
 		signed = strings.HasPrefix(encType, "int")
 		b      *big.Int
 	)

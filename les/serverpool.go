@@ -115,8 +115,6 @@ type serverPool struct {
 	db     ethdb.Database
 	dbKey  []byte
 	server *p2p.Server
-	quit   chan struct{}
-	wg     *sync.WaitGroup
 	connWg sync.WaitGroup
 
 	topic discv5.Topic
@@ -137,14 +135,15 @@ type serverPool struct {
 	connCh                     chan *connReq
 	disconnCh                  chan *disconnReq
 	registerCh                 chan *registerReq
+
+	closeCh chan struct{}
+	wg      sync.WaitGroup
 }
 
 // newServerPool creates a new serverPool instance
-func newServerPool(db ethdb.Database, quit chan struct{}, wg *sync.WaitGroup, trustedNodes []string) *serverPool {
+func newServerPool(db ethdb.Database, ulcServers []string) *serverPool {
 	pool := &serverPool{
 		db:           db,
-		quit:         quit,
-		wg:           wg,
 		entries:      make(map[enode.ID]*poolEntry),
 		timeout:      make(chan *poolEntry, 1),
 		adjustStats:  make(chan poolStatAdjust, 100),
@@ -152,10 +151,11 @@ func newServerPool(db ethdb.Database, quit chan struct{}, wg *sync.WaitGroup, tr
 		connCh:       make(chan *connReq),
 		disconnCh:    make(chan *disconnReq),
 		registerCh:   make(chan *registerReq),
+		closeCh:      make(chan struct{}),
 		knownSelect:  newWeightedRandomSelect(),
 		newSelect:    newWeightedRandomSelect(),
 		fastDiscover: true,
-		trustedNodes: parseTrustedNodes(trustedNodes),
+		trustedNodes: parseTrustedNodes(ulcServers),
 	}
 
 	pool.knownQueue = newPoolEntryQueue(maxKnownEntries, pool.removeEntry)
@@ -167,7 +167,6 @@ func (pool *serverPool) start(server *p2p.Server, topic discv5.Topic) {
 	pool.server = server
 	pool.topic = topic
 	pool.dbKey = append([]byte("serverPool/"), []byte(topic)...)
-	pool.wg.Add(1)
 	pool.loadNodes()
 	pool.connectToTrustedNodes()
 
@@ -178,7 +177,13 @@ func (pool *serverPool) start(server *p2p.Server, topic discv5.Topic) {
 		go pool.discoverNodes()
 	}
 	pool.checkDial()
+	pool.wg.Add(1)
 	go pool.eventLoop()
+}
+
+func (pool *serverPool) stop() {
+	close(pool.closeCh)
+	pool.wg.Wait()
 }
 
 // discoverNodes wraps SearchTopic, converting result nodes to enode.Node.
@@ -207,7 +212,7 @@ func (pool *serverPool) connect(p *peer, node *enode.Node) *poolEntry {
 	req := &connReq{p: p, node: node, result: make(chan *poolEntry, 1)}
 	select {
 	case pool.connCh <- req:
-	case <-pool.quit:
+	case <-pool.closeCh:
 		return nil
 	}
 	return <-req.result
@@ -219,7 +224,7 @@ func (pool *serverPool) registered(entry *poolEntry) {
 	req := &registerReq{entry: entry, done: make(chan struct{})}
 	select {
 	case pool.registerCh <- req:
-	case <-pool.quit:
+	case <-pool.closeCh:
 		return
 	}
 	<-req.done
@@ -231,7 +236,7 @@ func (pool *serverPool) registered(entry *poolEntry) {
 func (pool *serverPool) disconnect(entry *poolEntry) {
 	stopped := false
 	select {
-	case <-pool.quit:
+	case <-pool.closeCh:
 		stopped = true
 	default:
 	}
@@ -278,6 +283,7 @@ func (pool *serverPool) adjustResponseTime(entry *poolEntry, time time.Duration,
 
 // eventLoop handles pool events and mutex locking for all internal functions
 func (pool *serverPool) eventLoop() {
+	defer pool.wg.Done()
 	lookupCnt := 0
 	var convTime mclock.AbsTime
 	if pool.discSetPeriod != nil {
@@ -361,7 +367,7 @@ func (pool *serverPool) eventLoop() {
 		case req := <-pool.connCh:
 			if pool.trustedNodes[req.p.ID()] != nil {
 				// ignore trusted nodes
-				req.result <- nil
+				req.result <- &poolEntry{trusted: true}
 			} else {
 				// Handle peer connection requests.
 				entry := pool.entries[req.p.ID()]
@@ -389,6 +395,9 @@ func (pool *serverPool) eventLoop() {
 			}
 
 		case req := <-pool.registerCh:
+			if req.entry.trusted {
+				continue
+			}
 			// Handle peer registration requests.
 			entry := req.entry
 			entry.state = psRegistered
@@ -402,10 +411,13 @@ func (pool *serverPool) eventLoop() {
 			close(req.done)
 
 		case req := <-pool.disconnCh:
+			if req.entry.trusted {
+				continue
+			}
 			// Handle peer disconnection requests.
 			disconnect(req, req.stopped)
 
-		case <-pool.quit:
+		case <-pool.closeCh:
 			if pool.discSetPeriod != nil {
 				close(pool.discSetPeriod)
 			}
@@ -421,7 +433,6 @@ func (pool *serverPool) eventLoop() {
 				disconnect(req, true)
 			}
 			pool.saveNodes()
-			pool.wg.Done()
 			return
 		}
 	}
@@ -549,10 +560,10 @@ func (pool *serverPool) setRetryDial(entry *poolEntry) {
 	entry.delayedRetry = true
 	go func() {
 		select {
-		case <-pool.quit:
+		case <-pool.closeCh:
 		case <-time.After(delay):
 			select {
-			case <-pool.quit:
+			case <-pool.closeCh:
 			case pool.enableRetry <- entry:
 			}
 		}
@@ -618,10 +629,10 @@ func (pool *serverPool) dial(entry *poolEntry, knownSelected bool) {
 	go func() {
 		pool.server.AddPeer(entry.node)
 		select {
-		case <-pool.quit:
+		case <-pool.closeCh:
 		case <-time.After(dialTimeout):
 			select {
-			case <-pool.quit:
+			case <-pool.closeCh:
 			case pool.timeout <- entry:
 			}
 		}
@@ -662,14 +673,14 @@ type poolEntry struct {
 	lastConnected, dialed *poolEntryAddress
 	addrSelect            weightedRandomSelect
 
-	lastDiscovered              mclock.AbsTime
-	known, knownSelected        bool
-	connectStats, delayStats    poolStats
-	responseStats, timeoutStats poolStats
-	state                       int
-	regTime                     mclock.AbsTime
-	queueIdx                    int
-	removed                     bool
+	lastDiscovered                mclock.AbsTime
+	known, knownSelected, trusted bool
+	connectStats, delayStats      poolStats
+	responseStats, timeoutStats   poolStats
+	state                         int
+	regTime                       mclock.AbsTime
+	queueIdx                      int
+	removed                       bool
 
 	delayedRetry bool
 	shortRetry   int

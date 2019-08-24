@@ -162,6 +162,10 @@ Remove blockchain and state databases`,
 			utils.DataDirFlag,
 			utils.CacheFlag,
 			utils.SyncModeFlag,
+			utils.IterativeOutputFlag,
+			utils.ExcludeCodeFlag,
+			utils.ExcludeStorageFlag,
+			utils.IncludeIncompletesFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -287,7 +291,7 @@ func importChain(ctx *cli.Context) error {
 	fmt.Printf("Allocations:   %.3f million\n", float64(mem.Mallocs)/1000000)
 	fmt.Printf("GC pause:      %v\n\n", time.Duration(mem.PauseTotalNs))
 
-	if ctx.GlobalIsSet(utils.NoCompactionFlag.Name) {
+	if ctx.GlobalBool(utils.NoCompactionFlag.Name) {
 		return nil
 	}
 
@@ -504,6 +508,7 @@ func dump(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chain, chainDb := utils.MakeChain(ctx, stack)
+	defer chainDb.Close()
 	for _, arg := range ctx.Args() {
 		var block *types.Block
 		if hashish(arg) {
@@ -520,10 +525,20 @@ func dump(ctx *cli.Context) error {
 			if err != nil {
 				utils.Fatalf("could not create new state: %v", err)
 			}
-			fmt.Printf("%s\n", state.Dump())
+			excludeCode := ctx.Bool(utils.ExcludeCodeFlag.Name)
+			excludeStorage := ctx.Bool(utils.ExcludeStorageFlag.Name)
+			includeMissing := ctx.Bool(utils.IncludeIncompletesFlag.Name)
+			if ctx.Bool(utils.IterativeOutputFlag.Name) {
+				state.IterativeDump(excludeCode, excludeStorage, !includeMissing, json.NewEncoder(os.Stdout))
+			} else {
+				if includeMissing {
+					fmt.Printf("If you want to include accounts with missing preimages, you need iterative output, since" +
+						" otherwise the accounts will overwrite each other in the resulting mapping.")
+				}
+				fmt.Printf("%v %s\n", includeMissing, state.Dump(excludeCode, excludeStorage, false))
+			}
 		}
 	}
-	chainDb.Close()
 	return nil
 }
 

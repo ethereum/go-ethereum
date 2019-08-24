@@ -58,12 +58,10 @@ func TestKDF(t *testing.T) {
 
 	k, err := concatKDF(h, msg, nil, 64)
 	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
+		t.Fatal(err)
 	}
 	if len(k) != 64 {
-		fmt.Printf("KDF: generated key is the wrong size (%d instead of 64\n", len(k))
-		t.FailNow()
+		t.Fatalf("KDF: generated key is the wrong size (%d instead of 64\n", len(k))
 	}
 }
 
@@ -97,32 +95,27 @@ func cmpPublic(pub1, pub2 PublicKey) bool {
 func TestSharedKey(t *testing.T) {
 	prv1, err := GenerateKey(rand.Reader, DefaultCurve, nil)
 	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
+		t.Fatal(err)
 	}
 	skLen := MaxSharedKeyLength(&prv1.PublicKey) / 2
 
 	prv2, err := GenerateKey(rand.Reader, DefaultCurve, nil)
 	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
+		t.Fatal(err)
 	}
 
 	sk1, err := prv1.GenerateShared(&prv2.PublicKey, skLen, skLen)
 	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
+		t.Fatal(err)
 	}
 
 	sk2, err := prv2.GenerateShared(&prv1.PublicKey, skLen, skLen)
 	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
+		t.Fatal(err)
 	}
 
 	if !bytes.Equal(sk1, sk2) {
-		fmt.Println(ErrBadSharedKeys.Error())
-		t.FailNow()
+		t.Fatal(ErrBadSharedKeys)
 	}
 }
 
@@ -151,7 +144,7 @@ func TestSharedKeyPadding(t *testing.T) {
 	// test shared secret generation
 	sk1, err := prv0.GenerateShared(&prv1.PublicKey, 16, 16)
 	if err != nil {
-		fmt.Println(err.Error())
+		t.Log(err.Error())
 	}
 
 	sk2, err := prv1.GenerateShared(&prv0.PublicKey, 16, 16)
@@ -169,26 +162,22 @@ func TestSharedKeyPadding(t *testing.T) {
 func TestTooBigSharedKey(t *testing.T) {
 	prv1, err := GenerateKey(rand.Reader, DefaultCurve, nil)
 	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
+		t.Fatal(err)
 	}
 
 	prv2, err := GenerateKey(rand.Reader, DefaultCurve, nil)
 	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
+		t.Fatal(err)
 	}
 
 	_, err = prv1.GenerateShared(&prv2.PublicKey, 32, 32)
 	if err != ErrSharedKeyTooBig {
-		fmt.Println("ecdh: shared key should be too large for curve")
-		t.FailNow()
+		t.Fatal("ecdh: shared key should be too large for curve")
 	}
 
 	_, err = prv2.GenerateShared(&prv1.PublicKey, 32, 32)
 	if err != ErrSharedKeyTooBig {
-		fmt.Println("ecdh: shared key should be too large for curve")
-		t.FailNow()
+		t.Fatal("ecdh: shared key should be too large for curve")
 	}
 }
 
@@ -196,8 +185,7 @@ func TestTooBigSharedKey(t *testing.T) {
 func BenchmarkGenerateKeyP256(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		if _, err := GenerateKey(rand.Reader, elliptic.P256(), nil); err != nil {
-			fmt.Println(err.Error())
-			b.FailNow()
+			b.Fatal(err)
 		}
 	}
 }
@@ -206,15 +194,13 @@ func BenchmarkGenerateKeyP256(b *testing.B) {
 func BenchmarkGenSharedKeyP256(b *testing.B) {
 	prv, err := GenerateKey(rand.Reader, elliptic.P256(), nil)
 	if err != nil {
-		fmt.Println(err.Error())
-		b.FailNow()
+		b.Fatal(err)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := prv.GenerateShared(&prv.PublicKey, 16, 16)
 		if err != nil {
-			fmt.Println(err.Error())
-			b.FailNow()
+			b.Fatal(err)
 		}
 	}
 }
@@ -223,15 +209,13 @@ func BenchmarkGenSharedKeyP256(b *testing.B) {
 func BenchmarkGenSharedKeyS256(b *testing.B) {
 	prv, err := GenerateKey(rand.Reader, crypto.S256(), nil)
 	if err != nil {
-		fmt.Println(err.Error())
-		b.FailNow()
+		b.Fatal(err)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := prv.GenerateShared(&prv.PublicKey, 16, 16)
 		if err != nil {
-			fmt.Println(err.Error())
-			b.FailNow()
+			b.Fatal(err)
 		}
 	}
 }
@@ -240,38 +224,32 @@ func BenchmarkGenSharedKeyS256(b *testing.B) {
 func TestEncryptDecrypt(t *testing.T) {
 	prv1, err := GenerateKey(rand.Reader, DefaultCurve, nil)
 	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
+		t.Fatal(err)
 	}
 
 	prv2, err := GenerateKey(rand.Reader, DefaultCurve, nil)
 	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
+		t.Fatal(err)
 	}
 
 	message := []byte("Hello, world.")
 	ct, err := Encrypt(rand.Reader, &prv2.PublicKey, message, nil, nil)
 	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
+		t.Fatal(err)
 	}
 
 	pt, err := prv2.Decrypt(ct, nil, nil)
 	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
+		t.Fatal(err)
 	}
 
 	if !bytes.Equal(pt, message) {
-		fmt.Println("ecies: plaintext doesn't match message")
-		t.FailNow()
+		t.Fatal("ecies: plaintext doesn't match message")
 	}
 
 	_, err = prv1.Decrypt(ct, nil, nil)
 	if err == nil {
-		fmt.Println("ecies: encryption should not have succeeded")
-		t.FailNow()
+		t.Fatal("ecies: encryption should not have succeeded")
 	}
 }
 
@@ -341,50 +319,39 @@ func TestParamSelection(t *testing.T) {
 func testParamSelection(t *testing.T, c testCase) {
 	params := ParamsFromCurve(c.Curve)
 	if params == nil && c.Expected != nil {
-		fmt.Printf("%s (%s)\n", ErrInvalidParams.Error(), c.Name)
-		t.FailNow()
+		t.Fatalf("%s (%s)\n", ErrInvalidParams.Error(), c.Name)
 	} else if params != nil && !cmpParams(params, c.Expected) {
-		fmt.Printf("ecies: parameters should be invalid (%s)\n",
-			c.Name)
-		t.FailNow()
+		t.Fatalf("ecies: parameters should be invalid (%s)\n", c.Name)
 	}
 
 	prv1, err := GenerateKey(rand.Reader, DefaultCurve, nil)
 	if err != nil {
-		fmt.Printf("%s (%s)\n", err.Error(), c.Name)
-		t.FailNow()
+		t.Fatalf("%s (%s)\n", err.Error(), c.Name)
 	}
 
 	prv2, err := GenerateKey(rand.Reader, DefaultCurve, nil)
 	if err != nil {
-		fmt.Printf("%s (%s)\n", err.Error(), c.Name)
-		t.FailNow()
+		t.Fatalf("%s (%s)\n", err.Error(), c.Name)
 	}
 
 	message := []byte("Hello, world.")
 	ct, err := Encrypt(rand.Reader, &prv2.PublicKey, message, nil, nil)
 	if err != nil {
-		fmt.Printf("%s (%s)\n", err.Error(), c.Name)
-		t.FailNow()
+		t.Fatalf("%s (%s)\n", err.Error(), c.Name)
 	}
 
 	pt, err := prv2.Decrypt(ct, nil, nil)
 	if err != nil {
-		fmt.Printf("%s (%s)\n", err.Error(), c.Name)
-		t.FailNow()
+		t.Fatalf("%s (%s)\n", err.Error(), c.Name)
 	}
 
 	if !bytes.Equal(pt, message) {
-		fmt.Printf("ecies: plaintext doesn't match message (%s)\n",
-			c.Name)
-		t.FailNow()
+		t.Fatalf("ecies: plaintext doesn't match message (%s)\n", c.Name)
 	}
 
 	_, err = prv1.Decrypt(ct, nil, nil)
 	if err == nil {
-		fmt.Printf("ecies: encryption should not have succeeded (%s)\n",
-			c.Name)
-		t.FailNow()
+		t.Fatalf("ecies: encryption should not have succeeded (%s)\n", c.Name)
 	}
 
 }
@@ -396,23 +363,20 @@ func TestBasicKeyValidation(t *testing.T) {
 
 	prv, err := GenerateKey(rand.Reader, DefaultCurve, nil)
 	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
+		t.Fatal(err)
 	}
 
 	message := []byte("Hello, world.")
 	ct, err := Encrypt(rand.Reader, &prv.PublicKey, message, nil, nil)
 	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
+		t.Fatal(err)
 	}
 
 	for _, b := range badBytes {
 		ct[0] = b
 		_, err := prv.Decrypt(ct, nil, nil)
 		if err != ErrInvalidPublicKey {
-			fmt.Println("ecies: validated an invalid key")
-			t.FailNow()
+			t.Fatal("ecies: validated an invalid key")
 		}
 	}
 }
@@ -450,19 +414,16 @@ func TestSharedKeyStatic(t *testing.T) {
 
 	sk1, err := prv1.GenerateShared(&prv2.PublicKey, skLen, skLen)
 	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
+		t.Fatal(err)
 	}
 
 	sk2, err := prv2.GenerateShared(&prv1.PublicKey, skLen, skLen)
 	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
+		t.Fatal(err)
 	}
 
 	if !bytes.Equal(sk1, sk2) {
-		fmt.Println(ErrBadSharedKeys.Error())
-		t.FailNow()
+		t.Fatal(ErrBadSharedKeys)
 	}
 
 	sk, _ := hex.DecodeString("167ccc13ac5e8a26b131c3446030c60fbfac6aa8e31149d0869f93626a4cdf62")

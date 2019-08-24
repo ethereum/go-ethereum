@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -39,6 +39,7 @@ type solcOutput struct {
 		BinRuntime                                  string `json:"bin-runtime"`
 		SrcMapRuntime                               string `json:"srcmap-runtime"`
 		Bin, SrcMap, Abi, Devdoc, Userdoc, Metadata string
+		Hashes                                      map[string]string
 	}
 	Version string
 }
@@ -46,10 +47,11 @@ type solcOutput struct {
 func (s *Solidity) makeArgs() []string {
 	p := []string{
 		"--combined-json", "bin,bin-runtime,srcmap,srcmap-runtime,abi,userdoc,devdoc",
-		"--optimize", // code optimizer switched on
+		"--optimize",                  // code optimizer switched on
+		"--allow-paths", "., ./, ../", // default to support relative paths
 	}
 	if s.Major > 0 || s.Minor > 4 || s.Patch > 6 {
-		p[1] += ",metadata"
+		p[1] += ",metadata,hashes"
 	}
 	return p
 }
@@ -141,7 +143,6 @@ func ParseCombinedJSON(combinedJSON []byte, source string, languageVersion strin
 	if err := json.Unmarshal(combinedJSON, &output); err != nil {
 		return nil, err
 	}
-
 	// Compilation succeeded, assemble and return the contracts.
 	contracts := make(map[string]*Contract)
 	for name, info := range output.Contracts {
@@ -150,17 +151,14 @@ func ParseCombinedJSON(combinedJSON []byte, source string, languageVersion strin
 		if err := json.Unmarshal([]byte(info.Abi), &abi); err != nil {
 			return nil, fmt.Errorf("solc: error reading abi definition (%v)", err)
 		}
-		var userdoc interface{}
-		if err := json.Unmarshal([]byte(info.Userdoc), &userdoc); err != nil {
-			return nil, fmt.Errorf("solc: error reading user doc: %v", err)
-		}
-		var devdoc interface{}
-		if err := json.Unmarshal([]byte(info.Devdoc), &devdoc); err != nil {
-			return nil, fmt.Errorf("solc: error reading dev doc: %v", err)
-		}
+		var userdoc, devdoc interface{}
+		json.Unmarshal([]byte(info.Userdoc), &userdoc)
+		json.Unmarshal([]byte(info.Devdoc), &devdoc)
+
 		contracts[name] = &Contract{
 			Code:        "0x" + info.Bin,
 			RuntimeCode: "0x" + info.BinRuntime,
+			Hashes:      info.Hashes,
 			Info: ContractInfo{
 				Source:          source,
 				Language:        "Solidity",

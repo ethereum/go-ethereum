@@ -116,11 +116,11 @@ Print a short summary of all accounts`,
 
 Creates a new account and prints the address.
 
-The account is saved in encrypted format, you are prompted for a passphrase.
+The account is saved in encrypted format, you are prompted for a password.
 
-You must remember this passphrase to unlock your account in the future.
+You must remember this password to unlock your account in the future.
 
-For non-interactive use the passphrase can be specified with the --password flag:
+For non-interactive use the password can be specified with the --password flag:
 
 Note, this is meant to be used for testing only, it is a bad idea to save your
 password to file or expose in any other way.
@@ -142,12 +142,12 @@ password to file or expose in any other way.
 Update an existing account.
 
 The account is saved in the newest version in encrypted format, you are prompted
-for a passphrase to unlock the account and another to save the updated file.
+for a password to unlock the account and another to save the updated file.
 
 This same command can therefore be used to migrate an account of a deprecated
 format to the newest format or change the password for an account.
 
-For non-interactive use the passphrase can be specified with the --password flag:
+For non-interactive use the password can be specified with the --password flag:
 
     geth account update [options] <address>
 
@@ -174,11 +174,11 @@ Prints the address.
 
 The keyfile is assumed to contain an unencrypted private key in hexadecimal format.
 
-The account is saved in encrypted format, you are prompted for a passphrase.
+The account is saved in encrypted format, you are prompted for a password.
 
-You must remember this passphrase to unlock your account in the future.
+You must remember this password to unlock your account in the future.
 
-For non-interactive use the passphrase can be specified with the -password flag:
+For non-interactive use the password can be specified with the -password flag:
 
     geth account import [options] <keyfile>
 
@@ -247,17 +247,17 @@ func getPassPhrase(prompt string, confirmation bool, i int, passwords []string) 
 	if prompt != "" {
 		fmt.Println(prompt)
 	}
-	password, err := console.Stdin.PromptPassword("Passphrase: ")
+	password, err := console.Stdin.PromptPassword("Password: ")
 	if err != nil {
-		utils.Fatalf("Failed to read passphrase: %v", err)
+		utils.Fatalf("Failed to read password: %v", err)
 	}
 	if confirmation {
-		confirm, err := console.Stdin.PromptPassword("Repeat passphrase: ")
+		confirm, err := console.Stdin.PromptPassword("Repeat password: ")
 		if err != nil {
-			utils.Fatalf("Failed to read passphrase confirmation: %v", err)
+			utils.Fatalf("Failed to read password confirmation: %v", err)
 		}
 		if password != confirm {
-			utils.Fatalf("Passphrases do not match")
+			utils.Fatalf("Passwords do not match")
 		}
 	}
 	return password
@@ -268,7 +268,7 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 	for _, a := range err.Matches {
 		fmt.Println("  ", a.URL)
 	}
-	fmt.Println("Testing your passphrase against all of them...")
+	fmt.Println("Testing your password against all of them...")
 	var match *accounts.Account
 	for _, a := range err.Matches {
 		if err := ks.Unlock(a, auth); err == nil {
@@ -279,7 +279,7 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 	if match == nil {
 		utils.Fatalf("None of the listed files could be unlocked.")
 	}
-	fmt.Printf("Your passphrase unlocked %s\n", match.URL)
+	fmt.Printf("Your password unlocked %s\n", match.URL)
 	fmt.Println("In order to avoid this warning, you need to remove the following duplicate key files:")
 	for _, a := range err.Matches {
 		if a != *match {

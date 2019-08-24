@@ -272,7 +272,9 @@ func (t *freezerTable) repair() error {
 			if newLastIndex.filenum != lastIndex.filenum {
 				// Release earlier opened file
 				t.releaseFile(lastIndex.filenum)
-				t.head, err = t.openFile(newLastIndex.filenum, openFreezerFileForAppend)
+				if t.head, err = t.openFile(newLastIndex.filenum, openFreezerFileForAppend); err != nil {
+					return err
+				}
 				if stat, err = t.head.Stat(); err != nil {
 					// TODO, anything more we can do here?
 					// A data file has gone missing...

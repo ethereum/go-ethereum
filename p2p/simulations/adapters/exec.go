@@ -96,6 +96,7 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	// generate the config
 	conf := &execNodeConfig{
 		Stack: node.DefaultConfig,
@@ -106,11 +107,13 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 	} else {
 		conf.Stack.DataDir = filepath.Join(dir, "data")
 	}
+
+	// these parameters are crucial for execadapter node to run correctly
 	conf.Stack.WSHost = "127.0.0.1"
 	conf.Stack.WSPort = 0
 	conf.Stack.WSOrigins = []string{"*"}
 	conf.Stack.WSExposeAll = true
-	conf.Stack.P2P.EnableMsgEvents = false
+	conf.Stack.P2P.EnableMsgEvents = config.EnableMsgEvents
 	conf.Stack.P2P.NoDiscovery = true
 	conf.Stack.P2P.NAT = nil
 	conf.Stack.NoUSB = true
@@ -413,7 +416,7 @@ func startExecNodeStack() (*node.Node, error) {
 	}
 
 	// create enode record
-	nodeTcpConn, err := net.ResolveTCPAddr("tcp", conf.Stack.P2P.ListenAddr)
+	nodeTcpConn, _ := net.ResolveTCPAddr("tcp", conf.Stack.P2P.ListenAddr)
 	if nodeTcpConn.IP == nil {
 		nodeTcpConn.IP = net.IPv4(127, 0, 0, 1)
 	}

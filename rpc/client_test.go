@@ -374,10 +374,13 @@ func TestClientNotificationStorm(t *testing.T) {
 				return
 			}
 		}
+		if wantError {
+			t.Fatalf("didn't get expected error")
+		}
 	}
 
 	doTest(8000, false)
-	doTest(10000, true)
+	doTest(21000, true)
 }
 
 func TestClientHTTP(t *testing.T) {

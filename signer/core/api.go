@@ -1,18 +1,18 @@
 // Copyright 2018 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package core
 
@@ -24,7 +24,6 @@ import (
 	"math/big"
 	"os"
 	"reflect"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -44,7 +43,7 @@ const (
 	// ExternalAPIVersion -- see extapi_changelog.md
 	ExternalAPIVersion = "6.0.0"
 	// InternalAPIVersion -- see intapi_changelog.md
-	InternalAPIVersion = "6.0.0"
+	InternalAPIVersion = "7.0.0"
 )
 
 // ExternalAPI defines the external API through which signing requests are made.
@@ -234,7 +233,7 @@ type (
 		ContentType string                  `json:"content_type"`
 		Address     common.MixedcaseAddress `json:"address"`
 		Rawdata     []byte                  `json:"raw_data"`
-		Message     []*NameValueType        `json:"message"`
+		Messages    []*NameValueType        `json:"messages"`
 		Hash        hexutil.Bytes           `json:"hash"`
 		Meta        Metadata                `json:"meta"`
 	}
@@ -477,22 +476,24 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 	return modified
 }
 
-func (api *SignerAPI) lookupPassword(address common.Address) string {
-	return api.credentials.Get(strings.ToLower(address.String()))
+func (api *SignerAPI) lookupPassword(address common.Address) (string, error) {
+	return api.credentials.Get(address.Hex())
 }
+
 func (api *SignerAPI) lookupOrQueryPassword(address common.Address, title, prompt string) (string, error) {
-	if pw := api.lookupPassword(address); pw != "" {
+	// Look up the password and return if available
+	if pw, err := api.lookupPassword(address); err == nil {
 		return pw, nil
-	} else {
-		pwResp, err := api.UI.OnInputRequired(UserInputRequest{title, prompt, true})
-		if err != nil {
-			log.Warn("error obtaining password", "error", err)
-			// We'll not forward the error here, in case the error contains info about the response from the UI,
-			// which could leak the password if it was malformed json or something
-			return "", errors.New("internal error")
-		}
-		return pwResp.Text, nil
 	}
+	// Password unavailable, request it from the user
+	pwResp, err := api.UI.OnInputRequired(UserInputRequest{title, prompt, true})
+	if err != nil {
+		log.Warn("error obtaining password", "error", err)
+		// We'll not forward the error here, in case the error contains info about the response from the UI,
+		// which could leak the password if it was malformed json or something
+		return "", errors.New("internal error")
+	}
+	return pwResp.Text, nil
 }
 
 // SignTransaction signs the given Transaction and returns it both as json and rlp-encoded form

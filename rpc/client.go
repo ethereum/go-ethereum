@@ -41,9 +41,8 @@ var (
 
 const (
 	// Timeouts
-	tcpKeepAliveInterval = 30 * time.Second
-	defaultDialTimeout   = 10 * time.Second // used if context has no deadline
-	subscribeTimeout     = 5 * time.Second  // overall timeout eth_subscribe, rpc_modules calls
+	defaultDialTimeout = 10 * time.Second // used if context has no deadline
+	subscribeTimeout   = 5 * time.Second  // overall timeout eth_subscribe, rpc_modules calls
 )
 
 const (
@@ -137,9 +136,11 @@ func (op *requestOp) wait(ctx context.Context, c *Client) (*jsonrpcMessage, erro
 	select {
 	case <-ctx.Done():
 		// Send the timeout to dispatch so it can remove the request IDs.
-		select {
-		case c.reqTimeout <- op:
-		case <-c.closing:
+		if !c.isHTTP {
+			select {
+			case c.reqTimeout <- op:
+			case <-c.closing:
+			}
 		}
 		return nil, ctx.Err()
 	case resp := <-op.resp:
@@ -410,7 +411,7 @@ func (c *Client) ShhSubscribe(ctx context.Context, channel interface{}, args ...
 // The context argument cancels the RPC request that sets up the subscription but has no
 // effect on the subscription after Subscribe has returned.
 //
-// Slow subscribers will be dropped eventually. Client buffers up to 8000 notifications
+// Slow subscribers will be dropped eventually. Client buffers up to 20000 notifications
 // before considering the subscriber dead. The subscription Err channel will receive
 // ErrSubscriptionQueueOverflow. Use a sufficiently large buffer on the channel or ensure
 // that the channel usually has at least one reader to prevent this issue.

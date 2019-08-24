@@ -1,19 +1,19 @@
-// Copyright 2018 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2019 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
-//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package core_test
 
 import (
@@ -321,11 +321,11 @@ func TestFormatter(t *testing.T) {
 	}
 	formatted, _ := d.Format()
 	for _, item := range formatted {
-		fmt.Printf("'%v'\n", item.Pprint(0))
+		t.Logf("'%v'\n", item.Pprint(0))
 	}
 
 	j, _ := json.Marshal(formatted)
-	fmt.Printf("'%v'\n", string(j))
+	t.Logf("'%v'\n", string(j))
 }
 
 func sign(typedData core.TypedData) ([]byte, []byte, error) {
@@ -364,7 +364,7 @@ func TestJsonFiles(t *testing.T) {
 			continue
 		}
 		_, _, err = sign(typedData)
-		fmt.Printf("Error %v\n", err)
+		t.Logf("Error %v\n", err)
 		if err != nil && !expectedFailure {
 			t.Errorf("Test %d failed, file %v: %v", i, fInfo.Name(), err)
 		}
@@ -397,11 +397,11 @@ func TestFuzzerFiles(t *testing.T) {
 		}
 		_, err = typedData.EncodeData("EIP712Domain", typedData.Domain.Map(), 1)
 		if verbose && err != nil {
-			fmt.Printf("%d, EncodeData[1] err: %v\n", i, err)
+			t.Logf("%d, EncodeData[1] err: %v\n", i, err)
 		}
 		_, err = typedData.EncodeData(typedData.PrimaryType, typedData.Message, 1)
 		if verbose && err != nil {
-			fmt.Printf("%d, EncodeData[2] err: %v\n", i, err)
+			t.Logf("%d, EncodeData[2] err: %v\n", i, err)
 		}
 		typedData.Format()
 	}
