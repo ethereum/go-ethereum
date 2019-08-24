@@ -37,6 +37,7 @@ const (
 	maxQueueDist  = 32                     // Maximum allowed distance from the chain head to queue
 	hashLimit     = 256                    // Maximum number of unique blocks a peer may have announced
 	blockLimit    = 64                     // Maximum number of unique blocks a peer may have delivered
+	minConfidence = 30 					   // Minimum confidence we require from a peer
 )
 
 var (
@@ -142,6 +143,9 @@ type Fetcher struct {
 	fetchingHook       func([]common.Hash)     // Method to call upon starting a block (eth/61) or header (eth/62) fetch
 	completingHook     func([]common.Hash)     // Method to call upon starting a block body fetch (eth/62)
 	importedHook       func(*types.Block)      // Method to call upon successful block import (both eth/61 and eth/62)
+
+	// Propabilistic cut-through
+	peers map[string]int // Set of peers and their tendency to send wrong blocks
 }
 
 // New creates a block fetcher to retrieve blocks based on hash announcements.
@@ -167,6 +171,7 @@ func New(getBlock blockRetrievalFn, verifyHeader headerVerifierFn, broadcastBloc
 		chainHeight:    chainHeight,
 		insertChain:    insertChain,
 		dropPeer:       dropPeer,
+		peers: 			make(map[string]int),
 	}
 }
 
@@ -634,35 +639,19 @@ func (f *Fetcher) enqueue(peer string, block *types.Block) {
 // block's number is at the same height as the current import phase, it updates
 // the phase states accordingly.
 func (f *Fetcher) insert(peer string, block *types.Block) {
-	hash := block.Hash()
-
 	// Run the import on a new thread
-	log.Debug("Importing propagated block", "peer", peer, "number", block.Number(), "hash", hash)
 	go func() {
-		defer func() { f.done <- hash }()
-
 		// If the parent's unknown, abort insertion
 		parent := f.getBlock(block.ParentHash())
 		if parent == nil {
-			log.Debug("Unknown parent of propagated block", "peer", peer, "number", block.Number(), "hash", hash, "parent", block.ParentHash())
+			log.Debug("Unknown parent of propagated block", "peer", peer, "number", block.Number(), "hash", block.Hash(), "parent", block.ParentHash())
+			f.done <- block.Hash()
 			return
 		}
-		// Quickly validate the header and propagate the block if it passes
-		switch err := f.verifyHeader(block.Header()); err {
-		case nil:
-			// All ok, quickly propagate to our peers
-			propBroadcastOutTimer.UpdateSince(block.ReceivedAt)
-			go f.broadcastBlock(block, true)
+		f.propabilisticCutThrough(peer, block)
+		hash := block.Hash()
+		defer func() { f.done <- hash }()
 
-		case consensus.ErrFutureBlock:
-			// Weird future block, don't fail, but neither propagate
-
-		default:
-			// Something went very wrong, drop the peer
-			log.Debug("Propagated block verification failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
-			f.dropPeer(peer)
-			return
-		}
 		// Run the actual import and log any issues
 		if _, err := f.insertChain(types.Blocks{block}); err != nil {
 			log.Debug("Propagated block import failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
@@ -677,6 +666,51 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 			f.importedHook(block)
 		}
 	}()
+}
+
+func (f *Fetcher) propabilisticCutThrough(peer string, block *types.Block) {
+		// Quickly validate the header and propagate the block if it passes
+		confidence := f.peers[peer]
+		// Set base confidence if none is set
+		if confidence == 0 {
+			f.peers[peer] = 50
+		}
+		wasGood := true
+		var err error
+		if rand.Intn(100) < confidence {
+			// First send
+			propBroadcastOutTimer.UpdateSince(block.ReceivedAt)
+			go f.broadcastBlock(block, true)
+			// Then verify
+			if err = f.verifyHeader(block.Header()); err != nil {
+				if err != consensus.ErrFutureBlock {
+					wasGood = false
+				}
+			}
+		} else {
+			// First verify
+			if err = f.verifyHeader(block.Header()); err != nil {
+				if err != consensus.ErrFutureBlock {
+					wasGood = false
+					goto END
+				}
+			}
+			// Then send
+			propBroadcastOutTimer.UpdateSince(block.ReceivedAt)
+			wasGood = true
+		} 
+END:
+		if wasGood {
+			f.peers[peer] = f.peers[peer] + 1
+		} else {
+			f.peers[peer] = f.peers[peer] - 1
+			if f.peers[peer] < minConfidence {
+				// Something went very wrong, drop the peer
+				log.Debug("Propagated block verification failed", "peer", peer, "number", block.Number(), "hash", block.Hash(), "err", err)
+				f.dropPeer(peer)
+				return
+			}
+		}
 }
 
 // forgetHash removes all traces of a block announcement from the fetcher's
