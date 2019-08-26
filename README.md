@@ -210,7 +210,7 @@ aware of and agree upon. This consists of a small JSON file (e.g. call it `genes
 ```json
 {
   "config": {
-    "chainId": 0,
+    "chainId": <arbitrary positive integer>,
     "homesteadBlock": 0,
     "eip150Block": 0,
     "eip155Block": 0,
