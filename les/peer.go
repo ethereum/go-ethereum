@@ -94,6 +94,8 @@ type peer struct {
 	sendQueue *execQueue
 
 	errCh chan error
+	wg    sync.WaitGroup // Wait group used to track all in-flight task routines.
+
 	// responseLock ensures that responses are queued in the same order as
 	// RequestProcessed is called
 	responseLock  sync.Mutex
@@ -107,11 +109,10 @@ type peer struct {
 	updateTime     mclock.AbsTime
 	frozen         uint32 // 1 if client is in frozen state
 
-	fcClient       *flowcontrol.ClientNode // nil if the peer is server only
-	fcServer       *flowcontrol.ServerNode // nil if the peer is client only
-	fcParams       flowcontrol.ServerParams
-	fcCosts        requestCostTable
-	balanceTracker *balanceTracker // set by clientPool.connect, used and removed by serverHandler.
+	fcClient *flowcontrol.ClientNode // nil if the peer is server only
+	fcServer *flowcontrol.ServerNode // nil if the peer is client only
+	fcParams flowcontrol.ServerParams
+	fcCosts  requestCostTable
 
 	trusted                 bool
 	onlyAnnounce            bool
