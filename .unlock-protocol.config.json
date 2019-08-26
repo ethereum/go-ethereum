@@ -1,0 +1,14 @@
+{
+  "persistentCheckout": true,
+  "icon": "",
+  "callToAction": {
+    "default": "Please show your support for the Go-Ethereum team's work!",
+    "pending": "Thank you for your support. It means a lot to us!",
+    "confirmed": "Thank you for your support. It means a lot to us!"
+  },
+  "locks": {
+    "0x0364c5D9C268a1870f49AD2819801624d8Ce0fF0": {
+      "name": "Go Ethereum Supporters"
+    }
+  }
+}
