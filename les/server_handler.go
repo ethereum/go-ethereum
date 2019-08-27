@@ -583,7 +583,6 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 					}
 					// Look up the root hash belonging to the request
 					var (
-						number *uint64
 						header *types.Header
 						trie   state.Trie
 					)
@@ -591,7 +590,7 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 						root, lastBHash = common.Hash{}, request.BHash
 
 						if header = h.blockchain.GetHeaderByHash(request.BHash); header == nil {
-							p.Log().Warn("Failed to retrieve header for proof", "block", *number, "hash", request.BHash)
+							p.Log().Warn("Failed to retrieve header for proof", "hash", request.BHash)
 							atomic.AddUint32(&p.invalidCount, 1)
 							continue
 						}
