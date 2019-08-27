@@ -94,7 +94,6 @@ type peer struct {
 	sendQueue *execQueue
 
 	errCh chan error
-	wg    sync.WaitGroup // Wait group used to track all in-flight task routines.
 
 	// responseLock ensures that responses are queued in the same order as
 	// RequestProcessed is called

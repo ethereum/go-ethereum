@@ -139,9 +139,11 @@ func (h *serverHandler) handle(p *peer) error {
 	}
 	clientConnectionGauge.Update(int64(h.server.peers.Len()))
 
+	var wg sync.WaitGroup // Wait group used to track all in-flight task routines.
+
 	connectedAt := mclock.Now()
 	defer func() {
-		p.wg.Wait() // Ensure all background task routines have exited.
+		wg.Wait() // Ensure all background task routines have exited.
 		h.server.clientPool.disconnect(p)
 		h.server.peers.Unregister(p.id)
 		clientConnectionGauge.Update(int64(h.server.peers.Len()))
@@ -156,7 +158,7 @@ func (h *serverHandler) handle(p *peer) error {
 			return err
 		default:
 		}
-		if err := h.handleMsg(p); err != nil {
+		if err := h.handleMsg(p, &wg); err != nil {
 			p.Log().Debug("Light Ethereum message handling failed", "err", err)
 			return err
 		}
@@ -165,7 +167,7 @@ func (h *serverHandler) handle(p *peer) error {
 
 // handleMsg is invoked whenever an inbound message is received from a remote
 // peer. The remote connection is torn down upon returning any error.
-func (h *serverHandler) handleMsg(p *peer) error {
+func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 	// Read the next message from the remote peer, and ensure it's fully consumed
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
@@ -276,9 +278,9 @@ func (h *serverHandler) handleMsg(p *peer) error {
 		}
 		query := req.Query
 		if accept(req.ReqID, query.Amount, MaxHeaderFetch) {
-			p.wg.Add(1)
+			wg.Add(1)
 			go func() {
-				defer p.wg.Done()
+				defer wg.Done()
 				hashMode := query.Origin.Hash != (common.Hash{})
 				first := true
 				maxNonCanonical := uint64(100)
@@ -392,9 +394,9 @@ func (h *serverHandler) handleMsg(p *peer) error {
 		)
 		reqCnt := len(req.Hashes)
 		if accept(req.ReqID, uint64(reqCnt), MaxBodyFetch) {
-			p.wg.Add(1)
+			wg.Add(1)
 			go func() {
-				defer p.wg.Done()
+				defer wg.Done()
 				for i, hash := range req.Hashes {
 					if i != 0 && !task.waitOrStop() {
 						sendResponse(req.ReqID, 0, nil, task.servingTime)
@@ -440,9 +442,9 @@ func (h *serverHandler) handleMsg(p *peer) error {
 		)
 		reqCnt := len(req.Reqs)
 		if accept(req.ReqID, uint64(reqCnt), MaxCodeFetch) {
-			p.wg.Add(1)
+			wg.Add(1)
 			go func() {
-				defer p.wg.Done()
+				defer wg.Done()
 				for i, request := range req.Reqs {
 					if i != 0 && !task.waitOrStop() {
 						sendResponse(req.ReqID, 0, nil, task.servingTime)
@@ -511,9 +513,9 @@ func (h *serverHandler) handleMsg(p *peer) error {
 		)
 		reqCnt := len(req.Hashes)
 		if accept(req.ReqID, uint64(reqCnt), MaxReceiptFetch) {
-			p.wg.Add(1)
+			wg.Add(1)
 			go func() {
-				defer p.wg.Done()
+				defer wg.Done()
 				for i, hash := range req.Hashes {
 					if i != 0 && !task.waitOrStop() {
 						sendResponse(req.ReqID, 0, nil, task.servingTime)
@@ -568,9 +570,9 @@ func (h *serverHandler) handleMsg(p *peer) error {
 		)
 		reqCnt := len(req.Reqs)
 		if accept(req.ReqID, uint64(reqCnt), MaxProofsFetch) {
-			p.wg.Add(1)
+			wg.Add(1)
 			go func() {
-				defer p.wg.Done()
+				defer wg.Done()
 				nodes := light.NewNodeSet()
 
 				for i, request := range req.Reqs {
@@ -671,9 +673,9 @@ func (h *serverHandler) handleMsg(p *peer) error {
 		)
 		reqCnt := len(req.Reqs)
 		if accept(req.ReqID, uint64(reqCnt), MaxHelperTrieProofsFetch) {
-			p.wg.Add(1)
+			wg.Add(1)
 			go func() {
-				defer p.wg.Done()
+				defer wg.Done()
 				var (
 					lastIdx  uint64
 					lastType uint
@@ -740,9 +742,9 @@ func (h *serverHandler) handleMsg(p *peer) error {
 		}
 		reqCnt := len(req.Txs)
 		if accept(req.ReqID, uint64(reqCnt), MaxTxSend) {
-			p.wg.Add(1)
+			wg.Add(1)
 			go func() {
-				defer p.wg.Done()
+				defer wg.Done()
 				stats := make([]light.TxStatus, len(req.Txs))
 				for i, tx := range req.Txs {
 					if i != 0 && !task.waitOrStop() {
@@ -788,9 +790,9 @@ func (h *serverHandler) handleMsg(p *peer) error {
 		}
 		reqCnt := len(req.Hashes)
 		if accept(req.ReqID, uint64(reqCnt), MaxTxStatus) {
-			p.wg.Add(1)
+			wg.Add(1)
 			go func() {
-				defer p.wg.Done()
+				defer wg.Done()
 				stats := make([]light.TxStatus, len(req.Hashes))
 				for i, hash := range req.Hashes {
 					if i != 0 && !task.waitOrStop() {

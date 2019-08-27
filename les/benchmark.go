@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -312,7 +313,7 @@ func (h *serverHandler) measure(setup *benchmarkSetup, count int) error {
 	}()
 	go func() {
 		for i := 0; i < count; i++ {
-			if err := h.handleMsg(serverPeer); err != nil {
+			if err := h.handleMsg(serverPeer, &sync.WaitGroup{}); err != nil {
 				errCh <- err
 				return
 			}
