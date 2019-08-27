@@ -692,14 +692,13 @@ func (f *Fetcher) propabilisticCutThrough(peer string, block *types.Block) {
 			if err = f.verifyHeader(block.Header()); err != nil {
 				if err != consensus.ErrFutureBlock {
 					wasGood = false
-					goto END
 				}
+			} else {
+				// Then send
+				propBroadcastOutTimer.UpdateSince(block.ReceivedAt)
+				go f.broadcastBlock(block, true)
 			}
-			// Then send
-			propBroadcastOutTimer.UpdateSince(block.ReceivedAt)
-			wasGood = true
 		} 
-END:
 		if wasGood {
 			f.peers[peer] = f.peers[peer] + 1
 		} else {
