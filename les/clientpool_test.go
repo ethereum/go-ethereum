@@ -83,14 +83,14 @@ func testClientPool(t *testing.T, connLimit, clientCount, paidCount int, randomD
 
 	// pool should accept new peers up to its connected limit
 	for i := 0; i < connLimit; i++ {
-		if pool.connect(poolTestPeer(i), 0) != nil {
+		if pool.connect(poolTestPeer(i), 0) {
 			connected[i] = true
 		} else {
 			t.Fatalf("Test peer #%d rejected", i)
 		}
 	}
 	// since all accepted peers are new and should not be kicked out, the next one should be rejected
-	if pool.connect(poolTestPeer(connLimit), 0) != nil {
+	if pool.connect(poolTestPeer(connLimit), 0) {
 		connected[connLimit] = true
 		t.Fatalf("Peer accepted over connected limit")
 	}
@@ -116,7 +116,7 @@ func testClientPool(t *testing.T, connLimit, clientCount, paidCount int, randomD
 				connTicks[i] += tickCounter
 			}
 		} else {
-			if pool.connect(poolTestPeer(i), 0) != nil {
+			if pool.connect(poolTestPeer(i), 0) {
 				connected[i] = true
 				connTicks[i] -= tickCounter
 			}
@@ -159,7 +159,7 @@ func testClientPool(t *testing.T, connLimit, clientCount, paidCount int, randomD
 	}
 
 	// a previously unknown peer should be accepted now
-	if pool.connect(poolTestPeer(54321), 0) == nil {
+	if !pool.connect(poolTestPeer(54321), 0) {
 		t.Fatalf("Previously unknown peer rejected")
 	}
 
@@ -173,7 +173,7 @@ func testClientPool(t *testing.T, connLimit, clientCount, paidCount int, randomD
 		pool.connect(poolTestPeer(i), 0)
 	}
 	// expect pool to remember known nodes and kick out one of them to accept a new one
-	if pool.connect(poolTestPeer(54322), 0) == nil {
+	if !pool.connect(poolTestPeer(54322), 0) {
 		t.Errorf("Previously unknown peer rejected after restarting pool")
 	}
 	pool.stop()
