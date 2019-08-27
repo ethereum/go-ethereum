@@ -127,15 +127,16 @@ func (h *serverHandler) handle(p *peer) error {
 	}
 	defer p.fcClient.Disconnect()
 
-	// Register the peer locally
-	if err := h.server.peers.Register(p); err != nil {
-		p.Log().Error("Light Ethereum peer registration failed", "err", err)
-		return err
-	}
 	// Disconnect the inbound peer if it's rejected by clientPool
-	if h.server.clientPool.connect(p, 0) {
+	if !h.server.clientPool.connect(p, 0) {
 		p.Log().Debug("Light Ethereum peer registration failed", "err", errFullClientPool)
 		return errFullClientPool
+	}
+	// Register the peer locally
+	if err := h.server.peers.Register(p); err != nil {
+		h.server.clientPool.disconnect(p)
+		p.Log().Error("Light Ethereum peer registration failed", "err", err)
+		return err
 	}
 	clientConnectionGauge.Update(int64(h.server.peers.Len()))
 
@@ -144,8 +145,8 @@ func (h *serverHandler) handle(p *peer) error {
 	connectedAt := mclock.Now()
 	defer func() {
 		wg.Wait() // Ensure all background task routines have exited.
-		h.server.clientPool.disconnect(p)
 		h.server.peers.Unregister(p.id)
+		h.server.clientPool.disconnect(p)
 		clientConnectionGauge.Update(int64(h.server.peers.Len()))
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 	}()
