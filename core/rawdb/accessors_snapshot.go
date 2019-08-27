@@ -91,3 +91,9 @@ func DeleteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash com
 		log.Crit("Failed to delete storage snapshot", "err", err)
 	}
 }
+
+// IterateStorageSnapshots returns an iterator for walking the entire storage
+// space of a specific account.
+func IterateStorageSnapshots(db ethdb.Iteratee, accountHash common.Hash) ethdb.Iterator {
+	return db.NewIteratorWithPrefix(storageSnapshotsKey(accountHash))
+}

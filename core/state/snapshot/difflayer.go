@@ -247,27 +247,51 @@ func (dl *diffLayer) Cap(layers int, memory uint64) (uint64, uint64) {
 		base   = parent.parent.(*diskLayer)
 		batch  = base.db.NewBatch()
 	)
+	parent.lock.RLock()
+	defer parent.lock.RUnlock()
+
 	// Start by temporarilly deleting the current snapshot block marker. This
 	// ensures that in the case of a crash, the entire snapshot is invalidated.
 	rawdb.DeleteSnapshotBlock(batch)
 
 	// Push all the accounts into the database
 	for hash, data := range parent.accountData {
-		rawdb.WriteAccountSnapshot(batch, hash, data)
-		base.cache.Set(string(hash[:]), data)
+		if len(data) > 0 {
+			// Account was updated, push to disk
+			rawdb.WriteAccountSnapshot(batch, hash, data)
+			base.cache.Set(string(hash[:]), data)
 
-		if batch.ValueSize() > ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				log.Crit("Failed to write account snapshot", "err", err)
+			if batch.ValueSize() > ethdb.IdealBatchSize {
+				if err := batch.Write(); err != nil {
+					log.Crit("Failed to write account snapshot", "err", err)
+				}
+				batch.Reset()
 			}
-			batch.Reset()
+		} else {
+			// Account was deleted, remove all storage slots too
+			rawdb.DeleteAccountSnapshot(batch, hash)
+			base.cache.Set(string(hash[:]), nil)
+
+			it := rawdb.IterateStorageSnapshots(base.db, hash)
+			for it.Next() {
+				if key := it.Key(); len(key) == 65 { // TODO(karalabe): Yuck, we should move this into the iterator
+					batch.Delete(key)
+					base.cache.Delete(string(key[1:]))
+				}
+			}
+			it.Release()
 		}
 	}
 	// Push all the storage slots into the database
 	for accountHash, storage := range parent.storageData {
 		for storageHash, data := range storage {
-			rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, data)
-			base.cache.Set(string(append(accountHash[:], storageHash[:]...)), data)
+			if len(data) > 0 {
+				rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, data)
+				base.cache.Set(string(append(accountHash[:], storageHash[:]...)), data)
+			} else {
+				rawdb.DeleteStorageSnapshot(batch, accountHash, storageHash)
+				base.cache.Set(string(append(accountHash[:], storageHash[:]...)), nil)
+			}
 		}
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {

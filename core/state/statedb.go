@@ -484,7 +484,10 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 
 	// If state snapshotting is active, cache the data til commit
 	if s.snap != nil {
-		s.snapAccounts[obj.addrHash] = nil // Yes, nil means deleted
+		s.snapLock.Lock()
+		s.snapAccounts[obj.addrHash] = nil // We need to maintain account deletions explicitly
+		s.snapStorage[obj.addrHash] = nil  // We need to maintain storage deletions explicitly
+		s.snapLock.Unlock()
 	}
 }
 

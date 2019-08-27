@@ -119,6 +119,7 @@ func generateSnapshot(db ethdb.KeyValueStore, journal string, headNumber uint64,
 		storageNodes int
 		accountSize  common.StorageSize
 		storageSize  common.StorageSize
+		logged       time.Time
 	)
 	batch := db.NewBatch()
 	triedb := trie.NewDatabase(db)
@@ -176,8 +177,13 @@ func generateSnapshot(db ethdb.KeyValueStore, journal string, headNumber uint64,
 		storageSize += curStorageSize
 		storageNodes += curStorageNodes
 
-		fmt.Printf("%#x: %9s + %9s (%6d slots, %6d nodes), total %9s (%d accs, %d nodes) + %9s (%d slots, %d nodes)\n", accIt.Key, curAccountSize.TerminalString(), curStorageSize.TerminalString(), curStorageCount, curStorageNodes, accountSize.TerminalString(), accountCount, accIt.Nodes, storageSize.TerminalString(), storageCount, storageNodes)
+		if time.Since(logged) > 8*time.Second {
+			fmt.Printf("%#x: %9s + %9s (%6d slots, %6d nodes), total %9s (%d accs, %d nodes) + %9s (%d slots, %d nodes)\n", accIt.Key, curAccountSize.TerminalString(), curStorageSize.TerminalString(), curStorageCount, curStorageNodes, accountSize.TerminalString(), accountCount, accIt.Nodes, storageSize.TerminalString(), storageCount, storageNodes)
+			logged = time.Now()
+		}
 	}
+	fmt.Printf("Totals: %9s (%d accs, %d nodes) + %9s (%d slots, %d nodes)\n", accountSize.TerminalString(), accountCount, accIt.Nodes, storageSize.TerminalString(), storageCount, storageNodes)
+
 	// Update the snapshot block marker and write any remainder data
 	rawdb.WriteSnapshotBlock(batch, headNumber, headRoot)
 	batch.Write()

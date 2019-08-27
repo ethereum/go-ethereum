@@ -287,6 +287,23 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	// Make sure all dirty slots are finalized into the pending storage area
 	s.finalise()
 
+	// Retrieve the snapshot storage map for the object
+	var storage map[common.Hash][]byte
+	if s.db.snap != nil {
+		// Retrieve the old storage map, if available
+		s.db.snapLock.RLock()
+		storage = s.db.snapStorage[s.addrHash]
+		s.db.snapLock.RUnlock()
+
+		// If no old storage map was available, create a new one
+		if storage == nil {
+			storage = make(map[common.Hash][]byte)
+
+			s.db.snapLock.Lock()
+			s.db.snapStorage[s.addrHash] = storage
+			s.db.snapLock.Unlock()
+		}
+	}
 	// Insert all the pending updates into the trie
 	tr := s.getTrie(db)
 	for key, value := range s.pendingStorage {
@@ -305,20 +322,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 			s.setError(tr.TryUpdate(key[:], v))
 		}
 		// If state snapshotting is active, cache the data til commit
-		if s.db.snap != nil {
-			// Retrieve an old storage map, if available
-			s.db.snapLock.RLock()
-			storage := s.db.snapStorage[s.addrHash]
-			s.db.snapLock.RUnlock()
-
-			if storage == nil {
-				// No old storage available, create a new one
-				storage = make(map[common.Hash][]byte)
-
-				s.db.snapLock.Lock()
-				s.db.snapStorage[s.addrHash] = storage
-				s.db.snapLock.Unlock()
-			}
+		if storage != nil {
 			storage[crypto.Keccak256Hash(key[:])] = v // v will be nil if value is 0x00
 		}
 	}

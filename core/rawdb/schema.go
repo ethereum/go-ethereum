@@ -159,6 +159,11 @@ func storageSnapshotKey(accountHash, storageHash common.Hash) []byte {
 	return append(append(StateSnapshotPrefix, accountHash.Bytes()...), storageHash.Bytes()...)
 }
 
+// storageSnapshotsKey = StateSnapshotPrefix + account hash + storage hash
+func storageSnapshotsKey(accountHash common.Hash) []byte {
+	return append(StateSnapshotPrefix, accountHash.Bytes()...)
+}
+
 // bloomBitsKey = bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash
 func bloomBitsKey(bit uint, section uint64, hash common.Hash) []byte {
 	key := append(append(bloomBitsPrefix, make([]byte, 10)...), hash.Bytes()...)
