@@ -4,7 +4,7 @@ title: Getting Started with Geth
 
 ## Installing
 
-You can install the Go implementation of Ethereum in a variety of ways. These include installing it via your favorite package manager; downloading a standalone pre-built binary; running as a docker container; or building it yourself. This section highlights the common options, in the left hand menu, or in the [install and build](/install-and-build/Installing-Geth) section.
+You can install the Go implementation of Ethereum in a variety of ways. These include installing it via your favorite package manager; downloading a standalone pre-built binary; running as a docker container; or building it yourself. This section highlights the common options, but you can find others in the left hand menu, or in the [install and build](/install-and-build/Installing-Geth) section.
 
 ### Install on macOS via Homebrew
 
@@ -35,7 +35,7 @@ To enable our launchpad repository run:
 sudo add-apt-repository -y ppa:ethereum/ethereum
 ```
 
-After that you can install the stable version of Go Ethereum:
+After that you can install the stable version of go-ethereum:
 
 ```shell
 sudo apt-get update
@@ -50,7 +50,7 @@ _Although we were shipping Chocolatey packages for a time after the Frontier rel
 
 Until then grab a Windows installer from our [downloads](https://geth.ethereum.org/downloads) page.
 
-### Download standalone bundle
+### Download standalone binary
 
 We distribute all our stable releases and development builds as standalone binaries. These are useful for scenarios where you'd like to: a) install a specific version of our code (e.g., for reproducible environments); b) install on machines without internet access (e.g., air gapped computers); or c) do not like automatic updates and would rather manually install software.
 
@@ -77,7 +77,9 @@ docker run -it -p 30303:30303 ethereum/client-go
 
 _[Read this guide](/install-and-build/Installation-Instructions-for-Docker) for further Docker options._
 
-## Running ETC
+## Starting a node
+
+### Create an account
 
 Before starting Geth you first need to create an account that represents a key pair. Use the following command to create a new account and set a password for that account:
 
@@ -85,7 +87,9 @@ Before starting Geth you first need to create an account that represents a key p
 geth account new
 ```
 
-[Read this guide](/interface/Managing-your-accounts) for more details on importing existing Ethereum accounts and other uses of the `account` command.
+_[Read this guide](/interface/Managing-your-accounts) for more details on importing existing Ethereum accounts and other uses of the `account` command._
+
+### Sync modes
 
 Running Geth starts an Ethereum node that can join any existing network, or create a new one. You can start Geth in one of three different sync modes using the `--syncmode "{mode}"` argument that determines what sort of node it is in the network.
 
@@ -95,8 +99,26 @@ These are:
 -   **Fast** (Default): Downloads block headers and block data of the most recent transactions (1024) and validates them.
 -   **Light**: Downloads all block headers, block data, but does not validate transactions.
 
-* * *
+For example:
 
-Sync modes
+```shell
+geth --syncmode "light"
+```
 
-What a full node is
+### Connect to node
+
+Once you have an account and Geth is running, you can interact with it by opening another terminal and using the following command to open a JavaScript console:
+
+```shell
+geth attach
+```
+
+In the console you can issue any of the Geth commands, for example, to list all the accounts on the node, use:
+
+```shell
+eth.accounts
+```
+
+<!-- TODO: Read more -->
+
+## Next steps
