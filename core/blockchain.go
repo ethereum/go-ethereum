@@ -139,10 +139,10 @@ type BlockChain struct {
 	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
 
 	// txLookupLimit is the maximum number of blocks from head whose tx indices
-	// are reserved.
-	// * nil do nothing
-	// * 0 means no limit (and regenerate any missing)
-	// * N means N blocks limit [HEAD-N, HEAD]
+	// are reserved:
+	//  * 0:   means no limit and regenerate any missing indexes
+	//  * N:   means N block limit [HEAD-N, HEAD] and delete extra indexes
+	//  * nil: disable tx reindexer/deleter, but still index new blocks
 	txLookupLimit uint64
 
 	hc            *HeaderChain
@@ -236,14 +236,15 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		return nil, ErrNoGenesis
 	}
 	// Initialize the chain with ancient data if it isn't empty.
-	var ancients uint64
+	var txIndexBlock uint64
+
 	if bc.empty() {
-		rawdb.InitBlockIndexFromFreezer(bc.db)
+		rawdb.InitDatabaseFromFreezer(bc.db)
 		// If ancient database is not empty, reconstruct all missing
 		// indices in the background.
 		frozen, _ := bc.db.Ancients()
 		if frozen > 0 {
-			ancients = frozen
+			txIndexBlock = frozen
 		}
 	}
 	if err := bc.loadLastState(); err != nil {
@@ -304,7 +305,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	go bc.update()
 	if txLookupLimit != nil {
 		bc.txLookupLimit = *txLookupLimit
-		go bc.maintainTxIndex(ancients)
+		go bc.maintainTxIndex(txIndexBlock)
 	}
 	return bc, nil
 }
@@ -1187,8 +1188,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			// Write all the data out into the database
 			rawdb.WriteBody(batch, block.Hash(), block.NumberU64(), block.Body())
 			rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receiptChain[i])
-			// We always write tx indices for live block since we assume the indices are needed.
-			rawdb.WriteTxLookupEntries(batch, block)
+			rawdb.WriteTxLookupEntries(batch, block) // Always write tx indices for live blocks, we assume they are needed
 
 			stats.processed++
 			if batch.ValueSize() >= ethdb.IdealBatchSize {
@@ -1208,7 +1208,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		updateHead(blockChain[len(blockChain)-1])
 		return 0, nil
 	}
-	// Write downloaded chain data and corresponding receipt chain data.
+	// Write downloaded chain data and corresponding receipt chain data
 	if len(ancientBlocks) > 0 {
 		if n, err := writeAncient(ancientBlocks, ancientReceipts); err != nil {
 			if err == errInsertionInterrupted {
@@ -1217,10 +1217,10 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			return n, err
 		}
 	}
-	// Write tx indices tail before write any live block.
-	if len(ancientBlocks) > 0 && len(liveBlocks) > 0 {
+	// Write the tx index tail (block number from where we index) before write any live blocks
+	if len(liveBlocks) > 0 && liveBlocks[0].NumberU64() == ancientLimit+1 {
 		// The tx index tail can only be one of the following two options:
-		// * 0: all ancient blocks have been indexed.
+		// * 0: all ancient blocks have been indexed
 		// * ancient-limit: the indices of blocks before ancient-limit are ignored
 		if tail := rawdb.ReadTxIndexTail(bc.db); tail == nil {
 			if bc.txLookupLimit == 0 || ancientLimit <= bc.txLookupLimit {
@@ -1253,15 +1253,14 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	return 0, nil
 }
 
-// SetTxLookupLimit is responsible for updating the txlookup limit
-// to the original one stored in db if the new old mismatch with the old
-// one.
+// SetTxLookupLimit is responsible for updating the txlookup limit to the
+// original one stored in db if the new mismatches with the old one.
 func (bc *BlockChain) SetTxLookupLimit(limit uint64) {
 	bc.txLookupLimit = limit
 }
 
 // TxLookupLimit retrieves the txlookup limit used by blockchain to prune
-// stale tx indices.
+// stale transaction indices.
 func (bc *BlockChain) TxLookupLimit() uint64 {
 	return bc.txLookupLimit
 }
@@ -2098,64 +2097,60 @@ func (bc *BlockChain) update() {
 // sync, Geth will automatically construct the missing indices and delete
 // the extra indices.
 func (bc *BlockChain) maintainTxIndex(ancients uint64) {
-	// indexBlocks reindex or unindex transaction indices depends
-	// on user's requirement.
-	indexBlocks := func(tail *uint64, head uint64, done chan struct{}) {
-		defer func() { done <- struct{}{} }()
-
-		if tail == nil {
-			// This is a special case that user upgrades Geth to a new version
-			// which supports tx indices pruning feature but the tx index tail
-			// is missing. So that we can assume all blocks in db are indexed.
-			if bc.txLookupLimit == 0 || head < bc.txLookupLimit {
-				// Nothing to delete, write the tail and return.
-				rawdb.WriteTxIndexTail(bc.db, 0)
-			} else {
-				// Prune all stale tx indices and record the tx index tail.
-				rawdb.RemoveTxsLookup(bc.db, 0, head-bc.txLookupLimit+1)
-			}
-			return
-		}
-		// All indices should be reserved.
-		if bc.txLookupLimit == 0 || head < bc.txLookupLimit {
-			if *tail == 0 {
-				// Short circuit if nothing to delete.
-			} else {
-				// Reindex all indices if necessary
-				rawdb.IndexTxLookup(bc.db, 0, *tail)
-			}
-			return
-		}
-		if head-bc.txLookupLimit+1 < *tail {
-			// Reindex a part of missing indices and rewind oldest indexed
-			// point to HEAD-limit
-			rawdb.IndexTxLookup(bc.db, head-bc.txLookupLimit+1, *tail)
-		} else {
-			// Unindex a part of stale indices and forward oldest indexed
-			// point to HEAD-limit
-			rawdb.RemoveTxsLookup(bc.db, *tail, head-bc.txLookupLimit+1)
-		}
-	}
-	// Special case here: user might init Geth with an external ancient database.
-	// If so, we should reindex all necessary indices before start processing any
-	// indices pruning requests.
+	// Before starting the actual maintenance, we need to handle a special case,
+	// where user might init Geth with an external ancient database. If so, we
+	// need to reindex all necessary transactions before starting to process any
+	// pruning requests.
 	if ancients > 0 {
 		var from = uint64(0)
 		if bc.txLookupLimit != 0 && ancients > bc.txLookupLimit {
 			from = ancients - bc.txLookupLimit
 		}
-		rawdb.IndexTxLookup(bc.db, from, ancients)
+		rawdb.IndexTransactions(bc.db, from, ancients)
 	}
+	// indexBlocks reindexes or unindexes transactions depending on user configuration
+	indexBlocks := func(tail *uint64, head uint64, done chan struct{}) {
+		defer func() { done <- struct{}{} }()
+
+		// If the user just upgraded Geth to a new version which supports transaction
+		// index pruning, write the new tail and remove anything older.
+		if tail == nil {
+			if bc.txLookupLimit == 0 || head < bc.txLookupLimit {
+				// Nothing to delete, write the tail and return
+				rawdb.WriteTxIndexTail(bc.db, 0)
+			} else {
+				// Prune all stale tx indices and record the tx index tail
+				rawdb.UnindexTransactions(bc.db, 0, head-bc.txLookupLimit+1)
+			}
+			return
+		}
+		// If a previous indexing existed, make sure that we fill in any missing entries
+		if bc.txLookupLimit == 0 || head < bc.txLookupLimit {
+			if *tail > 0 {
+				rawdb.IndexTransactions(bc.db, 0, *tail)
+			}
+			return
+		}
+		// Update the transaction index to the new chain state
+		if head-bc.txLookupLimit+1 < *tail {
+			// Reindex a part of missing indices and rewind index tail to HEAD-limit
+			rawdb.IndexTransactions(bc.db, head-bc.txLookupLimit+1, *tail)
+		} else {
+			// Unindex a part of stale indices and forward index tail to HEAD-limit
+			rawdb.UnindexTransactions(bc.db, *tail, head-bc.txLookupLimit+1)
+		}
+	}
+	// Any reindexing done, start listening to chain events and moving the index window
 	var (
-		done   chan struct{} // Non-nil if background unindexing or reindexing routine is active.
-		headCh = make(chan ChainHeadEvent)
+		done   chan struct{}                  // Non-nil if background unindexing or reindexing routine is active.
+		headCh = make(chan ChainHeadEvent, 1) // Buffered to avoid locking up the event feed
 	)
 	sub := bc.SubscribeChainHeadEvent(headCh)
-	defer func() {
-		if sub != nil {
-			sub.Unsubscribe()
-		}
-	}()
+	if sub == nil {
+		return
+	}
+	defer sub.Unsubscribe()
+
 	for {
 		select {
 		case head := <-headCh:

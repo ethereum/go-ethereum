@@ -63,19 +63,20 @@ func WriteTxLookupEntries(db ethdb.KeyValueWriter, block *types.Block) {
 	}
 }
 
-// DeleteTxLookupEntries removes all transaction lookup indices contained in
-// given block.
+// DeleteTxLookupEntry removes all transaction data associated with a hash.
+func DeleteTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Delete(txLookupKey(hash)); err != nil {
+		log.Crit("Failed to delete transaction lookup entry", "err", err)
+	}
+}
+
+// DeleteTxLookupEntries removes all transaction lookups for a given block.
 func DeleteTxLookupEntries(db ethdb.KeyValueWriter, block *types.Block) {
 	for _, tx := range block.Transactions() {
 		if err := db.Delete(txLookupKey(tx.Hash())); err != nil {
 			log.Crit("Failed to delete transaction lookup entry", "err", err)
 		}
 	}
-}
-
-// DeleteTxLookupEntry removes all transaction data associated with a hash.
-func DeleteTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash) {
-	db.Delete(txLookupKey(hash))
 }
 
 // ReadTransaction retrieves a specific transaction from the database, along with

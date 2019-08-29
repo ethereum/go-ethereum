@@ -187,7 +187,7 @@ func ReadTxIndexTail(db ethdb.KeyValueReader) *uint64 {
 // into database.
 func WriteTxIndexTail(db ethdb.KeyValueWriter, number uint64) {
 	if err := db.Put(txIndexTailKey, encodeBlockNumber(number)); err != nil {
-		log.Crit("Failed to store the number of oldest indexed block", "err", err)
+		log.Crit("Failed to store the transaction index tail", "err", err)
 	}
 }
 
@@ -204,7 +204,7 @@ func ReadFastTxLookupLimit(db ethdb.KeyValueReader) *uint64 {
 // WriteFastTxLookupLimit stores the txlookup limit used in fast sync into database.
 func WriteFastTxLookupLimit(db ethdb.KeyValueWriter, number uint64) {
 	if err := db.Put(fastTxLookupLimitKey, encodeBlockNumber(number)); err != nil {
-		log.Crit("Failed to store txlookup limit for fast sync", "err", err)
+		log.Crit("Failed to store transaction lookup limit for fast sync", "err", err)
 	}
 }
 

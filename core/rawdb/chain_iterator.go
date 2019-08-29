@@ -31,19 +31,18 @@ import (
 )
 
 type (
-	prepareCallback func(*types.Block)              // The callback for customized prepare operation.
-	actionCallback  func(ethdb.Batch, *types.Block) // The callback for customized action.
+	prepareCallback func(*types.Block)              // Callback for custom concurrent pre-computations on block data
+	actionCallback  func(ethdb.Batch, *types.Block) // Callback for custom sequential operations on block data.
 )
 
-// iterateCanonicalChain iterates the specified range canonical chain and then
-// apply the given action callback.
-// Note both for forward and backward iteration, the range is [from, to).
-func iterateCanonicalChain(db ethdb.Database, from uint64, to uint64, typ string, prepare prepareCallback, action actionCallback, reverse bool, report bool) error {
-	// Short circuit if the action is nil.
+// iterateCanonicalChain iterates the specified range of canonical blocks and applies
+// the given action callback. Note, both for forward and backward iteration, the range
+// is [from, to).
+func iterateCanonicalChain(db ethdb.Database, from uint64, to uint64, prepare prepareCallback, action actionCallback, reverse bool, progMsg, doneMsg string) error {
+	// Short circuit if the action is nil or if the range is invalid
 	if action == nil {
 		return nil
 	}
-	// Short circuit if the iteration range is invalid.
 	if from >= to {
 		return nil
 	}
@@ -61,7 +60,11 @@ func iterateCanonicalChain(db ethdb.Database, from uint64, to uint64, typ string
 	abort := make(chan struct{})
 	defer close(abort)
 
-	for i := 0; i < runtime.NumCPU(); i++ {
+	threads := to - from
+	if cpus := runtime.NumCPU(); threads > uint64(cpus) {
+		threads = uint64(cpus)
+	}
+	for i := 0; i < int(threads); i++ {
 		go func() {
 			for {
 				// Fetch the next task number, terminating if everything's done
@@ -90,7 +93,7 @@ func iterateCanonicalChain(db ethdb.Database, from uint64, to uint64, typ string
 			}
 		}()
 	}
-	// Reassemble the blocks into a contiguous stream and apply the action callback.
+	// Reassemble the blocks into a contiguous stream and apply the action callback
 	var (
 		next, first, last int64
 		queue             = prque.New(nil)
@@ -103,10 +106,6 @@ func iterateCanonicalChain(db ethdb.Database, from uint64, to uint64, typ string
 		next, first, last = int64(from), int64(from), int64(to)
 	} else {
 		next, first, last = int64(to-1), int64(to-1), int64(from-1)
-	}
-	logFn := log.Debug
-	if report {
-		logFn = log.Info
 	}
 	for i := from; i < to; i++ {
 		// Retrieve the next result and bail if it's nil
@@ -145,19 +144,19 @@ func iterateCanonicalChain(db ethdb.Database, from uint64, to uint64, typ string
 			}
 			// If we've spent too much time already, notify the user of what we're doing
 			if time.Since(logged) > 8*time.Second {
-				logFn("Iterating canonical chain", "type", typ, "reserve", reverse, "number", block.Number(), "hash", block.Hash(), "total", int64(math.Abs(float64(next-first))), "elapsed", common.PrettyDuration(time.Since(start)))
+				log.Info(progMsg, "blocks", int64(math.Abs(float64(next-first))), "total", to-from, "number", block.Number(), "hash", block.Hash(), "elapsed", common.PrettyDuration(time.Since(start)))
 				logged = time.Now()
 			}
 		}
 	}
-	logFn("Iterated canonical chain", "type", typ, "reverse", reverse, "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info(doneMsg, "blocks", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
-// InitBlockIndexFromFreezer reinitializes an empty database from a previous batch
+// InitDatabaseFromFreezer reinitializes an empty database from a previous batch
 // of frozen ancient blocks. The method iterates over all the frozen blocks and
 // injects into the database the block hash->number mappings.
-func InitBlockIndexFromFreezer(db ethdb.Database) {
+func InitDatabaseFromFreezer(db ethdb.Database) {
 	// If we can't access the freezer or it's empty, abort
 	frozen, err := db.Ancients()
 	if err != nil || frozen == 0 {
@@ -170,22 +169,20 @@ func InitBlockIndexFromFreezer(db ethdb.Database) {
 	// writeIndex injects hash <-> number mapping into the database.
 	writeIndex := func(batch ethdb.Batch, block *types.Block) { WriteHeaderNumber(batch, block.Hash(), block.NumberU64()) }
 
-	if err := iterateCanonicalChain(db, 0, frozen, "blocks", hashBlock, writeIndex, false, true); err != nil {
-		log.Crit("Failed to iterate canonical chain", "err", err)
+	if err := iterateCanonicalChain(db, 0, frozen, hashBlock, writeIndex, false, "Initializing database from freezer", "Initialized database from freezer"); err != nil {
+		log.Crit("Failed to init database from freezer", "err", err)
 	}
 	hash := ReadCanonicalHash(db, frozen-1)
 	WriteHeadHeaderHash(db, hash)
 	WriteHeadFastBlockHash(db, hash)
-	log.Info("Initialized chain from ancient data", "number", frozen-1, "hash", hash)
 }
 
-// IndexTxLookup initializes txlookup indices of the specified range blocks into
-// the database.
+// IndexTransactions creates txlookup indices of the specified block range.
 //
 // This function iterates canonical chain in reverse order, it has one main advantage:
 // We can write tx index tail flag periodically even without the whole indexing
 // procedure is finished. So that we can resume indexing procedure next time quickly.
-func IndexTxLookup(db ethdb.Database, from uint64, to uint64) {
+func IndexTransactions(db ethdb.Database, from uint64, to uint64) {
 	// hashTxs calculates transaction hash in advance using the multi-routine's
 	// concurrent computing power.
 	hashTxs := func(block *types.Block) {
@@ -200,29 +197,26 @@ func IndexTxLookup(db ethdb.Database, from uint64, to uint64) {
 			WriteTxIndexTail(batch, block.NumberU64())
 		}
 	}
-	start := time.Now()
-	if err := iterateCanonicalChain(db, from, to, "txlookup", hashTxs, writeIndices, true, true); err != nil {
-		log.Crit("Failed to iterate canonical chain", "err", err)
+	if err := iterateCanonicalChain(db, from, to, hashTxs, writeIndices, true, "Indexing transactions", "Indexed transactions"); err != nil {
+		log.Crit("Failed to index transactions", "err", err)
 	}
 	WriteTxIndexTail(db, from)
-	log.Info("Constructed transaction indices", "from", from, "to", to, "count", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
 }
 
-// RemoveTxsLookup removes txlookup indices of the specified range blocks.
-func RemoveTxsLookup(db ethdb.Database, from uint64, to uint64) {
+// UnindexTransactions removes txlookup indices of the specified block range.
+func UnindexTransactions(db ethdb.Database, from uint64, to uint64) {
 	// Write flag first and then unindex the transaction indices. Some indices
 	// will be left in the database if crash happens but it's fine.
 	WriteTxIndexTail(db, to)
 
+	// If only one block is unindexed, do it direclty
 	if from+1 == to {
-		hash := ReadCanonicalHash(db, from)
-		DeleteTxLookupEntries(db, ReadBlock(db, hash, from))
-		log.Debug("Removed transaction indices", "number", from, "hash", hash)
-	} else {
-		deleteIndices := func(batch ethdb.Batch, block *types.Block) { DeleteTxLookupEntries(batch, block) }
-		if err := iterateCanonicalChain(db, from, to, "txlookup", nil, deleteIndices, false, false); err != nil {
-			log.Crit("Failed to iterate canonical chain", "err", err)
-		}
-		log.Debug("Removed transaction indices", "from", from, "to", to, "count", to-from)
+		DeleteTxLookupEntries(db, ReadBlock(db, ReadCanonicalHash(db, from), from))
+		return
+	}
+	// Otherwise spin up the concurrent iterator and unindexer
+	deleteIndices := func(batch ethdb.Batch, block *types.Block) { DeleteTxLookupEntries(batch, block) }
+	if err := iterateCanonicalChain(db, from, to, nil, deleteIndices, false, "Unindexing transactions", "Unindexed transactions"); err != nil {
+		log.Crit("Failed to unindex transactions", "err", err)
 	}
 }

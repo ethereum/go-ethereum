@@ -217,7 +217,7 @@ var (
 	}
 	TxLookupLimitFlag = cli.Int64Flag{
 		Name:  "txlookuplimit",
-		Usage: "The maximum number of blocks from head whose tx indices are reserved(0 means reserve all indices)",
+		Usage: "Number of recent blocks to index transactions-by-hash in (default = index all blocks)",
 		Value: 0,
 	}
 	LightKDFFlag = cli.BoolFlag{
@@ -1427,7 +1427,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// todo(rjl493456442) make it available for les server
 	// Ancient tx indices pruning is not available for les server now
 	// since light client relies on the server for transaction status query.
-	CheckExclusive(ctx, SyncModeFlag, "light", TxLookupLimitFlag)
+	CheckExclusive(ctx, LightLegacyServFlag, LightServeFlag, TxLookupLimitFlag)
 	var ks *keystore.KeyStore
 	if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0 {
 		ks = keystores[0].(*keystore.KeyStore)

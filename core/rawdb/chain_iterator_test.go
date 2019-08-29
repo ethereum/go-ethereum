@@ -56,7 +56,7 @@ func TestChainIterator(t *testing.T) {
 	}
 	for i, c := range cases {
 		var visit []uint64
-		err := iterateCanonicalChain(chainDb, c.from, c.to, "", nil, func(db ethdb.Batch, b *types.Block) { visit = append(visit, b.NumberU64()) }, c.reverse, false)
+		err := iterateCanonicalChain(chainDb, c.from, c.to, nil, func(db ethdb.Batch, b *types.Block) { visit = append(visit, b.NumberU64()) }, c.reverse, "", "")
 		if err != nil {
 			t.Fatalf("Case %d failed, err %v", i, err)
 		}
