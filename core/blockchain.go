@@ -141,7 +141,7 @@ type BlockChain struct {
 	// txLookupLimit is the maximum number of blocks from head whose tx indices
 	// are reserved:
 	//  * 0:   means no limit and regenerate any missing indexes
-	//  * N:   means N block limit [HEAD-N, HEAD] and delete extra indexes
+	//  * N:   means N block limit [HEAD-N+1, HEAD] and delete extra indexes
 	//  * nil: disable tx reindexer/deleter, but still index new blocks
 	txLookupLimit uint64
 
@@ -1112,7 +1112,15 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			// * If all ancient tx indices are required to be reserved(txlookuplimit is even higher than ancientlimit)
 			// * If block number is large enough to be regarded as a recent block
 			// It means blocks below the ancientLimit-txlookupLimit won't be indexed.
+			//
+			// But if the `TxIndexTail` is not nil, e.g. Geth is initialized with
+			// an external ancient database, during the setup, blockchain will start
+			// a background routine to re-indexed all indices in [ancients - txlookupLimit, ancients)
+			// range. In this case, all tx indices of newly imported blocks should be
+			// generated.
 			if bc.txLookupLimit == 0 || ancientLimit <= bc.txLookupLimit || block.NumberU64() >= ancientLimit-bc.txLookupLimit {
+				rawdb.WriteTxLookupEntries(batch, block)
+			} else if rawdb.ReadTxIndexTail(bc.db) != nil {
 				rawdb.WriteTxLookupEntries(batch, block)
 			}
 			stats.processed++
