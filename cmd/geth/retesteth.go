@@ -679,7 +679,7 @@ func (api *RetestethAPI) AccountRange(ctx context.Context,
 	}
 	it := trie.NewIterator(accountTrie.NodeIterator(common.BigToHash((*big.Int)(addressHash)).Bytes()))
 	result := AccountRangeResult{AddressMap: make(map[common.Hash]common.Address)}
-	for i := 0; /*i < int(maxResults) && */ it.Next(); i++ {
+	for i := 0; i < int(maxResults) && it.Next(); i++ {
 		if preimage := accountTrie.GetKey(it.Key); preimage != nil {
 			result.AddressMap[common.BytesToHash(it.Key)] = common.BytesToAddress(preimage)
 			//fmt.Printf("%x: %x\n", it.Key, preimage)
