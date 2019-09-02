@@ -7,7 +7,7 @@ ADD . /go-ethereum
 RUN cd /go-ethereum && make geth
 
 # Pull Geth into a second stage deploy alpine container
-FROM alpine:latest
+FROM alpine:3.10
 
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
