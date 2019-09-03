@@ -11,7 +11,7 @@ Main entry points:
 
 * [Installation Instructions](../install-and-build/Building-Ethereum)
 * [Management APIs](../interface/Management-APIs)
-* [Managing Accounts](../how-to/Managing-your-accounts)
+* [Managing Accounts](../interface/Managing-your-accounts)
 * [Command Line Options](../interface/Command-Line-Options)
 * [JavaScript Console](../interface/JavaScript-Console)
 * [Private Network](../doc/Private-network)
