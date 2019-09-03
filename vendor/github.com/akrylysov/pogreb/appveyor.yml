@@ -1,0 +1,15 @@
+version: "{build}"
+
+clone_folder: c:\gopath\src\github.com\akrylysov/pogreb
+
+environment:
+  GOPATH: c:\gopath
+
+install:
+  - echo %PATH%
+  - echo %GOPATH%
+  - go version
+  - go env
+
+build_script:
+  - go test -v ./...

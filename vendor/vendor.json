@@ -21,6 +21,24 @@
 			"revisionTime": "2018-01-16T20:38:02Z"
 		},
 		{
+			"checksumSHA1": "EBi6awUmT1usWPTFQseEzp70578=",
+			"path": "github.com/akrylysov/pogreb",
+			"revision": "828d0ef698122ac786f0c769eeea8c2b41ac1493",
+			"revisionTime": "2019-06-30T21:56:05Z"
+		},
+		{
+			"checksumSHA1": "7/INULWANAgDLXBI4eLIOgjjpzg=",
+			"path": "github.com/akrylysov/pogreb/fs",
+			"revision": "828d0ef698122ac786f0c769eeea8c2b41ac1493",
+			"revisionTime": "2019-06-30T21:56:05Z"
+		},
+		{
+			"checksumSHA1": "ykjZaRe9OBpXJFXqjlzInpzPM24=",
+			"path": "github.com/akrylysov/pogreb/hash",
+			"revision": "828d0ef698122ac786f0c769eeea8c2b41ac1493",
+			"revisionTime": "2019-06-30T21:56:05Z"
+		},
+		{
 			"checksumSHA1": "8skJYOdQytXjimcDPLRW4tonX3A=",
 			"path": "github.com/allegro/bigcache",
 			"revision": "e24eb225f15679bbe54f91bfa7da3b00e59b9768",

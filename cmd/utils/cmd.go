@@ -286,29 +286,29 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 // ExportPreimages exports all known hash preimages into the specified file,
 // truncating any data already present in the file.
 func ExportPreimages(db ethdb.Database, fn string) error {
-	log.Info("Exporting preimages", "file", fn)
+	log.Info("Not exporting preimages", "file", fn)
 
-	// Open the file handle and potentially wrap with a gzip stream
-	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
-	if err != nil {
-		return err
-	}
-	defer fh.Close()
-
-	var writer io.Writer = fh
-	if strings.HasSuffix(fn, ".gz") {
-		writer = gzip.NewWriter(writer)
-		defer writer.(*gzip.Writer).Close()
-	}
-	// Iterate over the preimages and export them
-	it := db.NewIteratorWithPrefix([]byte("secure-key-"))
-	defer it.Release()
-
-	for it.Next() {
-		if err := rlp.Encode(writer, it.Value()); err != nil {
-			return err
-		}
-	}
-	log.Info("Exported preimages", "file", fn)
+	//// Open the file handle and potentially wrap with a gzip stream
+	//fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	//if err != nil {
+	//	return err
+	//}
+	//defer fh.Close()
+	//
+	//var writer io.Writer = fh
+	//if strings.HasSuffix(fn, ".gz") {
+	//	writer = gzip.NewWriter(writer)
+	//	defer writer.(*gzip.Writer).Close()
+	//}
+	//// Iterate over the preimages and export them
+	//it := db.NewIteratorWithPrefix([]byte("secure-key-"))
+	//defer it.Release()
+	//
+	//for it.Next() {
+	//	if err := rlp.Encode(writer, it.Value()); err != nil {
+	//		return err
+	//	}
+	//}
+	//log.Info("Exported preimages", "file", fn)
 	return nil
 }

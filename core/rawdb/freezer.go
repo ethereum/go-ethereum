@@ -86,10 +86,16 @@ func newFreezer(datadir string, namespace string) (*freezer, error) {
 	)
 	// Ensure the datadir is not a symbolic link if it exists.
 	if info, err := os.Lstat(datadir); !os.IsNotExist(err) {
-		if info.Mode()&os.ModeSymlink != 0 {
+		if info != nil {
+			fmt.Printf("Error %v \n", err)
+		}
+		if info != nil && info.Mode()&os.ModeSymlink != 0 {
 			log.Warn("Symbolic link ancient database is not supported", "path", datadir)
 			return nil, errSymlinkDatadir
 		}
+		//panic(err)
+		//return nil, err
+
 	}
 	// Leveldb uses LOCK as the filelock filename. To prevent the
 	// name collision, we use FLOCK as the lock name.
