@@ -1,6 +1,7 @@
 ---
-title: Installation instructions for Mac
+title: Installation instructions for macOS
 ---
+
 ## Installing with Homebrew
 
 By far the easiest way to install go-ethereum is to use our
@@ -13,7 +14,7 @@ brew tap ethereum/ethereum
 brew install ethereum
 ```
 
-You can install the develop branch by running `--devel`:
+You can install the develop branch using the `--devel` parameter:
 
 ```shell
 brew install ethereum --devel
@@ -25,7 +26,7 @@ You should now be able to run `geth` and connect to the network.
 
 Make sure to check the different options and commands with `geth --help`
 
-For options and patches, see: https://github.com/ethereum/homebrew-ethereum
+For options and patches, see: <https://github.com/ethereum/homebrew-ethereum>
 
 ## Building from source
 
@@ -44,6 +45,7 @@ brew install go
 ```
 
 Finally, build the `geth` program using the following command.
+
 ```shell
 cd go-ethereum
 make geth
