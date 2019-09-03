@@ -1109,6 +1109,11 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	if ctx.GlobalIsSet(LightMaxPeersFlag.Name) {
 		lightPeers = ctx.GlobalInt(LightMaxPeersFlag.Name)
 	}
+	if lightClient && !ctx.GlobalIsSet(LightLegacyPeersFlag.Name) && !ctx.GlobalIsSet(LightMaxPeersFlag.Name) {
+		// dynamic default - for clients we use 1/10th of the default for servers
+		lightPeers /= 10
+	}
+
 	if ctx.GlobalIsSet(MaxPeersFlag.Name) {
 		cfg.MaxPeers = ctx.GlobalInt(MaxPeersFlag.Name)
 		if lightServer && !ctx.GlobalIsSet(LightLegacyPeersFlag.Name) && !ctx.GlobalIsSet(LightMaxPeersFlag.Name) {
