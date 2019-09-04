@@ -6,7 +6,6 @@ The Go implementation of Ethereum can be installed using a variety of ways. Thes
  * [Install from a package manager](#install-from-a-package-manager)
    * [Install on macOS via Homebrew](#install-on-macos-via-homebrew)
    * [Install on Ubuntu via PPAs](#install-on-ubuntu-via-ppas)
-   * [Install on Windows via Chocolatey](#install-on-windows-via-chocolatey)
  * [Download standalone bundle](#download-standalone-bundle)
  * [Run inside docker container](#run-inside-docker-container)
  * [Build it from source code](#build-it-from-source-code)
@@ -15,6 +14,31 @@ The Go implementation of Ethereum can be installed using a variety of ways. Thes
 ## Install from a package manager
 
 ### Install on macOS via Homebrew
+
+By far the easiest way to install go-ethereum is to use our
+Homebrew tap. If you don't have Homebrew, [install it first](http://brew.sh).
+
+Then run the following commands to add the tap and install `geth`:
+
+```shell
+brew tap ethereum/ethereum
+brew install ethereum
+```
+
+You can install the develop branch using the `--devel` parameter:
+
+```shell
+brew install ethereum --devel
+```
+
+After installing, run `geth account new` to create an account on your node.
+
+You should now be able to run `geth` and connect to the network.
+
+Make sure to check the different options and commands with `geth --help`
+
+For options and patches, see: <https://github.com/ethereum/homebrew-ethereum>
+
 
 ### Install on Ubuntu via PPAs
 
@@ -40,9 +64,40 @@ sudo apt-get update
 sudo apt-get install ethereum-unstable
 ```
 
-### Install on Windows via Chocolatey
+### Installing on FreeBSD using `pkg` 
 
-Although we were shipping Chocolatey packages for a time after Frontier, it has fallen out of date due to the constant manual approval process. With our new build infrastructure in place we will attempt to negotiate trusted package status for go-ethereum to be able to reinstate the Chocolatey workflow. Until then please grab a Windows installer from our [downloads](https://geth.ethereum.org/downloads) page.
+```shell
+pkg install go-ethereum
+```
+
+The `geth` command is then available on your system in `/usr/local/bin/geth`, you can start it e.g. on the testnet by typing:
+
+```shell
+geth -rinkeby
+```
+
+### Installing on FreeBSD Using ports
+
+Go to the `net-p2p/go-ethereum` ports directory:
+
+```shell
+cd /usr/ports/net-p2p/go-ethereum
+```
+Then build it the standard way (as root):
+
+```shell
+make install
+```
+
+### Installing on Arch Linux using `pacman` 
+
+The `geth` package is available from the [community repo](https://www.archlinux.org/packages/community/x86_64/geth/).
+
+You can install it using
+
+```shell
+pacman -S geth
+```
 
 ## Download standalone bundle
 
@@ -78,14 +133,15 @@ The image has the following ports automatically exposed:
 
  * `8545` TCP, used by the HTTP based JSON RPC API
  * `8546` TCP, used by the WebSocket based JSON RPC API
+ * `8547` TCP, used by the GraphQL API
  * `30303` TCP and UDP, used by the P2P protocol running the network
- * `30304` UDP, used by the P2P protocol's new peer discovery overlay
 
 *Note, if you are running an Ethereum client inside a docker container, you might want to mount in a data volume as the client's data directory (located at `/root/.ethereum` inside the container) to ensure that downloaded data is preserved between restarts and/or container life-cycles.*
 
 ## Build it from source code
 
-Go Ethereum (as its name implies) is written in [Go](https://golang.org), and as such to build from source code you'll need to ensure that you have at least Go 1.7 installed (preferably the latest version, currently at 1.9.2). This guide will not go into details on how to install Go itself, for that please consult the [Go installation instructions](https://golang.org/doc/install) and grab any needed bundles from the [Go download page](https://golang.org/dl/).
+### Most Linux systems
+Go Ethereum (as its name implies) is written in [Go](https://golang.org), and as such to build from source code you'll need to ensure that you have the most recent version of Go. This guide will not go into details on how to install Go itself, for that please consult the [Go installation instructions](https://golang.org/doc/install) and grab any needed bundles from the [Go download page](https://golang.org/dl/).
 
 Assuming you have Go installed, you can download our project via:
 
@@ -100,6 +156,44 @@ go install github.com/ethereum/go-ethereum/cmd/geth
 ```
 
 Or you can also build the entire project and install `geth` along with all developer tools by running `go install ./...` in the repository root inside your `GOPATH` work space.
+
+### MacOS 
+
+If you see some errors related to header files of Mac OS system library, install XCode Command Line Tools, and try again.
+
+```shell
+xcode-select --install
+```
+
+### FreeBSD
+
+Ports are slightly more up to date (1.8.14 at the time of writing)
+
+Clone the repository to a directory of your choosing:
+
+```shell
+git clone https://github.com/ethereum/go-ethereum
+```
+
+Building `geth` requires the Go compiler:
+
+```shell
+pkg install go
+```
+
+If your golang version is >= 1.5, build the `geth` program using the following command.
+```shell
+cd go-ethereum
+make geth
+```
+If your golang version is < 1.5 (quarterly packages, for example), use the following command instead.
+```shell
+cd go-ethereum
+CC=clang make geth
+```
+
+You can now run `build/bin/geth` to start your node.
+
 
 ### Building without a Go workflow
 
