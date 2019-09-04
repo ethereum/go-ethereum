@@ -3,6 +3,13 @@ title: Backup & restore
 ---
 **DO NOT FORGET YOUR PASSWORD** and **BACKUP YOUR KEYSTORE**
 
+<!--
+	This whole page can be nuked, _except_ for the info about 
+	where the keystore is located and advise the user
+	to back up his keystore. That section should be moved
+	into both accounts-info but also to any getting-started guide. 
+-->
+
 # Backup & restore
 
 ## Data directory

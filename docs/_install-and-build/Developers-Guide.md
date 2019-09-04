@@ -2,7 +2,7 @@
 title: Developers' guide
 ---
 **NOTE: These instructions are for people who want to contribute Go source code changes.
-If you just want to run ethereum, use the normal [Installation Instructions](Building-Ethereum)**
+If you just want to run ethereum, use the normal [Installation Instructions](Installing-Geth)**
 
 This document is the entry point for developers of the Go implementation of Ethereum. Developers here refer to the hands-on: who are interested in build, develop, debug, submit a bug report or pull request or contribute code to go-ethereum.
 
@@ -10,7 +10,7 @@ This document is the entry point for developers of the Go implementation of Ethe
 
 ### Go Environment
 
-We assume that you have [`go` v1.8 installed](../doc/Installing-Go), and `GOPATH` is set.
+We assume that you have [`go` installed](https://golang.org/doc/install), and `GOPATH` is set.
 
 **Note**:You must have your working copy under `$GOPATH/src/github.com/ethereum/go-ethereum`.
 
