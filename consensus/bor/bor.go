@@ -32,7 +32,7 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-const validatorsetABI = "[{\"constant\":false,\"inputs\":[],\"name\":\"finalizeChange\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"getValidators\",\"outputs\":[{\"name\":\"\",\"type\":\"address[]\"},{\"name\":\"\",\"type\":\"uint256[]\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"validator\",\"type\":\"address\"},{\"name\":\"blockNumber\",\"type\":\"uint256\"},{\"name\":\"proof\",\"type\":\"bytes\"}],\"name\":\"reportMalicious\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"validator\",\"type\":\"address\"},{\"name\":\"blockNumber\",\"type\":\"uint256\"}],\"name\":\"reportBenign\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"_parentHash\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"_newSet\",\"type\":\"address[]\"}],\"name\":\"InitiateChange\",\"type\":\"event\"}]"
+const validatorsetABI = `[{"constant":true,"inputs":[],"name":"getInitialValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"}]`
 
 const (
 	voteSnapshotInterval = 1024 // Number of blocks after which to save the vote snapshot to the database
@@ -44,7 +44,7 @@ const (
 
 // Bor protocol constants.
 var (
-	epochLength = uint64(30000) // Default number of blocks after which to checkpoint and reset the pending votes
+	defaultSprintLength = uint64(64) // Default number of blocks after which to checkpoint and reset the pending votes
 
 	extraVanity = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
 	extraSeal   = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
@@ -251,8 +251,8 @@ type Bor struct {
 func New(config *params.BorConfig, db ethdb.Database, ethAPI *ethapi.PublicBlockChainAPI) *Bor {
 	// Set any missing consensus parameters to their defaults
 	conf := *config
-	if conf.Epoch == 0 {
-		conf.Epoch = epochLength
+	if conf.Sprint == 0 {
+		conf.Sprint = defaultSprintLength
 	}
 
 	// Allocate the snapshot caches and create the engine
@@ -318,7 +318,7 @@ func (c *Bor) verifyHeader(chain consensus.ChainReader, header *types.Header, pa
 		return consensus.ErrFutureBlock
 	}
 	// Checkpoint blocks need to enforce zero beneficiary
-	checkpoint := (number % c.config.Epoch) == 0
+	checkpoint := (number % c.config.Sprint) == 0
 	if checkpoint && header.Coinbase != (common.Address{}) {
 		return errInvalidCheckpointBeneficiary
 	}
@@ -397,7 +397,7 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 
 	// If the block is a checkpoint block, verify the signer list
 	// TODO verify signers
-	if number%c.config.Epoch == 0 {
+	if number%c.config.Sprint == 0 {
 		// signers := make([]byte, len(snap.Signers)*common.AddressLength)
 		// for i, signer := range snap.signers() {
 		// 	copy(signers[i*common.AddressLength:], signer[:])
@@ -434,7 +434,7 @@ func (c *Bor) snapshot(chain consensus.ChainReader, number uint64, hash common.H
 		}
 
 		// If we're at an checkpoint block, make a snapshot if it's known
-		if number == 0 || (number%c.config.Epoch == 0 && chain.GetHeaderByNumber(number-1) == nil) {
+		if number == 0 || (number%c.config.Sprint == 0 && chain.GetHeaderByNumber(number-1) == nil) {
 			checkpoint := chain.GetHeaderByNumber(number)
 			if checkpoint != nil {
 				hash := checkpoint.Hash()
@@ -543,7 +543,7 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 	validators := snap.ValidatorSet.Validators
 	// proposer will be the last signer if block is not epoch block
 	proposer := snap.ValidatorSet.GetProposer().Address
-	if number%c.config.Epoch != 0 {
+	if number%c.config.Sprint != 0 {
 		// proposer = snap.Recents[number-1]
 	}
 	proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
@@ -564,7 +564,7 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 
 	// Ensure that the difficulty corresponds to the turn-ness of the signer
 	if !c.fakeDiff {
-		difficulty := snap.inturn(header.Number.Uint64(), signer, c.config.Epoch)
+		difficulty := snap.inturn(header.Number.Uint64(), signer, c.config.Sprint)
 		if header.Difficulty.Uint64() != difficulty {
 			return errWrongDifficulty
 		}
@@ -589,7 +589,7 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	}
 
 	// Set the correct difficulty
-	header.Difficulty = CalcDifficulty(snap, c.signer, c.config.Epoch)
+	header.Difficulty = CalcDifficulty(snap, c.signer, c.config.Sprint)
 
 	// Ensure the extra data has all it's components
 	if len(header.Extra) < extraVanity {
@@ -597,7 +597,7 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	}
 	header.Extra = header.Extra[:extraVanity]
 
-	if number%c.config.Epoch == 0 {
+	if number%c.config.Sprint == 0 {
 		for _, signer := range snap.signers() {
 			header.Extra = append(header.Extra, signer[:]...)
 		}
@@ -613,7 +613,7 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 		return consensus.ErrUnknownAncestor
 	}
 
-	header.Time = parent.Time + CalcProducerDelay(snap, c.signer, c.config.Period, c.config.Epoch, c.config.ProducerDelay)
+	header.Time = parent.Time + CalcProducerDelay(snap, c.signer, c.config.Period, c.config.Sprint, c.config.ProducerDelay)
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
 	}
@@ -683,7 +683,7 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 	validators := snap.ValidatorSet.Validators
 	// proposer will be the last signer if block is not epoch block
 	proposer := snap.ValidatorSet.GetProposer().Address
-	if number%c.config.Epoch != 0 {
+	if number%c.config.Sprint != 0 {
 		// proposer = snap.Recents[number-1]
 	}
 	proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
@@ -743,7 +743,7 @@ func (c *Bor) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *t
 	if err != nil {
 		return nil
 	}
-	return CalcDifficulty(snap, c.signer, c.config.Epoch)
+	return CalcDifficulty(snap, c.signer, c.config.Sprint)
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
@@ -769,16 +769,22 @@ func (c *Bor) Close() error {
 
 // GetCurrentValidators get current validators
 func (c *Bor) GetCurrentValidators(number uint64) ([]*Validator, error) {
-	return GetValidators(number, c.config.ValidatorContract, c.ethAPI)
+	return GetValidators(number, c.config.Sprint, c.config.ValidatorContract, c.ethAPI)
 }
 
 // GetValidators get current validators
-func GetValidators(number uint64, validatorContract string, ethAPI *ethapi.PublicBlockChainAPI) ([]*Validator, error) {
+func GetValidators(number uint64, sprint uint64, validatorContract string, ethAPI *ethapi.PublicBlockChainAPI) ([]*Validator, error) {
 	blockNr := rpc.BlockNumber(number)
+
+	// method
+	method := "getValidators"
+	if number < sprint {
+		method = "getInitialValidators"
+	}
 
 	// validator set ABI
 	validatorSetABI, _ := abi.JSON(strings.NewReader(validatorsetABI))
-	data, err := validatorSetABI.Pack("getValidators")
+	data, err := validatorSetABI.Pack(method)
 	if err != nil {
 		fmt.Println("Unable to pack tx for getValidator", "error", err)
 		return nil, err
@@ -810,7 +816,7 @@ func GetValidators(number uint64, validatorContract string, ethAPI *ethapi.Publi
 		ret1,
 	}
 
-	if err := validatorSetABI.Unpack(out, "getValidators", result); err != nil {
+	if err := validatorSetABI.Unpack(out, method, result); err != nil {
 		fmt.Println("err", err)
 		return nil, err
 	}
@@ -822,6 +828,9 @@ func GetValidators(number uint64, validatorContract string, ethAPI *ethapi.Publi
 			VotingPower: (*ret1)[i].Int64(),
 		}
 	}
+
+	fmt.Println(method)
+	fmt.Println(" === ", valz)
 	return valz, nil
 }
 

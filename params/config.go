@@ -318,7 +318,7 @@ func (c *CliqueConfig) String() string {
 type BorConfig struct {
 	Period            uint64 `json:"period"`            // Number of seconds between blocks to enforce
 	ProducerDelay     uint64 `json:"producerDelay"`     // Number of seconds delay between two producer interval
-	Epoch             uint64 `json:"epoch"`             // Epoch length to proposer
+	Sprint            uint64 `json:"sprint"`            // Epoch length to proposer
 	ValidatorContract string `json:"validatorContract"` // Validator set contract
 }
 
