@@ -3,13 +3,8 @@ title: Installing Geth
 ---
 The Go implementation of Ethereum can be installed using a variety of ways. These include obtaining it as part of Mist; installing it via your favorite package manager; downloading a standalone pre-built bundle; running as a docker container; or building it yourself. This document will detail all of these possibilities to get you quickly joining the Ethereum network using whatever means you prefer.
 
- * [Install from a package manager](#install-from-a-package-manager)
-   * [Install on macOS via Homebrew](#install-on-macos-via-homebrew)
-   * [Install on Ubuntu via PPAs](#install-on-ubuntu-via-ppas)
- * [Download standalone bundle](#download-standalone-bundle)
- * [Run inside docker container](#run-inside-docker-container)
- * [Build it from source code](#build-it-from-source-code)
-   * [Building without a Go workflow](#building-without-a-go-workflow)
+{:toc}
+* this will be removed by the toc
 
 ## Install from a package manager
 
@@ -64,7 +59,7 @@ sudo apt-get update
 sudo apt-get install ethereum-unstable
 ```
 
-### Installing on FreeBSD using `pkg` 
+### Installing on FreeBSD via `pkg` 
 
 ```shell
 pkg install go-ethereum
@@ -76,7 +71,7 @@ The `geth` command is then available on your system in `/usr/local/bin/geth`, yo
 geth -rinkeby
 ```
 
-### Installing on FreeBSD Using ports
+### Installing on FreeBSD via ports
 
 Go to the `net-p2p/go-ethereum` ports directory:
 
@@ -89,7 +84,7 @@ Then build it the standard way (as root):
 make install
 ```
 
-### Installing on Arch Linux using `pacman` 
+### Installing on Arch Linux via `pacman` 
 
 The `geth` package is available from the [community repo](https://www.archlinux.org/packages/community/x86_64/geth/).
 
