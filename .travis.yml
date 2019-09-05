@@ -1,6 +1,6 @@
 language: go
 go_import_path: github.com/ethereum/go-ethereum
-sudo: false
+sudo: true
 jobs:
   include:
         # This builder only tests code linters on latest version of Go
@@ -14,6 +14,24 @@ jobs:
         submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go lint
+
+    - stage: build
+      os: linux
+      dist: bionic
+      before_install:
+      - sudo apt install -y qemu-user-static xz-utils # qemu-system qemu-efi debootstrap
+      script:
+      - mkdir -p chrootdir
+      - wget https://github.com/gballet/ubuntu-18.4-go-rootfs/releases/download/ubuntu1804-go113/rootfs_v1.txz
+      - sudo tar xfJ rootfs_v1.txz -C chrootdir
+      - rm rootfs_v1.txz
+      - sudo cp `which qemu-aarch64-static` chrootdir/usr/bin
+      - sudo mkdir -p chrootdir/${TRAVIS_BUILD_DIR}
+      - sudo rsync -a --exclude 'chrootdir' ${TRAVIS_BUILD_DIR}/ chrootdir/${TRAVIS_BUILD_DIR}/
+      - sudo mount --bind /proc chrootdir/proc
+      - sudo mount --bind /sys chrootdir/sys
+      - sudo chroot chrootdir qemu-aarch64-static /bin/bash -c "export GOROOT=/usr/local/go; export PATH=\$PATH:\$GOROOT/bin; cd ${TRAVIS_BUILD_DIR} && go run build/ci.go install"
+      - sudo chroot chrootdir qemu-aarch64-static /bin/bash -c "export GOROOT=/usr/local/go; export PATH=\$PATH:\$GOROOT/bin; cd ${TRAVIS_BUILD_DIR} && go run build/ci.go test"
 
     - stage: build
       os: linux
