@@ -226,6 +226,7 @@ type reqInfo struct {
 	// servingTime is the CPU time corresponding to the actual processing of
 	// the request.
 	servingTime float64
+	msgCode     uint64
 }
 
 // gfLoop starts an event loop which updates the global cost factor which is
@@ -273,7 +274,27 @@ func (ct *costTracker) gfLoop() {
 				requestServedTimer.Update(time.Duration(r.servingTime))
 				requestEstimatedMeter.Mark(int64(r.avgTimeCost / factor))
 				requestEstimatedTimer.Update(time.Duration(r.avgTimeCost / factor))
-				relativeCostHistogram.Update(int64(r.avgTimeCost / factor / r.servingTime))
+
+				relCost := int64(factor * r.servingTime * 10000 / r.avgTimeCost)
+				relativeCostHistogram.Update(relCost)
+				switch r.msgCode {
+				case GetBlockHeadersMsg:
+					relativeCostHeaderHistogram.Update(relCost)
+				case GetBlockBodiesMsg:
+					relativeCostBodyHistogram.Update(relCost)
+				case GetReceiptsMsg:
+					relativeCostReceiptHistogram.Update(relCost)
+				case GetCodeMsg:
+					relativeCostCodeHistogram.Update(relCost)
+				case GetProofsV2Msg:
+					relativeCostProofHistogram.Update(relCost)
+				case GetHelperTrieProofsMsg:
+					relativeCostHelperProofHistogram.Update(relCost)
+				case SendTxV2Msg:
+					relativeCostSendTxHistogram.Update(relCost)
+				case GetTxStatusMsg:
+					relativeCostTxStatusHistogram.Update(relCost)
+				}
 
 				now := mclock.Now()
 				dt := float64(now - expUpdate)
@@ -375,7 +396,7 @@ func (ct *costTracker) updateStats(code, amount, servingTime, realCost uint64) {
 	avg := reqAvgTimeCost[code]
 	avgTimeCost := avg.baseCost + amount*avg.reqCost
 	select {
-	case ct.reqInfoCh <- reqInfo{float64(avgTimeCost), float64(servingTime)}:
+	case ct.reqInfoCh <- reqInfo{float64(avgTimeCost), float64(servingTime), code}:
 	default:
 	}
 	if makeCostStats {
