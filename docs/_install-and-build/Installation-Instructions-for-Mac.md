@@ -42,14 +42,18 @@ Building `geth` requires the Go compiler:
 brew install go
 ```
 
-Finally, build the `geth` program using the following command.
+<!-- TODO: Test -->
+
+Build the `geth` program using the following command.
 
 ```shell
 cd go-ethereum
 make geth
 ```
 
-If you see some errors related to header files of Mac OS system library, install XCode Command Line Tools, and try again.
+<!-- TODO: Check and correct -->
+
+If you see errors related to header files of the macOS system library, install XCode Command Line Tools, and try again.
 
 ```shell
 xcode-select --install
