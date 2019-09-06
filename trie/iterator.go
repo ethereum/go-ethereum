@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"container/heap"
 	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -574,4 +575,36 @@ func (it *unionIterator) Error() error {
 		}
 	}
 	return nil
+}
+
+// IterateRefs decodes a trie node, iterates all its children and invokes a
+// callback for each hash node found.
+func IterateRefs(node []byte, onHashNode func([]byte, common.Hash) error) error {
+	return iterateRefs(mustDecodeNode(nil, node), nil, onHashNode)
+}
+
+// iterateRefs traverses the node hierarchy of a cached node and invokes the
+// provided callback on all hash nodes.
+func iterateRefs(n node, path []byte, onHashNode func([]byte, common.Hash) error) error {
+	switch n := n.(type) {
+	case *shortNode:
+		return iterateRefs(n.Val, append(path, n.Key...), onHashNode)
+
+	case *fullNode:
+		for i := 0; i < 16; i++ {
+			if err := iterateRefs(n.Children[i], append(path, byte(i)), onHashNode); err != nil {
+				return err
+			}
+		}
+		return nil
+
+	case hashNode:
+		return onHashNode(path, common.BytesToHash(n))
+
+	case valueNode, nil:
+		return nil
+
+	default:
+		panic(fmt.Sprintf("unknown node type: %T", n))
+	}
 }

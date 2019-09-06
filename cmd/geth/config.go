@@ -178,6 +178,9 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, cfg.Ethstats.URL)
 	}
+	// Add the light server CDN if requested
+	utils.RegisterLesCDNService(stack)
+
 	return stack
 }
 

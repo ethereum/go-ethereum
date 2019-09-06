@@ -49,6 +49,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/graphql"
 	"github.com/ethereum/go-ethereum/les"
+	"github.com/ethereum/go-ethereum/lescdn"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
@@ -1618,6 +1619,19 @@ func RegisterGraphQLService(stack *node.Node, endpoint string, cors, vhosts []st
 		return nil, errors.New("no Ethereum service")
 	}); err != nil {
 		Fatalf("Failed to register the GraphQL service: %v", err)
+	}
+}
+
+// RegisterLesCDNService configures the light client CDN and adds it to the given node.
+func RegisterLesCDNService(stack *node.Node) {
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		var backend *eth.Ethereum
+		if err := ctx.Service(&backend); err == nil {
+			return lescdn.New(backend.BlockChain()), nil
+		}
+		return nil, errors.New("no Ethereum service")
+	}); err != nil {
+		Fatalf("Failed to register the light client CDN service: %v", err)
 	}
 }
 
