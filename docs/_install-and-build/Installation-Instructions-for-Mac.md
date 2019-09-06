@@ -4,10 +4,10 @@ title: Installation instructions for macOS
 
 ## Installing with Homebrew
 
-By far the easiest way to install go-ethereum is to use our
-Homebrew tap. If you don't have Homebrew, [install it first](http://brew.sh).
+By far the easiest way to install go-ethereum on macOS is to use [our
+Homebrew tap](https://github.com/ethereum/homebrew-ethereum). If you don't have Homebrew, [install it first](http://brew.sh).
 
-Then run the following commands to add the tap and install `geth`:
+Then run the following commands to add the tap and install the `geth` executable:
 
 ```shell
 brew tap ethereum/ethereum
@@ -24,9 +24,7 @@ After installing, run `geth account new` to create an account on your node.
 
 You should now be able to run `geth` and connect to the network.
 
-Make sure to check the different options and commands with `geth --help`
-
-For options and patches, see: <https://github.com/ethereum/homebrew-ethereum>
+Find the different options and commands with `geth --help`
 
 ## Building from source
 
