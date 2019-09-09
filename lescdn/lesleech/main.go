@@ -9,8 +9,8 @@ import (
 	"math/big"
 	"net/http"
 	"strconv"
+	"time"
 
-	"github.com/bsipos/thist"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -25,6 +25,12 @@ var (
 	barrier = flag.Int("barrier", 2, "Trie depth barrier to start tiles at")
 )
 
+type tileInfo struct {
+	Depth int
+	Size  common.StorageSize
+	Refs  []common.Hash
+}
+
 func main() {
 	flag.Parse()
 
@@ -36,11 +42,16 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	previous := make(map[common.Hash]common.StorageSize)
+	previous := make(map[common.Hash]*tileInfo)
 	for ; ; number++ {
 		// Crawl the entire state trie
 		header, err := rpc.HeaderByNumber(context.Background(), big.NewInt(int64(number)))
 		if err != nil {
+			if err.Error() == "not found" { // Super ugly, good enough for a tester
+				time.Sleep(15 * time.Second)
+				number--
+				continue
+			}
 			panic(err)
 		}
 		queue := prque.New(nil)
@@ -52,30 +63,45 @@ func main() {
 		)
 		depths := make(map[common.Hash]int)
 
-		tileHists := make(map[int]*thist.Hist)
 		tileCounts := make(map[int]int)
 		tileStorage := make(map[int]common.StorageSize)
 
-		current := make(map[common.Hash]common.StorageSize)
+		current := make(map[common.Hash]*tileInfo)
 		for !queue.Empty() {
 			hash, prio := queue.Pop()
 			root, depth := hash.(common.Hash), -prio
 
+			// If the node is already crawled in the previous run, short circuit
+			if _, crawled := previous[root]; crawled {
+				// Iterate over the entire subtrie (ugly queue, don't care) and visit
+				for skipset := []common.Hash{root}; len(skipset) > 0; skipset = skipset[1:] {
+					if _, ok := current[skipset[0]]; ok {
+						continue
+					}
+					current[skipset[0]] = previous[skipset[0]]
+					for _, ref := range current[skipset[0]].Refs {
+						skipset = append(skipset, ref)
+					}
+					storage += current[skipset[0]].Size
+					tiles++
+
+					tileStorage[current[skipset[0]].Depth] += current[skipset[0]].Size
+					tileCounts[current[skipset[0]].Depth]++
+				}
+				// Skip recrawling this subtrie
+				continue
+			}
 			// Read the next tile and dump some statistics
 			nodes, size := fetchTile(root)
-			current[root] = common.StorageSize(size)
-
-			storage += common.StorageSize(size)
+			current[root] = &tileInfo{
+				Depth: int(depth),
+				Size:  common.StorageSize(size),
+			}
+			storage += current[root].Size
 			tiles++
 
-			tileStorage[int(depth)] += common.StorageSize(size)
-			tileCounts[int(depth)]++
-			if _, ok := tileHists[int(depth)]; !ok {
-				tileHists[int(depth)] = thist.NewHist(nil, "", "auto", -1, true)
-			}
-			tileHists[int(depth)].Update(float64(size))
-
-			log.Printf("D=%d R=0x%x: %d nodes, %v (%d tiles, %v total)", depth, root, len(nodes), common.StorageSize(size), tiles, storage)
+			tileStorage[current[root].Depth] += current[root].Size
+			tileCounts[current[root].Depth]++
 
 			// Decode the tile and continue expansion
 			pulled := make(map[common.Hash]struct{})
@@ -86,43 +112,59 @@ func main() {
 				trie.IterateRefs(node, func(path []byte, child common.Hash) error {
 					depths[child] = depths[crypto.Keccak256Hash(node)] + len(path)
 					if _, ok := pulled[child]; !ok {
+						current[root].Refs = append(current[root].Refs, child)
 						queue.Push(child, -int64(depths[child]))
 					}
 					return nil
 				})
 			}
-		}
-		// Report any tile stats
-		fmt.Println("\nTile stats:")
-		for i := 0; i < 128; i++ {
-			if tileCounts[i] > 0 {
-				fmt.Printf("  Depth %d: %d tiles, %v\n", i, tileCounts[i], tileStorage[i])
-				fmt.Println(tileHists[i].Draw())
-			}
+			log.Printf("D=%d R=0x%x: %d nodes, %d refs, %v (%d tiles, %v total)", depth, root, len(nodes), len(current[root].Refs), current[root].Size, tiles, storage)
 		}
 		// Compare the current tileset with the previous one and report the diff
 		var (
 			addSize, dupSize, delSize    common.StorageSize
 			addCount, dupCount, delCount int
+
+			addSubSizes  = make(map[int]common.StorageSize)
+			dupSubSizes  = make(map[int]common.StorageSize)
+			delSubSizes  = make(map[int]common.StorageSize)
+			addSubCounts = make(map[int]int)
+			dupSubCounts = make(map[int]int)
+			delSubCounts = make(map[int]int)
 		)
-		for hash, size := range current {
+		for hash, info := range current {
 			if _, ok := previous[hash]; ok {
-				dupSize += size
+				dupSubSizes[info.Depth] += info.Size
+				dupSubCounts[info.Depth]++
+
+				dupSize += info.Size
 				dupCount++
 			} else {
-				addSize += size
+				addSubSizes[info.Depth] += info.Size
+				addSubCounts[info.Depth]++
+
+				addSize += info.Size
 				addCount++
 			}
 		}
-		for hash, size := range previous {
+		for hash, info := range previous {
 			if _, ok := current[hash]; !ok {
-				delSize += size
+				delSubSizes[info.Depth] += info.Size
+				delSubCounts[info.Depth]++
+
+				delSize += info.Size
 				delCount++
 			}
 		}
 		previous = current
 
-		fmt.Printf("Block %d: Added %d(%v), removed %d(%v), retained %d(%v)\n", number, addCount, addSize, delCount, delSize, dupCount, dupSize)
+		log.Printf("Block %d: Added %d(%v), removed %d(%v), retained %d(%v)", number, addCount, addSize, delCount, delSize, dupCount, dupSize)
+		for i := 0; i < 128; i++ {
+			if addSubCounts[i] > 0 || delSubCounts[i] > 0 || dupSubCounts[i] > 0 || tileCounts[i] > 0 {
+				log.Printf("  Depth %d: Added %d(%v), removed %d(%v), retained %d(%v), total %d(%v)", i, addSubCounts[i], addSubSizes[i], delSubCounts[i], delSubSizes[i], dupSubCounts[i], dupSubSizes[i], tileCounts[i], tileStorage[i])
+			}
+		}
+		log.Println()
 	}
 }
 
