@@ -149,7 +149,7 @@ func (h *Hash) UnmarshalGraphQL(input interface{}) error {
 	var err error
 	switch input := input.(type) {
 	case string:
-		*h = HexToHash(input)
+		err = h.UnmarshalText([]byte(input))
 	default:
 		err = fmt.Errorf("Unexpected type for Bytes32: %v", input)
 	}
@@ -288,7 +288,7 @@ func (a *Address) UnmarshalGraphQL(input interface{}) error {
 	var err error
 	switch input := input.(type) {
 	case string:
-		*a = HexToAddress(input)
+		err = a.UnmarshalText([]byte(input))
 	default:
 		err = fmt.Errorf("Unexpected type for Address: %v", input)
 	}
