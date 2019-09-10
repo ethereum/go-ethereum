@@ -6,6 +6,8 @@ import "sync/atomic"
 type Gauge interface {
 	Snapshot() Gauge
 	Update(int64)
+	Dec(int64)
+	Inc(int64)
 	Value() int64
 }
 
@@ -65,6 +67,16 @@ func (GaugeSnapshot) Update(int64) {
 	panic("Update called on a GaugeSnapshot")
 }
 
+// Dec panics.
+func (GaugeSnapshot) Dec(int64) {
+	panic("Dec called on a GaugeSnapshot")
+}
+
+// Inc panics.
+func (GaugeSnapshot) Inc(int64) {
+	panic("Inc called on a GaugeSnapshot")
+}
+
 // Value returns the value at the time the snapshot was taken.
 func (g GaugeSnapshot) Value() int64 { return int64(g) }
 
@@ -76,6 +88,12 @@ func (NilGauge) Snapshot() Gauge { return NilGauge{} }
 
 // Update is a no-op.
 func (NilGauge) Update(v int64) {}
+
+// Dec is a no-op.
+func (NilGauge) Dec(i int64) {}
+
+// Inc is a no-op.
+func (NilGauge) Inc(i int64) {}
 
 // Value is a no-op.
 func (NilGauge) Value() int64 { return 0 }
@@ -101,6 +119,16 @@ func (g *StandardGauge) Value() int64 {
 	return atomic.LoadInt64(&g.value)
 }
 
+// Dec decrements the gauge's current value by the given amount.
+func (g *StandardGauge) Dec(i int64) {
+	atomic.AddInt64(&g.value, -i)
+}
+
+// Inc increments the gauge's current value by the given amount.
+func (g *StandardGauge) Inc(i int64) {
+	atomic.AddInt64(&g.value, i)
+}
+
 // FunctionalGauge returns value from given function
 type FunctionalGauge struct {
 	value func() int64
@@ -117,4 +145,14 @@ func (g FunctionalGauge) Snapshot() Gauge { return GaugeSnapshot(g.Value()) }
 // Update panics.
 func (FunctionalGauge) Update(int64) {
 	panic("Update called on a FunctionalGauge")
+}
+
+// Dec panics.
+func (FunctionalGauge) Dec(int64) {
+	panic("Dec called on a FunctionalGauge")
+}
+
+// Inc panics.
+func (FunctionalGauge) Inc(int64) {
+	panic("Inc called on a FunctionalGauge")
 }
