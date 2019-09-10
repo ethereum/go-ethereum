@@ -76,6 +76,8 @@ type poolTestPeerWithCap struct {
 
 func (i *poolTestPeerWithCap) updateCapacity(cap uint64) { i.cap = cap }
 
+func (i poolTestPeer) freezeClient() {}
+
 func testClientPool(t *testing.T, connLimit, clientCount, paidCount int, randomDisconnect bool) {
 	rand.Seed(time.Now().UnixNano())
 	var (
@@ -91,7 +93,7 @@ func testClientPool(t *testing.T, connLimit, clientCount, paidCount int, randomD
 	)
 	pool.disableBias = true
 	pool.setLimits(connLimit, uint64(connLimit))
-	pool.setPriceFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
+	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
 	// pool should accept new peers up to its connected limit
 	for i := 0; i < connLimit; i++ {
@@ -107,9 +109,11 @@ func testClientPool(t *testing.T, connLimit, clientCount, paidCount int, randomD
 
 		if tickCounter == testClientPoolTicks/4 {
 			// give a positive balance to some of the peers
-			amount := uint64(testClientPoolTicks / 2 * 1000000000) // enough for half of the simulation period
+			amount := testClientPoolTicks / 2 * int64(time.Second) // enough for half of the simulation period
 			for i := 0; i < paidCount; i++ {
-				pool.addBalance(poolTestPeer(i).ID(), amount, false)
+				pool.forClients([]enode.ID{poolTestPeer(i).ID()}, func(client *clientInfo, id enode.ID) {
+					pool.updateBalance(id, amount, true, "")
+				})
 			}
 		}
 

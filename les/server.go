@@ -50,9 +50,9 @@ type LesServer struct {
 	servingQueue *servingQueue
 	clientPool   *clientPool
 
-	freeCapacity uint64 // The minimal client capacity used for free client.
-	threadsIdle  int    // Request serving threads count when system is idle.
-	threadsBusy  int    // Request serving threads count when system is busy(block insertion).
+	minCapacity, maxCapacity, freeCapacity uint64
+	threadsIdle                            int // Request serving threads count when system is idle.
+	threadsBusy                            int // Request serving threads count when system is busy(block insertion).
 }
 
 func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
@@ -88,7 +88,8 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		threadsIdle:  threads,
 	}
 	srv.handler = newServerHandler(srv, e.BlockChain(), e.ChainDb(), e.TxPool(), e.Synced)
-	srv.costTracker, srv.freeCapacity = newCostTracker(e.ChainDb(), config)
+	srv.costTracker, srv.minCapacity = newCostTracker(e.ChainDb(), config)
+	srv.freeCapacity = srv.minCapacity
 
 	// Set up checkpoint oracle.
 	oracle := config.CheckpointOracle
@@ -108,13 +109,13 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	// to send requests most of the time. Our goal is to serve as many clients as
 	// possible while the actually used server capacity does not exceed the limits
 	totalRecharge := srv.costTracker.totalRecharge()
-	maxCapacity := srv.freeCapacity * uint64(srv.config.LightPeers)
-	if totalRecharge > maxCapacity {
-		maxCapacity = totalRecharge
+	srv.maxCapacity = srv.freeCapacity * uint64(srv.config.LightPeers)
+	if totalRecharge > srv.maxCapacity {
+		srv.maxCapacity = totalRecharge
 	}
-	srv.fcManager.SetCapacityLimits(srv.freeCapacity, maxCapacity, srv.freeCapacity*2)
+	srv.fcManager.SetCapacityLimits(srv.freeCapacity, srv.maxCapacity, srv.freeCapacity*2)
 	srv.clientPool = newClientPool(srv.chainDb, srv.freeCapacity, mclock.System{}, func(id enode.ID) { go srv.peers.Unregister(peerIdToString(id)) })
-	srv.clientPool.setPriceFactors(priceFactors{0, 1, 1}, priceFactors{0, 1, 1})
+	srv.clientPool.setDefaultFactors(priceFactors{0, 1, 1}, priceFactors{0, 1, 1})
 
 	checkpoint := srv.latestLocalCheckpoint()
 	if !checkpoint.Empty() {
@@ -131,6 +132,18 @@ func (s *LesServer) APIs() []rpc.API {
 			Namespace: "les",
 			Version:   "1.0",
 			Service:   NewPrivateLightAPI(&s.lesCommons),
+			Public:    false,
+		},
+		{
+			Namespace: "les",
+			Version:   "1.0",
+			Service:   NewPrivateLightServerAPI(s),
+			Public:    false,
+		},
+		{
+			Namespace: "debug",
+			Version:   "1.0",
+			Service:   NewPrivateDebugAPI(s),
 			Public:    false,
 		},
 	}

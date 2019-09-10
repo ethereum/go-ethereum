@@ -17,6 +17,7 @@
 package les
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 	"math"
@@ -79,19 +80,21 @@ type clientPool struct {
 	stopCh     chan struct{}
 	closed     bool
 	removePeer func(enode.ID)
+	eventHook  func(string, *clientInfo)
 
 	connectedMap   map[enode.ID]*clientInfo
 	connectedQueue *prque.LazyQueue
 
-	posFactors, negFactors priceFactors
+	defaultPosFactors, defaultNegFactors priceFactors
 
-	connLimit      int            // The maximum number of connections that clientpool can support
-	capLimit       uint64         // The maximum cumulative capacity that clientpool can support
-	connectedCap   uint64         // The sum of the capacity of the current clientpool connected
-	freeClientCap  uint64         // The capacity value of each free client
-	startTime      mclock.AbsTime // The timestamp at which the clientpool started running
-	cumulativeTime int64          // The cumulative running time of clientpool at the start point.
-	disableBias    bool           // Disable connection bias(used in testing)
+	connLimit         int            // The maximum number of connections that clientpool can support
+	capLimit          uint64         // The maximum cumulative capacity that clientpool can support
+	connectedCap      uint64         // The sum of the capacity of the current clientpool connected
+	priorityConnected uint64         // The sum of the capacity of currently connected priority clients
+	freeClientCap     uint64         // The capacity value of each free client
+	startTime         mclock.AbsTime // The timestamp at which the clientpool started running
+	cumulativeTime    int64          // The cumulative running time of clientpool at the start point.
+	disableBias       bool           // Disable connection bias(used in testing)
 }
 
 // clientPeer represents a client in the pool.
@@ -103,18 +106,22 @@ type clientPeer interface {
 	ID() enode.ID
 	freeClientId() string
 	updateCapacity(uint64)
+	freezeClient()
 }
 
 // clientInfo represents a connected client
 type clientInfo struct {
-	address        string
-	id             enode.ID
-	capacity       uint64
-	priority       bool
-	pool           *clientPool
-	peer           clientPeer
-	queueIndex     int // position in connectedQueue
-	balanceTracker balanceTracker
+	address                string
+	id                     enode.ID
+	capacity               uint64
+	priority               bool
+	pool                   *clientPool
+	peer                   clientPeer
+	queueIndex             int // position in connectedQueue
+	balanceTracker         balanceTracker
+	posFactors, negFactors priceFactors
+	balanceMetaInfo        string
+	clientApiFields
 }
 
 // connSetIndex callback updates clientInfo item index in connectedQueue
@@ -223,12 +230,21 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 	)
 	pb := f.ndb.getOrNewPB(id)
 	posBalance = pb.value
-	e := &clientInfo{pool: f, peer: peer, address: freeID, queueIndex: -1, id: id, priority: posBalance != 0}
 
 	nb := f.ndb.getOrNewNB(freeID)
 	if nb.logValue != 0 {
-		negBalance = uint64(math.Exp(float64(nb.logValue-f.logOffset(now)) / fixedPointMultiplier))
-		negBalance *= uint64(time.Second)
+		negBalance = uint64(math.Exp(float64(nb.logValue-f.logOffset(now))/fixedPointMultiplier) * float64(time.Second))
+	}
+	e := &clientInfo{
+		pool:            f,
+		peer:            peer,
+		address:         freeID,
+		queueIndex:      -1,
+		id:              id,
+		priority:        posBalance != 0,
+		posFactors:      f.defaultPosFactors,
+		negFactors:      f.defaultNegFactors,
+		balanceMetaInfo: pb.meta,
 	}
 	// If the client is a free client, assign with a low free capacity,
 	// Otherwise assign with the given value(priority client)
@@ -240,11 +256,14 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 		capacity = f.freeClientCap
 	}
 	e.capacity = capacity
+	if e.priority {
+		f.priorityConnected += capacity
+	}
 
 	// Starts a balance tracker
 	e.balanceTracker.init(f.clock, capacity)
 	e.balanceTracker.setBalance(posBalance, negBalance)
-	f.setClientPriceFactors(e)
+	e.updatePriceFactors()
 
 	// If the number of clients already connected in the clientpool exceeds its
 	// capacity, evict some clients with lowest priority.
@@ -301,6 +320,9 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 	totalConnectedGauge.Update(int64(f.connectedCap))
 	clientConnectedMeter.Mark(1)
 	log.Debug("Client accepted", "address", freeID)
+	if f.eventHook != nil {
+		f.eventHook("connected", e)
+	}
 	return true
 }
 
@@ -324,6 +346,33 @@ func (f *clientPool) disconnect(p clientPeer) {
 	f.dropClient(e, f.clock.Now(), false)
 }
 
+// forClients iterates through a list of clients, calling the callback for each one.
+// If a client is not connected then clientInfo is nil. If the specified list is empty
+// then the callback is called for all connected clients.
+func (f *clientPool) forClients(ids []enode.ID, callback func(*clientInfo, enode.ID)) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	if len(ids) > 0 {
+		for _, id := range ids {
+			callback(f.connectedMap[id], id)
+		}
+	} else {
+		for _, c := range f.connectedMap {
+			callback(c, c.id)
+		}
+	}
+}
+
+// setDefaultFactors sets the default price factors applied to subsequently connected clients
+func (f *clientPool) setDefaultFactors(posFactors, negFactors priceFactors) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	f.defaultPosFactors = posFactors
+	f.defaultNegFactors = negFactors
+}
+
 // dropClient removes a client from the connected queue and finalizes its balance.
 // If kick is true then it also initiates the disconnection.
 func (f *clientPool) dropClient(e *clientInfo, now mclock.AbsTime, kick bool) {
@@ -334,15 +383,33 @@ func (f *clientPool) dropClient(e *clientInfo, now mclock.AbsTime, kick bool) {
 	f.connectedQueue.Remove(e.queueIndex)
 	delete(f.connectedMap, e.id)
 	f.connectedCap -= e.capacity
+	if e.priority {
+		f.priorityConnected -= e.capacity
+	}
 	totalConnectedGauge.Update(int64(f.connectedCap))
 	if kick {
 		clientKickedMeter.Mark(1)
 		log.Debug("Client kicked out", "address", e.address)
+		if f.eventHook != nil {
+			f.eventHook("kicked", e)
+		}
 		f.removePeer(e.id)
 	} else {
 		clientDisconnectedMeter.Mark(1)
 		log.Debug("Client disconnected", "address", e.address)
+		if f.eventHook != nil {
+			f.eventHook("disconnected", e)
+		}
 	}
+}
+
+// capacityInfo returns the total capacity allowance, the total capacity of connected
+// clients and the total capacity of connected and prioritized clients
+func (f *clientPool) capacityInfo() (uint64, uint64, uint64) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	return f.capLimit, f.connectedCap, f.priorityConnected
 }
 
 // finalizeBalance stops the balance tracker, retrieves the final balances and
@@ -374,6 +441,9 @@ func (f *clientPool) balanceExhausted(id enode.ID) {
 	if c == nil || !c.priority {
 		return
 	}
+	if c.priority {
+		f.priorityConnected -= c.capacity
+	}
 	c.priority = false
 	if c.capacity != f.freeClientCap {
 		f.connectedCap += f.freeClientCap - c.capacity
@@ -382,6 +452,9 @@ func (f *clientPool) balanceExhausted(id enode.ID) {
 		c.peer.updateCapacity(c.capacity)
 	}
 	f.ndb.delPB(id)
+	if f.eventHook != nil {
+		f.eventHook("balanceExhausted", c)
+	}
 }
 
 // setConnLimit sets the maximum number and total capacity of connected clients,
@@ -398,6 +471,57 @@ func (f *clientPool) setLimits(totalConn int, totalCap uint64) {
 			return f.connectedCap > f.capLimit || f.connectedQueue.Size() > f.connLimit
 		})
 	}
+	if f.eventHook != nil {
+		f.eventHook("capacityUpdate", nil)
+	}
+}
+
+// setCapacity sets the assigned capacity of a connected client
+func (f *clientPool) setCapacity(c *clientInfo, capacity uint64) error {
+	if f.connectedMap[c.id] != c {
+		return errClientNotConnected
+	}
+	if c.capacity == capacity {
+		return nil
+	}
+	if !c.priority {
+		return errNoPriority
+	}
+	oldCapacity := c.capacity
+	c.capacity = capacity
+	f.connectedCap += capacity - oldCapacity
+	f.connectedQueue.Remove(c.queueIndex)
+	f.connectedQueue.Push(c)
+	if f.connectedCap > f.capLimit {
+		var kickList []*clientInfo
+		kick := true
+		f.connectedQueue.MultiPop(func(data interface{}, priority int64) bool {
+			client := data.(*clientInfo)
+			kickList = append(kickList, client)
+			f.connectedCap -= client.capacity
+			if client == c {
+				kick = false
+			}
+			return kick && (f.connectedCap > f.capLimit)
+		})
+		if kick {
+			now := mclock.Now()
+			for _, c := range kickList {
+				f.dropClient(c, now, true)
+			}
+		} else {
+			c.capacity = oldCapacity
+			for _, c := range kickList {
+				f.connectedCap += c.capacity
+				f.connectedQueue.Push(c)
+			}
+			return errNoPriority
+		}
+	}
+	totalConnectedGauge.Update(int64(f.connectedCap))
+	f.priorityConnected += capacity - oldCapacity
+	c.peer.updateCapacity(c.capacity)
+	return nil
 }
 
 // requestCost feeds request cost after serving a request from the given peer.
@@ -424,30 +548,23 @@ func (f *clientPool) logOffset(now mclock.AbsTime) int64 {
 	return f.cumulativeTime + cumulativeTime
 }
 
-// setPriceFactors changes pricing factors for both positive and negative balances.
-// Applies to connected clients and also future connections.
-func (f *clientPool) setPriceFactors(posFactors, negFactors priceFactors) {
+// setClientPriceFactors sets the pricing factors for an individual connected client
+func (c *clientInfo) updatePriceFactors() {
+	c.balanceTracker.setFactors(true, c.negFactors.timeFactor+float64(c.capacity)*c.negFactors.capacityFactor/1000000, c.negFactors.requestFactor)
+	c.balanceTracker.setFactors(false, c.posFactors.timeFactor+float64(c.capacity)*c.posFactors.capacityFactor/1000000, c.posFactors.requestFactor)
+}
+
+// getPosBalance retrieves a single positive balance entry from cache or the database
+func (f *clientPool) getPosBalance(id enode.ID) posBalance {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	f.posFactors, f.negFactors = posFactors, negFactors
-	for _, c := range f.connectedMap {
-		f.setClientPriceFactors(c)
-	}
+	return f.ndb.getOrNewPB(id)
 }
 
-// setClientPriceFactors sets the pricing factors for an individual connected client
-func (f *clientPool) setClientPriceFactors(c *clientInfo) {
-	c.balanceTracker.setFactors(true, f.negFactors.timeFactor+float64(c.capacity)*f.negFactors.capacityFactor/1000000, f.negFactors.requestFactor)
-	c.balanceTracker.setFactors(false, f.posFactors.timeFactor+float64(c.capacity)*f.posFactors.capacityFactor/1000000, f.posFactors.requestFactor)
-}
-
-// addBalance updates the positive balance of a client.
-// If setTotal is false then the given amount is added to the balance.
-// If setTotal is true then amount represents the total amount ever added to the
-// given ID and positive balance is increased by (amount-lastTotal) while lastTotal
-// is updated to amount. This method also allows removing positive balance.
-func (f *clientPool) addBalance(id enode.ID, amount uint64, setTotal bool) {
+// updateBalance updates the balance of a client (either overwrites it or adds to it).
+// It also updates the balance meta info string.
+func (f *clientPool) updateBalance(id enode.ID, amount int64, add bool, meta string) error {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
@@ -463,44 +580,63 @@ func (f *clientPool) addBalance(id enode.ID, amount uint64, setTotal bool) {
 				// but we have no idea about the new capacity, need a second
 				// call to udpate it.
 				c.priority = true
+				if c.priority {
+					f.priorityConnected += c.capacity
+				}
 				c.balanceTracker.addCallback(balanceCallbackZero, 0, func() { f.balanceExhausted(id) })
 			}
+			c.balanceMetaInfo = meta
 		}()
 	}
-	if setTotal {
-		if pb.value+amount > pb.lastTotal {
-			pb.value += amount - pb.lastTotal
+	if add {
+		if amount > 0 {
+			if amount > maxBalance || pb.value > maxBalance-uint64(amount) {
+				return errBalanceOverflow
+			}
+			pb.value += uint64(amount)
 		} else {
-			pb.value = 0
+			if uint64(-amount) > pb.value {
+				pb.value = 0
+			} else {
+				pb.value -= uint64(-amount)
+			}
 		}
-		pb.lastTotal = amount
 	} else {
-		pb.value += amount
-		pb.lastTotal += amount
+		if amount > maxBalance {
+			return errBalanceOverflow
+		}
+		if amount < 0 {
+			amount = 0
+		}
+		pb.value = uint64(amount)
 	}
+	pb.meta = meta
 	f.ndb.setPB(id, pb)
+	return nil
 }
 
 // posBalance represents a recently accessed positive balance entry
 type posBalance struct {
-	value, lastTotal uint64
+	value uint64
+	meta  string
 }
 
 // EncodeRLP implements rlp.Encoder
 func (e *posBalance) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{e.value, e.lastTotal})
+	return rlp.Encode(w, []interface{}{e.value, e.meta})
 }
 
 // DecodeRLP implements rlp.Decoder
 func (e *posBalance) DecodeRLP(s *rlp.Stream) error {
 	var entry struct {
-		Value, LastTotal uint64
+		Value uint64
+		Meta  string
 	}
 	if err := s.Decode(&entry); err != nil {
 		return err
 	}
 	e.value = entry.Value
-	e.lastTotal = entry.LastTotal
+	e.meta = entry.Meta
 	return nil
 }
 
@@ -628,6 +764,37 @@ func (db *nodeDB) delPB(id enode.ID) {
 	key := db.key(id.Bytes(), false)
 	db.db.Delete(key)
 	db.pcache.Remove(string(key))
+}
+
+// getPosBalanceIDs returns a lexicographically ordered list of IDs of accounts
+// with a positive balance
+func (db *nodeDB) getPosBalanceIDs(start, stop enode.ID, maxCount int) (result []enode.ID) {
+	if maxCount <= 0 {
+		return
+	}
+	it := db.db.NewIteratorWithStart(db.key(start.Bytes(), false))
+	defer it.Release()
+	for i := len(stop[:]) - 1; i >= 0; i-- {
+		stop[i]--
+		if stop[i] != 255 {
+			break
+		}
+	}
+	stopKey := db.key(stop.Bytes(), false)
+	keyLen := len(stopKey)
+
+	for it.Next() {
+		var id enode.ID
+		if len(it.Key()) != keyLen || bytes.Compare(it.Key(), stopKey) == 1 {
+			return
+		}
+		copy(id[:], it.Key()[keyLen-len(id):])
+		result = append(result, id)
+		if len(result) == maxCount {
+			return
+		}
+	}
+	return
 }
 
 func (db *nodeDB) getOrNewNB(id string) negBalance {

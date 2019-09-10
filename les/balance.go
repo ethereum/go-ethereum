@@ -26,6 +26,7 @@ import (
 const (
 	balanceCallbackQueue = iota
 	balanceCallbackZero
+	balanceCallbackApi
 	balanceCallbackCount
 )
 
