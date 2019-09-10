@@ -233,8 +233,8 @@ aware of and agree upon. This consists of a small JSON file (e.g. call it `genes
 
 The above fields should be fine for most purposes, although we'd recommend changing
 the `nonce` to some random value so you prevent unknown remote nodes from being able
-to connect to you. If you'd like to pre-fund some accounts for easier testing, you can
-populate the `alloc` field with account configs:
+to connect to you. If you'd like to pre-fund some accounts for easier testing, create
+the accounts and populate the `alloc` field with their addresses.
 
 ```json
 "alloc": {
