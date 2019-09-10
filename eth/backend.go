@@ -69,8 +69,6 @@ type Ethereum struct {
 	// Channel for shutting down the service
 	shutdownChan chan bool
 
-	server *p2p.Server
-
 	// Handlers
 	txPool          *core.TxPool
 	blockchain      *core.BlockChain
