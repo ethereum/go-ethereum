@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 const makeCostStats = false // make request cost statistics during operation
@@ -87,7 +88,7 @@ const (
 	gfUsageTC        = time.Second
 	gfRaiseTC        = time.Second * 200
 	gfDropTC         = time.Second * 50
-	gfDbKey          = "_globalCostFactorV3"
+	gfDbKey          = "_globalCostFactorV4"
 )
 
 // costTracker is responsible for calculating costs and cost estimates on the
@@ -226,7 +227,9 @@ type reqInfo struct {
 	// servingTime is the CPU time corresponding to the actual processing of
 	// the request.
 	servingTime float64
-	msgCode     uint64
+
+	// msgCode indicates the type of request.
+	msgCode uint64
 }
 
 // gfLoop starts an event loop which updates the global cost factor which is
@@ -270,31 +273,43 @@ func (ct *costTracker) gfLoop() {
 		for {
 			select {
 			case r := <-ct.reqInfoCh:
+				relCost := int64(factor * r.servingTime * 100 / r.avgTimeCost) // Convert the value to a percentage form
+
+				// Record more metrics if we are debugging
+				if metrics.EnabledExpensive {
+					switch r.msgCode {
+					case GetBlockHeadersMsg:
+						relativeCostHeaderHistogram.Update(relCost)
+					case GetBlockBodiesMsg:
+						relativeCostBodyHistogram.Update(relCost)
+					case GetReceiptsMsg:
+						relativeCostReceiptHistogram.Update(relCost)
+					case GetCodeMsg:
+						relativeCostCodeHistogram.Update(relCost)
+					case GetProofsV2Msg:
+						relativeCostProofHistogram.Update(relCost)
+					case GetHelperTrieProofsMsg:
+						relativeCostHelperProofHistogram.Update(relCost)
+					case SendTxV2Msg:
+						relativeCostSendTxHistogram.Update(relCost)
+					case GetTxStatusMsg:
+						relativeCostTxStatusHistogram.Update(relCost)
+					}
+				}
+				// SendTxV2 and GetTxStatus requests are two special cases.
+				// All other requests will only put pressure on the database, and
+				// the corresponding delay is relatively stable. While these two
+				// requests involve txpool query, which is usually unstable.
+				//
+				// TODO(rjl493456442) fixes this.
+				if r.msgCode == SendTxV2Msg || r.msgCode == GetTxStatusMsg {
+					continue
+				}
 				requestServedMeter.Mark(int64(r.servingTime))
 				requestServedTimer.Update(time.Duration(r.servingTime))
 				requestEstimatedMeter.Mark(int64(r.avgTimeCost / factor))
 				requestEstimatedTimer.Update(time.Duration(r.avgTimeCost / factor))
-
-				relCost := int64(factor * r.servingTime * 10000 / r.avgTimeCost)
 				relativeCostHistogram.Update(relCost)
-				switch r.msgCode {
-				case GetBlockHeadersMsg:
-					relativeCostHeaderHistogram.Update(relCost)
-				case GetBlockBodiesMsg:
-					relativeCostBodyHistogram.Update(relCost)
-				case GetReceiptsMsg:
-					relativeCostReceiptHistogram.Update(relCost)
-				case GetCodeMsg:
-					relativeCostCodeHistogram.Update(relCost)
-				case GetProofsV2Msg:
-					relativeCostProofHistogram.Update(relCost)
-				case GetHelperTrieProofsMsg:
-					relativeCostHelperProofHistogram.Update(relCost)
-				case SendTxV2Msg:
-					relativeCostSendTxHistogram.Update(relCost)
-				case GetTxStatusMsg:
-					relativeCostTxStatusHistogram.Update(relCost)
-				}
 
 				now := mclock.Now()
 				dt := float64(now - expUpdate)

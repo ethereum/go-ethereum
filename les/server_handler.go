@@ -867,16 +867,19 @@ func (h *serverHandler) getAuxiliaryHeaders(req HelperTrieReq) []byte {
 // txStatus returns the status of a specified transaction.
 func (h *serverHandler) txStatus(hash common.Hash) light.TxStatus {
 	var stat light.TxStatus
-	// Looking the transaction in txpool first.
 	stat.Status = h.txpool.Status([]common.Hash{hash})[0]
 
-	// If the transaction is unknown to the pool, try looking it up locally.
+	// Looking the transaction in database first.
+	// The reason here is usually txpool has a high pressure in the mainnet,
+	// the cost to query the status in pool is even higher than database.
+	lookup := h.blockchain.GetTransactionLookup(hash)
+	if lookup != nil {
+		stat.Status = core.TxStatusIncluded
+		stat.Lookup = lookup
+	}
+	// If the transaction is unknown to the database, try looking it up in txpool.
 	if stat.Status == core.TxStatusUnknown {
-		lookup := h.blockchain.GetTransactionLookup(hash)
-		if lookup != nil {
-			stat.Status = core.TxStatusIncluded
-			stat.Lookup = lookup
-		}
+		stat.Status = h.txpool.Status([]common.Hash{hash})[0]
 	}
 	return stat
 }
