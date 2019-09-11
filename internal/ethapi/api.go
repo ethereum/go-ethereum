@@ -1079,6 +1079,42 @@ func (s *PublicBlockChainAPI) rpcMarshalBlock(b *types.Block, inclTx bool, fullT
 	return fields, err
 }
 
+// GetBlockReceiptsByHash returns the requested block receipts.
+func (s *PublicBlockChainAPI) GetBlockReceiptsByHash(ctx context.Context, blockHash common.Hash) ([]map[string]interface{}, error) {
+	receipts, err := s.b.GetReceipts(ctx, blockHash)
+	if err != nil {
+		return nil, err
+	}
+	resp := make([]map[string]interface{}, 0, len(receipts))
+	for index, receipt := range receipts {
+		fields := map[string]interface{}{
+			"blockHash":         blockHash,
+			"transactionHash":   receipt.TxHash,
+			"transactionIndex":  hexutil.Uint64(index),
+			"gasUsed":           hexutil.Uint64(receipt.GasUsed),
+			"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
+			"contractAddress":   nil,
+			"logs":              receipt.Logs,
+			"logsBloom":         receipt.Bloom,
+		}
+		// Assign receipt status or post state.
+		if len(receipt.PostState) > 0 {
+			fields["root"] = hexutil.Bytes(receipt.PostState)
+		} else {
+			fields["status"] = hexutil.Uint(receipt.Status)
+		}
+		if receipt.Logs == nil {
+			fields["logs"] = [][]*types.Log{}
+		}
+		// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
+		if receipt.ContractAddress != (common.Address{}) {
+			fields["contractAddress"] = receipt.ContractAddress
+		}
+		resp = append(resp, fields)
+	}
+	return resp, nil
+}
+
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
 type RPCTransaction struct {
 	BlockHash        *common.Hash    `json:"blockHash"`
