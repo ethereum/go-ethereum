@@ -4,11 +4,12 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-# Launchpad rejects Go's access to $HOME/.cache, use custom folder
-export GOCACHE=/tmp/go-build
+# Launchpad rejects Go's access to $HOME, use custom folder
+export HOME=/tmp/home
 
 override_dh_auto_build:
-	build/env.sh /usr/lib/go-1.11/bin/go run build/ci.go install -git-commit={{.Env.Commit}} -git-branch={{.Env.Branch}} -git-tag={{.Env.Tag}} -buildnum={{.Env.Buildnum}} -pull-request={{.Env.IsPullRequest}}
+	go get golang.org/dl/go1.13 && $HOME/go/bin/go1.13 download
+	build/env.sh $HOME/go/bin/go1.13 run build/ci.go install -git-commit={{.Env.Commit}} -git-branch={{.Env.Branch}} -git-tag={{.Env.Tag}} -buildnum={{.Env.Buildnum}} -pull-request={{.Env.IsPullRequest}}
 
 override_dh_auto_test:
 
