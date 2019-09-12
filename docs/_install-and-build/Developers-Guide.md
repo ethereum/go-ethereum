@@ -2,7 +2,7 @@
 title: Developers' guide
 ---
 **NOTE: These instructions are for people who want to contribute Go source code changes.
-If you just want to run ethereum, use the normal [Installation Instructions](Installing-Geth)**
+If you just want to run ethereum, use the normal [Installation Instructions](installing-geth)**
 
 This document is the entry point for developers of the Go implementation of Ethereum. Developers here refer to the hands-on: who are interested in build, develop, debug, submit a bug report or pull request or contribute code to go-ethereum.
 
@@ -49,7 +49,7 @@ go-ethereum exectuables can be built individually. To build just geth, use:
 go install -v ./cmd/geth
 ```
 
-Read about cross compilation of go-ethereum [here](../doc/Cross-compiling-Ethereum).
+read about cross compilation of go-ethereum [here](../developers/cross-compiling-ethereum).
 
 ### Git flow
 
@@ -84,7 +84,7 @@ for more see [go test flags](http://golang.org/cmd/go/#hdr-Description_of_testin
 ### Metrics and monitoring
 
 `geth` can do node behaviour monitoring, aggregation and show performance metric charts. 
-Read about [metrics and monitoring](../doc/Metrics-and-Monitoring)
+read about [metrics and monitoring](../doc/metrics-and-monitoring)
 
 ### Getting Stack Traces
 
@@ -126,7 +126,7 @@ PRs need to be based on and opened against the `master` branch (unless by explic
 agreement, you contribute to a complex feature branch).
 
 Your PR will be reviewed according to the [Code Review
-Guidelines](../doc/Code-Review-Guidelines).
+guidelines](../developers/code-review-guidelines).
 
 We encourage a PR early approach, meaning you create the PR the earliest even without the
 fix/feature. This will let core devs and other volunteers know you picked up an issue.
@@ -134,8 +134,8 @@ These early PRs should indicate 'in progress' status.
 
 ## Dev Tutorials (mostly outdated)
 
-* [Private networks, local clusters and monitoring](../doc/Setting-up-private-network-or-local-cluster)
+* [private networks, local clusters and monitoring](../doc/setting-up-private-network-or-local-cluster)
 
-* [P2P 101](../doc/Peer-to-Peer): a tutorial about setting up and creating a p2p server and p2p sub protocol.
+* [p2p 101](../developers/peer-to-peer): a tutorial about setting up and creating a p2p server and p2p sub protocol.
 
-* [How to Whisper](../doc/How-to-Whisper): an introduction to whisper.
+* [how to whisper](../whisper/whisper-overview): an introduction to whisper.

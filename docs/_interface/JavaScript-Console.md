@@ -3,7 +3,7 @@ title: JavaScript console
 ---
 Ethereum implements a **javascript runtime environment** (JSRE) that can be used in either interactive (console) or non-interactive (script) mode.
  
-Ethereum's Javascript console exposes the full [web3 JavaScript Dapp API](https://github.com/ethereum/wiki/wiki/JavaScript-API) and the [admin API](JavaScript-Console#javascript-console-api).
+Ethereum's Javascript console exposes the full [web3 JavaScript Dapp API](https://github.com/ethereum/wiki/wiki/JavaScript-API) and the [admin API](#javascript-console-api).
 
 ## Interactive use: the JSRE REPL  Console
 
@@ -18,7 +18,7 @@ The attach node accepts an endpoint in case the geth node is running with a non 
     $ geth attach http://191.168.1.1:8545
     $ geth attach ws://191.168.1.1:8546
 
-Note that by default the geth node doesn't start the http and weboscket service and not all functionality is provided over these interfaces due to security reasons. These defaults can be overridden when the `--rpcapi` and `--wsapi` arguments when the geth node is started, or with [admin.startRPC](Management-APIs#admin_startrpc) and [admin.startWS](Management-APIs#admin_startws).
+Note that by default the geth node doesn't start the http and weboscket service and not all functionality is provided over these interfaces due to security reasons. These defaults can be overridden when the `--rpcapi` and `--wsapi` arguments when the geth node is started, or with [admin.startRPC](management-apis#admin_startrpc) and [admin.startWS](management-apis#admin_startws).
 
 If you need log information, start with:
 
@@ -74,4 +74,4 @@ In addition to the full functionality of JS (as per ECMA5), the ethereum JSRE is
 
 Beside the official [DApp API](https://github.com/ethereum/wiki/JSON-RPC) interface the go ethereum node has support for additional management API's. These API's are offered using [JSON-RPC](http://www.jsonrpc.org/specification) and follow the same conventions as used in the DApp API. The go ethereum package comes with a console client which has support for all additional API's.
 
-[The management API has its own wiki page](Management-APIs).
+[The management API has its own page](management-apis).

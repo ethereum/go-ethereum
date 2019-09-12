@@ -15,11 +15,11 @@ The C++ implementation of Ethereum also offers a GPU miner, both as part of Eth 
 
 _**NOTE:** Ensure your blockchain is fully synchronised with the main chain before starting to mine, otherwise you will not be mining on the main chain._
 
-When you start up your ethereum node with `geth` it is not mining by default. To start it in mining mode, you use the `--mine` [command line option](../interface/Command-Line-Options). The `-minerthreads` parameter can be used to set the number parallel mining threads (defaulting to the total number of processor cores). 
+When you start up your ethereum node with `geth` it is not mining by default. To start it in mining mode, you use the `--mine` [command line option](../interface/command-line-options). The `-minerthreads` parameter can be used to set the number parallel mining threads (defaulting to the total number of processor cores). 
 
 `geth --mine --minerthreads=4`
 
-You can also start and stop CPU mining at runtime using the [console](../interface/JavaScript-Console#adminminerstart). `miner.start` takes an optional parameter for the number of miner threads. 
+You can also start and stop CPU mining at runtime using the [console](../interface/javascript-console#adminminerstart). `miner.start` takes an optional parameter for the number of miner threads. 
 
 ```
 > miner.start(8)
@@ -30,7 +30,7 @@ true
 
 Note that mining for real ether only makes sense if you are in sync with the network (since you mine on top of the consensus block). Therefore the eth blockchain downloader/synchroniser will delay mining until syncing is complete, and after that mining automatically starts unless you cancel your intention with `miner.stop()`.
 
-In order to earn ether you must have your **etherbase** (or **coinbase**) address set. This etherbase defaults to your [primary account](Managing-your-accounts). If you don't have an etherbase address, then `geth --mine` will not start up.
+In order to earn ether you must have your **etherbase** (or **coinbase**) address set. This etherbase defaults to your [primary account](../interface/managing-your-accounts). If you don't have an etherbase address, then `geth --mine` will not start up.
 
 You can set your etherbase on the command line:
 
@@ -46,7 +46,7 @@ miner.setEtherbase(eth.accounts[2])
 
 Note that your etherbase does not need to be an address of a local account, just an existing one. 
 
-There is an option [to add extra Data](../interface/JavaScript-Console#adminminersetextra) (32 bytes only) to your mined blocks. By convention this is interpreted as a unicode string, so you can set your short vanity tag.
+There is an option [to add extra Data](../interface/javascript-console#adminminersetextra) (32 bytes only) to your mined blocks. By convention this is interpreted as a unicode string, so you can set your short vanity tag.
 
 ```
 miner.setExtra("ΞTHΞЯSPHΞЯΞ")
@@ -66,7 +66,7 @@ Header:
 
 See also [this proposal](https://github.com/ethereum/wiki/wiki/Extra-Data)
 
-You can check your hashrate with [miner.hashrate](../interface/JavaScript-Console#adminminerhashrate), the result is in H/s (Hash operations per second). 
+You can check your hashrate with [miner.hashrate](../interface/javascript-console#adminminerhashrate), the result is in H/s (Hash operations per second). 
 
 ```
 > miner.hashrate
@@ -235,7 +235,7 @@ ethminer -G  // -G for GPU, -M for benchmark
 tail -f geth.log
 ```
 
-`ethminer` communicates with geth on port 8545 (the default RPC port in geth). You can change this by giving the [`--rpcport` option](https://github.com/ethereum/go-ethereum/Command-Line-Options) to `geth`.
+`ethminer` communicates with geth on port 8545 (the default RPC port in geth). You can change this by giving the [`--rpcport` option](../interface/command-line-options) to `geth`.
 Ethminer will find get on any port. Note that you need to set the CORS header with `--rpccorsdomain localhost`. You can also set port on `ethminer` with `-F http://127.0.0.1:3301`. Setting the ports is necessary if you want several instances mining on the same computer,  although this is somewhat pointless. If you are testing on a private cluster, we recommend you use CPU mining instead. 
 
 Also note that you do **not** need to give `geth` the `--mine` option or start the miner in the console unless you want to do CPU mining on TOP of GPU mining. 

@@ -4,7 +4,7 @@ title: Setting up private network or local cluster
 This page describes how to set up a local cluster of nodes, advise how to make it private, and how to hook up your nodes on the eth-netstat network monitoring app. 
 A fully controlled ethereum network is useful as a backend for network integration testing (core developers working on issues related to networking/blockchain synching/message propagation, etc or DAPP developers testing multi-block and multi-user scenarios).
 
-We assume you are able to build `geth` following the [build instructions](../install-and-build/Building-Ethereum)
+We assume you are able to build `geth` following the [build instructions](../install-and-build/build-from-source)
 
 ## Setting up multiple nodes
 
@@ -115,5 +115,5 @@ I0216 10:01:40.094089 p2p/discover/udp.go:227] Listening, enode://890b6b5367ef60
 
 [This page](https://github.com/ethereum/wiki/wiki/Network-Status) describes how to use the [The Ethereum (centralised) network status monitor (known sometimes as "eth-netstats")](http://stats.ethdev.com) to monitor your nodes.
 
-[This page](Setting-up-monitoring-on-local-cluster) or [this README](https://github.com/ethersphere/eth-utils) 
+[This page](../doc/setting-up-monitoring-on-local-cluster) or [this README](https://github.com/ethersphere/eth-utils) 
 describes how you set up your own monitoring service for a (private or public) local cluster.
