@@ -269,10 +269,29 @@ func (ct *costTracker) gfLoop() {
 			log.Debug("global cost factor saved", "value", factor)
 		}
 		saveTicker := time.NewTicker(time.Minute * 10)
+		mclockTicker := time.NewTicker(time.Millisecond * 100)
+		lastClock := mclock.Now()
+		noUpdate := lastClock
 
 		for {
 			select {
+			case <-mclockTicker.C:
+				now := mclock.Now()
+				dt := time.Duration(now - lastClock)
+				lastClock = now
+				mclockTimer.Update(dt)
+				if dt > time.Millisecond*300 {
+					noUpdate = now + mclock.AbsTime(time.Second*5)
+				}
+
 			case r := <-ct.reqInfoCh:
+				now := mclock.Now()
+				if time.Duration(now-lastClock) > time.Millisecond*300 {
+					noUpdate = now + mclock.AbsTime(time.Second*5)
+				}
+				if now < noUpdate {
+					continue
+				}
 				relCost := int64(factor * r.servingTime * 100 / r.avgTimeCost) // Convert the value to a percentage form
 
 				// Record more metrics if we are debugging
@@ -311,7 +330,6 @@ func (ct *costTracker) gfLoop() {
 				requestEstimatedTimer.Update(time.Duration(r.avgTimeCost / factor))
 				relativeCostHistogram.Update(relCost)
 
-				now := mclock.Now()
 				dt := float64(now - expUpdate)
 				expUpdate = now
 				exp := math.Exp(-dt / float64(gfUsageTC))

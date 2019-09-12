@@ -83,6 +83,8 @@ var (
 	relativeCostSendTxHistogram      = metrics.NewRegisteredHistogram("les/server/req/relative/sendtx", nil, metrics.NewExpDecaySample(1028, 0.015))
 	relativeCostTxStatusHistogram    = metrics.NewRegisteredHistogram("les/server/req/relative/txstatus", nil, metrics.NewExpDecaySample(1028, 0.015))
 
+	mclockTimer = metrics.NewRegisteredTimer("les/server/mclock", nil)
+
 	recentServedGauge    = metrics.NewRegisteredGauge("les/server/recentRequestServed", nil)
 	recentEstimatedGauge = metrics.NewRegisteredGauge("les/server/recentRequestEstimated", nil)
 	sqServedGauge        = metrics.NewRegisteredGauge("les/server/servingQueue/served", nil)
