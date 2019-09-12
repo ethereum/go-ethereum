@@ -450,11 +450,10 @@ func makeNilPtrDecoder(etype reflect.Type, etypeinfo *typeinfo, nilKind Kind) de
 		// Handle empty values as a nil pointer.
 		if kind != Byte && size == 0 {
 			if kind != nilKind {
-				err := &decodeError{
+				return &decodeError{
 					msg: fmt.Sprintf("wrong kind of empty value (got %v, want %v)", kind, nilKind),
 					typ: typ,
 				}
-				return err
 			}
 			// rearm s.Kind. This is important because the input
 			// position must advance to the next value even though
