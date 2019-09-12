@@ -22,19 +22,16 @@ variables `PPA_SIGNING_KEY` and `PPA_SSH_KEY` on Travis.
 
 We want to build go-ethereum with the most recent version of Go, irrespective of the Go
 version that is available in the main Ubuntu repository. In order to make this possible,
-our PPA depends on the ~gophers/ubuntu/archive PPA. Our source package build-depends on
-golang-1.11, which is co-installable alongside the regular golang package. PPA dependencies
-can be edited at https://launchpad.net/%7Eethereum/+archive/ubuntu/ethereum/+edit-dependencies
+our PPA always fetches a recent Go release for the upstream server and uses that.
 
 ## Building Packages Locally (for testing)
 
 You need to run Ubuntu to do test packaging.
 
-Add the gophers PPA and install Go 1.11 and Debian packaging tools:
+Install Go and the Debian packaging tools:
 
-    $ sudo apt-add-repository ppa:gophers/ubuntu/archive
     $ sudo apt-get update
-    $ sudo apt-get install build-essential golang-1.11 devscripts debhelper python-bzrlib python-paramiko
+    $ sudo apt-get install build-essential golang devscripts debhelper python-bzrlib python-paramiko
 
 Create the source packages:
 
