@@ -7,7 +7,7 @@ jobs:
     - stage: lint
       os: linux
       dist: xenial
-      go: 1.12.x
+      go: 1.13.x
       env:
         - lint
       git:
@@ -18,7 +18,7 @@ jobs:
     - stage: build
       os: linux
       dist: xenial
-      go: 1.11.x
+      go: 1.13.x
       script:
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
@@ -26,7 +26,7 @@ jobs:
     - stage: build
       os: linux
       dist: xenial
-      go: 1.12.x
+      go: 1.13.x
       script:
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
