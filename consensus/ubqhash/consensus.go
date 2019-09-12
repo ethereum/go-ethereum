@@ -24,7 +24,7 @@ import (
 	"runtime"
 	"time"
 
-  mapset "github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/consensus"
 	"github.com/ubiq/go-ubiq/consensus/misc"
@@ -38,9 +38,9 @@ import (
 
 // Ubqhash proof-of-work protocol constants.
 var (
-	blockReward *big.Int = big.NewInt(8e+18) // Block reward in wei for successfully mining a block
-	maxUncles            = 2                 // Maximum number of uncles allowed in a single block
-	allowedFutureBlockTime    = 15 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
+	blockReward            *big.Int = big.NewInt(8e+18) // Block reward in wei for successfully mining a block
+	maxUncles                       = 2                 // Maximum number of uncles allowed in a single block
+	allowedFutureBlockTime          = 15 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
 )
 
 // Diff algo constants.
@@ -666,7 +666,7 @@ func (ubqhash *Ubqhash) Prepare(chain consensus.ChainReader, header *types.Heade
 // setting the final state and assembling the block.
 func (ubqhash *Ubqhash) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// Accumulate any block and uncle rewards and commit the final state root
-	accumulateRewards(state, header, uncles)
+	accumulateRewards(chain.Config(), state, header, uncles)
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 	// Header seems complete, assemble into a block and return
@@ -706,7 +706,7 @@ func (ubqhash *Ubqhash) SealHash(header *types.Header) (hash common.Hash) {
 // AccumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
-func accumulateRewards(state *state.StateDB, header *types.Header, uncles []*types.Header) {
+func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	reward := new(big.Int).Set(blockReward)
 
 	if header.Number.Cmp(big.NewInt(358363)) > 0 {
@@ -731,16 +731,22 @@ func accumulateRewards(state *state.StateDB, header *types.Header, uncles []*typ
 		reward = big.NewInt(1e+18)
 	}
 
+	// Uncle reward step down fix.
+	ufixReward := new(big.Int).Set(blockReward)
+	if config.IsByzantium(header.Number) {
+		ufixReward = reward
+	}
+
 	r := new(big.Int)
 	for _, uncle := range uncles {
 		r.Add(uncle.Number, big2)
 		r.Sub(r, header.Number)
-		r.Mul(r, blockReward)
+		r.Mul(r, ufixReward)
 		r.Div(r, big2)
 
 		if header.Number.Cmp(big.NewInt(10)) < 0 {
 			state.AddBalance(uncle.Coinbase, r)
-			r.Div(blockReward, big32)
+			r.Div(ufixReward, big32)
 			if r.Cmp(big.NewInt(0)) < 0 {
 				r = big.NewInt(0)
 			}
@@ -749,7 +755,7 @@ func accumulateRewards(state *state.StateDB, header *types.Header, uncles []*typ
 				r = big.NewInt(0)
 			}
 			state.AddBalance(uncle.Coinbase, r)
-			r.Div(blockReward, big32)
+			r.Div(ufixReward, big32)
 		}
 
 		reward.Add(reward, r)
