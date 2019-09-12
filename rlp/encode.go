@@ -480,6 +480,11 @@ func makeStructWriter(typ reflect.Type) (writer, error) {
 	if err != nil {
 		return nil, err
 	}
+	for _, f := range fields {
+		if f.info.writerErr != nil {
+			return nil, structFieldError{typ, f.index, f.info.writerErr}
+		}
+	}
 	writer := func(val reflect.Value, w *encbuf) error {
 		lh := w.list()
 		for _, f := range fields {

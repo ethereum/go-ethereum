@@ -126,6 +126,16 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 	return fields, nil
 }
 
+type structFieldError struct {
+	typ   reflect.Type
+	field int
+	err   error
+}
+
+func (e structFieldError) Error() string {
+	return fmt.Sprintf("%v (struct field %v.%s)", e.err, e.typ, e.typ.Field(e.field).Name)
+}
+
 type structTagError struct {
 	typ             reflect.Type
 	field, tag, err string

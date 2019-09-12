@@ -365,6 +365,10 @@ type nilStringSlice struct {
 	X *[]uint `rlp:"nilString"`
 }
 
+type intField struct {
+	X int
+}
+
 var (
 	veryBigInt = big.NewInt(0).Add(
 		big.NewInt(0).Lsh(big.NewInt(0xFFFFFFFFFFFFFF), 16),
@@ -497,6 +501,11 @@ var decodeTests = []decodeTest{
 		error: "rlp: expected input string or byte for uint, decoding into (rlp.recstruct).Child.I",
 	},
 	{
+		input: "C103",
+		ptr:   new(intField),
+		error: "rlp: type int is not RLP-serializable (struct field rlp.intField.X)",
+	},
+	{
 		input: "C50102C20102",
 		ptr:   new(tailUint),
 		error: "rlp: expected input string or byte for uint, decoding into (rlp.tailUint).Tail[1]",
@@ -531,12 +540,12 @@ var decodeTests = []decodeTest{
 	{
 		input: "C0",
 		ptr:   new(invalidTail1),
-		error: "rlp: invalid struct tag \"tail\" for rlp.invalidTail1.A (must be on last field)",
+		error: `rlp: invalid struct tag "tail" for rlp.invalidTail1.A (must be on last field)`,
 	},
 	{
 		input: "C0",
 		ptr:   new(invalidTail2),
-		error: "rlp: invalid struct tag \"tail\" for rlp.invalidTail2.B (field type is not slice)",
+		error: `rlp: invalid struct tag "tail" for rlp.invalidTail2.B (field type is not slice)`,
 	},
 
 	// struct tag "-"

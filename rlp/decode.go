@@ -385,6 +385,11 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 	if err != nil {
 		return nil, err
 	}
+	for _, f := range fields {
+		if f.info.decoderErr != nil {
+			return nil, structFieldError{typ, f.index, f.info.decoderErr}
+		}
+	}
 	dec := func(s *Stream, val reflect.Value) (err error) {
 		if _, err := s.List(); err != nil {
 			return wrapStreamError(err, typ)

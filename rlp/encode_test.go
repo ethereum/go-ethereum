@@ -234,6 +234,7 @@ var encTests = []encTest{
 	{val: &tailRaw{A: 1, Tail: []RawValue{}}, output: "C101"},
 	{val: &tailRaw{A: 1, Tail: nil}, output: "C101"},
 	{val: &hasIgnoredField{A: 1, B: 2, C: 3}, output: "C20103"},
+	{val: &intField{X: 3}, error: "rlp: type int is not RLP-serializable (struct field rlp.intField.X)"},
 
 	// nil
 	{val: (*uint)(nil), output: "80"},
