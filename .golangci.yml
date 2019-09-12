@@ -1,0 +1,3 @@
+linters-settings:
+    goconst:
+        min-occurrences: 6
