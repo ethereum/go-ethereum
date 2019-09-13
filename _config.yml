@@ -20,6 +20,10 @@ defaults:
       path: "*/*"
     values:
       root: "../../.."
+  - scope:
+      path: "*/*/*"
+    values:
+      root: "../../../.."
 
 default_root: "../../.."
 

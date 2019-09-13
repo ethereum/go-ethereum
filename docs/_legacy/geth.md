@@ -18,7 +18,7 @@ By installing and running `geth`, you can take part in the ethereum frontier liv
 Supported Platforms are Linux, Mac Os and Windows.
 
 We support two types of installation: binary or scripted install for users. 
-See [Install instructions](../install-and-build/building-ethereum) for binary and scripted installs.
+See [Install instructions](../install-and-build/build-from-source) for binary and scripted installs.
 
 Developers and community enthusiast are advised to read the [Developers' Guide](../install-and-build/developers-guide), which contains detailed instructions for manual build from source (on any platform) as well as detailed tips on testing, monitoring, contributing, debugging and submitting pull requests on github.
 

@@ -65,7 +65,7 @@ Clef relies on __sign-what-you-see__. To provide as much context as possible,
 One setup scenario is to use virtualization, e.g. within QubesOS, where to 
 Clef is deployed on a non-networked machine (`ethvault` below)
 
-![](./qubes/clef_qubes_qrexec.png)
+![](clef_qubes_qrexec.png)
 
 
 Another option is to deploy Clef on a separate physical device, e.g. USB Armory, 
