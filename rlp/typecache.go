@@ -35,22 +35,28 @@ type typeinfo struct {
 	writerErr  error // error from makeWriter
 }
 
-// represents struct tags
+// tags represents struct tags.
 type tags struct {
 	// rlp:"nil" controls whether empty input results in a nil pointer.
 	nilOK bool
+
+	// This controls whether nil pointers are encoded/decoded as empty strings
+	// or empty lists.
+	nilKind Kind
+
 	// rlp:"tail" controls whether this field swallows additional list
 	// elements. It can only be set for the last field, which must be
 	// of slice type.
 	tail bool
+
 	// rlp:"-" ignores fields.
 	ignored bool
 }
 
+// typekey is the key of a type in typeCache. It includes the struct tags because
+// they might generate a different decoder.
 type typekey struct {
 	reflect.Type
-	// the key must include the struct tags because they
-	// might generate a different decoder.
 	tags
 }
 
@@ -120,6 +126,25 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 	return fields, nil
 }
 
+type structFieldError struct {
+	typ   reflect.Type
+	field int
+	err   error
+}
+
+func (e structFieldError) Error() string {
+	return fmt.Sprintf("%v (struct field %v.%s)", e.err, e.typ, e.typ.Field(e.field).Name)
+}
+
+type structTagError struct {
+	typ             reflect.Type
+	field, tag, err string
+}
+
+func (e structTagError) Error() string {
+	return fmt.Sprintf("rlp: invalid struct tag %q for %v.%s (%s)", e.tag, e.typ, e.field, e.err)
+}
+
 func parseStructTag(typ reflect.Type, fi, lastPublic int) (tags, error) {
 	f := typ.Field(fi)
 	var ts tags
@@ -128,15 +153,26 @@ func parseStructTag(typ reflect.Type, fi, lastPublic int) (tags, error) {
 		case "":
 		case "-":
 			ts.ignored = true
-		case "nil":
+		case "nil", "nilString", "nilList":
 			ts.nilOK = true
+			if f.Type.Kind() != reflect.Ptr {
+				return ts, structTagError{typ, f.Name, t, "field is not a pointer"}
+			}
+			switch t {
+			case "nil":
+				ts.nilKind = defaultNilKind(f.Type.Elem())
+			case "nilString":
+				ts.nilKind = String
+			case "nilList":
+				ts.nilKind = List
+			}
 		case "tail":
 			ts.tail = true
 			if fi != lastPublic {
-				return ts, fmt.Errorf(`rlp: invalid struct tag "tail" for %v.%s (must be on last field)`, typ, f.Name)
+				return ts, structTagError{typ, f.Name, t, "must be on last field"}
 			}
 			if f.Type.Kind() != reflect.Slice {
-				return ts, fmt.Errorf(`rlp: invalid struct tag "tail" for %v.%s (field type is not slice)`, typ, f.Name)
+				return ts, structTagError{typ, f.Name, t, "field type is not slice"}
 			}
 		default:
 			return ts, fmt.Errorf("rlp: unknown struct tag %q on %v.%s", t, typ, f.Name)
@@ -160,6 +196,20 @@ func (i *typeinfo) generate(typ reflect.Type, tags tags) {
 	i.writer, i.writerErr = makeWriter(typ, tags)
 }
 
+// defaultNilKind determines whether a nil pointer to typ encodes/decodes
+// as an empty string or empty list.
+func defaultNilKind(typ reflect.Type) Kind {
+	k := typ.Kind()
+	if isUint(k) || k == reflect.String || k == reflect.Bool || isByteArray(typ) {
+		return String
+	}
+	return List
+}
+
 func isUint(k reflect.Kind) bool {
 	return k >= reflect.Uint && k <= reflect.Uintptr
+}
+
+func isByteArray(typ reflect.Type) bool {
+	return (typ.Kind() == reflect.Slice || typ.Kind() == reflect.Array) && isByte(typ.Elem())
 }
