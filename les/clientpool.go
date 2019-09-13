@@ -33,7 +33,7 @@ import (
 const (
 	negBalanceExpTC      = time.Hour        // time constant for exponentially reducing negative balance
 	fixedPointMultiplier = 0x1000000        // constant to convert logarithms to fixed point format
-	connectedBias        = time.Minute      // this bias is applied in favor of already connected clients in order to avoid kicking them out very soon
+	connectedBias        = time.Minute * 5  // this bias is applied in favor of already connected clients in order to avoid kicking them out very soon
 	lazyQueueRefresh     = time.Second * 10 // refresh period of the connected queue
 )
 
