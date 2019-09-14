@@ -366,12 +366,14 @@ func (f *clientPool) setLimits(count int, totalCap uint64) {
 
 	f.countLimit = count
 	f.capacityLimit = totalCap
-	now := mclock.Now()
-	f.connectedQueue.MultiPop(func(data interface{}, priority int64) bool {
-		c := data.(*clientInfo)
-		f.dropClient(c, now, true)
-		return f.connectedCapacity > f.capacityLimit || f.connectedQueue.Size() > f.countLimit
-	})
+	if f.connectedCapacity > f.capacityLimit || f.connectedQueue.Size() > f.countLimit {
+		now := mclock.Now()
+		f.connectedQueue.MultiPop(func(data interface{}, priority int64) bool {
+			c := data.(*clientInfo)
+			f.dropClient(c, now, true)
+			return f.connectedCapacity > f.capacityLimit || f.connectedQueue.Size() > f.countLimit
+		})
+	}
 }
 
 // requestCost feeds request cost after serving a request from the given peer.
