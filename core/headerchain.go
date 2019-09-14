@@ -349,8 +349,11 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 	}
 	for ancestor != 0 {
 		if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
-			number -= ancestor
-			return rawdb.ReadCanonicalHash(hc.chainDb, number), number
+			ancestorHash := rawdb.ReadCanonicalHash(hc.chainDb, number-ancestor)
+			if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
+				number -= ancestor
+				return ancestorHash, number
+			}
 		}
 		if *maxNonCanonical == 0 {
 			return common.Hash{}, 0
