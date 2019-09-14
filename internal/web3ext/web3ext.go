@@ -22,7 +22,7 @@ var Modules = map[string]string{
 	"admin":      Admin_JS,
 	"chequebook": Chequebook_JS,
 	"clique":     Clique_JS,
-	"ubqhash":     Ubqhash_JS,
+	"ubqhash":    Ubqhash_JS,
 	"debug":      Debug_JS,
 	"eth":        Eth_JS,
 	"miner":      Miner_JS,
@@ -625,7 +625,13 @@ web3._extend({
 const RPC_JS = `
 web3._extend({
 	property: 'rpc',
-	methods: [],
+	methods: [
+		new web3._extend.Method({
+			name: 'discover',
+			call: 'rpc.discover',
+			params: 0
+		}),
+	],
 	properties: [
 		new web3._extend.Property({
 			name: 'modules',
