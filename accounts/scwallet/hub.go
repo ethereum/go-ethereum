@@ -153,7 +153,7 @@ func (hub *Hub) setPairing(wallet *Wallet, pairing *smartcardPairing) error {
 
 // NewHub creates a new hardware wallet manager for smartcards.
 func NewHub(daemonPath string, scheme string, datadir string) (*Hub, error) {
-	context, err := pcsc.EstablishContext(pcsc.ScopeSystem)
+	context, err := pcsc.EstablishContext(daemonPath, pcsc.ScopeSystem)
 	if err != nil {
 		return nil, err
 	}
