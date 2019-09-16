@@ -65,7 +65,7 @@ func TestCodeAccessLes3(t *testing.T) { testAccess(t, 3, tfCodeAccess) }
 
 func tfCodeAccess(db ethdb.Database, bhash common.Hash, num uint64) light.OdrRequest {
 	number := rawdb.ReadHeaderNumber(db, bhash)
-	if number != nil {
+	if number == nil {
 		return nil
 	}
 	header := rawdb.ReadHeader(db, bhash, *number)

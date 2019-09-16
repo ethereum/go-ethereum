@@ -795,9 +795,7 @@ func (t *UDPv4) handlePacket(from *net.UDPAddr, buf []byte) error {
 		return err
 	}
 	fromID := fromKey.id()
-	if err == nil {
-		err = packet.preverify(t, from, fromID, fromKey)
-	}
+	err = packet.preverify(t, from, fromID, fromKey)
 	t.log.Trace("<< "+packet.name(), "id", fromID, "addr", from, "err", err)
 	if err == nil {
 		packet.handle(t, from, fromID, hash)

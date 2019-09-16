@@ -544,7 +544,9 @@ func expectErrorMessageToContain(t *testing.T, got error, want string) {
 
 func expectNodeEquality(t *testing.T, got Node, want Node) {
 	t.Helper()
-	if !reflect.DeepEqual(got, want) {
+	if got.up != want.up ||
+		!reflect.DeepEqual(got.Node, want.Node) ||
+		!reflect.DeepEqual(got.Config, want.Config) {
 		t.Errorf("Node.UnmarshalJSON() = %v, want %v", got, want)
 	}
 }

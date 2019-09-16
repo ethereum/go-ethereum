@@ -527,9 +527,6 @@ func (whisper *Whisper) AddSymKeyFromPassword(password string) (string, error) {
 	// kdf should run no less than 0.1 seconds on an average computer,
 	// because it's an once in a session experience
 	derived := pbkdf2.Key([]byte(password), nil, 65356, aesKeyLength, sha256.New)
-	if err != nil {
-		return "", err
-	}
 
 	whisper.keyMu.Lock()
 	defer whisper.keyMu.Unlock()

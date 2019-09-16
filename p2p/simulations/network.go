@@ -118,6 +118,7 @@ func (net *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) 
 	node := &Node{
 		Node:   adapterNode,
 		Config: conf,
+		upMu:   new(sync.RWMutex),
 	}
 	log.Trace("Node created", "id", conf.ID)
 	net.nodeMap[conf.ID] = len(net.Nodes)
@@ -631,8 +632,18 @@ type Node struct {
 
 	// up tracks whether or not the node is running
 	up   bool
-	upMu sync.RWMutex
+	upMu *sync.RWMutex
 }
+
+/*
+func (n *Node) Clone() *Node {
+	return &Node{
+		Node:   n.Node,
+		Config: n.Config,
+		up:     n.up,
+	}
+}
+*/
 
 func (n *Node) Up() bool {
 	n.upMu.RLock()
@@ -695,6 +706,7 @@ func (n *Node) UnmarshalJSON(raw []byte) error {
 		return err
 	}
 
+	n.upMu = new(sync.RWMutex)
 	n.SetUp(node.Up)
 	n.Config = node.Config
 	return nil

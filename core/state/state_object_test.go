@@ -36,7 +36,7 @@ func BenchmarkCutOriginal(b *testing.B) {
 func BenchmarkCutsetterFn(b *testing.B) {
 	value := common.HexToHash("0x01")
 	cutSetFn := func(r rune) bool {
-		return int32(r) == int32(0)
+		return r == 0
 	}
 	for i := 0; i < b.N; i++ {
 		bytes.TrimLeftFunc(value[:], cutSetFn)

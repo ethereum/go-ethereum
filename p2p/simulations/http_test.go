@@ -424,7 +424,8 @@ func (t *expectEvents) nodeEvent(id string, up bool) *Event {
 		Config: &adapters.NodeConfig{
 			ID: enode.HexID(id),
 		},
-		up: up,
+		up:   up,
+		upMu: new(sync.RWMutex),
 	}
 	return &Event{
 		Type: EventTypeNode,
