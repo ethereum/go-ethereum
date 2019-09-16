@@ -88,7 +88,7 @@ const (
 	gfUsageTC        = time.Second
 	gfRaiseTC        = time.Second * 200
 	gfDropTC         = time.Second * 50
-	gfDbKey          = "_globalCostFactorV5"
+	gfDbKey          = "_globalCostFactorV6"
 )
 
 // costTracker is responsible for calculating costs and cost estimates on the
