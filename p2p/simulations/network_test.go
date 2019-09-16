@@ -17,6 +17,7 @@
 package simulations
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -389,6 +390,191 @@ func TestNetworkSimulation(t *testing.T) {
 		peerID := ids[(i+1)%len(ids)]
 		if conn.Other != peerID {
 			t.Fatalf("expected conn[%d].Other to be %s, got %s", i, peerID, conn.Other)
+		}
+	}
+}
+
+// TestMultiNodeRetrieval creates a multi-node simulation network.
+// Full nodes, bootnodes and lightnodes are created.
+// Functions for retrieving specific subgroups of nodes are then tested for correctness.
+func TestMultiNodeRetrieval(t *testing.T) {
+	adapter := adapters.NewSimAdapter(adapters.Services{
+		"test": newTestService,
+	})
+	network := NewNetwork(adapter, &NetworkConfig{
+		DefaultService: "test",
+	})
+	defer network.Shutdown()
+
+	// Create a bootnode
+	bootNodeConf := adapters.RandomNodeConfig()
+	bootNodeConf.BootNode = true
+	bootNode, err := network.NewNodeWithConfig(bootNodeConf)
+	if err != nil {
+		t.Fatalf("error creating bootnode: %s", err)
+	}
+	if err := network.Start(bootNode.ID()); err != nil {
+		t.Fatalf("error starting bootnode: %s", err)
+	}
+
+	// Create 20 light nodes
+	lightNodeCount := 20
+	lightNodes := make(map[enode.ID]*Node, lightNodeCount)
+	for i := 0; i < lightNodeCount; i++ {
+		conf := adapters.RandomNodeConfig()
+		conf.LightNode = true
+		node, err := network.NewNodeWithConfig(conf)
+		if err != nil {
+			t.Fatalf("error creating light node: %s", err)
+		}
+		if err := network.Start(node.ID()); err != nil {
+			t.Fatalf("error starting light node: %s", err)
+		}
+		lightNodes[node.ID()] = node
+	}
+
+	// Create 20 full nodes
+	fullNodeCount := 20
+	fullNodes := make(map[enode.ID]*Node, fullNodeCount)
+	for i := 0; i < fullNodeCount; i++ {
+		conf := adapters.RandomNodeConfig()
+		node, err := network.NewNodeWithConfig(conf)
+		if err != nil {
+			t.Fatalf("error creating node: %s", err)
+		}
+		if err := network.Start(node.ID()); err != nil {
+			t.Fatalf("error starting node: %s", err)
+		}
+		fullNodes[node.ID()] = node
+	}
+
+	// Check that network.GetBootNodes returns the boot node we created and only that bootnode
+	bootNodes := network.GetBootNodes()
+	if len(bootNodes) == 0 {
+		t.Fatal("GetBootNodes returned empty when size of one was expected")
+	}
+
+	for _, bn := range bootNodes {
+		if !bytes.Equal(bn.ID().Bytes(), bootNode.ID().Bytes()) {
+			t.Fatalf("Found an unexpected node in GetBootNodes: %s", bn.String())
+		}
+	}
+
+	// Check that the boot node's ID is the only one returned by GetBoodNodeIDs()
+	// If a non-matching ID is found, the test fails
+	bootNodeIDs := network.GetBootNodeIDs()
+	if len(bootNodeIDs) == 0 {
+		t.Fatal("GetBootNodeIDs returned empty when one ID was expected")
+	}
+
+	for _, id := range bootNodeIDs {
+		if !bytes.Equal(id.Bytes(), bootNode.ID().Bytes()) {
+			t.Fatalf("Found an unexpected enode.ID in GetBootNodeIDs: %s", id.String())
+		}
+	}
+
+	// Check that each of lightNodes (the light nodes we just created) are available from the GetLightNodes method.
+	// If a light node isn't found in GetLightNodes, the test fails.
+	for _, ln1 := range lightNodes {
+		match := false
+		lightNode1IDBytes := ln1.ID().Bytes()
+
+		for _, ln2 := range network.GetLightNodes() {
+			lightNode2IDBytes := ln2.ID().Bytes()
+			if bytes.Equal(lightNode1IDBytes, lightNode2IDBytes) {
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			t.Fatalf("A created light node was not returned by GetLightNodes(), ID: %s", ln1.ID().String())
+		}
+	}
+
+	// Check that the IDs of each of fullNodes are returned by GetFullNodeIDs()
+	// If a full not isn't found in GetFullNodeIDs(), the test fails
+	lightNodeIDs := network.GetLightNodeIDs()
+	for id1 := range lightNodes {
+		match := false
+		for _, id2 := range lightNodeIDs {
+			if bytes.Equal(id1.Bytes(), id2.Bytes()) {
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			t.Fatalf("Not all light nodes were returned by GetLightNodeIDs(), ID: %s", id1.String())
+		}
+	}
+
+	// Check that each of fullNodes (the full nodes we just created) are available from the GetFullNodes method.
+	// If a full node isn't found in GetFullNodes, the test fails.
+	for _, fn1 := range fullNodes {
+		match := false
+		fullNode1IDBytes := fn1.ID().Bytes()
+
+		for _, fn2 := range network.GetFullNodes() {
+			fullNode2IDBytes := fn2.ID().Bytes()
+			if bytes.Equal(fullNode1IDBytes, fullNode2IDBytes) {
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			t.Fatalf("A created full node was not returned by GetFullNodes(), ID: %s", fn1.ID().String())
+		}
+	}
+
+	// Check that the IDs of each of fullNodes are returned by GetFullNodeIDs()
+	// If a full not isn't found in GetFullNodeIDs(), the test fails
+	fullNodeIDs := network.GetFullNodeIDs()
+	for id1 := range fullNodes {
+		match := false
+		for _, id2 := range fullNodeIDs {
+			if bytes.Equal(id1.Bytes(), id2.Bytes()) {
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			t.Fatalf("Not all full nodes were returned by GetFullNodeIDs(), ID: %s", id1.String())
+		}
+	}
+
+	// Get all nodes, excluding the bootnode by passing the bootnode ID.
+	// Checks that the bootnode is excluded as expected and fails the test if not.
+	nodesExclBootNode := network.GetNodes(bootNode.ID())
+	for _, node := range nodesExclBootNode {
+		if bytes.Equal(node.ID().Bytes(), bootNode.ID().Bytes()) {
+			t.Fatalf("Bootnode still found in GetNodes when it has been explicitly excluded.")
+		}
+	}
+
+	// Get all node IDs and call GetNodesByID using them.
+	// The test then confirms that the nodes returned from GetNodes() match those returned from GetNodesByID(allIDs)
+	var nodeIDs []enode.ID
+	for _, node := range network.GetNodes() {
+		nodeIDs = append(nodeIDs, node.ID())
+	}
+
+	nodesByID := network.GetNodesByID(nodeIDs)
+	for _, node1 := range network.GetNodes() {
+		match := false
+		node1IDBytes := node1.ID().Bytes()
+		for _, node2 := range nodesByID {
+			node2IDBytes := node2.ID().Bytes()
+			if bytes.Equal(node1IDBytes, node2IDBytes) {
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			t.Fatalf("A node was found in GetNodes() that was not returned by GetNodesByID() for all node IDs")
 		}
 	}
 }

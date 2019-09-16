@@ -56,6 +56,10 @@ type Network struct {
 	Nodes   []*Node `json:"nodes"`
 	nodeMap map[enode.ID]int
 
+	// Node subtypes are also mapped separately, so they can be distinguished quickly
+	bootNodeMap  map[enode.ID]int
+	lightNodeMap map[enode.ID]int
+
 	Conns   []*Conn `json:"conns"`
 	connMap map[string]int
 
@@ -71,6 +75,8 @@ func NewNetwork(nodeAdapter adapters.NodeAdapter, conf *NetworkConfig) *Network 
 		NetworkConfig: *conf,
 		nodeAdapter:   nodeAdapter,
 		nodeMap:       make(map[enode.ID]int),
+		bootNodeMap:   make(map[enode.ID]int),
+		lightNodeMap:  make(map[enode.ID]int),
 		connMap:       make(map[string]int),
 		quitc:         make(chan struct{}),
 	}
@@ -120,7 +126,15 @@ func (net *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) 
 		Config: conf,
 	}
 	log.Trace("Node created", "id", conf.ID)
-	net.nodeMap[conf.ID] = len(net.Nodes)
+
+	nodeIndex := len(net.Nodes)
+	if conf.BootNode {
+		net.bootNodeMap[conf.ID] = nodeIndex
+	} else if conf.LightNode {
+		net.lightNodeMap[conf.ID] = nodeIndex
+	}
+
+	net.nodeMap[conf.ID] = nodeIndex
 	net.Nodes = append(net.Nodes, node)
 
 	// emit a "control" event
@@ -427,17 +441,162 @@ func (net *Network) getNodeByName(name string) *Node {
 	return nil
 }
 
-// GetNodes returns the existing nodes
-func (net *Network) GetNodes() (nodes []*Node) {
+// GetNodes returns the existing nodes.
+// Nodes can optionally be excluded by specifying their enode.ID.
+func (net *Network) GetNodes(excludeIDs ...enode.ID) []*Node {
 	net.lock.RLock()
 	defer net.lock.RUnlock()
 
-	return net.getNodes()
+	return net.getNodes(excludeIDs)
 }
 
-func (net *Network) getNodes() (nodes []*Node) {
-	nodes = append(nodes, net.Nodes...)
+func (net *Network) getNodes(excludeIDs []enode.ID) []*Node {
+	if len(excludeIDs) > 0 {
+		// Get all curent nodeIDs
+		nodeIDs := make([]enode.ID, 0, len(net.nodeMap))
+		for id := range net.nodeMap {
+			nodeIDs = append(nodeIDs, id)
+		}
+
+		// Return the difference of nodeIDs and excludeIDs
+		filteredIDs := filterIDs(nodeIDs, excludeIDs)
+		return net.getNodesByID(filteredIDs)
+	} else {
+		return net.Nodes
+	}
+}
+
+// GetNodesByID returns existing nodes with the given enode.IDs.
+// If a node doesn't exist with a given enode.ID, it is ignored.
+func (net *Network) GetNodesByID(nodeIDs []enode.ID) []*Node {
+	net.lock.RLock()
+	defer net.lock.RUnlock()
+
+	return net.getNodesByID(nodeIDs)
+}
+
+func (net *Network) getNodesByID(nodeIDs []enode.ID) []*Node {
+	nodes := make([]*Node, 0, len(nodeIDs))
+	for _, id := range nodeIDs {
+		node := net.getNode(id)
+		if node != nil {
+			nodes = append(nodes, node)
+		}
+	}
+
 	return nodes
+}
+
+// GetBootNodes returns all configured bootnodes in the network.
+func (net *Network) GetBootNodes() []*Node {
+	net.lock.RLock()
+	defer net.lock.RUnlock()
+
+	return net.getBootNodes()
+}
+
+func (net *Network) getBootNodes() []*Node {
+	bootNodes := make([]*Node, 0, len(net.bootNodeMap))
+	for _, i := range net.bootNodeMap {
+		bootNodes = append(bootNodes, net.Nodes[i])
+	}
+
+	return bootNodes
+}
+
+// GetBootNodeIDs returns a slice of all bootnode enode.ID
+func (net *Network) GetBootNodeIDs() []enode.ID {
+	net.lock.RLock()
+	defer net.lock.RUnlock()
+
+	return net.getBootNodeIDs()
+}
+
+func (net *Network) getBootNodeIDs() []enode.ID {
+	bootNodeIDs := make([]enode.ID, 0, len(net.bootNodeMap))
+	for id := range net.bootNodeMap {
+		bootNodeIDs = append(bootNodeIDs, id)
+	}
+
+	return bootNodeIDs
+}
+
+// GetLightNodes returns all configured light nodes in the network.
+func (net *Network) GetLightNodes() []*Node {
+	net.lock.RLock()
+	defer net.lock.RUnlock()
+
+	return net.getLightNodes()
+}
+
+func (net *Network) getLightNodes() []*Node {
+	lightNodes := make([]*Node, 0, len(net.lightNodeMap))
+	for _, i := range net.lightNodeMap {
+		lightNodes = append(lightNodes, net.Nodes[i])
+	}
+
+	return lightNodes
+}
+
+// GetLightNodeIDs returns a slice of all light node enode.ID
+func (net *Network) GetLightNodeIDs() []enode.ID {
+	net.lock.RLock()
+	defer net.lock.RUnlock()
+
+	return net.getLightNodeIDs()
+}
+
+func (net *Network) getLightNodeIDs() []enode.ID {
+	lightNodeIDs := make([]enode.ID, 0, len(net.lightNodeMap))
+	for id := range net.lightNodeMap {
+		lightNodeIDs = append(lightNodeIDs, id)
+	}
+
+	return lightNodeIDs
+}
+
+// GetFullNodes returns all configured full nodes in the network.
+// This excludes bootnodes and lightnodes.
+func (net *Network) GetFullNodes() []*Node {
+	net.lock.RLock()
+	defer net.lock.RUnlock()
+
+	return net.getFullNodes()
+}
+
+// Collect the enode.IDs of all nodes types that are not full nodes and provide them to getNodes for exclusion
+func (net *Network) getFullNodes() []*Node {
+	excludeNodeCount := len(net.lightNodeMap) + len(net.bootNodeMap)
+	excludeIDs := make([]enode.ID, 0, excludeNodeCount)
+	for ID := range net.lightNodeMap {
+		excludeIDs = append(excludeIDs, ID)
+	}
+
+	for ID := range net.bootNodeMap {
+		excludeIDs = append(excludeIDs, ID)
+	}
+
+	return net.getNodes(excludeIDs)
+}
+
+// GetFullNodeIDs returns a slice of all full node enode.ID
+func (net *Network) GetFullNodeIDs() []enode.ID {
+	net.lock.RLock()
+	defer net.lock.RUnlock()
+
+	return net.getFullNodeIDs()
+}
+
+func (net *Network) getFullNodeIDs() []enode.ID {
+	// The number of full nodes is the total number minus all sub mapping counts
+	fullNodeCount := len(net.nodeMap) - len(net.lightNodeMap) - len(net.bootNodeMap)
+	fullNodeIDs := make([]enode.ID, 0, fullNodeCount)
+
+	for _, node := range net.getFullNodes() {
+		fullNodeIDs = append(fullNodeIDs, node.ID())
+	}
+
+	return fullNodeIDs
 }
 
 // GetRandomUpNode returns a random node on the network, which is running.
@@ -469,7 +628,7 @@ func (net *Network) GetRandomDownNode(excludeIDs ...enode.ID) *Node {
 }
 
 func (net *Network) getDownNodeIDs() (ids []enode.ID) {
-	for _, node := range net.getNodes() {
+	for _, node := range net.Nodes {
 		if !node.Up() {
 			ids = append(ids, node.ID())
 		}
@@ -616,6 +775,8 @@ func (net *Network) Reset() {
 	//re-initialize the maps
 	net.connMap = make(map[string]int)
 	net.nodeMap = make(map[enode.ID]int)
+	net.bootNodeMap = make(map[enode.ID]int)
+	net.lightNodeMap = make(map[enode.ID]int)
 
 	net.Nodes = nil
 	net.Conns = nil
