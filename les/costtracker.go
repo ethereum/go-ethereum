@@ -360,6 +360,7 @@ func (ct *costTracker) gfLoop() {
 							default:
 							}
 						}
+						globalFactorGauge.Update(int64(1000 * factor))
 						log.Debug("global cost factor updated", "factor", factor)
 					}
 				}

@@ -438,9 +438,6 @@ func (lc *LightChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []com
 //
 // Note: ancestor == 0 returns the same block, 1 returns its parent and so on.
 func (lc *LightChain) GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64) {
-	lc.chainmu.RLock()
-	defer lc.chainmu.RUnlock()
-
 	return lc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
 }
 
