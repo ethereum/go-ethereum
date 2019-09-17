@@ -335,7 +335,7 @@ That can then be executed with:
 
 Since this function will disappear after restarting geth, it can be helpful to store
 commonly used functions to be recalled later. The
-[loadScript](../interface/javascript-console#loadscript)
+[loadScript](../interface/javascript-console)
 function makes this very easy.
 
 First, save the `checkAllBalances()` function definition to a file on your computer. For

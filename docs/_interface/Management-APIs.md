@@ -90,22 +90,22 @@ extra management API namespaces:
 
 | [admin](#admin)              | [debug](#debug)                                   | [miner](#miner)                     | [personal](#personal)                    | [txpool](#txpool)          |
 | :--------------------------- | :-----------------------------------------------  | :---------------------------------- | :--------------------------------------- | :------------------------- |
-| [addPeer](#admin_addpeer)    | [backtraceAt](#debug_backtraceAt)                 | [setExtra](#miner_setextra)         | [ecRecover](#personal_ecrecover)         | [content](#txpool_content) |
-| [datadir](#admin_datadir)          | [blockProfile](#debug_blockProfile)               | [setGasPrice](#miner_setgasprice)   | [importRawKey](#personal_importrawkey)   | [inspect](#txpool_inspect) |
-| [nodeInfo](#admin_nodeinfo)  | [cpuProfile](#debug_cpuProfile)                   | [start](#miner_start)               | [listAccounts](#personal_listaccounts)   | [status](#txpool_status)   |
+| [addPeer](#admin_addpeer)    | [backtraceAt](#debug_backtraceat)                 | [setExtra](#miner_setextra)         | [ecRecover](#personal_ecrecover)         | [content](#txpool_content) |
+| [datadir](#admin_datadir)          | [blockProfile](#debug_blockprofile)               | [setGasPrice](#miner_setgasprice)   | [importRawKey](#personal_importrawkey)   | [inspect](#txpool_inspect) |
+| [nodeInfo](#admin_nodeinfo)  | [cpuProfile](#debug_cpuprofile)                   | [start](#miner_start)               | [listAccounts](#personal_listaccounts)   | [status](#txpool_status)   |
 | [peers](#admin_peers)        | [dumpBlock](#debug_dumpblock)                     | [stop](#miner_stop)                 | [lockAccount](#personal_lockaccount)     |                            |
-| [setSolc](#admin_setsolc)    | [gcStats](#debug_gcStats)                         | [getHashrate](#miner_gethashrate)   | [newAccount](#personal_newaccount)       |                            |
+| [setSolc](#admin_setsolc)    | [gcStats](#debug_gcstats)                         | [getHashrate](#miner_gethashrate)   | [newAccount](#personal_newaccount)       |                            |
 | [startRPC](#admin_startrpc)  | [getBlockRlp](#debug_getblockrlp)                 | [setEtherbase](#miner_setetherbase) | [unlockAccount](#personal_unlockaccount) |                            |
 | [startWS](#admin_startws)    | [goTrace](#debug_goTrace)                         |                                     | [sendTransaction](#personal_sendtransaction) |                        |
 | [stopRPC](#admin_stoprpc)    | [memStats](#debug_memStats)                       |                                     | [sign](#personal_sign)                   |                            |
 | [stopWS](#admin_stopws)      | [seedHash](#debug_seedhash)[sign](#personal_sign)|                                      |                                          |                            |
-|                              | [setBlockProfileRate](#debug_setBlockProfileRate) |                                     |                                          |                            |
+|                              | [setBlockProfileRate](#debug_setblockprofilerate) |                                     |                                          |                            |
 |                              | [setHead](#debug_sethead)                         |                                     |                                          |                            |
 |                              | [stacks](#debug_stacks)                           |                                     |                                          |                            |
-|                              | [startCPUProfile](#debug_startCPUProfile)         |                                     |                                          |                            |
-|                              | [startGoTrace](#debug_startGoTrace)               |                                     |                                          |                            |
-|                              | [stopCPUProfile](#debug_stopCPUProfile)           |                                     |                                          |                            |
-|                              | [stopGoTrace](#debug_stopGoTrace)                 |                                     |                                          |                            |
+|                              | [startCPUProfile](#debug_startcpuprofile)         |                                     |                                          |                            |
+|                              | [startGoTrace](#debug_startgotrace)               |                                     |                                          |                            |
+|                              | [stopCPUProfile](#debug_stopcpuprofile)           |                                     |                                          |                            |
+|                              | [stopGoTrace](#debug_stopgotrace)                 |                                     |                                          |                            |
 |                              | [traceBlock](#debug_traceblock)                   |                                     |                                          |                            |
 |                              | [traceBlockByNumber](#debug_blockbynumber)        |                                     |                                          |                            |
 |                              | [traceBlockByHash](#debug_blockbyhash)            |                                     |                                          |                            |
@@ -113,8 +113,8 @@ extra management API namespaces:
 |                              | [traceTransaction](#debug_tracetransaction)       |                                     |                                          |                            |
 |                              | [verbosity](#debug_verbosity)                     |                                     |                                          |                            |
 |                              | [vmodule](#debug_vmodule)                         |                                     |                                          |                            |
-|                              | [writeBlockProfile](#debug_writeBlockProfile)     |                                     |                                          |                            |
-|                              | [writeMemProfile](#debug_writeMemProfile)         |                                     |                                          |                            |
+|                              | [writeBlockProfile](#debug_writeblockprofile)     |                                     |                                          |                            |
+|                              | [writeMemProfile](#debug_writememprofile)         |                                     |                                          |                            |
 
 ## Admin
 
@@ -627,7 +627,7 @@ References:
 
 ### debug_traceBlockByNumber
 
-Similar to [debug_traceBlock](#debug_traceBlock), `traceBlockByNumber` accepts a block number and will replay the
+Similar to [debug_traceBlock](#debug_traceblock), `traceBlockByNumber` accepts a block number and will replay the
 block that is already present in the database.
 
 | Client  | Method invocation                                                              |
@@ -641,7 +641,7 @@ References:
 
 ### debug_traceBlockByHash
 
-Similar to [debug_traceBlock](#debug_traceBlock), `traceBlockByHash` accepts a block hash and will replay the
+Similar to [debug_traceBlock](#debug_traceblock), `traceBlockByHash` accepts a block hash and will replay the
 block that is already present in the database.
 
 | Client  | Method invocation                                                               |
@@ -655,7 +655,7 @@ References:
 
 ### debug_traceBlockFromFile
 
-Similar to [debug_traceBlock](#debug_traceBlock), `traceBlockFromFile` accepts a file containing the RLP of the block.
+Similar to [debug_traceBlock](#debug_traceblock), `traceBlockFromFile` accepts a file containing the RLP of the block.
 
 | Client  | Method invocation                                                                |
 |:-------:|----------------------------------------------------------------------------------|

@@ -34,7 +34,7 @@ Contracts can receive transfers just like externally controlled accounts, but th
 blockchain 上で有効となる contract は Ethereum 特別仕様の バイナリの形式で、EVM byte コード と呼ばれます。
 しかしながら、典型的には、contract は [solidity](https://github.com/ethereum/wiki/wiki/Solidity-Tutorial) のような高級言語で記述され、blockchain 上に upload するために、この byte コードへコンパイルされます。
 
-flontier リリースでは、geth は Christian R. と Lefteris K が手がけた、コマンドライン [solidity コンパイラ](https://github.com/ethereum/cpp-ethereum/tree/develop/solc) である `solc` をシステムコールで呼び出すことを通して、solidity コンパイルをサポートしています。
+flontier リリースでは、geth は Christian R. と Lefteris K が手がけた、コマンドライン [solidity コンパイラ](https://solidity.readthedocs.io/en/latest/installing-solidity.html) である `solc` をシステムコールで呼び出すことを通して、solidity コンパイルをサポートしています。
 以下もお試しください。
 * [Solidity realtime compiler](https://chriseth.github.io/cpp-ethereum/) (by Christian R) 
 * [Cosmo](http://meteor-dapp-cosmo.meteor.com) 
