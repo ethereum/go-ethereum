@@ -33,7 +33,7 @@ import (
 const (
 	negBalanceExpTC      = time.Hour        // time constant for exponentially reducing negative balance
 	fixedPointMultiplier = 0x1000000        // constant to convert logarithms to fixed point format
-	connectedBias        = time.Minute      // this bias is applied in favor of already connected clients in order to avoid kicking them out very soon
+	connectedBias        = time.Minute * 5  // this bias is applied in favor of already connected clients in order to avoid kicking them out very soon
 	lazyQueueRefresh     = time.Second * 10 // refresh period of the connected queue
 )
 
@@ -366,12 +366,14 @@ func (f *clientPool) setLimits(count int, totalCap uint64) {
 
 	f.countLimit = count
 	f.capacityLimit = totalCap
-	now := mclock.Now()
-	f.connectedQueue.MultiPop(func(data interface{}, priority int64) bool {
-		c := data.(*clientInfo)
-		f.dropClient(c, now, true)
-		return f.connectedCapacity > f.capacityLimit || f.connectedQueue.Size() > f.countLimit
-	})
+	if f.connectedCapacity > f.capacityLimit || f.connectedQueue.Size() > f.countLimit {
+		now := mclock.Now()
+		f.connectedQueue.MultiPop(func(data interface{}, priority int64) bool {
+			c := data.(*clientInfo)
+			f.dropClient(c, now, true)
+			return f.connectedCapacity > f.capacityLimit || f.connectedQueue.Size() > f.countLimit
+		})
+	}
 }
 
 // requestCost feeds request cost after serving a request from the given peer.
