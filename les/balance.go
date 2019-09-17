@@ -67,7 +67,7 @@ type balanceCallback struct {
 // init initializes balanceTracker
 func (bt *balanceTracker) init(clock mclock.Clock, capacity uint64) {
 	bt.clock = clock
-	bt.initTime = clock.Now()
+	bt.initTime, bt.lastUpdate = clock.Now(), clock.Now() // Init timestamps
 	for i := range bt.callbackIndex {
 		bt.callbackIndex[i] = -1
 	}

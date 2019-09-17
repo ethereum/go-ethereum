@@ -44,14 +44,14 @@ const (
 	// freeConnectedBias is applied to already connected clients when new client
 	// is "free client". So that already connected client won't be kicked out very
 	// soon.
-	freeConnectedBias = time.Minute * 5
+	freeConnectedBias = time.Minute * 3
 
 	// priorityConnectedBias is applied to already connected clients when new client
 	// is "priority client". The value is smaller than freeConnectedBias, so that
 	// we can ensure most of new priority client can be accepted when pool is full.
 	// But if the balance of priority client is very small, there is no reason for
 	// very high priority.
-	priorityConnectedBias = time.Minute
+	priorityConnectedBias = time.Second * 30
 )
 
 // clientPool implements a client database that assigns a priority to each client
@@ -291,14 +291,16 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 			f.dropClient(c, f.clock.Now(), true)
 		}
 	}
-	if e.priority {
-		e.balanceTracker.addCallback(balanceCallbackZero, 0, func() { f.balanceExhausted(id) })
-	}
+	// Register new client to connection queue.
 	f.connectedMap[id] = e
 	f.connectedQueue.Push(e)
 	f.connectedCap += e.capacity
+	// If the current client is a paid client, notify it to update the capacity.
+	// And also monitor the status of client, downgrade it to normal client if
+	// positive balance is used up.
 	if e.capacity != f.freeClientCap {
 		e.peer.updateCapacity(e.capacity)
+		e.balanceTracker.addCallback(balanceCallbackZero, 0, func() { f.balanceExhausted(id) })
 	}
 	totalConnectedGauge.Update(int64(f.connectedCap))
 	clientConnectedMeter.Mark(1)
@@ -313,14 +315,14 @@ func (f *clientPool) disconnect(p clientPeer) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
+	// Short circuit if client pool is already closed.
 	if f.closed {
 		return
 	}
-	id := p.ID()
 	// Short circuit if the peer hasn't been registered.
-	e := f.connectedMap[id]
+	e := f.connectedMap[p.ID()]
 	if e == nil {
-		log.Debug("Client not connected", "address", p.freeClientId(), "id", peerIdToString(id))
+		log.Debug("Client not connected", "address", p.freeClientId(), "id", peerIdToString(p.ID()))
 		return
 	}
 	f.dropClient(e, f.clock.Now(), false)
@@ -383,6 +385,7 @@ func (f *clientPool) balanceExhausted(id enode.ID) {
 		c.capacity = f.freeClientCap
 		c.peer.updateCapacity(c.capacity)
 	}
+	f.ndb.delPB(id)
 }
 
 // setConnLimit sets the maximum number and total capacity of connected clients,
@@ -545,6 +548,7 @@ type nodeDB struct {
 	nbEvictCallBack func(mclock.AbsTime, negBalance) bool // Callback to determine whether the negative balance can be evicted.
 	clock           mclock.Clock
 	closeCh         chan struct{}
+	cleanupHook     func() // Test hook used for testing
 }
 
 func newNodeDB(db ethdb.Database, clock mclock.Clock) *nodeDB {
@@ -572,7 +576,9 @@ func (db *nodeDB) key(id []byte, neg bool) []byte {
 	if neg {
 		prefix = negativeBalancePrefix
 	}
-	db.auxbuf = db.auxbuf[:0]
+	if len(prefix)+len(db.verbuf)+len(id) > len(db.auxbuf) {
+		db.auxbuf = append(db.auxbuf, make([]byte, len(prefix)+len(db.verbuf)+len(id)-len(db.auxbuf))...)
+	}
 	copy(db.auxbuf[:len(db.verbuf)], db.verbuf[:])
 	copy(db.auxbuf[len(db.verbuf):len(db.verbuf)+len(prefix)], prefix)
 	copy(db.auxbuf[len(prefix)+len(db.verbuf):len(prefix)+len(db.verbuf)+len(id)], id)
@@ -692,6 +698,10 @@ func (db *nodeDB) expireNodes() {
 			deleted += 1
 			db.db.Delete(iter.Key())
 		}
+	}
+	// Invoke testing hook if it's not nil.
+	if db.cleanupHook != nil {
+		db.cleanupHook()
 	}
 	log.Debug("Expire nodes", "visited", visited, "deleted", deleted, "elapsed", common.PrettyDuration(time.Since(start)))
 }

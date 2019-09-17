@@ -54,7 +54,7 @@ func TestClientPoolL100C300P20(t *testing.T) {
 	testClientPool(t, 100, 300, 20, false)
 }
 
-const testClientPoolTicks = 500000
+const testClientPoolTicks = 100000
 
 type poolTestPeer int
 
@@ -134,11 +134,11 @@ func testClientPool(t *testing.T, connLimit, clientCount, paidCount int, randomD
 	}
 
 	expTicks := testClientPoolTicks/2*connLimit/clientCount + testClientPoolTicks/2*(connLimit-paidCount)/(clientCount-paidCount)
-	expMin := expTicks - expTicks/10
-	expMax := expTicks + expTicks/10
+	expMin := expTicks - expTicks/5
+	expMax := expTicks + expTicks/5
 	paidTicks := testClientPoolTicks/2*connLimit/clientCount + testClientPoolTicks/2
-	paidMin := paidTicks - paidTicks/10
-	paidMax := paidTicks + paidTicks/10
+	paidMin := paidTicks - paidTicks/5
+	paidMax := paidTicks + paidTicks/5
 
 	// check if the total connected time of peers are all in the expected range
 	for i, c := range connected {
@@ -352,6 +352,35 @@ func TestPositiveBalanceCalculation(t *testing.T) {
 	}
 }
 
+func TestDowngradePriorityClient(t *testing.T) {
+	var (
+		clock  mclock.Simulated
+		db     = rawdb.NewMemoryDatabase()
+		kicked = make(chan int, 10)
+	)
+	removeFn := func(id enode.ID) { kicked <- int(id[0]) } // Noop
+	pool := newClientPool(db, 1, &clock, removeFn)
+	defer pool.stop()
+	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
+	pool.setPriceFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
+
+	pool.addBalance(poolTestPeer(0).ID(), uint64(time.Minute), false)
+	pool.connect(poolTestPeer(0), 10)
+	clock.Run(time.Minute)             // All positive balance should be used up.
+	time.Sleep(300 * time.Millisecond) // Ensure the callback is called
+
+	pb := pool.ndb.getOrNewPB(poolTestPeer(0).ID())
+	if pb.value != 0 {
+		t.Fatalf("Positive balance mismatch, want %v, got %v", 0, pb.value)
+	}
+
+	pool.addBalance(poolTestPeer(0).ID(), uint64(time.Minute), false)
+	pb = pool.ndb.getOrNewPB(poolTestPeer(0).ID())
+	if pb.value != uint64(time.Minute) {
+		t.Fatalf("Positive balance mismatch, want %v, got %v", uint64(time.Minute), pb.value)
+	}
+}
+
 func TestNegativeBalanceCalculation(t *testing.T) {
 	var (
 		clock  mclock.Simulated
@@ -443,7 +472,10 @@ func TestNodeDB(t *testing.T) {
 }
 
 func TestNodeDBExpiration(t *testing.T) {
-	var iterated int
+	var (
+		iterated int
+		done     = make(chan struct{}, 1)
+	)
 	callback := func(now mclock.AbsTime, b negBalance) bool {
 		iterated += 1
 		return true
@@ -452,6 +484,7 @@ func TestNodeDBExpiration(t *testing.T) {
 	ndb := newNodeDB(rawdb.NewMemoryDatabase(), clock)
 	defer ndb.close()
 	ndb.nbEvictCallBack = callback
+	ndb.cleanupHook = func() { done <- struct{}{} }
 
 	var cases = []struct {
 		ip      string
@@ -466,7 +499,11 @@ func TestNodeDBExpiration(t *testing.T) {
 		ndb.setNB(c.ip, c.balance)
 	}
 	clock.Run(time.Hour + time.Minute)
-	time.Sleep(300 * time.Millisecond)
+	select {
+	case <-done:
+	case <-time.NewTimer(time.Second).C:
+		t.Fatalf("timeout")
+	}
 	if iterated != 4 {
 		t.Fatalf("Failed to evict useless negative balances, want %v, got %d", 4, iterated)
 	}
@@ -475,7 +512,11 @@ func TestNodeDBExpiration(t *testing.T) {
 		ndb.setNB(c.ip, c.balance)
 	}
 	clock.Run(time.Hour + time.Minute)
-	time.Sleep(300 * time.Millisecond)
+	select {
+	case <-done:
+	case <-time.NewTimer(time.Second).C:
+		t.Fatalf("timeout")
+	}
 	if iterated != 8 {
 		t.Fatalf("Failed to evict useless negative balances, want %v, got %d", 4, iterated)
 	}
