@@ -91,10 +91,10 @@ extra management API namespaces:
 | [admin](#admin)              | [debug](#debug)                                   | [miner](#miner)                     | [personal](#personal)                    | [txpool](#txpool)          |
 | :--------------------------- | :-----------------------------------------------  | :---------------------------------- | :--------------------------------------- | :------------------------- |
 | [addPeer](#admin_addpeer)    | [backtraceAt](#debug_backtraceAt)                 | [setExtra](#miner_setextra)         | [ecRecover](#personal_ecrecover)         | [content](#txpool_content) |
-| [datadir](#datadir)          | [blockProfile](#debug_blockProfile)               | [setGasPrice](#miner_setgasprice)   | [importRawKey](#personal_importrawkey)   | [inspect](#txpool_inspect) |
+| [datadir](#admin_datadir)          | [blockProfile](#debug_blockProfile)               | [setGasPrice](#miner_setgasprice)   | [importRawKey](#personal_importrawkey)   | [inspect](#txpool_inspect) |
 | [nodeInfo](#admin_nodeinfo)  | [cpuProfile](#debug_cpuProfile)                   | [start](#miner_start)               | [listAccounts](#personal_listaccounts)   | [status](#txpool_status)   |
 | [peers](#admin_peers)        | [dumpBlock](#debug_dumpblock)                     | [stop](#miner_stop)                 | [lockAccount](#personal_lockaccount)     |                            |
-| [setSolc](#admin_setcolc)    | [gcStats](#debug_gcStats)                         | [getHashrate](#miner_gethashrate)   | [newAccount](#personal_newaccount)       |                            |
+| [setSolc](#admin_setsolc)    | [gcStats](#debug_gcStats)                         | [getHashrate](#miner_gethashrate)   | [newAccount](#personal_newaccount)       |                            |
 | [startRPC](#admin_startrpc)  | [getBlockRlp](#debug_getblockrlp)                 | [setEtherbase](#miner_setetherbase) | [unlockAccount](#personal_unlockaccount) |                            |
 | [startWS](#admin_startws)    | [goTrace](#debug_goTrace)                         |                                     | [sendTransaction](#personal_sendtransaction) |                        |
 | [stopRPC](#admin_stoprpc)    | [memStats](#debug_memStats)                       |                                     | [sign](#personal_sign)                   |                            |
