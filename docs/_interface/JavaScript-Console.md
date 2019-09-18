@@ -3,7 +3,7 @@ title: JavaScript console
 ---
 Ethereum implements a **javascript runtime environment** (JSRE) that can be used in either interactive (console) or non-interactive (script) mode.
  
-Ethereum's Javascript console exposes the full [web3 JavaScript Dapp API](https://github.com/ethereum/wiki/wiki/JavaScript-API) and the [admin API](#javascript-console-api).
+Ethereum's Javascript console exposes the full [web3 JavaScript Dapp API](https://github.com/ethereum/wiki/wiki/JavaScript-API) and the admin API.
 
 ## Interactive use: the JSRE REPL  Console
 

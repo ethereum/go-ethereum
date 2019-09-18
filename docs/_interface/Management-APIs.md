@@ -1,7 +1,7 @@
 ---
 title: Management APIs
 ---
-Beside the official [DApp APIs](https://github.com/ethereum/wiki/JSON-RPC) interface go-ethereum
+Beside the official [DApp APIs](https://github.com/ethereum/wiki/wiki/JSON-RPC) interface go-ethereum
 has support for additional management APIs. Similar to the DApp APIs, these are also provided using
 [JSON-RPC](http://www.jsonrpc.org/specification) and follow exactly the same conventions. Geth comes
 with a console client which has support for all additional APIs described here.
@@ -96,8 +96,8 @@ extra management API namespaces:
 | [peers](#admin_peers)        | [dumpBlock](#debug_dumpblock)                     | [stop](#miner_stop)                 | [lockAccount](#personal_lockaccount)     |                            |
 | [setSolc](#admin_setsolc)    | [gcStats](#debug_gcstats)                         | [getHashrate](#miner_gethashrate)   | [newAccount](#personal_newaccount)       |                            |
 | [startRPC](#admin_startrpc)  | [getBlockRlp](#debug_getblockrlp)                 | [setEtherbase](#miner_setetherbase) | [unlockAccount](#personal_unlockaccount) |                            |
-| [startWS](#admin_startws)    | [goTrace](#debug_goTrace)                         |                                     | [sendTransaction](#personal_sendtransaction) |                        |
-| [stopRPC](#admin_stoprpc)    | [memStats](#debug_memStats)                       |                                     | [sign](#personal_sign)                   |                            |
+| [startWS](#admin_startws)    | [goTrace](#debug_gotrace)                         |                                     | [sendTransaction](#personal_sendtransaction) |                        |
+| [stopRPC](#admin_stoprpc)    | [memStats](#debug_memstats)                       |                                     | [sign](#personal_sign)                   |                            |
 | [stopWS](#admin_stopws)      | [seedHash](#debug_seedhash)[sign](#personal_sign)|                                      |                                          |                            |
 |                              | [setBlockProfileRate](#debug_setblockprofilerate) |                                     |                                          |                            |
 |                              | [setHead](#debug_sethead)                         |                                     |                                          |                            |
@@ -107,8 +107,8 @@ extra management API namespaces:
 |                              | [stopCPUProfile](#debug_stopcpuprofile)           |                                     |                                          |                            |
 |                              | [stopGoTrace](#debug_stopgotrace)                 |                                     |                                          |                            |
 |                              | [traceBlock](#debug_traceblock)                   |                                     |                                          |                            |
-|                              | [traceBlockByNumber](#debug_blockbynumber)        |                                     |                                          |                            |
-|                              | [traceBlockByHash](#debug_blockbyhash)            |                                     |                                          |                            |
+|                              | [traceBlockByNumber](#debug_traceblockbynumber)        |                                     |                                          |                            |
+|                              | [traceBlockByHash](#debug_traceblockbyhash)            |                                     |                                          |                            |
 |                              | [traceBlockFromFile](#debug_traceblockfromfile)   |                                     |                                          |                            |
 |                              | [traceTransaction](#debug_tracetransaction)       |                                     |                                          |                            |
 |                              | [verbosity](#debug_verbosity)                     |                                     |                                          |                            |
@@ -868,6 +868,16 @@ flag.
 
 The `miner` API allows you to remote control the node's mining operation and set various
 mining specific settings.
+
+### miner_getHashrate
+
+TBD
+The result is in H/s (Hash operations per second). 
+
+| Client  | Method invocation                                           |
+|:-------:|-------------------------------------------------------------|
+| Console | `miner.getHashrate()`                                       |
+| RPC     | `{"method": "miner_getHashrate", "params": []}`             |
 
 ### miner_setExtra
 

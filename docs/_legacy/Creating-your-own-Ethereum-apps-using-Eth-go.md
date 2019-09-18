@@ -4,11 +4,11 @@ title: Creating your own Ethereum apps using Eth go
 
 **This page is heavily outdated**
 
-The modular nature of Go and the Ethereum Go implementation, [eth-go](https://github.com/ethereum/eth-go), make it very easy to build your own Ethereum native applications. 
+The modular nature of Go and the Ethereum Go implementation make it very easy to build your own Ethereum native applications. 
 
 This post will cover the minimal steps required to build an native Ethereum application.
 
-Ethereum comes with a global config found in the [ethutil](https://github.com/ethereum/eth-go/tree/master/ethutil) package. The global config requires you to set a base path to store it's files (database, settings, etc).
+Ethereum comes with a global config found in the ethutil package. The global config requires you to set a base path to store it's files (database, settings, etc).
 
 ```go
 func main() {
@@ -19,7 +19,7 @@ func main() {
 
 ReadConfig takes four arguments. The data folder to use, a log flag, a globalConf instance and an id string to identify your app to other nodes in the network.
 
-Once you've configured the global config you can set up and create your Ethereum node. The Ethereum Object, or Node, will handle all trafic from and to the Ethereum network as well as handle all incoming block and transactions. A new node can be created through the `new` method found in [eth-go](https://github.com/ethereum/eth-go).
+Once you've configured the global config you can set up and create your Ethereum node. The Ethereum Object, or Node, will handle all trafic from and to the Ethereum network as well as handle all incoming block and transactions. A new node can be created through the `new` method found in eth-go.
 
 ```go
 func main() {
