@@ -291,5 +291,5 @@ eth -m on -G -a <coinbase> -i -v 8 //
 * https://github.com/ethereum/wiki/wiki/Ethash
 * [Benchmarking results for GPU mining](https://forum.ethereum.org/discussion/2134/gpu-mining-is-out-come-and-let-us-know-of-your-bench-scores)
 * [historic moment](https://twitter.com/gavofyork/status/586623875577937922)
-* [live mining statistic](https://etherapps.info/stats/mining)
+* [live mining statistic](https://ethstats.net/)
 * [netstat ethereum network monitor](https://stats.ethdev.com)

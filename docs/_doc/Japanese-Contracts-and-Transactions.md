@@ -37,7 +37,7 @@ blockchain 上で有効となる contract は Ethereum 特別仕様の バイナ
 flontier リリースでは、geth は Christian R. と Lefteris K が手がけた、コマンドライン [solidity コンパイラ](https://solidity.readthedocs.io/en/latest/installing-solidity.html) である `solc` をシステムコールで呼び出すことを通して、solidity コンパイルをサポートしています。
 以下もお試しください。
 * [Solidity realtime compiler](https://chriseth.github.io/cpp-ethereum/) (by Christian R) 
-* [Cosmo](http://meteor-dapp-cosmo.meteor.com) 
+* [Cosmo](https://github.com/cosmo-project/meteor-dapp-cosmo)
 * [Mix]() 
 * [AlethZero]()
 

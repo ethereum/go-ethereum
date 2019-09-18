@@ -85,7 +85,7 @@ IRC Freenode channels:
 * `#dappdevs`: Dapp developers channel
 * `#ethdev`: buildserver etc
 
-[IRC Logs by ZeroGox](https://zerogox.com/bot/log)
+IRC Logs by ZeroGox
 
 ### Gitter 
 
@@ -100,7 +100,7 @@ IRC Freenode channels:
 
 ### The ZeroGox Bot
 
-[ZeroGox Bot](https://zerogox.com/bot)
+ZeroGox Bot
 
 ### Dapp developers' mailing list
 
