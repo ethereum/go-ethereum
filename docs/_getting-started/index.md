@@ -18,7 +18,7 @@ brew tap ethereum/ethereum
 brew install ethereum
 ```
 
-_[Read this guide](/install-and-build/Installation-Instructions-for-Mac) further Homebrew options._
+_[Read this guide](/install-and-build/Installing-Geth#install-on-macos-via-homebrew) further Homebrew options._
 
 ### Install on Ubuntu via PPAs
 
@@ -43,7 +43,7 @@ sudo apt-get update
 sudo apt-get install ethereum
 ```
 
-_[Read this guide](/install-and-build/Installation-Instructions-for-Ubuntu) for further Ubuntu options._
+_[Read this guide](/install-and-build/Installing-Geth#install-on-ubuntu-via-ppas) for further Ubuntu options._
 
 ### Install on Windows
 
@@ -76,7 +76,7 @@ docker pull ethereum/client-go
 docker run -it -p 30303:30303 ethereum/client-go
 ```
 
-_[Read this guide](/install-and-build/Installation-Instructions-for-Docker) for further Docker options._
+_[Read this guide](/install-and-build/Installing-Geth#run-inside-docker-container) for further Docker options._
 
 ## Starting a node
 
