@@ -25,7 +25,7 @@ jobs:
       - wget https://github.com/gballet/ubuntu-18.4-go-rootfs/releases/download/ubuntu1804-go113/rootfs_v1.txz
       - sudo tar xfJ rootfs_v1.txz -C chrootdir
       - rm rootfs_v1.txz
-      - sudo cp /etc/resolv.conf chrootdir/etc
+      - sudo cp --remove-destination /etc/resolv.conf chrootdir/etc
       - sudo cp `which qemu-aarch64-static` chrootdir/usr/bin
       - sudo mkdir -p chrootdir/${TRAVIS_BUILD_DIR}
       - sudo rsync -a --exclude 'chrootdir' ${TRAVIS_BUILD_DIR}/ chrootdir/${TRAVIS_BUILD_DIR}/
