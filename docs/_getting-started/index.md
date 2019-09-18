@@ -119,3 +119,9 @@ In the console you can issue any of the Geth commands, for example, to list all 
 ```shell
 eth.accounts
 ```
+
+You can also enter the console directly when you start the node with the `console` command:
+
+```shell
+geth --syncmode "light" console
+```
