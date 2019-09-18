@@ -51,7 +51,7 @@ The basic premise being,
 
 The general flow for signing a transaction using e.g. geth is as follows:
 
-![image](sign_flow.png)
+![Sign flow](sign_flow.png)
 
 
 Clef relies on __sign-what-you-see__. To provide as much context as possible, 
@@ -65,14 +65,14 @@ Clef relies on __sign-what-you-see__. To provide as much context as possible,
 One setup scenario is to use virtualization, e.g. within QubesOS, where to 
 Clef is deployed on a non-networked machine (`ethvault` below)
 
-![](clef_qubes_qrexec.png)
+![Qubes](clef_qubes_qrexec.png)
 
 
 Another option is to deploy Clef on a separate physical device, e.g. USB Armory, 
 and access the CLI-UI via SSH on the interface provided by the USB ethernet 
 adapter, and expose HTTP interface via tunneling. 
 
-![](https://inversepath.com/images/usbarmory_coin_web.jpg)
+![USB armory from Inverse Path](https://inversepath.com/images/usbarmory_mark-one/usbarmory_coin_web.jpg)
 
 
 ## Multi-user setup
@@ -122,9 +122,9 @@ Enter password to approve:
 
 This is called the `internal api`, or `ui-api`. 
 
-![](clef_architecture_pt1.png)
+![Clef architecture 1](clef_architecture_pt1.png)
 
-![](clef_architecture_pt2.png)
+![Clef architecture 2](clef_architecture_pt2.png)
 
 ### Rules
 
@@ -247,13 +247,13 @@ In order to use rules, keystore passwords must be stored in `clef`. Clef uses an
 The `clef` daemon can be wrapped by an external process, which can then take
 the part of a UI. 
 
-![](clef_architecture_pt3.png)
+![Clef architecture 3](clef_architecture_pt3.png)
 QT UI on Ubuntu
-![](https://raw.githubusercontent.com/holiman/qtsigner/master/screenshot.png)
+![QT UI on Ubuntu](https://raw.githubusercontent.com/holiman/qtsigner/master/screenshot.png)
 
 GTK UI on Qubes
 
-![](https://raw.githubusercontent.com/ethereum/go-ethereum/master/cmd/clef/docs/qubes/qubes_newaccount-2.png)
+![GTK UI on Qubes](https://raw.githubusercontent.com/ethereum/go-ethereum/master/cmd/clef/docs/qubes/qubes_newaccount-2.png)
 
 ### Rules for UI apis
 
@@ -298,6 +298,6 @@ a corresponding (or exceeding) feature set:
 * EIP 191/712 - signing typed data
 
 Clef can even sign Clique headers in a private network
-![](clef_architecture_pt4.png)
+![Clef architecture 4](clef_architecture_pt4.png)
 
 

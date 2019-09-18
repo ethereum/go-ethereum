@@ -41,7 +41,7 @@ To get you hands dirty, here's a code snippet that will
 * Display some initial infos about your node
 * Subscribe to new blocks and display them live as they arrive
 
-<img src="http://i.imgur.com/LyTCCqg.png" width="512px" />
+<img src="http://i.imgur.com/LyTCCqg.png" width="512px" alt="Android in-process node"/>
 
 ```java
 import org.ethereum.geth.*;
