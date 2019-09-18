@@ -35,8 +35,7 @@ const OpenRPCSchema = `
     "methods": [
       {
         "name": "web3_clientVersion",
-        "description": "Returns the version of the current client",
-        "summary": "current client version",
+        "summary": "Returns the version of the current client.",
         "params": [],
         "result": {
           "name": "clientVersion",
@@ -49,15 +48,14 @@ const OpenRPCSchema = `
       },
       {
         "name": "web3_sha3",
-        "summary": "Hashes data",
-        "description": "Hashes data using the Keccak-256 algorithm",
+        "summary": "Hashes data using the Keccak-256 algorithm.",
         "params": [
           {
             "name": "data",
             "description": "data to hash using the Keccak-256 algorithm",
             "summary": "data to hash",
             "schema": {
-              "title": "datahash",
+              "title": "data",
               "type": "string",
               "pattern": "^0x[a-fA-F\\d]+$"
             }
@@ -88,7 +86,7 @@ const OpenRPCSchema = `
       },
       {
         "name": "net_listening",
-        "summary": "returns listening status",
+        "summary": "Returns listening status.",
         "description": "Determines if this client is listening for new network connections.",
         "params": [],
         "result": {
@@ -113,8 +111,7 @@ const OpenRPCSchema = `
       },
       {
         "name": "net_peerCount",
-        "summary": "number of peers",
-        "description": "Returns the number of peers currently connected to this client.",
+        "summary": "Returns the number of peers currently connected to this client.",
         "params": [],
         "result": {
           "name": "quantity",
@@ -128,16 +125,15 @@ const OpenRPCSchema = `
       },
       {
         "name": "net_version",
-        "summary": "chain ID associated with network",
-        "description": "Returns the chain ID associated with the current network.",
+        "summary": "Returns the network ID associated with the current network.",
         "params": [],
         "result": {
-          "name": "chainID",
-          "description": "chain ID associated with the current network",
+          "name": "networkID",
+          "description": "Network ID associated with the current network",
           "schema": {
-            "title": "chainID",
+            "title": "networkID",
             "type": "string",
-            "pattern": "^0x[a-fA-F\\d]+$"
+            "pattern": "^[\\d]+$"
           }
         }
       },
@@ -170,12 +166,12 @@ const OpenRPCSchema = `
       },
       {
         "name": "eth_chainId",
-        "summary": "Returns the currently configured chain id",
+        "summary": "Returns the currently configured chain id.",
         "description": "Returns the currently configured chain id, a value used in replay-protected transaction signing as introduced by [EIP-155](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-155.md).",
         "params": [],
         "result": {
           "name": "chainId",
-          "description": "hex format integer of the current chain id. Defaults are mainnet=8",
+          "description": "hex format integer of the current chain id. Defaults are ETC=61, ETH=1, Morden=62.",
           "schema": {
             "title": "chainId",
             "type": "string",
@@ -197,7 +193,8 @@ const OpenRPCSchema = `
       },
       {
         "name": "eth_estimateGas",
-        "summary": "Generates and returns an estimate of how much gas is necessary to allow the transaction to complete. The transaction will not be added to the blockchain. Note that the estimate may be significantly more than the amount of gas actually used by the transaction, for a variety of reasons including EVM mechanics and node performance.",
+        "summary": "Generates and returns an estimate of how much gas is necessary to allow the transaction to complete.",
+        "description": "Generates and returns an estimate of how much gas is necessary to allow the transaction to complete. The transaction will not be added to the blockchain. Note that the estimate may be significantly more than the amount of gas actually used by the transaction, for a variety of reasons including EVM mechanics and node performance.",
         "params": [
           {
             "$ref": "#/components/contentDescriptors/Transaction"
@@ -213,7 +210,7 @@ const OpenRPCSchema = `
       },
       {
         "name": "eth_gasPrice",
-        "summary": "Returns the current price per gas in wei",
+        "summary": "Returns the current price per gas in wei.",
         "params": [],
         "result": {
           "$ref": "#/components/contentDescriptors/GasPrice"
@@ -221,12 +218,12 @@ const OpenRPCSchema = `
       },
       {
         "name": "eth_getBalance",
-        "summary": "Returns balance of a given account or contract",
+        "summary": "Returns Ubiq balance of a given or account or contract in wei.",
         "params": [
           {
             "name": "address",
             "required": true,
-            "description": "The address of the acccount or contract",
+            "description": "The address of the account or contract",
             "schema": {
               "$ref": "#/components/schemas/Address"
             }
@@ -256,7 +253,7 @@ const OpenRPCSchema = `
       },
       {
         "name": "eth_getBlockByHash",
-        "summary": "Gets a block for a given hash",
+        "summary": "Gets a block for a given hash.",
         "params": [
           {
             "name": "blockHash",
@@ -292,7 +289,7 @@ const OpenRPCSchema = `
       },
       {
         "name": "eth_getBlockByNumber",
-        "summary": "Gets a block for a given number salad",
+        "summary": "Gets a block for a given number salad.",
         "params": [
           {
             "$ref": "#/components/contentDescriptors/BlockNumber"
@@ -807,7 +804,7 @@ const OpenRPCSchema = `
               "title": "storageKeys",
               "description": "The storage keys of all the storage slots being requested",
               "items": {
-                "description": "A storage key is indexed from the solidity compiler by the order it is declaired. For mappings it uses the keccak of the mapping key with its position (and recursively for X-dimensional mappings)",
+                "description": "A storage key is indexed from the solidity compiler by the order it is declared. For mappings it uses the keccak of the mapping key with its position (and recursively for X-dimensional mappings)",
                 "$ref": "#/components/schemas/Integer"
               }
             }
@@ -834,7 +831,7 @@ const OpenRPCSchema = `
                     "$ref": "#/components/schemas/AccountProof"
                   },
                   "balance": {
-                    "description": "The balance of the account or contract of the request",
+                    "description": "The Ubiq balance of the account or contract of the request",
                     "$ref": "#/components/schemas/Integer"
                   },
                   "codeHash": {
@@ -941,7 +938,7 @@ const OpenRPCSchema = `
       },
       {
         "name": "eth_pendingTransactions",
-        "summary": "Returns the pending transactions list",
+        "summary": "Returns the pending transactions list.",
         "params": [],
         "result": {
           "name": "pendingTransactions",
@@ -1000,7 +997,7 @@ const OpenRPCSchema = `
           {
             "name": "id",
             "required": true,
-            "description": "String identifiying the client",
+            "description": "String identifying the client",
             "schema": {
               "$ref": "#/components/schemas/DataWord"
             }
@@ -1139,7 +1136,7 @@ const OpenRPCSchema = `
       "schemas": {
         "ProofNode": {
           "type": "string",
-          "description": "An indiviual node used to prove a path down a merkle-patricia-tree",
+          "description": "An individual node used to prove a path down a merkle-patricia-tree",
           "$ref": "#/components/schemas/Bytes"
         },
         "AccountProof": {
@@ -1579,7 +1576,7 @@ const OpenRPCSchema = `
               "$ref": "#/components/schemas/IntOrPending"
             },
             "value": {
-              "description": "Value of ubiq being transferred in Wei",
+              "description": "Value of Ubiq being transferred in Wei",
               "$ref": "#/components/schemas/Keccak"
             },
             "v": {
