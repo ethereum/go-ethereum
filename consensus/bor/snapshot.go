@@ -198,14 +198,14 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 	for _, header := range headers {
 		// Remove any votes on checkpoint blocks
 		number := header.Number.Uint64()
-		if (number+1)%s.config.Epoch == 0 {
+		if (number+1)%s.config.Sprint == 0 {
 			// snap.Votes = nil
 			// snap.Tally = make(map[common.Address]Tally)
 		}
 
 		// Delete the oldest signer from the recent list to allow it signing again
-		if number >= s.config.Epoch && number-s.config.Epoch >= 0 {
-			delete(snap.Recents, number-s.config.Epoch)
+		if number >= s.config.Sprint && number-s.config.Sprint >= 0 {
+			delete(snap.Recents, number-s.config.Sprint)
 		}
 
 		// Resolve the authorization key and check against signers
@@ -225,7 +225,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		validators := snap.ValidatorSet.Validators
 		// proposer will be the last signer if block is not epoch block
 		proposer := snap.ValidatorSet.GetProposer().Address
-		// if number%s.config.Epoch != 0 {
+		// if number%s.config.Sprint != 0 {
 		// 	proposer = snap.Recents[number-1]
 		// }
 		proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
@@ -246,10 +246,11 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 
 		// add recents
 		snap.Recents[number] = signer
+		// TODO remove
 		fmt.Println("Recent signer", "number", number, "signer", signer.Hex())
 		// change proposer on epoch
-		if number > 0 && (number+1)%s.config.Epoch == 0 {
-			newVals, _ := GetValidators(number, snap.config.ValidatorContract, snap.ethAPI)
+		if number > 0 && (number+1)%s.config.Sprint == 0 {
+			newVals, _ := GetValidators(number, s.config.Sprint, s.config.ValidatorContract, snap.ethAPI)
 			v := getUpdatedValidatorSet(snap.ValidatorSet.Copy(), newVals)
 			v.IncrementProposerPriority(1)
 			snap.ValidatorSet = v
