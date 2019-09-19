@@ -57,6 +57,12 @@
 			"revisionTime": "2015-01-22T07:26:53Z"
 		},
 		{
+			"checksumSHA1": "WILMZlCPSNbyMzYRNo/RkDcUH2M=",
+			"path": "github.com/cloudflare/cloudflare-go",
+			"revision": "a80f83b9add9d67ca4098ccbf42cd865ebb36ffb",
+			"revisionTime": "2019-09-16T15:18:08Z"
+		},
+		{
 			"checksumSHA1": "dvabztWVQX8f6oMLRyv4dLH+TGY=",
 			"path": "github.com/davecgh/go-spew/spew",
 			"revision": "346938d642f2ec3594ed81d874461961cd0faa76",
@@ -843,6 +849,12 @@
 			"path": "golang.org/x/text/unicode/norm",
 			"revision": "31e7599a6c37728c25ca34167be099d072ad335d",
 			"revisionTime": "2019-04-05T05:38:27Z"
+		},
+		{
+			"checksumSHA1": "7Ev/X4Xe8P3961myez/hBKO05ig=",
+			"path": "golang.org/x/time/rate",
+			"revision": "9d24e82272b4f38b78bc8cff74fa936d31ccd8ef",
+			"revisionTime": "2019-02-15T22:48:40Z"
 		},
 		{
 			"checksumSHA1": "CEFTYXtWmgSh+3Ik1NmDaJcz4E0=",
