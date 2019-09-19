@@ -239,6 +239,7 @@ type parityChainSpec struct {
 		MaxCodeSizeTransition    hexutil.Uint64       `json:"maxCodeSizeTransition"`
 		EIP98Transition          hexutil.Uint64       `json:"eip98Transition"`
 		EIP150Transition         hexutil.Uint64       `json:"eip150Transition"`
+		EIP152Transition         hexutil.Uint64       `json:"eip152Transition"`
 		EIP160Transition         hexutil.Uint64       `json:"eip160Transition"`
 		EIP161abcTransition      hexutil.Uint64       `json:"eip161abcTransition"`
 		EIP161dTransition        hexutil.Uint64       `json:"eip161dTransition"`
@@ -250,8 +251,13 @@ type parityChainSpec struct {
 		EIP145Transition         hexutil.Uint64       `json:"eip145Transition"`
 		EIP1014Transition        hexutil.Uint64       `json:"eip1014Transition"`
 		EIP1052Transition        hexutil.Uint64       `json:"eip1052Transition"`
+		EIP1108Transition        hexutil.Uint64       `json:"eip1108Transition"`
 		EIP1283Transition        hexutil.Uint64       `json:"eip1283Transition"`
 		EIP1283DisableTransition hexutil.Uint64       `json:"eip1283DisableTransition"`
+		EIP1344Transition        hexutil.Uint64       `json:"eip1344Transition"`
+		EIP1884Transition        hexutil.Uint64       `json:"eip1884Transition"`
+		EIP2028Transition        hexutil.Uint64       `json:"eip2028Transition"`
+		EIP2200Transition        hexutil.Uint64       `json:"eip2200Transition"`
 	} `json:"params"`
 
 	Genesis struct {
@@ -358,7 +364,10 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	if num := genesis.Config.PetersburgBlock; num != nil {
 		spec.setConstantinopleFix(num)
 	}
-
+	// Istanbul
+	if num := genesis.Config.IstanbulBlock; num != nil {
+		spec.setIstanbul(num)
+	}
 	spec.Params.MaximumExtraDataSize = (hexutil.Uint64)(params.MaximumExtraDataSize)
 	spec.Params.MinGasLimit = (hexutil.Uint64)(params.MinGasLimit)
 	spec.Params.GasLimitBoundDivisor = (math2.HexOrDecimal64)(params.GasLimitBoundDivisor)
@@ -455,6 +464,15 @@ func (spec *parityChainSpec) setConstantinople(num *big.Int) {
 
 func (spec *parityChainSpec) setConstantinopleFix(num *big.Int) {
 	spec.Params.EIP1283DisableTransition = hexutil.Uint64(num.Uint64())
+}
+
+func (spec *parityChainSpec) setIstanbul(num *big.Int) {
+	spec.Params.EIP152Transition = hexutil.Uint64(num.Uint64())
+	spec.Params.EIP1108Transition = hexutil.Uint64(num.Uint64())
+	spec.Params.EIP1344Transition = hexutil.Uint64(num.Uint64())
+	spec.Params.EIP1884Transition = hexutil.Uint64(num.Uint64())
+	spec.Params.EIP2028Transition = hexutil.Uint64(num.Uint64())
+	spec.Params.EIP2200Transition = hexutil.Uint64(num.Uint64())
 }
 
 // pyEthereumGenesisSpec represents the genesis specification format used by the
