@@ -301,6 +301,43 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 	return stateDb.RawDump(false, false, true), nil
 }
 
+// IteratorAccountMaxResults is the maximum number of results to be returned per request
+const IteratorAccountMaxResults = 1000
+
+// IteratorAccountAt enumerates all accounts in the given block and start point in paging request
+func (api *PublicDebugAPI) IteratorAccountAt(blockNr rpc.BlockNumber, start []byte, maxResults int, nocode, nostorage, incompletes bool) (state.IteratorDump, error) {
+	var stateDb *state.StateDB
+	var err error
+
+	if blockNr == rpc.PendingBlockNumber {
+		// If we're dumping the pending state, we need to request
+		// both the pending block as well as the pending state from
+		// the miner and operate on those
+		_, stateDb = api.eth.miner.Pending()
+	} else {
+		var block *types.Block
+		if blockNr == rpc.LatestBlockNumber {
+			block = api.eth.blockchain.CurrentBlock()
+		} else {
+			block = api.eth.blockchain.GetBlockByNumber(uint64(blockNr))
+		}
+		if block == nil {
+			return state.IteratorDump{}, fmt.Errorf("block #%d not found", blockNr)
+		}
+
+		stateDb, err = api.eth.BlockChain().StateAt(block.Root())
+		if err != nil {
+			return state.IteratorDump{}, err
+		}
+	}
+
+	if maxResults > IteratorAccountMaxResults {
+		maxResults = IteratorAccountMaxResults
+	}
+
+	return stateDb.IteratorDump(nocode, nostorage, incompletes, start, maxResults), nil
+}
+
 // PrivateDebugAPI is the collection of Ethereum full node APIs exposed over
 // the private debugging endpoint.
 type PrivateDebugAPI struct {

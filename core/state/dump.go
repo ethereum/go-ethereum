@@ -51,6 +51,13 @@ type iterativeDump struct {
 	*json.Encoder
 }
 
+// IteratorDump is a
+type IteratorDump struct {
+	Root     string                         `json:"root"`
+	Accounts map[common.Address]DumpAccount `json:"accounts"`
+	Next     []byte                         `json:"next,omitempty"` // nil if no more accounts
+}
+
 // Collector interface which the state trie calls during iteration
 type collector interface {
 	onRoot(common.Hash)
@@ -62,6 +69,13 @@ func (d *Dump) onRoot(root common.Hash) {
 }
 
 func (d *Dump) onAccount(addr common.Address, account DumpAccount) {
+	d.Accounts[addr] = account
+}
+func (d *IteratorDump) onRoot(root common.Hash) {
+	d.Root = fmt.Sprintf("%x", root)
+}
+
+func (d *IteratorDump) onAccount(addr common.Address, account DumpAccount) {
 	d.Accounts[addr] = account
 }
 
@@ -88,11 +102,13 @@ func (d iterativeDump) onRoot(root common.Hash) {
 	}{root})
 }
 
-func (s *StateDB) dump(c collector, excludeCode, excludeStorage, excludeMissingPreimages bool) {
+func (s *StateDB) dump(c collector, excludeCode, excludeStorage, excludeMissingPreimages bool, start []byte, maxResults int) (nextKey []byte) {
 	emptyAddress := (common.Address{})
 	missingPreimages := 0
 	c.onRoot(s.trie.Hash())
-	it := trie.NewIterator(s.trie.NodeIterator(nil))
+
+	var count int
+	it := trie.NewIterator(s.trie.NodeIterator(start))
 	for it.Next() {
 		var data Account
 		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
@@ -130,10 +146,25 @@ func (s *StateDB) dump(c collector, excludeCode, excludeStorage, excludeMissingP
 			}
 		}
 		c.onAccount(addr, account)
+
+		if maxResults <= 0 {
+			continue
+		}
+
+		count++
+		if count >= maxResults {
+			if it.Next() {
+				nextKey = it.Key
+			}
+			break
+		}
 	}
+
 	if missingPreimages > 0 {
 		log.Warn("Dump incomplete due to missing preimages", "missing", missingPreimages)
 	}
+
+	return nextKey
 }
 
 // RawDump returns the entire state an a single large object
@@ -141,7 +172,7 @@ func (s *StateDB) RawDump(excludeCode, excludeStorage, excludeMissingPreimages b
 	dump := &Dump{
 		Accounts: make(map[common.Address]DumpAccount),
 	}
-	s.dump(dump, excludeCode, excludeStorage, excludeMissingPreimages)
+	s.dump(dump, excludeCode, excludeStorage, excludeMissingPreimages, nil, 0)
 	return *dump
 }
 
@@ -157,5 +188,14 @@ func (s *StateDB) Dump(excludeCode, excludeStorage, excludeMissingPreimages bool
 
 // IterativeDump dumps out accounts as json-objects, delimited by linebreaks on stdout
 func (s *StateDB) IterativeDump(excludeCode, excludeStorage, excludeMissingPreimages bool, output *json.Encoder) {
-	s.dump(iterativeDump{output}, excludeCode, excludeStorage, excludeMissingPreimages)
+	s.dump(iterativeDump{output}, excludeCode, excludeStorage, excludeMissingPreimages, nil, 0)
+}
+
+// IteratorDump dumps out a batch of accounts starts with the given start key
+func (s *StateDB) IteratorDump(excludeCode, excludeStorage, excludeMissingPreimages bool, start []byte, maxResults int) IteratorDump {
+	iterator := &IteratorDump{
+		Accounts: make(map[common.Address]DumpAccount),
+	}
+	iterator.Next = s.dump(iterator, excludeCode, excludeStorage, excludeMissingPreimages, start, maxResults)
+	return *iterator
 }
