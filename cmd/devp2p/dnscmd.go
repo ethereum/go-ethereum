@@ -239,8 +239,8 @@ type dnsDefinition struct {
 type dnsMetaJSON struct {
 	URL          string    `json:"url,omitempty"`
 	Seq          uint      `json:"seq"`
-	Sig          string    `json:"signature"`
-	Links        []string  `json:"links,omitempty"`
+	Sig          string    `json:"signature,omitempty"`
+	Links        []string  `json:"links"`
 	LastModified time.Time `json:"lastModified"`
 }
 
@@ -250,6 +250,9 @@ func treeToDefinition(url string, t *dnsdisc.Tree) *dnsDefinition {
 		Seq:   t.Seq(),
 		Sig:   t.Signature(),
 		Links: t.Links(),
+	}
+	if meta.Links == nil {
+		meta.Links = []string{}
 	}
 	return &dnsDefinition{Meta: meta, Nodes: t.Nodes()}
 }
@@ -261,6 +264,9 @@ func loadTreeDefinition(directory string) *dnsDefinition {
 	err := common.LoadJSON(metaFile, &def.Meta)
 	if err != nil && !os.IsNotExist(err) {
 		exit(err)
+	}
+	if def.Meta.Links == nil {
+		def.Meta.Links = []string{}
 	}
 	// Check link syntax.
 	for _, link := range def.Meta.Links {
