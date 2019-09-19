@@ -144,6 +144,7 @@ func (v *version) get(aux tFiles, ikey internalKey, ro *opt.ReadOptions, noValue
 	}
 
 	ukey := ikey.ukey()
+	sampleSeeks := !v.s.o.GetDisableSeeksCompaction()
 
 	var (
 		tset  *tSet
@@ -161,7 +162,7 @@ func (v *version) get(aux tFiles, ikey internalKey, ro *opt.ReadOptions, noValue
 	// Since entries never hop across level, finding key/value
 	// in smaller level make later levels irrelevant.
 	v.walkOverlapping(aux, ikey, func(level int, t *tFile) bool {
-		if level >= 0 && !tseek {
+		if sampleSeeks && level >= 0 && !tseek {
 			if tset == nil {
 				tset = &tSet{level, t}
 			} else {

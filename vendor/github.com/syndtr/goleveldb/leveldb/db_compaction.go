@@ -8,6 +8,7 @@ package leveldb
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/syndtr/goleveldb/leveldb/errors"
@@ -324,10 +325,12 @@ func (db *DB) memCompaction() {
 
 	db.logf("memdb@flush committed F·%d T·%v", len(rec.addedTables), stats.duration)
 
+	// Save compaction stats
 	for _, r := range rec.addedTables {
 		stats.write += r.size
 	}
 	db.compStats.addStat(flushLevel, stats)
+	atomic.AddUint32(&db.memComp, 1)
 
 	// Drop frozen memdb.
 	db.dropFrozenMem()
@@ -587,6 +590,14 @@ func (db *DB) tableCompaction(c *compaction, noTrivial bool) {
 	// Save compaction stats
 	for i := range stats {
 		db.compStats.addStat(c.sourceLevel+1, &stats[i])
+	}
+	switch c.typ {
+	case level0Compaction:
+		atomic.AddUint32(&db.level0Comp, 1)
+	case nonLevel0Compaction:
+		atomic.AddUint32(&db.nonLevel0Comp, 1)
+	case seekCompaction:
+		atomic.AddUint32(&db.seekComp, 1)
 	}
 }
 

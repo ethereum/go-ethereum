@@ -282,8 +282,10 @@ func (db *DB) waitCompaction() error {
 // until in-flight transaction is committed or discarded.
 // The returned transaction handle is safe for concurrent use.
 //
-// Transaction is expensive and can overwhelm compaction, especially if
+// Transaction is very expensive and can overwhelm compaction, especially if
 // transaction size is small. Use with caution.
+// The rule of thumb is if you need to merge at least same amount of
+// `Options.WriteBuffer` worth of data then use transaction, otherwise don't.
 //
 // The transaction must be closed once done, either by committing or discarding
 // the transaction.
