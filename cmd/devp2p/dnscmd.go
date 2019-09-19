@@ -134,7 +134,7 @@ func dnsSign(ctx *cli.Context) error {
 		domain = ctx.String(dnsDomainFlag.Name)
 	}
 	if ctx.IsSet(dnsSeqFlag.Name) {
-		def.Meta.Seq = uint(ctx.Uint(dnsSeqFlag.Name))
+		def.Meta.Seq = ctx.Uint(dnsSeqFlag.Name)
 	} else {
 		def.Meta.Seq++ // Auto-bump sequence number if not supplied via flag.
 	}
