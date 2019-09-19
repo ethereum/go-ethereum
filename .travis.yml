@@ -32,7 +32,7 @@ jobs:
       - sudo mount --bind /proc chrootdir/proc
       - sudo mount --bind /sys chrootdir/sys
       - sudo chroot chrootdir qemu-aarch64-static /bin/bash -c "export GOROOT=/usr/local/go; export PATH=\$PATH:\$GOROOT/bin; cd ${TRAVIS_BUILD_DIR} && go run build/ci.go install"
-      - sudo chroot chrootdir qemu-aarch64-static /bin/bash -c "export GOROOT=/usr/local/go; export PATH=\$PATH:\$GOROOT/bin; cd ${TRAVIS_BUILD_DIR} && go run build/ci.go test"
+      - HOME=/root sudo chroot chrootdir qemu-aarch64-static /bin/bash -c "export GOROOT=/usr/local/go; export PATH=\$PATH:\$GOROOT/bin; cd ${TRAVIS_BUILD_DIR} && go run build/ci.go test"
 
     - stage: build
       os: linux
