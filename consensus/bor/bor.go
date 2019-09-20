@@ -780,11 +780,11 @@ func GetValidators(number uint64, sprint uint64, validatorContract string, ethAP
 	validatorSetABI, _ := abi.JSON(strings.NewReader(validatorsetABI))
 
 	// First End block
-	getFirstEndBlock := func() (firstEndBlock uint64, err error) {
+	getFirstEndBlock := func() (uint64, error) {
 		data, err := validatorSetABI.Pack("FIRST_END_BLOCK")
 		if err != nil {
 			fmt.Println("Unable to pack tx for getValidator", "error", err)
-			return firstEndBlock, err
+			return 0, err
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -801,14 +801,19 @@ func GetValidators(number uint64, sprint uint64, validatorContract string, ethAP
 		}, blockNr)
 		if err != nil {
 			fmt.Println("err", err)
-			return firstEndBlock, err
+			return 0, err
 		}
 
-		if err := validatorSetABI.Unpack(&firstEndBlock, "FIRST_END_BLOCK", result); err != nil {
+		var (
+			ret0 = new(uint64)
+		)
+		out := ret0
+
+		if err := validatorSetABI.Unpack(&out, "FIRST_END_BLOCK", result); err != nil {
 			fmt.Println("err", err)
-			return firstEndBlock, err
+			return 0, err
 		}
-		return firstEndBlock, nil
+		return *ret0, nil
 
 	}
 
@@ -817,11 +822,15 @@ func GetValidators(number uint64, sprint uint64, validatorContract string, ethAP
 		panic(err)
 	}
 
+	fmt.Println("firstEndBlock", firstEndBlock)
+
 	// method
 	method := "getValidators"
-	if number < uint64(firstEndBlock) {
+	if number < firstEndBlock {
 		method = "getInitialValidators"
 	}
+
+	fmt.Println("method", method)
 
 	data, err := validatorSetABI.Pack(method)
 	if err != nil {
