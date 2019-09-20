@@ -181,6 +181,9 @@ func newAlethGenesisSpec(network string, genesis *core.Genesis) (*alethGenesisSp
 		spec.setPrecompile(8, &alethGenesisSpecBuiltin{Name: "alt_bn128_pairing_product",
 			StartingBlock: (hexutil.Uint64)(genesis.Config.ByzantiumBlock.Uint64())})
 	}
+	// todo
+	if genesis.Config.IstanbulBlock != nil {
+	}
 	return spec, nil
 }
 
@@ -229,35 +232,35 @@ type parityChainSpec struct {
 	} `json:"engine"`
 
 	Params struct {
-		AccountStartNonce         hexutil.Uint64       `json:"accountStartNonce"`
-		MaximumExtraDataSize      hexutil.Uint64       `json:"maximumExtraDataSize"`
-		MinGasLimit               hexutil.Uint64       `json:"minGasLimit"`
-		GasLimitBoundDivisor      math2.HexOrDecimal64 `json:"gasLimitBoundDivisor"`
-		NetworkID                 hexutil.Uint64       `json:"networkID"`
-		ChainID                   hexutil.Uint64       `json:"chainID"`
-		MaxCodeSize               hexutil.Uint64       `json:"maxCodeSize"`
-		MaxCodeSizeTransition     hexutil.Uint64       `json:"maxCodeSizeTransition"`
-		EIP98Transition           hexutil.Uint64       `json:"eip98Transition"`
-		EIP150Transition          hexutil.Uint64       `json:"eip150Transition"`
-		EIP152Transition          hexutil.Uint64       `json:"eip152Transition"`
-		EIP160Transition          hexutil.Uint64       `json:"eip160Transition"`
-		EIP161abcTransition       hexutil.Uint64       `json:"eip161abcTransition"`
-		EIP161dTransition         hexutil.Uint64       `json:"eip161dTransition"`
-		EIP155Transition          hexutil.Uint64       `json:"eip155Transition"`
-		EIP140Transition          hexutil.Uint64       `json:"eip140Transition"`
-		EIP211Transition          hexutil.Uint64       `json:"eip211Transition"`
-		EIP214Transition          hexutil.Uint64       `json:"eip214Transition"`
-		EIP658Transition          hexutil.Uint64       `json:"eip658Transition"`
-		EIP145Transition          hexutil.Uint64       `json:"eip145Transition"`
-		EIP1014Transition         hexutil.Uint64       `json:"eip1014Transition"`
-		EIP1052Transition         hexutil.Uint64       `json:"eip1052Transition"`
-		EIP1108Transition         hexutil.Uint64       `json:"eip1108Transition"`
-		EIP1283Transition         hexutil.Uint64       `json:"eip1283Transition"`
-		EIP1283DisableTransition  hexutil.Uint64       `json:"eip1283DisableTransition"`
-		EIP1283ReenableTransition hexutil.Uint64       `json:"eip1283ReenableTransition"`
-		EIP1344Transition         hexutil.Uint64       `json:"eip1344Transition"`
-		EIP1884Transition         hexutil.Uint64       `json:"eip1884Transition"`
-		EIP2028Transition         hexutil.Uint64       `json:"eip2028Transition"`
+		AccountStartNonce     hexutil.Uint64       `json:"accountStartNonce"`
+		MaximumExtraDataSize  hexutil.Uint64       `json:"maximumExtraDataSize"`
+		MinGasLimit           hexutil.Uint64       `json:"minGasLimit"`
+		GasLimitBoundDivisor  math2.HexOrDecimal64 `json:"gasLimitBoundDivisor"`
+		NetworkID             hexutil.Uint64       `json:"networkID"`
+		ChainID               hexutil.Uint64       `json:"chainID"`
+		MaxCodeSize           hexutil.Uint64       `json:"maxCodeSize"`
+		MaxCodeSizeTransition hexutil.Uint64       `json:"maxCodeSizeTransition"`
+		EIP98Transition       hexutil.Uint64       `json:"eip98Transition"`
+		EIP150Transition      hexutil.Uint64       `json:"eip150Transition"`
+		// EIP152Transition          hexutil.Uint64       `json:"eip152Transition"`
+		EIP160Transition    hexutil.Uint64 `json:"eip160Transition"`
+		EIP161abcTransition hexutil.Uint64 `json:"eip161abcTransition"`
+		EIP161dTransition   hexutil.Uint64 `json:"eip161dTransition"`
+		EIP155Transition    hexutil.Uint64 `json:"eip155Transition"`
+		EIP140Transition    hexutil.Uint64 `json:"eip140Transition"`
+		EIP211Transition    hexutil.Uint64 `json:"eip211Transition"`
+		EIP214Transition    hexutil.Uint64 `json:"eip214Transition"`
+		EIP658Transition    hexutil.Uint64 `json:"eip658Transition"`
+		EIP145Transition    hexutil.Uint64 `json:"eip145Transition"`
+		EIP1014Transition   hexutil.Uint64 `json:"eip1014Transition"`
+		EIP1052Transition   hexutil.Uint64 `json:"eip1052Transition"`
+		// EIP1108Transition         hexutil.Uint64       `json:"eip1108Transition"`
+		EIP1283Transition         hexutil.Uint64 `json:"eip1283Transition"`
+		EIP1283DisableTransition  hexutil.Uint64 `json:"eip1283DisableTransition"`
+		EIP1283ReenableTransition hexutil.Uint64 `json:"eip1283ReenableTransition"`
+		EIP1344Transition         hexutil.Uint64 `json:"eip1344Transition"`
+		EIP1884Transition         hexutil.Uint64 `json:"eip1884Transition"`
+		EIP2028Transition         hexutil.Uint64 `json:"eip2028Transition"`
 	} `json:"params"`
 
 	Genesis struct {
@@ -290,17 +293,20 @@ type parityChainSpecAccount struct {
 
 // parityChainSpecBuiltin is the precompiled contract definition.
 type parityChainSpecBuiltin struct {
-	Name       string                  `json:"name,omitempty"`
-	ActivateAt math2.HexOrDecimal64    `json:"activate_at,omitempty"`
-	Pricing    *parityChainSpecPricing `json:"pricing,omitempty"`
+	Name              string                  `json:"name,omitempty"`
+	ActivateAt        math2.HexOrDecimal64    `json:"activate_at,omitempty"`
+	Pricing           *parityChainSpecPricing `json:"pricing,omitempty"`
+	EIP1108Transition math2.HexOrDecimal64    `json:"eip1108_transition,omitempty"`
 }
 
 // parityChainSpecPricing represents the different pricing models that builtin
 // contracts might advertise using.
 type parityChainSpecPricing struct {
-	Linear       *parityChainSpecLinearPricing       `json:"linear,omitempty"`
-	ModExp       *parityChainSpecModExpPricing       `json:"modexp,omitempty"`
-	AltBnPairing *parityChainSpecAltBnPairingPricing `json:"alt_bn128_pairing,omitempty"`
+	Linear              *parityChainSpecLinearPricing              `json:"linear,omitempty"`
+	ModExp              *parityChainSpecModExpPricing              `json:"modexp,omitempty"`
+	AltBnPairing        *parityChainSpecAltBnPairingPricing        `json:"alt_bn128_pairing,omitempty"`
+	AltBnConstOperation *parityChainSpecAltBnConstOperationPricing `json:"alt_bn128_const_operations,omitempty"`
+	Blake2F             *parityChainSpecBlake2F                    `json:"blake2_f,omitempty"`
 }
 
 type parityChainSpecLinearPricing struct {
@@ -312,10 +318,19 @@ type parityChainSpecModExpPricing struct {
 	Divisor uint64 `json:"divisor"`
 }
 
-type parityChainSpecAltBnPairingPricing struct {
-	Base uint64 `json:"base"`
-	Pair uint64 `json:"pair"`
+type parityChainSpecAltBnConstOperationPricing struct {
+	Price                  uint64 `json:"price"`
+	EIP1108TransitionPrice uint64 `json:"eip1108_transition_price,omitempty"`
 }
+
+type parityChainSpecAltBnPairingPricing struct {
+	Base                  uint64 `json:"base"`
+	Pair                  uint64 `json:"pair"`
+	EIP1108TransitionBase uint64 `json:"eip1108_transition_base,omitempty"`
+	EIP1108TransitionPair uint64 `json:"eip1108_transition_pair,omitempty"`
+}
+
+type parityChainSpecBlake2F uint64 // Price per round of Blake2 compression.
 
 // newParityChainSpec converts a go-ethereum genesis block into a Parity specific
 // chain specification format.
@@ -418,13 +433,29 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 			Name: "modexp", ActivateAt: blnum, Pricing: &parityChainSpecPricing{ModExp: &parityChainSpecModExpPricing{Divisor: 20}},
 		})
 		spec.setPrecompile(6, &parityChainSpecBuiltin{
-			Name: "alt_bn128_add", ActivateAt: blnum, Pricing: &parityChainSpecPricing{Linear: &parityChainSpecLinearPricing{Base: 500}},
+			Name: "alt_bn128_add", ActivateAt: blnum, Pricing: &parityChainSpecPricing{AltBnConstOperation: &parityChainSpecAltBnConstOperationPricing{Price: 500}},
 		})
 		spec.setPrecompile(7, &parityChainSpecBuiltin{
-			Name: "alt_bn128_mul", ActivateAt: blnum, Pricing: &parityChainSpecPricing{Linear: &parityChainSpecLinearPricing{Base: 40000}},
+			Name: "alt_bn128_mul", ActivateAt: blnum, Pricing: &parityChainSpecPricing{AltBnConstOperation: &parityChainSpecAltBnConstOperationPricing{Price: 40000}},
 		})
 		spec.setPrecompile(8, &parityChainSpecBuiltin{
 			Name: "alt_bn128_pairing", ActivateAt: blnum, Pricing: &parityChainSpecPricing{AltBnPairing: &parityChainSpecAltBnPairingPricing{Base: 100000, Pair: 80000}},
+		})
+	}
+	if genesis.Config.IstanbulBlock != nil {
+		if genesis.Config.ByzantiumBlock == nil {
+			return nil, errors.New("invalid genesis, istanbul fork is enabled while byzantium is not")
+		}
+		byzantiumNumber := math2.HexOrDecimal64(genesis.Config.ByzantiumBlock.Uint64())
+		istanbulNumber := math2.HexOrDecimal64(genesis.Config.IstanbulBlock.Uint64())
+		spec.setPrecompile(6, &parityChainSpecBuiltin{
+			Name: "alt_bn128_add", ActivateAt: byzantiumNumber, EIP1108Transition: istanbulNumber, Pricing: &parityChainSpecPricing{AltBnConstOperation: &parityChainSpecAltBnConstOperationPricing{Price: 500, EIP1108TransitionPrice: 150}},
+		})
+		spec.setPrecompile(7, &parityChainSpecBuiltin{
+			Name: "alt_bn128_mul", ActivateAt: byzantiumNumber, EIP1108Transition: istanbulNumber, Pricing: &parityChainSpecPricing{AltBnConstOperation: &parityChainSpecAltBnConstOperationPricing{Price: 40000, EIP1108TransitionPrice: 6000}},
+		})
+		spec.setPrecompile(8, &parityChainSpecBuiltin{
+			Name: "alt_bn128_pairing", ActivateAt: byzantiumNumber, EIP1108Transition: istanbulNumber, Pricing: &parityChainSpecPricing{AltBnPairing: &parityChainSpecAltBnPairingPricing{Base: 100000, Pair: 80000, EIP1108TransitionBase: 45000, EIP1108TransitionPair: 34000}},
 		})
 	}
 	return spec, nil
@@ -467,8 +498,8 @@ func (spec *parityChainSpec) setConstantinopleFix(num *big.Int) {
 }
 
 func (spec *parityChainSpec) setIstanbul(num *big.Int) {
-	spec.Params.EIP152Transition = hexutil.Uint64(num.Uint64())
-	spec.Params.EIP1108Transition = hexutil.Uint64(num.Uint64())
+	// spec.Params.EIP152Transition = hexutil.Uint64(num.Uint64())
+	// spec.Params.EIP1108Transition = hexutil.Uint64(num.Uint64())
 	spec.Params.EIP1344Transition = hexutil.Uint64(num.Uint64())
 	spec.Params.EIP1884Transition = hexutil.Uint64(num.Uint64())
 	spec.Params.EIP2028Transition = hexutil.Uint64(num.Uint64())
