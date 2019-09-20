@@ -821,7 +821,7 @@ func GetValidators(number uint64, sprint uint64, validatorContract string, ethAP
 
 	// method
 	method := "getValidators"
-	if number < firstEndBlock {
+	if number <= firstEndBlock {
 		method = "getInitialValidators"
 	}
 
