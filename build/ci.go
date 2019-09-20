@@ -311,11 +311,16 @@ func doTest(cmdline []string) {
 		packages = flag.CommandLine.Args()
 	}
 
+	timeout := "5m"
+	if runtime.GOARCH == "arm64" && os.Getenv("CI") == "true" {
+		timeout = "10m"
+	}
+
 	// Run the actual tests.
 	// Test a single package at a time. CI builders are slow
 	// and some tests run into timeouts under load.
 	gotest := goTool("test", buildFlags(env)...)
-	gotest.Args = append(gotest.Args, "-p", "1", "-timeout", "5m")
+	gotest.Args = append(gotest.Args, "-p", "1", "-timeout", timeout)
 	if *coverage {
 		gotest.Args = append(gotest.Args, "-covermode=atomic", "-cover")
 	}
