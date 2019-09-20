@@ -32,7 +32,7 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-const validatorsetABI = `[{"constant":true,"inputs":[],"name":"getInitialValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"}]`
+const validatorsetABI = `[{"constant":true,"inputs":[{"name":"span","type":"uint256"}],"name":"getSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"},{"name":"signer","type":"address"}],"name":"isProducer","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"commitSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"},{"name":"signer","type":"address"}],"name":"isValidator","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"left","type":"bytes32"},{"name":"right","type":"bytes32"}],"name":"innerNode","outputs":[{"name":"","type":"bytes32"}],"payable":false,"stateMutability":"pure","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"}],"name":"getValidatorsTotalStakeBySpan","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"rootHash","type":"bytes32"},{"name":"leaf","type":"bytes32"},{"name":"proof","type":"bytes"}],"name":"checkMembership","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"pure","type":"function"},{"constant":true,"inputs":[],"name":"CHAIN","outputs":[{"name":"","type":"bytes32"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"},{"name":"signer","type":"address"}],"name":"getValidatorBySigner","outputs":[{"components":[{"name":"id","type":"uint256"},{"name":"power","type":"uint256"},{"name":"signer","type":"address"}],"name":"result","type":"tuple"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"currentSpanNumber","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"d","type":"bytes32"}],"name":"leafNode","outputs":[{"name":"","type":"bytes32"}],"payable":false,"stateMutability":"pure","type":"function"},{"constant":true,"inputs":[],"name":"getNextSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getInitialValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"FIRST_END_BLOCK","outputs":[{"name":"","type":"uint64"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"","type":"uint256"},{"name":"","type":"uint256"}],"name":"producers","outputs":[{"name":"id","type":"uint256"},{"name":"power","type":"uint256"},{"name":"signer","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"},{"name":"dataHash","type":"bytes32"},{"name":"sigs","type":"bytes"}],"name":"getStakePower","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"ROUND_TYPE","outputs":[{"name":"","type":"bytes32"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"}],"name":"getProducersTotalStakeBySpan","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"BOR_ID","outputs":[{"name":"","type":"bytes32"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getCurrentSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"sprint","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"","type":"uint256"}],"name":"spanNumbers","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"validateValidatorSet","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"VOTE_TYPE","outputs":[{"name":"","type":"uint8"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"","type":"uint256"},{"name":"","type":"uint256"}],"name":"validators","outputs":[{"name":"id","type":"uint256"},{"name":"power","type":"uint256"},{"name":"signer","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"currentSprint","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"","type":"uint256"}],"name":"spans","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"inputs":[],"payable":false,"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"name":"id","type":"uint256"},{"indexed":true,"name":"startBlock","type":"uint256"},{"indexed":true,"name":"endBlock","type":"uint256"}],"name":"NewSpan","type":"event"}]`
 
 const (
 	voteSnapshotInterval = 1024 // Number of blocks after which to save the vote snapshot to the database
@@ -776,14 +776,55 @@ func (c *Bor) GetCurrentValidators(number uint64) ([]*Validator, error) {
 func GetValidators(number uint64, sprint uint64, validatorContract string, ethAPI *ethapi.PublicBlockChainAPI) ([]*Validator, error) {
 	blockNr := rpc.BlockNumber(number)
 
+	// validator set ABI
+	validatorSetABI, _ := abi.JSON(strings.NewReader(validatorsetABI))
+
+	// First End block
+	getFirstEndBlock := func() (uint64, error) {
+		data, err := validatorSetABI.Pack("FIRST_END_BLOCK")
+		if err != nil {
+			return 0, err
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel() // cancel when we are finished consuming integers
+
+		// call
+		msgData := (hexutil.Bytes)(data)
+		toAddress := common.HexToAddress(validatorContract)
+		gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
+		result, err := ethAPI.Call(ctx, ethapi.CallArgs{
+			Gas:  &gas,
+			To:   &toAddress,
+			Data: &msgData,
+		}, blockNr)
+		if err != nil {
+			return 0, err
+		}
+
+		var (
+			ret0 = new(uint64)
+		)
+		out := ret0
+
+		if err := validatorSetABI.Unpack(&out, "FIRST_END_BLOCK", result); err != nil {
+			return 0, err
+		}
+		return *ret0, nil
+
+	}
+
+	firstEndBlock, err := getFirstEndBlock()
+	if err != nil {
+		panic(err)
+	}
+
 	// method
 	method := "getValidators"
-	if number < sprint {
+	if number <= firstEndBlock {
 		method = "getInitialValidators"
 	}
 
-	// validator set ABI
-	validatorSetABI, _ := abi.JSON(strings.NewReader(validatorsetABI))
 	data, err := validatorSetABI.Pack(method)
 	if err != nil {
 		fmt.Println("Unable to pack tx for getValidator", "error", err)
@@ -803,7 +844,6 @@ func GetValidators(number uint64, sprint uint64, validatorContract string, ethAP
 		Data: &msgData,
 	}, blockNr)
 	if err != nil {
-		fmt.Println("err", err)
 		return nil, err
 	}
 
