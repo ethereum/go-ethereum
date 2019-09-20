@@ -783,7 +783,6 @@ func GetValidators(number uint64, sprint uint64, validatorContract string, ethAP
 	getFirstEndBlock := func() (uint64, error) {
 		data, err := validatorSetABI.Pack("FIRST_END_BLOCK")
 		if err != nil {
-			fmt.Println("Unable to pack tx for getValidator", "error", err)
 			return 0, err
 		}
 
@@ -800,7 +799,6 @@ func GetValidators(number uint64, sprint uint64, validatorContract string, ethAP
 			Data: &msgData,
 		}, blockNr)
 		if err != nil {
-			fmt.Println("err", err)
 			return 0, err
 		}
 
@@ -810,7 +808,6 @@ func GetValidators(number uint64, sprint uint64, validatorContract string, ethAP
 		out := ret0
 
 		if err := validatorSetABI.Unpack(&out, "FIRST_END_BLOCK", result); err != nil {
-			fmt.Println("err", err)
 			return 0, err
 		}
 		return *ret0, nil
@@ -822,15 +819,11 @@ func GetValidators(number uint64, sprint uint64, validatorContract string, ethAP
 		panic(err)
 	}
 
-	fmt.Println("firstEndBlock", firstEndBlock)
-
 	// method
 	method := "getValidators"
 	if number < firstEndBlock {
 		method = "getInitialValidators"
 	}
-
-	fmt.Println("method", method)
 
 	data, err := validatorSetABI.Pack(method)
 	if err != nil {
@@ -851,7 +844,6 @@ func GetValidators(number uint64, sprint uint64, validatorContract string, ethAP
 		Data: &msgData,
 	}, blockNr)
 	if err != nil {
-		fmt.Println("err", err)
 		return nil, err
 	}
 
