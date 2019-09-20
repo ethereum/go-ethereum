@@ -296,7 +296,7 @@ func (w *wizard) manageGenesis() {
 func saveGenesis(folder, network, client string, spec interface{}) {
 	path := filepath.Join(folder, fmt.Sprintf("%s-%s.json", network, client))
 
-	out, _ := json.Marshal(spec)
+	out, _ := json.MarshalIndent(spec, "", "  ")
 	if err := ioutil.WriteFile(path, out, 0644); err != nil {
 		log.Error("Failed to save genesis file", "client", client, "err", err)
 		return
