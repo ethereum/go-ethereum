@@ -28,10 +28,12 @@ package keystore
 import (
 	"bytes"
 	"crypto/aes"
+	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -42,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"github.com/pborman/uuid"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/scrypt"
@@ -68,6 +71,13 @@ const (
 
 	scryptR     = 8
 	scryptDKLen = 32
+)
+
+var (
+	ErrUAddressFieldNotExist = errors.New("It seems that this account doesn't include a valid usechain address field, please update your keyfile version")
+	ErrUAddressInvalid       = errors.New("invalid usechain address")
+	ErrInvalidAccountKey     = errors.New("invalid account key")
+	ErrInvalidPrivateKey     = errors.New("invalid private key")
 )
 
 type keyStorePassphrase struct {
@@ -183,18 +193,90 @@ func EncryptDataV3(data, auth []byte, scryptN, scryptP int) (CryptoJSON, error) 
 // EncryptKey encrypts a key using the specified scrypt parameters into a json
 // blob that can be decrypted later on.
 func EncryptKey(key *Key, auth string, scryptN, scryptP int) ([]byte, error) {
-	keyBytes := math.PaddedBigBytes(key.PrivateKey.D, 32)
-	cryptoStruct, err := EncryptDataV3(keyBytes, []byte(auth), scryptN, scryptP)
+	if key == nil {
+		return nil, ErrInvalidAccountKey
+	}
+
+	cryptoStruct, err := EncryptOnePrivateKey(key.PrivateKey, auth, scryptN, scryptP)
+	if err != nil {
+		return nil, err
+	}
+
+	cryptoStruct2, err := EncryptOnePrivateKey(key.PrivateKey2, auth, scryptN, scryptP)
 	if err != nil {
 		return nil, err
 	}
 	encryptedKeyJSONV3 := encryptedKeyJSONV3{
-		hex.EncodeToString(key.Address[:]),
-		cryptoStruct,
+
+		key.Address.Hex()[2:],
+		*cryptoStruct,
+		*cryptoStruct2,
 		key.Id.String(),
 		version,
+		hex.EncodeToString(key.UAddress[:]),
 	}
 	return json.Marshal(encryptedKeyJSONV3)
+	// keyBytes := math.PaddedBigBytes(key.PrivateKey.D, 32)
+	// cryptoStruct, err := EncryptDataV3(keyBytes, []byte(auth), scryptN, scryptP)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// encryptedKeyJSONV3 := encryptedKeyJSONV3{
+	// 	hex.EncodeToString(key.Address[:]),
+	// 	cryptoStruct,
+	// 	key.Id.String(),
+	// 	version,
+	// }
+	// return json.Marshal(encryptedKeyJSONV3)
+}
+
+// EncryptOnePrivateKey encrypts a key using the specified scrypt parameters into one field of a json
+// blob that can be decrypted later on.
+func EncryptOnePrivateKey(privateKey *ecdsa.PrivateKey, auth string, scryptN, scryptP int) (*CryptoJSON, error) {
+	if privateKey == nil {
+		return nil, ErrInvalidPrivateKey
+	}
+
+	authArray := []byte(auth)
+	salt := randentropy.GetEntropyCSPRNG(32)
+	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptR, scryptP, scryptDKLen)
+	if err != nil {
+		return nil, err
+	}
+
+	encryptKey := derivedKey[:16]
+	keyBytes := math.PaddedBigBytes(privateKey.D, 32)
+
+	iv := randentropy.GetEntropyCSPRNG(aes.BlockSize) // 16
+
+	cipherText, err := aesCTRXOR(encryptKey, keyBytes, iv)
+	if err != nil {
+		return nil, err
+	}
+	mac := crypto.Keccak256(derivedKey[16:32], cipherText)
+
+	scryptParamsJSON := make(map[string]interface{}, 5)
+	scryptParamsJSON["n"] = scryptN
+	scryptParamsJSON["r"] = scryptR
+	scryptParamsJSON["p"] = scryptP
+	scryptParamsJSON["dklen"] = scryptDKLen
+	scryptParamsJSON["salt"] = hex.EncodeToString(salt)
+
+	cipherParamsJSON := cipherparamsJSON{
+		IV: hex.EncodeToString(iv),
+	}
+
+	cryptoStruct := &CryptoJSON{
+		Cipher:       "aes-128-ctr",
+		CipherText:   hex.EncodeToString(cipherText),
+		CipherParams: cipherParamsJSON,
+		KDF:          keyHeaderKDF,
+		KDFParams:    scryptParamsJSON,
+		MAC:          hex.EncodeToString(mac),
+	}
+
+	return cryptoStruct, nil
+
 }
 
 // DecryptKey decrypts a key from a json blob, returning the private key itself.

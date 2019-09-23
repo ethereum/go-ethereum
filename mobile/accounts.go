@@ -203,7 +203,7 @@ func (ks *KeyStore) ImportECDSAKey(key []byte, passphrase string) (account *Acco
 	if err != nil {
 		return nil, err
 	}
-	acc, err := ks.keystore.ImportECDSA(privkey, passphrase)
+	acc, err := ks.keystore.ImportECDSA(privkey, nil, passphrase)
 	if err != nil {
 		return nil, err
 	}

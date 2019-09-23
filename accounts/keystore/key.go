@@ -31,6 +31,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pborman/uuid"
 )
@@ -46,6 +47,16 @@ type Key struct {
 	// we only store privkey as pubkey/address can be derived from it
 	// privkey in this struct is always in plaintext
 	PrivateKey *ecdsa.PrivateKey
+	// add a second privkey for privary
+	PrivateKey2 *ecdsa.PrivateKey
+	// compact wanchain address format
+	UAddress common.UAddress
+}
+
+// Used to import and export raw keypair
+type keyPair struct {
+	D  string `json:"privateKey"`
+	D1 string `json:"privateKey1"`
 }
 
 type keyStore interface {
@@ -65,10 +76,12 @@ type plainKeyJSON struct {
 }
 
 type encryptedKeyJSONV3 struct {
-	Address string     `json:"address"`
-	Crypto  CryptoJSON `json:"crypto"`
-	Id      string     `json:"id"`
-	Version int        `json:"version"`
+	Address  string     `json:"address"`
+	Crypto   CryptoJSON `json:"crypto"`
+	Crypto2  CryptoJSON `json:"crypto2"`
+	Id       string     `json:"id"`
+	Version  int        `json:"version"`
+	UAddress string     `json:"uaddress"`
 }
 
 type encryptedKeyJSONV1 struct {
@@ -127,14 +140,42 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 	return nil
 }
 
-func newKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
+func newKeyFromECDSA(sk1, sk2 *ecdsa.PrivateKey) *Key {
 	id := uuid.NewRandom()
 	key := &Key{
-		Id:         id,
-		Address:    crypto.PubkeyToAddress(privateKeyECDSA.PublicKey),
-		PrivateKey: privateKeyECDSA,
+		Id:          id,
+		Address:     crypto.PubkeyToAddress(sk1.PublicKey),
+		PrivateKey:  sk1,
+		PrivateKey2: sk2,
 	}
+
+	updateUaddress(key)
 	return key
+}
+
+// updateuaddress adds UAddress field to the Key struct
+func updateUaddress(k *Key) {
+	k.UAddress = *GenerateUaddressFromPK(&k.PrivateKey.PublicKey, &k.PrivateKey2.PublicKey)
+}
+
+// ECDSAPKCompression serializes a public key in a 33-byte compressed format from btcec
+func ECDSAPKCompression(p *ecdsa.PublicKey) []byte {
+	const pubkeyCompressed byte = 0x2
+	b := make([]byte, 0, 33)
+	format := pubkeyCompressed
+	if p.Y.Bit(0) == 1 {
+		format |= 0x1
+	}
+	b = append(b, format)
+	b = append(b, math.PaddedBigBytes(p.X, 32)...)
+	return b
+}
+
+func GenerateUaddressFromPK(A *ecdsa.PublicKey, B *ecdsa.PublicKey) *common.UAddress {
+	var tmp common.UAddress
+	copy(tmp[:33], ECDSAPKCompression(A))
+	copy(tmp[33:], ECDSAPKCompression(B))
+	return &tmp
 }
 
 // NewKeyForDirectICAP generates a key whose address fits into < 155 bits so it can fit
@@ -147,11 +188,15 @@ func NewKeyForDirectICAP(rand io.Reader) *Key {
 		panic("key generation: could not read from random source: " + err.Error())
 	}
 	reader := bytes.NewReader(randBytes)
-	privateKeyECDSA, err := ecdsa.GenerateKey(crypto.S256(), reader)
+	sk1, err := ecdsa.GenerateKey(crypto.S256(), reader)
 	if err != nil {
 		panic("key generation: ecdsa.GenerateKey failed: " + err.Error())
 	}
-	key := newKeyFromECDSA(privateKeyECDSA)
+	sk2, err := ecdsa.GenerateKey(crypto.S256(), reader)
+	if err != nil {
+		panic("key generation: ecdsa.GenerateKey failed: " + err.Error())
+	}
+	key := newKeyFromECDSA(sk1, sk2)
 	if !strings.HasPrefix(key.Address.Hex(), "0x00") {
 		return NewKeyForDirectICAP(rand)
 	}
@@ -163,7 +208,13 @@ func newKey(rand io.Reader) (*Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newKeyFromECDSA(privateKeyECDSA), nil
+
+	privateKeyECDSA2, err := ecdsa.GenerateKey(crypto.S256(), rand)
+	if err != nil {
+		return nil, err
+	}
+
+	return newKeyFromECDSA(privateKeyECDSA, privateKeyECDSA2), nil
 }
 
 func storeNewKey(ks keyStore, rand io.Reader, auth string) (*Key, accounts.Account, error) {
@@ -229,4 +280,43 @@ func toISO8601(t time.Time) string {
 	}
 	return fmt.Sprintf("%04d-%02d-%02dT%02d-%02d-%02d.%09d%s",
 		t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), tz)
+}
+
+// LoadECDSAPair loads a secp256k1 private key pair from the given file
+func LoadECDSAPair(file string) (*ecdsa.PrivateKey, *ecdsa.PrivateKey, error) {
+	// read the given file including private key pair
+	kp := keyPair{}
+
+	raw, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = json.Unmarshal(raw, &kp)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Decode the key pair
+	d, err := hex.DecodeString(kp.D)
+	if err != nil {
+		return nil, nil, err
+	}
+	d1, err := hex.DecodeString(kp.D1)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Generate ecdsa private keys
+	sk, err := crypto.ToECDSA(d)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	sk1, err := crypto.ToECDSA(d1)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return sk, sk1, err
 }

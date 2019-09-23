@@ -84,7 +84,7 @@ func main() {
 
 		// Inject the signer key and start sealing with it
 		store := node.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-		signer, err := store.ImportECDSA(sealer, "")
+		signer, err := store.ImportECDSA(sealer, nil, "")
 		if err != nil {
 			panic(err)
 		}

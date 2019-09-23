@@ -118,8 +118,12 @@ func fetchKeystore(am *accounts.Manager) *keystore.KeyStore {
 // encrypting it with the passphrase.
 // Example call (should fail on password too short)
 // {"jsonrpc":"2.0","method":"clef_importRawKey","params":["1111111111111111111111111111111111111111111111111111111111111111","test"], "id":6}
-func (s *UIServerAPI) ImportRawKey(privkey string, password string) (accounts.Account, error) {
-	key, err := crypto.HexToECDSA(privkey)
+func (s *UIServerAPI) ImportRawKey(privkey1, privkey2 string, password string) (accounts.Account, error) {
+	key1, err := crypto.HexToECDSA(privkey1)
+	if err != nil {
+		return accounts.Account{}, err
+	}
+	key2, err := crypto.HexToECDSA(privkey2)
 	if err != nil {
 		return accounts.Account{}, err
 	}
@@ -127,7 +131,7 @@ func (s *UIServerAPI) ImportRawKey(privkey string, password string) (accounts.Ac
 		return accounts.Account{}, fmt.Errorf("password requirements not met: %v", err)
 	}
 	// No error
-	return fetchKeystore(s.am).ImportECDSA(key, password)
+	return fetchKeystore(s.am).ImportECDSA(key1, key2, password)
 }
 
 // OpenWallet initiates a hardware wallet opening procedure, establishing a USB

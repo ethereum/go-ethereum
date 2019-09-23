@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -368,7 +367,7 @@ func accountImport(ctx *cli.Context) error {
 	if len(keyfile) == 0 {
 		utils.Fatalf("keyfile must be given as argument")
 	}
-	key, err := crypto.LoadECDSA(keyfile)
+	key, key1, err := keystore.LoadECDSAPair(keyfile)
 	if err != nil {
 		utils.Fatalf("Failed to load the private key: %v", err)
 	}
@@ -376,7 +375,7 @@ func accountImport(ctx *cli.Context) error {
 	passphrase := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-	acct, err := ks.ImportECDSA(key, passphrase)
+	acct, err := ks.ImportECDSA(key, key1, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}

@@ -36,6 +36,8 @@ const (
 	HashLength = 32
 	// AddressLength is the expected length of the address
 	AddressLength = 20
+
+	UAddressLength = 66
 )
 
 var (
@@ -173,6 +175,9 @@ func (h UnprefixedHash) MarshalText() ([]byte, error) {
 
 // Address represents the 20 byte address of an Ethereum account.
 type Address [AddressLength]byte
+
+// UAddress represents the 66 byte address of an Usechain account
+type UAddress [UAddressLength]byte
 
 // BytesToAddress returns Address with value b.
 // If b is larger than len(h), b will be cropped from the left.

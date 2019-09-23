@@ -19,6 +19,7 @@ package ethapi
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -297,12 +298,35 @@ func fetchKeystore(am *accounts.Manager) *keystore.KeyStore {
 
 // ImportRawKey stores the given hex encoded ECDSA key into the key directory,
 // encrypting it with the passphrase.
-func (s *PrivateAccountAPI) ImportRawKey(privkey string, password string) (common.Address, error) {
-	key, err := crypto.HexToECDSA(privkey)
+func (s *PrivateAccountAPI) ImportRawKey(privkey0, privkey1 string, password string) (common.Address, error) {
+	if strings.HasPrefix(privkey0, "0x") {
+		privkey0 = privkey0[2:]
+	}
+	if strings.HasPrefix(privkey1, "0x") {
+		privkey1 = privkey1[2:]
+	}
+
+	r0, err := hex.DecodeString(privkey0)
 	if err != nil {
 		return common.Address{}, err
 	}
-	acc, err := fetchKeystore(s.am).ImportECDSA(key, password)
+
+	r1, err := hex.DecodeString(privkey1)
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	sk0, err := crypto.ToECDSA(r0)
+	if err != nil {
+		return common.Address{}, nil
+	}
+
+	sk1, err := crypto.ToECDSA(r1)
+	if err != nil {
+		return common.Address{}, nil
+	}
+
+	acc, err := fetchKeystore(s.am).ImportECDSA(sk0, sk1, password)
 	return acc.Address, err
 }
 
