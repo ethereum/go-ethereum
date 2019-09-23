@@ -473,7 +473,10 @@ func TestCopyCommitCopy(t *testing.T) {
 		t.Fatalf("initial code mismatch: have %x, want %x", code, []byte("hello"))
 	}
 	if val := state.GetState(addr, skey); val != sval {
-		t.Fatalf("initial storage slot mismatch: have %x, want %x", val, sval)
+		t.Fatalf("initial non-committed storage slot mismatch: have %x, want %x", val, sval)
+	}
+	if val := state.GetCommittedState(addr, skey); val != (common.Hash{}) {
+		t.Fatalf("initial committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
 	// Copy the non-committed state database and check pre/post commit balance
 	copyOne := state.Copy()
@@ -484,7 +487,10 @@ func TestCopyCommitCopy(t *testing.T) {
 		t.Fatalf("first copy pre-commit code mismatch: have %x, want %x", code, []byte("hello"))
 	}
 	if val := copyOne.GetState(addr, skey); val != sval {
-		t.Fatalf("first copy pre-commit storage slot mismatch: have %x, want %x", val, sval)
+		t.Fatalf("first copy pre-commit non-committed storage slot mismatch: have %x, want %x", val, sval)
+	}
+	if val := copyOne.GetCommittedState(addr, skey); val != (common.Hash{}) {
+		t.Fatalf("first copy pre-commit committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
 
 	copyOne.Commit(false)
@@ -495,7 +501,10 @@ func TestCopyCommitCopy(t *testing.T) {
 		t.Fatalf("first copy post-commit code mismatch: have %x, want %x", code, []byte("hello"))
 	}
 	if val := copyOne.GetState(addr, skey); val != sval {
-		t.Fatalf("first copy post-commit storage slot mismatch: have %x, want %x", val, sval)
+		t.Fatalf("first copy post-commit non-committed storage slot mismatch: have %x, want %x", val, sval)
+	}
+	if val := copyOne.GetCommittedState(addr, skey); val != sval {
+		t.Fatalf("first copy post-commit committed storage slot mismatch: have %x, want %x", val, sval)
 	}
 	// Copy the copy and check the balance once more
 	copyTwo := copyOne.Copy()
@@ -506,7 +515,10 @@ func TestCopyCommitCopy(t *testing.T) {
 		t.Fatalf("second copy code mismatch: have %x, want %x", code, []byte("hello"))
 	}
 	if val := copyTwo.GetState(addr, skey); val != sval {
-		t.Fatalf("second copy storage slot mismatch: have %x, want %x", val, sval)
+		t.Fatalf("second copy non-committed storage slot mismatch: have %x, want %x", val, sval)
+	}
+	if val := copyTwo.GetCommittedState(addr, skey); val != sval {
+		t.Fatalf("second copy post-commit committed storage slot mismatch: have %x, want %x", val, sval)
 	}
 }
 
@@ -533,7 +545,10 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 		t.Fatalf("initial code mismatch: have %x, want %x", code, []byte("hello"))
 	}
 	if val := state.GetState(addr, skey); val != sval {
-		t.Fatalf("initial storage slot mismatch: have %x, want %x", val, sval)
+		t.Fatalf("initial non-committed storage slot mismatch: have %x, want %x", val, sval)
+	}
+	if val := state.GetCommittedState(addr, skey); val != (common.Hash{}) {
+		t.Fatalf("initial committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
 	// Copy the non-committed state database and check pre/post commit balance
 	copyOne := state.Copy()
@@ -544,7 +559,10 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 		t.Fatalf("first copy code mismatch: have %x, want %x", code, []byte("hello"))
 	}
 	if val := copyOne.GetState(addr, skey); val != sval {
-		t.Fatalf("first copy storage slot mismatch: have %x, want %x", val, sval)
+		t.Fatalf("first copy non-committed storage slot mismatch: have %x, want %x", val, sval)
+	}
+	if val := copyOne.GetCommittedState(addr, skey); val != (common.Hash{}) {
+		t.Fatalf("first copy committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
 	// Copy the copy and check the balance once more
 	copyTwo := copyOne.Copy()
@@ -555,9 +573,11 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 		t.Fatalf("second copy pre-commit code mismatch: have %x, want %x", code, []byte("hello"))
 	}
 	if val := copyTwo.GetState(addr, skey); val != sval {
-		t.Fatalf("second copy pre-commit storage slot mismatch: have %x, want %x", val, sval)
+		t.Fatalf("second copy pre-commit non-committed storage slot mismatch: have %x, want %x", val, sval)
 	}
-
+	if val := copyTwo.GetCommittedState(addr, skey); val != (common.Hash{}) {
+		t.Fatalf("second copy pre-commit committed storage slot mismatch: have %x, want %x", val, common.Hash{})
+	}
 	copyTwo.Commit(false)
 	if balance := copyTwo.GetBalance(addr); balance.Cmp(big.NewInt(42)) != 0 {
 		t.Fatalf("second copy post-commit balance mismatch: have %v, want %v", balance, 42)
@@ -566,7 +586,10 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 		t.Fatalf("second copy post-commit code mismatch: have %x, want %x", code, []byte("hello"))
 	}
 	if val := copyTwo.GetState(addr, skey); val != sval {
-		t.Fatalf("second copy post-commit storage slot mismatch: have %x, want %x", val, sval)
+		t.Fatalf("second copy post-commit non-committed storage slot mismatch: have %x, want %x", val, sval)
+	}
+	if val := copyTwo.GetCommittedState(addr, skey); val != sval {
+		t.Fatalf("second copy post-commit committed storage slot mismatch: have %x, want %x", val, sval)
 	}
 	// Copy the copy-copy and check the balance once more
 	copyThree := copyTwo.Copy()
@@ -577,7 +600,10 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 		t.Fatalf("third copy code mismatch: have %x, want %x", code, []byte("hello"))
 	}
 	if val := copyThree.GetState(addr, skey); val != sval {
-		t.Fatalf("third copy storage slot mismatch: have %x, want %x", val, sval)
+		t.Fatalf("third copy non-committed storage slot mismatch: have %x, want %x", val, sval)
+	}
+	if val := copyThree.GetCommittedState(addr, skey); val != sval {
+		t.Fatalf("third copy committed storage slot mismatch: have %x, want %x", val, sval)
 	}
 }
 

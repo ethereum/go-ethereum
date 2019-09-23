@@ -672,6 +672,8 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		}
 		if obj.suicided || (deleteEmptyObjects && obj.empty()) {
 			obj.deleted = true
+		} else {
+			obj.finalise()
 		}
 		s.stateObjectsPending[addr] = struct{}{}
 		s.stateObjectsDirty[addr] = struct{}{}
