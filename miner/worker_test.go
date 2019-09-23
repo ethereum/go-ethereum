@@ -42,7 +42,7 @@ const (
 	// variables in constructor
 	testCode = "0x60806040527fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0060005534801561003457600080fd5b5060fc806100436000396000f3fe6080604052348015600f57600080fd5b506004361060325760003560e01c80630c4dae8814603757806398a213cf146053575b600080fd5b603d607e565b6040518082815260200191505060405180910390f35b607c60048036036020811015606757600080fd5b81019080803590602001909291905050506084565b005b60005481565b806000819055507fe9e44f9f7da8c559de847a3232b57364adc0354f15a2cd8dc636d54396f9587a6000546040518082815260200191505060405180910390a15056fea265627a7a723058208ae31d9424f2d0bc2a3da1a5dd659db2d71ec322a17db8f87e19e209e3a1ff4a64736f6c634300050a0032"
 
-	// testGas is the gas requried for contract deployment.
+	// testGas is the gas required for contract deployment.
 	testGas = 144109
 )
 
@@ -252,10 +252,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 
 	// Ignore empty commit here for less noise
 	w.skipSealHook = func(task *task) bool {
-		if len(task.receipts) == 0 {
-			return true
-		}
-		return false
+		return len(task.receipts) == 0
 	}
 	for i := 0; i < 2; i++ {
 		b.txPool.AddLocal(b.newRandomTx(true))
