@@ -52,6 +52,18 @@ const (
 	defaultGasPrice = params.GWei
 )
 
+var (
+	ErrInvalidUAddress                  = errors.New("Invalid Uaddress, try again")
+	ErrFailToGeneratePKPairFromUAddress = errors.New("Fail to generate publickey pair from UAddress")
+	ErrFailToGeneratePKPairSlice        = errors.New("Fail to generate publickey pair hex slice")
+	ErrInvalidPrivateKey                = errors.New("Invalid private key")
+	ErrInvalidOTAMixSet                 = errors.New("Invalid OTA mix set")
+	ErrInvalidOTAAddr                   = errors.New("Invalid OTA address")
+	ErrReqTooManyOTAMix                 = errors.New("Require too many OTA mix address")
+	ErrInvalidOTAMixNum                 = errors.New("Invalid required OTA mix address number")
+	ErrInvalidInput                     = errors.New("Invalid input")
+)
+
 // PublicEthereumAPI provides an API to access Ethereum related information.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicEthereumAPI struct {
@@ -1821,4 +1833,42 @@ func (s *PublicTransactionPoolAPI) GetUseAddress(ctx context.Context, a common.A
 	}
 
 	return hexutil.Encode(useAddr[:]), nil
+}
+
+// GenerateOneTimeAddress returns corresponding One-Time-Address for a given UseAddress
+func (s *PublicTransactionPoolAPI) GenerateOneTimeAddress(ctx context.Context, uAddr string) (string, error) {
+	strlen := len(uAddr)
+	if strlen != (common.UAddressLength<<1)+2 {
+		return "", ErrInvalidUAddress
+	}
+
+	PKBytesSlice, err := hexutil.Decode(uAddr)
+	if err != nil {
+		return "", err
+	}
+
+	PK1, PK2, err := keystore.GeneratePKPairFromUAddress(PKBytesSlice)
+	if err != nil {
+		return "", ErrFailToGeneratePKPairFromUAddress
+	}
+
+	PKPairSlice := hexutil.PKPair2HexSlice(PK1, PK2)
+
+	SKOTA, err := crypto.GenerateOneTimeKey(PKPairSlice[0], PKPairSlice[1], PKPairSlice[2], PKPairSlice[3])
+	if err != nil {
+		return "", err
+	}
+
+	otaStr := strings.Replace(strings.Join(SKOTA, ""), "0x", "", -1)
+	raw, err := hexutil.Decode("0x" + otaStr)
+	if err != nil {
+		return "", err
+	}
+
+	rawUanAddr, err := keystore.UaddrFromUncompressedRawBytes(raw)
+	if err != nil || rawUanAddr == nil {
+		return "", err
+	}
+
+	return hexutil.Encode(rawUanAddr[:]), nil
 }

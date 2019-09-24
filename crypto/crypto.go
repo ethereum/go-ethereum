@@ -29,6 +29,7 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
@@ -148,6 +149,20 @@ func UnmarshalPubkey(pub []byte) (*ecdsa.PublicKey, error) {
 	return &ecdsa.PublicKey{Curve: S256(), X: x, Y: y}, nil
 }
 
+//check input error
+func ToECDSAPub(pub []byte) *ecdsa.PublicKey {
+	if len(pub) != 65 {
+		return nil
+	}
+
+	x, y := elliptic.Unmarshal(S256(), pub)
+	if x == nil || y == nil {
+		return nil
+	}
+
+	return &ecdsa.PublicKey{Curve: S256(), X: x, Y: y}
+}
+
 func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
 	if pub == nil || pub.X == nil || pub.Y == nil {
 		return nil
@@ -218,4 +233,65 @@ func zeroBytes(bytes []byte) {
 	for i := range bytes {
 		bytes[i] = 0
 	}
+}
+
+// A1=[hash([r]B)]G+A
+func generateA1(r []byte, A *ecdsa.PublicKey, B *ecdsa.PublicKey) ecdsa.PublicKey {
+	A1 := new(ecdsa.PublicKey)
+	A1.X, A1.Y = S256().ScalarMult(B.X, B.Y, r)   //A1=[r]B
+	A1Bytes := Keccak256(FromECDSAPub(A1))        //hash([r]B)
+	A1.X, A1.Y = S256().ScalarBaseMult(A1Bytes)   //[hash([r]B)]G
+	A1.X, A1.Y = S256().Add(A1.X, A1.Y, A.X, A.Y) //A1=[hash([r]B)]G+A
+	A1.Curve = S256()
+	return *A1
+}
+
+func CompareA1(b []byte, A *ecdsa.PublicKey, S1 *ecdsa.PublicKey, A1 *ecdsa.PublicKey) bool {
+	A1n := generateA1(b, A, S1)
+	if A1.X.Cmp(A1n.X) == 0 && A1.Y.Cmp(A1n.Y) == 0 {
+		return true
+	}
+	return false
+}
+
+// generateOneTimeKey2528 generates an OTA account for receiver using receiver's publickey
+func generateOneTimeKey2528(A *ecdsa.PublicKey, B *ecdsa.PublicKey) (A1 *ecdsa.PublicKey, R *ecdsa.PublicKey, err error) {
+	RPrivateKey, err := GenerateKey()
+	if err != nil {
+		return nil, nil, err
+	}
+	R = &RPrivateKey.PublicKey
+	A1 = new(ecdsa.PublicKey)
+	*A1 = generateA1(RPrivateKey.D.Bytes(), A, B)
+	return A1, R, err
+}
+
+// Generate OTA account interface
+func GenerateOneTimeKey(AX string, AY string, BX string, BY string) (ret []string, err error) {
+	bytesAX, err := hexutil.Decode(AX)
+	if err != nil {
+		return
+	}
+	bytesAY, err := hexutil.Decode(AY)
+	if err != nil {
+		return
+	}
+	bytesBX, err := hexutil.Decode(BX)
+	if err != nil {
+		return
+	}
+	bytesBY, err := hexutil.Decode(BY)
+	if err != nil {
+		return
+	}
+	bnAX := new(big.Int).SetBytes(bytesAX)
+	bnAY := new(big.Int).SetBytes(bytesAY)
+	bnBX := new(big.Int).SetBytes(bytesBX)
+	bnBY := new(big.Int).SetBytes(bytesBY)
+
+	pa := &ecdsa.PublicKey{X: bnAX, Y: bnAY}
+	pb := &ecdsa.PublicKey{X: bnBX, Y: bnBY}
+
+	generatedA1, generatedR, err := generateOneTimeKey2528(pa, pb)
+	return hexutil.PKPair2HexSlice(generatedA1, generatedR), nil
 }

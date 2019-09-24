@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -29,6 +30,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -270,6 +272,66 @@ func writeKeyFile(file string, content []byte) error {
 func keyFileName(keyAddr common.Address) string {
 	ts := time.Now().UTC()
 	return fmt.Sprintf("UTC--%s--%s", toISO8601(ts), hex.EncodeToString(keyAddr[:]))
+}
+
+// GeneratePKPairFromUAddress represents the keystore to retrieve public key-pair from given UAddress
+func GeneratePKPairFromUAddress(w []byte) (*ecdsa.PublicKey, *ecdsa.PublicKey, error) {
+	if len(w) != common.UAddressLength {
+		return nil, nil, ErrUAddressInvalid
+	}
+
+	tmp := make([]byte, 33)
+	copy(tmp[:], w[:33])
+	curve := btcec.S256()
+	PK1, err := btcec.ParsePubKey(tmp, curve)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	copy(tmp[:], w[33:])
+	PK2, err := btcec.ParsePubKey(tmp, curve)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return (*ecdsa.PublicKey)(PK1), (*ecdsa.PublicKey)(PK2), nil
+}
+
+func UaddrFromUncompressedRawBytes(raw []byte) (*common.UAddress, error) {
+	if len(raw) != 32*2*2 {
+		return nil, errors.New("invalid uncompressed use address len")
+	}
+
+	pub := make([]byte, 65)
+	pub[0] = 0x004
+	copy(pub[1:], raw[:64])
+	A := crypto.ToECDSAPub(pub)
+	copy(pub[1:], raw[64:])
+	B := crypto.ToECDSAPub(pub)
+	return GenerateUaddressFromPK(A, B), nil
+}
+
+func UaddrToUncompressedRawBytes(waddr []byte) ([]byte, error) {
+	if len(waddr) != common.UAddressLength {
+		return nil, ErrUAddressInvalid
+	}
+
+	A, B, err := GeneratePKPairFromUAddress(waddr)
+	if err != nil {
+		return nil, err
+	}
+
+	u := make([]byte, 32*2*2)
+	ax := math.PaddedBigBytes(A.X, 32)
+	ay := math.PaddedBigBytes(A.Y, 32)
+	bx := math.PaddedBigBytes(B.X, 32)
+	by := math.PaddedBigBytes(B.Y, 32)
+	copy(u[0:], ax[:32])
+	copy(u[32:], ay[:32])
+	copy(u[64:], bx[:32])
+	copy(u[96:], by[:32])
+
+	return u, nil
 }
 
 func toISO8601(t time.Time) string {
