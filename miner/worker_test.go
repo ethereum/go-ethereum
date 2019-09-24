@@ -115,7 +115,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	}
 	genesis := gspec.MustCommit(db)
 
-	chain, _ := core.NewBlockChain(db, nil, gspec.Config, engine, vm.Config{}, nil)
+	chain, _ := core.NewBlockChain(db, &core.CacheConfig{TrieDirtyDisabled: true}, gspec.Config, engine, vm.Config{}, nil)
 	txpool := core.NewTxPool(testTxPoolConfig, chainConfig, chain)
 
 	// Generate a small n-block chain and an uncle block for it
@@ -254,9 +254,10 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	w.skipSealHook = func(task *task) bool {
 		return len(task.receipts) == 0
 	}
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 50; i++ {
 		b.txPool.AddLocal(b.newRandomTx(true))
 		b.txPool.AddLocal(b.newRandomTx(false))
+		b.PostChainEvents([]interface{}{core.ChainSideEvent{Block: b.newRandomUncle()}})
 		b.PostChainEvents([]interface{}{core.ChainSideEvent{Block: b.newRandomUncle()}})
 		select {
 		case <-newBlock:
