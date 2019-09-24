@@ -13647,8 +13647,16 @@ module.exports = XMLHttpRequest;
             inputFormatter: [formatters.inputAddressFormatter]
         });
 
+        var generateOneTimeAddress = new Method({
+            name: 'generateOneTimeAddress',
+            call: 'use_generateOneTimeAddress',
+            params: 1,
+            inputFormatter: [null]
+        });
+
         return [
             getUseAddress,
+            generateOneTimeAddress,
         ];
     };
     var properties = function () {
