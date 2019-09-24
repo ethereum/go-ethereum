@@ -17,10 +17,12 @@
 package keystore
 
 import (
+	"errors"
 	"math/big"
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -145,4 +147,26 @@ func (w *keystoreWallet) SignTxWithPassphrase(account accounts.Account, passphra
 	}
 	// Account seems valid, request the keystore to sign
 	return w.keystore.SignTxWithPassphrase(account, passphrase, tx, chainID)
+}
+
+// GetUseAddress represents the wallet to retrieve corresponding usechain public address for a specific ordinary account/address
+func (w *keystoreWallet) GetUseAddress(account accounts.Account) (common.UAddress, error) {
+	// Make sure the requested account is contained within
+	if account.Address != w.account.Address {
+		return common.UAddress{}, accounts.ErrUnknownAccount
+	}
+	if account.URL != (accounts.URL{}) && account.URL != w.account.URL {
+		return common.UAddress{}, accounts.ErrUnknownAccount
+	}
+	// Account seems valid, request the keystore to retrieve
+	return w.keystore.GetUseAddress(account)
+}
+
+func (w *keystoreWallet) GetUnlockedKey(address common.Address) (*Key, error) {
+	value, ok := w.keystore.unlocked[address]
+	if !ok {
+		return nil, errors.New("can not found a unlock key of: " + address.Hex())
+	}
+
+	return value.Key, nil
 }

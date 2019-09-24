@@ -486,6 +486,38 @@ func (ks *KeyStore) ImportPreSaleKey(keyJSON []byte, passphrase string) (account
 	return a, nil
 }
 
+// getEncryptedKey loads an encrypted keyfile from the disk
+func (ks *KeyStore) getEncryptedKey(a accounts.Account) (accounts.Account, *Key, error) {
+	a, err := ks.Find(a)
+	if err != nil {
+		return a, nil, err
+	}
+	key, err := ks.storage.GetEncryptedKey(a.Address, a.URL.Path)
+	if err != nil {
+		return a, nil, err
+	}
+	return a, key, nil
+
+}
+
+// GetUseAddress represents the keystore to retrieve corresponding usechain public address for a specific ordinary account/address
+func (ks *KeyStore) GetUseAddress(account accounts.Account) (common.UAddress, error) {
+	ks.mu.RLock()
+	defer ks.mu.RUnlock()
+
+	unlockedKey, found := ks.unlocked[account.Address]
+	if !found {
+		_, ksen, err := ks.getEncryptedKey(account)
+		if err != nil {
+			return common.UAddress{}, ErrLocked
+		}
+		return ksen.UAddress, nil
+	}
+
+	ret := unlockedKey.UAddress
+	return ret, nil
+}
+
 // zeroKey zeroes a private key in memory.
 func zeroKey(k *ecdsa.PrivateKey) {
 	b := k.D.Bits()

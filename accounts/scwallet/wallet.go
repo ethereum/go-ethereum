@@ -788,6 +788,11 @@ func (w *Wallet) findAccountPath(account accounts.Account) (accounts.DerivationP
 	return accounts.ParseDerivationPath(parts[1])
 }
 
+// TODO: TBI
+func (w *Wallet) GetUseAddress(account accounts.Account) (common.UAddress, error) {
+	return common.UAddress{}, nil
+}
+
 // Session represents a secured communication session with the wallet.
 type Session struct {
 	Wallet   *Wallet               // A handle to the wallet that opened the session

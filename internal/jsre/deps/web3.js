@@ -2509,6 +2509,7 @@ module.exports={
 var RequestManager = require('./web3/requestmanager');
 var Iban = require('./web3/iban');
 var Eth = require('./web3/methods/eth');
+var Use = require('./web3/methods/use');
 var DB = require('./web3/methods/db');
 var Shh = require('./web3/methods/shh');
 var Net = require('./web3/methods/net');
@@ -2531,6 +2532,7 @@ function Web3 (provider) {
     this._requestManager = new RequestManager(provider);
     this.currentProvider = provider;
     this.eth = new Eth(this);
+    this.use = new Use(this);
     this.db = new DB(this);
     this.shh = new Shh(this);
     this.net = new Net(this);
@@ -2632,7 +2634,7 @@ Web3.prototype.createBatch = function () {
 module.exports = Web3;
 
 
-},{"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
+},{"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/use":87,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
 /*
     This file is part of web3.js.
 
@@ -5358,6 +5360,13 @@ var methods = function () {
         outputFormatter: utils.toDecimal
     });
 
+    var getUseAddress = new Method({
+        name: 'getUseAddress',
+        call: 'eth_getUseAddress',
+        params: 1,
+        inputFormatter: [formatters.inputAddressFormatter]
+    });
+
     var sendRawTransaction = new Method({
         name: 'sendRawTransaction',
         call: 'eth_sendRawTransaction',
@@ -5444,6 +5453,7 @@ var methods = function () {
         getTransactionFromBlock,
         getTransactionReceipt,
         getTransactionCount,
+        getUseAddress,
         call,
         estimateGas,
         sendRawTransaction,
@@ -13608,7 +13618,44 @@ module.exports = transfer;
 },{}],86:[function(require,module,exports){
 module.exports = XMLHttpRequest;
 
-},{}],"bignumber.js":[function(require,module,exports){
+},{}],87:[function(require,module,exports){
+/* use.js */
+    var Method = require('../method');
+    var formatters = require('../formatters');
+
+    function Use(web3) {
+        this._requestManager = web3._requestManager;
+
+        var self = this;
+
+        methods().forEach(function(method) {
+            method.attachToObject(self);
+            method.setRequestManager(self._requestManager);
+        });
+
+        properties().forEach(function(p) {
+            p.attachToObject(self);
+            p.setRequestManager(self._requestManager);
+        });
+    }
+
+    var methods = function () {
+        var getUseAddress = new Method({
+            name: 'getUseAddress',
+            call: 'use_getUseAddress',
+            params: 1,
+            inputFormatter: [formatters.inputAddressFormatter]
+        });
+
+        return [
+            getUseAddress,
+        ];
+    };
+    var properties = function () {
+        return [];
+    };
+module.exports = Use;
+},{"../formatters":30,"../method":36}],"bignumber.js":[function(require,module,exports){
 'use strict';
 
 module.exports = BigNumber; // jshint ignore:line

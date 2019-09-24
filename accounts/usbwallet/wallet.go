@@ -593,3 +593,8 @@ func (w *wallet) SignTextWithPassphrase(account accounts.Account, passphrase str
 func (w *wallet) SignTxWithPassphrase(account accounts.Account, passphrase string, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
 	return w.SignTx(account, tx, chainID)
 }
+
+// TODO: TBI
+func (w *wallet) GetUseAddress(account accounts.Account) (common.UAddress, error) {
+	return common.UAddress{}, nil
+}

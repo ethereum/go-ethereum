@@ -1805,3 +1805,20 @@ func (s *PublicNetAPI) PeerCount() hexutil.Uint {
 func (s *PublicNetAPI) Version() string {
 	return fmt.Sprintf("%d", s.networkVersion)
 }
+
+////////////////////added for privacy tx ////////////////////////////////////////
+// GetUseAddress returns corresponding UAddress of an ordinary account
+func (s *PublicTransactionPoolAPI) GetUseAddress(ctx context.Context, a common.Address) (string, error) {
+	account := accounts.Account{Address: a}
+	// first fetch the wallet/keystore, and then retrieve the useaddress
+	wallet, err := s.b.AccountManager().Find(account)
+	if err != nil {
+		return "", err
+	}
+	useAddr, err := wallet.GetUseAddress(account)
+	if err != nil {
+		return "", err
+	}
+
+	return hexutil.Encode(useAddr[:]), nil
+}
