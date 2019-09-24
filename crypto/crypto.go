@@ -295,3 +295,48 @@ func GenerateOneTimeKey(AX string, AY string, BX string, BY string) (ret []strin
 	generatedA1, generatedR, err := generateOneTimeKey2528(pa, pb)
 	return hexutil.PKPair2HexSlice(generatedA1, generatedR), nil
 }
+
+// GenerteOTAPrivateKey generates the privatekey for an OTA account using receiver's main account's privatekey
+// Pengbo added, TeemoGuo revised
+func GenerteOTAPrivateKey(privateKey *ecdsa.PrivateKey, privateKey2 *ecdsa.PrivateKey, AX string, AY string, BX string, BY string) (retPub *ecdsa.PublicKey, retPriv1 *ecdsa.PrivateKey, retPriv2 *ecdsa.PrivateKey, err error) {
+	bytesAX, err := hexutil.Decode(AX)
+	if err != nil {
+		return
+	}
+	bytesAY, err := hexutil.Decode(AY)
+	if err != nil {
+		return
+	}
+	bytesBX, err := hexutil.Decode(BX)
+	if err != nil {
+		return
+	}
+	bytesBY, err := hexutil.Decode(BY)
+	if err != nil {
+		return
+	}
+	bnAX := new(big.Int).SetBytes(bytesAX)
+	bnAY := new(big.Int).SetBytes(bytesAY)
+	bnBX := new(big.Int).SetBytes(bytesBX)
+	bnBY := new(big.Int).SetBytes(bytesBY)
+
+	retPub = &ecdsa.PublicKey{X: bnAX, Y: bnAY}
+	pb := &ecdsa.PublicKey{X: bnBX, Y: bnBY}
+	retPriv1, retPriv2, err = GenerateOneTimePrivateKey2528(privateKey, privateKey2, retPub, pb)
+	return
+}
+
+func GenerateOneTimePrivateKey2528(privateKey *ecdsa.PrivateKey, privateKey2 *ecdsa.PrivateKey, destPubA *ecdsa.PublicKey, destPubB *ecdsa.PublicKey) (retPriv1 *ecdsa.PrivateKey, retPriv2 *ecdsa.PrivateKey, err error) {
+	pub := new(ecdsa.PublicKey)
+	pub.X, pub.Y = S256().ScalarMult(destPubB.X, destPubB.Y, privateKey2.D.Bytes()) //[b]R
+	k := new(big.Int).SetBytes(Keccak256(FromECDSAPub(pub)))                        //hash([b]R)
+	k.Add(k, privateKey.D)                                                          //hash([b]R)+a
+	k.Mod(k, S256().Params().N)                                                     //mod to feild N
+
+	retPriv1 = new(ecdsa.PrivateKey)
+	retPriv2 = new(ecdsa.PrivateKey)
+
+	retPriv1.D = k
+	retPriv2.D = new(big.Int).SetInt64(0)
+	return retPriv1, retPriv2, nil
+}

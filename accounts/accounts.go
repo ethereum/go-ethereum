@@ -152,6 +152,9 @@ type Wallet interface {
 
 	// GetUseAddress represents the wallet to retrieve corresponding wanchain public address for a specific ordinary account/address
 	GetUseAddress(account Account) (common.UAddress, error)
+
+	// ComputeOTAPPKeys returns one-time-address pair
+	ComputeOTAPPKeys(account Account, AX, AY, BX, BY string) ([]string, error)
 }
 
 // Backend is a "wallet provider" that may contain a batch of accounts they can

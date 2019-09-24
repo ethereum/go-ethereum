@@ -598,3 +598,8 @@ func (w *wallet) SignTxWithPassphrase(account accounts.Account, passphrase strin
 func (w *wallet) GetUseAddress(account accounts.Account) (common.UAddress, error) {
 	return common.UAddress{}, nil
 }
+
+// TODO: TBI
+func (w *wallet) ComputeOTAPPKeys(account accounts.Account, AX, AY, BX, BY string) ([]string, error) {
+	return nil, nil
+}

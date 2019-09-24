@@ -1531,6 +1531,57 @@ func (s *PublicTransactionPoolAPI) FillTransaction(ctx context.Context, args Sen
 	return &SignTransactionResult{data, tx}, nil
 }
 
+// ComputeOTAPPKeys compute ota private key, public key and short address
+// from account address and ota full address.
+func (s *PublicTransactionPoolAPI) ComputeOTAPPKeys(ctx context.Context, address common.Address, inOtaAddr string) (string, error) {
+	account := accounts.Account{Address: address}
+	wallet, err := s.b.AccountManager().Find(account)
+	if err != nil {
+		return "", err
+	}
+
+	uanBytes, err := hexutil.Decode(inOtaAddr)
+	if err != nil {
+		return "", err
+	}
+
+	otaBytes, err := keystore.UaddrToUncompressedRawBytes(uanBytes)
+	if err != nil {
+		return "", err
+	}
+
+	otaAddr := hexutil.Encode(otaBytes)
+
+	//AX string, AY string, BX string, BY string
+	otaAddr = strings.Replace(otaAddr, "0x", "", -1)
+	AX := "0x" + otaAddr[0:64]
+	AY := "0x" + otaAddr[64:128]
+
+	BX := "0x" + otaAddr[128:192]
+	BY := "0x" + otaAddr[192:256]
+
+	sS, err := wallet.ComputeOTAPPKeys(account, AX, AY, BX, BY)
+	if err != nil {
+		return "", err
+	}
+
+	otaPub := sS[0] + sS[1][2:]
+	otaPriv := sS[2]
+
+	privateKey, err := crypto.HexToECDSA(otaPriv[2:])
+	if err != nil {
+		return "", err
+	}
+
+	var addr common.Address
+	pubkey := crypto.FromECDSAPub(&privateKey.PublicKey)
+	//caculate the address for replaced pub
+	copy(addr[:], crypto.Keccak256(pubkey[1:])[12:])
+
+	return otaPriv + "+" + otaPub + "+" + hexutil.Encode(addr[:]), nil
+
+}
+
 // SendRawTransaction will add the signed transaction to the transaction pool.
 // The sender is responsible for signing the transaction and using the correct nonce.
 func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encodedTx hexutil.Bytes) (common.Hash, error) {

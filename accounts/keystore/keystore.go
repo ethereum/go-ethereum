@@ -35,6 +35,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
@@ -284,6 +285,25 @@ func (ks *KeyStore) SignTx(a accounts.Account, tx *types.Transaction, chainID *b
 		return types.SignTx(tx, types.NewEIP155Signer(chainID), unlockedKey.PrivateKey)
 	}
 	return types.SignTx(tx, types.HomesteadSigner{}, unlockedKey.PrivateKey)
+}
+
+func (ks *KeyStore) ComputeOTAPPKeys(a accounts.Account, AX, AY, BX, BY string) ([]string, error) {
+	ks.mu.RLock()
+	defer ks.mu.RUnlock()
+
+	unlockedKey, found := ks.unlocked[a.Address]
+	if !found {
+		return nil, ErrLocked
+	}
+
+	pub1, priv1, priv2, err := crypto.GenerteOTAPrivateKey(unlockedKey.PrivateKey, unlockedKey.PrivateKey2, AX, AY, BX, BY)
+
+	pub1X := hexutil.Encode(common.LeftPadBytes(pub1.X.Bytes(), 32))
+	pub1Y := hexutil.Encode(common.LeftPadBytes(pub1.Y.Bytes(), 32))
+	priv1D := hexutil.Encode(common.LeftPadBytes(priv1.D.Bytes(), 32))
+	priv2D := hexutil.Encode(common.LeftPadBytes(priv2.D.Bytes(), 32))
+
+	return []string{pub1X, pub1Y, priv1D, priv2D}, err
 }
 
 // SignHashWithPassphrase signs hash if the private key matching the given address

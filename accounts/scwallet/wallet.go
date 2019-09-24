@@ -793,6 +793,11 @@ func (w *Wallet) GetUseAddress(account accounts.Account) (common.UAddress, error
 	return common.UAddress{}, nil
 }
 
+// TODO: TBI
+func (w *Wallet) ComputeOTAPPKeys(account accounts.Account, AX, AY, BX, BY string) ([]string, error) {
+	return nil, nil
+}
+
 // Session represents a secured communication session with the wallet.
 type Session struct {
 	Wallet   *Wallet               // A handle to the wallet that opened the session
