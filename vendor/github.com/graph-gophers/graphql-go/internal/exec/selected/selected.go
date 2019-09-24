@@ -126,12 +126,28 @@ func applySelectionSet(r *Request, e *resolvable.Object, sels []query.Selection)
 					var err error
 					packedArgs, err = fe.ArgsPacker.Pack(args)
 					if err != nil {
-						r.AddError(errors.Errorf("%s", err))
+						curErr := errors.Errorf("%s", err)
+						// the error location will always be the first argument
+						// because the Pack interface provided ArgsPacker does
+						// not support detailed error information tracing
+						curErr.Locations = append(curErr.Locations, sel.Arguments[0].Value.Location())
+						// record error path, full path will be constructed recursively
+						curErr.Path = append(curErr.Path, field.Name.Name)
+						curErr.Path = append(curErr.Path, sel.Arguments[0].Name.Name)
+						r.AddError(curErr)
 						return
 					}
 				}
 
 				fieldSels := applyField(r, fe.ValueExec, field.Selections)
+				r.Mu.Lock()
+				if len(r.Errs) > 0 {
+					// recursively prepend error path
+					r.Errs[0].Path = append([]interface{}{field.Name.Name}, r.Errs[0].Path...)
+					// it is ok to use index 0 becasue selection process will
+					// panick and return with exactly one error
+				}
+				r.Mu.Unlock()
 				flattenedSels = append(flattenedSels, &SchemaField{
 					Field:      *fe,
 					Alias:      field.Alias.Name,
