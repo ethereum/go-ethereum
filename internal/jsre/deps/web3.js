@@ -13654,9 +13654,17 @@ module.exports = XMLHttpRequest;
             inputFormatter: [null]
         });
 
+        var computeOTAPPKeys = new Method({
+            name: 'computeOTAPPKeys',
+            call: 'use_computeOTAPPKeys',
+            params: 2,
+            inputFormatter: [formatters.inputAddressFormatter, null]
+        });
+
         return [
             getUseAddress,
             generateOneTimeAddress,
+            computeOTAPPKeys,
         ];
     };
     var properties = function () {
