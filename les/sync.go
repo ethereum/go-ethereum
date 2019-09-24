@@ -135,21 +135,24 @@ func (h *clientHandler) synchronise(peer *peer) {
 		mode = legacyCheckpointSync
 		log.Debug("Disable checkpoint syncing", "reason", "checkpoint is hardcoded")
 	case h.backend.oracle == nil || !h.backend.oracle.isRunning():
-		mode = legacyCheckpointSync
+		if h.checkpoint == nil {
+			mode = lightSync // Downgrade to light sync unfortunately.
+		} else {
+			checkpoint = h.checkpoint
+			mode = legacyCheckpointSync
+		}
 		log.Debug("Disable checkpoint syncing", "reason", "checkpoint syncing is not activated")
 	}
 	// Notify testing framework if syncing has completed(for testing purpose).
 	defer func() {
-		if h.backend.oracle != nil && h.backend.oracle.syncDoneHook != nil {
-			h.backend.oracle.syncDoneHook()
+		if h.syncDone != nil {
+			h.syncDone()
 		}
 	}()
 	start := time.Now()
 	if mode == checkpointSync || mode == legacyCheckpointSync {
 		// Validate the advertised checkpoint
-		if mode == legacyCheckpointSync {
-			checkpoint = h.checkpoint
-		} else if mode == checkpointSync {
+		if mode == checkpointSync {
 			if err := h.validateCheckpoint(peer); err != nil {
 				log.Debug("Failed to validate checkpoint", "reason", err)
 				h.removePeer(peer.id)
