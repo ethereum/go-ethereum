@@ -75,6 +75,18 @@
 			"revisionTime": "2018-06-03T19:32:48Z"
 		},
 		{
+			"checksumSHA1": "WBgnO6VroXxhpYS6kCiFS4jrW/c=",
+			"path": "github.com/dgraph-io/ristretto",
+			"revision": "ae326c3348e84b72d4f9db6b0ccb2f3551a0ed3e",
+			"revisionTime": "2019-09-24T01:22:51Z"
+		},
+		{
+			"checksumSHA1": "fp+NtBZPTvGfWtsxZWUQct/e0ZM=",
+			"path": "github.com/dgraph-io/ristretto/z",
+			"revision": "ae326c3348e84b72d4f9db6b0ccb2f3551a0ed3e",
+			"revisionTime": "2019-09-24T01:22:51Z"
+		},
+		{
 			"checksumSHA1": "Ad8LPSCP9HctFrmskh+S5HpHXcs=",
 			"path": "github.com/docker/docker/pkg/reexec",
 			"revision": "8e610b2b55bfd1bfa9436ab110d311f5e8a74dcb",
