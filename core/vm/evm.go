@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"bytes"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -51,7 +52,7 @@ func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, err
 			precompiles = PrecompiledContractsIstanbul
 		}
 		if p := precompiles[*contract.CodeAddr]; p != nil {
-			return RunPrecompiledContract(p, input, contract)
+			return RunPrecompiledContract(p, input, contract, evm)
 		}
 	}
 	for _, interpreter := range evm.interpreters {
@@ -222,7 +223,11 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
-	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
+
+	if !bytes.Equal(to.Address().Bytes(), useCoinPrecompileAddr.Bytes()) && !bytes.Equal(to.Address().Bytes(), useStampPrecompileAddr.Bytes()) {
+		evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
+	}
+
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
 	contract := NewContract(caller, to, value, gas)

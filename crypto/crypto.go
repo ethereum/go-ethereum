@@ -31,8 +31,18 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+
+	//usha3 "github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
+
 	"golang.org/x/crypto/sha3"
+
+	"github.com/ethereum/go-ethereum/log"
+)
+
+var (
+	secp256k1_N, _  = new(big.Int).SetString("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16)
+	secp256k1_halfN = new(big.Int).Div(secp256k1_N, big.NewInt(2))
 )
 
 //SignatureLength indicates the byte length required to carry a signature with recovery id.
@@ -233,6 +243,103 @@ func zeroBytes(bytes []byte) {
 	for i := range bytes {
 		bytes[i] = 0
 	}
+}
+
+// calc [x]Hash(P)
+func xScalarHashP(x []byte, pub *ecdsa.PublicKey) (I *ecdsa.PublicKey) {
+	KeyImg := new(ecdsa.PublicKey)
+	I = new(ecdsa.PublicKey)
+	KeyImg.X, KeyImg.Y = S256().ScalarMult(pub.X, pub.Y, Keccak256(FromECDSAPub(pub))) //Hash(P)
+	I.X, I.Y = S256().ScalarMult(KeyImg.X, KeyImg.Y, x)
+	I.Curve = S256()
+	return
+}
+
+// VerifyRingSign verifies the validity of ring signature
+// Pengbo added, Shi,TeemoGuo revised
+func VerifyRingSign(M []byte, PublicKeys []*ecdsa.PublicKey, I *ecdsa.PublicKey, c []*big.Int, r []*big.Int) bool {
+	if M == nil || PublicKeys == nil || I == nil || c == nil || r == nil {
+		return false
+	}
+
+	if len(PublicKeys) == 0 || len(PublicKeys) != len(c) || len(PublicKeys) != len(r) {
+		return false
+	}
+
+	n := len(PublicKeys)
+	for i := 0; i < n; i++ {
+		if PublicKeys[i] == nil || PublicKeys[i].X == nil || PublicKeys[i].Y == nil ||
+			c[i] == nil || r[i] == nil {
+			return false
+		}
+	}
+
+	log.Debug("M info", "R", 0, "M", common.ToHex(M))
+	for i := 0; i < n; i++ {
+		log.Debug("publicKeys", "i", i, "publickey", common.ToHex(FromECDSAPub(PublicKeys[i])))
+	}
+
+	log.Debug("image info", "I", common.ToHex(FromECDSAPub(I)))
+	for i := 0; i < n; i++ {
+		log.Debug("c info", "i", i, "c", common.ToHex(c[i].Bytes()))
+	}
+
+	for i := 0; i < n; i++ {
+		log.Debug("r info", "i", i, "r", common.ToHex(r[i].Bytes()))
+	}
+
+	SumC := new(big.Int).SetInt64(0)
+	Lpub := new(ecdsa.PublicKey)
+	d := sha3.NewLegacyKeccak256()
+	d.Write(M)
+
+	//hash(M,Li,Ri)
+	for i := 0; i < n; i++ {
+		Lpub.X, Lpub.Y = S256().ScalarBaseMult(r[i].Bytes()) //[ri]G
+		if Lpub.X == nil || Lpub.Y == nil {
+			return false
+		}
+
+		Ppub := new(ecdsa.PublicKey)
+		Ppub.X, Ppub.Y = S256().ScalarMult(PublicKeys[i].X, PublicKeys[i].Y, c[i].Bytes()) //[ci]Pi
+		if Ppub.X == nil || Ppub.Y == nil {
+			return false
+		}
+
+		Lpub.X, Lpub.Y = S256().Add(Lpub.X, Lpub.Y, Ppub.X, Ppub.Y) //[ri]G+[ci]Pi
+		SumC.Add(SumC, c[i])
+		SumC.Mod(SumC, secp256k1_N)
+		d.Write(FromECDSAPub(Lpub))
+		log.Debug("LPublicKeys", "i", i, "Lpub", common.ToHex(FromECDSAPub(Lpub)))
+	}
+
+	Rpub := new(ecdsa.PublicKey)
+	for i := 0; i < n; i++ {
+		Rpub = xScalarHashP(r[i].Bytes(), PublicKeys[i]) //[qi]HashPi
+		if Rpub == nil || Rpub.X == nil || Rpub.Y == nil {
+			return false
+		}
+
+		Ppub := new(ecdsa.PublicKey)
+		Ppub.X, Ppub.Y = S256().ScalarMult(I.X, I.Y, c[i].Bytes()) //[wi]I
+		if Ppub.X == nil || Ppub.Y == nil {
+			return false
+		}
+
+		Rpub.X, Rpub.Y = S256().Add(Rpub.X, Rpub.Y, Ppub.X, Ppub.Y) //[qi]HashPi+[wi]I
+		log.Debug("RPublicKeys", "i", i, "Rpub", common.ToHex(FromECDSAPub(Rpub)))
+
+		d.Write(FromECDSAPub(Rpub))
+	}
+
+	hash := new(big.Int).SetBytes(d.Sum(nil)) //hash(m,Li,Ri)
+	log.Debug("hash info", "i", 0, "hash", common.ToHex(hash.Bytes()))
+
+	hash.Mod(hash, secp256k1_N)
+	log.Debug("hash info", "i", 2, "hash", common.ToHex(hash.Bytes()))
+	log.Debug("SumC info", "i", 3, "SumC", common.ToHex(SumC.Bytes()))
+
+	return hash.Cmp(SumC) == 0
 }
 
 // A1=[hash([r]B)]G+A

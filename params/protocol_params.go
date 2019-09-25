@@ -129,6 +129,9 @@ const (
 	Bn256PairingBaseGasIstanbul      uint64 = 45000  // Base price for an elliptic curve pairing check
 	Bn256PairingPerPointGasByzantium uint64 = 80000  // Byzantium per-point price for an elliptic curve pairing check
 	Bn256PairingPerPointGasIstanbul  uint64 = 34000  // Per-point price for an elliptic curve pairing check
+
+	RequiredGasPerMixPub uint64 = 4000 // ring signature mix difficulty gas
+	GetOTAMixSetMaxSize  uint64 = 20   // Max number of mix ota set size from once getting
 )
 
 var (
