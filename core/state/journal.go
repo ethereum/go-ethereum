@@ -111,6 +111,11 @@ type (
 		account       *common.Address
 		key, prevalue common.Hash
 	}
+	storageByteArrayChange struct {
+		account  *common.Address
+		key      common.Hash
+		prevalue []byte
+	}
 	codeChange struct {
 		account            *common.Address
 		prevcode, prevhash []byte
@@ -176,6 +181,14 @@ func (ch balanceChange) revert(s *StateDB) {
 }
 
 func (ch balanceChange) dirtied() *common.Address {
+	return ch.account
+}
+
+func (ch storageByteArrayChange) revert(s *StateDB) {
+	s.getStateObject(*ch.account).setStateByteArray(ch.key, ch.prevalue)
+}
+
+func (ch storageByteArrayChange) dirtied() *common.Address {
 	return ch.account
 }
 

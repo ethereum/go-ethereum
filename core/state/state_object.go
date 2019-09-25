@@ -39,6 +39,8 @@ func (c Code) String() string {
 
 type Storage map[common.Hash]common.Hash
 
+type StorageByteArray map[common.Hash][]byte
+
 func (s Storage) String() (str string) {
 	for key, value := range s {
 		str += fmt.Sprintf("%X : %X\n", key, value)
@@ -50,6 +52,15 @@ func (s Storage) String() (str string) {
 func (s Storage) Copy() Storage {
 	cpy := make(Storage)
 	for key, value := range s {
+		cpy[key] = value
+	}
+
+	return cpy
+}
+
+func (self StorageByteArray) Copy() StorageByteArray {
+	cpy := make(StorageByteArray)
+	for key, value := range self {
 		cpy[key] = value
 	}
 
@@ -84,6 +95,9 @@ type stateObject struct {
 	dirtyStorage   Storage // Storage entries that have been modified in the current transaction execution
 	fakeStorage    Storage // Fake storage which constructed by caller for debugging purpose.
 
+	cachedStorageByteArray StorageByteArray
+	dirtyStorageByteArray  StorageByteArray
+
 	// Cache flags.
 	// When an object is marked suicided it will be delete from the trie
 	// during the "update" phase of the state transition.
@@ -94,7 +108,7 @@ type stateObject struct {
 
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
-	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash)
+	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash) && len(s.dirtyStorage) == 0 && len(s.dirtyStorageByteArray) == 0
 }
 
 // Account is the Ethereum consensus representation of accounts.
@@ -118,13 +132,15 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 		data.Root = emptyRoot
 	}
 	return &stateObject{
-		db:             db,
-		address:        address,
-		addrHash:       crypto.Keccak256Hash(address[:]),
-		data:           data,
-		originStorage:  make(Storage),
-		pendingStorage: make(Storage),
-		dirtyStorage:   make(Storage),
+		db:                     db,
+		address:                address,
+		addrHash:               crypto.Keccak256Hash(address[:]),
+		data:                   data,
+		originStorage:          make(Storage),
+		pendingStorage:         make(Storage),
+		dirtyStorage:           make(Storage),
+		cachedStorageByteArray: make(StorageByteArray),
+		dirtyStorageByteArray:  make(StorageByteArray),
 	}
 }
 
@@ -260,6 +276,34 @@ func (s *stateObject) setState(key, value common.Hash) {
 	s.dirtyStorage[key] = value
 }
 
+func (s *stateObject) GetStateByteArray(db Database, key common.Hash) []byte {
+	value, exists := s.cachedStorageByteArray[key]
+	if exists {
+		return value
+	}
+	// Load from DB in case it is missing.
+	value, err := s.getTrie(db).TryGet(key[:])
+	if err == nil && len(value) != 0 {
+		s.cachedStorageByteArray[key] = value
+	}
+	return value
+}
+
+func (s *stateObject) SetStateByteArray(db Database, key common.Hash, value []byte) {
+	s.db.journal.append(storageByteArrayChange{
+		account:  &s.address,
+		key:      key,
+		prevalue: s.GetStateByteArray(db, key),
+	})
+	s.setStateByteArray(key, value)
+
+}
+
+func (self *stateObject) setStateByteArray(key common.Hash, value []byte) {
+	self.cachedStorageByteArray[key] = value
+	self.dirtyStorageByteArray[key] = value
+}
+
 // finalise moves all dirty storage slots into the pending area to be hashed or
 // committed later. It is invoked at the end of every transaction.
 func (s *stateObject) finalise() {
@@ -300,6 +344,19 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	if len(s.pendingStorage) > 0 {
 		s.pendingStorage = make(Storage)
 	}
+
+	for key, value := range s.dirtyStorageByteArray {
+		delete(s.dirtyStorageByteArray, key)
+		if len(value) == 0 {
+			s.setError(tr.TryDelete(key[:]))
+			continue
+		}
+		s.setError(tr.TryUpdate(key[:], value))
+	}
+	if len(s.dirtyStorageByteArray) > 0 {
+		s.dirtyStorageByteArray = make(StorageByteArray)
+	}
+
 	return tr
 }
 
@@ -380,6 +437,8 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject.dirtyStorage = s.dirtyStorage.Copy()
 	stateObject.originStorage = s.originStorage.Copy()
 	stateObject.pendingStorage = s.pendingStorage.Copy()
+	stateObject.dirtyStorageByteArray = s.dirtyStorageByteArray.Copy()
+	stateObject.cachedStorageByteArray = s.cachedStorageByteArray.Copy()
 	stateObject.suicided = s.suicided
 	stateObject.dirtyCode = s.dirtyCode
 	stateObject.deleted = s.deleted

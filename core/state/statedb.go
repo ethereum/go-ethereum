@@ -398,6 +398,51 @@ func (self *StateDB) SetStorage(addr common.Address, storage map[common.Hash]com
 	}
 }
 
+// cb is callback function. cb return true indicating like to continue, return false indicating stop
+func (db *StateDB) ForEachStorageByteArray(addr common.Address, cb func(key common.Hash, value []byte) bool) {
+	so := db.getStateObject(addr)
+	if so == nil {
+		return
+	}
+
+	// When iterating over the storage check the cache first
+	for h, value := range so.cachedStorageByteArray {
+		if !cb(h, value) {
+			return
+		}
+	}
+
+	it := trie.NewIterator(so.getTrie(db.db).NodeIterator(nil))
+	for it.Next() {
+		// ignore cached values
+		key := common.BytesToHash(db.trie.GetKey(it.Key))
+		if _, ok := so.fakeStorage[key]; !ok {
+			if !cb(key, it.Value) {
+				return
+			}
+		} else if _, ok := so.dirtyStorage[key]; !ok {
+			if !cb(key, it.Value) {
+				return
+			}
+		}
+	}
+}
+
+func (self *StateDB) GetStateByteArray(a common.Address, b common.Hash) []byte {
+	stateObject := self.getStateObject(a)
+	if stateObject != nil {
+		return stateObject.GetStateByteArray(self.db, b)
+	}
+	return nil
+}
+
+func (self *StateDB) SetStateByteArray(addr common.Address, key common.Hash, value []byte) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetStateByteArray(self.db, key, value)
+	}
+}
+
 // Suicide marks the given account as suicided.
 // This clears the account balance.
 //
