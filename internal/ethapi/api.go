@@ -19,6 +19,7 @@ package ethapi
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -1529,6 +1530,97 @@ func (s *PublicTransactionPoolAPI) FillTransaction(ctx context.Context, args Sen
 		return nil, err
 	}
 	return &SignTransactionResult{data, tx}, nil
+}
+
+// GenRingSignData generate ring sign data
+func (s *PublicTransactionPoolAPI) GenRingSignData(ctx context.Context, hashMsg string, privateKey string, mixUseAdresses string) (string, error) {
+	if !hexutil.Has0xPrefix(privateKey) {
+		return "", ErrInvalidPrivateKey
+	}
+
+	hmsg, err := hexutil.Decode(hashMsg)
+	if err != nil {
+		return "", err
+	}
+
+	ecdsaPrivateKey, err := crypto.HexToECDSA(privateKey[2:])
+	if err != nil {
+		return "", err
+	}
+
+	privKey, err := hexutil.Decode(privateKey)
+	if err != nil {
+		return "", err
+	}
+
+	if privKey == nil {
+		return "", ErrInvalidPrivateKey
+	}
+
+	useAddresses := strings.Split(mixUseAdresses, "+")
+	if len(useAddresses) == 0 {
+		return "", ErrInvalidOTAMixSet
+	}
+
+	return genRingSignData(hmsg, privKey, &ecdsaPrivateKey.PublicKey, useAddresses)
+}
+
+func genRingSignData(hashMsg []byte, privateKey []byte, actualPub *ecdsa.PublicKey, mixUseAdress []string) (string, error) {
+	otaPrivD := new(big.Int).SetBytes(privateKey)
+
+	publicKeys := make([]*ecdsa.PublicKey, 0)
+	publicKeys = append(publicKeys, actualPub)
+
+	for _, strUseAddr := range mixUseAdress {
+		pubBytes, err := hexutil.Decode(strUseAddr)
+		if err != nil {
+			return "", errors.New("fail to decode use address!")
+		}
+
+		if len(pubBytes) != common.UAddressLength {
+			return "", ErrInvalidUAddress
+		}
+
+		publicKeyA, _, err := keystore.GeneratePKPairFromUAddress(pubBytes)
+		if err != nil {
+
+			return "", errors.New("Fail to generate public key from use address!")
+
+		}
+
+		publicKeys = append(publicKeys, publicKeyA)
+	}
+
+	retPublicKeys, keyImage, w_random, q_random, err := crypto.RingSign(hashMsg, otaPrivD, publicKeys)
+	if err != nil {
+		return "", err
+	}
+
+	return encodeRingSignOut(retPublicKeys, keyImage, w_random, q_random)
+}
+
+//  encode all ring sign out data to a string
+func encodeRingSignOut(publicKeys []*ecdsa.PublicKey, keyimage *ecdsa.PublicKey, Ws []*big.Int, Qs []*big.Int) (string, error) {
+	tmp := make([]string, 0)
+	for _, pk := range publicKeys {
+		tmp = append(tmp, common.ToHex(crypto.FromECDSAPub(pk)))
+	}
+
+	pkStr := strings.Join(tmp, "&")
+	k := common.ToHex(crypto.FromECDSAPub(keyimage))
+	wa := make([]string, 0)
+	for _, wi := range Ws {
+		wa = append(wa, hexutil.EncodeBig(wi))
+	}
+
+	wStr := strings.Join(wa, "&")
+	qa := make([]string, 0)
+	for _, qi := range Qs {
+		qa = append(qa, hexutil.EncodeBig(qi))
+	}
+	qStr := strings.Join(qa, "&")
+	outs := strings.Join([]string{pkStr, k, wStr, qStr}, "+")
+	return outs, nil
 }
 
 func (s *PublicTransactionPoolAPI) GetOTAMixSet(ctx context.Context, otaAddr string, setLen int) ([]string, error) {

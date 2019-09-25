@@ -893,8 +893,7 @@ func (c *useCoinSC) ValidRefundReq(stateDB StateDB, payload []byte, from []byte)
 func (c *useCoinSC) refund(all []byte, contract *Contract, evm *EVM) ([]byte, error) {
 	kix, value, err := c.ValidRefundReq(evm.StateDB, all, contract.CallerAddress.Bytes())
 	if err != nil {
-		fmt.Println("failed refund")
-		fmt.Println(evm.BlockNumber)
+		fmt.Println("failed refund ", err)
 		return nil, err
 	}
 
@@ -913,6 +912,7 @@ func (c *useCoinSC) refund(all []byte, contract *Contract, evm *EVM) ([]byte, er
 func (c *useCoinSC) buyCoin(in []byte, contract *Contract, evm *EVM) ([]byte, error) {
 	otaAddr, err := c.ValidBuyCoinReq(evm.StateDB, in, contract.value)
 	if err != nil {
+		fmt.Println("failed buyCoin ", err)
 		return nil, err
 	}
 

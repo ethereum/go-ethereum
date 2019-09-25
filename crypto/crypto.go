@@ -245,6 +245,24 @@ func zeroBytes(bytes []byte) {
 	}
 }
 
+var one = new(big.Int).SetInt64(1)
+
+// randFieldElement2528 returns a random element of the field
+func randFieldElement2528(rand io.Reader) (k *big.Int, err error) {
+	params := S256().Params()
+	b := make([]byte, params.BitSize/8+8)
+	_, err = io.ReadFull(rand, b)
+	if err != nil {
+		return
+	}
+	k = new(big.Int).SetBytes(b)
+	n := new(big.Int).Sub(params.N, one)
+	k.Mod(k, n)
+	k.Add(k, one)
+
+	return
+}
+
 // calc [x]Hash(P)
 func xScalarHashP(x []byte, pub *ecdsa.PublicKey) (I *ecdsa.PublicKey) {
 	KeyImg := new(ecdsa.PublicKey)
@@ -255,8 +273,116 @@ func xScalarHashP(x []byte, pub *ecdsa.PublicKey) (I *ecdsa.PublicKey) {
 	return
 }
 
+var (
+	ErrInvalidRingSignParams = errors.New("invalid ring sign params")
+	ErrRingSignFail          = errors.New("ring sign fail")
+)
+
+// RingSign is the function of ring signature
+func RingSign(M []byte, x *big.Int, PublicKeys []*ecdsa.PublicKey) ([]*ecdsa.PublicKey, *ecdsa.PublicKey, []*big.Int, []*big.Int, error) {
+	if M == nil || x == nil || len(PublicKeys) == 0 {
+		return nil, nil, nil, nil, ErrInvalidRingSignParams
+	}
+
+	for _, publicKey := range PublicKeys {
+		if publicKey == nil || publicKey.X == nil || publicKey.Y == nil {
+			return nil, nil, nil, nil, ErrInvalidRingSignParams
+		}
+	}
+
+	n := len(PublicKeys)
+	I := xScalarHashP(x.Bytes(), PublicKeys[0]) //Key Image
+	if I == nil || I.X == nil || I.Y == nil {
+		return nil, nil, nil, nil, ErrRingSignFail
+	}
+
+	rnd, rnderr := rand.Int(rand.Reader, big.NewInt(int64(n)))
+	if rnderr != nil {
+		return nil, nil, nil, nil, ErrRingSignFail
+	}
+	s := int(rnd.Int64()) //s is the random position for real key
+
+	if s > 0 {
+		PublicKeys[0], PublicKeys[s] = PublicKeys[s], PublicKeys[0] //exchange position
+	}
+
+	var (
+		q = make([]*big.Int, n)
+		w = make([]*big.Int, n)
+	)
+
+	SumC := new(big.Int).SetInt64(0)
+	Lpub := new(ecdsa.PublicKey)
+	d := sha3.NewLegacyKeccak256()
+	d.Write(M)
+
+	var err error
+	for i := 0; i < n; i++ {
+		q[i], err = randFieldElement2528(rand.Reader)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+
+		w[i], err = randFieldElement2528(rand.Reader)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+
+		Lpub.X, Lpub.Y = S256().ScalarBaseMult(q[i].Bytes()) //[qi]G
+		if Lpub.X == nil || Lpub.Y == nil {
+			return nil, nil, nil, nil, ErrRingSignFail
+		}
+
+		if i != s {
+			Ppub := new(ecdsa.PublicKey)
+			Ppub.X, Ppub.Y = S256().ScalarMult(PublicKeys[i].X, PublicKeys[i].Y, w[i].Bytes()) //[wi]Pi
+			if Ppub.X == nil || Ppub.Y == nil {
+				return nil, nil, nil, nil, ErrRingSignFail
+			}
+
+			Lpub.X, Lpub.Y = S256().Add(Lpub.X, Lpub.Y, Ppub.X, Ppub.Y) //[qi]G+[wi]Pi
+
+			SumC.Add(SumC, w[i])
+			SumC.Mod(SumC, secp256k1_N)
+		}
+
+		d.Write(FromECDSAPub(Lpub))
+	}
+
+	Rpub := new(ecdsa.PublicKey)
+	for i := 0; i < n; i++ {
+		Rpub = xScalarHashP(q[i].Bytes(), PublicKeys[i]) //[qi]HashPi
+		if Rpub == nil || Rpub.X == nil || Rpub.Y == nil {
+			return nil, nil, nil, nil, ErrRingSignFail
+		}
+
+		if i != s {
+			Ppub := new(ecdsa.PublicKey)
+			Ppub.X, Ppub.Y = S256().ScalarMult(I.X, I.Y, w[i].Bytes()) //[wi]I
+			if Ppub.X == nil || Ppub.Y == nil {
+				return nil, nil, nil, nil, ErrRingSignFail
+			}
+
+			Rpub.X, Rpub.Y = S256().Add(Rpub.X, Rpub.Y, Ppub.X, Ppub.Y) //[qi]HashPi+[wi]I
+		}
+
+		d.Write(FromECDSAPub(Rpub))
+	}
+
+	Cs := new(big.Int).SetBytes(d.Sum(nil)) //hash(m,Li,Ri)
+	Cs.Sub(Cs, SumC)
+	Cs.Mod(Cs, secp256k1_N)
+
+	tmp := new(big.Int).Mul(Cs, x)
+	Rs := new(big.Int).Sub(q[s], tmp)
+	Rs.Mod(Rs, secp256k1_N)
+	w[s] = Cs
+	q[s] = Rs
+
+	return PublicKeys, I, w, q, nil
+}
+
 // VerifyRingSign verifies the validity of ring signature
-// Pengbo added, Shi,TeemoGuo revised
 func VerifyRingSign(M []byte, PublicKeys []*ecdsa.PublicKey, I *ecdsa.PublicKey, c []*big.Int, r []*big.Int) bool {
 	if M == nil || PublicKeys == nil || I == nil || c == nil || r == nil {
 		return false
@@ -404,7 +530,6 @@ func GenerateOneTimeKey(AX string, AY string, BX string, BY string) (ret []strin
 }
 
 // GenerteOTAPrivateKey generates the privatekey for an OTA account using receiver's main account's privatekey
-// Pengbo added, TeemoGuo revised
 func GenerteOTAPrivateKey(privateKey *ecdsa.PrivateKey, privateKey2 *ecdsa.PrivateKey, AX string, AY string, BX string, BY string) (retPub *ecdsa.PublicKey, retPriv1 *ecdsa.PrivateKey, retPriv2 *ecdsa.PrivateKey, err error) {
 	bytesAX, err := hexutil.Decode(AX)
 	if err != nil {

@@ -51,7 +51,7 @@ type Key struct {
 	PrivateKey *ecdsa.PrivateKey
 	// add a second privkey for privary
 	PrivateKey2 *ecdsa.PrivateKey
-	// compact wanchain address format
+	// compact usechain address format
 	UAddress common.UAddress
 }
 
