@@ -13668,11 +13668,19 @@ module.exports = XMLHttpRequest;
             inputFormatter: [null, null]
         });
 
+        var genRingSignData = new Method({
+            name: 'genRingSignData',
+            call: 'use_genRingSignData',
+            params: 3,
+            inputFormatter: [null, null, null]
+        });
+
         return [
             getUseAddress,
             generateOneTimeAddress,
             computeOTAPPKeys,
             getOTAMixSet,
+            genRingSignData,
         ];
     };
     var properties = function () {
