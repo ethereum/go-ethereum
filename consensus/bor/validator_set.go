@@ -277,6 +277,7 @@ func (vals *ValidatorSet) updateTotalVotingPower() {
 // It recomputes the total voting power if required.
 func (vals *ValidatorSet) TotalVotingPower() int64 {
 	if vals.totalVotingPower == 0 {
+		fmt.Println(" === == == == total voting power : zero")
 		vals.updateTotalVotingPower()
 	}
 	return vals.totalVotingPower

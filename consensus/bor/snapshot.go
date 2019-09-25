@@ -98,6 +98,9 @@ func loadSnapshot(config *params.BorConfig, sigcache *lru.ARCCache, db ethdb.Dat
 	snap.sigcache = sigcache
 	snap.ethAPI = ethAPI
 
+	// update total voting power
+	snap.ValidatorSet.updateTotalVotingPower()
+
 	return snap, nil
 }
 
@@ -126,10 +129,6 @@ func (s *Snapshot) copy() *Snapshot {
 	for block, signer := range s.Recents {
 		cpy.Recents[block] = signer
 	}
-	// for address, tally := range s.Tally {
-	// 	cpy.Tally[address] = tally
-	// }
-	// copy(cpy.Votes, s.Votes)
 
 	return cpy
 }
@@ -198,10 +197,6 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 	for _, header := range headers {
 		// Remove any votes on checkpoint blocks
 		number := header.Number.Uint64()
-		if (number+1)%s.config.Sprint == 0 {
-			// snap.Votes = nil
-			// snap.Tally = make(map[common.Address]Tally)
-		}
 
 		// Delete the oldest signer from the recent list to allow it signing again
 		if number >= s.config.Sprint && number-s.config.Sprint >= 0 {
@@ -214,6 +209,29 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			return nil, err
 		}
 
+		// fmt.Println("In snapshot 1 ==>", "number", header.Number.String())
+		// change validator set and change proposer
+		if number > 0 && (number+1)%s.config.Sprint == 0 {
+			fmt.Println("before snap.ValidatorSet changed", snap.ValidatorSet, snap.ValidatorSet.TotalVotingPower())
+			// fmt.Println("In snapshot 2 ==>", "number", header.Number.String(), "extra", hex.EncodeToString(header.Extra))
+			validatorBytes := header.Extra[extraVanity : len(header.Extra)-extraSeal]
+
+			newVals, err := ParseValidators(validatorBytes)
+			if err != nil {
+				fmt.Println("err ==>", err)
+			}
+
+			fmt.Println(" newVals ==> ", newVals)
+
+			// newVals, _ := GetValidators(number, number+1, s.config.Sprint, s.config.ValidatorContract, snap.ethAPI)
+			v := getUpdatedValidatorSet(snap.ValidatorSet.Copy(), newVals)
+			fmt.Println("middle snap.ValidatorSet changed", v)
+			v.IncrementProposerPriority(1)
+			snap.ValidatorSet = v
+			fmt.Println("after snap.ValidatorSet changed", snap.ValidatorSet)
+		}
+
+		// check if signer is in validator set
 		if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
 			return nil, errUnauthorizedSigner
 		}
@@ -248,79 +266,11 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		snap.Recents[number] = signer
 		// TODO remove
 		fmt.Println("Recent signer", "number", number, "signer", signer.Hex())
-		// change proposer on epoch
-		if number > 0 && (number+1)%s.config.Sprint == 0 {
-			newVals, _ := GetValidators(number, s.config.Sprint, s.config.ValidatorContract, snap.ethAPI)
-			v := getUpdatedValidatorSet(snap.ValidatorSet.Copy(), newVals)
-			v.IncrementProposerPriority(1)
-			snap.ValidatorSet = v
-			fmt.Println("New validator set", "number", number, "proposer", v.Proposer.Address.Hex())
-		}
-		// // Header authorized, discard any previous votes from the signer
-		// for i, vote := range snap.Votes {
-		// 	if vote.Signer == signer && vote.Address == header.Coinbase {
-		// 		// Uncast the vote from the cached tally
-		// 		snap.uncast(vote.Address, vote.Authorize)
-
-		// 		// Uncast the vote from the chronological list
-		// 		snap.Votes = append(snap.Votes[:i], snap.Votes[i+1:]...)
-		// 		break // only one vote allowed
-		// 	}
-		// }
-		// Tally up the new vote from the signer
-		// var authorize bool
-		// switch {
-		// case bytes.Equal(header.Nonce[:], nonceAuthVote):
-		// 	authorize = true
-		// case bytes.Equal(header.Nonce[:], nonceDropVote):
-		// 	authorize = false
-		// default:
-		// 	return nil, errInvalidVote
-		// }
-		// if snap.cast(header.Coinbase, authorize) {
-		// 	snap.Votes = append(snap.Votes, &Vote{
-		// 		Signer:    signer,
-		// 		Block:     number,
-		// 		Address:   header.Coinbase,
-		// 		Authorize: authorize,
-		// 	})
-		// }
-		// If the vote passed, update the list of signers
-		// if tally := snap.Tally[header.Coinbase]; tally.Votes > len(snap.Signers)/2 {
-		// 	if tally.Authorize {
-		// 		snap.Signers[header.Coinbase] = struct{}{}
-		// 	} else {
-		// 		delete(snap.Signers, header.Coinbase)
-
-		// 		// Signer list shrunk, delete any leftover recent caches
-		// 		if limit := uint64(len(snap.Signers)/2 + 1); number >= limit {
-		// 			delete(snap.Recents, number-limit)
-		// 		}
-		// 		// Discard any previous votes the deauthorized signer cast
-		// 		for i := 0; i < len(snap.Votes); i++ {
-		// 			if snap.Votes[i].Signer == header.Coinbase {
-		// 				// Uncast the vote from the cached tally
-		// 				snap.uncast(snap.Votes[i].Address, snap.Votes[i].Authorize)
-
-		// 				// Uncast the vote from the chronological list
-		// 				snap.Votes = append(snap.Votes[:i], snap.Votes[i+1:]...)
-
-		// 				i--
-		// 			}
-		// 		}
-		// 	}
-		// 	// Discard any previous votes around the just changed account
-		// 	for i := 0; i < len(snap.Votes); i++ {
-		// 		if snap.Votes[i].Address == header.Coinbase {
-		// 			snap.Votes = append(snap.Votes[:i], snap.Votes[i+1:]...)
-		// 			i--
-		// 		}
-		// 	}
-		// 	delete(snap.Tally, header.Coinbase)
-		// }
 	}
 	snap.Number += uint64(len(headers))
 	snap.Hash = headers[len(headers)-1].Hash()
+
+	fmt.Println("ValidatorsSet => ", snap.Number, snap.ValidatorSet)
 
 	return snap, nil
 }

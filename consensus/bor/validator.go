@@ -2,8 +2,11 @@ package bor
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -85,4 +88,43 @@ func (v *Validator) Bytes() []byte {
 		return b
 	}
 	return nil
+}
+
+// HeaderBytes return header bytes
+func (v *Validator) HeaderBytes() []byte {
+	result := make([]byte, 40)
+	fmt.Println("validator.Address.Bytes()", hex.EncodeToString(v.Address.Bytes()))
+	fmt.Println("getPowerBytes(big.NewInt(0).SetInt64(validator.VotingPower))", hex.EncodeToString(v.PowerBytes()))
+	copy(result[:20], v.Address.Bytes())
+	copy(result[20:], v.PowerBytes())
+	fmt.Println("HeaderBytes result ==>", hex.EncodeToString(result))
+	return result
+}
+
+// PowerBytes return power bytes
+func (v *Validator) PowerBytes() []byte {
+	powerBytes := big.NewInt(0).SetInt64(v.VotingPower).Bytes()
+	result := make([]byte, 20)
+	copy(result[20-len(powerBytes):], powerBytes)
+	return result
+}
+
+// ParseValidators returns validator set bytes
+func ParseValidators(validatorsBytes []byte) ([]*Validator, error) {
+	if len(validatorsBytes)%40 != 0 {
+		return nil, errors.New("Invalid validators bytes")
+	}
+
+	result := make([]*Validator, len(validatorsBytes)/40)
+	for i := 0; i < len(validatorsBytes); i += 40 {
+		address := make([]byte, 20)
+		power := make([]byte, 20)
+
+		copy(address, validatorsBytes[i:i+20])
+		copy(power, validatorsBytes[i+20:i+40])
+
+		result[i/40] = NewValidator(common.BytesToAddress(address), big.NewInt(0).SetBytes(power).Int64())
+	}
+
+	return result, nil
 }
