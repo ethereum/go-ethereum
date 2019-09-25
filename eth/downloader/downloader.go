@@ -314,12 +314,7 @@ func (d *Downloader) UnregisterPeer(id string) error {
 	}
 	d.queue.Revoke(id)
 
-	// If this peer was the master peer, abort sync immediately
-	d.cancelLock.RLock()
-	master := id == d.cancelPeer
-	d.cancelLock.RUnlock()
-
-	if master {
+	if d.isMaster(id) {
 		d.cancel()
 	}
 	return nil
@@ -562,8 +557,8 @@ func (d *Downloader) spawnSync(fetchers []func() error) error {
 // isMaster returns an indicator whether the given peer id is master peer
 // used for syncing.
 func (d *Downloader) isMaster(id string) bool {
-	d.cancelLock.Lock()
-	defer d.cancelLock.Unlock()
+	d.cancelLock.RLock()
+	defer d.cancelLock.RUnlock()
 	return d.cancelPeer == id
 }
 
