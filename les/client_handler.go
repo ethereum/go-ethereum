@@ -47,8 +47,8 @@ type clientHandler struct {
 	wg      sync.WaitGroup // WaitGroup used to track all connected peers.
 
 	// Testing fields or hooks
-	ignoreHeaders bool   // Indicator whether ignore received headers
-	syncDone      func() // Test hooks when syncing is done.
+	ignoreCheckpoint bool   // Indicator whether ignore received checkpoint
+	syncDone         func() // Test hooks when syncing is done.
 }
 
 func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.TrustedCheckpoint, backend *LightEthereum) *clientHandler {
@@ -68,7 +68,7 @@ func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.T
 	}
 	var height uint64
 	if checkpoint != nil {
-		height = (checkpoint.SectionIndex+1)*params.CHTFrequency - 1
+		height = (checkpoint.SectionIndex+1)*backend.iConfig.ChtSize - 1
 	}
 	handler.fetcher = newLightFetcher(handler)
 	handler.downloader = downloader.New(height, backend.chainDb, nil, backend.eventMux, nil, backend.blockchain, handler.removePeer)
@@ -228,25 +228,23 @@ func (h *clientHandler) handleMsg(p *peer) error {
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
 
-		// If we are still waiting the checkpoint response.
-		if !h.ignoreHeaders && p.syncDrop != nil {
-			// First stop timer anyway.
+		// If no headers were received, but we're expecting a checkpoint header,
+		// drop the unsynced server.
+		if len(resp.Headers) == 0 && p.syncDrop != nil {
 			p.syncDrop.Stop()
 			p.syncDrop = nil
-			// If no headers were received or more headers received than we expect,
-			// reject the server directly.
-			//
-			// Two cases here:
-			// (1) The server is not synced, so no checkpoint header to response
-			// (2) The server sends us useless headers which we don't explicitly
-			//     request.
-			if len(resp.Headers) != 1 {
-				return errResp(ErrUselessPeer, "msg %v: %v", msg, err)
-			} else {
-				header := resp.Headers[0]
-				if header.Hash() != h.checkpoint.SectionHead {
+			return errResp(ErrUselessPeer, "msg %v: %v", msg, err)
+		}
+		// If we are still waiting the checkpoint response.
+		if len(resp.Headers) == 1 && p.syncDrop != nil {
+			if !h.ignoreCheckpoint && resp.Headers[0].Number.Uint64() == (h.checkpoint.SectionIndex+1)*h.backend.iConfig.ChtSize-1 {
+				// First stop timer anyway.
+				p.syncDrop.Stop()
+				p.syncDrop = nil
+				if resp.Headers[0].Hash() != h.checkpoint.SectionHead {
 					return errResp(ErrUselessPeer, "msg %v: %v", msg, err)
 				}
+				return nil
 			}
 		}
 		// Deliver response header to concrete requester.

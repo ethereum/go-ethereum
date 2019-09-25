@@ -687,7 +687,7 @@ func testCheckpointChallenge(t *testing.T, protocol int) {
 		t.Fatalf("Should pass checkpoint challenge")
 	}
 
-	client.handler.ignoreHeaders = true // Explicitly ignore all received headers, trigger timer
+	client.handler.ignoreCheckpoint = true // Explicitly ignore all received headers, trigger timer
 	// Create connected peer pair.
 	_, err1, _, err2 = newTestPeerPair("peer2", protocol, server.handler, client.handler)
 	select {
