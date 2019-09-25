@@ -43,8 +43,16 @@ const (
 	degradationWarnInterval = time.Minute
 
 	// minCache is the minimum amount of memory in megabytes to allocate to leveldb
-	// read and write caching, split half and half.
+	// read and write caching.
 	minCache = 16
+
+	// minWriteBufferCache is the minimum amount of memory in megabytes to allocate
+	// to leveldb's write buffer.
+	minWriteBufferCache = 4
+
+	// minWriteBufferCache is the maximum amount of memory in megabytes to allocate
+	// to leveldb's write buffer.
+	maxWriteBufferCache = 256
 
 	// minHandles is the minimum number of files handles to allocate to the open
 	// database files.
@@ -94,6 +102,23 @@ func New(file string, cache int, handles int, namespace string) (*Database, erro
 	logger := log.New("database", file)
 	logger.Info("Allocated cache and file handles", "cache", common.StorageSize(cache*1024*1024), "handles", handles)
 
+	// Assign write buffer with a "suitable" capacity. There are two internal
+	// write buffers(one live memdb, one frozen memdb), so the total capacity
+	// of write buffer is 1/8 cache.
+	//
+	// The capacity of write buffer can't be too large or too small. If the size
+	// is too large, then we will accumulate lots of data in memory and then
+	// dump them all at some time, which creates disk spike since lots of compaction
+	// tasks are created. Also if the size of write buffer is too small, then
+	// we will dump lots of small files at low level and they will be compacted
+	// with new files later. Unnecessary compaction is introduced.
+	writeBuffer := cache / 16
+	if writeBuffer >= maxWriteBufferCache {
+		writeBuffer = maxWriteBufferCache
+	}
+	if writeBuffer <= minWriteBufferCache {
+		writeBuffer = minWriteBufferCache
+	}
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, &opt.Options{
 		OpenFilesCacheCapacity: handles,
@@ -101,7 +126,8 @@ func New(file string, cache int, handles int, namespace string) (*Database, erro
 		// BlockCache can be used for caching: data block, index block as well as
 		// filter block. The more capacity block cache has, the less disk hit we
 		// have.
-		BlockCacheCapacity:     cache * opt.MiB,
+		BlockCacheCapacity:     7 * cache / 8 * opt.MiB,
+		WriteBuffer:            writeBuffer * opt.MiB,
 		Filter:                 filter.NewBloomFilter(10),
 		DisableSeeksCompaction: true,
 	})
