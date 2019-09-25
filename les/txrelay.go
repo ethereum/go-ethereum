@@ -136,7 +136,7 @@ func (self *lesTxRelay) send(txs types.Transactions, count int) {
 				peer := dp.(*peer)
 				cost := peer.GetTxRelayCost(len(ll), len(enc))
 				peer.fcServer.QueuedRequest(reqID, cost)
-				return func() { peer.SendTxs(reqID, cost, enc) }
+				return func() { peer.SendTxs(reqID, enc) }
 			},
 		}
 		go self.retriever.retrieve(context.Background(), reqID, rq, func(p distPeer, msg *Msg) error { return nil }, self.stop)

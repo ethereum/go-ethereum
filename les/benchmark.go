@@ -74,9 +74,9 @@ func (b *benchmarkBlockHeaders) init(h *serverHandler, count int) error {
 
 func (b *benchmarkBlockHeaders) request(peer *peer, index int) error {
 	if b.byHash {
-		return peer.RequestHeadersByHash(0, 0, b.hashes[index], b.amount, b.skip, b.reverse)
+		return peer.RequestHeadersByHash(0, b.hashes[index], b.amount, b.skip, b.reverse)
 	} else {
-		return peer.RequestHeadersByNumber(0, 0, uint64(b.offset+rand.Int63n(b.randMax)), b.amount, b.skip, b.reverse)
+		return peer.RequestHeadersByNumber(0, uint64(b.offset+rand.Int63n(b.randMax)), b.amount, b.skip, b.reverse)
 	}
 }
 
@@ -97,9 +97,9 @@ func (b *benchmarkBodiesOrReceipts) init(h *serverHandler, count int) error {
 
 func (b *benchmarkBodiesOrReceipts) request(peer *peer, index int) error {
 	if b.receipts {
-		return peer.RequestReceipts(0, 0, []common.Hash{b.hashes[index]})
+		return peer.RequestReceipts(0, []common.Hash{b.hashes[index]})
 	} else {
-		return peer.RequestBodies(0, 0, []common.Hash{b.hashes[index]})
+		return peer.RequestBodies(0, []common.Hash{b.hashes[index]})
 	}
 }
 
@@ -118,9 +118,9 @@ func (b *benchmarkProofsOrCode) request(peer *peer, index int) error {
 	key := make([]byte, 32)
 	rand.Read(key)
 	if b.code {
-		return peer.RequestCode(0, 0, []CodeReq{{BHash: b.headHash, AccKey: key}})
+		return peer.RequestCode(0, []CodeReq{{BHash: b.headHash, AccKey: key}})
 	} else {
-		return peer.RequestProofs(0, 0, []ProofReq{{BHash: b.headHash, Key: key}})
+		return peer.RequestProofs(0, []ProofReq{{BHash: b.headHash, Key: key}})
 	}
 }
 
@@ -163,7 +163,7 @@ func (b *benchmarkHelperTrie) request(peer *peer, index int) error {
 		}
 	}
 
-	return peer.RequestHelperTrieProofs(0, 0, reqs)
+	return peer.RequestHelperTrieProofs(0, reqs)
 }
 
 // benchmarkTxSend implements requestBenchmark
@@ -191,7 +191,7 @@ func (b *benchmarkTxSend) init(h *serverHandler, count int) error {
 
 func (b *benchmarkTxSend) request(peer *peer, index int) error {
 	enc, _ := rlp.EncodeToBytes(types.Transactions{b.txs[index]})
-	return peer.SendTxs(0, 0, enc)
+	return peer.SendTxs(0, enc)
 }
 
 // benchmarkTxStatus implements requestBenchmark
@@ -204,7 +204,7 @@ func (b *benchmarkTxStatus) init(h *serverHandler, count int) error {
 func (b *benchmarkTxStatus) request(peer *peer, index int) error {
 	var hash common.Hash
 	rand.Read(hash[:])
-	return peer.RequestTxStatus(0, 0, []common.Hash{hash})
+	return peer.RequestTxStatus(0, []common.Hash{hash})
 }
 
 // benchmarkSetup stores measurement data for a single benchmark type

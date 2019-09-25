@@ -31,23 +31,30 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+var checkpointChallengeTimeout = 15 * time.Second // Time allowance for a node to reply to the checkpoint progress challenge
+
 // clientHandler is responsible for receiving and processing all incoming server
 // responses.
 type clientHandler struct {
 	ulc        *ulc
+	clock      mclock.Clock
 	checkpoint *params.TrustedCheckpoint
 	fetcher    *lightFetcher
 	downloader *downloader.Downloader
 	backend    *LightEthereum
 
-	closeCh  chan struct{}
-	wg       sync.WaitGroup // WaitGroup used to track all connected peers.
-	syncDone func()         // Test hooks when syncing is done.
+	closeCh chan struct{}
+	wg      sync.WaitGroup // WaitGroup used to track all connected peers.
+
+	// Testing fields or hooks
+	ignoreHeaders bool   // Indicator whether ignore received headers
+	syncDone      func() // Test hooks when syncing is done.
 }
 
 func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.TrustedCheckpoint, backend *LightEthereum) *clientHandler {
 	handler := &clientHandler{
 		checkpoint: checkpoint,
+		clock:      mclock.System{},
 		backend:    backend,
 		closeCh:    make(chan struct{}),
 	}
@@ -89,6 +96,7 @@ func (h *clientHandler) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter)
 	}
 	h.wg.Add(1)
 	defer h.wg.Done()
+
 	err := h.handle(peer)
 	h.backend.serverPool.disconnect(peer.poolEntry)
 	return err
@@ -130,6 +138,26 @@ func (h *clientHandler) handle(p *peer) error {
 	// pool entry can be nil during the unit test.
 	if p.poolEntry != nil {
 		h.backend.serverPool.registered(p.poolEntry)
+	}
+	// If we have a trusted CHT, reject all peers below that (avoid light sync eclipse)
+	if h.checkpoint != nil {
+		// Request the peer's checkpoint header for chain height/weight validation
+		wrapPeer := &peerConnection{handler: h, peer: p}
+		if err := wrapPeer.RequestHeadersByNumber((h.checkpoint.SectionIndex+1)*h.backend.iConfig.ChtSize-1, 1, 0, false); err != nil {
+			return err
+		}
+		// Start a timer to disconnect if the peer doesn't reply in time
+		p.syncDrop = h.clock.AfterFunc(checkpointChallengeTimeout, func() {
+			p.Log().Warn("Checkpoint challenge timed out, dropping", "addr", p.RemoteAddr(), "type", p.Name())
+			h.removePeer(p.id)
+		})
+		// Make sure it's cleaned up if the peer dies off
+		defer func() {
+			if p.syncDrop != nil {
+				p.syncDrop.Stop()
+				p.syncDrop = nil
+			}
+		}()
 	}
 	// Spawn a main loop to handle all incoming messages.
 	for {
@@ -199,6 +227,29 @@ func (h *clientHandler) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+
+		// If we are still waiting the checkpoint response.
+		if !h.ignoreHeaders && p.syncDrop != nil {
+			// First stop timer anyway.
+			p.syncDrop.Stop()
+			p.syncDrop = nil
+			// If no headers were received or more headers received than we expect,
+			// reject the server directly.
+			//
+			// Two cases here:
+			// (1) The server is not synced, so no checkpoint header to response
+			// (2) The server sends us useless headers which we don't explicitly
+			//     request.
+			if len(resp.Headers) != 1 {
+				return errResp(ErrUselessPeer, "msg %v: %v", msg, err)
+			} else {
+				header := resp.Headers[0]
+				if header.Hash() != h.checkpoint.SectionHead {
+					return errResp(ErrUselessPeer, "msg %v: %v", msg, err)
+				}
+			}
+		}
+		// Deliver response header to concrete requester.
 		if h.fetcher.requestedID(resp.ReqID) {
 			h.fetcher.deliverHeaders(p, resp.ReqID, resp.Headers)
 		} else {
@@ -339,19 +390,13 @@ func (pc *peerConnection) Head() (common.Hash, *big.Int) {
 
 func (pc *peerConnection) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
 	rq := &distReq{
-		getCost: func(dp distPeer) uint64 {
-			peer := dp.(*peer)
-			return peer.GetRequestCost(GetBlockHeadersMsg, amount)
-		},
-		canSend: func(dp distPeer) bool {
-			return dp.(*peer) == pc.peer
-		},
+		getCost: func(dp distPeer) uint64 { return dp.(*peer).GetRequestCost(GetBlockHeadersMsg, amount) },
+		canSend: func(dp distPeer) bool { return dp.(*peer) == pc.peer },
 		request: func(dp distPeer) func() {
 			reqID := genReqID()
 			peer := dp.(*peer)
-			cost := peer.GetRequestCost(GetBlockHeadersMsg, amount)
-			peer.fcServer.QueuedRequest(reqID, cost)
-			return func() { peer.RequestHeadersByHash(reqID, cost, origin, amount, skip, reverse) }
+			peer.fcServer.QueuedRequest(reqID, peer.GetRequestCost(GetBlockHeadersMsg, amount))
+			return func() { peer.RequestHeadersByHash(reqID, origin, amount, skip, reverse) }
 		},
 	}
 	_, ok := <-pc.handler.backend.reqDist.queue(rq)
@@ -363,19 +408,13 @@ func (pc *peerConnection) RequestHeadersByHash(origin common.Hash, amount int, s
 
 func (pc *peerConnection) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
 	rq := &distReq{
-		getCost: func(dp distPeer) uint64 {
-			peer := dp.(*peer)
-			return peer.GetRequestCost(GetBlockHeadersMsg, amount)
-		},
-		canSend: func(dp distPeer) bool {
-			return dp.(*peer) == pc.peer
-		},
+		getCost: func(dp distPeer) uint64 { return dp.(*peer).GetRequestCost(GetBlockHeadersMsg, amount) },
+		canSend: func(dp distPeer) bool { return dp.(*peer) == pc.peer },
 		request: func(dp distPeer) func() {
 			reqID := genReqID()
 			peer := dp.(*peer)
-			cost := peer.GetRequestCost(GetBlockHeadersMsg, amount)
-			peer.fcServer.QueuedRequest(reqID, cost)
-			return func() { peer.RequestHeadersByNumber(reqID, cost, origin, amount, skip, reverse) }
+			peer.fcServer.QueuedRequest(reqID, peer.GetRequestCost(GetBlockHeadersMsg, amount))
+			return func() { peer.RequestHeadersByNumber(reqID, origin, amount, skip, reverse) }
 		},
 	}
 	_, ok := <-pc.handler.backend.reqDist.queue(rq)

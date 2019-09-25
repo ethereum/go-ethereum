@@ -557,7 +557,7 @@ func (f *lightFetcher) newFetcherDistReq(bestHash common.Hash, reqID uint64, bes
 				time.Sleep(hardRequestTimeout)
 				f.timeoutChn <- reqID
 			}()
-			return func() { p.RequestHeadersByHash(reqID, cost, bestHash, int(bestAmount), 0, true) }
+			return func() { p.RequestHeadersByHash(reqID, bestHash, int(bestAmount), 0, true) }
 		},
 	}
 }

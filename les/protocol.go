@@ -103,7 +103,6 @@ const (
 	ErrGenesisBlockMismatch
 	ErrNoStatusMsg
 	ErrExtraStatusMsg
-	ErrSuspendedPeer
 	ErrUselessPeer
 	ErrRequestRejected
 	ErrUnexpectedResponse
@@ -126,7 +125,6 @@ var errorToString = map[int]string{
 	ErrGenesisBlockMismatch:    "Genesis block mismatch",
 	ErrNoStatusMsg:             "No status message",
 	ErrExtraStatusMsg:          "Extra status message",
-	ErrSuspendedPeer:           "Suspended peer",
 	ErrRequestRejected:         "Request rejected",
 	ErrUnexpectedResponse:      "Unexpected response",
 	ErrInvalidResponse:         "Invalid response",
