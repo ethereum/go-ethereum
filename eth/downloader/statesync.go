@@ -316,17 +316,10 @@ func (s *stateSync) loop() (err error) {
 					// Timeouts can occur if e.g. compaction hits at the wrong time, and can be ignored
 					req.peer.log.Warn("Downloader wants to drop peer, but peerdrop-function is not set", "peer", req.peer.id)
 				} else {
+					// In dropPeer function, a callback will be called which aborts
+					// the sync immediately. Here return the timeout error explicitly.
 					s.d.dropPeer(req.peer.id)
-
-					// If this peer was the master peer, abort sync immediately
-					s.d.cancelLock.RLock()
-					master := req.peer.id == s.d.cancelPeer
-					s.d.cancelLock.RUnlock()
-
-					if master {
-						s.d.cancel()
-						return errTimeout
-					}
+					return errTimeout
 				}
 			}
 			// Process all the received blobs and check for stale delivery

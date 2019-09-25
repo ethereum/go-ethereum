@@ -362,11 +362,20 @@ func (dl *downloadTester) dropPeer(id string) {
 	dl.downloader.UnregisterPeer(id)
 }
 
+// setDelay adds a response delay to test peer.
+func (dl *downloadTester) setDelay(id string, delay time.Duration) {
+	dl.lock.Lock()
+	defer dl.lock.Unlock()
+
+	dl.peers[id].delayResponse = delay
+}
+
 type downloadTesterPeer struct {
 	dl            *downloadTester
 	id            string
 	lock          sync.RWMutex
 	chain         *testChain
+	delayResponse time.Duration
 	missingStates map[common.Hash]bool // State entries that fast sync should not return
 }
 
@@ -384,7 +393,7 @@ func (dlp *downloadTesterPeer) RequestHeadersByHash(origin common.Hash, amount i
 	if reverse {
 		panic("reverse header requests not supported")
 	}
-
+	time.Sleep(dlp.delayResponse)
 	result := dlp.chain.headersByHash(origin, amount, skip)
 	go dlp.dl.downloader.DeliverHeaders(dlp.id, result)
 	return nil
@@ -397,7 +406,7 @@ func (dlp *downloadTesterPeer) RequestHeadersByNumber(origin uint64, amount int,
 	if reverse {
 		panic("reverse header requests not supported")
 	}
-
+	time.Sleep(dlp.delayResponse)
 	result := dlp.chain.headersByNumber(origin, amount, skip)
 	go dlp.dl.downloader.DeliverHeaders(dlp.id, result)
 	return nil
@@ -407,6 +416,7 @@ func (dlp *downloadTesterPeer) RequestHeadersByNumber(origin uint64, amount int,
 // peer in the download tester. The returned function can be used to retrieve
 // batches of block bodies from the particularly requested peer.
 func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash) error {
+	time.Sleep(dlp.delayResponse)
 	txs, uncles := dlp.chain.bodies(hashes)
 	go dlp.dl.downloader.DeliverBodies(dlp.id, txs, uncles)
 	return nil
@@ -416,6 +426,7 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash) error {
 // peer in the download tester. The returned function can be used to retrieve
 // batches of block receipts from the particularly requested peer.
 func (dlp *downloadTesterPeer) RequestReceipts(hashes []common.Hash) error {
+	time.Sleep(dlp.delayResponse)
 	receipts := dlp.chain.receipts(hashes)
 	go dlp.dl.downloader.DeliverReceipts(dlp.id, receipts)
 	return nil
@@ -428,6 +439,7 @@ func (dlp *downloadTesterPeer) RequestNodeData(hashes []common.Hash) error {
 	dlp.dl.lock.RLock()
 	defer dlp.dl.lock.RUnlock()
 
+	time.Sleep(dlp.delayResponse)
 	results := make([][]byte, 0, len(hashes))
 	for _, hash := range hashes {
 		if data, err := dlp.dl.peerDb.Get(hash.Bytes()); err == nil {
@@ -1654,5 +1666,46 @@ func testCheckpointEnforcement(t *testing.T, protocol int, mode SyncMode) {
 		assertOwnChain(t, tester, 1)
 	} else {
 		assertOwnChain(t, tester, chain.len())
+	}
+}
+
+func TestCancelMasterPeer62(t *testing.T)      { testCancelMasterPeer(t, 62, FullSync) }
+func TestCancelMasterPeer63Full(t *testing.T)  { testCancelMasterPeer(t, 63, FullSync) }
+func TestCancelMasterPeer63Fast(t *testing.T)  { testCancelMasterPeer(t, 63, FastSync) }
+func TestCancelMasterPeer64Full(t *testing.T)  { testCancelMasterPeer(t, 64, FullSync) }
+func TestCancelMasterPeer64Fast(t *testing.T)  { testCancelMasterPeer(t, 64, FastSync) }
+func TestCancelMasterPeer64Light(t *testing.T) { testCancelMasterPeer(t, 64, LightSync) }
+
+func testCancelMasterPeer(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
+	// Create a new tester
+	tester := newTester()
+	defer tester.terminate()
+
+	// Attempt to sync with the two peers
+	chain1 := testChainBase.shorten(MaxHeaderFetch + 64)
+	tester.newPeer("peer1", protocol, chain1) // Mark peer1 as the master peer
+
+	// Add some response delay so that we have enough time to unregister master
+	// peer before sync finished.
+	tester.setDelay("peer1", time.Duration(time.Millisecond*300))
+	chain2 := testChainBase.shorten(MaxHeaderFetch)
+	tester.newPeer("peer2", protocol, chain2) // Mark peer2 as the auxiliary peer
+
+	var errCh = make(chan error, 1)
+	go func() {
+		errCh <- tester.sync("peer1", nil, mode)
+	}()
+	time.Sleep(time.Millisecond * 300)        // Ensure we have started the syncing
+	tester.downloader.UnregisterPeer("peer1") // Unregister the master peer, which should abort sync
+
+	select {
+	case err := <-errCh:
+		if err != errCanceled {
+			t.Fatalf("error mismatch, want %v, got %v", errCanceled, err)
+		}
+	case <-time.NewTimer(time.Second).C:
+		t.Fatalf("timeout")
 	}
 }

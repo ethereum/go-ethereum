@@ -314,6 +314,14 @@ func (d *Downloader) UnregisterPeer(id string) error {
 	}
 	d.queue.Revoke(id)
 
+	// If this peer was the master peer, abort sync immediately
+	d.cancelLock.RLock()
+	master := id == d.cancelPeer
+	d.cancelLock.RUnlock()
+
+	if master {
+		d.cancel()
+	}
 	return nil
 }
 
@@ -1275,17 +1283,10 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 							// Timeouts can occur if e.g. compaction hits at the wrong time, and can be ignored
 							peer.log.Warn("Downloader wants to drop peer, but peerdrop-function is not set", "peer", pid)
 						} else {
+							// In dropPeer function, a callback will be called which aborts
+							// the sync immediately. Here return the timeout error explicitly.
 							d.dropPeer(pid)
-
-							// If this peer was the master peer, abort sync immediately
-							d.cancelLock.RLock()
-							master := pid == d.cancelPeer
-							d.cancelLock.RUnlock()
-
-							if master {
-								d.cancel()
-								return errTimeout
-							}
+							return errTimeout
 						}
 					}
 				}
