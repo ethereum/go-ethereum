@@ -559,6 +559,14 @@ func (d *Downloader) spawnSync(fetchers []func() error) error {
 	return err
 }
 
+// isMaster returns an indicator whether the given peer id is master peer
+// used for syncing.
+func (d *Downloader) isMaster(id string) bool {
+	d.cancelLock.Lock()
+	defer d.cancelLock.Unlock()
+	return d.cancelPeer == id
+}
+
 // cancel aborts all of the operations and resets the queue. However, cancel does
 // not wait for the running download goroutines to finish. This method should be
 // used when cancelling the downloads from inside the downloader.
@@ -1284,9 +1292,12 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 							peer.log.Warn("Downloader wants to drop peer, but peerdrop-function is not set", "peer", pid)
 						} else {
 							// In dropPeer function, a callback will be called which aborts
-							// the sync immediately. Here return the timeout error explicitly.
+							// the sync immediately if the unregisted peer is master peer.
+							// If the peer is master one, return concrete error here.
 							d.dropPeer(pid)
-							return errTimeout
+							if d.isMaster(pid) {
+								return errTimeout
+							}
 						}
 					}
 				}

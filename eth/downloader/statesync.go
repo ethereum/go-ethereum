@@ -317,9 +317,12 @@ func (s *stateSync) loop() (err error) {
 					req.peer.log.Warn("Downloader wants to drop peer, but peerdrop-function is not set", "peer", req.peer.id)
 				} else {
 					// In dropPeer function, a callback will be called which aborts
-					// the sync immediately. Here return the timeout error explicitly.
+					// the sync immediately if the unregisted peer is master peer.
+					// If the peer is master one, return concrete error here.
 					s.d.dropPeer(req.peer.id)
-					return errTimeout
+					if s.d.isMaster(req.peer.id) {
+						return errTimeout
+					}
 				}
 			}
 			// Process all the received blobs and check for stale delivery
