@@ -13661,10 +13661,18 @@ module.exports = XMLHttpRequest;
             inputFormatter: [formatters.inputAddressFormatter, null]
         });
 
+        var getOTAMixSet = new Method({
+            name: 'getOTAMixSet',
+            call: 'use_getOTAMixSet',
+            params: 2,
+            inputFormatter: [null, null]
+        });
+
         return [
             getUseAddress,
             generateOneTimeAddress,
             computeOTAPPKeys,
+            getOTAMixSet,
         ];
     };
     var properties = function () {

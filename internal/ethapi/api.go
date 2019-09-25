@@ -1531,6 +1531,48 @@ func (s *PublicTransactionPoolAPI) FillTransaction(ctx context.Context, args Sen
 	return &SignTransactionResult{data, tx}, nil
 }
 
+func (s *PublicTransactionPoolAPI) GetOTAMixSet(ctx context.Context, otaAddr string, setLen int) ([]string, error) {
+	if setLen <= 0 {
+		return []string{}, ErrInvalidOTAMixNum
+	}
+
+	if uint64(setLen) > params.GetOTAMixSetMaxSize {
+		return []string{}, ErrReqTooManyOTAMix
+	}
+
+	if !hexutil.Has0xPrefix(otaAddr) {
+		return []string{}, ErrInvalidOTAAddr
+	}
+
+	orgOtaAddr := common.FromHex(otaAddr)
+	if len(orgOtaAddr) < common.HashLength {
+		return []string{}, ErrInvalidOTAAddr
+	}
+
+	state, _, err := s.b.StateAndHeaderByNumber(ctx, rpc.BlockNumber(-1))
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	otaAX := orgOtaAddr[:common.HashLength]
+	if len(orgOtaAddr) == common.UAddressLength {
+		otaAX, _ = vm.GetAXFromUseAddr(orgOtaAddr)
+	}
+
+	otaByteSet, _, err := vm.GetOTASet(state, otaAX, setLen)
+	if err != nil {
+		return nil, err
+	}
+
+	ret := make([]string, 0, setLen)
+	for _, otaByte := range otaByteSet {
+		ret = append(ret, common.ToHex(otaByte))
+
+	}
+
+	return ret, nil
+}
+
 // ComputeOTAPPKeys compute ota private key, public key and short address
 // from account address and ota full address.
 func (s *PublicTransactionPoolAPI) ComputeOTAPPKeys(ctx context.Context, address common.Address, inOtaAddr string) (string, error) {
