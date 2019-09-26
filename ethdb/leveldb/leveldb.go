@@ -70,7 +70,7 @@ type Database struct {
 	diskSizeGauge      metrics.Gauge // Gauge for tracking the size of all the levels in the database
 	diskReadMeter      metrics.Meter // Meter for measuring the effective amount of data read
 	diskWriteMeter     metrics.Meter // Meter for measuring the effective amount of data written
-	memCompGuage       metrics.Gauge // Gauge for tracking the number of memory compaction
+	memCompGauge       metrics.Gauge // Gauge for tracking the number of memory compaction
 	level0CompGauge    metrics.Gauge // Gauge for tracking the number of table compaction in level0
 	nonlevel0CompGauge metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
 	seekCompGauge      metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
@@ -123,7 +123,7 @@ func New(file string, cache int, handles int, namespace string) (*Database, erro
 	ldb.diskWriteMeter = metrics.NewRegisteredMeter(namespace+"disk/write", nil)
 	ldb.writeDelayMeter = metrics.NewRegisteredMeter(namespace+"compact/writedelay/duration", nil)
 	ldb.writeDelayNMeter = metrics.NewRegisteredMeter(namespace+"compact/writedelay/counter", nil)
-	ldb.memCompGuage = metrics.NewRegisteredGauge(namespace+"compact/memory", nil)
+	ldb.memCompGauge = metrics.NewRegisteredGauge(namespace+"compact/memory", nil)
 	ldb.level0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/level0", nil)
 	ldb.nonlevel0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/nonlevel0", nil)
 	ldb.seekCompGauge = metrics.NewRegisteredGauge(namespace+"compact/seek", nil)
@@ -402,7 +402,7 @@ func (db *Database) meter(refresh time.Duration) {
 			merr = err
 			continue
 		}
-		db.memCompGuage.Update(int64(memComp))
+		db.memCompGauge.Update(int64(memComp))
 		db.level0CompGauge.Update(int64(level0Comp))
 		db.nonlevel0CompGauge.Update(int64(nonLevel0Comp))
 		db.seekCompGauge.Update(int64(seekComp))
