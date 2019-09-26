@@ -80,7 +80,6 @@ func newSnapshot(config *params.BorConfig, sigcache *lru.ARCCache, number uint64
 		Recents:      make(map[uint64]common.Address),
 		// Tally:        make(map[common.Address]Tally),
 	}
-	fmt.Println("New validator set", "number", number, "proposer", snap.ValidatorSet.Proposer.Address.Hex())
 	return snap
 }
 
@@ -209,26 +208,15 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			return nil, err
 		}
 
-		// fmt.Println("In snapshot 1 ==>", "number", header.Number.String())
 		// change validator set and change proposer
 		if number > 0 && (number+1)%s.config.Sprint == 0 {
-			fmt.Println("before snap.ValidatorSet changed", snap.ValidatorSet, snap.ValidatorSet.TotalVotingPower())
-			// fmt.Println("In snapshot 2 ==>", "number", header.Number.String(), "extra", hex.EncodeToString(header.Extra))
 			validatorBytes := header.Extra[extraVanity : len(header.Extra)-extraSeal]
 
-			newVals, err := ParseValidators(validatorBytes)
-			if err != nil {
-				fmt.Println("err ==>", err)
-			}
-
-			fmt.Println(" newVals ==> ", newVals)
-
 			// newVals, _ := GetValidators(number, number+1, s.config.Sprint, s.config.ValidatorContract, snap.ethAPI)
+			newVals, _ := ParseValidators(validatorBytes)
 			v := getUpdatedValidatorSet(snap.ValidatorSet.Copy(), newVals)
-			fmt.Println("middle snap.ValidatorSet changed", v)
 			v.IncrementProposerPriority(1)
 			snap.ValidatorSet = v
-			fmt.Println("after snap.ValidatorSet changed", snap.ValidatorSet)
 		}
 
 		// check if signer is in validator set
@@ -269,8 +257,6 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 	}
 	snap.Number += uint64(len(headers))
 	snap.Hash = headers[len(headers)-1].Hash()
-
-	fmt.Println("ValidatorsSet => ", snap.Number, snap.ValidatorSet)
 
 	return snap, nil
 }

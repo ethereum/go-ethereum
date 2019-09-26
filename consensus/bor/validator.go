@@ -2,7 +2,6 @@ package bor
 
 import (
 	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -93,11 +92,8 @@ func (v *Validator) Bytes() []byte {
 // HeaderBytes return header bytes
 func (v *Validator) HeaderBytes() []byte {
 	result := make([]byte, 40)
-	fmt.Println("validator.Address.Bytes()", hex.EncodeToString(v.Address.Bytes()))
-	fmt.Println("getPowerBytes(big.NewInt(0).SetInt64(validator.VotingPower))", hex.EncodeToString(v.PowerBytes()))
 	copy(result[:20], v.Address.Bytes())
 	copy(result[20:], v.PowerBytes())
-	fmt.Println("HeaderBytes result ==>", hex.EncodeToString(result))
 	return result
 }
 

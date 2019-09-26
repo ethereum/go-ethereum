@@ -3,7 +3,6 @@ package bor
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -41,7 +40,7 @@ const (
 	inmemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-	wiggleTime = 1000 * time.Millisecond // Random delay (per signer) to allow concurrent signers
+	wiggleTime = 5000 * time.Millisecond // Random delay (per signer) to allow concurrent signers
 )
 
 // Bor protocol constants.
@@ -203,7 +202,6 @@ func CalcProducerDelay(snap *Snapshot, signer common.Address, period uint64, epo
 
 	// if block is epoch start block, proposer will be inturn signer
 	if (snap.Number+1)%epoch == 0 {
-		fmt.Println("==>", "producerDelay", producerDelay, "(snap.Number+1)%epoch", (snap.Number+1)%epoch)
 		return producerDelay
 
 		// if block is not epoch block, last block signer will be inturn
@@ -405,15 +403,13 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 
 		extraSuffix := len(header.Extra) - extraSeal
 
-		fmt.Println("validatorsBytes ==> verify seal ==> ", hex.EncodeToString(validatorsBytes))
-		fmt.Println("header.Extra ==> verify seal ==> ", hex.EncodeToString(header.Extra[extraVanity:extraSuffix]))
+		// fmt.Println("validatorsBytes ==> verify seal ==> ", hex.EncodeToString(validatorsBytes))
+		// fmt.Println("header.Extra ==> verify seal ==> ", hex.EncodeToString(header.Extra[extraVanity:extraSuffix]))
 
-		// if !bytes.Equal(header.Extra[extraVanity:extraSuffix], validatorsBytes) {
-		// 	return errMismatchingSprintValidators
-		// }
+		if !bytes.Equal(header.Extra[extraVanity:extraSuffix], validatorsBytes) {
+			// return errMismatchingSprintValidators
+		}
 	}
-
-	fmt.Println("verifySeal header", "number", header.Number.String(), "extra", hex.EncodeToString(header.Extra))
 
 	// All basic checks passed, verify the seal and return
 	return c.verifySeal(chain, header, parents)
@@ -421,8 +417,6 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 
 // snapshot retrieves the authorization snapshot at a given point in time.
 func (c *Bor) snapshot(chain consensus.ChainReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
-	fmt.Println("Start bor.snapshot", number)
-	defer func(x uint64) { fmt.Println("End bor.snapshot", x) }(number)
 	// Search for a snapshot in memory or on disk for checkpoints
 	var (
 		headers []*types.Header
@@ -438,7 +432,6 @@ func (c *Bor) snapshot(chain consensus.ChainReader, number uint64, hash common.H
 
 		// If an on-disk checkpoint snapshot can be found, use that
 		if number%checkpointInterval == 0 {
-			fmt.Println("loading snapshot for  number", number, "checkpointInterval", checkpointInterval)
 			if s, err := loadSnapshot(c.config, c.signatures, c.db, hash, c.ethAPI); err == nil {
 				log.Trace("Loaded snapshot from disk", "number", number, "hash", hash)
 				snap = s
@@ -587,21 +580,16 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 	if !c.fakeDiff {
 		difficulty := snap.inturn(header.Number.Uint64(), signer, c.config.Sprint)
 		if header.Difficulty.Uint64() != difficulty {
-			fmt.Println("difficulty ==>", difficulty, "header.Difficulty", header.Difficulty, "header.Number", header.Number, "signer", signer.Hex(), "sprint", c.config.Sprint, "validatorSet", snap.ValidatorSet)
 			return errWrongDifficulty
 		}
 	}
 
-	fmt.Println("==> New block", "number", header.Number, "hash", header.Hash().Hex(), "signer", signer.Hex(), "proposer", proposer.Hex())
 	return nil
 }
 
 // Prepare implements consensus.Engine, preparing all the consensus fields of the
 // header for running the transactions on top.
 func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
-	fmt.Println("Start bor.Prepare", header.Number.Uint64())
-	defer func(d uint64) { fmt.Println("End bor.Prepare", d) }(header.Number.Uint64())
-
 	// If the block isn't a checkpoint, cast a random vote (good enough for now)
 	header.Coinbase = common.Address{}
 	header.Nonce = types.BlockNonce{}
@@ -652,7 +640,6 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
 	}
-	fmt.Println("parent.Time", parent.Time, "header.Time", header.Time, "number", header.Number, "extra", hex.EncodeToString(header.Extra))
 	return nil
 }
 
@@ -715,7 +702,6 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 		return errUnauthorizedSigner
 	}
 
-	fmt.Println("Validators", number, snap.ValidatorSet)
 	validators := snap.ValidatorSet.Validators
 	// proposer will be the last signer if block is not epoch block
 	proposer := snap.ValidatorSet.GetProposer().Address
@@ -723,7 +709,6 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 		// proposer = snap.Recents[number-1]
 	}
 
-	fmt.Println("Sealing block", number, "validatorset", snap.ValidatorSet)
 	proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
 	signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
 	limit := len(validators) - (len(validators)/2 + 1)
@@ -733,7 +718,7 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 	if tempIndex < proposerIndex {
 		tempIndex = tempIndex + len(validators)
 	}
-	fmt.Println("Block temp index", "number", number, "tempIndex", tempIndex, "proposerIndex", proposerIndex)
+
 	if limit > 0 && tempIndex-proposerIndex > limit {
 		log.Info("Signed recently, must wait for others")
 		return nil
@@ -745,7 +730,7 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 	delay += wiggle
 
 	fmt.Println("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
-	fmt.Println("--> Sealing block with", "number", number, "delay", delay, "headerDifficulty", header.Difficulty, "signer", signer.Hex(), "proposer", proposer.Hex())
+	fmt.Println("Sealing block with", "number", number, "delay", delay, "headerDifficulty", header.Difficulty, "signer", signer.Hex(), "proposer", proposer.Hex())
 
 	// Sign all the things!
 	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeBor, BorRLP(header))
@@ -812,9 +797,6 @@ func (c *Bor) GetCurrentValidators(snapshotNumber uint64, blockNumber uint64) ([
 
 // GetValidators get current validators
 func GetValidators(snapshotNumber uint64, blockNumber uint64, sprint uint64, validatorContract string, ethAPI *ethapi.PublicBlockChainAPI) ([]*Validator, error) {
-	fmt.Println("Start bor.GetValdiators", snapshotNumber)
-	defer func(x uint64) { fmt.Println("End bor.GetValdiators", x) }(snapshotNumber)
-
 	// block
 	blockNr := rpc.BlockNumber(snapshotNumber)
 
@@ -857,7 +839,6 @@ func GetValidators(snapshotNumber uint64, blockNumber uint64, sprint uint64, val
 	}
 
 	if err := validatorSetABI.Unpack(out, method, result); err != nil {
-		fmt.Println("err", err)
 		return nil, err
 	}
 
@@ -869,8 +850,6 @@ func GetValidators(snapshotNumber uint64, blockNumber uint64, sprint uint64, val
 		}
 	}
 
-	fmt.Println(method)
-	fmt.Println(" === ", valz)
 	return valz, nil
 }
 
