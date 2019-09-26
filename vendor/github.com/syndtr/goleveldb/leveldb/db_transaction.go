@@ -69,6 +69,9 @@ func (tr *Transaction) Has(key []byte, ro *opt.ReadOptions) (bool, error) {
 // DB. And a nil Range.Limit is treated as a key after all keys in
 // the DB.
 //
+// The returned iterator has locks on its own resources, so it can live beyond
+// the lifetime of the transaction who creates them.
+//
 // WARNING: Any slice returned by interator (e.g. slice returned by calling
 // Iterator.Key() or Iterator.Key() methods), its content should not be modified
 // unless noted otherwise.
@@ -252,13 +255,14 @@ func (tr *Transaction) discard() {
 	// Discard transaction.
 	for _, t := range tr.tables {
 		tr.db.logf("transaction@discard @%d", t.fd.Num)
-		if err1 := tr.db.s.stor.Remove(t.fd); err1 == nil {
-			tr.db.s.reuseFileNum(t.fd.Num)
-		}
+		// Iterator may still use the table, so we use tOps.remove here.
+		tr.db.s.tops.remove(t.fd)
 	}
 }
 
 // Discard discards the transaction.
+// This method is noop if transaction is already closed (either committed or
+// discarded)
 //
 // Other methods should not be called after transaction has been discarded.
 func (tr *Transaction) Discard() {
