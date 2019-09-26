@@ -726,7 +726,7 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 
 	// Sweet, the protocol permits us to sign the block, wait for our time
 	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
-	wiggle := time.Duration(wiggleTime) * time.Duration(tempIndex-proposerIndex)
+	wiggle := time.Duration(2*c.config.Period) * time.Second * time.Duration(tempIndex-proposerIndex)
 	delay += wiggle
 
 	fmt.Println("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
