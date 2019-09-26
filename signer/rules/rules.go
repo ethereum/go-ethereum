@@ -1,18 +1,18 @@
 // Copyright 2018 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package rules
 
@@ -74,12 +74,28 @@ func (r *rulesetUI) execute(jsfunc string, jsarg interface{}) (otto.Value, error
 
 	// Instantiate a fresh vm engine every time
 	vm := otto.New()
+
 	// Set the native callbacks
 	consoleObj, _ := vm.Get("console")
 	consoleObj.Object().Set("log", consoleOutput)
 	consoleObj.Object().Set("error", consoleOutput)
-	vm.Set("storage", r.storage)
 
+	vm.Set("storage", struct{}{})
+	storageObj, _ := vm.Get("storage")
+	storageObj.Object().Set("put", func(call otto.FunctionCall) otto.Value {
+		key, val := call.Argument(0).String(), call.Argument(1).String()
+		if val == "" {
+			r.storage.Del(key)
+		} else {
+			r.storage.Put(key, val)
+		}
+		return otto.NullValue()
+	})
+	storageObj.Object().Set("get", func(call otto.FunctionCall) otto.Value {
+		goval, _ := r.storage.Get(call.Argument(0).String())
+		jsval, _ := otto.ToValue(goval)
+		return jsval
+	})
 	// Load bootstrap libraries
 	script, err := vm.Compile("bignumber.js", BigNumber_JS)
 	if err != nil {

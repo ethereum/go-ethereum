@@ -77,7 +77,7 @@ func (w *wizard) deployDashboard() {
 				}
 			case "explorer":
 				if infos, err := checkExplorer(client, w.network); err == nil {
-					port = infos.webPort
+					port = infos.port
 				}
 			case "wallet":
 				if infos, err := checkWallet(client, w.network); err == nil {

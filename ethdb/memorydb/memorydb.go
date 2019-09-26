@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -132,7 +132,36 @@ func (db *Database) NewBatch() ethdb.Batch {
 // NewIterator creates a binary-alphabetical iterator over the entire keyspace
 // contained within the memory database.
 func (db *Database) NewIterator() ethdb.Iterator {
-	return db.NewIteratorWithPrefix(nil)
+	return db.NewIteratorWithStart(nil)
+}
+
+// NewIteratorWithStart creates a binary-alphabetical iterator over a subset of
+// database content starting at a particular initial key (or after, if it does
+// not exist).
+func (db *Database) NewIteratorWithStart(start []byte) ethdb.Iterator {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
+	var (
+		st     = string(start)
+		keys   = make([]string, 0, len(db.db))
+		values = make([][]byte, 0, len(db.db))
+	)
+	// Collect the keys from the memory database corresponding to the given start
+	for key := range db.db {
+		if key >= st {
+			keys = append(keys, key)
+		}
+	}
+	// Sort the items and retrieve the associated values
+	sort.Strings(keys)
+	for _, key := range keys {
+		values = append(values, db.db[key])
+	}
+	return &iterator{
+		keys:   keys,
+		values: values,
+	}
 }
 
 // NewIteratorWithPrefix creates a binary-alphabetical iterator over a subset
@@ -168,9 +197,10 @@ func (db *Database) Stat(property string) (string, error) {
 	return "", errors.New("unknown property")
 }
 
-// Compact is not supported on a memory database.
+// Compact is not supported on a memory database, but there's no need either as
+// a memory database doesn't waste space anyway.
 func (db *Database) Compact(start []byte, limit []byte) error {
-	return errors.New("unsupported operation")
+	return nil
 }
 
 // Len returns the number of entries currently present in the memory database.
@@ -241,7 +271,7 @@ func (b *batch) Reset() {
 }
 
 // Replay replays the batch contents.
-func (b *batch) Replay(w ethdb.Writer) error {
+func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 	for _, keyvalue := range b.writes {
 		if keyvalue.delete {
 			if err := w.Delete(keyvalue.key); err != nil {

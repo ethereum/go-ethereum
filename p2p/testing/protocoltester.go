@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -110,6 +110,7 @@ func NewProtocolTester(prvkey *ecdsa.PrivateKey, nodeCount int, run func(*p2p.Pe
 // Stop stops the p2p server
 func (t *ProtocolTester) Stop() {
 	t.Server.Stop()
+	t.network.Shutdown()
 }
 
 // Connect brings up the remote peer node and connects it using the

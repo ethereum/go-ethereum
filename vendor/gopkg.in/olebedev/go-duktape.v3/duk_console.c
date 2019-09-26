@@ -13,10 +13,6 @@
 
 /* XXX: Add some form of log level filtering. */
 
-/* XXX: For now logs everything to stdout, V8/Node.js logs debug/info level
- * to stdout, warn and above to stderr.  Should this extra do the same?
- */
-
 /* XXX: Should all output be written via e.g. console.write(formattedMsg)?
  * This would make it easier for user code to redirect all console output
  * to a custom backend.
@@ -25,12 +21,10 @@
 /* XXX: Init console object using duk_def_prop() when that call is available. */
 
 static duk_ret_t duk__console_log_helper(duk_context *ctx, const char *error_name) {
-	duk_idx_t i, n;
-	duk_uint_t flags;
-
-	flags = (duk_uint_t) duk_get_current_magic(ctx);
-
-	n = duk_get_top(ctx);
+	duk_uint_t flags = (duk_uint_t) duk_get_current_magic(ctx);
+	FILE *output = (flags & DUK_CONSOLE_STDOUT_ONLY) ? stdout : stderr;
+	duk_idx_t n = duk_get_top(ctx);
+	duk_idx_t i;
 
 	duk_get_global_string(ctx, "console");
 	duk_get_prop_string(ctx, -1, "format");
@@ -59,9 +53,9 @@ static duk_ret_t duk__console_log_helper(duk_context *ctx, const char *error_nam
 		duk_get_prop_string(ctx, -1, "stack");
 	}
 
-	fprintf(stdout, "%s\n", duk_to_string(ctx, -1));
+	fprintf(output, "%s\n", duk_to_string(ctx, -1));
 	if (flags & DUK_CONSOLE_FLUSH) {
-		fflush(stdout);
+		fflush(output);
 	}
 	return 0;
 }
@@ -110,6 +104,17 @@ static void duk__console_reg_vararg_func(duk_context *ctx, duk_c_function func, 
 }
 
 void duk_console_init(duk_context *ctx, duk_uint_t flags) {
+	duk_uint_t flags_orig;
+
+	/* If both DUK_CONSOLE_STDOUT_ONLY and DUK_CONSOLE_STDERR_ONLY where specified,
+	 * just turn off DUK_CONSOLE_STDOUT_ONLY and keep DUK_CONSOLE_STDERR_ONLY.
+	 */
+	if ((flags & DUK_CONSOLE_STDOUT_ONLY) && (flags & DUK_CONSOLE_STDERR_ONLY)) {
+	    flags &= ~DUK_CONSOLE_STDOUT_ONLY;
+	}
+	/* Remember the (possibly corrected) flags we received. */
+	flags_orig = flags;
+
 	duk_push_object(ctx);
 
 	/* Custom function to format objects; user can replace.
@@ -128,11 +133,22 @@ void duk_console_init(duk_context *ctx, duk_uint_t flags) {
 		"})(Duktape.enc)");
 	duk_put_prop_string(ctx, -2, "format");
 
+	flags = flags_orig;
+	if (!(flags & DUK_CONSOLE_STDOUT_ONLY) && !(flags & DUK_CONSOLE_STDERR_ONLY)) {
+	    /* No output indicators were specified; these levels go to stdout. */
+	    flags |= DUK_CONSOLE_STDOUT_ONLY;
+	}
 	duk__console_reg_vararg_func(ctx, duk__console_assert, "assert", flags);
 	duk__console_reg_vararg_func(ctx, duk__console_log, "log", flags);
 	duk__console_reg_vararg_func(ctx, duk__console_log, "debug", flags);  /* alias to console.log */
 	duk__console_reg_vararg_func(ctx, duk__console_trace, "trace", flags);
 	duk__console_reg_vararg_func(ctx, duk__console_info, "info", flags);
+
+	flags = flags_orig;
+	if (!(flags & DUK_CONSOLE_STDOUT_ONLY) && !(flags & DUK_CONSOLE_STDERR_ONLY)) {
+	    /* No output indicators were specified; these levels go to stderr. */
+	    flags |= DUK_CONSOLE_STDERR_ONLY;
+	}
 	duk__console_reg_vararg_func(ctx, duk__console_warn, "warn", flags);
 	duk__console_reg_vararg_func(ctx, duk__console_error, "error", flags);
 	duk__console_reg_vararg_func(ctx, duk__console_error, "exception", flags);  /* alias to console.error */

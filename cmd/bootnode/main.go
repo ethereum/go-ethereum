@@ -143,7 +143,7 @@ func printNotice(nodeKey *ecdsa.PublicKey, addr net.UDPAddr) {
 		addr.IP = net.IP{127, 0, 0, 1}
 	}
 	n := enode.NewV4(nodeKey, addr.IP, 0, addr.Port)
-	fmt.Println(n.String())
+	fmt.Println(n.URLv4())
 	fmt.Println("Note: you're using cmd/bootnode, a developer tool.")
 	fmt.Println("We recommend using a regular node as bootstrap node for production deployments.")
 }

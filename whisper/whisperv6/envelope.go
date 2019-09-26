@@ -91,16 +91,18 @@ func (e *Envelope) Seal(options *MessageParams) error {
 		target = e.powToFirstBit(options.PoW)
 	}
 
-	buf := make([]byte, 64)
-	h := crypto.Keccak256(e.rlpWithoutNonce())
-	copy(buf[:32], h)
+	rlp := e.rlpWithoutNonce()
+	buf := make([]byte, len(rlp)+8)
+	copy(buf, rlp)
+	asAnInt := new(big.Int)
 
 	finish := time.Now().Add(time.Duration(options.WorkTime) * time.Second).UnixNano()
 	for nonce := uint64(0); time.Now().UnixNano() < finish; {
 		for i := 0; i < 1024; i++ {
-			binary.BigEndian.PutUint64(buf[56:], nonce)
-			d := new(big.Int).SetBytes(crypto.Keccak256(buf))
-			leadingZeros := 256 - d.BitLen()
+			binary.BigEndian.PutUint64(buf[len(rlp):], nonce)
+			h := crypto.Keccak256(buf)
+			asAnInt.SetBytes(h)
+			leadingZeros := 256 - asAnInt.BitLen()
 			if leadingZeros > bestLeadingZeros {
 				e.Nonce, bestLeadingZeros = nonce, leadingZeros
 				if target > 0 && bestLeadingZeros >= target {
@@ -128,11 +130,10 @@ func (e *Envelope) PoW() float64 {
 }
 
 func (e *Envelope) calculatePoW(diff uint32) {
-	buf := make([]byte, 64)
 	rlp := e.rlpWithoutNonce()
-	h := crypto.Keccak256(rlp)
-	copy(buf[:32], h)
-	binary.BigEndian.PutUint64(buf[56:], e.Nonce)
+	buf := make([]byte, len(rlp)+8)
+	copy(buf, rlp)
+	binary.BigEndian.PutUint64(buf[len(rlp):], e.Nonce)
 	powHash := new(big.Int).SetBytes(crypto.Keccak256(buf))
 	leadingZeroes := 256 - powHash.BitLen()
 	x := gmath.Pow(2, float64(leadingZeroes))

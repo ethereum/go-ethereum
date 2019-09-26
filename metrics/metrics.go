@@ -61,41 +61,56 @@ func CollectProcessMetrics(refresh time.Duration) {
 	if !Enabled {
 		return
 	}
+	refreshFreq := int64(refresh / time.Second)
+
 	// Create the various data collectors
+	cpuStats := make([]*CPUStats, 2)
 	memstats := make([]*runtime.MemStats, 2)
 	diskstats := make([]*DiskStats, 2)
 	for i := 0; i < len(memstats); i++ {
+		cpuStats[i] = new(CPUStats)
 		memstats[i] = new(runtime.MemStats)
 		diskstats[i] = new(DiskStats)
 	}
 	// Define the various metrics to collect
-	memAllocs := GetOrRegisterMeter("system/memory/allocs", DefaultRegistry)
-	memFrees := GetOrRegisterMeter("system/memory/frees", DefaultRegistry)
-	memInuse := GetOrRegisterMeter("system/memory/inuse", DefaultRegistry)
-	memPauses := GetOrRegisterMeter("system/memory/pauses", DefaultRegistry)
+	var (
+		cpuSysLoad    = GetOrRegisterGauge("system/cpu/sysload", DefaultRegistry)
+		cpuSysWait    = GetOrRegisterGauge("system/cpu/syswait", DefaultRegistry)
+		cpuProcLoad   = GetOrRegisterGauge("system/cpu/procload", DefaultRegistry)
+		cpuThreads    = GetOrRegisterGauge("system/cpu/threads", DefaultRegistry)
+		cpuGoroutines = GetOrRegisterGauge("system/cpu/goroutines", DefaultRegistry)
 
-	var diskReads, diskReadBytes, diskWrites, diskWriteBytes Meter
-	var diskReadBytesCounter, diskWriteBytesCounter Counter
-	if err := ReadDiskStats(diskstats[0]); err == nil {
-		diskReads = GetOrRegisterMeter("system/disk/readcount", DefaultRegistry)
-		diskReadBytes = GetOrRegisterMeter("system/disk/readdata", DefaultRegistry)
-		diskReadBytesCounter = GetOrRegisterCounter("system/disk/readbytes", DefaultRegistry)
-		diskWrites = GetOrRegisterMeter("system/disk/writecount", DefaultRegistry)
-		diskWriteBytes = GetOrRegisterMeter("system/disk/writedata", DefaultRegistry)
+		memPauses = GetOrRegisterMeter("system/memory/pauses", DefaultRegistry)
+		memAllocs = GetOrRegisterMeter("system/memory/allocs", DefaultRegistry)
+		memFrees  = GetOrRegisterMeter("system/memory/frees", DefaultRegistry)
+		memHeld   = GetOrRegisterGauge("system/memory/held", DefaultRegistry)
+		memUsed   = GetOrRegisterGauge("system/memory/used", DefaultRegistry)
+
+		diskReads             = GetOrRegisterMeter("system/disk/readcount", DefaultRegistry)
+		diskReadBytes         = GetOrRegisterMeter("system/disk/readdata", DefaultRegistry)
+		diskReadBytesCounter  = GetOrRegisterCounter("system/disk/readbytes", DefaultRegistry)
+		diskWrites            = GetOrRegisterMeter("system/disk/writecount", DefaultRegistry)
+		diskWriteBytes        = GetOrRegisterMeter("system/disk/writedata", DefaultRegistry)
 		diskWriteBytesCounter = GetOrRegisterCounter("system/disk/writebytes", DefaultRegistry)
-	} else {
-		log.Debug("Failed to read disk metrics", "err", err)
-	}
+	)
 	// Iterate loading the different stats and updating the meters
 	for i := 1; ; i++ {
 		location1 := i % 2
 		location2 := (i - 1) % 2
 
+		ReadCPUStats(cpuStats[location1])
+		cpuSysLoad.Update((cpuStats[location1].GlobalTime - cpuStats[location2].GlobalTime) / refreshFreq)
+		cpuSysWait.Update((cpuStats[location1].GlobalWait - cpuStats[location2].GlobalWait) / refreshFreq)
+		cpuProcLoad.Update((cpuStats[location1].LocalTime - cpuStats[location2].LocalTime) / refreshFreq)
+		cpuThreads.Update(int64(threadCreateProfile.Count()))
+		cpuGoroutines.Update(int64(runtime.NumGoroutine()))
+
 		runtime.ReadMemStats(memstats[location1])
+		memPauses.Mark(int64(memstats[location1].PauseTotalNs - memstats[location2].PauseTotalNs))
 		memAllocs.Mark(int64(memstats[location1].Mallocs - memstats[location2].Mallocs))
 		memFrees.Mark(int64(memstats[location1].Frees - memstats[location2].Frees))
-		memInuse.Mark(int64(memstats[location1].Alloc - memstats[location2].Alloc))
-		memPauses.Mark(int64(memstats[location1].PauseTotalNs - memstats[location2].PauseTotalNs))
+		memHeld.Update(int64(memstats[location1].HeapSys - memstats[location1].HeapReleased))
+		memUsed.Update(int64(memstats[location1].Alloc))
 
 		if ReadDiskStats(diskstats[location1]) == nil {
 			diskReads.Mark(diskstats[location1].ReadCount - diskstats[location2].ReadCount)

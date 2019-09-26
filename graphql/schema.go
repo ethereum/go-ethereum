@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -165,7 +165,7 @@ const schema string = `
         # GasUsed is the amount of gas that was used executing transactions in this block.
         gasUsed: Long!
         # Timestamp is the unix timestamp at which this block was mined.
-        timestamp: BigInt!
+        timestamp: Long!
         # LogsBloom is a bloom filter that can be used to check if a block may
         # contain log entries matching a filter.
         logsBloom: Bytes!

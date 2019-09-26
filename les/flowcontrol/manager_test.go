@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -63,7 +63,7 @@ func testConstantTotalCapacity(t *testing.T, nodeCount, maxCapacityNodes, random
 	}
 	m := NewClientManager(PieceWiseLinear{{0, totalCapacity}}, clock)
 	for _, n := range nodes {
-		n.bufLimit = n.capacity * 6000 //uint64(2000+rand.Intn(10000))
+		n.bufLimit = n.capacity * 6000
 		n.node = NewClientNode(m, ServerParams{BufLimit: n.bufLimit, MinRecharge: n.capacity})
 	}
 	maxNodes := make([]int, maxCapacityNodes)
@@ -73,6 +73,7 @@ func testConstantTotalCapacity(t *testing.T, nodeCount, maxCapacityNodes, random
 		maxNodes[i] = rand.Intn(nodeCount)
 	}
 
+	var sendCount int
 	for i := 0; i < testLength; i++ {
 		now := clock.Now()
 		for _, idx := range maxNodes {
@@ -83,13 +84,15 @@ func testConstantTotalCapacity(t *testing.T, nodeCount, maxCapacityNodes, random
 			maxNodes[rand.Intn(maxCapacityNodes)] = rand.Intn(nodeCount)
 		}
 
-		sendCount := randomSend
-		for sendCount > 0 {
+		sendCount += randomSend
+		failCount := randomSend * 10
+		for sendCount > 0 && failCount > 0 {
 			if nodes[rand.Intn(nodeCount)].send(t, now) {
 				sendCount--
+			} else {
+				failCount--
 			}
 		}
-
 		clock.Run(time.Millisecond)
 	}
 
@@ -117,7 +120,6 @@ func (n *testNode) send(t *testing.T, now mclock.AbsTime) bool {
 	if bv < testMaxCost {
 		n.waitUntil = now + mclock.AbsTime((testMaxCost-bv)*1001000/n.capacity)
 	}
-	//n.waitUntil = now + mclock.AbsTime(float64(testMaxCost)*1001000/float64(n.capacity)*(1-float64(bv)/float64(n.bufLimit)))
 	n.totalCost += rcost
 	return true
 }

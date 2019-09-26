@@ -102,6 +102,16 @@ func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 	return arguments.unpackAtomic(v, marshalledValues[0])
 }
 
+// UnpackIntoMap performs the operation hexdata -> mapping of argument name to argument value
+func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) error {
+	marshalledValues, err := arguments.UnpackValues(data)
+	if err != nil {
+		return err
+	}
+
+	return arguments.unpackIntoMap(v, marshalledValues)
+}
+
 // unpack sets the unmarshalled value to go format.
 // Note the dst here must be settable.
 func unpack(t *Type, dst interface{}, src interface{}) error {
@@ -109,10 +119,21 @@ func unpack(t *Type, dst interface{}, src interface{}) error {
 		dstVal = reflect.ValueOf(dst).Elem()
 		srcVal = reflect.ValueOf(src)
 	)
-
-	if t.T != TupleTy && !((t.T == SliceTy || t.T == ArrayTy) && t.Elem.T == TupleTy) {
+	tuple, typ := false, t
+	for {
+		if typ.T == SliceTy || typ.T == ArrayTy {
+			typ = typ.Elem
+			continue
+		}
+		tuple = typ.T == TupleTy
+		break
+	}
+	if !tuple {
 		return set(dstVal, srcVal)
 	}
+
+	// Dereferences interface or pointer wrapper
+	dstVal = indirectInterfaceOrPtr(dstVal)
 
 	switch t.T {
 	case TupleTy:
@@ -160,6 +181,19 @@ func unpack(t *Type, dst interface{}, src interface{}) error {
 	return nil
 }
 
+// unpackIntoMap unpacks marshalledValues into the provided map[string]interface{}
+func (arguments Arguments) unpackIntoMap(v map[string]interface{}, marshalledValues []interface{}) error {
+	// Make sure map is not nil
+	if v == nil {
+		return fmt.Errorf("abi: cannot unpack into a nil map")
+	}
+
+	for i, arg := range arguments.NonIndexed() {
+		v[arg.Name] = marshalledValues[i]
+	}
+	return nil
+}
+
 // unpackAtomic unpacks ( hexdata -> go ) a single value
 func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues interface{}) error {
 	if arguments.LengthNonIndexed() == 0 {
@@ -168,7 +202,7 @@ func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues interfac
 	argument := arguments.NonIndexed()[0]
 	elem := reflect.ValueOf(v).Elem()
 
-	if elem.Kind() == reflect.Struct {
+	if elem.Kind() == reflect.Struct && argument.Type.T != TupleTy {
 		fieldmap, err := mapArgNamesToStructFields([]string{argument.Name}, elem)
 		if err != nil {
 			return err

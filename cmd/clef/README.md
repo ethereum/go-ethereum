@@ -1,41 +1,38 @@
-Clef
-----
-Clef can be used to sign transactions and data and is meant as a replacement for geth's account management.
-This allows DApps not to depend on geth's account management. When a DApp wants to sign data it can send the data to
-the signer, the signer will then provide the user with context and asks the user for permission to sign the data. If
-the users grants the signing request the signer will send the signature back to the DApp.
-  
-This setup allows a DApp to connect to a remote Ethereum node and send transactions that are locally signed. This can
-help in situations when a DApp is connected to a remote node because a local Ethereum node is not available, not
-synchronised with the chain or a particular Ethereum node that has no built-in (or limited) account management.
-  
-Clef can run as a daemon on the same machine, or off a usb-stick like [usb armory](https://inversepath.com/usbarmory),
-or a separate VM in a [QubesOS](https://www.qubes-os.org/) type os setup.
+# Clef
 
-Check out 
+Clef can be used to sign transactions and data and is meant as a(n eventual) replacement for Geth's account management. This allows DApps to not depend on Geth's account management. When a DApp wants to sign data (or a transaction), it can send the content to Clef, which will then provide the user with context and asks for permission to sign the content. If the users grants the signing request, Clef will send the signature back to the DApp.
 
-* the [tutorial](tutorial.md) for some concrete examples on how the signer works.
-* the [setup docs](docs/setup.md) for some information on how to configure it to work on QubesOS or USBArmory. 
-* the [data types](datatypes.md) for detailed information on the json types used in the communication between
-  clef and an external UI 
+This setup allows a DApp to connect to a remote Ethereum node and send transactions that are locally signed. This can help in situations when a DApp is connected to an untrusted remote Ethereum node, because a local one is not available, not synchronised with the chain, or is a node that has no built-in (or limited) account management.
+
+Clef can run as a daemon on the same machine, off a usb-stick like [USB armory](https://inversepath.com/usbarmory), or even a separate VM in a [QubesOS](https://www.qubes-os.org/) type setup.
+
+Check out the
+
+* [CLI tutorial](tutorial.md) for some concrete examples on how Clef works.
+* [Setup docs](docs/setup.md) for infos on how to configure Clef on QubesOS or USB Armory.
+* [Data types](datatypes.md) for details on the communication messages between Clef and an external UI.
 
 ## Command line flags
+
 Clef accepts the following command line options:
+
 ```
 COMMANDS:
    init    Initialize the signer, generate secret storage
    attest  Attest that a js-file is to be used
    setpw   Store a credential for a keystore file
+   delpw   Remove a credential for a keystore file
    gendoc  Generate documentation about json-rpc format
    help    Shows a list of commands or help for one command
-   
+
 GLOBAL OPTIONS:
    --loglevel value        log level to emit to the screen (default: 4)
    --keystore value        Directory for the keystore (default: "$HOME/.ethereum/keystore")
    --configdir value       Directory for Clef configuration (default: "$HOME/.clef")
-   --chainid value         Chain id to use for signing (1=mainnet, 3=ropsten, 4=rinkeby, 5=Goerli) (default: 1)
+   --chainid value         Chain id to use for signing (1=mainnet, 3=Ropsten, 4=Rinkeby, 5=Goerli) (default: 1)
    --lightkdf              Reduce key-derivation RAM & CPU usage at some expense of KDF strength
    --nousb                 Disables monitoring for and managing USB hardware wallets
+   --pcscdpath value       Path to the smartcard daemon (pcscd) socket file (default: "/run/pcscd/pcscd.comm")
    --rpcaddr value         HTTP-RPC server listening interface (default: "localhost")
    --rpcvhosts value       Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (default: "localhost")
    --ipcdisable            Disable the IPC-RPC server
@@ -43,60 +40,48 @@ GLOBAL OPTIONS:
    --rpc                   Enable the HTTP-RPC server
    --rpcport value         HTTP-RPC server listening port (default: 8550)
    --signersecret value    A file containing the (encrypted) master seed to encrypt Clef data, e.g. keystore credentials and ruleset hash
-   --4bytedb value         File containing 4byte-identifiers (default: "./4byte.json")
    --4bytedb-custom value  File used for writing new 4byte-identifiers submitted via API (default: "./4byte-custom.json")
    --auditlog value        File used to emit audit logs. Set to "" to disable (default: "audit.log")
-   --rules value           Enable rule-engine (default: "rules.json")
+   --rules value           Path to the rule file to auto-authorize requests with
    --stdio-ui              Use STDIN/STDOUT as a channel for an external UI. This means that an STDIN/STDOUT is used for RPC-communication with a e.g. a graphical user interface, and can be used when Clef is started by an external process.
    --stdio-ui-test         Mechanism to test interface between Clef and UI. Requires 'stdio-ui'.
    --advanced              If enabled, issues warnings instead of rejections for suspicious requests. Default off
    --help, -h              show help
    --version, -v           print the version
-   
 ```
-
 
 Example:
-```
-signer -keystore /my/keystore -chainid 4
-```
 
+```
+$ clef -keystore /my/keystore -chainid 4
+```
 
 ## Security model
 
-The security model of the signer is as follows:
+The security model of Clef is as follows:
 
-* One critical component (the signer binary / daemon) is responsible for handling cryptographic operations: signing, private keys, encryption/decryption of keystore files.
-* The signer binary has a well-defined 'external' API.
+* One critical component (the Clef binary / daemon) is responsible for handling cryptographic operations: signing, private keys, encryption/decryption of keystore files.
+* Clef has a well-defined 'external' API.
 * The 'external' API is considered UNTRUSTED.
-* The signer binary also communicates with whatever process that invoked the binary, via stdin/stdout.
+* Clef also communicates with whatever process that invoked the binary, via stdin/stdout.
   * This channel is considered 'trusted'. Over this channel, approvals and passwords are communicated.
 
-The general flow for signing a transaction using e.g. geth is as follows:
+The general flow for signing a transaction using e.g. Geth is as follows:
 ![image](sign_flow.png)
 
-In this case, `geth` would be started with `--externalsigner=http://localhost:8550` and would relay requests to `eth.sendTransaction`.
+In this case, `geth` would be started with `--signer http://localhost:8550` and would relay requests to `eth.sendTransaction`.
 
 ## TODOs
 
 Some snags and todos
 
-* [ ] The signer should take a startup param "--no-change", for UIs that do not contain the capability
-   to perform changes to things, only approve/deny. Such a UI should be able to start the signer in
-   a more secure mode by telling it that it only wants approve/deny capabilities.
-
-* [x] It would be nice if the signer could collect new 4byte-id:s/method selectors, and have a
-secondary database for those (`4byte_custom.json`). Users could then (optionally) submit their collections for
-inclusion upstream.
-
-* It should be possible to configure the signer to check if an account is indeed known to it, before
-passing on to the UI. The reason it currently does not, is that it would make it possible to enumerate
-accounts if it immediately returned "unknown account".
-* [x] It should be possible to configure the signer to auto-allow listing (certain) accounts, instead of asking every time.
-* [x] Done Upon startup, the signer should spit out some info to the caller (particularly important when executed in `stdio-ui`-mode),
-invoking methods with the following info:
+* [ ] Clef should take a startup param "--no-change", for UIs that do not contain the capability to perform changes to things, only approve/deny. Such a UI should be able to start the signer in a more secure mode by telling it that it only wants approve/deny capabilities.
+* [x] It would be nice if Clef could collect new 4byte-id:s/method selectors, and have a secondary database for those (`4byte_custom.json`). Users could then (optionally) submit their collections for inclusion upstream.
+* [ ] It should be possible to configure Clef to check if an account is indeed known to it, before passing on to the UI. The reason it currently does not, is that it would make it possible to enumerate accounts if it immediately returned "unknown account" (side channel attack).
+* [x] It should be possible to configure Clef to auto-allow listing (certain) accounts, instead of asking every time.
+* [x] Done Upon startup, Clef should spit out some info to the caller (particularly important when executed in `stdio-ui`-mode), invoking methods with the following info:
   * [x] Version info about the signer
-  * [x] Address of API (http/ipc)
+  * [x] Address of API (HTTP/IPC)
   * [ ] List of known accounts
 * [ ] Have a default timeout on signing operations, so that if the user has not answered within e.g. 60 seconds, the request is rejected.
 * [ ] `account_signRawTransaction`
@@ -109,21 +94,16 @@ invoking methods with the following info:
       * the number of unique recipients
 
 * Geth todos
-    - The signer should pass the `Origin` header as call-info to the UI. As of right now, the way that info about the request is
-put together is a bit of a hack into the http server. This could probably be greatly improved
-    - Relay: Geth should be started in `geth --external_signer localhost:8550`.
-    - Currently, the Geth APIs use `common.Address` in the arguments to transaction submission (e.g `to` field). This
-  type is 20 `bytes`, and is incapable of carrying checksum information. The signer uses `common.MixedcaseAddress`, which
-  retains the original input.
-    - The Geth api should switch to use the same type, and relay `to`-account verbatim to the external api.
-
+    - The signer should pass the `Origin` header as call-info to the UI. As of right now, the way that info about the request is put together is a bit of a hack into the HTTP server. This could probably be greatly improved.
+    - Relay: Geth should be started in `geth --signer localhost:8550`.
+    - Currently, the Geth APIs use `common.Address` in the arguments to transaction submission (e.g `to` field). This type is 20 `bytes`, and is incapable of carrying checksum information. The signer uses `common.MixedcaseAddress`, which retains the original input.
+    - The Geth API should switch to use the same type, and relay `to`-account verbatim to the external API.
 * [x] Storage
-    * [x] An encrypted key-value storage should be implemented
+    * [x] An encrypted key-value storage should be implemented.
     * See [rules.md](rules.md) for more info about this.
-
 * Another potential thing to introduce is pairing.
   * To prevent spurious requests which users just accept, implement a way to "pair" the caller with the signer (external API).
-  * Thus geth/mist/cpp would cryptographically handshake and afterwards the caller would be allowed to make signing requests.
+  * Thus Geth/cpp would cryptographically handshake and afterwards the caller would be allowed to make signing requests.
   * This feature would make the addition of rules less dangerous.
 
 * Wallets / accounts. Add API methods for wallets.
@@ -132,37 +112,31 @@ put together is a bit of a hack into the http server. This could probably be gre
 
 ### External API
 
-The signer listens to HTTP requests on `rpcaddr`:`rpcport`, with the same JSONRPC standard as Geth. The messages are
-expected to be JSON [jsonrpc 2.0 standard](http://www.jsonrpc.org/specification).
+Clef listens to HTTP requests on `rpcaddr`:`rpcport` (or to IPC on `ipcpath`), with the same JSON-RPC standard as Geth. The messages are expected to be [JSON-RPC 2.0 standard](https://www.jsonrpc.org/specification).
 
-Some of these call can require user interaction. Clients must be aware that responses
-may be delayed significantly or may never be received if a users decides to ignore the confirmation request.
+Some of these call can require user interaction. Clients must be aware that responses may be delayed significantly or may never be received if a users decides to ignore the confirmation request.
 
-The External API is **untrusted** : it does not accept credentials over this api, nor does it expect
-that requests have any authority.
+The External API is **untrusted**: it does not accept credentials over this API, nor does it expect that requests have any authority.
 
-### UI API
+### Internal UI API
 
-The signer has one native console-based UI, for operation without any standalone tools.
-However, there is also an API to communicate with an external UI. To enable that UI,
-the signer needs to be executed with the `--stdio-ui` option, which allocates the
-`stdin`/`stdout` for the UI-api.
+Clef has one native console-based UI, for operation without any standalone tools. However, there is also an API to communicate with an external UI. To enable that UI, the signer needs to be executed with the `--stdio-ui` option, which allocates `stdin` / `stdout` for the UI API.
 
 An example (insecure) proof-of-concept of has been implemented in `pythonsigner.py`.
 
 The model is as follows:
 
 * The user starts the UI app (`pythonsigner.py`).
-* The UI app starts the `signer` with `--stdio-ui`, and listens to the
+* The UI app starts `clef` with `--stdio-ui`, and listens to the
 process output for confirmation-requests.
-* The `signer` opens the external http api.
-* When the `signer` receives requests, it sends a `jsonrpc` request via `stdout`.
-* The UI app prompts the user accordingly, and responds to the `signer`
-* The `signer` signs (or not), and responds to the original request.
+* `clef` opens the external HTTP API.
+* When the `signer` receives requests, it sends a JSON-RPC request via `stdout`.
+* The UI app prompts the user accordingly, and responds to `clef`.
+* `clef` signs (or not), and responds to the original request.
 
 ## External API
 
-See the [external api changelog](extapi_changelog.md) for information about changes to this API.
+See the [external API changelog](extapi_changelog.md) for information about changes to this API.
 
 ### Encoding
 - number: positive integers that are hex encoded
@@ -187,7 +161,7 @@ None
 #### Result
   - address [string]: account address that is derived from the generated key
   - url [string]: location of the keyfile
-  
+
 #### Sample call
 ```json
 {
@@ -221,9 +195,9 @@ None
 #### Result
   - array with account records:
      - account.address [string]: account address that is derived from the generated key
-     - account.type [string]: type of the 
+     - account.type [string]: type of the
      - account.url [string]: location of the account
-  
+
 #### Sample call
 ```json
 {
@@ -272,7 +246,7 @@ Response
 
 #### Result
   - signed transaction in RLP encoded form [data]
-  
+
 #### Sample call
 ```json
 {
@@ -372,7 +346,7 @@ Bash example:
 
 #### Result
   - calculated signature [data]
-  
+
 #### Sample call
 ```json
 {
@@ -407,7 +381,7 @@ Response
 
 #### Result
   - calculated signature [data]
-  
+
 #### Sample call
 ```json
 {
@@ -505,7 +479,7 @@ Derive the address from the account that was used to sign data with content type
 
 #### Result
   - derived account [address]
-  
+
 #### Sample call
 ```json
 {
@@ -534,16 +508,16 @@ Response
 #### Import account
    Import a private key into the keystore. The imported key is expected to be encrypted according to the web3 keystore
    format.
-   
+
 #### Arguments
-  - account [object]: key in [web3 keystore format](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) (retrieved with account_export) 
+  - account [object]: key in [web3 keystore format](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) (retrieved with account_export)
 
 #### Result
   - imported key [object]:
      - key.address [address]: address of the imported key
      - key.type [string]: type of the account
      - key.url [string]: key URL
-  
+
 #### Sample call
 ```json
 {
@@ -592,16 +566,16 @@ Response
 ### account_export
 
 #### Export account from keystore
-   Export a private key from the keystore. The exported private key is encrypted with the original passphrase. When the
-   key is imported later this passphrase is required.
-   
+   Export a private key from the keystore. The exported private key is encrypted with the original password. When the
+   key is imported later this password is required.
+
 #### Arguments
   - account [address]: export private key that is associated with this account
 
 #### Result
   - exported key, see [web3 keystore format](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) for
   more information
-  
+
 #### Sample call
 ```json
 {
@@ -643,8 +617,6 @@ Response
 }
 ```
 
-
-
 ## UI API
 
 These methods needs to be implemented by a UI listener.
@@ -655,7 +627,7 @@ See `pythonsigner`, which can be invoked via `python3 pythonsigner.py test` to p
 
 All methods in this API uses object-based parameters, so that there can be no mixups of parameters: each piece of data is accessed by key.
 
-See the [ui api changelog](intapi_changelog.md) for information about changes to this API.
+See the [ui API changelog](intapi_changelog.md) for information about changes to this API.
 
 OBS! A slight deviation from `json` standard is in place: every request and response should be confined to a single line.
 Whereas the `json` specification allows for linebreaks, linebreaks __should not__ be used in this communication channel, to make
@@ -909,7 +881,7 @@ TLDR; Use this method to keep track of signed transactions, instead of using the
 
 ### OnSignerStartup / `ui_onSignerStartup`
 
-This method provide the UI with information about what API version the signer uses (both internal and external) aswell as build-info and external api,
+This method provide the UI with information about what API version the signer uses (both internal and external) aswell as build-info and external API,
 in k/v-form.
 
 Example call:
@@ -942,7 +914,7 @@ A UI should conform to the following rules.
   * For example, not load icons, stylesheets from the internet
   * Not load files from the filesystem, unless they reside in the same local directory (e.g. config files)
 * A Graphical UI MUST show the blocky-identicon for ethereum addresses.
-* A UI MUST warn display approproate warning if the destination-account is formatted with invalid checksum.
+* A UI MUST warn display appropriate warning if the destination-account is formatted with invalid checksum.
 * A UI MUST NOT open any ports or services
   * The signer opens the public port
 * A UI SHOULD verify the permissions on the signer binary, and refuse to execute or warn if permissions allow non-user write.
@@ -953,9 +925,9 @@ A UI should conform to the following rules.
 along with the UI.
 
 
-### UI Implementations 
+### UI Implementations
 
-There are a couple of implementation for a UI. We'll try to keep this list up to date. 
+There are a couple of implementation for a UI. We'll try to keep this list up to date.
 
 | Name | Repo | UI type| No external resources| Blocky support| Verifies permissions | Hash information | No secondary storage | Statically linked| Can modify parameters|
 | ---- | ---- | -------| ---- | ---- | ---- |---- | ---- | ---- | ---- |

@@ -17,6 +17,7 @@
 package les
 
 import (
+	"context"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -29,36 +30,42 @@ type ltrInfo struct {
 	sentTo map[*peer]struct{}
 }
 
-type LesTxRelay struct {
+type lesTxRelay struct {
 	txSent       map[common.Hash]*ltrInfo
 	txPending    map[common.Hash]struct{}
 	ps           *peerSet
 	peerList     []*peer
 	peerStartPos int
 	lock         sync.RWMutex
+	stop         chan struct{}
 
-	reqDist *requestDistributor
+	retriever *retrieveManager
 }
 
-func NewLesTxRelay(ps *peerSet, reqDist *requestDistributor) *LesTxRelay {
-	r := &LesTxRelay{
+func newLesTxRelay(ps *peerSet, retriever *retrieveManager) *lesTxRelay {
+	r := &lesTxRelay{
 		txSent:    make(map[common.Hash]*ltrInfo),
 		txPending: make(map[common.Hash]struct{}),
 		ps:        ps,
-		reqDist:   reqDist,
+		retriever: retriever,
+		stop:      make(chan struct{}),
 	}
 	ps.notify(r)
 	return r
 }
 
-func (self *LesTxRelay) registerPeer(p *peer) {
+func (self *lesTxRelay) Stop() {
+	close(self.stop)
+}
+
+func (self *lesTxRelay) registerPeer(p *peer) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
 	self.peerList = self.ps.AllPeers()
 }
 
-func (self *LesTxRelay) unregisterPeer(p *peer) {
+func (self *lesTxRelay) unregisterPeer(p *peer) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
@@ -67,7 +74,7 @@ func (self *LesTxRelay) unregisterPeer(p *peer) {
 
 // send sends a list of transactions to at most a given number of peers at
 // once, never resending any particular transaction to the same peer twice
-func (self *LesTxRelay) send(txs types.Transactions, count int) {
+func (self *lesTxRelay) send(txs types.Transactions, count int) {
 	sendTo := make(map[*peer]types.Transactions)
 
 	self.peerStartPos++ // rotate the starting position of the peer list
@@ -123,7 +130,7 @@ func (self *LesTxRelay) send(txs types.Transactions, count int) {
 				return peer.GetTxRelayCost(len(ll), len(enc))
 			},
 			canSend: func(dp distPeer) bool {
-				return !dp.(*peer).isOnlyAnnounce && dp.(*peer) == pp
+				return !dp.(*peer).onlyAnnounce && dp.(*peer) == pp
 			},
 			request: func(dp distPeer) func() {
 				peer := dp.(*peer)
@@ -132,18 +139,18 @@ func (self *LesTxRelay) send(txs types.Transactions, count int) {
 				return func() { peer.SendTxs(reqID, cost, enc) }
 			},
 		}
-		self.reqDist.queue(rq)
+		go self.retriever.retrieve(context.Background(), reqID, rq, func(p distPeer, msg *Msg) error { return nil }, self.stop)
 	}
 }
 
-func (self *LesTxRelay) Send(txs types.Transactions) {
+func (self *lesTxRelay) Send(txs types.Transactions) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
 	self.send(txs, 3)
 }
 
-func (self *LesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
+func (self *lesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
@@ -166,7 +173,7 @@ func (self *LesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback 
 	}
 }
 
-func (self *LesTxRelay) Discard(hashes []common.Hash) {
+func (self *lesTxRelay) Discard(hashes []common.Hash) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 

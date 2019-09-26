@@ -263,7 +263,7 @@ static duk_ret_t duk__require(duk_context *ctx) {
 	 * done with Object.defineProperty().
 	 *
 	 * XXX: require.id could also be just made non-configurable, as there
-	 * is no practical reason to touch it (at least from Ecmascript code).
+	 * is no practical reason to touch it (at least from ECMAScript code).
 	 */
 	duk_push_c_function(ctx, duk__require, 1 /*nargs*/);
 	duk_push_string(ctx, "name");
@@ -307,7 +307,7 @@ static duk_ret_t duk__require(duk_context *ctx) {
 	 *  Call user provided module search function and build the wrapped
 	 *  module source code (if necessary).  The module search function
 	 *  can be used to implement pure Ecmacsript, pure C, and mixed
-	 *  Ecmascript/C modules.
+	 *  ECMAScript/C modules.
 	 *
 	 *  The module search function can operate on the exports table directly
 	 *  (e.g. DLL code can register values to it).  It can also return a

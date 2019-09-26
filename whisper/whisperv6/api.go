@@ -103,7 +103,7 @@ func (api *PublicWhisperAPI) SetBloomFilter(ctx context.Context, bloom hexutil.B
 // MarkTrustedPeer marks a peer trusted, which will allow it to send historic (expired) messages.
 // Note: This function is not adding new nodes, the node needs to exists as a peer.
 func (api *PublicWhisperAPI) MarkTrustedPeer(ctx context.Context, url string) (bool, error) {
-	n, err := enode.ParseV4(url)
+	n, err := enode.Parse(enode.ValidSchemes, url)
 	if err != nil {
 		return false, err
 	}
@@ -291,7 +291,7 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (hexutil.
 
 	// send to specific node (skip PoW check)
 	if len(req.TargetPeer) > 0 {
-		n, err := enode.ParseV4(req.TargetPeer)
+		n, err := enode.Parse(enode.ValidSchemes, req.TargetPeer)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse target peer: %s", err)
 		}

@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -19,8 +19,8 @@ package ethdb
 
 import "io"
 
-// Reader wraps the Has and Get method of a backing data store.
-type Reader interface {
+// KeyValueReader wraps the Has and Get method of a backing data store.
+type KeyValueReader interface {
 	// Has retrieves if a key is present in the key-value data store.
 	Has(key []byte) (bool, error)
 
@@ -28,8 +28,8 @@ type Reader interface {
 	Get(key []byte) ([]byte, error)
 }
 
-// Writer wraps the Put method of a backing data store.
-type Writer interface {
+// KeyValueWriter wraps the Put method of a backing data store.
+type KeyValueWriter interface {
 	// Put inserts the given value into the key-value data store.
 	Put(key []byte, value []byte) error
 
@@ -58,12 +58,63 @@ type Compacter interface {
 // KeyValueStore contains all the methods required to allow handling different
 // key-value data stores backing the high level database.
 type KeyValueStore interface {
-	Reader
-	Writer
+	KeyValueReader
+	KeyValueWriter
 	Batcher
 	Iteratee
 	Stater
 	Compacter
+	io.Closer
+}
+
+// AncientReader contains the methods required to read from immutable ancient data.
+type AncientReader interface {
+	// HasAncient returns an indicator whether the specified data exists in the
+	// ancient store.
+	HasAncient(kind string, number uint64) (bool, error)
+
+	// Ancient retrieves an ancient binary blob from the append-only immutable files.
+	Ancient(kind string, number uint64) ([]byte, error)
+
+	// Ancients returns the ancient item numbers in the ancient store.
+	Ancients() (uint64, error)
+
+	// AncientSize returns the ancient size of the specified category.
+	AncientSize(kind string) (uint64, error)
+}
+
+// AncientWriter contains the methods required to write to immutable ancient data.
+type AncientWriter interface {
+	// AppendAncient injects all binary blobs belong to block at the end of the
+	// append-only immutable table files.
+	AppendAncient(number uint64, hash, header, body, receipt, td []byte) error
+
+	// TruncateAncients discards all but the first n ancient data from the ancient store.
+	TruncateAncients(n uint64) error
+
+	// Sync flushes all in-memory ancient store data to disk.
+	Sync() error
+}
+
+// Reader contains the methods required to read data from both key-value as well as
+// immutable ancient data.
+type Reader interface {
+	KeyValueReader
+	AncientReader
+}
+
+// Writer contains the methods required to write data to both key-value as well as
+// immutable ancient data.
+type Writer interface {
+	KeyValueWriter
+	AncientWriter
+}
+
+// AncientStore contains all the methods required to allow handling different
+// ancient data stores backing immutable chain data store.
+type AncientStore interface {
+	AncientReader
+	AncientWriter
 	io.Closer
 }
 

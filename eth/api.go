@@ -168,6 +168,11 @@ func NewPrivateAdminAPI(eth *Ethereum) *PrivateAdminAPI {
 
 // ExportChain exports the current blockchain into a local file.
 func (api *PrivateAdminAPI) ExportChain(file string) (bool, error) {
+	if _, err := os.Stat(file); err == nil {
+		// File already exists. Allowing overwrite could be a DoS vecotor,
+		// since the 'file' may point to arbitrary paths on the drive
+		return false, errors.New("location would overwrite an existing file")
+	}
 	// Make sure we can create the file to export into
 	out, err := os.OpenFile(file, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	if err != nil {
@@ -266,7 +271,7 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 		// both the pending block as well as the pending state from
 		// the miner and operate on those
 		_, stateDb := api.eth.miner.Pending()
-		return stateDb.RawDump(), nil
+		return stateDb.RawDump(false, false, true), nil
 	}
 	var block *types.Block
 	if blockNr == rpc.LatestBlockNumber {
@@ -281,7 +286,7 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 	if err != nil {
 		return state.Dump{}, err
 	}
-	return stateDb.RawDump(), nil
+	return stateDb.RawDump(false, false, true), nil
 }
 
 // PrivateDebugAPI is the collection of Ethereum full node APIs exposed over
@@ -332,6 +337,72 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 		}
 	}
 	return results, nil
+}
+
+// AccountRangeResult returns a mapping from the hash of an account addresses
+// to its preimage. It will return the JSON null if no preimage is found.
+// Since a query can return a limited amount of results, a "next" field is
+// also present for paging.
+type AccountRangeResult struct {
+	Accounts map[common.Hash]*common.Address `json:"accounts"`
+	Next     common.Hash                     `json:"next"`
+}
+
+func accountRange(st state.Trie, start *common.Hash, maxResults int) (AccountRangeResult, error) {
+	if start == nil {
+		start = &common.Hash{0}
+	}
+	it := trie.NewIterator(st.NodeIterator(start.Bytes()))
+	result := AccountRangeResult{Accounts: make(map[common.Hash]*common.Address), Next: common.Hash{}}
+
+	if maxResults > AccountRangeMaxResults {
+		maxResults = AccountRangeMaxResults
+	}
+
+	for i := 0; i < maxResults && it.Next(); i++ {
+		if preimage := st.GetKey(it.Key); preimage != nil {
+			addr := &common.Address{}
+			addr.SetBytes(preimage)
+			result.Accounts[common.BytesToHash(it.Key)] = addr
+		} else {
+			result.Accounts[common.BytesToHash(it.Key)] = nil
+		}
+	}
+
+	if it.Next() {
+		result.Next = common.BytesToHash(it.Key)
+	}
+
+	return result, nil
+}
+
+// AccountRangeMaxResults is the maximum number of results to be returned per call
+const AccountRangeMaxResults = 256
+
+// AccountRange enumerates all accounts in the latest state
+func (api *PrivateDebugAPI) AccountRange(ctx context.Context, start *common.Hash, maxResults int) (AccountRangeResult, error) {
+	var statedb *state.StateDB
+	var err error
+	block := api.eth.blockchain.CurrentBlock()
+
+	if len(block.Transactions()) == 0 {
+		statedb, err = api.computeStateDB(block, defaultTraceReexec)
+		if err != nil {
+			return AccountRangeResult{}, err
+		}
+	} else {
+		_, _, statedb, err = api.computeTxEnv(block.Hash(), len(block.Transactions())-1, 0)
+		if err != nil {
+			return AccountRangeResult{}, err
+		}
+	}
+
+	trie, err := statedb.Database().OpenTrie(block.Header().Root)
+	if err != nil {
+		return AccountRangeResult{}, err
+	}
+
+	return accountRange(trie, start, maxResults)
 }
 
 // StorageRangeResult is the result of a debug_storageRangeAt API call.

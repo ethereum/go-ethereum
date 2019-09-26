@@ -115,7 +115,7 @@ func (db *NodeSet) NodeList() NodeList {
 }
 
 // Store writes the contents of the set to the given database
-func (db *NodeSet) Store(target ethdb.Writer) {
+func (db *NodeSet) Store(target ethdb.KeyValueWriter) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -124,11 +124,11 @@ func (db *NodeSet) Store(target ethdb.Writer) {
 	}
 }
 
-// NodeList stores an ordered list of trie nodes. It implements ethdb.Writer.
+// NodeList stores an ordered list of trie nodes. It implements ethdb.KeyValueWriter.
 type NodeList []rlp.RawValue
 
 // Store writes the contents of the list to the given database
-func (n NodeList) Store(db ethdb.Writer) {
+func (n NodeList) Store(db ethdb.KeyValueWriter) {
 	for _, node := range n {
 		db.Put(crypto.Keccak256(node), node)
 	}
