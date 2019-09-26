@@ -258,6 +258,8 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 	snap.Number += uint64(len(headers))
 	snap.Hash = headers[len(headers)-1].Hash()
 
+	fmt.Println("Current validator set", "number", snap.Number, "validatorSet", snap.ValidatorSet)
+
 	return snap, nil
 }
 
