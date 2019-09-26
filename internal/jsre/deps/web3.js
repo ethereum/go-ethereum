@@ -13675,12 +13675,28 @@ module.exports = XMLHttpRequest;
             inputFormatter: [null, null, null]
         });
 
+        var getOTABalance = new Method({
+            name: 'getOTABalance',
+            call: 'use_getOTABalance',
+            params: 2,
+            inputFormatter: [null, formatters.inputDefaultBlockNumberFormatter],
+            outputFormatter: formatters.outputBigNumberFormatter
+        });
+
+        var getSupportUseCoinOTABalances = new Method ({
+            name: 'getSupportUseCoinOTABalances',
+            call: 'use_getSupportUseCoinOTABalances',
+            params: 0,
+        });
+
         return [
             getUseAddress,
             generateOneTimeAddress,
             computeOTAPPKeys,
             getOTAMixSet,
             genRingSignData,
+            getOTABalance,
+            getSupportUseCoinOTABalances,
         ];
     };
     var properties = function () {

@@ -542,6 +542,21 @@ func (s *PrivateAccountAPI) Unpair(ctx context.Context, url string, pin string) 
 	}
 }
 
+func (s *PrivateAccountAPI) GetOTABalance(ctx context.Context, blockNr rpc.BlockNumber) (*big.Int, error) {
+	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	otaB, err := vm.GetUnspendOTATotalBalance(state)
+	if err != nil {
+		return common.Big0, err
+	}
+
+	return otaB, state.Error()
+
+}
+
 // PublicBlockChainAPI provides an API to access the Ethereum blockchain.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicBlockChainAPI struct {
@@ -1114,6 +1129,35 @@ func (s *PublicBlockChainAPI) rpcMarshalBlock(b *types.Block, inclTx bool, fullT
 	}
 	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(b.Hash()))
 	return fields, err
+}
+
+// GetOTABalance returns OTA balance
+func (s *PublicBlockChainAPI) GetOTABalance(ctx context.Context, otaUAddr string, blockNr rpc.BlockNumber) (*big.Int, error) {
+	if !hexutil.Has0xPrefix(otaUAddr) {
+		return nil, ErrInvalidOTAAddr
+	}
+
+	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	var otaAX []byte
+	otaUAddrByte := common.FromHex(otaUAddr)
+	switch len(otaUAddrByte) {
+	case common.HashLength:
+		otaAX = otaUAddrByte
+	case common.UAddressLength:
+		otaAX, _ = vm.GetAXFromUseAddr(otaUAddrByte)
+	default:
+		return nil, ErrInvalidOTAAddr
+	}
+
+	return vm.GetOtaBalanceFromAX(state, otaAX)
+}
+
+func (s *PublicBlockChainAPI) GetSupportUseCoinOTABalances(ctx context.Context) []*big.Int {
+	return vm.GetSupportUseCoinOTABalances()
 }
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction

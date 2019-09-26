@@ -1172,3 +1172,31 @@ func FetchRingSignInfo(stateDB StateDB, hashInput []byte, ringSignedStr string) 
 
 	return infoTmp, nil
 }
+
+func GetSupportUseCoinOTABalances() []*big.Int {
+	cval10, _ := new(big.Int).SetString(Usecoin10, 10)
+	cval20, _ := new(big.Int).SetString(Usecoin20, 10)
+	cval50, _ := new(big.Int).SetString(Usecoin50, 10)
+	cval100, _ := new(big.Int).SetString(Usecoin100, 10)
+
+	cval200, _ := new(big.Int).SetString(Usecoin200, 10)
+	cval500, _ := new(big.Int).SetString(Usecoin500, 10)
+	cval1000, _ := new(big.Int).SetString(Usecoin1000, 10)
+	cval5000, _ := new(big.Int).SetString(Usecoin5000, 10)
+	cval50000, _ := new(big.Int).SetString(Usecoin50000, 10)
+
+	usecoinBalances := []*big.Int{
+		cval10,
+		cval20,
+		cval50,
+		cval100,
+
+		cval200,
+		cval500,
+		cval1000,
+		cval5000,
+		cval50000,
+	}
+
+	return usecoinBalances
+}
