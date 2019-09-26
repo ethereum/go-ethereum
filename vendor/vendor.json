@@ -455,76 +455,76 @@
 			"revisionTime": "2017-07-05T02:17:15Z"
 		},
 		{
-			"checksumSHA1": "4NTmfUj7H5J59M2wCnp3/8FWt1I=",
+			"checksumSHA1": "Bl4KYAyUkgJSjcdEyv3VhHQ8PVs=",
 			"path": "github.com/syndtr/goleveldb/leveldb",
-			"revision": "c3a204f8e96543bb0cc090385c001078f184fc46",
-			"revisionTime": "2019-03-18T03:00:20Z"
+			"revision": "758128399b1df3a87e92df6c26c1d2063da8fabe",
+			"revisionTime": "2019-09-23T12:57:48Z"
 		},
 		{
 			"checksumSHA1": "mPNraL2edpk/2FYq26rSXfMHbJg=",
 			"path": "github.com/syndtr/goleveldb/leveldb/cache",
-			"revision": "b001fa50d6b27f3f0bb175a87d0cb55426d0a0ae",
-			"revisionTime": "2018-11-28T10:09:59Z"
+			"revision": "758128399b1df3a87e92df6c26c1d2063da8fabe",
+			"revisionTime": "2019-09-23T12:57:48Z"
 		},
 		{
 			"checksumSHA1": "UA+PKDKWlDnE2OZblh23W6wZwbY=",
 			"path": "github.com/syndtr/goleveldb/leveldb/comparer",
-			"revision": "b001fa50d6b27f3f0bb175a87d0cb55426d0a0ae",
-			"revisionTime": "2018-11-28T10:09:59Z"
+			"revision": "758128399b1df3a87e92df6c26c1d2063da8fabe",
+			"revisionTime": "2019-09-23T12:57:48Z"
 		},
 		{
 			"checksumSHA1": "1DRAxdlWzS4U0xKN/yQ/fdNN7f0=",
 			"path": "github.com/syndtr/goleveldb/leveldb/errors",
-			"revision": "b001fa50d6b27f3f0bb175a87d0cb55426d0a0ae",
-			"revisionTime": "2018-11-28T10:09:59Z"
+			"revision": "758128399b1df3a87e92df6c26c1d2063da8fabe",
+			"revisionTime": "2019-09-23T12:57:48Z"
 		},
 		{
-			"checksumSHA1": "eqKeD6DS7eNCtxVYZEHHRKkyZrw=",
+			"checksumSHA1": "iBorxU3FBbau81WSyVa8KwcutzA=",
 			"path": "github.com/syndtr/goleveldb/leveldb/filter",
-			"revision": "b001fa50d6b27f3f0bb175a87d0cb55426d0a0ae",
-			"revisionTime": "2018-11-28T10:09:59Z"
+			"revision": "758128399b1df3a87e92df6c26c1d2063da8fabe",
+			"revisionTime": "2019-09-23T12:57:48Z"
 		},
 		{
 			"checksumSHA1": "hPyFsMiqZ1OB7MX+6wIAA6nsdtc=",
 			"path": "github.com/syndtr/goleveldb/leveldb/iterator",
-			"revision": "b001fa50d6b27f3f0bb175a87d0cb55426d0a0ae",
-			"revisionTime": "2018-11-28T10:09:59Z"
+			"revision": "758128399b1df3a87e92df6c26c1d2063da8fabe",
+			"revisionTime": "2019-09-23T12:57:48Z"
 		},
 		{
 			"checksumSHA1": "gJY7bRpELtO0PJpZXgPQ2BYFJ88=",
 			"path": "github.com/syndtr/goleveldb/leveldb/journal",
-			"revision": "b001fa50d6b27f3f0bb175a87d0cb55426d0a0ae",
-			"revisionTime": "2018-11-28T10:09:59Z"
+			"revision": "758128399b1df3a87e92df6c26c1d2063da8fabe",
+			"revisionTime": "2019-09-23T12:57:48Z"
 		},
 		{
-			"checksumSHA1": "MtYY1b2234y/MlS+djL8tXVAcQs=",
+			"checksumSHA1": "2ncG38FDk2thSlrHd7JFmiuvnxA=",
 			"path": "github.com/syndtr/goleveldb/leveldb/memdb",
-			"revision": "b001fa50d6b27f3f0bb175a87d0cb55426d0a0ae",
-			"revisionTime": "2018-11-28T10:09:59Z"
+			"revision": "758128399b1df3a87e92df6c26c1d2063da8fabe",
+			"revisionTime": "2019-09-23T12:57:48Z"
 		},
 		{
-			"checksumSHA1": "o2TorI3z+vc+EBMJ8XeFoUmXBtU=",
+			"checksumSHA1": "LC+WnyNq4O2J9SHuVfWL19wZH48=",
 			"path": "github.com/syndtr/goleveldb/leveldb/opt",
-			"revision": "b001fa50d6b27f3f0bb175a87d0cb55426d0a0ae",
-			"revisionTime": "2018-11-28T10:09:59Z"
+			"revision": "758128399b1df3a87e92df6c26c1d2063da8fabe",
+			"revisionTime": "2019-09-23T12:57:48Z"
 		},
 		{
 			"checksumSHA1": "ZnyuciM+R19NG8L5YS3TIJdo1e8=",
 			"path": "github.com/syndtr/goleveldb/leveldb/storage",
-			"revision": "b001fa50d6b27f3f0bb175a87d0cb55426d0a0ae",
-			"revisionTime": "2018-11-28T10:09:59Z"
+			"revision": "758128399b1df3a87e92df6c26c1d2063da8fabe",
+			"revisionTime": "2019-09-23T12:57:48Z"
 		},
 		{
-			"checksumSHA1": "gWFPMz8OQeul0t54RM66yMTX49g=",
+			"checksumSHA1": "DS0i9KReIeZn3T1Bpu31xPMtzio=",
 			"path": "github.com/syndtr/goleveldb/leveldb/table",
-			"revision": "b001fa50d6b27f3f0bb175a87d0cb55426d0a0ae",
-			"revisionTime": "2018-11-28T10:09:59Z"
+			"revision": "758128399b1df3a87e92df6c26c1d2063da8fabe",
+			"revisionTime": "2019-09-23T12:57:48Z"
 		},
 		{
 			"checksumSHA1": "V/Dh7NV0/fy/5jX1KaAjmGcNbzI=",
 			"path": "github.com/syndtr/goleveldb/leveldb/util",
-			"revision": "b001fa50d6b27f3f0bb175a87d0cb55426d0a0ae",
-			"revisionTime": "2018-11-28T10:09:59Z"
+			"revision": "758128399b1df3a87e92df6c26c1d2063da8fabe",
+			"revisionTime": "2019-09-23T12:57:48Z"
 		},
 		{
 			"checksumSHA1": "SsMMqb3xn7hg1ZX5ugwZz5rzpx0=",

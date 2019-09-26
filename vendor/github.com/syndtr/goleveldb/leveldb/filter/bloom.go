@@ -16,7 +16,7 @@ func bloomHash(key []byte) uint32 {
 
 type bloomFilter int
 
-// The bloom filter serializes its parameters and is backward compatible
+// Name: The bloom filter serializes its parameters and is backward compatible
 // with respect to them. Therefor, its parameters are not added to its
 // name.
 func (bloomFilter) Name() string {

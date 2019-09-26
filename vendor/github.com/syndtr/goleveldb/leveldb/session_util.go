@@ -308,7 +308,7 @@ func (s *session) setNextFileNum(num int64) {
 func (s *session) markFileNum(num int64) {
 	nextFileNum := num + 1
 	for {
-		old, x := s.stNextFileNum, nextFileNum
+		old, x := atomic.LoadInt64(&s.stNextFileNum), nextFileNum
 		if old > x {
 			x = old
 		}
@@ -326,7 +326,7 @@ func (s *session) allocFileNum() int64 {
 // Reuse given file number.
 func (s *session) reuseFileNum(num int64) {
 	for {
-		old, x := s.stNextFileNum, num
+		old, x := atomic.LoadInt64(&s.stNextFileNum), num
 		if old != x+1 {
 			x = old
 		}
