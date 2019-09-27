@@ -29,10 +29,12 @@ type RistrettoCache struct {
 	cache *ristretto.Cache
 }
 
+// NewRistrettoCache create a new ristretto cache with the given
+// capacity in MB
 func NewRistrettoCache(capacity int) (*RistrettoCache, error) {
 	cache, err := ristretto.NewCache(&ristretto.Config{
 		NumCounters: int64(capacity * 10),
-		MaxCost:     int64(capacity),
+		MaxCost:     int64(1000 * 1000 * capacity),
 		BufferItems: 64,
 		Metrics:     false,
 		KeyToHash: func(key interface{}) uint64 {
