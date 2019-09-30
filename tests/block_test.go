@@ -26,6 +26,8 @@ func TestBlockchain(t *testing.T) {
 	bt := new(testMatcher)
 	// General state tests are 'exported' as blockchain tests, but we can run them natively.
 	bt.skipLoad(`^GeneralStateTests/`)
+	// Skip random failures due to selfish mining test
+	bt.skipLoad(`.*bcForgedTest/bcForkUncle\.json`)
 
 	// Slow tests
 	bt.slow(`.*bcExploitTest/DelegateCallSpam.json`)
