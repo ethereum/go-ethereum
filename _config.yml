@@ -15,52 +15,65 @@ defaults:
   - scope:
       path: "*"
     values:
-      root: "."
+      root: "../.."
   - scope:
       path: "*/*"
     values:
-      root: ".."
+      root: "../../.."
+  - scope:
+      path: "*/*/*"
+    values:
+      root: "../../../.."
 
-default_root: ".."
+default_root: "../../.."
 
 collections_dir: docs
 collections:
   install-and-build:
     output: true
+    permalink: docs/:collection/:slug
     caption: Install and build
     sidebar_index: 1
     frontpage: _install-and-build/Installing-Geth.md
   interface:
     output: true
+    permalink: docs/:collection/:slug
     caption: Interacting with Geth
     sidebar_index: 2
   support:
     output: true
+    permalink: docs/:collection/:slug
     caption: Issues and support
     sidebar_index: 3
   developers:
     output: true
+    permalink: docs/:collection/:slug
     caption: Developer docs
     sidebar_index: 4
   clef:
     output: true
+    permalink: docs/:collection/:slug
     caption: Clef
     sidebar_index: 5
     frontpage: _clef/Overview.md
   whisper:
     output: true
+    permalink: docs/:collection/:slug
     caption: Whisper
     sidebar_index: 6
     frontpage: _whisper/Whisper-Overview.md
   rpc:
     output: true
+    permalink: docs/:collection/:slug
     caption: JSON RPC APIs
     sidebar_index: 7
   doc:
     output: true
+    permalink: docs/:collection/:slug
     caption: Other
     sidebar_index: 8
   legacy:
     output: true
+    permalink: docs/:collection/:slug
     caption: Legacy content
     sidebar_index: 9

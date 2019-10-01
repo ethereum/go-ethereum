@@ -24,9 +24,9 @@ or a separate VM in a [QubesOS](https://www.qubes-os.org/) type os setup.
 
 Check out 
 
-* the [tutorial](Tutorial) for some concrete examples on how the signer works.
-* the [setup docs](Setup) for some information on how to configure it to work on QubesOS or USBArmory. 
-* more info about [rules](Rules)
+* the [tutorial](tutorial) for some concrete examples on how the signer works.
+* the [setup docs](setup) for some information on how to configure it to work on QubesOS or USBArmory. 
+* more info about [rules](rules)
 * the [data types](datatypes) for detailed information on the json types used in the communication between
   clef and an external UI 
 
@@ -65,7 +65,7 @@ Clef relies on __sign-what-you-see__. To provide as much context as possible,
 One setup scenario is to use virtualization, e.g. within QubesOS, where to 
 Clef is deployed on a non-networked machine (`ethvault` below)
 
-![](./qubes/clef_qubes_qrexec.png)
+![](clef_qubes_qrexec.png)
 
 
 Another option is to deploy Clef on a separate physical device, e.g. USB Armory, 

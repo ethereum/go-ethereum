@@ -112,7 +112,7 @@ If you have the SolC Solidity Compiler installed,  you need now reformat by remo
 
 #### Linking your compiler in Geth
 
-Now [go back to the console](../doc/geth) and type this command to install solC, replacing _path/to/solc_ to the path that you got on the last command you did:
+Now [go back to the console](../interface/javascript-console) and type this command to install solC, replacing _path/to/solc_ to the path that you got on the last command you did:
 
     admin.setSolc("path/to/solc")
 

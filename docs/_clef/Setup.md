@@ -40,7 +40,7 @@ There are two ways that this can be achieved: integrated via Qubes or integrated
 Qubes provdes a facility for inter-qubes communication via `qrexec`. A qube can request to make a cross-qube RPC request 
 to another qube. The OS then asks the user if the call is permitted. 
 
-![Example](qubes/qrexec-example.png)
+![Example](qrexec-example.png)
 
 A policy-file can be created to allow such interaction. On the `target` domain, a service is invoked which can read the
 `stdin` from the `client` qube. 
@@ -49,11 +49,11 @@ This is how [Split GPG](https://www.qubes-os.org/doc/split-gpg/) is implemented.
 
 ##### Server
 
-![Clef via qrexec](qubes/clef_qubes_qrexec.png)
+![Clef via qrexec](clef_qubes_qrexec.png)
 
 On the `target` qubes, we need to define the rpc service.
 
-[qubes.Clefsign](qubes/qubes.Clefsign):
+[qubes.Clefsign](qubes.Clefsign):
 
 ```bash
 #!/bin/bash
@@ -97,7 +97,7 @@ with minimal requirements.
 On the `client` qube, we need to create a listener which will receive the request from the Dapp, and proxy it. 
 
 
-[qubes-client.py](qubes/client/qubes-client.py):
+[qubes-client.py](qubes-client.py):
 
 ```python
 
@@ -140,11 +140,11 @@ $ cat newaccnt.json| qrexec-client-vm debian-work qubes.Clefsign
 
 This should pop up first a dialog to allow the IPC call:
 
-![one](qubes/qubes_newaccount-1.png)
+![one](qubes_newaccount-1.png)
 
 Followed by a GTK-dialog to approve the operation
 
-![two](qubes/qubes_newaccount-2.png)
+![two](qubes_newaccount-2.png)
 
 To test the full flow, we use the client wrapper. Start it on the `client` qube:
 ```
@@ -182,7 +182,7 @@ However, it comes with a couple of drawbacks:
 The second way to set up Clef on a qubes system is to allow networking, and have Clef listen to a port which is accessible
 form other qubes. 
 
-![Clef via http](qubes/clef_qubes_http.png)
+![Clef via http](clef_qubes_http.png)
 
 
 
