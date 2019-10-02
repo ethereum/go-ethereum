@@ -120,7 +120,7 @@ func (api *API) Discard(address common.Address) {
 	delete(api.clique.proposals, address)
 }
 
-type CliqueStatus struct {
+type Status struct {
 	InturnPercent float64                `json:"inturnPercent"`
 	SigningStatus map[common.Address]int `json:"sealerActivity""`
 	NumBlocks     uint64                 `json:"numBlocks"`
@@ -130,7 +130,7 @@ type CliqueStatus struct {
 // - the number of active signers,
 // - the number of signers,
 // - the percentage of in-turn blocks
-func (api *API) Status() (*CliqueStatus, error) {
+func (api *API) Status() (*Status, error) {
 	var (
 		numBlocks = uint64(64)
 		header    = api.chain.CurrentHeader()
@@ -156,21 +156,20 @@ func (api *API) Status() (*CliqueStatus, error) {
 	}
 	for n := start; n < end; n++ {
 		h := api.chain.GetHeaderByNumber(n)
-		if h != nil {
-			if h.Difficulty.Cmp(diffInTurn) == 0 {
-				optimals += 1
-			}
-			diff += h.Difficulty.Uint64()
-			if sealer, err := api.clique.Author(h); err != nil {
-				return nil, err
-			} else {
-				signStatus[sealer] += 1
-			}
-		} else {
+		if h == nil {
 			return nil, fmt.Errorf("missing block %d", n)
 		}
+		if h.Difficulty.Cmp(diffInTurn) == 0 {
+			optimals++
+		}
+		diff += h.Difficulty.Uint64()
+		sealer, err := api.clique.Author(h)
+		if err != nil {
+			return nil, err
+		}
+		signStatus[sealer]++
 	}
-	return &CliqueStatus{
+	return &Status{
 		InturnPercent: float64((100 * optimals)) / float64(numBlocks),
 		SigningStatus: signStatus,
 		NumBlocks:     numBlocks,
