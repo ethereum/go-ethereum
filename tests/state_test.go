@@ -43,6 +43,7 @@ func TestState(t *testing.T) {
 
 	// Very time consuming
 	st.skipLoad(`^stTimeConsuming/`)
+	
 	// Broken tests:
 	// Expected failures:
 	//st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Byzantium/0`, "bug in test")
@@ -79,7 +80,6 @@ func TestState(t *testing.T) {
 			})
 		}
 	})
-
 }
 
 // Transactions with gasLimit above this value will not get a VM trace on failure.
