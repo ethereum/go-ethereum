@@ -25,17 +25,9 @@ func TestBlockchain(t *testing.T) {
 
 	bt := new(testMatcher)
 	// General state tests are 'exported' as blockchain tests, but we can run them natively.
-	bt.skipLoad(`^ValidBlocks/bcStateTests/`)
-	// Skip random failures due to selfish mining test.
+	bt.skipLoad(`^GeneralStateTests/`)
+	// Skip random failures due to selfish mining test
 	bt.skipLoad(`.*bcForgedTest/bcForkUncle\.json`)
-	bt.skipLoad(`.*bcMultiChainTest/(ChainAtoChainB_blockorder|CallContractFromNotBestBlock)`)
-	bt.skipLoad(`.*bcTotalDifficultyTest/(lotsOfLeafs|lotsOfBranches|sideChainWithMoreTransactions)`)
-
-	// These are not formatted like the rest -- due to the large postState, the postState
-	// was replaced by a hash, instead of a genesisAlloc map
-	// See https://github.com/ethereum/tests/pull/616
-	bt.skipLoad(`.*bcExploitTest/ShanghaiLove.json`)
-	bt.skipLoad(`.*bcExploitTest/SuicideIssue.json`)
 
 	// Slow tests
 	bt.slow(`.*bcExploitTest/DelegateCallSpam.json`)
@@ -45,9 +37,20 @@ func TestBlockchain(t *testing.T) {
 	bt.slow(`.*/bcGasPricerTest/RPC_API_Test.json`)
 	bt.slow(`.*/bcWalletTest/`)
 
+	// Very slow test
+	bt.skipLoad(`.*/stTimeConsuming/.*`)
+
+	// test takes a lot for time and goes easily OOM because of sha3 calculation on a huge range,
+	// using 4.6 TGas
+	bt.skipLoad(`.*randomStatetest94.json.*`)
+
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
 		if err := bt.checkFailure(t, name, test.Run()); err != nil {
 			t.Error(err)
 		}
 	})
+
+	// There is also a LegacyTests folder, containing blockchain tests generated
+	// prior to Istanbul. However, they are all derived from GeneralStateTests,
+	// which run natively, so there's no reason to run them here.
 }
