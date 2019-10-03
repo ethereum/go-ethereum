@@ -17,48 +17,44 @@
 package runtime
 
 import (
-	"math/big"
-	"testing"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math/big"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 )
 
-
 var (
 	codefile string
-	input string
+	input    string
 	expected string
 )
 
-var testVMConfig = func() vm.Config {
-	vmconfig := vm.Config{}
+var flagsParsed = func() bool {
 	flag.StringVar(&codefile, "codefile", "", "EVM code to run")
 	flag.StringVar(&input, "input", "", "input calldata")
 	flag.StringVar(&expected, "expected", "", "expected return data")
 	flag.Parse()
-	// don't actually need this vmconfig, but we need to parse custom command args in some way like this
-	return vmconfig
+	return true
 }()
-
 
 func BenchmarkEvmCode(b *testing.B) {
 
-	state, _ := state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()))
+	state, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
 	address := common.HexToAddress("0x0a")
 
 	var (
-		codebytes  []byte
-		err  error
-		ret  []byte
-		codehex []byte
-		gasLeft uint64
+		codebytes []byte
+		err       error
+		ret       []byte
+		codehex   []byte
+		gasLeft   uint64
 	)
 
 	fmt.Println("codefile:", codefile)
@@ -71,32 +67,33 @@ func BenchmarkEvmCode(b *testing.B) {
 	} else {
 		panic("Need to pass --codefile arg!")
 	}
-	
+
 	codehexstr := string(codehex)
 
 	fmt.Println("code hex length:", len(codehexstr))
 
 	codebytes = common.Hex2Bytes(codehexstr)
 
-
 	state.SetCode(address, codebytes)
 	evmChainConfig := &params.ChainConfig{
-		ChainID:        big.NewInt(1),
-		HomesteadBlock: new(big.Int),
-		DAOForkBlock:   new(big.Int),
-		DAOForkSupport: false,
-		EIP150Block:    new(big.Int),
-		EIP155Block:    new(big.Int),
-		EIP158Block:    new(big.Int),
-		ByzantiumBlock:  big.NewInt(0),
+		ChainID:             big.NewInt(1),
+		HomesteadBlock:      new(big.Int),
+		DAOForkBlock:        new(big.Int),
+		DAOForkSupport:      false,
+		EIP150Block:         new(big.Int),
+		EIP155Block:         new(big.Int),
+		EIP158Block:         new(big.Int),
+		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
-	};
+	}
 
 	startGas := uint64(100000000) // 100 million
+	inputBytes := common.Hex2Bytes(input)
+	config := &Config{ChainConfig: evmChainConfig, State: state, EVMConfig: vm.Config{}, GasLimit: startGas}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ret, gasLeft, err = Call(address, common.Hex2Bytes(input), &Config{ChainConfig: evmChainConfig, State: state, EVMConfig: testVMConfig, GasLimit: startGas})
+		ret, gasLeft, err = Call(address, inputBytes, config)
 	}
 	b.StopTimer()
 	//Check if it is correct
