@@ -92,6 +92,48 @@ func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int) bool {
 
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db
 func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
+	// get inputs before
+	input1 := db.GetBalance(sender)
+	input2 := db.GetBalance(recipient)
+
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
+
+	// get outputs after
+	output1 := db.GetBalance(sender)
+	output2 := db.GetBalance(recipient)
+
+	// add tranfer
+	db.AddLog(&types.Log{
+		Address: common.HexToAddress("0x0000000000000000000000000000000000001010"),
+		Topics: []common.Hash{
+			common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"),
+			sender.Hash(),
+			recipient.Hash(),
+		},
+		Data: common.BytesToHash(amount.Bytes()).Bytes(),
+	})
+
+	dataInputs := []*big.Int{
+		amount,
+		input1,
+		input2,
+		output1,
+		output2,
+	}
+	var data []byte
+	for _, v := range dataInputs {
+		data = append(data, common.LeftPadBytes(v.Bytes(), 32)...)
+	}
+
+	// add transfer log
+	db.AddLog(&types.Log{
+		Address: common.HexToAddress("0x0000000000000000000000000000000000001010"),
+		Topics: []common.Hash{
+			common.HexToHash("0xe6497e3ee548a3372136af2fcb0696db31fc6cf20260707645068bd3fe97f3c4"),
+			sender.Hash(),
+			recipient.Hash(),
+		},
+		Data: data,
+	})
 }
