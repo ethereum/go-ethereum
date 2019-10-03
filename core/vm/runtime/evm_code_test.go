@@ -36,7 +36,8 @@ var (
 	expected string
 )
 
-var flagsParsed = func() bool {
+var _ = func() bool {
+	testing.Init()
 	flag.StringVar(&codefile, "codefile", "", "EVM code to run")
 	flag.StringVar(&input, "input", "", "input calldata")
 	flag.StringVar(&expected, "expected", "", "expected return data")
