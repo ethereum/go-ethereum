@@ -125,12 +125,5 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	receipt.BlockNumber = header.Number
 	receipt.TransactionIndex = uint(statedb.TxIndex())
 
-	if len(receipt.Logs) > 0 {
-		var l types.Log
-		l = *receipt.Logs[0]
-		statedb.AddLog(&l)
-		receipt.Logs = append(receipt.Logs, &l)
-	}
-
 	return receipt, gas, err
 }
