@@ -470,8 +470,8 @@ func isForked(s, head *big.Int) bool {
 }
 
 // isForkBlock returns whether the given block number designates a fork block
-func (c *ChainConfig) isForkBlock(n uint64) bool {
-	number := big.NewInt(n)
+func (c *ChainConfig) IsForkBlock(n uint64) bool {
+	number := new(big.Int).SetUint64(n)
 	for _, forkNum := range []*big.Int{
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -483,7 +483,7 @@ func (c *ChainConfig) isForkBlock(n uint64) bool {
 		c.PetersburgBlock,
 		c.IstanbulBlock,
 	} {
-		h := forkNum.Cmp(number)
+		h := number.Cmp(forkNum)
 		if h < 0 {
 			return false
 		}
@@ -491,6 +491,7 @@ func (c *ChainConfig) isForkBlock(n uint64) bool {
 			return true
 		}
 	}
+	return false
 }
 
 func configNumEqual(x, y *big.Int) bool {

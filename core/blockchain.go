@@ -1317,7 +1317,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 			// If we exceeded out time allowance, flush an entire trie to disk
 			flushToDisk := bc.gcproc > bc.cacheConfig.TrieTimeLimit ||
-				bc.chainConfig.isForkBlock(current+1)
+				bc.chainConfig.IsForkBlock(current+1)
 			if flushToDisk {
 				// If the header is missing (canonical chain behind), we're reorging a low
 				// diff sidechain. Suspend committing until this operation is completed.
@@ -1823,6 +1823,21 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	}
 	if parent == nil {
 		return it.index, nil, nil, errors.New("missing parent")
+	}
+	if parent.Number.Cmp(common.Big1) <= 0 {
+		// What most likely happened, is that the even though the common ancestor
+		// is not that far back, it is still earlier than the fast-sync pivot point.
+		// In that scenario, the only place from where we can start restoring
+		// the state is the genesis, which is probably not what the user
+		// wants, or expects: a fast-sync that switches over to a full-sync.
+		//
+		// There is a high likelihood that this sidechain is actually an invalid
+		// chain, but for some reason longer. If the user actually wants to land
+		// on the other chain, it would be better to do a fast-sync to that one,
+		// instead of progressing further via sidechain import
+		log.Warn("Sidechain import aborted, due to extreme size. Please re-sync if you believe this is in error",
+			"start", numbers[len(numbers)-1], "count", len(numbers))
+		return it.index, nil, nil, errors.New("state regeneration task too large")
 	}
 	// Import all the pruned blocks to make the state available
 	var (
