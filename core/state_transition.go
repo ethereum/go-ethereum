@@ -22,6 +22,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -181,6 +182,9 @@ func (st *StateTransition) preCheck() error {
 // returning the result including the used gas. It returns an error if failed.
 // An error indicates a consensus issue.
 func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bool, err error) {
+	input1 := st.state.GetBalance(st.msg.From())
+	input2 := st.state.GetBalance(st.evm.Coinbase)
+
 	if err = st.preCheck(); err != nil {
 		return
 	}
@@ -224,6 +228,24 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	st.refundGas()
 	st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
 
+	amount := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice)
+	output1 := new(big.Int).SetUint64(input1.Uint64())
+	output2 := new(big.Int).SetUint64(input2.Uint64())
+
+	// add transfer log
+	AddTransferLog(
+		st.state,
+
+		msg.From(),
+		st.evm.Coinbase,
+
+		amount,
+		input1,
+		input2,
+		output1.Sub(output1, amount),
+		output2.Add(output2, amount),
+	)
+
 	return ret, st.gasUsed(), vmerr != nil, err
 }
 
@@ -247,4 +269,54 @@ func (st *StateTransition) refundGas() {
 // gasUsed returns the amount of gas used up by the state transition.
 func (st *StateTransition) gasUsed() uint64 {
 	return st.initialGas - st.gas
+}
+
+// AddTransferLog adds transfer log into state
+func AddTransferLog(
+	state vm.StateDB,
+
+	sender,
+	recipient common.Address,
+
+	amount,
+	input1,
+	input2,
+	output1,
+	output2 *big.Int,
+) {
+
+	// // add tranfer
+	// db.AddLog(&types.Log{
+	// 	Address: common.HexToAddress("0x0000000000000000000000000000000000001010"),
+	// 	Topics: []common.Hash{
+	// 		common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"),
+	// 		sender.Hash(),
+	// 		recipient.Hash(),
+	// 	},
+	// 	Data: common.BytesToHash(amount.Bytes()).Bytes(),
+	// })
+
+	dataInputs := []*big.Int{
+		amount,
+		input1,
+		input2,
+		output1,
+		output2,
+	}
+
+	var data []byte
+	for _, v := range dataInputs {
+		data = append(data, common.LeftPadBytes(v.Bytes(), 32)...)
+	}
+
+	// add transfer log
+	state.AddLog(&types.Log{
+		Address: common.HexToAddress("0x0000000000000000000000000000000000001010"),
+		Topics: []common.Hash{
+			common.HexToHash("0xe6497e3ee548a3372136af2fcb0696db31fc6cf20260707645068bd3fe97f3c4"),
+			sender.Hash(),
+			recipient.Hash(),
+		},
+		Data: data,
+	})
 }
