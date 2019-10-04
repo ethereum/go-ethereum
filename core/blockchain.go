@@ -1979,6 +1979,23 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	if parent == nil {
 		return it.index, errors.New("missing parent")
 	}
+	if diff := new(big.Int).Sub(current.Number(), parent.Number); diff.Uint64() > params.ImmutabilityThreshold {
+		// What most likely happened, is that the even though the common ancestor
+		// is not that far back, it is still earlier than the fast-sync pivot point.
+		// In that scenario, the only place from where we can start restoring
+		// the state is the genesis (or, in any case, a block further back than
+		// three epochs), which is probably not what the user
+		// wants, or expects: a fast-sync that switches over to a full-sync.
+		//
+		// There is a high likelihood that this sidechain is actually an invalid
+		// chain, but for some reason longer. If the user actually wants to land
+		// on the other chain, it would be better to do a fast-sync to that one,
+		// instead of progressing further via sidechain import
+		//
+		log.Warn("Sidechain import aborted, due to extreme size. Please re-sync if you believe this is in error",
+			"start", numbers[len(numbers)-1], "count", len(numbers))
+		return it.index, errors.New("state regeneration task too large")
+	}
 	// Import all the pruned blocks to make the state available
 	var (
 		blocks []*types.Block
