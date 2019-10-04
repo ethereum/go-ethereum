@@ -17,6 +17,8 @@
 package snapshot
 
 import (
+	"sync"
+
 	"github.com/allegro/bigcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -32,6 +34,9 @@ type diskLayer struct {
 
 	number uint64      // Block number of the base snapshot
 	root   common.Hash // Root hash of the base snapshot
+	stale  bool        // Signals that the layer became stale (state progressed)
+
+	lock sync.RWMutex
 }
 
 // Info returns the block number and root hash for which this snapshot was made.
@@ -41,28 +46,39 @@ func (dl *diskLayer) Info() (uint64, common.Hash) {
 
 // Account directly retrieves the account associated with a particular hash in
 // the snapshot slim data format.
-func (dl *diskLayer) Account(hash common.Hash) *Account {
-	data := dl.AccountRLP(hash)
+func (dl *diskLayer) Account(hash common.Hash) (*Account, error) {
+	data, err := dl.AccountRLP(hash)
+	if err != nil {
+		return nil, err
+	}
 	if len(data) == 0 { // can be both nil and []byte{}
-		return nil
+		return nil, nil
 	}
 	account := new(Account)
 	if err := rlp.DecodeBytes(data, account); err != nil {
 		panic(err)
 	}
-	return account
+	return account, nil
 }
 
 // AccountRLP directly retrieves the account RLP associated with a particular
 // hash in the snapshot slim data format.
-func (dl *diskLayer) AccountRLP(hash common.Hash) []byte {
+func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	// If the layer was flattened into, consider it invalid (any live reference to
+	// the original should be marked as unusable).
+	if dl.stale {
+		return nil, ErrSnapshotStale
+	}
 	key := string(hash[:])
 
 	// Try to retrieve the account from the memory cache
 	if blob, err := dl.cache.Get(key); err == nil {
 		snapshotCleanHitMeter.Mark(1)
 		snapshotCleanReadMeter.Mark(int64(len(blob)))
-		return blob
+		return blob, nil
 	}
 	// Cache doesn't contain account, pull from disk and cache for later
 	blob := rawdb.ReadAccountSnapshot(dl.db, hash)
@@ -71,19 +87,27 @@ func (dl *diskLayer) AccountRLP(hash common.Hash) []byte {
 	snapshotCleanMissMeter.Mark(1)
 	snapshotCleanWriteMeter.Mark(int64(len(blob)))
 
-	return blob
+	return blob, nil
 }
 
 // Storage directly retrieves the storage data associated with a particular hash,
 // within a particular account.
-func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) []byte {
+func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	// If the layer was flattened into, consider it invalid (any live reference to
+	// the original should be marked as unusable).
+	if dl.stale {
+		return nil, ErrSnapshotStale
+	}
 	key := string(append(accountHash[:], storageHash[:]...))
 
 	// Try to retrieve the storage slot from the memory cache
 	if blob, err := dl.cache.Get(key); err == nil {
 		snapshotCleanHitMeter.Mark(1)
 		snapshotCleanReadMeter.Mark(int64(len(blob)))
-		return blob
+		return blob, nil
 	}
 	// Cache doesn't contain storage slot, pull from disk and cache for later
 	blob := rawdb.ReadStorageSnapshot(dl.db, accountHash, storageHash)
@@ -92,7 +116,7 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) []byte {
 	snapshotCleanMissMeter.Mark(1)
 	snapshotCleanWriteMeter.Mark(int64(len(blob)))
 
-	return blob
+	return blob, nil
 }
 
 // Update creates a new layer on top of the existing snapshot diff tree with

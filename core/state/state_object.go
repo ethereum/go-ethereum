@@ -204,13 +204,13 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		if metrics.EnabledExpensive {
 			defer func(start time.Time) { s.db.SnapshotStorageReads += time.Since(start) }(time.Now())
 		}
-		enc = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key[:]))
-	} else {
-		// Track the amount of time wasted on reading the storage trie
+		enc, err = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key[:]))
+	}
+	// If snapshot unavailable or reading from it failed, load from the database
+	if s.db.snap == nil || err != nil {
 		if metrics.EnabledExpensive {
 			defer func(start time.Time) { s.db.StorageReads += time.Since(start) }(time.Now())
 		}
-		// Otherwise load the value from the database
 		if enc, err = s.getTrie(db).TryGet(key[:]); err != nil {
 			s.setError(err)
 			return common.Hash{}

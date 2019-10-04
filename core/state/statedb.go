@@ -511,25 +511,31 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		return obj
 	}
 	// If no live objects are available, attempt to use snapshots
-	var data Account
+	var (
+		data Account
+		err  error
+	)
 	if s.snap != nil {
 		if metrics.EnabledExpensive {
 			defer func(start time.Time) { s.SnapshotAccountReads += time.Since(start) }(time.Now())
 		}
-		acc := s.snap.Account(crypto.Keccak256Hash(addr[:]))
-		if acc == nil {
-			return nil
+		var acc *snapshot.Account
+		if acc, err = s.snap.Account(crypto.Keccak256Hash(addr[:])); err == nil {
+			if acc == nil {
+				return nil
+			}
+			data.Nonce, data.Balance, data.CodeHash = acc.Nonce, acc.Balance, acc.CodeHash
+			if len(data.CodeHash) == 0 {
+				data.CodeHash = emptyCodeHash
+			}
+			data.Root = common.BytesToHash(acc.Root)
+			if data.Root == (common.Hash{}) {
+				data.Root = emptyRoot
+			}
 		}
-		data.Nonce, data.Balance, data.CodeHash = acc.Nonce, acc.Balance, acc.CodeHash
-		if len(data.CodeHash) == 0 {
-			data.CodeHash = emptyCodeHash
-		}
-		data.Root = common.BytesToHash(acc.Root)
-		if data.Root == (common.Hash{}) {
-			data.Root = emptyRoot
-		}
-	} else {
-		// Snapshot unavailable, fall back to the trie
+	}
+	// If snapshot unavailable or reading from it failed, load from the database
+	if s.snap == nil || err != nil {
 		if metrics.EnabledExpensive {
 			defer func(start time.Time) { s.AccountReads += time.Since(start) }(time.Now())
 		}

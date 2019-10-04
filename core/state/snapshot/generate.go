@@ -135,6 +135,7 @@ func generateSnapshot(db ethdb.KeyValueStore, journal string, headNumber uint64,
 			curStorageNodes int
 			curAccountSize  common.StorageSize
 			curStorageSize  common.StorageSize
+			accountHash     = common.BytesToHash(accIt.Key)
 		)
 		var acc struct {
 			Nonce    uint64
@@ -148,7 +149,7 @@ func generateSnapshot(db ethdb.KeyValueStore, journal string, headNumber uint64,
 		data := AccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash)
 		curAccountSize += common.StorageSize(1 + common.HashLength + len(data))
 
-		rawdb.WriteAccountSnapshot(batch, common.BytesToHash(accIt.Key), data)
+		rawdb.WriteAccountSnapshot(batch, accountHash, data)
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			batch.Write()
 			batch.Reset()
@@ -163,7 +164,7 @@ func generateSnapshot(db ethdb.KeyValueStore, journal string, headNumber uint64,
 				curStorageSize += common.StorageSize(1 + 2*common.HashLength + len(storeIt.Value))
 				curStorageCount++
 
-				rawdb.WriteStorageSnapshot(batch, common.BytesToHash(accIt.Key), common.BytesToHash(storeIt.Key), storeIt.Value)
+				rawdb.WriteStorageSnapshot(batch, accountHash, common.BytesToHash(storeIt.Key), storeIt.Value)
 				if batch.ValueSize() > ethdb.IdealBatchSize {
 					batch.Write()
 					batch.Reset()

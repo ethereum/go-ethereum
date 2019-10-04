@@ -40,13 +40,12 @@ type diffLayer struct {
 
 	number uint64      // Block number to which this snapshot diff belongs to
 	root   common.Hash // Root hash to which this snapshot diff belongs to
+	stale  bool        // Signals that the layer became stale (state progressed)
 
-	accountList   []common.Hash                          // List of account for iteration, might not be sorted yet (lazy)
-	accountSorted bool                                   // Flag whether the account list has alreayd been sorted or not
-	accountData   map[common.Hash][]byte                 // Keyed accounts for direct retrival (nil means deleted)
-	storageList   map[common.Hash][]common.Hash          // List of storage slots for iterated retrievals, one per account
-	storageSorted map[common.Hash]bool                   // Flag whether the storage slot list has alreayd been sorted or not
-	storageData   map[common.Hash]map[common.Hash][]byte // Keyed storage slots for direct retrival. one per account (nil means deleted)
+	accountList []common.Hash                          // List of account for iteration. If it exists, it's sorted, otherwise it's nil
+	accountData map[common.Hash][]byte                 // Keyed accounts for direct retrival (nil means deleted)
+	storageList map[common.Hash][]common.Hash          // List of storage slots for iterated retrievals, one per account. Any existing lists are sorted if non-nil
+	storageData map[common.Hash]map[common.Hash][]byte // Keyed storage slots for direct retrival. one per account (nil means deleted)
 
 	lock sync.RWMutex
 }
@@ -62,21 +61,13 @@ func newDiffLayer(parent snapshot, number uint64, root common.Hash, accounts map
 		accountData: accounts,
 		storageData: storage,
 	}
-	// Fill the account hashes and sort them for the iterator
-	accountList := make([]common.Hash, 0, len(accounts))
-	for hash, data := range accounts {
-		accountList = append(accountList, hash)
+	// Determine mem size
+	for _, data := range accounts {
 		dl.memory += uint64(len(data))
 	}
-	sort.Sort(hashes(accountList))
-	dl.accountList = accountList
-	dl.accountSorted = true
-
-	dl.memory += uint64(len(dl.accountList) * common.HashLength)
 
 	// Fill the storage hashes and sort them for the iterator
-	dl.storageList = make(map[common.Hash][]common.Hash, len(storage))
-	dl.storageSorted = make(map[common.Hash]bool, len(storage))
+	dl.storageList = make(map[common.Hash][]common.Hash)
 
 	for accountHash, slots := range storage {
 		// If the slots are nil, sanity check that it's a deleted account
@@ -93,19 +84,11 @@ func newDiffLayer(parent snapshot, number uint64, root common.Hash, accounts map
 		// account was just updated.
 		if account, ok := accounts[accountHash]; account == nil || !ok {
 			log.Error(fmt.Sprintf("storage in %#x exists, but account nil (exists: %v)", accountHash, ok))
-			//panic(fmt.Sprintf("storage in %#x exists, but account nil (exists: %v)", accountHash, ok))
 		}
-		// Fill the storage hashes for this account and sort them for the iterator
-		storageList := make([]common.Hash, 0, len(slots))
-		for storageHash, data := range slots {
-			storageList = append(storageList, storageHash)
+		// Determine mem size
+		for _, data := range slots {
 			dl.memory += uint64(len(data))
 		}
-		sort.Sort(hashes(storageList))
-		dl.storageList[accountHash] = storageList
-		dl.storageSorted[accountHash] = true
-
-		dl.memory += uint64(len(storageList) * common.HashLength)
 	}
 	dl.memory += uint64(len(dl.storageList) * common.HashLength)
 
@@ -119,28 +102,36 @@ func (dl *diffLayer) Info() (uint64, common.Hash) {
 
 // Account directly retrieves the account associated with a particular hash in
 // the snapshot slim data format.
-func (dl *diffLayer) Account(hash common.Hash) *Account {
-	data := dl.AccountRLP(hash)
+func (dl *diffLayer) Account(hash common.Hash) (*Account, error) {
+	data, err := dl.AccountRLP(hash)
+	if err != nil {
+		return nil, err
+	}
 	if len(data) == 0 { // can be both nil and []byte{}
-		return nil
+		return nil, nil
 	}
 	account := new(Account)
 	if err := rlp.DecodeBytes(data, account); err != nil {
 		panic(err)
 	}
-	return account
+	return account, nil
 }
 
 // AccountRLP directly retrieves the account RLP associated with a particular
 // hash in the snapshot slim data format.
-func (dl *diffLayer) AccountRLP(hash common.Hash) []byte {
+func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
+	// If the layer was flattened into, consider it invalid (any live reference to
+	// the original should be marked as unusable).
+	if dl.stale {
+		return nil, ErrSnapshotStale
+	}
 	// If the account is known locally, return it. Note, a nil account means it was
 	// deleted, and is a different notion than an unknown account!
 	if data, ok := dl.accountData[hash]; ok {
-		return data
+		return data, nil
 	}
 	// Account unknown to this diff, resolve from parent
 	return dl.parent.AccountRLP(hash)
@@ -149,18 +140,23 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) []byte {
 // Storage directly retrieves the storage data associated with a particular hash,
 // within a particular account. If the slot is unknown to this diff, it's parent
 // is consulted.
-func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) []byte {
+func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
+	// If the layer was flattened into, consider it invalid (any live reference to
+	// the original should be marked as unusable).
+	if dl.stale {
+		return nil, ErrSnapshotStale
+	}
 	// If the account is known locally, try to resolve the slot locally. Note, a nil
 	// account means it was deleted, and is a different notion than an unknown account!
 	if storage, ok := dl.storageData[accountHash]; ok {
 		if storage == nil {
-			return nil
+			return nil, nil
 		}
 		if data, ok := storage[storageHash]; ok {
-			return data
+			return data, nil
 		}
 	}
 	// Account - or slot within - unknown to this diff, resolve from parent
@@ -193,13 +189,17 @@ func (dl *diffLayer) Cap(layers int, memory uint64) (uint64, uint64) {
 	case *diskLayer:
 		return parent.number, dl.number
 	case *diffLayer:
+		// Flatten the parent into the grandparent. The flattening internally obtains a
+		// write lock on grandparent.
+		flattened := parent.flatten().(*diffLayer)
+
 		dl.lock.Lock()
 		defer dl.lock.Unlock()
 
-		dl.parent = parent.flatten()
-		if dl.parent.(*diffLayer).memory < memory {
-			diskNumber, _ := parent.parent.Info()
-			return diskNumber, parent.number
+		dl.parent = flattened
+		if flattened.memory < memory {
+			diskNumber, _ := flattened.parent.Info()
+			return diskNumber, flattened.number
 		}
 	default:
 		panic(fmt.Sprintf("unknown data layer: %T", parent))
@@ -213,9 +213,17 @@ func (dl *diffLayer) Cap(layers int, memory uint64) (uint64, uint64) {
 	parent.lock.RLock()
 	defer parent.lock.RUnlock()
 
-	// Start by temporarilly deleting the current snapshot block marker. This
+	// Start by temporarily deleting the current snapshot block marker. This
 	// ensures that in the case of a crash, the entire snapshot is invalidated.
 	rawdb.DeleteSnapshotBlock(batch)
+
+	// Mark the original base as stale as we're going to create a new wrapper
+	base.lock.Lock()
+	if base.stale {
+		panic("parent disk layer is stale") // we've committed into the same base from two children, boo
+	}
+	base.stale = true
+	base.lock.Unlock()
 
 	// Push all the accounts into the database
 	for hash, data := range parent.accountData {
@@ -264,15 +272,20 @@ func (dl *diffLayer) Cap(layers int, memory uint64) (uint64, uint64) {
 		}
 	}
 	// Update the snapshot block marker and write any remainder data
-	base.number, base.root = parent.number, parent.root
-
-	rawdb.WriteSnapshotBlock(batch, base.number, base.root)
+	newBase := &diskLayer{
+		root:    parent.root,
+		number:  parent.number,
+		cache:   base.cache,
+		db:      base.db,
+		journal: base.journal,
+	}
+	rawdb.WriteSnapshotBlock(batch, newBase.number, newBase.root)
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write leftover snapshot", "err", err)
 	}
-	dl.parent = base
+	dl.parent = newBase
 
-	return base.number, dl.number
+	return newBase.number, dl.number
 }
 
 // flatten pushes all data from this point downwards, flattening everything into
@@ -289,19 +302,25 @@ func (dl *diffLayer) flatten() snapshot {
 	// be smarter about grouping flattens together).
 	parent = parent.flatten().(*diffLayer)
 
+	parent.lock.Lock()
+	defer parent.lock.Unlock()
+
+	// Before actually writing all our data to the parent, first ensure that the
+	// parent hasn't been 'corrupted' by someone else already flattening into it
+	if parent.stale {
+		panic("parent diff layer is stale") // we've flattened into the same parent from two children, boo
+	}
+	parent.stale = true
+
 	// Overwrite all the updated accounts blindly, merge the sorted list
 	for hash, data := range dl.accountData {
 		parent.accountData[hash] = data
 	}
-	parent.accountList = append(parent.accountList, dl.accountList...) // TODO(karalabe): dedup!!
-	parent.accountSorted = false
-
 	// Overwrite all the updates storage slots (individually)
 	for accountHash, storage := range dl.storageData {
 		// If storage didn't exist (or was deleted) in the parent; or if the storage
 		// was freshly deleted in the child, overwrite blindly
 		if parent.storageData[accountHash] == nil || storage == nil {
-			parent.storageList[accountHash] = dl.storageList[accountHash]
 			parent.storageData[accountHash] = storage
 			continue
 		}
@@ -311,14 +330,18 @@ func (dl *diffLayer) flatten() snapshot {
 			comboData[storageHash] = data
 		}
 		parent.storageData[accountHash] = comboData
-		parent.storageList[accountHash] = append(parent.storageList[accountHash], dl.storageList[accountHash]...) // TODO(karalabe): dedup!!
-		parent.storageSorted[accountHash] = false
 	}
 	// Return the combo parent
-	parent.number = dl.number
-	parent.root = dl.root
-	parent.memory += dl.memory
-	return parent
+	return &diffLayer{
+		parent:      parent.parent,
+		number:      dl.number,
+		root:        dl.root,
+		storageList: parent.storageList,
+		storageData: parent.storageData,
+		accountList: parent.accountList,
+		accountData: parent.accountData,
+		memory:      parent.memory + dl.memory,
+	}
 }
 
 // Journal commits an entire diff hierarchy to disk into a single journal file.
@@ -334,4 +357,46 @@ func (dl *diffLayer) Journal() error {
 	}
 	writer.Close()
 	return nil
+}
+
+// AccountList returns a sorted list of all accounts in this difflayer.
+func (dl *diffLayer) AccountList() []common.Hash {
+	dl.lock.Lock()
+	defer dl.lock.Unlock()
+	if dl.accountList != nil {
+		return dl.accountList
+	}
+	accountList := make([]common.Hash, len(dl.accountData))
+	i := 0
+	for k, _ := range dl.accountData {
+		accountList[i] = k
+		i++
+		// This would be a pretty good opportunity to also
+		// calculate the size, if we want to
+	}
+	sort.Sort(hashes(accountList))
+	dl.accountList = accountList
+	return dl.accountList
+}
+
+// StorageList returns a sorted list of all storage slot hashes
+// in this difflayer for the given account.
+func (dl *diffLayer) StorageList(accountHash common.Hash) []common.Hash {
+	dl.lock.Lock()
+	defer dl.lock.Unlock()
+	if dl.storageList[accountHash] != nil {
+		return dl.storageList[accountHash]
+	}
+	accountStorageMap := dl.storageData[accountHash]
+	accountStorageList := make([]common.Hash, len(accountStorageMap))
+	i := 0
+	for k, _ := range accountStorageMap {
+		accountStorageList[i] = k
+		i++
+		// This would be a pretty good opportunity to also
+		// calculate the size, if we want to
+	}
+	sort.Sort(hashes(accountStorageList))
+	dl.storageList[accountHash] = accountStorageList
+	return accountStorageList
 }

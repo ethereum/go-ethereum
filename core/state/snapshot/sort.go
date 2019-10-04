@@ -60,3 +60,33 @@ func merge(a, b []common.Hash) []common.Hash {
 	}
 	return result
 }
+
+// dedupMerge combines two sorted lists of hashes into a combo sorted one,
+// and removes duplicates in the process
+func dedupMerge(a, b []common.Hash) []common.Hash {
+	result := make([]common.Hash, len(a)+len(b))
+	i := 0
+	for len(a) > 0 && len(b) > 0 {
+		if diff := bytes.Compare(a[0][:], b[0][:]); diff < 0 {
+			result[i] = a[0]
+			a = a[1:]
+		} else {
+			result[i] = b[0]
+			b = b[1:]
+			// If they were equal, progress a too
+			if diff == 0 {
+				a = a[1:]
+			}
+		}
+		i++
+	}
+	for j := 0; j < len(a); j++ {
+		result[i] = a[j]
+		i++
+	}
+	for j := 0; j < len(b); j++ {
+		result[i] = b[j]
+		i++
+	}
+	return result[:i]
+}
