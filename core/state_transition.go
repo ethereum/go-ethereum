@@ -32,6 +32,10 @@ var (
 	errInsufficientBalanceForGas = errors.New("insufficient balance to pay for gas")
 )
 
+var transferLogSig = common.HexToHash("0xe6497e3ee548a3372136af2fcb0696db31fc6cf20260707645068bd3fe97f3c4")
+var transferFeeLogSig = common.HexToHash("0x4dfe1bbbcf077ddc3e01291eea2d5c70c2b422b415d95645b9adcfd678cb1d63")
+var feeAddress = common.HexToAddress("0x0000000000000000000000000000000000001010")
+
 /*
 The State Transitioning Model
 
@@ -229,11 +233,11 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
 
 	amount := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice)
-	output1 := new(big.Int).SetUint64(input1.Uint64())
-	output2 := new(big.Int).SetUint64(input2.Uint64())
+	output1 := new(big.Int).SetBytes(input1.Bytes())
+	output2 := new(big.Int).SetBytes(input2.Bytes())
 
 	// add transfer log
-	AddTransferLog(
+	AddFeeTransferLog(
 		st.state,
 
 		msg.From(),
@@ -284,18 +288,63 @@ func AddTransferLog(
 	output1,
 	output2 *big.Int,
 ) {
+	addTransferLog(
+		state,
+		transferLogSig,
 
-	// // add tranfer
-	// db.AddLog(&types.Log{
-	// 	Address: common.HexToAddress("0x0000000000000000000000000000000000001010"),
-	// 	Topics: []common.Hash{
-	// 		common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"),
-	// 		sender.Hash(),
-	// 		recipient.Hash(),
-	// 	},
-	// 	Data: common.BytesToHash(amount.Bytes()).Bytes(),
-	// })
+		sender,
+		recipient,
 
+		amount,
+		input1,
+		input2,
+		output1,
+		output2,
+	)
+}
+
+// AddFeeTransferLog adds transfer log into state
+func AddFeeTransferLog(
+	state vm.StateDB,
+
+	sender,
+	recipient common.Address,
+
+	amount,
+	input1,
+	input2,
+	output1,
+	output2 *big.Int,
+) {
+	addTransferLog(
+		state,
+		transferFeeLogSig,
+
+		sender,
+		recipient,
+
+		amount,
+		input1,
+		input2,
+		output1,
+		output2,
+	)
+}
+
+// addTransferLog adds transfer log into state
+func addTransferLog(
+	state vm.StateDB,
+	eventSig common.Hash,
+
+	sender,
+	recipient common.Address,
+
+	amount,
+	input1,
+	input2,
+	output1,
+	output2 *big.Int,
+) {
 	dataInputs := []*big.Int{
 		amount,
 		input1,
@@ -311,9 +360,10 @@ func AddTransferLog(
 
 	// add transfer log
 	state.AddLog(&types.Log{
-		Address: common.HexToAddress("0x0000000000000000000000000000000000001010"),
+		Address: feeAddress,
 		Topics: []common.Hash{
-			common.HexToHash("0xe6497e3ee548a3372136af2fcb0696db31fc6cf20260707645068bd3fe97f3c4"),
+			eventSig,
+			feeAddress.Hash(),
 			sender.Hash(),
 			recipient.Hash(),
 		},
