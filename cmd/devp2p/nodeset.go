@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"sort"
 	"time"
 
@@ -54,6 +55,10 @@ func writeNodesJSON(file string, nodes nodeSet) {
 	nodesJSON, err := json.MarshalIndent(nodes, "", jsonIndent)
 	if err != nil {
 		exit(err)
+	}
+	if file == "-" {
+		os.Stdout.Write(nodesJSON)
+		return
 	}
 	if err := ioutil.WriteFile(file, nodesJSON, 0644); err != nil {
 		exit(err)
