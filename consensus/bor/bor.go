@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"math/big"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -32,14 +33,14 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-const validatorsetABI = `[{"constant":true,"inputs":[{"name":"span","type":"uint256"}],"name":"getSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"},{"name":"signer","type":"address"}],"name":"isProducer","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"commitSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"},{"name":"signer","type":"address"}],"name":"isValidator","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"left","type":"bytes32"},{"name":"right","type":"bytes32"}],"name":"innerNode","outputs":[{"name":"","type":"bytes32"}],"payable":false,"stateMutability":"pure","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"}],"name":"getValidatorsTotalStakeBySpan","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"rootHash","type":"bytes32"},{"name":"leaf","type":"bytes32"},{"name":"proof","type":"bytes"}],"name":"checkMembership","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"pure","type":"function"},{"constant":true,"inputs":[],"name":"CHAIN","outputs":[{"name":"","type":"bytes32"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"},{"name":"signer","type":"address"}],"name":"getValidatorBySigner","outputs":[{"components":[{"name":"id","type":"uint256"},{"name":"power","type":"uint256"},{"name":"signer","type":"address"}],"name":"result","type":"tuple"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"currentSpanNumber","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"d","type":"bytes32"}],"name":"leafNode","outputs":[{"name":"","type":"bytes32"}],"payable":false,"stateMutability":"pure","type":"function"},{"constant":true,"inputs":[],"name":"getNextSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getInitialValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"FIRST_END_BLOCK","outputs":[{"name":"","type":"uint64"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"","type":"uint256"},{"name":"","type":"uint256"}],"name":"producers","outputs":[{"name":"id","type":"uint256"},{"name":"power","type":"uint256"},{"name":"signer","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"},{"name":"dataHash","type":"bytes32"},{"name":"sigs","type":"bytes"}],"name":"getStakePower","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"ROUND_TYPE","outputs":[{"name":"","type":"bytes32"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"}],"name":"getProducersTotalStakeBySpan","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"BOR_ID","outputs":[{"name":"","type":"bytes32"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getCurrentSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"sprint","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"","type":"uint256"}],"name":"spanNumbers","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"validateValidatorSet","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"VOTE_TYPE","outputs":[{"name":"","type":"uint8"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"","type":"uint256"},{"name":"","type":"uint256"}],"name":"validators","outputs":[{"name":"id","type":"uint256"},{"name":"power","type":"uint256"},{"name":"signer","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"currentSprint","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"","type":"uint256"}],"name":"spans","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"inputs":[],"payable":false,"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"name":"id","type":"uint256"},{"indexed":true,"name":"startBlock","type":"uint256"},{"indexed":true,"name":"endBlock","type":"uint256"}],"name":"NewSpan","type":"event"}]`
+const validatorsetABI = `[{"constant":true,"inputs":[{"name":"span","type":"uint256"}],"name":"getSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getBorValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"commitSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"currentSpanNumber","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getNextSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getInitialValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getCurrentSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getSpanByBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"validateValidatorSet","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}]`
 
 const (
-	voteSnapshotInterval = 1024 // Number of blocks after which to save the vote snapshot to the database
-	inmemorySnapshots    = 128  // Number of recent vote snapshots to keep in memory
-	inmemorySignatures   = 4096 // Number of recent block signatures to keep in memory
+	checkpointInterval = 1024 // Number of blocks after which to save the vote snapshot to the database
+	inmemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
+	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-	wiggleTime = 1000 * time.Millisecond // Random delay (per signer) to allow concurrent signers
+	wiggleTime = 5000 * time.Millisecond // Random delay (per signer) to allow concurrent signers
 )
 
 // Bor protocol constants.
@@ -49,13 +50,12 @@ var (
 	extraVanity = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
 	extraSeal   = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
 
-	nonceAuthVote = hexutil.MustDecode("0xffffffffffffffff") // Magic nonce number to vote on adding a new signer
-	nonceDropVote = hexutil.MustDecode("0x0000000000000000") // Magic nonce number to vote on removing a signer.
-
 	uncleHash = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
 
 	diffInTurn = big.NewInt(2) // Block difficulty for in-turn signatures
 	diffNoTurn = big.NewInt(1) // Block difficulty for out-of-turn signatures
+
+	validatorHeaderBytesLength = common.AddressLength + 20 // address + power
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -87,17 +87,17 @@ var (
 	// to contain a 65 byte secp256k1 signature.
 	errMissingSignature = errors.New("extra-data 65 byte signature suffix missing")
 
-	// errExtraSigners is returned if non-checkpoint block contain signer data in
+	// errExtraValidators is returned if non-sprint-end block contain validator data in
 	// their extra-data fields.
-	errExtraSigners = errors.New("non-checkpoint block contains extra signer list")
+	errExtraValidators = errors.New("non-sprint-end block contains extra validator list")
 
-	// errInvalidCheckpointSigners is returned if a checkpoint block contains an
-	// invalid list of signers (i.e. non divisible by 20 bytes).
-	errInvalidCheckpointSigners = errors.New("invalid signer list on checkpoint block")
+	// errInvalidSpanValidators is returned if a block contains an
+	// invalid list of validators (i.e. non divisible by 40 bytes).
+	errInvalidSpanValidators = errors.New("invalid validator list on sprint end block")
 
-	// errMismatchingCheckpointSigners is returned if a checkpoint block contains a
-	// list of signers different than the one the local node calculated.
-	errMismatchingCheckpointSigners = errors.New("mismatching signer list on checkpoint block")
+	// errMismatchingSprintValidators is returned if a sprint block contains a
+	// list of validators different than the one the local node calculated.
+	errMismatchingSprintValidators = errors.New("mismatching validator list on sprint block")
 
 	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
 	errInvalidMixDigest = errors.New("non-zero mix digest")
@@ -202,7 +202,6 @@ func CalcProducerDelay(snap *Snapshot, signer common.Address, period uint64, epo
 
 	// if block is epoch start block, proposer will be inturn signer
 	if (snap.Number+1)%epoch == 0 {
-		fmt.Println("==>", "producerDelay", producerDelay, "(snap.Number+1)%epoch", (snap.Number+1)%epoch)
 		return producerDelay
 
 		// if block is not epoch block, last block signer will be inturn
@@ -317,18 +316,6 @@ func (c *Bor) verifyHeader(chain consensus.ChainReader, header *types.Header, pa
 	if header.Time > uint64(time.Now().Unix()) {
 		return consensus.ErrFutureBlock
 	}
-	// Checkpoint blocks need to enforce zero beneficiary
-	checkpoint := (number % c.config.Sprint) == 0
-	if checkpoint && header.Coinbase != (common.Address{}) {
-		return errInvalidCheckpointBeneficiary
-	}
-	// Nonces must be 0x00..0 or 0xff..f, zeroes enforced on checkpoints
-	if !bytes.Equal(header.Nonce[:], nonceAuthVote) && !bytes.Equal(header.Nonce[:], nonceDropVote) {
-		return errInvalidVote
-	}
-	if checkpoint && !bytes.Equal(header.Nonce[:], nonceDropVote) {
-		return errInvalidCheckpointVote
-	}
 	// Check that the extra-data contains both the vanity and signature
 	if len(header.Extra) < extraVanity {
 		return errMissingVanity
@@ -336,13 +323,17 @@ func (c *Bor) verifyHeader(chain consensus.ChainReader, header *types.Header, pa
 	if len(header.Extra) < extraVanity+extraSeal {
 		return errMissingSignature
 	}
+
+	// check extr adata
+	isSprintEnd := (number+1)%c.config.Sprint == 0
+
 	// Ensure that the extra-data contains a signer list on checkpoint, but none otherwise
 	signersBytes := len(header.Extra) - extraVanity - extraSeal
-	if !checkpoint && signersBytes != 0 {
-		return errExtraSigners
+	if !isSprintEnd && signersBytes != 0 {
+		return errExtraValidators
 	}
-	if checkpoint && signersBytes%common.AddressLength != 0 {
-		return errInvalidCheckpointSigners
+	if isSprintEnd && signersBytes%validatorHeaderBytesLength != 0 {
+		return errInvalidSpanValidators
 	}
 	// Ensure that the mix digest is zero as we don't have fork protection currently
 	if header.MixDigest != (common.Hash{}) {
@@ -376,6 +367,7 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 	if number == 0 {
 		return nil
 	}
+
 	// Ensure that the block's timestamp isn't too close to it's parent
 	var parent *types.Header
 	if len(parents) > 0 {
@@ -383,30 +375,42 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 	} else {
 		parent = chain.GetHeader(header.ParentHash, number-1)
 	}
+
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
+
 	if parent.Time+c.config.Period > header.Time {
 		return ErrInvalidTimestamp
 	}
-	// Retrieve the snapshot needed to verify this header and cache it
-	// snap, err := c.snapshot(chain, number-1, header.ParentHash, parents)
-	// if err != nil {
-	// 	return err
-	// }
 
-	// If the block is a checkpoint block, verify the signer list
-	// TODO verify signers
-	if number%c.config.Sprint == 0 {
-		// signers := make([]byte, len(snap.Signers)*common.AddressLength)
-		// for i, signer := range snap.signers() {
-		// 	copy(signers[i*common.AddressLength:], signer[:])
-		// }
-		// extraSuffix := len(header.Extra) - extraSeal
-		// if !bytes.Equal(header.Extra[extraVanity:extraSuffix], signers) {
-		// 	return errMismatchingCheckpointSigners
-		// }
+	// Retrieve the snapshot needed to verify this header and cache it
+	snap, err := c.snapshot(chain, number-1, header.ParentHash, parents)
+	if err != nil {
+		return err
 	}
+
+	// If the block is a sprint end block, verify the validator list
+	if number%c.config.Sprint == 0 {
+		validatorsBytes := make([]byte, len(snap.ValidatorSet.Validators)*validatorHeaderBytesLength)
+
+		currentValidators := snap.ValidatorSet.Copy().Validators
+		// sort validator by address
+		sort.Sort(ValidatorsByAddress(currentValidators))
+		for i, validator := range currentValidators {
+			copy(validatorsBytes[i*validatorHeaderBytesLength:], validator.HeaderBytes())
+		}
+
+		extraSuffix := len(header.Extra) - extraSeal
+
+		// fmt.Println("validatorsBytes ==> verify seal ==> ", hex.EncodeToString(validatorsBytes))
+		// fmt.Println("header.Extra ==> verify seal ==> ", hex.EncodeToString(header.Extra[extraVanity:extraSuffix]))
+
+		if !bytes.Equal(header.Extra[extraVanity:extraSuffix], validatorsBytes) {
+			// return errMismatchingSprintValidators
+		}
+	}
+
 	// All basic checks passed, verify the seal and return
 	return c.verifySeal(chain, header, parents)
 }
@@ -418,39 +422,41 @@ func (c *Bor) snapshot(chain consensus.ChainReader, number uint64, hash common.H
 		headers []*types.Header
 		snap    *Snapshot
 	)
+
 	for snap == nil {
 		// If an in-memory snapshot was found, use that
 		if s, ok := c.recents.Get(hash); ok {
 			snap = s.(*Snapshot)
 			break
 		}
+
 		// If an on-disk checkpoint snapshot can be found, use that
-		if number%voteSnapshotInterval == 0 {
+		if number%checkpointInterval == 0 {
 			if s, err := loadSnapshot(c.config, c.signatures, c.db, hash, c.ethAPI); err == nil {
-				log.Trace("Loaded voting snapshot from disk", "number", number, "hash", hash)
+				log.Trace("Loaded snapshot from disk", "number", number, "hash", hash)
 				snap = s
 				break
 			}
 		}
 
-		// If we're at an checkpoint block, make a snapshot if it's known
-		if number == 0 || (number%c.config.Sprint == 0 && chain.GetHeaderByNumber(number-1) == nil) {
+		// If we're at the genesis, snapshot the initial state. Alternatively if we're
+		// at a checkpoint block without a parent (light client CHT), or we have piled
+		// up more headers than allowed to be reorged (chain reinit from a freezer),
+		// consider the checkpoint trusted and snapshot it.
+		// TODO fix this
+		if number == 0 /* || (number%c.config.Sprint == 0 && (len(headers) > params.ImmutabilityThreshold || chain.GetHeaderByNumber(number-1) == nil)) */ {
 			checkpoint := chain.GetHeaderByNumber(number)
 			if checkpoint != nil {
+				// get checkpoint data
 				hash := checkpoint.Hash()
 
 				// current validators
-				validators, err := c.GetCurrentValidators(number)
+				validators, err := c.GetCurrentValidators(number, number+1)
 				if err != nil {
-					// Handle error
+					return nil, err
 				}
 
-				// TODO remove signer
-				signers := make([]common.Address, (len(checkpoint.Extra)-extraVanity-extraSeal)/common.AddressLength)
-				for i := 0; i < len(signers); i++ {
-					copy(signers[i][:], checkpoint.Extra[extraVanity+i*common.AddressLength:])
-				}
-
+				// new snap shot
 				snap = newSnapshot(c.config, c.signatures, number, hash, validators, c.ethAPI)
 				if err := snap.store(c.db); err != nil {
 					return nil, err
@@ -459,6 +465,7 @@ func (c *Bor) snapshot(chain consensus.ChainReader, number uint64, hash common.H
 				break
 			}
 		}
+
 		// No snapshot for this header, gather the header and move backward
 		var header *types.Header
 		if len(parents) > 0 {
@@ -478,10 +485,17 @@ func (c *Bor) snapshot(chain consensus.ChainReader, number uint64, hash common.H
 		headers = append(headers, header)
 		number, hash = number-1, header.ParentHash
 	}
+
+	// check if snapshot is nil
+	if snap == nil {
+		return nil, fmt.Errorf("Unknown error while retrieving snapshot at block number %v", number)
+	}
+
 	// Previous snapshot found, apply any pending headers on top of it
 	for i := 0; i < len(headers)/2; i++ {
 		headers[i], headers[len(headers)-1-i] = headers[len(headers)-1-i], headers[i]
 	}
+
 	snap, err := snap.apply(headers)
 	if err != nil {
 		return nil, err
@@ -489,11 +503,11 @@ func (c *Bor) snapshot(chain consensus.ChainReader, number uint64, hash common.H
 	c.recents.Add(snap.Hash, snap)
 
 	// If we've generated a new checkpoint snapshot, save to disk
-	if snap.Number%voteSnapshotInterval == 0 && len(headers) > 0 {
+	if snap.Number%checkpointInterval == 0 && len(headers) > 0 {
 		if err = snap.store(c.db); err != nil {
 			return nil, err
 		}
-		log.Trace("Stored voting snapshot to disk", "number", snap.Number, "hash", snap.Hash)
+		log.Trace("Stored snapshot to disk", "number", snap.Number, "hash", snap.Hash)
 	}
 	return snap, err
 }
@@ -570,7 +584,6 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 		}
 	}
 
-	fmt.Println("==> New block", "number", header.Number, "hash", header.Hash().Hex(), "signer", signer.Hex(), "proposer", proposer.Hex())
 	return nil
 }
 
@@ -582,7 +595,7 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	header.Nonce = types.BlockNonce{}
 
 	number := header.Number.Uint64()
-	// Assemble the voting snapshot to check which votes make sense
+	// Assemble the validator snapshot to check which votes make sense
 	snap, err := c.snapshot(chain, number-1, header.ParentHash, nil)
 	if err != nil {
 		return err
@@ -597,11 +610,21 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	}
 	header.Extra = header.Extra[:extraVanity]
 
-	if number%c.config.Sprint == 0 {
-		for _, signer := range snap.signers() {
-			header.Extra = append(header.Extra, signer[:]...)
+	// get validator set if number
+	if (number+1)%c.config.Sprint == 0 {
+		newValidators, err := c.GetCurrentValidators(snap.Number, number+1)
+		if err != nil {
+			return errors.New("unknown validators")
+		}
+
+		// sort validator by address
+		sort.Sort(ValidatorsByAddress(newValidators))
+		for _, validator := range newValidators {
+			header.Extra = append(header.Extra, validator.HeaderBytes()...)
 		}
 	}
+
+	// add extra seal space
 	header.Extra = append(header.Extra, make([]byte, extraSeal)...)
 
 	// Mix digest is reserved for now, set to empty
@@ -617,7 +640,6 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
 	}
-	fmt.Println("parent.Time", parent.Time, "header.Time", header.Time, "number", header.Number)
 	return nil
 }
 
@@ -686,6 +708,7 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 	if number%c.config.Sprint != 0 {
 		// proposer = snap.Recents[number-1]
 	}
+
 	proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
 	signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
 	limit := len(validators) - (len(validators)/2 + 1)
@@ -695,7 +718,7 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 	if tempIndex < proposerIndex {
 		tempIndex = tempIndex + len(validators)
 	}
-	fmt.Println("Block temp index", "number", number, "tempIndex", tempIndex, "proposerIndex", proposerIndex)
+
 	if limit > 0 && tempIndex-proposerIndex > limit {
 		log.Info("Signed recently, must wait for others")
 		return nil
@@ -703,11 +726,11 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 
 	// Sweet, the protocol permits us to sign the block, wait for our time
 	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
-	wiggle := time.Duration(wiggleTime) * time.Duration(tempIndex-proposerIndex)
+	wiggle := time.Duration(2*c.config.Period) * time.Second * time.Duration(tempIndex-proposerIndex)
 	delay += wiggle
 
 	fmt.Println("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
-	fmt.Println("--> Sealing block with", "number", number, "delay", delay, "headerDifficulty", header.Difficulty, "signer", signer.Hex(), "proposer", proposer.Hex())
+	fmt.Println("Sealing block with", "number", number, "delay", delay, "headerDifficulty", header.Difficulty, "signer", signer.Hex(), "proposer", proposer.Hex())
 
 	// Sign all the things!
 	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeBor, BorRLP(header))
@@ -768,64 +791,22 @@ func (c *Bor) Close() error {
 }
 
 // GetCurrentValidators get current validators
-func (c *Bor) GetCurrentValidators(number uint64) ([]*Validator, error) {
-	return GetValidators(number, c.config.Sprint, c.config.ValidatorContract, c.ethAPI)
+func (c *Bor) GetCurrentValidators(snapshotNumber uint64, blockNumber uint64) ([]*Validator, error) {
+	return GetValidators(snapshotNumber, blockNumber, c.config.Sprint, c.config.ValidatorContract, c.ethAPI)
 }
 
 // GetValidators get current validators
-func GetValidators(number uint64, sprint uint64, validatorContract string, ethAPI *ethapi.PublicBlockChainAPI) ([]*Validator, error) {
-	blockNr := rpc.BlockNumber(number)
+func GetValidators(snapshotNumber uint64, blockNumber uint64, sprint uint64, validatorContract string, ethAPI *ethapi.PublicBlockChainAPI) ([]*Validator, error) {
+	// block
+	blockNr := rpc.BlockNumber(snapshotNumber)
 
 	// validator set ABI
 	validatorSetABI, _ := abi.JSON(strings.NewReader(validatorsetABI))
 
-	// First End block
-	getFirstEndBlock := func() (uint64, error) {
-		data, err := validatorSetABI.Pack("FIRST_END_BLOCK")
-		if err != nil {
-			return 0, err
-		}
-
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel() // cancel when we are finished consuming integers
-
-		// call
-		msgData := (hexutil.Bytes)(data)
-		toAddress := common.HexToAddress(validatorContract)
-		gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-		result, err := ethAPI.Call(ctx, ethapi.CallArgs{
-			Gas:  &gas,
-			To:   &toAddress,
-			Data: &msgData,
-		}, blockNr)
-		if err != nil {
-			return 0, err
-		}
-
-		var (
-			ret0 = new(uint64)
-		)
-		out := ret0
-
-		if err := validatorSetABI.Unpack(&out, "FIRST_END_BLOCK", result); err != nil {
-			return 0, err
-		}
-		return *ret0, nil
-
-	}
-
-	firstEndBlock, err := getFirstEndBlock()
-	if err != nil {
-		panic(err)
-	}
-
 	// method
-	method := "getValidators"
-	if number <= firstEndBlock {
-		method = "getInitialValidators"
-	}
+	method := "getBorValidators"
 
-	data, err := validatorSetABI.Pack(method)
+	data, err := validatorSetABI.Pack(method, big.NewInt(0).SetUint64(blockNumber))
 	if err != nil {
 		fmt.Println("Unable to pack tx for getValidator", "error", err)
 		return nil, err
@@ -844,7 +825,8 @@ func GetValidators(number uint64, sprint uint64, validatorContract string, ethAP
 		Data: &msgData,
 	}, blockNr)
 	if err != nil {
-		return nil, err
+		panic(err)
+		// return nil, err
 	}
 
 	var (
@@ -857,7 +839,6 @@ func GetValidators(number uint64, sprint uint64, validatorContract string, ethAP
 	}
 
 	if err := validatorSetABI.Unpack(out, method, result); err != nil {
-		fmt.Println("err", err)
 		return nil, err
 	}
 
@@ -869,8 +850,6 @@ func GetValidators(number uint64, sprint uint64, validatorContract string, ethAP
 		}
 	}
 
-	fmt.Println(method)
-	fmt.Println(" === ", valz)
 	return valz, nil
 }
 
