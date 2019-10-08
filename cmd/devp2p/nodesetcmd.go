@@ -187,4 +187,5 @@ func lesFilter(args []string) (nodeFilter, error) {
 		}
 		return n.N.Load(enr.WithEntry("les", &les)) == nil
 	}
+	return f, nil
 }
