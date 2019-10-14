@@ -483,6 +483,9 @@ func (c *ChainConfig) IsForkBlock(n uint64) bool {
 		c.PetersburgBlock,
 		c.IstanbulBlock,
 	} {
+		if forkNum == nil {
+			return false
+		}
 		h := number.Cmp(forkNum)
 		if h < 0 {
 			return false
