@@ -107,7 +107,7 @@ func NewClient(cfg Config, urls ...string) (*Client, error) {
 // SyncTree downloads the entire node tree at the given URL. This doesn't add the tree for
 // later use, but any previously-synced entries are reused.
 func (c *Client) SyncTree(url string) (*Tree, error) {
-	le, err := parseURL(url)
+	le, err := parseLink(url)
 	if err != nil {
 		return nil, fmt.Errorf("invalid enrtree URL: %v", err)
 	}
@@ -122,7 +122,7 @@ func (c *Client) SyncTree(url string) (*Tree, error) {
 
 // AddTree adds a enrtree:// URL to crawl.
 func (c *Client) AddTree(url string) error {
-	le, err := parseURL(url)
+	le, err := parseLink(url)
 	if err != nil {
 		return fmt.Errorf("invalid enrtree URL: %v", err)
 	}

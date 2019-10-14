@@ -49,7 +49,7 @@ func (t *Tree) Sign(key *ecdsa.PrivateKey, domain string) (url string, err error
 	root.sig = sig
 	t.root = &root
 	link := &linkEntry{domain, &key.PublicKey}
-	return link.url(), nil
+	return link.String(), nil
 }
 
 // SetSignature verifies the given signature and assigns it as the tree's current
@@ -96,7 +96,7 @@ func (t *Tree) Links() []string {
 	var links []string
 	for _, e := range t.entries {
 		if le, ok := e.(*linkEntry); ok {
-			links = append(links, le.url())
+			links = append(links, le.String())
 		}
 	}
 	return links
@@ -115,15 +115,15 @@ func (t *Tree) Nodes() []*enode.Node {
 
 const (
 	hashAbbrev    = 16
-	maxChildren   = 300 / (hashAbbrev * (13 / 8))
+	maxChildren   = 300 / hashAbbrev * (13 / 8)
 	minHashLength = 12
-	rootPrefix    = "enrtree-root=v1"
 )
 
 // MakeTree creates a tree containing the given nodes and links.
 func MakeTree(seq uint, nodes []*enode.Node, links []string) (*Tree, error) {
 	// Sort records by ID and ensure all nodes have a valid record.
 	records := make([]*enode.Node, len(nodes))
+
 	copy(records, nodes)
 	sortByID(records)
 	for _, n := range records {
@@ -139,7 +139,7 @@ func MakeTree(seq uint, nodes []*enode.Node, links []string) (*Tree, error) {
 	}
 	linkEntries := make([]entry, len(links))
 	for i, l := range links {
-		le, err := parseURL(l)
+		le, err := parseLink(l)
 		if err != nil {
 			return nil, err
 		}
@@ -166,7 +166,7 @@ func (t *Tree) build(entries []entry) entry {
 			hashes[i] = subdomain(e)
 			t.entries[hashes[i]] = e
 		}
-		return &subtreeEntry{hashes}
+		return &branchEntry{hashes}
 	}
 	var subtrees []entry
 	for len(entries) > 0 {
@@ -202,7 +202,7 @@ type (
 		seq   uint
 		sig   []byte
 	}
-	subtreeEntry struct {
+	branchEntry struct {
 		children []string
 	}
 	enrEntry struct {
@@ -218,7 +218,14 @@ type (
 
 var (
 	b32format = base32.StdEncoding.WithPadding(base32.NoPadding)
-	b64format = base64.URLEncoding
+	b64format = base64.RawURLEncoding
+)
+
+const (
+	rootPrefix   = "enrtree-root:v1"
+	linkPrefix   = "enrtree://"
+	branchPrefix = "enrtree-branch:"
+	enrPrefix    = "enr:"
 )
 
 func subdomain(e entry) string {
@@ -242,37 +249,29 @@ func (e *rootEntry) verifySignature(pubkey *ecdsa.PublicKey) bool {
 	return crypto.VerifySignature(crypto.FromECDSAPub(pubkey), e.sigHash(), sig)
 }
 
-func (e *subtreeEntry) String() string {
-	return "enrtree=" + strings.Join(e.children, ",")
+func (e *branchEntry) String() string {
+	return branchPrefix + strings.Join(e.children, ",")
 }
 
 func (e *enrEntry) String() string {
-	enc, _ := rlp.EncodeToBytes(e.node.Record())
-	return "enr=" + b64format.EncodeToString(enc)
+	return e.node.String()
 }
 
 func (e *linkEntry) String() string {
-	return "enrtree-link=" + e.link()
-}
-
-func (e *linkEntry) url() string {
-	return "enrtree://" + e.link()
-}
-
-func (e *linkEntry) link() string {
-	return fmt.Sprintf("%s@%s", b32format.EncodeToString(crypto.CompressPubkey(e.pubkey)), e.domain)
+	pubkey := b32format.EncodeToString(crypto.CompressPubkey(e.pubkey))
+	return fmt.Sprintf("%s%s@%s", linkPrefix, pubkey, e.domain)
 }
 
 // Entry Parsing
 
 func parseEntry(e string, validSchemes enr.IdentityScheme) (entry, error) {
 	switch {
-	case strings.HasPrefix(e, "enrtree-link="):
-		return parseLink(e[13:])
-	case strings.HasPrefix(e, "enrtree="):
-		return parseSubtree(e[8:])
-	case strings.HasPrefix(e, "enr="):
-		return parseENR(e[4:], validSchemes)
+	case strings.HasPrefix(e, linkPrefix):
+		return parseLinkEntry(e)
+	case strings.HasPrefix(e, branchPrefix):
+		return parseBranch(e)
+	case strings.HasPrefix(e, enrPrefix):
+		return parseENR(e, validSchemes)
 	default:
 		return nil, errUnknownEntry
 	}
@@ -294,7 +293,19 @@ func parseRoot(e string) (rootEntry, error) {
 	return rootEntry{eroot, lroot, seq, sigb}, nil
 }
 
-func parseLink(e string) (entry, error) {
+func parseLinkEntry(e string) (entry, error) {
+	le, err := parseLink(e)
+	if err != nil {
+		return nil, err
+	}
+	return le, nil
+}
+
+func parseLink(e string) (*linkEntry, error) {
+	if !strings.HasPrefix(e, linkPrefix) {
+		return nil, fmt.Errorf("wrong/missing scheme 'enrtree' in URL")
+	}
+	e = e[len(linkPrefix):]
 	pos := strings.IndexByte(e, '@')
 	if pos == -1 {
 		return nil, entryError{"link", errNoPubkey}
@@ -311,21 +322,23 @@ func parseLink(e string) (entry, error) {
 	return &linkEntry{domain, key}, nil
 }
 
-func parseSubtree(e string) (entry, error) {
+func parseBranch(e string) (entry, error) {
+	e = e[len(branchPrefix):]
 	if e == "" {
-		return &subtreeEntry{}, nil // empty entry is OK
+		return &branchEntry{}, nil // empty entry is OK
 	}
 	hashes := make([]string, 0, strings.Count(e, ","))
 	for _, c := range strings.Split(e, ",") {
 		if !isValidHash(c) {
-			return nil, entryError{"subtree", errInvalidChild}
+			return nil, entryError{"branch", errInvalidChild}
 		}
 		hashes = append(hashes, c)
 	}
-	return &subtreeEntry{hashes}, nil
+	return &branchEntry{hashes}, nil
 }
 
 func parseENR(e string, validSchemes enr.IdentityScheme) (entry, error) {
+	e = e[len(enrPrefix):]
 	enc, err := b64format.DecodeString(e)
 	if err != nil {
 		return nil, entryError{"enr", errInvalidENR}
@@ -364,21 +377,9 @@ func truncateHash(hash string) string {
 
 // ParseURL parses an enrtree:// URL and returns its components.
 func ParseURL(url string) (domain string, pubkey *ecdsa.PublicKey, err error) {
-	le, err := parseURL(url)
+	le, err := parseLink(url)
 	if err != nil {
 		return "", nil, err
 	}
 	return le.domain, le.pubkey, nil
-}
-
-func parseURL(url string) (*linkEntry, error) {
-	const scheme = "enrtree://"
-	if !strings.HasPrefix(url, scheme) {
-		return nil, fmt.Errorf("wrong/missing scheme 'enrtree' in URL")
-	}
-	le, err := parseLink(url[len(scheme):])
-	if err != nil {
-		return nil, err.(entryError).err
-	}
-	return le.(*linkEntry), nil
 }

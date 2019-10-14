@@ -32,15 +32,15 @@ func TestParseRoot(t *testing.T) {
 		err   error
 	}{
 		{
-			input: "enrtree-root=v1 e=TO4Q75OQ2N7DX4EOOR7X66A6OM seq=3 sig=N-YY6UB9xD0hFx1Gmnt7v0RfSxch5tKyry2SRDoLx7B4GfPXagwLxQqyf7gAMvApFn_ORwZQekMWa_pXrcGCtw=",
+			input: "enrtree-root:v1 e=TO4Q75OQ2N7DX4EOOR7X66A6OM seq=3 sig=N-YY6UB9xD0hFx1Gmnt7v0RfSxch5tKyry2SRDoLx7B4GfPXagwLxQqyf7gAMvApFn_ORwZQekMWa_pXrcGCtw",
 			err:   entryError{"root", errSyntax},
 		},
 		{
-			input: "enrtree-root=v1 e=TO4Q75OQ2N7DX4EOOR7X66A6OM l=TO4Q75OQ2N7DX4EOOR7X66A6OM seq=3 sig=N-YY6UB9xD0hFx1Gmnt7v0RfSxch5tKyry2SRDoLx7B4GfPXagwLxQqyf7gAMvApFn_ORwZQekMWa_pXrcGCtw=",
+			input: "enrtree-root:v1 e=TO4Q75OQ2N7DX4EOOR7X66A6OM l=TO4Q75OQ2N7DX4EOOR7X66A6OM seq=3 sig=N-YY6UB9xD0hFx1Gmnt7v0RfSxch5tKyry2SRDoLx7B4GfPXagwLxQqyf7gAMvApFn_ORwZQekMWa_pXrcGCtw",
 			err:   entryError{"root", errInvalidSig},
 		},
 		{
-			input: "enrtree-root=v1 e=QFT4PBCRX4XQCV3VUYJ6BTCEPU l=JGUFMSAGI7KZYB3P7IZW4S5Y3A seq=3 sig=3FmXuVwpa8Y7OstZTx9PIb1mt8FrW7VpDOFv4AaGCsZ2EIHmhraWhe4NxYhQDlw5MjeFXYMbJjsPeKlHzmJREQE=",
+			input: "enrtree-root:v1 e=QFT4PBCRX4XQCV3VUYJ6BTCEPU l=JGUFMSAGI7KZYB3P7IZW4S5Y3A seq=3 sig=3FmXuVwpa8Y7OstZTx9PIb1mt8FrW7VpDOFv4AaGCsZ2EIHmhraWhe4NxYhQDlw5MjeFXYMbJjsPeKlHzmJREQE",
 			e: rootEntry{
 				eroot: "QFT4PBCRX4XQCV3VUYJ6BTCEPU",
 				lroot: "JGUFMSAGI7KZYB3P7IZW4S5Y3A",
@@ -69,49 +69,49 @@ func TestParseEntry(t *testing.T) {
 	}{
 		// Subtrees:
 		{
-			input: "enrtree=1,2",
-			err:   entryError{"subtree", errInvalidChild},
+			input: "enrtree-branch:1,2",
+			err:   entryError{"branch", errInvalidChild},
 		},
 		{
-			input: "enrtree=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-			err:   entryError{"subtree", errInvalidChild},
+			input: "enrtree-branch:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+			err:   entryError{"branch", errInvalidChild},
 		},
 		{
-			input: "enrtree=",
-			e:     &subtreeEntry{},
+			input: "enrtree-branch:",
+			e:     &branchEntry{},
 		},
 		{
-			input: "enrtree=AAAAAAAAAAAAAAAAAAAA",
-			e:     &subtreeEntry{[]string{"AAAAAAAAAAAAAAAAAAAA"}},
+			input: "enrtree-branch:AAAAAAAAAAAAAAAAAAAA",
+			e:     &branchEntry{[]string{"AAAAAAAAAAAAAAAAAAAA"}},
 		},
 		{
-			input: "enrtree=AAAAAAAAAAAAAAAAAAAA,BBBBBBBBBBBBBBBBBBBB",
-			e:     &subtreeEntry{[]string{"AAAAAAAAAAAAAAAAAAAA", "BBBBBBBBBBBBBBBBBBBB"}},
+			input: "enrtree-branch:AAAAAAAAAAAAAAAAAAAA,BBBBBBBBBBBBBBBBBBBB",
+			e:     &branchEntry{[]string{"AAAAAAAAAAAAAAAAAAAA", "BBBBBBBBBBBBBBBBBBBB"}},
 		},
 		// Links
 		{
-			input: "enrtree-link=AKPYQIUQIL7PSIACI32J7FGZW56E5FKHEFCCOFHILBIMW3M6LWXS2@nodes.example.org",
+			input: "enrtree://AKPYQIUQIL7PSIACI32J7FGZW56E5FKHEFCCOFHILBIMW3M6LWXS2@nodes.example.org",
 			e:     &linkEntry{"nodes.example.org", &testkey.PublicKey},
 		},
 		{
-			input: "enrtree-link=nodes.example.org",
+			input: "enrtree://nodes.example.org",
 			err:   entryError{"link", errNoPubkey},
 		},
 		{
-			input: "enrtree-link=AP62DT7WOTEQZGQZOU474PP3KMEGVTTE7A7NPRXKX3DUD57@nodes.example.org",
+			input: "enrtree://AP62DT7WOTEQZGQZOU474PP3KMEGVTTE7A7NPRXKX3DUD57@nodes.example.org",
 			err:   entryError{"link", errBadPubkey},
 		},
 		{
-			input: "enrtree-link=AP62DT7WONEQZGQZOU474PP3KMEGVTTE7A7NPRXKX3DUD57TQHGIA@nodes.example.org",
+			input: "enrtree://AP62DT7WONEQZGQZOU474PP3KMEGVTTE7A7NPRXKX3DUD57TQHGIA@nodes.example.org",
 			err:   entryError{"link", errBadPubkey},
 		},
 		// ENRs
 		{
-			input: "enr=-HW4QES8QIeXTYlDzbfr1WEzE-XKY4f8gJFJzjJL-9D7TC9lJb4Z3JPRRz1lP4pL_N_QpT6rGQjAU9Apnc-C1iMP36OAgmlkgnY0iXNlY3AyNTZrMaED5IdwfMxdmR8W37HqSFdQLjDkIwBd4Q_MjxgZifgKSdM=",
+			input: "enr:-HW4QES8QIeXTYlDzbfr1WEzE-XKY4f8gJFJzjJL-9D7TC9lJb4Z3JPRRz1lP4pL_N_QpT6rGQjAU9Apnc-C1iMP36OAgmlkgnY0iXNlY3AyNTZrMaED5IdwfMxdmR8W37HqSFdQLjDkIwBd4Q_MjxgZifgKSdM",
 			e:     &enrEntry{node: testNode(nodesSeed1)},
 		},
 		{
-			input: "enr=-HW4QLZHjM4vZXkbp-5xJoHsKSbE7W39FPC8283X-y8oHcHPTnDDlIlzL5ArvDUlHZVDPgmFASrh7cWgLOLxj4wprRkHgmlkgnY0iXNlY3AyNTZrMaEC3t2jLMhDpCDX5mbSEwDn4L3iUfyXzoO8G28XvjGRkrAg=",
+			input: "enr:-HW4QLZHjM4vZXkbp-5xJoHsKSbE7W39FPC8283X-y8oHcHPTnDDlIlzL5ArvDUlHZVDPgmFASrh7cWgLOLxj4wprRkHgmlkgnY0iXNlY3AyNTZrMaEC3t2jLMhDpCDX5mbSEwDn4L3iUfyXzoO8G28XvjGRkrAg=",
 			err:   entryError{"enr", errInvalidENR},
 		},
 		// Invalid:
