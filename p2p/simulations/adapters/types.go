@@ -89,12 +89,6 @@ type NodeConfig struct {
 	// Enable peer events for Msgs
 	EnableMsgEvents bool
 
-	// Node will run services as a bootnode
-	BootNode bool
-
-	// Node will run services as a lightnode
-	LightNode bool
-
 	// Name is a human friendly name for the node like "node01"
 	Name string
 
@@ -106,6 +100,11 @@ type NodeConfig struct {
 	// contained in SimAdapter.services, for other nodes it should be
 	// services registered by calling the RegisterService function)
 	Services []string
+
+	// Properties are the names of the properties this node should hold
+	// within running services (e.g. "bootnode", "lightnode" or any custom values)
+	// These values need to be checked and acted upon by node Services
+	Properties []string
 
 	// Enode
 	node *enode.Node
@@ -126,9 +125,8 @@ type nodeConfigJSON struct {
 	PrivateKey      string   `json:"private_key"`
 	Name            string   `json:"name"`
 	Services        []string `json:"services"`
+	Properties      []string `json:"properties"`
 	EnableMsgEvents bool     `json:"enable_msg_events"`
-	BootNode        bool     `json:"bootnode"`
-	LightNode       bool     `json:"lightnode"`
 	Port            uint16   `json:"port"`
 }
 
@@ -139,10 +137,9 @@ func (n *NodeConfig) MarshalJSON() ([]byte, error) {
 		ID:              n.ID.String(),
 		Name:            n.Name,
 		Services:        n.Services,
+		Properties:      n.Properties,
 		Port:            n.Port,
 		EnableMsgEvents: n.EnableMsgEvents,
-		BootNode:        n.BootNode,
-		LightNode:       n.LightNode,
 	}
 	if n.PrivateKey != nil {
 		confJSON.PrivateKey = hex.EncodeToString(crypto.FromECDSA(n.PrivateKey))
@@ -178,10 +175,9 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 
 	n.Name = confJSON.Name
 	n.Services = confJSON.Services
+	n.Properties = confJSON.Properties
 	n.Port = confJSON.Port
 	n.EnableMsgEvents = confJSON.EnableMsgEvents
-	n.BootNode = confJSON.BootNode
-	n.LightNode = confJSON.LightNode
 
 	return nil
 }
