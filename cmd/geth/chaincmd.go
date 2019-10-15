@@ -244,6 +244,9 @@ func initGenesis(ctx *cli.Context) error {
 
 func dumpGenesis(ctx *cli.Context) error {
 	genesis := utils.MakeGenesis(ctx)
+	if genesis == nil {
+		genesis = core.DefaultGenesisBlock()
+	}
 	if err := json.NewEncoder(os.Stdout).Encode(genesis); err != nil {
 		utils.Fatalf("could not encode defaulty genesis")
 	}
