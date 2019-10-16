@@ -41,12 +41,12 @@ const (
 
 func TestClientSyncTree(t *testing.T) {
 	r := mapResolver{
-		"3CA2MBMUQ55ZCT74YEEQLANJDI.n": "enr=-HW4QAggRauloj2SDLtIHN1XBkvhFZ1vtf1raYQp9TBW2RD5EEawDzbtSmlXUfnaHcvwOizhVYLtr7e6vw7NAf6mTuoCgmlkgnY0iXNlY3AyNTZrMaECjrXI8TLNXU0f8cthpAMxEshUyQlK-AM0PW2wfrnacNI=",
-		"53HBTPGGZ4I76UEPCNQGZWIPTQ.n": "enr=-HW4QOFzoVLaFJnNhbgMoDXPnOvcdVuj7pDpqRvh6BRDO68aVi5ZcjB3vzQRZH2IcLBGHzo8uUN3snqmgTiE56CH3AMBgmlkgnY0iXNlY3AyNTZrMaECC2_24YYkYHEgdzxlSNKQEnHhuNAbNlMlWJxrJxbAFvA=",
-		"BG7SVUBUAJ3UAWD2ATEBLMRNEE.n": "enrtree=53HBTPGGZ4I76UEPCNQGZWIPTQ,3CA2MBMUQ55ZCT74YEEQLANJDI,HNHR6UTVZF5TJKK3FV27ZI76P4",
-		"HNHR6UTVZF5TJKK3FV27ZI76P4.n": "enr=-HW4QLAYqmrwllBEnzWWs7I5Ev2IAs7x_dZlbYdRdMUx5EyKHDXp7AV5CkuPGUPdvbv1_Ms1CPfhcGCvSElSosZmyoqAgmlkgnY0iXNlY3AyNTZrMaECriawHKWdDRk2xeZkrOXBQ0dfMFLHY4eENZwdufn1S1o=",
-		"JGUFMSAGI7KZYB3P7IZW4S5Y3A.n": "enrtree-link=AM5FCQLWIZX2QFPNJAP7VUERCCRNGRHWZG3YYHIUV7BVDQ5FDPRT2@morenodes.example.org",
-		"n":                            "enrtree-root=v1 e=BG7SVUBUAJ3UAWD2ATEBLMRNEE l=JGUFMSAGI7KZYB3P7IZW4S5Y3A seq=1 sig=gacuU0nTy9duIdu1IFDyF5Lv9CFHqHiNcj91n0frw70tZo3tZZsCVkE3j1ILYyVOHRLWGBmawo_SEkThZ9PgcQE=",
+		"n":                            "enrtree-root:v1 e=JWXYDBPXYWG6FX3GMDIBFA6CJ4 l=C7HRFPF3BLGF3YR4DY5KX3SMBE seq=1 sig=o908WmNp7LibOfPsr4btQwatZJ5URBr2ZAuxvK4UWHlsB9sUOTJQaGAlLPVAhM__XJesCHxLISo94z5Z2a463gA",
+		"C7HRFPF3BLGF3YR4DY5KX3SMBE.n": "enrtree://AM5FCQLWIZX2QFPNJAP7VUERCCRNGRHWZG3YYHIUV7BVDQ5FDPRT2@morenodes.example.org",
+		"JWXYDBPXYWG6FX3GMDIBFA6CJ4.n": "enrtree-branch:2XS2367YHAXJFGLZHVAWLQD4ZY,H4FHT4B454P6UXFD7JCYQ5PWDY,MHTDO6TMUBRIA2XWG5LUDACK24",
+		"2XS2367YHAXJFGLZHVAWLQD4ZY.n": "enr:-HW4QOFzoVLaFJnNhbgMoDXPnOvcdVuj7pDpqRvh6BRDO68aVi5ZcjB3vzQRZH2IcLBGHzo8uUN3snqmgTiE56CH3AMBgmlkgnY0iXNlY3AyNTZrMaECC2_24YYkYHEgdzxlSNKQEnHhuNAbNlMlWJxrJxbAFvA",
+		"H4FHT4B454P6UXFD7JCYQ5PWDY.n": "enr:-HW4QAggRauloj2SDLtIHN1XBkvhFZ1vtf1raYQp9TBW2RD5EEawDzbtSmlXUfnaHcvwOizhVYLtr7e6vw7NAf6mTuoCgmlkgnY0iXNlY3AyNTZrMaECjrXI8TLNXU0f8cthpAMxEshUyQlK-AM0PW2wfrnacNI",
+		"MHTDO6TMUBRIA2XWG5LUDACK24.n": "enr:-HW4QLAYqmrwllBEnzWWs7I5Ev2IAs7x_dZlbYdRdMUx5EyKHDXp7AV5CkuPGUPdvbv1_Ms1CPfhcGCvSElSosZmyoqAgmlkgnY0iXNlY3AyNTZrMaECriawHKWdDRk2xeZkrOXBQ0dfMFLHY4eENZwdufn1S1o",
 	}
 	var (
 		wantNodes = testNodes(0x29452, 3)
@@ -75,15 +75,25 @@ func TestClientSyncTree(t *testing.T) {
 
 // In this test, syncing the tree fails because it contains an invalid ENR entry.
 func TestClientSyncTreeBadNode(t *testing.T) {
-	r := mapResolver{
-		"n":                            "enrtree-root=v1 e=ZFJZDQKSOMJRYYQSZKJZC54HCF l=JGUFMSAGI7KZYB3P7IZW4S5Y3A seq=3 sig=WEy8JTZ2dHmXM2qeBZ7D2ECK7SGbnurl1ge_S_5GQBAqnADk0gLTcg8Lm5QNqLHZjJKGAb443p996idlMcBqEQA=",
-		"JGUFMSAGI7KZYB3P7IZW4S5Y3A.n": "enrtree-link=AM5FCQLWIZX2QFPNJAP7VUERCCRNGRHWZG3YYHIUV7BVDQ5FDPRT2@morenodes.example.org",
-		"ZFJZDQKSOMJRYYQSZKJZC54HCF.n": "enr=gggggggggggggg=",
-	}
+	// var b strings.Builder
+	// b.WriteString(enrPrefix)
+	// b.WriteString("-----")
+	// badHash := subdomain(&b)
+	// tree, _ := MakeTree(3, nil, []string{"enrtree://AM5FCQLWIZX2QFPNJAP7VUERCCRNGRHWZG3YYHIUV7BVDQ5FDPRT2@morenodes.example.org"})
+	// tree.entries[badHash] = &b
+	// tree.root.eroot = badHash
+	// url, _ := tree.Sign(testKey(signingKeySeed), "n")
+	// fmt.Println(url)
+	// fmt.Printf("%#v\n", tree.ToTXT("n"))
 
+	r := mapResolver{
+		"n":                            "enrtree-root:v1 e=INDMVBZEEQ4ESVYAKGIYU74EAA l=C7HRFPF3BLGF3YR4DY5KX3SMBE seq=3 sig=Vl3AmunLur0JZ3sIyJPSH6A3Vvdp4F40jWQeCmkIhmcgwE4VC5U9wpK8C_uL_CMY29fd6FAhspRvq2z_VysTLAA",
+		"C7HRFPF3BLGF3YR4DY5KX3SMBE.n": "enrtree://AM5FCQLWIZX2QFPNJAP7VUERCCRNGRHWZG3YYHIUV7BVDQ5FDPRT2@morenodes.example.org",
+		"INDMVBZEEQ4ESVYAKGIYU74EAA.n": "enr:-----",
+	}
 	c, _ := NewClient(Config{Resolver: r, Logger: testlog.Logger(t, log.LvlTrace)})
-	_, err := c.SyncTree("enrtree://APFGGTFOBVE2ZNAB3CSMNNX6RRK3ODIRLP2AA5U4YFAA6MSYZUYTQ@n")
-	wantErr := nameError{name: "ZFJZDQKSOMJRYYQSZKJZC54HCF.n", err: entryError{typ: "enr", err: errInvalidENR}}
+	_, err := c.SyncTree("enrtree://AKPYQIUQIL7PSIACI32J7FGZW56E5FKHEFCCOFHILBIMW3M6LWXS2@n")
+	wantErr := nameError{name: "INDMVBZEEQ4ESVYAKGIYU74EAA.n", err: entryError{typ: "enr", err: errInvalidENR}}
 	if err != wantErr {
 		t.Fatalf("expected sync error %q, got %q", wantErr, err)
 	}
