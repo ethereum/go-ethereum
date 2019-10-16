@@ -51,7 +51,7 @@ type iterativeDump struct {
 	*json.Encoder
 }
 
-// IteratorDump is a
+// IterationDump is an implementation for iterating over data
 type IteratorDump struct {
 	Root     string                         `json:"root"`
 	Accounts map[common.Address]DumpAccount `json:"accounts"`
@@ -147,12 +147,8 @@ func (s *StateDB) dump(c collector, excludeCode, excludeStorage, excludeMissingP
 		}
 		c.onAccount(addr, account)
 
-		if maxResults <= 0 {
-			continue
-		}
-
 		count++
-		if count >= maxResults {
+		if maxResults > 0 && count >= maxResults {
 			if it.Next() {
 				nextKey = it.Key
 			}

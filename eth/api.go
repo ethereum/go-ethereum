@@ -305,36 +305,45 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 const IteratorAccountMaxResults = 1000
 
 // IteratorAccountAt enumerates all accounts in the given block and start point in paging request
-func (api *PublicDebugAPI) IteratorAccountAt(blockNr rpc.BlockNumber, start []byte, maxResults int, nocode, nostorage, incompletes bool) (state.IteratorDump, error) {
+func (api *PublicDebugAPI) IteratorAccountAt(blockNrOrHash rpc.BlockNumberOrHash, start []byte, maxResults int, nocode, nostorage, incompletes bool) (state.IteratorDump, error) {
 	var stateDb *state.StateDB
 	var err error
 
-	if blockNr == rpc.PendingBlockNumber {
-		// If we're dumping the pending state, we need to request
-		// both the pending block as well as the pending state from
-		// the miner and operate on those
-		_, stateDb = api.eth.miner.Pending()
-	} else {
-		var block *types.Block
-		if blockNr == rpc.LatestBlockNumber {
-			block = api.eth.blockchain.CurrentBlock()
+	if number, ok := blockNrOrHash.Number(); ok {
+		if number == rpc.PendingBlockNumber {
+			// If we're dumping the pending state, we need to request
+			// both the pending block as well as the pending state from
+			// the miner and operate on those
+			_, stateDb = api.eth.miner.Pending()
 		} else {
-			block = api.eth.blockchain.GetBlockByNumber(uint64(blockNr))
+			var block *types.Block
+			if number == rpc.LatestBlockNumber {
+				block = api.eth.blockchain.CurrentBlock()
+			} else {
+				block = api.eth.blockchain.GetBlockByNumber(uint64(number))
+			}
+			if block == nil {
+				return state.IteratorDump{}, fmt.Errorf("block #%d not found", number)
+			}
+			stateDb, err = api.eth.BlockChain().StateAt(block.Root())
+			if err != nil {
+				return state.IteratorDump{}, err
+			}
 		}
+	} else if hash, ok := blockNrOrHash.Hash(); ok {
+		block := api.eth.blockchain.GetBlockByHash(hash)
 		if block == nil {
-			return state.IteratorDump{}, fmt.Errorf("block #%d not found", blockNr)
+			return state.IteratorDump{}, fmt.Errorf("block %s not found", hash.Hex())
 		}
-
 		stateDb, err = api.eth.BlockChain().StateAt(block.Root())
 		if err != nil {
 			return state.IteratorDump{}, err
 		}
 	}
 
-	if maxResults > IteratorAccountMaxResults {
+	if maxResults > IteratorAccountMaxResults || maxResults <= 0 {
 		maxResults = IteratorAccountMaxResults
 	}
-
 	return stateDb.IteratorDump(nocode, nostorage, incompletes, start, maxResults), nil
 }
 
