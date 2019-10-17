@@ -126,12 +126,6 @@ func (dl *diskLayer) Update(blockHash common.Hash, accounts map[common.Hash][]by
 	return newDiffLayer(dl, dl.number+1, blockHash, accounts, storage)
 }
 
-// Cap traverses downwards the diff tree until the number of allowed layers are
-// crossed. All diffs beyond the permitted number are flattened downwards.
-func (dl *diskLayer) Cap(layers int, memory uint64) (uint64, uint64) {
-	return dl.number, dl.number
-}
-
 // Journal commits an entire diff hierarchy to disk into a single journal file.
 func (dl *diskLayer) Journal() error {
 	// There's no journalling a disk layer

@@ -73,11 +73,6 @@ type snapshot interface {
 	// copying everything.
 	Update(blockRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer
 
-	// Cap traverses downwards the diff tree until the number of allowed layers are
-	// crossed. All diffs beyond the permitted number are flattened downwards. The
-	// block numbers for the disk layer and first diff layer are returned for GC.
-	Cap(layers int, memory uint64) (uint64, uint64)
-
 	// Journal commits an entire diff hierarchy to disk into a single journal file.
 	// This is meant to be used during shutdown to persist the snapshot without
 	// flattening everything down (bad for reorgs).
@@ -169,17 +164,191 @@ func (st *SnapshotTree) Cap(blockRoot common.Hash, layers int, memory uint64) er
 	if snap == nil {
 		return fmt.Errorf("snapshot [%#x] missing", blockRoot)
 	}
+	diff, ok := snap.(*diffLayer)
+	if !ok {
+		return fmt.Errorf("snapshot [%#x] is base layer", blockRoot)
+	}
 	// Run the internal capping and discard all stale layers
 	st.lock.Lock()
 	defer st.lock.Unlock()
 
-	diskNumber, diffNumber := snap.Cap(layers, memory)
+	var (
+		diskNumber uint64
+		diffNumber uint64
+	)
+	// Flattening the bottom-most diff layer requires special casing since there's
+	// no child to rewire to the grandparent. In that case we can fake a temporary
+	// child for the capping and then remove it.
+	switch layers {
+	case 0:
+		// If full commit was requested, flatten the diffs and merge onto disk
+		diff.lock.RLock()
+		base := diffToDisk(diff.flatten().(*diffLayer))
+		diff.lock.RUnlock()
+
+		st.layers[base.root] = base
+		diskNumber, diffNumber = base.number, base.number
+
+	case 1:
+		// If full flattening was requested, flatten the diffs but only merge if the
+		// memory limit was reached
+		var (
+			bottom *diffLayer
+			base   *diskLayer
+		)
+		diff.lock.RLock()
+		bottom = diff.flatten().(*diffLayer)
+		if bottom.memory >= memory {
+			base = diffToDisk(bottom)
+		}
+		diff.lock.RUnlock()
+
+		if base != nil {
+			st.layers[base.root] = base
+			diskNumber, diffNumber = base.number, base.number
+		} else {
+			st.layers[bottom.root] = bottom
+			diskNumber, diffNumber = bottom.parent.(*diskLayer).number, bottom.number
+		}
+
+	default:
+		diskNumber, diffNumber = st.cap(diff, layers, memory)
+	}
 	for root, snap := range st.layers {
 		if number, _ := snap.Info(); number != diskNumber && number < diffNumber {
 			delete(st.layers, root)
 		}
 	}
 	return nil
+}
+
+// cap traverses downwards the diff tree until the number of allowed layers are
+// crossed. All diffs beyond the permitted number are flattened downwards. If
+// the layer limit is reached, memory cap is also enforced (but not before). The
+// block numbers for the disk layer and first diff layer are returned for GC.
+func (st *SnapshotTree) cap(diff *diffLayer, layers int, memory uint64) (uint64, uint64) {
+	// Dive until we run out of layers or reach the persistent database
+	if layers > 2 {
+		// If we still have diff layers below, recurse
+		if parent, ok := diff.parent.(*diffLayer); ok {
+			return st.cap(parent, layers-1, memory)
+		}
+		// Diff stack too shallow, return block numbers without modifications
+		return diff.parent.(*diskLayer).number, diff.number
+	}
+	// We're out of layers, flatten anything below, stopping if it's the disk or if
+	// the memory limit is not yet exceeded.
+	switch parent := diff.parent.(type) {
+	case *diskLayer:
+		return parent.number, diff.number
+
+	case *diffLayer:
+		// Flatten the parent into the grandparent. The flattening internally obtains a
+		// write lock on grandparent.
+		flattened := parent.flatten().(*diffLayer)
+		st.layers[flattened.root] = flattened
+
+		diff.lock.Lock()
+		defer diff.lock.Unlock()
+
+		diff.parent = flattened
+		if flattened.memory < memory {
+			diskNumber, _ := flattened.parent.Info()
+			return diskNumber, flattened.number
+		}
+	default:
+		panic(fmt.Sprintf("unknown data layer: %T", parent))
+	}
+	// If the bottom-most layer is larger than our memory cap, persist to disk
+	bottom := diff.parent.(*diffLayer)
+
+	bottom.lock.RLock()
+	base := diffToDisk(bottom)
+	bottom.lock.RUnlock()
+
+	st.layers[base.root] = base
+	diff.parent = base
+
+	return base.number, diff.number
+}
+
+// diffToDisk merges a bottom-most diff into the persistent disk layer underneath
+// it. The method will panic if called onto a non-bottom-most diff layer.
+func diffToDisk(bottom *diffLayer) *diskLayer {
+	var (
+		base  = bottom.parent.(*diskLayer)
+		batch = base.db.NewBatch()
+	)
+	// Start by temporarily deleting the current snapshot block marker. This
+	// ensures that in the case of a crash, the entire snapshot is invalidated.
+	rawdb.DeleteSnapshotBlock(batch)
+
+	// Mark the original base as stale as we're going to create a new wrapper
+	base.lock.Lock()
+	if base.stale {
+		panic("parent disk layer is stale") // we've committed into the same base from two children, boo
+	}
+	base.stale = true
+	base.lock.Unlock()
+
+	// Push all the accounts into the database
+	for hash, data := range bottom.accountData {
+		if len(data) > 0 {
+			// Account was updated, push to disk
+			rawdb.WriteAccountSnapshot(batch, hash, data)
+			base.cache.Set(string(hash[:]), data)
+
+			if batch.ValueSize() > ethdb.IdealBatchSize {
+				if err := batch.Write(); err != nil {
+					log.Crit("Failed to write account snapshot", "err", err)
+				}
+				batch.Reset()
+			}
+		} else {
+			// Account was deleted, remove all storage slots too
+			rawdb.DeleteAccountSnapshot(batch, hash)
+			base.cache.Set(string(hash[:]), nil)
+
+			it := rawdb.IterateStorageSnapshots(base.db, hash)
+			for it.Next() {
+				if key := it.Key(); len(key) == 65 { // TODO(karalabe): Yuck, we should move this into the iterator
+					batch.Delete(key)
+					base.cache.Delete(string(key[1:]))
+				}
+			}
+			it.Release()
+		}
+	}
+	// Push all the storage slots into the database
+	for accountHash, storage := range bottom.storageData {
+		for storageHash, data := range storage {
+			if len(data) > 0 {
+				rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, data)
+				base.cache.Set(string(append(accountHash[:], storageHash[:]...)), data)
+			} else {
+				rawdb.DeleteStorageSnapshot(batch, accountHash, storageHash)
+				base.cache.Set(string(append(accountHash[:], storageHash[:]...)), nil)
+			}
+		}
+		if batch.ValueSize() > ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				log.Crit("Failed to write storage snapshot", "err", err)
+			}
+			batch.Reset()
+		}
+	}
+	// Update the snapshot block marker and write any remainder data
+	rawdb.WriteSnapshotBlock(batch, bottom.number, bottom.root)
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to write leftover snapshot", "err", err)
+	}
+	return &diskLayer{
+		root:    bottom.root,
+		number:  bottom.number,
+		cache:   base.cache,
+		db:      base.db,
+		journal: base.journal,
+	}
 }
 
 // Journal commits an entire diff hierarchy to disk into a single journal file.

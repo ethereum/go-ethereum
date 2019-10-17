@@ -22,8 +22,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -167,125 +165,6 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 // the specified data items.
 func (dl *diffLayer) Update(blockRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
 	return newDiffLayer(dl, dl.number+1, blockRoot, accounts, storage)
-}
-
-// Cap traverses downwards the diff tree until the number of allowed layers are
-// crossed. All diffs beyond the permitted number are flattened downwards. If
-// the layer limit is reached, memory cap is also enforced (but not before). The
-// block numbers for the disk layer and first diff layer are returned for GC.
-func (dl *diffLayer) Cap(layers int, memory uint64) (uint64, uint64) {
-	// Dive until we run out of layers or reach the persistent database
-	if layers > 2 {
-		// If we still have diff layers below, recurse
-		if parent, ok := dl.parent.(*diffLayer); ok {
-			return parent.Cap(layers-1, memory)
-		}
-		// Diff stack too shallow, return block numbers without modifications
-		return dl.parent.(*diskLayer).number, dl.number
-	}
-	// We're out of layers, flatten anything below, stopping if it's the disk or if
-	// the memory limit is not yet exceeded.
-	switch parent := dl.parent.(type) {
-	case *diskLayer:
-		return parent.number, dl.number
-	case *diffLayer:
-		// Flatten the parent into the grandparent. The flattening internally obtains a
-		// write lock on grandparent.
-		flattened := parent.flatten().(*diffLayer)
-
-		dl.lock.Lock()
-		defer dl.lock.Unlock()
-
-		dl.parent = flattened
-		if flattened.memory < memory {
-			diskNumber, _ := flattened.parent.Info()
-			return diskNumber, flattened.number
-		}
-	default:
-		panic(fmt.Sprintf("unknown data layer: %T", parent))
-	}
-	// If the bottommost layer is larger than our memory cap, persist to disk
-	var (
-		parent = dl.parent.(*diffLayer)
-		base   = parent.parent.(*diskLayer)
-		batch  = base.db.NewBatch()
-	)
-	parent.lock.RLock()
-	defer parent.lock.RUnlock()
-
-	// Start by temporarily deleting the current snapshot block marker. This
-	// ensures that in the case of a crash, the entire snapshot is invalidated.
-	rawdb.DeleteSnapshotBlock(batch)
-
-	// Mark the original base as stale as we're going to create a new wrapper
-	base.lock.Lock()
-	if base.stale {
-		panic("parent disk layer is stale") // we've committed into the same base from two children, boo
-	}
-	base.stale = true
-	base.lock.Unlock()
-
-	// Push all the accounts into the database
-	for hash, data := range parent.accountData {
-		if len(data) > 0 {
-			// Account was updated, push to disk
-			rawdb.WriteAccountSnapshot(batch, hash, data)
-			base.cache.Set(string(hash[:]), data)
-
-			if batch.ValueSize() > ethdb.IdealBatchSize {
-				if err := batch.Write(); err != nil {
-					log.Crit("Failed to write account snapshot", "err", err)
-				}
-				batch.Reset()
-			}
-		} else {
-			// Account was deleted, remove all storage slots too
-			rawdb.DeleteAccountSnapshot(batch, hash)
-			base.cache.Set(string(hash[:]), nil)
-
-			it := rawdb.IterateStorageSnapshots(base.db, hash)
-			for it.Next() {
-				if key := it.Key(); len(key) == 65 { // TODO(karalabe): Yuck, we should move this into the iterator
-					batch.Delete(key)
-					base.cache.Delete(string(key[1:]))
-				}
-			}
-			it.Release()
-		}
-	}
-	// Push all the storage slots into the database
-	for accountHash, storage := range parent.storageData {
-		for storageHash, data := range storage {
-			if len(data) > 0 {
-				rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, data)
-				base.cache.Set(string(append(accountHash[:], storageHash[:]...)), data)
-			} else {
-				rawdb.DeleteStorageSnapshot(batch, accountHash, storageHash)
-				base.cache.Set(string(append(accountHash[:], storageHash[:]...)), nil)
-			}
-		}
-		if batch.ValueSize() > ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				log.Crit("Failed to write storage snapshot", "err", err)
-			}
-			batch.Reset()
-		}
-	}
-	// Update the snapshot block marker and write any remainder data
-	newBase := &diskLayer{
-		root:    parent.root,
-		number:  parent.number,
-		cache:   base.cache,
-		db:      base.db,
-		journal: base.journal,
-	}
-	rawdb.WriteSnapshotBlock(batch, newBase.number, newBase.root)
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to write leftover snapshot", "err", err)
-	}
-	dl.parent = newBase
-
-	return newBase.number, dl.number
 }
 
 // flatten pushes all data from this point downwards, flattening everything into

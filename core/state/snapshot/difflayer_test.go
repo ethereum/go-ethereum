@@ -18,15 +18,11 @@ package snapshot
 
 import (
 	"bytes"
-	"fmt"
 	"math/big"
 	"math/rand"
 	"testing"
-	"time"
 
-	"github.com/allegro/bigcache"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -192,110 +188,9 @@ func TestInsertAndMerge(t *testing.T) {
 	}
 }
 
-// TestCapTree tests some functionality regarding capping/flattening
-func TestCapTree(t *testing.T) {
-
-	var (
-		storage = make(map[common.Hash]map[common.Hash][]byte)
-	)
-	setAccount := func(accKey string) map[common.Hash][]byte {
-		return map[common.Hash][]byte{
-			common.HexToHash(accKey): randomAccount(),
-		}
-	}
-	// the bottom-most layer, aside from the 'disk layer'
-	cache, _ := bigcache.NewBigCache(bigcache.Config{ // TODO(karalabe): dedup
-		Shards:             1,
-		LifeWindow:         time.Hour,
-		MaxEntriesInWindow: 1 * 1024,
-		MaxEntrySize:       1,
-		HardMaxCacheSize:   1,
-	})
-
-	base := &diskLayer{
-		journal: "",
-		db:      rawdb.NewMemoryDatabase(),
-		cache:   cache,
-		number:  0,
-		root:    common.HexToHash("0x01"),
-	}
-	// The lowest difflayer
-	a1 := base.Update(common.HexToHash("0xa1"), setAccount("0xa1"), storage)
-
-	a2 := a1.Update(common.HexToHash("0xa2"), setAccount("0xa2"), storage)
-	b2 := a1.Update(common.HexToHash("0xb2"), setAccount("0xb2"), storage)
-
-	a3 := a2.Update(common.HexToHash("0xa3"), setAccount("0xa3"), storage)
-	b3 := b2.Update(common.HexToHash("0xb3"), setAccount("0xb3"), storage)
-
-	checkExist := func(layer *diffLayer, key string) error {
-		accountKey := common.HexToHash(key)
-		data, _ := layer.Account(accountKey)
-		if data == nil {
-			return fmt.Errorf("expected %x to exist, got nil", accountKey)
-		}
-		return nil
-	}
-	shouldErr := func(layer *diffLayer, key string) error {
-		accountKey := common.HexToHash(key)
-		data, err := layer.Account(accountKey)
-		if err == nil {
-			return fmt.Errorf("expected error, got data %x", data)
-		}
-		return nil
-	}
-
-	// check basics
-	if err := checkExist(b3, "0xa1"); err != nil {
-		t.Error(err)
-	}
-	if err := checkExist(b3, "0xb2"); err != nil {
-		t.Error(err)
-	}
-	if err := checkExist(b3, "0xb3"); err != nil {
-		t.Error(err)
-	}
-	// Now, merge the a-chain
-	diskNum, diffNum := a3.Cap(0, 1024)
-	if diskNum != 0 {
-		t.Errorf("disk layer err, got %d exp %d", diskNum, 0)
-	}
-	if diffNum != 2 {
-		t.Errorf("diff layer err, got %d exp %d", diffNum, 2)
-	}
-	// At this point, a2 got merged into a1. Thus, a1 is now modified,
-	// and as a1 is the parent of b2, b2 should no longer be able to iterate into parent
-
-	// These should still be accessible
-	if err := checkExist(b3, "0xb2"); err != nil {
-		t.Error(err)
-	}
-	if err := checkExist(b3, "0xb3"); err != nil {
-		t.Error(err)
-	}
-	//b2ParentNum, _ := b2.parent.Info()
-	//if b2.parent.invalid == false
-	//	t.Errorf("err, exp parent to be invalid, got %v", b2.parent, b2ParentNum)
-	//}
-	// But these would need iteration into the modified parent:
-	if err := shouldErr(b3, "0xa1"); err != nil {
-		t.Error(err)
-	}
-	if err := shouldErr(b3, "0xa2"); err != nil {
-		t.Error(err)
-	}
-	if err := shouldErr(b3, "0xa3"); err != nil {
-		t.Error(err)
-	}
-}
-
 type emptyLayer struct{}
 
 func (emptyLayer) Update(blockRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
-	panic("implement me")
-}
-
-func (emptyLayer) Cap(layers int, memory uint64) (uint64, uint64) {
 	panic("implement me")
 }
 
@@ -403,7 +298,6 @@ func BenchmarkSearchSlot(b *testing.B) {
 // Without sorting and tracking accountlist
 // BenchmarkFlatten-6   	     300	   5511511 ns/op
 func BenchmarkFlatten(b *testing.B) {
-
 	fill := func(parent snapshot, blocknum int) *diffLayer {
 		accounts := make(map[common.Hash][]byte)
 		storage := make(map[common.Hash]map[common.Hash][]byte)
