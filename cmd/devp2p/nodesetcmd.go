@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -154,19 +155,18 @@ func minAgeFilter(args []string) (nodeFilter, error) {
 }
 
 func ethFilter(args []string) (nodeFilter, error) {
-	// var config *params.ChainConfig
-	// switch args[0] {
-	// case "mainnet":
-	// 	config = params.MainnetChainConfig
-	// case "rinkeby":
-	// 	config = params.RinkebyChainConfig
-	// case "goerli":
-	// 	config = params.GoerliChainConfig
-	// default:
-	// 	return nil, fmt.Errorf("unknown network %q", args[0])
-	// }
+	var filter func(forkid.ID) error
+	switch args[0] {
+	case "mainnet":
+		filter = forkid.NewStaticFilter(params.MainnetChainConfig, params.MainnetGenesisHash)
+	case "rinkeby":
+		filter = forkid.NewStaticFilter(params.RinkebyChainConfig, params.RinkebyGenesisHash)
+	case "goerli":
+		filter = forkid.NewStaticFilter(params.GoerliChainConfig, params.GoerliGenesisHash)
+	default:
+		return nil, fmt.Errorf("unknown network %q", args[0])
+	}
 
-	forkFilter := forkid.NewFilter(nil)
 	f := func(n nodeJSON) bool {
 		var eth struct {
 			ForkID forkid.ID
@@ -175,7 +175,7 @@ func ethFilter(args []string) (nodeFilter, error) {
 		if n.N.Load(enr.WithEntry("eth", &eth)) != nil {
 			return false
 		}
-		return forkFilter(eth.ForkID) == nil
+		return filter(eth.ForkID) == nil
 	}
 	return f, nil
 }
