@@ -65,7 +65,7 @@ type tmplField struct {
 // tmplStruct is a wrapper around an abi.tuple contains a auto-generated
 // struct name.
 type tmplStruct struct {
-	Name   string       // Auto-generated struct name(We can't obtain the raw struct name through abi)
+	Name   string       // Auto-generated struct name(before solidity v0.5.11) or raw name.
 	Fields []*tmplField // Struct fields definition depends on the binding language.
 }
 
