@@ -32,7 +32,7 @@ type Iterator interface {
 
 // ReadNodes reads at most n nodes from the given iterator. The return value contains no
 // duplicates and no nil values. To prevent looping indefinitely for small repeating node
-// sequences, this function calls NextNode at most n times.
+// sequences, this function calls Next at most n times.
 func ReadNodes(it Iterator, n int) []*Node {
 	seen := make(map[ID]*Node, n)
 	for i := 0; i < n && it.Next(); i++ {
@@ -101,7 +101,7 @@ func (it *sliceIter) Close() {
 	it.nodes = nil
 }
 
-// Filter wraps an iterator such that NextNode only returns nodes for which
+// Filter wraps an iterator such that Next only returns nodes for which
 // the 'check' function returns true.
 func Filter(it Iterator, check func(*Node) bool) Iterator {
 	return &filterIter{it, check}
@@ -125,12 +125,12 @@ func (f *filterIter) Next() bool {
 // only when Close is called. Source iterators added via AddSource are removed from the
 // mix when they end.
 //
-// The distribution of nodes returned by NextNode is approximately fair, i.e. FairMix
+// The distribution of nodes returned by Next is approximately fair, i.e. FairMix
 // attempts to draw from all sources equally often. However, if a certain source is slow
 // and doesn't return a node within the configured timeout, a node from any other source
 // will be returned.
 //
-// It's safe to call AddSource and Close concurrently with NextNode.
+// It's safe to call AddSource and Close concurrently with Next.
 type FairMix struct {
 	wg      sync.WaitGroup
 	fromAny chan *Node
@@ -196,7 +196,7 @@ func (m *FairMix) Close() {
 	m.closed = nil
 }
 
-// NextNode returns a node from a random source.
+// Next returns a node from a random source.
 func (m *FairMix) Next() bool {
 	m.cur = nil
 
