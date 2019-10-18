@@ -483,7 +483,7 @@ var (
 
 		// Parse{{.Normalized.Name}} is a log parse operation binding the contract event 0x{{printf "%x" .Original.ID}}.
 		//
-		// Solidity: {{.Original.String}}
+		// Solidity: {{formatevent .Original $structs}}
 		func (_{{$contract.Type}} *{{$contract.Type}}Filterer) Parse{{.Normalized.Name}}(log types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
 			event := new({{$contract.Type}}{{.Normalized.Name}})
 			if err := _{{$contract.Type}}.contract.UnpackLog(event, "{{.Original.Name}}", log); err != nil {

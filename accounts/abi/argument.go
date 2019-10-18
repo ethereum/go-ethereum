@@ -88,6 +88,13 @@ func (arguments Arguments) isTuple() bool {
 
 // Unpack performs the operation hexdata -> Go format
 func (arguments Arguments) Unpack(v interface{}, data []byte) error {
+	if len(data) == 0 {
+		if len(arguments) != 0 {
+			return fmt.Errorf("abi: unmarshalling empty output")
+		} else {
+			return nil // Nothing to unmarshal, return
+		}
+	}
 	// make sure the passed value is arguments pointer
 	if reflect.Ptr != reflect.ValueOf(v).Kind() {
 		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
@@ -104,11 +111,17 @@ func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 
 // UnpackIntoMap performs the operation hexdata -> mapping of argument name to argument value
 func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) error {
+	if len(data) == 0 {
+		if len(arguments) != 0 {
+			return fmt.Errorf("abi: unmarshalling empty output")
+		} else {
+			return nil // Nothing to unmarshal, return
+		}
+	}
 	marshalledValues, err := arguments.UnpackValues(data)
 	if err != nil {
 		return err
 	}
-
 	return arguments.unpackIntoMap(v, marshalledValues)
 }
 
