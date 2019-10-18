@@ -48,8 +48,8 @@ For more IDE support install the `linter-eslint` package too, which finds the `.
 [ESLint]: https://eslint.org/
 [Airbnb]: https://github.com/airbnb/javascript/tree/master/react
 [Webpack]: https://webpack.github.io/
-[WA]: http://webpack.github.io/analyse/
-[WV]: http://chrisbateman.github.io/webpack-visualizer/
+[WA]: https://webpack.github.io/analyse/
+[WV]: https://chrisbateman.github.io/webpack-visualizer/
 [Node.js]: https://nodejs.org/en/
 [Flow]: https://flow.org/
 [Atom]: https://atom.io/
