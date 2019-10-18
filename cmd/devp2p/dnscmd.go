@@ -316,7 +316,7 @@ func ensureValidTreeSignature(t *dnsdisc.Tree, pubkey *ecdsa.PublicKey, sig stri
 	return nil
 }
 
-// writeTreeMetadata writes a DNS node tree metata file to the given directory.
+// writeTreeMetadata writes a DNS node tree metadata file to the given directory.
 func writeTreeMetadata(directory string, def *dnsDefinition) {
 	metaJSON, err := json.MarshalIndent(&def.Meta, "", jsonIndent)
 	if err != nil {
