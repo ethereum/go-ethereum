@@ -179,11 +179,11 @@ func (it *lookupIterator) Node() *enode.Node {
 
 // Next moves to the next node.
 func (it *lookupIterator) Next() bool {
-	// Consume next node in lastReply.
+	// Consume next node in buffer.
 	if len(it.buffer) > 0 {
 		it.buffer = it.buffer[1:]
 	}
-	// Advance the lookup to refill lastReply.
+	// Advance the lookup to refill the buffer.
 	for len(it.buffer) == 0 {
 		if it.ctx.Err() != nil {
 			it.lookup = nil
