@@ -148,7 +148,7 @@ func minAgeFilter(args []string) (nodeFilter, error) {
 		return nil, err
 	}
 	f := func(n nodeJSON) bool {
-		age := n.LastSeen.Sub(n.FirstSeen)
+		age := n.LastResponse.Sub(n.FirstResponse)
 		return age >= minage
 	}
 	return f, nil

@@ -36,11 +36,17 @@ const jsonIndent = "    "
 type nodeSet map[enode.ID]nodeJSON
 
 type nodeJSON struct {
-	Seq       uint64      `json:"seq"`
-	N         *enode.Node `json:"record"`
-	FirstSeen time.Time   `json:"firstSeen,omitempty"`
-	LastSeen  time.Time   `json:"lastSeen,omitempty"`
-	Checks    int         `json:"checks"`
+	Seq uint64      `json:"seq"`
+	N   *enode.Node `json:"record"`
+
+	// The score tracks how many liveness checks were performed. It is incremented by one
+	// every time the node passes a check, and halved every time it doesn't.
+	Score int `json:"score,omitempty"`
+	// These two track the time of last successful contact.
+	FirstResponse time.Time `json:"firstResponse,omitempty"`
+	LastResponse  time.Time `json:"lastResponse,omitempty"`
+	// This one tracks the time of our last attempt to contact the node.
+	LastCheck time.Time `json:"lastCheck,omitempty"`
 }
 
 func loadNodesJSON(file string) nodeSet {
@@ -79,7 +85,7 @@ func (ns nodeSet) nodes() []*enode.Node {
 
 func (ns nodeSet) add(nodes ...*enode.Node) {
 	for _, n := range nodes {
-		ns[n.ID()] = nodeJSON{Seq: n.Seq(), N: n, FirstSeen: truncNow()}
+		ns[n.ID()] = nodeJSON{Seq: n.Seq(), N: n}
 	}
 }
 

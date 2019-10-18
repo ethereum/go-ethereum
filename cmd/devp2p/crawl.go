@@ -111,38 +111,40 @@ func (c *crawler) runIterator(done chan<- enode.Iterator, it enode.Iterator) {
 }
 
 func (c *crawler) updateNode(n *enode.Node) {
-	existing, ok := c.output[n.ID()]
+	node, ok := c.output[n.ID()]
 
 	// Skip validation of recently-seen nodes.
-	if ok && time.Since(existing.LastSeen) < c.revalidateInterval {
+	if ok && time.Since(node.LastCheck) < c.revalidateInterval {
 		return
 	}
 
 	// Request the node record.
 	nn, err := c.disc.RequestENR(n)
+	node.LastCheck = truncNow()
 	if err != nil {
-		if existing.Checks == 0 {
+		if node.Score == 0 {
+			// Node doesn't implement EIP-868.
 			log.Debug("Skipping node", "id", n.ID())
 			return
 		}
-		existing.Checks /= 2
+		node.Score /= 2
 	} else {
-		if !ok {
-			existing.FirstSeen = truncNow()
+		node.N = nn
+		node.Seq = nn.Seq()
+		node.Score++
+		if node.FirstResponse.IsZero() {
+			node.FirstResponse = node.LastCheck
 		}
-		existing.N = nn
-		existing.Seq = nn.Seq()
-		existing.LastSeen = truncNow()
-		existing.Checks++
+		node.LastResponse = node.LastCheck
 	}
 
 	// Store/update node in output set.
-	if existing.Checks <= 0 {
+	if node.Score <= 0 {
 		log.Info("Removing node", "id", n.ID())
 		delete(c.output, n.ID())
 	} else {
-		log.Info("Updating node", "id", n.ID(), "seq", existing.Seq, "checks", existing.Checks)
-		c.output[n.ID()] = existing
+		log.Info("Updating node", "id", n.ID(), "seq", n.Seq(), "score", node.Score)
+		c.output[n.ID()] = node
 	}
 }
 
