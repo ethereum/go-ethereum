@@ -35,6 +35,7 @@ var (
 var transferLogSig = common.HexToHash("0xe6497e3ee548a3372136af2fcb0696db31fc6cf20260707645068bd3fe97f3c4")
 var transferFeeLogSig = common.HexToHash("0x4dfe1bbbcf077ddc3e01291eea2d5c70c2b422b415d95645b9adcfd678cb1d63")
 var feeAddress = common.HexToAddress("0x0000000000000000000000000000000000001010")
+var bigZero = big.NewInt(0)
 
 /*
 The State Transitioning Model
@@ -237,18 +238,20 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	output2 := new(big.Int).SetBytes(input2.Bytes())
 
 	// add transfer log
-	AddFeeTransferLog(
-		st.state,
+	if amount.Cmp(bigZero) > 0 {
+		AddFeeTransferLog(
+			st.state,
 
-		msg.From(),
-		st.evm.Coinbase,
+			msg.From(),
+			st.evm.Coinbase,
 
-		amount,
-		input1,
-		input2,
-		output1.Sub(output1, amount),
-		output2.Add(output2, amount),
-	)
+			amount,
+			input1,
+			input2,
+			output1.Sub(output1, amount),
+			output2.Add(output2, amount),
+		)
+	}
 
 	return ret, st.gasUsed(), vmerr != nil, err
 }
