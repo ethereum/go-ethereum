@@ -67,10 +67,7 @@ It expects the genesis file as argument.`,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
-The dumpgenesis command dumps the genesis block configuration in JSON format to stdout.
-
-This data can be used as a template or passed to the 'init' command. 
-`,
+The dumpgenesis command dumps the genesis block configuration in JSON format to stdout.`,
 	}
 	importCommand = cli.Command{
 		Action:    utils.MigrateFlags(importChain),
