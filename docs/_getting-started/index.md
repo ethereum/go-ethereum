@@ -96,7 +96,7 @@ Running Geth starts an Ethereum node that can join any existing network, or crea
 
 These are:
 
--   **Full**: Downloads all block headers, block data, and validates all transactions
+-   **Full**: Downloads all blocks (including headers, transactions and receipts) and generates the state of the blockchain incrementally by executing every block.
 -   **Fast** (Default): Downloads all blocks (including headers, transactions and receipts), verifies all headers, and downloads the state and verifies it against the headers.
 -   **Light**: Downloads all block headers, block data, and verifies some randomly. 
 
