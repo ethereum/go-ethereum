@@ -15,7 +15,7 @@ defaults:
   - scope:
       path: "*"
     values:
-      root: "."
+      root: "../.."
   - scope:
       path: "*/*"
     values:

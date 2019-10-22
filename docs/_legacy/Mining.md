@@ -46,7 +46,11 @@ miner.setEtherbase(eth.accounts[2])
 
 Note that your etherbase does not need to be an address of a local account, just an existing one. 
 
+<<<<<<< HEAD
 There is an option [to add extra Data](../interface/javascript-console) (32 bytes only) to your mined blocks. By convention this is interpreted as a unicode string, so you can set your short vanity tag.
+=======
+There is an option [to add extra Data](../interface/javascript-console#adminminersetextra) (32 bytes only) to your mined blocks. By convention this is interpreted as a unicode string, so you can set your short vanity tag.
+>>>>>>> 8e49d1571d52da8555847b9901f9d52d5c20ddb1
 
 ```
 miner.setExtra("ΞTHΞЯSPHΞЯΞ")
@@ -66,7 +70,11 @@ Header:
 
 See also [this proposal](https://github.com/ethereum/wiki/wiki/Extra-Data)
 
+<<<<<<< HEAD
 You can check your hashrate with [miner.hashrate](../interface/javascript-console), the result is in H/s (Hash operations per second). 
+=======
+You can check your hashrate with [miner.hashrate](../interface/javascript-console#adminminerhashrate), the result is in H/s (Hash operations per second). 
+>>>>>>> 8e49d1571d52da8555847b9901f9d52d5c20ddb1
 
 ```
 > miner.hashrate
