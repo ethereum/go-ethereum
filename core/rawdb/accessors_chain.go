@@ -249,20 +249,32 @@ func deleteHeaderWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number
 	}
 }
 
-// ReadBodyRLP retrieves the block body (transactions and uncles) in RLP encoding.
-func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
+// readBodyRLPFromAncient tries to read the rlp body from ancients, also reading the
+// hash to ensure that we read out the correct body
+func readBodyRLPFromAncient(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	data, _ := db.Ancient(freezerBodiesTable, number)
-	if len(data) == 0 {
-		data, _ = db.Get(blockBodyKey(number, hash))
-		// In the background freezer is moving data from leveldb to flatten files.
-		// So during the first check for ancient db, the data is not yet in there,
-		// but when we reach into leveldb, the data was already moved. That would
-		// result in a not found error.
-		if len(data) == 0 {
-			data, _ = db.Ancient(freezerBodiesTable, number)
+	foundHash, _ := db.Ancient(freezerHashTable, number)
+	if len(data) != 0 && len(foundHash) != 0 {
+		if common.BytesToHash(foundHash) == hash {
+			return data
 		}
 	}
-	return data
+	return nil
+}
+
+// ReadBodyRLP retrieves the block body (transactions and uncles) in RLP encoding.
+func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
+	if data := readBodyRLPFromAncient(db, hash, number); len(data) != 0 {
+		return data
+	}
+	if data, _ := db.Get(blockBodyKey(number, hash)); len(data) != 0 {
+		return data
+	}
+	// In the background freezer is moving data from leveldb to flatten files.
+	// So during the first check for ancient db, the data is not yet in there,
+	// but when we reach into leveldb, the data was already moved. That would
+	// result in a not found error.
+	return readBodyRLPFromAncient(db, hash, number)
 }
 
 // WriteBodyRLP stores an RLP encoded block body into the database.
@@ -274,7 +286,7 @@ func WriteBodyRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rlp 
 
 // HasBody verifies the existence of a block body corresponding to the hash.
 func HasBody(db ethdb.Reader, hash common.Hash, number uint64) bool {
-	if has, err := db.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(has) == hash {
+	if ourHash, err := db.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(ourHash) == hash {
 		return true
 	}
 	if has, err := db.Has(blockBodyKey(number, hash)); !has || err != nil {
