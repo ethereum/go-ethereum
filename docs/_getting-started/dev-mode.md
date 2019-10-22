@@ -44,5 +44,5 @@ And check the balance of the account:
 If you want to test your dapps with a realistic block time use the `--dev.period` option when you start dev mode:
 
 ```shell
-geth --dev --dev.period 100 console
+geth --dev --dev.period 14 console
 ```
