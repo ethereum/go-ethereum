@@ -12,7 +12,7 @@ Starting geth in dev mode does the following:
 -   Sets the gas price to 0
 -   Uses the Clique PoA consensus engine with which allows blocks to be mined as-needed without excessive CPU and memory consumption
 -   Prevents the consensus (proof of work) difficulty from ever increasing
--   Permits 0 block times in the clique consensus engine and forbid empty blocks for 0 periods
+-   Uses on-demand block generation, producing blocks when there are transactions waiting to be mined
 
 You can specify a data directory to maintain state between runs using the `--datadir` option, otherwise databases are ephemeral and in-memory:
 
