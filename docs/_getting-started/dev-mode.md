@@ -10,7 +10,7 @@ Starting geth in dev mode does the following:
 -   Sets max peers to 0
 -   Turns off discovery by other nodes
 -   Sets the gas price to 0
--   Uses the ethash consensus engine with clique headers to allows blocks to be mined as fast as your CPU and memory can handle
+-   Uses the Clique PoA consensus engine with which allows blocks to be mined as-needed without excessive CPU and memory consumption
 -   Prevents the consensus (proof of work) difficulty from ever increasing
 -   Permits 0 block times in the clique consensus engine and forbid empty blocks for 0 periods
 
