@@ -98,7 +98,7 @@ These are:
 
 -   **Full**: Downloads all block headers, block data, and validates all transactions
 -   **Fast** (Default): Downloads block headers and block data of the most recent transactions (1024) and validates them.
--   **Light**: Downloads all block headers, block data, but does not validate transactions.
+-   **Light**: Downloads all block headers, block data, and verifies some randomly. 
 
 For example:
 
