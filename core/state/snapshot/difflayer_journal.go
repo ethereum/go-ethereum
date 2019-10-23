@@ -17,6 +17,7 @@
 package snapshot
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -105,12 +106,22 @@ func (dl *diffLayer) journal() (io.WriteCloser, error) {
 		}
 		writer = file
 	}
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	if dl.stale {
+		writer.Close()
+		return nil, ErrSnapshotStale
+	}
+	buf := bufio.NewWriter(writer)
 	// Everything below was journalled, persist this layer too
-	if err := rlp.Encode(writer, dl.number); err != nil {
+	if err := rlp.Encode(buf, dl.number); err != nil {
+		buf.Flush()
 		writer.Close()
 		return nil, err
 	}
-	if err := rlp.Encode(writer, dl.root); err != nil {
+	if err := rlp.Encode(buf, dl.root); err != nil {
+		buf.Flush()
 		writer.Close()
 		return nil, err
 	}
@@ -118,7 +129,8 @@ func (dl *diffLayer) journal() (io.WriteCloser, error) {
 	for hash, blob := range dl.accountData {
 		accounts = append(accounts, journalAccount{Hash: hash, Blob: blob})
 	}
-	if err := rlp.Encode(writer, accounts); err != nil {
+	if err := rlp.Encode(buf, accounts); err != nil {
+		buf.Flush()
 		writer.Close()
 		return nil, err
 	}
@@ -132,9 +144,11 @@ func (dl *diffLayer) journal() (io.WriteCloser, error) {
 		}
 		storage = append(storage, journalStorage{Hash: hash, Keys: keys, Vals: vals})
 	}
-	if err := rlp.Encode(writer, storage); err != nil {
+	if err := rlp.Encode(buf, storage); err != nil {
+		buf.Flush()
 		writer.Close()
 		return nil, err
 	}
+	buf.Flush()
 	return writer, nil
 }

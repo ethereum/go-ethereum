@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"math/big"
 	"math/rand"
+	"os"
+	"path"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -338,5 +340,48 @@ func BenchmarkFlatten(b *testing.B) {
 			layer = dl.flatten()
 		}
 		b.StopTimer()
+	}
+}
+
+// This test writes ~324M of diff layers to disk, spread over
+// - 128 individual layers,
+// - each with 200 accounts
+// - containing 200 slots
+//
+// BenchmarkJournal-6   	       1	1471373923 ns/ops
+// BenchmarkJournal-6   	       1	1208083335 ns/op // bufio writer
+func BenchmarkJournal(b *testing.B) {
+	fill := func(parent snapshot, blocknum int) *diffLayer {
+		accounts := make(map[common.Hash][]byte)
+		storage := make(map[common.Hash]map[common.Hash][]byte)
+
+		for i := 0; i < 200; i++ {
+			accountKey := randomHash()
+			accounts[accountKey] = randomAccount()
+
+			accStorage := make(map[common.Hash][]byte)
+			for i := 0; i < 200; i++ {
+				value := make([]byte, 32)
+				rand.Read(value)
+				accStorage[randomHash()] = value
+
+			}
+			storage[accountKey] = accStorage
+		}
+		return newDiffLayer(parent, uint64(blocknum), common.Hash{}, accounts, storage)
+	}
+
+	var layer snapshot
+	layer = &diskLayer{
+		journal: path.Join(os.TempDir(), "difflayer_journal.tmp"),
+	}
+	for i := 1; i < 128; i++ {
+		layer = fill(layer, i)
+	}
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		f, _ := layer.(*diffLayer).journal()
+		f.Close()
 	}
 }

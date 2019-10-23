@@ -227,9 +227,6 @@ func (dl *diffLayer) flatten() snapshot {
 // This is meant to be used during shutdown to persist the snapshot without
 // flattening everything down (bad for reorgs).
 func (dl *diffLayer) Journal() error {
-	dl.lock.RLock()
-	defer dl.lock.RUnlock()
-
 	writer, err := dl.journal()
 	if err != nil {
 		return err

@@ -205,6 +205,15 @@ func TestDiffLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	}
 	ref := snaps.Snapshot(common.HexToHash("0x02"))
 
+	// Doing a Cap operation with many allowed layers should be a no-op
+	exp := len(snaps.layers)
+	if err := snaps.Cap(common.HexToHash("0x04"), 2000, 1024*1024); err != nil {
+		t.Fatalf("failed to flatten diff layer into accumulator: %v", err)
+	}
+	if got := len(snaps.layers); got != exp {
+		t.Errorf("layers modified, got %d exp %d", got, exp)
+	}
+
 	// Flatten the diff layer into the bottom accumulator
 	if err := snaps.Cap(common.HexToHash("0x04"), 2, 1024*1024); err != nil {
 		t.Fatalf("failed to flatten diff layer into accumulator: %v", err)
@@ -277,6 +286,10 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 	if err := checkExist(snap, "0xb3"); err != nil {
 		t.Error(err)
 	}
+	// Cap to a bad root should fail
+	if err := snaps.Cap(common.HexToHash("0x1337"), 0, 1024); err == nil {
+		t.Errorf("expected error, got none")
+	}
 	// Now, merge the a-chain
 	snaps.Cap(common.HexToHash("0xa3"), 0, 1024)
 
@@ -299,5 +312,10 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 	}
 	if err := shouldErr(snap, "0xa3"); err != nil {
 		t.Error(err)
+	}
+	// Now, merge it again, just for fun. It should now error, since a3
+	// is a disk layer
+	if err := snaps.Cap(common.HexToHash("0xa3"), 0, 1024); err == nil {
+		t.Error("expected error capping the disk layer, got none")
 	}
 }

@@ -160,13 +160,15 @@ func (st *SnapshotTree) Update(blockRoot common.Hash, parentRoot common.Hash, ac
 // are flattened downwards.
 func (st *SnapshotTree) Cap(blockRoot common.Hash, layers int, memory uint64) error {
 	// Retrieve the head snapshot to cap from
-	snap := st.Snapshot(blockRoot).(snapshot)
-	if snap == nil {
+	var snap snapshot
+	if s := st.Snapshot(blockRoot); s == nil {
 		return fmt.Errorf("snapshot [%#x] missing", blockRoot)
+	} else {
+		snap = s.(snapshot)
 	}
 	diff, ok := snap.(*diffLayer)
 	if !ok {
-		return fmt.Errorf("snapshot [%#x] is base layer", blockRoot)
+		return fmt.Errorf("snapshot [%#x] is disk layer", blockRoot)
 	}
 	// Run the internal capping and discard all stale layers
 	st.lock.Lock()
@@ -228,13 +230,14 @@ func (st *SnapshotTree) Cap(blockRoot common.Hash, layers int, memory uint64) er
 // block numbers for the disk layer and first diff layer are returned for GC.
 func (st *SnapshotTree) cap(diff *diffLayer, layers int, memory uint64) (uint64, uint64) {
 	// Dive until we run out of layers or reach the persistent database
-	if layers > 2 {
-		// If we still have diff layers below, recurse
+	for ; layers > 2; layers-- {
+		// If we still have diff layers below, continue down
 		if parent, ok := diff.parent.(*diffLayer); ok {
-			return st.cap(parent, layers-1, memory)
+			diff = parent
+		} else {
+			// Diff stack too shallow, return block numbers without modifications
+			return diff.parent.(*diskLayer).number, diff.number
 		}
-		// Diff stack too shallow, return block numbers without modifications
-		return diff.parent.(*diskLayer).number, diff.number
 	}
 	// We're out of layers, flatten anything below, stopping if it's the disk or if
 	// the memory limit is not yet exceeded.
@@ -356,9 +359,11 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 // flattening everything down (bad for reorgs).
 func (st *SnapshotTree) Journal(blockRoot common.Hash) error {
 	// Retrieve the head snapshot to journal from
-	snap := st.Snapshot(blockRoot).(snapshot)
-	if snap == nil {
+	var snap snapshot
+	if s := st.Snapshot(blockRoot); s == nil {
 		return fmt.Errorf("snapshot [%#x] missing", blockRoot)
+	} else {
+		snap = s.(snapshot)
 	}
 	// Run the journaling
 	st.lock.Lock()
