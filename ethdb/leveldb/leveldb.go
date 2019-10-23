@@ -74,6 +74,7 @@ type Database struct {
 	level0CompGauge    metrics.Gauge // Gauge for tracking the number of table compaction in level0
 	nonlevel0CompGauge metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
 	seekCompGauge      metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
+	batchWriteGauge    metrics.Gauge // Gauge for tracking the number of batched writes we do
 
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -127,6 +128,7 @@ func New(file string, cache int, handles int, namespace string) (*Database, erro
 	ldb.level0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/level0", nil)
 	ldb.nonlevel0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/nonlevel0", nil)
 	ldb.seekCompGauge = metrics.NewRegisteredGauge(namespace+"compact/seek", nil)
+	ldb.batchWriteGauge = metrics.NewRegisteredGauge(namespace+"batch/write/counter", nil)
 
 	// Start up the metrics gathering and return
 	go ldb.meter(metricsGatheringInterval)
@@ -178,8 +180,9 @@ func (db *Database) Delete(key []byte) error {
 // database until a final write is called.
 func (db *Database) NewBatch() ethdb.Batch {
 	return &batch{
-		db: db.db,
-		b:  new(leveldb.Batch),
+		db:         db.db,
+		b:          new(leveldb.Batch),
+		writeGauge: db.batchWriteGauge,
 	}
 }
 
@@ -425,9 +428,10 @@ func (db *Database) meter(refresh time.Duration) {
 // batch is a write-only leveldb batch that commits changes to its host database
 // when Write is called. A batch cannot be used concurrently.
 type batch struct {
-	db   *leveldb.DB
-	b    *leveldb.Batch
-	size int
+	db         *leveldb.DB
+	b          *leveldb.Batch
+	size       int
+	writeGauge metrics.Gauge
 }
 
 // Put inserts the given value into the batch for later committing.
@@ -451,6 +455,7 @@ func (b *batch) ValueSize() int {
 
 // Write flushes any accumulated data to disk.
 func (b *batch) Write() error {
+	b.writeGauge.Inc(1)
 	return b.db.Write(b.b, nil)
 }
 
