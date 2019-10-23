@@ -602,11 +602,9 @@ func opPop(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *
 }
 
 func opMload(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	offset := stack.pop()
-	val := interpreter.intPool.get().SetBytes(memory.Get(offset.Int64(), 32))
-	stack.push(val)
-
-	interpreter.intPool.put(offset)
+	v := stack.peek()
+	offset := v.Int64()
+	v.SetBytes(memory.GetPtr(offset, 32))
 	return nil, nil
 }
 
