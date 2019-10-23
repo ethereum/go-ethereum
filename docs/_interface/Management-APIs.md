@@ -929,8 +929,7 @@ mining specific settings.
 
 ### miner_getHashrate
 
-TBD
-The result is in H/s (Hash operations per second). 
+Get your hashrate in H/s (Hash operations per second). 
 
 | Client  | Method invocation                                           |
 |:-------:|-------------------------------------------------------------|
