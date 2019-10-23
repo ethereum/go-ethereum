@@ -25,7 +25,7 @@ Developers and community enthusiast are advised to read the [Developers' Guide](
 ## Interfaces
 
 * Javascript Console: `geth` can be launched with an interactive console, that provides a javascript runtime environment exposing a javascript API to interact with your node. [Javascript Console API](../interface/javascript-console) includes the `web3` javascript Ðapp API as well as an additional admin API. 
-* JSON-RPC server: `geth` can be launched with a $c server that exposes the [JSON-RPC API](https://github.com/ethereum/wiki/wiki/JSON-RPC)
+* JSON-RPC server: `geth` can be launched with a server that exposes the [JSON-RPC API](https://github.com/ethereum/wiki/wiki/JSON-RPC)
 * [Command line options](../interface/command-line-options) documents command line parameters as well as subcommands.
 
 ## Basic Use Case Documentation
@@ -85,8 +85,6 @@ IRC Freenode channels:
 * `#dappdevs`: Dapp developers channel
 * `#ethdev`: buildserver etc
 
-IRC Logs by ZeroGox
-
 ### Gitter 
 
 * [go-ethereum Gitter](https://gitter.im/ethereum/go-ethereum)
@@ -97,10 +95,6 @@ IRC Logs by ZeroGox
 ### Forum
 
 - [Forum](https://forum.ethereum.org/categories/geth)
-
-### The ZeroGox Bot
-
-ZeroGox Bot
 
 ### Dapp developers' mailing list
 
