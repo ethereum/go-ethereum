@@ -14,7 +14,7 @@ title: Swarm - distributed preimage archive
 - Dani & Viktor on public wiki: https://github.com/ethereum/wiki/wiki/Distributed-Preimage-Archive
 - Dani on swarm hash: https://github.com/ethereum/wiki/wiki/Swarm-Hash
 - Dani on incentive system: https://github.com/ethersphere/swarm/blob/master/doc/incentives.md 
-- [The swarm smart contract](./swarm-contract)
+- The swarm smart contract
 - gav on url-hint https://github.com/ethereum/wiki/wiki/URL-Hint-Protocol
 - Gav on public wiki: https://github.com/ethereum/cpp-ethereum/wiki/Swarm
 - network (DEVp2p)
