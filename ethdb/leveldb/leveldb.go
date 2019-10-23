@@ -455,7 +455,9 @@ func (b *batch) ValueSize() int {
 
 // Write flushes any accumulated data to disk.
 func (b *batch) Write() error {
-	b.writeGauge.Inc(1)
+	if b.writeGauge != nil {
+		b.writeGauge.Inc(1)
+	}
 	return b.db.Write(b.b, nil)
 }
 
