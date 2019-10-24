@@ -320,6 +320,7 @@ type BorConfig struct {
 	ProducerDelay     uint64 `json:"producerDelay"`     // Number of seconds delay between two producer interval
 	Sprint            uint64 `json:"sprint"`            // Epoch length to proposer
 	ValidatorContract string `json:"validatorContract"` // Validator set contract
+	Heimdall          string `json:"heimdall"`          // heimdall light client url
 }
 
 // String implements the stringer interface, returning the consensus engine details.
