@@ -404,6 +404,27 @@ func initialize(c *cli.Context) error {
 	return nil
 }
 
+// ipcEndpoint resolves an IPC endpoint based on a configured value, taking into
+// account the set data folders as well as the designated platform we're currently
+// running on.
+func ipcEndpoint(ipcPath, datadir string) string {
+	// On windows we can only use plain top-level pipes
+	if runtime.GOOS == "windows" {
+		if strings.HasPrefix(ipcPath, `\\.\pipe\`) {
+			return ipcPath
+		}
+		return `\\.\pipe\` + ipcPath
+	}
+	// Resolve names into the data directory full paths otherwise
+	if filepath.Base(ipcPath) == ipcPath {
+		if datadir == "" {
+			return filepath.Join(os.TempDir(), ipcPath)
+		}
+		return filepath.Join(datadir, ipcPath)
+	}
+	return ipcPath
+}
+
 func signer(c *cli.Context) error {
 	// If we have some unrecognized command, bail out
 	if args := c.Args(); len(args) > 0 {
@@ -532,12 +553,8 @@ func signer(c *cli.Context) error {
 		}()
 	}
 	if !c.GlobalBool(utils.IPCDisabledFlag.Name) {
-		if c.IsSet(utils.IPCPathFlag.Name) {
-			ipcapiURL = c.GlobalString(utils.IPCPathFlag.Name)
-		} else {
-			ipcapiURL = filepath.Join(configDir, "clef.ipc")
-		}
-
+		givenPath := c.GlobalString(utils.IPCPathFlag.Name)
+		ipcapiURL = ipcEndpoint(filepath.Join(givenPath, "clef.ipc"), configDir)
 		listener, _, err := rpc.StartIPCEndpoint(ipcapiURL, rpcAPI)
 		if err != nil {
 			utils.Fatalf("Could not start IPC api: %v", err)
@@ -547,7 +564,6 @@ func signer(c *cli.Context) error {
 			listener.Close()
 			log.Info("IPC endpoint closed", "url", ipcapiURL)
 		}()
-
 	}
 
 	if c.GlobalBool(testFlag.Name) {
