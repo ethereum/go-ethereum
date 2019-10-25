@@ -773,15 +773,21 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 // also wakes any threads waiting for data delivery.
 func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, uncleLists [][]*types.Header) (int, error) {
 
-	reconstruct := func(header *types.Header, index int, result *fetchResult) error {
-		if types.DeriveSha(types.Transactions(txLists[index])) != header.TxHash || types.CalcUncleHash(uncleLists[index]) != header.UncleHash {
+	validate := func(index int, txHash, uncleHash, receiptHash common.Hash) error {
+		if types.DeriveSha(types.Transactions(txLists[index])) != txHash {
 			return errInvalidBody
 		}
-		result.Transactions = txLists[index]
-		result.Uncles = uncleLists[index]
+		if types.CalcUncleHash(uncleLists[index]) != uncleHash {
+			return errInvalidBody
+		}
 		return nil
 	}
-	return q.deliver(id, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool, q.blockDonePool, bodyReqTimer, len(txLists), reconstruct)
+
+	reconstruct := func(index int, result *fetchResult) {
+		result.Transactions = txLists[index]
+		result.Uncles = uncleLists[index]
+	}
+	return q.deliver(id, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool, q.blockDonePool, bodyReqTimer, len(txLists), validate, reconstruct)
 }
 
 // DeliverReceipts injects a receipt retrieval response into the results queue.
@@ -789,14 +795,16 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, uncleLi
 // and also wakes any threads waiting for data delivery.
 func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt) (int, error) {
 
-	reconstruct := func(header *types.Header, index int, result *fetchResult) error {
-		if types.DeriveSha(types.Receipts(receiptList[index])) != header.ReceiptHash {
+	validate := func(index int, txHash, uncleHash, receiptHash common.Hash) error {
+		if types.DeriveSha(types.Receipts(receiptList[index])) != receiptHash {
 			return errInvalidReceipt
 		}
-		result.Receipts = receiptList[index]
 		return nil
 	}
-	return q.deliver(id, q.receiptTaskPool, q.receiptTaskQueue, q.receiptPendPool, q.receiptDonePool, receiptReqTimer, len(receiptList), reconstruct)
+	reconstruct := func(index int, result *fetchResult) {
+		result.Receipts = receiptList[index]
+	}
+	return q.deliver(id, q.receiptTaskPool, q.receiptTaskQueue, q.receiptPendPool, q.receiptDonePool, receiptReqTimer, len(receiptList), validate, reconstruct)
 }
 
 // deliver injects a data retrieval response into the results queue.
@@ -804,7 +812,7 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt) (int,
 // This method obtains the lock as needed
 func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header, taskQueue *prque.Prque,
 	pendPool map[string]*fetchRequest, donePool map[common.Hash]struct{}, reqTimer metrics.Timer,
-	results int, reconstruct func(header *types.Header, index int, result *fetchResult) error) (int, error) {
+	results int, validate func(index int, txHash, uncleHash, receiptHash common.Hash) error, reconstruct func(index int, result *fetchResult)) (int, error) {
 
 	q.lock.Lock()
 	// Short circuit if the data was never requested
@@ -847,7 +855,7 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header, taskQ
 			failure = errInvalidChain
 			break
 		}
-		if err := reconstruct(header, i, q.resultCache[index]); err != nil {
+		if err := validate(index, header.TxHash, header.UncleHash, header.ReceiptHash); err != nil {
 			failure = err
 			break
 		}
@@ -861,10 +869,15 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header, taskQ
 	q.lock.Lock()
 	for _, item := range acceptedItems {
 		donePool[item.hash] = struct{}{}
-		if res := q.resultCache[item.index]; res != nil {
-			res.Pending--
+		if item.index < len(q.resultCache) {
+			if res := q.resultCache[item.index]; res != nil {
+				reconstruct(item.index, res)
+				res.Pending--
+				delete(taskPool, item.hash)
+			}
 		}
-		delete(taskPool, item.hash)
+		// else: betweeen here and above, some other peer filled this result
+		// we just ignore and move on
 	}
 	// Return all failed or missing fetches to the queue
 	for _, header := range request.Headers[i:] {
