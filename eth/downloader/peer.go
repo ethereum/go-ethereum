@@ -117,9 +117,7 @@ func newPeerConnection(id string, version int, peer Peer, logger log.Logger) *pe
 	return &peerConnection{
 		id:      id,
 		lacking: make(map[common.Hash]struct{}),
-
-		peer: peer,
-
+		peer:    peer,
 		version: version,
 		log:     logger,
 	}
@@ -173,12 +171,14 @@ func (p *peerConnection) FetchBodies(request *fetchRequest) error {
 	}
 	p.blockStarted = time.Now()
 
-	// Convert the header set to a retrievable slice
-	hashes := make([]common.Hash, 0, len(request.Headers))
-	for _, header := range request.Headers {
-		hashes = append(hashes, header.Hash())
-	}
-	go p.peer.RequestBodies(hashes)
+	go func() {
+		// Convert the header set to a retrievable slice
+		hashes := make([]common.Hash, 0, len(request.Headers))
+		for _, header := range request.Headers {
+			hashes = append(hashes, header.Hash())
+		}
+		p.peer.RequestBodies(hashes)
+	}()
 
 	return nil
 }
@@ -195,12 +195,14 @@ func (p *peerConnection) FetchReceipts(request *fetchRequest) error {
 	}
 	p.receiptStarted = time.Now()
 
-	// Convert the header set to a retrievable slice
-	hashes := make([]common.Hash, 0, len(request.Headers))
-	for _, header := range request.Headers {
-		hashes = append(hashes, header.Hash())
-	}
-	go p.peer.RequestReceipts(hashes)
+	go func() {
+		// Convert the header set to a retrievable slice
+		hashes := make([]common.Hash, 0, len(request.Headers))
+		for _, header := range request.Headers {
+			hashes = append(hashes, header.Hash())
+		}
+		p.peer.RequestReceipts(hashes)
+	}()
 
 	return nil
 }
@@ -225,34 +227,34 @@ func (p *peerConnection) FetchNodeData(hashes []common.Hash) error {
 // SetHeadersIdle sets the peer to idle, allowing it to execute new header retrieval
 // requests. Its estimated header retrieval throughput is updated with that measured
 // just now.
-func (p *peerConnection) SetHeadersIdle(delivered int) {
-	p.setIdle(p.headerStarted, delivered, &p.headerThroughput, &p.headerIdle)
+func (p *peerConnection) SetHeadersIdle(delivered int, deliveryTime time.Time) {
+	p.setIdle(deliveryTime.Sub(p.headerStarted), delivered, &p.headerThroughput, &p.headerIdle)
 }
 
 // SetBodiesIdle sets the peer to idle, allowing it to execute block body retrieval
 // requests. Its estimated body retrieval throughput is updated with that measured
 // just now.
-func (p *peerConnection) SetBodiesIdle(delivered int) {
-	p.setIdle(p.blockStarted, delivered, &p.blockThroughput, &p.blockIdle)
+func (p *peerConnection) SetBodiesIdle(delivered int, deliveryTime time.Time) {
+	p.setIdle(deliveryTime.Sub(p.blockStarted), delivered, &p.blockThroughput, &p.blockIdle)
 }
 
 // SetReceiptsIdle sets the peer to idle, allowing it to execute new receipt
 // retrieval requests. Its estimated receipt retrieval throughput is updated
 // with that measured just now.
-func (p *peerConnection) SetReceiptsIdle(delivered int) {
-	p.setIdle(p.receiptStarted, delivered, &p.receiptThroughput, &p.receiptIdle)
+func (p *peerConnection) SetReceiptsIdle(delivered int, deliveryTime time.Time) {
+	p.setIdle(deliveryTime.Sub(p.receiptStarted), delivered, &p.receiptThroughput, &p.receiptIdle)
 }
 
 // SetNodeDataIdle sets the peer to idle, allowing it to execute new state trie
 // data retrieval requests. Its estimated state retrieval throughput is updated
 // with that measured just now.
-func (p *peerConnection) SetNodeDataIdle(delivered int) {
-	p.setIdle(p.stateStarted, delivered, &p.stateThroughput, &p.stateIdle)
+func (p *peerConnection) SetNodeDataIdle(delivered int, deliveryTime time.Time) {
+	p.setIdle(deliveryTime.Sub(p.stateStarted), delivered, &p.stateThroughput, &p.stateIdle)
 }
 
 // setIdle sets the peer to idle, allowing it to execute new retrieval requests.
 // Its estimated retrieval throughput is updated with that measured just now.
-func (p *peerConnection) setIdle(started time.Time, delivered int, throughput *float64, idle *int32) {
+func (p *peerConnection) setIdle(elapsed time.Duration, delivered int, throughput *float64, idle *int32) {
 	// Irrelevant of the scaling, make sure the peer ends up idle
 	defer atomic.StoreInt32(idle, 0)
 
@@ -265,7 +267,9 @@ func (p *peerConnection) setIdle(started time.Time, delivered int, throughput *f
 		return
 	}
 	// Otherwise update the throughput with a new measurement
-	elapsed := time.Since(started) + 1 // +1 (ns) to ensure non-zero divisor
+	if elapsed <= 0 {
+		elapsed = 1 // +1 (ns) to ensure non-zero divisor
+	}
 	measured := float64(delivered) / (float64(elapsed) / float64(time.Second))
 
 	*throughput = (1-measurementImpact)*(*throughput) + measurementImpact*measured
@@ -523,22 +527,20 @@ func (ps *peerSet) idlePeers(minProtocol, maxProtocol int, idleCheck func(*peerC
 	defer ps.lock.RUnlock()
 
 	idle, total := make([]*peerConnection, 0, len(ps.peers)), 0
+	tps := make([]float64, 0, len(ps.peers))
 	for _, p := range ps.peers {
 		if p.version >= minProtocol && p.version <= maxProtocol {
 			if idleCheck(p) {
 				idle = append(idle, p)
+				tps = append(tps, throughput(p))
 			}
 			total++
 		}
 	}
-	for i := 0; i < len(idle); i++ {
-		for j := i + 1; j < len(idle); j++ {
-			if throughput(idle[i]) < throughput(idle[j]) {
-				idle[i], idle[j] = idle[j], idle[i]
-			}
-		}
-	}
-	return idle, total
+	// And sort them
+	sortPeers := &peerThroughputSort{idle, tps}
+	sort.Sort(sortPeers)
+	return sortPeers.p, total
 }
 
 // medianRTT returns the median RTT of the peerset, considering only the tuning
@@ -570,4 +572,25 @@ func (ps *peerSet) medianRTT() time.Duration {
 		median = rttMaxEstimate
 	}
 	return median
+}
+
+// peerThroughputSort implements the Sort interface, and allows for
+// sorting a set of peers by their throughput
+// The sorted data is with the _highest_ throughput first
+type peerThroughputSort struct {
+	p  []*peerConnection
+	tp []float64
+}
+
+func (ps *peerThroughputSort) Len() int {
+	return len(ps.p)
+}
+
+func (ps *peerThroughputSort) Less(i, j int) bool {
+	return ps.tp[i] > ps.tp[j]
+}
+
+func (ps *peerThroughputSort) Swap(i, j int) {
+	ps.p[i], ps.p[j] = ps.p[j], ps.p[i]
+	ps.tp[i], ps.tp[j] = ps.tp[j], ps.tp[i]
 }
