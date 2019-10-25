@@ -3,12 +3,15 @@ package bor
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math"
 	"math/big"
+	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -36,7 +39,7 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-const validatorsetABI = `[{"constant":true,"inputs":[{"name":"span","type":"uint256"}],"name":"getSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getBorValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[],"name":"proposeSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[{"name":"newSpan","type":"uint256"},{"name":"proposer","type":"address"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"},{"name":"validatorBytes","type":"bytes"},{"name":"producerBytes","type":"bytes"}],"name":"commitSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"currentSpanNumber","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getNextSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getInitialValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getCurrentSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getSpanByBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"validateValidatorSet","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}]`
+const validatorsetABI = `[{"constant":true,"inputs":[{"name":"span","type":"uint256"}],"name":"getSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getBorValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"newSpan","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"},{"name":"validatorBytes","type":"bytes"},{"name":"producerBytes","type":"bytes"}],"name":"commitSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[],"name":"proposeSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"currentSpanNumber","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getNextSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getInitialValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"spanProposalPending","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getCurrentSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getSpanByBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"validateValidatorSet","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}]`
 
 const (
 	checkpointInterval = 1024 // Number of blocks after which to save the vote snapshot to the database
@@ -238,14 +241,14 @@ type Bor struct {
 	recents    *lru.ARCCache // Snapshots for recent block to speed up reorgs
 	signatures *lru.ARCCache // Signatures of recent blocks to speed up mining
 
-	proposals map[common.Address]bool // Current list of proposals we are pushing
-
 	signer common.Address // Ethereum address of the signing key
 	signFn SignerFn       // Signer function to authorize hashes with
 	lock   sync.RWMutex   // Protects the signer fields
 
 	ethAPI          *ethapi.PublicBlockChainAPI
 	validatorSetABI abi.ABI
+	span            *Span
+	httpClient      http.Client
 
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
@@ -276,8 +279,11 @@ func New(
 		ethAPI:          ethAPI,
 		recents:         recents,
 		signatures:      signatures,
-		proposals:       make(map[common.Address]bool),
+		span:            nil,
 		validatorSetABI: vABI,
+		httpClient: http.Client{
+			Timeout: time.Duration(5 * time.Second),
+		},
 	}
 
 	return c
@@ -463,11 +469,8 @@ func (c *Bor) snapshot(chain consensus.ChainReader, number uint64, hash common.H
 				// get checkpoint data
 				hash := checkpoint.Hash()
 
-				// current validators
-				validators, err := c.GetCurrentValidators(number, number+1)
-				if err != nil {
-					return nil, err
-				}
+				// get validators and current span
+				validators, _ := c.GetCurrentValidators(number, number+1)
 
 				// new snap shot
 				snap = newSnapshot(c.config, c.signatures, number, hash, validators, c.ethAPI)
@@ -659,8 +662,12 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
 func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
-	// commit span
-	// c.commitSpan(state, header, chainContext{Chain: chain, Bor: c})
+	// // commit span
+	// err := c.checkAndCommitSpan(state, header, chainContext{Chain: chain, Bor: c})
+	// if err != nil {
+	// 	fmt.Println("Error while committing span", err)
+	// 	// return nil, err
+	// }
 
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
@@ -671,7 +678,11 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 // nor block rewards given, and returns the final block.
 func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// commit span
-	// c.commitSpan(state, header, chainContext{Chain: chain, Bor: c})
+	err := c.checkAndCommitSpan(state, header, chainContext{Chain: chain, Bor: c})
+	if err != nil {
+		fmt.Println("Error while committing span", err)
+		// return nil, err
+	}
 
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
@@ -809,6 +820,92 @@ func (c *Bor) Close() error {
 	return nil
 }
 
+// Checks if new span is pending
+func (c *Bor) isSpanPending(snapshotNumber uint64) (bool, error) {
+	blockNr := rpc.BlockNumber(snapshotNumber)
+	method := "spanProposalPending"
+
+	// get packed data
+	data, err := c.validatorSetABI.Pack(method)
+	if err != nil {
+		fmt.Println("Unable to pack tx for spanProposalPending", "error", err)
+		return false, err
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // cancel when we are finished consuming integers
+
+	// call
+	msgData := (hexutil.Bytes)(data)
+	toAddress := common.HexToAddress(c.config.ValidatorContract)
+	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
+	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+		Gas:  &gas,
+		To:   &toAddress,
+		Data: &msgData,
+	}, blockNr)
+	if err != nil {
+		return false, err
+	}
+
+	var ret0 = new(bool)
+	if err := c.validatorSetABI.Unpack(ret0, method, result); err != nil {
+		return false, err
+	}
+
+	return *ret0, nil
+}
+
+// GetCurrentSpan get current span from contract
+func (c *Bor) GetCurrentSpan(snapshotNumber uint64) (*Span, error) {
+	// block
+	blockNr := rpc.BlockNumber(snapshotNumber)
+
+	// method
+	method := "getCurrentSpan"
+
+	data, err := c.validatorSetABI.Pack(method)
+	if err != nil {
+		fmt.Println("Unable to pack tx for getCurrentSpan", "error", err)
+		return nil, err
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // cancel when we are finished consuming integers
+
+	// call
+	msgData := (hexutil.Bytes)(data)
+	toAddress := common.HexToAddress(c.config.ValidatorContract)
+	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
+	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+		Gas:  &gas,
+		To:   &toAddress,
+		Data: &msgData,
+	}, blockNr)
+	if err != nil {
+		return nil, err
+	}
+
+	// span result
+	ret := new(struct {
+		Number     *big.Int
+		StartBlock *big.Int
+		EndBlock   *big.Int
+	})
+	if err := c.validatorSetABI.Unpack(ret, method, result); err != nil {
+		return nil, err
+	}
+
+	// create new span
+	span := Span{
+		ID:         ret.Number.Uint64(),
+		StartBlock: ret.StartBlock.Uint64(),
+		EndBlock:   ret.EndBlock.Uint64(),
+	}
+
+	return &span, nil
+}
+
 // GetCurrentValidators get current validators
 func (c *Bor) GetCurrentValidators(snapshotNumber uint64, blockNumber uint64) ([]*Validator, error) {
 	// block
@@ -864,16 +961,90 @@ func (c *Bor) GetCurrentValidators(snapshotNumber uint64, blockNumber uint64) ([
 	return valz, nil
 }
 
-func (c *Bor) commitSpan(
+func (c *Bor) checkAndCommitSpan(
 	state *state.StateDB,
 	header *types.Header,
 	chain core.ChainContext,
 ) error {
+	var pending bool = false
+	var span *Span = c.span
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		pending, _ = c.isSpanPending(header.Number.Uint64())
+		wg.Done()
+	}()
+
+	// fetch if span is nil
+	if span == nil {
+		wg.Add(1)
+		go func() {
+			fmt.Println("Fetching current span")
+			span, _ = c.GetCurrentSpan(header.Number.Uint64() - 1)
+			c.span = span // store in cache
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	// commit span if there is new span pending or span is ending or end block is not set
+	if pending || (span != nil && (span.EndBlock == 0 || span.EndBlock == header.Number.Uint64())) {
+		err := c.commitSpan(span, state, header, chain)
+		c.span = nil // reset cache
+		return err
+	}
+
+	return nil
+}
+
+func (c *Bor) commitSpan(
+	span *Span,
+	state *state.StateDB,
+	header *types.Header,
+	chain core.ChainContext,
+) error {
+	response, err := FetchFromHeimdall(c.httpClient, c.chainConfig.Bor.Heimdall, "bor", "span", strconv.FormatUint(span.ID+1, 10))
+	if err != nil {
+		return err
+	}
+
+	var heimdallSpan HeimdallSpan
+	if err := json.Unmarshal(response.Result, &heimdallSpan); err != nil {
+		return err
+	}
+
+	// get validators bytes
+	var validators []MinimalVal
+	for _, val := range heimdallSpan.ValidatorSet.Validators {
+		validators = append(validators, val.MinimalVal())
+	}
+	validatorsBytes, err := rlp.EncodeToBytes(validators)
+	if err != nil {
+		return err
+	}
+
+	// get producers bytes
+	var producers []MinimalVal
+	for _, val := range heimdallSpan.SelectedProducers {
+		producers = append(validators, val.MinimalVal())
+	}
+	producersBytes, err := rlp.EncodeToBytes(producers)
+	if err != nil {
+		return err
+	}
+
 	// method
 	method := "commitSpan"
 
 	// get packed data
-	data, err := c.validatorSetABI.Pack(method)
+	data, err := c.validatorSetABI.Pack(method,
+		heimdallSpan.ID,
+		heimdallSpan.StartBlock,
+		heimdallSpan.EndBlock,
+		validatorsBytes,
+		producersBytes,
+	)
 	if err != nil {
 		fmt.Println("Unable to pack tx for commitSpan", "error", err)
 		return err

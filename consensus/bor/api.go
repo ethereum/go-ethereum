@@ -87,33 +87,3 @@ func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
 	}
 	return snap.signers(), nil
 }
-
-// Proposals returns the current proposals the node tries to uphold and vote on.
-func (api *API) Proposals() map[common.Address]bool {
-	api.bor.lock.RLock()
-	defer api.bor.lock.RUnlock()
-
-	proposals := make(map[common.Address]bool)
-	for address, auth := range api.bor.proposals {
-		proposals[address] = auth
-	}
-	return proposals
-}
-
-// Propose injects a new authorization proposal that the signer will attempt to
-// push through.
-func (api *API) Propose(address common.Address, auth bool) {
-	api.bor.lock.Lock()
-	defer api.bor.lock.Unlock()
-
-	api.bor.proposals[address] = auth
-}
-
-// Discard drops a currently running proposal, stopping the signer from casting
-// further votes (either for or against).
-func (api *API) Discard(address common.Address) {
-	api.bor.lock.Lock()
-	defer api.bor.lock.Unlock()
-
-	delete(api.bor.proposals, address)
-}

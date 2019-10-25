@@ -29,22 +29,6 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
-// Vote represents a single vote that an authorized signer made to modify the
-// list of authorizations.
-type Vote struct {
-	Signer    common.Address `json:"signer"`    // Authorized signer that cast this vote
-	Block     uint64         `json:"block"`     // Block number the vote was cast in (expire old votes)
-	Address   common.Address `json:"address"`   // Account being voted on to change its authorization
-	Authorize bool           `json:"authorize"` // Whether to authorize or deauthorize the voted account
-}
-
-// Tally is a simple vote tally to keep the current score of votes. Votes that
-// go against the proposal aren't counted since it's equivalent to not voting.
-type Tally struct {
-	Authorize bool `json:"authorize"` // Whether the vote is about authorizing or kicking someone
-	Votes     int  `json:"votes"`     // Number of votes until now wanting to pass the proposal
-}
-
 // Snapshot is the state of the authorization voting at a given point in time.
 type Snapshot struct {
 	config   *params.BorConfig // Consensus engine parameters to fine tune behavior
@@ -55,8 +39,6 @@ type Snapshot struct {
 	Hash         common.Hash               `json:"hash"`         // Block hash where the snapshot was created
 	ValidatorSet *ValidatorSet             `json:"validatorSet"` // Validator set at this moment
 	Recents      map[uint64]common.Address `json:"recents"`      // Set of recent signers for spam protections
-	// Votes        []*Vote                   `json:"votes"`        // List of votes cast in chronological order
-	// Tally map[common.Address]Tally `json:"tally"` // Current vote tally to avoid recalculating
 }
 
 // signersAscending implements the sort interface to allow sorting a list of addresses
@@ -69,7 +51,14 @@ func (s signersAscending) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 // newSnapshot creates a new snapshot with the specified startup parameters. This
 // method does not initialize the set of recent signers, so only ever use if for
 // the genesis block.
-func newSnapshot(config *params.BorConfig, sigcache *lru.ARCCache, number uint64, hash common.Hash, validators []*Validator, ethAPI *ethapi.PublicBlockChainAPI) *Snapshot {
+func newSnapshot(
+	config *params.BorConfig,
+	sigcache *lru.ARCCache,
+	number uint64,
+	hash common.Hash,
+	validators []*Validator,
+	ethAPI *ethapi.PublicBlockChainAPI,
+) *Snapshot {
 	snap := &Snapshot{
 		config:       config,
 		ethAPI:       ethAPI,
@@ -78,7 +67,6 @@ func newSnapshot(config *params.BorConfig, sigcache *lru.ARCCache, number uint64
 		Hash:         hash,
 		ValidatorSet: NewValidatorSet(validators),
 		Recents:      make(map[uint64]common.Address),
-		// Tally:        make(map[common.Address]Tally),
 	}
 	return snap
 }
@@ -122,8 +110,6 @@ func (s *Snapshot) copy() *Snapshot {
 		Hash:         s.Hash,
 		ValidatorSet: s.ValidatorSet.Copy(),
 		Recents:      make(map[uint64]common.Address),
-		// Votes:        make([]*Vote, len(s.Votes)),
-		// Tally:        make(map[common.Address]Tally),
 	}
 	for block, signer := range s.Recents {
 		cpy.Recents[block] = signer
@@ -208,15 +194,20 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			return nil, err
 		}
 
+		fmt.Println(" validator set change ", number)
+
 		// change validator set and change proposer
 		if number > 0 && (number+1)%s.config.Sprint == 0 {
 			validatorBytes := header.Extra[extraVanity : len(header.Extra)-extraSeal]
 
-			// newVals, _ := GetValidators(number, number+1, s.config.Sprint, s.config.ValidatorContract, snap.ethAPI)
+			// get validators from headers and use that for new validator set
 			newVals, _ := ParseValidators(validatorBytes)
 			v := getUpdatedValidatorSet(snap.ValidatorSet.Copy(), newVals)
 			v.IncrementProposerPriority(1)
 			snap.ValidatorSet = v
+
+			// log new validator set
+			fmt.Println("Current validator set", "number", snap.Number, "validatorSet", snap.ValidatorSet)
 		}
 
 		// check if signer is in validator set
@@ -257,8 +248,6 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 	}
 	snap.Number += uint64(len(headers))
 	snap.Hash = headers[len(headers)-1].Hash()
-
-	fmt.Println("Current validator set", "number", snap.Number, "validatorSet", snap.ValidatorSet)
 
 	return snap, nil
 }

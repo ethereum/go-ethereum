@@ -112,6 +112,7 @@ func (w *wizard) makeGenesis() {
 			ProducerDelay:     5,
 			Sprint:            60,
 			ValidatorContract: "0x0000000000000000000000000000000000001000",
+			Heimdall:          "http://localhost:1317",
 		}
 
 		// We also need the initial list of signers

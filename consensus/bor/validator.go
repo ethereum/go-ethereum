@@ -6,20 +6,23 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sort"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// Volatile state for each Validator
+// Validator represets Volatile state for each Validator
 // NOTE: The ProposerPriority is not included in Validator.Hash();
 // make sure to update that method if changes are made here
 type Validator struct {
-	Address          common.Address `json:"address"`
-	VotingPower      int64          `json:"voting_power"`
-	ProposerPriority int64          `json:"proposer_priority"`
+	ID               uint64         `json:"ID"`
+	Address          common.Address `json:"signer"`
+	VotingPower      int64          `json:"power"`
+	ProposerPriority int64          `json:"accum"`
 }
 
+// NewValidator creates new validator
 func NewValidator(address common.Address, votingPower int64) *Validator {
 	return &Validator{
 		Address:          address,
@@ -105,6 +108,15 @@ func (v *Validator) PowerBytes() []byte {
 	return result
 }
 
+// MinimalVal returns block number of last validator update
+func (v *Validator) MinimalVal() MinimalVal {
+	return MinimalVal{
+		ID:          v.ID,
+		VotingPower: uint64(v.VotingPower),
+		Signer:      v.Address,
+	}
+}
+
 // ParseValidators returns validator set bytes
 func ParseValidators(validatorsBytes []byte) ([]*Validator, error) {
 	if len(validatorsBytes)%40 != 0 {
@@ -123,4 +135,30 @@ func ParseValidators(validatorsBytes []byte) ([]*Validator, error) {
 	}
 
 	return result, nil
+}
+
+// ---
+
+// MinimalVal is the minimal validator representation
+// Used to send validator information to bor validator contract
+type MinimalVal struct {
+	ID          uint64         `json:"ID"`
+	VotingPower uint64         `json:"power"` // TODO add 10^-18 here so that we dont overflow easily
+	Signer      common.Address `json:"signer"`
+}
+
+// SortMinimalValByAddress sorts validators
+func SortMinimalValByAddress(a []MinimalVal) []MinimalVal {
+	sort.Slice(a, func(i, j int) bool {
+		return bytes.Compare(a[i].Signer.Bytes(), a[j].Signer.Bytes()) < 0
+	})
+	return a
+}
+
+// ValidatorsToMinimalValidators converts array of validators to minimal validators
+func ValidatorsToMinimalValidators(vals []Validator) (minVals []MinimalVal) {
+	for _, val := range vals {
+		minVals = append(minVals, val.MinimalVal())
+	}
+	return
 }
