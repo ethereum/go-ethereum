@@ -152,6 +152,7 @@ func init() {
 		runCommand,
 		stateTestCommand,
 	}
+	cli.CommandHelpTemplate = utils.OriginCommandHelpTemplate
 }
 
 func main() {
