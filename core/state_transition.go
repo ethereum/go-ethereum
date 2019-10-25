@@ -238,20 +238,18 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	output2 := new(big.Int).SetBytes(input2.Bytes())
 
 	// add transfer log
-	if amount.Cmp(bigZero) > 0 {
-		AddFeeTransferLog(
-			st.state,
+	AddFeeTransferLog(
+		st.state,
 
-			msg.From(),
-			st.evm.Coinbase,
+		msg.From(),
+		st.evm.Coinbase,
 
-			amount,
-			input1,
-			input2,
-			output1.Sub(output1, amount),
-			output2.Add(output2, amount),
-		)
-	}
+		amount,
+		input1,
+		input2,
+		output1.Sub(output1, amount),
+		output2.Add(output2, amount),
+	)
 
 	return ret, st.gasUsed(), vmerr != nil, err
 }
@@ -348,6 +346,11 @@ func addTransferLog(
 	output1,
 	output2 *big.Int,
 ) {
+	// ignore if amount is 0
+	if amount.Cmp(bigZero) <= 0 {
+		return
+	}
+
 	dataInputs := []*big.Int{
 		amount,
 		input1,
