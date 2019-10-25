@@ -833,14 +833,9 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header, taskQ
 		}
 	}
 	// Assemble each of the results with their headers and retrieved data parts
-	type acceptedItem struct {
-		hash  common.Hash
-		index int
-	}
 	var (
-		failure       error
-		acceptedItems []acceptedItem
-		i             int
+		failure error
+		i       int
 	)
 	// Need the read lock to access resultcache
 	q.lock.RLock()
@@ -849,38 +844,40 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header, taskQ
 		if i >= results {
 			break
 		}
-		// Reconstruct the next result if contents match up
-		index := int(header.Number.Int64() - int64(q.resultOffset))
-		if index >= len(q.resultCache) || index < 0 || q.resultCache[index] == nil {
-			failure = errInvalidChain
-			break
-		}
-		if err := validate(index, header.TxHash, header.UncleHash, header.ReceiptHash); err != nil {
+		// Validate the fields
+		if err := validate(i, header.TxHash, header.UncleHash, header.ReceiptHash); err != nil {
 			failure = err
 			break
 		}
-		hash := header.Hash()
-		acceptedItems = append(acceptedItems, acceptedItem{hash, index})
-		// Clean up a successful fetch
-		request.Headers[i] = nil
+		header.Hash()
 		i++
 	}
 	q.lock.RUnlock()
 	q.lock.Lock()
-	for _, item := range acceptedItems {
-		donePool[item.hash] = struct{}{}
-		if item.index < len(q.resultCache) {
-			if res := q.resultCache[item.index]; res != nil {
-				reconstruct(item.index, res)
-				res.Pending--
-				delete(taskPool, item.hash)
-			}
+	var acceptCount = 0
+	for _, header := range request.Headers[:i] {
+		index := int(header.Number.Int64() - int64(q.resultOffset))
+		if index >= len(q.resultCache) || index < 0 {
+			// TODO! this should probably be errStaleDelivery instead
+			failure = errStaleDelivery
+			break
+		}
+		if res := q.resultCache[index]; res != nil {
+			hash := header.Hash()
+			donePool[hash] = struct{}{}
+			reconstruct(acceptCount, res)
+			res.Pending--
+			delete(taskPool, hash)
 		}
 		// else: betweeen here and above, some other peer filled this result
 		// we just ignore and move on
+
+		// Clean up a successful fetch
+		request.Headers[acceptCount] = nil
+		acceptCount++
 	}
 	// Return all failed or missing fetches to the queue
-	for _, header := range request.Headers[i:] {
+	for _, header := range request.Headers[acceptCount:] {
 		if header != nil {
 			taskQueue.Push(header, -int64(header.Number.Uint64()))
 		}
@@ -888,7 +885,6 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header, taskQ
 	q.lock.Unlock()
 
 	// Wake up Results
-	var acceptCount = len(acceptedItems)
 	if acceptCount > 0 {
 		q.active.Signal()
 	}
