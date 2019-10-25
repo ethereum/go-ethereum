@@ -40,6 +40,20 @@ var (
 // between account and storage tries.
 type LeafCallback func(leaf []byte, parent common.Hash) error
 
+// TraceConfig is a set of tracing config which caller can specify.
+type TraceConfig struct {
+	RecordPath     bool // Record the trie path of all read nodes.
+	RecordHash     bool // Record the node hash of all read nodes.
+	RecordLeafBlob bool // Record RLP encoded value of read leaves.
+}
+
+// TrieTrace represents a read step of trie.
+type TrieTrace struct {
+	Path     []byte      // The path from root node to current visited node.
+	LeafBlob []byte      // The RLP encoded value of leaf node.
+	Hash     common.Hash // The hash of visited node, can be nil if it's not a standalone or dirty
+}
+
 // Trie is a Merkle Patricia Trie.
 // The zero value is an empty trie with no database.
 // Use New to create a trie that sits on top of a database.
@@ -52,6 +66,11 @@ type Trie struct {
 	// hashing operation. This number will not directly map to the number of
 	// actually unhashed nodes
 	unhashed int
+
+	// The fields needed by tracing.
+	enableTrace bool
+	traceConfig *TraceConfig
+	traces      []*TrieTrace
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -69,8 +88,27 @@ func New(root common.Hash, db *Database) (*Trie, error) {
 	if db == nil {
 		panic("trie.New called without a database")
 	}
+	trie := &Trie{db: db}
+	if root != (common.Hash{}) && root != emptyRoot {
+		rootnode, err := trie.resolveHash(root[:], nil)
+		if err != nil {
+			return nil, err
+		}
+		trie.root = rootnode
+	}
+	return trie, nil
+}
+
+// NewTraceTrie creates a traceable trie which can offer more tracing
+// information during read opt.
+func NewTraceTrie(root common.Hash, db *Database, config *TraceConfig) (*Trie, error) {
+	if db == nil {
+		panic("trie.NewTraceTrie called without a database")
+	}
 	trie := &Trie{
-		db: db,
+		enableTrace: true,
+		traceConfig: config,
+		db:          db,
 	}
 	if root != (common.Hash{}) && root != emptyRoot {
 		rootnode, err := trie.resolveHash(root[:], nil)
@@ -103,6 +141,12 @@ func (t *Trie) Get(key []byte) []byte {
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryGet(key []byte) ([]byte, error) {
 	key = keybytesToHex(key)
+
+	// If read tracing is enable, clean all history
+	// before a new round reading.
+	if t.enableTrace {
+		t.traces = nil
+	}
 	value, newroot, didResolve, err := t.tryGet(t.root, key, 0)
 	if err == nil && didResolve {
 		t.root = newroot
@@ -115,11 +159,21 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 	case nil:
 		return nil, nil, false, nil
 	case valueNode:
+		if t.enableTrace {
+			t.trace(common.Hash{}, common.CopyBytes(key[:pos]), common.CopyBytes(n))
+		}
 		return n, n, false, nil
 	case *shortNode:
 		if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
 			// key not found in trie
 			return nil, n, false, nil
+		}
+		if t.enableTrace {
+			// Cached hash can be nil if it's dirty.
+			// Besides if it's an embedded node, the
+			// hash is also nil.
+			h, _ := n.cache()
+			t.trace(common.BytesToHash(h), common.CopyBytes(key[:pos]), nil)
 		}
 		value, newnode, didResolve, err = t.tryGet(n.Val, key, pos+len(n.Key))
 		if err == nil && didResolve {
@@ -128,6 +182,13 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 		}
 		return value, n, didResolve, err
 	case *fullNode:
+		if t.enableTrace {
+			// Cached hash can be nil if it's dirty.
+			// Besides if it's an embedded node, the
+			// hash is also nil.
+			h, _ := n.cache()
+			t.trace(common.BytesToHash(h), common.CopyBytes(key[:pos]), nil)
+		}
 		value, newnode, didResolve, err = t.tryGet(n.Children[key[pos]], key, pos+1)
 		if err == nil && didResolve {
 			n = n.copy()
@@ -144,6 +205,21 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
 	}
+}
+
+// trace adds a new read step into trace record set.
+func (t *Trie) trace(hash common.Hash, path []byte, leafBlob []byte) {
+	record := &TrieTrace{}
+	if t.traceConfig.RecordHash {
+		record.Hash = hash
+	}
+	if t.traceConfig.RecordPath {
+		record.Path = path
+	}
+	if t.traceConfig.RecordLeafBlob {
+		record.LeafBlob = leafBlob
+	}
+	t.traces = append(t.traces, record)
 }
 
 // Update associates key with value in the trie. Subsequent calls to
@@ -472,4 +548,10 @@ func (t *Trie) hashRoot(db *Database) (node, node, error) {
 	hashed, cached := h.hash(t.root, true)
 	t.unhashed = 0
 	return hashed, cached, nil
+}
+
+// GetTraces returns the read traces recorded by last Get
+// operation. Note, caller can't modify the returned value.
+func (t *Trie) GetTraces() []*TrieTrace {
+	return t.traces
 }

@@ -34,9 +34,12 @@ var (
 	hardRequestTimeout = time.Second * 10
 )
 
-// retrieveManager is a layer on top of requestDistributor which takes care of
-// matching replies by request ID and handles timeouts and resends if necessary.
-type retrieveManager struct {
+// p2pRetriever is a layer on top of requestDistributor which sends the request
+// to p2p network, takes care of matching replies by request ID and handles timeouts.
+//
+// Besides, if there exists a validation function for request, then retriever will
+// run the function and resend the request to other peers if the reply is invalid.
+type p2pRetriever struct {
 	dist       *requestDistributor
 	peers      *serverPeerSet
 	serverPool peerSelector
@@ -53,9 +56,9 @@ type peerSelector interface {
 	adjustResponseTime(*poolEntry, time.Duration, bool)
 }
 
-// sentReq represents a request sent and tracked by retrieveManager
+// sentReq represents a request sent and tracked by p2pRetriever
 type sentReq struct {
-	rm       *retrieveManager
+	rm       *p2pRetriever
 	req      *distReq
 	id       uint64
 	validate validatorFunc
@@ -99,8 +102,8 @@ const (
 )
 
 // newRetrieveManager creates the retrieve manager
-func newRetrieveManager(peers *serverPeerSet, dist *requestDistributor, serverPool peerSelector) *retrieveManager {
-	return &retrieveManager{
+func newRetrieveManager(peers *serverPeerSet, dist *requestDistributor, serverPool peerSelector) *p2pRetriever {
+	return &p2pRetriever{
 		peers:      peers,
 		dist:       dist,
 		serverPool: serverPool,
@@ -112,7 +115,7 @@ func newRetrieveManager(peers *serverPeerSet, dist *requestDistributor, serverPo
 // that is delivered through the deliver function and successfully validated by the
 // validator callback. It returns when a valid answer is delivered or the context is
 // cancelled.
-func (rm *retrieveManager) retrieve(ctx context.Context, reqID uint64, req *distReq, val validatorFunc, shutdown chan struct{}) error {
+func (rm *p2pRetriever) retrieve(ctx context.Context, reqID uint64, req *distReq, val validatorFunc, shutdown chan struct{}) error {
 	sentReq := rm.sendReq(reqID, req, val)
 	select {
 	case <-sentReq.stopCh:
@@ -126,7 +129,7 @@ func (rm *retrieveManager) retrieve(ctx context.Context, reqID uint64, req *dist
 
 // sendReq starts a process that keeps trying to retrieve a valid answer for a
 // request from any suitable peers until stopped or succeeded.
-func (rm *retrieveManager) sendReq(reqID uint64, req *distReq, val validatorFunc) *sentReq {
+func (rm *p2pRetriever) sendReq(reqID uint64, req *distReq, val validatorFunc) *sentReq {
 	r := &sentReq{
 		rm:       rm,
 		req:      req,
@@ -163,7 +166,7 @@ func (rm *retrieveManager) sendReq(reqID uint64, req *distReq, val validatorFunc
 }
 
 // deliver is called by the LES protocol manager to deliver reply messages to waiting requests
-func (rm *retrieveManager) deliver(peer distPeer, msg *Msg) error {
+func (rm *p2pRetriever) deliver(peer distPeer, msg *Msg) error {
 	rm.lock.RLock()
 	req, ok := rm.sentReqs[msg.ReqID]
 	rm.lock.RUnlock()
@@ -176,7 +179,7 @@ func (rm *retrieveManager) deliver(peer distPeer, msg *Msg) error {
 
 // frozen is called by the LES protocol manager when a server has suspended its service and we
 // should not expect an answer for the requests already sent there
-func (rm *retrieveManager) frozen(peer distPeer) {
+func (rm *p2pRetriever) frozen(peer distPeer) {
 	rm.lock.RLock()
 	defer rm.lock.RUnlock()
 

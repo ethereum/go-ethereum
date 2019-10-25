@@ -156,10 +156,11 @@ func (t *odrTrie) do(key []byte, fn func() error) error {
 		if err == nil {
 			err = fn()
 		}
-		if _, ok := err.(*trie.MissingNodeError); !ok {
+		missError, ok := err.(*trie.MissingNodeError)
+		if !ok {
 			return err
 		}
-		r := &TrieRequest{Id: t.id, Key: key}
+		r := &TrieRequest{Id: t.id, Key: key, MissNodeHash: missError.NodeHash}
 		if err := t.db.backend.Retrieve(t.db.ctx, r); err != nil {
 			return err
 		}

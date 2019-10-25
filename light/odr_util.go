@@ -99,9 +99,8 @@ func GetBodyRLP(ctx context.Context, odr OdrBackend, hash common.Hash, number ui
 	r := &BlockRequest{Hash: hash, Number: number}
 	if err := odr.Retrieve(ctx, r); err != nil {
 		return nil, err
-	} else {
-		return r.Rlp, nil
 	}
+	return rawdb.ReadBodyRLP(odr.Database(), hash, number), nil
 }
 
 // GetBody retrieves the block body (transactons, uncles) corresponding to the
@@ -252,7 +251,7 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bitIdx uint, sectionIdxLi
 	}
 
 	r := &BloomRequest{BloomTrieRoot: GetBloomTrieRoot(db, bloomTrieCount-1, sectionHead), BloomTrieNum: bloomTrieCount - 1,
-		BitIdx: bitIdx, SectionIndexList: reqList, Config: odr.IndexerConfig()}
+		BitIndex: bitIdx, SectionList: reqList, Config: odr.IndexerConfig()}
 	if err := odr.Retrieve(ctx, r); err != nil {
 		return nil, err
 	} else {

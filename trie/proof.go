@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -149,4 +150,44 @@ func get(tn node, key []byte) ([]byte, node) {
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
 	}
+}
+
+// VerifyTrie checks whether the given sub trie is exactly matched with specified
+// root hash. The main difference between VerifyTrie and VerifyProof is the target
+// of the former is sub trie while the latter is trie path.
+func VerifyTrie(rootHash common.Hash, proofDb ethdb.KeyValueReader, nodes int) error {
+	queue := prque.New(nil)
+	queue.Push(rootHash, 0)
+
+	var (
+		visit int // The number of checked trie nodes
+		count int // The number of trie nodes.
+	)
+	for !queue.Empty() && visit < nodes {
+		item, _ := queue.Pop()
+		hash := item.(common.Hash)
+		blob, err := proofDb.Get(hash.Bytes())
+		// We haven't traversed the whole db, but hash mismatch comes first.
+		if err != nil {
+			return err
+		}
+		node, err := decodeNode(hash.Bytes(), blob)
+		if err != nil {
+			return err
+		}
+		visit += 1
+		err = iterateRefs(node, nil, func(i []byte, hash common.Hash) error {
+			// Short circuit if hash candidates already exceeds the total entries.
+			if count+2 > nodes { // plus on root node.
+				return nil
+			}
+			queue.Push(hash, int64(-1*count))
+			count += 1
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

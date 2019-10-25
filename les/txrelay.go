@@ -38,10 +38,10 @@ type lesTxRelay struct {
 	lock         sync.RWMutex
 	stop         chan struct{}
 
-	retriever *retrieveManager
+	retriever *p2pRetriever
 }
 
-func newLesTxRelay(ps *serverPeerSet, retriever *retrieveManager) *lesTxRelay {
+func newLesTxRelay(ps *serverPeerSet, retriever *p2pRetriever) *lesTxRelay {
 	r := &lesTxRelay{
 		txSent:    make(map[common.Hash]*ltrInfo),
 		txPending: make(map[common.Hash]struct{}),

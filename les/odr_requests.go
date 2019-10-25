@@ -17,6 +17,7 @@
 package les
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -36,6 +37,7 @@ var (
 	errInvalidMessageType  = errors.New("invalid message type")
 	errInvalidEntryCount   = errors.New("invalid number of response entries")
 	errHeaderUnavailable   = errors.New("header unavailable")
+	errInvalidHeader       = errors.New("invalid header")
 	errTxHashMismatch      = errors.New("transaction hash mismatch")
 	errUncleHashMismatch   = errors.New("uncle hash mismatch")
 	errReceiptHashMismatch = errors.New("receipt hash mismatch")
@@ -50,6 +52,7 @@ type LesOdrRequest interface {
 	CanSend(*serverPeer) bool
 	Request(uint64, *serverPeer) error
 	Validate(ethdb.Database, *Msg) error
+	RequestByHTTP(context.Context, string, ethdb.Database) error
 }
 
 func LesRequest(req light.OdrRequest) LesOdrRequest {
@@ -120,12 +123,9 @@ func (r *BlockRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if header.UncleHash != types.CalcUncleHash(body.Uncles) {
 		return errUncleHashMismatch
 	}
-	// Validations passed, encode and store RLP
-	data, err := rlp.EncodeToBytes(body)
-	if err != nil {
-		return err
-	}
-	r.Rlp = data
+	r.Lock.Lock()
+	defer r.Lock.Unlock()
+	r.Txs, r.Uncles = body.Transactions, body.Uncles
 	return nil
 }
 
@@ -175,7 +175,8 @@ func (r *ReceiptsRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if r.Header.ReceiptHash != types.DeriveSha(receipt) {
 		return errReceiptHashMismatch
 	}
-	// Validations passed, store and return
+	r.Lock.Lock()
+	defer r.Lock.Unlock()
 	r.Receipts = receipt
 	return nil
 }
@@ -231,6 +232,8 @@ func (r *TrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if len(reads.reads) != nodeSet.KeyCount() {
 		return errUselessNodes
 	}
+	r.Lock.Lock()
+	defer r.Lock.Unlock()
 	r.Proof = nodeSet
 	return nil
 }
@@ -284,6 +287,8 @@ func (r *CodeRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if hash := crypto.Keccak256Hash(data); r.Hash != hash {
 		return errDataHashMismatch
 	}
+	r.Lock.Lock()
+	defer r.Lock.Unlock()
 	r.Data = data
 	return nil
 }
@@ -397,10 +402,11 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 		}
 	}
 	// Verifications passed, store and return
+	r.Lock.Lock()
+	defer r.Lock.Unlock()
 	r.Header = header
 	r.Proof = nodeSet
 	r.Td = node.Td // For untrusted request, td here is nil, todo improve the les/2 protocol
-
 	return nil
 }
 
@@ -414,7 +420,7 @@ type BloomRequest light.BloomRequest
 // GetCost returns the cost of the given ODR request according to the serving
 // peer's cost table (implementation of LesOdrRequest)
 func (r *BloomRequest) GetCost(peer *serverPeer) uint64 {
-	return peer.getRequestCost(GetHelperTrieProofsMsg, len(r.SectionIndexList))
+	return peer.getRequestCost(GetHelperTrieProofsMsg, len(r.SectionList))
 }
 
 // CanSend tells if a certain peer is suitable for serving the given request
@@ -430,13 +436,13 @@ func (r *BloomRequest) CanSend(peer *serverPeer) bool {
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (r *BloomRequest) Request(reqID uint64, peer *serverPeer) error {
-	peer.Log().Debug("Requesting BloomBits", "bloomTrie", r.BloomTrieNum, "bitIdx", r.BitIdx, "sections", r.SectionIndexList)
-	reqs := make([]HelperTrieReq, len(r.SectionIndexList))
+	peer.Log().Debug("Requesting BloomBits", "bloomTrie", r.BloomTrieNum, "bitIdx", r.BitIndex, "sections", r.SectionList)
+	reqs := make([]HelperTrieReq, len(r.SectionList))
 
 	var encNumber [10]byte
-	binary.BigEndian.PutUint16(encNumber[:2], uint16(r.BitIdx))
+	binary.BigEndian.PutUint16(encNumber[:2], uint16(r.BitIndex))
 
-	for i, sectionIdx := range r.SectionIndexList {
+	for i, sectionIdx := range r.SectionList {
 		binary.BigEndian.PutUint64(encNumber[2:], sectionIdx)
 		reqs[i] = HelperTrieReq{
 			Type:    htBloomBits,
@@ -451,7 +457,7 @@ func (r *BloomRequest) Request(reqID uint64, peer *serverPeer) error {
 // returns true and stores results in memory if the message was a valid reply
 // to the request (implementation of LesOdrRequest)
 func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
-	log.Debug("Validating BloomBits", "bloomTrie", r.BloomTrieNum, "bitIdx", r.BitIdx, "sections", r.SectionIndexList)
+	log.Debug("Validating BloomBits", "bloomTrie", r.BloomTrieNum, "bitIdx", r.BitIndex, "sections", r.SectionList)
 
 	// Ensure we have a correct message with a single proof element
 	if msg.MsgType != MsgHelperTrieProofs {
@@ -462,13 +468,13 @@ func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
 	nodeSet := proofs.NodeSet()
 	reads := &readTraceDB{db: nodeSet}
 
-	r.BloomBits = make([][]byte, len(r.SectionIndexList))
+	r.BloomBits = make([][]byte, len(r.SectionList))
 
 	// Verify the proofs
 	var encNumber [10]byte
-	binary.BigEndian.PutUint16(encNumber[:2], uint16(r.BitIdx))
+	binary.BigEndian.PutUint16(encNumber[:2], uint16(r.BitIndex))
 
-	for i, idx := range r.SectionIndexList {
+	for i, idx := range r.SectionList {
 		binary.BigEndian.PutUint64(encNumber[2:], idx)
 		value, _, err := trie.VerifyProof(r.BloomTrieRoot, encNumber[:], reads)
 		if err != nil {
@@ -518,6 +524,8 @@ func (r *TxStatusRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if len(status) != len(r.Hashes) {
 		return errInvalidEntryCount
 	}
+	r.Lock.Lock()
+	defer r.Lock.Unlock()
 	r.Status = status
 	return nil
 }

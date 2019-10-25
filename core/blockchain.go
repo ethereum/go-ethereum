@@ -532,6 +532,11 @@ func (bc *BlockChain) StateCache() state.Database {
 	return bc.stateCache
 }
 
+// Database returns the disk database underpinning the blockchain instance.
+func (bc *BlockChain) Database() ethdb.Database {
+	return bc.db
+}
+
 // Reset purges the entire blockchain, restoring it to its genesis state.
 func (bc *BlockChain) Reset() error {
 	return bc.ResetWithGenesisBlock(bc.genesisBlock)

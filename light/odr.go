@@ -20,12 +20,14 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // NoOdr is the default context passed to an ODR capable function when the ODR
@@ -82,22 +84,31 @@ func StorageTrieID(state *TrieID, addrHash, root common.Hash) *TrieID {
 
 // TrieRequest is the ODR request type for state/storage trie entries
 type TrieRequest struct {
-	OdrRequest
-	Id    *TrieID
-	Key   []byte
+	// Request fields
+	Id           *TrieID
+	Key          []byte
+	MissNodeHash common.Hash
+
+	// Response fields
+	Lock  sync.Mutex
 	Proof *NodeSet
 }
 
 // StoreResult stores the retrieved data in local database
 func (req *TrieRequest) StoreResult(db ethdb.Database) {
-	req.Proof.Store(db)
+	if req.Proof != nil {
+		req.Proof.Store(db)
+	}
 }
 
 // CodeRequest is the ODR request type for retrieving contract code
 type CodeRequest struct {
-	OdrRequest
+	// Request fields
 	Id   *TrieID // references storage trie of the account
 	Hash common.Hash
+
+	// Response fields
+	Lock sync.Mutex
 	Data []byte
 }
 
@@ -108,25 +119,36 @@ func (req *CodeRequest) StoreResult(db ethdb.Database) {
 
 // BlockRequest is the ODR request type for retrieving block bodies
 type BlockRequest struct {
-	OdrRequest
+	// Request fields
 	Hash   common.Hash
 	Number uint64
-	Rlp    []byte
+
+	// Response fields
+	Lock   sync.Mutex
+	Txs    types.Transactions
+	Uncles []*types.Header
 }
 
 // StoreResult stores the retrieved data in local database
 func (req *BlockRequest) StoreResult(db ethdb.Database) {
-	rawdb.WriteBodyRLP(db, req.Hash, req.Number, req.Rlp)
+	data, err := rlp.EncodeToBytes(&types.Body{Transactions: req.Txs, Uncles: req.Uncles})
+	if err != nil {
+		panic(err) // todo how to handle the error?
+	}
+	rawdb.WriteBodyRLP(db, req.Hash, req.Number, data)
 }
 
 // ReceiptsRequest is the ODR request type for retrieving block bodies
 type ReceiptsRequest struct {
-	OdrRequest
+	// Request fields
 	Untrusted bool // Indicator whether the result retrieved is trusted or not
 	Hash      common.Hash
 	Number    uint64
 	Header    *types.Header
-	Receipts  types.Receipts
+
+	// Response fields
+	Lock     sync.Mutex
+	Receipts types.Receipts
 }
 
 // StoreResult stores the retrieved data in local database
@@ -138,15 +160,18 @@ func (req *ReceiptsRequest) StoreResult(db ethdb.Database) {
 
 // ChtRequest is the ODR request type for state/storage trie entries
 type ChtRequest struct {
-	OdrRequest
+	// Request fields
 	Untrusted        bool   // Indicator whether the result retrieved is trusted or not
 	PeerId           string // The specified peer id from which to retrieve data.
 	Config           *IndexerConfig
 	ChtNum, BlockNum uint64
 	ChtRoot          common.Hash
-	Header           *types.Header
-	Td               *big.Int
-	Proof            *NodeSet
+
+	// Response fields
+	Lock   sync.Mutex
+	Header *types.Header
+	Td     *big.Int
+	Proof  *NodeSet
 }
 
 // StoreResult stores the retrieved data in local database
@@ -162,25 +187,28 @@ func (req *ChtRequest) StoreResult(db ethdb.Database) {
 
 // BloomRequest is the ODR request type for retrieving bloom filters from a CHT structure
 type BloomRequest struct {
-	OdrRequest
-	Config           *IndexerConfig
-	BloomTrieNum     uint64
-	BitIdx           uint
-	SectionIndexList []uint64
-	BloomTrieRoot    common.Hash
-	BloomBits        [][]byte
-	Proofs           *NodeSet
+	// Request fields
+	Config        *IndexerConfig
+	BitIndex      uint
+	SectionList   []uint64
+	BloomTrieNum  uint64
+	BloomTrieRoot common.Hash
+
+	// Response fields
+	Lock      sync.Mutex
+	BloomBits [][]byte
+	Proofs    *NodeSet
 }
 
 // StoreResult stores the retrieved data in local database
 func (req *BloomRequest) StoreResult(db ethdb.Database) {
-	for i, sectionIdx := range req.SectionIndexList {
+	for i, sectionIdx := range req.SectionList {
 		sectionHead := rawdb.ReadCanonicalHash(db, (sectionIdx+1)*req.Config.BloomTrieSize-1)
 		// if we don't have the canonical hash stored for this section head number, we'll still store it under
 		// a key with a zero sectionHead. GetBloomBits will look there too if we still don't have the canonical
 		// hash. In the unlikely case we've retrieved the section head hash since then, we'll just retrieve the
 		// bit vector again from the network.
-		rawdb.WriteBloomBits(db, req.BitIdx, sectionIdx, sectionHead, req.BloomBits[i])
+		rawdb.WriteBloomBits(db, req.BitIndex, sectionIdx, sectionHead, req.BloomBits[i])
 	}
 }
 
@@ -193,8 +221,11 @@ type TxStatus struct {
 
 // TxStatusRequest is the ODR request type for retrieving transaction status
 type TxStatusRequest struct {
-	OdrRequest
+	// Request fields
 	Hashes []common.Hash
+
+	// Response fields
+	Lock   sync.Mutex
 	Status []TxStatus
 }
 

@@ -134,6 +134,7 @@ type ChtIndexerBackend struct {
 	section, sectionSize uint64
 	lastHash             common.Hash
 	trie                 *trie.Trie
+	tiler                *chtTiler
 }
 
 // NewChtIndexer creates a Cht chain indexer
@@ -146,7 +147,17 @@ func NewChtIndexer(db ethdb.Database, odr OdrBackend, size, confirms uint64) *co
 		triedb:      trie.NewDatabaseWithCache(trieTable, 1), // Use a tiny cache only to keep memory down
 		sectionSize: size,
 	}
-	return core.NewChainIndexer(db, rawdb.NewTable(db, "chtIndexV2-"), backend, size, confirms, time.Millisecond*100, "cht")
+	indexDb := rawdb.NewTable(db, "chtIndexV2-")
+	var count uint64
+	data, _ := indexDb.Get([]byte("count"))
+	if len(data) == 8 {
+		count = binary.BigEndian.Uint64(data)
+	}
+	// Only enable it in the server side
+	if odr == nil {
+		backend.tiler = newCHTTiler(db, size, count)
+	}
+	return core.NewChainIndexer(db, indexDb, backend, size, confirms, time.Millisecond*100, "cht")
 }
 
 // fetchMissingNodes tries to retrieve the last entry of the latest trusted CHT from the
@@ -158,7 +169,9 @@ func (c *ChtIndexerBackend) fetchMissingNodes(ctx context.Context, section uint6
 		err := c.odr.Retrieve(ctx, r)
 		switch err {
 		case nil:
-			r.Proof.Store(batch)
+			if r.Proof != nil {
+				r.Proof.Store(batch)
+			}
 			return batch.Write()
 		case ErrNoPeers:
 			// if there are no peers to serve, retry later
@@ -189,7 +202,6 @@ func (c *ChtIndexerBackend) Reset(ctx context.Context, section uint64, lastSecti
 			c.trie, err = trie.New(root, c.triedb)
 		}
 	}
-
 	c.section = section
 	return err
 }
@@ -220,6 +232,11 @@ func (c *ChtIndexerBackend) Commit() error {
 
 	log.Info("Storing CHT", "section", c.section, "head", fmt.Sprintf("%064x", c.lastHash), "root", fmt.Sprintf("%064x", root))
 	StoreChtRoot(c.diskdb, c.section, c.lastHash, root)
+
+	// Push a new work to tiler.
+	if c.tiler != nil {
+		c.tiler.commit(c.section)
+	}
 	return nil
 }
 
@@ -284,7 +301,7 @@ func (b *BloomTrieIndexerBackend) fetchMissingNodes(ctx context.Context, section
 	for i := 0; i < 20; i++ {
 		go func() {
 			for bitIndex := range indexCh {
-				r := &BloomRequest{BloomTrieRoot: root, BloomTrieNum: section - 1, BitIdx: bitIndex, SectionIndexList: []uint64{section - 1}, Config: b.odr.IndexerConfig()}
+				r := &BloomRequest{BloomTrieRoot: root, BloomTrieNum: section - 1, BitIndex: bitIndex, SectionList: []uint64{section - 1}, Config: b.odr.IndexerConfig()}
 				for {
 					if err := b.odr.Retrieve(ctx, r); err == ErrNoPeers {
 						// if there are no peers to serve, retry later

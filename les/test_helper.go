@@ -209,8 +209,8 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 			closeCh:     make(chan struct{}),
 		},
 		peers:      peers,
-		reqDist:    odr.retriever.dist,
-		retriever:  odr.retriever,
+		reqDist:    odr.p2pRtr.dist,
+		p2pRtr:     odr.p2pRtr,
 		odr:        odr,
 		engine:     engine,
 		blockchain: chain,
@@ -493,7 +493,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 	}
 	dist := newRequestDistributor(speers, clock)
 	rm := newRetrieveManager(speers, dist, nil)
-	odr := NewLesOdr(cdb, light.TestClientIndexerConfig, rm)
+	odr := NewLesOdr(cdb, light.TestClientIndexerConfig, rm, nil)
 
 	sindexers := testIndexers(sdb, nil, light.TestServerIndexerConfig)
 	cIndexers := testIndexers(cdb, odr, light.TestClientIndexerConfig)

@@ -287,6 +287,15 @@ var (
 		Name:  "ulc.onlyannounce",
 		Usage: "Ultra light server sends announcements only",
 	}
+	LesCDNURLFlag = cli.StringFlag{
+		Name:  "light.cdn.url",
+		Usage: "The URL of les cdn which can speed up request serving",
+	}
+	LesCDNSwitchFlag = cli.Int64Flag{
+		Name:  "light.cdn.switch",
+		Usage: "The maximum waiting time on the p2p network before switch to CDN(count by ms)",
+		Value: 100, // Default cdn switch is 100ms
+	}
 	// Ethash settings
 	EthashCacheDirFlag = DirectoryFlag{
 		Name:  "ethash.cachedir",
@@ -1010,6 +1019,12 @@ func setLes(ctx *cli.Context, cfg *eth.Config) {
 	if ctx.GlobalIsSet(UltraLightOnlyAnnounceFlag.Name) {
 		cfg.UltraLightOnlyAnnounce = ctx.GlobalBool(UltraLightOnlyAnnounceFlag.Name)
 	}
+	if ctx.GlobalIsSet(LesCDNURLFlag.Name) {
+		cfg.LesCDNURL = ctx.GlobalString(LesCDNURLFlag.Name)
+	}
+	if ctx.GlobalIsSet(LesCDNSwitchFlag.Name) {
+		cfg.LesCDNSwitch = time.Duration(ctx.GlobalInt64(LesCDNSwitchFlag.Name) * 1000 * 1000)
+	}
 }
 
 // makeDatabaseHandles raises out the number of allowed file handles per process
@@ -1569,6 +1584,8 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 			}
 			return fullNode, err
 		})
+		// Add the light server CDN if requested
+		RegisterLesCDNService(stack)
 	}
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)

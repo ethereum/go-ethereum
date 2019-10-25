@@ -347,7 +347,58 @@ func TestRandomCases(t *testing.T) {
 		{op: 1, key: common.Hex2Bytes("fd"), value: common.Hex2Bytes("")},                                                                                               // step 25
 	}
 	runRandTest(rt)
+}
 
+func Example_TraceTrie() {
+	triedb := NewDatabase(memorydb.New())
+	trie, _ := NewTraceTrie(common.Hash{}, triedb, &TraceConfig{RecordPath: true, RecordHash: true, RecordLeafBlob: true})
+	vals := []struct{ k, v string }{
+		{"do", "verb"},
+		{"dog", "puppy"},
+		{"doge", "coin"},
+	}
+	for _, val := range vals {
+		updateString(trie, val.k, val.v)
+	}
+	root, err := trie.Commit(nil)
+	if err != nil {
+		fmt.Println("commit err", err)
+	}
+	_, err = trie.TryGet([]byte("dog"))
+	if err != nil {
+		fmt.Println("read err", err)
+	}
+	traces := trie.traces
+	for index, t := range traces {
+		fmt.Printf("step%d => path: %v, hash: %v, blob: %v\n", index+1, t.Path, t.Hash.Hex(), t.LeafBlob)
+	}
+
+	// Reopen from database
+	trie, _ = NewTraceTrie(root, triedb, &TraceConfig{RecordPath: true, RecordHash: true, RecordLeafBlob: true})
+	_, err = trie.TryGet([]byte("dog"))
+	if err != nil {
+		fmt.Println("read err", err)
+	}
+	traces = trie.traces
+	for index, t := range traces {
+		fmt.Printf("step%d => path: %v, hash: %v, blob: %v\n", index+1, t.Path, t.Hash.Hex(), t.LeafBlob)
+	}
+	// Output:
+	// step1 => path: [], hash: 0xef7b2fe20f5d2c30c46ad4d83c39811bcbf1721aef2e805c0e107947320888b6, blob: []
+	// step2 => path: [6 4 6 15], hash: 0xd43b87fdcd4217013ccc92d04662e12d36e4cc25dc690077cd821a1956fc3e36, blob: []
+	// step3 => path: [6 4 6 15 6], hash: 0x0000000000000000000000000000000000000000000000000000000000000000, blob: []
+	// step4 => path: [6 4 6 15 6 7], hash: 0x0000000000000000000000000000000000000000000000000000000000000000, blob: []
+	// step5 => path: [6 4 6 15 6 7 16], hash: 0x0000000000000000000000000000000000000000000000000000000000000000, blob: [112 117 112 112 121]
+	// step1 => path: [], hash: 0xef7b2fe20f5d2c30c46ad4d83c39811bcbf1721aef2e805c0e107947320888b6, blob: []
+	// step2 => path: [6 4 6 15], hash: 0xd43b87fdcd4217013ccc92d04662e12d36e4cc25dc690077cd821a1956fc3e36, blob: []
+	// step3 => path: [6 4 6 15 6], hash: 0x0000000000000000000000000000000000000000000000000000000000000000, blob: []
+	// step4 => path: [6 4 6 15 6 7], hash: 0x0000000000000000000000000000000000000000000000000000000000000000, blob: []
+	// step5 => path: [6 4 6 15 6 7 16], hash: 0x0000000000000000000000000000000000000000000000000000000000000000, blob: [112 117 112 112 121]
+}
+
+type countingDB struct {
+	ethdb.KeyValueStore
+	gets map[string]int
 }
 
 // randTest performs random trie operations.

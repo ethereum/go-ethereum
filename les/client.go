@@ -51,7 +51,8 @@ type LightEthereum struct {
 
 	peers      *serverPeerSet
 	reqDist    *requestDistributor
-	retriever  *retrieveManager
+	p2pRtr     *p2pRetriever
+	httpRtr    *httpRetriever
 	odr        *LesOdr
 	relay      *lesTxRelay
 	handler    *clientHandler
@@ -100,10 +101,11 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		bloomIndexer:   eth.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
 		serverPool:     newServerPool(chainDb, config.UltraLightServers),
 	}
-	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool)
-	leth.relay = newLesTxRelay(peers, leth.retriever)
+	leth.p2pRtr = newRetrieveManager(peers, leth.reqDist, leth.serverPool)
+	leth.httpRtr = newHTTPRetriever(config.LesCDNURL, config.LesCDNSwitch, chainDb)
+	leth.relay = newLesTxRelay(peers, leth.p2pRtr)
 
-	leth.odr = NewLesOdr(chainDb, light.DefaultClientIndexerConfig, leth.retriever)
+	leth.odr = NewLesOdr(chainDb, light.DefaultClientIndexerConfig, leth.p2pRtr, leth.httpRtr)
 	leth.chtIndexer = light.NewChtIndexer(chainDb, leth.odr, params.CHTFrequency, params.HelperTrieConfirmations)
 	leth.bloomTrieIndexer = light.NewBloomTrieIndexer(chainDb, leth.odr, params.BloomBitsBlocksClient, params.BloomTrieFrequency)
 	leth.odr.SetIndexers(leth.chtIndexer, leth.bloomTrieIndexer, leth.bloomIndexer)

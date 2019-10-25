@@ -74,7 +74,11 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 	case *BlockRequest:
 		number := rawdb.ReadHeaderNumber(odr.sdb, req.Hash)
 		if number != nil {
-			req.Rlp = rawdb.ReadBodyRLP(odr.sdb, req.Hash, *number)
+			blob := rawdb.ReadBodyRLP(odr.sdb, req.Hash, *number)
+			var body types.Body
+			rlp.DecodeBytes(blob, &body)
+			req.Txs, req.Uncles = body.Transactions, body.Uncles
+			return nil
 		}
 	case *ReceiptsRequest:
 		number := rawdb.ReadHeaderNumber(odr.sdb, req.Hash)

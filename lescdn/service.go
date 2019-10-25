@@ -1,3 +1,19 @@
+// Copyright 2019 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package lescdn
 
 import (
@@ -58,6 +74,10 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "state":
 		s.serveState(w, r)
 		return
+
+	case "misc":
+		s.serveMisc(w, r)
+		return
 	}
 	http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 }
@@ -79,10 +99,17 @@ func shift(p *string) string {
 	return head
 }
 
-// reply marshals a value into the response stream via RLP, also setting caching
+// replyAndCache marshals a value into the response stream via RLP, also setting caching
 // to indefinite.
-func reply(w http.ResponseWriter, v interface{}) {
+func replyAndCache(w http.ResponseWriter, v interface{}) {
 	w.Header().Set("Cache-Control", "max-age=31536000") // 1 year cache expiry
+	if err := rlp.Encode(w, v); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// reply marshals a value into the response stream via RLP but not caches it.
+func reply(w http.ResponseWriter, v interface{}) {
 	if err := rlp.Encode(w, v); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}

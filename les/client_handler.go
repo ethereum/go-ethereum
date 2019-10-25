@@ -299,7 +299,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 		}
 	case StopMsg:
 		p.freeze()
-		h.backend.retriever.frozen(p)
+		h.backend.p2pRtr.frozen(p)
 		p.Log().Debug("Service stopped")
 	case ResumeMsg:
 		var bv uint64
@@ -315,7 +315,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 	}
 	// Deliver the received response to retriever.
 	if deliverMsg != nil {
-		if err := h.backend.retriever.deliver(p, deliverMsg); err != nil {
+		if err := h.backend.p2pRtr.deliver(p, deliverMsg); err != nil {
 			p.errCount++
 			if p.errCount > maxResponseErrors {
 				return err

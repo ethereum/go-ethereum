@@ -125,6 +125,7 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 			"chtroot", checkpoint.CHTRoot, "bloomroot", checkpoint.BloomRoot)
 	}
 	srv.chtIndexer.Start(e.BlockChain())
+
 	return srv, nil
 }
 
@@ -213,7 +214,8 @@ func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
 	bloomIndexer.AddChildIndexer(s.bloomTrieIndexer)
 }
 
-// SetClient sets the rpc client and starts running checkpoint contract if it is not yet watched.
+// SetContractBackend sets the rpc client and starts running checkpoint contract
+// if it is not yet watched.
 func (s *LesServer) SetContractBackend(backend bind.ContractBackend) {
 	if s.oracle == nil {
 		return

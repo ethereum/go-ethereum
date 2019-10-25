@@ -580,7 +580,11 @@ func (it *unionIterator) Error() error {
 // IterateRefs decodes a trie node, iterates all its children and invokes a
 // callback for each hash node found.
 func IterateRefs(node []byte, onHashNode func([]byte, common.Hash) error) error {
-	return iterateRefs(mustDecodeNode(nil, node), nil, onHashNode)
+	n, err := decodeNode(nil, node)
+	if err != nil {
+		return err
+	}
+	return iterateRefs(n, nil, onHashNode)
 }
 
 // iterateRefs traverses the node hierarchy of a cached node and invokes the
