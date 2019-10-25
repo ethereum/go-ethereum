@@ -3,6 +3,7 @@ package bor
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -247,7 +248,6 @@ type Bor struct {
 
 	ethAPI          *ethapi.PublicBlockChainAPI
 	validatorSetABI abi.ABI
-	span            *Span
 	httpClient      http.Client
 
 	// The fields below are for testing only
@@ -279,7 +279,6 @@ func New(
 		ethAPI:          ethAPI,
 		recents:         recents,
 		signatures:      signatures,
-		span:            nil,
 		validatorSetABI: vABI,
 		httpClient: http.Client{
 			Timeout: time.Duration(5 * time.Second),
@@ -662,12 +661,13 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
 func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
-	// // commit span
-	// err := c.checkAndCommitSpan(state, header, chainContext{Chain: chain, Bor: c})
-	// if err != nil {
-	// 	fmt.Println("Error while committing span", err)
-	// 	// return nil, err
-	// }
+	// commit span
+	if header.Number.Uint64()%c.config.Sprint == 0 {
+		if err := c.checkAndCommitSpan(state, header, chainContext{Chain: chain, Bor: c}); err != nil {
+			fmt.Println("Error while committing span", err)
+			// return nil, err
+		}
+	}
 
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
@@ -678,10 +678,12 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 // nor block rewards given, and returns the final block.
 func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// commit span
-	err := c.checkAndCommitSpan(state, header, chainContext{Chain: chain, Bor: c})
-	if err != nil {
-		fmt.Println("Error while committing span", err)
-		// return nil, err
+	if header.Number.Uint64()%c.config.Sprint == 0 {
+		err := c.checkAndCommitSpan(state, header, chainContext{Chain: chain, Bor: c})
+		if err != nil {
+			fmt.Println("Error while committing span", err)
+			// return nil, err
+		}
 	}
 
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
@@ -967,8 +969,7 @@ func (c *Bor) checkAndCommitSpan(
 	chain core.ChainContext,
 ) error {
 	var pending bool = false
-	var span *Span = c.span
-
+	var span *Span = nil
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -976,26 +977,43 @@ func (c *Bor) checkAndCommitSpan(
 		wg.Done()
 	}()
 
-	// fetch if span is nil
-	if span == nil {
-		wg.Add(1)
-		go func() {
-			fmt.Println("Fetching current span")
-			span, _ = c.GetCurrentSpan(header.Number.Uint64() - 1)
-			c.span = span // store in cache
-			wg.Done()
-		}()
-	}
+	wg.Add(1)
+	go func() {
+		span, _ = c.GetCurrentSpan(header.Number.Uint64() - 1)
+		wg.Done()
+	}()
+
 	wg.Wait()
 
+	fmt.Println("Span", span.ID, span.StartBlock, span.EndBlock, "number", header.Number, "needToCommitSpan", c.needToCommitSpan(span, header))
+
 	// commit span if there is new span pending or span is ending or end block is not set
-	if pending || (span != nil && (span.EndBlock == 0 || span.EndBlock == header.Number.Uint64())) {
+	if pending || c.needToCommitSpan(span, header) {
 		err := c.commitSpan(span, state, header, chain)
-		c.span = nil // reset cache
 		return err
 	}
 
 	return nil
+}
+
+func (c *Bor) needToCommitSpan(span *Span, header *types.Header) bool {
+	// if span is nil
+	if span == nil {
+		return false
+	}
+
+	// check span is not set initially
+	if span.EndBlock == 0 {
+		return true
+	}
+
+	// if current block is first block of last sprint in current span
+	h := header.Number.Uint64()
+	if span.EndBlock > c.config.Sprint && span.EndBlock-c.config.Sprint+1 == h {
+		return true
+	}
+
+	return false
 }
 
 func (c *Bor) commitSpan(
@@ -1019,7 +1037,7 @@ func (c *Bor) commitSpan(
 	for _, val := range heimdallSpan.ValidatorSet.Validators {
 		validators = append(validators, val.MinimalVal())
 	}
-	validatorsBytes, err := rlp.EncodeToBytes(validators)
+	validatorBytes, err := rlp.EncodeToBytes(validators)
 	if err != nil {
 		return err
 	}
@@ -1027,9 +1045,9 @@ func (c *Bor) commitSpan(
 	// get producers bytes
 	var producers []MinimalVal
 	for _, val := range heimdallSpan.SelectedProducers {
-		producers = append(validators, val.MinimalVal())
+		producers = append(producers, val.MinimalVal())
 	}
-	producersBytes, err := rlp.EncodeToBytes(producers)
+	producerBytes, err := rlp.EncodeToBytes(producers)
 	if err != nil {
 		return err
 	}
@@ -1037,13 +1055,21 @@ func (c *Bor) commitSpan(
 	// method
 	method := "commitSpan"
 
+	fmt.Println(
+		"id", heimdallSpan.ID,
+		"startBlock", heimdallSpan.StartBlock,
+		"endBlock", heimdallSpan.EndBlock,
+		"validatorBytes", hex.EncodeToString(validatorBytes),
+		"producerBytes", hex.EncodeToString(producerBytes),
+	)
+
 	// get packed data
 	data, err := c.validatorSetABI.Pack(method,
-		heimdallSpan.ID,
-		heimdallSpan.StartBlock,
-		heimdallSpan.EndBlock,
-		validatorsBytes,
-		producersBytes,
+		big.NewInt(0).SetUint64(heimdallSpan.ID),
+		big.NewInt(0).SetUint64(heimdallSpan.StartBlock),
+		big.NewInt(0).SetUint64(heimdallSpan.EndBlock),
+		validatorBytes,
+		producerBytes,
 	)
 	if err != nil {
 		fmt.Println("Unable to pack tx for commitSpan", "error", err)

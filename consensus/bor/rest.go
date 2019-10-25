@@ -48,11 +48,9 @@ func FetchFromHeimdall(client http.Client, urlString string, paths ...string) (*
 
 	// unmarshall data from buffer
 	var response ResponseWithHeight
-	fmt.Println("body", string(body))
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, err
 	}
 
-	fmt.Println("response", response.Result)
 	return &response, nil
 }
