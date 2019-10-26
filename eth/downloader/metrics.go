@@ -40,4 +40,7 @@ var (
 
 	stateInMeter   = metrics.NewRegisteredMeter("eth/downloader/states/in", nil)
 	stateDropMeter = metrics.NewRegisteredMeter("eth/downloader/states/drop", nil)
+
+	throttleBlockCounter   = metrics.NewRegisteredCounter("eth/downloader/throttle/blocks", nil)
+	throttleReceiptCounter = metrics.NewRegisteredCounter("eth/downloader/throttle/receipts", nil)
 )

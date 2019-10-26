@@ -115,13 +115,15 @@ func (w *lightPeerWrapper) RequestNodeData([]common.Hash) error {
 // newPeerConnection creates a new downloader peer.
 func newPeerConnection(id string, version int, peer Peer, logger log.Logger) *peerConnection {
 	return &peerConnection{
-		id:      id,
-		lacking: make(map[common.Hash]struct{}),
-
-		peer: peer,
-
-		version: version,
-		log:     logger,
+		id:                id,
+		lacking:           make(map[common.Hash]struct{}),
+		peer:              peer,
+		version:           version,
+		log:               logger,
+		headerThroughput:  float64(MaxHeaderFetch / 8),
+		blockThroughput:   float64(MaxBlockFetch / 8),
+		receiptThroughput: float64(MaxReceiptFetch / 8),
+		stateThroughput:   float64(MaxStateFetch / 8),
 	}
 }
 
@@ -135,10 +137,10 @@ func (p *peerConnection) Reset() {
 	atomic.StoreInt32(&p.receiptIdle, 0)
 	atomic.StoreInt32(&p.stateIdle, 0)
 
-	p.headerThroughput = 0
-	p.blockThroughput = 0
-	p.receiptThroughput = 0
-	p.stateThroughput = 0
+	p.headerThroughput = float64(MaxHeaderFetch / 8)
+	p.blockThroughput = float64(MaxBlockFetch / 8)
+	p.receiptThroughput = float64(MaxReceiptFetch / 8)
+	p.stateThroughput = float64(MaxStateFetch / 8)
 
 	p.lacking = make(map[common.Hash]struct{})
 }
@@ -283,7 +285,7 @@ func (p *peerConnection) HeaderCapacity(targetRTT time.Duration) int {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	return int(math.Min(1+math.Max(1, p.headerThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxHeaderFetch)))
+	return int(math.Min(7+math.Max(1, p.headerThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxHeaderFetch)))
 }
 
 // BlockCapacity retrieves the peers block download allowance based on its
@@ -292,7 +294,7 @@ func (p *peerConnection) BlockCapacity(targetRTT time.Duration) int {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	return int(math.Min(1+math.Max(1, p.blockThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxBlockFetch)))
+	return int(math.Min(7+math.Max(1, p.blockThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxBlockFetch)))
 }
 
 // ReceiptCapacity retrieves the peers receipt download allowance based on its
@@ -301,7 +303,7 @@ func (p *peerConnection) ReceiptCapacity(targetRTT time.Duration) int {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	return int(math.Min(1+math.Max(1, p.receiptThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxReceiptFetch)))
+	return int(math.Min(7+math.Max(1, p.receiptThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxReceiptFetch)))
 }
 
 // NodeDataCapacity retrieves the peers state download allowance based on its
@@ -310,7 +312,7 @@ func (p *peerConnection) NodeDataCapacity(targetRTT time.Duration) int {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	return int(math.Min(1+math.Max(1, p.stateThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxStateFetch)))
+	return int(math.Min(7+math.Max(1, p.stateThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxStateFetch)))
 }
 
 // MarkLacking appends a new entity to the set of items (blocks, receipts, states)
@@ -473,6 +475,12 @@ func (ps *peerSet) HeaderIdlePeers() ([]*peerConnection, int) {
 	return ps.idlePeers(62, 65, idle, throughput)
 }
 
+func fullyIdle(p *peerConnection) bool {
+	return atomic.LoadInt32(&p.blockIdle) == 0 &&
+		atomic.LoadInt32(&p.receiptIdle) == 0 &&
+		atomic.LoadInt32(&p.stateIdle) == 0
+}
+
 // BodyIdlePeers retrieves a flat list of all the currently body-idle peers within
 // the active peer set, ordered by their reputation.
 func (ps *peerSet) BodyIdlePeers() ([]*peerConnection, int) {
@@ -523,22 +531,20 @@ func (ps *peerSet) idlePeers(minProtocol, maxProtocol int, idleCheck func(*peerC
 	defer ps.lock.RUnlock()
 
 	idle, total := make([]*peerConnection, 0, len(ps.peers)), 0
+	tps := make([]float64, 0, len(ps.peers))
 	for _, p := range ps.peers {
 		if p.version >= minProtocol && p.version <= maxProtocol {
 			if idleCheck(p) {
 				idle = append(idle, p)
+				tps = append(tps, throughput(p))
 			}
 			total++
 		}
 	}
-	for i := 0; i < len(idle); i++ {
-		for j := i + 1; j < len(idle); j++ {
-			if throughput(idle[i]) < throughput(idle[j]) {
-				idle[i], idle[j] = idle[j], idle[i]
-			}
-		}
-	}
-	return idle, total
+	// And sort them
+	sortPeers := &peerThroughputSort{idle, tps}
+	sort.Sort(sortPeers)
+	return sortPeers.p, total
 }
 
 // medianRTT returns the median RTT of the peerset, considering only the tuning
@@ -570,4 +576,25 @@ func (ps *peerSet) medianRTT() time.Duration {
 		median = rttMaxEstimate
 	}
 	return median
+}
+
+// peerThroughputSort implements the Sort interface, and allows for
+// sorting a set of peers by their throughput
+// The sorted data is with the _highest_ throughput first
+type peerThroughputSort struct {
+	p  []*peerConnection
+	tp []float64
+}
+
+func (ps *peerThroughputSort) Len() int {
+	return len(ps.p)
+}
+
+func (ps *peerThroughputSort) Less(i, j int) bool {
+	return ps.tp[i] > ps.tp[j]
+}
+
+func (ps *peerThroughputSort) Swap(i, j int) {
+	ps.p[i], ps.p[j] = ps.p[j], ps.p[i]
+	ps.tp[i], ps.tp[j] = ps.tp[j], ps.tp[i]
 }
