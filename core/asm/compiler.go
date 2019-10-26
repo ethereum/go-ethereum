@@ -201,8 +201,8 @@ func (c *Compiler) compileElement(element token) error {
 		case stringValue:
 			value = []byte(rvalue.text[1 : len(rvalue.text)-1])
 		case label:
-			value = make([]byte, 4)
-			copy(value, big.NewInt(int64(c.labels[rvalue.text])).Bytes())
+			value = big.NewInt(int64(c.labels[rvalue.text])).Bytes()
+			value = append(make([]byte, 4-len(value)), value...)
 		default:
 			return compileErr(rvalue, rvalue.text, "number, string or label")
 		}
