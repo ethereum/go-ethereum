@@ -186,6 +186,8 @@ func (c *Compiler) compileElement(element token) error {
 			pos := big.NewInt(int64(c.labels[rvalue.text])).Bytes()
 			pos = append(make([]byte, 4-len(pos)), pos...)
 			c.pushBin(pos)
+		case lineEnd:
+			c.pos--
 		default:
 			return compileErr(rvalue, rvalue.text, "number, string or label")
 		}
