@@ -241,8 +241,6 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 
 		// add recents
 		snap.Recents[number] = signer
-		// TODO remove
-		fmt.Println("Recent signer", "number", number, "signer", signer.Hex())
 	}
 	snap.Number += uint64(len(headers))
 	snap.Hash = headers[len(headers)-1].Hash()

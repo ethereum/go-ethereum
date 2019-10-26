@@ -40,7 +40,8 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-const validatorsetABI = `[{"constant":true,"inputs":[{"name":"span","type":"uint256"}],"name":"getSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getBorValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"newSpan","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"},{"name":"validatorBytes","type":"bytes"},{"name":"producerBytes","type":"bytes"}],"name":"commitSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[],"name":"proposeSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"currentSpanNumber","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getNextSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getInitialValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"spanProposalPending","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getCurrentSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getSpanByBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"validateValidatorSet","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}]`
+const validatorsetABI = `[{"constant":true,"inputs":[{"name":"span","type":"uint256"}],"name":"getSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getBorValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"},{"name":"signer","type":"address"}],"name":"isProducer","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"newSpan","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"},{"name":"validatorBytes","type":"bytes"},{"name":"producerBytes","type":"bytes"}],"name":"commitSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"},{"name":"signer","type":"address"}],"name":"isValidator","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[],"name":"proposeSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"currentSpanNumber","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getNextSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getInitialValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"spanProposalPending","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getCurrentSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getSpanByBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"validateValidatorSet","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}]`
+const stateReceiverABI = `[{"constant":true,"inputs":[{"name":"","type":"uint256"}],"name":"states","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"recordBytes","type":"bytes"}],"name":"commitState","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"getPendingStates","outputs":[{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"SYSTEM_ADDRESS","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"validatorSet","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"validateValidatorSet","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"isValidatorSetContract","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"stateId","type":"uint256"}],"name":"proposeState","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[{"name":"signer","type":"address"}],"name":"isProducer","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"signer","type":"address"}],"name":"isValidator","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"}]`
 
 const (
 	checkpointInterval = 1024 // Number of blocks after which to save the vote snapshot to the database
@@ -246,9 +247,10 @@ type Bor struct {
 	signFn SignerFn       // Signer function to authorize hashes with
 	lock   sync.RWMutex   // Protects the signer fields
 
-	ethAPI          *ethapi.PublicBlockChainAPI
-	validatorSetABI abi.ABI
-	httpClient      http.Client
+	ethAPI           *ethapi.PublicBlockChainAPI
+	validatorSetABI  abi.ABI
+	stateReceiverABI abi.ABI
+	httpClient       http.Client
 
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
@@ -272,14 +274,16 @@ func New(
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySignatures)
 	vABI, _ := abi.JSON(strings.NewReader(validatorsetABI))
+	sABI, _ := abi.JSON(strings.NewReader(stateReceiverABI))
 	c := &Bor{
-		chainConfig:     chainConfig,
-		config:          borConfig,
-		db:              db,
-		ethAPI:          ethAPI,
-		recents:         recents,
-		signatures:      signatures,
-		validatorSetABI: vABI,
+		chainConfig:      chainConfig,
+		config:           borConfig,
+		db:               db,
+		ethAPI:           ethAPI,
+		recents:          recents,
+		signatures:       signatures,
+		validatorSetABI:  vABI,
+		stateReceiverABI: sABI,
 		httpClient: http.Client{
 			Timeout: time.Duration(5 * time.Second),
 		},
@@ -663,8 +667,17 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	// commit span
 	if header.Number.Uint64()%c.config.Sprint == 0 {
-		if err := c.checkAndCommitSpan(state, header, chainContext{Chain: chain, Bor: c}); err != nil {
+		cx := chainContext{Chain: chain, Bor: c}
+
+		// check and commit span
+		if err := c.checkAndCommitSpan(state, header, cx); err != nil {
 			fmt.Println("Error while committing span", err)
+			// return nil, err
+		}
+
+		// commit statees
+		if err := c.CommitStates(state, header, cx); err != nil {
+			fmt.Println("Error while committing states", err)
 			// return nil, err
 		}
 	}
@@ -679,9 +692,18 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// commit span
 	if header.Number.Uint64()%c.config.Sprint == 0 {
-		err := c.checkAndCommitSpan(state, header, chainContext{Chain: chain, Bor: c})
+		cx := chainContext{Chain: chain, Bor: c}
+
+		// check and commit span
+		err := c.checkAndCommitSpan(state, header, cx)
 		if err != nil {
 			fmt.Println("Error while committing span", err)
+			// return nil, err
+		}
+
+		// commit statees
+		if err := c.CommitStates(state, header, cx); err != nil {
+			fmt.Println("Error while committing states", err)
 			// return nil, err
 		}
 	}
@@ -1081,6 +1103,100 @@ func (c *Bor) commitSpan(
 
 	// apply message
 	return applyMessage(msg, state, header, c.chainConfig, chain)
+}
+
+// GetPendingStateProposals get pending state proposals
+func (c *Bor) GetPendingStateProposals(snapshotNumber uint64) ([]*big.Int, error) {
+	// block
+	blockNr := rpc.BlockNumber(snapshotNumber)
+
+	// method
+	method := "getPendingStates"
+
+	data, err := c.stateReceiverABI.Pack(method)
+	if err != nil {
+		fmt.Println("Unable to pack tx for getPendingStates", "error", err)
+		return nil, err
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // cancel when we are finished consuming integers
+
+	msgData := (hexutil.Bytes)(data)
+	toAddress := common.HexToAddress(c.config.StateReceiverContract)
+	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
+	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+		Gas:  &gas,
+		To:   &toAddress,
+		Data: &msgData,
+	}, blockNr)
+	if err != nil {
+		return nil, err
+	}
+
+	var ret = new([]*big.Int)
+	if err := c.stateReceiverABI.Unpack(ret, method, result); err != nil {
+		return nil, err
+	}
+
+	return *ret, nil
+}
+
+// CommitStates commit states
+func (c *Bor) CommitStates(
+	state *state.StateDB,
+	header *types.Header,
+	chain core.ChainContext,
+) error {
+	// get pending state proposals
+	stateIds, err := c.GetPendingStateProposals(header.Number.Uint64() - 1)
+	if err != nil {
+		return err
+	}
+
+	// state ids
+	if len(stateIds) > 0 {
+		fmt.Println("Found new proposed states", len(stateIds))
+	}
+
+	method := "commitState"
+
+	// itereate through state ids
+	for _, stateID := range stateIds {
+		// fetch from heimdall
+		response, err := FetchFromHeimdall(c.httpClient, c.chainConfig.Bor.Heimdall, "clerk", "event-record", strconv.FormatUint(stateID.Uint64(), 10))
+		if err != nil {
+			return err
+		}
+
+		// get event record
+		var eventRecord EventRecord
+		if err := json.Unmarshal(response.Result, &eventRecord); err != nil {
+			return err
+		}
+
+		recordBytes, err := rlp.EncodeToBytes(eventRecord)
+		if err != nil {
+			return err
+		}
+
+		// get packed data for commit state
+		data, err := c.stateReceiverABI.Pack(method, recordBytes)
+		if err != nil {
+			fmt.Println("Unable to pack tx for commitState", "error", err)
+			return err
+		}
+
+		// get system message
+		msg := getSystemMessage(common.HexToAddress(c.config.StateReceiverContract), data)
+
+		// apply message
+		if err := applyMessage(msg, state, header, c.chainConfig, chain); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 //
