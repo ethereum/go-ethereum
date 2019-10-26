@@ -57,6 +57,7 @@ func NewCompiler(debug bool) *Compiler {
 // second stage to push labels and determine the right
 // position.
 func (c *Compiler) Feed(ch <-chan token) {
+	var prev token
 	for i := range ch {
 		switch i.typ {
 		case number:
@@ -73,10 +74,14 @@ func (c *Compiler) Feed(ch <-chan token) {
 			c.labels[i.text] = c.pc
 			c.pc++
 		case label:
-			c.pc += 5
+			c.pc += 4
+			if prev.typ == element && isJump(prev.text) {
+				c.pc++
+			}
 		}
 
 		c.tokens = append(c.tokens, i)
+		prev = i
 	}
 	if c.debug {
 		fmt.Fprintln(os.Stderr, "found", len(c.labels), "labels")
