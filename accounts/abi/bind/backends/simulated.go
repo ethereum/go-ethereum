@@ -286,8 +286,6 @@ func (b *SimulatedBackend) TransactionCount(ctx context.Context, blockHash commo
 	return uint(block.Transactions().Len()), nil
 }
 
-
-
 // TransactionInBlock returns the transaction for a specific block at a specific index
 func (b *SimulatedBackend) TransactionInBlock(ctx context.Context, blockHash common.Hash, index uint) (*types.Transaction, error) {
 	b.mu.Lock()
@@ -295,7 +293,7 @@ func (b *SimulatedBackend) TransactionInBlock(ctx context.Context, blockHash com
 
 	if blockHash == b.pendingBlock.Hash() {
 		transactions := b.pendingBlock.Transactions()
-		if uint(len(transactions)) < index + 1 {
+		if uint(len(transactions)) < index+1 {
 			return nil, errTransactionDoesNotExist
 		}
 
@@ -308,7 +306,7 @@ func (b *SimulatedBackend) TransactionInBlock(ctx context.Context, blockHash com
 	}
 
 	transactions := block.Transactions()
-	if uint(len(transactions)) < index + 1 {
+	if uint(len(transactions)) < index+1 {
 		return nil, errTransactionDoesNotExist
 	}
 
