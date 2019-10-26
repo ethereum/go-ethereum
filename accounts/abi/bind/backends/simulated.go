@@ -367,6 +367,9 @@ func (b *SimulatedBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error
 // EstimateGas executes the requested code against the currently pending block/state and
 // returns the used amount of gas.
 func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMsg) (uint64, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	// Determine the lowest and highest possible gas limits to binary search in between
 	var (
 		lo  uint64 = params.TxGas - 1
