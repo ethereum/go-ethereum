@@ -811,7 +811,7 @@ func TestSimulatedBackend_PendingAndCallContract(t *testing.T) {
 	}
 
 	// while comparing against the byte array is more exact, also compare against the human readable string for readability
-	if bytes.Compare(res, expectedReturn) != 0 || !strings.Contains(string(res), "hello world") {
+	if !bytes.Equal(res, expectedReturn) || !strings.Contains(string(res), "hello world") {
 		t.Errorf("response from calling contract was expected to be 'hello world' instead received %v", string(res))
 	}
 
@@ -830,7 +830,7 @@ func TestSimulatedBackend_PendingAndCallContract(t *testing.T) {
 		t.Errorf("result of contract call was empty: %v", res)
 	}
 
-	if bytes.Compare(res, expectedReturn) != 0 || !strings.Contains(string(res), "hello world") {
+	if !bytes.Equal(res, expectedReturn) || !strings.Contains(string(res), "hello world") {
 		t.Errorf("response from calling contract was expected to be 'hello world' instead received %v", string(res))
 	}
 }
