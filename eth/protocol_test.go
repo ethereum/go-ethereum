@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -180,16 +181,16 @@ func TestForkIDSplit(t *testing.T) {
 		blocksNoFork, _  = core.GenerateChain(configNoFork, genesisNoFork, engine, dbNoFork, 2, nil)
 		blocksProFork, _ = core.GenerateChain(configProFork, genesisProFork, engine, dbProFork, 2, nil)
 
-		ethNoFork, _  = NewProtocolManager(configNoFork, nil, downloader.FullSync, 1, new(event.TypeMux), new(testTxPool), engine, chainNoFork, dbNoFork, 1, nil)
-		ethProFork, _ = NewProtocolManager(configProFork, nil, downloader.FullSync, 1, new(event.TypeMux), new(testTxPool), engine, chainProFork, dbProFork, 1, nil)
+		ethNoFork, _  = NewProtocolManager(configNoFork, nil, downloader.FullSync, 1, new(event.TypeMux), &testTxPool{pool: make(map[common.Hash]*types.Transaction)}, engine, chainNoFork, dbNoFork, 1, nil)
+		ethProFork, _ = NewProtocolManager(configProFork, nil, downloader.FullSync, 1, new(event.TypeMux), &testTxPool{pool: make(map[common.Hash]*types.Transaction)}, engine, chainProFork, dbProFork, 1, nil)
 	)
 	ethNoFork.Start(1000)
 	ethProFork.Start(1000)
 
 	// Both nodes should allow the other to connect (same genesis, next fork is the same)
 	p2pNoFork, p2pProFork := p2p.MsgPipe()
-	peerNoFork := newPeer(64, p2p.NewPeer(enode.ID{1}, "", nil), p2pNoFork)
-	peerProFork := newPeer(64, p2p.NewPeer(enode.ID{2}, "", nil), p2pProFork)
+	peerNoFork := newPeer(64, p2p.NewPeer(enode.ID{1}, "", nil), p2pNoFork, nil)
+	peerProFork := newPeer(64, p2p.NewPeer(enode.ID{2}, "", nil), p2pProFork, nil)
 
 	errc := make(chan error, 2)
 	go func() { errc <- ethNoFork.handle(peerProFork) }()
@@ -207,8 +208,8 @@ func TestForkIDSplit(t *testing.T) {
 	chainProFork.InsertChain(blocksProFork[:1])
 
 	p2pNoFork, p2pProFork = p2p.MsgPipe()
-	peerNoFork = newPeer(64, p2p.NewPeer(enode.ID{1}, "", nil), p2pNoFork)
-	peerProFork = newPeer(64, p2p.NewPeer(enode.ID{2}, "", nil), p2pProFork)
+	peerNoFork = newPeer(64, p2p.NewPeer(enode.ID{1}, "", nil), p2pNoFork, nil)
+	peerProFork = newPeer(64, p2p.NewPeer(enode.ID{2}, "", nil), p2pProFork, nil)
 
 	errc = make(chan error, 2)
 	go func() { errc <- ethNoFork.handle(peerProFork) }()
@@ -226,8 +227,8 @@ func TestForkIDSplit(t *testing.T) {
 	chainProFork.InsertChain(blocksProFork[1:2])
 
 	p2pNoFork, p2pProFork = p2p.MsgPipe()
-	peerNoFork = newPeer(64, p2p.NewPeer(enode.ID{1}, "", nil), p2pNoFork)
-	peerProFork = newPeer(64, p2p.NewPeer(enode.ID{2}, "", nil), p2pProFork)
+	peerNoFork = newPeer(64, p2p.NewPeer(enode.ID{1}, "", nil), p2pNoFork, nil)
+	peerProFork = newPeer(64, p2p.NewPeer(enode.ID{2}, "", nil), p2pProFork, nil)
 
 	errc = make(chan error, 2)
 	go func() { errc <- ethNoFork.handle(peerProFork) }()
@@ -246,6 +247,7 @@ func TestForkIDSplit(t *testing.T) {
 // This test checks that received transactions are added to the local pool.
 func TestRecvTransactions63(t *testing.T) { testRecvTransactions(t, 63) }
 func TestRecvTransactions64(t *testing.T) { testRecvTransactions(t, 64) }
+func TestRecvTransactions65(t *testing.T) { testRecvTransactions(t, 65) }
 
 func testRecvTransactions(t *testing.T, protocol int) {
 	txAdded := make(chan []*types.Transaction)
@@ -274,6 +276,7 @@ func testRecvTransactions(t *testing.T, protocol int) {
 // This test checks that pending transactions are sent.
 func TestSendTransactions63(t *testing.T) { testSendTransactions(t, 63) }
 func TestSendTransactions64(t *testing.T) { testSendTransactions(t, 64) }
+func TestSendTransactions65(t *testing.T) { testSendTransactions(t, 65) }
 
 func testSendTransactions(t *testing.T, protocol int) {
 	pm, _ := newTestProtocolManagerMust(t, downloader.FullSync, 0, nil, nil)
@@ -298,17 +301,43 @@ func testSendTransactions(t *testing.T, protocol int) {
 		}
 		for n := 0; n < len(alltxs) && !t.Failed(); {
 			var txs []*types.Transaction
-			msg, err := p.app.ReadMsg()
-			if err != nil {
-				t.Errorf("%v: read error: %v", p.Peer, err)
-			} else if msg.Code != TxMsg {
-				t.Errorf("%v: got code %d, want TxMsg", p.Peer, msg.Code)
+			var hashes []common.Hash
+			var forAllHashes func(callback func(hash common.Hash))
+			switch protocol {
+			case 63:
+				fallthrough
+			case 64:
+				msg, err := p.app.ReadMsg()
+				if err != nil {
+					t.Errorf("%v: read error: %v", p.Peer, err)
+				} else if msg.Code != TxMsg {
+					t.Errorf("%v: got code %d, want TxMsg", p.Peer, msg.Code)
+				}
+				if err := msg.Decode(&txs); err != nil {
+					t.Errorf("%v: %v", p.Peer, err)
+				}
+				forAllHashes = func(callback func(hash common.Hash)) {
+					for _, tx := range txs {
+						callback(tx.Hash())
+					}
+				}
+			case 65:
+				msg, err := p.app.ReadMsg()
+				if err != nil {
+					t.Errorf("%v: read error: %v", p.Peer, err)
+				} else if msg.Code != NewPooledTransactionHashesMsg {
+					t.Errorf("%v: got code %d, want TxMsg", p.Peer, msg.Code)
+				}
+				if err := msg.Decode(&hashes); err != nil {
+					t.Errorf("%v: %v", p.Peer, err)
+				}
+				forAllHashes = func(callback func(hash common.Hash)) {
+					for _, h := range hashes {
+						callback(h)
+					}
+				}
 			}
-			if err := msg.Decode(&txs); err != nil {
-				t.Errorf("%v: %v", p.Peer, err)
-			}
-			for _, tx := range txs {
-				hash := tx.Hash()
+			forAllHashes(func(hash common.Hash) {
 				seentx, want := seen[hash]
 				if seentx {
 					t.Errorf("%v: got tx more than once: %x", p.Peer, hash)
@@ -318,7 +347,7 @@ func testSendTransactions(t *testing.T, protocol int) {
 				}
 				seen[hash] = true
 				n++
-			}
+			})
 		}
 	}
 	for i := 0; i < 3; i++ {
@@ -327,6 +356,53 @@ func testSendTransactions(t *testing.T, protocol int) {
 		go checktxs(p)
 	}
 	wg.Wait()
+}
+
+func TestTransactionPropagation(t *testing.T)  { testSyncTransaction(t, true) }
+func TestTransactionAnnouncement(t *testing.T) { testSyncTransaction(t, false) }
+
+func testSyncTransaction(t *testing.T, propagtion bool) {
+	// Create a protocol manager for transaction fetcher and sender
+	pmFetcher, _ := newTestProtocolManagerMust(t, downloader.FastSync, 0, nil, nil)
+	defer pmFetcher.Stop()
+	pmSender, _ := newTestProtocolManagerMust(t, downloader.FastSync, 1024, nil, nil)
+	pmSender.broadcastTxAnnouncesOnly = !propagtion
+	defer pmSender.Stop()
+
+	// Sync up the two peers
+	io1, io2 := p2p.MsgPipe()
+
+	go pmSender.handle(pmSender.newPeer(65, p2p.NewPeer(enode.ID{}, "sender", nil), io2, pmSender.txpool.Get))
+	go pmFetcher.handle(pmFetcher.newPeer(65, p2p.NewPeer(enode.ID{}, "fetcher", nil), io1, pmFetcher.txpool.Get))
+
+	time.Sleep(250 * time.Millisecond)
+	pmFetcher.synchronise(pmFetcher.peers.BestPeer())
+	atomic.StoreUint32(&pmFetcher.acceptTxs, 1)
+
+	newTxs := make(chan core.NewTxsEvent, 1024)
+	sub := pmFetcher.txpool.SubscribeNewTxsEvent(newTxs)
+	defer sub.Unsubscribe()
+
+	// Fill the pool with new transactions
+	alltxs := make([]*types.Transaction, 1024)
+	for nonce := range alltxs {
+		alltxs[nonce] = newTestTransaction(testAccount, uint64(nonce), 0)
+	}
+	pmSender.txpool.AddRemotes(alltxs)
+
+	var got int
+loop:
+	for {
+		select {
+		case ev := <-newTxs:
+			got += len(ev.Txs)
+			if got == 1024 {
+				break loop
+			}
+		case <-time.NewTimer(time.Second).C:
+			t.Fatal("Failed to retrieve all transaction")
+		}
+	}
 }
 
 // Tests that the custom union field encoder and decoder works correctly.

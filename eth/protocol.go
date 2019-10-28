@@ -33,16 +33,17 @@ import (
 const (
 	eth63 = 63
 	eth64 = 64
+	eth65 = 65
 )
 
 // protocolName is the official short name of the protocol used during capability negotiation.
 const protocolName = "eth"
 
 // ProtocolVersions are the supported versions of the eth protocol (first is primary).
-var ProtocolVersions = []uint{eth64, eth63}
+var ProtocolVersions = []uint{eth65, eth64, eth63}
 
 // protocolLengths are the number of implemented message corresponding to different protocol versions.
-var protocolLengths = map[uint]uint64{eth64: 17, eth63: 17}
+var protocolLengths = map[uint]uint64{eth65: 17, eth64: 17, eth63: 17}
 
 const protocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
 
@@ -60,6 +61,13 @@ const (
 	NodeDataMsg        = 0x0e
 	GetReceiptsMsg     = 0x0f
 	ReceiptsMsg        = 0x10
+
+	// New protocol message codes introduced in eth65
+	//
+	// Previously these message ids(0x08, 0x09) were used by some
+	// legacy and unsupported eth protocols, reown them here.
+	NewPooledTransactionHashesMsg = 0x08
+	GetPooledTransactionsMsg      = 0x09
 )
 
 type errCode int
@@ -94,6 +102,14 @@ var errorToString = map[int]string{
 }
 
 type txPool interface {
+	// Has returns an indicator whether txpool has a transaction
+	// cached with the given hash.
+	Has(hash common.Hash) bool
+
+	// Get retrieves the transaction from local txpool with given
+	// tx hash.
+	Get(hash common.Hash) *types.Transaction
+
 	// AddRemotes should add the given transactions to the pool.
 	AddRemotes([]*types.Transaction) []error
 
