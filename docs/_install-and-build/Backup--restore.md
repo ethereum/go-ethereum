@@ -25,7 +25,7 @@ Accounts are stored in the `keystore` subdirectory. The contents of this directo
 
 To configure the location of the data directory, the `--datadir` parameter can be specified. See [CLI Options](../interface/command-line-options) for more details.
 
-_**note:** the [ethash dag](../legacy/mining#ethash-dag) is stored at `~/.ethash` (Mac/Linux) or `%APPDATA%\Ethash` (Windows) so that it can be reused by all clients. You can store this in a different location by using a symbolic link._
+_**note:** the [ethash dag](../legacy/mining) is stored at `~/.ethash` (Mac/Linux) or `%APPDATA%\Ethash` (Windows) so that it can be reused by all clients. You can store this in a different location by using a symbolic link._
 
 ## Upgrades
 

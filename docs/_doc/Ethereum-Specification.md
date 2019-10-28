@@ -14,8 +14,8 @@ Specifications of all ethereum technologies, languages, protocols, etc.
 ### Specs
 
 - [JavaScript API](https://github.com/ethereum/wiki/wiki/JavaScript-API#a)
-- [Generic JSON RPC](https://github.com/ethereum/wiki/JSON-RPC)
-- [JSRE admin API](../interface/javascript-console#console-api)
+- [Generic JSON RPC](https://github.com/ethereum/wiki/wiki/JSON-RPC)
+- [JSRE admin API](../interface/javascript-console)
 - [RLP](https://github.com/ethereum/wiki/wiki/RLP)
 - [ÐΞVp2p Wire Protocol](https://github.com/ethereum/wiki/wiki/%C3%90%CE%9EVp2p-Wire-Protocol)
 - [Web3 Secret Storage](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition)

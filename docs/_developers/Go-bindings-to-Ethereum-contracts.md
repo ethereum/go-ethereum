@@ -27,7 +27,7 @@ Go.*
 ## Token contract 
 
 To avoid falling into the fallacy of useless academic examples, we're going to take the
-official [Token contract](https://ethereum.org/token) as the base for introducing the Go
+official Token contract as the base for introducing the Go
 native bindings. If you're unfamiliar with the contract, skimming the linked page should
 probably be enough, the details aren't relevant for now. *In short the contract implements
 a custom token that can be deployed on top of Ethereum.* To make sure this tutorial doesn't
@@ -83,7 +83,7 @@ of the contract itself, and need to specify a `backend` through which to access 
 The binding generator provides out of the box an RPC backend through which you can attach
 to an existing Ethereum node via IPC, HTTP or WebSockets.
 
-We'll use the foundation's [Unicorn](https://ethereum.org/donate) token contract deployed
+We'll use the foundation's Unicorn token contract deployed
 on the testnet to demonstrate calling contract methods. It is deployed at the address
 `0x21e6fc92f93c8a1bb41e2be64b4e1f88a54d3576`.
 

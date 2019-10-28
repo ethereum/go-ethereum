@@ -9,7 +9,7 @@ title: Mining
 
 At Frontier, the first release of Ethereum, you'll just need a) a GPU and b) an Ethereum client, Geth. CPU mining will be possible but too inefficient to hold any value.
 
-At the moment, Geth only includes a CPU miner, and the team is testing a [GPU miner branch](https://github.com/ethereum/go-ethereum/tree/gpu_miner), but this won't be part of Frontier.
+At the moment, Geth only includes a CPU miner, and the team is testing a GPU miner branch, but this won't be part of Frontier.
 
 The C++ implementation of Ethereum also offers a GPU miner, both as part of Eth (its CLI), AlethZero (its GUI) and EthMiner (the standalone miner). 
 
@@ -19,7 +19,7 @@ When you start up your ethereum node with `geth` it is not mining by default. To
 
 `geth --mine --minerthreads=4`
 
-You can also start and stop CPU mining at runtime using the [console](../interface/javascript-console#adminminerstart). `miner.start` takes an optional parameter for the number of miner threads. 
+You can also start and stop CPU mining at runtime using the [console](../interface/javascript-console). `miner.start` takes an optional parameter for the number of miner threads. 
 
 ```
 > miner.start(8)
@@ -46,7 +46,7 @@ miner.setEtherbase(eth.accounts[2])
 
 Note that your etherbase does not need to be an address of a local account, just an existing one. 
 
-There is an option [to add extra Data](../interface/javascript-console#adminminersetextra) (32 bytes only) to your mined blocks. By convention this is interpreted as a unicode string, so you can set your short vanity tag.
+There is an option [to add extra Data](../interface/javascript-console) (32 bytes only) to your mined blocks. By convention this is interpreted as a unicode string, so you can set your short vanity tag.
 
 ```
 miner.setExtra("ΞTHΞЯSPHΞЯΞ")
@@ -66,7 +66,7 @@ Header:
 
 See also [this proposal](https://github.com/ethereum/wiki/wiki/Extra-Data)
 
-You can check your hashrate with [miner.hashrate](../interface/javascript-console#adminminerhashrate), the result is in H/s (Hash operations per second). 
+You can check your hashrate with [miner.hashrate](../interface/javascript-console), the result is in H/s (Hash operations per second). 
 
 ```
 > miner.hashrate
@@ -139,14 +139,13 @@ The GPU miner is implemented in OpenCL, so AMD GPUs will be 'faster' than same-c
 ASICs and FPGAs are relatively inefficient and therefore discouraged. 
 
 To get openCL for your chipset and platform, try:
-* [AMD SDK openCL](http://developer.amd.com/tools-and-sdks/opencl-zone/amd-accelerated-parallel-processing-app-sdk)
+* [AMD SDK openCL](http://developer.amd.com/tools-and-sdks)
 * [NVIDIA CUDA openCL](https://developer.nvidia.com/cuda-downloads)
 
 ## On Ubuntu
 ### AMD
 
-* http://developer.amd.com/tools-and-sdks/opencl-zone/amd-accelerated-parallel-processing
-* http://developer.amd.com/tools-and-sdks/graphics-development/display-library-adl-sdk/
+* http://developer.amd.com/tools-and-sdks
 
 download: `ADL_SDK8.zip ` and `AMD-APP-SDK-v2.9-1.599.381-GA-linux64.sh`
 
@@ -189,7 +188,7 @@ You check your cooling status:
 
 ## Mining Software
 
-The official Frontier release of `geth` only supports a CPU miner natively. We are working on a [GPU miner](https://github.com/ethereum/go-ethereum/tree/gpuminer), but it may not be available for the Frontier release. Geth however can be used in conjunction with `ethminer`, using the standalone miner as workers and `geth` as scheduler communicating via [JSON-RPC](https://github.com/ethereum/wiki/JSON-RPC). 
+The official Frontier release of `geth` only supports a CPU miner natively. We are working on a GPU miner, but it may not be available for the Frontier release. Geth however can be used in conjunction with `ethminer`, using the standalone miner as workers and `geth` as scheduler communicating via [JSON-RPC](https://github.com/ethereum/wiki/wiki/JSON-RPC). 
 
 The [C++ implementation of Ethereum](https://github.com/ethereum/cpp-ethereum/) (not officially released) however has a GPU miner. It can be used from `eth`, `AlethZero` (GUI) and `ethMiner` (the standalone miner). 
 
@@ -292,5 +291,5 @@ eth -m on -G -a <coinbase> -i -v 8 //
 * https://github.com/ethereum/wiki/wiki/Ethash
 * [Benchmarking results for GPU mining](https://forum.ethereum.org/discussion/2134/gpu-mining-is-out-come-and-let-us-know-of-your-bench-scores)
 * [historic moment](https://twitter.com/gavofyork/status/586623875577937922)
-* [live mining statistic](https://etherapps.info/stats/mining)
+* [live mining statistic](https://ethstats.net/)
 * [netstat ethereum network monitor](https://stats.ethdev.com)

@@ -1,7 +1,7 @@
 ---
 title: Management APIs
 ---
-Beside the official [DApp APIs](https://github.com/ethereum/wiki/JSON-RPC) interface go-ethereum
+Beside the official [DApp APIs](https://github.com/ethereum/wiki/wiki/JSON-RPC) interface go-ethereum
 has support for additional management APIs. Similar to the DApp APIs, these are also provided using
 [JSON-RPC](http://www.jsonrpc.org/specification) and follow exactly the same conventions. Geth comes
 with a console client which has support for all additional APIs described here.
@@ -90,32 +90,33 @@ extra management API namespaces:
 
 | [admin](#admin)              | [debug](#debug)                                   | [miner](#miner)                     | [personal](#personal)                    | [txpool](#txpool)          |
 | :--------------------------- | :-----------------------------------------------  | :---------------------------------- | :--------------------------------------- | :------------------------- |
-| [addPeer](#admin_addpeer)    | [backtraceAt](#debug_backtraceAt)                 | [setExtra](#miner_setextra)         | [ecRecover](#personal_ecrecover)         | [content](#txpool_content) |
-| [datadir](#datadir)          | [blockProfile](#debug_blockProfile)               | [setGasPrice](#miner_setgasprice)   | [importRawKey](#personal_importrawkey)   | [inspect](#txpool_inspect) |
-| [nodeInfo](#admin_nodeinfo)  | [cpuProfile](#debug_cpuProfile)                   | [start](#miner_start)               | [listAccounts](#personal_listaccounts)   | [status](#txpool_status)   |
+| [addPeer](#admin_addpeer)    | [backtraceAt](#debug_backtraceat)                 | [setExtra](#miner_setextra)         | [ecRecover](#personal_ecrecover)         | [content](#txpool_content) |
+| [datadir](#admin_datadir)          | [blockProfile](#debug_blockprofile)               | [setGasPrice](#miner_setgasprice)   | [importRawKey](#personal_importrawkey)   | [inspect](#txpool_inspect) |
+| [nodeInfo](#admin_nodeinfo)  | [cpuProfile](#debug_cpuprofile)                   | [start](#miner_start)               | [listAccounts](#personal_listaccounts)   | [status](#txpool_status)   |
 | [peers](#admin_peers)        | [dumpBlock](#debug_dumpblock)                     | [stop](#miner_stop)                 | [lockAccount](#personal_lockaccount)     |                            |
-| [setSolc](#admin_setcolc)    | [gcStats](#debug_gcStats)                         | [getHashrate](#miner_gethashrate)   | [newAccount](#personal_newaccount)       |                            |
+| [setSolc](#admin_setsolc)    | [gcStats](#debug_gcstats)                         | [getHashrate](#miner_gethashrate)   | [newAccount](#personal_newaccount)       |                            |
 | [startRPC](#admin_startrpc)  | [getBlockRlp](#debug_getblockrlp)                 | [setEtherbase](#miner_setetherbase) | [unlockAccount](#personal_unlockaccount) |                            |
-| [startWS](#admin_startws)    | [goTrace](#debug_goTrace)                         |                                     | [sendTransaction](#personal_sendtransaction) |                        |
-| [stopRPC](#admin_stoprpc)    | [memStats](#debug_memStats)                       |                                     | [sign](#personal_sign)                   |                            |
+| [startWS](#admin_startws)    | [goTrace](#debug_gotrace)                         |                                     | [sendTransaction](#personal_sendtransaction) |                        |
+| [stopRPC](#admin_stoprpc)    | [memStats](#debug_memstats)                       |                                     | [sign](#personal_sign)                   |                            |
 | [stopWS](#admin_stopws)      | [seedHash](#debug_seedhash)[sign](#personal_sign)|                                      |                                          |                            |
-|                              | [setBlockProfileRate](#debug_setBlockProfileRate) |                                     |                                          |                            |
+|                              | [setBlockProfileRate](#debug_setblockprofilerate) |                                     |                                          |                            |
 |                              | [setHead](#debug_sethead)                         |                                     |                                          |                            |
 |                              | [stacks](#debug_stacks)                           |                                     |                                          |                            |
-|                              | [startCPUProfile](#debug_startCPUProfile)         |                                     |                                          |                            |
-|                              | [startGoTrace](#debug_startGoTrace)               |                                     |                                          |                            |
-|                              | [stopCPUProfile](#debug_stopCPUProfile)           |                                     |                                          |                            |
-|                              | [stopGoTrace](#debug_stopGoTrace)                 |                                     |                                          |                            |
+|                              | [startCPUProfile](#debug_startcpuprofile)         |                                     |                                          |                            |
+|                              | [startGoTrace](#debug_startgotrace)               |                                     |                                          |                            |
+|                              | [stopCPUProfile](#debug_stopcpuprofile)           |                                     |                                          |                            |
+|                              | [stopGoTrace](#debug_stopgotrace)                 |                                     |                                          |                            |
 |                              | [traceBlock](#debug_traceblock)                   |                                     |                                          |                            |
-|                              | [traceBlockByNumber](#debug_blockbynumber)        |                                     |                                          |                            |
-|                              | [traceBlockByHash](#debug_blockbyhash)            |                                     |                                          |                            |
+|                              | [traceBlockByNumber](#debug_traceblockbynumber)        |                                     |                                          |                            |
+|                              | [traceBlockByHash](#debug_traceblockbyhash)            |                                     |                                          |                            |
 |                              | [traceBlockFromFile](#debug_traceblockfromfile)   |                                     |                                          |                            |
 |                              | [traceTransaction](#debug_tracetransaction)       |                                     |                                          |                            |
 |                              | [verbosity](#debug_verbosity)                     |                                     |                                          |                            |
 |                              | [vmodule](#debug_vmodule)                         |                                     |                                          |                            |
-|                              | [writeBlockProfile](#debug_writeBlockProfile)     |                                     |                                          |                            |
-|                              | [writeMemProfile](#debug_writeMemProfile)         |                                     |                                          |                            |
-|                              | [standardTraceBlockToFile](#debug_standardTraceBlockToFile)|                             |                                          |                            | 
+|                              | [writeBlockProfile](#debug_writeblockprofile)     |                                     |                                          |                            |
+|                              | [writeMemProfile](#debug_writememprofile)         |                                     |                                          |                            |
+|                              | [standardTraceBlockToFile](#debug_standardtraceblocktofile)|                             |                                          |                            | 
+
 
 ## Admin
 
@@ -628,7 +629,7 @@ References:
 
 ### debug_traceBlockByNumber
 
-Similar to [debug_traceBlock](#debug_traceBlock), `traceBlockByNumber` accepts a block number and will replay the
+Similar to [debug_traceBlock](#debug_traceblock), `traceBlockByNumber` accepts a block number and will replay the
 block that is already present in the database.
 
 | Client  | Method invocation                                                              |
@@ -642,7 +643,7 @@ References:
 
 ### debug_traceBlockByHash
 
-Similar to [debug_traceBlock](#debug_traceBlock), `traceBlockByHash` accepts a block hash and will replay the
+Similar to [debug_traceBlock](#debug_traceblock), `traceBlockByHash` accepts a block hash and will replay the
 block that is already present in the database.
 
 | Client  | Method invocation                                                               |
@@ -656,7 +657,7 @@ References:
 
 ### debug_traceBlockFromFile
 
-Similar to [debug_traceBlock](#debug_traceBlock), `traceBlockFromFile` accepts a file containing the RLP of the block.
+Similar to [debug_traceBlock](#debug_traceblock), `traceBlockFromFile` accepts a file containing the RLP of the block.
 
 | Client  | Method invocation                                                                |
 |:-------:|----------------------------------------------------------------------------------|
@@ -925,6 +926,15 @@ flag.
 
 The `miner` API allows you to remote control the node's mining operation and set various
 mining specific settings.
+
+### miner_getHashrate
+
+Get your hashrate in H/s (Hash operations per second). 
+
+| Client  | Method invocation                                           |
+|:-------:|-------------------------------------------------------------|
+| Console | `miner.getHashrate()`                                       |
+| RPC     | `{"method": "miner_getHashrate", "params": []}`             |
 
 ### miner_setExtra
 

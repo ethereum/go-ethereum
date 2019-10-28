@@ -25,7 +25,7 @@ Developers and community enthusiast are advised to read the [Developers' Guide](
 ## Interfaces
 
 * Javascript Console: `geth` can be launched with an interactive console, that provides a javascript runtime environment exposing a javascript API to interact with your node. [Javascript Console API](../interface/javascript-console) includes the `web3` javascript Ðapp API as well as an additional admin API. 
-* JSON-RPC server: `geth` can be launched with a json-rpc server that exposes the [JSON-RPC API](https://github.com/ethereum/wiki/JSON-RPC)
+* JSON-RPC server: `geth` can be launched with a server that exposes the [JSON-RPC API](https://github.com/ethereum/wiki/wiki/JSON-RPC)
 * [Command line options](../interface/command-line-options) documents command line parameters as well as subcommands.
 
 ## Basic Use Case Documentation
@@ -37,7 +37,7 @@ Developers and community enthusiast are advised to read the [Developers' Guide](
 
 ## License
 
-The Ethereum Core Protocol licensed under the [GNU Lesser General Public License](https://www.gnu.org/licenses/lgpl.html). All frontend client software (under [cmd](https://github.com/ethereum/go-ethereum/tree/develop/cmd)) is licensed under the [GNU General Public License](https://www.gnu.org/copyleft/gpl.html).
+The Ethereum Core Protocol licensed under the [GNU Lesser General Public License](https://www.gnu.org/licenses/lgpl.html). All frontend client software (under [cmd](https://github.com/ethereum/go-ethereum/tree/master/cmd)) is licensed under the [GNU General Public License](https://www.gnu.org/copyleft/gpl.html).
 
 ## Reporting 
 
@@ -85,8 +85,6 @@ IRC Freenode channels:
 * `#dappdevs`: Dapp developers channel
 * `#ethdev`: buildserver etc
 
-[IRC Logs by ZeroGox](https://zerogox.com/bot/log)
-
 ### Gitter 
 
 * [go-ethereum Gitter](https://gitter.im/ethereum/go-ethereum)
@@ -96,11 +94,7 @@ IRC Freenode channels:
 
 ### Forum
 
-- [Forum](https://forum.ethereum.org/categories/go-implementation)
-
-### The ZeroGox Bot
-
-[ZeroGox Bot](https://zerogox.com/bot)
+- [Forum](https://forum.ethereum.org/categories/geth)
 
 ### Dapp developers' mailing list
 

@@ -19,13 +19,9 @@ defaults:
   - scope:
       path: "*/*"
     values:
-      root: "../../.."
-  - scope:
-      path: "*/*/*"
-    values:
-      root: "../../../.."
+      root: "../.."
 
-default_root: "../../.."
+default_root: "../.."
 
 collections_dir: docs
 collections:
