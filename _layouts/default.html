@@ -31,7 +31,7 @@ common-js:
         <div id="navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
             {% for link in site.data.navbar %}
-	    {% capture target %}{% include link.html url=link.last %}{% endcapture %}
+        {% capture target %}{% include link.html url=link.last %}{% endcapture %}
               <li><a href="{{target |strip }}">{{ link.first }}</a></li>
               {% endfor %}
           </ul>
@@ -41,8 +41,12 @@ common-js:
     {{ content }}
     <hr/>
     <footer class="container">
-        <p>&copy; 2013–2019. The go-ethereum Authors. | <a href="https://github.com/ethereum/go-ethereum/blob/gh-pages/{{ page.name }}">Edit this page</a></p>
-</p>
+      {%- capture gh_link -%}
+      https://github.com/ethereum/go-ethereum/blob/gh-pages/
+      {%- if page.collection -%}{{ site.collections_dir }}/{%- endif -%}
+      {{- page.path -}}
+      {%- endcapture -%}
+      <p>&copy; 2013–2019. The go-ethereum Authors. <a href="{{ gh_link }}">Edit this page.</a></p>
     </footer>
   </body>
 </html>
