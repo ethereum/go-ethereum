@@ -271,6 +271,9 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
 		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
+
+		// Heuristic limit, reject transactions over 32KB to prevent DOS attacks
+		maxTxSize: 32 * 1024,
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
