@@ -77,6 +77,13 @@ func pricedTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key *ec
 	return tx
 }
 
+func pricedDataTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key *ecdsa.PrivateKey, numDataBytes uint64) *types.Transaction {
+	data := make([]byte, numDataBytes)
+	rand.Read(data)
+	tx, _ := types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(0), gaslimit, gasprice, data), types.HomesteadSigner{}, key)
+	return tx
+}
+
 func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed)}
@@ -751,6 +758,55 @@ func TestTransactionQueueAccountLimiting(t *testing.T) {
 	}
 	if pool.all.Count() != int(testTxPoolConfig.AccountQueue) {
 		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), testTxPoolConfig.AccountQueue)
+	}
+}
+
+// Test the limit on transaction size is enforced correctly.
+// This test verifies every transaction having allowed size
+// is added to the pool, and longer transactions are rejected.
+func TestAllowedTxSize(t *testing.T) {
+	t.Parallel()
+
+	// Create a test account and fund it
+	pool, key := setupTxPool()
+	defer pool.Stop()
+
+	account, _ := deriveSender(transaction(0, 0, key))
+	pool.currentState.AddBalance(account, big.NewInt(1024*int64(pool.currentMaxGas)))
+
+	// Compute maximal data size for transactions (lower bound).
+	// It is assumed the fields in the transaction (except of the data) are:
+	// nonce : at most 32 bytes
+	// gasPrice : at most 32 bytes
+	// gasLimit : at most 32 bytes
+	// To address : 20 bytes
+	// value : at most 32 bytes
+	// signature : 65 bytes
+	// All those fields are summed up to at most 213 bytes.
+	txSizeWithoutData := uint64(213)
+	maxDataSize := pool.maxTxSize - txSizeWithoutData
+
+	// Increase block gas limit to infinity
+	pool.currentMaxGas = 2 << 60
+
+	// Try adding a transaction with maximal allowed size
+	if err := pool.validateTx(pricedDataTransaction(0, pool.currentMaxGas, big.NewInt(0), key, maxDataSize), true); err != nil {
+		t.Fatalf("failed to add transaction of size close to maximal: %d, %v", int(pricedDataTransaction(0, pool.currentMaxGas, big.NewInt(1), key, maxDataSize).Size()), err)
+	}
+
+	// Try adding a transaction with random allowed size
+	if err := pool.validateTx(pricedDataTransaction(0, pool.currentMaxGas, big.NewInt(0), key, uint64(rand.Intn(int(maxDataSize)))), true); err != nil {
+		t.Fatalf("failed to add transaction of random allowed size: %v", err)
+	}
+
+	// Try adding a transaction of minimal not allowed size
+	if pool.validateTx(pricedDataTransaction(0, pool.currentMaxGas, big.NewInt(0), key, pool.maxTxSize), true) == nil {
+		t.Fatalf("expected rejection on slightly oversize transaction")
+	}
+
+	// Try adding a transaction of random not allowed size
+	if pool.validateTx(pricedDataTransaction(0, pool.currentMaxGas, big.NewInt(1), key, maxDataSize+1+uint64(rand.Intn(int(10*pool.maxTxSize)))), true) == nil {
+		t.Fatalf("expected rejection on oversize transaction")
 	}
 }
 
