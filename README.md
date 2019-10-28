@@ -255,7 +255,7 @@ set:
 $ geth init path/to/genesis.json
 ```
 
-#### Creating the rendezvous point
+#### Creating the rendezvous point.
 
 With all nodes that you want to run initialized to the desired genesis state, you'll need to
 start a bootstrap node that others can use to find each other in your network and/or over
