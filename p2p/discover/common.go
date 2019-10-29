@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
+// UDPConn is a network connection on which discovery can operate.
 type UDPConn interface {
 	ReadFromUDP(b []byte) (n int, addr *net.UDPAddr, err error)
 	WriteToUDP(b []byte, addr *net.UDPAddr) (n int, err error)
@@ -32,7 +33,7 @@ type UDPConn interface {
 	LocalAddr() net.Addr
 }
 
-// Config holds Table-related settings.
+// Config holds settings for the discovery listener.
 type Config struct {
 	// These settings are required and configure the UDP listener:
 	PrivateKey *ecdsa.PrivateKey
@@ -50,7 +51,7 @@ func ListenUDP(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 }
 
 // ReadPacket is a packet that couldn't be handled. Those packets are sent to the unhandled
-// channel if configured.
+// channel if configured. This is exported for internal use, do not use this type.
 type ReadPacket struct {
 	Data []byte
 	Addr *net.UDPAddr

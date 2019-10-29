@@ -39,6 +39,7 @@ var (
 			discv4RequestRecordCommand,
 			discv4ResolveCommand,
 			discv4ResolveJSONCommand,
+			discv4CrawlCommand,
 		},
 	}
 	discv4PingCommand = cli.Command{
@@ -67,12 +68,25 @@ var (
 		Flags:     []cli.Flag{bootnodesFlag},
 		ArgsUsage: "<nodes.json file>",
 	}
+	discv4CrawlCommand = cli.Command{
+		Name:   "crawl",
+		Usage:  "Updates a nodes.json file with random nodes found in the DHT",
+		Action: discv4Crawl,
+		Flags:  []cli.Flag{bootnodesFlag, crawlTimeoutFlag},
+	}
 )
 
-var bootnodesFlag = cli.StringFlag{
-	Name:  "bootnodes",
-	Usage: "Comma separated nodes used for bootstrapping",
-}
+var (
+	bootnodesFlag = cli.StringFlag{
+		Name:  "bootnodes",
+		Usage: "Comma separated nodes used for bootstrapping",
+	}
+	crawlTimeoutFlag = cli.DurationFlag{
+		Name:  "timeout",
+		Usage: "Time limit for the crawl.",
+		Value: 30 * time.Minute,
+	}
+)
 
 func discv4Ping(ctx *cli.Context) error {
 	n := getNodeArg(ctx)
@@ -113,30 +127,48 @@ func discv4ResolveJSON(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
 		return fmt.Errorf("need nodes file as argument")
 	}
-	disc := startV4(ctx)
-	defer disc.Close()
-	file := ctx.Args().Get(0)
-
-	// Load existing nodes in file.
-	var nodes []*enode.Node
-	if common.FileExist(file) {
-		nodes = loadNodesJSON(file).nodes()
+	nodesFile := ctx.Args().Get(0)
+	inputSet := make(nodeSet)
+	if common.FileExist(nodesFile) {
+		inputSet = loadNodesJSON(nodesFile)
 	}
-	// Add nodes from command line arguments.
+
+	// Add extra nodes from command line arguments.
+	var nodeargs []*enode.Node
 	for i := 1; i < ctx.NArg(); i++ {
 		n, err := parseNode(ctx.Args().Get(i))
 		if err != nil {
 			exit(err)
 		}
-		nodes = append(nodes, n)
+		nodeargs = append(nodeargs, n)
 	}
 
-	result := make(nodeSet, len(nodes))
-	for _, n := range nodes {
-		n = disc.Resolve(n)
-		result[n.ID()] = nodeJSON{Seq: n.Seq(), N: n}
+	// Run the crawler.
+	disc := startV4(ctx)
+	defer disc.Close()
+	c := newCrawler(inputSet, disc, enode.IterNodes(nodeargs))
+	c.revalidateInterval = 0
+	output := c.run(0)
+	writeNodesJSON(nodesFile, output)
+	return nil
+}
+
+func discv4Crawl(ctx *cli.Context) error {
+	if ctx.NArg() < 1 {
+		return fmt.Errorf("need nodes file as argument")
 	}
-	writeNodesJSON(file, result)
+	nodesFile := ctx.Args().First()
+	var inputSet nodeSet
+	if common.FileExist(nodesFile) {
+		inputSet = loadNodesJSON(nodesFile)
+	}
+
+	disc := startV4(ctx)
+	defer disc.Close()
+	c := newCrawler(inputSet, disc, disc.RandomNodes())
+	c.revalidateInterval = 10 * time.Minute
+	output := c.run(ctx.Duration(crawlTimeoutFlag.Name))
+	writeNodesJSON(nodesFile, output)
 	return nil
 }
 

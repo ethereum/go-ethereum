@@ -80,7 +80,7 @@ func newID(config *params.ChainConfig, genesis common.Hash, head uint64) ID {
 	return ID{Hash: checksumToBytes(hash), Next: next}
 }
 
-// NewFilter creates an filter that returns if a fork ID should be rejected or not
+// NewFilter creates a filter that returns if a fork ID should be rejected or not
 // based on the local chain's status.
 func NewFilter(chain *core.BlockChain) func(id ID) error {
 	return newFilter(
@@ -90,6 +90,12 @@ func NewFilter(chain *core.BlockChain) func(id ID) error {
 			return chain.CurrentHeader().Number.Uint64()
 		},
 	)
+}
+
+// NewStaticFilter creates a filter at block zero.
+func NewStaticFilter(config *params.ChainConfig, genesis common.Hash) func(id ID) error {
+	head := func() uint64 { return 0 }
+	return newFilter(config, genesis, head)
 }
 
 // newFilter is the internal version of NewFilter, taking closures as its arguments

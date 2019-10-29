@@ -20,7 +20,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"net"
-	"reflect"
 	"sort"
 	"testing"
 
@@ -49,19 +48,7 @@ func TestUDPv4_Lookup(t *testing.T) {
 	}()
 
 	// Answer lookup packets.
-	for done := false; !done; {
-		done = test.waitPacketOut(func(p packetV4, to *net.UDPAddr, hash []byte) {
-			n, key := lookupTestnet.nodeByAddr(to)
-			switch p.(type) {
-			case *pingV4:
-				test.packetInFrom(nil, key, to, &pongV4{Expiration: futureExp, ReplyTok: hash})
-			case *findnodeV4:
-				dist := enode.LogDist(n.ID(), lookupTestnet.target.id())
-				nodes := lookupTestnet.nodesAtDistance(dist - 1)
-				test.packetInFrom(nil, key, to, &neighborsV4{Expiration: futureExp, Nodes: nodes})
-			}
-		})
-	}
+	serveTestnet(test, lookupTestnet)
 
 	// Verify result nodes.
 	results := <-resultC
@@ -78,8 +65,94 @@ func TestUDPv4_Lookup(t *testing.T) {
 	if !sortedByDistanceTo(lookupTestnet.target.id(), wrapNodes(results)) {
 		t.Errorf("result set not sorted by distance to target")
 	}
-	if !reflect.DeepEqual(results, lookupTestnet.closest(bucketSize)) {
-		t.Errorf("results aren't the closest %d nodes", bucketSize)
+	if err := checkNodesEqual(results, lookupTestnet.closest(bucketSize)); err != nil {
+		t.Errorf("results aren't the closest %d nodes\n%v", bucketSize, err)
+	}
+}
+
+func TestUDPv4_LookupIterator(t *testing.T) {
+	t.Parallel()
+	test := newUDPTest(t)
+	defer test.close()
+
+	// Seed table with initial nodes.
+	bootnodes := make([]*node, len(lookupTestnet.dists[256]))
+	for i := range lookupTestnet.dists[256] {
+		bootnodes[i] = wrapNode(lookupTestnet.node(256, i))
+	}
+	fillTable(test.table, bootnodes)
+	go serveTestnet(test, lookupTestnet)
+
+	// Create the iterator and collect the nodes it yields.
+	iter := test.udp.RandomNodes()
+	seen := make(map[enode.ID]*enode.Node)
+	for limit := lookupTestnet.len(); iter.Next() && len(seen) < limit; {
+		seen[iter.Node().ID()] = iter.Node()
+	}
+	iter.Close()
+
+	// Check that all nodes in lookupTestnet were seen by the iterator.
+	results := make([]*enode.Node, 0, len(seen))
+	for _, n := range seen {
+		results = append(results, n)
+	}
+	sortByID(results)
+	want := lookupTestnet.nodes()
+	if err := checkNodesEqual(results, want); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestUDPv4_LookupIteratorClose checks that lookupIterator ends when its Close
+// method is called.
+func TestUDPv4_LookupIteratorClose(t *testing.T) {
+	t.Parallel()
+	test := newUDPTest(t)
+	defer test.close()
+
+	// Seed table with initial nodes.
+	bootnodes := make([]*node, len(lookupTestnet.dists[256]))
+	for i := range lookupTestnet.dists[256] {
+		bootnodes[i] = wrapNode(lookupTestnet.node(256, i))
+	}
+	fillTable(test.table, bootnodes)
+	go serveTestnet(test, lookupTestnet)
+
+	it := test.udp.RandomNodes()
+	if ok := it.Next(); !ok || it.Node() == nil {
+		t.Fatalf("iterator didn't return any node")
+	}
+
+	it.Close()
+
+	ncalls := 0
+	for ; ncalls < 100 && it.Next(); ncalls++ {
+		if it.Node() == nil {
+			t.Error("iterator returned Node() == nil node after Next() == true")
+		}
+	}
+	t.Logf("iterator returned %d nodes after close", ncalls)
+	if it.Next() {
+		t.Errorf("Next() == true after close and %d more calls", ncalls)
+	}
+	if n := it.Node(); n != nil {
+		t.Errorf("iterator returned non-nil node after close and %d more calls", ncalls)
+	}
+}
+
+func serveTestnet(test *udpTest, testnet *preminedTestnet) {
+	for done := false; !done; {
+		done = test.waitPacketOut(func(p packetV4, to *net.UDPAddr, hash []byte) {
+			n, key := testnet.nodeByAddr(to)
+			switch p.(type) {
+			case *pingV4:
+				test.packetInFrom(nil, key, to, &pongV4{Expiration: futureExp, ReplyTok: hash})
+			case *findnodeV4:
+				dist := enode.LogDist(n.ID(), testnet.target.id())
+				nodes := testnet.nodesAtDistance(dist - 1)
+				test.packetInFrom(nil, key, to, &neighborsV4{Expiration: futureExp, Nodes: nodes})
+			}
+		})
 	}
 }
 
@@ -146,6 +219,25 @@ var lookupTestnet = &preminedTestnet{
 type preminedTestnet struct {
 	target encPubkey
 	dists  [hashBits + 1][]*ecdsa.PrivateKey
+}
+
+func (tn *preminedTestnet) len() int {
+	n := 0
+	for _, keys := range tn.dists {
+		n += len(keys)
+	}
+	return n
+}
+
+func (tn *preminedTestnet) nodes() []*enode.Node {
+	result := make([]*enode.Node, 0, tn.len())
+	for dist, keys := range tn.dists {
+		for index := range keys {
+			result = append(result, tn.node(dist, index))
+		}
+	}
+	sortByID(result)
+	return result
 }
 
 func (tn *preminedTestnet) node(dist, index int) *enode.Node {
