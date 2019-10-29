@@ -57,14 +57,14 @@ func newLookup(ctx context.Context, tab *Table, target enode.ID, q queryFunc) *l
 
 // run runs the lookup to completion and returns the closest nodes found.
 func (it *lookup) run() []*enode.Node {
-	for it.next() {
+	for it.advance() {
 	}
 	return unwrapNodes(it.result.entries)
 }
 
-// next advances the lookup until any new nodes have been found.
+// advance advances the lookup until any new nodes have been found.
 // It returns false when the lookup has ended.
-func (it *lookup) next() bool {
+func (it *lookup) advance() bool {
 	for it.startQueries() {
 		select {
 		case nodes := <-it.replyCh:
@@ -194,7 +194,7 @@ func (it *lookupIterator) Next() bool {
 			it.lookup = it.nextLookup(it.ctx)
 			continue
 		}
-		if !it.lookup.next() {
+		if !it.lookup.advance() {
 			it.lookup = nil
 			continue
 		}
