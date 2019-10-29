@@ -45,6 +45,11 @@ import (
 const (
 	defaultDialTimeout = 15 * time.Second
 
+	// This is the fairness knob for the discovery mixer. When looking for peers, we'll
+	// wait this long for a single source of candidates before moving on and trying other
+	// sources.
+	discmixTimeout = 5 * time.Second
+
 	// Connectivity defaults.
 	maxActiveDialTasks     = 16
 	defaultMaxPendingPeers = 50
@@ -525,7 +530,7 @@ func (srv *Server) setupLocalNode() error {
 }
 
 func (srv *Server) setupDiscovery() error {
-	srv.discmix = enode.NewFairMix(fallbackInterval)
+	srv.discmix = enode.NewFairMix(discmixTimeout)
 
 	// Add protocol-specific discovery sources.
 	added := make(map[string]bool)
