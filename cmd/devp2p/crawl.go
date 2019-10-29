@@ -73,16 +73,15 @@ loop:
 		case n := <-c.ch:
 			c.updateNode(n)
 		case it := <-doneCh:
-			liveIters--
-			if liveIters == 0 {
-				break loop
-			}
 			if it == c.inputIter {
 				// Enable timeout when we're done revalidating the input nodes.
 				log.Info("Revalidation of input set is done", "len", len(c.input))
 				if timeout > 0 {
 					timeoutCh = timeoutTimer.C
 				}
+			}
+			if liveIters--; liveIters == 0 {
+				break loop
 			}
 		case <-timeoutCh:
 			break loop
