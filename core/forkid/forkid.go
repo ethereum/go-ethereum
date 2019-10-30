@@ -50,6 +50,9 @@ type ID struct {
 	Next uint64  // Block number of the next upcoming fork, or 0 if no forks are known
 }
 
+// Filter is a fork id filter to validate a remotely advertised ID.
+type Filter func(id ID) error
+
 // NewID calculates the Ethereum fork ID from the chain config and head.
 func NewID(chain *core.BlockChain) ID {
 	return newID(
@@ -82,7 +85,7 @@ func newID(config *params.ChainConfig, genesis common.Hash, head uint64) ID {
 
 // NewFilter creates a filter that returns if a fork ID should be rejected or not
 // based on the local chain's status.
-func NewFilter(chain *core.BlockChain) func(id ID) error {
+func NewFilter(chain *core.BlockChain) Filter {
 	return newFilter(
 		chain.Config(),
 		chain.Genesis().Hash(),
