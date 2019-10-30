@@ -19,6 +19,7 @@ package miner
 import (
 	"math/big"
 	"math/rand"
+	"runtime"
 	"testing"
 	"time"
 
@@ -340,7 +341,13 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 		}
 	}
 	w.fullTaskHook = func() {
-		time.Sleep(1000 * time.Millisecond)
+		// Aarch64 unit tests are running in a VM on travis, they must
+		// be given more time to execute.
+		if runtime.GOARCH == "arm64" {
+			time.Sleep(1000 * time.Millisecond)
+		} else {
+			time.Sleep(100 * time.Millisecond)
+		}
 	}
 
 	// Ensure worker has finished initialization
