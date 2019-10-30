@@ -47,7 +47,7 @@ jobs:
       dist: xenial
       go: 1.13.x
       script:
-        - export GODEBUG=netdns=go+1
+        - export GODEBUG=netdns=cgo
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
