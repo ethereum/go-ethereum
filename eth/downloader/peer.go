@@ -227,34 +227,34 @@ func (p *peerConnection) FetchNodeData(hashes []common.Hash) error {
 // SetHeadersIdle sets the peer to idle, allowing it to execute new header retrieval
 // requests. Its estimated header retrieval throughput is updated with that measured
 // just now.
-func (p *peerConnection) SetHeadersIdle(delivered int) {
-	p.setIdle(p.headerStarted, delivered, &p.headerThroughput, &p.headerIdle)
+func (p *peerConnection) SetHeadersIdle(delivered int, deliveryTime time.Time) {
+	p.setIdle(deliveryTime.Sub(p.headerStarted), delivered, &p.headerThroughput, &p.headerIdle)
 }
 
 // SetBodiesIdle sets the peer to idle, allowing it to execute block body retrieval
 // requests. Its estimated body retrieval throughput is updated with that measured
 // just now.
-func (p *peerConnection) SetBodiesIdle(delivered int) {
-	p.setIdle(p.blockStarted, delivered, &p.blockThroughput, &p.blockIdle)
+func (p *peerConnection) SetBodiesIdle(delivered int, deliveryTime time.Time) {
+	p.setIdle(deliveryTime.Sub(p.blockStarted), delivered, &p.blockThroughput, &p.blockIdle)
 }
 
 // SetReceiptsIdle sets the peer to idle, allowing it to execute new receipt
 // retrieval requests. Its estimated receipt retrieval throughput is updated
 // with that measured just now.
-func (p *peerConnection) SetReceiptsIdle(delivered int) {
-	p.setIdle(p.receiptStarted, delivered, &p.receiptThroughput, &p.receiptIdle)
+func (p *peerConnection) SetReceiptsIdle(delivered int, deliveryTime time.Time) {
+	p.setIdle(deliveryTime.Sub(p.receiptStarted), delivered, &p.receiptThroughput, &p.receiptIdle)
 }
 
 // SetNodeDataIdle sets the peer to idle, allowing it to execute new state trie
 // data retrieval requests. Its estimated state retrieval throughput is updated
 // with that measured just now.
-func (p *peerConnection) SetNodeDataIdle(delivered int) {
-	p.setIdle(p.stateStarted, delivered, &p.stateThroughput, &p.stateIdle)
+func (p *peerConnection) SetNodeDataIdle(delivered int, deliveryTime time.Time) {
+	p.setIdle(deliveryTime.Sub(p.stateStarted), delivered, &p.stateThroughput, &p.stateIdle)
 }
 
 // setIdle sets the peer to idle, allowing it to execute new retrieval requests.
 // Its estimated retrieval throughput is updated with that measured just now.
-func (p *peerConnection) setIdle(started time.Time, delivered int, throughput *float64, idle *int32) {
+func (p *peerConnection) setIdle(elapsed time.Duration, delivered int, throughput *float64, idle *int32) {
 	// Irrelevant of the scaling, make sure the peer ends up idle
 	defer atomic.StoreInt32(idle, 0)
 
@@ -267,7 +267,9 @@ func (p *peerConnection) setIdle(started time.Time, delivered int, throughput *f
 		return
 	}
 	// Otherwise update the throughput with a new measurement
-	elapsed := time.Since(started) + 1 // +1 (ns) to ensure non-zero divisor
+	if elapsed <= 0{
+		elapsed = 1 // +1 (ns) to ensure non-zero divisor
+	}
 	measured := float64(delivered) / (float64(elapsed) / float64(time.Second))
 
 	*throughput = (1-measurementImpact)*(*throughput) + measurementImpact*measured
@@ -285,7 +287,7 @@ func (p *peerConnection) HeaderCapacity(targetRTT time.Duration) int {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	return int(math.Min(7+math.Max(1, p.headerThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxHeaderFetch)))
+	return int(math.Min(1+math.Max(1, p.headerThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxHeaderFetch)))
 }
 
 // BlockCapacity retrieves the peers block download allowance based on its
@@ -294,7 +296,7 @@ func (p *peerConnection) BlockCapacity(targetRTT time.Duration) int {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	return int(math.Min(7+math.Max(1, p.blockThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxBlockFetch)))
+	return int(math.Min(1+math.Max(1, p.blockThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxBlockFetch)))
 }
 
 // ReceiptCapacity retrieves the peers receipt download allowance based on its
@@ -303,7 +305,7 @@ func (p *peerConnection) ReceiptCapacity(targetRTT time.Duration) int {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	return int(math.Min(7+math.Max(1, p.receiptThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxReceiptFetch)))
+	return int(math.Min(1+math.Max(1, p.receiptThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxReceiptFetch)))
 }
 
 // NodeDataCapacity retrieves the peers state download allowance based on its
@@ -312,7 +314,7 @@ func (p *peerConnection) NodeDataCapacity(targetRTT time.Duration) int {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	return int(math.Min(7+math.Max(1, p.stateThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxStateFetch)))
+	return int(math.Min(1+math.Max(1, p.stateThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxStateFetch)))
 }
 
 // MarkLacking appends a new entity to the set of items (blocks, receipts, states)
