@@ -45,6 +45,7 @@ collections:
     output: true
     permalink: docs/:collection/:slug
     caption: JSON RPC APIs
+    frontpage: _rpc/index.md
     sidebar_index: 4
   support:
     output: true
