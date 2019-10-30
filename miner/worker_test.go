@@ -84,6 +84,7 @@ func init() {
 	pendingTxs = append(pendingTxs, tx1)
 	tx2, _ := types.SignTx(types.NewTransaction(1, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
 	newTxs = append(newTxs, tx2)
+	rand.Seed(time.Now().UnixNano())
 }
 
 // testWorkerBackend implements worker.Backend interfaces and wraps all information needed during the testing.
@@ -159,9 +160,9 @@ func (b *testWorkerBackend) newRandomUncle() *types.Block {
 		parent = b.chain.GetBlockByHash(b.chain.CurrentBlock().ParentHash())
 	}
 	blocks, _ := core.GenerateChain(b.chain.Config(), parent, b.chain.Engine(), b.db, 1, func(i int, gen *core.BlockGen) {
-		var addr common.Address
-		rand.Read(addr.Bytes())
-		gen.SetCoinbase(addr)
+		var addr = make([]byte, common.AddressLength)
+		rand.Read(addr)
+		gen.SetCoinbase(common.BytesToAddress(addr))
 	})
 	return blocks[0]
 }
@@ -200,6 +201,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	)
 	if isClique {
 		chainConfig = params.AllCliqueProtocolChanges
+		chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
 		engine = clique.New(chainConfig.Clique, db)
 	} else {
 		chainConfig = params.AllEthashProtocolChanges
@@ -254,14 +256,14 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	w.skipSealHook = func(task *task) bool {
 		return len(task.receipts) == 0
 	}
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 5; i++ {
 		b.txPool.AddLocal(b.newRandomTx(true))
 		b.txPool.AddLocal(b.newRandomTx(false))
 		b.PostChainEvents([]interface{}{core.ChainSideEvent{Block: b.newRandomUncle()}})
 		b.PostChainEvents([]interface{}{core.ChainSideEvent{Block: b.newRandomUncle()}})
 		select {
 		case <-newBlock:
-		case <-time.NewTimer(time.Millisecond * 1500).C: // Worker needs 1s to include new changes.
+		case <-time.NewTimer(3 * time.Second).C: // Worker needs 1s to include new changes.
 			t.Fatalf("timeout")
 		}
 	}
