@@ -151,7 +151,7 @@ func TestValidation(t *testing.T) {
 
 		// Local is mainnet Petersburg, remote announces Byzantium + knowledge about Petersburg. Remote
 		// is simply out of sync, accept.
-		{7987396, ID{Hash: checksumToBytes(0x668db0af), Next: 7280000}, nil},
+		{7987396, ID{Hash: checksumToBytes(0xa00bc324), Next: 7280000}, nil},
 
 		// Local is mainnet Petersburg, remote announces Spurious + knowledge about Byzantium. Remote
 		// is definitely out of sync. It may or may not need the Petersburg update, we don't know yet.
@@ -178,6 +178,16 @@ func TestValidation(t *testing.T) {
 
 		// Local is mainnet Petersburg, remote is Rinkeby Petersburg.
 		{7987396, ID{Hash: checksumToBytes(0xafec6b27), Next: 0}, ErrLocalIncompatibleOrStale},
+
+		// Local is mainnet Petersburg, far in the future. Remote announces Gopherium (non existing fork)
+		// at some future block 88888888, for itself, but past block for local. Local is incompatible.
+		//
+		// This case detects non-upgraded nodes with majority hash power (typical Ropsten mess).
+		{88888888, ID{Hash: checksumToBytes(0x668db0af), Next: 88888888}, ErrLocalIncompatibleOrStale},
+
+		// Local is mainnet Byzantium. Remote is also in Byzantium, but announces Gopherium (non existing
+		// fork) at block 7279999, before Petersburg. Local is incompatible.
+		{7279999, ID{Hash: checksumToBytes(0xa00bc324), Next: 7279999}, ErrLocalIncompatibleOrStale},
 	}
 	for i, tt := range tests {
 		filter := newFilter(params.MainnetChainConfig, params.MainnetGenesisHash, func() uint64 { return tt.head })

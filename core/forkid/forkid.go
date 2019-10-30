@@ -120,10 +120,13 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() ui
 	// Create a validator that will filter out incompatible chains
 	return func(id ID) error {
 		// Run the fork checksum validation ruleset:
-		//   1. If local and remote FORK_CSUM matches, connect.
+		//   1. If local and remote FORK_CSUM matches, compare local head to FORK_NEXT.
 		//        The two nodes are in the same fork state currently. They might know
 		//        of differing future forks, but that's not relevant until the fork
 		//        triggers (might be postponed, nodes might be updated to match).
+		//      1a. A remotely announced but remotely not passed block is already passed
+		//          locally, disconnect, since the chains are incompatible.
+		//      1b. No remotely announced fork; or not yet passed locally, connect.
 		//   2. If the remote FORK_CSUM is a subset of the local past forks and the
 		//      remote FORK_NEXT matches with the locally following fork block number,
 		//      connect.
@@ -145,7 +148,12 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() ui
 			// Found the first unpassed fork block, check if our current state matches
 			// the remote checksum (rule #1).
 			if sums[i] == id.Hash {
-				// Yay, fork checksum matched, ignore any upcoming fork
+				// Fork checksum matched, check if a remote future fork block already passed
+				// locally without the local node being aware of it (rule #1a).
+				if id.Next > 0 && head >= id.Next {
+					return ErrLocalIncompatibleOrStale
+				}
+				// Haven't passed locally a remote-only fork, accept the connection (rule #1b).
 				return nil
 			}
 			// The local and remote nodes are in different forks currently, check if the
