@@ -1090,10 +1090,9 @@ func (d *Downloader) fillHeaderSkeleton(from uint64, skeleton []*types.Header) (
 			pack := packet.(*headerPack)
 			return d.queue.DeliverHeaders(pack.peerID, pack.headers, d.headerProcCh)
 		}
-		expire   = func() map[string]int { return d.queue.ExpireHeaders(d.requestTTL()) }
-		throttle = func() bool { return false }
-		reserve  = func(p *peerConnection, count int) (*fetchRequest, bool, error) {
-			return d.queue.ReserveHeaders(p, count), false, nil
+		expire  = func() map[string]int { return d.queue.ExpireHeaders(d.requestTTL()) }
+		reserve = func(p *peerConnection, count int) (*fetchRequest, bool, bool, error) {
+			return d.queue.ReserveHeaders(p, count), false, false, nil
 		}
 		fetch    = func(p *peerConnection, req *fetchRequest) error { return p.FetchHeaders(req.From, MaxHeaderFetch) }
 		capacity = func(p *peerConnection) int { return p.HeaderCapacity(d.requestRTT()) }
@@ -1102,7 +1101,7 @@ func (d *Downloader) fillHeaderSkeleton(from uint64, skeleton []*types.Header) (
 		}
 	)
 	err := d.fetchParts(d.headerCh, deliver, d.queue.headerContCh, expire,
-		d.queue.PendingHeaders, d.queue.InFlightHeaders, throttle, reserve,
+		d.queue.PendingHeaders, d.queue.InFlightHeaders, reserve,
 		nil, fetch, d.queue.CancelHeaders, capacity, d.peers.HeaderIdlePeers, setIdle, "headers")
 
 	log.Debug("Skeleton fill terminated", "err", err)
@@ -1128,7 +1127,7 @@ func (d *Downloader) fetchBodies(from uint64) error {
 		setIdle  = func(p *peerConnection, accepted int, deliveryTime time.Time) { p.SetBodiesIdle(accepted, deliveryTime) }
 	)
 	err := d.fetchParts(d.bodyCh, deliver, d.bodyWakeCh, expire,
-		d.queue.PendingBlocks, d.queue.InFlightBlocks, d.queue.ShouldThrottleBlocks, d.queue.ReserveBodies,
+		d.queue.PendingBlocks, d.queue.InFlightBlocks, d.queue.ReserveBodies,
 		d.bodyFetchHook, fetch, d.queue.CancelBodies, capacity, d.peers.BodyIdlePeers, setIdle, "bodies")
 
 	log.Debug("Block body download terminated", "err", err)
@@ -1154,7 +1153,7 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 		}
 	)
 	err := d.fetchParts(d.receiptCh, deliver, d.receiptWakeCh, expire,
-		d.queue.PendingReceipts, d.queue.InFlightReceipts, d.queue.ShouldThrottleReceipts, d.queue.ReserveReceipts,
+		d.queue.PendingReceipts, d.queue.InFlightReceipts, d.queue.ReserveReceipts,
 		d.receiptFetchHook, fetch, d.queue.CancelReceipts, capacity, d.peers.ReceiptIdlePeers, setIdle, "receipts")
 
 	log.Debug("Transaction receipt download terminated", "err", err)
@@ -1187,7 +1186,7 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 //  - setIdle:     network callback to set a peer back to idle and update its estimated capacity (traffic shaping)
 //  - kind:        textual label of the type being downloaded to display in log mesages
 func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack) (int, error), wakeCh chan bool,
-	expire func() map[string]int, pending func() int, inFlight func() bool, throttle func() bool, reserve func(*peerConnection, int) (*fetchRequest, bool, error),
+	expire func() map[string]int, pending func() int, inFlight func() bool, reserve func(*peerConnection, int) (*fetchRequest, bool, bool, error),
 	fetchHook func([]*types.Header), fetch func(*peerConnection, *fetchRequest) error, cancel func(*fetchRequest), capacity func(*peerConnection) int,
 	idle func() ([]*peerConnection, int), setIdle func(*peerConnection, int, time.Time), kind string) error {
 
@@ -1306,56 +1305,55 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 			// Send a download request to all idle peers, until throttled
 			progressed, throttled, running := false, false, inFlight()
 			idles, total := idle()
-
+			pendCount := 1
 			for _, peer := range idles {
 				// Short circuit if throttling activated
-				if throttle() {
-					throttled = true
+				if throttled {
 					break
 				}
 				// Short circuit if there is no more available task.
-				if pending() == 0 {
+				if pendCount = pending(); pendCount == 0 {
 					break
 				}
 				// Reserve a chunk of fetches for a peer. A nil can mean either that
 				// no more headers are available, or that the peer is known not to
 				// have them.
-				request, progress, err := reserve(peer, capacity(peer))
+				request, progress, throttle, err := reserve(peer, capacity(peer))
 				if err != nil {
+					log.Info("Error in loop", "err", err)
 					return err
 				}
 				if progress {
 					progressed = true
 				}
-				if request == nil {
-					// This means we've over-committed, and reserving returns nil
-					// because there's no space for the top-prio header to download.
-					// No need to continue this loop
+				if throttle {
 					throttled = true
-					break
+					throttleBlockCounter.Inc(1)
 				}
-				if request.From > 0 {
-					peer.log.Trace("Requesting new batch of data", "type", kind, "from", request.From)
-				} else {
-					peer.log.Trace("Requesting new batch of data", "type", kind, "count", len(request.Headers), "from", request.Headers[0].Number)
-				}
-				// Fetch the chunk and make sure any errors return the hashes to the queue
-				if fetchHook != nil {
-					fetchHook(request.Headers)
-				}
-				if err := fetch(peer, request); err != nil {
-					// Although we could try and make an attempt to fix this, this error really
-					// means that we've double allocated a fetch task to a peer. If that is the
-					// case, the internal state of the downloader and the queue is very wrong so
-					// better hard crash and note the error instead of silently accumulating into
-					// a much bigger issue.
-					panic(fmt.Sprintf("%v: %s fetch assignment failed", peer, kind))
+				if request != nil {
+					if request.From > 0 {
+						peer.log.Trace("Requesting new batch of data", "type", kind, "from", request.From)
+					} else {
+						peer.log.Trace("Requesting new batch of data", "type", kind, "count", len(request.Headers), "from", request.Headers[0].Number)
+					}
+					// Fetch the chunk and make sure any errors return the hashes to the queue
+					if fetchHook != nil {
+						fetchHook(request.Headers)
+					}
+					if err := fetch(peer, request); err != nil {
+						// Although we could try and make an attempt to fix this, this error really
+						// means that we've double allocated a fetch task to a peer. If that is the
+						// case, the internal state of the downloader and the queue is very wrong so
+						// better hard crash and note the error instead of silently accumulating into
+						// a much bigger issue.
+						panic(fmt.Sprintf("%v: %s fetch assignment failed", peer, kind))
+					}
 				}
 				running = true
 			}
 			// Make sure that we have peers available for fetching. If all peers have been tried
 			// and all failed throw an error
-			if !progressed && !throttled && !running && len(idles) == total && pending() > 0 {
+			if !progressed && !throttled && !running && len(idles) == total && pendCount > 0 {
 				return errPeersUnavailable
 			}
 		}
@@ -1482,7 +1480,7 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 							rollbackErr = err
 							rollback = append(rollback, chunk[:n]...)
 						}
-						log.Info("Invalid header encountered", "number", chunk[n].Number, "hash", chunk[n].Hash(), "err", err)
+						log.Info("Invalid header encountered", "number", chunk[n].Number, "hash", chunk[n].Hash(), "err", err, "parent", chunk[n].ParentHash)
 						return errInvalidChain
 					}
 					// All verifications passed, store newly found uncertain headers
@@ -1637,6 +1635,7 @@ func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 			}
 		}
 		P, beforeP, afterP := splitAroundPivot(pivot, results)
+		results = nil
 		if err := d.commitFastSyncData(beforeP, sync); err != nil {
 			return err
 		}
@@ -1674,6 +1673,15 @@ func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 }
 
 func splitAroundPivot(pivot uint64, results []*fetchResult) (p *fetchResult, before, after []*fetchResult) {
+	if len(results) == 0 {
+		return
+	}
+	if lastNum := results[len(results)-1].Header.Number.Uint64(); lastNum < pivot {
+		// the pivot is somewhere in the future
+		before = results
+		return
+	}
+	// This can also be optimized, but only happens very seldom
 	for _, result := range results {
 		num := result.Header.Number.Uint64()
 		switch {
@@ -1704,7 +1712,7 @@ func (d *Downloader) commitFastSyncData(results []*fetchResult, stateSync *state
 	}
 	// Retrieve the a batch of results to import
 	first, last := results[0].Header, results[len(results)-1].Header
-	log.Info("Inserting fast-sync blocks", "items", len(results),
+	log.Debug("Inserting fast-sync blocks", "items", len(results),
 		"firstnum", first.Number, "firsthash", first.Hash(),
 		"lastnumn", last.Number, "lasthash", last.Hash(),
 	)

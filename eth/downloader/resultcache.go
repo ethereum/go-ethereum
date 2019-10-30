@@ -21,126 +21,129 @@ package downloader
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
 	"sync"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type resultStore struct {
-	items        []*fetchResult     // Downloaded but not yet delivered fetch results
-	lock         *sync.RWMutex      // lock protect internals
-	resultOffset uint64             // Offset of the first cached fetch result in the block chain
-	resultSize   common.StorageSize // Approximate size of a block (exponential moving average)
+	items        []*fetchResult // Downloaded but not yet delivered fetch results
+	lock         *sync.RWMutex  // lock protect internals
+	resultOffset uint64         // Offset of the first cached fetch result in the block chain
 
 	// Internal index of first non-completed entry, updated atomically when needed.
 	// If all items are complete, this will equal length(items), so
 	// *important* : is not safe to use for indexing without checking against length
-	indexIncomplete int32
+	indexIncomplete int32 // atomic access
+
+	// throttleThreshold is the limit up to which we _want_ to fill the
+	// results. If blocks are large, we want to limit the results to less
+	// than the number of available slots, and maybe only fill 1024 out of
+	// 8192 possible places. The queue will, at certain times, recalibrate
+	// this index.
+	throttleThreshold uint64
 }
 
 func newResultStore(size int) *resultStore {
 	return &resultStore{
-		resultOffset: 0,
-		items:        make([]*fetchResult, size),
-		resultSize:   0, // TODO: use a saner default, left at zero as it was legacy
-		lock:         new(sync.RWMutex),
+		resultOffset:      0,
+		items:             make([]*fetchResult, size),
+		lock:              new(sync.RWMutex),
+		throttleThreshold: 3 * uint64(size) / 4, // 75%
 	}
 }
 
-// AddFetch adds a header for body/receipt fetching.
-// returning
-// stale -- if true, this item is already passed, and should not be requested again
-// fetchResult -- if `nil`, that means no fetch was created, and that the
-// if an error is returned, that most likely means backpressure prevents the results from expanding,
-// and someone needs to take care of results
-func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale bool, item *fetchResult, err error) {
-	hash := header.Hash()
+func (r *resultStore) SetThrottleThreshold(threshold uint64) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	limit := uint64(len(r.items)) * 3 / 4
+	if threshold >= limit {
+		threshold = limit
+	}
+	r.throttleThreshold = threshold
+}
+
+// AddFetch adds a header for body/receipt fetching. This is used when the queue
+// wants to reserve headers for fetching.
+// It returns the following:
+// stale       -- if true, this item is already passed, and should not be requested again.
+// throttled   -- if true, the resultcache is at capacity, and this particular header is not
+//                prio right now
+// fetchResult -- the result to store data into
+// err         -- any error that occurred
+func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale, throttled bool, item *fetchResult, err error) {
+	header.Hash()
 	r.lock.RLock()
-	item, _, stale, err = r.getFetchResult(header)
-	if err != nil {
+	var index int
+	if item, index, stale, throttled, err = r.getFetchResult(header); err != nil {
 		r.lock.RUnlock()
-		log.Info("resultcache addfetch err [1]", "error", err.Error())
-		// can't create a fetchResult right away
-		return stale, nil, err
+		return
+	}
+	if stale {
+		r.lock.RUnlock()
+		return
+	}
+	if throttled {
+		// Index is above the current threshold of 'prioritized' blocks,
+		log.Debug("resultcache throttle", "index", index, "threshold", r.throttleThreshold)
+		r.lock.RUnlock()
+		return
 	}
 	if item != nil {
+		// All good, item already exists (perhaps a receipt fetch following
+		// a body fetch)
 		r.lock.RUnlock()
-		return false, item, nil
+		return
 	}
 	r.lock.RUnlock()
 	// Need to create a fetchresult, and as we've just release the Rlock,
 	// we need to check again after obtaining the writelock
 	r.lock.Lock()
 	defer r.lock.Unlock()
-	var index int
-	item, index, stale, err = r.getFetchResult(header)
-	if err != nil {
-		// can't create a fetchResult right away
-		log.Info("resultcache addfetch err [2]", "error", err.Error())
-		return stale, nil, err
-
+	// Same checks as above, now with wlock
+	if item, index, stale, throttled, err = r.getFetchResult(header); err != nil {
+		return
+	}
+	if stale || throttled {
+		return
 	}
 	if item == nil {
-		item = &fetchResult{
-			Hash:   hash,
-			Header: header,
-		}
-		// Need to fetch body?
-		if !header.EmptyBody() {
-			// yes
-			item.Pending |= 0x1
-		}
-		// Do we need to fetch receipts?
-		if fastSync && !header.EmptyReceipts() {
-			item.Pending |= 0x2
-		}
+		item = newFetchResult(header, fastSync)
 		r.items[index] = item
 	}
-	return false, item, nil
-
+	return
 }
 
+// GetFetchResult returns the fetchResult for the given header. If the 'stale' flag
+// is true, that means the header has already been delivered 'upstream'.
 func (r *resultStore) GetFetchResult(header *types.Header) (*fetchResult, bool, error) {
 	r.lock.RLock()
 	defer r.lock.RUnlock()
-	res, _, stale, err := r.getFetchResult(header)
+	res, _, stale, _, err := r.getFetchResult(header)
 	return res, stale, err
 }
 
 // getFetchResult returns the fetchResult corresponding to the given item, and the index where
 // the result is stored.
-// There are two ways it can error:
-// 1. The header is too far off in the future, and we don't have room for it.
-// 2. The header is stale, and the results for that header has already been delivered upstream.
-func (r *resultStore) getFetchResult(header *types.Header) (item *fetchResult, index int, stale bool, err error) {
+func (r *resultStore) getFetchResult(header *types.Header) (item *fetchResult, index int, stale, throttle bool, err error) {
+
 	index = int(header.Number.Int64() - int64(r.resultOffset))
+	throttle = index >= int(r.throttleThreshold)
+	stale = index < 0
+
 	if index >= len(r.items) {
 		err = fmt.Errorf("index allocation went beyond available resultStore space "+
 			"(index [%d] = header [%d] - resultOffset [%d], len(resultStore) = %d",
 			index, header.Number.Int64(), r.resultOffset, len(r.items))
-		return item, index, stale, err
+		return
 	}
-	if index < 0 {
-		stale = true
-		err = fmt.Errorf("index allocation went beyond available resultStore space "+
-			"(index [%d] = header [%d] - resultOffset [%d], len(resultStore) = %d",
-			index, header.Number.Int64(), r.resultOffset, len(r.items))
-		return item, index, stale, err
+	if stale {
+		return
 	}
 	item = r.items[index]
-	return item, index, stale, err
-}
-
-// numberSpan returns the header number start and end, for the headers
-// currently "allocated" for download (both completed, in-flight and pending)
-func (r *resultStore) NumberSpan() (uint64, uint64) {
-	r.lock.RLock()
-	defer r.lock.RUnlock()
-	return r.resultOffset, r.resultOffset + uint64(len(r.items))
-
+	return
 }
 
 // hasCompletedItems returns true if there are processable items available
@@ -151,81 +154,33 @@ func (r *resultStore) HasCompletedItems() bool {
 	if len(r.items) == 0 {
 		return false
 	}
-	if item := r.items[0]; item != nil && item.Pending == 0 {
+	if item := r.items[0]; item != nil && item.AllDone() {
 		return true
 	}
 	return false
 }
 
-// CountCompleted returns the number of items completed
-func (r *resultStore) CountCompleted() int {
-	r.lock.RLock()
-	defer r.lock.RUnlock()
-	return r.countCompleted()
-}
-
-// countCompleted returns the number of items completed
-// assumes (at least) rlock is held
+// countCompleted returns the number of items ready for delivery, stopping at
+// the first non-complete item.
+// It assumes (at least) rlock is held
 func (r *resultStore) countCompleted() int {
 	// We iterate from the already known complete point, and see
 	// if any more has completed since last count
-	// debug
-	/*
-		var (
-			nils         = 0
-			fins         = 0
-			bodyneeds    = 0
-			receiptneeds = 0
-		)
-		var ctx []interface{}
-		for _, item := range r.items {
-			if item == nil {
-				nils++
-			} else {
-				if item.Pending == 0 {
-					fins++
-				} else {
-					if item.Pending&0x01 != 0 {
-						bodyneeds++
-					} else {
-						receiptneeds++
-					}
-				}
-			}
-		}
-		ctx = append(ctx, "items", len(r.items), "nils", nil, "fins", fins,
-			"needB", bodyneeds, "needR", receiptneeds)
-	*/
-	/// end debug
 	index := atomic.LoadInt32(&r.indexIncomplete)
 	for ; ; index++ {
 		if index >= int32(len(r.items)) {
 			break
 		}
 		result := r.items[index]
-		if result == nil || result.Pending > 0 {
+		if result == nil || !result.AllDone() {
 			break
 		}
 	}
-	/*
-		if index < int32(len(r.items)) {
-			//ctx = append(ctx, []interface{}{"index", index, "blocknum", uint64(index) + r.resultOffset}...)
-			if r.items[index] != nil {
-				log.Info("resultstore", ctx...)
-			} else {
-				ctx = append(ctx, []interface{}{"first missing", "nil"}...)
-				log.Info("resultstore", ctx...)
-			}
-		} else {
-			ctx = append(ctx, []interface{}{"first missing", "out of range"}...)
-			log.Info("resultstore", ctx...)
-		}
-	*/
 	atomic.StoreInt32(&r.indexIncomplete, index)
 	return int(index)
 }
 
-// getCompleted returns the next batch of completed fetchresults
+// GetCompleted returns the next batch of completed fetchResults
 func (r *resultStore) GetCompleted(limit int) []*fetchResult {
 	r.lock.Lock()
 	defer r.lock.Unlock()
@@ -244,11 +199,12 @@ func (r *resultStore) GetCompleted(limit int) []*fetchResult {
 	}
 	// Advance the expected block number of the first cache entry.
 	r.resultOffset += uint64(limit)
-	// And subtract the number of items from our two indexes
-	atomic.StoreInt32(&r.indexIncomplete, int32(completed-limit))
+	// And subtract the number of items from our index
+	atomic.AddInt32(&r.indexIncomplete, int32(-limit))
 	return results
 }
 
+// Prepare initialises the offset with the given block number
 func (r *resultStore) Prepare(offset uint64) {
 	r.lock.Lock()
 	if r.resultOffset < offset {

@@ -267,7 +267,7 @@ func (p *peerConnection) setIdle(elapsed time.Duration, delivered int, throughpu
 		return
 	}
 	// Otherwise update the throughput with a new measurement
-	if elapsed <= 0{
+	if elapsed <= 0 {
 		elapsed = 1 // +1 (ns) to ensure non-zero divisor
 	}
 	measured := float64(delivered) / (float64(elapsed) / float64(time.Second))
