@@ -1,9 +1,6 @@
 language: go
 go_import_path: github.com/ethereum/go-ethereum
 sudo: false
-arch:
-  - amd64
-  - arch64
 jobs:
   include:
         # This builder only tests code linters on latest version of Go
