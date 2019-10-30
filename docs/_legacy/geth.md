@@ -18,26 +18,26 @@ By installing and running `geth`, you can take part in the ethereum frontier liv
 Supported Platforms are Linux, Mac Os and Windows.
 
 We support two types of installation: binary or scripted install for users. 
-See [Install instructions](../install-and-build/Building-Ethereum) for binary and scripted installs.
+See [Install instructions](../install-and-build/build-from-source) for binary and scripted installs.
 
-Developers and community enthusiast are advised to read the [Developers' Guide](../install-and-build/Developers-Guide), which contains detailed instructions for manual build from source (on any platform) as well as detailed tips on testing, monitoring, contributing, debugging and submitting pull requests on github.
+Developers and community enthusiast are advised to read the [Developers' Guide](../install-and-build/developers-guide), which contains detailed instructions for manual build from source (on any platform) as well as detailed tips on testing, monitoring, contributing, debugging and submitting pull requests on github.
 
 ## Interfaces
 
-* Javascript Console: `geth` can be launched with an interactive console, that provides a javascript runtime environment exposing a javascript API to interact with your node. [Javascript Console API](../interface/JavaScript-Console) includes the `web3` javascript Ðapp API as well as an additional admin API. 
-* JSON-RPC server: `geth` can be launched with a json-rpc server that exposes the [JSON-RPC API](https://github.com/ethereum/wiki/JSON-RPC)
-* [Command line options](../interface/Command-Line-Options) documents command line parameters as well as subcommands.
+* Javascript Console: `geth` can be launched with an interactive console, that provides a javascript runtime environment exposing a javascript API to interact with your node. [Javascript Console API](../interface/javascript-console) includes the `web3` javascript Ðapp API as well as an additional admin API. 
+* JSON-RPC server: `geth` can be launched with a server that exposes the [JSON-RPC API](https://github.com/ethereum/wiki/wiki/JSON-RPC)
+* [Command line options](../interface/command-line-options) documents command line parameters as well as subcommands.
 
 ## Basic Use Case Documentation
 
-* [Managing accounts](../how-to/Managing-your-accounts)
-* [Mining](../how-to/Mining)
+* [Managing accounts](../interface/managing-your-accounts)
+* [Mining](../legacy/mining)
 
 **Note** buying and selling ether through exchanges is not discussed here. 
 
 ## License
 
-The Ethereum Core Protocol licensed under the [GNU Lesser General Public License](https://www.gnu.org/licenses/lgpl.html). All frontend client software (under [cmd](https://github.com/ethereum/go-ethereum/tree/develop/cmd)) is licensed under the [GNU General Public License](https://www.gnu.org/copyleft/gpl.html).
+The Ethereum Core Protocol licensed under the [GNU Lesser General Public License](https://www.gnu.org/licenses/lgpl.html). All frontend client software (under [cmd](https://github.com/ethereum/go-ethereum/tree/master/cmd)) is licensed under the [GNU General Public License](https://www.gnu.org/copyleft/gpl.html).
 
 ## Reporting 
 
@@ -85,8 +85,6 @@ IRC Freenode channels:
 * `#dappdevs`: Dapp developers channel
 * `#ethdev`: buildserver etc
 
-[IRC Logs by ZeroGox](https://zerogox.com/bot/log)
-
 ### Gitter 
 
 * [go-ethereum Gitter](https://gitter.im/ethereum/go-ethereum)
@@ -96,11 +94,7 @@ IRC Freenode channels:
 
 ### Forum
 
-- [Forum](https://forum.ethereum.org/categories/go-implementation)
-
-### The ZeroGox Bot
-
-[ZeroGox Bot](https://zerogox.com/bot)
+- [Forum](https://forum.ethereum.org/categories/geth)
 
 ### Dapp developers' mailing list
 

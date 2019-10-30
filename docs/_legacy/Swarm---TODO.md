@@ -31,7 +31,7 @@ title: Swarm TODO
 
 ## APIs
 - DAPP API - js integration (Fabian, Alex)
-- mist dapp storage scheme, url->hash mapping (Fabian, Alex) [URL scheme](URL-Scheme)
+- mist dapp storage scheme, url->hash mapping (Fabian, Alex) [URL scheme](../doc/url-scheme)
 
 # Discuss alternatives 
 

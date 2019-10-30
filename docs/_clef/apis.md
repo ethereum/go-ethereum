@@ -280,7 +280,7 @@ Response
 ### account_signTypedData
 
 #### Sign data
-   Signs a chunk of structured data conformant to [EIP712]([EIP-712](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-712.md)) and returns the calculated signature.
+   Signs a chunk of structured data conformant to [EIP712](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-712.md) and returns the calculated signature.
 
 #### Arguments
   - account [address]: account to sign with
