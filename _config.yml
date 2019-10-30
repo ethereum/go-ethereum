@@ -25,51 +25,56 @@ default_root: "../.."
 
 collections_dir: docs
 collections:
+  getting-started:
+    output: true
+    caption: Getting started
+    sidebar_index: 1
+    frontpage: _getting-started/index.md
   install-and-build:
     output: true
     permalink: docs/:collection/:slug
     caption: Install and build
-    sidebar_index: 1
+    sidebar_index: 2
     frontpage: _install-and-build/Installing-Geth.md
   interface:
     output: true
     permalink: docs/:collection/:slug
     caption: Interacting with Geth
-    sidebar_index: 2
+    sidebar_index: 3
   support:
     output: true
     permalink: docs/:collection/:slug
     caption: Issues and support
-    sidebar_index: 3
+    sidebar_index: 4
   developers:
     output: true
     permalink: docs/:collection/:slug
     caption: Developer docs
-    sidebar_index: 4
+    sidebar_index: 5
   clef:
     output: true
     permalink: docs/:collection/:slug
     caption: Clef
-    sidebar_index: 5
+    sidebar_index: 6
     frontpage: _clef/Overview.md
   whisper:
     output: true
     permalink: docs/:collection/:slug
     caption: Whisper
-    sidebar_index: 6
+    sidebar_index: 7
     frontpage: _whisper/Whisper-Overview.md
   rpc:
     output: true
     permalink: docs/:collection/:slug
     caption: JSON RPC APIs
-    sidebar_index: 7
+    sidebar_index: 8
   doc:
     output: true
     permalink: docs/:collection/:slug
     caption: Other
-    sidebar_index: 8
+    sidebar_index: 9
   legacy:
     output: true
     permalink: docs/:collection/:slug
     caption: Legacy content
-    sidebar_index: 9
+    sidebar_index: 10
