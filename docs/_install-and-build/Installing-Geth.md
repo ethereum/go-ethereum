@@ -146,7 +146,7 @@ With Go installed, you can download our project via:
 go get -d github.com/ethereum/go-ethereum
 ```
 
-The above command checksout the default version of Go Ethereum into your local `GOPATH` work space, but does not build any executables. To do that you can either build one specifically:
+The above command checks out the default version of Go Ethereum into your local `GOPATH` work space, but does not build any executables. To do that you can either build one specifically:
 
 ```shell
 go install github.com/ethereum/go-ethereum/cmd/geth
