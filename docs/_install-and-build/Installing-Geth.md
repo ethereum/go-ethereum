@@ -192,7 +192,7 @@ You can now run `build/bin/geth` to start your node.
 
 ### Building without a Go workflow
 
-If you do not want to set up Go workspaces on your machine, only build `geth` and forget about the build process, you can clone our repository directly into a folder of your choosing and invoke `make`, which configures everything for a temporary build and cleans up afterwards:
+If you do not want to set up Go workspaces on your machine, only build `geth` and forget about the build process, you can clone our repository directly into a folder of your choosing and invoke `make`, which configures everything for a temporary build and cleans up afterwards. Note that this method of building only works on UNIX-like operating systems.
 
 ```shell
 git clone https://github.com/ethereum/go-ethereum.git
@@ -200,4 +200,4 @@ cd go-ethereum
 make geth
 ```
 
-This creates a `geth` (or `geth.exe` on Windows) executable file in the `go-ethereum/build/bin` folder that you can move wherever you want to run from. The binary is standalone and doesn't require any additional files.
+This creates a `geth` executable file in the `go-ethereum/build/bin` folder that you can move wherever you want to run from. The binary is standalone and doesn't require any additional files.
