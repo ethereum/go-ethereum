@@ -1,6 +1,9 @@
 language: go
 go_import_path: github.com/ethereum/go-ethereum
 sudo: false
+arch:
+  - amd64
+  - arch64
 jobs:
   include:
         # This builder only tests code linters on latest version of Go
@@ -34,6 +37,16 @@ jobs:
     # These are the latest Go versions.
     - stage: build
       os: linux
+      arch: amd64
+      dist: xenial
+      go: 1.13.x
+      script:
+        - go run build/ci.go install
+        - go run build/ci.go test -coverage $TEST_PACKAGES
+
+    - stage: build
+      os: linux
+      arch: arm64
       dist: xenial
       go: 1.13.x
       script:
