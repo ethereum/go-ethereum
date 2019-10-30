@@ -20,10 +20,10 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"math/big"
-	"testing"
-	"os"
 	"io/ioutil"
+	"math/big"
+	"os"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -410,7 +410,7 @@ func TestAncientStorage(t *testing.T) {
 		t.Fatalf("no td returned")
 	}
 	// Use a fake hash for data retrieval, nothing should be returned.
-	fakeHash := common.BytesToHash([]byte{0x01,0x02,0x03})
+	fakeHash := common.BytesToHash([]byte{0x01, 0x02, 0x03})
 	if blob := ReadHeaderRLP(db, fakeHash, number); len(blob) != 0 {
 		t.Fatalf("invalid header returned")
 	}
@@ -424,4 +424,3 @@ func TestAncientStorage(t *testing.T) {
 		t.Fatalf("invalid td returned")
 	}
 }
-
