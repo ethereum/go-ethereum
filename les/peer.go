@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
@@ -43,6 +44,11 @@ var (
 	errClosed            = errors.New("peer set is closed")
 	errAlreadyRegistered = errors.New("peer is already registered")
 	errNotRegistered     = errors.New("peer is not registered")
+)
+
+var (
+	s = rand.NewSource(time.Now().UnixNano())
+	r = rand.New(s)
 )
 
 const (
@@ -542,7 +548,7 @@ func (m keyValueMap) get(key string, val interface{}) error {
 	return rlp.DecodeBytes(enc, val)
 }
 
-func (p *peer) sendReceiveHandshake(sendList keyValueList) (keyValueList, error) {
+func (p *peer) exchangeHandshake(sendList keyValueList) (keyValueList, error) {
 	// Send out own handshake in a new thread
 	errc := make(chan error, 1)
 	go func() {
@@ -570,9 +576,11 @@ func (p *peer) sendReceiveHandshake(sendList keyValueList) (keyValueList, error)
 	return recvList, nil
 }
 
-// Handshake executes the les protocol handshake, negotiating version number,
-// network IDs, difficulties, head and genesis blocks.
-func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, server *LesServer) error {
+// handshake executes the les protocol handshake, negotiating version number,
+// network IDs, difficulties, head and genesis blocks. Besides the basic handshake
+// fields, server and client can exchange and resolve some specified fields through
+// two callback functions.
+func (p *peer) handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter, sendCallback func(*keyValueList), recvCallback func(keyValueMap) error) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -585,54 +593,19 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 	send = send.add("headHash", head)
 	send = send.add("headNum", headNum)
 	send = send.add("genesisHash", genesis)
-	if server != nil {
-		// Add some information which services server can offer.
-		if !server.config.UltraLightOnlyAnnounce {
-			send = send.add("serveHeaders", nil)
-			send = send.add("serveChainSince", uint64(0))
-			send = send.add("serveStateSince", uint64(0))
 
-			// If local ethereum node is running in archive mode, advertise ourselves we have
-			// all version state data. Otherwise only recent state is available.
-			stateRecent := uint64(core.TriesInMemory - 4)
-			if server.archiveMode {
-				stateRecent = 0
-			}
-			send = send.add("serveRecentState", stateRecent)
-			send = send.add("txRelay", nil)
-		}
-		send = send.add("flowControl/BL", server.defParams.BufLimit)
-		send = send.add("flowControl/MRR", server.defParams.MinRecharge)
-
-		var costList RequestCostList
-		if server.costTracker.testCostList != nil {
-			costList = server.costTracker.testCostList
-		} else {
-			costList = server.costTracker.makeCostList(server.costTracker.globalFactor())
-		}
-		send = send.add("flowControl/MRC", costList)
-		p.fcCosts = costList.decode(ProtocolLengths[uint(p.version)])
-		p.fcParams = server.defParams
-
-		// Add advertised checkpoint and register block height which
-		// client can verify the checkpoint validity.
-		if server.oracle != nil && server.oracle.isRunning() {
-			cp, height := server.oracle.stableCheckpoint()
-			if cp != nil {
-				send = send.add("checkpoint/value", cp)
-				send = send.add("checkpoint/registerHeight", height)
-			}
-		}
-	} else {
-		// Add some client-specific handshake fields
-		p.announceType = announceTypeSimple
-		if p.trusted {
-			p.announceType = announceTypeSigned
-		}
-		send = send.add("announceType", p.announceType)
+	// If the protocol version is beyond les4, then pass the forkID
+	// as well. Check http://eips.ethereum.org/EIPS/eip-2124 for more
+	// spec detail.
+	if p.version >= lpv4 {
+		send = send.add("forkID", forkID)
 	}
-
-	recvList, err := p.sendReceiveHandshake(send)
+	// Add client-specified or server-specified fields
+	if sendCallback != nil {
+		sendCallback(&send)
+	}
+	// Exchange the handshake packet and resolve the received one.
+	recvList, err := p.exchangeHandshake(send)
 	if err != nil {
 		return err
 	}
@@ -640,47 +613,73 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 	if p.rejectUpdate(size) {
 		return errResp(ErrRequestRejected, "")
 	}
-
-	var rGenesis, rHash common.Hash
-	var rVersion, rNetwork, rNum uint64
-	var rTd *big.Int
-
-	if err := recv.get("protocolVersion", &rVersion); err != nil {
+	// Check and compare the protocol version of remote peer
+	var remoteVersion uint64
+	if err := recv.get("protocolVersion", &remoteVersion); err != nil {
 		return err
 	}
-	if err := recv.get("networkId", &rNetwork); err != nil {
+	if int(remoteVersion) != p.version {
+		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", remoteVersion, p.version)
+	}
+	// Check and compare the network id of remote peer
+	var remoteNetwork uint64
+	if err := recv.get("networkId", &remoteNetwork); err != nil {
 		return err
 	}
-	if err := recv.get("headTd", &rTd); err != nil {
+	if remoteNetwork != p.network {
+		return errResp(ErrNetworkIdMismatch, "%d (!= %d)", remoteNetwork, p.network)
+	}
+	// Check and compare the genesis of remote peer
+	var remoteGenesis common.Hash
+	if err := recv.get("genesisHash", &remoteGenesis); err != nil {
 		return err
 	}
-	if err := recv.get("headHash", &rHash); err != nil {
-		return err
+	if remoteGenesis != genesis {
+		return errResp(ErrGenesisBlockMismatch, "%x (!= %x)", remoteGenesis[:8], genesis[:8])
 	}
-	if err := recv.get("headNum", &rNum); err != nil {
-		return err
-	}
-	if err := recv.get("genesisHash", &rGenesis); err != nil {
-		return err
-	}
-
-	if rGenesis != genesis {
-		return errResp(ErrGenesisBlockMismatch, "%x (!= %x)", rGenesis[:8], genesis[:8])
-	}
-	if rNetwork != p.network {
-		return errResp(ErrNetworkIdMismatch, "%d (!= %d)", rNetwork, p.network)
-	}
-	if int(rVersion) != p.version {
-		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", rVersion, p.version)
-	}
-
-	if server != nil {
-		if recv.get("announceType", &p.announceType) != nil {
-			// set default announceType on server side
-			p.announceType = announceTypeSimple
+	// Check forkID if the protocol version is beyond the les4
+	if p.version >= lpv4 {
+		var forkID forkid.ID
+		if err := recv.get("forkID", &forkID); err != nil {
+			return err
 		}
-		p.fcClient = flowcontrol.NewClientNode(server.fcManager, server.defParams)
-	} else {
+		if err := forkFilter(forkID); err != nil {
+			return errResp(ErrForkIDRejected, "%v", err)
+		}
+	}
+	// Pass all checks, extract the remaning fields.
+	var remoteId *big.Int
+	if err := recv.get("headTd", &remoteId); err != nil {
+		return err
+	}
+	var remoteHead common.Hash
+	if err := recv.get("headHash", &remoteHead); err != nil {
+		return err
+	}
+	var remoteHeadNum uint64
+	if err := recv.get("headNum", &remoteHeadNum); err != nil {
+		return err
+	}
+	p.headInfo = &announceData{Hash: remoteHead, Number: remoteHeadNum, Td: remoteId}
+	if recvCallback != nil {
+		return recvCallback(recv)
+	}
+	return nil
+}
+
+// handshakeWithServer executes the les protocol handshake with les server, negotiating
+// version number, network IDs, difficulties, head and genesis blocks.
+func (p *peer) handshakeWithServer(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter) error {
+	return p.handshake(td, head, headNum, genesis, forkID, forkFilter, func(lists *keyValueList) {
+		// Add some client-specific handshake fields
+		//
+		// Enable signed announcement randomly even the server is not trusted.
+		p.announceType = announceTypeSimple
+		if p.trusted || r.Intn(10) > 3 {
+			p.announceType = announceTypeSigned
+		}
+		*lists = (*lists).add("announceType", p.announceType)
+	}, func(recv keyValueMap) error {
 		if recv.get("serveChainSince", &p.chainSince) != nil {
 			p.onlyAnnounce = true
 		}
@@ -696,11 +695,10 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		if recv.get("txRelay", nil) != nil {
 			p.onlyAnnounce = true
 		}
-
 		if p.onlyAnnounce && !p.trusted {
 			return errResp(ErrUselessPeer, "peer cannot serve requests")
 		}
-
+		// Parse flow control handshake packet.
 		var sParams flowcontrol.ServerParams
 		if err := recv.get("flowControl/BL", &sParams.BufLimit); err != nil {
 			return err
@@ -726,9 +724,59 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 				}
 			}
 		}
-	}
-	p.headInfo = &announceData{Td: rTd, Hash: rHash, Number: rNum}
-	return nil
+		return nil
+	})
+}
+
+// handshakeWithClient executes the les protocol handshake with les client, negotiating
+// version number, network IDs, difficulties, head and genesis blocks.
+func (p *peer) handshakeWithClient(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter, server *LesServer) error {
+	return p.handshake(td, head, headNum, genesis, forkID, forkFilter, func(lists *keyValueList) {
+		// Add some information which services server can offer.
+		if !server.config.UltraLightOnlyAnnounce {
+			*lists = (*lists).add("serveHeaders", nil)
+			*lists = (*lists).add("serveChainSince", uint64(0))
+			*lists = (*lists).add("serveStateSince", uint64(0))
+
+			// If local ethereum node is running in archive mode, advertise ourselves we have
+			// all version state data. Otherwise only recent state is available.
+			stateRecent := uint64(core.TriesInMemory - 4)
+			if server.archiveMode {
+				stateRecent = 0
+			}
+			*lists = (*lists).add("serveRecentState", stateRecent)
+			*lists = (*lists).add("txRelay", nil)
+		}
+		*lists = (*lists).add("flowControl/BL", server.defParams.BufLimit)
+		*lists = (*lists).add("flowControl/MRR", server.defParams.MinRecharge)
+
+		var costList RequestCostList
+		if server.costTracker.testCostList != nil {
+			costList = server.costTracker.testCostList
+		} else {
+			costList = server.costTracker.makeCostList(server.costTracker.globalFactor())
+		}
+		*lists = (*lists).add("flowControl/MRC", costList)
+		p.fcCosts = costList.decode(ProtocolLengths[uint(p.version)])
+		p.fcParams = server.defParams
+
+		// Add advertised checkpoint and register block height which
+		// client can verify the checkpoint validity.
+		if server.oracle != nil && server.oracle.isRunning() {
+			cp, height := server.oracle.stableCheckpoint()
+			if cp != nil {
+				*lists = (*lists).add("checkpoint/value", cp)
+				*lists = (*lists).add("checkpoint/registerHeight", height)
+			}
+		}
+	}, func(recv keyValueMap) error {
+		if recv.get("announceType", &p.announceType) != nil {
+			// set default announceType on server side
+			p.announceType = announceTypeSimple
+		}
+		p.fcClient = flowcontrol.NewClientNode(server.fcManager, server.defParams)
+		return nil
+	})
 }
 
 // updateFlowControl updates the flow control parameters belonging to the server

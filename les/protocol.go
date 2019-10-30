@@ -33,17 +33,18 @@ import (
 const (
 	lpv2 = 2
 	lpv3 = 3
+	lpv4 = 4
 )
 
 // Supported versions of the les protocol (first is primary)
 var (
-	ClientProtocolVersions    = []uint{lpv2, lpv3}
-	ServerProtocolVersions    = []uint{lpv2, lpv3}
+	ClientProtocolVersions    = []uint{lpv2, lpv3, lpv4}
+	ServerProtocolVersions    = []uint{lpv2, lpv3, lpv4}
 	AdvertiseProtocolVersions = []uint{lpv2} // clients are searching for the first advertised protocol in the list
 )
 
 // Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = map[uint]uint64{lpv2: 22, lpv3: 24}
+var ProtocolLengths = map[uint]uint64{lpv2: 22, lpv3: 24, lpv4: 24}
 
 const (
 	NetworkId          = 1
@@ -110,6 +111,7 @@ const (
 	ErrInvalidResponse
 	ErrTooManyTimeouts
 	ErrMissingKey
+	ErrForkIDRejected
 )
 
 func (e errCode) String() string {
@@ -132,6 +134,7 @@ var errorToString = map[int]string{
 	ErrInvalidResponse:         "Invalid response",
 	ErrTooManyTimeouts:         "Too many request timeouts",
 	ErrMissingKey:              "Key missing from list",
+	ErrForkIDRejected:          "Forkid rejected",
 }
 
 type announceBlock struct {

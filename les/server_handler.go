@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -62,6 +63,7 @@ var (
 // serverHandler is responsible for serving light client and process
 // all incoming light requests.
 type serverHandler struct {
+	forkFilter forkid.Filter
 	blockchain *core.BlockChain
 	chainDb    ethdb.Database
 	txpool     *core.TxPool
@@ -77,6 +79,7 @@ type serverHandler struct {
 
 func newServerHandler(server *LesServer, blockchain *core.BlockChain, chainDb ethdb.Database, txpool *core.TxPool, synced func() bool) *serverHandler {
 	handler := &serverHandler{
+		forkFilter: forkid.NewFilter(blockchain),
 		server:     server,
 		blockchain: blockchain,
 		chainDb:    chainDb,
@@ -121,7 +124,7 @@ func (h *serverHandler) handle(p *peer) error {
 		number = head.Number.Uint64()
 		td     = h.blockchain.GetTd(hash, number)
 	)
-	if err := p.Handshake(td, hash, number, h.blockchain.Genesis().Hash(), h.server); err != nil {
+	if err := p.handshakeWithClient(td, hash, number, h.blockchain.Genesis().Hash(), forkid.NewID(h.blockchain), h.forkFilter, h.server); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}

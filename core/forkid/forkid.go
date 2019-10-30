@@ -27,7 +27,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -44,6 +44,18 @@ var (
 	ErrLocalIncompatibleOrStale = errors.New("local incompatible or needs update")
 )
 
+// Blockchain defines all necessary method to build a forkID.
+type Blockchain interface {
+	// Config retrieves the chain's fork configuration.
+	Config() *params.ChainConfig
+
+	// Genesis retrieves the chain's genesis block.
+	Genesis() *types.Block
+
+	// CurrentHeader retrieves the current head header of the canonical chain.
+	CurrentHeader() *types.Header
+}
+
 // ID is a fork identifier as defined by EIP-2124.
 type ID struct {
 	Hash [4]byte // CRC32 checksum of the genesis block and passed fork block numbers
@@ -54,7 +66,7 @@ type ID struct {
 type Filter func(id ID) error
 
 // NewID calculates the Ethereum fork ID from the chain config and head.
-func NewID(chain *core.BlockChain) ID {
+func NewID(chain Blockchain) ID {
 	return newID(
 		chain.Config(),
 		chain.Genesis().Hash(),
@@ -85,7 +97,7 @@ func newID(config *params.ChainConfig, genesis common.Hash, head uint64) ID {
 
 // NewFilter creates a filter that returns if a fork ID should be rejected or not
 // based on the local chain's status.
-func NewFilter(chain *core.BlockChain) Filter {
+func NewFilter(chain Blockchain) Filter {
 	return newFilter(
 		chain.Config(),
 		chain.Genesis().Hash(),
