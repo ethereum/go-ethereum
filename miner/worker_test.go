@@ -340,7 +340,7 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 		}
 	}
 	w.fullTaskHook = func() {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 	}
 
 	// Ensure worker has finished initialization
