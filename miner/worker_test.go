@@ -358,11 +358,18 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 		}
 	}
 
+	var timeoutS time.Duration
+	if runtime.GOARCH == "arm64" {
+		timeoutS = 4 * time.Second
+	} else {
+		timeoutS = 2 * time.Second
+	}
+
 	w.start()
 	for i := 0; i < 2; i += 1 {
 		select {
 		case <-taskCh:
-		case <-time.NewTimer(2 * time.Second).C:
+		case <-time.NewTimer(timeoutS).C:
 			t.Error("new task timeout")
 		}
 	}

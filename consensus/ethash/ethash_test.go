@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -32,6 +33,12 @@ import (
 
 // Tests that ethash works correctly in test mode.
 func TestTestMode(t *testing.T) {
+	var timeoutS time.Duration
+	if runtime.GOARCH == "arm64" {
+		timeoutS = 2 * time.Second
+	} else {
+		timeoutS = time.Second
+	}
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(100)}
 
 	ethash := NewTester(nil, false)
@@ -49,7 +56,7 @@ func TestTestMode(t *testing.T) {
 		if err := ethash.VerifySeal(nil, header); err != nil {
 			t.Fatalf("unexpected verification error: %v", err)
 		}
-	case <-time.NewTimer(time.Second).C:
+	case <-time.NewTimer(timeoutS).C:
 		t.Error("sealing result timeout")
 	}
 }
