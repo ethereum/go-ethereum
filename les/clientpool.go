@@ -527,9 +527,9 @@ const (
 )
 
 var (
-	positiveBalancePrefix    = []byte("pb:")      // dbVersion(uint16 big endian) + positiveBalancePrefix + id -> balance
-	negativeBalancePrefix    = []byte("nb:")      // dbVersion(uint16 big endian) + negativeBalancePrefix + ip -> balance
-	cumulativeRunningTimeKey = []byte("cumTime:") // dbVersion(uint16 big endian) + cumulativeRunningTimeKey -> cumTime
+	positiveBalancePrefix    = []byte("pb:")             // dbVersion(uint16 big endian) + positiveBalancePrefix + id -> balance
+	negativeBalancePrefix    = []byte("nb:")             // dbVersion(uint16 big endian) + negativeBalancePrefix + ip -> balance
+	cumulativeRunningTimeKey = []byte("cumulativeTime:") // dbVersion(uint16 big endian) + cumulativeRunningTimeKey -> cumulativeTime
 )
 
 type nodeDB struct {
