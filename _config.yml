@@ -74,8 +74,3 @@ collections:
     permalink: docs/:collection/:slug
     caption: Other
     sidebar_index: 9
-  legacy:
-    output: true
-    permalink: docs/:collection/:slug
-    caption: Legacy content
-    sidebar_index: 10
