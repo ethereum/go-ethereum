@@ -103,6 +103,7 @@
       }
     },
     "0000000000000000000000000000000000000009": {
+      "balance": "0x1",
       "precompiled": {
         "name": "blake2_compression",
         "startingBlock": "0xc350"
