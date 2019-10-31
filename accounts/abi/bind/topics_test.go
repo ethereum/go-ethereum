@@ -59,7 +59,7 @@ func TestParseTopics(t *testing.T) {
 	type bytesStruct struct {
 		StaticBytes [5]byte
 	}
-	bytesType, _ := abi.NewType("bytes5", nil)
+	bytesType, _ := abi.NewType("bytes5", "", nil)
 	type args struct {
 		createObj func() interface{}
 		resultObj func() interface{}

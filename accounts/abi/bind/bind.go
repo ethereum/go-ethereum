@@ -86,7 +86,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 				if input.Name == "" {
 					normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
 				}
-				if _, exist := structs[input.Type.String()]; input.Type.T == abi.TupleTy && !exist {
+				if hasStruct(input.Type) {
 					bindStructType[lang](input.Type, structs)
 				}
 			}
@@ -96,7 +96,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 				if output.Name != "" {
 					normalized.Outputs[j].Name = capitalise(output.Name)
 				}
-				if _, exist := structs[output.Type.String()]; output.Type.T == abi.TupleTy && !exist {
+				if hasStruct(output.Type) {
 					bindStructType[lang](output.Type, structs)
 				}
 			}
@@ -119,14 +119,11 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)
 			for j, input := range normalized.Inputs {
-				// Indexed fields are input, non-indexed ones are outputs
-				if input.Indexed {
-					if input.Name == "" {
-						normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
-					}
-					if _, exist := structs[input.Type.String()]; input.Type.T == abi.TupleTy && !exist {
-						bindStructType[lang](input.Type, structs)
-					}
+				if input.Name == "" {
+					normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
+				}
+				if hasStruct(input.Type) {
+					bindStructType[lang](input.Type, structs)
 				}
 			}
 			// Append the event to the accumulator list
@@ -244,7 +241,7 @@ func bindBasicTypeGo(kind abi.Type) string {
 func bindTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
 	switch kind.T {
 	case abi.TupleTy:
-		return structs[kind.String()].Name
+		return structs[kind.TupleRawName+kind.String()].Name
 	case abi.ArrayTy:
 		return fmt.Sprintf("[%d]", kind.Size) + bindTypeGo(*kind.Elem, structs)
 	case abi.SliceTy:
@@ -321,7 +318,7 @@ func pluralizeJavaType(typ string) string {
 func bindTypeJava(kind abi.Type, structs map[string]*tmplStruct) string {
 	switch kind.T {
 	case abi.TupleTy:
-		return structs[kind.String()].Name
+		return structs[kind.TupleRawName+kind.String()].Name
 	case abi.ArrayTy, abi.SliceTy:
 		return pluralizeJavaType(bindTypeJava(*kind.Elem, structs))
 	default:
@@ -340,6 +337,13 @@ var bindTopicType = map[Lang]func(kind abi.Type, structs map[string]*tmplStruct)
 // funcionality as for simple types, but dynamic types get converted to hashes.
 func bindTopicTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
 	bound := bindTypeGo(kind, structs)
+
+	// todo(rjl493456442) according solidity documentation, indexed event
+	// parameters that are not value types i.e. arrays and structs are not
+	// stored directly but instead a keccak256-hash of an encoding is stored.
+	//
+	// We only convert stringS and bytes to hash, still need to deal with
+	// array(both fixed-size and dynamic-size) and struct.
 	if bound == "string" || bound == "[]byte" {
 		bound = "common.Hash"
 	}
@@ -350,6 +354,13 @@ func bindTopicTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
 // funcionality as for simple types, but dynamic types get converted to hashes.
 func bindTopicTypeJava(kind abi.Type, structs map[string]*tmplStruct) string {
 	bound := bindTypeJava(kind, structs)
+
+	// todo(rjl493456442) according solidity documentation, indexed event
+	// parameters that are not value types i.e. arrays and structs are not
+	// stored directly but instead a keccak256-hash of an encoding is stored.
+	//
+	// We only convert stringS and bytes to hash, still need to deal with
+	// array(both fixed-size and dynamic-size) and struct.
 	if bound == "String" || bound == "byte[]" {
 		bound = "Hash"
 	}
@@ -369,7 +380,14 @@ var bindStructType = map[Lang]func(kind abi.Type, structs map[string]*tmplStruct
 func bindStructTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
 	switch kind.T {
 	case abi.TupleTy:
-		if s, exist := structs[kind.String()]; exist {
+		// We compose raw struct name and canonical parameter expression
+		// together here. The reason is before solidity v0.5.11, kind.TupleRawName
+		// is empty, so we use canonical parameter expression to distinguish
+		// different struct definition. From the consideration of backward
+		// compatibility, we concat these two together so that if kind.TupleRawName
+		// is not empty, it can have unique id.
+		id := kind.TupleRawName + kind.String()
+		if s, exist := structs[id]; exist {
 			return s.Name
 		}
 		var fields []*tmplField
@@ -377,8 +395,11 @@ func bindStructTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
 			field := bindStructTypeGo(*elem, structs)
 			fields = append(fields, &tmplField{Type: field, Name: capitalise(kind.TupleRawNames[i]), SolKind: *elem})
 		}
-		name := fmt.Sprintf("Struct%d", len(structs))
-		structs[kind.String()] = &tmplStruct{
+		name := kind.TupleRawName
+		if name == "" {
+			name = fmt.Sprintf("Struct%d", len(structs))
+		}
+		structs[id] = &tmplStruct{
 			Name:   name,
 			Fields: fields,
 		}
@@ -398,7 +419,14 @@ func bindStructTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
 func bindStructTypeJava(kind abi.Type, structs map[string]*tmplStruct) string {
 	switch kind.T {
 	case abi.TupleTy:
-		if s, exist := structs[kind.String()]; exist {
+		// We compose raw struct name and canonical parameter expression
+		// together here. The reason is before solidity v0.5.11, kind.TupleRawName
+		// is empty, so we use canonical parameter expression to distinguish
+		// different struct definition. From the consideration of backward
+		// compatibility, we concat these two together so that if kind.TupleRawName
+		// is not empty, it can have unique id.
+		id := kind.TupleRawName + kind.String()
+		if s, exist := structs[id]; exist {
 			return s.Name
 		}
 		var fields []*tmplField
@@ -406,8 +434,11 @@ func bindStructTypeJava(kind abi.Type, structs map[string]*tmplStruct) string {
 			field := bindStructTypeJava(*elem, structs)
 			fields = append(fields, &tmplField{Type: field, Name: decapitalise(kind.TupleRawNames[i]), SolKind: *elem})
 		}
-		name := fmt.Sprintf("Class%d", len(structs))
-		structs[kind.String()] = &tmplStruct{
+		name := kind.TupleRawName
+		if name == "" {
+			name = fmt.Sprintf("Class%d", len(structs))
+		}
+		structs[id] = &tmplStruct{
 			Name:   name,
 			Fields: fields,
 		}
@@ -497,6 +528,21 @@ func structured(args abi.Arguments) bool {
 	return true
 }
 
+// hasStruct returns an indicator whether the given type is struct, struct slice
+// or struct array.
+func hasStruct(t abi.Type) bool {
+	switch t.T {
+	case abi.SliceTy:
+		return hasStruct(*t.Elem)
+	case abi.ArrayTy:
+		return hasStruct(*t.Elem)
+	case abi.TupleTy:
+		return true
+	default:
+		return false
+	}
+}
+
 // resolveArgName converts a raw argument representation into a user friendly format.
 func resolveArgName(arg abi.Argument, structs map[string]*tmplStruct) string {
 	var (
@@ -512,7 +558,7 @@ loop:
 		case abi.ArrayTy:
 			prefix += fmt.Sprintf("[%d]", typ.Size)
 		default:
-			embedded = typ.String()
+			embedded = typ.TupleRawName + typ.String()
 			break loop
 		}
 		typ = typ.Elem

@@ -57,7 +57,7 @@ const jsondata2 = `
 ]`
 
 func TestReader(t *testing.T) {
-	Uint256, _ := NewType("uint256", nil)
+	Uint256, _ := NewType("uint256", "", nil)
 	exp := ABI{
 		Methods: map[string]Method{
 			"balance": {
@@ -172,7 +172,7 @@ func TestTestSlice(t *testing.T) {
 }
 
 func TestMethodSignature(t *testing.T) {
-	String, _ := NewType("string", nil)
+	String, _ := NewType("string", "", nil)
 	m := Method{"foo", "foo", false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil}
 	exp := "foo(string,string)"
 	if m.Sig() != exp {
@@ -184,7 +184,7 @@ func TestMethodSignature(t *testing.T) {
 		t.Errorf("expected ids to match %x != %x", m.ID(), idexp)
 	}
 
-	uintt, _ := NewType("uint256", nil)
+	uintt, _ := NewType("uint256", "", nil)
 	m = Method{"foo", "foo", false, []Argument{{"bar", uintt, false}}, nil}
 	exp = "foo(uint256)"
 	if m.Sig() != exp {
@@ -192,7 +192,7 @@ func TestMethodSignature(t *testing.T) {
 	}
 
 	// Method with tuple arguments
-	s, _ := NewType("tuple", []ArgumentMarshaling{
+	s, _ := NewType("tuple", "", []ArgumentMarshaling{
 		{Name: "a", Type: "int256"},
 		{Name: "b", Type: "int256[]"},
 		{Name: "c", Type: "tuple[]", Components: []ArgumentMarshaling{
@@ -602,9 +602,9 @@ func TestBareEvents(t *testing.T) {
 	{ "type" : "event", "name" : "tuple", "inputs" : [{ "indexed":false, "name":"t", "type":"tuple", "components":[{"name":"a", "type":"uint256"}] }, { "indexed":true, "name":"arg1", "type":"address" }] }
 	]`
 
-	arg0, _ := NewType("uint256", nil)
-	arg1, _ := NewType("address", nil)
-	tuple, _ := NewType("tuple", []ArgumentMarshaling{{Name: "a", Type: "uint256"}})
+	arg0, _ := NewType("uint256", "", nil)
+	arg1, _ := NewType("address", "", nil)
+	tuple, _ := NewType("tuple", "", []ArgumentMarshaling{{Name: "a", Type: "uint256"}})
 
 	expectedEvents := map[string]struct {
 		Anonymous bool
