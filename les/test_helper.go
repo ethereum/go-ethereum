@@ -517,7 +517,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 	if connect {
 		cpeer, err1, speer, err2 = newTestPeerPair("peer", protocol, server, client)
 		select {
-		case <-time.After(time.Millisecond * 100):
+		case <-time.After(time.Millisecond * 300):
 		case err := <-err1:
 			t.Fatalf("peer 1 handshake error: %v", err)
 		case err := <-err2:

@@ -81,7 +81,14 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	// Assemble the test environment
 	server, client, tearDown := newClientServerEnv(t, 4, protocol, nil, nil, 0, false, true)
 	defer tearDown()
+
 	client.handler.synchronise(client.peer.peer)
+
+	// Ensure the client has synced all necessary data.
+	clientHead := client.handler.backend.blockchain.CurrentHeader()
+	if clientHead.Number.Uint64() != 4 {
+		t.Fatalf("Failed to sync the chain with server, head: %v", clientHead.Number.Uint64())
+	}
 
 	test := func(expFail uint64) {
 		for i := uint64(0); i <= server.handler.blockchain.CurrentHeader().Number.Uint64(); i++ {

@@ -188,6 +188,12 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 
 	client.handler.synchronise(client.peer.peer)
 
+	// Ensure the client has synced all necessary data.
+	clientHead := client.handler.backend.blockchain.CurrentHeader()
+	if clientHead.Number.Uint64() != 4 {
+		t.Fatalf("Failed to sync the chain with server, head: %v", clientHead.Number.Uint64())
+	}
+
 	test := func(expFail uint64) {
 		// Mark this as a helper to put the failures at the correct lines
 		t.Helper()
