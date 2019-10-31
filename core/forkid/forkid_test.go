@@ -56,7 +56,9 @@ func TestCreation(t *testing.T) {
 				{4370000, ID{Hash: checksumToBytes(0xa00bc324), Next: 7280000}}, // First Byzantium block
 				{7279999, ID{Hash: checksumToBytes(0xa00bc324), Next: 7280000}}, // Last Byzantium block
 				{7280000, ID{Hash: checksumToBytes(0x668db0af), Next: 9069000}}, // First and last Constantinople, first Petersburg block
-				{9069001, ID{Hash: checksumToBytes(0x879d6e30), Next: 0}},       // Today Istanbul block
+				{9068999, ID{Hash: checksumToBytes(0x668db0af), Next: 9069000}}, // Last Petersburg block
+				{9069000, ID{Hash: checksumToBytes(0x879d6e30), Next: 0}},       // Today Istanbul block
+				{10000000, ID{Hash: checksumToBytes(0x879d6e30), Next: 0}},      // Future Istanbul block
 			},
 		},
 		// Ropsten test cases
