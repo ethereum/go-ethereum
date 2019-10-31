@@ -66,7 +66,7 @@ const (
 // accepting and instantly kicking out clients. In theory, we try to ensure that
 // each client can have several minutes of connection time.
 //
-// Balances of disconnected clients are stored in nodeDB including postive balance
+// Balances of disconnected clients are stored in nodeDB including positive balance
 // and negative banalce. Negative balance is transformed into a logarithmic form
 // with a constantly shifting linear offset in order to implement an exponential
 // decrease. Besides nodeDB will have a background thread to check the negative

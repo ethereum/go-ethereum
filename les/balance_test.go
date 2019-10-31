@@ -181,13 +181,13 @@ func TestEstimatedPriority(t *testing.T) {
 
 		// 3 seconds time cost, 3 second estimated time cost, 10^9*2 request cost,
 		// 4*10^9 estimated request cost.
-		{time.Second, 3*time.Second, 1000000000, ^int64(48)},
+		{time.Second, 3 * time.Second, 1000000000, ^int64(48)},
 
 		// All positive balance is used up
-		{time.Second*55, 0, 0, 0},
+		{time.Second * 55, 0, 0, 0},
 
 		// 1 minute estimated time cost, 4/58 * 10^9 estimated request cost per sec.
-		{0, time.Minute, 0, int64(time.Minute) + int64(time.Second) * 120/29},
+		{0, time.Minute, 0, int64(time.Minute) + int64(time.Second)*120/29},
 	}
 	for _, i := range inputs {
 		clock.Run(i.runTime)
@@ -209,13 +209,13 @@ func TestCallbackChecking(t *testing.T) {
 	tracker.setFactors(false, 1, 1)
 	tracker.setFactors(true, 1, 1)
 
-	var inputs = []struct{
+	var inputs = []struct {
 		priority int64
 		expDiff  time.Duration
-	} {
-		{^int64(500), time.Millisecond*500},
+	}{
+		{^int64(500), time.Millisecond * 500},
 		{0, time.Second},
-		{int64(time.Second), 2*time.Second},
+		{int64(time.Second), 2 * time.Second},
 	}
 	tracker.setBalance(uint64(time.Second), 0)
 	for _, i := range inputs {
@@ -238,7 +238,7 @@ func TestCallback(t *testing.T) {
 
 	callCh := make(chan struct{}, 1)
 	tracker.setBalance(uint64(time.Minute), 0)
-	tracker.addCallback(balanceCallbackZero, 0, func() {callCh <- struct{}{}})
+	tracker.addCallback(balanceCallbackZero, 0, func() { callCh <- struct{}{} })
 
 	clock.Run(time.Minute)
 	select {
@@ -248,13 +248,13 @@ func TestCallback(t *testing.T) {
 	}
 
 	tracker.setBalance(uint64(time.Minute), 0)
-	tracker.addCallback(balanceCallbackZero, 0, func() {callCh <- struct{}{}})
+	tracker.addCallback(balanceCallbackZero, 0, func() { callCh <- struct{}{} })
 	tracker.removeCallback(balanceCallbackZero)
 
 	clock.Run(time.Minute)
 	select {
 	case <-callCh:
 		t.Fatalf("Callback shouldn't be called")
-	case <-time.NewTimer(time.Millisecond*100).C:
+	case <-time.NewTimer(time.Millisecond * 100).C:
 	}
 }
