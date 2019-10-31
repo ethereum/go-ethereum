@@ -214,7 +214,7 @@ func TestConnectPaidClientToFullPool(t *testing.T) {
 		t.Fatalf("Low balance paid client should be rejected")
 	}
 	clock.Run(time.Second)
-	pool.addBalance(poolTestPeer(12).ID(), 1000000000*60, false) // Add high balance to new paid client
+	pool.addBalance(poolTestPeer(12).ID(), 1000000000*60*3, false) // Add high balance to new paid client
 	if !pool.connect(poolTestPeer(12), 1) {
 		t.Fatalf("High balance paid client should be accpected")
 	}
@@ -238,7 +238,7 @@ func TestPaidClientKickedOut(t *testing.T) {
 		clock.Run(time.Millisecond)
 	}
 	clock.Run(time.Second)
-	clock.Run(freeConnectedBias)
+	clock.Run(connectedBias)
 	if !pool.connect(poolTestPeer(11), 0) {
 		t.Fatalf("Free client should be accectped")
 	}
@@ -465,9 +465,9 @@ func TestNodeDB(t *testing.T) {
 			}
 		}
 	}
-	ndb.setCumTime(100)
-	if ndb.getCumTime() != 100 {
-		t.Fatalf("Cumulative time mismatch, want %v, got %v", 100, ndb.getCumTime())
+	ndb.setCumulativeTime(100)
+	if ndb.getCumulativeTime() != 100 {
+		t.Fatalf("Cumulative time mismatch, want %v, got %v", 100, ndb.getCumulativeTime())
 	}
 }
 
@@ -490,10 +490,10 @@ func TestNodeDBExpiration(t *testing.T) {
 		ip      string
 		balance negBalance
 	}{
-		{"127.0.0.1", negBalance{logValue: 10}},
-		{"127.0.0.2", negBalance{logValue: 10}},
-		{"127.0.0.3", negBalance{logValue: 10}},
-		{"127.0.0.4", negBalance{logValue: 10}},
+		{"127.0.0.1", negBalance{logValue: 1}},
+		{"127.0.0.2", negBalance{logValue: 1}},
+		{"127.0.0.3", negBalance{logValue: 1}},
+		{"127.0.0.4", negBalance{logValue: 1}},
 	}
 	for _, c := range cases {
 		ndb.setNB(c.ip, c.balance)

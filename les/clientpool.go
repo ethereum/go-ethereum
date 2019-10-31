@@ -34,24 +34,21 @@ import (
 )
 
 const (
-	negBalanceExpTC       = time.Minute      // time constant for exponentially reducing negative balance
-	fixedPointMultiplier  = 0x1000000        // constant to convert logarithms to fixed point format
-	lazyQueueRefresh      = time.Second * 10 // refresh period of the connected queue
-	persistCumTimeRefresh = time.Minute * 5  // refresh period of the cumulative running time persistence
-	posBalanceCacheLimit  = 8192             // the maximum number of cached items in positive balance queue
-	negBalanceCacheLimit  = 8192             // the maximum number of cached items in negative balance queue
+	negBalanceExpTC              = time.Hour        // time constant for exponentially reducing negative balance
+	fixedPointMultiplier         = 0x1000000        // constant to convert logarithms to fixed point format
+	lazyQueueRefresh             = time.Second * 10 // refresh period of the connected queue
+	persistCumulativeTimeRefresh = time.Minute * 5  // refresh period of the cumulative running time persistence
+	posBalanceCacheLimit         = 8192             // the maximum number of cached items in positive balance queue
+	negBalanceCacheLimit         = 8192             // the maximum number of cached items in negative balance queue
 
-	// freeConnectedBias is applied to already connected clients when new client
-	// is "free client". So that already connected client won't be kicked out very
-	// soon.
-	freeConnectedBias = time.Minute * 3
-
-	// priorityConnectedBias is applied to already connected clients when new client
-	// is "priority client". The value is smaller than freeConnectedBias, so that
-	// we can ensure most of new priority client can be accepted when pool is full.
-	// But if the balance of priority client is very small, there is no reason for
-	// very high priority.
-	priorityConnectedBias = time.Second * 30
+	// connectedBias is applied to already connected clients So that
+	// already connected client won't be kicked out very soon and we
+	// can ensure all connected clients can have enough time to request
+	// or sync some data.
+	//
+	// todo(rjl493456442) make it configurable. It can be the option of
+	// free trial time!
+	connectedBias = time.Minute * 3
 )
 
 // clientPool implements a client database that assigns a priority to each client
@@ -69,12 +66,12 @@ const (
 // accepting and instantly kicking out clients. In theory, we try to ensure that
 // each client can have several minutes of connection time.
 //
-// Balances of disconnected clients are stored in posBalanceQueue and negBalanceQueue
-// and are also saved in the database. Negative balance is transformed into a
-// logarithmic form with a constantly shifting linear offset in order to implement
-// an exponential decrease. negBalanceQueue has a limited size and drops the smallest
-// values when necessary. Positive balances are stored in the database as long as
-// they exist, posBalanceQueue only acts as a cache for recently accessed entries.
+// Balances of disconnected clients are stored in nodeDB including postive balance
+// and negative banalce. Negative balance is transformed into a logarithmic form
+// with a constantly shifting linear offset in order to implement an exponential
+// decrease. Besides nodeDB will have a background thread to check the negative
+// balance of disconnected client. If the balance is low enough, then the record
+// will be dropped.
 type clientPool struct {
 	ndb        *nodeDB
 	lock       sync.Mutex
@@ -88,13 +85,13 @@ type clientPool struct {
 
 	posFactors, negFactors priceFactors
 
-	connLimit     int            // The maximum number of connections that clientpool can support
-	capLimit      uint64         // The maximum cumulative capacity that clientpool can support
-	connectedCap  uint64         // The sum of the capacity of the current clientpool connected
-	freeClientCap uint64         // The capacity value of each free client
-	startTime     mclock.AbsTime // The timestamp at which the clientpool started running
-	startCumTime  int64          // The cumulative running time of clientpool at the start point.
-	disableBias   bool           // Disable connection bias(used in testing)
+	connLimit      int            // The maximum number of connections that clientpool can support
+	capLimit       uint64         // The maximum cumulative capacity that clientpool can support
+	connectedCap   uint64         // The sum of the capacity of the current clientpool connected
+	freeClientCap  uint64         // The capacity value of each free client
+	startTime      mclock.AbsTime // The timestamp at which the clientpool started running
+	cumulativeTime int64          // The cumulative running time of clientpool at the start point.
+	disableBias    bool           // Disable connection bias(used in testing)
 }
 
 // clientPeer represents a client in the pool.
@@ -165,7 +162,7 @@ func newClientPool(db ethdb.Database, freeClientCap uint64, clock mclock.Clock, 
 		freeClientCap:  freeClientCap,
 		removePeer:     removePeer,
 		startTime:      clock.Now(),
-		startCumTime:   ndb.getCumTime(),
+		cumulativeTime: ndb.getCumulativeTime(),
 		stopCh:         make(chan struct{}),
 	}
 	// If the negative balance of free client is even lower than 1,
@@ -184,8 +181,8 @@ func newClientPool(db ethdb.Database, freeClientCap uint64, clock mclock.Clock, 
 				pool.lock.Lock()
 				pool.connectedQueue.Refresh()
 				pool.lock.Unlock()
-			case <-clock.After(persistCumTimeRefresh):
-				pool.ndb.setCumTime(pool.logOffset(clock.Now()))
+			case <-clock.After(persistCumulativeTimeRefresh):
+				pool.ndb.setCumulativeTime(pool.logOffset(clock.Now()))
 			case <-pool.stopCh:
 				return
 			}
@@ -200,7 +197,7 @@ func (f *clientPool) stop() {
 	f.lock.Lock()
 	f.closed = true
 	f.lock.Unlock()
-	f.ndb.setCumTime(f.logOffset(f.clock.Now()))
+	f.ndb.setCumulativeTime(f.logOffset(f.clock.Now()))
 	f.ndb.close()
 }
 
@@ -225,6 +222,7 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 	var (
 		posBalance uint64
 		negBalance uint64
+		now        = f.clock.Now()
 	)
 	pb := f.ndb.getOrNewPB(id)
 	posBalance = pb.value
@@ -232,7 +230,7 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 
 	nb := f.ndb.getOrNewNB(freeID)
 	if nb.logValue != 0 {
-		negBalance = uint64(math.Exp(float64(nb.logValue-f.logOffset(f.clock.Now())) / fixedPointMultiplier))
+		negBalance = uint64(math.Exp(float64(nb.logValue-f.logOffset(now)) / fixedPointMultiplier))
 		negBalance *= uint64(time.Second)
 	}
 	// If the client is a free client, assign with a low free capacity,
@@ -271,14 +269,11 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 			newCount--
 			return newCapacity > f.capLimit || newCount > f.connLimit
 		})
-		bias := freeConnectedBias
-		if e.priority {
-			bias = priorityConnectedBias
-		}
+		bias := connectedBias
 		if f.disableBias {
 			bias = 0
 		}
-		if newCapacity > f.capLimit || newCount > f.connLimit || (e.balanceTracker.estimatedPriority(f.clock.Now()+mclock.AbsTime(bias), false)-kickPriority) > 0 {
+		if newCapacity > f.capLimit || newCount > f.connLimit || (e.balanceTracker.estimatedPriority(now+mclock.AbsTime(bias), false)-kickPriority) > 0 {
 			for _, c := range kickList {
 				f.connectedQueue.Push(c)
 			}
@@ -288,17 +283,18 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 		}
 		// accept new client, drop old ones
 		for _, c := range kickList {
-			f.dropClient(c, f.clock.Now(), true)
+			f.dropClient(c, now, true)
 		}
 	}
 	// Register new client to connection queue.
 	f.connectedMap[id] = e
 	f.connectedQueue.Push(e)
 	f.connectedCap += e.capacity
+
 	// If the current client is a paid client, notify it to update the capacity.
 	// And also monitor the status of client, downgrade it to normal client if
 	// positive balance is used up.
-	if e.capacity != f.freeClientCap {
+	if e.priority {
 		e.peer.updateCapacity(e.capacity)
 		e.balanceTracker.addCallback(balanceCallbackZero, 0, func() { f.balanceExhausted(id) })
 	}
@@ -359,7 +355,7 @@ func (f *clientPool) finalizeBalance(c *clientInfo, now mclock.AbsTime) {
 	pb.value = pos
 	f.ndb.setPB(c.id, pb)
 
-	neg /= uint64(time.Second)
+	neg /= uint64(time.Second) // Convert the expanse to second level.
 	if neg > 1 {
 		nb.logValue = int64(math.Log(float64(neg))*fixedPointMultiplier) + f.logOffset(now)
 		f.ndb.setNB(c.address, nb)
@@ -420,12 +416,12 @@ func (f *clientPool) requestCost(p *peer, cost uint64) {
 // representation of negative balance
 //
 // From another point of view, the result returned by the function represents
-// the total time that the clientpool is cumulatively running(total_minutes/multiplier).
+// the total time that the clientpool is cumulatively running(total_hours/multiplier).
 func (f *clientPool) logOffset(now mclock.AbsTime) int64 {
 	// Note: fixedPointMultiplier acts as a multiplier here; the reason for dividing the divisor
 	// is to avoid int64 overflow. We assume that int64(negBalanceExpTC) >> fixedPointMultiplier.
-	cumTime := int64((time.Duration(now - f.startTime)) / (negBalanceExpTC / fixedPointMultiplier))
-	return f.startCumTime + cumTime
+	cumulativeTime := int64((time.Duration(now - f.startTime)) / (negBalanceExpTC / fixedPointMultiplier))
+	return f.cumulativeTime + cumulativeTime
 }
 
 // setPriceFactors changes pricing factors for both positive and negative balances.
@@ -585,7 +581,7 @@ func (db *nodeDB) key(id []byte, neg bool) []byte {
 	return db.auxbuf[:len(prefix)+len(db.verbuf)+len(id)]
 }
 
-func (db *nodeDB) getCumTime() int64 {
+func (db *nodeDB) getCumulativeTime() int64 {
 	blob, err := db.db.Get(append(cumulativeRunningTimeKey, db.verbuf[:]...))
 	if err != nil || len(blob) == 0 {
 		return 0
@@ -593,7 +589,7 @@ func (db *nodeDB) getCumTime() int64 {
 	return int64(binary.BigEndian.Uint64(blob))
 }
 
-func (db *nodeDB) setCumTime(v int64) {
+func (db *nodeDB) setCumulativeTime(v int64) {
 	binary.BigEndian.PutUint64(db.auxbuf[:8], uint64(v))
 	db.db.Put(append(cumulativeRunningTimeKey, db.verbuf[:]...), db.auxbuf[:8])
 }
