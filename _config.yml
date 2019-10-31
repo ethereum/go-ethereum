@@ -41,33 +41,40 @@ collections:
     permalink: docs/:collection/:slug
     caption: Interacting with Geth
     sidebar_index: 3
+  dapp:
+    output: true
+    permalink: docs/:collection/:slug
+    caption: For dApp Developers
+    frontpage: _dapp/index.md
+    sidebar_index: 4
   rpc:
     output: true
     permalink: docs/:collection/:slug
     caption: JSON RPC APIs
     frontpage: _rpc/index.md
-    sidebar_index: 4
-  support:
-    output: true
-    permalink: docs/:collection/:slug
-    caption: Issues and support
     sidebar_index: 5
   developers:
     output: true
     permalink: docs/:collection/:slug
-    caption: Developer docs
+    caption: For Geth Developers
+    frontpage: _developers/devguide.md
     sidebar_index: 6
+  support:
+    output: true
+    permalink: docs/:collection/:slug
+    caption: Issues and support
+    sidebar_index: 7
   clef:
     output: true
     permalink: docs/:collection/:slug
     caption: Clef
-    sidebar_index: 7
+    sidebar_index: 8
     frontpage: _clef/Overview.md
   whisper:
     output: true
     permalink: docs/:collection/:slug
     caption: Whisper
-    sidebar_index: 8
+    sidebar_index: 9
     frontpage: _whisper/Whisper-Overview.md
   doc:
     output: true
