@@ -308,7 +308,7 @@ func TestFreeClientKickedOut(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		pool.connect(poolTestPeer(i), 1)
-		clock.Run(time.Millisecond)
+		clock.Run(100 * time.Millisecond)
 	}
 	if pool.connect(poolTestPeer(11), 1) {
 		t.Fatalf("New free client should be rejected")
@@ -498,6 +498,7 @@ func TestNodeDBExpiration(t *testing.T) {
 	for _, c := range cases {
 		ndb.setNB(c.ip, c.balance)
 	}
+	time.Sleep(100 * time.Millisecond) // Ensure the db expirer is registered.
 	clock.Run(time.Hour + time.Minute)
 	select {
 	case <-done:

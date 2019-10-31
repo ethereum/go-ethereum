@@ -169,10 +169,7 @@ func newClientPool(db ethdb.Database, freeClientCap uint64, clock mclock.Clock, 
 	// delete this entry.
 	ndb.nbEvictCallBack = func(now mclock.AbsTime, b negBalance) bool {
 		balance := math.Exp(float64(b.logValue-pool.logOffset(now)) / fixedPointMultiplier)
-		if balance <= 1 {
-			return true
-		}
-		return false
+		return balance <= 1
 	}
 	go func() {
 		for {
