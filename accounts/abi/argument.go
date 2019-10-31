@@ -91,7 +91,7 @@ func (arguments Arguments) isTuple() bool {
 func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 	if len(data) == 0 {
 		if len(arguments) != 0 {
-			return fmt.Errorf("abi: unmarshalling empty output")
+			return fmt.Errorf("abi: attempting to unmarshall an empty string while arguments are expected")
 		} else {
 			return nil // Nothing to unmarshal, return
 		}
@@ -114,7 +114,7 @@ func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) error {
 	if len(data) == 0 {
 		if len(arguments) != 0 {
-			return fmt.Errorf("abi: unmarshalling empty output")
+			return fmt.Errorf("abi: attempting to unmarshall an empty string while arguments are expected")
 		} else {
 			return nil // Nothing to unmarshal, return
 		}

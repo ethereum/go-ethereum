@@ -342,7 +342,7 @@ func bindTopicTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
 	// parameters that are not value types i.e. arrays and structs are not
 	// stored directly but instead a keccak256-hash of an encoding is stored.
 	//
-	// We only only convert string and bytes to hash, still need to deal with
+	// We only convert stringS and bytes to hash, still need to deal with
 	// array(both fixed-size and dynamic-size) and struct.
 	if bound == "string" || bound == "[]byte" {
 		bound = "common.Hash"
@@ -359,7 +359,7 @@ func bindTopicTypeJava(kind abi.Type, structs map[string]*tmplStruct) string {
 	// parameters that are not value types i.e. arrays and structs are not
 	// stored directly but instead a keccak256-hash of an encoding is stored.
 	//
-	// We only only convert string and bytes to hash, still need to deal with
+	// We only convert stringS and bytes to hash, still need to deal with
 	// array(both fixed-size and dynamic-size) and struct.
 	if bound == "String" || bound == "byte[]" {
 		bound = "Hash"
@@ -380,7 +380,7 @@ var bindStructType = map[Lang]func(kind abi.Type, structs map[string]*tmplStruct
 func bindStructTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
 	switch kind.T {
 	case abi.TupleTy:
-		// We composite raw struct name and canonical parameter expression
+		// We compose raw struct name and canonical parameter expression
 		// together here. The reason is before solidity v0.5.11, kind.TupleRawName
 		// is empty, so we use canonical parameter expression to distinguish
 		// different struct definition. From the consideration of backward
@@ -419,7 +419,7 @@ func bindStructTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
 func bindStructTypeJava(kind abi.Type, structs map[string]*tmplStruct) string {
 	switch kind.T {
 	case abi.TupleTy:
-		// We composite raw struct name and canonical parameter expression
+		// We compose raw struct name and canonical parameter expression
 		// together here. The reason is before solidity v0.5.11, kind.TupleRawName
 		// is empty, so we use canonical parameter expression to distinguish
 		// different struct definition. From the consideration of backward
