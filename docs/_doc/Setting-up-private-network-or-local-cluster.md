@@ -1,6 +1,8 @@
 ---
-title: Setting up private network or local cluster
+title: Creating a local cluster
 ---
+
+<!-- TODO: Redirects -->
 
 > In the first link, the first section "Setting up multiple nodes" does not necessarily imply that those nodes will be connected in any way. They could literally be separate nodes that have no knowledge of each other. Perhaps serving as an array of nodes for some local testers, for example.
 >
@@ -10,32 +12,43 @@ title: Setting up private network or local cluster
 
 * * *
 
-This page describes how to set up a local cluster of nodes, advise how to make it private, and how to hook up your nodes on the eth-netstat network monitoring app.
-A fully controlled ethereum network is useful as a backend for network integration testing (core developers working on issues related to networking/blockchain synching/message propagation, etc or DAPP developers testing multi-block and multi-user scenarios).
+This page describes how to set up a local cluster of nodes, and connect it to the [eth-netstat](https://github.com/cubedro/eth-netstats) network monitoring app.
 
-We assume you are able to build `geth` following the [build instructions](../install-and-build/build-from-source)
+An Ethereum cluster under your control is useful as a backend for network integration testing. For example, core developers working on issues related to networking/blockchain synching/message propagation, or dapp developers testing multi-block and multi-user scenarios.
 
 ## Setting up multiple nodes
 
-In order to run multiple ethereum nodes locally, you have to make sure:
+To run multiple ethereum nodes locally, you have to make sure:
 
 -   each instance has a separate data directory (`--datadir`)
--   each instance runs on a different port (both eth and rpc) (`--port and --rpcport`)
+-   each instance runs on a different port (both ETH and RPC) (`--port and --rpcport`)
 -   in case of a cluster the instances must know about each other
--   the ipc endpoint is unique or the ipc interface is disabled (`--ipcpath or --ipcdisable`)
+-   the IPC endpoint is unique or the IPC interface is disabled (`--ipcpath or --ipcdisable`)
 
-You start the first node (let's make port explicit and disable ipc interface)
+Create the temporary directories needed by geth to store data and save logs:
 
-```bash
+<!-- TODO: Why `60` -->
+
+```shell
+mkdir -p /tmp/eth/60/01
+mkdir -p /tmp/eth/60/02
+```
+
+Start the first node, making the port explicit and disabling the IPC interface:
+
+```shell
 geth --datadir="/tmp/eth/60/01" -verbosity 6 --ipcdisable --port 30301 --rpcport 8101 console 2>> /tmp/eth/60/01.log
 ```
 
-We started the node with the console, so that we can grab the enode url for instance:
+The node started with the console, so you can get the enode url that other nodes use to connect to it:
 
-    > admin.nodeInfo.enode
-    enode://8c544b4a07da02a9ee024def6f3ba24b2747272b64e16ec5dd6b17b55992f8980b77938155169d9d33807e501729ecb42f5c0a61018898c32799ced152e9f0d7@9[::]:30301
+```shell
+> admin.nodeInfo.enode
 
-`[::]` will be parsed as localhost (`127.0.0.1`). If your nodes are on a local network check each individual host machine and find your ip with `ifconfig` (on Linux and MacOS):
+enode://{PUBLIC_KEY}@{IP_ADDRESS}:30301
+```
+
+If your nodes are on a local network check each individual host machine and find your ip with `ifconfig` (on Linux and MacOS):
 
 ```bash
 $ ifconfig|grep netmask|awk '{print $2}'
@@ -51,27 +64,45 @@ Now you can launch a second node with:
 geth --datadir="/tmp/eth/60/02" --verbosity 6 --ipcdisable --port 30302 --rpcport 8102 console 2>> /tmp/eth/60/02.log
 ```
 
-If you want to connect this instance to the previously started node you can add it as a peer from the console with `admin.addPeer(enodeUrlOfFirstInstance)`.
+To connect this instance to the first node you can add it as a peer from the console with `admin.addPeer(enodeUrlOfFirstInstance)`.
 
-You can test the connection  by typing in geth console:
+You can test the connection with the following commands:
 
 ```javascript
 > net.listening
 true
 > net.peerCount
-1
+2
 > admin.peers
-...
+[{
+    caps: ["eth/62", "eth/63"],
+    enode: "enode://{PUBLIC_KEY}@{IP_ADDRESS}:30301",
+    id: "638c0193168646dd18136c3de7f5f4342b879b274f9bec90c60dfc1a04c50051",
+    name: "Geth/main.jnode.network/v1.8.22-stable-7fa3509e/linux-amd64/go1.11.5",
+    network: {
+      inbound: false,
+      localAddress: "{IP_ADDRESS}:55364",
+      remoteAddress: "{IP_ADDRESS}:30301",
+      static: false,
+      trusted: false
+    },
+    protocols: {
+      eth: {
+        difficulty: 1.2651073550501831e+22,
+        head: "0xa366e1198576fba10fe767199c7a330679cd37eab4f40fd8ac6eb2c84b7d3d0b",
+        version: 63
+      }
+    }
+}]
 ```
 
-* * *
+### Scripting cluster creation
 
-## Local cluster
-
-As an extention of the above, you can spawn a local cluster of nodes easily. It can also be scripted including account creation which is needed for mining.
-See [`gethcluster.sh`](https://github.com/ethersphere/eth-utils) script, and the README there for usage and examples.
+You can automate the creation a local cluster of nodes, including account creation which is needed for mining. See the [`gethcluster.sh`](https://github.com/ethersphere/eth-utils/blob/master/gethcluster.sh) script, and the [README](https://github.com/ethersphere/eth-utils/blob/master/README.md) for usage and examples.
 
 ## Private network
+
+<!-- TODO: Bring in -->
 
 See \[[the Private Network Page|Private network]] for more information.
 
