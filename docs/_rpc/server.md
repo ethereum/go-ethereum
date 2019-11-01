@@ -9,6 +9,14 @@ JSON-RPC is provided on multiple transports. Geth supports JSON-RPC over HTTP,
 WebSocket and Unix Domain Sockets. Transports must be enabled through
 command-line flags.
 
+Ethereum JSON-RPC APIs use a name-space system. RPC methods are grouped into
+several categories depending on their purpose. All method names are composed of
+the namespace, an underscore, and the actual method name within the namespace.
+For example, the `eth_call` method resides in the `eth` namespace.
+
+Access to RPC methods can be enabled on a per-namespace basis. Find
+documentation for individual namespaces in the sidebar.
+
 ### HTTP Server
 
 To enable the HTTP server, use the `--rpc` flag.
