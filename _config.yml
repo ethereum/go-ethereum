@@ -39,7 +39,7 @@ collections:
   interface:
     output: true
     permalink: docs/:collection/:slug
-    caption: Interacting with Geth
+    caption: Using Geth
     sidebar_index: 3
   dapp:
     output: true
