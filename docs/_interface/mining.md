@@ -1,5 +1,6 @@
 ---
 title: Mining
+sort_key: B
 ---
 
 This document explains how to set up geth for mining. The Ethereum wiki also has a [page

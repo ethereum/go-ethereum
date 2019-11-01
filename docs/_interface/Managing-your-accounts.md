@@ -1,6 +1,8 @@
 ---
-title: Managing your accounts
+title: Managing Your Accounts
+sort_key: B
 ---
+
 **WARNING**
 Remember your password. 
 

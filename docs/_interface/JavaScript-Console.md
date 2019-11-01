@@ -1,5 +1,6 @@
 ---
 title: JavaScript Console
+sort_key: B
 ---
 
 The Geth JavaScript console exposes the full [web3 JavaScript Dapp

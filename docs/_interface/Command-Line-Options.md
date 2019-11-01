@@ -1,6 +1,8 @@
 ---
-title: Commandline options
+title: Command-line Options
+sort_key: A
 ---
+
 ```
 $ geth help
 NAME:

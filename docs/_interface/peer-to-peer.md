@@ -1,5 +1,6 @@
 ---
 title: Connecting To The Network
+sort_key: B
 ---
 
 ## How Peers Are Found
