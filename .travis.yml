@@ -50,7 +50,7 @@ jobs:
         - GODEBUG="netdns=cgo"
       script:
         - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
+        - go run build/ci.go test -coverage ./p2p/enode/...
 
     - stage: build
       os: osx
