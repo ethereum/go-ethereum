@@ -8,7 +8,7 @@
 export GOCACHE=/tmp/go-build
 
 override_dh_auto_build:
-	build/env.sh /usr/lib/go-1.11/bin/go run build/ci.go install -git-commit={{.Env.Commit}} -git-branch={{.Env.Branch}} -git-tag={{.Env.Tag}} -buildnum={{.Env.Buildnum}} -pull-request={{.Env.IsPullRequest}}
+	build/env.sh /usr/lib/go-{{.GoVersion}}/bin/go run build/ci.go install -git-commit={{.Env.Commit}} -git-branch={{.Env.Branch}} -git-tag={{.Env.Tag}} -buildnum={{.Env.Buildnum}} -pull-request={{.Env.IsPullRequest}}
 
 override_dh_auto_test:
 

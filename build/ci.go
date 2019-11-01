@@ -138,7 +138,13 @@ var (
 	// Note: zesty is unsupported because it was officially deprecated on Launchpad.
 	// Note: artful is unsupported because it was officially deprecated on Launchpad.
 	// Note: cosmic is unsupported because it was officially deprecated on Launchpad.
-	debDistros = []string{"trusty", "xenial", "bionic", "disco", "eoan"}
+	debDistros = map[string]string{
+		"trusty": "1.11", // Trusty is only supported in ppa:gophers/archive, which is abandoned, so we're stuck at Go 1.11
+		"xenial": "1.13", // Xenial and upward are supported in ppa:longsleep/golang-backports, so we can get Go 1.13
+		"bionic": "1.13",
+		"disco":  "1.13",
+		"eoan":   "1.13",
+	}
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -479,8 +485,8 @@ func doDebianSource(cmdline []string) {
 
 	// Create Debian packages and upload them
 	for _, pkg := range debPackages {
-		for _, distro := range debDistros {
-			meta := newDebMetadata(distro, *signer, env, now, pkg.Name, pkg.Version, pkg.Executables)
+		for distro, gover := range debDistros {
+			meta := newDebMetadata(distro, gover, *signer, env, now, pkg.Name, pkg.Version, pkg.Executables)
 			pkgdir := stageDebianSource(*workdir, meta)
 			debuild := exec.Command("debuild", "-S", "-sa", "-us", "-uc", "-d", "-Zxz")
 			debuild.Dir = pkgdir
@@ -561,7 +567,8 @@ type debPackage struct {
 }
 
 type debMetadata struct {
-	Env build.Environment
+	Env       build.Environment
+	GoVersion string
 
 	PackageName string
 
@@ -590,12 +597,13 @@ func (d debExecutable) Package() string {
 	return d.BinaryName
 }
 
-func newDebMetadata(distro, author string, env build.Environment, t time.Time, name string, version string, exes []debExecutable) debMetadata {
+func newDebMetadata(distro, gover, author string, env build.Environment, t time.Time, name string, version string, exes []debExecutable) debMetadata {
 	if author == "" {
 		// No signing key, use default author.
 		author = "Ethereum Builds <fjl@ethereum.org>"
 	}
 	return debMetadata{
+		GoVersion:   gover,
 		PackageName: name,
 		Env:         env,
 		Author:      author,
