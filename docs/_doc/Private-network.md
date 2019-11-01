@@ -2,26 +2,26 @@
 title: Private network
 ---
 
-An Ethereum network is a private network if the nodes are not connected to the main
-network nodes. In this context private only means reserved or isolated, rather than
+An Ethereum network is private if the nodes are not connected to a main
+network. In this context private means reserved or isolated, rather than
 protected or secure.
 
 ## Choosing A Network ID
 
-Since connections between nodes are valid only if peers have identical protocol version
-and network ID, you can effectively isolate your network by setting either of these to a
+Since connections between nodes are valid only if peers have identical protocol versions
+and network IDs, you can effectively isolate your network by setting either of these to a
 non default value. We recommend using the `--networkid` command line option for this. Its
-argument is an integer, the main network has id 1 (the default). So if you supply your own
-custom network ID which is different than the main network your nodes will not connect to
+argument is an integer, the main network has **id 1** (the default). If you supply your own
+custom network ID which is different from the main network your nodes will not connect to
 other nodes and form a private network.
 
 ## Creating The Genesis Block
 
 Every blockchain starts with the genesis block. When you run geth with default settings
-for the first time, the main net genesis block is committed to the database. For a private
-network, you usually want a different genesis block.
+for the first time, it commits the main network genesis block to the database. For a private
+network, you usually want to use a different genesis block.
 
-Here's an example of a custom genesis.json file. The `config` section ensures that certain
+Here's an example of a custom _genesis.json_ file. The `config` section ensures that certain
 protocol upgrades are immediately available. The `alloc` section pre-funds accounts.
 
 ```json
@@ -41,14 +41,13 @@ protocol upgrades are immediately available. The `alloc` section pre-funds accou
 }
 ```
 
-To create a database that uses this genesis block, run the following command. This will
-import and set the canonical genesis block for your chain.
+To create a database that uses this genesis block, run the following command. This imports and sets the canonical genesis block for your chain.
 
-```text
+```shell
 geth --datadir path/to/custom/data/folder init genesis.json
 ```
 
-Future runs of geth on this data directory will use the genesis block you have defined.
+Future runs of geth using this data directory will use the genesis block you defined.
 
 ```text
 geth --datadir path/to/custom/data/folder --networkid 15
@@ -56,54 +55,54 @@ geth --datadir path/to/custom/data/folder --networkid 15
 
 ## Network Connectivity
 
-With all nodes that you want to run initialized to the desired genesis state, you'll need
+With all nodes initialized to the desired genesis state, you need
 to start a bootstrap node that others can use to find each other in your network and/or
 over the internet. The clean way is to configure and run a dedicated bootnode:
 
-```text
+```shell
 bootnode --genkey=boot.key
 bootnode --nodekey=boot.key
 ```
 
-With the bootnode online, it will display an enode URL that other nodes can use to connect
+The bootnode shows an enode URL that other nodes can use to connect
 to it and exchange peer information. Make sure to replace the displayed IP address
-information (most probably [::]) with your externally accessible IP to get the actual
+information (most probably `[::]`) with your externally accessible IP to get the actual
 enode URL.
 
-Note: You can also use a full fledged Geth node as a bootstrap node.
+<!-- TODO: Then why bother? -->
+
+**Note**: You can also use a full fledged geth node as a bootstrap node.
 
 ### Starting Up Your Member Nodes
 
 With the bootnode operational and externally reachable (you can try `telnet <ip> <port>`
-to ensure it's indeed reachable), start every subsequent Geth node pointed to the bootnode
-for peer discovery via the --bootnodes flag. It will probably also be desirable to keep
-the data directory of your private network separated, so do also specify a custom
+to check), start every subsequent geth node pointed to the bootnode
+for peer discovery via the `--bootnodes` flag. You should keep
+the data directory of your private network separated, so also specify a custom
 `--datadir` flag.
 
 ```text
-geth --datadir path/to/custom/data/folder --networkid 15 --bootnodes <bootnode-enode-url-from-above>
+geth --datadir path/to/custom/data/folder --networkid 15 --bootnodes {bootnode-enode-url-from-above}
 ```
 
-Since your network will be completely cut off from the main and test networks, you'll also
-need to configure a miner to process transactions and create new blocks for you.
+Since your network is cut off from the main and test networks, you need to configure a miner to process transactions and create new blocks for you.
 
 ## Running A Private Miner
 
 Mining on the public Ethereum network is a complex task as it's only feasible using GPUs,
-requiring an OpenCL or CUDA enabled ethminer instance. For information on such a setup,
-please consult the EtherMining subreddit and the Genoil miner repository.
+requiring an OpenCL or CUDA enabled [ethminer](https://github.com/ethereum-mining/ethminer) instance. For information on such a setup,
+please consult the [EtherMining subreddit](https://www.reddit.com/r/EtherMining/) and the [Genoil miner repository](https://github.com/Genoil).
 
-In a private network setting however, a single CPU miner instance is more than enough for
-practical purposes as it can produce a stable stream of blocks at the correct intervals
+In a private network setting a single CPU miner instance is more than enough as it can produce a stable stream of blocks at the correct intervals
 without needing heavy resources (consider running on a single thread, no need for multiple
-ones either). To start a Geth instance for mining, run it with all your usual flags,
+ones either). To start a geth instance for mining, run it with all your usual flags,
 extended by:
 
-```text
-$ geth <usual-flags> --mine --minerthreads=1 --etherbase=0x0000000000000000000000000000000000000000
+```shell
+geth <usual-flags> --mine --minerthreads 1 --etherbase {ACCOUNT}
 ```
 
-Which will start mining bocks and transactions on a single CPU thread, crediting all
-proceedings to the account specified by --etherbase. You can further tune the mining by
+Which will start mining blocks and transactions on a single CPU thread, crediting all
+proceedings to the account specified by `--etherbase`. You can further tune the mining by
 changing the default gas limit blocks converge to (`--targetgaslimit`) and the price
 transactions are accepted at (`--gasprice`).
