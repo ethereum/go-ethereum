@@ -1,46 +1,52 @@
 body {
-	padding-top: 50px;
+    padding-top: 50px;
 }
 
 h1, h2, h3 {
-	margin-top: 36px;
-	margin-bottom: 24px;
+    margin-top: 36px;
+    margin-bottom: 24px;
+}
+
+pre code {
+    white-space: pre;
 }
 
 code {
-	color:            #7b8a8b;
-	background-color: #ecf0f1;
+    color: #7b8a8b;
+    background-color: #ecf0f1;
+    overflow-x: scroll;
+    overflow-y: hidden;
 }
 
 a code {
-	color: #18bc9c;
+    color: #18bc9c;
 }
 
 .hljs {
-	background-color: inherit;
+    background-color: inherit;
 }
 
 .jumbotron h2 {
-	margin-top: 21px;
-	margin-bottom: 10px;
+    margin-top: 21px;
+    margin-bottom: 10px;
 }
 
 .fa {
-	margin-right: 4px;
+    margin-right: 4px;
 }
 
 .emoji {
-	width:         1.5em;
-	height:        1.5em;
-	display:       inline-block;
-	margin-bottom: -0.25em;
+    width:         1.5em;
+    height:        1.5em;
+    display:       inline-block;
+    margin-bottom: -0.25em;
 }
 
 table {
-	margin-top: 16px;
-	margin-bottom: 16px;
+    margin-top: 16px;
+    margin-bottom: 16px;
 }
 table thead tr th, table tbody tr td {
-	border-bottom: 1px solid #ddd;
-	padding: 4px;
+    border-bottom: 1px solid #ddd;
+    padding: 4px;
 }
