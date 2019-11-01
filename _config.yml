@@ -27,13 +27,13 @@ collections_dir: docs
 collections:
   getting-started:
     output: true
-    caption: Getting started
+    caption: Getting Started
     sidebar_index: 1
     frontpage: _getting-started/index.md
   install-and-build:
     output: true
     permalink: docs/:collection/:slug
-    caption: Install and build
+    caption: Install and Build
     sidebar_index: 2
     frontpage: _install-and-build/Installing-Geth.md
   interface:
