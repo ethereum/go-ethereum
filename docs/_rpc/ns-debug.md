@@ -5,6 +5,9 @@ title: debug Namespace
 The `debug` API gives you access to several non-standard RPC methods, which will allow you
 to inspect, debug and set certain debugging flags during runtime.
 
+* TOC
+{:toc}
+
 ### debug_backtraceAt
 
 Sets the logging backtrace location. When a backtrace location
@@ -14,7 +17,7 @@ of the goroutine executing the log statement will be printed to stderr.
 The location is specified as `<filename>:<line>`.
 
 | Client  | Method invocation                                     |
-|:-------:|-------------------------------------------------------|
+|:--------|-------------------------------------------------------|
 | Console | `debug.backtraceAt(string)`                           |
 | RPC     | `{"method": "debug_backtraceAt", "params": [string]}` |
 
@@ -33,7 +36,7 @@ the rate and write the profile manually using
 `debug_writeBlockProfile`.
 
 | Client  | Method invocation                                              |
-|:-------:|----------------------------------------------------------------|
+|:--------|----------------------------------------------------------------|
 | Console | `debug.blockProfile(file, seconds)`                            |
 | RPC     | `{"method": "debug_blockProfile", "params": [string, number]}` |
 
@@ -43,7 +46,7 @@ Turns on CPU profiling for the given duration and writes
 profile data to disk.
 
 | Client  | Method invocation                                            |
-|:-------:|--------------------------------------------------------------|
+|:--------|--------------------------------------------------------------|
 | Console | `debug.cpuProfile(file, seconds)`                            |
 | RPC     | `{"method": "debug_cpuProfile", "params": [string, number]}` |
 
@@ -53,7 +56,7 @@ Retrieves the state that corresponds to the block number and returns a list of a
 storage and code).
 
 | Client  | Method invocation                                     |
-|:-------:|-------------------------------------------------------|
+|:--------|-------------------------------------------------------|
 | Go      | `debug.DumpBlock(number uint64) (state.World, error)` |
 | Console | `debug.traceBlockByHash(number, [options])`           |
 | RPC     | `{"method": "debug_dumpBlock", "params": [number]}`   |
@@ -92,7 +95,7 @@ See https://golang.org/pkg/runtime/debug/#GCStats for information about
 the fields of the returned object.
 
 | Client  | Method invocation                                 |
-|:-------:|---------------------------------------------------|
+|:--------|---------------------------------------------------|
 | Console | `debug.gcStats()`                                 |
 | RPC     | `{"method": "debug_gcStats", "params": []}`       |
 
@@ -101,7 +104,7 @@ the fields of the returned object.
 Retrieves and returns the RLP encoded block by number.
 
 | Client  | Method invocation                                     |
-|:-------:|-------------------------------------------------------|
+|:--------|-------------------------------------------------------|
 | Go      | `debug.GetBlockRlp(number uint64) (string, error)`    |
 | Console | `debug.getBlockRlp(number, [options])`                |
 | RPC     | `{"method": "debug_getBlockRlp", "params": [number]}` |
@@ -114,7 +117,7 @@ Turns on Go runtime tracing for the given duration and writes
 trace data to disk.
 
 | Client  | Method invocation                                         |
-|:-------:|-----------------------------------------------------------|
+|:--------|-----------------------------------------------------------|
 | Console | `debug.goTrace(file, seconds)`                            |
 | RPC     | `{"method": "debug_goTrace", "params": [string, number]}` |
 
@@ -126,7 +129,7 @@ See https://golang.org/pkg/runtime/#MemStats for information about
 the fields of the returned object.
 
 | Client  | Method invocation                                 |
-|:-------:|---------------------------------------------------|
+|:--------|---------------------------------------------------|
 | Console | `debug.memStats()`                                |
 | RPC     | `{"method": "debug_memStats", "params": []}`      |
 
@@ -135,7 +138,7 @@ the fields of the returned object.
 Fetches and retrieves the seed hash of the block by number
 
 | Client  | Method invocation                                  |
-|:-------:|----------------------------------------------------|
+|:--------|----------------------------------------------------|
 | Go      | `debug.SeedHash(number uint64) (string, error)`    |
 | Console | `debug.seedHash(number, [options])`                |
 | RPC     | `{"method": "debug_seedHash", "params": [number]}` |
@@ -146,7 +149,7 @@ Sets the current head of the local chain by block number. **Note**, this is a
 destructive action and may severely damage your chain. Use with *extreme* caution.
 
 | Client  | Method invocation                                 |
-|:-------:|---------------------------------------------------|
+|:--------|---------------------------------------------------|
 | Go      | `debug.SetHead(number uint64)`                    |
 | Console | `debug.setHead(number)`                           |
 | RPC     | `{"method": "debug_setHead", "params": [number]}` |
@@ -162,7 +165,7 @@ setting it to zero stops the profile. Collected profile data
 can be written using `debug_writeBlockProfile`.
 
 | Client  | Method invocation                                             |
-|:-------:|---------------------------------------------------------------|
+|:--------|---------------------------------------------------------------|
 | Console | `debug.setBlockProfileRate(rate)`                             |
 | RPC     | `{"method": "debug_setBlockProfileRate", "params": [number]}` |
 
@@ -173,7 +176,7 @@ Note that the web3 wrapper for this method takes care of the printing
 and does not return the string.
 
 | Client  | Method invocation                                 |
-|:-------:|---------------------------------------------------|
+|:--------|---------------------------------------------------|
 | Console | `debug.stacks()`                                  |
 | RPC     | `{"method": "debug_stacks", "params": []}`        |
 
@@ -182,7 +185,7 @@ and does not return the string.
 Turns on CPU profiling indefinitely, writing to the given file.
 
 | Client  | Method invocation                                         |
-|:-------:|-----------------------------------------------------------|
+|:--------|-----------------------------------------------------------|
 | Console | `debug.startCPUProfile(file)`                             |
 | RPC     | `{"method": "debug_startCPUProfile", "params": [string]}` |
 
@@ -191,7 +194,7 @@ Turns on CPU profiling indefinitely, writing to the given file.
 Starts writing a Go runtime trace to the given file.
 
 | Client  | Method invocation                                      |
-|:-------:|--------------------------------------------------------|
+|:--------|--------------------------------------------------------|
 | Console | `debug.startGoTrace(file)`                             |
 | RPC     | `{"method": "debug_startGoTrace", "params": [string]}` |
 
@@ -200,7 +203,7 @@ Starts writing a Go runtime trace to the given file.
 Stops an ongoing CPU profile.
 
 | Client  | Method invocation                                  |
-|:-------:|----------------------------------------------------|
+|:--------|----------------------------------------------------|
 | Console | `debug.stopCPUProfile()`                           |
 | RPC     | `{"method": "debug_stopCPUProfile", "params": []}` |
 
@@ -209,7 +212,7 @@ Stops an ongoing CPU profile.
 Stops writing the Go runtime trace.
 
 | Client  | Method invocation                                 |
-|:-------:|---------------------------------------------------|
+|:--------|---------------------------------------------------|
 | Console | `debug.startGoTrace(file)`                        |
 | RPC     | `{"method": "debug_stopGoTrace", "params": []}`   |
 
@@ -220,7 +223,7 @@ that were included included in this block. **Note**, the parent of this block mu
 it will fail.
 
 | Client  | Method invocation                                                        |
-|:-------:|--------------------------------------------------------------------------|
+|:--------|--------------------------------------------------------------------------|
 | Go      | `debug.TraceBlock(blockRlp []byte, config. *vm.Config) BlockTraceResult` |
 | Console | `debug.traceBlock(tblockRlp, [options])`                                 |
 | RPC     | `{"method": "debug_traceBlock", "params": [blockRlp, {}]}`               |
@@ -270,7 +273,7 @@ Similar to [debug_traceBlock](#debug_traceblock), `traceBlockByNumber` accepts a
 block that is already present in the database.
 
 | Client  | Method invocation                                                              |
-|:-------:|--------------------------------------------------------------------------------|
+|:--------|--------------------------------------------------------------------------------|
 | Go      | `debug.TraceBlockByNumber(number uint64, config. *vm.Config) BlockTraceResult` |
 | Console | `debug.traceBlockByNumber(number, [options])`                                  |
 | RPC     | `{"method": "debug_traceBlockByNumber", "params": [number, {}]}`               |
@@ -284,7 +287,7 @@ Similar to [debug_traceBlock](#debug_traceblock), `traceBlockByHash` accepts a b
 block that is already present in the database.
 
 | Client  | Method invocation                                                               |
-|:-------:|---------------------------------------------------------------------------------|
+|:--------|---------------------------------------------------------------------------------|
 | Go      | `debug.TraceBlockByHash(hash common.Hash, config. *vm.Config) BlockTraceResult` |
 | Console | `debug.traceBlockByHash(hash, [options])`                                       |
 | RPC     | `{"method": "debug_traceBlockByHash", "params": [hash {}]}`                     |
@@ -297,7 +300,7 @@ References:
 Similar to [debug_traceBlock](#debug_traceblock), `traceBlockFromFile` accepts a file containing the RLP of the block.
 
 | Client  | Method invocation                                                                |
-|:-------:|----------------------------------------------------------------------------------|
+|:--------|----------------------------------------------------------------------------------|
 | Go      | `debug.TraceBlockFromFile(fileName string, config. *vm.Config) BlockTraceResult` |
 | Console | `debug.traceBlockFromFile(fileName, [options])`                                  |
 | RPC     | `{"method": "debug_traceBlockFromFile", "params": [fileName, {}]}`               |
@@ -377,7 +380,7 @@ specifies the options for this specific call. The possible options are:
 * `timeout`: `STRING`. Overrides the default timeout of 5 seconds for JavaScript-based tracing calls. Valid values are described [here](https://golang.org/pkg/time/#ParseDuration).
 
 | Client  | Method invocation                                                                            |
-|:-------:|----------------------------------------------------------------------------------------------|
+|:--------|----------------------------------------------------------------------------------------------|
 | Go      | `debug.TraceTransaction(txHash common.Hash, logger *vm.LogConfig) (*ExecutionResurt, error)` |
 | Console | `debug.traceTransaction(txHash, [options])`                                                  |
 | RPC     | `{"method": "debug_traceTransaction", "params": [txHash, {}]}`                               |
@@ -493,7 +496,7 @@ The verbosity of individual packages and source files
 can be raised using `debug_vmodule`.
 
 | Client  | Method invocation                                 |
-|:-------:|---------------------------------------------------|
+|:--------|---------------------------------------------------|
 | Console | `debug.verbosity(level)`                          |
 | RPC     | `{"method": "debug_vmodule", "params": [number]}` |
 
@@ -502,7 +505,7 @@ can be raised using `debug_vmodule`.
 Sets the logging verbosity pattern.
 
 | Client  | Method invocation                                 |
-|:-------:|---------------------------------------------------|
+|:--------|---------------------------------------------------|
 | Console | `debug.vmodule(string)`                           |
 | RPC     | `{"method": "debug_vmodule", "params": [string]}` |
 
@@ -543,7 +546,7 @@ debug.vmodule("eth/*/peer.go=6,p2p=5")
 Writes a goroutine blocking profile to the given file.
 
 | Client  | Method invocation                                           |
-|:-------:|-------------------------------------------------------------|
+|:--------|-------------------------------------------------------------|
 | Console | `debug.writeBlockProfile(file)`                             |
 | RPC     | `{"method": "debug_writeBlockProfile", "params": [string]}` |
 
@@ -555,6 +558,6 @@ it must be set on the command line using the `--memprofilerate`
 flag.
 
 | Client  | Method invocation                                           |
-|:-------:|-------------------------------------------------------------|
+|:--------|-------------------------------------------------------------|
 | Console | `debug.writeMemProfile(file string)`                        |
 | RPC     | `{"method": "debug_writeBlockProfile", "params": [string]}` |

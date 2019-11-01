@@ -5,6 +5,9 @@ title: miner Namespace
 The `miner` API allows you to remote control the node's mining operation and set various
 mining specific settings.
 
+* TOC
+{:toc}
+
 ### miner_getHashrate
 
 Get your hashrate in H/s (Hash operations per second).

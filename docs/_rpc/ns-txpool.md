@@ -6,6 +6,9 @@ The `txpool` API gives you access to several non-standard RPC methods to inspect
 transaction pool containing all the currently pending transactions as well as the ones queued for
 future processing.
 
+* TOC
+{:toc}
+
 ### txpool_content
 
 The `content` inspection property can be queried to list the exact details of all the transactions
@@ -21,7 +24,7 @@ happen if the user broadcast mutliple ones with varying gas allowances (or even 
 transactions).
 
 | Client  | Method invocation                                                       |
-|:-------:|-------------------------------------------------------------------------|
+|:--------|-------------------------------------------------------------------------|
 | Go      | `txpool.Content() (map[string]map[string]map[string][]*RPCTransaction)` |
 | Console | `txpool.content`                                                        |
 | RPC     | `{"method": "txpool_content"}`                                          |
@@ -139,7 +142,7 @@ happen if the user broadcast mutliple ones with varying gas allowances (or even 
 transactions).
 
 | Client  | Method invocation                                              |
-|:-------:|----------------------------------------------------------------|
+|:--------|----------------------------------------------------------------|
 | Go      | `txpool.Inspect() (map[string]map[string]map[string][]string)` |
 | Console | `txpool.inspect`                                               |
 | RPC     | `{"method": "txpool_inspect"}`                                 |
@@ -208,7 +211,7 @@ The result is an object with two fields `pending` and `queued`, each of which is
 the number of transactions in that particular state.
 
 | Client  | Method invocation                             |
-|:-------:|-----------------------------------------------|
+|:--------|-----------------------------------------------|
 | Go      | `txpool.Status() (map[string]*rpc.HexNumber)` |
 | Console | `txpool.status`                               |
 | RPC     | `{"method": "txpool_status"}`                 |

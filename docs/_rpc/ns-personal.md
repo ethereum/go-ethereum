@@ -4,6 +4,9 @@ title: personal Namespace
 
 The personal API manages private keys in the key store.
 
+* TOC
+{:toc}
+
 ### personal_importRawKey
 
 Imports the given unencrypted private key (hex string) into the key store,
@@ -11,20 +14,20 @@ encrypting it with the passphrase.
 
 Returns the address of the new account.
  
-| Client    | Method invocation                                                 |
-| :-------: | ----------------------------------------------------------------- |
-| Console   | `personal.importRawKey(keydata, passphrase)`                      |
-| RPC       | `{"method": "personal_importRawKey", "params": [string, string]}` |
+| Client   | Method invocation                                                 |
+| :--------| ----------------------------------------------------------------- |
+| Console  | `personal.importRawKey(keydata, passphrase)`                      |
+| RPC      | `{"method": "personal_importRawKey", "params": [string, string]}` |
 
 ### personal_listAccounts
 
 Returns all the Ethereum account addresses of all keys
 in the key store.
 
-| Client    | Method invocation                                   |
-| :-------: | --------------------------------------------------- |
-| Console   | `personal.listAccounts`                             |
-| RPC       | `{"method": "personal_listAccounts", "params": []}` |
+| Client   | Method invocation                                   |
+| :--------| --------------------------------------------------- |
+| Console  | `personal.listAccounts`                             |
+| RPC      | `{"method": "personal_listAccounts", "params": []}` |
 
 #### Example
 
@@ -38,10 +41,10 @@ in the key store.
 Removes the private key with given address from memory.
 The account can no longer be used to send transactions.
  
-| Client    | Method invocation                                        |
-| :-------: | -------------------------------------------------------- |
-| Console   | `personal.lockAccount(address)`                          |
-| RPC       | `{"method": "personal_lockAccount", "params": [string]}` |
+| Client   | Method invocation                                        |
+| :--------| -------------------------------------------------------- |
+| Console  | `personal.lockAccount(address)`                          |
+| RPC      | `{"method": "personal_lockAccount", "params": [string]}` |
 
 ### personal_newAccount
 
@@ -52,10 +55,10 @@ Returns the address of the new account.
 At the geth console, `newAccount` will prompt for a passphrase when 
 it is not supplied as the argument.
 
-| Client    | Method invocation                                       |
-| :-------: | ---------------------------------------------------     |
-| Console   | `personal.newAccount()`                                 |
-| RPC       | `{"method": "personal_newAccount", "params": [string]}` |
+| Client   | Method invocation                                       |
+| :--------| ---------------------------------------------------     |
+| Console  | `personal.newAccount()`                                 |
+| RPC      | `{"method": "personal_newAccount", "params": [string]}` |
 
 #### Example
  
@@ -87,10 +90,10 @@ of zero seconds unlocks the key until geth exits.
 
 The account can be used with `eth_sign` and `eth_sendTransaction` while it is unlocked.
  
-| Client    | Method invocation                                                          |
-| :-------: | -------------------------------------------------------------------------- |
-| Console   | `personal.unlockAccount(address, passphrase, duration)`                    |
-| RPC       | `{"method": "personal_unlockAccount", "params": [string, string, number]}` |
+| Client   | Method invocation                                                          |
+| :--------| -------------------------------------------------------------------------- |
+| Console  | `personal.unlockAccount(address, passphrase, duration)`                    |
+| RPC      | `{"method": "personal_unlockAccount", "params": [string, string, number]}` |
 
 #### Examples
 
@@ -124,12 +127,13 @@ Validate the given passphrase and submit transaction.
 
 The transaction is the same argument as for `eth_sendTransaction` and contains the `from` address. If the passphrase can be used to decrypt the private key belogging to `tx.from` the transaction is verified, signed and send onto the network. The account is not unlocked globally in the node and cannot be used in other RPC calls.
 
-| Client    | Method invocation                                                |
-| :-------: | -----------------------------------------------------------------|
-| Console   | `personal.sendTransaction(tx, passphrase)`                       |
-| RPC       | `{"method": "personal_sendTransaction", "params": [tx, string]}` |
+| Client   | Method invocation                                                |
+| :--------| -----------------------------------------------------------------|
+| Console  | `personal.sendTransaction(tx, passphrase)`                       |
+| RPC      | `{"method": "personal_sendTransaction", "params": [tx, string]}` |
 
-*Note, prior to Geth 1.5, please use `personal_signAndSendTransaction` as that was the original introductory name and only later renamed to the current final version.*
+*Note, prior to Geth 1.5, please use `personal_signAndSendTransaction` as that was the
+original introductory name and only later renamed to the current final version.*
 
 #### Examples
 
@@ -150,7 +154,7 @@ By adding a prefix to the message makes the calculated signature recognisable as
 See ecRecover to verify the signature.
 
 | Client  | Method invocation                                     |
-|:-------:|-------------------------------------------------------|   
+|:--------|-------------------------------------------------------|   
 | Console | `personal.sign(message, account, [password])`                |
 | RPC     | `{"method": "personal_sign", "params": [message, account, password]}` |
 
@@ -167,7 +171,7 @@ See ecRecover to verify the signature.
 `ecRecover` returns the address associated with the private key that was used to calculate the signature in `personal_sign`. 
 
 | Client  | Method invocation                                     |
-|:-------:|-------------------------------------------------------|   
+|:--------|-------------------------------------------------------|   
 | Console | `personal.ecRecover(message, signature)`                 |
 | RPC     | `{"method": "personal_ecRecover", "params": [message, signature]}` |
 

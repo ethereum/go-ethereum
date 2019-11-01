@@ -6,6 +6,9 @@ The `admin` API gives you access to several non-standard RPC methods, which will
 a fine grained control over your Geth instance, including but not limited to network peer and RPC
 endpoint management.
 
+* TOC
+{:toc}
+
 ### admin_addPeer
 
 The `addPeer` administrative method requests adding a new remote node to the list of tracked static
@@ -17,7 +20,7 @@ URL of the remote peer to start tracking and returns a `BOOL` indicating whether
 for tracking or some error occurred.
 
 | Client  | Method invocation                              |
-|:-------:|------------------------------------------------|
+|:--------|------------------------------------------------|
 | Go      | `admin.AddPeer(url string) (bool, error)`      |
 | Console | `admin.addPeer(url)`                           |
 | RPC     | `{"method": "admin_addPeer", "params": [url]}` |
@@ -35,7 +38,7 @@ The `datadir` administrative property can be queried for the absolute path the r
 currently uses to store all its databases.
 
 | Client  | Method invocation                 |
-|:-------:|-----------------------------------|
+|:--------|-----------------------------------|
 | Go      | `admin.Datadir() (string, error`) |
 | Console | `admin.datadir`                   |
 | RPC     | `{"method": "admin_datadir"}`     |
@@ -56,7 +59,7 @@ overlay protocol, as well as specialized information added by each of the runnin
 (e.g. `eth`, `les`, `shh`, `bzz`).
 
 | Client  | Method invocation                         |
-|:-------:|-------------------------------------------|
+|:--------|-------------------------------------------|
 | Go      | `admin.NodeInfo() (*p2p.NodeInfo, error`) |
 | Console | `admin.nodeInfo`                          |
 | RPC     | `{"method": "admin_nodeInfo"}`            |
@@ -95,7 +98,7 @@ P2P overlay protocol, as well as specialized information added by each of the ru
 protocols (e.g. `eth`, `les`, `shh`, `bzz`).
 
 | Client  | Method invocation                        |
-|:-------:|------------------------------------------|
+|:--------|------------------------------------------|
 | Go      | `admin.Peers() ([]*p2p.PeerInfo, error`) |
 | Console | `admin.peers`                            |
 | RPC     | `{"method": "admin_peers"}`              |
@@ -148,7 +151,7 @@ would depend on the current – to the user unknown – working directory of Get
 version string reported by `solc --version`.
 
 | Client  | Method invocation                               |
-|:-------:|-------------------------------------------------|
+|:--------|-------------------------------------------------|
 | Go      | `admin.SetSolc(path string) (string, error`)    |
 | Console | `admin.setSolc(path)`                           |
 | RPC     | `{"method": "admin_setSolc", "params": [path]}` |
@@ -173,7 +176,7 @@ API webserver to handle client requests. All the parameters are optional:
 The method returns a boolean flag specifying whether the HTTP RPC listener was opened or not. Please note, only one HTTP endpoint is allowed to be active at any time.
 
 | Client  | Method invocation                                                                             |
-|:-------:|-----------------------------------------------------------------------------------------------|
+|:--------|-----------------------------------------------------------------------------------------------|
 | Go      | `admin.StartRPC(host *string, port *rpc.HexNumber, cors *string, apis *string) (bool, error)` |
 | Console | `admin.startRPC(host, port, cors, apis)`                                                      |
 | RPC     | `{"method": "admin_startRPC", "params": [host, port, cors, apis]}`                            |
@@ -198,7 +201,7 @@ API webserver to handle client requests. All the parameters are optional:
 The method returns a boolean flag specifying whether the WebSocket RPC listener was opened or not. Please note, only one WebSocket endpoint is allowed to be active at any time.
 
 | Client  | Method invocation                                                                             |
-|:-------:|-----------------------------------------------------------------------------------------------|
+|:--------|-----------------------------------------------------------------------------------------------|
 | Go      | `admin.StartWS(host *string, port *rpc.HexNumber, cors *string, apis *string) (bool, error)` |
 | Console | `admin.startWS(host, port, cors, apis)`                                                      |
 | RPC     | `{"method": "admin_startWS", "params": [host, port, cors, apis]}`                            |
@@ -215,7 +218,7 @@ true
 The `stopRPC` administrative method closes the currently open HTTP RPC endpoint. As the node can only have a single HTTP endpoint running, this method takes no parameters, returning a boolean whether the endpoint was closed or not.
 
 | Client  | Method invocation               |
-|:-------:|---------------------------------|
+|:--------|---------------------------------|
 | Go      | `admin.StopRPC() (bool, error`) |
 | Console | `admin.stopRPC()`               |
 | RPC     | `{"method": "admin_stopRPC"`    |
@@ -232,7 +235,7 @@ true
 The `stopWS` administrative method closes the currently open WebSocket RPC endpoint. As the node can only have a single WebSocket endpoint running, this method takes no parameters, returning a boolean whether the endpoint was closed or not.
 
 | Client  | Method invocation              |
-|:-------:|--------------------------------|
+|:--------|--------------------------------|
 | Go      | `admin.StopWS() (bool, error`) |
 | Console | `admin.stopWS()`               |
 | RPC     | `{"method": "admin_stopWS"`    |
