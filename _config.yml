@@ -59,20 +59,15 @@ collections:
     caption: For Geth Developers
     frontpage: _developers/devguide.md
     sidebar_index: 6
-  support:
-    output: true
-    permalink: docs/:collection/:slug
-    caption: Issues and support
-    sidebar_index: 7
   clef:
     output: true
     permalink: docs/:collection/:slug
     caption: Clef
-    sidebar_index: 8
+    sidebar_index: 7
     frontpage: _clef/Overview.md
   whisper:
     output: true
     permalink: docs/:collection/:slug
     caption: Whisper
-    sidebar_index: 9
+    sidebar_index: 8
     frontpage: _whisper/Whisper-Overview.md
