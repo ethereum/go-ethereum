@@ -1,21 +1,24 @@
 ---
-title: Documentation
+title: Geth Documentation
 root: ..
 ---
-* User documentation can be found at our [Ethereum User Guide and reference manual](http://ethereum.gitbooks.io/frontier-guide/content/).
-* For the API reference and developer documentation head over to the auto generated [GoDoc](https://godoc.org/github.com/ethereum/go-ethereum) documentation.
 
-This is the documentation for the official Ethereum golang implementation. For generic Ethereum-related information (whitepaper, yellow paper, protocol and interface specs, APIs, DAPP development guides, etc) see the [Ethereum main wiki](https://github.com/ethereum/wiki/wiki).
+You have found the user manual for geth, the Go language implementation of Ethereum.
 
-Main entry points:
-
+* [Getting Started Guide](./getting-started)
 * [Installation Instructions](./install-and-build/installing-geth)
-* [Management APIs](./interface/management-apis)
-* [Managing Accounts](./interface/managing-your-accounts)
-* [Command Line Options](./interface/command-line-options)
+* [JSON-RPC Server](./rpc/server)
 * [JavaScript Console](./interface/javascript-console)
-* [Private Network](./doc/private-network)
-* [Developers' Guide](./install-and-build/developers-guide)
-* [Whisper v6](./whisper/whisper-overview)
 
-Sidebar lists all pages.
+For the Go API reference and developer documentation head over to
+[GoDoc](https://godoc.org/github.com/ethereum/go-ethereum).
+
+### Other Ethereum Documentation
+
+For generic Ethereum-related information, check the **[Ethereum
+Wiki](https://github.com/ethereum/wiki/wiki)**.
+
+* [Ethereum Whitepaper](https://github.com/ethereum/wiki/wiki/White-Paper)
+* [Ethereum Yellow Paper](https://ethereum.github.io/yellowpaper/paper.pdf)
+* [Ethereum Improvement Proposals (EIPs)](https://eips.ethereum.org)
+* [Peer-to-peer Networking Specifications](https://github.com/ethereum/devp2p/blob/master/README.md)
