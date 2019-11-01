@@ -76,8 +76,3 @@ collections:
     caption: Whisper
     sidebar_index: 9
     frontpage: _whisper/Whisper-Overview.md
-  doc:
-    output: true
-    permalink: docs/:collection/:slug
-    caption: Other
-    sidebar_index: 9
