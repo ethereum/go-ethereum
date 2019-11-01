@@ -288,12 +288,15 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 	f.connectedQueue.Push(e)
 	f.connectedCap += e.capacity
 
-	// If the current client is a paid client, notify it to update the capacity.
-	// And also monitor the status of client, downgrade it to normal client if
-	// positive balance is used up.
+	// If the current client is a paid client, monitor the status of client,
+	// downgrade it to normal client if positive balance is used up.
 	if e.priority {
-		e.peer.updateCapacity(e.capacity)
 		e.balanceTracker.addCallback(balanceCallbackZero, 0, func() { f.balanceExhausted(id) })
+	}
+	// If the capacity of client is not the default value(free capacity), notify
+	// it to update capacity.
+	if e.capacity != f.freeClientCap {
+		e.peer.updateCapacity(e.capacity)
 	}
 	totalConnectedGauge.Update(int64(f.connectedCap))
 	clientConnectedMeter.Mark(1)
