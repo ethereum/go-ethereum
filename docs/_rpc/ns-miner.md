@@ -1,5 +1,6 @@
 ---
 title: miner Namespace
+sort_key: C
 ---
 
 The `miner` API allows you to remote control the node's mining operation and set various

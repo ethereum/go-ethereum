@@ -45,13 +45,13 @@ collections:
     output: true
     permalink: docs/:collection/:slug
     caption: For dApp Developers
-    frontpage: _dapp/index.md
+    frontpage: _dapp/native.md
     sidebar_index: 4
   rpc:
     output: true
     permalink: docs/:collection/:slug
     caption: JSON RPC APIs
-    frontpage: _rpc/index.md
+    frontpage: _rpc/server.md
     sidebar_index: 5
   developers:
     output: true
@@ -64,7 +64,7 @@ collections:
     permalink: docs/:collection/:slug
     caption: Clef
     sidebar_index: 7
-    frontpage: _clef/Overview.md
+    frontpage: _clef/Tutorial.md
   whisper:
     output: true
     permalink: docs/:collection/:slug

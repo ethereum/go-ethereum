@@ -1,5 +1,6 @@
 ---
 title: Private Network Tutorial
+sort_key: B
 ---
 
 This page describes how to set up a local cluster of nodes, advise how to make it private,

@@ -1,5 +1,6 @@
 ---
 title: eth Namespace
+sort_key: C
 ---
 
 Geth provides several extensions to the standard "eth" JSON-RPC namespace.

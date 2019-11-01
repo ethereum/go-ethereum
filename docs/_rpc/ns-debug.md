@@ -1,5 +1,6 @@
 ---
 title: debug Namespace
+sort_key: C
 ---
 
 The `debug` API gives you access to several non-standard RPC methods, which will allow you

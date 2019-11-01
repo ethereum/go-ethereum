@@ -1,5 +1,6 @@
 ---
 title: Communication data types
+sort_key: C
 ---
 
 ## UI Client interface

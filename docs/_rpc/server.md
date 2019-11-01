@@ -1,5 +1,6 @@
 ---
 title: JSON-RPC Server
+sort_key: A
 ---
 
 Geth supports all standard web3 JSON-RPC APIs. You can find documentation for

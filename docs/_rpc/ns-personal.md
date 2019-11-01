@@ -1,5 +1,6 @@
 ---
 title: personal Namespace
+sort_key: C
 ---
 
 The personal API manages private keys in the key store.

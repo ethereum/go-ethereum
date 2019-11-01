@@ -1,7 +1,10 @@
 ---
-title: Issue handling workflow
+title: Issue Handling Workflow
+sort_key: B
 ---
+
 ### (Draft proposal)
+
 Keep the number of open issues under 820
 
 Keep the ratio of open issues per all issues under 13%

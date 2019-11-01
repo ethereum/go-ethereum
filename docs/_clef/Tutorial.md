@@ -1,5 +1,6 @@
 ---
 title: Tutorial
+sort_key: A
 ---
 
 ## Initializing Clef

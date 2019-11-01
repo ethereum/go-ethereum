@@ -1,5 +1,6 @@
 ---
 title: Cross-Compiling Geth
+sort_key: C
 ---
 
 **Note: All of these and much more have been merged into the project Makefile. You can

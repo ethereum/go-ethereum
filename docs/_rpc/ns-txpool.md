@@ -1,5 +1,6 @@
 ---
 title: txpool Namespace
+sort_key: C
 ---
 
 The `txpool` API gives you access to several non-standard RPC methods to inspect the contents of the

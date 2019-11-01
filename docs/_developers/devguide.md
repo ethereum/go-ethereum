@@ -1,5 +1,6 @@
 ---
 title: Developer guide
+sort_key: A
 ---
 
 **NOTE: These instructions are for people who want to contribute Go source code changes.

@@ -1,6 +1,8 @@
 ---
 title: Backup & restore
+sort_key: C
 ---
+
 **DO NOT FORGET YOUR PASSWORD** and **BACKUP YOUR KEYSTORE**
 
 <!--

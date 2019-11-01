@@ -1,5 +1,6 @@
 ---
 title: Real-time Events
+sort_key: B
 ---
 
 Geth v1.4 and later support publish / subscribe using JSON-RPC notifications. This allows

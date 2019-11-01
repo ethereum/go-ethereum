@@ -1,5 +1,6 @@
 ---
 title: Advanced setup
+sort_key: B
 ---
 
 

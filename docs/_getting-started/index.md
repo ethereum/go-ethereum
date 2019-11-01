@@ -1,6 +1,7 @@
 ---
 title: Getting Started with Geth
-permalink: getting-started
+permalink: docs/getting-started
+sort_key: A
 ---
 
 ## Installing
