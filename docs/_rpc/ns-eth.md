@@ -7,6 +7,10 @@ Geth provides several extensions to the standard "eth" JSON-RPC namespace.
 * TOC
 {:toc}
 
+### eth_subscribe, eth_unsubscribe
+
+These methods are used for real-time events through subscriptions. See the [subscription
+documentation](./pubsub) for more information.
 
 ### eth_call
 

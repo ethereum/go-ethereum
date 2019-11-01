@@ -1,5 +1,5 @@
 ---
-title: eth_subscribe
+title: Real-time Events
 ---
 
 Geth v1.4 and later support publish / subscribe using JSON-RPC notifications. This allows
