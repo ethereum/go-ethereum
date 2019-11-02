@@ -113,7 +113,7 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		maxCapacity = totalRecharge
 	}
 	srv.fcManager.SetCapacityLimits(srv.freeCapacity, maxCapacity, srv.freeCapacity*2)
-	srv.clientPool = newClientPool(srv.chainDb, srv.freeCapacity, 10000, mclock.System{}, func(id enode.ID) { go srv.peers.Unregister(peerIdToString(id)) })
+	srv.clientPool = newClientPool(srv.chainDb, srv.freeCapacity, mclock.System{}, func(id enode.ID) { go srv.peers.Unregister(peerIdToString(id)) })
 	srv.clientPool.setPriceFactors(priceFactors{0, 1, 1}, priceFactors{0, 1, 1})
 
 	checkpoint := srv.latestLocalCheckpoint()
@@ -183,9 +183,9 @@ func (s *LesServer) Stop() {
 	s.peers.Close()
 
 	s.fcManager.Stop()
-	s.clientPool.stop()
 	s.costTracker.stop()
 	s.handler.stop()
+	s.clientPool.stop() // client pool should be closed after handler.
 	s.servingQueue.stop()
 
 	// Note, bloom trie indexer is closed by parent bloombits indexer.

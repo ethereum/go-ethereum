@@ -280,7 +280,7 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 	}
 	server.costTracker, server.freeCapacity = newCostTracker(db, server.config)
 	server.costTracker.testCostList = testCostList(0) // Disable flow control mechanism.
-	server.clientPool = newClientPool(db, 1, 10000, clock, nil)
+	server.clientPool = newClientPool(db, 1, clock, nil)
 	server.clientPool.setLimits(10000, 10000) // Assign enough capacity for clientpool
 	server.handler = newServerHandler(server, simulation.Blockchain(), db, txpool, func() bool { return true })
 	if server.oracle != nil {
@@ -517,7 +517,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 	if connect {
 		cpeer, err1, speer, err2 = newTestPeerPair("peer", protocol, server, client)
 		select {
-		case <-time.After(time.Millisecond * 100):
+		case <-time.After(time.Millisecond * 300):
 		case err := <-err1:
 			t.Fatalf("peer 1 handshake error: %v", err)
 		case err := <-err2:

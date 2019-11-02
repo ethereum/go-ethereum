@@ -17,67 +17,81 @@
 package les
 
 import (
+	"encoding/binary"
 	"io"
 	"math"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/hashicorp/golang-lru"
 )
 
 const (
-	negBalanceExpTC      = time.Hour        // time constant for exponentially reducing negative balance
-	fixedPointMultiplier = 0x1000000        // constant to convert logarithms to fixed point format
-	connectedBias        = time.Minute * 5  // this bias is applied in favor of already connected clients in order to avoid kicking them out very soon
-	lazyQueueRefresh     = time.Second * 10 // refresh period of the connected queue
-)
+	negBalanceExpTC              = time.Hour        // time constant for exponentially reducing negative balance
+	fixedPointMultiplier         = 0x1000000        // constant to convert logarithms to fixed point format
+	lazyQueueRefresh             = time.Second * 10 // refresh period of the connected queue
+	persistCumulativeTimeRefresh = time.Minute * 5  // refresh period of the cumulative running time persistence
+	posBalanceCacheLimit         = 8192             // the maximum number of cached items in positive balance queue
+	negBalanceCacheLimit         = 8192             // the maximum number of cached items in negative balance queue
 
-var (
-	clientPoolDbKey    = []byte("clientPool")
-	clientBalanceDbKey = []byte("clientPool-balance")
+	// connectedBias is applied to already connected clients So that
+	// already connected client won't be kicked out very soon and we
+	// can ensure all connected clients can have enough time to request
+	// or sync some data.
+	//
+	// todo(rjl493456442) make it configurable. It can be the option of
+	// free trial time!
+	connectedBias = time.Minute * 3
 )
 
 // clientPool implements a client database that assigns a priority to each client
 // based on a positive and negative balance. Positive balance is externally assigned
 // to prioritized clients and is decreased with connection time and processed
 // requests (unless the price factors are zero). If the positive balance is zero
-// then negative balance is accumulated. Balance tracking and priority calculation
-// for connected clients is done by balanceTracker. connectedQueue ensures that
-// clients with the lowest positive or highest negative balance get evicted when
-// the total capacity allowance is full and new clients with a better balance want
-// to connect. Already connected nodes receive a small bias in their favor in order
-// to avoid accepting and instantly kicking out clients.
-// Balances of disconnected clients are stored in posBalanceQueue and negBalanceQueue
-// and are also saved in the database. Negative balance is transformed into a
-// logarithmic form with a constantly shifting linear offset in order to implement
-// an exponential decrease. negBalanceQueue has a limited size and drops the smallest
-// values when necessary. Positive balances are stored in the database as long as
-// they exist, posBalanceQueue only acts as a cache for recently accessed entries.
+// then negative balance is accumulated.
+//
+// Balance tracking and priority calculation for connected clients is done by
+// balanceTracker. connectedQueue ensures that clients with the lowest positive or
+// highest negative balance get evicted when the total capacity allowance is full
+// and new clients with a better balance want to connect.
+//
+// Already connected nodes receive a small bias in their favor in order to avoid
+// accepting and instantly kicking out clients. In theory, we try to ensure that
+// each client can have several minutes of connection time.
+//
+// Balances of disconnected clients are stored in nodeDB including positive balance
+// and negative banalce. Negative balance is transformed into a logarithmic form
+// with a constantly shifting linear offset in order to implement an exponential
+// decrease. Besides nodeDB will have a background thread to check the negative
+// balance of disconnected client. If the balance is low enough, then the record
+// will be dropped.
 type clientPool struct {
-	db         ethdb.Database
+	ndb        *nodeDB
 	lock       sync.Mutex
 	clock      mclock.Clock
-	stopCh     chan chan struct{}
+	stopCh     chan struct{}
 	closed     bool
 	removePeer func(enode.ID)
 
-	queueLimit, countLimit                          int
-	freeClientCap, capacityLimit, connectedCapacity uint64
+	connectedMap   map[enode.ID]*clientInfo
+	connectedQueue *prque.LazyQueue
 
-	connectedMap                     map[enode.ID]*clientInfo
-	posBalanceMap                    map[enode.ID]*posBalance
-	negBalanceMap                    map[string]*negBalance
-	connectedQueue                   *prque.LazyQueue
-	posBalanceQueue, negBalanceQueue *prque.Prque
-	posFactors, negFactors           priceFactors
-	posBalanceAccessCounter          int64
-	startupTime                      mclock.AbsTime
-	logOffsetAtStartup               int64
+	posFactors, negFactors priceFactors
+
+	connLimit      int            // The maximum number of connections that clientpool can support
+	capLimit       uint64         // The maximum cumulative capacity that clientpool can support
+	connectedCap   uint64         // The sum of the capacity of the current clientpool connected
+	freeClientCap  uint64         // The capacity value of each free client
+	startTime      mclock.AbsTime // The timestamp at which the clientpool started running
+	cumulativeTime int64          // The cumulative running time of clientpool at the start point.
+	disableBias    bool           // Disable connection bias(used in testing)
 }
 
 // clientPeer represents a client in the pool.
@@ -138,22 +152,25 @@ type priceFactors struct {
 }
 
 // newClientPool creates a new client pool
-func newClientPool(db ethdb.Database, freeClientCap uint64, queueLimit int, clock mclock.Clock, removePeer func(enode.ID)) *clientPool {
+func newClientPool(db ethdb.Database, freeClientCap uint64, clock mclock.Clock, removePeer func(enode.ID)) *clientPool {
+	ndb := newNodeDB(db, clock)
 	pool := &clientPool{
-		db:              db,
-		clock:           clock,
-		connectedMap:    make(map[enode.ID]*clientInfo),
-		posBalanceMap:   make(map[enode.ID]*posBalance),
-		negBalanceMap:   make(map[string]*negBalance),
-		connectedQueue:  prque.NewLazyQueue(connSetIndex, connPriority, connMaxPriority, clock, lazyQueueRefresh),
-		negBalanceQueue: prque.New(negSetIndex),
-		posBalanceQueue: prque.New(posSetIndex),
-		freeClientCap:   freeClientCap,
-		queueLimit:      queueLimit,
-		removePeer:      removePeer,
-		stopCh:          make(chan chan struct{}),
+		ndb:            ndb,
+		clock:          clock,
+		connectedMap:   make(map[enode.ID]*clientInfo),
+		connectedQueue: prque.NewLazyQueue(connSetIndex, connPriority, connMaxPriority, clock, lazyQueueRefresh),
+		freeClientCap:  freeClientCap,
+		removePeer:     removePeer,
+		startTime:      clock.Now(),
+		cumulativeTime: ndb.getCumulativeTime(),
+		stopCh:         make(chan struct{}),
 	}
-	pool.loadFromDb()
+	// If the negative balance of free client is even lower than 1,
+	// delete this entry.
+	ndb.nbEvictCallBack = func(now mclock.AbsTime, b negBalance) bool {
+		balance := math.Exp(float64(b.logValue-pool.logOffset(now)) / fixedPointMultiplier)
+		return balance <= 1
+	}
 	go func() {
 		for {
 			select {
@@ -161,8 +178,9 @@ func newClientPool(db ethdb.Database, freeClientCap uint64, queueLimit int, cloc
 				pool.lock.Lock()
 				pool.connectedQueue.Refresh()
 				pool.lock.Unlock()
-			case stop := <-pool.stopCh:
-				close(stop)
+			case <-clock.After(persistCumulativeTimeRefresh):
+				pool.ndb.setCumulativeTime(pool.logOffset(clock.Now()))
+			case <-pool.stopCh:
 				return
 			}
 		}
@@ -172,13 +190,12 @@ func newClientPool(db ethdb.Database, freeClientCap uint64, queueLimit int, cloc
 
 // stop shuts the client pool down
 func (f *clientPool) stop() {
-	stop := make(chan struct{})
-	f.stopCh <- stop
-	<-stop
+	close(f.stopCh)
 	f.lock.Lock()
 	f.closed = true
-	f.saveToDb()
 	f.lock.Unlock()
+	f.ndb.setCumulativeTime(f.logOffset(f.clock.Now()))
+	f.ndb.close()
 }
 
 // connect should be called after a successful handshake. If the connection was
@@ -187,7 +204,7 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	// Short circuit is clientPool is already closed.
+	// Short circuit if clientPool is already closed.
 	if f.closed {
 		return false
 	}
@@ -199,14 +216,19 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 		return false
 	}
 	// Create a clientInfo but do not add it yet
-	now := f.clock.Now()
-	posBalance := f.getPosBalance(id).value
+	var (
+		posBalance uint64
+		negBalance uint64
+		now        = f.clock.Now()
+	)
+	pb := f.ndb.getOrNewPB(id)
+	posBalance = pb.value
 	e := &clientInfo{pool: f, peer: peer, address: freeID, queueIndex: -1, id: id, priority: posBalance != 0}
 
-	var negBalance uint64
-	nb := f.negBalanceMap[freeID]
-	if nb != nil {
+	nb := f.ndb.getOrNewNB(freeID)
+	if nb.logValue != 0 {
 		negBalance = uint64(math.Exp(float64(nb.logValue-f.logOffset(now)) / fixedPointMultiplier))
+		negBalance *= uint64(time.Second)
 	}
 	// If the client is a free client, assign with a low free capacity,
 	// Otherwise assign with the given value(priority client)
@@ -219,6 +241,7 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 	}
 	e.capacity = capacity
 
+	// Starts a balance tracker
 	e.balanceTracker.init(f.clock, capacity)
 	e.balanceTracker.setBalance(posBalance, negBalance)
 	f.setClientPriceFactors(e)
@@ -228,9 +251,9 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 	//
 	// If the priority of the newly added client is lower than the priority of
 	// all connected clients, the client is rejected.
-	newCapacity := f.connectedCapacity + capacity
+	newCapacity := f.connectedCap + capacity
 	newCount := f.connectedQueue.Size() + 1
-	if newCapacity > f.capacityLimit || newCount > f.countLimit {
+	if newCapacity > f.capLimit || newCount > f.connLimit {
 		var (
 			kickList     []*clientInfo
 			kickPriority int64
@@ -241,10 +264,13 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 			kickPriority = priority
 			newCapacity -= c.capacity
 			newCount--
-			return newCapacity > f.capacityLimit || newCount > f.countLimit
+			return newCapacity > f.capLimit || newCount > f.connLimit
 		})
-		if newCapacity > f.capacityLimit || newCount > f.countLimit || (e.balanceTracker.estimatedPriority(now+mclock.AbsTime(connectedBias), false)-kickPriority) > 0 {
-			// reject client
+		bias := connectedBias
+		if f.disableBias {
+			bias = 0
+		}
+		if newCapacity > f.capLimit || newCount > f.connLimit || (e.balanceTracker.estimatedPriority(now+mclock.AbsTime(bias), false)-kickPriority) > 0 {
 			for _, c := range kickList {
 				f.connectedQueue.Push(c)
 			}
@@ -257,21 +283,22 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 			f.dropClient(c, now, true)
 		}
 	}
-	// client accepted, finish setting it up
-	if nb != nil {
-		delete(f.negBalanceMap, freeID)
-		f.negBalanceQueue.Remove(nb.queueIndex)
-	}
+	// Register new client to connection queue.
+	f.connectedMap[id] = e
+	f.connectedQueue.Push(e)
+	f.connectedCap += e.capacity
+
+	// If the current client is a paid client, monitor the status of client,
+	// downgrade it to normal client if positive balance is used up.
 	if e.priority {
 		e.balanceTracker.addCallback(balanceCallbackZero, 0, func() { f.balanceExhausted(id) })
 	}
-	f.connectedMap[id] = e
-	f.connectedQueue.Push(e)
-	f.connectedCapacity += e.capacity
-	totalConnectedGauge.Update(int64(f.connectedCapacity))
+	// If the capacity of client is not the default value(free capacity), notify
+	// it to update capacity.
 	if e.capacity != f.freeClientCap {
 		e.peer.updateCapacity(e.capacity)
 	}
+	totalConnectedGauge.Update(int64(f.connectedCap))
 	clientConnectedMeter.Mark(1)
 	log.Debug("Client accepted", "address", freeID)
 	return true
@@ -284,15 +311,14 @@ func (f *clientPool) disconnect(p clientPeer) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
+	// Short circuit if client pool is already closed.
 	if f.closed {
 		return
 	}
-	address := p.freeClientId()
-	id := p.ID()
 	// Short circuit if the peer hasn't been registered.
-	e := f.connectedMap[id]
+	e := f.connectedMap[p.ID()]
 	if e == nil {
-		log.Debug("Client not connected", "address", address, "id", peerIdToString(id))
+		log.Debug("Client not connected", "address", p.freeClientId(), "id", peerIdToString(p.ID()))
 		return
 	}
 	f.dropClient(e, f.clock.Now(), false)
@@ -307,8 +333,8 @@ func (f *clientPool) dropClient(e *clientInfo, now mclock.AbsTime, kick bool) {
 	f.finalizeBalance(e, now)
 	f.connectedQueue.Remove(e.queueIndex)
 	delete(f.connectedMap, e.id)
-	f.connectedCapacity -= e.capacity
-	totalConnectedGauge.Update(int64(f.connectedCapacity))
+	f.connectedCap -= e.capacity
+	totalConnectedGauge.Update(int64(f.connectedCap))
 	if kick {
 		clientKickedMeter.Mark(1)
 		log.Debug("Client kicked out", "address", e.address)
@@ -324,18 +350,17 @@ func (f *clientPool) dropClient(e *clientInfo, now mclock.AbsTime, kick bool) {
 func (f *clientPool) finalizeBalance(c *clientInfo, now mclock.AbsTime) {
 	c.balanceTracker.stop(now)
 	pos, neg := c.balanceTracker.getBalance(now)
-	pb := f.getPosBalance(c.id)
+
+	pb, nb := f.ndb.getOrNewPB(c.id), f.ndb.getOrNewNB(c.address)
 	pb.value = pos
-	f.storePosBalance(pb)
-	if neg < 1 {
-		neg = 1
-	}
-	nb := &negBalance{address: c.address, queueIndex: -1, logValue: int64(math.Log(float64(neg))*fixedPointMultiplier) + f.logOffset(now)}
-	f.negBalanceMap[c.address] = nb
-	f.negBalanceQueue.Push(nb, -nb.logValue)
-	if f.negBalanceQueue.Size() > f.queueLimit {
-		nn := f.negBalanceQueue.PopItem().(*negBalance)
-		delete(f.negBalanceMap, nn.address)
+	f.ndb.setPB(c.id, pb)
+
+	neg /= uint64(time.Second) // Convert the expanse to second level.
+	if neg > 1 {
+		nb.logValue = int64(math.Log(float64(neg))*fixedPointMultiplier) + f.logOffset(now)
+		f.ndb.setNB(c.address, nb)
+	} else {
+		f.ndb.delNB(c.address) // Negative balance is small enough, drop it directly.
 	}
 }
 
@@ -351,27 +376,26 @@ func (f *clientPool) balanceExhausted(id enode.ID) {
 	}
 	c.priority = false
 	if c.capacity != f.freeClientCap {
-		f.connectedCapacity += f.freeClientCap - c.capacity
-		totalConnectedGauge.Update(int64(f.connectedCapacity))
+		f.connectedCap += f.freeClientCap - c.capacity
+		totalConnectedGauge.Update(int64(f.connectedCap))
 		c.capacity = f.freeClientCap
 		c.peer.updateCapacity(c.capacity)
 	}
+	f.ndb.delPB(id)
 }
 
 // setConnLimit sets the maximum number and total capacity of connected clients,
 // dropping some of them if necessary.
-func (f *clientPool) setLimits(count int, totalCap uint64) {
+func (f *clientPool) setLimits(totalConn int, totalCap uint64) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	f.countLimit = count
-	f.capacityLimit = totalCap
-	if f.connectedCapacity > f.capacityLimit || f.connectedQueue.Size() > f.countLimit {
-		now := mclock.Now()
+	f.connLimit = totalConn
+	f.capLimit = totalCap
+	if f.connectedCap > f.capLimit || f.connectedQueue.Size() > f.connLimit {
 		f.connectedQueue.MultiPop(func(data interface{}, priority int64) bool {
-			c := data.(*clientInfo)
-			f.dropClient(c, now, true)
-			return f.connectedCapacity > f.capacityLimit || f.connectedQueue.Size() > f.countLimit
+			f.dropClient(data.(*clientInfo), mclock.Now(), true)
+			return f.connectedCap > f.capLimit || f.connectedQueue.Size() > f.connLimit
 		})
 	}
 }
@@ -390,11 +414,14 @@ func (f *clientPool) requestCost(p *peer, cost uint64) {
 
 // logOffset calculates the time-dependent offset for the logarithmic
 // representation of negative balance
+//
+// From another point of view, the result returned by the function represents
+// the total time that the clientpool is cumulatively running(total_hours/multiplier).
 func (f *clientPool) logOffset(now mclock.AbsTime) int64 {
 	// Note: fixedPointMultiplier acts as a multiplier here; the reason for dividing the divisor
 	// is to avoid int64 overflow. We assume that int64(negBalanceExpTC) >> fixedPointMultiplier.
-	logDecay := int64((time.Duration(now - f.startupTime)) / (negBalanceExpTC / fixedPointMultiplier))
-	return f.logOffsetAtStartup + logDecay
+	cumulativeTime := int64((time.Duration(now - f.startTime)) / (negBalanceExpTC / fixedPointMultiplier))
+	return f.cumulativeTime + cumulativeTime
 }
 
 // setPriceFactors changes pricing factors for both positive and negative balances.
@@ -415,100 +442,6 @@ func (f *clientPool) setClientPriceFactors(c *clientInfo) {
 	c.balanceTracker.setFactors(false, f.posFactors.timeFactor+float64(c.capacity)*f.posFactors.capacityFactor/1000000, f.posFactors.requestFactor)
 }
 
-// clientPoolStorage is the RLP representation of the pool's database storage
-type clientPoolStorage struct {
-	LogOffset uint64
-	List      []*negBalance
-}
-
-// loadFromDb restores pool status from the database storage
-// (automatically called at initialization)
-func (f *clientPool) loadFromDb() {
-	enc, err := f.db.Get(clientPoolDbKey)
-	if err != nil {
-		return
-	}
-	var storage clientPoolStorage
-	err = rlp.DecodeBytes(enc, &storage)
-	if err != nil {
-		log.Error("Failed to decode client list", "err", err)
-		return
-	}
-	f.logOffsetAtStartup = int64(storage.LogOffset)
-	f.startupTime = f.clock.Now()
-	for _, e := range storage.List {
-		log.Debug("Loaded free client record", "address", e.address, "logValue", e.logValue)
-		f.negBalanceMap[e.address] = e
-		f.negBalanceQueue.Push(e, -e.logValue)
-	}
-}
-
-// saveToDb saves pool status to the database storage
-// (automatically called during shutdown)
-func (f *clientPool) saveToDb() {
-	now := f.clock.Now()
-	storage := clientPoolStorage{
-		LogOffset: uint64(f.logOffset(now)),
-	}
-	for _, c := range f.connectedMap {
-		f.finalizeBalance(c, now)
-	}
-	i := 0
-	storage.List = make([]*negBalance, len(f.negBalanceMap))
-	for _, e := range f.negBalanceMap {
-		storage.List[i] = e
-		i++
-	}
-	enc, err := rlp.EncodeToBytes(storage)
-	if err != nil {
-		log.Error("Failed to encode negative balance list", "err", err)
-	} else {
-		f.db.Put(clientPoolDbKey, enc)
-	}
-}
-
-// storePosBalance stores a single positive balance entry in the database
-func (f *clientPool) storePosBalance(b *posBalance) {
-	if b.value == b.lastStored {
-		return
-	}
-	enc, err := rlp.EncodeToBytes(b)
-	if err != nil {
-		log.Error("Failed to encode client balance", "err", err)
-	} else {
-		f.db.Put(append(clientBalanceDbKey, b.id[:]...), enc)
-		b.lastStored = b.value
-	}
-}
-
-// getPosBalance retrieves a single positive balance entry from cache or the database
-func (f *clientPool) getPosBalance(id enode.ID) *posBalance {
-	if b, ok := f.posBalanceMap[id]; ok {
-		f.posBalanceQueue.Remove(b.queueIndex)
-		f.posBalanceAccessCounter--
-		f.posBalanceQueue.Push(b, f.posBalanceAccessCounter)
-		return b
-	}
-	balance := &posBalance{}
-	if enc, err := f.db.Get(append(clientBalanceDbKey, id[:]...)); err == nil {
-		if err := rlp.DecodeBytes(enc, balance); err != nil {
-			log.Error("Failed to decode client balance", "err", err)
-			balance = &posBalance{}
-		}
-	}
-	balance.id = id
-	balance.queueIndex = -1
-	if f.posBalanceQueue.Size() >= f.queueLimit {
-		b := f.posBalanceQueue.PopItem().(*posBalance)
-		f.storePosBalance(b)
-		delete(f.posBalanceMap, b.id)
-	}
-	f.posBalanceAccessCounter--
-	f.posBalanceQueue.Push(balance, f.posBalanceAccessCounter)
-	f.posBalanceMap[id] = balance
-	return balance
-}
-
 // addBalance updates the positive balance of a client.
 // If setTotal is false then the given amount is added to the balance.
 // If setTotal is true then amount represents the total amount ever added to the
@@ -518,11 +451,18 @@ func (f *clientPool) addBalance(id enode.ID, amount uint64, setTotal bool) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	pb := f.getPosBalance(id)
+	pb := f.ndb.getOrNewPB(id)
 	c := f.connectedMap[id]
-	var negBalance uint64
 	if c != nil {
-		pb.value, negBalance = c.balanceTracker.getBalance(f.clock.Now())
+		posBalance, negBalance := c.balanceTracker.getBalance(f.clock.Now())
+		pb.value = posBalance
+		defer func() {
+			c.balanceTracker.setBalance(pb.value, negBalance)
+			if !c.priority && pb.value > 0 {
+				c.priority = true
+				c.balanceTracker.addCallback(balanceCallbackZero, 0, func() { f.balanceExhausted(id) })
+			}
+		}()
 	}
 	if setTotal {
 		if pb.value+amount > pb.lastTotal {
@@ -535,21 +475,12 @@ func (f *clientPool) addBalance(id enode.ID, amount uint64, setTotal bool) {
 		pb.value += amount
 		pb.lastTotal += amount
 	}
-	f.storePosBalance(pb)
-	if c != nil {
-		c.balanceTracker.setBalance(pb.value, negBalance)
-		if !c.priority && pb.value > 0 {
-			c.priority = true
-			c.balanceTracker.addCallback(balanceCallbackZero, 0, func() { f.balanceExhausted(id) })
-		}
-	}
+	f.ndb.setPB(id, pb)
 }
 
 // posBalance represents a recently accessed positive balance entry
 type posBalance struct {
-	id                           enode.ID
-	value, lastStored, lastTotal uint64
-	queueIndex                   int // position in posBalanceQueue
+	value, lastTotal uint64
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -566,44 +497,207 @@ func (e *posBalance) DecodeRLP(s *rlp.Stream) error {
 		return err
 	}
 	e.value = entry.Value
-	e.lastStored = entry.Value
 	e.lastTotal = entry.LastTotal
 	return nil
 }
 
-// posSetIndex callback updates posBalance item index in posBalanceQueue
-func posSetIndex(a interface{}, index int) {
-	a.(*posBalance).queueIndex = index
-}
-
 // negBalance represents a negative balance entry of a disconnected client
-type negBalance struct {
-	address    string
-	logValue   int64
-	queueIndex int // position in negBalanceQueue
-}
+type negBalance struct{ logValue int64 }
 
 // EncodeRLP implements rlp.Encoder
 func (e *negBalance) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{e.address, uint64(e.logValue)})
+	return rlp.Encode(w, []interface{}{uint64(e.logValue)})
 }
 
 // DecodeRLP implements rlp.Decoder
 func (e *negBalance) DecodeRLP(s *rlp.Stream) error {
 	var entry struct {
-		Address  string
 		LogValue uint64
 	}
 	if err := s.Decode(&entry); err != nil {
 		return err
 	}
-	e.address = entry.Address
 	e.logValue = int64(entry.LogValue)
-	e.queueIndex = -1
 	return nil
 }
 
-// negSetIndex callback updates negBalance item index in negBalanceQueue
-func negSetIndex(a interface{}, index int) {
-	a.(*negBalance).queueIndex = index
+const (
+	// nodeDBVersion is the version identifier of the node data in db
+	nodeDBVersion = 0
+
+	// dbCleanupCycle is the cycle of db for useless data cleanup
+	dbCleanupCycle = time.Hour
+)
+
+var (
+	positiveBalancePrefix    = []byte("pb:")             // dbVersion(uint16 big endian) + positiveBalancePrefix + id -> balance
+	negativeBalancePrefix    = []byte("nb:")             // dbVersion(uint16 big endian) + negativeBalancePrefix + ip -> balance
+	cumulativeRunningTimeKey = []byte("cumulativeTime:") // dbVersion(uint16 big endian) + cumulativeRunningTimeKey -> cumulativeTime
+)
+
+type nodeDB struct {
+	db              ethdb.Database
+	pcache          *lru.Cache
+	ncache          *lru.Cache
+	auxbuf          []byte                                // 37-byte auxiliary buffer for key encoding
+	verbuf          [2]byte                               // 2-byte auxiliary buffer for db version
+	nbEvictCallBack func(mclock.AbsTime, negBalance) bool // Callback to determine whether the negative balance can be evicted.
+	clock           mclock.Clock
+	closeCh         chan struct{}
+	cleanupHook     func() // Test hook used for testing
+}
+
+func newNodeDB(db ethdb.Database, clock mclock.Clock) *nodeDB {
+	pcache, _ := lru.New(posBalanceCacheLimit)
+	ncache, _ := lru.New(negBalanceCacheLimit)
+	ndb := &nodeDB{
+		db:      db,
+		pcache:  pcache,
+		ncache:  ncache,
+		auxbuf:  make([]byte, 37),
+		clock:   clock,
+		closeCh: make(chan struct{}),
+	}
+	binary.BigEndian.PutUint16(ndb.verbuf[:], uint16(nodeDBVersion))
+	go ndb.expirer()
+	return ndb
+}
+
+func (db *nodeDB) close() {
+	close(db.closeCh)
+}
+
+func (db *nodeDB) key(id []byte, neg bool) []byte {
+	prefix := positiveBalancePrefix
+	if neg {
+		prefix = negativeBalancePrefix
+	}
+	if len(prefix)+len(db.verbuf)+len(id) > len(db.auxbuf) {
+		db.auxbuf = append(db.auxbuf, make([]byte, len(prefix)+len(db.verbuf)+len(id)-len(db.auxbuf))...)
+	}
+	copy(db.auxbuf[:len(db.verbuf)], db.verbuf[:])
+	copy(db.auxbuf[len(db.verbuf):len(db.verbuf)+len(prefix)], prefix)
+	copy(db.auxbuf[len(prefix)+len(db.verbuf):len(prefix)+len(db.verbuf)+len(id)], id)
+	return db.auxbuf[:len(prefix)+len(db.verbuf)+len(id)]
+}
+
+func (db *nodeDB) getCumulativeTime() int64 {
+	blob, err := db.db.Get(append(cumulativeRunningTimeKey, db.verbuf[:]...))
+	if err != nil || len(blob) == 0 {
+		return 0
+	}
+	return int64(binary.BigEndian.Uint64(blob))
+}
+
+func (db *nodeDB) setCumulativeTime(v int64) {
+	binary.BigEndian.PutUint64(db.auxbuf[:8], uint64(v))
+	db.db.Put(append(cumulativeRunningTimeKey, db.verbuf[:]...), db.auxbuf[:8])
+}
+
+func (db *nodeDB) getOrNewPB(id enode.ID) posBalance {
+	key := db.key(id.Bytes(), false)
+	item, exist := db.pcache.Get(string(key))
+	if exist {
+		return item.(posBalance)
+	}
+	var balance posBalance
+	if enc, err := db.db.Get(key); err == nil {
+		if err := rlp.DecodeBytes(enc, &balance); err != nil {
+			log.Error("Failed to decode positive balance", "err", err)
+		}
+	}
+	db.pcache.Add(string(key), balance)
+	return balance
+}
+
+func (db *nodeDB) setPB(id enode.ID, b posBalance) {
+	key := db.key(id.Bytes(), false)
+	enc, err := rlp.EncodeToBytes(&(b))
+	if err != nil {
+		log.Error("Failed to encode positive balance", "err", err)
+		return
+	}
+	db.db.Put(key, enc)
+	db.pcache.Add(string(key), b)
+}
+
+func (db *nodeDB) delPB(id enode.ID) {
+	key := db.key(id.Bytes(), false)
+	db.db.Delete(key)
+	db.pcache.Remove(string(key))
+}
+
+func (db *nodeDB) getOrNewNB(id string) negBalance {
+	key := db.key([]byte(id), true)
+	item, exist := db.ncache.Get(string(key))
+	if exist {
+		return item.(negBalance)
+	}
+	var balance negBalance
+	if enc, err := db.db.Get(key); err == nil {
+		if err := rlp.DecodeBytes(enc, &balance); err != nil {
+			log.Error("Failed to decode negative balance", "err", err)
+		}
+	}
+	db.ncache.Add(string(key), balance)
+	return balance
+}
+
+func (db *nodeDB) setNB(id string, b negBalance) {
+	key := db.key([]byte(id), true)
+	enc, err := rlp.EncodeToBytes(&(b))
+	if err != nil {
+		log.Error("Failed to encode negative balance", "err", err)
+		return
+	}
+	db.db.Put(key, enc)
+	db.ncache.Add(string(key), b)
+}
+
+func (db *nodeDB) delNB(id string) {
+	key := db.key([]byte(id), true)
+	db.db.Delete(key)
+	db.ncache.Remove(string(key))
+}
+
+func (db *nodeDB) expirer() {
+	for {
+		select {
+		case <-db.clock.After(dbCleanupCycle):
+			db.expireNodes()
+		case <-db.closeCh:
+			return
+		}
+	}
+}
+
+// expireNodes iterates the whole node db and checks whether the negative balance
+// entry can deleted.
+//
+// The rationale behind this is: server doesn't need to keep the negative balance
+// records if they are low enough.
+func (db *nodeDB) expireNodes() {
+	var (
+		visited int
+		deleted int
+		start   = time.Now()
+	)
+	iter := db.db.NewIteratorWithPrefix(append(db.verbuf[:], negativeBalancePrefix...))
+	for iter.Next() {
+		visited += 1
+		var balance negBalance
+		if err := rlp.DecodeBytes(iter.Value(), &balance); err != nil {
+			log.Error("Failed to decode negative balance", "err", err)
+			continue
+		}
+		if db.nbEvictCallBack != nil && db.nbEvictCallBack(db.clock.Now(), balance) {
+			deleted += 1
+			db.db.Delete(iter.Key())
+		}
+	}
+	// Invoke testing hook if it's not nil.
+	if db.cleanupHook != nil {
+		db.cleanupHook()
+	}
+	log.Debug("Expire nodes", "visited", visited, "deleted", deleted, "elapsed", common.PrettyDuration(time.Since(start)))
 }
