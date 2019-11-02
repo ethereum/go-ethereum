@@ -235,8 +235,8 @@ loop:
 
 // UpdateBalance updates the balance of a client (either overwrites it or adds to it).
 // It also updates the balance meta info string.
-func (api *PrivateLightServerAPI) UpdateBalance(id enode.ID, value int64, add bool, meta string) error {
-	return api.server.clientPool.updateBalance(id, value, add, meta)
+func (api *PrivateLightServerAPI) UpdateBalance(id enode.ID, value int64, meta string) error {
+	return api.server.clientPool.updateBalance(id, value, meta)
 }
 
 // SetClientParams sets client parameters for all clients listed in the ids list

@@ -564,7 +564,7 @@ func (f *clientPool) getPosBalance(id enode.ID) posBalance {
 
 // updateBalance updates the balance of a client (either overwrites it or adds to it).
 // It also updates the balance meta info string.
-func (f *clientPool) updateBalance(id enode.ID, amount int64, add bool, meta string) error {
+func (f *clientPool) updateBalance(id enode.ID, amount int64, meta string) error {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
@@ -588,27 +588,17 @@ func (f *clientPool) updateBalance(id enode.ID, amount int64, add bool, meta str
 			c.balanceMetaInfo = meta
 		}()
 	}
-	if add {
-		if amount > 0 {
-			if amount > maxBalance || pb.value > maxBalance-uint64(amount) {
-				return errBalanceOverflow
-			}
-			pb.value += uint64(amount)
-		} else {
-			if uint64(-amount) > pb.value {
-				pb.value = 0
-			} else {
-				pb.value -= uint64(-amount)
-			}
-		}
-	} else {
-		if amount > maxBalance {
+	if amount > 0 {
+		if amount > maxBalance || pb.value > maxBalance-uint64(amount) {
 			return errBalanceOverflow
 		}
-		if amount < 0 {
-			amount = 0
+		pb.value += uint64(amount)
+	} else {
+		if uint64(-amount) > pb.value {
+			pb.value = 0
+		} else {
+			pb.value -= uint64(-amount)
 		}
-		pb.value = uint64(amount)
 	}
 	pb.meta = meta
 	f.ndb.setPB(id, pb)

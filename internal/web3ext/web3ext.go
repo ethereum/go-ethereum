@@ -826,7 +826,7 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'updateBalance',
 			call: 'les_updateBalance',
-			params: 4
+			params: 3
 		}),
 	],
 	properties:
