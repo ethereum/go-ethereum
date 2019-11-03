@@ -107,14 +107,19 @@ func (api *PrivateLightServerAPI) PriorityClientInfo(start, stop enode.ID, maxCo
 func (api *PrivateLightServerAPI) clientInfo(c *clientInfo, id enode.ID) map[string]interface{} {
 	info := make(map[string]interface{})
 	if c != nil {
+		now := mclock.Now()
 		info["isConnected"] = true
+		info["connectionTime"] = float64(now-c.connectedAt) / float64(time.Second)
 		info["capacity"] = c.capacity
-		info["pricing/balance"], info["pricing/negBalance"] = c.balanceTracker.getBalance(mclock.Now())
+		pb, nb := c.balanceTracker.getBalance(now)
+		info["pricing/balance"], info["pricing/negBalance"] = pb, nb
 		info["pricing/balanceMeta"] = c.balanceMetaInfo
+		info["priority"] = pb != 0
 	} else {
 		info["isConnected"] = false
 		pb := api.server.clientPool.getPosBalance(id)
 		info["pricing/balance"], info["pricing/balanceMeta"] = pb.value, pb.meta
+		info["priority"] = pb.value != 0
 	}
 	return info
 }

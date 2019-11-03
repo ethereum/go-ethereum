@@ -113,6 +113,7 @@ type clientPeer interface {
 type clientInfo struct {
 	address                string
 	id                     enode.ID
+	connectedAt            mclock.AbsTime
 	capacity               uint64
 	priority               bool
 	pool                   *clientPool
@@ -241,6 +242,7 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 		address:         freeID,
 		queueIndex:      -1,
 		id:              id,
+		connectedAt:     now,
 		priority:        posBalance != 0,
 		posFactors:      f.defaultPosFactors,
 		negFactors:      f.defaultNegFactors,
