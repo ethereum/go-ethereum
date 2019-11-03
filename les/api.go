@@ -97,9 +97,11 @@ func (api *PrivateLightServerAPI) PriorityClientInfo(start, stop enode.ID, maxCo
 		res[ids[maxCount]] = make(map[string]interface{})
 		ids = ids[:maxCount]
 	}
-	api.server.clientPool.forClients(ids, func(client *clientInfo, id enode.ID) {
-		res[id] = api.clientInfo(client, id)
-	})
+	if len(ids) != 0 {
+		api.server.clientPool.forClients(ids, func(client *clientInfo, id enode.ID) {
+			res[id] = api.clientInfo(client, id)
+		})
+	}
 	return res
 }
 
