@@ -451,7 +451,9 @@ func (f *clientPool) balanceExhausted(id enode.ID) {
 		c.capacity = f.freeClientCap
 		c.peer.updateCapacity(c.capacity)
 	}
-	f.ndb.delPB(id)
+	pb := f.ndb.getOrNewPB(id)
+	pb.value = 0
+	f.ndb.setPB(id, pb)
 	if f.eventHook != nil {
 		f.eventHook("balanceExhausted", c)
 	}
@@ -740,6 +742,10 @@ func (db *nodeDB) getOrNewPB(id enode.ID) posBalance {
 }
 
 func (db *nodeDB) setPB(id enode.ID, b posBalance) {
+	if b.value == 0 && len(b.meta) == 0 {
+		db.delPB(id)
+		return
+	}
 	key := db.key(id.Bytes(), false)
 	enc, err := rlp.EncodeToBytes(&(b))
 	if err != nil {
