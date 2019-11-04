@@ -99,7 +99,7 @@ func (mw *memoryWrapper) slice(begin, end int64) []byte {
 		log.Warn("Tracer accessed out of bound memory", "available", mw.memory.Len(), "offset", begin, "size", end-begin)
 		return nil
 	}
-	return mw.memory.Get(begin, end-begin)
+	return mw.memory.GetCopy(begin, end-begin)
 }
 
 // getUint returns the 32 bytes at the specified address interpreted as a uint.
