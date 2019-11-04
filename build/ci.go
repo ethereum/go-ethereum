@@ -50,6 +50,7 @@ import (
 	"go/token"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -60,6 +61,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/internal/build"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/mholt/archiver"
 )
 
 var (
@@ -138,12 +140,17 @@ var (
 	// Note: zesty is unsupported because it was officially deprecated on Launchpad.
 	// Note: artful is unsupported because it was officially deprecated on Launchpad.
 	// Note: cosmic is unsupported because it was officially deprecated on Launchpad.
-	debDistros = map[string]string{
-		"trusty": "1.11", // Trusty is only supported in ppa:gophers/archive, which is abandoned, so we're stuck at Go 1.11
-		"xenial": "1.13", // Xenial and upward are supported in ppa:longsleep/golang-backports, so we can get Go 1.13
-		"bionic": "1.13",
-		"disco":  "1.13",
-		"eoan":   "1.13",
+	debDistroGoBoots = map[string]string{
+		"trusty": "golang-1.11",
+		"xenial": "golang-go",
+		"bionic": "golang-go",
+		"disco":  "golang-go",
+		"eoan":   "golang-go",
+	}
+
+	debGoBootPaths = map[string]string{
+		"golang-1.11": "/usr/lib/go-1.11",
+		"golang-go":   "/usr/lib/go",
 	}
 )
 
@@ -465,11 +472,12 @@ func maybeSkipArchive(env build.Environment) {
 // Debian Packaging
 func doDebianSource(cmdline []string) {
 	var (
-		signer  = flag.String("signer", "", `Signing key name, also used as package author`)
-		upload  = flag.String("upload", "", `Where to upload the source package (usually "ethereum/ethereum")`)
-		sshUser = flag.String("sftp-user", "", `Username for SFTP upload (usually "geth-ci")`)
-		workdir = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
-		now     = time.Now()
+		goversion = flag.String("goversion", "", `Go version to build with (will be included in the src package)`)
+		signer    = flag.String("signer", "", `Signing key name, also used as package author`)
+		upload    = flag.String("upload", "", `Where to upload the source package (usually "ethereum/ethereum")`)
+		sshUser   = flag.String("sftp-user", "", `Username for SFTP upload (usually "geth-ci")`)
+		workdir   = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
+		now       = time.Now()
 	)
 	flag.CommandLine.Parse(cmdline)
 	*workdir = makeWorkdir(*workdir)
@@ -482,12 +490,35 @@ func doDebianSource(cmdline []string) {
 		gpg.Stdin = bytes.NewReader(key)
 		build.MustRun(gpg)
 	}
+	// Download and verify the Go source package
+	res, err := http.Get(fmt.Sprintf("https://dl.google.com/go/go%s.src.tar.gz", *goversion))
+	if err != nil || res.StatusCode != http.StatusOK {
+		log.Fatalf("Failed to access Go sources: code %d, err %v", res.StatusCode, err)
+	}
+	defer res.Body.Close()
 
+	tarball, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		log.Fatalf("Failed to read Go sources: %v", err)
+	}
+	if err := ioutil.WriteFile(filepath.Join(*workdir, "go.tar.gz"), tarball, 0600); err != nil {
+		log.Fatalf("Failed to save Go sources: %v", err)
+	}
 	// Create Debian packages and upload them
 	for _, pkg := range debPackages {
-		for distro, gover := range debDistros {
-			meta := newDebMetadata(distro, gover, *signer, env, now, pkg.Name, pkg.Version, pkg.Executables)
+		for distro, goboot := range debDistroGoBoots {
+			// Prepare the debian package with the go-ethereum sources
+			meta := newDebMetadata(distro, goboot, *signer, env, now, pkg.Name, pkg.Version, pkg.Executables)
 			pkgdir := stageDebianSource(*workdir, meta)
+
+			// Ship the Go sources along so we have a proper thing to build with
+			if err := archiver.Unarchive(filepath.Join(*workdir, "go.tar.gz"), pkgdir); err != nil {
+				log.Fatalf("Failed to extract Go sources: %v", err)
+			}
+			if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, ".go")); err != nil {
+				log.Fatalf("Failed to rename Go source folder: %v", err)
+			}
+			// Run the packaging and upload to the PPA
 			debuild := exec.Command("debuild", "-S", "-sa", "-us", "-uc", "-d", "-Zxz")
 			debuild.Dir = pkgdir
 			build.MustRun(debuild)
@@ -502,7 +533,7 @@ func doDebianSource(cmdline []string) {
 				build.MustRunCommand("debsign", changes)
 			}
 			if *upload != "" {
-				ppaUpload(*workdir, *upload, *sshUser, []string{source, dsc, changes})
+				ppaUpload(*workdir, *upload, *sshUser, []string{source, dsc, changes, buildinfo})
 			}
 		}
 	}
@@ -567,8 +598,9 @@ type debPackage struct {
 }
 
 type debMetadata struct {
-	Env       build.Environment
-	GoVersion string
+	Env           build.Environment
+	GoBootPackage string
+	GoBootPath    string
 
 	PackageName string
 
@@ -597,20 +629,21 @@ func (d debExecutable) Package() string {
 	return d.BinaryName
 }
 
-func newDebMetadata(distro, gover, author string, env build.Environment, t time.Time, name string, version string, exes []debExecutable) debMetadata {
+func newDebMetadata(distro, goboot, author string, env build.Environment, t time.Time, name string, version string, exes []debExecutable) debMetadata {
 	if author == "" {
 		// No signing key, use default author.
 		author = "Ethereum Builds <fjl@ethereum.org>"
 	}
 	return debMetadata{
-		GoVersion:   gover,
-		PackageName: name,
-		Env:         env,
-		Author:      author,
-		Distro:      distro,
-		Version:     version,
-		Time:        t.Format(time.RFC1123Z),
-		Executables: exes,
+		GoBootPackage: goboot,
+		GoBootPath:    debGoBootPaths[goboot],
+		PackageName:   name,
+		Env:           env,
+		Author:        author,
+		Distro:        distro,
+		Version:       version,
+		Time:          t.Format(time.RFC1123Z),
+		Executables:   exes,
 	}
 }
 
@@ -675,7 +708,6 @@ func stageDebianSource(tmpdir string, meta debMetadata) (pkgdir string) {
 	if err := os.Mkdir(pkgdir, 0755); err != nil {
 		log.Fatal(err)
 	}
-
 	// Copy the source code.
 	build.MustRunCommand("git", "checkout-index", "-a", "--prefix", pkgdir+string(filepath.Separator))
 
@@ -693,7 +725,6 @@ func stageDebianSource(tmpdir string, meta debMetadata) (pkgdir string) {
 		build.Render("build/deb/"+meta.PackageName+"/deb.install", install, 0644, exe)
 		build.Render("build/deb/"+meta.PackageName+"/deb.docs", docs, 0644, exe)
 	}
-
 	return pkgdir
 }
 
