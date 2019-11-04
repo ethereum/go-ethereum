@@ -402,6 +402,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 			} else {
 				err := bc.repair(&newHeadBlock)
 				if err != nil {
+					log.Error("Failed to set head", "head", head, "err", err)
 					// Rewound block missing, rolled back to genesis
 					newHeadBlock = bc.genesisBlock
 				}
