@@ -316,14 +316,14 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 			log.Warn("Header broke chain ancestry", "number", header.Number, "hash", hash)
 			break
 		}
-		if !header.EmptyBody() {
-			// Make sure no duplicate requests are executed
-			if _, ok := q.blockTaskPool[hash]; ok {
-				log.Warn("Header already scheduled for block fetch", "number", header.Number, "hash", hash)
-			} else {
-				q.blockTaskPool[hash] = header
-				q.blockTaskQueue.Push(header, -int64(header.Number.Uint64()))
-			}
+		// Make sure no duplicate requests are executed
+		// We cannot skip this, even if the block is empty, since this is
+		// what triggers the fetchResult creation.
+		if _, ok := q.blockTaskPool[hash]; ok {
+			log.Warn("Header already scheduled for block fetch", "number", header.Number, "hash", hash)
+		} else {
+			q.blockTaskPool[hash] = header
+			q.blockTaskQueue.Push(header, -int64(header.Number.Uint64()))
 		}
 		// Queue for receipt retrieval
 		if q.mode == FastSync && !header.EmptyReceipts() {
