@@ -138,12 +138,12 @@ func rlpHash(x interface{}) (h common.Hash) {
 
 // EmptyBody returns true if there is no additional 'body' to complete the header
 // that is: no transactions and no uncles
-func (h *Header) EmptyBody() bool{
+func (h *Header) EmptyBody() bool {
 	return h.TxHash == EmptyRootHash && h.UncleHash == EmptyUncleHash
 }
 
 // EmptyReceipts returns true if there are no receipts for this header/block
-func (h *Header) EmptyReceipts() bool{
+func (h *Header) EmptyReceipts() bool {
 	return h.ReceiptHash == EmptyRootHash
 }
 

@@ -1191,7 +1191,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 	idle func() ([]*peerConnection, int), setIdle func(*peerConnection, int, time.Time), kind string) error {
 
 	// Create a ticker to detect expired retrieval tasks
-	ticker := time.NewTicker(200 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	update := make(chan struct{}, 1)
@@ -1328,7 +1328,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 				}
 				if throttle {
 					throttled = true
-					throttleBlockCounter.Inc(1)
+					throttleCounter.Inc(1)
 				}
 				if request != nil {
 					if request.From > 0 {

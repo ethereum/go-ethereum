@@ -19,7 +19,6 @@ package downloader
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 	"strings"
 	"sync"
@@ -735,7 +734,6 @@ func testBoundedHeavyForkedSync(t *testing.T, protocol int, mode SyncMode) {
 	if err := tester.sync("heavy-rewriter", nil, mode); err != errInvalidAncestor {
 		t.Fatalf("sync failure mismatch: have %v, want %v", err, errInvalidAncestor)
 	}
-	fmt.Printf("terminating\n")
 	tester.terminate()
 }
 

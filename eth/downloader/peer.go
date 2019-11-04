@@ -477,12 +477,6 @@ func (ps *peerSet) HeaderIdlePeers() ([]*peerConnection, int) {
 	return ps.idlePeers(62, 65, idle, throughput)
 }
 
-func fullyIdle(p *peerConnection) bool {
-	return atomic.LoadInt32(&p.blockIdle) == 0 &&
-		atomic.LoadInt32(&p.receiptIdle) == 0 &&
-		atomic.LoadInt32(&p.stateIdle) == 0
-}
-
 // BodyIdlePeers retrieves a flat list of all the currently body-idle peers within
 // the active peer set, ordered by their reputation.
 func (ps *peerSet) BodyIdlePeers() ([]*peerConnection, int) {

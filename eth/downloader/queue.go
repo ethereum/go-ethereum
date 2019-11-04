@@ -139,9 +139,8 @@ type queue struct {
 	receiptTaskQueue *prque.Prque                  // [eth/63] Priority queue of the headers to fetch the receipts for
 	receiptPendPool  map[string]*fetchRequest      // [eth/63] Currently pending receipt retrieval operations
 
-	resultCache *resultStore // Downloaded but not yet delivered fetch results
-	//resultOffset uint64             // Offset of the first cached fetch result in the block chain
-	resultSize common.StorageSize // Approximate size of a block (exponential moving average)
+	resultCache *resultStore       // Downloaded but not yet delivered fetch results
+	resultSize  common.StorageSize // Approximate size of a block (exponential moving average)
 
 	lock   *sync.RWMutex
 	active *sync.Cond
@@ -304,8 +303,6 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	// if the resultCache pushes back, we can stop trying to shove things in there for now
-	//var pushBack error
 	// Insert all the headers prioritised by the contained block number
 	inserts := make([]*types.Header, 0, len(headers))
 	for _, header := range headers {
@@ -319,49 +316,24 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 			log.Warn("Header broke chain ancestry", "number", header.Number, "hash", hash)
 			break
 		}
-		// Make sure no duplicate requests are executed
-		if _, ok := q.blockTaskPool[hash]; ok {
-			log.Warn("Header already scheduled for block fetch", "number", header.Number, "hash", hash)
-			continue
+		if !header.EmptyBody() {
+			// Make sure no duplicate requests are executed
+			if _, ok := q.blockTaskPool[hash]; ok {
+				log.Warn("Header already scheduled for block fetch", "number", header.Number, "hash", hash)
+			} else {
+				q.blockTaskPool[hash] = header
+				q.blockTaskQueue.Push(header, -int64(header.Number.Uint64()))
+			}
 		}
-		q.blockTaskPool[hash] = header
-		q.blockTaskQueue.Push(header, -int64(header.Number.Uint64()))
 		// Queue for receipt retrieval
-		if q.mode == FastSync {
+		if q.mode == FastSync && !header.EmptyReceipts() {
 			if _, ok := q.receiptTaskPool[hash]; ok {
 				log.Warn("Header already scheduled for receipt fetch", "number", header.Number, "hash", hash)
-				continue
+			} else {
+				q.receiptTaskPool[hash] = header
+				q.receiptTaskQueue.Push(header, -int64(header.Number.Uint64()))
 			}
-			q.receiptTaskPool[hash] = header
-			q.receiptTaskQueue.Push(header, -int64(header.Number.Uint64()))
 		}
-		//var bodyNeeded = !header.EmptyBody()
-		//var receiptNeeded = q.mode == FastSync && !header.EmptyReceipts()
-
-		//if pushBack == nil {
-		//	bodyNeeded, receiptNeeded, _, pushBack = q.resultCache.AddFetch(header, q.mode == FastSync)
-		//}
-		//if !receiptNeeded {
-		//	bodyNeeded = true
-		//}
-		// Queue for body retrieval - unless empty block
-		//if bodyNeeded {
-		//	q.blockTaskPool[hash] = header
-		//	q.blockTaskQueue.Push(header, -int64(header.Number.Uint64()))
-		//} else { // otherwise, straight to done
-		//	q.blockDonePool[hash] = struct{}{}
-		//}
-		//if receiptNeeded {
-		//	// Queue for receipt retrieval
-		//	if _, ok := q.receiptTaskPool[hash]; ok {
-		//		log.Warn("Header already scheduled for receipt fetch", "number", header.Number, "hash", hash)
-		//		continue
-		//	}
-		//	q.receiptTaskPool[hash] = header
-		//	q.receiptTaskQueue.Push(header, -int64(header.Number.Uint64()))
-		//} else { // done already
-		//	q.receiptDonePool[hash] = struct{}{}
-		//}
 		inserts = append(inserts, header)
 		q.headerHead = hash
 		from++
