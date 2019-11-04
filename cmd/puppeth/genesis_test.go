@@ -76,7 +76,7 @@ func TestParitySturebyConverter(t *testing.T) {
 	if err := json.Unmarshal(blob, &genesis); err != nil {
 		t.Fatalf("failed parsing genesis: %v", err)
 	}
-	spec, err := newParityChainSpec("Stureby", &genesis, []string{})
+	spec, err := newParityChainSpec("stureby", &genesis, []string{})
 	if err != nil {
 		t.Fatalf("failed creating chainspec: %v", err)
 	}
