@@ -58,6 +58,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/internal/build"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -138,7 +139,18 @@ var (
 	// Note: zesty is unsupported because it was officially deprecated on Launchpad.
 	// Note: artful is unsupported because it was officially deprecated on Launchpad.
 	// Note: cosmic is unsupported because it was officially deprecated on Launchpad.
-	debDistros = []string{"trusty", "xenial", "bionic", "disco", "eoan"}
+	debDistroGoBoots = map[string]string{
+		"trusty": "golang-1.11",
+		"xenial": "golang-go",
+		"bionic": "golang-go",
+		"disco":  "golang-go",
+		"eoan":   "golang-go",
+	}
+
+	debGoBootPaths = map[string]string{
+		"golang-1.11": "/usr/lib/go-1.11",
+		"golang-go":   "/usr/lib/go",
+	}
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -459,11 +471,14 @@ func maybeSkipArchive(env build.Environment) {
 // Debian Packaging
 func doDebianSource(cmdline []string) {
 	var (
-		signer  = flag.String("signer", "", `Signing key name, also used as package author`)
-		upload  = flag.String("upload", "", `Where to upload the source package (usually "ethereum/ethereum")`)
-		sshUser = flag.String("sftp-user", "", `Username for SFTP upload (usually "geth-ci")`)
-		workdir = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
-		now     = time.Now()
+		goversion = flag.String("goversion", "", `Go version to build with (will be included in the source package)`)
+		gobundle  = flag.String("gobundle", "/tmp/go.tar.gz", `Filesystem path to cache the downloaded Go bundles at`)
+		gohash    = flag.String("gohash", "", `SHA256 checksum of the Go sources requested to build with`)
+		signer    = flag.String("signer", "", `Signing key name, also used as package author`)
+		upload    = flag.String("upload", "", `Where to upload the source package (usually "ethereum/ethereum")`)
+		sshUser   = flag.String("sftp-user", "", `Username for SFTP upload (usually "geth-ci")`)
+		workdir   = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
+		now       = time.Now()
 	)
 	flag.CommandLine.Parse(cmdline)
 	*workdir = makeWorkdir(*workdir)
@@ -476,12 +491,25 @@ func doDebianSource(cmdline []string) {
 		gpg.Stdin = bytes.NewReader(key)
 		build.MustRun(gpg)
 	}
-
+	// Download and verify the Go source package
+	if err := build.EnsureGoSources(*goversion, hexutil.MustDecode("0x"+*gohash), *gobundle); err != nil {
+		log.Fatalf("Failed to ensure Go source package: %v", err)
+	}
 	// Create Debian packages and upload them
 	for _, pkg := range debPackages {
-		for _, distro := range debDistros {
-			meta := newDebMetadata(distro, *signer, env, now, pkg.Name, pkg.Version, pkg.Executables)
+		for distro, goboot := range debDistroGoBoots {
+			// Prepare the debian package with the go-ethereum sources
+			meta := newDebMetadata(distro, goboot, *signer, env, now, pkg.Name, pkg.Version, pkg.Executables)
 			pkgdir := stageDebianSource(*workdir, meta)
+
+			// Ship the Go sources along so we have a proper thing to build with
+			if err := build.ExtractTarballArchive(*gobundle, pkgdir); err != nil {
+				log.Fatalf("Failed to extract Go sources: %v", err)
+			}
+			if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, ".go")); err != nil {
+				log.Fatalf("Failed to rename Go source folder: %v", err)
+			}
+			// Run the packaging and upload to the PPA
 			debuild := exec.Command("debuild", "-S", "-sa", "-us", "-uc", "-d", "-Zxz")
 			debuild.Dir = pkgdir
 			build.MustRun(debuild)
@@ -561,7 +589,9 @@ type debPackage struct {
 }
 
 type debMetadata struct {
-	Env build.Environment
+	Env           build.Environment
+	GoBootPackage string
+	GoBootPath    string
 
 	PackageName string
 
@@ -590,19 +620,21 @@ func (d debExecutable) Package() string {
 	return d.BinaryName
 }
 
-func newDebMetadata(distro, author string, env build.Environment, t time.Time, name string, version string, exes []debExecutable) debMetadata {
+func newDebMetadata(distro, goboot, author string, env build.Environment, t time.Time, name string, version string, exes []debExecutable) debMetadata {
 	if author == "" {
 		// No signing key, use default author.
 		author = "Ethereum Builds <fjl@ethereum.org>"
 	}
 	return debMetadata{
-		PackageName: name,
-		Env:         env,
-		Author:      author,
-		Distro:      distro,
-		Version:     version,
-		Time:        t.Format(time.RFC1123Z),
-		Executables: exes,
+		GoBootPackage: goboot,
+		GoBootPath:    debGoBootPaths[goboot],
+		PackageName:   name,
+		Env:           env,
+		Author:        author,
+		Distro:        distro,
+		Version:       version,
+		Time:          t.Format(time.RFC1123Z),
+		Executables:   exes,
 	}
 }
 
@@ -667,7 +699,6 @@ func stageDebianSource(tmpdir string, meta debMetadata) (pkgdir string) {
 	if err := os.Mkdir(pkgdir, 0755); err != nil {
 		log.Fatal(err)
 	}
-
 	// Copy the source code.
 	build.MustRunCommand("git", "checkout-index", "-a", "--prefix", pkgdir+string(filepath.Separator))
 
@@ -685,7 +716,6 @@ func stageDebianSource(tmpdir string, meta debMetadata) (pkgdir string) {
 		build.Render("build/deb/"+meta.PackageName+"/deb.install", install, 0644, exe)
 		build.Render("build/deb/"+meta.PackageName+"/deb.docs", docs, 0644, exe)
 	}
-
 	return pkgdir
 }
 
