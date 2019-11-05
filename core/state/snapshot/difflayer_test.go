@@ -18,6 +18,7 @@ package snapshot
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -346,4 +347,366 @@ func BenchmarkJournal(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		layer.Journal(new(bytes.Buffer))
 	}
+}
+
+// TestIteratorBasics tests some simple single-layer iteration
+func TestIteratorBasics(t *testing.T) {
+	var (
+		accounts = make(map[common.Hash][]byte)
+		storage  = make(map[common.Hash]map[common.Hash][]byte)
+	)
+	// Fill up a parent
+	for i := 0; i < 100; i++ {
+		h := randomHash()
+		data := randomAccount()
+		accounts[h] = data
+		if rand.Intn(20) < 10 {
+			accStorage := make(map[common.Hash][]byte)
+			value := make([]byte, 32)
+			rand.Read(value)
+			accStorage[randomHash()] = value
+			storage[h] = accStorage
+		}
+	}
+	// Add some (identical) layers on top
+	parent := newDiffLayer(emptyLayer{}, common.Hash{}, accounts, storage)
+	it := parent.newIterator()
+	verifyIterator(t, 100, it)
+}
+
+type testIterator struct {
+	values []byte
+}
+
+func newTestIterator(values ...byte) *testIterator {
+	return &testIterator{values}
+}
+func (ti *testIterator) Next() bool {
+	ti.values = ti.values[1:]
+	if len(ti.values) == 0 {
+		return false
+	}
+	return true
+}
+
+func (ti *testIterator) Key() common.Hash {
+	return common.BytesToHash([]byte{ti.values[0]})
+}
+
+func (ti *testIterator) Seek(common.Hash) {
+	panic("implement me")
+}
+
+func TestFastIteratorBasics(t *testing.T) {
+	type testCase struct {
+		lists   [][]byte
+		expKeys []byte
+	}
+	for i, tc := range []testCase{
+		{lists: [][]byte{{0, 1, 8}, {1, 2, 8}, {2, 9}, {4},
+			{7, 14, 15}, {9, 13, 15, 16}},
+			expKeys: []byte{0, 1, 2, 4, 7, 8, 9, 13, 14, 15, 16}},
+		{lists: [][]byte{{0, 8}, {1, 2, 8}, {7, 14, 15}, {8, 9},
+			{9, 10}, {10, 13, 15, 16}},
+			expKeys: []byte{0, 1, 2, 7, 8, 9, 10, 13, 14, 15, 16}},
+	} {
+		var iterators []Iterator
+		for _, data := range tc.lists {
+			iterators = append(iterators, newTestIterator(data...))
+
+		}
+		fi := &fastIterator{
+			iterators: iterators,
+			initiated: false,
+		}
+		count := 0
+		for fi.Next() {
+			if got, exp := fi.Key()[31], tc.expKeys[count]; exp != got {
+				t.Errorf("tc %d, [%d]: got %d exp %d", i, count, got, exp)
+			}
+			count++
+		}
+	}
+}
+
+func verifyIterator(t *testing.T, expCount int, it Iterator) {
+	var (
+		i    = 0
+		last = common.Hash{}
+	)
+	for it.Next() {
+		v := it.Key()
+		if bytes.Compare(last[:], v[:]) >= 0 {
+			t.Errorf("Wrong order:\n%x \n>=\n%x", last, v)
+		}
+		i++
+	}
+	if i != expCount {
+		t.Errorf("iterator len wrong, expected %d, got %d", expCount, i)
+	}
+}
+
+// TestIteratorTraversal tests some simple multi-layer iteration
+func TestIteratorTraversal(t *testing.T) {
+	var (
+		storage = make(map[common.Hash]map[common.Hash][]byte)
+	)
+
+	mkAccounts := func(args ...string) map[common.Hash][]byte {
+		accounts := make(map[common.Hash][]byte)
+		for _, h := range args {
+			accounts[common.HexToHash(h)] = randomAccount()
+		}
+		return accounts
+	}
+	// entries in multiple layers should only become output once
+	parent := newDiffLayer(emptyLayer{}, common.Hash{},
+		mkAccounts("0xaa", "0xee", "0xff", "0xf0"), storage)
+
+	child := parent.Update(common.Hash{},
+		mkAccounts("0xbb", "0xdd", "0xf0"), storage)
+
+	child = child.Update(common.Hash{},
+		mkAccounts("0xcc", "0xf0", "0xff"), storage)
+
+	// single layer iterator
+	verifyIterator(t, 3, child.newIterator())
+	// multi-layered binary iterator
+	verifyIterator(t, 7, child.newBinaryIterator())
+	// multi-layered fast iterator
+	verifyIterator(t, 7, child.newFastIterator())
+}
+
+func TestIteratorLargeTraversal(t *testing.T) {
+	// This testcase is a bit notorious -- all layers contain the exact
+	// same 200 accounts.
+	var storage = make(map[common.Hash]map[common.Hash][]byte)
+	mkAccounts := func(num int) map[common.Hash][]byte {
+		accounts := make(map[common.Hash][]byte)
+		for i := 0; i < num; i++ {
+			h := common.Hash{}
+			binary.BigEndian.PutUint64(h[:], uint64(i+1))
+			accounts[h] = randomAccount()
+		}
+		return accounts
+	}
+	parent := newDiffLayer(emptyLayer{}, common.Hash{},
+		mkAccounts(200), storage)
+	child := parent.Update(common.Hash{},
+		mkAccounts(200), storage)
+	for i := 2; i < 100; i++ {
+		child = child.Update(common.Hash{},
+			mkAccounts(200), storage)
+	}
+	// single layer iterator
+	verifyIterator(t, 200, child.newIterator())
+	// multi-layered binary iterator
+	verifyIterator(t, 200, child.newBinaryIterator())
+	// multi-layered fast iterator
+	verifyIterator(t, 200, child.newFastIterator())
+}
+
+// BenchmarkIteratorTraversal is a bit a bit notorious -- all layers contain the exact
+// same 200 accounts. That means that we need to process 2000 items, but only
+// spit out 200 values eventually.
+//
+//BenchmarkIteratorTraversal/binary_iterator-6         	    2008	    573290 ns/op	    9520 B/op	     199 allocs/op
+//BenchmarkIteratorTraversal/fast_iterator-6           	    1946	    575596 ns/op	   20146 B/op	     134 allocs/op
+func BenchmarkIteratorTraversal(b *testing.B) {
+
+	var storage = make(map[common.Hash]map[common.Hash][]byte)
+
+	mkAccounts := func(num int) map[common.Hash][]byte {
+		accounts := make(map[common.Hash][]byte)
+		for i := 0; i < num; i++ {
+			h := common.Hash{}
+			binary.BigEndian.PutUint64(h[:], uint64(i+1))
+			accounts[h] = randomAccount()
+		}
+		return accounts
+	}
+	parent := newDiffLayer(emptyLayer{}, common.Hash{},
+		mkAccounts(200), storage)
+
+	child := parent.Update(common.Hash{},
+		mkAccounts(200), storage)
+
+	for i := 2; i < 100; i++ {
+		child = child.Update(common.Hash{},
+			mkAccounts(200), storage)
+
+	}
+	// We call this once before the benchmark, so the creation of
+	// sorted accountlists are not included in the results.
+	child.newBinaryIterator()
+	b.Run("binary iterator", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			got := 0
+			it := child.newBinaryIterator()
+			for it.Next() {
+				got++
+			}
+			if exp := 200; got != exp {
+				b.Errorf("iterator len wrong, expected %d, got %d", exp, got)
+			}
+		}
+	})
+	b.Run("fast iterator", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			got := 0
+			it := child.newFastIterator()
+			for it.Next() {
+				got++
+			}
+			if exp := 200; got != exp {
+				b.Errorf("iterator len wrong, expected %d, got %d", exp, got)
+			}
+		}
+	})
+}
+
+// BenchmarkIteratorLargeBaselayer is a pretty realistic benchmark, where
+// the baselayer is a lot larger than the upper layer.
+//
+// This is heavy on the binary iterator, which in most cases will have to
+// call recursively 100 times for the majority of the values
+//
+// BenchmarkIteratorLargeBaselayer/binary_iterator-6    	     585	   2067377 ns/op	    9520 B/op	     199 allocs/op
+// BenchmarkIteratorLargeBaselayer/fast_iterator-6      	   13198	     91043 ns/op	    8601 B/op	     118 allocs/op
+func BenchmarkIteratorLargeBaselayer(b *testing.B) {
+	var storage = make(map[common.Hash]map[common.Hash][]byte)
+
+	mkAccounts := func(num int) map[common.Hash][]byte {
+		accounts := make(map[common.Hash][]byte)
+		for i := 0; i < num; i++ {
+			h := common.Hash{}
+			binary.BigEndian.PutUint64(h[:], uint64(i+1))
+			accounts[h] = randomAccount()
+		}
+		return accounts
+	}
+
+	parent := newDiffLayer(emptyLayer{}, common.Hash{},
+		mkAccounts(2000), storage)
+
+	child := parent.Update(common.Hash{},
+		mkAccounts(20), storage)
+
+	for i := 2; i < 100; i++ {
+		child = child.Update(common.Hash{},
+			mkAccounts(20), storage)
+
+	}
+	// We call this once before the benchmark, so the creation of
+	// sorted accountlists are not included in the results.
+	child.newBinaryIterator()
+	b.Run("binary iterator", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			got := 0
+			it := child.newBinaryIterator()
+			for it.Next() {
+				got++
+			}
+			if exp := 2000; got != exp {
+				b.Errorf("iterator len wrong, expected %d, got %d", exp, got)
+			}
+		}
+	})
+	b.Run("fast iterator", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			got := 0
+			it := child.newFastIterator()
+			for it.Next() {
+				got++
+			}
+			if exp := 2000; got != exp {
+				b.Errorf("iterator len wrong, expected %d, got %d", exp, got)
+			}
+		}
+	})
+}
+
+// TestIteratorFlatting tests what happens when we
+// - have a live iterator on child C (parent C1 -> C2 .. CN)
+// - flattens C2 all the way into CN
+// - continues iterating
+// Right now, this "works" simply because the keys do not change -- the
+// iterator is not aware that a layer has become stale. This naive
+// solution probably won't work in the long run, however
+func TestIteratorFlattning(t *testing.T) {
+	var (
+		storage = make(map[common.Hash]map[common.Hash][]byte)
+	)
+	mkAccounts := func(args ...string) map[common.Hash][]byte {
+		accounts := make(map[common.Hash][]byte)
+		for _, h := range args {
+			accounts[common.HexToHash(h)] = randomAccount()
+		}
+		return accounts
+	}
+	// entries in multiple layers should only become output once
+	parent := newDiffLayer(emptyLayer{}, common.Hash{},
+		mkAccounts("0xaa", "0xee", "0xff", "0xf0"), storage)
+
+	child := parent.Update(common.Hash{},
+		mkAccounts("0xbb", "0xdd", "0xf0"), storage)
+
+	child = child.Update(common.Hash{},
+		mkAccounts("0xcc", "0xf0", "0xff"), storage)
+
+	it := child.newFastIterator()
+	child.parent.(*diffLayer).flatten()
+	// The parent should now be stale
+	verifyIterator(t, 7, it)
+}
+
+func TestIteratorSeek(t *testing.T) {
+	storage := make(map[common.Hash]map[common.Hash][]byte)
+	mkAccounts := func(args ...string) map[common.Hash][]byte {
+		accounts := make(map[common.Hash][]byte)
+		for _, h := range args {
+			accounts[common.HexToHash(h)] = randomAccount()
+		}
+		return accounts
+	}
+	parent := newDiffLayer(emptyLayer{}, common.Hash{},
+		mkAccounts("0xaa", "0xee", "0xff", "0xf0"), storage)
+	it := parent.newIterator()
+	// expected: ee, f0, ff
+	it.Seek(common.HexToHash("0xdd"))
+	verifyIterator(t, 3, it)
+
+	it = parent.newIterator().(*dlIterator)
+	// expected: ee, f0, ff
+	it.Seek(common.HexToHash("0xaa"))
+	verifyIterator(t, 3, it)
+
+	it = parent.newIterator().(*dlIterator)
+	// expected: nothing
+	it.Seek(common.HexToHash("0xff"))
+	verifyIterator(t, 0, it)
+
+	child := parent.Update(common.Hash{},
+		mkAccounts("0xbb", "0xdd", "0xf0"), storage)
+
+	child = child.Update(common.Hash{},
+		mkAccounts("0xcc", "0xf0", "0xff"), storage)
+
+	it = child.newFastIterator()
+	// expected: cc, dd, ee, f0, ff
+	it.Seek(common.HexToHash("0xbb"))
+	verifyIterator(t, 5, it)
+
+	it = child.newFastIterator()
+	it.Seek(common.HexToHash("0xef"))
+	// exp: f0, ff
+	verifyIterator(t, 2, it)
+
+	it = child.newFastIterator()
+	it.Seek(common.HexToHash("0xf0"))
+	verifyIterator(t, 1, it)
+
+	it.Seek(common.HexToHash("0xff"))
+	verifyIterator(t, 0, it)
+
 }
