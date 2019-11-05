@@ -7,7 +7,7 @@ type Span struct {
 	EndBlock   uint64 `json:"end_block" yaml:"end_block"`
 }
 
-// HeimdallSpan represents
+// HeimdallSpan represents span from heimdall APIs
 type HeimdallSpan struct {
 	Span
 	ValidatorSet      ValidatorSet `json:"validator_set" yaml:"validator_set"`

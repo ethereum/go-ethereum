@@ -118,50 +118,6 @@ func (s *Snapshot) copy() *Snapshot {
 	return cpy
 }
 
-// // validVote returns whether it makes sense to cast the specified vote in the
-// // given snapshot context (e.g. don't try to add an already authorized signer).
-// func (s *Snapshot) validVote(address common.Address, authorize bool) bool {
-// 	_, signer := s.Signers[address]
-// 	return (signer && !authorize) || (!signer && authorize)
-// }
-
-// // cast adds a new vote into the tally.
-// func (s *Snapshot) cast(address common.Address, authorize bool) bool {
-// 	// Ensure the vote is meaningful
-// 	if !s.validVote(address, authorize) {
-// 		return false
-// 	}
-// 	// Cast the vote into an existing or new tally
-// 	if old, ok := s.Tally[address]; ok {
-// 		old.Votes++
-// 		s.Tally[address] = old
-// 	} else {
-// 		s.Tally[address] = Tally{Authorize: authorize, Votes: 1}
-// 	}
-// 	return true
-// }
-
-// // uncast removes a previously cast vote from the tally.
-// func (s *Snapshot) uncast(address common.Address, authorize bool) bool {
-// 	// If there's no tally, it's a dangling vote, just drop
-// 	tally, ok := s.Tally[address]
-// 	if !ok {
-// 		return false
-// 	}
-// 	// Ensure we only revert counted votes
-// 	if tally.Authorize != authorize {
-// 		return false
-// 	}
-// 	// Otherwise revert the vote
-// 	if tally.Votes > 1 {
-// 		tally.Votes--
-// 		s.Tally[address] = tally
-// 	} else {
-// 		delete(s.Tally, address)
-// 	}
-// 	return true
-// }
-
 func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 	// Allow passing in no headers for cleaner code
 	if len(headers) == 0 {
@@ -220,9 +176,6 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		validators := snap.ValidatorSet.Validators
 		// proposer will be the last signer if block is not epoch block
 		proposer := snap.ValidatorSet.GetProposer().Address
-		// if number%s.config.Sprint != 0 {
-		// 	proposer = snap.Recents[number-1]
-		// }
 		proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
 		signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
 		limit := len(validators) - (len(validators)/2 + 1)
@@ -268,11 +221,6 @@ func (s *Snapshot) inturn(number uint64, signer common.Address, epoch uint64) ui
 	proposer := s.ValidatorSet.GetProposer().Address
 	totalValidators := len(validators)
 
-	// proposer will be the last signer if block is not epoch block
-	// proposer := snap.ValidatorSet.GetProposer().Address
-	// if number%epoch != 0 {
-	// 	proposer = snap.Recents[number-1]
-	// }
 	proposerIndex, _ := s.ValidatorSet.GetByAddress(proposer)
 	signerIndex, _ := s.ValidatorSet.GetByAddress(signer)
 
@@ -283,21 +231,4 @@ func (s *Snapshot) inturn(number uint64, signer common.Address, epoch uint64) ui
 	}
 
 	return uint64(totalValidators - (tempIndex - proposerIndex))
-
-	// signers, offset := s.signers(), 0
-	// for offset < len(signers) && signers[offset] != signer {
-	// 	offset++
-	// }
-	// return ((number / producerPeriod) % uint64(len(signers))) == uint64(offset)
-
-	// // if block is epoch start block, proposer will be inturn signer
-	// if s.Number%epoch == 0 {
-	// 	if bytes.Compare(proposer.Address.Bytes(), signer.Bytes()) == 0 {
-	// 		return true
-	// 	}
-	// 	// if block is not epoch block, last block signer will be inturn
-	// } else if bytes.Compare(lastSigner.Bytes(), signer.Bytes()) == 0 {
-	// 	return false
-	// }
-	// return false
 }

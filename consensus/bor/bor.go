@@ -206,16 +206,9 @@ func CalcDifficulty(snap *Snapshot, signer common.Address, epoch uint64) *big.In
 
 // CalcProducerDelay is the producer delay algorithm based on block time.
 func CalcProducerDelay(snap *Snapshot, signer common.Address, period uint64, epoch uint64, producerDelay uint64) uint64 {
-	// lastSigner := snap.Recents[snap.Number]
-	// proposer := snap.ValidatorSet.GetProposer()
-
 	// if block is epoch start block, proposer will be inturn signer
 	if (snap.Number+1)%epoch == 0 {
 		return producerDelay
-
-		// if block is not epoch block, last block signer will be inturn
-		// } else if bytes.Compare(lastSigner.Bytes(), signer.Bytes()) != 0 {
-		// return producerDelay
 	}
 
 	return period
@@ -473,7 +466,10 @@ func (c *Bor) snapshot(chain consensus.ChainReader, number uint64, hash common.H
 				hash := checkpoint.Hash()
 
 				// get validators and current span
-				validators, _ := c.GetCurrentValidators(number, number+1)
+				validators, err := c.GetCurrentValidators(number, number+1)
+				if err != nil {
+					return nil, err
+				}
 
 				// new snap shot
 				snap = newSnapshot(c.config, c.signatures, number, hash, validators, c.ethAPI)
@@ -672,13 +668,13 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 		// check and commit span
 		if err := c.checkAndCommitSpan(state, header, cx); err != nil {
 			fmt.Println("Error while committing span", err)
-			// return nil, err
+			return
 		}
 
 		// commit statees
 		if err := c.CommitStates(state, header, cx); err != nil {
 			fmt.Println("Error while committing states", err)
-			// return nil, err
+			return
 		}
 	}
 
@@ -698,7 +694,7 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Hea
 		err := c.checkAndCommitSpan(state, header, cx)
 		if err != nil {
 			fmt.Println("Error while committing span", err)
-			// return nil, err
+			return nil, err
 		}
 
 		// commit statees
@@ -990,7 +986,7 @@ func (c *Bor) checkAndCommitSpan(
 	header *types.Header,
 	chain core.ChainContext,
 ) error {
-	var pending bool = false
+	pending := false
 	var span *Span = nil
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -1006,8 +1002,6 @@ func (c *Bor) checkAndCommitSpan(
 	}()
 
 	wg.Wait()
-
-	fmt.Println("Span", span.ID, span.StartBlock, span.EndBlock, "number", header.Number, "needToCommitSpan", c.needToCommitSpan(span, header))
 
 	// commit span if there is new span pending or span is ending or end block is not set
 	if pending || c.needToCommitSpan(span, header) {
