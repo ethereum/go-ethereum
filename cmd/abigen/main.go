@@ -103,6 +103,10 @@ var (
 		Usage: "Destination language for the bindings (go, java, objc)",
 		Value: "go",
 	}
+	aliasFlag = cli.StringFlag{
+		Name:  "alias",
+		Usage: "Comma separated aliases for function and event renaming, e.g. foo=bar",
+	}
 )
 
 func init() {
@@ -120,6 +124,7 @@ func init() {
 		pkgFlag,
 		outFlag,
 		langFlag,
+		aliasFlag,
 	}
 	app.Action = utils.MigrateFlags(abigen)
 	cli.CommandHelpTemplate = commandHelperTemplate
@@ -144,11 +149,12 @@ func abigen(c *cli.Context) error {
 	}
 	// If the entire solidity code was specified, build and bind based on that
 	var (
-		abis  []string
-		bins  []string
-		types []string
-		sigs  []map[string]string
-		libs  = make(map[string]string)
+		abis    []string
+		bins    []string
+		types   []string
+		sigs    []map[string]string
+		libs    = make(map[string]string)
+		aliases = make(map[string]string)
 	)
 	if c.GlobalString(abiFlag.Name) != "" {
 		// Load up the ABI, optional bytecode and type name from the parameters
@@ -232,8 +238,28 @@ func abigen(c *cli.Context) error {
 			libs[libPattern] = nameParts[len(nameParts)-1]
 		}
 	}
+	// Extract all aliases from the flags
+	if c.GlobalIsSet(aliasFlag.Name) {
+		v := strings.Split(c.GlobalString(aliasFlag.Name), ",")
+		for _, alias := range v {
+			// We support multi-versions for aliasing
+			// e.g.
+			//      foo=bar
+			//      foo:bar
+			index := strings.Index(alias, ":")
+			if index == -1 {
+				index = strings.Index(alias, "=")
+			}
+			// Filter out invalid aliasing
+			if index == -1 || index == 0 || index == len(alias)-1 {
+				continue
+			}
+			aliases[alias[:index]] = alias[index+1:] // Add to the aliasing map
+		}
+	}
+
 	// Generate the contract binding
-	code, err := bind.Bind(types, abis, bins, sigs, c.GlobalString(pkgFlag.Name), lang, libs)
+	code, err := bind.Bind(types, abis, bins, sigs, c.GlobalString(pkgFlag.Name), lang, libs, aliases)
 	if err != nil {
 		utils.Fatalf("Failed to generate ABI binding: %v", err)
 	}

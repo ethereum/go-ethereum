@@ -47,7 +47,7 @@ const (
 // to be used as is in client code, but rather as an intermediate struct which
 // enforces compile time type safety and naming convention opposed to having to
 // manually maintain hard coded strings that break on runtime.
-func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, lang Lang, libs map[string]string) (string, error) {
+func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, lang Lang, libs map[string]string, aliases map[string]string) (string, error) {
 	// Process each individual contract requested binding
 	contracts := make(map[string]*tmplContract)
 
@@ -78,7 +78,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		for _, original := range evmABI.Methods {
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
 			normalized := original
-			normalized.Name = methodNormalizer[lang](original.Name)
+			normalized.Name = methodNormalizer[lang](alias(aliases, original.Name))
 
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)
@@ -114,7 +114,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			}
 			// Normalize the event for capital cases and non-anonymous outputs
 			normalized := original
-			normalized.Name = methodNormalizer[lang](original.Name)
+			normalized.Name = methodNormalizer[lang](alias(aliases, original.Name))
 
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)
@@ -481,6 +481,19 @@ func namedTypeJava(javaKind string, solKind abi.Type) string {
 			return javaKind
 		}
 	}
+}
+
+// alias returns an alias of the given string based on the aliasing rules
+// or returns itself if no rule is matched.
+func alias(aliases map[string]string, n string) string {
+	// Short circuit if aliasing rule is empty
+	if aliases == nil {
+		return n
+	}
+	if alias, exist := aliases[n]; exist {
+		return alias
+	}
+	return n
 }
 
 // methodNormalizer is a name transformer that modifies Solidity method names to
