@@ -48,7 +48,7 @@ currently uses to store all its databases.
 
 ```javascript
 > admin.datadir
-"/home/karalabe/.ethereum"
+"/home/john/.ethereum"
 ```
 
 ### admin_nodeInfo
