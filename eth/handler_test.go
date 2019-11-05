@@ -21,7 +21,6 @@ import (
 	"math"
 	"math/big"
 	"math/rand"
-	"runtime"
 	"testing"
 	"time"
 
@@ -609,13 +608,7 @@ func testBroadcastBlock(t *testing.T, totalPeers, broadcastExpected int) {
 			}
 		}(peer)
 	}
-	var timeoutMs time.Duration
-	if runtime.GOARCH == "arm64" {
-		timeoutMs = time.Second
-	} else {
-		timeoutMs = 300 * time.Millisecond
-	}
-	timeout := time.After(timeoutMs)
+	timeout := time.After(time.Second)
 	var receivedCount int
 outer:
 	for {

@@ -46,18 +46,9 @@ jobs:
       arch: arm64
       dist: xenial
       go: 1.13.x
-      env:
-        - GODEBUG="netdns=go+1"
       script:
-        - echo "test dns"
-        - cat /etc/resolv.conf
-        - ping -c 4 8.8.8.8
-        - ping -c 4 8.8.4.4
-        - ping -c 4 1.1.1.1
-        - ip address
-        - go test -v ./investigate/...
         - go run build/ci.go install
-        - go run build/ci.go test -coverage ./p2p/enode/...
+        - go run build/ci.go test -coverage $TEST_PACKAGES
 
     - stage: build
       os: osx

@@ -71,12 +71,14 @@ func MustParseV4(rawurl string) *Node {
 //    enode://<hex node id>@10.3.58.6:30303?discport=30301
 func ParseV4(rawurl string) (*Node, error) {
 	if m := incompleteNodeURL.FindStringSubmatch(rawurl); m != nil {
+		fmt.Println("m != nil")
 		id, err := parsePubkey(m[1])
 		if err != nil {
 			return nil, fmt.Errorf("invalid public key (%v)", err)
 		}
 		return NewV4(id, nil, 0, 0), nil
 	}
+	fmt.Println("parse complete")
 	return parseComplete(rawurl)
 }
 
