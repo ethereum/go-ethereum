@@ -141,29 +141,6 @@ protocols (e.g. `eth`, `les`, `shh`, `bzz`).
 }]
 ```
 
-### admin_setSolc
-
-The `setSolc` administrative method sets the Solidity compiler path to be used by the node when
-invoking the `eth_compileSolidity` RPC method. The Solidity compiler path defaults to `/usr/bin/solc`
-if not set, so you only need to change it for using a non-standard compiler location.
-
-The method accepts an absolute path to the Solidity compiler to use (specifying a relative path
-would depend on the current – to the user unknown – working directory of Geth), and returns the
-version string reported by `solc --version`.
-
-| Client  | Method invocation                               |
-|:--------|-------------------------------------------------|
-| Go      | `admin.SetSolc(path string) (string, error`)    |
-| Console | `admin.setSolc(path)`                           |
-| RPC     | `{"method": "admin_setSolc", "params": [path]}` |
-
-#### Example
-
-```javascript
-> admin.setSolc("/usr/bin/solc")
-"solc, the solidity compiler commandline interface\nVersion: 0.3.2-0/Release-Linux/g++/Interpreter\n\npath: /usr/bin/solc"
-```
-
 ### admin_startRPC
 
 The `startRPC` administrative method starts an HTTP based [JSON RPC](http://www.jsonrpc.org/specification)
