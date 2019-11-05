@@ -50,7 +50,6 @@ import (
 	"go/token"
 	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -59,9 +58,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/internal/build"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/mholt/archiver"
 )
 
 var (
@@ -472,7 +471,9 @@ func maybeSkipArchive(env build.Environment) {
 // Debian Packaging
 func doDebianSource(cmdline []string) {
 	var (
-		goversion = flag.String("goversion", "", `Go version to build with (will be included in the src package)`)
+		goversion = flag.String("goversion", "", `Go version to build with (will be included in the source package)`)
+		gobundle  = flag.String("gobundle", "/tmp/go.tar.gz", `Filesystem path to cache the downloaded Go bundles at`)
+		gohash    = flag.String("gohash", "", `SHA256 checksum of the Go sources requested to build with`)
 		signer    = flag.String("signer", "", `Signing key name, also used as package author`)
 		upload    = flag.String("upload", "", `Where to upload the source package (usually "ethereum/ethereum")`)
 		sshUser   = flag.String("sftp-user", "", `Username for SFTP upload (usually "geth-ci")`)
@@ -491,18 +492,8 @@ func doDebianSource(cmdline []string) {
 		build.MustRun(gpg)
 	}
 	// Download and verify the Go source package
-	res, err := http.Get(fmt.Sprintf("https://dl.google.com/go/go%s.src.tar.gz", *goversion))
-	if err != nil || res.StatusCode != http.StatusOK {
-		log.Fatalf("Failed to access Go sources: code %d, err %v", res.StatusCode, err)
-	}
-	defer res.Body.Close()
-
-	tarball, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		log.Fatalf("Failed to read Go sources: %v", err)
-	}
-	if err := ioutil.WriteFile(filepath.Join(*workdir, "go.tar.gz"), tarball, 0600); err != nil {
-		log.Fatalf("Failed to save Go sources: %v", err)
+	if err := build.EnsureGoSources(*goversion, hexutil.MustDecode("0x"+*gohash), *gobundle); err != nil {
+		log.Fatalf("Failed to ensure Go source package: %v", err)
 	}
 	// Create Debian packages and upload them
 	for _, pkg := range debPackages {
@@ -512,7 +503,7 @@ func doDebianSource(cmdline []string) {
 			pkgdir := stageDebianSource(*workdir, meta)
 
 			// Ship the Go sources along so we have a proper thing to build with
-			if err := archiver.Unarchive(filepath.Join(*workdir, "go.tar.gz"), pkgdir); err != nil {
+			if err := build.ExtractTarballArchive(*gobundle, pkgdir); err != nil {
 				log.Fatalf("Failed to extract Go sources: %v", err)
 			}
 			if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, ".go")); err != nil {
@@ -533,7 +524,7 @@ func doDebianSource(cmdline []string) {
 				build.MustRunCommand("debsign", changes)
 			}
 			if *upload != "" {
-				ppaUpload(*workdir, *upload, *sshUser, []string{source, dsc, changes, buildinfo})
+				ppaUpload(*workdir, *upload, *sshUser, []string{source, dsc, changes})
 			}
 		}
 	}
