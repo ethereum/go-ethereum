@@ -22,20 +22,18 @@ variables `PPA_SIGNING_KEY` and `PPA_SSH_KEY` on Travis.
 
 We want to build go-ethereum with the most recent version of Go, irrespective of the Go
 version that is available in the main Ubuntu repository. In order to make this possible,
-our we depend on ~gophers/ubuntu/archive and ~longsleep/ubuntu/golang-backports PPAs. Our
-source package build-depends on golang-1.11 on Tusty and golang-1.13 on others, which is
-co-installable alongside the regular golang package. PPA dependencies can be edited at
-https://launchpad.net/%7Eethereum/+archive/ubuntu/ethereum/+edit-dependencies
+we bundle the entire Go sources into our own source archive and start the built job by
+compiling Go and then using that to build go-ethereum. On Trusty we have a special case
+requiring the `~gophers/ubuntu/archive` PPA since Trusty can't even build Go itself. PPA
+deps are set at https://launchpad.net/%7Eethereum/+archive/ubuntu/ethereum/+edit-dependencies
 
 ## Building Packages Locally (for testing)
 
 You need to run Ubuntu to do test packaging.
 
-Add the longsleep PPA and install Go 1.13 and Debian packaging tools:
+Install any version of Go and Debian packaging tools:
 
-    $ sudo apt-add-repository ppa:longsleep/ubuntu/golang-backports
-    $ sudo apt-get update
-    $ sudo apt-get install build-essential golang-1.13 devscripts debhelper python-bzrlib python-paramiko
+    $ sudo apt-get install build-essential golang-go devscripts debhelper python-bzrlib python-paramiko
 
 Create the source packages:
 
