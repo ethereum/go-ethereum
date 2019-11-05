@@ -51,8 +51,8 @@ existing Ethereum accounts and other uses of the `account` command._
 ### Sync modes
 
 Running Geth starts an Ethereum node that can join any existing network, or create a new
-one. You can start Geth in one of three different sync modes using the `--syncmode
-"{mode}"` argument that determines what sort of node it is in the network.
+one. You can start Geth in one of three different sync modes using the `--syncmode "{mode}"`
+argument that determines what sort of node it is in the network.
 
 These are:
 
