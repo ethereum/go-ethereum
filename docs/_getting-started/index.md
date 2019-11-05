@@ -41,7 +41,9 @@ these executables.
 Before starting Geth you first need to create an account that represents a key pair. Use
 the following command to create a new account and set a password for that account:
 
-    geth account new
+```shell
+geth account new
+```
 
 _[Read this guide](./interface/managing-your-accounts) for more details on importing
 existing Ethereum accounts and other uses of the `account` command._
@@ -63,20 +65,28 @@ These are:
 
 For example:
 
-    geth --syncmode "light"
+```shell
+geth --syncmode "light"
+```
 
 ### Javascript Console
 
 Once you have an account and Geth is running, you can interact with it by opening another
 terminal and using the following command to open a JavaScript console:
 
-    geth attach
+```shell
+geth attach
+```
 
 In the console you can issue any of the Geth commands, for example, to list all the
 accounts on the node, use:
 
-    > eth.accounts
+```js
+> eth.accounts
+```
 
 You can also enter the console directly when you start the node with the `console` command:
 
-    geth console --syncmode "light"
+```shell
+geth console --syncmode "light"
+```
