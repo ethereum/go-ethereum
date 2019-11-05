@@ -1,5 +1,7 @@
 ---
 title: FAQ
+permalink: docs/faq
+sort_key: C
 ---
 
 **Q.**  I noticed my peercount slowly decrease, and now it is at 0.  Restarting doesn't get any peers.

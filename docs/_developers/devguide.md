@@ -1,8 +1,10 @@
 ---
-title: Developers' guide
+title: Developer guide
+sort_key: A
 ---
+
 **NOTE: These instructions are for people who want to contribute Go source code changes.
-If you just want to run ethereum, use the normal [Installation Instructions](installing-geth)**
+If you just want to run ethereum, use the normal [Installation Instructions](../install-and-build/installing-geth)**
 
 This document is the entry point for developers of the Go implementation of Ethereum. Developers here refer to the hands-on: who are interested in build, develop, debug, submit a bug report or pull request or contribute code to go-ethereum.
 

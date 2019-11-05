@@ -1,5 +1,6 @@
 ---
 title: Build from source
+sort_key: B
 ---
 <!-- TODO: Maybe move? -->
 

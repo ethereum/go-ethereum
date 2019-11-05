@@ -27,54 +27,47 @@ collections_dir: docs
 collections:
   getting-started:
     output: true
-    caption: Getting started
+    caption: Getting Started
     sidebar_index: 1
     frontpage: _getting-started/index.md
   install-and-build:
     output: true
     permalink: docs/:collection/:slug
-    caption: Install and build
+    caption: Install and Build
     sidebar_index: 2
     frontpage: _install-and-build/Installing-Geth.md
   interface:
     output: true
     permalink: docs/:collection/:slug
-    caption: Interacting with Geth
+    caption: Using Geth
     sidebar_index: 3
-  support:
+  dapp:
     output: true
     permalink: docs/:collection/:slug
-    caption: Issues and support
+    caption: For dApp Developers
+    frontpage: _dapp/native.md
     sidebar_index: 4
-  developers:
-    output: true
-    permalink: docs/:collection/:slug
-    caption: Developer docs
-    sidebar_index: 5
-  clef:
-    output: true
-    permalink: docs/:collection/:slug
-    caption: Clef
-    sidebar_index: 6
-    frontpage: _clef/Overview.md
-  whisper:
-    output: true
-    permalink: docs/:collection/:slug
-    caption: Whisper
-    sidebar_index: 7
-    frontpage: _whisper/Whisper-Overview.md
   rpc:
     output: true
     permalink: docs/:collection/:slug
     caption: JSON RPC APIs
+    frontpage: _rpc/server.md
+    sidebar_index: 5
+  developers:
+    output: true
+    permalink: docs/:collection/:slug
+    caption: For Geth Developers
+    frontpage: _developers/devguide.md
+    sidebar_index: 6
+  clef:
+    output: true
+    permalink: docs/:collection/:slug
+    caption: Clef
+    sidebar_index: 7
+    frontpage: _clef/Tutorial.md
+  whisper:
+    output: true
+    permalink: docs/:collection/:slug
+    caption: Whisper
     sidebar_index: 8
-  doc:
-    output: true
-    permalink: docs/:collection/:slug
-    caption: Other
-    sidebar_index: 9
-  legacy:
-    output: true
-    permalink: docs/:collection/:slug
-    caption: Legacy content
-    sidebar_index: 10
+    frontpage: _whisper/Whisper-Overview.md

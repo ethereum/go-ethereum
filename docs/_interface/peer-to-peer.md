@@ -1,42 +1,44 @@
 ---
-title: Connecting to the network
+title: Connecting To The Network
+sort_key: B
 ---
+
 ## How Peers Are Found
 
-Geth continuously attempts to connect to other nodes on the network
-until it has peers. If you have UPnP enabled on your router or run
-ethereum on an Internet-facing server, it will also accept connections
-from other nodes.
+Geth continuously attempts to connect to other nodes on the network until it has peers. If
+you have UPnP enabled on your router or run ethereum on an Internet-facing server, it will
+also accept connections from other nodes.
 
-Geth finds peers through something called the discovery protocol. In
-the discovery protocol, nodes are gossipping with each other to find
-out about other nodes on the network. In order to get going initially,
-geth uses a set of bootstrap nodes whose endpoints are recorded in the
-source code.
+Geth finds peers through something called the discovery protocol. In the discovery
+protocol, nodes are gossipping with each other to find out about other nodes on the
+network. In order to get going initially, geth uses a set of bootstrap nodes whose
+endpoints are recorded in the source code.
 
-To change the bootnodes on startup, use the `--bootnodes` option and
-separate the nodes by commas. For example:
+To change the bootnodes on startup, use the `--bootnodes` option and separate the nodes by
+commas. For example:
 
     geth --bootnodes enode://pubkey1@ip1:port1,enode://pubkey2@ip2:port2,enode://pubkey3@ip3:port3
 
 ## Common Problems With Connectivity
 
-Sometimes you just can't get connected. The most common reasons are
-as follows:
+Sometimes you just can't get connected. The most common reasons are as follows:
 
-- Your local time might be incorrect. An accurate clock is required
-  to participate in the Ethereum network.  Check your OS for how to resync
-  your clock (example sudo ntpdate -s time.nist.gov) because even 12
-  seconds too fast can lead to 0 peers.
-- Some firewall configurations can prevent UDP traffic from flowing.
-  You can use the static nodes feature or `admin.addPeer()` on the console
-  to configure connections by hand.
+- Your local time might be incorrect. An accurate clock is required to participate in the
+  Ethereum network. Check your OS for how to resync your clock (example sudo ntpdate -s
+  time.nist.gov) because even 12 seconds too fast can lead to 0 peers.
+- Some firewall configurations can prevent UDP traffic from flowing. You can use the
+  static nodes feature or `admin.addPeer()` on the console to configure connections by
+  hand.
 
-To start geth without the discovery protocol, you can use the `--nodiscover` parameter. You only want this is you are running a test node or an experimental test network with fixed nodes.
+To start geth without the discovery protocol, you can use the `--nodiscover` parameter.
+You only want this is you are running a test node or an experimental test network with
+fixed nodes.
 
 ## Checking Connectivity
 
-To check how many peers the client is connected to in the interactive console, the `net` module has two attributes give you info about the number of peers and whether you are a listening node.
+To check how many peers the client is connected to in the interactive console, the `net`
+module has two attributes give you info about the number of peers and whether you are a
+listening node.
 
 ```js
 > net.listening
@@ -45,7 +47,9 @@ true
 4
 ```
 
-To get more information about the connected peers, such as IP address and port number, supported protocols, use the `peers()` function of the `admin` object. `admin.peers()` returns the list of currently connected peers.
+To get more information about the connected peers, such as IP address and port number,
+supported protocols, use the `peers()` function of the `admin` object. `admin.peers()`
+returns the list of currently connected peers.
 
 ```
 > admin.peers
@@ -78,6 +82,7 @@ To get more information about the connected peers, such as IP address and port n
 ```
 
 To check the ports used by geth and also find your enode URI run:
+
 ```
 > admin.nodeInfo
 {
@@ -92,21 +97,18 @@ To check the ports used by geth and also find your enode URI run:
 }
 ```
 
-
 ## Custom Networks
 
-Sometimes you might not need to connect to the live public network,
-you can instead choose to create your own private testnet. This is
-very useful if you don't need to test external contracts and want just
-to test the technology, because you won't have to compete with other
-miners and will easily generate a lot of test ether to play around
-(replace 12345 with any non-negative number):
+Sometimes you might not need to connect to the live public network, you can instead choose
+to create your own private testnet. This is very useful if you don't need to test external
+contracts and want just to test the technology, because you won't have to compete with
+other miners and will easily generate a lot of test ether to play around (replace 12345
+with any non-negative number):
 
 	geth -—networkid="12345" console
 
-It is also possible to run geth with a custom genesis block from a JSON file
-by supplying the `--genesis` flag. The genesis JSON file should have the following
-format:
+It is also possible to run geth with a custom genesis block from a JSON file by supplying
+the `--genesis` flag. The genesis JSON file should have the following format:
 
 ```js
 {
@@ -132,10 +134,10 @@ format:
 
 ## Static nodes
 
-Geth also supports a feature called static nodes if you have certain
-peers you always want to connect to. Static nodes are re-connected
-on disconnects. You can configure permanent static nodes by putting something like
-the following into `<datadir>/geth/static-nodes.json`:
+Geth also supports a feature called static nodes if you have certain peers you always want
+to connect to. Static nodes are re-connected on disconnects. You can configure permanent
+static nodes by putting something like the following into
+`<datadir>/geth/static-nodes.json`:
 
 ```js
 [
@@ -144,10 +146,9 @@ the following into `<datadir>/geth/static-nodes.json`:
 ]
 ```
 
-You can also add static nodes at runtime via the js console using [`admin.addPeer()`](../interface/management-apis#admin_addpeer):
+You can also add static nodes at runtime via the js console using
+[`admin.addPeer()`](../interface/management-apis#admin_addpeer):
 
 ```js
 admin.addPeer("enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303")
 ```
-
-Caveat: Currently the console is lacking support for removing a peer, increasing peercount or adding a non-static peer but not to keep try reconnecting.
