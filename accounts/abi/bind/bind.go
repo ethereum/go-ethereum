@@ -486,10 +486,6 @@ func namedTypeJava(javaKind string, solKind abi.Type) string {
 // alias returns an alias of the given string based on the aliasing rules
 // or returns itself if no rule is matched.
 func alias(aliases map[string]string, n string) string {
-	// Short circuit if aliasing rule is empty
-	if aliases == nil {
-		return n
-	}
 	if alias, exist := aliases[n]; exist {
 		return alias
 	}
