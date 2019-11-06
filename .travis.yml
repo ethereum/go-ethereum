@@ -66,6 +66,24 @@ jobs:
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
+    - stage: build
+      # if: type = push
+      os: linux
+      dist: xenial
+      go: 1.13.x
+      git:
+        submodules: false
+      script:
+        - wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+        - go build ./cmd/geth/...
+        - mkdir appdir
+        - cp geth appdir/AppRun
+        - cp geth.desktop appdir
+        - cp geth.png appdir
+        - chmod +x appimagetool-x86_64.AppImage
+        - ./appimagetool-x86_64.AppImage ./appdir geth.AppImage
+        - rm -rf appdir
+
     # This builder does the Ubuntu PPA upload
     - stage: build
       if: type = push

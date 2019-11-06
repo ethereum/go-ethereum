@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name="Go Ethereum Client"
+Terminal=true
+Type=Application
+Comment="An Ethereum client written in Go"
+Categories=Finance;Network;
+Icon=geth
