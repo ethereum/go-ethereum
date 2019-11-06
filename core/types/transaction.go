@@ -54,6 +54,10 @@ type txdata struct {
 	Amount       *big.Int        `json:"value"    gencodec:"required"`
 	Payload      []byte          `json:"input"    gencodec:"required"`
 
+	// EIP1559 gas values
+	GasPremium *big.Int `json:"gasPremium" gencodec:"required" rlp:"nil"` // nil means legacy transaction
+	FeeCap     *big.Int `json:"feeCap"     gencodec:"required" rlp:"nil"` // nil means legacy transaction
+
 	// Signature values
 	V *big.Int `json:"v" gencodec:"required"`
 	R *big.Int `json:"r" gencodec:"required"`
@@ -74,15 +78,15 @@ type txdataMarshaling struct {
 	S            *hexutil.Big
 }
 
-func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	return newTransaction(nonce, &to, amount, gasLimit, gasPrice, data)
+func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, gasPremium, feeCap *big.Int) *Transaction {
+	return newTransaction(nonce, &to, amount, gasLimit, gasPrice, data, gasPremium, feeCap)
 }
 
-func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	return newTransaction(nonce, nil, amount, gasLimit, gasPrice, data)
+func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, gasPremium, feeCap *big.Int) *Transaction {
+	return newTransaction(nonce, nil, amount, gasLimit, gasPrice, data, gasPremium, feeCap)
 }
 
-func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
+func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, gasPremium, feeCap *big.Int) *Transaction {
 	if len(data) > 0 {
 		data = common.CopyBytes(data)
 	}
@@ -102,6 +106,12 @@ func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit 
 	}
 	if gasPrice != nil {
 		d.Price.Set(gasPrice)
+	}
+	if gasPremium != nil {
+		d.GasPremium = gasPremium
+	}
+	if feeCap != nil {
+		d.FeeCap = feeCap
 	}
 	return &Transaction{
 		data: d,
@@ -128,20 +138,154 @@ func isProtectedV(V *big.Int) bool {
 	return true
 }
 
+/*
+EncodeRLP should be modified to encode a struct without the gasPremium and feeCap fields if either are nil, or the raw txdata struct if not.
+This keeps the RLP encoding of legacy transactions identical to the way they were pre-fork.
+*/
+
+// legacyTxData is used to RLP decode and encode txData if either the gasPremium or the feeCap fields are nil
+type legacyTxData struct {
+	AccountNonce uint64          `json:"nonce"    gencodec:"required"`
+	Price        *big.Int        `json:"gasPrice" gencodec:"required"`
+	GasLimit     uint64          `json:"gas"      gencodec:"required"`
+	Recipient    *common.Address `json:"to"       rlp:"nil"` // nil means contract creation
+	Amount       *big.Int        `json:"value"    gencodec:"required"`
+	Payload      []byte          `json:"input"    gencodec:"required"`
+
+	// Signature values
+	V *big.Int `json:"v" gencodec:"required"`
+	R *big.Int `json:"r" gencodec:"required"`
+	S *big.Int `json:"s" gencodec:"required"`
+}
+
 // EncodeRLP implements rlp.Encoder
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
+	if tx.data.FeeCap == nil || tx.data.GasPremium == nil {
+		legacyTx := &legacyTxData{
+			AccountNonce: tx.data.AccountNonce,
+			Price:        tx.data.Price,
+			GasLimit:     tx.data.GasLimit,
+			Recipient:    tx.data.Recipient,
+			Amount:       tx.data.Amount,
+			Payload:      tx.data.Payload,
+			V:            tx.data.V,
+			R:            tx.data.R,
+			S:            tx.data.S,
+		}
+		return rlp.Encode(w, legacyTx)
+	}
 	return rlp.Encode(w, &tx.data)
 }
 
+/*
+DecodeRLP should decode the rlp.Stream value into individual fields first, then build the resulting struct.
+If decoding the gasPremium’s value returns an EOL error, then this is a legacy transaction.
+This allows legacy RLP-encoded transactions to be decoded while properly handling errors
+*/
+
 // DecodeRLP implements rlp.Decoder
-func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
-	_, size, _ := s.Kind()
-	err := s.Decode(&tx.data)
-	if err == nil {
-		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
-		tx.time = time.Now()
+func (tx *Transaction) DecodeRLP(stream *rlp.Stream) error {
+	size, err := stream.List()
+	if err != nil {
+		return err
 	}
-	return err
+	var accountNonce uint64
+	if err = stream.Decode(&accountNonce); err != nil {
+		return err
+	}
+	price := new(big.Int)
+	if err = stream.Decode(price); err != nil {
+		return err
+	}
+	var gasLimit uint64
+	if err = stream.Decode(&gasLimit); err != nil {
+		return err
+	}
+	_, recipientSize, err := stream.Kind()
+	if err != nil {
+		return err
+	}
+	var recipient *common.Address
+	// attempting to unpack a zero value into *common.Address throws an error
+	// if the value is of size zero we leave the recipient "nil"
+	// if there is a non-zero address, unpack it
+	if recipientSize != 0 {
+		recipient = new(common.Address)
+		if err = stream.Decode(recipient); err != nil {
+			return err
+		}
+	} else {
+		// otherwise throw away the zero value, move to next position in the list, and leave recipient nil
+		if _, err = stream.Raw(); err != nil {
+			return err
+		}
+	}
+	amount := new(big.Int)
+	if err = stream.Decode(amount); err != nil {
+		return err
+	}
+	var payload []byte
+	if err = stream.Decode(&payload); err != nil {
+		return err
+	}
+	gasPremium := new(big.Int)
+	if err = stream.Decode(gasPremium); err != nil {
+		return err
+	}
+	feeCap := new(big.Int)
+	if err = stream.Decode(feeCap); err != nil {
+		return err
+	}
+	v := new(big.Int)
+	if err = stream.Decode(v); err != nil {
+		return err
+	}
+
+	tx.time = time.Now()
+
+	// if this is the end of the list then we are decoding a legacy transaction
+	// so the last decoded gasPremium, feeCap, and v values are shifted into the v, r, and s values
+	if err = stream.ListEnd(); err == nil {
+		tx.data = txdata{
+			AccountNonce: accountNonce,
+			Price:        price,
+			GasLimit:     gasLimit,
+			Recipient:    recipient,
+			Amount:       amount,
+			Payload:      payload,
+			V:            gasPremium,
+			R:            feeCap,
+			S:            v,
+		}
+		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
+		return nil
+	}
+	if err != rlp.ErrNotAtEOL {
+		return err
+	}
+	r := new(big.Int)
+	if err := stream.Decode(r); err != nil {
+		return err
+	}
+	s := new(big.Int)
+	if err := stream.Decode(s); err != nil {
+		return err
+	}
+	tx.data = txdata{
+		AccountNonce: accountNonce,
+		Price:        price,
+		GasLimit:     gasLimit,
+		Recipient:    recipient,
+		Amount:       amount,
+		Payload:      payload,
+		GasPremium:   gasPremium,
+		FeeCap:       feeCap,
+		V:            v,
+		R:            r,
+		S:            v,
+	}
+	tx.size.Store(common.StorageSize(rlp.ListSize(size)))
+	return nil
 }
 
 // MarshalJSON encodes the web3 RPC transaction format.
@@ -187,9 +331,11 @@ func (tx *Transaction) GasPriceCmp(other *Transaction) int {
 func (tx *Transaction) GasPriceIntCmp(other *big.Int) int {
 	return tx.data.Price.Cmp(other)
 }
-func (tx *Transaction) Value() *big.Int  { return new(big.Int).Set(tx.data.Amount) }
-func (tx *Transaction) Nonce() uint64    { return tx.data.AccountNonce }
-func (tx *Transaction) CheckNonce() bool { return true }
+func (tx *Transaction) Value() *big.Int      { return new(big.Int).Set(tx.data.Amount) }
+func (tx *Transaction) Nonce() uint64        { return tx.data.AccountNonce }
+func (tx *Transaction) CheckNonce() bool     { return true }
+func (tx *Transaction) GasPremium() *big.Int { return tx.data.GasPremium }
+func (tx *Transaction) FeeCap() *big.Int     { return tx.data.FeeCap }
 
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.
