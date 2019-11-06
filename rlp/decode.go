@@ -43,10 +43,10 @@ var (
 	ErrElemTooLarge     = errors.New("rlp: element is larger than containing list")
 	ErrValueTooLarge    = errors.New("rlp: value size exceeds available input length")
 	ErrMoreThanOneValue = errors.New("rlp: input contains more than one value")
+	ErrNotAtEOL         = errors.New("rlp: call of ListEnd not positioned at EOL")
 
 	// internal errors
 	errNotInList     = errors.New("rlp: call of ListEnd outside of any list")
-	errNotAtEOL      = errors.New("rlp: call of ListEnd not positioned at EOL")
 	errUintOverflow  = errors.New("rlp: uint overflow")
 	errNoPointer     = errors.New("rlp: interface given to Decode must be a pointer")
 	errDecodeIntoNil = errors.New("rlp: pointer given to Decode must not be nil")
@@ -130,7 +130,7 @@ func wrapStreamError(err error, typ reflect.Type) error {
 		return &decodeError{msg: "expected input string or byte", typ: typ}
 	case errUintOverflow:
 		return &decodeError{msg: "input string too long", typ: typ}
-	case errNotAtEOL:
+	case ErrNotAtEOL:
 		return &decodeError{msg: "input list has too many elements", typ: typ}
 	}
 	return err
@@ -730,7 +730,7 @@ func (s *Stream) ListEnd() error {
 	}
 	tos := s.stack[len(s.stack)-1]
 	if tos.pos != tos.size {
-		return errNotAtEOL
+		return ErrNotAtEOL
 	}
 	s.stack = s.stack[:len(s.stack)-1] // pop
 	if len(s.stack) > 0 {
@@ -766,6 +766,7 @@ func (s *Stream) Decode(val interface{}) error {
 		// add decode target type to error so context has more meaning
 		decErr.ctx = append(decErr.ctx, fmt.Sprint("(", rtyp.Elem(), ")"))
 	}
+
 	return err
 }
 
