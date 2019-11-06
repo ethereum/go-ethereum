@@ -89,7 +89,7 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 			for {
 				_, hash, _, err := server.handler.server.oracle.contract.Contract().GetLatestCheckpoint(nil)
 				if err != nil || hash == [32]byte{} {
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(10 * time.Millisecond)
 					continue
 				}
 				break
