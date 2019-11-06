@@ -110,13 +110,15 @@ func (d *requestDistributor) registerTestPeer(p distPeer) {
 	d.peerLock.Unlock()
 }
 
-// distMaxWait is the maximum waiting time after which further necessary waiting
-// times are recalculated based on new feedback from the servers
-const distMaxWait = time.Millisecond * 50
+var (
+	// distMaxWait is the maximum waiting time after which further necessary waiting
+	// times are recalculated based on new feedback from the servers
+	distMaxWait = time.Millisecond * 50
 
-// waitForPeers is the time window in which a request does not fail even if it
-// has no suitable peers to send to at the moment
-const waitForPeers = time.Second * 3
+	// waitForPeers is the time window in which a request does not fail even if it
+	// has no suitable peers to send to at the moment
+	waitForPeers = time.Second * 3
+)
 
 // main event loop
 func (d *requestDistributor) loop() {
