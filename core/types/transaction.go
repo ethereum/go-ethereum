@@ -157,6 +157,12 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &tx.data)
 }
 
+/*
+DecodeRLP should decode the rlp.Stream value into individual fields first, then build the resulting struct.
+If decoding the gasPremium’s value returns an EOL error, then this is a legacy transaction.
+This allows legacy RLP-encoded transactions to be decoded while properly handling errors
+*/
+
 // DecodeRLP implements rlp.Decoder
 func (tx *Transaction) DecodeRLP(stream *rlp.Stream) error {
 	size, err := stream.List()
