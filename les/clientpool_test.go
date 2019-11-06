@@ -68,6 +68,14 @@ func (i poolTestPeer) freeClientId() string {
 
 func (i poolTestPeer) updateCapacity(uint64) {}
 
+type poolTestPeerWithCap struct {
+	poolTestPeer
+
+	cap uint64
+}
+
+func (i *poolTestPeerWithCap) updateCapacity(cap uint64) { i.cap = cap }
+
 func testClientPool(t *testing.T, connLimit, clientCount, paidCount int, randomDisconnect bool) {
 	rand.Seed(time.Now().UnixNano())
 	var (
@@ -364,11 +372,20 @@ func TestDowngradePriorityClient(t *testing.T) {
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setPriceFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
-	pool.addBalance(poolTestPeer(0).ID(), uint64(time.Minute), false)
-	pool.connect(poolTestPeer(0), 10)
+	p := &poolTestPeerWithCap{
+		poolTestPeer: poolTestPeer(0),
+	}
+	pool.addBalance(p.ID(), uint64(time.Minute), false)
+	pool.connect(p, 10)
+	if p.cap != 10 {
+		t.Fatalf("The capcacity of priority peer hasn't been updated, got: %d", p.cap)
+	}
+
 	clock.Run(time.Minute)             // All positive balance should be used up.
 	time.Sleep(300 * time.Millisecond) // Ensure the callback is called
-
+	if p.cap != 1 {
+		t.Fatalf("The capcacity of peer should be downgraded, got: %d", p.cap)
+	}
 	pb := pool.ndb.getOrNewPB(poolTestPeer(0).ID())
 	if pb.value != 0 {
 		t.Fatalf("Positive balance mismatch, want %v, got %v", 0, pb.value)

@@ -459,6 +459,9 @@ func (f *clientPool) addBalance(id enode.ID, amount uint64, setTotal bool) {
 		defer func() {
 			c.balanceTracker.setBalance(pb.value, negBalance)
 			if !c.priority && pb.value > 0 {
+				// The capacity should be adjusted based on the requirement,
+				// but we have no idea about the new capacity, need a second
+				// call to udpate it.
 				c.priority = true
 				c.balanceTracker.addCallback(balanceCallbackZero, 0, func() { f.balanceExhausted(id) })
 			}
