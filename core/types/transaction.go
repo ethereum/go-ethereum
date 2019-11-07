@@ -349,6 +349,8 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 		amount:     tx.data.Amount,
 		data:       tx.data.Payload,
 		checkNonce: true,
+		gasPremium: tx.data.GasPremium,
+		feeCap:     tx.data.FeeCap,
 	}
 
 	var err error
@@ -517,9 +519,11 @@ type Message struct {
 	gasPrice   *big.Int
 	data       []byte
 	checkNonce bool
+	gasPremium *big.Int
+	feeCap     *big.Int
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool, gasPremium, feeCap *big.Int) Message {
 	return Message{
 		from:       from,
 		to:         to,
@@ -529,6 +533,8 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 		gasPrice:   gasPrice,
 		data:       data,
 		checkNonce: checkNonce,
+		gasPremium: gasPremium,
+		feeCap:     feeCap,
 	}
 }
 
@@ -540,3 +546,5 @@ func (m Message) Gas() uint64          { return m.gasLimit }
 func (m Message) Nonce() uint64        { return m.nonce }
 func (m Message) Data() []byte         { return m.data }
 func (m Message) CheckNonce() bool     { return m.checkNonce }
+func (m Message) GasPremium() *big.Int { return m.gasPremium }
+func (m Message) FeeCap() *big.Int     { return m.feeCap }
