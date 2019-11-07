@@ -31,10 +31,20 @@ common-js:
         <div id="navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
             {% for link in site.data.navbar %}
-        {% capture target %}{% include link.html url=link.last %}{% endcapture %}
+              {% capture target %}{% include link.html url=link.last %}{% endcapture %}
               <li><a href="{{target |strip }}">{{ link.first }}</a></li>
-              {% endfor %}
+            {% endfor %}
           </ul>
+          <form class="navbar-form pull-right" role="search" method="get" action="https://duckduckgo.com/">
+            <input type="hidden" name="sites" value="geth.ethereum.org">
+            <input type="hidden" name="kz" value="-1">
+            <div class="input-group navbar-input-group-fixup">
+              <input class="input-sm" type="text" name="q" placeholder="Search site...">
+              <span class="input-group-btn">
+                <button type="submit" class="btn btn-default btn-sm"><i class="fa fa-search" aria-hidden="true"></i></button>
+              </span>
+            </div>
+          </form>
         </div>
       </div>
     </nav>
