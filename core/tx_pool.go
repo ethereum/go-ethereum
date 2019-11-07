@@ -584,7 +584,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			return false, ErrUnderpriced
 		}
 		// New transaction is better than our worse ones, make room for it
-		drop := pool.priced.Discard(pool.all.Count()-int(pool.config.GlobalSlots+pool.config.GlobalQueue-1), pool.locals)
+		drop := pool.priced.Discard(pool.all.SlotsUsed()-int(pool.config.GlobalSlots+pool.config.GlobalQueue)+NumSlots(tx), pool.locals)
 		for _, tx := range drop {
 			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash(), "price", tx.GasPrice())
 			underpricedTxMeter.Mark(1)
@@ -1143,8 +1143,8 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.pendingNonces = newTxNoncer(statedb)
 	pool.currentMaxGas = newHead.GasLimit
 
-	// Heuristic limit, reject transactions over 32KB to prevent DOS attacks
-	pool.maxTxSize = 32 * 1024
+	// Heuristic limit, reject transactions over 4 slots to prevent DOS attacks
+	pool.maxTxSize = 4 * slotSize
 
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
@@ -1497,14 +1497,16 @@ func (as *accountSet) merge(other *accountSet) {
 // peeking into the pool in TxPool.Get without having to acquire the widely scoped
 // TxPool.mu mutex.
 type txLookup struct {
-	all  map[common.Hash]*types.Transaction
-	lock sync.RWMutex
+	all          map[common.Hash]*types.Transaction
+	numUsedSlots int
+	lock         sync.RWMutex
 }
 
 // newTxLookup returns a new txLookup structure.
 func newTxLookup() *txLookup {
 	return &txLookup{
-		all: make(map[common.Hash]*types.Transaction),
+		all:          make(map[common.Hash]*types.Transaction),
+		numUsedSlots: 0,
 	}
 }
 
@@ -1536,11 +1538,32 @@ func (t *txLookup) Count() int {
 	return len(t.all)
 }
 
+// SlotsUsed returns the current number of slots used in the lookup.
+func (t *txLookup) SlotsUsed() int {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	return t.numUsedSlots
+}
+
+const (
+	// Transactions are kept in slots.
+	// Each slot is defined to be 32KB.
+	// This slots mechanism provides protection against
+	// resources over consumption.
+	slotSize = 32 * 1024
+)
+
+func NumSlots(tx *types.Transaction) int {
+	return int(math.Ceil(float64(tx.Size()) / slotSize))
+}
+
 // Add adds a transaction to the lookup.
 func (t *txLookup) Add(tx *types.Transaction) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
+	t.numUsedSlots += NumSlots(tx)
 	t.all[tx.Hash()] = tx
 }
 
@@ -1549,5 +1572,6 @@ func (t *txLookup) Remove(hash common.Hash) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
+	t.numUsedSlots -= NumSlots(t.all[hash])
 	delete(t.all, hash)
 }

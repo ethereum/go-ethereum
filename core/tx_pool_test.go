@@ -1808,6 +1808,25 @@ func TestTransactionStatusCheck(t *testing.T) {
 	}
 }
 
+// Test the transaction slots consumption is computed correctly
+func TestNumSlots(t *testing.T) {
+	t.Parallel()
+
+	key, _ := crypto.GenerateKey()
+
+	tinyTx := pricedDataTransaction(0, 0, big.NewInt(0), key, 0)
+	if NumSlots(tinyTx) != 1 {
+		t.Fatalf("Small transactions are expected to consume a single slot.")
+	}
+
+	numAdditionalSlots := rand.Intn(10)
+	dataLen := uint64(slotSize * numAdditionalSlots)
+	severalSlotsTx := pricedDataTransaction(0, 0, big.NewInt(0), key, dataLen)
+	if actual := NumSlots(severalSlotsTx); actual != 1+numAdditionalSlots {
+		t.Fatalf("Unexpected slots consumptions: expected %d, actual %d", 1+numAdditionalSlots, actual)
+	}
+}
+
 // Benchmarks the speed of validating the contents of the pending queue of the
 // transaction pool.
 func BenchmarkPendingDemotion100(b *testing.B)   { benchmarkPendingDemotion(b, 100) }
