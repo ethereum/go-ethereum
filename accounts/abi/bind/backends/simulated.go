@@ -716,6 +716,8 @@ func (m callMsg) GasPrice() *big.Int   { return m.CallMsg.GasPrice }
 func (m callMsg) Gas() uint64          { return m.CallMsg.Gas }
 func (m callMsg) Value() *big.Int      { return m.CallMsg.Value }
 func (m callMsg) Data() []byte         { return m.CallMsg.Data }
+func (m callMsg) GasPremium() *big.Int { return m.CallMsg.GasPremium }
+func (m callMsg) FeeCap() *big.Int     { return m.CallMsg.FeeCap }
 
 // filterBackend implements filters.Backend to support filtering for logs without
 // taking bloom-bits acceleration structures into account.
