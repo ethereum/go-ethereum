@@ -52,8 +52,8 @@ type txdata struct {
 	Payload      []byte          `json:"input"    gencodec:"required"`
 
 	// EIP1559 gas values
-	GasPremium *big.Int `json:"gasPremium" gencodec:"required" rlp:"nil"` // nil means legacy transaction
-	FeeCap     *big.Int `json:"feeCap"     gencodec:"required" rlp:"nil"` // nil means legacy transaction
+	GasPremium *big.Int `json:"gasPremium" rlp:"nil"` // nil means legacy transaction
+	FeeCap     *big.Int `json:"feeCap"     rlp:"nil"` // nil means legacy transaction
 
 	// Signature values
 	V *big.Int `json:"v" gencodec:"required"`
@@ -133,12 +133,7 @@ func isProtectedV(V *big.Int) bool {
 	return true
 }
 
-/*
-EncodeRLP should be modified to encode a struct without the gasPremium and feeCap fields if either are nil, or the raw txdata struct if not.
-This keeps the RLP encoding of legacy transactions identical to the way they were pre-fork.
-*/
-
-// legacyTxData is used to RLP decode and encode txData if either the gasPremium or the feeCap fields are nil
+// legacyTxData is used to RLP encode txData if either the gasPremium or the feeCap fields are nil
 type legacyTxData struct {
 	AccountNonce uint64          `json:"nonce"    gencodec:"required"`
 	Price        *big.Int        `json:"gasPrice" gencodec:"required"`
@@ -172,28 +167,22 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &tx.data)
 }
 
-/*
-DecodeRLP should decode the rlp.Stream value into individual fields first, then build the resulting struct.
-If decoding the gasPremium’s value returns an EOL error, then this is a legacy transaction.
-This allows legacy RLP-encoded transactions to be decoded while properly handling errors
-*/
-
 // DecodeRLP implements rlp.Decoder
 func (tx *Transaction) DecodeRLP(stream *rlp.Stream) error {
 	size, err := stream.List()
 	if err != nil {
 		return err
 	}
-	var accountNonce uint64
-	if err = stream.Decode(&accountNonce); err != nil {
+	accountNonce := new(uint64)
+	if err = stream.Decode(accountNonce); err != nil {
 		return err
 	}
 	price := new(big.Int)
 	if err = stream.Decode(price); err != nil {
 		return err
 	}
-	var gasLimit uint64
-	if err = stream.Decode(&gasLimit); err != nil {
+	gasLimit := new(uint64)
+	if err = stream.Decode(gasLimit); err != nil {
 		return err
 	}
 	_, recipientSize, err := stream.Kind()
@@ -201,8 +190,8 @@ func (tx *Transaction) DecodeRLP(stream *rlp.Stream) error {
 		return err
 	}
 	var recipient *common.Address
+	// the below is to handle the "rlp: nil" tag (tag itself is not needed anymore because of this manual handling)
 	// attempting to unpack a zero value into *common.Address throws an error
-	// if the value is of size zero we leave the recipient "nil"
 	// if there is a non-zero address, unpack it
 	if recipientSize != 0 {
 		recipient = new(common.Address)
@@ -210,7 +199,7 @@ func (tx *Transaction) DecodeRLP(stream *rlp.Stream) error {
 			return err
 		}
 	} else {
-		// otherwise throw away the zero value, move to next position in the list, and leave recipient nil
+		// otherwise if the value is of size zero throw away the value, move to next value in the stream, and leave recipient nil
 		if _, err = stream.Raw(); err != nil {
 			return err
 		}
@@ -219,8 +208,8 @@ func (tx *Transaction) DecodeRLP(stream *rlp.Stream) error {
 	if err = stream.Decode(amount); err != nil {
 		return err
 	}
-	var payload []byte
-	if err = stream.Decode(&payload); err != nil {
+	payload := new([]byte)
+	if err = stream.Decode(payload); err != nil {
 		return err
 	}
 	gasPremium := new(big.Int)
@@ -235,17 +224,16 @@ func (tx *Transaction) DecodeRLP(stream *rlp.Stream) error {
 	if err = stream.Decode(v); err != nil {
 		return err
 	}
-
 	// if this is the end of the list then we are decoding a legacy transaction
-	// so the last decoded gasPremium, feeCap, and v values are shifted into the v, r, and s values
+	// so the decoded gasPremium, feeCap, and v values are shifted into the v, r, and s values
 	if err = stream.ListEnd(); err == nil {
 		tx.data = txdata{
-			AccountNonce: accountNonce,
+			AccountNonce: *accountNonce,
 			Price:        price,
-			GasLimit:     gasLimit,
+			GasLimit:     *gasLimit,
 			Recipient:    recipient,
 			Amount:       amount,
-			Payload:      payload,
+			Payload:      *payload,
 			V:            gasPremium,
 			R:            feeCap,
 			S:            v,
@@ -253,6 +241,7 @@ func (tx *Transaction) DecodeRLP(stream *rlp.Stream) error {
 		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
 		return nil
 	}
+	// if we are not at the end of the list, continue decoding the 1559 transaction fields
 	if err != rlp.ErrNotAtEOL {
 		return err
 	}
@@ -264,13 +253,17 @@ func (tx *Transaction) DecodeRLP(stream *rlp.Stream) error {
 	if err := stream.Decode(s); err != nil {
 		return err
 	}
+	// we should now be at the end of the list for a EIP1559 transaction
+	if err = stream.ListEnd(); err != nil {
+		return err
+	}
 	tx.data = txdata{
-		AccountNonce: accountNonce,
+		AccountNonce: *accountNonce,
 		Price:        price,
-		GasLimit:     gasLimit,
+		GasLimit:     *gasLimit,
 		Recipient:    recipient,
 		Amount:       amount,
-		Payload:      payload,
+		Payload:      *payload,
 		GasPremium:   gasPremium,
 		FeeCap:       feeCap,
 		V:            v,
