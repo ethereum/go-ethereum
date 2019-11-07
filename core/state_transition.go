@@ -66,6 +66,9 @@ type Message interface {
 	Nonce() uint64
 	CheckNonce() bool
 	Data() []byte
+
+	GasPremium() *big.Int
+	FeeCap() *big.Int
 }
 
 // ExecutionResult includes all output after executing given evm
