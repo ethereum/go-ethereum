@@ -22,6 +22,8 @@ func (t txdata) MarshalJSON() ([]byte, error) {
 		Recipient    *common.Address `json:"to"       rlp:"nil"`
 		Amount       *hexutil.Big    `json:"value"    gencodec:"required"`
 		Payload      hexutil.Bytes   `json:"input"    gencodec:"required"`
+		GasPremium   *hexutil.Big    `json:"gasPremium" rlp:"nil"`
+		FeeCap       *hexutil.Big    `json:"feeCap"     rlp:"nil"`
 		V            *hexutil.Big    `json:"v" gencodec:"required"`
 		R            *hexutil.Big    `json:"r" gencodec:"required"`
 		S            *hexutil.Big    `json:"s" gencodec:"required"`
@@ -34,6 +36,8 @@ func (t txdata) MarshalJSON() ([]byte, error) {
 	enc.Recipient = t.Recipient
 	enc.Amount = (*hexutil.Big)(t.Amount)
 	enc.Payload = t.Payload
+	enc.GasPremium = (*hexutil.Big)(t.GasPremium)
+	enc.FeeCap = (*hexutil.Big)(t.FeeCap)
 	enc.V = (*hexutil.Big)(t.V)
 	enc.R = (*hexutil.Big)(t.R)
 	enc.S = (*hexutil.Big)(t.S)
@@ -50,6 +54,8 @@ func (t *txdata) UnmarshalJSON(input []byte) error {
 		Recipient    *common.Address `json:"to"       rlp:"nil"`
 		Amount       *hexutil.Big    `json:"value"    gencodec:"required"`
 		Payload      *hexutil.Bytes  `json:"input"    gencodec:"required"`
+		GasPremium   *hexutil.Big    `json:"gasPremium" rlp:"nil"`
+		FeeCap       *hexutil.Big    `json:"feeCap"     rlp:"nil"`
 		V            *hexutil.Big    `json:"v" gencodec:"required"`
 		R            *hexutil.Big    `json:"r" gencodec:"required"`
 		S            *hexutil.Big    `json:"s" gencodec:"required"`
@@ -82,6 +88,12 @@ func (t *txdata) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'input' for txdata")
 	}
 	t.Payload = *dec.Payload
+	if dec.GasPremium != nil {
+		t.GasPremium = (*big.Int)(dec.GasPremium)
+	}
+	if dec.FeeCap != nil {
+		t.FeeCap = (*big.Int)(dec.FeeCap)
+	}
 	if dec.V == nil {
 		return errors.New("missing required field 'v' for txdata")
 	}
