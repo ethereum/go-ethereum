@@ -79,6 +79,10 @@ var (
 	// than some meaningful limit a user might use. This is not a consensus error
 	// making the transaction invalid, rather a DOS protection.
 	ErrOversizedData = errors.New("oversized data")
+
+	// ErrTxNotEIP1559 is returned if we have passed the EIP1559 finalized block height
+	// and the input transaction does not conform to with EIP1559
+	ErrTxNotEIP1559 = errors.New("transaction does not conform with EIP1559")
 )
 
 var (
