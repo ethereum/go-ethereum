@@ -509,10 +509,6 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		if throttle {
 			// There are no resultslots available. Put it back in the task queue
 			taskQueue.Push(header, -int64(header.Number.Uint64()))
-			// Set progress to true -- otherwise the peer will get
-			// penalized for not 'accepting' requests, while in fact it's
-			// because we don't have room for more results right now
-			progress = true
 			// However, if there are any left as 'skipped', we should not tell
 			// the caller to throttle, since we still want some other
 			// peer to fetch those for us
