@@ -100,52 +100,11 @@ true
 
 You can automate the creation a local cluster of nodes, including account creation which is needed for mining. See the [`gethcluster.sh`](https://github.com/ethersphere/eth-utils/blob/master/gethcluster.sh) script, and the [README](https://github.com/ethersphere/eth-utils/blob/master/README.md) for usage and examples.
 
-## Private network
+### Monitoring your nodes
 
-<!-- TODO: Bring in -->
+<!-- TODO: Bring in? -->
 
-See \[[the Private Network Page|Private network]] for more information.
-
-### Setup bootnode
-
-The first time a node connects to the network it uses one of the predefined [bootnodes](https://github.com/ethereum/go-ethereum/blob/master/params/bootnodes.go). Through these bootnodes a node can join the network and find other nodes. In the case of a private cluster these predefined bootnodes are not of much use. Therefore go-ethereum offers a bootnode implementation that can be configured and run in your private network.
-
-It can be run through the command.
-
-    > bootnode
-    Fatal: Use -nodekey or -nodekeyhex to specify a private key
-
-As can be seen the bootnode asks for a key. Each ethereum node, including a bootnode is identified by an enode identifier. These identifiers are derived from a key. Therefore you will need to give the bootnode such key. Since we currently don't have one we can instruct the bootnode to generate a key (and store it in a file) before it starts.
-
-    > bootnode -genkey bootnode.key
-    I0216 09:53:08.076155 p2p/discover/udp.go:227] Listening, enode://890b6b5367ef6072455fedbd7a24ebac239d442b18c5ab9d26f58a349dad35ee5783a0dd543e4f454fed22db9772efe28a3ed6f21e75674ef6203e47803da682@[::]:30301
-
-(exit with CTRL-C)
-
-The stored key can be seen with:
-
-    > cat bootnode.key
-    dc90f8f7324f1cc7ba52c4077721c939f98a628ed17e51266d01c9cd0294033a
-
-To instruct geth nodes to use our own bootnode(s) use the `--bootnodes` flag. This is a comma separated list of bootnode enode identifiers.
-
-    geth --bootnodes "enode://890b6b5367ef6072455fedbd7a24ebac239d442b18c5ab9d26f58a349dad35ee5783a0dd543e4f454fed22db9772efe28a3ed6f21e75674ef6203e47803da682@[::]:30301"
-
-(what [::] means is explained previously)
-
-Since it is convenient to start the bootnode each time with the same enode we can give the bootnode program the just generated key on the next time it is started.
-
-    bootnode -nodekey bootnode.key
-    I0216 10:01:19.125600 p2p/discover/udp.go:227] Listening, enode://890b6b5367ef6072455fedbd7a24ebac239d442b18c5ab9d26f58a349dad35ee5783a0dd543e4f454fed22db9772efe28a3ed6f21e75674ef6203e47803da682@[::]:30301
-
-or
-
-    bootnode -nodekeyhex dc90f8f7324f1cc7ba52c4077721c939f98a628ed17e51266d01c9cd0294033a
-    I0216 10:01:40.094089 p2p/discover/udp.go:227] Listening, enode://890b6b5367ef6072455fedbd7a24ebac239d442b18c5ab9d26f58a349dad35ee5783a0dd543e4f454fed22db9772efe28a3ed6f21e75674ef6203e47803da682@[::]:30301
-
-## Monitoring your nodes
-
-[This page](https://github.com/ethereum/wiki/wiki/Network-Status) describes how to use the [The Ethereum (centralised) network status monitor (known sometimes as "eth-netstats")](http://stats.ethdev.com) to monitor your nodes.
+[This guide](https://github.com/ethereum/wiki/wiki/Network-Status) describes how to use the [The Ethereum (centralised) network status monitor (known sometimes as "eth-netstats")](http://stats.ethdev.com) to monitor your nodes.
 
 [This page](Setting-up-monitoring-on-local-cluster) or [this README](https://github.com/ethersphere/eth-utils)
 describes how you set up your own monitoring service for a (private or public) local cluster.
