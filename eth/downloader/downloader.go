@@ -1305,7 +1305,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 			// Send a download request to all idle peers, until throttled
 			progressed, throttled, running := false, false, inFlight()
 			idles, total := idle()
-			pendCount := 1
+			pendCount := pending()
 			for _, peer := range idles {
 				// Short circuit if throttling activated
 				if throttled {
@@ -1330,24 +1330,25 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 					throttled = true
 					throttleCounter.Inc(1)
 				}
-				if request != nil {
-					if request.From > 0 {
-						peer.log.Trace("Requesting new batch of data", "type", kind, "from", request.From)
-					} else {
-						peer.log.Trace("Requesting new batch of data", "type", kind, "count", len(request.Headers), "from", request.Headers[0].Number)
-					}
-					// Fetch the chunk and make sure any errors return the hashes to the queue
-					if fetchHook != nil {
-						fetchHook(request.Headers)
-					}
-					if err := fetch(peer, request); err != nil {
-						// Although we could try and make an attempt to fix this, this error really
-						// means that we've double allocated a fetch task to a peer. If that is the
-						// case, the internal state of the downloader and the queue is very wrong so
-						// better hard crash and note the error instead of silently accumulating into
-						// a much bigger issue.
-						panic(fmt.Sprintf("%v: %s fetch assignment failed", peer, kind))
-					}
+				if request == nil {
+					continue
+				}
+				if request.From > 0 {
+					peer.log.Trace("Requesting new batch of data", "type", kind, "from", request.From)
+				} else {
+					peer.log.Trace("Requesting new batch of data", "type", kind, "count", len(request.Headers), "from", request.Headers[0].Number)
+				}
+				// Fetch the chunk and make sure any errors return the hashes to the queue
+				if fetchHook != nil {
+					fetchHook(request.Headers)
+				}
+				if err := fetch(peer, request); err != nil {
+					// Although we could try and make an attempt to fix this, this error really
+					// means that we've double allocated a fetch task to a peer. If that is the
+					// case, the internal state of the downloader and the queue is very wrong so
+					// better hard crash and note the error instead of silently accumulating into
+					// a much bigger issue.
+					panic(fmt.Sprintf("%v: %s fetch assignment failed", peer, kind))
 				}
 				running = true
 			}
