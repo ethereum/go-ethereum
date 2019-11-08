@@ -860,7 +860,7 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	q.lock.Lock()
 	var acceptCount = 0
 	for _, header := range request.Headers[:i] {
-		if res, stale, err := q.resultCache.GetFetchResult(header); err == nil {
+		if res, stale, err := q.resultCache.GetDeliverySlot(header); err == nil {
 			reconstruct(acceptCount, res)
 		} else {
 			// else: betweeen here and above, some other peer filled this result,

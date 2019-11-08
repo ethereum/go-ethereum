@@ -73,29 +73,25 @@ func (r *resultStore) SetThrottleThreshold(threshold uint64) {
 //                prio right now
 // fetchResult -- the result to store data into
 // err         -- any error that occurred
-func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale, throttled bool, item *fetchResult, err error) {
+func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (bool, bool, *fetchResult, error) {
 	header.Hash()
 	r.lock.RLock()
 	var index int
-	if item, index, stale, throttled, err = r.getFetchResult(header); err != nil {
+	item, index, stale, throttled, err := r.getFetchResult(header)
+	if err != nil || stale || throttled {
 		r.lock.RUnlock()
-		return
-	}
-	if stale {
-		r.lock.RUnlock()
-		return
-	}
-	if throttled {
 		// Index is above the current threshold of 'prioritized' blocks,
-		log.Debug("resultcache throttle", "index", index, "threshold", r.throttleThreshold)
-		r.lock.RUnlock()
-		return
+		if throttled {
+			log.Debug("resultcache throttle", "index", index, "threshold", r.throttleThreshold)
+
+		}
+		return stale, throttled, item, err
 	}
 	if item != nil {
 		// All good, item already exists (perhaps a receipt fetch following
 		// a body fetch)
 		r.lock.RUnlock()
-		return
+		return stale, throttled, item, err
 	}
 	r.lock.RUnlock()
 	// Need to create a fetchresult, and as we've just release the Rlock,
@@ -103,22 +99,22 @@ func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale, thro
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	// Same checks as above, now with wlock
-	if item, index, stale, throttled, err = r.getFetchResult(header); err != nil {
-		return
-	}
-	if stale || throttled {
-		return
+	item, index, stale, throttled, err = r.getFetchResult(header)
+	if err != nil || stale || throttled {
+		return stale, throttled, item, err
 	}
 	if item == nil {
 		item = newFetchResult(header, fastSync)
 		r.items[index] = item
 	}
-	return
+	return stale, throttled, item, err
 }
 
-// GetFetchResult returns the fetchResult for the given header. If the 'stale' flag
+// GetDeliverySlot returns the fetchResult for the given header. If the 'stale' flag
 // is true, that means the header has already been delivered 'upstream'.
-func (r *resultStore) GetFetchResult(header *types.Header) (*fetchResult, bool, error) {
+// This method does not bubble up the 'throttle' flag, since it's moot at the
+// point in time when the item is downloaded and ready for delivery
+func (r *resultStore) GetDeliverySlot(header *types.Header) (*fetchResult, bool, error) {
 	r.lock.RLock()
 	defer r.lock.RUnlock()
 	res, _, stale, _, err := r.getFetchResult(header)

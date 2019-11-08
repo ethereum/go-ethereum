@@ -261,7 +261,7 @@ func (dl *downloadTester) InsertHeaderChain(headers []*types.Header, checkFreq i
 	defer dl.lock.Unlock()
 	// Do a quick check, as the blockchain.InsertHeaderChain doesn't insert anything in case of errors
 	if _, ok := dl.getHeader(headers[0].ParentHash); !ok {
-		return 0, errors.New("unknown parentx")
+		return 0, errors.New("unknown parent")
 	}
 	for i := 1; i < len(headers); i++ {
 		if headers[i].ParentHash != headers[i-1].Hash() {
