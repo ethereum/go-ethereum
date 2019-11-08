@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"math"
 	"math/rand"
 	"runtime"
 	"testing"
@@ -326,7 +327,7 @@ func testUniformSampleStatistics(t *testing.T, s Sample) {
 	if 7380.5 != ps[1] {
 		t.Errorf("75th percentile: 7380.5 != %v\n", ps[1])
 	}
-	if 9986.429999999998 != ps[2] {
+	if math.Abs(9986.429999999998-ps[2]) > epsilonPercentile {
 		t.Errorf("99th percentile: 9986.429999999998 != %v\n", ps[2])
 	}
 }

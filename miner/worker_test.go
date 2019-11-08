@@ -340,7 +340,9 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 		}
 	}
 	w.fullTaskHook = func() {
-		time.Sleep(100 * time.Millisecond)
+		// Aarch64 unit tests are running in a VM on travis, they must
+		// be given more time to execute.
+		time.Sleep(time.Second)
 	}
 
 	// Ensure worker has finished initialization
@@ -355,7 +357,7 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	for i := 0; i < 2; i += 1 {
 		select {
 		case <-taskCh:
-		case <-time.NewTimer(2 * time.Second).C:
+		case <-time.NewTimer(4 * time.Second).C:
 			t.Error("new task timeout")
 		}
 	}
