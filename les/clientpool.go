@@ -19,6 +19,7 @@ package les
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"math"
 	"sync"
@@ -483,7 +484,7 @@ func (f *clientPool) setLimits(totalConn int, totalCap uint64) {
 // setCapacity sets the assigned capacity of a connected client
 func (f *clientPool) setCapacity(c *clientInfo, capacity uint64) error {
 	if f.connectedMap[c.id] != c {
-		return errClientNotConnected
+		return fmt.Errorf("client %064x is not connected", c.id[:])
 	}
 	if c.capacity == capacity {
 		return nil

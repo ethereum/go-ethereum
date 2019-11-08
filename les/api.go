@@ -34,7 +34,6 @@ var (
 	errNoCheckpoint         = errors.New("no local checkpoint provided")
 	errNotActivated         = errors.New("checkpoint registrar is not activated")
 	errUnknownBenchmarkType = errors.New("unknown benchmark type")
-	errClientNotConnected   = errors.New("client is not connected")
 	errBalanceOverflow      = errors.New("balance overflow")
 	errNoPriority           = errors.New("not enough priority")
 )
@@ -152,28 +151,24 @@ func (api *PrivateLightServerAPI) sendEvent(clientEvent string, client *clientIn
 	}
 }
 
-// setParams either sets the given parameters for a single client (if ID is specified)
+// setParams either sets the given parameters for a single connected client (if specified)
 // or the default parameters applicable to clients connected in the future
-func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, client *clientInfo, id enode.ID, posFactors, negFactors *priceFactors) (updateFactors bool, err error) {
-	if client != nil {
+func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, client *clientInfo, posFactors, negFactors *priceFactors) (updateFactors bool, err error) {
+	defParams := client == nil
+	if !defParams {
 		posFactors, negFactors = &client.posFactors, &client.negFactors
 	}
-	defParams := id == enode.ID{}
 loop:
 	for name, value := range params {
 		errValue := func() error {
 			return fmt.Errorf("invalid value for parameter '%s'", name)
 		}
 		setFactor := func(v *float64) {
-			if posFactors != nil {
-				if val, ok := value.(float64); ok && val >= 0 {
-					*v = val / float64(time.Second)
-					updateFactors = true
-				} else {
-					err = errValue()
-				}
+			if val, ok := value.(float64); ok && val >= 0 {
+				*v = val / float64(time.Second)
+				updateFactors = true
 			} else {
-				err = errClientNotConnected
+				err = errValue()
 			}
 		}
 
@@ -203,35 +198,23 @@ loop:
 		}
 		switch name {
 		case "capacity":
-			if client != nil {
-				if capacity, ok := value.(float64); ok && (capacity == 0 || uint64(capacity) >= api.server.minCapacity) {
-					err = api.server.clientPool.setCapacity(client, uint64(capacity))
-					updateFactors = true
-				} else {
-					err = errValue()
-				}
+			if capacity, ok := value.(float64); ok && uint64(capacity) >= api.server.minCapacity {
+				err = api.server.clientPool.setCapacity(client, uint64(capacity))
+				updateFactors = true
 			} else {
-				err = errClientNotConnected
+				err = errValue()
 			}
 		case "pricing/alert":
-			if client != nil {
-				if val, ok := value.(float64); ok && val >= 0 {
-					api.setBalanceUpdate(client, uint64(val), false)
-				} else {
-					err = errValue()
-				}
+			if val, ok := value.(float64); ok && val >= 0 {
+				api.setBalanceUpdate(client, uint64(val), false)
 			} else {
-				err = errClientNotConnected
+				err = errValue()
 			}
 		case "pricing/periodicUpdate":
-			if client != nil {
-				if val, ok := value.(float64); ok && val >= 0 {
-					api.setBalanceUpdate(client, uint64(val), true)
-				} else {
-					err = errValue()
-				}
+			if val, ok := value.(float64); ok && val >= 0 {
+				api.setBalanceUpdate(client, uint64(val), true)
 			} else {
-				err = errClientNotConnected
+				err = errValue()
 			}
 		default:
 			err = fmt.Errorf("invalid client parameter '%s'", name)
@@ -251,12 +234,16 @@ func (api *PrivateLightServerAPI) UpdateBalance(id enode.ID, value int64, meta s
 func (api *PrivateLightServerAPI) SetClientParams(ids []enode.ID, params map[string]interface{}) error {
 	var finalErr error
 	api.server.clientPool.forClients(ids, func(client *clientInfo, id enode.ID) {
-		update, err := api.setParams(params, client, id, nil, nil)
-		if err != nil {
-			finalErr = err
-		}
-		if update {
-			client.updatePriceFactors()
+		if client != nil {
+			update, err := api.setParams(params, client, nil, nil)
+			if err != nil {
+				finalErr = err
+			}
+			if update {
+				client.updatePriceFactors()
+			}
+		} else {
+			finalErr = fmt.Errorf("client %064x is not connected", id[:])
 		}
 	})
 	return finalErr
@@ -264,7 +251,7 @@ func (api *PrivateLightServerAPI) SetClientParams(ids []enode.ID, params map[str
 
 // SetDefaultParams sets the default parameters applicable to clients connected in the future
 func (api *PrivateLightServerAPI) SetDefaultParams(params map[string]interface{}) error {
-	update, err := api.setParams(params, nil, enode.ID{}, &api.defaultPosFactors, &api.defaultNegFactors)
+	update, err := api.setParams(params, nil, &api.defaultPosFactors, &api.defaultNegFactors)
 	if update {
 		api.server.clientPool.setDefaultFactors(api.defaultPosFactors, api.defaultNegFactors)
 	}
@@ -410,7 +397,7 @@ func NewPrivateDebugAPI(server *LesServer) *PrivateDebugAPI {
 
 // FreezeClient forces a temporary client freeze which normally happens when the server is overloaded
 func (api *PrivateDebugAPI) FreezeClient(id enode.ID) error {
-	err := errClientNotConnected
+	err := fmt.Errorf("client %064x is not connected", id[:])
 	api.server.clientPool.forClients([]enode.ID{id}, func(c *clientInfo, id enode.ID) {
 		c.peer.freezeClient()
 		err = nil
