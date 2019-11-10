@@ -1670,7 +1670,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	if config.Clique != nil {
 		engine = clique.New(config.Clique, chainDb)
 	} else if config.Bor != nil {
-		engine = bor.New(config.Bor, chainDb, nil)
+		engine = bor.New(config, chainDb, nil)
 	} else {
 		engine = ethash.NewFaker()
 		if !ctx.GlobalBool(FakePoWFlag.Name) {

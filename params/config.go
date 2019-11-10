@@ -316,10 +316,12 @@ func (c *CliqueConfig) String() string {
 
 // BorConfig is the consensus engine configs for Matic bor based sealing.
 type BorConfig struct {
-	Period            uint64 `json:"period"`            // Number of seconds between blocks to enforce
-	ProducerDelay     uint64 `json:"producerDelay"`     // Number of seconds delay between two producer interval
-	Sprint            uint64 `json:"sprint"`            // Epoch length to proposer
-	ValidatorContract string `json:"validatorContract"` // Validator set contract
+	Period                uint64 `json:"period"`                // Number of seconds between blocks to enforce
+	ProducerDelay         uint64 `json:"producerDelay"`         // Number of seconds delay between two producer interval
+	Sprint                uint64 `json:"sprint"`                // Epoch length to proposer
+	ValidatorContract     string `json:"validatorContract"`     // Validator set contract
+	StateReceiverContract string `json:"stateReceiverContract"` // State receiver contract
+	Heimdall              string `json:"heimdall"`              // heimdall light client url
 }
 
 // String implements the stringer interface, returning the consensus engine details.

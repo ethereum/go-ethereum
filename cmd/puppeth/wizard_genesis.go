@@ -108,10 +108,12 @@ func (w *wizard) makeGenesis() {
 		genesis.Difficulty = big.NewInt(1)
 		genesis.GasLimit = 10000000
 		genesis.Config.Bor = &params.BorConfig{
-			Period:            1,
-			ProducerDelay:     5,
-			Sprint:            60,
-			ValidatorContract: "0x0000000000000000000000000000000000001000",
+			Period:                1,
+			ProducerDelay:         5,
+			Sprint:                60,
+			ValidatorContract:     "0x0000000000000000000000000000000000001000",
+			StateReceiverContract: "0x0000000000000000000000000000000000001001",
+			Heimdall:              "http://localhost:1317",
 		}
 
 		// We also need the initial list of signers

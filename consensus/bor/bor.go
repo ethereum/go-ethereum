@@ -3,24 +3,31 @@ package bor
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math"
 	"math/big"
+	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -33,7 +40,8 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-const validatorsetABI = `[{"constant":true,"inputs":[{"name":"span","type":"uint256"}],"name":"getSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getBorValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"commitSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"currentSpanNumber","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getNextSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getInitialValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getCurrentSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getSpanByBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"validateValidatorSet","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}]`
+const validatorsetABI = `[{"constant":true,"inputs":[{"name":"span","type":"uint256"}],"name":"getSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getBorValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"},{"name":"signer","type":"address"}],"name":"isProducer","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"newSpan","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"},{"name":"validatorBytes","type":"bytes"},{"name":"producerBytes","type":"bytes"}],"name":"commitSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[{"name":"span","type":"uint256"},{"name":"signer","type":"address"}],"name":"isValidator","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[],"name":"proposeSpan","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"currentSpanNumber","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getNextSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getInitialValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"spanProposalPending","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getCurrentSpan","outputs":[{"name":"number","type":"uint256"},{"name":"startBlock","type":"uint256"},{"name":"endBlock","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"number","type":"uint256"}],"name":"getSpanByBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getValidators","outputs":[{"name":"","type":"address[]"},{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"validateValidatorSet","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}]`
+const stateReceiverABI = `[{"constant":true,"inputs":[{"name":"","type":"uint256"}],"name":"states","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"recordBytes","type":"bytes"}],"name":"commitState","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"getPendingStates","outputs":[{"name":"","type":"uint256[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"SYSTEM_ADDRESS","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"validatorSet","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"vote","type":"bytes"},{"name":"sigs","type":"bytes"},{"name":"txBytes","type":"bytes"},{"name":"proof","type":"bytes"}],"name":"validateValidatorSet","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"isValidatorSetContract","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"stateId","type":"uint256"}],"name":"proposeState","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[{"name":"signer","type":"address"}],"name":"isProducer","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"signer","type":"address"}],"name":"isValidator","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"}]`
 
 const (
 	checkpointInterval = 1024 // Number of blocks after which to save the vote snapshot to the database
@@ -56,6 +64,7 @@ var (
 	diffNoTurn = big.NewInt(1) // Block difficulty for out-of-turn signatures
 
 	validatorHeaderBytesLength = common.AddressLength + 20 // address + power
+	systemAddress              = common.HexToAddress("0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE")
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -197,16 +206,9 @@ func CalcDifficulty(snap *Snapshot, signer common.Address, epoch uint64) *big.In
 
 // CalcProducerDelay is the producer delay algorithm based on block time.
 func CalcProducerDelay(snap *Snapshot, signer common.Address, period uint64, epoch uint64, producerDelay uint64) uint64 {
-	// lastSigner := snap.Recents[snap.Number]
-	// proposer := snap.ValidatorSet.GetProposer()
-
 	// if block is epoch start block, proposer will be inturn signer
 	if (snap.Number+1)%epoch == 0 {
 		return producerDelay
-
-		// if block is not epoch block, last block signer will be inturn
-		// } else if bytes.Compare(lastSigner.Bytes(), signer.Bytes()) != 0 {
-		// return producerDelay
 	}
 
 	return period
@@ -227,46 +229,59 @@ func BorRLP(header *types.Header) []byte {
 
 // Bor is the matic-bor consensus engine
 type Bor struct {
-	config *params.BorConfig // Consensus engine configuration parameters for bor consensus
-	db     ethdb.Database    // Database to store and retrieve snapshot checkpoints
+	chainConfig *params.ChainConfig // Chain config
+	config      *params.BorConfig   // Consensus engine configuration parameters for bor consensus
+	db          ethdb.Database      // Database to store and retrieve snapshot checkpoints
 
 	recents    *lru.ARCCache // Snapshots for recent block to speed up reorgs
 	signatures *lru.ARCCache // Signatures of recent blocks to speed up mining
-
-	proposals map[common.Address]bool // Current list of proposals we are pushing
 
 	signer common.Address // Ethereum address of the signing key
 	signFn SignerFn       // Signer function to authorize hashes with
 	lock   sync.RWMutex   // Protects the signer fields
 
-	ethAPI          *ethapi.PublicBlockChainAPI
-	validatorSetABI abi.ABI
+	ethAPI           *ethapi.PublicBlockChainAPI
+	validatorSetABI  abi.ABI
+	stateReceiverABI abi.ABI
+	httpClient       http.Client
 
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
 }
 
 // New creates a Matic Bor consensus engine.
-func New(config *params.BorConfig, db ethdb.Database, ethAPI *ethapi.PublicBlockChainAPI) *Bor {
+func New(
+	chainConfig *params.ChainConfig,
+	db ethdb.Database,
+	ethAPI *ethapi.PublicBlockChainAPI,
+) *Bor {
+	// get bor config
+	borConfig := chainConfig.Bor
+
 	// Set any missing consensus parameters to their defaults
-	conf := *config
-	if conf.Sprint == 0 {
-		conf.Sprint = defaultSprintLength
+	if borConfig != nil && borConfig.Sprint == 0 {
+		borConfig.Sprint = defaultSprintLength
 	}
 
 	// Allocate the snapshot caches and create the engine
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySignatures)
 	vABI, _ := abi.JSON(strings.NewReader(validatorsetABI))
+	sABI, _ := abi.JSON(strings.NewReader(stateReceiverABI))
 	c := &Bor{
-		config:          &conf,
-		db:              db,
-		ethAPI:          ethAPI,
-		recents:         recents,
-		signatures:      signatures,
-		proposals:       make(map[common.Address]bool),
-		validatorSetABI: vABI,
+		chainConfig:      chainConfig,
+		config:           borConfig,
+		db:               db,
+		ethAPI:           ethAPI,
+		recents:          recents,
+		signatures:       signatures,
+		validatorSetABI:  vABI,
+		stateReceiverABI: sABI,
+		httpClient: http.Client{
+			Timeout: time.Duration(5 * time.Second),
+		},
 	}
+
 	return c
 }
 
@@ -450,7 +465,7 @@ func (c *Bor) snapshot(chain consensus.ChainReader, number uint64, hash common.H
 				// get checkpoint data
 				hash := checkpoint.Hash()
 
-				// current validators
+				// get validators and current span
 				validators, err := c.GetCurrentValidators(number, number+1)
 				if err != nil {
 					return nil, err
@@ -646,6 +661,23 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
 func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
+	// commit span
+	if header.Number.Uint64()%c.config.Sprint == 0 {
+		cx := chainContext{Chain: chain, Bor: c}
+
+		// check and commit span
+		if err := c.checkAndCommitSpan(state, header, cx); err != nil {
+			fmt.Println("Error while committing span", err)
+			return
+		}
+
+		// commit statees
+		if err := c.CommitStates(state, header, cx); err != nil {
+			fmt.Println("Error while committing states", err)
+			return
+		}
+	}
+
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
@@ -654,6 +686,24 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
 func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+	// commit span
+	if header.Number.Uint64()%c.config.Sprint == 0 {
+		cx := chainContext{Chain: chain, Bor: c}
+
+		// check and commit span
+		err := c.checkAndCommitSpan(state, header, cx)
+		if err != nil {
+			fmt.Println("Error while committing span", err)
+			return nil, err
+		}
+
+		// commit statees
+		if err := c.CommitStates(state, header, cx); err != nil {
+			fmt.Println("Error while committing states", err)
+			// return nil, err
+		}
+	}
+
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
@@ -790,23 +840,101 @@ func (c *Bor) Close() error {
 	return nil
 }
 
-// GetCurrentValidators get current validators
-func (c *Bor) GetCurrentValidators(snapshotNumber uint64, blockNumber uint64) ([]*Validator, error) {
-	return GetValidators(snapshotNumber, blockNumber, c.config.Sprint, c.config.ValidatorContract, c.ethAPI)
+// Checks if new span is pending
+func (c *Bor) isSpanPending(snapshotNumber uint64) (bool, error) {
+	blockNr := rpc.BlockNumber(snapshotNumber)
+	method := "spanProposalPending"
+
+	// get packed data
+	data, err := c.validatorSetABI.Pack(method)
+	if err != nil {
+		fmt.Println("Unable to pack tx for spanProposalPending", "error", err)
+		return false, err
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // cancel when we are finished consuming integers
+
+	// call
+	msgData := (hexutil.Bytes)(data)
+	toAddress := common.HexToAddress(c.config.ValidatorContract)
+	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
+	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+		Gas:  &gas,
+		To:   &toAddress,
+		Data: &msgData,
+	}, blockNr)
+	if err != nil {
+		return false, err
+	}
+
+	var ret0 = new(bool)
+	if err := c.validatorSetABI.Unpack(ret0, method, result); err != nil {
+		return false, err
+	}
+
+	return *ret0, nil
 }
 
-// GetValidators get current validators
-func GetValidators(snapshotNumber uint64, blockNumber uint64, sprint uint64, validatorContract string, ethAPI *ethapi.PublicBlockChainAPI) ([]*Validator, error) {
+// GetCurrentSpan get current span from contract
+func (c *Bor) GetCurrentSpan(snapshotNumber uint64) (*Span, error) {
 	// block
 	blockNr := rpc.BlockNumber(snapshotNumber)
 
-	// validator set ABI
-	validatorSetABI, _ := abi.JSON(strings.NewReader(validatorsetABI))
+	// method
+	method := "getCurrentSpan"
+
+	data, err := c.validatorSetABI.Pack(method)
+	if err != nil {
+		fmt.Println("Unable to pack tx for getCurrentSpan", "error", err)
+		return nil, err
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // cancel when we are finished consuming integers
+
+	// call
+	msgData := (hexutil.Bytes)(data)
+	toAddress := common.HexToAddress(c.config.ValidatorContract)
+	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
+	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+		Gas:  &gas,
+		To:   &toAddress,
+		Data: &msgData,
+	}, blockNr)
+	if err != nil {
+		return nil, err
+	}
+
+	// span result
+	ret := new(struct {
+		Number     *big.Int
+		StartBlock *big.Int
+		EndBlock   *big.Int
+	})
+	if err := c.validatorSetABI.Unpack(ret, method, result); err != nil {
+		return nil, err
+	}
+
+	// create new span
+	span := Span{
+		ID:         ret.Number.Uint64(),
+		StartBlock: ret.StartBlock.Uint64(),
+		EndBlock:   ret.EndBlock.Uint64(),
+	}
+
+	return &span, nil
+}
+
+// GetCurrentValidators get current validators
+func (c *Bor) GetCurrentValidators(snapshotNumber uint64, blockNumber uint64) ([]*Validator, error) {
+	// block
+	blockNr := rpc.BlockNumber(snapshotNumber)
 
 	// method
 	method := "getBorValidators"
 
-	data, err := validatorSetABI.Pack(method, big.NewInt(0).SetUint64(blockNumber))
+	data, err := c.validatorSetABI.Pack(method, big.NewInt(0).SetUint64(blockNumber))
 	if err != nil {
 		fmt.Println("Unable to pack tx for getValidator", "error", err)
 		return nil, err
@@ -817,9 +945,9 @@ func GetValidators(snapshotNumber uint64, blockNumber uint64, sprint uint64, val
 
 	// call
 	msgData := (hexutil.Bytes)(data)
-	toAddress := common.HexToAddress(validatorContract)
+	toAddress := common.HexToAddress(c.config.ValidatorContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := ethAPI.Call(ctx, ethapi.CallArgs{
+	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
@@ -838,7 +966,7 @@ func GetValidators(snapshotNumber uint64, blockNumber uint64, sprint uint64, val
 		ret1,
 	}
 
-	if err := validatorSetABI.Unpack(out, method, result); err != nil {
+	if err := c.validatorSetABI.Unpack(out, method, result); err != nil {
 		return nil, err
 	}
 
@@ -851,6 +979,297 @@ func GetValidators(snapshotNumber uint64, blockNumber uint64, sprint uint64, val
 	}
 
 	return valz, nil
+}
+
+func (c *Bor) checkAndCommitSpan(
+	state *state.StateDB,
+	header *types.Header,
+	chain core.ChainContext,
+) error {
+	pending := false
+	var span *Span = nil
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		pending, _ = c.isSpanPending(header.Number.Uint64())
+		wg.Done()
+	}()
+
+	wg.Add(1)
+	go func() {
+		span, _ = c.GetCurrentSpan(header.Number.Uint64() - 1)
+		wg.Done()
+	}()
+
+	wg.Wait()
+
+	// commit span if there is new span pending or span is ending or end block is not set
+	if pending || c.needToCommitSpan(span, header) {
+		err := c.commitSpan(span, state, header, chain)
+		return err
+	}
+
+	return nil
+}
+
+func (c *Bor) needToCommitSpan(span *Span, header *types.Header) bool {
+	// if span is nil
+	if span == nil {
+		return false
+	}
+
+	// check span is not set initially
+	if span.EndBlock == 0 {
+		return true
+	}
+
+	// if current block is first block of last sprint in current span
+	h := header.Number.Uint64()
+	if span.EndBlock > c.config.Sprint && span.EndBlock-c.config.Sprint+1 == h {
+		return true
+	}
+
+	return false
+}
+
+func (c *Bor) commitSpan(
+	span *Span,
+	state *state.StateDB,
+	header *types.Header,
+	chain core.ChainContext,
+) error {
+	response, err := FetchFromHeimdall(c.httpClient, c.chainConfig.Bor.Heimdall, "bor", "span", strconv.FormatUint(span.ID+1, 10))
+	if err != nil {
+		return err
+	}
+
+	var heimdallSpan HeimdallSpan
+	if err := json.Unmarshal(response.Result, &heimdallSpan); err != nil {
+		return err
+	}
+
+	// get validators bytes
+	var validators []MinimalVal
+	for _, val := range heimdallSpan.ValidatorSet.Validators {
+		validators = append(validators, val.MinimalVal())
+	}
+	validatorBytes, err := rlp.EncodeToBytes(validators)
+	if err != nil {
+		return err
+	}
+
+	// get producers bytes
+	var producers []MinimalVal
+	for _, val := range heimdallSpan.SelectedProducers {
+		producers = append(producers, val.MinimalVal())
+	}
+	producerBytes, err := rlp.EncodeToBytes(producers)
+	if err != nil {
+		return err
+	}
+
+	// method
+	method := "commitSpan"
+
+	fmt.Println(
+		"id", heimdallSpan.ID,
+		"startBlock", heimdallSpan.StartBlock,
+		"endBlock", heimdallSpan.EndBlock,
+		"validatorBytes", hex.EncodeToString(validatorBytes),
+		"producerBytes", hex.EncodeToString(producerBytes),
+	)
+
+	// get packed data
+	data, err := c.validatorSetABI.Pack(method,
+		big.NewInt(0).SetUint64(heimdallSpan.ID),
+		big.NewInt(0).SetUint64(heimdallSpan.StartBlock),
+		big.NewInt(0).SetUint64(heimdallSpan.EndBlock),
+		validatorBytes,
+		producerBytes,
+	)
+	if err != nil {
+		fmt.Println("Unable to pack tx for commitSpan", "error", err)
+		return err
+	}
+
+	// get system message
+	msg := getSystemMessage(common.HexToAddress(c.config.ValidatorContract), data)
+
+	// apply message
+	return applyMessage(msg, state, header, c.chainConfig, chain)
+}
+
+// GetPendingStateProposals get pending state proposals
+func (c *Bor) GetPendingStateProposals(snapshotNumber uint64) ([]*big.Int, error) {
+	// block
+	blockNr := rpc.BlockNumber(snapshotNumber)
+
+	// method
+	method := "getPendingStates"
+
+	data, err := c.stateReceiverABI.Pack(method)
+	if err != nil {
+		fmt.Println("Unable to pack tx for getPendingStates", "error", err)
+		return nil, err
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // cancel when we are finished consuming integers
+
+	msgData := (hexutil.Bytes)(data)
+	toAddress := common.HexToAddress(c.config.StateReceiverContract)
+	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
+	result, err := c.ethAPI.Call(ctx, ethapi.CallArgs{
+		Gas:  &gas,
+		To:   &toAddress,
+		Data: &msgData,
+	}, blockNr)
+	if err != nil {
+		return nil, err
+	}
+
+	var ret = new([]*big.Int)
+	if err := c.stateReceiverABI.Unpack(ret, method, result); err != nil {
+		return nil, err
+	}
+
+	return *ret, nil
+}
+
+// CommitStates commit states
+func (c *Bor) CommitStates(
+	state *state.StateDB,
+	header *types.Header,
+	chain core.ChainContext,
+) error {
+	// get pending state proposals
+	stateIds, err := c.GetPendingStateProposals(header.Number.Uint64() - 1)
+	if err != nil {
+		return err
+	}
+
+	// state ids
+	if len(stateIds) > 0 {
+		fmt.Println("Found new proposed states", len(stateIds))
+	}
+
+	method := "commitState"
+
+	// itereate through state ids
+	for _, stateID := range stateIds {
+		// fetch from heimdall
+		response, err := FetchFromHeimdall(c.httpClient, c.chainConfig.Bor.Heimdall, "clerk", "event-record", strconv.FormatUint(stateID.Uint64(), 10))
+		if err != nil {
+			return err
+		}
+
+		// get event record
+		var eventRecord EventRecord
+		if err := json.Unmarshal(response.Result, &eventRecord); err != nil {
+			return err
+		}
+
+		recordBytes, err := rlp.EncodeToBytes(eventRecord)
+		if err != nil {
+			return err
+		}
+
+		// get packed data for commit state
+		data, err := c.stateReceiverABI.Pack(method, recordBytes)
+		if err != nil {
+			fmt.Println("Unable to pack tx for commitState", "error", err)
+			return err
+		}
+
+		// get system message
+		msg := getSystemMessage(common.HexToAddress(c.config.StateReceiverContract), data)
+
+		// apply message
+		if err := applyMessage(msg, state, header, c.chainConfig, chain); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+//
+// Private methods
+//
+
+//
+// Chain context
+//
+
+// chain context
+type chainContext struct {
+	Chain consensus.ChainReader
+	Bor   consensus.Engine
+}
+
+func (c chainContext) Engine() consensus.Engine {
+	return c.Bor
+}
+
+func (c chainContext) GetHeader(hash common.Hash, number uint64) *types.Header {
+	return c.Chain.GetHeader(hash, number)
+}
+
+// callmsg implements core.Message to allow passing it as a transaction simulator.
+type callmsg struct {
+	ethereum.CallMsg
+}
+
+func (m callmsg) From() common.Address { return m.CallMsg.From }
+func (m callmsg) Nonce() uint64        { return 0 }
+func (m callmsg) CheckNonce() bool     { return false }
+func (m callmsg) To() *common.Address  { return m.CallMsg.To }
+func (m callmsg) GasPrice() *big.Int   { return m.CallMsg.GasPrice }
+func (m callmsg) Gas() uint64          { return m.CallMsg.Gas }
+func (m callmsg) Value() *big.Int      { return m.CallMsg.Value }
+func (m callmsg) Data() []byte         { return m.CallMsg.Data }
+
+// get system message
+func getSystemMessage(toAddress common.Address, data []byte) callmsg {
+	return callmsg{
+		ethereum.CallMsg{
+			From:     systemAddress,
+			Gas:      math.MaxUint64 / 2,
+			GasPrice: big.NewInt(0),
+			Value:    big.NewInt(0),
+			To:       &toAddress,
+			Data:     data,
+		},
+	}
+}
+
+// apply message
+func applyMessage(
+	msg callmsg,
+	state *state.StateDB,
+	header *types.Header,
+	chainConfig *params.ChainConfig,
+	chainContext core.ChainContext,
+) error {
+	// Create a new context to be used in the EVM environment
+	context := core.NewEVMContext(msg, header, chainContext, &header.Coinbase)
+	// Create a new environment which holds all relevant information
+	// about the transaction and calling mechanisms.
+	vmenv := vm.NewEVM(context, state, chainConfig, vm.Config{})
+	// Apply the transaction to the current state (included in the env)
+	_, _, err := vmenv.Call(
+		vm.AccountRef(msg.From()),
+		*msg.To(),
+		msg.Data(),
+		msg.Gas(),
+		msg.Value(),
+	)
+	// Update the state with pending changes
+	if err != nil {
+		state.Finalise(true)
+	}
+
+	return nil
 }
 
 func validatorContains(a []*Validator, x *Validator) (*Validator, bool) {

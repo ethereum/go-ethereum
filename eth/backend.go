@@ -257,7 +257,7 @@ func CreateConsensusEngine(ctx *node.ServiceContext, chainConfig *params.ChainCo
 
 	// If Matic Bor is requested, set it up
 	if chainConfig.Bor != nil {
-		return bor.New(chainConfig.Bor, db, ee)
+		return bor.New(chainConfig, db, ee)
 	}
 
 	// Otherwise assume proof-of-work
