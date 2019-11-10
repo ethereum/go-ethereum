@@ -251,10 +251,15 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 	}
 	// If the client is a free client, assign with a low free capacity,
 	// Otherwise assign with the given value(priority client)
-	if !e.priority {
+	if !e.priority || capacity == 0 {
 		capacity = f.freeClientCap
 	}
 	e.capacity = capacity
+
+	// Starts a balance tracker
+	e.balanceTracker.init(f.clock, capacity)
+	e.balanceTracker.setBalance(posBalance, negBalance)
+	e.updatePriceFactors()
 
 	// If the number of clients already connected in the clientpool exceeds its
 	// capacity, evict some clients with lowest priority.
@@ -293,15 +298,11 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 			f.dropClient(c, now, true)
 		}
 	}
+
 	// Register new client to connection queue.
 	f.connectedMap[id] = e
 	f.connectedQueue.Push(e)
 	f.connectedCap += e.capacity
-
-	// Starts a balance tracker
-	e.balanceTracker.init(f.clock, capacity)
-	e.balanceTracker.setBalance(posBalance, negBalance)
-	e.updatePriceFactors()
 
 	// If the current client is a paid client, monitor the status of client,
 	// downgrade it to normal client if positive balance is used up.
