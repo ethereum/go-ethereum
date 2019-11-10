@@ -565,31 +565,20 @@ func (f *clientPool) getPosBalance(id enode.ID) posBalance {
 
 // updateBalance updates the balance of a client (either overwrites it or adds to it).
 // It also updates the balance meta info string.
-func (f *clientPool) updateBalance(id enode.ID, amount int64, meta string) error {
+func (f *clientPool) updateBalance(id enode.ID, amount int64, meta string) (uint64, uint64, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
 	pb := f.ndb.getOrNewPB(id)
+	var negBalance uint64
 	c := f.connectedMap[id]
 	if c != nil {
-		posBalance, negBalance := c.balanceTracker.getBalance(f.clock.Now())
-		pb.value = posBalance
-		defer func() {
-			c.balanceTracker.setBalance(pb.value, negBalance)
-			if !c.priority && pb.value > 0 {
-				// The capacity should be adjusted based on the requirement,
-				// but we have no idea about the new capacity, need a second
-				// call to udpate it.
-				c.priority = true
-				f.priorityConnected += c.capacity
-				c.balanceTracker.addCallback(balanceCallbackZero, 0, func() { f.balanceExhausted(id) })
-			}
-			c.balanceMetaInfo = meta
-		}()
+		pb.value, negBalance = c.balanceTracker.getBalance(f.clock.Now())
 	}
+	oldBalance := pb.value
 	if amount > 0 {
 		if amount > maxBalance || pb.value > maxBalance-uint64(amount) {
-			return errBalanceOverflow
+			return oldBalance, oldBalance, errBalanceOverflow
 		}
 		pb.value += uint64(amount)
 	} else {
@@ -601,7 +590,21 @@ func (f *clientPool) updateBalance(id enode.ID, amount int64, meta string) error
 	}
 	pb.meta = meta
 	f.ndb.setPB(id, pb)
-	return nil
+	if c != nil {
+		c.balanceTracker.setBalance(pb.value, negBalance)
+		if !c.priority && pb.value > 0 {
+			// The capacity should be adjusted based on the requirement,
+			// but we have no idea about the new capacity, need a second
+			// call to udpate it.
+			c.priority = true
+			f.priorityConnected += c.capacity
+			c.balanceTracker.addCallback(balanceCallbackZero, 0, func() { f.balanceExhausted(id) })
+		}
+		// if balance is set to zero then reverting to non-priority status
+		// is handled by the balanceExhausted callback
+		c.balanceMetaInfo = meta
+	}
+	return oldBalance, pb.value, nil
 }
 
 // posBalance represents a recently accessed positive balance entry
