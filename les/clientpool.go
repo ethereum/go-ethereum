@@ -446,6 +446,7 @@ func (f *clientPool) balanceExhausted(id enode.ID) {
 		f.connectedCap += f.freeClientCap - c.capacity
 		totalConnectedGauge.Update(int64(f.connectedCap))
 		c.capacity = f.freeClientCap
+		c.balanceTracker.setCapacity(c.capacity)
 		c.peer.updateCapacity(c.capacity)
 	}
 	pb := f.ndb.getOrNewPB(id)

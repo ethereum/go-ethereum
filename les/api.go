@@ -35,7 +35,7 @@ var (
 	errNotActivated         = errors.New("checkpoint registrar is not activated")
 	errUnknownBenchmarkType = errors.New("unknown benchmark type")
 	errBalanceOverflow      = errors.New("balance overflow")
-	errNoPriority           = errors.New("not enough priority")
+	errNoPriority           = errors.New("priority too low to raise capacity")
 )
 
 const maxBalance = math.MaxInt64
