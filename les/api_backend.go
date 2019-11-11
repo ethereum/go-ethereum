@@ -250,7 +250,7 @@ func (b *LesApiBackend) EventMux() *event.TypeMux {
 }
 
 func (b *LesApiBackend) AccountManager() *accounts.Manager {
-	return b.eth.accountManager
+	return b.eth.am
 }
 
 func (b *LesApiBackend) ExtRPCEnabled() bool {

@@ -19,8 +19,10 @@ package bind
 import (
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/external"
@@ -91,6 +93,22 @@ func NewClefTransactor(clef *external.ExternalSigner, account accounts.Account) 
 				return nil, errors.New("not authorized to sign this account")
 			}
 			return clef.SignTx(account, transaction, nil) // Clef enforces its own chain id
+		},
+	}
+}
+
+// NewRawTransactor is a utility method to easily create a transaction signer
+// with a raw signer function.
+func NewRawTransactor(signFn func(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error), account accounts.Account) *TransactOpts {
+	return &TransactOpts{
+		From: account.Address,
+		Signer: func(signer types.Signer, address common.Address, transaction *types.Transaction) (*types.Transaction, error) {
+			if address != account.Address {
+				fmt.Println("want", account.Address.Hex(), "got", address.Hex())
+
+				return nil, errors.New("not authorized to sign this account")
+			}
+			return signFn(account, transaction, nil) // Clef enforces its own chain id
 		},
 	}
 }

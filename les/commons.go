@@ -21,12 +21,14 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/les/payment"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
@@ -64,6 +66,13 @@ type lesCommons struct {
 	chainReader                  chainReader
 	chtIndexer, bloomTrieIndexer *core.ChainIndexer
 	oracle                       *checkpointOracle
+
+	// Payment channel relative fields
+	paymentDb      ethdb.Database                 // The database used to store all received payments or payment records
+	paymentInited  uint32                         // The status indicator whether payment methods are allocated.
+	address        common.Address                 // The address used to pay or charge
+	am             *accounts.Manager              // The global account manager which holds the local account
+	channelManager *payment.PaymentChannelManager // Off-chain payment channel manager
 
 	closeCh chan struct{}
 	wg      sync.WaitGroup

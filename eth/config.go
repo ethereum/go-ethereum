@@ -112,6 +112,11 @@ type Config struct {
 	UltraLightFraction     int      `toml:",omitempty"` // Percentage of trusted servers to accept an announcement
 	UltraLightOnlyAnnounce bool     `toml:",omitempty"` // Whether to only announce headers, or also serve them
 
+	// Les server incentivization options
+	LightServiceCharge bool           // Indicator whether to charge for the light service
+	LightServicePay    bool           // Indicator whether to pay for the light service
+	LightAddress       common.Address // Address of the server or client which used to pay the fee or charge.
+
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`
 	DatabaseHandles    int  `toml:"-"`

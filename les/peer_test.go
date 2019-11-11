@@ -83,7 +83,7 @@ func TestPeerHandshakeSetAnnounceTypeToAnnounceTypeSignedForTrustedPeer(t *testi
 		},
 		network: NetworkId,
 	}
-	err := p.Handshake(td, hash, headNum, genesis, nil)
+	err := p.Handshake(td, hash, headNum, genesis, nil, common.Address{})
 	if err != nil {
 		t.Fatalf("Handshake error: %s", err)
 	}
@@ -123,7 +123,7 @@ func TestPeerHandshakeAnnounceTypeSignedForTrustedPeersPeerNotInTrusted(t *testi
 		},
 		network: NetworkId,
 	}
-	err := p.Handshake(td, hash, headNum, genesis, nil)
+	err := p.Handshake(td, hash, headNum, genesis, nil, common.Address{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestPeerHandshakeDefaultAllRequests(t *testing.T) {
 		network: NetworkId,
 	}
 
-	err := p.Handshake(td, hash, headNum, genesis, s)
+	err := p.Handshake(td, hash, headNum, genesis, s, common.Address{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestPeerHandshakeServerSendOnlyAnnounceRequestsHeaders(t *testing.T) {
 		network: NetworkId,
 	}
 
-	err := p.Handshake(td, hash, headNum, genesis, s)
+	err := p.Handshake(td, hash, headNum, genesis, s, common.Address{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestPeerHandshakeClientReceiveOnlyAnnounceRequestsHeaders(t *testing.T) {
 		trusted: true,
 	}
 
-	err := p.Handshake(td, hash, headNum, genesis, nil)
+	err := p.Handshake(td, hash, headNum, genesis, nil, common.Address{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestPeerHandshakeClientReturnErrorOnUselessPeer(t *testing.T) {
 		network: NetworkId,
 	}
 
-	err := p.Handshake(td, hash, headNum, genesis, nil)
+	err := p.Handshake(td, hash, headNum, genesis, nil, common.Address{})
 	if err == nil {
 		t.FailNow()
 	}

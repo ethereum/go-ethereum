@@ -17,14 +17,17 @@
 package les
 
 import (
+	"errors"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/les/payment"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -100,6 +103,10 @@ func (h *clientHandler) handle(p *peer) error {
 	}
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
 
+	// Ensure the payment is initialized before we establish any connections
+	if h.backend.config.LightServicePay && atomic.LoadUint32(&h.backend.paymentInited) == 0 {
+		return errors.New("payment hasn't been initialized")
+	}
 	// Execute the LES handshake
 	var (
 		head   = h.backend.blockchain.CurrentHeader()
@@ -107,7 +114,7 @@ func (h *clientHandler) handle(p *peer) error {
 		number = head.Number.Uint64()
 		td     = h.backend.blockchain.GetTd(hash, number)
 	)
-	if err := p.Handshake(td, hash, number, h.backend.blockchain.Genesis().Hash(), nil); err != nil {
+	if err := p.Handshake(td, hash, number, h.backend.blockchain.Genesis().Hash(), nil, h.backend.address); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -131,9 +138,40 @@ func (h *clientHandler) handle(p *peer) error {
 	if p.poolEntry != nil {
 		h.backend.serverPool.registered(p.poolEntry)
 	}
+	// Open channel if server requests charging.
+	var err error
+	var payment payment.Payment
+	if p.paymentChannel != (common.Address{}) {
+		payment, err = h.backend.channelManager.OpenChannel(p.paymentChannel, p)
+		if err != nil {
+			p.Log().Error("Failed to open channel", "error", err)
+			return err
+		}
+		p.Log().Info("Opened the channel", "address", p.paymentChannel, "id", p.id)
+		defer h.backend.channelManager.CloseChannel(p.paymentChannel)
+
+		// todo code hash challenge, ensure the channel is trusted
+
+		// Toy payment loop, just for debugging
+		exit := make(chan struct{})
+		go func() {
+			ticker := time.NewTicker(time.Second * 30)
+			for {
+				select {
+				case <-ticker.C:
+					if err := payment.Pay(new(big.Int).Mul(big.NewInt(1e6), big.NewInt(params.GWei))); err != nil {
+						p.Log().Error("Failed to pay", "error", err)
+					} // 1e6 gWei
+				case <-exit:
+					return
+				}
+			}
+		}()
+		defer close(exit)
+	}
 	// Spawn a main loop to handle all incoming messages.
 	for {
-		if err := h.handleMsg(p); err != nil {
+		if err := h.handleMsg(p, payment); err != nil {
 			p.Log().Debug("Light Ethereum message handling failed", "err", err)
 			p.fcServer.DumpLogs()
 			return err
@@ -143,7 +181,7 @@ func (h *clientHandler) handle(p *peer) error {
 
 // handleMsg is invoked whenever an inbound message is received from a remote
 // peer. The remote connection is torn down upon returning any error.
-func (h *clientHandler) handleMsg(p *peer) error {
+func (h *clientHandler) handleMsg(p *peer, payment payment.Payment) error {
 	// Read the next message from the remote peer, and ensure it's fully consumed
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
@@ -308,6 +346,10 @@ func (h *clientHandler) handleMsg(p *peer) error {
 		p.fcServer.ResumeFreeze(bv)
 		p.freezeServer(false)
 		p.Log().Debug("Service resumed")
+	case PaymentResultMsg:
+		if err := payment.Amend(msg.Payload); err != nil {
+			return err
+		}
 	default:
 		p.Log().Trace("Received invalid message", "code", msg.Code)
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)

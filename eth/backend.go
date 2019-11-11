@@ -59,7 +59,7 @@ type LesServer interface {
 	APIs() []rpc.API
 	Protocols() []p2p.Protocol
 	SetBloomBitsIndexer(bbIndexer *core.ChainIndexer)
-	SetContractBackend(bind.ContractBackend)
+	SetBackends(bind.ContractBackend, bind.DeployBackend)
 }
 
 // Ethereum implements the Ethereum full node service.
@@ -103,10 +103,10 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 }
 
 // SetClient sets a rpc client which connecting to our local node.
-func (s *Ethereum) SetContractBackend(backend bind.ContractBackend) {
+func (s *Ethereum) SetBackends(contract bind.ContractBackend, deploy bind.DeployBackend) {
 	// Pass the rpc client to les server if it is enabled.
 	if s.lesServer != nil {
-		s.lesServer.SetContractBackend(backend)
+		s.lesServer.SetBackends(contract, deploy)
 	}
 }
 

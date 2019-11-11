@@ -20,10 +20,13 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/les/payment"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
@@ -33,6 +36,7 @@ var (
 	errUnknownBenchmarkType = errors.New("unknown benchmark type")
 	errBalanceOverflow      = errors.New("balance overflow")
 	errNoPriority           = errors.New("priority too low to raise capacity")
+	errNoPayment            = errors.New("payment channel hasn't been initialized")
 )
 
 const maxBalance = math.MaxInt64
@@ -351,4 +355,20 @@ func (api *PrivateLightAPI) GetCheckpointContractAddress() (string, error) {
 		return "", errNotActivated
 	}
 	return api.backend.oracle.config.Address.Hex(), nil
+}
+
+// OpenedChannel returns all established channel addresses.
+func (api *PrivateLightAPI) OpenedChannels() ([]common.Address, error) {
+	if atomic.LoadUint32(&api.backend.paymentInited) == 0 {
+		return nil, errNoPayment
+	}
+	return api.backend.channelManager.ChannelAddresses(), nil
+}
+
+// ChannelInfo returns the info of the specified one.
+func (api *PrivateLightAPI) ChannelInfo(addr common.Address) (payment.ChannelInfo, error) {
+	if atomic.LoadUint32(&api.backend.paymentInited) == 0 {
+		return payment.ChannelInfo{}, errNoPayment
+	}
+	return api.backend.channelManager.ChannelInfo(addr), nil
 }

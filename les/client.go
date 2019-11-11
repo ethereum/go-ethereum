@@ -19,6 +19,7 @@ package les
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -36,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/les/payment"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -60,11 +62,10 @@ type LightEthereum struct {
 	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
 	bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
 
-	ApiBackend     *LesApiBackend
-	eventMux       *event.TypeMux
-	engine         consensus.Engine
-	accountManager *accounts.Manager
-	netRPCService  *ethapi.PublicNetAPI
+	ApiBackend    *LesApiBackend
+	eventMux      *event.TypeMux
+	engine        consensus.Engine
+	netRPCService *ethapi.PublicNetAPI
 }
 
 func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
@@ -88,14 +89,14 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 			chainDb:     chainDb,
 			peers:       peers,
 			closeCh:     make(chan struct{}),
+			am:          ctx.AccountManager,
 		},
-		eventMux:       ctx.EventMux,
-		reqDist:        newRequestDistributor(peers, &mclock.System{}),
-		accountManager: ctx.AccountManager,
-		engine:         eth.CreateConsensusEngine(ctx, chainConfig, &config.Ethash, nil, false, chainDb),
-		bloomRequests:  make(chan chan *bloombits.Retrieval),
-		bloomIndexer:   eth.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
-		serverPool:     newServerPool(chainDb, config.UltraLightServers),
+		eventMux:      ctx.EventMux,
+		reqDist:       newRequestDistributor(peers, &mclock.System{}),
+		engine:        eth.CreateConsensusEngine(ctx, chainConfig, &config.Ethash, nil, false, chainDb),
+		bloomRequests: make(chan chan *bloombits.Retrieval),
+		bloomIndexer:  eth.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
+		serverPool:    newServerPool(chainDb, config.UltraLightServers),
 	}
 	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool)
 	leth.relay = newLesTxRelay(peers, leth.retriever)
@@ -148,6 +149,15 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	}
 	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
 
+	if config.LightServicePay {
+		paymentDb, err := ctx.OpenDatabase("paymentdata", 0, 0, "eth/db/paymentdata") // How to disable metrics?
+		if err != nil {
+			return nil, err
+		}
+		leth.paymentDb = paymentDb
+		leth.address = config.LightAddress
+		log.Warn("Payment db opened, please never delete it", "path", ctx.ResolvePath("eth/db/paymentdata"))
+	}
 	return leth, nil
 }
 
@@ -264,15 +274,42 @@ func (s *LightEthereum) Stop() error {
 	s.eventMux.Stop()
 	s.serverPool.stop()
 	s.chainDb.Close()
+	if s.paymentDb != nil {
+		s.paymentDb.Close()
+	}
 	s.wg.Wait()
 	log.Info("Light ethereum stopped")
 	return nil
 }
 
 // SetClient sets the rpc client and binds the registrar contract.
-func (s *LightEthereum) SetContractBackend(backend bind.ContractBackend) {
-	if s.oracle == nil {
-		return
+func (s *LightEthereum) SetBackends(contract bind.ContractBackend, deploy bind.DeployBackend) {
+	if s.oracle != nil {
+		s.oracle.start(contract)
 	}
-	s.oracle.start(backend)
+	if s.config.LightServicePay {
+		go func() {
+			if s.address == (common.Address{}) {
+				log.Warn("Failed to setup cheque drawee", "error", "empty cheque drawee address")
+				return
+			}
+			account := accounts.Account{Address: s.address}
+			wallet, err := s.am.Find(account)
+			if err != nil {
+				log.Warn("Failed to setup cheque drawee", "error", err)
+				return
+			}
+			chequeSigner := func(data []byte) ([]byte, error) {
+				return wallet.SignData(account, accounts.MimetypeDataWithValidator, data)
+			}
+			channelManager, err := payment.NewPaymentChannelManager(payment.DefaultPaymentChannelDrawerConfig, s.chainReader, bind.NewRawTransactor(wallet.SignTx, account), chequeSigner, s.address, contract, deploy, s.paymentDb)
+			if err != nil {
+				log.Warn("Failed to setup cheque drawee", "error", err)
+				return
+			}
+			s.channelManager = channelManager
+			atomic.StoreUint32(&s.paymentInited, 1) // Mark payment channel is available now
+			log.Info("Succeed to setup cheque drawee", "address", s.address)
+		}()
+	}
 }

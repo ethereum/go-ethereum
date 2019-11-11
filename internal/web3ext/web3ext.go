@@ -833,6 +833,11 @@ web3._extend({
 			call: 'les_addBalance',
 			params: 3
 		}),
+		new web3._extend.Method({
+			name: 'channelInfo',
+			call: 'les_channelInfo',
+			params: 1
+		}),
 	],
 	properties:
 	[
@@ -847,6 +852,10 @@ web3._extend({
 		new web3._extend.Property({
 			name: 'serverInfo',
 			getter: 'les_serverInfo'
+		}),
+		new web3._extend.Property({
+			name: 'openedChannels',
+			getter: 'les_openedChannels'
 		}),
 	]
 });

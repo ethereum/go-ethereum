@@ -282,6 +282,19 @@ var (
 		Name:  "ulc.onlyannounce",
 		Usage: "Ultra light server sends announcements only",
 	}
+	// Les server incentivization settings
+	ServiceChargeFlag = cli.BoolFlag{
+		Name:  "light.charge",
+		Usage: "Indicator whether to charge for light client service",
+	}
+	ServicePaymentFlag = cli.BoolFlag{
+		Name:  "light.pay",
+		Usage: "Indicator whether to pay for light server service",
+	}
+	LightAddressFlag = cli.StringFlag{
+		Name:  "light.address",
+		Usage: "Account address of the light server or client which used to pay the fee or charge",
+	}
 	// Ethash settings
 	EthashCacheDirFlag = DirectoryFlag{
 		Name:  "ethash.cachedir",
@@ -1001,6 +1014,15 @@ func setLes(ctx *cli.Context, cfg *eth.Config) {
 	if ctx.GlobalIsSet(UltraLightOnlyAnnounceFlag.Name) {
 		cfg.UltraLightOnlyAnnounce = ctx.GlobalBool(UltraLightOnlyAnnounceFlag.Name)
 	}
+	if ctx.GlobalIsSet(ServiceChargeFlag.Name) {
+		cfg.LightServiceCharge = ctx.GlobalBool(ServiceChargeFlag.Name)
+	}
+	if ctx.GlobalIsSet(ServicePaymentFlag.Name) {
+		cfg.LightServicePay = ctx.GlobalBool(ServicePaymentFlag.Name)
+	}
+	if ctx.GlobalIsSet(LightAddressFlag.Name) {
+		cfg.LightAddress = common.HexToAddress(ctx.GlobalString(LightAddressFlag.Name))
+	}
 }
 
 // makeDatabaseHandles raises out the number of allowed file handles per process
@@ -1531,7 +1553,7 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			fullNode, err := eth.New(ctx, cfg)
 			if fullNode != nil && cfg.LightServ > 0 {
-				ls, _ := les.NewLesServer(fullNode, cfg)
+				ls, _ := les.NewLesServer(ctx, fullNode, cfg)
 				fullNode.AddLesServer(ls)
 			}
 			return fullNode, err

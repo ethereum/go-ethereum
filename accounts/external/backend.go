@@ -17,6 +17,7 @@
 package external
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"sync"
@@ -130,6 +131,11 @@ func (api *ExternalSigner) Accounts() []accounts.Account {
 
 func (api *ExternalSigner) Contains(account accounts.Account) bool {
 	api.cacheMu.RLock()
+	if api.cache == nil {
+		api.cacheMu.RUnlock()
+		api.Accounts()
+		api.cacheMu.RLock()
+	}
 	defer api.cacheMu.RUnlock()
 	for _, a := range api.cache {
 		if a.Address == account.Address && (account.URL == (accounts.URL{}) || account.URL == api.URL()) {
@@ -155,10 +161,14 @@ func (api *ExternalSigner) signHash(account accounts.Account, hash []byte) ([]by
 func (api *ExternalSigner) SignData(account accounts.Account, mimeType string, data []byte) ([]byte, error) {
 	var res hexutil.Bytes
 	var signAddress = common.NewMixedcaseAddress(account.Address)
+	var param = make(map[string]interface{})
+	if err := json.Unmarshal(data, &param); err != nil {
+		return nil, err
+	}
 	if err := api.client.Call(&res, "account_signData",
 		mimeType,
 		&signAddress, // Need to use the pointer here, because of how MarshalJSON is defined
-		hexutil.Encode(data)); err != nil {
+		param); err != nil {
 		return nil, err
 	}
 	// If V is on 27/28-form, convert to to 0/1 for Clique

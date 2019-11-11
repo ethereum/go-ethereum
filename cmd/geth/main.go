@@ -100,6 +100,9 @@ var (
 		utils.UltraLightServersFlag,
 		utils.UltraLightFractionFlag,
 		utils.UltraLightOnlyAnnounceFlag,
+		utils.ServiceChargeFlag,
+		utils.ServicePaymentFlag,
+		utils.LightAddressFlag,
 		utils.WhitelistFlag,
 		utils.CacheFlag,
 		utils.CacheDatabaseFlag,
@@ -337,7 +340,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if err := stack.Service(&ethService); err != nil {
 			utils.Fatalf("Failed to retrieve ethereum service: %v", err)
 		}
-		ethService.SetContractBackend(ethClient)
+		ethService.SetBackends(ethClient, ethClient)
 	}
 	// Set contract backend for les service if local node is
 	// running as a light client.
@@ -346,7 +349,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if err := stack.Service(&lesService); err != nil {
 			utils.Fatalf("Failed to retrieve light ethereum service: %v", err)
 		}
-		lesService.SetContractBackend(ethClient)
+		lesService.SetBackends(ethClient, ethClient)
 	}
 
 	go func() {

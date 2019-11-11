@@ -18,15 +18,20 @@ package les
 
 import (
 	"crypto/ecdsa"
+	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/les/payment"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -42,6 +47,7 @@ type LesServer struct {
 	handler     *serverHandler
 	lesTopics   []discv5.Topic
 	privateKey  *ecdsa.PrivateKey
+	synced      func() bool
 
 	// Flow control and capacity management
 	fcManager    *flowcontrol.ClientManager
@@ -55,7 +61,7 @@ type LesServer struct {
 	threadsBusy                            int // Request serving threads count when system is busy(block insertion).
 }
 
-func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
+func NewLesServer(ctx *node.ServiceContext, e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	// Collect les protocol version information supported by local node.
 	lesTopics := make([]discv5.Topic, len(AdvertiseProtocolVersions))
 	for i, pv := range AdvertiseProtocolVersions {
@@ -79,6 +85,7 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 			chtIndexer:       light.NewChtIndexer(e.ChainDb(), nil, params.CHTFrequency, params.HelperTrieProcessConfirmations),
 			bloomTrieIndexer: light.NewBloomTrieIndexer(e.ChainDb(), nil, params.BloomBitsBlocks, params.BloomTrieFrequency),
 			closeCh:          make(chan struct{}),
+			am:               ctx.AccountManager,
 		},
 		archiveMode:  e.ArchiveMode(),
 		lesTopics:    lesTopics,
@@ -86,6 +93,7 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		servingQueue: newServingQueue(int64(time.Millisecond*10), float64(config.LightServ)/100),
 		threadsBusy:  config.LightServ/100 + 1,
 		threadsIdle:  threads,
+		synced:       e.Synced,
 	}
 	srv.handler = newServerHandler(srv, e.BlockChain(), e.ChainDb(), e.TxPool(), e.Synced)
 	srv.costTracker, srv.minCapacity = newCostTracker(e.ChainDb(), config)
@@ -123,6 +131,15 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 			"chtroot", checkpoint.CHTRoot, "bloomroot", checkpoint.BloomRoot)
 	}
 	srv.chtIndexer.Start(e.BlockChain())
+
+	if config.LightServiceCharge {
+		paymentDb, err := ctx.OpenDatabase("paymentdata", 0, 0, "eth/db/paymentdata") // How to disable metrics?
+		if err != nil {
+			return nil, err
+		}
+		srv.paymentDb = paymentDb
+		srv.address = config.LightAddress
+	}
 	return srv, nil
 }
 
@@ -203,6 +220,9 @@ func (s *LesServer) Stop() {
 
 	// Note, bloom trie indexer is closed by parent bloombits indexer.
 	s.chtIndexer.Close()
+	if s.paymentDb != nil {
+		s.paymentDb.Close()
+	}
 	s.wg.Wait()
 	log.Info("Les server stopped")
 }
@@ -212,11 +232,39 @@ func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
 }
 
 // SetClient sets the rpc client and starts running checkpoint contract if it is not yet watched.
-func (s *LesServer) SetContractBackend(backend bind.ContractBackend) {
-	if s.oracle == nil {
-		return
+func (s *LesServer) SetBackends(cbackend bind.ContractBackend, dbackend bind.DeployBackend) {
+	if s.oracle != nil {
+		s.oracle.start(cbackend)
 	}
-	s.oracle.start(backend)
+	if s.config.LightServiceCharge {
+		go func() {
+			if s.address == (common.Address{}) {
+				log.Warn("Failed to setup cheque drawee", "error", "empty cheque drawee address")
+				return
+			}
+			for {
+				if !s.synced() {
+					time.Sleep(time.Second * 10)
+				} else {
+					break
+				}
+			}
+			account := accounts.Account{Address: s.address}
+			wallet, err := s.am.Find(account)
+			if err != nil {
+				log.Warn("Failed to setup cheque drawee", "error", err)
+				return
+			}
+			channelManager, err := payment.NewPaymentChannelManager(payment.DefaultPaymentChannelDraweeConfig, s.chainReader, bind.NewRawTransactor(wallet.SignTx, account), nil, s.address, cbackend, dbackend, s.paymentDb)
+			if err != nil {
+				log.Warn("Failed to setup cheque drawee", "error", err)
+				return
+			}
+			s.channelManager = channelManager
+			atomic.StoreUint32(&s.paymentInited, 1) // Mark payment channel is available now
+			log.Info("Succeed to setup cheque drawee", "address", s.address)
+		}()
+	}
 }
 
 // capacityManagement starts an event handler loop that updates the recharge curve of

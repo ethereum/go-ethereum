@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/contracts/accountbook"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
@@ -117,6 +118,10 @@ type peer struct {
 	onlyAnnounce            bool
 	chainSince, chainRecent uint64
 	stateSince, stateRecent uint64
+
+	// Payment relative fields
+	paymentChannel common.Address
+	payerAddr      common.Address
 }
 
 func newPeer(version int, network uint64, trusted bool, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -398,6 +403,21 @@ func (p *peer) SendResume(bv uint64) error {
 	return p2p.Send(p.rw, ResumeMsg, bv)
 }
 
+// SendPayment sends a signed cheque to this peer.
+func (p *peer) SendPayment(cheque *accountbook.Cheque) error {
+	return p2p.Send(p.rw, PaymentMsg, cheque)
+}
+
+func (p *peer) SendPaymentResult(res *accountbook.StaleChequeError) error {
+	return p2p.Send(p.rw, PaymentResultMsg, res)
+}
+
+// Only for debugging
+func (p *peer) AddBalance(amount *big.Int) error {
+	fmt.Printf("[Add balance] add %d for %s\n", amount, p.id)
+	return nil
+}
+
 // ReplyBlockHeaders creates a reply with a batch of block headers
 func (p *peer) ReplyBlockHeaders(reqID uint64, headers []*types.Header) *reply {
 	data, _ := rlp.EncodeToBytes(headers)
@@ -572,7 +592,7 @@ func (p *peer) sendReceiveHandshake(sendList keyValueList) (keyValueList, error)
 
 // Handshake executes the les protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
-func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, server *LesServer) error {
+func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, server *LesServer, addr common.Address) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -623,6 +643,10 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 				send = send.add("checkpoint/registerHeight", height)
 			}
 		}
+		// If payment is enabled, add the payment info in the handshake packet
+		if atomic.LoadUint32(&server.paymentInited) == 1 {
+			send = send.add("payment/paymentChannel", server.channelManager.ChannelAddresses()[0])
+		}
 	} else {
 		// Add some client-specific handshake fields
 		p.announceType = announceTypeSimple
@@ -630,6 +654,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 			p.announceType = announceTypeSigned
 		}
 		send = send.add("announceType", p.announceType)
+		send = send.add("payment/payer", addr)
 	}
 
 	recvList, err := p.sendReceiveHandshake(send)
@@ -680,6 +705,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 			p.announceType = announceTypeSimple
 		}
 		p.fcClient = flowcontrol.NewClientNode(server.fcManager, server.defParams)
+		recv.get("payment/payer", &p.payerAddr)
 	} else {
 		if recv.get("serveChainSince", &p.chainSince) != nil {
 			p.onlyAnnounce = true
@@ -718,6 +744,8 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 
 		recv.get("checkpoint/value", &p.checkpoint)
 		recv.get("checkpoint/registerHeight", &p.checkpointNumber)
+
+		recv.get("payment/paymentChannel", &p.paymentChannel)
 
 		if !p.onlyAnnounce {
 			for msgCode := range reqAvgTimeCost {
