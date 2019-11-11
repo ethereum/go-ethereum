@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package trie
 
 import (
@@ -7,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-func newFullNode(v []byte) []interface{} {
+func newTestFullNode(v []byte) []interface{} {
 	fullNodeData := []interface{}{}
 	for i := 0; i < 16; i++ {
 		k := bytes.Repeat([]byte{byte(i + 1)}, 32)
@@ -18,7 +34,7 @@ func newFullNode(v []byte) []interface{} {
 }
 
 func TestDecodeNestedNode(t *testing.T) {
-	fullNodeData := newFullNode([]byte("fullnode"))
+	fullNodeData := newTestFullNode([]byte("fullnode"))
 
 	data := [][]byte{}
 	for i := 0; i < 16; i++ {
@@ -36,7 +52,7 @@ func TestDecodeNestedNode(t *testing.T) {
 }
 
 func TestDecodeFullNodeWrongSizeChild(t *testing.T) {
-	fullNodeData := newFullNode([]byte("wrongsizechild"))
+	fullNodeData := newTestFullNode([]byte("wrongsizechild"))
 	fullNodeData[0] = []byte("00")
 	buf := bytes.NewBuffer([]byte{})
 	rlp.Encode(buf, fullNodeData)
@@ -48,7 +64,7 @@ func TestDecodeFullNodeWrongSizeChild(t *testing.T) {
 }
 
 func TestDecodeFullNodeWrongNestedFullNode(t *testing.T) {
-	fullNodeData := newFullNode([]byte("fullnode"))
+	fullNodeData := newTestFullNode([]byte("fullnode"))
 
 	data := [][]byte{}
 	for i := 0; i < 16; i++ {
@@ -66,8 +82,8 @@ func TestDecodeFullNodeWrongNestedFullNode(t *testing.T) {
 	}
 }
 
-func TestDecodeNode(t *testing.T) {
-	fullNodeData := newFullNode([]byte("decodefullnode"))
+func TestDecodeFullNode(t *testing.T) {
+	fullNodeData := newTestFullNode([]byte("decodefullnode"))
 	buf := bytes.NewBuffer([]byte{})
 	rlp.Encode(buf, fullNodeData)
 
