@@ -81,7 +81,6 @@ type clientPool struct {
 	stopCh     chan struct{}
 	closed     bool
 	removePeer func(enode.ID)
-	eventHook  func(string, *clientInfo)
 
 	connectedMap   map[enode.ID]*clientInfo
 	connectedQueue *prque.LazyQueue
@@ -318,9 +317,6 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 	totalConnectedGauge.Update(int64(f.connectedCap))
 	clientConnectedMeter.Mark(1)
 	log.Debug("Client accepted", "address", freeID)
-	if f.eventHook != nil {
-		f.eventHook("connected", e)
-	}
 	return true
 }
 
@@ -388,16 +384,10 @@ func (f *clientPool) dropClient(e *clientInfo, now mclock.AbsTime, kick bool) {
 	if kick {
 		clientKickedMeter.Mark(1)
 		log.Debug("Client kicked out", "address", e.address)
-		if f.eventHook != nil {
-			f.eventHook("kicked", e)
-		}
 		f.removePeer(e.id)
 	} else {
 		clientDisconnectedMeter.Mark(1)
 		log.Debug("Client disconnected", "address", e.address)
-		if f.eventHook != nil {
-			f.eventHook("disconnected", e)
-		}
 	}
 }
 
@@ -453,9 +443,6 @@ func (f *clientPool) balanceExhausted(id enode.ID) {
 	pb := f.ndb.getOrNewPB(id)
 	pb.value = 0
 	f.ndb.setPB(id, pb)
-	if f.eventHook != nil {
-		f.eventHook("balanceExhausted", c)
-	}
 }
 
 // setConnLimit sets the maximum number and total capacity of connected clients,
@@ -471,9 +458,6 @@ func (f *clientPool) setLimits(totalConn int, totalCap uint64) {
 			f.dropClient(data.(*clientInfo), mclock.Now(), true)
 			return f.connectedCap > f.capLimit || f.connectedQueue.Size() > f.connLimit
 		})
-	}
-	if f.eventHook != nil {
-		f.eventHook("capacityUpdate", nil)
 	}
 }
 

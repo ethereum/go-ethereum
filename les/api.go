@@ -17,7 +17,6 @@
 package les
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -27,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 var (
@@ -48,20 +46,16 @@ type clientApiFields struct {
 type PrivateLightServerAPI struct {
 	server                               *LesServer
 	defaultPosFactors, defaultNegFactors priceFactors
-	subs                                 map[*eventSub]struct{}
 	lock                                 sync.Mutex
 }
 
 // NewPrivateLightServerAPI creates a new LES light server API.
 func NewPrivateLightServerAPI(server *LesServer) *PrivateLightServerAPI {
-	api := &PrivateLightServerAPI{
+	return &PrivateLightServerAPI{
 		server:            server,
 		defaultPosFactors: server.clientPool.defaultPosFactors,
 		defaultNegFactors: server.clientPool.defaultNegFactors,
-		subs:              make(map[*eventSub]struct{}),
 	}
-	server.clientPool.eventHook = api.sendEvent
-	return api
 }
 
 // ServerInfo returns global server parameters
@@ -125,32 +119,6 @@ func (api *PrivateLightServerAPI) clientInfo(c *clientInfo, id enode.ID) map[str
 	return info
 }
 
-// sendEvent sends an event to the subscribers interested in it. For global events client == nil.
-func (api *PrivateLightServerAPI) sendEvent(clientEvent string, client *clientInfo) {
-	if len(api.subs) == 0 {
-		return
-	}
-
-	event := make(map[string]interface{})
-	event["totalCapacity"], event["totalConnectedCapacity"], event["priorityConnectedCapacity"] = api.server.clientPool.capacityInfo()
-	if client != nil {
-		event["clientEvent"] = clientEvent
-		event["clientId"] = client.id
-		event["clientInfo"] = api.clientInfo(client, client.id)
-	}
-
-	for sub := range api.subs {
-		select {
-		case <-sub.rpcSub.Err():
-			delete(api.subs, sub)
-		case <-sub.notifier.Closed():
-			delete(api.subs, sub)
-		default:
-			sub.notifier.Notify(sub.rpcSub.ID, event)
-		}
-	}
-}
-
 // setParams either sets the given parameters for a single connected client (if specified)
 // or the default parameters applicable to clients connected in the future
 func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, client *clientInfo, posFactors, negFactors *priceFactors) (updateFactors bool, err error) {
@@ -158,7 +126,6 @@ func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, clien
 	if !defParams {
 		posFactors, negFactors = &client.posFactors, &client.negFactors
 	}
-loop:
 	for name, value := range params {
 		errValue := func() error {
 			return fmt.Errorf("invalid value for parameter '%s'", name)
@@ -172,52 +139,32 @@ loop:
 			}
 		}
 
-		processed := true
-		switch name {
-		case "pricing/timeFactor":
+		switch {
+		case name == "pricing/timeFactor":
 			setFactor(&posFactors.timeFactor)
-		case "pricing/capacityFactor":
+		case name == "pricing/capacityFactor":
 			setFactor(&posFactors.capacityFactor)
-		case "pricing/requestCostFactor":
+		case name == "pricing/requestCostFactor":
 			setFactor(&posFactors.requestFactor)
-		case "pricing/negative/timeFactor":
+		case name == "pricing/negative/timeFactor":
 			setFactor(&negFactors.timeFactor)
-		case "pricing/negative/capacityFactor":
+		case name == "pricing/negative/capacityFactor":
 			setFactor(&negFactors.capacityFactor)
-		case "pricing/negative/requestCostFactor":
+		case name == "pricing/negative/requestCostFactor":
 			setFactor(&negFactors.requestFactor)
-		default:
-			processed = false
-			if defParams {
-				err = fmt.Errorf("invalid default parameter '%s'", name)
-				continue loop
-			}
-		}
-		if processed {
-			continue loop
-		}
-		switch name {
-		case "capacity":
+		case !defParams && name == "capacity":
 			if capacity, ok := value.(float64); ok && uint64(capacity) >= api.server.minCapacity {
 				err = api.server.clientPool.setCapacity(client, uint64(capacity))
 				updateFactors = true
 			} else {
 				err = errValue()
 			}
-		case "pricing/alert":
-			if val, ok := value.(float64); ok && val >= 0 {
-				api.setBalanceUpdate(client, uint64(val), false)
-			} else {
-				err = errValue()
-			}
-		case "pricing/periodicUpdate":
-			if val, ok := value.(float64); ok && val >= 0 {
-				api.setBalanceUpdate(client, uint64(val), true)
-			} else {
-				err = errValue()
-			}
 		default:
-			err = fmt.Errorf("invalid client parameter '%s'", name)
+			if defParams {
+				err = fmt.Errorf("invalid default parameter '%s'", name)
+			} else {
+				err = fmt.Errorf("invalid client parameter '%s'", name)
+			}
 		}
 	}
 	return updateFactors, err
@@ -260,55 +207,6 @@ func (api *PrivateLightServerAPI) SetDefaultParams(params map[string]interface{}
 		api.server.clientPool.setDefaultFactors(api.defaultPosFactors, api.defaultNegFactors)
 	}
 	return err
-}
-
-// balanceUpdate sends a price update client event and schedules a new update with the
-// price tracker if necessary.
-func (api *PrivateLightServerAPI) balanceUpdate(client *clientInfo) {
-	api.lock.Lock()
-	defer api.lock.Unlock()
-
-	api.sendEvent("balanceUpdate", client)
-	if client.balanceUpdatePeriod != 0 {
-		api.setBalanceUpdate(client, client.balanceUpdatePeriod, true)
-	}
-}
-
-// setBalanceUpdate schedules a price update when the balance reaches the given limit.
-// If periodic is false then the limit is interpreted as an absolute value while if true
-// it is relative to the current totalAmount value or the its value at the last future update.
-func (api *PrivateLightServerAPI) setBalanceUpdate(client *clientInfo, value uint64, periodic bool) {
-	balance := balance{pos: value}
-	if periodic {
-		client.balanceUpdatePeriod = value
-		balance.pos, _ = client.balanceTracker.getBalance(mclock.Now())
-		if balance.pos > value {
-			balance.pos -= value
-		} else {
-			balance.pos = 0
-		}
-	} else {
-		client.balanceUpdatePeriod = 0
-	}
-	client.balanceTracker.addCallback(balanceCallbackApi, client.balanceTracker.balanceToPriority(balance), func() { api.balanceUpdate(client) })
-}
-
-// eventSub represents an event subscription
-type eventSub struct {
-	notifier *rpc.Notifier
-	rpcSub   *rpc.Subscription
-}
-
-// SubscribeEvent subscribes to global events and client events related to the clients matching the given tags.
-// If totalCapUnderrun is true then totalCapacity updates are only sent when totalCapacity drops under totalConnectedCapacity.
-func (api *PrivateLightServerAPI) SubscribeEvent(ctx context.Context) (*rpc.Subscription, error) {
-	notifier, supported := rpc.NotifierFromContext(ctx)
-	if !supported {
-		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
-	}
-	rpcSub := notifier.CreateSubscription()
-	api.subs[&eventSub{notifier, rpcSub}] = struct{}{}
-	return rpcSub, nil
 }
 
 // Benchmark runs a request performance benchmark with a given set of measurement setups
