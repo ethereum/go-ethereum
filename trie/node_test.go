@@ -29,7 +29,7 @@ func newTestFullNode(v []byte) []interface{} {
 		k := bytes.Repeat([]byte{byte(i + 1)}, 32)
 		fullNodeData = append(fullNodeData, k)
 	}
-	fullNodeData = append(fullNodeData, []byte("value1"))
+	fullNodeData = append(fullNodeData, v)
 	return fullNodeData
 }
 
