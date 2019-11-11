@@ -493,6 +493,8 @@ func (t *tOps) remove(fd storage.FileDesc) {
 		if t.evictRemoved && t.bcache != nil {
 			t.bcache.EvictNS(uint64(fd.Num))
 		}
+		// Try to reuse file num, useful for discarded transaction.
+		t.s.reuseFileNum(fd.Num)
 	})
 }
 

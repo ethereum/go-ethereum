@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -175,8 +175,11 @@ func TestCheckpointRegister(t *testing.T) {
 	sort.Sort(accounts)
 
 	// Deploy registrar contract
-	transactOpts := bind.NewKeyedTransactor(accounts[0].key)
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{accounts[0].addr: {Balance: big.NewInt(1000000000)}, accounts[1].addr: {Balance: big.NewInt(1000000000)}, accounts[2].addr: {Balance: big.NewInt(1000000000)}}, 10000000)
+	defer contractBackend.Close()
+
+	transactOpts := bind.NewKeyedTransactor(accounts[0].key)
+
 	// 3 trusted signers, threshold 2
 	contractAddr, _, c, err := contract.DeployCheckpointOracle(transactOpts, contractBackend, []common.Address{accounts[0].addr, accounts[1].addr, accounts[2].addr}, sectionSize, processConfirms, big.NewInt(2))
 	if err != nil {
@@ -241,9 +244,9 @@ func TestCheckpointRegister(t *testing.T) {
 
 	// Test transaction replay protection
 	validateOperation(t, c, contractBackend, func() {
-		number, hash := getRecent()
+		number, _ := getRecent()
 		v, r, s := collectSig(0, checkpoint0.Hash(), 2, nil)
-		hash = common.HexToHash("deadbeef")
+		hash := common.HexToHash("deadbeef")
 		c.SetCheckpoint(transactOpts, number, hash, checkpoint0.Hash(), 0, v, r, s)
 	}, func(events <-chan *contract.CheckpointOracleNewCheckpointVote) error {
 		return assert(0, emptyHash, big.NewInt(0))

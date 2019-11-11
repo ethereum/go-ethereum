@@ -49,7 +49,7 @@ func init() {
 var (
 	passphraseFlag = cli.StringFlag{
 		Name:  "passwordfile",
-		Usage: "the file that contains the passphrase for the keyfile",
+		Usage: "the file that contains the password for the keyfile",
 	}
 	jsonFlag = cli.BoolFlag{
 		Name:  "json",

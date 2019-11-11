@@ -19,6 +19,7 @@ package types
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"math/big"
 	"reflect"
@@ -108,6 +109,25 @@ var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
 // to approximate and limit the memory consumption of various caches.
 func (h *Header) Size() common.StorageSize {
 	return headerSize + common.StorageSize(len(h.Extra)+(h.Difficulty.BitLen()+h.Number.BitLen())/8)
+}
+
+// SanityCheck checks a few basic things -- these checks are way beyond what
+// any 'sane' production values should hold, and can mainly be used to prevent
+// that the unbounded fields are stuffed with junk data to add processing
+// overhead
+func (h *Header) SanityCheck() error {
+	if h.Number != nil && !h.Number.IsUint64() {
+		return fmt.Errorf("too large block number: bitlen %d", h.Number.BitLen())
+	}
+	if h.Difficulty != nil {
+		if diffLen := h.Difficulty.BitLen(); diffLen > 80 {
+			return fmt.Errorf("too large block difficulty: bitlen %d", diffLen)
+		}
+	}
+	if eLen := len(h.Extra); eLen > 100*1024 {
+		return fmt.Errorf("too large block extradata: size %d", eLen)
+	}
+	return nil
 }
 
 func rlpHash(x interface{}) (h common.Hash) {
@@ -314,6 +334,12 @@ func (b *Block) Size() common.StorageSize {
 	rlp.Encode(&c, b)
 	b.size.Store(common.StorageSize(c))
 	return common.StorageSize(c)
+}
+
+// SanityCheck can be used to prevent that unbounded fields are
+// stuffed with junk data to add processing overhead
+func (b *Block) SanityCheck() error {
+	return b.header.SanityCheck()
 }
 
 type writeCounter common.StorageSize

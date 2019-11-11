@@ -356,7 +356,7 @@ func configureNode() {
 		if len(symPass) == 0 {
 			symPass, err = console.Stdin.PromptPassword("Please enter the password for symmetric encryption: ")
 			if err != nil {
-				utils.Fatalf("Failed to read passphrase: %v", err)
+				utils.Fatalf("Failed to read password: %v", err)
 			}
 		}
 

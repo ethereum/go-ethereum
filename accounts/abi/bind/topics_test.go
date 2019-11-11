@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -59,7 +59,7 @@ func TestParseTopics(t *testing.T) {
 	type bytesStruct struct {
 		StaticBytes [5]byte
 	}
-	bytesType, _ := abi.NewType("bytes5", nil)
+	bytesType, _ := abi.NewType("bytes5", "", nil)
 	type args struct {
 		createObj func() interface{}
 		resultObj func() interface{}

@@ -88,6 +88,12 @@ func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBac
 	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit)
 }
 
+// Close terminates the underlying blockchain's update loop.
+func (b *SimulatedBackend) Close() error {
+	b.blockchain.Stop()
+	return nil
+}
+
 // Commit imports all the pending transactions as a single block and starts a
 // fresh new state.
 func (b *SimulatedBackend) Commit() {

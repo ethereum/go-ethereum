@@ -509,12 +509,12 @@ func TestOpMstore(t *testing.T) {
 	v := "abcdef00000000000000abba000000000deaf000000c0de00100000000133700"
 	stack.pushN(new(big.Int).SetBytes(common.Hex2Bytes(v)), big.NewInt(0))
 	opMstore(&pc, evmInterpreter, nil, mem, stack)
-	if got := common.Bytes2Hex(mem.Get(0, 32)); got != v {
+	if got := common.Bytes2Hex(mem.GetCopy(0, 32)); got != v {
 		t.Fatalf("Mstore fail, got %v, expected %v", got, v)
 	}
 	stack.pushN(big.NewInt(0x1), big.NewInt(0))
 	opMstore(&pc, evmInterpreter, nil, mem, stack)
-	if common.Bytes2Hex(mem.Get(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
+	if common.Bytes2Hex(mem.GetCopy(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
 		t.Fatalf("Mstore failed to overwrite previous value")
 	}
 	poolOfIntPools.put(evmInterpreter.intPool)

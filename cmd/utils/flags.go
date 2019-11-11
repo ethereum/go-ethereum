@@ -19,15 +19,17 @@ package utils
 
 import (
 	"crypto/ecdsa"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"text/tabwriter"
+	"text/template"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -91,8 +93,8 @@ GLOBAL OPTIONS:
    {{range .Flags}}{{.}}
    {{end}}{{end}}
 `
-
 	cli.CommandHelpTemplate = CommandHelpTemplate
+	cli.HelpPrinter = printHelp
 }
 
 // NewApp creates an app with sane defaults.
@@ -100,11 +102,21 @@ func NewApp(gitCommit, gitDate, usage string) *cli.App {
 	app := cli.NewApp()
 	app.Name = filepath.Base(os.Args[0])
 	app.Author = ""
-	//app.Authors = nil
 	app.Email = ""
 	app.Version = params.VersionWithCommit(gitCommit, gitDate)
 	app.Usage = usage
 	return app
+}
+
+func printHelp(out io.Writer, templ string, data interface{}) {
+	funcMap := template.FuncMap{"join": strings.Join}
+	t := template.Must(template.New("help").Funcs(funcMap).Parse(templ))
+	w := tabwriter.NewWriter(out, 38, 8, 2, ' ', 0)
+	err := t.Execute(w, data)
+	if err != nil {
+		panic(err)
+	}
+	w.Flush()
 }
 
 // These are all the command line flags we support.
@@ -119,7 +131,7 @@ var (
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
 		Usage: "Data directory for the databases and keystore",
-		Value: DirectoryString{node.DefaultDataDir()},
+		Value: DirectoryString(node.DefaultDataDir()),
 	}
 	AncientFlag = DirectoryFlag{
 		Name:  "datadir.ancient",
@@ -170,27 +182,11 @@ var (
 	DocRootFlag = DirectoryFlag{
 		Name:  "docroot",
 		Usage: "Document Root for HTTPClient file scheme",
-		Value: DirectoryString{homeDir()},
+		Value: DirectoryString(homeDir()),
 	}
 	ExitWhenSyncedFlag = cli.BoolFlag{
 		Name:  "exitwhensynced",
 		Usage: "Exits after block synchronisation completes",
-	}
-	ULCModeConfigFlag = cli.StringFlag{
-		Name:  "ulc.config",
-		Usage: "Config file to use for ultra light client mode",
-	}
-	OnlyAnnounceModeFlag = cli.BoolFlag{
-		Name:  "ulc.onlyannounce",
-		Usage: "ULC server sends announcements only",
-	}
-	ULCMinTrustedFractionFlag = cli.IntFlag{
-		Name:  "ulc.fraction",
-		Usage: "Minimum % of trusted ULC servers required to announce a new head",
-	}
-	ULCTrustedNodesFlag = cli.StringFlag{
-		Name:  "ulc.trusted",
-		Usage: "List of trusted ULC servers",
 	}
 	IterativeOutputFlag = cli.BoolFlag{
 		Name:  "iterative",
@@ -219,26 +215,6 @@ var (
 		Usage: `Blockchain garbage collection mode ("full", "archive")`,
 		Value: "full",
 	}
-	LightServFlag = cli.IntFlag{
-		Name:  "lightserv",
-		Usage: "Maximum percentage of time allowed for serving LES requests (multi-threaded processing allows values over 100)",
-		Value: 0,
-	}
-	LightBandwidthInFlag = cli.IntFlag{
-		Name:  "lightbwin",
-		Usage: "Incoming bandwidth limit for light server (kilobytes/sec, 0 = unlimited)",
-		Value: 0,
-	}
-	LightBandwidthOutFlag = cli.IntFlag{
-		Name:  "lightbwout",
-		Usage: "Outgoing bandwidth limit for light server (kilobytes/sec, 0 = unlimited)",
-		Value: 0,
-	}
-	LightPeersFlag = cli.IntFlag{
-		Name:  "lightpeers",
-		Usage: "Maximum number of LES client peers",
-		Value: eth.DefaultConfig.LightPeers,
-	}
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
@@ -246,6 +222,55 @@ var (
 	WhitelistFlag = cli.StringFlag{
 		Name:  "whitelist",
 		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>)",
+	}
+	OverrideIstanbulFlag = cli.Uint64Flag{
+		Name:  "override.istanbul",
+		Usage: "Manually specify Istanbul fork-block, overriding the bundled setting",
+	}
+	// Light server and client settings
+	LightLegacyServFlag = cli.IntFlag{ // Deprecated in favor of light.serve, remove in 2021
+		Name:  "lightserv",
+		Usage: "Maximum percentage of time allowed for serving LES requests (deprecated, use --light.serve)",
+		Value: eth.DefaultConfig.LightServ,
+	}
+	LightServeFlag = cli.IntFlag{
+		Name:  "light.serve",
+		Usage: "Maximum percentage of time allowed for serving LES requests (multi-threaded processing allows values over 100)",
+		Value: eth.DefaultConfig.LightServ,
+	}
+	LightIngressFlag = cli.IntFlag{
+		Name:  "light.ingress",
+		Usage: "Incoming bandwidth limit for serving light clients (kilobytes/sec, 0 = unlimited)",
+		Value: eth.DefaultConfig.LightIngress,
+	}
+	LightEgressFlag = cli.IntFlag{
+		Name:  "light.egress",
+		Usage: "Outgoing bandwidth limit for serving light clients (kilobytes/sec, 0 = unlimited)",
+		Value: eth.DefaultConfig.LightEgress,
+	}
+	LightLegacyPeersFlag = cli.IntFlag{ // Deprecated in favor of light.maxpeers, remove in 2021
+		Name:  "lightpeers",
+		Usage: "Maximum number of light clients to serve, or light servers to attach to  (deprecated, use --light.maxpeers)",
+		Value: eth.DefaultConfig.LightPeers,
+	}
+	LightMaxPeersFlag = cli.IntFlag{
+		Name:  "light.maxpeers",
+		Usage: "Maximum number of light clients to serve, or light servers to attach to",
+		Value: eth.DefaultConfig.LightPeers,
+	}
+	UltraLightServersFlag = cli.StringFlag{
+		Name:  "ulc.servers",
+		Usage: "List of trusted ultra-light servers",
+		Value: strings.Join(eth.DefaultConfig.UltraLightServers, ","),
+	}
+	UltraLightFractionFlag = cli.IntFlag{
+		Name:  "ulc.fraction",
+		Usage: "Minimum % of trusted ultra-light servers required to announce a new head",
+		Value: eth.DefaultConfig.UltraLightFraction,
+	}
+	UltraLightOnlyAnnounceFlag = cli.BoolFlag{
+		Name:  "ulc.onlyannounce",
+		Usage: "Ultra light server sends announcements only",
 	}
 	// Dashboard settings
 	DashboardEnabledFlag = cli.BoolFlag{
@@ -284,8 +309,8 @@ var (
 	}
 	EthashDatasetDirFlag = DirectoryFlag{
 		Name:  "ethash.dagdir",
-		Usage: "Directory to store the ethash mining DAGs (default = inside home folder)",
-		Value: DirectoryString{eth.DefaultConfig.Ethash.DatasetDir},
+		Usage: "Directory to store the ethash mining DAGs",
+		Value: DirectoryString(eth.DefaultConfig.Ethash.DatasetDir),
 	}
 	EthashDatasetsInMemoryFlag = cli.IntFlag{
 		Name:  "ethash.dagsinmem",
@@ -944,7 +969,7 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 // setIPC creates an IPC path configuration from the set command line flags,
 // returning an empty string if IPC was explicitly disabled, or the set path.
 func setIPC(ctx *cli.Context, cfg *node.Config) {
-	checkExclusive(ctx, IPCDisabledFlag, IPCPathFlag)
+	CheckExclusive(ctx, IPCDisabledFlag, IPCPathFlag)
 	switch {
 	case ctx.GlobalBool(IPCDisabledFlag.Name):
 		cfg.IPCPath = ""
@@ -953,37 +978,38 @@ func setIPC(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
-// SetULC setup ULC config from file if given.
-func SetULC(ctx *cli.Context, cfg *eth.Config) {
-	// ULC config isn't loaded from global config and ULC config and ULC trusted nodes are not defined.
-	if cfg.ULC == nil && !(ctx.GlobalIsSet(ULCModeConfigFlag.Name) || ctx.GlobalIsSet(ULCTrustedNodesFlag.Name)) {
-		return
+// setLes configures the les server and ultra light client settings from the command line flags.
+func setLes(ctx *cli.Context, cfg *eth.Config) {
+	if ctx.GlobalIsSet(LightLegacyServFlag.Name) {
+		cfg.LightServ = ctx.GlobalInt(LightLegacyServFlag.Name)
 	}
-	cfg.ULC = &eth.ULCConfig{}
-
-	path := ctx.GlobalString(ULCModeConfigFlag.Name)
-	if path != "" {
-		cfgData, err := ioutil.ReadFile(path)
-		if err != nil {
-			Fatalf("Failed to unmarshal ULC configuration: %v", err)
-		}
-
-		err = json.Unmarshal(cfgData, &cfg.ULC)
-		if err != nil {
-			Fatalf("Failed to unmarshal ULC configuration: %s", err.Error())
-		}
+	if ctx.GlobalIsSet(LightServeFlag.Name) {
+		cfg.LightServ = ctx.GlobalInt(LightServeFlag.Name)
 	}
-
-	if trustedNodes := ctx.GlobalString(ULCTrustedNodesFlag.Name); trustedNodes != "" {
-		cfg.ULC.TrustedServers = strings.Split(trustedNodes, ",")
+	if ctx.GlobalIsSet(LightIngressFlag.Name) {
+		cfg.LightIngress = ctx.GlobalInt(LightIngressFlag.Name)
 	}
-
-	if trustedFraction := ctx.GlobalInt(ULCMinTrustedFractionFlag.Name); trustedFraction > 0 {
-		cfg.ULC.MinTrustedFraction = trustedFraction
+	if ctx.GlobalIsSet(LightEgressFlag.Name) {
+		cfg.LightEgress = ctx.GlobalInt(LightEgressFlag.Name)
 	}
-	if cfg.ULC.MinTrustedFraction <= 0 && cfg.ULC.MinTrustedFraction > 100 {
-		log.Error("MinTrustedFraction is invalid", "MinTrustedFraction", cfg.ULC.MinTrustedFraction, "Changed to default", eth.DefaultULCMinTrustedFraction)
-		cfg.ULC.MinTrustedFraction = eth.DefaultULCMinTrustedFraction
+	if ctx.GlobalIsSet(LightLegacyPeersFlag.Name) {
+		cfg.LightPeers = ctx.GlobalInt(LightLegacyPeersFlag.Name)
+	}
+	if ctx.GlobalIsSet(LightMaxPeersFlag.Name) {
+		cfg.LightPeers = ctx.GlobalInt(LightMaxPeersFlag.Name)
+	}
+	if ctx.GlobalIsSet(UltraLightServersFlag.Name) {
+		cfg.UltraLightServers = strings.Split(ctx.GlobalString(UltraLightServersFlag.Name), ",")
+	}
+	if ctx.GlobalIsSet(UltraLightFractionFlag.Name) {
+		cfg.UltraLightFraction = ctx.GlobalInt(UltraLightFractionFlag.Name)
+	}
+	if cfg.UltraLightFraction <= 0 && cfg.UltraLightFraction > 100 {
+		log.Error("Ultra light fraction is invalid", "had", cfg.UltraLightFraction, "updated", eth.DefaultConfig.UltraLightFraction)
+		cfg.UltraLightFraction = eth.DefaultConfig.UltraLightFraction
+	}
+	if ctx.GlobalIsSet(UltraLightOnlyAnnounceFlag.Name) {
+		cfg.UltraLightOnlyAnnounce = ctx.GlobalBool(UltraLightOnlyAnnounceFlag.Name)
 	}
 }
 
@@ -1077,19 +1103,27 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	setBootstrapNodesV5(ctx, cfg)
 
 	lightClient := ctx.GlobalString(SyncModeFlag.Name) == "light"
-	lightServer := ctx.GlobalInt(LightServFlag.Name) != 0
-	lightPeers := ctx.GlobalInt(LightPeersFlag.Name)
+	lightServer := (ctx.GlobalInt(LightLegacyServFlag.Name) != 0 || ctx.GlobalInt(LightServeFlag.Name) != 0)
+
+	lightPeers := ctx.GlobalInt(LightLegacyPeersFlag.Name)
+	if ctx.GlobalIsSet(LightMaxPeersFlag.Name) {
+		lightPeers = ctx.GlobalInt(LightMaxPeersFlag.Name)
+	}
+	if lightClient && !ctx.GlobalIsSet(LightLegacyPeersFlag.Name) && !ctx.GlobalIsSet(LightMaxPeersFlag.Name) {
+		// dynamic default - for clients we use 1/10th of the default for servers
+		lightPeers /= 10
+	}
 
 	if ctx.GlobalIsSet(MaxPeersFlag.Name) {
 		cfg.MaxPeers = ctx.GlobalInt(MaxPeersFlag.Name)
-		if lightServer && !ctx.GlobalIsSet(LightPeersFlag.Name) {
+		if lightServer && !ctx.GlobalIsSet(LightLegacyPeersFlag.Name) && !ctx.GlobalIsSet(LightMaxPeersFlag.Name) {
 			cfg.MaxPeers += lightPeers
 		}
 	} else {
 		if lightServer {
 			cfg.MaxPeers += lightPeers
 		}
-		if lightClient && ctx.GlobalIsSet(LightPeersFlag.Name) && cfg.MaxPeers < lightPeers {
+		if lightClient && (ctx.GlobalIsSet(LightLegacyPeersFlag.Name) || ctx.GlobalIsSet(LightMaxPeersFlag.Name)) && cfg.MaxPeers < lightPeers {
 			cfg.MaxPeers = lightPeers
 		}
 	}
@@ -1191,11 +1225,11 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = ctx.GlobalString(DataDirFlag.Name)
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
-	case ctx.GlobalBool(TestnetFlag.Name):
+	case ctx.GlobalBool(TestnetFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "testnet")
-	case ctx.GlobalBool(RinkebyFlag.Name):
+	case ctx.GlobalBool(RinkebyFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
-	case ctx.GlobalBool(GoerliFlag.Name):
+	case ctx.GlobalBool(GoerliFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
 	}
 }
@@ -1329,10 +1363,10 @@ func setWhitelist(ctx *cli.Context, cfg *eth.Config) {
 	}
 }
 
-// checkExclusive verifies that only a single instance of the provided flags was
+// CheckExclusive verifies that only a single instance of the provided flags was
 // set by the user. Each flag might optionally be followed by a string type to
 // specialize it further.
-func checkExclusive(ctx *cli.Context, args ...interface{}) {
+func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 	set := make([]string, 0, 1)
 	for i := 0; i < len(args); i++ {
 		// Make sure the next argument is a flag and skip if not set
@@ -1386,10 +1420,10 @@ func SetShhConfig(ctx *cli.Context, stack *node.Node, cfg *whisper.Config) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// Avoid conflicting network flags
-	checkExclusive(ctx, DeveloperFlag, TestnetFlag, RinkebyFlag, GoerliFlag)
-	checkExclusive(ctx, LightServFlag, SyncModeFlag, "light")
-	// Can't use both ephemeral unlocked and external signer
-	checkExclusive(ctx, DeveloperFlag, ExternalSignerFlag)
+	CheckExclusive(ctx, DeveloperFlag, TestnetFlag, RinkebyFlag, GoerliFlag)
+	CheckExclusive(ctx, LightLegacyServFlag, LightServeFlag, SyncModeFlag, "light")
+	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
+
 	var ks *keystore.KeyStore
 	if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0 {
 		ks = keystores[0].(*keystore.KeyStore)
@@ -1400,20 +1434,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	setEthash(ctx, cfg)
 	setMiner(ctx, &cfg.Miner)
 	setWhitelist(ctx, cfg)
+	setLes(ctx, cfg)
 
 	if ctx.GlobalIsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
-	}
-	if ctx.GlobalIsSet(LightServFlag.Name) {
-		cfg.LightServ = ctx.GlobalInt(LightServFlag.Name)
-	}
-	cfg.LightBandwidthIn = ctx.GlobalInt(LightBandwidthInFlag.Name)
-	cfg.LightBandwidthOut = ctx.GlobalInt(LightBandwidthOutFlag.Name)
-	if ctx.GlobalIsSet(LightPeersFlag.Name) {
-		cfg.LightPeers = ctx.GlobalInt(LightPeersFlag.Name)
-	}
-	if ctx.GlobalIsSet(OnlyAnnounceModeFlag.Name) {
-		cfg.OnlyAnnounce = ctx.GlobalBool(OnlyAnnounceModeFlag.Name)
 	}
 	if ctx.GlobalIsSet(NetworkIdFlag.Name) {
 		cfg.NetworkId = ctx.GlobalUint64(NetworkIdFlag.Name)
@@ -1429,9 +1453,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
-	cfg.NoPruning = ctx.GlobalString(GCModeFlag.Name) == "archive"
-	cfg.NoPrefetch = ctx.GlobalBool(CacheNoPrefetchFlag.Name)
-
+	if ctx.GlobalIsSet(GCModeFlag.Name) {
+		cfg.NoPruning = ctx.GlobalString(GCModeFlag.Name) == "archive"
+	}
+	if ctx.GlobalIsSet(CacheNoPrefetchFlag.Name) {
+		cfg.NoPrefetch = ctx.GlobalBool(CacheNoPrefetchFlag.Name)
+	}
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheTrieFlag.Name) {
 		cfg.TrieCleanCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheTrieFlag.Name) / 100
 	}

@@ -1318,7 +1318,7 @@ func TestEIP155Transition(t *testing.T) {
 		funds      = big.NewInt(1000000000)
 		deleteAddr = common.Address{1}
 		gspec      = &Genesis{
-			Config: &params.ChainConfig{ChainID: big.NewInt(1), EIP155Block: big.NewInt(2), HomesteadBlock: new(big.Int)},
+			Config: &params.ChainConfig{ChainID: big.NewInt(1), EIP150Block: big.NewInt(0), EIP155Block: big.NewInt(2), HomesteadBlock: new(big.Int)},
 			Alloc:  GenesisAlloc{address: {Balance: funds}, deleteAddr: {Balance: new(big.Int)}},
 		}
 		genesis = gspec.MustCommit(db)
@@ -1389,7 +1389,7 @@ func TestEIP155Transition(t *testing.T) {
 	}
 
 	// generate an invalid chain id transaction
-	config := &params.ChainConfig{ChainID: big.NewInt(2), EIP155Block: big.NewInt(2), HomesteadBlock: new(big.Int)}
+	config := &params.ChainConfig{ChainID: big.NewInt(2), EIP150Block: big.NewInt(0), EIP155Block: big.NewInt(2), HomesteadBlock: new(big.Int)}
 	blocks, _ = GenerateChain(config, blocks[len(blocks)-1], ethash.NewFaker(), db, 4, func(i int, block *BlockGen) {
 		var (
 			tx      *types.Transaction
@@ -1425,6 +1425,7 @@ func TestEIP161AccountRemoval(t *testing.T) {
 				ChainID:        big.NewInt(1),
 				HomesteadBlock: new(big.Int),
 				EIP155Block:    new(big.Int),
+				EIP150Block:    new(big.Int),
 				EIP158Block:    big.NewInt(2),
 			},
 			Alloc: GenesisAlloc{address: {Balance: funds}},
@@ -2240,4 +2241,125 @@ func BenchmarkBlockChain_1x1000Executions(b *testing.B) {
 		return nil
 	}
 	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn, dataFn)
+}
+
+// Tests that importing a some old blocks, where all blocks are before the
+// pruning point.
+// This internally leads to a sidechain import, since the blocks trigger an
+// ErrPrunedAncestor error.
+// This may e.g. happen if
+//   1. Downloader rollbacks a batch of inserted blocks and exits
+//   2. Downloader starts to sync again
+//   3. The blocks fetched are all known and canonical blocks
+func TestSideImportPrunedBlocks(t *testing.T) {
+	// Generate a canonical chain to act as the main dataset
+	engine := ethash.NewFaker()
+	db := rawdb.NewMemoryDatabase()
+	genesis := new(Genesis).MustCommit(db)
+
+	// Generate and import the canonical chain
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 2*TriesInMemory, nil)
+	diskdb := rawdb.NewMemoryDatabase()
+	new(Genesis).MustCommit(diskdb)
+	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	lastPrunedIndex := len(blocks) - TriesInMemory - 1
+	lastPrunedBlock := blocks[lastPrunedIndex]
+
+	// Verify pruning of lastPrunedBlock
+	if chain.HasBlockAndState(lastPrunedBlock.Hash(), lastPrunedBlock.NumberU64()) {
+		t.Errorf("Block %d not pruned", lastPrunedBlock.NumberU64())
+	}
+	firstNonPrunedBlock := blocks[len(blocks)-TriesInMemory]
+	// Verify firstNonPrunedBlock is not pruned
+	if !chain.HasBlockAndState(firstNonPrunedBlock.Hash(), firstNonPrunedBlock.NumberU64()) {
+		t.Errorf("Block %d pruned", firstNonPrunedBlock.NumberU64())
+	}
+	// Now re-import some old blocks
+	blockToReimport := blocks[5:8]
+	_, err = chain.InsertChain(blockToReimport)
+	if err != nil {
+		t.Errorf("Got error, %v", err)
+	}
+}
+
+// TestDeleteCreateRevert tests a weird state transition corner case that we hit
+// while changing the internals of statedb. The workflow is that a contract is
+// self destructed, then in a followup transaction (but same block) it's created
+// again and the transaction reverted.
+//
+// The original statedb implementation flushed dirty objects to the tries after
+// each transaction, so this works ok. The rework accumulated writes in memory
+// first, but the journal wiped the entire state object on create-revert.
+func TestDeleteCreateRevert(t *testing.T) {
+	var (
+		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+		bb = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
+		// Generate a canonical chain to act as the main dataset
+		engine = ethash.NewFaker()
+		db     = rawdb.NewMemoryDatabase()
+
+		// A sender who makes transactions, has some funds
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address = crypto.PubkeyToAddress(key.PublicKey)
+		funds   = big.NewInt(1000000000)
+		gspec   = &Genesis{
+			Config: params.TestChainConfig,
+			Alloc: GenesisAlloc{
+				address: {Balance: funds},
+				// The address 0xAAAAA selfdestructs if called
+				aa: {
+					// Code needs to just selfdestruct
+					Code:    []byte{byte(vm.PC), 0xFF},
+					Nonce:   1,
+					Balance: big.NewInt(0),
+				},
+				// The address 0xBBBB send 1 wei to 0xAAAA, then reverts
+				bb: {
+					Code: []byte{
+						byte(vm.PC),          // [0]
+						byte(vm.DUP1),        // [0,0]
+						byte(vm.DUP1),        // [0,0,0]
+						byte(vm.DUP1),        // [0,0,0,0]
+						byte(vm.PUSH1), 0x01, // [0,0,0,0,1] (value)
+						byte(vm.PUSH2), 0xaa, 0xaa, // [0,0,0,0,1, 0xaaaa]
+						byte(vm.GAS),
+						byte(vm.CALL),
+						byte(vm.REVERT),
+					},
+					Balance: big.NewInt(1),
+				},
+			},
+		}
+		genesis = gspec.MustCommit(db)
+	)
+
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 1, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+		// One transaction to AAAA
+		tx, _ := types.SignTx(types.NewTransaction(0, aa,
+			big.NewInt(0), 50000, big.NewInt(1), nil), types.HomesteadSigner{}, key)
+		b.AddTx(tx)
+		// One transaction to BBBB
+		tx, _ = types.SignTx(types.NewTransaction(1, bb,
+			big.NewInt(0), 100000, big.NewInt(1), nil), types.HomesteadSigner{}, key)
+		b.AddTx(tx)
+	})
+	// Import the canonical chain
+	diskdb := rawdb.NewMemoryDatabase()
+	gspec.MustCommit(diskdb)
+
+	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
 }

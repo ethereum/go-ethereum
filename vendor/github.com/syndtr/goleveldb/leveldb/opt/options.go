@@ -278,6 +278,14 @@ type Options struct {
 	// The default is false.
 	DisableLargeBatchTransaction bool
 
+	// DisableSeeksCompaction allows disabling 'seeks triggered compaction'.
+	// The purpose of 'seeks triggered compaction' is to optimize database so
+	// that 'level seeks' can be minimized, however this might generate many
+	// small compaction which may not preferable.
+	//
+	// The default is false.
+	DisableSeeksCompaction bool
+
 	// ErrorIfExist defines whether an error should returned if the DB already
 	// exist.
 	//
@@ -309,6 +317,8 @@ type Options struct {
 	// IteratorSamplingRate defines approximate gap (in bytes) between read
 	// sampling of an iterator. The samples will be used to determine when
 	// compaction should be triggered.
+	// Use negative value to disable iterator sampling.
+	// The iterator sampling is disabled if DisableSeeksCompaction is true.
 	//
 	// The default is 1MiB.
 	IteratorSamplingRate int
@@ -526,6 +536,13 @@ func (o *Options) GetDisableLargeBatchTransaction() bool {
 	return o.DisableLargeBatchTransaction
 }
 
+func (o *Options) GetDisableSeeksCompaction() bool {
+	if o == nil {
+		return false
+	}
+	return o.DisableSeeksCompaction
+}
+
 func (o *Options) GetErrorIfExist() bool {
 	if o == nil {
 		return false
@@ -548,8 +565,10 @@ func (o *Options) GetFilter() filter.Filter {
 }
 
 func (o *Options) GetIteratorSamplingRate() int {
-	if o == nil || o.IteratorSamplingRate <= 0 {
+	if o == nil || o.IteratorSamplingRate == 0 {
 		return DefaultIteratorSamplingRate
+	} else if o.IteratorSamplingRate < 0 {
+		return 0
 	}
 	return o.IteratorSamplingRate
 }

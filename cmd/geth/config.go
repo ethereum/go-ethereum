@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"reflect"
 	"unicode"
@@ -123,7 +124,6 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	}
 
 	// Apply flags.
-	utils.SetULC(ctx, &cfg.Eth)
 	utils.SetNodeConfig(ctx, &cfg.Node)
 	stack, err := node.New(&cfg.Node)
 	if err != nil {
@@ -133,7 +133,6 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
-
 	utils.SetShhConfig(ctx, stack, &cfg.Shh)
 	utils.SetDashboardConfig(ctx, &cfg.Dashboard)
 
@@ -152,6 +151,9 @@ func enableWhisper(ctx *cli.Context) bool {
 
 func makeFullNode(ctx *cli.Context) *node.Node {
 	stack, cfg := makeConfigNode(ctx)
+	if ctx.GlobalIsSet(utils.OverrideIstanbulFlag.Name) {
+		cfg.Eth.OverrideIstanbul = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideIstanbulFlag.Name))
+	}
 	utils.RegisterEthService(stack, &cfg.Eth)
 
 	if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {

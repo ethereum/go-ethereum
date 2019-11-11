@@ -52,7 +52,7 @@ func (h GraphiQL) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, errorJSON("only GET requests are supported"), http.StatusMethodNotAllowed)
 		return
 	}
-
+	w.Header().Set("Content-Type", "text/html")
 	w.Write(graphiql)
 }
 

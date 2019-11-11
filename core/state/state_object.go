@@ -79,8 +79,10 @@ type stateObject struct {
 	trie Trie // storage trie, which becomes non-nil on first access
 	code Code // contract bytecode, which gets set when code is loaded
 
-	originStorage Storage // Storage cache of original entries to dedup rewrites
-	dirtyStorage  Storage // Storage entries that need to be flushed to disk
+	originStorage  Storage // Storage cache of original entries to dedup rewrites, reset for every transaction
+	pendingStorage Storage // Storage entries that need to be flushed to disk, at the end of an entire block
+	dirtyStorage   Storage // Storage entries that have been modified in the current transaction execution
+	fakeStorage    Storage // Fake storage which constructed by caller for debugging purpose.
 
 	// Cache flags.
 	// When an object is marked suicided it will be delete from the trie
@@ -112,13 +114,17 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 	if data.CodeHash == nil {
 		data.CodeHash = emptyCodeHash
 	}
+	if data.Root == (common.Hash{}) {
+		data.Root = emptyRoot
+	}
 	return &stateObject{
-		db:            db,
-		address:       address,
-		addrHash:      crypto.Keccak256Hash(address[:]),
-		data:          data,
-		originStorage: make(Storage),
-		dirtyStorage:  make(Storage),
+		db:             db,
+		address:        address,
+		addrHash:       crypto.Keccak256Hash(address[:]),
+		data:           data,
+		originStorage:  make(Storage),
+		pendingStorage: make(Storage),
+		dirtyStorage:   make(Storage),
 	}
 }
 
@@ -163,6 +169,10 @@ func (s *stateObject) getTrie(db Database) Trie {
 
 // GetState retrieves a value from the account storage trie.
 func (s *stateObject) GetState(db Database, key common.Hash) common.Hash {
+	// If the fake storage is set, only lookup the state here(in the debugging mode)
+	if s.fakeStorage != nil {
+		return s.fakeStorage[key]
+	}
 	// If we have a dirty value for this state entry, return it
 	value, dirty := s.dirtyStorage[key]
 	if dirty {
@@ -174,12 +184,18 @@ func (s *stateObject) GetState(db Database, key common.Hash) common.Hash {
 
 // GetCommittedState retrieves a value from the committed account storage trie.
 func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Hash {
-	// If we have the original value cached, return that
-	value, cached := s.originStorage[key]
-	if cached {
+	// If the fake storage is set, only lookup the state here(in the debugging mode)
+	if s.fakeStorage != nil {
+		return s.fakeStorage[key]
+	}
+	// If we have a pending write or clean cached, return that
+	if value, pending := s.pendingStorage[key]; pending {
 		return value
 	}
-	// Track the amount of time wasted on reading the storge trie
+	if value, cached := s.originStorage[key]; cached {
+		return value
+	}
+	// Track the amount of time wasted on reading the storage trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageReads += time.Since(start) }(time.Now())
 	}
@@ -189,6 +205,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		s.setError(err)
 		return common.Hash{}
 	}
+	var value common.Hash
 	if len(enc) > 0 {
 		_, content, _, err := rlp.Split(enc)
 		if err != nil {
@@ -202,6 +219,11 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 
 // SetState updates a value in account storage.
 func (s *stateObject) SetState(db Database, key, value common.Hash) {
+	// If the fake storage is set, put the temporary state update here.
+	if s.fakeStorage != nil {
+		s.fakeStorage[key] = value
+		return
+	}
 	// If the new value is the same as old, don't set
 	prev := s.GetState(db, key)
 	if prev == value {
@@ -216,21 +238,51 @@ func (s *stateObject) SetState(db Database, key, value common.Hash) {
 	s.setState(key, value)
 }
 
+// SetStorage replaces the entire state storage with the given one.
+//
+// After this function is called, all original state will be ignored and state
+// lookup only happens in the fake state storage.
+//
+// Note this function should only be used for debugging purpose.
+func (s *stateObject) SetStorage(storage map[common.Hash]common.Hash) {
+	// Allocate fake storage if it's nil.
+	if s.fakeStorage == nil {
+		s.fakeStorage = make(Storage)
+	}
+	for key, value := range storage {
+		s.fakeStorage[key] = value
+	}
+	// Don't bother journal since this function should only be used for
+	// debugging and the `fake` storage won't be committed to database.
+}
+
 func (s *stateObject) setState(key, value common.Hash) {
 	s.dirtyStorage[key] = value
 }
 
+// finalise moves all dirty storage slots into the pending area to be hashed or
+// committed later. It is invoked at the end of every transaction.
+func (s *stateObject) finalise() {
+	for key, value := range s.dirtyStorage {
+		s.pendingStorage[key] = value
+	}
+	if len(s.dirtyStorage) > 0 {
+		s.dirtyStorage = make(Storage)
+	}
+}
+
 // updateTrie writes cached storage modifications into the object's storage trie.
 func (s *stateObject) updateTrie(db Database) Trie {
+	// Make sure all dirty slots are finalized into the pending storage area
+	s.finalise()
+
 	// Track the amount of time wasted on updating the storge trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
 	}
-	// Update all the dirty slots in the trie
+	// Insert all the pending updates into the trie
 	tr := s.getTrie(db)
-	for key, value := range s.dirtyStorage {
-		delete(s.dirtyStorage, key)
-
+	for key, value := range s.pendingStorage {
 		// Skip noop changes, persist actual changes
 		if value == s.originStorage[key] {
 			continue
@@ -242,8 +294,11 @@ func (s *stateObject) updateTrie(db Database) Trie {
 			continue
 		}
 		// Encoding []byte cannot fail, ok to ignore the error.
-		v, _ := rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
+		v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
 		s.setError(tr.TryUpdate(key[:], v))
+	}
+	if len(s.pendingStorage) > 0 {
+		s.pendingStorage = make(Storage)
 	}
 	return tr
 }
@@ -324,6 +379,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject.code = s.code
 	stateObject.dirtyStorage = s.dirtyStorage.Copy()
 	stateObject.originStorage = s.originStorage.Copy()
+	stateObject.pendingStorage = s.pendingStorage.Copy()
 	stateObject.suicided = s.suicided
 	stateObject.dirtyCode = s.dirtyCode
 	stateObject.deleted = s.deleted

@@ -218,7 +218,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 			}
 		}
 		// If the contract surely has code (or code is not needed), estimate the transaction
-		msg := ethereum.CallMsg{From: opts.From, To: contract, Value: value, Data: input}
+		msg := ethereum.CallMsg{From: opts.From, To: contract, GasPrice: gasPrice, Value: value, Data: input}
 		gasLimit, err = c.transactor.EstimateGas(ensureContext(opts.Context), msg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to estimate gas needed: %v", err)
@@ -252,7 +252,7 @@ func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]int
 		opts = new(FilterOpts)
 	}
 	// Append the event selector to the query parameters and construct the topic set
-	query = append([][]interface{}{{c.abi.Events[name].Id()}}, query...)
+	query = append([][]interface{}{{c.abi.Events[name].ID()}}, query...)
 
 	topics, err := makeTopics(query...)
 	if err != nil {
@@ -301,7 +301,7 @@ func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]inter
 		opts = new(WatchOpts)
 	}
 	// Append the event selector to the query parameters and construct the topic set
-	query = append([][]interface{}{{c.abi.Events[name].Id()}}, query...)
+	query = append([][]interface{}{{c.abi.Events[name].ID()}}, query...)
 
 	topics, err := makeTopics(query...)
 	if err != nil {

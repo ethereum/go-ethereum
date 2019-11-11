@@ -238,6 +238,11 @@ func newBatch() interface{} {
 	return &Batch{}
 }
 
+// MakeBatch returns empty batch with preallocated buffer.
+func MakeBatch(n int) *Batch {
+	return &Batch{data: make([]byte, 0, n)}
+}
+
 func decodeBatch(data []byte, fn func(i int, index batchIndex) error) error {
 	var index batchIndex
 	for i, o := 0, 0; o < len(data); i++ {

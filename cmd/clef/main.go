@@ -53,6 +53,8 @@ import (
 	"github.com/ethereum/go-ethereum/signer/fourbyte"
 	"github.com/ethereum/go-ethereum/signer/rules"
 	"github.com/ethereum/go-ethereum/signer/storage"
+	colorable "github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -333,7 +335,7 @@ func setCredential(ctx *cli.Context) error {
 		utils.Fatalf("Invalid address specified: %s", addr)
 	}
 	address := common.HexToAddress(addr)
-	password := getPassPhrase("Please enter a passphrase to store for this address:", true)
+	password := getPassPhrase("Please enter a password to store for this address:", true)
 	fmt.Println()
 
 	stretchedKey, err := readMasterKey(ctx, nil)
@@ -392,8 +394,35 @@ func initialize(c *cli.Context) error {
 		}
 		fmt.Println()
 	}
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int(logLevelFlag.Name)), log.StreamHandler(logOutput, log.TerminalFormat(true))))
+	usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+	output := io.Writer(logOutput)
+	if usecolor {
+		output = colorable.NewColorable(logOutput)
+	}
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int(logLevelFlag.Name)), log.StreamHandler(output, log.TerminalFormat(usecolor))))
+
 	return nil
+}
+
+// ipcEndpoint resolves an IPC endpoint based on a configured value, taking into
+// account the set data folders as well as the designated platform we're currently
+// running on.
+func ipcEndpoint(ipcPath, datadir string) string {
+	// On windows we can only use plain top-level pipes
+	if runtime.GOOS == "windows" {
+		if strings.HasPrefix(ipcPath, `\\.\pipe\`) {
+			return ipcPath
+		}
+		return `\\.\pipe\` + ipcPath
+	}
+	// Resolve names into the data directory full paths otherwise
+	if filepath.Base(ipcPath) == ipcPath {
+		if datadir == "" {
+			return filepath.Join(os.TempDir(), ipcPath)
+		}
+		return filepath.Join(datadir, ipcPath)
+	}
+	return ipcPath
 }
 
 func signer(c *cli.Context) error {
@@ -524,12 +553,8 @@ func signer(c *cli.Context) error {
 		}()
 	}
 	if !c.GlobalBool(utils.IPCDisabledFlag.Name) {
-		if c.IsSet(utils.IPCPathFlag.Name) {
-			ipcapiURL = c.GlobalString(utils.IPCPathFlag.Name)
-		} else {
-			ipcapiURL = filepath.Join(configDir, "clef.ipc")
-		}
-
+		givenPath := c.GlobalString(utils.IPCPathFlag.Name)
+		ipcapiURL = ipcEndpoint(filepath.Join(givenPath, "clef.ipc"), configDir)
 		listener, _, err := rpc.StartIPCEndpoint(ipcapiURL, rpcAPI)
 		if err != nil {
 			utils.Fatalf("Could not start IPC api: %v", err)
@@ -539,7 +564,6 @@ func signer(c *cli.Context) error {
 			listener.Close()
 			log.Info("IPC endpoint closed", "url", ipcapiURL)
 		}()
-
 	}
 
 	if c.GlobalBool(testFlag.Name) {
@@ -767,8 +791,8 @@ func testExternalUI(api *core.SignerAPI) {
 		data := `{"types":{"EIP712Domain":[{"name":"name","type":"string"},{"name":"version","type":"string"},{"name":"chainId","type":"uint256"},{"name":"verifyingContract","type":"address"}],"Person":[{"name":"name","type":"string"},{"name":"test","type":"uint8"},{"name":"wallet","type":"address"}],"Mail":[{"name":"from","type":"Person"},{"name":"to","type":"Person"},{"name":"contents","type":"string"}]},"primaryType":"Mail","domain":{"name":"Ether Mail","version":"1","chainId":"1","verifyingContract":"0xCCCcccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"},"message":{"from":{"name":"Cow","test":"3","wallet":"0xcD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"},"to":{"name":"Bob","wallet":"0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB","test":"2"},"contents":"Hello, Bob!"}}`
 		//_, err := api.SignData(ctx, accounts.MimetypeTypedData, *addr, hexutil.Encode([]byte(data)))
 		var typedData core.TypedData
-		err := json.Unmarshal([]byte(data), &typedData)
-		_, err = api.SignTypedData(ctx, *addr, typedData)
+		json.Unmarshal([]byte(data), &typedData)
+		_, err := api.SignTypedData(ctx, *addr, typedData)
 		expectApprove("sign 712 typed data", err)
 	}
 	{ // Sign data test - plain text
@@ -837,17 +861,17 @@ func testExternalUI(api *core.SignerAPI) {
 // TODO: there are many `getPassPhrase` functions, it will be better to abstract them into one.
 func getPassPhrase(prompt string, confirmation bool) string {
 	fmt.Println(prompt)
-	password, err := console.Stdin.PromptPassword("Passphrase: ")
+	password, err := console.Stdin.PromptPassword("Password: ")
 	if err != nil {
-		utils.Fatalf("Failed to read passphrase: %v", err)
+		utils.Fatalf("Failed to read password: %v", err)
 	}
 	if confirmation {
-		confirm, err := console.Stdin.PromptPassword("Repeat passphrase: ")
+		confirm, err := console.Stdin.PromptPassword("Repeat password: ")
 		if err != nil {
-			utils.Fatalf("Failed to read passphrase confirmation: %v", err)
+			utils.Fatalf("Failed to read password confirmation: %v", err)
 		}
 		if password != confirm {
-			utils.Fatalf("Passphrases do not match")
+			utils.Fatalf("Passwords do not match")
 		}
 	}
 	return password

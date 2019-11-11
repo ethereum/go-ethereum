@@ -28,7 +28,18 @@ import (
 // holds type information (inputs) about the yielded output. Anonymous events
 // don't get the signature canonical representation as the first LOG topic.
 type Event struct {
-	Name      string
+	// Name is the event name used for internal representation. It's derived from
+	// the raw name and a suffix will be added in the case of a event overload.
+	//
+	// e.g.
+	// There are two events have same name:
+	// * foo(int,int)
+	// * foo(uint,uint)
+	// The event name of the first one wll be resolved as foo while the second one
+	// will be resolved as foo0.
+	Name string
+	// RawName is the raw event name parsed from ABI.
+	RawName   string
 	Anonymous bool
 	Inputs    Arguments
 }
@@ -41,17 +52,26 @@ func (e Event) String() string {
 			inputs[i] = fmt.Sprintf("%v indexed %v", input.Type, input.Name)
 		}
 	}
-	return fmt.Sprintf("event %v(%v)", e.Name, strings.Join(inputs, ", "))
+	return fmt.Sprintf("event %v(%v)", e.RawName, strings.Join(inputs, ", "))
 }
 
-// Id returns the canonical representation of the event's signature used by the
-// abi definition to identify event names and types.
-func (e Event) Id() common.Hash {
+// Sig returns the event string signature according to the ABI spec.
+//
+// Example
+//
+//     event foo(uint32 a, int b) = "foo(uint32,int256)"
+//
+// Please note that "int" is substitute for its canonical representation "int256"
+func (e Event) Sig() string {
 	types := make([]string, len(e.Inputs))
-	i := 0
-	for _, input := range e.Inputs {
+	for i, input := range e.Inputs {
 		types[i] = input.Type.String()
-		i++
 	}
-	return common.BytesToHash(crypto.Keccak256([]byte(fmt.Sprintf("%v(%v)", e.Name, strings.Join(types, ",")))))
+	return fmt.Sprintf("%v(%v)", e.RawName, strings.Join(types, ","))
+}
+
+// ID returns the canonical representation of the event's signature used by the
+// abi definition to identify event names and types.
+func (e Event) ID() common.Hash {
+	return common.BytesToHash(crypto.Keccak256([]byte(e.Sig())))
 }

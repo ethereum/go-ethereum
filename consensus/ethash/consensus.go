@@ -86,7 +86,7 @@ func (ethash *Ethash) VerifyHeader(chain consensus.ChainReader, header *types.He
 	if ethash.config.PowMode == ModeFullFake {
 		return nil
 	}
-	// Short circuit if the header is known, or it's parent not
+	// Short circuit if the header is known, or its parent not
 	number := header.Number.Uint64()
 	if chain.GetHeader(header.Hash(), number) != nil {
 		return nil
@@ -252,7 +252,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainReader, header, parent *
 	if header.Time <= parent.Time {
 		return errZeroBlockTime
 	}
-	// Verify the block's difficulty based in it's timestamp and parent's difficulty
+	// Verify the block's difficulty based in its timestamp and parent's difficulty
 	expected := ethash.CalcDifficulty(chain, header.Time, parent)
 
 	if expected.Cmp(header.Difficulty) != 0 {

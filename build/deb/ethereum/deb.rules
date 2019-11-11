@@ -6,9 +6,11 @@
 
 # Launchpad rejects Go's access to $HOME/.cache, use custom folder
 export GOCACHE=/tmp/go-build
+export GOROOT_BOOTSTRAP={{.GoBootPath}}
 
 override_dh_auto_build:
-	build/env.sh /usr/lib/go-1.11/bin/go run build/ci.go install -git-commit={{.Env.Commit}} -git-branch={{.Env.Branch}} -git-tag={{.Env.Tag}} -buildnum={{.Env.Buildnum}} -pull-request={{.Env.IsPullRequest}}
+	(cd .go/src && ./make.bash)
+	build/env.sh .go/bin/go run build/ci.go install -git-commit={{.Env.Commit}} -git-branch={{.Env.Branch}} -git-tag={{.Env.Tag}} -buildnum={{.Env.Buildnum}} -pull-request={{.Env.IsPullRequest}}
 
 override_dh_auto_test:
 

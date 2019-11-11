@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // Config are the configuration options for the Interpreter
@@ -37,6 +37,8 @@ type Config struct {
 
 	EWASMInterpreter string // External EWASM interpreter options
 	EVMInterpreter   string // External EVM interpreter options
+
+	ExtraEips []int // Additional EIPS that are to be enabled
 }
 
 // Interpreter is used to run Ethereum based contracts and will utilise the
@@ -71,9 +73,8 @@ type keccakState interface {
 
 // EVMInterpreter represents an EVM interpreter
 type EVMInterpreter struct {
-	evm      *EVM
-	cfg      Config
-	gasTable params.GasTable
+	evm *EVM
+	cfg Config
 
 	intPool *intPool
 
@@ -90,22 +91,36 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	// the jump table was initialised. If it was not
 	// we'll set the default jump table.
 	if !cfg.JumpTable[STOP].valid {
+		var jt JumpTable
 		switch {
-		case evm.ChainConfig().IsConstantinople(evm.BlockNumber):
-			cfg.JumpTable = constantinopleInstructionSet
-		case evm.ChainConfig().IsByzantium(evm.BlockNumber):
-			cfg.JumpTable = byzantiumInstructionSet
-		case evm.ChainConfig().IsHomestead(evm.BlockNumber):
-			cfg.JumpTable = homesteadInstructionSet
+		case evm.chainRules.IsIstanbul:
+			jt = istanbulInstructionSet
+		case evm.chainRules.IsConstantinople:
+			jt = constantinopleInstructionSet
+		case evm.chainRules.IsByzantium:
+			jt = byzantiumInstructionSet
+		case evm.chainRules.IsEIP158:
+			jt = spuriousDragonInstructionSet
+		case evm.chainRules.IsEIP150:
+			jt = tangerineWhistleInstructionSet
+		case evm.chainRules.IsHomestead:
+			jt = homesteadInstructionSet
 		default:
-			cfg.JumpTable = frontierInstructionSet
+			jt = frontierInstructionSet
 		}
+		for i, eip := range cfg.ExtraEips {
+			if err := EnableEIP(eip, &jt); err != nil {
+				// Disable it, so caller can check if it's activated or not
+				cfg.ExtraEips = append(cfg.ExtraEips[:i], cfg.ExtraEips[i+1:]...)
+				log.Error("EIP activation failed", "eip", eip, "error", err)
+			}
+		}
+		cfg.JumpTable = jt
 	}
 
 	return &EVMInterpreter{
-		evm:      evm,
-		cfg:      cfg,
-		gasTable: evm.ChainConfig().GasTable(evm.BlockNumber),
+		evm: evm,
+		cfg: cfg,
 	}
 }
 
@@ -210,6 +225,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 		}
 		// Static portion of gas
+		cost = operation.constantGas // For tracing
 		if !contract.UseGas(operation.constantGas) {
 			return nil, ErrOutOfGas
 		}
@@ -234,8 +250,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// consume the gas and return an error if not enough gas is available.
 		// cost is explicitly set so that the capture state defer method can get the proper cost
 		if operation.dynamicGas != nil {
-			cost, err = operation.dynamicGas(in.gasTable, in.evm, contract, stack, mem, memorySize)
-			if err != nil || !contract.UseGas(cost) {
+			var dynamicCost uint64
+			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
+			cost += dynamicCost // total cost, for debug tracing
+			if err != nil || !contract.UseGas(dynamicCost) {
 				return nil, ErrOutOfGas
 			}
 		}

@@ -38,6 +38,12 @@ type DB struct {
 	inWritePaused          int32 // The indicator whether write operation is paused by compaction
 	aliveSnaps, aliveIters int32
 
+	// Compaction statistic
+	memComp       uint32 // The cumulative number of memory compaction
+	level0Comp    uint32 // The cumulative number of level0 compaction
+	nonLevel0Comp uint32 // The cumulative number of non-level0 compaction
+	seekComp      uint32 // The cumulative number of seek compaction
+
 	// Session.
 	s *session
 
@@ -978,6 +984,8 @@ func (db *DB) GetProperty(name string) (value string, err error) {
 		value += fmt.Sprintf(" Total | %10d | %13.5f | %13.5f | %13.5f | %13.5f\n",
 			totalTables, float64(totalSize)/1048576.0, totalDuration.Seconds(),
 			float64(totalRead)/1048576.0, float64(totalWrite)/1048576.0)
+	case p == "compcount":
+		value = fmt.Sprintf("MemComp:%d Level0Comp:%d NonLevel0Comp:%d SeekComp:%d", atomic.LoadUint32(&db.memComp), atomic.LoadUint32(&db.level0Comp), atomic.LoadUint32(&db.nonLevel0Comp), atomic.LoadUint32(&db.seekComp))
 	case p == "iostats":
 		value = fmt.Sprintf("Read(MB):%.5f Write(MB):%.5f",
 			float64(db.s.stor.reads())/1048576.0,
@@ -1034,6 +1042,11 @@ type DBStats struct {
 	LevelRead         Sizes
 	LevelWrite        Sizes
 	LevelDurations    []time.Duration
+
+	MemComp       uint32
+	Level0Comp    uint32
+	NonLevel0Comp uint32
+	SeekComp      uint32
 }
 
 // Stats populates s with database statistics.
@@ -1070,16 +1083,17 @@ func (db *DB) Stats(s *DBStats) error {
 
 	for level, tables := range v.levels {
 		duration, read, write := db.compStats.getStat(level)
-		if len(tables) == 0 && duration == 0 {
-			continue
-		}
+
 		s.LevelDurations = append(s.LevelDurations, duration)
 		s.LevelRead = append(s.LevelRead, read)
 		s.LevelWrite = append(s.LevelWrite, write)
 		s.LevelSizes = append(s.LevelSizes, tables.size())
 		s.LevelTablesCounts = append(s.LevelTablesCounts, len(tables))
 	}
-
+	s.MemComp = atomic.LoadUint32(&db.memComp)
+	s.Level0Comp = atomic.LoadUint32(&db.level0Comp)
+	s.NonLevel0Comp = atomic.LoadUint32(&db.nonLevel0Comp)
+	s.SeekComp = atomic.LoadUint32(&db.seekComp)
 	return nil
 }
 

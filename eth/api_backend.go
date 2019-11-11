@@ -59,44 +59,86 @@ func (b *EthAPIBackend) SetHead(number uint64) {
 	b.eth.blockchain.SetHead(number)
 }
 
-func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
+func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	// Pending block is only known by the miner
-	if blockNr == rpc.PendingBlockNumber {
+	if number == rpc.PendingBlockNumber {
 		block := b.eth.miner.PendingBlock()
 		return block.Header(), nil
 	}
 	// Otherwise resolve and return the block
-	if blockNr == rpc.LatestBlockNumber {
+	if number == rpc.LatestBlockNumber {
 		return b.eth.blockchain.CurrentBlock().Header(), nil
 	}
-	return b.eth.blockchain.GetHeaderByNumber(uint64(blockNr)), nil
+	return b.eth.blockchain.GetHeaderByNumber(uint64(number)), nil
+}
+
+func (b *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
+	if blockNr, ok := blockNrOrHash.Number(); ok {
+		return b.HeaderByNumber(ctx, blockNr)
+	}
+	if hash, ok := blockNrOrHash.Hash(); ok {
+		header := b.eth.blockchain.GetHeaderByHash(hash)
+		if header == nil {
+			return nil, errors.New("header for hash not found")
+		}
+		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
+			return nil, errors.New("hash is not currently canonical")
+		}
+		return header, nil
+	}
+	return nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
 func (b *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
 	return b.eth.blockchain.GetHeaderByHash(hash), nil
 }
 
-func (b *EthAPIBackend) BlockByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Block, error) {
+func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	// Pending block is only known by the miner
-	if blockNr == rpc.PendingBlockNumber {
+	if number == rpc.PendingBlockNumber {
 		block := b.eth.miner.PendingBlock()
 		return block, nil
 	}
 	// Otherwise resolve and return the block
-	if blockNr == rpc.LatestBlockNumber {
+	if number == rpc.LatestBlockNumber {
 		return b.eth.blockchain.CurrentBlock(), nil
 	}
-	return b.eth.blockchain.GetBlockByNumber(uint64(blockNr)), nil
+	return b.eth.blockchain.GetBlockByNumber(uint64(number)), nil
 }
 
-func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
+func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
+	return b.eth.blockchain.GetBlockByHash(hash), nil
+}
+
+func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
+	if blockNr, ok := blockNrOrHash.Number(); ok {
+		return b.BlockByNumber(ctx, blockNr)
+	}
+	if hash, ok := blockNrOrHash.Hash(); ok {
+		header := b.eth.blockchain.GetHeaderByHash(hash)
+		if header == nil {
+			return nil, errors.New("header for hash not found")
+		}
+		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
+			return nil, errors.New("hash is not currently canonical")
+		}
+		block := b.eth.blockchain.GetBlock(hash, header.Number.Uint64())
+		if block == nil {
+			return nil, errors.New("header found, but block body is missing")
+		}
+		return block, nil
+	}
+	return nil, errors.New("invalid arguments; neither block nor hash specified")
+}
+
+func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	// Pending state is only known by the miner
-	if blockNr == rpc.PendingBlockNumber {
+	if number == rpc.PendingBlockNumber {
 		block, state := b.eth.miner.Pending()
 		return state, block.Header(), nil
 	}
 	// Otherwise resolve the block number and return its state
-	header, err := b.HeaderByNumber(ctx, blockNr)
+	header, err := b.HeaderByNumber(ctx, number)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -107,8 +149,25 @@ func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.
 	return stateDb, header, err
 }
 
-func (b *EthAPIBackend) GetBlock(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return b.eth.blockchain.GetBlockByHash(hash), nil
+func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
+	if blockNr, ok := blockNrOrHash.Number(); ok {
+		return b.StateAndHeaderByNumber(ctx, blockNr)
+	}
+	if hash, ok := blockNrOrHash.Hash(); ok {
+		header, err := b.HeaderByHash(ctx, hash)
+		if err != nil {
+			return nil, nil, err
+		}
+		if header == nil {
+			return nil, nil, errors.New("header for hash not found")
+		}
+		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
+			return nil, nil, errors.New("hash is not currently canonical")
+		}
+		stateDb, err := b.eth.BlockChain().StateAt(header.Root)
+		return stateDb, header, err
+	}
+	return nil, nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
 func (b *EthAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
@@ -185,7 +244,7 @@ func (b *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) 
 }
 
 func (b *EthAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	return b.eth.txPool.State().GetNonce(addr), nil
+	return b.eth.txPool.Nonce(addr), nil
 }
 
 func (b *EthAPIBackend) Stats() (pending int, queued int) {

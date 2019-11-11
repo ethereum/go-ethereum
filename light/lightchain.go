@@ -426,6 +426,11 @@ func (lc *LightChain) HasHeader(hash common.Hash, number uint64) bool {
 	return lc.hc.HasHeader(hash, number)
 }
 
+// GetCanonicalHash returns the canonical hash for a given block number
+func (bc *LightChain) GetCanonicalHash(number uint64) common.Hash {
+	return bc.hc.GetCanonicalHash(number)
+}
+
 // GetBlockHashesFromHash retrieves a number of block hashes starting at a given
 // hash, fetching towards the genesis block.
 func (lc *LightChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []common.Hash {
@@ -438,9 +443,6 @@ func (lc *LightChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []com
 //
 // Note: ancestor == 0 returns the same block, 1 returns its parent and so on.
 func (lc *LightChain) GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64) {
-	lc.chainmu.RLock()
-	defer lc.chainmu.RUnlock()
-
 	return lc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
 }
 
