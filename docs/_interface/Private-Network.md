@@ -63,11 +63,13 @@ block, you need to decide on a few initial parameters for your blockchain:
   while the blockchain is running requires scheduling a hard fork.
 - Initial block gas limit (`gasLimit`). Your choice here impacts how much EVM computation
   can happen within a single block. We recommend using the main Ethereum network as a
-  guideline to find a good amount. The block gas limit can be adjusted after launch using
-  the `--targetgaslimit` command-line flag.
+  [guideline to find a good amount](gaslimit-char). The block gas limit can be adjusted
+  after launch using the `--targetgaslimit` command-line flag.
 - Initial allocation of ether (`alloc`). This determines how much ether is available to
   the addresses you list in the genesis block. Additional ether can be created through
   mining as the chain progresses.
+
+[gaslimit-chart]: https://etherscan.io/chart/gaslimit
 
 #### Clique Example
 
@@ -87,10 +89,12 @@ geth account new --datadir data
 
 Take note of the Ethereum address printed by this command.
 
-To create the initial extradata for your network, collect the signer addresses and
-hex-encode `extradata` as the concatenation of 32 zero bytes, all signer addresses, and 65
-further zero bytes. In the example below, `extradata` contains a single initial signer
-address, `0x7df9a875a174b3bc565e6424a0050ebc1b2d1d82`.
+To create the initial extradata for your network, collect the signer addresses and encode
+`extradata` as the concatenation of 32 zero bytes, all signer addresses, and 65 further
+zero bytes. In the example below, `extradata` contains a single initial signer address,
+`0x7df9a875a174b3bc565e6424a0050ebc1b2d1d82`.
+
+You can use the `period` configuration option to set the target block time of the chain.
 
 ```json
 {
@@ -102,7 +106,7 @@ address, `0x7df9a875a174b3bc565e6424a0050ebc1b2d1d82`.
     "eip158Block": 0,
     "byzantiumBlock": 0,
     "constantinopleBlock": 0,
-    "petersburgBlock": 0
+    "petersburgBlock": 0,
     "clique": {
       "period": 5,
       "epoch": 30000
