@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/params"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
@@ -491,6 +493,7 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 			}
 		}()
 	}
+	var gp1559 *core.GasPool
 	// Feed the transactions into the tracers and return
 	var failed error
 	for i, tx := range txs {
@@ -501,8 +504,11 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 		msg, _ := tx.AsMessage(signer)
 		vmctx := core.NewEVMContext(msg, block.Header(), api.eth.blockchain, nil)
 
+		if api.eth.blockchain.Config().IsEIP1559(block.Number()) {
+			gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+		}
 		vmenv := vm.NewEVM(vmctx, statedb, api.eth.blockchain.Config(), vm.Config{})
-		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
+		if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), gp1559); err != nil {
 			failed = err
 			break
 		}
@@ -563,6 +569,7 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 	var (
 		signer = types.MakeSigner(api.eth.blockchain.Config(), block.Number())
 		dumps  []string
+		gp1559 *core.GasPool
 	)
 	for i, tx := range block.Transactions() {
 		// Prepare the trasaction for un-traced execution
@@ -596,7 +603,10 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 		}
 		// Execute the transaction and flush any traces to disk
 		vmenv := vm.NewEVM(vmctx, statedb, api.eth.blockchain.Config(), vmConf)
-		_, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
+		if api.eth.blockchain.Config().IsEIP1559(block.Number()) {
+			gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+		}
+		_, _, _, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), gp1559)
 		if writer != nil {
 			writer.Flush()
 		}
@@ -727,7 +737,11 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 	var (
 		tracer vm.Tracer
 		err    error
+		gp1559 *core.GasPool
 	)
+	if api.eth.blockchain.Config().IsEIP1559(vmctx.BlockNumber) {
+		gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+	}
 	switch {
 	case config != nil && config.Tracer != nil:
 		// Define a meaningful timeout of a single transaction trace
@@ -758,7 +772,7 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, statedb, api.eth.blockchain.Config(), vm.Config{Debug: true, Tracer: tracer})
 
-	result, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()))
+	ret, gas, failed, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()), gp1559)
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %v", err)
 	}
@@ -810,9 +824,13 @@ func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, ree
 		if idx == txIndex {
 			return msg, context, statedb, nil
 		}
+		var gp1559 *core.GasPool
+		if api.eth.blockchain.Config().IsEIP1559(block.Number()) {
+			gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+		}
 		// Not yet the searched for transaction, execute on top of the current state
 		vmenv := vm.NewEVM(context, statedb, api.eth.blockchain.Config(), vm.Config{})
-		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
+		if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), gp1559); err != nil {
 			return nil, vm.Context{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		// Ensure any modifications are committed to the state
