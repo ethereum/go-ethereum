@@ -219,8 +219,7 @@ func parseTopicsIntoMap(out map[string]interface{}, fields abi.Arguments, topics
 		case abi.BoolTy:
 			out[arg.Name] = topics[0][common.HashLength-1] == 1
 		case abi.IntTy, abi.UintTy:
-			num := new(big.Int).SetBytes(topics[0][:])
-			out[arg.Name] = num
+			out[arg.Name] = abi.ReadInteger(arg.Type.T, arg.Type.Kind, topics[0].Bytes())
 		case abi.AddressTy:
 			var addr common.Address
 			copy(addr[:], topics[0][common.HashLength-common.AddressLength:])
@@ -228,9 +227,11 @@ func parseTopicsIntoMap(out map[string]interface{}, fields abi.Arguments, topics
 		case abi.HashTy:
 			out[arg.Name] = topics[0]
 		case abi.FixedBytesTy:
-			array := reflect.New(arg.Type.Type).Elem()
-			reflect.Copy(array, reflect.ValueOf(topics[0][:arg.Type.Size]))
-			out[arg.Name] = array.Interface()
+			array, err := abi.ReadFixedBytes(arg.Type, topics[0].Bytes())
+			if err != nil {
+				return err
+			}
+			out[arg.Name] = array
 		case abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
 			// Array types (including strings and bytes) have their keccak256 hashes stored in the topic- not a hash
 			// whose bytes can be decoded to the actual value- so the best we can do is retrieve that hash

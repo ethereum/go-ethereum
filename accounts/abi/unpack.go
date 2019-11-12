@@ -26,16 +26,18 @@ import (
 )
 
 var (
+	// MaxUint256 is the maximum value that can be represented by a uint256
 	MaxUint256 = big.NewInt(0).Add(
 		big.NewInt(0).Exp(big.NewInt(2), big.NewInt(256), nil),
 		big.NewInt(-1))
+	// MaxInt256 is the maximum value that can be represented by a int256
 	MaxInt256 = big.NewInt(0).Add(
 		big.NewInt(0).Exp(big.NewInt(2), big.NewInt(255), nil),
 		big.NewInt(-1))
 )
 
-// reads the integer based on its kind
-func readInteger(typ byte, kind reflect.Kind, b []byte) interface{} {
+// ReadInteger reads the integer based on its kind and returns the appropriate value
+func ReadInteger(typ byte, kind reflect.Kind, b []byte) interface{} {
 	switch kind {
 	case reflect.Uint8:
 		return b[len(b)-1]
@@ -102,8 +104,8 @@ func readFunctionType(t Type, word []byte) (funcTy [24]byte, err error) {
 	return
 }
 
-// through reflection, creates a fixed array to be read from
-func readFixedBytes(t Type, word []byte) (interface{}, error) {
+// ReadFixedBytes uses reflection to create a fixed array to be read from
+func ReadFixedBytes(t Type, word []byte) (interface{}, error) {
 	if t.T != FixedBytesTy {
 		return nil, fmt.Errorf("abi: invalid type in call to make fixed byte array")
 	}
@@ -230,7 +232,7 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 	case StringTy: // variable arrays are written at the end of the return bytes
 		return string(output[begin : begin+length]), nil
 	case IntTy, UintTy:
-		return readInteger(t.T, t.Kind, returnOutput), nil
+		return ReadInteger(t.T, t.Kind, returnOutput), nil
 	case BoolTy:
 		return readBool(returnOutput)
 	case AddressTy:
@@ -240,7 +242,7 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 	case BytesTy:
 		return output[begin : begin+length], nil
 	case FixedBytesTy:
-		return readFixedBytes(t, returnOutput)
+		return ReadFixedBytes(t, returnOutput)
 	case FunctionTy:
 		return readFunctionType(t, returnOutput)
 	default:
