@@ -250,7 +250,7 @@ to ensure it's indeed reachable), you can start more Geth nodes and connect them
 bootstrap node using the `--bootnodes` flag.
 
 To create a member node running on the same machine as the bootstrap node, choose a
-separate data directory (example: `data-2`) and listening port (example: 30305):
+separate data directory (example: `data-2`) and listening port (example: `30305`):
 
 ```shell
 geth --datadir data-2 --networkid 15 --port 30305 --bootnodes <bootstrap-node-record>
