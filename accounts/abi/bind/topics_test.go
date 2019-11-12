@@ -92,7 +92,7 @@ func setupTopicsTests() []topicTest {
 				createObj: func() interface{} { return &bytesStruct{} },
 				resultObj: func() interface{} { return &bytesStruct{StaticBytes: [5]byte{1, 2, 3, 4, 5}} },
 				resultMap: func() map[string]interface{} {
-					return map[string]interface{}{"staticBytes":[5]byte{1, 2, 3, 4, 5}}
+					return map[string]interface{}{"staticBytes": [5]byte{1, 2, 3, 4, 5}}
 				},
 				fields: abi.Arguments{abi.Argument{
 					Name:    "staticBytes",
@@ -111,7 +111,7 @@ func setupTopicsTests() []topicTest {
 				createObj: func() interface{} { return &int8Struct{} },
 				resultObj: func() interface{} { return &int8Struct{Int8Value: -1} },
 				resultMap: func() map[string]interface{} {
-					return map[string]interface{}{"int8Value":int8(-1)}
+					return map[string]interface{}{"int8Value": int8(-1)}
 				},
 				fields: abi.Arguments{abi.Argument{
 					Name:    "int8Value",
@@ -131,7 +131,7 @@ func setupTopicsTests() []topicTest {
 				createObj: func() interface{} { return &int256Struct{} },
 				resultObj: func() interface{} { return &int256Struct{Int256Value: big.NewInt(-1)} },
 				resultMap: func() map[string]interface{} {
-					return map[string]interface{}{"int256Value":big.NewInt(-1)}
+					return map[string]interface{}{"int256Value": big.NewInt(-1)}
 				},
 				fields: abi.Arguments{abi.Argument{
 					Name:    "int256Value",
