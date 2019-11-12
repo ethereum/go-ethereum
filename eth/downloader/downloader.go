@@ -511,9 +511,9 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		d.syncInitHook(origin, height)
 	}
 	fetchers := []func() error{
-		func() error { return d.fetchHeaders(p, origin+1, pivot) }, // Headers are always retrieved
-		func() error { return d.fetchBodies(origin + 1) },          // Bodies are retrieved during normal and fast sync
-		func() error { return d.fetchReceipts(origin + 1) },        // Receipts are retrieved during fast sync
+		func() error { return d.fetchHeaders(p, origin+1, pivot, height) }, // Headers are always retrieved
+		func() error { return d.fetchBodies(origin + 1) },                  // Bodies are retrieved during normal and fast sync
+		func() error { return d.fetchReceipts(origin + 1) },                // Receipts are retrieved during fast sync
 		func() error { return d.processHeaders(origin+1, pivot, td) },
 	}
 	if d.mode == FastSync {
@@ -908,7 +908,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 // other peers are only accepted if they map cleanly to the skeleton. If no one
 // can fill in the skeleton - not even the origin peer - it's assumed invalid and
 // the origin is dropped.
-func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) error {
+func (d *Downloader) fetchHeaders(p *peerConnection, from, pivot, advertisedHead uint64) error {
 	p.log.Debug("Directing header downloads", "origin", from)
 	defer p.log.Debug("Header download terminated")
 
@@ -925,7 +925,6 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 
 		ttl = d.requestTTL()
 		timeout.Reset(ttl)
-
 		if skeleton {
 			p.log.Trace("Fetching skeleton headers", "count", MaxHeaderFetch, "from", from)
 			go p.peer.RequestHeadersByNumber(from+uint64(MaxHeaderFetch)-1, MaxSkeletonSize, MaxHeaderFetch-1, false)
@@ -1033,8 +1032,14 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 				from += uint64(len(headers))
 				getHeaders(from)
 			} else {
-				// No headers delivered, or all of them being delayed, sleep a bit and retry
+				if !skeleton && from < advertisedHead-uint64(reorgProtHeaderDelay) {
+					// This peer told is about a high number, but is not
+					// delivering
+					p.log.Trace("peer did not deliver", "requested", from, "head", advertisedHead)
+					return errStallingPeer
+				}
 				p.log.Trace("All headers delayed, waiting")
+				// No headers delivered, or all of them being delayed, sleep a bit and retry
 				select {
 				case <-time.After(fsHeaderContCheck):
 					getHeaders(from)
