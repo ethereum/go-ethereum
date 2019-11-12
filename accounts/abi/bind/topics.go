@@ -135,6 +135,7 @@ func parseTopics(out interface{}, fields abi.Arguments, topics []common.Hash) er
 		case reflect.Int8:
 			num := new(big.Int).SetBytes(topics[0][:])
 			field.Set(reflect.ValueOf(int8(num.Int64())))
+			fmt.Printf("parseTopics: num '%v', topics[0] '%v', field '%v'\n", num, topics[0], field)
 
 		case reflect.Int16:
 			num := new(big.Int).SetBytes(topics[0][:])
@@ -178,6 +179,13 @@ func parseTopics(out interface{}, fields abi.Arguments, topics []common.Hash) er
 
 			case reflectBigInt:
 				num := new(big.Int).SetBytes(topics[0][:])
+				if arg.Type.T == abi.IntTy {
+					if num.Cmp(abi.MaxInt256) > 0 {
+						num.Add(abi.MaxUint256, big.NewInt(0).Neg(num))
+						num.Add(num, big.NewInt(1))
+						num.Neg(num)
+					}
+				}
 				field.Set(reflect.ValueOf(num))
 
 			default:

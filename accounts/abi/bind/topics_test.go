@@ -17,6 +17,7 @@
 package bind
 
 import (
+	"math/big"
 	"reflect"
 	"testing"
 
@@ -59,7 +60,15 @@ func TestParseTopics(t *testing.T) {
 	type bytesStruct struct {
 		StaticBytes [5]byte
 	}
+	type int8Struct struct {
+		Int8Value int8
+	}
+	type int256Struct struct {
+		Int256Value *big.Int
+	}
 	bytesType, _ := abi.NewType("bytes5", "", nil)
+	int8Type, _ := abi.NewType("int8", "", nil)
+	int256Type, _ := abi.NewType("int256", "", nil)
 	type args struct {
 		createObj func() interface{}
 		resultObj func() interface{}
@@ -83,6 +92,40 @@ func TestParseTopics(t *testing.T) {
 				}},
 				topics: []common.Hash{
 					{1, 2, 3, 4, 5},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "int8 with negative value",
+			args: args{
+				createObj: func() interface{} { return &int8Struct{} },
+				resultObj: func() interface{} { return &int8Struct{Int8Value: -1} },
+				fields: abi.Arguments{abi.Argument{
+					Name:    "int8Value",
+					Type:    int8Type,
+					Indexed: true,
+				}},
+				topics: []common.Hash{
+					{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+						255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "int256 with negative value",
+			args: args{
+				createObj: func() interface{} { return &int256Struct{} },
+				resultObj: func() interface{} { return &int256Struct{Int256Value: big.NewInt(-1)} },
+				fields: abi.Arguments{abi.Argument{
+					Name:    "int256Value",
+					Type:    int256Type,
+					Indexed: true,
+				}},
+				topics: []common.Hash{
+					{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+						255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255},
 				},
 			},
 			wantErr: false,

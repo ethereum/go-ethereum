@@ -26,10 +26,10 @@ import (
 )
 
 var (
-	maxUint256 = big.NewInt(0).Add(
+	MaxUint256 = big.NewInt(0).Add(
 		big.NewInt(0).Exp(big.NewInt(2), big.NewInt(256), nil),
 		big.NewInt(-1))
-	maxInt256 = big.NewInt(0).Add(
+	MaxInt256 = big.NewInt(0).Add(
 		big.NewInt(0).Exp(big.NewInt(2), big.NewInt(255), nil),
 		big.NewInt(-1))
 )
@@ -62,8 +62,8 @@ func readInteger(typ byte, kind reflect.Kind, b []byte) interface{} {
 			return ret
 		}
 
-		if ret.Cmp(maxInt256) > 0 {
-			ret.Add(maxUint256, big.NewInt(0).Neg(ret))
+		if ret.Cmp(MaxInt256) > 0 {
+			ret.Add(MaxUint256, big.NewInt(0).Neg(ret))
 			ret.Add(ret, big.NewInt(1))
 			ret.Neg(ret)
 		}
