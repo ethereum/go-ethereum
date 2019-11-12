@@ -72,10 +72,20 @@ func TestAccountNew(t *testing.T) {
 	geth.Expect(`
 Your new account is locked with a password. Please give a password. Do not forget this password.
 !! Unsupported terminal, password will be echoed.
-Passphrase: {{.InputLine "foobar"}}
-Repeat passphrase: {{.InputLine "foobar"}}
+Password: {{.InputLine "foobar"}}
+Repeat password: {{.InputLine "foobar"}}
+
+Your new key was generated
 `)
-	geth.ExpectRegexp(`Address: \{[0-9a-f]{40}\}\n`)
+	geth.ExpectRegexp(`
+Public address of the key:   0x[0-9a-fA-F]{40}
+Path of the secret key file: .*UTC--.+--[0-9a-f]{40}
+
+- You can share your public address with anyone. Others need it to interact with you.
+- You must NEVER share the secret key with anyone! The key controls access to your funds!
+- You must BACKUP your key file! Without the key, it's impossible to access account funds!
+- You must REMEMBER your password! Without the password, it's impossible to decrypt the key!
+`)
 }
 
 func TestAccountNewBadRepeat(t *testing.T) {
@@ -84,9 +94,9 @@ func TestAccountNewBadRepeat(t *testing.T) {
 	geth.Expect(`
 Your new account is locked with a password. Please give a password. Do not forget this password.
 !! Unsupported terminal, password will be echoed.
-Passphrase: {{.InputLine "something"}}
-Repeat passphrase: {{.InputLine "something else"}}
-Fatal: Passphrases do not match
+Password: {{.InputLine "something"}}
+Repeat password: {{.InputLine "something else"}}
+Fatal: Passwords do not match
 `)
 }
 
@@ -99,10 +109,10 @@ func TestAccountUpdate(t *testing.T) {
 	geth.Expect(`
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
-Passphrase: {{.InputLine "foobar"}}
+Password: {{.InputLine "foobar"}}
 Please give a new password. Do not forget this password.
-Passphrase: {{.InputLine "foobar2"}}
-Repeat passphrase: {{.InputLine "foobar2"}}
+Password: {{.InputLine "foobar2"}}
+Repeat password: {{.InputLine "foobar2"}}
 `)
 }
 
@@ -111,7 +121,7 @@ func TestWalletImport(t *testing.T) {
 	defer geth.ExpectExit()
 	geth.Expect(`
 !! Unsupported terminal, password will be echoed.
-Passphrase: {{.InputLine "foo"}}
+Password: {{.InputLine "foo"}}
 Address: {d4584b5f6229b7be90727b0fc8c6b91bb427821f}
 `)
 
@@ -126,8 +136,8 @@ func TestWalletImportBadPassword(t *testing.T) {
 	defer geth.ExpectExit()
 	geth.Expect(`
 !! Unsupported terminal, password will be echoed.
-Passphrase: {{.InputLine "wrong"}}
-Fatal: could not decrypt key with given passphrase
+Password: {{.InputLine "wrong"}}
+Fatal: could not decrypt key with given password
 `)
 }
 
@@ -140,7 +150,7 @@ func TestUnlockFlag(t *testing.T) {
 	geth.Expect(`
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
-Passphrase: {{.InputLine "foobar"}}
+Password: {{.InputLine "foobar"}}
 `)
 	geth.ExpectExit()
 
@@ -164,12 +174,12 @@ func TestUnlockFlagWrongPassword(t *testing.T) {
 	geth.Expect(`
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
-Passphrase: {{.InputLine "wrong1"}}
+Password: {{.InputLine "wrong1"}}
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 2/3
-Passphrase: {{.InputLine "wrong2"}}
+Password: {{.InputLine "wrong2"}}
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 3/3
-Passphrase: {{.InputLine "wrong3"}}
-Fatal: Failed to unlock account f466859ead1932d743d622cb74fc058882e8648a (could not decrypt key with given passphrase)
+Password: {{.InputLine "wrong3"}}
+Fatal: Failed to unlock account f466859ead1932d743d622cb74fc058882e8648a (could not decrypt key with given password)
 `)
 }
 
@@ -183,9 +193,9 @@ func TestUnlockFlagMultiIndex(t *testing.T) {
 	geth.Expect(`
 Unlocking account 0 | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
-Passphrase: {{.InputLine "foobar"}}
+Password: {{.InputLine "foobar"}}
 Unlocking account 2 | Attempt 1/3
-Passphrase: {{.InputLine "foobar"}}
+Password: {{.InputLine "foobar"}}
 `)
 	geth.ExpectExit()
 
@@ -228,7 +238,7 @@ func TestUnlockFlagPasswordFileWrongPassword(t *testing.T) {
 		"--password", "testdata/wrong-passwords.txt", "--unlock", "0,2")
 	defer geth.ExpectExit()
 	geth.Expect(`
-Fatal: Failed to unlock account 0 (could not decrypt key with given passphrase)
+Fatal: Failed to unlock account 0 (could not decrypt key with given password)
 `)
 }
 
@@ -248,12 +258,12 @@ func TestUnlockFlagAmbiguous(t *testing.T) {
 	geth.Expect(`
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
-Passphrase: {{.InputLine "foobar"}}
+Password: {{.InputLine "foobar"}}
 Multiple key files exist for address f466859ead1932d743d622cb74fc058882e8648a:
    keystore://{{keypath "1"}}
    keystore://{{keypath "2"}}
-Testing your passphrase against all of them...
-Your passphrase unlocked keystore://{{keypath "1"}}
+Testing your password against all of them...
+Your password unlocked keystore://{{keypath "1"}}
 In order to avoid this warning, you need to remove the following duplicate key files:
    keystore://{{keypath "2"}}
 `)
@@ -285,11 +295,11 @@ func TestUnlockFlagAmbiguousWrongPassword(t *testing.T) {
 	geth.Expect(`
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
-Passphrase: {{.InputLine "wrong"}}
+Password: {{.InputLine "wrong"}}
 Multiple key files exist for address f466859ead1932d743d622cb74fc058882e8648a:
    keystore://{{keypath "1"}}
    keystore://{{keypath "2"}}
-Testing your passphrase against all of them...
+Testing your password against all of them...
 Fatal: None of the listed files could be unlocked.
 `)
 	geth.ExpectExit()

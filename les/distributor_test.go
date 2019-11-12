@@ -86,8 +86,8 @@ func (p *testDistPeer) worker(t *testing.T, checkOrder bool, stop chan struct{})
 const (
 	testDistBufLimit       = 10000000
 	testDistMaxCost        = 1000000
-	testDistPeerCount      = 5
-	testDistReqCount       = 5000
+	testDistPeerCount      = 2
+	testDistReqCount       = 10
 	testDistMaxResendCount = 3
 )
 
@@ -121,13 +121,16 @@ func testRequestDistributor(t *testing.T, resend bool) {
 	stop := make(chan struct{})
 	defer close(stop)
 
-	dist := newRequestDistributor(nil, stop, &mclock.System{})
+	dist := newRequestDistributor(nil, &mclock.System{})
 	var peers [testDistPeerCount]*testDistPeer
 	for i := range peers {
 		peers[i] = &testDistPeer{}
 		go peers[i].worker(t, !resend, stop)
 		dist.registerTestPeer(peers[i])
 	}
+	// Disable the mechanism that we will wait a few time for request
+	// even there is no suitable peer to send right now.
+	waitForPeers = 0
 
 	var wg sync.WaitGroup
 

@@ -1,200 +1,278 @@
-## Initializing the signer
+## Initializing Clef
 
-First, initialize the master seed.
+First thing's first, Clef needs to store some data itself. Since that data might be sensitive (passwords, signing rules, accounts), Clef's entire storage is encrypted. To support encrypting data, the first step is to initialize Clef with a random master seed, itself too encrypted with your chosen password:
 
 ```text
-#./signer init
+$ clef init
 
 WARNING!
 
-The signer is alpha software, and not yet publically released. This software has _not_ been audited, and there
-are no guarantees about the workings of this software. It may contain severe flaws. You should not use this software
-unless you agree to take full responsibility for doing so, and know what you are doing.
+Clef is an account management tool. It may, like any software, contain bugs.
 
-TLDR; THIS IS NOT PRODUCTION-READY SOFTWARE!
+Please take care to
+- backup your keystore files,
+- verify that the keystore(s) can be opened with your password.
 
+Clef is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
 
 Enter 'ok' to proceed:
->ok
-A master seed has been generated into /home/martin/.signer/secrets.dat
+> ok
 
-This is required to be able to store credentials, such as :
+The master seed of clef will be locked with a password.
+Please specify a password. Do not forget this password!
+Password:
+Repeat password:
+
+A master seed has been generated into /home/martin/.clef/masterseed.json
+
+This is required to be able to store credentials, such as:
 * Passwords for keystores (used by rule engine)
-* Storage for javascript rules
-* Hash of rule-file
+* Storage for JavaScript auto-signing rules
+* Hash of JavaScript rule-file
 
-You should treat that file with utmost secrecy, and make a backup of it.
-NOTE: This file does not contain your accounts. Those need to be backed up separately!
+You should treat 'masterseed.json' with utmost secrecy and make a backup of it!
+* The password is necessary but not enough, you need to back up the master seed too!
+* The master seed does not contain your accounts, those need to be backed up separately!
 ```
 
-(for readability purposes, we'll remove the WARNING printout in the rest of this document)
+*For readability purposes, we'll remove the WARNING printout, user confirmation and the unlocking of the master seed in the rest of this document.*
 
-## Creating rules
+## Remote interactions
 
-Now, you can create a rule-file. Note that it is not mandatory to use predefined rules, but it's really handy.
+Clef is capable of managing both key-file based accounts as well as hardware wallets. To evaluate clef, we're going to point it to our Rinkeby testnet keystore and specify the Rinkeby chain ID for signing (Clef doesn't have a backing chain, so it doesn't know what network it runs on).
 
-```javascript
-function ApproveListing(){
+```text
+$ clef --keystore ~/.ethereum/rinkeby/keystore --chainid 4
+
+INFO [07-01|11:00:46.385] Starting signer                          chainid=4 keystore=$HOME/.ethereum/rinkeby/keystore light-kdf=false advanced=false
+DEBUG[07-01|11:00:46.389] FS scan times                            list=3.521941ms set=9.017µs diff=4.112µs
+DEBUG[07-01|11:00:46.391] Ledger support enabled
+DEBUG[07-01|11:00:46.391] Trezor support enabled via HID
+DEBUG[07-01|11:00:46.391] Trezor support enabled via WebUSB
+INFO [07-01|11:00:46.391] Audit logs configured                    file=audit.log
+DEBUG[07-01|11:00:46.392] IPC registered                           namespace=account
+INFO [07-01|11:00:46.392] IPC endpoint opened                      url=$HOME/.clef/clef.ipc
+------- Signer info -------
+* intapi_version : 7.0.0
+* extapi_version : 6.0.0
+* extapi_http : n/a
+* extapi_ipc : $HOME/.clef/clef.ipc
+```
+
+By default, Clef starts up in CLI (Command Line Interface) mode. Arbitrary remote processes may *request* account interactions (e.g. sign a transaction), which the user will need to individually *confirm*.
+
+To test this out, we can *request* Clef to list all account via its *External API endpoint*:
+
+```text
+echo '{"id": 1, "jsonrpc": "2.0", "method": "account_list"}' | nc -U ~/.clef/clef.ipc
+```
+
+This will prompt the user within the Clef CLI to confirm or deny the request:
+
+```text
+-------- List Account request--------------
+A request has been made to list all accounts.
+You can select which accounts the caller can see
+  [x] 0xD9C9Cd5f6779558b6e0eD4e6Acf6b1947E7fA1F3
+    URL: keystore://$HOME/.ethereum/rinkeby/keystore/UTC--2017-04-14T15-15-00.327614556Z--d9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3
+  [x] 0x086278A6C067775F71d6B2BB1856Db6E28c30418
+    URL: keystore://$HOME/.ethereum/rinkeby/keystore/UTC--2018-02-06T22-53-11.211657239Z--086278a6c067775f71d6b2bb1856db6e28c30418
+-------------------------------------------
+Request context:
+	NA -> NA -> NA
+
+Additional HTTP header data, provided by the external caller:
+	User-Agent:
+	Origin:
+Approve? [y/N]:
+>
+```
+
+Depending on whether we approve or deny the request, the original NetCat process will get:
+
+```text
+{"jsonrpc":"2.0","id":1,"result":["0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3","0x086278a6c067775f71d6b2bb1856db6e28c30418"]}
+
+or
+
+{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"Request denied"}}
+```
+
+Apart from listing accounts, you can also *request* creating a new account; signing transactions and data; and recovering signatures. You can find the available methods in the Clef [External API Spec](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef#external-api-1) and the [External API Changelog](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/extapi_changelog.md).
+
+*Note, the number of things you can do from the External API is deliberately small, since we want to limit the power of remote calls by as much as possible! Clef has an [Internal API](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef#ui-api-1) too for the UI (User Interface) which is much richer and can support custom interfaces on top. But that's out of scope here.*
+
+## Automatic rules
+
+For most users, manually confirming every transaction is the way to go. However, there are cases when it makes sense to set up some rules which permit Clef to sign a transaction without prompting the user. One such example would be running a signer on Rinkeby or other PoA networks.
+
+For starters, we can create a rule file that automatically permits anyone to list our available accounts without user confirmation. The rule file is a tiny JavaScript snippet that you can program however you want:
+
+```js
+function ApproveListing() {
     return "Approve"
 }
 ```
 
-Get the `sha256` hash. If you have openssl, you can do `openssl sha256 rules.js`...
-```text
-#sha256sum rules.js
-6c21d1737429d6d4f2e55146da0797782f3c0a0355227f19d702df377c165d72  rules.js
-```
-...now `attest` the file...
-```text
-#./signer attest 6c21d1737429d6d4f2e55146da0797782f3c0a0355227f19d702df377c165d72
+Of course, Clef isn't going to just accept and run arbitrary scripts you give it, that would be dangerous if someone changes your rule file! Instead, you need to explicitly *attest* the rule file, which entails injecting its hash into Clef's secure store.
 
-INFO [02-21|12:14:38] Ruleset attestation updated              sha256=6c21d1737429d6d4f2e55146da0797782f3c0a0355227f19d702df377c165d72
-```
-
-...and (this is required only for non-production versions) load a mock-up `4byte.json` by copying the file from the source to your current working directory:
 ```text
-#cp $GOPATH/src/github.com/ethereum/go-ethereum/cmd/clef/4byte.json $PWD
+$ sha256sum rules.js
+645b58e4f945e24d0221714ff29f6aa8e860382ced43490529db1695f5fcc71c  rules.js
+
+$ clef attest 645b58e4f945e24d0221714ff29f6aa8e860382ced43490529db1695f5fcc71c
+Decrypt master seed of clef
+Password:
+INFO [07-01|13:25:03.290] Ruleset attestation updated              sha256=645b58e4f945e24d0221714ff29f6aa8e860382ced43490529db1695f5fcc71c
 ```
 
-At this point, we can start the signer with the rule-file:
-```text
-#./signer --rules rules.js --rpc
+At this point, we can start Clef with the rule file:
 
-INFO [09-25|20:28:11.866] Using CLI as UI-channel 
-INFO [09-25|20:28:11.876] Loaded 4byte db                          signatures=5509 file=./4byte.json
-INFO [09-25|20:28:11.877] Rule engine configured                   file=./rules.js
-DEBUG[09-25|20:28:11.877] FS scan times                            list=100.781µs set=13.253µs diff=5.761µs
-DEBUG[09-25|20:28:11.884] Ledger support enabled 
-DEBUG[09-25|20:28:11.888] Trezor support enabled 
-INFO [09-25|20:28:11.888] Audit logs configured                    file=audit.log
-DEBUG[09-25|20:28:11.888] HTTP registered                          namespace=account
-INFO [09-25|20:28:11.890] HTTP endpoint opened                     url=http://localhost:8550
-DEBUG[09-25|20:28:11.890] IPC registered                           namespace=account
-INFO [09-25|20:28:11.890] IPC endpoint opened                      url=<nil>
+```text
+$ clef --keystore ~/.ethereum/rinkeby/keystore --chainid 4 --rules rules.js
+
+INFO [07-01|13:39:49.726] Rule engine configured                   file=rules.js
+INFO [07-01|13:39:49.726] Starting signer                          chainid=4 keystore=$HOME/.ethereum/rinkeby/keystore light-kdf=false advanced=false
+DEBUG[07-01|13:39:49.726] FS scan times                            list=35.15µs set=4.251µs diff=2.766µs
+DEBUG[07-01|13:39:49.727] Ledger support enabled
+DEBUG[07-01|13:39:49.727] Trezor support enabled via HID
+DEBUG[07-01|13:39:49.727] Trezor support enabled via WebUSB
+INFO [07-01|13:39:49.728] Audit logs configured                    file=audit.log
+DEBUG[07-01|13:39:49.728] IPC registered                           namespace=account
+INFO [07-01|13:39:49.728] IPC endpoint opened                      url=$HOME/.clef/clef.ipc
 ------- Signer info -------
-* extapi_version : 2.0.0
-* intapi_version : 2.0.0
-* extapi_http : http://localhost:8550
-* extapi_ipc : <nil>
+* intapi_version : 7.0.0
+* extapi_version : 6.0.0
+* extapi_http : n/a
+* extapi_ipc : $HOME/.clef/clef.ipc
 ```
 
-Any list-requests will now be auto-approved by our rule-file.
+Any account listing *request* will now be auto-approved by the rule file:
+
+```text
+$ echo '{"id": 1, "jsonrpc": "2.0", "method": "account_list"}' | nc -U ~/.clef/clef.ipc
+{"jsonrpc":"2.0","id":1,"result":["0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3","0x086278a6c067775f71d6b2bb1856db6e28c30418"]}
+```
 
 ## Under the hood
 
 While doing the operations above, these files have been created:
 
 ```text
-#ls -laR ~/.signer/
-/home/martin/.signer/:
-total 16
-drwx------  3 martin martin 4096 feb 21 12:14 .
-drwxr-xr-x 71 martin martin 4096 feb 21 12:12 ..
-drwx------  2 martin martin 4096 feb 21 12:14 43f73718397aa54d1b22
--rwx------  1 martin martin  256 feb 21 12:12 secrets.dat
+$ ls -laR ~/.clef/
 
-/home/martin/.signer/43f73718397aa54d1b22:
+$HOME/.clef/:
+total 24
+drwxr-x--x   3 user user  4096 Jul  1 13:45 .
+drwxr-xr-x 102 user user 12288 Jul  1 13:39 ..
+drwx------   2 user user  4096 Jul  1 13:25 02f90c0603f4f2f60188
+-r--------   1 user user   868 Jun 28 13:55 masterseed.json
+
+$HOME/.clef/02f90c0603f4f2f60188:
 total 12
-drwx------ 2 martin martin 4096 feb 21 12:14 .
-drwx------ 3 martin martin 4096 feb 21 12:14 ..
--rw------- 1 martin martin  159 feb 21 12:14 config.json
+drwx------ 2 user user 4096 Jul  1 13:25 .
+drwxr-x--x 3 user user 4096 Jul  1 13:45 ..
+-rw------- 1 user user  159 Jul  1 13:25 config.json
 
-#cat /home/martin/.signer/43f73718397aa54d1b22/config.json
-{"ruleset_sha256":{"iv":"6v4W4tfJxj3zZFbl","c":"6dt5RTDiTq93yh1qDEjpsat/tsKG7cb+vr3sza26IPL2fvsQ6ZoqFx++CPUa8yy6fD9Bbq41L01ehkKHTG3pOAeqTW6zc/+t0wv3AB6xPmU="}}
-
+$ cat ~/.clef/02f90c0603f4f2f60188/config.json
+{"ruleset_sha256":{"iv":"SWWEtnl+R+I+wfG7","c":"I3fjmwmamxVcfGax7D0MdUOL29/rBWcs73WBILmYK0o1CrX7wSMc3y37KsmtlZUAjp0oItYq01Ow8VGUOzilG91tDHInB5YHNtm/YkufEbo="}}
 ```
 
-In `~/.signer`, the `secrets.dat` file was created, containing the `master_seed`.
-The `master_seed` was then used to derive a few other things:
+In `$HOME/.clef`, the `masterseed.json` file was created, containing the master seed. This seed was then used to derive a few other things:
 
-- `vault_location` : in this case `43f73718397aa54d1b22` .
-   - Thus, if you use a different `master_seed`, another `vault_location` will be used that does not conflict with each other.
-   - Example: `signer --signersecret /path/to/afile ...`
-- `config.json` which is the encrypted key/value storage for configuration data, containing the key `ruleset_sha256`.
+- **Vault location**: in this case `02f90c0603f4f2f60188`.
+   - If you use a different master seed, a different vault location will be used that does not conflict with each other (e.g. `clef --signersecret /path/to/file`). This allows you to run multiple instances of Clef, each with its own rules (e.g. mainnet + testnet).
+- **`config.json`**: the encrypted key/value storage for configuration data, currently only containing the key `ruleset_sha256`, the attested hash of the automatic rules to use.
 
+## Advanced rules
 
-## Adding credentials
-
-In order to make more useful rules like signing transactions, the signer needs access to the passwords needed to unlock keystores.
+In order to make more useful rules - like signing transactions - the signer needs access to the passwords needed to unlock keys from the keystore. You can inject an unlock password via `clef setpw`.
 
 ```text
-#./signer addpw "0x694267f14675d7e1b9494fd8d72fefe1755710fa" "test_password"
+$ clef setpw 0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3
 
-INFO [02-21|13:43:21] Credential store updated                 key=0x694267f14675d7e1b9494fd8d72fefe1755710fa
+Please enter a password to store for this address:
+Password:
+Repeat password:
+
+Decrypt master seed of clef
+Password:
+INFO [07-01|14:05:56.031] Credential store updated                 key=0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3
 ```
-## More advanced rules
 
-Now let's update the rules to make use of credentials:
+Now let's update the rules to make use of the new credentials:
 
-```javascript
-function ApproveListing(){
+```js
+function ApproveListing() {
     return "Approve"
 }
-function ApproveSignData(r){
-    if( r.address.toLowerCase() == "0x694267f14675d7e1b9494fd8d72fefe1755710fa")
-    {
-        if(r.message.indexOf("bazonk") >= 0){
+
+function ApproveSignData(req) {
+    if (req.address.toLowerCase() == "0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3") {
+        if (req.messages[0].value.indexOf("bazonk") >= 0) {
             return "Approve"
         }
         return "Reject"
     }
     // Otherwise goes to manual processing
 }
-
 ```
+
 In this example:
-* Any requests to sign data with the account `0x694...` will be
-    * auto-approved if the message contains with `bazonk`
-    * auto-rejected if it does not.
-* Any other signing-requests will be passed along for manual approve/reject.
 
-_Note: make sure that `0x694...` is an account you have access to. You can create it either via the clef or the traditional account cli tool. If the latter was chosen, make sure both clef and geth use the same keystore by specifing `--keystore path/to/your/keystore` when running clef._
+- Any requests to sign data with the account `0xd9c9...` will be:
+    - Auto-approved if the message contains `bazonk`,
+    - Auto-rejected if the message does not contain `bazonk`,
+- Any other requests will be passed along for manual confirmation.
 
-Attest the new file...
+*Note, to make this example work, please use you own accounts. You can create a new account either via Clef or the traditional account CLI tools. If the latter was chosen, make sure both Clef and Geth use the same keystore by specifying `--keystore path/to/your/keystore` when running Clef.*
+
+Attest the new rule file so that Clef will accept loading it:
+
 ```text
-#sha256sum rules.js
-2a0cb661dacfc804b6e95d935d813fd17c0997a7170e4092ffbc34ca976acd9f  rules.js
+$ sha256sum rules.js
+f163a1738b649259bb9b369c593fdc4c6b6f86cc87e343c3ba58faee03c2a178  rules.js
 
-#./signer attest 2a0cb661dacfc804b6e95d935d813fd17c0997a7170e4092ffbc34ca976acd9f
-
-INFO [02-21|14:36:30] Ruleset attestation updated              sha256=2a0cb661dacfc804b6e95d935d813fd17c0997a7170e4092ffbc34ca976acd9f
+$ clef attest f163a1738b649259bb9b369c593fdc4c6b6f86cc87e343c3ba58faee03c2a178
+Decrypt master seed of clef
+Password:
+INFO [07-01|14:11:28.509] Ruleset attestation updated              sha256=f163a1738b649259bb9b369c593fdc4c6b6f86cc87e343c3ba58faee03c2a178
 ```
 
-And start the signer:
+Restart Clef with the new rules in place:
 
 ```
-#./signer --rules rules.js --rpc
+$ clef --keystore ~/.ethereum/rinkeby/keystore --chainid 4 --rules rules.js
 
-INFO [09-25|21:02:16.450] Using CLI as UI-channel 
-INFO [09-25|21:02:16.466] Loaded 4byte db                          signatures=5509 file=./4byte.json
-INFO [09-25|21:02:16.467] Rule engine configured                   file=./rules.js
-DEBUG[09-25|21:02:16.468] FS scan times                            list=1.45262ms set=21.926µs diff=6.944µs
-DEBUG[09-25|21:02:16.473] Ledger support enabled 
-DEBUG[09-25|21:02:16.475] Trezor support enabled 
-INFO [09-25|21:02:16.476] Audit logs configured                    file=audit.log
-DEBUG[09-25|21:02:16.476] HTTP registered                          namespace=account
-INFO [09-25|21:02:16.478] HTTP endpoint opened                     url=http://localhost:8550
-DEBUG[09-25|21:02:16.478] IPC registered                           namespace=account
-INFO [09-25|21:02:16.478] IPC endpoint opened                      url=<nil>
+INFO [07-01|14:12:41.636] Rule engine configured                   file=rules.js
+INFO [07-01|14:12:41.636] Starting signer                          chainid=4 keystore=$HOME/.ethereum/rinkeby/keystore light-kdf=false advanced=false
+DEBUG[07-01|14:12:41.636] FS scan times                            list=46.722µs set=4.47µs diff=2.157µs
+DEBUG[07-01|14:12:41.637] Ledger support enabled
+DEBUG[07-01|14:12:41.637] Trezor support enabled via HID
+DEBUG[07-01|14:12:41.638] Trezor support enabled via WebUSB
+INFO [07-01|14:12:41.638] Audit logs configured                    file=audit.log
+DEBUG[07-01|14:12:41.638] IPC registered                           namespace=account
+INFO [07-01|14:12:41.638] IPC endpoint opened                      url=$HOME/.clef/clef.ipc
 ------- Signer info -------
-* extapi_version : 2.0.0
-* intapi_version : 2.0.0
-* extapi_http : http://localhost:8550
-* extapi_ipc : <nil>
+* intapi_version : 7.0.0
+* extapi_version : 6.0.0
+* extapi_http : n/a
+* extapi_ipc : $HOME/.clef/clef.ipc
 ```
 
-And then test signing, once with `bazonk` and once without:
+Then test signing, once with `bazonk` and once without:
 
 ```
-#curl -H "Content-Type: application/json" -X POST --data "{\"jsonrpc\":\"2.0\",\"method\":\"account_sign\",\"params\":[\"0x694267f14675d7e1b9494fd8d72fefe1755710fa\",\"0x$(xxd -pu <<< '  bazonk baz gaz')\"],\"id\":67}" http://localhost:8550/
-{"jsonrpc":"2.0","id":67,"result":"0x93e6161840c3ae1efc26dc68dedab6e8fc233bb3fefa1b4645dbf6609b93dace160572ea4ab33240256bb6d3dadb60dcd9c515d6374d3cf614ee897408d41d541c"}
+$ echo '{"id": 1, "jsonrpc":"2.0", "method":"account_signData", "params":["data/plain", "0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3", "0x202062617a6f6e6b2062617a2067617a0a"]}' | nc -U ~/.clef/clef.ipc
+{"jsonrpc":"2.0","id":1,"result":"0x4f93e3457027f6be99b06b3392d0ebc60615ba448bb7544687ef1248dea4f5317f789002df783979c417d969836b6fda3710f5bffb296b4d51c8aaae6e2ac4831c"}
 
-#curl -H "Content-Type: application/json" -X POST --data "{\"jsonrpc\":\"2.0\",\"method\":\"account_sign\",\"params\":[\"0x694267f14675d7e1b9494fd8d72fefe1755710fa\",\"0x$(xxd -pu <<< '  bonk baz gaz')\"],\"id\":67}" http://localhost:8550/
-{"jsonrpc":"2.0","id":67,"error":{"code":-32000,"message":"Request denied"}}
-
+$ echo '{"id": 1, "jsonrpc":"2.0", "method":"account_signData", "params":["data/plain", "0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3", "0x2020626f6e6b2062617a2067617a0a"]}' | nc -U ~/.clef/clef.ipc
+{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"Request denied"}}
 ```
 
-Meanwhile, in the signer output:
+Meanwhile, in the Clef output log you can see:
 ```text
 INFO [02-21|14:42:41] Op approved
 INFO [02-21|14:42:56] Op rejected
@@ -203,9 +281,73 @@ INFO [02-21|14:42:56] Op rejected
 The signer also stores all traffic over the external API in a log file. The last 4 lines shows the two requests and their responses:
 
 ```text
-#tail -n 4 audit.log
-t=2018-02-21T14:42:41+0100 lvl=info msg=Sign       api=signer type=request  metadata="{\"remote\":\"127.0.0.1:49706\",\"local\":\"localhost:8550\",\"scheme\":\"HTTP/1.1\"}" addr="0x694267f14675d7e1b9494fd8d72fefe1755710fa [chksum INVALID]" data=202062617a6f6e6b2062617a2067617a0a
-t=2018-02-21T14:42:42+0100 lvl=info msg=Sign       api=signer type=response data=93e6161840c3ae1efc26dc68dedab6e8fc233bb3fefa1b4645dbf6609b93dace160572ea4ab33240256bb6d3dadb60dcd9c515d6374d3cf614ee897408d41d541c error=nil
-t=2018-02-21T14:42:56+0100 lvl=info msg=Sign       api=signer type=request  metadata="{\"remote\":\"127.0.0.1:49708\",\"local\":\"localhost:8550\",\"scheme\":\"HTTP/1.1\"}" addr="0x694267f14675d7e1b9494fd8d72fefe1755710fa [chksum INVALID]" data=2020626f6e6b2062617a2067617a0a
-t=2018-02-21T14:42:56+0100 lvl=info msg=Sign       api=signer type=response data=                                                                                                                                   error="Request denied"
+$ tail -n 4 audit.log
+t=2019-07-01T15:52:14+0300 lvl=info msg=SignData   api=signer type=request  metadata="{\"remote\":\"NA\",\"local\":\"NA\",\"scheme\":\"NA\",\"User-Agent\":\"\",\"Origin\":\"\"}" addr="0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3 [chksum INVALID]" data=0x202062617a6f6e6b2062617a2067617a0a content-type=data/plain
+t=2019-07-01T15:52:14+0300 lvl=info msg=SignData   api=signer type=response data=4f93e3457027f6be99b06b3392d0ebc60615ba448bb7544687ef1248dea4f5317f789002df783979c417d969836b6fda3710f5bffb296b4d51c8aaae6e2ac4831c error=nil
+t=2019-07-01T15:52:23+0300 lvl=info msg=SignData   api=signer type=request  metadata="{\"remote\":\"NA\",\"local\":\"NA\",\"scheme\":\"NA\",\"User-Agent\":\"\",\"Origin\":\"\"}" addr="0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3 [chksum INVALID]" data=0x2020626f6e6b2062617a2067617a0a     content-type=data/plain
+t=2019-07-01T15:52:23+0300 lvl=info msg=SignData   api=signer type=response data=                                     error="Request denied"
 ```
+
+For more details on writing automatic rules, please see the [rules spec](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/rules.md).
+
+## Geth integration
+
+Of course, as awesome as Clef is, it's not feasible to interact with it via JSON RPC by hand. Long term, we're hoping to convince the general Ethereum community to support Clef as a general signer (it's only 3-5 methods), thus allowing your favorite DApp, Metamask, MyCrypto, etc to request signatures directly.
+
+Until then however, we're trying to pave the way via Geth. Geth v1.9.0 has built in support via `--signer <API endpoint>` for using a local or remote Clef instance as an account backend!
+
+We can try this by running Clef with our previous rules on Rinkeby (for now it's a good idea to allow auto-listing accounts, since Geth likes to retrieve them once in a while).
+
+```text
+$ clef --keystore ~/.ethereum/rinkeby/keystore --chainid 4 --rules rules.js
+```
+
+In a different window we can start Geth, list our accounts, even list our wallets to see where the accounts originate from:
+
+```text
+$ geth --rinkeby --signer=~/.clef/clef.ipc console
+
+> eth.accounts
+["0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3", "0x086278a6c067775f71d6b2bb1856db6e28c30418"]
+
+> personal.listWallets
+[{
+    accounts: [{
+        address: "0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3",
+        url: "extapi://$HOME/.clef/clef.ipc"
+    }, {
+        address: "0x086278a6c067775f71d6b2bb1856db6e28c30418",
+        url: "extapi://$HOME/.clef/clef.ipc"
+    }],
+    status: "ok [version=6.0.0]",
+    url: "extapi://$HOME/.clef/clef.ipc"
+}]
+
+> eth.sendTransaction({from: eth.accounts[0], to: eth.accounts[0]})
+```
+
+Lastly, when we requested a transaction to be sent, Clef prompted us in the original window to approve it:
+
+```text
+--------- Transaction request-------------
+to:       0xD9C9Cd5f6779558b6e0eD4e6Acf6b1947E7fA1F3
+from:     0xD9C9Cd5f6779558b6e0eD4e6Acf6b1947E7fA1F3 [chksum ok]
+value:    0 wei
+gas:      0x5208 (21000)
+gasprice: 1000000000 wei
+nonce:    0x2366 (9062)
+
+Request context:
+	NA -> NA -> NA
+
+Additional HTTP header data, provided by the external caller:
+	User-Agent:
+	Origin:
+-------------------------------------------
+Approve? [y/N]:
+> y
+```
+
+:boom:
+
+*Note, if you enable the external signer backend in Geth, all other account management is disabled. This is because long term we want to remove account management from Geth.*

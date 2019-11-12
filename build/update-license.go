@@ -62,18 +62,22 @@ var (
 	skipPrefixes = []string{
 		// boring stuff
 		"vendor/", "tests/testdata/", "build/",
+
 		// don't relicense vendored sources
 		"cmd/internal/browser",
+		"common/bitutil/bitutil",
+		"common/prque/",
 		"consensus/ethash/xor.go",
 		"crypto/bn256/",
 		"crypto/ecies/",
-		"crypto/secp256k1/curve.go",
-		"crypto/sha3/",
+		"graphql/graphiql.go",
 		"internal/jsre/deps",
 		"log/",
-		"common/bitutil/bitutil",
-		// don't license generated files
-		"contracts/chequebook/contract/code.go",
+		"metrics/",
+		"signer/rules/deps",
+
+		// skip special licenses
+		"crypto/secp256k1", // Relicensed to BSD-3 via https://github.com/ethereum/go-ethereum/pull/17225
 	}
 
 	// paths with this prefix are licensed as GPL. all other files are LGPL.
@@ -145,6 +149,13 @@ func (i info) gpl() bool {
 	}
 	return false
 }
+
+// authors implements the sort.Interface for strings in case-insensitive mode.
+type authors []string
+
+func (as authors) Len() int           { return len(as) }
+func (as authors) Less(i, j int) bool { return strings.ToLower(as[i]) < strings.ToLower(as[j]) }
+func (as authors) Swap(i, j int)      { as[i], as[j] = as[j], as[i] }
 
 func main() {
 	var (
@@ -264,27 +275,32 @@ func mailmapLookup(authors []string) []string {
 }
 
 func writeAuthors(files []string) {
-	merge := make(map[string]bool)
-	// Add authors that Git reports as contributorxs.
+	var (
+		dedup = make(map[string]bool)
+		list  []string
+	)
+	// Add authors that Git reports as contributors.
 	// This is the primary source of author information.
 	for _, a := range gitAuthors(files) {
-		merge[a] = true
+		if la := strings.ToLower(a); !dedup[la] {
+			list = append(list, a)
+			dedup[la] = true
+		}
 	}
 	// Add existing authors from the file. This should ensure that we
 	// never lose authors, even if Git stops listing them. We can also
 	// add authors manually this way.
 	for _, a := range readAuthors() {
-		merge[a] = true
+		if la := strings.ToLower(a); !dedup[la] {
+			list = append(list, a)
+			dedup[la] = true
+		}
 	}
 	// Write sorted list of authors back to the file.
-	var result []string
-	for a := range merge {
-		result = append(result, a)
-	}
-	sort.Strings(result)
+	sort.Sort(authors(list))
 	content := new(bytes.Buffer)
 	content.WriteString(authorsFileHeader)
-	for _, a := range result {
+	for _, a := range list {
 		content.WriteString(a)
 		content.WriteString("\n")
 	}

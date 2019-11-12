@@ -141,6 +141,11 @@ type Conn interface {
 	SetWriteDeadline(time.Time) error
 }
 
+type deadlineCloser interface {
+	io.Closer
+	SetWriteDeadline(time.Time) error
+}
+
 // ConnRemoteAddr wraps the RemoteAddr operation, which returns a description
 // of the peer address of a connection. If a Conn also implements ConnRemoteAddr, this
 // description is used in log messages.
@@ -165,12 +170,10 @@ type jsonCodec struct {
 	decode     func(v interface{}) error // decoder to allow multiple transports
 	encMu      sync.Mutex                // guards the encoder
 	encode     func(v interface{}) error // encoder to allow multiple transports
-	conn       Conn
+	conn       deadlineCloser
 }
 
-// NewCodec creates a new RPC server codec with support for JSON-RPC 2.0 based
-// on explicitly given encoding and decoding methods.
-func NewCodec(conn Conn, encode, decode func(v interface{}) error) ServerCodec {
+func newCodec(conn deadlineCloser, encode, decode func(v interface{}) error) ServerCodec {
 	codec := &jsonCodec{
 		closed: make(chan interface{}),
 		encode: encode,
@@ -183,12 +186,14 @@ func NewCodec(conn Conn, encode, decode func(v interface{}) error) ServerCodec {
 	return codec
 }
 
-// NewJSONCodec creates a new RPC server codec with support for JSON-RPC 2.0.
+// NewJSONCodec creates a codec that reads from the given connection. If conn implements
+// ConnRemoteAddr, log messages will use it to include the remote address of the
+// connection.
 func NewJSONCodec(conn Conn) ServerCodec {
 	enc := json.NewEncoder(conn)
 	dec := json.NewDecoder(conn)
 	dec.UseNumber()
-	return NewCodec(conn, enc.Encode, dec.Decode)
+	return newCodec(conn, enc.Encode, dec.Decode)
 }
 
 func (c *jsonCodec) RemoteAddr() string {

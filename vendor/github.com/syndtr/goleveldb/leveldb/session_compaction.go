@@ -14,6 +14,13 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
+const (
+	undefinedCompaction = iota
+	level0Compaction
+	nonLevel0Compaction
+	seekCompaction
+)
+
 func (s *session) pickMemdbLevel(umin, umax []byte, maxLevel int) int {
 	v := s.version()
 	defer v.release()
@@ -50,6 +57,7 @@ func (s *session) pickCompaction() *compaction {
 
 	var sourceLevel int
 	var t0 tFiles
+	var typ int
 	if v.cScore >= 1 {
 		sourceLevel = v.cLevel
 		cptr := s.getCompPtr(sourceLevel)
@@ -63,18 +71,24 @@ func (s *session) pickCompaction() *compaction {
 		if len(t0) == 0 {
 			t0 = append(t0, tables[0])
 		}
+		if sourceLevel == 0 {
+			typ = level0Compaction
+		} else {
+			typ = nonLevel0Compaction
+		}
 	} else {
 		if p := atomic.LoadPointer(&v.cSeek); p != nil {
 			ts := (*tSet)(p)
 			sourceLevel = ts.level
 			t0 = append(t0, ts.table)
+			typ = seekCompaction
 		} else {
 			v.release()
 			return nil
 		}
 	}
 
-	return newCompaction(s, v, sourceLevel, t0)
+	return newCompaction(s, v, sourceLevel, t0, typ)
 }
 
 // Create compaction from given level and range; need external synchronization.
@@ -109,13 +123,18 @@ func (s *session) getCompactionRange(sourceLevel int, umin, umax []byte, noLimit
 		}
 	}
 
-	return newCompaction(s, v, sourceLevel, t0)
+	typ := level0Compaction
+	if sourceLevel != 0 {
+		typ = nonLevel0Compaction
+	}
+	return newCompaction(s, v, sourceLevel, t0, typ)
 }
 
-func newCompaction(s *session, v *version, sourceLevel int, t0 tFiles) *compaction {
+func newCompaction(s *session, v *version, sourceLevel int, t0 tFiles, typ int) *compaction {
 	c := &compaction{
 		s:             s,
 		v:             v,
+		typ:           typ,
 		sourceLevel:   sourceLevel,
 		levels:        [2]tFiles{t0, nil},
 		maxGPOverlaps: int64(s.o.GetCompactionGPOverlaps(sourceLevel)),
@@ -131,6 +150,7 @@ type compaction struct {
 	s *session
 	v *version
 
+	typ           int
 	sourceLevel   int
 	levels        [2]tFiles
 	maxGPOverlaps int64
@@ -181,10 +201,14 @@ func (c *compaction) expand() {
 
 	t0, t1 := c.levels[0], c.levels[1]
 	imin, imax := t0.getRange(c.s.icmp)
-	// We expand t0 here just incase ukey hop across tables.
-	t0 = vt0.getOverlaps(t0, c.s.icmp, imin.ukey(), imax.ukey(), c.sourceLevel == 0)
-	if len(t0) != len(c.levels[0]) {
-		imin, imax = t0.getRange(c.s.icmp)
+
+	// For non-zero levels, the ukey can't hop across tables at all.
+	if c.sourceLevel == 0 {
+		// We expand t0 here just incase ukey hop across tables.
+		t0 = vt0.getOverlaps(t0, c.s.icmp, imin.ukey(), imax.ukey(), c.sourceLevel == 0)
+		if len(t0) != len(c.levels[0]) {
+			imin, imax = t0.getRange(c.s.icmp)
+		}
 	}
 	t1 = vt1.getOverlaps(t1, c.s.icmp, imin.ukey(), imax.ukey(), false)
 	// Get entire range covered by compaction.

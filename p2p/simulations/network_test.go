@@ -17,6 +17,7 @@
 package simulations
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -389,6 +390,275 @@ func TestNetworkSimulation(t *testing.T) {
 		peerID := ids[(i+1)%len(ids)]
 		if conn.Other != peerID {
 			t.Fatalf("expected conn[%d].Other to be %s, got %s", i, peerID, conn.Other)
+		}
+	}
+}
+
+func createTestNodes(count int, network *Network) (nodes []*Node, err error) {
+	for i := 0; i < count; i++ {
+		nodeConf := adapters.RandomNodeConfig()
+		node, err := network.NewNodeWithConfig(nodeConf)
+		if err != nil {
+			return nil, err
+		}
+		if err := network.Start(node.ID()); err != nil {
+			return nil, err
+		}
+
+		nodes = append(nodes, node)
+	}
+
+	return nodes, nil
+}
+
+func createTestNodesWithProperty(property string, count int, network *Network) (propertyNodes []*Node, err error) {
+	for i := 0; i < count; i++ {
+		nodeConf := adapters.RandomNodeConfig()
+		nodeConf.Properties = append(nodeConf.Properties, property)
+
+		node, err := network.NewNodeWithConfig(nodeConf)
+		if err != nil {
+			return nil, err
+		}
+		if err := network.Start(node.ID()); err != nil {
+			return nil, err
+		}
+
+		propertyNodes = append(propertyNodes, node)
+	}
+
+	return propertyNodes, nil
+}
+
+// TestGetNodeIDs creates a set of nodes and attempts to retrieve their IDs,.
+// It then tests again whilst excluding a node ID from being returned.
+// If a node ID is not returned, or more node IDs than expected are returned, the test fails.
+func TestGetNodeIDs(t *testing.T) {
+	adapter := adapters.NewSimAdapter(adapters.Services{
+		"test": newTestService,
+	})
+	network := NewNetwork(adapter, &NetworkConfig{
+		DefaultService: "test",
+	})
+	defer network.Shutdown()
+
+	numNodes := 5
+	nodes, err := createTestNodes(numNodes, network)
+	if err != nil {
+		t.Fatalf("Could not creat test nodes %v", err)
+	}
+
+	gotNodeIDs := network.GetNodeIDs()
+	if len(gotNodeIDs) != numNodes {
+		t.Fatalf("Expected %d nodes, got %d", numNodes, len(gotNodeIDs))
+	}
+
+	for _, node1 := range nodes {
+		match := false
+		for _, node2ID := range gotNodeIDs {
+			if bytes.Equal(node1.ID().Bytes(), node2ID.Bytes()) {
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			t.Fatalf("A created node was not returned by GetNodes(), ID: %s", node1.ID().String())
+		}
+	}
+
+	excludeNodeID := nodes[3].ID()
+	gotNodeIDsExcl := network.GetNodeIDs(excludeNodeID)
+	if len(gotNodeIDsExcl) != numNodes-1 {
+		t.Fatalf("Expected one less node ID to be returned")
+	}
+	for _, nodeID := range gotNodeIDsExcl {
+		if bytes.Equal(excludeNodeID.Bytes(), nodeID.Bytes()) {
+			t.Fatalf("GetNodeIDs returned the node ID we excluded, ID: %s", nodeID.String())
+		}
+	}
+}
+
+// TestGetNodes creates a set of nodes and attempts to retrieve them again.
+// It then tests again whilst excluding a node from being returned.
+// If a node is not returned, or more nodes than expected are returned, the test fails.
+func TestGetNodes(t *testing.T) {
+	adapter := adapters.NewSimAdapter(adapters.Services{
+		"test": newTestService,
+	})
+	network := NewNetwork(adapter, &NetworkConfig{
+		DefaultService: "test",
+	})
+	defer network.Shutdown()
+
+	numNodes := 5
+	nodes, err := createTestNodes(numNodes, network)
+	if err != nil {
+		t.Fatalf("Could not creat test nodes %v", err)
+	}
+
+	gotNodes := network.GetNodes()
+	if len(gotNodes) != numNodes {
+		t.Fatalf("Expected %d nodes, got %d", numNodes, len(gotNodes))
+	}
+
+	for _, node1 := range nodes {
+		match := false
+		for _, node2 := range gotNodes {
+			if bytes.Equal(node1.ID().Bytes(), node2.ID().Bytes()) {
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			t.Fatalf("A created node was not returned by GetNodes(), ID: %s", node1.ID().String())
+		}
+	}
+
+	excludeNodeID := nodes[3].ID()
+	gotNodesExcl := network.GetNodes(excludeNodeID)
+	if len(gotNodesExcl) != numNodes-1 {
+		t.Fatalf("Expected one less node to be returned")
+	}
+	for _, node := range gotNodesExcl {
+		if bytes.Equal(excludeNodeID.Bytes(), node.ID().Bytes()) {
+			t.Fatalf("GetNodes returned the node we excluded, ID: %s", node.ID().String())
+		}
+	}
+}
+
+// TestGetNodesByID creates a set of nodes and attempts to retrieve a subset of them by ID
+// If a node is not returned, or more nodes than expected are returned, the test fails.
+func TestGetNodesByID(t *testing.T) {
+	adapter := adapters.NewSimAdapter(adapters.Services{
+		"test": newTestService,
+	})
+	network := NewNetwork(adapter, &NetworkConfig{
+		DefaultService: "test",
+	})
+	defer network.Shutdown()
+
+	numNodes := 5
+	nodes, err := createTestNodes(numNodes, network)
+	if err != nil {
+		t.Fatalf("Could not create test nodes: %v", err)
+	}
+
+	numSubsetNodes := 2
+	subsetNodes := nodes[0:numSubsetNodes]
+	var subsetNodeIDs []enode.ID
+	for _, node := range subsetNodes {
+		subsetNodeIDs = append(subsetNodeIDs, node.ID())
+	}
+
+	gotNodesByID := network.GetNodesByID(subsetNodeIDs)
+	if len(gotNodesByID) != numSubsetNodes {
+		t.Fatalf("Expected %d nodes, got %d", numSubsetNodes, len(gotNodesByID))
+	}
+
+	for _, node1 := range subsetNodes {
+		match := false
+		for _, node2 := range gotNodesByID {
+			if bytes.Equal(node1.ID().Bytes(), node2.ID().Bytes()) {
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			t.Fatalf("A created node was not returned by GetNodesByID(), ID: %s", node1.ID().String())
+		}
+	}
+}
+
+// TestGetNodesByProperty creates a subset of nodes with a property assigned.
+// GetNodesByProperty is then checked for correctness by comparing the nodes returned to those initially created.
+// If a node with a property is not found, or more nodes than expected are returned, the test fails.
+func TestGetNodesByProperty(t *testing.T) {
+	adapter := adapters.NewSimAdapter(adapters.Services{
+		"test": newTestService,
+	})
+	network := NewNetwork(adapter, &NetworkConfig{
+		DefaultService: "test",
+	})
+	defer network.Shutdown()
+
+	numNodes := 3
+	_, err := createTestNodes(numNodes, network)
+	if err != nil {
+		t.Fatalf("Failed to create nodes: %v", err)
+	}
+
+	numPropertyNodes := 3
+	propertyTest := "test"
+	propertyNodes, err := createTestNodesWithProperty(propertyTest, numPropertyNodes, network)
+	if err != nil {
+		t.Fatalf("Failed to create nodes with property: %v", err)
+	}
+
+	gotNodesByProperty := network.GetNodesByProperty(propertyTest)
+	if len(gotNodesByProperty) != numPropertyNodes {
+		t.Fatalf("Expected %d nodes with a property, got %d", numPropertyNodes, len(gotNodesByProperty))
+	}
+
+	for _, node1 := range propertyNodes {
+		match := false
+		for _, node2 := range gotNodesByProperty {
+			if bytes.Equal(node1.ID().Bytes(), node2.ID().Bytes()) {
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			t.Fatalf("A created node with property was not returned by GetNodesByProperty(), ID: %s", node1.ID().String())
+		}
+	}
+}
+
+// TestGetNodeIDsByProperty creates a subset of nodes with a property assigned.
+// GetNodeIDsByProperty is then checked for correctness by comparing the node IDs returned to those initially created.
+// If a node ID with a property is not found, or more nodes IDs than expected are returned, the test fails.
+func TestGetNodeIDsByProperty(t *testing.T) {
+	adapter := adapters.NewSimAdapter(adapters.Services{
+		"test": newTestService,
+	})
+	network := NewNetwork(adapter, &NetworkConfig{
+		DefaultService: "test",
+	})
+	defer network.Shutdown()
+
+	numNodes := 3
+	_, err := createTestNodes(numNodes, network)
+	if err != nil {
+		t.Fatalf("Failed to create nodes: %v", err)
+	}
+
+	numPropertyNodes := 3
+	propertyTest := "test"
+	propertyNodes, err := createTestNodesWithProperty(propertyTest, numPropertyNodes, network)
+	if err != nil {
+		t.Fatalf("Failed to created nodes with property: %v", err)
+	}
+
+	gotNodeIDsByProperty := network.GetNodeIDsByProperty(propertyTest)
+	if len(gotNodeIDsByProperty) != numPropertyNodes {
+		t.Fatalf("Expected %d nodes with a property, got %d", numPropertyNodes, len(gotNodeIDsByProperty))
+	}
+
+	for _, node1 := range propertyNodes {
+		match := false
+		id1 := node1.ID()
+		for _, id2 := range gotNodeIDsByProperty {
+			if bytes.Equal(id1.Bytes(), id2.Bytes()) {
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			t.Fatalf("Not all nodes IDs were returned by GetNodeIDsByProperty(), ID: %s", id1.String())
 		}
 	}
 }

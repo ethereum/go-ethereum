@@ -33,8 +33,9 @@ type testEncoder struct {
 
 func (e *testEncoder) EncodeRLP(w io.Writer) error {
 	if e == nil {
-		w.Write([]byte{0, 0, 0, 0})
-	} else if e.err != nil {
+		panic("EncodeRLP called on nil value")
+	}
+	if e.err != nil {
 		return e.err
 	} else {
 		w.Write([]byte{0, 1, 0, 1, 0, 1, 0, 1, 0, 1})
@@ -42,10 +43,24 @@ func (e *testEncoder) EncodeRLP(w io.Writer) error {
 	return nil
 }
 
+type testEncoderValueMethod struct{}
+
+func (e testEncoderValueMethod) EncodeRLP(w io.Writer) error {
+	w.Write([]byte{0xFA, 0xFE, 0xF0})
+	return nil
+}
+
 type byteEncoder byte
 
 func (e byteEncoder) EncodeRLP(w io.Writer) error {
 	w.Write(EmptyList)
+	return nil
+}
+
+type undecodableEncoder func()
+
+func (f undecodableEncoder) EncodeRLP(w io.Writer) error {
+	w.Write([]byte{0xF5, 0xF5, 0xF5})
 	return nil
 }
 
@@ -219,6 +234,7 @@ var encTests = []encTest{
 	{val: &tailRaw{A: 1, Tail: []RawValue{}}, output: "C101"},
 	{val: &tailRaw{A: 1, Tail: nil}, output: "C101"},
 	{val: &hasIgnoredField{A: 1, B: 2, C: 3}, output: "C20103"},
+	{val: &intField{X: 3}, error: "rlp: type int is not RLP-serializable (struct field rlp.intField.X)"},
 
 	// nil
 	{val: (*uint)(nil), output: "80"},
@@ -232,20 +248,66 @@ var encTests = []encTest{
 	{val: (*[]struct{ uint })(nil), output: "C0"},
 	{val: (*interface{})(nil), output: "C0"},
 
+	// nil struct fields
+	{
+		val: struct {
+			X *[]byte
+		}{},
+		output: "C180",
+	},
+	{
+		val: struct {
+			X *[2]byte
+		}{},
+		output: "C180",
+	},
+	{
+		val: struct {
+			X *uint64
+		}{},
+		output: "C180",
+	},
+	{
+		val: struct {
+			X *uint64 `rlp:"nilList"`
+		}{},
+		output: "C1C0",
+	},
+	{
+		val: struct {
+			X *[]uint64
+		}{},
+		output: "C1C0",
+	},
+	{
+		val: struct {
+			X *[]uint64 `rlp:"nilString"`
+		}{},
+		output: "C180",
+	},
+
 	// interfaces
 	{val: []io.Reader{reader}, output: "C3C20102"}, // the contained value is a struct
 
 	// Encoder
-	{val: (*testEncoder)(nil), output: "00000000"},
+	{val: (*testEncoder)(nil), output: "C0"},
 	{val: &testEncoder{}, output: "00010001000100010001"},
 	{val: &testEncoder{errors.New("test error")}, error: "test error"},
-	// verify that pointer method testEncoder.EncodeRLP is called for
+	{val: struct{ E testEncoderValueMethod }{}, output: "C3FAFEF0"},
+	{val: struct{ E *testEncoderValueMethod }{}, output: "C1C0"},
+
+	// Verify that the Encoder interface works for unsupported types like func().
+	{val: undecodableEncoder(func() {}), output: "F5F5F5"},
+
+	// Verify that pointer method testEncoder.EncodeRLP is called for
 	// addressable non-pointer values.
 	{val: &struct{ TE testEncoder }{testEncoder{}}, output: "CA00010001000100010001"},
 	{val: &struct{ TE testEncoder }{testEncoder{errors.New("test error")}}, error: "test error"},
-	// verify the error for non-addressable non-pointer Encoder
-	{val: testEncoder{}, error: "rlp: game over: unadressable value of type rlp.testEncoder, EncodeRLP is pointer method"},
-	// verify the special case for []byte
+
+	// Verify the error for non-addressable non-pointer Encoder.
+	{val: testEncoder{}, error: "rlp: unadressable value of type rlp.testEncoder, EncodeRLP is pointer method"},
+
+	// Verify Encoder takes precedence over []byte.
 	{val: []byteEncoder{0, 1, 2, 3, 4}, output: "C5C0C0C0C0C0"},
 }
 

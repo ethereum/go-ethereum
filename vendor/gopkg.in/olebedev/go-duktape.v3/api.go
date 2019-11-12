@@ -247,16 +247,16 @@ func (d *Context) CompileFile(flags uint, path string) {
 }
 
 // See: http://duktape.org/api.html#duk_compile_lstring
-func (d *Context) CompileLstring(flags uint, src string, len int) {
+func (d *Context) CompileLstring(flags uint, src string, lenght int) {
 	__src__ := C.CString(src)
-	C._duk_compile_lstring(d.duk_context, C.duk_uint_t(flags), __src__, C.duk_size_t(len))
+	C._duk_compile_lstring(d.duk_context, C.duk_uint_t(flags), __src__, C.duk_size_t(lenght))
 	C.free(unsafe.Pointer(__src__))
 }
 
 // See: http://duktape.org/api.html#duk_compile_lstring_filename
-func (d *Context) CompileLstringFilename(flags uint, src string, len int) {
+func (d *Context) CompileLstringFilename(flags uint, src string, lenght int) {
 	__src__ := C.CString(src)
-	C._duk_compile_lstring_filename(d.duk_context, C.duk_uint_t(flags), __src__, C.duk_size_t(len))
+	C._duk_compile_lstring_filename(d.duk_context, C.duk_uint_t(flags), __src__, C.duk_size_t(lenght))
 	C.free(unsafe.Pointer(__src__))
 }
 
@@ -395,16 +395,16 @@ func (d *Context) EvalFileNoresult(path string) {
 }
 
 // See: http://duktape.org/api.html#duk_eval_lstring
-func (d *Context) EvalLstring(src string, len int) {
+func (d *Context) EvalLstring(src string, lenght int) {
 	__src__ := C.CString(src)
-	C._duk_eval_lstring(d.duk_context, __src__, C.duk_size_t(len))
+	C._duk_eval_lstring(d.duk_context, __src__, C.duk_size_t(lenght))
 	C.free(unsafe.Pointer(__src__))
 }
 
 // See: http://duktape.org/api.html#duk_eval_lstring_noresult
-func (d *Context) EvalLstringNoresult(src string, len int) {
+func (d *Context) EvalLstringNoresult(src string, lenght int) {
 	__src__ := C.CString(src)
-	C._duk_eval_lstring_noresult(d.duk_context, __src__, C.duk_size_t(len))
+	C._duk_eval_lstring_noresult(d.duk_context, __src__, C.duk_size_t(lenght))
 	C.free(unsafe.Pointer(__src__))
 }
 
@@ -801,17 +801,17 @@ func (d *Context) PcompileFile(flags uint, path string) error {
 }
 
 // See: http://duktape.org/api.html#duk_pcompile_lstring
-func (d *Context) PcompileLstring(flags uint, src string, len int) error {
+func (d *Context) PcompileLstring(flags uint, src string, lenght int) error {
 	__src__ := C.CString(src)
-	result := int(C._duk_pcompile_lstring(d.duk_context, C.duk_uint_t(flags), __src__, C.duk_size_t(len)))
+	result := int(C._duk_pcompile_lstring(d.duk_context, C.duk_uint_t(flags), __src__, C.duk_size_t(lenght)))
 	C.free(unsafe.Pointer(__src__))
 	return d.castStringToError(result)
 }
 
 // See: http://duktape.org/api.html#duk_pcompile_lstring_filename
-func (d *Context) PcompileLstringFilename(flags uint, src string, len int) error {
+func (d *Context) PcompileLstringFilename(flags uint, src string, lenght int) error {
 	__src__ := C.CString(src)
-	result := int(C._duk_pcompile_lstring_filename(d.duk_context, C.duk_uint_t(flags), __src__, C.duk_size_t(len)))
+	result := int(C._duk_pcompile_lstring_filename(d.duk_context, C.duk_uint_t(flags), __src__, C.duk_size_t(lenght)))
 	C.free(unsafe.Pointer(__src__))
 	return d.castStringToError(result)
 }
@@ -821,8 +821,7 @@ func (d *Context) PcompileString(flags uint, src string) error {
 	__src__ := C.CString(src)
 	result := int(C._duk_pcompile_string(d.duk_context, C.duk_uint_t(flags), __src__))
 	C.free(unsafe.Pointer(__src__))
-	fmt.Println("result herhehreh", result)
-	return nil //d.castStringToError(result)
+	return d.castStringToError(result)
 }
 
 // See: http://duktape.org/api.html#duk_pcompile_string_filename
@@ -856,18 +855,18 @@ func (d *Context) PevalFileNoresult(path string) int {
 }
 
 // See: http://duktape.org/api.html#duk_peval_lstring
-func (d *Context) PevalLstring(src string, len int) error {
+func (d *Context) PevalLstring(src string, lenght int) error {
 	__src__ := C.CString(src)
-	result := int(C._duk_peval_lstring(d.duk_context, __src__, C.duk_size_t(len)))
+	result := int(C._duk_peval_lstring(d.duk_context, __src__, C.duk_size_t(lenght)))
 	C.free(unsafe.Pointer(__src__))
 	return d.castStringToError(result)
 
 }
 
 // See: http://duktape.org/api.html#duk_peval_lstring_noresult
-func (d *Context) PevalLstringNoresult(src string, len int) int {
+func (d *Context) PevalLstringNoresult(src string, lenght int) int {
 	__src__ := C.CString(src)
-	result := int(C._duk_peval_lstring_noresult(d.duk_context, __src__, C.duk_size_t(len)))
+	result := int(C._duk_peval_lstring_noresult(d.duk_context, __src__, C.duk_size_t(lenght)))
 	C.free(unsafe.Pointer(__src__))
 	return result
 }
@@ -1040,10 +1039,10 @@ func (d *Context) PushInt(val int) {
 }
 
 // See: http://duktape.org/api.html#duk_push_lstring
-func (d *Context) PushLstring(str string, len int) string {
+func (d *Context) PushLstring(str string, lenght int) string {
 	__str__ := C.CString(str)
 	var result string
-	if s := C.duk_push_lstring(d.duk_context, __str__, C.duk_size_t(len)); s != nil {
+	if s := C.duk_push_lstring(d.duk_context, __str__, C.duk_size_t(lenght)); s != nil {
 		result = C.GoString(s)
 	}
 	C.free(unsafe.Pointer(__str__))
@@ -1590,6 +1589,16 @@ func (d *Context) PushExternalBuffer() {
 	C._duk_push_external_buffer(d.duk_context)
 }
 
+// See: http://duktape.org/api.html#duk_config_buffer
+func (d *Context) ConfigBuffer(bufferIdx int, buffer []byte) {
+	C.duk_config_buffer(
+		d.duk_context,
+		C.duk_idx_t(bufferIdx),
+		unsafe.Pointer(&buffer[0]),
+		C.duk_size_t(len(buffer)),
+	)
+}
+
 /**
  * Unimplemented.
  *
@@ -1608,7 +1617,6 @@ func (d *Context) PushExternalBuffer() {
  * Realloc see: http://duktape.org/api.html#duk_realloc
  * ReallocRaw see: http://duktape.org/api.html#duk_realloc_raw
  * RequireCFunction see: http://duktape.org/api.html#duk_require_c_function
- * ConfigBuffer see: http://duktape.org/api.html#duk_config_buffer
  * GetBufferData see: http://duktape.org/api.html#duk_get_buffer_data
  * StealBuffer see: http://duktape.org/api.html#duk_steal_buffer
  * RequireBufferData see: http://duktape.org/api.html#duk_require_buffer_data

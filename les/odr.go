@@ -18,7 +18,9 @@ package les
 
 import (
 	"context"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
@@ -84,10 +86,9 @@ const (
 	MsgBlockBodies = iota
 	MsgCode
 	MsgReceipts
-	MsgProofsV1
 	MsgProofsV2
-	MsgHeaderProofs
 	MsgHelperTrieProofs
+	MsgTxStatus
 )
 
 // Msg encodes a LES message that delivers reply data for a request
@@ -109,7 +110,7 @@ func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err erro
 		},
 		canSend: func(dp distPeer) bool {
 			p := dp.(*peer)
-			if !p.isOnlyAnnounce {
+			if !p.onlyAnnounce {
 				return lreq.CanSend(p)
 			}
 			return false
@@ -121,10 +122,11 @@ func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err erro
 			return func() { lreq.Request(reqID, p) }
 		},
 	}
-
+	sent := mclock.Now()
 	if err = odr.retriever.retrieve(ctx, reqID, rq, func(p distPeer, msg *Msg) error { return lreq.Validate(odr.db, msg) }, odr.stop); err == nil {
 		// retrieved from network, store in db
 		req.StoreResult(odr.db)
+		requestRTT.Update(time.Duration(mclock.Now() - sent))
 	} else {
 		log.Debug("Failed to retrieve data from network", "err", err)
 	}

@@ -68,13 +68,14 @@ func RunGit(args ...string) string {
 	cmd := exec.Command("git", args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err == exec.ErrNotFound {
-		if !warnedAboutGit {
-			log.Println("Warning: can't find 'git' in PATH")
-			warnedAboutGit = true
+	if err := cmd.Run(); err != nil {
+		if e, ok := err.(*exec.Error); ok && e.Err == exec.ErrNotFound {
+			if !warnedAboutGit {
+				log.Println("Warning: can't find 'git' in PATH")
+				warnedAboutGit = true
+			}
+			return ""
 		}
-		return ""
-	} else if err != nil {
 		log.Fatal(strings.Join(cmd.Args, " "), ": ", err, "\n", stderr.String())
 	}
 	return strings.TrimSpace(stdout.String())
@@ -143,39 +144,13 @@ func CopyFile(dst, src string, mode os.FileMode) {
 // so that go commands executed by build use the same version of Go as the 'host' that runs
 // build code. e.g.
 //
-//     /usr/lib/go-1.12/bin/go run build/ci.go ...
+//     /usr/lib/go-1.12.1/bin/go run build/ci.go ...
 //
-// runs using go 1.12 and invokes go 1.12 tools from the same GOROOT. This is also important
+// runs using go 1.12.1 and invokes go 1.12.1 tools from the same GOROOT. This is also important
 // because runtime.Version checks on the host should match the tools that are run.
 func GoTool(tool string, args ...string) *exec.Cmd {
 	args = append([]string{tool}, args...)
 	return exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), args...)
-}
-
-// ExpandPackagesNoVendor expands a cmd/go import path pattern, skipping
-// vendored packages.
-func ExpandPackagesNoVendor(patterns []string) []string {
-	expand := false
-	for _, pkg := range patterns {
-		if strings.Contains(pkg, "...") {
-			expand = true
-		}
-	}
-	if expand {
-		cmd := GoTool("list", patterns...)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			log.Fatalf("package listing failed: %v\n%s", err, string(out))
-		}
-		var packages []string
-		for _, line := range strings.Split(string(out), "\n") {
-			if !strings.Contains(line, "/vendor/") {
-				packages = append(packages, strings.TrimSpace(line))
-			}
-		}
-		return packages
-	}
-	return patterns
 }
 
 // UploadSFTP uploads files to a remote host using the sftp command line tool.

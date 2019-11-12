@@ -25,18 +25,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/enode"
-
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 const (
-	MetricsInboundConnects  = "p2p/InboundConnects"  // Name for the registered inbound connects meter
-	MetricsInboundTraffic   = "p2p/InboundTraffic"   // Name for the registered inbound traffic meter
-	MetricsOutboundConnects = "p2p/OutboundConnects" // Name for the registered outbound connects meter
-	MetricsOutboundTraffic  = "p2p/OutboundTraffic"  // Name for the registered outbound traffic meter
+	MetricsInboundTraffic   = "p2p/ingress" // Name for the registered inbound traffic meter
+	MetricsOutboundTraffic  = "p2p/egress"  // Name for the registered outbound traffic meter
+	MetricsOutboundConnects = "p2p/dials"   // Name for the registered outbound connects meter
+	MetricsInboundConnects  = "p2p/serves"  // Name for the registered inbound connects meter
 
 	MeteredPeerLimit = 1024 // This amount of peers are individually metered
 )
@@ -46,6 +45,7 @@ var (
 	ingressTrafficMeter = metrics.NewRegisteredMeter(MetricsInboundTraffic, nil)   // Meter metering the cumulative ingress traffic
 	egressConnectMeter  = metrics.NewRegisteredMeter(MetricsOutboundConnects, nil) // Meter counting the egress connections
 	egressTrafficMeter  = metrics.NewRegisteredMeter(MetricsOutboundTraffic, nil)  // Meter metering the cumulative egress traffic
+	activePeerGauge     = metrics.NewRegisteredGauge("p2p/peers", nil)             // Gauge tracking the current peer count
 
 	PeerIngressRegistry = metrics.NewPrefixedChildRegistry(metrics.EphemeralRegistry, MetricsInboundTraffic+"/")  // Registry containing the peer ingress
 	PeerEgressRegistry  = metrics.NewPrefixedChildRegistry(metrics.EphemeralRegistry, MetricsOutboundTraffic+"/") // Registry containing the peer egress
@@ -124,6 +124,8 @@ func newMeteredConn(conn net.Conn, ingress bool, ip net.IP) net.Conn {
 	} else {
 		egressConnectMeter.Mark(1)
 	}
+	activePeerGauge.Inc(1)
+
 	return &meteredConn{
 		Conn:      conn,
 		ip:        ip,
@@ -161,6 +163,7 @@ func (c *meteredConn) Write(b []byte) (n int, err error) {
 // the ingress and the egress traffic registries using the peer's IP and node ID,
 // also emits connect event.
 func (c *meteredConn) handshakeDone(id enode.ID) {
+	// TODO (kurkomisi): use the node URL instead of the pure node ID. (the String() method of *Node)
 	if atomic.AddInt32(&meteredPeerCount, 1) >= MeteredPeerLimit {
 		// Don't register the peer in the traffic registries.
 		atomic.AddInt32(&meteredPeerCount, -1)
@@ -197,6 +200,7 @@ func (c *meteredConn) Close() error {
 			IP:      c.ip,
 			Elapsed: time.Since(c.connected),
 		})
+		activePeerGauge.Dec(1)
 		return err
 	}
 	id := c.id
@@ -208,6 +212,7 @@ func (c *meteredConn) Close() error {
 			IP:   c.ip,
 			ID:   id,
 		})
+		activePeerGauge.Dec(1)
 		return err
 	}
 	ingress, egress := uint64(c.ingressMeter.Count()), uint64(c.egressMeter.Count())
@@ -228,5 +233,6 @@ func (c *meteredConn) Close() error {
 		Ingress: ingress,
 		Egress:  egress,
 	})
+	activePeerGauge.Dec(1)
 	return err
 }

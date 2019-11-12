@@ -18,116 +18,110 @@ package les
 
 import (
 	"crypto/ecdsa"
-	"sync"
+	"time"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-const bufLimitRatio = 6000 // fixed bufLimit/MRR ratio
-
 type LesServer struct {
 	lesCommons
 
-	fcManager    *flowcontrol.ClientManager // nil if our node is client only
+	archiveMode bool // Flag whether the ethereum node runs in archive mode.
+	handler     *serverHandler
+	lesTopics   []discv5.Topic
+	privateKey  *ecdsa.PrivateKey
+
+	// Flow control and capacity management
+	fcManager    *flowcontrol.ClientManager
 	costTracker  *costTracker
 	defParams    flowcontrol.ServerParams
-	lesTopics    []discv5.Topic
-	privateKey   *ecdsa.PrivateKey
-	quitSync     chan struct{}
-	onlyAnnounce bool
+	servingQueue *servingQueue
+	clientPool   *clientPool
 
-	thcNormal, thcBlockProcessing int // serving thread count for normal operation and block processing mode
-
-	maxPeers           int
-	freeClientCap      uint64
-	freeClientPool     *freeClientPool
-	priorityClientPool *priorityClientPool
+	freeCapacity uint64 // The minimal client capacity used for free client.
+	threadsIdle  int    // Request serving threads count when system is idle.
+	threadsBusy  int    // Request serving threads count when system is busy(block insertion).
 }
 
-func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
-	quitSync := make(chan struct{})
-	pm, err := NewProtocolManager(
-		eth.BlockChain().Config(),
-		light.DefaultServerIndexerConfig,
-		false,
-		config.NetworkId,
-		eth.EventMux(),
-		eth.Engine(),
-		newPeerSet(),
-		eth.BlockChain(),
-		eth.TxPool(),
-		eth.ChainDb(),
-		nil,
-		nil,
-		nil,
-		quitSync,
-		new(sync.WaitGroup),
-		config.ULC)
-	if err != nil {
-		return nil, err
-	}
-
+func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
+	// Collect les protocol version information supported by local node.
 	lesTopics := make([]discv5.Topic, len(AdvertiseProtocolVersions))
 	for i, pv := range AdvertiseProtocolVersions {
-		lesTopics[i] = lesTopic(eth.BlockChain().Genesis().Hash(), pv)
+		lesTopics[i] = lesTopic(e.BlockChain().Genesis().Hash(), pv)
 	}
-
+	// Calculate the number of threads used to service the light client
+	// requests based on the user-specified value.
+	threads := config.LightServ * 4 / 100
+	if threads < 4 {
+		threads = 4
+	}
 	srv := &LesServer{
 		lesCommons: lesCommons{
+			genesis:          e.BlockChain().Genesis().Hash(),
 			config:           config,
-			chainDb:          eth.ChainDb(),
+			chainConfig:      e.BlockChain().Config(),
 			iConfig:          light.DefaultServerIndexerConfig,
-			chtIndexer:       light.NewChtIndexer(eth.ChainDb(), nil, params.CHTFrequencyServer, params.HelperTrieProcessConfirmations),
-			bloomTrieIndexer: light.NewBloomTrieIndexer(eth.ChainDb(), nil, params.BloomBitsBlocks, params.BloomTrieFrequency),
-			protocolManager:  pm,
+			chainDb:          e.ChainDb(),
+			peers:            newPeerSet(),
+			chainReader:      e.BlockChain(),
+			chtIndexer:       light.NewChtIndexer(e.ChainDb(), nil, params.CHTFrequency, params.HelperTrieProcessConfirmations),
+			bloomTrieIndexer: light.NewBloomTrieIndexer(e.ChainDb(), nil, params.BloomBitsBlocks, params.BloomTrieFrequency),
+			closeCh:          make(chan struct{}),
 		},
-		costTracker:  newCostTracker(eth.ChainDb(), config),
-		quitSync:     quitSync,
+		archiveMode:  e.ArchiveMode(),
 		lesTopics:    lesTopics,
-		onlyAnnounce: config.OnlyAnnounce,
+		fcManager:    flowcontrol.NewClientManager(nil, &mclock.System{}),
+		servingQueue: newServingQueue(int64(time.Millisecond*10), float64(config.LightServ)/100),
+		threadsBusy:  config.LightServ/100 + 1,
+		threadsIdle:  threads,
 	}
+	srv.handler = newServerHandler(srv, e.BlockChain(), e.ChainDb(), e.TxPool(), e.Synced)
+	srv.costTracker, srv.freeCapacity = newCostTracker(e.ChainDb(), config)
 
-	logger := log.New()
-	pm.server = srv
-	srv.thcNormal = config.LightServ * 4 / 100
-	if srv.thcNormal < 4 {
-		srv.thcNormal = 4
+	// Set up checkpoint oracle.
+	oracle := config.CheckpointOracle
+	if oracle == nil {
+		oracle = params.CheckpointOracles[e.BlockChain().Genesis().Hash()]
 	}
-	srv.thcBlockProcessing = config.LightServ/100 + 1
-	srv.fcManager = flowcontrol.NewClientManager(nil, &mclock.System{})
+	srv.oracle = newCheckpointOracle(oracle, srv.localCheckpoint)
 
-	chtV1SectionCount, _, _ := srv.chtIndexer.Sections() // indexer still uses LES/1 4k section size for backwards server compatibility
-	chtV2SectionCount := chtV1SectionCount / (params.CHTFrequencyClient / params.CHTFrequencyServer)
-	if chtV2SectionCount != 0 {
-		// convert to LES/2 section
-		chtLastSection := chtV2SectionCount - 1
-		// convert last LES/2 section index back to LES/1 index for chtIndexer.SectionHead
-		chtLastSectionV1 := (chtLastSection+1)*(params.CHTFrequencyClient/params.CHTFrequencyServer) - 1
-		chtSectionHead := srv.chtIndexer.SectionHead(chtLastSectionV1)
-		chtRoot := light.GetChtRoot(pm.chainDb, chtLastSectionV1, chtSectionHead)
-		logger.Info("Loaded CHT", "section", chtLastSection, "head", chtSectionHead, "root", chtRoot)
+	// Initialize server capacity management fields.
+	srv.defParams = flowcontrol.ServerParams{
+		BufLimit:    srv.freeCapacity * bufLimitRatio,
+		MinRecharge: srv.freeCapacity,
 	}
-	bloomTrieSectionCount, _, _ := srv.bloomTrieIndexer.Sections()
-	if bloomTrieSectionCount != 0 {
-		bloomTrieLastSection := bloomTrieSectionCount - 1
-		bloomTrieSectionHead := srv.bloomTrieIndexer.SectionHead(bloomTrieLastSection)
-		bloomTrieRoot := light.GetBloomTrieRoot(pm.chainDb, bloomTrieLastSection, bloomTrieSectionHead)
-		logger.Info("Loaded bloom trie", "section", bloomTrieLastSection, "head", bloomTrieSectionHead, "root", bloomTrieRoot)
+	// LES flow control tries to more or less guarantee the possibility for the
+	// clients to send a certain amount of requests at any time and get a quick
+	// response. Most of the clients want this guarantee but don't actually need
+	// to send requests most of the time. Our goal is to serve as many clients as
+	// possible while the actually used server capacity does not exceed the limits
+	totalRecharge := srv.costTracker.totalRecharge()
+	maxCapacity := srv.freeCapacity * uint64(srv.config.LightPeers)
+	if totalRecharge > maxCapacity {
+		maxCapacity = totalRecharge
 	}
+	srv.fcManager.SetCapacityLimits(srv.freeCapacity, maxCapacity, srv.freeCapacity*2)
+	srv.clientPool = newClientPool(srv.chainDb, srv.freeCapacity, mclock.System{}, func(id enode.ID) { go srv.peers.Unregister(peerIdToString(id)) })
+	srv.clientPool.setPriceFactors(priceFactors{0, 1, 1}, priceFactors{0, 1, 1})
 
-	srv.chtIndexer.Start(eth.BlockChain())
+	checkpoint := srv.latestLocalCheckpoint()
+	if !checkpoint.Empty() {
+		log.Info("Loaded latest checkpoint", "section", checkpoint.SectionIndex, "head", checkpoint.SectionHead,
+			"chtroot", checkpoint.CHTRoot, "bloomroot", checkpoint.BloomRoot)
+	}
+	srv.chtIndexer.Start(e.BlockChain())
 	return srv, nil
 }
 
@@ -136,85 +130,34 @@ func (s *LesServer) APIs() []rpc.API {
 		{
 			Namespace: "les",
 			Version:   "1.0",
-			Service:   NewPrivateLightServerAPI(s),
+			Service:   NewPrivateLightAPI(&s.lesCommons),
 			Public:    false,
 		},
 	}
 }
 
-// startEventLoop starts an event handler loop that updates the recharge curve of
-// the client manager and adjusts the client pool's size according to the total
-// capacity updates coming from the client manager
-func (s *LesServer) startEventLoop() {
-	s.protocolManager.wg.Add(1)
-
-	var processing bool
-	blockProcFeed := make(chan bool, 100)
-	s.protocolManager.blockchain.(*core.BlockChain).SubscribeBlockProcessingEvent(blockProcFeed)
-	totalRechargeCh := make(chan uint64, 100)
-	totalRecharge := s.costTracker.subscribeTotalRecharge(totalRechargeCh)
-	totalCapacityCh := make(chan uint64, 100)
-	updateRecharge := func() {
-		if processing {
-			s.protocolManager.servingQueue.setThreads(s.thcBlockProcessing)
-			s.fcManager.SetRechargeCurve(flowcontrol.PieceWiseLinear{{0, 0}, {totalRecharge, totalRecharge}})
-		} else {
-			s.protocolManager.servingQueue.setThreads(s.thcNormal)
-			s.fcManager.SetRechargeCurve(flowcontrol.PieceWiseLinear{{0, 0}, {totalRecharge / 10, totalRecharge}, {totalRecharge, totalRecharge}})
-		}
-	}
-	updateRecharge()
-	totalCapacity := s.fcManager.SubscribeTotalCapacity(totalCapacityCh)
-	s.priorityClientPool.setLimits(s.maxPeers, totalCapacity)
-
-	go func() {
-		for {
-			select {
-			case processing = <-blockProcFeed:
-				updateRecharge()
-			case totalRecharge = <-totalRechargeCh:
-				updateRecharge()
-			case totalCapacity = <-totalCapacityCh:
-				s.priorityClientPool.setLimits(s.maxPeers, totalCapacity)
-			case <-s.protocolManager.quitSync:
-				s.protocolManager.wg.Done()
-				return
-			}
-		}
-	}()
-}
-
 func (s *LesServer) Protocols() []p2p.Protocol {
-	return s.makeProtocols(ServerProtocolVersions)
+	ps := s.makeProtocols(ServerProtocolVersions, s.handler.runPeer, func(id enode.ID) interface{} {
+		if p := s.peers.Peer(peerIdToString(id)); p != nil {
+			return p.Info()
+		}
+		return nil
+	})
+	// Add "les" ENR entries.
+	for i := range ps {
+		ps[i].Attributes = []enr.Entry{&lesEntry{}}
+	}
+	return ps
 }
 
 // Start starts the LES server
 func (s *LesServer) Start(srvr *p2p.Server) {
-	s.maxPeers = s.config.LightPeers
-	totalRecharge := s.costTracker.totalRecharge()
-	if s.maxPeers > 0 {
-		s.freeClientCap = minCapacity //totalRecharge / uint64(s.maxPeers)
-		if s.freeClientCap < minCapacity {
-			s.freeClientCap = minCapacity
-		}
-		if s.freeClientCap > 0 {
-			s.defParams = flowcontrol.ServerParams{
-				BufLimit:    s.freeClientCap * bufLimitRatio,
-				MinRecharge: s.freeClientCap,
-			}
-		}
-	}
-	freePeers := int(totalRecharge / s.freeClientCap)
-	if freePeers < s.maxPeers {
-		log.Warn("Light peer count limited", "specified", s.maxPeers, "allowed", freePeers)
-	}
+	s.privateKey = srvr.PrivateKey
+	s.handler.start()
 
-	s.freeClientPool = newFreeClientPool(s.chainDb, s.freeClientCap, 10000, mclock.System{}, func(id string) { go s.protocolManager.removePeer(id) })
-	s.priorityClientPool = newPriorityClientPool(s.freeClientCap, s.protocolManager.peers, s.freeClientPool)
+	s.wg.Add(1)
+	go s.capacityManagement()
 
-	s.protocolManager.peers.notify(s.priorityClientPool)
-	s.startEventLoop()
-	s.protocolManager.Start(s.config.LightPeers)
 	if srvr.DiscV5 != nil {
 		for _, topic := range s.lesTopics {
 			topic := topic
@@ -223,84 +166,101 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 				logger.Info("Starting topic registration")
 				defer logger.Info("Terminated topic registration")
 
-				srvr.DiscV5.RegisterTopic(topic, s.quitSync)
+				srvr.DiscV5.RegisterTopic(topic, s.closeCh)
 			}()
 		}
 	}
-	s.privateKey = srvr.PrivateKey
-	s.protocolManager.blockLoop()
+}
+
+// Stop stops the LES service
+func (s *LesServer) Stop() {
+	close(s.closeCh)
+
+	// Disconnect existing sessions.
+	// This also closes the gate for any new registrations on the peer set.
+	// sessions which are already established but not added to pm.peers yet
+	// will exit when they try to register.
+	s.peers.Close()
+
+	s.fcManager.Stop()
+	s.costTracker.stop()
+	s.handler.stop()
+	s.clientPool.stop() // client pool should be closed after handler.
+	s.servingQueue.stop()
+
+	// Note, bloom trie indexer is closed by parent bloombits indexer.
+	s.chtIndexer.Close()
+	s.wg.Wait()
+	log.Info("Les server stopped")
 }
 
 func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
 	bloomIndexer.AddChildIndexer(s.bloomTrieIndexer)
 }
 
-// Stop stops the LES service
-func (s *LesServer) Stop() {
-	s.chtIndexer.Close()
-	// bloom trie indexer is closed by parent bloombits indexer
-	go func() {
-		<-s.protocolManager.noMorePeers
-	}()
-	s.freeClientPool.stop()
-	s.costTracker.stop()
-	s.protocolManager.Stop()
+// SetClient sets the rpc client and starts running checkpoint contract if it is not yet watched.
+func (s *LesServer) SetContractBackend(backend bind.ContractBackend) {
+	if s.oracle == nil {
+		return
+	}
+	s.oracle.start(backend)
 }
 
-func (pm *ProtocolManager) blockLoop() {
-	pm.wg.Add(1)
-	headCh := make(chan core.ChainHeadEvent, 10)
-	headSub := pm.blockchain.SubscribeChainHeadEvent(headCh)
-	go func() {
-		var lastHead *types.Header
-		lastBroadcastTd := common.Big0
-		for {
-			select {
-			case ev := <-headCh:
-				peers := pm.peers.AllPeers()
-				if len(peers) > 0 {
-					header := ev.Block.Header()
-					hash := header.Hash()
-					number := header.Number.Uint64()
-					td := rawdb.ReadTd(pm.chainDb, hash, number)
-					if td != nil && td.Cmp(lastBroadcastTd) > 0 {
-						var reorg uint64
-						if lastHead != nil {
-							reorg = lastHead.Number.Uint64() - rawdb.FindCommonAncestor(pm.chainDb, header, lastHead).Number.Uint64()
-						}
-						lastHead = header
-						lastBroadcastTd = td
+// capacityManagement starts an event handler loop that updates the recharge curve of
+// the client manager and adjusts the client pool's size according to the total
+// capacity updates coming from the client manager
+func (s *LesServer) capacityManagement() {
+	defer s.wg.Done()
 
-						log.Debug("Announcing block to peers", "number", number, "hash", hash, "td", td, "reorg", reorg)
+	processCh := make(chan bool, 100)
+	sub := s.handler.blockchain.SubscribeBlockProcessingEvent(processCh)
+	defer sub.Unsubscribe()
 
-						announce := announceData{Hash: hash, Number: number, Td: td, ReorgDepth: reorg}
-						var (
-							signed         bool
-							signedAnnounce announceData
-						)
+	totalRechargeCh := make(chan uint64, 100)
+	totalRecharge := s.costTracker.subscribeTotalRecharge(totalRechargeCh)
 
-						for _, p := range peers {
-							switch p.announceType {
+	totalCapacityCh := make(chan uint64, 100)
+	totalCapacity := s.fcManager.SubscribeTotalCapacity(totalCapacityCh)
+	s.clientPool.setLimits(s.config.LightPeers, totalCapacity)
 
-							case announceTypeSimple:
-								p.queueSend(func() { p.SendAnnounce(announce) })
-							case announceTypeSigned:
-								if !signed {
-									signedAnnounce = announce
-									signedAnnounce.sign(pm.server.privateKey)
-									signed = true
-								}
-
-								p.queueSend(func() { p.SendAnnounce(signedAnnounce) })
-							}
-						}
-					}
-				}
-			case <-pm.quitSync:
-				headSub.Unsubscribe()
-				pm.wg.Done()
-				return
-			}
+	var (
+		busy         bool
+		freePeers    uint64
+		blockProcess mclock.AbsTime
+	)
+	updateRecharge := func() {
+		if busy {
+			s.servingQueue.setThreads(s.threadsBusy)
+			s.fcManager.SetRechargeCurve(flowcontrol.PieceWiseLinear{{0, 0}, {totalRecharge, totalRecharge}})
+		} else {
+			s.servingQueue.setThreads(s.threadsIdle)
+			s.fcManager.SetRechargeCurve(flowcontrol.PieceWiseLinear{{0, 0}, {totalRecharge / 10, totalRecharge}, {totalRecharge, totalRecharge}})
 		}
-	}()
+	}
+	updateRecharge()
+
+	for {
+		select {
+		case busy = <-processCh:
+			if busy {
+				blockProcess = mclock.Now()
+			} else {
+				blockProcessingTimer.Update(time.Duration(mclock.Now() - blockProcess))
+			}
+			updateRecharge()
+		case totalRecharge = <-totalRechargeCh:
+			totalRechargeGauge.Update(int64(totalRecharge))
+			updateRecharge()
+		case totalCapacity = <-totalCapacityCh:
+			totalCapacityGauge.Update(int64(totalCapacity))
+			newFreePeers := totalCapacity / s.freeCapacity
+			if newFreePeers < freePeers && newFreePeers < uint64(s.config.LightPeers) {
+				log.Warn("Reduced free peer connections", "from", freePeers, "to", newFreePeers)
+			}
+			freePeers = newFreePeers
+			s.clientPool.setLimits(s.config.LightPeers, totalCapacity)
+		case <-s.closeCh:
+			return
+		}
+	}
 }

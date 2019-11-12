@@ -29,26 +29,34 @@ var (
 )
 
 type typeinfo struct {
-	decoder
-	writer
+	decoder    decoder
+	decoderErr error // error from makeDecoder
+	writer     writer
+	writerErr  error // error from makeWriter
 }
 
-// represents struct tags
+// tags represents struct tags.
 type tags struct {
 	// rlp:"nil" controls whether empty input results in a nil pointer.
 	nilOK bool
+
+	// This controls whether nil pointers are encoded/decoded as empty strings
+	// or empty lists.
+	nilKind Kind
+
 	// rlp:"tail" controls whether this field swallows additional list
 	// elements. It can only be set for the last field, which must be
 	// of slice type.
 	tail bool
+
 	// rlp:"-" ignores fields.
 	ignored bool
 }
 
+// typekey is the key of a type in typeCache. It includes the struct tags because
+// they might generate a different decoder.
 type typekey struct {
 	reflect.Type
-	// the key must include the struct tags because they
-	// might generate a different decoder.
 	tags
 }
 
@@ -56,12 +64,22 @@ type decoder func(*Stream, reflect.Value) error
 
 type writer func(reflect.Value, *encbuf) error
 
-func cachedTypeInfo(typ reflect.Type, tags tags) (*typeinfo, error) {
+func cachedDecoder(typ reflect.Type) (decoder, error) {
+	info := cachedTypeInfo(typ, tags{})
+	return info.decoder, info.decoderErr
+}
+
+func cachedWriter(typ reflect.Type) (writer, error) {
+	info := cachedTypeInfo(typ, tags{})
+	return info.writer, info.writerErr
+}
+
+func cachedTypeInfo(typ reflect.Type, tags tags) *typeinfo {
 	typeCacheMutex.RLock()
 	info := typeCache[typekey{typ, tags}]
 	typeCacheMutex.RUnlock()
 	if info != nil {
-		return info, nil
+		return info
 	}
 	// not in the cache, need to generate info for this type.
 	typeCacheMutex.Lock()
@@ -69,25 +87,20 @@ func cachedTypeInfo(typ reflect.Type, tags tags) (*typeinfo, error) {
 	return cachedTypeInfo1(typ, tags)
 }
 
-func cachedTypeInfo1(typ reflect.Type, tags tags) (*typeinfo, error) {
+func cachedTypeInfo1(typ reflect.Type, tags tags) *typeinfo {
 	key := typekey{typ, tags}
 	info := typeCache[key]
 	if info != nil {
 		// another goroutine got the write lock first
-		return info, nil
+		return info
 	}
 	// put a dummy value into the cache before generating.
 	// if the generator tries to lookup itself, it will get
 	// the dummy value and won't call itself recursively.
-	typeCache[key] = new(typeinfo)
-	info, err := genTypeInfo(typ, tags)
-	if err != nil {
-		// remove the dummy value if the generator fails
-		delete(typeCache, key)
-		return nil, err
-	}
-	*typeCache[key] = *info
-	return typeCache[key], err
+	info = new(typeinfo)
+	typeCache[key] = info
+	info.generate(typ, tags)
+	return info
 }
 
 type field struct {
@@ -96,26 +109,43 @@ type field struct {
 }
 
 func structFields(typ reflect.Type) (fields []field, err error) {
+	lastPublic := lastPublicField(typ)
 	for i := 0; i < typ.NumField(); i++ {
 		if f := typ.Field(i); f.PkgPath == "" { // exported
-			tags, err := parseStructTag(typ, i)
+			tags, err := parseStructTag(typ, i, lastPublic)
 			if err != nil {
 				return nil, err
 			}
 			if tags.ignored {
 				continue
 			}
-			info, err := cachedTypeInfo1(f.Type, tags)
-			if err != nil {
-				return nil, err
-			}
+			info := cachedTypeInfo1(f.Type, tags)
 			fields = append(fields, field{i, info})
 		}
 	}
 	return fields, nil
 }
 
-func parseStructTag(typ reflect.Type, fi int) (tags, error) {
+type structFieldError struct {
+	typ   reflect.Type
+	field int
+	err   error
+}
+
+func (e structFieldError) Error() string {
+	return fmt.Sprintf("%v (struct field %v.%s)", e.err, e.typ, e.typ.Field(e.field).Name)
+}
+
+type structTagError struct {
+	typ             reflect.Type
+	field, tag, err string
+}
+
+func (e structTagError) Error() string {
+	return fmt.Sprintf("rlp: invalid struct tag %q for %v.%s (%s)", e.tag, e.typ, e.field, e.err)
+}
+
+func parseStructTag(typ reflect.Type, fi, lastPublic int) (tags, error) {
 	f := typ.Field(fi)
 	var ts tags
 	for _, t := range strings.Split(f.Tag.Get("rlp"), ",") {
@@ -123,15 +153,26 @@ func parseStructTag(typ reflect.Type, fi int) (tags, error) {
 		case "":
 		case "-":
 			ts.ignored = true
-		case "nil":
+		case "nil", "nilString", "nilList":
 			ts.nilOK = true
+			if f.Type.Kind() != reflect.Ptr {
+				return ts, structTagError{typ, f.Name, t, "field is not a pointer"}
+			}
+			switch t {
+			case "nil":
+				ts.nilKind = defaultNilKind(f.Type.Elem())
+			case "nilString":
+				ts.nilKind = String
+			case "nilList":
+				ts.nilKind = List
+			}
 		case "tail":
 			ts.tail = true
-			if fi != typ.NumField()-1 {
-				return ts, fmt.Errorf(`rlp: invalid struct tag "tail" for %v.%s (must be on last field)`, typ, f.Name)
+			if fi != lastPublic {
+				return ts, structTagError{typ, f.Name, t, "must be on last field"}
 			}
 			if f.Type.Kind() != reflect.Slice {
-				return ts, fmt.Errorf(`rlp: invalid struct tag "tail" for %v.%s (field type is not slice)`, typ, f.Name)
+				return ts, structTagError{typ, f.Name, t, "field type is not slice"}
 			}
 		default:
 			return ts, fmt.Errorf("rlp: unknown struct tag %q on %v.%s", t, typ, f.Name)
@@ -140,17 +181,35 @@ func parseStructTag(typ reflect.Type, fi int) (tags, error) {
 	return ts, nil
 }
 
-func genTypeInfo(typ reflect.Type, tags tags) (info *typeinfo, err error) {
-	info = new(typeinfo)
-	if info.decoder, err = makeDecoder(typ, tags); err != nil {
-		return nil, err
+func lastPublicField(typ reflect.Type) int {
+	last := 0
+	for i := 0; i < typ.NumField(); i++ {
+		if typ.Field(i).PkgPath == "" {
+			last = i
+		}
 	}
-	if info.writer, err = makeWriter(typ, tags); err != nil {
-		return nil, err
+	return last
+}
+
+func (i *typeinfo) generate(typ reflect.Type, tags tags) {
+	i.decoder, i.decoderErr = makeDecoder(typ, tags)
+	i.writer, i.writerErr = makeWriter(typ, tags)
+}
+
+// defaultNilKind determines whether a nil pointer to typ encodes/decodes
+// as an empty string or empty list.
+func defaultNilKind(typ reflect.Type) Kind {
+	k := typ.Kind()
+	if isUint(k) || k == reflect.String || k == reflect.Bool || isByteArray(typ) {
+		return String
 	}
-	return info, nil
+	return List
 }
 
 func isUint(k reflect.Kind) bool {
 	return k >= reflect.Uint && k <= reflect.Uintptr
+}
+
+func isByteArray(typ reflect.Type) bool {
+	return (typ.Kind() == reflect.Slice || typ.Kind() == reflect.Array) && isByte(typ.Elem())
 }

@@ -183,3 +183,49 @@ func (a *TarballArchive) Close() error {
 	}
 	return a.file.Close()
 }
+
+func ExtractTarballArchive(archive string, dest string) error {
+	// We're only interested in gzipped archives, wrap the reader now
+	ar, err := os.Open(archive)
+	if err != nil {
+		return err
+	}
+	defer ar.Close()
+
+	gzr, err := gzip.NewReader(ar)
+	if err != nil {
+		return err
+	}
+	defer gzr.Close()
+
+	// Iterate over all the files in the tarball
+	tr := tar.NewReader(gzr)
+	for {
+		// Fetch the next tarball header and abort if needed
+		header, err := tr.Next()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+		// Figure out the target and create it
+		target := filepath.Join(dest, header.Name)
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(target, 0755); err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			file, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(file, tr); err != nil {
+				return err
+			}
+			file.Close()
+		}
+	}
+}

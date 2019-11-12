@@ -25,6 +25,33 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+func TestPoWCalculationsWithNoLeadingZeros(t *testing.T) {
+	e := Envelope{
+		TTL:   1,
+		Data:  []byte{0xde, 0xad, 0xbe, 0xef},
+		Nonce: 100000,
+	}
+
+	e.calculatePoW(0)
+
+	if e.pow != 0.07692307692307693 {
+		t.Fatalf("invalid PoW calculation. Expected 0.07692307692307693, got %v", e.pow)
+	}
+}
+
+func TestPoWCalculationsWith8LeadingZeros(t *testing.T) {
+	e := Envelope{
+		TTL:   1,
+		Data:  []byte{0xde, 0xad, 0xbe, 0xef},
+		Nonce: 276,
+	}
+	e.calculatePoW(0)
+
+	if e.pow != 19.692307692307693 {
+		t.Fatalf("invalid PoW calculation. Expected 19.692307692307693, got %v", e.pow)
+	}
+}
+
 func TestEnvelopeOpenAcceptsOnlyOneKeyTypeInFilter(t *testing.T) {
 	symKey := make([]byte, aesKeyLength)
 	mrand.Read(symKey)

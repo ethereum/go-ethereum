@@ -16,71 +16,66 @@
 
 // React syntax style mostly according to https://github.com/airbnb/javascript/tree/master/react
 {
-    'env': {
-        'browser': true,
-        'node':    true,
-        'es6':     true,
+    "env": {
+        "browser": true,
+        "node":    true,
+        "es6":     true
     },
-    'parser': 'babel-eslint',
-    'parserOptions': {
-        'sourceType':   'module',
-        'ecmaVersion':  6,
-        'ecmaFeatures': {
-            'jsx': true,
+    "parser": "babel-eslint",
+    "parserOptions": {
+        "sourceType":   "module",
+        "ecmaVersion":  6,
+        "ecmaFeatures": {
+            "jsx": true
         }
     },
-    'extends': 'airbnb',
-    'plugins': [
-        'flowtype',
-        'react',
+    "extends": [
+        "eslint:recommended",
+        "airbnb",
+        "plugin:flowtype/recommended",
+        "plugin:react/recommended"
     ],
-    'rules': {
-        'no-tabs':                'off',
-        'indent':                 ['error', 'tab'],
-        'react/jsx-indent':       ['error', 'tab'],
-        'react/jsx-indent-props': ['error', 'tab'],
-        'react/prefer-stateless-function': 'off',
-        'jsx-quotes':  ['error', 'prefer-single'],
-        'no-plusplus': 'off',
-        'no-console':  ['error', { allow: ['error'] }],
-
+    "plugins": [
+        "flowtype",
+        "react"
+    ],
+    "rules": {
+        "no-tabs":                "off",
+        "indent":                 ["error", "tab"],
+        "react/jsx-indent":       ["error", "tab"],
+        "react/jsx-indent-props": ["error", "tab"],
+        "react/prefer-stateless-function": "off",
+        "react/destructuring-assignment": ["error", "always", {"ignoreClassFields": true}],
+        "jsx-quotes":  ["error", "prefer-single"],
+        "no-plusplus": "off",
+        "no-console":  ["error", { "allow": ["error"] }],
         // Specifies the maximum length of a line.
-        'max-len': ['warn', 120, 2, {
-            'ignoreUrls':             true,
-            'ignoreComments':         false,
-            'ignoreRegExpLiterals':   true,
-            'ignoreStrings':          true,
-            'ignoreTemplateLiterals': true,
+        "max-len": ["warn", 120, 2, {
+            "ignoreUrls":             true,
+            "ignoreComments":         false,
+            "ignoreRegExpLiterals":   true,
+            "ignoreStrings":          true,
+            "ignoreTemplateLiterals": true
         }],
         // Enforces consistent spacing between keys and values in object literal properties.
-        'key-spacing': ['error', {'align': {
-            'beforeColon': false,
-            'afterColon':  true,
-            'on':          'value'
+        "key-spacing": ["error", {"align": {
+            "beforeColon": false,
+            "afterColon":  true,
+            "on":          "value"
         }}],
         // Prohibits padding inside curly braces.
-        'object-curly-spacing': ['error', 'never'],
-        'no-use-before-define': 'off', // messageAPI
-        'default-case': 'off',
-
-        'flowtype/boolean-style':                  ['error', 'boolean'],
-        'flowtype/define-flow-type':               'warn',
-        'flowtype/generic-spacing':                ['error', 'never'],
-        'flowtype/no-primitive-constructor-types': 'error',
-        'flowtype/no-weak-types':                  'error',
-        'flowtype/object-type-delimiter':          ['error', 'comma'],
-        'flowtype/require-valid-file-annotation':  'error',
-        'flowtype/semi':                           ['error', 'always'],
-        'flowtype/space-after-type-colon':         ['error', 'always'],
-        'flowtype/space-before-generic-bracket':   ['error', 'never'],
-        'flowtype/space-before-type-colon':        ['error', 'never'],
-        'flowtype/union-intersection-spacing':     ['error', 'always'],
-        'flowtype/use-flow-type':                  'warn',
-        'flowtype/valid-syntax':                   'warn',
+        "object-curly-spacing": ["error", "never"],
+        "no-use-before-define": "off", // message types
+        "default-case": "off"
     },
-    'settings': {
-        'flowtype': {
-            'onlyFilesWithFlowAnnotation': true,
+    "settings": {
+        "import/resolver": {
+            "node":    {
+                "paths": ["components"] // import './components/Component' -> import 'Component'
+            }
+        },
+        "flowtype": {
+            "onlyFilesWithFlowAnnotation": true
         }
-    },
+    }
 }

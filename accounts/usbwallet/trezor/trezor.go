@@ -16,11 +16,35 @@
 
 // This file contains the implementation for interacting with the Trezor hardware
 // wallets. The wire protocol spec can be found on the SatoshiLabs website:
-// https://doc.satoshilabs.com/trezor-tech/api-protobuf.html
+// https://wiki.trezor.io/Developers_guide-Message_Workflows
 
-//go:generate protoc --go_out=import_path=trezor:. types.proto messages.proto
+// !!! STAHP !!!
+//
+// Before you touch the protocol files, you need to be aware of a breaking change
+// that occurred between firmware versions 1.7.3->1.8.0 (Model One) and 2.0.10->
+// 2.1.0 (Model T). The Ethereum address representation was changed from the 20
+// byte binary blob to a 42 byte hex string. The upstream protocol buffer files
+// only support the new format, so blindly pulling in a new spec will break old
+// devices!
+//
+// The Trezor devs had the foresight to add the string version as a new message
+// code instead of replacing the binary one. This means that the proto file can
+// actually define both the old and the new versions as optional. Please ensure
+// that you add back the old addresses everywhere (to avoid name clash. use the
+// addressBin and addressHex names).
+//
+// If in doubt, reach out to @karalabe.
 
-// Package trezor contains the wire protocol wrapper in Go.
+// To regenerate the protocol files in this package:
+//   - Download the latest protoc https://github.com/protocolbuffers/protobuf/releases
+//   - Build with the usual `./configure && make` and ensure it's on your $PATH
+//   - Delete all the .proto and .pb.go files, pull in fresh ones from Trezor
+//   - Grab the latest Go plugin `go get -u github.com/golang/protobuf/protoc-gen-go`
+//   - Vendor in the latest Go plugin `govendor fetch github.com/golang/protobuf/...`
+
+//go:generate protoc -I/usr/local/include:. --go_out=import_path=trezor:. messages.proto messages-common.proto messages-management.proto messages-ethereum.proto
+
+// Package trezor contains the wire protocol.
 package trezor
 
 import (

@@ -20,7 +20,6 @@ import (
 	"encoding"
 	"errors"
 	"flag"
-	"fmt"
 	"math/big"
 	"os"
 	"os/user"
@@ -34,33 +33,44 @@ import (
 // Custom type which is registered in the flags library which cli uses for
 // argument parsing. This allows us to expand Value to an absolute path when
 // the argument is parsed
-type DirectoryString struct {
-	Value string
+type DirectoryString string
+
+func (s *DirectoryString) String() string {
+	return string(*s)
 }
 
-func (self *DirectoryString) String() string {
-	return self.Value
-}
-
-func (self *DirectoryString) Set(value string) error {
-	self.Value = expandPath(value)
+func (s *DirectoryString) Set(value string) error {
+	*s = DirectoryString(expandPath(value))
 	return nil
 }
 
 // Custom cli.Flag type which expand the received string to an absolute path.
 // e.g. ~/.ethereum -> /home/username/.ethereum
 type DirectoryFlag struct {
-	Name  string
-	Value DirectoryString
-	Usage string
+	Name   string
+	Value  DirectoryString
+	Usage  string
+	EnvVar string
 }
 
-func (self DirectoryFlag) String() string {
-	fmtString := "%s %v\t%v"
-	if len(self.Value.Value) > 0 {
-		fmtString = "%s \"%v\"\t%v"
-	}
-	return fmt.Sprintf(fmtString, prefixedNames(self.Name), self.Value.Value, self.Usage)
+func (f DirectoryFlag) String() string {
+	return cli.FlagStringer(f)
+}
+
+// called by cli library, grabs variable from environment (if in env)
+// and adds variable to flag set for parsing.
+func (f DirectoryFlag) Apply(set *flag.FlagSet) {
+	eachName(f.Name, func(name string) {
+		set.Var(&f.Value, f.Name, f.Usage)
+	})
+}
+
+func (f DirectoryFlag) GetName() string {
+	return f.Name
+}
+
+func (f *DirectoryFlag) Set(value string) {
+	f.Value.Set(value)
 }
 
 func eachName(longName string, fn func(string)) {
@@ -69,14 +79,6 @@ func eachName(longName string, fn func(string)) {
 		name = strings.Trim(name, " ")
 		fn(name)
 	}
-}
-
-// called by cli library, grabs variable from environment (if in env)
-// and adds variable to flag set for parsing.
-func (self DirectoryFlag) Apply(set *flag.FlagSet) {
-	eachName(self.Name, func(name string) {
-		set.Var(&self.Value, self.Name, self.Usage)
-	})
 }
 
 type TextMarshaler interface {
@@ -103,9 +105,10 @@ func (v textMarshalerVal) Set(s string) error {
 
 // TextMarshalerFlag wraps a TextMarshaler value.
 type TextMarshalerFlag struct {
-	Name  string
-	Value TextMarshaler
-	Usage string
+	Name   string
+	Value  TextMarshaler
+	Usage  string
+	EnvVar string
 }
 
 func (f TextMarshalerFlag) GetName() string {
@@ -113,7 +116,7 @@ func (f TextMarshalerFlag) GetName() string {
 }
 
 func (f TextMarshalerFlag) String() string {
-	return fmt.Sprintf("%s \"%v\"\t%v", prefixedNames(f.Name), f.Value, f.Usage)
+	return cli.FlagStringer(f)
 }
 
 func (f TextMarshalerFlag) Apply(set *flag.FlagSet) {
@@ -134,9 +137,10 @@ func GlobalTextMarshaler(ctx *cli.Context, name string) TextMarshaler {
 // BigFlag is a command line flag that accepts 256 bit big integers in decimal or
 // hexadecimal syntax.
 type BigFlag struct {
-	Name  string
-	Value *big.Int
-	Usage string
+	Name   string
+	Value  *big.Int
+	Usage  string
+	EnvVar string
 }
 
 // bigValue turns *big.Int into a flag.Value
@@ -163,11 +167,7 @@ func (f BigFlag) GetName() string {
 }
 
 func (f BigFlag) String() string {
-	fmtString := "%s %v\t%v"
-	if f.Value != nil {
-		fmtString = "%s \"%v\"\t%v"
-	}
-	return fmt.Sprintf(fmtString, prefixedNames(f.Name), f.Value, f.Usage)
+	return cli.FlagStringer(f)
 }
 
 func (f BigFlag) Apply(set *flag.FlagSet) {
@@ -205,14 +205,6 @@ func prefixedNames(fullName string) (prefixed string) {
 		}
 	}
 	return
-}
-
-func (self DirectoryFlag) GetName() string {
-	return self.Name
-}
-
-func (self *DirectoryFlag) Set(value string) {
-	self.Value.Value = value
 }
 
 // Expands a file path

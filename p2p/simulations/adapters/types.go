@@ -27,9 +27,11 @@ import (
 
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -99,6 +101,17 @@ type NodeConfig struct {
 	// services registered by calling the RegisterService function)
 	Services []string
 
+	// Properties are the names of the properties this node should hold
+	// within running services (e.g. "bootnode", "lightnode" or any custom values)
+	// These values need to be checked and acted upon by node Services
+	Properties []string
+
+	// Enode
+	node *enode.Node
+
+	// ENR Record with entries to overwrite
+	Record enr.Record
+
 	// function to sanction or prevent suggesting a peer
 	Reachable func(id enode.ID) bool
 
@@ -112,6 +125,7 @@ type nodeConfigJSON struct {
 	PrivateKey      string   `json:"private_key"`
 	Name            string   `json:"name"`
 	Services        []string `json:"services"`
+	Properties      []string `json:"properties"`
 	EnableMsgEvents bool     `json:"enable_msg_events"`
 	Port            uint16   `json:"port"`
 }
@@ -123,6 +137,7 @@ func (n *NodeConfig) MarshalJSON() ([]byte, error) {
 		ID:              n.ID.String(),
 		Name:            n.Name,
 		Services:        n.Services,
+		Properties:      n.Properties,
 		Port:            n.Port,
 		EnableMsgEvents: n.EnableMsgEvents,
 	}
@@ -160,6 +175,7 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 
 	n.Name = confJSON.Name
 	n.Services = confJSON.Services
+	n.Properties = confJSON.Properties
 	n.Port = confJSON.Port
 	n.EnableMsgEvents = confJSON.EnableMsgEvents
 
@@ -168,26 +184,27 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 
 // Node returns the node descriptor represented by the config.
 func (n *NodeConfig) Node() *enode.Node {
-	return enode.NewV4(&n.PrivateKey.PublicKey, net.IP{127, 0, 0, 1}, int(n.Port), int(n.Port))
+	return n.node
 }
 
 // RandomNodeConfig returns node configuration with a randomly generated ID and
 // PrivateKey
 func RandomNodeConfig() *NodeConfig {
-	key, err := crypto.GenerateKey()
+	prvkey, err := crypto.GenerateKey()
 	if err != nil {
 		panic("unable to generate key")
 	}
 
-	id := enode.PubkeyToIDV4(&key.PublicKey)
 	port, err := assignTCPPort()
 	if err != nil {
 		panic("unable to assign tcp port")
 	}
+
+	enodId := enode.PubkeyToIDV4(&prvkey.PublicKey)
 	return &NodeConfig{
-		ID:              id,
-		Name:            fmt.Sprintf("node_%s", id.String()),
-		PrivateKey:      key,
+		PrivateKey:      prvkey,
+		ID:              enodId,
+		Name:            fmt.Sprintf("node_%s", enodId.String()),
 		Port:            port,
 		EnableMsgEvents: true,
 	}
@@ -256,4 +273,31 @@ func RegisterServices(services Services) {
 	if reexec.Init() {
 		os.Exit(0)
 	}
+}
+
+// adds the host part to the configuration's ENR, signs it
+// creates and  the corresponding enode object to the configuration
+func (n *NodeConfig) initEnode(ip net.IP, tcpport int, udpport int) error {
+	enrIp := enr.IP(ip)
+	n.Record.Set(&enrIp)
+	enrTcpPort := enr.TCP(tcpport)
+	n.Record.Set(&enrTcpPort)
+	enrUdpPort := enr.UDP(udpport)
+	n.Record.Set(&enrUdpPort)
+
+	err := enode.SignV4(&n.Record, n.PrivateKey)
+	if err != nil {
+		return fmt.Errorf("unable to generate ENR: %v", err)
+	}
+	nod, err := enode.New(enode.V4ID{}, &n.Record)
+	if err != nil {
+		return fmt.Errorf("unable to create enode: %v", err)
+	}
+	log.Trace("simnode new", "record", n.Record)
+	n.node = nod
+	return nil
+}
+
+func (n *NodeConfig) initDummyEnode() error {
+	return n.initEnode(net.IPv4(127, 0, 0, 1), 0, 0)
 }
