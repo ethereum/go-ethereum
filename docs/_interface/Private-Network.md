@@ -228,7 +228,7 @@ network.
 
 Setting up peer-to-peer networking depends on your requirements. If you connect nodes
 across the Internet, please ensure that your bootnode and all other nodes have public IP
-addresses assigned and both TCP and UDP traffic can pass the firewall.
+addresses assigned and both TCP, and UDP traffic can pass the firewall.
 
 If Internet connectivity is not required or all member nodes connect using well-known IPs,
 we strongly recommend setting up Geth to restrict peer-to-peer connectivity to an IP
