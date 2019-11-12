@@ -150,7 +150,7 @@ adapt to the amount of mining resources you deploy on the chain.
 ### Initializing the Geth Database
 
 To create a blockchain node that uses this genesis block, run the following command. This
-imports and set the canonical genesis block for your chain.
+imports and sets the canonical genesis block for your chain.
 
 ```shell
 geth init --datadir data genesis.json
