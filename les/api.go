@@ -71,8 +71,9 @@ func (api *PrivateLightServerAPI) ServerInfo() map[string]interface{} {
 // ClientInfo returns information about clients listed in the ids list or matching the given tags
 func (api *PrivateLightServerAPI) ClientInfo(ids []enode.ID) map[enode.ID]map[string]interface{} {
 	res := make(map[enode.ID]map[string]interface{})
-	api.server.clientPool.forClients(ids, func(client *clientInfo, id enode.ID) {
+	api.server.clientPool.forClients(ids, func(client *clientInfo, id enode.ID) error {
 		res[id] = api.clientInfo(client, id)
+		return nil
 	})
 	return res
 }
@@ -91,8 +92,9 @@ func (api *PrivateLightServerAPI) PriorityClientInfo(start, stop enode.ID, maxCo
 		ids = ids[:maxCount]
 	}
 	if len(ids) != 0 {
-		api.server.clientPool.forClients(ids, func(client *clientInfo, id enode.ID) {
+		api.server.clientPool.forClients(ids, func(client *clientInfo, id enode.ID) error {
 			res[id] = api.clientInfo(client, id)
+			return nil
 		})
 	}
 	return res
@@ -166,8 +168,11 @@ func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, clien
 				err = fmt.Errorf("invalid client parameter '%s'", name)
 			}
 		}
+		if err != nil {
+			return
+		}
 	}
-	return updateFactors, err
+	return
 }
 
 // UpdateBalance updates the balance of a client (either overwrites it or adds to it).
@@ -183,21 +188,17 @@ func (api *PrivateLightServerAPI) UpdateBalance(id enode.ID, value int64, meta s
 // SetClientParams sets client parameters for all clients listed in the ids list
 // or all connected clients if the list is empty
 func (api *PrivateLightServerAPI) SetClientParams(ids []enode.ID, params map[string]interface{}) error {
-	var finalErr error
-	api.server.clientPool.forClients(ids, func(client *clientInfo, id enode.ID) {
+	return api.server.clientPool.forClients(ids, func(client *clientInfo, id enode.ID) error {
 		if client != nil {
 			update, err := api.setParams(params, client, nil, nil)
-			if err != nil {
-				finalErr = err
-			}
 			if update {
 				client.updatePriceFactors()
 			}
+			return err
 		} else {
-			finalErr = fmt.Errorf("client %064x is not connected", id[:])
+			return fmt.Errorf("client %064x is not connected", id[:])
 		}
 	})
-	return finalErr
 }
 
 // SetDefaultParams sets the default parameters applicable to clients connected in the future
@@ -299,12 +300,13 @@ func NewPrivateDebugAPI(server *LesServer) *PrivateDebugAPI {
 
 // FreezeClient forces a temporary client freeze which normally happens when the server is overloaded
 func (api *PrivateDebugAPI) FreezeClient(id enode.ID) error {
-	err := fmt.Errorf("client %064x is not connected", id[:])
-	api.server.clientPool.forClients([]enode.ID{id}, func(c *clientInfo, id enode.ID) {
+	return api.server.clientPool.forClients([]enode.ID{id}, func(c *clientInfo, id enode.ID) error {
+		if c == nil {
+			return fmt.Errorf("client %064x is not connected", id[:])
+		}
 		c.peer.freezeClient()
-		err = nil
+		return nil
 	})
-	return err
 }
 
 // PrivateLightAPI provides an API to access the LES light server or light client.

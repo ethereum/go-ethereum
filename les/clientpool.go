@@ -343,19 +343,24 @@ func (f *clientPool) disconnect(p clientPeer) {
 // forClients iterates through a list of clients, calling the callback for each one.
 // If a client is not connected then clientInfo is nil. If the specified list is empty
 // then the callback is called for all connected clients.
-func (f *clientPool) forClients(ids []enode.ID, callback func(*clientInfo, enode.ID)) {
+func (f *clientPool) forClients(ids []enode.ID, callback func(*clientInfo, enode.ID) error) error {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
 	if len(ids) > 0 {
 		for _, id := range ids {
-			callback(f.connectedMap[id], id)
+			if err := callback(f.connectedMap[id], id); err != nil {
+				return err
+			}
 		}
 	} else {
 		for _, c := range f.connectedMap {
-			callback(c, c.id)
+			if err := callback(c, c.id); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 // setDefaultFactors sets the default price factors applied to subsequently connected clients
