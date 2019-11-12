@@ -27,13 +27,13 @@ package dashboard
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
 	"io"
 	"net"
 	"net/http"
 	"sync"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/les"
@@ -46,7 +46,7 @@ import (
 )
 
 const (
-	sampleLimit = 200 // Maximum number of data samples
+	sampleLimit        = 200 // Maximum number of data samples
 	dataCollectorCount = 4
 )
 
