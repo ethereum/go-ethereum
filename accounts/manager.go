@@ -21,7 +21,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/event"
+	"github.com/maticnetwork/bor/event"
 )
 
 // Config contains the settings of the global account manager.

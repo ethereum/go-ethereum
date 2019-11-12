@@ -27,14 +27,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/maticnetwork/bor/common/mclock"
+	"github.com/maticnetwork/bor/crypto"
+	"github.com/maticnetwork/bor/ethdb"
+	"github.com/maticnetwork/bor/log"
+	"github.com/maticnetwork/bor/p2p"
+	"github.com/maticnetwork/bor/p2p/discv5"
+	"github.com/maticnetwork/bor/p2p/enode"
+	"github.com/maticnetwork/bor/rlp"
 )
 
 const (

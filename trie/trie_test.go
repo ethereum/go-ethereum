@@ -29,12 +29,12 @@ import (
 	"testing/quick"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/leveldb"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/crypto"
+	"github.com/maticnetwork/bor/ethdb"
+	"github.com/maticnetwork/bor/ethdb/leveldb"
+	"github.com/maticnetwork/bor/ethdb/memorydb"
+	"github.com/maticnetwork/bor/rlp"
 )
 
 func init() {

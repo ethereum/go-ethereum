@@ -25,11 +25,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/ethdb"
+	"github.com/maticnetwork/bor/log"
+	"github.com/maticnetwork/bor/metrics"
+	"github.com/maticnetwork/bor/params"
 	"github.com/prometheus/tsdb/fileutil"
 )
 

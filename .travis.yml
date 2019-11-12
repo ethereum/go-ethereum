@@ -1,5 +1,5 @@
 language: go
-go_import_path: github.com/ethereum/go-ethereum
+go_import_path: github.com/maticnetwork/bor
 sudo: false
 matrix:
   include:
@@ -169,7 +169,7 @@ matrix:
         - mv android-ndk-r19b $ANDROID_HOME/ndk-bundle
 
         - mkdir -p $GOPATH/src/github.com/ethereum
-        - ln -s `pwd` $GOPATH/src/github.com/ethereum/go-ethereum
+        - ln -s `pwd` $GOPATH/src/github.com/maticnetwork/bor
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads

@@ -4,11 +4,11 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/les/flowcontrol"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/common/mclock"
+	"github.com/maticnetwork/bor/les/flowcontrol"
+	"github.com/maticnetwork/bor/p2p"
+	"github.com/maticnetwork/bor/rlp"
 )
 
 const (

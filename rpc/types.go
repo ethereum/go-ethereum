@@ -22,7 +22,7 @@ import (
 	"math"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/maticnetwork/bor/common/hexutil"
 )
 
 // API describes the set of methods offered over the RPC interface

@@ -20,12 +20,12 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/maticnetwork/bor/accounts"
+	"github.com/maticnetwork/bor/core/rawdb"
+	"github.com/maticnetwork/bor/ethdb"
+	"github.com/maticnetwork/bor/event"
+	"github.com/maticnetwork/bor/p2p"
+	"github.com/maticnetwork/bor/rpc"
 )
 
 // ServiceContext is a collection of service independent options inherited from

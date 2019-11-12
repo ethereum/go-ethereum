@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/crypto"
 )
 
 // Genesis hashes to enforce below configs on.

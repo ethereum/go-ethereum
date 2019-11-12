@@ -25,11 +25,11 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/internal/testlog"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/maticnetwork/bor/internal/testlog"
+	"github.com/maticnetwork/bor/log"
+	"github.com/maticnetwork/bor/p2p/enode"
+	"github.com/maticnetwork/bor/p2p/enr"
+	"github.com/maticnetwork/bor/p2p/netutil"
 )
 
 func init() {
