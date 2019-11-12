@@ -136,8 +136,12 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 
 				//vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(math.MaxUint64)
-				result, _ := core.ApplyMessage(vmenv, msg, gp)
-				res = append(res, result.Return()...)
+				var gp1559 *core.GasPool
+				if config.IsEIP1559(header.Number) {
+					gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+				}
+				ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp, gp1559)
+				res = append(res, ret...)
 			}
 		} else {
 			header := lc.GetHeaderByHash(bhash)
@@ -148,7 +152,11 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			txContext := core.NewEVMTxContext(msg)
 			vmenv := vm.NewEVM(context, txContext, state, config, vm.Config{})
 			gp := new(core.GasPool).AddGas(math.MaxUint64)
-			result, _ := core.ApplyMessage(vmenv, msg, gp)
+			var gp1559 *core.GasPool
+			if config.IsEIP1559(header.Number) {
+				gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+			}
+			ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp, gp1559)
 			if state.Error() == nil {
 				res = append(res, result.Return()...)
 			}

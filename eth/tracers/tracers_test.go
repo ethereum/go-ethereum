@@ -110,6 +110,7 @@ type callContext struct {
 	Time       math.HexOrDecimal64   `json:"timestamp"`
 	GasLimit   math.HexOrDecimal64   `json:"gasLimit"`
 	Miner      common.Address        `json:"miner"`
+	BaseFee    *math.HexOrDecimal256 `json:"baseFee"`
 }
 
 // callTracerTest defines a single test to check the call tracer against.
@@ -183,8 +184,8 @@ func TestPrestateTracerCreate2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to prepare transaction for tracing: %v", err)
 	}
-	st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
-	if _, err = st.TransitionDb(); err != nil {
+	st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()), nil)
+	if _, _, _, err = st.TransitionDb(); err != nil {
 		t.Fatalf("failed to execute transaction: %v", err)
 	}
 	// Retrieve the trace result and compare against the etalon
@@ -244,6 +245,7 @@ func TestCallTracer(t *testing.T) {
 				Time:        new(big.Int).SetUint64(uint64(test.Context.Time)),
 				Difficulty:  (*big.Int)(test.Context.Difficulty),
 				GasLimit:    uint64(test.Context.GasLimit),
+				BaseFee:     (*big.Int)(test.Context.BaseFee),
 			}
 			_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 
@@ -258,7 +260,11 @@ func TestCallTracer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+			var gp1559 *core.GasPool
+			if test.Genesis.Config.IsEIP1559(context.BlockNumber) {
+				gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+			}
+			st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()), gp1559)
 			if _, err = st.TransitionDb(); err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}

@@ -87,6 +87,7 @@ type environment struct {
 	uncles    mapset.Set     // uncle set
 	tcount    int            // tx count in cycle
 	gasPool   *core.GasPool  // available gas used to pack transactions
+	gp1559    *core.GasPool  // available gas used to pack EIP1559 transactions
 
 	header   *types.Header
 	txs      []*types.Transaction
@@ -726,7 +727,7 @@ func (w *worker) updateSnapshot() {
 func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
 	snap := w.current.state.Snapshot()
 
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
+	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.gp1559, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
 		return nil, err
@@ -746,10 +747,28 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 	if w.current.gasPool == nil {
 		w.current.gasPool = new(core.GasPool).AddGas(w.current.header.GasLimit)
 	}
+	if w.chainConfig.IsEIP1559(w.current.header.Number) && w.current.gp1559 == nil {
+		w.current.gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+	}
 
 	var coalescedLogs []*types.Log
 
 	for {
+		// Retrieve the next transaction and abort if all done
+		tx := txs.Peek()
+		if tx == nil {
+			break
+		}
+		// Set which gasPool to use based on the type of transaction
+		var gp *core.GasPool
+		if tx.GasPrice() == nil && tx.GasPremium() != nil && tx.FeeCap() != nil {
+			gp = w.current.gp1559
+		} else if tx.GasPremium() == nil && tx.FeeCap() == nil && tx.GasPrice() != nil {
+			gp = w.current.gasPool
+		} else {
+			continue
+		}
+
 		// In the following three cases, we will interrupt the execution of the transaction.
 		// (1) new head block event arrival, the interrupt signal is 1
 		// (2) worker start or restart, the interrupt signal is 1
@@ -759,7 +778,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
 			// Notify resubmit loop to increase resubmitting interval due to too frequent commits.
 			if atomic.LoadInt32(interrupt) == commitInterruptResubmit {
-				ratio := float64(w.current.header.GasLimit-w.current.gasPool.Gas()) / float64(w.current.header.GasLimit)
+				ratio := float64(w.current.header.GasLimit-gp.Gas()) / float64(w.current.header.GasLimit)
 				if ratio < 0.1 {
 					ratio = 0.1
 				}
@@ -771,13 +790,8 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
 		}
 		// If we don't have enough gas for any further transactions then we're done
-		if w.current.gasPool.Gas() < params.TxGas {
-			log.Trace("Not enough gas for further transactions", "have", w.current.gasPool, "want", params.TxGas)
-			break
-		}
-		// Retrieve the next transaction and abort if all done
-		tx := txs.Peek()
-		if tx == nil {
+		if gp.Gas() < params.TxGas {
+			log.Trace("Not enough gas for further transactions", "have", gp, "want", params.TxGas)
 			break
 		}
 		// Error may be ignored here. The error has already been checked
