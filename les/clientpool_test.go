@@ -444,8 +444,8 @@ func TestNodeDB(t *testing.T) {
 	ndb := newNodeDB(rawdb.NewMemoryDatabase(), mclock.System{})
 	defer ndb.close()
 
-	if !bytes.Equal(ndb.verbuf[:], []byte{0x00, 0x00}) {
-		t.Fatalf("version buffer mismatch, want %v, got %v", []byte{0x00, 0x00}, ndb.verbuf)
+	if !bytes.Equal(ndb.verbuf[:], []byte{0x00, nodeDBVersion}) {
+		t.Fatalf("version buffer mismatch, want %v, got %v", []byte{0x00, nodeDBVersion}, ndb.verbuf)
 	}
 	var cases = []struct {
 		id       enode.ID
