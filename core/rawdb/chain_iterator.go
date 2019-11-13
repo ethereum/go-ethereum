@@ -213,7 +213,7 @@ func UnindexTransactions(db ethdb.Database, from uint64, to uint64) {
 	// will be left in the database if crash happens but it's fine.
 	WriteTxIndexTail(db, to)
 
-	// If only one block is unindexed, do it direclty
+	// If only one block is unindexed, do it directly
 	if from+1 == to {
 		DeleteTxLookupEntries(db, ReadBlock(db, ReadCanonicalHash(db, from), from))
 		log.Info("Unindexed transactions", "blocks", 1, "tail", to)
