@@ -160,6 +160,14 @@ func (bt *balanceTracker) timeUntil(priority int64) (time.Duration, bool) {
 	return time.Duration(dt), true
 }
 
+// setCapacity updates the capacity value used for priority calculation
+func (bt *balanceTracker) setCapacity(capacity uint64) {
+	bt.lock.Lock()
+	defer bt.lock.Unlock()
+
+	bt.capacity = capacity
+}
+
 // getPriority returns the actual priority based on the current balance
 func (bt *balanceTracker) getPriority(now mclock.AbsTime) int64 {
 	bt.lock.Lock()
