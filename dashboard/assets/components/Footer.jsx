@@ -32,6 +32,9 @@ import ChartRow from 'ChartRow';
 import CustomTooltip, {bytePlotter, bytePerSecPlotter, percentPlotter, multiplier} from 'CustomTooltip';
 import {chartStrokeWidth, styles as commonStyles} from '../common';
 import type {General, System} from '../types/content';
+import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
+import {faNetworkWired} from "@fortawesome/free-solid-svg-icons";
+import Toolbar from "@material-ui/core/Toolbar";
 
 const FOOTER_SYNC_ID = 'footerSyncId';
 
@@ -154,6 +157,23 @@ class Footer extends Component<Props, State> {
 
 	render() {
 		const {general, system} = this.props;
+		let network = '';
+		switch (general.genesis) {
+		case '0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3':
+			network = 'main';
+			break;
+		case '0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d':
+			network = 'ropsten';
+			break;
+		case '0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177':
+			network = 'rinkeby';
+			break;
+		case '0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a':
+			network = 'görli';
+			break;
+		default:
+			network = `unknown (${general.genesis.substring(0, 8)})`;
+		}
 
 		return (
 			<Grid container className={this.props.classes.footer} direction='row' alignItems='center' style={styles.footer}>
@@ -202,6 +222,9 @@ class Footer extends Component<Props, State> {
 							</a>
 						</Typography>
 					)}
+					<Typography style={styles.headerText}>
+						<span style={commonStyles.light}>Network</span> {network}
+					</Typography>
 				</Grid>
 			</Grid>
 		);

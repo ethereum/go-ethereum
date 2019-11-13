@@ -20,6 +20,7 @@ import React, {Component} from 'react';
 
 import withStyles from '@material-ui/core/styles/withStyles';
 
+import Chain from 'Chain';
 import Network from 'Network';
 import Logs from 'Logs';
 import Footer from 'Footer';
@@ -95,7 +96,9 @@ class Main extends Component<Props, State> {
 			children = <div>Work in progress.</div>;
 			break;
 		case MENU.get('chain').id:
-			children = <div>Work in progress.</div>;
+			children = <Chain
+				content={this.props.content.chain}
+			/>;
 			break;
 		case MENU.get('txpool').id:
 			children = <div>Work in progress.</div>;

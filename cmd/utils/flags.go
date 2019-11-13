@@ -1561,9 +1561,18 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 
 // RegisterDashboardService adds a dashboard to the stack.
 func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config, commit string) {
-	stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return dashboard.New(cfg, commit, ctx.ResolvePath("logs")), nil
+	err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		var (
+			ethServ *eth.Ethereum
+			lesServ *les.LightEthereum
+		)
+		_ = ctx.Service(&ethServ)
+		_ = ctx.Service(&lesServ)
+		return dashboard.New(cfg, ethServ, lesServ, commit, ctx.ResolvePath("logs")), nil
 	})
+	if err != nil {
+		Fatalf("Failed to register the dashboard service: %v", err)
+	}
 }
 
 // RegisterShhService configures Whisper and adds it to the given node.

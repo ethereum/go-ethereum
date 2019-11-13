@@ -779,6 +779,9 @@ running:
 				if p.Inbound() {
 					inboundCount++
 				}
+				if conn, ok := c.fd.(*meteredConn); ok {
+					conn.handshakeDone(p)
+				}
 			}
 			// The dialer logic relies on the assumption that
 			// dial tasks complete after the peer has been added or
@@ -902,9 +905,13 @@ func (srv *Server) listenLoop() {
 			continue
 		}
 		if remoteIP != nil {
-			fd = newMeteredConn(fd, true, remoteIP)
+			var addr *net.TCPAddr
+			if tcp, ok := fd.RemoteAddr().(*net.TCPAddr); ok {
+				addr = tcp
+			}
+			fd = newMeteredConn(fd, true, addr)
+			srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
 		}
-		srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
 		go func() {
 			srv.SetupConn(fd, inboundConn, nil)
 			slots <- struct{}{}
@@ -973,9 +980,6 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		c.node = dialDest
 	} else {
 		c.node = nodeFromConn(remotePubkey, c.fd)
-	}
-	if conn, ok := c.fd.(*meteredConn); ok {
-		conn.handshakeDone(c.node.ID())
 	}
 	clog := srv.log.New("id", c.node.ID(), "addr", c.fd.RemoteAddr(), "conn", c.flags)
 	err = srv.checkpoint(c, srv.checkpointPostHandshake)

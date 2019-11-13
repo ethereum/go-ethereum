@@ -25,6 +25,7 @@ import Header from 'Header';
 import Body from 'Body';
 import {inserter as logInserter, SAME} from 'Logs';
 import {inserter as peerInserter} from 'Network';
+import {inserter as chainInserter} from 'Chain';
 import {MENU} from '../common';
 import type {Content} from '../types/content';
 
@@ -83,17 +84,24 @@ const appender = <T>(limit: number, mapper = replacer) => (update: Array<T>, pre
 // the execution of unnecessary operations (e.g. copy of the log array).
 const defaultContent: () => Content = () => ({
 	general: {
-		version: null,
 		commit:  null,
+		version: null,
+		genesis: '',
 	},
-	home:    {},
-	chain:   {},
+	home:  {},
+	chain: {
+		currentBlock: {
+			number:    0,
+			timestamp: 0,
+		},
+	},
 	txpool:  {},
 	network: {
 		peers: {
 			bundles: {},
 		},
-		diff: [],
+		diff:            [],
+		activePeerCount: 0,
 	},
 	system: {
 		activeMemory:   [],
@@ -121,9 +129,10 @@ const updaters = {
 	general: {
 		version: replacer,
 		commit:  replacer,
+		genesis: replacer,
 	},
 	home:    null,
-	chain:   null,
+	chain:   chainInserter(),
 	txpool:  null,
 	network: peerInserter(200),
 	system:  {
@@ -241,6 +250,7 @@ class Dashboard extends Component<Props, State> {
 			<div className={this.props.classes.dashboard} style={styles.dashboard}>
 				<Header
 					switchSideBar={this.switchSideBar}
+					content={this.state.content}
 				/>
 				<Body
 					opened={this.state.sideBar}

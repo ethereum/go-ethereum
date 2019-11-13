@@ -47,10 +47,11 @@ const themeStyles = theme => ({
 		background: theme.palette.grey[900],
 	},
 	listItem: {
-		minWidth: theme.spacing.unit * 7,
+		minWidth: theme.spacing(7),
+		color:    theme.palette.common.white,
 	},
 	icon: {
-		fontSize: theme.spacing.unit * 3,
+		fontSize: theme.spacing(3),
 		overflow: 'unset',
 	},
 });

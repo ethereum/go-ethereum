@@ -35,6 +35,7 @@ export type ChartEntry = {
 export type General = {
 	version: ?string,
 	commit:  ?string,
+	genesis: ?string,
 };
 
 export type Home = {
@@ -42,21 +43,29 @@ export type Home = {
 };
 
 export type Chain = {
-	/* TODO (kurkomisi) */
+	currentBlock: Block,
 };
+
+export type Block = {
+	number:    number,
+	timestamp: number,
+}
 
 export type TxPool = {
 	/* TODO (kurkomisi) */
 };
 
 export type Network = {
-	peers: Peers,
-	diff:  Array<PeerEvent>
+	peers:           Peers,
+	diff:            Array<PeerEvent>,
+	activePeerCount: number,
 };
 
 export type PeerEvent = {
-	ip:           string,
-	id:           string,
+	name:         string,
+	addr:         string,
+	enode:        string,
+	protocols:    {[string]: Object},
 	remove:       string,
 	location:     GeoLocation,
 	connected:    Date,
@@ -71,9 +80,9 @@ export type Peers = {
 };
 
 export type PeerBundle = {
-	location:     GeoLocation,
-	knownPeers:   {[string]: KnownPeer},
-	attempts: Array<UnknownPeer>,
+	location:   GeoLocation,
+	knownPeers: {[string]: KnownPeer},
+	attempts:   number,
 };
 
 export type KnownPeer = {
@@ -81,12 +90,10 @@ export type KnownPeer = {
 	disconnected: Array<Date>,
 	ingress:      Array<ChartEntries>,
 	egress:       Array<ChartEntries>,
+	name:         string,
+	enode:        string,
+	protocols:    {[string]: Object},
 	active:       boolean,
-};
-
-export type UnknownPeer = {
-	connected:    Date,
-	disconnected: Date,
 };
 
 export type GeoLocation = {
