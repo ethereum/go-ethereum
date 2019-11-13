@@ -74,10 +74,9 @@ func (r *resultStore) SetThrottleThreshold(threshold uint64) {
 // fetchResult -- the result to store data into
 // err         -- any error that occurred
 func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (bool, bool, *fetchResult, error) {
-	header.Hash()
 	r.lock.RLock()
 	var index int
-	item, index, stale, throttled, err := r.getFetchResult(header)
+	item, index, stale, throttled, err := r.getFetchResult(header.Number.Uint64())
 	if err != nil || stale || throttled {
 		r.lock.RUnlock()
 		// Index is above the current threshold of 'prioritized' blocks,
@@ -99,7 +98,7 @@ func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (bool, bool,
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	// Same checks as above, now with wlock
-	item, index, stale, throttled, err = r.getFetchResult(header)
+	item, index, stale, throttled, err = r.getFetchResult(header.Number.Uint64())
 	if err != nil || stale || throttled {
 		return stale, throttled, item, err
 	}
@@ -114,25 +113,25 @@ func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (bool, bool,
 // is true, that means the header has already been delivered 'upstream'.
 // This method does not bubble up the 'throttle' flag, since it's moot at the
 // point in time when the item is downloaded and ready for delivery
-func (r *resultStore) GetDeliverySlot(header *types.Header) (*fetchResult, bool, error) {
+func (r *resultStore) GetDeliverySlot(headerNumber uint64) (*fetchResult, bool, error) {
 	r.lock.RLock()
 	defer r.lock.RUnlock()
-	res, _, stale, _, err := r.getFetchResult(header)
+	res, _, stale, _, err := r.getFetchResult(headerNumber)
 	return res, stale, err
 }
 
 // getFetchResult returns the fetchResult corresponding to the given item, and the index where
 // the result is stored.
-func (r *resultStore) getFetchResult(header *types.Header) (item *fetchResult, index int, stale, throttle bool, err error) {
+func (r *resultStore) getFetchResult(headerNumber uint64) (item *fetchResult, index int, stale, throttle bool, err error) {
 
-	index = int(header.Number.Int64() - int64(r.resultOffset))
+	index = int(int64(headerNumber) - int64(r.resultOffset))
 	throttle = index >= int(r.throttleThreshold)
 	stale = index < 0
 
 	if index >= len(r.items) {
 		err = fmt.Errorf("index allocation went beyond available resultStore space "+
 			"(index [%d] = header [%d] - resultOffset [%d], len(resultStore) = %d",
-			index, header.Number.Int64(), r.resultOffset, len(r.items))
+			index, headerNumber, r.resultOffset, len(r.items))
 		return
 	}
 	if stale {

@@ -60,8 +60,7 @@ type fetchRequest struct {
 // fetchResult is a struct collecting partial results from data fetchers until
 // all outstanding pieces complete and the result as a whole can be processed.
 type fetchResult struct {
-	pending int32       // Flag telling what deliveries are outstanding
-	Hash    common.Hash // Hash of the header to prevent recalculating
+	pending int32 // Flag telling what deliveries are outstanding
 
 	Header       *types.Header
 	Uncles       []*types.Header
@@ -71,7 +70,6 @@ type fetchResult struct {
 
 func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
 	item := &fetchResult{
-		Hash:   header.Hash(),
 		Header: header,
 	}
 	if !header.EmptyBody() {
@@ -511,13 +509,12 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		// we can ask the resultcache if this header is within the
 		// "prioritized" segment of blocks. If it is not, we need to throttle
 
-		hash := header.Hash()
 		stale, throttle, item, err := q.resultCache.AddFetch(header, q.mode == FastSync)
 		if stale {
 			// Don't put back in the task queue, this item has already been
 			// delivered upstream
 			progress = true
-			delete(taskPool, hash)
+			delete(taskPool, header.Hash())
 			proc = proc - 1
 			continue
 		}
@@ -539,13 +536,13 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		}
 		if item.Done(typ) {
 			// If it's a noop, we can skip this task
-			delete(taskPool, hash)
+			delete(taskPool, header.Hash())
 			proc = proc - 1
 			progress = true
 			continue
 		}
 		// Otherwise unless the peer is known not to have the data, add to the retrieve list
-		if p.Lacks(hash) {
+		if p.Lacks(header.Hash()) {
 			skip = append(skip, header)
 		} else {
 			send = append(send, header)
@@ -854,24 +851,25 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	var (
 		failure error
 		i       int
+		hashes  []common.Hash
 	)
 	for _, header := range request.Headers {
 		// Short circuit assembly if no more fetch results are found
 		if i >= results {
 			break
 		}
-		header.Hash()
 		// Validate the fields
 		if err := validate(i, header); err != nil {
 			failure = err
 			break
 		}
+		hashes = append(hashes, header.Hash())
 		i++
 	}
 	q.lock.Lock()
 	var acceptCount = 0
 	for _, header := range request.Headers[:i] {
-		if res, stale, err := q.resultCache.GetDeliverySlot(header); err == nil {
+		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil {
 			reconstruct(acceptCount, res)
 		} else {
 			// else: betweeen here and above, some other peer filled this result,
@@ -880,8 +878,8 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 			log.Info("delivery stale?", "err", err, "stale", stale)
 			failure = errStaleDelivery
 		}
-		delete(taskPool, header.Hash())
 		// Clean up a successful fetch
+		delete(taskPool, hashes[acceptCount])
 		request.Headers[acceptCount] = nil
 		acceptCount++
 	}
