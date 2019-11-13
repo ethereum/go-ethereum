@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -38,15 +37,10 @@ var (
 
 const maxBalance = math.MaxInt64
 
-type clientApiFields struct {
-	balanceUpdatePeriod uint64
-}
-
 // PrivateLightServerAPI provides an API to access the LES light server.
 type PrivateLightServerAPI struct {
 	server                               *LesServer
 	defaultPosFactors, defaultNegFactors priceFactors
-	lock                                 sync.Mutex
 }
 
 // NewPrivateLightServerAPI creates a new LES light server API.
@@ -157,7 +151,8 @@ func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, clien
 		case !defParams && name == "capacity":
 			if capacity, ok := value.(float64); ok && uint64(capacity) >= api.server.minCapacity {
 				err = api.server.clientPool.setCapacity(client, uint64(capacity))
-				updateFactors = true
+				// Don't have to call factor update explicitly. It's already done
+				// in setCapacity function.
 			} else {
 				err = errValue()
 			}

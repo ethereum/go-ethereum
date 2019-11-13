@@ -122,7 +122,6 @@ type clientInfo struct {
 	balanceTracker         balanceTracker
 	posFactors, negFactors priceFactors
 	balanceMetaInfo        string
-	clientApiFields
 }
 
 // connSetIndex callback updates clientInfo item index in connectedQueue
@@ -645,7 +644,10 @@ func (e *negBalance) DecodeRLP(s *rlp.Stream) error {
 
 const (
 	// nodeDBVersion is the version identifier of the node data in db
-	nodeDBVersion = 0
+	//
+	// Changelog:
+	// * Replace `lastTotal` with `meta` in positive balance: version 0=>1
+	nodeDBVersion = 1
 
 	// dbCleanupCycle is the cycle of db for useless data cleanup
 	dbCleanupCycle = time.Hour
