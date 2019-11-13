@@ -70,16 +70,22 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 
 		// Extract the call and transact methods; events, struct definitions; and sort them alphabetically
 		var (
-			calls     = make(map[string]*tmplMethod)
-			transacts = make(map[string]*tmplMethod)
-			events    = make(map[string]*tmplEvent)
-			structs   = make(map[string]*tmplStruct)
+			calls       = make(map[string]*tmplMethod)
+			transacts   = make(map[string]*tmplMethod)
+			events      = make(map[string]*tmplEvent)
+			structs     = make(map[string]*tmplStruct)
+			identifiers = make(map[string]bool)
 		)
 		for _, original := range evmABI.Methods {
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
 			normalized := original
-			normalized.Name = methodNormalizer[lang](alias(aliases, original.Name))
-
+			// Ensure there is no duplicated identifier
+			identifier := methodNormalizer[lang](alias(aliases, original.Name))
+			if identifiers[identifier] {
+				return "", fmt.Errorf("dupliated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, identifier)
+			}
+			identifiers[identifier] = true
+			normalized.Name = identifier
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)
 			for j, input := range normalized.Inputs {
@@ -114,7 +120,14 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			}
 			// Normalize the event for capital cases and non-anonymous outputs
 			normalized := original
-			normalized.Name = methodNormalizer[lang](alias(aliases, original.Name))
+
+			// Ensure there is no duplicated identifier
+			identifier := methodNormalizer[lang](alias(aliases, original.Name))
+			if identifiers[identifier] {
+				return "", fmt.Errorf("dupliated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, identifier)
+			}
+			identifiers[identifier] = true
+			normalized.Name = identifier
 
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)
