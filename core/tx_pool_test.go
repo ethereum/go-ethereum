@@ -771,8 +771,11 @@ func TestAllowedTxSize(t *testing.T) {
 	pool, key := setupTxPool()
 	defer pool.Stop()
 
+	// Increase block gas limit to something very big
+	pool.currentMaxGas = 2 << 30
+
 	account, _ := deriveSender(transaction(0, 0, key))
-	pool.currentState.AddBalance(account, big.NewInt(1024*int64(pool.currentMaxGas)))
+	pool.currentState.AddBalance(account, big.NewInt(int64(pool.currentMaxGas)<<30))
 
 	// Compute maximal data size for transactions (lower bound).
 	// It is assumed the fields in the transaction (except of the data) are:
@@ -786,26 +789,27 @@ func TestAllowedTxSize(t *testing.T) {
 	txSizeWithoutData := uint64(213)
 	maxDataSize := pool.maxTxSize - txSizeWithoutData
 
-	// Increase block gas limit to infinity
-	pool.currentMaxGas = 2 << 60
+	// Provide a legitimate gas price
+	gasPrice := big.NewInt(1)
 
 	// Try adding a transaction with maximal allowed size
-	if err := pool.validateTx(pricedDataTransaction(0, pool.currentMaxGas, big.NewInt(0), key, maxDataSize), true); err != nil {
-		t.Fatalf("failed to add transaction of size close to maximal: %d, %v", int(pricedDataTransaction(0, pool.currentMaxGas, big.NewInt(1), key, maxDataSize).Size()), err)
+	currTx := pricedDataTransaction(0, pool.currentMaxGas, gasPrice, key, maxDataSize)
+	if err := pool.addRemoteSync(currTx); err != nil {
+		t.Fatalf("failed to add transaction of size close to maximal: %d, %v", int(currTx.Size()), err)
 	}
 
 	// Try adding a transaction with random allowed size
-	if err := pool.validateTx(pricedDataTransaction(0, pool.currentMaxGas, big.NewInt(0), key, uint64(rand.Intn(int(maxDataSize)))), true); err != nil {
+	if err := pool.addRemoteSync(pricedDataTransaction(1, pool.currentMaxGas, gasPrice, key, uint64(rand.Intn(int(maxDataSize))))); err != nil {
 		t.Fatalf("failed to add transaction of random allowed size: %v", err)
 	}
 
 	// Try adding a transaction of minimal not allowed size
-	if pool.validateTx(pricedDataTransaction(0, pool.currentMaxGas, big.NewInt(0), key, pool.maxTxSize), true) == nil {
+	if pool.addRemoteSync(pricedDataTransaction(2, pool.currentMaxGas, gasPrice, key, pool.maxTxSize)) == nil {
 		t.Fatalf("expected rejection on slightly oversize transaction")
 	}
 
 	// Try adding a transaction of random not allowed size
-	if pool.validateTx(pricedDataTransaction(0, pool.currentMaxGas, big.NewInt(1), key, maxDataSize+1+uint64(rand.Intn(int(10*pool.maxTxSize)))), true) == nil {
+	if pool.addRemoteSync(pricedDataTransaction(3, pool.currentMaxGas, gasPrice, key, maxDataSize+1+uint64(rand.Intn(int(10*pool.maxTxSize))))) == nil {
 		t.Fatalf("expected rejection on oversize transaction")
 	}
 }
