@@ -100,7 +100,7 @@ func iterateCanonicalChain(db ethdb.Database, from uint64, to uint64, prepare pr
 
 		batch  = db.NewBatch()
 		start  = time.Now()
-		logged time.Time
+		logged = start.Add(-7 * time.Second) // Unindex during import is fast, don't double log
 	)
 	if !reverse {
 		next, first, last = int64(from), int64(from), int64(to)
@@ -144,12 +144,16 @@ func iterateCanonicalChain(db ethdb.Database, from uint64, to uint64, prepare pr
 			}
 			// If we've spent too much time already, notify the user of what we're doing
 			if time.Since(logged) > 8*time.Second {
-				log.Info(progMsg, "blocks", int64(math.Abs(float64(next-first))), "total", to-from, "number", block.Number(), "hash", block.Hash(), "elapsed", common.PrettyDuration(time.Since(start)))
+				log.Info(progMsg, "blocks", int64(math.Abs(float64(next-first))), "total", to-from, "tail", block.Number(), "hash", block.Hash(), "elapsed", common.PrettyDuration(time.Since(start)))
 				logged = time.Now()
 			}
 		}
 	}
-	log.Info(doneMsg, "blocks", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
+	tail := to
+	if reverse {
+		tail = from
+	}
+	log.Info(doneMsg, "blocks", to-from, "tail", tail, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
@@ -212,6 +216,7 @@ func UnindexTransactions(db ethdb.Database, from uint64, to uint64) {
 	// If only one block is unindexed, do it direclty
 	if from+1 == to {
 		DeleteTxLookupEntries(db, ReadBlock(db, ReadCanonicalHash(db, from), from))
+		log.Info("Unindexed transactions", "blocks", 1, "tail", to)
 		return
 	}
 	// Otherwise spin up the concurrent iterator and unindexer
