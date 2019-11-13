@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -240,24 +241,16 @@ func abigen(c *cli.Context) error {
 	}
 	// Extract all aliases from the flags
 	if c.GlobalIsSet(aliasFlag.Name) {
-		v := strings.Split(c.GlobalString(aliasFlag.Name), ",")
-		for _, alias := range v {
-			// We support multi-versions for aliasing
-			// e.g.
-			//      foo=bar
-			//      foo:bar
-			index := strings.Index(alias, ":")
-			if index == -1 {
-				index = strings.Index(alias, "=")
-			}
-			// Filter out invalid aliasing
-			if index == -1 || index == 0 || index == len(alias)-1 {
-				continue
-			}
-			aliases[alias[:index]] = alias[index+1:] // Add to the aliasing map
+		// We support multi-versions for aliasing
+		// e.g.
+		//      foo=bar,foo2=bar2
+		//      foo:bar,foo2:bar2
+		re := regexp.MustCompile(`(?:(\w+)[:=](\w+))`)
+		submatches := re.FindAllStringSubmatch(c.GlobalString(aliasFlag.Name), -1)
+		for _, match := range submatches {
+			aliases[match[1]] = match[2]
 		}
 	}
-
 	// Generate the contract binding
 	code, err := bind.Bind(types, abis, bins, sigs, c.GlobalString(pkgFlag.Name), lang, libs, aliases)
 	if err != nil {
