@@ -232,12 +232,8 @@ func init() {
 	app.Flags = append(app.Flags, metricsFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
-		if err := debug.Setup(ctx, ""); err != nil {
-			return err
-		}
-		return nil
+		return debug.Setup(ctx, "")
 	}
-
 	app.After = func(ctx *cli.Context) error {
 		debug.Exit()
 		console.Stdin.Close() // Resets terminal mode.
