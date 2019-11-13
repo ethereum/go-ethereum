@@ -588,8 +588,10 @@ func (d *Downloader) Terminate() {
 	default:
 		close(d.quitCh)
 	}
+	if d.stateBloom != nil {
+		d.stateBloom.Close()
+	}
 	d.quitLock.Unlock()
-
 	// Cancel any pending download requests
 	d.Cancel()
 }
@@ -980,7 +982,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from, pivot, advertisedHead
 				}
 			}
 			headers := packet.(*headerPack).headers
-
+			ignoredHeaders := 0
 			// If we received a skeleton batch, resolve internals concurrently
 			if skeleton {
 				filled, proced, err := d.fillHeaderSkeleton(from, headers)
@@ -1018,6 +1020,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from, pivot, advertisedHead
 							delay = n
 						}
 						headers = headers[:n-delay]
+						ignoredHeaders = delay
 					}
 				}
 			}
@@ -1032,7 +1035,8 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from, pivot, advertisedHead
 				from += uint64(len(headers))
 				getHeaders(from)
 			} else {
-				if !skeleton && from < advertisedHead-uint64(reorgProtHeaderDelay) {
+				// No headers delivered
+				if !skeleton && ignoredHeaders == 0 && from < advertisedHead {
 					// This peer told is about a high number, but is not
 					// delivering
 					p.log.Trace("peer did not deliver", "requested", from, "head", advertisedHead)
@@ -1198,7 +1202,6 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 	// Create a ticker to detect expired retrieval tasks
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
-
 	update := make(chan struct{}, 1)
 
 	// Prepare the queue and fetch block parts until the block header fetcher's done

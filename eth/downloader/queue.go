@@ -352,12 +352,27 @@ func (q *queue) Results(block bool) []*fetchResult {
 		return nil
 	}
 	results := q.resultCache.GetCompleted(maxResultsProcess)
-	for len(results) == 0 && !q.closed {
-		if !block {
-			return nil
-		}
+	if len(results) == 0 && !block {
+		return nil
+	}
+	closed := false
+	for !closed && len(results) == 0 {
+		// In order to wait on 'active', we need to obtain the lock.
+		// That may take a while, if someone is delivering at the same
+		// time, so after obtaining the lock, we check again if there
+		// are any results to fetch.
+		// Also, in-between we ask for the lock and the lock is obtained,
+		// someone can have closed the queue. In that case, we should
+		// return the available results and stop blocking
 		q.lock.Lock()
+		closed = q.closed
+		results = q.resultCache.GetCompleted(maxResultsProcess)
+		if closed || len(results) > 0 {
+			q.lock.Unlock()
+			break
+		}
 		q.active.Wait()
+		closed = q.closed
 		q.lock.Unlock()
 		results = q.resultCache.GetCompleted(maxResultsProcess)
 	}
@@ -880,7 +895,7 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 
 	// Wake up Results
 	if acceptCount > 0 {
-		q.active.Signal()
+		q.active.Broadcast()
 	}
 	// If none of the data was good, it's a stale delivery
 	switch {
