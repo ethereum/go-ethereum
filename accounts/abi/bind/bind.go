@@ -79,25 +79,23 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			// and event. For all calls, transacts and events, abigen will generate
 			// corresponding bindings. However we have to ensure there is no
 			// identifier coliision in the bindings of these categories.
-			//
-			// The key of identifiers map is the concat of function name and function type.
-			identifiers = make(map[string]bool)
+			callIdentifiers     = make(map[string]bool)
+			transactIdentifiers = make(map[string]bool)
+			eventIdentifiers    = make(map[string]bool)
 		)
 		for _, original := range evmABI.Methods {
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
 			normalized := original
-			// Ensure there is no duplicated identifier
 			normalizedName := methodNormalizer[lang](alias(aliases, original.Name))
-			id := normalizedName
-			if original.Const {
-				id += "call"
-			} else {
-				id += "transact"
+			// Ensure there is no duplicated identifier
+			var identifiers = callIdentifiers
+			if !original.Const {
+				identifiers = transactIdentifiers
 			}
-			if identifiers[id] {
+			if identifiers[normalizedName] {
 				return "", fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
 			}
-			identifiers[id] = true
+			identifiers[normalizedName] = true
 			normalized.Name = normalizedName
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)
@@ -136,11 +134,10 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 
 			// Ensure there is no duplicated identifier
 			normalizedName := methodNormalizer[lang](alias(aliases, original.Name))
-			id := normalizedName + "event"
-			if identifiers[id] {
+			if eventIdentifiers[normalizedName] {
 				return "", fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
 			}
-			identifiers[id] = true
+			eventIdentifiers[normalizedName] = true
 			normalized.Name = normalizedName
 
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
