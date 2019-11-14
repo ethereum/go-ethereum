@@ -159,7 +159,6 @@ func (lc *LightChain) loadLastState() error {
 			lc.hc.SetCurrentHeader(header)
 		}
 	}
-
 	// Issue a status log and return
 	header := lc.hc.CurrentHeader()
 	headerTd := lc.GetTd(header.Hash(), header.Number.Uint64())
@@ -198,12 +197,17 @@ func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 	defer lc.chainmu.Unlock()
 
 	// Prepare the genesis block and reinitialise the chain
-	rawdb.WriteTd(lc.chainDb, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
-	rawdb.WriteBlock(lc.chainDb, genesis)
+	batch := lc.chainDb.NewBatch()
+	rawdb.WriteTd(batch, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
+	rawdb.WriteBlock(batch, genesis)
 
 	lc.genesisBlock = genesis
 	lc.hc.SetGenesis(lc.genesisBlock.Header())
-	lc.hc.SetCurrentHeader(lc.genesisBlock.Header())
+	lc.hc.WriteHeadHeader(batch, lc.genesisBlock.Header())
+
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to reset genesis block", "err", err)
+	}
 }
 
 // Accessors
@@ -327,7 +331,7 @@ func (lc *LightChain) Rollback(chain []common.Hash) {
 		hash := chain[i]
 
 		if head := lc.hc.CurrentHeader(); head.Hash() == hash {
-			lc.hc.SetCurrentHeader(lc.GetHeader(head.ParentHash, head.Number.Uint64()-1))
+			lc.hc.WriteHeadHeader(lc.chainDb, lc.GetHeader(head.ParentHash, head.Number.Uint64()-1))
 		}
 	}
 }
@@ -493,7 +497,7 @@ func (lc *LightChain) SyncCheckpoint(ctx context.Context, checkpoint *params.Tru
 		// Ensure the chain didn't move past the latest block while retrieving it
 		if lc.hc.CurrentHeader().Number.Uint64() < header.Number.Uint64() {
 			log.Info("Updated latest header based on CHT", "number", header.Number, "hash", header.Hash(), "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
-			lc.hc.SetCurrentHeader(header)
+			lc.hc.WriteHeadHeader(lc.chainDb, header)
 		}
 		return true
 	}
