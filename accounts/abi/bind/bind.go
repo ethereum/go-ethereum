@@ -47,7 +47,7 @@ const (
 // to be used as is in client code, but rather as an intermediate struct which
 // enforces compile time type safety and naming convention opposed to having to
 // manually maintain hard coded strings that break on runtime.
-func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, lang Lang, libs map[string]string) (string, error) {
+func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, lang Lang, libs map[string]string, aliases map[string]string) (string, error) {
 	// Process each individual contract requested binding
 	contracts := make(map[string]*tmplContract)
 
@@ -74,12 +74,29 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			transacts = make(map[string]*tmplMethod)
 			events    = make(map[string]*tmplEvent)
 			structs   = make(map[string]*tmplStruct)
+
+			// identifiers are used to detect duplicated identifier of function
+			// and event. For all calls, transacts and events, abigen will generate
+			// corresponding bindings. However we have to ensure there is no
+			// identifier coliision in the bindings of these categories.
+			callIdentifiers     = make(map[string]bool)
+			transactIdentifiers = make(map[string]bool)
+			eventIdentifiers    = make(map[string]bool)
 		)
 		for _, original := range evmABI.Methods {
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
 			normalized := original
-			normalized.Name = methodNormalizer[lang](original.Name)
-
+			normalizedName := methodNormalizer[lang](alias(aliases, original.Name))
+			// Ensure there is no duplicated identifier
+			var identifiers = callIdentifiers
+			if !original.Const {
+				identifiers = transactIdentifiers
+			}
+			if identifiers[normalizedName] {
+				return "", fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
+			}
+			identifiers[normalizedName] = true
+			normalized.Name = normalizedName
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)
 			for j, input := range normalized.Inputs {
@@ -114,7 +131,14 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			}
 			// Normalize the event for capital cases and non-anonymous outputs
 			normalized := original
-			normalized.Name = methodNormalizer[lang](original.Name)
+
+			// Ensure there is no duplicated identifier
+			normalizedName := methodNormalizer[lang](alias(aliases, original.Name))
+			if eventIdentifiers[normalizedName] {
+				return "", fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
+			}
+			eventIdentifiers[normalizedName] = true
+			normalized.Name = normalizedName
 
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)
@@ -481,6 +505,15 @@ func namedTypeJava(javaKind string, solKind abi.Type) string {
 			return javaKind
 		}
 	}
+}
+
+// alias returns an alias of the given string based on the aliasing rules
+// or returns itself if no rule is matched.
+func alias(aliases map[string]string, n string) string {
+	if alias, exist := aliases[n]; exist {
+		return alias
+	}
+	return n
 }
 
 // methodNormalizer is a name transformer that modifies Solidity method names to

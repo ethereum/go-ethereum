@@ -38,6 +38,7 @@ var bindTests = []struct {
 	tester   string
 	fsigs    []map[string]string
 	libs     map[string]string
+	aliases  map[string]string
 	types    []string
 }{
 	// Test that the binding is available in combined and separate forms too
@@ -61,6 +62,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Test that all the official sample contracts bind correctly
 	{
@@ -74,6 +76,7 @@ var bindTests = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -92,6 +95,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	{
 		`DAO`,
@@ -104,6 +108,7 @@ var bindTests = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -143,6 +148,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Test that named and anonymous outputs are handled correctly
 	{
@@ -179,6 +185,7 @@ var bindTests = []struct {
 
 			 fmt.Println(str1, str2, res.Str1, res.Str2, err)
 		 }`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -250,6 +257,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Test that contract interactions (deploy, transact and call) generate working code
 	{
@@ -311,6 +319,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Tests that plain values can be properly returned and deserialized
 	{
@@ -356,6 +365,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Tests that tuples can be properly returned and deserialized
 	{
@@ -398,6 +408,7 @@ var bindTests = []struct {
 				t.Fatalf("Retrieved value mismatch: have %v/%v, want %v/%v", res.A, res.B, "Hi", 1)
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -458,6 +469,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Tests that anonymous default methods can be correctly invoked
 	{
@@ -508,6 +520,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Tests that non-existent contracts are reported as such (though only simulator test)
 	{
@@ -544,6 +557,7 @@ var bindTests = []struct {
 				t.Fatalf("Error mismatch: have %v, want %v", err, bind.ErrNoCode)
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -602,6 +616,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Test that constant functions can be called from an (optional) specified address
 	{
@@ -652,6 +667,7 @@ var bindTests = []struct {
 				}
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -731,6 +747,7 @@ var bindTests = []struct {
 
 			fmt.Println(a, b, err)
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -955,6 +972,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	{
 		`DeeplyNestedArray`,
@@ -1035,6 +1053,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	{
 		`CallbackParam`,
@@ -1074,6 +1093,7 @@ var bindTests = []struct {
 				"test(function)": "d7a5aba2",
 			},
 		},
+		nil,
 		nil,
 		nil,
 	}, {
@@ -1219,6 +1239,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	{
 		`UseLibrary`,
@@ -1287,6 +1308,7 @@ var bindTests = []struct {
 		map[string]string{
 			"b98c933f0a6ececcd167bd4f9d3299b1a0": "Math",
 		},
+		nil,
 		[]string{"UseLibrary", "Math"},
 	}, {
 		"Overload",
@@ -1381,6 +1403,50 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
+	},
+	{
+		"IdentifierCollision",
+		`
+		pragma solidity >=0.4.19 <0.6.0;
+
+		contract IdentifierCollision {
+			uint public _myVar;
+
+			function MyVar() public view returns (uint) {
+				return _myVar;
+			}
+		}
+		`,
+		[]string{"60806040523480156100115760006000fd5b50610017565b60c3806100256000396000f3fe608060405234801560105760006000fd5b506004361060365760003560e01c806301ad4d8714603c5780634ef1f0ad146058576036565b60006000fd5b60426074565b6040518082815260200191505060405180910390f35b605e607d565b6040518082815260200191505060405180910390f35b60006000505481565b60006000600050549050608b565b9056fea265627a7a7231582067c8d84688b01c4754ba40a2a871cede94ea1f28b5981593ab2a45b46ac43af664736f6c634300050c0032"},
+		[]string{`[{"constant":true,"inputs":[],"name":"MyVar","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"_myVar","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"}]`},
+		`
+		"math/big"
+
+		"github.com/ethereum/go-ethereum/accounts/abi/bind"
+		"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+		"github.com/ethereum/go-ethereum/crypto"
+		"github.com/ethereum/go-ethereum/core"
+		`,
+		`
+		// Initialize test accounts
+		key, _ := crypto.GenerateKey()
+		addr := crypto.PubkeyToAddress(key.PublicKey)
+
+		// Deploy registrar contract
+		sim := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
+		defer sim.Close()
+
+		transactOpts := bind.NewKeyedTransactor(key)
+		_, _, _, err := DeployIdentifierCollision(transactOpts, sim)
+		if err != nil {
+			t.Fatalf("failed to deploy contract: %v", err)
+		}
+		`,
+		nil,
+		nil,
+		map[string]string{"_myVar": "pubVar"}, // alias MyVar to PubVar
+		nil,
 	},
 }
 
@@ -1412,7 +1478,7 @@ func TestGolangBindings(t *testing.T) {
 			types = []string{tt.name}
 		}
 		// Generate the binding and create a Go source file in the workspace
-		bind, err := Bind(types, tt.abi, tt.bytecode, tt.fsigs, "bindtest", LangGo, tt.libs)
+		bind, err := Bind(types, tt.abi, tt.bytecode, tt.fsigs, "bindtest", LangGo, tt.libs, tt.aliases)
 		if err != nil {
 			t.Fatalf("test %d: failed to generate binding: %v", i, err)
 		}
@@ -1835,7 +1901,7 @@ public class Test {
 		},
 	}
 	for i, c := range cases {
-		binding, err := Bind([]string{c.name}, []string{c.abi}, []string{c.bytecode}, nil, "bindtest", LangJava, nil)
+		binding, err := Bind([]string{c.name}, []string{c.abi}, []string{c.bytecode}, nil, "bindtest", LangJava, nil, nil)
 		if err != nil {
 			t.Fatalf("test %d: failed to generate binding: %v", i, err)
 		}
