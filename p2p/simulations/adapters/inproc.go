@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/gorilla/websocket"
 )
 
 // SimAdapter is a NodeAdapter which creates in-memory simulation nodes and
@@ -210,13 +211,14 @@ func (sn *SimNode) Client() (*rpc.Client, error) {
 }
 
 // ServeRPC serves RPC requests over the given connection by creating an
-// in-memory client to the node's RPC server
-func (sn *SimNode) ServeRPC(conn net.Conn) error {
+// in-memory client to the node's RPC server.
+func (sn *SimNode) ServeRPC(conn *websocket.Conn) error {
 	handler, err := sn.node.RPCHandler()
 	if err != nil {
 		return err
 	}
-	handler.ServeCodec(rpc.NewJSONCodec(conn), rpc.OptionMethodInvocation|rpc.OptionSubscriptions)
+	codec := rpc.NewFuncCodec(conn, conn.WriteJSON, conn.ReadJSON)
+	handler.ServeCodec(codec, 0)
 	return nil
 }
 
