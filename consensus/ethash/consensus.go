@@ -628,10 +628,10 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		r.Sub(r, header.Number)
 		r.Mul(r, blockReward)
 		r.Div(r, big8)
-		state.AddBalance(uncle.Coinbase, r)
+		// state.AddBalance(uncle.Coinbase, r) // inflationary rewards removed by LydianElectrum
 
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)
 	}
-	state.AddBalance(header.Coinbase, reward)
+	// state.AddBalance(header.Coinbase, reward) // inflationary rewards removed by LydianElectrum
 }
