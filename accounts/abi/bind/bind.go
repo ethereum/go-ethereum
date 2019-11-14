@@ -70,22 +70,35 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 
 		// Extract the call and transact methods; events, struct definitions; and sort them alphabetically
 		var (
-			calls       = make(map[string]*tmplMethod)
-			transacts   = make(map[string]*tmplMethod)
-			events      = make(map[string]*tmplEvent)
-			structs     = make(map[string]*tmplStruct)
+			calls     = make(map[string]*tmplMethod)
+			transacts = make(map[string]*tmplMethod)
+			events    = make(map[string]*tmplEvent)
+			structs   = make(map[string]*tmplStruct)
+
+			// identifiers are used to detect duplicated identifier of function
+			// and event. For all calls, transacts and events, abigen will generate
+			// corresponding bindings. However we have to ensure there is no
+			// identifier coliision in the bindings of these categories.
+			//
+			// The key of identifiers map is the concat of function name and function type.
 			identifiers = make(map[string]bool)
 		)
 		for _, original := range evmABI.Methods {
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
 			normalized := original
 			// Ensure there is no duplicated identifier
-			identifier := methodNormalizer[lang](alias(aliases, original.Name))
-			if identifiers[identifier] {
-				return "", fmt.Errorf("dupliated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, identifier)
+			normalizedName := methodNormalizer[lang](alias(aliases, original.Name))
+			id := normalizedName
+			if original.Const {
+				id += "call"
+			} else {
+				id += "transact"
 			}
-			identifiers[identifier] = true
-			normalized.Name = identifier
+			if identifiers[id] {
+				return "", fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
+			}
+			identifiers[id] = true
+			normalized.Name = normalizedName
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)
 			for j, input := range normalized.Inputs {
@@ -122,12 +135,13 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			normalized := original
 
 			// Ensure there is no duplicated identifier
-			identifier := methodNormalizer[lang](alias(aliases, original.Name))
-			if identifiers[identifier] {
-				return "", fmt.Errorf("dupliated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, identifier)
+			normalizedName := methodNormalizer[lang](alias(aliases, original.Name))
+			id := normalizedName + "event"
+			if identifiers[id] {
+				return "", fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
 			}
-			identifiers[identifier] = true
-			normalized.Name = identifier
+			identifiers[id] = true
+			normalized.Name = normalizedName
 
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)
