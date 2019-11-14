@@ -119,6 +119,16 @@ type (
 		Nodes []rpcNode
 	}
 
+	talkRequest struct {
+		TalkID  []byte
+		Payload rlp.RawValue
+	}
+
+	talkResponse struct {
+		ReplyTok []byte
+		Payload  rlp.RawValue
+	}
+
 	rpcNode struct {
 		IP  net.IP // len 4 for IPv4 or 16 for IPv6
 		UDP uint16 // for discovery protocol
@@ -420,6 +430,10 @@ func decodePacket(buffer []byte, pkt *ingressPacket) error {
 		pkt.data = new(topicQuery)
 	case topicNodesPacket:
 		pkt.data = new(topicNodes)
+	case talkRequestPacket:
+		pkt.data = new(talkRequest)
+	case talkResponsePacket:
+		pkt.data = new(talkResponse)
 	default:
 		return fmt.Errorf("unknown packet type: %d", sigdata[0])
 	}

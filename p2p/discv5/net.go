@@ -22,12 +22,14 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
@@ -70,6 +72,11 @@ type Network struct {
 	topicRegisterReq chan topicRegisterReq
 	topicSearchReq   chan topicSearchReq
 
+	talkRequestSubLock  sync.RWMutex
+	talkResponseSubLock sync.Mutex
+	talkRequestSubs     map[string]TalkRequestHandler
+	talkResponseSubs    map[string]TalkResponseHandler
+
 	// State of the main loop.
 	tab           *Table
 	topictab      *topicTable
@@ -78,6 +85,11 @@ type Network struct {
 	nodes         map[NodeID]*Node // tracks active nodes with state != known
 	timeoutTimers map[timeoutEvent]*time.Timer
 }
+
+type (
+	TalkRequestHandler  func(enode.ID, rlp.RawValue) (rlp.RawValue, bool)
+	TalkResponseHandler func(rlp.RawValue) bool
+)
 
 // transport is implemented by the UDP transport.
 // it is an interface so we can test without opening lots of UDP
@@ -155,6 +167,8 @@ func newNetwork(conn transport, ourPubkey ecdsa.PublicKey, dbPath string, netres
 		topicRegisterReq: make(chan topicRegisterReq),
 		topicSearchReq:   make(chan topicSearchReq),
 		nodes:            make(map[NodeID]*Node),
+		talkRequestSubs:  make(map[string]TalkRequestHandler),
+		talkResponseSubs: make(map[string]TalkResponseHandler),
 	}
 	go net.loop()
 	return net, nil
@@ -772,6 +786,7 @@ type nodeNetGuts struct {
 	deferredQueries   []*findnodeQuery // queries that can't be sent yet
 	pendingNeighbours *findnodeQuery   // current query, waiting for reply
 	queryTimeouts     int
+	talkFailures      int
 }
 
 func (n *nodeNetGuts) deferQuery(q *findnodeQuery) {
@@ -828,6 +843,8 @@ const (
 	topicRegisterPacket
 	topicQueryPacket
 	topicNodesPacket
+	talkRequestPacket
+	talkResponsePacket
 
 	// Non-packet events.
 	// Event values in this category are allocated outside
@@ -835,6 +852,7 @@ const (
 	pongTimeout nodeEvent = iota + 256
 	pingTimeout
 	neighboursTimeout
+	talkTimeout
 )
 
 // Node State Machine.
@@ -1196,7 +1214,51 @@ func (net *Network) handleQueryEvent(n *Node, ev nodeEvent, pkt *ingressPacket) 
 			}
 		}
 		return n.state, nil
-
+	case talkRequestPacket:
+		p := pkt.data.(*talkRequest)
+		net.talkRequestSubLock.RLock()
+		subFn := net.talkRequestSubs[string(p.TalkID)]
+		net.talkRequestSubLock.RUnlock()
+		if subFn != nil {
+			resp, ok := subFn(enode.ID(n.sha), p.Payload)
+			if ok {
+				net.conn.send(n, talkResponsePacket, talkResponse{ReplyTok: pkt.hash, Payload: resp})
+			} else {
+				n.talkFailures++
+			}
+		} else {
+			n.talkFailures++
+		}
+		if n.talkFailures > maxTalkFailures && n.state == known {
+			return contested, errors.New("too many talk failures")
+		}
+		return n.state, nil
+	case talkResponsePacket:
+		p := pkt.data.(*talkResponse)
+		net.talkResponseSubLock.Lock()
+		key := string(n.sha[:]) + string(p.ReplyTok)
+		subFn := net.talkResponseSubs[key]
+		if subFn != nil {
+			delete(net.talkResponseSubs, key)
+		}
+		net.talkResponseSubLock.Unlock()
+		if subFn == nil || !subFn(p.Payload) {
+			n.talkFailures++
+			if n.talkFailures > maxTalkFailures && n.state == known {
+				return contested, errors.New("too many talk failures")
+			}
+		}
+		return n.state, nil
+	case talkTimeout:
+		if n.pendingNeighbours != nil {
+			n.pendingNeighbours.reply <- nil
+			n.pendingNeighbours = nil
+		}
+		n.queryTimeouts++
+		if n.queryTimeouts > maxFindnodeFailures && n.state == known {
+			return contested, errors.New("too many timeouts")
+		}
+		return n.state, nil
 	default:
 		return n.state, errInvalidEvent
 	}
@@ -1259,4 +1321,28 @@ func (net *Network) handleNeighboursPacket(n *Node, pkt *ingressPacket) error {
 	// Now that this query is done, start the next one.
 	n.startNextQuery(net)
 	return nil
+}
+
+func (net *Network) RegisterTalkHandler(talkID string, handler TalkRequestHandler) {
+	net.talkRequestSubLock.Lock()
+	net.talkRequestSubs[talkID] = handler
+	net.talkRequestSubLock.Unlock()
+}
+
+func (net *Network) SendTalkRequest(to *enode.Node, talkID string, payload rlp.RawValue, handler TalkResponseHandler) func() bool {
+	node := NewNode(to.ID(), to.IP(), to.UDP(), to.TCP())
+	net.talkResponseSubLock.Lock()
+	hash := net.conn.send(node, talkRequestPacket, talkRequest{TalkID: []byte(talkID), Payload: payload})
+	key := string(to.sha[:]) + string(hash[:])
+	net.talkResponseSubs[key] = handler
+	net.talkResponseSubLock.Unlock()
+	return func() bool {
+		net.talkResponseSubLock.Lock()
+		cancel := net.talkResponseSubs[key] != nil
+		if cancel {
+			delete(net.talkResponseSubs, key)
+		}
+		net.talkResponseSubLock.Unlock()
+		return cancel
+	}
 }
