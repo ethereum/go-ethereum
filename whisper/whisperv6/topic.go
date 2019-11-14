@@ -19,7 +19,6 @@
 package whisperv6
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -43,7 +42,7 @@ func BytesToTopic(b []byte) (t TopicType) {
 
 // String converts a topic byte array to a string representation.
 func (t *TopicType) String() string {
-	return common.ToHex(t[:])
+	return hexutil.Encode(t[:])
 }
 
 // MarshalText returns the hex representation of t.
