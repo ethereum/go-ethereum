@@ -277,7 +277,7 @@ func (tx *Transaction) DecodeRLP(stream *rlp.Stream) error {
 		FeeCap:       feeCap,
 		V:            v,
 		R:            r,
-		S:            v,
+		S:            s,
 	}
 	tx.size.Store(common.StorageSize(rlp.ListSize(size)))
 	return nil
