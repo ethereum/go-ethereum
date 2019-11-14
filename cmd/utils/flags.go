@@ -752,7 +752,7 @@ func MakeDataDir(ctx *cli.Context) string {
 		}
 		return path
 	}
-	Fatalf("Cannot determine default data directory, please set manually (--datadir)")
+	Fatalf("Cannot determine default data directory, please set manually (--%s)", DataDirFlag.Name)
 	return ""
 }
 
