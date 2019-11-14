@@ -141,7 +141,7 @@ func (n *Notifier) Notify(id ID, data interface{}) error {
 // Closed returns a channel that is closed when the RPC connection is closed.
 // Deprecated: use subscription error channel
 func (n *Notifier) Closed() <-chan interface{} {
-	return n.h.conn.Closed()
+	return n.h.conn.closed()
 }
 
 // takeSubscription returns the subscription (if one has been created). No subscription can
@@ -172,7 +172,7 @@ func (n *Notifier) activate() error {
 func (n *Notifier) send(sub *Subscription, data json.RawMessage) error {
 	params, _ := json.Marshal(&subscriptionResult{ID: string(sub.ID), Result: data})
 	ctx := context.Background()
-	return n.h.conn.Write(ctx, &jsonrpcMessage{
+	return n.h.conn.writeJSON(ctx, &jsonrpcMessage{
 		Version: vsn,
 		Method:  n.namespace + notificationMethodSuffix,
 		Params:  params,
