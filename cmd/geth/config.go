@@ -28,7 +28,6 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/dashboard"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -75,11 +74,10 @@ type ethstatsConfig struct {
 }
 
 type gethConfig struct {
-	Eth       eth.Config
-	Shh       whisper.Config
-	Node      node.Config
-	Ethstats  ethstatsConfig
-	Dashboard dashboard.Config
+	Eth      eth.Config
+	Shh      whisper.Config
+	Node     node.Config
+	Ethstats ethstatsConfig
 }
 
 func loadConfig(file string, cfg *gethConfig) error {
@@ -110,10 +108,9 @@ func defaultNodeConfig() node.Config {
 func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	// Load defaults.
 	cfg := gethConfig{
-		Eth:       eth.DefaultConfig,
-		Shh:       whisper.DefaultConfig,
-		Node:      defaultNodeConfig(),
-		Dashboard: dashboard.DefaultConfig,
+		Eth:  eth.DefaultConfig,
+		Shh:  whisper.DefaultConfig,
+		Node: defaultNodeConfig(),
 	}
 
 	// Load config file.
@@ -134,7 +131,6 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
 	utils.SetShhConfig(ctx, stack, &cfg.Shh)
-	utils.SetDashboardConfig(ctx, &cfg.Dashboard)
 
 	return stack, cfg
 }
@@ -178,12 +174,6 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, cfg.Ethstats.URL)
-	}
-
-	// Add dashboard daemon if requested. This should be the last registered service
-	// in order to be able to collect information about the other services.
-	if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
-		utils.RegisterDashboardService(stack, &cfg.Dashboard, gitCommit)
 	}
 	return stack
 }
