@@ -24,9 +24,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/maticnetwork/bor/common/hexutil"
+	"github.com/maticnetwork/bor/internal/ethapi"
+	"github.com/maticnetwork/bor/log"
 	"golang.org/x/crypto/ssh/terminal"
 )
 

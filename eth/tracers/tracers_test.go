@@ -27,17 +27,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/tests"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/common/hexutil"
+	"github.com/maticnetwork/bor/common/math"
+	"github.com/maticnetwork/bor/core"
+	"github.com/maticnetwork/bor/core/rawdb"
+	"github.com/maticnetwork/bor/core/types"
+	"github.com/maticnetwork/bor/core/vm"
+	"github.com/maticnetwork/bor/crypto"
+	"github.com/maticnetwork/bor/params"
+	"github.com/maticnetwork/bor/rlp"
+	"github.com/maticnetwork/bor/tests"
 )
 
 // To generate a new callTracer test, copy paste the makeTest method below into

@@ -21,11 +21,11 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/core/types"
+	"github.com/maticnetwork/bor/core/vm"
+	"github.com/maticnetwork/bor/log"
+	"github.com/maticnetwork/bor/params"
 )
 
 var (

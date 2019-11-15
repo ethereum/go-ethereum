@@ -25,13 +25,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/maticnetwork/bor/log"
+	"github.com/maticnetwork/bor/node"
+	"github.com/maticnetwork/bor/p2p"
+	"github.com/maticnetwork/bor/p2p/enode"
+	"github.com/maticnetwork/bor/p2p/simulations"
+	"github.com/maticnetwork/bor/p2p/simulations/adapters"
+	"github.com/maticnetwork/bor/rpc"
 )
 
 var adapterType = flag.String("adapter", "sim", `node adapter to use (one of "sim", "exec" or "docker")`)

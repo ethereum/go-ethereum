@@ -26,12 +26,12 @@ import (
 
 	cli "gopkg.in/urfave/cli.v1"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/dashboard"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+	"github.com/maticnetwork/bor/cmd/utils"
+	"github.com/maticnetwork/bor/dashboard"
+	"github.com/maticnetwork/bor/eth"
+	"github.com/maticnetwork/bor/node"
+	"github.com/maticnetwork/bor/params"
+	whisper "github.com/maticnetwork/bor/whisper/whisperv6"
 	"github.com/naoina/toml"
 )
 
@@ -102,7 +102,7 @@ func defaultNodeConfig() node.Config {
 	cfg.Version = params.VersionWithCommit(gitCommit, gitDate)
 	cfg.HTTPModules = append(cfg.HTTPModules, "eth", "shh")
 	cfg.WSModules = append(cfg.WSModules, "eth", "shh")
-	cfg.IPCPath = "geth.ipc"
+	cfg.IPCPath = "bor.ipc"
 	return cfg
 }
 

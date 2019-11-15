@@ -23,14 +23,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/maticnetwork/bor"
+	"github.com/maticnetwork/bor/accounts/abi"
+	"github.com/maticnetwork/bor/accounts/abi/bind"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/common/hexutil"
+	"github.com/maticnetwork/bor/core/types"
+	"github.com/maticnetwork/bor/crypto"
+	"github.com/maticnetwork/bor/rlp"
 )
 
 type mockCaller struct {

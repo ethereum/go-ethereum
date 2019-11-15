@@ -23,9 +23,9 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/maticnetwork/bor/accounts/abi"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/crypto"
 )
 
 // makeTopics converts a filter query argument list into a filter topic set.

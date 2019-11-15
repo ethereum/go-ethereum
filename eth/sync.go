@@ -21,11 +21,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/core/types"
+	"github.com/maticnetwork/bor/eth/downloader"
+	"github.com/maticnetwork/bor/log"
+	"github.com/maticnetwork/bor/p2p/enode"
 )
 
 const (

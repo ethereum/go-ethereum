@@ -25,12 +25,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/signer/core"
+	"github.com/maticnetwork/bor/accounts/keystore"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/common/hexutil"
+	"github.com/maticnetwork/bor/common/math"
+	"github.com/maticnetwork/bor/crypto"
+	"github.com/maticnetwork/bor/signer/core"
 )
 
 var typesStandard = core.Types{

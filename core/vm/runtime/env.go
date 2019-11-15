@@ -17,9 +17,9 @@
 package runtime
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/core"
+	"github.com/maticnetwork/bor/core/vm"
 )
 
 func NewEnv(cfg *Config) *vm.EVM {

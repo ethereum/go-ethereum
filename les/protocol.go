@@ -23,10 +23,10 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/crypto"
+	"github.com/maticnetwork/bor/p2p/enode"
+	"github.com/maticnetwork/bor/rlp"
 )
 
 // Constants to match up protocol versions and messages

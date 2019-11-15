@@ -25,33 +25,33 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/bor"
-	"github.com/ethereum/go-ethereum/consensus/clique"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/maticnetwork/bor/accounts"
+	"github.com/maticnetwork/bor/accounts/abi/bind"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/common/hexutil"
+	"github.com/maticnetwork/bor/consensus"
+	"github.com/maticnetwork/bor/consensus/bor"
+	"github.com/maticnetwork/bor/consensus/clique"
+	"github.com/maticnetwork/bor/consensus/ethash"
+	"github.com/maticnetwork/bor/core"
+	"github.com/maticnetwork/bor/core/bloombits"
+	"github.com/maticnetwork/bor/core/rawdb"
+	"github.com/maticnetwork/bor/core/types"
+	"github.com/maticnetwork/bor/core/vm"
+	"github.com/maticnetwork/bor/eth/downloader"
+	"github.com/maticnetwork/bor/eth/filters"
+	"github.com/maticnetwork/bor/eth/gasprice"
+	"github.com/maticnetwork/bor/ethdb"
+	"github.com/maticnetwork/bor/event"
+	"github.com/maticnetwork/bor/internal/ethapi"
+	"github.com/maticnetwork/bor/log"
+	"github.com/maticnetwork/bor/miner"
+	"github.com/maticnetwork/bor/node"
+	"github.com/maticnetwork/bor/p2p"
+	"github.com/maticnetwork/bor/p2p/enr"
+	"github.com/maticnetwork/bor/params"
+	"github.com/maticnetwork/bor/rlp"
+	"github.com/maticnetwork/bor/rpc"
 )
 
 type LesServer interface {
@@ -236,7 +236,7 @@ func makeExtraData(extra []byte) []byte {
 		// create default extradata
 		extra, _ = rlp.EncodeToBytes([]interface{}{
 			uint(params.VersionMajor<<16 | params.VersionMinor<<8 | params.VersionPatch),
-			"geth",
+			"bor",
 			runtime.Version(),
 			runtime.GOOS,
 		})

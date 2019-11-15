@@ -24,10 +24,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/core/state"
+	"github.com/maticnetwork/bor/core/vm"
+	"github.com/maticnetwork/bor/params"
 )
 
 type account struct{}

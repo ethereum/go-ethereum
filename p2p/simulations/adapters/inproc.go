@@ -23,13 +23,13 @@ import (
 	"net"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/maticnetwork/bor/event"
+	"github.com/maticnetwork/bor/log"
+	"github.com/maticnetwork/bor/node"
+	"github.com/maticnetwork/bor/p2p"
+	"github.com/maticnetwork/bor/p2p/enode"
+	"github.com/maticnetwork/bor/p2p/simulations/pipes"
+	"github.com/maticnetwork/bor/rpc"
 )
 
 // SimAdapter is a NodeAdapter which creates in-memory simulation nodes and

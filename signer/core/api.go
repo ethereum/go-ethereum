@@ -25,16 +25,16 @@ import (
 	"os"
 	"reflect"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/accounts/scwallet"
-	"github.com/ethereum/go-ethereum/accounts/usbwallet"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/signer/storage"
+	"github.com/maticnetwork/bor/accounts"
+	"github.com/maticnetwork/bor/accounts/keystore"
+	"github.com/maticnetwork/bor/accounts/scwallet"
+	"github.com/maticnetwork/bor/accounts/usbwallet"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/common/hexutil"
+	"github.com/maticnetwork/bor/internal/ethapi"
+	"github.com/maticnetwork/bor/log"
+	"github.com/maticnetwork/bor/rlp"
+	"github.com/maticnetwork/bor/signer/storage"
 )
 
 const (

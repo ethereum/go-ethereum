@@ -29,17 +29,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/common/mclock"
+	"github.com/maticnetwork/bor/crypto"
+	"github.com/maticnetwork/bor/event"
+	"github.com/maticnetwork/bor/log"
+	"github.com/maticnetwork/bor/p2p/discover"
+	"github.com/maticnetwork/bor/p2p/discv5"
+	"github.com/maticnetwork/bor/p2p/enode"
+	"github.com/maticnetwork/bor/p2p/enr"
+	"github.com/maticnetwork/bor/p2p/nat"
+	"github.com/maticnetwork/bor/p2p/netutil"
 )
 
 const (

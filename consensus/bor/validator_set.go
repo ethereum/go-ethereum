@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/maticnetwork/bor/common"
 )
 
 // MaxTotalVotingPower - the maximum allowed total voting power.

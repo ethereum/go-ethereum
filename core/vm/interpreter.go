@@ -21,9 +21,9 @@ import (
 	"hash"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/common/math"
+	"github.com/maticnetwork/bor/params"
 )
 
 // Config are the configuration options for the Interpreter

@@ -26,13 +26,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/internal/jsre"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/node"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/consensus/ethash"
+	"github.com/maticnetwork/bor/core"
+	"github.com/maticnetwork/bor/eth"
+	"github.com/maticnetwork/bor/internal/jsre"
+	"github.com/maticnetwork/bor/miner"
+	"github.com/maticnetwork/bor/node"
 )
 
 const (

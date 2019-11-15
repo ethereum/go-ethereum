@@ -20,14 +20,14 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/core"
+	"github.com/maticnetwork/bor/eth"
+	"github.com/maticnetwork/bor/ethdb"
+	"github.com/maticnetwork/bor/light"
+	"github.com/maticnetwork/bor/p2p"
+	"github.com/maticnetwork/bor/p2p/enode"
+	"github.com/maticnetwork/bor/params"
 )
 
 // lesCommons contains fields needed by both server and client.

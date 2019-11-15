@@ -26,17 +26,17 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/external"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/accounts/scwallet"
-	"github.com/ethereum/go-ethereum/accounts/usbwallet"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/maticnetwork/bor/accounts"
+	"github.com/maticnetwork/bor/accounts/external"
+	"github.com/maticnetwork/bor/accounts/keystore"
+	"github.com/maticnetwork/bor/accounts/scwallet"
+	"github.com/maticnetwork/bor/accounts/usbwallet"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/crypto"
+	"github.com/maticnetwork/bor/log"
+	"github.com/maticnetwork/bor/p2p"
+	"github.com/maticnetwork/bor/p2p/enode"
+	"github.com/maticnetwork/bor/rpc"
 )
 
 const (
@@ -287,8 +287,8 @@ func (c *Config) ExtRPCEnabled() bool {
 func (c *Config) NodeName() string {
 	name := c.name()
 	// Backwards compatibility: previous versions used title-cased "Geth", keep that.
-	if name == "geth" || name == "geth-testnet" {
-		name = "Geth"
+	if name == "bor" || name == "bor-testnet" {
+		name = "Bor"
 	}
 	if c.UserIdent != "" {
 		name += "/" + c.UserIdent
@@ -333,7 +333,7 @@ func (c *Config) ResolvePath(path string) string {
 	// by geth 1.4 are used if they exist.
 	if warn, isOld := isOldGethResource[path]; isOld {
 		oldpath := ""
-		if c.name() == "geth" {
+		if c.name() == "bor" {
 			oldpath = filepath.Join(c.DataDir, path)
 		}
 		if oldpath != "" && common.FileExist(oldpath) {

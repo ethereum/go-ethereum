@@ -21,12 +21,12 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/core/rawdb"
+	"github.com/maticnetwork/bor/core/state"
+	"github.com/maticnetwork/bor/core/vm"
+	"github.com/maticnetwork/bor/crypto"
+	"github.com/maticnetwork/bor/params"
 )
 
 // Config is a basic type specifying certain configuration flags for running

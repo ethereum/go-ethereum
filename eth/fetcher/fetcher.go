@@ -22,11 +22,11 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/prque"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/common/prque"
+	"github.com/maticnetwork/bor/consensus"
+	"github.com/maticnetwork/bor/core/types"
+	"github.com/maticnetwork/bor/log"
 )
 
 const (

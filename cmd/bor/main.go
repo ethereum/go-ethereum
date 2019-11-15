@@ -29,24 +29,24 @@ import (
 	"time"
 
 	"github.com/elastic/gosigar"
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/les"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/node"
+	"github.com/maticnetwork/bor/accounts"
+	"github.com/maticnetwork/bor/accounts/keystore"
+	"github.com/maticnetwork/bor/cmd/utils"
+	"github.com/maticnetwork/bor/common"
+	"github.com/maticnetwork/bor/console"
+	"github.com/maticnetwork/bor/eth"
+	"github.com/maticnetwork/bor/eth/downloader"
+	"github.com/maticnetwork/bor/ethclient"
+	"github.com/maticnetwork/bor/internal/debug"
+	"github.com/maticnetwork/bor/les"
+	"github.com/maticnetwork/bor/log"
+	"github.com/maticnetwork/bor/metrics"
+	"github.com/maticnetwork/bor/node"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
 const (
-	clientIdentifier = "geth" // Client identifier to advertise over the network
+	clientIdentifier = "bor" // Client identifier to advertise over the network
 )
 
 var (
