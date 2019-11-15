@@ -11,9 +11,11 @@ linters:
   disable-all: true
   enable:
     - deadcode
+    - goconst
     - goimports
     - gosimple
     - govet
+    - ineffassign
     - misspell
     # - staticcheck
     - unconvert
@@ -38,3 +40,6 @@ issues:
     - path: p2p/discv5/
       linters:
         - deadcode
+    - path: core/vm/instructions_test.go
+      linters:
+        - goconst
