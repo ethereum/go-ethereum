@@ -164,24 +164,24 @@ func (c connWithRemoteAddr) RemoteAddr() string { return c.addr }
 // jsonCodec reads and writes JSON-RPC messages to the underlying connection. It also has
 // support for parsing arguments and serializing (result) objects.
 type jsonCodec struct {
-	remote string
-	closer     sync.Once                 // close closed channel once
-	closeCh     chan interface{}          // closed on Close
-	decode     func(v interface{}) error // decoder to allow multiple transports
-	encMu      sync.Mutex                // guards the encoder
-	encode     func(v interface{}) error // encoder to allow multiple transports
-	conn       deadlineCloser
+	remote  string
+	closer  sync.Once                 // close closed channel once
+	closeCh chan interface{}          // closed on Close
+	decode  func(v interface{}) error // decoder to allow multiple transports
+	encMu   sync.Mutex                // guards the encoder
+	encode  func(v interface{}) error // encoder to allow multiple transports
+	conn    deadlineCloser
 }
 
-// NewCodec creates a codec which uses the given functions to read and write. If conn
+// NewFuncCodec creates a codec which uses the given functions to read and write. If conn
 // implements ConnRemoteAddr, log messages will use it to include the remote address of
 // the connection.
 func NewFuncCodec(conn deadlineCloser, encode, decode func(v interface{}) error) ServerCodec {
 	codec := &jsonCodec{
 		closeCh: make(chan interface{}),
-		encode: encode,
-		decode: decode,
-		conn:   conn,
+		encode:  encode,
+		decode:  decode,
+		conn:    conn,
 	}
 	if ra, ok := conn.(ConnRemoteAddr); ok {
 		codec.remote = ra.RemoteAddr()

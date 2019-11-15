@@ -54,4 +54,3 @@ func DialIPC(ctx context.Context, endpoint string) (*Client, error) {
 		return NewCodec(conn), err
 	})
 }
-

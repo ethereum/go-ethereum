@@ -47,7 +47,7 @@ type httpConn struct {
 	client    *http.Client
 	req       *http.Request
 	closeOnce sync.Once
-	closeCh    chan interface{}
+	closeCh   chan interface{}
 }
 
 // httpConn is treated specially by Client.

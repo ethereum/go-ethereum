@@ -66,7 +66,7 @@ func (s *Server) RegisterName(name string, receiver interface{}) error {
 	return s.services.registerName(name, receiver)
 }
 
-// receiver reads incoming requests from codec, calls the appropriate callback and writes
+// ServeCodec reads incoming requests from codec, calls the appropriate callback and writes
 // the response back using the given codec. It will block until the codec is closed or the
 // server is stopped. In either case the codec is closed.
 //
