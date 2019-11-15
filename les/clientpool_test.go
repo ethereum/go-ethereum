@@ -89,7 +89,7 @@ func testClientPool(t *testing.T, connLimit, clientCount, paidCount int, randomD
 		disconnFn = func(id enode.ID) {
 			disconnCh <- int(id[0]) + int(id[1])<<8
 		}
-		pool = newClientPool(db, 1, &clock, disconnFn)
+		pool = newClientPool(db, 1, 1, &clock, disconnFn)
 	)
 	pool.disableBias = true
 	pool.setLimits(connLimit, uint64(connLimit))
@@ -172,7 +172,7 @@ func TestConnectPaidClient(t *testing.T) {
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
 	)
-	pool := newClientPool(db, 1, &clock, nil)
+	pool := newClientPool(db, 1, 1, &clock, nil)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10))
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
@@ -190,7 +190,7 @@ func TestConnectPaidClientToSmallPool(t *testing.T) {
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
 	)
-	pool := newClientPool(db, 1, &clock, nil)
+	pool := newClientPool(db, 1, 1, &clock, nil)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
@@ -210,7 +210,7 @@ func TestConnectPaidClientToFullPool(t *testing.T) {
 		db    = rawdb.NewMemoryDatabase()
 	)
 	removeFn := func(enode.ID) {} // Noop
-	pool := newClientPool(db, 1, &clock, removeFn)
+	pool := newClientPool(db, 1, 1, &clock, removeFn)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
@@ -237,7 +237,7 @@ func TestPaidClientKickedOut(t *testing.T) {
 		kickedCh = make(chan int, 1)
 	)
 	removeFn := func(id enode.ID) { kickedCh <- int(id[0]) }
-	pool := newClientPool(db, 1, &clock, removeFn)
+	pool := newClientPool(db, 1, 1, &clock, removeFn)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
@@ -267,7 +267,7 @@ func TestConnectFreeClient(t *testing.T) {
 		clock mclock.Simulated
 		db    = rawdb.NewMemoryDatabase()
 	)
-	pool := newClientPool(db, 1, &clock, nil)
+	pool := newClientPool(db, 1, 1, &clock, nil)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10))
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
@@ -282,7 +282,7 @@ func TestConnectFreeClientToFullPool(t *testing.T) {
 		db    = rawdb.NewMemoryDatabase()
 	)
 	removeFn := func(enode.ID) {} // Noop
-	pool := newClientPool(db, 1, &clock, removeFn)
+	pool := newClientPool(db, 1, 1, &clock, removeFn)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
@@ -311,7 +311,7 @@ func TestFreeClientKickedOut(t *testing.T) {
 		kicked = make(chan int, 10)
 	)
 	removeFn := func(id enode.ID) { kicked <- int(id[0]) }
-	pool := newClientPool(db, 1, &clock, removeFn)
+	pool := newClientPool(db, 1, 1, &clock, removeFn)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
@@ -346,7 +346,7 @@ func TestPositiveBalanceCalculation(t *testing.T) {
 		kicked = make(chan int, 10)
 	)
 	removeFn := func(id enode.ID) { kicked <- int(id[0]) } // Noop
-	pool := newClientPool(db, 1, &clock, removeFn)
+	pool := newClientPool(db, 1, 1, &clock, removeFn)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
@@ -369,7 +369,7 @@ func TestDowngradePriorityClient(t *testing.T) {
 		kicked = make(chan int, 10)
 	)
 	removeFn := func(id enode.ID) { kicked <- int(id[0]) } // Noop
-	pool := newClientPool(db, 1, &clock, removeFn)
+	pool := newClientPool(db, 1, 1, &clock, removeFn)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
@@ -407,7 +407,7 @@ func TestNegativeBalanceCalculation(t *testing.T) {
 		kicked = make(chan int, 10)
 	)
 	removeFn := func(id enode.ID) { kicked <- int(id[0]) } // Noop
-	pool := newClientPool(db, 1, &clock, removeFn)
+	pool := newClientPool(db, 1, 1, &clock, removeFn)
 	defer pool.stop()
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})

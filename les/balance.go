@@ -17,11 +17,14 @@
 package les
 
 import (
+	"math"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 )
+
+const maxBalance = math.MaxInt64
 
 const (
 	balanceCallbackQueue = iota
@@ -99,6 +102,31 @@ func (bt *balanceTracker) balanceToPriority(b balance) int64 {
 		return ^int64(b.pos / bt.capacity)
 	}
 	return int64(b.neg)
+}
+
+func (bt *balanceTracker) posBalanceMissing(targetPriority int64, after time.Duration) uint64 {
+	if targetPriority > 0 {
+		negPrice := uint64(float64(after) * bt.negTimeFactor)
+		if negPrice+bt.balance.neg <= uint64(targetPriority) {
+			return 0
+		}
+		if uint64(targetPriority) > bt.balance.neg && bt.negTimeFactor > 1e-100 {
+			if negTime := time.Duration(float64(uint64(targetPriority)-bt.balance.neg) / bt.negTimeFactor); negTime < after {
+				after -= negTime
+			} else {
+				after = 0
+			}
+		}
+		targetPriority = 0
+	}
+	posRequired := uint64(float64(^targetPriority)*float64(bt.capacity) + float64(after)*bt.timeFactor)
+	if posRequired >= maxBalance {
+		return math.MaxUint64 // target not reachable
+	}
+	if posRequired > bt.balance.pos {
+		return posRequired - bt.balance.pos
+	}
+	return 0
 }
 
 // reducedBalance estimates the reduced balance at a given time in the fututre based

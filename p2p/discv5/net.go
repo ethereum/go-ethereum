@@ -1330,10 +1330,12 @@ func (net *Network) RegisterTalkHandler(talkID string, handler TalkRequestHandle
 }
 
 func (net *Network) SendTalkRequest(to *enode.Node, talkID string, payload rlp.RawValue, handler TalkResponseHandler) func() bool {
-	node := NewNode(to.ID(), to.IP(), to.UDP(), to.TCP())
+	var nodeID NodeID
+	copy(nodeID[:], crypto.FromECDSAPub(to.Pubkey())[1:])
+	node := NewNode(nodeID, to.IP(), uint16(to.UDP()), uint16(to.TCP()))
 	net.talkResponseSubLock.Lock()
 	hash := net.conn.send(node, talkRequestPacket, talkRequest{TalkID: []byte(talkID), Payload: payload})
-	key := string(to.sha[:]) + string(hash[:])
+	key := string(node.sha[:]) + string(hash[:])
 	net.talkResponseSubs[key] = handler
 	net.talkResponseSubLock.Unlock()
 	return func() bool {

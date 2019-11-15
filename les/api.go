@@ -19,7 +19,6 @@ package les
 import (
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -34,8 +33,6 @@ var (
 	errBalanceOverflow      = errors.New("balance overflow")
 	errNoPriority           = errors.New("priority too low to raise capacity")
 )
-
-const maxBalance = math.MaxInt64
 
 // PrivateLightServerAPI provides an API to access the LES light server.
 type PrivateLightServerAPI struct {
@@ -184,7 +181,7 @@ func (api *PrivateLightServerAPI) SetClientParams(ids []enode.ID, params map[str
 		if client != nil {
 			update, err := api.setParams(params, client, nil, nil)
 			if update {
-				client.updatePriceFactors()
+				updatePriceFactors(&client.balanceTracker, client.posFactors, client.negFactors, client.capacity)
 			}
 			return err
 		} else {
