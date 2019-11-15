@@ -166,19 +166,41 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 	if err != nil || frozen == 0 {
 		return
 	}
-	// hashBlock calculates block hash in advance using the multi-routine's concurrent
-	// computing power.
-	hashBlock := func(block *types.Block) { block.Hash() }
+	var (
+		batch  = db.NewBatch()
+		start  = time.Now()
+		logged = start.Add(-7 * time.Second) // Unindex during import is fast, don't double log
+		hash   common.Hash
+	)
+	for i := uint64(0); i < frozen; i++ {
+		if h, err := db.Ancient(freezerHashTable, i); err != nil {
+			log.Crit("Failed to init database from freezer", "err", err)
+		} else {
+			hash = common.BytesToHash(h)
+		}
 
-	// writeIndex injects hash <-> number mapping into the database.
-	writeIndex := func(batch ethdb.Batch, block *types.Block) { WriteHeaderNumber(batch, block.Hash(), block.NumberU64()) }
-
-	if err := iterateCanonicalChain(db, 0, frozen, hashBlock, writeIndex, false, "Initializing database from freezer", "Initialized database from freezer"); err != nil {
-		log.Crit("Failed to init database from freezer", "err", err)
+		WriteHeaderNumber(batch, hash, i)
+		// If enough data was accumulated in memory or we're at the last block, dump to disk
+		if batch.ValueSize() > ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				log.Crit("Failed to write data to db", "err", err)
+			}
+			batch.Reset()
+		}
+		// If we've spent too much time already, notify the user of what we're doing
+		if time.Since(logged) > 8*time.Second {
+			log.Info("Initializing database from freezer", "blocks", i, "total", frozen, "tail", i, "hash", hash, "elapsed", common.PrettyDuration(time.Since(start)))
+			logged = time.Now()
+		}
 	}
-	hash := ReadCanonicalHash(db, frozen-1)
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to write data to db", "err", err)
+	}
+	batch.Reset()
+
 	WriteHeadHeaderHash(db, hash)
 	WriteHeadFastBlockHash(db, hash)
+	log.Info("Initialized database from freezer", "blocks", frozen, "tail", frozen, "elapsed", common.PrettyDuration(time.Since(start)))
 }
 
 // IndexTransactions creates txlookup indices of the specified block range.
