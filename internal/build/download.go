@@ -82,51 +82,68 @@ func (db *ChecksumDB) DownloadFile(url, dstPath string) error {
 	fmt.Printf("%s is stale\n", dstPath)
 	fmt.Printf("downloading from %s\n", url)
 
-	if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
-		return err
-	}
-
 	resp, err := http.Get(url)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download error: code %d, err %v", resp.StatusCode, err)
 	}
 	defer resp.Body.Close()
-
+	if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
+		return err
+	}
 	fd, err := os.OpenFile(dstPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
-	dst := bufio.NewWriter(io.MultiWriter(fd, &dots{length: resp.ContentLength}))
-	_, copyErr := io.Copy(dst, resp.Body)
-	flushErr := dst.Flush()
-	fd.Close()
-	if copyErr != nil {
-		return copyErr
-	} else if flushErr != nil {
-		return flushErr
+	dst := newDownloadWriter(fd, resp.ContentLength)
+	_, err = io.Copy(dst, resp.Body)
+	dst.Close()
+	if err != nil {
+		return err
 	}
 
 	return db.Verify(dstPath)
 }
 
-type dots struct {
-	c       int64
-	length  int64
+type downloadWriter struct {
+	file    *os.File
+	dstBuf  *bufio.Writer
+	size    int64
+	written int64
 	lastpct int64
 }
 
-func (d *dots) Write(buf []byte) (int, error) {
-	d.c += int64(len(buf))
-	pct := d.c * 10 / d.length * 10
-	if pct != d.lastpct {
-		if d.lastpct != 0 {
+func newDownloadWriter(dst *os.File, size int64) *downloadWriter {
+	return &downloadWriter{
+		file:   dst,
+		dstBuf: bufio.NewWriter(dst),
+		size:   size,
+	}
+}
+
+func (w *downloadWriter) Write(buf []byte) (int, error) {
+	n, err := w.dstBuf.Write(buf)
+
+	// Report progress.
+	w.written += int64(n)
+	pct := w.written * 10 / w.size * 10
+	if pct != w.lastpct {
+		if w.lastpct != 0 {
 			fmt.Print("...")
 		}
 		fmt.Print(pct, "%")
-		d.lastpct = pct
+		w.lastpct = pct
 	}
-	if pct == 100 {
-		fmt.Println()
+	return n, err
+}
+
+func (w *downloadWriter) Close() error {
+	if w.lastpct > 0 {
+		fmt.Println() // Finish the progress line.
 	}
-	return len(buf), nil
+	flushErr := w.dstBuf.Flush()
+	closeErr := w.file.Close()
+	if flushErr != nil {
+		return flushErr
+	}
+	return closeErr
 }
