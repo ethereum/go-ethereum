@@ -18,7 +18,6 @@ package build
 
 import (
 	"bufio"
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -29,7 +28,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // ChecksumDB keeps file checksums.
@@ -88,13 +86,7 @@ func (db *ChecksumDB) DownloadFile(url, dstPath string) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := http.Get(url)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download error: code %d, err %v", resp.StatusCode, err)
 	}
