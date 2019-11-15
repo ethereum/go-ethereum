@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -952,4 +954,8 @@ func (h *serverHandler) broadcastHeaders() {
 			return
 		}
 	}
+}
+
+func (h *serverHandler) talkRequestHandler(id enode.ID, addr *net.UDPAddr, payload rlp.RawValue) (rlp.RawValue, bool) {
+	return payload, true
 }

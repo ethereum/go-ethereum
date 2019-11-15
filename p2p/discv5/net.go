@@ -87,7 +87,7 @@ type Network struct {
 }
 
 type (
-	TalkRequestHandler  func(enode.ID, rlp.RawValue) (rlp.RawValue, bool)
+	TalkRequestHandler  func(enode.ID, *net.UDPAddr, rlp.RawValue) (rlp.RawValue, bool)
 	TalkResponseHandler func(rlp.RawValue) bool
 )
 
@@ -1220,7 +1220,7 @@ func (net *Network) handleQueryEvent(n *Node, ev nodeEvent, pkt *ingressPacket) 
 		subFn := net.talkRequestSubs[string(p.TalkID)]
 		net.talkRequestSubLock.RUnlock()
 		if subFn != nil {
-			resp, ok := subFn(enode.ID(n.sha), p.Payload)
+			resp, ok := subFn(enode.ID(n.sha), n.addr(), p.Payload)
 			if ok {
 				net.conn.send(n, talkResponsePacket, talkResponse{ReplyTok: pkt.hash, Payload: resp})
 			} else {
@@ -1326,6 +1326,12 @@ func (net *Network) handleNeighboursPacket(n *Node, pkt *ingressPacket) error {
 func (net *Network) RegisterTalkHandler(talkID string, handler TalkRequestHandler) {
 	net.talkRequestSubLock.Lock()
 	net.talkRequestSubs[talkID] = handler
+	net.talkRequestSubLock.Unlock()
+}
+
+func (net *Network) RemoveTalkHandler(talkID string) {
+	net.talkRequestSubLock.Lock()
+	delete(net.talkRequestSubs, talkID)
 	net.talkRequestSubLock.Unlock()
 }
 

@@ -42,6 +42,7 @@ type LesServer struct {
 	handler     *serverHandler
 	lesTopics   []discv5.Topic
 	privateKey  *ecdsa.PrivateKey
+	srvr        *p2p.Server
 
 	// Flow control and capacity management
 	fcManager    *flowcontrol.ClientManager
@@ -165,6 +166,7 @@ func (s *LesServer) Protocols() []p2p.Protocol {
 
 // Start starts the LES server
 func (s *LesServer) Start(srvr *p2p.Server) {
+	s.srvr = srvr
 	s.privateKey = srvr.PrivateKey
 	s.handler.start()
 
@@ -172,6 +174,7 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 	go s.capacityManagement()
 
 	if srvr.DiscV5 != nil {
+		srvr.DiscV5.RegisterTalkHandler("les", s.handler.talkRequestHandler)
 		for _, topic := range s.lesTopics {
 			topic := topic
 			go func() {
@@ -188,6 +191,10 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 // Stop stops the LES service
 func (s *LesServer) Stop() {
 	close(s.closeCh)
+
+	if s.srvr.DiscV5 != nil {
+		s.srvr.DiscV5.RemoveTalkHandler("les")
+	}
 
 	// Disconnect existing sessions.
 	// This also closes the gate for any new registrations on the peer set.
