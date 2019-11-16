@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -116,7 +115,9 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	}
 	genesis := gspec.MustCommit(db)
 
-	chain, _ := core.NewBlockChain(db, &core.CacheConfig{TrieDirtyDisabled: true}, gspec.Config, engine, vm.Config{}, nil)
+	chain, _ := core.NewBlockChain(db, engine,
+		core.WithCacheConfig(&core.CacheConfig{TrieDirtyDisabled: true}),
+		core.WithChainConfig(gspec.Config))
 	txpool := core.NewTxPool(testTxPoolConfig, chainConfig, chain)
 
 	// Generate a small n-block chain and an uncle block for it
@@ -213,7 +214,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 
 	db2 := rawdb.NewMemoryDatabase()
 	b.genesis.MustCommit(db2)
-	chain, _ := core.NewBlockChain(db2, nil, b.chain.Config(), engine, vm.Config{}, nil)
+	chain, _ := core.NewBlockChain(db2, engine, core.WithChainConfig(b.chain.Config()))
 	defer chain.Stop()
 
 	newBlock := make(chan struct{})

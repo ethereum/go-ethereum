@@ -178,17 +178,41 @@ type BlockChain struct {
 	terminateInsert func(common.Hash, uint64) bool // Testing hook used to terminate ancient receipt chain insertion.
 }
 
+// BlockChainOption represents the func change to BlockChain config
+type BlockChainOption func(*BlockChain)
+
+// WithCacheConfig returns a function setting cacheConfig for Blockchain
+func WithCacheConfig(cacheConfig *CacheConfig) BlockChainOption {
+	return func(bc *BlockChain) {
+		bc.cacheConfig = cacheConfig
+	}
+}
+
+// WithChainConfig returns a function setting chainConfig for Blockchain
+func WithChainConfig(chainConfig *params.ChainConfig) BlockChainOption {
+	return func(bc *BlockChain) {
+		bc.chainConfig = chainConfig
+	}
+}
+
+// WithVmConfig returns a function setting vmConfig for Blockchain
+func WithVmConfig(vmConfig vm.Config) BlockChainOption {
+	return func(bc *BlockChain) {
+		bc.vmConfig = vmConfig
+	}
+}
+
+// WithPreserveHandler returns a function setting shouldPreserve for Blockchain
+func WithPreserveHandler(shouldPreserve func(block *types.Block) bool) BlockChainOption {
+	return func(bc *BlockChain) {
+		bc.shouldPreserve = shouldPreserve
+	}
+}
+
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(block *types.Block) bool) (*BlockChain, error) {
-	if cacheConfig == nil {
-		cacheConfig = &CacheConfig{
-			TrieCleanLimit: 256,
-			TrieDirtyLimit: 256,
-			TrieTimeLimit:  5 * time.Minute,
-		}
-	}
+func NewBlockChain(db ethdb.Database, engine consensus.Engine, opts ...BlockChainOption) (*BlockChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
@@ -198,29 +222,34 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	badBlocks, _ := lru.New(badBlockLimit)
 
 	bc := &BlockChain{
-		chainConfig:    chainConfig,
-		cacheConfig:    cacheConfig,
-		db:             db,
-		triegc:         prque.New(nil),
-		stateCache:     state.NewDatabaseWithCache(db, cacheConfig.TrieCleanLimit),
-		quit:           make(chan struct{}),
-		shouldPreserve: shouldPreserve,
-		bodyCache:      bodyCache,
-		bodyRLPCache:   bodyRLPCache,
-		receiptsCache:  receiptsCache,
-		blockCache:     blockCache,
-		txLookupCache:  txLookupCache,
-		futureBlocks:   futureBlocks,
-		engine:         engine,
-		vmConfig:       vmConfig,
-		badBlocks:      badBlocks,
+		cacheConfig: &CacheConfig{
+			TrieCleanLimit: 256,
+			TrieDirtyLimit: 256,
+			TrieTimeLimit:  5 * time.Minute,
+		},
+		db:            db,
+		triegc:        prque.New(nil),
+		quit:          make(chan struct{}),
+		bodyCache:     bodyCache,
+		bodyRLPCache:  bodyRLPCache,
+		receiptsCache: receiptsCache,
+		blockCache:    blockCache,
+		txLookupCache: txLookupCache,
+		futureBlocks:  futureBlocks,
+		engine:        engine,
+		badBlocks:     badBlocks,
 	}
-	bc.validator = NewBlockValidator(chainConfig, bc, engine)
-	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
-	bc.processor = NewStateProcessor(chainConfig, bc, engine)
+
+	for _, opt := range opts {
+		opt(bc)
+	}
+	bc.stateCache = state.NewDatabaseWithCache(db, bc.cacheConfig.TrieCleanLimit)
+	bc.validator = NewBlockValidator(bc.chainConfig, bc, engine)
+	bc.prefetcher = newStatePrefetcher(bc.chainConfig, bc, engine)
+	bc.processor = NewStateProcessor(bc.chainConfig, bc, engine)
 
 	var err error
-	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.getProcInterrupt)
+	bc.hc, err = NewHeaderChain(db, bc.chainConfig, engine, bc.getProcInterrupt)
 	if err != nil {
 		return nil, err
 	}
