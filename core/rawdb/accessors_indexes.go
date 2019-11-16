@@ -63,6 +63,16 @@ func WriteTxLookupEntries(db ethdb.KeyValueWriter, block *types.Block) {
 	}
 }
 
+// WriteTxLookupEntriesByHash is identical to WriteTxLookupEntries, but does not
+// require a full types.Block as input
+func WriteTxLookupEntriesByHash(db ethdb.KeyValueWriter, number []byte, hashes []common.Hash) {
+	for _, hash := range hashes {
+		if err := db.Put(txLookupKey(hash), number); err != nil {
+			log.Crit("Failed to store transaction lookup entry", "err", err)
+		}
+	}
+}
+
 // DeleteTxLookupEntry removes all transaction data associated with a hash.
 func DeleteTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(txLookupKey(hash)); err != nil {
@@ -71,9 +81,9 @@ func DeleteTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash) {
 }
 
 // DeleteTxLookupEntries removes all transaction lookups for a given block.
-func DeleteTxLookupEntries(db ethdb.KeyValueWriter, block *types.Block) {
-	for _, tx := range block.Transactions() {
-		if err := db.Delete(txLookupKey(tx.Hash())); err != nil {
+func DeleteTxLookupEntriesByHash(db ethdb.KeyValueWriter, hashes []common.Hash) {
+	for _, hash := range hashes {
+		if err := db.Delete(txLookupKey(hash)); err != nil {
 			log.Crit("Failed to delete transaction lookup entry", "err", err)
 		}
 	}

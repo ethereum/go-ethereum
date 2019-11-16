@@ -19,11 +19,11 @@ package rawdb
 import (
 	"math/big"
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 func TestChainIterator(t *testing.T) {
@@ -31,11 +31,13 @@ func TestChainIterator(t *testing.T) {
 	chainDb := NewMemoryDatabase()
 
 	var block *types.Block
+	var txs []*types.Transaction
 	for i := uint64(0); i <= 10; i++ {
 		if i == 0 {
 			block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, nil, nil, nil) // Empty genesis block
 		} else {
 			tx := types.NewTransaction(i, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
+			txs = append(txs, tx)
 			block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil)
 		}
 		WriteBlock(chainDb, block)
@@ -45,23 +47,36 @@ func TestChainIterator(t *testing.T) {
 	var cases = []struct {
 		from, to uint64
 		reverse  bool
-		expect   []uint64
+		expect   []int
 	}{
-		{0, 11, true, []uint64{10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}},
+		{0, 11, true, []int{10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}},
 		{0, 0, true, nil},
-		{10, 11, true, []uint64{10}},
-		{0, 11, false, []uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}},
+		{0, 5, true, []int{4, 3, 2, 1, 0}},
+		{10, 11, true, []int{10}},
+		{0, 11, false, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}},
 		{0, 0, false, nil},
-		{10, 11, false, []uint64{10}},
+		{10, 11, false, []int{10}},
 	}
 	for i, c := range cases {
-		var visit []uint64
-		err := iterateCanonicalChain(chainDb, c.from, c.to, nil, func(db ethdb.Batch, b *types.Block) { visit = append(visit, b.NumberU64()) }, c.reverse, "", "")
-		if err != nil {
-			t.Fatalf("Case %d failed, err %v", i, err)
+		var numbers []int
+		hashCh, _ := iterateTransactions(chainDb, c.from, c.to, c.reverse)
+		if hashCh != nil {
+			for h := range hashCh {
+				numbers = append(numbers, int(h.number))
+				if len(h.hashes) > 0 {
+					if got, exp := h.hashes[0], txs[h.number-1].Hash(); got != exp {
+						t.Fatalf("hash wrong, got %x exp %x", got, exp)
+					}
+				}
+			}
 		}
-		if !reflect.DeepEqual(visit, c.expect) {
-			t.Fatalf("Case %d failed, visit element mismatch, want %v, got %v", i, c.expect, visit)
+		if !c.reverse {
+			sort.Ints(numbers)
+		} else {
+			sort.Sort(sort.Reverse(sort.IntSlice(numbers)))
+		}
+		if !reflect.DeepEqual(numbers, c.expect) {
+			t.Fatalf("Case %d failed, visit element mismatch, want %v, got %v", i, c.expect, numbers)
 		}
 	}
 }
