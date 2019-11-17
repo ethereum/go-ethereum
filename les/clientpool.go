@@ -553,9 +553,9 @@ func (f *clientPool) getPosBalance(id enode.ID) posBalance {
 	return f.ndb.getOrNewPB(id)
 }
 
-// updateBalance updates the balance of a client (either overwrites it or adds to it).
+// addBalance updates the balance of a client (either overwrites it or adds to it).
 // It also updates the balance meta info string.
-func (f *clientPool) updateBalance(id enode.ID, amount int64, meta string) (uint64, uint64, error) {
+func (f *clientPool) addBalance(id enode.ID, amount int64, meta string) (uint64, uint64, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 

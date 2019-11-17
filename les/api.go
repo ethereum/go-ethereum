@@ -170,14 +170,11 @@ func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, clien
 	return
 }
 
-// UpdateBalance updates the balance of a client (either overwrites it or adds to it).
+// AddBalance updates the balance of a client (either overwrites it or adds to it).
 // It also updates the balance meta info string.
-func (api *PrivateLightServerAPI) UpdateBalance(id enode.ID, value int64, meta string) (map[string]uint64, error) {
-	oldBalance, newBalance, err := api.server.clientPool.updateBalance(id, value, meta)
-	m := make(map[string]uint64)
-	m["old"] = oldBalance
-	m["new"] = newBalance
-	return m, err
+func (api *PrivateLightServerAPI) AddBalance(id enode.ID, value int64, meta string) ([2]uint64, error) {
+	oldBalance, newBalance, err := api.server.clientPool.addBalance(id, value, meta)
+	return [2]uint64{oldBalance, newBalance}, err
 }
 
 // SetClientParams sets client parameters for all clients listed in the ids list

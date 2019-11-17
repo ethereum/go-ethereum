@@ -111,7 +111,7 @@ func testClientPool(t *testing.T, connLimit, clientCount, paidCount int, randomD
 			// give a positive balance to some of the peers
 			amount := testClientPoolTicks / 2 * int64(time.Second) // enough for half of the simulation period
 			for i := 0; i < paidCount; i++ {
-				pool.updateBalance(poolTestPeer(i).ID(), amount, "")
+				pool.addBalance(poolTestPeer(i).ID(), amount, "")
 			}
 		}
 
@@ -178,7 +178,7 @@ func TestConnectPaidClient(t *testing.T) {
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
 	// Add balance for an external client and mark it as paid client
-	pool.updateBalance(poolTestPeer(0).ID(), 1000, "")
+	pool.addBalance(poolTestPeer(0).ID(), 1000, "")
 
 	if !pool.connect(poolTestPeer(0), 10) {
 		t.Fatalf("Failed to connect paid client")
@@ -196,7 +196,7 @@ func TestConnectPaidClientToSmallPool(t *testing.T) {
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
 	// Add balance for an external client and mark it as paid client
-	pool.updateBalance(poolTestPeer(0).ID(), 1000, "")
+	pool.addBalance(poolTestPeer(0).ID(), 1000, "")
 
 	// Connect a fat paid client to pool, should reject it.
 	if pool.connect(poolTestPeer(0), 100) {
@@ -216,15 +216,15 @@ func TestConnectPaidClientToFullPool(t *testing.T) {
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
 	for i := 0; i < 10; i++ {
-		pool.updateBalance(poolTestPeer(i).ID(), 1000000000, "")
+		pool.addBalance(poolTestPeer(i).ID(), 1000000000, "")
 		pool.connect(poolTestPeer(i), 1)
 	}
-	pool.updateBalance(poolTestPeer(11).ID(), 1000, "") // Add low balance to new paid client
+	pool.addBalance(poolTestPeer(11).ID(), 1000, "") // Add low balance to new paid client
 	if pool.connect(poolTestPeer(11), 1) {
 		t.Fatalf("Low balance paid client should be rejected")
 	}
 	clock.Run(time.Second)
-	pool.updateBalance(poolTestPeer(12).ID(), 1000000000*60*3, "") // Add high balance to new paid client
+	pool.addBalance(poolTestPeer(12).ID(), 1000000000*60*3, "") // Add high balance to new paid client
 	if !pool.connect(poolTestPeer(12), 1) {
 		t.Fatalf("High balance paid client should be accpected")
 	}
@@ -243,7 +243,7 @@ func TestPaidClientKickedOut(t *testing.T) {
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
 	for i := 0; i < 10; i++ {
-		pool.updateBalance(poolTestPeer(i).ID(), 1000000000, "") // 1 second allowance
+		pool.addBalance(poolTestPeer(i).ID(), 1000000000, "") // 1 second allowance
 		pool.connect(poolTestPeer(i), 1)
 		clock.Run(time.Millisecond)
 	}
@@ -351,7 +351,7 @@ func TestPositiveBalanceCalculation(t *testing.T) {
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
-	pool.updateBalance(poolTestPeer(0).ID(), int64(time.Minute*3), "")
+	pool.addBalance(poolTestPeer(0).ID(), int64(time.Minute*3), "")
 	pool.connect(poolTestPeer(0), 10)
 	clock.Run(time.Minute)
 
@@ -377,7 +377,7 @@ func TestDowngradePriorityClient(t *testing.T) {
 	p := &poolTestPeerWithCap{
 		poolTestPeer: poolTestPeer(0),
 	}
-	pool.updateBalance(p.ID(), int64(time.Minute), "")
+	pool.addBalance(p.ID(), int64(time.Minute), "")
 	pool.connect(p, 10)
 	if p.cap != 10 {
 		t.Fatalf("The capcacity of priority peer hasn't been updated, got: %d", p.cap)
@@ -393,7 +393,7 @@ func TestDowngradePriorityClient(t *testing.T) {
 		t.Fatalf("Positive balance mismatch, want %v, got %v", 0, pb.value)
 	}
 
-	pool.updateBalance(poolTestPeer(0).ID(), int64(time.Minute), "")
+	pool.addBalance(poolTestPeer(0).ID(), int64(time.Minute), "")
 	pb = pool.ndb.getOrNewPB(poolTestPeer(0).ID())
 	if pb.value != uint64(time.Minute) {
 		t.Fatalf("Positive balance mismatch, want %v, got %v", uint64(time.Minute), pb.value)
