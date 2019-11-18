@@ -47,10 +47,8 @@ jobs:
       dist: xenial
       go: 1.13.x
       script:
-        - cat /proc/cpuinfo
-        - free -h
         - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
+        - travis_wait 30 go run build/ci.go test -coverage $TEST_PACKAGES
 
     - stage: build
       os: osx
