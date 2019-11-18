@@ -186,13 +186,6 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() ui
 	}
 }
 
-// checksum calculates the IEEE CRC32 checksum of a block number.
-func checksum(fork uint64) uint32 {
-	var blob [8]byte
-	binary.BigEndian.PutUint64(blob[:], fork)
-	return crc32.ChecksumIEEE(blob[:])
-}
-
 // checksumUpdate calculates the next IEEE CRC32 checksum based on the previous
 // one and a fork block number (equivalent to CRC32(original-blob || fork)).
 func checksumUpdate(hash uint32, fork uint64) uint32 {

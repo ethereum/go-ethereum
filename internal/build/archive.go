@@ -213,11 +213,10 @@ func ExtractTarballArchive(archive string, dest string) error {
 		target := filepath.Join(dest, header.Name)
 
 		switch header.Typeflag {
-		case tar.TypeDir:
-			if err := os.MkdirAll(target, 0755); err != nil {
+		case tar.TypeReg:
+			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 				return err
 			}
-		case tar.TypeReg:
 			file, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			if err != nil {
 				return err

@@ -152,7 +152,6 @@ func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 	switch {
 	case typ == rawValueType:
 		return decodeRawValue, nil
-		return decodeDecoder, nil
 	case typ.AssignableTo(reflect.PtrTo(bigInt)):
 		return decodeBigInt, nil
 	case typ.AssignableTo(bigInt):

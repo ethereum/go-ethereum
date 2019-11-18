@@ -119,10 +119,7 @@ func (net *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) 
 	if err != nil {
 		return nil, err
 	}
-	node := &Node{
-		Node:   adapterNode,
-		Config: conf,
-	}
+	node := newNode(adapterNode, conf, false)
 	log.Trace("Node created", "id", conf.ID)
 
 	nodeIndex := len(net.Nodes)
@@ -448,7 +445,7 @@ func (net *Network) GetNodeIDs(excludeIDs ...enode.ID) []enode.ID {
 }
 
 func (net *Network) getNodeIDs(excludeIDs []enode.ID) []enode.ID {
-	// Get all curent nodeIDs
+	// Get all current nodeIDs
 	nodeIDs := make([]enode.ID, 0, len(net.nodeMap))
 	for id := range net.nodeMap {
 		nodeIDs = append(nodeIDs, id)
@@ -735,7 +732,16 @@ type Node struct {
 
 	// up tracks whether or not the node is running
 	up   bool
-	upMu sync.RWMutex
+	upMu *sync.RWMutex
+}
+
+func newNode(an adapters.Node, ac *adapters.NodeConfig, up bool) *Node {
+	return &Node{Node: an, Config: ac, up: up, upMu: new(sync.RWMutex)}
+}
+
+func (n *Node) copy() *Node {
+	configCpy := *n.Config
+	return newNode(n.Node, &configCpy, n.Up())
 }
 
 // Up returns whether the node is currently up (online)
@@ -787,22 +793,19 @@ func (n *Node) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON implements json.Unmarshaler interface so that we don't lose
-// Node.up status. IMPORTANT: The implementation is incomplete; we lose
-// p2p.NodeInfo.
+// UnmarshalJSON implements json.Unmarshaler interface so that we don't lose Node.up
+// status. IMPORTANT: The implementation is incomplete; we lose p2p.NodeInfo.
 func (n *Node) UnmarshalJSON(raw []byte) error {
 	// TODO: How should we turn back NodeInfo into n.Node?
 	// Ticket: https://github.com/ethersphere/go-ethereum/issues/1177
-	node := struct {
+	var node struct {
 		Config *adapters.NodeConfig `json:"config,omitempty"`
 		Up     bool                 `json:"up"`
-	}{}
+	}
 	if err := json.Unmarshal(raw, &node); err != nil {
 		return err
 	}
-
-	n.SetUp(node.Up)
-	n.Config = node.Config
+	*n = *newNode(nil, node.Config, node.Up)
 	return nil
 }
 
@@ -899,7 +902,7 @@ func (net *Network) snapshot(addServices []string, removeServices []string) (*Sn
 		Nodes: make([]NodeSnapshot, len(net.Nodes)),
 	}
 	for i, node := range net.Nodes {
-		snap.Nodes[i] = NodeSnapshot{Node: *node}
+		snap.Nodes[i] = NodeSnapshot{Node: *node.copy()}
 		if !node.Up() {
 			continue
 		}
