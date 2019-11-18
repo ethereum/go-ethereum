@@ -622,3 +622,109 @@ func TestOffset(t *testing.T) {
 // However, all 'normal' failure modes arising due to failing to sync() or save a file should be
 // handled already, and the case described above can only (?) happen if an external process/user
 // deletes files from the filesystem.
+
+// TestIterator does some basic tests on the RetrieveN and iterarating the
+// resultset
+func TestIterator(t *testing.T) {
+	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
+	fname := fmt.Sprintf("iterator-%d", rand.Uint64())
+	{ // Fill table
+		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 50, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Write 15 bytes 30 times
+		for x := 0; x < 30; x++ {
+			data := getChunk(15, x)
+			f.Append(uint64(x), data)
+		}
+		f.Close()
+	}
+	{ // Open it, iterate, verify iteration
+		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 40, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		exp := f.items
+		itemCount := uint64(0)
+		lookupCount := 0
+		for {
+			it, err := f.RetrieveN(itemCount, 10000, 100000)
+			if err != nil {
+				break
+			}
+			lookupCount++
+			for !it.Next() {
+				it.Value()
+				itemCount++
+			}
+		}
+		// There should be one lookup per file (zero-indexed files)
+		if exp := int(f.headId) + 1; exp != lookupCount {
+			t.Errorf("did %d lookups, expected %d", lookupCount, exp)
+		}
+		if itemCount != exp {
+			t.Errorf("got %d items, expected %d", itemCount, exp)
+		}
+		f.Close()
+	}
+	{ // Open it, iterate, verify byte limit. The byte limit is less than item
+		// size, so each lookup should only return one otem
+		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 40, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		exp := f.items
+		itemCount := uint64(0)
+		lookupCount := 0
+		for {
+
+			it, err := f.RetrieveN(itemCount, 10000, 10)
+			if err != nil {
+				break
+			}
+			lookupCount++
+			for !it.Next() {
+				it.Value()
+				itemCount++
+			}
+		}
+		// There should be one lookup per item
+		if exp != uint64(lookupCount) {
+			t.Errorf("did %d lookups, expected %d", lookupCount, exp)
+		}
+		if itemCount != exp {
+			t.Errorf("got %d items, expected %d", itemCount, exp)
+		}
+		f.Close()
+	}
+	{ // Open it, iterate, verify item limit. Max two items per go
+		f, err := newCustomTable(os.TempDir(), fname, rm, wm, sg, 40, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		exp := f.items
+		itemCount := uint64(0)
+		lookupCount := 0
+		for {
+
+			it, err := f.RetrieveN(itemCount, 1, 1000)
+			if err != nil {
+				break
+			}
+			lookupCount++
+			for !it.Next() {
+				it.Value()
+				itemCount++
+			}
+		}
+		// There should be one lookup per item
+		if exp != uint64(lookupCount) {
+			t.Errorf("did %d lookups, expected %d", lookupCount, exp)
+		}
+		if itemCount != exp {
+			t.Errorf("got %d items, expected %d", itemCount, exp)
+		}
+		f.Close()
+	}
+}
