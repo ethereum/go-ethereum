@@ -140,6 +140,29 @@ func CopyFile(dst, src string, mode os.FileMode) {
 	}
 }
 
+// CopyFolder copies a folder.
+func CopyFolder(dst, src string, mode os.FileMode) {
+	if err := os.MkdirAll(dst, mode); err != nil {
+		log.Fatal(err)
+	}
+	dir, _ := os.Open(src)
+
+	objects, err := dir.Readdir(-1)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, obj := range objects {
+		srcPath := filepath.Join(src, obj.Name())
+		dstPath := filepath.Join(dst, obj.Name())
+
+		if obj.IsDir() {
+			CopyFolder(dstPath, srcPath, mode)
+		} else {
+			CopyFile(dstPath, srcPath, mode)
+		}
+	}
+}
+
 // GoTool returns the command that runs a go tool. This uses go from GOROOT instead of PATH
 // so that go commands executed by build use the same version of Go as the 'host' that runs
 // build code. e.g.

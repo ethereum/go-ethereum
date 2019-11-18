@@ -46,6 +46,7 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
+	gobuild "go/build"
 	"go/parser"
 	"go/token"
 	"io/ioutil"
@@ -507,13 +508,15 @@ func doDebianSource(cmdline []string) {
 			meta := newDebMetadata(distro, goboot, *signer, env, now, pkg.Name, pkg.Version, pkg.Executables)
 			pkgdir := stageDebianSource(*workdir, meta)
 
-			// Add Go source code.
+			// Add Go source code
 			if err := build.ExtractTarballArchive(gobundle, pkgdir); err != nil {
 				log.Fatalf("Failed to extract Go sources: %v", err)
 			}
 			if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, ".go")); err != nil {
 				log.Fatalf("Failed to rename Go source folder: %v", err)
 			}
+			// Add all dependency modules in compressed form
+			build.CopyFolder(filepath.Join(pkgdir, ".mod", "cache", "download"), filepath.Join(gobuild.Default.GOPATH, "pkg", "mod", "cache", "download"), 0755)
 
 			// Run the packaging and upload to the PPA
 			debuild := exec.Command("debuild", "-S", "-sa", "-us", "-uc", "-d", "-Zxz")
