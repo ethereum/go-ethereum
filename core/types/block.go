@@ -140,7 +140,42 @@ func (h *Header) EncodeRLP(w io.Writer) error {
 		}
 		return rlp.Encode(w, legacyH)
 	}
-	return rlp.Encode(w, h)
+	encHeader := struct {
+		ParentHash  common.Hash
+		UncleHash   common.Hash
+		Coinbase    common.Address
+		Root        common.Hash
+		TxHash      common.Hash
+		ReceiptHash common.Hash
+		Bloom       Bloom
+		Difficulty  *big.Int
+		Number      *big.Int
+		GasLimit    uint64
+		GasUsed     uint64
+		Time        uint64
+		Extra       []byte
+		MixDigest   common.Hash
+		Nonce       BlockNonce
+		BaseFee     *big.Int
+	}{
+		ParentHash:  h.ParentHash,
+		UncleHash:   h.UncleHash,
+		Coinbase:    h.Coinbase,
+		Root:        h.Root,
+		TxHash:      h.TxHash,
+		ReceiptHash: h.ReceiptHash,
+		Bloom:       h.Bloom,
+		Difficulty:  h.Difficulty,
+		Number:      h.Number,
+		GasLimit:    h.GasLimit,
+		GasUsed:     h.GasUsed,
+		Time:        h.Time,
+		Extra:       h.Extra,
+		MixDigest:   h.MixDigest,
+		Nonce:       h.Nonce,
+		BaseFee:     h.BaseFee,
+	}
+	return rlp.Encode(w, encHeader)
 }
 
 func (h *Header) DecodeRLP(s *rlp.Stream) error {
