@@ -1216,6 +1216,8 @@ type RPCTransaction struct {
 	To               *common.Address `json:"to"`
 	TransactionIndex *hexutil.Uint64 `json:"transactionIndex"`
 	Value            *hexutil.Big    `json:"value"`
+	GasPremium       *hexutil.Big    `json:"gasPremium"`
+	FeeCap           *hexutil.Big    `json:"feeCap"`
 	V                *hexutil.Big    `json:"v"`
 	R                *hexutil.Big    `json:"r"`
 	S                *hexutil.Big    `json:"s"`
@@ -1232,17 +1234,19 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	v, r, s := tx.RawSignatureValues()
 
 	result := &RPCTransaction{
-		From:     from,
-		Gas:      hexutil.Uint64(tx.Gas()),
-		GasPrice: (*hexutil.Big)(tx.GasPrice()),
-		Hash:     tx.Hash(),
-		Input:    hexutil.Bytes(tx.Data()),
-		Nonce:    hexutil.Uint64(tx.Nonce()),
-		To:       tx.To(),
-		Value:    (*hexutil.Big)(tx.Value()),
-		V:        (*hexutil.Big)(v),
-		R:        (*hexutil.Big)(r),
-		S:        (*hexutil.Big)(s),
+		From:       from,
+		Gas:        hexutil.Uint64(tx.Gas()),
+		GasPrice:   (*hexutil.Big)(tx.GasPrice()),
+		Hash:       tx.Hash(),
+		Input:      hexutil.Bytes(tx.Data()),
+		Nonce:      hexutil.Uint64(tx.Nonce()),
+		To:         tx.To(),
+		Value:      (*hexutil.Big)(tx.Value()),
+		GasPremium: (*hexutil.Big)(tx.GasPremium()),
+		FeeCap:     (*hexutil.Big)(tx.FeeCap()),
+		V:          (*hexutil.Big)(v),
+		R:          (*hexutil.Big)(r),
+		S:          (*hexutil.Big)(s),
 	}
 	if blockHash != (common.Hash{}) {
 		result.BlockHash = &blockHash
