@@ -106,9 +106,9 @@ func randomSource() *rand.Rand {
 func (re *JSRE) runEventLoop() {
 	defer close(re.closed)
 
-	vm := goja.New()
+	re.vm = goja.New()
 	r := randomSource()
-	vm.SetRandSource(r.Float64)
+	re.vm.SetRandSource(r.Float64)
 
 	registry := map[*jsTimer]*jsTimer{}
 	ready := make(chan *jsTimer)
@@ -150,22 +150,22 @@ func (re *JSRE) runEventLoop() {
 		}
 		return goja.Undefined()
 	}
-	vm.Set("_setTimeout", setTimeout)
-	vm.Set("_setInterval", setInterval)
-	vm.RunString(`var setTimeout = function(args) {
+	re.vm.Set("_setTimeout", setTimeout)
+	re.vm.Set("_setInterval", setInterval)
+	re.vm.RunString(`var setTimeout = function(args) {
 		if (arguments.length < 1) {
 			throw TypeError("Failed to execute 'setTimeout': 1 argument required, but only 0 present.");
 		}
 		return _setTimeout.apply(this, arguments);
 	}`)
-	vm.RunString(`var setInterval = function(args) {
+	re.vm.RunString(`var setInterval = function(args) {
 		if (arguments.length < 1) {
 			throw TypeError("Failed to execute 'setInterval': 1 argument required, but only 0 present.");
 		}
 		return _setInterval.apply(this, arguments);
 	}`)
-	vm.Set("clearTimeout", clearTimeout)
-	vm.Set("clearInterval", clearTimeout)
+	re.vm.Set("clearTimeout", clearTimeout)
+	re.vm.Set("clearInterval", clearTimeout)
 
 	var waitForCallbacks bool
 
@@ -185,9 +185,9 @@ loop:
 				arguments = make([]interface{}, 1)
 			}
 			arguments[0] = timer.call.Arguments[0]
-			call, isFunc := goja.AssertFunction(vm.Get(`Function.call.call`))
+			call, isFunc := goja.AssertFunction(timer.call.Arguments[0])
 			if !isFunc {
-				panic(vm.ToValue("js error: Function.call.call is not a function"))
+				panic(re.vm.ToValue("js error: timer/timeout callback is not a function"))
 			}
 			call(goja.Null(), timer.call.Arguments...)
 
@@ -202,7 +202,7 @@ loop:
 			}
 		case req := <-re.evalQueue:
 			// run the code, send the result back
-			req.fn(vm)
+			req.fn(re.vm)
 			close(req.done)
 			if waitForCallbacks && (len(registry) == 0) {
 				break loop
