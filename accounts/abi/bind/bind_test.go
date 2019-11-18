@@ -1320,7 +1320,7 @@ var bindTests = []struct {
 
 		  event bar(uint256 i);
 		  event bar(uint256 i, uint256 j);
-			
+
 		  function foo(uint256 i) public {
 			  emit bar(i);
 		  }
@@ -1501,6 +1501,18 @@ func TestGolangBindings(t *testing.T) {
 		if err := ioutil.WriteFile(filepath.Join(pkg, strings.ToLower(tt.name)+"_test.go"), []byte(code), 0600); err != nil {
 			t.Fatalf("test %d: failed to write tests: %v", i, err)
 		}
+	}
+	// Convert the package to go modules and use the current source for go-ethereum
+	moder := exec.Command(gocmd, "mod", "init", "bindtest")
+	moder.Dir = pkg
+	if out, err := moder.CombinedOutput(); err != nil {
+		t.Fatalf("failed to convert binding test to modules: %v\n%s", err, out)
+	}
+	pwd, _ := os.Getwd()
+	replacer := exec.Command(gocmd, "mod", "edit", "-replace", "github.com/ethereum/go-ethereum="+filepath.Join(pwd, "..", "..", "..")) // Repo root
+	replacer.Dir = pkg
+	if out, err := replacer.CombinedOutput(); err != nil {
+		t.Fatalf("failed to replace binding test dependency to current source tree: %v\n%s", err, out)
 	}
 	// Test the entire package and report any failures
 	cmd := exec.Command(gocmd, "test", "-v", "-count", "1")
