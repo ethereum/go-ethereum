@@ -68,7 +68,7 @@ func TestSubscriptions(t *testing.T) {
 			t.Fatalf("unable to register test service %v", err)
 		}
 	}
-	go server.ServeCodec(NewJSONCodec(serverConn), OptionMethodInvocation|OptionSubscriptions)
+	go server.ServeCodec(NewCodec(serverConn), 0)
 	defer server.Stop()
 
 	// wait for message and write them to the given channels
@@ -130,7 +130,7 @@ func TestServerUnsubscribe(t *testing.T) {
 	service := &notificationTestService{unsubscribed: make(chan string)}
 	server.RegisterName("nftest2", service)
 	p1, p2 := net.Pipe()
-	go server.ServeCodec(NewJSONCodec(p1), OptionMethodInvocation|OptionSubscriptions)
+	go server.ServeCodec(NewCodec(p1), 0)
 
 	p2.SetDeadline(time.Now().Add(10 * time.Second))
 

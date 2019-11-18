@@ -671,12 +671,6 @@
 			"revisionTime": "2019-06-28T18:40:41Z"
 		},
 		{
-			"checksumSHA1": "F+tqxPGFt5x7DKZakbbMmENX1oQ=",
-			"path": "golang.org/x/net/websocket",
-			"revision": "da137c7871d730100384dbcf36e6f8fa493aef5b",
-			"revisionTime": "2019-06-28T18:40:41Z"
-		},
-		{
 			"checksumSHA1": "4TEYFKrAUuwBMqExjQBsnf/CgjQ=",
 			"path": "golang.org/x/sync/syncmap",
 			"revision": "f52d1811a62927559de87708c8913c1650ce4f26",
