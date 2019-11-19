@@ -529,7 +529,23 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 // state is modified during execution, make sure to copy it if necessary.
 func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, block *types.Block, stateDB *state.StateDB) (*core.ExecutionResult, error) {
 	// Ensure message is initialized properly.
-	if call.GasPrice == nil {
+	// EIP1559 guards
+	if b.config.IsEIP1559Finalized(block.Number()) && call.GasPremium == nil || call.FeeCap == nil || call.GasPrice != nil {
+		return nil, 0, false, fmt.Errorf("after block %d EIP1559 is finalized and transactions must contain a GasPremium and FeeCap and not contain a GasPrice", b.config.EIP1559FinalizedBlock.Uint64())
+	}
+	if !b.config.IsEIP1559(block.Number()) && call.GasPremium != nil || call.FeeCap != nil || call.GasPrice == nil {
+		return nil, 0, false, fmt.Errorf("before block %d EIP1559 is not activated and transactions must contain a GasPrice and not contain a GasPremium or FeeCap", b.config.EIP1559Block.Uint64())
+	}
+	if call.GasPrice != nil && (call.GasPremium != nil || call.FeeCap != nil) {
+		return nil, 0, false, errors.New("if GasPrice is set, GasPremium and FeeCap must not be set")
+	}
+	if call.FeeCap != nil && call.GasPremium == nil {
+		return nil, 0, false, errors.New("if FeeCap is set, GasPremium must be set")
+	}
+	if call.GasPremium != nil && call.FeeCap == nil {
+		return nil, 0, false, errors.New("if GasPremium is set, FeeCap must be set")
+	}
+	if call.GasPrice == nil && call.GasPremium == nil {
 		call.GasPrice = big.NewInt(1)
 	}
 	if call.Gas == 0 {
@@ -562,6 +578,26 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transaction) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
+	// EIP1559 guards
+	if b.config.IsEIP1559Finalized(b.blockchain.CurrentBlock().Number()) && tx.GasPremium() == nil || tx.FeeCap() == nil || tx.GasPrice() != nil {
+		return fmt.Errorf("after block %d EIP1559 is finalized and transactions must contain a GasPremium and FeeCap and not contain a GasPrice", b.config.EIP1559FinalizedBlock.Uint64())
+	}
+	if !b.config.IsEIP1559(b.blockchain.CurrentBlock().Number()) && tx.GasPremium() != nil || tx.FeeCap() != nil || tx.GasPrice() == nil {
+		return fmt.Errorf("before block %d EIP1559 is not activated and transactions must contain a GasPrice and not contain a GasPremium or FeeCap", b.config.EIP1559Block.Uint64())
+	}
+	if tx.GasPrice() != nil && (tx.GasPremium() != nil || tx.FeeCap() != nil) {
+		return errors.New("if GasPrice is set, GasPremium and FeeCap must not be set")
+	}
+	if tx.FeeCap() != nil && tx.GasPremium() == nil {
+		return errors.New("if FeeCap is set, GasPremium must be set")
+	}
+	if tx.GasPremium() != nil && tx.FeeCap() == nil {
+		return errors.New("if GasPremium is set, FeeCap must be set")
+	}
+	if tx.GasPrice() == nil && tx.GasPremium() == nil {
+		return errors.New("either GasPrice or GasPremium and FeeCap need to be set")
+	}
 
 	sender, err := types.Sender(types.NewEIP155Signer(b.config.ChainID), tx)
 	if err != nil {
