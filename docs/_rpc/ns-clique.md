@@ -52,7 +52,7 @@ Retrieves the state snapshot at a given block.
 | Client  | Method invocation                                        |
 |:--------|----------------------------------------------------------|
 | Console | `clique.getSnapshotAtHash(blockHash)`                    |
-| RPC     | `{"method": "clique_getSigners", "params": [blockHash]}` |
+| RPC     | `{"method": "clique_getSnapshotAtHash", "params": [blockHash]}` |
 
 ### clique_getSigners
 
@@ -107,7 +107,7 @@ for the last 64 blocks. The returned object contains the following fields:
 | Client  | Method invocation                                   |
 |:--------|-----------------------------------------------------|
 | Console | `clique.status()`                                   |
-| RPC     | `{"method": "clique_discard", "params": [address]}` |
+| RPC     | `{"method": "clique_status", "params": [}` |
 
 Example:
 
