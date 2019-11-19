@@ -40,17 +40,6 @@ func (h *expHeap) add(item string, exp time.Time) {
 	heap.Push(h, expItem{item, exp})
 }
 
-// remove removes an item.
-func (h *expHeap) remove(item string) bool {
-	for i, v := range *h {
-		if v.item == item {
-			heap.Remove(h, i)
-			return true
-		}
-	}
-	return false
-}
-
 // contains checks whether an item is present.
 func (h expHeap) contains(item string) bool {
 	for _, v := range h {
