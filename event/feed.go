@@ -39,10 +39,9 @@ type Feed struct {
 	sendCases caseList         // the active set of select cases used by Send
 
 	// The inbox holds newly subscribed channels until they are added to sendCases.
-	mu     sync.Mutex
-	inbox  caseList
-	etype  reflect.Type
-	closed bool
+	mu    sync.Mutex
+	inbox caseList
+	etype reflect.Type
 }
 
 // This is the index of the first actual subscription channel in sendCases.
