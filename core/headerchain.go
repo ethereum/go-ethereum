@@ -546,7 +546,11 @@ func (hc *HeaderChain) GetAncestorHash(ref *types.Header, target uint64) common.
 		return common.Hash{}
 	}
 	var (
-		maxNonCanonLookups = uint64(100)
+		// The maxNonCanonLookups _must_ be above 256, since this method is used
+		// when importing sidechains. If we are importing a very long sidechain,
+		// then we _might_ have to look back up to 256 blocks in order to execute
+		// the BLOCKHASH opcode, regardless if it's canon or not
+		maxNonCanonLookups = uint64(260)
 	)
 	if hashHistoryTail, _ := hc.hashHistory.Oldest(); hashHistoryTail <= target {
 		// Iterate the chain until we hit the target or we hit a ancestor

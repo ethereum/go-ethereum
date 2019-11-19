@@ -2363,3 +2363,95 @@ func TestDeleteCreateRevert(t *testing.T) {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 }
+
+// TestImportlongSidechainWithBlockhash200 imports a canonical chain of 500 blocks,
+// and then finds out about a longer sidechain which forked off at block 200 (300 blocks ago).
+// It will then import the sidechain, and execute the transactions.
+// Now, at block 450, there is a transaction which executes BLOCKHASH(205), and stores
+// the result in slot(0).
+// This test is meant to ensure that the hashbuffer-based GetAncestorHash correctly
+// handles non-canon lookups
+func TestImportlongSidechainWithBlockhash200(t *testing.T) {
+
+	var (
+		aa     = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+		engine = ethash.NewFaker()
+		db     = rawdb.NewMemoryDatabase()
+		// A sender who makes transactions, has some funds
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address = crypto.PubkeyToAddress(key.PublicKey)
+		funds   = big.NewInt(1000000000)
+		gspec   = &Genesis{
+			Config: params.TestChainConfig,
+			Alloc: GenesisAlloc{
+				address: {Balance: funds},
+				// The address 0xAAAAA stores BLOCKHASH in slot zero
+				aa: {
+					// Push
+					Code: []byte{
+						byte(vm.PUSH1), byte(205), // [205]
+						byte(vm.BLOCKHASH),      // [ bh(205) ]
+						byte(vm.PUSH1), byte(0), // [bh(205), 0] ; location
+						byte(vm.SSTORE), // []
+					},
+					Nonce:   1,
+					Balance: big.NewInt(0),
+				},
+			},
+		}
+		genesis = gspec.MustCommit(db)
+	)
+
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 500, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+	})
+	// Import the canonical chain
+	diskdb := rawdb.NewMemoryDatabase()
+	gspec.MustCommit(diskdb)
+	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil)
+	if err != nil {
+		t.Fatalf("failed to create initial chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+	// Ok, the canon chain is done. Now generate the competing chain. In order to be able to
+	// do so, we need to do it in two steps, so we can call b.AddTxWithChain, and have the
+	// sidechain blocks be in the chain already
+	forkBlockNum := 200
+	// Add 200 sideblocks
+	sideblocks1, _ := GenerateChain(params.TestChainConfig, blocks[forkBlockNum], engine, db, 248, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{2})
+	})
+	if n, err := chain.InsertChain(sideblocks1); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+	// Add another 150 blocks
+	sideblocks2, _ := GenerateChain(params.TestChainConfig, sideblocks1[len(sideblocks1)-1], engine, db, 150, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{2})
+		if i == 0 {
+			tx, _ := types.SignTx(types.NewTransaction(0, aa,
+				big.NewInt(0), 50000, big.NewInt(1), nil), types.HomesteadSigner{}, key)
+			b.AddTxWithChain(chain, tx)
+		}
+	})
+	if n, err := chain.InsertChain(sideblocks2); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+	if got, exp := chain.CurrentBlock().Hash(), sideblocks2[len(sideblocks2)-1].Hash(); got != exp {
+		t.Fatalf("error, exp %x got %x", got, exp)
+	}
+	statedb, err := chain.State()
+	if err != nil {
+		t.Fatalf("failed to get state: %v", err)
+	}
+	val := statedb.GetState(aa, common.Hash{})
+	// Check canon
+	if got, exp := val, chain.GetCanonicalHash(205); got != exp {
+		t.Fatalf("wrong hash, got %x exp %x", got, exp)
+	}
+	// Sanity check against the sideblocks
+	if got, exp := val, sideblocks1[3].Hash(); got != exp {
+		t.Fatalf("wrong hash, got %x exp %x", got, exp)
+	}
+}
