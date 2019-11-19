@@ -25,6 +25,11 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+var (
+	errInsufficientBalanceForGas   = errors.New("insufficient balance to pay for gas")
+	errInsufficientCoinbaseBalance = errors.New("insufficient coinbase balance to apply a negative coinbase credit")
+)
+
 /*
 The State Transitioning Model
 
@@ -191,11 +196,12 @@ func (st *StateTransition) buyGas() error {
 }
 
 func (st *StateTransition) buyGasEIP1559() error {
-	// any reason we can't set st.gasPrice to this?
+	// gasPrice = min(BASEFEE + tx.fee_premium, tx.fee_cap)
 	gasPrice := new(big.Int).Add(st.evm.BaseFee, st.msg.GasPremium())
 	if gasPrice.Cmp(st.msg.FeeCap()) > 0 {
 		gasPrice.Set(st.msg.FeeCap())
 	}
+	// tx.origin pays gasPrice * tx.gas
 	mgval := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), gasPrice)
 	if st.state.GetBalance(st.msg.From()).Cmp(mgval) < 0 {
 		return errInsufficientBalanceForGas
@@ -302,10 +308,21 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 	st.refundGas()
-	if st.isEIP1559 { // if we can set st.gasPrice to the calculated eip1559 gasPrice in buyGas then we don't need this
+	if st.isEIP1559 {
 		gasPrice := new(big.Int).Add(st.evm.BaseFee, st.msg.GasPremium())
 		if gasPrice.Cmp(st.msg.FeeCap()) > 0 {
 			gasPrice.Set(st.msg.FeeCap())
+		}
+		// block.coinbase gains (gasprice - BASEFEE) * gasused
+		coinBaseCredit := new(big.Int).Mul(new(big.Int).Sub(gasPrice, st.evm.BaseFee), new(big.Int).SetUint64(st.gasUsed()))
+		//  If gasprice < BASEFEE (due to the fee_cap), this means that the block.coinbase loses funds from this operation;
+		//  in this case, check that the post-balance is non-negative and throw an exception if it is negative.
+		if coinBaseCredit.Sign() < 0 {
+			coinbaseBal := st.state.GetBalance(st.evm.Coinbase)
+			postBalance := new(big.Int).Add(coinbaseBal, coinBaseCredit)
+			if postBalance.Sign() < 0 {
+				return nil, 0, vmerr != nil, errInsufficientCoinbaseBalance
+			}
 		}
 		st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), gasPrice))
 
@@ -353,12 +370,15 @@ func (st *StateTransition) refundGasEIP1559() {
 	}
 	st.gas += refund
 
-	// Return ETH for remaining gas, exchanged at the original rate.
+	// tx.origin gets refunded gasprice * (tx.gas - gasused)
+	txGasSubUsed := new(big.Int).Sub(new(big.Int).SetUint64(st.msg.Gas()), new(big.Int).SetUint64(st.gasUsed()))
+
+	// gasPrice = min(BASEFEE + tx.fee_premium, tx.fee_cap)
 	gasPrice := new(big.Int).Add(st.evm.BaseFee, st.msg.GasPremium())
 	if gasPrice.Cmp(st.msg.FeeCap()) > 0 {
 		gasPrice.Set(st.msg.FeeCap())
 	}
-	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), gasPrice)
+	remaining := new(big.Int).Mul(gasPrice, txGasSubUsed)
 	st.state.AddBalance(st.msg.From(), remaining)
 
 	// Also return remaining gas to the block gas counter so it is
