@@ -538,21 +538,21 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 
 	// Prepare the genesis block and reinitialise the chain
 	batch := bc.db.NewBatch()
-	bc.hc.WriteTd(batch, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
+	rawdb.WriteTd(batch, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
 	rawdb.WriteBlock(batch, genesis)
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write genesis block", "err", err)
 	}
-	bc.genesisBlock = genesis
-	bc.writeHeadBlock(bc.genesisBlock)
+	bc.writeHeadBlock(genesis)
 
+	// Last update all in-memory chain markers
+	bc.genesisBlock = genesis
 	bc.currentBlock.Store(bc.genesisBlock)
 	headBlockGauge.Update(int64(bc.genesisBlock.NumberU64()))
 	bc.hc.SetGenesis(bc.genesisBlock.Header())
 	bc.hc.SetCurrentHeader(bc.genesisBlock.Header())
 	bc.currentFastBlock.Store(bc.genesisBlock)
 	headFastBlockGauge.Update(int64(bc.genesisBlock.NumberU64()))
-
 	return nil
 }
 
@@ -621,28 +621,28 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	updateHeads := rawdb.ReadCanonicalHash(bc.db, block.NumberU64()) != block.Hash()
 
 	// Add the block to the canonical chain number scheme and mark as the head
-	// First write all header chain relative indexes
 	batch := bc.db.NewBatch()
 	rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
-	if updateHeads {
-		bc.hc.WriteHeadHeader(batch, block.Header())
-	}
-	// Then write all block chain relative indexes
 	rawdb.WriteTxLookupEntries(batch, block)
 	rawdb.WriteHeadBlockHash(batch, block.Hash())
 
-	bc.currentBlock.Store(block)
-	headBlockGauge.Update(int64(block.NumberU64()))
-
 	// If the block is better than our head or is on a different chain, force update heads
 	if updateHeads {
+		rawdb.WriteHeadHeaderHash(batch, block.Hash())
 		rawdb.WriteHeadFastBlockHash(batch, block.Hash())
-		bc.currentFastBlock.Store(block)
-		headFastBlockGauge.Update(int64(block.NumberU64()))
 	}
+	// Flush the whole batch into the disk, exit the node if failed
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to update chain indexes and markers", "err", err)
 	}
+	// Update all in-memory chain markers in the last step
+	if updateHeads {
+		bc.hc.SetCurrentHeader(block.Header())
+		bc.currentFastBlock.Store(block)
+		headFastBlockGauge.Update(int64(block.NumberU64()))
+	}
+	bc.currentBlock.Store(block)
+	headBlockGauge.Update(int64(block.NumberU64()))
 }
 
 // Genesis retrieves the chain's genesis block.
@@ -892,9 +892,15 @@ func (bc *BlockChain) Rollback(chain []common.Hash) {
 	for i := len(chain) - 1; i >= 0; i-- {
 		hash := chain[i]
 
+		// Degrade the chain markers if they are explictly reverted.
+		// In thoery we should update all in-memory markers in the
+		// last step, however the direction of rollback is from high
+		// to low, so it's safe the update in-memory markers directly.
 		currentHeader := bc.hc.CurrentHeader()
 		if currentHeader.Hash() == hash {
-			bc.hc.WriteHeadHeader(batch, bc.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64()-1))
+			newHeadHeader := bc.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64()-1)
+			rawdb.WriteHeadHeaderHash(batch, currentHeader.ParentHash)
+			bc.hc.SetCurrentHeader(newHeadHeader)
 		}
 		if currentFastBlock := bc.CurrentFastBlock(); currentFastBlock.Hash() == hash {
 			newFastBlock := bc.GetBlock(currentFastBlock.ParentHash(), currentFastBlock.NumberU64()-1)
@@ -1240,15 +1246,15 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 var lastWrite uint64
 
-// writeSideBlock writes only the block and its metadata to the database,
+// writeBlockWithState writes only the block and its metadata to the database,
 // but does not write any state. This is used to construct competing side forks
 // up to the point where they exceed the canonical total difficulty.
-func (bc *BlockChain) writeSideBlock(block *types.Block, td *big.Int) (err error) {
+func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (err error) {
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
 	batch := bc.db.NewBatch()
-	bc.hc.WriteTd(batch, block.Hash(), block.NumberU64(), td)
+	rawdb.WriteTd(batch, block.Hash(), block.NumberU64(), td)
 	rawdb.WriteBlock(batch, block)
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
@@ -1301,11 +1307,10 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Note all the components of block(td, hash->number map, header, body, receipts)
 	// should be written atomically. BlockBatch is used for containing all components.
 	blockBatch := bc.db.NewBatch()
-	if err := bc.hc.WriteTd(blockBatch, block.Hash(), block.NumberU64(), externTd); err != nil {
-		return NonStatTy, err
-	}
+	rawdb.WriteTd(blockBatch, block.Hash(), block.NumberU64(), externTd)
 	rawdb.WriteBlock(blockBatch, block)
 	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
+	rawdb.WritePreimages(blockBatch, state.Preimages())
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
 	}
@@ -1393,10 +1398,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				return NonStatTy, err
 			}
 		}
-		// Preimages is a specical helper data, we don't need to
-		// consider the atomicity.
-		rawdb.WritePreimages(bc.db, state.Preimages())
-
 		status = CanonStatTy
 	} else {
 		status = SideStatTy
@@ -1801,7 +1802,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 
 		if !bc.HasBlock(block.Hash(), block.NumberU64()) {
 			start := time.Now()
-			if err := bc.writeSideBlock(block, externTd); err != nil {
+			if err := bc.writeBlockWithoutState(block, externTd); err != nil {
 				return it.index, nil, nil, err
 			}
 			log.Debug("Injected sidechain block", "number", block.Number(), "hash", block.Hash(),

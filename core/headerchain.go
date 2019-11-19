@@ -157,7 +157,7 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 	// Note all the components of header(td, hash->number index and header) should
 	// be written atomically.
 	headerBatch := hc.chainDb.NewBatch()
-	hc.WriteTd(headerBatch, hash, number, externTd)
+	rawdb.WriteTd(headerBatch, hash, number, externTd)
 	rawdb.WriteHeader(headerBatch, header)
 	if err := headerBatch.Write(); err != nil {
 		log.Crit("Failed to write header into disk", "err", err)
@@ -200,6 +200,7 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 		if err := markerBatch.Write(); err != nil {
 			log.Crit("Failed to write header markers into disk", "err", err)
 		}
+		// Last step update all in-memory head header markers
 		hc.currentHeaderHash = hash
 		hc.currentHeader.Store(types.CopyHeader(header))
 		headHeaderGauge.Update(header.Number.Int64())
@@ -208,6 +209,7 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 	} else {
 		status = SideStatTy
 	}
+	hc.tdCache.Add(hash, externTd)
 	hc.headerCache.Add(hash, header)
 	hc.numberCache.Add(hash, number)
 	return
@@ -411,14 +413,6 @@ func (hc *HeaderChain) GetTdByHash(hash common.Hash) *big.Int {
 	return hc.GetTd(hash, *number)
 }
 
-// WriteTd stores a block's total difficulty into the database, also caching it
-// along the way.
-func (hc *HeaderChain) WriteTd(db ethdb.KeyValueWriter, hash common.Hash, number uint64, td *big.Int) error {
-	rawdb.WriteTd(db, hash, number, td)
-	hc.tdCache.Add(hash, new(big.Int).Set(td))
-	return nil
-}
-
 // GetHeader retrieves a block header from the database by hash and number,
 // caching it if found.
 func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header {
@@ -475,18 +469,12 @@ func (hc *HeaderChain) CurrentHeader() *types.Header {
 	return hc.currentHeader.Load().(*types.Header)
 }
 
-// SetCurrentHeader sets the current head header of the canonical chain.
+// SetCurrentHeader sets the in-memory head header marker of the canonical chan
+// as the given header.
 func (hc *HeaderChain) SetCurrentHeader(head *types.Header) {
 	hc.currentHeader.Store(head)
 	hc.currentHeaderHash = head.Hash()
 	headHeaderGauge.Update(head.Number.Int64())
-}
-
-// WriteHeadHeader sets the current head header of the canonical chain
-// and write the marker into database.
-func (hc *HeaderChain) WriteHeadHeader(db ethdb.KeyValueWriter, head *types.Header) {
-	rawdb.WriteHeadHeaderHash(db, head.Hash())
-	hc.SetCurrentHeader(head)
 }
 
 type (
