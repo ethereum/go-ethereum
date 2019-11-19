@@ -42,13 +42,14 @@ jobs:
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
     - stage: build
+      if: type = pull_request
       os: linux
       arch: arm64
       dist: xenial
       go: 1.13.x
       script:
-        - travis_wait 20 go run build/ci.go install
-        - travis_wait 30 go run build/ci.go test -coverage $TEST_PACKAGES
+        - go run build/ci.go install
+        - go run build/ci.go test -coverage $TEST_PACKAGES
 
     - stage: build
       os: osx
