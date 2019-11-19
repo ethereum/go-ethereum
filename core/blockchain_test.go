@@ -1289,14 +1289,17 @@ func TestCanonicalBlockRetrieval(t *testing.T) {
 					continue // busy wait for canonical hash to be written
 				}
 				if ch != block.Hash() {
-					t.Fatalf("unknown canonical hash, want %s, got %s", block.Hash().Hex(), ch.Hex())
+					t.Errorf("unknown canonical hash, want %s, got %s", block.Hash().Hex(), ch.Hex())
+					return
 				}
 				fb := rawdb.ReadBlock(blockchain.db, ch, block.NumberU64())
 				if fb == nil {
-					t.Fatalf("unable to retrieve block %d for canonical hash: %s", block.NumberU64(), ch.Hex())
+					t.Errorf("unable to retrieve block %d for canonical hash: %s", block.NumberU64(), ch.Hex())
+					return
 				}
 				if fb.Hash() != block.Hash() {
-					t.Fatalf("invalid block hash for block %d, want %s, got %s", block.NumberU64(), block.Hash().Hex(), fb.Hash().Hex())
+					t.Errorf("invalid block hash for block %d, want %s, got %s", block.NumberU64(), block.Hash().Hex(), fb.Hash().Hex())
+					return
 				}
 				return
 			}
@@ -1916,13 +1919,6 @@ func testInsertKnownChainData(t *testing.T, typ string) {
 		inserter func(blocks []*types.Block, receipts []types.Receipts) error
 		asserter func(t *testing.T, block *types.Block)
 	)
-	headers, headers2 := make([]*types.Header, 0, len(blocks)), make([]*types.Header, 0, len(blocks2))
-	for _, block := range blocks {
-		headers = append(headers, block.Header())
-	}
-	for _, block := range blocks2 {
-		headers2 = append(headers2, block.Header())
-	}
 	if typ == "headers" {
 		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
 			headers := make([]*types.Header, 0, len(blocks))
