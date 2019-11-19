@@ -81,11 +81,13 @@ func TestSnapshot(t *testing.T) {
 
 	// connect nodes in a ring
 	// spawn separate thread to avoid deadlock in the event listeners
+	connectErr := make(chan error, 1)
 	go func() {
 		for i, id := range ids {
 			peerID := ids[(i+1)%len(ids)]
 			if err := network.Connect(id, peerID); err != nil {
-				t.Fatal(err)
+				connectErr <- err
+				return
 			}
 		}
 	}()
@@ -100,9 +102,10 @@ OUTER:
 		select {
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())
+		case err := <-connectErr:
+			t.Fatal(err)
 		case ev := <-evC:
 			if ev.Type == EventTypeConn && !ev.Control {
-
 				// fail on any disconnect
 				if !ev.Conn.Up {
 					t.Fatalf("unexpected disconnect: %v -> %v", ev.Conn.One, ev.Conn.Other)
