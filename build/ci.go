@@ -319,6 +319,7 @@ func goToolArch(arch string, cc string, subcmd string, args ...string) *exec.Cmd
 func doTest(cmdline []string) {
 	coverage := flag.Bool("coverage", false, "Whether to record code coverage")
 	verbose := flag.Bool("v", false, "Whether to log verbosely")
+	count := flag.Int("count", 0, "Run each test n times. Use '1' to idiomatically disable caching.")
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
 
@@ -337,6 +338,9 @@ func doTest(cmdline []string) {
 	}
 	if *verbose {
 		gotest.Args = append(gotest.Args, "-v")
+	}
+	if *count > 0 {
+		gotest.Args = append(gotest.Args, fmt.Sprintf("-count=%d", *count))
 	}
 
 	gotest.Args = append(gotest.Args, packages...)
