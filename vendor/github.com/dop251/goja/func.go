@@ -1,8 +1,6 @@
 package goja
 
-import (
-	"reflect"
-)
+import "reflect"
 
 type baseFuncObject struct {
 	baseObject

@@ -974,7 +974,7 @@ func (r *Runtime) ToValue(i interface{}) Value {
 	case int64:
 		return intToValue(i)
 	case uint:
-		if int64(i) <= math.MaxInt64 {
+		if uint64(i) <= math.MaxInt64 {
 			return intToValue(int64(i))
 		} else {
 			return floatToValue(float64(i))
@@ -995,6 +995,9 @@ func (r *Runtime) ToValue(i interface{}) Value {
 	case float64:
 		return floatToValue(i)
 	case map[string]interface{}:
+		if i == nil {
+			return _null
+		}
 		obj := &Object{runtime: r}
 		m := &objectGoMapSimple{
 			baseObject: baseObject{
@@ -1007,6 +1010,9 @@ func (r *Runtime) ToValue(i interface{}) Value {
 		m.init()
 		return obj
 	case []interface{}:
+		if i == nil {
+			return _null
+		}
 		obj := &Object{runtime: r}
 		a := &objectGoSlice{
 			baseObject: baseObject{
@@ -1018,6 +1024,9 @@ func (r *Runtime) ToValue(i interface{}) Value {
 		a.init()
 		return obj
 	case *[]interface{}:
+		if i == nil {
+			return _null
+		}
 		obj := &Object{runtime: r}
 		a := &objectGoSlice{
 			baseObject: baseObject{

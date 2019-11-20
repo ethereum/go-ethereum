@@ -278,7 +278,7 @@ func (c *compiler) compile(in *ast.Program) {
 	}
 
 	c.p.code = append(c.p.code, code...)
-	for i, _ := range c.p.srcMap {
+	for i := range c.p.srcMap {
 		c.p.srcMap[i].pc += len(c.scope.names)
 	}
 

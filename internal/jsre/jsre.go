@@ -68,13 +68,14 @@ type evalReq struct {
 }
 
 // runtime must be stopped with Stop() after use and cannot be used after stopping
-func New(assetPath string, output io.Writer) *JSRE {
+func New(assetPath string, output io.Writer, vm *goja.Runtime) *JSRE {
 	re := &JSRE{
 		assetPath:     assetPath,
 		output:        output,
 		closed:        make(chan struct{}),
 		evalQueue:     make(chan *evalReq),
 		stopEventLoop: make(chan bool),
+		vm:            vm,
 	}
 	go re.runEventLoop()
 	re.Set("loadScript", re.loadScript)
@@ -106,7 +107,6 @@ func randomSource() *rand.Rand {
 func (re *JSRE) runEventLoop() {
 	defer close(re.closed)
 
-	re.vm = goja.New()
 	r := randomSource()
 	re.vm.SetRandSource(r.Float64)
 

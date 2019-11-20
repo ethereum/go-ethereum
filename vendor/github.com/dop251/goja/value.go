@@ -436,7 +436,7 @@ func (p *valueProperty) get(this Value) Value {
 		}
 		return _undefined
 	}
-	call, r := p.getterFunc.self.assertCallable()
+	call, _ := p.getterFunc.self.assertCallable()
 	return call(FunctionCall{
 		This: this,
 	})

@@ -64,13 +64,14 @@ type Config struct {
 // JavaScript console attached to a running node via an external or in-process RPC
 // client.
 type Console struct {
-	client   *rpc.Client  // RPC client to execute Ethereum requests through
-	jsre     *jsre.JSRE   // JavaScript runtime environment running the interpreter
-	prompt   string       // Input prompt prefix string
-	prompter UserPrompter // Input prompter to allow interactive user feedback
-	histPath string       // Absolute path to the console scrollback history
-	history  []string     // Scroll history maintained by the console
-	printer  io.Writer    // Output writer to serialize any display strings to
+	client   *rpc.Client   // RPC client to execute Ethereum requests through
+	jsre     *jsre.JSRE    // JavaScript runtime environment running the interpreter
+	prompt   string        // Input prompt prefix string
+	prompter UserPrompter  // Input prompter to allow interactive user feedback
+	histPath string        // Absolute path to the console scrollback history
+	history  []string      // Scroll history maintained by the console
+	printer  io.Writer     // Output writer to serialize any display strings to
+	runtime  *goja.Runtime // The javascript runtime
 }
 
 // New initializes a JavaScript interpreted runtime environment and sets defaults
@@ -86,10 +87,15 @@ func New(config Config) (*Console, error) {
 	if config.Printer == nil {
 		config.Printer = colorable.NewColorableStdout()
 	}
+
+	// Create the JS runtime
+	runtime := goja.New()
+
 	// Initialize the console and return
 	console := &Console{
+		runtime:  runtime,
 		client:   config.Client,
-		jsre:     jsre.New(config.DocRoot, config.Printer),
+		jsre:     jsre.New(config.DocRoot, config.Printer, runtime),
 		prompt:   config.Prompt,
 		prompter: config.Prompter,
 		printer:  config.Printer,
@@ -108,18 +114,25 @@ func New(config Config) (*Console, error) {
 // the console's JavaScript namespaces based on the exposed modules.
 func (c *Console) init(preload []string) error {
 	// Initialize the JavaScript <-> Go RPC bridge
-	runtime := goja.New()
-	bridge := newBridge(c.client, c.prompter, c.printer, runtime)
-	c.jsre.Set("jeth", struct{}{})
-	c.jsre.Set("console", struct{}{})
+	bridge := newBridge(c.client, c.prompter, c.printer, c.runtime)
+	c.jsre.Run("jeth = {};")
+	c.jsre.Run("console = {};")
 
-	jethObj := c.jsre.Get("jeth").ToObject(runtime)
-	jethObj.Set("send", bridge.Send)
-	jethObj.Set("sendAsync", bridge.Send)
+	jethObj := c.jsre.Get("jeth").ToObject(c.runtime)
+	if err := jethObj.Set("send", bridge.Send); err != nil {
+		panic(err)
+	}
+	if err := jethObj.Set("sendAsync", bridge.Send); err != nil {
+		panic(err)
+	}
 
-	consoleObj := c.jsre.Get("console").ToObject(runtime)
-	consoleObj.Set("log", c.consoleOutput)
-	consoleObj.Set("error", c.consoleOutput)
+	consoleObj := c.runtime.Get("console").ToObject(c.runtime)
+	if err := consoleObj.Set("log", c.consoleOutput); err != nil {
+		panic(err)
+	}
+	if err := consoleObj.Set("error", c.consoleOutput); err != nil {
+		panic(err)
+	}
 
 	// Load all the internal utility JavaScript libraries
 	if err := c.jsre.Compile("bignumber.js", string(jsre.BignumberJs)); err != nil {
@@ -150,7 +163,7 @@ func (c *Console) init(preload []string) error {
 				return fmt.Errorf("%s.js: %v", api, err)
 			}
 			flatten += fmt.Sprintf("var %s = web3.%s; ", api, api)
-		} else if obj, err := c.jsre.Run("web3." + api); err == nil && obj.ToObject(runtime) != nil {
+		} else if obj, err := c.jsre.Run("web3." + api); err == nil && obj.ToObject(c.runtime) != nil {
 			// Enable web3.js built-in extension if available.
 			flatten += fmt.Sprintf("var %s = web3.%s; ", api, api)
 		}
@@ -173,7 +186,7 @@ func (c *Console) init(preload []string) error {
 		// original web3 callbacks. These will be called by the jeth.* methods after
 		// they got the password from the user and send the original web3 request to
 		// the backend.
-		if obj := personal.ToObject(runtime); obj != nil { // make sure the personal api is enabled over the interface
+		if obj := personal.ToObject(c.runtime); obj != nil { // make sure the personal api is enabled over the interface
 			if _, err = c.jsre.Run(`jeth.openWallet = personal.openWallet;`); err != nil {
 				return fmt.Errorf("personal.openWallet: %v", err)
 			}
@@ -197,7 +210,7 @@ func (c *Console) init(preload []string) error {
 	if admin == nil {
 		return fmt.Errorf("Could not find admin")
 	}
-	if obj := admin.ToObject(runtime); obj != nil { // make sure the admin api is enabled over the interface
+	if obj := admin.ToObject(c.runtime); obj != nil { // make sure the admin api is enabled over the interface
 		obj.Set("sleepBlocks", bridge.SleepBlocks)
 		obj.Set("sleep", bridge.Sleep)
 		obj.Set("clearHistory", c.clearHistory)
