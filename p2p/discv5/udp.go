@@ -120,13 +120,11 @@ type (
 	}
 
 	talkRequest struct {
-		TalkID  []byte
-		Payload rlp.RawValue
+		TalkID, Payload []byte
 	}
 
 	talkResponse struct {
-		ReplyTok []byte
-		Payload  rlp.RawValue
+		ReplyTok, Payload []byte
 	}
 
 	rpcNode struct {

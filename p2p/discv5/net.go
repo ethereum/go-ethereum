@@ -66,7 +66,7 @@ type Network struct {
 	refreshResp      chan (<-chan struct{}) // ...and get the channel to block on from this one
 	read             chan ingressPacket     // ingress packets arrive here
 	timeout          chan timeoutEvent
-	queryReq         chan *findnodeQuery // lookups submit findnode queries on this channel
+	queryReq         chan deferredQuery // lookups submit findnode queries on this channel
 	tableOpReq       chan func()
 	tableOpResp      chan struct{}
 	topicRegisterReq chan topicRegisterReq
@@ -87,8 +87,8 @@ type Network struct {
 }
 
 type (
-	TalkRequestHandler  func(enode.ID, *net.UDPAddr, rlp.RawValue) (rlp.RawValue, bool)
-	TalkResponseHandler func(rlp.RawValue) bool
+	TalkRequestHandler  func(enode.ID, *net.UDPAddr, []byte) ([]byte, bool)
+	TalkResponseHandler func([]byte) bool
 )
 
 // transport is implemented by the UDP transport.
@@ -111,6 +111,14 @@ type findnodeQuery struct {
 	remote *Node
 	target common.Hash
 	reply  chan<- []*Node
+}
+
+type talkQuery struct {
+	remote  *Node
+	talkID  string
+	payload rlp.RawValue
+	key     string
+	handler TalkResponseHandler
 }
 
 type topicRegisterReq struct {
@@ -163,7 +171,7 @@ func newNetwork(conn transport, ourPubkey ecdsa.PublicKey, dbPath string, netres
 		timeoutTimers:    make(map[timeoutEvent]*time.Timer),
 		tableOpReq:       make(chan func()),
 		tableOpResp:      make(chan struct{}),
-		queryReq:         make(chan *findnodeQuery),
+		queryReq:         make(chan deferredQuery),
 		topicRegisterReq: make(chan topicRegisterReq),
 		topicSearchReq:   make(chan topicSearchReq),
 		nodes:            make(map[NodeID]*Node),
@@ -460,7 +468,7 @@ loop:
 		case q := <-net.queryReq:
 			log.Trace("<-net.queryReq")
 			if !q.start(net) {
-				q.remote.deferQuery(q)
+				q.deferQuery()
 			}
 
 		// Interacting with the table.
@@ -781,15 +789,21 @@ type nodeNetGuts struct {
 	// State machine fields. Access to these fields
 	// is restricted to the Network.loop goroutine.
 	state             *nodeState
-	pingEcho          []byte           // hash of last ping sent by us
-	pingTopics        []Topic          // topic set sent by us in last ping
-	deferredQueries   []*findnodeQuery // queries that can't be sent yet
-	pendingNeighbours *findnodeQuery   // current query, waiting for reply
+	pingEcho          []byte          // hash of last ping sent by us
+	pingTopics        []Topic         // topic set sent by us in last ping
+	deferredQueries   []deferredQuery // queries that can't be sent yet
+	pendingNeighbours *findnodeQuery  // current query, waiting for reply
 	queryTimeouts     int
 	talkFailures      int
 }
 
-func (n *nodeNetGuts) deferQuery(q *findnodeQuery) {
+type deferredQuery interface {
+	start(net *Network) bool
+	cancel()
+	deferQuery()
+}
+
+func (n *nodeNetGuts) deferQuery(q deferredQuery) {
 	n.deferredQueries = append(n.deferredQueries, q)
 }
 
@@ -823,6 +837,14 @@ func (q *findnodeQuery) start(net *Network) bool {
 		net.transition(q.remote, verifyinit)
 	}
 	return false
+}
+
+func (q *findnodeQuery) cancel() {
+	q.reply <- nil
+}
+
+func (q *findnodeQuery) deferQuery() {
+	q.remote.deferQuery(q)
 }
 
 // Node Events (the input to the state machine).
@@ -886,7 +908,7 @@ func init() {
 			n.pingEcho = nil
 			// Abort active queries.
 			for _, q := range n.deferredQueries {
-				q.reply <- nil
+				q.cancel()
 			}
 			n.deferredQueries = nil
 			if n.pendingNeighbours != nil {
@@ -1335,22 +1357,62 @@ func (net *Network) RemoveTalkHandler(talkID string) {
 	net.talkRequestSubLock.Unlock()
 }
 
-func (net *Network) SendTalkRequest(to *enode.Node, talkID string, payload rlp.RawValue, handler TalkResponseHandler) func() bool {
+func (q *talkQuery) start(net *Network) bool {
+	if q.remote == net.tab.self {
+		return false
+	}
+	if q.remote.state.canQuery {
+		net.talkResponseSubLock.Lock()
+		hash := net.conn.send(q.remote, talkRequestPacket, talkRequest{TalkID: []byte(q.talkID), Payload: q.payload})
+		q.key = string(q.remote.sha[:]) + string(hash[:])
+		net.talkResponseSubs[q.key] = q.handler
+		net.talkResponseSubLock.Unlock()
+		fmt.Println("sent")
+		return true
+	}
+	// If the node is not known yet, it won't accept queries.
+	// Initiate the transition to known.
+	// The request will be sent later when the node reaches known state.
+	if q.remote.state == unknown {
+		net.transition(q.remote, verifyinit)
+	}
+	return false
+}
+
+func (q *talkQuery) cancel() {
+	q.handler(nil)
+}
+
+func (q *talkQuery) deferQuery() {
+	q.remote.deferQuery(q)
+}
+
+func (net *Network) SendTalkRequest(to *enode.Node, talkID string, payload []byte, handler TalkResponseHandler) func() bool {
 	var nodeID NodeID
 	copy(nodeID[:], crypto.FromECDSAPub(to.Pubkey())[1:])
-	node := NewNode(nodeID, to.IP(), uint16(to.UDP()), uint16(to.TCP()))
-	net.talkResponseSubLock.Lock()
-	hash := net.conn.send(node, talkRequestPacket, talkRequest{TalkID: []byte(talkID), Payload: payload})
-	key := string(node.sha[:]) + string(hash[:])
-	net.talkResponseSubs[key] = handler
-	net.talkResponseSubLock.Unlock()
+	node := net.nodes[nodeID]
+	if node == nil {
+		node = NewNode(nodeID, to.IP(), uint16(to.UDP()), uint16(to.TCP()))
+		node.state = unknown
+		net.nodes[nodeID] = node
+	}
+	q := &talkQuery{remote: node, talkID: talkID, payload: payload, handler: handler}
+	select {
+	case net.queryReq <- q:
+	case <-net.closed:
+		return nil
+	}
+
 	return func() bool {
 		net.talkResponseSubLock.Lock()
-		cancel := net.talkResponseSubs[key] != nil
+		cancel := q.key != "" && net.talkResponseSubs[q.key] != nil
 		if cancel {
-			delete(net.talkResponseSubs, key)
+			delete(net.talkResponseSubs, q.key)
 		}
 		net.talkResponseSubLock.Unlock()
+		if cancel {
+			handler(nil)
+		}
 		return cancel
 	}
 }
