@@ -17,11 +17,21 @@
 package misc
 
 import (
+	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+)
+
+var (
+	errInvalidInitialBaseFee = fmt.Errorf("initial BaseFee must equal %d", params.EIP1559InitialBaseFee)
+	errInvalidBaseFee        = errors.New("invalid BaseFee")
+	errMissingParentBaseFee  = errors.New("parent header is missing BaseFee")
+	errMissingBaseFee        = errors.New("current header is missing BaseFee")
+	errHaveBaseFee           = fmt.Errorf("BaseFee should not be set before block %d", params.EIP1559ForkBlockNumber)
 )
 
 // VerifyForkHashes verifies that blocks conforming to network hard-forks do have
@@ -39,5 +49,43 @@ func VerifyForkHashes(config *params.ChainConfig, header *types.Header, uncle bo
 		}
 	}
 	// All ok, return
+	return nil
+}
+
+// VerifyEIP1559BaseFee verifies that the EIP1559 BaseFee field is valid for the current block height
+func VerifyEIP1559BaseFee(config *params.ChainConfig, header, parent *types.Header) error {
+	// If we are at the EIP1559 fork block the BaseFee needs to be equal to params.EIP1559InitialBaseFee
+	if config.EIP1559Block != nil && config.EIP1559Block.Cmp(header.Number) == 0 {
+		if header.BaseFee == nil || header.BaseFee.Cmp(new(big.Int).SetUint64(params.EIP1559InitialBaseFee)) != 0 {
+			return errInvalidInitialBaseFee
+		}
+		return nil
+	}
+	// Verify the BaseFee is valid if we are past the EIP1559 initialization block
+	if config.IsEIP1559(header.Number) {
+		// A valid BASEFEE is one such that abs(BASEFEE - PARENT_BASEFEE) <= max(1, PARENT_BASEFEE // BASEFEE_MAX_CHANGE_DENOMINATOR)
+		if parent.BaseFee == nil {
+			return errMissingParentBaseFee
+		}
+		if header.BaseFee == nil {
+			return errMissingBaseFee
+		}
+		diff := new(big.Int).Sub(header.BaseFee, parent.BaseFee)
+		if diff.Sign() < 0 {
+			diff.Neg(diff)
+		}
+		max := new(big.Int).Div(parent.BaseFee, new(big.Int).SetUint64(params.BaseFeeMaxChangeDenominator))
+		if max.Cmp(common.Big1) < 0 {
+			max = common.Big1
+		}
+		if diff.Cmp(max) > 0 {
+			return errInvalidBaseFee
+		}
+		return nil
+	}
+	// If we are before the EIP1559 initialization block the current and parent BaseFees should be nil
+	if header.BaseFee != nil || parent.BaseFee != nil {
+		return errHaveBaseFee
+	}
 	return nil
 }
