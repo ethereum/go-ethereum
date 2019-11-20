@@ -80,8 +80,7 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 		{"EIP158", types.NewEIP155Signer(config.ChainID), tt.EIP158, true, false},
 		{"Byzantium", types.NewEIP155Signer(config.ChainID), tt.Byzantium, true, false},
 		{"Constantinople", types.NewEIP155Signer(config.ChainID), tt.Constantinople, true, false},
-		//TODO! @holiman or @rjl493456442 : enable this after tests have been updated for Istanbul
-		//{"Istanbul", types.NewEIP155Signer(config.ChainID), tt.Istanbul, true, true},
+		{"Istanbul", types.NewEIP155Signer(config.ChainID), tt.Istanbul, true, true},
 	} {
 		sender, txhash, err := validateTx(tt.RLP, testcase.signer, testcase.isHomestead, testcase.isIstanbul)
 
