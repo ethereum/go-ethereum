@@ -223,6 +223,7 @@ jobs:
 
     # This builder does the Azure archive purges to avoid accumulating junk
     - stage: deploy
+      if: type = cron
       os: linux
       dist: xenial
       go: 1.13.x
