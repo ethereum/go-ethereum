@@ -519,6 +519,10 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 		if err := markerBatch.Write(); err != nil {
 			log.Crit("Failed to update chain markers", "error", err)
 		}
+		hc.currentHeader.Store(parent)
+		hc.currentHeaderHash = parentHash
+		headHeaderGauge.Update(parent.Number.Int64())
+
 		// Remove the relative data from the database.
 		if delFn != nil {
 			delFn(batch, hash, num)
@@ -527,10 +531,6 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 		rawdb.DeleteHeader(batch, hash, num)
 		rawdb.DeleteTd(batch, hash, num)
 		rawdb.DeleteCanonicalHash(batch, num)
-
-		hc.currentHeader.Store(parent)
-		hc.currentHeaderHash = parentHash
-		headHeaderGauge.Update(parent.Number.Int64())
 	}
 	// Flush all accumulated deletions.
 	if err := batch.Write(); err != nil {

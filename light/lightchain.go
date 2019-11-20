@@ -206,6 +206,7 @@ func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 	}
 	lc.genesisBlock = genesis
 	lc.hc.SetGenesis(lc.genesisBlock.Header())
+	lc.hc.SetCurrentHeader(lc.genesisBlock.Header())
 }
 
 // Accessors
@@ -329,7 +330,7 @@ func (lc *LightChain) Rollback(chain []common.Hash) {
 	for i := len(chain) - 1; i >= 0; i-- {
 		hash := chain[i]
 
-		// Degrade the chain markers if they are explictly reverted.
+		// Degrade the chain markers if they are explicitly reverted.
 		// In thoery we should update all in-memory markers in the
 		// last step, however the direction of rollback is from high
 		// to low, so it's safe the update in-memory markers directly.
