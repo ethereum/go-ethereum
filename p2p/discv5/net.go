@@ -1112,6 +1112,9 @@ func (net *Network) ping(n *Node, addr *net.UDPAddr) {
 	n.pingTopics = net.ticketStore.regTopicSet()
 	n.pingEcho = net.conn.sendPing(n, addr, n.pingTopics)
 	net.timedEvent(respTimeout, n, pongTimeout)
+
+	//update last ping sent to Node n
+	net.db.updateLastPing(n.ID, time.Now())
 }
 
 func (net *Network) handlePing(n *Node, pkt *ingressPacket) {
@@ -1140,6 +1143,9 @@ func (net *Network) handleKnownPong(n *Node, pkt *ingressPacket) error {
 	} else {
 		log.Trace("Failed to convert pong to ticket", "err", err)
 	}
+	//update Node n last seen pong time
+	net.db.updateLastPong(n.ID, time.Now())
+
 	n.pingEcho = nil
 	n.pingTopics = nil
 	return err
