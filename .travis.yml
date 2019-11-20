@@ -1,6 +1,11 @@
 language: go
 go_import_path: github.com/ethereum/go-ethereum
 sudo: false
+stages:
+  - lint
+  - build
+  - name: deploy
+    if: type = push
 jobs:
   include:
         # This builder only tests code linters on latest version of Go
@@ -42,7 +47,6 @@ jobs:
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
     - stage: build
-      if: type = pull_request
       os: linux
       arch: arm64
       dist: xenial
@@ -68,8 +72,7 @@ jobs:
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
     # This builder does the Ubuntu PPA upload
-    - stage: build
-      if: type = push
+    - stage: deploy
       os: linux
       dist: xenial
       go: 1.13.x
@@ -91,8 +94,7 @@ jobs:
         - go run build/ci.go debsrc -goversion 1.13.4 -upload ethereum/ethereum -sftp-user geth-ci -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
 
     # This builder does the Linux Azure uploads
-    - stage: build
-      if: type = push
+    - stage: deploy
       os: linux
       dist: xenial
       sudo: required
@@ -126,8 +128,7 @@ jobs:
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Linux Azure MIPS xgo uploads
-    - stage: build
-      if: type = push
+    - stage: deploy
       os: linux
       dist: xenial
       services:
@@ -155,8 +156,7 @@ jobs:
         - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Android Maven and Azure uploads
-    - stage: build
-      if: type = push
+    - stage: deploy
       os: linux
       dist: xenial
       addons:
@@ -193,8 +193,7 @@ jobs:
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
-    - stage: build
-      if: type = push
+    - stage: deploy
       os: osx
       go: 1.13.x
       env:
@@ -223,8 +222,7 @@ jobs:
         - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
 
     # This builder does the Azure archive purges to avoid accumulating junk
-    - stage: build
-      if: type = cron
+    - stage: deploy
       os: linux
       dist: xenial
       go: 1.13.x
