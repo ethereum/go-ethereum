@@ -408,7 +408,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 			rawdb.WriteHeadBlockHash(db, newHeadBlock.Hash())
 
 			// Degrade the chain markers if they are explicitly reverted.
-			// In thoery we should update all in-memory markers in the
+			// In theory we should update all in-memory markers in the
 			// last step, however the direction of SetHead is from high
 			// to low, so it's safe the update in-memory markers directly.
 			bc.currentBlock.Store(newHeadBlock)
@@ -425,7 +425,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 			rawdb.WriteHeadFastBlockHash(db, newHeadFastBlock.Hash())
 
 			// Degrade the chain markers if they are explicitly reverted.
-			// In thoery we should update all in-memory markers in the
+			// In theory we should update all in-memory markers in the
 			// last step, however the direction of SetHead is from high
 			// to low, so it's safe the update in-memory markers directly.
 			bc.currentFastBlock.Store(newHeadFastBlock)
@@ -903,7 +903,7 @@ func (bc *BlockChain) Rollback(chain []common.Hash) {
 		hash := chain[i]
 
 		// Degrade the chain markers if they are explicitly reverted.
-		// In thoery we should update all in-memory markers in the
+		// In theory we should update all in-memory markers in the
 		// last step, however the direction of rollback is from high
 		// to low, so it's safe the update in-memory markers directly.
 		currentHeader := bc.hc.CurrentHeader()
