@@ -131,13 +131,22 @@
       "builtin": {
         "name": "alt_bn128_add",
         "pricing": {
-          "alt_bn128_const_operations": {
-            "price": 500,
-            "eip1108_transition_price": 150
+          "0x0": {
+            "price": {
+              "alt_bn128_const_operations": {
+                "price": 500
+              }
+            }
+          },
+          "0xc350": {
+            "price": {
+              "alt_bn128_const_operations": {
+                "price": 150
+              }
+            }
           }
         },
-        "activate_at": "0x7530",
-        "eip1108_transition": "0xc350"
+        "activate_at": "0x7530"
       }
     },
     "0000000000000000000000000000000000000007": {
@@ -145,13 +154,22 @@
       "builtin": {
         "name": "alt_bn128_mul",
         "pricing": {
-          "alt_bn128_const_operations": {
-            "price": 40000,
-            "eip1108_transition_price": 6000
+          "0x0": {
+            "price": {
+              "alt_bn128_const_operations": {
+                "price": 40000
+              }
+            }
+          },
+          "0xc350": {
+            "price": {
+              "alt_bn128_const_operations": {
+                "price": 6000
+              }
+            }
           }
         },
-        "activate_at": "0x7530",
-        "eip1108_transition": "0xc350"
+        "activate_at": "0x7530"
       }
     },
     "0000000000000000000000000000000000000008": {
@@ -159,15 +177,24 @@
       "builtin": {
         "name": "alt_bn128_pairing",
         "pricing": {
-          "alt_bn128_pairing": {
-            "base": 100000,
-            "pair": 80000,
-            "eip1108_transition_base": 45000,
-            "eip1108_transition_pair": 34000
+          "0x0": {
+            "price": {
+              "alt_bn128_pairing": {
+                "base": 100000,
+                "pair": 80000
+              }
+            }
+          },
+          "0xc350": {
+            "price": {
+              "alt_bn128_pairing": {
+                "base": 45000,
+                "pair": 34000
+              }
+            }
           }
         },
-        "activate_at": "0x7530",
-        "eip1108_transition": "0xc350"
+        "activate_at": "0x7530"
       }
     },
     "0000000000000000000000000000000000000009": {
