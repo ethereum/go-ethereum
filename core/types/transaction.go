@@ -140,36 +140,20 @@ func isProtectedV(V *big.Int) bool {
 	return true
 }
 
-// legacyTxData is used to RLP encode txData if either the gasPremium or the feeCap fields are nil
-type legacyTxData struct {
-	AccountNonce uint64          `json:"nonce"    gencodec:"required"`
-	Price        *big.Int        `json:"gasPrice" gencodec:"required"`
-	GasLimit     uint64          `json:"gas"      gencodec:"required"`
-	Recipient    *common.Address `json:"to"       rlp:"nil"` // nil means contract creation
-	Amount       *big.Int        `json:"value"    gencodec:"required"`
-	Payload      []byte          `json:"input"    gencodec:"required"`
-
-	// Signature values
-	V *big.Int `json:"v" gencodec:"required"`
-	R *big.Int `json:"r" gencodec:"required"`
-	S *big.Int `json:"s" gencodec:"required"`
-}
-
 // EncodeRLP implements rlp.Encoder
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	if tx.data.FeeCap == nil || tx.data.GasPremium == nil {
-		legacyTx := &legacyTxData{
-			AccountNonce: tx.data.AccountNonce,
-			Price:        tx.data.Price,
-			GasLimit:     tx.data.GasLimit,
-			Recipient:    tx.data.Recipient,
-			Amount:       tx.data.Amount,
-			Payload:      tx.data.Payload,
-			V:            tx.data.V,
-			R:            tx.data.R,
-			S:            tx.data.S,
-		}
-		return rlp.Encode(w, legacyTx)
+		return rlp.Encode(w, []interface{}{
+			tx.data.AccountNonce,
+			tx.data.Price,
+			tx.data.GasLimit,
+			tx.data.Recipient,
+			tx.data.Amount,
+			tx.data.Payload,
+			tx.data.V,
+			tx.data.R,
+			tx.data.S,
+		})
 	}
 	return rlp.Encode(w, &tx.data)
 }
