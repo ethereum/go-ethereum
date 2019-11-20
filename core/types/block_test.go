@@ -69,27 +69,6 @@ func TestBlockEncoding(t *testing.T) {
 	}
 }
 
-/*
-type Header struct {
-	ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
-	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
-	Coinbase    common.Address `json:"miner"            gencodec:"required"`
-	Root        common.Hash    `json:"stateRoot"        gencodec:"required"`
-	TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required"`
-	ReceiptHash common.Hash    `json:"receiptsRoot"     gencodec:"required"`
-	Bloom       Bloom          `json:"logsBloom"        gencodec:"required"`
-	Difficulty  *big.Int       `json:"difficulty"       gencodec:"required"`
-	Number      *big.Int       `json:"number"           gencodec:"required"`
-	GasLimit    uint64         `json:"gasLimit"         gencodec:"required"`
-	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
-	Time        uint64         `json:"timestamp"        gencodec:"required"`
-	Extra       []byte         `json:"extraData"        gencodec:"required"`
-	MixDigest   common.Hash    `json:"mixHash"`
-	Nonce       BlockNonce     `json:"nonce"`
-	BaseFee     *big.Int       `json:"baseFee"          rlp:"nil"`
-}
-*/
-
 func TestEIP1559BlockEncoding(t *testing.T) {
 	tx, err := decodeTx(common.Hex2Bytes("f86903808207d094b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a82554483030d40830c35001ba0612a9c962f0ac2841c671c021e45aeaa23f2892bf34da5d32d7948754cf078bda03a350e0e4e1ff5299228eb921af7c0435dbabd5b3d17f79c925864192ca9d126"))
 	if err != nil {
