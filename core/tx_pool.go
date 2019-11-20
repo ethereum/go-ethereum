@@ -18,6 +18,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"sort"
@@ -84,9 +85,24 @@ var (
 	// making the transaction invalid, rather a DOS protection.
 	ErrOversizedData = errors.New("oversized data")
 
-	// ErrTxNotEIP1559 is returned if we have passed the EIP1559 finalized block height
+	// ErrTxNotEIP1559 is returned if we have reached the EIP1559 finalized block height
 	// and the input transaction does not conform to with EIP1559
-	ErrTxNotEIP1559 = errors.New("transaction does not conform with EIP1559")
+	ErrTxNotEIP1559 = fmt.Errorf("after block %d EIP1559 is finalized and transactions must contain a GasPremium and FeeCap and not contain a GasPrice", params.EIP1559ForkFinalizedBlockNumber)
+
+	// ErrTxIsEIP1559 is returned if we have not reached the EIP1559 initialization block height
+	// and the input transaction is not of the legacy type
+	ErrTxIsEIP1559 = fmt.Errorf("before block %d EIP1559 is not activated and transactions must contain a GasPrice and not contain a GasPremium or FeeCap", params.EIP1559ForkBlockNumber)
+
+	// ErrTxSetsLegacyAndEIP1559Fields is returned if a transaction attempts to set
+	// both legacy (GasPrice) and EIP1559 (GasPremium and FeeCap) fields
+	ErrTxSetsLegacyAndEIP1559Fields = errors.New("transaction sets both legacy and EIP1559 fields")
+
+	// ErrNoBaseFee is returned if we are past the EIP1559 initialization block but
+	// the current header does not provide a BaseFee
+	ErrNoBaseFee = errors.New("current header does not provide the BaseFee needed to process EIP1559 transactions")
+
+	// ErrMissingGasFields is returned if neither GasPrice nor GasPremium and FeeCap are set
+	ErrMissingGasFields = errors.New("either GasPrice or GasPremium and FeeCap need to be set")
 )
 
 var (
@@ -526,7 +542,34 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
-	// Reject transactions over defined size to prevent DOS attacks
+	// EIP1559 guards
+	if pool.chainconfig.IsEIP1559(pool.chain.CurrentBlock().Number()) && pool.chain.CurrentBlock().BaseFee() == nil {
+		return ErrNoBaseFee
+	}
+	if pool.chainconfig.IsEIP1559Finalized(pool.chain.CurrentBlock().Number()) && (tx.GasPremium() == nil || tx.FeeCap() == nil || tx.GasPrice() != nil) {
+		return ErrTxNotEIP1559
+	}
+	if !pool.chainconfig.IsEIP1559(pool.chain.CurrentBlock().Number()) && (tx.GasPremium() != nil || tx.FeeCap() != nil || tx.GasPrice() == nil) {
+		return ErrTxIsEIP1559
+	}
+	if tx.GasPrice() != nil && (tx.GasPremium() != nil || tx.FeeCap() != nil) {
+		return ErrTxSetsLegacyAndEIP1559Fields
+	}
+	if tx.GasPrice() == nil && (tx.GasPremium() == nil || tx.FeeCap() == nil) {
+		return ErrMissingGasFields
+	}
+	// Set the gasPrice to the tx.GasPrice() if it is non nil (legacy transaction)
+	var gasPrice *big.Int
+	if tx.GasPrice() != nil {
+		gasPrice = tx.GasPrice()
+	} else { // Derive the gasPrice from the tx.GasPremium() and tx.FeeCap() (EIP1559 transaction)
+		gasPrice = new(big.Int).Add(pool.chain.CurrentBlock().BaseFee(), tx.GasPremium())
+		if gasPrice.Cmp(tx.FeeCap()) > 0 {
+			gasPrice.Set(tx.FeeCap())
+		}
+	}
+
+	// Heuristic limit, reject transactions over 32KB to prevent DOS attacks
 	if uint64(tx.Size()) > txMaxSize {
 		return ErrOversizedData
 	}

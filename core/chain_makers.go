@@ -52,7 +52,7 @@ type BlockGen struct {
 // SetCoinbase sets the coinbase of the generated block.
 // It can be called at most once.
 func (b *BlockGen) SetCoinbase(addr common.Address) {
-	if b.gasPool != nil || b.gasPool1559 != nil {
+	if b.gasPool != nil {
 		if len(b.txs) > 0 {
 			panic("coinbase must be set before adding transactions")
 		}
@@ -60,7 +60,6 @@ func (b *BlockGen) SetCoinbase(addr common.Address) {
 	}
 	b.header.Coinbase = addr
 	b.gasPool = new(GasPool).AddGas(b.header.GasLimit)
-	b.gasPool1559 = new(GasPool).AddGas(params.MaxGasEIP1559)
 }
 
 // SetExtra sets the extra data field of the generated block.
@@ -101,8 +100,11 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 // added. If contract code relies on the BLOCKHASH instruction,
 // the block in chain will be returned.
 func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
-	if b.gasPool == nil || b.gasPool1559 == nil {
+	if b.gasPool == nil {
 		b.SetCoinbase(common.Address{})
+	}
+	if b.gasPool1559 == nil && b.config.IsEIP1559(b.header.Number) {
+		b.gasPool1559 = new(GasPool).AddGas(params.MaxGasEIP1559)
 	}
 	b.statedb.Prepare(tx.Hash(), common.Hash{}, len(b.txs))
 	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.gasPool1559, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{})
