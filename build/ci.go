@@ -46,7 +46,6 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
-	gobuild "go/build"
 	"go/parser"
 	"go/token"
 	"io/ioutil"
@@ -502,6 +501,11 @@ func doDebianSource(cmdline []string) {
 	// Download and verify the Go source package.
 	gobundle := downloadGoSources(*goversion, *cachedir)
 
+	// Download all the dependencies needed to build the sources
+	depfetch := goTool("install", "-n", "./...")
+	depfetch.Env = append(os.Environ(), "GOPATH="+filepath.Join(*workdir, "modgopath"))
+	build.MustRun(depfetch)
+
 	// Create Debian packages and upload them.
 	for _, pkg := range debPackages {
 		for distro, goboot := range debDistroGoBoots {
@@ -517,7 +521,8 @@ func doDebianSource(cmdline []string) {
 				log.Fatalf("Failed to rename Go source folder: %v", err)
 			}
 			// Add all dependency modules in compressed form
-			if err := cp.CopyAll(filepath.Join(pkgdir, ".mod", "cache", "download"), filepath.Join(gobuild.Default.GOPATH, "pkg", "mod", "cache", "download")); err != nil {
+			os.MkdirAll(filepath.Join(pkgdir, ".mod", "cache"), 0755)
+			if err := cp.CopyAll(filepath.Join(pkgdir, ".mod", "cache", "download"), filepath.Join(*workdir, "modgopath", "pkg", "mod", "cache", "download")); err != nil {
 				log.Fatalf("Failed to copy Go module dependencies: %v", err)
 			}
 			// Run the packaging and upload to the PPA
@@ -1067,16 +1072,11 @@ func doXgo(cmdline []string) {
 
 func xgoTool(args []string) *exec.Cmd {
 	cmd := exec.Command(filepath.Join(GOBIN, "xgo"), args...)
-	cmd.Env = []string{
+	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, []string{
 		"GOPATH=" + build.GOPATH(),
 		"GOBIN=" + GOBIN,
-	}
-	for _, e := range os.Environ() {
-		if strings.HasPrefix(e, "GOPATH=") || strings.HasPrefix(e, "GOBIN=") {
-			continue
-		}
-		cmd.Env = append(cmd.Env, e)
-	}
+	}...)
 	return cmd
 }
 
