@@ -87,6 +87,10 @@ var (
 		Name:  "verbosity",
 		Usage: "sets the verbosity level",
 	}
+	BenchFlag = cli.BoolFlag{
+		Name:  "bench",
+		Usage: "benchmark the execution",
+	}
 	CreateFlag = cli.BoolFlag{
 		Name:  "create",
 		Usage: "indicates the action should be create rather than call",
@@ -124,6 +128,7 @@ var (
 
 func init() {
 	app.Flags = []cli.Flag{
+		BenchFlag,
 		CreateFlag,
 		DebugFlag,
 		VerbosityFlag,
