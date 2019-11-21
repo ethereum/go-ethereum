@@ -17,7 +17,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"errors"
 	"math"
 	"math/big"
@@ -28,6 +27,7 @@ import (
 	math2 "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -60,14 +60,14 @@ type alethGenesisSpec struct {
 	} `json:"params"`
 
 	Genesis struct {
-		Nonce      hexutil.Bytes  `json:"nonce"`
-		Difficulty *hexutil.Big   `json:"difficulty"`
-		MixHash    common.Hash    `json:"mixHash"`
-		Author     common.Address `json:"author"`
-		Timestamp  hexutil.Uint64 `json:"timestamp"`
-		ParentHash common.Hash    `json:"parentHash"`
-		ExtraData  hexutil.Bytes  `json:"extraData"`
-		GasLimit   hexutil.Uint64 `json:"gasLimit"`
+		Nonce      types.BlockNonce `json:"nonce"`
+		Difficulty *hexutil.Big     `json:"difficulty"`
+		MixHash    common.Hash      `json:"mixHash"`
+		Author     common.Address   `json:"author"`
+		Timestamp  hexutil.Uint64   `json:"timestamp"`
+		ParentHash common.Hash      `json:"parentHash"`
+		ExtraData  hexutil.Bytes    `json:"extraData"`
+		GasLimit   hexutil.Uint64   `json:"gasLimit"`
 	} `json:"genesis"`
 
 	Accounts map[common.UnprefixedAddress]*alethGenesisSpecAccount `json:"accounts"`
@@ -146,9 +146,7 @@ func newAlethGenesisSpec(network string, genesis *core.Genesis) (*alethGenesisSp
 	spec.Params.DurationLimit = (*math2.HexOrDecimal256)(params.DurationLimit)
 	spec.Params.BlockReward = (*hexutil.Big)(ethash.FrontierBlockReward)
 
-	spec.Genesis.Nonce = (hexutil.Bytes)(make([]byte, 8))
-	binary.LittleEndian.PutUint64(spec.Genesis.Nonce[:], genesis.Nonce)
-
+	spec.Genesis.Nonce = types.EncodeNonce(genesis.Nonce)
 	spec.Genesis.MixHash = genesis.Mixhash
 	spec.Genesis.Difficulty = (*hexutil.Big)(genesis.Difficulty)
 	spec.Genesis.Author = genesis.Coinbase
@@ -278,8 +276,8 @@ type parityChainSpec struct {
 	Genesis struct {
 		Seal struct {
 			Ethereum struct {
-				Nonce   hexutil.Bytes `json:"nonce"`
-				MixHash hexutil.Bytes `json:"mixHash"`
+				Nonce   types.BlockNonce `json:"nonce"`
+				MixHash hexutil.Bytes    `json:"mixHash"`
 			} `json:"ethereum"`
 		} `json:"seal"`
 
@@ -426,10 +424,8 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	// Disable this one
 	spec.Params.EIP98Transition = math.MaxInt64
 
-	spec.Genesis.Seal.Ethereum.Nonce = (hexutil.Bytes)(make([]byte, 8))
-	binary.LittleEndian.PutUint64(spec.Genesis.Seal.Ethereum.Nonce[:], genesis.Nonce)
-
-	spec.Genesis.Seal.Ethereum.MixHash = (hexutil.Bytes)(genesis.Mixhash[:])
+	spec.Genesis.Seal.Ethereum.Nonce = types.EncodeNonce(genesis.Nonce)
+	spec.Genesis.Seal.Ethereum.MixHash = (genesis.Mixhash[:])
 	spec.Genesis.Difficulty = (*hexutil.Big)(genesis.Difficulty)
 	spec.Genesis.Author = genesis.Coinbase
 	spec.Genesis.Timestamp = (hexutil.Uint64)(genesis.Timestamp)
@@ -597,7 +593,7 @@ func (spec *parityChainSpec) setIstanbul(num *big.Int) {
 // pyEthereumGenesisSpec represents the genesis specification format used by the
 // Python Ethereum implementation.
 type pyEthereumGenesisSpec struct {
-	Nonce      hexutil.Bytes     `json:"nonce"`
+	Nonce      types.BlockNonce  `json:"nonce"`
 	Timestamp  hexutil.Uint64    `json:"timestamp"`
 	ExtraData  hexutil.Bytes     `json:"extraData"`
 	GasLimit   hexutil.Uint64    `json:"gasLimit"`
@@ -616,6 +612,7 @@ func newPyEthereumGenesisSpec(network string, genesis *core.Genesis) (*pyEthereu
 		return nil, errors.New("unsupported consensus engine")
 	}
 	spec := &pyEthereumGenesisSpec{
+		Nonce:      types.EncodeNonce(genesis.Nonce),
 		Timestamp:  (hexutil.Uint64)(genesis.Timestamp),
 		ExtraData:  genesis.ExtraData,
 		GasLimit:   (hexutil.Uint64)(genesis.GasLimit),
@@ -625,8 +622,5 @@ func newPyEthereumGenesisSpec(network string, genesis *core.Genesis) (*pyEthereu
 		Alloc:      genesis.Alloc,
 		ParentHash: genesis.ParentHash,
 	}
-	spec.Nonce = (hexutil.Bytes)(make([]byte, 8))
-	binary.LittleEndian.PutUint64(spec.Nonce[:], genesis.Nonce)
-
 	return spec, nil
 }
