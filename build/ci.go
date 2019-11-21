@@ -501,10 +501,14 @@ func doDebianSource(cmdline []string) {
 	// Download and verify the Go source package.
 	gobundle := downloadGoSources(*goversion, *cachedir)
 
-	// Download all the dependencies needed to build the sources
-	depfetch := goTool("install", "-n", "./...")
-	depfetch.Env = append(os.Environ(), "GOPATH="+filepath.Join(*workdir, "modgopath"))
-	build.MustRun(depfetch)
+	// Download all the dependencies needed to build the sources and run the ci script
+	srcdepfetch := goTool("install", "-n", "./...")
+	srcdepfetch.Env = append(os.Environ(), "GOPATH="+filepath.Join(*workdir, "modgopath"))
+	build.MustRun(srcdepfetch)
+
+	cidepfetch := goTool("run", "./build/ci.go")
+	cidepfetch.Env = append(os.Environ(), "GOPATH="+filepath.Join(*workdir, "modgopath"))
+	cidepfetch.Run() // Command fails, don't care, we only need the deps to start it
 
 	// Create Debian packages and upload them.
 	for _, pkg := range debPackages {
