@@ -118,28 +118,6 @@ func render(tpl *template.Template, outputFile string, outputPerm os.FileMode, x
 	}
 }
 
-// CopyFile copies a file.
-func CopyFile(dst, src string, mode os.FileMode) {
-	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
-		log.Fatal(err)
-	}
-	destFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer destFile.Close()
-
-	srcFile, err := os.Open(src)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer srcFile.Close()
-
-	if _, err := io.Copy(destFile, srcFile); err != nil {
-		log.Fatal(err)
-	}
-}
-
 // GoTool returns the command that runs a go tool. This uses go from GOROOT instead of PATH
 // so that go commands executed by build use the same version of Go as the 'host' that runs
 // build code. e.g.

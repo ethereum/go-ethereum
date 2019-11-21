@@ -199,7 +199,6 @@ type Server struct {
 	checkpointAddPeer       chan *conn
 
 	// State of run loop and listenLoop.
-	lastLookup     time.Time
 	inboundHistory expHeap
 }
 
@@ -410,7 +409,7 @@ type sharedUDPConn struct {
 func (s *sharedUDPConn) ReadFromUDP(b []byte) (n int, addr *net.UDPAddr, err error) {
 	packet, ok := <-s.unhandled
 	if !ok {
-		return 0, nil, errors.New("Connection was closed")
+		return 0, nil, errors.New("connection was closed")
 	}
 	l := len(packet.Data)
 	if l > len(b) {
@@ -779,6 +778,9 @@ running:
 				if p.Inbound() {
 					inboundCount++
 				}
+				if conn, ok := c.fd.(*meteredConn); ok {
+					conn.handshakeDone(p)
+				}
 			}
 			// The dialer logic relies on the assumption that
 			// dial tasks complete after the peer has been added or
@@ -902,9 +904,13 @@ func (srv *Server) listenLoop() {
 			continue
 		}
 		if remoteIP != nil {
-			fd = newMeteredConn(fd, true, remoteIP)
+			var addr *net.TCPAddr
+			if tcp, ok := fd.RemoteAddr().(*net.TCPAddr); ok {
+				addr = tcp
+			}
+			fd = newMeteredConn(fd, true, addr)
+			srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
 		}
-		srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
 		go func() {
 			srv.SetupConn(fd, inboundConn, nil)
 			slots <- struct{}{}
@@ -973,9 +979,6 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		c.node = dialDest
 	} else {
 		c.node = nodeFromConn(remotePubkey, c.fd)
-	}
-	if conn, ok := c.fd.(*meteredConn); ok {
-		conn.handshakeDone(c.node.ID())
 	}
 	clog := srv.log.New("id", c.node.ID(), "addr", c.fd.RemoteAddr(), "conn", c.flags)
 	err = srv.checkpoint(c, srv.checkpointPostHandshake)

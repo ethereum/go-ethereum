@@ -387,7 +387,7 @@ func initialize(c *cli.Context) error {
 	if c.GlobalBool(stdiouiFlag.Name) {
 		logOutput = os.Stderr
 		// If using the stdioui, we can't do the 'confirm'-flow
-		fmt.Fprintf(logOutput, legalWarning)
+		fmt.Fprint(logOutput, legalWarning)
 	} else {
 		if !confirm(legalWarning) {
 			return fmt.Errorf("aborted by user")
@@ -579,7 +579,7 @@ func signer(c *cli.Context) error {
 		},
 	})
 
-	abortChan := make(chan os.Signal)
+	abortChan := make(chan os.Signal, 1)
 	signal.Notify(abortChan, os.Interrupt)
 
 	sig := <-abortChan
@@ -694,7 +694,7 @@ func checkFile(filename string) error {
 
 // confirm displays a text and asks for user confirmation
 func confirm(text string) bool {
-	fmt.Printf(text)
+	fmt.Print(text)
 	fmt.Printf("\nEnter 'ok' to proceed:\n> ")
 
 	text, err := bufio.NewReader(os.Stdin).ReadString('\n')
@@ -760,21 +760,19 @@ func testExternalUI(api *core.SignerAPI) {
 		api.UI.ShowInfo("Please approve the next request for signing a clique header")
 		time.Sleep(delay)
 		cliqueHeader := types.Header{
-			common.HexToHash("0000H45H"),
-			common.HexToHash("0000H45H"),
-			common.HexToAddress("0000H45H"),
-			common.HexToHash("0000H00H"),
-			common.HexToHash("0000H45H"),
-			common.HexToHash("0000H45H"),
-			types.Bloom{},
-			big.NewInt(1337),
-			big.NewInt(1337),
-			1338,
-			1338,
-			1338,
-			[]byte("Extra data Extra data Extra data  Extra data  Extra data  Extra data  Extra data Extra data"),
-			common.HexToHash("0x0000H45H"),
-			types.BlockNonce{},
+			ParentHash:  common.HexToHash("0000H45H"),
+			UncleHash:   common.HexToHash("0000H45H"),
+			Coinbase:    common.HexToAddress("0000H45H"),
+			Root:        common.HexToHash("0000H00H"),
+			TxHash:      common.HexToHash("0000H45H"),
+			ReceiptHash: common.HexToHash("0000H45H"),
+			Difficulty:  big.NewInt(1337),
+			Number:      big.NewInt(1337),
+			GasLimit:    1338,
+			GasUsed:     1338,
+			Time:        1338,
+			Extra:       []byte("Extra data Extra data Extra data  Extra data  Extra data  Extra data  Extra data Extra data"),
+			MixDigest:   common.HexToHash("0x0000H45H"),
 		}
 		cliqueRlp, err := rlp.EncodeToBytes(cliqueHeader)
 		if err != nil {
@@ -938,7 +936,7 @@ func GenDoc(ctx *cli.Context) {
 			"of the work in canonicalizing and making sense of the data, and it's up to the UI to present" +
 			"the user with the contents of the `message`"
 		sighash, msg := accounts.TextAndHash([]byte("hello world"))
-		messages := []*core.NameValueType{{"message", msg, accounts.MimetypeTextPlain}}
+		messages := []*core.NameValueType{{Name: "message", Value: msg, Typ: accounts.MimetypeTextPlain}}
 
 		add("SignDataRequest", desc, &core.SignDataRequest{
 			Address:     common.NewMixedcaseAddress(a),
@@ -969,8 +967,8 @@ func GenDoc(ctx *cli.Context) {
 		add("SignTxRequest", desc, &core.SignTxRequest{
 			Meta: meta,
 			Callinfo: []core.ValidationInfo{
-				{"Warning", "Something looks odd, show this message as a warning"},
-				{"Info", "User should see this aswell"},
+				{Typ: "Warning", Message: "Something looks odd, show this message as a warning"},
+				{Typ: "Info", Message: "User should see this as well"},
 			},
 			Transaction: core.SendTxArgs{
 				Data:     &data,
@@ -1036,16 +1034,21 @@ func GenDoc(ctx *cli.Context) {
 			&core.ListRequest{
 				Meta: meta,
 				Accounts: []accounts.Account{
-					{a, accounts.URL{Scheme: "keystore", Path: "/path/to/keyfile/a"}},
-					{b, accounts.URL{Scheme: "keystore", Path: "/path/to/keyfile/b"}}},
+					{Address: a, URL: accounts.URL{Scheme: "keystore", Path: "/path/to/keyfile/a"}},
+					{Address: b, URL: accounts.URL{Scheme: "keystore", Path: "/path/to/keyfile/b"}}},
 			})
 
 		add("ListResponse", "Response to list request. The response contains a list of all addresses to show to the caller. "+
 			"Note: the UI is free to respond with any address the caller, regardless of whether it exists or not",
 			&core.ListResponse{
 				Accounts: []accounts.Account{
-					{common.HexToAddress("0xcowbeef000000cowbeef00000000000000000c0w"), accounts.URL{Path: ".. ignored .."}},
-					{common.HexToAddress("0xffffffffffffffffffffffffffffffffffffffff"), accounts.URL{}},
+					{
+						Address: common.HexToAddress("0xcowbeef000000cowbeef00000000000000000c0w"),
+						URL:     accounts.URL{Path: ".. ignored .."},
+					},
+					{
+						Address: common.HexToAddress("0xffffffffffffffffffffffffffffffffffffffff"),
+					},
 				}})
 	}
 

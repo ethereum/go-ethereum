@@ -72,7 +72,7 @@ func (s *Server) RegisterName(name string, receiver interface{}) error {
 //
 // Note that codec options are no longer supported.
 func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
-	defer codec.Close()
+	defer codec.close()
 
 	// Don't serve if server is stopped.
 	if atomic.LoadInt32(&s.run) == 0 {
@@ -84,7 +84,7 @@ func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	defer s.codecs.Remove(codec)
 
 	c := initClient(codec, s.idgen, &s.services)
-	<-codec.Closed()
+	<-codec.closed()
 	c.Close()
 }
 
@@ -101,10 +101,10 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 	h.allowSubscribe = false
 	defer h.close(io.EOF, nil)
 
-	reqs, batch, err := codec.Read()
+	reqs, batch, err := codec.readBatch()
 	if err != nil {
 		if err != io.EOF {
-			codec.Write(ctx, errorMessage(&invalidMessageError{"parse error"}))
+			codec.writeJSON(ctx, errorMessage(&invalidMessageError{"parse error"}))
 		}
 		return
 	}
@@ -122,7 +122,7 @@ func (s *Server) Stop() {
 	if atomic.CompareAndSwapInt32(&s.run, 1, 0) {
 		log.Debug("RPC server shutting down")
 		s.codecs.Each(func(c interface{}) bool {
-			c.(ServerCodec).Close()
+			c.(ServerCodec).close()
 			return true
 		})
 	}

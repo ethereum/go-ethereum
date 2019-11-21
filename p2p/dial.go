@@ -304,7 +304,7 @@ func (t *dialTask) dial(srv *Server, dest *enode.Node) error {
 	if err != nil {
 		return &dialError{err}
 	}
-	mfd := newMeteredConn(fd, false, dest.IP())
+	mfd := newMeteredConn(fd, false, &net.TCPAddr{IP: dest.IP(), Port: dest.TCP()})
 	return srv.SetupConn(mfd, t.flags, dest)
 }
 

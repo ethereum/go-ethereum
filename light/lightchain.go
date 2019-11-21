@@ -143,6 +143,11 @@ func (lc *LightChain) Odr() OdrBackend {
 	return lc.odr
 }
 
+// HeaderChain returns the underlying header chain.
+func (lc *LightChain) HeaderChain() *core.HeaderChain {
+	return lc.hc
+}
+
 // loadLastState loads the last known chain state from the database. This method
 // assumes that the chain manager mutex is held.
 func (lc *LightChain) loadLastState() error {

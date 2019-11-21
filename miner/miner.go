@@ -72,7 +72,7 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 		mux:      mux,
 		engine:   engine,
 		exitCh:   make(chan struct{}),
-		worker:   newWorker(config, chainConfig, engine, eth, mux, isLocalBlock),
+		worker:   newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
 		canStart: 1,
 	}
 	go miner.update()

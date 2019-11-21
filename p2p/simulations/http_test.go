@@ -420,16 +420,8 @@ type expectEvents struct {
 }
 
 func (t *expectEvents) nodeEvent(id string, up bool) *Event {
-	node := Node{
-		Config: &adapters.NodeConfig{
-			ID: enode.HexID(id),
-		},
-		up: up,
-	}
-	return &Event{
-		Type: EventTypeNode,
-		Node: &node,
-	}
+	config := &adapters.NodeConfig{ID: enode.HexID(id)}
+	return &Event{Type: EventTypeNode, Node: newNode(nil, config, up)}
 }
 
 func (t *expectEvents) connEvent(one, other string, up bool) *Event {
@@ -450,7 +442,7 @@ loop:
 	for {
 		select {
 		case event := <-t.events:
-			t.Logf("received %s event: %s", event.Type, event)
+			t.Logf("received %s event: %v", event.Type, event)
 
 			if event.Type != EventTypeMsg || event.Msg.Received {
 				continue loop
@@ -486,7 +478,7 @@ func (t *expectEvents) expect(events ...*Event) {
 	for {
 		select {
 		case event := <-t.events:
-			t.Logf("received %s event: %s", event.Type, event)
+			t.Logf("received %s event: %v", event.Type, event)
 
 			expected := events[i]
 			if event.Type != expected.Type {
