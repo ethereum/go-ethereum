@@ -58,6 +58,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cespare/cp"
 	"github.com/ethereum/go-ethereum/internal/build"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -500,6 +501,11 @@ func doDebianSource(cmdline []string) {
 	// Download and verify the Go source package.
 	gobundle := downloadGoSources(*goversion, *cachedir)
 
+	// Download all the dependencies needed to build the sources
+	depfetch := goTool("install", "-n", "./...")
+	depfetch.Env = append(os.Environ(), "GOPATH="+filepath.Join(*workdir, "modgopath"))
+	build.MustRun(depfetch)
+
 	// Create Debian packages and upload them.
 	for _, pkg := range debPackages {
 		for distro, goboot := range debDistroGoBoots {
@@ -507,14 +513,18 @@ func doDebianSource(cmdline []string) {
 			meta := newDebMetadata(distro, goboot, *signer, env, now, pkg.Name, pkg.Version, pkg.Executables)
 			pkgdir := stageDebianSource(*workdir, meta)
 
-			// Add Go source code.
+			// Add Go source code
 			if err := build.ExtractTarballArchive(gobundle, pkgdir); err != nil {
 				log.Fatalf("Failed to extract Go sources: %v", err)
 			}
 			if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, ".go")); err != nil {
 				log.Fatalf("Failed to rename Go source folder: %v", err)
 			}
-
+			// Add all dependency modules in compressed form
+			os.MkdirAll(filepath.Join(pkgdir, ".mod", "cache"), 0755)
+			if err := cp.CopyAll(filepath.Join(pkgdir, ".mod", "cache", "download"), filepath.Join(*workdir, "modgopath", "pkg", "mod", "cache", "download")); err != nil {
+				log.Fatalf("Failed to copy Go module dependencies: %v", err)
+			}
 			// Run the packaging and upload to the PPA
 			debuild := exec.Command("debuild", "-S", "-sa", "-us", "-uc", "-d", "-Zxz")
 			debuild.Dir = pkgdir
@@ -780,9 +790,12 @@ func doWindowsInstaller(cmdline []string) {
 	build.Render("build/nsis.uninstall.nsh", filepath.Join(*workdir, "uninstall.nsh"), 0644, allTools)
 	build.Render("build/nsis.pathupdate.nsh", filepath.Join(*workdir, "PathUpdate.nsh"), 0644, nil)
 	build.Render("build/nsis.envvarupdate.nsh", filepath.Join(*workdir, "EnvVarUpdate.nsh"), 0644, nil)
-	build.CopyFile(filepath.Join(*workdir, "SimpleFC.dll"), "build/nsis.simplefc.dll", 0755)
-	build.CopyFile(filepath.Join(*workdir, "COPYING"), "COPYING", 0755)
-
+	if err := cp.CopyFile(filepath.Join(*workdir, "SimpleFC.dll"), "build/nsis.simplefc.dll"); err != nil {
+		log.Fatal("Failed to copy SimpleFC.dll: %v", err)
+	}
+	if err := cp.CopyFile(filepath.Join(*workdir, "COPYING"), "COPYING"); err != nil {
+		log.Fatal("Failed to copy copyright note: %v", err)
+	}
 	// Build the installer. This assumes that all the needed files have been previously
 	// built (don't mix building and packaging to keep cross compilation complexity to a
 	// minimum).
@@ -799,7 +812,6 @@ func doWindowsInstaller(cmdline []string) {
 		"/DARCH="+*arch,
 		filepath.Join(*workdir, "geth.nsi"),
 	)
-
 	// Sign and publish installer.
 	if err := archiveUpload(installer, *upload, *signer); err != nil {
 		log.Fatal(err)
@@ -1060,16 +1072,11 @@ func doXgo(cmdline []string) {
 
 func xgoTool(args []string) *exec.Cmd {
 	cmd := exec.Command(filepath.Join(GOBIN, "xgo"), args...)
-	cmd.Env = []string{
+	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, []string{
 		"GOPATH=" + build.GOPATH(),
 		"GOBIN=" + GOBIN,
-	}
-	for _, e := range os.Environ() {
-		if strings.HasPrefix(e, "GOPATH=") || strings.HasPrefix(e, "GOBIN=") {
-			continue
-		}
-		cmd.Env = append(cmd.Env, e)
-	}
+	}...)
 	return cmd
 }
 
