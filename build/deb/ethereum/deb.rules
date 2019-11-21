@@ -4,9 +4,12 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-# Launchpad rejects Go's access to $HOME/.cache, use custom folder
+# Launchpad rejects Go's access to $HOME, use custom folders
 export GOCACHE=/tmp/go-build
 export GOROOT_BOOTSTRAP={{.GoBootPath}}
+
+override_dh_auto_clean:
+	# Don't try to be smart Launchpad, we know our build rules better than you
 
 override_dh_auto_build:
 	# We can't download a fresh Go within Launchpad, so we're shipping and building
