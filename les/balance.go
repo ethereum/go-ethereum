@@ -104,7 +104,7 @@ func (bt *balanceTracker) balanceToPriority(b balance) int64 {
 	return int64(b.neg)
 }
 
-func (bt *balanceTracker) posBalanceMissing(targetPriority int64, after time.Duration) uint64 {
+func (bt *balanceTracker) posBalanceMissing(targetPriority int64, targetCapacity uint64, after time.Duration) uint64 {
 	if targetPriority > 0 {
 		negPrice := uint64(float64(after) * bt.negTimeFactor)
 		if negPrice+bt.balance.neg <= uint64(targetPriority) {
@@ -119,7 +119,7 @@ func (bt *balanceTracker) posBalanceMissing(targetPriority int64, after time.Dur
 		}
 		targetPriority = 0
 	}
-	posRequired := uint64(float64(^targetPriority)*float64(bt.capacity) + float64(after)*bt.timeFactor)
+	posRequired := uint64(float64(^targetPriority)*float64(targetCapacity) + float64(after)*bt.timeFactor)
 	if posRequired >= maxBalance {
 		return math.MaxUint64 // target not reachable
 	}

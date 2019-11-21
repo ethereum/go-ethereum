@@ -114,6 +114,7 @@ type clientPeer interface {
 type clientInfo struct {
 	address                string
 	id                     enode.ID
+	freeID                 string
 	connectedAt            mclock.AbsTime
 	capacity               uint64
 	priority               bool
@@ -224,72 +225,29 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 		log.Debug("Client already connected", "address", freeID, "id", peerIdToString(id))
 		return false
 	}
-	// Create a clientInfo but do not add it yet
-	now := f.clock.Now()
+	var missing uint64
+	missing, capacity = f.capAvailable(id, freeID, capacity, 0, true)
+	if missing != 0 {
+		return false
+	}
+	// capacity is available, create and add client
 	pb := f.ndb.getOrNewPB(id)
 	nb := f.ndb.getOrNewNB(freeID)
-
 	e := &clientInfo{
+		capacity:        capacity,
 		pool:            f,
 		peer:            peer,
 		address:         freeID,
 		queueIndex:      -1,
 		id:              id,
-		connectedAt:     now,
+		freeID:          freeID,
+		connectedAt:     f.clock.Now(),
 		priority:        pb.value != 0,
 		posFactors:      f.defaultPosFactors,
 		negFactors:      f.defaultNegFactors,
 		balanceMetaInfo: pb.meta,
 	}
-	// If the client is a free client, assign with a low free capacity,
-	// Otherwise assign with the given value(priority client)
-	if !e.priority || capacity == 0 {
-		capacity = f.freeClientCap
-	}
-	if capacity < f.minCap {
-		capacity = f.minCap
-	}
-	e.capacity = capacity
 	f.initBalanceTracker(&e.balanceTracker, pb, nb, capacity)
-
-	// If the number of clients already connected in the clientpool exceeds its
-	// capacity, evict some clients with lowest priority.
-	//
-	// If the priority of the newly added client is lower than the priority of
-	// all connected clients, the client is rejected.
-	newCapacity := f.connectedCap + capacity
-	newCount := f.connectedQueue.Size() + 1
-	if newCapacity > f.capLimit || newCount > f.connLimit {
-		var (
-			kickList     []*clientInfo
-			kickPriority int64
-		)
-		f.connectedQueue.MultiPop(func(data interface{}, priority int64) bool {
-			c := data.(*clientInfo)
-			kickList = append(kickList, c)
-			kickPriority = priority
-			newCapacity -= c.capacity
-			newCount--
-			return newCapacity > f.capLimit || newCount > f.connLimit
-		})
-		bias := connectedBias
-		if f.disableBias {
-			bias = 0
-		}
-		if newCapacity > f.capLimit || newCount > f.connLimit || (e.balanceTracker.estimatedPriority(now+mclock.AbsTime(bias), false)-kickPriority) > 0 {
-			for _, c := range kickList {
-				f.connectedQueue.Push(c)
-			}
-			clientRejectedMeter.Mark(1)
-			log.Debug("Client rejected", "address", freeID, "id", peerIdToString(id))
-			return false
-		}
-		// accept new client, drop old ones
-		for _, c := range kickList {
-			f.dropClient(c, now, true)
-		}
-	}
-
 	// Register new client to connection queue.
 	f.connectedMap[id] = e
 	f.connectedQueue.Push(e)
@@ -347,6 +305,13 @@ func (f *clientPool) balanceMissing(id enode.ID, freeID string, capacity uint64,
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
+	return f.capAvailable(id, freeID, capacity, minConnTime, false)
+}
+
+// capAvailable checks whether the current priority level of the given client is enough to
+// connect or change capacity to the requested level and then stay connected for at least
+// the specified duration. If not then the additional required amount of positive balance is returned.
+func (f *clientPool) capAvailable(id enode.ID, freeID string, capacity uint64, minConnTime time.Duration, kick bool) (uint64, uint64) {
 	var missing uint64
 	if capacity == 0 {
 		capacity = f.freeClientCap
@@ -383,7 +348,7 @@ func (f *clientPool) balanceMissing(id enode.ID, freeID string, capacity uint64,
 			if client != nil {
 				bt = &client.balanceTracker
 			} else {
-				bt := &balanceTracker{}
+				bt = &balanceTracker{}
 				f.initBalanceTracker(bt, f.ndb.getOrNewPB(id), f.ndb.getOrNewNB(freeID), capacity)
 			}
 			if capacity != f.freeClientCap && targetPriority >= -1 {
@@ -396,10 +361,17 @@ func (f *clientPool) balanceMissing(id enode.ID, freeID string, capacity uint64,
 			if bias < minConnTime {
 				bias = minConnTime
 			}
-			missing = bt.posBalanceMissing(targetPriority, bias)
+			missing = bt.posBalanceMissing(targetPriority, capacity, bias)
+		}
+		if missing != 0 {
+			kick = false
 		}
 		for _, c := range popList {
-			f.connectedQueue.Push(c)
+			if kick && c != client {
+				f.dropClient(c, f.clock.Now(), true)
+			} else {
+				f.connectedQueue.Push(c)
+			}
 		}
 	}
 	return missing, capacity
@@ -532,7 +504,7 @@ func (f *clientPool) setLimits(totalConn int, totalCap uint64) {
 }
 
 // setCapacity sets the assigned capacity of a connected client
-func (f *clientPool) setCapacity(c *clientInfo, capacity uint64) error {
+func (f *clientPool) setCapacity(c *clientInfo, capacity uint64) (uint64, uint64, error) {
 	if capacity == 0 {
 		capacity = f.freeClientCap
 	}
@@ -540,51 +512,26 @@ func (f *clientPool) setCapacity(c *clientInfo, capacity uint64) error {
 		capacity = f.minCap
 	}
 	if f.connectedMap[c.id] != c {
-		return fmt.Errorf("client %064x is not connected", c.id[:])
+		return 0, capacity, fmt.Errorf("client %064x is not connected", c.id[:])
 	}
 	if c.capacity == capacity {
-		return nil
+		return 0, capacity, nil
 	}
-	if !c.priority {
-		return errNoPriority
+	var missing uint64
+	missing, capacity = f.capAvailable(c.id, c.freeID, capacity, 0, true)
+	if missing != 0 {
+		return missing, capacity, errNoPriority
 	}
-	oldCapacity := c.capacity
+	// capacity update is possible
+	f.connectedCap += capacity - c.capacity
+	f.priorityConnected += capacity - c.capacity
 	c.capacity = capacity
-	f.connectedCap += capacity - oldCapacity
 	c.balanceTracker.setCapacity(capacity)
 	f.connectedQueue.Update(c.queueIndex)
-	if f.connectedCap > f.capLimit {
-		var kickList []*clientInfo
-		kick := true
-		f.connectedQueue.MultiPop(func(data interface{}, priority int64) bool {
-			client := data.(*clientInfo)
-			kickList = append(kickList, client)
-			f.connectedCap -= client.capacity
-			if client == c {
-				kick = false
-			}
-			return kick && (f.connectedCap > f.capLimit)
-		})
-		if kick {
-			now := mclock.Now()
-			for _, c := range kickList {
-				f.dropClient(c, now, true)
-			}
-		} else {
-			c.capacity = oldCapacity
-			c.balanceTracker.setCapacity(oldCapacity)
-			for _, c := range kickList {
-				f.connectedCap += c.capacity
-				f.connectedQueue.Push(c)
-			}
-			return errNoPriority
-		}
-	}
 	totalConnectedGauge.Update(int64(f.connectedCap))
-	f.priorityConnected += capacity - oldCapacity
 	updatePriceFactors(&c.balanceTracker, c.posFactors, c.negFactors, c.capacity)
 	c.peer.updateCapacity(c.capacity)
-	return nil
+	return 0, capacity, nil
 }
 
 // requestCost feeds request cost after serving a request from the given peer.

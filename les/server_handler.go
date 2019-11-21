@@ -957,5 +957,5 @@ func (h *serverHandler) broadcastHeaders() {
 }
 
 func (h *serverHandler) talkRequestHandler(id enode.ID, addr *net.UDPAddr, payload []byte) ([]byte, bool) {
-	return payload, true
+	return payload, true // dummy handler, just returns the same payload
 }
