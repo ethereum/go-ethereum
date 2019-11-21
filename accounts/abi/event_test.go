@@ -173,6 +173,7 @@ func TestEventTupleUnpack(t *testing.T) {
 	type EventTransferWithTag struct {
 		// this is valid because `value` is not exportable,
 		// so value is only unmarshalled into `Value1`.
+		value  *big.Int //lint:ignore U1000 unused field is part of test
 		Value1 *big.Int `abi:"value"`
 	}
 
