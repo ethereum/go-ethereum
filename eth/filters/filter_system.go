@@ -91,7 +91,7 @@ type EventSystem struct {
 	txsSub         event.Subscription // Subscription for new transaction event
 	logsSub        event.Subscription // Subscription for new log event
 	rmLogsSub      event.Subscription // Subscription for removed log event
-	pendingLogsSub event.Subscription // Subscription for removed log event
+	pendingLogsSub event.Subscription // Subscription for pending log event
 	chainSub       event.Subscription // Subscription for new chain event
 
 	// Channels
