@@ -130,7 +130,7 @@ geth -port=30302 -verbosity 5 --pprof --pprofport 6062 2>> /tmp/02.glog
 ```
 
 Alternatively if you want to kill the clients (in case they hang or stalled syncing, etc)
-but have the stacktrace too, you can use the `-QUIT` signal with `kill`:
+and have the stacktrace too, you can use the `-QUIT` signal with `kill`:
 
 ```
 killall -QUIT geth
