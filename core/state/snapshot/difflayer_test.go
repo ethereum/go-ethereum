@@ -61,11 +61,11 @@ func TestMergeBasics(t *testing.T) {
 		}
 	}
 	// Add some (identical) layers on top
-	parent := newDiffLayer(emptyLayer{}, 1, common.Hash{}, accounts, storage)
-	child := newDiffLayer(parent, 1, common.Hash{}, accounts, storage)
-	child = newDiffLayer(child, 1, common.Hash{}, accounts, storage)
-	child = newDiffLayer(child, 1, common.Hash{}, accounts, storage)
-	child = newDiffLayer(child, 1, common.Hash{}, accounts, storage)
+	parent := newDiffLayer(emptyLayer{}, common.Hash{}, accounts, storage)
+	child := newDiffLayer(parent, common.Hash{}, accounts, storage)
+	child = newDiffLayer(child, common.Hash{}, accounts, storage)
+	child = newDiffLayer(child, common.Hash{}, accounts, storage)
+	child = newDiffLayer(child, common.Hash{}, accounts, storage)
 	// And flatten
 	merged := (child.flatten()).(*diffLayer)
 
@@ -122,7 +122,7 @@ func TestMergeDelete(t *testing.T) {
 	}
 
 	// Add some flip-flopping layers on top
-	parent := newDiffLayer(emptyLayer{}, 1, common.Hash{}, flip(), storage)
+	parent := newDiffLayer(emptyLayer{}, common.Hash{}, flip(), storage)
 	child := parent.Update(common.Hash{}, flop(), storage)
 	child = child.Update(common.Hash{}, flip(), storage)
 	child = child.Update(common.Hash{}, flop(), storage)
@@ -139,10 +139,6 @@ func TestMergeDelete(t *testing.T) {
 	// And flatten
 	merged := (child.flatten()).(*diffLayer)
 
-	// check number
-	if got, exp := merged.number, child.number; got != exp {
-		t.Errorf("merged layer: wrong number - exp %d got %d", exp, got)
-	}
 	if data, _ := merged.Account(h1); data == nil {
 		t.Errorf("merged layer: expected %x to be non-nil", h1)
 	}
@@ -169,7 +165,7 @@ func TestInsertAndMerge(t *testing.T) {
 	{
 		var accounts = make(map[common.Hash][]byte)
 		var storage = make(map[common.Hash]map[common.Hash][]byte)
-		parent = newDiffLayer(emptyLayer{}, 1, common.Hash{}, accounts, storage)
+		parent = newDiffLayer(emptyLayer{}, common.Hash{}, accounts, storage)
 	}
 	{
 		var accounts = make(map[common.Hash][]byte)
@@ -178,7 +174,7 @@ func TestInsertAndMerge(t *testing.T) {
 		accstorage := make(map[common.Hash][]byte)
 		storage[acc] = accstorage
 		storage[acc][slot] = []byte{0x01}
-		child = newDiffLayer(parent, 2, common.Hash{}, accounts, storage)
+		child = newDiffLayer(parent, common.Hash{}, accounts, storage)
 	}
 	// And flatten
 	merged := (child.flatten()).(*diffLayer)
@@ -200,11 +196,12 @@ func (emptyLayer) Journal() error {
 	panic("implement me")
 }
 
-func (emptyLayer) Info() (uint64, common.Hash) {
-	return 0, common.Hash{}
+func (emptyLayer) Stale() bool {
+	panic("implement me")
 }
-func (emptyLayer) Number() uint64 {
-	return 0
+
+func (emptyLayer) Root() common.Hash {
+	return common.Hash{}
 }
 
 func (emptyLayer) Account(hash common.Hash) (*Account, error) {
@@ -227,8 +224,6 @@ func (emptyLayer) Storage(accountHash, storageHash common.Hash) ([]byte, error) 
 // BenchmarkSearch-6   	  500000	      3723 ns/op (10k per layer, only top-level RLock()
 func BenchmarkSearch(b *testing.B) {
 	// First, we set up 128 diff layers, with 1K items each
-
-	blocknum := uint64(0)
 	fill := func(parent snapshot) *diffLayer {
 		accounts := make(map[common.Hash][]byte)
 		storage := make(map[common.Hash]map[common.Hash][]byte)
@@ -236,10 +231,8 @@ func BenchmarkSearch(b *testing.B) {
 		for i := 0; i < 10000; i++ {
 			accounts[randomHash()] = randomAccount()
 		}
-		blocknum++
-		return newDiffLayer(parent, blocknum, common.Hash{}, accounts, storage)
+		return newDiffLayer(parent, common.Hash{}, accounts, storage)
 	}
-
 	var layer snapshot
 	layer = emptyLayer{}
 	for i := 0; i < 128; i++ {
@@ -261,8 +254,6 @@ func BenchmarkSearch(b *testing.B) {
 // BenchmarkSearchSlot-6   	  100000	     14551 ns/op (when checking parent number using atomic)
 func BenchmarkSearchSlot(b *testing.B) {
 	// First, we set up 128 diff layers, with 1K items each
-
-	blocknum := uint64(0)
 	accountKey := common.Hash{}
 	storageKey := common.HexToHash("0x1337")
 	accountRLP := randomAccount()
@@ -278,16 +269,13 @@ func BenchmarkSearchSlot(b *testing.B) {
 			accStorage[randomHash()] = value
 			storage[accountKey] = accStorage
 		}
-		blocknum++
-		return newDiffLayer(parent, blocknum, common.Hash{}, accounts, storage)
+		return newDiffLayer(parent, common.Hash{}, accounts, storage)
 	}
-
 	var layer snapshot
 	layer = emptyLayer{}
 	for i := 0; i < 128; i++ {
 		layer = fill(layer)
 	}
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		layer.Storage(accountKey, storageKey)
@@ -300,7 +288,7 @@ func BenchmarkSearchSlot(b *testing.B) {
 // Without sorting and tracking accountlist
 // BenchmarkFlatten-6   	     300	   5511511 ns/op
 func BenchmarkFlatten(b *testing.B) {
-	fill := func(parent snapshot, blocknum int) *diffLayer {
+	fill := func(parent snapshot) *diffLayer {
 		accounts := make(map[common.Hash][]byte)
 		storage := make(map[common.Hash]map[common.Hash][]byte)
 
@@ -317,7 +305,7 @@ func BenchmarkFlatten(b *testing.B) {
 			}
 			storage[accountKey] = accStorage
 		}
-		return newDiffLayer(parent, uint64(blocknum), common.Hash{}, accounts, storage)
+		return newDiffLayer(parent, common.Hash{}, accounts, storage)
 	}
 
 	b.ResetTimer()
@@ -327,7 +315,7 @@ func BenchmarkFlatten(b *testing.B) {
 		var layer snapshot
 		layer = emptyLayer{}
 		for i := 1; i < 128; i++ {
-			layer = fill(layer, i)
+			layer = fill(layer)
 		}
 		b.StartTimer()
 
@@ -336,7 +324,6 @@ func BenchmarkFlatten(b *testing.B) {
 			if !ok {
 				break
 			}
-
 			layer = dl.flatten()
 		}
 		b.StopTimer()
@@ -351,7 +338,7 @@ func BenchmarkFlatten(b *testing.B) {
 // BenchmarkJournal-6   	       1	1471373923 ns/ops
 // BenchmarkJournal-6   	       1	1208083335 ns/op // bufio writer
 func BenchmarkJournal(b *testing.B) {
-	fill := func(parent snapshot, blocknum int) *diffLayer {
+	fill := func(parent snapshot) *diffLayer {
 		accounts := make(map[common.Hash][]byte)
 		storage := make(map[common.Hash]map[common.Hash][]byte)
 
@@ -368,15 +355,14 @@ func BenchmarkJournal(b *testing.B) {
 			}
 			storage[accountKey] = accStorage
 		}
-		return newDiffLayer(parent, uint64(blocknum), common.Hash{}, accounts, storage)
+		return newDiffLayer(parent, common.Hash{}, accounts, storage)
 	}
-
 	var layer snapshot
 	layer = &diskLayer{
 		journal: path.Join(os.TempDir(), "difflayer_journal.tmp"),
 	}
 	for i := 1; i < 128; i++ {
-		layer = fill(layer, i)
+		layer = fill(layer)
 	}
 	b.ResetTimer()
 

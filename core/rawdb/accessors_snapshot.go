@@ -17,38 +17,36 @@
 package rawdb
 
 import (
-	"encoding/binary"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// ReadSnapshotBlock retrieves the number and root of the block whose state is
-// contained in the persisted snapshot.
-func ReadSnapshotBlock(db ethdb.KeyValueReader) (uint64, common.Hash) {
-	data, _ := db.Get(snapshotBlockKey)
-	if len(data) != 8+common.HashLength {
-		return 0, common.Hash{}
+// ReadSnapshotRoot retrieves the root of the block whose state is contained in
+// the persisted snapshot.
+func ReadSnapshotRoot(db ethdb.KeyValueReader) common.Hash {
+	data, _ := db.Get(snapshotRootKey)
+	if len(data) != common.HashLength {
+		return common.Hash{}
 	}
-	return binary.BigEndian.Uint64(data[:8]), common.BytesToHash(data[8:])
+	return common.BytesToHash(data)
 }
 
-// WriteSnapshotBlock stores the number and root of the block whose state is
-// contained in the persisted snapshot.
-func WriteSnapshotBlock(db ethdb.KeyValueWriter, number uint64, root common.Hash) {
-	if err := db.Put(snapshotBlockKey, append(encodeBlockNumber(number), root.Bytes()...)); err != nil {
-		log.Crit("Failed to store snapsnot block's number and root", "err", err)
+// WriteSnapshotRoot stores the root of the block whose state is contained in
+// the persisted snapshot.
+func WriteSnapshotRoot(db ethdb.KeyValueWriter, root common.Hash) {
+	if err := db.Put(snapshotRootKey, root[:]); err != nil {
+		log.Crit("Failed to store snapshot root", "err", err)
 	}
 }
 
-// DeleteSnapshotBlock deletes the number and hash of the block whose state is
-// contained in the persisted snapshot. Since snapshots are not immutable, this
-// method can be used during updates, so a crash or failure will mark the entire
-// snapshot invalid.
-func DeleteSnapshotBlock(db ethdb.KeyValueWriter) {
-	if err := db.Delete(snapshotBlockKey); err != nil {
-		log.Crit("Failed to remove snapsnot block's number and hash", "err", err)
+// DeleteSnapshotRoot deletes the hash of the block whose state is contained in
+// the persisted snapshot. Since snapshots are not immutable, this  method can
+// be used during updates, so a crash or failure will mark the entire snapshot
+// invalid.
+func DeleteSnapshotRoot(db ethdb.KeyValueWriter) {
+	if err := db.Delete(snapshotRootKey); err != nil {
+		log.Crit("Failed to remove snapshot root", "err", err)
 	}
 }
 

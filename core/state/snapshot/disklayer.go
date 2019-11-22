@@ -32,16 +32,24 @@ type diskLayer struct {
 	db      ethdb.KeyValueStore // Key-value store containing the base snapshot
 	cache   *bigcache.BigCache  // Cache to avoid hitting the disk for direct access
 
-	number uint64      // Block number of the base snapshot
-	root   common.Hash // Root hash of the base snapshot
-	stale  bool        // Signals that the layer became stale (state progressed)
+	root  common.Hash // Root hash of the base snapshot
+	stale bool        // Signals that the layer became stale (state progressed)
 
 	lock sync.RWMutex
 }
 
-// Info returns the block number and root hash for which this snapshot was made.
-func (dl *diskLayer) Info() (uint64, common.Hash) {
-	return dl.number, dl.root
+// Root returns  root hash for which this snapshot was made.
+func (dl *diskLayer) Root() common.Hash {
+	return dl.root
+}
+
+// Stale return whether this layer has become stale (was flattened across) or if
+// it's still live.
+func (dl *diskLayer) Stale() bool {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	return dl.stale
 }
 
 // Account directly retrieves the account associated with a particular hash in
@@ -123,7 +131,7 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 // the specified data items. Note, the maps are retained by the method to avoid
 // copying everything.
 func (dl *diskLayer) Update(blockHash common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
-	return newDiffLayer(dl, dl.number+1, blockHash, accounts, storage)
+	return newDiffLayer(dl, blockHash, accounts, storage)
 }
 
 // Journal commits an entire diff hierarchy to disk into a single journal file.

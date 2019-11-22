@@ -43,18 +43,12 @@ type journalStorage struct {
 // diff and verifying that it can be linked to the requested parent.
 func loadDiffLayer(parent snapshot, r *rlp.Stream) (snapshot, error) {
 	// Read the next diff journal entry
-	var (
-		number uint64
-		root   common.Hash
-	)
-	if err := r.Decode(&number); err != nil {
+	var root common.Hash
+	if err := r.Decode(&root); err != nil {
 		// The first read may fail with EOF, marking the end of the journal
 		if err == io.EOF {
 			return parent, nil
 		}
-		return nil, fmt.Errorf("load diff number: %v", err)
-	}
-	if err := r.Decode(&root); err != nil {
 		return nil, fmt.Errorf("load diff root: %v", err)
 	}
 	var accounts []journalAccount
@@ -77,13 +71,7 @@ func loadDiffLayer(parent snapshot, r *rlp.Stream) (snapshot, error) {
 		}
 		storageData[entry.Hash] = slots
 	}
-	// Validate the block number to avoid state corruption
-	if parent, ok := parent.(*diffLayer); ok {
-		if number != parent.number+1 {
-			return nil, fmt.Errorf("snapshot chain broken: block #%d after #%d", number, parent.number)
-		}
-	}
-	return loadDiffLayer(newDiffLayer(parent, number, root, accountData, storageData), r)
+	return loadDiffLayer(newDiffLayer(parent, root, accountData, storageData), r)
 }
 
 // journal is the internal version of Journal that also returns the journal file
@@ -113,13 +101,8 @@ func (dl *diffLayer) journal() (io.WriteCloser, error) {
 		writer.Close()
 		return nil, ErrSnapshotStale
 	}
-	buf := bufio.NewWriter(writer)
 	// Everything below was journalled, persist this layer too
-	if err := rlp.Encode(buf, dl.number); err != nil {
-		buf.Flush()
-		writer.Close()
-		return nil, err
-	}
+	buf := bufio.NewWriter(writer)
 	if err := rlp.Encode(buf, dl.root); err != nil {
 		buf.Flush()
 		writer.Close()

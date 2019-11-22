@@ -68,7 +68,7 @@ type StateDB struct {
 	db   Database
 	trie Trie
 
-	snaps        *snapshot.SnapshotTree
+	snaps        *snapshot.Tree
 	snap         snapshot.Snapshot
 	snapAccounts map[common.Hash][]byte
 	snapStorage  map[common.Hash]map[common.Hash][]byte
@@ -117,7 +117,7 @@ type StateDB struct {
 }
 
 // Create a new state from a given trie.
-func New(root common.Hash, db Database, snaps *snapshot.SnapshotTree) (*StateDB, error) {
+func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
@@ -840,12 +840,14 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		if metrics.EnabledExpensive {
 			defer func(start time.Time) { s.SnapshotCommits += time.Since(start) }(time.Now())
 		}
-		_, parentRoot := s.snap.Info()
-		if err := s.snaps.Update(root, parentRoot, s.snapAccounts, s.snapStorage); err != nil {
-			log.Warn("Failed to update snapshot tree", "from", parentRoot, "to", root, "err", err)
-		}
-		if err := s.snaps.Cap(root, 16, 4*1024*1024); err != nil {
-			log.Warn("Failed to cap snapshot tree", "root", root, "layers", 16, "memory", 4*1024*1024, "err", err)
+		// Only update if there's a state transition (skip empty Clique blocks)
+		if parent := s.snap.Root(); parent != root {
+			if err := s.snaps.Update(root, parent, s.snapAccounts, s.snapStorage); err != nil {
+				log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
+			}
+			if err := s.snaps.Cap(root, 16, 4*1024*1024); err != nil {
+				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 16, "memory", 4*1024*1024, "err", err)
+			}
 		}
 		s.snap, s.snapAccounts, s.snapStorage = nil, nil, nil
 	}

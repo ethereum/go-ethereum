@@ -41,8 +41,8 @@ var (
 	// fastTrieProgressKey tracks the number of trie entries imported during fast sync.
 	fastTrieProgressKey = []byte("TrieSync")
 
-	// snapshotBlockKey tracks the number and hash of the last snapshot.
-	snapshotBlockKey = []byte("SnapshotBlock")
+	// snapshotRootKey tracks the number and hash of the last snapshot.
+	snapshotRootKey = []byte("SnapshotRoot")
 
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
 	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header

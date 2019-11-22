@@ -37,7 +37,7 @@ func TestDiskLayerExternalInvalidationFullFlatten(t *testing.T) {
 		root:  common.HexToHash("0x01"),
 		cache: cache,
 	}
-	snaps := &SnapshotTree{
+	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
 			base.root: base,
 		},
@@ -83,7 +83,7 @@ func TestDiskLayerExternalInvalidationPartialFlatten(t *testing.T) {
 		root:  common.HexToHash("0x01"),
 		cache: cache,
 	}
-	snaps := &SnapshotTree{
+	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
 			base.root: base,
 		},
@@ -132,7 +132,7 @@ func TestDiffLayerExternalInvalidationFullFlatten(t *testing.T) {
 		root:  common.HexToHash("0x01"),
 		cache: cache,
 	}
-	snaps := &SnapshotTree{
+	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
 			base.root: base,
 		},
@@ -181,7 +181,7 @@ func TestDiffLayerExternalInvalidationPartialFlatten(t *testing.T) {
 		root:  common.HexToHash("0x01"),
 		cache: cache,
 	}
-	snaps := &SnapshotTree{
+	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
 			base.root: base,
 		},
@@ -213,7 +213,6 @@ func TestDiffLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	if got := len(snaps.layers); got != exp {
 		t.Errorf("layers modified, got %d exp %d", got, exp)
 	}
-
 	// Flatten the diff layer into the bottom accumulator
 	if err := snaps.Cap(common.HexToHash("0x04"), 2, 1024*1024); err != nil {
 		t.Fatalf("failed to flatten diff layer into accumulator: %v", err)
@@ -247,7 +246,7 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 		root:  common.HexToHash("0x01"),
 		cache: cache,
 	}
-	snaps := &SnapshotTree{
+	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
 			base.root: base,
 		},

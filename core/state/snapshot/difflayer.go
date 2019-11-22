@@ -36,9 +36,8 @@ type diffLayer struct {
 	parent snapshot // Parent snapshot modified by this one, never nil
 	memory uint64   // Approximate guess as to how much memory we use
 
-	number uint64      // Block number to which this snapshot diff belongs to
-	root   common.Hash // Root hash to which this snapshot diff belongs to
-	stale  bool        // Signals that the layer became stale (state progressed)
+	root  common.Hash // Root hash to which this snapshot diff belongs to
+	stale bool        // Signals that the layer became stale (state progressed)
 
 	accountList []common.Hash                          // List of account for iteration. If it exists, it's sorted, otherwise it's nil
 	accountData map[common.Hash][]byte                 // Keyed accounts for direct retrival (nil means deleted)
@@ -50,11 +49,10 @@ type diffLayer struct {
 
 // newDiffLayer creates a new diff on top of an existing snapshot, whether that's a low
 // level persistent database or a hierarchical diff already.
-func newDiffLayer(parent snapshot, number uint64, root common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
+func newDiffLayer(parent snapshot, root common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
 	// Create the new layer with some pre-allocated data segments
 	dl := &diffLayer{
 		parent:      parent,
-		number:      number,
 		root:        root,
 		accountData: accounts,
 		storageData: storage,
@@ -63,7 +61,6 @@ func newDiffLayer(parent snapshot, number uint64, root common.Hash, accounts map
 	for _, data := range accounts {
 		dl.memory += uint64(len(data))
 	}
-
 	// Fill the storage hashes and sort them for the iterator
 	dl.storageList = make(map[common.Hash][]common.Hash)
 
@@ -93,9 +90,18 @@ func newDiffLayer(parent snapshot, number uint64, root common.Hash, accounts map
 	return dl
 }
 
-// Info returns the block number and root hash for which this snapshot was made.
-func (dl *diffLayer) Info() (uint64, common.Hash) {
-	return dl.number, dl.root
+// Root returns the root hash for which this snapshot was made.
+func (dl *diffLayer) Root() common.Hash {
+	return dl.root
+}
+
+// Stale return whether this layer has become stale (was flattened across) or if
+// it's still live.
+func (dl *diffLayer) Stale() bool {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	return dl.stale
 }
 
 // Account directly retrieves the account associated with a particular hash in
@@ -164,7 +170,7 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 // Update creates a new layer on top of the existing snapshot diff tree with
 // the specified data items.
 func (dl *diffLayer) Update(blockRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
-	return newDiffLayer(dl, dl.number+1, blockRoot, accounts, storage)
+	return newDiffLayer(dl, blockRoot, accounts, storage)
 }
 
 // flatten pushes all data from this point downwards, flattening everything into
@@ -213,7 +219,6 @@ func (dl *diffLayer) flatten() snapshot {
 	// Return the combo parent
 	return &diffLayer{
 		parent:      parent.parent,
-		number:      dl.number,
 		root:        dl.root,
 		storageList: parent.storageList,
 		storageData: parent.storageData,

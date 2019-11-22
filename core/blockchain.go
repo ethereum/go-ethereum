@@ -140,10 +140,10 @@ type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
-	db     ethdb.Database         // Low level persistent database to store final content in
-	snaps  *snapshot.SnapshotTree // Snapshot tree for fast trie leaf access
-	triegc *prque.Prque           // Priority queue mapping block numbers to tries to gc
-	gcproc time.Duration          // Accumulates canonical block processing for trie dumping
+	db     ethdb.Database // Low level persistent database to store final content in
+	snaps  *snapshot.Tree // Snapshot tree for fast trie leaf access
+	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
+	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
 
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
@@ -301,7 +301,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 	// Load any existing snapshot, regenerating it if loading failed
 	head := bc.CurrentBlock()
-	if bc.snaps, err = snapshot.New(bc.db, "snapshot.rlp", head.NumberU64(), head.Root()); err != nil {
+	if bc.snaps, err = snapshot.New(bc.db, "snapshot.rlp", head.Root()); err != nil {
 		return nil, err
 	}
 	// Take ownership of this particular state

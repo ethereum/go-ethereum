@@ -85,7 +85,7 @@ func wipeSnapshot(db ethdb.KeyValueStore) error {
 	}
 	it.Release()
 
-	rawdb.DeleteSnapshotBlock(batch)
+	rawdb.DeleteSnapshotRoot(batch)
 	if err := batch.Write(); err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func wipeSnapshot(db ethdb.KeyValueStore) error {
 }
 
 // generateSnapshot regenerates a brand new snapshot based on an existing state database and head block.
-func generateSnapshot(db ethdb.KeyValueStore, journal string, headNumber uint64, headRoot common.Hash) (snapshot, error) {
+func generateSnapshot(db ethdb.KeyValueStore, journal string, root common.Hash) (snapshot, error) {
 	// Wipe any previously existing snapshot from the database
 	if err := wipeSnapshot(db); err != nil {
 		return nil, err
@@ -124,7 +124,7 @@ func generateSnapshot(db ethdb.KeyValueStore, journal string, headNumber uint64,
 	batch := db.NewBatch()
 	triedb := trie.NewDatabase(db)
 
-	accTrie, err := trie.NewSecure(headRoot, triedb)
+	accTrie, err := trie.NewSecure(root, triedb)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +186,7 @@ func generateSnapshot(db ethdb.KeyValueStore, journal string, headNumber uint64,
 	fmt.Printf("Totals: %9s (%d accs, %d nodes) + %9s (%d slots, %d nodes)\n", accountSize.TerminalString(), accountCount, accIt.Nodes, storageSize.TerminalString(), storageCount, storageNodes)
 
 	// Update the snapshot block marker and write any remainder data
-	rawdb.WriteSnapshotBlock(batch, headNumber, headRoot)
+	rawdb.WriteSnapshotRoot(batch, root)
 	batch.Write()
 	batch.Reset()
 
@@ -207,7 +207,6 @@ func generateSnapshot(db ethdb.KeyValueStore, journal string, headNumber uint64,
 		journal: journal,
 		db:      db,
 		cache:   cache,
-		number:  headNumber,
-		root:    headRoot,
+		root:    root,
 	}, nil
 }
