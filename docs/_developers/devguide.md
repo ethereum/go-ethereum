@@ -4,7 +4,7 @@ sort_key: A
 ---
 
 **NOTE: These instructions are for people who want to contribute Go source code changes.
-If you just want to run ethereum, use the regular [Installation Instructions](../install-and-build/installing-geth).**
+If you just want to run ethereum, use the regular [Installation Instructions](install-guide).**
 
 This document is the entry point for developers of the Go implementation of Ethereum.
 Developers here refer to the hands-on: who are interested in build, develop, debug, submit
@@ -20,16 +20,15 @@ documentation.
 
 If you'd like to contribute to go-ethereum, please fork, fix, commit and send a pull
 request (PR) for the maintainers to review and merge into the main code base. If you wish
-to submit more complex changes though, please check up with the core devs first on [our
-gitter channel](https://gitter.im/ethereum/go-ethereum) to ensure those changes are in
-line with the general philosophy of the project and/or get some early feedback which can
-make both your efforts much lighter as well as our review and merge procedures quick and
-simple.
+to submit more complex changes though, please check up with the core devs in the
+go-ethereum [Discord server](discord). to ensure those changes are in line with the
+general philosophy of the project and/or get some early feedback. This can reduce your
+effort as well as speeding up our review and merge procedures.
 
 PRs need to be based on and opened against the `master` branch (unless by explicit
 agreement, you contribute to a complex feature branch).
 
-Your PR will be reviewed according to the [Code Review guidelines](../developers/code-review-guidelines).
+Your PR will be reviewed according to the [Code Review guidelines](code-review).
 
 We encourage a PR early approach, meaning you create the PR the earliest even without the
 fix/feature. This will let core devs and other volunteers know you picked up an issue.
@@ -37,34 +36,11 @@ These early PRs should indicate 'in progress' status.
 
 ## Building and Testing
 
-We assume that you have [Go installed](https://golang.org/doc/install), and `GOPATH` is set.
+We assume that you have Go installed. Please use Go version 1.13 or later. We use the gc
+toolchain for development, which you can get from the [Go downloads page](go-install).
 
-**Note**:You must have your working copy under `$GOPATH/src/github.com/ethereum/go-ethereum`.
-
-Since Go does not use relative path for import, working in any other directory will have
-no effect, since the import paths will be appended to `$GOPATH/src`, and if the lib does
-not exist, the version at master HEAD will be downloaded.
-
-Most likely you will be working from your fork of `go-ethereum`, let's say from
-`github.com/yourname/go-ethereum`. Clone or move your fork into the right place:
-
-```
-git clone git@github.com:nirname/go-ethereum.git $GOPATH/src/github.com/ethereum/go-ethereum
-```
-
-### Managing Vendored Dependencies
-
-All other dependencies are tracked in the vendor/ directory. We use
-[govendor](https://github.com/kardianos/govendor) to manage them.
-
-If you want to add a new dependency, run `govendor fetch <import-path>`, then commit the
-result.
-
-If you want to update all dependencies to their latest upstream version, run `govendor
-fetch +v`.
-
-You can also use govendor to run certain commands on all go-ethereum packages, excluding
-vendored code. Example: to recreate all generated code, run `govendor generate +l`.
+go-ethereum is a Go module, and uses the [Go modules system](go-modules) to manage
+dependencies. Using `GOPATH` is not required to build go-ethereum.
 
 ### Building Executables
 
@@ -82,8 +58,8 @@ go-ethereum exectuables can be built individually. To build just geth, use:
 go install -v ./cmd/geth
 ```
 
-If you want to compile geth for an architecture that differs from your host, please consult
-our [cross compilation guide](../install-and-build/cross-compile).
+If you want to compile geth for an architecture that differs from your host, please
+consult our [cross compilation guide](cross-compile).
 
 ### Testing
 
@@ -105,11 +81,10 @@ TestMethod1, then both tests will run.
 Running benchmarks, eg.:
 
 ```
-go test -v -cpu 4 -bench . -run BenchmarkJoin
+go test -v -bench . -run BenchmarkJoin
 ```
 
-For more information, see the [go test
-flags](http://golang.org/cmd/go/#hdr-Description_of_testing_flags) documentation.
+For more information, see the [go test flags](testflag) documentation.
 
 ### Getting Stack Traces
 
@@ -137,3 +112,11 @@ killall -QUIT geth
 ```
 
 This will dump stack traces for each instance to their respective log file.
+
+[install-guide]: ../install-and-build/installing-geth
+[code-review]: ../developers/code-review-guidelines
+[cross-compile]: ../install-and-build/cross-compile
+[go-modules]: https://github.com/golang/go/wiki/Modules
+[discord]: https://discord.gg/nthXNEv
+[go-install]: https://golang.org/doc/install
+[testflag]: http://golang.org/cmd/go/#hdr-Description_of_testing_flags
