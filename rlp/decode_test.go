@@ -818,7 +818,7 @@ func ExampleDecode() {
 		fmt.Printf("Decoded value: %#v\n", s)
 	}
 	// Output:
-	// Decoded value: rlp.example{A:0xa, B:0x14, private:0x0, String:"foobar"}
+	// Decoded value: rlp.example{A:0xa, B:0x14, String:"foobar"}
 }
 
 func ExampleDecode_structTagNil() {
