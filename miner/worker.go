@@ -485,7 +485,21 @@ func (w *worker) mainLoop() {
 			// be automatically eliminated.
 			if !w.isRunning() && w.current != nil {
 				// If block is already full, abort
-				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
+				legacyGasPool := w.current.gasPool
+				eip1559GasPool := w.current.gp1559
+				// If EIP1559 is finalized we only accept 1559 transactions so if that pool is exhausted the block is full
+				if w.chainConfig.IsEIP1559Finalized(w.chain.CurrentBlock().Number()) && eip1559GasPool != nil && eip1559GasPool.Gas() < params.TxGas {
+					continue
+				}
+				// If EIP1559 has not been initialized we only accept legacy transaction so if that pool is exhausted the block is full
+				if !w.chainConfig.IsEIP1559(w.chain.CurrentBlock().Number()) && legacyGasPool != nil && legacyGasPool.Gas() < params.TxGas {
+					continue
+				}
+				// When we are between EIP1559 initialization and finalization we can received transactions of both types
+				// and one pool could be exhausted while the other is not
+				// If both pools are exhausted we know the block is full but if only one is we could still accept transactions
+				// of the other type so we need to proceed into commitTransactions()
+				if legacyGasPool != nil && legacyGasPool.Gas() < params.TxGas && eip1559GasPool != nil && eip1559GasPool.Gas() < params.TxGas {
 					continue
 				}
 				w.mu.RLock()
@@ -515,7 +529,7 @@ func (w *worker) mainLoop() {
 			}
 			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
 
-		// System stopped
+			// System stopped
 		case <-w.exitCh:
 			return
 		case <-w.txsSub.Err():
@@ -744,11 +758,15 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		return true
 	}
 
-	if w.current.gasPool == nil {
+	if !w.chainConfig.IsEIP1559Finalized(w.current.header.Number) && w.current.gasPool == nil {
 		w.current.gasPool = new(core.GasPool).AddGas(w.current.header.GasLimit)
 	}
 	if w.chainConfig.IsEIP1559(w.current.header.Number) && w.current.gp1559 == nil {
 		w.current.gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+	}
+	oneTxType := false
+	if w.chainConfig.IsEIP1559Finalized(w.current.header.Number) || !w.chainConfig.IsEIP1559(w.current.header.Number) {
+		oneTxType = true
 	}
 
 	var coalescedLogs []*types.Log
@@ -760,12 +778,37 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			break
 		}
 		// Set which gasPool to use based on the type of transaction
+		eip1559 := false
 		var gp *core.GasPool
-		if tx.GasPrice() == nil && tx.GasPremium() != nil && tx.FeeCap() != nil {
+		if w.chainConfig.IsEIP1559(w.current.header.Number) && tx.GasPrice() == nil && tx.GasPremium() != nil && tx.FeeCap() != nil {
 			gp = w.current.gp1559
-		} else if tx.GasPremium() == nil && tx.FeeCap() == nil && tx.GasPrice() != nil {
+			eip1559 = true
+		} else if !w.chainConfig.IsEIP1559Finalized(w.current.header.Number) && tx.GasPremium() == nil && tx.FeeCap() == nil && tx.GasPrice() != nil {
 			gp = w.current.gasPool
 		} else {
+			log.Error("Transaction does not conform with expected format (legacy or EIP1559)")
+			continue
+		}
+
+		// If we processing both types of transactions then we can break if both pools are exhausted
+		if w.current.gasPool != nil && w.current.gasPool.Gas() < params.TxGas && w.current.gp1559 != nil && w.current.gp1559.Gas() < params.TxGas {
+			log.Trace("Not enough gas for further transactions", "have legacy pool", w.current.gasPool, "and eip1559 pool", w.current.gp1559, "want", params.TxGas)
+			break
+		}
+
+		// If we don't have enough gas for any further transactions of this type
+		if gp.Gas() < params.TxGas {
+			if eip1559 {
+				log.Trace("Not enough gas for further EIP1559 transactions", "have", gp, "want", params.TxGas)
+			} else {
+				log.Trace("Not enough gas for further legacy transactions", "have", gp, "want", params.TxGas)
+			}
+			// and this is the only type we are processing, then we're done
+			if oneTxType {
+				break
+			}
+			// Otherwise if only the current pool is exhausted we need to continue
+			// in case some of the subsequent transactions are for the non-exhausted pool
 			continue
 		}
 
@@ -778,7 +821,12 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
 			// Notify resubmit loop to increase resubmitting interval due to too frequent commits.
 			if atomic.LoadInt32(interrupt) == commitInterruptResubmit {
-				ratio := float64(w.current.header.GasLimit-gp.Gas()) / float64(w.current.header.GasLimit)
+				var ratio float64
+				if eip1559 {
+					ratio = float64(params.MaxGasEIP1559-gp.Gas()) / float64(params.MaxGasEIP1559)
+				} else {
+					ratio = float64(w.current.header.GasLimit-gp.Gas()) / float64(w.current.header.GasLimit)
+				}
 				if ratio < 0.1 {
 					ratio = 0.1
 				}
@@ -789,11 +837,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			}
 			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
 		}
-		// If we don't have enough gas for any further transactions then we're done
-		if gp.Gas() < params.TxGas {
-			log.Trace("Not enough gas for further transactions", "have", gp, "want", params.TxGas)
-			break
-		}
+
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
 		//
