@@ -18,7 +18,7 @@ func BenchmarkTimer(b *testing.B) {
 func TestGetOrRegisterTimer(t *testing.T) {
 	r := NewRegistry()
 	NewRegisteredTimer("foo", r).Update(47)
-	if tm := GetOrRegisterTimer("foo", r); 1 != tm.Count() {
+	if tm := GetOrRegisterTimer("foo", r); tm.Count() != 1 {
 		t.Fatal(tm)
 	}
 }
@@ -27,7 +27,7 @@ func TestTimerExtremes(t *testing.T) {
 	tm := NewTimer()
 	tm.Update(math.MaxInt64)
 	tm.Update(0)
-	if stdDev := tm.StdDev(); 4.611686018427388e+18 != stdDev {
+	if stdDev := tm.StdDev(); stdDev != 4.611686018427388e+18 {
 		t.Errorf("tm.StdDev(): 4.611686018427388e+18 != %v\n", stdDev)
 	}
 }
@@ -35,11 +35,11 @@ func TestTimerExtremes(t *testing.T) {
 func TestTimerStop(t *testing.T) {
 	l := len(arbiter.meters)
 	tm := NewTimer()
-	if len(arbiter.meters) != l+1 {
+	if l+1 != len(arbiter.meters) {
 		t.Errorf("arbiter.meters: %d != %d\n", l+1, len(arbiter.meters))
 	}
 	tm.Stop()
-	if len(arbiter.meters) != l {
+	if l != len(arbiter.meters) {
 		t.Errorf("arbiter.meters: %d != %d\n", l, len(arbiter.meters))
 	}
 }
@@ -54,41 +54,41 @@ func TestTimerFunc(t *testing.T) {
 
 func TestTimerZero(t *testing.T) {
 	tm := NewTimer()
-	if count := tm.Count(); 0 != count {
+	if count := tm.Count(); count != 0 {
 		t.Errorf("tm.Count(): 0 != %v\n", count)
 	}
-	if min := tm.Min(); 0 != min {
+	if min := tm.Min(); min != 0 {
 		t.Errorf("tm.Min(): 0 != %v\n", min)
 	}
-	if max := tm.Max(); 0 != max {
+	if max := tm.Max(); max != 0 {
 		t.Errorf("tm.Max(): 0 != %v\n", max)
 	}
-	if mean := tm.Mean(); 0.0 != mean {
+	if mean := tm.Mean(); mean != 0.0 {
 		t.Errorf("tm.Mean(): 0.0 != %v\n", mean)
 	}
-	if stdDev := tm.StdDev(); 0.0 != stdDev {
+	if stdDev := tm.StdDev(); stdDev != 0.0 {
 		t.Errorf("tm.StdDev(): 0.0 != %v\n", stdDev)
 	}
 	ps := tm.Percentiles([]float64{0.5, 0.75, 0.99})
-	if 0.0 != ps[0] {
+	if ps[0] != 0.0 {
 		t.Errorf("median: 0.0 != %v\n", ps[0])
 	}
-	if 0.0 != ps[1] {
+	if ps[1] != 0.0 {
 		t.Errorf("75th percentile: 0.0 != %v\n", ps[1])
 	}
-	if 0.0 != ps[2] {
+	if ps[2] != 0.0 {
 		t.Errorf("99th percentile: 0.0 != %v\n", ps[2])
 	}
-	if rate1 := tm.Rate1(); 0.0 != rate1 {
+	if rate1 := tm.Rate1(); rate1 != 0.0 {
 		t.Errorf("tm.Rate1(): 0.0 != %v\n", rate1)
 	}
-	if rate5 := tm.Rate5(); 0.0 != rate5 {
+	if rate5 := tm.Rate5(); rate5 != 0.0 {
 		t.Errorf("tm.Rate5(): 0.0 != %v\n", rate5)
 	}
-	if rate15 := tm.Rate15(); 0.0 != rate15 {
+	if rate15 := tm.Rate15(); rate15 != 0.0 {
 		t.Errorf("tm.Rate15(): 0.0 != %v\n", rate15)
 	}
-	if rateMean := tm.RateMean(); 0.0 != rateMean {
+	if rateMean := tm.RateMean(); rateMean != 0.0 {
 		t.Errorf("tm.RateMean(): 0.0 != %v\n", rateMean)
 	}
 }
