@@ -32,8 +32,6 @@ import (
 
 const (
 	ticketTimeBucketLen = time.Minute
-	timeWindow          = 10 // * ticketTimeBucketLen
-	wantTicketsInWindow = 10
 	collectFrequency    = time.Second * 30
 	registerFrequency   = time.Second * 60
 	maxCollectDebt      = 10
