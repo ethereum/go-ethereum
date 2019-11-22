@@ -119,7 +119,7 @@ func (rm *retrieveManager) retrieve(ctx context.Context, reqID uint64, req *dist
 	case <-ctx.Done():
 		sentReq.stop(ctx.Err())
 	case <-shutdown:
-		sentReq.stop(fmt.Errorf("Client is shutting down"))
+		sentReq.stop(fmt.Errorf("client is shutting down"))
 	}
 	return sentReq.getError()
 }
