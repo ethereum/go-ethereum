@@ -46,7 +46,7 @@ no effect, since the import paths will be appended to `$GOPATH/src`, and if the 
 not exist, the version at master HEAD will be downloaded.
 
 Most likely you will be working from your fork of `go-ethereum`, let's say from
-`github.com/nirname/go-ethereum`. Clone or move your fork into the right place:
+`github.com/yourname/go-ethereum`. Clone or move your fork into the right place:
 
 ```
 git clone git@github.com:nirname/go-ethereum.git $GOPATH/src/github.com/ethereum/go-ethereum
