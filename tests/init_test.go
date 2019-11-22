@@ -140,17 +140,6 @@ func (tm *testMatcher) whitelist(pattern string) {
 	tm.whitelistpat = regexp.MustCompile(pattern)
 }
 
-func TestWhitelist(t *testing.T) {
-	t.Parallel()
-	tm := new(testMatcher)
-	tm.whitelist("invalid*")
-	tm.walk(t, rlpTestDir, func(t *testing.T, name string, test *RLPTest) {
-		if name[:len("invalidRLPTest.json")] != "invalidRLPTest.json" {
-			t.Fatalf("invalid test found: %s != invalidRLPTest.json", name)
-		}
-	})
-}
-
 // config defines chain config for tests matching the pattern.
 func (tm *testMatcher) config(pattern string, cfg params.ChainConfig) {
 	tm.configpat = append(tm.configpat, testConfig{regexp.MustCompile(pattern), cfg})
@@ -298,5 +287,16 @@ func runTestFunc(runTest interface{}, t *testing.T, name string, m reflect.Value
 		reflect.ValueOf(t),
 		reflect.ValueOf(name),
 		m.MapIndex(reflect.ValueOf(key)),
+	})
+}
+
+func TestMatcherWhitelist(t *testing.T) {
+	t.Parallel()
+	tm := new(testMatcher)
+	tm.whitelist("invalid*")
+	tm.walk(t, rlpTestDir, func(t *testing.T, name string, test *RLPTest) {
+		if name[:len("invalidRLPTest.json")] != "invalidRLPTest.json" {
+			t.Fatalf("invalid test found: %s != invalidRLPTest.json", name)
+		}
 	})
 }
