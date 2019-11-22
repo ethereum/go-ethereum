@@ -97,18 +97,16 @@ type Database struct {
 // in the same cache fields).
 type rawNode []byte
 
-func (n rawNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
-func (n rawNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
-func (n rawNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
+func (n rawNode) cache() (hashNode, bool)   { panic("this should never end up in a live trie") }
+func (n rawNode) fstring(ind string) string { panic("this should never end up in a live trie") }
 
 // rawFullNode represents only the useful data content of a full node, with the
 // caches and flags stripped out to minimize its data storage. This type honors
 // the same RLP encoding as the original parent.
 type rawFullNode [17]node
 
-func (n rawFullNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
-func (n rawFullNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
-func (n rawFullNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
+func (n rawFullNode) cache() (hashNode, bool)   { panic("this should never end up in a live trie") }
+func (n rawFullNode) fstring(ind string) string { panic("this should never end up in a live trie") }
 
 func (n rawFullNode) EncodeRLP(w io.Writer) error {
 	var nodes [17]node
@@ -131,9 +129,8 @@ type rawShortNode struct {
 	Val node
 }
 
-func (n rawShortNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
-func (n rawShortNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
-func (n rawShortNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
+func (n rawShortNode) cache() (hashNode, bool)   { panic("this should never end up in a live trie") }
+func (n rawShortNode) fstring(ind string) string { panic("this should never end up in a live trie") }
 
 // cachedNode is all the information we know about a single cached node in the
 // memory database write layer.
@@ -841,7 +838,7 @@ func (c *cleaner) Put(key []byte, rlp []byte) error {
 }
 
 func (c *cleaner) Delete(key []byte) error {
-	panic("Not implemented")
+	panic("not implemented")
 }
 
 // Size returns the current storage size of the memory cache in front of the
@@ -856,46 +853,4 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 	var metadataSize = common.StorageSize((len(db.dirties) - 1) * cachedNodeSize)
 	var metarootRefs = common.StorageSize(len(db.dirties[common.Hash{}].children) * (common.HashLength + 2))
 	return db.dirtiesSize + db.childrenSize + metadataSize - metarootRefs, db.preimagesSize
-}
-
-// verifyIntegrity is a debug method to iterate over the entire trie stored in
-// memory and check whether every node is reachable from the meta root. The goal
-// is to find any errors that might cause memory leaks and or trie nodes to go
-// missing.
-//
-// This method is extremely CPU and memory intensive, only use when must.
-func (db *Database) verifyIntegrity() {
-	// Iterate over all the cached nodes and accumulate them into a set
-	reachable := map[common.Hash]struct{}{{}: {}}
-
-	for child := range db.dirties[common.Hash{}].children {
-		db.accumulate(child, reachable)
-	}
-	// Find any unreachable but cached nodes
-	var unreachable []string
-	for hash, node := range db.dirties {
-		if _, ok := reachable[hash]; !ok {
-			unreachable = append(unreachable, fmt.Sprintf("%x: {Node: %v, Parents: %d, Prev: %x, Next: %x}",
-				hash, node.node, node.parents, node.flushPrev, node.flushNext))
-		}
-	}
-	if len(unreachable) != 0 {
-		panic(fmt.Sprintf("trie cache memory leak: %v", unreachable))
-	}
-}
-
-// accumulate iterates over the trie defined by hash and accumulates all the
-// cached children found in memory.
-func (db *Database) accumulate(hash common.Hash, reachable map[common.Hash]struct{}) {
-	// Mark the node reachable if present in the memory cache
-	node, ok := db.dirties[hash]
-	if !ok {
-		return
-	}
-	reachable[hash] = struct{}{}
-
-	// Iterate over all the children and accumulate them too
-	for _, child := range node.childs() {
-		db.accumulate(child, reachable)
-	}
 }
