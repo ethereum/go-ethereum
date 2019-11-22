@@ -777,9 +777,6 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		legacyGasLimit = w.current.header.GasLimit
 		w.current.gasPool = new(core.GasPool).AddGas(legacyGasLimit)
 	}
-	if w.chainConfig.IsEIP1559(w.current.header.Number) && w.current.gp1559 == nil {
-		w.current.gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
-	}
 
 	var coalescedLogs []*types.Log
 
