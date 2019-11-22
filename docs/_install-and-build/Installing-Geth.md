@@ -6,7 +6,8 @@ sort_key: A
 You can install the Go implementation of Ethereum using a variety of ways. These include installing it via your favorite package manager; downloading a standalone pre-built bundle; running as a docker container; or building it yourself. This document details all of the possibilities to get you joining the Ethereum network using whatever means you prefer.
 
 {:toc}
-* this will be removed by the toc
+
+-   this will be removed by the toc
 
 ## Install from a package manager
 
@@ -28,13 +29,13 @@ You can install the develop branch using the `--devel` parameter:
 brew install ethereum --devel
 ```
 
-After installing, run `geth account new` to create an account on your node.
+The `abigen`, `bootnode`, `checkpoint-admin`, `clef`, `devp2p`, `ethkey`, `evm`, `examples`, `faucet`, `geth`, `p2psim`, `puppeth`, `rlpdump`, and `wnode` commands are then available on your system in `/usr/local/bin/`. You can create a new account on your node with:
 
-You should now be able to run `geth` and connect to the network.
+```shell
+geth account new
+```
 
-Check the different options and commands with `geth --help`
-
-For options and patches, see: <https://github.com/ethereum/homebrew-ethereum>
+Find the different options and commands available with `geth --help`.
 
 ### Install on Ubuntu via PPAs
 
@@ -60,17 +61,27 @@ sudo apt-get update
 sudo apt-get install ethereum-unstable
 ```
 
-### Install on FreeBSD via `pkg`
+The `abigen`, `bootnode`, `clef`, `evm`, `geth`, `puppeth`, `rlpdump`, and `wnode` commands are then available on your system in `/usr/bin/`. You can create a new account on your node with:
+
+```shell
+geth account new
+```
+
+Find the different options and commands available with `geth --help`.
+
+### Install on FreeBSD via pkg
 
 ```shell
 pkg install go-ethereum
 ```
 
-The `geth` command is then available on your system in `/usr/local/bin/geth`, you can start it on the testnet (for example) by using:
+The `geth` command is then available on your system in `/usr/local/bin/`. You can create a new account on your node with:
 
 ```shell
-geth -rinkeby
+geth account new
 ```
+
+Find the different options and commands available with `geth --help`.
 
 ### Install on FreeBSD via ports
 
@@ -86,6 +97,14 @@ Then build it the standard way (as root):
 make install
 ```
 
+The `abigen`, `bootnode`, `clef`, `evm`, `geth`, `puppeth`, `rlpdump`, and `wnode` commands are then available on your system in `/usr/local/bin/`. You can create a new account on your node with:
+
+```shell
+geth account new
+```
+
+Find the different options and commands available with `geth --help`.
+
 ### Install on Arch Linux via `pacman`
 
 The `geth` package is available from the [community repo](https://www.archlinux.org/packages/community/x86_64/geth/).
@@ -96,9 +115,17 @@ You can install it using:
 pacman -S geth
 ```
 
+The `abigen`, `bootnode`, `clef`, `evm`, `geth`, `puppeth`, `rlpdump`, and `wnode` commands are then available on your system in `/usr/local/bin/`. You can create a new account on your node with:
+
+```shell
+geth account new
+```
+
+Find the different options and commands available with `geth --help`.
+
 ## Download standalone bundle
 
-We distribute our stable releases and develop builds as standalone bundles. These are useful when you'd like to: a) install a specific version of our code (e.g., for reproducible environments); b) install on machines without internet access (e.g., air-gapped computers); or c) do not like automatic updates and would rather manually install software.
+We distribute our stable releases and development builds as standalone bundles. These are useful when you'd like to: a) install a specific version of our code (e.g., for reproducible environments); b) install on machines without internet access (e.g., air-gapped computers); or c) do not like automatic updates and would rather manually install software.
 
 We create the following standalone bundles:
 
@@ -106,7 +133,7 @@ We create the following standalone bundles:
 -   64bit archives (`.tar.gz`) on macOS
 -   32bit and 64bit archives (`.zip`) and installers (`.exe`) on Windows
 
-For all archives we provide separate ones containing only Geth, and separate ones containing Geth along with all the developer tools from our repository (`abigen`, `bootnode`, `disasm`, `evm`, `rlpdump`). Read our [`README`](https://github.com/ethereum/go-ethereum#executables) for more information about these executables.
+We provide archives containing only Geth, and archives containing Geth along with the developer tools from our repository (`abigen`, `bootnode`, `disasm`, `evm`, `rlpdump`). Read our [`README`](https://github.com/ethereum/go-ethereum#executables) for more information about these executables.
 
 Download these bundles from the [Go Ethereum Downloads](https://geth.ethereum.org/downloads) page.
 
