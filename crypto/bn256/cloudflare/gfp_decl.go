@@ -9,6 +9,7 @@ import (
 	"golang.org/x/sys/cpu"
 )
 
+//lint:ignore U1000 used in asm
 //nolint:varcheck
 var hasBMI2 = cpu.X86.HasBMI2
 
