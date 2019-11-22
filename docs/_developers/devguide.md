@@ -4,7 +4,7 @@ sort_key: A
 ---
 
 **NOTE: These instructions are for people who want to contribute Go source code changes.
-If you just want to run ethereum, use the regular [Installation Instructions](install-guide).**
+If you just want to run ethereum, use the regular [Installation Instructions][install-guide].**
 
 This document is the entry point for developers of the Go implementation of Ethereum.
 Developers here refer to the hands-on: who are interested in build, develop, debug, submit
@@ -21,14 +21,14 @@ documentation.
 If you'd like to contribute to go-ethereum, please fork, fix, commit and send a pull
 request (PR) for the maintainers to review and merge into the main code base. If you wish
 to submit more complex changes though, please check up with the core devs in the
-go-ethereum [Discord server](discord). to ensure those changes are in line with the
+go-ethereum [Discord Server][discord]. to ensure those changes are in line with the
 general philosophy of the project and/or get some early feedback. This can reduce your
 effort as well as speeding up our review and merge procedures.
 
 PRs need to be based on and opened against the `master` branch (unless by explicit
 agreement, you contribute to a complex feature branch).
 
-Your PR will be reviewed according to the [Code Review guidelines](code-review).
+Your PR will be reviewed according to the [Code Review guidelines][code-review].
 
 We encourage a PR early approach, meaning you create the PR the earliest even without the
 fix/feature. This will let core devs and other volunteers know you picked up an issue.
@@ -37,9 +37,9 @@ These early PRs should indicate 'in progress' status.
 ## Building and Testing
 
 We assume that you have Go installed. Please use Go version 1.13 or later. We use the gc
-toolchain for development, which you can get from the [Go downloads page](go-install).
+toolchain for development, which you can get from the [Go downloads page][go-install].
 
-go-ethereum is a Go module, and uses the [Go modules system](go-modules) to manage
+go-ethereum is a Go module, and uses the [Go modules system][go-modules] to manage
 dependencies. Using `GOPATH` is not required to build go-ethereum.
 
 ### Building Executables
@@ -59,7 +59,7 @@ go install -v ./cmd/geth
 ```
 
 If you want to compile geth for an architecture that differs from your host, please
-consult our [cross compilation guide](cross-compile).
+consult our [cross compilation guide][cross-compile].
 
 ### Testing
 
@@ -84,7 +84,7 @@ Running benchmarks, eg.:
 go test -v -bench . -run BenchmarkJoin
 ```
 
-For more information, see the [go test flags](testflag) documentation.
+For more information, see the [go test flags][testflag] documentation.
 
 ### Getting Stack Traces
 
@@ -119,4 +119,4 @@ This will dump stack traces for each instance to their respective log file.
 [go-modules]: https://github.com/golang/go/wiki/Modules
 [discord]: https://discord.gg/nthXNEv
 [go-install]: https://golang.org/doc/install
-[testflag]: http://golang.org/cmd/go/#hdr-Description_of_testing_flags
+[testflag]: https://golang.org/cmd/go/#hdr-Description_of_testing_flags
