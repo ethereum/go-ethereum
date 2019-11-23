@@ -50,6 +50,7 @@ type LesServer struct {
 	defParams    flowcontrol.ServerParams
 	servingQueue *servingQueue
 	clientPool   *clientPool
+	tokenSale    *tokenSale
 
 	minCapacity, maxCapacity, freeCapacity uint64
 	threadsIdle                            int // Request serving threads count when system is idle.

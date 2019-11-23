@@ -957,5 +957,14 @@ func (h *serverHandler) broadcastHeaders() {
 }
 
 func (h *serverHandler) talkRequestHandler(id enode.ID, addr *net.UDPAddr, payload []byte) ([]byte, bool) {
-	return payload, true // dummy handler, just returns the same payload
+	if h.server.tokenSale == nil {
+		return nil, false
+	}
+	var cmds [][]byte
+	if err := rlp.DecodeBytes(payload, &cmds); err != nil {
+		return nil, false
+	}
+	results := h.server.tokenSale.runCommands(cmds, id, addr.IP.String())
+	res, _ := rlp.EncodeToBytes(&results)
+	return res, true
 }
