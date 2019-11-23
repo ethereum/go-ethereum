@@ -152,7 +152,7 @@ func (r *rulesetUI) checkApproval(jsfunc string, jsarg []byte, err error) (bool,
 		log.Info("Op rejected")
 		return false, nil
 	}
-	return false, fmt.Errorf("Unknown response")
+	return false, fmt.Errorf("unknown response")
 }
 
 func (r *rulesetUI) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
