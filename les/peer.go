@@ -501,6 +501,18 @@ func (p *peer) SendTxs(reqID, cost uint64, txs rlp.RawValue) error {
 	return sendRequest(p.rw, SendTxV2Msg, reqID, cost, txs)
 }
 
+// SendLespay sends a set of commands to the service token sale module
+func (p *peer) SendLespay(reqID uint64, cmds [][]byte) error {
+	p.Log().Debug("Sending batch of lespay commands", "size", len(cmds))
+	return sendRequest(p.rw, LespayMsg, reqID, 0, cmds)
+}
+
+// ReplyLespay sends a set of replies to lespay commands
+func (p *peer) ReplyLespay(reqID uint64, replies [][]byte) error {
+	p.Log().Debug("Sending batch of lespay replies", "size", len(replies))
+	return sendRequest(p.rw, LespayReplyMsg, reqID, 0, replies)
+}
+
 type keyValueEntry struct {
 	Key   string
 	Value rlp.RawValue

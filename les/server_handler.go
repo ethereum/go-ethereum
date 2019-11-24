@@ -824,6 +824,31 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 				}
 			}()
 		}
+	case LespayMsg:
+		p.Log().Trace("Received transaction status query request")
+		if metrics.EnabledExpensive {
+			miscInLespayPacketsMeter.Mark(1)
+			miscInLespayTrafficMeter.Mark(int64(msg.Size))
+			defer func(start time.Time) { miscServingTimeLespayTimer.UpdateSince(start) }(time.Now())
+		}
+		var req struct {
+			ReqID uint64
+			Cmds  [][]byte
+		}
+		if err := msg.Decode(&req); err != nil {
+			clientErrorMeter.Mark(1)
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		replies := h.server.tokenSale.runCommands(req.Cmds, p.ID(), p.freeClientId())
+		p.ReplyLespay(req.ReqID, replies)
+		if metrics.EnabledExpensive {
+			miscOutLespayPacketsMeter.Mark(1)
+			var size int64
+			for _, r := range replies {
+				size += int64(len(r))
+			}
+			miscOutLespayTrafficMeter.Mark(size)
+		}
 
 	default:
 		p.Log().Trace("Received invalid message", "code", msg.Code)
@@ -957,9 +982,6 @@ func (h *serverHandler) broadcastHeaders() {
 }
 
 func (h *serverHandler) talkRequestHandler(id enode.ID, addr *net.UDPAddr, payload []byte) ([]byte, bool) {
-	if h.server.tokenSale == nil {
-		return nil, false
-	}
 	var cmds [][]byte
 	if err := rlp.DecodeBytes(payload, &cmds); err != nil {
 		return nil, false
