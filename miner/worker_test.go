@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"fmt"
 	"math/big"
 	"math/rand"
 	"sync/atomic"
@@ -217,6 +218,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	chain, _ := core.NewBlockChain(db2, nil, b.chain.Config(), engine, vm.Config{}, nil)
 	defer chain.Stop()
 
+	loopErr := make(chan error)
 	newBlock := make(chan struct{})
 	listenNewBlock := func() {
 		sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
@@ -226,7 +228,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 			block := item.Data.(core.NewMinedBlockEvent).Block
 			_, err := chain.InsertChain([]*types.Block{block})
 			if err != nil {
-				t.Fatalf("Failed to insert new mined block:%d, error:%v", block.NumberU64(), err)
+				loopErr <- fmt.Errorf("failed to insert new mined block:%d, error:%v", block.NumberU64(), err)
 			}
 			newBlock <- struct{}{}
 		}
@@ -244,6 +246,8 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 		b.PostChainEvents([]interface{}{core.ChainSideEvent{Block: b.newRandomUncle()}})
 		b.PostChainEvents([]interface{}{core.ChainSideEvent{Block: b.newRandomUncle()}})
 		select {
+		case e := <-loopErr:
+			t.Fatal(e)
 		case <-newBlock:
 		case <-time.NewTimer(3 * time.Second).C: // Worker needs 1s to include new changes.
 			t.Fatalf("timeout")
