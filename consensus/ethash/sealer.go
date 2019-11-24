@@ -373,7 +373,7 @@ func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []
 		s.ethash.config.Log.Warn("Can't create remote miner notification", "err", err)
 		return
 	}
-	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, remoteSealerTimeout)
 	defer cancel()
 	req = req.WithContext(ctx)
 	req.Header.Set("Content-Type", "application/json")
