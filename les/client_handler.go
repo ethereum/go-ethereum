@@ -40,6 +40,9 @@ type clientHandler struct {
 	downloader *downloader.Downloader
 	backend    *LightEthereum
 
+	lespayReplyHandlers map[uint64]func([][]byte) bool
+	lespayReplyLock     sync.Mutex
+
 	closeCh  chan struct{}
 	wg       sync.WaitGroup // WaitGroup used to track all connected peers.
 	syncDone func()         // Test hooks when syncing is done.
@@ -47,9 +50,10 @@ type clientHandler struct {
 
 func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.TrustedCheckpoint, backend *LightEthereum) *clientHandler {
 	handler := &clientHandler{
-		checkpoint: checkpoint,
-		backend:    backend,
-		closeCh:    make(chan struct{}),
+		checkpoint:          checkpoint,
+		backend:             backend,
+		closeCh:             make(chan struct{}),
+		lespayReplyHandlers: make(map[uint64]func([][]byte) bool),
 	}
 	if ulcServers != nil {
 		ulc, err := newULC(ulcServers, ulcFraction)
@@ -156,7 +160,10 @@ func (h *clientHandler) handleMsg(p *peer) error {
 	}
 	defer msg.Discard()
 
-	var deliverMsg *Msg
+	var (
+		deliverMsg    *Msg
+		responseError bool
+	)
 
 	// Handle the message depending on its contents
 	switch msg.Code {
@@ -308,6 +315,24 @@ func (h *clientHandler) handleMsg(p *peer) error {
 		p.fcServer.ResumeFreeze(bv)
 		p.freezeServer(false)
 		p.Log().Debug("Service resumed")
+	case LespayReplyMsg:
+		p.Log().Trace("Received tx status response")
+		var resp struct {
+			ReqID   uint64
+			Replies [][]byte
+		}
+		if err := msg.Decode(&resp); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		h.lespayReplyLock.Lock()
+		if handler := h.lespayReplyHandlers[resp.ReqID]; handler != nil {
+			delete(h.lespayReplyHandlers, resp.ReqID)
+			responseError = !handler(resp.Replies)
+		} else {
+			responseError = true
+		}
+		h.lespayReplyLock.Unlock()
+
 	default:
 		p.Log().Trace("Received invalid message", "code", msg.Code)
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
@@ -315,13 +340,35 @@ func (h *clientHandler) handleMsg(p *peer) error {
 	// Deliver the received response to retriever.
 	if deliverMsg != nil {
 		if err := h.backend.retriever.deliver(p, deliverMsg); err != nil {
-			p.responseErrors++
-			if p.responseErrors > maxResponseErrors {
-				return err
-			}
+			responseError = true
+		}
+	}
+	if responseError {
+		p.responseErrors++
+		if p.responseErrors > maxResponseErrors {
+			return err
 		}
 	}
 	return nil
+}
+
+func (h *clientHandler) sendLespayCommands(p *peer, cmds [][]byte, handler func([][]byte) bool) func() bool {
+	reqID := genReqID()
+	if p.SendLespay(reqID, cmds) != nil {
+		return nil
+	}
+	return func() bool {
+		h.lespayReplyLock.Lock()
+		cancel := h.lespayReplyHandlers[reqID] != nil
+		if cancel {
+			delete(h.lespayReplyHandlers, reqID)
+		}
+		h.lespayReplyLock.Unlock()
+		if cancel {
+			handler(nil)
+		}
+		return cancel
+	}
 }
 
 func (h *clientHandler) removePeer(id string) {
