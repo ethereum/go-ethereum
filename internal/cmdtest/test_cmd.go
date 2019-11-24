@@ -127,12 +127,12 @@ func (tt *TestCmd) matchExactOutput(want []byte) error {
 		// Find the mismatch position.
 		for i := 0; i < n; i++ {
 			if want[i] != buf[i] {
-				return fmt.Errorf("Output mismatch at ◊:\n---------------- (stdout text)\n%s◊%s\n---------------- (expected text)\n%s",
+				return fmt.Errorf("output mismatch at ◊:\n---------------- (stdout text)\n%s◊%s\n---------------- (expected text)\n%s",
 					buf[:i], buf[i:n], want)
 			}
 		}
 		if n < len(want) {
-			return fmt.Errorf("Not enough output, got until ◊:\n---------------- (stdout text)\n%s\n---------------- (expected text)\n%s◊%s",
+			return fmt.Errorf("not enough output, got until ◊:\n---------------- (stdout text)\n%s\n---------------- (expected text)\n%s◊%s",
 				buf, want[:n], want[n:])
 		}
 	}
