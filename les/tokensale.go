@@ -319,11 +319,6 @@ const (
 	tsConnection
 )
 
-/*func (t *tokenSale) connection(id enode.ID, freeID string, requestedCapacity uint64, stayConnected time.Duration, paymentModule []string, setCap bool) (availableCapacity, tokenBalance, tokensMissing, pcBalance, pcMissing uint64, paymentRequired []uint64, err error) {
-func (t *tokenSale) deposit(id enode.ID, paymentModule string, proofOfPayment []byte) (pcValue, pcBalance uint64, err error) {
-func (t *tokenSale) buyTokens(id enode.ID, maxSpend, minReceive uint64, spendAll bool) (pcBalance, tokenBalance, spend, receive uint64, success bool) {
-func (t *tokenSale) paymentInfo(paymentModule []string) map[string][]byte {*/
-
 type (
 	tsDepositParams struct {
 		PaymentModule  string

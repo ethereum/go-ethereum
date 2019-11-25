@@ -87,8 +87,8 @@ type Network struct {
 }
 
 type (
-	TalkRequestHandler  func(enode.ID, *net.UDPAddr, []byte) ([]byte, bool)
-	TalkResponseHandler func([]byte) bool
+	TalkRequestHandler  func(enode.ID, *net.UDPAddr, interface{}) (interface{}, bool)
+	TalkResponseHandler func(interface{}) bool
 )
 
 // transport is implemented by the UDP transport.
@@ -116,7 +116,7 @@ type findnodeQuery struct {
 type talkQuery struct {
 	remote  *Node
 	talkID  string
-	payload rlp.RawValue
+	payload interface{}
 	key     string
 	handler TalkResponseHandler
 }
@@ -1387,7 +1387,7 @@ func (q *talkQuery) deferQuery() {
 	q.remote.deferQuery(q)
 }
 
-func (net *Network) SendTalkRequest(to *enode.Node, talkID string, payload []byte, handler TalkResponseHandler) func() bool {
+func (net *Network) SendTalkRequest(to *enode.Node, talkID string, payload interface{}, handler TalkResponseHandler) func() bool {
 	var nodeID NodeID
 	copy(nodeID[:], crypto.FromECDSAPub(to.Pubkey())[1:])
 	node := net.nodes[nodeID]

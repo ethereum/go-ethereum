@@ -17,13 +17,16 @@
 package les
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -348,4 +351,103 @@ func (api *PrivateLightAPI) GetCheckpointContractAddress() (string, error) {
 		return "", errNotActivated
 	}
 	return api.backend.oracle.config.Address.Hex(), nil
+}
+
+type PrivateLespayAPI struct {
+	peerSet       *peerSet
+	clientHandler *clientHandler
+	dht           *discv5.Network
+	tokenSale     *tokenSale
+}
+
+// NewPrivateLespayAPI creates a new LESPAY API.
+func NewPrivateLespayAPI(peerSet *peerSet, clientHandler *clientHandler, dht *discv5.Network, tokenSale *tokenSale) *PrivateLespayAPI {
+	return &PrivateLespayAPI{
+		peerSet:       peerSet,
+		clientHandler: clientHandler,
+		dht:           dht,
+		tokenSale:     tokenSale,
+	}
+}
+
+func (api *PrivateLespayAPI) makeCall(ctx context.Context, remote bool, nodeStr string, cmd []byte) ([]byte, error) {
+	var (
+		id     enode.ID
+		freeID string
+		peer   *peer
+		node   *enode.Node
+	)
+	if nodeStr != "" {
+		if peer = api.peerSet.Peer(nodeStr); peer != nil {
+			id = peer.ID()
+			freeID = peer.freeClientId()
+		} else {
+			var err error
+			if node, err = enode.Parse(enode.ValidSchemes, nodeStr); err == nil {
+				id = node.ID()
+				freeID = node.IP().String()
+			} else {
+				return nil, err
+			}
+		}
+	}
+
+	if remote {
+		var (
+			reply    []byte
+			cancelFn func() bool
+		)
+		delivered := make(chan struct{})
+		if peer != nil {
+			// remote call to a connected peer through LES
+			if api.clientHandler == nil {
+				return nil, errors.New("client handler not available")
+			}
+			cancelFn = api.clientHandler.makeLespayCall(peer, [][]byte{cmd}, func(replies [][]byte) bool {
+				if len(replies) == 1 {
+					reply = replies[0]
+				}
+				close(delivered)
+				return reply != nil
+			})
+		} else {
+			// remote call through UDP TALK
+			if api.dht == nil {
+				return nil, errors.New("UDP DHT not available")
+			}
+			cancelFn = api.dht.SendTalkRequest(node, "lespay", [][]byte{cmd}, func(payload interface{}) bool {
+				if replies, ok := payload.([][]byte); ok && len(replies) == 1 {
+					reply = replies[0]
+				}
+				close(delivered)
+				return reply != nil
+			})
+		}
+		select {
+		case <-ctx.Done():
+			cancelFn()
+			return nil, ctx.Err()
+		case <-delivered:
+			return reply, nil
+		}
+	} else {
+		if api.tokenSale == nil {
+			return nil, errors.New("token sale module not available")
+		}
+		// execute call locally
+		return api.tokenSale.runCommand(cmd, id, freeID), nil
+	}
+
+}
+
+func (api *PrivateLespayAPI) Connection(ctx context.Context, remote bool, node string, requestedCapacity, stayConnected uint64, paymentModule []string, setCap bool) (results tsConnectionResults, err error) {
+	params := tsConnectionParams{requestedCapacity, stayConnected, paymentModule, setCap}
+	enc, _ := rlp.EncodeToBytes(&params)
+	var resEnc []byte
+	resEnc, err = api.makeCall(ctx, remote, node, enc)
+	if err != nil {
+		return
+	}
+	err = rlp.DecodeBytes(resEnc, &results)
+	return
 }

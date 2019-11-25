@@ -120,11 +120,13 @@ type (
 	}
 
 	talkRequest struct {
-		TalkID, Payload []byte
+		TalkID  []byte
+		Payload interface{}
 	}
 
 	talkResponse struct {
-		ReplyTok, Payload []byte
+		ReplyTok []byte
+		Payload  interface{}
 	}
 
 	rpcNode struct {

@@ -33,6 +33,7 @@ var Modules = map[string]string{
 	"swarmfs":    SwarmfsJs,
 	"txpool":     TxpoolJs,
 	"les":        LESJs,
+	"lespay":     LESPAYJs,
 }
 
 const ChequebookJs = `
@@ -853,6 +854,23 @@ web3._extend({
 			name: 'serverInfo',
 			getter: 'les_serverInfo'
 		}),
+	]
+});
+`
+
+const LESPAYJs = `
+web3._extend({
+	property: 'lespay',
+	methods:
+	[
+		new web3._extend.Method({
+			name: 'connection',
+			call: 'lespay_connection',
+			params: 6
+		}),
+	],
+	properties:
+	[
 	]
 });
 `

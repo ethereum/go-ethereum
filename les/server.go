@@ -149,6 +149,12 @@ func (s *LesServer) APIs() []rpc.API {
 			Service:   NewPrivateDebugAPI(s),
 			Public:    false,
 		},
+		{
+			Namespace: "lespay",
+			Version:   "1.0",
+			Service:   NewPrivateLespayAPI(s.lesCommons.peers, nil, s.srvr.DiscV5, s.tokenSale),
+			Public:    false,
+		},
 	}
 }
 

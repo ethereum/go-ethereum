@@ -981,9 +981,9 @@ func (h *serverHandler) broadcastHeaders() {
 	}
 }
 
-func (h *serverHandler) talkRequestHandler(id enode.ID, addr *net.UDPAddr, payload []byte) ([]byte, bool) {
-	var cmds [][]byte
-	if err := rlp.DecodeBytes(payload, &cmds); err != nil {
+func (h *serverHandler) talkRequestHandler(id enode.ID, addr *net.UDPAddr, payload interface{}) (interface{}, bool) {
+	cmds, ok := payload.([][]byte)
+	if !ok {
 		return nil, false
 	}
 	results := h.server.tokenSale.runCommands(cmds, id, addr.IP.String())

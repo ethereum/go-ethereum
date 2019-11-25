@@ -352,7 +352,7 @@ func (h *clientHandler) handleMsg(p *peer) error {
 	return nil
 }
 
-func (h *clientHandler) sendLespayCommands(p *peer, cmds [][]byte, handler func([][]byte) bool) func() bool {
+func (h *clientHandler) makeLespayCall(p *peer, cmds [][]byte, handler func([][]byte) bool) func() bool {
 	reqID := genReqID()
 	if p.SendLespay(reqID, cmds) != nil {
 		return nil
