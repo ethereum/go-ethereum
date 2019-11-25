@@ -187,8 +187,10 @@ func newClientPool(db ethdb.Database, minCap, freeClientCap uint64, clock mclock
 		var stop bool
 		l := len(ids)
 		if l == 1000 {
-			stop = true
 			l--
+			start = ids[l]
+		} else {
+			stop = true
 		}
 		for i := 0; i < l; i++ {
 			pool.disconnectedBalances += pool.ndb.getOrNewPB(ids[i]).value

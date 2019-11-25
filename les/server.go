@@ -176,7 +176,7 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 	go s.capacityManagement()
 
 	if srvr.DiscV5 != nil {
-		srvr.DiscV5.RegisterTalkHandler("les", s.handler.talkRequestHandler)
+		srvr.DiscV5.RegisterTalkHandler("lespay", s.handler.talkRequestHandler)
 		for _, topic := range s.lesTopics {
 			topic := topic
 			go func() {
@@ -195,8 +195,9 @@ func (s *LesServer) Stop() {
 	close(s.closeCh)
 
 	if s.srvr.DiscV5 != nil {
-		s.srvr.DiscV5.RemoveTalkHandler("les")
+		s.srvr.DiscV5.RemoveTalkHandler("lespay")
 	}
+	s.tokenSale.stop()
 
 	// Disconnect existing sessions.
 	// This also closes the gate for any new registrations on the peer set.
