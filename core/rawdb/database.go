@@ -150,11 +150,10 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 				}
 				// Database contains only older data than the freezer, this happens if the
 				// state was wiped and reinited from an existing freezer.
-			} else {
-				// Key-value store continues where the freezer left off, all is fine. We might
-				// have duplicate blocks (crash after freezer write but before kay-value store
-				// deletion, but that's fine).
 			}
+			// Otherwise, key-value store continues where the freezer left off, all is fine.
+			// We might have duplicate blocks (crash after freezer write but before key-value
+			// store deletion, but that's fine).
 		} else {
 			// If the freezer is empty, ensure nothing was moved yet from the key-value
 			// store, otherwise we'll end up missing data. We check block #1 to decide
@@ -167,9 +166,9 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 					return nil, errors.New("ancient chain segments already extracted, please set --datadir.ancient to the correct path")
 				}
 				// Block #1 is still in the database, we're allowed to init a new feezer
-			} else {
-				// The head header is still the genesis, we're allowed to init a new feezer
 			}
+			// Otherwise, the head header is still the genesis, we're allowed to init a new
+			// feezer.
 		}
 	}
 	// Freezer is consistent with the key-value database, permit combining the two
