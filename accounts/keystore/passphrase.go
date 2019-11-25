@@ -117,12 +117,13 @@ func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) er
 		// Verify that we can decrypt the file with the given password.
 		_, err = ks.GetKey(key.Address, tmpName, auth)
 		if err != nil {
-			msg := "an error was encountered when saving and verifying the keystore file. \n" +
+			msg := "An error was encountered when saving and verifying the keystore file. \n" +
 				"This indicates that the keystore is corrupted. \n" +
 				"The corrupted file is stored at \n%v\n" +
 				"Please file a ticket at:\n\n" +
 				"https://github.com/ethereum/go-ethereum/issues." +
 				"The error was : %s"
+			//lint:ignore ST1005 This is a message for the user
 			return fmt.Errorf(msg, tmpName, err)
 		}
 	}
