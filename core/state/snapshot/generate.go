@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/allegro/bigcache"
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -196,13 +196,7 @@ func generateSnapshot(db ethdb.KeyValueStore, journal string, root common.Hash) 
 		return nil, err
 	}
 	// New snapshot generated, construct a brand new base layer
-	cache, _ := bigcache.NewBigCache(bigcache.Config{ // TODO(karalabe): dedup
-		Shards:             1024,
-		LifeWindow:         time.Hour,
-		MaxEntriesInWindow: 512 * 1024,
-		MaxEntrySize:       512,
-		HardMaxCacheSize:   512,
-	})
+	cache := fastcache.New(512 * 1024 * 1024)
 	return &diskLayer{
 		journal: journal,
 		db:      db,

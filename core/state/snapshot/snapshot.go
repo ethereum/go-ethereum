@@ -22,9 +22,8 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"time"
 
-	"github.com/allegro/bigcache"
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -323,7 +322,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		if len(data) > 0 {
 			// Account was updated, push to disk
 			rawdb.WriteAccountSnapshot(batch, hash, data)
-			base.cache.Set(string(hash[:]), data)
+			base.cache.Set(hash[:], data)
 
 			if batch.ValueSize() > ethdb.IdealBatchSize {
 				if err := batch.Write(); err != nil {
@@ -334,13 +333,13 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		} else {
 			// Account was deleted, remove all storage slots too
 			rawdb.DeleteAccountSnapshot(batch, hash)
-			base.cache.Set(string(hash[:]), nil)
+			base.cache.Set(hash[:], nil)
 
 			it := rawdb.IterateStorageSnapshots(base.db, hash)
 			for it.Next() {
 				if key := it.Key(); len(key) == 65 { // TODO(karalabe): Yuck, we should move this into the iterator
 					batch.Delete(key)
-					base.cache.Delete(string(key[1:]))
+					base.cache.Del(key[1:])
 				}
 			}
 			it.Release()
@@ -351,10 +350,10 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		for storageHash, data := range storage {
 			if len(data) > 0 {
 				rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, data)
-				base.cache.Set(string(append(accountHash[:], storageHash[:]...)), data)
+				base.cache.Set(append(accountHash[:], storageHash[:]...), data)
 			} else {
 				rawdb.DeleteStorageSnapshot(batch, accountHash, storageHash)
-				base.cache.Set(string(append(accountHash[:], storageHash[:]...)), nil)
+				base.cache.Set(append(accountHash[:], storageHash[:]...), nil)
 			}
 		}
 		if batch.ValueSize() > ethdb.IdealBatchSize {
@@ -401,17 +400,10 @@ func loadSnapshot(db ethdb.KeyValueStore, journal string, root common.Hash) (sna
 	if baseRoot == (common.Hash{}) {
 		return nil, errors.New("missing or corrupted snapshot")
 	}
-	cache, _ := bigcache.NewBigCache(bigcache.Config{ // TODO(karalabe): dedup
-		Shards:             1024,
-		LifeWindow:         time.Hour,
-		MaxEntriesInWindow: 512 * 1024,
-		MaxEntrySize:       512,
-		HardMaxCacheSize:   512,
-	})
 	base := &diskLayer{
 		journal: journal,
 		db:      db,
-		cache:   cache,
+		cache:   fastcache.New(512 * 1024 * 1024),
 		root:    baseRoot,
 	}
 	// Load all the snapshot diffs from the journal, failing if their chain is broken

@@ -19,9 +19,8 @@ package snapshot
 import (
 	"fmt"
 	"testing"
-	"time"
 
-	"github.com/allegro/bigcache"
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 )
@@ -31,11 +30,10 @@ import (
 // to check internal corner case around the bottom-most memory accumulator.
 func TestDiskLayerExternalInvalidationFullFlatten(t *testing.T) {
 	// Create an empty base layer and a snapshot tree out of it
-	cache, _ := bigcache.NewBigCache(bigcache.DefaultConfig(time.Minute))
 	base := &diskLayer{
 		db:    rawdb.NewMemoryDatabase(),
 		root:  common.HexToHash("0x01"),
-		cache: cache,
+		cache: fastcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -77,11 +75,10 @@ func TestDiskLayerExternalInvalidationFullFlatten(t *testing.T) {
 // layer to check the usual mode of operation where the accumulator is retained.
 func TestDiskLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	// Create an empty base layer and a snapshot tree out of it
-	cache, _ := bigcache.NewBigCache(bigcache.DefaultConfig(time.Minute))
 	base := &diskLayer{
 		db:    rawdb.NewMemoryDatabase(),
 		root:  common.HexToHash("0x01"),
-		cache: cache,
+		cache: fastcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -126,11 +123,10 @@ func TestDiskLayerExternalInvalidationPartialFlatten(t *testing.T) {
 // to check internal corner case around the bottom-most memory accumulator.
 func TestDiffLayerExternalInvalidationFullFlatten(t *testing.T) {
 	// Create an empty base layer and a snapshot tree out of it
-	cache, _ := bigcache.NewBigCache(bigcache.DefaultConfig(time.Minute))
 	base := &diskLayer{
 		db:    rawdb.NewMemoryDatabase(),
 		root:  common.HexToHash("0x01"),
-		cache: cache,
+		cache: fastcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -175,11 +171,10 @@ func TestDiffLayerExternalInvalidationFullFlatten(t *testing.T) {
 // layer to check the usual mode of operation where the accumulator is retained.
 func TestDiffLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	// Create an empty base layer and a snapshot tree out of it
-	cache, _ := bigcache.NewBigCache(bigcache.DefaultConfig(time.Minute))
 	base := &diskLayer{
 		db:    rawdb.NewMemoryDatabase(),
 		root:  common.HexToHash("0x01"),
-		cache: cache,
+		cache: fastcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -240,11 +235,10 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 		}
 	}
 	// Create a starting base layer and a snapshot tree out of it
-	cache, _ := bigcache.NewBigCache(bigcache.DefaultConfig(time.Minute))
 	base := &diskLayer{
 		db:    rawdb.NewMemoryDatabase(),
 		root:  common.HexToHash("0x01"),
-		cache: cache,
+		cache: fastcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{

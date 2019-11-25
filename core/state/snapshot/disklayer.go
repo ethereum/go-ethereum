@@ -19,7 +19,7 @@ package snapshot
 import (
 	"sync"
 
-	"github.com/allegro/bigcache"
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -30,7 +30,7 @@ import (
 type diskLayer struct {
 	journal string              // Path of the snapshot journal to use on shutdown
 	db      ethdb.KeyValueStore // Key-value store containing the base snapshot
-	cache   *bigcache.BigCache  // Cache to avoid hitting the disk for direct access
+	cache   *fastcache.Cache    // Cache to avoid hitting the disk for direct access
 
 	root  common.Hash // Root hash of the base snapshot
 	stale bool        // Signals that the layer became stale (state progressed)
@@ -80,17 +80,15 @@ func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	if dl.stale {
 		return nil, ErrSnapshotStale
 	}
-	key := string(hash[:])
-
 	// Try to retrieve the account from the memory cache
-	if blob, err := dl.cache.Get(key); err == nil {
+	if blob := dl.cache.Get(nil, hash[:]); blob != nil {
 		snapshotCleanHitMeter.Mark(1)
 		snapshotCleanReadMeter.Mark(int64(len(blob)))
 		return blob, nil
 	}
 	// Cache doesn't contain account, pull from disk and cache for later
 	blob := rawdb.ReadAccountSnapshot(dl.db, hash)
-	dl.cache.Set(key, blob)
+	dl.cache.Set(hash[:], blob)
 
 	snapshotCleanMissMeter.Mark(1)
 	snapshotCleanWriteMeter.Mark(int64(len(blob)))
@@ -109,10 +107,10 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	if dl.stale {
 		return nil, ErrSnapshotStale
 	}
-	key := string(append(accountHash[:], storageHash[:]...))
+	key := append(accountHash[:], storageHash[:]...)
 
 	// Try to retrieve the storage slot from the memory cache
-	if blob, err := dl.cache.Get(key); err == nil {
+	if blob := dl.cache.Get(nil, key); blob != nil {
 		snapshotCleanHitMeter.Mark(1)
 		snapshotCleanReadMeter.Mark(int64(len(blob)))
 		return blob, nil
