@@ -419,17 +419,17 @@ func New(code string) (*Tracer, error) {
 	tracer.tracerObject = 0 // yeah, nice, eval can't return the index itself
 
 	if !tracer.vm.GetPropString(tracer.tracerObject, "step") {
-		return nil, fmt.Errorf("Trace object must expose a function step()")
+		return nil, fmt.Errorf("trace object must expose a function step()")
 	}
 	tracer.vm.Pop()
 
 	if !tracer.vm.GetPropString(tracer.tracerObject, "fault") {
-		return nil, fmt.Errorf("Trace object must expose a function fault()")
+		return nil, fmt.Errorf("trace object must expose a function fault()")
 	}
 	tracer.vm.Pop()
 
 	if !tracer.vm.GetPropString(tracer.tracerObject, "result") {
-		return nil, fmt.Errorf("Trace object must expose a function result()")
+		return nil, fmt.Errorf("trace object must expose a function result()")
 	}
 	tracer.vm.Pop()
 

@@ -153,14 +153,6 @@ type ConnRemoteAddr interface {
 	RemoteAddr() string
 }
 
-// connWithRemoteAddr overrides the remote address of a connection.
-type connWithRemoteAddr struct {
-	Conn
-	addr string
-}
-
-func (c connWithRemoteAddr) RemoteAddr() string { return c.addr }
-
 // jsonCodec reads and writes JSON-RPC messages to the underlying connection. It also has
 // support for parsing arguments and serializing (result) objects.
 type jsonCodec struct {

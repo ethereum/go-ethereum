@@ -927,7 +927,7 @@ func TestABI_MethodById(t *testing.T) {
 		}
 		b := fmt.Sprintf("%v", m2)
 		if a != b {
-			t.Errorf("Method %v (id %v) not 'findable' by id in ABI", name, common.ToHex(m.ID()))
+			t.Errorf("Method %v (id %x) not 'findable' by id in ABI", name, m.ID())
 		}
 	}
 	// Also test empty

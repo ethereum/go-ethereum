@@ -96,7 +96,7 @@ func TestWebsocketLargeCall(t *testing.T) {
 	defer client.Close()
 
 	// This call sends slightly less than the limit and should work.
-	var result Result
+	var result echoResult
 	arg := strings.Repeat("x", maxRequestContentLength-200)
 	if err := client.Call(&result, "test_echo", arg, 1); err != nil {
 		t.Fatalf("valid call didn't work: %v", err)

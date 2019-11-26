@@ -17,7 +17,6 @@
 package discv5
 
 import (
-	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -265,10 +264,6 @@ type preminedTestnet struct {
 	net       *Network
 }
 
-func (tn *preminedTestnet) sendFindnode(to *Node, target NodeID) {
-	panic("sendFindnode called")
-}
-
 func (tn *preminedTestnet) sendFindnodeHash(to *Node, target common.Hash) {
 	// current log distance is encoded in port number
 	// fmt.Println("findnode query at dist", toaddr.Port)
@@ -316,10 +311,6 @@ func (tn *preminedTestnet) sendNeighbours(to *Node, nodes []*Node) {
 	panic("sendNeighbours called")
 }
 
-func (tn *preminedTestnet) sendTopicQuery(to *Node, topic Topic) {
-	panic("sendTopicQuery called")
-}
-
 func (tn *preminedTestnet) sendTopicNodes(to *Node, queryHash common.Hash, nodes []*Node) {
 	panic("sendTopicNodes called")
 }
@@ -332,41 +323,6 @@ func (*preminedTestnet) Close() {}
 
 func (*preminedTestnet) localAddr() *net.UDPAddr {
 	return &net.UDPAddr{IP: net.ParseIP("10.0.1.1"), Port: 40000}
-}
-
-// mine generates a testnet struct literal with nodes at
-// various distances to the given target.
-func (tn *preminedTestnet) mine(target NodeID) {
-	tn.target = target
-	tn.targetSha = crypto.Keccak256Hash(tn.target[:])
-	found := 0
-	for found < bucketSize*10 {
-		k := newkey()
-		id := PubkeyID(&k.PublicKey)
-		sha := crypto.Keccak256Hash(id[:])
-		ld := logdist(tn.targetSha, sha)
-		if len(tn.dists[ld]) < bucketSize {
-			tn.dists[ld] = append(tn.dists[ld], id)
-			fmt.Println("found ID with ld", ld)
-			found++
-		}
-	}
-	fmt.Println("&preminedTestnet{")
-	fmt.Printf("	target: %#v,\n", tn.target)
-	fmt.Printf("	targetSha: %#v,\n", tn.targetSha)
-	fmt.Printf("	dists: [%d][]NodeID{\n", len(tn.dists))
-	for ld, ns := range &tn.dists {
-		if len(ns) == 0 {
-			continue
-		}
-		fmt.Printf("		%d: []NodeID{\n", ld)
-		for _, n := range ns {
-			fmt.Printf("			MustHexID(\"%x\"),\n", n[:])
-		}
-		fmt.Println("		},")
-	}
-	fmt.Println("	},")
-	fmt.Println("}")
 }
 
 func injectResponse(net *Network, from *Node, ev nodeEvent, packet interface{}) {

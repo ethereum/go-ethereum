@@ -269,7 +269,7 @@ type (
 	}
 )
 
-var ErrRequestDenied = errors.New("Request denied")
+var ErrRequestDenied = errors.New("request denied")
 
 // NewSignerAPI creates a new API that can be used for Account management.
 // ksLocation specifies the directory where to store the password protected private
@@ -552,6 +552,9 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 	}
 
 	rlpdata, err := rlp.EncodeToBytes(signedTx)
+	if err != nil {
+		return nil, err
+	}
 	response := ethapi.SignTransactionResult{Raw: rlpdata, Tx: signedTx}
 
 	// Finally, send the signed tx to the UI

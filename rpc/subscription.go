@@ -241,11 +241,11 @@ func (sub *ClientSubscription) Err() <-chan error {
 // Unsubscribe unsubscribes the notification and closes the error channel.
 // It can safely be called more than once.
 func (sub *ClientSubscription) Unsubscribe() {
-	sub.quitWithError(nil, true)
+	sub.quitWithError(true, nil)
 	sub.errOnce.Do(func() { close(sub.err) })
 }
 
-func (sub *ClientSubscription) quitWithError(err error, unsubscribeServer bool) {
+func (sub *ClientSubscription) quitWithError(unsubscribeServer bool, err error) {
 	sub.quitOnce.Do(func() {
 		// The dispatch loop won't be able to execute the unsubscribe call
 		// if it is blocked on deliver. Close sub.quit first because it
@@ -276,7 +276,7 @@ func (sub *ClientSubscription) start() {
 	sub.quitWithError(sub.forward())
 }
 
-func (sub *ClientSubscription) forward() (err error, unsubscribeServer bool) {
+func (sub *ClientSubscription) forward() (unsubscribeServer bool, err error) {
 	cases := []reflect.SelectCase{
 		{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(sub.quit)},
 		{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(sub.in)},
@@ -298,14 +298,14 @@ func (sub *ClientSubscription) forward() (err error, unsubscribeServer bool) {
 
 		switch chosen {
 		case 0: // <-sub.quit
-			return nil, false
+			return false, nil
 		case 1: // <-sub.in
 			val, err := sub.unmarshal(recv.Interface().(json.RawMessage))
 			if err != nil {
-				return err, true
+				return true, err
 			}
 			if buffer.Len() == maxClientSubscriptionBuffer {
-				return ErrSubscriptionQueueOverflow, true
+				return true, ErrSubscriptionQueueOverflow
 			}
 			buffer.PushBack(val)
 		case 2: // sub.channel<-

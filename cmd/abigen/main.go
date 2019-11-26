@@ -32,19 +32,6 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-const (
-	commandHelperTemplate = `{{.Name}}{{if .Subcommands}} command{{end}}{{if .Flags}} [command options]{{end}} [arguments...]
-{{if .Description}}{{.Description}}
-{{end}}{{if .Subcommands}}
-SUBCOMMANDS:
-	{{range .Subcommands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
-	{{end}}{{end}}{{if .Flags}}
-OPTIONS:
-{{range $.Flags}}{{"\t"}}{{.}}
-{{end}}
-{{end}}`
-)
-
 var (
 	// Git SHA1 commit hash of the release (set via linker flags)
 	gitCommit = ""
@@ -128,7 +115,7 @@ func init() {
 		aliasFlag,
 	}
 	app.Action = utils.MigrateFlags(abigen)
-	cli.CommandHelpTemplate = commandHelperTemplate
+	cli.CommandHelpTemplate = utils.OriginCommandHelpTemplate
 }
 
 func abigen(c *cli.Context) error {
