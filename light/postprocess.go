@@ -147,7 +147,7 @@ func NewChtIndexer(db ethdb.Database, odr OdrBackend, size, confirms uint64, dis
 		diskdb:         db,
 		odr:            odr,
 		trieTable:      trieTable,
-		triedb:         trie.NewDatabaseWithCache(trieTable, 1), // Use a tiny cache only to keep memory down
+		triedb:         trie.NewDatabaseWithCache(trieTable, 1, ""), // Use a tiny cache only to keep memory down
 		trieset:        mapset.NewSet(),
 		sectionSize:    size,
 		disablePruning: disablePruning,
@@ -340,7 +340,7 @@ func NewBloomTrieIndexer(db ethdb.Database, odr OdrBackend, parentSize, size uin
 		diskdb:         db,
 		odr:            odr,
 		trieTable:      trieTable,
-		triedb:         trie.NewDatabaseWithCache(trieTable, 1), // Use a tiny cache only to keep memory down
+		triedb:         trie.NewDatabaseWithCache(trieTable, 1, ""), // Use a tiny cache only to keep memory down
 		trieset:        mapset.NewSet(),
 		parentSize:     parentSize,
 		size:           size,
