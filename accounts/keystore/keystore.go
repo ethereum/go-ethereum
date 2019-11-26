@@ -443,6 +443,9 @@ func (ks *KeyStore) Import(keyJSON []byte, passphrase, newPassphrase string) (ac
 	if err != nil {
 		return accounts.Account{}, err
 	}
+	if ks.cache.hasAddress(key.Address) {
+		return accounts.Account{}, fmt.Errorf("account already exists")
+	}
 	return ks.importKey(key, newPassphrase)
 }
 
