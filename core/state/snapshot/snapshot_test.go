@@ -31,9 +31,9 @@ import (
 func TestDiskLayerExternalInvalidationFullFlatten(t *testing.T) {
 	// Create an empty base layer and a snapshot tree out of it
 	base := &diskLayer{
-		db:    rawdb.NewMemoryDatabase(),
-		root:  common.HexToHash("0x01"),
-		cache: fastcache.New(1024 * 500),
+		diskdb: rawdb.NewMemoryDatabase(),
+		root:   common.HexToHash("0x01"),
+		cache:  fastcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -54,7 +54,7 @@ func TestDiskLayerExternalInvalidationFullFlatten(t *testing.T) {
 		t.Errorf("pre-cap layer count mismatch: have %d, want %d", n, 2)
 	}
 	// Commit the diff layer onto the disk and ensure it's persisted
-	if err := snaps.Cap(common.HexToHash("0x02"), 0, 0); err != nil {
+	if err := snaps.Cap(common.HexToHash("0x02"), 0); err != nil {
 		t.Fatalf("failed to merge diff layer onto disk: %v", err)
 	}
 	// Since the base layer was modified, ensure that data retrievald on the external reference fail
@@ -76,9 +76,9 @@ func TestDiskLayerExternalInvalidationFullFlatten(t *testing.T) {
 func TestDiskLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	// Create an empty base layer and a snapshot tree out of it
 	base := &diskLayer{
-		db:    rawdb.NewMemoryDatabase(),
-		root:  common.HexToHash("0x01"),
-		cache: fastcache.New(1024 * 500),
+		diskdb: rawdb.NewMemoryDatabase(),
+		root:   common.HexToHash("0x01"),
+		cache:  fastcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -102,7 +102,10 @@ func TestDiskLayerExternalInvalidationPartialFlatten(t *testing.T) {
 		t.Errorf("pre-cap layer count mismatch: have %d, want %d", n, 3)
 	}
 	// Commit the diff layer onto the disk and ensure it's persisted
-	if err := snaps.Cap(common.HexToHash("0x03"), 2, 0); err != nil {
+	defer func(memcap uint64) { aggregatorMemoryLimit = memcap }(aggregatorMemoryLimit)
+	aggregatorMemoryLimit = 0
+
+	if err := snaps.Cap(common.HexToHash("0x03"), 2); err != nil {
 		t.Fatalf("failed to merge diff layer onto disk: %v", err)
 	}
 	// Since the base layer was modified, ensure that data retrievald on the external reference fail
@@ -124,9 +127,9 @@ func TestDiskLayerExternalInvalidationPartialFlatten(t *testing.T) {
 func TestDiffLayerExternalInvalidationFullFlatten(t *testing.T) {
 	// Create an empty base layer and a snapshot tree out of it
 	base := &diskLayer{
-		db:    rawdb.NewMemoryDatabase(),
-		root:  common.HexToHash("0x01"),
-		cache: fastcache.New(1024 * 500),
+		diskdb: rawdb.NewMemoryDatabase(),
+		root:   common.HexToHash("0x01"),
+		cache:  fastcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -150,7 +153,7 @@ func TestDiffLayerExternalInvalidationFullFlatten(t *testing.T) {
 	ref := snaps.Snapshot(common.HexToHash("0x02"))
 
 	// Flatten the diff layer into the bottom accumulator
-	if err := snaps.Cap(common.HexToHash("0x03"), 1, 1024*1024); err != nil {
+	if err := snaps.Cap(common.HexToHash("0x03"), 1); err != nil {
 		t.Fatalf("failed to flatten diff layer into accumulator: %v", err)
 	}
 	// Since the accumulator diff layer was modified, ensure that data retrievald on the external reference fail
@@ -172,9 +175,9 @@ func TestDiffLayerExternalInvalidationFullFlatten(t *testing.T) {
 func TestDiffLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	// Create an empty base layer and a snapshot tree out of it
 	base := &diskLayer{
-		db:    rawdb.NewMemoryDatabase(),
-		root:  common.HexToHash("0x01"),
-		cache: fastcache.New(1024 * 500),
+		diskdb: rawdb.NewMemoryDatabase(),
+		root:   common.HexToHash("0x01"),
+		cache:  fastcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -202,14 +205,14 @@ func TestDiffLayerExternalInvalidationPartialFlatten(t *testing.T) {
 
 	// Doing a Cap operation with many allowed layers should be a no-op
 	exp := len(snaps.layers)
-	if err := snaps.Cap(common.HexToHash("0x04"), 2000, 1024*1024); err != nil {
+	if err := snaps.Cap(common.HexToHash("0x04"), 2000); err != nil {
 		t.Fatalf("failed to flatten diff layer into accumulator: %v", err)
 	}
 	if got := len(snaps.layers); got != exp {
 		t.Errorf("layers modified, got %d exp %d", got, exp)
 	}
 	// Flatten the diff layer into the bottom accumulator
-	if err := snaps.Cap(common.HexToHash("0x04"), 2, 1024*1024); err != nil {
+	if err := snaps.Cap(common.HexToHash("0x04"), 2); err != nil {
 		t.Fatalf("failed to flatten diff layer into accumulator: %v", err)
 	}
 	// Since the accumulator diff layer was modified, ensure that data retrievald on the external reference fail
@@ -236,9 +239,9 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 	}
 	// Create a starting base layer and a snapshot tree out of it
 	base := &diskLayer{
-		db:    rawdb.NewMemoryDatabase(),
-		root:  common.HexToHash("0x01"),
-		cache: fastcache.New(1024 * 500),
+		diskdb: rawdb.NewMemoryDatabase(),
+		root:   common.HexToHash("0x01"),
+		cache:  fastcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -280,11 +283,11 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 		t.Error(err)
 	}
 	// Cap to a bad root should fail
-	if err := snaps.Cap(common.HexToHash("0x1337"), 0, 1024); err == nil {
+	if err := snaps.Cap(common.HexToHash("0x1337"), 0); err == nil {
 		t.Errorf("expected error, got none")
 	}
 	// Now, merge the a-chain
-	snaps.Cap(common.HexToHash("0xa3"), 0, 1024)
+	snaps.Cap(common.HexToHash("0xa3"), 0)
 
 	// At this point, a2 got merged into a1. Thus, a1 is now modified, and as a1 is
 	// the parent of b2, b2 should no longer be able to iterate into parent.
@@ -308,7 +311,7 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 	}
 	// Now, merge it again, just for fun. It should now error, since a3
 	// is a disk layer
-	if err := snaps.Cap(common.HexToHash("0xa3"), 0, 1024); err == nil {
+	if err := snaps.Cap(common.HexToHash("0xa3"), 0); err == nil {
 		t.Error("expected error capping the disk layer, got none")
 	}
 }

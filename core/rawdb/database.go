@@ -282,9 +282,9 @@ func InspectDatabase(db ethdb.Database) error {
 			receiptSize += size
 		case bytes.HasPrefix(key, txLookupPrefix) && len(key) == (len(txLookupPrefix)+common.HashLength):
 			txlookupSize += size
-		case bytes.HasPrefix(key, StateSnapshotPrefix) && len(key) == (len(StateSnapshotPrefix)+common.HashLength):
+		case bytes.HasPrefix(key, SnapshotAccountPrefix) && len(key) == (len(SnapshotAccountPrefix)+common.HashLength):
 			accountSnapSize += size
-		case bytes.HasPrefix(key, StateSnapshotPrefix) && len(key) == (len(StateSnapshotPrefix)+2*common.HashLength):
+		case bytes.HasPrefix(key, SnapshotStoragePrefix) && len(key) == (len(SnapshotStoragePrefix)+2*common.HashLength):
 			storageSnapSize += size
 		case bytes.HasPrefix(key, preimagePrefix) && len(key) == (len(preimagePrefix)+common.HashLength):
 			preimageSize += size

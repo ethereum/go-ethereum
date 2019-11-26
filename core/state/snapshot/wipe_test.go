@@ -59,17 +59,31 @@ func TestWipe(t *testing.T) {
 		// Randomize the suffix, dedup and inject it under the snapshot namespace
 		keysuffix := make([]byte, keysize)
 		rand.Read(keysuffix)
-		db.Put(append(rawdb.StateSnapshotPrefix, keysuffix...), randomHash().Bytes())
+
+		if rand.Int31n(2) == 0 {
+			db.Put(append(rawdb.SnapshotAccountPrefix, keysuffix...), randomHash().Bytes())
+		} else {
+			db.Put(append(rawdb.SnapshotStoragePrefix, keysuffix...), randomHash().Bytes())
+		}
 	}
 	// Sanity check that all the keys are present
 	var items int
 
-	it := db.NewIteratorWithPrefix(rawdb.StateSnapshotPrefix)
+	it := db.NewIteratorWithPrefix(rawdb.SnapshotAccountPrefix)
 	defer it.Release()
 
 	for it.Next() {
 		key := it.Key()
-		if len(key) == len(rawdb.StateSnapshotPrefix)+32 || len(key) == len(rawdb.StateSnapshotPrefix)+64 {
+		if len(key) == len(rawdb.SnapshotAccountPrefix)+common.HashLength {
+			items++
+		}
+	}
+	it = db.NewIteratorWithPrefix(rawdb.SnapshotStoragePrefix)
+	defer it.Release()
+
+	for it.Next() {
+		key := it.Key()
+		if len(key) == len(rawdb.SnapshotStoragePrefix)+2*common.HashLength {
 			items++
 		}
 	}
@@ -80,16 +94,24 @@ func TestWipe(t *testing.T) {
 		t.Errorf("snapshot block marker mismatch: have %#x, want <not-nil>", hash)
 	}
 	// Wipe all snapshot entries from the database
-	if err := wipeSnapshot(db); err != nil {
-		t.Fatalf("failed to wipe snapshot: %v", err)
-	}
+	<-wipeSnapshot(db, true)
+
 	// Iterate over the database end ensure no snapshot information remains
-	it = db.NewIteratorWithPrefix(rawdb.StateSnapshotPrefix)
+	it = db.NewIteratorWithPrefix(rawdb.SnapshotAccountPrefix)
 	defer it.Release()
 
 	for it.Next() {
 		key := it.Key()
-		if len(key) == len(rawdb.StateSnapshotPrefix)+32 || len(key) == len(rawdb.StateSnapshotPrefix)+64 {
+		if len(key) == len(rawdb.SnapshotAccountPrefix)+common.HashLength {
+			t.Errorf("snapshot entry remained after wipe: %x", key)
+		}
+	}
+	it = db.NewIteratorWithPrefix(rawdb.SnapshotStoragePrefix)
+	defer it.Release()
+
+	for it.Next() {
+		key := it.Key()
+		if len(key) == len(rawdb.SnapshotStoragePrefix)+2*common.HashLength {
 			t.Errorf("snapshot entry remained after wipe: %x", key)
 		}
 	}

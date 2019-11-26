@@ -62,8 +62,8 @@ var (
 	storageUpdateTimer = metrics.NewRegisteredTimer("chain/storage/updates", nil)
 	storageCommitTimer = metrics.NewRegisteredTimer("chain/storage/commits", nil)
 
-	snapshotAccountReadTimer = metrics.NewRegisteredTimer("chain/snapshot/accountreads", nil)
-	snapshotStorageReadTimer = metrics.NewRegisteredTimer("chain/snapshot/storagereads", nil)
+	snapshotAccountReadTimer = metrics.NewRegisteredTimer("chain/snapshot/account/reads", nil)
+	snapshotStorageReadTimer = metrics.NewRegisteredTimer("chain/snapshot/storage/reads", nil)
 	snapshotCommitTimer      = metrics.NewRegisteredTimer("chain/snapshot/commits", nil)
 
 	blockInsertTimer     = metrics.NewRegisteredTimer("chain/inserts", nil)
@@ -120,6 +120,7 @@ type CacheConfig struct {
 	TrieDirtyLimit      int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
 	TrieDirtyDisabled   bool          // Whether to disable trie write caching and GC altogether (archive node)
 	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
+	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -194,6 +195,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			TrieCleanLimit: 256,
 			TrieDirtyLimit: 256,
 			TrieTimeLimit:  5 * time.Minute,
+			SnapshotLimit:  256,
 		}
 	}
 	bodyCache, _ := lru.New(bodyCacheLimit)
@@ -300,10 +302,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		}
 	}
 	// Load any existing snapshot, regenerating it if loading failed
-	head := bc.CurrentBlock()
-	if bc.snaps, err = snapshot.New(bc.db, "snapshot.rlp", head.Root()); err != nil {
-		return nil, err
-	}
+	bc.snaps = snapshot.New(bc.db, bc.stateCache.TrieDB(), "snapshot.rlp", bc.cacheConfig.SnapshotLimit, bc.CurrentBlock().Root())
+
 	// Take ownership of this particular state
 	go bc.update()
 	return bc, nil
@@ -496,6 +496,9 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	bc.currentBlock.Store(block)
 	headBlockGauge.Update(int64(block.NumberU64()))
 	bc.chainmu.Unlock()
+
+	// Destroy any existing state snapshot and regenerate it in the background
+	bc.snaps.Rebuild(block.Root())
 
 	log.Info("Committed new head block", "number", block.Number(), "hash", hash)
 	return nil
@@ -851,7 +854,8 @@ func (bc *BlockChain) Stop() {
 	bc.wg.Wait()
 
 	// Ensure that the entirety of the state snapshot is journalled to disk.
-	if err := bc.snaps.Journal(bc.CurrentBlock().Root()); err != nil {
+	snapBase, err := bc.snaps.Journal(bc.CurrentBlock().Root(), "snapshot.rlp")
+	if err != nil {
 		log.Error("Failed to journal state snapshot", "err", err)
 	}
 	// Ensure the state of a recent block is also stored to disk before exiting.
@@ -870,6 +874,12 @@ func (bc *BlockChain) Stop() {
 				if err := triedb.Commit(recent.Root(), true); err != nil {
 					log.Error("Failed to commit recent state trie", "err", err)
 				}
+			}
+		}
+		if snapBase != (common.Hash{}) {
+			log.Info("Writing snapshot state to disk", "root", snapBase)
+			if err := triedb.Commit(snapBase, true); err != nil {
+				log.Error("Failed to commit recent state trie", "err", err)
 			}
 		}
 		for !bc.triegc.Empty() {

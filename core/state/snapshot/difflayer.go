@@ -17,13 +17,52 @@
 package snapshot
 
 import (
+	"encoding/binary"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/steakknife/bloomfilter"
+)
+
+var (
+	// aggregatorMemoryLimit is the maximum size of the bottom-most diff layer
+	// that aggregates the writes from above until it's flushed into the disk
+	// layer.
+	//
+	// Note, bumping this up might drastically increase the size of the bloom
+	// filters that's stored in every diff layer. Don't do that without fully
+	// understanding all the implications.
+	aggregatorMemoryLimit = uint64(4 * 1024 * 1024)
+
+	// aggregatorItemLimit is an approximate number of items that will end up
+	// in the agregator layer before it's flushed out to disk. A plain account
+	// weighs around 14B (+hash), a storage slot 32B (+hash), so 50 is a very
+	// rough average of what we might see.
+	aggregatorItemLimit = aggregatorMemoryLimit / 55
+
+	// bloomTargetError is the target false positive rate when the aggregator
+	// layer is at its fullest. The actual value will probably move around up
+	// and down from this number, it's mostly a ballpark figure.
+	//
+	// Note, dropping this down might drastically increase the size of the bloom
+	// filters that's stored in every diff layer. Don't do that without fully
+	// understanding all the implications.
+	bloomTargetError = 0.02
+
+	// bloomSize is the ideal bloom filter size given the maximum number of items
+	// it's expected to hold and the target false positive error rate.
+	bloomSize = math.Ceil(float64(aggregatorItemLimit) * math.Log(bloomTargetError) / math.Log(1/math.Pow(2, math.Log(2))))
+
+	// bloomFuncs is the ideal number of bits a single entry should set in the
+	// bloom filter to keep its size to a minimum (given it's size and maximum
+	// entry count).
+	bloomFuncs = math.Round((bloomSize / float64(aggregatorItemLimit)) * math.Log(2))
 )
 
 // diffLayer represents a collection of modifications made to a state snapshot
@@ -33,8 +72,9 @@ import (
 // The goal of a diff layer is to act as a journal, tracking recent modifications
 // made to the state, that have not yet graduated into a semi-immutable state.
 type diffLayer struct {
-	parent snapshot // Parent snapshot modified by this one, never nil
-	memory uint64   // Approximate guess as to how much memory we use
+	origin *diskLayer // Base disk layer to directly use on bloom misses
+	parent snapshot   // Parent snapshot modified by this one, never nil
+	memory uint64     // Approximate guess as to how much memory we use
 
 	root  common.Hash // Root hash to which this snapshot diff belongs to
 	stale bool        // Signals that the layer became stale (state progressed)
@@ -44,7 +84,37 @@ type diffLayer struct {
 	storageList map[common.Hash][]common.Hash          // List of storage slots for iterated retrievals, one per account. Any existing lists are sorted if non-nil
 	storageData map[common.Hash]map[common.Hash][]byte // Keyed storage slots for direct retrival. one per account (nil means deleted)
 
+	diffed *bloomfilter.Filter // Bloom filter tracking all the diffed items up to the disk layer
+
 	lock sync.RWMutex
+}
+
+// accountBloomHasher is a wrapper around a common.Hash to satisfy the interface
+// API requirements of the bloom library used. It's used to convert an account
+// hash into a 64 bit mini hash.
+type accountBloomHasher common.Hash
+
+func (h accountBloomHasher) Write(p []byte) (n int, err error) { panic("not implemented") }
+func (h accountBloomHasher) Sum(b []byte) []byte               { panic("not implemented") }
+func (h accountBloomHasher) Reset()                            { panic("not implemented") }
+func (h accountBloomHasher) BlockSize() int                    { panic("not implemented") }
+func (h accountBloomHasher) Size() int                         { return 8 }
+func (h accountBloomHasher) Sum64() uint64 {
+	return binary.BigEndian.Uint64(h[:8])
+}
+
+// storageBloomHasher is a wrapper around a [2]common.Hash to satisfy the interface
+// API requirements of the bloom library used. It's used to convert an account
+// hash into a 64 bit mini hash.
+type storageBloomHasher [2]common.Hash
+
+func (h storageBloomHasher) Write(p []byte) (n int, err error) { panic("not implemented") }
+func (h storageBloomHasher) Sum(b []byte) []byte               { panic("not implemented") }
+func (h storageBloomHasher) Reset()                            { panic("not implemented") }
+func (h storageBloomHasher) BlockSize() int                    { panic("not implemented") }
+func (h storageBloomHasher) Size() int                         { return 8 }
+func (h storageBloomHasher) Sum64() uint64 {
+	return binary.BigEndian.Uint64(h[0][:8]) ^ binary.BigEndian.Uint64(h[1][:8])
 }
 
 // newDiffLayer creates a new diff on top of an existing snapshot, whether that's a low
@@ -57,9 +127,18 @@ func newDiffLayer(parent snapshot, root common.Hash, accounts map[common.Hash][]
 		accountData: accounts,
 		storageData: storage,
 	}
-	// Determine mem size
+	switch parent := parent.(type) {
+	case *diskLayer:
+		dl.rebloom(parent)
+	case *diffLayer:
+		dl.rebloom(parent.origin)
+	default:
+		panic("unknown parent type")
+	}
+	// Determine memory size and track the dirty writes
 	for _, data := range accounts {
-		dl.memory += uint64(len(data))
+		dl.memory += uint64(common.HashLength + len(data))
+		snapshotDirtyAccountWriteMeter.Mark(int64(len(data)))
 	}
 	// Fill the storage hashes and sort them for the iterator
 	dl.storageList = make(map[common.Hash][]common.Hash)
@@ -80,14 +159,54 @@ func newDiffLayer(parent snapshot, root common.Hash, accounts map[common.Hash][]
 		if account, ok := accounts[accountHash]; account == nil || !ok {
 			log.Error(fmt.Sprintf("storage in %#x exists, but account nil (exists: %v)", accountHash, ok))
 		}
-		// Determine mem size
+		// Determine memory size and track the dirty writes
 		for _, data := range slots {
-			dl.memory += uint64(len(data))
+			dl.memory += uint64(common.HashLength + len(data))
+			snapshotDirtyStorageWriteMeter.Mark(int64(len(data)))
 		}
 	}
 	dl.memory += uint64(len(dl.storageList) * common.HashLength)
-
 	return dl
+}
+
+// rebloom discards the layer's current bloom and rebuilds it from scratch based
+// on the parent's and the local diffs.
+func (dl *diffLayer) rebloom(origin *diskLayer) {
+	dl.lock.Lock()
+	defer dl.lock.Unlock()
+
+	defer func(start time.Time) {
+		snapshotBloomIndexTimer.Update(time.Since(start))
+	}(time.Now())
+
+	// Inject the new origin that triggered the rebloom
+	dl.origin = origin
+
+	// Retrieve the parent bloom or create a fresh empty one
+	if parent, ok := dl.parent.(*diffLayer); ok {
+		parent.lock.RLock()
+		dl.diffed, _ = parent.diffed.Copy()
+		parent.lock.RUnlock()
+	} else {
+		dl.diffed, _ = bloomfilter.New(uint64(bloomSize), uint64(bloomFuncs))
+	}
+	// Iterate over all the accounts and storage slots and index them
+	for hash := range dl.accountData {
+		dl.diffed.Add(accountBloomHasher(hash))
+	}
+	for accountHash, slots := range dl.storageData {
+		for storageHash := range slots {
+			dl.diffed.Add(storageBloomHasher{accountHash, storageHash})
+		}
+	}
+	// Calculate the current false positive rate and update the error rate meter.
+	// This is a bit cheating because subsequent layers will overwrite it, but it
+	// should be fine, we're only interested in ballpark figures.
+	k := float64(dl.diffed.K())
+	n := float64(dl.diffed.N())
+	m := float64(dl.diffed.M())
+
+	snapshotBloomErrorGauge.Update(math.Pow(1.0-math.Exp((-k)*(n+0.5)/(m-1)), k))
 }
 
 // Root returns the root hash for which this snapshot was made.
@@ -124,6 +243,26 @@ func (dl *diffLayer) Account(hash common.Hash) (*Account, error) {
 // AccountRLP directly retrieves the account RLP associated with a particular
 // hash in the snapshot slim data format.
 func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
+	// Check the bloom filter first whether there's even a point in reaching into
+	// all the maps in all the layers below
+	dl.lock.RLock()
+	hit := dl.diffed.Contains(accountBloomHasher(hash))
+	dl.lock.RUnlock()
+
+	// If the bloom filter misses, don't even bother with traversing the memory
+	// diff layers, reach straight into the bottom persistent disk layer
+	if !hit {
+		snapshotBloomAccountMissMeter.Mark(1)
+		return dl.origin.AccountRLP(hash)
+	}
+	// The bloom filter hit, start poking in the internal maps
+	return dl.accountRLP(hash)
+}
+
+// accountRLP is an internal version of AccountRLP that skips the bloom filter
+// checks and uses the internal maps to try and retrieve the data. It's meant
+// to be used if a higher layer's bloom filter hit already.
+func (dl *diffLayer) accountRLP(hash common.Hash) ([]byte, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
@@ -135,9 +274,17 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	// If the account is known locally, return it. Note, a nil account means it was
 	// deleted, and is a different notion than an unknown account!
 	if data, ok := dl.accountData[hash]; ok {
+		snapshotDirtyAccountHitMeter.Mark(1)
+		snapshotDirtyAccountReadMeter.Mark(int64(len(data)))
+		snapshotBloomAccountTrueHitMeter.Mark(1)
 		return data, nil
 	}
 	// Account unknown to this diff, resolve from parent
+	if diff, ok := dl.parent.(*diffLayer); ok {
+		return diff.accountRLP(hash)
+	}
+	// Failed to resolve through diff layers, mark a bloom error and use the disk
+	snapshotBloomAccountFalseHitMeter.Mark(1)
 	return dl.parent.AccountRLP(hash)
 }
 
@@ -145,6 +292,26 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 // within a particular account. If the slot is unknown to this diff, it's parent
 // is consulted.
 func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
+	// Check the bloom filter first whether there's even a point in reaching into
+	// all the maps in all the layers below
+	dl.lock.RLock()
+	hit := dl.diffed.Contains(storageBloomHasher{accountHash, storageHash})
+	dl.lock.RUnlock()
+
+	// If the bloom filter misses, don't even bother with traversing the memory
+	// diff layers, reach straight into the bottom persistent disk layer
+	if !hit {
+		snapshotBloomStorageMissMeter.Mark(1)
+		return dl.origin.Storage(accountHash, storageHash)
+	}
+	// The bloom filter hit, start poking in the internal maps
+	return dl.storage(accountHash, storageHash)
+}
+
+// storage is an internal version of Storage that skips the bloom filter checks
+// and uses the internal maps to try and retrieve the data. It's meant  to be
+// used if a higher layer's bloom filter hit already.
+func (dl *diffLayer) storage(accountHash, storageHash common.Hash) ([]byte, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
@@ -157,13 +324,23 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	// account means it was deleted, and is a different notion than an unknown account!
 	if storage, ok := dl.storageData[accountHash]; ok {
 		if storage == nil {
+			snapshotDirtyStorageHitMeter.Mark(1)
+			snapshotBloomStorageTrueHitMeter.Mark(1)
 			return nil, nil
 		}
 		if data, ok := storage[storageHash]; ok {
+			snapshotDirtyStorageHitMeter.Mark(1)
+			snapshotDirtyStorageReadMeter.Mark(int64(len(data)))
+			snapshotBloomStorageTrueHitMeter.Mark(1)
 			return data, nil
 		}
 	}
-	// Account - or slot within - unknown to this diff, resolve from parent
+	// Storage slot unknown to this diff, resolve from parent
+	if diff, ok := dl.parent.(*diffLayer); ok {
+		return diff.storage(accountHash, storageHash)
+	}
+	// Failed to resolve through diff layers, mark a bloom error and use the disk
+	snapshotBloomStorageFalseHitMeter.Mark(1)
 	return dl.parent.Storage(accountHash, storageHash)
 }
 
@@ -224,20 +401,9 @@ func (dl *diffLayer) flatten() snapshot {
 		storageData: parent.storageData,
 		accountList: parent.accountList,
 		accountData: parent.accountData,
+		diffed:      dl.diffed,
 		memory:      parent.memory + dl.memory,
 	}
-}
-
-// Journal commits an entire diff hierarchy to disk into a single journal file.
-// This is meant to be used during shutdown to persist the snapshot without
-// flattening everything down (bad for reorgs).
-func (dl *diffLayer) Journal() error {
-	writer, err := dl.journal()
-	if err != nil {
-		return err
-	}
-	writer.Close()
-	return nil
 }
 
 // AccountList returns a sorted list of all accounts in this difflayer.

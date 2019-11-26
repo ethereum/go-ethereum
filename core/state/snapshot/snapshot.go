@@ -18,30 +18,66 @@
 package snapshot
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
-	"os"
+	"io"
 	"sync"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
-	snapshotCleanHitMeter   = metrics.NewRegisteredMeter("state/snapshot/clean/hit", nil)
-	snapshotCleanMissMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/miss", nil)
-	snapshotCleanReadMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/read", nil)
-	snapshotCleanWriteMeter = metrics.NewRegisteredMeter("state/snapshot/clean/write", nil)
+	snapshotCleanAccountHitMeter   = metrics.NewRegisteredMeter("state/snapshot/clean/account/hit", nil)
+	snapshotCleanAccountMissMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/account/miss", nil)
+	snapshotCleanAccountReadMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/account/read", nil)
+	snapshotCleanAccountWriteMeter = metrics.NewRegisteredMeter("state/snapshot/clean/account/write", nil)
+
+	snapshotCleanStorageHitMeter   = metrics.NewRegisteredMeter("state/snapshot/clean/storage/hit", nil)
+	snapshotCleanStorageMissMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/storage/miss", nil)
+	snapshotCleanStorageReadMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/storage/read", nil)
+	snapshotCleanStorageWriteMeter = metrics.NewRegisteredMeter("state/snapshot/clean/storage/write", nil)
+
+	snapshotDirtyAccountHitMeter   = metrics.NewRegisteredMeter("state/snapshot/dirty/account/hit", nil)
+	snapshotDirtyAccountMissMeter  = metrics.NewRegisteredMeter("state/snapshot/dirty/account/miss", nil)
+	snapshotDirtyAccountReadMeter  = metrics.NewRegisteredMeter("state/snapshot/dirty/account/read", nil)
+	snapshotDirtyAccountWriteMeter = metrics.NewRegisteredMeter("state/snapshot/dirty/account/write", nil)
+
+	snapshotDirtyStorageHitMeter   = metrics.NewRegisteredMeter("state/snapshot/dirty/storage/hit", nil)
+	snapshotDirtyStorageMissMeter  = metrics.NewRegisteredMeter("state/snapshot/dirty/storage/miss", nil)
+	snapshotDirtyStorageReadMeter  = metrics.NewRegisteredMeter("state/snapshot/dirty/storage/read", nil)
+	snapshotDirtyStorageWriteMeter = metrics.NewRegisteredMeter("state/snapshot/dirty/storage/write", nil)
+
+	snapshotFlushAccountItemMeter = metrics.NewRegisteredMeter("state/snapshot/flush/account/item", nil)
+	snapshotFlushAccountSizeMeter = metrics.NewRegisteredMeter("state/snapshot/flush/account/size", nil)
+	snapshotFlushStorageItemMeter = metrics.NewRegisteredMeter("state/snapshot/flush/storage/item", nil)
+	snapshotFlushStorageSizeMeter = metrics.NewRegisteredMeter("state/snapshot/flush/storage/size", nil)
+
+	snapshotBloomIndexTimer = metrics.NewRegisteredResettingTimer("state/snapshot/bloom/index", nil)
+	snapshotBloomErrorGauge = metrics.NewRegisteredGaugeFloat64("state/snapshot/bloom/error", nil)
+
+	snapshotBloomAccountTrueHitMeter  = metrics.NewRegisteredMeter("state/snapshot/bloom/account/truehit", nil)
+	snapshotBloomAccountFalseHitMeter = metrics.NewRegisteredMeter("state/snapshot/bloom/account/falsehit", nil)
+	snapshotBloomAccountMissMeter     = metrics.NewRegisteredMeter("state/snapshot/bloom/account/miss", nil)
+
+	snapshotBloomStorageTrueHitMeter  = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/truehit", nil)
+	snapshotBloomStorageFalseHitMeter = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/falsehit", nil)
+	snapshotBloomStorageMissMeter     = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/miss", nil)
 
 	// ErrSnapshotStale is returned from data accessors if the underlying snapshot
 	// layer had been invalidated due to the chain progressing forward far enough
 	// to not maintain the layer's original state.
 	ErrSnapshotStale = errors.New("snapshot stale")
+
+	// ErrNotCoveredYet is returned from data accessors if the underlying snapshot
+	// is being generated currently and the requested data item is not yet in the
+	// range of accounts covered.
+	ErrNotCoveredYet = errors.New("not covered yet")
 
 	// errSnapshotCycle is returned if a snapshot is attempted to be inserted
 	// that forms a cycle in the snapshot tree.
@@ -79,7 +115,7 @@ type snapshot interface {
 	// Journal commits an entire diff hierarchy to disk into a single journal file.
 	// This is meant to be used during shutdown to persist the snapshot without
 	// flattening everything down (bad for reorgs).
-	Journal() error
+	Journal(path string) (io.WriteCloser, common.Hash, error)
 
 	// Stale return whether this layer has become stale (was flattened across) or
 	// if it's still live.
@@ -96,7 +132,10 @@ type snapshot interface {
 // storage data to avoid expensive multi-level trie lookups; and to allow sorted,
 // cheap iteration of the account/storage tries for sync aid.
 type Tree struct {
-	layers map[common.Hash]snapshot // Collection of all known layers // TODO(karalabe): split Clique overlaps
+	diskdb ethdb.KeyValueStore      // Persistent database to store the snapshot
+	triedb *trie.Database           // In-memory cache to access the trie through
+	cache  int                      // Megabytes permitted to use for read caches
+	layers map[common.Hash]snapshot // Collection of all known layers
 	lock   sync.RWMutex
 }
 
@@ -105,20 +144,24 @@ type Tree struct {
 // of the snapshot matches the expected one.
 //
 // If the snapshot is missing or inconsistent, the entirety is deleted and will
-// be reconstructed from scratch based on the tries in the key-value store.
-func New(db ethdb.KeyValueStore, journal string, root common.Hash) (*Tree, error) {
-	// Attempt to load a previously persisted snapshot
-	head, err := loadSnapshot(db, journal, root)
-	if err != nil {
-		log.Warn("Failed to load snapshot, regenerating", "err", err)
-		if head, err = generateSnapshot(db, journal, root); err != nil {
-			return nil, err
-		}
-	}
-	// Existing snapshot loaded or one regenerated, seed all the layers
+// be reconstructed from scratch based on the tries in the key-value store, on a
+// background thread.
+func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, journal string, cache int, root common.Hash) *Tree {
+	// Create a new, empty snapshot tree
 	snap := &Tree{
+		diskdb: diskdb,
+		triedb: triedb,
+		cache:  cache,
 		layers: make(map[common.Hash]snapshot),
 	}
+	// Attempt to load a previously persisted snapshot and rebuild one if failed
+	head, err := loadSnapshot(diskdb, triedb, journal, cache, root)
+	if err != nil {
+		log.Warn("Failed to load snapshot, regenerating", "err", err)
+		snap.Rebuild(root)
+		return snap
+	}
+	// Existing snapshot loaded, seed all the layers
 	for head != nil {
 		snap.layers[head.Root()] = head
 
@@ -131,7 +174,7 @@ func New(db ethdb.KeyValueStore, journal string, root common.Hash) (*Tree, error
 			panic(fmt.Sprintf("unknown data layer: %T", self))
 		}
 	}
-	return snap, nil
+	return snap
 }
 
 // Snapshot retrieves a snapshot belonging to the given block root, or nil if no
@@ -173,7 +216,7 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, accounts ma
 // Cap traverses downwards the snapshot tree from a head block hash until the
 // number of allowed layers are crossed. All layers beyond the permitted number
 // are flattened downwards.
-func (t *Tree) Cap(root common.Hash, layers int, memory uint64) error {
+func (t *Tree) Cap(root common.Hash, layers int) error {
 	// Retrieve the head snapshot to cap from
 	snap := t.Snapshot(root)
 	if snap == nil {
@@ -190,6 +233,8 @@ func (t *Tree) Cap(root common.Hash, layers int, memory uint64) error {
 	// Flattening the bottom-most diff layer requires special casing since there's
 	// no child to rewire to the grandparent. In that case we can fake a temporary
 	// child for the capping and then remove it.
+	var persisted *diskLayer
+
 	switch layers {
 	case 0:
 		// If full commit was requested, flatten the diffs and merge onto disk
@@ -210,7 +255,7 @@ func (t *Tree) Cap(root common.Hash, layers int, memory uint64) error {
 		)
 		diff.lock.RLock()
 		bottom = diff.flatten().(*diffLayer)
-		if bottom.memory >= memory {
+		if bottom.memory >= aggregatorMemoryLimit {
 			base = diffToDisk(bottom)
 		}
 		diff.lock.RUnlock()
@@ -225,7 +270,7 @@ func (t *Tree) Cap(root common.Hash, layers int, memory uint64) error {
 
 	default:
 		// Many layers requested to be retained, cap normally
-		t.cap(diff, layers, memory)
+		persisted = t.cap(diff, layers)
 	}
 	// Remove any layer that is stale or links into a stale layer
 	children := make(map[common.Hash][]common.Hash)
@@ -248,13 +293,28 @@ func (t *Tree) Cap(root common.Hash, layers int, memory uint64) error {
 			remove(root)
 		}
 	}
+	// If the disk layer was modified, regenerate all the cummulative blooms
+	if persisted != nil {
+		var rebloom func(root common.Hash)
+		rebloom = func(root common.Hash) {
+			if diff, ok := t.layers[root].(*diffLayer); ok {
+				diff.rebloom(persisted)
+			}
+			for _, child := range children[root] {
+				rebloom(child)
+			}
+		}
+		rebloom(persisted.root)
+	}
 	return nil
 }
 
 // cap traverses downwards the diff tree until the number of allowed layers are
 // crossed. All diffs beyond the permitted number are flattened downwards. If the
 // layer limit is reached, memory cap is also enforced (but not before).
-func (t *Tree) cap(diff *diffLayer, layers int, memory uint64) {
+//
+// The method returns the new disk layer if diffs were persistend into it.
+func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 	// Dive until we run out of layers or reach the persistent database
 	for ; layers > 2; layers-- {
 		// If we still have diff layers below, continue down
@@ -262,14 +322,14 @@ func (t *Tree) cap(diff *diffLayer, layers int, memory uint64) {
 			diff = parent
 		} else {
 			// Diff stack too shallow, return without modifications
-			return
+			return nil
 		}
 	}
 	// We're out of layers, flatten anything below, stopping if it's the disk or if
 	// the memory limit is not yet exceeded.
 	switch parent := diff.parent.(type) {
 	case *diskLayer:
-		return
+		return nil
 
 	case *diffLayer:
 		// Flatten the parent into the grandparent. The flattening internally obtains a
@@ -281,8 +341,14 @@ func (t *Tree) cap(diff *diffLayer, layers int, memory uint64) {
 		defer diff.lock.Unlock()
 
 		diff.parent = flattened
-		if flattened.memory < memory {
-			return
+		if flattened.memory < aggregatorMemoryLimit {
+			// Accumulator layer is smaller than the limit, so we can abort, unless
+			// there's a snapshot being generated currently. In that case, the trie
+			// will move fron underneath the generator so we **must** merge all the
+			// partial data down into the snapshot and restart the generation.
+			if flattened.parent.(*diskLayer).genAbort == nil {
+				return nil
+			}
 		}
 	default:
 		panic(fmt.Sprintf("unknown data layer: %T", parent))
@@ -296,6 +362,7 @@ func (t *Tree) cap(diff *diffLayer, layers int, memory uint64) {
 
 	t.layers[base.root] = base
 	diff.parent = base
+	return base
 }
 
 // diffToDisk merges a bottom-most diff into the persistent disk layer underneath
@@ -303,8 +370,15 @@ func (t *Tree) cap(diff *diffLayer, layers int, memory uint64) {
 func diffToDisk(bottom *diffLayer) *diskLayer {
 	var (
 		base  = bottom.parent.(*diskLayer)
-		batch = base.db.NewBatch()
+		batch = base.diskdb.NewBatch()
+		stats *generatorStats
 	)
+	// If the disk layer is running a snapshot generator, abort it
+	if base.genAbort != nil {
+		abort := make(chan *generatorStats)
+		base.genAbort <- abort
+		stats = <-abort
+	}
 	// Start by temporarily deleting the current snapshot block marker. This
 	// ensures that in the case of a crash, the entire snapshot is invalidated.
 	rawdb.DeleteSnapshotRoot(batch)
@@ -319,6 +393,10 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 
 	// Push all the accounts into the database
 	for hash, data := range bottom.accountData {
+		// Skip any account not covered yet by the snapshot
+		if base.genMarker != nil && bytes.Compare(hash[:], base.genMarker) > 0 {
+			continue
+		}
 		if len(data) > 0 {
 			// Account was updated, push to disk
 			rawdb.WriteAccountSnapshot(batch, hash, data)
@@ -335,19 +413,35 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			rawdb.DeleteAccountSnapshot(batch, hash)
 			base.cache.Set(hash[:], nil)
 
-			it := rawdb.IterateStorageSnapshots(base.db, hash)
+			it := rawdb.IterateStorageSnapshots(base.diskdb, hash)
 			for it.Next() {
 				if key := it.Key(); len(key) == 65 { // TODO(karalabe): Yuck, we should move this into the iterator
 					batch.Delete(key)
 					base.cache.Del(key[1:])
+
+					snapshotFlushStorageItemMeter.Mark(1)
+					snapshotFlushStorageSizeMeter.Mark(int64(len(data)))
 				}
 			}
 			it.Release()
 		}
+		snapshotFlushAccountItemMeter.Mark(1)
+		snapshotFlushAccountSizeMeter.Mark(int64(len(data)))
 	}
 	// Push all the storage slots into the database
 	for accountHash, storage := range bottom.storageData {
+		// Skip any account not covered yet by the snapshot
+		if base.genMarker != nil && bytes.Compare(accountHash[:], base.genMarker) > 0 {
+			continue
+		}
+		// Generation might be mid-account, track that case too
+		midAccount := base.genMarker != nil && bytes.Equal(accountHash[:], base.genMarker[:common.HashLength])
+
 		for storageHash, data := range storage {
+			// Skip any slot not covered yet by the snapshot
+			if midAccount && bytes.Compare(storageHash[:], base.genMarker[common.HashLength:]) > 0 {
+				continue
+			}
 			if len(data) > 0 {
 				rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, data)
 				base.cache.Set(append(accountHash[:], storageHash[:]...), data)
@@ -355,6 +449,8 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 				rawdb.DeleteStorageSnapshot(batch, accountHash, storageHash)
 				base.cache.Set(append(accountHash[:], storageHash[:]...), nil)
 			}
+			snapshotFlushStorageItemMeter.Mark(1)
+			snapshotFlushStorageSizeMeter.Mark(int64(len(data)))
 		}
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
@@ -368,65 +464,91 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write leftover snapshot", "err", err)
 	}
-	return &diskLayer{
-		root:    bottom.root,
-		cache:   base.cache,
-		db:      base.db,
-		journal: base.journal,
+	res := &diskLayer{
+		root:      bottom.root,
+		cache:     base.cache,
+		diskdb:    base.diskdb,
+		triedb:    base.triedb,
+		genMarker: base.genMarker,
 	}
+	// If snapshot generation hasn't finished yet, port over all the starts and
+	// continue where the previous round left off.
+	//
+	// Note, the `base.genAbort` comparison is not used normally, it's checked
+	// to allow the tests to play with the marker without triggering this path.
+	if base.genMarker != nil && base.genAbort != nil {
+		res.genMarker = base.genMarker
+		res.genAbort = make(chan chan *generatorStats)
+		go res.generate(stats)
+	}
+	return res
 }
 
 // Journal commits an entire diff hierarchy to disk into a single journal file.
 // This is meant to be used during shutdown to persist the snapshot without
 // flattening everything down (bad for reorgs).
-func (t *Tree) Journal(blockRoot common.Hash) error {
+//
+// The method returns the root hash of the base layer that needs to be persisted
+// to disk as a trie too to allow continuing any pending generation op.
+func (t *Tree) Journal(root common.Hash, path string) (common.Hash, error) {
 	// Retrieve the head snapshot to journal from var snap snapshot
-	snap := t.Snapshot(blockRoot)
+	snap := t.Snapshot(root)
 	if snap == nil {
-		return fmt.Errorf("snapshot [%#x] missing", blockRoot)
+		return common.Hash{}, fmt.Errorf("snapshot [%#x] missing", root)
 	}
 	// Run the journaling
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	return snap.(snapshot).Journal()
+	writer, base, err := snap.(snapshot).Journal(path)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return base, writer.Close()
 }
 
-// loadSnapshot loads a pre-existing state snapshot backed by a key-value store.
-func loadSnapshot(db ethdb.KeyValueStore, journal string, root common.Hash) (snapshot, error) {
-	// Retrieve the block number and hash of the snapshot, failing if no snapshot
-	// is present in the database (or crashed mid-update).
-	baseRoot := rawdb.ReadSnapshotRoot(db)
-	if baseRoot == (common.Hash{}) {
-		return nil, errors.New("missing or corrupted snapshot")
-	}
-	base := &diskLayer{
-		journal: journal,
-		db:      db,
-		cache:   fastcache.New(512 * 1024 * 1024),
-		root:    baseRoot,
-	}
-	// Load all the snapshot diffs from the journal, failing if their chain is broken
-	// or does not lead from the disk snapshot to the specified head.
-	if _, err := os.Stat(journal); os.IsNotExist(err) {
-		// Journal doesn't exist, don't worry if it's not supposed to
-		if baseRoot != root {
-			return nil, fmt.Errorf("snapshot journal missing, head doesn't match snapshot: have %#x, want %#x", baseRoot, root)
+// Rebuild wipes all available snapshot data from the persistent database and
+// discard all caches and diff layers. Afterwards, it starts a new snapshot
+// generator with the given root hash.
+func (t *Tree) Rebuild(root common.Hash) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	// Track whether there's a wipe currently running and keep it alive if so
+	var wiper chan struct{}
+
+	// Iterate over and mark all layers stale
+	for _, layer := range t.layers {
+		switch layer := layer.(type) {
+		case *diskLayer:
+			// If the base layer is generating, abort it and save
+			if layer.genAbort != nil {
+				abort := make(chan *generatorStats)
+				layer.genAbort <- abort
+
+				if stats := <-abort; stats != nil {
+					wiper = stats.wiping
+				}
+			}
+			// Layer should be inactive now, mark it as stale
+			layer.lock.Lock()
+			layer.stale = true
+			layer.lock.Unlock()
+
+		case *diffLayer:
+			// If the layer is a simple diff, simply mark as stale
+			layer.lock.Lock()
+			layer.stale = true
+			layer.lock.Unlock()
+
+		default:
+			panic(fmt.Sprintf("unknown layer type: %T", layer))
 		}
-		return base, nil
 	}
-	file, err := os.Open(journal)
-	if err != nil {
-		return nil, err
+	// Start generating a new snapshot from scratch on a backgroung thread. The
+	// generator will run a wiper first if there's not one running right now.
+	log.Info("Rebuilding state snapshot")
+	t.layers = map[common.Hash]snapshot{
+		root: generateSnapshot(t.diskdb, t.triedb, t.cache, root, wiper),
 	}
-	snapshot, err := loadDiffLayer(base, rlp.NewStream(file, 0))
-	if err != nil {
-		return nil, err
-	}
-	// Entire snapshot journal loaded, sanity check the head and return
-	// Journal doesn't exist, don't worry if it's not supposed to
-	if head := snapshot.Root(); head != root {
-		return nil, fmt.Errorf("head doesn't match snapshot: have %#x, want %#x", head, root)
-	}
-	return snapshot, nil
 }

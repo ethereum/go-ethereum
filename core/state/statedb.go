@@ -845,8 +845,8 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			if err := s.snaps.Update(root, parent, s.snapAccounts, s.snapStorage); err != nil {
 				log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
 			}
-			if err := s.snaps.Cap(root, 16, 4*1024*1024); err != nil {
-				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 16, "memory", 4*1024*1024, "err", err)
+			if err := s.snaps.Cap(root, 128); err != nil {
+				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
 			}
 		}
 		s.snap, s.snapAccounts, s.snapStorage = nil, nil, nil

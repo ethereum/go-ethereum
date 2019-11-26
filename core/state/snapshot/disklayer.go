@@ -17,6 +17,7 @@
 package snapshot
 
 import (
+	"bytes"
 	"sync"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -24,16 +25,20 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // diskLayer is a low level persistent snapshot built on top of a key-value store.
 type diskLayer struct {
-	journal string              // Path of the snapshot journal to use on shutdown
-	db      ethdb.KeyValueStore // Key-value store containing the base snapshot
-	cache   *fastcache.Cache    // Cache to avoid hitting the disk for direct access
+	diskdb ethdb.KeyValueStore // Key-value store containing the base snapshot
+	triedb *trie.Database      // Trie node cache for reconstuction purposes
+	cache  *fastcache.Cache    // Cache to avoid hitting the disk for direct access
 
 	root  common.Hash // Root hash of the base snapshot
 	stale bool        // Signals that the layer became stale (state progressed)
+
+	genMarker []byte                    // Marker for the state that's indexed during initial layer generation
+	genAbort  chan chan *generatorStats // Notification channel to abort generating the snapshot in this layer
 
 	lock sync.RWMutex
 }
@@ -80,18 +85,26 @@ func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	if dl.stale {
 		return nil, ErrSnapshotStale
 	}
+	// If the layer is being generated, ensure the requested hash has already been
+	// covered by the generator.
+	if dl.genMarker != nil && bytes.Compare(hash[:], dl.genMarker) > 0 {
+		return nil, ErrNotCoveredYet
+	}
+	// If we're in the disk layer, all diff layers missed
+	snapshotDirtyAccountMissMeter.Mark(1)
+
 	// Try to retrieve the account from the memory cache
-	if blob := dl.cache.Get(nil, hash[:]); blob != nil {
-		snapshotCleanHitMeter.Mark(1)
-		snapshotCleanReadMeter.Mark(int64(len(blob)))
+	if blob, found := dl.cache.HasGet(nil, hash[:]); found {
+		snapshotCleanAccountHitMeter.Mark(1)
+		snapshotCleanAccountReadMeter.Mark(int64(len(blob)))
 		return blob, nil
 	}
 	// Cache doesn't contain account, pull from disk and cache for later
-	blob := rawdb.ReadAccountSnapshot(dl.db, hash)
+	blob := rawdb.ReadAccountSnapshot(dl.diskdb, hash)
 	dl.cache.Set(hash[:], blob)
 
-	snapshotCleanMissMeter.Mark(1)
-	snapshotCleanWriteMeter.Mark(int64(len(blob)))
+	snapshotCleanAccountMissMeter.Mark(1)
+	snapshotCleanAccountWriteMeter.Mark(int64(len(blob)))
 
 	return blob, nil
 }
@@ -109,18 +122,26 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	}
 	key := append(accountHash[:], storageHash[:]...)
 
+	// If the layer is being generated, ensure the requested hash has already been
+	// covered by the generator.
+	if dl.genMarker != nil && bytes.Compare(key, dl.genMarker) > 0 {
+		return nil, ErrNotCoveredYet
+	}
+	// If we're in the disk layer, all diff layers missed
+	snapshotDirtyStorageMissMeter.Mark(1)
+
 	// Try to retrieve the storage slot from the memory cache
-	if blob := dl.cache.Get(nil, key); blob != nil {
-		snapshotCleanHitMeter.Mark(1)
-		snapshotCleanReadMeter.Mark(int64(len(blob)))
+	if blob, found := dl.cache.HasGet(nil, key); found {
+		snapshotCleanStorageHitMeter.Mark(1)
+		snapshotCleanStorageReadMeter.Mark(int64(len(blob)))
 		return blob, nil
 	}
 	// Cache doesn't contain storage slot, pull from disk and cache for later
-	blob := rawdb.ReadStorageSnapshot(dl.db, accountHash, storageHash)
+	blob := rawdb.ReadStorageSnapshot(dl.diskdb, accountHash, storageHash)
 	dl.cache.Set(key, blob)
 
-	snapshotCleanMissMeter.Mark(1)
-	snapshotCleanWriteMeter.Mark(int64(len(blob)))
+	snapshotCleanStorageMissMeter.Mark(1)
+	snapshotCleanStorageWriteMeter.Mark(int64(len(blob)))
 
 	return blob, nil
 }
@@ -130,10 +151,4 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 // copying everything.
 func (dl *diskLayer) Update(blockHash common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
 	return newDiffLayer(dl, blockHash, accounts, storage)
-}
-
-// Journal commits an entire diff hierarchy to disk into a single journal file.
-func (dl *diskLayer) Journal() error {
-	// There's no journalling a disk layer
-	return nil
 }

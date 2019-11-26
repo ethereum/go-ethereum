@@ -53,9 +53,10 @@ var (
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
 
-	txLookupPrefix      = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
-	bloomBitsPrefix     = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
-	StateSnapshotPrefix = []byte("s") // StateSnapshotPrefix + account hash [+ storage hash] -> account/storage trie value
+	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
+	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
+	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
+	SnapshotStoragePrefix = []byte("s") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 
 	preimagePrefix = []byte("secure-key-")      // preimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-") // config prefix for the db
@@ -149,19 +150,19 @@ func txLookupKey(hash common.Hash) []byte {
 	return append(txLookupPrefix, hash.Bytes()...)
 }
 
-// accountSnapshotKey = StateSnapshotPrefix + hash
+// accountSnapshotKey = SnapshotAccountPrefix + hash
 func accountSnapshotKey(hash common.Hash) []byte {
-	return append(StateSnapshotPrefix, hash.Bytes()...)
+	return append(SnapshotAccountPrefix, hash.Bytes()...)
 }
 
-// storageSnapshotKey = StateSnapshotPrefix + account hash + storage hash
+// storageSnapshotKey = SnapshotStoragePrefix + account hash + storage hash
 func storageSnapshotKey(accountHash, storageHash common.Hash) []byte {
-	return append(append(StateSnapshotPrefix, accountHash.Bytes()...), storageHash.Bytes()...)
+	return append(append(SnapshotStoragePrefix, accountHash.Bytes()...), storageHash.Bytes()...)
 }
 
-// storageSnapshotsKey = StateSnapshotPrefix + account hash + storage hash
+// storageSnapshotsKey = SnapshotStoragePrefix + account hash + storage hash
 func storageSnapshotsKey(accountHash common.Hash) []byte {
-	return append(StateSnapshotPrefix, accountHash.Bytes()...)
+	return append(SnapshotStoragePrefix, accountHash.Bytes()...)
 }
 
 // bloomBitsKey = bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash
