@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ubiq/go-ubiq/log"
 	jaeger "github.com/uber/jaeger-client-go"
 	jaegercfg "github.com/uber/jaeger-client-go/config"
+	"github.com/ubiq/go-ubiq/log"
 	cli "gopkg.in/urfave/cli.v1"
 )
 

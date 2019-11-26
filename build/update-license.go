@@ -72,8 +72,6 @@ var (
 		"internal/jsre/deps",
 		"log/",
 		"common/bitutil/bitutil",
-		// don't license generated files
-		"contracts/chequebook/contract/code.go",
 	}
 
 	// paths with this prefix are licensed as GPL. all other files are LGPL.
