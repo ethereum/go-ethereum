@@ -874,6 +874,9 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 }
 
 func (db *Database) saveCache(dir string, threads int) (err error) {
+	if db.cleans == nil {
+		return
+	}
 	defer func(start time.Time) {
 		if err == nil {
 			log.Info("Saved clean cache into the file", "path", dir, "elapsed", common.PrettyDuration(time.Since(start)))
@@ -881,9 +884,6 @@ func (db *Database) saveCache(dir string, threads int) (err error) {
 			log.Info("Failed to save clean cache into file", "error", err)
 		}
 	}(time.Now())
-	if db.cleans == nil {
-		return
-	}
 	err = db.cleans.SaveToFileConcurrent(dir, threads)
 	return err
 }
