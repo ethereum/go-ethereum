@@ -111,7 +111,7 @@ func (it *lookup) startQueries() bool {
 		// for the table to fill in this case, but there is no good mechanism for that
 		// yet.
 		if len(closest.entries) == 0 {
-			time.Sleep(1 * time.Second)
+			it.slowdown()
 		}
 		it.queries = 1
 		it.replyCh <- closest.entries
@@ -129,6 +129,15 @@ func (it *lookup) startQueries() bool {
 	}
 	// The lookup ends when no more nodes can be asked.
 	return it.queries > 0
+}
+
+func (it *lookup) slowdown() {
+	sleep := time.NewTimer(1 * time.Second)
+	defer sleep.Stop()
+	select {
+	case <-sleep.C:
+	case <-it.tab.closeReq:
+	}
 }
 
 func (it *lookup) query(n *node, reply chan<- []*node) {
