@@ -105,6 +105,9 @@ func NewTxPool(config *params.ChainConfig, chain *LightChain, relay TxRelayBacke
 	}
 	// Subscribe events from blockchain
 	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
+	if pool.chainHeadSub == nil {
+		log.Crit("Failed to create chain head subscription")
+	}
 	go pool.eventLoop()
 
 	return pool

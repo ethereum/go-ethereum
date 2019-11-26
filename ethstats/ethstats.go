@@ -145,15 +145,18 @@ func (s *Service) loop() {
 		blockchain = s.les.BlockChain()
 		txpool = s.les.TxPool()
 	}
-
 	chainHeadCh := make(chan core.ChainHeadEvent, chainHeadChanSize)
 	headSub := blockchain.SubscribeChainHeadEvent(chainHeadCh)
+	if headSub == nil {
+		log.Crit("Failed to create chain head subscription")
+	}
 	defer headSub.Unsubscribe()
-
 	txEventCh := make(chan core.NewTxsEvent, txChanSize)
 	txSub := txpool.SubscribeNewTxsEvent(txEventCh)
+	if txSub == nil {
+		log.Crit("Failed to create new tx subscription")
+	}
 	defer txSub.Unsubscribe()
-
 	// Start a goroutine that exhausts the subsciptions to avoid events piling up
 	var (
 		quitCh = make(chan struct{})

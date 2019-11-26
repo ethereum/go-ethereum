@@ -19,6 +19,7 @@ package eth
 import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -40,7 +41,9 @@ func (e ethEntry) ENRKey() string {
 func (eth *Ethereum) startEthEntryUpdate(ln *enode.LocalNode) {
 	var newHead = make(chan core.ChainHeadEvent, 10)
 	sub := eth.blockchain.SubscribeChainHeadEvent(newHead)
-
+	if sub == nil {
+		log.Crit("Failed to create chain head subscription")
+	}
 	go func() {
 		defer sub.Unsubscribe()
 		for {

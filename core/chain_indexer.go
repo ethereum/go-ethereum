@@ -145,7 +145,9 @@ func (c *ChainIndexer) AddCheckpoint(section uint64, shead common.Hash) {
 func (c *ChainIndexer) Start(chain ChainIndexerChain) {
 	events := make(chan ChainHeadEvent, 10)
 	sub := chain.SubscribeChainHeadEvent(events)
-
+	if sub == nil {
+		log.Crit("Failed to create chain head subscription")
+	}
 	go c.eventLoop(chain.CurrentHeader(), events, sub)
 }
 
