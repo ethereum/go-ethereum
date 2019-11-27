@@ -262,7 +262,7 @@ func TestCallTracer(t *testing.T) {
 			}
 			var gp1559 *core.GasPool
 			if test.Genesis.Config.IsEIP1559(context.BlockNumber) {
-				gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+				gp1559 = new(core.GasPool).AddGas(tx.Gas())
 			}
 			st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()), gp1559)
 			if _, err = st.TransitionDb(); err != nil {

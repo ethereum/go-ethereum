@@ -758,12 +758,26 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		return true
 	}
 
-	if !w.chainConfig.IsEIP1559Finalized(w.current.header.Number) && w.current.gasPool == nil {
-		w.current.gasPool = new(core.GasPool).AddGas(w.current.header.GasLimit)
+	// If EIP1559 is initialized then header.GasLimit is for the EIP1559 pool
+	// and the difference between the MaxGasEIP1559 and header.GasLimit is the limit for the legacy pool
+	// Once EIP1559 is finalized the header.GasLimit is the entire MaxGasEIP1559
+	// so no gas will be allocated to the legacy pool
+	var eip1559GasLimit uint64
+	var legacyGasLimit uint64
+	if w.chainConfig.IsEIP1559(w.current.header.Number) {
+		if w.current.gasPool == nil {
+			legacyGasLimit = params.MaxGasEIP1559 - w.current.header.GasLimit
+			w.current.gasPool = new(core.GasPool).AddGas(legacyGasLimit)
+		}
+		if w.current.gp1559 == nil {
+			eip1559GasLimit = w.current.header.GasLimit
+			w.current.gasPool = new(core.GasPool).AddGas(eip1559GasLimit)
+		}
+	} else if w.current.gasPool == nil { // If we are before EIP1559 initialization then we use header.GasLimit for the legacy pool
+		legacyGasLimit = w.current.header.GasLimit
+		w.current.gasPool = new(core.GasPool).AddGas(legacyGasLimit)
 	}
-	if w.chainConfig.IsEIP1559(w.current.header.Number) && w.current.gp1559 == nil {
-		w.current.gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
-	}
+
 	oneTxType := false
 	if w.chainConfig.IsEIP1559Finalized(w.current.header.Number) || !w.chainConfig.IsEIP1559(w.current.header.Number) {
 		oneTxType = true
@@ -823,9 +837,9 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			if atomic.LoadInt32(interrupt) == commitInterruptResubmit {
 				var ratio float64
 				if eip1559 {
-					ratio = float64(params.MaxGasEIP1559-gp.Gas()) / float64(params.MaxGasEIP1559)
+					ratio = float64(eip1559GasLimit-gp.Gas()) / float64(eip1559GasLimit)
 				} else {
-					ratio = float64(w.current.header.GasLimit-gp.Gas()) / float64(w.current.header.GasLimit)
+					ratio = float64(legacyGasLimit-gp.Gas()) / float64(legacyGasLimit)
 				}
 				if ratio < 0.1 {
 					ratio = 0.1
@@ -927,10 +941,12 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 
 	num := parent.Number()
+	gasLimit, baseFee := core.CalcGasLimitAndBaseFee(w.chainConfig, parent, w.config.GasFloor, w.config.GasCeil)
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     num.Add(num, common.Big1),
-		GasLimit:   core.CalcGasLimit(parent, w.config.GasFloor, w.config.GasCeil),
+		GasLimit:   gasLimit,
+		BaseFee:    baseFee,
 		Extra:      w.extra,
 		Time:       uint64(timestamp),
 	}

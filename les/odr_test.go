@@ -138,7 +138,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 				gp := new(core.GasPool).AddGas(math.MaxUint64)
 				var gp1559 *core.GasPool
 				if config.IsEIP1559(header.Number) {
-					gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+					gp1559 = new(core.GasPool).AddGas(math.MaxUint64)
 				}
 				ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp, gp1559)
 				res = append(res, ret...)
@@ -154,7 +154,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			gp := new(core.GasPool).AddGas(math.MaxUint64)
 			var gp1559 *core.GasPool
 			if config.IsEIP1559(header.Number) {
-				gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+				gp1559 = new(core.GasPool).AddGas(math.MaxUint64)
 			}
 			ret, _, _, _ := core.ApplyMessage(vmenv, msg, gp, gp1559)
 			if state.Error() == nil {

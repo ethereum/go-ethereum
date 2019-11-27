@@ -898,7 +898,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
 	var gp1559 *core.GasPool
 	if evm.ChainConfig().IsEIP1559(header.Number) {
-		gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+		gp1559 = new(core.GasPool).AddGas(math.MaxUint64)
 	}
 	res, gas, failed, err := core.ApplyMessage(evm, msg, gp, gp1559)
 	if err := vmError(); err != nil {

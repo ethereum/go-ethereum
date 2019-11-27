@@ -197,11 +197,16 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 			statedb.AddAddressToAccessList(addr)
 		}
 	}
-	gaspool := new(core.GasPool).AddGas(block.GasLimit())
+
 	var gp1559 *core.GasPool
+	var gaspool *core.GasPool
 	if config.IsEIP1559(block.Number()) {
-		gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+		gaspool = new(core.GasPool).AddGas(params.MaxGasEIP1559 - block.GasLimit())
+		gp1559 = new(core.GasPool).AddGas(block.GasLimit())
+	} else {
+		gaspool = new(core.GasPool).AddGas(block.GasLimit())
 	}
+
 	snapshot := statedb.Snapshot()
 	if _, _, _, err := core.ApplyMessage(evm, msg, gaspool, gp1559); err != nil {
 		statedb.RevertToSnapshot(snapshot)

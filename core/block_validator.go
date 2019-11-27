@@ -142,7 +142,7 @@ func CalcGasLimit(parent *types.Block, gasFloor, gasCeil uint64) uint64 {
 	return limit
 }
 
-func CalcGasLimitAndBaseFee(config params.ChainConfig, parent *types.Block, gasFloor, gasCeil uint64) (uint64, *big.Int) {
+func CalcGasLimitAndBaseFee(config *params.ChainConfig, parent *types.Block, gasFloor, gasCeil uint64) (uint64, *big.Int) {
 	if !config.IsEIP1559(new(big.Int).Add(parent.Number(), common.Big1)) {
 		return CalcGasLimit(parent, gasFloor, gasCeil), nil
 	}
@@ -152,7 +152,7 @@ func CalcGasLimitAndBaseFee(config params.ChainConfig, parent *types.Block, gasF
 // start at 50 : 50 and then shift to 0 : 100
 // calcGasLimitAndBaseFee returns the EIP1559GasLimit and the BaseFee
 // The GasLimit for the legacy pool is (params.MaxGasEIP1559 - EIP1559GasLimit)
-func calcGasLimitAndBaseFee(config params.ChainConfig, parent *types.Block, gasFloor, gasCeil uint64) (uint64, *big.Int) {
+func calcGasLimitAndBaseFee(config *params.ChainConfig, parent *types.Block, gasFloor, gasCeil uint64) (uint64, *big.Int) {
 	// panic if we do not have a block number set for the EIP1559 initialization fork
 	if config.EIP1559Block == nil {
 		panic("chain config is missing EIP1559Block")
@@ -166,10 +166,10 @@ func calcGasLimitAndBaseFee(config params.ChainConfig, parent *types.Block, gasF
 	}
 
 	/*
-				Otherwise, calculate the BaseFee
-				As a default strategy, miners set BASEFEE as follows. Let delta = block.gas_used - TARGET_GASUSED (possibly negative).
-		 		Set BASEFEE = PARENT_BASEFEE + PARENT_BASEFEE * delta // TARGET_GASUSED // BASEFEE_MAX_CHANGE_DENOMINATOR,
-				clamping this result inside of the allowable bounds if needed (with the parameter setting above clamping will not be required).
+		Otherwise, calculate the BaseFee
+		As a default strategy, miners set BASEFEE as follows. Let delta = block.gas_used - TARGET_GASUSED (possibly negative).
+		Set BASEFEE = PARENT_BASEFEE + PARENT_BASEFEE * delta // TARGET_GASUSED // BASEFEE_MAX_CHANGE_DENOMINATOR,
+		clamping this result inside of the allowable bounds if needed (with the parameter setting above clamping will not be required).
 	*/
 
 	delta := new(big.Int).Sub(new(big.Int).SetUint64(parent.GasUsed()), new(big.Int).SetUint64(params.TargetGasUsed))

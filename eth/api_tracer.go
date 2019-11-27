@@ -28,8 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/params"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
@@ -501,7 +499,7 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 		msg, _ := tx.AsMessage(signer)
 		txContext := core.NewEVMTxContext(msg)
 		if api.eth.blockchain.Config().IsEIP1559(block.Number()) {
-			gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+			gp1559 = new(core.GasPool).AddGas(msg.Gas())
 		}
 		vmenv := vm.NewEVM(blockCtx, txContext, statedb, api.eth.blockchain.Config(), vm.Config{})
 		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), gp1559); err != nil {
@@ -618,7 +616,7 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 		}
 		// Execute the transaction and flush any traces to disk
 		if api.eth.blockchain.Config().IsEIP1559(block.Number()) {
-			gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+			gp1559 = new(core.GasPool).AddGas(msg.Gas())
 		}
 		vmenv := vm.NewEVM(vmctx, txContext, statedb, chainConfig, vmConf)
 		_, _, _, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), gp1559)
@@ -795,7 +793,7 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 		gp1559    *core.GasPool
 	)
 	if api.eth.blockchain.Config().IsEIP1559(vmctx.BlockNumber) {
-		gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+		gp1559 = new(core.GasPool).AddGas(message.Gas())
 	}
 	switch {
 	case config != nil && config.Tracer != nil:
@@ -883,7 +881,7 @@ func (api *PrivateDebugAPI) computeTxEnv(block *types.Block, txIndex int, reexec
 		}
 		var gp1559 *core.GasPool
 		if api.eth.blockchain.Config().IsEIP1559(block.Number()) {
-			gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+			gp1559 = new(core.GasPool).AddGas(tx.Gas())
 		}
 		// Not yet the searched for transaction, execute on top of the current state
 		vmenv := vm.NewEVM(context, txContext, statedb, api.eth.blockchain.Config(), vm.Config{})
