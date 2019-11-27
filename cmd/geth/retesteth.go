@@ -500,11 +500,16 @@ func (api *RetestethAPI) mineBlock() error {
 	if api.chainConfig.DAOForkSupport && api.chainConfig.DAOForkBlock != nil && api.chainConfig.DAOForkBlock.Cmp(header.Number) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
-	gasPool := new(core.GasPool).AddGas(header.GasLimit)
+
 	var gp1559 *core.GasPool
+	var gasPool *core.GasPool
 	if api.chainConfig.IsEIP1559(header.Number) {
-		gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+		gasPool = new(core.GasPool).AddGas(params.MaxGasEIP1559 - header.GasLimit)
+		gp1559 = new(core.GasPool).AddGas(header.GasLimit)
+	} else {
+		gasPool = new(core.GasPool).AddGas(header.GasLimit)
 	}
+
 	txCount := 0
 	var txs []*types.Transaction
 	var receipts []*types.Receipt
@@ -685,7 +690,7 @@ func (api *RetestethAPI) AccountRange(ctx context.Context,
 			vmenv := vm.NewEVM(context, statedb, api.blockchain.Config(), vm.Config{})
 			var gp1559 *core.GasPool
 			if vmenv.ChainConfig().IsEIP1559(block.Number()) {
-				gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+				gp1559 = new(core.GasPool).AddGas(tx.Gas())
 			}
 			if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), gp1559); err != nil {
 				return AccountRangeResult{}, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
@@ -799,7 +804,7 @@ func (api *RetestethAPI) StorageRangeAt(ctx context.Context,
 			vmenv := vm.NewEVM(context, statedb, api.blockchain.Config(), vm.Config{})
 			var gp1559 *core.GasPool
 			if vmenv.ChainConfig().IsEIP1559(block.Number()) {
-				gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+				gp1559 = new(core.GasPool).AddGas(tx.Gas())
 			}
 			if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), gp1559); err != nil {
 				return StorageRangeResult{}, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)

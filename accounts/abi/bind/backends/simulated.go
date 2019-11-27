@@ -565,7 +565,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	gaspool := new(core.GasPool).AddGas(math.MaxUint64)
 	var gp1559 *core.GasPool
 	if b.config.IsEIP1559(block.Number()) {
-		gp1559 = new(core.GasPool).AddGas(params.MaxGasEIP1559)
+		gp1559 = new(core.GasPool).AddGas(math.MaxUint64)
 	}
 
 	return core.NewStateTransition(vmenv, msg, gaspool, gp1559).TransitionDb()

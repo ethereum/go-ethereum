@@ -51,11 +51,18 @@ func newStatePrefetcher(config *params.ChainConfig, bc *BlockChain, engine conse
 func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, cfg vm.Config, interrupt *uint32) {
 	var (
 		header  = block.Header()
-		gaspool = new(GasPool).AddGas(block.GasLimit())
+		gaspool *GasPool
 		gp1559  *GasPool
 	)
+	// If EIP1559 is initialized then header.GasLimit is for the EIP1559 pool
+	// and the difference between the MaxGasEIP1559 and header.GasLimit is the limit for the legacy pool
+	// Once EIP1559 is finalized the header.GasLimit is the entire MaxGasEIP1559
+	// so no gas will be allocated to the legacy pool
 	if p.config.IsEIP1559(block.Number()) {
-		gp1559 = new(GasPool).AddGas(params.MaxGasEIP1559)
+		gaspool = new(GasPool).AddGas(params.MaxGasEIP1559 - block.GasLimit())
+		gp1559 = new(GasPool).AddGas(block.GasLimit())
+	} else { // If we are before EIP1559 initialization then we use header.GasLimit for the legacy pool
+		gaspool = new(GasPool).AddGas(block.GasLimit())
 	}
 	// Iterate over and process the individual transactions
 	byzantium := p.config.IsByzantium(block.Number())
