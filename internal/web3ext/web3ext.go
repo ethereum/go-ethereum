@@ -74,7 +74,7 @@ web3._extend({
 			name: 'getSnapshot',
 			call: 'clique_getSnapshot',
 			params: 1,
-			inputFormatter: [null]
+			inputFormatter: [web3._extend.utils.fromDecimal]
 		}),
 		new web3._extend.Method({
 			name: 'getSnapshotAtHash',
@@ -85,7 +85,7 @@ web3._extend({
 			name: 'getSigners',
 			call: 'clique_getSigners',
 			params: 1,
-			inputFormatter: [null]
+			inputFormatter: [web3._extend.utils.fromDecimal]
 		}),
 		new web3._extend.Method({
 			name: 'getSignersAtHash',
@@ -101,6 +101,11 @@ web3._extend({
 			name: 'discard',
 			call: 'clique_discard',
 			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'status',
+			call: 'clique_status',
+			params: 0
 		}),
 	],
 	properties: [
@@ -444,6 +449,11 @@ web3._extend({
 			call: 'debug_getModifiedAccountsByHash',
 			params: 2,
 			inputFormatter:[null, null],
+		}),
+		new web3._extend.Method({
+			name: 'freezeClient',
+			call: 'debug_freezeClient',
+			params: 1,
 		}),
 	],
 	properties: []
@@ -798,6 +808,31 @@ web3._extend({
 			call: 'les_getCheckpoint',
 			params: 1
 		}),
+		new web3._extend.Method({
+			name: 'clientInfo',
+			call: 'les_clientInfo',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'priorityClientInfo',
+			call: 'les_priorityClientInfo',
+			params: 3
+		}),
+		new web3._extend.Method({
+			name: 'setClientParams',
+			call: 'les_setClientParams',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'setDefaultParams',
+			call: 'les_setDefaultParams',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'addBalance',
+			call: 'les_addBalance',
+			params: 3
+		}),
 	],
 	properties:
 	[
@@ -808,6 +843,10 @@ web3._extend({
 		new web3._extend.Property({
 			name: 'checkpointContractAddress',
 			getter: 'les_getCheckpointContractAddress'
+		}),
+		new web3._extend.Property({
+			name: 'serverInfo',
+			getter: 'les_serverInfo'
 		}),
 	]
 });

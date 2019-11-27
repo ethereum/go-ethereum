@@ -173,7 +173,7 @@ func (s *UIServerAPI) Export(ctx context.Context, addr common.Address) (json.Raw
 		return nil, err
 	}
 	if wallet.URL().Scheme != keystore.KeyStoreScheme {
-		return nil, fmt.Errorf("Account is not a keystore-account")
+		return nil, fmt.Errorf("account is not a keystore-account")
 	}
 	return ioutil.ReadFile(wallet.URL().Path)
 }

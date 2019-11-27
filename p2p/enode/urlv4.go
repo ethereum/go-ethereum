@@ -31,7 +31,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
-var incompleteNodeURL = regexp.MustCompile("(?i)^(?:enode://)?([0-9a-f]+)$")
+var (
+	incompleteNodeURL = regexp.MustCompile("(?i)^(?:enode://)?([0-9a-f]+)$")
+	lookupIPFunc      = net.LookupIP
+)
 
 // MustParseV4 parses a node URL. It panics if the URL is not valid.
 func MustParseV4(rawurl string) *Node {
@@ -107,7 +110,6 @@ func isNewV4(n *Node) bool {
 func parseComplete(rawurl string) (*Node, error) {
 	var (
 		id               *ecdsa.PublicKey
-		ip               net.IP
 		tcpPort, udpPort uint64
 	)
 	u, err := url.Parse(rawurl)
@@ -125,11 +127,14 @@ func parseComplete(rawurl string) (*Node, error) {
 		return nil, fmt.Errorf("invalid public key (%v)", err)
 	}
 	// Parse the IP address.
-	ips, err := net.LookupIP(u.Hostname())
-	if err != nil {
-		return nil, err
+	ip := net.ParseIP(u.Hostname())
+	if ip == nil {
+		ips, err := lookupIPFunc(u.Hostname())
+		if err != nil {
+			return nil, err
+		}
+		ip = ips[0]
 	}
-	ip = ips[0]
 	// Ensure the IP is 4 bytes long for IPv4 addresses.
 	if ipv4 := ip.To4(); ipv4 != nil {
 		ip = ipv4

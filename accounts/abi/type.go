@@ -53,6 +53,7 @@ type Type struct {
 	stringKind string // holds the unparsed string for deriving signatures
 
 	// Tuple relative fields
+	TupleRawName  string   // Raw struct name defined in source code, may be empty.
 	TupleElems    []*Type  // Type information of all tuple fields
 	TupleRawNames []string // Raw field name of all tuple fields
 }
@@ -63,7 +64,7 @@ var (
 )
 
 // NewType creates a new reflection type of abi type given in t.
-func NewType(t string, components []ArgumentMarshaling) (typ Type, err error) {
+func NewType(t string, internalType string, components []ArgumentMarshaling) (typ Type, err error) {
 	// check that array brackets are equal if they exist
 	if strings.Count(t, "[") != strings.Count(t, "]") {
 		return Type{}, fmt.Errorf("invalid arg type in abi")
@@ -73,9 +74,14 @@ func NewType(t string, components []ArgumentMarshaling) (typ Type, err error) {
 	// if there are brackets, get ready to go into slice/array mode and
 	// recursively create the type
 	if strings.Count(t, "[") != 0 {
-		i := strings.LastIndex(t, "[")
+		// Note internalType can be empty here.
+		subInternal := internalType
+		if i := strings.LastIndex(internalType, "["); i != -1 {
+			subInternal = subInternal[:i]
+		}
 		// recursively embed the type
-		embeddedType, err := NewType(t[:i], components)
+		i := strings.LastIndex(t, "[")
+		embeddedType, err := NewType(t[:i], subInternal, components)
 		if err != nil {
 			return Type{}, err
 		}
@@ -173,7 +179,7 @@ func NewType(t string, components []ArgumentMarshaling) (typ Type, err error) {
 		)
 		expression += "("
 		for idx, c := range components {
-			cType, err := NewType(c.Type, c.Components)
+			cType, err := NewType(c.Type, c.InternalType, c.Components)
 			if err != nil {
 				return Type{}, err
 			}
@@ -199,6 +205,17 @@ func NewType(t string, components []ArgumentMarshaling) (typ Type, err error) {
 		typ.TupleRawNames = names
 		typ.T = TupleTy
 		typ.stringKind = expression
+
+		const structPrefix = "struct "
+		// After solidity 0.5.10, a new field of abi "internalType"
+		// is introduced. From that we can obtain the struct name
+		// user defined in the source code.
+		if internalType != "" && strings.HasPrefix(internalType, structPrefix) {
+			// Foo.Bar type definition is not allowed in golang,
+			// convert the format to FooBar
+			typ.TupleRawName = strings.Replace(internalType[len(structPrefix):], ".", "", -1)
+		}
+
 	case "function":
 		typ.Kind = reflect.Array
 		typ.T = FunctionTy

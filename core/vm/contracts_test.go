@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -409,6 +410,11 @@ func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
 		} else if common.Bytes2Hex(res) != test.expected {
 			t.Errorf("Expected %v, got %v", test.expected, common.Bytes2Hex(res))
 		}
+		// Verify that the precompile did not touch the input buffer
+		exp := common.Hex2Bytes(test.input)
+		if !bytes.Equal(in, exp) {
+			t.Errorf("Precompiled %v modified input data", addr)
+		}
 	})
 }
 
@@ -422,6 +428,11 @@ func testPrecompiledFailure(addr string, test precompiledFailureTest, t *testing
 		_, err := RunPrecompiledContract(p, in, contract)
 		if !reflect.DeepEqual(err, test.expectedError) {
 			t.Errorf("Expected error [%v], got [%v]", test.expectedError, err)
+		}
+		// Verify that the precompile did not touch the input buffer
+		exp := common.Hex2Bytes(test.input)
+		if !bytes.Equal(in, exp) {
+			t.Errorf("Precompiled %v modified input data", addr)
 		}
 	})
 }
@@ -573,4 +584,56 @@ func TestPrecompileBlake2FMalformedInput(t *testing.T) {
 	for _, test := range blake2FMalformedInputTests {
 		testPrecompiledFailure("09", test, t)
 	}
+}
+
+// EcRecover test vectors
+var ecRecoverTests = []precompiledTest{
+	{
+		input: "a8b53bdf3306a35a7103ab5504a0c9b492295564b6202b1942a84ef300107281" +
+			"000000000000000000000000000000000000000000000000000000000000001b" +
+			"3078356531653033663533636531386237373263636230303933666637316633" +
+			"6635336635633735623734646362333161383561613862383839326234653862" +
+			"1122334455667788991011121314151617181920212223242526272829303132",
+		expected: "",
+		name:     "CallEcrecoverUnrecoverableKey",
+	},
+	{
+		input: "18c547e4f7b0f325ad1e56f57e26c745b09a3e503d86e00e5255ff7f715d3d1c" +
+			"000000000000000000000000000000000000000000000000000000000000001c" +
+			"73b1693892219d736caba55bdb67216e485557ea6b6af75f37096c9aa6a5a75f" +
+			"eeb940b1d03b21e36b0e47e79769f095fe2ab855bd91e3a38756b7d75a9c4549",
+		expected: "000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+		name:     "ValidKey",
+	},
+	{
+		input: "18c547e4f7b0f325ad1e56f57e26c745b09a3e503d86e00e5255ff7f715d3d1c" +
+			"100000000000000000000000000000000000000000000000000000000000001c" +
+			"73b1693892219d736caba55bdb67216e485557ea6b6af75f37096c9aa6a5a75f" +
+			"eeb940b1d03b21e36b0e47e79769f095fe2ab855bd91e3a38756b7d75a9c4549",
+		expected: "",
+		name:     "InvalidHighV-bits-1",
+	},
+	{
+		input: "18c547e4f7b0f325ad1e56f57e26c745b09a3e503d86e00e5255ff7f715d3d1c" +
+			"000000000000000000000000000000000000001000000000000000000000001c" +
+			"73b1693892219d736caba55bdb67216e485557ea6b6af75f37096c9aa6a5a75f" +
+			"eeb940b1d03b21e36b0e47e79769f095fe2ab855bd91e3a38756b7d75a9c4549",
+		expected: "",
+		name:     "InvalidHighV-bits-2",
+	},
+	{
+		input: "18c547e4f7b0f325ad1e56f57e26c745b09a3e503d86e00e5255ff7f715d3d1c" +
+			"000000000000000000000000000000000000001000000000000000000000011c" +
+			"73b1693892219d736caba55bdb67216e485557ea6b6af75f37096c9aa6a5a75f" +
+			"eeb940b1d03b21e36b0e47e79769f095fe2ab855bd91e3a38756b7d75a9c4549",
+		expected: "",
+		name:     "InvalidHighV-bits-3",
+	},
+}
+
+func TestPrecompiledEcrecover(t *testing.T) {
+	for _, test := range ecRecoverTests {
+		testPrecompiled("01", test, t)
+	}
+
 }

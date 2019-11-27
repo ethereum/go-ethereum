@@ -20,6 +20,7 @@ import (
 	"database/sql/driver"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -142,7 +143,7 @@ func (h Hash) Value() (driver.Value, error) {
 }
 
 // ImplementsGraphQLType returns true if Hash implements the specified GraphQL type.
-func (_ Hash) ImplementsGraphQLType(name string) bool { return name == "Bytes32" }
+func (Hash) ImplementsGraphQLType(name string) bool { return name == "Bytes32" }
 
 // UnmarshalGraphQL unmarshals the provided GraphQL query data.
 func (h *Hash) UnmarshalGraphQL(input interface{}) error {
@@ -151,7 +152,7 @@ func (h *Hash) UnmarshalGraphQL(input interface{}) error {
 	case string:
 		err = h.UnmarshalText([]byte(input))
 	default:
-		err = fmt.Errorf("Unexpected type for Bytes32: %v", input)
+		err = fmt.Errorf("unexpected type %T for Hash", input)
 	}
 	return err
 }
@@ -290,7 +291,7 @@ func (a *Address) UnmarshalGraphQL(input interface{}) error {
 	case string:
 		err = a.UnmarshalText([]byte(input))
 	default:
-		err = fmt.Errorf("Unexpected type for Address: %v", input)
+		err = fmt.Errorf("unexpected type %T for Address", input)
 	}
 	return err
 }
@@ -323,7 +324,7 @@ func NewMixedcaseAddress(addr Address) MixedcaseAddress {
 // NewMixedcaseAddressFromString is mainly meant for unit-testing
 func NewMixedcaseAddressFromString(hexaddr string) (*MixedcaseAddress, error) {
 	if !IsHexAddress(hexaddr) {
-		return nil, fmt.Errorf("Invalid address")
+		return nil, errors.New("invalid address")
 	}
 	a := FromHex(hexaddr)
 	return &MixedcaseAddress{addr: BytesToAddress(a), original: hexaddr}, nil

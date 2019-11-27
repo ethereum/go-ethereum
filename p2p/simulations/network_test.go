@@ -81,11 +81,13 @@ func TestSnapshot(t *testing.T) {
 
 	// connect nodes in a ring
 	// spawn separate thread to avoid deadlock in the event listeners
+	connectErr := make(chan error, 1)
 	go func() {
 		for i, id := range ids {
 			peerID := ids[(i+1)%len(ids)]
 			if err := network.Connect(id, peerID); err != nil {
-				t.Fatal(err)
+				connectErr <- err
+				return
 			}
 		}
 	}()
@@ -100,9 +102,10 @@ OUTER:
 		select {
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())
+		case err := <-connectErr:
+			t.Fatal(err)
 		case ev := <-evC:
 			if ev.Type == EventTypeConn && !ev.Control {
-
 				// fail on any disconnect
 				if !ev.Conn.Up {
 					t.Fatalf("unexpected disconnect: %v -> %v", ev.Conn.One, ev.Conn.Other)
@@ -758,27 +761,22 @@ func benchmarkMinimalServiceTmp(b *testing.B) {
 }
 
 func TestNode_UnmarshalJSON(t *testing.T) {
-	t.Run(
-		"test unmarshal of Node up field",
-		func(t *testing.T) {
-			runNodeUnmarshalJSON(t, casesNodeUnmarshalJSONUpField())
-		},
-	)
-	t.Run(
-		"test unmarshal of Node Config field",
-		func(t *testing.T) {
-			runNodeUnmarshalJSON(t, casesNodeUnmarshalJSONConfigField())
-		},
-	)
+	t.Run("up_field", func(t *testing.T) {
+		runNodeUnmarshalJSON(t, casesNodeUnmarshalJSONUpField())
+	})
+	t.Run("config_field", func(t *testing.T) {
+		runNodeUnmarshalJSON(t, casesNodeUnmarshalJSONConfigField())
+	})
 }
 
 func runNodeUnmarshalJSON(t *testing.T, tests []nodeUnmarshalTestCase) {
 	t.Helper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var got Node
-			if err := got.UnmarshalJSON([]byte(tt.marshaled)); err != nil {
+			var got *Node
+			if err := json.Unmarshal([]byte(tt.marshaled), &got); err != nil {
 				expectErrorMessageToContain(t, err, tt.wantErr)
+				got = nil
 			}
 			expectNodeEquality(t, got, tt.want)
 		})
@@ -788,7 +786,7 @@ func runNodeUnmarshalJSON(t *testing.T, tests []nodeUnmarshalTestCase) {
 type nodeUnmarshalTestCase struct {
 	name      string
 	marshaled string
-	want      Node
+	want      *Node
 	wantErr   string
 }
 
@@ -812,7 +810,7 @@ func expectErrorMessageToContain(t *testing.T, got error, want string) {
 	}
 }
 
-func expectNodeEquality(t *testing.T, got Node, want Node) {
+func expectNodeEquality(t *testing.T, got, want *Node) {
 	t.Helper()
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Node.UnmarshalJSON() = %v, want %v", got, want)
@@ -824,23 +822,17 @@ func casesNodeUnmarshalJSONUpField() []nodeUnmarshalTestCase {
 		{
 			name:      "empty json",
 			marshaled: "{}",
-			want: Node{
-				up: false,
-			},
+			want:      newNode(nil, nil, false),
 		},
 		{
 			name:      "a stopped node",
 			marshaled: "{\"up\": false}",
-			want: Node{
-				up: false,
-			},
+			want:      newNode(nil, nil, false),
 		},
 		{
 			name:      "a running node",
 			marshaled: "{\"up\": true}",
-			want: Node{
-				up: true,
-			},
+			want:      newNode(nil, nil, true),
 		},
 		{
 			name:      "invalid JSON value on valid key",
@@ -867,26 +859,17 @@ func casesNodeUnmarshalJSONConfigField() []nodeUnmarshalTestCase {
 		{
 			name:      "Config field is omitted",
 			marshaled: "{}",
-			want: Node{
-				Config: nil,
-			},
+			want:      newNode(nil, nil, false),
 		},
 		{
 			name:      "Config field is nil",
-			marshaled: "{\"config\": nil}",
-			want: Node{
-				Config: nil,
-			},
+			marshaled: "{\"config\": null}",
+			want:      newNode(nil, nil, false),
 		},
 		{
 			name:      "a non default Config field",
 			marshaled: "{\"config\":{\"name\":\"node_ecdd0\",\"port\":44665}}",
-			want: Node{
-				Config: &adapters.NodeConfig{
-					Name: "node_ecdd0",
-					Port: 44665,
-				},
-			},
+			want:      newNode(nil, &adapters.NodeConfig{Name: "node_ecdd0", Port: 44665}, false),
 		},
 	}
 }

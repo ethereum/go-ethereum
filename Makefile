@@ -36,7 +36,7 @@ lint: ## Run linters.
 	build/env.sh go run build/ci.go lint
 
 clean:
-	./build/clean_go_build_cache.sh
+	go clean -cache
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
 
 # The devtools target installs tools required for 'go generate'.

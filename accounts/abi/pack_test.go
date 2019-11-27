@@ -613,7 +613,7 @@ func TestPack(t *testing.T) {
 				"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), // tuple[1].A[1]
 		},
 	} {
-		typ, err := NewType(test.typ, test.components)
+		typ, err := NewType(test.typ, "", test.components)
 		if err != nil {
 			t.Fatalf("%v failed. Unexpected parse error: %v", i, err)
 		}

@@ -358,7 +358,7 @@ func TestJsonFiles(t *testing.T) {
 			continue
 		}
 		var typedData core.TypedData
-		err = json.Unmarshal([]byte(data), &typedData)
+		err = json.Unmarshal(data, &typedData)
 		if err != nil {
 			t.Errorf("Test %d, file %v, json unmarshalling failed: %v", i, fInfo.Name(), err)
 			continue
@@ -390,7 +390,7 @@ func TestFuzzerFiles(t *testing.T) {
 			continue
 		}
 		var typedData core.TypedData
-		err = json.Unmarshal([]byte(data), &typedData)
+		err = json.Unmarshal(data, &typedData)
 		if err != nil {
 			t.Errorf("Test %d, file %v, json unmarshalling failed: %v", i, fInfo.Name(), err)
 			continue

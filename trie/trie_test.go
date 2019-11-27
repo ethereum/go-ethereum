@@ -31,7 +31,6 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -315,16 +314,6 @@ func TestLargeValue(t *testing.T) {
 	trie.Update([]byte("key1"), []byte{99, 99, 99, 99})
 	trie.Update([]byte("key2"), bytes.Repeat([]byte{1}, 32))
 	trie.Hash()
-}
-
-type countingDB struct {
-	ethdb.KeyValueStore
-	gets map[string]int
-}
-
-func (db *countingDB) Get(key []byte) ([]byte, error) {
-	db.gets[string(key)]++
-	return db.KeyValueStore.Get(key)
 }
 
 // randTest performs random trie operations.

@@ -23,6 +23,7 @@ type tmplData struct {
 	Package   string                   // Name of the package to place the generated file in
 	Contracts map[string]*tmplContract // List of contracts to generate into this file
 	Libraries map[string]string        // Map the bytecode's link pattern to the library name
+	Structs   map[string]*tmplStruct   // Contract struct type definitions
 }
 
 // tmplContract contains the data needed to generate an individual contract binding.
@@ -36,8 +37,7 @@ type tmplContract struct {
 	Transacts   map[string]*tmplMethod // Contract calls that write state data
 	Events      map[string]*tmplEvent  // Contract events accessors
 	Libraries   map[string]string      // Same as tmplData, but filtered to only keep what the contract needs
-	Structs     map[string]*tmplStruct // Contract struct type definitions
-	Library     bool
+	Library     bool                   // Indicator whether the contract is a library
 }
 
 // tmplMethod is a wrapper around an abi.Method that contains a few preprocessed
@@ -65,7 +65,7 @@ type tmplField struct {
 // tmplStruct is a wrapper around an abi.tuple contains a auto-generated
 // struct name.
 type tmplStruct struct {
-	Name   string       // Auto-generated struct name(We can't obtain the raw struct name through abi)
+	Name   string       // Auto-generated struct name(before solidity v0.5.11) or raw name.
 	Fields []*tmplField // Struct fields definition depends on the binding language.
 }
 
@@ -108,8 +108,16 @@ var (
 	_ = event.NewSubscription
 )
 
+{{$structs := .Structs}}
+{{range $structs}}
+	// {{.Name}} is an auto generated low-level Go binding around an user-defined struct.
+	type {{.Name}} struct {
+	{{range $field := .Fields}}
+	{{$field.Name}} {{$field.Type}}{{end}}
+	}
+{{end}}
+
 {{range $contract := .Contracts}}
-	{{$structs := $contract.Structs}}
 	// {{.Type}}ABI is the input ABI used to generate the binding from.
 	const {{.Type}}ABI = "{{.InputABI}}"
 
@@ -284,14 +292,6 @@ var (
 	func (_{{$contract.Type}} *{{$contract.Type}}TransactorRaw) Transact(opts *bind.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
 		return _{{$contract.Type}}.Contract.contract.Transact(opts, method, params...)
 	}
-
-	{{range .Structs}}
-		// {{.Name}} is an auto generated low-level Go binding around an user-defined struct.
-		type {{.Name}} struct {
-		{{range $field := .Fields}}
-		{{$field.Name}} {{$field.Type}}{{end}}
-		}
-	{{end}}
 
 	{{range .Calls}}
 		// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.ID}}.
@@ -483,7 +483,7 @@ var (
 
 		// Parse{{.Normalized.Name}} is a log parse operation binding the contract event 0x{{printf "%x" .Original.ID}}.
 		//
-		// Solidity: {{.Original.String}}
+		// Solidity: {{formatevent .Original $structs}}
 		func (_{{$contract.Type}} *{{$contract.Type}}Filterer) Parse{{.Normalized.Name}}(log types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
 			event := new({{$contract.Type}}{{.Normalized.Name}})
 			if err := _{{$contract.Type}}.contract.UnpackLog(event, "{{.Original.Name}}", log); err != nil {
@@ -507,8 +507,8 @@ package {{.Package}};
 import org.ethereum.geth.*;
 import java.util.*;
 
+{{$structs := .Structs}}
 {{range $contract := .Contracts}}
-{{$structs := $contract.Structs}}
 {{if not .Library}}public {{end}}class {{.Type}} {
 	// ABI is the input ABI used to generate the binding from.
 	public final static String ABI = "{{.InputABI}}";

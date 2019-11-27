@@ -185,28 +185,6 @@ func GlobalBig(ctx *cli.Context, name string) *big.Int {
 	return (*big.Int)(val.(*bigValue))
 }
 
-func prefixFor(name string) (prefix string) {
-	if len(name) == 1 {
-		prefix = "-"
-	} else {
-		prefix = "--"
-	}
-
-	return
-}
-
-func prefixedNames(fullName string) (prefixed string) {
-	parts := strings.Split(fullName, ",")
-	for i, name := range parts {
-		name = strings.Trim(name, " ")
-		prefixed += prefixFor(name) + name
-		if i < len(parts)-1 {
-			prefixed += ", "
-		}
-	}
-	return
-}
-
 // Expands a file path
 // 1. replace tilde with users home dir
 // 2. expands embedded environment variables

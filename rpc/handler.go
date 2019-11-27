@@ -85,8 +85,8 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 		serverSubs:     make(map[ID]*Subscription),
 		log:            log.Root(),
 	}
-	if conn.RemoteAddr() != "" {
-		h.log = h.log.New("conn", conn.RemoteAddr())
+	if conn.remoteAddr() != "" {
+		h.log = h.log.New("conn", conn.remoteAddr())
 	}
 	h.unsubscribeCb = newCallback(reflect.Value{}, reflect.ValueOf(h.unsubscribe))
 	return h
@@ -97,7 +97,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	// Emit error response for empty batches:
 	if len(msgs) == 0 {
 		h.startCallProc(func(cp *callProc) {
-			h.conn.Write(cp.ctx, errorMessage(&invalidRequestError{"empty batch"}))
+			h.conn.writeJSON(cp.ctx, errorMessage(&invalidRequestError{"empty batch"}))
 		})
 		return
 	}
@@ -122,7 +122,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 		}
 		h.addSubscriptions(cp.notifiers)
 		if len(answers) > 0 {
-			h.conn.Write(cp.ctx, answers)
+			h.conn.writeJSON(cp.ctx, answers)
 		}
 		for _, n := range cp.notifiers {
 			n.activate()
@@ -139,7 +139,7 @@ func (h *handler) handleMsg(msg *jsonrpcMessage) {
 		answer := h.handleCallMsg(cp, msg)
 		h.addSubscriptions(cp.notifiers)
 		if answer != nil {
-			h.conn.Write(cp.ctx, answer)
+			h.conn.writeJSON(cp.ctx, answer)
 		}
 		for _, n := range cp.notifiers {
 			n.activate()
@@ -189,7 +189,7 @@ func (h *handler) cancelAllRequests(err error, inflightReq *requestOp) {
 	}
 	for id, sub := range h.clientSubs {
 		delete(h.clientSubs, id)
-		sub.quitWithError(err, false)
+		sub.quitWithError(false, err)
 	}
 }
 

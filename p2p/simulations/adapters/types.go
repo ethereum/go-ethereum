@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/gorilla/websocket"
 )
 
 // Node represents a node in a simulation network which is created by a
@@ -51,7 +52,7 @@ type Node interface {
 	Client() (*rpc.Client, error)
 
 	// ServeRPC serves RPC requests over the given connection
-	ServeRPC(net.Conn) error
+	ServeRPC(*websocket.Conn) error
 
 	// Start starts the node with the given snapshots
 	Start(snapshots map[string][]byte) error

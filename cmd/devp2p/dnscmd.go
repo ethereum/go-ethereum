@@ -109,7 +109,8 @@ func dnsSync(ctx *cli.Context) error {
 	}
 	def := treeToDefinition(url, t)
 	def.Meta.LastModified = time.Now()
-	writeTreeDefinition(outdir, def)
+	writeTreeMetadata(outdir, def)
+	writeTreeNodes(outdir, def)
 	return nil
 }
 
@@ -151,7 +152,7 @@ func dnsSign(ctx *cli.Context) error {
 
 	def = treeToDefinition(url, t)
 	def.Meta.LastModified = time.Now()
-	writeTreeDefinition(defdir, def)
+	writeTreeMetadata(defdir, def)
 	return nil
 }
 
@@ -315,24 +316,26 @@ func ensureValidTreeSignature(t *dnsdisc.Tree, pubkey *ecdsa.PublicKey, sig stri
 	return nil
 }
 
-// writeTreeDefinition writes a DNS node tree definition to the given directory.
-func writeTreeDefinition(directory string, def *dnsDefinition) {
+// writeTreeMetadata writes a DNS node tree metadata file to the given directory.
+func writeTreeMetadata(directory string, def *dnsDefinition) {
 	metaJSON, err := json.MarshalIndent(&def.Meta, "", jsonIndent)
 	if err != nil {
 		exit(err)
 	}
-	// Convert nodes.
-	nodes := make(nodeSet, len(def.Nodes))
-	nodes.add(def.Nodes...)
-	// Write.
 	if err := os.Mkdir(directory, 0744); err != nil && !os.IsExist(err) {
 		exit(err)
 	}
-	metaFile, nodesFile := treeDefinitionFiles(directory)
-	writeNodesJSON(nodesFile, nodes)
+	metaFile, _ := treeDefinitionFiles(directory)
 	if err := ioutil.WriteFile(metaFile, metaJSON, 0644); err != nil {
 		exit(err)
 	}
+}
+
+func writeTreeNodes(directory string, def *dnsDefinition) {
+	ns := make(nodeSet, len(def.Nodes))
+	ns.add(def.Nodes...)
+	_, nodesFile := treeDefinitionFiles(directory)
+	writeNodesJSON(nodesFile, ns)
 }
 
 func treeDefinitionFiles(directory string) (string, string) {
