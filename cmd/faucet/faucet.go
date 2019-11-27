@@ -351,7 +351,8 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 
 		if head == nil || balance == nil {
 			// Report the faucet offline until initial stats are ready
-			if err = sendError(conn, errors.New("faucet offline")); err != nil {
+			//lint:ignore ST1005 This error is to be displayed in the browser
+			if err = sendError(conn, errors.New("Faucet offline")); err != nil {
 				log.Warn("failed to send faucet error to client", "err", err)
 				return
 			}
@@ -392,7 +393,8 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if msg.Tier >= uint(*tiersFlag) {
-			if err = sendError(conn, errors.New("invalid funding tier requested")); err != nil {
+			//lint:ignore ST1005 This error is to be displayed in the browser
+			if err = sendError(conn, errors.New("Invalid funding tier requested")); err != nil {
 				log.Warn("Failed to send tier error to client", "err", err)
 				return
 			}
@@ -430,7 +432,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 			if !result.Success {
 				log.Warn("Captcha verification failed", "err", string(result.Errors))
 				//lint:ignore ST1005 it's funny and the robot won't mind
-				if err = sendError(conn, errors.New("beep-bop, you're a robot!")); err != nil {
+				if err = sendError(conn, errors.New("Beep-bop, you're a robot!")); err != nil {
 					log.Warn("Failed to send captcha failure to client", "err", err)
 					return
 				}
@@ -464,7 +466,8 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 		case *noauthFlag:
 			username, avatar, address, err = authNoAuth(msg.URL)
 		default:
-			err = errors.New("something funky happened, please open an issue at https://github.com/ethereum/go-ethereum/issues")
+			//lint:ignore ST1005 This error is to be displayed in the browser
+			err = errors.New("Something funky happened, please open an issue at https://github.com/ethereum/go-ethereum/issues")
 		}
 		if err != nil {
 			if err = sendError(conn, err); err != nil {
@@ -684,7 +687,8 @@ func authTwitter(url string) (string, string, common.Address, error) {
 	// Ensure the user specified a meaningful URL, no fancy nonsense
 	parts := strings.Split(url, "/")
 	if len(parts) < 4 || parts[len(parts)-2] != "status" {
-		return "", "", common.Address{}, errors.New("invalid Twitter status URL")
+		//lint:ignore ST1005 This error is to be displayed in the browser
+		return "", "", common.Address{}, errors.New("Invalid Twitter status URL")
 	}
 	// Twitter's API isn't really friendly with direct links. Still, we don't
 	// want to do ask read permissions from users, so just load the public posts and
@@ -698,7 +702,8 @@ func authTwitter(url string) (string, string, common.Address, error) {
 	// Resolve the username from the final redirect, no intermediate junk
 	parts = strings.Split(res.Request.URL.String(), "/")
 	if len(parts) < 4 || parts[len(parts)-2] != "status" {
-		return "", "", common.Address{}, errors.New("invalid Twitter status URL")
+		//lint:ignore ST1005 This error is to be displayed in the browser
+		return "", "", common.Address{}, errors.New("Invalid Twitter status URL")
 	}
 	username := parts[len(parts)-3]
 
@@ -708,7 +713,8 @@ func authTwitter(url string) (string, string, common.Address, error) {
 	}
 	address := common.HexToAddress(string(regexp.MustCompile("0x[0-9a-fA-F]{40}").Find(body)))
 	if address == (common.Address{}) {
-		return "", "", common.Address{}, errors.New("no Ethereum address found to fund")
+		//lint:ignore ST1005 This error is to be displayed in the browser
+		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
 	}
 	var avatar string
 	if parts = regexp.MustCompile("src=\"([^\"]+twimg.com/profile_images[^\"]+)\"").FindStringSubmatch(string(body)); len(parts) == 2 {
@@ -723,7 +729,8 @@ func authFacebook(url string) (string, string, common.Address, error) {
 	// Ensure the user specified a meaningful URL, no fancy nonsense
 	parts := strings.Split(url, "/")
 	if len(parts) < 4 || parts[len(parts)-2] != "posts" {
-		return "", "", common.Address{}, errors.New("invalid Facebook post URL")
+		//lint:ignore ST1005 This error is to be displayed in the browser
+		return "", "", common.Address{}, errors.New("Invalid Facebook post URL")
 	}
 	username := parts[len(parts)-3]
 
@@ -742,7 +749,8 @@ func authFacebook(url string) (string, string, common.Address, error) {
 	}
 	address := common.HexToAddress(string(regexp.MustCompile("0x[0-9a-fA-F]{40}").Find(body)))
 	if address == (common.Address{}) {
-		return "", "", common.Address{}, errors.New("no Ethereum address found to fund")
+		//lint:ignore ST1005 This error is to be displayed in the browser
+		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
 	}
 	var avatar string
 	if parts = regexp.MustCompile("src=\"([^\"]+fbcdn.net[^\"]+)\"").FindStringSubmatch(string(body)); len(parts) == 2 {
@@ -757,7 +765,8 @@ func authFacebook(url string) (string, string, common.Address, error) {
 func authNoAuth(url string) (string, string, common.Address, error) {
 	address := common.HexToAddress(regexp.MustCompile("0x[0-9a-fA-F]{40}").FindString(url))
 	if address == (common.Address{}) {
-		return "", "", common.Address{}, errors.New("no Ethereum address found to fund")
+		//lint:ignore ST1005 This error is to be displayed in the browser
+		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
 	}
 	return address.Hex() + "@noauth", "", address, nil
 }
