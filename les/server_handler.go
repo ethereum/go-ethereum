@@ -20,7 +20,9 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -130,7 +132,7 @@ func (h *serverHandler) handle(p *peer) error {
 	}
 	// Reject light clients if server is not synced.
 	if !h.synced() {
-		return p2p.DiscRequested
+		//return p2p.DiscRequested
 	}
 	defer p.fcClient.Disconnect()
 
@@ -982,11 +984,21 @@ func (h *serverHandler) broadcastHeaders() {
 }
 
 func (h *serverHandler) talkRequestHandler(id enode.ID, addr *net.UDPAddr, payload interface{}) (interface{}, bool) {
-	cmds, ok := payload.([][]byte)
+	fmt.Println("talkRequestHandler", id, addr, payload, reflect.TypeOf(payload))
+	c, ok := payload.([]interface{})
 	if !ok {
 		return nil, false
 	}
+	cmds := make([][]byte, len(c))
+	for i, c := range c {
+		cmds[i], ok = c.([]byte)
+		if !ok {
+			fmt.Println("type err", reflect.TypeOf(c))
+			return nil, false
+		}
+	}
+	fmt.Println("ok", ok)
 	results := h.server.tokenSale.runCommands(cmds, id, addr.IP.String())
-	res, _ := rlp.EncodeToBytes(&results)
-	return res, true
+	fmt.Println("results", results)
+	return results, true
 }

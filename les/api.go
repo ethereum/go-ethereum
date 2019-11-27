@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -376,10 +377,13 @@ func (api *PrivateLespayAPI) makeCall(ctx context.Context, remote bool, nodeStr 
 		freeID string
 		peer   *peer
 		node   *enode.Node
+		err    error
 	)
 	if nodeStr != "" {
-		if peer = api.peerSet.Peer(nodeStr); peer != nil {
-			id = peer.ID()
+		if id, err = enode.ParseID(nodeStr); err == nil {
+			if peer = api.peerSet.Peer(peerIdToString(id)); peer == nil {
+				return nil, errors.New("peer not connected")
+			}
 			freeID = peer.freeClientId()
 		} else {
 			var err error
@@ -416,18 +420,25 @@ func (api *PrivateLespayAPI) makeCall(ctx context.Context, remote bool, nodeStr 
 				return nil, errors.New("UDP DHT not available")
 			}
 			cancelFn = api.dht.SendTalkRequest(node, "lespay", [][]byte{cmd}, func(payload interface{}) bool {
-				if replies, ok := payload.([][]byte); ok && len(replies) == 1 {
-					reply = replies[0]
+				fmt.Println("dht delivered", payload, reflect.TypeOf(payload))
+				if replies, ok := payload.([]interface{}); ok && len(replies) == 1 {
+					reply, ok = replies[0].([]byte)
 				}
 				close(delivered)
 				return reply != nil
 			})
 		}
 		select {
+		case <-time.After(time.Second * 5):
+			cancelFn()
+			return nil, errors.New("timeout")
 		case <-ctx.Done():
 			cancelFn()
 			return nil, ctx.Err()
 		case <-delivered:
+			if len(reply) == 0 {
+				return nil, errors.New("unknown command")
+			}
 			return reply, nil
 		}
 	} else {
@@ -444,10 +455,13 @@ func (api *PrivateLespayAPI) Connection(ctx context.Context, remote bool, node s
 	params := tsConnectionParams{requestedCapacity, stayConnected, paymentModule, setCap}
 	enc, _ := rlp.EncodeToBytes(&params)
 	var resEnc []byte
-	resEnc, err = api.makeCall(ctx, remote, node, enc)
+	fmt.Println("makeCall", remote, node, enc)
+	resEnc, err = api.makeCall(ctx, remote, node, append([]byte{tsConnection}, enc...))
 	if err != nil {
+		fmt.Println("makeCall err", err)
 		return
 	}
 	err = rlp.DecodeBytes(resEnc, &results)
+	fmt.Println("decode err", err)
 	return
 }

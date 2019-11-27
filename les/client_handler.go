@@ -17,6 +17,7 @@
 package les
 
 import (
+	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -316,19 +317,24 @@ func (h *clientHandler) handleMsg(p *peer) error {
 		p.freezeServer(false)
 		p.Log().Debug("Service resumed")
 	case LespayReplyMsg:
+		fmt.Println("LespayReply received")
 		p.Log().Trace("Received tx status response")
 		var resp struct {
 			ReqID   uint64
 			Replies [][]byte
 		}
 		if err := msg.Decode(&resp); err != nil {
+			fmt.Println("LespayReply decode err", err)
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
+		fmt.Println("LespayReply decoded", resp)
 		h.lespayReplyLock.Lock()
 		if handler := h.lespayReplyHandlers[resp.ReqID]; handler != nil {
+			fmt.Println("handler found")
 			delete(h.lespayReplyHandlers, resp.ReqID)
 			responseError = !handler(resp.Replies)
 		} else {
+			fmt.Println("handler not found")
 			responseError = true
 		}
 		h.lespayReplyLock.Unlock()
@@ -354,9 +360,16 @@ func (h *clientHandler) handleMsg(p *peer) error {
 
 func (h *clientHandler) makeLespayCall(p *peer, cmds [][]byte, handler func([][]byte) bool) func() bool {
 	reqID := genReqID()
+	h.lespayReplyLock.Lock()
+	h.lespayReplyHandlers[reqID] = handler
+	h.lespayReplyLock.Unlock()
 	if p.SendLespay(reqID, cmds) != nil {
+		h.lespayReplyLock.Lock()
+		delete(h.lespayReplyHandlers, reqID)
+		h.lespayReplyLock.Unlock()
 		return nil
 	}
+	fmt.Println("Lespay sent")
 	return func() bool {
 		h.lespayReplyLock.Lock()
 		cancel := h.lespayReplyHandlers[reqID] != nil

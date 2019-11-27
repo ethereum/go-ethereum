@@ -367,7 +367,9 @@ func (t *tokenSale) runCommand(cmd []byte, id enode.ID, freeID string) []byte {
 		)
 		if err := rlp.DecodeBytes(cmd[1:], &params); err == nil {
 			results.PcValue, results.PcBalance, err = t.deposit(id, params.PaymentModule, params.ProofOfPayment)
-			results.Err = err.Error()
+			if err != nil {
+				results.Err = err.Error()
+			}
 			res, _ = rlp.EncodeToBytes(&results)
 		}
 	case tsBuyTokens:
@@ -388,7 +390,9 @@ func (t *tokenSale) runCommand(cmd []byte, id enode.ID, freeID string) []byte {
 		if err := rlp.DecodeBytes(cmd[1:], &params); err == nil {
 			results.AvailableCapacity, results.TokenBalance, results.TokensMissing, results.PcBalance, results.PcMissing, results.PaymentRequired, err =
 				t.connection(id, freeID, params.RequestedCapacity, time.Duration(params.StayConnected)*time.Second, params.PaymentModule, params.SetCap)
-			results.Err = err.Error()
+			if err != nil {
+				results.Err = err.Error()
+			}
 			res, _ = rlp.EncodeToBytes(&results)
 		}
 	}

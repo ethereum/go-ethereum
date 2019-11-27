@@ -432,9 +432,11 @@ loop:
 
 		// Ingress packet handling.
 		case pkt := <-net.read:
-			//fmt.Println("read", pkt.ev)
 			log.Trace("<-net.read")
 			n := net.internNode(&pkt)
+			if pkt.ev == talkRequestPacket {
+				fmt.Println("read trp", n.state, pkt)
+			}
 			prestate := n.state
 			status := "ok"
 			if err := net.handle(n, pkt.ev, &pkt); err != nil {
@@ -722,10 +724,16 @@ func (net *Network) refresh(done chan<- struct{}) {
 
 func (net *Network) internNode(pkt *ingressPacket) *Node {
 	if n := net.nodes[pkt.remoteID]; n != nil {
+		if pkt.ev == talkRequestPacket {
+			fmt.Println("node exists")
+		}
 		n.IP = pkt.remoteAddr.IP
 		n.UDP = uint16(pkt.remoteAddr.Port)
 		n.TCP = uint16(pkt.remoteAddr.Port)
 		return n
+	}
+	if pkt.ev == talkRequestPacket {
+		fmt.Println("node created")
 	}
 	n := NewNode(pkt.remoteID, pkt.remoteAddr.IP, uint16(pkt.remoteAddr.Port), uint16(pkt.remoteAddr.Port))
 	n.state = unknown
@@ -1061,7 +1069,7 @@ func (net *Network) handle(n *Node, ev nodeEvent, pkt *ingressPacket) error {
 	//fmt.Println("handle", n.addr().String(), n.state, ev)
 	if pkt != nil {
 		if err := net.checkPacket(n, ev, pkt); err != nil {
-			//fmt.Println("check err:", err)
+			//fmt.Println("check err:", err, pkt)
 			return err
 		}
 		// Start the background expiration goroutine after the first
@@ -1076,6 +1084,7 @@ func (net *Network) handle(n *Node, ev nodeEvent, pkt *ingressPacket) error {
 	if n.state == nil {
 		n.state = unknown //???
 	}
+	//fmt.Println("old state:", n.state)
 	next, err := n.state.handle(net, n, ev, pkt)
 	net.transition(n, next)
 	//fmt.Println("new state:", n.state)
@@ -1241,8 +1250,10 @@ func (net *Network) handleQueryEvent(n *Node, ev nodeEvent, pkt *ingressPacket) 
 		net.talkRequestSubLock.RLock()
 		subFn := net.talkRequestSubs[string(p.TalkID)]
 		net.talkRequestSubLock.RUnlock()
+		fmt.Println("trp", p)
 		if subFn != nil {
 			resp, ok := subFn(enode.ID(n.sha), n.addr(), p.Payload)
+			fmt.Println("subFn", ok)
 			if ok {
 				net.conn.send(n, talkResponsePacket, talkResponse{ReplyTok: pkt.hash, Payload: resp})
 			} else {
@@ -1367,7 +1378,7 @@ func (q *talkQuery) start(net *Network) bool {
 		q.key = string(q.remote.sha[:]) + string(hash[:])
 		net.talkResponseSubs[q.key] = q.handler
 		net.talkResponseSubLock.Unlock()
-		fmt.Println("sent")
+		fmt.Println("sent", q.remote.state)
 		return true
 	}
 	// If the node is not known yet, it won't accept queries.
@@ -1397,6 +1408,9 @@ func (net *Network) SendTalkRequest(to *enode.Node, talkID string, payload inter
 		net.nodes[nodeID] = node
 	}
 	q := &talkQuery{remote: node, talkID: talkID, payload: payload, handler: handler}
+	if node.state == nil || !node.state.canQuery {
+		net.ping(node, node.addr())
+	}
 	select {
 	case net.queryReq <- q:
 	case <-net.closed:

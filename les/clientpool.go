@@ -594,19 +594,21 @@ func (f *clientPool) setCapacity(id enode.ID, freeID string, capacity uint64, mi
 	if missing != 0 {
 		return missing, capacity, errNoPriority
 	}
-	if setCap && c == nil {
-		return missing, capacity, fmt.Errorf("client %064x is not connected", c.id[:])
-	}
 	// capacity update is possible
-	f.connectedCap += capacity - c.capacity
-	f.updateFullRatio()
-	f.priorityConnected += capacity - c.capacity
-	c.capacity = capacity
-	c.balanceTracker.setCapacity(capacity)
-	f.connectedQueue.Update(c.queueIndex)
-	totalConnectedGauge.Update(int64(f.connectedCap))
-	updatePriceFactors(&c.balanceTracker, c.posFactors, c.negFactors, c.capacity)
-	c.peer.updateCapacity(c.capacity)
+	if setCap {
+		if c == nil {
+			return 0, capacity, fmt.Errorf("client %064x is not connected", c.id[:])
+		}
+		f.connectedCap += capacity - c.capacity
+		f.updateFullRatio()
+		f.priorityConnected += capacity - c.capacity
+		c.capacity = capacity
+		c.balanceTracker.setCapacity(capacity)
+		f.connectedQueue.Update(c.queueIndex)
+		totalConnectedGauge.Update(int64(f.connectedCap))
+		updatePriceFactors(&c.balanceTracker, c.posFactors, c.negFactors, c.capacity)
+		c.peer.updateCapacity(c.capacity)
+	}
 	return 0, capacity, nil
 }
 
