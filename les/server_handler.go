@@ -835,21 +835,17 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 		}
 		var req struct {
 			ReqID uint64
-			Cmds  [][]byte
+			Cmd   []byte
 		}
 		if err := msg.Decode(&req); err != nil {
 			clientErrorMeter.Mark(1)
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		replies := h.server.tokenSale.runCommands(req.Cmds, p.ID(), p.freeClientId())
-		p.ReplyLespay(req.ReqID, replies)
+		reply := h.server.tokenSale.runCommand(req.Cmd, p.ID(), p.freeClientId())
+		p.ReplyLespay(req.ReqID, reply)
 		if metrics.EnabledExpensive {
 			miscOutLespayPacketsMeter.Mark(1)
-			var size int64
-			for _, r := range replies {
-				size += int64(len(r))
-			}
-			miscOutLespayTrafficMeter.Mark(size)
+			miscOutLespayTrafficMeter.Mark(int64(len(reply)))
 		}
 
 	default:

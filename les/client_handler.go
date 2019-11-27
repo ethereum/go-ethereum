@@ -41,7 +41,7 @@ type clientHandler struct {
 	downloader *downloader.Downloader
 	backend    *LightEthereum
 
-	lespayReplyHandlers map[uint64]func([][]byte) bool
+	lespayReplyHandlers map[uint64]func([]byte) bool
 	lespayReplyLock     sync.Mutex
 
 	closeCh  chan struct{}
@@ -54,7 +54,7 @@ func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.T
 		checkpoint:          checkpoint,
 		backend:             backend,
 		closeCh:             make(chan struct{}),
-		lespayReplyHandlers: make(map[uint64]func([][]byte) bool),
+		lespayReplyHandlers: make(map[uint64]func([]byte) bool),
 	}
 	if ulcServers != nil {
 		ulc, err := newULC(ulcServers, ulcFraction)
@@ -320,8 +320,8 @@ func (h *clientHandler) handleMsg(p *peer) error {
 		fmt.Println("LespayReply received")
 		p.Log().Trace("Received tx status response")
 		var resp struct {
-			ReqID   uint64
-			Replies [][]byte
+			ReqID uint64
+			Reply []byte
 		}
 		if err := msg.Decode(&resp); err != nil {
 			fmt.Println("LespayReply decode err", err)
@@ -332,7 +332,7 @@ func (h *clientHandler) handleMsg(p *peer) error {
 		if handler := h.lespayReplyHandlers[resp.ReqID]; handler != nil {
 			fmt.Println("handler found")
 			delete(h.lespayReplyHandlers, resp.ReqID)
-			responseError = !handler(resp.Replies)
+			responseError = !handler(resp.Reply)
 		} else {
 			fmt.Println("handler not found")
 			responseError = true
@@ -358,12 +358,12 @@ func (h *clientHandler) handleMsg(p *peer) error {
 	return nil
 }
 
-func (h *clientHandler) makeLespayCall(p *peer, cmds [][]byte, handler func([][]byte) bool) func() bool {
+func (h *clientHandler) makeLespayCall(p *peer, cmd []byte, handler func([]byte) bool) func() bool {
 	reqID := genReqID()
 	h.lespayReplyLock.Lock()
 	h.lespayReplyHandlers[reqID] = handler
 	h.lespayReplyLock.Unlock()
-	if p.SendLespay(reqID, cmds) != nil {
+	if p.SendLespay(reqID, cmd) != nil {
 		h.lespayReplyLock.Lock()
 		delete(h.lespayReplyHandlers, reqID)
 		h.lespayReplyLock.Unlock()

@@ -407,10 +407,8 @@ func (api *PrivateLespayAPI) makeCall(ctx context.Context, remote bool, nodeStr 
 			if api.clientHandler == nil {
 				return nil, errors.New("client handler not available")
 			}
-			cancelFn = api.clientHandler.makeLespayCall(peer, [][]byte{cmd}, func(replies [][]byte) bool {
-				if len(replies) == 1 {
-					reply = replies[0]
-				}
+			cancelFn = api.clientHandler.makeLespayCall(peer, cmd, func(r []byte) bool {
+				reply = r
 				close(delivered)
 				return reply != nil
 			})
