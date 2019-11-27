@@ -217,6 +217,9 @@ func TestSimulatedBackend_BlockByNumber(t *testing.T) {
 	}
 
 	blockByNumber, err := sim.BlockByNumber(bgCtx, big.NewInt(1))
+	if err != nil {
+		t.Errorf("could not get block by number: %v", err)
+	}
 	if blockByNumber.Hash() != block.Hash() {
 		t.Errorf("did not get the same block with height of 1 as before")
 	}
@@ -623,6 +626,9 @@ func TestSimulatedBackend_PendingNonceAt(t *testing.T) {
 		t.Errorf("could not sign tx: %v", err)
 	}
 	err = sim.SendTransaction(bgCtx, signedTx)
+	if err != nil {
+		t.Errorf("could not send tx: %v", err)
+	}
 
 	// expect pending nonce to be 2 since account now has two transactions
 	pendingNonce, err = sim.PendingNonceAt(bgCtx, testAddr)
