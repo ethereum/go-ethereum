@@ -30,7 +30,7 @@ import (
 const basePriceTC = time.Hour * 10
 
 type paymentReceiver interface {
-	info() []byte
+	info() keyValueList
 	receivePayment(from enode.ID, proofOfPayment, oldMeta []byte) (value uint64, newMeta []byte, err error)
 	requestPayment(from enode.ID, value uint64, meta []byte) uint64
 }
@@ -40,6 +40,7 @@ type tokenSale struct {
 	clientPool              *clientPool
 	stopCh                  chan struct{}
 	receivers               map[string]paymentReceiver
+	receiverNames           []string
 	basePrice, minBasePrice float64
 }
 
@@ -249,12 +250,19 @@ func (t *tokenSale) buyTokens(id enode.ID, maxSpend, minReceive uint64, spendAll
 	return
 }
 
-func (t *tokenSale) paymentInfo(paymentModule []string) [][]byte {
+func (t *tokenSale) info() (version, compatible uint, info keyValueList, receivers []string) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	res := make([][]byte, len(paymentModule))
-	for i, id := range paymentModule {
+	return 1, 1, keyValueList{}, t.receiverNames
+}
+
+func (t *tokenSale) receiverInfo(receiverIDs []string) []keyValueList {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	res := make([]keyValueList, len(receiverIDs))
+	for i, id := range receiverIDs {
 		if rec, ok := t.receivers[id]; ok {
 			res[i] = rec.info()
 		}
@@ -314,13 +322,21 @@ func (t *tokenSaleMeta) DecodeRLP(s *rlp.Stream) error {
 
 const (
 	tsInfo = iota
+	tsReceiverInfo
 	tsDeposit
 	tsBuyTokens
 	tsConnection
 )
 
 type (
-	tsDepositParams struct {
+	tsInfoResults struct {
+		Version, Compatible uint
+		Info                keyValueList
+		Receivers           []string
+	}
+	tsReceiverInfoParams  []string
+	tsReceiverInfoResults []keyValueList
+	tsDepositParams       struct {
 		PaymentModule  string
 		ProofOfPayment []byte
 	}
@@ -352,12 +368,18 @@ func (t *tokenSale) runCommand(cmd []byte, id enode.ID, freeID string) []byte {
 	var res []byte
 	switch cmd[0] {
 	case tsInfo:
+		var results tsInfoResults
+		if len(cmd) == 1 {
+			results.Version, results.Compatible, results.Info, results.Receivers = t.info()
+			res, _ = rlp.EncodeToBytes(&results)
+		}
+	case tsReceiverInfo:
 		var (
-			params  []string
-			results [][]byte
+			params  tsReceiverInfoParams
+			results tsReceiverInfoResults
 		)
 		if err := rlp.DecodeBytes(cmd[1:], &params); err == nil {
-			results = t.paymentInfo(params)
+			results = t.receiverInfo(params)
 			res, _ = rlp.EncodeToBytes(&results)
 		}
 	case tsDeposit:
