@@ -55,10 +55,10 @@ func InitDatabaseFromFreezer(db ethdb.Database) error {
 				if n >= frozen {
 					return
 				}
-				// Retrieve the block from the freezer (no need for the hash, we pull by
-				// number from the freezer). If successful, pre-cache the block hash and
-				// the individual transaction hashes for storing into the database.
-				block := ReadBlock(db, common.Hash{}, n)
+				// Retrieve the block from the freezer. If successful, pre-cache
+				// the block hash and the individual transaction hashes for storing
+				// into the database.
+				block := ReadBlock(db, ReadCanonicalHash(db, n), n)
 				if block != nil {
 					block.Hash()
 					for _, tx := range block.Transactions() {
