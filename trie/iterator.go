@@ -135,7 +135,7 @@ func (e seekError) Error() string {
 }
 
 func newNodeIterator(trie *Trie, start []byte) NodeIterator {
-	if trie.Hash() == emptyState {
+	if trie.Hash() == emptyRoot {
 		return new(nodeIterator)
 	}
 	it := &nodeIterator{trie: trie}
