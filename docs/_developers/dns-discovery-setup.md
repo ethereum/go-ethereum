@@ -3,7 +3,7 @@ title: DNS Discovery Setup Guide
 sort_key: C
 ---
 
-This document explains how to set up an [EIP 1459][dns-eip] node list using the cmd/devp2p
+This document explains how to set up an [EIP 1459][dns-eip] node list using the devp2p
 developer tool. The focus of this guide is creating a public list for the Ethereum mainnet
 and public testnets, but you may also find this helpful if you want to set up DNS-based
 discovery for a private network.
@@ -30,8 +30,8 @@ go get -u github.com/ethereum/go-ethereum/cmd/ethkey
 ### Crawling the v4 DHT
 
 Our first step is to compile a list of all reachable nodes. The DHT crawler in cmd/devp2p
-is a batch process which runs for a set amount of time. You should set up this command to
-run at a regular interval. To create a node list, run
+is a batch process which runs for a set amount of time. You should should schedule this command
+to run at a regular interval. To create a node list, run
 
 ```shell
 devp2p discv4 crawl -timeout 30m all-nodes.json
@@ -68,13 +68,13 @@ The following filter flags are available:
 * `-eth-network ( mainnet | ropsten | rinkeby | goerli )` selects an Ethereum network.
 * `-les-server` selects LES server nodes.
 * `-ip <mask>` restricts nodes to the given IP range.
-* `-min-age <duration>` restricts the result set to nodes which have been live for the
+* `-min-age <duration>` restricts the result to nodes which have been live for the
   given duration.
 
 ### Creating DNS trees
 
 To turn a node list into a DNS node tree, the list needs to be signed. To do this, you
-need a key pair. To create the key file in the right format, you can use the cmd/ethkey
+need a key pair. To create the key file in the correct format, you can use the cmd/ethkey
 utility. Please choose a good password to encrypt the key on disk.
 
 ```shell
