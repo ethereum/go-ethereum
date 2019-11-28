@@ -17,7 +17,6 @@
 package trie
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -270,19 +269,6 @@ func expandNode(hash hashNode, n node) node {
 	default:
 		panic(fmt.Sprintf("unknown node type: %T", n))
 	}
-}
-
-// trienodeHasher is a struct to be used with BigCache, which uses a Hasher to
-// determine which shard to place an entry into. It's not a cryptographic hash,
-// just to provide a bit of anti-collision (default is FNV64a).
-//
-// Since trie keys are already hashes, we can just use the key directly to
-// map shard id.
-type trienodeHasher struct{}
-
-// Sum64 implements the bigcache.Hasher interface.
-func (t trienodeHasher) Sum64(key string) uint64 {
-	return binary.BigEndian.Uint64([]byte(key))
 }
 
 // NewDatabase creates a new trie database to store ephemeral trie content before
