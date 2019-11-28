@@ -39,7 +39,7 @@ Find the different options and commands available with `geth --help`.
 
 ### Install on Ubuntu via PPAs
 
-The easiest way to install go-ethereum on Ubuntu-based distributions is with the built in launchpad PPAs (Personal Package Archives). We provide a single PPA repository that contains both our stable and develop releases for Ubuntu versions `trusty`, `xenial`, `zesty` and `artful`.
+The easiest way to install go-ethereum on Ubuntu-based distributions is with the built-in launchpad PPAs (Personal Package Archives). We provide a single PPA repository that contains both our stable and development releases for Ubuntu versions `trusty`, `xenial`, `zesty` and `artful`.
 
 To enable our launchpad repository run:
 
@@ -68,6 +68,10 @@ geth account new
 ```
 
 Find the different options and commands available with `geth --help`.
+
+### Install on Windows
+
+The easiest way to install go-ethereum is to download a pre-compiled binary from the [downloads](https://geth.ethereum.org/downloads/) page. The  page provides an installer as well as a zip file. The installer puts `geth` into your `PATH` automatically. The zip file contains the command `.exe` files that you can use without installing by runnning it from the command prompt.
 
 ### Install on FreeBSD via pkg
 
@@ -139,16 +143,23 @@ Download these bundles from the [Go Ethereum Downloads](https://geth.ethereum.or
 
 ## Run inside Docker container
 
-If you prefer containerized processes, you can run go-ethereum as a Docker container. We maintain four different Docker images for running the latest stable or develop versions of Geth.
+If you prefer containerized processes, we maintain a Docker image with recent snapshot builds from our `develop` branch on DockerHub. We maintain four different Docker images for running the latest stable or development versions of Geth.
 
--   `ethereum/client-go:latest` is the latest develop version of Geth
+-   `ethereum/client-go:latest` is the latest development version of Geth (default)
 -   `ethereum/client-go:stable` is the latest stable version of Geth
 -   `ethereum/client-go:{version}` is the stable version of Geth at a specific version number
 -   `ethereum/client-go:release-{version}` is the latest stable version of Geth at a specific version family
 
-We also maintain four different Docker images for running the latest stable or develop versions of miscellaneous Ethereum tools.
+To pull an image and start a node, run these commands:
 
--   `ethereum/client-go:alltools-latest` is the latest develop version of the Ethereum tools
+```shell
+docker pull ethereum/client-go
+docker run -it -p 30303:30303 ethereum/client-go
+```
+
+We also maintain four different Docker images for running the latest stable or development versions of miscellaneous Ethereum tools.
+
+-   `ethereum/client-go:alltools-latest` is the latest development version of the Ethereum tools
 -   `ethereum/client-go:alltools-stable` is the latest stable version of the Ethereum tools
 -   `ethereum/client-go:alltools-{version}` is the stable version of the Ethereum tools at a specific version number
 -   `ethereum/client-go:alltools-release-{version}` is the latest stable version of the Ethereum tools at a specific version family
@@ -164,27 +175,49 @@ _Note, if you are running an Ethereum client inside a Docker container, you shou
 
 ## Build go-ethereum from source code
 
-### Most Linux systems
+### Most Linux systems and macOS
 
 Go Ethereum is written in [Go](https://golang.org), so to build from source code you need the most recent version of Go. This guide doesn't cover how to install Go itself, for details read the [Go installation instructions](https://golang.org/doc/install) and grab any needed bundles from the [Go download page](https://golang.org/dl/).
 
-With Go installed, you can download our project via:
+With Go installed, you can download the project into you `GOPATH` workspace via:
 
 ```shell
 go get -d github.com/ethereum/go-ethereum
 ```
 
-The above command checks out the default version of Go Ethereum into your local `GOPATH` work space, but does not build any executables. To do that you can either build one specifically:
+The above command does not build any executables. To do that you can either build one specifically:
 
 ```shell
 go install github.com/ethereum/go-ethereum/cmd/geth
 ```
 
-Or you can build the entire project and install `geth` along with all developer tools by running `go install ./...` in the repository root inside your `GOPATH` work space.
+Or you can build the entire project and install `geth` along with all developer tools by running `go install ./...` in the `ethereum/go-ethereum` repository root inside your `GOPATH` workspace.
 
-### macOS
+If you are using macOS and see errors related to macOS header files, install XCode Command Line Tools with `xcode-select --install`, and try again.
 
-If you see errors related to macOS header files, install XCode Command Line Tools with `xcode-select --install`, and try again.
+### Windows
+
+The Chocolatey package manager provides an easy way to get the required build tools installed. If you don't have chocolatey, [follow the instructions](https://chocolatey.org) to install it first.
+
+Then open an Administrator command prompt and install the build tools you need:
+
+```shell
+C:\Windows\system32> choco install git
+C:\Windows\system32> choco install golang
+C:\Windows\system32> choco install mingw
+```
+
+Installing these packages sets up the path environment variables, you need to open a new command prompt to get the new path.
+
+The following steps don't need Administrator privileges. First create and set up a Go workspace directory layout, then clone the source and build it.
+
+```shell
+C:\Users\xxx> mkdir src\github.com\ethereum
+C:\Users\xxx> git clone https://github.com/ethereum/go-ethereum src\github.com\ethereum\go-ethereum
+C:\Users\xxx> cd src\github.com\ethereum\go-ethereum
+C:\Users\xxx> go get -u -v golang.org/x/net/context
+C:\Users\xxx\src\github.com\ethereum\go-ethereum> go install -v ./cmd/...
+```
 
 ### FreeBSD
 
@@ -220,7 +253,7 @@ You can now run `build/bin/geth` to start your node.
 
 ### Building without a Go workflow
 
-If you do not want to set up Go workspaces on your machine, only build `geth` and forget about the build process, you can clone our repository directly into a folder of your choosing and invoke `make`, which configures everything for a temporary build and cleans up afterwards. Note that this method of building only works on UNIX-like operating systems.
+If you do not want to set up Go workspaces on your machine, but only build `geth` and forget about the build process, you can clone our repository and use the `make` command, which configures everything for a temporary build and cleans up afterwards. This method of building only works on UNIX-like operating systems, and you still need Go installed.
 
 ```shell
 git clone https://github.com/ethereum/go-ethereum.git
@@ -228,4 +261,4 @@ cd go-ethereum
 make geth
 ```
 
-This creates a `geth` executable file in the `go-ethereum/build/bin` folder that you can move wherever you want to run from. The binary is standalone and doesn't require any additional files.
+These commands create a `geth` executable file in the `go-ethereum/build/bin` folder that you can move wherever you want to run from. The binary is standalone and doesn't require any additional files.
