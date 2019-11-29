@@ -224,7 +224,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.Miner.GasPrice
 	}
-	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
+	eth.APIBackend.gpo = gasprice.NewFullOracle(eth.APIBackend, gpoParams)
 
 	eth.dialCandidates, err = eth.setupDiscovery(&ctx.Config.P2P)
 	if err != nil {
