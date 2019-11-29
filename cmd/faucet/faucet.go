@@ -353,7 +353,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 			// Report the faucet offline until initial stats are ready
 			//lint:ignore ST1005 This error is to be displayed in the browser
 			if err = sendError(conn, errors.New("Faucet offline")); err != nil {
-				log.Warn("failed to send faucet error to client", "err", err)
+				log.Warn("Failed to send faucet error to client", "err", err)
 				return
 			}
 			time.Sleep(3 * time.Second)
