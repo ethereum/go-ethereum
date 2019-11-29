@@ -453,7 +453,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			continue
 		case strings.HasPrefix(msg.URL, "https://plus.google.com/"):
-			//lint:ignore ST1005 this is a company name
+			//lint:ignore ST1005 Google is a company name and should be capitalized.
 			if err = sendError(conn, errors.New("Google+ authentication discontinued as the service was sunset")); err != nil {
 				log.Warn("Failed to send Google+ deprecation to client", "err", err)
 				return
