@@ -44,10 +44,10 @@ func TestHDPathParsing(t *testing.T) {
 		{"2147483648", DerivationPath{0x80000000 + 44, 0x80000000 + 108, 0x80000000 + 0, 0, 0x80000000 + 0}},
 
 		// Hexadecimal absolute derivation paths
-		{"m/0x2C'/0x3c'/0x00'/0x00", DerivationPath{0x80000000 + 44, 0x80000000 + 108, 0x80000000 + 0, 0}},
-		{"m/0x2C'/0x3c'/0x00'/0x80", DerivationPath{0x80000000 + 44, 0x80000000 + 108, 0x80000000 + 0, 128}},
-		{"m/0x2C'/0x3c'/0x00'/0x00'", DerivationPath{0x80000000 + 44, 0x80000000 + 108, 0x80000000 + 0, 0x80000000 + 0}},
-		{"m/0x2C'/0x3c'/0x00'/0x80'", DerivationPath{0x80000000 + 44, 0x80000000 + 108, 0x80000000 + 0, 0x80000000 + 128}},
+		{"m/0x2C'/0x6c'/0x00'/0x00", DerivationPath{0x80000000 + 44, 0x80000000 + 108, 0x80000000 + 0, 0}},
+		{"m/0x2C'/0x6c'/0x00'/0x80", DerivationPath{0x80000000 + 44, 0x80000000 + 108, 0x80000000 + 0, 128}},
+		{"m/0x2C'/0x6c'/0x00'/0x00'", DerivationPath{0x80000000 + 44, 0x80000000 + 108, 0x80000000 + 0, 0x80000000 + 0}},
+		{"m/0x2C'/0x6c'/0x00'/0x80'", DerivationPath{0x80000000 + 44, 0x80000000 + 108, 0x80000000 + 0, 0x80000000 + 128}},
 		{"m/0x8000002C/0x8000006c/0x80000000/0x00", DerivationPath{0x80000000 + 44, 0x80000000 + 108, 0x80000000 + 0, 0}},
 		{"m/0x8000002C/0x8000006c/0x80000000/0x80000000", DerivationPath{0x80000000 + 44, 0x80000000 + 108, 0x80000000 + 0, 0x80000000 + 0}},
 
@@ -62,12 +62,12 @@ func TestHDPathParsing(t *testing.T) {
 		{"	m  /   44			'\n/\n   108	\n\n\t'   /\n0 ' /\t\t	0", DerivationPath{0x80000000 + 44, 0x80000000 + 108, 0x80000000 + 0, 0}},
 
 		// Invaid derivation paths
-		{"", nil},              // Empty relative derivation path
-		{"m", nil},             // Empty absolute derivation path
-		{"m/", nil},            // Missing last derivation component
+		{"", nil},               // Empty relative derivation path
+		{"m", nil},              // Empty absolute derivation path
+		{"m/", nil},             // Missing last derivation component
 		{"/44'/108'/0'/0", nil}, // Absolute path without m prefix, might be user error
-		{"m/2147483648'", nil}, // Overflows 32 bit integer
-		{"m/-1'", nil},         // Cannot contain negative number
+		{"m/2147483648'", nil},  // Overflows 32 bit integer
+		{"m/-1'", nil},          // Cannot contain negative number
 	}
 	for i, tt := range tests {
 		if path, err := ParseDerivationPath(tt.input); !reflect.DeepEqual(path, tt.output) {
