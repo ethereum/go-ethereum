@@ -396,6 +396,7 @@ func (dl *diffLayer) flatten() snapshot {
 	// Return the combo parent
 	return &diffLayer{
 		parent:      parent.parent,
+		origin:      parent.origin,
 		root:        dl.root,
 		storageList: parent.storageList,
 		storageData: parent.storageData,
