@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -112,10 +111,10 @@ type snapshot interface {
 	// copying everything.
 	Update(blockRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer
 
-	// Journal commits an entire diff hierarchy to disk into a single journal file.
+	// Journal commits an entire diff hierarchy to disk into a single journal entry.
 	// This is meant to be used during shutdown to persist the snapshot without
 	// flattening everything down (bad for reorgs).
-	Journal(path string) (io.WriteCloser, common.Hash, error)
+	Journal(buffer *bytes.Buffer) (common.Hash, error)
 
 	// Stale return whether this layer has become stale (was flattened across) or
 	// if it's still live.
@@ -146,7 +145,7 @@ type Tree struct {
 // If the snapshot is missing or inconsistent, the entirety is deleted and will
 // be reconstructed from scratch based on the tries in the key-value store, on a
 // background thread.
-func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, journal string, cache int, root common.Hash) *Tree {
+func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash) *Tree {
 	// Create a new, empty snapshot tree
 	snap := &Tree{
 		diskdb: diskdb,
@@ -155,7 +154,7 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, journal string, cach
 		layers: make(map[common.Hash]snapshot),
 	}
 	// Attempt to load a previously persisted snapshot and rebuild one if failed
-	head, err := loadSnapshot(diskdb, triedb, journal, cache, root)
+	head, err := loadSnapshot(diskdb, triedb, cache, root)
 	if err != nil {
 		log.Warn("Failed to load snapshot, regenerating", "err", err)
 		snap.Rebuild(root)
@@ -401,6 +400,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			// Account was updated, push to disk
 			rawdb.WriteAccountSnapshot(batch, hash, data)
 			base.cache.Set(hash[:], data)
+			snapshotCleanAccountWriteMeter.Mark(int64(len(data)))
 
 			if batch.ValueSize() > ethdb.IdealBatchSize {
 				if err := batch.Write(); err != nil {
@@ -445,6 +445,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			if len(data) > 0 {
 				rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, data)
 				base.cache.Set(append(accountHash[:], storageHash[:]...), data)
+				snapshotCleanStorageWriteMeter.Mark(int64(len(data)))
 			} else {
 				rawdb.DeleteStorageSnapshot(batch, accountHash, storageHash)
 				base.cache.Set(append(accountHash[:], storageHash[:]...), nil)
@@ -484,13 +485,13 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	return res
 }
 
-// Journal commits an entire diff hierarchy to disk into a single journal file.
+// Journal commits an entire diff hierarchy to disk into a single journal entry.
 // This is meant to be used during shutdown to persist the snapshot without
 // flattening everything down (bad for reorgs).
 //
 // The method returns the root hash of the base layer that needs to be persisted
 // to disk as a trie too to allow continuing any pending generation op.
-func (t *Tree) Journal(root common.Hash, path string) (common.Hash, error) {
+func (t *Tree) Journal(root common.Hash) (common.Hash, error) {
 	// Retrieve the head snapshot to journal from var snap snapshot
 	snap := t.Snapshot(root)
 	if snap == nil {
@@ -500,11 +501,14 @@ func (t *Tree) Journal(root common.Hash, path string) (common.Hash, error) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	writer, base, err := snap.(snapshot).Journal(path)
+	journal := new(bytes.Buffer)
+	base, err := snap.(snapshot).Journal(journal)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return base, writer.Close()
+	// Store the journal into the database and return
+	rawdb.WriteSnapshotJournal(t.diskdb, journal.Bytes())
+	return base, nil
 }
 
 // Rebuild wipes all available snapshot data from the persistent database and

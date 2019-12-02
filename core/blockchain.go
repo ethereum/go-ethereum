@@ -302,7 +302,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		}
 	}
 	// Load any existing snapshot, regenerating it if loading failed
-	bc.snaps = snapshot.New(bc.db, bc.stateCache.TrieDB(), "snapshot.rlp", bc.cacheConfig.SnapshotLimit, bc.CurrentBlock().Root())
+	bc.snaps = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, bc.CurrentBlock().Root())
 
 	// Take ownership of this particular state
 	go bc.update()
@@ -854,7 +854,7 @@ func (bc *BlockChain) Stop() {
 	bc.wg.Wait()
 
 	// Ensure that the entirety of the state snapshot is journalled to disk.
-	snapBase, err := bc.snaps.Journal(bc.CurrentBlock().Root(), "snapshot.rlp")
+	snapBase, err := bc.snaps.Journal(bc.CurrentBlock().Root())
 	if err != nil {
 		log.Error("Failed to journal state snapshot", "err", err)
 	}

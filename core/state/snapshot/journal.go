@@ -17,12 +17,11 @@
 package snapshot
 
 import (
-	"bufio"
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -58,7 +57,7 @@ type journalStorage struct {
 }
 
 // loadSnapshot loads a pre-existing state snapshot backed by a key-value store.
-func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, journal string, cache int, root common.Hash) (snapshot, error) {
+func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash) (snapshot, error) {
 	// Retrieve the block number and hash of the snapshot, failing if no snapshot
 	// is present in the database (or crashed mid-update).
 	baseRoot := rawdb.ReadSnapshotRoot(diskdb)
@@ -71,13 +70,13 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, journal str
 		cache:  fastcache.New(cache * 1024 * 1024),
 		root:   baseRoot,
 	}
-	// Open the journal, it must exist since even for 0 layer it stores whether
+	// Retrieve the journal, it must exist since even for 0 layer it stores whether
 	// we've already generated the snapshot or are in progress only
-	file, err := os.Open(journal)
-	if err != nil {
-		return nil, err
+	journal := rawdb.ReadSnapshotJournal(diskdb)
+	if len(journal) == 0 {
+		return nil, errors.New("missing or corrupted snapshot journal")
 	}
-	r := rlp.NewStream(file, 0)
+	r := rlp.NewStream(bytes.NewReader(journal), 0)
 
 	// Read the snapshot generation progress for the disk layer
 	var generator journalGenerator
@@ -162,9 +161,9 @@ func loadDiffLayer(parent snapshot, r *rlp.Stream) (snapshot, error) {
 	return loadDiffLayer(newDiffLayer(parent, root, accountData, storageData), r)
 }
 
-// Journal is the internal version of Journal that also returns the journal file
-// so subsequent layers know where to write to.
-func (dl *diskLayer) Journal(path string) (io.WriteCloser, common.Hash, error) {
+// Journal writes the persistent layer generator stats into a buffer to be stored
+// in the database as the snapshot journal.
+func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	// If the snapshot is currenty being generated, abort it
 	var stats *generatorStats
 	if dl.genAbort != nil {
@@ -180,12 +179,7 @@ func (dl *diskLayer) Journal(path string) (io.WriteCloser, common.Hash, error) {
 	defer dl.lock.RUnlock()
 
 	if dl.stale {
-		return nil, common.Hash{}, ErrSnapshotStale
-	}
-	// We've reached the bottom, open the journal
-	file, err := os.Create(path)
-	if err != nil {
-		return nil, common.Hash{}, err
+		return common.Hash{}, ErrSnapshotStale
 	}
 	// Write out the generator marker
 	entry := journalGenerator{
@@ -198,44 +192,37 @@ func (dl *diskLayer) Journal(path string) (io.WriteCloser, common.Hash, error) {
 		entry.Slots = stats.slots
 		entry.Storage = uint64(stats.storage)
 	}
-	if err := rlp.Encode(file, entry); err != nil {
-		file.Close()
-		return nil, common.Hash{}, err
+	if err := rlp.Encode(buffer, entry); err != nil {
+		return common.Hash{}, err
 	}
-	return file, dl.root, nil
+	return dl.root, nil
 }
 
-// Journal is the internal version of Journal that also returns the journal file
-// so subsequent layers know where to write to.
-func (dl *diffLayer) Journal(path string) (io.WriteCloser, common.Hash, error) {
+// Journal writes the memory layer contents into a buffer to be stored in the
+// database as the snapshot journal.
+func (dl *diffLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	// Journal the parent first
-	writer, base, err := dl.parent.Journal(path)
+	base, err := dl.parent.Journal(buffer)
 	if err != nil {
-		return nil, common.Hash{}, err
+		return common.Hash{}, err
 	}
 	// Ensure the layer didn't get stale
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	if dl.stale {
-		writer.Close()
-		return nil, common.Hash{}, ErrSnapshotStale
+		return common.Hash{}, ErrSnapshotStale
 	}
 	// Everything below was journalled, persist this layer too
-	buf := bufio.NewWriter(writer)
-	if err := rlp.Encode(buf, dl.root); err != nil {
-		buf.Flush()
-		writer.Close()
-		return nil, common.Hash{}, err
+	if err := rlp.Encode(buffer, dl.root); err != nil {
+		return common.Hash{}, err
 	}
 	accounts := make([]journalAccount, 0, len(dl.accountData))
 	for hash, blob := range dl.accountData {
 		accounts = append(accounts, journalAccount{Hash: hash, Blob: blob})
 	}
-	if err := rlp.Encode(buf, accounts); err != nil {
-		buf.Flush()
-		writer.Close()
-		return nil, common.Hash{}, err
+	if err := rlp.Encode(buffer, accounts); err != nil {
+		return common.Hash{}, err
 	}
 	storage := make([]journalStorage, 0, len(dl.storageData))
 	for hash, slots := range dl.storageData {
@@ -247,11 +234,8 @@ func (dl *diffLayer) Journal(path string) (io.WriteCloser, common.Hash, error) {
 		}
 		storage = append(storage, journalStorage{Hash: hash, Keys: keys, Vals: vals})
 	}
-	if err := rlp.Encode(buf, storage); err != nil {
-		buf.Flush()
-		writer.Close()
-		return nil, common.Hash{}, err
+	if err := rlp.Encode(buffer, storage); err != nil {
+		return common.Hash{}, err
 	}
-	buf.Flush()
-	return writer, base, nil
+	return base, nil
 }

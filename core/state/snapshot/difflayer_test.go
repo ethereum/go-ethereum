@@ -20,8 +20,6 @@ import (
 	"bytes"
 	"math/big"
 	"math/rand"
-	"os"
-	"path"
 	"testing"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -343,7 +341,6 @@ func BenchmarkJournal(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		f, _, _ := layer.Journal(path.Join(os.TempDir(), "difflayer_journal.tmp"))
-		f.Close()
+		layer.Journal(new(bytes.Buffer))
 	}
 }
