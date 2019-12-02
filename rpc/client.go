@@ -465,7 +465,7 @@ func (c *Client) newMessage(method string, paramsIn ...interface{}) (*jsonrpcMes
 func (c *Client) send(ctx context.Context, op *requestOp, msg interface{}) error {
 	select {
 	case c.reqInit <- op:
-		err := c.write(ctx, msg)
+		err := c.write(ctx, msg, false)
 		c.reqSent <- err
 		return err
 	case <-ctx.Done():
@@ -477,7 +477,7 @@ func (c *Client) send(ctx context.Context, op *requestOp, msg interface{}) error
 	}
 }
 
-func (c *Client) write(ctx context.Context, msg interface{}) error {
+func (c *Client) write(ctx context.Context, msg interface{}, retry bool) error {
 	// The previous write failed. Try to establish a new connection.
 	if c.writeConn == nil {
 		if err := c.reconnect(ctx); err != nil {
@@ -487,6 +487,9 @@ func (c *Client) write(ctx context.Context, msg interface{}) error {
 	err := c.writeConn.writeJSON(ctx, msg)
 	if err != nil {
 		c.writeConn = nil
+		if !retry {
+			return c.write(ctx, msg, true)
+		}
 	}
 	return err
 }
@@ -555,7 +558,6 @@ func (c *Client) dispatch(codec ServerCodec) {
 			conn.handler.log.Debug("RPC connection read error", "err", err)
 			conn.close(err, lastOp)
 			reading = false
-			c.writeConn = nil
 
 		// Reconnect:
 		case newcodec := <-c.reconnected:
