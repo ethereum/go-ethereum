@@ -397,16 +397,12 @@ type jsonrpcCall struct {
 // Send implements the web3 provider "send" method.
 func (b *bridge) Send(call goja.FunctionCall) (response goja.Value) {
 	// Remarshal the request into a Go value.
-	stringify, isFunc := goja.AssertFunction(b.runtime.Get("JSON.stringify"))
-	if !isFunc {
-		throwJSException(b.runtime, "JSON.stringify isn't a function")
-	}
-	reqVal, err := stringify(call.Argument(0))
+	reqVal, err := call.Argument(0).ToObject(b.runtime).MarshalJSON()
 	if err != nil {
 		throwJSException(b.runtime, err.Error())
 	}
 	var (
-		rawReq = reqVal.String()
+		rawReq = string(reqVal)
 		dec    = json.NewDecoder(strings.NewReader(rawReq))
 		reqs   []jsonrpcCall
 		batch  bool
@@ -436,11 +432,7 @@ func (b *bridge) Send(call goja.FunctionCall) (response goja.Value) {
 				// raw message for some reason.
 				resp.Set("result", goja.Null())
 			} else {
-				parse, isFunc := goja.AssertFunction(b.runtime.Get("JSON.parse"))
-				if !isFunc {
-					throwJSException(b.runtime, "JSON.parse isn't a function")
-				}
-				resultVal, err := parse(b.runtime.ToValue(string(result)))
+				resultVal, err := b.runtime.RunString(string(result))
 				if err != nil {
 					setError(resp, -32603, err.Error())
 				} else {
