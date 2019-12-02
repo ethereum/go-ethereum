@@ -367,7 +367,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 		d.stateBloom.Close()
 	}
 	// Reset the queue, peer set and wake channels to clean any internal leftover state
-	d.queue.Reset()
+	d.queue.Reset(blockCacheItems)
 	d.peers.Reset()
 
 	for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
@@ -1644,7 +1644,6 @@ func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 			}
 		}
 		P, beforeP, afterP := splitAroundPivot(pivot, results)
-		results = nil
 		if err := d.commitFastSyncData(beforeP, sync); err != nil {
 			return err
 		}

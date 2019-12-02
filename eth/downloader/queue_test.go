@@ -242,11 +242,11 @@ func TestEmptyBlocks(t *testing.T) {
 
 }
 
-// xTestDelivery does some more extensive testing of events that happen,
+// XTestDelivery does some more extensive testing of events that happen,
 // blocks that become known and peers that make reservations and deliveries.
 // disabled since it's not really a unit-test, but can be executed to test
 // some more advanced scenarios
-func xTestDelivery(t *testing.T) {
+func XTestDelivery(t *testing.T) {
 	// the outside network, holding blocks
 	blo, rec := makeChain(128, 0, genesis, false)
 	world := newNetwork()

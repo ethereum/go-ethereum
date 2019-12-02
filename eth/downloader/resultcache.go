@@ -25,7 +25,6 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 type resultStore struct {
@@ -73,31 +72,10 @@ func (r *resultStore) SetThrottleThreshold(threshold uint64) {
 //                prio right now
 // fetchResult -- the result to store data into
 // err         -- any error that occurred
-func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (bool, bool, *fetchResult, error) {
-	r.lock.RLock()
-	var index int
-	item, index, stale, throttled, err := r.getFetchResult(header.Number.Uint64())
-	if err != nil || stale || throttled {
-		r.lock.RUnlock()
-		// Index is above the current threshold of 'prioritized' blocks,
-		if throttled {
-			log.Debug("resultcache throttle", "index", index, "threshold", r.throttleThreshold)
-
-		}
-		return stale, throttled, item, err
-	}
-	if item != nil {
-		// All good, item already exists (perhaps a receipt fetch following
-		// a body fetch)
-		r.lock.RUnlock()
-		return stale, throttled, item, err
-	}
-	r.lock.RUnlock()
-	// Need to create a fetchresult, and as we've just release the Rlock,
-	// we need to check again after obtaining the writelock
+func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale, throttled bool, item *fetchResult, err error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
-	// Same checks as above, now with wlock
+	var index int
 	item, index, stale, throttled, err = r.getFetchResult(header.Number.Uint64())
 	if err != nil || stale || throttled {
 		return stale, throttled, item, err
@@ -132,13 +110,13 @@ func (r *resultStore) getFetchResult(headerNumber uint64) (item *fetchResult, in
 		err = fmt.Errorf("index allocation went beyond available resultStore space "+
 			"(index [%d] = header [%d] - resultOffset [%d], len(resultStore) = %d",
 			index, headerNumber, r.resultOffset, len(r.items))
-		return
+		return nil, index, stale, throttle, err
 	}
 	if stale {
-		return
+		return nil, index, stale, throttle, nil
 	}
 	item = r.items[index]
-	return
+	return item, index, stale, throttle, nil
 }
 
 // hasCompletedItems returns true if there are processable items available

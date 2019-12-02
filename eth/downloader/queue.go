@@ -83,7 +83,7 @@ func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
 
 // SetBodyDone flags the body as finished.
 func (f *fetchResult) SetBodyDone() {
-	if v := atomic.LoadInt32(&f.pending); v == 1 || v == 3 {
+	if v := atomic.LoadInt32(&f.pending); (v & 1) != 0 {
 		atomic.AddInt32(&f.pending, -1)
 	}
 }
@@ -95,19 +95,19 @@ func (f *fetchResult) AllDone() bool {
 
 // SetReceiptsDone flags the receipts as finished.
 func (f *fetchResult) SetReceiptsDone() {
-	if v := atomic.LoadInt32(&f.pending); v == 2 || v == 3 {
+	if v := atomic.LoadInt32(&f.pending); (v & 2) != 0 {
 		atomic.AddInt32(&f.pending, -2)
 	}
 }
 
-// CheckDone checks if the given type is done already
+// Done checks if the given type is done already
 func (f *fetchResult) Done(typ int) bool {
 	v := atomic.LoadInt32(&f.pending)
 	switch typ {
 	case BodyType:
-		return !(v == 1 || v == 3)
+		return (v & 1) == 0
 	case ReceiptType:
-		return !(v == 2 || v == 3)
+		return (v & 2) == 0
 	default:
 		return false
 	}
@@ -148,23 +148,19 @@ type queue struct {
 // newQueue creates a new download queue for scheduling block retrieval.
 func newQueue(blockCacheLimit int) *queue {
 	lock := new(sync.RWMutex)
-	return &queue{
-		headerPendPool:   make(map[string]*fetchRequest),
+	q := &queue{
 		headerContCh:     make(chan bool),
-		blockTaskPool:    make(map[common.Hash]*types.Header),
 		blockTaskQueue:   prque.New(nil),
-		blockPendPool:    make(map[string]*fetchRequest),
-		receiptTaskPool:  make(map[common.Hash]*types.Header),
 		receiptTaskQueue: prque.New(nil),
-		receiptPendPool:  make(map[string]*fetchRequest),
-		resultCache:      newResultStore(blockCacheLimit * 2),
 		active:           sync.NewCond(lock),
 		lock:             lock,
 	}
+	q.Reset(blockCacheLimit)
+	return q
 }
 
 // Reset clears out the queue contents.
-func (q *queue) Reset() {
+func (q *queue) Reset(blockCacheLimit int) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -182,7 +178,7 @@ func (q *queue) Reset() {
 	q.receiptTaskQueue.Reset()
 	q.receiptPendPool = make(map[string]*fetchRequest)
 
-	q.resultCache = newResultStore(blockCacheItems * 2)
+	q.resultCache = newResultStore(blockCacheLimit * 2)
 }
 
 // Close marks the end of the sync, unblocking Results.
@@ -190,8 +186,8 @@ func (q *queue) Reset() {
 func (q *queue) Close() {
 	q.lock.Lock()
 	q.closed = true
+	q.active.Signal()
 	q.lock.Unlock()
-	q.active.Broadcast()
 }
 
 // PendingHeaders retrieves the number of header requests pending for retrieval.
@@ -341,20 +337,15 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 
 // Results retrieves and permanently removes a batch of fetch results from
 // the cache. the result slice will be empty if the queue has been closed.
-// This is 'thread-safe', but assumes that there are not two simultaneous
-// callers to Results (both will modify q.resultSize)
+// Results can be called concurrently with Deliver and Schedule,
+// but assumes that there are not two simultaneous callers to Results
 func (q *queue) Results(block bool) []*fetchResult {
-
 	// abort early if there are no items and non-blocking requested
-	if !q.resultCache.HasCompletedItems() && !block {
-		return nil
-	}
-	results := q.resultCache.GetCompleted(maxResultsProcess)
-	if len(results) == 0 && !block {
+	if !block && !q.resultCache.HasCompletedItems() {
 		return nil
 	}
 	closed := false
-	for !closed && len(results) == 0 {
+	for !closed && !q.resultCache.HasCompletedItems() {
 		// In order to wait on 'active', we need to obtain the lock.
 		// That may take a while, if someone is delivering at the same
 		// time, so after obtaining the lock, we check again if there
@@ -363,17 +354,17 @@ func (q *queue) Results(block bool) []*fetchResult {
 		// someone can have closed the queue. In that case, we should
 		// return the available results and stop blocking
 		q.lock.Lock()
-		closed = q.closed
-		results = q.resultCache.GetCompleted(maxResultsProcess)
-		if closed || len(results) > 0 {
+		if q.resultCache.HasCompletedItems() || q.closed {
 			q.lock.Unlock()
 			break
 		}
+		// No items available, and not closed
 		q.active.Wait()
 		closed = q.closed
 		q.lock.Unlock()
-		results = q.resultCache.GetCompleted(maxResultsProcess)
 	}
+	// Regardless if closed or not, we can still deliver whatever we have
+	results := q.resultCache.GetCompleted(maxResultsProcess)
 	for _, result := range results {
 		// Recalculate the result item weights to prevent memory exhaustion
 		size := result.Header.Size()
@@ -397,7 +388,7 @@ func (q *queue) Results(block bool) []*fetchResult {
 	if time.Now().Second()&0xa == 0 {
 		info := q.Stats()
 		info = append(info, "throttle", throttleThreshold)
-		log.Info("queue stats", info...)
+		log.Info("Downloader queue stats", info...)
 	}
 	return results
 }
@@ -866,6 +857,7 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 		hashes = append(hashes, header.Hash())
 		i++
 	}
+
 	q.lock.Lock()
 	var acceptCount = 0
 	for _, header := range request.Headers[:i] {
@@ -889,12 +881,11 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 			taskQueue.Push(header, -int64(header.Number.Uint64()))
 		}
 	}
-	q.lock.Unlock()
-
 	// Wake up Results
 	if acceptCount > 0 {
-		q.active.Broadcast()
+		q.active.Signal()
 	}
+	q.lock.Unlock()
 	// If none of the data was good, it's a stale delivery
 	switch {
 	case failure == nil || failure == errInvalidChain:
