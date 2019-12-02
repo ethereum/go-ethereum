@@ -24,6 +24,7 @@ import (
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -216,7 +217,7 @@ func BenchmarkSearch(b *testing.B) {
 		layer = fill(layer)
 	}
 
-	key := common.Hash{}
+	key := crypto.Keccak256Hash([]byte{0x13, 0x38})
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		layer.AccountRLP(key)
@@ -229,10 +230,12 @@ func BenchmarkSearch(b *testing.B) {
 // BenchmarkSearchSlot-6   	  100000	     14554 ns/op
 // BenchmarkSearchSlot-6   	  100000	     22254 ns/op (when checking parent root using mutex)
 // BenchmarkSearchSlot-6   	  100000	     14551 ns/op (when checking parent number using atomic)
+// With bloom filter:
+// BenchmarkSearchSlot-6   	 3467835	       351 ns/op
 func BenchmarkSearchSlot(b *testing.B) {
 	// First, we set up 128 diff layers, with 1K items each
-	accountKey := common.Hash{}
-	storageKey := common.HexToHash("0x1337")
+	accountKey := crypto.Keccak256Hash([]byte{0x13, 0x37})
+	storageKey := crypto.Keccak256Hash([]byte{0x13, 0x37})
 	accountRLP := randomAccount()
 	fill := func(parent snapshot) *diffLayer {
 		accounts := make(map[common.Hash][]byte)

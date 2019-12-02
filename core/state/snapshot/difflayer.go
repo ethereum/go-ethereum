@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"math/rand"
 	"sort"
 	"sync"
 	"time"
@@ -63,7 +64,19 @@ var (
 	// bloom filter to keep its size to a minimum (given it's size and maximum
 	// entry count).
 	bloomFuncs = math.Round((bloomSize / float64(aggregatorItemLimit)) * math.Log(2))
+
+	// bloomHashesOffset is a runtime constant which determines which part of the
+	// the account/storage hash the hasher functions looks at, to determine the
+	// bloom key for an account/slot. This is randomized at init(), so that the
+	// global population of nodes do not all display the exact same behaviour with
+	// regards to bloom content
+	bloomHasherOffset = 0
 )
+
+func init() {
+	// Init bloomHasherOffset in the range [0:24] (requires 8 bytes)
+	bloomHasherOffset = rand.Intn(25)
+}
 
 // diffLayer represents a collection of modifications made to a state snapshot
 // after running a block on top. It contains one sorted list for the account trie
@@ -100,7 +113,7 @@ func (h accountBloomHasher) Reset()                            { panic("not impl
 func (h accountBloomHasher) BlockSize() int                    { panic("not implemented") }
 func (h accountBloomHasher) Size() int                         { return 8 }
 func (h accountBloomHasher) Sum64() uint64 {
-	return binary.BigEndian.Uint64(h[:8])
+	return binary.BigEndian.Uint64(h[bloomHasherOffset : bloomHasherOffset+8])
 }
 
 // storageBloomHasher is a wrapper around a [2]common.Hash to satisfy the interface
@@ -114,7 +127,8 @@ func (h storageBloomHasher) Reset()                            { panic("not impl
 func (h storageBloomHasher) BlockSize() int                    { panic("not implemented") }
 func (h storageBloomHasher) Size() int                         { return 8 }
 func (h storageBloomHasher) Sum64() uint64 {
-	return binary.BigEndian.Uint64(h[0][:8]) ^ binary.BigEndian.Uint64(h[1][:8])
+	return binary.BigEndian.Uint64(h[0][bloomHasherOffset:bloomHasherOffset+8]) ^
+		binary.BigEndian.Uint64(h[1][bloomHasherOffset:bloomHasherOffset+8])
 }
 
 // newDiffLayer creates a new diff on top of an existing snapshot, whether that's a low
@@ -205,7 +219,6 @@ func (dl *diffLayer) rebloom(origin *diskLayer) {
 	k := float64(dl.diffed.K())
 	n := float64(dl.diffed.N())
 	m := float64(dl.diffed.M())
-
 	snapshotBloomErrorGauge.Update(math.Pow(1.0-math.Exp((-k)*(n+0.5)/(m-1)), k))
 }
 
