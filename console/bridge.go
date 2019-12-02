@@ -58,6 +58,14 @@ func IsNumber(v goja.Value) bool {
 	}
 }
 
+func getJeth(r *goja.Runtime) *goja.Object {
+	jethObj := r.Get("jeth")
+	if jethObj == nil {
+		panic(r.ToValue("jeth object does not exist"))
+	}
+	return jethObj.ToObject(r)
+}
+
 // NewAccount is a wrapper around the personal.newAccount RPC method that uses a
 // non-echoing password prompt to acquire the passphrase and executes the original
 // RPC method (saved in jeth.newAccount) with it to actually execute the RPC call.
@@ -89,7 +97,7 @@ func (b *bridge) NewAccount(call goja.FunctionCall) (response goja.Value) {
 		throwJSException(b.runtime, "expected 0 or 1 string argument")
 	}
 	// Password acquired, execute the call and return
-	newAccount, callable := goja.AssertFunction(b.runtime.Get("jeth.newAccount"))
+	newAccount, callable := goja.AssertFunction(getJeth(b.runtime).Get("newAccount"))
 	if !callable {
 		panic(b.runtime.ToValue("jeth.newAccount isn't callable"))
 	}
@@ -116,7 +124,7 @@ func (b *bridge) OpenWallet(call goja.FunctionCall) (response goja.Value) {
 		passwd = call.Argument(1)
 	}
 	// Open the wallet and return if successful in itself
-	openWallet, callable := goja.AssertFunction(b.runtime.Get("jeth.openWallet"))
+	openWallet, callable := goja.AssertFunction(getJeth(b.runtime).Get("openWallet"))
 	if !callable {
 		panic(b.runtime.ToValue("jeth.openWallet is not callable"))
 	}
@@ -204,7 +212,7 @@ func (b *bridge) readPassphraseAndReopenWallet(call goja.FunctionCall) (goja.Val
 	} else {
 		passwd = b.runtime.ToValue(input)
 	}
-	openWallet, callable := goja.AssertFunction(b.runtime.Get("jeth.openWallet"))
+	openWallet, callable := goja.AssertFunction(getJeth(b.runtime).Get("openWallet"))
 	if !callable {
 		return nil, fmt.Errorf("jeth.openWallet is not callable")
 	}
@@ -227,7 +235,7 @@ func (b *bridge) readPinAndReopenWallet(call goja.FunctionCall) (goja.Value, err
 	} else {
 		passwd = b.runtime.ToValue(input)
 	}
-	openWallet, callable := goja.AssertFunction(b.runtime.Get("jeth.openWallet"))
+	openWallet, callable := goja.AssertFunction(getJeth(b.runtime).Get("openWallet"))
 	if !callable {
 		return nil, fmt.Errorf("jeth.openWallet is not callable")
 	}
@@ -270,7 +278,7 @@ func (b *bridge) UnlockAccount(call goja.FunctionCall) (response goja.Value) {
 		duration = call.Argument(2)
 	}
 	// Send the request to the backend and return
-	unlockAccount, callable := goja.AssertFunction(b.runtime.Get("jeth.unlockAccount"))
+	unlockAccount, callable := goja.AssertFunction(getJeth(b.runtime).Get("unlockAccount"))
 	if !callable {
 		throwJSException(b.runtime, "jeth.unlockAccount is not callable")
 	}
@@ -312,7 +320,7 @@ func (b *bridge) Sign(call goja.FunctionCall) (response goja.Value) {
 	}
 
 	// Send the request to the backend and return
-	sign, callable := goja.AssertFunction(b.runtime.Get("jeth.unlockAccount"))
+	sign, callable := goja.AssertFunction(getJeth(b.runtime).Get("unlockAccount"))
 	if !callable {
 		throwJSException(b.runtime, "jeth.unlockAccount is not callable")
 	}
