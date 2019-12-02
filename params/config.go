@@ -66,6 +66,7 @@ var (
 		ConstantinopleBlock: big.NewInt(7280000),
 		PetersburgBlock:     big.NewInt(7280000),
 		IstanbulBlock:       big.NewInt(9069000),
+		EIP2384Block:        big.NewInt(9200000),
 		Ethash:              new(EthashConfig),
 	}
 
@@ -104,6 +105,7 @@ var (
 		ConstantinopleBlock: big.NewInt(4230000),
 		PetersburgBlock:     big.NewInt(4939394),
 		IstanbulBlock:       big.NewInt(6485846),
+		EIP2384Block:        big.NewInt(7117117),
 		Ethash:              new(EthashConfig),
 	}
 
@@ -292,7 +294,7 @@ type ChainConfig struct {
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
 	PetersburgBlock     *big.Int `json:"petersburgBlock,omitempty"`     // Petersburg switch block (nil = same as Constantinople)
 	IstanbulBlock       *big.Int `json:"istanbulBlock,omitempty"`       // Istanbul switch block (nil = no fork, 0 = already on istanbul)
-	EIP2384Block        *big.Int `json:"eip2384Block,omitempty"`        // Eip-2384 (bomb delay) switch block (nil = no fork, 0 = already activated)
+	EIP2384Block        *big.Int `json:"muirGlacierBlock,omitempty"`    // Eip-2384 (bomb delay) switch block (nil = no fork, 0 = already activated)
 	EWASMBlock          *big.Int `json:"ewasmBlock,omitempty"`          // EWASM switch block (nil = no fork, 0 = already activated)
 
 	// Various consensus engines
@@ -382,6 +384,7 @@ func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 	return isForked(c.ConstantinopleBlock, num)
 }
 
+// IsEip2384 returns whether num is equal or greater than the EIP 2384 block
 func (c *ChainConfig) IsEip2384(num *big.Int) bool {
 	return isForked(c.EIP2384Block, num)
 }
