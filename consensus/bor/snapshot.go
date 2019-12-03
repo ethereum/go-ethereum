@@ -164,7 +164,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		proposer := snap.ValidatorSet.GetProposer().Address
 		proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
 		signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
-		limit := len(validators) - (len(validators)/2 + 1)
+		limit := len(validators)/2 + 1
 
 		// temp index
 		tempIndex := signerIndex

@@ -577,7 +577,7 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 	}
 	proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
 	signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
-	limit := len(validators) - (len(validators)/2 + 1)
+	limit := len(validators)/2 + 1
 
 	// temp index
 	tempIndex := signerIndex
@@ -761,7 +761,7 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 
 	proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
 	signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
-	limit := len(validators) - (len(validators)/2 + 1)
+	limit := len(validators)/2 + 1
 
 	// temp index
 	tempIndex := signerIndex
