@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maticnetwork/bor"
+	ethereum "github.com/maticnetwork/bor"
 	"github.com/maticnetwork/bor/accounts"
 	"github.com/maticnetwork/bor/accounts/abi"
 	"github.com/maticnetwork/bor/common"
@@ -1038,7 +1038,7 @@ func (c *Bor) commitSpan(
 	header *types.Header,
 	chain core.ChainContext,
 ) error {
-	response, err := FetchFromHeimdall(c.httpClient, c.chainConfig.Bor.Heimdall, "bor", "span", strconv.FormatUint(span.ID+1, 10))
+	response, err := FetchFromHeimdallWithRetry(c.httpClient, c.chainConfig.Bor.Heimdall, "bor", "span", strconv.FormatUint(span.ID+1, 10))
 	if err != nil {
 		return err
 	}
@@ -1158,7 +1158,7 @@ func (c *Bor) CommitStates(
 	// itereate through state ids
 	for _, stateID := range stateIds {
 		// fetch from heimdall
-		response, err := FetchFromHeimdall(c.httpClient, c.chainConfig.Bor.Heimdall, "clerk", "event-record", strconv.FormatUint(stateID.Uint64(), 10))
+		response, err := FetchFromHeimdallWithRetry(c.httpClient, c.chainConfig.Bor.Heimdall, "clerk", "event-record", strconv.FormatUint(stateID.Uint64(), 10))
 		if err != nil {
 			return err
 		}
