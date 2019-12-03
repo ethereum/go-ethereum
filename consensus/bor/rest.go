@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"time"
 )
 
 // ResponseWithHeight defines a response object type that wraps an original
@@ -16,19 +17,8 @@ type ResponseWithHeight struct {
 	Result json.RawMessage `json:"result"`
 }
 
-// FetchFromHeimdall returns data from heimdall
-func FetchFromHeimdall(client http.Client, urlString string, paths ...string) (*ResponseWithHeight, error) {
-	u, err := url.Parse(urlString)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, e := range paths {
-		if e != "" {
-			u.Path = path.Join(u.Path, e)
-		}
-	}
-
+// internal fetch method
+func internalFetch(client http.Client, u *url.URL) (*ResponseWithHeight, error) {
 	res, err := client.Get(u.String())
 	if err != nil {
 		return nil, err
@@ -53,4 +43,44 @@ func FetchFromHeimdall(client http.Client, urlString string, paths ...string) (*
 	}
 
 	return &response, nil
+}
+
+// FetchFromHeimdallWithRetry returns data from heimdall with retry
+func FetchFromHeimdallWithRetry(client http.Client, urlString string, paths ...string) (*ResponseWithHeight, error) {
+	u, err := url.Parse(urlString)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, e := range paths {
+		if e != "" {
+			u.Path = path.Join(u.Path, e)
+		}
+	}
+
+	for {
+		res, err := internalFetch(client, u)
+		if err == nil && res != nil {
+			return res, nil
+		}
+		fmt.Println("Retrying again in 5 seconds", u.String())
+		time.Sleep(5 * time.Second)
+
+	}
+}
+
+// FetchFromHeimdall returns data from heimdall
+func FetchFromHeimdall(client http.Client, urlString string, paths ...string) (*ResponseWithHeight, error) {
+	u, err := url.Parse(urlString)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, e := range paths {
+		if e != "" {
+			u.Path = path.Join(u.Path, e)
+		}
+	}
+
+	return internalFetch(client, u)
 }
