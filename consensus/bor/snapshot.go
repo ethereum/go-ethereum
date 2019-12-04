@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 
 	lru "github.com/hashicorp/golang-lru"
+
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/core/types"
 	"github.com/maticnetwork/bor/ethdb"
@@ -150,23 +151,6 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			return nil, err
 		}
 
-<<<<<<< HEAD
-		// change validator set and change proposer
-		if number > 0 && (number+1)%s.config.Sprint == 0 {
-			validatorBytes := header.Extra[extraVanity : len(header.Extra)-extraSeal]
-
-			// get validators from headers and use that for new validator set
-			newVals, _ := ParseValidators(validatorBytes)
-			v := getUpdatedValidatorSet(snap.ValidatorSet.Copy(), newVals)
-			v.IncrementProposerPriority(1)
-			snap.ValidatorSet = v
-
-			// log new validator set
-			log.Info("Current validator set", "number", snap.Number, "validatorSet", snap.ValidatorSet)
-		}
-
-=======
->>>>>>> origin/mat-494
 		// check if signer is in validator set
 		if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
 			return nil, errUnauthorizedSigner
@@ -191,7 +175,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			}
 
 			if tempIndex-proposerIndex > limit {
-				fmt.Println("Invalid signer: error while applying headers", "proposerIndex", validators[proposerIndex].Address.Hex(), "signerIndex", validators[signerIndex].Address.Hex())
+				log.Info("Invalid signer: error while applying headers", "proposerIndex", validators[proposerIndex].Address.Hex(), "signerIndex", validators[signerIndex].Address.Hex())
 				return nil, errRecentlySigned
 			}
 		}
@@ -210,7 +194,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			snap.ValidatorSet = v
 
 			// log new validator set
-			fmt.Println("New changed validator set", "number", snap.Number, "validatorSet", snap.ValidatorSet, "currentSigner", signer.Hex())
+			log.Info("New changed validator set", "number", snap.Number, "validatorSet", snap.ValidatorSet, "currentSigner", signer.Hex())
 		}
 	}
 	snap.Number += uint64(len(headers))
