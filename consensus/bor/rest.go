@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"path"
 	"time"
+
+	"github.com/maticnetwork/bor/log"
 )
 
 // ResponseWithHeight defines a response object type that wraps an original
@@ -63,7 +65,7 @@ func FetchFromHeimdallWithRetry(client http.Client, urlString string, paths ...s
 		if err == nil && res != nil {
 			return res, nil
 		}
-		fmt.Println("Retrying again in 5 seconds", u.String())
+		log.Info("Retrying again in 5 seconds", u.String())
 		time.Sleep(5 * time.Second)
 	}
 }

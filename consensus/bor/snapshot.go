@@ -19,13 +19,13 @@ package bor
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/core/types"
 	"github.com/maticnetwork/bor/ethdb"
 	"github.com/maticnetwork/bor/internal/ethapi"
+	"github.com/maticnetwork/bor/log"
 	"github.com/maticnetwork/bor/params"
 )
 
@@ -150,6 +150,23 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			return nil, err
 		}
 
+<<<<<<< HEAD
+		// change validator set and change proposer
+		if number > 0 && (number+1)%s.config.Sprint == 0 {
+			validatorBytes := header.Extra[extraVanity : len(header.Extra)-extraSeal]
+
+			// get validators from headers and use that for new validator set
+			newVals, _ := ParseValidators(validatorBytes)
+			v := getUpdatedValidatorSet(snap.ValidatorSet.Copy(), newVals)
+			v.IncrementProposerPriority(1)
+			snap.ValidatorSet = v
+
+			// log new validator set
+			log.Info("Current validator set", "number", snap.Number, "validatorSet", snap.ValidatorSet)
+		}
+
+=======
+>>>>>>> origin/mat-494
 		// check if signer is in validator set
 		if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
 			return nil, errUnauthorizedSigner

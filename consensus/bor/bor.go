@@ -667,13 +667,13 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 
 		// check and commit span
 		if err := c.checkAndCommitSpan(state, header, cx); err != nil {
-			fmt.Println("Error while committing span", err)
+			log.Error("Error while committing span", "error", err)
 			return
 		}
 
 		// commit statees
 		if err := c.CommitStates(state, header, cx); err != nil {
-			fmt.Println("Error while committing states", err)
+			log.Error("Error while committing states", "error", err)
 			return
 		}
 	}
@@ -693,13 +693,13 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Hea
 		// check and commit span
 		err := c.checkAndCommitSpan(state, header, cx)
 		if err != nil {
-			fmt.Println("Error while committing span", err)
+			log.Error("Error while committing span", "error", err)
 			return nil, err
 		}
 
 		// commit statees
 		if err := c.CommitStates(state, header, cx); err != nil {
-			fmt.Println("Error while committing states", err)
+			log.Error("Error while committing states", "error", err)
 			// return nil, err
 		}
 	}
@@ -779,8 +779,8 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 	wiggle := time.Duration(2*c.config.Period) * time.Second * time.Duration(tempIndex-proposerIndex)
 	delay += wiggle
 
-	fmt.Println("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
-	fmt.Println("Sealing block with", "number", number, "delay", delay, "headerDifficulty", header.Difficulty, "signer", signer.Hex(), "proposer", proposer.Hex())
+	log.Info("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
+	log.Info("Sealing block with", "number", number, "delay", delay, "headerDifficulty", header.Difficulty, "signer", signer.Hex(), "proposer", proposer.Hex())
 
 	// Sign all the things!
 	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeBor, BorRLP(header))
@@ -848,7 +848,7 @@ func (c *Bor) isSpanPending(snapshotNumber uint64) (bool, error) {
 	// get packed data
 	data, err := c.validatorSetABI.Pack(method)
 	if err != nil {
-		fmt.Println("Unable to pack tx for spanProposalPending", "error", err)
+		log.Error("Unable to pack tx for spanProposalPending", "error", err)
 		return false, err
 	}
 
@@ -886,7 +886,7 @@ func (c *Bor) GetCurrentSpan(snapshotNumber uint64) (*Span, error) {
 
 	data, err := c.validatorSetABI.Pack(method)
 	if err != nil {
-		fmt.Println("Unable to pack tx for getCurrentSpan", "error", err)
+		log.Error("Unable to pack tx for getCurrentSpan", "error", err)
 		return nil, err
 	}
 
@@ -936,7 +936,7 @@ func (c *Bor) GetCurrentValidators(snapshotNumber uint64, blockNumber uint64) ([
 
 	data, err := c.validatorSetABI.Pack(method, big.NewInt(0).SetUint64(blockNumber))
 	if err != nil {
-		fmt.Println("Unable to pack tx for getValidator", "error", err)
+		log.Error("Unable to pack tx for getValidator", "error", err)
 		return nil, err
 	}
 
@@ -1070,8 +1070,7 @@ func (c *Bor) commitSpan(
 
 	// method
 	method := "commitSpan"
-
-	fmt.Println(
+	log.Info("✅ Committing new span",
 		"id", heimdallSpan.ID,
 		"startBlock", heimdallSpan.StartBlock,
 		"endBlock", heimdallSpan.EndBlock,
@@ -1088,7 +1087,7 @@ func (c *Bor) commitSpan(
 		producerBytes,
 	)
 	if err != nil {
-		fmt.Println("Unable to pack tx for commitSpan", "error", err)
+		log.Error("Unable to pack tx for commitSpan", "error", err)
 		return err
 	}
 
@@ -1109,7 +1108,7 @@ func (c *Bor) GetPendingStateProposals(snapshotNumber uint64) ([]*big.Int, error
 
 	data, err := c.stateReceiverABI.Pack(method)
 	if err != nil {
-		fmt.Println("Unable to pack tx for getPendingStates", "error", err)
+		log.Error("Unable to pack tx for getPendingStates", "error", err)
 		return nil, err
 	}
 
@@ -1150,7 +1149,7 @@ func (c *Bor) CommitStates(
 
 	// state ids
 	if len(stateIds) > 0 {
-		fmt.Println("Found new proposed states", len(stateIds))
+		log.Debug("Found new proposed states", "numberOfStates", len(stateIds))
 	}
 
 	method := "commitState"
@@ -1168,6 +1167,12 @@ func (c *Bor) CommitStates(
 		if err := json.Unmarshal(response.Result, &eventRecord); err != nil {
 			return err
 		}
+		log.Info("→ committing new state",
+			"id", eventRecord.ID,
+			"contract", eventRecord.Contract,
+			"data", hex.EncodeToString(eventRecord.Data),
+			"txHash", eventRecord.TxHash,
+		)
 
 		recordBytes, err := rlp.EncodeToBytes(eventRecord)
 		if err != nil {
@@ -1177,7 +1182,7 @@ func (c *Bor) CommitStates(
 		// get packed data for commit state
 		data, err := c.stateReceiverABI.Pack(method, recordBytes)
 		if err != nil {
-			fmt.Println("Unable to pack tx for commitState", "error", err)
+			log.Error("Unable to pack tx for commitState", "error", err)
 			return err
 		}
 
