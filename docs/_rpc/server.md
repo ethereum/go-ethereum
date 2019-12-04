@@ -4,7 +4,7 @@ sort_key: A
 ---
 
 Geth supports all standard web3 JSON-RPC APIs. You can find documentation for
-these APIs on the [Ethereum Wiki JSON-RPC page](web3-rpc).
+these APIs on the [Ethereum Wiki JSON-RPC page][web3-rpc].
 
 JSON-RPC is provided on multiple transports. Geth supports JSON-RPC over HTTP,
 WebSocket and Unix Domain Sockets. Transports must be enabled through
@@ -44,7 +44,7 @@ protection is built into the server to prevent misuse of the API from web pages.
 If you want enable access to the API from a web page, you must configure the
 server to accept Cross-Origin requests with the `--rpccorsdomain` flag.
 
-Example: if you want to use [Remix](remix) with geth, allow requests from the
+Example: if you want to use [Remix][remix] with geth, allow requests from the
 remix domain.
 
     geth --rpc --rpccorsdomain https://remix.ethereum.org
