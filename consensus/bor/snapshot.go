@@ -19,14 +19,14 @@ package bor
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/core/types"
 	"github.com/maticnetwork/bor/ethdb"
 	"github.com/maticnetwork/bor/internal/ethapi"
+	"github.com/maticnetwork/bor/log"
 	"github.com/maticnetwork/bor/params"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 // Snapshot is the state of the authorization voting at a given point in time.
@@ -161,7 +161,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			snap.ValidatorSet = v
 
 			// log new validator set
-			fmt.Println("Current validator set", "number", snap.Number, "validatorSet", snap.ValidatorSet)
+			log.Info("Current validator set", "number", snap.Number, "validatorSet", snap.ValidatorSet)
 		}
 
 		// check if signer is in validator set
