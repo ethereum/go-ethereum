@@ -577,7 +577,7 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 	}
 	proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
 	signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
-	limit := len(validators) - (len(validators)/2 + 1)
+	limit := len(validators)/2 + 1
 
 	// temp index
 	tempIndex := signerIndex
@@ -761,7 +761,7 @@ func (c *Bor) Seal(chain consensus.ChainReader, block *types.Block, results chan
 
 	proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
 	signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
-	limit := len(validators) - (len(validators)/2 + 1)
+	limit := len(validators)/2 + 1
 
 	// temp index
 	tempIndex := signerIndex
@@ -1038,7 +1038,7 @@ func (c *Bor) commitSpan(
 	header *types.Header,
 	chain core.ChainContext,
 ) error {
-	response, err := FetchFromHeimdall(c.httpClient, c.chainConfig.Bor.Heimdall, "bor", "span", strconv.FormatUint(span.ID+1, 10))
+	response, err := FetchFromHeimdallWithRetry(c.httpClient, c.chainConfig.Bor.Heimdall, "bor", "span", strconv.FormatUint(span.ID+1, 10))
 	if err != nil {
 		return err
 	}
@@ -1157,7 +1157,7 @@ func (c *Bor) CommitStates(
 	// itereate through state ids
 	for _, stateID := range stateIds {
 		// fetch from heimdall
-		response, err := FetchFromHeimdall(c.httpClient, c.chainConfig.Bor.Heimdall, "clerk", "event-record", strconv.FormatUint(stateID.Uint64(), 10))
+		response, err := FetchFromHeimdallWithRetry(c.httpClient, c.chainConfig.Bor.Heimdall, "clerk", "event-record", strconv.FormatUint(stateID.Uint64(), 10))
 		if err != nil {
 			return err
 		}

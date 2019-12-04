@@ -150,6 +150,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			return nil, err
 		}
 
+<<<<<<< HEAD
 		// change validator set and change proposer
 		if number > 0 && (number+1)%s.config.Sprint == 0 {
 			validatorBytes := header.Extra[extraVanity : len(header.Extra)-extraSeal]
@@ -164,6 +165,8 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			log.Info("Current validator set", "number", snap.Number, "validatorSet", snap.ValidatorSet)
 		}
 
+=======
+>>>>>>> origin/mat-494
 		// check if signer is in validator set
 		if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
 			return nil, errUnauthorizedSigner
@@ -178,7 +181,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		proposer := snap.ValidatorSet.GetProposer().Address
 		proposerIndex, _ := snap.ValidatorSet.GetByAddress(proposer)
 		signerIndex, _ := snap.ValidatorSet.GetByAddress(signer)
-		limit := len(validators) - (len(validators)/2 + 1)
+		limit := len(validators)/2 + 1
 
 		// temp index
 		tempIndex := signerIndex
@@ -188,12 +191,27 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			}
 
 			if tempIndex-proposerIndex > limit {
+				fmt.Println("Invalid signer: error while applying headers", "proposerIndex", validators[proposerIndex].Address.Hex(), "signerIndex", validators[signerIndex].Address.Hex())
 				return nil, errRecentlySigned
 			}
 		}
 
 		// add recents
 		snap.Recents[number] = signer
+
+		// change validator set and change proposer
+		if number > 0 && (number+1)%s.config.Sprint == 0 {
+			validatorBytes := header.Extra[extraVanity : len(header.Extra)-extraSeal]
+
+			// get validators from headers and use that for new validator set
+			newVals, _ := ParseValidators(validatorBytes)
+			v := getUpdatedValidatorSet(snap.ValidatorSet.Copy(), newVals)
+			v.IncrementProposerPriority(1)
+			snap.ValidatorSet = v
+
+			// log new validator set
+			fmt.Println("New changed validator set", "number", snap.Number, "validatorSet", snap.ValidatorSet, "currentSigner", signer.Hex())
+		}
 	}
 	snap.Number += uint64(len(headers))
 	snap.Hash = headers[len(headers)-1].Hash()
