@@ -18,7 +18,6 @@ package snapshot
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math"
 	"math/rand"
 	"sort"
@@ -172,47 +171,18 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 	}
 	switch parent := parent.(type) {
 	case *diskLayer:
-		dl.rebloom(parent)
+		dl.rebloom(parent, true)
 	case *diffLayer:
-		dl.rebloom(parent.origin)
+		dl.rebloom(parent.origin, true)
 	default:
 		panic("unknown parent type")
 	}
-	// Sanity check that accounts or storage slots are never nil
-	for accountHash, blob := range accounts {
-		if blob == nil {
-			panic(fmt.Sprintf("account %#x nil", accountHash))
-		}
-	}
-	for accountHash, slots := range storage {
-		if slots == nil {
-			panic(fmt.Sprintf("storage %#x nil", accountHash))
-		}
-	}
-	// Determine memory size and track the dirty writes
-	for _, data := range accounts {
-		dl.memory += uint64(common.HashLength + len(data))
-		snapshotDirtyAccountWriteMeter.Mark(int64(len(data)))
-	}
-	// Fill the storage hashes and sort them for the iterator
-	dl.storageList = make(map[common.Hash][]common.Hash)
-	for accountHash := range destructs {
-		dl.storageList[accountHash] = nil
-	}
-	// Determine memory size and track the dirty writes
-	for _, slots := range storage {
-		for _, data := range slots {
-			dl.memory += uint64(common.HashLength + len(data))
-			snapshotDirtyStorageWriteMeter.Mark(int64(len(data)))
-		}
-	}
-	dl.memory += uint64(len(dl.storageList) * common.HashLength)
 	return dl
 }
 
 // rebloom discards the layer's current bloom and rebuilds it from scratch based
 // on the parent's and the local diffs.
-func (dl *diffLayer) rebloom(origin *diskLayer) {
+func (dl *diffLayer) rebloom(origin *diskLayer, creation bool) {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
@@ -235,13 +205,38 @@ func (dl *diffLayer) rebloom(origin *diskLayer) {
 	for hash := range dl.destructSet {
 		dl.diffed.Add(destructBloomHasher(hash))
 	}
-	for hash := range dl.accountData {
-		dl.diffed.Add(accountBloomHasher(hash))
-	}
-	for accountHash, slots := range dl.storageData {
-		for storageHash := range slots {
-			dl.diffed.Add(storageBloomHasher{accountHash, storageHash})
+	// Also count memory consumption while we're at it
+	dl.memory = 0
+	dataSize, nHashes := uint64(0), uint64(0)
+	for hash, data := range dl.accountData {
+		// Sanity check that accounts are never nil
+		if data == nil {
+			panic(fmt.Sprintf("account %#x nil", hash))
 		}
+		dl.diffed.Add(accountBloomHasher(hash))
+		dataSize += uint64(len(data))
+		nHashes++
+	}
+	dl.memory = dataSize + nHashes*uint64(common.HashLength)
+	if creation {
+		snapshotDirtyAccountWriteMeter.Mark(int64(dataSize))
+	}
+
+	dataSize, nHashes = uint64(0), uint64(0)
+	for accountHash, slots := range dl.storageData {
+		// Sanity check that storage slots are never nil
+		if slots == nil {
+			panic(fmt.Sprintf("storage %#x nil", accountHash))
+		}
+		for storageHash, data := range slots {
+			dl.diffed.Add(storageBloomHasher{accountHash, storageHash})
+			dataSize += uint64(len(data))
+			nHashes++
+		}
+	}
+	dl.memory += dataSize + nHashes*uint64(common.HashLength)
+	if creation {
+		snapshotDirtyStorageWriteMeter.Mark(int64(dataSize))
 	}
 	// Calculate the current false positive rate and update the error rate meter.
 	// This is a bit cheating because subsequent layers will overwrite it, but it

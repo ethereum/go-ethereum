@@ -332,7 +332,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		var rebloom func(root common.Hash)
 		rebloom = func(root common.Hash) {
 			if diff, ok := t.layers[root].(*diffLayer); ok {
-				diff.rebloom(persisted)
+				diff.rebloom(persisted, false)
 			}
 			for _, child := range children[root] {
 				rebloom(child)
