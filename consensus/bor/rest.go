@@ -65,7 +65,6 @@ func FetchFromHeimdallWithRetry(client http.Client, urlString string, paths ...s
 		}
 		fmt.Println("Retrying again in 5 seconds", u.String())
 		time.Sleep(5 * time.Second)
-
 	}
 }
 
