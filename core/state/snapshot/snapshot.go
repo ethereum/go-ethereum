@@ -107,6 +107,7 @@ type Snapshot interface {
 	// Storage directly retrieves the storage data associated with a particular hash,
 	// within a particular account.
 	Storage(accountHash, storageHash common.Hash) ([]byte, error)
+	Release()
 }
 
 // snapshot is the internal version of the snapshot data layer that supports some
@@ -138,6 +139,8 @@ type snapshot interface {
 
 	// AccountIterator creates an account iterator over an arbitrary layer.
 	AccountIterator(seek common.Hash) AccountIterator
+
+	Prepare(*diskLayer)
 }
 
 // SnapshotTree is an Ethereum state snapshot tree. It consists of one persistent
@@ -150,11 +153,12 @@ type snapshot interface {
 // storage data to avoid expensive multi-level trie lookups; and to allow sorted,
 // cheap iteration of the account/storage tries for sync aid.
 type Tree struct {
-	diskdb ethdb.KeyValueStore      // Persistent database to store the snapshot
-	triedb *trie.Database           // In-memory cache to access the trie through
-	cache  int                      // Megabytes permitted to use for read caches
-	layers map[common.Hash]snapshot // Collection of all known layers
-	lock   sync.RWMutex
+	diskdb    ethdb.KeyValueStore      // Persistent database to store the snapshot
+	triedb    *trie.Database           // In-memory cache to access the trie through
+	cache     int                      // Megabytes permitted to use for read caches
+	layers    map[common.Hash]snapshot // Collection of all known layers
+	lock      sync.RWMutex
+	diskLayer *diskLayer // The underlying disklayer
 }
 
 // New attempts to load an already existing snapshot from a persistent key-value
@@ -186,6 +190,9 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root comm
 	for head != nil {
 		snap.layers[head.Root()] = head
 		head = head.Parent()
+		// TODO(@holiman), check if we need to add this back:
+		//case *diskLayer:
+		//	snap.diskLayer = self
 	}
 	return snap
 }
@@ -209,6 +216,16 @@ func (t *Tree) waitBuild() {
 	if done != nil {
 		<-done
 	}
+}
+
+func (t *Tree) PrepareSnapshot(blockRoot common.Hash) Snapshot {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	if snap := t.layers[blockRoot]; snap != nil {
+		snap.Prepare(t.diskLayer)
+		return snap
+	}
+	return nil
 }
 
 // Snapshot retrieves a snapshot belonging to the given block root, or nil if no
@@ -278,6 +295,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 
 		// Replace the entire snapshot tree with the flat base
 		t.layers = map[common.Hash]snapshot{base.root: base}
+		t.diskLayer = base
 		return nil
 
 	case 1:
@@ -291,6 +309,7 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		bottom = diff.flatten().(*diffLayer)
 		if bottom.memory >= aggregatorMemoryLimit {
 			base = diffToDisk(bottom)
+			t.diskLayer = base
 		}
 		diff.lock.RUnlock()
 
@@ -305,6 +324,9 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 	default:
 		// Many layers requested to be retained, cap normally
 		persisted = t.cap(diff, layers)
+		if persisted != nil {
+			t.diskLayer = persisted
+		}
 	}
 	// Remove any layer that is stale or links into a stale layer
 	children := make(map[common.Hash][]common.Hash)
@@ -328,18 +350,6 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 		}
 	}
 	// If the disk layer was modified, regenerate all the cummulative blooms
-	if persisted != nil {
-		var rebloom func(root common.Hash)
-		rebloom = func(root common.Hash) {
-			if diff, ok := t.layers[root].(*diffLayer); ok {
-				diff.rebloom(persisted, false)
-			}
-			for _, child := range children[root] {
-				rebloom(child)
-			}
-		}
-		rebloom(persisted.root)
-	}
 	return nil
 }
 
@@ -591,8 +601,10 @@ func (t *Tree) Rebuild(root common.Hash) {
 	// Start generating a new snapshot from scratch on a backgroung thread. The
 	// generator will run a wiper first if there's not one running right now.
 	log.Info("Rebuilding state snapshot")
+	diskLayer := generateSnapshot(t.diskdb, t.triedb, t.cache, root, wiper)
+	t.diskLayer = diskLayer
 	t.layers = map[common.Hash]snapshot{
-		root: generateSnapshot(t.diskdb, t.triedb, t.cache, root, wiper),
+		root: diskLayer,
 	}
 }
 

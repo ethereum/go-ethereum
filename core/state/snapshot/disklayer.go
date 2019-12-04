@@ -164,3 +164,6 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 func (dl *diskLayer) Update(blockHash common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
 	return newDiffLayer(dl, blockHash, destructs, accounts, storage)
 }
+
+func (dl *diskLayer) Prepare(*diskLayer) {}
+func (dl *diskLayer) Release()           {}

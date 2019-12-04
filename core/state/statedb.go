@@ -133,7 +133,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		journal:             newJournal(),
 	}
 	if sdb.snaps != nil {
-		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
+		if sdb.snap = sdb.snaps.PrepareSnapshot(root); sdb.snap != nil {
 			sdb.snapDestructs = make(map[common.Hash]struct{})
 			sdb.snapAccounts = make(map[common.Hash][]byte)
 			sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
@@ -862,7 +862,11 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			if err := s.snaps.Update(root, parent, s.snapDestructs, s.snapAccounts, s.snapStorage); err != nil {
 				log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
 			}
+			if err := s.snaps.Cap(root, 127); err != nil { // Persistent layer is 128th, the last available trie
+				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 127, "err", err)
+			}
 		}
+		s.snap.Release()
 		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 	}
 	return root, err

@@ -33,6 +33,7 @@ require (
 	github.com/gorilla/websocket v1.4.1-0.20190629185528-ae1634f6a989
 	github.com/graph-gophers/graphql-go v0.0.0-20191115155744-f33e81362277
 	github.com/hashicorp/golang-lru v0.0.0-20160813221303-0a025b7e63ad
+	github.com/holiman/bloomfilter v0.0.0-20191204204232-5fc8e9365fc2
 	github.com/huin/goupnp v0.0.0-20161224104101-679507af18f3
 	github.com/influxdata/influxdb v1.2.3-0.20180221223340-01288bdb0883
 	github.com/jackpal/go-nat-pmp v1.0.2-0.20160603034137-1fa385a6f458
@@ -57,6 +58,7 @@ require (
 	github.com/stretchr/testify v1.4.0
 	github.com/syndtr/goleveldb v1.0.1-0.20190923125748-758128399b1d
 	github.com/tyler-smith/go-bip39 v1.0.1-0.20181017060643-dbb3b84ba2ef
+	github.com/umbracle/fastrlp v0.0.0-20191017143648-86584926e68c
 	github.com/wsddn/go-ecdh v0.0.0-20161211032359-48726bab9208
 	golang.org/x/crypto v0.0.0-20200311171314-f7b00557c8c4
 	golang.org/x/net v0.0.0-20200301022130-244492dfa37a // indirect
