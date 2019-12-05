@@ -69,7 +69,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if p.config.IsEIP1559(block.Number()) {
 		gp = new(GasPool).AddGas(params.MaxGasEIP1559 - block.GasLimit())
 		gp1559 = new(GasPool).AddGas(block.GasLimit())
-	} else { // If we are before EIP1559 initialization then we use header.GasLimit for the legacy pool
+	} else { // If we are before EIP1559 activation then we use header.GasLimit for the legacy pool
 		gp = new(GasPool).AddGas(block.GasLimit())
 	}
 

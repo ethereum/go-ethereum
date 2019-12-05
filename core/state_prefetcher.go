@@ -61,7 +61,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 	if p.config.IsEIP1559(block.Number()) {
 		gaspool = new(GasPool).AddGas(params.MaxGasEIP1559 - block.GasLimit())
 		gp1559 = new(GasPool).AddGas(block.GasLimit())
-	} else { // If we are before EIP1559 initialization then we use header.GasLimit for the legacy pool
+	} else { // If we are before EIP1559 activation then we use header.GasLimit for the legacy pool
 		gaspool = new(GasPool).AddGas(block.GasLimit())
 	}
 	// Iterate over and process the individual transactions
