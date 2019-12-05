@@ -169,7 +169,7 @@ func calcGasLimitAndBaseFee(config *params.ChainConfig, parent *types.Block) (ui
 	div := new(big.Int).Div(mul, new(big.Int).SetUint64(params.TargetGasUsed))
 	div2 := new(big.Int).Div(div, new(big.Int).SetUint64(params.BaseFeeMaxChangeDenominator))
 	baseFee := new(big.Int).Add(parent.BaseFee(), div2)
-
+	
 	// A valid BASEFEE is one such that abs(BASEFEE - PARENT_BASEFEE) <= max(1, PARENT_BASEFEE // BASEFEE_MAX_CHANGE_DENOMINATOR)
 	diff := new(big.Int).Sub(baseFee, parent.BaseFee())
 	neg := false
