@@ -178,7 +178,7 @@ func calcGasLimitAndBaseFee(config *params.ChainConfig, parent *types.Block) (ui
 	div2 := new(big.Int).Div(div, new(big.Int).SetUint64(params.BaseFeeMaxChangeDenominator))
 	baseFee := new(big.Int).Add(parent.BaseFee(), div2)
 
-	// panic is the BaseFee is not valid
+	// Panic is the BaseFee is not valid
 	// A valid BASEFEE is one such that abs(BASEFEE - PARENT_BASEFEE) <= max(1, PARENT_BASEFEE // BASEFEE_MAX_CHANGE_DENOMINATOR)
 	diff := new(big.Int).Sub(baseFee, parent.BaseFee())
 	if diff.Sign() < 0 {
@@ -198,9 +198,8 @@ func calcGasLimitAndBaseFee(config *params.ChainConfig, parent *types.Block) (ui
 	}
 
 	// Otherwise calculate how much of the MaxGasEIP1559 serves as the limit for the EIP1559 pool
-	// We need to shift (MaxGasEIP1559 / 2) gas from the legacy pool into the eip1559 pool over the EIP1559DecayRange
-	gasIncrement := (params.MaxGasEIP1559 / 2) / params.EIP1559DecayRange // 10 gas shifted per block
+	// The GasLimit for the legacy pool is (params.MaxGasEIP1559 - eip1559GasLimit)
 	numOfIncrements := new(big.Int).Sub(height, config.EIP1559Block).Uint64()
-	eip1559GasLimit := (params.MaxGasEIP1559 / 2) + (numOfIncrements * gasIncrement)
+	eip1559GasLimit := (params.MaxGasEIP1559 / 2) + (numOfIncrements * params.EIP1559GasIncrementAmount)
 	return eip1559GasLimit, baseFee
 }

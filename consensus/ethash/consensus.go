@@ -266,8 +266,8 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, expected)
 	}
 
-	// If we have not reached the EIP1559 activation block we need to verify that the GasLimit field is valid
-	if !chain.Config().IsEIP1559Finalized(header.Number) {
+	// If EIP1559 is not active we need to verify that the GasLimit field is valid according to the legacy rules
+	if !chain.Config().IsEIP1559(header.Number) {
 		// Verify that the gas limit is <= 2^63-1
 		cap := uint64(0x7fffffffffffffff)
 		if header.GasLimit > cap {
@@ -288,9 +288,9 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		if uint64(diff) >= limit || header.GasLimit < params.MinGasLimit {
 			return fmt.Errorf("invalid gas limit: have %d, want %d += %d", header.GasLimit, parent.GasLimit, limit)
 		}
-	} else if header.GasLimit != 0 {
-		// If EIP1559 is finalized, GasLimit should be 0
-		return errGasLimitSet
+		// If EIP1559 is active, assert that the GasLimit field is valid according to the EIP1559 rules
+	} else if err := misc.VerifyEIP1559GasLimit(chain.Config(), header); err != nil {
+		return err
 	}
 
 	// Verify that the block number is parent's +1
