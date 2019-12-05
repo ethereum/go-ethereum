@@ -397,3 +397,45 @@ func BenchmarkJournal(b *testing.B) {
 		layer.Journal(new(bytes.Buffer))
 	}
 }
+
+// BenchmarkBloom checks how long it takes to do a full rebloom of all layers,
+// compared to doing a 128-layer merge of existing bloom
+//
+// BenchmarkBloom/bloom_init-6         	      42	  27876166 ns/op
+// BenchmarkBloom/merge-6              	     782	   1603802 ns/op
+//
+func BenchmarkBloom(b *testing.B) {
+	// First, we set up 128 diff layers, with 1K items each
+	fill := func(parent snapshot) *diffLayer {
+		accounts := make(map[common.Hash][]byte)
+		storage := make(map[common.Hash]map[common.Hash][]byte)
+
+		for i := 0; i < 1000; i++ {
+			accounts[randomHash()] = randomAccount()
+		}
+		return newDiffLayer(parent, common.Hash{}, accounts, storage)
+	}
+	var layer snapshot
+	layer = emptyLayer()
+	var layers []*diffLayer
+	for i := 0; i < 128; i++ {
+		dl := fill(layer)
+		layer = dl
+		layers = append(layers, dl)
+	}
+	b.ResetTimer()
+	b.Run("bloom init", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, dl := range layers {
+				dl.initBloom()
+			}
+		}
+	})
+
+	b.Run("merge", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			layer = layers[len(layers)-1]
+			layer.Prepare(nil)
+		}
+	})
+}
