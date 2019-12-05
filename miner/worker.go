@@ -495,7 +495,7 @@ func (w *worker) mainLoop() {
 				if !w.chainConfig.IsEIP1559(w.chain.CurrentBlock().Number()) && legacyGasPool != nil && legacyGasPool.Gas() < params.TxGas {
 					continue
 				}
-				// When we are between EIP1559 initialization and finalization we can received transactions of both types
+				// When we are between EIP1559 activation and finalization we can received transactions of both types
 				// and one pool could be exhausted while the other is not
 				// If both pools are exhausted we know the block is full but if only one is we could still accept transactions
 				// of the other type so we need to proceed into commitTransactions()
@@ -773,7 +773,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			eip1559GasLimit = w.current.header.GasLimit
 			w.current.gasPool = new(core.GasPool).AddGas(eip1559GasLimit)
 		}
-	} else if w.current.gasPool == nil { // If we are before EIP1559 initialization then we use header.GasLimit for the legacy pool
+	} else if w.current.gasPool == nil { // If we are before EIP1559 activation then we use header.GasLimit for the legacy pool
 		legacyGasLimit = w.current.header.GasLimit
 		w.current.gasPool = new(core.GasPool).AddGas(legacyGasLimit)
 	}

@@ -266,7 +266,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, expected)
 	}
 
-	// If we have not reached the EIP1559 finalization block we need to verify that the GasLimit field is valid
+	// If we have not reached the EIP1559 activation block we need to verify that the GasLimit field is valid
 	if !chain.Config().IsEIP1559Finalized(header.Number) {
 		// Verify that the gas limit is <= 2^63-1
 		cap := uint64(0x7fffffffffffffff)

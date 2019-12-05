@@ -250,7 +250,7 @@ func (st *StateTransition) preCheck() error {
 	if st.evm.ChainConfig().IsEIP1559Finalized(st.evm.BlockNumber) && !st.isEIP1559 {
 		return ErrTxNotEIP1559
 	}
-	// If we are before the EIP1559 initialization block, throw an error if we have EIP1559 fields or do not have a GasPrice
+	// If we are before the EIP1559 activation block, throw an error if we have EIP1559 fields or do not have a GasPrice
 	if !st.evm.ChainConfig().IsEIP1559(st.evm.BlockNumber) && (st.msg.GasPremium() != nil || st.msg.FeeCap() != nil || st.gp1559 != nil || st.evm.BaseFee != nil || st.msg.GasPrice() == nil) {
 		return ErrTxIsEIP1559
 	}
@@ -258,7 +258,7 @@ func (st *StateTransition) preCheck() error {
 	if (st.msg.GasPremium() != nil || st.msg.FeeCap() != nil) && st.msg.GasPrice() != nil {
 		return ErrTxSetsLegacyAndEIP1559Fields
 	}
-	// We need a BaseFee if we are past EIP1559 initialization
+	// We need a BaseFee if we are past EIP1559 activation
 	if st.evm.ChainConfig().IsEIP1559(st.evm.BlockNumber) && st.evm.BaseFee == nil {
 		return ErrNoBaseFee
 	}

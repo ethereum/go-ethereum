@@ -146,20 +146,20 @@ func CalcGasLimitAndBaseFee(config *params.ChainConfig, parent *types.Block, gas
 	if !config.IsEIP1559(new(big.Int).Add(parent.Number(), common.Big1)) {
 		return CalcGasLimit(parent, gasFloor, gasCeil), nil
 	}
-	return calcGasLimitAndBaseFee(config, parent, gasFloor, gasCeil)
+	return calcGasLimitAndBaseFee(config, parent)
 }
 
 // start at 50 : 50 and then shift to 0 : 100
 // calcGasLimitAndBaseFee returns the EIP1559GasLimit and the BaseFee
 // The GasLimit for the legacy pool is (params.MaxGasEIP1559 - EIP1559GasLimit)
-func calcGasLimitAndBaseFee(config *params.ChainConfig, parent *types.Block, gasFloor, gasCeil uint64) (uint64, *big.Int) {
-	// panic if we do not have a block number set for the EIP1559 initialization fork
+func calcGasLimitAndBaseFee(config *params.ChainConfig, parent *types.Block) (uint64, *big.Int) {
+	// panic if we do not have a block number set for EIP1559 activation
 	if config.EIP1559Block == nil {
 		panic("chain config is missing EIP1559Block")
 	}
 	height := new(big.Int).Add(parent.Number(), common.Big1)
 
-	// If we are at the block of EIP1559 initialization then the BaseFee is set to the initial value
+	// If we are at the block of EIP1559 activation then the BaseFee is set to the initial value
 	// and the GasLimit is split evenly between the two pools
 	if config.EIP1559Block.Cmp(height) == 0 {
 		return params.MaxGasEIP1559 / 2, new(big.Int).SetUint64(params.EIP1559InitialBaseFee)

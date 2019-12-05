@@ -61,7 +61,7 @@ func VerifyEIP1559BaseFee(config *params.ChainConfig, header, parent *types.Head
 		}
 		return nil
 	}
-	// Verify the BaseFee is valid if we are past the EIP1559 initialization block
+	// Verify the BaseFee is valid if we are past the EIP1559 activation block
 	if config.IsEIP1559(header.Number) {
 		// A valid BASEFEE is one such that abs(BASEFEE - PARENT_BASEFEE) <= max(1, PARENT_BASEFEE // BASEFEE_MAX_CHANGE_DENOMINATOR)
 		if parent.BaseFee == nil {
@@ -83,7 +83,7 @@ func VerifyEIP1559BaseFee(config *params.ChainConfig, header, parent *types.Head
 		}
 		return nil
 	}
-	// If we are before the EIP1559 initialization block the current and parent BaseFees should be nil
+	// If we are before the EIP1559 activation block the current and parent BaseFees should be nil
 	if header.BaseFee != nil || parent.BaseFee != nil {
 		return errHaveBaseFee
 	}

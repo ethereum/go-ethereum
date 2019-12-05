@@ -66,7 +66,7 @@ func (b *BlockGen) SetCoinbase(addr common.Address) {
 	if b.config.IsEIP1559(b.header.Number) {
 		b.gasPool = new(GasPool).AddGas(params.MaxGasEIP1559 - b.header.GasLimit)
 		b.gasPool1559 = new(GasPool).AddGas(b.header.GasLimit)
-	} else { // If we are before EIP1559 initialization then we use header.GasLimit for the legacy pool
+	} else { // If we are before EIP1559 activation then we use header.GasLimit for the legacy pool
 		b.gasPool = new(GasPool).AddGas(b.header.GasLimit)
 	}
 }

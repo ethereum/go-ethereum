@@ -89,7 +89,7 @@ var (
 	// and the input transaction does not conform to with EIP1559
 	ErrTxNotEIP1559 = fmt.Errorf("after block %d EIP1559 is finalized and transactions must contain a GasPremium and FeeCap and not contain a GasPrice", params.EIP1559ForkFinalizedBlockNumber)
 
-	// ErrTxIsEIP1559 is returned if we have not reached the EIP1559 initialization block height
+	// ErrTxIsEIP1559 is returned if we have not reached the EIP1559 activation block height
 	// and the input transaction is not of the legacy type
 	ErrTxIsEIP1559 = fmt.Errorf("before block %d EIP1559 is not activated and transactions must contain a GasPrice and not contain a GasPremium or FeeCap", params.EIP1559ForkBlockNumber)
 
@@ -97,7 +97,7 @@ var (
 	// both legacy (GasPrice) and EIP1559 (GasPremium and FeeCap) fields
 	ErrTxSetsLegacyAndEIP1559Fields = errors.New("transaction sets both legacy and EIP1559 fields")
 
-	// ErrNoBaseFee is returned if we are past the EIP1559 initialization block but
+	// ErrNoBaseFee is returned if we are past the EIP1559 activation block but
 	// the current header does not provide a BaseFee
 	ErrNoBaseFee = errors.New("current header does not provide the BaseFee needed to process EIP1559 transactions")
 
