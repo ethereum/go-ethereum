@@ -384,8 +384,8 @@ func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 	return isForked(c.ConstantinopleBlock, num)
 }
 
-// IsEip2384 returns whether num is equal or greater than the EIP 2384 block
-func (c *ChainConfig) IsEip2384(num *big.Int) bool {
+// IsMuirGlacier returns whether num is either equal to the Muir Glacier (EIP-2384) fork block or greater.
+func (c *ChainConfig) IsMuirGlacier(num *big.Int) bool {
 	return isForked(c.EIP2384Block, num)
 }
 
