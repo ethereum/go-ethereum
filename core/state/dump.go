@@ -47,7 +47,9 @@ type Dump struct {
 }
 
 // iterativeDump is a 'collector'-implementation which dump output line-by-line iteratively
-type iterativeDump json.Encoder
+type iterativeDump struct {
+	*json.Encoder
+}
 
 // Collector interface which the state trie calls during iteration
 type collector interface {
@@ -55,15 +57,15 @@ type collector interface {
 	onAccount(common.Address, DumpAccount)
 }
 
-func (self *Dump) onRoot(root common.Hash) {
-	self.Root = fmt.Sprintf("%x", root)
+func (d *Dump) onRoot(root common.Hash) {
+	d.Root = fmt.Sprintf("%x", root)
 }
 
-func (self *Dump) onAccount(addr common.Address, account DumpAccount) {
-	self.Accounts[addr] = account
+func (d *Dump) onAccount(addr common.Address, account DumpAccount) {
+	d.Accounts[addr] = account
 }
 
-func (self iterativeDump) onAccount(addr common.Address, account DumpAccount) {
+func (d iterativeDump) onAccount(addr common.Address, account DumpAccount) {
 	dumpAccount := &DumpAccount{
 		Balance:   account.Balance,
 		Nonce:     account.Nonce,
@@ -77,25 +79,26 @@ func (self iterativeDump) onAccount(addr common.Address, account DumpAccount) {
 	if addr != (common.Address{}) {
 		dumpAccount.Address = &addr
 	}
-	(*json.Encoder)(&self).Encode(dumpAccount)
+	d.Encode(dumpAccount)
 }
-func (self iterativeDump) onRoot(root common.Hash) {
-	(*json.Encoder)(&self).Encode(struct {
+
+func (d iterativeDump) onRoot(root common.Hash) {
+	d.Encode(struct {
 		Root common.Hash `json:"root"`
 	}{root})
 }
 
-func (self *StateDB) dump(c collector, excludeCode, excludeStorage, excludeMissingPreimages bool) {
+func (s *StateDB) dump(c collector, excludeCode, excludeStorage, excludeMissingPreimages bool) {
 	emptyAddress := (common.Address{})
 	missingPreimages := 0
-	c.onRoot(self.trie.Hash())
-	it := trie.NewIterator(self.trie.NodeIterator(nil))
+	c.onRoot(s.trie.Hash())
+	it := trie.NewIterator(s.trie.NodeIterator(nil))
 	for it.Next() {
 		var data Account
 		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 			panic(err)
 		}
-		addr := common.BytesToAddress(self.trie.GetKey(it.Key))
+		addr := common.BytesToAddress(s.trie.GetKey(it.Key))
 		obj := newObject(nil, addr, data)
 		account := DumpAccount{
 			Balance:  data.Balance.String(),
@@ -112,18 +115,18 @@ func (self *StateDB) dump(c collector, excludeCode, excludeStorage, excludeMissi
 			account.SecureKey = it.Key
 		}
 		if !excludeCode {
-			account.Code = common.Bytes2Hex(obj.Code(self.db))
+			account.Code = common.Bytes2Hex(obj.Code(s.db))
 		}
 		if !excludeStorage {
 			account.Storage = make(map[common.Hash]string)
-			storageIt := trie.NewIterator(obj.getTrie(self.db).NodeIterator(nil))
+			storageIt := trie.NewIterator(obj.getTrie(s.db).NodeIterator(nil))
 			for storageIt.Next() {
 				_, content, _, err := rlp.Split(storageIt.Value)
 				if err != nil {
 					log.Error("Failed to decode the value returned by iterator", "error", err)
 					continue
 				}
-				account.Storage[common.BytesToHash(self.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(content)
+				account.Storage[common.BytesToHash(s.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(content)
 			}
 		}
 		c.onAccount(addr, account)
@@ -134,17 +137,17 @@ func (self *StateDB) dump(c collector, excludeCode, excludeStorage, excludeMissi
 }
 
 // RawDump returns the entire state an a single large object
-func (self *StateDB) RawDump(excludeCode, excludeStorage, excludeMissingPreimages bool) Dump {
+func (s *StateDB) RawDump(excludeCode, excludeStorage, excludeMissingPreimages bool) Dump {
 	dump := &Dump{
 		Accounts: make(map[common.Address]DumpAccount),
 	}
-	self.dump(dump, excludeCode, excludeStorage, excludeMissingPreimages)
+	s.dump(dump, excludeCode, excludeStorage, excludeMissingPreimages)
 	return *dump
 }
 
 // Dump returns a JSON string representing the entire state as a single json-object
-func (self *StateDB) Dump(excludeCode, excludeStorage, excludeMissingPreimages bool) []byte {
-	dump := self.RawDump(excludeCode, excludeStorage, excludeMissingPreimages)
+func (s *StateDB) Dump(excludeCode, excludeStorage, excludeMissingPreimages bool) []byte {
+	dump := s.RawDump(excludeCode, excludeStorage, excludeMissingPreimages)
 	json, err := json.MarshalIndent(dump, "", "    ")
 	if err != nil {
 		fmt.Println("dump err", err)
@@ -153,6 +156,6 @@ func (self *StateDB) Dump(excludeCode, excludeStorage, excludeMissingPreimages b
 }
 
 // IterativeDump dumps out accounts as json-objects, delimited by linebreaks on stdout
-func (self *StateDB) IterativeDump(excludeCode, excludeStorage, excludeMissingPreimages bool, output *json.Encoder) {
-	self.dump(iterativeDump(*output), excludeCode, excludeStorage, excludeMissingPreimages)
+func (s *StateDB) IterativeDump(excludeCode, excludeStorage, excludeMissingPreimages bool, output *json.Encoder) {
+	s.dump(iterativeDump{output}, excludeCode, excludeStorage, excludeMissingPreimages)
 }

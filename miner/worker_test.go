@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"fmt"
 	"math/big"
 	"math/rand"
 	"sync/atomic"
@@ -148,9 +149,6 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 
 func (b *testWorkerBackend) BlockChain() *core.BlockChain { return b.chain }
 func (b *testWorkerBackend) TxPool() *core.TxPool         { return b.txPool }
-func (b *testWorkerBackend) PostChainEvents(events []interface{}) {
-	b.chain.PostChainEvents(events, nil)
-}
 
 func (b *testWorkerBackend) newRandomUncle() *types.Block {
 	var parent *types.Block
@@ -217,6 +215,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	chain, _ := core.NewBlockChain(db2, nil, b.chain.Config(), engine, vm.Config{}, nil)
 	defer chain.Stop()
 
+	loopErr := make(chan error)
 	newBlock := make(chan struct{})
 	listenNewBlock := func() {
 		sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
@@ -226,7 +225,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 			block := item.Data.(core.NewMinedBlockEvent).Block
 			_, err := chain.InsertChain([]*types.Block{block})
 			if err != nil {
-				t.Fatalf("Failed to insert new mined block:%d, error:%v", block.NumberU64(), err)
+				loopErr <- fmt.Errorf("failed to insert new mined block:%d, error:%v", block.NumberU64(), err)
 			}
 			newBlock <- struct{}{}
 		}
@@ -241,9 +240,11 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	for i := 0; i < 5; i++ {
 		b.txPool.AddLocal(b.newRandomTx(true))
 		b.txPool.AddLocal(b.newRandomTx(false))
-		b.PostChainEvents([]interface{}{core.ChainSideEvent{Block: b.newRandomUncle()}})
-		b.PostChainEvents([]interface{}{core.ChainSideEvent{Block: b.newRandomUncle()}})
+		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
+		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
 		select {
+		case e := <-loopErr:
+			t.Fatal(e)
 		case <-newBlock:
 		case <-time.NewTimer(3 * time.Second).C: // Worker needs 1s to include new changes.
 			t.Fatalf("timeout")
@@ -291,7 +292,7 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	}
 	w.skipSealHook = func(task *task) bool { return true }
 	w.fullTaskHook = func() {
-		// Aarch64 unit tests are running in a VM on travis, they must
+		// Arch64 unit tests are running in a VM on travis, they must
 		// be given more time to execute.
 		time.Sleep(time.Second)
 	}
@@ -347,7 +348,8 @@ func TestStreamUncleBlock(t *testing.T) {
 		}
 	}
 
-	b.PostChainEvents([]interface{}{core.ChainSideEvent{Block: b.uncleBlock}})
+	w.postSideBlock(core.ChainSideEvent{Block: b.uncleBlock})
+
 	select {
 	case <-taskCh:
 	case <-time.NewTimer(time.Second).C:

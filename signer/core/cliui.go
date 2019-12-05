@@ -58,34 +58,6 @@ func (ui *CommandlineUI) readString() string {
 	}
 }
 
-// readPassword reads a single line from stdin, trimming it from the trailing new
-// line and returns it. The input will not be echoed.
-func (ui *CommandlineUI) readPassword() string {
-	fmt.Printf("Enter password to approve:\n")
-	fmt.Printf("> ")
-
-	text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
-	if err != nil {
-		log.Crit("Failed to read password", "err", err)
-	}
-	fmt.Println()
-	fmt.Println("-----------------------")
-	return string(text)
-}
-
-// readPassword reads a single line from stdin, trimming it from the trailing new
-// line and returns it. The input will not be echoed.
-func (ui *CommandlineUI) readPasswordText(inputstring string) string {
-	fmt.Printf("Enter %s:\n", inputstring)
-	fmt.Printf("> ")
-	text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
-	if err != nil {
-		log.Crit("Failed to read password", "err", err)
-	}
-	fmt.Println("-----------------------")
-	return string(text)
-}
-
 func (ui *CommandlineUI) OnInputRequired(info UserInputRequest) (UserInputResponse, error) {
 
 	fmt.Printf("## %s\n\n%s\n", info.Title, info.Prompt)

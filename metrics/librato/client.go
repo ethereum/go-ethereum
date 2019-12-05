@@ -96,7 +96,7 @@ func (c *LibratoClient) PostMetrics(batch Batch) (err error) {
 		if body, err = ioutil.ReadAll(resp.Body); err != nil {
 			body = []byte(fmt.Sprintf("(could not fetch response body for error: %s)", err))
 		}
-		err = fmt.Errorf("Unable to post to Librato: %d %s %s", resp.StatusCode, resp.Status, string(body))
+		err = fmt.Errorf("unable to post to Librato: %d %s %s", resp.StatusCode, resp.Status, string(body))
 	}
 	return
 }

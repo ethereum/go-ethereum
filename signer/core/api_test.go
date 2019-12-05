@@ -71,7 +71,7 @@ func (ui *headlessUi) ApproveTx(request *core.SignTxRequest) (core.SignTxRespons
 }
 
 func (ui *headlessUi) ApproveSignData(request *core.SignDataRequest) (core.SignDataResponse, error) {
-	approved := "Y" == <-ui.approveCh
+	approved := (<-ui.approveCh == "Y")
 	return core.SignDataResponse{approved}, nil
 }
 
@@ -91,7 +91,7 @@ func (ui *headlessUi) ApproveListing(request *core.ListRequest) (core.ListRespon
 }
 
 func (ui *headlessUi) ApproveNewAccount(request *core.NewAccountRequest) (core.NewAccountResponse, error) {
-	if "Y" == <-ui.approveCh {
+	if <-ui.approveCh == "Y" {
 		return core.NewAccountResponse{true}, nil
 	}
 	return core.NewAccountResponse{false}, nil

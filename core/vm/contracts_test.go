@@ -29,7 +29,6 @@ import (
 // precompiledTest defines the input/output pairs for precompiled contract tests.
 type precompiledTest struct {
 	input, expected string
-	gas             uint64
 	name            string
 	noBenchmark     bool // Benchmark primarily the worst-cases
 }
@@ -418,6 +417,24 @@ func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
 	})
 }
 
+func testPrecompiledOOG(addr string, test precompiledTest, t *testing.T) {
+	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
+	in := common.Hex2Bytes(test.input)
+	contract := NewContract(AccountRef(common.HexToAddress("1337")),
+		nil, new(big.Int), p.RequiredGas(in)-1)
+	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, contract.Gas), func(t *testing.T) {
+		_, err := RunPrecompiledContract(p, in, contract)
+		if err.Error() != "out of gas" {
+			t.Errorf("Expected error [out of gas], got [%v]", err)
+		}
+		// Verify that the precompile did not touch the input buffer
+		exp := common.Hex2Bytes(test.input)
+		if !bytes.Equal(in, exp) {
+			t.Errorf("Precompiled %v modified input data", addr)
+		}
+	})
+}
+
 func testPrecompiledFailure(addr string, test precompiledFailureTest, t *testing.T) {
 	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
@@ -538,6 +555,13 @@ func TestPrecompiledBn256Add(t *testing.T) {
 func BenchmarkPrecompiledBn256Add(bench *testing.B) {
 	for _, test := range bn256AddTests {
 		benchmarkPrecompiled("06", test, bench)
+	}
+}
+
+// Tests OOG
+func TestPrecompiledModExpOOG(t *testing.T) {
+	for _, test := range modexpTests {
+		testPrecompiledOOG("05", test, t)
 	}
 }
 

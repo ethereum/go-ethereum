@@ -108,7 +108,7 @@ func (api *PrivateLightServerAPI) clientInfo(c *clientInfo, id enode.ID) map[str
 		info["priority"] = pb != 0
 	} else {
 		info["isConnected"] = false
-		pb := api.server.clientPool.getPosBalance(id)
+		pb := api.server.clientPool.ndb.getOrNewPB(id)
 		info["pricing/balance"], info["pricing/balanceMeta"] = pb.value, pb.meta
 		info["priority"] = pb.value != 0
 	}
