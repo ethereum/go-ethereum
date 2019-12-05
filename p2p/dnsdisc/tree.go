@@ -48,7 +48,7 @@ func (t *Tree) Sign(key *ecdsa.PrivateKey, domain string) (url string, err error
 	}
 	root.sig = sig
 	t.root = &root
-	link := &linkEntry{domain, &key.PublicKey}
+	link := newLinkEntry(domain, &key.PublicKey)
 	return link.String(), nil
 }
 
@@ -209,6 +209,7 @@ type (
 		node *enode.Node
 	}
 	linkEntry struct {
+		str    string
 		domain string
 		pubkey *ecdsa.PublicKey
 	}
@@ -246,7 +247,8 @@ func (e *rootEntry) sigHash() []byte {
 
 func (e *rootEntry) verifySignature(pubkey *ecdsa.PublicKey) bool {
 	sig := e.sig[:crypto.RecoveryIDOffset] // remove recovery id
-	return crypto.VerifySignature(crypto.FromECDSAPub(pubkey), e.sigHash(), sig)
+	enckey := crypto.FromECDSAPub(pubkey)
+	return crypto.VerifySignature(enckey, e.sigHash(), sig)
 }
 
 func (e *branchEntry) String() string {
@@ -258,8 +260,13 @@ func (e *enrEntry) String() string {
 }
 
 func (e *linkEntry) String() string {
-	pubkey := b32format.EncodeToString(crypto.CompressPubkey(e.pubkey))
-	return fmt.Sprintf("%s%s@%s", linkPrefix, pubkey, e.domain)
+	return linkPrefix + e.str
+}
+
+func newLinkEntry(domain string, pubkey *ecdsa.PublicKey) *linkEntry {
+	key := b32format.EncodeToString(crypto.CompressPubkey(pubkey))
+	str := key + "@" + domain
+	return &linkEntry{str, domain, pubkey}
 }
 
 // Entry Parsing
@@ -319,7 +326,7 @@ func parseLink(e string) (*linkEntry, error) {
 	if err != nil {
 		return nil, entryError{"link", errBadPubkey}
 	}
-	return &linkEntry{domain, key}, nil
+	return &linkEntry{e, domain, key}, nil
 }
 
 func parseBranch(e string) (entry, error) {
