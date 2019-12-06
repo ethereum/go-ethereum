@@ -101,7 +101,11 @@ func TestIterator(t *testing.T) {
 	nodes := testNodes(nodesSeed1, 30)
 	tree, url := makeTestTree("n", nodes, nil)
 	r := mapResolver(tree.ToTXT("n"))
-	c := NewClient(Config{Resolver: r, Logger: testlog.Logger(t, log.LvlTrace)})
+	c := NewClient(Config{
+		Resolver:  r,
+		Logger:    testlog.Logger(t, log.LvlTrace),
+		RateLimit: 500,
+	})
 	it, err := c.NewIterator(url)
 	if err != nil {
 		t.Fatal(err)
@@ -139,8 +143,9 @@ func TestIteratorLinks(t *testing.T) {
 	tree1, url1 := makeTestTree("t1", nodes[:10], nil)
 	tree2, url2 := makeTestTree("t2", nodes[10:], []string{url1})
 	c := NewClient(Config{
-		Resolver: newMapResolver(tree1.ToTXT("t1"), tree2.ToTXT("t2")),
-		Logger:   testlog.Logger(t, log.LvlTrace),
+		Resolver:  newMapResolver(tree1.ToTXT("t1"), tree2.ToTXT("t2")),
+		Logger:    testlog.Logger(t, log.LvlTrace),
+		RateLimit: 500,
 	})
 	it, err := c.NewIterator(url2)
 	if err != nil {
@@ -161,6 +166,7 @@ func TestIteratorNodeUpdates(t *testing.T) {
 			Resolver:        resolver,
 			Logger:          testlog.Logger(t, log.LvlTrace),
 			RecheckInterval: 20 * time.Minute,
+			RateLimit:       500,
 		})
 	)
 	c.clock = clock
@@ -202,6 +208,7 @@ func TestIteratorLinkUpdates(t *testing.T) {
 			Resolver:        resolver,
 			Logger:          testlog.Logger(t, log.LvlTrace),
 			RecheckInterval: 20 * time.Minute,
+			RateLimit:       500,
 		})
 	)
 	c.clock = clock

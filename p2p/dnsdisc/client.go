@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	lru "github.com/hashicorp/golang-lru"
+	"golang.org/x/time/rate"
 )
 
 // Client discovers nodes by querying DNS servers.
@@ -46,6 +47,7 @@ type Config struct {
 	Timeout         time.Duration      // timeout used for DNS lookups (default 5s)
 	RecheckInterval time.Duration      // time between tree root update checks (default 30min)
 	CacheLimit      int                // maximum number of cached records (default 1000)
+	RateLimit       float64            // maximum DNS requests / second (default 4)
 	ValidSchemes    enr.IdentityScheme // acceptable ENR identity schemes (default enode.ValidSchemes)
 	Resolver        Resolver           // the DNS resolver to use (defaults to system DNS)
 	Logger          log.Logger         // destination of client log messages (defaults to root logger)
@@ -58,9 +60,10 @@ type Resolver interface {
 
 func (cfg Config) withDefaults() Config {
 	const (
-		defaultTimeout = 5 * time.Second
-		defaultRecheck = 30 * time.Minute
-		defaultCache   = 1000
+		defaultTimeout   = 5 * time.Second
+		defaultRecheck   = 30 * time.Minute
+		defaultRateLimit = 3
+		defaultCache     = 1000
 	)
 	if cfg.Timeout == 0 {
 		cfg.Timeout = defaultTimeout
@@ -70,6 +73,9 @@ func (cfg Config) withDefaults() Config {
 	}
 	if cfg.CacheLimit == 0 {
 		cfg.CacheLimit = defaultCache
+	}
+	if cfg.RateLimit == 0 {
+		cfg.RateLimit = defaultRateLimit
 	}
 	if cfg.ValidSchemes == nil {
 		cfg.ValidSchemes = enode.ValidSchemes
@@ -85,15 +91,14 @@ func (cfg Config) withDefaults() Config {
 
 // NewClient creates a client.
 func NewClient(cfg Config) *Client {
-	c := &Client{
-		cfg:   cfg.withDefaults(),
-		clock: mclock.System{},
-	}
-	var err error
-	if c.entries, err = lru.New(c.cfg.CacheLimit); err != nil {
+	cfg = cfg.withDefaults()
+	cache, err := lru.New(cfg.CacheLimit)
+	if err != nil {
 		panic(err)
 	}
-	return c
+	rlimit := rate.NewLimiter(rate.Limit(cfg.RateLimit), 10)
+	cfg.Resolver = &rateLimitResolver{cfg.Resolver, rlimit}
+	return &Client{cfg: cfg, entries: cache, clock: mclock.System{}}
 }
 
 // SyncTree downloads the entire node tree at the given URL.
@@ -189,6 +194,19 @@ func (c *Client) doResolveEntry(ctx context.Context, domain, hash string) (entry
 		return e, err
 	}
 	return nil, nameError{name, errNoEntry}
+}
+
+// rateLimitResolver applies a rate limit to a Resolver.
+type rateLimitResolver struct {
+	r       Resolver
+	limiter *rate.Limiter
+}
+
+func (r *rateLimitResolver) LookupTXT(ctx context.Context, domain string) ([]string, error) {
+	if err := r.limiter.Wait(ctx); err != nil {
+		return nil, err
+	}
+	return r.r.LookupTXT(ctx, domain)
 }
 
 // randomIterator traverses a set of trees and returns nodes found in them.
