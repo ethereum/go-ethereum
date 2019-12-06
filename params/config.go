@@ -496,7 +496,7 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 		return newCompatError("Istanbul fork block", c.IstanbulBlock, newcfg.IstanbulBlock)
 	}
 	if isForkIncompatible(c.MuirGlacierBlock, newcfg.MuirGlacierBlock, head) {
-		return newCompatError("EIP-2348 fork block", c.MuirGlacierBlock, newcfg.MuirGlacierBlock)
+		return newCompatError("Muir Glacier fork block", c.MuirGlacierBlock, newcfg.MuirGlacierBlock)
 	}
 	if isForkIncompatible(c.EWASMBlock, newcfg.EWASMBlock, head) {
 		return newCompatError("ewasm fork block", c.EWASMBlock, newcfg.EWASMBlock)
