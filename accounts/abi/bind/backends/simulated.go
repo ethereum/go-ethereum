@@ -530,23 +530,26 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, block *types.Block, stateDB *state.StateDB) (*core.ExecutionResult, error) {
 	// Ensure message is initialized properly.
 	// EIP1559 guards
+	// If we have finalized EIP1559 and do not have a properly formed EIP1559 trx, sub in default values
 	if b.config.IsEIP1559Finalized(block.Number()) && (call.GasPremium == nil || call.FeeCap == nil || call.GasPrice != nil) {
-		return nil, 0, false, core.ErrTxNotEIP1559
+		call.GasPremium = big.NewInt(1)
+		call.FeeCap = big.NewInt(10)
+		call.GasPrice = nil
 	}
+	// If we have not activated EIP1559 and do not have a properly formed legacy trx, sub in default values
 	if !b.config.IsEIP1559(block.Number()) && (call.GasPremium != nil || call.FeeCap != nil || call.GasPrice == nil) {
-		return nil, 0, false, core.ErrTxIsEIP1559
-	}
-	if call.GasPrice != nil && (call.GasPremium != nil || call.FeeCap != nil) {
-		return nil, 0, false, core.ErrTxSetsLegacyAndEIP1559Fields
-	}
-	if call.FeeCap != nil && call.GasPremium == nil {
-		return nil, 0, false, errors.New("if FeeCap is set, GasPremium must be set")
-	}
-	if call.GasPremium != nil && call.FeeCap == nil {
-		return nil, 0, false, errors.New("if GasPremium is set, FeeCap must be set")
-	}
-	if call.GasPrice == nil && call.GasPremium == nil {
+		call.GasPremium = nil
+		call.FeeCap = nil
 		call.GasPrice = big.NewInt(1)
+	}
+	// If we are in between activation and finalization
+	if b.config.IsEIP1559(block.Number()) && !b.config.IsEIP1559Finalized(block.Number()) {
+		// and we have neither a properly formed legacy or EIP1559 transaction, sub in default legacy values
+		if (call.GasPremium == nil || call.FeeCap == nil && call.GasPrice == nil) || (call.GasPremium != nil || call.FeeCap != nil && call.GasPrice != nil) {
+			call.GasPremium = nil
+			call.FeeCap = nil
+			call.GasPrice = big.NewInt(1)
+		}
 	}
 	if call.Gas == 0 {
 		call.Gas = 50000000
