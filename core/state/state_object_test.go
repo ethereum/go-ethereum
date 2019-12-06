@@ -18,6 +18,8 @@ package state
 
 import (
 	"bytes"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -42,5 +44,21 @@ func BenchmarkCutCustomTrim(b *testing.B) {
 	value := common.HexToHash("0x01")
 	for i := 0; i < b.N; i++ {
 		common.TrimLeftZeroes(value[:])
+	}
+}
+
+// BenchmarkHashKey-6   	 1221526	       975 ns/op
+func BenchmarkHashKey(b *testing.B) {
+	key := common.HexToHash("0x01")
+	for i := 0; i < b.N; i++ {
+		crypto.Keccak256Hash(key[:])
+	}
+}
+
+//BenchmarkEncodeValue-6   	 4843382	       219 ns/op
+func BenchmarkEncodeValue(b *testing.B) {
+	value := common.HexToHash("0x01")
+	for i := 0; i < b.N; i++ {
+		rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
 	}
 }
