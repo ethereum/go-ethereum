@@ -237,6 +237,10 @@ var (
 		Name:  "override.istanbul",
 		Usage: "Manually specify Istanbul fork-block, overriding the bundled setting",
 	}
+	OverrideMuirGlacierFlag = cli.Uint64Flag{
+		Name:  "override.muirglacier",
+		Usage: "Manually specify Muir Glacier fork-block, overriding the bundled setting",
+	}
 	// Light server and client settings
 	LightLegacyServFlag = cli.IntFlag{ // Deprecated in favor of light.serve, remove in 2021
 		Name:  "lightserv",

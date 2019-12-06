@@ -157,4 +157,7 @@ type Config struct {
 
 	// Istanbul block override (TODO: remove after the fork)
 	OverrideIstanbul *big.Int
+
+	// MuirGlacier block override (TODO: remove after the fork)
+	OverrideMuirGlacier *big.Int
 }
