@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -233,17 +232,17 @@ type Transaction struct {
 
 // NewContractCreation creates a new transaction for deploying a new contract with
 // the given properties.
-func NewContractCreation(nonce int64, amount *BigInt, gasLimit int64, gasPrice *BigInt, data []byte, gasPremium, feeCap *big.Int) *Transaction {
-	return &Transaction{types.NewContractCreation(uint64(nonce), amount.bigint, uint64(gasLimit), gasPrice.bigint, common.CopyBytes(data), gasPremium, feeCap)}
+func NewContractCreation(nonce int64, amount *BigInt, gasLimit int64, gasPrice *BigInt, data []byte, gasPremium, feeCap *BigInt) *Transaction {
+	return &Transaction{types.NewContractCreation(uint64(nonce), amount.bigint, uint64(gasLimit), gasPrice.bigint, common.CopyBytes(data), gasPremium.bigint, feeCap.bigint)}
 }
 
 // NewTransaction creates a new transaction with the given properties. Contracts
 // can be created by transacting with a nil recipient.
-func NewTransaction(nonce int64, to *Address, amount *BigInt, gasLimit int64, gasPrice *BigInt, data []byte, gasPremium, feeCap *big.Int) *Transaction {
+func NewTransaction(nonce int64, to *Address, amount *BigInt, gasLimit int64, gasPrice *BigInt, data []byte, gasPremium, feeCap *BigInt) *Transaction {
 	if to == nil {
-		return &Transaction{types.NewContractCreation(uint64(nonce), amount.bigint, uint64(gasLimit), gasPrice.bigint, common.CopyBytes(data), gasPremium, feeCap)}
+		return &Transaction{types.NewContractCreation(uint64(nonce), amount.bigint, uint64(gasLimit), gasPrice.bigint, common.CopyBytes(data), gasPremium.bigint, feeCap.bigint)}
 	}
-	return &Transaction{types.NewTransaction(uint64(nonce), to.address, amount.bigint, uint64(gasLimit), gasPrice.bigint, common.CopyBytes(data), gasPremium, feeCap)}
+	return &Transaction{types.NewTransaction(uint64(nonce), to.address, amount.bigint, uint64(gasLimit), gasPrice.bigint, common.CopyBytes(data), gasPremium.bigint, feeCap.bigint)}
 }
 
 // NewTransactionFromRLP parses a transaction from an RLP data dump.
