@@ -527,7 +527,7 @@ func testTransactionStatus(t *testing.T, protocol int) {
 	signer := types.HomesteadSigner{}
 
 	// test error status by sending an underpriced transaction
-	tx0, _ := types.SignTx(types.NewTransaction(0, userAddr1, big.NewInt(10000), params.TxGas, nil, nil, nil, nil), signer, bankKey)
+	tx0, _ := types.SignTx(types.NewTransaction(0, userAddr1, big.NewInt(10000), params.TxGas, new(big.Int), nil, nil, nil), signer, bankKey)
 	test(tx0, true, light.TxStatus{Status: core.TxStatusUnknown, Error: core.ErrUnderpriced.Error()})
 
 	tx1, _ := types.SignTx(types.NewTransaction(0, userAddr1, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil, nil, nil), signer, bankKey)

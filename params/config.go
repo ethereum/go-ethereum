@@ -68,9 +68,9 @@ var (
 		ConstantinopleBlock:   big.NewInt(7280000),
 		PetersburgBlock:       big.NewInt(7280000),
 		IstanbulBlock:         big.NewInt(9069000),
-		EWASMBlock:            nil,
 		EIP1559Block:          nil,
 		EIP1559FinalizedBlock: nil,
+		EWASMBlock:            nil,
 		Ethash:                new(EthashConfig),
 	}
 
@@ -113,6 +113,7 @@ var (
 		EWASMBlock:            nil,
 		EIP1559Block:          nil,
 		EIP1559FinalizedBlock: nil,
+		EWASMBlock:            nil,
 		Ethash:                new(EthashConfig),
 	}
 
@@ -155,6 +156,7 @@ var (
 		EWASMBlock:            nil,
 		EIP1559Block:          nil,
 		EIP1559FinalizedBlock: nil,
+		EWASMBlock:            nil,
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
@@ -198,6 +200,7 @@ var (
 		EWASMBlock:            nil,
 		EIP1559Block:          nil,
 		EIP1559FinalizedBlock: nil,
+		EWASMBlock:            nil,
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
@@ -265,8 +268,8 @@ var (
 	TestRules = TestChainConfig.Rules(new(big.Int))
 
 	// EIP1559 test configs
-	EIP1559ChainConfig          = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, big.NewInt(0), nil, new(EthashConfig), nil}
-	EIP1559FinalizedChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, big.NewInt(0), big.NewInt(0), new(EthashConfig), nil}
+	EIP1559ChainConfig          = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, big.NewInt(0), nil, nil, new(EthashConfig), nil}
+	EIP1559FinalizedChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil}
 
 	EIP1559TestRules          = EIP1559ChainConfig.Rules(new(big.Int))
 	EIP1559FinalizedTestRules = EIP1559FinalizedChainConfig.Rules(new(big.Int))
@@ -344,6 +347,7 @@ type ChainConfig struct {
 	EWASMBlock            *big.Int `json:"ewasmBlock,omitempty"`            // EWASM switch block (nil = no fork, 0 = already activated)
 	EIP1559Block          *big.Int `json:"eip1559Block,omitempty"`          // EIP1559 switch block (nil = no fork, 0 = already on eip1559)
 	EIP1559FinalizedBlock *big.Int `json:"eip1559FinalizedBlock,omitempty"` // EIP1559 finalization switch block (nil = no fork, 0 = already on eip1559 finalized)
+	EWASMBlock            *big.Int `json:"ewasmBlock,omitempty"`            // EWASM switch block (nil = no fork, 0 = already activated)
 
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
@@ -513,6 +517,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "yoloV2Block", block: c.YoloV2Block},
 		{name: "eip1559Block", block: c.EIP1559Block},
 		{name: "eip1559FinalizedBlock", block: c.EIP1559FinalizedBlock},
+		{name: "ewasmBlock", block: c.EWASMBlock},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
@@ -579,14 +584,14 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	if isForkIncompatible(c.YoloV2Block, newcfg.YoloV2Block, head) {
 		return newCompatError("YOLOv2 fork block", c.YoloV2Block, newcfg.YoloV2Block)
 	}
-	if isForkIncompatible(c.EWASMBlock, newcfg.EWASMBlock, head) {
-		return newCompatError("EWASM fork block", c.EWASMBlock, newcfg.EWASMBlock)
-	}
 	if isForkIncompatible(c.EIP1559Block, newcfg.EIP1559Block, head) {
 		return newCompatError("EIP1559 fork block", c.EIP1559Block, newcfg.EIP1559Block)
 	}
 	if isForkIncompatible(c.EIP1559FinalizedBlock, newcfg.EIP1559FinalizedBlock, head) {
 		return newCompatError("EIP1559Finalized fork block", c.EIP1559FinalizedBlock, newcfg.EIP1559FinalizedBlock)
+	}
+	if isForkIncompatible(c.EWASMBlock, newcfg.EWASMBlock, head) {
+		return newCompatError("EWASM fork block", c.EWASMBlock, newcfg.EWASMBlock)
 	}
 	return nil
 }

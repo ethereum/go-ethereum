@@ -149,11 +149,11 @@ func CalcGasLimitAndBaseFee(config *params.ChainConfig, parent *types.Block, gas
 	return calcGasLimitAndBaseFee(config, parent)
 }
 
-// start at 50 : 50 and then shift to 0 : 100
 // calcGasLimitAndBaseFee returns the EIP1559GasLimit and the BaseFee
+// Start at 50 : 50 and then shift to 0 : 100
 // The GasLimit for the legacy pool is (params.MaxGasEIP1559 - EIP1559GasLimit)
 func calcGasLimitAndBaseFee(config *params.ChainConfig, parent *types.Block) (uint64, *big.Int) {
-	// panic if we do not have a block number set for EIP1559 activation
+	// Panic if we do not have a block number set for EIP1559 activation
 	if config.EIP1559Block == nil {
 		panic("chain config is missing EIP1559Block")
 	}
@@ -178,7 +178,7 @@ func calcGasLimitAndBaseFee(config *params.ChainConfig, parent *types.Block) (ui
 	div2 := new(big.Int).Div(div, new(big.Int).SetUint64(params.BaseFeeMaxChangeDenominator))
 	baseFee := new(big.Int).Add(parent.BaseFee(), div2)
 
-	// Panic is the BaseFee is not valid
+	// Panic if the BaseFee is not valid
 	// A valid BASEFEE is one such that abs(BASEFEE - PARENT_BASEFEE) <= max(1, PARENT_BASEFEE // BASEFEE_MAX_CHANGE_DENOMINATOR)
 	diff := new(big.Int).Sub(baseFee, parent.BaseFee())
 	if diff.Sign() < 0 {

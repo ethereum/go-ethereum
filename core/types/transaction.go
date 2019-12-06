@@ -48,7 +48,7 @@ type Transaction struct {
 
 type txdata struct {
 	AccountNonce uint64          `json:"nonce"    gencodec:"required"`
-	Price        *big.Int        `json:"gasPrice" gencodec:"required"`
+	Price        *big.Int        `json:"gasPrice"`
 	GasLimit     uint64          `json:"gas"      gencodec:"required"`
 	Recipient    *common.Address `json:"to"       rlp:"nil"` // nil means contract creation
 	Amount       *big.Int        `json:"value"    gencodec:"required"`
@@ -98,7 +98,6 @@ func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit 
 		Payload:      data,
 		Amount:       new(big.Int),
 		GasLimit:     gasLimit,
-		Price:        new(big.Int),
 		V:            new(big.Int),
 		R:            new(big.Int),
 		S:            new(big.Int),
@@ -107,7 +106,7 @@ func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit 
 		d.Amount.Set(amount)
 	}
 	if gasPrice != nil {
-		d.Price.Set(gasPrice)
+		d.Price = gasPrice
 	}
 	if gasPremium != nil {
 		d.GasPremium = gasPremium
@@ -358,7 +357,7 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	msg := Message{
 		nonce:      tx.data.AccountNonce,
 		gasLimit:   tx.data.GasLimit,
-		gasPrice:   new(big.Int).Set(tx.data.Price),
+		gasPrice:   tx.data.Price,
 		to:         tx.data.Recipient,
 		amount:     tx.data.Amount,
 		data:       tx.data.Payload,
