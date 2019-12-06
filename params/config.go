@@ -68,9 +68,9 @@ var (
 		PetersburgBlock:       big.NewInt(7280000),
 		IstanbulBlock:         big.NewInt(9069000),
 		MuirGlacierBlock:      big.NewInt(9200000),
-		EWASMBlock:            nil,
 		EIP1559Block:          nil,
 		EIP1559FinalizedBlock: nil,
+		EWASMBlock:            nil,
 		Ethash:                new(EthashConfig),
 	}
 
@@ -583,14 +583,14 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	if isForkIncompatible(c.EIP1559FinalizedBlock, newcfg.EIP1559FinalizedBlock, head) {
 		return newCompatError("EIP1559Finalized fork block", c.EIP1559FinalizedBlock, newcfg.EIP1559FinalizedBlock)
 	}
-	if isForkIncompatible(c.EWASMBlock, newcfg.EWASMBlock, head) {
-		return newCompatError("EWASM fork block", c.EWASMBlock, newcfg.EWASMBlock)
-	}
 	if isForkIncompatible(c.EIP1559Block, newcfg.EIP1559Block, head) {
 		return newCompatError("EIP1559 fork block", c.EIP1559Block, newcfg.EIP1559Block)
 	}
 	if isForkIncompatible(c.EIP1559FinalizedBlock, newcfg.EIP1559FinalizedBlock, head) {
 		return newCompatError("EIP1559Finalized fork block", c.EIP1559FinalizedBlock, newcfg.EIP1559FinalizedBlock)
+	}
+	if isForkIncompatible(c.EWASMBlock, newcfg.EWASMBlock, head) {
+		return newCompatError("EWASM fork block", c.EWASMBlock, newcfg.EWASMBlock)
 	}
 	return nil
 }
@@ -659,7 +659,8 @@ type Rules struct {
 	ChainID                                                 *big.Int
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
-	IsYoloV1, IsEIP1559, IsEIP1559Finalized, IsEWASM        bool
+	IsMuirGlacier, IsYoloV1, IsEIP1559, IsEIP1559Finalized  bool
+	IsEWASM        											bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -678,6 +679,7 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsConstantinople: c.IsConstantinople(num),
 		IsPetersburg:     c.IsPetersburg(num),
 		IsIstanbul:       c.IsIstanbul(num),
+		IsMuirGlacier:      c.IsMuirGlacier(num),
 		IsYoloV1:         c.IsYoloV1(num),
 		IsEIP1559:          c.IsEIP1559(num),
 		IsEIP1559Finalized: c.IsEIP1559Finalized(num),
