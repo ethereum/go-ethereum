@@ -197,3 +197,28 @@ func testHeaderConcurrentAbortion(t *testing.T, threads int) {
 		t.Errorf("verification count too large: have %d, want below %d", verified, 2*threads)
 	}
 }
+
+/*
+	We need to test:
+
+	1. That the correct, original, gasLimit is returned in the period before activation and no BaseFee is returned
+	2. That both the correct EIP1559 gasLimit and BaseFee are calculated and returned in the period between activation and finalization
+	3. That the entire `MaxGasEIP1559` is returned as the EIP1559 gasLimit after finalization and the correct BaseFee is calculated
+
+*/
+
+// TestEIP1559Verification tests that verificaiton works after EIP1559 initialization and finalization
+func TestEIP1559Verification(t *testing.T) {
+	//testEIP1559Verification(t)
+	//testEIP1559VerificationAfterFinalization(t)
+}
+
+// testEIP1559Verification tests verification during the EIP1559 transition phase
+func testEIP1559Verification(t *testing.T) {
+	panic("implement me")
+}
+
+// testEIP1559VerificationAfterFinalization tests verification after EIP1559 finalization
+func testEIP1559VerificationAfterFinalization(t *testing.T) {
+	panic("implement me")
+}

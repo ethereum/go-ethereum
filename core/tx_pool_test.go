@@ -1914,3 +1914,30 @@ func benchmarkPoolBatchInsert(b *testing.B, size int) {
 		pool.AddRemotes(batch)
 	}
 }
+
+/*
+	We need to test:
+
+	1. That the tx_pool rejects EIP1559 transactions before the initialization block (validateTx)
+	2. That the tx_pool accepts both types of transactions in between initialization and finalization (validateTx)
+	3. That the tx_pool rejects malformed transactions that don't fit either format (validateTx)
+
+*/
+
+// TestEIP1559 tests the tx_pool handling of EIP1559 transactions
+func TestEIP1559TxPool(t *testing.T) {
+	//testEIP1559TxPool(t)
+	//testEIP1559TxPoolAfterFinalization(t)
+}
+
+// testEIP1559TxPool tests the tx_pool handling of EIP1559 and legacy transactions during the transition phase
+// in this phase both types of transactions are accepted
+func testEIP1559TxPool(t *testing.T) {
+	panic("implement me")
+}
+
+// testEIP1559TxPoolAfterFinalization tests the tx_pool handling of EIP1559 and legacy transactions after EIP1559 has been finalized
+// after finalization, only EIP1559 transactions are accepted
+func testEIP1559TxPoolAfterFinalization(t *testing.T) {
+	panic("implement me")
+}
