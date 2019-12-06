@@ -231,32 +231,38 @@ func (dl *diffLayer) initBloom() {
 // bloom
 func (dl *diffLayer) Prepare(origin *diskLayer) {
 	dl.lock.Lock()
+	defer dl.lock.Unlock()
+	// If we already have a cumulative bloom, we're done here
+	if dl.cumulative != nil {
+		return
+	}
+	// Traverse up the parent tree
 	dl.cumulative, _ = dl.diffed.Copy()
 	layer := dl
 	for {
-		if parent, ok := layer.parent.(*diffLayer); ok {
-			parent.lock.RLock()
-			dl.cumulative.UnionInPlace(parent.diffed)
-			parent.lock.RUnlock()
-			layer = parent
-		} else {
+		parent, ok := layer.parent.(*diffLayer)
+		if !ok {
+			break // We hit the disk layer
+		}
+		parent.lock.Lock()
+		// If we're lucky, the parent has a cumulative we can use.
+		if parent.cumulative != nil {
+			// Copy, nuke and done.
+			dl.cumulative.UnionInPlace(parent.cumulative)
+			parent.cumulative = nil
+			parent.lock.Unlock()
 			break
 		}
+		dl.cumulative.UnionInPlace(parent.diffed)
+		parent.lock.Unlock()
+		layer = parent
 	}
 	dl.origin = origin
-	dl.lock.Unlock()
 	// Calculate the current false positive rate and update the error rate meter.
 	k := float64(dl.cumulative.K())
 	n := float64(dl.cumulative.N())
 	m := float64(dl.cumulative.M())
 	snapshotBloomErrorGauge.Update(math.Pow(1.0-math.Exp((-k)*(n+0.5)/(m-1)), k))
-
-}
-
-func (dl *diffLayer) Release() {
-	dl.lock.Lock()
-	dl.cumulative = nil
-	dl.lock.Unlock()
 }
 
 // Root returns the root hash for which this snapshot was made.

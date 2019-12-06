@@ -166,4 +166,3 @@ func (dl *diskLayer) Update(blockHash common.Hash, destructs map[common.Hash]str
 }
 
 func (dl *diskLayer) Prepare(*diskLayer) {}
-func (dl *diskLayer) Release()           {}
