@@ -250,7 +250,7 @@ func checkIterator(t *testing.T, it enode.Iterator, wantNodes []*enode.Node) {
 
 	var (
 		want     = make(map[enode.ID]*enode.Node)
-		maxCalls = len(wantNodes) * 2
+		maxCalls = len(wantNodes) * 3
 		calls    = 0
 	)
 	for _, n := range wantNodes {
