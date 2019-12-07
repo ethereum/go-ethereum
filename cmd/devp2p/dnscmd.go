@@ -214,8 +214,7 @@ func dnsClient(ctx *cli.Context) *dnsdisc.Client {
 	if commandHasFlag(ctx, dnsTimeoutFlag) {
 		cfg.Timeout = ctx.Duration(dnsTimeoutFlag.Name)
 	}
-	c, _ := dnsdisc.NewClient(cfg) // cannot fail because no URLs given
-	return c
+	return dnsdisc.NewClient(cfg)
 }
 
 // There are two file formats for DNS node trees on disk:
