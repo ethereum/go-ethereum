@@ -18,7 +18,6 @@ package dnsdisc
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"math/rand"
 	"time"
 
@@ -28,21 +27,21 @@ import (
 
 // clientTree is a full tree being synced.
 type clientTree struct {
-	c             *Client
-	lc            *linkCache
-	loc           *linkEntry
-	root          *rootEntry
+	c   *Client
+	loc *linkEntry // link to this tree
+
 	lastRootCheck mclock.AbsTime // last revalidation of root
+	root          *rootEntry
 	enrs          *subtreeSync
 	links         *subtreeSync
+
+	lc         *linkCache          // tracks all links between all trees
+	curLinks   map[string]struct{} // links contained in this tree
+	linkGCRoot string              // root on which last link GC has run
 }
 
 func newClientTree(c *Client, lc *linkCache, loc *linkEntry) *clientTree {
 	return &clientTree{c: c, lc: lc, loc: loc}
-}
-
-func keysEqual(k1, k2 *ecdsa.PublicKey) bool {
-	return k1.Curve == k2.Curve && k1.X.Cmp(k2.X) == 0 && k1.Y.Cmp(k2.Y) == 0
 }
 
 // syncAll retrieves all entries of the tree.
@@ -72,6 +71,7 @@ func (ct *clientTree) syncRandom(ctx context.Context) (*enode.Node, error) {
 		err := ct.syncNextLink(ctx)
 		return nil, err
 	}
+	ct.gcLinks()
 
 	// Sync next random entry in ENR tree. Once every node has been visited, we simply
 	// start over. This is fine because entries are cached.
@@ -79,6 +79,16 @@ func (ct *clientTree) syncRandom(ctx context.Context) (*enode.Node, error) {
 		ct.enrs = newSubtreeSync(ct.c, ct.loc, ct.root.eroot, false)
 	}
 	return ct.syncNextRandomENR(ctx)
+}
+
+// gcLinks removes outdated links from the global link cache. GC runs once
+// when the link sync finishes.
+func (ct *clientTree) gcLinks() {
+	if !ct.links.done() || ct.root.lroot == ct.linkGCRoot {
+		return
+	}
+	ct.lc.resetLinks(ct.loc.str, ct.curLinks)
+	ct.linkGCRoot = ct.root.lroot
 }
 
 func (ct *clientTree) syncNextLink(ctx context.Context) error {
@@ -91,6 +101,7 @@ func (ct *clientTree) syncNextLink(ctx context.Context) error {
 
 	if dest, ok := e.(*linkEntry); ok {
 		ct.lc.addLink(ct.loc.str, dest.str)
+		ct.curLinks[dest.str] = struct{}{}
 	}
 	return nil
 }
@@ -140,7 +151,7 @@ func (ct *clientTree) updateRoot() error {
 	// Invalidate subtrees if changed.
 	if ct.links == nil || root.lroot != ct.links.root {
 		ct.links = newSubtreeSync(ct.c, ct.loc, root.lroot, true)
-		ct.lc.resetLinks(ct.loc.str)
+		ct.curLinks = make(map[string]struct{})
 	}
 	if ct.enrs == nil || root.eroot != ct.enrs.root {
 		ct.enrs = newSubtreeSync(ct.c, ct.loc, root.eroot, false)
@@ -231,13 +242,16 @@ func (lc *linkCache) addLink(from, to string) {
 }
 
 // resetLinks clears all links of the given tree.
-func (lc *linkCache) resetLinks(from string) {
+func (lc *linkCache) resetLinks(from string, keep map[string]struct{}) {
 	stk := []string{from}
 	for len(stk) > 0 {
 		item := stk[len(stk)-1]
 		stk = stk[:len(stk)-1]
 
 		for r, refs := range lc.backrefs {
+			if _, ok := keep[r]; ok {
+				continue
+			}
 			if _, ok := refs[item]; !ok {
 				continue
 			}

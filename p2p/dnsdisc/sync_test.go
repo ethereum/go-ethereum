@@ -47,7 +47,7 @@ func TestLinkCache(t *testing.T) {
 		t.Error("6 is referenced")
 	}
 
-	lc.resetLinks("1")
+	lc.resetLinks("1", nil)
 	if !lc.changed {
 		t.Error("changed flag not set")
 	}
@@ -74,7 +74,7 @@ func TestLinkCacheRandom(t *testing.T) {
 
 	// Remove all the links.
 	for _, s := range remove {
-		lc.resetLinks(s)
+		lc.resetLinks(s, nil)
 	}
 	if len(lc.backrefs) != 0 {
 		t.Logf("%+v", lc)
