@@ -70,7 +70,7 @@ type runToken chan struct{}
 // start blocks until the task can start and returns true if it is allowed to run.
 // Returning false means that the task should be cancelled.
 func (t *servingTask) start() bool {
-	if t.peer.isFrozen() {
+	if t.peer != nil && t.peer.isFrozen() {
 		return false
 	}
 	t.tokenCh = make(chan runToken, 1)
@@ -289,7 +289,7 @@ func (sq *servingQueue) addTask(task *servingTask) {
 	sq.queuedTime += task.expTime
 	sqServedGauge.Update(int64(sq.recentTime))
 	sqQueuedGauge.Update(int64(sq.queuedTime))
-	if sq.recentTime+sq.queuedTime > sq.burstLimit {
+	if sq.burstLimit != 0 && sq.recentTime+sq.queuedTime > sq.burstLimit {
 		sq.freezePeers()
 	}
 }

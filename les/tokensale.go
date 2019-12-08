@@ -23,11 +23,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const basePriceTC = time.Hour * 10
+const (
+	basePriceTC  = time.Hour * 10
+	tokenQueueTC = time.Hour
+)
 
 type paymentReceiver interface {
 	info() keyValueList
@@ -36,12 +40,15 @@ type paymentReceiver interface {
 }
 
 type tokenSale struct {
-	lock                    sync.Mutex
+	lock, qlock             sync.Mutex
 	clientPool              *clientPool
 	stopCh                  chan struct{}
 	receivers               map[string]paymentReceiver
 	receiverNames           []string
 	basePrice, minBasePrice float64
+
+	sq      *servingQueue
+	sources map[string]*cmdSource
 }
 
 func newTokenSale(clientPool *clientPool, minBasePrice float64) *tokenSale {
@@ -51,8 +58,12 @@ func newTokenSale(clientPool *clientPool, minBasePrice float64) *tokenSale {
 		basePrice:    minBasePrice,
 		minBasePrice: minBasePrice,
 		stopCh:       make(chan struct{}),
+		sq:           newServingQueue(0, 0),
+		sources:      make(map[string]*cmdSource),
 	}
+	t.sq.setThreads(1)
 	go func() {
+		cleanupCounter := 0
 		for {
 			select {
 			case <-time.After(time.Second * 10):
@@ -66,6 +77,12 @@ func newTokenSale(clientPool *clientPool, minBasePrice float64) *tokenSale {
 					t.basePrice = minBasePrice
 				}
 				t.lock.Unlock()
+
+				cleanupCounter++
+				if cleanupCounter == 100 {
+					t.sourceMapCleanup()
+					cleanupCounter = 0
+				}
 			case <-t.stopCh:
 				return
 			}
@@ -74,8 +91,104 @@ func newTokenSale(clientPool *clientPool, minBasePrice float64) *tokenSale {
 	return t
 }
 
+type (
+	cmdSource struct {
+		ch         chan tokenCmd
+		recentTime float64
+		lastUpdate mclock.AbsTime
+	}
+
+	tokenCmd struct {
+		cmd    []byte
+		id     enode.ID
+		freeID string
+		send   func([]byte)
+	}
+)
+
+func (c *cmdSource) priority(capacity uint64) int64 {
+	dt := mclock.Now() - c.lastUpdate
+	rt := c.recentTime
+	if dt > 0 {
+		rt *= math.Exp(-float64(dt) / float64(tokenQueueTC))
+	}
+	return -int64(rt / float64(capacity))
+}
+
+func (c *cmdSource) addTime(time uint64) {
+	now := mclock.Now()
+	dt := now - c.lastUpdate
+	if dt > 0 {
+		c.recentTime *= math.Exp(-float64(dt) / float64(tokenQueueTC))
+		c.lastUpdate = now
+	}
+	c.recentTime += float64(time)
+}
+
+func (t *tokenSale) sourceMapCleanup() {
+	t.qlock.Lock()
+	defer t.qlock.Unlock()
+
+	for src, s := range t.sources {
+		s.addTime(0)
+		if s.recentTime < float64(time.Millisecond*100) {
+			delete(t.sources, src)
+		}
+	}
+}
+
+func (t *tokenSale) queueCommand(src string, cmd tokenCmd, capacity uint64) bool {
+	t.qlock.Lock()
+	defer t.qlock.Unlock()
+
+	s := t.sources[src]
+	if s == nil {
+		s = &cmdSource{lastUpdate: mclock.Now()}
+		t.sources[src] = s
+	}
+	if s.ch != nil {
+		select {
+		case s.ch <- cmd:
+			return true
+		default:
+			return false
+		}
+	}
+	s.ch = make(chan tokenCmd, 16)
+	s.ch <- cmd
+
+	go func() {
+	loop:
+		for {
+			select {
+			case cmd := <-s.ch:
+				task := t.sq.newTask(nil, 0, s.priority(capacity))
+				if !task.start() {
+					break loop
+				}
+				start := mclock.Now()
+				reply := t.runCommand(cmd.cmd, cmd.id, cmd.freeID)
+				runTime := mclock.Now() - start
+				cmd.send(reply)
+				time.Sleep(time.Duration(runTime) * 9)
+				task.done()
+				t.qlock.Lock()
+				s.addTime(uint64(runTime))
+				t.qlock.Unlock()
+			default:
+				break loop
+			}
+			t.qlock.Lock()
+			s.ch = nil // TODO map cleanup
+			t.qlock.Unlock()
+		}
+	}()
+	return true
+}
+
 func (t *tokenSale) stop() {
 	close(t.stopCh)
+	t.sq.stop()
 }
 
 func (t *tokenSale) tokenCost(buyAmount uint64) (float64, bool) {
@@ -417,14 +530,6 @@ func (t *tokenSale) runCommand(cmd []byte, id enode.ID, freeID string) []byte {
 			}
 			res, _ = rlp.EncodeToBytes(&results)
 		}
-	}
-	return res
-}
-
-func (t *tokenSale) runCommands(cmds [][]byte, id enode.ID, freeID string) [][]byte {
-	res := make([][]byte, len(cmds))
-	for i, cmd := range cmds {
-		res[i] = t.runCommand(cmd, id, freeID)
 	}
 	return res
 }

@@ -377,7 +377,7 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 					first = false
 				}
 				reply := p.ReplyBlockHeaders(req.ReqID, headers)
-				sendResponse(req.ReqID, query.Amount, p.ReplyBlockHeaders(req.ReqID, headers), task.done())
+				sendResponse(req.ReqID, query.Amount, reply, task.done())
 				if metrics.EnabledExpensive {
 					miscOutHeaderPacketsMeter.Mark(1)
 					miscOutHeaderTrafficMeter.Mark(int64(reply.size()))
@@ -841,11 +841,22 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 			clientErrorMeter.Mark(1)
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		reply := h.server.tokenSale.runCommand(req.Cmd, p.ID(), p.freeClientId())
-		p.ReplyLespay(req.ReqID, reply)
-		if metrics.EnabledExpensive {
-			miscOutLespayPacketsMeter.Mark(1)
-			miscOutLespayTrafficMeter.Mark(int64(len(reply)))
+		if !h.server.tokenSale.queueCommand(p.id, tokenCmd{
+			cmd:    req.Cmd,
+			id:     p.ID(),
+			freeID: p.freeClientId(),
+			send: func(reply []byte) {
+				if metrics.EnabledExpensive {
+					miscOutLespayPacketsMeter.Mark(1)
+					miscOutLespayTrafficMeter.Mark(int64(len(reply)))
+				}
+				p.queueSend(func() {
+					p.ReplyLespay(req.ReqID, reply)
+				})
+			},
+		}, p.fcClient.Params().MinRecharge) {
+			clientErrorMeter.Mark(1)
+			return errResp(ErrRequestRejected, "")
 		}
 
 	default:
@@ -985,16 +996,34 @@ func (h *serverHandler) talkRequestHandler(id enode.ID, addr *net.UDPAddr, paylo
 	if !ok {
 		return nil, false
 	}
-	cmds := make([][]byte, len(c))
-	for i, c := range c {
-		cmds[i], ok = c.([]byte)
+	resultCh := make(chan []byte, len(c))
+	results := make([][]byte, len(c))
+	for _, c := range c {
+		cmd, ok := c.([]byte)
 		if !ok {
 			fmt.Println("type err", reflect.TypeOf(c))
 			return nil, false
 		}
+		if !h.server.tokenSale.queueCommand(id.String(), tokenCmd{
+			cmd:    cmd,
+			id:     id,
+			freeID: addr.IP.String(),
+			send: func(reply []byte) {
+				resultCh <- reply
+			},
+		}, h.server.freeCapacity) {
+			fmt.Println("failed to queue")
+			return nil, false
+		}
 	}
-	fmt.Println("ok", ok)
-	results := h.server.tokenSale.runCommands(cmds, id, addr.IP.String())
+
+	for i, _ := range results {
+		select {
+		case results[i] = <-resultCh:
+		case <-h.closeCh:
+			return nil, false
+		}
+	}
 	fmt.Println("results", results)
 	return results, true
 }

@@ -185,6 +185,13 @@ func (node *ClientNode) UpdateParams(params ServerParams) {
 	}
 }
 
+func (node *ClientNode) Params() ServerParams {
+	node.lock.Lock()
+	defer node.lock.Unlock()
+
+	return node.params
+}
+
 // updateParams updates the flow control parameters of the node
 func (node *ClientNode) updateParams(params ServerParams, now mclock.AbsTime) {
 	diff := int64(params.BufLimit - node.params.BufLimit)
