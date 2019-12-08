@@ -1372,7 +1372,7 @@ func (q *talkQuery) start(net *Network) bool {
 	if q.remote == net.tab.self {
 		return false
 	}
-	if q.remote.state.canQuery {
+	if q.remote.state == known {
 		net.talkResponseSubLock.Lock()
 		hash := net.conn.send(q.remote, talkRequestPacket, talkRequest{TalkID: []byte(q.talkID), Payload: q.payload})
 		q.key = string(q.remote.sha[:]) + string(hash[:])
