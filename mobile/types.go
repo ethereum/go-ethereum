@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -289,8 +290,8 @@ func (tx *Transaction) GetGasPrice() *BigInt { return &BigInt{tx.tx.GasPrice()} 
 func (tx *Transaction) GetValue() *BigInt    { return &BigInt{tx.tx.Value()} }
 func (tx *Transaction) GetNonce() int64      { return int64(tx.tx.Nonce()) }
 
-func (tx *Transaction) GetHash() *Hash   { return &Hash{tx.tx.Hash()} }
-func (tx *Transaction) GetCost() *BigInt { return &BigInt{tx.tx.Cost()} }
+func (tx *Transaction) GetHash() *Hash                   { return &Hash{tx.tx.Hash()} }
+func (tx *Transaction) GetCost(baseFee *big.Int) *BigInt { return &BigInt{tx.tx.Cost(baseFee)} }
 
 // Deprecated: GetSigHash cannot know which signer to use.
 func (tx *Transaction) GetSigHash() *Hash { return &Hash{types.HomesteadSigner{}.Hash(tx.tx)} }

@@ -387,10 +387,22 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 }
 
 // Cost returns amount + gasprice * gaslimit.
-func (tx *Transaction) Cost() *big.Int {
-	total := new(big.Int).Mul(tx.data.Price, new(big.Int).SetUint64(tx.data.GasLimit))
-	total.Add(total, tx.data.Amount)
-	return total
+func (tx *Transaction) Cost(baseFee *big.Int) *big.Int {
+	if tx.data.Price != nil {
+		total := new(big.Int).Mul(tx.data.Price, new(big.Int).SetUint64(tx.data.GasLimit))
+		total.Add(total, tx.data.Amount)
+		return total
+	}
+	if baseFee != nil && tx.data.GasPremium != nil && tx.data.FeeCap != nil {
+		eip1559GasPrice := new(big.Int).Add(baseFee, tx.data.GasPremium)
+		if eip1559GasPrice.Cmp(tx.data.FeeCap) > 0 {
+			eip1559GasPrice.Set(tx.data.FeeCap)
+		}
+		total := new(big.Int).Mul(eip1559GasPrice, new(big.Int).SetUint64(tx.data.GasLimit))
+		total.Add(total, tx.data.Amount)
+		return total
+	}
+	return nil
 }
 
 // RawSignatureValues returns the V, R, S signature values of the transaction.
