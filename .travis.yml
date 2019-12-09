@@ -9,7 +9,7 @@ before_script:
 # the `install` step will run `bundle install` by default.
 script:
   - bundle exec jekyll build
-  - bundle exec htmlproofer ./_site --assume-extension --allow-hash-href
+  - bundle exec htmlproofer ./_site --assume-extension --allow-hash-href --empty-alt-ignore
 
 env:
   global:
