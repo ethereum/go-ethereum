@@ -248,21 +248,52 @@ func (l *txList) Overlaps(tx *types.Transaction) bool {
 //
 // If the new transaction is accepted into the list, the lists' cost and gas
 // thresholds are also potentially updated.
-func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transaction) {
+func (l *txList) Add(tx *types.Transaction, priceBump uint64, baseFee *big.Int) (bool, *types.Transaction) {
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
 	if old != nil {
-		threshold := new(big.Int).Div(new(big.Int).Mul(old.GasPrice(), big.NewInt(100+int64(priceBump))), big.NewInt(100))
 		// Have to ensure that the new gas price is higher than the old gas
 		// price as well as checking the percentage threshold to ensure that
 		// this is accurate for low (Wei-level) gas price replacements
-		if old.GasPrice().Cmp(tx.GasPrice()) >= 0 || threshold.Cmp(tx.GasPrice()) > 0 {
-			return false, nil
+		if old.GasPrice() != nil {
+			threshold := new(big.Int).Div(new(big.Int).Mul(old.GasPrice(), big.NewInt(100+int64(priceBump))), big.NewInt(100))
+			if tx.GasPrice() != nil {
+				if old.GasPrice().Cmp(tx.GasPrice()) >= 0 || threshold.Cmp(tx.GasPrice()) > 0 {
+					return false, nil
+				}
+			} else {
+				newGasPrice := new(big.Int).Add(baseFee, tx.GasPremium())
+				if newGasPrice.Cmp(tx.FeeCap()) > 0 {
+					newGasPrice.Set(tx.FeeCap())
+				}
+				if old.GasPrice().Cmp(newGasPrice) >= 0 || threshold.Cmp(newGasPrice) > 0 {
+					return false, nil
+				}
+			}
+		} else {
+			oldGasPrice := new(big.Int).Add(baseFee, old.GasPremium())
+			if oldGasPrice.Cmp(old.FeeCap()) > 0 {
+				oldGasPrice.Set(old.FeeCap())
+			}
+			threshold := new(big.Int).Div(new(big.Int).Mul(oldGasPrice, big.NewInt(100+int64(priceBump))), big.NewInt(100))
+			if tx.GasPrice() != nil {
+				if oldGasPrice.Cmp(tx.GasPrice()) >= 0 || threshold.Cmp(tx.GasPrice()) > 0 {
+					return false, nil
+				}
+			} else {
+				newGasPrice := new(big.Int).Add(baseFee, tx.GasPremium())
+				if newGasPrice.Cmp(tx.FeeCap()) > 0 {
+					newGasPrice.Set(tx.FeeCap())
+				}
+				if oldGasPrice.Cmp(newGasPrice) >= 0 || threshold.Cmp(newGasPrice) > 0 {
+					return false, nil
+				}
+			}
 		}
 	}
 	// Otherwise overwrite the old transaction with the current one
 	l.txs.Put(tx)
-	if cost := tx.Cost(); l.costcap.Cmp(cost) < 0 {
+	if cost := tx.Cost(baseFee); l.costcap.Cmp(cost) < 0 {
 		l.costcap = cost
 	}
 	if gas := tx.Gas(); l.gascap < gas {
@@ -287,7 +318,7 @@ func (l *txList) Forward(threshold uint64) types.Transactions {
 // a point in calculating all the costs or if the balance covers all. If the threshold
 // is lower than the costgas cap, the caps will be reset to a new high after removing
 // the newly invalidated transactions.
-func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) (types.Transactions, types.Transactions) {
+func (l *txList) Filter(costLimit *big.Int, gasLimit uint64, baseFee *big.Int) (types.Transactions, types.Transactions) {
 	// If all transactions are below the threshold, short circuit
 	if l.costcap.Cmp(costLimit) <= 0 && l.gascap <= gasLimit {
 		return nil, nil
@@ -296,7 +327,7 @@ func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) (types.Transactions
 	l.gascap = gasLimit
 
 	// Filter out all the transactions above the account's funds
-	removed := l.txs.Filter(func(tx *types.Transaction) bool { return tx.Cost().Cmp(costLimit) > 0 || tx.Gas() > gasLimit })
+	removed := l.txs.Filter(func(tx *types.Transaction) bool { return tx.Cost(baseFee).Cmp(costLimit) > 0 || tx.Gas() > gasLimit })
 
 	// If the list was strict, filter anything above the lowest nonce
 	var invalids types.Transactions
@@ -365,32 +396,49 @@ func (l *txList) Flatten() types.Transactions {
 
 // priceHeap is a heap.Interface implementation over transactions for retrieving
 // price-sorted transactions to discard when the pool fills up.
-type priceHeap []*types.Transaction
+type priceHeap struct {
+	txs     []*types.Transaction
+	baseFee *big.Int
+}
 
-func (h priceHeap) Len() int      { return len(h) }
-func (h priceHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+func (h priceHeap) Len() int      { return len(h.txs) }
+func (h priceHeap) Swap(i, j int) { h.txs[i], h.txs[j] = h.txs[j], h.txs[i] }
 
 func (h priceHeap) Less(i, j int) bool {
 	// Sort primarily by price, returning the cheaper one
-	switch h[i].GasPrice().Cmp(h[j].GasPrice()) {
+	iPrice := h.txs[i].GasPrice()
+	jPrice := h.txs[j].GasPrice()
+	if iPrice == nil {
+		iPrice = new(big.Int).Add(h.baseFee, h.txs[i].GasPremium())
+		if iPrice.Cmp(h.txs[i].FeeCap()) > 0 {
+			iPrice.Set(h.txs[i].FeeCap())
+		}
+	}
+	if jPrice == nil {
+		jPrice = new(big.Int).Add(h.baseFee, h.txs[j].GasPremium())
+		if jPrice.Cmp(h.txs[j].FeeCap()) > 0 {
+			jPrice.Set(h.txs[j].FeeCap())
+		}
+	}
+	switch iPrice.Cmp(jPrice) {
 	case -1:
 		return true
 	case 1:
 		return false
 	}
 	// If the prices match, stabilize via nonces (high nonce is worse)
-	return h[i].Nonce() > h[j].Nonce()
+	return h.txs[i].Nonce() > h.txs[j].Nonce()
 }
 
 func (h *priceHeap) Push(x interface{}) {
-	*h = append(*h, x.(*types.Transaction))
+	h.txs = append(h.txs, x.(*types.Transaction))
 }
 
 func (h *priceHeap) Pop() interface{} {
-	old := *h
+	old := h.txs
 	n := len(old)
 	x := old[n-1]
-	*h = old[0 : n-1]
+	h.txs = old[0 : n-1]
 	return x
 }
 
@@ -403,10 +451,13 @@ type txPricedList struct {
 }
 
 // newTxPricedList creates a new price-sorted transaction heap.
-func newTxPricedList(all *txLookup) *txPricedList {
+func newTxPricedList(all *txLookup, baseFee *big.Int) *txPricedList {
+	pHeap := new(priceHeap)
+	pHeap.txs = make([]*types.Transaction, 0)
+	pHeap.baseFee = baseFee
 	return &txPricedList{
 		all:   all,
-		items: new(priceHeap),
+		items: pHeap,
 	}
 }
 
@@ -421,15 +472,17 @@ func (l *txPricedList) Put(tx *types.Transaction) {
 func (l *txPricedList) Removed(count int) {
 	// Bump the stale counter, but exit if still too low (< 25%)
 	l.stales += count
-	if l.stales <= len(*l.items)/4 {
+	if l.stales <= len(l.items.txs)/4 {
 		return
 	}
 	// Seems we've reached a critical number of stale transactions, reheap
-	reheap := make(priceHeap, 0, l.all.Count())
+	reheap := priceHeap{}
+	reheap.txs = make([]*types.Transaction, 0, l.all.Count())
+	reheap.baseFee = l.items.baseFee
 
 	l.stales, l.items = 0, &reheap
 	l.all.Range(func(hash common.Hash, tx *types.Transaction) bool {
-		*l.items = append(*l.items, tx)
+		l.items.txs = append(l.items.txs, tx)
 		return true
 	})
 	heap.Init(l.items)
@@ -441,7 +494,7 @@ func (l *txPricedList) Cap(threshold *big.Int, local *accountSet) types.Transact
 	drop := make(types.Transactions, 0, 128) // Remote underpriced transactions to drop
 	save := make(types.Transactions, 0, 64)  // Local underpriced transactions to keep
 
-	for len(*l.items) > 0 {
+	for len(l.items.txs) > 0 {
 		// Discard stale transactions if found during cleanup
 		tx := heap.Pop(l.items).(*types.Transaction)
 		if l.all.Get(tx.Hash()) == nil {
@@ -449,7 +502,14 @@ func (l *txPricedList) Cap(threshold *big.Int, local *accountSet) types.Transact
 			continue
 		}
 		// Stop the discards if we've reached the threshold
-		if tx.GasPrice().Cmp(threshold) >= 0 {
+		gasPrice := tx.GasPrice()
+		if gasPrice == nil {
+			gasPrice = new(big.Int).Add(l.items.baseFee, tx.GasPremium())
+			if gasPrice.Cmp(tx.FeeCap()) > 0 {
+				gasPrice.Set(tx.FeeCap())
+			}
+		}
+		if gasPrice.Cmp(threshold) >= 0 {
 			save = append(save, tx)
 			break
 		}
@@ -474,8 +534,8 @@ func (l *txPricedList) Underpriced(tx *types.Transaction, local *accountSet) boo
 		return false
 	}
 	// Discard stale price points if found at the heap start
-	for len(*l.items) > 0 {
-		head := []*types.Transaction(*l.items)[0]
+	for len(l.items.txs) > 0 {
+		head := []*types.Transaction(l.items.txs)[0]
 		if l.all.Get(head.Hash()) == nil {
 			l.stales--
 			heap.Pop(l.items)
@@ -484,12 +544,26 @@ func (l *txPricedList) Underpriced(tx *types.Transaction, local *accountSet) boo
 		break
 	}
 	// Check if the transaction is underpriced or not
-	if len(*l.items) == 0 {
+	if len(l.items.txs) == 0 {
 		log.Error("Pricing query for empty pool") // This cannot happen, print to catch programming errors
 		return false
 	}
-	cheapest := []*types.Transaction(*l.items)[0]
-	return cheapest.GasPrice().Cmp(tx.GasPrice()) >= 0
+	cheapest := []*types.Transaction(l.items.txs)[0]
+	cheapestPrice := cheapest.GasPrice()
+	if cheapestPrice == nil {
+		cheapestPrice = new(big.Int).Add(l.items.baseFee, cheapest.GasPremium())
+		if cheapestPrice.Cmp(cheapest.FeeCap()) > 0 {
+			cheapestPrice.Set(cheapest.FeeCap())
+		}
+	}
+	txPrice := tx.GasPrice()
+	if txPrice == nil {
+		txPrice = new(big.Int).Add(l.items.baseFee, tx.GasPremium())
+		if txPrice.Cmp(tx.FeeCap()) > 0 {
+			txPrice.Set(tx.FeeCap())
+		}
+	}
+	return cheapestPrice.Cmp(txPrice) >= 0
 }
 
 // Discard finds a number of most underpriced transactions, removes them from the
@@ -498,7 +572,7 @@ func (l *txPricedList) Discard(slots int, local *accountSet) types.Transactions 
 	drop := make(types.Transactions, 0, slots) // Remote underpriced transactions to drop
 	save := make(types.Transactions, 0, 64)    // Local underpriced transactions to keep
 
-	for len(*l.items) > 0 && slots > 0 {
+	for len(l.items.txs) > 0 && slots > 0 {
 		// Discard stale transactions if found during cleanup
 		tx := heap.Pop(l.items).(*types.Transaction)
 		if l.all.Get(tx.Hash()) == nil {
