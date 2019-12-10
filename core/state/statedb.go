@@ -359,6 +359,7 @@ func (s *StateDB) StorageTrie(addr common.Address) Trie {
 	}
 	cpy := stateObject.deepCopy(s)
 	cpy.updateTrie(s.db)
+	// Explicitly load the trie
 	return cpy.getTrie(s.db)
 }
 
@@ -806,7 +807,6 @@ func (s *StateDB) clearJournalAndRefund() {
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	// Finalize any pending changes and merge everything into the tries
 	s.IntermediateRoot(deleteEmptyObjects)
-
 	// Commit objects to the trie, measuring the elapsed time
 	for addr := range s.stateObjectsDirty {
 		if obj := s.stateObjects[addr]; !obj.deleted {

@@ -680,3 +680,58 @@ func TestDeleteCreateRevert(t *testing.T) {
 		t.Fatalf("self-destructed contract came alive")
 	}
 }
+
+func TestPlainTransferCommit(t *testing.T) {
+	// Create an initial state with a single contract and a single sender
+	state, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()), nil)
+
+	// Create three contracts with non-empty root hash
+	// contract1 -- only balance change
+	// contract2 -- change to a slot
+	// contract3 -- temporary change to slot, which is changed back again
+	// EOA - plain account without storage
+
+	addrC1 := toAddr([]byte("contract1"))
+	state.SetBalance(addrC1, big.NewInt(0))
+	state.SetState(addrC1, common.Hash{0x1}, common.Hash{0x1})
+
+	addrC2 := toAddr([]byte("contract2"))
+	state.SetBalance(addrC2, big.NewInt(0))
+	state.SetState(addrC2, common.Hash{0x1}, common.Hash{0x2})
+
+	addrC3 := toAddr([]byte("contract3"))
+	state.SetBalance(addrC3, big.NewInt(0))
+	state.SetState(addrC3, common.Hash{0x1}, common.Hash{0x3})
+
+	// Create EOA
+	addrEOA := toAddr([]byte("plain"))
+	state.SetBalance(addrEOA, big.NewInt(1))
+	// Make sure none of them are empty
+	state.SetNonce(addrC1, 1)
+	state.SetNonce(addrC2, 1)
+	state.SetNonce(addrC3, 1)
+
+	root, _ := state.Commit(false)
+	state.Reset(root)
+	// Simulate sending from user to contract
+	state.SetNonce(addrEOA, 1)
+	state.SetBalance(addrEOA, new(big.Int))
+	// contract1 gets some ether (no slot changed)
+	state.SetBalance(addrC1, big.NewInt(1))
+	// contract2 has a slot changed, updating the storage root
+	state.SetState(addrC2, common.Hash{0x1}, common.Hash{0xFF})
+
+	// contract3 has a slot changed, and changed back again
+	state.SetState(addrC3, common.Hash{0x1}, common.Hash{0x4})
+	state.SetState(addrC3, common.Hash{0x1}, common.Hash{0x3})
+
+	// Tx done, now Finalise
+	state.Finalise(true)
+	// Block done, Commit
+	root, _ = state.Commit(true)
+	// adf3478f2e81a39f5e24413e13673502a75ab8c4675fd2691ca1f442877e2a25
+	exp := common.HexToHash("adf3478f2e81a39f5e24413e13673502a75ab8c4675fd2691ca1f442877e2a25")
+	if exp != root {
+		t.Errorf("root wrong, exp: %x, got %x", exp, root)
+	}
+}
