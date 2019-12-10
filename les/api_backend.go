@@ -225,6 +225,13 @@ func (b *LesApiBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 	return b.eth.blockchain.SubscribeLogsEvent(ch)
 }
 
+func (b *LesApiBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		<-quit
+		return nil
+	})
+}
+
 func (b *LesApiBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return b.eth.blockchain.SubscribeRemovedLogsEvent(ch)
 }
@@ -243,10 +250,6 @@ func (b *LesApiBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
 
 func (b *LesApiBackend) ChainDb() ethdb.Database {
 	return b.eth.chainDb
-}
-
-func (b *LesApiBackend) EventMux() *event.TypeMux {
-	return b.eth.eventMux
 }
 
 func (b *LesApiBackend) AccountManager() *accounts.Manager {

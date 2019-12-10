@@ -76,7 +76,7 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 		database:   database,
 		blockchain: blockchain,
 		config:     genesis.Config,
-		events:     filters.NewEventSystem(new(event.TypeMux), &filterBackend{database, blockchain}, false),
+		events:     filters.NewEventSystem(&filterBackend{database, blockchain}, false),
 	}
 	backend.rollback()
 	return backend
@@ -502,22 +502,34 @@ func (fb *filterBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*ty
 }
 
 func (fb *filterBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	return event.NewSubscription(func(quit <-chan struct{}) error {
-		<-quit
-		return nil
-	})
+	return nullSubscription()
 }
+
 func (fb *filterBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	return fb.bc.SubscribeChainEvent(ch)
 }
+
 func (fb *filterBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return fb.bc.SubscribeRemovedLogsEvent(ch)
 }
+
 func (fb *filterBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return fb.bc.SubscribeLogsEvent(ch)
 }
 
+func (fb *filterBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
+	return nullSubscription()
+}
+
 func (fb *filterBackend) BloomStatus() (uint64, uint64) { return 4096, 0 }
+
 func (fb *filterBackend) ServiceFilter(ctx context.Context, ms *bloombits.MatcherSession) {
 	panic("not supported")
+}
+
+func nullSubscription() event.Subscription {
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		<-quit
+		return nil
+	})
 }
