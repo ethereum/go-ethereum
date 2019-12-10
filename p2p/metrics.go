@@ -31,13 +31,13 @@ import (
 
 const (
 	// MetricsInboundTraffic is the name for the registered inbound traffic meter
-	MetricsInboundTraffic   = "p2p/ingress"
+	MetricsInboundTraffic = "p2p/ingress"
 	// MetricsOutboundTraffic is the name for the registered outbound traffic meter
-	MetricsOutboundTraffic  = "p2p/egress"
+	MetricsOutboundTraffic = "p2p/egress"
 	// MetricsOutboundConnects is the name for the registered outbound connects meter
 	MetricsOutboundConnects = "p2p/dials"
 	// MetricsInboundConnects is the name for the registered inbound connects meter
-	MetricsInboundConnects  = "p2p/serves"
+	MetricsInboundConnects = "p2p/serves"
 
 	// MeteredPeerLimit is the amount of peers are individually metered
 	MeteredPeerLimit = 1024
@@ -53,7 +53,7 @@ var (
 	// PeerIngressRegistry is a registry containing the peer ingress
 	PeerIngressRegistry = metrics.NewPrefixedChildRegistry(metrics.EphemeralRegistry, MetricsInboundTraffic+"/")
 	// PeerEgressRegistry is a registry containing the peer egress
-	PeerEgressRegistry  = metrics.NewPrefixedChildRegistry(metrics.EphemeralRegistry, MetricsOutboundTraffic+"/")
+	PeerEgressRegistry = metrics.NewPrefixedChildRegistry(metrics.EphemeralRegistry, MetricsOutboundTraffic+"/")
 
 	meteredPeerFeed  event.Feed // Event feed for peer metrics
 	meteredPeerCount int32      // Actually stored peer connection count
