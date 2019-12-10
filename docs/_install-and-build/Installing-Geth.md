@@ -23,17 +23,13 @@ brew tap ethereum/ethereum
 brew install ethereum
 ```
 
-You can install the develop branch using the `--devel` parameter:
+You can install the master branch using the `--devel` parameter:
 
 ```shell
 brew install ethereum --devel
 ```
 
-The `abigen`, `bootnode`, `checkpoint-admin`, `clef`, `devp2p`, `ethkey`, `evm`, `faucet`, `geth`, `p2psim`, `puppeth`, `rlpdump`, and `wnode` commands are then available on your system in `/usr/local/bin/`. You can create a new account on your node with:
-
-```shell
-geth account new
-```
+The `abigen`, `bootnode`, `checkpoint-admin`, `clef`, `devp2p`, `ethkey`, `evm`, `faucet`, `geth`, `p2psim`, `puppeth`, `rlpdump`, and `wnode` commands are then available on your system in `/usr/local/bin/`. 
 
 Find the different options and commands available with `geth --help`.
 
@@ -61,11 +57,7 @@ sudo apt-get update
 sudo apt-get install ethereum-unstable
 ```
 
-The `abigen`, `bootnode`, `clef`, `evm`, `geth`, `puppeth`, `rlpdump`, and `wnode` commands are then available on your system in `/usr/bin/`. You can create a new account on your node with:
-
-```shell
-geth account new
-```
+The `abigen`, `bootnode`, `clef`, `evm`, `geth`, `puppeth`, `rlpdump`, and `wnode` commands are then available on your system in `/usr/bin/`.
 
 Find the different options and commands available with `geth --help`.
 
@@ -101,11 +93,7 @@ Then build it the standard way (as root):
 make install
 ```
 
-The `abigen`, `bootnode`, `clef`, `evm`, `geth`, `puppeth`, `rlpdump`, and `wnode` commands are then available on your system in `/usr/local/bin/`. You can create a new account on your node with:
-
-```shell
-geth account new
-```
+The `abigen`, `bootnode`, `clef`, `evm`, `geth`, `puppeth`, `rlpdump`, and `wnode` commands are then available on your system in `/usr/local/bin/`.
 
 Find the different options and commands available with `geth --help`.
 
@@ -119,11 +107,7 @@ You can install it using:
 pacman -S geth
 ```
 
-The `abigen`, `bootnode`, `clef`, `evm`, `geth`, `puppeth`, `rlpdump`, and `wnode` commands are then available on your system in `/usr/local/bin/`. You can create a new account on your node with:
-
-```shell
-geth account new
-```
+The `abigen`, `bootnode`, `clef`, `evm`, `geth`, `puppeth`, `rlpdump`, and `wnode` commands are then available on your system in `/usr/bin/`.
 
 Find the different options and commands available with `geth --help`.
 
