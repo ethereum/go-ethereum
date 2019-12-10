@@ -53,7 +53,7 @@ const (
 	PendingTransactionsSubscription
 	// BlocksSubscription queries hashes for blocks that are imported
 	BlocksSubscription
-	// LastSubscription keeps track of the last index
+	// LastIndexSubscription keeps track of the last index
 	LastIndexSubscription
 )
 
@@ -71,6 +71,7 @@ const (
 )
 
 var (
+	// ErrInvalidSubscriptionID is the invalid id error
 	ErrInvalidSubscriptionID = errors.New("invalid id")
 )
 

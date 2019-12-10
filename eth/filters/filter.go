@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+// Backend interface
 type Backend interface {
 	ChainDb() ethdb.Database
 	EventMux() *event.TypeMux
