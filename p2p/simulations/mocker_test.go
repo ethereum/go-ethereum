@@ -101,7 +101,7 @@ func TestMocker(t *testing.T) {
 						nodesComplete = true
 					}
 				} else if event.Conn != nil && nodesComplete {
-					connCount += 1
+					connCount++
 				}
 			case <-time.After(30 * time.Second):
 				t.Errorf("Timeout waiting for nodes being started up!")

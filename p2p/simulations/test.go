@@ -31,12 +31,14 @@ type NoopService struct {
 	c map[enode.ID]chan struct{}
 }
 
+// NewNoopService will return a NoopService
 func NewNoopService(ackC map[enode.ID]chan struct{}) *NoopService {
 	return &NoopService{
 		c: ackC,
 	}
 }
 
+// Protocols will return the protocols
 func (t *NoopService) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
@@ -62,18 +64,22 @@ func (t *NoopService) Protocols() []p2p.Protocol {
 	}
 }
 
+// APIs will return the list of rcp APIs
 func (t *NoopService) APIs() []rpc.API {
 	return []rpc.API{}
 }
 
+// Start is not implemented
 func (t *NoopService) Start(server *p2p.Server) error {
 	return nil
 }
 
+// Stop is not implemented
 func (t *NoopService) Stop() error {
 	return nil
 }
 
+// VerifyRing will verify the ring network
 func VerifyRing(t *testing.T, net *Network, ids []enode.ID) {
 	t.Helper()
 	n := len(ids)
@@ -93,6 +99,7 @@ func VerifyRing(t *testing.T, net *Network, ids []enode.ID) {
 	}
 }
 
+// VerifyChain will verify the chain
 func VerifyChain(t *testing.T, net *Network, ids []enode.ID) {
 	t.Helper()
 	n := len(ids)
@@ -112,6 +119,7 @@ func VerifyChain(t *testing.T, net *Network, ids []enode.ID) {
 	}
 }
 
+// VerifyFull will verify connections
 func VerifyFull(t *testing.T, net *Network, ids []enode.ID) {
 	t.Helper()
 	n := len(ids)
@@ -130,6 +138,7 @@ func VerifyFull(t *testing.T, net *Network, ids []enode.ID) {
 	}
 }
 
+// VerifyStar will verify the star network
 func VerifyStar(t *testing.T, net *Network, ids []enode.ID, centerIndex int) {
 	t.Helper()
 	n := len(ids)
