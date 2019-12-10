@@ -30,9 +30,9 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// DirectoryString is a custom type which is registered in the flags library 
-// which cli uses for argument parsing. This allows us to expand Value to 
-// an absolute path when the argument is parsed
+// DirectoryString is a custom type which is registered in the flags library
+// which cli uses for argument parsing. This allows us to expand Value to
+// an absolute path when the argument is parsed.
 type DirectoryString string
 
 func (s *DirectoryString) String() string {
@@ -66,7 +66,7 @@ func (f DirectoryFlag) Apply(set *flag.FlagSet) {
 	})
 }
 
-// GetName retuns the name
+// GetName returns the name
 func (f DirectoryFlag) GetName() string {
 	return f.Name
 }
