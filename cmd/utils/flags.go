@@ -67,6 +67,7 @@ import (
 )
 
 var (
+	// CommandHelpTemplate is a templated string for command help
 	CommandHelpTemplate = `{{.cmd.Name}}{{if .cmd.Subcommands}} command{{end}}{{if .cmd.Flags}} [command options]{{end}} [arguments...]
 {{if .cmd.Description}}{{.cmd.Description}}
 {{end}}{{if .cmd.Subcommands}}
@@ -78,6 +79,7 @@ SUBCOMMANDS:
 {{end}}
 {{end}}{{end}}`
 
+	// OriginCommandHelpTemplate is a templated string for sub commands
 	OriginCommandHelpTemplate = `{{.Name}}{{if .Subcommands}} command{{end}}{{if .Flags}} [command options]{{end}} [arguments...]
 {{if .Description}}{{.Description}}
 {{end}}{{if .Subcommands}}
@@ -137,528 +139,656 @@ func printHelp(out io.Writer, templ string, data interface{}) {
 // are the same for all commands.
 
 var (
+
 	// General settings
+
+	// DataDirFlag is the data directory for the databases and keystore
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
 		Usage: "Data directory for the databases and keystore",
 		Value: DirectoryString(node.DefaultDataDir()),
 	}
+	// AncientFlag is the data directory for the ancient chain segments
 	AncientFlag = DirectoryFlag{
 		Name:  "datadir.ancient",
 		Usage: "Data directory for ancient chain segments (default = inside chaindata)",
 	}
+	// KeyStoreDirFlag is the directory for the keystore
 	KeyStoreDirFlag = DirectoryFlag{
 		Name:  "keystore",
 		Usage: "Directory for the keystore (default = inside the datadir)",
 	}
+	// NoUSBFlag disables monitoring for and managing USB hardware wallets
 	NoUSBFlag = cli.BoolFlag{
 		Name:  "nousb",
 		Usage: "Disables monitoring for and managing USB hardware wallets",
 	}
+	// SmartCardDaemonPathFlag is the path to the smartcard daemon (pcscd) socket file
 	SmartCardDaemonPathFlag = cli.StringFlag{
 		Name:  "pcscdpath",
 		Usage: "Path to the smartcard daemon (pcscd) socket file",
 		Value: pcsclite.PCSCDSockName,
 	}
-	NetworkIdFlag = cli.Uint64Flag{
+	// NetworkIDFlag is the network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten, 4=Rinkeby)
+	NetworkIDFlag = cli.Uint64Flag{
 		Name:  "networkid",
 		Usage: "Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten, 4=Rinkeby)",
 		Value: eth.DefaultConfig.NetworkId,
 	}
+	// TestnetFlag is to use the Ropsten network: pre-configured proof-of-work test network
 	TestnetFlag = cli.BoolFlag{
 		Name:  "testnet",
 		Usage: "Ropsten network: pre-configured proof-of-work test network",
 	}
+	// RinkebyFlag is to use the Rinkeby network: pre-configured proof-of-authority test network
 	RinkebyFlag = cli.BoolFlag{
 		Name:  "rinkeby",
 		Usage: "Rinkeby network: pre-configured proof-of-authority test network",
 	}
+	// GoerliFlag is to use the Görli network: pre-configured proof-of-authority test network
 	GoerliFlag = cli.BoolFlag{
 		Name:  "goerli",
 		Usage: "Görli network: pre-configured proof-of-authority test network",
 	}
+	// DeveloperFlag is to use an ephemeral proof-of-authority network with a pre-funded developer account, mining enabled
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
 		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
 	}
+	// DeveloperPeriodFlag is to specify the block period to use in developer mode (0 = mine only if transaction pending)
 	DeveloperPeriodFlag = cli.IntFlag{
 		Name:  "dev.period",
 		Usage: "Block period to use in developer mode (0 = mine only if transaction pending)",
 	}
+	// IdentityFlag is to use a custom node name
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
 		Usage: "Custom node name",
 	}
+	// DocRootFlag is the document root for HTTPClient file scheme
 	DocRootFlag = DirectoryFlag{
 		Name:  "docroot",
 		Usage: "Document Root for HTTPClient file scheme",
 		Value: DirectoryString(homeDir()),
 	}
+	// ExitWhenSyncedFlag specifies to exit after block synchronisation completes
 	ExitWhenSyncedFlag = cli.BoolFlag{
 		Name:  "exitwhensynced",
 		Usage: "Exits after block synchronisation completes",
 	}
+	// IterativeOutputFlag will print streaming JSON iteratively, delimited by newlines
 	IterativeOutputFlag = cli.BoolFlag{
 		Name:  "iterative",
 		Usage: "Print streaming JSON iteratively, delimited by newlines",
 	}
+	// ExcludeStorageFlag specifies to exclude storage entries (save db lookups)
 	ExcludeStorageFlag = cli.BoolFlag{
 		Name:  "nostorage",
 		Usage: "Exclude storage entries (save db lookups)",
 	}
+	// IncludeIncompletesFlag specifies to include accounts for which we don't have the address (missing preimage)
 	IncludeIncompletesFlag = cli.BoolFlag{
 		Name:  "incompletes",
 		Usage: "Include accounts for which we don't have the address (missing preimage)",
 	}
+	// ExcludeCodeFlag is to exclude contract code (save db lookups)
 	ExcludeCodeFlag = cli.BoolFlag{
 		Name:  "nocode",
 		Usage: "Exclude contract code (save db lookups)",
 	}
 	defaultSyncMode = eth.DefaultConfig.SyncMode
+	// SyncModeFlag is the blockchain sync mode ("fast", "full", or "light")
 	SyncModeFlag    = TextMarshalerFlag{
 		Name:  "syncmode",
 		Usage: `Blockchain sync mode ("fast", "full", or "light")`,
 		Value: &defaultSyncMode,
 	}
+	// GCModeFlag is the blockchain garbage collection mode ("full", "archive")
 	GCModeFlag = cli.StringFlag{
 		Name:  "gcmode",
 		Usage: `Blockchain garbage collection mode ("full", "archive")`,
 		Value: "full",
 	}
+	// LightKDFFlag specifies to reduce key-derivation RAM & CPU usage at some expense of KDF strength"
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
+	// WhitelistFlag is a comma separated block number-to-hash mappings to enforce (<number>=<hash>)
 	WhitelistFlag = cli.StringFlag{
 		Name:  "whitelist",
 		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>)",
 	}
+	// OverrideIstanbulFlag specifies to manually specify Istanbul fork-block, overriding the bundled setting
 	OverrideIstanbulFlag = cli.Uint64Flag{
 		Name:  "override.istanbul",
 		Usage: "Manually specify Istanbul fork-block, overriding the bundled setting",
 	}
+	// OverrideMuirGlacierFlag is to manually specify Muir Glacier fork-block, overriding the bundled setting
 	OverrideMuirGlacierFlag = cli.Uint64Flag{
 		Name:  "override.muirglacier",
 		Usage: "Manually specify Muir Glacier fork-block, overriding the bundled setting",
 	}
-	// Light server and client settings
+	// LightLegacyServFlag is for light server and client settings
 	LightLegacyServFlag = cli.IntFlag{ // Deprecated in favor of light.serve, remove in 2021
 		Name:  "lightserv",
 		Usage: "Maximum percentage of time allowed for serving LES requests (deprecated, use --light.serve)",
 		Value: eth.DefaultConfig.LightServ,
 	}
+	// LightServeFlag specifies the maximum percentage of time allowed for serving LES requests (multi-threaded processing allows values over 100)
 	LightServeFlag = cli.IntFlag{
 		Name:  "light.serve",
 		Usage: "Maximum percentage of time allowed for serving LES requests (multi-threaded processing allows values over 100)",
 		Value: eth.DefaultConfig.LightServ,
 	}
+	// LightIngressFlag specifies the incoming bandwidth limit for serving light clients (kilobytes/sec, 0 = unlimited)
 	LightIngressFlag = cli.IntFlag{
 		Name:  "light.ingress",
 		Usage: "Incoming bandwidth limit for serving light clients (kilobytes/sec, 0 = unlimited)",
 		Value: eth.DefaultConfig.LightIngress,
 	}
+	// LightEgressFlag specifies the outgoing bandwidth limit for serving light clients (kilobytes/sec, 0 = unlimited)
 	LightEgressFlag = cli.IntFlag{
 		Name:  "light.egress",
 		Usage: "Outgoing bandwidth limit for serving light clients (kilobytes/sec, 0 = unlimited)",
 		Value: eth.DefaultConfig.LightEgress,
 	}
+	// LightLegacyPeersFlag specifies the maximum number of light clients to serve, or light servers to attach to  (deprecated, use --light.maxpeers)
 	LightLegacyPeersFlag = cli.IntFlag{ // Deprecated in favor of light.maxpeers, remove in 2021
 		Name:  "lightpeers",
 		Usage: "Maximum number of light clients to serve, or light servers to attach to  (deprecated, use --light.maxpeers)",
 		Value: eth.DefaultConfig.LightPeers,
 	}
+	// LightMaxPeersFlag specifies the maximum number of light clients to serve, or light servers to attach to
 	LightMaxPeersFlag = cli.IntFlag{
 		Name:  "light.maxpeers",
 		Usage: "Maximum number of light clients to serve, or light servers to attach to",
 		Value: eth.DefaultConfig.LightPeers,
 	}
+	// UltraLightServersFlag specifies the list of trusted ultra-light servers
 	UltraLightServersFlag = cli.StringFlag{
 		Name:  "ulc.servers",
 		Usage: "List of trusted ultra-light servers",
 		Value: strings.Join(eth.DefaultConfig.UltraLightServers, ","),
 	}
+	// UltraLightFractionFlag specifies the minimum % of trusted ultra-light servers required to announce a new head
 	UltraLightFractionFlag = cli.IntFlag{
 		Name:  "ulc.fraction",
 		Usage: "Minimum % of trusted ultra-light servers required to announce a new head",
 		Value: eth.DefaultConfig.UltraLightFraction,
 	}
+	// UltraLightOnlyAnnounceFlag specifies that ultra light server sends announcements only
 	UltraLightOnlyAnnounceFlag = cli.BoolFlag{
 		Name:  "ulc.onlyannounce",
 		Usage: "Ultra light server sends announcements only",
 	}
+
 	// Ethash settings
+
+	// EthashCacheDirFlag specifies the directory to store the ethash verification caches (default = inside the datadir)
 	EthashCacheDirFlag = DirectoryFlag{
 		Name:  "ethash.cachedir",
 		Usage: "Directory to store the ethash verification caches (default = inside the datadir)",
 	}
+	// EthashCachesInMemoryFlag specifies the number of recent ethash caches to keep in memory (16MB each)
 	EthashCachesInMemoryFlag = cli.IntFlag{
 		Name:  "ethash.cachesinmem",
 		Usage: "Number of recent ethash caches to keep in memory (16MB each)",
 		Value: eth.DefaultConfig.Ethash.CachesInMem,
 	}
+	// EthashCachesOnDiskFlag specifies the number of recent ethash caches to keep on disk (16MB each)
 	EthashCachesOnDiskFlag = cli.IntFlag{
 		Name:  "ethash.cachesondisk",
 		Usage: "Number of recent ethash caches to keep on disk (16MB each)",
 		Value: eth.DefaultConfig.Ethash.CachesOnDisk,
 	}
+	// EthashDatasetDirFlag specifies the directory to store the ethash mining DAGs
 	EthashDatasetDirFlag = DirectoryFlag{
 		Name:  "ethash.dagdir",
 		Usage: "Directory to store the ethash mining DAGs",
 		Value: DirectoryString(eth.DefaultConfig.Ethash.DatasetDir),
 	}
+	// EthashDatasetsInMemoryFlag specifies the number of recent ethash mining DAGs to keep in memory (1+GB each)
 	EthashDatasetsInMemoryFlag = cli.IntFlag{
 		Name:  "ethash.dagsinmem",
 		Usage: "Number of recent ethash mining DAGs to keep in memory (1+GB each)",
 		Value: eth.DefaultConfig.Ethash.DatasetsInMem,
 	}
+	// EthashDatasetsOnDiskFlag specifies the number of recent ethash mining DAGs to keep on disk (1+GB each)
 	EthashDatasetsOnDiskFlag = cli.IntFlag{
 		Name:  "ethash.dagsondisk",
 		Usage: "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
 		Value: eth.DefaultConfig.Ethash.DatasetsOnDisk,
 	}
+
 	// Transaction pool settings
+
+	// TxPoolLocalsFlag is a comma separated accounts to treat as locals (no flush, priority inclusion)
 	TxPoolLocalsFlag = cli.StringFlag{
 		Name:  "txpool.locals",
 		Usage: "Comma separated accounts to treat as locals (no flush, priority inclusion)",
 	}
+	// TxPoolNoLocalsFlag disables price exemptions for locally submitted transactions
 	TxPoolNoLocalsFlag = cli.BoolFlag{
 		Name:  "txpool.nolocals",
 		Usage: "Disables price exemptions for locally submitted transactions",
 	}
+	// TxPoolJournalFlag specifies the disk journal for local transaction to survive node restarts
 	TxPoolJournalFlag = cli.StringFlag{
 		Name:  "txpool.journal",
 		Usage: "Disk journal for local transaction to survive node restarts",
 		Value: core.DefaultTxPoolConfig.Journal,
 	}
+	// TxPoolRejournalFlag specifies the time interval to regenerate the local transaction journal
 	TxPoolRejournalFlag = cli.DurationFlag{
 		Name:  "txpool.rejournal",
 		Usage: "Time interval to regenerate the local transaction journal",
 		Value: core.DefaultTxPoolConfig.Rejournal,
 	}
+	// TxPoolPriceLimitFlag specifies the minimum gas price limit to enforce for acceptance into the pool
 	TxPoolPriceLimitFlag = cli.Uint64Flag{
 		Name:  "txpool.pricelimit",
 		Usage: "Minimum gas price limit to enforce for acceptance into the pool",
 		Value: eth.DefaultConfig.TxPool.PriceLimit,
 	}
+	// TxPoolPriceBumpFlag specifies the price bump percentage to replace an already existing transaction
 	TxPoolPriceBumpFlag = cli.Uint64Flag{
 		Name:  "txpool.pricebump",
 		Usage: "Price bump percentage to replace an already existing transaction",
 		Value: eth.DefaultConfig.TxPool.PriceBump,
 	}
+	// TxPoolAccountSlotsFlag specifies the minimum number of executable transaction slots guaranteed per account
 	TxPoolAccountSlotsFlag = cli.Uint64Flag{
 		Name:  "txpool.accountslots",
 		Usage: "Minimum number of executable transaction slots guaranteed per account",
 		Value: eth.DefaultConfig.TxPool.AccountSlots,
 	}
+	// TxPoolGlobalSlotsFlag specifies the maximum number of executable transaction slots for all accounts
 	TxPoolGlobalSlotsFlag = cli.Uint64Flag{
 		Name:  "txpool.globalslots",
 		Usage: "Maximum number of executable transaction slots for all accounts",
 		Value: eth.DefaultConfig.TxPool.GlobalSlots,
 	}
+	// TxPoolAccountQueueFlag specifies the maximum number of non-executable transaction slots permitted per account
 	TxPoolAccountQueueFlag = cli.Uint64Flag{
 		Name:  "txpool.accountqueue",
 		Usage: "Maximum number of non-executable transaction slots permitted per account",
 		Value: eth.DefaultConfig.TxPool.AccountQueue,
 	}
+	// TxPoolGlobalQueueFlag specifies the maximum number of non-executable transaction slots for all accounts
 	TxPoolGlobalQueueFlag = cli.Uint64Flag{
 		Name:  "txpool.globalqueue",
 		Usage: "Maximum number of non-executable transaction slots for all accounts",
 		Value: eth.DefaultConfig.TxPool.GlobalQueue,
 	}
+	// TxPoolLifetimeFlag specifies the maximum amount of time non-executable transaction are queued
 	TxPoolLifetimeFlag = cli.DurationFlag{
 		Name:  "txpool.lifetime",
 		Usage: "Maximum amount of time non-executable transaction are queued",
 		Value: eth.DefaultConfig.TxPool.Lifetime,
 	}
+
 	// Performance tuning settings
+
+	// CacheFlag specifies the megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode)
 	CacheFlag = cli.IntFlag{
 		Name:  "cache",
 		Usage: "Megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode)",
 		Value: 1024,
 	}
+	// CacheDatabaseFlag specifies the percentage of cache memory allowance to use for database io
 	CacheDatabaseFlag = cli.IntFlag{
 		Name:  "cache.database",
 		Usage: "Percentage of cache memory allowance to use for database io",
 		Value: 50,
 	}
+	// CacheTrieFlag specifies the percentage of cache memory allowance to use for trie caching (default = 25% full mode, 50% archive mode)
 	CacheTrieFlag = cli.IntFlag{
 		Name:  "cache.trie",
 		Usage: "Percentage of cache memory allowance to use for trie caching (default = 25% full mode, 50% archive mode)",
 		Value: 25,
 	}
+	// CacheGCFlag specifies the percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode)
 	CacheGCFlag = cli.IntFlag{
 		Name:  "cache.gc",
 		Usage: "Percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode)",
 		Value: 25,
 	}
+	// CacheNoPrefetchFlag will disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)
 	CacheNoPrefetchFlag = cli.BoolFlag{
 		Name:  "cache.noprefetch",
 		Usage: "Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)",
 	}
+
 	// Miner settings
+
+	// MiningEnabledFlag will enable mining
 	MiningEnabledFlag = cli.BoolFlag{
 		Name:  "mine",
 		Usage: "Enable mining",
 	}
+	// MinerThreadsFlag specifies the number of CPU threads to use for mining
 	MinerThreadsFlag = cli.IntFlag{
 		Name:  "miner.threads",
 		Usage: "Number of CPU threads to use for mining",
 		Value: 0,
 	}
+	// MinerLegacyThreadsFlag specifies the number of CPU threads to use for mining (deprecated, use --miner.threads)
 	MinerLegacyThreadsFlag = cli.IntFlag{
 		Name:  "minerthreads",
 		Usage: "Number of CPU threads to use for mining (deprecated, use --miner.threads)",
 		Value: 0,
 	}
+	// MinerNotifyFlag is a comma separated HTTP URL list to notify of new work packages
 	MinerNotifyFlag = cli.StringFlag{
 		Name:  "miner.notify",
 		Usage: "Comma separated HTTP URL list to notify of new work packages",
 	}
+	// MinerGasTargetFlag specifies the target gas floor for mined blocks
 	MinerGasTargetFlag = cli.Uint64Flag{
 		Name:  "miner.gastarget",
 		Usage: "Target gas floor for mined blocks",
 		Value: eth.DefaultConfig.Miner.GasFloor,
 	}
+	// MinerLegacyGasTargetFlag specifies the target gas floor for mined blocks (deprecated, use --miner.gastarget)
 	MinerLegacyGasTargetFlag = cli.Uint64Flag{
 		Name:  "targetgaslimit",
 		Usage: "Target gas floor for mined blocks (deprecated, use --miner.gastarget)",
 		Value: eth.DefaultConfig.Miner.GasFloor,
 	}
+	// MinerGasLimitFlag specifies the target gas ceiling for mined blocks
 	MinerGasLimitFlag = cli.Uint64Flag{
 		Name:  "miner.gaslimit",
 		Usage: "Target gas ceiling for mined blocks",
 		Value: eth.DefaultConfig.Miner.GasCeil,
 	}
+	// MinerGasPriceFlag specifies the minimum gas price for mining a transaction
 	MinerGasPriceFlag = BigFlag{
 		Name:  "miner.gasprice",
 		Usage: "Minimum gas price for mining a transaction",
 		Value: eth.DefaultConfig.Miner.GasPrice,
 	}
+	// MinerLegacyGasPriceFlag specifies the minimum gas price for mining a transaction (deprecated, use --miner.gasprice)
 	MinerLegacyGasPriceFlag = BigFlag{
 		Name:  "gasprice",
 		Usage: "Minimum gas price for mining a transaction (deprecated, use --miner.gasprice)",
 		Value: eth.DefaultConfig.Miner.GasPrice,
 	}
+	// MinerEtherbaseFlag specifies the public address for block mining rewards (default = first account)
 	MinerEtherbaseFlag = cli.StringFlag{
 		Name:  "miner.etherbase",
 		Usage: "Public address for block mining rewards (default = first account)",
 		Value: "0",
 	}
+	// MinerLegacyEtherbaseFlag specicies the public address for block mining rewards (default = first account, deprecated, use --miner.etherbase)
 	MinerLegacyEtherbaseFlag = cli.StringFlag{
 		Name:  "etherbase",
 		Usage: "Public address for block mining rewards (default = first account, deprecated, use --miner.etherbase)",
 		Value: "0",
 	}
+	// MinerExtraDataFlag specifies the block extra data set by the miner (default = client version)
 	MinerExtraDataFlag = cli.StringFlag{
 		Name:  "miner.extradata",
 		Usage: "Block extra data set by the miner (default = client version)",
 	}
+	// MinerLegacyExtraDataFlag specifies the block extra data set by the miner (default = client version, deprecated, use --miner.extradata)
 	MinerLegacyExtraDataFlag = cli.StringFlag{
 		Name:  "extradata",
 		Usage: "Block extra data set by the miner (default = client version, deprecated, use --miner.extradata)",
 	}
+	// MinerRecommitIntervalFlag specifies the time interval to recreate the block being mined
 	MinerRecommitIntervalFlag = cli.DurationFlag{
 		Name:  "miner.recommit",
 		Usage: "Time interval to recreate the block being mined",
 		Value: eth.DefaultConfig.Miner.Recommit,
 	}
+	// MinerNoVerfiyFlag will disable remote sealing verification
 	MinerNoVerfiyFlag = cli.BoolFlag{
 		Name:  "miner.noverify",
 		Usage: "Disable remote sealing verification",
 	}
+
 	// Account settings
+
+	// UnlockedAccountFlag specifies a comma separated list of accounts to unlock
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
 		Usage: "Comma separated list of accounts to unlock",
 		Value: "",
 	}
+	// PasswordFileFlag specifies a password file to use for non-interactive password input
 	PasswordFileFlag = cli.StringFlag{
 		Name:  "password",
 		Usage: "Password file to use for non-interactive password input",
 		Value: "",
 	}
+	// ExternalSignerFlag specifies the external signer (url or path to ipc file)
 	ExternalSignerFlag = cli.StringFlag{
 		Name:  "signer",
 		Usage: "External signer (url or path to ipc file)",
 		Value: "",
 	}
+	// VMEnableDebugFlag will record information useful for VM and contract debugging
 	VMEnableDebugFlag = cli.BoolFlag{
 		Name:  "vmdebug",
 		Usage: "Record information useful for VM and contract debugging",
 	}
+	// InsecureUnlockAllowedFlag will allow insecure account unlocking when account-related RPCs are exposed by http
 	InsecureUnlockAllowedFlag = cli.BoolFlag{
 		Name:  "allow-insecure-unlock",
 		Usage: "Allow insecure account unlocking when account-related RPCs are exposed by http",
 	}
+	// RPCGlobalGasCap sets a cap on gas that can be used in eth_call/estimateGas
 	RPCGlobalGasCap = cli.Uint64Flag{
 		Name:  "rpc.gascap",
 		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas",
 	}
+
 	// Logging and debug settings
+
+	// EthStatsURLFlag sets the reporting URL of a ethstats service (nodename:secret@host:port)
 	EthStatsURLFlag = cli.StringFlag{
 		Name:  "ethstats",
 		Usage: "Reporting URL of a ethstats service (nodename:secret@host:port)",
 	}
+	// FakePoWFlag disables proof-of-work verification
 	FakePoWFlag = cli.BoolFlag{
 		Name:  "fakepow",
 		Usage: "Disables proof-of-work verification",
 	}
+	// NoCompactionFlag disables db compaction after import
 	NoCompactionFlag = cli.BoolFlag{
 		Name:  "nocompaction",
 		Usage: "Disables db compaction after import",
 	}
+
 	// RPC settings
+
+	// IPCDisabledFlag disable the IPC-RPC server
 	IPCDisabledFlag = cli.BoolFlag{
 		Name:  "ipcdisable",
 		Usage: "Disable the IPC-RPC server",
 	}
+	// IPCPathFlag specifies the filename for IPC socket/pipe within the datadir (explicit paths escape it)
 	IPCPathFlag = DirectoryFlag{
 		Name:  "ipcpath",
 		Usage: "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
 	}
+	// RPCEnabledFlag will enable the HTTP-RPC server
 	RPCEnabledFlag = cli.BoolFlag{
 		Name:  "rpc",
 		Usage: "Enable the HTTP-RPC server",
 	}
+	// RPCListenAddrFlag specifies the HTTP-RPC server listening interface
 	RPCListenAddrFlag = cli.StringFlag{
 		Name:  "rpcaddr",
 		Usage: "HTTP-RPC server listening interface",
 		Value: node.DefaultHTTPHost,
 	}
+	// RPCPortFlag specifies the HTTP-RPC server listening port
 	RPCPortFlag = cli.IntFlag{
 		Name:  "rpcport",
 		Usage: "HTTP-RPC server listening port",
 		Value: node.DefaultHTTPPort,
 	}
+	// RPCCORSDomainFlag specifies a comma separated list of domains from which to accept cross origin requests (browser enforced)
 	RPCCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
 		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
 		Value: "",
 	}
+	// RPCVirtualHostsFlag specifies a comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.
 	RPCVirtualHostsFlag = cli.StringFlag{
 		Name:  "rpcvhosts",
 		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
 		Value: strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
 	}
+	// RPCApiFlag specifies the API's offered over the HTTP-RPC interface
 	RPCApiFlag = cli.StringFlag{
 		Name:  "rpcapi",
 		Usage: "API's offered over the HTTP-RPC interface",
 		Value: "",
 	}
+	// WSEnabledFlag will enable the WS-RPC server
 	WSEnabledFlag = cli.BoolFlag{
 		Name:  "ws",
 		Usage: "Enable the WS-RPC server",
 	}
+	// WSListenAddrFlag specifies the WS-RPC server listening interface
 	WSListenAddrFlag = cli.StringFlag{
 		Name:  "wsaddr",
 		Usage: "WS-RPC server listening interface",
 		Value: node.DefaultWSHost,
 	}
+	// WSPortFlag specifies the WS-RPC server listening port
 	WSPortFlag = cli.IntFlag{
 		Name:  "wsport",
 		Usage: "WS-RPC server listening port",
 		Value: node.DefaultWSPort,
 	}
+	// WSApiFlag specifies the API's offered over the WS-RPC interface
 	WSApiFlag = cli.StringFlag{
 		Name:  "wsapi",
 		Usage: "API's offered over the WS-RPC interface",
 		Value: "",
 	}
+	// WSAllowedOriginsFlag specifies the origins from which to accept websockets requests
 	WSAllowedOriginsFlag = cli.StringFlag{
 		Name:  "wsorigins",
 		Usage: "Origins from which to accept websockets requests",
 		Value: "",
 	}
+	// GraphQLEnabledFlag will enable the GraphQL server
 	GraphQLEnabledFlag = cli.BoolFlag{
 		Name:  "graphql",
 		Usage: "Enable the GraphQL server",
 	}
+	// GraphQLListenAddrFlag specifies the GraphQL server listening interface
 	GraphQLListenAddrFlag = cli.StringFlag{
 		Name:  "graphql.addr",
 		Usage: "GraphQL server listening interface",
 		Value: node.DefaultGraphQLHost,
 	}
+	// GraphQLPortFlag specifies the GraphQL server listening port
 	GraphQLPortFlag = cli.IntFlag{
 		Name:  "graphql.port",
 		Usage: "GraphQL server listening port",
 		Value: node.DefaultGraphQLPort,
 	}
+	// GraphQLCORSDomainFlag specifies a comma separated list of domains from which to accept cross origin requests (browser enforced)
 	GraphQLCORSDomainFlag = cli.StringFlag{
 		Name:  "graphql.corsdomain",
 		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
 		Value: "",
 	}
+	// GraphQLVirtualHostsFlag specifies a comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.
 	GraphQLVirtualHostsFlag = cli.StringFlag{
 		Name:  "graphql.vhosts",
 		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
 		Value: strings.Join(node.DefaultConfig.GraphQLVirtualHosts, ","),
 	}
+	// ExecFlag specifies the execute JavaScript statement
 	ExecFlag = cli.StringFlag{
 		Name:  "exec",
 		Usage: "Execute JavaScript statement",
 	}
+	// PreloadJSFlag specifies a comma separated list of JavaScript files to preload into the console
 	PreloadJSFlag = cli.StringFlag{
 		Name:  "preload",
 		Usage: "Comma separated list of JavaScript files to preload into the console",
 	}
 
 	// Network Settings
+
+	// MaxPeersFlag specifies the maximum number of network peers (network disabled if set to 0)
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
 		Usage: "Maximum number of network peers (network disabled if set to 0)",
 		Value: node.DefaultConfig.P2P.MaxPeers,
 	}
+	// MaxPendingPeersFlag specifies the maximum number of pending connection attempts (defaults used if set to 0)
 	MaxPendingPeersFlag = cli.IntFlag{
 		Name:  "maxpendpeers",
 		Usage: "Maximum number of pending connection attempts (defaults used if set to 0)",
 		Value: node.DefaultConfig.P2P.MaxPendingPeers,
 	}
+	// ListenPortFlag specifies the network listening port
 	ListenPortFlag = cli.IntFlag{
 		Name:  "port",
 		Usage: "Network listening port",
 		Value: 30303,
 	}
+	// BootnodesFlag specifies a comma separated enode URLs for P2P discovery bootstrap (set v4+v5 instead for light servers)
 	BootnodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
 		Usage: "Comma separated enode URLs for P2P discovery bootstrap (set v4+v5 instead for light servers)",
 		Value: "",
 	}
+	// BootnodesV4Flag specifies a comma separated enode URLs for P2P v4 discovery bootstrap (light server, full nodes)
 	BootnodesV4Flag = cli.StringFlag{
 		Name:  "bootnodesv4",
 		Usage: "Comma separated enode URLs for P2P v4 discovery bootstrap (light server, full nodes)",
 		Value: "",
 	}
+	// BootnodesV5Flag specifies a comma separated enode URLs for P2P v5 discovery bootstrap (light server, light nodes)
 	BootnodesV5Flag = cli.StringFlag{
 		Name:  "bootnodesv5",
 		Usage: "Comma separated enode URLs for P2P v5 discovery bootstrap (light server, light nodes)",
 		Value: "",
 	}
+	// NodeKeyFileFlag specifies the P2P node key file
 	NodeKeyFileFlag = cli.StringFlag{
 		Name:  "nodekey",
 		Usage: "P2P node key file",
 	}
+	// NodeKeyHexFlag specifies the P2P node key as hex (for testing)
 	NodeKeyHexFlag = cli.StringFlag{
 		Name:  "nodekeyhex",
 		Usage: "P2P node key as hex (for testing)",
 	}
+	// NATFlag specifies the NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>)
 	NATFlag = cli.StringFlag{
 		Name:  "nat",
 		Usage: "NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
 		Value: "any",
 	}
+	// NoDiscoverFlag will disable the peer discovery mechanism (manual peer addition)
 	NoDiscoverFlag = cli.BoolFlag{
 		Name:  "nodiscover",
 		Usage: "Disables the peer discovery mechanism (manual peer addition)",
 	}
+	// DiscoveryV5Flag will enable the experimental RLPx V5 (Topic Discovery) mechanism
 	DiscoveryV5Flag = cli.BoolFlag{
 		Name:  "v5disc",
 		Usage: "Enables the experimental RLPx V5 (Topic Discovery) mechanism",
 	}
+	// NetrestrictFlag will restrict network communication to the given IP networks (CIDR masks)
 	NetrestrictFlag = cli.StringFlag{
 		Name:  "netrestrict",
 		Usage: "Restricts network communication to the given IP networks (CIDR masks)",
 	}
 
+	// JSpathFlag specifies the JavaScript root path for `loadScript'
 	// ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
 		Name:  "jspath",
@@ -667,83 +797,103 @@ var (
 	}
 
 	// Gas price oracle settings
+
+	// GpoBlocksFlag specifies the number of recent blocks to check for gas prices
 	GpoBlocksFlag = cli.IntFlag{
 		Name:  "gpoblocks",
 		Usage: "Number of recent blocks to check for gas prices",
 		Value: eth.DefaultConfig.GPO.Blocks,
 	}
+	// GpoPercentileFlag specifies the suggested gas price is the given percentile of a set of recent transaction gas prices
 	GpoPercentileFlag = cli.IntFlag{
 		Name:  "gpopercentile",
 		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices",
 		Value: eth.DefaultConfig.GPO.Percentile,
 	}
+	// WhisperEnabledFlag will enable Whisper
 	WhisperEnabledFlag = cli.BoolFlag{
 		Name:  "shh",
 		Usage: "Enable Whisper",
 	}
+	// WhisperMaxMessageSizeFlag specifies the max message size accepted
 	WhisperMaxMessageSizeFlag = cli.IntFlag{
 		Name:  "shh.maxmessagesize",
 		Usage: "Max message size accepted",
 		Value: int(whisper.DefaultMaxMessageSize),
 	}
+	// WhisperMinPOWFlag specifies the minimum POW accepted
 	WhisperMinPOWFlag = cli.Float64Flag{
 		Name:  "shh.pow",
 		Usage: "Minimum POW accepted",
 		Value: whisper.DefaultMinimumPoW,
 	}
+	// WhisperRestrictConnectionBetweenLightClientsFlag will restrict connection between two whisper light clients
 	WhisperRestrictConnectionBetweenLightClientsFlag = cli.BoolFlag{
 		Name:  "shh.restrict-light",
 		Usage: "Restrict connection between two whisper light clients",
 	}
 
 	// Metrics flags
+
+	// MetricsEnabledFlag will enable metrics collection and reporting
 	MetricsEnabledFlag = cli.BoolFlag{
 		Name:  "metrics",
 		Usage: "Enable metrics collection and reporting",
 	}
+	// MetricsEnabledExpensiveFlag will enable expensive metrics collection and reporting
 	MetricsEnabledExpensiveFlag = cli.BoolFlag{
 		Name:  "metrics.expensive",
 		Usage: "Enable expensive metrics collection and reporting",
 	}
+	// MetricsEnableInfluxDBFlag will enable metrics export/push to an external InfluxDB database
 	MetricsEnableInfluxDBFlag = cli.BoolFlag{
 		Name:  "metrics.influxdb",
 		Usage: "Enable metrics export/push to an external InfluxDB database",
 	}
+	// MetricsInfluxDBEndpointFlag specifies the InfluxDB API endpoint to report metrics to
 	MetricsInfluxDBEndpointFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.endpoint",
 		Usage: "InfluxDB API endpoint to report metrics to",
 		Value: "http://localhost:8086",
 	}
+	// MetricsInfluxDBDatabaseFlag specifies the InfluxDB database name to push reported metrics to
 	MetricsInfluxDBDatabaseFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.database",
 		Usage: "InfluxDB database name to push reported metrics to",
 		Value: "geth",
 	}
+	// MetricsInfluxDBUsernameFlag specifies the username to authorize access to the database
 	MetricsInfluxDBUsernameFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.username",
 		Usage: "Username to authorize access to the database",
 		Value: "test",
 	}
+	// MetricsInfluxDBPasswordFlag specifies the password to authorize access to the database
 	MetricsInfluxDBPasswordFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.password",
 		Usage: "Password to authorize access to the database",
 		Value: "test",
 	}
+
 	// Tags are part of every measurement sent to InfluxDB. Queries on tags are faster in InfluxDB.
 	// For example `host` tag could be used so that we can group all nodes and average a measurement
 	// across all of them, but also so that we can select a specific node and inspect its measurements.
 	// https://docs.influxdata.com/influxdb/v1.4/concepts/key_concepts/#tag-key
+
+	// MetricsInfluxDBTagsFlag specifies a comma-separated InfluxDB tags (key/values) attached to all measurements
 	MetricsInfluxDBTagsFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.tags",
 		Usage: "Comma-separated InfluxDB tags (key/values) attached to all measurements",
 		Value: "host=localhost",
 	}
 
+	// EWASMInterpreterFlag specifies an external ewasm configuration (default = built-in interpreter)
 	EWASMInterpreterFlag = cli.StringFlag{
 		Name:  "vm.ewasm",
 		Usage: "External ewasm configuration (default = built-in interpreter)",
 		Value: "",
 	}
+	// EVMInterpreterFlag specifies an external EVM configuration (default = built-in interpreter)
 	EVMInterpreterFlag = cli.StringFlag{
 		Name:  "vm.evm",
 		Usage: "External EVM configuration (default = built-in interpreter)",
@@ -1089,6 +1239,7 @@ func MakePasswordList(ctx *cli.Context) []string {
 	return lines
 }
 
+// SetP2PConfig sets the P2P configuration
 func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	setNodeKey(ctx, cfg)
 	setNAT(ctx, cfg)
@@ -1433,8 +1584,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
 	}
-	if ctx.GlobalIsSet(NetworkIdFlag.Name) {
-		cfg.NetworkId = ctx.GlobalUint64(NetworkIdFlag.Name)
+	if ctx.GlobalIsSet(NetworkIDFlag.Name) {
+		cfg.NetworkId = ctx.GlobalUint64(NetworkIDFlag.Name)
 	}
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheDatabaseFlag.Name) {
 		cfg.DatabaseCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
@@ -1481,22 +1632,22 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.GlobalBool(TestnetFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+		if !ctx.GlobalIsSet(NetworkIDFlag.Name) {
 			cfg.NetworkId = 3
 		}
 		cfg.Genesis = core.DefaultTestnetGenesisBlock()
 	case ctx.GlobalBool(RinkebyFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+		if !ctx.GlobalIsSet(NetworkIDFlag.Name) {
 			cfg.NetworkId = 4
 		}
 		cfg.Genesis = core.DefaultRinkebyGenesisBlock()
 	case ctx.GlobalBool(GoerliFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+		if !ctx.GlobalIsSet(NetworkIDFlag.Name) {
 			cfg.NetworkId = 5
 		}
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+		if !ctx.GlobalIsSet(NetworkIDFlag.Name) {
 			cfg.NetworkId = 1337
 		}
 		// Create new developer account or reuse existing one
@@ -1593,6 +1744,7 @@ func RegisterGraphQLService(stack *node.Node, endpoint string, cors, vhosts []st
 	}
 }
 
+// SetupMetrics sets up the metrics
 func SetupMetrics(ctx *cli.Context) {
 	if metrics.Enabled {
 		log.Info("Enabling metrics collection")
@@ -1614,6 +1766,7 @@ func SetupMetrics(ctx *cli.Context) {
 	}
 }
 
+// SplitTagsFlag splits the tagsflags and returns a map of keys and values
 func SplitTagsFlag(tagsFlag string) map[string]string {
 	tags := strings.Split(tagsFlag, ",")
 	tagsMap := map[string]string{}
@@ -1648,6 +1801,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	return chainDb
 }
 
+// MakeGenesis will make a genesis block
 func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	var genesis *core.Genesis
 	switch {

@@ -30,22 +30,23 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// Custom type which is registered in the flags library which cli uses for
-// argument parsing. This allows us to expand Value to an absolute path when
-// the argument is parsed
+// DirectoryString is a custom type which is registered in the flags library 
+// which cli uses for argument parsing. This allows us to expand Value to 
+// an absolute path when the argument is parsed
 type DirectoryString string
 
 func (s *DirectoryString) String() string {
 	return string(*s)
 }
 
+// Set sets the value
 func (s *DirectoryString) Set(value string) error {
 	*s = DirectoryString(expandPath(value))
 	return nil
 }
 
-// Custom cli.Flag type which expand the received string to an absolute path.
-// e.g. ~/.ethereum -> /home/username/.ethereum
+// DirectoryFlag is a custom cli.Flag type which expand the received string
+// to an absolute path. e.g. ~/.ethereum -> /home/username/.ethereum
 type DirectoryFlag struct {
 	Name   string
 	Value  DirectoryString
@@ -57,7 +58,7 @@ func (f DirectoryFlag) String() string {
 	return cli.FlagStringer(f)
 }
 
-// called by cli library, grabs variable from environment (if in env)
+// Apply is called by cli library, grabs variable from environment (if in env)
 // and adds variable to flag set for parsing.
 func (f DirectoryFlag) Apply(set *flag.FlagSet) {
 	eachName(f.Name, func(name string) {
@@ -65,10 +66,12 @@ func (f DirectoryFlag) Apply(set *flag.FlagSet) {
 	})
 }
 
+// GetName retuns the name
 func (f DirectoryFlag) GetName() string {
 	return f.Name
 }
 
+// Set sets the value
 func (f *DirectoryFlag) Set(value string) {
 	f.Value.Set(value)
 }
@@ -81,6 +84,7 @@ func eachName(longName string, fn func(string)) {
 	}
 }
 
+// TextMarshaler provides an interface for marshalling/unmarshalling
 type TextMarshaler interface {
 	encoding.TextMarshaler
 	encoding.TextUnmarshaler
@@ -111,6 +115,7 @@ type TextMarshalerFlag struct {
 	EnvVar string
 }
 
+// GetName returns the name
 func (f TextMarshalerFlag) GetName() string {
 	return f.Name
 }
@@ -119,6 +124,7 @@ func (f TextMarshalerFlag) String() string {
 	return cli.FlagStringer(f)
 }
 
+// Apply sets the value for each flag
 func (f TextMarshalerFlag) Apply(set *flag.FlagSet) {
 	eachName(f.Name, func(name string) {
 		set.Var(textMarshalerVal{f.Value}, f.Name, f.Usage)
@@ -162,6 +168,7 @@ func (b *bigValue) Set(s string) error {
 	return nil
 }
 
+// GetName returns the name
 func (f BigFlag) GetName() string {
 	return f.Name
 }
@@ -170,6 +177,7 @@ func (f BigFlag) String() string {
 	return cli.FlagStringer(f)
 }
 
+// Apply sets the value for each flag
 func (f BigFlag) Apply(set *flag.FlagSet) {
 	eachName(f.Name, func(name string) {
 		set.Var((*bigValue)(f.Value), f.Name, f.Usage)

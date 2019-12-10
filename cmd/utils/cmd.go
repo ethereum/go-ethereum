@@ -63,6 +63,7 @@ func Fatalf(format string, args ...interface{}) {
 	os.Exit(1)
 }
 
+// StartNode starts the node
 func StartNode(stack *node.Node) {
 	if err := stack.Start(); err != nil {
 		Fatalf("Error starting protocol stack: %v", err)
@@ -85,6 +86,7 @@ func StartNode(stack *node.Node) {
 	}()
 }
 
+// ImportChain imports the blockchain
 func ImportChain(chain *core.BlockChain, fn string) error {
 	// Watch for Ctrl-C while the import is running.
 	// If a signal is received, the import will stop at the next batch.
