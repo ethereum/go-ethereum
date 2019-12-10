@@ -29,7 +29,7 @@ import (
 	natpmp "github.com/jackpal/go-nat-pmp"
 )
 
-// An implementation of nat.Interface can map local ports to ports
+// Interface is an implementation of nat.Interface can map local ports to ports
 // accessible from the Internet.
 type Interface interface {
 	// These methods manage a mapping between a port on the local
@@ -131,13 +131,17 @@ func Map(m Interface, c chan struct{}, protocol string, extport, intport int, na
 // Mapping operations will not return an error but won't actually do anything.
 type ExtIP net.IP
 
+// ExternalIP returns the external ip address
 func (n ExtIP) ExternalIP() (net.IP, error) { return net.IP(n), nil }
-func (n ExtIP) String() string              { return fmt.Sprintf("ExtIP(%v)", net.IP(n)) }
 
-// These do nothing.
+// String returns a string representation of the external ip address
+func (n ExtIP) String() string { return fmt.Sprintf("ExtIP(%v)", net.IP(n)) }
 
+// AddMapping does nothing as it assumes the ports were mapped manually
 func (ExtIP) AddMapping(string, int, int, string, time.Duration) error { return nil }
-func (ExtIP) DeleteMapping(string, int, int) error                     { return nil }
+
+// DeleteMapping does nothing as it assumes the ports were mapped manually
+func (ExtIP) DeleteMapping(string, int, int) error { return nil }
 
 // Any returns a port mapper that tries to discover any supported
 // mechanism on the local network.
@@ -220,9 +224,8 @@ func (n *autodisc) String() string {
 	defer n.mu.Unlock()
 	if n.found == nil {
 		return n.what
-	} else {
-		return n.found.String()
 	}
+	return n.found.String()
 }
 
 // wait blocks until auto-discovery has been performed.

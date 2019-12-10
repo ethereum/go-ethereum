@@ -420,11 +420,11 @@ func startExecNodeStack() (*node.Node, error) {
 	}
 
 	// create enode record
-	nodeTcpConn, _ := net.ResolveTCPAddr("tcp", conf.Stack.P2P.ListenAddr)
-	if nodeTcpConn.IP == nil {
-		nodeTcpConn.IP = net.IPv4(127, 0, 0, 1)
+	nodeTCPConn, _ := net.ResolveTCPAddr("tcp", conf.Stack.P2P.ListenAddr)
+	if nodeTCPConn.IP == nil {
+		nodeTCPConn.IP = net.IPv4(127, 0, 0, 1)
 	}
-	conf.Node.initEnode(nodeTcpConn.IP, nodeTcpConn.Port, nodeTcpConn.Port)
+	conf.Node.initEnode(nodeTCPConn.IP, nodeTCPConn.Port, nodeTCPConn.Port)
 	conf.Stack.P2P.PrivateKey = conf.Node.PrivateKey
 	conf.Stack.Logger = log.New("node.id", conf.Node.ID.String())
 
@@ -521,6 +521,7 @@ type SnapshotAPI struct {
 	services map[string]node.Service
 }
 
+// Snapshot will create snapshot of services
 func (api SnapshotAPI) Snapshot() (map[string][]byte, error) {
 	snapshots := make(map[string][]byte)
 	for name, service := range api.services {

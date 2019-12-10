@@ -251,7 +251,7 @@ func (n NodeID) String() string {
 	return fmt.Sprintf("%x", n[:])
 }
 
-// The Go syntax representation of a NodeID is a call to HexID.
+// GoString returns the Go syntax representation of a NodeID which is a call to HexID.
 func (n NodeID) GoString() string {
 	return fmt.Sprintf("discover.HexID(\"%x\")", n[:])
 }

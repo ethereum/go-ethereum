@@ -67,12 +67,12 @@ const (
 
 // RPC packet types
 const (
-	p_pingV4 = iota + 1 // zero is 'reserved'
-	p_pongV4
-	p_findnodeV4
-	p_neighborsV4
-	p_enrRequestV4
-	p_enrResponseV4
+	pPingV4 = iota + 1 // zero is 'reserved'
+	pPongV4
+	pFindnodeV4
+	pNeighborsV4
+	pEnrRequestV4
+	pEnrResponseV4
 )
 
 // RPC request structures
@@ -257,6 +257,7 @@ type reply struct {
 	matched chan<- bool
 }
 
+// ListenV4 will create a udp listener
 func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 	closeCtx, cancel := context.WithCancel(context.Background())
 	t := &UDPv4{
@@ -366,7 +367,7 @@ func (t *UDPv4) sendPing(toid enode.ID, toaddr *net.UDPAddr, callback func()) *r
 	}
 	// Add a matcher for the reply to the pending reply queue. Pongs are matched if they
 	// reference the ping we're about to send.
-	rm := t.pending(toid, toaddr.IP, p_pongV4, func(p interface{}) (matched bool, requestDone bool) {
+	rm := t.pending(toid, toaddr.IP, pPongV4, func(p interface{}) (matched bool, requestDone bool) {
 		matched = bytes.Equal(p.(*pongV4).ReplyTok, hash)
 		if matched && callback != nil {
 			callback()
@@ -438,7 +439,7 @@ func (t *UDPv4) findnode(toid enode.ID, toaddr *net.UDPAddr, target encPubkey) (
 	// active until enough nodes have been received.
 	nodes := make([]*node, 0, bucketSize)
 	nreceived := 0
-	rm := t.pending(toid, toaddr.IP, p_neighborsV4, func(r interface{}) (matched bool, requestDone bool) {
+	rm := t.pending(toid, toaddr.IP, pNeighborsV4, func(r interface{}) (matched bool, requestDone bool) {
 		reply := r.(*neighborsV4)
 		for _, rn := range reply.Nodes {
 			nreceived++
@@ -472,7 +473,7 @@ func (t *UDPv4) RequestENR(n *enode.Node) (*enode.Node, error) {
 	}
 	// Add a matcher for the reply to the pending reply queue. Responses are matched if
 	// they reference the request we're about to send.
-	rm := t.pending(n.ID(), addr.IP, p_enrResponseV4, func(r interface{}) (matched bool, requestDone bool) {
+	rm := t.pending(n.ID(), addr.IP, pEnrResponseV4, func(r interface{}) (matched bool, requestDone bool) {
 		matched = bytes.Equal(r.(*enrResponseV4).ReplyTok, hash)
 		return matched, matched
 	})
@@ -752,17 +753,17 @@ func decodeV4(buf []byte) (packetV4, encPubkey, []byte, error) {
 
 	var req packetV4
 	switch ptype := sigdata[0]; ptype {
-	case p_pingV4:
+	case pPingV4:
 		req = new(pingV4)
-	case p_pongV4:
+	case pPongV4:
 		req = new(pongV4)
-	case p_findnodeV4:
+	case pFindnodeV4:
 		req = new(findnodeV4)
-	case p_neighborsV4:
+	case pNeighborsV4:
 		req = new(neighborsV4)
-	case p_enrRequestV4:
+	case pEnrRequestV4:
 		req = new(enrRequestV4)
-	case p_enrResponseV4:
+	case pEnrResponseV4:
 		req = new(enrResponseV4)
 	default:
 		return nil, fromKey, hash, fmt.Errorf("unknown type: %d", ptype)
@@ -806,7 +807,7 @@ func seqFromTail(tail []rlp.RawValue) uint64 {
 // PING/v4
 
 func (req *pingV4) name() string { return "PING/v4" }
-func (req *pingV4) kind() byte   { return p_pingV4 }
+func (req *pingV4) kind() byte   { return pPingV4 }
 
 func (req *pingV4) preverify(t *UDPv4, from *net.UDPAddr, fromID enode.ID, fromKey encPubkey) error {
 	if expired(req.Expiration) {
@@ -848,7 +849,7 @@ func (req *pingV4) handle(t *UDPv4, from *net.UDPAddr, fromID enode.ID, mac []by
 // PONG/v4
 
 func (req *pongV4) name() string { return "PONG/v4" }
-func (req *pongV4) kind() byte   { return p_pongV4 }
+func (req *pongV4) kind() byte   { return pPongV4 }
 
 func (req *pongV4) preverify(t *UDPv4, from *net.UDPAddr, fromID enode.ID, fromKey encPubkey) error {
 	if expired(req.Expiration) {
@@ -868,7 +869,7 @@ func (req *pongV4) handle(t *UDPv4, from *net.UDPAddr, fromID enode.ID, mac []by
 // FINDNODE/v4
 
 func (req *findnodeV4) name() string { return "FINDNODE/v4" }
-func (req *findnodeV4) kind() byte   { return p_findnodeV4 }
+func (req *findnodeV4) kind() byte   { return pFindnodeV4 }
 
 func (req *findnodeV4) preverify(t *UDPv4, from *net.UDPAddr, fromID enode.ID, fromKey encPubkey) error {
 	if expired(req.Expiration) {
@@ -915,7 +916,7 @@ func (req *findnodeV4) handle(t *UDPv4, from *net.UDPAddr, fromID enode.ID, mac 
 // NEIGHBORS/v4
 
 func (req *neighborsV4) name() string { return "NEIGHBORS/v4" }
-func (req *neighborsV4) kind() byte   { return p_neighborsV4 }
+func (req *neighborsV4) kind() byte   { return pNeighborsV4 }
 
 func (req *neighborsV4) preverify(t *UDPv4, from *net.UDPAddr, fromID enode.ID, fromKey encPubkey) error {
 	if expired(req.Expiration) {
@@ -933,7 +934,7 @@ func (req *neighborsV4) handle(t *UDPv4, from *net.UDPAddr, fromID enode.ID, mac
 // ENRREQUEST/v4
 
 func (req *enrRequestV4) name() string { return "ENRREQUEST/v4" }
-func (req *enrRequestV4) kind() byte   { return p_enrRequestV4 }
+func (req *enrRequestV4) kind() byte   { return pEnrRequestV4 }
 
 func (req *enrRequestV4) preverify(t *UDPv4, from *net.UDPAddr, fromID enode.ID, fromKey encPubkey) error {
 	if expired(req.Expiration) {
@@ -955,7 +956,7 @@ func (req *enrRequestV4) handle(t *UDPv4, from *net.UDPAddr, fromID enode.ID, ma
 // ENRRESPONSE/v4
 
 func (req *enrResponseV4) name() string { return "ENRRESPONSE/v4" }
-func (req *enrResponseV4) kind() byte   { return p_enrResponseV4 }
+func (req *enrResponseV4) kind() byte   { return pEnrResponseV4 }
 
 func (req *enrResponseV4) preverify(t *UDPv4, from *net.UDPAddr, fromID enode.ID, fromKey encPubkey) error {
 	if !t.handleReply(fromID, from.IP, req) {

@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
+// DialBanTimeout is the time out for the network connections
 var DialBanTimeout = 200 * time.Millisecond
 
 // NetworkConfig defines configuration options for starting a Network
@@ -454,9 +455,8 @@ func (net *Network) getNodeIDs(excludeIDs []enode.ID) []enode.ID {
 	if len(excludeIDs) > 0 {
 		// Return the difference of nodeIDs and excludeIDs
 		return filterIDs(nodeIDs, excludeIDs)
-	} else {
-		return nodeIDs
 	}
+	return nodeIDs
 }
 
 // GetNodes returns the existing nodes.
@@ -472,9 +472,8 @@ func (net *Network) getNodes(excludeIDs []enode.ID) []*Node {
 	if len(excludeIDs) > 0 {
 		nodeIDs := net.getNodeIDs(excludeIDs)
 		return net.getNodesByID(nodeIDs)
-	} else {
-		return net.Nodes
 	}
+	return net.Nodes
 }
 
 // GetNodesByID returns existing nodes with the given enode.IDs.
@@ -651,7 +650,7 @@ func (net *Network) getConn(oneID, otherID enode.ID) *Conn {
 	return net.Conns[i]
 }
 
-// InitConn(one, other) retrieves the connection model for the connection between
+// InitConn (one, other) retrieves the connection model for the connection between
 // peers one and other, or creates a new one if it does not exist
 // the order of nodes does not matter, i.e., Conn(i,j) == Conn(j, i)
 // it checks if the connection is already up, and if the nodes are running
@@ -891,6 +890,7 @@ func (net *Network) Snapshot() (*Snapshot, error) {
 	return net.snapshot(nil, nil)
 }
 
+// SnapshotWithServices will take a snapshot with the services specified as parameters
 func (net *Network) SnapshotWithServices(addServices []string, removeServices []string) (*Snapshot, error) {
 	return net.snapshot(addServices, removeServices)
 }
@@ -1098,7 +1098,6 @@ func (net *Network) executeNodeEvent(e *Event) error {
 func (net *Network) executeConnEvent(e *Event) error {
 	if e.Conn.Up {
 		return net.Connect(e.Conn.One, e.Conn.Other)
-	} else {
-		return net.Disconnect(e.Conn.One, e.Conn.Other)
 	}
+	return net.Disconnect(e.Conn.One, e.Conn.Other)
 }

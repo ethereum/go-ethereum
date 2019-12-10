@@ -24,6 +24,7 @@ import (
 )
 
 var (
+	// ErrNodeNotFound is the node not found error
 	ErrNodeNotFound = errors.New("node not found")
 )
 

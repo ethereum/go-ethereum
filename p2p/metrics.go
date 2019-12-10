@@ -30,12 +30,17 @@ import (
 )
 
 const (
-	MetricsInboundTraffic   = "p2p/ingress" // Name for the registered inbound traffic meter
-	MetricsOutboundTraffic  = "p2p/egress"  // Name for the registered outbound traffic meter
-	MetricsOutboundConnects = "p2p/dials"   // Name for the registered outbound connects meter
-	MetricsInboundConnects  = "p2p/serves"  // Name for the registered inbound connects meter
+	// MetricsInboundTraffic is the name for the registered inbound traffic meter
+	MetricsInboundTraffic = "p2p/ingress"
+	// MetricsOutboundTraffic is the name for the registered outbound traffic meter
+	MetricsOutboundTraffic = "p2p/egress"
+	// MetricsOutboundConnects is the name for the registered outbound connects meter
+	MetricsOutboundConnects = "p2p/dials"
+	// MetricsInboundConnects is the name for the registered inbound connects meter
+	MetricsInboundConnects = "p2p/serves"
 
-	MeteredPeerLimit = 1024 // This amount of peers are individually metered
+	// MeteredPeerLimit is the amount of peers are individually metered
+	MeteredPeerLimit = 1024
 )
 
 var (
@@ -45,8 +50,10 @@ var (
 	egressTrafficMeter  = metrics.NewRegisteredMeter(MetricsOutboundTraffic, nil)  // Meter metering the cumulative egress traffic
 	activePeerGauge     = metrics.NewRegisteredGauge("p2p/peers", nil)             // Gauge tracking the current peer count
 
-	PeerIngressRegistry = metrics.NewPrefixedChildRegistry(metrics.EphemeralRegistry, MetricsInboundTraffic+"/")  // Registry containing the peer ingress
-	PeerEgressRegistry  = metrics.NewPrefixedChildRegistry(metrics.EphemeralRegistry, MetricsOutboundTraffic+"/") // Registry containing the peer egress
+	// PeerIngressRegistry is a registry containing the peer ingress
+	PeerIngressRegistry = metrics.NewPrefixedChildRegistry(metrics.EphemeralRegistry, MetricsInboundTraffic+"/")
+	// PeerEgressRegistry is a registry containing the peer egress
+	PeerEgressRegistry = metrics.NewPrefixedChildRegistry(metrics.EphemeralRegistry, MetricsOutboundTraffic+"/")
 
 	meteredPeerFeed  event.Feed // Event feed for peer metrics
 	meteredPeerCount int32      // Actually stored peer connection count

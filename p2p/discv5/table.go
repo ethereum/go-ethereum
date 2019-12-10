@@ -37,6 +37,7 @@ const (
 	maxFindnodeFailures = 5
 )
 
+// Table is a struct that holds the nodes/peers
 type Table struct {
 	count         int               // number of nodes
 	buckets       [nBuckets]*bucket // index of known nodes by distance

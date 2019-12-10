@@ -58,28 +58,34 @@ func WithEntry(k string, v interface{}) Entry {
 // TCP is the "tcp" key, which holds the TCP port of the node.
 type TCP uint16
 
+// ENRKey returns the string representation of the key
 func (v TCP) ENRKey() string { return "tcp" }
 
-// UDP is the "udp" key, which holds the IPv6-specific UDP port of the node.
+// TCP6 is the "udp" key, which holds the IPv6-specific UDP port of the node.
 type TCP6 uint16
 
+// ENRKey returns the string representation of the key
 func (v TCP6) ENRKey() string { return "tcp6" }
 
 // UDP is the "udp" key, which holds the UDP port of the node.
 type UDP uint16
 
+// ENRKey returns the string representation of the key
 func (v UDP) ENRKey() string { return "udp" }
 
-// UDP is the "udp" key, which holds the IPv6-specific UDP port of the node.
+// UDP6 is the "udp" key, which holds the IPv6-specific UDP port of the node.
 type UDP6 uint16
 
+// ENRKey returns the string representation of the key
 func (v UDP6) ENRKey() string { return "udp6" }
 
 // ID is the "id" key, which holds the name of the identity scheme.
 type ID string
 
-const IDv4 = ID("v4") // the default identity scheme
+// IDv4 is the default identity scheme
+const IDv4 = ID("v4")
 
+// ENRKey returns the string representation of the key
 func (v ID) ENRKey() string { return "id" }
 
 // IP is either the "ip" or "ip6" key, depending on the value.
@@ -87,6 +93,7 @@ func (v ID) ENRKey() string { return "id" }
 // To load an address from a record use the IPv4 or IPv6 types.
 type IP net.IP
 
+// ENRKey returns the string representation of the key
 func (v IP) ENRKey() string {
 	if net.IP(v).To4() == nil {
 		return "ip6"
@@ -119,6 +126,7 @@ func (v *IP) DecodeRLP(s *rlp.Stream) error {
 // IPv4 is the "ip" key, which holds the IP address of the node.
 type IPv4 net.IP
 
+// ENRKey returns the string representation of the key
 func (v IPv4) ENRKey() string { return "ip" }
 
 // EncodeRLP implements rlp.Encoder.
@@ -144,6 +152,7 @@ func (v *IPv4) DecodeRLP(s *rlp.Stream) error {
 // IPv6 is the "ip6" key, which holds the IP address of the node.
 type IPv6 net.IP
 
+// ENRKey returns the string representation of the key
 func (v IPv6) ENRKey() string { return "ip6" }
 
 // EncodeRLP implements rlp.Encoder.

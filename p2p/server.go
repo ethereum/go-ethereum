@@ -363,7 +363,7 @@ func (srv *Server) RemoveTrustedPeer(node *enode.Node) {
 	}
 }
 
-// SubscribePeers subscribes the given channel to peer events
+// SubscribeEvents subscribes to peer events and returns the event subscription
 func (srv *Server) SubscribeEvents(ch chan *PeerEvent) event.Subscription {
 	return srv.peerFeed.Subscribe(ch)
 }

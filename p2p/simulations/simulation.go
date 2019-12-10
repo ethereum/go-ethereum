@@ -113,6 +113,7 @@ func (s *Simulation) watchNetwork(result *StepResult) func() {
 	}
 }
 
+// Step is a struct for the action, trigger, and expectation
 type Step struct {
 	// Action is the action to perform for this step
 	Action func(context.Context) error
@@ -125,6 +126,7 @@ type Step struct {
 	Expect *Expectation
 }
 
+// Expectation is a struct to hold the map of nodes and check function
 type Expectation struct {
 	// Nodes is a list of nodes to check
 	Nodes []enode.ID
@@ -139,6 +141,7 @@ func newStepResult() *StepResult {
 	}
 }
 
+// StepResult is a struct to hold the results from each step
 type StepResult struct {
 	// Error is the error encountered whilst running the step
 	Error error

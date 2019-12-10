@@ -70,10 +70,12 @@ func (msg Msg) Discard() error {
 	return err
 }
 
+// MsgReader provides reading of encoded messages
 type MsgReader interface {
 	ReadMsg() (Msg, error)
 }
 
+// MsgWriter provides reading of encoded messages
 type MsgWriter interface {
 	// WriteMsg sends a message. It will block until the message's
 	// Payload has been consumed by the other end.

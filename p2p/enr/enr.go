@@ -43,9 +43,11 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const SizeLimit = 300 // maximum encoded size of a node record in bytes
+// SizeLimit is the maximum encoded size of a node record in bytes
+const SizeLimit = 300
 
 var (
+	// ErrInvalidSig is an invalid signature on node record error
 	ErrInvalidSig     = errors.New("invalid signature on node record")
 	errNotSorted      = errors.New("record key/value pairs are not sorted by key")
 	errDuplicateKey   = errors.New("record contains duplicate key")
@@ -65,6 +67,7 @@ type IdentityScheme interface {
 // SchemeMap is a registry of named identity schemes.
 type SchemeMap map[string]IdentityScheme
 
+// Verify will verify a record
 func (m SchemeMap) Verify(r *Record, sig []byte) error {
 	s := m[r.IdentityScheme()]
 	if s == nil {
@@ -73,6 +76,7 @@ func (m SchemeMap) Verify(r *Record, sig []byte) error {
 	return s.Verify(r, sig)
 }
 
+// NodeAddr returns the node address of record
 func (m SchemeMap) NodeAddr(r *Record) []byte {
 	s := m[r.IdentityScheme()]
 	if s == nil {

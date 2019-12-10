@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
+// TestPeer holds a test peer entry
 type TestPeer interface {
 	ID() enode.ID
 	Drop()
@@ -35,10 +36,12 @@ type TestPeerPool struct {
 	peers map[enode.ID]TestPeer
 }
 
+// NewTestPeerPool will create a new peer pool for testing
 func NewTestPeerPool() *TestPeerPool {
 	return &TestPeerPool{peers: make(map[enode.ID]TestPeer)}
 }
 
+// Add adds a peer to the test peer pool
 func (p *TestPeerPool) Add(peer TestPeer) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
@@ -47,12 +50,14 @@ func (p *TestPeerPool) Add(peer TestPeer) {
 
 }
 
+// Remove removes a peer from the test peer pool
 func (p *TestPeerPool) Remove(peer TestPeer) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	delete(p.peers, peer.ID())
 }
 
+// Has returns true if the peer is in the test peer pool
 func (p *TestPeerPool) Has(id enode.ID) bool {
 	p.lock.Lock()
 	defer p.lock.Unlock()
@@ -60,6 +65,7 @@ func (p *TestPeerPool) Has(id enode.ID) bool {
 	return ok
 }
 
+// Get returns the peer from the test peer pool
 func (p *TestPeerPool) Get(id enode.ID) TestPeer {
 	p.lock.Lock()
 	defer p.lock.Unlock()

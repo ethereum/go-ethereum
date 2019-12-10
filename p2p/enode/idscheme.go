@@ -28,17 +28,18 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// List of known secure identity schemes.
+// ValidSchemes is a list of known secure identity schemes.
 var ValidSchemes = enr.SchemeMap{
 	"v4": V4ID{},
 }
 
+// ValidSchemesForTesting is a list of security identity schemes used in testing
 var ValidSchemesForTesting = enr.SchemeMap{
 	"v4":   V4ID{},
 	"null": NullID{},
 }
 
-// v4ID is the "v4" identity scheme.
+// V4ID is the "v4" identity scheme.
 type V4ID struct{}
 
 // SignV4 signs a record using the v4 scheme.
@@ -61,6 +62,7 @@ func SignV4(r *enr.Record, privkey *ecdsa.PrivateKey) error {
 	return err
 }
 
+// Verify verifies a record using the v4 scheme.
 func (V4ID) Verify(r *enr.Record, sig []byte) error {
 	var entry s256raw
 	if err := r.Load(&entry); err != nil {
@@ -77,6 +79,7 @@ func (V4ID) Verify(r *enr.Record, sig []byte) error {
 	return nil
 }
 
+// NodeAddr returns the node address from a record
 func (V4ID) NodeAddr(r *enr.Record) []byte {
 	var pubkey Secp256k1
 	err := r.Load(&pubkey)
@@ -92,6 +95,7 @@ func (V4ID) NodeAddr(r *enr.Record) []byte {
 // Secp256k1 is the "secp256k1" key, which holds a public key.
 type Secp256k1 ecdsa.PublicKey
 
+// ENRKey returns the ENR identiy scheme string
 func (v Secp256k1) ENRKey() string { return "secp256k1" }
 
 // EncodeRLP implements rlp.Encoder.
@@ -116,6 +120,7 @@ func (v *Secp256k1) DecodeRLP(s *rlp.Stream) error {
 // s256raw is an unparsed secp256k1 public key entry.
 type s256raw []byte
 
+// ENRKey returns the ENR identiy scheme string
 func (s256raw) ENRKey() string { return "secp256k1" }
 
 // v4CompatID is a weaker and insecure version of the "v4" scheme which only checks for the
@@ -140,16 +145,19 @@ func signV4Compat(r *enr.Record, pubkey *ecdsa.PublicKey) {
 // ID in the record without any signature.
 type NullID struct{}
 
+// Verify on a NullID is a noop. It is just for testing purposes.
 func (NullID) Verify(r *enr.Record, sig []byte) error {
 	return nil
 }
 
+// NodeAddr returns the node address from a record
 func (NullID) NodeAddr(r *enr.Record) []byte {
 	var id ID
 	r.Load(enr.WithEntry("nulladdr", &id))
 	return id[:]
 }
 
+// SignNull will set an ENR identiy record with a null id
 func SignNull(r *enr.Record, id ID) *Node {
 	r.Set(enr.ID("null"))
 	r.Set(enr.WithEntry("nulladdr", id))

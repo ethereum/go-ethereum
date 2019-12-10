@@ -201,11 +201,11 @@ func RandomNodeConfig() *NodeConfig {
 		panic("unable to assign tcp port")
 	}
 
-	enodId := enode.PubkeyToIDV4(&prvkey.PublicKey)
+	enodID := enode.PubkeyToIDV4(&prvkey.PublicKey)
 	return &NodeConfig{
 		PrivateKey:      prvkey,
-		ID:              enodId,
-		Name:            fmt.Sprintf("node_%s", enodId.String()),
+		ID:              enodID,
+		Name:            fmt.Sprintf("node_%s", enodID.String()),
 		Port:            port,
 		EnableMsgEvents: true,
 	}
@@ -279,12 +279,12 @@ func RegisterServices(services Services) {
 // adds the host part to the configuration's ENR, signs it
 // creates and  the corresponding enode object to the configuration
 func (n *NodeConfig) initEnode(ip net.IP, tcpport int, udpport int) error {
-	enrIp := enr.IP(ip)
-	n.Record.Set(&enrIp)
-	enrTcpPort := enr.TCP(tcpport)
-	n.Record.Set(&enrTcpPort)
-	enrUdpPort := enr.UDP(udpport)
-	n.Record.Set(&enrUdpPort)
+	enrIP := enr.IP(ip)
+	n.Record.Set(&enrIP)
+	enrTCPPort := enr.TCP(tcpport)
+	n.Record.Set(&enrTCPPort)
+	enrUDPPort := enr.UDP(udpport)
+	n.Record.Set(&enrUDPPort)
 
 	err := enode.SignV4(&n.Record, n.PrivateKey)
 	if err != nil {
