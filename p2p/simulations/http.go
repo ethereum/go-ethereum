@@ -698,12 +698,6 @@ func (s *Server) JSON(w http.ResponseWriter, status int, data interface{}) {
 	json.NewEncoder(w).Encode(data)
 }
 
-type contextKey int
-const (
-	keyNode contextKey = iota
-	keyPeer
-)
-
 // wrapHandler returns a httprouter.Handle which wraps a http.HandlerFunc by
 // populating request.Context with any objects from the URL params
 func (s *Server) wrapHandler(handler http.HandlerFunc) httprouter.Handle {
@@ -725,7 +719,7 @@ func (s *Server) wrapHandler(handler http.HandlerFunc) httprouter.Handle {
 				http.NotFound(w, req)
 				return
 			}
-			ctx = context.WithValue(ctx, keyNode, node)
+			ctx = context.WithValue(ctx, "node", node)
 		}
 
 		if id := params.ByName("peerid"); id != "" {
@@ -740,7 +734,7 @@ func (s *Server) wrapHandler(handler http.HandlerFunc) httprouter.Handle {
 				http.NotFound(w, req)
 				return
 			}
-			ctx = context.WithValue(ctx, keyPeer, peer)
+			ctx = context.WithValue(ctx, "peer", peer)
 		}
 
 		handler(w, req.WithContext(ctx))
