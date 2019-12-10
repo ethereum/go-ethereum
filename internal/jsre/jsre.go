@@ -32,7 +32,9 @@ import (
 )
 
 var (
+	// BignumberJs specifies bignumber.js
 	BignumberJs = deps.MustAsset("bignumber.js")
+	// Web3Js specifies web3.js
 	Web3Js      = deps.MustAsset("web3.js")
 )
 
@@ -66,7 +68,8 @@ type evalReq struct {
 	done chan bool
 }
 
-// runtime must be stopped with Stop() after use and cannot be used after stopping
+// New creates a new runtime environment
+// Note the runtime must be stopped with Stop() after use and cannot be used after stopping
 func New(assetPath string, output io.Writer) *JSRE {
 	re := &JSRE{
 		assetPath:     assetPath,
@@ -230,7 +233,7 @@ func (re *JSRE) Do(fn func(*otto.Otto)) {
 	<-done
 }
 
-// stops the event loop before exit, optionally waits for all timers to expire
+// Stop stops the event loop before exit, optionally waits for all timers to expire
 func (re *JSRE) Stop(waitForCallbacks bool) {
 	select {
 	case <-re.closed:
@@ -239,7 +242,7 @@ func (re *JSRE) Stop(waitForCallbacks bool) {
 	}
 }
 
-// Exec(file) loads and runs the contents of a file
+// Exec (file) loads and runs the contents of a file
 // if a relative path is given, the jsre's assetPath is used
 func (re *JSRE) Exec(file string) error {
 	code, err := ioutil.ReadFile(common.AbsolutePath(re.assetPath, file))
