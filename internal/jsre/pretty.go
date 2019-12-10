@@ -36,13 +36,13 @@ var (
 	// FunctionColor specifies what color to use for functions
 	FunctionColor = color.New(color.FgMagenta).SprintfFunc()
 	// SpecialColor specifies what color to use for special values
-	SpecialColor  = color.New(color.Bold).SprintfFunc()
+	SpecialColor = color.New(color.Bold).SprintfFunc()
 	// NumberColor specifies what color to use for numbers
-	NumberColor   = color.New(color.FgRed).SprintfFunc()
+	NumberColor = color.New(color.FgRed).SprintfFunc()
 	// StringColor specifies what color to use for strings
-	StringColor   = color.New(color.FgGreen).SprintfFunc()
+	StringColor = color.New(color.FgGreen).SprintfFunc()
 	// ErrorColor specifies what color to use for errors
-	ErrorColor    = color.New(color.FgHiRed).SprintfFunc()
+	ErrorColor = color.New(color.FgHiRed).SprintfFunc()
 )
 
 // these fields are hidden when printing objects.

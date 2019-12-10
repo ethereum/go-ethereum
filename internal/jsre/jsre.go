@@ -35,7 +35,7 @@ var (
 	// BignumberJs specifies bignumber.js
 	BignumberJs = deps.MustAsset("bignumber.js")
 	// Web3Js specifies web3.js
-	Web3Js      = deps.MustAsset("web3.js")
+	Web3Js = deps.MustAsset("web3.js")
 )
 
 /*
