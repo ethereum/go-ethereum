@@ -55,7 +55,7 @@ func TestTrieEntryAccessLes3(t *testing.T) { testAccess(t, 3, tfTrieEntryAccess)
 
 func tfTrieEntryAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	if number := rawdb.ReadHeaderNumber(db, bhash); number != nil {
-		return &light.TrieRequest{Id: light.StateTrieID(rawdb.ReadHeader(db, bhash, *number)), Key: testBankSecureTrieKey}
+		return &light.TrieRequest{ID: light.StateTrieID(rawdb.ReadHeader(db, bhash, *number)), Key: testBankSecureTrieKey}
 	}
 	return nil
 }
@@ -74,7 +74,7 @@ func tfCodeAccess(db ethdb.Database, bhash common.Hash, num uint64) light.OdrReq
 	}
 	sti := light.StateTrieID(header)
 	ci := light.StorageTrieID(sti, crypto.Keccak256Hash(testContractAddr[:]), common.Hash{})
-	return &light.CodeRequest{Id: ci, Hash: crypto.Keccak256Hash(testContractCodeDeployed)}
+	return &light.CodeRequest{ID: ci, Hash: crypto.Keccak256Hash(testContractCodeDeployed)}
 }
 
 func testAccess(t *testing.T, protocol int, fn accessTestFn) {
