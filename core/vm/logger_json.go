@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
+// JSONLogger is a struct with a json encoder and logging configuration
 type JSONLogger struct {
 	encoder *json.Encoder
 	cfg     *LogConfig
@@ -41,6 +42,7 @@ func NewJSONLogger(cfg *LogConfig, writer io.Writer) *JSONLogger {
 	return l
 }
 
+// CaptureStart is triggered at start of execution.
 func (l *JSONLogger) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) error {
 	return nil
 }

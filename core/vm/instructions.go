@@ -914,7 +914,7 @@ func opPush1(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory
 		codeLen = uint64(len(contract.Code))
 		integer = interpreter.intPool.get()
 	)
-	*pc += 1
+	*pc++
 	if *pc < codeLen {
 		stack.push(integer.SetUint64(uint64(contract.Code[*pc])))
 	} else {
