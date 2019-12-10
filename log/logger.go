@@ -15,14 +15,21 @@ const ctxKey = "ctx"
 const errorKey = "LOG15_ERROR"
 const skipLevel = 2
 
+// Lvl is a type for logging levels
 type Lvl int
 
 const (
+	// LvlCrit is the CRIT logging level
 	LvlCrit Lvl = iota
+	// LvlError is the ERROR logging level
 	LvlError
+	// LvlWarn is the WARN logging level
 	LvlWarn
+	// LvlInfo is the INFO logging level
 	LvlInfo
+	// LvlDebug is the DEBUG logging level
 	LvlDebug
+	// LvlTrace is the TRACE logging level
 	LvlTrace
 )
 

@@ -1,5 +1,5 @@
 /*
-Package log15 provides an opinionated, simple toolkit for best-practice logging that is
+Package log provides an opinionated, simple toolkit for best-practice logging that is
 both human and machine readable. It is modeled after the standard library's io and net/http
 packages.
 

@@ -51,6 +51,7 @@ var fieldPadding = make(map[string]int)
 // fieldPaddingLock is a global mutex protecting the field padding map.
 var fieldPaddingLock sync.RWMutex
 
+// Format is an interface for the formatting
 type Format interface {
 	Format(r *Record) []byte
 }

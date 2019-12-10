@@ -6,7 +6,9 @@ import (
 
 var (
 	root          = &logger{[]interface{}{}, new(swapHandler)}
+	// StdoutHandler is the standard output handler
 	StdoutHandler = StreamHandler(os.Stdout, LogfmtFormat())
+	// StderrHandler is the standard error handler
 	StderrHandler = StreamHandler(os.Stderr, LogfmtFormat())
 )
 
