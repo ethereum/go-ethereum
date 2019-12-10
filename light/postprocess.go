@@ -103,7 +103,7 @@ var (
 	errNoHeader           = errors.New("header not found")
 	chtPrefix             = []byte("chtRootV2-") // chtPrefix + chtNum (uint64 big endian) -> trie root hash
 	// ChtTablePrefix is the prefix used "cht-"
-	ChtTablePrefix        = "cht-"
+	ChtTablePrefix = "cht-"
 )
 
 // ChtNode structures are stored in the Canonical Hash Trie in an RLP encoded format
@@ -225,7 +225,7 @@ func (c *ChtIndexerBackend) Commit() error {
 }
 
 var (
-	bloomTriePrefix      = []byte("bltRoot-") // bloomTriePrefix + bloomTrieNum (uint64 big endian) -> trie root hash
+	bloomTriePrefix = []byte("bltRoot-") // bloomTriePrefix + bloomTrieNum (uint64 big endian) -> trie root hash
 	// BloomTrieTablePrefix is the prefix used "blt-"
 	BloomTrieTablePrefix = "blt-"
 )
