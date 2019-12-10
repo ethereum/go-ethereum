@@ -45,8 +45,8 @@ func RandomG1(r io.Reader) (*big.Int, *G1, error) {
 	return k, new(G1).ScalarBaseMult(k), nil
 }
 
-func (g *G1) String() string {
-	return "bn256.G1" + g.p.String()
+func (e *G1) String() string {
+	return "bn256.G1" + e.p.String()
 }
 
 // ScalarBaseMult sets e to g*k where g is the generator of the group and then
@@ -334,8 +334,8 @@ func Miller(g1 *G1, g2 *G2) *GT {
 	return &GT{miller(g2.p, g1.p)}
 }
 
-func (g *GT) String() string {
-	return "bn256.GT" + g.p.String()
+func (e *GT) String() string {
+	return "bn256.GT" + e.p.String()
 }
 
 // ScalarMult sets e to a*k and then returns e.
