@@ -229,6 +229,11 @@ func (dl *diffLayer) Root() common.Hash {
 	return dl.root
 }
 
+// Parent returns the subsequent layer of a diff layer.
+func (dl *diffLayer) Parent() snapshot {
+	return dl.parent
+}
+
 // Stale return whether this layer has become stale (was flattened across) or if
 // it's still live.
 func (dl *diffLayer) Stale() bool {
@@ -405,7 +410,7 @@ func (dl *diffLayer) flatten() snapshot {
 	for hash, data := range dl.accountData {
 		parent.accountData[hash] = data
 	}
-	// Overwrite all the updates storage slots (individually)
+	// Overwrite all the updated storage slots (individually)
 	for accountHash, storage := range dl.storageData {
 		// If storage didn't exist (or was deleted) in the parent; or if the storage
 		// was freshly deleted in the child, overwrite blindly
@@ -425,53 +430,62 @@ func (dl *diffLayer) flatten() snapshot {
 		parent:      parent.parent,
 		origin:      parent.origin,
 		root:        dl.root,
-		storageList: parent.storageList,
-		storageData: parent.storageData,
-		accountList: parent.accountList,
 		accountData: parent.accountData,
+		storageData: parent.storageData,
+		storageList: make(map[common.Hash][]common.Hash),
 		diffed:      dl.diffed,
 		memory:      parent.memory + dl.memory,
 	}
 }
 
-// AccountList returns a sorted list of all accounts in this difflayer.
+// AccountList returns a sorted list of all accounts in this difflayer, including
+// the deleted ones.
+//
+// Note, the returned slice is not a copy, so do not modify it.
 func (dl *diffLayer) AccountList() []common.Hash {
+	// If an old list already exists, return it
+	dl.lock.RLock()
+	list := dl.accountList
+	dl.lock.RUnlock()
+
+	if list != nil {
+		return list
+	}
+	// No old sorted account list exists, generate a new one
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
-	if dl.accountList != nil {
-		return dl.accountList
+
+	dl.accountList = make([]common.Hash, 0, len(dl.accountData))
+	for hash := range dl.accountData {
+		dl.accountList = append(dl.accountList, hash)
 	}
-	accountList := make([]common.Hash, len(dl.accountData))
-	i := 0
-	for k, _ := range dl.accountData {
-		accountList[i] = k
-		i++
-		// This would be a pretty good opportunity to also
-		// calculate the size, if we want to
-	}
-	sort.Sort(hashes(accountList))
-	dl.accountList = accountList
+	sort.Sort(hashes(dl.accountList))
 	return dl.accountList
 }
 
-// StorageList returns a sorted list of all storage slot hashes
-// in this difflayer for the given account.
+// StorageList returns a sorted list of all storage slot hashes in this difflayer
+// for the given account.
+//
+// Note, the returned slice is not a copy, so do not modify it.
 func (dl *diffLayer) StorageList(accountHash common.Hash) []common.Hash {
+	// If an old list already exists, return it
+	dl.lock.RLock()
+	list := dl.storageList[accountHash]
+	dl.lock.RUnlock()
+
+	if list != nil {
+		return list
+	}
+	// No old sorted account list exists, generate a new one
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
-	if dl.storageList[accountHash] != nil {
-		return dl.storageList[accountHash]
+
+	storageMap := dl.storageData[accountHash]
+	storageList := make([]common.Hash, 0, len(storageMap))
+	for k, _ := range storageMap {
+		storageList = append(storageList, k)
 	}
-	accountStorageMap := dl.storageData[accountHash]
-	accountStorageList := make([]common.Hash, len(accountStorageMap))
-	i := 0
-	for k, _ := range accountStorageMap {
-		accountStorageList[i] = k
-		i++
-		// This would be a pretty good opportunity to also
-		// calculate the size, if we want to
-	}
-	sort.Sort(hashes(accountStorageList))
-	dl.storageList[accountHash] = accountStorageList
-	return accountStorageList
+	sort.Sort(hashes(storageList))
+	dl.storageList[accountHash] = storageList
+	return storageList
 }

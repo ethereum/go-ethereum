@@ -18,12 +18,47 @@ package snapshot
 
 import (
 	"fmt"
+	"math/big"
+	"math/rand"
 	"testing"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/rlp"
 )
+
+// randomHash generates a random blob of data and returns it as a hash.
+func randomHash() common.Hash {
+	var hash common.Hash
+	if n, err := rand.Read(hash[:]); n != common.HashLength || err != nil {
+		panic(err)
+	}
+	return hash
+}
+
+// randomAccount generates a random account and returns it RLP encoded.
+func randomAccount() []byte {
+	root := randomHash()
+	a := Account{
+		Balance:  big.NewInt(rand.Int63()),
+		Nonce:    rand.Uint64(),
+		Root:     root[:],
+		CodeHash: emptyCode[:],
+	}
+	data, _ := rlp.EncodeToBytes(a)
+	return data
+}
+
+// randomAccountSet generates a set of random accounts with the given strings as
+// the account address hashes.
+func randomAccountSet(hashes ...string) map[common.Hash][]byte {
+	accounts := make(map[common.Hash][]byte)
+	for _, hash := range hashes {
+		accounts[common.HexToHash(hash)] = randomAccount()
+	}
+	return accounts
+}
 
 // Tests that if a disk layer becomes stale, no active external references will
 // be returned with junk data. This version of the test flattens every diff layer
@@ -46,8 +81,7 @@ func TestDiskLayerExternalInvalidationFullFlatten(t *testing.T) {
 	accounts := map[common.Hash][]byte{
 		common.HexToHash("0xa1"): randomAccount(),
 	}
-	storage := make(map[common.Hash]map[common.Hash][]byte)
-	if err := snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), accounts, storage); err != nil {
+	if err := snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), accounts, nil); err != nil {
 		t.Fatalf("failed to create a diff layer: %v", err)
 	}
 	if n := len(snaps.layers); n != 2 {
@@ -91,11 +125,10 @@ func TestDiskLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	accounts := map[common.Hash][]byte{
 		common.HexToHash("0xa1"): randomAccount(),
 	}
-	storage := make(map[common.Hash]map[common.Hash][]byte)
-	if err := snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), accounts, storage); err != nil {
+	if err := snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), accounts, nil); err != nil {
 		t.Fatalf("failed to create a diff layer: %v", err)
 	}
-	if err := snaps.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), accounts, storage); err != nil {
+	if err := snaps.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), accounts, nil); err != nil {
 		t.Fatalf("failed to create a diff layer: %v", err)
 	}
 	if n := len(snaps.layers); n != 3 {
@@ -140,11 +173,10 @@ func TestDiffLayerExternalInvalidationFullFlatten(t *testing.T) {
 	accounts := map[common.Hash][]byte{
 		common.HexToHash("0xa1"): randomAccount(),
 	}
-	storage := make(map[common.Hash]map[common.Hash][]byte)
-	if err := snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), accounts, storage); err != nil {
+	if err := snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), accounts, nil); err != nil {
 		t.Fatalf("failed to create a diff layer: %v", err)
 	}
-	if err := snaps.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), accounts, storage); err != nil {
+	if err := snaps.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), accounts, nil); err != nil {
 		t.Fatalf("failed to create a diff layer: %v", err)
 	}
 	if n := len(snaps.layers); n != 3 {
@@ -188,14 +220,13 @@ func TestDiffLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	accounts := map[common.Hash][]byte{
 		common.HexToHash("0xa1"): randomAccount(),
 	}
-	storage := make(map[common.Hash]map[common.Hash][]byte)
-	if err := snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), accounts, storage); err != nil {
+	if err := snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), accounts, nil); err != nil {
 		t.Fatalf("failed to create a diff layer: %v", err)
 	}
-	if err := snaps.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), accounts, storage); err != nil {
+	if err := snaps.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), accounts, nil); err != nil {
 		t.Fatalf("failed to create a diff layer: %v", err)
 	}
-	if err := snaps.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), accounts, storage); err != nil {
+	if err := snaps.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), accounts, nil); err != nil {
 		t.Fatalf("failed to create a diff layer: %v", err)
 	}
 	if n := len(snaps.layers); n != 4 {

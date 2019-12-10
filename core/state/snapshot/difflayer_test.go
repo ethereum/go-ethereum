@@ -18,7 +18,6 @@ package snapshot
 
 import (
 	"bytes"
-	"math/big"
 	"math/rand"
 	"testing"
 
@@ -26,20 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/rlp"
 )
-
-func randomAccount() []byte {
-	root := randomHash()
-	a := Account{
-		Balance:  big.NewInt(rand.Int63()),
-		Nonce:    rand.Uint64(),
-		Root:     root[:],
-		CodeHash: emptyCode[:],
-	}
-	data, _ := rlp.EncodeToBytes(a)
-	return data
-}
 
 // TestMergeBasics tests some simple merges
 func TestMergeBasics(t *testing.T) {

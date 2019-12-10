@@ -113,9 +113,17 @@ type Snapshot interface {
 type snapshot interface {
 	Snapshot
 
+	// Parent returns the subsequent layer of a snapshot, or nil if the base was
+	// reached.
+	//
+	// Note, the method is an internal helper to avoid type switching between the
+	// disk and diff layers. There is no locking involved.
+	Parent() snapshot
+
 	// Update creates a new layer on top of the existing snapshot diff tree with
-	// the specified data items. Note, the maps are retained by the method to avoid
-	// copying everything.
+	// the specified data items.
+	//
+	// Note, the maps are retained by the method to avoid copying everything.
 	Update(blockRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer
 
 	// Journal commits an entire diff hierarchy to disk into a single journal entry.
@@ -126,6 +134,9 @@ type snapshot interface {
 	// Stale return whether this layer has become stale (was flattened across) or
 	// if it's still live.
 	Stale() bool
+
+	// AccountIterator creates an account iterator over an arbitrary layer.
+	AccountIterator(seek common.Hash) AccountIterator
 }
 
 // SnapshotTree is an Ethereum state snapshot tree. It consists of one persistent
@@ -170,15 +181,7 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root comm
 	// Existing snapshot loaded, seed all the layers
 	for head != nil {
 		snap.layers[head.Root()] = head
-
-		switch self := head.(type) {
-		case *diffLayer:
-			head = self.parent
-		case *diskLayer:
-			head = nil
-		default:
-			panic(fmt.Sprintf("unknown data layer: %T", self))
-		}
+		head = head.Parent()
 	}
 	return snap
 }
@@ -562,4 +565,10 @@ func (t *Tree) Rebuild(root common.Hash) {
 	t.layers = map[common.Hash]snapshot{
 		root: generateSnapshot(t.diskdb, t.triedb, t.cache, root, wiper),
 	}
+}
+
+// AccountIterator creates a new account iterator for the specified root hash and
+// seeks to a starting account hash.
+func (t *Tree) AccountIterator(root common.Hash, seek common.Hash) (AccountIterator, error) {
+	return newFastAccountIterator(t, root, seek)
 }

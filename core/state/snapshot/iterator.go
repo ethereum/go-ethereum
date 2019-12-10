@@ -18,18 +18,17 @@ package snapshot
 
 import (
 	"bytes"
+	"fmt"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // AccountIterator is an iterator to step over all the accounts in a snapshot,
 // which may or may npt be composed of multiple layers.
 type AccountIterator interface {
-	// Seek steps the iterator forward as many elements as needed, so that after
-	// calling Next(), the iterator will be at a key higher than the given hash.
-	Seek(hash common.Hash)
-
 	// Next steps the iterator forward one element, returning false if exhausted,
 	// or an error if iteration failed for some reason (e.g. root being iterated
 	// becomes stale and garbage collected).
@@ -39,43 +38,133 @@ type AccountIterator interface {
 	// caused a premature iteration exit (e.g. snapshot stack becoming stale).
 	Error() error
 
-	// Key returns the hash of the account the iterator is currently at.
-	Key() common.Hash
+	// Hash returns the hash of the account the iterator is currently at.
+	Hash() common.Hash
 
-	// Value returns the RLP encoded slim account the iterator is currently at.
+	// Account returns the RLP encoded slim account the iterator is currently at.
 	// An error will be returned if the iterator becomes invalid (e.g. snaph
-	Value() []byte
+	Account() []byte
+
+	// Release releases associated resources. Release should always succeed and
+	// can be called multiple times without causing error.
+	Release()
 }
 
 // diffAccountIterator is an account iterator that steps over the accounts (both
-// live and deleted) contained within a single
+// live and deleted) contained within a single diff layer. Higher order iterators
+// will use the deleted accounts to skip deeper iterators.
 type diffAccountIterator struct {
-	layer *diffLayer
-	index int
+	// curHash is the current hash the iterator is positioned on. The field is
+	// explicitly tracked since the referenced diff layer might go stale after
+	// the iterator was positioned and we don't want to fail accessing the old
+	// hash as long as the iterator is not touched any more.
+	curHash common.Hash
+
+	// curAccount is the current value the iterator is positioned on. The field
+	// is explicitly tracked since the referenced diff layer might go stale after
+	// the iterator was positioned and we don't want to fail accessing the old
+	// value as long as the iterator is not touched any more.
+	curAccount []byte
+
+	layer *diffLayer    // Live layer to retrieve values from
+	keys  []common.Hash // Keys left in the layer to iterate
+	fail  error         // Any failures encountered (stale)
 }
 
-func (dl *diffLayer) newAccountIterator() *diffAccountIterator {
-	dl.AccountList()
-	return &diffAccountIterator{layer: dl, index: -1}
-}
-
-// Seek steps the iterator forward as many elements as needed, so that after
-// calling Next(), the iterator will be at a key higher than the given hash.
-func (it *diffAccountIterator) Seek(key common.Hash) {
-	// Search uses binary search to find and return the smallest index i
-	// in [0, n) at which f(i) is true
-	index := sort.Search(len(it.layer.accountList), func(i int) bool {
-		return bytes.Compare(key[:], it.layer.accountList[i][:]) < 0
+// AccountIterator creates an account iterator over a single diff layer.
+func (dl *diffLayer) AccountIterator(seek common.Hash) AccountIterator {
+	// Seek out the requested starting account
+	hashes := dl.AccountList()
+	index := sort.Search(len(hashes), func(i int) bool {
+		return bytes.Compare(seek[:], hashes[i][:]) < 0
 	})
-	it.index = index - 1
+	// Assemble and returned the already seeked iterator
+	return &diffAccountIterator{
+		layer: dl,
+		keys:  hashes[index:],
+	}
 }
 
 // Next steps the iterator forward one element, returning false if exhausted.
 func (it *diffAccountIterator) Next() bool {
-	if it.index < len(it.layer.accountList) {
-		it.index++
+	// If the iterator was already stale, consider it a programmer error. Although
+	// we could just return false here, triggering this path would probably mean
+	// somebody forgot to check for Error, so lets blow up instead of undefined
+	// behavior that's hard to debug.
+	if it.fail != nil {
+		panic(fmt.Sprintf("called Next of failed iterator: %v", it.fail))
 	}
-	return it.index < len(it.layer.accountList)
+	// Stop iterating if all keys were exhausted
+	if len(it.keys) == 0 {
+		return false
+	}
+	// Iterator seems to be still alive, retrieve and cache the live hash and
+	// account value, or fail now if layer became stale
+	it.layer.lock.RLock()
+	defer it.layer.lock.RUnlock()
+
+	if it.layer.stale {
+		it.fail, it.keys = ErrSnapshotStale, nil
+		return false
+	}
+	it.curHash = it.keys[0]
+	if blob, ok := it.layer.accountData[it.curHash]; !ok {
+		panic(fmt.Sprintf("iterator referenced non-existent account: %x", it.curHash))
+	} else {
+		it.curAccount = blob
+	}
+	// Values cached, shift the iterator and notify the user of success
+	it.keys = it.keys[1:]
+	return true
+}
+
+// Error returns any failure that occurred during iteration, which might have
+// caused a premature iteration exit (e.g. snapshot stack becoming stale).
+func (it *diffAccountIterator) Error() error {
+	return it.fail
+}
+
+// Hash returns the hash of the account the iterator is currently at.
+func (it *diffAccountIterator) Hash() common.Hash {
+	return it.curHash
+}
+
+// Account returns the RLP encoded slim account the iterator is currently at.
+func (it *diffAccountIterator) Account() []byte {
+	return it.curAccount
+}
+
+// Release is a noop for diff account iterators as there are no held resources.
+func (it *diffAccountIterator) Release() {}
+
+// diskAccountIterator is an account iterator that steps over the live accounts
+// contained within a disk layer.
+type diskAccountIterator struct {
+	layer *diskLayer
+	it    ethdb.Iterator
+}
+
+// AccountIterator creates an account iterator over a disk layer.
+func (dl *diskLayer) AccountIterator(seek common.Hash) AccountIterator {
+	return &diskAccountIterator{
+		layer: dl,
+		it:    dl.diskdb.NewIteratorWithPrefix(append(rawdb.SnapshotAccountPrefix, seek[:]...)),
+	}
+}
+
+// Next steps the iterator forward one element, returning false if exhausted.
+func (it *diskAccountIterator) Next() bool {
+	// If the iterator was already exhausted, don't bother
+	if it.it == nil {
+		return false
+	}
+	// Try to advance the iterator and release it if we reahed the end
+	if !it.it.Next() || !bytes.HasPrefix(it.it.Key(), rawdb.SnapshotAccountPrefix) {
+		it.it.Release()
+		it.it = nil
+		return false
+	}
+	return true
 }
 
 // Error returns any failure that occurred during iteration, which might have
@@ -83,34 +172,25 @@ func (it *diffAccountIterator) Next() bool {
 //
 // A diff layer is immutable after creation content wise and can always be fully
 // iterated without error, so this method always returns nil.
-func (it *diffAccountIterator) Error() error {
-	return nil
+func (it *diskAccountIterator) Error() error {
+	return it.it.Error()
 }
 
-// Key returns the hash of the account the iterator is currently at.
-func (it *diffAccountIterator) Key() common.Hash {
-	if it.index < len(it.layer.accountList) {
-		return it.layer.accountList[it.index]
-	}
-	return common.Hash{}
+// Hash returns the hash of the account the iterator is currently at.
+func (it *diskAccountIterator) Hash() common.Hash {
+	return common.BytesToHash(it.it.Key())
 }
 
-// Value returns the RLP encoded slim account the iterator is currently at.
-func (it *diffAccountIterator) Value() []byte {
-	it.layer.lock.RLock()
-	defer it.layer.lock.RUnlock()
-
-	hash := it.layer.accountList[it.index]
-	if data, ok := it.layer.accountData[hash]; ok {
-		return data
-	}
-	panic("iterator references non-existent layer account")
+// Account returns the RLP encoded slim account the iterator is currently at.
+func (it *diskAccountIterator) Account() []byte {
+	return it.it.Value()
 }
 
-func (dl *diffLayer) iterators() []AccountIterator {
-	if parent, ok := dl.parent.(*diffLayer); ok {
-		iterators := parent.iterators()
-		return append(iterators, dl.newAccountIterator())
+// Release releases the database snapshot held during iteration.
+func (it *diskAccountIterator) Release() {
+	// The iterator is auto-released on exhaustion, so make sure it's still alive
+	if it.it != nil {
+		it.it.Release()
+		it.it = nil
 	}
-	return []AccountIterator{dl.newAccountIterator()}
 }

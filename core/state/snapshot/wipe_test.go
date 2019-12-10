@@ -25,15 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
-// randomHash generates a random blob of data and returns it as a hash.
-func randomHash() common.Hash {
-	var hash common.Hash
-	if n, err := rand.Read(hash[:]); n != common.HashLength || err != nil {
-		panic(err)
-	}
-	return hash
-}
-
 // Tests that given a database with random data content, all parts of a snapshot
 // can be crrectly wiped without touching anything else.
 func TestWipe(t *testing.T) {

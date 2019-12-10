@@ -48,6 +48,11 @@ func (dl *diskLayer) Root() common.Hash {
 	return dl.root
 }
 
+// Parent always returns nil as there's no layer below the disk.
+func (dl *diskLayer) Parent() snapshot {
+	return nil
+}
+
 // Stale return whether this layer has become stale (was flattened across) or if
 // it's still live.
 func (dl *diskLayer) Stale() bool {
