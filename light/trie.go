@@ -29,11 +29,13 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+// NewState will return the new state
 func NewState(ctx context.Context, head *types.Header, odr OdrBackend) *state.StateDB {
 	state, _ := state.New(head.Root, NewStateDatabase(ctx, head, odr))
 	return state
 }
 
+// NewStateDatabase will return the new state of the database
 func NewStateDatabase(ctx context.Context, head *types.Header, odr OdrBackend) state.Database {
 	return &odrDatabase{ctx, StateTrieID(head), odr}
 }
@@ -75,7 +77,7 @@ func (db *odrDatabase) ContractCode(addrHash, codeHash common.Hash) ([]byte, err
 	}
 	id := *db.id
 	id.AccKey = addrHash[:]
-	req := &CodeRequest{Id: &id, Hash: codeHash}
+	req := &CodeRequest{ID: &id, Hash: codeHash}
 	err := db.backend.Retrieve(db.ctx, req)
 	return req.Data, err
 }
@@ -159,7 +161,7 @@ func (t *odrTrie) do(key []byte, fn func() error) error {
 		if _, ok := err.(*trie.MissingNodeError); !ok {
 			return err
 		}
-		r := &TrieRequest{Id: t.id, Key: key}
+		r := &TrieRequest{ID: t.id, Key: key}
 		if err := t.db.backend.Retrieve(t.db.ctx, r); err != nil {
 			return err
 		}
@@ -214,7 +216,7 @@ func (it *nodeIterator) do(fn func() error) {
 			return
 		}
 		lasthash = missing.NodeHash
-		r := &TrieRequest{Id: it.t.id, Key: nibblesToKey(missing.Path)}
+		r := &TrieRequest{ID: it.t.id, Key: nibblesToKey(missing.Path)}
 		if it.err = it.t.db.backend.Retrieve(it.t.db.ctx, r); it.err != nil {
 			return
 		}

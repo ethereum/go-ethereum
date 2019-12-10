@@ -197,15 +197,15 @@ func (r *TrieRequest) GetCost(peer *peer) uint64 {
 
 // CanSend tells if a certain peer is suitable for serving the given request
 func (r *TrieRequest) CanSend(peer *peer) bool {
-	return peer.HasBlock(r.Id.BlockHash, r.Id.BlockNumber, true)
+	return peer.HasBlock(r.ID.BlockHash, r.ID.BlockNumber, true)
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (r *TrieRequest) Request(reqID uint64, peer *peer) error {
-	peer.Log().Debug("Requesting trie proof", "root", r.Id.Root, "key", r.Key)
+	peer.Log().Debug("Requesting trie proof", "root", r.ID.Root, "key", r.Key)
 	req := ProofReq{
-		BHash:  r.Id.BlockHash,
-		AccKey: r.Id.AccKey,
+		BHash:  r.ID.BlockHash,
+		AccKey: r.ID.AccKey,
 		Key:    r.Key,
 	}
 	return peer.RequestProofs(reqID, r.GetCost(peer), []ProofReq{req})
@@ -215,7 +215,7 @@ func (r *TrieRequest) Request(reqID uint64, peer *peer) error {
 // returns true and stores results in memory if the message was a valid reply
 // to the request (implementation of LesOdrRequest)
 func (r *TrieRequest) Validate(db ethdb.Database, msg *Msg) error {
-	log.Debug("Validating trie proof", "root", r.Id.Root, "key", r.Key)
+	log.Debug("Validating trie proof", "root", r.ID.Root, "key", r.Key)
 
 	if msg.MsgType != MsgProofsV2 {
 		return errInvalidMessageType
@@ -224,7 +224,7 @@ func (r *TrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 	// Verify the proof and store if checks out
 	nodeSet := proofs.NodeSet()
 	reads := &readTraceDB{db: nodeSet}
-	if _, _, err := trie.VerifyProof(r.Id.Root, r.Key, reads); err != nil {
+	if _, _, err := trie.VerifyProof(r.ID.Root, r.Key, reads); err != nil {
 		return fmt.Errorf("merkle proof verification failed: %v", err)
 	}
 	// check if all nodes have been read by VerifyProof
@@ -251,15 +251,15 @@ func (r *CodeRequest) GetCost(peer *peer) uint64 {
 
 // CanSend tells if a certain peer is suitable for serving the given request
 func (r *CodeRequest) CanSend(peer *peer) bool {
-	return peer.HasBlock(r.Id.BlockHash, r.Id.BlockNumber, true)
+	return peer.HasBlock(r.ID.BlockHash, r.ID.BlockNumber, true)
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (r *CodeRequest) Request(reqID uint64, peer *peer) error {
 	peer.Log().Debug("Requesting code data", "hash", r.Hash)
 	req := CodeReq{
-		BHash:  r.Id.BlockHash,
-		AccKey: r.Id.AccKey,
+		BHash:  r.ID.BlockHash,
+		AccKey: r.ID.AccKey,
 	}
 	return peer.RequestCode(reqID, r.GetCost(peer), []CodeReq{req})
 }
@@ -326,7 +326,7 @@ func (r *ChtRequest) CanSend(peer *peer) bool {
 	defer peer.lock.RUnlock()
 
 	if r.Untrusted {
-		return peer.headInfo.Number >= r.BlockNum && peer.id == r.PeerId
+		return peer.headInfo.Number >= r.BlockNum && peer.id == r.PeerID
 	} else {
 		return peer.headInfo.Number >= r.Config.ChtConfirms && r.ChtNum <= (peer.headInfo.Number-r.Config.ChtConfirms)/r.Config.ChtSize
 	}

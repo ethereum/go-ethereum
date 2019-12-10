@@ -30,6 +30,7 @@ import (
 
 var sha3Nil = crypto.Keccak256Hash(nil)
 
+// GetHeaderByNumber will return the header by the provided number
 func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*types.Header, error) {
 	db := odr.Database()
 	hash := rawdb.ReadCanonicalHash(db, number)
@@ -71,14 +72,15 @@ func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*typ
 
 // GetUntrustedHeaderByNumber fetches specified block header without correctness checking.
 // Note this function should only be used in light client checkpoint syncing.
-func GetUntrustedHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64, peerId string) (*types.Header, error) {
-	r := &ChtRequest{BlockNum: number, ChtNum: number / odr.IndexerConfig().ChtSize, Untrusted: true, PeerId: peerId, Config: odr.IndexerConfig()}
+func GetUntrustedHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64, peerID string) (*types.Header, error) {
+	r := &ChtRequest{BlockNum: number, ChtNum: number / odr.IndexerConfig().ChtSize, Untrusted: true, PeerID: peerID, Config: odr.IndexerConfig()}
 	if err := odr.Retrieve(ctx, r); err != nil {
 		return nil, err
 	}
 	return r.Header, nil
 }
 
+// GetCanonicalHash will return the canonical hash
 func GetCanonicalHash(ctx context.Context, odr OdrBackend, number uint64) (common.Hash, error) {
 	hash := rawdb.ReadCanonicalHash(odr.Database(), number)
 	if (hash != common.Hash{}) {
@@ -97,11 +99,11 @@ func GetBodyRLP(ctx context.Context, odr OdrBackend, hash common.Hash, number ui
 		return data, nil
 	}
 	r := &BlockRequest{Hash: hash, Number: number}
-	if err := odr.Retrieve(ctx, r); err != nil {
+	err := odr.Retrieve(ctx, r)
+	if err != nil {
 		return nil, err
-	} else {
-		return r.Rlp, nil
 	}
+	return r.Rlp, nil
 }
 
 // GetBody retrieves the block body (transactons, uncles) corresponding to the
@@ -253,32 +255,32 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bitIdx uint, sectionIdxLi
 
 	r := &BloomRequest{BloomTrieRoot: GetBloomTrieRoot(db, bloomTrieCount-1, sectionHead), BloomTrieNum: bloomTrieCount - 1,
 		BitIdx: bitIdx, SectionIndexList: reqList, Config: odr.IndexerConfig()}
-	if err := odr.Retrieve(ctx, r); err != nil {
+	err := odr.Retrieve(ctx, r)
+	if err != nil {
 		return nil, err
-	} else {
-		for i, idx := range reqIdx {
-			result[idx] = r.BloomBits[i]
-		}
-		return result, nil
 	}
+	for i, idx := range reqIdx {
+		result[idx] = r.BloomBits[i]
+	}
+	return result, nil
 }
 
 // GetTransaction retrieves a canonical transaction by hash and also returns its position in the chain
 func GetTransaction(ctx context.Context, odr OdrBackend, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
 	r := &TxStatusRequest{Hashes: []common.Hash{txHash}}
-	if err := odr.Retrieve(ctx, r); err != nil || r.Status[0].Status != core.TxStatusIncluded {
+	err := odr.Retrieve(ctx, r)
+	if err != nil || r.Status[0].Status != core.TxStatusIncluded {
 		return nil, common.Hash{}, 0, 0, err
-	} else {
-		pos := r.Status[0].Lookup
-		// first ensure that we have the header, otherwise block body retrieval will fail
-		// also verify if this is a canonical block by getting the header by number and checking its hash
-		if header, err := GetHeaderByNumber(ctx, odr, pos.BlockIndex); err != nil || header.Hash() != pos.BlockHash {
-			return nil, common.Hash{}, 0, 0, err
-		}
-		if body, err := GetBody(ctx, odr, pos.BlockHash, pos.BlockIndex); err != nil || uint64(len(body.Transactions)) <= pos.Index || body.Transactions[pos.Index].Hash() != txHash {
-			return nil, common.Hash{}, 0, 0, err
-		} else {
-			return body.Transactions[pos.Index], pos.BlockHash, pos.BlockIndex, pos.Index, nil
-		}
 	}
+	pos := r.Status[0].Lookup
+	// first ensure that we have the header, otherwise block body retrieval will fail
+	// also verify if this is a canonical block by getting the header by number and checking its hash
+	if header, err := GetHeaderByNumber(ctx, odr, pos.BlockIndex); err != nil || header.Hash() != pos.BlockHash {
+		return nil, common.Hash{}, 0, 0, err
+	}
+	body, err := GetBody(ctx, odr, pos.BlockHash, pos.BlockIndex)
+	if err != nil || uint64(len(body.Transactions)) <= pos.Index || body.Transactions[pos.Index].Hash() != txHash {
+		return nil, common.Hash{}, 0, 0, err
+	}
+	return body.Transactions[pos.Index], pos.BlockHash, pos.BlockIndex, pos.Index, nil
 }

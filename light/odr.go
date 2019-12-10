@@ -83,7 +83,7 @@ func StorageTrieID(state *TrieID, addrHash, root common.Hash) *TrieID {
 // TrieRequest is the ODR request type for state/storage trie entries
 type TrieRequest struct {
 	OdrRequest
-	Id    *TrieID
+	ID    *TrieID
 	Key   []byte
 	Proof *NodeSet
 }
@@ -96,7 +96,7 @@ func (req *TrieRequest) StoreResult(db ethdb.Database) {
 // CodeRequest is the ODR request type for retrieving contract code
 type CodeRequest struct {
 	OdrRequest
-	Id   *TrieID // references storage trie of the account
+	ID   *TrieID // references storage trie of the account
 	Hash common.Hash
 	Data []byte
 }
@@ -140,7 +140,7 @@ func (req *ReceiptsRequest) StoreResult(db ethdb.Database) {
 type ChtRequest struct {
 	OdrRequest
 	Untrusted        bool   // Indicator whether the result retrieved is trusted or not
-	PeerId           string // The specified peer id from which to retrieve data.
+	PeerID           string // The specified peer id from which to retrieve data.
 	Config           *IndexerConfig
 	ChtNum, BlockNum uint64
 	ChtRoot          common.Hash
