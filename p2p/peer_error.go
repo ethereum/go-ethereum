@@ -54,21 +54,35 @@ func (pe *peerError) Error() string {
 
 var errProtocolReturned = errors.New("protocol returned")
 
+// DiscReason is the code for a disconnect reason
 type DiscReason uint
 
 const (
+	// DiscRequested is disconnect requested
 	DiscRequested DiscReason = iota
+	// DiscNetworkError is a network error
 	DiscNetworkError
+	// DiscProtocolError is a breach of protocol
 	DiscProtocolError
+	// DiscUselessPeer is a useless peer
 	DiscUselessPeer
+	// DiscTooManyPeers is too many peers
 	DiscTooManyPeers
+	// DiscAlreadyConnected is already connected
 	DiscAlreadyConnected
+	// DiscIncompatibleVersion is an incompatible p2p protocol version
 	DiscIncompatibleVersion
+	// DiscInvalidIdentity is invalid node entity
 	DiscInvalidIdentity
+	// DiscQuitting is client quitting
 	DiscQuitting
+	// DiscUnexpectedIdentity is an unexpected identity
 	DiscUnexpectedIdentity
+	// DiscSelf is connected to self
 	DiscSelf
+	// DiscReadTimeout is read timeout
 	DiscReadTimeout
+	// DiscSubprotocolError is subprotocol error
 	DiscSubprotocolError = 0x10
 )
 

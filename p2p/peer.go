@@ -35,6 +35,7 @@ import (
 )
 
 var (
+	// ErrShuttingDown is the shutting down error
 	ErrShuttingDown = errors.New("shutting down")
 )
 
@@ -193,6 +194,7 @@ func newPeer(log log.Logger, conn *conn, protocols []Protocol) *Peer {
 	return p
 }
 
+// Log will return the logger
 func (p *Peer) Log() log.Logger {
 	return p.log
 }
