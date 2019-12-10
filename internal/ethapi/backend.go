@@ -86,6 +86,7 @@ type Backend interface {
 	CurrentBlock() *types.Block
 }
 
+// GetAPIs will return a map of the APIs
 func GetAPIs(apiBackend Backend) []rpc.API {
 	nonceLock := new(AddrLocker)
 	return []rpc.API{
