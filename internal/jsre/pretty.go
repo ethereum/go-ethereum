@@ -263,11 +263,11 @@ func (ctx ppctx) isBigNumber(v *goja.Object) bool {
 		return false
 	}
 	prototype := BigNumber.Get("prototype").ToObject(ctx.vm)
-	isPrototypeOf, exists := goja.AssertFunction(prototype.Get("isPrototypeOf"))
-	if !exists {
+	isPrototypeOf, callable := goja.AssertFunction(prototype.Get("isPrototypeOf"))
+	if !callable {
 		return false
 	}
-	bv, _ := isPrototypeOf(v)
+	bv, _ := isPrototypeOf(prototype, v)
 	return bv.ToBoolean()
 }
 
