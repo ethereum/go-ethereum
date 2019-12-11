@@ -48,7 +48,7 @@ type Transaction struct {
 
 type txdata struct {
 	AccountNonce uint64          `json:"nonce"    gencodec:"required"`
-	Price        *big.Int        `json:"gasPrice"`
+	Price        *big.Int        `json:"gasPrice" rlp:"nil"`
 	GasLimit     uint64          `json:"gas"      gencodec:"required"`
 	Recipient    *common.Address `json:"to"       rlp:"nil"` // nil means contract creation
 	Amount       *big.Int        `json:"value"    gencodec:"required"`
@@ -251,7 +251,7 @@ func (tx *Transaction) DecodeRLP(stream *rlp.Stream) error {
 	}
 	tx.data = txdata{
 		AccountNonce: *accountNonce,
-		Price:        price,
+		Price:        nil,
 		GasLimit:     *gasLimit,
 		Recipient:    recipient,
 		Amount:       amount,

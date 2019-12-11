@@ -148,6 +148,49 @@ func TestEIP1159TransactionEncode(t *testing.T) {
 	}
 }
 
+func TestEIP1159TransactionDecode(t *testing.T) {
+	tx, err := decodeTx(common.Hex2Bytes("f86903808207d094b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a82554483030d40830c35001ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tx.data.FeeCap == nil || tx.data.FeeCap.Cmp(eip1559Tx.data.FeeCap) != 0 {
+		t.Fatal("unexpected FeeCap")
+	}
+	if tx.data.GasPremium == nil || tx.data.GasPremium.Cmp(eip1559Tx.data.GasPremium) != 0 {
+		t.Fatal("unexpected GasPremium")
+	}
+	if tx.data.Price != nil {
+		t.Fatal("expected GasPrice to be nil")
+	}
+	if tx.data.Hash != nil {
+		t.Fatal("expected tx Hash to be nil")
+	}
+	if tx.data.GasLimit != eip1559Tx.data.GasLimit {
+		t.Fatal("unexpected GasLimit")
+	}
+	if tx.data.Amount == nil || tx.data.Amount.Cmp(eip1559Tx.data.Amount) != 0 {
+		t.Fatal("unexpected Amount")
+	}
+	if tx.data.Recipient == nil || !bytes.Equal(tx.data.Recipient.Bytes(), eip1559Tx.data.Recipient.Bytes()) {
+		t.Fatal("unexpected Recipient")
+	}
+	if !bytes.Equal(tx.data.Payload, eip1559Tx.data.Payload) {
+		t.Fatal("unexpected Payload")
+	}
+	if tx.data.AccountNonce != eip1559Tx.data.AccountNonce {
+		t.Fatal("unexpected AccountNonce")
+	}
+	if tx.data.R == nil || tx.data.R.Cmp(eip1559Tx.data.R) != 0 {
+		t.Fatal("unexpected R")
+	}
+	if tx.data.V == nil || tx.data.V.Cmp(eip1559Tx.data.V) != 0 {
+		t.Fatal("unexpected V")
+	}
+	if tx.data.S == nil || tx.data.S.Cmp(eip1559Tx.data.S) != 0 {
+		t.Fatal("unexpected S")
+	}
+}
+
 func decodeTx(data []byte) (*Transaction, error) {
 	var tx Transaction
 	t, err := &tx, rlp.Decode(bytes.NewReader(data), &tx)
