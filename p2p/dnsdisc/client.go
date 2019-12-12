@@ -47,7 +47,7 @@ type Config struct {
 	Timeout         time.Duration      // timeout used for DNS lookups (default 5s)
 	RecheckInterval time.Duration      // time between tree root update checks (default 30min)
 	CacheLimit      int                // maximum number of cached records (default 1000)
-	RateLimit       float64            // maximum DNS requests / second (default 4)
+	RateLimit       float64            // maximum DNS requests / second (default 3)
 	ValidSchemes    enr.IdentityScheme // acceptable ENR identity schemes (default enode.ValidSchemes)
 	Resolver        Resolver           // the DNS resolver to use (defaults to system DNS)
 	Logger          log.Logger         // destination of client log messages (defaults to root logger)
