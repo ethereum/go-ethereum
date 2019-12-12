@@ -108,10 +108,6 @@ func (h *serverHandler) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter)
 }
 
 func (h *serverHandler) handle(p *peer) error {
-	// Reject light clients if server is not synced.
-	if !h.synced() {
-		return p2p.DiscRequested
-	}
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
 
 	// Execute the LES handshake
@@ -124,6 +120,15 @@ func (h *serverHandler) handle(p *peer) error {
 	if err := p.Handshake(td, hash, number, h.blockchain.Genesis().Hash(), h.server); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
+	}
+	if p.server {
+		// connected to another server, no messages expected, just wait for disconnection
+		_, err := p.rw.ReadMsg()
+		return err
+	}
+	// Reject light clients if server is not synced.
+	if !h.synced() {
+		return p2p.DiscRequested
 	}
 	defer p.fcClient.Disconnect()
 

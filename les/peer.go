@@ -113,7 +113,7 @@ type peer struct {
 	fcParams flowcontrol.ServerParams
 	fcCosts  requestCostTable
 
-	trusted                 bool
+	trusted, server         bool
 	onlyAnnounce            bool
 	chainSince, chainRecent uint64
 	stateSince, stateRecent uint64
@@ -675,11 +675,16 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 	}
 
 	if server != nil {
-		if recv.get("announceType", &p.announceType) != nil {
-			// set default announceType on server side
-			p.announceType = announceTypeSimple
+		p.server = recv.get("flowControl/MRR", nil) == nil
+		if p.server {
+			p.announceType = announceTypeNone // connected to another server, send no messages
+		} else {
+			if recv.get("announceType", &p.announceType) != nil {
+				// set default announceType on server side
+				p.announceType = announceTypeSimple
+			}
+			p.fcClient = flowcontrol.NewClientNode(server.fcManager, server.defParams)
 		}
-		p.fcClient = flowcontrol.NewClientNode(server.fcManager, server.defParams)
 	} else {
 		if recv.get("serveChainSince", &p.chainSince) != nil {
 			p.onlyAnnounce = true
@@ -726,6 +731,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 				}
 			}
 		}
+		p.server = true
 	}
 	p.headInfo = &announceData{Td: rTd, Hash: rHash, Number: rNum}
 	return nil
