@@ -211,7 +211,7 @@ func dnsToRoute53(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	client := newRoute53(ctx)
+	client := newRoute53Client(ctx)
 	return client.deploy(domain, t)
 }
 

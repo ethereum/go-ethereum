@@ -34,13 +34,13 @@ import (
 var (
 	route53AccessKeyFlag = cli.StringFlag{
 		Name:   "access-key-id",
-		Usage:  "Route53 Access Key ID",
-		EnvVar: "ROUTE53_ACCESS_KEY_ID",
+		Usage:  "AWS Access Key ID",
+		EnvVar: "AWS_ACCESS_KEY_ID",
 	}
 	route53AccessSecretFlag = cli.StringFlag{
 		Name:   "access-key-secret",
-		Usage:  "Route53 Access Key Secret",
-		EnvVar: "ROUTE53_ACCESS_KEY_SECRET",
+		Usage:  "AWS Access Key Secret",
+		EnvVar: "AWS_SECRET_ACCESS_KEY",
 	}
 	route53ZoneIDFlag = cli.StringFlag{
 		Name:  "zone-id",
@@ -53,8 +53,8 @@ type route53Client struct {
 	zoneID string
 }
 
-// newRoute53 sets up a Route53 API client from command line flags.
-func newRoute53(ctx *cli.Context) *route53Client {
+// newRoute53Client sets up a Route53 API client from command line flags.
+func newRoute53Client(ctx *cli.Context) *route53Client {
 	akey := ctx.String(route53AccessKeyFlag.Name)
 	asec := ctx.String(route53AccessSecretFlag.Name)
 	if akey == "" || asec == "" {
@@ -64,7 +64,6 @@ func newRoute53(ctx *cli.Context) *route53Client {
 	session, err := session.NewSession(config)
 	if err != nil {
 		exit(fmt.Errorf("can't create AWS session: %v", err))
-		exit(err)
 	}
 	return &route53Client{
 		api:    route53.New(session),
@@ -85,7 +84,7 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 		return err
 	}
 	if len(changes) == 0 {
-		log.Info(fmt.Sprintf("No DNS changes needed"))
+		log.Info("No DNS changes needed")
 		return nil
 	}
 
