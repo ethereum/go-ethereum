@@ -112,6 +112,20 @@ func (ctx ppctx) printValue(v goja.Value, level int, inArray bool) {
 	}
 }
 
+// SafeGet attempt to get the value associated to `key`, and
+// catches the panic that goja creates if an error occurs in
+// key.
+func SafeGet(obj *goja.Object, key string) (ret goja.Value) {
+	defer func() {
+		if r := recover(); r != nil {
+			ret = goja.Undefined()
+		}
+	}()
+	ret = obj.Get(key)
+
+	return ret
+}
+
 func (ctx ppctx) printObject(obj *goja.Object, level int, inArray bool) {
 	switch obj.ClassName() {
 	case "Array", "GoArray":
@@ -155,7 +169,7 @@ func (ctx ppctx) printObject(obj *goja.Object, level int, inArray bool) {
 		}
 		fmt.Fprintln(ctx.w, "{")
 		for i, k := range keys {
-			v := obj.Get(k)
+			v := SafeGet(obj, k)
 			fmt.Fprintf(ctx.w, "%s%s: ", ctx.indent(level+1), k)
 			ctx.printValue(v, level+1, false)
 			if i < len(keys)-1 {
@@ -198,11 +212,21 @@ func (ctx ppctx) fields(obj *goja.Object) []string {
 		}
 		seen[k] = true
 
-		if _, callable := goja.AssertFunction(obj.Get(k)); callable {
-			methods = append(methods, k)
-		} else {
+		key := SafeGet(obj, k)
+		if key == nil {
+			// The value corresponding to that key could not be found
+			// (typically because it is backed by an RPC call that is
+			// not supported by this instance.  Add it to the list of
+			// values so that it appears as `undefined` to the user.
 			vals = append(vals, k)
+		} else {
+			if _, callable := goja.AssertFunction(key); callable {
+				methods = append(methods, k)
+			} else {
+				vals = append(vals, k)
+			}
 		}
+
 	}
 	iterOwnAndConstructorKeys(ctx.vm, obj, add)
 	sort.Strings(vals)
