@@ -93,6 +93,13 @@ type memoryWrapper struct {
 
 // slice returns the requested range of memory as a byte slice.
 func (mw *memoryWrapper) slice(begin, end int64) []byte {
+	if end == begin {
+		return nil
+	}
+	if end < begin || begin < 0 {
+		log.Warn("Tracer accessed memory incorrectly", "offset", begin, "size", end-begin)
+		return nil
+	}
 	if mw.memory.Len() < int(end) {
 		// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
 		// runtime goes belly up https://github.com/golang/go/issues/15639.
