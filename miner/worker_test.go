@@ -49,9 +49,13 @@ const (
 
 var (
 	// Test chain configurations
-	testTxPoolConfig  core.TxPoolConfig
-	ethashChainConfig *params.ChainConfig
-	cliqueChainConfig *params.ChainConfig
+	testTxPoolConfig                  core.TxPoolConfig
+	ethashChainConfig                 *params.ChainConfig
+	cliqueChainConfig                 *params.ChainConfig
+	eip1559ChainConfig                *params.ChainConfig
+	eip1559CliqueChainConfig          *params.ChainConfig
+	eip1559FinalizedChainConfig       *params.ChainConfig
+	eip1559FinalizedCliqueChainConfig *params.ChainConfig
 
 	// Test accounts
 	testBankKey, _  = crypto.GenerateKey()
@@ -62,8 +66,12 @@ var (
 	testUserAddress = crypto.PubkeyToAddress(testUserKey.PublicKey)
 
 	// Test transactions
-	pendingTxs []*types.Transaction
-	newTxs     []*types.Transaction
+	pendingTxs                 []*types.Transaction
+	newTxs                     []*types.Transaction
+	pendingLegacyAndEIP1559Txs []*types.Transaction
+	newLegacyAndEIP1559Txs     []*types.Transaction
+	pendingEIP1559Txs          []*types.Transaction
+	newEIP1559Txs              []*types.Transaction
 
 	testConfig = &Config{
 		Recommit: time.Second,
@@ -81,10 +89,28 @@ func init() {
 		Period: 10,
 		Epoch:  30000,
 	}
-	tx1, _ := types.SignTx(types.NewTransaction(0, testUserAddress, big.NewInt(1000), params.TxGas, new(big.Int), nil, nil, nil), types.HomesteadSigner{}, testBankKey)
-	pendingTxs = append(pendingTxs, tx1)
-	tx2, _ := types.SignTx(types.NewTransaction(1, testUserAddress, big.NewInt(1000), params.TxGas, new(big.Int), nil, nil, nil), types.HomesteadSigner{}, testBankKey)
-	newTxs = append(newTxs, tx2)
+	eip1559ChainConfig = params.EIP1559ChainConfig
+	eip1559CliqueChainConfig = params.EIP1559ChainConfig
+	eip1559CliqueChainConfig.Clique = &params.CliqueConfig{
+		Period: 10,
+		Epoch:  30000,
+	}
+	eip1559FinalizedChainConfig = params.EIP1559FinalizedChainConfig
+	eip1559FinalizedCliqueChainConfig = params.EIP1559FinalizedChainConfig
+	eip1559FinalizedCliqueChainConfig.Clique = &params.CliqueConfig{
+		Period: 10,
+		Epoch:  30000,
+	}
+	tx, _ := types.SignTx(types.NewTransaction(0, testUserAddress, big.NewInt(1000), params.TxGas, new(big.Int), nil, nil, nil), types.HomesteadSigner{}, testBankKey)
+	pendingTxs = append(pendingTxs, tx)
+	pendingLegacyAndEIP1559Txs = append(pendingLegacyAndEIP1559Txs, tx)
+	tx, _ = types.SignTx(types.NewTransaction(1, testUserAddress, big.NewInt(1000), params.TxGas, new(big.Int), nil, nil, nil), types.HomesteadSigner{}, testBankKey)
+	newTxs = append(newTxs, tx)
+	newLegacyAndEIP1559Txs = append(newLegacyAndEIP1559Txs, tx)
+	tx, _ = types.SignTx(types.NewTransaction(0, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int)), types.HomesteadSigner{}, testBankKey)
+	pendingEIP1559Txs = append(pendingEIP1559Txs, tx)
+	tx, _ = types.SignTx(types.NewTransaction(1, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int)), types.HomesteadSigner{}, testBankKey)
+	newEIP1559Txs = append(newEIP1559Txs, tx)
 	rand.Seed(time.Now().UnixNano())
 }
 
@@ -98,10 +124,11 @@ type testWorkerBackend struct {
 	uncleBlock *types.Block
 }
 
-func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int) *testWorkerBackend {
+func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int, baseFee *big.Int) *testWorkerBackend {
 	var gspec = core.Genesis{
-		Config: chainConfig,
-		Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
+		Config:  chainConfig,
+		Alloc:   core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
+		BaseFee: baseFee,
 	}
 
 	switch e := engine.(type) {
@@ -165,19 +192,27 @@ func (b *testWorkerBackend) newRandomUncle() *types.Block {
 	return blocks[0]
 }
 
-func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
+func (b *testWorkerBackend) newRandomTx(creation, eip1559 bool) *types.Transaction {
 	var tx *types.Transaction
 	if creation {
-		tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(testBankAddress), big.NewInt(0), testGas, new(big.Int), common.FromHex(testCode), nil, nil), types.HomesteadSigner{}, testBankKey)
+		if eip1559 {
+			tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(testBankAddress), big.NewInt(0), testGas, nil, common.FromHex(testCode), new(big.Int), new(big.Int)), types.HomesteadSigner{}, testBankKey)
+		} else {
+			tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(testBankAddress), big.NewInt(0), testGas, new(big.Int), common.FromHex(testCode), nil, nil), types.HomesteadSigner{}, testBankKey)
+		}
 	} else {
-		tx, _ = types.SignTx(types.NewTransaction(b.txPool.Nonce(testBankAddress), testUserAddress, big.NewInt(1000), params.TxGas, new(big.Int), nil, nil, nil), types.HomesteadSigner{}, testBankKey)
+		if eip1559 {
+			tx, _ = types.SignTx(types.NewTransaction(b.txPool.Nonce(testBankAddress), testUserAddress, big.NewInt(1000), params.TxGas, nil, nil, new(big.Int), new(big.Int)), types.HomesteadSigner{}, testBankKey)
+		} else {
+			tx, _ = types.SignTx(types.NewTransaction(b.txPool.Nonce(testBankAddress), testUserAddress, big.NewInt(1000), params.TxGas, new(big.Int), nil, nil, nil), types.HomesteadSigner{}, testBankKey)
+		}
 	}
 	return tx
 }
 
-func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int) (*worker, *testWorkerBackend) {
-	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
-	backend.txPool.AddLocals(pendingTxs)
+func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int, baseFee *big.Int, txs []*types.Transaction) (*worker, *testWorkerBackend) {
+	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks, baseFee)
+	backend.txPool.AddLocals(txs)
 	w := newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
 	w.setEtherbase(testBankAddress)
 	return w, backend
@@ -206,7 +241,175 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 		engine = ethash.NewFaker()
 	}
 
-	w, b := newTestWorker(t, chainConfig, engine, db, 0)
+	w, b := newTestWorker(t, chainConfig, engine, db, 0, nil, pendingTxs)
+	defer w.close()
+
+	db2 := rawdb.NewMemoryDatabase()
+	b.genesis.MustCommit(db2)
+	chain, _ := core.NewBlockChain(db2, nil, b.chain.Config(), engine, vm.Config{}, nil)
+	defer chain.Stop()
+
+	newBlock := make(chan struct{})
+	listenNewBlock := func() {
+		sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
+		defer sub.Unsubscribe()
+
+		for item := range sub.Chan() {
+			block := item.Data.(core.NewMinedBlockEvent).Block
+			_, err := chain.InsertChain([]*types.Block{block})
+			if err != nil {
+				t.Fatalf("Failed to insert new mined block:%d, error:%v", block.NumberU64(), err)
+			}
+			newBlock <- struct{}{}
+		}
+	}
+
+	// Ensure worker has finished initialization
+	for {
+		b := w.pendingBlock()
+		if b != nil && b.NumberU64() == 1 {
+			break
+		}
+	}
+	w.start() // Start mining!
+
+	// Ignore first 2 commits caused by start operation
+	ignored := make(chan struct{}, 2)
+	w.skipSealHook = func(task *task) bool {
+		ignored <- struct{}{}
+		return true
+	}
+	for i := 0; i < 2; i++ {
+		<-ignored
+	}
+
+	go listenNewBlock()
+
+	// Ignore empty commit here for less noise
+	w.skipSealHook = func(task *task) bool {
+		return len(task.receipts) == 0
+	}
+	for i := 0; i < 5; i++ {
+		b.txPool.AddLocal(b.newRandomTx(true, false))
+		b.txPool.AddLocal(b.newRandomTx(false, false))
+		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
+		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
+		select {
+		case <-newBlock:
+		case <-time.NewTimer(3 * time.Second).C: // Worker needs 1s to include new changes.
+			t.Fatalf("timeout")
+		}
+	}
+}
+
+func TestGenerateBlockAndImportEthashEIP1559(t *testing.T) {
+	testGenerateBlockAndImportEIP1559(t, false)
+}
+
+func TestGenerateBlockAndImportCliqueEIP1559(t *testing.T) {
+	testGenerateBlockAndImportEIP1559(t, true)
+}
+
+func testGenerateBlockAndImportEIP1559(t *testing.T, isClique bool) {
+	var (
+		engine      consensus.Engine
+		chainConfig *params.ChainConfig
+		db          = rawdb.NewMemoryDatabase()
+	)
+	if isClique {
+		chainConfig = params.EIP1559ChainConfig
+		chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+		engine = clique.New(chainConfig.Clique, db)
+	} else {
+		chainConfig = params.EIP1559ChainConfig
+		engine = ethash.NewFaker()
+	}
+
+	w, b := newTestWorker(t, chainConfig, engine, db, 0, new(big.Int), pendingLegacyAndEIP1559Txs)
+	defer w.close()
+
+	db2 := rawdb.NewMemoryDatabase()
+	b.genesis.MustCommit(db2)
+	chain, _ := core.NewBlockChain(db2, nil, b.chain.Config(), engine, vm.Config{}, nil)
+	defer chain.Stop()
+
+	newBlock := make(chan struct{})
+	listenNewBlock := func() {
+		sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
+		defer sub.Unsubscribe()
+
+		for item := range sub.Chan() {
+			block := item.Data.(core.NewMinedBlockEvent).Block
+			_, err := chain.InsertChain([]*types.Block{block})
+			if err != nil {
+				t.Fatalf("Failed to insert new mined block:%d, error:%v", block.NumberU64(), err)
+			}
+			newBlock <- struct{}{}
+		}
+	}
+
+	// Ensure worker has finished initialization
+	for {
+		b := w.pendingBlock()
+		if b != nil && b.NumberU64() == 1 {
+			break
+		}
+	}
+	w.start() // Start mining!
+
+	// Ignore first 2 commits caused by start operation
+	ignored := make(chan struct{}, 2)
+	w.skipSealHook = func(task *task) bool {
+		ignored <- struct{}{}
+		return true
+	}
+	for i := 0; i < 2; i++ {
+		<-ignored
+	}
+
+	go listenNewBlock()
+
+	// Ignore empty commit here for less noise
+	w.skipSealHook = func(task *task) bool {
+		return len(task.receipts) == 0
+	}
+	for i := 0; i < 5; i++ {
+		b.txPool.AddLocal(b.newRandomTx(true, true))
+		b.txPool.AddLocal(b.newRandomTx(false, false))
+		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
+		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
+		select {
+		case <-newBlock:
+		case <-time.NewTimer(3 * time.Second).C: // Worker needs 1s to include new changes.
+			t.Fatalf("timeout")
+		}
+	}
+}
+
+func TestGenerateBlockAndImportEthashEIP1559Finalized(t *testing.T) {
+	testGenerateBlockAndImportEIP1559Finalized(t, false)
+}
+
+func TestGenerateBlockAndImportCliqueEIP1559Finalized(t *testing.T) {
+	testGenerateBlockAndImportEIP1559Finalized(t, true)
+}
+
+func testGenerateBlockAndImportEIP1559Finalized(t *testing.T, isClique bool) {
+	var (
+		engine      consensus.Engine
+		chainConfig *params.ChainConfig
+		db          = rawdb.NewMemoryDatabase()
+	)
+	if isClique {
+		chainConfig = params.EIP1559FinalizedChainConfig
+		chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+		engine = clique.New(chainConfig.Clique, db)
+	} else {
+		chainConfig = params.EIP1559FinalizedChainConfig
+		engine = ethash.NewFaker()
+	}
+
+	w, b := newTestWorker(t, chainConfig, engine, db, 0, new(big.Int), pendingEIP1559Txs)
 	defer w.close()
 
 	// This test chain imports the mined blocks.
@@ -228,8 +431,8 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	w.start()
 
 	for i := 0; i < 5; i++ {
-		b.txPool.AddLocal(b.newRandomTx(true))
-		b.txPool.AddLocal(b.newRandomTx(false))
+		b.txPool.AddLocal(b.newRandomTx(true, true))
+		b.txPool.AddLocal(b.newRandomTx(false, true))
 		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
 		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
 
@@ -245,17 +448,73 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	}
 }
 
-func TestEmptyWorkEthash(t *testing.T) {
-	testEmptyWork(t, ethashChainConfig, ethash.NewFaker())
+func TestPendingStateAndBlockEthash(t *testing.T) {
+	testPendingStateAndBlock(t, ethashChainConfig, ethash.NewFaker(), pendingTxs, newTxs, nil)
 }
-func TestEmptyWorkClique(t *testing.T) {
-	testEmptyWork(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()))
+func TestPendingStateAndBlockClique(t *testing.T) {
+	testPendingStateAndBlock(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingTxs, newTxs, nil)
+}
+func TestPendingStateAndBlockEthashEIP1559(t *testing.T) {
+	testPendingStateAndBlock(t, eip1559ChainConfig, ethash.NewFaker(), pendingLegacyAndEIP1559Txs, newLegacyAndEIP1559Txs, new(big.Int))
+}
+func TestPendingStateAndBlockCliqueEIP1559(t *testing.T) {
+	testPendingStateAndBlock(t, eip1559CliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingLegacyAndEIP1559Txs, newLegacyAndEIP1559Txs, new(big.Int))
+}
+func TestPendingStateAndBlockEthashEIP1559Finalized(t *testing.T) {
+	testPendingStateAndBlock(t, eip1559FinalizedChainConfig, ethash.NewFaker(), pendingEIP1559Txs, newEIP1559Txs, new(big.Int))
+}
+func TestPendingStateAndBlockCliqueEIP1559Finalized(t *testing.T) {
+	testPendingStateAndBlock(t, eip1559FinalizedCliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingEIP1559Txs, newEIP1559Txs, new(big.Int))
 }
 
-func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
+func testPendingStateAndBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, pTxs, nTxs []*types.Transaction, baseFee *big.Int) {
 	defer engine.Close()
 
-	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, baseFee, pTxs)
+	defer w.close()
+
+	// Ensure snapshot has been updated.
+	time.Sleep(100 * time.Millisecond)
+	block, state := w.pending()
+	if block.NumberU64() != 1 {
+		t.Errorf("block number mismatch: have %d, want %d", block.NumberU64(), 1)
+	}
+	if balance := state.GetBalance(testUserAddress); balance.Cmp(big.NewInt(1000)) != 0 {
+		t.Errorf("account balance mismatch: have %d, want %d", balance, 1000)
+	}
+	b.txPool.AddLocals(nTxs)
+
+	// Ensure the new tx events has been processed
+	time.Sleep(100 * time.Millisecond)
+	block, state = w.pending()
+	if balance := state.GetBalance(testUserAddress); balance.Cmp(big.NewInt(2000)) != 0 {
+		t.Errorf("account balance mismatch: have %d, want %d", balance, 2000)
+	}
+}
+
+func TestEmptyWorkEthash(t *testing.T) {
+	testEmptyWork(t, ethashChainConfig, ethash.NewFaker(), pendingTxs, nil)
+}
+func TestEmptyWorkClique(t *testing.T) {
+	testEmptyWork(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingTxs, nil)
+}
+func TestEmptyWorkEthashEIP1559(t *testing.T) {
+	testEmptyWork(t, eip1559ChainConfig, ethash.NewFaker(), pendingLegacyAndEIP1559Txs, new(big.Int))
+}
+func TestEmptyWorkCliqueEIP1559(t *testing.T) {
+	testEmptyWork(t, eip1559CliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingLegacyAndEIP1559Txs, new(big.Int))
+}
+func TestEmptyWorkEthashEIP1559Finalized(t *testing.T) {
+	testEmptyWork(t, eip1559FinalizedChainConfig, ethash.NewFaker(), pendingEIP1559Txs, new(big.Int))
+}
+func TestEmptyWorkCliqueEIP1559Finalized(t *testing.T) {
+	testEmptyWork(t, eip1559FinalizedCliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingEIP1559Txs, new(big.Int))
+}
+
+func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, pTxs []*types.Transaction, baseFee *big.Int) {
+	defer engine.Close()
+
+	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, baseFee, pTxs)
 	defer w.close()
 
 	var (
@@ -298,10 +557,20 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 }
 
 func TestStreamUncleBlock(t *testing.T) {
+	testStreamUncleBlock(t, ethashChainConfig, pendingTxs, nil)
+}
+func TestStreamUncleBlockEIP1559(t *testing.T) {
+	testStreamUncleBlock(t, eip1559ChainConfig, pendingLegacyAndEIP1559Txs, new(big.Int))
+}
+func TestStreamUncleBlockEIP1559Finalized(t *testing.T) {
+	testStreamUncleBlock(t, eip1559FinalizedChainConfig, pendingEIP1559Txs, new(big.Int))
+}
+
+func testStreamUncleBlock(t *testing.T, chainConfig *params.ChainConfig, pTxs []*types.Transaction, baseFee *big.Int) {
 	ethash := ethash.NewFaker()
 	defer ethash.Close()
 
-	w, b := newTestWorker(t, ethashChainConfig, ethash, rawdb.NewMemoryDatabase(), 1)
+	w, b := newTestWorker(t, chainConfig, ethash, rawdb.NewMemoryDatabase(), 1, baseFee, pTxs)
 	defer w.close()
 
 	var taskCh = make(chan struct{})
@@ -349,17 +618,33 @@ func TestStreamUncleBlock(t *testing.T) {
 }
 
 func TestRegenerateMiningBlockEthash(t *testing.T) {
-	testRegenerateMiningBlock(t, ethashChainConfig, ethash.NewFaker())
+	testRegenerateMiningBlock(t, ethashChainConfig, ethash.NewFaker(), pendingTxs, newTxs, nil)
 }
 
 func TestRegenerateMiningBlockClique(t *testing.T) {
-	testRegenerateMiningBlock(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()))
+	testRegenerateMiningBlock(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingTxs, newTxs, nil)
 }
 
-func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
+func TestRegenerateMiningBlockEthashEIP1559(t *testing.T) {
+	testRegenerateMiningBlock(t, eip1559ChainConfig, ethash.NewFaker(), pendingLegacyAndEIP1559Txs, newLegacyAndEIP1559Txs, new(big.Int))
+}
+
+func TestRegenerateMiningBlockCliqueEIP1559(t *testing.T) {
+	testRegenerateMiningBlock(t, eip1559CliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingLegacyAndEIP1559Txs, newLegacyAndEIP1559Txs, new(big.Int))
+}
+
+func TestRegenerateMiningBlockEthashEIP1559Finalized(t *testing.T) {
+	testRegenerateMiningBlock(t, eip1559FinalizedChainConfig, ethash.NewFaker(), pendingEIP1559Txs, newEIP1559Txs, new(big.Int))
+}
+
+func TestRegenerateMiningBlockCliqueEIP1559Finalized(t *testing.T) {
+	testRegenerateMiningBlock(t, eip1559FinalizedCliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingEIP1559Txs, newEIP1559Txs, new(big.Int))
+}
+
+func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, pTxs, nTxs []*types.Transaction, baseFee *big.Int) {
 	defer engine.Close()
 
-	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, baseFee, pTxs)
 	defer w.close()
 
 	var taskCh = make(chan struct{})
@@ -398,7 +683,7 @@ func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, en
 			t.Error("new task timeout")
 		}
 	}
-	b.txPool.AddLocals(newTxs)
+	b.txPool.AddLocals(nTxs)
 	time.Sleep(time.Second)
 
 	select {
@@ -409,17 +694,33 @@ func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, en
 }
 
 func TestAdjustIntervalEthash(t *testing.T) {
-	testAdjustInterval(t, ethashChainConfig, ethash.NewFaker())
+	testAdjustInterval(t, ethashChainConfig, ethash.NewFaker(), pendingTxs, nil)
 }
 
 func TestAdjustIntervalClique(t *testing.T) {
-	testAdjustInterval(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()))
+	testAdjustInterval(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingTxs, nil)
 }
 
-func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
+func TestAdjustIntervalEthashEIP1559(t *testing.T) {
+	testAdjustInterval(t, eip1559ChainConfig, ethash.NewFaker(), pendingLegacyAndEIP1559Txs, new(big.Int))
+}
+
+func TestAdjustIntervalCliqueEIP1559(t *testing.T) {
+	testAdjustInterval(t, eip1559CliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingLegacyAndEIP1559Txs, new(big.Int))
+}
+
+func TestAdjustIntervalEthashEIP1559Finalized(t *testing.T) {
+	testAdjustInterval(t, eip1559FinalizedChainConfig, ethash.NewFaker(), pendingEIP1559Txs, new(big.Int))
+}
+
+func TestAdjustIntervalCliqueEIP1559Finalized(t *testing.T) {
+	testAdjustInterval(t, eip1559FinalizedCliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingEIP1559Txs, new(big.Int))
+}
+
+func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, pTxs []*types.Transaction, baseFee *big.Int) {
 	defer engine.Close()
 
-	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
+	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, baseFee, pTxs)
 	defer w.close()
 
 	w.skipSealHook = func(task *task) bool {
