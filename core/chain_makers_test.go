@@ -132,9 +132,8 @@ func generateChainBeforeActivation(t *testing.T) {
 
 	// Ensure that key1 has some funds in the genesis block.
 	gspec := &Genesis{
-		Config:  &params.ChainConfig{HomesteadBlock: new(big.Int)},
-		Alloc:   GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
-		BaseFee: new(big.Int),
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
+		Alloc:  GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
 	}
 	genesis := gspec.MustCommit(db)
 
@@ -195,7 +194,7 @@ func generateChainDuringTransition(t *testing.T) {
 	gspec := &Genesis{
 		Config:  params.EIP1559ChainConfig,
 		Alloc:   GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
-		BaseFee: new(big.Int),
+		BaseFee: new(big.Int).SetUint64(params.EIP1559InitialBaseFee),
 	}
 	genesis := gspec.MustCommit(db)
 
@@ -258,6 +257,7 @@ func generateChainDuringTransition(t *testing.T) {
 
 // generateChainAfterFinalization demonstrates that we panic if we try to make a chain with legacy transactions after EIP1559 finalization
 func generateChainAfterFinalization(t *testing.T) {
+	// We expect a panic due to an ErrTxNotEIP1559 error because of the panic at line 119 in chain_makers.go
 	defer func() {
 		if err := recover().(error); err != nil {
 			if err != ErrTxNotEIP1559 {
@@ -279,7 +279,7 @@ func generateChainAfterFinalization(t *testing.T) {
 	gspec := &Genesis{
 		Config:  params.EIP1559FinalizedChainConfig,
 		Alloc:   GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
-		BaseFee: new(big.Int),
+		BaseFee: new(big.Int).SetUint64(params.EIP1559InitialBaseFee),
 	}
 	genesis := gspec.MustCommit(db)
 
@@ -339,8 +339,8 @@ func generateChainAfterFinalization2(t *testing.T) {
 	// Ensure that key1 has some funds in the genesis block.
 	gspec := &Genesis{
 		Config:  params.EIP1559FinalizedChainConfig,
-		Alloc:   GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
-		BaseFee: new(big.Int),
+		Alloc:   GenesisAlloc{addr1: {Balance: new(big.Int).SetUint64((params.EIP1559InitialBaseFee * params.TxGas) + 1000000)}},
+		BaseFee: new(big.Int).SetUint64(params.EIP1559InitialBaseFee),
 	}
 	genesis := gspec.MustCommit(db)
 
@@ -352,7 +352,7 @@ func generateChainAfterFinalization2(t *testing.T) {
 		switch i {
 		case 0:
 			// In block 1, addr1 sends addr2 some ether.
-			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil, new(big.Int), new(big.Int)), signer, key1)
+			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil, new(big.Int), new(big.Int).SetUint64(params.EIP1559InitialBaseFee)), signer, key1)
 			gen.AddTx(tx)
 		case 1:
 			// In block 2, addr1 sends some more ether to addr2.
@@ -388,7 +388,7 @@ func generateChainAfterFinalization2(t *testing.T) {
 	if blockchain.CurrentBlock().Number().Uint64() != 5 {
 		t.Fatalf("expected last block to equal %d got %d", 5, blockchain.CurrentBlock().Number().Uint64())
 	}
-	if state.GetBalance(addr1).Uint64() != 989000 {
+	if state.GetBalance(addr1).Uint64() != 2625000989000 {
 		t.Fatalf("expected balance of addr1 to equal %d got %d", 989000, state.GetBalance(addr1).Uint64())
 	}
 	if state.GetBalance(addr2).Uint64() != 10000 {

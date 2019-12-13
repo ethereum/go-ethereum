@@ -21,7 +21,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -153,10 +152,6 @@ func CalcGasLimitAndBaseFee(config *params.ChainConfig, parent *types.Block, gas
 // Start at 50 : 50 and then shift to 0 : 100
 // The GasLimit for the legacy pool is (params.MaxGasEIP1559 - EIP1559GasLimit)
 func calcGasLimitAndBaseFee(config *params.ChainConfig, parent *types.Block) (uint64, *big.Int) {
-	// Panic if we do not have a block number set for EIP1559 activation
-	if config.EIP1559Block == nil {
-		panic("chain config is missing EIP1559Block")
-	}
 	height := new(big.Int).Add(parent.Number(), common.Big1)
 
 	// If we are at the block of EIP1559 activation then the BaseFee is set to the initial value
@@ -165,12 +160,9 @@ func calcGasLimitAndBaseFee(config *params.ChainConfig, parent *types.Block) (ui
 		return params.MaxGasEIP1559 / 2, new(big.Int).SetUint64(params.EIP1559InitialBaseFee)
 	}
 
-	/*
-		Otherwise, calculate the BaseFee
-		As a default strategy, miners set BASEFEE as follows. Let delta = block.gas_used - TARGET_GASUSED (possibly negative).
-		Set BASEFEE = PARENT_BASEFEE + PARENT_BASEFEE * delta // TARGET_GASUSED // BASEFEE_MAX_CHANGE_DENOMINATOR,
-		clamping this result inside of the allowable bounds if needed (with the parameter setting above clamping will not be required).
-	*/
+	// Otherwise, calculate the BaseFee
+	// As a default strategy, miners set BASEFEE as follows. Let delta = block.gas_used - TARGET_GASUSED (possibly negative).
+	// Set BASEFEE = PARENT_BASEFEE + PARENT_BASEFEE * delta // TARGET_GASUSED // BASEFEE_MAX_CHANGE_DENOMINATOR,
 
 	delta := new(big.Int).Sub(new(big.Int).SetUint64(parent.GasUsed()), new(big.Int).SetUint64(params.TargetGasUsed))
 	mul := new(big.Int).Mul(parent.BaseFee(), delta)
@@ -178,18 +170,23 @@ func calcGasLimitAndBaseFee(config *params.ChainConfig, parent *types.Block) (ui
 	div2 := new(big.Int).Div(div, new(big.Int).SetUint64(params.BaseFeeMaxChangeDenominator))
 	baseFee := new(big.Int).Add(parent.BaseFee(), div2)
 
-	// Panic if the BaseFee is not valid
 	// A valid BASEFEE is one such that abs(BASEFEE - PARENT_BASEFEE) <= max(1, PARENT_BASEFEE // BASEFEE_MAX_CHANGE_DENOMINATOR)
 	diff := new(big.Int).Sub(baseFee, parent.BaseFee())
+	neg := false
 	if diff.Sign() < 0 {
+		neg = true
 		diff.Neg(diff)
 	}
 	max := new(big.Int).Div(parent.BaseFee(), new(big.Int).SetUint64(params.BaseFeeMaxChangeDenominator))
 	if max.Cmp(common.Big1) < 0 {
 		max = common.Big1
 	}
+	// If derived BaseFee is not valid, restrict it within the bounds
 	if diff.Cmp(max) > 0 {
-		panic("invalid BaseFee")
+		if neg {
+			max.Neg(max)
+		}
+		baseFee.Set(new(big.Int).Add(parent.BaseFee(), max))
 	}
 
 	// If EIP1559 is finalized, our limit for the EIP1559 pool is the entire max limit
