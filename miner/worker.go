@@ -24,7 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	mapset "github.com/deckarep/golang-set"
+	"github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -762,7 +762,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		}
 		if w.current.gp1559 == nil {
 			eip1559GasLimit = w.current.header.GasLimit
-			w.current.gasPool = new(core.GasPool).AddGas(eip1559GasLimit)
+			w.current.gp1559 = new(core.GasPool).AddGas(eip1559GasLimit)
 		}
 	} else if w.current.gasPool == nil { // If we are before EIP1559 activation then we use header.GasLimit for the legacy pool
 		legacyGasLimit = w.current.header.GasLimit
@@ -1068,7 +1068,15 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 
 			feesWei := new(big.Int)
 			for i, tx := range block.Transactions() {
-				feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), tx.GasPrice()))
+				if tx.GasPrice() != nil {
+					feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), tx.GasPrice()))
+				} else if tx.GasPremium() != nil && tx.FeeCap() != nil {
+					gasPrice := new(big.Int).Add(block.BaseFee(), tx.GasPremium())
+					if gasPrice.Cmp(tx.FeeCap()) > 0 {
+						gasPrice.Set(tx.FeeCap())
+					}
+					feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), gasPrice))
+				}
 			}
 			feesEth := new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
 
