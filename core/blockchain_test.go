@@ -49,34 +49,37 @@ var (
 // newCanonical creates a chain database, and injects a deterministic canonical
 // chain. Depending on the full flag, if creates either a full block chain or a
 // header only chain.
-func newCanonical(engine consensus.Engine, n int, full bool) (ethdb.Database, *BlockChain, error) {
+func newCanonical(engine consensus.Engine, n int, full bool, chainConfig *params.ChainConfig, baseFee *big.Int) (ethdb.Database, *BlockChain, error) {
 	var (
-		db      = rawdb.NewMemoryDatabase()
-		genesis = new(Genesis).MustCommit(db)
+		db    = rawdb.NewMemoryDatabase()
+		gspec = &Genesis{
+			Config:  chainConfig,
+			BaseFee: baseFee}
+		genesis = gspec.MustCommit(db)
 	)
 
 	// Initialize a fresh chain with only a genesis block
-	blockchain, _ := NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	blockchain, _ := NewBlockChain(db, nil, chainConfig, engine, vm.Config{}, nil, nil)
 	// Create and inject the requested chain
 	if n == 0 {
 		return db, blockchain, nil
 	}
 	if full {
 		// Full block-chain requested
-		blocks := makeBlockChain(genesis, n, engine, db, canonicalSeed)
+		blocks := makeBlockChain(genesis, n, engine, db, canonicalSeed, chainConfig)
 		_, err := blockchain.InsertChain(blocks)
 		return db, blockchain, err
 	}
 	// Header-only chain requested
-	headers := makeHeaderChain(genesis.Header(), n, engine, db, canonicalSeed)
+	headers := makeHeaderChain(genesis.Header(), n, engine, db, canonicalSeed, chainConfig)
 	_, err := blockchain.InsertHeaderChain(headers, 1)
 	return db, blockchain, err
 }
 
 // Test fork of length N starting from block i
-func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, comparator func(td1, td2 *big.Int)) {
+func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, comparator func(td1, td2 *big.Int), chainConfig *params.ChainConfig, baseFee *big.Int) {
 	// Copy old chain up to #i into a new db
-	db, blockchain2, err := newCanonical(ethash.NewFaker(), i, full)
+	db, blockchain2, err := newCanonical(ethash.NewFaker(), i, full, chainConfig, baseFee)
 	if err != nil {
 		t.Fatal("could not make new canonical in testFork", err)
 	}
@@ -100,12 +103,12 @@ func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, compara
 		headerChainB []*types.Header
 	)
 	if full {
-		blockChainB = makeBlockChain(blockchain2.CurrentBlock(), n, ethash.NewFaker(), db, forkSeed)
+		blockChainB = makeBlockChain(blockchain2.CurrentBlock(), n, ethash.NewFaker(), db, forkSeed, chainConfig)
 		if _, err := blockchain2.InsertChain(blockChainB); err != nil {
 			t.Fatalf("failed to insert forking chain: %v", err)
 		}
 	} else {
-		headerChainB = makeHeaderChain(blockchain2.CurrentHeader(), n, ethash.NewFaker(), db, forkSeed)
+		headerChainB = makeHeaderChain(blockchain2.CurrentHeader(), n, ethash.NewFaker(), db, forkSeed, chainConfig)
 		if _, err := blockchain2.InsertHeaderChain(headerChainB, 1); err != nil {
 			t.Fatalf("failed to insert forking chain: %v", err)
 		}
@@ -186,13 +189,22 @@ func testHeaderChainImport(chain []*types.Header, blockchain *BlockChain) error 
 }
 
 func TestLastBlock(t *testing.T) {
-	_, blockchain, err := newCanonical(ethash.NewFaker(), 0, true)
+	testLastBlock(t, params.AllEthashProtocolChanges, nil)
+}
+func TestLastBlockEIP1559(t *testing.T) {
+	testLastBlock(t, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestLastBlockEIP1559Finalized(t *testing.T) {
+	testLastBlock(t, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+
+func testLastBlock(t *testing.T, chainConfig *params.ChainConfig, baseFee *big.Int) {
+	_, blockchain, err := newCanonical(ethash.NewFaker(), 0, true, chainConfig, baseFee)
 	if err != nil {
 		t.Fatalf("failed to create pristine chain: %v", err)
 	}
 	defer blockchain.Stop()
-
-	blocks := makeBlockChain(blockchain.CurrentBlock(), 1, ethash.NewFullFaker(), blockchain.db, 0)
+	blocks := makeBlockChain(blockchain.CurrentBlock(), 1, ethash.NewFullFaker(), blockchain.db, 0, chainConfig)
 	if _, err := blockchain.InsertChain(blocks); err != nil {
 		t.Fatalf("Failed to insert block: %v", err)
 	}
@@ -203,14 +215,30 @@ func TestLastBlock(t *testing.T) {
 
 // Tests that given a starting canonical chain of a given size, it can be extended
 // with various length chains.
-func TestExtendCanonicalHeaders(t *testing.T) { testExtendCanonical(t, false) }
-func TestExtendCanonicalBlocks(t *testing.T)  { testExtendCanonical(t, true) }
+func TestExtendCanonicalHeaders(t *testing.T) {
+	testExtendCanonical(t, false, params.AllEthashProtocolChanges, nil)
+}
+func TestExtendCanonicalBlocks(t *testing.T) {
+	testExtendCanonical(t, true, params.AllEthashProtocolChanges, nil)
+}
+func TestExtendCanonicalHeadersEIP1559(t *testing.T) {
+	testExtendCanonical(t, false, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestExtendCanonicalBlocksEIP1559(t *testing.T) {
+	testExtendCanonical(t, true, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestExtendCanonicalHeadersEIP1559Finalized(t *testing.T) {
+	testExtendCanonical(t, false, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestExtendCanonicalBlocksEIP1559Finalized(t *testing.T) {
+	testExtendCanonical(t, true, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
 
-func testExtendCanonical(t *testing.T, full bool) {
+func testExtendCanonical(t *testing.T, full bool, chainConfig *params.ChainConfig, baseFee *big.Int) {
 	length := 5
 
 	// Make first chain starting from genesis
-	_, processor, err := newCanonical(ethash.NewFaker(), length, full)
+	_, processor, err := newCanonical(ethash.NewFaker(), length, full, chainConfig, baseFee)
 	if err != nil {
 		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
@@ -223,22 +251,38 @@ func testExtendCanonical(t *testing.T, full bool) {
 		}
 	}
 	// Start fork from current height
-	testFork(t, processor, length, 1, full, better)
-	testFork(t, processor, length, 2, full, better)
-	testFork(t, processor, length, 5, full, better)
-	testFork(t, processor, length, 10, full, better)
+	testFork(t, processor, length, 1, full, better, chainConfig, baseFee)
+	testFork(t, processor, length, 2, full, better, chainConfig, baseFee)
+	testFork(t, processor, length, 5, full, better, chainConfig, baseFee)
+	testFork(t, processor, length, 10, full, better, chainConfig, baseFee)
 }
 
 // Tests that given a starting canonical chain of a given size, creating shorter
 // forks do not take canonical ownership.
-func TestShorterForkHeaders(t *testing.T) { testShorterFork(t, false) }
-func TestShorterForkBlocks(t *testing.T)  { testShorterFork(t, true) }
+func TestShorterForkHeaders(t *testing.T) {
+	testShorterFork(t, false, params.AllEthashProtocolChanges, nil)
+}
+func TestShorterForkBlocks(t *testing.T) {
+	testShorterFork(t, true, params.AllEthashProtocolChanges, nil)
+}
+func TestShorterForkHeadersEIP1559(t *testing.T) {
+	testShorterFork(t, false, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestShorterForkBlocksEIP1559(t *testing.T) {
+	testShorterFork(t, true, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestShorterForkHeadersEIP1559Finalized(t *testing.T) {
+	testShorterFork(t, false, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestShorterForkBlocksEIP1559Finalized(t *testing.T) {
+	testShorterFork(t, true, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
 
-func testShorterFork(t *testing.T, full bool) {
+func testShorterFork(t *testing.T, full bool, chainConfig *params.ChainConfig, baseFee *big.Int) {
 	length := 10
 
 	// Make first chain starting from genesis
-	_, processor, err := newCanonical(ethash.NewFaker(), length, full)
+	_, processor, err := newCanonical(ethash.NewFaker(), length, full, chainConfig, baseFee)
 	if err != nil {
 		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
@@ -251,24 +295,38 @@ func testShorterFork(t *testing.T, full bool) {
 		}
 	}
 	// Sum of numbers must be less than `length` for this to be a shorter fork
-	testFork(t, processor, 0, 3, full, worse)
-	testFork(t, processor, 0, 7, full, worse)
-	testFork(t, processor, 1, 1, full, worse)
-	testFork(t, processor, 1, 7, full, worse)
-	testFork(t, processor, 5, 3, full, worse)
-	testFork(t, processor, 5, 4, full, worse)
+	testFork(t, processor, 0, 3, full, worse, chainConfig, baseFee)
+	testFork(t, processor, 0, 7, full, worse, chainConfig, baseFee)
+	testFork(t, processor, 1, 1, full, worse, chainConfig, baseFee)
+	testFork(t, processor, 1, 7, full, worse, chainConfig, baseFee)
+	testFork(t, processor, 5, 3, full, worse, chainConfig, baseFee)
+	testFork(t, processor, 5, 4, full, worse, chainConfig, baseFee)
 }
 
 // Tests that given a starting canonical chain of a given size, creating longer
 // forks do take canonical ownership.
-func TestLongerForkHeaders(t *testing.T) { testLongerFork(t, false) }
-func TestLongerForkBlocks(t *testing.T)  { testLongerFork(t, true) }
+func TestLongerForkHeaders(t *testing.T) {
+	testLongerFork(t, false, params.AllEthashProtocolChanges, nil)
+}
+func TestLongerForkBlocks(t *testing.T) { testLongerFork(t, true, params.AllEthashProtocolChanges, nil) }
+func TestLongerForkHeadersEIP1559(t *testing.T) {
+	testLongerFork(t, false, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestLongerForkBlocksEIP1559(t *testing.T) {
+	testLongerFork(t, true, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestLongerForkHeadersEIP1559Finalized(t *testing.T) {
+	testLongerFork(t, false, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestLongerForkBlocksEIP1559Finalized(t *testing.T) {
+	testLongerFork(t, true, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
 
-func testLongerFork(t *testing.T, full bool) {
+func testLongerFork(t *testing.T, full bool, chainConfig *params.ChainConfig, baseFee *big.Int) {
 	length := 10
 
 	// Make first chain starting from genesis
-	_, processor, err := newCanonical(ethash.NewFaker(), length, full)
+	_, processor, err := newCanonical(ethash.NewFaker(), length, full, chainConfig, baseFee)
 	if err != nil {
 		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
@@ -281,24 +339,36 @@ func testLongerFork(t *testing.T, full bool) {
 		}
 	}
 	// Sum of numbers must be greater than `length` for this to be a longer fork
-	testFork(t, processor, 0, 11, full, better)
-	testFork(t, processor, 0, 15, full, better)
-	testFork(t, processor, 1, 10, full, better)
-	testFork(t, processor, 1, 12, full, better)
-	testFork(t, processor, 5, 6, full, better)
-	testFork(t, processor, 5, 8, full, better)
+	testFork(t, processor, 0, 11, full, better, chainConfig, baseFee)
+	testFork(t, processor, 0, 15, full, better, chainConfig, baseFee)
+	testFork(t, processor, 1, 10, full, better, chainConfig, baseFee)
+	testFork(t, processor, 1, 12, full, better, chainConfig, baseFee)
+	testFork(t, processor, 5, 6, full, better, chainConfig, baseFee)
+	testFork(t, processor, 5, 8, full, better, chainConfig, baseFee)
 }
 
 // Tests that given a starting canonical chain of a given size, creating equal
 // forks do take canonical ownership.
-func TestEqualForkHeaders(t *testing.T) { testEqualFork(t, false) }
-func TestEqualForkBlocks(t *testing.T)  { testEqualFork(t, true) }
+func TestEqualForkHeaders(t *testing.T) { testEqualFork(t, false, params.AllEthashProtocolChanges, nil) }
+func TestEqualForkBlocks(t *testing.T)  { testEqualFork(t, true, params.AllEthashProtocolChanges, nil) }
+func TestEqualForkHeadersEIP1559(t *testing.T) {
+	testEqualFork(t, false, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestEqualForkBlocksEIP1559(t *testing.T) {
+	testEqualFork(t, true, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestEqualForkHeadersEIP1559Finalized(t *testing.T) {
+	testEqualFork(t, false, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestEqualForkBlocksEIP1559Finalized(t *testing.T) {
+	testEqualFork(t, true, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
 
-func testEqualFork(t *testing.T, full bool) {
+func testEqualFork(t *testing.T, full bool, chainConfig *params.ChainConfig, baseFee *big.Int) {
 	length := 10
 
 	// Make first chain starting from genesis
-	_, processor, err := newCanonical(ethash.NewFaker(), length, full)
+	_, processor, err := newCanonical(ethash.NewFaker(), length, full, chainConfig, baseFee)
 	if err != nil {
 		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
@@ -311,21 +381,37 @@ func testEqualFork(t *testing.T, full bool) {
 		}
 	}
 	// Sum of numbers must be equal to `length` for this to be an equal fork
-	testFork(t, processor, 0, 10, full, equal)
-	testFork(t, processor, 1, 9, full, equal)
-	testFork(t, processor, 2, 8, full, equal)
-	testFork(t, processor, 5, 5, full, equal)
-	testFork(t, processor, 6, 4, full, equal)
-	testFork(t, processor, 9, 1, full, equal)
+	testFork(t, processor, 0, 10, full, equal, chainConfig, baseFee)
+	testFork(t, processor, 1, 9, full, equal, chainConfig, baseFee)
+	testFork(t, processor, 2, 8, full, equal, chainConfig, baseFee)
+	testFork(t, processor, 5, 5, full, equal, chainConfig, baseFee)
+	testFork(t, processor, 6, 4, full, equal, chainConfig, baseFee)
+	testFork(t, processor, 9, 1, full, equal, chainConfig, baseFee)
 }
 
 // Tests that chains missing links do not get accepted by the processor.
-func TestBrokenHeaderChain(t *testing.T) { testBrokenChain(t, false) }
-func TestBrokenBlockChain(t *testing.T)  { testBrokenChain(t, true) }
+func TestBrokenHeaderChain(t *testing.T) {
+	testBrokenChain(t, false, params.AllEthashProtocolChanges, nil)
+}
+func TestBrokenBlockChain(t *testing.T) {
+	testBrokenChain(t, true, params.AllEthashProtocolChanges, nil)
+}
+func TestBrokenHeaderChainEIP1559(t *testing.T) {
+	testBrokenChain(t, false, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestBrokenBlockChainEIP1559(t *testing.T) {
+	testBrokenChain(t, true, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestBrokenHeaderChainEIP1559Finalized(t *testing.T) {
+	testBrokenChain(t, false, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestBrokenBlockChainEIP1559Finalized(t *testing.T) {
+	testBrokenChain(t, true, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
 
-func testBrokenChain(t *testing.T, full bool) {
+func testBrokenChain(t *testing.T, full bool, chainConfig *params.ChainConfig, baseFee *big.Int) {
 	// Make chain starting from genesis
-	db, blockchain, err := newCanonical(ethash.NewFaker(), 10, full)
+	db, blockchain, err := newCanonical(ethash.NewFaker(), 10, full, chainConfig, baseFee)
 	if err != nil {
 		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
@@ -333,12 +419,12 @@ func testBrokenChain(t *testing.T, full bool) {
 
 	// Create a forked chain, and try to insert with a missing link
 	if full {
-		chain := makeBlockChain(blockchain.CurrentBlock(), 5, ethash.NewFaker(), db, forkSeed)[1:]
+		chain := makeBlockChain(blockchain.CurrentBlock(), 5, ethash.NewFaker(), db, forkSeed, chainConfig)[1:]
 		if err := testBlockChainImport(chain, blockchain); err == nil {
 			t.Errorf("broken block chain not reported")
 		}
 	} else {
-		chain := makeHeaderChain(blockchain.CurrentHeader(), 5, ethash.NewFaker(), db, forkSeed)[1:]
+		chain := makeHeaderChain(blockchain.CurrentHeader(), 5, ethash.NewFaker(), db, forkSeed, chainConfig)[1:]
 		if err := testHeaderChainImport(chain, blockchain); err == nil {
 			t.Errorf("broken header chain not reported")
 		}
@@ -347,19 +433,45 @@ func testBrokenChain(t *testing.T, full bool) {
 
 // Tests that reorganising a long difficult chain after a short easy one
 // overwrites the canonical numbers and links in the database.
-func TestReorgLongHeaders(t *testing.T) { testReorgLong(t, false) }
-func TestReorgLongBlocks(t *testing.T)  { testReorgLong(t, true) }
+func TestReorgLongHeaders(t *testing.T) { testReorgLong(t, false, params.AllEthashProtocolChanges, nil) }
+func TestReorgLongBlocks(t *testing.T)  { testReorgLong(t, true, params.AllEthashProtocolChanges, nil) }
+func TestReorgLongHeadersEIP1559(t *testing.T) {
+	testReorgLong(t, false, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestReorgLongBlocksEIP1559(t *testing.T) {
+	testReorgLong(t, true, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestReorgLongHeadersEIP1559Finalized(t *testing.T) {
+	testReorgLong(t, false, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestReorgLongBlocksEIP1559Finalized(t *testing.T) {
+	testReorgLong(t, true, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
 
-func testReorgLong(t *testing.T, full bool) {
-	testReorg(t, []int64{0, 0, -9}, []int64{0, 0, 0, -9}, 393280, full)
+func testReorgLong(t *testing.T, full bool, chainConfig *params.ChainConfig, baseFee *big.Int) {
+	testReorg(t, []int64{0, 0, -9}, []int64{0, 0, 0, -9}, 393280, full, chainConfig, baseFee)
 }
 
 // Tests that reorganising a short difficult chain after a long easy one
 // overwrites the canonical numbers and links in the database.
-func TestReorgShortHeaders(t *testing.T) { testReorgShort(t, false) }
-func TestReorgShortBlocks(t *testing.T)  { testReorgShort(t, true) }
+func TestReorgShortHeaders(t *testing.T) {
+	testReorgShort(t, false, params.AllEthashProtocolChanges, nil)
+}
+func TestReorgShortBlocks(t *testing.T) { testReorgShort(t, true, params.AllEthashProtocolChanges, nil) }
+func TestReorgShortHeadersEIP1559(t *testing.T) {
+	testReorgShort(t, false, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestReorgShortBlocksEIP1559(t *testing.T) {
+	testReorgShort(t, true, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestReorgShortHeadersEIP1559Finalized(t *testing.T) {
+	testReorgShort(t, false, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestReorgShortBlocksEIP1559Finalized(t *testing.T) {
+	testReorgShort(t, true, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
 
-func testReorgShort(t *testing.T, full bool) {
+func testReorgShort(t *testing.T, full bool, chainConfig *params.ChainConfig, baseFee *big.Int) {
 	// Create a long easy chain vs. a short heavy one. Due to difficulty adjustment
 	// we need a fairly long chain of blocks with different difficulties for a short
 	// one to become heavyer than a long one. The 96 is an empirical value.
@@ -371,22 +483,22 @@ func testReorgShort(t *testing.T, full bool) {
 	for i := 0; i < len(diff); i++ {
 		diff[i] = -9
 	}
-	testReorg(t, easy, diff, 12615120, full)
+	testReorg(t, easy, diff, 12615120, full, chainConfig, baseFee)
 }
 
-func testReorg(t *testing.T, first, second []int64, td int64, full bool) {
+func testReorg(t *testing.T, first, second []int64, td int64, full bool, chainConfig *params.ChainConfig, baseFee *big.Int) {
 	// Create a pristine chain and database
-	db, blockchain, err := newCanonical(ethash.NewFaker(), 0, full)
+	db, blockchain, err := newCanonical(ethash.NewFaker(), 0, full, chainConfig, baseFee)
 	if err != nil {
 		t.Fatalf("failed to create pristine chain: %v", err)
 	}
 	defer blockchain.Stop()
 
 	// Insert an easy and a difficult chain afterwards
-	easyBlocks, _ := GenerateChain(params.TestChainConfig, blockchain.CurrentBlock(), ethash.NewFaker(), db, len(first), func(i int, b *BlockGen) {
+	easyBlocks, _ := GenerateChain(chainConfig, blockchain.CurrentBlock(), ethash.NewFaker(), db, len(first), func(i int, b *BlockGen) {
 		b.OffsetTime(first[i])
 	})
-	diffBlocks, _ := GenerateChain(params.TestChainConfig, blockchain.CurrentBlock(), ethash.NewFaker(), db, len(second), func(i int, b *BlockGen) {
+	diffBlocks, _ := GenerateChain(chainConfig, blockchain.CurrentBlock(), ethash.NewFaker(), db, len(second), func(i int, b *BlockGen) {
 		b.OffsetTime(second[i])
 	})
 	if full {
@@ -442,12 +554,24 @@ func testReorg(t *testing.T, first, second []int64, td int64, full bool) {
 }
 
 // Tests that the insertion functions detect banned hashes.
-func TestBadHeaderHashes(t *testing.T) { testBadHashes(t, false) }
-func TestBadBlockHashes(t *testing.T)  { testBadHashes(t, true) }
+func TestBadHeaderHashes(t *testing.T) { testBadHashes(t, false, params.AllEthashProtocolChanges, nil) }
+func TestBadBlockHashes(t *testing.T)  { testBadHashes(t, true, params.AllEthashProtocolChanges, nil) }
+func TestBadHeaderHashesEIP1559(t *testing.T) {
+	testBadHashes(t, false, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestBadBlockHashesEIP1559(t *testing.T) {
+	testBadHashes(t, true, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestBadHeaderHashesEIP1559Finalized(t *testing.T) {
+	testBadHashes(t, false, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestBadBlockHashesEIP1559Finalized(t *testing.T) {
+	testBadHashes(t, true, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
 
-func testBadHashes(t *testing.T, full bool) {
+func testBadHashes(t *testing.T, full bool, chainConfig *params.ChainConfig, baseFee *big.Int) {
 	// Create a pristine chain and database
-	db, blockchain, err := newCanonical(ethash.NewFaker(), 0, full)
+	db, blockchain, err := newCanonical(ethash.NewFaker(), 0, full, chainConfig, baseFee)
 	if err != nil {
 		t.Fatalf("failed to create pristine chain: %v", err)
 	}
@@ -455,14 +579,14 @@ func testBadHashes(t *testing.T, full bool) {
 
 	// Create a chain, ban a hash and try to import
 	if full {
-		blocks := makeBlockChain(blockchain.CurrentBlock(), 3, ethash.NewFaker(), db, 10)
+		blocks := makeBlockChain(blockchain.CurrentBlock(), 3, ethash.NewFaker(), db, 10, chainConfig)
 
 		BadHashes[blocks[2].Header().Hash()] = true
 		defer func() { delete(BadHashes, blocks[2].Header().Hash()) }()
 
 		_, err = blockchain.InsertChain(blocks)
 	} else {
-		headers := makeHeaderChain(blockchain.CurrentHeader(), 3, ethash.NewFaker(), db, 10)
+		headers := makeHeaderChain(blockchain.CurrentHeader(), 3, ethash.NewFaker(), db, 10, chainConfig)
 
 		BadHashes[headers[2].Hash()] = true
 		defer func() { delete(BadHashes, headers[2].Hash()) }()
@@ -476,18 +600,34 @@ func testBadHashes(t *testing.T, full bool) {
 
 // Tests that bad hashes are detected on boot, and the chain rolled back to a
 // good state prior to the bad hash.
-func TestReorgBadHeaderHashes(t *testing.T) { testReorgBadHashes(t, false) }
-func TestReorgBadBlockHashes(t *testing.T)  { testReorgBadHashes(t, true) }
+func TestReorgBadHeaderHashes(t *testing.T) {
+	testReorgBadHashes(t, false, params.AllEthashProtocolChanges, nil)
+}
+func TestReorgBadBlockHashes(t *testing.T) {
+	testReorgBadHashes(t, true, params.AllEthashProtocolChanges, nil)
+}
+func TestReorgBadHeaderHashesEIP1559(t *testing.T) {
+	testReorgBadHashes(t, false, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestReorgBadBlockHashesEIP1559(t *testing.T) {
+	testReorgBadHashes(t, true, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestReorgBadHeaderHashesEIP1559Finalized(t *testing.T) {
+	testReorgBadHashes(t, false, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestReorgBadBlockHashesEIP1559Finalized(t *testing.T) {
+	testReorgBadHashes(t, true, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
 
-func testReorgBadHashes(t *testing.T, full bool) {
+func testReorgBadHashes(t *testing.T, full bool, chainConfig *params.ChainConfig, baseFee *big.Int) {
 	// Create a pristine chain and database
-	db, blockchain, err := newCanonical(ethash.NewFaker(), 0, full)
+	db, blockchain, err := newCanonical(ethash.NewFaker(), 0, full, chainConfig, baseFee)
 	if err != nil {
 		t.Fatalf("failed to create pristine chain: %v", err)
 	}
 	// Create a chain, import and ban afterwards
-	headers := makeHeaderChain(blockchain.CurrentHeader(), 4, ethash.NewFaker(), db, 10)
-	blocks := makeBlockChain(blockchain.CurrentBlock(), 4, ethash.NewFaker(), db, 10)
+	headers := makeHeaderChain(blockchain.CurrentHeader(), 4, ethash.NewFaker(), db, 10, chainConfig)
+	blocks := makeBlockChain(blockchain.CurrentBlock(), 4, ethash.NewFaker(), db, 10, chainConfig)
 
 	if full {
 		if _, err = blockchain.InsertChain(blocks); err != nil {
@@ -531,13 +671,29 @@ func testReorgBadHashes(t *testing.T, full bool) {
 }
 
 // Tests chain insertions in the face of one entity containing an invalid nonce.
-func TestHeadersInsertNonceError(t *testing.T) { testInsertNonceError(t, false) }
-func TestBlocksInsertNonceError(t *testing.T)  { testInsertNonceError(t, true) }
+func TestHeadersInsertNonceError(t *testing.T) {
+	testInsertNonceError(t, false, params.AllEthashProtocolChanges, nil)
+}
+func TestBlocksInsertNonceError(t *testing.T) {
+	testInsertNonceError(t, true, params.AllEthashProtocolChanges, nil)
+}
+func TestHeadersInsertNonceErrorEIP1559(t *testing.T) {
+	testInsertNonceError(t, false, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestBlocksInsertNonceErrorEIP1559(t *testing.T) {
+	testInsertNonceError(t, true, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestHeadersInsertNonceErrorEIP1559Finalized(t *testing.T) {
+	testInsertNonceError(t, false, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestBlocksInsertNonceErrorEIP1559Finalized(t *testing.T) {
+	testInsertNonceError(t, true, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
 
-func testInsertNonceError(t *testing.T, full bool) {
+func testInsertNonceError(t *testing.T, full bool, chainConfig *params.ChainConfig, baseFee *big.Int) {
 	for i := 1; i < 25 && !t.Failed(); i++ {
 		// Create a pristine chain and database
-		db, blockchain, err := newCanonical(ethash.NewFaker(), 0, full)
+		db, blockchain, err := newCanonical(ethash.NewFaker(), 0, full, chainConfig, baseFee)
 		if err != nil {
 			t.Fatalf("failed to create pristine chain: %v", err)
 		}
@@ -550,7 +706,7 @@ func testInsertNonceError(t *testing.T, full bool) {
 			failNum uint64
 		)
 		if full {
-			blocks := makeBlockChain(blockchain.CurrentBlock(), i, ethash.NewFaker(), db, 0)
+			blocks := makeBlockChain(blockchain.CurrentBlock(), i, ethash.NewFaker(), db, 0, chainConfig)
 
 			failAt = rand.Int() % len(blocks)
 			failNum = blocks[failAt].NumberU64()
@@ -558,7 +714,7 @@ func testInsertNonceError(t *testing.T, full bool) {
 			blockchain.engine = ethash.NewFakeFailer(failNum)
 			failRes, err = blockchain.InsertChain(blocks)
 		} else {
-			headers := makeHeaderChain(blockchain.CurrentHeader(), i, ethash.NewFaker(), db, 0)
+			headers := makeHeaderChain(blockchain.CurrentHeader(), i, ethash.NewFaker(), db, 0, chainConfig)
 
 			failAt = rand.Int() % len(headers)
 			failNum = headers[failAt].Number.Uint64()
@@ -1208,9 +1364,19 @@ done:
 
 }
 
-// Tests if the canonical block can be fetched from the database during chain insertion.
 func TestCanonicalBlockRetrieval(t *testing.T) {
-	_, blockchain, err := newCanonical(ethash.NewFaker(), 0, true)
+	testCanonicalBlockRetrieval(t, params.AllEthashProtocolChanges, nil)
+}
+func TestCanonicalBlockRetrievalEIP1559(t *testing.T) {
+	testCanonicalBlockRetrieval(t, params.EIP1559ChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+func TestCanonicalBlockRetrievalEIP1559Finalized(t *testing.T) {
+	testCanonicalBlockRetrieval(t, params.EIP1559FinalizedChainConfig, new(big.Int).SetUint64(params.EIP1559InitialBaseFee))
+}
+
+// Tests if the canonical block can be fetched from the database during chain insertion.
+func testCanonicalBlockRetrieval(t *testing.T, chainConfig *params.ChainConfig, baseFee *big.Int) {
+	_, blockchain, err := newCanonical(ethash.NewFaker(), 0, true, chainConfig, baseFee)
 	if err != nil {
 		t.Fatalf("failed to create pristine chain: %v", err)
 	}
@@ -3029,31 +3195,4 @@ func TestInitThenFailCreateContract(t *testing.T) {
 			t.Fatalf("block %d: failed to insert into chain: %v", block.NumberU64(), err)
 		}
 	}
-}
-
-/*
-	We need to test:
-
-	1. blockChain.insertChain works as usual before activation
-	2. blockChain.insertChain works as expected during transition phase (with both types of transactions)
-	3. blockChain.insertChain works as expected after finalization (with only EIP1559 transactions)
-
-*/
-
-// TestEIP1559 tests the changes introduced by the EIP1559 forks
-func TestEIP1559BlockChain(t *testing.T) {
-	//testEIP1559BlockChain(t)
-	//testEIP1559BlockChainAfterFinalization(t)
-}
-
-// TestEIP1559Initialization tests the first EIP1559 fork which introduces a second gas pool and transaction type
-// that coexists with the legacy pool and transaction type
-func testEIP1559BlockChain(t *testing.T) {
-	panic("implement me")
-}
-
-// TestEIP1559Finalization tests the second EIP1559 fork which finalizes the new gas pool and transaction type
-// and deprecates the legacy pool and transaction type
-func testEIP1559BlockChainAfterFinalization(t *testing.T) {
-	panic("implement me")
 }
