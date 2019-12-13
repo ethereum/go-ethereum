@@ -3196,30 +3196,3 @@ func TestInitThenFailCreateContract(t *testing.T) {
 		}
 	}
 }
-
-/*
-	We need to test:
-
-	1. blockChain.insertChain works as usual before activation
-	2. blockChain.insertChain works as expected during transition phase (with both types of transactions)
-	3. blockChain.insertChain works as expected after finalization (with only EIP1559 transactions)
-
-*/
-
-// TestEIP1559 tests the changes introduced by the EIP1559 forks
-func TestEIP1559BlockChain(t *testing.T) {
-	//testEIP1559BlockChain(t)
-	//testEIP1559BlockChainAfterFinalization(t)
-}
-
-// TestEIP1559Initialization tests the first EIP1559 fork which introduces a second gas pool and transaction type
-// that coexists with the legacy pool and transaction type
-func testEIP1559BlockChain(t *testing.T) {
-	panic("implement me")
-}
-
-// TestEIP1559Finalization tests the second EIP1559 fork which finalizes the new gas pool and transaction type
-// and deprecates the legacy pool and transaction type
-func testEIP1559BlockChainAfterFinalization(t *testing.T) {
-	panic("implement me")
-}
