@@ -434,6 +434,7 @@ var (
 
 			logs, sub, err := _{{$contract.Type}}.contract.FilterLogs(opts, "{{.Original.Name}}"{{range .Normalized.Inputs}}{{if .Indexed}}, {{.Name}}Rule{{end}}{{end}})
 			if err != nil {
+				sub.Unsubscribe()
 				return nil, err
 			}
 			return &{{$contract.Type}}{{.Normalized.Name}}Iterator{contract: _{{$contract.Type}}.contract, event: "{{.Original.Name}}", logs: logs, sub: sub}, nil
@@ -451,6 +452,7 @@ var (
 
 			logs, sub, err := _{{$contract.Type}}.contract.WatchLogs(opts, "{{.Original.Name}}"{{range .Normalized.Inputs}}{{if .Indexed}}, {{.Name}}Rule{{end}}{{end}})
 			if err != nil {
+				sub.Unsubscribe()
 				return nil, err
 			}
 			return event.NewSubscription(func(quit <-chan struct{}) error {
