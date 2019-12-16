@@ -177,9 +177,9 @@ func (t *SecureTrie) NodeIterator(start []byte) NodeIterator {
 // invalid on the next call to hashKey or secKey.
 func (t *SecureTrie) hashKey(key []byte) []byte {
 	h := newHasher(nil)
-	h.sha.Reset()
-	h.sha.Write(key)
-	buf := h.sha.Sum(t.hashKeyBuf[:0])
+	h.sha[0].Reset()
+	h.sha[0].Write(key)
+	buf := h.sha[0].Sum(t.hashKeyBuf[:0])
 	returnHasherToPool(h)
 	return buf
 }

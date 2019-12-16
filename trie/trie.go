@@ -429,5 +429,5 @@ func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
 	}
 	h := newHasher(onleaf)
 	defer returnHasherToPool(h)
-	return h.hash(t.root, db, true)
+	return h.hashParalell(t.root, db, true, -1)
 }
