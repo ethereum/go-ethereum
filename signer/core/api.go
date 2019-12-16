@@ -470,9 +470,35 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 		modified = true
 		log.Info("Gas changed by UI", "was", g0, "is", g1)
 	}
-	if g0, g1 := big.Int(original.Transaction.GasPrice), big.Int(new.Transaction.GasPrice); g0.Cmp(&g1) != 0 {
+	g0, g1 := (*big.Int)(original.Transaction.GasPrice), (*big.Int)(new.Transaction.GasPrice)
+	if g0 == nil || g1 == nil {
+		if g0 != g1 {
+			modified = true
+			log.Info("GasPrice changed by UI", "was", g0, "is", g1)
+		}
+	} else if g0.Cmp(g1) != 0 {
 		modified = true
 		log.Info("GasPrice changed by UI", "was", g0, "is", g1)
+	}
+	gp0, gp1 := (*big.Int)(original.Transaction.GasPremium), (*big.Int)(new.Transaction.GasPremium)
+	if gp0 == nil || gp1 == nil {
+		if gp0 != gp1 {
+			modified = true
+			log.Info("GasPremium changed by UI", "was", gp0, "is", gp1)
+		}
+	} else if gp0.Cmp(gp1) != 0 {
+		modified = true
+		log.Info("GasPremium changed by UI", "was", gp0, "is", gp1)
+	}
+	f0, f1 := (*big.Int)(original.Transaction.FeeCap), (*big.Int)(new.Transaction.FeeCap)
+	if f0 == nil || f1 == nil {
+		if f0 != f1 {
+			modified = true
+			log.Info("GasFee changed by UI", "was", f0, "is", f1)
+		}
+	} else if f0.Cmp(f1) != 0 {
+		modified = true
+		log.Info("GasFee changed by UI", "was", f0, "is", f1)
 	}
 	if v0, v1 := big.Int(original.Transaction.Value), big.Int(new.Transaction.Value); v0.Cmp(&v1) != 0 {
 		modified = true
