@@ -363,6 +363,19 @@ func (t *tokenSale) buyTokens(id enode.ID, maxSpend, minReceive uint64, spendAll
 	return
 }
 
+func (t *tokenSale) getBalance(id enode.ID) (pcBalance, tokenBalance uint64) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	pb := t.clientPool.getPosBalance(id)
+	tokenBalance = pb.value
+	var meta tokenSaleMeta
+	if err := rlp.DecodeBytes([]byte(pb.meta), &meta); err == nil {
+		pcBalance = meta.pcBalance
+	}
+	return
+}
+
 func (t *tokenSale) info() (version, compatible uint, info keyValueList, receivers []string) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -436,6 +449,7 @@ func (t *tokenSaleMeta) DecodeRLP(s *rlp.Stream) error {
 const (
 	tsInfo = iota
 	tsReceiverInfo
+	tsGetBalance
 	tsDeposit
 	tsBuyTokens
 	tsConnection
@@ -449,7 +463,10 @@ type (
 	}
 	tsReceiverInfoParams  []string
 	tsReceiverInfoResults []keyValueList
-	tsDepositParams       struct {
+	tsGetBalanceResults   struct {
+		PcBalance, TokenBalance uint64
+	}
+	tsDepositParams struct {
 		PaymentModule  string
 		ProofOfPayment []byte
 	}
@@ -493,6 +510,12 @@ func (t *tokenSale) runCommand(cmd []byte, id enode.ID, freeID string) []byte {
 		)
 		if err := rlp.DecodeBytes(cmd[1:], &params); err == nil {
 			results = t.receiverInfo(params)
+			res, _ = rlp.EncodeToBytes(&results)
+		}
+	case tsGetBalance:
+		var results tsGetBalanceResults
+		if len(cmd) == 1 {
+			results.PcBalance, results.TokenBalance = t.getBalance(id)
 			res, _ = rlp.EncodeToBytes(&results)
 		}
 	case tsDeposit:

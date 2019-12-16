@@ -453,13 +453,66 @@ func (api *PrivateLespayAPI) Connection(ctx context.Context, remote bool, node s
 	params := tsConnectionParams{requestedCapacity, stayConnected, paymentModule, setCap}
 	enc, _ := rlp.EncodeToBytes(&params)
 	var resEnc []byte
-	fmt.Println("makeCall", remote, node, enc)
 	resEnc, err = api.makeCall(ctx, remote, node, append([]byte{tsConnection}, enc...))
 	if err != nil {
-		fmt.Println("makeCall err", err)
 		return
 	}
 	err = rlp.DecodeBytes(resEnc, &results)
-	fmt.Println("decode err", err)
+	return
+}
+
+func (api *PrivateLespayAPI) Deposit(ctx context.Context, remote bool, node string, paymentModule string, proofOfPayment []byte) (results tsDepositResults, err error) {
+	params := tsDepositParams{paymentModule, proofOfPayment}
+	enc, _ := rlp.EncodeToBytes(&params)
+	var resEnc []byte
+	resEnc, err = api.makeCall(ctx, remote, node, append([]byte{tsDeposit}, enc...))
+	if err != nil {
+		return
+	}
+	err = rlp.DecodeBytes(resEnc, &results)
+	return
+}
+
+func (api *PrivateLespayAPI) BuyTokens(ctx context.Context, remote bool, node string, maxSpend, minReceive uint64, spendAll bool) (results tsBuyTokensResults, err error) {
+	params := tsBuyTokensParams{maxSpend, minReceive, spendAll}
+	enc, _ := rlp.EncodeToBytes(&params)
+	var resEnc []byte
+	resEnc, err = api.makeCall(ctx, remote, node, append([]byte{tsBuyTokens}, enc...))
+	if err != nil {
+		return
+	}
+	err = rlp.DecodeBytes(resEnc, &results)
+	return
+}
+
+func (api *PrivateLespayAPI) GetBalance(ctx context.Context, remote bool, node string) (results tsGetBalanceResults, err error) {
+	var resEnc []byte
+	resEnc, err = api.makeCall(ctx, remote, node, []byte{tsGetBalance})
+	if err != nil {
+		return
+	}
+	err = rlp.DecodeBytes(resEnc, &results)
+	return
+}
+
+func (api *PrivateLespayAPI) Info(ctx context.Context, remote bool, node string) (results tsInfoResults, err error) {
+	var resEnc []byte
+	resEnc, err = api.makeCall(ctx, remote, node, []byte{tsInfo})
+	if err != nil {
+		return
+	}
+	err = rlp.DecodeBytes(resEnc, &results)
+	return
+}
+
+func (api *PrivateLespayAPI) ReceiverInfo(ctx context.Context, remote bool, node string, receiverIDs []string) (results tsReceiverInfoResults, err error) {
+	params := tsReceiverInfoParams(receiverIDs)
+	enc, _ := rlp.EncodeToBytes(&params)
+	var resEnc []byte
+	resEnc, err = api.makeCall(ctx, remote, node, append([]byte{tsReceiverInfo}, enc...))
+	if err != nil {
+		return
+	}
+	err = rlp.DecodeBytes(resEnc, &results)
 	return
 }
