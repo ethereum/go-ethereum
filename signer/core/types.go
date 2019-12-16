@@ -70,12 +70,15 @@ type SendTxArgs struct {
 	From     common.MixedcaseAddress  `json:"from"`
 	To       *common.MixedcaseAddress `json:"to"`
 	Gas      hexutil.Uint64           `json:"gas"`
-	GasPrice hexutil.Big              `json:"gasPrice"`
+	GasPrice *hexutil.Big             `json:"gasPrice"`
 	Value    hexutil.Big              `json:"value"`
 	Nonce    hexutil.Uint64           `json:"nonce"`
 	// We accept "data" and "input" for backwards-compatibility reasons.
 	Data  *hexutil.Bytes `json:"data"`
 	Input *hexutil.Bytes `json:"input,omitempty"`
+	// EIP1559 fields
+	GasPremium *hexutil.Big `json:"gasPremium"`
+	FeeCap     *hexutil.Big `json:"feeCap"`
 }
 
 func (args SendTxArgs) String() string {
@@ -94,7 +97,7 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 		input = *args.Input
 	}
 	if args.To == nil {
-		return types.NewContractCreation(uint64(args.Nonce), (*big.Int)(&args.Value), uint64(args.Gas), (*big.Int)(&args.GasPrice), input, nil, nil)
+		return types.NewContractCreation(uint64(args.Nonce), (*big.Int)(&args.Value), uint64(args.Gas), (*big.Int)(args.GasPrice), input, (*big.Int)(args.GasPremium), (*big.Int)(args.FeeCap))
 	}
-	return types.NewTransaction(uint64(args.Nonce), args.To.Address(), (*big.Int)(&args.Value), (uint64)(args.Gas), (*big.Int)(&args.GasPrice), input, nil, nil)
+	return types.NewTransaction(uint64(args.Nonce), args.To.Address(), (*big.Int)(&args.Value), (uint64)(args.Gas), (*big.Int)(args.GasPrice), input, (*big.Int)(args.GasPremium), (*big.Int)(args.FeeCap))
 }
