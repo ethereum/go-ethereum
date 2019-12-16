@@ -165,20 +165,20 @@ func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 	if _, isHash := n.(hashNode); n == nil || isHash {
 		return n, nil
 	}
-	// Generate the RLP encoding of the node
-	h.tmp.Reset()
-	if err := rlp.Encode(&h.tmp, n); err != nil {
-		panic("encode error: " + err.Error())
-	}
-	if len(h.tmp) < 32 && !force {
-		return n, nil // Nodes smaller than 32 bytes are stored inside their parent
-	}
-	// Larger nodes are replaced by their hash and stored in the database.
+	// We might already have the hash
 	hash, _ := n.cache()
 	if hash == nil {
+		// Generate the RLP encoding of the node
+		h.tmp.Reset()
+		if err := rlp.Encode(&h.tmp, n); err != nil {
+			panic("encode error: " + err.Error())
+		}
+		if len(h.tmp) < 32 && !force {
+			return n, nil // Nodes smaller than 32 bytes are stored inside their parent
+		}
+		// Larger nodes are replaced by their hash and stored in the database.
 		hash = h.makeHashNode(h.tmp)
 	}
-
 	if db != nil {
 		// We are pooling the trie nodes into an intermediate memory cache
 		hash := common.BytesToHash(hash)
