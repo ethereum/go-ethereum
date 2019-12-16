@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -204,7 +205,8 @@ func abigen(c *cli.Context) error {
 				// Sanitize the combined json names to match the
 				// format expected by solidity.
 				if !strings.Contains(n, ":") {
-					name = abi.ToCamelCase(strings.TrimSuffix(name, ".vy"))
+					// Remove extra path components
+					name = abi.ToCamelCase(strings.TrimSuffix(filepath.Base(name), ".vy"))
 				}
 				contracts[name] = contract
 			}
