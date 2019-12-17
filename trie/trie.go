@@ -20,6 +20,7 @@ package trie
 import (
 	"bytes"
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -415,7 +416,18 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	if t.db == nil {
 		panic("commit called on trie with nil database")
 	}
-	hash, cached, err := t.hashRoot(t.db, onleaf)
+	if t.root == nil {
+		return emptyRoot, nil
+	}
+	h := newHasher(onleaf)
+	h.leafCh = make(chan *Leaf, 200) // arbitrary number
+	defer returnHasherToPool(h)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go h.commitLoop(t.db, &wg)
+	hash, cached, err :=  h.hash(t.root, t.db, true)
+	close(h.leafCh)
+	wg.Wait()
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -431,3 +443,4 @@ func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
 	defer returnHasherToPool(h)
 	return h.hash(t.root, db, true)
 }
+

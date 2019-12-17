@@ -25,10 +25,17 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+type Leaf struct {
+	size int
+	hash common.Hash
+	node node
+}
+
 type hasher struct {
 	tmp    sliceBuffer
 	sha    keccakState
 	onleaf LeafCallback
+	leafCh chan *Leaf
 }
 
 // keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
@@ -178,16 +185,37 @@ func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 	if hash == nil {
 		hash = h.makeHashNode(h.tmp)
 	}
-
 	if db != nil {
+		h.leafCh <- &Leaf{
+			size: len(h.tmp),
+			hash: common.BytesToHash(hash),
+			node: n,
+		}
+	}
+	return hash, nil
+}
+
+func (h *hasher) makeHashNode(data []byte) hashNode {
+	n := make(hashNode, h.sha.Size())
+	h.sha.Reset()
+	h.sha.Write(data)
+	h.sha.Read(n)
+	return n
+}
+
+// commitLoop does the actual insert + leaf callback for nodes
+func (h *hasher) commitLoop(db *Database, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for item := range h.leafCh {
+		var (
+			hash = item.hash
+			size = item.size
+			n    = item.node
+		)
 		// We are pooling the trie nodes into an intermediate memory cache
-		hash := common.BytesToHash(hash)
-
 		db.lock.Lock()
-		db.insert(hash, len(h.tmp), n)
+		db.insert(hash, size, n)
 		db.lock.Unlock()
-
-		// Track external references from account->storage trie
 		if h.onleaf != nil {
 			switch n := n.(type) {
 			case *shortNode:
@@ -203,13 +231,4 @@ func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 			}
 		}
 	}
-	return hash, nil
-}
-
-func (h *hasher) makeHashNode(data []byte) hashNode {
-	n := make(hashNode, h.sha.Size())
-	h.sha.Reset()
-	h.sha.Write(data)
-	h.sha.Read(n)
-	return n
 }
