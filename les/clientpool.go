@@ -619,16 +619,17 @@ func (f *clientPool) setCapacityLocked(id enode.ID, freeID string, capacity uint
 	return f.setCapacity(id, freeID, capacity, minConnTime, setCap)
 }
 
-// requestCost feeds request cost after serving a request from the given peer.
-func (f *clientPool) requestCost(p *peer, cost uint64) {
+// requestCost feeds request cost after serving a request from the given peer and
+// returns the remaining token balance
+func (f *clientPool) requestCost(p *peer, cost uint64) uint64 {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
 	info, exist := f.connectedMap[p.ID()]
 	if !exist || f.closed {
-		return
+		return 0
 	}
-	info.balanceTracker.requestCost(cost)
+	return info.balanceTracker.requestCost(cost)
 }
 
 // logOffset calculates the time-dependent offset for the logarithmic
@@ -654,7 +655,12 @@ func (f *clientPool) getPosBalance(id enode.ID) posBalance {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	return f.ndb.getOrNewPB(id)
+	if c := f.connectedMap[id]; c != nil {
+		pb, _ := c.balanceTracker.getBalance(mclock.Now())
+		return posBalance{value: pb, meta: c.balanceMetaInfo}
+	} else {
+		return f.ndb.getOrNewPB(id)
+	}
 }
 
 // addBalance updates the balance of a client (either overwrites it or adds to it).

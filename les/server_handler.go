@@ -106,6 +106,9 @@ func (h *serverHandler) stop() {
 // runPeer is the p2p protocol run function for the given version.
 func (h *serverHandler) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := newPeer(int(version), h.server.config.NetworkId, false, p, newMeteredMsgWriter(rw, int(version)))
+	peer.getBalance = func() posBalance {
+		return h.server.clientPool.getPosBalance(p.ID())
+	}
 	h.wg.Add(1)
 	defer h.wg.Done()
 	return h.handle(peer)
@@ -247,22 +250,33 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 		if reply != nil {
 			replySize = reply.size()
 		}
-		var realCost uint64
+		var realCost, balance uint64
 		if h.server.costTracker.testing {
 			realCost = maxCost // Assign a fake cost for testing purpose
 		} else {
 			realCost = h.server.costTracker.realCost(servingTime, msg.Size, replySize)
+			if realCost > maxCost {
+				realCost = maxCost
+			}
 		}
 		bv := p.fcClient.RequestProcessed(reqID, responseCount, maxCost, realCost)
 		if amount != 0 {
 			// Feed cost tracker request serving statistic.
 			h.server.costTracker.updateStats(msg.Code, amount, servingTime, realCost)
 			// Reduce priority "balance" for the specific peer.
-			h.server.clientPool.requestCost(p, realCost)
+			balance = h.server.clientPool.requestCost(p, realCost)
+		}
+		sf := stateFeedback{
+			protocolVersion: p.version,
+			stateFeedbackV4: stateFeedbackV4{
+				BV:           bv,
+				RealCost:     realCost,
+				TokenBalance: balance,
+			},
 		}
 		if reply != nil {
 			p.queueSend(func() {
-				if err := reply.send(bv); err != nil {
+				if err := reply.send(sf); err != nil {
 					select {
 					case p.errCh <- err:
 					default:

@@ -113,6 +113,8 @@ type peer struct {
 	fcParams flowcontrol.ServerParams
 	fcCosts  requestCostTable
 
+	getBalance func() posBalance
+
 	trusted, server         bool
 	onlyAnnounce            bool
 	chainSince, chainRecent uint64
@@ -198,7 +200,19 @@ func (p *peer) freezeClient() {
 					time.Sleep(freezeCheckPeriod)
 				} else {
 					atomic.StoreUint32(&p.frozen, 0)
-					p.SendResume(bufValue)
+					var balance uint64
+					if p.getBalance != nil {
+						balance = p.getBalance().value
+					}
+					sf := stateFeedback{
+						protocolVersion: p.version,
+						stateFeedbackV4: stateFeedbackV4{
+							BV:           bufValue,
+							RealCost:     0,
+							TokenBalance: balance,
+						},
+					}
+					p.SendResume(sf)
 					break
 				}
 			}
@@ -314,12 +328,13 @@ type reply struct {
 }
 
 // send sends the reply with the calculated buffer value
-func (r *reply) send(bv uint64) error {
+func (r *reply) send(sf stateFeedback) error {
 	type resp struct {
-		ReqID, BV uint64
-		Data      rlp.RawValue
+		ReqID uint64
+		SF    stateFeedback
+		Data  rlp.RawValue
 	}
-	return p2p.Send(r.w, r.msgcode, resp{r.reqID, bv, r.data})
+	return p2p.Send(r.w, r.msgcode, resp{r.reqID, sf, r.data})
 }
 
 // size returns the RLP encoded size of the message data
@@ -394,8 +409,8 @@ func (p *peer) SendStop() error {
 }
 
 // SendResume notifies the client about getting out of frozen state
-func (p *peer) SendResume(bv uint64) error {
-	return p2p.Send(p.rw, ResumeMsg, bv)
+func (p *peer) SendResume(sf stateFeedback) error {
+	return p2p.Send(p.rw, ResumeMsg, sf)
 }
 
 // ReplyBlockHeaders creates a reply with a batch of block headers

@@ -239,3 +239,28 @@ func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
 type CodeData []struct {
 	Value []byte
 }
+
+type stateFeedbackV4 struct {
+	BV, RealCost, TokenBalance uint64
+}
+
+type stateFeedback struct {
+	protocolVersion int
+	stateFeedbackV4
+}
+
+func (sf stateFeedback) EncodeRLP(w io.Writer) error {
+	if sf.protocolVersion >= lpv4 {
+		return rlp.Encode(w, sf.stateFeedbackV4)
+	} else {
+		return rlp.Encode(w, sf.BV)
+	}
+}
+
+func (sf *stateFeedback) DecodeRLP(s *rlp.Stream) error {
+	if sf.protocolVersion >= lpv4 {
+		return s.Decode(&sf.stateFeedbackV4)
+	} else {
+		return s.Decode(&sf.BV)
+	}
+}

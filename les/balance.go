@@ -290,12 +290,12 @@ func (bt *balanceTracker) updateAfter(dt time.Duration) {
 }
 
 // requestCost should be called after serving a request for the given peer
-func (bt *balanceTracker) requestCost(cost uint64) {
+func (bt *balanceTracker) requestCost(cost uint64) uint64 {
 	bt.lock.Lock()
 	defer bt.lock.Unlock()
 
 	if bt.stopped {
-		return
+		return 0
 	}
 	now := bt.clock.Now()
 	bt.addBalance(now)
@@ -323,6 +323,7 @@ func (bt *balanceTracker) requestCost(cost uint64) {
 		}
 	}
 	bt.sumReqCost += cost
+	return bt.balance.pos
 }
 
 // getBalance returns the current positive and negative balance

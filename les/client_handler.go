@@ -200,13 +200,15 @@ func (h *clientHandler) handleMsg(p *peer) error {
 	case BlockHeadersMsg:
 		p.Log().Trace("Received block header response message")
 		var resp struct {
-			ReqID, BV uint64
-			Headers   []*types.Header
+			ReqID   uint64
+			SF      stateFeedback
+			Headers []*types.Header
 		}
+		resp.SF.protocolVersion = p.version
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.fcServer.ReceivedReply(resp.ReqID, resp.SF.BV)
 		if h.fetcher.requestedID(resp.ReqID) {
 			h.fetcher.deliverHeaders(p, resp.ReqID, resp.Headers)
 		} else {
@@ -217,13 +219,15 @@ func (h *clientHandler) handleMsg(p *peer) error {
 	case BlockBodiesMsg:
 		p.Log().Trace("Received block bodies response")
 		var resp struct {
-			ReqID, BV uint64
-			Data      []*types.Body
+			ReqID uint64
+			SF    stateFeedback
+			Data  []*types.Body
 		}
+		resp.SF.protocolVersion = p.version
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.fcServer.ReceivedReply(resp.ReqID, resp.SF.BV)
 		deliverMsg = &Msg{
 			MsgType: MsgBlockBodies,
 			ReqID:   resp.ReqID,
@@ -232,13 +236,15 @@ func (h *clientHandler) handleMsg(p *peer) error {
 	case CodeMsg:
 		p.Log().Trace("Received code response")
 		var resp struct {
-			ReqID, BV uint64
-			Data      [][]byte
+			ReqID uint64
+			SF    stateFeedback
+			Data  [][]byte
 		}
+		resp.SF.protocolVersion = p.version
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.fcServer.ReceivedReply(resp.ReqID, resp.SF.BV)
 		deliverMsg = &Msg{
 			MsgType: MsgCode,
 			ReqID:   resp.ReqID,
@@ -247,13 +253,15 @@ func (h *clientHandler) handleMsg(p *peer) error {
 	case ReceiptsMsg:
 		p.Log().Trace("Received receipts response")
 		var resp struct {
-			ReqID, BV uint64
-			Receipts  []types.Receipts
+			ReqID    uint64
+			SF       stateFeedback
+			Receipts []types.Receipts
 		}
+		resp.SF.protocolVersion = p.version
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.fcServer.ReceivedReply(resp.ReqID, resp.SF.BV)
 		deliverMsg = &Msg{
 			MsgType: MsgReceipts,
 			ReqID:   resp.ReqID,
@@ -262,13 +270,15 @@ func (h *clientHandler) handleMsg(p *peer) error {
 	case ProofsV2Msg:
 		p.Log().Trace("Received les/2 proofs response")
 		var resp struct {
-			ReqID, BV uint64
-			Data      light.NodeList
+			ReqID uint64
+			SF    stateFeedback
+			Data  light.NodeList
 		}
+		resp.SF.protocolVersion = p.version
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.fcServer.ReceivedReply(resp.ReqID, resp.SF.BV)
 		deliverMsg = &Msg{
 			MsgType: MsgProofsV2,
 			ReqID:   resp.ReqID,
@@ -277,13 +287,15 @@ func (h *clientHandler) handleMsg(p *peer) error {
 	case HelperTrieProofsMsg:
 		p.Log().Trace("Received helper trie proof response")
 		var resp struct {
-			ReqID, BV uint64
-			Data      HelperTrieResps
+			ReqID uint64
+			SF    stateFeedback
+			Data  HelperTrieResps
 		}
+		resp.SF.protocolVersion = p.version
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.fcServer.ReceivedReply(resp.ReqID, resp.SF.BV)
 		deliverMsg = &Msg{
 			MsgType: MsgHelperTrieProofs,
 			ReqID:   resp.ReqID,
@@ -292,13 +304,15 @@ func (h *clientHandler) handleMsg(p *peer) error {
 	case TxStatusMsg:
 		p.Log().Trace("Received tx status response")
 		var resp struct {
-			ReqID, BV uint64
-			Status    []light.TxStatus
+			ReqID  uint64
+			SF     stateFeedback
+			Status []light.TxStatus
 		}
+		resp.SF.protocolVersion = p.version
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+		p.fcServer.ReceivedReply(resp.ReqID, resp.SF.BV)
 		deliverMsg = &Msg{
 			MsgType: MsgTxStatus,
 			ReqID:   resp.ReqID,
@@ -309,11 +323,12 @@ func (h *clientHandler) handleMsg(p *peer) error {
 		h.backend.retriever.frozen(p)
 		p.Log().Debug("Service stopped")
 	case ResumeMsg:
-		var bv uint64
-		if err := msg.Decode(&bv); err != nil {
+		var sf stateFeedback
+		sf.protocolVersion = p.version
+		if err := msg.Decode(&sf); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		p.fcServer.ResumeFreeze(bv)
+		p.fcServer.ResumeFreeze(sf.BV)
 		p.freezeServer(false)
 		p.Log().Debug("Service resumed")
 	case LespayReplyMsg:
