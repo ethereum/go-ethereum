@@ -172,8 +172,8 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'exportChain',
 			call: 'admin_exportChain',
-			params: 1,
-			inputFormatter: [null]
+			params: 3,
+			inputFormatter: [null, null, null]
 		}),
 		new web3._extend.Method({
 			name: 'importChain',
