@@ -512,14 +512,34 @@ func BenchmarkHash(b *testing.B) {
 	trie.Hash()
 }
 
+type account struct {
+	Nonce   uint64
+	Balance *big.Int
+	Root    common.Hash
+	Code    []byte
+}
+
 // Benchmarks the trie Commit following a Hash. Since the trie caches the result of any operation,
 // we cannot use b.N as the number of hashing rouns, since all rounds apart from
 // the first one will be NOOP. As such, we'll use b.N as the number of account to
 // insert into the trie before measuring the hashing.
 func BenchmarkCommitAfterHash(b *testing.B) {
+	b.Run("no-onleaf", func(b *testing.B) {
+		benchmarkCommitAfterHash(b, nil)
+	})
+	onleaf := func(leaf []byte, parent common.Hash) error {
+		var a account
+		rlp.DecodeBytes(leaf, &a)
+		return nil
+	}
+	b.Run("with-onleaf", func(b *testing.B) {
+		benchmarkCommitAfterHash(b, onleaf)
+	})
+}
+
+func benchmarkCommitAfterHash(b *testing.B, onleaf LeafCallback) {
 	// Make the random benchmark deterministic
 	random := rand.New(rand.NewSource(0))
-
 	// Create a realistic account trie to hash
 	addresses := make([][20]byte, b.N)
 	for i := 0; i < len(addresses); i++ {
@@ -535,17 +555,17 @@ func BenchmarkCommitAfterHash(b *testing.B) {
 			root    = emptyRoot
 			code    = crypto.Keccak256(nil)
 		)
-		accounts[i], _ = rlp.EncodeToBytes([]interface{}{nonce, balance, root, code})
+		accounts[i], _ = rlp.EncodeToBytes(&account{nonce, balance, root, code})
 	}
-	// Insert the accounts into the trie and hash it
 	trie := newEmpty()
 	for i := 0; i < len(addresses); i++ {
 		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
+	// Insert the accounts into the trie and hash it
 	trie.Hash()
 	b.ResetTimer()
 	b.ReportAllocs()
-	trie.Commit(nil)
+	trie.Commit(onleaf)
 }
 
 func tempDB() (string, *Database) {
