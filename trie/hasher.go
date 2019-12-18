@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"fmt"
 	"hash"
 	"sync"
 
@@ -169,6 +170,37 @@ func (h *hasher) hashChildren(original node, db *Database) (node, node, error) {
 	}
 }
 
+// estimateSize estimates the size of an rlp-encoded node, without actually
+// rlp-encoding it (zero allocs). This method has been experimentally tried, and with a trie
+// with 1000 leafs, the only errors above 1% are on small shortnodes, where this
+// method overestimates by 2 or 3 bytes (e.g. 37 instead of 35)
+func estimateSize(n node) int {
+	switch n := n.(type) {
+	case *shortNode:
+		// A short node contains a compacted key, and a value.
+		return 3 + len(n.Key) + estimateSize(n.Val)
+	case *fullNode:
+		// A full node contains up to 16 hashes (some nils), and a key
+		s := 3
+		for i := 0; i < 16; i++ {
+			if child := n.Children[i]; child != nil {
+				s += estimateSize(child)
+			} else {
+				s += 1
+			}
+		}
+		return s
+	case valueNode:
+		return 1 + len(n)
+	case hashNode:
+		return 1 + len(n)
+	default:
+		panic(fmt.Sprintf("node type %T", n))
+
+	}
+	return 0
+}
+
 // store hashes the node n and if we have a storage layer specified, it writes
 // the key/value pair to it and tracks any node->child references as well as any
 // node->external trie references.
@@ -190,6 +222,16 @@ func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 	if hash == nil {
 		hash = h.makeHashNode(h.tmp)
 	}
+	// DEBUG todo remove me
+	// When we already have a cached hash, there's no need to rlp-encode the
+	// blob -- however, we stil need to use report the size to the database.
+	//actual := len(h.tmp)
+	//got := estimateSize(n)
+	//diff := math.Abs(1.0-float64(got)/float64(actual)) * 100
+	//if diff > 1.0 {
+	//	fmt.Printf("actual: %d, got %d, diff : %02f%% (%T)\n", actual, got, diff, n)
+	//}
+
 	// If we're using channel-based leaf-reporting, send to channel.
 	// The leaf channel will be active only when there an active leaf-callback
 	if h.leafCh != nil {

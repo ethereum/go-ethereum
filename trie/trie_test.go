@@ -568,6 +568,18 @@ func benchmarkCommitAfterHash(b *testing.B, onleaf LeafCallback) {
 	trie.Commit(onleaf)
 }
 
+func TestCommitAfterHash(t *testing.T) {
+	// Create a realistic account trie to hash
+	addresses, accounts := makeAccounts(1000)
+	trie := newEmpty()
+	for i := 0; i < len(addresses); i++ {
+		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+	}
+	// Insert the accounts into the trie and hash it
+	trie.Hash()
+	trie.Commit(nil)
+}
+
 func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 	// Make the random benchmark deterministic
 	random := rand.New(rand.NewSource(0))
@@ -637,7 +649,7 @@ func benchmarkCommitAfterHashFixedSize(b *testing.B, addresses [][20]byte, accou
 	// Insert the accounts into the trie and hash it
 	trie.Hash()
 	b.StartTimer()
-	trie.Commit()
+	trie.Commit(nil)
 	b.StopTimer()
 }
 
