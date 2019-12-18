@@ -18,7 +18,6 @@ package rpc
 
 import (
 	"net"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -33,8 +32,7 @@ func mustAvailableModule(module string, apis []API) {
 			return
 		}
 	}
-	log.Crit("invalid api module", "module", module, "available", func() string {
-		available := []string{}
+	log.Crit("invalid api module", "module", module, "available", func() (available []string) {
 	outer:
 		for _, api := range apis {
 			// Only include unique api names
@@ -45,7 +43,7 @@ func mustAvailableModule(module string, apis []API) {
 			}
 			available = append(available, api.Namespace)
 		}
-		return strings.Join(available, ",")
+		return
 	}())
 }
 
