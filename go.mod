@@ -18,7 +18,7 @@ require (
 	github.com/deckarep/golang-set v0.0.0-20180603214616-504e848d77ea
 	github.com/dlclark/regexp2 v1.2.0 // indirect
 	github.com/docker/docker v1.4.2-0.20180625184442-8e610b2b55bf
-	github.com/dop251/goja v0.0.0-20191203121440-007eef3bc40f // indirect
+	github.com/dop251/goja v0.0.0-20191203121440-007eef3bc40f
 	github.com/edsrzf/mmap-go v0.0.0-20160512033002-935e0e8a636c
 	github.com/elastic/gosigar v0.8.1-0.20180330100440-37f05ff46ffa
 	github.com/fatih/color v1.3.0
