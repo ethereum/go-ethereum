@@ -703,62 +703,71 @@ func (ubqhash *Ubqhash) SealHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
+// Calculates the base block reward as per the ubiq monetary policy
+func CalcBaseBlockReward(height *big.Int) *big.Int {
+	reward := new(big.Int).Set(blockReward)
+
+	if height.Cmp(big.NewInt(358363)) > 0 {
+		reward = big.NewInt(7e+18)
+	}
+	if height.Cmp(big.NewInt(716727)) > 0 {
+		reward = big.NewInt(6e+18)
+	}
+	if height.Cmp(big.NewInt(1075090)) > 0 {
+		reward = big.NewInt(5e+18)
+	}
+	if height.Cmp(big.NewInt(1433454)) > 0 {
+		reward = big.NewInt(4e+18)
+	}
+	if height.Cmp(big.NewInt(1791818)) > 0 {
+		reward = big.NewInt(3e+18)
+	}
+	if height.Cmp(big.NewInt(2150181)) > 0 {
+		reward = big.NewInt(2e+18)
+	}
+	if height.Cmp(big.NewInt(2508545)) > 0 {
+		reward = big.NewInt(1e+18)
+	}
+	return reward
+}
+
+func CalcUncleBlockReward(config *params.ChainConfig, blockHeight *big.Int, uncleHeight *big.Int, blockReward *big.Int) *big.Int {
+	reward := new(big.Int)
+	// calculate reward based on depth
+	reward.Add(uncleHeight, big2)
+	reward.Sub(reward, blockHeight)
+	reward.Mul(reward, blockReward)
+	reward.Div(reward, big2)
+
+	// negative uncle reward fix. (activates along-side EIP158)
+	if config.IsEIP158(blockHeight) && reward.Cmp(big.NewInt(0)) < 0 {
+		reward = big.NewInt(0)
+	}
+	return reward
+}
+
 // AccumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
-	reward := new(big.Int).Set(blockReward)
+	// block reward (miner)
+	reward := CalcBaseBlockReward(header.Number)
 
-	if header.Number.Cmp(big.NewInt(358363)) > 0 {
-		reward = big.NewInt(7e+18)
-	}
-	if header.Number.Cmp(big.NewInt(716727)) > 0 {
-		reward = big.NewInt(6e+18)
-	}
-	if header.Number.Cmp(big.NewInt(1075090)) > 0 {
-		reward = big.NewInt(5e+18)
-	}
-	if header.Number.Cmp(big.NewInt(1433454)) > 0 {
-		reward = big.NewInt(4e+18)
-	}
-	if header.Number.Cmp(big.NewInt(1791818)) > 0 {
-		reward = big.NewInt(3e+18)
-	}
-	if header.Number.Cmp(big.NewInt(2150181)) > 0 {
-		reward = big.NewInt(2e+18)
-	}
-	if header.Number.Cmp(big.NewInt(2508545)) > 0 {
-		reward = big.NewInt(1e+18)
-	}
-
-	// Uncle reward step down fix.
+	// Uncle reward step down fix. (activates along-side byzantium)
 	ufixReward := new(big.Int).Set(blockReward)
 	if config.IsByzantium(header.Number) {
 		ufixReward = reward
 	}
 
-	r := new(big.Int)
 	for _, uncle := range uncles {
-		r.Add(uncle.Number, big2)
-		r.Sub(r, header.Number)
-		r.Mul(r, ufixReward)
-		r.Div(r, big2)
-
-		if header.Number.Cmp(big.NewInt(10)) < 0 {
-			state.AddBalance(uncle.Coinbase, r)
-			r.Div(ufixReward, big32)
-			if r.Cmp(big.NewInt(0)) < 0 {
-				r = big.NewInt(0)
-			}
-		} else {
-			if r.Cmp(big.NewInt(0)) < 0 {
-				r = big.NewInt(0)
-			}
-			state.AddBalance(uncle.Coinbase, r)
-			r.Div(ufixReward, big32)
-		}
-
-		reward.Add(reward, r)
+		// uncle block miner reward (depth === 1 ? baseBlockReward * 0.5 : 0)
+		uncleReward := CalcUncleBlockReward(config, header.Number, uncle.Number, ufixReward)
+		// update uncle miner balance
+		state.AddBalance(uncle.Coinbase, uncleReward)
+		// include uncle bonus reward (baseBlockReward/32)
+		uncleReward.Div(ufixReward, big32)
+		reward.Add(reward, uncleReward)
 	}
+	// update block miner balance
 	state.AddBalance(header.Coinbase, reward)
 }
