@@ -568,6 +568,79 @@ func benchmarkCommitAfterHash(b *testing.B, onleaf LeafCallback) {
 	trie.Commit(onleaf)
 }
 
+func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
+	// Make the random benchmark deterministic
+	random := rand.New(rand.NewSource(0))
+	// Create a realistic account trie to hash
+	addresses = make([][20]byte, size)
+	for i := 0; i < len(addresses); i++ {
+		for j := 0; j < len(addresses[i]); j++ {
+			addresses[i][j] = byte(random.Intn(256))
+		}
+	}
+	accounts = make([][]byte, len(addresses))
+	for i := 0; i < len(accounts); i++ {
+		var (
+			nonce   = uint64(random.Int63())
+			balance = new(big.Int).Rand(random, new(big.Int).Exp(common.Big2, common.Big256, nil))
+			root    = emptyRoot
+			code    = crypto.Keccak256(nil)
+		)
+		accounts[i], _ = rlp.EncodeToBytes(&account{nonce, balance, root, code})
+	}
+	return addresses, accounts
+}
+
+// BenchmarkCommitAfterHashFixedSize benchmarks the Commit (after Hash) of a fixed number of updates to a trie.
+// This benchmark is meant to capture the difference on efficiency of small versus large changes. Typically,
+// storage tries are small (a couple of entries), whereas the full post-block account trie update is large (a couple
+// of thousand entries)
+//
+func BenchmarkCommitAfterHashFixedSize(b *testing.B) {
+	b.Run("10", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(20)
+		for i := 0; i < b.N; i++ {
+			benchmarkCommitAfterHashFixedSize(b, acc, add)
+		}
+	})
+	b.Run("100", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(100)
+		for i := 0; i < b.N; i++ {
+			benchmarkCommitAfterHashFixedSize(b, acc, add)
+		}
+	})
+
+	b.Run("1000", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(1000)
+		for i := 0; i < b.N; i++ {
+			benchmarkCommitAfterHashFixedSize(b, acc, add)
+		}
+	})
+	b.Run("10000", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(10000)
+		for i := 0; i < b.N; i++ {
+			benchmarkCommitAfterHashFixedSize(b, acc, add)
+		}
+	})
+}
+
+func benchmarkCommitAfterHashFixedSize(b *testing.B, addresses [][20]byte, accounts [][]byte) {
+	b.ReportAllocs()
+	trie := newEmpty()
+	for i := 0; i < len(addresses); i++ {
+		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+	}
+	// Insert the accounts into the trie and hash it
+	trie.Hash()
+	b.StartTimer()
+	trie.Commit(nil)
+	b.StopTimer()
+}
+
 func tempDB() (string, *Database) {
 	dir, err := ioutil.TempDir("", "trie-bench")
 	if err != nil {
