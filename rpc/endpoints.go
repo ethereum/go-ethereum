@@ -28,29 +28,25 @@ import (
 // then log.Crit is used to cause program to exit, logging the invalid module and a list of available
 // API service names.
 func mustAvailableModule(module string, apis []API) {
-	apiExists := false
 	for _, api := range apis {
 		if module == api.Namespace {
-			apiExists = true
-			break
+			return
 		}
 	}
-	if !apiExists {
-		log.Crit("invalid api module", "module", module, "available", func() string {
-			available := []string{}
-		outer:
-			for _, api := range apis {
-				// Only include unique api names
-				for _, av := range available {
-					if av == api.Namespace {
-						continue outer
-					}
+	log.Crit("invalid api module", "module", module, "available", func() string {
+		available := []string{}
+	outer:
+		for _, api := range apis {
+			// Only include unique api names
+			for _, av := range available {
+				if av == api.Namespace {
+					continue outer
 				}
-				available = append(available, api.Namespace)
 			}
-			return strings.Join(available, ",")
-		}())
-	}
+			available = append(available, api.Namespace)
+		}
+		return strings.Join(available, ",")
+	}())
 }
 
 // StartHTTPEndpoint starts the HTTP RPC endpoint, configured with cors/vhosts/modules
