@@ -20,10 +20,12 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/dop251/goja"
 )
 
 func TestCompleteKeywords(t *testing.T) {
-	re := New("", os.Stdout)
+	re := New("", os.Stdout, goja.New())
 	re.Run(`
 		function theClass() {
 			this.foo = 3;
