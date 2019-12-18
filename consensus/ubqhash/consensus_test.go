@@ -24,7 +24,10 @@ import (
 	"testing"
 
 	"github.com/ubiq/go-ubiq/common/math"
+	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/types"
+	"github.com/ubiq/go-ubiq/core/vm"
+	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/params"
 )
 
@@ -72,9 +75,24 @@ func TestCalcDifficulty(t *testing.T) {
 
 	config := &params.ChainConfig{HomesteadBlock: big.NewInt(1150000)}
 
+	var (
+		testdb    = ethdb.NewMemDatabase()
+		gspec     = &core.Genesis{Config: config}
+		genesis   = gspec.MustCommit(testdb)
+		blocks, _ = core.GenerateChain(config, genesis, NewFaker(), testdb, 88, nil)
+	)
+
+	headers := make([]*types.Header, len(blocks))
+	for i, block := range blocks {
+		headers[i] = block.Header()
+	}
+	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
+	chain, _ := core.NewBlockChain(testdb, nil, config, NewFaker(), vm.Config{}, nil)
+	defer chain.Stop()
+
 	for name, test := range tests {
 		number := new(big.Int).Sub(test.CurrentBlocknumber, big.NewInt(1))
-		diff := CalcDifficulty(config, test.CurrentTimestamp, &types.Header{
+		diff := CalcDifficulty(chain, test.CurrentTimestamp, &types.Header{
 			Number:     number,
 			Time:       test.ParentTimestamp,
 			Difficulty: test.ParentDifficulty,
