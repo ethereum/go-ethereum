@@ -17,6 +17,7 @@
 package bind
 
 import (
+	"math/big"
 	"reflect"
 	"testing"
 
@@ -55,27 +56,44 @@ func TestMakeTopics(t *testing.T) {
 	}
 }
 
-func TestParseTopics(t *testing.T) {
-	type bytesStruct struct {
-		StaticBytes [5]byte
-	}
+type args struct {
+	createObj func() interface{}
+	resultObj func() interface{}
+	resultMap func() map[string]interface{}
+	fields    abi.Arguments
+	topics    []common.Hash
+}
+
+type bytesStruct struct {
+	StaticBytes [5]byte
+}
+type int8Struct struct {
+	Int8Value int8
+}
+type int256Struct struct {
+	Int256Value *big.Int
+}
+
+type topicTest struct {
+	name    string
+	args    args
+	wantErr bool
+}
+
+func setupTopicsTests() []topicTest {
 	bytesType, _ := abi.NewType("bytes5", "", nil)
-	type args struct {
-		createObj func() interface{}
-		resultObj func() interface{}
-		fields    abi.Arguments
-		topics    []common.Hash
-	}
-	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
-	}{
+	int8Type, _ := abi.NewType("int8", "", nil)
+	int256Type, _ := abi.NewType("int256", "", nil)
+
+	tests := []topicTest{
 		{
 			name: "support fixed byte types, right padded to 32 bytes",
 			args: args{
 				createObj: func() interface{} { return &bytesStruct{} },
 				resultObj: func() interface{} { return &bytesStruct{StaticBytes: [5]byte{1, 2, 3, 4, 5}} },
+				resultMap: func() map[string]interface{} {
+					return map[string]interface{}{"staticBytes": [5]byte{1, 2, 3, 4, 5}}
+				},
 				fields: abi.Arguments{abi.Argument{
 					Name:    "staticBytes",
 					Type:    bytesType,
@@ -87,7 +105,54 @@ func TestParseTopics(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "int8 with negative value",
+			args: args{
+				createObj: func() interface{} { return &int8Struct{} },
+				resultObj: func() interface{} { return &int8Struct{Int8Value: -1} },
+				resultMap: func() map[string]interface{} {
+					return map[string]interface{}{"int8Value": int8(-1)}
+				},
+				fields: abi.Arguments{abi.Argument{
+					Name:    "int8Value",
+					Type:    int8Type,
+					Indexed: true,
+				}},
+				topics: []common.Hash{
+					{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+						255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "int256 with negative value",
+			args: args{
+				createObj: func() interface{} { return &int256Struct{} },
+				resultObj: func() interface{} { return &int256Struct{Int256Value: big.NewInt(-1)} },
+				resultMap: func() map[string]interface{} {
+					return map[string]interface{}{"int256Value": big.NewInt(-1)}
+				},
+				fields: abi.Arguments{abi.Argument{
+					Name:    "int256Value",
+					Type:    int256Type,
+					Indexed: true,
+				}},
+				topics: []common.Hash{
+					{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+						255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255},
+				},
+			},
+			wantErr: false,
+		},
 	}
+
+	return tests
+}
+
+func TestParseTopics(t *testing.T) {
+	tests := setupTopicsTests()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			createObj := tt.args.createObj()
@@ -97,6 +162,23 @@ func TestParseTopics(t *testing.T) {
 			resultObj := tt.args.resultObj()
 			if !reflect.DeepEqual(createObj, resultObj) {
 				t.Errorf("parseTopics() = %v, want %v", createObj, resultObj)
+			}
+		})
+	}
+}
+
+func TestParseTopicsIntoMap(t *testing.T) {
+	tests := setupTopicsTests()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			outMap := make(map[string]interface{})
+			if err := parseTopicsIntoMap(outMap, tt.args.fields, tt.args.topics); (err != nil) != tt.wantErr {
+				t.Errorf("parseTopicsIntoMap() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			resultMap := tt.args.resultMap()
+			if !reflect.DeepEqual(outMap, resultMap) {
+				t.Errorf("parseTopicsIntoMap() = %v, want %v", outMap, resultMap)
 			}
 		})
 	}
