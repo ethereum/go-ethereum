@@ -440,7 +440,14 @@ func (b *bridge) Send(call goja.FunctionCall) (response goja.Value) {
 				// raw message for some reason.
 				resp.Set("result", goja.Null())
 			} else {
-				resultVal, err := b.runtime.RunString(string(result))
+
+				JSON := b.runtime.Get("JSON").ToObject(b.runtime)
+				parse, callable := goja.AssertFunction(JSON.Get("parse"))
+				if !callable {
+					panic("JSON.parse isn't a function")
+				}
+
+				resultVal, err := parse(goja.Null(), b.runtime.ToValue(string(result)))
 				if err != nil {
 					setError(resp, -32603, err.Error())
 				} else {
