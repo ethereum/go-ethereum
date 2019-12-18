@@ -420,14 +420,17 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 		return emptyRoot, nil
 	}
 	h := newHasher(onleaf)
-	h.leafCh = make(chan *Leaf, 200) // arbitrary number
 	defer returnHasherToPool(h)
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go h.commitLoop(t.db, &wg)
-	hash, cached, err :=  h.hash(t.root, t.db, true)
-	close(h.leafCh)
-	wg.Wait()
+	if onleaf != nil {
+		wg.Add(1)
+		go h.commitLoop(t.db, &wg)
+	}
+	hash, cached, err := h.hash(t.root, t.db, true)
+	if onleaf != nil {
+		close(h.leafCh)
+		wg.Wait()
+	}
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -443,4 +446,3 @@ func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
 	defer returnHasherToPool(h)
 	return h.hash(t.root, db, true)
 }
-

@@ -70,10 +70,15 @@ var hasherPool = sync.Pool{
 func newHasher(onleaf LeafCallback) *hasher {
 	h := hasherPool.Get().(*hasher)
 	h.onleaf = onleaf
+	if onleaf != nil {
+		h.leafCh = make(chan *Leaf, 200) // arbitrary number
+	}
 	return h
 }
 
 func returnHasherToPool(h *hasher) {
+	h.onleaf = nil
+	h.leafCh = nil
 	hasherPool.Put(h)
 }
 
@@ -185,12 +190,21 @@ func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 	if hash == nil {
 		hash = h.makeHashNode(h.tmp)
 	}
-	if db != nil {
+	// If we're using channel-based leaf-reporting, send to channel.
+	// The leaf channel will be active only when there an active leaf-callback
+	if h.leafCh != nil {
 		h.leafCh <- &Leaf{
 			size: len(h.tmp),
 			hash: common.BytesToHash(hash),
 			node: n,
 		}
+	} else if db != nil {
+		// No leaf-callback used, but there's still a database. Do serial
+		// insertion
+		db.lock.Lock()
+		db.insert(common.BytesToHash(hash), len(h.tmp), n)
+		db.lock.Unlock()
+
 	}
 	return hash, nil
 }

@@ -637,7 +637,7 @@ func benchmarkCommitAfterHashFixedSize(b *testing.B, addresses [][20]byte, accou
 	// Insert the accounts into the trie and hash it
 	trie.Hash()
 	b.StartTimer()
-	trie.Commit(nil)
+	trie.Commit()
 	b.StopTimer()
 }
 
