@@ -37,22 +37,45 @@ func getCompletions(vm *goja.Runtime, line string) (results []string) {
 	parts := strings.Split(line, ".")
 	objRef := "this"
 	prefix := line
-	var obj *goja.Object
-	if len(parts) > 1 {
-		objRef = strings.Join(parts[0:len(parts)-1], ".")
-		prefix = parts[len(parts)-1]
-		obj, _ = vm.Get(objRef).(*goja.Object)
-	} else {
-		obj = vm.GlobalObject()
-	}
 
-	if obj == nil {
+	if len(parts) == 0 {
 		return nil
 	}
+
+	// Figure out which is the right-most fully named object
+	// in the line. e.g. if line = "x.y.z" and "x.y" is an
+	// object, and that its keys are "zebu" and "zebra", then
+	// objRef will be set to "y" and obj will reference "x.y".
+	v := vm.Get(parts[0])
+	var obj *goja.Object = v.ToObject(vm)
+	switch {
+	case obj != nil && len(parts) > 1: // "x.y.z" case
+		objRef = strings.Join(parts[0:len(parts)-1], ".")
+		prefix = parts[len(parts)-1]
+		for _, part := range parts[1 : len(parts)-1] {
+			v = obj.Get(part)
+			if v == nil {
+				return nil
+			}
+			obj = v.ToObject(vm)
+		}
+	case obj != nil:
+		// In this case, there is no "." chain, so the
+		// the right-most object is assumed to be `this`.
+		obj = vm.GlobalObject()
+	default: // No object was found
+		return nil
+	}
+
+	// Go over the keys of the right-most object (which could
+	// be `this`) and retain those keys that are prefixed by
+	// `prefix`. e.g. if line = "x.y.z", that "x.y" exists
+	// and has keys "zebu", "zebra" and "platypus", then only
+	// "zebu" and "zebra" will be added to `results`.
 	iterOwnAndConstructorKeys(vm, obj, func(k string) {
 		if strings.HasPrefix(k, prefix) {
 			if objRef == "this" {
-				results = append(results, k)
+				results = append(results, line)
 			} else {
 				results = append(results, strings.Join(parts[:len(parts)-1], ".")+"."+k)
 			}
@@ -62,9 +85,7 @@ func getCompletions(vm *goja.Runtime, line string) (results []string) {
 	// Append opening parenthesis (for functions) or dot (for objects)
 	// if the line itself is the only completion.
 	if len(results) == 1 && results[0] == line {
-		/* XXX Get will return `nil` et j'avais suppose que ca lancerait
-		une exception donc je dois tout revoir */
-		obj := vm.Get(line)
+		obj := obj.Get(parts[len(parts)-1])
 		if obj != nil {
 			if _, isfunc := goja.AssertFunction(obj); isfunc {
 				results[0] += "("
