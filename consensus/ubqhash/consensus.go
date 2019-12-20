@@ -45,21 +45,35 @@ var (
 
 // Diff algo constants.
 var (
-	big88               = big.NewInt(88)
-	bigMinus99          = big.NewInt(-99)
-	nPowAveragingWindow = big.NewInt(21)
-	nPowMaxAdjustDown   = big.NewInt(16) // 16% adjustment down
-	nPowMaxAdjustUp     = big.NewInt(8)  // 8% adjustment up
+	big88      = big.NewInt(88)
+	bigMinus99 = big.NewInt(-99)
 
-	nPowAveragingWindow88 = big.NewInt(88)
-	nPowMaxAdjustDown2    = big.NewInt(3) // 3% adjustment down
-	nPowMaxAdjustUp2      = big.NewInt(2) // 2% adjustment up
+	digishieldV3Config = &diffConfig{
+		AveragingWindow: big.NewInt(21),
+		MaxAdjustDown:   big.NewInt(16), // 16%
+		MaxAdjustUp:     big.NewInt(8),  // 8%
+	}
 
-	// Flux
-	nPowMaxAdjustDownFlux = big.NewInt(5) // 0.5% adjustment down
-	nPowMaxAdjustUpFlux   = big.NewInt(3) // 0.3% adjustment up
-	nPowDampFlux          = big.NewInt(1) // 0.1%
+	digishieldV3ModConfig = &diffConfig{
+		AveragingWindow: big.NewInt(88),
+		MaxAdjustDown:   big.NewInt(3), // 3%
+		MaxAdjustUp:     big.NewInt(2), // 2%
+	}
+
+	fluxConfig = &diffConfig{
+		AveragingWindow: big.NewInt(88),
+		MaxAdjustDown:   big.NewInt(5), // 0.5%
+		MaxAdjustUp:     big.NewInt(3), // 0.3%
+		Dampen:          big.NewInt(1), // 0.1%
+	}
 )
+
+type diffConfig struct {
+	AveragingWindow *big.Int `json:"averagingWindow"`
+	MaxAdjustDown   *big.Int `json:"maxAdjustDown"`
+	MaxAdjustUp     *big.Int `json:"maxAdjustUp"`
+	Dampen          *big.Int `json:"dampen,omitempty"`
+}
 
 // Various error messages to mark blocks invalid. These should be private to
 // prevent engine specific errors from being referenced in the remainder of the
@@ -300,14 +314,14 @@ func (ubqhash *Ubqhash) verifyHeader(chain consensus.ChainReader, header, parent
 // Difficulty timespans
 func averagingWindowTimespan() *big.Int {
 	x := new(big.Int)
-	return x.Mul(nPowAveragingWindow, big88)
+	return x.Mul(digishieldV3Config.AveragingWindow, big88)
 }
 
 func minActualTimespan() *big.Int {
 	x := new(big.Int)
 	y := new(big.Int)
 	z := new(big.Int)
-	x.Sub(big.NewInt(100), nPowMaxAdjustUp)
+	x.Sub(big.NewInt(100), digishieldV3Config.MaxAdjustUp)
 	y.Mul(averagingWindowTimespan(), x)
 	z.Div(y, big.NewInt(100))
 	return z
@@ -317,7 +331,7 @@ func maxActualTimespan() *big.Int {
 	x := new(big.Int)
 	y := new(big.Int)
 	z := new(big.Int)
-	x.Add(big.NewInt(100), nPowMaxAdjustDown)
+	x.Add(big.NewInt(100), digishieldV3Config.MaxAdjustDown)
 	y.Mul(averagingWindowTimespan(), x)
 	z.Div(y, big.NewInt(100))
 	return z
@@ -325,14 +339,14 @@ func maxActualTimespan() *big.Int {
 
 func averagingWindowTimespan88() *big.Int {
 	x := new(big.Int)
-	return x.Mul(nPowAveragingWindow88, big88)
+	return x.Mul(digishieldV3ModConfig.AveragingWindow, big88)
 }
 
 func minActualTimespan2() *big.Int {
 	x := new(big.Int)
 	y := new(big.Int)
 	z := new(big.Int)
-	x.Sub(big.NewInt(100), nPowMaxAdjustUp2)
+	x.Sub(big.NewInt(100), digishieldV3ModConfig.MaxAdjustUp)
 	y.Mul(averagingWindowTimespan88(), x)
 	z.Div(y, big.NewInt(100))
 	return z
@@ -342,7 +356,7 @@ func maxActualTimespan2() *big.Int {
 	x := new(big.Int)
 	y := new(big.Int)
 	z := new(big.Int)
-	x.Add(big.NewInt(100), nPowMaxAdjustDown2)
+	x.Add(big.NewInt(100), digishieldV3ModConfig.MaxAdjustDown)
 	y.Mul(averagingWindowTimespan88(), x)
 	z.Div(y, big.NewInt(100))
 	return z
@@ -353,11 +367,11 @@ func minActualTimespanFlux(dampen bool) *big.Int {
 	y := new(big.Int)
 	z := new(big.Int)
 	if dampen {
-		x.Sub(big.NewInt(1000), nPowDampFlux)
+		x.Sub(big.NewInt(1000), fluxConfig.Dampen)
 		y.Mul(averagingWindowTimespan88(), x)
 		z.Div(y, big.NewInt(1000))
 	} else {
-		x.Sub(big.NewInt(1000), nPowMaxAdjustUpFlux)
+		x.Sub(big.NewInt(1000), fluxConfig.MaxAdjustUp)
 		y.Mul(averagingWindowTimespan88(), x)
 		z.Div(y, big.NewInt(1000))
 	}
@@ -369,11 +383,11 @@ func maxActualTimespanFlux(dampen bool) *big.Int {
 	y := new(big.Int)
 	z := new(big.Int)
 	if dampen {
-		x.Add(big.NewInt(1000), nPowDampFlux)
+		x.Add(big.NewInt(1000), fluxConfig.Dampen)
 		y.Mul(averagingWindowTimespan88(), x)
 		z.Div(y, big.NewInt(1000))
 	} else {
-		x.Add(big.NewInt(1000), nPowMaxAdjustDownFlux)
+		x.Add(big.NewInt(1000), fluxConfig.MaxAdjustDown)
 		y.Mul(averagingWindowTimespan88(), x)
 		z.Div(y, big.NewInt(1000))
 	}
@@ -454,13 +468,13 @@ func calcDifficultyOrig(chain consensus.ChainReader, parentNumber, parentDiff *b
 	// holds intermediate values to make the algo easier to read & audit
 	x := new(big.Int)
 	nFirstBlock := new(big.Int)
-	nFirstBlock.Sub(parentNumber, nPowAveragingWindow)
+	nFirstBlock.Sub(parentNumber, digishieldV3Config.AveragingWindow)
 
 	log.Debug(fmt.Sprintf("CalcDifficulty parentNumber: %v parentDiff: %v", parentNumber, parentDiff))
 
 	// Check we have enough blocks
-	if parentNumber.Cmp(nPowAveragingWindow) < 1 {
-		log.Debug(fmt.Sprintf("CalcDifficulty: parentNumber(%+x) < nPowAveragingWindow(%+x)", parentNumber, nPowAveragingWindow))
+	if parentNumber.Cmp(digishieldV3Config.AveragingWindow) < 1 {
+		log.Debug(fmt.Sprintf("CalcDifficulty: parentNumber(%+x) < digishieldV3Config.AveragingWindow(%+x)", parentNumber, digishieldV3Config.AveragingWindow))
 		x.Set(parentDiff)
 		return x
 	}
@@ -504,7 +518,7 @@ func calcDifficultyOrig(chain consensus.ChainReader, parentNumber, parentDiff *b
 func calcDifficulty2(chain consensus.ChainReader, parentNumber, parentDiff *big.Int, parent *types.Header) *big.Int {
 	x := new(big.Int)
 	nFirstBlock := new(big.Int)
-	nFirstBlock.Sub(parentNumber, nPowAveragingWindow88)
+	nFirstBlock.Sub(parentNumber, digishieldV3ModConfig.AveragingWindow)
 
 	nLastBlockTime := chain.CalcPastMedianTime(parentNumber.Uint64(), parent)
 	nFirstBlockTime := chain.CalcPastMedianTime(nFirstBlock.Uint64(), parent)
@@ -536,7 +550,7 @@ func calcDifficulty2(chain consensus.ChainReader, parentNumber, parentDiff *big.
 func fluxDifficulty(chain consensus.ChainReader, time, parentTime, parentNumber, parentDiff *big.Int, parent *types.Header) *big.Int {
 	x := new(big.Int)
 	nFirstBlock := new(big.Int)
-	nFirstBlock.Sub(parentNumber, nPowAveragingWindow88)
+	nFirstBlock.Sub(parentNumber, fluxConfig.AveragingWindow)
 
 	diffTime := new(big.Int)
 	diffTime.Sub(time, parentTime)
