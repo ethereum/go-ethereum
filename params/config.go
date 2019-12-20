@@ -42,7 +42,10 @@ var (
 		ByzantiumBlock:      big.NewInt(math.MaxInt64),
 		ConstantinopleBlock: big.NewInt(math.MaxInt64),
 		PetersburgBlock:     big.NewInt(math.MaxInt64),
-		Ubqhash:              new(UbqhashConfig),
+		Ubqhash: &UbqhashConfig{
+			DigishieldModBlock: big.NewInt(4088),
+			FluxBlock:          big.NewInt(8000),
+		},
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
@@ -65,7 +68,10 @@ var (
 		ByzantiumBlock:      big.NewInt(math.MaxInt64),
 		ConstantinopleBlock: big.NewInt(math.MaxInt64),
 		PetersburgBlock:     big.NewInt(math.MaxInt64),
-		Ubqhash:              new(UbqhashConfig),
+		Ubqhash: &UbqhashConfig{
+			DigishieldModBlock: big.NewInt(4088),
+			FluxBlock:          big.NewInt(8000),
+		},
 	}
 
 	// TestnetTrustedCheckpoint contains the light client trusted checkpoint for the Ropsten test network.
@@ -82,7 +88,7 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllUbqhashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(UbqhashConfig), nil}
+	AllUbqhashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, &UbqhashConfig{DigishieldModBlock: big.NewInt(0), FluxBlock: big.NewInt(0)}, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ubiq core developers into the Clique consensus.
@@ -135,7 +141,10 @@ type ChainConfig struct {
 }
 
 // UbqhashConfig is the consensus engine configs for proof-of-work based sealing.
-type UbqhashConfig struct{}
+type UbqhashConfig struct {
+	DigishieldModBlock *big.Int `json:"digishieldModBlock"` // Block to activate the DigiShield V3 mod
+	FluxBlock          *big.Int `json:"fluxBlock"`          // Block to activate the Flux difficulty algorithm (must be > DigiShieldModBlock)
+}
 
 // String implements the stringer interface, returning the consensus engine details.
 func (c *UbqhashConfig) String() string {

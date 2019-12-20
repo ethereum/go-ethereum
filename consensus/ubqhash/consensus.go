@@ -51,13 +51,11 @@ var (
 	nPowMaxAdjustDown   = big.NewInt(16) // 16% adjustment down
 	nPowMaxAdjustUp     = big.NewInt(8)  // 8% adjustment up
 
-	diffChangeBlock       = big.NewInt(4088)
 	nPowAveragingWindow88 = big.NewInt(88)
 	nPowMaxAdjustDown2    = big.NewInt(3) // 3% adjustment down
 	nPowMaxAdjustUp2      = big.NewInt(2) // 2% adjustment up
 
 	// Flux
-	fluxChangeBlock       = big.NewInt(8000)
 	nPowMaxAdjustDownFlux = big.NewInt(5) // 0.5% adjustment down
 	nPowMaxAdjustUpFlux   = big.NewInt(3) // 0.3% adjustment up
 	nPowDampFlux          = big.NewInt(1) // 0.1%
@@ -394,10 +392,13 @@ func CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Head
 	parentNumber := parent.Number
 	parentDiff := parent.Difficulty
 
-	if parentNumber.Cmp(diffChangeBlock) < 0 {
+	config := chain.Config()
+	ubqhashConfig := config.Ubqhash
+
+	if parentNumber.Cmp(ubqhashConfig.DigishieldModBlock) < 0 {
 		return calcDifficultyOrig(chain, parentNumber, parentDiff, parent)
 	}
-	if parentNumber.Cmp(fluxChangeBlock) < 0 {
+	if parentNumber.Cmp(ubqhashConfig.FluxBlock) < 0 {
 		// (chain consensus.ChainReader, parentNumber, parentDiff *big.Int, parent *types.Header)
 		return calcDifficulty2(chain, parentNumber, parentDiff, parent)
 	} else {
