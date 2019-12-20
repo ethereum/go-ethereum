@@ -116,28 +116,48 @@ func (h *clientHandler) handle(p *peer) error {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
-	// Register the peer locally
-	if err := h.backend.peers.Register(p); err != nil {
-		p.Log().Error("Light Ethereum peer registration failed", "err", err)
-		return err
-	}
-	serverConnectionGauge.Update(int64(h.backend.peers.Len()))
 
-	connectedAt := mclock.Now()
-	defer func() {
-		h.backend.peers.Unregister(p.id)
+	var (
+		connectedAt mclock.AbsTime
+		lastActive  bool
+	)
+	activate := func() {
+		// Register the peer locally
+		if err := h.backend.peers.Register(p); err != nil {
+			p.Log().Error("Light Ethereum peer registration failed", "err", err)
+			return
+		}
+		serverConnectionGauge.Update(int64(h.backend.peers.Len()))
+		connectedAt = mclock.Now()
+		h.fetcher.announce(p, p.headInfo)
+		lastActive = true
+	}
+	deactivate := func() {
+		h.backend.peers.Unregister(p)
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 		serverConnectionGauge.Update(int64(h.backend.peers.Len()))
+		lastActive = false
+	}
+	defer func() {
+		if lastActive {
+			deactivate()
+		}
+		h.backend.peers.Disconnect(p.id)
 	}()
-
-	h.fetcher.announce(p, p.headInfo)
 
 	// pool entry can be nil during the unit test.
 	if p.poolEntry != nil {
 		h.backend.serverPool.registered(p.poolEntry)
 	}
+
 	// Spawn a main loop to handle all incoming messages.
 	for {
+		if p.active && !lastActive {
+			activate()
+		}
+		if !p.active && lastActive {
+			deactivate()
+		}
 		if err := h.handleMsg(p); err != nil {
 			p.Log().Debug("Light Ethereum message handling failed", "err", err)
 			p.fcServer.DumpLogs()
@@ -400,7 +420,7 @@ func (h *clientHandler) makeLespayCall(p *peer, cmd []byte, handler func([]byte)
 }
 
 func (h *clientHandler) removePeer(id string) {
-	h.backend.peers.Unregister(id)
+	h.backend.peers.Disconnect(id)
 }
 
 type peerConnection struct {

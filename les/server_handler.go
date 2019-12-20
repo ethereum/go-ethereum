@@ -58,10 +58,7 @@ const (
 	MaxTxStatus              = 256 // Amount of transactions to queried per request
 )
 
-var (
-	errTooManyInvalidRequest = errors.New("too many invalid requests made")
-	errFullClientPool        = errors.New("client pool is full")
-)
+var errTooManyInvalidRequest = errors.New("too many invalid requests made")
 
 // serverHandler is responsible for serving light client and process
 // all incoming light requests.
@@ -139,28 +136,58 @@ func (h *serverHandler) handle(p *peer) error {
 	}
 	defer p.fcClient.Disconnect()
 
-	// Disconnect the inbound peer if it's rejected by clientPool
-	if !h.server.clientPool.connect(p, 0) {
-		p.Log().Debug("Light Ethereum peer registration failed", "err", errFullClientPool)
-		return errFullClientPool
+	var (
+		connectedAt mclock.AbsTime
+		wg          *sync.WaitGroup // Wait group used to track all in-flight task routines.
+	)
+	p.activate = func() {
+		// Register the peer locally
+		if err := h.server.peers.Register(p); err != nil {
+			h.server.clientPool.disconnect(p)
+			p.Log().Error("Light Ethereum peer registration failed", "err", err)
+			return
+		}
+		clientConnectionGauge.Update(int64(h.server.peers.Len()))
+		connectedAt = mclock.Now()
+		wg = new(sync.WaitGroup)
+		p.active = true
 	}
-	// Register the peer locally
-	if err := h.server.peers.Register(p); err != nil {
-		h.server.clientPool.disconnect(p)
-		p.Log().Error("Light Ethereum peer registration failed", "err", err)
-		return err
-	}
-	clientConnectionGauge.Update(int64(h.server.peers.Len()))
-
-	var wg sync.WaitGroup // Wait group used to track all in-flight task routines.
-
-	connectedAt := mclock.Now()
-	defer func() {
-		wg.Wait() // Ensure all background task routines have exited.
-		h.server.peers.Unregister(p.id)
-		h.server.clientPool.disconnect(p)
+	p.deactivate = func() {
+		h.server.peers.Unregister(p)
+		if p.version < lpv4 {
+			h.server.peers.Disconnect(p.id)
+		}
 		clientConnectionGauge.Update(int64(h.server.peers.Len()))
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
+		p.active = false
+	}
+	if p.active {
+		p.activate()
+	}
+
+	if capacity, err := h.server.clientPool.connect(p, 0); err != nil {
+		// Disconnect the inbound peer if it's rejected by clientPool
+		p.Log().Debug("Light Ethereum peer registration failed", "err", err)
+		return err
+	} else if capacity != p.fcParams.MinRecharge {
+		if p.version < lpv4 {
+			h.server.peers.Disconnect(p.id)
+		} else {
+			p.updateCapacity(capacity)
+		}
+	}
+
+	defer func() {
+		wg.Wait() // Ensure all background task routines have exited.
+		h.server.clientPool.disconnect(p)
+		p.responseLock.Lock()
+		if p.active {
+			p.deactivate()
+		}
+		p.activate = nil
+		p.deactivate = nil
+		p.responseLock.Unlock()
+		h.server.peers.Disconnect(p.id)
 	}()
 
 	// Spawn a main loop to handle all incoming messages.
@@ -171,7 +198,7 @@ func (h *serverHandler) handle(p *peer) error {
 			return err
 		default:
 		}
-		if err := h.handleMsg(p, &wg); err != nil {
+		if err := h.handleMsg(p, wg); err != nil {
 			p.Log().Debug("Light Ethereum message handling failed", "err", err)
 			return err
 		}

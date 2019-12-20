@@ -60,7 +60,7 @@ func TestGetBlockHeadersLes3(t *testing.T) { testGetBlockHeaders(t, 3) }
 func TestGetBlockHeadersLes4(t *testing.T) { testGetBlockHeaders(t, 4) }
 
 func testGetBlockHeaders(t *testing.T, protocol int) {
-	server, tearDown := newServerEnv(t, downloader.MaxHashFetch+15, protocol, nil, false, true, 0)
+	server, tearDown := newServerEnv(t, downloader.MaxHashFetch+15, protocol, nil, false, true, 0, true)
 	defer tearDown()
 
 	bc := server.handler.blockchain
@@ -190,7 +190,7 @@ func TestGetBlockBodiesLes3(t *testing.T) { testGetBlockBodies(t, 3) }
 func TestGetBlockBodiesLes4(t *testing.T) { testGetBlockBodies(t, 4) }
 
 func testGetBlockBodies(t *testing.T, protocol int) {
-	server, tearDown := newServerEnv(t, downloader.MaxBlockFetch+15, protocol, nil, false, true, 0)
+	server, tearDown := newServerEnv(t, downloader.MaxBlockFetch+15, protocol, nil, false, true, 0, true)
 	defer tearDown()
 
 	bc := server.handler.blockchain
@@ -269,7 +269,7 @@ func TestGetCodeLes4(t *testing.T) { testGetCode(t, 4) }
 
 func testGetCode(t *testing.T, protocol int) {
 	// Assemble the test environment
-	server, tearDown := newServerEnv(t, 4, protocol, nil, false, true, 0)
+	server, tearDown := newServerEnv(t, 4, protocol, nil, false, true, 0, true)
 	defer tearDown()
 	bc := server.handler.blockchain
 
@@ -299,7 +299,7 @@ func TestGetStaleCodeLes3(t *testing.T) { testGetStaleCode(t, 3) }
 func TestGetStaleCodeLes4(t *testing.T) { testGetStaleCode(t, 4) }
 
 func testGetStaleCode(t *testing.T, protocol int) {
-	server, tearDown := newServerEnv(t, core.TriesInMemory+4, protocol, nil, false, true, 0)
+	server, tearDown := newServerEnv(t, core.TriesInMemory+4, protocol, nil, false, true, 0, true)
 	defer tearDown()
 	bc := server.handler.blockchain
 
@@ -325,7 +325,7 @@ func TestGetReceiptLes4(t *testing.T) { testGetReceipt(t, 4) }
 
 func testGetReceipt(t *testing.T, protocol int) {
 	// Assemble the test environment
-	server, tearDown := newServerEnv(t, 4, protocol, nil, false, true, 0)
+	server, tearDown := newServerEnv(t, 4, protocol, nil, false, true, 0, true)
 	defer tearDown()
 
 	bc := server.handler.blockchain
@@ -353,7 +353,7 @@ func TestGetProofsLes4(t *testing.T) { testGetProofs(t, 4) }
 
 func testGetProofs(t *testing.T, protocol int) {
 	// Assemble the test environment
-	server, tearDown := newServerEnv(t, 4, protocol, nil, false, true, 0)
+	server, tearDown := newServerEnv(t, 4, protocol, nil, false, true, 0, true)
 	defer tearDown()
 
 	bc := server.handler.blockchain
@@ -388,7 +388,7 @@ func TestGetStaleProofLes3(t *testing.T) { testGetStaleProof(t, 3) }
 func TestGetStaleProofLes4(t *testing.T) { testGetStaleProof(t, 4) }
 
 func testGetStaleProof(t *testing.T, protocol int) {
-	server, tearDown := newServerEnv(t, core.TriesInMemory+4, protocol, nil, false, true, 0)
+	server, tearDown := newServerEnv(t, core.TriesInMemory+4, protocol, nil, false, true, 0, true)
 	defer tearDown()
 	bc := server.handler.blockchain
 
@@ -436,7 +436,7 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
-	server, tearDown := newServerEnv(t, int(config.ChtSize+config.ChtConfirms), protocol, waitIndexers, false, true, 0)
+	server, tearDown := newServerEnv(t, int(config.ChtSize+config.ChtConfirms), protocol, waitIndexers, false, true, 0, true)
 	defer tearDown()
 
 	bc := server.handler.blockchain
@@ -485,7 +485,7 @@ func testGetBloombitsProofs(t *testing.T, protocol int) {
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
-	server, tearDown := newServerEnv(t, int(config.BloomTrieSize+config.BloomTrieConfirms), protocol, waitIndexers, false, true, 0)
+	server, tearDown := newServerEnv(t, int(config.BloomTrieSize+config.BloomTrieConfirms), protocol, waitIndexers, false, true, 0, true)
 	defer tearDown()
 
 	bc := server.handler.blockchain
@@ -523,7 +523,7 @@ func TestTransactionStatusLes3(t *testing.T) { testTransactionStatus(t, 3) }
 func TestTransactionStatusLes4(t *testing.T) { testTransactionStatus(t, 4) }
 
 func testTransactionStatus(t *testing.T, protocol int) {
-	server, tearDown := newServerEnv(t, 0, protocol, nil, false, true, 0)
+	server, tearDown := newServerEnv(t, 0, protocol, nil, false, true, 0, true)
 	defer tearDown()
 	server.handler.addTxsSync = true
 
@@ -620,7 +620,7 @@ func TestStopResumeLes3(t *testing.T) { testStopResume(t, 3) }
 func TestStopResumeLes4(t *testing.T) { testStopResume(t, 4) }
 
 func testStopResume(t *testing.T, protocol int) {
-	server, tearDown := newServerEnv(t, 0, protocol, nil, true, true, testBufLimit/10)
+	server, tearDown := newServerEnv(t, 0, protocol, nil, true, true, testBufLimit/10, true)
 	defer tearDown()
 
 	server.handler.server.costTracker.testing = true

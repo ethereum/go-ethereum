@@ -141,8 +141,8 @@ func TestBalanceToPriority(t *testing.T) {
 		neg      uint64
 		priority int64
 	}{
-		{1000, 0, ^int64(1)},
-		{2000, 0, ^int64(2)}, // Higher balance, lower priority value
+		{1000, 0, -1},
+		{2000, 0, -2}, // Higher balance, lower priority value
 		{0, 0, 0},
 		{0, 1000, 1000},
 	}
@@ -172,16 +172,16 @@ func TestEstimatedPriority(t *testing.T) {
 		reqCost    uint64        // single request cost
 		priority   int64         // expected estimated priority
 	}{
-		{time.Second, time.Second, 0, ^int64(58)},
-		{0, time.Second, 0, ^int64(58)},
+		{time.Second, time.Second, 0, -58},
+		{0, time.Second, 0, -58},
 
 		// 2 seconds time cost, 1 second estimated time cost, 10^9 request cost,
 		// 10^9 estimated request cost per second.
-		{time.Second, time.Second, 1000000000, ^int64(55)},
+		{time.Second, time.Second, 1000000000, -55},
 
 		// 3 seconds time cost, 3 second estimated time cost, 10^9*2 request cost,
 		// 4*10^9 estimated request cost.
-		{time.Second, 3 * time.Second, 1000000000, ^int64(48)},
+		{time.Second, 3 * time.Second, 1000000000, -48},
 
 		// All positive balance is used up
 		{time.Second * 55, 0, 0, 0},
@@ -213,7 +213,7 @@ func TestCallbackChecking(t *testing.T) {
 		priority int64
 		expDiff  time.Duration
 	}{
-		{^int64(500), time.Millisecond * 500},
+		{-500, time.Millisecond * 500},
 		{0, time.Second},
 		{int64(time.Second), 2 * time.Second},
 	}
