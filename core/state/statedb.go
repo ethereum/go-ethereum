@@ -715,6 +715,13 @@ func (s *StateDB) Prepare(thash, bhash common.Hash, ti int) {
 	s.bhash = bhash
 	s.txIndex = ti
 }
+func (s *StateDB) PrepareTransaction(thash, ti int) {
+	s.thash = thash
+	s.txIndex = ti
+}
+func (s *StateDB) PrepareBlock(bhash common.Hash) {
+	s.bhash = bhash
+}
 
 func (s *StateDB) clearJournalAndRefund() {
 	if len(s.journal.entries) > 0 {

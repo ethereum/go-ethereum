@@ -53,6 +53,8 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		header  = block.Header()
 		gaspool = new(GasPool).AddGas(block.GasLimit())
 	)
+	// Prepare the block hash which is used when the EVM emits new state logs
+	statedb.PrepareBlock(block.Hash())
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		// If block precaching was interrupted, abort
@@ -60,7 +62,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 			return
 		}
 		// Block precaching permitted to continue, execute the transaction
-		statedb.Prepare(tx.Hash(), block.Hash(), i)
+		statedb.PrepareTransaction(tx.Hash(), i)
 		if err := precacheTransaction(p.config, p.bc, nil, gaspool, statedb, header, tx, cfg); err != nil {
 			return // Ugh, something went horribly wrong, bail out
 		}
