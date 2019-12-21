@@ -38,9 +38,9 @@ import (
 
 // Ubqhash proof-of-work protocol constants.
 var (
-	blockReward            *big.Int = big.NewInt(8e+18) // Block reward in wei for successfully mining a block
-	maxUncles                       = 2                 // Maximum number of uncles allowed in a single block
-	allowedFutureBlockTime          = 15 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
+	// blockReward            *big.Int = big.NewInt(8e+18) // Block reward in wei for successfully mining a block
+	maxUncles              = 2                // Maximum number of uncles allowed in a single block
+	allowedFutureBlockTime = 15 * time.Second // Max time from current time allowed for blocks, before they're considered future blocks
 )
 
 // Diff algo constants.
@@ -650,34 +650,21 @@ func (ubqhash *Ubqhash) SealHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
-// Calculates the base block reward as per the ubiq monetary policy
-func CalcBaseBlockReward(height *big.Int) *big.Int {
-	reward := new(big.Int).Set(blockReward)
+// CalcBaseBlockReward calculates the base block reward as per the ubiq monetary
+// policy.
+func CalcBaseBlockReward(config *params.UbqhashConfig, height *big.Int) *big.Int {
+	reward := new(big.Int).Set(config.BlockReward)
 
-	if height.Cmp(big.NewInt(358363)) > 0 {
-		reward = big.NewInt(7e+18)
+	for _, step := range config.MonetaryPolicy {
+		if height.Cmp(step.Block) > 0 {
+			reward = step.Reward
+		}
 	}
-	if height.Cmp(big.NewInt(716727)) > 0 {
-		reward = big.NewInt(6e+18)
-	}
-	if height.Cmp(big.NewInt(1075090)) > 0 {
-		reward = big.NewInt(5e+18)
-	}
-	if height.Cmp(big.NewInt(1433454)) > 0 {
-		reward = big.NewInt(4e+18)
-	}
-	if height.Cmp(big.NewInt(1791818)) > 0 {
-		reward = big.NewInt(3e+18)
-	}
-	if height.Cmp(big.NewInt(2150181)) > 0 {
-		reward = big.NewInt(2e+18)
-	}
-	if height.Cmp(big.NewInt(2508545)) > 0 {
-		reward = big.NewInt(1e+18)
-	}
+
 	return reward
 }
 
+// CalcUncleBlockReward calculates the uncle miner reward based on depth.
 func CalcUncleBlockReward(config *params.ChainConfig, blockHeight *big.Int, uncleHeight *big.Int, blockReward *big.Int) *big.Int {
 	reward := new(big.Int)
 	// calculate reward based on depth
@@ -697,11 +684,13 @@ func CalcUncleBlockReward(config *params.ChainConfig, blockHeight *big.Int, uncl
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+	ubqhashConfig := config.Ubqhash
+
 	// block reward (miner)
-	reward := CalcBaseBlockReward(header.Number)
+	reward := CalcBaseBlockReward(ubqhashConfig, header.Number)
 
 	// Uncle reward step down fix. (activates along-side byzantium)
-	ufixReward := new(big.Int).Set(blockReward)
+	ufixReward := new(big.Int).Set(ubqhashConfig.BlockReward)
 	if config.IsByzantium(header.Number) {
 		ufixReward = reward
 	}
