@@ -401,10 +401,9 @@ func CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Head
 	if parentNumber.Cmp(ubqhashConfig.FluxBlock) < 0 {
 		// (chain consensus.ChainReader, parentNumber, parentDiff *big.Int, parent *types.Header)
 		return calcDifficulty2(chain, parentNumber, parentDiff, parent)
-	} else {
-		// (chain consensus.ChainReader, time, parentTime, parentNumber, parentDiff *big.Int, parent *types.Header)
-		return fluxDifficulty(chain, big.NewInt(int64(time)), big.NewInt(int64(parentTime)), parentNumber, parentDiff, parent)
 	}
+	// (chain consensus.ChainReader, time, parentTime, parentNumber, parentDiff *big.Int, parent *types.Header)
+	return fluxDifficulty(chain, big.NewInt(int64(time)), big.NewInt(int64(parentTime)), parentNumber, parentDiff, parent)
 }
 
 // Some weird constants to avoid constant memory allocs for them.
