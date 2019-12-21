@@ -142,7 +142,7 @@ func TestHashRate(t *testing.T) {
 	}
 
 	api := &API{ubqhash}
-	for i := 0; i < len(hashrate); i += 1 {
+	for i := 0; i < len(hashrate); i++ {
 		if res := api.SubmitHashRate(hashrate[i], ids[i]); !res {
 			t.Error("remote miner submit hashrate failed")
 		}

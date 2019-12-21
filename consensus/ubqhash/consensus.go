@@ -388,14 +388,12 @@ func CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Head
 		if parentNumber.Cmp(ubqhashConfig.DigishieldModBlock) < 0 {
 			// Original DigishieldV3
 			return calcDifficultyDigishieldV3(chain, parentNumber, parentDiff, parent, digishieldV3Config)
-		} else {
-			// Modified DigishieldV3
-			return calcDifficultyDigishieldV3(chain, parentNumber, parentDiff, parent, digishieldV3ModConfig)
 		}
-	} else {
-		// Flux
-		return calcDifficultyFlux(chain, big.NewInt(int64(time)), big.NewInt(int64(parentTime)), parentNumber, parentDiff, parent)
+		// Modified DigishieldV3
+		return calcDifficultyDigishieldV3(chain, parentNumber, parentDiff, parent, digishieldV3ModConfig)
 	}
+	// Flux
+	return calcDifficultyFlux(chain, big.NewInt(int64(time)), big.NewInt(int64(parentTime)), parentNumber, parentDiff, parent)
 }
 
 // Some weird constants to avoid constant memory allocs for them.
@@ -404,7 +402,7 @@ var (
 	big10         = big.NewInt(10)
 )
 
-// calcDifficultyLegacy is the difficulty adjustment algorithm. It returns
+// CalcDifficultyLegacy is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time given the
 // parent block's time and difficulty. The calculation uses the Legacy rules.
 func CalcDifficultyLegacy(time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
@@ -437,10 +435,10 @@ func CalcDifficultyLegacy(time, parentTime uint64, parentNumber, parentDiff *big
 	return x
 }
 
-// CalcDifficulty is the difficulty adjustment algorithm. It returns
-// the difficulty that a new block should have when created at time
+// calcDifficultyDigishieldV3 is the original difficulty adjustment algorithm.
+// It returns the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
-// Rewritten to be based on Digibyte's Digishield v3 retargeting
+// Based on Digibyte's Digishield v3 retargeting
 func calcDifficultyDigishieldV3(chain consensus.ChainReader, parentNumber, parentDiff *big.Int, parent *types.Header, digishield *diffConfig) *big.Int {
 	// holds intermediate values to make the algo easier to read & audit
 	x := new(big.Int)
