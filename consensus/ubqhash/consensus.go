@@ -441,14 +441,12 @@ func calcDifficultyDigishieldV3(chain consensus.ChainReader, parentNumber, paren
 
 	// Limit adjustment step
 	// Use medians to prevent time-warp attacks
-	// nActualTimespan := nLastBlockTime - nFirstBlockTime
 	nLastBlockTime := chain.CalcPastMedianTime(parentNumber.Uint64(), parent)
 	nFirstBlockTime := chain.CalcPastMedianTime(nFirstBlock.Uint64(), parent)
 	nActualTimespan := new(big.Int)
 	nActualTimespan.Sub(nLastBlockTime, nFirstBlockTime)
 	log.Debug(fmt.Sprintf("CalcDifficulty nActualTimespan = %v before dampening", nActualTimespan))
 
-	// nActualTimespan = AveragingWindowTimespan() + (nActualTimespan-AveragingWindowTimespan())/4
 	y := new(big.Int)
 	y.Sub(nActualTimespan, averagingWindowTimespan(digishield))
 	y.Div(y, big.NewInt(4))
@@ -483,6 +481,13 @@ func calcDifficultyFlux(chain consensus.ChainReader, time, parentTime, parentNum
 	x := new(big.Int)
 	nFirstBlock := new(big.Int)
 	nFirstBlock.Sub(parentNumber, fluxConfig.AveragingWindow)
+
+	// Check we have enough blocks
+	if parentNumber.Cmp(fluxConfig.AveragingWindow) < 1 {
+		log.Debug(fmt.Sprintf("CalcDifficulty: parentNumber(%+x) < fluxConfig.AveragingWindow(%+x)", parentNumber, fluxConfig.AveragingWindow))
+		x.Set(parentDiff)
+		return x
+	}
 
 	diffTime := new(big.Int)
 	diffTime.Sub(time, parentTime)
