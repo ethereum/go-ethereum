@@ -52,12 +52,14 @@ var (
 		AveragingWindow: big.NewInt(21),
 		MaxAdjustDown:   big.NewInt(16), // 16%
 		MaxAdjustUp:     big.NewInt(8),  // 8%
+		Factor:          big.NewInt(100),
 	}
 
 	digishieldV3ModConfig = &diffConfig{
 		AveragingWindow: big.NewInt(88),
 		MaxAdjustDown:   big.NewInt(3), // 3%
 		MaxAdjustUp:     big.NewInt(2), // 2%
+		Factor:          big.NewInt(100),
 	}
 
 	fluxConfig = &diffConfig{
@@ -65,6 +67,7 @@ var (
 		MaxAdjustDown:   big.NewInt(5), // 0.5%
 		MaxAdjustUp:     big.NewInt(3), // 0.3%
 		Dampen:          big.NewInt(1), // 0.1%
+		Factor:          big.NewInt(1000),
 	}
 )
 
@@ -73,6 +76,7 @@ type diffConfig struct {
 	MaxAdjustDown   *big.Int `json:"maxAdjustDown"`
 	MaxAdjustUp     *big.Int `json:"maxAdjustUp"`
 	Dampen          *big.Int `json:"dampen,omitempty"`
+	Factor          *big.Int `json:"factor"`
 }
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -317,54 +321,34 @@ func averagingWindowTimespan(config *diffConfig) *big.Int {
 	return x.Mul(config.AveragingWindow, big88)
 }
 
-func minActualTimespan(config *diffConfig) *big.Int {
-	x := new(big.Int)
-	y := new(big.Int)
-	z := new(big.Int)
-	x.Sub(big.NewInt(100), config.MaxAdjustUp)
-	y.Mul(averagingWindowTimespan(config), x)
-	z.Div(y, big.NewInt(100))
-	return z
-}
-
-func maxActualTimespan(config *diffConfig) *big.Int {
-	x := new(big.Int)
-	y := new(big.Int)
-	z := new(big.Int)
-	x.Add(big.NewInt(100), config.MaxAdjustDown)
-	y.Mul(averagingWindowTimespan(config), x)
-	z.Div(y, big.NewInt(100))
-	return z
-}
-
-func minActualTimespanFlux(dampen bool) *big.Int {
+func minActualTimespan(config *diffConfig, dampen bool) *big.Int {
 	x := new(big.Int)
 	y := new(big.Int)
 	z := new(big.Int)
 	if dampen {
-		x.Sub(big.NewInt(1000), fluxConfig.Dampen)
-		y.Mul(averagingWindowTimespan(fluxConfig), x)
-		z.Div(y, big.NewInt(1000))
+		x.Sub(config.Factor, config.Dampen)
+		y.Mul(averagingWindowTimespan(config), x)
+		z.Div(y, config.Factor)
 	} else {
-		x.Sub(big.NewInt(1000), fluxConfig.MaxAdjustUp)
-		y.Mul(averagingWindowTimespan(fluxConfig), x)
-		z.Div(y, big.NewInt(1000))
+		x.Sub(config.Factor, config.MaxAdjustUp)
+		y.Mul(averagingWindowTimespan(config), x)
+		z.Div(y, config.Factor)
 	}
 	return z
 }
 
-func maxActualTimespanFlux(dampen bool) *big.Int {
+func maxActualTimespan(config *diffConfig, dampen bool) *big.Int {
 	x := new(big.Int)
 	y := new(big.Int)
 	z := new(big.Int)
 	if dampen {
-		x.Add(big.NewInt(1000), fluxConfig.Dampen)
-		y.Mul(averagingWindowTimespan(fluxConfig), x)
-		z.Div(y, big.NewInt(1000))
+		x.Add(config.Factor, config.Dampen)
+		y.Mul(averagingWindowTimespan(config), x)
+		z.Div(y, config.Factor)
 	} else {
-		x.Add(big.NewInt(1000), fluxConfig.MaxAdjustDown)
-		y.Mul(averagingWindowTimespan(fluxConfig), x)
-		z.Div(y, big.NewInt(1000))
+		x.Add(config.Factor, config.MaxAdjustDown)
+		y.Mul(averagingWindowTimespan(config), x)
+		z.Div(y, config.Factor)
 	}
 	return z
 }
@@ -376,6 +360,7 @@ func (ubqhash *Ubqhash) CalcDifficulty(chain consensus.ChainReader, time uint64,
 	return CalcDifficulty(chain, time, parent)
 }
 
+// CalcDifficulty determines which difficulty algorithm to use for calculating a new block
 func CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
 	parentTime := parent.Time
 	parentNumber := parent.Number
@@ -470,11 +455,11 @@ func calcDifficultyDigishieldV3(chain consensus.ChainReader, parentNumber, paren
 	nActualTimespan.Add(y, averagingWindowTimespan(digishield))
 	log.Debug(fmt.Sprintf("CalcDifficulty nActualTimespan = %v before bounds", nActualTimespan))
 
-	if nActualTimespan.Cmp(minActualTimespan(digishield)) < 0 {
-		nActualTimespan.Set(minActualTimespan(digishield))
+	if nActualTimespan.Cmp(minActualTimespan(digishield, false)) < 0 {
+		nActualTimespan.Set(minActualTimespan(digishield, false))
 		log.Debug("CalcDifficulty Minimum Timespan set")
-	} else if nActualTimespan.Cmp(maxActualTimespan(digishield)) > 0 {
-		nActualTimespan.Set(maxActualTimespan(digishield))
+	} else if nActualTimespan.Cmp(maxActualTimespan(digishield, false)) > 0 {
+		nActualTimespan.Set(maxActualTimespan(digishield, false))
 		log.Debug("CalcDifficulty Maximum Timespan set")
 	}
 
@@ -512,21 +497,21 @@ func calcDifficultyFlux(chain consensus.ChainReader, time, parentTime, parentNum
 	y.Div(y, big.NewInt(4))
 	nActualTimespan.Add(y, averagingWindowTimespan(fluxConfig))
 
-	if nActualTimespan.Cmp(minActualTimespanFlux(false)) < 0 {
+	if nActualTimespan.Cmp(minActualTimespan(fluxConfig, false)) < 0 {
 		doubleBig88 := new(big.Int)
 		doubleBig88.Mul(big88, big.NewInt(2))
 		if diffTime.Cmp(doubleBig88) > 0 {
-			nActualTimespan.Set(minActualTimespanFlux(true))
+			nActualTimespan.Set(minActualTimespan(fluxConfig, true))
 		} else {
-			nActualTimespan.Set(minActualTimespanFlux(false))
+			nActualTimespan.Set(minActualTimespan(fluxConfig, false))
 		}
-	} else if nActualTimespan.Cmp(maxActualTimespanFlux(false)) > 0 {
+	} else if nActualTimespan.Cmp(maxActualTimespan(fluxConfig, false)) > 0 {
 		halfBig88 := new(big.Int)
 		halfBig88.Div(big88, big.NewInt(2))
 		if diffTime.Cmp(halfBig88) < 0 {
-			nActualTimespan.Set(maxActualTimespanFlux(true))
+			nActualTimespan.Set(maxActualTimespan(fluxConfig, true))
 		} else {
-			nActualTimespan.Set(maxActualTimespanFlux(false))
+			nActualTimespan.Set(maxActualTimespan(fluxConfig, false))
 		}
 	}
 
