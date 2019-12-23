@@ -179,7 +179,7 @@ func (c *Console) init(preload []string) error {
 		// Retrieve the account management object to instrument
 		personal := c.jsre.Get("personal")
 		if personal == nil {
-			return fmt.Errorf("Could not find personal")
+			return fmt.Errorf("could not find personal")
 		}
 		// Override the openWallet, unlockAccount, newAccount and sign methods since
 		// these require user interaction. Assign these method in the Console the
@@ -208,7 +208,7 @@ func (c *Console) init(preload []string) error {
 	// The admin.sleep and admin.sleepBlocks are offered by the console and not by the RPC layer.
 	admin := c.jsre.Get("admin")
 	if admin == nil {
-		return fmt.Errorf("Could not find admin")
+		return fmt.Errorf("could not find admin")
 	}
 	if obj := admin.ToObject(c.runtime); obj != nil { // make sure the admin api is enabled over the interface
 		obj.Set("sleepBlocks", bridge.SleepBlocks)
