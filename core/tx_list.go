@@ -440,8 +440,8 @@ type priceHeap struct {
 	baseFee *big.Int
 }
 
-func (h priceHeap) Len() int      { return len(h.txs) }
-func (h priceHeap) Swap(i, j int) { h.txs[i], h.txs[j] = h.txs[j], h.txs[i] }
+func (h priceHeap) Len() int       { return len(h.txs) }
+func (h *priceHeap) Swap(i, j int) { h.txs[i], h.txs[j] = h.txs[j], h.txs[i] }
 
 func (h priceHeap) Less(i, j int) bool {
 	// Sort primarily by price, returning the cheaper one

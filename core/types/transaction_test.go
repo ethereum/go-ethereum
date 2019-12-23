@@ -331,12 +331,18 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 	for start, key := range keys {
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 		for i := 0; i < 25; i++ {
-			tx, _ := SignTx(NewTransaction(uint64(start+i), common.Address{}, big.NewInt(100), 100, big.NewInt(int64(start+i)), nil, nil, nil), signer, key)
-			groups[addr] = append(groups[addr], tx)
+			if i%2 == 0 {
+				tx, _ := SignTx(NewTransaction(uint64(start+i), common.Address{}, big.NewInt(100), 100, big.NewInt(int64(start+i)), nil, nil, nil), signer, key)
+				groups[addr] = append(groups[addr], tx)
+			} else {
+				tx, _ := SignTx(NewTransaction(uint64(start+i), common.Address{}, big.NewInt(100), 100, nil, nil, big.NewInt(int64(start+i)), big.NewInt(int64(start+i+1))), signer, key)
+				groups[addr] = append(groups[addr], tx)
+			}
 		}
 	}
 	// Sort the transactions and cross check the nonce ordering
-	txset := NewTransactionsByPriceAndNonce(signer, groups)
+	baseFee := big.NewInt(1)
+	txset := NewTransactionsByPriceAndNonce(signer, groups, baseFee)
 
 	txs := Transactions{}
 	for tx := txset.Peek(); tx != nil; tx = txset.Peek() {
@@ -360,8 +366,22 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 		if i+1 < len(txs) {
 			next := txs[i+1]
 			fromNext, _ := Sender(signer, next)
-			if fromi != fromNext && txi.GasPrice().Cmp(next.GasPrice()) < 0 {
-				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) < tx #%d (A=%x P=%v)", i, fromi[:4], txi.GasPrice(), i+1, fromNext[:4], next.GasPrice())
+			iPrice := txi.GasPrice()
+			nextPrice := next.GasPrice()
+			if iPrice == nil {
+				iPrice = new(big.Int).Add(baseFee, txi.GasPremium())
+				if iPrice.Cmp(txi.FeeCap()) > 0 {
+					iPrice.Set(txi.FeeCap())
+				}
+			}
+			if nextPrice == nil {
+				nextPrice = new(big.Int).Add(baseFee, next.GasPremium())
+				if nextPrice.Cmp(next.FeeCap()) > 0 {
+					nextPrice.Set(next.FeeCap())
+				}
+			}
+			if fromi != fromNext && iPrice.Cmp(nextPrice) < 0 {
+				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) < tx #%d (A=%x P=%v)", i, fromi[:4], iPrice.Uint64(), i+1, fromNext[:4], nextPrice.Uint64())
 			}
 		}
 	}
@@ -426,10 +446,9 @@ func TestTransactionJSON(t *testing.T) {
 	transactions := make([]*Transaction, 0, 50)
 	for i := uint64(0); i < 25; i++ {
 		var tx *Transaction
-		switch i % 2 {
-		case 0:
+		if i%2 == 0 {
 			tx = NewTransaction(i, common.Address{1}, common.Big0, 1, common.Big2, []byte("abcdef"), nil, nil)
-		case 1:
+		} else {
 			tx = NewContractCreation(i, common.Big0, 1, common.Big2, []byte("abcdef"), nil, nil)
 		}
 		transactions = append(transactions, tx)
@@ -474,10 +493,9 @@ func TestEIP1559TransactionJSON(t *testing.T) {
 	transactions := make([]*Transaction, 0, 50)
 	for i := uint64(0); i < 25; i++ {
 		var tx *Transaction
-		switch i % 2 {
-		case 0:
+		if i%2 == 0 {
 			tx = NewTransaction(i, common.Address{1}, common.Big0, 1, nil, []byte("abcdef"), big.NewInt(200000), big.NewInt(800000))
-		case 1:
+		} else {
 			tx = NewContractCreation(i, common.Big0, 1, nil, []byte("abcdef"), big.NewInt(200000), big.NewInt(800000))
 		}
 		transactions = append(transactions, tx)

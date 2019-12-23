@@ -223,25 +223,34 @@ func TestNewAcc(t *testing.T) {
 	}
 }
 
-func mkTestTx(from common.MixedcaseAddress) core.SendTxArgs {
+func mkTestTx(from common.MixedcaseAddress, eip1559 bool) core.SendTxArgs {
 	to := common.NewMixedcaseAddress(common.HexToAddress("0x1337"))
 	gas := hexutil.Uint64(21000)
-	gasPrice := (*hexutil.Big)(big.NewInt(2000000000))
 	value := (hexutil.Big)(*big.NewInt(1e18))
 	nonce := (hexutil.Uint64)(0)
 	data := hexutil.Bytes(common.Hex2Bytes("01020304050607080a"))
 	tx := core.SendTxArgs{
-		From:     from,
-		To:       &to,
-		Gas:      gas,
-		GasPrice: gasPrice,
-		Value:    value,
-		Data:     &data,
-		Nonce:    nonce}
+		From:  from,
+		To:    &to,
+		Gas:   gas,
+		Value: value,
+		Data:  &data,
+		Nonce: nonce}
+	if eip1559 {
+		tx.GasPremium = (*hexutil.Big)(big.NewInt(1000000000))
+		tx.FeeCap = (*hexutil.Big)(big.NewInt(2000000000))
+	} else {
+		tx.GasPrice = (*hexutil.Big)(big.NewInt(2000000000))
+	}
 	return tx
 }
 
 func TestSignTx(t *testing.T) {
+	testSignTx(t, false)
+	testSignTx(t, true)
+}
+
+func testSignTx(t *testing.T, eip1559 bool) {
 	var (
 		list      []common.Address
 		res, res2 *ethapi.SignTransactionResult
@@ -258,7 +267,7 @@ func TestSignTx(t *testing.T) {
 	a := common.NewMixedcaseAddress(list[0])
 
 	methodSig := "test(uint)"
-	tx := mkTestTx(a)
+	tx := mkTestTx(a, eip1559)
 
 	control.approveCh <- "Y"
 	control.inputCh <- "wrongpassword"
@@ -321,5 +330,4 @@ func TestSignTx(t *testing.T) {
 	if bytes.Equal(res.Raw, res2.Raw) {
 		t.Error("Expected tx to be modified by UI")
 	}
-
 }

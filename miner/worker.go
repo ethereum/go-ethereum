@@ -488,11 +488,11 @@ func (w *worker) mainLoop() {
 				legacyGasPool := w.current.gasPool
 				eip1559GasPool := w.current.gp1559
 				// If EIP1559 is finalized we only accept 1559 transactions so if that pool is exhausted the block is full
-				if w.chainConfig.IsEIP1559Finalized(w.chain.CurrentBlock().Number()) && eip1559GasPool != nil && eip1559GasPool.Gas() < params.TxGas {
+				if w.chainConfig.IsEIP1559Finalized(w.current.header.Number) && eip1559GasPool != nil && eip1559GasPool.Gas() < params.TxGas {
 					continue
 				}
 				// If EIP1559 has not been initialized we only accept legacy transaction so if that pool is exhausted the block is full
-				if !w.chainConfig.IsEIP1559(w.chain.CurrentBlock().Number()) && legacyGasPool != nil && legacyGasPool.Gas() < params.TxGas {
+				if !w.chainConfig.IsEIP1559(w.current.header.Number) && legacyGasPool != nil && legacyGasPool.Gas() < params.TxGas {
 					continue
 				}
 				// When we are between EIP1559 activation and finalization we can received transactions of both types
@@ -511,7 +511,7 @@ func (w *worker) mainLoop() {
 					acc, _ := types.Sender(w.current.signer, tx)
 					txs[acc] = append(txs[acc], tx)
 				}
-				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs)
+				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
 				tcount := w.current.tcount
 				w.commitTransactions(txset, coinbase, nil)
 				// Only update the snapshot if any new transactons were added
@@ -1039,13 +1039,13 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		}
 	}
 	if len(localTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs)
+		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs, baseFee)
 		if w.commitTransactions(txs, w.coinbase, interrupt) {
 			return
 		}
 	}
 	if len(remoteTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs)
+		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs, baseFee)
 		if w.commitTransactions(txs, w.coinbase, interrupt) {
 			return
 		}

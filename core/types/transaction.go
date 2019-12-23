@@ -455,29 +455,47 @@ func (s TxByNonce) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 // TxByPriceAndTime implements both the sort and the heap interface, making it useful
 // for all at once sorting as well as individually adding and removing elements.
-type TxByPriceAndTime Transactions
-
-func (s TxByPriceAndTime) Len() int { return len(s) }
-func (s TxByPriceAndTime) Less(i, j int) bool {
-	// If the prices are equal, use the time the transaction was first seen for
-	// deterministic sorting
-	cmp := s[i].data.Price.Cmp(s[j].data.Price)
-	if cmp == 0 {
-		return s[i].time.Before(s[j].time)
-	}
-	return cmp > 0
+type TxByPriceAndTime struct {
+	txs     Transactions
+	baseFee *big.Int
 }
-func (s TxByPriceAndTime) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+
+func (s TxByPriceAndTime) Len() int { return len(s.txs) }
+
+// Note that this returns true if j is less than i, as the ordering needs to be from highest price to lowest
+func (s TxByPriceAndTime) Less(i, j int) bool {
+	iPrice := s.txs[i].data.Price
+	jPrice := s.txs[j].data.Price
+	if iPrice == nil {
+		iPrice = new(big.Int).Add(s.baseFee, s.txs[i].data.GasPremium)
+		if iPrice.Cmp(s.txs[i].data.FeeCap) > 0 {
+			iPrice.Set(s.txs[i].data.FeeCap)
+		}
+	}
+	if jPrice == nil {
+		jPrice = new(big.Int).Add(s.baseFee, s.txs[j].data.GasPremium)
+		if jPrice.Cmp(s.txs[j].data.FeeCap) > 0 {
+			jPrice.Set(s.txs[j].data.FeeCap)
+		}
+	}
+	cmp := iPrice.Cmp(jPrice)
+	if cmp == 0 {
+		return s.txs[i].time.Before(s.txs[j].time)
+	}
+	return iPrice.Cmp(jPrice) > 0
+}
+
+func (s *TxByPriceAndTime) Swap(i, j int) { s.txs[i], s.txs[j] = s.txs[j], s.txs[i] }
 
 func (s *TxByPriceAndTime) Push(x interface{}) {
-	*s = append(*s, x.(*Transaction))
+	s.txs = append(s.txs, x.(*Transaction))
 }
 
 func (s *TxByPriceAndTime) Pop() interface{} {
-	old := *s
+	old := s.txs
 	n := len(old)
 	x := old[n-1]
-	*s = old[0 : n-1]
+	s.txs = old[0 : n-1]
 	return x
 }
 
@@ -486,7 +504,7 @@ func (s *TxByPriceAndTime) Pop() interface{} {
 // entire batches of transactions for non-executable accounts.
 type TransactionsByPriceAndNonce struct {
 	txs    map[common.Address]Transactions // Per account nonce-sorted list of transactions
-	heads  TxByPriceAndTime                // Next transaction for each unique account (price heap)
+	heads  *TxByPriceAndTime               // Next transaction for each unique account (price heap)
 	signer Signer                          // Signer for the set of transactions
 }
 
@@ -495,11 +513,13 @@ type TransactionsByPriceAndNonce struct {
 //
 // Note, the input map is reowned so the caller should not interact any more with
 // if after providing it to the constructor.
-func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transactions) *TransactionsByPriceAndNonce {
-	// Initialize a price and received time based heap with the head transactions
-	heads := make(TxByPriceAndTime, 0, len(txs))
+func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transactions, baseFee *big.Int) *TransactionsByPriceAndNonce {
+	// Initialize a price based heap with the head transactions
+	heads := new(TxByPriceAndTime)
+	heads.txs = make(Transactions, 0, len(txs))
+	heads.baseFee = baseFee
 	for from, accTxs := range txs {
-		heads = append(heads, accTxs[0])
+		heads.txs = append(heads.txs, accTxs[0])
 		// Ensure the sender address is from the signer
 		acc, _ := Sender(signer, accTxs[0])
 		txs[acc] = accTxs[1:]
@@ -507,7 +527,7 @@ func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transa
 			delete(txs, from)
 		}
 	}
-	heap.Init(&heads)
+	heap.Init(heads)
 
 	// Assemble and return the transaction set
 	return &TransactionsByPriceAndNonce{
@@ -519,20 +539,20 @@ func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transa
 
 // Peek returns the next transaction by price.
 func (t *TransactionsByPriceAndNonce) Peek() *Transaction {
-	if len(t.heads) == 0 {
+	if len(t.heads.txs) == 0 {
 		return nil
 	}
-	return t.heads[0]
+	return t.heads.txs[0]
 }
 
 // Shift replaces the current best head with the next one from the same account.
 func (t *TransactionsByPriceAndNonce) Shift() {
-	acc, _ := Sender(t.signer, t.heads[0])
+	acc, _ := Sender(t.signer, t.heads.txs[0])
 	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {
-		t.heads[0], t.txs[acc] = txs[0], txs[1:]
-		heap.Fix(&t.heads, 0)
+		t.heads.txs[0], t.txs[acc] = txs[0], txs[1:]
+		heap.Fix(t.heads, 0)
 	} else {
-		heap.Pop(&t.heads)
+		heap.Pop(t.heads)
 	}
 }
 
@@ -540,7 +560,7 @@ func (t *TransactionsByPriceAndNonce) Shift() {
 // the same account. This should be used when a transaction cannot be executed
 // and hence all subsequent ones should be discarded from the same account.
 func (t *TransactionsByPriceAndNonce) Pop() {
-	heap.Pop(&t.heads)
+	heap.Pop(t.heads)
 }
 
 // Message is a fully derived transaction and implements core.Message
