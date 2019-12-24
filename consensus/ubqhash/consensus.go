@@ -45,8 +45,7 @@ var (
 
 // Diff algo constants.
 var (
-	big88      = big.NewInt(88)
-	bigMinus99 = big.NewInt(-99)
+	big88 = big.NewInt(88)
 
 	digishieldV3Config = &diffConfig{
 		AveragingWindow: big.NewInt(21),
@@ -381,12 +380,6 @@ func CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Head
 	return calcDifficultyFlux(chain, big.NewInt(int64(time)), big.NewInt(int64(parentTime)), parentNumber, parentDiff, parent)
 }
 
-// Some weird constants to avoid constant memory allocs for them.
-var (
-	expDiffPeriod = big.NewInt(100000)
-	big10         = big.NewInt(10)
-)
-
 // calcDifficultyDigishieldV3 is the original difficulty adjustment algorithm.
 // It returns the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
@@ -595,7 +588,6 @@ func (ubqhash *Ubqhash) Finalize(chain consensus.ChainReader, header *types.Head
 // Some weird constants to avoid constant memory allocs for them.
 var (
 	big2  = big.NewInt(2)
-	big8  = big.NewInt(8)
 	big32 = big.NewInt(32)
 )
 
