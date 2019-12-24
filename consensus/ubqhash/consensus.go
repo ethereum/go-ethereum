@@ -621,7 +621,7 @@ func CalcBaseBlockReward(config *params.UbqhashConfig, height *big.Int) *big.Int
 
 	for _, step := range config.MonetaryPolicy {
 		if height.Cmp(step.Block) > 0 {
-			reward = step.Reward
+			reward = new(big.Int).Set(step.Reward)
 		}
 	}
 
@@ -656,7 +656,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	// Uncle reward step down fix. (activates along-side byzantium)
 	ufixReward := new(big.Int).Set(ubqhashConfig.BlockReward)
 	if config.IsByzantium(header.Number) {
-		ufixReward = reward
+		ufixReward = new(big.Int).Set(reward)
 	}
 
 	for _, uncle := range uncles {
