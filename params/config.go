@@ -43,10 +43,13 @@ var (
 		ConstantinopleBlock: big.NewInt(math.MaxInt64),
 		PetersburgBlock:     big.NewInt(math.MaxInt64),
 		Ubqhash: &UbqhashConfig{
-			BlockReward:        big.NewInt(8e+18), // 8 UBQ in wei
 			DigishieldModBlock: big.NewInt(4088),
 			FluxBlock:          big.NewInt(8000),
 			MonetaryPolicy: []UbqhashMPStep{
+				UbqhashMPStep{
+					Block:  big.NewInt(0),
+					Reward: big.NewInt(8e+18),
+				},
 				UbqhashMPStep{
 					Block:  big.NewInt(358363),
 					Reward: big.NewInt(7e+18),
@@ -100,10 +103,13 @@ var (
 		ConstantinopleBlock: big.NewInt(math.MaxInt64),
 		PetersburgBlock:     big.NewInt(math.MaxInt64),
 		Ubqhash: &UbqhashConfig{
-			BlockReward:        big.NewInt(8e+18), // 8 UBQ in wei
 			DigishieldModBlock: big.NewInt(4088),
 			FluxBlock:          big.NewInt(8000),
 			MonetaryPolicy: []UbqhashMPStep{
+				UbqhashMPStep{
+					Block:  big.NewInt(0),
+					Reward: big.NewInt(8e+18),
+				},
 				UbqhashMPStep{
 					Block:  big.NewInt(358363),
 					Reward: big.NewInt(7e+18),

@@ -38,7 +38,6 @@ import (
 
 // Ubqhash proof-of-work protocol constants.
 var (
-	// blockReward            *big.Int = big.NewInt(8e+18) // Block reward in wei for successfully mining a block
 	maxUncles              = 2                // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTime = 15 * time.Second // Max time from current time allowed for blocks, before they're considered future blocks
 )
@@ -612,18 +611,19 @@ func (ubqhash *Ubqhash) SealHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
-// CalcBaseBlockReward calculates the base block reward as per the ubiq monetary
-// policy.
-func CalcBaseBlockReward(config *params.UbqhashConfig, height *big.Int) *big.Int {
-	reward := new(big.Int).Set(config.BlockReward)
+// CalcBaseBlockReward calculates the base block reward as per the ubiq monetary policy.
+func CalcBaseBlockReward(config *params.UbqhashConfig, height *big.Int) (*big.Int, *big.Int) {
+	reward := new(big.Int)
 
 	for _, step := range config.MonetaryPolicy {
 		if height.Cmp(step.Block) > 0 {
 			reward = new(big.Int).Set(step.Reward)
+		} else {
+			break
 		}
 	}
 
-	return reward
+	return new(big.Int).Set(config.MonetaryPolicy[0].Reward), reward
 }
 
 // CalcUncleBlockReward calculates the uncle miner reward based on depth.
@@ -646,15 +646,13 @@ func CalcUncleBlockReward(config *params.ChainConfig, blockHeight *big.Int, uncl
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
-	ubqhashConfig := config.Ubqhash
-
 	// block reward (miner)
-	reward := CalcBaseBlockReward(ubqhashConfig, header.Number)
+	initialReward, currentReward := CalcBaseBlockReward(config.Ubqhash, header.Number)
 
 	// Uncle reward step down fix. (activates along-side byzantium)
-	ufixReward := new(big.Int).Set(ubqhashConfig.BlockReward)
+	ufixReward := initialReward
 	if config.IsByzantium(header.Number) {
-		ufixReward = new(big.Int).Set(reward)
+		ufixReward = currentReward
 	}
 
 	for _, uncle := range uncles {
@@ -664,8 +662,8 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		state.AddBalance(uncle.Coinbase, uncleReward)
 		// include uncle bonus reward (baseBlockReward/32)
 		uncleReward.Div(ufixReward, big32)
-		reward.Add(reward, uncleReward)
+		currentReward.Add(currentReward, uncleReward)
 	}
 	// update block miner balance
-	state.AddBalance(header.Coinbase, reward)
+	state.AddBalance(header.Coinbase, currentReward)
 }
