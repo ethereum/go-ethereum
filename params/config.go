@@ -156,7 +156,7 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllUbqhashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, &UbqhashConfig{big.NewInt(0), big.NewInt(0), big.NewInt(0), []UbqhashMPStep{}}, nil}
+	AllUbqhashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, &UbqhashConfig{big.NewInt(0), big.NewInt(0), []UbqhashMPStep{}}, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ubiq core developers into the Clique consensus.
@@ -165,7 +165,7 @@ var (
 	// adding flags to the config to also have to set these fields.
 	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, &UbqhashConfig{big.NewInt(0), big.NewInt(0), big.NewInt(0), []UbqhashMPStep{}}, nil}
+	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, &UbqhashConfig{big.NewInt(0), big.NewInt(0), []UbqhashMPStep{}}, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -216,7 +216,6 @@ type UbqhashMPStep struct {
 
 // UbqhashConfig is the consensus engine configs for proof-of-work based sealing.
 type UbqhashConfig struct {
-	BlockReward        *big.Int        `json:"blockReward"`                  // Initial block reward in wei for mining a block
 	DigishieldModBlock *big.Int        `json:"digishieldModBlock,omitempty"` // Block to activate the DigiShield V3 mod
 	FluxBlock          *big.Int        `json:"fluxBlock"`                    // Block to activate the Flux difficulty algorithm
 	MonetaryPolicy     []UbqhashMPStep `json:"monetaryPolicy"`               // Blocks to step the block reward down
