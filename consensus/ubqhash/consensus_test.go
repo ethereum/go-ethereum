@@ -107,77 +107,77 @@ func TestCalcDifficulty(t *testing.T) {
 
 func TestCalcBaseBlockReward(t *testing.T) {
 	config := *params.MainnetChainConfig
-	reward := CalcBaseBlockReward(config.Ubqhash, big.NewInt(1))
+	_, reward := CalcBaseBlockReward(config.Ubqhash, big.NewInt(1))
 	if reward.Cmp(big.NewInt(8e+18)) != 0 {
 		t.Error("TestCalcBaseBlockReward 8 (start)", "failed. Expected", big.NewInt(8e+18), "and calculated", reward)
 	}
-	reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(358363))
+	_, reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(358363))
 	if reward.Cmp(big.NewInt(8e+18)) != 0 {
 		t.Error("TestCalcBaseBlockReward 8 (end)", "failed. Expected", big.NewInt(8e+18), "and calculated", reward)
 	}
 
-	reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(358364))
+	_, reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(358364))
 	if reward.Cmp(big.NewInt(7e+18)) != 0 {
 		t.Error("TestCalcBaseBlockReward 7 (start)", "failed. Expected", big.NewInt(7e+18), "and calculated", reward)
 	}
-	reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(716727))
+	_, reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(716727))
 	if reward.Cmp(big.NewInt(7e+18)) != 0 {
 		t.Error("TestCalcBaseBlockReward 7 (end)", "failed. Expected", big.NewInt(7e+18), "and calculated", reward)
 	}
 
-	reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(716728))
+	_, reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(716728))
 	if reward.Cmp(big.NewInt(6e+18)) != 0 {
 		t.Error("TestCalcBaseBlockReward 6 (start)", "failed. Expected", big.NewInt(6e+18), "and calculated", reward)
 	}
-	reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(1075090))
+	_, reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(1075090))
 	if reward.Cmp(big.NewInt(6e+18)) != 0 {
 		t.Error("TestCalcBaseBlockReward 6 (end)", "failed. Expected", big.NewInt(6e+18), "and calculated", reward)
 	}
 
-	reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(1075091))
+	_, reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(1075091))
 	if reward.Cmp(big.NewInt(5e+18)) != 0 {
 		t.Error("TestCalcBaseBlockReward 5 (start)", "failed. Expected", big.NewInt(5e+18), "and calculated", reward)
 	}
-	reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(1433454))
+	_, reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(1433454))
 	if reward.Cmp(big.NewInt(5e+18)) != 0 {
 		t.Error("TestCalcBaseBlockReward 5 (end)", "failed. Expected", big.NewInt(5e+18), "and calculated", reward)
 	}
 
-	reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(1433455))
+	_, reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(1433455))
 	if reward.Cmp(big.NewInt(4e+18)) != 0 {
 		t.Error("TestCalcBaseBlockReward 4 (start)", "failed. Expected", big.NewInt(4e+18), "and calculated", reward)
 	}
-	reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(1791818))
+	_, reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(1791818))
 	if reward.Cmp(big.NewInt(4e+18)) != 0 {
 		t.Error("TestCalcBaseBlockReward 4 (end)", "failed. Expected", big.NewInt(4e+18), "and calculated", reward)
 	}
 
-	reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(1791819))
+	_, reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(1791819))
 	if reward.Cmp(big.NewInt(3e+18)) != 0 {
 		t.Error("TestCalcBaseBlockReward 3 (start)", "failed. Expected", big.NewInt(3e+18), "and calculated", reward)
 	}
-	reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(2150181))
+	_, reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(2150181))
 	if reward.Cmp(big.NewInt(3e+18)) != 0 {
 		t.Error("TestCalcBaseBlockReward 3 (end)", "failed. Expected", big.NewInt(3e+18), "and calculated", reward)
 	}
 
-	reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(2150182))
+	_, reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(2150182))
 	if reward.Cmp(big.NewInt(2e+18)) != 0 {
 		t.Error("TestCalcBaseBlockReward 2 (start)", "failed. Expected", big.NewInt(2e+18), "and calculated", reward)
 	}
-	reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(2508545))
+	_, reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(2508545))
 	if reward.Cmp(big.NewInt(2e+18)) != 0 {
 		t.Error("TestCalcBaseBlockReward 2 (end)", "failed. Expected", big.NewInt(2e+18), "and calculated", reward)
 	}
 
-	reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(2508546))
+	_, reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(2508546))
 	if reward.Cmp(big.NewInt(1e+18)) != 0 {
 		t.Error("TestCalcBaseBlockReward 1 (start)", "failed. Expected", big.NewInt(1e+18), "and calculated", reward)
 	}
 }
 
 func TestCalcUncleBlockReward(t *testing.T) {
-	config := &params.ChainConfig{HomesteadBlock: big.NewInt(0), EIP158Block: big.NewInt(10)}
+	config := params.MainnetChainConfig
 	reward := big.NewInt(8e+18)
 	// depth 1
 	u := CalcUncleBlockReward(config, big.NewInt(5), big.NewInt(4), reward)
@@ -203,7 +203,7 @@ func TestCalcUncleBlockReward(t *testing.T) {
 		t.Error("TestCalcUncleBlockReward 8", "failed. Expected", big.NewInt(0), "and calculated", u)
 	}
 
-	reward = big.NewInt(7e+18)
+	_, reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(358364))
 	expected := big.NewInt(35e+17)
 	// depth 1 (after stepdown)
 	u = CalcUncleBlockReward(config, big.NewInt(8), big.NewInt(7), reward)
@@ -211,11 +211,12 @@ func TestCalcUncleBlockReward(t *testing.T) {
 		t.Error("TestCalcUncleBlockReward 7", "failed. Expected", expected, "and calculated", u)
 	}
 
-	reward = big.NewInt(5e+18)
+	_, reward = CalcBaseBlockReward(config.Ubqhash, big.NewInt(1075091))
 	expected = big.NewInt(25e+17)
 	// depth 1 (after stepdown)
 	u = CalcUncleBlockReward(config, big.NewInt(8), big.NewInt(7), reward)
 	if u.Cmp(expected) != 0 {
 		t.Error("TestCalcUncleBlockReward 5", "failed. Expected", expected, "and calculated", u)
 	}
+
 }
