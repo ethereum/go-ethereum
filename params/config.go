@@ -39,9 +39,9 @@ var (
 		EIP150Hash:          common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
 		EIP155Block:         big.NewInt(10),
 		EIP158Block:         big.NewInt(10),
-		ByzantiumBlock:      big.NewInt(math.MaxInt64),
-		ConstantinopleBlock: big.NewInt(math.MaxInt64),
-		PetersburgBlock:     big.NewInt(math.MaxInt64),
+		ByzantiumBlock:      big.NewInt(1075090), // Andromeda
+		ConstantinopleBlock: big.NewInt(1075090), // Andromeda
+		PetersburgBlock:     big.NewInt(1075090), // Andromeda
 		Ubqhash: &UbqhashConfig{
 			DigishieldModBlock: big.NewInt(4088),
 			FluxBlock:          big.NewInt(8000),
