@@ -873,10 +873,13 @@ func (ps *peerSet) Register(p *peer) error {
 		ps.lock.Unlock()
 		return errAlreadyRegistered
 	}
+	if _, ok := ps.inactive[p.id]; ok {
+		delete(ps.inactive, p.id)
+	} else {
+		p.sendQueue = newExecQueue(100)
+	}
 	ps.active[p.id] = p
-	delete(ps.inactive, p.id)
 
-	p.sendQueue = newExecQueue(100)
 	peers := make([]peerSetNotify, len(ps.notifyList))
 	copy(peers, ps.notifyList)
 	ps.lock.Unlock()
@@ -904,7 +907,6 @@ func (ps *peerSet) Unregister(p *peer) error {
 		for _, n := range peers {
 			n.unregisterPeer(p)
 		}
-		p.sendQueue.quit()
 		return nil
 	}
 }
@@ -913,17 +915,27 @@ func (ps *peerSet) Unregister(p *peer) error {
 // initiates disconnection at the networking layer.
 func (ps *peerSet) Disconnect(id string) error {
 	ps.lock.Lock()
-	p, ok := ps.active[id]
-	if ok {
-		delete(ps.active, id)
-	} else {
-		if p, ok = ps.inactive[id]; !ok {
-			ps.lock.Unlock()
-			return errNotRegistered
-		}
+
+	var (
+		peers []peerSetNotify
+		p     *peer
+		ok    bool
+	)
+	if p, ok = ps.active[id]; ok {
+		delete(ps.active, p.id)
+		peers = make([]peerSetNotify, len(ps.notifyList))
+		copy(peers, ps.notifyList)
+	} else if p, ok = ps.inactive[id]; ok {
 		delete(ps.inactive, id)
+	} else {
+		ps.lock.Unlock()
+		return errNotRegistered
 	}
 	ps.lock.Unlock()
+	for _, n := range peers {
+		n.unregisterPeer(p)
+	}
+	p.sendQueue.quit()
 	p.Peer.Disconnect(p2p.DiscUselessPeer)
 	return nil
 }
