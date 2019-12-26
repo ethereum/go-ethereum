@@ -187,13 +187,13 @@ func doInstall(cmdline []string) {
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
 
+	// Figure out the minor version number since we can't textually compare (1.10 < 1.9)
+	var minor int
+	fmt.Sscanf(strings.TrimPrefix(runtime.Version(), "go1."), "%d", &minor)
+
 	// Check Go version. People regularly open issues about compilation
 	// failure with outdated Go. This should save them the trouble.
 	if !strings.Contains(runtime.Version(), "devel") {
-		// Figure out the minor version number since we can't textually compare (1.10 < 1.9)
-		var minor int
-		fmt.Sscanf(strings.TrimPrefix(runtime.Version(), "go1."), "%d", &minor)
-
 		if minor < 9 {
 			log.Println("You have Go version", runtime.Version())
 			log.Println("go-ethereum requires at least Go version 1.9 and cannot")
@@ -210,6 +210,9 @@ func doInstall(cmdline []string) {
 
 	if *arch == "" || *arch == runtime.GOARCH {
 		goinstall := goTool("install", buildFlags(env)...)
+		if minor >= 13 {
+			goinstall.Args = append(goinstall.Args, "-trimpath")
+		}
 		goinstall.Args = append(goinstall.Args, "-v")
 		goinstall.Args = append(goinstall.Args, packages...)
 		build.MustRun(goinstall)
@@ -224,6 +227,9 @@ func doInstall(cmdline []string) {
 	}
 	// Seems we are cross compiling, work around forbidden GOBIN
 	goinstall := goToolArch(*arch, *cc, "install", buildFlags(env)...)
+	if minor >= 13 {
+		goinstall.Args = append(goinstall.Args, "-trimpath")
+	}
 	goinstall.Args = append(goinstall.Args, "-v")
 	goinstall.Args = append(goinstall.Args, []string{"-buildmode", "archive"}...)
 	goinstall.Args = append(goinstall.Args, packages...)
@@ -253,9 +259,7 @@ func buildFlags(env build.Environment) (flags []string) {
 	var ld []string
 	if env.Commit != "" {
 		ld = append(ld, "-X", "main.gitCommit="+env.Commit)
-	}
-	if runtime.GOOS == "darwin" {
-		ld = append(ld, "-s")
+		ld = append(ld, "-s", "-w")
 	}
 
 	if len(ld) > 0 {
