@@ -40,6 +40,7 @@ const (
 	fixedPointMultiplier         = 0x1000000        // constant to convert logarithms to fixed point format
 	lazyQueueRefresh             = time.Second * 10 // refresh period of the connected queue
 	tryActivatePeriod            = time.Second * 5  // periodically check whether inactive clients can be activated
+	dropInactiveCycles           = 2                // number of activation check periods after non-priority inactive peers are dropped
 	persistCumulativeTimeRefresh = time.Minute * 5  // refresh period of the cumulative running time persistence
 	posBalanceCacheLimit         = 8192             // the maximum number of cached items in positive balance queue
 	negBalanceCacheLimit         = 8192             // the maximum number of cached items in negative balance queue
@@ -84,9 +85,11 @@ type clientPool struct {
 	closed     bool
 	removePeer func(enode.ID)
 
-	connectedMap  map[enode.ID]*clientInfo
-	activeQueue   *prque.LazyQueue
-	inactiveQueue *prque.Prque
+	connectedMap        map[enode.ID]*clientInfo
+	activeQueue         *prque.LazyQueue
+	inactiveQueue       *prque.Prque
+	dropInactivePeers   map[uint64][]*clientInfo
+	dropInactiveCounter uint64
 
 	activeBalances, inactiveBalances                uint64
 	lastConnectedBalanceUpdate, fullRatioLastUpdate mclock.AbsTime
@@ -237,6 +240,13 @@ func newClientPool(db ethdb.Database, minCap, freeClientCap uint64, clock mclock
 			case <-clock.After(tryActivatePeriod):
 				pool.lock.Lock()
 				pool.tryActivateClients()
+				for _, c := range pool.dropInactivePeers[pool.dropInactiveCounter] {
+					if _, ok := pool.connectedMap[c.id]; ok && !c.active && !c.priority {
+						pool.disconnect(c.peer)
+					}
+				}
+				delete(pool.dropInactivePeers, pool.dropInactiveCounter)
+				pool.dropInactiveCounter++
 				pool.lock.Unlock()
 			case <-pool.stopCh:
 				return
@@ -404,6 +414,7 @@ func (f *clientPool) disconnect(p clientPeer) {
 		log.Debug("Client not connected", "address", p.freeClientId(), "id", peerIdToString(p.ID()))
 		return
 	}
+	tryActivate := e.active
 	if e.active {
 		f.deactivateClient(e)
 	}
@@ -412,7 +423,9 @@ func (f *clientPool) disconnect(p clientPeer) {
 	delete(f.connectedMap, e.id)
 	clientDisconnectedMeter.Mark(1)
 	log.Debug("Client disconnected", "address", e.address)
-	f.tryActivateClients()
+	if tryActivate {
+		f.tryActivateClients()
+	}
 }
 
 // capAvailable checks whether the current priority level of the given client is enough to
@@ -530,7 +543,7 @@ func (f *clientPool) deactivateClient(e *clientInfo) {
 	e.peer.updateCapacity(0)
 	totalConnectedGauge.Update(int64(f.activeCap))
 	f.inactiveQueue.Push(e, -connPriority(e, f.clock.Now()))
-	//TODO start timer
+	f.dropInactivePeers[f.dropInactiveCounter+dropInactiveCycles] = append(f.dropInactivePeers[f.dropInactiveCounter+dropInactiveCycles], e)
 }
 
 func (f *clientPool) tryActivateClients() {
