@@ -109,9 +109,11 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.EthashCacheDirFlag,
 			utils.EthashCachesInMemoryFlag,
 			utils.EthashCachesOnDiskFlag,
+			utils.EthashCachesLockMmapFlag,
 			utils.EthashDatasetDirFlag,
 			utils.EthashDatasetsInMemoryFlag,
 			utils.EthashDatasetsOnDiskFlag,
+			utils.EthashDatasetsLockMmapFlag,
 		},
 	},
 	{

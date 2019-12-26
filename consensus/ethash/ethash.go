@@ -48,7 +48,7 @@ var (
 	two256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 
 	// sharedEthash is a full instance that can be shared between multiple users.
-	sharedEthash = New(Config{"", 3, 0, "", 1, 0, ModeNormal, nil}, nil, false)
+	sharedEthash = New(Config{"", 3, 0, false, "", 1, 0, false, ModeNormal, nil}, nil, false)
 
 	// algorithmRevision is the data structure version used for file naming.
 	algorithmRevision = 23
@@ -65,7 +65,7 @@ func isLittleEndian() bool {
 }
 
 // memoryMap tries to memory map a file of uint32s for read only access.
-func memoryMap(path string) (*os.File, mmap.MMap, []uint32, error) {
+func memoryMap(path string, lock bool) (*os.File, mmap.MMap, []uint32, error) {
 	file, err := os.OpenFile(path, os.O_RDONLY, 0644)
 	if err != nil {
 		return nil, nil, nil, err
@@ -80,6 +80,13 @@ func memoryMap(path string) (*os.File, mmap.MMap, []uint32, error) {
 			mem.Unmap()
 			file.Close()
 			return nil, nil, nil, ErrInvalidDumpMagic
+		}
+	}
+	if lock {
+		if err := mem.Lock(); err != nil {
+			mem.Unmap()
+			file.Close()
+			return nil, nil, nil, err
 		}
 	}
 	return file, mem, buffer[len(dumpMagic):], err
@@ -107,7 +114,7 @@ func memoryMapFile(file *os.File, write bool) (mmap.MMap, []uint32, error) {
 // memoryMapAndGenerate tries to memory map a temporary file of uint32s for write
 // access, fill it with the data from a generator and then move it into the final
 // path requested.
-func memoryMapAndGenerate(path string, size uint64, generator func(buffer []uint32)) (*os.File, mmap.MMap, []uint32, error) {
+func memoryMapAndGenerate(path string, size uint64, lock bool, generator func(buffer []uint32)) (*os.File, mmap.MMap, []uint32, error) {
 	// Ensure the data folder exists
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return nil, nil, nil, err
@@ -142,7 +149,7 @@ func memoryMapAndGenerate(path string, size uint64, generator func(buffer []uint
 	if err := os.Rename(temp, path); err != nil {
 		return nil, nil, nil, err
 	}
-	return memoryMap(path)
+	return memoryMap(path, lock)
 }
 
 // lru tracks caches or datasets by their last use time, keeping at most N of them.
@@ -213,7 +220,7 @@ func newCache(epoch uint64) interface{} {
 }
 
 // generate ensures that the cache content is generated before use.
-func (c *cache) generate(dir string, limit int, test bool) {
+func (c *cache) generate(dir string, limit int, lock bool, test bool) {
 	c.once.Do(func() {
 		size := cacheSize(c.epoch*epochLength + 1)
 		seed := seedHash(c.epoch*epochLength + 1)
@@ -240,7 +247,7 @@ func (c *cache) generate(dir string, limit int, test bool) {
 
 		// Try to load the file from disk and memory map it
 		var err error
-		c.dump, c.mmap, c.cache, err = memoryMap(path)
+		c.dump, c.mmap, c.cache, err = memoryMap(path, lock)
 		if err == nil {
 			logger.Debug("Loaded old ethash cache from disk")
 			return
@@ -248,7 +255,7 @@ func (c *cache) generate(dir string, limit int, test bool) {
 		logger.Debug("Failed to load old ethash cache", "err", err)
 
 		// No previous cache available, create a new cache file to fill
-		c.dump, c.mmap, c.cache, err = memoryMapAndGenerate(path, size, func(buffer []uint32) { generateCache(buffer, c.epoch, seed) })
+		c.dump, c.mmap, c.cache, err = memoryMapAndGenerate(path, size, lock, func(buffer []uint32) { generateCache(buffer, c.epoch, seed) })
 		if err != nil {
 			logger.Error("Failed to generate mapped ethash cache", "err", err)
 
@@ -290,7 +297,7 @@ func newDataset(epoch uint64) interface{} {
 }
 
 // generate ensures that the dataset content is generated before use.
-func (d *dataset) generate(dir string, limit int, test bool) {
+func (d *dataset) generate(dir string, limit int, lock bool, test bool) {
 	d.once.Do(func() {
 		// Mark the dataset generated after we're done. This is needed for remote
 		defer atomic.StoreUint32(&d.done, 1)
@@ -326,7 +333,7 @@ func (d *dataset) generate(dir string, limit int, test bool) {
 
 		// Try to load the file from disk and memory map it
 		var err error
-		d.dump, d.mmap, d.dataset, err = memoryMap(path)
+		d.dump, d.mmap, d.dataset, err = memoryMap(path, lock)
 		if err == nil {
 			logger.Debug("Loaded old ethash dataset from disk")
 			return
@@ -337,7 +344,7 @@ func (d *dataset) generate(dir string, limit int, test bool) {
 		cache := make([]uint32, csize/4)
 		generateCache(cache, d.epoch, seed)
 
-		d.dump, d.mmap, d.dataset, err = memoryMapAndGenerate(path, dsize, func(buffer []uint32) { generateDataset(buffer, d.epoch, cache) })
+		d.dump, d.mmap, d.dataset, err = memoryMapAndGenerate(path, dsize, lock, func(buffer []uint32) { generateDataset(buffer, d.epoch, cache) })
 		if err != nil {
 			logger.Error("Failed to generate mapped ethash dataset", "err", err)
 
@@ -372,13 +379,13 @@ func (d *dataset) finalizer() {
 // MakeCache generates a new ethash cache and optionally stores it to disk.
 func MakeCache(block uint64, dir string) {
 	c := cache{epoch: block / epochLength}
-	c.generate(dir, math.MaxInt32, false)
+	c.generate(dir, math.MaxInt32, false, false)
 }
 
 // MakeDataset generates a new ethash dataset and optionally stores it to disk.
 func MakeDataset(block uint64, dir string) {
 	d := dataset{epoch: block / epochLength}
-	d.generate(dir, math.MaxInt32, false)
+	d.generate(dir, math.MaxInt32, false, false)
 }
 
 // Mode defines the type and amount of PoW verification an ethash engine makes.
@@ -394,13 +401,15 @@ const (
 
 // Config are the configuration parameters of the ethash.
 type Config struct {
-	CacheDir       string
-	CachesInMem    int
-	CachesOnDisk   int
-	DatasetDir     string
-	DatasetsInMem  int
-	DatasetsOnDisk int
-	PowMode        Mode
+	CacheDir         string
+	CachesInMem      int
+	CachesOnDisk     int
+	CachesLockMmap   bool
+	DatasetDir       string
+	DatasetsInMem    int
+	DatasetsOnDisk   int
+	DatasetsLockMmap bool
+	PowMode          Mode
 
 	Log log.Logger `toml:"-"`
 }
@@ -549,12 +558,12 @@ func (ethash *Ethash) cache(block uint64) *cache {
 	current := currentI.(*cache)
 
 	// Wait for generation finish.
-	current.generate(ethash.config.CacheDir, ethash.config.CachesOnDisk, ethash.config.PowMode == ModeTest)
+	current.generate(ethash.config.CacheDir, ethash.config.CachesOnDisk, ethash.config.CachesLockMmap, ethash.config.PowMode == ModeTest)
 
 	// If we need a new future cache, now's a good time to regenerate it.
 	if futureI != nil {
 		future := futureI.(*cache)
-		go future.generate(ethash.config.CacheDir, ethash.config.CachesOnDisk, ethash.config.PowMode == ModeTest)
+		go future.generate(ethash.config.CacheDir, ethash.config.CachesOnDisk, ethash.config.CachesLockMmap, ethash.config.PowMode == ModeTest)
 	}
 	return current
 }
@@ -574,20 +583,20 @@ func (ethash *Ethash) dataset(block uint64, async bool) *dataset {
 	// If async is specified, generate everything in a background thread
 	if async && !current.generated() {
 		go func() {
-			current.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.PowMode == ModeTest)
+			current.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.DatasetsLockMmap, ethash.config.PowMode == ModeTest)
 
 			if futureI != nil {
 				future := futureI.(*dataset)
-				future.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.PowMode == ModeTest)
+				future.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.DatasetsLockMmap, ethash.config.PowMode == ModeTest)
 			}
 		}()
 	} else {
 		// Either blocking generation was requested, or already done
-		current.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.PowMode == ModeTest)
+		current.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.DatasetsLockMmap, ethash.config.PowMode == ModeTest)
 
 		if futureI != nil {
 			future := futureI.(*dataset)
-			go future.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.PowMode == ModeTest)
+			go future.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.DatasetsLockMmap, ethash.config.PowMode == ModeTest)
 		}
 	}
 	return current
