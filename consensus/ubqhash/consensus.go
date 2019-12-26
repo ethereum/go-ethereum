@@ -24,7 +24,7 @@ import (
 	"runtime"
 	"time"
 
-  mapset "github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/consensus"
 	"github.com/ubiq/go-ubiq/consensus/misc"
@@ -38,43 +38,55 @@ import (
 
 // Ubqhash proof-of-work protocol constants.
 var (
-	blockReward *big.Int = big.NewInt(8e+18) // Block reward in wei for successfully mining a block
-	maxUncles            = 2                 // Maximum number of uncles allowed in a single block
-	allowedFutureBlockTime    = 15 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
+	maxUncles              = 2                // Maximum number of uncles allowed in a single block
+	allowedFutureBlockTime = 15 * time.Second // Max time from current time allowed for blocks, before they're considered future blocks
 )
 
 // Diff algo constants.
 var (
-	big88               = big.NewInt(88)
-	bigMinus99          = big.NewInt(-99)
-	nPowAveragingWindow = big.NewInt(21)
-	nPowMaxAdjustDown   = big.NewInt(16) // 16% adjustment down
-	nPowMaxAdjustUp     = big.NewInt(8)  // 8% adjustment up
+	big88 = big.NewInt(88)
 
-	diffChangeBlock       = big.NewInt(4088)
-	nPowAveragingWindow88 = big.NewInt(88)
-	nPowMaxAdjustDown2    = big.NewInt(3) // 3% adjustment down
-	nPowMaxAdjustUp2      = big.NewInt(2) // 2% adjustment up
+	digishieldV3Config = &diffConfig{
+		AveragingWindow: big.NewInt(21),
+		MaxAdjustDown:   big.NewInt(16), // 16%
+		MaxAdjustUp:     big.NewInt(8),  // 8%
+		Factor:          big.NewInt(100),
+	}
 
-	// Flux
-	fluxChangeBlock       = big.NewInt(8000)
-	nPowMaxAdjustDownFlux = big.NewInt(5) // 0.5% adjustment down
-	nPowMaxAdjustUpFlux   = big.NewInt(3) // 0.3% adjustment up
-	nPowDampFlux          = big.NewInt(1) // 0.1%
+	digishieldV3ModConfig = &diffConfig{
+		AveragingWindow: big.NewInt(88),
+		MaxAdjustDown:   big.NewInt(3), // 3%
+		MaxAdjustUp:     big.NewInt(2), // 2%
+		Factor:          big.NewInt(100),
+	}
+
+	fluxConfig = &diffConfig{
+		AveragingWindow: big.NewInt(88),
+		MaxAdjustDown:   big.NewInt(5), // 0.5%
+		MaxAdjustUp:     big.NewInt(3), // 0.3%
+		Dampen:          big.NewInt(1), // 0.1%
+		Factor:          big.NewInt(1000),
+	}
 )
+
+type diffConfig struct {
+	AveragingWindow *big.Int `json:"averagingWindow"`
+	MaxAdjustDown   *big.Int `json:"maxAdjustDown"`
+	MaxAdjustUp     *big.Int `json:"maxAdjustUp"`
+	Dampen          *big.Int `json:"dampen,omitempty"`
+	Factor          *big.Int `json:"factor"`
+}
 
 // Various error messages to mark blocks invalid. These should be private to
 // prevent engine specific errors from being referenced in the remainder of the
 // codebase, inherently breaking if the engine is swapped out. Please put common
 // error types into the consensus package.
 var (
-	errLargeBlockTime    = errors.New("timestamp too big")
 	errZeroBlockTime     = errors.New("timestamp equals parent's")
 	errTooManyUncles     = errors.New("too many uncles")
 	errDuplicateUncle    = errors.New("duplicate uncle")
 	errUncleIsAncestor   = errors.New("uncle is ancestor")
 	errDanglingUncle     = errors.New("uncle's parent is not ancestor")
-	errNonceOutOfRange   = errors.New("nonce out of range")
 	errInvalidDifficulty = errors.New("non-positive difficulty")
 	errInvalidMixDigest  = errors.New("invalid mix digest")
 	errInvalidPoW        = errors.New("invalid proof-of-work")
@@ -300,84 +312,39 @@ func (ubqhash *Ubqhash) verifyHeader(chain consensus.ChainReader, header, parent
 }
 
 // Difficulty timespans
-func averagingWindowTimespan() *big.Int {
+func averagingWindowTimespan(config *diffConfig) *big.Int {
 	x := new(big.Int)
-	return x.Mul(nPowAveragingWindow, big88)
+	return x.Mul(config.AveragingWindow, big88)
 }
 
-func minActualTimespan() *big.Int {
-	x := new(big.Int)
-	y := new(big.Int)
-	z := new(big.Int)
-	x.Sub(big.NewInt(100), nPowMaxAdjustUp)
-	y.Mul(averagingWindowTimespan(), x)
-	z.Div(y, big.NewInt(100))
-	return z
-}
-
-func maxActualTimespan() *big.Int {
-	x := new(big.Int)
-	y := new(big.Int)
-	z := new(big.Int)
-	x.Add(big.NewInt(100), nPowMaxAdjustDown)
-	y.Mul(averagingWindowTimespan(), x)
-	z.Div(y, big.NewInt(100))
-	return z
-}
-
-func averagingWindowTimespan88() *big.Int {
-	x := new(big.Int)
-	return x.Mul(nPowAveragingWindow88, big88)
-}
-
-func minActualTimespan2() *big.Int {
-	x := new(big.Int)
-	y := new(big.Int)
-	z := new(big.Int)
-	x.Sub(big.NewInt(100), nPowMaxAdjustUp2)
-	y.Mul(averagingWindowTimespan88(), x)
-	z.Div(y, big.NewInt(100))
-	return z
-}
-
-func maxActualTimespan2() *big.Int {
-	x := new(big.Int)
-	y := new(big.Int)
-	z := new(big.Int)
-	x.Add(big.NewInt(100), nPowMaxAdjustDown2)
-	y.Mul(averagingWindowTimespan88(), x)
-	z.Div(y, big.NewInt(100))
-	return z
-}
-
-func minActualTimespanFlux(dampen bool) *big.Int {
+func minActualTimespan(config *diffConfig, dampen bool) *big.Int {
 	x := new(big.Int)
 	y := new(big.Int)
 	z := new(big.Int)
 	if dampen {
-		x.Sub(big.NewInt(1000), nPowDampFlux)
-		y.Mul(averagingWindowTimespan88(), x)
-		z.Div(y, big.NewInt(1000))
+		x.Sub(config.Factor, config.Dampen)
+		y.Mul(averagingWindowTimespan(config), x)
+		z.Div(y, config.Factor)
 	} else {
-		x.Sub(big.NewInt(1000), nPowMaxAdjustUpFlux)
-		y.Mul(averagingWindowTimespan88(), x)
-		z.Div(y, big.NewInt(1000))
+		x.Sub(config.Factor, config.MaxAdjustUp)
+		y.Mul(averagingWindowTimespan(config), x)
+		z.Div(y, config.Factor)
 	}
 	return z
 }
 
-func maxActualTimespanFlux(dampen bool) *big.Int {
+func maxActualTimespan(config *diffConfig, dampen bool) *big.Int {
 	x := new(big.Int)
 	y := new(big.Int)
 	z := new(big.Int)
 	if dampen {
-		x.Add(big.NewInt(1000), nPowDampFlux)
-		y.Mul(averagingWindowTimespan88(), x)
-		z.Div(y, big.NewInt(1000))
+		x.Add(config.Factor, config.Dampen)
+		y.Mul(averagingWindowTimespan(config), x)
+		z.Div(y, config.Factor)
 	} else {
-		x.Add(big.NewInt(1000), nPowMaxAdjustDownFlux)
-		y.Mul(averagingWindowTimespan88(), x)
-		z.Div(y, big.NewInt(1000))
+		x.Add(config.Factor, config.MaxAdjustDown)
+		y.Mul(averagingWindowTimespan(config), x)
+		z.Div(y, config.Factor)
 	}
 	return z
 }
@@ -389,141 +356,76 @@ func (ubqhash *Ubqhash) CalcDifficulty(chain consensus.ChainReader, time uint64,
 	return CalcDifficulty(chain, time, parent)
 }
 
+// CalcDifficulty determines which difficulty algorithm to use for calculating a new block
 func CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
 	parentTime := parent.Time
 	parentNumber := parent.Number
 	parentDiff := parent.Difficulty
 
-	if parentNumber.Cmp(diffChangeBlock) < 0 {
-		return calcDifficultyOrig(chain, parentNumber, parentDiff, parent)
+	config := chain.Config()
+	ubqhashConfig := config.Ubqhash
+
+	if parentNumber.Cmp(ubqhashConfig.FluxBlock) < 0 {
+		if parentNumber.Cmp(ubqhashConfig.DigishieldModBlock) < 0 {
+			// Original DigishieldV3
+			return calcDifficultyDigishieldV3(chain, parentNumber, parentDiff, parent, digishieldV3Config)
+		}
+		// Modified DigishieldV3
+		return calcDifficultyDigishieldV3(chain, parentNumber, parentDiff, parent, digishieldV3ModConfig)
 	}
-	if parentNumber.Cmp(fluxChangeBlock) < 0 {
-		// (chain consensus.ChainReader, parentNumber, parentDiff *big.Int, parent *types.Header)
-		return calcDifficulty2(chain, parentNumber, parentDiff, parent)
-	} else {
-		// (chain consensus.ChainReader, time, parentTime, parentNumber, parentDiff *big.Int, parent *types.Header)
-		return fluxDifficulty(chain, big.NewInt(int64(time)), big.NewInt(int64(parentTime)), parentNumber, parentDiff, parent)
-	}
+	// Flux
+	return calcDifficultyFlux(chain, big.NewInt(int64(time)), big.NewInt(int64(parentTime)), parentNumber, parentDiff, parent)
 }
 
-// Some weird constants to avoid constant memory allocs for them.
-var (
-	expDiffPeriod = big.NewInt(100000)
-	big10         = big.NewInt(10)
-)
-
-// calcDifficultyLegacy is the difficulty adjustment algorithm. It returns
-// the difficulty that a new block should have when created at time given the
-// parent block's time and difficulty. The calculation uses the Legacy rules.
-func CalcDifficultyLegacy(time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
-	bigTime := new(big.Int).SetUint64(time)
-	bigParentTime := new(big.Int).SetUint64(parentTime)
-
-	// holds intermediate values to make the algo easier to read & audit
-	x := new(big.Int)
-	y := new(big.Int)
-
-	// 1 - (block_timestamp -parent_timestamp) // 10
-	x.Sub(bigTime, bigParentTime)
-	x.Div(x, big88)
-	x.Sub(common.Big1, x)
-
-	// max(1 - (block_timestamp - parent_timestamp) // 10, -99)))
-	if x.Cmp(bigMinus99) < 0 {
-		x.Set(bigMinus99)
-	}
-	// (parent_diff + parent_diff // 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
-	y.Div(parentDiff, params.DifficultyBoundDivisor)
-	x.Mul(y, x)
-	x.Add(parentDiff, x)
-
-	// minimum difficulty can ever be (before exponential factor)
-	if x.Cmp(params.MinimumDifficulty) < 0 {
-		x.Set(params.MinimumDifficulty)
-	}
-
-	return x
-}
-
-// CalcDifficulty is the difficulty adjustment algorithm. It returns
-// the difficulty that a new block should have when created at time
+// calcDifficultyDigishieldV3 is the original difficulty adjustment algorithm.
+// It returns the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
-// Rewritten to be based on Digibyte's Digishield v3 retargeting
-func calcDifficultyOrig(chain consensus.ChainReader, parentNumber, parentDiff *big.Int, parent *types.Header) *big.Int {
+// Based on Digibyte's Digishield v3 retargeting
+func calcDifficultyDigishieldV3(chain consensus.ChainReader, parentNumber, parentDiff *big.Int, parent *types.Header, digishield *diffConfig) *big.Int {
 	// holds intermediate values to make the algo easier to read & audit
 	x := new(big.Int)
 	nFirstBlock := new(big.Int)
-	nFirstBlock.Sub(parentNumber, nPowAveragingWindow)
+	nFirstBlock.Sub(parentNumber, digishield.AveragingWindow)
 
 	log.Debug(fmt.Sprintf("CalcDifficulty parentNumber: %v parentDiff: %v", parentNumber, parentDiff))
 
 	// Check we have enough blocks
-	if parentNumber.Cmp(nPowAveragingWindow) < 1 {
-		log.Debug(fmt.Sprintf("CalcDifficulty: parentNumber(%+x) < nPowAveragingWindow(%+x)", parentNumber, nPowAveragingWindow))
+	if parentNumber.Cmp(digishield.AveragingWindow) < 1 {
+		log.Debug(fmt.Sprintf("CalcDifficulty: parentNumber(%+x) < digishieldV3Config.AveragingWindow(%+x)", parentNumber, digishield.AveragingWindow))
 		x.Set(parentDiff)
 		return x
 	}
 
 	// Limit adjustment step
 	// Use medians to prevent time-warp attacks
-	// nActualTimespan := nLastBlockTime - nFirstBlockTime
 	nLastBlockTime := chain.CalcPastMedianTime(parentNumber.Uint64(), parent)
 	nFirstBlockTime := chain.CalcPastMedianTime(nFirstBlock.Uint64(), parent)
 	nActualTimespan := new(big.Int)
 	nActualTimespan.Sub(nLastBlockTime, nFirstBlockTime)
 	log.Debug(fmt.Sprintf("CalcDifficulty nActualTimespan = %v before dampening", nActualTimespan))
 
-	// nActualTimespan = AveragingWindowTimespan() + (nActualTimespan-AveragingWindowTimespan())/4
 	y := new(big.Int)
-	y.Sub(nActualTimespan, averagingWindowTimespan())
+	y.Sub(nActualTimespan, averagingWindowTimespan(digishield))
 	y.Div(y, big.NewInt(4))
-	nActualTimespan.Add(y, averagingWindowTimespan())
+	nActualTimespan.Add(y, averagingWindowTimespan(digishield))
 	log.Debug(fmt.Sprintf("CalcDifficulty nActualTimespan = %v before bounds", nActualTimespan))
 
-	if nActualTimespan.Cmp(minActualTimespan()) < 0 {
-		nActualTimespan.Set(minActualTimespan())
+	if nActualTimespan.Cmp(minActualTimespan(digishield, false)) < 0 {
+		nActualTimespan.Set(minActualTimespan(digishield, false))
 		log.Debug("CalcDifficulty Minimum Timespan set")
-	} else if nActualTimespan.Cmp(maxActualTimespan()) > 0 {
-		nActualTimespan.Set(maxActualTimespan())
+	} else if nActualTimespan.Cmp(maxActualTimespan(digishield, false)) > 0 {
+		nActualTimespan.Set(maxActualTimespan(digishield, false))
 		log.Debug("CalcDifficulty Maximum Timespan set")
 	}
 
 	log.Debug(fmt.Sprintf("CalcDifficulty nActualTimespan = %v final\n", nActualTimespan))
 
 	// Retarget
-	x.Mul(parentDiff, averagingWindowTimespan())
+	x.Mul(parentDiff, averagingWindowTimespan(digishield))
 	log.Debug(fmt.Sprintf("CalcDifficulty parentDiff * AveragingWindowTimespan: %v", x))
 
 	x.Div(x, nActualTimespan)
 	log.Debug(fmt.Sprintf("CalcDifficulty x / nActualTimespan: %v", x))
-
-	return x
-}
-
-func calcDifficulty2(chain consensus.ChainReader, parentNumber, parentDiff *big.Int, parent *types.Header) *big.Int {
-	x := new(big.Int)
-	nFirstBlock := new(big.Int)
-	nFirstBlock.Sub(parentNumber, nPowAveragingWindow88)
-
-	nLastBlockTime := chain.CalcPastMedianTime(parentNumber.Uint64(), parent)
-	nFirstBlockTime := chain.CalcPastMedianTime(nFirstBlock.Uint64(), parent)
-
-	nActualTimespan := new(big.Int)
-	nActualTimespan.Sub(nLastBlockTime, nFirstBlockTime)
-
-	y := new(big.Int)
-	y.Sub(nActualTimespan, averagingWindowTimespan88())
-	y.Div(y, big.NewInt(4))
-	nActualTimespan.Add(y, averagingWindowTimespan88())
-
-	if nActualTimespan.Cmp(minActualTimespan2()) < 0 {
-		nActualTimespan.Set(minActualTimespan2())
-	} else if nActualTimespan.Cmp(maxActualTimespan2()) > 0 {
-		nActualTimespan.Set(maxActualTimespan2())
-	}
-
-	x.Mul(parentDiff, averagingWindowTimespan88())
-	x.Div(x, nActualTimespan)
 
 	if x.Cmp(params.MinimumDifficulty) < 0 {
 		x.Set(params.MinimumDifficulty)
@@ -532,10 +434,17 @@ func calcDifficulty2(chain consensus.ChainReader, parentNumber, parentDiff *big.
 	return x
 }
 
-func fluxDifficulty(chain consensus.ChainReader, time, parentTime, parentNumber, parentDiff *big.Int, parent *types.Header) *big.Int {
+func calcDifficultyFlux(chain consensus.ChainReader, time, parentTime, parentNumber, parentDiff *big.Int, parent *types.Header) *big.Int {
 	x := new(big.Int)
 	nFirstBlock := new(big.Int)
-	nFirstBlock.Sub(parentNumber, nPowAveragingWindow88)
+	nFirstBlock.Sub(parentNumber, fluxConfig.AveragingWindow)
+
+	// Check we have enough blocks
+	if parentNumber.Cmp(fluxConfig.AveragingWindow) < 1 {
+		log.Debug(fmt.Sprintf("CalcDifficulty: parentNumber(%+x) < fluxConfig.AveragingWindow(%+x)", parentNumber, fluxConfig.AveragingWindow))
+		x.Set(parentDiff)
+		return x
+	}
 
 	diffTime := new(big.Int)
 	diffTime.Sub(time, parentTime)
@@ -546,29 +455,29 @@ func fluxDifficulty(chain consensus.ChainReader, time, parentTime, parentNumber,
 	nActualTimespan.Sub(nLastBlockTime, nFirstBlockTime)
 
 	y := new(big.Int)
-	y.Sub(nActualTimespan, averagingWindowTimespan88())
+	y.Sub(nActualTimespan, averagingWindowTimespan(fluxConfig))
 	y.Div(y, big.NewInt(4))
-	nActualTimespan.Add(y, averagingWindowTimespan88())
+	nActualTimespan.Add(y, averagingWindowTimespan(fluxConfig))
 
-	if nActualTimespan.Cmp(minActualTimespanFlux(false)) < 0 {
+	if nActualTimespan.Cmp(minActualTimespan(fluxConfig, false)) < 0 {
 		doubleBig88 := new(big.Int)
 		doubleBig88.Mul(big88, big.NewInt(2))
 		if diffTime.Cmp(doubleBig88) > 0 {
-			nActualTimespan.Set(minActualTimespanFlux(true))
+			nActualTimespan.Set(minActualTimespan(fluxConfig, true))
 		} else {
-			nActualTimespan.Set(minActualTimespanFlux(false))
+			nActualTimespan.Set(minActualTimespan(fluxConfig, false))
 		}
-	} else if nActualTimespan.Cmp(maxActualTimespanFlux(false)) > 0 {
+	} else if nActualTimespan.Cmp(maxActualTimespan(fluxConfig, false)) > 0 {
 		halfBig88 := new(big.Int)
 		halfBig88.Div(big88, big.NewInt(2))
 		if diffTime.Cmp(halfBig88) < 0 {
-			nActualTimespan.Set(maxActualTimespanFlux(true))
+			nActualTimespan.Set(maxActualTimespan(fluxConfig, true))
 		} else {
-			nActualTimespan.Set(maxActualTimespanFlux(false))
+			nActualTimespan.Set(maxActualTimespan(fluxConfig, false))
 		}
 	}
 
-	x.Mul(parentDiff, averagingWindowTimespan88())
+	x.Mul(parentDiff, averagingWindowTimespan(fluxConfig))
 	x.Div(x, nActualTimespan)
 
 	if x.Cmp(params.MinimumDifficulty) < 0 {
@@ -666,7 +575,7 @@ func (ubqhash *Ubqhash) Prepare(chain consensus.ChainReader, header *types.Heade
 // setting the final state and assembling the block.
 func (ubqhash *Ubqhash) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// Accumulate any block and uncle rewards and commit the final state root
-	accumulateRewards(state, header, uncles)
+	accumulateRewards(chain.Config(), state, header, uncles)
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 	// Header seems complete, assemble into a block and return
@@ -676,7 +585,6 @@ func (ubqhash *Ubqhash) Finalize(chain consensus.ChainReader, header *types.Head
 // Some weird constants to avoid constant memory allocs for them.
 var (
 	big2  = big.NewInt(2)
-	big8  = big.NewInt(8)
 	big32 = big.NewInt(32)
 )
 
@@ -703,56 +611,59 @@ func (ubqhash *Ubqhash) SealHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
+// CalcBaseBlockReward calculates the base block reward as per the ubiq monetary policy.
+func CalcBaseBlockReward(config *params.UbqhashConfig, height *big.Int) (*big.Int, *big.Int) {
+	reward := new(big.Int)
+
+	for _, step := range config.MonetaryPolicy {
+		if height.Cmp(step.Block) > 0 {
+			reward = new(big.Int).Set(step.Reward)
+		} else {
+			break
+		}
+	}
+
+	return new(big.Int).Set(config.MonetaryPolicy[0].Reward), reward
+}
+
+// CalcUncleBlockReward calculates the uncle miner reward based on depth.
+func CalcUncleBlockReward(config *params.ChainConfig, blockHeight *big.Int, uncleHeight *big.Int, blockReward *big.Int) *big.Int {
+	reward := new(big.Int)
+	// calculate reward based on depth
+	reward.Add(uncleHeight, big2)
+	reward.Sub(reward, blockHeight)
+	reward.Mul(reward, blockReward)
+	reward.Div(reward, big2)
+
+	// negative uncle reward fix. (activates along-side EIP158)
+	if config.IsEIP158(blockHeight) && reward.Cmp(big.NewInt(0)) < 0 {
+		reward = big.NewInt(0)
+	}
+	return reward
+}
+
 // AccumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
-func accumulateRewards(state *state.StateDB, header *types.Header, uncles []*types.Header) {
-	reward := new(big.Int).Set(blockReward)
+func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+	// block reward (miner)
+	initialReward, currentReward := CalcBaseBlockReward(config.Ubqhash, header.Number)
 
-	if header.Number.Cmp(big.NewInt(358363)) > 0 {
-		reward = big.NewInt(7e+18)
-	}
-	if header.Number.Cmp(big.NewInt(716727)) > 0 {
-		reward = big.NewInt(6e+18)
-	}
-	if header.Number.Cmp(big.NewInt(1075090)) > 0 {
-		reward = big.NewInt(5e+18)
-	}
-	if header.Number.Cmp(big.NewInt(1433454)) > 0 {
-		reward = big.NewInt(4e+18)
-	}
-	if header.Number.Cmp(big.NewInt(1791818)) > 0 {
-		reward = big.NewInt(3e+18)
-	}
-	if header.Number.Cmp(big.NewInt(2150181)) > 0 {
-		reward = big.NewInt(2e+18)
-	}
-	if header.Number.Cmp(big.NewInt(2508545)) > 0 {
-		reward = big.NewInt(1e+18)
+	// Uncle reward step down fix. (activates along-side byzantium)
+	ufixReward := initialReward
+	if config.IsByzantium(header.Number) {
+		ufixReward = currentReward
 	}
 
-	r := new(big.Int)
 	for _, uncle := range uncles {
-		r.Add(uncle.Number, big2)
-		r.Sub(r, header.Number)
-		r.Mul(r, blockReward)
-		r.Div(r, big2)
-
-		if header.Number.Cmp(big.NewInt(10)) < 0 {
-			state.AddBalance(uncle.Coinbase, r)
-			r.Div(blockReward, big32)
-			if r.Cmp(big.NewInt(0)) < 0 {
-				r = big.NewInt(0)
-			}
-		} else {
-			if r.Cmp(big.NewInt(0)) < 0 {
-				r = big.NewInt(0)
-			}
-			state.AddBalance(uncle.Coinbase, r)
-			r.Div(blockReward, big32)
-		}
-
-		reward.Add(reward, r)
+		// uncle block miner reward (depth === 1 ? baseBlockReward * 0.5 : 0)
+		uncleReward := CalcUncleBlockReward(config, header.Number, uncle.Number, ufixReward)
+		// update uncle miner balance
+		state.AddBalance(uncle.Coinbase, uncleReward)
+		// include uncle bonus reward (baseBlockReward/32)
+		uncleReward.Div(ufixReward, big32)
+		currentReward.Add(currentReward, uncleReward)
 	}
-	state.AddBalance(header.Coinbase, reward)
+	// update block miner balance
+	state.AddBalance(header.Coinbase, currentReward)
 }

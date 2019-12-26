@@ -24,7 +24,7 @@ import (
 	"github.com/ubiq/go-ubiq/core/types"
 )
 
-var errEthashStopped = errors.New("ubqhash stopped")
+var errUbqhashStopped = errors.New("ubqhash stopped")
 
 // API exposes ubqhash related methods for the RPC interface.
 type API struct {
@@ -51,7 +51,7 @@ func (api *API) GetWork() ([4]string, error) {
 	select {
 	case api.ubqhash.fetchWorkCh <- &sealWork{errc: errc, res: workCh}:
 	case <-api.ubqhash.exitCh:
-		return [4]string{}, errEthashStopped
+		return [4]string{}, errUbqhashStopped
 	}
 
 	select {

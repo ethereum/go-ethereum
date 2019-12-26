@@ -706,20 +706,20 @@ func TestConcurrentDiskCacheGeneration(t *testing.T) {
 
 	// Define a heavy enough block, one from mainnet should do
 	block := types.NewBlockWithHeader(&types.Header{
-		Number:      big.NewInt(3311058),
-		ParentHash:  common.HexToHash("0xd783efa4d392943503f28438ad5830b2d5964696ffc285f338585e9fe0a37a05"),
+		Number:      big.NewInt(1047270),
+		ParentHash:  common.HexToHash("0x50162f5bb86b04d36ad3c0972942f3ad12012681364a9ecfd851163893973b1e"),
 		UncleHash:   common.HexToHash("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"),
-		Coinbase:    common.HexToAddress("0xc0ea08a2d404d3172d2add29a45be56da40e2949"),
-		Root:        common.HexToHash("0x77d14e10470b5850332524f8cd6f69ad21f070ce92dca33ab2858300242ef2f1"),
-		TxHash:      common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
-		ReceiptHash: common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
-		Difficulty:  big.NewInt(167925187834220),
-		GasLimit:    4015682,
-		GasUsed:     0,
-		Time:        1488928920,
-		Extra:       []byte("www.bw.com"),
-		MixDigest:   common.HexToHash("0x3e140b0784516af5e5ec6730f2fb20cca22f32be399b9e4ad77d32541f798cd0"),
-		Nonce:       types.EncodeNonce(0xf400cd0006070c49),
+		Coinbase:    common.HexToAddress("0xaeb7897adf9b1309d7ef2dca6f3f6afb65358abd"),
+		Root:        common.HexToHash("0x48450163a72087d7f7c7f8e479ca5f9b46ba2dea65af31374869330438f092bc"),
+		TxHash:      common.HexToHash("0xf3d988c1ba77b327ffe99f8f24d183f1dcca0a858dea397da90d19511f3e5243"),
+		ReceiptHash: common.HexToHash("0x51f3538babf4e6315ac5843cbb6585b57024cfda57a3fbe51413549944496dcc"),
+		Difficulty:  big.NewInt(4399410101192),
+		GasLimit:    8000000,
+		GasUsed:     21000,
+		Time:        1576671205,
+		Extra:       []byte("ubiqpool.maxhash.org"),
+		MixDigest:   common.HexToHash("0x8ce33f23cc18c394542ab28d35065706293eaf9c101007beb800f7e273266f82"),
+		Nonce:       types.EncodeNonce(0x2b00b2d234c5134e),
 	})
 	// Simulate multiple processes sharing the same datadir
 	var pend sync.WaitGroup

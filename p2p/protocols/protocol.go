@@ -38,13 +38,13 @@ import (
 	"sync"
 	"time"
 
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/metrics"
 	"github.com/ubiq/go-ubiq/p2p"
+	"github.com/ubiq/go-ubiq/p2p/spancontext"
+	"github.com/ubiq/go-ubiq/p2p/tracing"
 	"github.com/ubiq/go-ubiq/rlp"
-	"github.com/ubiq/go-ubiq/swarm/spancontext"
-	"github.com/ubiq/go-ubiq/swarm/tracing"
-	opentracing "github.com/opentracing/opentracing-go"
 )
 
 // error codes used by this  protocol scheme

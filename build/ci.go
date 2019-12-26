@@ -60,7 +60,6 @@ import (
 
 	"github.com/ubiq/go-ubiq/internal/build"
 	"github.com/ubiq/go-ubiq/params"
-	sv "github.com/ubiq/go-ubiq/swarm/version"
 )
 
 var (
@@ -80,12 +79,6 @@ var (
 		executablePath("puppeth"),
 		executablePath("rlpdump"),
 		executablePath("wnode"),
-	}
-
-	// Files that end up in the swarm*.zip archive.
-	swarmArchiveFiles = []string{
-		"COPYING",
-		executablePath("swarm"),
 	}
 
 	// A debian package is created for all executables listed here.
@@ -116,16 +109,7 @@ var (
 		},
 		{
 			BinaryName:  "wnode",
-			Description: "Ethereum Whisper diagnostic tool",
-		},
-	}
-
-	// A debian package is created for all executables listed here.
-	debSwarmExecutables = []debExecutable{
-		{
-			BinaryName:  "swarm",
-			PackageName: "ethereum-swarm",
-			Description: "Ethereum Swarm daemon and tools",
+			Description: "Ubiq Whisper diagnostic tool",
 		},
 	}
 
@@ -135,20 +119,10 @@ var (
 		Executables: debExecutables,
 	}
 
-	debSwarm = debPackage{
-		Name:        "ethereum-swarm",
-		Version:     sv.Version,
-		Executables: debSwarmExecutables,
-	}
-
 	// Debian meta packages to build and push to Ubuntu PPA
 	debPackages = []debPackage{
-		debSwarm,
 		debEthereum,
 	}
-
-	// Packages to be cross-compiled by the xgo command
-	allCrossCompiledArchiveFiles = append(allToolsArchiveFiles, swarmArchiveFiles...)
 
 	// Distros for which packages are created.
 	// Note: vivid is unsupported because there is no golang-1.6 package for it.
@@ -402,10 +376,7 @@ func doArchive(cmdline []string) {
 
 		basegubiq = archiveBasename(*arch, params.ArchiveVersion(env.Commit))
 		gubiq     = "gubiq-" + basegubiq + ext
-		alltools = "gubiq-alltools-" + basegubiq + ext
-
-		baseswarm = archiveBasename(*arch, sv.ArchiveVersion(env.Commit))
-		swarm     = "swarm-" + baseswarm + ext
+		alltools  = "gubiq-alltools-" + basegubiq + ext
 	)
 	maybeSkipArchive(env)
 	if err := build.WriteArchive(gubiq, gubiqArchiveFiles); err != nil {
@@ -414,10 +385,7 @@ func doArchive(cmdline []string) {
 	if err := build.WriteArchive(alltools, allToolsArchiveFiles); err != nil {
 		log.Fatal(err)
 	}
-	if err := build.WriteArchive(swarm, swarmArchiveFiles); err != nil {
-		log.Fatal(err)
-	}
-	for _, archive := range []string{gubiq, alltools, swarm} {
+	for _, archive := range []string{gubiq, alltools} {
 		if err := archiveUpload(archive, *upload, *signer); err != nil {
 			log.Fatal(err)
 		}
@@ -1021,7 +989,7 @@ func doXgo(cmdline []string) {
 
 	if *alltools {
 		args = append(args, []string{"--dest", GOBIN}...)
-		for _, res := range allCrossCompiledArchiveFiles {
+		for _, res := range allToolsArchiveFiles {
 			if strings.HasPrefix(res, GOBIN) {
 				// Binary tool found, cross build it explicitly
 				args = append(args, "./"+filepath.Join("cmd", filepath.Base(res)))

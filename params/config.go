@@ -39,10 +39,47 @@ var (
 		EIP150Hash:          common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
 		EIP155Block:         big.NewInt(10),
 		EIP158Block:         big.NewInt(10),
-		ByzantiumBlock:      big.NewInt(math.MaxInt64),
-		ConstantinopleBlock: big.NewInt(math.MaxInt64),
-		PetersburgBlock:     big.NewInt(math.MaxInt64),
-		Ubqhash:              new(UbqhashConfig),
+		ByzantiumBlock:      big.NewInt(1075090), // Andromeda
+		ConstantinopleBlock: big.NewInt(1075090), // Andromeda
+		PetersburgBlock:     big.NewInt(1075090), // Andromeda
+		Ubqhash: &UbqhashConfig{
+			DigishieldModBlock: big.NewInt(4088),
+			FluxBlock:          big.NewInt(8000),
+			MonetaryPolicy: []UbqhashMPStep{
+				UbqhashMPStep{
+					Block:  big.NewInt(0),
+					Reward: big.NewInt(8e+18),
+				},
+				UbqhashMPStep{
+					Block:  big.NewInt(358363),
+					Reward: big.NewInt(7e+18),
+				},
+				UbqhashMPStep{
+					Block:  big.NewInt(716727),
+					Reward: big.NewInt(6e+18),
+				},
+				UbqhashMPStep{
+					Block:  big.NewInt(1075090),
+					Reward: big.NewInt(5e+18),
+				},
+				UbqhashMPStep{
+					Block:  big.NewInt(1433454),
+					Reward: big.NewInt(4e+18),
+				},
+				UbqhashMPStep{
+					Block:  big.NewInt(1791818),
+					Reward: big.NewInt(3e+18),
+				},
+				UbqhashMPStep{
+					Block:  big.NewInt(2150181),
+					Reward: big.NewInt(2e+18),
+				},
+				UbqhashMPStep{
+					Block:  big.NewInt(2508545),
+					Reward: big.NewInt(1e+18),
+				},
+			},
+		},
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
@@ -65,7 +102,44 @@ var (
 		ByzantiumBlock:      big.NewInt(math.MaxInt64),
 		ConstantinopleBlock: big.NewInt(math.MaxInt64),
 		PetersburgBlock:     big.NewInt(math.MaxInt64),
-		Ubqhash:              new(UbqhashConfig),
+		Ubqhash: &UbqhashConfig{
+			DigishieldModBlock: big.NewInt(4088),
+			FluxBlock:          big.NewInt(8000),
+			MonetaryPolicy: []UbqhashMPStep{
+				UbqhashMPStep{
+					Block:  big.NewInt(0),
+					Reward: big.NewInt(8e+18),
+				},
+				UbqhashMPStep{
+					Block:  big.NewInt(358363),
+					Reward: big.NewInt(7e+18),
+				},
+				UbqhashMPStep{
+					Block:  big.NewInt(716727),
+					Reward: big.NewInt(6e+18),
+				},
+				UbqhashMPStep{
+					Block:  big.NewInt(1075090),
+					Reward: big.NewInt(5e+18),
+				},
+				UbqhashMPStep{
+					Block:  big.NewInt(1433454),
+					Reward: big.NewInt(4e+18),
+				},
+				UbqhashMPStep{
+					Block:  big.NewInt(1791818),
+					Reward: big.NewInt(3e+18),
+				},
+				UbqhashMPStep{
+					Block:  big.NewInt(2150181),
+					Reward: big.NewInt(2e+18),
+				},
+				UbqhashMPStep{
+					Block:  big.NewInt(2508545),
+					Reward: big.NewInt(1e+18),
+				},
+			},
+		},
 	}
 
 	// TestnetTrustedCheckpoint contains the light client trusted checkpoint for the Ropsten test network.
@@ -82,7 +156,7 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllUbqhashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(UbqhashConfig), nil}
+	AllUbqhashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, &UbqhashConfig{big.NewInt(0), big.NewInt(0), []UbqhashMPStep{}}, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ubiq core developers into the Clique consensus.
@@ -91,7 +165,7 @@ var (
 	// adding flags to the config to also have to set these fields.
 	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(UbqhashConfig), nil}
+	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, &UbqhashConfig{big.NewInt(0), big.NewInt(0), []UbqhashMPStep{}}, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -134,8 +208,18 @@ type ChainConfig struct {
 	Clique  *CliqueConfig  `json:"clique,omitempty"`
 }
 
+// Ubqhash monetary policy reward step
+type UbqhashMPStep struct {
+	Block  *big.Int `json:"block"`
+	Reward *big.Int `json:"reward"`
+}
+
 // UbqhashConfig is the consensus engine configs for proof-of-work based sealing.
-type UbqhashConfig struct{}
+type UbqhashConfig struct {
+	DigishieldModBlock *big.Int        `json:"digishieldModBlock,omitempty"` // Block to activate the DigiShield V3 mod
+	FluxBlock          *big.Int        `json:"fluxBlock"`                    // Block to activate the Flux difficulty algorithm
+	MonetaryPolicy     []UbqhashMPStep `json:"monetaryPolicy"`               // Blocks to step the block reward down
+}
 
 // String implements the stringer interface, returning the consensus engine details.
 func (c *UbqhashConfig) String() string {

@@ -20,9 +20,8 @@ package web3ext
 var Modules = map[string]string{
 	"accounting": Accounting_JS,
 	"admin":      Admin_JS,
-	"chequebook": Chequebook_JS,
 	"clique":     Clique_JS,
-	"ubqhash":     Ubqhash_JS,
+	"ubqhash":    Ubqhash_JS,
 	"debug":      Debug_JS,
 	"eth":        Eth_JS,
 	"miner":      Miner_JS,
@@ -30,40 +29,8 @@ var Modules = map[string]string{
 	"personal":   Personal_JS,
 	"rpc":        RPC_JS,
 	"shh":        Shh_JS,
-	"swarmfs":    SWARMFS_JS,
 	"txpool":     TxPool_JS,
 }
-
-const Chequebook_JS = `
-web3._extend({
-	property: 'chequebook',
-	methods: [
-		new web3._extend.Method({
-			name: 'deposit',
-			call: 'chequebook_deposit',
-			params: 1,
-			inputFormatter: [null]
-		}),
-		new web3._extend.Property({
-			name: 'balance',
-			getter: 'chequebook_balance',
-			outputFormatter: web3._extend.utils.toDecimal
-		}),
-		new web3._extend.Method({
-			name: 'cash',
-			call: 'chequebook_cash',
-			params: 1,
-			inputFormatter: [null]
-		}),
-		new web3._extend.Method({
-			name: 'issue',
-			call: 'chequebook_issue',
-			params: 2,
-			inputFormatter: [null, null]
-		}),
-	]
-});
-`
 
 const Clique_JS = `
 web3._extend({
@@ -625,7 +592,13 @@ web3._extend({
 const RPC_JS = `
 web3._extend({
 	property: 'rpc',
-	methods: [],
+	methods: [
+		new web3._extend.Method({
+			name: 'discover',
+			call: 'rpc.discover',
+			params: 0
+		}),
+	],
 	properties: [
 		new web3._extend.Property({
 			name: 'modules',
@@ -650,30 +623,6 @@ web3._extend({
 		new web3._extend.Property({
 			name: 'info',
 			getter: 'shh_info'
-		}),
-	]
-});
-`
-
-const SWARMFS_JS = `
-web3._extend({
-	property: 'swarmfs',
-	methods:
-	[
-		new web3._extend.Method({
-			name: 'mount',
-			call: 'swarmfs_mount',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'unmount',
-			call: 'swarmfs_unmount',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'listmounts',
-			call: 'swarmfs_listmounts',
-			params: 0
 		}),
 	]
 });

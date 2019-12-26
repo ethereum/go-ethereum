@@ -11,7 +11,7 @@ Binary archives are published at [releases](https://github.com/ubiq/go-ubiq/rele
 
 ## Building the source
 
-For prerequisites and detailed build instructions please read the [Ubiq's Installation Instructions](https://github.com/ubiq/go-ubiq/wiki/Building-Ubiq) on their wiki. 
+For prerequisites and detailed build instructions please read the [Ubiq's Installation Instructions](https://github.com/ubiq/go-ubiq/wiki/Building-Ubiq) on their wiki.
 
 *Note*: Keep in mind that Ubiq aims to be 100% compatible with Ethereum, so mostly all the documentation you can find on Ethereum wiki, will apply for sure to Ubiq.
 
@@ -35,12 +35,11 @@ The go-ubiq project comes with several wrappers/executables found in the `cmd` d
 | `evm` | Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode. Its purpose is to allow isolated, fine-grained debugging of EVM opcodes (e.g. `evm --code 60ff60ff --debug`). |
 | `gubiqrpctest` | Developer utility tool to support our [ethereum/rpc-test](https://github.com/ethereum/rpc-tests) test suite which validates baseline conformity to the [Ethereum JSON RPC](https://github.com/ethereum/wiki/wiki/JSON-RPC) specs. Please see the [test suite's readme](https://github.com/ethereum/rpc-tests/blob/master/README.md) for details. |
 | `rlpdump` | Developer utility tool to convert binary RLP ([Recursive Length Prefix](https://github.com/ethereum/wiki/wiki/RLP)) dumps (data encoding used by the Ubiq protocol both network as well as consensus wise) to user friendlier hierarchical representation (e.g. `rlpdump --hex CE0183FFFFFFC4C304050583616263`). |
-| `swarm`    | Swarm daemon and tools. This is the entrypoint for the Swarm network. `swarm --help` for command line options and subcommands. See [Swarm README](https://github.com/ubiq/go-ubiq/tree/master/swarm) for more information. |
 | `puppeth`    | a CLI wizard that aids in creating a new Ubiq network. |
 
 ## Running gubiq
 
-Going through all the possible command line flags is out of scope here (please consult 
+Going through all the possible command line flags is out of scope here (please consult
 [Ubiq CLI Wiki page](https://github.com/ubiq/go-ubiq/wiki/Command-Line-Options)), but we've
 enumerated a few common parameter combos to get you up to speed quickly on how you can run your
 own Gubiq instance.
@@ -90,7 +89,7 @@ Specifying the `--testnet` flag however will reconfigure your Gubiq instance a b
    `gubiq attach <datadir>/testnet/gubiq.ipc`. Windows users are not affected by this.
  * Instead of connecting the main Ubiq network, the client will connect to the test network,
    which uses different P2P bootnodes, different network IDs and genesis states.
-   
+
 *Note: Although there are some internal protective measures to prevent transactions from crossing
 over between the main network and test network, you should make sure to always use separate accounts
 for play-money and real-money. Unless you manually move accounts, Gubiq will by default correctly
