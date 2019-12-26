@@ -151,7 +151,7 @@ func (h *committer) store(n node, db *Database, force bool, hasVnodeChildren boo
 	// Larger nodes are replaced by their hash and stored in the database.
 	var (
 		hash, _ = n.cache()
-		size    = 0
+		size    int
 	)
 	if hash == nil {
 		if vn, ok := n.(valueNode); ok {
@@ -261,7 +261,6 @@ func estimateSize(n node) int {
 		panic(fmt.Sprintf("node type %T", n))
 
 	}
-	return 0
 }
 
 /**
