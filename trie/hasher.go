@@ -67,6 +67,7 @@ func newHasher(onleaf LeafCallback) *hasher {
 }
 
 func returnHasherToPool(h *hasher) {
+	h.onleaf = nil
 	hasherPool.Put(h)
 }
 

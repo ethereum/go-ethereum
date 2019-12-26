@@ -20,6 +20,7 @@ package trie
 import (
 	"bytes"
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -409,13 +410,20 @@ func (t *Trie) Hash() common.Hash {
 	return common.BytesToHash(hash.(hashNode))
 }
 
-// Commit writes all nodes to the trie's memory database, tracking the internal
+// oldCommit is the old implementation of Commit, which uses the
+// regular hasher.
+// It writes all nodes to the trie's memory database, tracking the internal
 // and external (for account tries) references.
-func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
+func (t *Trie) oldCommit(onleaf LeafCallback) (root common.Hash, err error) {
 	if t.db == nil {
 		panic("commit called on trie with nil database")
 	}
-	hash, cached, err := t.hashRoot(t.db, onleaf)
+	if t.root == nil {
+		return emptyRoot, nil
+	}
+	h := newHasher(onleaf)
+	defer returnHasherToPool(h)
+	hash, cached, err := h.hash(t.root, t.db, true)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -423,11 +431,49 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	return common.BytesToHash(hash.(hashNode)), nil
 }
 
-func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
+func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
+	if t.db == nil {
+		panic("commit called on trie with nil database")
+	}
+	if t.root == nil {
+		return emptyRoot, nil
+	}
+	rootHash := t.Hash()
+	h := newCommitter(onleaf)
+	defer returnCommitterToPool(h)
+	var wg sync.WaitGroup
+	if onleaf != nil {
+		wg.Add(1)
+		go h.commitLoop(t.db, &wg)
+	}
+	_, err = h.commit(t.root, t.db, true)
+	if onleaf != nil {
+		close(h.leafCh)
+		wg.Wait()
+	}
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return rootHash, nil
+}
+
+// oldHashRoot is the old implementation of hashRoot, which uses the regular hasher
+func (t *Trie) oldHashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
 	if t.root == nil {
 		return hashNode(emptyRoot.Bytes()), nil, nil
 	}
 	h := newHasher(onleaf)
 	defer returnHasherToPool(h)
 	return h.hash(t.root, db, true)
+}
+
+// hashRoot calculates the root hash of the given trie
+func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
+	if t.root == nil {
+		return hashNode(emptyRoot.Bytes()), nil, nil
+	}
+	h := newPureHasher()
+	defer returnPureHasherToPool(h)
+	hashed, cached := h.hash(t.root, true)
+	return hashed, cached, nil
 }
