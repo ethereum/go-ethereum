@@ -175,17 +175,18 @@ type priceFactors struct {
 func newClientPool(db ethdb.Database, minCap, freeClientCap uint64, clock mclock.Clock, removePeer func(enode.ID)) *clientPool {
 	ndb := newNodeDB(db, clock)
 	pool := &clientPool{
-		ndb:            ndb,
-		clock:          clock,
-		connectedMap:   make(map[enode.ID]*clientInfo),
-		activeQueue:    prque.NewLazyQueue(connSetIndex, connPriority, connMaxPriority, clock, lazyQueueRefresh),
-		inactiveQueue:  prque.New(connSetIndex),
-		minCap:         minCap,
-		freeClientCap:  freeClientCap,
-		removePeer:     removePeer,
-		startTime:      clock.Now(),
-		cumulativeTime: ndb.getCumulativeTime(),
-		stopCh:         make(chan struct{}),
+		ndb:               ndb,
+		clock:             clock,
+		connectedMap:      make(map[enode.ID]*clientInfo),
+		activeQueue:       prque.NewLazyQueue(connSetIndex, connPriority, connMaxPriority, clock, lazyQueueRefresh),
+		inactiveQueue:     prque.New(connSetIndex),
+		dropInactivePeers: make(map[uint64][]*clientInfo),
+		minCap:            minCap,
+		freeClientCap:     freeClientCap,
+		removePeer:        removePeer,
+		startTime:         clock.Now(),
+		cumulativeTime:    ndb.getCumulativeTime(),
+		stopCh:            make(chan struct{}),
 	}
 	// calculate total token balance amount
 	var start enode.ID
@@ -416,7 +417,7 @@ func (f *clientPool) disconnect(p clientPeer) {
 	}
 	tryActivate := e.active
 	if e.active {
-		f.deactivateClient(e)
+		f.deactivateClient(e, false)
 	}
 	f.finalizeBalance(e, f.clock.Now())
 	f.inactiveQueue.Remove(e.queueIndex)
@@ -488,7 +489,7 @@ func (f *clientPool) capAvailable(id enode.ID, freeID string, capacity uint64, m
 		}
 		for _, c := range popList {
 			if kick && c != client {
-				f.deactivateClient(c)
+				f.deactivateClient(c, true)
 			} else {
 				f.activeQueue.Push(c)
 			}
@@ -529,7 +530,7 @@ func (f *clientPool) setDefaultFactors(posFactors, negFactors priceFactors) {
 	f.defaultNegFactors = negFactors
 }
 
-func (f *clientPool) deactivateClient(e *clientInfo) {
+func (f *clientPool) deactivateClient(e *clientInfo, scheduleDrop bool) {
 	if _, ok := f.connectedMap[e.id]; !ok || !e.active {
 		return
 	}
@@ -543,7 +544,9 @@ func (f *clientPool) deactivateClient(e *clientInfo) {
 	e.peer.updateCapacity(0)
 	totalConnectedGauge.Update(int64(f.activeCap))
 	f.inactiveQueue.Push(e, -connPriority(e, f.clock.Now()))
-	f.dropInactivePeers[f.dropInactiveCounter+dropInactiveCycles] = append(f.dropInactivePeers[f.dropInactiveCounter+dropInactiveCycles], e)
+	if scheduleDrop {
+		f.dropInactivePeers[f.dropInactiveCounter+dropInactiveCycles] = append(f.dropInactivePeers[f.dropInactiveCounter+dropInactiveCycles], e)
+	}
 }
 
 func (f *clientPool) tryActivateClients() {
@@ -650,7 +653,7 @@ func (f *clientPool) setLimits(totalConn int, totalCap uint64) {
 	f.capLimit = totalCap
 	if f.activeCap > f.capLimit || f.activeQueue.Size() > f.activeLimit {
 		f.activeQueue.MultiPop(func(data interface{}, priority int64) bool {
-			f.deactivateClient(data.(*clientInfo))
+			f.deactivateClient(data.(*clientInfo), true)
 			return f.activeCap > f.capLimit || f.activeQueue.Size() > f.activeLimit
 		})
 	} else {
