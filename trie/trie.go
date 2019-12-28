@@ -48,6 +48,10 @@ type LeafCallback func(leaf []byte, parent common.Hash) error
 type Trie struct {
 	db   *Database
 	root node
+	// Keep a rough track of the number of leafs to commit
+	dirtyCount int
+	// And leafs to hash
+	unhashedCount int
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -163,6 +167,8 @@ func (t *Trie) Update(key, value []byte) {
 //
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryUpdate(key, value []byte) error {
+	t.unhashedCount++
+	t.dirtyCount++
 	k := keybytesToHex(key)
 	if len(value) != 0 {
 		_, n, err := t.insert(t.root, nil, k, valueNode(value))
@@ -259,6 +265,8 @@ func (t *Trie) Delete(key []byte) {
 // TryDelete removes any existing value for key from the trie.
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryDelete(key []byte) error {
+	t.unhashedCount++
+	t.dirtyCount++
 	k := keybytesToHex(key)
 	_, n, err := t.delete(t.root, nil, k)
 	if err != nil {
@@ -405,7 +413,7 @@ func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 // Hash returns the root hash of the trie. It does not write to the
 // database and can be used even if the trie doesn't have one.
 func (t *Trie) Hash() common.Hash {
-	hash, cached, _ := t.hashRoot(nil, nil)
+	hash, cached, _ := t.hashRoot(nil)
 	t.root = cached
 	return common.BytesToHash(hash.(hashNode))
 }
@@ -454,6 +462,7 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
+	t.dirtyCount = 0
 	return rootHash, nil
 }
 
@@ -468,12 +477,14 @@ func (t *Trie) oldHashRoot(db *Database, onleaf LeafCallback) (node, node, error
 }
 
 // hashRoot calculates the root hash of the given trie
-func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
+func (t *Trie) hashRoot(db *Database) (node, node, error) {
 	if t.root == nil {
 		return hashNode(emptyRoot.Bytes()), nil, nil
 	}
-	h := newPureHasher()
+	// If the number of changes is below 100, we let one thread handle it
+	h := newPureHasher(t.unhashedCount >= 100)
 	defer returnPureHasherToPool(h)
 	hashed, cached := h.hash(t.root, true)
+	t.unhashedCount = 0
 	return hashed, cached, nil
 }

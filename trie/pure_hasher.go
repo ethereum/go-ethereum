@@ -26,23 +26,23 @@ import (
 type pureHasher struct {
 	sha keccakState
 
-	tmp    sliceBuffer
-	tmpKey []byte
+	tmp      sliceBuffer
+	parallel bool
 }
 
 // hashers live in a global db.
 var pureHasherPool = sync.Pool{
 	New: func() interface{} {
 		return &pureHasher{
-			tmp:    make(sliceBuffer, 0, 550), // cap is as large as a full fullNode.
-			tmpKey: make([]byte, 64),          // space for an packed key
-			sha:    sha3.NewLegacyKeccak256().(keccakState),
+			tmp: make(sliceBuffer, 0, 550), // cap is as large as a full fullNode.
+			sha: sha3.NewLegacyKeccak256().(keccakState),
 		}
 	},
 }
 
-func newPureHasher() *pureHasher {
+func newPureHasher(parallel bool) *pureHasher {
 	h := pureHasherPool.Get().(*pureHasher)
+	h.parallel = parallel
 	return h
 }
 
@@ -107,14 +107,31 @@ func (h *pureHasher) hashFullNodeChildren(n *fullNode) (collapsed *fullNode, cac
 	// Hash the full node's children, caching the newly hashed subtrees
 	cached = n.copy()
 	collapsed = n.copy()
-	for i := 0; i < 16; i++ {
-		if child := n.Children[i]; child != nil {
-			collapsed.Children[i], cached.Children[i] = h.hash(child, false)
-		} else {
-			collapsed.Children[i] = nilValueNode
+	if h.parallel {
+		var wg sync.WaitGroup
+		wg.Add(16)
+		for i := 0; i < 16; i++ {
+			go func(i int) {
+				hasher := newPureHasher(false)
+				if child := n.Children[i]; child != nil {
+					collapsed.Children[i], cached.Children[i] = hasher.hash(child, false)
+				} else {
+					collapsed.Children[i] = nilValueNode
+				}
+				wg.Done()
+				defer returnPureHasherToPool(hasher)
+			}(i)
+		}
+		wg.Wait()
+	} else {
+		for i := 0; i < 16; i++ {
+			if child := n.Children[i]; child != nil {
+				collapsed.Children[i], cached.Children[i] = h.hash(child, false)
+			} else {
+				collapsed.Children[i] = nilValueNode
+			}
 		}
 	}
-	cached.Children[16] = n.Children[16]
 	return collapsed, cached
 }
 
@@ -139,7 +156,7 @@ func (h *pureHasher) shortnodeToHash(n *shortNode, force bool) node {
 func (h *pureHasher) fullnodeToHash(n *fullNode, force bool) node {
 	h.tmp.Reset()
 	// Generate the RLP encoding of the node
-	if err := rlp.Encode(&h.tmp, n); err != nil {
+	if err := n.EncodeRLP(&h.tmp); err != nil {
 		panic("encode error: " + err.Error())
 	}
 
