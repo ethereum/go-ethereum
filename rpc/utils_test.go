@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -16,10 +16,28 @@
 
 package rpc
 
-type OpenRPCDiscoverSchemaT struct {
-	OpenRPC    string                   `json:"openrpc"`
-	Info       map[string]interface{}   `json:"info"`
-	Servers    []map[string]interface{} `json:"servers"`
-	Methods    []map[string]interface{} `json:"methods"`
-	Components map[string]interface{}   `json:"components"`
+import (
+	"strings"
+	"testing"
+)
+
+func TestNewID(t *testing.T) {
+	hexchars := "0123456789ABCDEFabcdef"
+	for i := 0; i < 100; i++ {
+		id := string(NewID())
+		if !strings.HasPrefix(id, "0x") {
+			t.Fatalf("invalid ID prefix, want '0x...', got %s", id)
+		}
+
+		id = id[2:]
+		if len(id) == 0 || len(id) > 32 {
+			t.Fatalf("invalid ID length, want len(id) > 0 && len(id) <= 32), got %d", len(id))
+		}
+
+		for i := 0; i < len(id); i++ {
+			if strings.IndexByte(hexchars, id[i]) == -1 {
+				t.Fatalf("unexpected byte, want any valid hex char, got %c", id[i])
+			}
+		}
+	}
 }

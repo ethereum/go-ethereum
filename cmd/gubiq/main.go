@@ -35,11 +35,11 @@ import (
 	"github.com/ubiq/go-ubiq/eth"
 	"github.com/ubiq/go-ubiq/ethclient"
 	"github.com/ubiq/go-ubiq/internal/debug"
-	"github.com/ubiq/go-ubiq/internal/openrpc"
+	// "github.com/ubiq/go-ubiq/internal/openrpc"
 	"github.com/ubiq/go-ubiq/log"
 	"github.com/ubiq/go-ubiq/metrics"
 	"github.com/ubiq/go-ubiq/node"
-	"github.com/ubiq/go-ubiq/rpc"
+	// "github.com/ubiq/go-ubiq/rpc"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -251,9 +251,9 @@ func init() {
 		return nil
 	}
 
-	if err := rpc.SetDefaultOpenRPCSchemaRaw(openrpc.OpenRPCSchema); err != nil {
-		log.Crit("Setting OpenRPC default", "error", err)
-	}
+	// if err := rpc.SetDefaultOpenRPCSchemaRaw(openrpc.OpenRPCSchema); err != nil {
+	//	log.Crit("Setting OpenRPC default", "error", err)
+	// }
 }
 
 func main() {
