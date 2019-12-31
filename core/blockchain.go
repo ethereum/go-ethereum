@@ -1572,11 +1572,19 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// If there are any still remaining, mark as ignored
 		return it.index, err
 
+	case err == ErrInconsistentBody:
+		// If the body is inconsistent with header, don't mark the
+		// whole block hash as invalid. We may receive a block with
+		// invalid body but valid header.
+		stats.ignored += len(it.chain)
+		bc.reportBlock(block, nil, err, false)
+		return it.index, err
+
 	// Some other error occurred, abort
 	case err != nil:
 		bc.futureBlocks.Remove(block.Hash())
 		stats.ignored += len(it.chain)
-		bc.reportBlock(block, nil, err)
+		bc.reportBlock(block, nil, err, true)
 		return it.index, err
 	}
 	// No validation errors for the first block (or chain prefix skipped)
@@ -1588,7 +1596,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		}
 		// If the header is a banned one, straight out abort
 		if BadHashes[block.Hash()] {
-			bc.reportBlock(block, nil, ErrBlacklistedHash)
+			bc.reportBlock(block, nil, ErrBlacklistedHash, true)
 			return it.index, ErrBlacklistedHash
 		}
 		// If the block is known (in the middle of the chain), it's a special case for
@@ -1647,7 +1655,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		substart := time.Now()
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
-			bc.reportBlock(block, receipts, err)
+			bc.reportBlock(block, receipts, err, true)
 			atomic.StoreUint32(&followupInterrupt, 1)
 			return it.index, err
 		}
@@ -1666,7 +1674,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Validate the state using the default validator
 		substart = time.Now()
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-			bc.reportBlock(block, receipts, err)
+			bc.reportBlock(block, receipts, err, true)
 			atomic.StoreUint32(&followupInterrupt, 1)
 			return it.index, err
 		}
@@ -2065,9 +2073,10 @@ func (bc *BlockChain) addBadBlock(block *types.Block) {
 }
 
 // reportBlock logs a bad block error.
-func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
-	bc.addBadBlock(block)
-
+func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error, markBad bool) {
+	if markBad {
+		bc.addBadBlock(block)
+	}
 	var receiptString string
 	for i, receipt := range receipts {
 		receiptString += fmt.Sprintf("\t %d: cumulative: %v gas: %v contract: %v status: %v tx: %v logs: %v bloom: %x state: %x\n",

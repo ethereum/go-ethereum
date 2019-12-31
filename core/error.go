@@ -35,4 +35,8 @@ var (
 
 	// ErrNoGenesis is returned when there is no Genesis Block.
 	ErrNoGenesis = errors.New("genesis not found in chain")
+
+	// ErrInconsistentBody is returned if the block body is inconsistent with its
+	// corresponding header.
+	ErrInconsistentBody = errors.New("body is inconsistent with header")
 )

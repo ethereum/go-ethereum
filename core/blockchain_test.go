@@ -150,12 +150,12 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 		}
 		receipts, _, usedGas, err := blockchain.processor.Process(block, statedb, vm.Config{})
 		if err != nil {
-			blockchain.reportBlock(block, receipts, err)
+			blockchain.reportBlock(block, receipts, err, true)
 			return err
 		}
 		err = blockchain.validator.ValidateState(block, statedb, receipts, usedGas)
 		if err != nil {
-			blockchain.reportBlock(block, receipts, err)
+			blockchain.reportBlock(block, receipts, err, true)
 			return err
 		}
 		blockchain.chainmu.Lock()
@@ -2360,5 +2360,52 @@ func TestDeleteCreateRevert(t *testing.T) {
 	}
 	if n, err := chain.InsertChain(blocks); err != nil {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+}
+
+func TestInconsistentBlockImport(t *testing.T) {
+	var (
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		gspec   = &Genesis{
+			Config: params.TestChainConfig,
+			Alloc:  GenesisAlloc{addr1: {Balance: big.NewInt(10000000000000)}},
+		}
+		signer = types.NewEIP155Signer(gspec.Config.ChainID)
+	)
+	engine := ethash.NewFaker()
+	db := rawdb.NewMemoryDatabase()
+	genesis, _ := gspec.Commit(db)
+
+	// Generate inconsistent blocks
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 32, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+		tx, err := types.SignTx(types.NewContractCreation(b.TxNonce(addr1), new(big.Int), 1000000, new(big.Int), nil), signer, key1)
+		if err != nil {
+			t.Fatalf("failed to create tx: %v", err)
+		}
+		b.AddTx(tx)
+	})
+	badBlocks := make([]*types.Block, len(blocks))
+	copy(badBlocks, blocks)
+	badBlocks[0] = types.NewBlockWithHeader(badBlocks[0].Header()) // Modify the block, wipe body.
+
+	// Import the canonical chain
+	diskdb := rawdb.NewMemoryDatabase()
+	gspec.Commit(diskdb)
+	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	n, err := chain.InsertChain(badBlocks)
+	if err == nil || n != 0 {
+		t.Fatal("expect error")
+	}
+	// Ensure the hash is not recorded as BAD
+	if chain.badBlocks.Contains(badBlocks[0].Hash()) {
+		t.Fatal("expect no recording")
+	}
+	if _, err := chain.InsertChain(blocks); err != nil {
+		t.Fatal("expect successfully insertion")
 	}
 }
