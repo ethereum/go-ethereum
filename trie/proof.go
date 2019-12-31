@@ -563,9 +563,11 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 	if empty {
 		tr.root = nil
 	}
+	tr.batchStart()
 	for index, key := range keys {
 		tr.TryUpdate(key, values[index])
 	}
+	tr.batchEnd()
 	if tr.Hash() != rootHash {
 		return false, fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, tr.Hash())
 	}

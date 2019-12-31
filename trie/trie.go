@@ -74,6 +74,10 @@ type Trie struct {
 	// tracer is the tool to track the trie changes.
 	// It will be reset after each commit operation.
 	tracer *tracer
+
+	// batchMode, if true, means that the trie will overwrite nodes in-place,
+	// avoiding many copy operations.
+	batchMode bool
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -306,6 +310,13 @@ func (t *Trie) tryUpdate(key, value []byte) error {
 	return nil
 }
 
+func (t *Trie) batchStart() {
+	t.batchMode = true
+}
+func (t *Trie) batchEnd() {
+	t.batchMode = false
+}
+
 func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error) {
 	if len(key) == 0 {
 		if v, ok := n.(valueNode); ok {
@@ -353,7 +364,20 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		if !dirty || err != nil {
 			return false, n, err
 		}
-		n = n.copy()
+		// If we're in batch-mode, we don't keep 'ephemeral' changes.
+		// When we modify a node, we only copy it in case it is an old committed
+		// node.
+		// If the node is "new", we just update in place.
+		if t.batchMode {
+			if h, dirty := n.cache(); !dirty || h != nil {
+				// This node is either not dirty, or already hashed. We copy it
+				n = n.copy()
+			} else {
+				// No copy
+			}
+		} else {
+			n = n.copy()
+		}
 		n.flags = t.newFlag()
 		n.Children[key[0]] = nn
 		return true, n, nil
