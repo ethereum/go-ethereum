@@ -507,10 +507,12 @@ func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 	trie := newEmpty()
 	k := make([]byte, 32)
 	b.ReportAllocs()
+	trie.batchStart()
 	for i := 0; i < b.N; i++ {
 		e.PutUint64(k, uint64(i))
 		trie.Update(k, k)
 	}
+	trie.batchEnd()
 	return trie
 }
 

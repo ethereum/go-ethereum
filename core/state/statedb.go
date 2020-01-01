@@ -18,6 +18,7 @@
 package state
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -330,7 +331,7 @@ func (s *StateDB) StorageTrie(addr common.Address) Trie {
 		return nil
 	}
 	cpy := stateObject.deepCopy(s)
-	return cpy.updateTrie(s.db)
+	return cpy.updateTrie(cpy.getTrie(s.db))
 }
 
 func (s *StateDB) HasSuicided(addr common.Address) bool {
@@ -694,7 +695,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		if obj.deleted {
 			s.deleteStateObject(obj)
 		} else {
-			obj.updateRoot(s.db)
+			obj.updateRoot(obj.getTrie(s.db))
 			s.updateStateObject(obj)
 		}
 	}
@@ -730,20 +731,30 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	// Finalize any pending changes and merge everything into the tries
 	s.IntermediateRoot(deleteEmptyObjects)
 
+	// The commit phase. We start by committing the account storage tries
+	//
+	// Start the dedicated inserter
+	dbi := trie.StartDBInserter(s.db.TrieDB())
+
 	// Commit objects to the trie, measuring the elapsed time
 	for addr := range s.stateObjectsDirty {
 		if obj := s.stateObjects[addr]; !obj.deleted {
 			// Write any contract code associated with the state object
 			if obj.code != nil && obj.dirtyCode {
-				s.db.TrieDB().InsertBlob(common.BytesToHash(obj.CodeHash()), obj.code)
+				dbi.InsertBlob(obj.code, common.BytesToHash(obj.CodeHash()))
+				//s.db.TrieDB().InsertBlob(common.BytesToHash(obj.CodeHash()), obj.code)
 				obj.dirtyCode = false
 			}
 			// Write any storage changes in the state object to its storage trie
-			if err := obj.CommitTrie(s.db); err != nil {
+			if err := obj.CommitTrieTo(obj.getTrie(s.db), dbi); err != nil {
 				return common.Hash{}, err
 			}
 		}
 	}
+	// Wait for storage update to punch through
+	//dbi.WaitForEmpty()
+	// .. or not
+
 	if len(s.stateObjectsDirty) > 0 {
 		s.stateObjectsDirty = make(map[common.Address]struct{})
 	}
@@ -754,17 +765,21 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	// The onleaf func is called _serially_, so we can reuse the same account
 	// for unmarshalling every time.
 	var account Account
-	return s.trie.Commit(func(leaf []byte, parent common.Hash) error {
+	var trieDb = s.db.TrieDB()
+	h, e := s.trie.CommitTo(func(leaf []byte, parent common.Hash) error {
 		if err := rlp.DecodeBytes(leaf, &account); err != nil {
 			return nil
 		}
 		if account.Root != emptyRoot {
-			s.db.TrieDB().Reference(account.Root, parent)
+			trieDb.Reference(account.Root, parent)
 		}
-		code := common.BytesToHash(account.CodeHash)
-		if code != emptyCode {
-			s.db.TrieDB().Reference(code, parent)
+		if !bytes.Equal(emptyCodeHash, account.CodeHash) {
+			trieDb.Reference(common.BytesToHash(account.CodeHash), parent)
 		}
 		return nil
-	})
+	}, dbi)
+	// Close it, and wait for empty
+	dbi.Close()
+
+	return h, e
 }

@@ -19,6 +19,7 @@ package trie
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -32,6 +33,7 @@ type Leaf struct {
 	hash   common.Hash // hash of rlp data
 	node   node        // the node to commit
 	vnodes bool        // set to true if the node (possibly) contains a valueNode
+	onleaf LeafCallback
 }
 
 type committer struct {
@@ -52,10 +54,11 @@ var committerPool = sync.Pool{
 	},
 }
 
-func newCommitter(onleaf LeafCallback) *committer {
+func newCommitter(onleaf LeafCallback, leafCh chan *Leaf) *committer {
 	h := committerPool.Get().(*committer)
 	h.onleaf = onleaf
-	if onleaf != nil {
+	h.leafCh = leafCh
+	if onleaf != nil && leafCh == nil {
 		h.leafCh = make(chan *Leaf, 200) // arbitrary number
 	}
 	return h
@@ -182,6 +185,7 @@ func (h *committer) store(n node, db *Database, force bool, hasVnodeChildren boo
 			hash:   common.BytesToHash(hash),
 			node:   n,
 			vnodes: hasVnodeChildren,
+			onleaf: h.onleaf,
 		}
 	} else if db != nil {
 		// No leaf-callback used, but there's still a database. Do serial
@@ -275,7 +279,7 @@ have to do the waitgroup-wait between each trie commit.
 The code below is a rough sketch, it needs to be integrated nicely without causing
 dependency cycles between state, core and trie.
 
-
+**/
 
 type DbInserter struct {
 	inputCh  chan *Leaf // This is where input to database is sent
@@ -293,7 +297,7 @@ func (dbi *DbInserter) run() {
 			size      = item.size
 			n         = item.node
 			hasVnodes = item.vnodes
-			onleaf    = item.onLeaf
+			onleaf    = item.onleaf
 		)
 		if size < 0 {
 			// This is an end-marker object.
@@ -334,14 +338,14 @@ func (dbi *DbInserter) Insert(leaf *Leaf) {
 // channel has been handled
 func (dbi *DbInserter) WaitForEmpty() {
 	// Send an arbitrary id there
-	checksum := rand.Uint32()
-	dbi.inputCh <- &trie.Leaf{
+	checksum := rand.Int()
+	dbi.inputCh <- &Leaf{
 		size: -checksum,
 	}
 	// And wait for it to come back
 	for {
 		select {
-		case retval <- dbi.reportCh:
+		case retval := <-dbi.reportCh:
 			if retval == checksum {
 				return
 			}
@@ -351,7 +355,7 @@ func (dbi *DbInserter) WaitForEmpty() {
 }
 
 func (dbi *DbInserter) InsertBlob(blob []byte, blobHash common.Hash) {
-	dbi.inputCh <- &trie.Leaf{
+	dbi.inputCh <- &Leaf{
 		size:   len(blob),
 		hash:   blobHash,
 		node:   rawNode(blob),
@@ -366,8 +370,7 @@ func StartDBInserter(db *Database) *DbInserter {
 		reportCh: make(chan int),
 		db:       db,
 	}
+	dbi.wg.Add(1)
 	go dbi.run()
+	return dbi
 }
-
-
-*/

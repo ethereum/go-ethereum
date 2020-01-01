@@ -129,6 +129,13 @@ func (t *odrTrie) Commit(onleaf trie.LeafCallback) (common.Hash, error) {
 	return t.trie.Commit(onleaf)
 }
 
+func (t *odrTrie) CommitTo(onleaf trie.LeafCallback, dbi *trie.DbInserter) (common.Hash, error) {
+	if t.trie == nil {
+		return t.id.Root, nil
+	}
+	return t.trie.Commit(onleaf)
+}
+
 func (t *odrTrie) Hash() common.Hash {
 	if t.trie == nil {
 		return t.id.Root

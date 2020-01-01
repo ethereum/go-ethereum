@@ -52,7 +52,7 @@ type Trie struct {
 	dirtyCount int
 	// And leafs to hash
 	unhashedCount int
-	batchMode bool
+	batchMode     bool
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -187,10 +187,10 @@ func (t *Trie) TryUpdate(key, value []byte) error {
 	return nil
 }
 
-func (t *Trie) batchStart(){
+func (t *Trie) batchStart() {
 	t.batchMode = true
 }
-func (t *Trie) batchEnd(){
+func (t *Trie) batchEnd() {
 	t.batchMode = false
 }
 
@@ -240,14 +240,14 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		// When we modify a node, we only copy it in case it is an old committed
 		// node.
 		// If the node is "new", we just update in place.
-		if t.batchMode{
-			if h, dirty := n.cache(); !dirty || h != nil{
+		if t.batchMode {
+			if h, dirty := n.cache(); !dirty || h != nil {
 				// This node is either not dirty, or already hashed. We copy it
 				n = n.copy()
-			}else{
+			} else {
 				// No copy
 			}
-		}else{
+		} else {
 			n = n.copy()
 		}
 		n.flags = t.newFlag()
@@ -468,7 +468,7 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 		return emptyRoot, nil
 	}
 	rootHash := t.Hash()
-	h := newCommitter(onleaf)
+	h := newCommitter(onleaf, nil)
 	defer returnCommitterToPool(h)
 	var wg sync.WaitGroup
 	if onleaf != nil {
@@ -480,6 +480,24 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 		close(h.leafCh)
 		wg.Wait()
 	}
+	if err != nil {
+		return common.Hash{}, err
+	}
+	t.dirtyCount = 0
+	return rootHash, nil
+}
+
+func (t *Trie) CommitTo(onleaf LeafCallback, dbi *DbInserter) (root common.Hash, err error) {
+	if t.db == nil {
+		panic("commit called on trie with nil database")
+	}
+	if t.root == nil {
+		return emptyRoot, nil
+	}
+	rootHash := t.Hash()
+	h := newCommitter(onleaf, dbi.inputCh)
+	h.leafCh = dbi.inputCh
+	_, err = h.commit(t.root, t.db, true)
 	if err != nil {
 		return common.Hash{}, err
 	}

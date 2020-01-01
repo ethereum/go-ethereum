@@ -19,6 +19,7 @@ package state
 import (
 	"bytes"
 	"fmt"
+	"github.com/ethereum/go-ethereum/trie"
 	"io"
 	"math/big"
 	"time"
@@ -272,7 +273,7 @@ func (s *stateObject) finalise() {
 }
 
 // updateTrie writes cached storage modifications into the object's storage trie.
-func (s *stateObject) updateTrie(db Database) Trie {
+func (s *stateObject) updateTrie(tr Trie) Trie {
 	// Make sure all dirty slots are finalized into the pending storage area
 	s.finalise()
 
@@ -281,7 +282,6 @@ func (s *stateObject) updateTrie(db Database) Trie {
 		defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
 	}
 	// Insert all the pending updates into the trie
-	tr := s.getTrie(db)
 	for key, value := range s.pendingStorage {
 		// Skip noop changes, persist actual changes
 		if value == s.originStorage[key] {
@@ -304,8 +304,8 @@ func (s *stateObject) updateTrie(db Database) Trie {
 }
 
 // UpdateRoot sets the trie root to the current root hash of
-func (s *stateObject) updateRoot(db Database) {
-	s.updateTrie(db)
+func (s *stateObject) updateRoot(tr Trie) {
+	s.updateTrie(tr)
 
 	// Track the amount of time wasted on hashing the storge trie
 	if metrics.EnabledExpensive {
@@ -316,8 +316,8 @@ func (s *stateObject) updateRoot(db Database) {
 
 // CommitTrie the storage trie of the object to db.
 // This updates the trie root.
-func (s *stateObject) CommitTrie(db Database) error {
-	s.updateTrie(db)
+func (s *stateObject) CommitTrie(tr Trie) error {
+	s.updateTrie(tr)
 	if s.dbErr != nil {
 		return s.dbErr
 	}
@@ -326,6 +326,22 @@ func (s *stateObject) CommitTrie(db Database) error {
 		defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
 	}
 	root, err := s.trie.Commit(nil)
+	if err == nil {
+		s.data.Root = root
+	}
+	return err
+}
+
+func (s *stateObject) CommitTrieTo(tr Trie, inserter *trie.DbInserter) error {
+	s.updateTrie(tr)
+	if s.dbErr != nil {
+		return s.dbErr
+	}
+	// Track the amount of time wasted on committing the storge trie
+	if metrics.EnabledExpensive {
+		defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
+	}
+	root, err := s.trie.CommitTo(nil, inserter)
 	if err == nil {
 		s.data.Root = root
 	}

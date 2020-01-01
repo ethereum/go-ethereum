@@ -83,6 +83,8 @@ type Trie interface {
 	// and external (for account tries) references.
 	Commit(onleaf trie.LeafCallback) (common.Hash, error)
 
+	CommitTo(onleaf trie.LeafCallback, dbi *trie.DbInserter) (common.Hash, error)
+
 	// NodeIterator returns an iterator that returns nodes of the trie. Iteration
 	// starts at the key after the given start key.
 	NodeIterator(startKey []byte) trie.NodeIterator

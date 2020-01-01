@@ -161,6 +161,20 @@ func (t *SecureTrie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	return t.trie.Commit(onleaf)
 }
 
+func (t *SecureTrie) CommitTo(onleaf LeafCallback, inserter *DbInserter ) (root common.Hash, err error) {
+	// Write all the pre-images to the actual disk database
+	if len(t.getSecKeyCache()) > 0 {
+		t.trie.db.lock.Lock()
+		for hk, key := range t.secKeyCache {
+			t.trie.db.insertPreimage(common.BytesToHash([]byte(hk)), key)
+		}
+		t.trie.db.lock.Unlock()
+
+		t.secKeyCache = make(map[string][]byte)
+	}
+	return t.trie.CommitTo(onleaf, inserter)
+}
+
 // Hash returns the root hash of SecureTrie. It does not write to the
 // database and can be used even if the trie doesn't have one.
 func (t *SecureTrie) Hash() common.Hash {
