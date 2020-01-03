@@ -35,6 +35,7 @@ const (
 	nBuckets   = hashBits + 1 // Number of buckets
 
 	maxFindnodeFailures = 5
+	maxTalkFailures     = 5
 )
 
 type Table struct {
