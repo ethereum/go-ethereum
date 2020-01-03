@@ -111,7 +111,7 @@ API AND CONSOLE OPTIONS:
   --rpc                               Enable the HTTP-RPC server
   --rpcaddr value                     HTTP-RPC server listening interface (default: "localhost")
   --rpcport value                     HTTP-RPC server listening port (default: 8545)
-  --rpcapi value                      API's offered over the HTTP-RPC interface
+  --rpcapi value                      API's offered over the HTTP-RPC interface (default: "eth,net,web3")
   --rpc.gascap value                  Sets a cap on gas that can be used in eth_call/estimateGas (default: 0)
   --rpccorsdomain value               Comma separated list of domains from which to accept cross origin requests (browser enforced)
   --rpcvhosts value                   Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (default: "localhost")
