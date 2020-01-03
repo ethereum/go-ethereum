@@ -243,7 +243,7 @@ func newClientPool(db ethdb.Database, minCap, freeClientCap uint64, clock mclock
 				pool.tryActivateClients()
 				for _, c := range pool.dropInactivePeers[pool.dropInactiveCounter] {
 					if _, ok := pool.connectedMap[c.id]; ok && !c.active && !c.priority {
-						pool.disconnect(c.peer)
+						pool.disconnectLocked(c.peer)
 					}
 				}
 				delete(pool.dropInactivePeers, pool.dropInactiveCounter)
@@ -406,6 +406,10 @@ func (f *clientPool) disconnect(p clientPeer) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
+	f.disconnectLocked(p)
+}
+
+func (f *clientPool) disconnectLocked(p clientPeer) {
 	// Short circuit if client pool is already closed.
 	if f.closed {
 		return
