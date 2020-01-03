@@ -272,6 +272,10 @@ var (
 		Usage: "Maximum number of light clients to serve, or light servers to attach to",
 		Value: eth.DefaultConfig.LightPeers,
 	}
+	LespayTestModuleFlag = cli.BoolFlag{
+		Name:  "lespay.testmodule",
+		Usage: "Enable dummy payment module (for testing only)",
+	}
 	UltraLightServersFlag = cli.StringFlag{
 		Name:  "ulc.servers",
 		Usage: "List of trusted ultra-light servers",
@@ -1008,6 +1012,9 @@ func setLes(ctx *cli.Context, cfg *eth.Config) {
 	}
 	if ctx.GlobalIsSet(UltraLightOnlyAnnounceFlag.Name) {
 		cfg.UltraLightOnlyAnnounce = ctx.GlobalBool(UltraLightOnlyAnnounceFlag.Name)
+	}
+	if ctx.GlobalIsSet(LespayTestModuleFlag.Name) {
+		cfg.LespayTestModule = true
 	}
 }
 

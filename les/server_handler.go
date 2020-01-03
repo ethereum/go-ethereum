@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -54,10 +56,7 @@ const (
 	MaxTxStatus              = 256 // Amount of transactions to queried per request
 )
 
-var (
-	errTooManyInvalidRequest = errors.New("too many invalid requests made")
-	errFullClientPool        = errors.New("client pool is full")
-)
+var errTooManyInvalidRequest = errors.New("too many invalid requests made")
 
 // serverHandler is responsible for serving light client and process
 // all incoming light requests.
@@ -103,6 +102,9 @@ func (h *serverHandler) stop() {
 func (h *serverHandler) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := newClientPeer(int(version), h.server.config.NetworkId, p, newMeteredMsgWriter(rw, int(version)))
 	defer peer.close()
+	peer.getBalance = func() uint64 {
+		return h.server.clientPool.getPosBalance(p.ID()).value.value(h.server.clientPool.posExpiration(mclock.Now()))
+	}
 	h.wg.Add(1)
 	defer h.wg.Done()
 	return h.handle(peer)
@@ -134,28 +136,58 @@ func (h *serverHandler) handle(p *clientPeer) error {
 	}
 	defer p.fcClient.Disconnect()
 
-	// Disconnect the inbound peer if it's rejected by clientPool
-	if !h.server.clientPool.connect(p, 0) {
-		p.Log().Debug("Light Ethereum peer registration failed", "err", errFullClientPool)
-		return errFullClientPool
+	var (
+		connectedAt mclock.AbsTime
+		wg          *sync.WaitGroup // Wait group used to track all in-flight task routines.
+	)
+	p.activate = func() {
+		// Register the peer locally
+		if err := h.server.peers.Register(p); err != nil {
+			h.server.clientPool.disconnect(p)
+			p.Log().Error("Light Ethereum peer registration failed", "err", err)
+			return
+		}
+		clientConnectionGauge.Update(int64(h.server.peers.Len()))
+		connectedAt = mclock.Now()
+		wg = new(sync.WaitGroup)
+		p.active = true
 	}
-	// Register the peer locally
-	if err := h.server.peers.register(p); err != nil {
-		h.server.clientPool.disconnect(p)
-		p.Log().Error("Light Ethereum peer registration failed", "err", err)
+	p.deactivate = func() {
+		h.server.peers.unregister(p)
+		if p.version < lpv4 {
+			h.server.peers.disconnect(p.id)
+		}
+		clientConnectionGauge.Update(int64(h.server.peers.Len()))
+		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
+		p.active = false
+	}
+	if p.active {
+		p.activate()
+	}
+
+	if capacity, err := h.server.clientPool.connect(p, 0); err != nil {
+		// Disconnect the inbound peer if it's rejected by clientPool
+		p.Log().Debug("Light Ethereum peer registration failed", "err", err)
 		return err
+	} else if capacity != p.fcParams.MinRecharge {
+		if p.version < lpv4 {
+			h.server.peers.Disconnect(p.id)
+		} else {
+			p.updateCapacity(capacity)
+		}
 	}
-	clientConnectionGauge.Update(int64(h.server.peers.len()))
 
-	var wg sync.WaitGroup // Wait group used to track all in-flight task routines.
-
-	connectedAt := mclock.Now()
 	defer func() {
 		wg.Wait() // Ensure all background task routines have exited.
-		h.server.peers.unregister(p.id)
 		h.server.clientPool.disconnect(p)
-		clientConnectionGauge.Update(int64(h.server.peers.len()))
-		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
+		p.responseLock.Lock()
+		if p.active {
+			p.deactivate()
+		}
+		p.activate = nil
+		p.deactivate = nil
+		p.responseLock.Unlock()
+		h.server.peers.disconnect(p.id)
 	}()
 
 	// Spawn a main loop to handle all incoming messages.
@@ -166,7 +198,7 @@ func (h *serverHandler) handle(p *clientPeer) error {
 			return err
 		default:
 		}
-		if err := h.handleMsg(p, &wg); err != nil {
+		if err := h.handleMsg(p, wg); err != nil {
 			p.Log().Debug("Light Ethereum message handling failed", "err", err)
 			return err
 		}
@@ -245,22 +277,33 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 		if reply != nil {
 			replySize = reply.size()
 		}
-		var realCost uint64
+		var realCost, balance uint64
 		if h.server.costTracker.testing {
 			realCost = maxCost // Assign a fake cost for testing purpose
 		} else {
 			realCost = h.server.costTracker.realCost(servingTime, msg.Size, replySize)
+			if realCost > maxCost {
+				realCost = maxCost
+			}
 		}
 		bv := p.fcClient.RequestProcessed(reqID, responseCount, maxCost, realCost)
 		if amount != 0 {
 			// Feed cost tracker request serving statistic.
 			h.server.costTracker.updateStats(msg.Code, amount, servingTime, realCost)
 			// Reduce priority "balance" for the specific peer.
-			h.server.clientPool.requestCost(p, realCost)
+			balance = h.server.clientPool.requestCost(p, realCost)
+		}
+		sf := stateFeedback{
+			protocolVersion: p.version,
+			stateFeedbackV4: stateFeedbackV4{
+				BV:           bv,
+				RealCost:     realCost,
+				TokenBalance: balance,
+			},
 		}
 		if reply != nil {
 			p.mustQueueSend(func() {
-				if err := reply.send(bv); err != nil {
+				if err := reply.send(sf); err != nil {
 					select {
 					case p.errCh <- err:
 					default:
@@ -375,6 +418,8 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 				}
 				reply := p.replyBlockHeaders(req.ReqID, headers)
 				sendResponse(req.ReqID, query.Amount, p.replyBlockHeaders(req.ReqID, headers), task.done())
+				reply := p.ReplyBlockHeaders(req.ReqID, headers)
+				sendResponse(req.ReqID, query.Amount, reply, task.done())
 				if metrics.EnabledExpensive {
 					miscOutHeaderPacketsMeter.Mark(1)
 					miscOutHeaderTrafficMeter.Mark(int64(reply.size()))
@@ -824,6 +869,38 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 				}
 			}()
 		}
+	case LespayMsg:
+		p.Log().Trace("Received transaction status query request")
+		if metrics.EnabledExpensive {
+			miscInLespayPacketsMeter.Mark(1)
+			miscInLespayTrafficMeter.Mark(int64(msg.Size))
+			defer func(start time.Time) { miscServingTimeLespayTimer.UpdateSince(start) }(time.Now())
+		}
+		var req struct {
+			ReqID uint64
+			Cmd   []byte
+		}
+		if err := msg.Decode(&req); err != nil {
+			clientErrorMeter.Mark(1)
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		if !h.server.tokenSale.queueCommand(p.id, lespayCmd{
+			cmd:    req.Cmd,
+			id:     p.ID(),
+			freeID: p.freeClientId(),
+			send: func(reply []byte, delay uint) {
+				if metrics.EnabledExpensive {
+					miscOutLespayPacketsMeter.Mark(1)
+					miscOutLespayTrafficMeter.Mark(int64(len(reply)))
+				}
+				p.queueSend(func() {
+					p.ReplyLespay(req.ReqID, reply, delay)
+				})
+			},
+		}) {
+			clientErrorMeter.Mark(1)
+			return errResp(ErrRequestRejected, "")
+		}
 
 	default:
 		p.Log().Trace("Received invalid message", "code", msg.Code)
@@ -958,4 +1035,50 @@ func (h *serverHandler) broadcastHeaders() {
 			return
 		}
 	}
+}
+
+// talkRequestHandler implements discv5.TalkRequestHandler. It processes a list of
+// lespay token sale commands and returns the results and the recommended delay.
+//
+// Note: the UDP talk format for lespay commands allows multiple commands in a single
+// packet because UDP does not guarantee the correct order of messages which might be
+// important in some cases (like deposit followed by buyTokens).
+func (h *serverHandler) talkRequestHandler(id enode.ID, addr *net.UDPAddr, payload interface{}) (interface{}, uint, bool) {
+	c, ok := payload.([]interface{})
+	if !ok {
+		return nil, 0, false
+	}
+	type result struct {
+		data  []byte
+		delay uint
+	}
+	resultCh := make(chan result, len(c))
+	results := make([][]byte, len(c))
+	for _, c := range c {
+		cmd, ok := c.([]byte)
+		if !ok {
+			return nil, 0, false
+		}
+		if !h.server.tokenSale.queueCommand(id.String(), lespayCmd{
+			cmd:    cmd,
+			id:     id,
+			freeID: addr.IP.String(),
+			send: func(reply []byte, delay uint) {
+				resultCh <- result{reply, delay}
+			},
+		}) {
+			return nil, 0, false
+		}
+	}
+
+	var lastDelay uint
+	for i := range results {
+		select {
+		case r := <-resultCh:
+			results[i], lastDelay = r.data, r.delay
+		case <-h.closeCh:
+			return nil, 0, false
+		}
+	}
+	return results, lastDelay, true
 }

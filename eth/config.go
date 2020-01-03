@@ -116,6 +116,9 @@ type Config struct {
 	UltraLightFraction     int      `toml:",omitempty"` // Percentage of trusted servers to accept an announcement
 	UltraLightOnlyAnnounce bool     `toml:",omitempty"` // Whether to only announce headers, or also serve them
 
+	// Light client payment options
+	LespayTestModule bool
+
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`
 	DatabaseHandles    int  `toml:"-"`

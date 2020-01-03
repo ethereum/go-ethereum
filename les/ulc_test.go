@@ -28,8 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-func TestULCAnnounceThresholdLes2(t *testing.T) { testULCAnnounceThreshold(t, 2) }
 func TestULCAnnounceThresholdLes3(t *testing.T) { testULCAnnounceThreshold(t, 3) }
+func TestULCAnnounceThresholdLes4(t *testing.T) { testULCAnnounceThreshold(t, 4) }
 
 func testULCAnnounceThreshold(t *testing.T, protocol int) {
 	// todo figure out why it takes fetcher so longer to fetcher the announced header.
@@ -124,9 +124,9 @@ func connect(server *serverHandler, serverId enode.ID, client *clientHandler, pr
 	return peer1, peer2, nil
 }
 
-// newTestServerPeer creates server peer.
+// newServerPeer creates server peer.
 func newTestServerPeer(t *testing.T, blocks int, protocol int) (*testServer, *enode.Node, func()) {
-	s, teardown := newServerEnv(t, blocks, protocol, nil, false, false, 0)
+	s, teardown := newServerEnv(t, blocks, protocol, nil, false, false, 0, false)
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatal("generate key err:", err)

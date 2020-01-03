@@ -33,17 +33,18 @@ import (
 const (
 	lpv2 = 2
 	lpv3 = 3
+	lpv4 = 4
 )
 
 // Supported versions of the les protocol (first is primary)
 var (
-	ClientProtocolVersions    = []uint{lpv2, lpv3}
-	ServerProtocolVersions    = []uint{lpv2, lpv3}
+	ClientProtocolVersions    = []uint{lpv2, lpv3, lpv4}
+	ServerProtocolVersions    = []uint{lpv2, lpv3, lpv4}
 	AdvertiseProtocolVersions = []uint{lpv2} // clients are searching for the first advertised protocol in the list
 )
 
 // Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = map[uint]uint64{lpv2: 22, lpv3: 24}
+var ProtocolLengths = map[uint]uint64{lpv2: 22, lpv3: 24, lpv4: 26}
 
 const (
 	NetworkId          = 1
@@ -74,6 +75,9 @@ const (
 	// Protocol messages introduced in LPV3
 	StopMsg   = 0x16
 	ResumeMsg = 0x17
+	// Protocol messages introduced in LPV4
+	LespayMsg      = 0x18
+	LespayReplyMsg = 0x19
 )
 
 type requestInfo struct {
@@ -201,6 +205,11 @@ type hashOrNumber struct {
 	Number uint64      // Block hash from which to retrieve headers (excludes Hash)
 }
 
+type lespayReply struct {
+	Reply []byte
+	Delay uint
+}
+
 // EncodeRLP is a specialized encoder for hashOrNumber to encode only one of the
 // two contained union fields.
 func (hn *hashOrNumber) EncodeRLP(w io.Writer) error {
@@ -234,4 +243,29 @@ func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
 // CodeData is the network response packet for a node data retrieval.
 type CodeData []struct {
 	Value []byte
+}
+
+type stateFeedbackV4 struct {
+	BV, RealCost, TokenBalance uint64
+}
+
+type stateFeedback struct {
+	protocolVersion int
+	stateFeedbackV4
+}
+
+func (sf stateFeedback) EncodeRLP(w io.Writer) error {
+	if sf.protocolVersion >= lpv4 {
+		return rlp.Encode(w, sf.stateFeedbackV4)
+	} else {
+		return rlp.Encode(w, sf.BV)
+	}
+}
+
+func (sf *stateFeedback) DecodeRLP(s *rlp.Stream) error {
+	if sf.protocolVersion >= lpv4 {
+		return s.Decode(&sf.stateFeedbackV4)
+	} else {
+		return s.Decode(&sf.BV)
+	}
 }

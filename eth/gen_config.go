@@ -32,6 +32,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		UltraLightServers       []string               `toml:",omitempty"`
 		UltraLightFraction      int                    `toml:",omitempty"`
 		UltraLightOnlyAnnounce  bool                   `toml:",omitempty"`
+		LespayTestModule        bool                   `toml:"-"`
 		SkipBcVersionCheck      bool                   `toml:"-"`
 		DatabaseHandles         int                    `toml:"-"`
 		DatabaseCache           int
@@ -68,6 +69,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.UltraLightServers = c.UltraLightServers
 	enc.UltraLightFraction = c.UltraLightFraction
 	enc.UltraLightOnlyAnnounce = c.UltraLightOnlyAnnounce
+	enc.LespayTestModule = c.LespayTestModule
 	enc.SkipBcVersionCheck = c.SkipBcVersionCheck
 	enc.DatabaseHandles = c.DatabaseHandles
 	enc.DatabaseCache = c.DatabaseCache
@@ -108,6 +110,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		UltraLightServers       []string               `toml:",omitempty"`
 		UltraLightFraction      *int                   `toml:",omitempty"`
 		UltraLightOnlyAnnounce  *bool                  `toml:",omitempty"`
+		LespayTestModule        *bool                  `toml:"-"`
 		SkipBcVersionCheck      *bool                  `toml:"-"`
 		DatabaseHandles         *int                   `toml:"-"`
 		DatabaseCache           *int
@@ -174,6 +177,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.UltraLightOnlyAnnounce != nil {
 		c.UltraLightOnlyAnnounce = *dec.UltraLightOnlyAnnounce
+	}
+	if dec.LespayTestModule != nil {
+		c.LespayTestModule = *dec.LespayTestModule
 	}
 	if dec.SkipBcVersionCheck != nil {
 		c.SkipBcVersionCheck = *dec.SkipBcVersionCheck

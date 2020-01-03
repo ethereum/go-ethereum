@@ -40,6 +40,8 @@ var (
 	miscInTxsTrafficMeter        = metrics.NewRegisteredMeter("les/misc/in/traffic/txs", nil)
 	miscInTxStatusPacketsMeter   = metrics.NewRegisteredMeter("les/misc/in/packets/txStatus", nil)
 	miscInTxStatusTrafficMeter   = metrics.NewRegisteredMeter("les/misc/in/traffic/txStatus", nil)
+	miscInLespayPacketsMeter     = metrics.NewRegisteredMeter("les/misc/in/packets/lespay", nil)
+	miscInLespayTrafficMeter     = metrics.NewRegisteredMeter("les/misc/in/traffic/lespay", nil)
 
 	miscOutPacketsMeter           = metrics.NewRegisteredMeter("les/misc/out/packets/total", nil)
 	miscOutTrafficMeter           = metrics.NewRegisteredMeter("les/misc/out/traffic/total", nil)
@@ -59,6 +61,8 @@ var (
 	miscOutTxsTrafficMeter        = metrics.NewRegisteredMeter("les/misc/out/traffic/txs", nil)
 	miscOutTxStatusPacketsMeter   = metrics.NewRegisteredMeter("les/misc/out/packets/txStatus", nil)
 	miscOutTxStatusTrafficMeter   = metrics.NewRegisteredMeter("les/misc/out/traffic/txStatus", nil)
+	miscOutLespayPacketsMeter     = metrics.NewRegisteredMeter("les/misc/out/packets/lespay", nil)
+	miscOutLespayTrafficMeter     = metrics.NewRegisteredMeter("les/misc/out/traffic/lespay", nil)
 
 	miscServingTimeHeaderTimer     = metrics.NewRegisteredTimer("les/misc/serve/header", nil)
 	miscServingTimeBodyTimer       = metrics.NewRegisteredTimer("les/misc/serve/body", nil)
@@ -68,6 +72,7 @@ var (
 	miscServingTimeHelperTrieTimer = metrics.NewRegisteredTimer("les/misc/serve/helperTrie", nil)
 	miscServingTimeTxTimer         = metrics.NewRegisteredTimer("les/misc/serve/txs", nil)
 	miscServingTimeTxStatusTimer   = metrics.NewRegisteredTimer("les/misc/serve/txStatus", nil)
+	miscServingTimeLespayTimer     = metrics.NewRegisteredTimer("les/misc/serve/lespay", nil)
 
 	connectionTimer       = metrics.NewRegisteredTimer("les/connection/duration", nil)
 	serverConnectionGauge = metrics.NewRegisteredGauge("les/connection/server", nil)
