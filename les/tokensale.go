@@ -326,7 +326,7 @@ func (t *tokenSale) deposit(id enode.ID, paymentModule string, proofOfPayment []
 	return
 }
 
-func (t *tokenSale) buyTokens(id enode.ID, maxSpend, minReceive uint64, spendAll bool) (pcBalance, tokenBalance, spend, receive uint64, success bool) {
+func (t *tokenSale) buyTokens(id enode.ID, maxSpend, minReceive uint64, relative, spendAll bool) (pcBalance, tokenBalance, spend, receive uint64, success bool) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -335,6 +335,18 @@ func (t *tokenSale) buyTokens(id enode.ID, maxSpend, minReceive uint64, spendAll
 	var meta tokenSaleMeta
 	if err := rlp.DecodeBytes([]byte(pb.meta), &meta); err == nil {
 		pcBalance = meta.pcBalance
+	}
+	if relative {
+		if pcBalance > maxSpend {
+			maxSpend = pcBalance - maxSpend
+		} else {
+			maxSpend = 0
+		}
+		if minReceive > tokenBalance {
+			minReceive -= tokenBalance
+		} else {
+			minReceive = 0
+		}
 	}
 
 	if maxSpend > pcBalance {
@@ -476,7 +488,7 @@ type (
 	}
 	tsBuyTokensParams struct {
 		MaxSpend, MinReceive uint64
-		SpendAll             bool
+		Relative, SpendAll   bool
 	}
 	tsBuyTokensResults struct {
 		PcBalance, TokenBalance, Spend, Receive uint64
@@ -537,7 +549,7 @@ func (t *tokenSale) runCommand(cmd []byte, id enode.ID, freeID string) []byte {
 		)
 		if err := rlp.DecodeBytes(cmd[1:], &params); err == nil {
 			results.PcBalance, results.TokenBalance, results.Spend, results.Receive, results.Success =
-				t.buyTokens(id, params.MaxSpend, params.MinReceive, params.SpendAll)
+				t.buyTokens(id, params.MaxSpend, params.MinReceive, params.Relative, params.SpendAll)
 			res, _ = rlp.EncodeToBytes(&results)
 		}
 	case tsConnection:

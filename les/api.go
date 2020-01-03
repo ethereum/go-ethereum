@@ -473,8 +473,8 @@ func (api *PrivateLespayAPI) Deposit(ctx context.Context, remote bool, node stri
 	return
 }
 
-func (api *PrivateLespayAPI) BuyTokens(ctx context.Context, remote bool, node string, maxSpend, minReceive uint64, spendAll bool) (results tsBuyTokensResults, err error) {
-	params := tsBuyTokensParams{maxSpend, minReceive, spendAll}
+func (api *PrivateLespayAPI) BuyTokens(ctx context.Context, remote bool, node string, maxSpend, minReceive uint64, relative, spendAll bool) (results tsBuyTokensResults, err error) {
+	params := tsBuyTokensParams{maxSpend, minReceive, relative, spendAll}
 	enc, _ := rlp.EncodeToBytes(&params)
 	var resEnc []byte
 	resEnc, err = api.makeCall(ctx, remote, node, append([]byte{tsBuyTokens}, enc...))
