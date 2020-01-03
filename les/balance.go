@@ -17,11 +17,14 @@
 package les
 
 import (
+	"math"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 )
+
+const maxBalance = math.MaxInt64
 
 const (
 	balanceCallbackQueue = iota
@@ -29,12 +32,86 @@ const (
 	balanceCallbackCount
 )
 
+// expirationController controls the exponential expiration of positive and negative
+// balances
+type expirationController interface {
+	posExpiration(mclock.AbsTime) uint64
+	negExpiration(mclock.AbsTime) uint64
+}
+
+// expiredValue is a scalar value that is continuously expired (decreased exponentially)
+// based on the logarithmic expiration offset value provided by the expirationController.
+// The actual value can be calculated as base*2^(exp-logOffset/log2Multiplier).
+//
+// Note: this representation is basically a floating point value capable of handling
+// 64 bit exponents. The operations are not general purpose floating point operations
+// though because a monotonously increasing exponent is assumed and therefore if an
+// operation is performed with two different exponents then simply the higher one is used.
+type expiredValue struct {
+	base, exp uint64
+}
+
+// value calculates the value at the given moment
+func (e expiredValue) value(logOffset uint64) uint64 {
+	return uint64(math.Exp(float64(int64(e.exp*log2Multiplier-logOffset))/logMultiplier) * float64(e.base))
+}
+
+// add adds a signed value at the given moment
+func (e *expiredValue) add(amount int64, logOffset uint64) int64 {
+	addExp := logOffset / log2Multiplier
+	baseMul := math.Exp(float64(logOffset%log2Multiplier) / logMultiplier)
+	if addExp < e.exp {
+		baseMul /= math.Pow(2, float64(e.exp-addExp))
+	}
+	if addExp > e.exp {
+		e.base >>= (addExp - e.exp)
+		e.exp = addExp
+	}
+	add := int64(float64(amount) * baseMul)
+	if add >= 0 || uint64(-add) <= e.base {
+		e.base += uint64(add)
+		return amount
+	} else {
+		e.base = 0
+		return int64(-float64(e.base) / baseMul)
+	}
+}
+
+// addExp adds another expiredValue
+func (e *expiredValue) addExp(a expiredValue) {
+	if e.exp > a.exp {
+		a.base >>= (e.exp - a.exp)
+	}
+	if e.exp < a.exp {
+		e.base >>= (a.exp - e.exp)
+		e.exp = a.exp
+	}
+	e.base += a.base
+}
+
+// subExp subtracts another expiredValue
+func (e *expiredValue) subExp(a expiredValue) {
+	if e.exp > a.exp {
+		a.base >>= (e.exp - a.exp)
+	}
+	if e.exp < a.exp {
+		e.base >>= (a.exp - e.exp)
+		e.exp = a.exp
+	}
+	if e.base > a.base {
+		e.base -= a.base
+	} else {
+		e.base = 0
+	}
+}
+
 // balanceTracker keeps track of the positive and negative balances of a connected
 // client and calculates actual and projected future priority values required by
 // prque.LazyQueue.
 type balanceTracker struct {
 	lock                             sync.Mutex
 	clock                            mclock.Clock
+	exp                              expirationController
 	stopped                          bool
 	capacity                         uint64
 	balance                          balance
@@ -53,7 +130,7 @@ type balanceTracker struct {
 
 // balance represents a pair of positive and negative balances
 type balance struct {
-	pos, neg uint64
+	pos, neg expiredValue
 }
 
 // balanceCallback represents a single callback that is activated when client priority
@@ -65,6 +142,7 @@ type balanceCallback struct {
 }
 
 // init initializes balanceTracker
+// Note: capacity should never be zero
 func (bt *balanceTracker) init(clock mclock.Clock, capacity uint64) {
 	bt.clock = clock
 	bt.initTime, bt.lastUpdate = clock.Now(), clock.Now() // Init timestamps
@@ -95,10 +173,41 @@ func (bt *balanceTracker) stop(now mclock.AbsTime) {
 // first to disconnect. Positive balance translates to negative priority. If positive
 // balance is zero then negative balance translates to a positive priority.
 func (bt *balanceTracker) balanceToPriority(b balance) int64 {
-	if b.pos > 0 {
-		return ^int64(b.pos / bt.capacity)
+	if b.pos.base > 0 {
+		return -int64(b.pos.value(bt.exp.posExpiration(bt.clock.Now())) / bt.capacity)
 	}
-	return int64(b.neg)
+	return int64(b.neg.value(bt.exp.negExpiration(bt.clock.Now())))
+}
+
+// posBalanceMissing calculates the missing amount of positive balance in order to
+// connect at targetCapacity, stay connected for the given amount of time and then
+// still have a priority of targetPriority
+func (bt *balanceTracker) posBalanceMissing(targetPriority int64, targetCapacity uint64, after time.Duration) uint64 {
+	now := bt.clock.Now()
+	if targetPriority > 0 {
+		negPrice := uint64(float64(after) * bt.negTimeFactor)
+		negBalance := bt.balance.neg.value(bt.exp.negExpiration(now))
+		if negPrice+negBalance < uint64(targetPriority) {
+			return 0
+		}
+		if uint64(targetPriority) > negBalance && bt.negTimeFactor > 1e-100 {
+			if negTime := time.Duration(float64(uint64(targetPriority)-negBalance) / bt.negTimeFactor); negTime < after {
+				after -= negTime
+			} else {
+				after = 0
+			}
+		}
+		targetPriority = 0
+	}
+	posRequired := uint64(float64(-targetPriority)*float64(targetCapacity)+float64(after)*bt.timeFactor) + 1
+	if posRequired >= maxBalance {
+		return math.MaxUint64 // target not reachable
+	}
+	posBalance := bt.balance.pos.value(bt.exp.posExpiration(now))
+	if posRequired > posBalance {
+		return posRequired - posBalance
+	}
+	return 0
 }
 
 // reducedBalance estimates the reduced balance at a given time in the fututre based
@@ -106,20 +215,19 @@ func (bt *balanceTracker) balanceToPriority(b balance) int64 {
 func (bt *balanceTracker) reducedBalance(at mclock.AbsTime, avgReqCost float64) balance {
 	dt := float64(at - bt.lastUpdate)
 	b := bt.balance
-	if b.pos != 0 {
+	if b.pos.base != 0 {
 		factor := bt.timeFactor + bt.requestFactor*avgReqCost
-		diff := uint64(dt * factor)
-		if diff <= b.pos {
-			b.pos -= diff
+		diff := -int64(dt * factor)
+		dd := b.pos.add(diff, bt.exp.posExpiration(at))
+		if dd == diff {
 			dt = 0
 		} else {
-			dt -= float64(b.pos) / factor
-			b.pos = 0
+			dt += float64(dd) / factor
 		}
 	}
-	if dt != 0 {
+	if dt > 0 {
 		factor := bt.negTimeFactor + bt.negRequestFactor*avgReqCost
-		b.neg += uint64(dt * factor)
+		b.neg.add(int64(dt*factor), bt.exp.negExpiration(at))
 	}
 	return b
 }
@@ -130,20 +238,22 @@ func (bt *balanceTracker) reducedBalance(at mclock.AbsTime, avgReqCost float64) 
 // Note: the function assumes that the balance has been recently updated and
 // calculates the time starting from the last update.
 func (bt *balanceTracker) timeUntil(priority int64) (time.Duration, bool) {
+	now := bt.clock.Now()
 	var dt float64
-	if bt.balance.pos != 0 {
+	if bt.balance.pos.base != 0 {
+		posBalance := bt.balance.pos.value(bt.exp.posExpiration(now))
 		if bt.timeFactor < 1e-100 {
 			return 0, false
 		}
 		if priority < 0 {
-			newBalance := uint64(^priority) * bt.capacity
-			if newBalance > bt.balance.pos {
+			newBalance := uint64(-priority) * bt.capacity
+			if newBalance > posBalance {
 				return 0, false
 			}
-			dt = float64(bt.balance.pos-newBalance) / bt.timeFactor
+			dt = float64(posBalance-newBalance) / bt.timeFactor
 			return time.Duration(dt), true
 		} else {
-			dt = float64(bt.balance.pos) / bt.timeFactor
+			dt = float64(posBalance) / bt.timeFactor
 		}
 	} else {
 		if priority < 0 {
@@ -151,16 +261,18 @@ func (bt *balanceTracker) timeUntil(priority int64) (time.Duration, bool) {
 		}
 	}
 	// if we have a positive balance then dt equals the time needed to get it to zero
-	if uint64(priority) > bt.balance.neg {
+	negBalance := bt.balance.neg.value(bt.exp.negExpiration(now))
+	if uint64(priority) > negBalance {
 		if bt.negTimeFactor < 1e-100 {
 			return 0, false
 		}
-		dt += float64(uint64(priority)-bt.balance.neg) / bt.negTimeFactor
+		dt += float64(uint64(priority)-negBalance) / bt.negTimeFactor
 	}
 	return time.Duration(dt), true
 }
 
 // setCapacity updates the capacity value used for priority calculation
+// Note: capacity should never be zero
 func (bt *balanceTracker) setCapacity(capacity uint64) {
 	bt.lock.Lock()
 	defer bt.lock.Unlock()
@@ -262,26 +374,26 @@ func (bt *balanceTracker) updateAfter(dt time.Duration) {
 }
 
 // requestCost should be called after serving a request for the given peer
-func (bt *balanceTracker) requestCost(cost uint64) {
+func (bt *balanceTracker) requestCost(cost uint64) uint64 {
 	bt.lock.Lock()
 	defer bt.lock.Unlock()
 
 	if bt.stopped {
-		return
+		return 0
 	}
 	now := bt.clock.Now()
 	bt.addBalance(now)
 	fcost := float64(cost)
 
-	if bt.balance.pos != 0 {
+	posExp := bt.exp.posExpiration(now)
+	if bt.balance.pos.base != 0 {
 		if bt.requestFactor != 0 {
-			c := uint64(fcost * bt.requestFactor)
-			if bt.balance.pos >= c {
-				bt.balance.pos -= c
+			c := -int64(fcost * bt.requestFactor)
+			cc := bt.balance.pos.add(c, posExp)
+			if c == cc {
 				fcost = 0
 			} else {
-				fcost *= 1 - float64(bt.balance.pos)/float64(c)
-				bt.balance.pos = 0
+				fcost *= 1 - float64(cc)/float64(c)
 			}
 			bt.checkCallbacks(now)
 		} else {
@@ -290,15 +402,16 @@ func (bt *balanceTracker) requestCost(cost uint64) {
 	}
 	if fcost > 0 {
 		if bt.negRequestFactor != 0 {
-			bt.balance.neg += uint64(fcost * bt.negRequestFactor)
+			bt.balance.neg.add(int64(fcost*bt.negRequestFactor), bt.exp.negExpiration(now))
 			bt.checkCallbacks(now)
 		}
 	}
 	bt.sumReqCost += cost
+	return bt.balance.pos.value(posExp)
 }
 
 // getBalance returns the current positive and negative balance
-func (bt *balanceTracker) getBalance(now mclock.AbsTime) (uint64, uint64) {
+func (bt *balanceTracker) getBalance(now mclock.AbsTime) (expiredValue, expiredValue) {
 	bt.lock.Lock()
 	defer bt.lock.Unlock()
 
@@ -307,7 +420,7 @@ func (bt *balanceTracker) getBalance(now mclock.AbsTime) (uint64, uint64) {
 }
 
 // setBalance sets the positive and negative balance to the given values
-func (bt *balanceTracker) setBalance(pos, neg uint64) error {
+func (bt *balanceTracker) setBalance(pos, neg expiredValue) error {
 	bt.lock.Lock()
 	defer bt.lock.Unlock()
 

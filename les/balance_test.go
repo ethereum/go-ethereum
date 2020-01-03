@@ -23,18 +23,31 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 )
 
+type zeroExpCtrl struct{}
+
+func (z zeroExpCtrl) posExpiration(mclock.AbsTime) uint64 {
+	return 0
+}
+
+func (z zeroExpCtrl) negExpiration(mclock.AbsTime) uint64 {
+	return 0
+}
+
+func expval(v uint64) expiredValue {
+	return expiredValue{base: v}
+}
+
 func TestSetBalance(t *testing.T) {
 	var clock = &mclock.Simulated{}
 	var inputs = []struct {
-		pos uint64
-		neg uint64
+		pos, neg expiredValue
 	}{
-		{1000, 0},
-		{0, 1000},
-		{1000, 1000},
+		{expval(1000), expval(0)},
+		{expval(0), expval(1000)},
+		{expval(1000), expval(1000)},
 	}
 
-	tracker := balanceTracker{}
+	tracker := balanceTracker{exp: zeroExpCtrl{}}
 	tracker.init(clock, 1000)
 	defer tracker.stop(clock.Now())
 
@@ -53,14 +66,14 @@ func TestSetBalance(t *testing.T) {
 func TestBalanceTimeCost(t *testing.T) {
 	var (
 		clock   = &mclock.Simulated{}
-		tracker = balanceTracker{}
+		tracker = balanceTracker{exp: zeroExpCtrl{}}
 	)
 	tracker.init(clock, 1000)
 	defer tracker.stop(clock.Now())
 	tracker.setFactors(false, 1, 1)
 	tracker.setFactors(true, 1, 1)
 
-	tracker.setBalance(uint64(time.Minute), 0) // 1 minute time allowance
+	tracker.setBalance(expval(uint64(time.Minute)), expval(0)) // 1 minute time allowance
 
 	var inputs = []struct {
 		runTime time.Duration
@@ -74,21 +87,21 @@ func TestBalanceTimeCost(t *testing.T) {
 	}
 	for _, i := range inputs {
 		clock.Run(i.runTime)
-		if pos, _ := tracker.getBalance(clock.Now()); pos != i.expPos {
+		if pos, _ := tracker.getBalance(clock.Now()); pos != expval(i.expPos) {
 			t.Fatalf("Positive balance mismatch, want %v, got %v", i.expPos, pos)
 		}
-		if _, neg := tracker.getBalance(clock.Now()); neg != i.expNeg {
+		if _, neg := tracker.getBalance(clock.Now()); neg != expval(i.expNeg) {
 			t.Fatalf("Negative balance mismatch, want %v, got %v", i.expNeg, neg)
 		}
 	}
 
-	tracker.setBalance(uint64(time.Minute), 0) // Refill 1 minute time allowance
+	tracker.setBalance(expval(uint64(time.Minute)), expval(0)) // Refill 1 minute time allowance
 	for _, i := range inputs {
 		clock.Run(i.runTime)
-		if pos, _ := tracker.getBalance(clock.Now()); pos != i.expPos {
+		if pos, _ := tracker.getBalance(clock.Now()); pos != expval(i.expPos) {
 			t.Fatalf("Positive balance mismatch, want %v, got %v", i.expPos, pos)
 		}
-		if _, neg := tracker.getBalance(clock.Now()); neg != i.expNeg {
+		if _, neg := tracker.getBalance(clock.Now()); neg != expval(i.expNeg) {
 			t.Fatalf("Negative balance mismatch, want %v, got %v", i.expNeg, neg)
 		}
 	}
@@ -97,14 +110,14 @@ func TestBalanceTimeCost(t *testing.T) {
 func TestBalanceReqCost(t *testing.T) {
 	var (
 		clock   = &mclock.Simulated{}
-		tracker = balanceTracker{}
+		tracker = balanceTracker{exp: zeroExpCtrl{}}
 	)
 	tracker.init(clock, 1000)
 	defer tracker.stop(clock.Now())
 	tracker.setFactors(false, 1, 1)
 	tracker.setFactors(true, 1, 1)
 
-	tracker.setBalance(uint64(time.Minute), 0) // 1 minute time serving time allowance
+	tracker.setBalance(expval(uint64(time.Minute)), expval(0)) // 1 minute time serving time allowance
 	var inputs = []struct {
 		reqCost uint64
 		expPos  uint64
@@ -117,10 +130,10 @@ func TestBalanceReqCost(t *testing.T) {
 	}
 	for _, i := range inputs {
 		tracker.requestCost(i.reqCost)
-		if pos, _ := tracker.getBalance(clock.Now()); pos != i.expPos {
+		if pos, _ := tracker.getBalance(clock.Now()); pos != expval(i.expPos) {
 			t.Fatalf("Positive balance mismatch, want %v, got %v", i.expPos, pos)
 		}
-		if _, neg := tracker.getBalance(clock.Now()); neg != i.expNeg {
+		if _, neg := tracker.getBalance(clock.Now()); neg != expval(i.expNeg) {
 			t.Fatalf("Negative balance mismatch, want %v, got %v", i.expNeg, neg)
 		}
 	}
@@ -129,7 +142,7 @@ func TestBalanceReqCost(t *testing.T) {
 func TestBalanceToPriority(t *testing.T) {
 	var (
 		clock   = &mclock.Simulated{}
-		tracker = balanceTracker{}
+		tracker = balanceTracker{exp: zeroExpCtrl{}}
 	)
 	tracker.init(clock, 1000) // cap = 1000
 	defer tracker.stop(clock.Now())
@@ -141,13 +154,13 @@ func TestBalanceToPriority(t *testing.T) {
 		neg      uint64
 		priority int64
 	}{
-		{1000, 0, ^int64(1)},
-		{2000, 0, ^int64(2)}, // Higher balance, lower priority value
+		{1000, 0, -1},
+		{2000, 0, -2}, // Higher balance, lower priority value
 		{0, 0, 0},
 		{0, 1000, 1000},
 	}
 	for _, i := range inputs {
-		tracker.setBalance(i.pos, i.neg)
+		tracker.setBalance(expval(i.pos), expval(i.neg))
 		priority := tracker.getPriority(clock.Now())
 		if priority != i.priority {
 			t.Fatalf("Priority mismatch, want %v, got %v", i.priority, priority)
@@ -158,30 +171,30 @@ func TestBalanceToPriority(t *testing.T) {
 func TestEstimatedPriority(t *testing.T) {
 	var (
 		clock   = &mclock.Simulated{}
-		tracker = balanceTracker{}
+		tracker = balanceTracker{exp: zeroExpCtrl{}}
 	)
 	tracker.init(clock, 1000000000) // cap = 1000,000,000
 	defer tracker.stop(clock.Now())
 	tracker.setFactors(false, 1, 1)
 	tracker.setFactors(true, 1, 1)
 
-	tracker.setBalance(uint64(time.Minute), 0)
+	tracker.setBalance(expval(uint64(time.Minute)), expval(0))
 	var inputs = []struct {
 		runTime    time.Duration // time cost
 		futureTime time.Duration // diff of future time
 		reqCost    uint64        // single request cost
 		priority   int64         // expected estimated priority
 	}{
-		{time.Second, time.Second, 0, ^int64(58)},
-		{0, time.Second, 0, ^int64(58)},
+		{time.Second, time.Second, 0, -58},
+		{0, time.Second, 0, -58},
 
 		// 2 seconds time cost, 1 second estimated time cost, 10^9 request cost,
 		// 10^9 estimated request cost per second.
-		{time.Second, time.Second, 1000000000, ^int64(55)},
+		{time.Second, time.Second, 1000000000, -55},
 
 		// 3 seconds time cost, 3 second estimated time cost, 10^9*2 request cost,
 		// 4*10^9 estimated request cost.
-		{time.Second, 3 * time.Second, 1000000000, ^int64(48)},
+		{time.Second, 3 * time.Second, 1000000000, -48},
 
 		// All positive balance is used up
 		{time.Second * 55, 0, 0, 0},
@@ -202,7 +215,7 @@ func TestEstimatedPriority(t *testing.T) {
 func TestCallbackChecking(t *testing.T) {
 	var (
 		clock   = &mclock.Simulated{}
-		tracker = balanceTracker{}
+		tracker = balanceTracker{exp: zeroExpCtrl{}}
 	)
 	tracker.init(clock, 1000000) // cap = 1000,000
 	defer tracker.stop(clock.Now())
@@ -213,11 +226,11 @@ func TestCallbackChecking(t *testing.T) {
 		priority int64
 		expDiff  time.Duration
 	}{
-		{^int64(500), time.Millisecond * 500},
+		{-500, time.Millisecond * 500},
 		{0, time.Second},
 		{int64(time.Second), 2 * time.Second},
 	}
-	tracker.setBalance(uint64(time.Second), 0)
+	tracker.setBalance(expval(uint64(time.Second)), expval(0))
 	for _, i := range inputs {
 		diff, _ := tracker.timeUntil(i.priority)
 		if diff != i.expDiff {
@@ -229,7 +242,7 @@ func TestCallbackChecking(t *testing.T) {
 func TestCallback(t *testing.T) {
 	var (
 		clock   = &mclock.Simulated{}
-		tracker = balanceTracker{}
+		tracker = balanceTracker{exp: zeroExpCtrl{}}
 	)
 	tracker.init(clock, 1000) // cap = 1000
 	defer tracker.stop(clock.Now())
@@ -237,7 +250,7 @@ func TestCallback(t *testing.T) {
 	tracker.setFactors(true, 1, 1)
 
 	callCh := make(chan struct{}, 1)
-	tracker.setBalance(uint64(time.Minute), 0)
+	tracker.setBalance(expval(uint64(time.Minute)), expval(0))
 	tracker.addCallback(balanceCallbackZero, 0, func() { callCh <- struct{}{} })
 
 	clock.Run(time.Minute)
@@ -247,7 +260,7 @@ func TestCallback(t *testing.T) {
 		t.Fatalf("Callback hasn't been called yet")
 	}
 
-	tracker.setBalance(uint64(time.Minute), 0)
+	tracker.setBalance(expval(uint64(time.Minute)), expval(0))
 	tracker.addCallback(balanceCallbackZero, 0, func() { callCh <- struct{}{} })
 	tracker.removeCallback(balanceCallbackZero)
 

@@ -36,21 +36,26 @@ import (
 )
 
 const (
-	negBalanceExpTC              = time.Hour        // time constant for exponentially reducing negative balance
-	fixedPointMultiplier         = 0x1000000        // constant to convert logarithms to fixed point format
-	lazyQueueRefresh             = time.Second * 10 // refresh period of the connected queue
-	persistCumulativeTimeRefresh = time.Minute * 5  // refresh period of the cumulative running time persistence
-	posBalanceCacheLimit         = 8192             // the maximum number of cached items in positive balance queue
-	negBalanceCacheLimit         = 8192             // the maximum number of cached items in negative balance queue
+	defaultPosExpTC          = 36000              // default time constant (in seconds) for exponentially reducing positive balance
+	defaultNegExpTC          = 3600               // default time constant (in seconds) for exponentially reducing negative balance
+	logMultiplier            = 24204406.323122971 // constant to convert natural logarithms to fixed point format
+	log2Multiplier           = 0x1000000          // constant to convert 2-based logarithms to fixed point format
+	lazyQueueRefresh         = time.Second * 10   // refresh period of the connected queue
+	tryActivatePeriod        = time.Second * 5    // periodically check whether inactive clients can be activated
+	dropInactiveCycles       = 2                  // number of activation check periods after non-priority inactive peers are dropped
+	persistExpirationRefresh = time.Minute * 5    // refresh period of the token expiration persistence
+	posBalanceCacheLimit     = 8192               // the maximum number of cached items in positive balance queue
+	negBalanceCacheLimit     = 8192               // the maximum number of cached items in negative balance queue
+	freeRatioTC              = time.Hour          // time constant of token supply control based on free service availability
 
-	// connectedBias is applied to already connected clients So that
+	// activeBias is applied to already connected clients So that
 	// already connected client won't be kicked out very soon and we
 	// can ensure all connected clients can have enough time to request
 	// or sync some data.
 	//
 	// todo(rjl493456442) make it configurable. It can be the option of
 	// free trial time!
-	connectedBias = time.Minute * 3
+	activeBias = time.Minute * 3
 )
 
 // clientPool implements a client database that assigns a priority to each client
@@ -60,7 +65,7 @@ const (
 // then negative balance is accumulated.
 //
 // Balance tracking and priority calculation for connected clients is done by
-// balanceTracker. connectedQueue ensures that clients with the lowest positive or
+// balanceTracker. activeQueue ensures that clients with the lowest positive or
 // highest negative balance get evicted when the total capacity allowance is full
 // and new clients with a better balance want to connect.
 //
@@ -82,19 +87,31 @@ type clientPool struct {
 	closed     bool
 	removePeer func(enode.ID)
 
-	connectedMap   map[enode.ID]*clientInfo
-	connectedQueue *prque.LazyQueue
+	connectedMap        map[enode.ID]*clientInfo
+	activeQueue         *prque.LazyQueue
+	inactiveQueue       *prque.Prque
+	dropInactivePeers   map[uint64][]*clientInfo
+	dropInactiveCounter uint64
+
+	activeBalances, inactiveBalances expiredValue
+	lastConnectedBalanceUpdate       mclock.AbsTime
+	freeRatio, averageFreeRatio      float64
 
 	defaultPosFactors, defaultNegFactors priceFactors
 
-	connLimit         int            // The maximum number of connections that clientpool can support
-	capLimit          uint64         // The maximum cumulative capacity that clientpool can support
-	connectedCap      uint64         // The sum of the capacity of the current clientpool connected
-	priorityConnected uint64         // The sum of the capacity of currently connected priority clients
-	freeClientCap     uint64         // The capacity value of each free client
-	startTime         mclock.AbsTime // The timestamp at which the clientpool started running
-	cumulativeTime    int64          // The cumulative running time of clientpool at the start point.
-	disableBias       bool           // Disable connection bias(used in testing)
+	activeLimit    int    // The maximum number of connections that clientpool can support
+	capLimit       uint64 // The maximum cumulative capacity that clientpool can support
+	activeCap      uint64 // The sum of the capacity of the current clientpool connected
+	priorityActive uint64 // The sum of the capacity of currently connected priority clients
+	minCap         uint64 // The minimal capacity value allowed for any client
+	freeClientCap  uint64 // The capacity value of each free client
+	disableBias    bool   // Disable connection bias(used in testing)
+
+	// fields in this group are protected by expLock
+	expLock                            sync.RWMutex
+	posExp, negExp, posExpTC, negExpTC uint64
+	posExpTCi, negExpTCi               float64 // already inverted (logMultiplier/time)
+	freeRatioLastUpdate                mclock.AbsTime
 }
 
 // clientPoolPeer represents a client peer in the pool.
@@ -113,36 +130,38 @@ type clientPoolPeer interface {
 type clientInfo struct {
 	address                string
 	id                     enode.ID
+	freeID                 string
+	active                 bool
 	connectedAt            mclock.AbsTime
 	capacity               uint64
 	priority               bool
 	pool                   *clientPool
 	peer                   clientPoolPeer
-	queueIndex             int // position in connectedQueue
+	queueIndex             int // position in activeQueue
 	balanceTracker         balanceTracker
 	posFactors, negFactors priceFactors
 	balanceMetaInfo        string
 }
 
-// connSetIndex callback updates clientInfo item index in connectedQueue
+// connSetIndex callback updates clientInfo item index in activeQueue
 func connSetIndex(a interface{}, index int) {
 	a.(*clientInfo).queueIndex = index
 }
 
-// connPriority callback returns actual priority of clientInfo item in connectedQueue
+// connPriority callback returns actual priority of clientInfo item in activeQueue
 func connPriority(a interface{}, now mclock.AbsTime) int64 {
 	c := a.(*clientInfo)
 	return c.balanceTracker.getPriority(now)
 }
 
-// connMaxPriority callback returns estimated maximum priority of clientInfo item in connectedQueue
+// connMaxPriority callback returns estimated maximum priority of clientInfo item in activeQueue
 func connMaxPriority(a interface{}, until mclock.AbsTime) int64 {
 	c := a.(*clientInfo)
 	pri := c.balanceTracker.estimatedPriority(until, true)
 	c.balanceTracker.addCallback(balanceCallbackQueue, pri+1, func() {
 		c.pool.lock.Lock()
-		if c.queueIndex != -1 {
-			c.pool.connectedQueue.Update(c.queueIndex)
+		if c.active && c.queueIndex != -1 {
+			c.pool.activeQueue.Update(c.queueIndex)
 		}
 		c.pool.lock.Unlock()
 	})
@@ -159,34 +178,94 @@ type priceFactors struct {
 }
 
 // newClientPool creates a new client pool
-func newClientPool(db ethdb.Database, freeClientCap uint64, clock mclock.Clock, removePeer func(enode.ID)) *clientPool {
+func newClientPool(db ethdb.Database, minCap, freeClientCap uint64, clock mclock.Clock, removePeer func(enode.ID)) *clientPool {
 	ndb := newNodeDB(db, clock)
+	posExp, negExp := ndb.getExpiration()
 	pool := &clientPool{
-		ndb:            ndb,
-		clock:          clock,
-		connectedMap:   make(map[enode.ID]*clientInfo),
-		connectedQueue: prque.NewLazyQueue(connSetIndex, connPriority, connMaxPriority, clock, lazyQueueRefresh),
-		freeClientCap:  freeClientCap,
-		removePeer:     removePeer,
-		startTime:      clock.Now(),
-		cumulativeTime: ndb.getCumulativeTime(),
-		stopCh:         make(chan struct{}),
+		ndb:                 ndb,
+		clock:               clock,
+		connectedMap:        make(map[enode.ID]*clientInfo),
+		activeQueue:         prque.NewLazyQueue(connSetIndex, connPriority, connMaxPriority, clock, lazyQueueRefresh),
+		inactiveQueue:       prque.New(connSetIndex),
+		dropInactivePeers:   make(map[uint64][]*clientInfo),
+		minCap:              minCap,
+		freeClientCap:       freeClientCap,
+		removePeer:          removePeer,
+		freeRatioLastUpdate: clock.Now(),
+		posExp:              posExp,
+		negExp:              negExp,
+		freeRatio:           1,
+		averageFreeRatio:    1,
+		stopCh:              make(chan struct{}),
+	}
+	// set default expiration constants used by tests
+	// Note: server overwrites this if token sale is active
+	pool.setExpirationTCs(0, defaultNegExpTC)
+	// calculate total token balance amount
+	var start enode.ID
+	for {
+		ids := pool.ndb.getPosBalanceIDs(start, enode.ID{}, 1000)
+		var stop bool
+		l := len(ids)
+		if l == 1000 {
+			l--
+			start = ids[l]
+		} else {
+			stop = true
+		}
+		for i := 0; i < l; i++ {
+			pool.inactiveBalances.addExp(pool.ndb.getOrNewPB(ids[i]).value)
+		}
+		if stop {
+			break
+		}
 	}
 	// If the negative balance of free client is even lower than 1,
 	// delete this entry.
 	ndb.nbEvictCallBack = func(now mclock.AbsTime, b negBalance) bool {
-		balance := math.Exp(float64(b.logValue-pool.logOffset(now)) / fixedPointMultiplier)
-		return balance <= 1
+		return b.logValue <= pool.negExpiration(now)
 	}
 	go func() {
 		for {
 			select {
 			case <-clock.After(lazyQueueRefresh):
 				pool.lock.Lock()
-				pool.connectedQueue.Refresh()
+				pool.activeQueue.Refresh()
 				pool.lock.Unlock()
-			case <-clock.After(persistCumulativeTimeRefresh):
-				pool.ndb.setCumulativeTime(pool.logOffset(clock.Now()))
+			case <-pool.stopCh:
+				return
+			}
+		}
+	}()
+	go func() {
+		for {
+			select {
+			case <-clock.After(persistExpirationRefresh):
+				pool.lock.Lock()
+				now := pool.clock.Now()
+				posExp := pool.posExpiration(now)
+				negExp := pool.negExpiration(now)
+				pool.lock.Unlock()
+				pool.ndb.setExpiration(posExp, negExp)
+			case <-pool.stopCh:
+				return
+			}
+		}
+	}()
+	go func() {
+		for {
+			select {
+			case <-clock.After(tryActivatePeriod):
+				pool.lock.Lock()
+				pool.tryActivateClients()
+				for _, c := range pool.dropInactivePeers[pool.dropInactiveCounter] {
+					if _, ok := pool.connectedMap[c.id]; ok && !c.active && !c.priority {
+						pool.drop(c.peer, true)
+					}
+				}
+				delete(pool.dropInactivePeers, pool.dropInactiveCounter)
+				pool.dropInactiveCounter++
+				pool.lock.Unlock()
 			case <-pool.stopCh:
 				return
 			}
@@ -201,122 +280,213 @@ func (f *clientPool) stop() {
 	f.lock.Lock()
 	f.closed = true
 	f.lock.Unlock()
-	f.ndb.setCumulativeTime(f.logOffset(f.clock.Now()))
+	now := f.clock.Now()
+	f.ndb.setExpiration(f.posExpiration(now), f.negExpiration(now))
 	f.ndb.close()
+}
+
+// updateFreeRatio updates freeRatio, averageFreeRatio, posExp and negExp based
+// on free service availability. Should be called after capLimit or priorityActive
+// is changed.
+func (f *clientPool) updateFreeRatio() {
+	f.freeRatio = 0
+	if f.priorityActive < f.capLimit {
+		freeCap := f.capLimit - f.priorityActive
+		if freeCap > f.freeClientCap {
+			freeCapThreshold := f.capLimit / 4
+			if freeCap > freeCapThreshold {
+				f.freeRatio = 1
+			} else {
+				f.freeRatio = float64(freeCap-f.freeClientCap) / float64(freeCapThreshold-f.freeClientCap)
+			}
+		}
+	}
+	f.expLock.Lock()
+	now := f.clock.Now()
+	dt := now - f.freeRatioLastUpdate
+	if dt < 0 {
+		dt = 0
+	}
+	f.averageFreeRatio -= (f.freeRatio - f.averageFreeRatio) * math.Expm1(-float64(dt)/float64(freeRatioTC))
+	f.freeRatioLastUpdate = now
+	f.posExp += uint64(float64(dt) * f.posExpTCi * f.freeRatio)
+	f.negExp += uint64(float64(dt) * f.negExpTCi * f.freeRatio)
+	f.expLock.Unlock()
+}
+
+// setExpirationTCs sets positive and negative token expiration time constants.
+// Specified in seconds, 0 means infinite (no expiration).
+func (f *clientPool) setExpirationTCs(pos, neg uint64) {
+	f.lock.Lock()
+	f.updateFreeRatio()
+	f.lock.Unlock()
+
+	f.expLock.Lock()
+	f.posExpTC, f.negExpTC = pos, neg
+	if pos > 0 {
+		f.posExpTCi = logMultiplier / float64(pos*uint64(time.Second))
+	} else {
+		f.posExpTCi = 0
+	}
+	if neg > 0 {
+		f.negExpTCi = logMultiplier / float64(neg*uint64(time.Second))
+	} else {
+		f.negExpTCi = 0
+	}
+	f.expLock.Unlock()
+}
+
+// getExpirationTCs returns the current positive and negative token expiration
+// time constants
+func (f *clientPool) getExpirationTCs() (pos, neg uint64) {
+	f.expLock.Lock()
+	defer f.expLock.Unlock()
+
+	return f.posExpTC, f.negExpTC
+}
+
+// posExpiration implements expirationController. Expiration happens only when
+// free service is available.
+func (f *clientPool) posExpiration(now mclock.AbsTime) uint64 {
+	f.expLock.RLock()
+	defer f.expLock.RUnlock()
+
+	dt := now - f.freeRatioLastUpdate
+	if dt < 0 {
+		dt = 0
+	}
+	return f.posExp + uint64(float64(dt)*f.posExpTCi*f.freeRatio)
+}
+
+// negExpiration implements expirationController. Expiration happens only when
+// free service is available.
+func (f *clientPool) negExpiration(now mclock.AbsTime) uint64 {
+	f.expLock.RLock()
+	defer f.expLock.RUnlock()
+
+	dt := now - f.freeRatioLastUpdate
+	if dt < 0 {
+		dt = 0
+	}
+	return f.negExp + uint64(float64(dt)*f.negExpTCi*f.freeRatio)
+}
+
+// totalTokenLimit returns the current token supply limit. Token prices are based
+// on the ratio of total token amount and supply limit while the limit depends on
+// averageFreeRatio, ensuring the availability of free service most of the time.
+func (f *clientPool) totalTokenLimit() uint64 {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	f.updateFreeRatio()
+	d := f.averageFreeRatio
+	if d > 0.5 {
+		d = -math.Log(0.5/d) * float64(freeRatioTC)
+	} else {
+		d = 0
+	}
+	return uint64(d * float64(f.capLimit) * f.defaultPosFactors.capacityFactor)
+}
+
+// totalTokenAmount returns the total amount of currently existing service tokens
+func (f *clientPool) totalTokenAmount() uint64 {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	now := f.clock.Now()
+	if now > f.lastConnectedBalanceUpdate+mclock.AbsTime(time.Second) {
+		f.activeBalances = expiredValue{}
+		for _, c := range f.connectedMap {
+			pos, _ := c.balanceTracker.getBalance(now)
+			f.activeBalances.addExp(pos)
+		}
+		f.lastConnectedBalanceUpdate = now
+	}
+	sum := f.activeBalances
+	sum.addExp(f.inactiveBalances)
+	return sum.value(f.posExpiration(now))
 }
 
 // connect should be called after a successful handshake. If the connection was
 // rejected, there is no need to call disconnect.
-func (f *clientPool) connect(peer clientPoolPeer, capacity uint64) bool {
+func (f *clientPool) connect(peer clientPoolPeer, reqCapacity uint64) (uint64, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
 	// Short circuit if clientPool is already closed.
 	if f.closed {
-		return false
+		return 0, fmt.Errorf("Client pool is already closed")
 	}
 	// Dedup connected peers.
 	id, freeID := peer.ID(), peer.freeClientId()
 	if _, ok := f.connectedMap[id]; ok {
 		clientRejectedMeter.Mark(1)
 		log.Debug("Client already connected", "address", freeID, "id", peerIdToString(id))
-		return false
+		return 0, fmt.Errorf("Client already connected   address = %s  id = %s", freeID, peerIdToString(id))
 	}
-	// Create a clientInfo but do not add it yet
-	var (
-		posBalance uint64
-		negBalance uint64
-		now        = f.clock.Now()
-	)
 	pb := f.ndb.getOrNewPB(id)
-	posBalance = pb.value
-
 	nb := f.ndb.getOrNewNB(freeID)
-	if nb.logValue != 0 {
-		negBalance = uint64(math.Exp(float64(nb.logValue-f.logOffset(now))/fixedPointMultiplier) * float64(time.Second))
-	}
 	e := &clientInfo{
+		capacity:        reqCapacity,
 		pool:            f,
 		peer:            peer,
 		address:         freeID,
 		queueIndex:      -1,
 		id:              id,
-		connectedAt:     now,
-		priority:        posBalance != 0,
+		freeID:          freeID,
+		connectedAt:     f.clock.Now(),
+		priority:        pb.value.base != 0,
 		posFactors:      f.defaultPosFactors,
 		negFactors:      f.defaultNegFactors,
 		balanceMetaInfo: pb.meta,
 	}
-	// If the client is a free client, assign with a low free capacity,
-	// Otherwise assign with the given value(priority client)
-	if !e.priority || capacity == 0 {
-		capacity = f.freeClientCap
-	}
-	e.capacity = capacity
-
-	// Starts a balance tracker
-	e.balanceTracker.init(f.clock, capacity)
-	e.balanceTracker.setBalance(posBalance, negBalance)
-	e.updatePriceFactors()
-
-	// If the number of clients already connected in the clientpool exceeds its
-	// capacity, evict some clients with lowest priority.
-	//
-	// If the priority of the newly added client is lower than the priority of
-	// all connected clients, the client is rejected.
-	newCapacity := f.connectedCap + capacity
-	newCount := f.connectedQueue.Size() + 1
-	if newCapacity > f.capLimit || newCount > f.connLimit {
-		var (
-			kickList     []*clientInfo
-			kickPriority int64
-		)
-		f.connectedQueue.MultiPop(func(data interface{}, priority int64) bool {
-			c := data.(*clientInfo)
-			kickList = append(kickList, c)
-			kickPriority = priority
-			newCapacity -= c.capacity
-			newCount--
-			return newCapacity > f.capLimit || newCount > f.connLimit
-		})
-		bias := connectedBias
-		if f.disableBias {
-			bias = 0
-		}
-		if newCapacity > f.capLimit || newCount > f.connLimit || (e.balanceTracker.estimatedPriority(now+mclock.AbsTime(bias), false)-kickPriority) > 0 {
-			for _, c := range kickList {
-				f.connectedQueue.Push(c)
-			}
-			clientRejectedMeter.Mark(1)
-			log.Debug("Client rejected", "address", freeID, "id", peerIdToString(id))
-			return false
-		}
-		// accept new client, drop old ones
-		for _, c := range kickList {
-			f.dropClient(c, now, true)
-		}
-	}
-
-	// Register new client to connection queue.
+	missing, capacity := f.capAvailable(id, freeID, reqCapacity, 0, true)
 	f.connectedMap[id] = e
-	f.connectedQueue.Push(e)
-	f.connectedCap += e.capacity
+	if missing != 0 {
+		// capacity is not available, add client to inactive queue
+		f.initBalanceTracker(&e.balanceTracker, pb, nb, capacity, false)
+		f.inactiveQueue.Push(e, -connPriority(e, f.clock.Now()))
+		return 0, nil
+	}
+	// capacity is available, add client
+	e.active = true
+	e.capacity = capacity
+	f.initBalanceTracker(&e.balanceTracker, pb, nb, capacity, true)
+	// Register new client to connection queue.
+	f.inactiveBalances.subExp(pb.value)
+	f.activeBalances.addExp(pb.value)
+	f.activeQueue.Push(e)
+	f.activeCap += e.capacity
 
 	// If the current client is a paid client, monitor the status of client,
 	// downgrade it to normal client if positive balance is used up.
 	if e.priority {
-		f.priorityConnected += capacity
+		f.priorityActive += capacity
+		f.updateFreeRatio()
 		e.balanceTracker.addCallback(balanceCallbackZero, 0, func() { f.balanceExhausted(id) })
 	}
-	// If the capacity of client is not the default value(free capacity), notify
-	// it to update capacity.
-	if e.capacity != f.freeClientCap {
-		e.peer.updateCapacity(e.capacity)
-	}
-	totalConnectedGauge.Update(int64(f.connectedCap))
+	totalConnectedGauge.Update(int64(f.activeCap))
 	clientConnectedMeter.Mark(1)
 	log.Debug("Client accepted", "address", freeID)
-	return true
+	return e.capacity, nil
+}
+
+// initBalanceTracker initializes the positive and negative balances and price factors
+func (f *clientPool) initBalanceTracker(bt *balanceTracker, pb posBalance, nb negBalance, capacity uint64, active bool) {
+	bt.exp = f
+	posBalance := pb.value
+	var negBalance expiredValue
+	if nb.logValue != 0 {
+		negBalance.exp = nb.logValue / log2Multiplier
+		negBalance.base = uint64(math.Exp(float64(nb.logValue%log2Multiplier)/logMultiplier) * float64(time.Second))
+	}
+	bt.init(f.clock, capacity)
+	bt.setBalance(posBalance, negBalance)
+	if active {
+		updatePriceFactors(bt, f.defaultPosFactors, f.defaultNegFactors, capacity)
+	} else {
+		zeroPriceFactors(bt)
+	}
 }
 
 // disconnect should be called when a connection is terminated. If the disconnection
@@ -326,17 +496,106 @@ func (f *clientPool) disconnect(p clientPoolPeer) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
+	f.drop(p, false)
+}
+
+// drop deactivates the peer if necessary and drops it from the inactive queue
+func (f *clientPool) drop(p clientPeer, kicked bool) {
 	// Short circuit if client pool is already closed.
 	if f.closed {
 		return
 	}
-	// Short circuit if the peer hasn't been registered.
-	e := f.connectedMap[p.ID()]
-	if e == nil {
+	e, ok := f.connectedMap[p.ID()]
+	if !ok {
 		log.Debug("Client not connected", "address", p.freeClientId(), "id", peerIdToString(p.ID()))
 		return
 	}
-	f.dropClient(e, f.clock.Now(), false)
+	tryActivate := e.active
+	if e.active {
+		f.deactivateClient(e, false)
+	}
+	f.finalizeBalance(e, f.clock.Now())
+	f.inactiveQueue.Remove(e.queueIndex)
+	delete(f.connectedMap, e.id)
+	if kicked {
+		clientKickedMeter.Mark(1)
+		log.Debug("Client kicked out", "address", e.address)
+	} else {
+		clientDisconnectedMeter.Mark(1)
+		log.Debug("Client disconnected", "address", e.address)
+	}
+	if tryActivate {
+		f.tryActivateClients()
+	}
+}
+
+// capAvailable checks whether the current priority level of the given client is enough to
+// connect or change capacity to the requested level and then stay connected for at least
+// the specified duration. If not then the additional required amount of positive balance is returned.
+func (f *clientPool) capAvailable(id enode.ID, freeID string, capacity uint64, minConnTime time.Duration, kick bool) (uint64, uint64) {
+	var missing uint64
+	if capacity == 0 {
+		capacity = f.freeClientCap
+	}
+	if capacity < f.minCap {
+		capacity = f.minCap
+	}
+	newCapacity := f.activeCap + capacity
+	newCount := f.activeQueue.Size() + 1
+	client := f.connectedMap[id]
+	if client != nil && client.active {
+		newCapacity -= client.capacity
+		newCount--
+	}
+	if newCapacity > f.capLimit || newCount > f.activeLimit {
+		var (
+			popList        []*clientInfo
+			targetPriority int64
+		)
+		f.activeQueue.MultiPop(func(data interface{}, priority int64) bool {
+			c := data.(*clientInfo)
+			popList = append(popList, c)
+			if c != client {
+				targetPriority = priority
+				newCapacity -= c.capacity
+				newCount--
+			}
+			return newCapacity > f.capLimit || newCount > f.activeLimit
+		})
+		if newCapacity > f.capLimit || newCount > f.activeLimit {
+			missing = math.MaxUint64
+		} else {
+			var bt *balanceTracker
+			if client != nil {
+				bt = &client.balanceTracker
+			} else {
+				bt = &balanceTracker{}
+				f.initBalanceTracker(bt, f.ndb.getOrNewPB(id), f.ndb.getOrNewNB(freeID), capacity, true)
+			}
+			if capacity != f.freeClientCap && targetPriority >= 0 {
+				targetPriority = -1
+			}
+			bias := activeBias
+			if f.disableBias {
+				bias = 0
+			}
+			if bias < minConnTime {
+				bias = minConnTime
+			}
+			missing = bt.posBalanceMissing(targetPriority, capacity, bias)
+		}
+		if missing != 0 {
+			kick = false
+		}
+		for _, c := range popList {
+			if kick && c != client {
+				f.deactivateClient(c, true)
+			} else {
+				f.activeQueue.Push(c)
+			}
+		}
+	}
+	return missing, capacity
 }
 
 // forClients iterates through a list of clients, calling the callback for each one.
@@ -371,27 +630,61 @@ func (f *clientPool) setDefaultFactors(posFactors, negFactors priceFactors) {
 	f.defaultNegFactors = negFactors
 }
 
-// dropClient removes a client from the connected queue and finalizes its balance.
-// If kick is true then it also initiates the disconnection.
-func (f *clientPool) dropClient(e *clientInfo, now mclock.AbsTime, kick bool) {
-	if _, ok := f.connectedMap[e.id]; !ok {
+// deactivateClient puts a client in inactive state
+func (f *clientPool) deactivateClient(e *clientInfo, scheduleDrop bool) {
+	if _, ok := f.connectedMap[e.id]; !ok || !e.active {
 		return
 	}
-	f.finalizeBalance(e, now)
-	f.connectedQueue.Remove(e.queueIndex)
-	delete(f.connectedMap, e.id)
-	f.connectedCap -= e.capacity
+	f.activeQueue.Remove(e.queueIndex)
+	f.activeCap -= e.capacity
 	if e.priority {
-		f.priorityConnected -= e.capacity
+		f.priorityActive -= e.capacity
+		f.updateFreeRatio()
 	}
-	totalConnectedGauge.Update(int64(f.connectedCap))
-	if kick {
-		clientKickedMeter.Mark(1)
-		log.Debug("Client kicked out", "address", e.address)
-		f.removePeer(e.id)
-	} else {
-		clientDisconnectedMeter.Mark(1)
-		log.Debug("Client disconnected", "address", e.address)
+	e.active = false
+	e.peer.updateCapacity(0)
+	totalConnectedGauge.Update(int64(f.activeCap))
+	f.inactiveQueue.Push(e, -connPriority(e, f.clock.Now()))
+	if scheduleDrop {
+		f.dropInactivePeers[f.dropInactiveCounter+dropInactiveCycles] = append(f.dropInactivePeers[f.dropInactiveCounter+dropInactiveCycles], e)
+	}
+}
+
+// tryActivateClients checks whether some inactive clients have enough priority now
+// and activates them if possible
+func (f *clientPool) tryActivateClients() {
+	now := f.clock.Now()
+	for f.inactiveQueue.Size() != 0 {
+		e := f.inactiveQueue.PopItem().(*clientInfo)
+		missing, capacity := f.capAvailable(e.id, e.freeID, e.capacity, 0, true)
+		if missing != 0 {
+			f.inactiveQueue.Push(e, -connPriority(e, now))
+			return
+		}
+		// capacity is available, activate client
+		e.active = true
+		e.capacity = capacity
+		e.peer.updateCapacity(capacity)
+		balance, _ := e.balanceTracker.getBalance(now)
+		e.balanceTracker.setCapacity(capacity)
+		updatePriceFactors(&e.balanceTracker, f.defaultPosFactors, f.defaultNegFactors, capacity)
+		// Register activated client to connection queue.
+		f.inactiveBalances.subExp(balance)
+		f.activeBalances.addExp(balance)
+		f.activeQueue.Push(e)
+		f.activeCap += e.capacity
+
+		// If the current client is a paid client, monitor the status of client,
+		// downgrade it to normal client if positive balance is used up.
+		if e.priority {
+			f.priorityActive += capacity
+			f.updateFreeRatio()
+			e.balanceTracker.addCallback(balanceCallbackZero, 0, func() { f.balanceExhausted(e.id) })
+		}
+		e.peer.updateCapacity(e.capacity)
+		totalConnectedGauge.Update(int64(f.activeCap))
+		clientConnectedMeter.Mark(1)
+		log.Debug("Client activated", "address", e.freeID)
 	}
 }
 
@@ -401,7 +694,7 @@ func (f *clientPool) capacityInfo() (uint64, uint64, uint64) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	return f.capLimit, f.connectedCap, f.priorityConnected
+	return f.capLimit, f.activeCap, f.priorityActive
 }
 
 // finalizeBalance stops the balance tracker, retrieves the final balances and
@@ -409,14 +702,19 @@ func (f *clientPool) capacityInfo() (uint64, uint64, uint64) {
 func (f *clientPool) finalizeBalance(c *clientInfo, now mclock.AbsTime) {
 	c.balanceTracker.stop(now)
 	pos, neg := c.balanceTracker.getBalance(now)
+	f.inactiveBalances.addExp(pos)
+	f.activeBalances.subExp(pos)
 
 	pb, nb := f.ndb.getOrNewPB(c.id), f.ndb.getOrNewNB(c.address)
 	pb.value = pos
 	f.ndb.setPB(c.id, pb)
 
-	neg /= uint64(time.Second) // Convert the expanse to second level.
-	if neg > 1 {
-		nb.logValue = int64(math.Log(float64(neg))*fixedPointMultiplier) + f.logOffset(now)
+	var nbLog int64
+	if neg.base > 0 {
+		nbLog = int64(math.Log(float64(neg.base)/float64(time.Second))*logMultiplier) + int64(neg.exp*log2Multiplier)
+	}
+	if nbLog > 0 {
+		nb.logValue = uint64(nbLog)
 		f.ndb.setNB(c.address, nb)
 	} else {
 		f.ndb.delNB(c.address) // Negative balance is small enough, drop it directly.
@@ -434,115 +732,104 @@ func (f *clientPool) balanceExhausted(id enode.ID) {
 		return
 	}
 	if c.priority {
-		f.priorityConnected -= c.capacity
+		f.priorityActive -= c.capacity
+		f.updateFreeRatio()
 	}
 	c.priority = false
 	if c.capacity != f.freeClientCap {
-		f.connectedCap += f.freeClientCap - c.capacity
-		totalConnectedGauge.Update(int64(f.connectedCap))
+		f.activeCap += f.freeClientCap - c.capacity
+		totalConnectedGauge.Update(int64(f.activeCap))
 		c.capacity = f.freeClientCap
 		c.balanceTracker.setCapacity(c.capacity)
 		c.peer.updateCapacity(c.capacity)
 	}
 	pb := f.ndb.getOrNewPB(id)
-	pb.value = 0
+	pb.value = expiredValue{}
 	f.ndb.setPB(id, pb)
 }
 
-// setConnLimit sets the maximum number and total capacity of connected clients,
+// setactiveLimit sets the maximum number and total capacity of connected clients,
 // dropping some of them if necessary.
 func (f *clientPool) setLimits(totalConn int, totalCap uint64) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	f.connLimit = totalConn
+	f.activeLimit = totalConn
 	f.capLimit = totalCap
-	if f.connectedCap > f.capLimit || f.connectedQueue.Size() > f.connLimit {
-		f.connectedQueue.MultiPop(func(data interface{}, priority int64) bool {
-			f.dropClient(data.(*clientInfo), mclock.Now(), true)
-			return f.connectedCap > f.capLimit || f.connectedQueue.Size() > f.connLimit
+	if f.activeCap > f.capLimit || f.activeQueue.Size() > f.activeLimit {
+		f.activeQueue.MultiPop(func(data interface{}, priority int64) bool {
+			f.deactivateClient(data.(*clientInfo), true)
+			return f.activeCap > f.capLimit || f.activeQueue.Size() > f.activeLimit
 		})
+	} else {
+		f.tryActivateClients()
 	}
+	f.updateFreeRatio()
 }
 
 // setCapacity sets the assigned capacity of a connected client
-func (f *clientPool) setCapacity(c *clientInfo, capacity uint64) error {
-	if f.connectedMap[c.id] != c {
-		return fmt.Errorf("client %064x is not connected", c.id[:])
-	}
-	if c.capacity == capacity {
-		return nil
-	}
-	if !c.priority {
-		return errNoPriority
-	}
-	oldCapacity := c.capacity
-	c.capacity = capacity
-	f.connectedCap += capacity - oldCapacity
-	c.balanceTracker.setCapacity(capacity)
-	f.connectedQueue.Update(c.queueIndex)
-	if f.connectedCap > f.capLimit {
-		var kickList []*clientInfo
-		kick := true
-		f.connectedQueue.MultiPop(func(data interface{}, priority int64) bool {
-			client := data.(*clientInfo)
-			kickList = append(kickList, client)
-			f.connectedCap -= client.capacity
-			if client == c {
-				kick = false
-			}
-			return kick && (f.connectedCap > f.capLimit)
-		})
-		if kick {
-			now := mclock.Now()
-			for _, c := range kickList {
-				f.dropClient(c, now, true)
-			}
-		} else {
-			c.capacity = oldCapacity
-			c.balanceTracker.setCapacity(oldCapacity)
-			for _, c := range kickList {
-				f.connectedCap += c.capacity
-				f.connectedQueue.Push(c)
-			}
-			return errNoPriority
+func (f *clientPool) setCapacity(id enode.ID, freeID string, capacity uint64, minConnTime time.Duration, setCap bool) (uint64, uint64, error) {
+	c := f.connectedMap[id]
+	if c != nil {
+		if c.capacity == capacity {
+			return 0, capacity, nil
 		}
 	}
-	totalConnectedGauge.Update(int64(f.connectedCap))
-	f.priorityConnected += capacity - oldCapacity
-	c.updatePriceFactors()
-	c.peer.updateCapacity(c.capacity)
-	return nil
+	var missing uint64
+	missing, capacity = f.capAvailable(id, freeID, capacity, 0, setCap && c != nil)
+	if missing != 0 {
+		return missing, capacity, errNoPriority
+	}
+	// capacity update is possible
+	if setCap {
+		if c == nil {
+			return 0, capacity, fmt.Errorf("client %064x is not connected", c.id[:])
+		}
+		f.activeCap += capacity - c.capacity
+		f.priorityActive += capacity - c.capacity
+		f.updateFreeRatio()
+		c.capacity = capacity
+		c.balanceTracker.setCapacity(capacity)
+		f.activeQueue.Update(c.queueIndex)
+		totalConnectedGauge.Update(int64(f.activeCap))
+		updatePriceFactors(&c.balanceTracker, c.posFactors, c.negFactors, c.capacity)
+		c.peer.updateCapacity(c.capacity)
+		f.tryActivateClients()
+	}
+	return 0, capacity, nil
 }
 
-// requestCost feeds request cost after serving a request from the given peer.
-func (f *clientPool) requestCost(p *clientPeer, cost uint64) {
+// setCapacityLocked is the equivalent of setCapacity used when f.lock is already locked
+func (f *clientPool) setCapacityLocked(id enode.ID, freeID string, capacity uint64, minConnTime time.Duration, setCap bool) (uint64, uint64, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	info, exist := f.connectedMap[p.ID()]
-	if !exist || f.closed {
-		return
+	return f.setCapacity(id, freeID, capacity, minConnTime, setCap)
+}
+
+// requestCost feeds request cost after serving a request from the given peer and
+// returns the remaining token balance
+func (f *clientPool) requestCost(p *clientPeer, cost uint64) uint64 {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	c := f.connectedMap[p.ID()]
+	if c == nil || f.closed {
+		return 0
 	}
-	info.balanceTracker.requestCost(cost)
+	return c.balanceTracker.requestCost(cost)
 }
 
-// logOffset calculates the time-dependent offset for the logarithmic
-// representation of negative balance
-//
-// From another point of view, the result returned by the function represents
-// the total time that the clientpool is cumulatively running(total_hours/multiplier).
-func (f *clientPool) logOffset(now mclock.AbsTime) int64 {
-	// Note: fixedPointMultiplier acts as a multiplier here; the reason for dividing the divisor
-	// is to avoid int64 overflow. We assume that int64(negBalanceExpTC) >> fixedPointMultiplier.
-	cumulativeTime := int64((time.Duration(now - f.startTime)) / (negBalanceExpTC / fixedPointMultiplier))
-	return f.cumulativeTime + cumulativeTime
+// updatePriceFactors sets the pricing factors for an individual connected client
+func updatePriceFactors(bt *balanceTracker, posFactors, negFactors priceFactors, capacity uint64) {
+	bt.setFactors(true, negFactors.timeFactor+float64(capacity)*negFactors.capacityFactor/1000000, negFactors.requestFactor)
+	bt.setFactors(false, posFactors.timeFactor+float64(capacity)*posFactors.capacityFactor/1000000, posFactors.requestFactor)
 }
 
-// setClientPriceFactors sets the pricing factors for an individual connected client
-func (c *clientInfo) updatePriceFactors() {
-	c.balanceTracker.setFactors(true, c.negFactors.timeFactor+float64(c.capacity)*c.negFactors.capacityFactor/1000000, c.negFactors.requestFactor)
-	c.balanceTracker.setFactors(false, c.posFactors.timeFactor+float64(c.capacity)*c.posFactors.capacityFactor/1000000, c.posFactors.requestFactor)
+// zeroPriceFactors sets the pricing factors to zero
+func zeroPriceFactors(bt *balanceTracker) {
+	bt.setFactors(true, 0, 0)
+	bt.setFactors(false, 0, 0)
 }
 
 // getPosBalance retrieves a single positive balance entry from cache or the database
@@ -550,7 +837,12 @@ func (f *clientPool) getPosBalance(id enode.ID) posBalance {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	return f.ndb.getOrNewPB(id)
+	if c := f.connectedMap[id]; c != nil {
+		pb, _ := c.balanceTracker.getBalance(f.clock.Now())
+		return posBalance{value: pb, meta: c.balanceMetaInfo}
+	} else {
+		return f.ndb.getOrNewPB(id)
+	}
 }
 
 // addBalance updates the balance of a client (either overwrites it or adds to it).
@@ -559,75 +851,87 @@ func (f *clientPool) addBalance(id enode.ID, amount int64, meta string) (uint64,
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
+	now := f.clock.Now()
 	pb := f.ndb.getOrNewPB(id)
-	var negBalance uint64
+	var negBalance expiredValue
 	c := f.connectedMap[id]
 	if c != nil {
-		pb.value, negBalance = c.balanceTracker.getBalance(f.clock.Now())
+		pb.value, negBalance = c.balanceTracker.getBalance(now)
 	}
 	oldBalance := pb.value
-	if amount > 0 {
-		if amount > maxBalance || pb.value > maxBalance-uint64(amount) {
-			return oldBalance, oldBalance, errBalanceOverflow
-		}
-		pb.value += uint64(amount)
-	} else {
-		if uint64(-amount) > pb.value {
-			pb.value = 0
-		} else {
-			pb.value -= uint64(-amount)
-		}
+	posExp := f.posExpiration(now)
+	oldValue := oldBalance.value(posExp)
+	if amount > 0 && (amount > maxBalance || oldValue > maxBalance-uint64(amount)) {
+		return oldValue, oldValue, errBalanceOverflow
 	}
+	pb.value.add(amount, posExp)
 	pb.meta = meta
 	f.ndb.setPB(id, pb)
 	if c != nil {
 		c.balanceTracker.setBalance(pb.value, negBalance)
-		if !c.priority && pb.value > 0 {
-			// The capacity should be adjusted based on the requirement,
-			// but we have no idea about the new capacity, need a second
-			// call to udpate it.
-			c.priority = true
-			f.priorityConnected += c.capacity
-			c.balanceTracker.addCallback(balanceCallbackZero, 0, func() { f.balanceExhausted(id) })
+		if c.active {
+			f.activeQueue.Update(c.queueIndex)
+			if !c.priority && pb.value.base > 0 {
+				// The capacity should be adjusted based on the requirement,
+				// but we have no idea about the new capacity, need a second
+				// call to udpate it.
+				f.priorityActive += c.capacity
+				f.updateFreeRatio()
+				c.balanceTracker.addCallback(balanceCallbackZero, 0, func() { f.balanceExhausted(id) })
+			}
+			c.balanceMetaInfo = meta
+			f.activeBalances.subExp(oldBalance)
+			f.activeBalances.addExp(pb.value)
+		} else {
+			f.inactiveQueue.Remove(c.queueIndex)
+			f.inactiveQueue.Push(c, -connPriority(c, f.clock.Now()))
+			f.inactiveBalances.subExp(oldBalance)
+			f.inactiveBalances.addExp(pb.value)
 		}
-		// if balance is set to zero then reverting to non-priority status
-		// is handled by the balanceExhausted callback
-		c.balanceMetaInfo = meta
+		if pb.value.base > 0 {
+			c.priority = true
+			// if balance is set to zero then reverting to non-priority status
+			// is handled by the balanceExhausted callback
+		}
+	} else {
+		f.inactiveBalances.subExp(oldBalance)
+		f.inactiveBalances.addExp(pb.value)
 	}
-	return oldBalance, pb.value, nil
+	f.tryActivateClients()
+	return oldValue, pb.value.value(posExp), nil
 }
 
 // posBalance represents a recently accessed positive balance entry
 type posBalance struct {
-	value uint64
+	value expiredValue
 	meta  string
 }
 
 // EncodeRLP implements rlp.Encoder
 func (e *posBalance) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{e.value, e.meta})
+	return rlp.Encode(w, []interface{}{e.value.base, e.value.exp, e.meta})
 }
 
 // DecodeRLP implements rlp.Decoder
 func (e *posBalance) DecodeRLP(s *rlp.Stream) error {
 	var entry struct {
-		Value uint64
-		Meta  string
+		ValueBase, ValueExp uint64
+		Meta                string
 	}
 	if err := s.Decode(&entry); err != nil {
 		return err
 	}
-	e.value = entry.Value
+	e.value = expiredValue{base: entry.ValueBase, exp: entry.ValueExp}
 	e.meta = entry.Meta
 	return nil
 }
 
 // negBalance represents a negative balance entry of a disconnected client
-type negBalance struct{ logValue int64 }
+type negBalance struct{ logValue uint64 }
 
 // EncodeRLP implements rlp.Encoder
 func (e *negBalance) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{uint64(e.logValue)})
+	return rlp.Encode(w, []interface{}{e.logValue})
 }
 
 // DecodeRLP implements rlp.Decoder
@@ -638,7 +942,7 @@ func (e *negBalance) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&entry); err != nil {
 		return err
 	}
-	e.logValue = int64(entry.LogValue)
+	e.logValue = entry.LogValue
 	return nil
 }
 
@@ -654,9 +958,9 @@ const (
 )
 
 var (
-	positiveBalancePrefix    = []byte("pb:")             // dbVersion(uint16 big endian) + positiveBalancePrefix + id -> balance
-	negativeBalancePrefix    = []byte("nb:")             // dbVersion(uint16 big endian) + negativeBalancePrefix + ip -> balance
-	cumulativeRunningTimeKey = []byte("cumulativeTime:") // dbVersion(uint16 big endian) + cumulativeRunningTimeKey -> cumulativeTime
+	positiveBalancePrefix = []byte("pb:")         // dbVersion(uint16 big endian) + positiveBalancePrefix + id -> balance
+	negativeBalancePrefix = []byte("nb:")         // dbVersion(uint16 big endian) + negativeBalancePrefix + ip -> balance
+	expirationKey         = []byte("expiration:") // dbVersion(uint16 big endian) + expirationKey -> posExp, negExp
 )
 
 type nodeDB struct {
@@ -705,17 +1009,18 @@ func (db *nodeDB) key(id []byte, neg bool) []byte {
 	return db.auxbuf[:len(prefix)+len(db.verbuf)+len(id)]
 }
 
-func (db *nodeDB) getCumulativeTime() int64 {
-	blob, err := db.db.Get(append(cumulativeRunningTimeKey, db.verbuf[:]...))
-	if err != nil || len(blob) == 0 {
-		return 0
+func (db *nodeDB) getExpiration() (uint64, uint64) {
+	blob, err := db.db.Get(append(expirationKey, db.verbuf[:]...))
+	if err != nil || len(blob) != 16 {
+		return 0, 0
 	}
-	return int64(binary.BigEndian.Uint64(blob))
+	return binary.BigEndian.Uint64(blob[:8]), binary.BigEndian.Uint64(blob[8:16])
 }
 
-func (db *nodeDB) setCumulativeTime(v int64) {
-	binary.BigEndian.PutUint64(db.auxbuf[:8], uint64(v))
-	db.db.Put(append(cumulativeRunningTimeKey, db.verbuf[:]...), db.auxbuf[:8])
+func (db *nodeDB) setExpiration(pos, neg uint64) {
+	binary.BigEndian.PutUint64(db.auxbuf[:8], pos)
+	binary.BigEndian.PutUint64(db.auxbuf[8:16], neg)
+	db.db.Put(append(expirationKey, db.verbuf[:]...), db.auxbuf[:16])
 }
 
 func (db *nodeDB) getOrNewPB(id enode.ID) posBalance {
@@ -735,7 +1040,7 @@ func (db *nodeDB) getOrNewPB(id enode.ID) posBalance {
 }
 
 func (db *nodeDB) setPB(id enode.ID, b posBalance) {
-	if b.value == 0 && len(b.meta) == 0 {
+	if b.value.base == 0 && len(b.meta) == 0 {
 		db.delPB(id)
 		return
 	}

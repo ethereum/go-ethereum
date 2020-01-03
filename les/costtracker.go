@@ -159,15 +159,9 @@ func newCostTracker(db ethdb.Database, config *eth.Config) (*costTracker, uint64
 	}
 	ct.gfLoop()
 	costList := ct.makeCostList(ct.globalFactor() * 1.25)
-	for _, c := range costList {
-		amount := minBufferReqAmount[c.MsgCode]
-		cost := c.BaseCost + amount*c.ReqCost
-		if cost > ct.minBufLimit {
-			ct.minBufLimit = cost
-		}
-	}
-	ct.minBufLimit *= uint64(minBufferMultiplier)
-	return ct, (ct.minBufLimit-1)/bufLimitRatio + 1
+	var minRecharge uint64
+	ct.minBufLimit, minRecharge = costList.decode(ProtocolLengths[ServerProtocolVersions[len(ServerProtocolVersions)-1]]).reqParams()
+	return ct, minRecharge
 }
 
 // stop stops the cost tracker and saves the cost factor statistics to the database
@@ -478,6 +472,22 @@ type (
 func (table requestCostTable) getMaxCost(code, amount uint64) uint64 {
 	costs := table[code]
 	return costs.baseCost + amount*costs.reqCost
+}
+
+func (table requestCostTable) reqParams() (minRecharge, minBufLimit uint64) {
+	for code, c := range table {
+		amount := minBufferReqAmount[code]
+		cost := c.baseCost + amount*c.reqCost
+		if cost > minBufLimit {
+			minBufLimit = cost
+		}
+	}
+	minBufLimit *= uint64(minBufferMultiplier)
+	if minBufLimit < 1 {
+		minBufLimit = 1
+	}
+	minRecharge = (minBufLimit-1)/bufLimitRatio + 1
+	return
 }
 
 // decode converts a cost list to a cost table
