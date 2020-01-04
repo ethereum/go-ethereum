@@ -67,6 +67,12 @@ func returnCommitterToPool(h *committer) {
 	committerPool.Put(h)
 }
 
+// commitNeeded returns 'false' if the given node is already in sync with db
+func (h *committer) commitNeeded(n node) bool {
+	hash, dirty := n.cache()
+	return hash == nil || dirty
+}
+
 // hash collapses a node down into a hash node, also returning a copy of the
 // original node initialized with the computed hash to replace the original one.
 func (h *committer) commit(n node, db *Database, force bool) (node, error) {

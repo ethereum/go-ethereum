@@ -330,7 +330,8 @@ func (s *StateDB) StorageTrie(addr common.Address) Trie {
 		return nil
 	}
 	cpy := stateObject.deepCopy(s)
-	return cpy.updateTrie(s.db)
+	cpy.updateTrie(s.db)
+	return cpy.getTrie(s.db)
 }
 
 func (s *StateDB) HasSuicided(addr common.Address) bool {
