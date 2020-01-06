@@ -410,27 +410,8 @@ func (t *Trie) Hash() common.Hash {
 	return common.BytesToHash(hash.(hashNode))
 }
 
-// oldCommit is the old implementation of Commit, which uses the
-// regular hasher.
-// It writes all nodes to the trie's memory database, tracking the internal
+// Commit writes all nodes to the trie's memory database, tracking the internal
 // and external (for account tries) references.
-func (t *Trie) oldCommit(onleaf LeafCallback) (root common.Hash, err error) {
-	if t.db == nil {
-		panic("commit called on trie with nil database")
-	}
-	if t.root == nil {
-		return emptyRoot, nil
-	}
-	h := newHasher(onleaf)
-	defer returnHasherToPool(h)
-	hash, cached, err := h.hash(t.root, t.db, true)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	t.root = cached
-	return common.BytesToHash(hash.(hashNode)), nil
-}
-
 func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	if t.db == nil {
 		panic("commit called on trie with nil database")
@@ -450,10 +431,17 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	var wg sync.WaitGroup
 	if onleaf != nil {
 		wg.Add(1)
-		go h.commitLoop(t.db, &wg)
+		go func() {
+			defer wg.Done()
+			h.commitLoop(t.db)
+		}()
 	}
 	_, err = h.commit(t.root, t.db, true)
 	if onleaf != nil {
+		// The leafch is created in newCommitter if there was an onleaf callback
+		// provided. The commitLoop only _reads_ from it, and the commit
+		// operation was the sole writer. Therefore, it's safe to close this
+		// channel here.
 		close(h.leafCh)
 		wg.Wait()
 	}
