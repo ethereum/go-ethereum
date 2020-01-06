@@ -350,5 +350,5 @@ func (api *PrivateLightAPI) GetCheckpointContractAddress() (string, error) {
 	if api.backend.oracle == nil {
 		return "", errNotActivated
 	}
-	return api.backend.oracle.config.Address.Hex(), nil
+	return api.backend.oracle.Contract().ContractAddr().Hex(), nil
 }
