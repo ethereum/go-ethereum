@@ -31,6 +31,10 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+// The Route53 limits change sets to this size. DNS changes need to be split
+// up into multiple batches to work around the limit.
+const route53ChangeLimit = 32000
+
 var (
 	route53AccessKeyFlag = cli.StringFlag{
 		Name:   "access-key-id",
@@ -88,21 +92,26 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 		return nil
 	}
 
-	// Submit change request.
-	log.Info(fmt.Sprintf("Submitting %d changes to Route53", len(changes)))
-	batch := new(route53.ChangeBatch)
-	batch.SetChanges(changes)
-	batch.SetComment(fmt.Sprintf("enrtree update of %s at seq %d", name, t.Seq()))
-	req := &route53.ChangeResourceRecordSetsInput{HostedZoneId: &c.zoneID, ChangeBatch: batch}
-	resp, err := c.api.ChangeResourceRecordSets(req)
-	if err != nil {
-		return err
-	}
+	// Submit change batches.
+	batches := splitChangeBatches(changes)
+	for i, changes := range batches {
+		log.Info(fmt.Sprintf("Submitting %d changes to Route53", len(changes)))
+		batch := new(route53.ChangeBatch)
+		batch.SetChanges(changes)
+		batch.SetComment(fmt.Sprintf("enrtree update %d/%d of %s at seq %d", i+1, len(batches), name, t.Seq()))
+		req := &route53.ChangeResourceRecordSetsInput{HostedZoneId: &c.zoneID, ChangeBatch: batch}
+		resp, err := c.api.ChangeResourceRecordSets(req)
+		if err != nil {
+			return err
+		}
 
-	// Wait for the change to be applied.
-	log.Info(fmt.Sprintf("Waiting for change request %s", *resp.ChangeInfo.Id))
-	wreq := &route53.GetChangeInput{Id: resp.ChangeInfo.Id}
-	return c.api.WaitUntilResourceRecordSetsChanged(wreq)
+		log.Info(fmt.Sprintf("Waiting for change request %s", *resp.ChangeInfo.Id))
+		wreq := &route53.GetChangeInput{Id: resp.ChangeInfo.Id}
+		if err := c.api.WaitUntilResourceRecordSetsChanged(wreq); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // checkZone verifies zone information for the given domain.
@@ -184,6 +193,34 @@ func (c *route53Client) computeChanges(name string, records map[string]string) (
 		changes = append(changes, newTXTChange("DELETE", path, 1, values))
 	}
 	return changes, nil
+}
+
+// splitChangeBatches splits up DNS changes such that each change batch
+// is smaller than the limit.
+func splitChangeBatches(changes []*route53.Change) [][]*route53.Change {
+	var batches [][]*route53.Change
+	var batchSize int
+	for _, ch := range changes {
+		// Start new batch if this change pushes the current one over the limit.
+		size := changeSize(ch)
+		if len(batches) == 0 || batchSize+size > route53ChangeLimit {
+			batches = append(batches, nil)
+			batchSize = 0
+		}
+		batches[len(batches)-1] = append(batches[len(batches)-1], ch)
+		batchSize += size
+	}
+	return batches
+}
+
+func changeSize(ch *route53.Change) int {
+	size := 0
+	for _, rr := range ch.ResourceRecordSet.ResourceRecords {
+		if rr.Value != nil {
+			size += len(*rr.Value)
+		}
+	}
+	return size
 }
 
 // collectRecords collects all TXT records below the given name.
