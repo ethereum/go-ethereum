@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/les/utilities"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -91,7 +92,7 @@ type peer struct {
 	headInfo *announceData
 	lock     sync.RWMutex
 
-	sendQueue *execQueue
+	sendQueue *utilities.ExecQueue
 
 	errCh chan error
 
@@ -213,7 +214,7 @@ func (p *peer) freezeServer(frozen bool) {
 		f = 1
 	}
 	if atomic.SwapUint32(&p.frozen, f) != f && frozen {
-		p.sendQueue.clear()
+		p.sendQueue.Clear()
 	}
 }
 
@@ -224,11 +225,11 @@ func (p *peer) isFrozen() bool {
 }
 
 func (p *peer) canQueue() bool {
-	return p.sendQueue.canQueue() && !p.isFrozen()
+	return p.sendQueue.CanQueue() && !p.isFrozen()
 }
 
 func (p *peer) queueSend(f func()) {
-	p.sendQueue.queue(f)
+	p.sendQueue.Queue(f)
 }
 
 // Info gathers and returns a collection of metadata known about a peer.
@@ -817,7 +818,7 @@ func (ps *peerSet) Register(p *peer) error {
 		return errAlreadyRegistered
 	}
 	ps.peers[p.id] = p
-	p.sendQueue = newExecQueue(100)
+	p.sendQueue = utilities.NewExecQueue(100)
 	peers := make([]peerSetNotify, len(ps.notifyList))
 	copy(peers, ps.notifyList)
 	ps.lock.Unlock()
@@ -845,7 +846,7 @@ func (ps *peerSet) Unregister(id string) error {
 			n.unregisterPeer(p)
 		}
 
-		p.sendQueue.quit()
+		p.sendQueue.Quit()
 		p.Peer.Disconnect(p2p.DiscUselessPeer)
 
 		return nil

@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/les/utilities"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -285,7 +286,7 @@ func (h *serverHandler) measure(setup *benchmarkSetup, count int) error {
 
 	clientPeer := newPeer(lpv2, NetworkId, false, p2p.NewPeer(id, "client", nil), clientMeteredPipe)
 	serverPeer := newPeer(lpv2, NetworkId, false, p2p.NewPeer(id, "server", nil), serverMeteredPipe)
-	serverPeer.sendQueue = newExecQueue(count)
+	serverPeer.sendQueue = utilities.NewExecQueue(count)
 	serverPeer.announceType = announceTypeNone
 	serverPeer.fcCosts = make(requestCostTable)
 	c := &requestCosts{}
