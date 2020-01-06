@@ -23,6 +23,8 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+// pureHasher is a type used for the trie Hash operation. A pureHasher has some
+// internal preallocated temp space
 type pureHasher struct {
 	sha keccakState
 
@@ -30,7 +32,7 @@ type pureHasher struct {
 	tmpKey []byte
 }
 
-// hashers live in a global db.
+// pureHasherPool holds pureHashers
 var pureHasherPool = sync.Pool{
 	New: func() interface{} {
 		return &pureHasher{
@@ -139,7 +141,7 @@ func (h *pureHasher) shortnodeToHash(n *shortNode, force bool) node {
 func (h *pureHasher) fullnodeToHash(n *fullNode, force bool) node {
 	h.tmp.Reset()
 	// Generate the RLP encoding of the node
-	if err := rlp.Encode(&h.tmp, n); err != nil {
+	if err := n.EncodeRLP(&h.tmp); err != nil {
 		panic("encode error: " + err.Error())
 	}
 

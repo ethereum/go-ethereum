@@ -26,6 +26,10 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+// LeafChanSize is the size of the leafCh. It's a pretty arbitrary number, to allow
+// some paralellism but not incur too much memory overhead.
+const LeafChanSize = 200
+
 // Leaf represents a trie leaf value
 type Leaf struct {
 	size   int         // size of the rlp data (estimate)
@@ -34,6 +38,12 @@ type Leaf struct {
 	vnodes bool        // set to true if the node (possibly) contains a valueNode
 }
 
+// committer is a type used for the trie Commit operation. A committer has some
+// internal preallocated temp space, and also a callback that is invoked when
+// leaves are committed. The leafs are passed through the `leafCh`,  to allow
+// some level of paralellism.
+// By 'some level' of paralellism, it's still the case that all leaves will be
+// processed sequentially - onleaf will never be called in paralell or out of order.
 type committer struct {
 	tmp sliceBuffer
 	sha keccakState
@@ -52,11 +62,17 @@ var committerPool = sync.Pool{
 	},
 }
 
+// newCommitter creates a new committer or picks one from the pool, and
+// initializes the leafCh, if needed.
+// In case no onleaf-callback is provided, the committer does not
+// use a channel-based commit, but inlined.
+// Typically, the account trie is committed with a channel-based leaf-commit,
+// whereas storage tries are committed 'inline'.
 func newCommitter(onleaf LeafCallback) *committer {
 	h := committerPool.Get().(*committer)
 	h.onleaf = onleaf
 	if onleaf != nil {
-		h.leafCh = make(chan *Leaf, 200) // arbitrary number
+		h.leafCh = make(chan *Leaf, LeafChanSize)
 	}
 	return h
 }
@@ -200,8 +216,7 @@ func (h *committer) store(n node, db *Database, force bool, hasVnodeChildren boo
 }
 
 // commitLoop does the actual insert + leaf callback for nodes
-func (h *committer) commitLoop(db *Database, wg *sync.WaitGroup) {
-	defer wg.Done()
+func (h *committer) commitLoop(db *Database) {
 	for item := range h.leafCh {
 		var (
 			hash      = item.hash
