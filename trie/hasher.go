@@ -17,7 +17,6 @@
 package trie
 
 import (
-	"hash"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -25,29 +24,13 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+// @deprecated
+// hasher is the old hash+commit utility, replaced by dedicated
+// hasher (pure_hasher) and committer (pure_commit)
 type hasher struct {
 	tmp    sliceBuffer
 	sha    keccakState
 	onleaf LeafCallback
-}
-
-// keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
-// Read to get a variable amount of data from the hash state. Read is faster than Sum
-// because it doesn't copy the internal state, but also modifies the internal state.
-type keccakState interface {
-	hash.Hash
-	Read([]byte) (int, error)
-}
-
-type sliceBuffer []byte
-
-func (b *sliceBuffer) Write(data []byte) (n int, err error) {
-	*b = append(*b, data...)
-	return len(data), nil
-}
-
-func (b *sliceBuffer) Reset() {
-	*b = (*b)[:0]
 }
 
 // hashers live in a global db.

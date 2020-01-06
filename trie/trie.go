@@ -451,16 +451,6 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	return rootHash, nil
 }
 
-// oldHashRoot is the old implementation of hashRoot, which uses the regular hasher
-func (t *Trie) oldHashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
-	if t.root == nil {
-		return hashNode(emptyRoot.Bytes()), nil, nil
-	}
-	h := newHasher(onleaf)
-	defer returnHasherToPool(h)
-	return h.hash(t.root, db, true)
-}
-
 // hashRoot calculates the root hash of the given trie
 func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
 	if t.root == nil {
