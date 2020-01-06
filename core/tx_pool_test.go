@@ -1387,14 +1387,16 @@ func TestTransactionDroppingEIP1559(t *testing.T) {
 		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 4)
 	}
 	// Reduce the block gas limit, check that invalidated transactions are dropped
+	// After EIP1559 initialization, the legacy gas limit is `params.MaxGasEIP1559 - gasLimit` and the EIP1559 gas limit is `gasLimit`
+	// As such by reducing the `gasLimit` we increase the legacy gas limit, this must be accounted for in these tests (tx1 is not over-gased)
 	pool.chain.(*testBlockChain).gasLimit = 100
 	<-pool.requestReset(nil, nil)
 
 	if _, ok := pool.pending[account].txs.items[tx0.Nonce()]; !ok {
 		t.Errorf("funded pending transaction missing: %v", tx0)
 	}
-	if _, ok := pool.pending[account].txs.items[tx1.Nonce()]; ok {
-		t.Errorf("over-gased pending transaction present: %v", tx1)
+	if _, ok := pool.pending[account].txs.items[tx1.Nonce()]; !ok {
+		t.Errorf("funded pending transaction missing: %v", tx1)
 	}
 	if _, ok := pool.queue[account].txs.items[tx10.Nonce()]; !ok {
 		t.Errorf("funded queued transaction missing: %v", tx10)
@@ -1402,8 +1404,8 @@ func TestTransactionDroppingEIP1559(t *testing.T) {
 	if _, ok := pool.queue[account].txs.items[tx11.Nonce()]; ok {
 		t.Errorf("over-gased queued transaction present: %v", tx11)
 	}
-	if pool.all.Count() != 2 {
-		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 2)
+	if pool.all.Count() != 3 {
+		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 3)
 	}
 }
 

@@ -495,7 +495,7 @@ func (w *worker) mainLoop() {
 				if !w.chainConfig.IsEIP1559(w.current.header.Number) && legacyGasPool != nil && legacyGasPool.Gas() < params.TxGas {
 					continue
 				}
-				// When we are between EIP1559 activation and finalization we can received transactions of both types
+				// When we are between EIP1559 activation and finalization we can receive transactions of both types
 				// and one pool could be exhausted while the other is not
 				// If both pools are exhausted we know the block is full but if only one is we could still accept transactions
 				// of the other type so we need to proceed into commitTransactions()
@@ -514,7 +514,7 @@ func (w *worker) mainLoop() {
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
 				tcount := w.current.tcount
 				w.commitTransactions(txset, coinbase, nil)
-				// Only update the snapshot if any new transactons were added
+				// Only update the snapshot if any new transactions were added
 				// to the pending block
 				if tcount != w.current.tcount {
 					w.updateSnapshot()
@@ -778,11 +778,6 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		w.current.gasPool = new(core.GasPool).AddGas(legacyGasLimit)
 	}
 
-	oneTxType := false
-	if w.chainConfig.IsEIP1559Finalized(w.current.header.Number) || !w.chainConfig.IsEIP1559(w.current.header.Number) {
-		oneTxType = true
-	}
-
 	var coalescedLogs []*types.Log
 
 	for {
@@ -791,38 +786,17 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		if tx == nil {
 			break
 		}
+
 		// Set which gasPool to use based on the type of transaction
 		eip1559 := false
 		var gp *core.GasPool
-		if w.chainConfig.IsEIP1559(w.current.header.Number) && tx.GasPrice() == nil && tx.GasPremium() != nil && tx.FeeCap() != nil {
+		if w.current.gp1559 != nil && tx.GasPrice() == nil && tx.GasPremium() != nil && tx.FeeCap() != nil {
 			gp = w.current.gp1559
 			eip1559 = true
-		} else if !w.chainConfig.IsEIP1559Finalized(w.current.header.Number) && tx.GasPremium() == nil && tx.FeeCap() == nil && tx.GasPrice() != nil {
+		} else if w.current.gasPool != nil && tx.GasPremium() == nil && tx.FeeCap() == nil && tx.GasPrice() != nil {
 			gp = w.current.gasPool
 		} else {
 			log.Error("Transaction does not conform with expected format (legacy or EIP1559)")
-			continue
-		}
-
-		// If we processing both types of transactions then we can break if both pools are exhausted
-		if w.current.gasPool != nil && w.current.gasPool.Gas() < params.TxGas && w.current.gp1559 != nil && w.current.gp1559.Gas() < params.TxGas {
-			log.Trace("Not enough gas for further transactions", "have legacy pool", w.current.gasPool, "and eip1559 pool", w.current.gp1559, "want", params.TxGas)
-			break
-		}
-
-		// If we don't have enough gas for any further transactions of this type
-		if gp.Gas() < params.TxGas {
-			if eip1559 {
-				log.Trace("Not enough gas for further EIP1559 transactions", "have", gp, "want", params.TxGas)
-			} else {
-				log.Trace("Not enough gas for further legacy transactions", "have", gp, "want", params.TxGas)
-			}
-			// and this is the only type we are processing, then we're done
-			if oneTxType {
-				break
-			}
-			// Otherwise if only the current pool is exhausted we need to continue
-			// in case some of the subsequent transactions are for the non-exhausted pool
 			continue
 		}
 
@@ -850,6 +824,22 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 				}
 			}
 			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
+		}
+
+		// If all available gas pools are empty, break
+		if (w.current.gasPool == nil || w.current.gasPool.Gas() < params.TxGas) && (w.current.gp1559 == nil || w.current.gp1559.Gas() < params.TxGas) {
+			log.Trace("Not enough gas for further transactions", "have legacy pool", w.current.gasPool, "and eip1559 pool", w.current.gp1559, "want", params.TxGas)
+			break
+		}
+
+		// If just the current gas pool is empty, continue
+		if gp.Gas() < params.TxGas {
+			if eip1559 {
+				log.Trace("Not enough gas for further EIP1559 transactions", "have", gp, "want", params.TxGas)
+			} else {
+				log.Trace("Not enough gas for further legacy transactions", "have", gp, "want", params.TxGas)
+			}
+			continue
 		}
 
 		// Error may be ignored here. The error has already been checked

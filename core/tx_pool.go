@@ -72,9 +72,13 @@ var (
 	// with a different one without the required price bump.
 	ErrReplaceUnderpriced = errors.New("replacement transaction underpriced")
 
-	// ErrGasLimit is returned if a transaction's requested gas limit exceeds the
-	// maximum allowance of the current block.
-	ErrGasLimit = errors.New("exceeds block gas limit")
+	// ErrLegacyGasLimit is returned if a transaction's requested gas limit exceeds the
+	// maximum allowance of the current block for legacy transactions.
+	ErrLegacyGasLimit = errors.New("exceeds block gas limit for legacy transactions")
+
+	// ErrEIP1559GasLimit is returned if a transaction's requested gas limit exceeds the
+	// maximum allowance of the current block for EIP1559 transactions.
+	ErrEIP1559GasLimit = errors.New("exceeds block gas limit for EIP1559 transactions")
 
 	// ErrNegativeValue is a sanity error to ensure no one is able to specify a
 	// transaction with a negative value.
@@ -250,9 +254,10 @@ type TxPool struct {
 
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
 
-	currentState  *state.StateDB // Current state in the blockchain head
-	pendingNonces *txNoncer      // Pending state tracking virtual nonces
-	currentMaxGas uint64         // Current gas limit for transaction caps
+	currentState         *state.StateDB // Current state in the blockchain head
+	pendingNonces        *txNoncer      // Pending state tracking virtual nonces
+	currentLegacyMaxGas  uint64         // Current gas limit for legacy transaction caps
+	currentEIP1559MaxGas uint64         // Current gas limit for EIP1559 transaction caps
 
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *txJournal  // Journal of local transaction to back up to disk
@@ -580,8 +585,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrNegativeValue
 	}
 	// Ensure the transaction doesn't exceed the current block limit gas.
-	if pool.currentMaxGas < tx.Gas() {
-		return ErrGasLimit
+	if tx.GasPrice() != nil && pool.currentLegacyMaxGas < tx.Gas() {
+		return ErrLegacyGasLimit
+	}
+	if tx.GasPrice() == nil && pool.currentEIP1559MaxGas < tx.Gas() {
+		return ErrEIP1559GasLimit
 	}
 	// Make sure the transaction is signed properly
 	from, err := types.Sender(pool.signer, tx)
@@ -1238,7 +1246,14 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	}
 	pool.currentState = statedb
 	pool.pendingNonces = newTxNoncer(statedb)
-	pool.currentMaxGas = newHead.GasLimit
+
+	if pool.chainconfig.IsEIP1559(newHead.Number) {
+		pool.currentLegacyMaxGas = params.MaxGasEIP1559 - newHead.GasLimit
+		pool.currentEIP1559MaxGas = newHead.GasLimit
+	} else {
+		pool.currentLegacyMaxGas = newHead.GasLimit
+		pool.currentEIP1559MaxGas = 0
+	}
 
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
@@ -1271,7 +1286,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 		}
 		log.Trace("Removed old queued transactions", "count", len(forwards))
 		// Drop all transactions that are too costly (low balance or out of gas)
-		drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas, pool.chain.CurrentBlock().BaseFee())
+		drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentLegacyMaxGas, pool.currentEIP1559MaxGas, pool.chain.CurrentBlock().BaseFee())
 		for _, tx := range drops {
 			hash := tx.Hash()
 			pool.all.Remove(hash)
@@ -1464,7 +1479,7 @@ func (pool *TxPool) demoteUnexecutables() {
 			log.Trace("Removed old pending transaction", "hash", hash)
 		}
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
-		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas, pool.chain.CurrentBlock().BaseFee())
+		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentLegacyMaxGas, pool.currentEIP1559MaxGas, pool.chain.CurrentBlock().BaseFee())
 		for _, tx := range drops {
 			hash := tx.Hash()
 			log.Trace("Removed unpayable pending transaction", "hash", hash)
