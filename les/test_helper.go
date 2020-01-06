@@ -195,7 +195,7 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 				BloomRoot:    light.GetBloomTrieRoot(db, index, sectionHead),
 			}
 		}
-		oracle = checkpointoracle.NewCheckpointOracle(checkpointConfig, getLocal)
+		oracle = checkpointoracle.New(checkpointConfig, getLocal)
 	}
 	client := &LightEthereum{
 		lesCommons: lesCommons{
@@ -258,7 +258,7 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 				BloomRoot:    light.GetBloomTrieRoot(db, index, sectionHead),
 			}
 		}
-		oracle = checkpointoracle.NewCheckpointOracle(checkpointConfig, getLocal)
+		oracle = checkpointoracle.New(checkpointConfig, getLocal)
 	}
 	server := &LesServer{
 		lesCommons: lesCommons{

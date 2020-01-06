@@ -42,8 +42,8 @@ type CheckpointOracle struct {
 	getLocal func(uint64) params.TrustedCheckpoint // Function used to retrieve local checkpoint
 }
 
-// NewCheckpointOracle returns a checkpoint oracle handler.
-func NewCheckpointOracle(config *params.CheckpointOracleConfig, getLocal func(uint64) params.TrustedCheckpoint) *CheckpointOracle {
+// New creates a checkpoint oracle handler with given configs and callback.
+func New(config *params.CheckpointOracleConfig, getLocal func(uint64) params.TrustedCheckpoint) *CheckpointOracle {
 	if config == nil {
 		log.Info("Checkpoint registrar is not enabled")
 		return nil
