@@ -223,8 +223,9 @@ type txList struct {
 	strict bool         // Whether nonces are strictly continuous or not
 	txs    *txSortedMap // Heap indexed sorted hash map of the transactions
 
-	costcap *big.Int // Price of the highest costing transaction (reset only if exceeds balance)
-	gascap  uint64   // Gas limit of the highest spending transaction (reset only if exceeds block limit)
+	costcap       *big.Int // Price of the highest costing transaction (reset only if exceeds balance)
+	legacyGasCap  uint64   // Gas limit of the highest spending legacy transaction (reset only if exceeds block limit)
+	eip1559GasCap uint64   // Gas limit of the highest spending eip1559 transaction
 }
 
 // newTxList create a new transaction list for maintaining nonce-indexable fast,
@@ -250,6 +251,7 @@ func (l *txList) Overlaps(tx *types.Transaction) bool {
 // thresholds are also potentially updated.
 func (l *txList) Add(tx *types.Transaction, priceBump uint64, baseFee *big.Int) (bool, *types.Transaction) {
 	// If there's an older better transaction, abort
+	eip1559 := false
 	old := l.txs.Get(tx.Nonce())
 	if old != nil {
 		// Have to ensure that the new gas price is higher than the old gas
@@ -262,6 +264,7 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64, baseFee *big.Int) 
 					return false, nil
 				}
 			} else {
+				eip1559 = true
 				newGasPrice := new(big.Int).Add(baseFee, tx.GasPremium())
 				if newGasPrice.Cmp(tx.FeeCap()) > 0 {
 					newGasPrice.Set(tx.FeeCap())
@@ -281,6 +284,7 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64, baseFee *big.Int) 
 					return false, nil
 				}
 			} else {
+				eip1559 = true
 				newGasPrice := new(big.Int).Add(baseFee, tx.GasPremium())
 				if newGasPrice.Cmp(tx.FeeCap()) > 0 {
 					newGasPrice.Set(tx.FeeCap())
@@ -296,8 +300,11 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64, baseFee *big.Int) 
 	if cost := tx.Cost(baseFee); l.costcap.Cmp(cost) < 0 {
 		l.costcap = cost
 	}
-	if gas := tx.Gas(); l.gascap < gas {
-		l.gascap = gas
+	if eip1559 && l.eip1559GasCap < tx.Gas() {
+		l.eip1559GasCap = tx.Gas()
+	}
+	if !eip1559 && l.legacyGasCap < tx.Gas() {
+		l.legacyGasCap = tx.Gas()
 	}
 	return true, old
 }
@@ -318,16 +325,19 @@ func (l *txList) Forward(threshold uint64) types.Transactions {
 // a point in calculating all the costs or if the balance covers all. If the threshold
 // is lower than the costgas cap, the caps will be reset to a new high after removing
 // the newly invalidated transactions.
-func (l *txList) Filter(costLimit *big.Int, gasLimit uint64, baseFee *big.Int) (types.Transactions, types.Transactions) {
+func (l *txList) Filter(costLimit *big.Int, legacyGasLimit, eip1559GasLimit uint64, baseFee *big.Int) (types.Transactions, types.Transactions) {
 	// If all transactions are below the threshold, short circuit
-	if l.costcap.Cmp(costLimit) <= 0 && l.gascap <= gasLimit {
+	if l.costcap.Cmp(costLimit) <= 0 && l.legacyGasCap <= legacyGasLimit && l.eip1559GasCap <= eip1559GasLimit {
 		return nil, nil
 	}
 	l.costcap = new(big.Int).Set(costLimit) // Lower the caps to the thresholds
-	l.gascap = gasLimit
+	l.legacyGasCap = legacyGasLimit
+	l.eip1559GasCap = eip1559GasLimit
 
 	// Filter out all the transactions above the account's funds
-	removed := l.txs.Filter(func(tx *types.Transaction) bool { return tx.Cost(baseFee).Cmp(costLimit) > 0 || tx.Gas() > gasLimit })
+	removed := l.txs.Filter(func(tx *types.Transaction) bool {
+		return tx.Cost(baseFee).Cmp(costLimit) > 0 || (tx.GasPrice() != nil && tx.Gas() > legacyGasLimit) || (tx.GasPremium()) != nil && tx.Gas() > eip1559GasLimit
+	})
 
 	// If the list was strict, filter anything above the lowest nonce
 	var invalids types.Transactions
