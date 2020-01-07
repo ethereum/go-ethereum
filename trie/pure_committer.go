@@ -42,8 +42,8 @@ type Leaf struct {
 // internal preallocated temp space, and also a callback that is invoked when
 // leaves are committed. The leafs are passed through the `leafCh`,  to allow
 // some level of paralellism.
-// By 'some level' of paralellism, it's still the case that all leaves will be
-// processed sequentially - onleaf will never be called in paralell or out of order.
+// By 'some level' of parallelism, it's still the case that all leaves will be
+// processed sequentially - onleaf will never be called in parallel or out of order.
 type committer struct {
 	tmp sliceBuffer
 	sha keccakState
