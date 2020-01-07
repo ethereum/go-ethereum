@@ -146,7 +146,9 @@ func (peer *Peer) handshake() error {
 func (peer *Peer) update() {
 	// Start the tickers for the updates
 	expire := time.NewTicker(expirationCycle)
+	defer expire.Stop()
 	transmit := time.NewTicker(transmissionCycle)
+	defer transmit.Stop()
 
 	// Loop and transmit until termination is requested
 	for {
