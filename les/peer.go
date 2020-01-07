@@ -616,8 +616,8 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 
 		// Add advertised checkpoint and register block height which
 		// client can verify the checkpoint validity.
-		if server.oracle != nil && server.oracle.isRunning() {
-			cp, height := server.oracle.stableCheckpoint()
+		if server.oracle != nil && server.oracle.IsRunning() {
+			cp, height := server.oracle.StableCheckpoint()
 			if cp != nil {
 				send = send.add("checkpoint/value", cp)
 				send = send.add("checkpoint/registerHeight", height)
