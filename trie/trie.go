@@ -456,8 +456,8 @@ func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
 	if t.root == nil {
 		return hashNode(emptyRoot.Bytes()), nil, nil
 	}
-	h := newPureHasher()
-	defer returnPureHasherToPool(h)
+	h := newHasher()
+	defer returnHasherToPool(h)
 	hashed, cached := h.hash(t.root, true)
 	return hashed, cached, nil
 }
