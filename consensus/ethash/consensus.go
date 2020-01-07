@@ -68,7 +68,7 @@ var (
 // codebase, inherently breaking if the engine is swapped out. Please put common
 // error types into the consensus package.
 var (
-	errOlderBlockTime    = errors.New("header timestamp is older or same as parent's")
+	errOlderBlockTime    = errors.New("timestamp older than parent")
 	errTooManyUncles     = errors.New("too many uncles")
 	errDuplicateUncle    = errors.New("duplicate uncle")
 	errUncleIsAncestor   = errors.New("uncle is ancestor")
