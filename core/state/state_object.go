@@ -278,7 +278,7 @@ func (s *stateObject) finalise() {
 func (s *stateObject) updateTrie(db Database) Trie {
 	// Make sure all dirty slots are finalized into the pending storage area
 	s.finalise()
-	if len(s.pendingStorage) == 0{
+	if len(s.pendingStorage) == 0 {
 		return s.trie
 	}
 	// Track the amount of time wasted on updating the storge trie
@@ -310,7 +310,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 
 // UpdateRoot sets the trie root to the current root hash of
 func (s *stateObject) updateRoot(db Database) {
-	if s.updateTrie(db) == nil{
+	if s.updateTrie(db) == nil {
 		// No changes, storage trie is not even loaded
 		return
 	}
@@ -324,7 +324,7 @@ func (s *stateObject) updateRoot(db Database) {
 // CommitTrie the storage trie of the object to db.
 // This updates the trie root.
 func (s *stateObject) CommitTrie(db Database) error {
-	if s.updateTrie(db) == nil{
+	if s.updateTrie(db) == nil {
 		// No changes, storage trie is not even loaded
 		return nil
 	}
