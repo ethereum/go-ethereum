@@ -206,14 +206,14 @@ func (c *Console) init(preload []string) error {
 		}
 	}
 	// The admin.sleep and admin.sleepBlocks are offered by the console and not by the RPC layer.
-	admin := c.jsre.Get("admin")
-	if admin == nil {
-		return fmt.Errorf("could not find admin")
-	}
-	if obj := admin.ToObject(c.runtime); obj != nil { // make sure the admin api is enabled over the interface
-		obj.Set("sleepBlocks", bridge.SleepBlocks)
-		obj.Set("sleep", bridge.Sleep)
-		obj.Set("clearHistory", c.clearHistory)
+	admin := c.jsre.Get("admin") // Could be `nil`
+	if admin != nil {
+		// make sure the admin api is enabled over the interface
+		if obj := admin.ToObject(c.runtime); obj != nil {
+			obj.Set("sleepBlocks", bridge.SleepBlocks)
+			obj.Set("sleep", bridge.Sleep)
+			obj.Set("clearHistory", c.clearHistory)
+		}
 	}
 	// Preload any JavaScript files before starting the console
 	for _, path := range preload {
