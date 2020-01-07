@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/les/checkpointoracle"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/les/protocol"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -200,7 +201,7 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 	client := &LightEthereum{
 		lesCommons: lesCommons{
 			genesis:     genesis.Hash(),
-			config:      &eth.Config{LightPeers: 100, NetworkId: NetworkId},
+			config:      &eth.Config{LightPeers: 100, NetworkId: protocol.NetworkId},
 			chainConfig: params.AllEthashProtocolChanges,
 			iConfig:     light.TestClientIndexerConfig,
 			chainDb:     db,
@@ -263,7 +264,7 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 	server := &LesServer{
 		lesCommons: lesCommons{
 			genesis:     genesis.Hash(),
-			config:      &eth.Config{LightPeers: 100, NetworkId: NetworkId},
+			config:      &eth.Config{LightPeers: 100, NetworkId: protocol.NetworkId},
 			chainConfig: params.AllEthashProtocolChanges,
 			iConfig:     light.TestServerIndexerConfig,
 			chainDb:     db,
@@ -308,7 +309,7 @@ func newTestPeer(t *testing.T, name string, version int, handler *serverHandler,
 	// Generate a random id and create the peer
 	var id enode.ID
 	rand.Read(id[:])
-	peer := newPeer(version, NetworkId, false, p2p.NewPeer(id, name, nil), net)
+	peer := newPeer(version, protocol.NetworkId, false, p2p.NewPeer(id, name, nil), net)
 
 	// Start the peer on a new thread
 	errCh := make(chan error, 1)
@@ -354,8 +355,8 @@ func newTestPeerPair(name string, version int, server *serverHandler, client *cl
 	var id enode.ID
 	rand.Read(id[:])
 
-	peer1 := newPeer(version, NetworkId, false, p2p.NewPeer(id, name, nil), net)
-	peer2 := newPeer(version, NetworkId, false, p2p.NewPeer(id, name, nil), app)
+	peer1 := newPeer(version, protocol.NetworkId, false, p2p.NewPeer(id, name, nil), net)
+	peer2 := newPeer(version, protocol.NetworkId, false, p2p.NewPeer(id, name, nil), app)
 
 	// Start the peer on a new thread
 	errc1 := make(chan error, 1)
@@ -379,29 +380,29 @@ func newTestPeerPair(name string, version int, server *serverHandler, client *cl
 
 // handshake simulates a trivial handshake that expects the same state from the
 // remote side as we are simulating locally.
-func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, costList RequestCostList) {
-	var expList keyValueList
-	expList = expList.add("protocolVersion", uint64(p.peer.version))
-	expList = expList.add("networkId", uint64(NetworkId))
-	expList = expList.add("headTd", td)
-	expList = expList.add("headHash", head)
-	expList = expList.add("headNum", headNum)
-	expList = expList.add("genesisHash", genesis)
-	sendList := make(keyValueList, len(expList))
+func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, costList protocol.RequestCostList) {
+	var expList protocol.KeyValueList
+	expList = expList.Add("protocolVersion", uint64(p.peer.version))
+	expList = expList.Add("networkId", uint64(protocol.NetworkId))
+	expList = expList.Add("headTd", td)
+	expList = expList.Add("headHash", head)
+	expList = expList.Add("headNum", headNum)
+	expList = expList.Add("genesisHash", genesis)
+	sendList := make(protocol.KeyValueList, len(expList))
 	copy(sendList, expList)
-	expList = expList.add("serveHeaders", nil)
-	expList = expList.add("serveChainSince", uint64(0))
-	expList = expList.add("serveStateSince", uint64(0))
-	expList = expList.add("serveRecentState", uint64(core.TriesInMemory-4))
-	expList = expList.add("txRelay", nil)
-	expList = expList.add("flowControl/BL", testBufLimit)
-	expList = expList.add("flowControl/MRR", testBufRecharge)
-	expList = expList.add("flowControl/MRC", costList)
+	expList = expList.Add("serveHeaders", nil)
+	expList = expList.Add("serveChainSince", uint64(0))
+	expList = expList.Add("serveStateSince", uint64(0))
+	expList = expList.Add("serveRecentState", uint64(core.TriesInMemory-4))
+	expList = expList.Add("txRelay", nil)
+	expList = expList.Add("flowControl/BL", testBufLimit)
+	expList = expList.Add("flowControl/MRR", testBufRecharge)
+	expList = expList.Add("flowControl/MRC", costList)
 
-	if err := p2p.ExpectMsg(p.app, StatusMsg, expList); err != nil {
+	if err := p2p.ExpectMsg(p.app, protocol.StatusMsg, expList); err != nil {
 		t.Fatalf("status recv: %v", err)
 	}
-	if err := p2p.Send(p.app, StatusMsg, sendList); err != nil {
+	if err := p2p.Send(p.app, protocol.StatusMsg, sendList); err != nil {
 		t.Fatalf("status send: %v", err)
 	}
 	p.peer.fcParams = flowcontrol.ServerParams{

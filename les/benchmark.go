@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/les/protocol"
 	"github.com/ethereum/go-ethereum/les/utilities"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -119,9 +120,9 @@ func (b *benchmarkProofsOrCode) request(peer *peer, index int) error {
 	key := make([]byte, 32)
 	rand.Read(key)
 	if b.code {
-		return peer.RequestCode(0, 0, []CodeReq{{BHash: b.headHash, AccKey: key}})
+		return peer.RequestCode(0, 0, []protocol.CodeRequest{{BlockHash: b.headHash, Account: key}})
 	} else {
-		return peer.RequestProofs(0, 0, []ProofReq{{BHash: b.headHash, Key: key}})
+		return peer.RequestProofs(0, 0, []protocol.TrieProofRequest{{BlockHash: b.headHash, Key: key}})
 	}
 }
 
@@ -146,7 +147,7 @@ func (b *benchmarkHelperTrie) init(h *serverHandler, count int) error {
 }
 
 func (b *benchmarkHelperTrie) request(peer *peer, index int) error {
-	reqs := make([]HelperTrieReq, b.reqCount)
+	reqs := make([]protocol.HelperTrieRequest, b.reqCount)
 
 	if b.bloom {
 		bitIdx := uint16(rand.Intn(2048))
@@ -154,13 +155,22 @@ func (b *benchmarkHelperTrie) request(peer *peer, index int) error {
 			key := make([]byte, 10)
 			binary.BigEndian.PutUint16(key[:2], bitIdx)
 			binary.BigEndian.PutUint64(key[2:], uint64(rand.Int63n(int64(b.sectionCount))))
-			reqs[i] = HelperTrieReq{Type: htBloomBits, TrieIdx: b.sectionCount - 1, Key: key}
+			reqs[i] = protocol.HelperTrieRequest{
+				Type:      protocol.HelperTrieBloomTrie,
+				TrieIndex: b.sectionCount - 1,
+				Key:       key,
+			}
 		}
 	} else {
 		for i := range reqs {
 			key := make([]byte, 8)
 			binary.BigEndian.PutUint64(key[:], uint64(rand.Int63n(int64(b.headNum))))
-			reqs[i] = HelperTrieReq{Type: htCanonical, TrieIdx: b.sectionCount - 1, Key: key, AuxReq: auxHeader}
+			reqs[i] = protocol.HelperTrieRequest{
+				Type:      protocol.HelperTrieCHT,
+				TrieIndex: b.sectionCount - 1,
+				Key:       key,
+				AuxType:   protocol.AuxHeader,
+			}
 		}
 	}
 
@@ -284,13 +294,13 @@ func (h *serverHandler) measure(setup *benchmarkSetup, count int) error {
 	var id enode.ID
 	rand.Read(id[:])
 
-	clientPeer := newPeer(lpv2, NetworkId, false, p2p.NewPeer(id, "client", nil), clientMeteredPipe)
-	serverPeer := newPeer(lpv2, NetworkId, false, p2p.NewPeer(id, "server", nil), serverMeteredPipe)
+	clientPeer := newPeer(protocol.Lpv2, protocol.NetworkId, false, p2p.NewPeer(id, "client", nil), clientMeteredPipe)
+	serverPeer := newPeer(protocol.Lpv2, protocol.NetworkId, false, p2p.NewPeer(id, "server", nil), serverMeteredPipe)
 	serverPeer.sendQueue = utilities.NewExecQueue(count)
 	serverPeer.announceType = announceTypeNone
-	serverPeer.fcCosts = make(requestCostTable)
-	c := &requestCosts{}
-	for code := range requests {
+	serverPeer.fcCosts = make(protocol.RequestCostTable)
+	c := &protocol.RequestCost{}
+	for code := range protocol.LesRequests {
 		serverPeer.fcCosts[code] = c
 	}
 	serverPeer.fcParams = flowcontrol.ServerParams{BufLimit: 1, MinRecharge: 1}

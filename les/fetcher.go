@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/les/protocol"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -250,7 +251,7 @@ func (f *lightFetcher) unregisterPeer(p *peer) {
 
 // announce processes a new announcement message received from a peer, adding new
 // nodes to the peer's block tree and removing old nodes if necessary
-func (f *lightFetcher) announce(p *peer, head *announceData) {
+func (f *lightFetcher) announce(p *peer, head *protocol.Announcement) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 	p.Log().Debug("Received new announcement", "number", head.Number, "hash", head.Hash, "reorg", head.ReorgDepth)
@@ -519,7 +520,7 @@ func (f *lightFetcher) newFetcherDistReq(bestHash common.Hash, reqID uint64, bes
 	return &distReq{
 		getCost: func(dp distPeer) uint64 {
 			p := dp.(*peer)
-			return p.GetRequestCost(GetBlockHeadersMsg, int(bestAmount))
+			return p.GetRequestCost(protocol.GetBlockHeadersMsg, int(bestAmount))
 		},
 		canSend: func(dp distPeer) bool {
 			p := dp.(*peer)
@@ -548,7 +549,7 @@ func (f *lightFetcher) newFetcherDistReq(bestHash common.Hash, reqID uint64, bes
 			}
 			f.lock.Unlock()
 
-			cost := p.GetRequestCost(GetBlockHeadersMsg, int(bestAmount))
+			cost := p.GetRequestCost(protocol.GetBlockHeadersMsg, int(bestAmount))
 			p.fcServer.QueuedRequest(reqID, cost)
 			f.reqMu.Lock()
 			f.requested[reqID] = fetchRequest{hash: bestHash, amount: bestAmount, peer: p, sent: mclock.Now()}

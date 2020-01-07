@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/les/protocol"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -43,15 +44,6 @@ const (
 	softResponseLimit = 2 * 1024 * 1024 // Target maximum size of returned blocks, headers or node data.
 	estHeaderRlpSize  = 500             // Approximate size of an RLP encoded block header
 	ethVersion        = 63              // equivalent eth version for the downloader
-
-	MaxHeaderFetch           = 192 // Amount of block headers to be fetched per retrieval request
-	MaxBodyFetch             = 32  // Amount of block bodies to be fetched per retrieval request
-	MaxReceiptFetch          = 128 // Amount of transaction receipts to allow fetching per request
-	MaxCodeFetch             = 64  // Amount of contract codes to allow fetching per request
-	MaxProofsFetch           = 64  // Amount of merkle proofs to be fetched per retrieval request
-	MaxHelperTrieProofsFetch = 64  // Amount of helper tries to be fetched per retrieval request
-	MaxTxSend                = 64  // Amount of transactions to be send per request
-	MaxTxStatus              = 256 // Amount of transactions to queried per request
 )
 
 var (
@@ -182,9 +174,9 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 	p.Log().Trace("Light Ethereum message arrived", "code", msg.Code, "bytes", msg.Size)
 
 	// Discard large message which exceeds the limitation.
-	if msg.Size > ProtocolMaxMsgSize {
+	if msg.Size > protocol.ProtocolMaxMsgSize {
 		clientErrorMeter.Mark(1)
-		return errResp(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
+		return protocol.ErrResp(protocol.ErrMsgTooLarge, "%v > %v", msg.Size, protocol.ProtocolMaxMsgSize)
 	}
 	defer msg.Discard()
 
@@ -204,7 +196,7 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 			return false
 		}
 		// Prepaid max cost units before request been serving.
-		maxCost = p.fcCosts.getMaxCost(msg.Code, reqCnt)
+		maxCost = p.fcCosts.GetMaxCost(msg.Code, reqCnt)
 		accepted, bufShort, priority := p.fcClient.AcceptRequest(reqID, responseCount, maxCost)
 		if !accepted {
 			p.freezeClient()
@@ -268,7 +260,7 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 		}
 	}
 	switch msg.Code {
-	case GetBlockHeadersMsg:
+	case protocol.GetBlockHeadersMsg:
 		p.Log().Trace("Received block header request")
 		if metrics.EnabledExpensive {
 			miscInHeaderPacketsMeter.Mark(1)
@@ -277,14 +269,14 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 		}
 		var req struct {
 			ReqID uint64
-			Query getBlockHeadersData
+			Query protocol.GetBlockHeadersRequest
 		}
 		if err := msg.Decode(&req); err != nil {
 			clientErrorMeter.Mark(1)
-			return errResp(ErrDecode, "%v: %v", msg, err)
+			return protocol.ErrResp(protocol.ErrDecode, "%v: %v", msg, err)
 		}
 		query := req.Query
-		if accept(req.ReqID, query.Amount, MaxHeaderFetch) {
+		if accept(req.ReqID, query.Amount, protocol.MaxHeaderFetch) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -381,7 +373,7 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 			}()
 		}
 
-	case GetBlockBodiesMsg:
+	case protocol.GetBlockBodiesMsg:
 		p.Log().Trace("Received block bodies request")
 		if metrics.EnabledExpensive {
 			miscInBodyPacketsMeter.Mark(1)
@@ -394,14 +386,14 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 		}
 		if err := msg.Decode(&req); err != nil {
 			clientErrorMeter.Mark(1)
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
+			return protocol.ErrResp(protocol.ErrDecode, "msg %v: %v", msg, err)
 		}
 		var (
 			bytes  int
 			bodies []rlp.RawValue
 		)
 		reqCnt := len(req.Hashes)
-		if accept(req.ReqID, uint64(reqCnt), MaxBodyFetch) {
+		if accept(req.ReqID, uint64(reqCnt), protocol.MaxBodyFetch) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -430,7 +422,7 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 			}()
 		}
 
-	case GetCodeMsg:
+	case protocol.GetCodeMsg:
 		p.Log().Trace("Received code request")
 		if metrics.EnabledExpensive {
 			miscInCodePacketsMeter.Mark(1)
@@ -439,18 +431,18 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 		}
 		var req struct {
 			ReqID uint64
-			Reqs  []CodeReq
+			Reqs  []protocol.CodeRequest
 		}
 		if err := msg.Decode(&req); err != nil {
 			clientErrorMeter.Mark(1)
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
+			return protocol.ErrResp(protocol.ErrDecode, "msg %v: %v", msg, err)
 		}
 		var (
 			bytes int
 			data  [][]byte
 		)
 		reqCnt := len(req.Reqs)
-		if accept(req.ReqID, uint64(reqCnt), MaxCodeFetch) {
+		if accept(req.ReqID, uint64(reqCnt), protocol.MaxCodeFetch) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -460,9 +452,9 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 						return
 					}
 					// Look up the root hash belonging to the request
-					header := h.blockchain.GetHeaderByHash(request.BHash)
+					header := h.blockchain.GetHeaderByHash(request.BlockHash)
 					if header == nil {
-						p.Log().Warn("Failed to retrieve associate header for code", "hash", request.BHash)
+						p.Log().Warn("Failed to retrieve associate header for code", "hash", request.BlockHash)
 						atomic.AddUint32(&p.invalidCount, 1)
 						continue
 					}
@@ -476,15 +468,15 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 					}
 					triedb := h.blockchain.StateCache().TrieDB()
 
-					account, err := h.getAccount(triedb, header.Root, common.BytesToHash(request.AccKey))
+					account, err := h.getAccount(triedb, header.Root, common.BytesToHash(request.Account))
 					if err != nil {
-						p.Log().Warn("Failed to retrieve account for code", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
+						p.Log().Warn("Failed to retrieve account for code", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.Account), "err", err)
 						atomic.AddUint32(&p.invalidCount, 1)
 						continue
 					}
 					code, err := triedb.Node(common.BytesToHash(account.CodeHash))
 					if err != nil {
-						p.Log().Warn("Failed to retrieve account code", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "codehash", common.BytesToHash(account.CodeHash), "err", err)
+						p.Log().Warn("Failed to retrieve account code", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.Account), "codehash", common.BytesToHash(account.CodeHash), "err", err)
 						continue
 					}
 					// Accumulate the code and abort if enough data was retrieved
@@ -502,7 +494,7 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 			}()
 		}
 
-	case GetReceiptsMsg:
+	case protocol.GetReceiptsMsg:
 		p.Log().Trace("Received receipts request")
 		if metrics.EnabledExpensive {
 			miscInReceiptPacketsMeter.Mark(1)
@@ -515,14 +507,14 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 		}
 		if err := msg.Decode(&req); err != nil {
 			clientErrorMeter.Mark(1)
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
+			return protocol.ErrResp(protocol.ErrDecode, "msg %v: %v", msg, err)
 		}
 		var (
 			bytes    int
 			receipts []rlp.RawValue
 		)
 		reqCnt := len(req.Hashes)
-		if accept(req.ReqID, uint64(reqCnt), MaxReceiptFetch) {
+		if accept(req.ReqID, uint64(reqCnt), protocol.MaxReceiptFetch) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -559,7 +551,7 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 			}()
 		}
 
-	case GetProofsV2Msg:
+	case protocol.GetProofsV2Msg:
 		p.Log().Trace("Received les/2 proofs request")
 		if metrics.EnabledExpensive {
 			miscInTrieProofPacketsMeter.Mark(1)
@@ -568,11 +560,11 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 		}
 		var req struct {
 			ReqID uint64
-			Reqs  []ProofReq
+			Reqs  []protocol.TrieProofRequest
 		}
 		if err := msg.Decode(&req); err != nil {
 			clientErrorMeter.Mark(1)
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
+			return protocol.ErrResp(protocol.ErrDecode, "msg %v: %v", msg, err)
 		}
 		// Gather state data until the fetch or network limits is reached
 		var (
@@ -580,7 +572,7 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 			root      common.Hash
 		)
 		reqCnt := len(req.Reqs)
-		if accept(req.ReqID, uint64(reqCnt), MaxProofsFetch) {
+		if accept(req.ReqID, uint64(reqCnt), protocol.MaxProofsFetch) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -596,11 +588,11 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 						header *types.Header
 						trie   state.Trie
 					)
-					if request.BHash != lastBHash {
-						root, lastBHash = common.Hash{}, request.BHash
+					if request.BlockHash != lastBHash {
+						root, lastBHash = common.Hash{}, request.BlockHash
 
-						if header = h.blockchain.GetHeaderByHash(request.BHash); header == nil {
-							p.Log().Warn("Failed to retrieve header for proof", "hash", request.BHash)
+						if header = h.blockchain.GetHeaderByHash(request.BlockHash); header == nil {
+							p.Log().Warn("Failed to retrieve header for proof", "hash", request.BlockHash)
 							atomic.AddUint32(&p.invalidCount, 1)
 							continue
 						}
@@ -622,7 +614,7 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 					// Open the account or storage trie for the request
 					statedb := h.blockchain.StateCache()
 
-					switch len(request.AccKey) {
+					switch len(request.Account) {
 					case 0:
 						// No account key specified, open an account trie
 						trie, err = statedb.OpenTrie(root)
@@ -632,15 +624,15 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 						}
 					default:
 						// Account key specified, open a storage trie
-						account, err := h.getAccount(statedb.TrieDB(), root, common.BytesToHash(request.AccKey))
+						account, err := h.getAccount(statedb.TrieDB(), root, common.BytesToHash(request.Account))
 						if err != nil {
-							p.Log().Warn("Failed to retrieve account for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "err", err)
+							p.Log().Warn("Failed to retrieve account for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.Account), "err", err)
 							atomic.AddUint32(&p.invalidCount, 1)
 							continue
 						}
-						trie, err = statedb.OpenStorageTrie(common.BytesToHash(request.AccKey), account.Root)
+						trie, err = statedb.OpenStorageTrie(common.BytesToHash(request.Account), account.Root)
 						if trie == nil || err != nil {
-							p.Log().Warn("Failed to open storage trie for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.AccKey), "root", account.Root, "err", err)
+							p.Log().Warn("Failed to open storage trie for proof", "block", header.Number, "hash", header.Hash(), "account", common.BytesToHash(request.Account), "root", account.Root, "err", err)
 							continue
 						}
 					}
@@ -662,7 +654,7 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 			}()
 		}
 
-	case GetHelperTrieProofsMsg:
+	case protocol.GetHelperTrieProofsMsg:
 		p.Log().Trace("Received helper trie proof request")
 		if metrics.EnabledExpensive {
 			miscInHelperTriePacketsMeter.Mark(1)
@@ -671,11 +663,11 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 		}
 		var req struct {
 			ReqID uint64
-			Reqs  []HelperTrieReq
+			Reqs  []protocol.HelperTrieRequest
 		}
 		if err := msg.Decode(&req); err != nil {
 			clientErrorMeter.Mark(1)
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
+			return protocol.ErrResp(protocol.ErrDecode, "msg %v: %v", msg, err)
 		}
 		// Gather state data until the fetch or network limits is reached
 		var (
@@ -683,7 +675,7 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 			auxData  [][]byte
 		)
 		reqCnt := len(req.Reqs)
-		if accept(req.ReqID, uint64(reqCnt), MaxHelperTrieProofsFetch) {
+		if accept(req.ReqID, uint64(reqCnt), protocol.MaxHelperTrieProofsFetch) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -699,15 +691,15 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 						sendResponse(req.ReqID, 0, nil, task.servingTime)
 						return
 					}
-					if auxTrie == nil || request.Type != lastType || request.TrieIdx != lastIdx {
-						auxTrie, lastType, lastIdx = nil, request.Type, request.TrieIdx
+					if auxTrie == nil || request.Type != lastType || request.TrieIndex != lastIdx {
+						auxTrie, lastType, lastIdx = nil, request.Type, request.TrieIndex
 
 						var prefix string
-						if root, prefix = h.getHelperTrie(request.Type, request.TrieIdx); root != (common.Hash{}) {
+						if root, prefix = h.getHelperTrie(request.Type, request.TrieIndex); root != (common.Hash{}) {
 							auxTrie, _ = trie.New(root, trie.NewDatabase(rawdb.NewTable(h.chainDb, prefix)))
 						}
 					}
-					if request.AuxReq == auxRoot {
+					if request.AuxType == protocol.AuxRoot {
 						var data []byte
 						if root != (common.Hash{}) {
 							data = root[:]
@@ -718,7 +710,7 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 						if auxTrie != nil {
 							auxTrie.Prove(request.Key, request.FromLevel, nodes)
 						}
-						if request.AuxReq != 0 {
+						if request.AuxType != 0 {
 							data := h.getAuxiliaryHeaders(request)
 							auxData = append(auxData, data)
 							auxBytes += len(data)
@@ -728,7 +720,7 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 						break
 					}
 				}
-				reply := p.ReplyHelperTrieProofs(req.ReqID, HelperTrieResps{Proofs: nodes.NodeList(), AuxData: auxData})
+				reply := p.ReplyHelperTrieProofs(req.ReqID, protocol.HelperTrieResponse{Proofs: nodes.NodeList(), AuxData: auxData})
 				sendResponse(req.ReqID, uint64(reqCnt), reply, task.done())
 				if metrics.EnabledExpensive {
 					miscOutHelperTriePacketsMeter.Mark(1)
@@ -737,7 +729,7 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 			}()
 		}
 
-	case SendTxV2Msg:
+	case protocol.SendTxV2Msg:
 		p.Log().Trace("Received new transactions")
 		if metrics.EnabledExpensive {
 			miscInTxsPacketsMeter.Mark(1)
@@ -750,10 +742,10 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 		}
 		if err := msg.Decode(&req); err != nil {
 			clientErrorMeter.Mark(1)
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
+			return protocol.ErrResp(protocol.ErrDecode, "msg %v: %v", msg, err)
 		}
 		reqCnt := len(req.Txs)
-		if accept(req.ReqID, uint64(reqCnt), MaxTxSend) {
+		if accept(req.ReqID, uint64(reqCnt), protocol.MaxTxSend) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -786,7 +778,7 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 			}()
 		}
 
-	case GetTxStatusMsg:
+	case protocol.GetTxStatusMsg:
 		p.Log().Trace("Received transaction status query request")
 		if metrics.EnabledExpensive {
 			miscInTxStatusPacketsMeter.Mark(1)
@@ -799,10 +791,10 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 		}
 		if err := msg.Decode(&req); err != nil {
 			clientErrorMeter.Mark(1)
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
+			return protocol.ErrResp(protocol.ErrDecode, "msg %v: %v", msg, err)
 		}
 		reqCnt := len(req.Hashes)
-		if accept(req.ReqID, uint64(reqCnt), MaxTxStatus) {
+		if accept(req.ReqID, uint64(reqCnt), protocol.MaxTxStatus) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -826,7 +818,7 @@ func (h *serverHandler) handleMsg(p *peer, wg *sync.WaitGroup) error {
 	default:
 		p.Log().Trace("Received invalid message", "code", msg.Code)
 		clientErrorMeter.Mark(1)
-		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
+		return protocol.ErrResp(protocol.ErrInvalidMsgCode, "%v", msg.Code)
 	}
 	// If the client has made too much invalid request(e.g. request a non-exist data),
 	// reject them to prevent SPAM attack.
@@ -857,10 +849,10 @@ func (h *serverHandler) getAccount(triedb *trie.Database, root, hash common.Hash
 // getHelperTrie returns the post-processed trie root for the given trie ID and section index
 func (h *serverHandler) getHelperTrie(typ uint, index uint64) (common.Hash, string) {
 	switch typ {
-	case htCanonical:
+	case protocol.HelperTrieCHT:
 		sectionHead := rawdb.ReadCanonicalHash(h.chainDb, (index+1)*h.server.iConfig.ChtSize-1)
 		return light.GetChtRoot(h.chainDb, index, sectionHead), light.ChtTablePrefix
-	case htBloomBits:
+	case protocol.HelperTrieBloomTrie:
 		sectionHead := rawdb.ReadCanonicalHash(h.chainDb, (index+1)*h.server.iConfig.BloomTrieSize-1)
 		return light.GetBloomTrieRoot(h.chainDb, index, sectionHead), light.BloomTrieTablePrefix
 	}
@@ -868,8 +860,8 @@ func (h *serverHandler) getHelperTrie(typ uint, index uint64) (common.Hash, stri
 }
 
 // getAuxiliaryHeaders returns requested auxiliary headers for the CHT request.
-func (h *serverHandler) getAuxiliaryHeaders(req HelperTrieReq) []byte {
-	if req.Type == htCanonical && req.AuxReq == auxHeader && len(req.Key) == 8 {
+func (h *serverHandler) getAuxiliaryHeaders(req protocol.HelperTrieRequest) []byte {
+	if req.Type == protocol.HelperTrieCHT && req.AuxType == protocol.AuxHeader && len(req.Key) == 8 {
 		blockNum := binary.BigEndian.Uint64(req.Key)
 		hash := rawdb.ReadCanonicalHash(h.chainDb, blockNum)
 		return rawdb.ReadHeaderRLP(h.chainDb, hash, blockNum)
@@ -931,9 +923,16 @@ func (h *serverHandler) broadcastHeaders() {
 			log.Debug("Announcing block to peers", "number", number, "hash", hash, "td", td, "reorg", reorg)
 			var (
 				signed         bool
-				signedAnnounce announceData
+				signedAnnounce protocol.Announcement
 			)
-			announce := announceData{Hash: hash, Number: number, Td: td, ReorgDepth: reorg}
+			announce := protocol.Announcement{
+				HeadHeader: protocol.HeadHeader{
+					Hash:   hash,
+					Number: number,
+					Td:     td,
+				},
+				ReorgDepth: reorg,
+			}
 			for _, p := range peers {
 				p := p
 				switch p.announceType {
@@ -942,7 +941,7 @@ func (h *serverHandler) broadcastHeaders() {
 				case announceTypeSigned:
 					if !signed {
 						signedAnnounce = announce
-						signedAnnounce.sign(h.server.privateKey)
+						signedAnnounce.Sign(h.server.privateKey)
 						signed = true
 					}
 					p.queueSend(func() { p.SendAnnounce(signedAnnounce) })

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/les/protocol"
 	"github.com/ethereum/go-ethereum/light"
 )
 
@@ -171,7 +172,7 @@ func (rm *retrieveManager) deliver(peer distPeer, msg *Msg) error {
 	if ok {
 		return req.deliver(peer, msg)
 	}
-	return errResp(ErrUnexpectedResponse, "reqID = %v", msg.ReqID)
+	return protocol.ErrResp(protocol.ErrUnexpectedResponse, "reqID = %v", msg.ReqID)
 }
 
 // frozen is called by the LES protocol manager when a server has suspended its service and we
@@ -389,7 +390,7 @@ func (r *sentReq) deliver(peer distPeer, msg *Msg) error {
 
 	s, ok := r.sentTo[peer]
 	if !ok || s.delivered {
-		return errResp(ErrUnexpectedResponse, "reqID = %v", msg.ReqID)
+		return protocol.ErrResp(protocol.ErrUnexpectedResponse, "reqID = %v", msg.ReqID)
 	}
 	if s.frozen {
 		return nil
@@ -402,7 +403,7 @@ func (r *sentReq) deliver(peer distPeer, msg *Msg) error {
 		s.event <- rpDeliveredInvalid
 	}
 	if !valid {
-		return errResp(ErrInvalidResponse, "reqID = %v", msg.ReqID)
+		return protocol.ErrResp(protocol.ErrInvalidResponse, "reqID = %v", msg.ReqID)
 	}
 	return nil
 }

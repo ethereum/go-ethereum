@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/les/protocol"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
@@ -86,15 +87,15 @@ func testULCAnnounceThreshold(t *testing.T, protocol int) {
 	}
 }
 
-func connect(server *serverHandler, serverId enode.ID, client *clientHandler, protocol int) (*peer, *peer, error) {
+func connect(server *serverHandler, serverId enode.ID, client *clientHandler, p int) (*peer, *peer, error) {
 	// Create a message pipe to communicate through
 	app, net := p2p.MsgPipe()
 
 	var id enode.ID
 	rand.Read(id[:])
 
-	peer1 := newPeer(protocol, NetworkId, true, p2p.NewPeer(serverId, "", nil), net) // Mark server as trusted
-	peer2 := newPeer(protocol, NetworkId, false, p2p.NewPeer(id, "", nil), app)
+	peer1 := newPeer(p, protocol.NetworkId, true, p2p.NewPeer(serverId, "", nil), net) // Mark server as trusted
+	peer2 := newPeer(p, protocol.NetworkId, false, p2p.NewPeer(id, "", nil), app)
 
 	// Start the peerLight on a new thread
 	errc1 := make(chan error, 1)

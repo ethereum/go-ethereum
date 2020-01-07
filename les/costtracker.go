@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/les/protocol"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 )
@@ -35,48 +36,48 @@ const makeCostStats = false // make request cost statistics during operation
 
 var (
 	// average request cost estimates based on serving time
-	reqAvgTimeCost = requestCostTable{
-		GetBlockHeadersMsg:     {150000, 30000},
-		GetBlockBodiesMsg:      {0, 700000},
-		GetReceiptsMsg:         {0, 1000000},
-		GetCodeMsg:             {0, 450000},
-		GetProofsV2Msg:         {0, 600000},
-		GetHelperTrieProofsMsg: {0, 1000000},
-		SendTxV2Msg:            {0, 450000},
-		GetTxStatusMsg:         {0, 250000},
+	reqAvgTimeCost = protocol.RequestCostTable{
+		protocol.GetBlockHeadersMsg:     {150000, 30000},
+		protocol.GetBlockBodiesMsg:      {0, 700000},
+		protocol.GetReceiptsMsg:         {0, 1000000},
+		protocol.GetCodeMsg:             {0, 450000},
+		protocol.GetProofsV2Msg:         {0, 600000},
+		protocol.GetHelperTrieProofsMsg: {0, 1000000},
+		protocol.SendTxV2Msg:            {0, 450000},
+		protocol.GetTxStatusMsg:         {0, 250000},
 	}
 	// maximum incoming message size estimates
-	reqMaxInSize = requestCostTable{
-		GetBlockHeadersMsg:     {40, 0},
-		GetBlockBodiesMsg:      {0, 40},
-		GetReceiptsMsg:         {0, 40},
-		GetCodeMsg:             {0, 80},
-		GetProofsV2Msg:         {0, 80},
-		GetHelperTrieProofsMsg: {0, 20},
-		SendTxV2Msg:            {0, 16500},
-		GetTxStatusMsg:         {0, 50},
+	reqMaxInSize = protocol.RequestCostTable{
+		protocol.GetBlockHeadersMsg:     {40, 0},
+		protocol.GetBlockBodiesMsg:      {0, 40},
+		protocol.GetReceiptsMsg:         {0, 40},
+		protocol.GetCodeMsg:             {0, 80},
+		protocol.GetProofsV2Msg:         {0, 80},
+		protocol.GetHelperTrieProofsMsg: {0, 20},
+		protocol.SendTxV2Msg:            {0, 16500},
+		protocol.GetTxStatusMsg:         {0, 50},
 	}
 	// maximum outgoing message size estimates
-	reqMaxOutSize = requestCostTable{
-		GetBlockHeadersMsg:     {0, 556},
-		GetBlockBodiesMsg:      {0, 100000},
-		GetReceiptsMsg:         {0, 200000},
-		GetCodeMsg:             {0, 50000},
-		GetProofsV2Msg:         {0, 4000},
-		GetHelperTrieProofsMsg: {0, 4000},
-		SendTxV2Msg:            {0, 100},
-		GetTxStatusMsg:         {0, 100},
+	reqMaxOutSize = protocol.RequestCostTable{
+		protocol.GetBlockHeadersMsg:     {0, 556},
+		protocol.GetBlockBodiesMsg:      {0, 100000},
+		protocol.GetReceiptsMsg:         {0, 200000},
+		protocol.GetCodeMsg:             {0, 50000},
+		protocol.GetProofsV2Msg:         {0, 4000},
+		protocol.GetHelperTrieProofsMsg: {0, 4000},
+		protocol.SendTxV2Msg:            {0, 100},
+		protocol.GetTxStatusMsg:         {0, 100},
 	}
 	// request amounts that have to fit into the minimum buffer size minBufferMultiplier times
 	minBufferReqAmount = map[uint64]uint64{
-		GetBlockHeadersMsg:     192,
-		GetBlockBodiesMsg:      1,
-		GetReceiptsMsg:         1,
-		GetCodeMsg:             1,
-		GetProofsV2Msg:         1,
-		GetHelperTrieProofsMsg: 16,
-		SendTxV2Msg:            8,
-		GetTxStatusMsg:         64,
+		protocol.GetBlockHeadersMsg:     192,
+		protocol.GetBlockBodiesMsg:      1,
+		protocol.GetReceiptsMsg:         1,
+		protocol.GetCodeMsg:             1,
+		protocol.GetProofsV2Msg:         1,
+		protocol.GetHelperTrieProofsMsg: 16,
+		protocol.SendTxV2Msg:            8,
+		protocol.GetTxStatusMsg:         64,
 	}
 	minBufferMultiplier = 3
 )
@@ -131,8 +132,8 @@ type costTracker struct {
 	stats map[uint64][]uint64 // Used for testing purpose.
 
 	// TestHooks
-	testing      bool            // Disable real cost evaluation for testing purpose.
-	testCostList RequestCostList // Customized cost table for testing purpose.
+	testing      bool                     // Disable real cost evaluation for testing purpose.
+	testCostList protocol.RequestCostList // Customized cost table for testing purpose.
 }
 
 // newCostTracker creates a cost tracker and loads the cost factor statistics from the database.
@@ -182,7 +183,7 @@ func (ct *costTracker) stop() {
 
 // makeCostList returns upper cost estimates based on the hardcoded cost estimate
 // tables and the optionally specified incoming/outgoing bandwidth limits
-func (ct *costTracker) makeCostList(globalFactor float64) RequestCostList {
+func (ct *costTracker) makeCostList(globalFactor float64) protocol.RequestCostList {
 	maxCost := func(avgTimeCost, inSize, outSize uint64) uint64 {
 		cost := avgTimeCost * maxCostFactor
 		inSizeCost := uint64(float64(inSize) * ct.inSizeFactor * globalFactor)
@@ -195,10 +196,10 @@ func (ct *costTracker) makeCostList(globalFactor float64) RequestCostList {
 		}
 		return cost
 	}
-	var list RequestCostList
+	var list protocol.RequestCostList
 	for code, data := range reqAvgTimeCost {
-		baseCost := maxCost(data.baseCost, reqMaxInSize[code].baseCost, reqMaxOutSize[code].baseCost)
-		reqCost := maxCost(data.reqCost, reqMaxInSize[code].reqCost, reqMaxOutSize[code].reqCost)
+		baseCost := maxCost(data.BaseCost, reqMaxInSize[code].BaseCost, reqMaxOutSize[code].BaseCost)
+		reqCost := maxCost(data.ReqCost, reqMaxInSize[code].ReqCost, reqMaxOutSize[code].ReqCost)
 		if ct.minBufLimit != 0 {
 			// if minBufLimit is set then always enforce maximum request cost <= minBufLimit
 			maxCost := baseCost + reqCost*minBufferReqAmount[code]
@@ -209,7 +210,7 @@ func (ct *costTracker) makeCostList(globalFactor float64) RequestCostList {
 			}
 		}
 
-		list = append(list, requestCostListItem{
+		list = append(list, protocol.RequestCostListItem{
 			MsgCode:  code,
 			BaseCost: baseCost,
 			ReqCost:  reqCost,
@@ -278,21 +279,21 @@ func (ct *costTracker) gfLoop() {
 				// Record more metrics if we are debugging
 				if metrics.EnabledExpensive {
 					switch r.msgCode {
-					case GetBlockHeadersMsg:
+					case protocol.GetBlockHeadersMsg:
 						relativeCostHeaderHistogram.Update(relCost)
-					case GetBlockBodiesMsg:
+					case protocol.GetBlockBodiesMsg:
 						relativeCostBodyHistogram.Update(relCost)
-					case GetReceiptsMsg:
+					case protocol.GetReceiptsMsg:
 						relativeCostReceiptHistogram.Update(relCost)
-					case GetCodeMsg:
+					case protocol.GetCodeMsg:
 						relativeCostCodeHistogram.Update(relCost)
-					case GetProofsV2Msg:
+					case protocol.GetProofsV2Msg:
 						relativeCostProofHistogram.Update(relCost)
-					case GetHelperTrieProofsMsg:
+					case protocol.GetHelperTrieProofsMsg:
 						relativeCostHelperProofHistogram.Update(relCost)
-					case SendTxV2Msg:
+					case protocol.SendTxV2Msg:
 						relativeCostSendTxHistogram.Update(relCost)
-					case GetTxStatusMsg:
+					case protocol.GetTxStatusMsg:
 						relativeCostTxStatusHistogram.Update(relCost)
 					}
 				}
@@ -302,7 +303,7 @@ func (ct *costTracker) gfLoop() {
 				// requests involve txpool query, which is usually unstable.
 				//
 				// TODO(rjl493456442) fixes this.
-				if r.msgCode == SendTxV2Msg || r.msgCode == GetTxStatusMsg {
+				if r.msgCode == protocol.SendTxV2Msg || r.msgCode == protocol.GetTxStatusMsg {
 					continue
 				}
 				requestServedMeter.Mark(int64(r.servingTime))
@@ -410,7 +411,7 @@ func (ct *costTracker) subscribeTotalRecharge(ch chan uint64) uint64 {
 // average estimate statistics
 func (ct *costTracker) updateStats(code, amount, servingTime, realCost uint64) {
 	avg := reqAvgTimeCost[code]
-	avgTimeCost := avg.baseCost + amount*avg.reqCost
+	avgTimeCost := avg.BaseCost + amount*avg.ReqCost
 	select {
 	case ct.reqInfoCh <- reqInfo{float64(avgTimeCost), float64(servingTime), code}:
 	default:
@@ -457,46 +458,9 @@ func (ct *costTracker) printStats() {
 	}
 }
 
-type (
-	// requestCostTable assigns a cost estimate function to each request type
-	// which is a linear function of the requested amount
-	// (cost = baseCost + reqCost * amount)
-	requestCostTable map[uint64]*requestCosts
-	requestCosts     struct {
-		baseCost, reqCost uint64
-	}
-
-	// RequestCostList is a list representation of request costs which is used for
-	// database storage and communication through the network
-	RequestCostList     []requestCostListItem
-	requestCostListItem struct {
-		MsgCode, BaseCost, ReqCost uint64
-	}
-)
-
-// getMaxCost calculates the estimated cost for a given request type and amount
-func (table requestCostTable) getMaxCost(code, amount uint64) uint64 {
-	costs := table[code]
-	return costs.baseCost + amount*costs.reqCost
-}
-
-// decode converts a cost list to a cost table
-func (list RequestCostList) decode(protocolLength uint64) requestCostTable {
-	table := make(requestCostTable)
-	for _, e := range list {
-		if e.MsgCode < protocolLength {
-			table[e.MsgCode] = &requestCosts{
-				baseCost: e.BaseCost,
-				reqCost:  e.ReqCost,
-			}
-		}
-	}
-	return table
-}
-
 // testCostList returns a dummy request cost list used by tests
-func testCostList(testCost uint64) RequestCostList {
-	cl := make(RequestCostList, len(reqAvgTimeCost))
+func testCostList(testCost uint64) protocol.RequestCostList {
+	cl := make(protocol.RequestCostList, len(reqAvgTimeCost))
 	var max uint64
 	for code := range reqAvgTimeCost {
 		if code > max {

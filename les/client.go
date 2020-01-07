@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/les/checkpointoracle"
+	"github.com/ethereum/go-ethereum/les/protocol"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -217,14 +218,14 @@ func (s *LightEthereum) ResetWithGenesisBlock(gb *types.Block) {
 func (s *LightEthereum) BlockChain() *light.LightChain      { return s.blockchain }
 func (s *LightEthereum) TxPool() *light.TxPool              { return s.txPool }
 func (s *LightEthereum) Engine() consensus.Engine           { return s.engine }
-func (s *LightEthereum) LesVersion() int                    { return int(ClientProtocolVersions[0]) }
+func (s *LightEthereum) LesVersion() int                    { return int(protocol.ClientProtocolVersions[0]) }
 func (s *LightEthereum) Downloader() *downloader.Downloader { return s.handler.downloader }
 func (s *LightEthereum) EventMux() *event.TypeMux           { return s.eventMux }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.
 func (s *LightEthereum) Protocols() []p2p.Protocol {
-	return s.makeProtocols(ClientProtocolVersions, s.handler.runPeer, func(id enode.ID) interface{} {
+	return s.makeProtocols(protocol.ClientProtocolVersions, s.handler.runPeer, func(id enode.ID) interface{} {
 		if p := s.peers.Peer(peerIdToString(id)); p != nil {
 			return p.Info()
 		}
@@ -244,8 +245,8 @@ func (s *LightEthereum) Start(srvr *p2p.Server) error {
 	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.config.NetworkId)
 
 	// clients are searching for the first advertised protocol in the list
-	protocolVersion := AdvertiseProtocolVersions[0]
-	s.serverPool.start(srvr, lesTopic(s.blockchain.Genesis().Hash(), protocolVersion))
+	protocolVersion := protocol.AdvertiseProtocolVersions[0]
+	s.serverPool.start(srvr, protocol.LesTopic(s.blockchain.Genesis().Hash(), protocolVersion))
 	return nil
 }
 

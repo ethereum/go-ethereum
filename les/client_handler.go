@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/les/protocol"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -151,8 +152,8 @@ func (h *clientHandler) handleMsg(p *peer) error {
 	}
 	p.Log().Trace("Light Ethereum message arrived", "code", msg.Code, "bytes", msg.Size)
 
-	if msg.Size > ProtocolMaxMsgSize {
-		return errResp(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
+	if msg.Size > protocol.ProtocolMaxMsgSize {
+		return protocol.ErrResp(protocol.ErrMsgTooLarge, "%v > %v", msg.Size, protocol.ProtocolMaxMsgSize)
 	}
 	defer msg.Discard()
 
@@ -160,43 +161,43 @@ func (h *clientHandler) handleMsg(p *peer) error {
 
 	// Handle the message depending on its contents
 	switch msg.Code {
-	case AnnounceMsg:
+	case protocol.AnnounceMsg:
 		p.Log().Trace("Received announce message")
-		var req announceData
-		if err := msg.Decode(&req); err != nil {
-			return errResp(ErrDecode, "%v: %v", msg, err)
+		var anno protocol.Announcement
+		if err := msg.Decode(&anno); err != nil {
+			return protocol.ErrResp(protocol.ErrDecode, "%v: %v", msg, err)
 		}
-		if err := req.sanityCheck(); err != nil {
+		if err := anno.SanityCheck(); err != nil {
 			return err
 		}
-		update, size := req.Update.decode()
+		update, size := anno.Update.ToMap()
 		if p.rejectUpdate(size) {
-			return errResp(ErrRequestRejected, "")
+			return protocol.ErrResp(protocol.ErrRequestRejected, "")
 		}
 		p.updateFlowControl(update)
 
-		if req.Hash != (common.Hash{}) {
+		if anno.Hash != (common.Hash{}) {
 			if p.announceType == announceTypeNone {
-				return errResp(ErrUnexpectedResponse, "")
+				return protocol.ErrResp(protocol.ErrUnexpectedResponse, "")
 			}
 			if p.announceType == announceTypeSigned {
-				if err := req.checkSignature(p.ID(), update); err != nil {
+				if err := anno.CheckSignature(p.ID(), update); err != nil {
 					p.Log().Trace("Invalid announcement signature", "err", err)
 					return err
 				}
 				p.Log().Trace("Valid announcement signature")
 			}
-			p.Log().Trace("Announce message content", "number", req.Number, "hash", req.Hash, "td", req.Td, "reorg", req.ReorgDepth)
-			h.fetcher.announce(p, &req)
+			p.Log().Trace("Announce message content", "number", anno.Number, "hash", anno.Hash, "td", anno.Td, "reorg", anno.ReorgDepth)
+			h.fetcher.announce(p, &anno)
 		}
-	case BlockHeadersMsg:
+	case protocol.BlockHeadersMsg:
 		p.Log().Trace("Received block header response message")
 		var resp struct {
 			ReqID, BV uint64
 			Headers   []*types.Header
 		}
 		if err := msg.Decode(&resp); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
+			return protocol.ErrResp(protocol.ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
 		if h.fetcher.requestedID(resp.ReqID) {
@@ -206,14 +207,14 @@ func (h *clientHandler) handleMsg(p *peer) error {
 				log.Debug("Failed to deliver headers", "err", err)
 			}
 		}
-	case BlockBodiesMsg:
+	case protocol.BlockBodiesMsg:
 		p.Log().Trace("Received block bodies response")
 		var resp struct {
 			ReqID, BV uint64
 			Data      []*types.Body
 		}
 		if err := msg.Decode(&resp); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
+			return protocol.ErrResp(protocol.ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
 		deliverMsg = &Msg{
@@ -221,14 +222,14 @@ func (h *clientHandler) handleMsg(p *peer) error {
 			ReqID:   resp.ReqID,
 			Obj:     resp.Data,
 		}
-	case CodeMsg:
+	case protocol.CodeMsg:
 		p.Log().Trace("Received code response")
 		var resp struct {
 			ReqID, BV uint64
 			Data      [][]byte
 		}
 		if err := msg.Decode(&resp); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
+			return protocol.ErrResp(protocol.ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
 		deliverMsg = &Msg{
@@ -236,14 +237,14 @@ func (h *clientHandler) handleMsg(p *peer) error {
 			ReqID:   resp.ReqID,
 			Obj:     resp.Data,
 		}
-	case ReceiptsMsg:
+	case protocol.ReceiptsMsg:
 		p.Log().Trace("Received receipts response")
 		var resp struct {
 			ReqID, BV uint64
 			Receipts  []types.Receipts
 		}
 		if err := msg.Decode(&resp); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
+			return protocol.ErrResp(protocol.ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
 		deliverMsg = &Msg{
@@ -251,14 +252,14 @@ func (h *clientHandler) handleMsg(p *peer) error {
 			ReqID:   resp.ReqID,
 			Obj:     resp.Receipts,
 		}
-	case ProofsV2Msg:
+	case protocol.ProofsV2Msg:
 		p.Log().Trace("Received les/2 proofs response")
 		var resp struct {
 			ReqID, BV uint64
 			Data      light.NodeList
 		}
 		if err := msg.Decode(&resp); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
+			return protocol.ErrResp(protocol.ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
 		deliverMsg = &Msg{
@@ -266,14 +267,14 @@ func (h *clientHandler) handleMsg(p *peer) error {
 			ReqID:   resp.ReqID,
 			Obj:     resp.Data,
 		}
-	case HelperTrieProofsMsg:
+	case protocol.HelperTrieProofsMsg:
 		p.Log().Trace("Received helper trie proof response")
 		var resp struct {
 			ReqID, BV uint64
-			Data      HelperTrieResps
+			Data      protocol.HelperTrieResponse
 		}
 		if err := msg.Decode(&resp); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
+			return protocol.ErrResp(protocol.ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
 		deliverMsg = &Msg{
@@ -281,14 +282,14 @@ func (h *clientHandler) handleMsg(p *peer) error {
 			ReqID:   resp.ReqID,
 			Obj:     resp.Data,
 		}
-	case TxStatusMsg:
+	case protocol.TxStatusMsg:
 		p.Log().Trace("Received tx status response")
 		var resp struct {
 			ReqID, BV uint64
 			Status    []light.TxStatus
 		}
 		if err := msg.Decode(&resp); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
+			return protocol.ErrResp(protocol.ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
 		deliverMsg = &Msg{
@@ -296,21 +297,21 @@ func (h *clientHandler) handleMsg(p *peer) error {
 			ReqID:   resp.ReqID,
 			Obj:     resp.Status,
 		}
-	case StopMsg:
+	case protocol.StopMsg:
 		p.freezeServer(true)
 		h.backend.retriever.frozen(p)
 		p.Log().Debug("Service stopped")
-	case ResumeMsg:
+	case protocol.ResumeMsg:
 		var bv uint64
 		if err := msg.Decode(&bv); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
+			return protocol.ErrResp(protocol.ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ResumeFreeze(bv)
 		p.freezeServer(false)
 		p.Log().Debug("Service resumed")
 	default:
 		p.Log().Trace("Received invalid message", "code", msg.Code)
-		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
+		return protocol.ErrResp(protocol.ErrInvalidMsgCode, "%v", msg.Code)
 	}
 	// Deliver the received response to retriever.
 	if deliverMsg != nil {
@@ -341,7 +342,7 @@ func (pc *peerConnection) RequestHeadersByHash(origin common.Hash, amount int, s
 	rq := &distReq{
 		getCost: func(dp distPeer) uint64 {
 			peer := dp.(*peer)
-			return peer.GetRequestCost(GetBlockHeadersMsg, amount)
+			return peer.GetRequestCost(protocol.GetBlockHeadersMsg, amount)
 		},
 		canSend: func(dp distPeer) bool {
 			return dp.(*peer) == pc.peer
@@ -349,7 +350,7 @@ func (pc *peerConnection) RequestHeadersByHash(origin common.Hash, amount int, s
 		request: func(dp distPeer) func() {
 			reqID := genReqID()
 			peer := dp.(*peer)
-			cost := peer.GetRequestCost(GetBlockHeadersMsg, amount)
+			cost := peer.GetRequestCost(protocol.GetBlockHeadersMsg, amount)
 			peer.fcServer.QueuedRequest(reqID, cost)
 			return func() { peer.RequestHeadersByHash(reqID, cost, origin, amount, skip, reverse) }
 		},
@@ -365,7 +366,7 @@ func (pc *peerConnection) RequestHeadersByNumber(origin uint64, amount int, skip
 	rq := &distReq{
 		getCost: func(dp distPeer) uint64 {
 			peer := dp.(*peer)
-			return peer.GetRequestCost(GetBlockHeadersMsg, amount)
+			return peer.GetRequestCost(protocol.GetBlockHeadersMsg, amount)
 		},
 		canSend: func(dp distPeer) bool {
 			return dp.(*peer) == pc.peer
@@ -373,7 +374,7 @@ func (pc *peerConnection) RequestHeadersByNumber(origin uint64, amount int, skip
 		request: func(dp distPeer) func() {
 			reqID := genReqID()
 			peer := dp.(*peer)
-			cost := peer.GetRequestCost(GetBlockHeadersMsg, amount)
+			cost := peer.GetRequestCost(protocol.GetBlockHeadersMsg, amount)
 			peer.fcServer.QueuedRequest(reqID, cost)
 			return func() { peer.RequestHeadersByNumber(reqID, cost, origin, amount, skip, reverse) }
 		},

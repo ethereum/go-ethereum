@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/les/protocol"
 	"github.com/ethereum/go-ethereum/les/utilities"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -89,7 +90,7 @@ type peer struct {
 
 	id string
 
-	headInfo *announceData
+	headInfo *protocol.Announcement
 	lock     sync.RWMutex
 
 	sendQueue *utilities.ExecQueue
@@ -112,7 +113,7 @@ type peer struct {
 	fcClient *flowcontrol.ClientNode // nil if the peer is server only
 	fcServer *flowcontrol.ServerNode // nil if the peer is client only
 	fcParams flowcontrol.ServerParams
-	fcCosts  requestCostTable
+	fcCosts  protocol.RequestCostTable
 
 	trusted, server         bool
 	onlyAnnounce            bool
@@ -179,7 +180,7 @@ func (p *peer) rejectUpdate(size uint64) bool {
 // region. The client is also notified about being frozen/unfrozen with a Stop/Resume
 // message.
 func (p *peer) freezeClient() {
-	if p.version < lpv3 {
+	if p.version < protocol.Lpv3 {
 		// if Stop/Resume is not supported then just drop the peer after setting
 		// its frozen status permanently
 		atomic.StoreUint32(&p.frozen, 1)
@@ -258,11 +259,11 @@ func (p *peer) HeadAndTd() (hash common.Hash, td *big.Int) {
 	return hash, p.headInfo.Td
 }
 
-func (p *peer) headBlockInfo() blockInfo {
+func (p *peer) headBlockInfo() protocol.HeadHeader {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	return blockInfo{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td}
+	return protocol.HeadHeader{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td}
 }
 
 // Td retrieves the current total difficulty of a peer.
@@ -286,10 +287,10 @@ func (p *peer) updateCapacity(cap uint64) {
 
 	p.fcParams = flowcontrol.ServerParams{MinRecharge: cap, BufLimit: cap * bufLimitRatio}
 	p.fcClient.UpdateParams(p.fcParams)
-	var kvList keyValueList
-	kvList = kvList.add("flowControl/MRR", cap)
-	kvList = kvList.add("flowControl/BL", cap*bufLimitRatio)
-	p.queueSend(func() { p.SendAnnounce(announceData{Update: kvList}) })
+	var kvList protocol.KeyValueList
+	kvList = kvList.Add("flowControl/MRR", cap)
+	kvList = kvList.Add("flowControl/BL", cap*bufLimitRatio)
+	p.queueSend(func() { p.SendAnnounce(protocol.Announcement{Update: kvList}) })
 }
 
 func (p *peer) responseID() uint64 {
@@ -336,7 +337,7 @@ func (p *peer) GetRequestCost(msgcode uint64, amount int) uint64 {
 	if costs == nil {
 		return 0
 	}
-	cost := costs.baseCost + costs.reqCost*uint64(amount)
+	cost := costs.BaseCost + costs.ReqCost*uint64(amount)
 	if cost > p.fcParams.BufLimit {
 		cost = p.fcParams.BufLimit
 	}
@@ -347,12 +348,12 @@ func (p *peer) GetTxRelayCost(amount, size int) uint64 {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	costs := p.fcCosts[SendTxV2Msg]
+	costs := p.fcCosts[protocol.SendTxV2Msg]
 	if costs == nil {
 		return 0
 	}
-	cost := costs.baseCost + costs.reqCost*uint64(amount)
-	sizeCost := costs.baseCost + costs.reqCost*uint64(size)/txSizeCostLimit
+	cost := costs.BaseCost + costs.ReqCost*uint64(amount)
+	sizeCost := costs.BaseCost + costs.ReqCost*uint64(size)/txSizeCostLimit
 	if sizeCost > cost {
 		cost = sizeCost
 	}
@@ -385,185 +386,144 @@ func (p *peer) HasBlock(hash common.Hash, number uint64, hasState bool) bool {
 
 // SendAnnounce announces the availability of a number of blocks through
 // a hash notification.
-func (p *peer) SendAnnounce(request announceData) error {
-	return p2p.Send(p.rw, AnnounceMsg, request)
+func (p *peer) SendAnnounce(request protocol.Announcement) error {
+	return p2p.Send(p.rw, protocol.AnnounceMsg, request)
 }
 
 // SendStop notifies the client about being in frozen state
 func (p *peer) SendStop() error {
-	return p2p.Send(p.rw, StopMsg, struct{}{})
+	return p2p.Send(p.rw, protocol.StopMsg, struct{}{})
 }
 
 // SendResume notifies the client about getting out of frozen state
 func (p *peer) SendResume(bv uint64) error {
-	return p2p.Send(p.rw, ResumeMsg, bv)
+	return p2p.Send(p.rw, protocol.ResumeMsg, bv)
 }
 
 // ReplyBlockHeaders creates a reply with a batch of block headers
 func (p *peer) ReplyBlockHeaders(reqID uint64, headers []*types.Header) *reply {
 	data, _ := rlp.EncodeToBytes(headers)
-	return &reply{p.rw, BlockHeadersMsg, reqID, data}
+	return &reply{p.rw, protocol.BlockHeadersMsg, reqID, data}
 }
 
 // ReplyBlockBodiesRLP creates a reply with a batch of block contents from
 // an already RLP encoded format.
 func (p *peer) ReplyBlockBodiesRLP(reqID uint64, bodies []rlp.RawValue) *reply {
 	data, _ := rlp.EncodeToBytes(bodies)
-	return &reply{p.rw, BlockBodiesMsg, reqID, data}
+	return &reply{p.rw, protocol.BlockBodiesMsg, reqID, data}
 }
 
 // ReplyCode creates a reply with a batch of arbitrary internal data, corresponding to the
 // hashes requested.
 func (p *peer) ReplyCode(reqID uint64, codes [][]byte) *reply {
 	data, _ := rlp.EncodeToBytes(codes)
-	return &reply{p.rw, CodeMsg, reqID, data}
+	return &reply{p.rw, protocol.CodeMsg, reqID, data}
 }
 
 // ReplyReceiptsRLP creates a reply with a batch of transaction receipts, corresponding to the
 // ones requested from an already RLP encoded format.
 func (p *peer) ReplyReceiptsRLP(reqID uint64, receipts []rlp.RawValue) *reply {
 	data, _ := rlp.EncodeToBytes(receipts)
-	return &reply{p.rw, ReceiptsMsg, reqID, data}
+	return &reply{p.rw, protocol.ReceiptsMsg, reqID, data}
 }
 
 // ReplyProofsV2 creates a reply with a batch of merkle proofs, corresponding to the ones requested.
 func (p *peer) ReplyProofsV2(reqID uint64, proofs light.NodeList) *reply {
 	data, _ := rlp.EncodeToBytes(proofs)
-	return &reply{p.rw, ProofsV2Msg, reqID, data}
+	return &reply{p.rw, protocol.ProofsV2Msg, reqID, data}
 }
 
 // ReplyHelperTrieProofs creates a reply with a batch of HelperTrie proofs, corresponding to the ones requested.
-func (p *peer) ReplyHelperTrieProofs(reqID uint64, resp HelperTrieResps) *reply {
+func (p *peer) ReplyHelperTrieProofs(reqID uint64, resp protocol.HelperTrieResponse) *reply {
 	data, _ := rlp.EncodeToBytes(resp)
-	return &reply{p.rw, HelperTrieProofsMsg, reqID, data}
+	return &reply{p.rw, protocol.HelperTrieProofsMsg, reqID, data}
 }
 
 // ReplyTxStatus creates a reply with a batch of transaction status records, corresponding to the ones requested.
 func (p *peer) ReplyTxStatus(reqID uint64, stats []light.TxStatus) *reply {
 	data, _ := rlp.EncodeToBytes(stats)
-	return &reply{p.rw, TxStatusMsg, reqID, data}
+	return &reply{p.rw, protocol.TxStatusMsg, reqID, data}
 }
 
 // RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the hash of an origin block.
 func (p *peer) RequestHeadersByHash(reqID, cost uint64, origin common.Hash, amount int, skip int, reverse bool) error {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
-	return sendRequest(p.rw, GetBlockHeadersMsg, reqID, cost, &getBlockHeadersData{Origin: hashOrNumber{Hash: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
+	return sendRequest(p.rw, protocol.GetBlockHeadersMsg, reqID, cost, &protocol.GetBlockHeadersRequest{Origin: protocol.HashOrNumber{Hash: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
 }
 
 // RequestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
 func (p *peer) RequestHeadersByNumber(reqID, cost, origin uint64, amount int, skip int, reverse bool) error {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
-	return sendRequest(p.rw, GetBlockHeadersMsg, reqID, cost, &getBlockHeadersData{Origin: hashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
+	return sendRequest(p.rw, protocol.GetBlockHeadersMsg, reqID, cost, &protocol.GetBlockHeadersRequest{Origin: protocol.HashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
 }
 
 // RequestBodies fetches a batch of blocks' bodies corresponding to the hashes
 // specified.
 func (p *peer) RequestBodies(reqID, cost uint64, hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of block bodies", "count", len(hashes))
-	return sendRequest(p.rw, GetBlockBodiesMsg, reqID, cost, hashes)
+	return sendRequest(p.rw, protocol.GetBlockBodiesMsg, reqID, cost, hashes)
 }
 
 // RequestCode fetches a batch of arbitrary data from a node's known state
 // data, corresponding to the specified hashes.
-func (p *peer) RequestCode(reqID, cost uint64, reqs []CodeReq) error {
+func (p *peer) RequestCode(reqID, cost uint64, reqs []protocol.CodeRequest) error {
 	p.Log().Debug("Fetching batch of codes", "count", len(reqs))
-	return sendRequest(p.rw, GetCodeMsg, reqID, cost, reqs)
+	return sendRequest(p.rw, protocol.GetCodeMsg, reqID, cost, reqs)
 }
 
 // RequestReceipts fetches a batch of transaction receipts from a remote node.
 func (p *peer) RequestReceipts(reqID, cost uint64, hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
-	return sendRequest(p.rw, GetReceiptsMsg, reqID, cost, hashes)
+	return sendRequest(p.rw, protocol.GetReceiptsMsg, reqID, cost, hashes)
 }
 
 // RequestProofs fetches a batch of merkle proofs from a remote node.
-func (p *peer) RequestProofs(reqID, cost uint64, reqs []ProofReq) error {
+func (p *peer) RequestProofs(reqID, cost uint64, reqs []protocol.TrieProofRequest) error {
 	p.Log().Debug("Fetching batch of proofs", "count", len(reqs))
-	return sendRequest(p.rw, GetProofsV2Msg, reqID, cost, reqs)
+	return sendRequest(p.rw, protocol.GetProofsV2Msg, reqID, cost, reqs)
 }
 
 // RequestHelperTrieProofs fetches a batch of HelperTrie merkle proofs from a remote node.
-func (p *peer) RequestHelperTrieProofs(reqID, cost uint64, reqs []HelperTrieReq) error {
+func (p *peer) RequestHelperTrieProofs(reqID, cost uint64, reqs []protocol.HelperTrieRequest) error {
 	p.Log().Debug("Fetching batch of HelperTrie proofs", "count", len(reqs))
-	return sendRequest(p.rw, GetHelperTrieProofsMsg, reqID, cost, reqs)
+	return sendRequest(p.rw, protocol.GetHelperTrieProofsMsg, reqID, cost, reqs)
 }
 
 // RequestTxStatus fetches a batch of transaction status records from a remote node.
 func (p *peer) RequestTxStatus(reqID, cost uint64, txHashes []common.Hash) error {
 	p.Log().Debug("Requesting transaction status", "count", len(txHashes))
-	return sendRequest(p.rw, GetTxStatusMsg, reqID, cost, txHashes)
+	return sendRequest(p.rw, protocol.GetTxStatusMsg, reqID, cost, txHashes)
 }
 
 // SendTxStatus creates a reply with a batch of transactions to be added to the remote transaction pool.
 func (p *peer) SendTxs(reqID, cost uint64, txs rlp.RawValue) error {
 	p.Log().Debug("Sending batch of transactions", "size", len(txs))
-	return sendRequest(p.rw, SendTxV2Msg, reqID, cost, txs)
+	return sendRequest(p.rw, protocol.SendTxV2Msg, reqID, cost, txs)
 }
 
-type keyValueEntry struct {
-	Key   string
-	Value rlp.RawValue
-}
-type keyValueList []keyValueEntry
-type keyValueMap map[string]rlp.RawValue
-
-func (l keyValueList) add(key string, val interface{}) keyValueList {
-	var entry keyValueEntry
-	entry.Key = key
-	if val == nil {
-		val = uint64(0)
-	}
-	enc, err := rlp.EncodeToBytes(val)
-	if err == nil {
-		entry.Value = enc
-	}
-	return append(l, entry)
-}
-
-func (l keyValueList) decode() (keyValueMap, uint64) {
-	m := make(keyValueMap)
-	var size uint64
-	for _, entry := range l {
-		m[entry.Key] = entry.Value
-		size += uint64(len(entry.Key)) + uint64(len(entry.Value)) + 8
-	}
-	return m, size
-}
-
-func (m keyValueMap) get(key string, val interface{}) error {
-	enc, ok := m[key]
-	if !ok {
-		return errResp(ErrMissingKey, "%s", key)
-	}
-	if val == nil {
-		return nil
-	}
-	return rlp.DecodeBytes(enc, val)
-}
-
-func (p *peer) sendReceiveHandshake(sendList keyValueList) (keyValueList, error) {
+func (p *peer) sendReceiveHandshake(sendList protocol.KeyValueList) (protocol.KeyValueList, error) {
 	// Send out own handshake in a new thread
 	errc := make(chan error, 1)
 	go func() {
-		errc <- p2p.Send(p.rw, StatusMsg, sendList)
+		errc <- p2p.Send(p.rw, protocol.StatusMsg, sendList)
 	}()
 	// In the mean time retrieve the remote status message
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
 		return nil, err
 	}
-	if msg.Code != StatusMsg {
-		return nil, errResp(ErrNoStatusMsg, "first msg has code %x (!= %x)", msg.Code, StatusMsg)
+	if msg.Code != protocol.StatusMsg {
+		return nil, protocol.ErrResp(protocol.ErrNoStatusMsg, "first msg has code %x (!= %x)", msg.Code, protocol.StatusMsg)
 	}
-	if msg.Size > ProtocolMaxMsgSize {
-		return nil, errResp(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
+	if msg.Size > protocol.ProtocolMaxMsgSize {
+		return nil, protocol.ErrResp(protocol.ErrMsgTooLarge, "%v > %v", msg.Size, protocol.ProtocolMaxMsgSize)
 	}
 	// Decode the handshake
-	var recvList keyValueList
+	var recvList protocol.KeyValueList
 	if err := msg.Decode(&recvList); err != nil {
-		return nil, errResp(ErrDecode, "msg %v: %v", msg, err)
+		return nil, protocol.ErrResp(protocol.ErrDecode, "msg %v: %v", msg, err)
 	}
 	if err := <-errc; err != nil {
 		return nil, err
@@ -577,21 +537,21 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	var send keyValueList
+	var send protocol.KeyValueList
 
 	// Add some basic handshake fields
-	send = send.add("protocolVersion", uint64(p.version))
-	send = send.add("networkId", p.network)
-	send = send.add("headTd", td)
-	send = send.add("headHash", head)
-	send = send.add("headNum", headNum)
-	send = send.add("genesisHash", genesis)
+	send = send.Add("protocolVersion", uint64(p.version))
+	send = send.Add("networkId", p.network)
+	send = send.Add("headTd", td)
+	send = send.Add("headHash", head)
+	send = send.Add("headNum", headNum)
+	send = send.Add("genesisHash", genesis)
 	if server != nil {
 		// Add some information which services server can offer.
 		if !server.config.UltraLightOnlyAnnounce {
-			send = send.add("serveHeaders", nil)
-			send = send.add("serveChainSince", uint64(0))
-			send = send.add("serveStateSince", uint64(0))
+			send = send.Add("serveHeaders", nil)
+			send = send.Add("serveChainSince", uint64(0))
+			send = send.Add("serveStateSince", uint64(0))
 
 			// If local ethereum node is running in archive mode, advertise ourselves we have
 			// all version state data. Otherwise only recent state is available.
@@ -599,20 +559,20 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 			if server.archiveMode {
 				stateRecent = 0
 			}
-			send = send.add("serveRecentState", stateRecent)
-			send = send.add("txRelay", nil)
+			send = send.Add("serveRecentState", stateRecent)
+			send = send.Add("txRelay", nil)
 		}
-		send = send.add("flowControl/BL", server.defParams.BufLimit)
-		send = send.add("flowControl/MRR", server.defParams.MinRecharge)
+		send = send.Add("flowControl/BL", server.defParams.BufLimit)
+		send = send.Add("flowControl/MRR", server.defParams.MinRecharge)
 
-		var costList RequestCostList
+		var costList protocol.RequestCostList
 		if server.costTracker.testCostList != nil {
 			costList = server.costTracker.testCostList
 		} else {
 			costList = server.costTracker.makeCostList(server.costTracker.globalFactor())
 		}
-		send = send.add("flowControl/MRC", costList)
-		p.fcCosts = costList.decode(ProtocolLengths[uint(p.version)])
+		send = send.Add("flowControl/MRC", costList)
+		p.fcCosts = costList.ToTable(protocol.ProtocolLengths[uint(p.version)])
 		p.fcParams = server.defParams
 
 		// Add advertised checkpoint and register block height which
@@ -620,8 +580,8 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		if server.oracle != nil && server.oracle.IsRunning() {
 			cp, height := server.oracle.StableCheckpoint()
 			if cp != nil {
-				send = send.add("checkpoint/value", cp)
-				send = send.add("checkpoint/registerHeight", height)
+				send = send.Add("checkpoint/value", cp)
+				send = send.Add("checkpoint/registerHeight", height)
 			}
 		}
 	} else {
@@ -630,130 +590,136 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		if p.trusted {
 			p.announceType = announceTypeSigned
 		}
-		send = send.add("announceType", p.announceType)
+		send = send.Add("announceType", p.announceType)
 	}
 
 	recvList, err := p.sendReceiveHandshake(send)
 	if err != nil {
 		return err
 	}
-	recv, size := recvList.decode()
+	recv, size := recvList.ToMap()
 	if p.rejectUpdate(size) {
-		return errResp(ErrRequestRejected, "")
+		return protocol.ErrResp(protocol.ErrRequestRejected, "")
 	}
 
 	var rGenesis, rHash common.Hash
 	var rVersion, rNetwork, rNum uint64
 	var rTd *big.Int
 
-	if err := recv.get("protocolVersion", &rVersion); err != nil {
+	if err := recv.Get("protocolVersion", &rVersion); err != nil {
 		return err
 	}
-	if err := recv.get("networkId", &rNetwork); err != nil {
+	if err := recv.Get("networkId", &rNetwork); err != nil {
 		return err
 	}
-	if err := recv.get("headTd", &rTd); err != nil {
+	if err := recv.Get("headTd", &rTd); err != nil {
 		return err
 	}
-	if err := recv.get("headHash", &rHash); err != nil {
+	if err := recv.Get("headHash", &rHash); err != nil {
 		return err
 	}
-	if err := recv.get("headNum", &rNum); err != nil {
+	if err := recv.Get("headNum", &rNum); err != nil {
 		return err
 	}
-	if err := recv.get("genesisHash", &rGenesis); err != nil {
+	if err := recv.Get("genesisHash", &rGenesis); err != nil {
 		return err
 	}
 
 	if rGenesis != genesis {
-		return errResp(ErrGenesisBlockMismatch, "%x (!= %x)", rGenesis[:8], genesis[:8])
+		return protocol.ErrResp(protocol.ErrGenesisBlockMismatch, "%x (!= %x)", rGenesis[:8], genesis[:8])
 	}
 	if rNetwork != p.network {
-		return errResp(ErrNetworkIdMismatch, "%d (!= %d)", rNetwork, p.network)
+		return protocol.ErrResp(protocol.ErrNetworkIdMismatch, "%d (!= %d)", rNetwork, p.network)
 	}
 	if int(rVersion) != p.version {
-		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", rVersion, p.version)
+		return protocol.ErrResp(protocol.ErrProtocolVersionMismatch, "%d (!= %d)", rVersion, p.version)
 	}
 
 	if server != nil {
-		p.server = recv.get("flowControl/MRR", nil) == nil
+		p.server = recv.Get("flowControl/MRR", nil) == nil
 		if p.server {
 			p.announceType = announceTypeNone // connected to another server, send no messages
 		} else {
-			if recv.get("announceType", &p.announceType) != nil {
+			if recv.Get("announceType", &p.announceType) != nil {
 				// set default announceType on server side
 				p.announceType = announceTypeSimple
 			}
 			p.fcClient = flowcontrol.NewClientNode(server.fcManager, server.defParams)
 		}
 	} else {
-		if recv.get("serveChainSince", &p.chainSince) != nil {
+		if recv.Get("serveChainSince", &p.chainSince) != nil {
 			p.onlyAnnounce = true
 		}
-		if recv.get("serveRecentChain", &p.chainRecent) != nil {
+		if recv.Get("serveRecentChain", &p.chainRecent) != nil {
 			p.chainRecent = 0
 		}
-		if recv.get("serveStateSince", &p.stateSince) != nil {
+		if recv.Get("serveStateSince", &p.stateSince) != nil {
 			p.onlyAnnounce = true
 		}
-		if recv.get("serveRecentState", &p.stateRecent) != nil {
+		if recv.Get("serveRecentState", &p.stateRecent) != nil {
 			p.stateRecent = 0
 		}
-		if recv.get("txRelay", nil) != nil {
+		if recv.Get("txRelay", nil) != nil {
 			p.onlyAnnounce = true
 		}
 
 		if p.onlyAnnounce && !p.trusted {
-			return errResp(ErrUselessPeer, "peer cannot serve requests")
+			return protocol.ErrResp(protocol.ErrUselessPeer, "peer cannot serve requests")
 		}
 
 		var sParams flowcontrol.ServerParams
-		if err := recv.get("flowControl/BL", &sParams.BufLimit); err != nil {
+		if err := recv.Get("flowControl/BL", &sParams.BufLimit); err != nil {
 			return err
 		}
-		if err := recv.get("flowControl/MRR", &sParams.MinRecharge); err != nil {
+		if err := recv.Get("flowControl/MRR", &sParams.MinRecharge); err != nil {
 			return err
 		}
-		var MRC RequestCostList
-		if err := recv.get("flowControl/MRC", &MRC); err != nil {
+		var MRC protocol.RequestCostList
+		if err := recv.Get("flowControl/MRC", &MRC); err != nil {
 			return err
 		}
 		p.fcParams = sParams
 		p.fcServer = flowcontrol.NewServerNode(sParams, &mclock.System{})
-		p.fcCosts = MRC.decode(ProtocolLengths[uint(p.version)])
+		p.fcCosts = MRC.ToTable(protocol.ProtocolLengths[uint(p.version)])
 
-		recv.get("checkpoint/value", &p.checkpoint)
-		recv.get("checkpoint/registerHeight", &p.checkpointNumber)
+		recv.Get("checkpoint/value", &p.checkpoint)
+		recv.Get("checkpoint/registerHeight", &p.checkpointNumber)
 
 		if !p.onlyAnnounce {
 			for msgCode := range reqAvgTimeCost {
 				if p.fcCosts[msgCode] == nil {
-					return errResp(ErrUselessPeer, "peer does not support message %d", msgCode)
+					return protocol.ErrResp(protocol.ErrUselessPeer, "peer does not support message %d", msgCode)
 				}
 			}
 		}
 		p.server = true
 	}
-	p.headInfo = &announceData{Td: rTd, Hash: rHash, Number: rNum}
+	p.headInfo = &protocol.Announcement{
+		HeadHeader: protocol.HeadHeader{
+			Td:     rTd,
+			Hash:   rHash,
+			Number: rNum,
+		},
+	}
 	return nil
 }
 
 // updateFlowControl updates the flow control parameters belonging to the server
 // node if the announced key/value set contains relevant fields
-func (p *peer) updateFlowControl(update keyValueMap) {
+func (p *peer) updateFlowControl(update protocol.KeyValueMap) {
 	if p.fcServer == nil {
 		return
 	}
 	// If any of the flow control params is nil, refuse to update.
 	var params flowcontrol.ServerParams
-	if update.get("flowControl/BL", &params.BufLimit) == nil && update.get("flowControl/MRR", &params.MinRecharge) == nil {
+	if update.Get("flowControl/BL", &params.BufLimit) == nil && update.Get("flowControl/MRR", &params.MinRecharge) == nil {
 		// todo can light client set a minimal acceptable flow control params?
 		p.fcParams = params
 		p.fcServer.UpdateParams(params)
 	}
-	var MRC RequestCostList
-	if update.get("flowControl/MRC", &MRC) == nil {
-		costUpdate := MRC.decode(ProtocolLengths[uint(p.version)])
+	var MRC protocol.RequestCostList
+	if update.Get("flowControl/MRC", &MRC) == nil {
+		costUpdate := MRC.ToTable(protocol.ProtocolLengths[uint(p.version)])
 		for code, cost := range costUpdate {
 			p.fcCosts[code] = cost
 		}

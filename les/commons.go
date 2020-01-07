@@ -17,7 +17,6 @@
 package les
 
 import (
-	"fmt"
 	"math/big"
 	"sync"
 
@@ -28,27 +27,12 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/checkpointoracle"
+	"github.com/ethereum/go-ethereum/les/protocol"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 )
-
-func errResp(code errCode, format string, v ...interface{}) error {
-	return fmt.Errorf("%v - %v", code, fmt.Sprintf(format, v...))
-}
-
-func lesTopic(genesisHash common.Hash, protocolVersion uint) discv5.Topic {
-	var name string
-	switch protocolVersion {
-	case lpv2:
-		name = "LES2"
-	default:
-		panic(nil)
-	}
-	return discv5.Topic(name + "@" + common.Bytes2Hex(genesisHash.Bytes()[0:8]))
-}
 
 type chainReader interface {
 	CurrentHeader() *types.Header
@@ -89,7 +73,7 @@ func (c *lesCommons) makeProtocols(versions []uint, runPeer func(version uint, p
 		protos[i] = p2p.Protocol{
 			Name:     "les",
 			Version:  version,
-			Length:   ProtocolLengths[version],
+			Length:   protocol.ProtocolLengths[version],
 			NodeInfo: c.nodeInfo,
 			Run: func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 				return runPeer(version, peer, rw)

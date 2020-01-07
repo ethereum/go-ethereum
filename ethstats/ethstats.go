@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/les"
+	lesproto "github.com/ethereum/go-ethereum/les/protocol"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -378,7 +379,7 @@ func (s *Service) login(conn *websocket.Conn) error {
 		protocol = fmt.Sprintf("eth/%d", eth.ProtocolVersions[0])
 	} else {
 		network = fmt.Sprintf("%d", infos.Protocols["les"].(*les.NodeInfo).Network)
-		protocol = fmt.Sprintf("les/%d", les.ClientProtocolVersions[0])
+		protocol = fmt.Sprintf("les/%d", lesproto.ClientProtocolVersions[0])
 	}
 	auth := &authMsg{
 		ID: s.node,

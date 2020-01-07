@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/checkpointoracle"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/les/protocol"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -58,9 +59,9 @@ type LesServer struct {
 
 func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	// Collect les protocol version information supported by local node.
-	lesTopics := make([]discv5.Topic, len(AdvertiseProtocolVersions))
-	for i, pv := range AdvertiseProtocolVersions {
-		lesTopics[i] = lesTopic(e.BlockChain().Genesis().Hash(), pv)
+	lesTopics := make([]discv5.Topic, len(protocol.AdvertiseProtocolVersions))
+	for i, pv := range protocol.AdvertiseProtocolVersions {
+		lesTopics[i] = protocol.LesTopic(e.BlockChain().Genesis().Hash(), pv)
 	}
 	// Calculate the number of threads used to service the light client
 	// requests based on the user-specified value.
@@ -151,7 +152,7 @@ func (s *LesServer) APIs() []rpc.API {
 }
 
 func (s *LesServer) Protocols() []p2p.Protocol {
-	ps := s.makeProtocols(ServerProtocolVersions, s.handler.runPeer, func(id enode.ID) interface{} {
+	ps := s.makeProtocols(protocol.ServerProtocolVersions, s.handler.runPeer, func(id enode.ID) interface{} {
 		if p := s.peers.Peer(peerIdToString(id)); p != nil {
 			return p.Info()
 		}
