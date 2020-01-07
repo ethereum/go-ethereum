@@ -420,7 +420,7 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 		return emptyRoot, nil
 	}
 	rootHash := t.Hash()
-	h := newCommitter(onleaf)
+	h := newCommitter()
 	defer returnCommitterToPool(h)
 	// Do a quick check if we really need to commit, before we spin
 	// up goroutines. This can happen e.g. if we load a trie for reading storage
@@ -430,6 +430,8 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	}
 	var wg sync.WaitGroup
 	if onleaf != nil {
+		h.onleaf = onleaf
+		h.leafCh = make(chan *Leaf, leafChanSize)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

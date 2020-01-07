@@ -47,18 +47,15 @@ func (b *sliceBuffer) Reset() {
 // internal preallocated temp space
 type hasher struct {
 	sha keccakState
-
-	tmp    sliceBuffer
-	tmpKey []byte
+	tmp sliceBuffer
 }
 
 // hasherPool holds pureHashers
 var hasherPool = sync.Pool{
 	New: func() interface{} {
 		return &hasher{
-			tmp:    make(sliceBuffer, 0, 550), // cap is as large as a full fullNode.
-			tmpKey: make([]byte, 64),          // space for an packed key
-			sha:    sha3.NewLegacyKeccak256().(keccakState),
+			tmp: make(sliceBuffer, 0, 550), // cap is as large as a full fullNode.
+			sha: sha3.NewLegacyKeccak256().(keccakState),
 		}
 	},
 }

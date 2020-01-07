@@ -26,9 +26,9 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// LeafChanSize is the size of the leafCh. It's a pretty arbitrary number, to allow
+// leafChanSize is the size of the leafCh. It's a pretty arbitrary number, to allow
 // some paralellism but not incur too much memory overhead.
-const LeafChanSize = 200
+const leafChanSize = 200
 
 // Leaf represents a trie leaf value
 type Leaf struct {
@@ -52,7 +52,7 @@ type committer struct {
 	leafCh chan *Leaf
 }
 
-// committers live in a global db.
+// committers live in a global sync.Pool
 var committerPool = sync.Pool{
 	New: func() interface{} {
 		return &committer{
@@ -62,19 +62,9 @@ var committerPool = sync.Pool{
 	},
 }
 
-// newCommitter creates a new committer or picks one from the pool, and
-// initializes the leafCh, if needed.
-// In case no onleaf-callback is provided, the committer does not
-// use a channel-based commit, but inlined.
-// Typically, the account trie is committed with a channel-based leaf-commit,
-// whereas storage tries are committed 'inline'.
-func newCommitter(onleaf LeafCallback) *committer {
-	h := committerPool.Get().(*committer)
-	h.onleaf = onleaf
-	if onleaf != nil {
-		h.leafCh = make(chan *Leaf, LeafChanSize)
-	}
-	return h
+// newCommitter creates a new committer or picks one from the pool.
+func newCommitter() *committer {
+	return committerPool.Get().(*committer)
 }
 
 func returnCommitterToPool(h *committer) {
@@ -84,14 +74,13 @@ func returnCommitterToPool(h *committer) {
 }
 
 // commitNeeded returns 'false' if the given node is already in sync with db
-func (h *committer) commitNeeded(n node) bool {
+func (c *committer) commitNeeded(n node) bool {
 	hash, dirty := n.cache()
 	return hash == nil || dirty
 }
 
-// hash collapses a node down into a hash node, also returning a copy of the
-// original node initialized with the computed hash to replace the original one.
-func (h *committer) commit(n node, db *Database, force bool) (node, error) {
+// commit collapses a node down into a hash node and inserts it into the database
+func (c *committer) commit(n node, db *Database, force bool) (node, error) {
 	// If we're not storing the node, just hashing, use available cached data
 	hash, dirty := n.cache()
 	if hash != nil && !dirty {
@@ -100,14 +89,13 @@ func (h *committer) commit(n node, db *Database, force bool) (node, error) {
 	if db == nil {
 		return nil, errors.New("no db provided")
 	}
-	// Commit children. then parent
-	// Remove the dirty flag.
+	// Commit children, then parent, and remove remove the dirty flag.
 	switch cn := n.(type) {
 	case *shortNode:
 		// Commit child
 		collapsed := cn.copy()
 		if _, ok := cn.Val.(valueNode); !ok {
-			if childV, err := h.commit(cn.Val, db, false); err != nil {
+			if childV, err := c.commit(cn.Val, db, false); err != nil {
 				return nil, err
 			} else {
 				collapsed.Val = childV
@@ -115,7 +103,7 @@ func (h *committer) commit(n node, db *Database, force bool) (node, error) {
 		}
 		// The key needs to be copied, since we're delivering it to database
 		collapsed.Key = hexToCompact(cn.Key)
-		hashedNode := h.store(collapsed, db, force, true)
+		hashedNode := c.store(collapsed, db, force, true)
 		if hn, ok := hashedNode.(hashNode); ok {
 			cn.flags.dirty = false
 			return hn, nil
@@ -123,14 +111,14 @@ func (h *committer) commit(n node, db *Database, force bool) (node, error) {
 			return collapsed, nil
 		}
 	case *fullNode:
-		hashedKids, hasVnodes, err := h.commitChildren(cn, db, force)
+		hashedKids, hasVnodes, err := c.commitChildren(cn, db, force)
 		if err != nil {
 			return nil, err
 		}
 		collapsed := cn.copy()
 		collapsed.Children = hashedKids
 
-		hashedNode := h.store(collapsed, db, force, hasVnodes)
+		hashedNode := c.store(collapsed, db, force, hasVnodes)
 		if hn, ok := hashedNode.(hashNode); ok {
 			cn.flags.dirty = false
 			return hn, nil
@@ -138,7 +126,7 @@ func (h *committer) commit(n node, db *Database, force bool) (node, error) {
 			return collapsed, nil
 		}
 	case valueNode:
-		return h.store(cn, db, force, false), nil
+		return c.store(cn, db, force, false), nil
 	// hashnodes aren't stored
 	case hashNode:
 		return cn, nil
@@ -147,14 +135,14 @@ func (h *committer) commit(n node, db *Database, force bool) (node, error) {
 }
 
 // commitChildren commits the children of the given fullnode
-func (h *committer) commitChildren(n *fullNode, db *Database, force bool) ([17]node, bool, error) {
+func (c *committer) commitChildren(n *fullNode, db *Database, force bool) ([17]node, bool, error) {
 	var children [17]node
 	var hasValueNodeChildren = false
 	for i, child := range n.Children {
 		if child == nil {
 			continue
 		}
-		hnode, err := h.commit(child, db, false)
+		hnode, err := c.commit(child, db, false)
 		if err != nil {
 			return children, false, err
 		}
@@ -169,7 +157,7 @@ func (h *committer) commitChildren(n *fullNode, db *Database, force bool) ([17]n
 // store hashes the node n and if we have a storage layer specified, it writes
 // the key/value pair to it and tracks any node->child references as well as any
 // node->external trie references.
-func (h *committer) store(n node, db *Database, force bool, hasVnodeChildren bool) node {
+func (c *committer) store(n node, db *Database, force bool, hasVnodeChildren bool) node {
 	// Larger nodes are replaced by their hash and stored in the database.
 	var (
 		hash, _ = n.cache()
@@ -177,15 +165,15 @@ func (h *committer) store(n node, db *Database, force bool, hasVnodeChildren boo
 	)
 	if hash == nil {
 		if vn, ok := n.(valueNode); ok {
-			h.tmp.Reset()
-			if err := rlp.Encode(&h.tmp, vn); err != nil {
+			c.tmp.Reset()
+			if err := rlp.Encode(&c.tmp, vn); err != nil {
 				panic("encode error: " + err.Error())
 			}
-			size = len(h.tmp)
+			size = len(c.tmp)
 			if size < 32 && !force {
 				return n // Nodes smaller than 32 bytes are stored inside their parent
 			}
-			hash = h.makeHashNode(h.tmp)
+			hash = c.makeHashNode(c.tmp)
 		} else {
 			// This was not generated - must be a small node stored in the parent
 			// No need to do anything here
@@ -198,8 +186,8 @@ func (h *committer) store(n node, db *Database, force bool, hasVnodeChildren boo
 	}
 	// If we're using channel-based leaf-reporting, send to channel.
 	// The leaf channel will be active only when there an active leaf-callback
-	if h.leafCh != nil {
-		h.leafCh <- &Leaf{
+	if c.leafCh != nil {
+		c.leafCh <- &Leaf{
 			size:   size,
 			hash:   common.BytesToHash(hash),
 			node:   n,
@@ -216,8 +204,8 @@ func (h *committer) store(n node, db *Database, force bool, hasVnodeChildren boo
 }
 
 // commitLoop does the actual insert + leaf callback for nodes
-func (h *committer) commitLoop(db *Database) {
-	for item := range h.leafCh {
+func (c *committer) commitLoop(db *Database) {
+	for item := range c.leafCh {
 		var (
 			hash      = item.hash
 			size      = item.size
@@ -228,16 +216,16 @@ func (h *committer) commitLoop(db *Database) {
 		db.lock.Lock()
 		db.insert(hash, size, n)
 		db.lock.Unlock()
-		if h.onleaf != nil && hasVnodes {
+		if c.onleaf != nil && hasVnodes {
 			switch n := n.(type) {
 			case *shortNode:
 				if child, ok := n.Val.(valueNode); ok {
-					h.onleaf(child, hash)
+					c.onleaf(child, hash)
 				}
 			case *fullNode:
 				for i := 0; i < 16; i++ {
 					if child, ok := n.Children[i].(valueNode); ok {
-						h.onleaf(child, hash)
+						c.onleaf(child, hash)
 					}
 				}
 			}
@@ -245,11 +233,11 @@ func (h *committer) commitLoop(db *Database) {
 	}
 }
 
-func (h *committer) makeHashNode(data []byte) hashNode {
-	n := make(hashNode, h.sha.Size())
-	h.sha.Reset()
-	h.sha.Write(data)
-	h.sha.Read(n)
+func (c *committer) makeHashNode(data []byte) hashNode {
+	n := make(hashNode, c.sha.Size())
+	c.sha.Reset()
+	c.sha.Write(data)
+	c.sha.Read(n)
 	return n
 }
 

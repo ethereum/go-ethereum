@@ -273,8 +273,6 @@ func (s *stateObject) finalise() {
 
 // updateTrie writes cached storage modifications into the object's storage trie.
 // It will return nil if the trie has not been loaded and no changes have been made
-// Note: It may return non-nil if the trie is already loaded due to previous changes
-// in the same block
 func (s *stateObject) updateTrie(db Database) Trie {
 	// Make sure all dirty slots are finalized into the pending storage area
 	s.finalise()
@@ -310,8 +308,8 @@ func (s *stateObject) updateTrie(db Database) Trie {
 
 // UpdateRoot sets the trie root to the current root hash of
 func (s *stateObject) updateRoot(db Database) {
+	// If nothing changed, don't bother with hashing anything
 	if s.updateTrie(db) == nil {
-		// No changes, storage trie is not even loaded
 		return
 	}
 	// Track the amount of time wasted on hashing the storge trie
@@ -324,8 +322,8 @@ func (s *stateObject) updateRoot(db Database) {
 // CommitTrie the storage trie of the object to db.
 // This updates the trie root.
 func (s *stateObject) CommitTrie(db Database) error {
+	// If nothing changed, don't bother with hashing anything
 	if s.updateTrie(db) == nil {
-		// No changes, storage trie is not even loaded
 		return nil
 	}
 	if s.dbErr != nil {
