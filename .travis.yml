@@ -57,6 +57,7 @@ jobs:
 
     - stage: build
       os: osx
+      osx_image: xcode11.3
       go: 1.13.x
       script:
         - echo "Increase the maximum number of open file descriptors on macOS"
