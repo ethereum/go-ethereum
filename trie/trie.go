@@ -431,7 +431,7 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	var wg sync.WaitGroup
 	if onleaf != nil {
 		h.onleaf = onleaf
-		h.leafCh = make(chan *Leaf, leafChanSize)
+		h.leafCh = make(chan *leaf, leafChanSize)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

@@ -30,8 +30,8 @@ import (
 // some paralellism but not incur too much memory overhead.
 const leafChanSize = 200
 
-// Leaf represents a trie leaf value
-type Leaf struct {
+// leaf represents a trie leaf value
+type leaf struct {
 	size   int         // size of the rlp data (estimate)
 	hash   common.Hash // hash of rlp data
 	node   node        // the node to commit
@@ -49,7 +49,7 @@ type committer struct {
 	sha keccakState
 
 	onleaf LeafCallback
-	leafCh chan *Leaf
+	leafCh chan *leaf
 }
 
 // committers live in a global sync.Pool
@@ -81,7 +81,7 @@ func (c *committer) commitNeeded(n node) bool {
 
 // commit collapses a node down into a hash node and inserts it into the database
 func (c *committer) commit(n node, db *Database, force bool) (node, error) {
-	// If we're not storing the node, just hashing, use available cached data
+	// if this path is clean, use available cached data
 	hash, dirty := n.cache()
 	if hash != nil && !dirty {
 		return hash, nil
@@ -187,7 +187,7 @@ func (c *committer) store(n node, db *Database, force bool, hasVnodeChildren boo
 	// If we're using channel-based leaf-reporting, send to channel.
 	// The leaf channel will be active only when there an active leaf-callback
 	if c.leafCh != nil {
-		c.leafCh <- &Leaf{
+		c.leafCh <- &leaf{
 			size:   size,
 			hash:   common.BytesToHash(hash),
 			node:   n,
