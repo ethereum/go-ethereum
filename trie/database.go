@@ -180,40 +180,6 @@ func (n *cachedNode) obj(hash common.Hash) node {
 	return expandNode(hash[:], n.node)
 }
 
-// childs returns all the tracked children of this node, both the implicit ones
-// from inside the node as well as the explicit ones from outside the node.
-func (n *cachedNode) childs() []common.Hash {
-	children := make([]common.Hash, 0, 16)
-	for child := range n.children {
-		children = append(children, child)
-	}
-	if _, ok := n.node.(rawNode); !ok {
-		gatherChildren(n.node, &children)
-	}
-	return children
-}
-
-// gatherChildren traverses the node hierarchy of a collapsed storage node and
-// retrieves all the hashnode children.
-func gatherChildren(n node, children *[]common.Hash) {
-	switch n := n.(type) {
-	case *rawShortNode:
-		gatherChildren(n.Val, children)
-
-	case rawFullNode:
-		for i := 0; i < 16; i++ {
-			gatherChildren(n[i], children)
-		}
-	case hashNode:
-		*children = append(*children, common.BytesToHash(n))
-
-	case valueNode, nil:
-
-	default:
-		panic(fmt.Sprintf("unknown node type: %T", n))
-	}
-}
-
 // forChilds invokes the callback for  all the tracked children of this node,
 // both the implicit ones  from inside the node as well as the explicit ones
 //from outside the node.
@@ -796,10 +762,14 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	if !ok {
 		return nil
 	}
-	for _, child := range node.childs() {
-		if err := db.commit(child, batch, uncacher); err != nil {
-			return err
+	var err error
+	node.forChilds(func(child common.Hash) {
+		if err == nil {
+			err = db.commit(child, batch, uncacher)
 		}
+	})
+	if err != nil {
+		return err
 	}
 	if err := batch.Put(hash[:], node.rlp()); err != nil {
 		return err
