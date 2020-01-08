@@ -39,8 +39,10 @@ func (h *handler) Log(r *log.Record) error {
 	return nil
 }
 
-// logger implements log.Logger such that all output goes to the
-// unit test log via t.Logf().
+// logger implements log.Logger such that all output goes to the unit test log via
+// t.Logf(). All methods in between logger.Trace, logger.Debug, etc. are marked as test
+// helpers, so the file and line number in unit test output correspond to the call site
+// which emitted the log message.
 type logger struct {
 	t  *testing.T
 	l  log.Logger
