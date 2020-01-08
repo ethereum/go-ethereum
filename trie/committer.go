@@ -80,14 +80,27 @@ func (c *committer) commitNeeded(n node) bool {
 }
 
 // commit collapses a node down into a hash node and inserts it into the database
+func (c *committer) Commit(n node, db *Database) (hashNode, error) {
+	if db == nil {
+		return nil, errors.New("no db provided")
+	}
+	h, err := c.commit(n, db, true)
+	if err != nil {
+		return nil, err
+	}
+	hn, ok := h.(hashNode)
+	if !ok {
+		panic("commit did not hash down to a hashnode!")
+	}
+	return hn, nil
+}
+
+// commit collapses a node down into a hash node and inserts it into the database
 func (c *committer) commit(n node, db *Database, force bool) (node, error) {
 	// if this path is clean, use available cached data
 	hash, dirty := n.cache()
 	if hash != nil && !dirty {
 		return hash, nil
-	}
-	if db == nil {
-		return nil, errors.New("no db provided")
 	}
 	// Commit children, then parent, and remove remove the dirty flag.
 	switch cn := n.(type) {
@@ -105,7 +118,6 @@ func (c *committer) commit(n node, db *Database, force bool) (node, error) {
 		collapsed.Key = hexToCompact(cn.Key)
 		hashedNode := c.store(collapsed, db, force, true)
 		if hn, ok := hashedNode.(hashNode); ok {
-			cn.flags.dirty = false
 			return hn, nil
 		} else {
 			return collapsed, nil
@@ -120,7 +132,6 @@ func (c *committer) commit(n node, db *Database, force bool) (node, error) {
 
 		hashedNode := c.store(collapsed, db, force, hasVnodes)
 		if hn, ok := hashedNode.(hashNode); ok {
-			cn.flags.dirty = false
 			return hn, nil
 		} else {
 			return collapsed, nil

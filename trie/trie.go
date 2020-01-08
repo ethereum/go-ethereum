@@ -438,7 +438,8 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 			h.commitLoop(t.db)
 		}()
 	}
-	_, err = h.commit(t.root, t.db, true)
+	var newRoot hashNode
+	newRoot, err = h.Commit(t.root, t.db)
 	if onleaf != nil {
 		// The leafch is created in newCommitter if there was an onleaf callback
 		// provided. The commitLoop only _reads_ from it, and the commit
@@ -450,6 +451,10 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
+	if common.BytesToHash(newRoot) != rootHash{
+		panic(fmt.Sprintf("Committed root %x != roothash %x", newRoot, rootHash))
+	}
+	t.root = newRoot
 	return rootHash, nil
 }
 
