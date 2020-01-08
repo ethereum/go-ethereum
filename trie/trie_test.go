@@ -766,6 +766,58 @@ func benchmarkCommitAfterHashFixedSize(b *testing.B, addresses [][20]byte, accou
 	b.StopTimer()
 }
 
+func BenchmarkDerefRootFixedSize(b *testing.B) {
+	b.Run("10", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(20)
+		for i := 0; i < b.N; i++ {
+			benchmarkDerefRootFixedSize(b, acc, add)
+		}
+	})
+	b.Run("100", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(100)
+		for i := 0; i < b.N; i++ {
+			benchmarkDerefRootFixedSize(b, acc, add)
+		}
+	})
+
+	b.Run("1K", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(1000)
+		for i := 0; i < b.N; i++ {
+			benchmarkDerefRootFixedSize(b, acc, add)
+		}
+	})
+	b.Run("10K", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(10000)
+		for i := 0; i < b.N; i++ {
+			benchmarkDerefRootFixedSize(b, acc, add)
+		}
+	})
+	b.Run("100K", func(b *testing.B) {
+		b.StopTimer()
+		acc, add := makeAccounts(100000)
+		for i := 0; i < b.N; i++ {
+			benchmarkDerefRootFixedSize(b, acc, add)
+		}
+	})
+}
+
+func benchmarkDerefRootFixedSize(b *testing.B, addresses [][20]byte, accounts [][]byte) {
+	b.ReportAllocs()
+	trie := newEmpty()
+	for i := 0; i < len(addresses); i++ {
+		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+	}
+	h := trie.Hash()
+	trie.Commit(nil)
+	b.StartTimer()
+	trie.db.Dereference(h)
+	b.StopTimer()
+}
+
 func tempDB() (string, *Database) {
 	dir, err := ioutil.TempDir("", "trie-bench")
 	if err != nil {
