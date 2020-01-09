@@ -219,197 +219,37 @@ func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consens
 }
 
 func TestGenerateBlockAndImportEthash(t *testing.T) {
-	testGenerateBlockAndImport(t, false)
+	testGenerateBlockAndImport(t, false, params.AllEthashProtocolChanges, nil, pendingTxs, false, false)
 }
-
 func TestGenerateBlockAndImportClique(t *testing.T) {
-	testGenerateBlockAndImport(t, true)
+	testGenerateBlockAndImport(t, true, params.AllCliqueProtocolChanges, nil, pendingTxs, false, false)
 }
-
-func testGenerateBlockAndImport(t *testing.T, isClique bool) {
-	var (
-		engine      consensus.Engine
-		chainConfig *params.ChainConfig
-		db          = rawdb.NewMemoryDatabase()
-	)
-	if isClique {
-		chainConfig = params.AllCliqueProtocolChanges
-		chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
-		engine = clique.New(chainConfig.Clique, db)
-	} else {
-		chainConfig = params.AllEthashProtocolChanges
-		engine = ethash.NewFaker()
-	}
-
-	w, b := newTestWorker(t, chainConfig, engine, db, 0, nil, pendingTxs)
-	defer w.close()
-
-	db2 := rawdb.NewMemoryDatabase()
-	b.genesis.MustCommit(db2)
-	chain, _ := core.NewBlockChain(db2, nil, b.chain.Config(), engine, vm.Config{}, nil)
-	defer chain.Stop()
-
-	newBlock := make(chan struct{})
-	listenNewBlock := func() {
-		sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
-		defer sub.Unsubscribe()
-
-		for item := range sub.Chan() {
-			block := item.Data.(core.NewMinedBlockEvent).Block
-			_, err := chain.InsertChain([]*types.Block{block})
-			if err != nil {
-				t.Fatalf("Failed to insert new mined block:%d, error:%v", block.NumberU64(), err)
-			}
-			newBlock <- struct{}{}
-		}
-	}
-
-	// Ensure worker has finished initialization
-	for {
-		b := w.pendingBlock()
-		if b != nil && b.NumberU64() == 1 {
-			break
-		}
-	}
-	w.start() // Start mining!
-
-	// Ignore first 2 commits caused by start operation
-	ignored := make(chan struct{}, 2)
-	w.skipSealHook = func(task *task) bool {
-		ignored <- struct{}{}
-		return true
-	}
-	for i := 0; i < 2; i++ {
-		<-ignored
-	}
-
-	go listenNewBlock()
-
-	// Ignore empty commit here for less noise
-	w.skipSealHook = func(task *task) bool {
-		return len(task.receipts) == 0
-	}
-	for i := 0; i < 5; i++ {
-		b.txPool.AddLocal(b.newRandomTx(true, false))
-		b.txPool.AddLocal(b.newRandomTx(false, false))
-		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
-		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
-		select {
-		case <-newBlock:
-		case <-time.NewTimer(3 * time.Second).C: // Worker needs 1s to include new changes.
-			t.Fatalf("timeout")
-		}
-	}
-}
-
 func TestGenerateBlockAndImportEthashEIP1559(t *testing.T) {
-	testGenerateBlockAndImportEIP1559(t, false)
+	testGenerateBlockAndImport(t, false, params.EIP1559ChainConfig, new(big.Int), pendingLegacyAndEIP1559Txs, true, false)
 }
-
 func TestGenerateBlockAndImportCliqueEIP1559(t *testing.T) {
-	testGenerateBlockAndImportEIP1559(t, true)
+	testGenerateBlockAndImport(t, true, params.EIP1559ChainConfig, new(big.Int), pendingLegacyAndEIP1559Txs, true, false)
 }
-
-func testGenerateBlockAndImportEIP1559(t *testing.T, isClique bool) {
-	var (
-		engine      consensus.Engine
-		chainConfig *params.ChainConfig
-		db          = rawdb.NewMemoryDatabase()
-	)
-	if isClique {
-		chainConfig = params.EIP1559ChainConfig
-		chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
-		engine = clique.New(chainConfig.Clique, db)
-	} else {
-		chainConfig = params.EIP1559ChainConfig
-		engine = ethash.NewFaker()
-	}
-
-	w, b := newTestWorker(t, chainConfig, engine, db, 0, new(big.Int), pendingLegacyAndEIP1559Txs)
-	defer w.close()
-
-	db2 := rawdb.NewMemoryDatabase()
-	b.genesis.MustCommit(db2)
-	chain, _ := core.NewBlockChain(db2, nil, b.chain.Config(), engine, vm.Config{}, nil)
-	defer chain.Stop()
-
-	newBlock := make(chan struct{})
-	listenNewBlock := func() {
-		sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
-		defer sub.Unsubscribe()
-
-		for item := range sub.Chan() {
-			block := item.Data.(core.NewMinedBlockEvent).Block
-			_, err := chain.InsertChain([]*types.Block{block})
-			if err != nil {
-				t.Fatalf("Failed to insert new mined block:%d, error:%v", block.NumberU64(), err)
-			}
-			newBlock <- struct{}{}
-		}
-	}
-
-	// Ensure worker has finished initialization
-	for {
-		b := w.pendingBlock()
-		if b != nil && b.NumberU64() == 1 {
-			break
-		}
-	}
-	w.start() // Start mining!
-
-	// Ignore first 2 commits caused by start operation
-	ignored := make(chan struct{}, 2)
-	w.skipSealHook = func(task *task) bool {
-		ignored <- struct{}{}
-		return true
-	}
-	for i := 0; i < 2; i++ {
-		<-ignored
-	}
-
-	go listenNewBlock()
-
-	// Ignore empty commit here for less noise
-	w.skipSealHook = func(task *task) bool {
-		return len(task.receipts) == 0
-	}
-	for i := 0; i < 5; i++ {
-		b.txPool.AddLocal(b.newRandomTx(true, true))
-		b.txPool.AddLocal(b.newRandomTx(false, false))
-		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
-		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
-		select {
-		case <-newBlock:
-		case <-time.NewTimer(3 * time.Second).C: // Worker needs 1s to include new changes.
-			t.Fatalf("timeout")
-		}
-	}
-}
-
 func TestGenerateBlockAndImportEthashEIP1559Finalized(t *testing.T) {
-	testGenerateBlockAndImportEIP1559Finalized(t, false)
+	testGenerateBlockAndImport(t, false, params.EIP1559FinalizedChainConfig, new(big.Int), pendingEIP1559Txs, true, true)
 }
-
 func TestGenerateBlockAndImportCliqueEIP1559Finalized(t *testing.T) {
-	testGenerateBlockAndImportEIP1559Finalized(t, true)
+	testGenerateBlockAndImport(t, true, params.EIP1559FinalizedChainConfig, new(big.Int), pendingEIP1559Txs, true, true)
 }
 
-func testGenerateBlockAndImportEIP1559Finalized(t *testing.T, isClique bool) {
+func testGenerateBlockAndImport(t *testing.T, isClique bool, c *params.ChainConfig, baseFee *big.Int, pTxs []*types.Transaction, eip1559, eip1559Finalized bool) {
 	var (
-		engine      consensus.Engine
-		chainConfig *params.ChainConfig
-		db          = rawdb.NewMemoryDatabase()
+		engine consensus.Engine
+		db     = rawdb.NewMemoryDatabase()
 	)
 	if isClique {
-		chainConfig = params.EIP1559FinalizedChainConfig
-		chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
-		engine = clique.New(chainConfig.Clique, db)
+		c.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+		engine = clique.New(c.Clique, db)
 	} else {
-		chainConfig = params.EIP1559FinalizedChainConfig
 		engine = ethash.NewFaker()
 	}
 
-	w, b := newTestWorker(t, chainConfig, engine, db, 0, new(big.Int), pendingEIP1559Txs)
+	w, b := newTestWorker(t, c, engine, db, 0, baseFee, pTxs)
 	defer w.close()
 
 	// This test chain imports the mined blocks.
@@ -431,8 +271,8 @@ func testGenerateBlockAndImportEIP1559Finalized(t *testing.T, isClique bool) {
 	w.start()
 
 	for i := 0; i < 5; i++ {
-		b.txPool.AddLocal(b.newRandomTx(true, true))
-		b.txPool.AddLocal(b.newRandomTx(false, true))
+		b.txPool.AddLocal(b.newRandomTx(true, eip1559))
+		b.txPool.AddLocal(b.newRandomTx(false, eip1559Finalized))
 		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
 		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
 
@@ -445,50 +285,6 @@ func testGenerateBlockAndImportEIP1559Finalized(t *testing.T, isClique bool) {
 		case <-time.After(3 * time.Second): // Worker needs 1s to include new changes.
 			t.Fatalf("timeout")
 		}
-	}
-}
-
-func TestPendingStateAndBlockEthash(t *testing.T) {
-	testPendingStateAndBlock(t, ethashChainConfig, ethash.NewFaker(), pendingTxs, newTxs, nil)
-}
-func TestPendingStateAndBlockClique(t *testing.T) {
-	testPendingStateAndBlock(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingTxs, newTxs, nil)
-}
-func TestPendingStateAndBlockEthashEIP1559(t *testing.T) {
-	testPendingStateAndBlock(t, eip1559ChainConfig, ethash.NewFaker(), pendingLegacyAndEIP1559Txs, newLegacyAndEIP1559Txs, new(big.Int))
-}
-func TestPendingStateAndBlockCliqueEIP1559(t *testing.T) {
-	testPendingStateAndBlock(t, eip1559CliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingLegacyAndEIP1559Txs, newLegacyAndEIP1559Txs, new(big.Int))
-}
-func TestPendingStateAndBlockEthashEIP1559Finalized(t *testing.T) {
-	testPendingStateAndBlock(t, eip1559FinalizedChainConfig, ethash.NewFaker(), pendingEIP1559Txs, newEIP1559Txs, new(big.Int))
-}
-func TestPendingStateAndBlockCliqueEIP1559Finalized(t *testing.T) {
-	testPendingStateAndBlock(t, eip1559FinalizedCliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), pendingEIP1559Txs, newEIP1559Txs, new(big.Int))
-}
-
-func testPendingStateAndBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, pTxs, nTxs []*types.Transaction, baseFee *big.Int) {
-	defer engine.Close()
-
-	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0, baseFee, pTxs)
-	defer w.close()
-
-	// Ensure snapshot has been updated.
-	time.Sleep(100 * time.Millisecond)
-	block, state := w.pending()
-	if block.NumberU64() != 1 {
-		t.Errorf("block number mismatch: have %d, want %d", block.NumberU64(), 1)
-	}
-	if balance := state.GetBalance(testUserAddress); balance.Cmp(big.NewInt(1000)) != 0 {
-		t.Errorf("account balance mismatch: have %d, want %d", balance, 1000)
-	}
-	b.txPool.AddLocals(nTxs)
-
-	// Ensure the new tx events has been processed
-	time.Sleep(100 * time.Millisecond)
-	block, state = w.pending()
-	if balance := state.GetBalance(testUserAddress); balance.Cmp(big.NewInt(2000)) != 0 {
-		t.Errorf("account balance mismatch: have %d, want %d", balance, 2000)
 	}
 }
 
@@ -771,7 +567,7 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 	}
 	w.start()
 
-	time.Sleep(time.Second) // Ensure two tasks have been summitted due to start opt
+	time.Sleep(time.Second)
 	atomic.StoreUint32(&start, 1)
 
 	w.setRecommitInterval(3 * time.Second)
