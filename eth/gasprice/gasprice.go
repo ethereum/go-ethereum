@@ -24,9 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 var maxPrice = big.NewInt(500 * params.GWei)
@@ -37,26 +35,36 @@ type Config struct {
 	Default    *big.Int `toml:",omitempty"`
 }
 
+type (
+	// headHeaderRetrieverFn is a callback type for retrieving the head header from the local chain.
+	headHeaderRetrieverFn func() *types.Header
+
+	// blockRetrieverFn is a callback type for retrieving a block from the local chain or p2p network.
+	blockRetrieverFn func(context.Context, uint64) (*types.Block, error)
+)
+
 // Oracle recommends gas prices based on the content of recent
 // blocks. Suitable for both light and full clients.
 type Oracle struct {
-	backend   ethapi.Backend
-	lastHead  common.Hash
-	lastPrice *big.Int
-	cacheLock sync.RWMutex
-	fetchLock sync.Mutex
+	lastHead      common.Hash
+	lastPrice     *big.Int
+	cacheLock     sync.RWMutex
+	fetchLock     sync.Mutex
+	chainConfig   *params.ChainConfig
+	getHeadHeader headHeaderRetrieverFn
+	getBlock      blockRetrieverFn
 
 	checkBlocks, maxEmpty, maxBlocks int
 	percentile                       int
 }
 
 // NewOracle returns a new oracle.
-func NewOracle(backend ethapi.Backend, params Config) *Oracle {
-	blocks := params.Blocks
+func NewOracle(config Config, chainConfig *params.ChainConfig, getHeadHeader headHeaderRetrieverFn, getBlock blockRetrieverFn) *Oracle {
+	blocks := config.Blocks
 	if blocks < 1 {
 		blocks = 1
 	}
-	percent := params.Percentile
+	percent := config.Percentile
 	if percent < 0 {
 		percent = 0
 	}
@@ -64,12 +72,14 @@ func NewOracle(backend ethapi.Backend, params Config) *Oracle {
 		percent = 100
 	}
 	return &Oracle{
-		backend:     backend,
-		lastPrice:   params.Default,
-		checkBlocks: blocks,
-		maxEmpty:    blocks / 2,
-		maxBlocks:   blocks * 5,
-		percentile:  percent,
+		lastPrice:     config.Default,
+		checkBlocks:   blocks,
+		maxEmpty:      blocks / 2,
+		maxBlocks:     blocks * 5,
+		percentile:    percent,
+		chainConfig:   chainConfig,
+		getHeadHeader: getHeadHeader,
+		getBlock:      getBlock,
 	}
 }
 
@@ -80,7 +90,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	lastPrice := gpo.lastPrice
 	gpo.cacheLock.RUnlock()
 
-	head, _ := gpo.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+	head := gpo.getHeadHeader()
 	headHash := head.Hash()
 	if headHash == lastHead {
 		return lastPrice, nil
@@ -104,7 +114,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	exp := 0
 	var blockPrices []*big.Int
 	for sent < gpo.checkBlocks && blockNum > 0 {
-		go gpo.getBlockPrices(ctx, types.MakeSigner(gpo.backend.ChainConfig(), big.NewInt(int64(blockNum))), blockNum, ch)
+		go gpo.getBlockPrices(ctx, types.MakeSigner(gpo.chainConfig, big.NewInt(int64(blockNum))), blockNum, ch)
 		sent++
 		exp++
 		blockNum--
@@ -125,7 +135,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 			continue
 		}
 		if blockNum > 0 && sent < gpo.maxBlocks {
-			go gpo.getBlockPrices(ctx, types.MakeSigner(gpo.backend.ChainConfig(), big.NewInt(int64(blockNum))), blockNum, ch)
+			go gpo.getBlockPrices(ctx, types.MakeSigner(gpo.chainConfig, big.NewInt(int64(blockNum))), blockNum, ch)
 			sent++
 			exp++
 			blockNum--
@@ -161,7 +171,7 @@ func (t transactionsByGasPrice) Less(i, j int) bool { return t[i].GasPrice().Cmp
 // getBlockPrices calculates the lowest transaction gas price in a given block
 // and sends it to the result channel. If the block is empty, price is nil.
 func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, blockNum uint64, ch chan getBlockPricesResult) {
-	block, err := gpo.backend.BlockByNumber(ctx, rpc.BlockNumber(blockNum))
+	block, err := gpo.getBlock(ctx, blockNum)
 	if block == nil {
 		ch <- getBlockPricesResult{nil, err}
 		return

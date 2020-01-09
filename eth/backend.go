@@ -18,6 +18,7 @@
 package eth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -215,18 +216,23 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
-	eth.APIBackend = &EthAPIBackend{ctx.ExtRPCEnabled(), eth, nil}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.Miner.GasPrice
 	}
-	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
-
+	eth.APIBackend = &EthAPIBackend{
+		ctx.ExtRPCEnabled(), eth,
+		gasprice.NewOracle(gpoParams, chainConfig,
+			func() *types.Header { return eth.blockchain.CurrentHeader() },
+			func(ctx context.Context, number uint64) (*types.Block, error) {
+				return eth.blockchain.GetBlockByNumber(number), nil
+			},
+		),
+	}
 	eth.dialCandiates, err = eth.setupDiscovery(&ctx.Config.P2P)
 	if err != nil {
 		return nil, err
 	}
-
 	return eth, nil
 }
 

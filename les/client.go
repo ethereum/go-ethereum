@@ -142,14 +142,11 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		leth.blockchain.SetHead(compat.RewindTo)
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
-
-	leth.ApiBackend = &LesApiBackend{ctx.ExtRPCEnabled(), leth, nil}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.Miner.GasPrice
 	}
-	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
-
+	leth.ApiBackend = &LesApiBackend{ctx.ExtRPCEnabled(), leth, gasprice.NewOracle(gpoParams, chainConfig, func() *types.Header { return leth.blockchain.CurrentHeader() }, leth.blockchain.GetBlockByNumber)}
 	return leth, nil
 }
 
