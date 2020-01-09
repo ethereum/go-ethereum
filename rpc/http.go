@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -38,6 +39,7 @@ import (
 const (
 	maxRequestContentLength = 1024 * 1024 * 5
 	contentType             = "application/json"
+	acceptContentEncoding   = "gzip"
 )
 
 // https://www.jsonrpc.org/historical/json-rpc-over-http.html#id13
@@ -113,6 +115,7 @@ func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
 	}
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Accept", contentType)
+	req.Header.Set("Accept-Encoding", acceptContentEncoding)
 
 	initctx := context.Background()
 	return newClient(initctx, func(context.Context) (ServerCodec, error) {
@@ -179,10 +182,17 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return resp.Body, errors.New(resp.Status)
+	b := resp.Body
+	if !resp.Uncompressed && resp.Header.Get("Content-Encoding") == "gzip" {
+		b, err = gzip.NewReader(resp.Body)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return resp.Body, nil
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return b, errors.New(resp.Status)
+	}
+	return b, nil
 }
 
 // httpServerConn turns a HTTP connection into a Conn.
