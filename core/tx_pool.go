@@ -38,6 +38,18 @@ import (
 const (
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
+
+	// txSlotSize is used to calculate how many data slots a single transaction
+	// takes up based on its size. The slots are used as DoS protection, ensuring
+	// that validating a new transaction remains a constant operation (in reality
+	// O(maxslots), where max slots are 4 currently).
+	txSlotSize = 32 * 1024
+
+	// txMaxSize is the maximum size a single transaction can have. This field has
+	// non-trivial consequences: larger transactions are significantly harder and
+	// more expensive to propagate; larger transactions also take more resources
+	// to validate whether they fit into the pool or not.
+	txMaxSize = 4 * txSlotSize // 128KB, don't bump without chunking support
 )
 
 var (
@@ -105,6 +117,7 @@ var (
 	pendingGauge = metrics.NewRegisteredGauge("txpool/pending", nil)
 	queuedGauge  = metrics.NewRegisteredGauge("txpool/queued", nil)
 	localGauge   = metrics.NewRegisteredGauge("txpool/local", nil)
+	slotsGauge   = metrics.NewRegisteredGauge("txpool/slots", nil)
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.
@@ -223,7 +236,6 @@ type TxPool struct {
 	currentState  *state.StateDB // Current state in the blockchain head
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
 	currentMaxGas uint64         // Current gas limit for transaction caps
-	maxTxSize     uint64         // Maximal size of allowed transaction in bytes
 
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *txJournal  // Journal of local transaction to back up to disk
@@ -271,9 +283,6 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
 		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
-
-		// Heuristic limit, reject transactions over 32KB to prevent DOS attacks
-		maxTxSize: 32 * 1024,
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -515,7 +524,7 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// Reject transactions over defined size to prevent DOS attacks
-	if uint64(tx.Size()) > pool.maxTxSize {
+	if uint64(tx.Size()) > txMaxSize {
 		return ErrOversizedData
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
@@ -587,7 +596,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			return false, ErrUnderpriced
 		}
 		// New transaction is better than our worse ones, make room for it
-		drop := pool.priced.Discard(pool.all.SlotsUsed()-int(pool.config.GlobalSlots+pool.config.GlobalQueue)+NumSlots(tx), pool.locals)
+		drop := pool.priced.Discard(pool.all.Slots()-int(pool.config.GlobalSlots+pool.config.GlobalQueue)+numSlots(tx), pool.locals)
 		for _, tx := range drop {
 			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash(), "price", tx.GasPrice())
 			underpricedTxMeter.Mark(1)
@@ -1146,9 +1155,6 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.pendingNonces = newTxNoncer(statedb)
 	pool.currentMaxGas = newHead.GasLimit
 
-	// Heuristic limit, reject transactions over 4 slots to prevent DOS attacks
-	pool.maxTxSize = 4 * slotSize
-
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
 	senderCacher.recover(pool.signer, reinject)
@@ -1500,16 +1506,15 @@ func (as *accountSet) merge(other *accountSet) {
 // peeking into the pool in TxPool.Get without having to acquire the widely scoped
 // TxPool.mu mutex.
 type txLookup struct {
-	all          map[common.Hash]*types.Transaction
-	numUsedSlots int
-	lock         sync.RWMutex
+	all   map[common.Hash]*types.Transaction
+	slots int
+	lock  sync.RWMutex
 }
 
 // newTxLookup returns a new txLookup structure.
 func newTxLookup() *txLookup {
 	return &txLookup{
-		all:          make(map[common.Hash]*types.Transaction),
-		numUsedSlots: 0,
+		all: make(map[common.Hash]*types.Transaction),
 	}
 }
 
@@ -1541,24 +1546,12 @@ func (t *txLookup) Count() int {
 	return len(t.all)
 }
 
-// SlotsUsed returns the current number of slots used in the lookup.
-func (t *txLookup) SlotsUsed() int {
+// Slots returns the current number of slots used in the lookup.
+func (t *txLookup) Slots() int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
-	return t.numUsedSlots
-}
-
-const (
-	// Transactions are kept in slots.
-	// Each slot is defined to be 32KB.
-	// This slots mechanism provides protection against
-	// resources over consumption.
-	slotSize = 32 * 1024
-)
-
-func NumSlots(tx *types.Transaction) int {
-	return int(math.Ceil(float64(tx.Size()) / slotSize))
+	return t.slots
 }
 
 // Add adds a transaction to the lookup.
@@ -1566,7 +1559,9 @@ func (t *txLookup) Add(tx *types.Transaction) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	t.numUsedSlots += NumSlots(tx)
+	t.slots += numSlots(tx)
+	slotsGauge.Update(int64(t.slots))
+
 	t.all[tx.Hash()] = tx
 }
 
@@ -1575,6 +1570,13 @@ func (t *txLookup) Remove(hash common.Hash) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	t.numUsedSlots -= NumSlots(t.all[hash])
+	t.slots -= numSlots(t.all[hash])
+	slotsGauge.Update(int64(t.slots))
+
 	delete(t.all, hash)
+}
+
+// numSlots calculates the number of slots needed for a single transaction.
+func numSlots(tx *types.Transaction) int {
+	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
 }
