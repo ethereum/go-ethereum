@@ -280,6 +280,14 @@ func (b *EthAPIBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	return b.gpo.SuggestPrice(ctx)
 }
 
+func (b *EthAPIBackend) SuggestPremium(ctx context.Context) (*big.Int, error) {
+	return b.gpo.SuggestPremium(ctx)
+}
+
+func (b *EthAPIBackend) SuggestCap(ctx context.Context) (*big.Int, error) {
+	return b.gpo.SuggestCap(ctx)
+}
+
 func (b *EthAPIBackend) ChainDb() ethdb.Database {
 	return b.eth.ChainDb()
 }

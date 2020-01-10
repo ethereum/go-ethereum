@@ -49,9 +49,13 @@ type TransactOpts struct {
 	Nonce  *big.Int       // Nonce to use for the transaction execution (nil = use pending state)
 	Signer SignerFn       // Method to use for signing the transaction (mandatory)
 
-	Value    *big.Int // Funds to transfer along the transaction (nil = 0 = no funds)
-	GasPrice *big.Int // Gas price to use for the transaction execution (nil = gas price oracle)
+	Value    *big.Int // Funds to transfer along along the transaction (nil = 0 = no funds)
 	GasLimit uint64   // Gas limit to set for the transaction execution (0 = estimate)
+
+	// If GasPrice, GasPremium, and FeeCap are all nil then we defer to the gas price oracle
+	GasPrice   *big.Int // Gas price to use for the transaction execution
+	GasPremium *big.Int // Gas premium (tip) to use for EIP1559 transaction execution (
+	FeeCap     *big.Int // Fee cap to use for EIP1559 transaction execution
 
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 }
@@ -223,7 +227,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	}
 	// Figure out the gas allowance and gas price values
 	gasPrice := opts.GasPrice
-	if gasPrice == nil {
+	if gasPrice == nil && opts.FeeCap == nil && opts.GasPremium == nil {
 		gasPrice, err = c.transactor.SuggestGasPrice(ensureContext(opts.Context))
 		if err != nil {
 			return nil, fmt.Errorf("failed to suggest gas price: %v", err)
@@ -240,7 +244,15 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 			}
 		}
 		// If the contract surely has code (or code is not needed), estimate the transaction
-		msg := ethereum.CallMsg{From: opts.From, To: contract, GasPrice: gasPrice, Value: value, Data: input}
+		msg := ethereum.CallMsg{
+			From:       opts.From,
+			To:         contract,
+			GasPrice:   gasPrice,
+			Value:      value,
+			Data:       input,
+			GasPremium: opts.GasPremium,
+			FeeCap:     opts.FeeCap,
+		}
 		gasLimit, err = c.transactor.EstimateGas(ensureContext(opts.Context), msg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to estimate gas needed: %v", err)
@@ -249,9 +261,9 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	// Create the transaction, sign it and schedule it for execution
 	var rawTx *types.Transaction
 	if contract == nil {
-		rawTx = types.NewContractCreation(nonce, value, gasLimit, gasPrice, input, nil, nil)
+		rawTx = types.NewContractCreation(nonce, value, gasLimit, gasPrice, input, opts.GasPremium, opts.FeeCap)
 	} else {
-		rawTx = types.NewTransaction(nonce, c.address, value, gasLimit, gasPrice, input, nil, nil)
+		rawTx = types.NewTransaction(nonce, c.address, value, gasLimit, gasPrice, input, opts.GasPremium, opts.FeeCap)
 	}
 	if opts.Signer == nil {
 		return nil, errors.New("no signer to authorize the transaction with")

@@ -156,6 +156,20 @@ func (b *SimulatedBackend) CodeAt(ctx context.Context, contract common.Address, 
 	return stateDB.GetCode(contract), nil
 }
 
+// BaseFeeAt returns the BaseFee at the given block height.
+// If the blockNumber is nil the latest known BaseFee is returned.
+func (b *SimulatedBackend) BaseFeeAt(ctx context.Context, blockNumber *big.Int) (*big.Int, error) {
+	if blockNumber == nil || blockNumber.Cmp(b.pendingBlock.Number()) == 0 {
+		header := b.blockchain.CurrentHeader()
+		return header.BaseFee, nil
+	}
+	header, err := b.HeaderByNumber(ctx, blockNumber)
+	if err != nil {
+		return nil, err
+	}
+	return header.BaseFee, nil
+}
+
 // BalanceAt returns the wei balance of a certain account in the blockchain.
 func (b *SimulatedBackend) BalanceAt(ctx context.Context, contract common.Address, blockNumber *big.Int) (*big.Int, error) {
 	b.mu.Lock()
@@ -429,6 +443,16 @@ func (b *SimulatedBackend) PendingNonceAt(ctx context.Context, account common.Ad
 // SuggestGasPrice implements ContractTransactor.SuggestGasPrice. Since the simulated
 // chain doesn't have miners, we just return a gas price of 1 for any call.
 func (b *SimulatedBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
+	return big.NewInt(1), nil
+}
+
+// SuggestGasPremium, since the simulated chain doesn't have miners, we just return a GasPremium of 1 for any call
+func (b *SimulatedBackend) SuggestGasPremium(ctx context.Context) (*big.Int, error) {
+	return big.NewInt(1), nil
+}
+
+// SuggestFeeCap, since the simulated chain doesn't have miners, we just return a FeeCap of 1 for any call
+func (b *SimulatedBackend) SuggestFeeCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(1), nil
 }
 

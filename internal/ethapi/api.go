@@ -64,6 +64,18 @@ func (s *PublicEthereumAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) 
 	return (*hexutil.Big)(price), err
 }
 
+// GasPremium returns a suggestion for the gas premium.
+func (s *PublicEthereumAPI) GasPremium(ctx context.Context) (*hexutil.Big, error) {
+	premium, err := s.b.SuggestPremium(ctx)
+	return (*hexutil.Big)(premium), err
+}
+
+// FeeCap returns a suggestion for the fee cap.
+func (s *PublicEthereumAPI) FeeCap(ctx context.Context) (*hexutil.Big, error) {
+	cap, err := s.b.SuggestCap(ctx)
+	return (*hexutil.Big)(cap), err
+}
+
 // ProtocolVersion returns the current Ethereum protocol version this node supports
 func (s *PublicEthereumAPI) ProtocolVersion() hexutil.Uint {
 	return hexutil.Uint(s.b.ProtocolVersion())

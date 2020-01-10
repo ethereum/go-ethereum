@@ -251,6 +251,14 @@ func (b *LesApiBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	return b.gpo.SuggestPrice(ctx)
 }
 
+func (b *LesApiBackend) SuggestPremium(ctx context.Context) (*big.Int, error) {
+	return b.gpo.SuggestPremium(ctx)
+}
+
+func (b *LesApiBackend) SuggestCap(ctx context.Context) (*big.Int, error) {
+	return b.gpo.SuggestCap(ctx)
+}
+
 func (b *LesApiBackend) ChainDb() ethdb.Database {
 	return b.eth.chainDb
 }

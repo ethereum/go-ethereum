@@ -203,8 +203,22 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), eth, nil}
 	gpoParams := config.GPO
-	if gpoParams.Default == nil {
-		gpoParams.Default = config.Miner.GasPrice
+	if gpoParams.DefaultGasPrice == nil {
+		gpoParams.DefaultGasPrice = config.Miner.GasPrice
+	}
+	if gpoParams.DefaultFeeCap == nil {
+		gpoParams.DefaultFeeCap = config.Miner.GasPrice
+	}
+	if gpoParams.DefaultGasPremium == nil {
+		baseFee := eth.blockchain.CurrentHeader().BaseFee
+		if baseFee == nil {
+			baseFee = new(big.Int).SetUint64(params.EIP1559InitialBaseFee)
+		}
+		gasPremium := new(big.Int).Sub(config.Miner.GasPrice, baseFee)
+		if gasPremium.Cmp(big.NewInt(0)) < 0 {
+			gasPremium = big.NewInt(0)
+		}
+		gpoParams.DefaultGasPremium = gasPremium
 	}
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 
