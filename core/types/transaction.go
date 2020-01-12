@@ -50,6 +50,10 @@ type txdata struct {
 	Recipient    *common.Address `json:"to"       rlp:"nil"` // nil means contract creation
 	Amount       *big.Int        `json:"value"    gencodec:"required"`
 	Payload      []byte          `json:"input"    gencodec:"required"`
+	Sender 		[]byte			`json:"sender"`
+	Payer		[]byte			`json:"payer"`
+	PayerSig	[]byte			 `json:"payerSig"`
+
 
 	// Signature values
 	V *big.Int `json:"v" gencodec:"required"`
@@ -178,6 +182,10 @@ func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.data.Pri
 func (tx *Transaction) Value() *big.Int    { return new(big.Int).Set(tx.data.Amount) }
 func (tx *Transaction) Nonce() uint64      { return tx.data.AccountNonce }
 func (tx *Transaction) CheckNonce() bool   { return true }
+func (tx *Transaction) Payer() []byte       { return common.CopyBytes(tx.data.Payer) }
+func (tx *Transaction) Sender() []byte       { return common.CopyBytes(tx.data.Sender) }
+func (tx *Transaction) PayerSig() []byte       { return common.CopyBytes(tx.data.PayerSig) }
+
 
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.

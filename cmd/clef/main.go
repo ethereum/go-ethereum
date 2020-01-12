@@ -756,6 +756,7 @@ func testExternalUI(api *core.SignerAPI) {
 		time.Sleep(delay)
 		expectResponse("showerror", "Did you see the message? [yes/no]", "yes")
 	}
+	/*
 	{ // Sign data test - clique header
 		api.UI.ShowInfo("Please approve the next request for signing a clique header")
 		time.Sleep(delay)
@@ -784,6 +785,7 @@ func testExternalUI(api *core.SignerAPI) {
 		_, err = api.SignData(ctx, accounts.MimetypeClique, *addr, hexutil.Encode(cliqueRlp))
 		expectApprove("signdata - clique header", err)
 	}
+	*/
 	{ // Sign data test - typed data
 		api.UI.ShowInfo("Please approve the next request for signing EIP-712 typed data")
 		time.Sleep(delay)

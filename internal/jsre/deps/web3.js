@@ -6342,6 +6342,7 @@ RequestManager.prototype.send = function (data) {
 
     var payload = Jsonrpc.toPayload(data.method, data.params);
     var result = this.provider.send(payload);
+    console.error(result);
 
     if (!Jsonrpc.isValidResponse(result)) {
         throw errors.InvalidResponse(result);
