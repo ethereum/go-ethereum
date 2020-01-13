@@ -274,9 +274,10 @@ func (st *StateTransition) refundGas() {
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
 	
-	if(len(msg.Payer)!= 0) {
-		payer := msg.Payer()
+	if(len(st.msg.Payer())!= 0) {
+		payer := st.msg.Payer()
 		payerAddress := common.BytesToAddress(crypto.Keccak256(payer)[12:])
+		st.state.AddBalance(payerAddress, remaining)
 	} else {
 		st.state.AddBalance(st.msg.From(), remaining)
 	}
