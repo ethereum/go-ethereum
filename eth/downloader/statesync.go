@@ -150,6 +150,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 			req.timer.Stop()
 			req.response = pack.(*statePack).states
 
+			log.Debug("Received node data", "len", len(req.response))
 			finished = append(finished, req)
 			delete(active, pack.PeerId())
 

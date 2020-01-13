@@ -601,6 +601,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				bytes += len(entry)
 			}
 		}
+		log.Debug("Sending node data", "len", len(data))
+		if len(data) == 0 {
+			// in this case, sending node data with len=0 may cause the requesting peer retrieve this GetNodeDataMsg
+			// again and again, and can block block synchronise.
+			log.Warn("Sending node data is invalid", "len", len(data))
+		}
 		return p.SendNodeData(data)
 
 	case p.version >= eth63 && msg.Code == NodeDataMsg:
@@ -608,6 +614,15 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		var data [][]byte
 		if err := msg.Decode(&data); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		// to make peer compatible with old peer sending zero node data, just avoid deliver this node data.
+		// Why:
+		// deliver zero node data will cause statesync failing before other fetchers which interrupts all other
+		// fetchers, then all fetchers including statesync fetcher will run again and again until blocks from other
+		// peers were inserted
+		if len(data) == 0 {
+			log.Warn("No need to deliver zero len data")
+			return nil
 		}
 		// Deliver all to the downloader
 		if err := pm.downloader.DeliverNodeData(p.id, data); err != nil {
