@@ -137,11 +137,10 @@ const (
 
 	EIP1559InitialBaseFee           uint64 = 1000000000 // Wei used as the initial BaseFee
 	EIP1559ForkBlockNumber          uint64 = 100000000  // TBD
-	EIP1559ForkFinalizedBlockNumber        = EIP1559ForkBlockNumber + (MaxGasEIP1559 / (10 * SlackCoefficient))
+	EIP1559ForkFinalizedBlockNumber        = EIP1559ForkBlockNumber + (MaxGasEIP1559 / 20)
 	BaseFeeMaxChangeDenominator     uint64 = 8
-	SlackCoefficient                uint64 = 2
-	TargetGasUsed                   uint64 = 8000000
-	MaxGasEIP1559                          = SlackCoefficient * TargetGasUsed
+	TargetGasUsed                   uint64 = 10000000
+	MaxGasEIP1559                          = 16000000
 	EIP1559DecayRange                      = EIP1559ForkFinalizedBlockNumber - EIP1559ForkBlockNumber
 	EIP1559GasIncrementAmount              = (MaxGasEIP1559 / 2) / EIP1559DecayRange // We need to shift (MaxGasEIP1559 / 2) gas from the legacy pool into the EIP1559 pool over the EIP1559DecayRange
 )
