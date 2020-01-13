@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -73,6 +74,7 @@ type Message interface {
 	Nonce() uint64
 	CheckNonce() bool
 	Data() []byte
+	Payer() []byte
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
@@ -133,6 +135,8 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition 
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
 func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool) ([]byte, uint64, bool, error) {
+	log.Info("Apply Message")
+
 	return NewStateTransition(evm, msg, gp).TransitionDb()
 }
 
@@ -155,21 +159,36 @@ func (st *StateTransition) useGas(amount uint64) error {
 
 func (st *StateTransition) buyGas() error {
 	mgval := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.gasPrice)
-	if st.state.GetBalance(st.msg.From()).Cmp(mgval) < 0 {
+	var payerAddress common.Address
+	if len(st.msg.Payer()) != 0 {
+		payerAddress = common.BytesToAddress(crypto.Keccak256(st.msg.Payer())[12:])
+		if st.state.GetBalance(payerAddress).Cmp(mgval) < 0 {
+			return errInsufficientBalanceForGas
+		}
+
+	} else if st.state.GetBalance(st.msg.From()).Cmp(mgval) < 0 {
+		log.Info("I dont have money for gas i am homeless")
+		log.Info("homeless pil", "from money: ", st.msg.Payer())
 		return errInsufficientBalanceForGas
 	}
 	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
+		log.Info("I dont have money for gas i am homeless")
 		return err
 	}
 	st.gas += st.msg.Gas()
 
 	st.initialGas = st.msg.Gas()
-	st.state.SubBalance(st.msg.From(), mgval)
+	if len(st.msg.Payer()) != 0 {
+		st.state.SubBalance(payerAddress, mgval)
+	} else {
+		st.state.SubBalance(st.msg.From(), mgval)
+	}
 	return nil
 }
 
 func (st *StateTransition) preCheck() error {
 	// Make sure this transaction's nonce is correct.
+
 	if st.msg.CheckNonce() {
 		nonce := st.state.GetNonce(st.msg.From())
 		if nonce < st.msg.Nonce() {
@@ -178,6 +197,8 @@ func (st *StateTransition) preCheck() error {
 			return ErrNonceTooLow
 		}
 	}
+	log.Info("I will try to buy gas")
+
 	return st.buyGas()
 }
 
@@ -188,13 +209,19 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	if err = st.preCheck(); err != nil {
 		return
 	}
+	log.Info("I am in transitionDB")
 	msg := st.msg
 	sender := vm.AccountRef(msg.From())
 	homestead := st.evm.ChainConfig().IsHomestead(st.evm.BlockNumber)
 	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.BlockNumber)
 	contractCreation := msg.To() == nil
 
+	payer := msg.Payer()
+	payerAddress := common.BytesToAddress(crypto.Keccak256(payer)[12:])
+
+
 	// Pay intrinsic gas
+	log.Info("Before instrinsicGas")
 	gas, err := IntrinsicGas(st.data, contractCreation, homestead, istanbul)
 	if err != nil {
 		return nil, 0, false, err
@@ -214,15 +241,19 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value)
 	} else {
 		// Increment the nonce for the next transaction
+		log.Info("I am in transitionDB incrementing nonce")
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
-		ret, st.gas, vmerr = evm.Call(sender, st.to(), st.data, st.gas, st.value)
+		log.Info("Before evmCall")
+		ret, st.gas, vmerr = evm.Call(sender, st.to(), st.data, st.gas, st.value,payerAddress)
 	}
 	if vmerr != nil {
+		log.Info("VM returned with error", "err", vmerr)
 		log.Debug("VM returned with error", "err", vmerr)
 		// The only possible consensus-error would be if there wasn't
 		// sufficient balance to make the transfer happen. The first
 		// balance transfer may never fail.
 		if vmerr == vm.ErrInsufficientBalance {
+			log.Info("VM insufficientBalance")
 			return nil, 0, false, vmerr
 		}
 	}
@@ -242,7 +273,13 @@ func (st *StateTransition) refundGas() {
 
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
-	st.state.AddBalance(st.msg.From(), remaining)
+	
+	if(len(msg.Payer)!= 0) {
+		payer := msg.Payer()
+		payerAddress := common.BytesToAddress(crypto.Keccak256(payer)[12:])
+	} else {
+		st.state.AddBalance(st.msg.From(), remaining)
+	}
 
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.

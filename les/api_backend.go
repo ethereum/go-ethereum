@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type LesApiBackend struct {
@@ -178,6 +179,8 @@ func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 }
 
 func (b *LesApiBackend) RemoveTx(txHash common.Hash) {
+	log.Info("api backend removing tx")
+
 	b.eth.txPool.RemoveTx(txHash)
 }
 

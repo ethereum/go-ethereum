@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // statePrefetcher is a basic Prefetcher, which blindly executes a block on top
@@ -79,6 +80,7 @@ func precacheTransaction(config *params.ChainConfig, bc ChainContext, author *co
 	// Create the EVM and execute the transaction
 	context := NewEVMContext(msg, header, bc, author)
 	vm := vm.NewEVM(context, statedb, config, cfg)
+	log.Info("precacheTransaction")
 
 	_, _, _, err = ApplyMessage(vm, msg, gaspool)
 	return err

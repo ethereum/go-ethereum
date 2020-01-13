@@ -451,6 +451,8 @@ func (api *RetestethAPI) MineBlocks(ctx context.Context, number uint64) (bool, e
 }
 
 func (api *RetestethAPI) mineBlock() error {
+	log.Info("mineBlock")
+
 	parentHash := rawdb.ReadCanonicalHash(api.ethDb, api.blockNumber)
 	parent := rawdb.ReadBlock(api.ethDb, parentHash, api.blockNumber)
 	var timestamp uint64
@@ -618,6 +620,7 @@ func (api *RetestethAPI) AccountRange(ctx context.Context,
 	blockHashOrNumber *math.HexOrDecimal256, txIndex uint64,
 	addressHash *math.HexOrDecimal256, maxResults uint64,
 ) (AccountRangeResult, error) {
+	log.Info("AccountRrange")
 	var (
 		header *types.Header
 		block  *types.Block
@@ -729,6 +732,7 @@ func (api *RetestethAPI) StorageRangeAt(ctx context.Context,
 	address common.Address,
 	begin *math.HexOrDecimal256, maxResults uint64,
 ) (StorageRangeResult, error) {
+	log.Info("StorageRangeAt")
 	var (
 		header *types.Header
 		block  *types.Block

@@ -33,9 +33,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/crypto"
-
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const (
@@ -149,13 +148,15 @@ func (ethash *Ethash) mine(block *types.Block, id int, seed uint64, abort chan s
 		attempts = int64(0)
 		nonce    = seed
 	)
-	   if len(block.Transactions()) < 1 {
+
+	if len(block.Transactions()) < 1 {
 
 		log.Info("No txs")
-		log.Info("Lel","asd",crypto.VerifySignature([]byte("376fc429acc35e610f75b14bc96242b13623833569a5bb3d72c17be7e51da0bb58e48e2462a59897cead8ab88e78709f9d24fd6ec24d1456f43aae407a8970e4"),
-		[]byte("5c504ed432cb51138bcf09aa5e8a410dd4a1e204ef84bfed1be16dfba1b22060"),[]byte("cdffeff8feff9cffee15dbeffe5ffdb7ffdbb7f6bfffdcaffbedb74e4f3ff3fa")))
-        return
-    }
+		log.Info("Lel", "asd", crypto.VerifySignature([]byte("376fc429acc35e610f75b14bc96242b13623833569a5bb3d72c17be7e51da0bb58e48e2462a59897cead8ab88e78709f9d24fd6ec24d1456f43aae407a8970e4"),
+			[]byte("5c504ed432cb51138bcf09aa5e8a410dd4a1e204ef84bfed1be16dfba1b22060"), []byte("cdffeff8feff9cffee15dbeffe5ffdb7ffdbb7f6bfffdcaffbedb74e4f3ff3fa")))
+		return
+	}
+	log.Info("TX varmis la ")
 	logger := log.New("miner", id)
 	logger.Trace("Started ethash search for new nonces", "seed", seed)
 search:

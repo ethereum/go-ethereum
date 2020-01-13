@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // BlockGen creates blocks for testing.
@@ -99,6 +100,8 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 // added. If contract code relies on the BLOCKHASH instruction,
 // the block in chain will be returned.
 func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
+	log.Info("AddTxWithChain")
+
 	if b.gasPool == nil {
 		b.SetCoinbase(common.Address{})
 	}

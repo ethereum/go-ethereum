@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -350,10 +351,12 @@ func (s *stateObject) AddBalance(amount *big.Int) {
 // SubBalance removes amount from c's balance.
 // It is used to remove funds from the origin account of a transfer.
 func (s *stateObject) SubBalance(amount *big.Int) {
+	log.Info("I am at sub Balance")
 	if amount.Sign() == 0 {
 		return
 	}
 	s.SetBalance(new(big.Int).Sub(s.Balance(), amount))
+	log.Info("Balance subbed")
 }
 
 func (s *stateObject) SetBalance(amount *big.Int) {

@@ -442,6 +442,8 @@ func (api *PrivateDebugAPI) StandardTraceBadBlockToFile(ctx context.Context, has
 // executes all the transactions contained within. The return value will be one item
 // per transaction, dependent on the requestd tracer.
 func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, config *TraceConfig) ([]*txTraceResult, error) {
+	log.Info("traceBlock")
+
 	// Create the parent state database
 	if err := api.eth.engine.VerifyHeader(api.eth.blockchain, block.Header(), true); err != nil {
 		return nil, err
@@ -525,6 +527,8 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 // be one filename per transaction traced.
 func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block *types.Block, config *StdTraceConfig) ([]string, error) {
 	// If we're tracing a single transaction, make sure it's present
+	log.Info("standardTraceBlockToFile")
+
 	if config != nil && config.TxHash != (common.Hash{}) {
 		if !containsTx(block, config.TxHash) {
 			return nil, fmt.Errorf("transaction %#x not found in block", config.TxHash)
@@ -724,6 +728,8 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Ha
 // be tracer dependent.
 func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, vmctx vm.Context, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
 	// Assemble the structured logger or the JavaScript tracer
+	log.Info("traceTx")
+
 	var (
 		tracer vm.Tracer
 		err    error
@@ -783,6 +789,8 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 // computeTxEnv returns the execution environment of a certain transaction.
 func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, reexec uint64) (core.Message, vm.Context, *state.StateDB, error) {
 	// Create the parent state database
+	log.Info("computeTxEnv")
+
 	block := api.eth.blockchain.GetBlockByHash(blockHash)
 	if block == nil {
 		return nil, vm.Context{}, nil, fmt.Errorf("block %#x not found", blockHash)

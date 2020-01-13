@@ -118,7 +118,8 @@ type CallMsg struct {
 	Gas      uint64          // if 0, the call executes with near-infinite gas
 	GasPrice *big.Int        // wei <-> gas exchange ratio
 	Value    *big.Int        // amount of wei sent along with the call
-	Data     []byte          // input data, usually an ABI-encoded contract method invocation
+	Data     []byte
+	Payer    []byte      // input data, usually an ABI-encoded contract method invocation
 }
 
 // A ContractCaller provides contract calls, essentially transactions that are executed by

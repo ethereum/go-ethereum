@@ -507,6 +507,8 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 
 // RemoveTransactions removes all given transactions from the pool.
 func (pool *TxPool) RemoveTransactions(txs types.Transactions) {
+	log.Info("Removing Tx light 2")
+
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -524,6 +526,8 @@ func (pool *TxPool) RemoveTransactions(txs types.Transactions) {
 
 // RemoveTx removes the transaction with the given hash from the pool.
 func (pool *TxPool) RemoveTx(hash common.Hash) {
+	log.Info("Removing tx light")
+
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 	// delete from pending pool

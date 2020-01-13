@@ -452,6 +452,7 @@ func (w *worker) mainLoop() {
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current mining block. These transactions will
 			// be automatically eliminated.
+			log.Info("Tx arrived to main loop")
 			if !w.isRunning() && w.current != nil {
 				// If block is already full, abort
 				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
@@ -462,12 +463,16 @@ func (w *worker) mainLoop() {
 				w.mu.RUnlock()
 
 				txs := make(map[common.Address]types.Transactions)
+				log.Info("Pooled new future transaction", "txs", txs)
+
 				for _, tx := range ev.Txs {
 					acc, _ := types.Sender(w.current.signer, tx)
 					txs[acc] = append(txs[acc], tx)
 				}
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs)
 				tcount := w.current.tcount
+				log.Info("mainLoop")
+
 				w.commitTransactions(txset, coinbase, nil)
 				// Only update the snapshot if any new transactons were added
 				// to the pending block
@@ -702,6 +707,8 @@ func (w *worker) updateSnapshot() {
 }
 
 func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
+	log.Info("commitTransaction")
+
 	snap := w.current.state.Snapshot()
 
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
@@ -716,6 +723,8 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 }
 
 func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, interrupt *int32) bool {
+	log.Info("commitTransactionssssss")
+
 	// Short circuit if current is nil
 	if w.current == nil {
 		return true
@@ -773,6 +782,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		}
 		// Start executing the transaction
 		w.current.state.Prepare(tx.Hash(), common.Hash{}, w.current.tcount)
+			log.Info("mineBlock")
 
 		logs, err := w.commitTransaction(tx, coinbase)
 		switch err {
@@ -923,6 +933,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 	// Fill the block with all available pending transactions.
 	pending, err := w.eth.TxPool().Pending()
+	log.Info("Pending tx", "tx", pending)
 	if err != nil {
 		log.Error("Failed to fetch pending transactions", "err", err)
 		return
@@ -942,12 +953,15 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 	if len(localTxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs)
+		log.Info("commitNewWork")
+
 		if w.commitTransactions(txs, w.coinbase, interrupt) {
 			return
 		}
 	}
 	if len(remoteTxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs)
+		log.Info("commitNewWork Remote")
 		if w.commitTransactions(txs, w.coinbase, interrupt) {
 			return
 		}

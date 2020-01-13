@@ -150,6 +150,7 @@ func (m *txSortedMap) Cap(threshold int) types.Transactions {
 // Remove deletes a transaction from the maintained map, returning whether the
 // transaction was found.
 func (m *txSortedMap) Remove(nonce uint64) bool {
+	log.Info("I am removing tx list")
 	// Short circuit if no transaction is present
 	_, ok := m.items[nonce]
 	if !ok {
@@ -249,6 +250,8 @@ func (l *txList) Overlaps(tx *types.Transaction) bool {
 // If the new transaction is accepted into the list, the lists' cost and gas
 // thresholds are also potentially updated.
 func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transaction) {
+	log.Info("Trying to add to txList")
+
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
 	if old != nil {
@@ -268,6 +271,7 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Tran
 	if gas := tx.Gas(); l.gascap < gas {
 		l.gascap = gas
 	}
+	log.Info("I am adding it its okay")
 	return true, old
 }
 
@@ -296,7 +300,12 @@ func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) (types.Transactions
 	l.gascap = gasLimit
 
 	// Filter out all the transactions above the account's funds
-	removed := l.txs.Filter(func(tx *types.Transaction) bool { return tx.Cost().Cmp(costLimit) > 0 || tx.Gas() > gasLimit })
+	removed := l.txs.Filter(func(tx *types.Transaction) bool {
+		log.Info("Inside filter ","costlimit",costLimit,"txCost",tx.Cost(),"txGas",tx.Gas(),"gasLimit",gasLimit)
+		
+		return tx.Cost().Cmp(costLimit) > 0 || tx.Gas() > gasLimit 
+	})
+	log.Info("Removed tx ","tx",removed)
 
 	// If the list was strict, filter anything above the lowest nonce
 	var invalids types.Transactions
@@ -323,6 +332,7 @@ func (l *txList) Cap(threshold int) types.Transactions {
 // transaction was found, and also returning any transaction invalidated due to
 // the deletion (strict mode only).
 func (l *txList) Remove(tx *types.Transaction) (bool, types.Transactions) {
+	log.Info("remove tx list 2")
 	// Remove the transaction from the set
 	nonce := tx.Nonce()
 	if removed := l.txs.Remove(nonce); !removed {
@@ -495,6 +505,7 @@ func (l *txPricedList) Underpriced(tx *types.Transaction, local *accountSet) boo
 // Discard finds a number of most underpriced transactions, removes them from the
 // priced list and returns them for further removal from the entire pool.
 func (l *txPricedList) Discard(count int, local *accountSet) types.Transactions {
+	log.Info("I am discarding")
 	drop := make(types.Transactions, 0, count) // Remote underpriced transactions to drop
 	save := make(types.Transactions, 0, 64)    // Local underpriced transactions to keep
 
