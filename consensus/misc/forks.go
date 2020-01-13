@@ -64,15 +64,21 @@ func VerifyEIP1559BaseFee(config *params.ChainConfig, header, parent *types.Head
 	}
 	// Verify the BaseFee is valid if we are past the EIP1559 activation block
 	if config.IsEIP1559(header.Number) {
-		// A valid BASEFEE is one such that abs(BASEFEE - PARENT_BASEFEE) <= max(1, PARENT_BASEFEE // BASEFEE_MAX_CHANGE_DENOMINATOR)
 		if parent.BaseFee == nil {
 			return errMissingParentBaseFee
 		}
 		if header.BaseFee == nil {
 			return errMissingBaseFee
 		}
-		diff := new(big.Int).Sub(header.BaseFee, parent.BaseFee)
+		delta := new(big.Int).Sub(new(big.Int).SetUint64(parent.GasUsed), new(big.Int).SetUint64(params.TargetGasUsed))
+		mul := new(big.Int).Mul(parent.BaseFee, delta)
+		div := new(big.Int).Div(mul, new(big.Int).SetUint64(params.TargetGasUsed))
+		div2 := new(big.Int).Div(div, new(big.Int).SetUint64(params.BaseFeeMaxChangeDenominator))
+		expectedBaseFee := new(big.Int).Add(parent.BaseFee, div2)
+		diff := new(big.Int).Sub(expectedBaseFee, parent.BaseFee)
+		neg := false
 		if diff.Sign() < 0 {
+			neg = true
 			diff.Neg(diff)
 		}
 		max := new(big.Int).Div(parent.BaseFee, new(big.Int).SetUint64(params.BaseFeeMaxChangeDenominator))
@@ -80,6 +86,12 @@ func VerifyEIP1559BaseFee(config *params.ChainConfig, header, parent *types.Head
 			max = common.Big1
 		}
 		if diff.Cmp(max) > 0 {
+			if neg {
+				max.Neg(max)
+			}
+			expectedBaseFee.Set(new(big.Int).Add(parent.BaseFee, max))
+		}
+		if expectedBaseFee.Cmp(header.BaseFee) > 0 {
 			return errInvalidBaseFee
 		}
 		return nil
