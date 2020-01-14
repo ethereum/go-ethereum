@@ -140,9 +140,10 @@ const (
 	EIP1559ForkFinalizedBlockNumber        = EIP1559ForkBlockNumber + (MaxGasEIP1559 / 20)
 	BaseFeeMaxChangeDenominator     uint64 = 8
 	TargetGasUsed                   uint64 = 10000000
-	MaxGasEIP1559                          = 16000000
+	MaxGasEIP1559                   uint64 = 16000000
 	EIP1559DecayRange                      = EIP1559ForkFinalizedBlockNumber - EIP1559ForkBlockNumber
 	EIP1559GasIncrementAmount              = (MaxGasEIP1559 / 2) / EIP1559DecayRange // We need to shift (MaxGasEIP1559 / 2) gas from the legacy pool into the EIP1559 pool over the EIP1559DecayRange
+	PerTransactionGasLimit          uint64 = 8000000
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations
