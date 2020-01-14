@@ -24,7 +24,7 @@ import (
 	"runtime"
 	"time"
 
-	mapset "github.com/deckarep/golang-set"
+	"github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -76,7 +76,7 @@ var (
 	errInvalidDifficulty = errors.New("non-positive difficulty")
 	errInvalidMixDigest  = errors.New("invalid mix digest")
 	errInvalidPoW        = errors.New("invalid proof-of-work")
-	errGasLimitSet       = errors.New("GasLimit should not be set after EIP1559 has finalized")
+	errExceedGasLimit    = errors.New("transaction gas usage exceeds the per-transaction limit")
 )
 
 // Author implements consensus.Engine, returning the header's coinbase as the
@@ -168,6 +168,18 @@ func (ethash *Ethash) VerifyHeaders(chain consensus.ChainReader, headers []*type
 		}
 	}()
 	return abort, errorsOut
+}
+
+// VerifyTransactions verifies a the transactions in a block do not exceed the per-transaction gas limit
+func (*Ethash) VerifyTransactions(chain consensus.ChainReader, block *types.Block) error {
+	if chain.Config().IsEIP1559(block.Number()) {
+		for _, tx := range block.Transactions() {
+			if tx.Gas() > params.PerTransactionGasLimit {
+				return errExceedGasLimit
+			}
+		}
+	}
+	return nil
 }
 
 func (ethash *Ethash) verifyHeaderWorker(chain consensus.ChainReader, headers []*types.Header, seals []bool, index int) error {

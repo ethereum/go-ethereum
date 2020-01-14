@@ -208,6 +208,10 @@ func (e *NoRewardEngine) VerifyHeaders(chain consensus.ChainReader, headers []*t
 	return e.inner.VerifyHeaders(chain, headers, seals)
 }
 
+func (e *NoRewardEngine) VerifyTransactions(chain consensus.ChainReader, block *types.Block) error {
+	return e.inner.VerifyTransactions(chain, block)
+}
+
 func (e *NoRewardEngine) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
 	return e.inner.VerifyUncles(chain, block)
 }
