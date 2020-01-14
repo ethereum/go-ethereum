@@ -18,6 +18,7 @@ package gasprice
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"sort"
 	"sync"
@@ -31,7 +32,16 @@ import (
 
 const sampleNumber = 3 // Number of transactions sampled in a block
 
-var DefaultMaxPrice = big.NewInt(500 * params.GWei)
+var (
+	DefaultMaxPrice = big.NewInt(500 * params.GWei)
+
+	maxPrice   = big.NewInt(500 * params.GWei)
+	maxPremium = big.NewInt(500 * params.GWei)
+	maxFeeCap  = big.NewInt(1000 * params.GWei)
+
+	errEIP1559IsFinalized    = errors.New("past EIP1559 finalization, GasPrice cannot be set")
+	errEIP1559IsNotActivated = errors.New("before EIP1559 activation, GasPremium and FeeCap cannot be set")
+)
 
 type Config struct {
 	Blocks            int
@@ -103,6 +113,9 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 // have a very high chance to be included in the following blocks.
 func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	head, _ := gpo.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if gpo.backend.ChainConfig().IsEIP1559Finalized(head.Number) {
+		return nil, errEIP1559IsFinalized
+	}
 	headHash := head.Hash()
 
 	// If the latest gasprice is still available, return it.
@@ -183,6 +196,9 @@ func (gpo *Oracle) SuggestPremium(ctx context.Context) (*big.Int, error) {
 	gpo.cacheLock.RUnlock()
 
 	head, _ := gpo.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if !gpo.backend.ChainConfig().IsEIP1559(head.Number) {
+		return nil, errEIP1559IsNotActivated
+	}
 	headHash := head.Hash()
 	if headHash == lastHead {
 		return lastPremium, nil
@@ -257,6 +273,9 @@ func (gpo *Oracle) SuggestCap(ctx context.Context) (*big.Int, error) {
 	gpo.cacheLock.RUnlock()
 
 	head, _ := gpo.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if !gpo.backend.ChainConfig().IsEIP1559(head.Number) {
+		return nil, errEIP1559IsNotActivated
+	}
 	headHash := head.Hash()
 	if headHash == lastHead {
 		return lastCap, nil
@@ -338,34 +357,52 @@ type getBlockCapsResult struct {
 	err error
 }
 
-type transactionsByGasPrice []*types.Transaction
+type transactionsByGasPrice struct {
+	txs     []*types.Transaction
+	baseFee *big.Int
+}
 
-func (t transactionsByGasPrice) Len() int      { return len(t) }
-func (t transactionsByGasPrice) Swap(i, j int) { t[i], t[j] = t[j], t[i] }
-func (t transactionsByGasPrice) Less(i, j int) bool {
-	iPrice := t[i].GasPrice()
-	jPrice := t[j].GasPrice()
+func (t *transactionsByGasPrice) Len() int      { return len(t.txs) }
+func (t *transactionsByGasPrice) Swap(i, j int) { t.txs[i], t.txs[j] = t.txs[j], t.txs[i] }
+func (t *transactionsByGasPrice) Less(i, j int) bool {
+	iPrice := t.txs[i].GasPrice()
+	jPrice := t.txs[j].GasPrice()
 	if iPrice == nil {
-		iPrice = big.NewInt(0)
+		iPrice = new(big.Int).Add(t.baseFee, t.txs[i].GasPremium())
+		if iPrice.Cmp(t.txs[i].FeeCap()) > 0 {
+			iPrice.Set(t.txs[i].FeeCap())
+		}
 	}
 	if jPrice == nil {
-		jPrice = big.NewInt(0)
+		jPrice = new(big.Int).Add(t.baseFee, t.txs[j].GasPremium())
+		if jPrice.Cmp(t.txs[j].FeeCap()) > 0 {
+			jPrice.Set(t.txs[j].FeeCap())
+		}
 	}
 	return iPrice.Cmp(jPrice) < 0
 }
 
-type transactionsByGasPremium []*types.Transaction
+type transactionsByGasPremium struct {
+	txs     []*types.Transaction
+	baseFee *big.Int
+}
 
-func (t transactionsByGasPremium) Len() int      { return len(t) }
-func (t transactionsByGasPremium) Swap(i, j int) { t[i], t[j] = t[j], t[i] }
-func (t transactionsByGasPremium) Less(i, j int) bool {
-	iPremium := t[i].GasPremium()
-	jPremium := t[j].GasPremium()
+func (t *transactionsByGasPremium) Len() int      { return len(t.txs) }
+func (t *transactionsByGasPremium) Swap(i, j int) { t.txs[i], t.txs[j] = t.txs[j], t.txs[i] }
+func (t *transactionsByGasPremium) Less(i, j int) bool {
+	iPremium := t.txs[i].GasPremium()
+	jPremium := t.txs[j].GasPremium()
 	if iPremium == nil {
-		iPremium = big.NewInt(0)
+		iPremium = new(big.Int).Sub(t.txs[i].GasPrice(), t.baseFee)
+		if iPremium.Cmp(common.Big0) < 0 {
+			iPremium.Set(common.Big0)
+		}
 	}
 	if jPremium == nil {
-		jPremium = big.NewInt(0)
+		jPremium = new(big.Int).Sub(t.txs[j].GasPrice(), t.baseFee)
+		if jPremium.Cmp(common.Big0) < 0 {
+			jPremium.Set(common.Big0)
+		}
 	}
 	return iPremium.Cmp(jPremium) < 0
 }
@@ -378,10 +415,10 @@ func (t transactionsByFeeCap) Less(i, j int) bool {
 	iCap := t[i].FeeCap()
 	jCap := t[j].FeeCap()
 	if iCap == nil {
-		iCap = big.NewInt(0)
+		iCap = t[i].GasPrice()
 	}
 	if jCap == nil {
-		jCap = big.NewInt(0)
+		jCap = t[j].GasPrice()
 	}
 	return iCap.Cmp(jCap) < 0
 }
@@ -400,15 +437,24 @@ func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, bloc
 		return
 	}
 	blockTxs := block.Transactions()
-	txs := make([]*types.Transaction, len(blockTxs))
-	copy(txs, blockTxs)
-	sort.Sort(transactionsByGasPrice(txs))
+	txs := new(transactionsByGasPrice)
+	txs.txs = make([]*types.Transaction, len(blockTxs))
+	copy(txs.txs, blockTxs)
+	txs.baseFee = block.BaseFee()
+	sort.Sort(txs)
 
 	var prices []*big.Int
-	for _, tx := range txs {
+	for _, tx := range txs.txs {
 		sender, err := types.Sender(signer, tx)
 		if err == nil && sender != block.Coinbase() {
-			prices = append(prices, tx.GasPrice())
+			price := tx.GasPrice()
+			if price == nil {
+				price = new(big.Int).Add(block.BaseFee(), tx.GasPremium())
+				if price.Cmp(tx.FeeCap()) > 0 {
+					price.Set(tx.FeeCap())
+				}
+			}
+			prices = append(prices, price)
 			if len(prices) >= limit {
 				break
 			}
@@ -430,14 +476,23 @@ func (gpo *Oracle) getBlockPremiums(ctx context.Context, signer types.Signer, bl
 	}
 
 	blockTxs := block.Transactions()
-	txs := make([]*types.Transaction, len(blockTxs))
-	copy(txs, blockTxs)
-	sort.Sort(transactionsByGasPremium(txs))
+	txs := new(transactionsByGasPremium)
+	txs.txs = make([]*types.Transaction, len(blockTxs))
+	copy(txs.txs, blockTxs)
+	txs.baseFee = block.BaseFee()
+	sort.Sort(txs)
 
-	for _, tx := range txs {
+	for _, tx := range txs.txs {
 		sender, err := types.Sender(signer, tx)
 		if err == nil && sender != block.Coinbase() {
-			ch <- getBlockPremiumsResult{tx.GasPremium(), nil}
+			premium := tx.GasPremium()
+			if premium == nil {
+				premium = new(big.Int).Sub(tx.GasPrice(), block.BaseFee())
+				if premium.Cmp(common.Big0) < 0 {
+					premium.Set(common.Big0)
+				}
+			}
+			ch <- getBlockPremiumsResult{premium, nil}
 			return
 		}
 	}
@@ -461,7 +516,11 @@ func (gpo *Oracle) getBlockCaps(ctx context.Context, signer types.Signer, blockN
 	for _, tx := range txs {
 		sender, err := types.Sender(signer, tx)
 		if err == nil && sender != block.Coinbase() {
-			ch <- getBlockCapsResult{tx.FeeCap(), nil}
+			cap := tx.FeeCap()
+			if cap == nil {
+				cap = tx.GasPrice()
+			}
+			ch <- getBlockCapsResult{cap, nil}
 			return
 		}
 	}

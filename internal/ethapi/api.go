@@ -412,8 +412,8 @@ func (s *PrivateAccountAPI) SignTransaction(ctx context.Context, args SendTxArgs
 	if args.Gas == nil {
 		return nil, fmt.Errorf("gas not specified")
 	}
-	if args.GasPrice == nil {
-		return nil, fmt.Errorf("gasPrice not specified")
+	if args.GasPrice == nil && (args.GasPremium == nil || args.FeeCap == nil) {
+		return nil, fmt.Errorf("gasPrice or gasPremium+feeCap not specified")
 	}
 	if args.Nonce == nil {
 		return nil, fmt.Errorf("nonce not specified")
