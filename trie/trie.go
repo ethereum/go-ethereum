@@ -451,7 +451,7 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-	if common.BytesToHash(newRoot) != rootHash{
+	if common.BytesToHash(newRoot) != rootHash {
 		panic(fmt.Sprintf("Committed root %x != roothash %x", newRoot, rootHash))
 	}
 	t.root = newRoot
