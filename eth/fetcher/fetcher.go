@@ -515,14 +515,18 @@ func (f *Fetcher) loop() {
 
 			blocks := []*types.Block{}
 			for i := 0; i < len(task.transactions) && i < len(task.uncles); i++ {
+				var txnHash, uncleHash common.Hash
 				// Match up a body to any possible completion request
 				matched := false
 
 				for hash, announce := range f.completing {
 					if f.queued[hash] == nil {
-						txnHash := types.DeriveSha(types.Transactions(task.transactions[i]))
-						uncleHash := types.CalcUncleHash(task.uncles[i])
-
+						if txnHash == (common.Hash{}) {
+							txnHash = types.DeriveSha(types.Transactions(task.transactions[i]))
+						}
+						if txnHash == (common.Hash{}) {
+							uncleHash = types.CalcUncleHash(task.uncles[i])
+						}
 						if txnHash == announce.header.TxHash && uncleHash == announce.header.UncleHash && announce.origin == task.peer {
 							// Mark the body matched, reassemble if still unknown
 							matched = true
