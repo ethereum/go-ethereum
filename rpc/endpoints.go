@@ -23,11 +23,11 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// isModuleAvailable enforces that requested api modules (eg. via --rpcapi) are actually
+// checkModuleAvailable check that requested api modules (eg. via --rpcapi) are actually
 // available API services. If an invalid module is given (ie API "foo" wanted which does not exist),
-// then log.Crit is used to cause program to exit, logging the invalid module and a list of available
+// then an error is returned including the invalid module and a list of available
 // API service names.
-func isModuleAvailable(module string, apis []API) (err error) {
+func checkModuleAvailable(module string, apis []API) (err error) {
 	for _, api := range apis {
 		if module == api.Namespace {
 			return nil
@@ -57,7 +57,7 @@ func StartHTTPEndpoint(endpoint string, apis []API, modules []string, cors []str
 	for _, module := range modules {
 
 		// Ensure the requested module is actually available.
-		if err := isModuleAvailable(module, apis); err != nil {
+		if err := checkModuleAvailable(module, apis); err != nil {
 			return nil, nil, err
 		}
 		whitelist[module] = true
@@ -92,7 +92,7 @@ func StartWSEndpoint(endpoint string, apis []API, modules []string, wsOrigins []
 	for _, module := range modules {
 
 		// Ensure the requested module is actually available.
-		if err := isModuleAvailable(module, apis); err != nil {
+		if err := checkModuleAvailable(module, apis); err != nil {
 			return nil, nil, err
 		}
 		whitelist[module] = true
