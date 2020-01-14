@@ -873,34 +873,31 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 	return db.dirtiesSize + db.childrenSize + metadataSize - metarootRefs, db.preimagesSize
 }
 
-func (db *Database) saveCache(dir string, threads int) (err error) {
+// saveCache saves clean state cache to given directory path
+// using specified CPU cores.
+func (db *Database) saveCache(dir string, threads int) error {
 	if db.cleans == nil {
-		return
+		return nil
 	}
-	defer func(start time.Time) {
-		if err == nil {
-			log.Info("Saved clean cache into the file", "path", dir, "elapsed", common.PrettyDuration(time.Since(start)))
-		} else {
-			log.Info("Failed to save clean cache into file", "error", err)
-		}
-	}(time.Now())
-	err = db.cleans.SaveToFileConcurrent(dir, threads)
-	return err
+	start := time.Now()
+	err := db.cleans.SaveToFileConcurrent(dir, threads)
+	if err != nil {
+		log.Error("Failed to persist clean trie cache", "error", err)
+		return err
+	}
+	log.Info("Persisted the clean trie cache", "path", dir, "elapsed", common.PrettyDuration(time.Since(start)))
+	return nil
 }
 
-// SaveCache atomically saves fast cache data to the given dir using a single
-// or multi CPU cores.
-func (db *Database) SaveCache(dir string, concurrent bool) error {
-	threads := 1
-	if concurrent {
-		threads = runtime.GOMAXPROCS(-1)
-	}
-	return db.saveCache(dir, threads)
+// SaveCache atomically saves fast cache data to the given dir using all
+// available CPU cores.
+func (db *Database) SaveCache(dir string) error {
+	return db.saveCache(dir, runtime.GOMAXPROCS(0))
 }
 
 // SaveCachePeriodically atomically saves fast cache data to the given dir with
 // the specified interval. All dump operation will only use a single CPU core.
-func (db *Database) SaveCachePeriodically(dir string, interval time.Duration, stopCh <-chan struct{}, wg *sync.WaitGroup) {
+func (db *Database) SaveCachePeriodically(dir string, interval time.Duration, stopCh <-chan struct{}) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -909,8 +906,6 @@ func (db *Database) SaveCachePeriodically(dir string, interval time.Duration, st
 		case <-ticker.C:
 			db.saveCache(dir, 1)
 		case <-stopCh:
-			wg.Done()
-			log.Info("Stopped cache dumping thread")
 			return
 		}
 	}

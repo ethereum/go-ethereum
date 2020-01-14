@@ -338,7 +338,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		}
 		triedb := bc.stateCache.TrieDB()
 		bc.wg.Add(1)
-		go triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit, &bc.wg)
+		go func() {
+			defer bc.wg.Done()
+			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
+		}()
 	}
 	return bc, nil
 }
@@ -932,10 +935,10 @@ func (bc *BlockChain) Stop() {
 		}
 	}
 	// Ensure all live cached entries be saved into disk, so that we can skip
-	// cache rewarm when node restarts.
+	// cache warmup when node restarts.
 	if bc.cacheConfig.TrieCleanJournal != "" {
 		triedb := bc.stateCache.TrieDB()
-		triedb.SaveCache(bc.cacheConfig.TrieCleanJournal, true)
+		triedb.SaveCache(bc.cacheConfig.TrieCleanJournal)
 	}
 	log.Info("Blockchain stopped")
 }
