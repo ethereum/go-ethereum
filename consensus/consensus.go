@@ -73,6 +73,10 @@ type Engine interface {
 	// the input slice).
 	VerifyHeaders(chain ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error)
 
+	// VerifyTransactions verifies that none of the block's transactions
+	// exceed the per-transaction gas limit (post EIP1559 only)
+	VerifyTransactions(chain ChainReader, block *types.Block) error
+
 	// VerifyUncles verifies that the given block's uncles conform to the consensus
 	// rules of a given engine.
 	VerifyUncles(chain ChainReader, block *types.Block) error

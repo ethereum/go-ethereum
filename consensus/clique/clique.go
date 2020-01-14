@@ -136,6 +136,9 @@ var (
 	// errRecentlySigned is returned if a header is signed by an authorized entity
 	// that already signed a header recently, thus is temporarily not allowed to.
 	errRecentlySigned = errors.New("recently signed")
+
+	// errExceedGasLimit is returned if a transaction uses more gas than the allowed per-tx limit
+	errExceedGasLimit = errors.New("transaction gas usage exceeds the per-transaction limit")
 )
 
 // SignerFn hashes and signs the data to be signed by a backing account.
@@ -299,6 +302,18 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	}
 	// All basic checks passed, verify cascading fields
 	return c.verifyCascadingFields(chain, header, parents)
+}
+
+// VerifyTransactions verifies a the transactions in a block do not exceed the per-transaction gas limit
+func (*Clique) VerifyTransactions(chain consensus.ChainReader, block *types.Block) error {
+	if chain.Config().IsEIP1559(block.Number()) {
+		for _, tx := range block.Transactions() {
+			if tx.Gas() > params.PerTransactionGasLimit {
+				return errExceedGasLimit
+			}
+		}
+	}
+	return nil
 }
 
 // verifyCascadingFields verifies all the header fields that are not standalone,
@@ -713,23 +728,45 @@ func CliqueRLP(header *types.Header) []byte {
 }
 
 func encodeSigHeader(w io.Writer, header *types.Header) {
-	err := rlp.Encode(w, []interface{}{
-		header.ParentHash,
-		header.UncleHash,
-		header.Coinbase,
-		header.Root,
-		header.TxHash,
-		header.ReceiptHash,
-		header.Bloom,
-		header.Difficulty,
-		header.Number,
-		header.GasLimit,
-		header.GasUsed,
-		header.Time,
-		header.Extra[:len(header.Extra)-crypto.SignatureLength], // Yes, this will panic if extra is too short
-		header.MixDigest,
-		header.Nonce,
-	})
+	var err error
+	if header.BaseFee == nil {
+		err = rlp.Encode(w, []interface{}{
+			header.ParentHash,
+			header.UncleHash,
+			header.Coinbase,
+			header.Root,
+			header.TxHash,
+			header.ReceiptHash,
+			header.Bloom,
+			header.Difficulty,
+			header.Number,
+			header.GasLimit,
+			header.GasUsed,
+			header.Time,
+			header.Extra[:len(header.Extra)-crypto.SignatureLength], // Yes, this will panic if extra is too short
+			header.MixDigest,
+			header.Nonce,
+		})
+	} else {
+		err = rlp.Encode(w, []interface{}{
+			header.ParentHash,
+			header.UncleHash,
+			header.Coinbase,
+			header.Root,
+			header.TxHash,
+			header.ReceiptHash,
+			header.Bloom,
+			header.Difficulty,
+			header.Number,
+			header.GasLimit,
+			header.GasUsed,
+			header.Time,
+			header.Extra[:len(header.Extra)-crypto.SignatureLength], // Yes, this will panic if extra is too short
+			header.MixDigest,
+			header.Nonce,
+			header.BaseFee,
+		})
+	}
 	if err != nil {
 		panic("can't encode: " + err.Error())
 	}
