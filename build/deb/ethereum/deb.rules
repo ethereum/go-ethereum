@@ -22,7 +22,7 @@ override_dh_auto_build:
 	(mkdir -p build/_workspace/pkg/mod && mv .mod/* build/_workspace/pkg/mod)
 
 	# A fresh Go was built, all dependency downloads faked, hope build works now
-	build/env.sh ../.go/bin/go run build/ci.go install -git-commit={{.Env.Commit}} -git-branch={{.Env.Branch}} -git-tag={{.Env.Tag}} -buildnum={{.Env.Buildnum}} -pull-request={{.Env.IsPullRequest}}
+	../.go/bin/go run build/ci.go install -git-commit={{.Env.Commit}} -git-branch={{.Env.Branch}} -git-tag={{.Env.Tag}} -buildnum={{.Env.Buildnum}} -pull-request={{.Env.IsPullRequest}}
 
 override_dh_auto_test:
 
