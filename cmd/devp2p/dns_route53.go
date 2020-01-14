@@ -19,6 +19,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -82,18 +83,20 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 	}
 
 	// Compute DNS changes.
-	records := t.ToTXT(name)
-	changes, err := c.computeChanges(name, records)
+	existing, err := c.collectRecords(name)
 	if err != nil {
 		return err
 	}
+	log.Info(fmt.Sprintf("Found %d TXT records", len(existing)))
+	records := t.ToTXT(name)
+	changes := c.computeChanges(name, records, existing)
 	if len(changes) == 0 {
 		log.Info("No DNS changes needed")
 		return nil
 	}
 
 	// Submit change batches.
-	batches := splitChangeBatches(changes)
+	batches := splitChanges(changes, route53ChangeLimit)
 	for i, changes := range batches {
 		log.Info(fmt.Sprintf("Submitting %d changes to Route53", len(changes)))
 		batch := new(route53.ChangeBatch)
@@ -146,20 +149,13 @@ func (c *route53Client) findZoneID(name string) (string, error) {
 }
 
 // computeChanges creates DNS changes for the given record.
-func (c *route53Client) computeChanges(name string, records map[string]string) ([]*route53.Change, error) {
+func (c *route53Client) computeChanges(name string, records map[string]string, existing map[string][]string) []*route53.Change {
 	// Convert all names to lowercase.
 	lrecords := make(map[string]string, len(records))
 	for name, r := range records {
 		lrecords[strings.ToLower(name)] = r
 	}
 	records = lrecords
-
-	// Get existing records.
-	existing, err := c.collectRecords(name)
-	if err != nil {
-		return nil, err
-	}
-	log.Info(fmt.Sprintf("Found %d TXT records", len(existing)))
 
 	var changes []*route53.Change
 	for path, val := range records {
@@ -192,18 +188,31 @@ func (c *route53Client) computeChanges(name string, records map[string]string) (
 		log.Info(fmt.Sprintf("Deleting %s = %q", path, combineTXT(values)))
 		changes = append(changes, newTXTChange("DELETE", path, 1, values))
 	}
-	return changes, nil
+
+	sortChanges(changes)
+	return changes
 }
 
-// splitChangeBatches splits up DNS changes such that each change batch
-// is smaller than the limit.
-func splitChangeBatches(changes []*route53.Change) [][]*route53.Change {
+// sortChanges ensures DNS changes are in leaf-added -> root-changed -> leaf-deleted order.
+func sortChanges(changes []*route53.Change) {
+	score := map[string]int{"CREATE": 1, "UPSERT": 2, "DELETE": 3}
+	sort.Slice(changes, func(i, j int) bool {
+		if *changes[i].Action == *changes[j].Action {
+			return *changes[i].ResourceRecordSet.Name < *changes[j].ResourceRecordSet.Name
+		}
+		return score[*changes[i].Action] < score[*changes[j].Action]
+	})
+}
+
+// splitChanges splits up DNS changes such that each change batch
+// is smaller than the given RDATA limit.
+func splitChanges(changes []*route53.Change, limit int) [][]*route53.Change {
 	var batches [][]*route53.Change
 	var batchSize int
 	for _, ch := range changes {
 		// Start new batch if this change pushes the current one over the limit.
 		size := changeSize(ch)
-		if len(batches) == 0 || batchSize+size > route53ChangeLimit {
+		if len(batches) == 0 || batchSize+size > limit {
 			batches = append(batches, nil)
 			batchSize = 0
 		}
@@ -213,6 +222,7 @@ func splitChangeBatches(changes []*route53.Change) [][]*route53.Change {
 	return batches
 }
 
+// changeSize returns the RDATA size of a DNS change.
 func changeSize(ch *route53.Change) int {
 	size := 0
 	for _, rr := range ch.ResourceRecordSet.ResourceRecords {
