@@ -125,7 +125,14 @@ func prepFile(path string) (*countingWriter, error) {
 		return nil, err
 	}
 	ns := fi.Size() - cut
-	if err = f.Truncate(ns); err != nil {
+	if err := f.Close(); err != nil {
+		return nil, err
+	}
+	if err = os.Truncate(path, ns); err != nil {
+		return nil, err
+	}
+	f, err = os.OpenFile(path, os.O_RDWR|os.O_APPEND, 0600)
+	if err != nil {
 		return nil, err
 	}
 	return &countingWriter{w: f, count: uint(ns)}, nil
