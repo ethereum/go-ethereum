@@ -46,15 +46,17 @@ const (
 )
 
 var (
-	blockAnnounceInMeter   = metrics.NewRegisteredMeter("eth/fetcher/block/announces/in", nil)
-	blockAnnounceOutTimer  = metrics.NewRegisteredTimer("eth/fetcher/block/announces/out", nil)
-	blockAnnounceDropMeter = metrics.NewRegisteredMeter("eth/fetcher/block/announces/drop", nil)
-	blockAnnounceDOSMeter  = metrics.NewRegisteredMeter("eth/fetcher/block/announces/dos", nil)
+	blockAnnounceInMeter    = metrics.NewRegisteredMeter("eth/fetcher/block/announces/in", nil)
+	blockAnnounceKnownMeter = metrics.NewRegisteredMeter("eth/fetcher/block/announces/known", nil)
+	blockAnnounceOutTimer   = metrics.NewRegisteredTimer("eth/fetcher/block/announces/out", nil)
+	blockAnnounceDropMeter  = metrics.NewRegisteredMeter("eth/fetcher/block/announces/drop", nil)
+	blockAnnounceDOSMeter   = metrics.NewRegisteredMeter("eth/fetcher/block/announces/dos", nil)
 
-	blockBroadcastInMeter   = metrics.NewRegisteredMeter("eth/fetcher/block/broadcasts/in", nil)
-	blockBroadcastOutTimer  = metrics.NewRegisteredTimer("eth/fetcher/block/broadcasts/out", nil)
-	blockBroadcastDropMeter = metrics.NewRegisteredMeter("eth/fetcher/block/broadcasts/drop", nil)
-	blockBroadcastDOSMeter  = metrics.NewRegisteredMeter("eth/fetcher/block/broadcasts/dos", nil)
+	blockBroadcastInMeter    = metrics.NewRegisteredMeter("eth/fetcher/block/broadcasts/in", nil)
+	blockBroadcastKnownMeter = metrics.NewRegisteredMeter("eth/fetcher/block/broadcasts/known", nil)
+	blockBroadcastOutTimer   = metrics.NewRegisteredTimer("eth/fetcher/block/broadcasts/out", nil)
+	blockBroadcastDropMeter  = metrics.NewRegisteredMeter("eth/fetcher/block/broadcasts/drop", nil)
+	blockBroadcastDOSMeter   = metrics.NewRegisteredMeter("eth/fetcher/block/broadcasts/dos", nil)
 
 	headerFetchMeter = metrics.NewRegisteredMeter("eth/fetcher/block/headers", nil)
 	bodyFetchMeter   = metrics.NewRegisteredMeter("eth/fetcher/block/bodies", nil)
@@ -70,8 +72,8 @@ var errTerminated = errors.New("terminated")
 // HeaderRetrievalFn is a callback type for retrieving a header from the local chain.
 type HeaderRetrievalFn func(common.Hash) *types.Header
 
-// blockRetrievalFn is a callback type for retrieving a block from the local chain.
-type blockRetrievalFn func(common.Hash) *types.Block
+// hasBlockFn is a callback type for checking the presence of a block in the local chain.
+type hasBlockFn func(common.Hash, uint64) bool
 
 // headerRequesterFn is a callback type for sending a header retrieval request.
 type headerRequesterFn func(common.Hash) error
@@ -180,7 +182,7 @@ type BlockFetcher struct {
 
 	// Callbacks
 	getHeader      HeaderRetrievalFn  // Retrieves a header from the local chain
-	getBlock       blockRetrievalFn   // Retrieves a block from the local chain
+	hasBlock       hasBlockFn         // Checks if a block is present in the local chain
 	verifyHeader   headerVerifierFn   // Checks if a block's headers have a valid proof of work
 	broadcastBlock blockBroadcasterFn // Broadcasts a block to connected peers
 	chainHeight    chainHeightFn      // Retrieves the current chain's height
@@ -197,7 +199,7 @@ type BlockFetcher struct {
 }
 
 // NewBlockFetcher creates a block fetcher to retrieve blocks based on hash announcements.
-func NewBlockFetcher(light bool, getHeader HeaderRetrievalFn, getBlock blockRetrievalFn, verifyHeader headerVerifierFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, insertHeaders headersInsertFn, insertChain chainInsertFn, dropPeer peerDropFn) *BlockFetcher {
+func NewBlockFetcher(light bool, getHeader HeaderRetrievalFn, hasBlock hasBlockFn, verifyHeader headerVerifierFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, insertHeaders headersInsertFn, insertChain chainInsertFn, dropPeer peerDropFn) *BlockFetcher {
 	return &BlockFetcher{
 		light:          light,
 		notify:         make(chan *blockAnnounce),
@@ -215,7 +217,7 @@ func NewBlockFetcher(light bool, getHeader HeaderRetrievalFn, getBlock blockRetr
 		queues:         make(map[string]int),
 		queued:         make(map[common.Hash]*blockOrHeaderInject),
 		getHeader:      getHeader,
-		getBlock:       getBlock,
+		hasBlock:       hasBlock,
 		verifyHeader:   verifyHeader,
 		broadcastBlock: broadcastBlock,
 		chainHeight:    chainHeight,
@@ -241,6 +243,12 @@ func (f *BlockFetcher) Stop() {
 // the network.
 func (f *BlockFetcher) Notify(peer string, hash common.Hash, number uint64, time time.Time,
 	headerFetcher headerRequesterFn, bodyFetcher bodyRequesterFn) error {
+	// Keep track of all the announced blocks
+	blockAnnounceInMeter.Mark(1)
+	if f.hasBlock(hash, number) {
+		blockAnnounceKnownMeter.Mark(1)
+		return nil
+	}
 	block := &blockAnnounce{
 		hash:        hash,
 		number:      number,
@@ -259,6 +267,11 @@ func (f *BlockFetcher) Notify(peer string, hash common.Hash, number uint64, time
 
 // Enqueue tries to fill gaps the fetcher's future import queue.
 func (f *BlockFetcher) Enqueue(peer string, block *types.Block) error {
+	blockBroadcastInMeter.Mark(1)
+	if f.hasBlock(block.Hash(), block.NumberU64()) {
+		blockBroadcastKnownMeter.Mark(1)
+		return nil
+	}
 	op := &blockOrHeaderInject{
 		origin: peer,
 		block:  block,
@@ -361,7 +374,7 @@ func (f *BlockFetcher) loop() {
 				break
 			}
 			// Otherwise if fresh and still unknown, try and import
-			if (number+maxUncleDist < height) || (f.light && f.getHeader(hash) != nil) || (!f.light && f.getBlock(hash) != nil) {
+			if (number+maxUncleDist < height) || (f.light && f.getHeader(hash) != nil) || (!f.light && f.hasBlock(hash, number)) {
 				f.forgetBlock(hash)
 				continue
 			}
@@ -379,8 +392,6 @@ func (f *BlockFetcher) loop() {
 
 		case notification := <-f.notify:
 			// A block was announced, make sure the peer isn't DOSing us
-			blockAnnounceInMeter.Mark(1)
-
 			count := f.announces[notification.origin] + 1
 			if count > hashLimit {
 				log.Debug("Peer exceeded outstanding announces", "peer", notification.origin, "limit", hashLimit)
@@ -413,7 +424,6 @@ func (f *BlockFetcher) loop() {
 
 		case op := <-f.inject:
 			// A direct block insertion was requested, try and fill any pending gaps
-			blockBroadcastInMeter.Mark(1)
 
 			// Now only direct block injection is allowed, drop the header injection
 			// here silently if we receive.
@@ -444,7 +454,7 @@ func (f *BlockFetcher) loop() {
 					f.forgetHash(hash)
 
 					// If the block still didn't arrive, queue for fetching
-					if (f.light && f.getHeader(hash) == nil) || (!f.light && f.getBlock(hash) == nil) {
+					if (f.light && f.getHeader(hash) == nil) || (!f.light && !f.hasBlock(hash, announce.number)) {
 						request[announce.origin] = append(request[announce.origin], hash)
 						f.fetching[hash] = announce
 					}
@@ -479,7 +489,7 @@ func (f *BlockFetcher) loop() {
 				f.forgetHash(hash)
 
 				// If the block still didn't arrive, queue for completion
-				if f.getBlock(hash) == nil {
+				if !f.hasBlock(hash, announce.number) {
 					request[announce.origin] = append(request[announce.origin], hash)
 					f.completing[hash] = announce
 				}
@@ -536,7 +546,7 @@ func (f *BlockFetcher) loop() {
 						continue
 					}
 					// Only keep if not imported by other means
-					if f.getBlock(hash) == nil {
+					if !f.hasBlock(hash, announce.number) {
 						announce.header = header
 						announce.time = task.time
 
@@ -627,7 +637,7 @@ func (f *BlockFetcher) loop() {
 						}
 						// Mark the body matched, reassemble if still unknown
 						matched = true
-						if f.getBlock(hash) == nil {
+						if !f.hasBlock(hash, announce.number) {
 							block := types.NewBlockWithHeader(announce.header).WithBody(task.transactions[i], task.uncles[i])
 							block.ReceivedAt = task.time
 							blocks = append(blocks, block)
@@ -788,8 +798,7 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 		defer func() { f.done <- hash }()
 
 		// If the parent's unknown, abort insertion
-		parent := f.getBlock(block.ParentHash())
-		if parent == nil {
+		if !f.hasBlock(block.ParentHash(), block.NumberU64()-1) {
 			log.Debug("Unknown parent of propagated block", "peer", peer, "number", block.Number(), "hash", hash, "parent", block.ParentHash())
 			return
 		}
