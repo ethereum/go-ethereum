@@ -19,7 +19,7 @@ override_dh_auto_build:
 
 	# We can't download external go modules within Launchpad, so we're shipping the
 	# entire dependency source cache with go-ethereum.
-	(mkdir -p $HOME/go/pkg/mod && mv .mod/* $HOME/go/pkg/mod)
+	(mkdir -p $(HOME)/go/pkg/mod && mv .mod/* $(HOME)/go/pkg/mod)
 
 	# A fresh Go was built, all dependency downloads faked, hope build works now
 	../.go/bin/go run build/ci.go install -git-commit={{.Env.Commit}} -git-branch={{.Env.Branch}} -git-tag={{.Env.Tag}} -buildnum={{.Env.Buildnum}} -pull-request={{.Env.IsPullRequest}}
