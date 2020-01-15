@@ -19,8 +19,8 @@ package main
 import (
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/external"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"

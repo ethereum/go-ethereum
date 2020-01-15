@@ -30,8 +30,8 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/ethereum/go-ethereum/abi"
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
