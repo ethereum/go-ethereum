@@ -608,7 +608,7 @@ func testBroadcastBlock(t *testing.T, totalPeers, broadcastExpected int) {
 			}
 		}(peer)
 	}
-	timeout := time.After(time.Second)
+	timeout := time.After(2 * time.Second)
 	var receivedCount int
 outer:
 	for {
