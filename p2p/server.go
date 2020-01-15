@@ -864,7 +864,6 @@ func (srv *Server) maxDialedConns() int {
 // listenLoop runs in its own goroutine and accepts
 // inbound connections.
 func (srv *Server) listenLoop() {
-	defer srv.loopWG.Done()
 	srv.log.Debug("TCP listener up", "addr", srv.listener.Addr())
 
 	tokens := defaultMaxPendingPeers
@@ -872,6 +871,12 @@ func (srv *Server) listenLoop() {
 		tokens = srv.MaxPendingPeers
 	}
 	slots := make(chan struct{}, tokens)
+	defer func() {
+		// Wait for a slot. This is to wait for any goroutine(s) doing srv.SetupConn
+		// to complete before exiting
+		<-slots
+		srv.loopWG.Done()
+	}()
 	for i := 0; i < tokens; i++ {
 		slots <- struct{}{}
 	}
