@@ -3,7 +3,7 @@
 
 accounts/usbwallet              @karalabe
 accounts/scwallet               @gballet
-accounts/abi                    @gballet
+abi	                        @gballet @rjl493456442
 cmd/clef                        @holiman
 cmd/puppeth                     @karalabe
 consensus                       @karalabe
