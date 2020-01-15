@@ -696,3 +696,59 @@ func TestBroadcastMalformedBlock(t *testing.T) {
 		}
 	}
 }
+
+// TestBroadcastBlockSpam Tests that how we handle if a peer broadcasts a canon
+// block (close to head) multiple times
+func TestBroadcastBlockSpam(t *testing.T) {
+	// Create a live node to test propagation with
+	var (
+		engine  = ethash.NewFaker()
+		db      = rawdb.NewMemoryDatabase()
+		config  = &params.ChainConfig{}
+		gspec   = &core.Genesis{Config: config}
+		genesis = gspec.MustCommit(db)
+	)
+	blockchain, err := core.NewBlockChain(db, nil, config, engine, vm.Config{}, nil)
+	if err != nil {
+		t.Fatalf("failed to create new blockchain: %v", err)
+	}
+	pm, err := NewProtocolManager(config, nil, downloader.FullSync, DefaultConfig.NetworkId, new(event.TypeMux), new(testTxPool), engine, blockchain, db, 1, nil)
+	if err != nil {
+		t.Fatalf("failed to start test protocol manager: %v", err)
+	}
+	pm.Start(2)
+	defer pm.Stop()
+	// Create two peers, one to send the block with and one to check
+	// propagation
+	source, _ := newTestPeer("source", eth63, pm, true)
+	defer source.close()
+
+	sink, _ := newTestPeer("sink", eth63, pm, true)
+	defer sink.close()
+
+	// Create a chain
+	chain, _ := core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, 2, func(i int, gen *core.BlockGen) {})
+
+	// Broadcast head N times
+	nBroadcasts := 10
+	for i := 0; i < nBroadcasts; i++ {
+		block := chain[0]
+		if err := p2p.Send(source.app, NewBlockMsg, []interface{}{block, big.NewInt(131136)}); err != nil {
+			t.Fatalf("failed to broadcast block: %v", err)
+		}
+	}
+	// Broadcast new head N times
+	for i := 0; i < nBroadcasts; i++ {
+		block := chain[1]
+		if err := p2p.Send(source.app, NewBlockMsg, []interface{}{block, big.NewInt(131137)}); err != nil {
+			t.Fatalf("failed to broadcast block: %v", err)
+		}
+	}
+	// Broadcast old block N times
+	for i := 0; i < nBroadcasts; i++ {
+		block := chain[0]
+		if err := p2p.Send(source.app, NewBlockMsg, []interface{}{block, big.NewInt(131136)}); err != nil {
+			t.Fatalf("failed to broadcast block: %v", err)
+		}
+	}
+}
