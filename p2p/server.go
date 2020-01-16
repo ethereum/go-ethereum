@@ -866,20 +866,24 @@ func (srv *Server) maxDialedConns() int {
 func (srv *Server) listenLoop() {
 	srv.log.Debug("TCP listener up", "addr", srv.listener.Addr())
 
+	// The slots channel limits accepts of new connections.
 	tokens := defaultMaxPendingPeers
 	if srv.MaxPendingPeers > 0 {
 		tokens = srv.MaxPendingPeers
 	}
 	slots := make(chan struct{}, tokens)
-	defer func() {
-		// Wait for a slot. This is to wait for any goroutine(s) doing srv.SetupConn
-		// to complete before exiting
-		<-slots
-		srv.loopWG.Done()
-	}()
 	for i := 0; i < tokens; i++ {
 		slots <- struct{}{}
 	}
+
+	// Wait for slots to be returned on exit. This ensures all connection goroutines
+	// are down before listenLoop returns.
+	defer srv.loopWG.Done()
+	defer func() {
+		for i := 0; i < cap(slots); i++ {
+			<-slots
+		}
+	}()
 
 	for {
 		// Wait for a free slot before accepting.
@@ -896,6 +900,7 @@ func (srv *Server) listenLoop() {
 				continue
 			} else if err != nil {
 				srv.log.Debug("Read error", "err", err)
+				slots <- struct{}{}
 				return
 			}
 			break
