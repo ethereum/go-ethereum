@@ -52,3 +52,24 @@ func testHTTPErrorResponse(t *testing.T, method, contentType, body string, expec
 		t.Fatalf("response code should be %d not %d", expected, code)
 	}
 }
+
+func TestHTTPClientGzip(t *testing.T) {
+	var (
+		s  = newTestServer()
+		ts = httptest.NewServer(newGzipHandler(s))
+	)
+	defer s.Stop()
+	defer ts.Close()
+
+	httpclient := http.Client{Transport: &http.Transport{DisableCompression: true}}
+	client, err := DialHTTPWithClient(ts.URL, &httpclient)
+	if err != nil {
+		t.Fatal("can't create client", err)
+	}
+	defer client.Close()
+
+	var result string
+	if err := client.Call(&result, "test_rets"); err != nil {
+		t.Fatal("call error:", err)
+	}
+}
