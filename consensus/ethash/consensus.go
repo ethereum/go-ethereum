@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 	"runtime"
 	"time"
@@ -532,21 +533,30 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainReader, header *types.Head
 		}
 	}
 	// If slow-but-light PoW verification was requested (or DAG not yet ready), use an ethash cache
+	var ctx []interface{}
 	if !fulldag {
 		cache := ethash.cache(number)
-
+		ctx = append(ctx, "number", number)
 		size := datasetSize(number)
 		if ethash.config.PowMode == ModeTest {
 			size = 32 * 1024
 		}
-		digest, result = hashimotoLight(size, cache.cache, ethash.SealHash(header).Bytes(), header.Nonce.Uint64())
-
+		ctx = append(ctx, "datasetSize", size)
+		nonce := header.Nonce.Uint64()
+		ctx = append(ctx, "hdr.nonce", nonce)
+		sealHash := ethash.SealHash(header).Bytes()
+		ctx = append(ctx, "sealHash", sealHash)
+		digest, result = hashimotoLight(size, cache.cache, sealHash, nonce)
+		ctx = append(ctx, "result", result)
 		// Caches are unmapped in a finalizer. Ensure that the cache stays alive
 		// until after the call to hashimotoLight so it's not unmapped while being used.
 		runtime.KeepAlive(cache)
 	}
 	// Verify the calculated values against the ones provided in the header
 	if !bytes.Equal(header.MixDigest[:], digest) {
+		ctx = append(ctx, "digest", digest)
+		ctx = append(ctx, "hdr.digest", header.MixDigest[:])
+		log.Error("Invalid mix digest", ctx...)
 		return errInvalidMixDigest
 	}
 	target := new(big.Int).Div(two256, header.Difficulty)
