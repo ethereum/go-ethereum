@@ -34,7 +34,7 @@ import (
 
 // The Route53 limits change sets to this size. DNS changes need to be split
 // up into multiple batches to work around the limit.
-const route53ChangeLimit = 32000
+const route53ChangeLimit = 30000
 
 var (
 	route53AccessKeyFlag = cli.StringFlag{
