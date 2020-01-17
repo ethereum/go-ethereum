@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/gorilla/websocket"
 )
 
 // SimAdapter is a NodeAdapter which creates in-memory simulation nodes and
@@ -71,8 +72,13 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	// check a node with the ID doesn't already exist
 	id := config.ID
+	// verify that the node has a private key in the config
+	if config.PrivateKey == nil {
+		return nil, fmt.Errorf("node is missing private key: %s", id)
+	}
+
+	// check a node with the ID doesn't already exist
 	if _, exists := s.nodes[id]; exists {
 		return nil, fmt.Errorf("node already exists: %s", id)
 	}
@@ -85,6 +91,11 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 		if _, exists := s.services[service]; !exists {
 			return nil, fmt.Errorf("unknown node service %q", service)
 		}
+	}
+
+	err := config.initDummyEnode()
+	if err != nil {
+		return nil, err
 	}
 
 	n, err := node.New(&node.Config{
@@ -200,13 +211,14 @@ func (sn *SimNode) Client() (*rpc.Client, error) {
 }
 
 // ServeRPC serves RPC requests over the given connection by creating an
-// in-memory client to the node's RPC server
-func (sn *SimNode) ServeRPC(conn net.Conn) error {
+// in-memory client to the node's RPC server.
+func (sn *SimNode) ServeRPC(conn *websocket.Conn) error {
 	handler, err := sn.node.RPCHandler()
 	if err != nil {
 		return err
 	}
-	handler.ServeCodec(rpc.NewJSONCodec(conn), rpc.OptionMethodInvocation|rpc.OptionSubscriptions)
+	codec := rpc.NewFuncCodec(conn, conn.WriteJSON, conn.ReadJSON)
+	handler.ServeCodec(codec, 0)
 	return nil
 }
 

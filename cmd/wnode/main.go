@@ -37,6 +37,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -165,7 +166,7 @@ func echo() {
 	fmt.Printf("pow = %f \n", *argPoW)
 	fmt.Printf("mspow = %f \n", *argServerPoW)
 	fmt.Printf("ip = %s \n", *argIP)
-	fmt.Printf("pub = %s \n", common.ToHex(crypto.FromECDSAPub(pub)))
+	fmt.Printf("pub = %s \n", hexutil.Encode(crypto.FromECDSAPub(pub)))
 	fmt.Printf("idfile = %s \n", *argIDFile)
 	fmt.Printf("dbpath = %s \n", *argDBPath)
 	fmt.Printf("boot = %s \n", *argEnode)
@@ -203,7 +204,7 @@ func initialize() {
 		if len(*argEnode) == 0 {
 			argEnode = scanLineA("Please enter the peer's enode: ")
 		}
-		peer := enode.MustParseV4(*argEnode)
+		peer := enode.MustParse(*argEnode)
 		peers = append(peers, peer)
 	}
 
@@ -298,7 +299,7 @@ func startServer() error {
 		return err
 	}
 
-	fmt.Printf("my public key: %s \n", common.ToHex(crypto.FromECDSAPub(&asymKey.PublicKey)))
+	fmt.Printf("my public key: %s \n", hexutil.Encode(crypto.FromECDSAPub(&asymKey.PublicKey)))
 	fmt.Println(server.NodeInfo().Enode)
 
 	if *bootstrapMode {
@@ -356,7 +357,7 @@ func configureNode() {
 		if len(symPass) == 0 {
 			symPass, err = console.Stdin.PromptPassword("Please enter the password for symmetric encryption: ")
 			if err != nil {
-				utils.Fatalf("Failed to read passphrase: %v", err)
+				utils.Fatalf("Failed to read password: %v", err)
 			}
 		}
 
@@ -747,9 +748,9 @@ func requestExpiredMessagesLoop() {
 }
 
 func extractIDFromEnode(s string) []byte {
-	n, err := enode.ParseV4(s)
+	n, err := enode.Parse(enode.ValidSchemes, s)
 	if err != nil {
-		utils.Fatalf("Failed to parse enode: %s", err)
+		utils.Fatalf("Failed to parse node: %s", err)
 	}
 	return n.ID().Bytes()
 }

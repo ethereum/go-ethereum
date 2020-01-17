@@ -29,10 +29,10 @@ var (
 	// databaseVerisionKey tracks the current database version.
 	databaseVerisionKey = []byte("DatabaseVersion")
 
-	// headHeaderKey tracks the latest know header's hash.
+	// headHeaderKey tracks the latest known header's hash.
 	headHeaderKey = []byte("LastHeader")
 
-	// headBlockKey tracks the latest know full block's hash.
+	// headBlockKey tracks the latest known full block's hash.
 	headBlockKey = []byte("LastBlock")
 
 	// headFastBlockKey tracks the latest known incomplete block's hash during fast sync.
@@ -63,6 +63,33 @@ var (
 	preimageHitCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
 )
 
+const (
+	// freezerHeaderTable indicates the name of the freezer header table.
+	freezerHeaderTable = "headers"
+
+	// freezerHashTable indicates the name of the freezer canonical hash table.
+	freezerHashTable = "hashes"
+
+	// freezerBodiesTable indicates the name of the freezer block body table.
+	freezerBodiesTable = "bodies"
+
+	// freezerReceiptTable indicates the name of the freezer receipts table.
+	freezerReceiptTable = "receipts"
+
+	// freezerDifficultyTable indicates the name of the freezer total difficulty table.
+	freezerDifficultyTable = "diffs"
+)
+
+// freezerNoSnappy configures whether compression is disabled for the ancient-tables.
+// Hashes and difficulties don't compress well.
+var freezerNoSnappy = map[string]bool{
+	freezerHeaderTable:     false,
+	freezerHashTable:       true,
+	freezerBodiesTable:     false,
+	freezerReceiptTable:    false,
+	freezerDifficultyTable: true,
+}
+
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
 // fields.
 type LegacyTxLookupEntry struct {
@@ -76,6 +103,11 @@ func encodeBlockNumber(number uint64) []byte {
 	enc := make([]byte, 8)
 	binary.BigEndian.PutUint64(enc, number)
 	return enc
+}
+
+// headerKeyPrefix = headerPrefix + num (uint64 big endian)
+func headerKeyPrefix(number uint64) []byte {
+	return append(headerPrefix, encodeBlockNumber(number)...)
 }
 
 // headerKey = headerPrefix + num (uint64 big endian) + hash

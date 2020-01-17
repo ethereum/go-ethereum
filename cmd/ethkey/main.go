@@ -30,11 +30,12 @@ const (
 
 // Git SHA1 commit hash of the release (set via linker flags)
 var gitCommit = ""
+var gitDate = ""
 
 var app *cli.App
 
 func init() {
-	app = utils.NewApp(gitCommit, "an Ethereum key manager")
+	app = utils.NewApp(gitCommit, gitDate, "an Ethereum key manager")
 	app.Commands = []cli.Command{
 		commandGenerate,
 		commandInspect,
@@ -42,13 +43,14 @@ func init() {
 		commandSignMessage,
 		commandVerifyMessage,
 	}
+	cli.CommandHelpTemplate = utils.OriginCommandHelpTemplate
 }
 
 // Commonly used command line flags.
 var (
 	passphraseFlag = cli.StringFlag{
 		Name:  "passwordfile",
-		Usage: "the file that contains the passphrase for the keyfile",
+		Usage: "the file that contains the password for the keyfile",
 	}
 	jsonFlag = cli.BoolFlag{
 		Name:  "json",

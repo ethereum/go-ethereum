@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -53,24 +53,24 @@ func sequentialIDGenerator() func() ID {
 
 type testService struct{}
 
-type Args struct {
+type echoArgs struct {
 	S string
 }
 
-type Result struct {
+type echoResult struct {
 	String string
 	Int    int
-	Args   *Args
+	Args   *echoArgs
 }
 
 func (s *testService) NoArgsRets() {}
 
-func (s *testService) Echo(str string, i int, args *Args) Result {
-	return Result{str, i, args}
+func (s *testService) Echo(str string, i int, args *echoArgs) echoResult {
+	return echoResult{str, i, args}
 }
 
-func (s *testService) EchoWithCtx(ctx context.Context, str string, i int, args *Args) Result {
-	return Result{str, i, args}
+func (s *testService) EchoWithCtx(ctx context.Context, str string, i int, args *echoArgs) echoResult {
+	return echoResult{str, i, args}
 }
 
 func (s *testService) Sleep(ctx context.Context, duration time.Duration) {
@@ -81,6 +81,7 @@ func (s *testService) Rets() (string, error) {
 	return "", nil
 }
 
+//lint:ignore ST1008 returns error first on purpose.
 func (s *testService) InvalidRets1() (error, string) {
 	return nil, ""
 }

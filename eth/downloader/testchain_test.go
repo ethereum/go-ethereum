@@ -24,9 +24,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -34,7 +34,7 @@ import (
 var (
 	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddress = crypto.PubkeyToAddress(testKey.PublicKey)
-	testDB      = ethdb.NewMemDatabase()
+	testDB      = rawdb.NewMemoryDatabase()
 	testGenesis = core.GenesisBlockForTesting(testDB, testAddress, big.NewInt(1000000000))
 )
 
@@ -45,7 +45,7 @@ var testChainBase = newTestChain(blockCacheItems+200, testGenesis)
 var testChainForkLightA, testChainForkLightB, testChainForkHeavy *testChain
 
 func init() {
-	var forkLen = int(MaxForkAncestry + 50)
+	var forkLen = int(maxForkAncestry + 50)
 	var wg sync.WaitGroup
 	wg.Add(3)
 	go func() { testChainForkLightA = testChainBase.makeFork(forkLen, false, 1); wg.Done() }()

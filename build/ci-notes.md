@@ -22,19 +22,18 @@ variables `PPA_SIGNING_KEY` and `PPA_SSH_KEY` on Travis.
 
 We want to build go-ethereum with the most recent version of Go, irrespective of the Go
 version that is available in the main Ubuntu repository. In order to make this possible,
-our PPA depends on the ~gophers/ubuntu/archive PPA. Our source package build-depends on
-golang-1.10, which is co-installable alongside the regular golang package. PPA dependencies
-can be edited at https://launchpad.net/%7Eethereum/+archive/ubuntu/ethereum/+edit-dependencies
+we bundle the entire Go sources into our own source archive and start the built job by
+compiling Go and then using that to build go-ethereum. On Trusty we have a special case
+requiring the `~gophers/ubuntu/archive` PPA since Trusty can't even build Go itself. PPA
+deps are set at https://launchpad.net/%7Eethereum/+archive/ubuntu/ethereum/+edit-dependencies
 
 ## Building Packages Locally (for testing)
 
 You need to run Ubuntu to do test packaging.
 
-Add the gophers PPA and install Go 1.10 and Debian packaging tools:
+Install any version of Go and Debian packaging tools:
 
-    $ sudo apt-add-repository ppa:gophers/ubuntu/archive
-    $ sudo apt-get update
-    $ sudo apt-get install build-essential golang-1.10 devscripts debhelper python-bzrlib python-paramiko
+    $ sudo apt-get install build-essential golang-go devscripts debhelper python-bzrlib python-paramiko
 
 Create the source packages:
 
@@ -42,10 +41,10 @@ Create the source packages:
 
 Then go into the source package directory for your running distribution and build the package:
 
-    $ cd dist/ethereum-unstable-1.6.0+xenial
+    $ cd dist/ethereum-unstable-1.9.6+bionic
     $ dpkg-buildpackage
 
 Built packages are placed in the dist/ directory.
 
     $ cd ..
-    $ dpkg-deb -c geth-unstable_1.6.0+xenial_amd64.deb
+    $ dpkg-deb -c geth-unstable_1.9.6+bionic_amd64.deb

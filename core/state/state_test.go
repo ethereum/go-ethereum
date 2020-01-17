@@ -22,21 +22,27 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	checker "gopkg.in/check.v1"
 )
-
-type StateSuite struct {
-	db    *ethdb.MemDatabase
-	state *StateDB
-}
-
-var _ = checker.Suite(&StateSuite{})
 
 var toAddr = common.BytesToAddress
 
-func (s *StateSuite) TestDump(c *checker.C) {
+type stateTest struct {
+	db    ethdb.Database
+	state *StateDB
+}
+
+func newStateTest() *stateTest {
+	db := rawdb.NewMemoryDatabase()
+	sdb, _ := New(common.Hash{}, NewDatabase(db))
+	return &stateTest{db: db, state: sdb}
+}
+
+func TestDump(t *testing.T) {
+	s := newStateTest()
+
 	// generate a few entries
 	obj1 := s.state.GetOrNewStateObject(toAddr([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
@@ -51,47 +57,38 @@ func (s *StateSuite) TestDump(c *checker.C) {
 	s.state.Commit(false)
 
 	// check that dump contains the state objects that are in trie
-	got := string(s.state.Dump())
+	got := string(s.state.Dump(false, false, true))
 	want := `{
     "root": "71edff0130dd2385947095001c73d9e28d862fc286fca2b922ca6f6f3cddfdd2",
     "accounts": {
-        "0000000000000000000000000000000000000001": {
+        "0x0000000000000000000000000000000000000001": {
             "balance": "22",
             "nonce": 0,
             "root": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-            "codeHash": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
-            "code": "",
-            "storage": {}
+            "codeHash": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
         },
-        "0000000000000000000000000000000000000002": {
+        "0x0000000000000000000000000000000000000002": {
             "balance": "44",
             "nonce": 0,
             "root": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-            "codeHash": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
-            "code": "",
-            "storage": {}
+            "codeHash": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
         },
-        "0000000000000000000000000000000000000102": {
+        "0x0000000000000000000000000000000000000102": {
             "balance": "0",
             "nonce": 0,
             "root": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
             "codeHash": "87874902497a5bb968da31a2998d8f22e949d1ef6214bcdedd8bae24cca4b9e3",
-            "code": "03030303030303",
-            "storage": {}
+            "code": "03030303030303"
         }
     }
 }`
 	if got != want {
-		c.Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
+		t.Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
 	}
 }
 
-func (s *StateSuite) SetUpTest(c *checker.C) {
-	s.db = ethdb.NewMemDatabase()
-	s.state, _ = New(common.Hash{}, NewDatabase(s.db))
-}
-
-func (s *StateSuite) TestNull(c *checker.C) {
+func TestNull(t *testing.T) {
+	s := newStateTest()
 	address := common.HexToAddress("0x823140710bf13990e4500136726d8b55")
 	s.state.CreateAccount(address)
 	//value := common.FromHex("0x823140710bf13990e4500136726d8b55")
@@ -101,18 +98,19 @@ func (s *StateSuite) TestNull(c *checker.C) {
 	s.state.Commit(false)
 
 	if value := s.state.GetState(address, common.Hash{}); value != (common.Hash{}) {
-		c.Errorf("expected empty current value, got %x", value)
+		t.Errorf("expected empty current value, got %x", value)
 	}
 	if value := s.state.GetCommittedState(address, common.Hash{}); value != (common.Hash{}) {
-		c.Errorf("expected empty committed value, got %x", value)
+		t.Errorf("expected empty committed value, got %x", value)
 	}
 }
 
-func (s *StateSuite) TestSnapshot(c *checker.C) {
+func TestSnapshot(t *testing.T) {
 	stateobjaddr := toAddr([]byte("aa"))
 	var storageaddr common.Hash
 	data1 := common.BytesToHash([]byte{42})
 	data2 := common.BytesToHash([]byte{43})
+	s := newStateTest()
 
 	// snapshot the genesis state
 	genesis := s.state.Snapshot()
@@ -125,23 +123,30 @@ func (s *StateSuite) TestSnapshot(c *checker.C) {
 	s.state.SetState(stateobjaddr, storageaddr, data2)
 	s.state.RevertToSnapshot(snapshot)
 
-	c.Assert(s.state.GetState(stateobjaddr, storageaddr), checker.DeepEquals, data1)
-	c.Assert(s.state.GetCommittedState(stateobjaddr, storageaddr), checker.DeepEquals, common.Hash{})
+	if v := s.state.GetState(stateobjaddr, storageaddr); v != data1 {
+		t.Errorf("wrong storage value %v, want %v", v, data1)
+	}
+	if v := s.state.GetCommittedState(stateobjaddr, storageaddr); v != (common.Hash{}) {
+		t.Errorf("wrong committed storage value %v, want %v", v, common.Hash{})
+	}
 
 	// revert up to the genesis state and ensure correct content
 	s.state.RevertToSnapshot(genesis)
-	c.Assert(s.state.GetState(stateobjaddr, storageaddr), checker.DeepEquals, common.Hash{})
-	c.Assert(s.state.GetCommittedState(stateobjaddr, storageaddr), checker.DeepEquals, common.Hash{})
+	if v := s.state.GetState(stateobjaddr, storageaddr); v != (common.Hash{}) {
+		t.Errorf("wrong storage value %v, want %v", v, common.Hash{})
+	}
+	if v := s.state.GetCommittedState(stateobjaddr, storageaddr); v != (common.Hash{}) {
+		t.Errorf("wrong committed storage value %v, want %v", v, common.Hash{})
+	}
 }
 
-func (s *StateSuite) TestSnapshotEmpty(c *checker.C) {
+func TestSnapshotEmpty(t *testing.T) {
+	s := newStateTest()
 	s.state.RevertToSnapshot(s.state.Snapshot())
 }
 
-// use testing instead of checker because checker does not support
-// printing/logging in tests (-check.vv does not work)
 func TestSnapshot2(t *testing.T) {
-	state, _ := New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()))
+	state, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()))
 
 	stateobjaddr0 := toAddr([]byte("so0"))
 	stateobjaddr1 := toAddr([]byte("so1"))

@@ -99,7 +99,7 @@ func (mw *memoryWrapper) slice(begin, end int64) []byte {
 		log.Warn("Tracer accessed out of bound memory", "available", mw.memory.Len(), "offset", begin, "size", end-begin)
 		return nil
 	}
-	return mw.memory.Get(begin, end-begin)
+	return mw.memory.GetCopy(begin, end-begin)
 }
 
 // getUint returns the 32 bytes at the specified address interpreted as a uint.
@@ -390,7 +390,7 @@ func New(code string) (*Tracer, error) {
 		return 1
 	})
 	tracer.vm.PushGlobalGoFunction("isPrecompiled", func(ctx *duktape.Context) int {
-		_, ok := vm.PrecompiledContractsByzantium[common.BytesToAddress(popSlice(ctx))]
+		_, ok := vm.PrecompiledContractsIstanbul[common.BytesToAddress(popSlice(ctx))]
 		ctx.PushBoolean(ok)
 		return 1
 	})
@@ -419,17 +419,17 @@ func New(code string) (*Tracer, error) {
 	tracer.tracerObject = 0 // yeah, nice, eval can't return the index itself
 
 	if !tracer.vm.GetPropString(tracer.tracerObject, "step") {
-		return nil, fmt.Errorf("Trace object must expose a function step()")
+		return nil, fmt.Errorf("trace object must expose a function step()")
 	}
 	tracer.vm.Pop()
 
 	if !tracer.vm.GetPropString(tracer.tracerObject, "fault") {
-		return nil, fmt.Errorf("Trace object must expose a function fault()")
+		return nil, fmt.Errorf("trace object must expose a function fault()")
 	}
 	tracer.vm.Pop()
 
 	if !tracer.vm.GetPropString(tracer.tracerObject, "result") {
-		return nil, fmt.Errorf("Trace object must expose a function result()")
+		return nil, fmt.Errorf("trace object must expose a function result()")
 	}
 	tracer.vm.Pop()
 

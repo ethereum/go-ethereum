@@ -19,27 +19,30 @@
 package geth
 
 import (
+	"errors"
 	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// Signer is an interaface defining the callback when a contract requires a
+// Signer is an interface defining the callback when a contract requires a
 // method to sign the transaction before submission.
 type Signer interface {
 	Sign(*Address, *Transaction) (tx *Transaction, _ error)
 }
 
-type signer struct {
+type MobileSigner struct {
 	sign bind.SignerFn
 }
 
-func (s *signer) Sign(addr *Address, unsignedTx *Transaction) (signedTx *Transaction, _ error) {
-	sig, err := s.sign(types.HomesteadSigner{}, addr.address, unsignedTx.tx)
+func (s *MobileSigner) Sign(addr *Address, unsignedTx *Transaction) (signedTx *Transaction, _ error) {
+	sig, err := s.sign(types.EIP155Signer{}, addr.address, unsignedTx.tx)
 	if err != nil {
 		return nil, err
 	}
@@ -71,6 +74,35 @@ func (opts *CallOpts) SetContext(context *Context) { opts.opts.Context = context
 // valid Ethereum transaction.
 type TransactOpts struct {
 	opts bind.TransactOpts
+}
+
+// NewTransactOpts creates a new option set for contract transaction.
+func NewTransactOpts() *TransactOpts {
+	return new(TransactOpts)
+}
+
+// NewKeyedTransactor is a utility method to easily create a transaction signer
+// from a single private key.
+func NewKeyedTransactOpts(keyJson []byte, passphrase string) (*TransactOpts, error) {
+	key, err := keystore.DecryptKey(keyJson, passphrase)
+	if err != nil {
+		return nil, err
+	}
+	keyAddr := crypto.PubkeyToAddress(key.PrivateKey.PublicKey)
+	opts := bind.TransactOpts{
+		From: keyAddr,
+		Signer: func(signer types.Signer, address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+			if address != keyAddr {
+				return nil, errors.New("not authorized to sign this account")
+			}
+			signature, err := crypto.Sign(signer.Hash(tx).Bytes(), key.PrivateKey)
+			if err != nil {
+				return nil, err
+			}
+			return tx.WithSignature(signer, signature)
+		},
+	}
+	return &TransactOpts{opts}, nil
 }
 
 func (opts *TransactOpts) GetFrom() *Address    { return &Address{opts.opts.From} }

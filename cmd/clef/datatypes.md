@@ -11,7 +11,7 @@ Example:
   "content_type": "text/plain",
   "address": "0xDEADbEeF000000000000000000000000DeaDbeEf",
   "raw_data": "GUV0aGVyZXVtIFNpZ25lZCBNZXNzYWdlOgoxMWhlbGxvIHdvcmxk",
-  "message": [
+  "messages": [
     {
       "name": "message",
       "value": "\u0019Ethereum Signed Message:\n11hello world",
@@ -35,8 +35,7 @@ Response to SignDataRequest
 Example:
 ```json
 {
-  "approved": true,
-  "Password": "apassword"
+  "approved": true
 }
 ```
 ### SignDataResponse - deny
@@ -46,8 +45,7 @@ Response to SignDataRequest
 Example:
 ```json
 {
-  "approved": false,
-  "Password": ""
+  "approved": false
 }
 ```
 ### SignTxRequest
@@ -89,9 +87,9 @@ Example:
   }
 }
 ```
-### SignDataResponse - approve
+### SignTxResponse - approve
 
-Response to SignDataRequest. This response needs to contain the `transaction`, because the UI is free to make modifications to the transaction.
+Response to request to sign a transaction. This response needs to contain the `transaction`, because the UI is free to make modifications to the transaction.
 
 Example:
 ```json
@@ -105,19 +103,26 @@ Example:
     "nonce": "0x4",
     "data": "0x04030201"
   },
-  "approved": true,
-  "password": "apassword"
+  "approved": true
 }
 ```
-### SignDataResponse - deny
+### SignTxResponse - deny
 
-Response to SignDataRequest. When denying a request, there's no need to provide the transaction in return
+Response to SignTxRequest. When denying a request, there's no need to provide the transaction in return
 
 Example:
 ```json
 {
-  "approved": false,
-  "Password": ""
+  "transaction": {
+    "from": "0x",
+    "to": null,
+    "gas": "0x0",
+    "gasPrice": "0x0",
+    "value": "0x0",
+    "nonce": "0x0",
+    "data": null
+  },
+  "approved": false
 }
 ```
 ### OnApproved - SignTransactionResult
@@ -128,7 +133,7 @@ This occurs _after_ successful completion of the entire signing procedure, but r
 
 A ruleset that implements a rate limitation needs to know what transactions are sent out to the external interface. By hooking into this methods, the ruleset can maintain track of that count.
 
-**OBS:** Note that if an attacker can restore your `clef` data to a previous point in time (e.g through a backup), the attacker can reset such windows, even if he/she is unable to decrypt the content. 
+**OBS:** Note that if an attacker can restore your `clef` data to a previous point in time (e.g through a backup), the attacker can reset such windows, even if he/she is unable to decrypt the content.
 
 The `OnApproved` method cannot be responded to, it's purely informative
 
@@ -164,7 +169,7 @@ Example:
 ```
 ### UserInputResponse
 
-Response to SignDataRequest
+Response to UserInputRequest
 
 Example:
 ```json
@@ -174,7 +179,7 @@ Example:
 ```
 ### ListRequest
 
-Sent when a request has been made to list addresses. The UI is provided with the full `account`s, including local directory names. Note: this information is not passed back to the external caller, who only sees the `address`es. 
+Sent when a request has been made to list addresses. The UI is provided with the full `account`s, including local directory names. Note: this information is not passed back to the external caller, who only sees the `address`es.
 
 Example:
 ```json
@@ -198,7 +203,7 @@ Example:
   }
 }
 ```
-### UserInputResponse
+### ListResponse
 
 Response to list request. The response contains a list of all addresses to show to the caller. Note: the UI is free to respond with any address the caller, regardless of whether it exists or not
 

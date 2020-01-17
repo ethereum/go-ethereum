@@ -418,9 +418,9 @@ func (l *txPricedList) Put(tx *types.Transaction) {
 // Removed notifies the prices transaction list that an old transaction dropped
 // from the pool. The list will just keep a counter of stale objects and update
 // the heap if a large enough ratio of transactions go stale.
-func (l *txPricedList) Removed() {
+func (l *txPricedList) Removed(count int) {
 	// Bump the stale counter, but exit if still too low (< 25%)
-	l.stales++
+	l.stales += count
 	if l.stales <= len(*l.items)/4 {
 		return
 	}
@@ -494,11 +494,11 @@ func (l *txPricedList) Underpriced(tx *types.Transaction, local *accountSet) boo
 
 // Discard finds a number of most underpriced transactions, removes them from the
 // priced list and returns them for further removal from the entire pool.
-func (l *txPricedList) Discard(count int, local *accountSet) types.Transactions {
-	drop := make(types.Transactions, 0, count) // Remote underpriced transactions to drop
+func (l *txPricedList) Discard(slots int, local *accountSet) types.Transactions {
+	drop := make(types.Transactions, 0, slots) // Remote underpriced transactions to drop
 	save := make(types.Transactions, 0, 64)    // Local underpriced transactions to keep
 
-	for len(*l.items) > 0 && count > 0 {
+	for len(*l.items) > 0 && slots > 0 {
 		// Discard stale transactions if found during cleanup
 		tx := heap.Pop(l.items).(*types.Transaction)
 		if l.all.Get(tx.Hash()) == nil {
@@ -510,7 +510,7 @@ func (l *txPricedList) Discard(count int, local *accountSet) types.Transactions 
 			save = append(save, tx)
 		} else {
 			drop = append(drop, tx)
-			count--
+			slots -= numSlots(tx)
 		}
 	}
 	for _, tx := range save {

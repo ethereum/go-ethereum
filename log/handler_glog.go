@@ -207,7 +207,7 @@ func (h *GlogHandler) Log(r *Record) error {
 	}
 	// Check callsite cache for previously calculated log levels
 	h.lock.RLock()
-	lvl, ok := h.siteCache[r.Call.PC()]
+	lvl, ok := h.siteCache[r.Call.Frame().PC]
 	h.lock.RUnlock()
 
 	// If we didn't cache the callsite yet, calculate it
@@ -215,13 +215,13 @@ func (h *GlogHandler) Log(r *Record) error {
 		h.lock.Lock()
 		for _, rule := range h.patterns {
 			if rule.pattern.MatchString(fmt.Sprintf("%+s", r.Call)) {
-				h.siteCache[r.Call.PC()], lvl, ok = rule.level, rule.level, true
+				h.siteCache[r.Call.Frame().PC], lvl, ok = rule.level, rule.level, true
 				break
 			}
 		}
 		// If no rule matched, remember to drop log the next time
 		if !ok {
-			h.siteCache[r.Call.PC()] = 0
+			h.siteCache[r.Call.Frame().PC] = 0
 		}
 		h.lock.Unlock()
 	}

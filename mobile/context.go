@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-// Context carries a deadline, a cancelation signal, and other values across API
+// Context carries a deadline, a cancellation signal, and other values across API
 // boundaries.
 type Context struct {
 	context context.Context

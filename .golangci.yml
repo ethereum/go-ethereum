@@ -1,0 +1,50 @@
+# This file configures github.com/golangci/golangci-lint.
+
+run:
+  timeout: 2m
+  tests: true
+  # default is true. Enables skipping of directories:
+  #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
+  skip-dirs-use-default: true
+  skip-files:
+    - core/genesis_alloc.go
+
+linters:
+  disable-all: true
+  enable:
+    - deadcode
+    - goconst
+    - goimports
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    # - staticcheck
+    - unconvert
+    # - unused
+    - varcheck
+
+linters-settings:
+  gofmt:
+    simplify: true
+  goconst:
+    min-len: 3 # minimum length of string constant
+    min-occurrences: 6 # minimum number of occurrences
+
+issues:
+  exclude-rules:
+    - path: crypto/blake2b/
+      linters:
+        - deadcode
+    - path: crypto/bn256/cloudflare
+      linters:
+        - deadcode
+    - path: p2p/discv5/
+      linters:
+        - deadcode
+    - path: core/vm/instructions_test.go
+      linters:
+        - goconst
+    - path: cmd/faucet/
+      linters:
+        - deadcode

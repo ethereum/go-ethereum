@@ -18,6 +18,7 @@ package fdlimit
 
 import "fmt"
 
+// hardlimit is the number of file descriptors allowed at max by the kernel.
 const hardlimit = 16384
 
 // Raise tries to maximize the file descriptor allowance of this process

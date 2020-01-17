@@ -38,16 +38,18 @@ const (
 
 // DefaultConfig contains reasonable default settings.
 var DefaultConfig = Config{
-	DataDir:          DefaultDataDir(),
-	HTTPPort:         DefaultHTTPPort,
-	HTTPModules:      []string{"net", "web3"},
-	HTTPVirtualHosts: []string{"localhost"},
-	HTTPTimeouts:     rpc.DefaultHTTPTimeouts,
-	WSPort:           DefaultWSPort,
-	WSModules:        []string{"net", "web3"},
+	DataDir:             DefaultDataDir(),
+	HTTPPort:            DefaultHTTPPort,
+	HTTPModules:         []string{"net", "web3"},
+	HTTPVirtualHosts:    []string{"localhost"},
+	HTTPTimeouts:        rpc.DefaultHTTPTimeouts,
+	WSPort:              DefaultWSPort,
+	WSModules:           []string{"net", "web3"},
+	GraphQLPort:         DefaultGraphQLPort,
+	GraphQLVirtualHosts: []string{"localhost"},
 	P2P: p2p.Config{
 		ListenAddr: ":30303",
-		MaxPeers:   25,
+		MaxPeers:   50,
 		NAT:        nat.Any(),
 	},
 }
@@ -80,13 +82,14 @@ func DefaultDataDir() string {
 }
 
 func windowsAppData() string {
-	if v := os.Getenv("LOCALAPPDATA"); v != "" {
-		return v // Vista+
+	v := os.Getenv("LOCALAPPDATA")
+	if v == "" {
+		// Windows XP and below don't have LocalAppData. Crash here because
+		// we don't support Windows XP and undefining the variable will cause
+		// other issues.
+		panic("environment variable LocalAppData is undefined")
 	}
-	if v := os.Getenv("APPDATA"); v != "" {
-		return filepath.Join(v, "Local")
-	}
-	return ""
+	return v
 }
 
 func isNonEmptyDir(dir string) bool {

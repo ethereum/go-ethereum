@@ -24,6 +24,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var discard = Protocol{
@@ -52,7 +54,7 @@ func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan error) {
 		c2.caps = append(c2.caps, p.cap())
 	}
 
-	peer := newPeer(c1, protos)
+	peer := newPeer(log.Root(), c1, protos)
 	errc := make(chan error, 1)
 	go func() {
 		_, err := peer.run()
@@ -150,7 +152,7 @@ func TestPeerDisconnect(t *testing.T) {
 // This test is supposed to verify that Peer can reliably handle
 // multiple causes of disconnection occurring at the same time.
 func TestPeerDisconnectRace(t *testing.T) {
-	maybe := func() bool { return rand.Intn(1) == 1 }
+	maybe := func() bool { return rand.Intn(2) == 1 }
 
 	for i := 0; i < 1000; i++ {
 		protoclose := make(chan error)

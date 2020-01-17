@@ -53,7 +53,7 @@ func TestFunctionalGaugeFloat64(t *testing.T) {
 func TestGetOrRegisterFunctionalGaugeFloat64(t *testing.T) {
 	r := NewRegistry()
 	NewRegisteredFunctionalGaugeFloat64("foo", r, func() float64 { return 47 })
-	if g := GetOrRegisterGaugeFloat64("foo", r); 47 != g.Value() {
+	if g := GetOrRegisterGaugeFloat64("foo", r); g.Value() != 47 {
 		t.Fatal(g)
 	}
 }

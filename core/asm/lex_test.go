@@ -22,7 +22,7 @@ import (
 )
 
 func lexAll(src string) []token {
-	ch := Lex("test.asm", []byte(src), false)
+	ch := Lex([]byte(src), false)
 
 	var tokens []token
 	for i := range ch {
@@ -59,6 +59,14 @@ func TestLexer(t *testing.T) {
 		{
 			input:  "0123abc",
 			tokens: []token{{typ: lineStart}, {typ: number, text: "0123"}, {typ: element, text: "abc"}, {typ: eof}},
+		},
+		{
+			input:  "@foo",
+			tokens: []token{{typ: lineStart}, {typ: label, text: "foo"}, {typ: eof}},
+		},
+		{
+			input:  "@label123",
+			tokens: []token{{typ: lineStart}, {typ: label, text: "label123"}, {typ: eof}},
 		},
 	}
 

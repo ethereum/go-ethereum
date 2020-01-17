@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -161,7 +162,8 @@ func (w *ledgerDriver) SignTx(path accounts.DerivationPath, tx *types.Transactio
 		return common.Address{}, nil, accounts.ErrWalletClosed
 	}
 	// Ensure the wallet is capable of signing the given transaction
-	if chainID != nil && w.version[0] <= 1 && w.version[1] <= 0 && w.version[2] <= 2 {
+	if chainID != nil && w.version[0] <= 1 && w.version[2] <= 2 {
+		//lint:ignore ST1005 brand name displayed on the console
 		return common.Address{}, nil, fmt.Errorf("Ledger v%d.%d.%d doesn't support signing this transaction, please update to v1.0.3 at least", w.version[0], w.version[1], w.version[2])
 	}
 	// All infos gathered and metadata checks out, request signing
@@ -341,7 +343,7 @@ func (w *ledgerDriver) ledgerSign(derivationPath []uint32, tx *types.Transaction
 		op = ledgerP1ContTransactionData
 	}
 	// Extract the Ethereum signature and do a sanity validation
-	if len(reply) != 65 {
+	if len(reply) != crypto.SignatureLength {
 		return common.Address{}, nil, errors.New("reply lacks signature")
 	}
 	signature := append(reply[1:], reply[0])

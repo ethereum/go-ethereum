@@ -190,6 +190,8 @@ func benchmarkBaseOR(b *testing.B, size int) {
 	}
 }
 
+var GloBool bool // Exported global will not be dead-code eliminated, at least not yet.
+
 // Benchmarks the potentially optimized bit testing performance.
 func BenchmarkFastTest1KB(b *testing.B) { benchmarkFastTest(b, 1024) }
 func BenchmarkFastTest2KB(b *testing.B) { benchmarkFastTest(b, 2048) }
@@ -197,9 +199,11 @@ func BenchmarkFastTest4KB(b *testing.B) { benchmarkFastTest(b, 4096) }
 
 func benchmarkFastTest(b *testing.B, size int) {
 	p := make([]byte, size)
+	a := false
 	for i := 0; i < b.N; i++ {
-		TestBytes(p)
+		a = a != TestBytes(p)
 	}
+	GloBool = a // Use of benchmark "result" to prevent total dead code elimination.
 }
 
 // Benchmarks the baseline bit testing performance.
@@ -209,7 +213,9 @@ func BenchmarkBaseTest4KB(b *testing.B) { benchmarkBaseTest(b, 4096) }
 
 func benchmarkBaseTest(b *testing.B, size int) {
 	p := make([]byte, size)
+	a := false
 	for i := 0; i < b.N; i++ {
-		safeTestBytes(p)
+		a = a != safeTestBytes(p)
 	}
+	GloBool = a // Use of benchmark "result" to prevent total dead code elimination.
 }

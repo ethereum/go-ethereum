@@ -20,13 +20,14 @@ import (
 	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // ReadDatabaseVersion retrieves the version number of the database.
-func ReadDatabaseVersion(db DatabaseReader) *uint64 {
+func ReadDatabaseVersion(db ethdb.KeyValueReader) *uint64 {
 	var version uint64
 
 	enc, _ := db.Get(databaseVerisionKey)
@@ -41,7 +42,7 @@ func ReadDatabaseVersion(db DatabaseReader) *uint64 {
 }
 
 // WriteDatabaseVersion stores the version number of the database
-func WriteDatabaseVersion(db DatabaseWriter, version uint64) {
+func WriteDatabaseVersion(db ethdb.KeyValueWriter, version uint64) {
 	enc, err := rlp.EncodeToBytes(version)
 	if err != nil {
 		log.Crit("Failed to encode database version", "err", err)
@@ -52,7 +53,7 @@ func WriteDatabaseVersion(db DatabaseWriter, version uint64) {
 }
 
 // ReadChainConfig retrieves the consensus settings based on the given genesis hash.
-func ReadChainConfig(db DatabaseReader, hash common.Hash) *params.ChainConfig {
+func ReadChainConfig(db ethdb.KeyValueReader, hash common.Hash) *params.ChainConfig {
 	data, _ := db.Get(configKey(hash))
 	if len(data) == 0 {
 		return nil
@@ -66,7 +67,7 @@ func ReadChainConfig(db DatabaseReader, hash common.Hash) *params.ChainConfig {
 }
 
 // WriteChainConfig writes the chain config settings to the database.
-func WriteChainConfig(db DatabaseWriter, hash common.Hash, cfg *params.ChainConfig) {
+func WriteChainConfig(db ethdb.KeyValueWriter, hash common.Hash, cfg *params.ChainConfig) {
 	if cfg == nil {
 		return
 	}
@@ -80,13 +81,13 @@ func WriteChainConfig(db DatabaseWriter, hash common.Hash, cfg *params.ChainConf
 }
 
 // ReadPreimage retrieves a single preimage of the provided hash.
-func ReadPreimage(db DatabaseReader, hash common.Hash) []byte {
+func ReadPreimage(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(preimageKey(hash))
 	return data
 }
 
 // WritePreimages writes the provided set of preimages to the database.
-func WritePreimages(db DatabaseWriter, preimages map[common.Hash][]byte) {
+func WritePreimages(db ethdb.KeyValueWriter, preimages map[common.Hash][]byte) {
 	for hash, preimage := range preimages {
 		if err := db.Put(preimageKey(hash), preimage); err != nil {
 			log.Crit("Failed to store trie preimage", "err", err)

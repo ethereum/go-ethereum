@@ -95,7 +95,7 @@ type lexer struct {
 
 // lex lexes the program by name with the given source. It returns a
 // channel on which the tokens are delivered.
-func Lex(name string, source []byte, debug bool) <-chan token {
+func Lex(source []byte, debug bool) <-chan token {
 	ch := make(chan token)
 	l := &lexer{
 		input:  string(source),
@@ -234,7 +234,7 @@ func lexComment(l *lexer) stateFn {
 // the lex text state function to advance the parsing
 // process.
 func lexLabel(l *lexer) stateFn {
-	l.acceptRun(Alpha + "_")
+	l.acceptRun(Alpha + "_" + Numbers)
 
 	l.emit(label)
 

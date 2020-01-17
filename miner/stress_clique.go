@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -199,10 +200,12 @@ func makeSealer(genesis *core.Genesis) (*node.Node, error) {
 			DatabaseHandles: 256,
 			TxPool:          core.DefaultTxPoolConfig,
 			GPO:             eth.DefaultConfig.GPO,
-			MinerGasFloor:   genesis.GasLimit * 9 / 10,
-			MinerGasCeil:    genesis.GasLimit * 11 / 10,
-			MinerGasPrice:   big.NewInt(1),
-			MinerRecommit:   time.Second,
+			Miner: miner.Config{
+				GasFloor: genesis.GasLimit * 9 / 10,
+				GasCeil:  genesis.GasLimit * 11 / 10,
+				GasPrice: big.NewInt(1),
+				Recommit: time.Second,
+			},
 		})
 	}); err != nil {
 		return nil, err

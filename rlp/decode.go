@@ -26,14 +26,16 @@ import (
 	"math/big"
 	"reflect"
 	"strings"
+	"sync"
 )
 
-var (
-	// EOL is returned when the end of the current list
-	// has been reached during streaming.
-	EOL = errors.New("rlp: end of list")
+//lint:ignore ST1012 EOL is not an error.
 
-	// Actual Errors
+// EOL is returned when the end of the current list
+// has been reached during streaming.
+var EOL = errors.New("rlp: end of list")
+
+var (
 	ErrExpectedString   = errors.New("rlp: expected String or Byte")
 	ErrExpectedList     = errors.New("rlp: expected List")
 	ErrCanonInt         = errors.New("rlp: non-canonical integer format")
@@ -48,95 +50,49 @@ var (
 	errUintOverflow  = errors.New("rlp: uint overflow")
 	errNoPointer     = errors.New("rlp: interface given to Decode must be a pointer")
 	errDecodeIntoNil = errors.New("rlp: pointer given to Decode must not be nil")
+
+	streamPool = sync.Pool{
+		New: func() interface{} { return new(Stream) },
+	}
 )
 
-// Decoder is implemented by types that require custom RLP
-// decoding rules or need to decode into private fields.
+// Decoder is implemented by types that require custom RLP decoding rules or need to decode
+// into private fields.
 //
-// The DecodeRLP method should read one value from the given
-// Stream. It is not forbidden to read less or more, but it might
-// be confusing.
+// The DecodeRLP method should read one value from the given Stream. It is not forbidden to
+// read less or more, but it might be confusing.
 type Decoder interface {
 	DecodeRLP(*Stream) error
 }
 
-// Decode parses RLP-encoded data from r and stores the result in the
-// value pointed to by val. Val must be a non-nil pointer. If r does
-// not implement ByteReader, Decode will do its own buffering.
+// Decode parses RLP-encoded data from r and stores the result in the value pointed to by
+// val. Please see package-level documentation for the decoding rules. Val must be a
+// non-nil pointer.
 //
-// Decode uses the following type-dependent decoding rules:
+// If r does not implement ByteReader, Decode will do its own buffering.
 //
-// If the type implements the Decoder interface, decode calls
-// DecodeRLP.
-//
-// To decode into a pointer, Decode will decode into the value pointed
-// to. If the pointer is nil, a new value of the pointer's element
-// type is allocated. If the pointer is non-nil, the existing value
-// will be reused.
-//
-// To decode into a struct, Decode expects the input to be an RLP
-// list. The decoded elements of the list are assigned to each public
-// field in the order given by the struct's definition. The input list
-// must contain an element for each decoded field. Decode returns an
-// error if there are too few or too many elements.
-//
-// The decoding of struct fields honours certain struct tags, "tail",
-// "nil" and "-".
-//
-// The "-" tag ignores fields.
-//
-// For an explanation of "tail", see the example.
-//
-// The "nil" tag applies to pointer-typed fields and changes the decoding
-// rules for the field such that input values of size zero decode as a nil
-// pointer. This tag can be useful when decoding recursive types.
-//
-//     type StructWithEmptyOK struct {
-//         Foo *[20]byte `rlp:"nil"`
-//     }
-//
-// To decode into a slice, the input must be a list and the resulting
-// slice will contain the input elements in order. For byte slices,
-// the input must be an RLP string. Array types decode similarly, with
-// the additional restriction that the number of input elements (or
-// bytes) must match the array's length.
-//
-// To decode into a Go string, the input must be an RLP string. The
-// input bytes are taken as-is and will not necessarily be valid UTF-8.
-//
-// To decode into an unsigned integer type, the input must also be an RLP
-// string. The bytes are interpreted as a big endian representation of
-// the integer. If the RLP string is larger than the bit size of the
-// type, Decode will return an error. Decode also supports *big.Int.
-// There is no size limit for big integers.
-//
-// To decode into an interface value, Decode stores one of these
-// in the value:
-//
-//	  []interface{}, for RLP lists
-//	  []byte, for RLP strings
-//
-// Non-empty interface types are not supported, nor are booleans,
-// signed integers, floating point numbers, maps, channels and
-// functions.
-//
-// Note that Decode does not set an input limit for all readers
-// and may be vulnerable to panics cause by huge value sizes. If
-// you need an input limit, use
+// Note that Decode does not set an input limit for all readers and may be vulnerable to
+// panics cause by huge value sizes. If you need an input limit, use
 //
 //     NewStream(r, limit).Decode(val)
 func Decode(r io.Reader, val interface{}) error {
-	// TODO: this could use a Stream from a pool.
-	return NewStream(r, 0).Decode(val)
+	stream := streamPool.Get().(*Stream)
+	defer streamPool.Put(stream)
+
+	stream.Reset(r, 0)
+	return stream.Decode(val)
 }
 
-// DecodeBytes parses RLP data from b into val.
-// Please see the documentation of Decode for the decoding rules.
-// The input must contain exactly one value and no trailing data.
+// DecodeBytes parses RLP data from b into val. Please see package-level documentation for
+// the decoding rules. The input must contain exactly one value and no trailing data.
 func DecodeBytes(b []byte, val interface{}) error {
-	// TODO: this could use a Stream from a pool.
 	r := bytes.NewReader(b)
-	if err := NewStream(r, uint64(len(b))).Decode(val); err != nil {
+
+	stream := streamPool.Get().(*Stream)
+	defer streamPool.Put(stream)
+
+	stream.Reset(r, uint64(len(b)))
+	if err := stream.Decode(val); err != nil {
 		return err
 	}
 	if r.Len() > 0 {
@@ -197,14 +153,14 @@ func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 	switch {
 	case typ == rawValueType:
 		return decodeRawValue, nil
-	case typ.Implements(decoderInterface):
-		return decodeDecoder, nil
-	case kind != reflect.Ptr && reflect.PtrTo(typ).Implements(decoderInterface):
-		return decodeDecoderNoPtr, nil
 	case typ.AssignableTo(reflect.PtrTo(bigInt)):
 		return decodeBigInt, nil
 	case typ.AssignableTo(bigInt):
 		return decodeBigIntNoPtr, nil
+	case kind == reflect.Ptr:
+		return makePtrDecoder(typ, tags)
+	case reflect.PtrTo(typ).Implements(decoderInterface):
+		return decodeDecoder, nil
 	case isUint(kind):
 		return decodeUint, nil
 	case kind == reflect.Bool:
@@ -215,11 +171,6 @@ func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 		return makeListDecoder(typ, tags)
 	case kind == reflect.Struct:
 		return makeStructDecoder(typ)
-	case kind == reflect.Ptr:
-		if tags.nilOK {
-			return makeOptionalPtrDecoder(typ)
-		}
-		return makePtrDecoder(typ)
 	case kind == reflect.Interface:
 		return decodeInterface, nil
 	default:
@@ -294,9 +245,9 @@ func makeListDecoder(typ reflect.Type, tag tags) (decoder, error) {
 		}
 		return decodeByteSlice, nil
 	}
-	etypeinfo, err := cachedTypeInfo1(etype, tags{})
-	if err != nil {
-		return nil, err
+	etypeinfo := cachedTypeInfo1(etype, tags{})
+	if etypeinfo.decoderErr != nil {
+		return nil, etypeinfo.decoderErr
 	}
 	var dec decoder
 	switch {
@@ -434,6 +385,11 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 	if err != nil {
 		return nil, err
 	}
+	for _, f := range fields {
+		if f.info.decoderErr != nil {
+			return nil, structFieldError{typ, f.index, f.info.decoderErr}
+		}
+	}
 	dec := func(s *Stream, val reflect.Value) (err error) {
 		if _, err := s.List(); err != nil {
 			return wrapStreamError(err, typ)
@@ -451,15 +407,22 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 	return dec, nil
 }
 
-// makePtrDecoder creates a decoder that decodes into
-// the pointer's element type.
-func makePtrDecoder(typ reflect.Type) (decoder, error) {
+// makePtrDecoder creates a decoder that decodes into the pointer's element type.
+func makePtrDecoder(typ reflect.Type, tag tags) (decoder, error) {
 	etype := typ.Elem()
-	etypeinfo, err := cachedTypeInfo1(etype, tags{})
-	if err != nil {
-		return nil, err
+	etypeinfo := cachedTypeInfo1(etype, tags{})
+	switch {
+	case etypeinfo.decoderErr != nil:
+		return nil, etypeinfo.decoderErr
+	case !tag.nilOK:
+		return makeSimplePtrDecoder(etype, etypeinfo), nil
+	default:
+		return makeNilPtrDecoder(etype, etypeinfo, tag.nilKind), nil
 	}
-	dec := func(s *Stream, val reflect.Value) (err error) {
+}
+
+func makeSimplePtrDecoder(etype reflect.Type, etypeinfo *typeinfo) decoder {
+	return func(s *Stream, val reflect.Value) (err error) {
 		newval := val
 		if val.IsNil() {
 			newval = reflect.New(etype)
@@ -469,30 +432,35 @@ func makePtrDecoder(typ reflect.Type) (decoder, error) {
 		}
 		return err
 	}
-	return dec, nil
 }
 
-// makeOptionalPtrDecoder creates a decoder that decodes empty values
-// as nil. Non-empty values are decoded into a value of the element type,
-// just like makePtrDecoder does.
+// makeNilPtrDecoder creates a decoder that decodes empty values as nil. Non-empty
+// values are decoded into a value of the element type, just like makePtrDecoder does.
 //
 // This decoder is used for pointer-typed struct fields with struct tag "nil".
-func makeOptionalPtrDecoder(typ reflect.Type) (decoder, error) {
-	etype := typ.Elem()
-	etypeinfo, err := cachedTypeInfo1(etype, tags{})
-	if err != nil {
-		return nil, err
-	}
-	dec := func(s *Stream, val reflect.Value) (err error) {
+func makeNilPtrDecoder(etype reflect.Type, etypeinfo *typeinfo, nilKind Kind) decoder {
+	typ := reflect.PtrTo(etype)
+	nilPtr := reflect.Zero(typ)
+	return func(s *Stream, val reflect.Value) (err error) {
 		kind, size, err := s.Kind()
-		if err != nil || size == 0 && kind != Byte {
+		if err != nil {
+			val.Set(nilPtr)
+			return wrapStreamError(err, typ)
+		}
+		// Handle empty values as a nil pointer.
+		if kind != Byte && size == 0 {
+			if kind != nilKind {
+				return &decodeError{
+					msg: fmt.Sprintf("wrong kind of empty value (got %v, want %v)", kind, nilKind),
+					typ: typ,
+				}
+			}
 			// rearm s.Kind. This is important because the input
 			// position must advance to the next value even though
 			// we don't read anything.
 			s.kind = -1
-			// set the pointer to nil.
-			val.Set(reflect.Zero(typ))
-			return err
+			val.Set(nilPtr)
+			return nil
 		}
 		newval := val
 		if val.IsNil() {
@@ -503,7 +471,6 @@ func makeOptionalPtrDecoder(typ reflect.Type) (decoder, error) {
 		}
 		return err
 	}
-	return dec, nil
 }
 
 var ifsliceType = reflect.TypeOf([]interface{}{})
@@ -532,21 +499,8 @@ func decodeInterface(s *Stream, val reflect.Value) error {
 	return nil
 }
 
-// This decoder is used for non-pointer values of types
-// that implement the Decoder interface using a pointer receiver.
-func decodeDecoderNoPtr(s *Stream, val reflect.Value) error {
-	return val.Addr().Interface().(Decoder).DecodeRLP(s)
-}
-
 func decodeDecoder(s *Stream, val reflect.Value) error {
-	// Decoder instances are not handled using the pointer rule if the type
-	// implements Decoder with pointer receiver (i.e. always)
-	// because it might handle empty values specially.
-	// We need to allocate one here in this case, like makePtrDecoder does.
-	if val.Kind() == reflect.Ptr && val.IsNil() {
-		val.Set(reflect.New(val.Type().Elem()))
-	}
-	return val.Interface().(Decoder).DecodeRLP(s)
+	return val.Addr().Interface().(Decoder).DecodeRLP(s)
 }
 
 // Kind represents the kind of value contained in an RLP stream.
@@ -802,12 +756,12 @@ func (s *Stream) Decode(val interface{}) error {
 	if rval.IsNil() {
 		return errDecodeIntoNil
 	}
-	info, err := cachedTypeInfo(rtyp.Elem(), tags{})
+	decoder, err := cachedDecoder(rtyp.Elem())
 	if err != nil {
 		return err
 	}
 
-	err = info.decoder(s, rval.Elem())
+	err = decoder(s, rval.Elem())
 	if decErr, ok := err.(*decodeError); ok && len(decErr.ctx) > 0 {
 		// add decode target type to error so context has more meaning
 		decErr.ctx = append(decErr.ctx, fmt.Sprint("(", rtyp.Elem(), ")"))
@@ -853,6 +807,7 @@ func (s *Stream) Reset(r io.Reader, inputLimit uint64) {
 	if s.uintbuf == nil {
 		s.uintbuf = make([]byte, 8)
 	}
+	s.byteval = 0
 }
 
 // Kind returns the kind and size of the next value in the

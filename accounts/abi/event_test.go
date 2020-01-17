@@ -104,8 +104,8 @@ func TestEventId(t *testing.T) {
 		}
 
 		for name, event := range abi.Events {
-			if event.Id() != test.expectations[name] {
-				t.Errorf("expected id to be %x, got %x", test.expectations[name], event.Id())
+			if event.ID() != test.expectations[name] {
+				t.Errorf("expected id to be %x, got %x", test.expectations[name], event.ID())
 			}
 		}
 	}
@@ -173,7 +173,7 @@ func TestEventTupleUnpack(t *testing.T) {
 	type EventTransferWithTag struct {
 		// this is valid because `value` is not exportable,
 		// so value is only unmarshalled into `Value1`.
-		value  *big.Int
+		value  *big.Int //lint:ignore U1000 unused field is part of test
 		Value1 *big.Int `abi:"value"`
 	}
 
@@ -352,40 +352,6 @@ func unpackTestEventData(dest interface{}, hexData string, jsonEvent []byte, ass
 	assert.NoError(json.Unmarshal(jsonEvent, &e), "Should be able to unmarshal event ABI")
 	a := ABI{Events: map[string]Event{"e": e}}
 	return a.Unpack(dest, "e", data)
-}
-
-/*
-Taken from
-https://github.com/ethereum/go-ethereum/pull/15568
-*/
-
-type testResult struct {
-	Values [2]*big.Int
-	Value1 *big.Int
-	Value2 *big.Int
-}
-
-type testCase struct {
-	definition string
-	want       testResult
-}
-
-func (tc testCase) encoded(intType, arrayType Type) []byte {
-	var b bytes.Buffer
-	if tc.want.Value1 != nil {
-		val, _ := intType.pack(reflect.ValueOf(tc.want.Value1))
-		b.Write(val)
-	}
-
-	if !reflect.DeepEqual(tc.want.Values, [2]*big.Int{nil, nil}) {
-		val, _ := arrayType.pack(reflect.ValueOf(tc.want.Values))
-		b.Write(val)
-	}
-	if tc.want.Value2 != nil {
-		val, _ := intType.pack(reflect.ValueOf(tc.want.Value2))
-		b.Write(val)
-	}
-	return b.Bytes()
 }
 
 // TestEventUnpackIndexed verifies that indexed field will be skipped by event decoder.

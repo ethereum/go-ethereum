@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -57,7 +57,7 @@ const (
 const (
 	dbNodeExpiration = 24 * time.Hour // Time after which an unseen node should be dropped.
 	dbCleanupCycle   = time.Hour      // Time period for running the expiration task.
-	dbVersion        = 8
+	dbVersion        = 9
 )
 
 var zeroIP = make(net.IP, 16)
@@ -380,12 +380,12 @@ func (db *DB) UpdateFindFails(id ID, ip net.IP, fails int) error {
 
 // LocalSeq retrieves the local record sequence counter.
 func (db *DB) localSeq(id ID) uint64 {
-	return db.fetchUint64(nodeItemKey(id, zeroIP, dbLocalSeq))
+	return db.fetchUint64(localItemKey(id, dbLocalSeq))
 }
 
 // storeLocalSeq stores the local record sequence counter.
 func (db *DB) storeLocalSeq(id ID, n uint64) {
-	db.storeUint64(nodeItemKey(id, zeroIP, dbLocalSeq), n)
+	db.storeUint64(localItemKey(id, dbLocalSeq), n)
 }
 
 // QuerySeeds retrieves random nodes to be used as potential seed nodes
