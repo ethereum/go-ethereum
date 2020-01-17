@@ -180,35 +180,31 @@ func (n *cachedNode) obj(hash common.Hash) node {
 	return expandNode(hash[:], n.node)
 }
 
-// childs returns all the tracked children of this node, both the implicit ones
-// from inside the node as well as the explicit ones from outside the node.
-func (n *cachedNode) childs() []common.Hash {
-	children := make([]common.Hash, 0, 16)
+// forChilds invokes the callback for  all the tracked children of this node,
+// both the implicit ones  from inside the node as well as the explicit ones
+//from outside the node.
+func (n *cachedNode) forChilds(onChild func(hash common.Hash)) {
 	for child := range n.children {
-		children = append(children, child)
+		onChild(child)
 	}
 	if _, ok := n.node.(rawNode); !ok {
-		gatherChildren(n.node, &children)
+		forGatherChildren(n.node, onChild)
 	}
-	return children
 }
 
-// gatherChildren traverses the node hierarchy of a collapsed storage node and
-// retrieves all the hashnode children.
-func gatherChildren(n node, children *[]common.Hash) {
+// forGatherChildren traverses the node hierarchy of a collapsed storage node and
+// invokes the callback for all the hashnode children.
+func forGatherChildren(n node, onChild func(hash common.Hash)) {
 	switch n := n.(type) {
 	case *rawShortNode:
-		gatherChildren(n.Val, children)
-
+		forGatherChildren(n.Val, onChild)
 	case rawFullNode:
 		for i := 0; i < 16; i++ {
-			gatherChildren(n[i], children)
+			forGatherChildren(n[i], onChild)
 		}
 	case hashNode:
-		*children = append(*children, common.BytesToHash(n))
-
+		onChild(common.BytesToHash(n))
 	case valueNode, nil:
-
 	default:
 		panic(fmt.Sprintf("unknown node type: %T", n))
 	}
@@ -334,11 +330,11 @@ func (db *Database) insert(hash common.Hash, blob []byte, node node) {
 		size:      uint16(len(blob)),
 		flushPrev: db.newest,
 	}
-	for _, child := range entry.childs() {
+	entry.forChilds(func(child common.Hash) {
 		if c := db.dirties[child]; c != nil {
 			c.parents++
 		}
-	}
+	})
 	db.dirties[hash] = entry
 
 	// Update the flush-list endpoints
@@ -570,9 +566,9 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 			db.dirties[node.flushNext].flushPrev = node.flushPrev
 		}
 		// Dereference all children and delete the node
-		for _, hash := range node.childs() {
+		node.forChilds(func(hash common.Hash) {
 			db.dereference(hash, child)
-		}
+		})
 		delete(db.dirties, child)
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 		if node.children != nil {
@@ -766,10 +762,14 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	if !ok {
 		return nil
 	}
-	for _, child := range node.childs() {
-		if err := db.commit(child, batch, uncacher); err != nil {
-			return err
+	var err error
+	node.forChilds(func(child common.Hash) {
+		if err == nil {
+			err = db.commit(child, batch, uncacher)
 		}
+	})
+	if err != nil {
+		return err
 	}
 	if err := batch.Put(hash[:], node.rlp()); err != nil {
 		return err
