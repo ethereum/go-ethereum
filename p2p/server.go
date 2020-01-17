@@ -650,9 +650,12 @@ func (srv *Server) run(dialstate dialer) {
 		inboundCount = 0
 		trusted      = make(map[enode.ID]bool, len(srv.TrustedNodes))
 		taskdone     = make(chan task, maxActiveDialTasks)
+		tick         = time.NewTicker(30 * time.Second)
 		runningTasks []task
 		queuedTasks  []task // tasks that can't run yet
 	)
+	defer tick.Stop()
+
 	// Put trusted nodes into a map to speed up checks.
 	// Trusted peers are loaded on startup or added via AddTrustedPeer RPC.
 	for _, n := range srv.TrustedNodes {
@@ -694,6 +697,9 @@ running:
 		scheduleTasks()
 
 		select {
+		case <-tick.C:
+			// This is just here to ensure the dial scheduler runs occasionally.
+
 		case <-srv.quit:
 			// The server was stopped. Run the cleanup logic.
 			break running
