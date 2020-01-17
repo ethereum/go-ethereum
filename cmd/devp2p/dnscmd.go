@@ -96,6 +96,11 @@ var (
 	}
 )
 
+const (
+	rootTTL     = 1
+	treeNodeTTL = 2147483647
+)
+
 // dnsSync performs dnsSyncCommand.
 func dnsSync(ctx *cli.Context) error {
 	var (
