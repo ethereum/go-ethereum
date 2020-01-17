@@ -274,7 +274,7 @@ func newTXTChange(action, name string, ttl int64, values []string) *route53.Chan
 	}
 	r.SetType("TXT")
 	r.SetName(name)
-	r.SetTTL(int64(ttl))
+	r.SetTTL(ttl)
 	r.SetResourceRecords(rrs)
 	c.SetAction(action)
 	c.SetResourceRecordSet(&r)
