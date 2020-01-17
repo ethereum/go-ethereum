@@ -58,6 +58,11 @@ type route53Client struct {
 	zoneID string
 }
 
+type recordSet struct {
+	values []string
+	ttl    int64
+}
+
 // newRoute53Client sets up a Route53 API client from command line flags.
 func newRoute53Client(ctx *cli.Context) *route53Client {
 	akey := ctx.String(route53AccessKeyFlag.Name)
@@ -88,6 +93,7 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 		return err
 	}
 	log.Info(fmt.Sprintf("Found %d TXT records", len(existing)))
+
 	records := t.ToTXT(name)
 	changes := c.computeChanges(name, records, existing)
 	if len(changes) == 0 {
@@ -149,7 +155,7 @@ func (c *route53Client) findZoneID(name string) (string, error) {
 }
 
 // computeChanges creates DNS changes for the given record.
-func (c *route53Client) computeChanges(name string, records map[string]string, existing map[string][]string) []*route53.Change {
+func (c *route53Client) computeChanges(name string, records map[string]string, existing map[string]recordSet) []*route53.Change {
 	// Convert all names to lowercase.
 	lrecords := make(map[string]string, len(records))
 	for name, r := range records {
@@ -159,13 +165,13 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 
 	var changes []*route53.Change
 	for path, val := range records {
-		ttl := 1
+		ttl := int64(rootTTL)
 		if path != name {
-			ttl = 2147483647
+			ttl = int64(treeNodeTTL)
 		}
 
 		prevRecords, exists := existing[path]
-		prevValue := combineTXT(prevRecords)
+		prevValue := combineTXT(prevRecords.values)
 		if !exists {
 			// Entry is unknown, push a new one
 			log.Info(fmt.Sprintf("Creating %s = %q", path, val))
@@ -180,13 +186,13 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 	}
 
 	// Iterate over the old records and delete anything stale.
-	for path, values := range existing {
+	for path, set := range existing {
 		if _, ok := records[path]; ok {
 			continue
 		}
 		// Stale entry, nuke it.
-		log.Info(fmt.Sprintf("Deleting %s = %q", path, combineTXT(values)))
-		changes = append(changes, newTXTChange("DELETE", path, 1, values))
+		log.Info(fmt.Sprintf("Deleting %s = %q", path, combineTXT(set.values)))
+		changes = append(changes, newTXTChange("DELETE", path, set.ttl, set.values))
 	}
 
 	sortChanges(changes)
@@ -234,20 +240,22 @@ func changeSize(ch *route53.Change) int {
 }
 
 // collectRecords collects all TXT records below the given name.
-func (c *route53Client) collectRecords(name string) (map[string][]string, error) {
+func (c *route53Client) collectRecords(name string) (map[string]recordSet, error) {
 	log.Info(fmt.Sprintf("Retrieving existing TXT records on %s (%s)", name, c.zoneID))
 	var req route53.ListResourceRecordSetsInput
 	req.SetHostedZoneId(c.zoneID)
-	existing := make(map[string][]string)
+	existing := make(map[string]recordSet)
 	err := c.api.ListResourceRecordSetsPages(&req, func(resp *route53.ListResourceRecordSetsOutput, last bool) bool {
 		for _, set := range resp.ResourceRecordSets {
 			if !isSubdomain(*set.Name, name) || *set.Type != "TXT" {
 				continue
 			}
-			name := strings.TrimSuffix(*set.Name, ".")
+			s := recordSet{ttl: *set.TTL}
 			for _, rec := range set.ResourceRecords {
-				existing[name] = append(existing[name], *rec.Value)
+				s.values = append(s.values, *rec.Value)
 			}
+			name := strings.TrimSuffix(*set.Name, ".")
+			existing[name] = s
 		}
 		return true
 	})
@@ -255,7 +263,7 @@ func (c *route53Client) collectRecords(name string) (map[string][]string, error)
 }
 
 // newTXTChange creates a change to a TXT record.
-func newTXTChange(action, name string, ttl int, values []string) *route53.Change {
+func newTXTChange(action, name string, ttl int64, values []string) *route53.Change {
 	var c route53.Change
 	var r route53.ResourceRecordSet
 	var rrs []*route53.ResourceRecord
