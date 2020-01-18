@@ -33,6 +33,18 @@ The `abigen`, `bootnode`, `checkpoint-admin`, `clef`, `devp2p`, `ethkey`, `evm`,
 
 Find the different options and commands available with `geth --help`.
 
+### Install on macOS via MacPorts
+
+If you are a [MacPorts](https://www.macports.org) user, you can run the following command and install `geth`:
+
+```shell
+sudo port install go-ethereum
+```
+
+The `evm`, `geth`, `rlpdump` and `puppeth` commands are then available on your system in `/opt/local/bin/` or macports installation prefix. 
+
+Find the different options and commands available with `geth --help`.
+
 ### Install on Ubuntu via PPAs
 
 The easiest way to install go-ethereum on Ubuntu-based distributions is with the built-in launchpad PPAs (Personal Package Archives). We provide a single PPA repository that contains both our stable and development releases for Ubuntu versions `trusty`, `xenial`, `zesty` and `artful`.
