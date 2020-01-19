@@ -210,7 +210,7 @@ func (dl *diffLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
-	if dl.stale {
+	if dl.Stale() {
 		return common.Hash{}, ErrSnapshotStale
 	}
 	// Everything below was journalled, persist this layer too

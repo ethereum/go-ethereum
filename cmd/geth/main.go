@@ -91,6 +91,7 @@ var (
 		utils.SyncModeFlag,
 		utils.ExitWhenSyncedFlag,
 		utils.GCModeFlag,
+		utils.SnapshotFlag,
 		utils.LightServeFlag,
 		utils.LightLegacyServFlag,
 		utils.LightIngressFlag,

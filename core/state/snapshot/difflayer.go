@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -92,7 +93,7 @@ type diffLayer struct {
 	memory uint64     // Approximate guess as to how much memory we use
 
 	root  common.Hash // Root hash to which this snapshot diff belongs to
-	stale bool        // Signals that the layer became stale (state progressed)
+	stale uint32      // Signals that the layer became stale (state progressed)
 
 	accountList []common.Hash                          // List of account for iteration. If it exists, it's sorted, otherwise it's nil
 	accountData map[common.Hash][]byte                 // Keyed accounts for direct retrival (nil means deleted)
@@ -237,10 +238,7 @@ func (dl *diffLayer) Parent() snapshot {
 // Stale return whether this layer has become stale (was flattened across) or if
 // it's still live.
 func (dl *diffLayer) Stale() bool {
-	dl.lock.RLock()
-	defer dl.lock.RUnlock()
-
-	return dl.stale
+	return atomic.LoadUint32(&dl.stale) != 0
 }
 
 // Account directly retrieves the account associated with a particular hash in
@@ -288,7 +286,7 @@ func (dl *diffLayer) accountRLP(hash common.Hash, depth int) ([]byte, error) {
 
 	// If the layer was flattened into, consider it invalid (any live reference to
 	// the original should be marked as unusable).
-	if dl.stale {
+	if dl.Stale() {
 		return nil, ErrSnapshotStale
 	}
 	// If the account is known locally, return it. Note, a nil account means it was
@@ -342,7 +340,7 @@ func (dl *diffLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 
 	// If the layer was flattened into, consider it invalid (any live reference to
 	// the original should be marked as unusable).
-	if dl.stale {
+	if dl.Stale() {
 		return nil, ErrSnapshotStale
 	}
 	// If the account is known locally, try to resolve the slot locally. Note, a nil
@@ -401,11 +399,9 @@ func (dl *diffLayer) flatten() snapshot {
 
 	// Before actually writing all our data to the parent, first ensure that the
 	// parent hasn't been 'corrupted' by someone else already flattening into it
-	if parent.stale {
+	if atomic.SwapUint32(&parent.stale, 1) != 0 {
 		panic("parent diff layer is stale") // we've flattened into the same parent from two children, boo
 	}
-	parent.stale = true
-
 	// Overwrite all the updated accounts blindly, merge the sorted list
 	for hash, data := range dl.accountData {
 		parent.accountData[hash] = data
