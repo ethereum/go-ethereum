@@ -183,7 +183,7 @@ jobs:
       git:
         submodules: false # avoid cloning ethereum/tests
       before_install:
-        - curl https://dl.google.com/go/go1.13.linux-amd64.tar.gz | tar -xz
+        - curl https://dl.google.com/go/go1.13.6.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
