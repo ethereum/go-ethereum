@@ -130,6 +130,10 @@ var (
 		Name:  "stdio-ui-test",
 		Usage: "Mechanism to test interface between Clef and UI. Requires 'stdio-ui'.",
 	}
+	vaultFlag = cli.StringFlag{
+		Name:  "vault",
+		Usage: "URI to the user managed database which stores Clef vault data (ruleset & kps)",
+	}
 	app         = cli.NewApp()
 	initCommand = cli.Command{
 		Action:    utils.MigrateFlags(initializeSecrets),
@@ -219,6 +223,7 @@ func init() {
 		ruleFlag,
 		stdiouiFlag,
 		testFlag,
+		vaultFlag,
 		advancedMode,
 	}
 	app.Action = signer
