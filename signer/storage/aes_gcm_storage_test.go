@@ -28,31 +28,8 @@ import (
 	"github.com/mattn/go-colorable"
 )
 
-func TestEncryption(t *testing.T) {
-	//	key := []byte("AES256Key-32Characters1234567890")
-	//	plaintext := []byte(value)
-	key := []byte("AES256Key-32Characters1234567890")
-	plaintext := []byte("exampleplaintext")
-
-	c, iv, err := encrypt(key, plaintext, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("Ciphertext %x, nonce %x\n", c, iv)
-
-	p, err := decrypt(key, iv, c, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("Plaintext %v\n", string(p))
-	if !bytes.Equal(plaintext, p) {
-		t.Errorf("Failed: expected plaintext recovery, got %v expected %v", string(plaintext), string(p))
-	}
-}
-
 func TestFileStorage(t *testing.T) {
-
-	a := map[string]storedCredential{
+	a := map[string]StoredCredential{
 		"secret": {
 			Iv:         common.Hex2Bytes("cdb30036279601aeee60f16b"),
 			CipherText: common.Hex2Bytes("f311ac49859d7260c2c464c28ffac122daf6be801d3cfd3edcbde7e00c9ff74f"),
@@ -133,7 +110,7 @@ func TestSwappedKeys(t *testing.T) {
 	s1.Put("k2", "v2")
 	// Now make a modified copy
 
-	creds := make(map[string]storedCredential)
+	creds := make(map[string]StoredCredential)
 	raw, err := ioutil.ReadFile(s1.filename)
 	if err != nil {
 		t.Fatal(err)

@@ -17,23 +17,12 @@
 package storage
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"encoding/json"
-	"io"
 	"io/ioutil"
 	"os"
 
 	"github.com/ethereum/go-ethereum/log"
 )
-
-type storedCredential struct {
-	// The iv
-	Iv []byte `json:"iv"`
-	// The ciphertext
-	CipherText []byte `json:"c"`
-}
 
 // AESEncryptedStorage is a storage type which is backed by a json-file. The json-file contains
 // key-value mappings, where the keys are _not_ encrypted, only the values are.
@@ -62,12 +51,12 @@ func (s *AESEncryptedStorage) Put(key, value string) {
 		log.Warn("Failed to read encrypted storage", "err", err, "file", s.filename)
 		return
 	}
-	ciphertext, iv, err := encrypt(s.key, []byte(value), []byte(key))
+	ciphertext, iv, err := Encrypt(s.key, []byte(value), []byte(key))
 	if err != nil {
 		log.Warn("Failed to encrypt entry", "err", err)
 		return
 	}
-	encrypted := storedCredential{Iv: iv, CipherText: ciphertext}
+	encrypted := StoredCredential{Iv: iv, CipherText: ciphertext}
 	data[key] = encrypted
 	if err = s.writeEncryptedStorage(data); err != nil {
 		log.Warn("Failed to write entry", "err", err)
@@ -90,7 +79,7 @@ func (s *AESEncryptedStorage) Get(key string) (string, error) {
 		log.Warn("Key does not exist", "key", key)
 		return "", ErrNotFound
 	}
-	entry, err := decrypt(s.key, encrypted.Iv, encrypted.CipherText, []byte(key))
+	entry, err := Decrypt(s.key, encrypted.Iv, encrypted.CipherText, []byte(key))
 	if err != nil {
 		log.Warn("Failed to decrypt key", "key", key)
 		return "", err
@@ -112,8 +101,8 @@ func (s *AESEncryptedStorage) Del(key string) {
 }
 
 // readEncryptedStorage reads the file with encrypted creds
-func (s *AESEncryptedStorage) readEncryptedStorage() (map[string]storedCredential, error) {
-	creds := make(map[string]storedCredential)
+func (s *AESEncryptedStorage) readEncryptedStorage() (map[string]StoredCredential, error) {
+	creds := make(map[string]StoredCredential)
 	raw, err := ioutil.ReadFile(s.filename)
 
 	if err != nil {
@@ -131,7 +120,7 @@ func (s *AESEncryptedStorage) readEncryptedStorage() (map[string]storedCredentia
 }
 
 // writeEncryptedStorage write the file with encrypted creds
-func (s *AESEncryptedStorage) writeEncryptedStorage(creds map[string]storedCredential) error {
+func (s *AESEncryptedStorage) writeEncryptedStorage(creds map[string]StoredCredential) error {
 	raw, err := json.Marshal(creds)
 	if err != nil {
 		return err
@@ -140,40 +129,4 @@ func (s *AESEncryptedStorage) writeEncryptedStorage(creds map[string]storedCrede
 		return err
 	}
 	return nil
-}
-
-// encrypt encrypts plaintext with the given key, with additional data
-// The 'additionalData' is used to place the (plaintext) KV-store key into the V,
-// to prevent the possibility to alter a K, or swap two entries in the KV store with eachother.
-func encrypt(key []byte, plaintext []byte, additionalData []byte) ([]byte, []byte, error) {
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, nil, err
-	}
-	aesgcm, err := cipher.NewGCM(block)
-	nonce := make([]byte, aesgcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, nil, err
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-	ciphertext := aesgcm.Seal(nil, nonce, plaintext, additionalData)
-	return ciphertext, nonce, nil
-}
-
-func decrypt(key []byte, nonce []byte, ciphertext []byte, additionalData []byte) ([]byte, error) {
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	aesgcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	plaintext, err := aesgcm.Open(nil, nonce, ciphertext, additionalData)
-	if err != nil {
-		return nil, err
-	}
-	return plaintext, nil
 }
