@@ -545,17 +545,17 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainReader, header *types.Head
 		nonce := header.Nonce.Uint64()
 		ctx = append(ctx, "hdr.nonce", nonce)
 		sealHash := ethash.SealHash(header).Bytes()
-		ctx = append(ctx, "sealHash", sealHash)
+		ctx = append(ctx, "sealHash", fmt.Sprintf("%x", sealHash))
 		digest, result = hashimotoLight(size, cache.cache, sealHash, nonce)
-		ctx = append(ctx, "result", result)
+		ctx = append(ctx, "result", fmt.Sprintf("%x", result))
 		// Caches are unmapped in a finalizer. Ensure that the cache stays alive
 		// until after the call to hashimotoLight so it's not unmapped while being used.
 		runtime.KeepAlive(cache)
 	}
 	// Verify the calculated values against the ones provided in the header
 	if !bytes.Equal(header.MixDigest[:], digest) {
-		ctx = append(ctx, "digest", digest)
-		ctx = append(ctx, "hdr.digest", header.MixDigest[:])
+		ctx = append(ctx, "digest", fmt.Sprintf("%x", digest))
+		ctx = append(ctx, "hdr.digest", fmt.Sprintf("%x", header.MixDigest[:]))
 		log.Error("Invalid mix digest", ctx...)
 		return errInvalidMixDigest
 	}
