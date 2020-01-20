@@ -173,12 +173,12 @@ func TestClosedRemoteSealer(t *testing.T) {
 func TestEthashVerification(t *testing.T) {
 
 	/*
-		ERROR[01-20|14:19:41.708] Invalid mix digest
-	number=5901768 datasetSize=2717907328 hdr.nonce=8774555798626709531
-	sealHash="[69 201 230 234 206 75 24 9 247 242 180 231 191 184 43 24 242 195 86 93 114 177 250 81 31 11 16 38 7 157 51 241]"
-	result="[103 158 62 246 38 246 6 82 71 33 210 238 177 37 178 13 191 241 61 186 140 226 136 148 83 111 108 166 252 245 249 55]"
-	digest="[243 53 19 163 179 107 241 143 214 217 69 240 230 214 186 30 147 91 37 133 63 119 50 135 143 2 34 91 56 44 57 133]"
-	hdr.digest="[7 230 161 170 212 130 52 40 152 14 130 41 51 80 133 198 228 85 153 243 214 89 81 206 124 121 106 216 112 129 235 114]"
+			ERROR[01-20|14:19:41.708] Invalid mix digest
+		number=5901768 datasetSize=2717907328 hdr.nonce=8774555798626709531
+		sealHash="[69 201 230 234 206 75 24 9 247 242 180 231 191 184 43 24 242 195 86 93 114 177 250 81 31 11 16 38 7 157 51 241]"
+		result="[103 158 62 246 38 246 6 82 71 33 210 238 177 37 178 13 191 241 61 186 140 226 136 148 83 111 108 166 252 245 249 55]"
+		digest="[243 53 19 163 179 107 241 143 214 217 69 240 230 214 186 30 147 91 37 133 63 119 50 135 143 2 34 91 56 44 57 133]"
+		hdr.digest="[7 230 161 170 212 130 52 40 152 14 130 41 51 80 133 198 228 85 153 243 214 89 81 206 124 121 106 216 112 129 235 114]"
 	*/
 	engine := New(Config{
 		CacheDir:       "",
@@ -204,8 +204,13 @@ func TestEthashVerification(t *testing.T) {
 	fmt.Printf("result: %x\n", result)
 	fmt.Println()
 	fmt.Printf("digest: %x\n", digest)
-	expDigest,_ := hexutil.Decode("07e6a1aad4823428980e8229335085c6e45599f3d65951ce7c796ad87081eb72")
-	if bytes.Equal(expDigest, digest){
-		t.Errorf("Mix digest wrong!, got %x exp %x",digest, expDigest )
+	expDigest, _ := hexutil.Decode("07e6a1aad4823428980e8229335085c6e45599f3d65951ce7c796ad87081eb72")
+	if bytes.Equal(expDigest, digest) {
+		t.Errorf("Mix digest wrong!, got %x exp %x", digest, expDigest)
 	}
+	sum := uint32(0)
+	for _, val := range cache.cache {
+		sum = sum ^ val
+	}
+	fmt.Printf("xor sum of cache contents: %x\n", sum)
 }
