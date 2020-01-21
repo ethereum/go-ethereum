@@ -18,6 +18,7 @@ package ethash
 
 import (
 	"encoding/binary"
+	"fmt"
 	"hash"
 	"math/big"
 	"reflect"
@@ -374,7 +375,7 @@ func hashimoto(hash []byte, nonce uint64, size uint64, lookup func(index uint32)
 // hashimotoLight aggregates data from the full dataset (using only a small
 // in-memory cache) in order to produce our final value for a particular header
 // hash and nonce.
-func hashimotoLight(size uint64, cache []uint32, hash []byte, nonce uint64) ([]byte, []byte) {
+func hashimotoLight(size uint64, cache []uint32, hash []byte, nonce uint64, verbose bool) ([]byte, []byte) {
 	keccak512 := makeHasher(sha3.NewLegacyKeccak512())
 
 	lookup := func(index uint32) []uint32 {
@@ -383,6 +384,9 @@ func hashimotoLight(size uint64, cache []uint32, hash []byte, nonce uint64) ([]b
 		data := make([]uint32, len(rawData)/4)
 		for i := 0; i < len(data); i++ {
 			data[i] = binary.LittleEndian.Uint32(rawData[i*4:])
+		}
+		if verbose {
+			fmt.Printf("lookup(%d)=%x\n", index, data)
 		}
 		return data
 	}

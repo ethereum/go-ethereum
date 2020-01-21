@@ -546,17 +546,21 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainReader, header *types.Head
 		ctx = append(ctx, "hdr.nonce", nonce)
 		sealHash := ethash.SealHash(header).Bytes()
 		ctx = append(ctx, "sealHash", fmt.Sprintf("%x", sealHash))
-		digest, result = hashimotoLight(size, cache.cache, sealHash, nonce)
+		verbose := (number == 5901768)
+
+		digest, result = hashimotoLight(size, cache.cache, sealHash, nonce, verbose)
 		ctx = append(ctx, "result", fmt.Sprintf("%x", result))
 		ctx = append(ctx, "epoch", cache.epoch)
 		ctx = append(ctx, "cachedir", ethash.config.CacheDir)
 		ctx = append(ctx, "datasetdir", ethash.config.DatasetDir)
 		// For debuggging only
-		sum := uint32(0)
-		for _, val := range cache.cache {
-			sum = sum ^ val
+		if verbose {
+			sum := uint32(0)
+			for _, val := range cache.cache {
+				sum = sum ^ val
+			}
+			ctx = append(ctx, "cachexor", fmt.Sprintf("%x", sum))
 		}
-		ctx = append(ctx, "cachexor", fmt.Sprintf("%x", sum))
 
 		// Caches are unmapped in a finalizer. Ensure that the cache stays alive
 		// until after the call to hashimotoLight so it's not unmapped while being used.
