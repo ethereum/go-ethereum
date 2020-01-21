@@ -84,30 +84,23 @@ func (ctx ppctx) indent(level int) string {
 }
 
 func (ctx ppctx) printValue(v goja.Value, level int, inArray bool) {
+	if goja.IsNull(v) || goja.IsUndefined(v) {
+		fmt.Fprint(ctx.w, SpecialColor(v.String()))
+		return
+	}
+	kind := v.ExportType().Kind()
 	switch {
-	case goja.IsNull(v):
-		fmt.Fprint(ctx.w, SpecialColor("null"))
-	case goja.IsUndefined(v):
-		fmt.Fprint(ctx.w, SpecialColor("undefined"))
-	case goja.IsNaN(v):
-		fmt.Fprint(ctx.w, NumberColor("NaN"))
+	case kind == reflect.Bool:
+		fmt.Fprint(ctx.w, SpecialColor("%t", v.ToBoolean()))
+	case kind == reflect.String:
+		fmt.Fprint(ctx.w, StringColor("%q", v.String()))
+	case kind >= reflect.Int && kind <= reflect.Complex128:
+		fmt.Fprint(ctx.w, NumberColor("%s", v.String()))
 	default:
-		switch v.ExportType().Kind() {
-		case reflect.String:
-			s := v.ToString().String()
-			fmt.Fprint(ctx.w, StringColor("%q", s))
-		case reflect.Bool:
-			b := v.ToBoolean()
-			fmt.Fprint(ctx.w, SpecialColor("%t", b))
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			s := v.ToString().String()
-			fmt.Fprint(ctx.w, NumberColor("%s", s))
-		default:
-			if obj, ok := v.(*goja.Object); ok {
-				ctx.printObject(obj, level, inArray)
-			} else {
-				fmt.Fprint(ctx.w, "<unprintable>")
-			}
+		if obj, ok := v.(*goja.Object); ok {
+			ctx.printObject(obj, level, inArray)
+		} else {
+			fmt.Fprintf(ctx.w, "<unprintable %T>", v)
 		}
 	}
 }
