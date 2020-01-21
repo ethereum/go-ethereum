@@ -549,6 +549,8 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainReader, header *types.Head
 		digest, result = hashimotoLight(size, cache.cache, sealHash, nonce)
 		ctx = append(ctx, "result", fmt.Sprintf("%x", result))
 		ctx = append(ctx, "epoch", cache.epoch)
+		ctx = append(ctx, "cachedir", ethash.config.CacheDir)
+		ctx = append(ctx, "datasetdir", ethash.config.DatasetDir)
 		// For debuggging only
 		sum := uint32(0)
 		for _, val := range cache.cache {
