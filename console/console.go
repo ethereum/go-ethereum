@@ -119,20 +119,12 @@ func (c *Console) init(preload []string) error {
 	c.jsre.Run("console = {};")
 
 	jethObj := c.jsre.Get("jeth").ToObject(c.runtime)
-	if err := jethObj.Set("send", bridge.Send); err != nil {
-		panic(err)
-	}
-	if err := jethObj.Set("sendAsync", bridge.Send); err != nil {
-		panic(err)
-	}
+	jethObj.Set("send", bridge.Send)
+	jethObj.Set("sendAsync", bridge.Send)
 
 	consoleObj := c.runtime.Get("console").ToObject(c.runtime)
-	if err := consoleObj.Set("log", c.consoleOutput); err != nil {
-		panic(err)
-	}
-	if err := consoleObj.Set("error", c.consoleOutput); err != nil {
-		panic(err)
-	}
+	consoleObj.Set("log", c.consoleOutput)
+	consoleObj.Set("error", c.consoleOutput)
 
 	// Load all the internal utility JavaScript libraries
 	if err := c.jsre.Compile("bignumber.js", string(jsre.BignumberJs)); err != nil {
