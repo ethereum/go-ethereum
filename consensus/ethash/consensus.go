@@ -548,6 +548,14 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainReader, header *types.Head
 		ctx = append(ctx, "sealHash", fmt.Sprintf("%x", sealHash))
 		digest, result = hashimotoLight(size, cache.cache, sealHash, nonce)
 		ctx = append(ctx, "result", fmt.Sprintf("%x", result))
+		ctx = append(ctx, "epoch", cache.epoch)
+		// For debuggging only
+		sum := uint32(0)
+		for _, val := range cache.cache {
+			sum = sum ^ val
+		}
+		ctx = append(ctx, "cachexor", fmt.Sprintf("%x", sum))
+
 		// Caches are unmapped in a finalizer. Ensure that the cache stays alive
 		// until after the call to hashimotoLight so it's not unmapped while being used.
 		runtime.KeepAlive(cache)
@@ -556,6 +564,7 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainReader, header *types.Head
 	if !bytes.Equal(header.MixDigest[:], digest) {
 		ctx = append(ctx, "digest", fmt.Sprintf("%x", digest))
 		ctx = append(ctx, "hdr.digest", fmt.Sprintf("%x", header.MixDigest[:]))
+
 		log.Error("Invalid mix digest", ctx...)
 		return errInvalidMixDigest
 	}

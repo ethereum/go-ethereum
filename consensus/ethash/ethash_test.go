@@ -197,6 +197,7 @@ func TestEthashVerification(t *testing.T) {
 	)
 	cache := engine.cache(number)
 	size := datasetSize(number)
+	fmt.Printf("number: %d\n", number)
 	fmt.Printf("datasetSize: %d\n", size)
 	digest, result := hashimotoLight(size, cache.cache, sealHash, nonce)
 	fmt.Printf("nonce: %v\n", nonce)
