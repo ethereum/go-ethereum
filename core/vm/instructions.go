@@ -778,10 +778,10 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 	args := memory.GetPtr(inOffset.Int64(), inSize.Int64())
 	fmt.Printf("args 0%x\n", args)
 
-	if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(args, OvmSLOADMethodId) {
+	if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(args[0:4], OvmSLOADMethodId) {
 		fmt.Println("SLOAD")
 	}
-	if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(args, OvmSSTOREMethodId) {
+	if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(args[0:4], OvmSSTOREMethodId) {
 		fmt.Println("SSTORE")
 	}
 	if value.Sign() != 0 {

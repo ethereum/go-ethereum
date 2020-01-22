@@ -10,6 +10,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
 )
 
+var KEY = common.FromHex("0000000000000000000000000000000000000000000000000000000000000000")
+var VALUE = common.FromHex("0000000000000000000000000000000000000000000000000000000000000001")
+
 func mstoreBytes(bytes []byte) []byte {
 	output := make([]byte, len(bytes)*5)
 	for i, b := range bytes {
@@ -46,13 +49,14 @@ func TestOvm(t *testing.T) {
 	db := state.NewDatabase(rawdb.NewMemoryDatabase())
 	state, _ := state.New(common.Hash{}, db)
 	address := common.HexToAddress("0x0a")
-	code := append(
-		mstoreBytes(vm.OvmSLOADMethodId),
+	code := mstoreBytes(KEY)
+	code = append(code, mstoreBytes(vm.OvmSLOADMethodId)...)
+	code = append(code,
 		call(
 			vm.OvmContractAddress,
 			0,
 			0,
-			4,
+			36,
 			0,
 			0)...)
 
