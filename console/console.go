@@ -116,30 +116,8 @@ func (c *Console) init(preload []string) error {
 	if err := c.initWeb3(bridge); err != nil {
 		return err
 	}
-
-	// Load the supported APIs.
-	apis, err := c.client.SupportedModules()
-	if err != nil {
-		return fmt.Errorf("api modules: %v", err)
-	}
-	flatten := "var eth = web3.eth; var personal = web3.personal; "
-	for api := range apis {
-		if api == "web3" {
-			continue // manually mapped or ignore
-		}
-		if file, ok := web3ext.Modules[api]; ok {
-			// Load our extension for the module.
-			if err = c.jsre.Compile(fmt.Sprintf("%s.js", api), file); err != nil {
-				return fmt.Errorf("%s.js: %v", api, err)
-			}
-			flatten += fmt.Sprintf("var %s = web3.%s; ", api, api)
-		} else if _, err := c.jsre.Run("web3." + api); err == nil {
-			// Enable web3.js built-in extension if available.
-			flatten += fmt.Sprintf("var %s = web3.%s; ", api, api)
-		}
-	}
-	if _, err = c.jsre.Run(flatten); err != nil {
-		return fmt.Errorf("namespace flattening: %v", err)
+	if err := c.initExtensions(); err != nil {
+		return err
 	}
 
 	// Add bridge overrides for web3.js functionality.
@@ -202,6 +180,38 @@ func (c *Console) initWeb3(bridge *bridge) error {
 		_, err = vm.RunString("var web3 = new Web3(_consoleWeb3Transport)")
 	})
 	return err
+}
+
+// initExtensions loads and registers web3.js extensions.
+func (c *Console) initExtensions() error {
+	// Compute aliases from server-provided modules.
+	apis, err := c.client.SupportedModules()
+	if err != nil {
+		return fmt.Errorf("api modules: %v", err)
+	}
+	aliases := map[string]struct{}{"eth": {}, "personal": {}}
+	for api := range apis {
+		if api == "web3" {
+			continue
+		}
+		aliases[api] = struct{}{}
+		if file, ok := web3ext.Modules[api]; ok {
+			if err = c.jsre.Compile(api+".js", file); err != nil {
+				return fmt.Errorf("%s.js: %v", api, err)
+			}
+		}
+	}
+
+	// Apply aliases.
+	c.jsre.Do(func(vm *goja.Runtime) {
+		web3 := getObject(vm, "web3")
+		for name, _ := range aliases {
+			if v := web3.Get(name); v != nil {
+				vm.Set(name, v)
+			}
+		}
+	})
+	return nil
 }
 
 // initAdmin creates additional admin APIs implemented by the bridge.
