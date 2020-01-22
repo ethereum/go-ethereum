@@ -54,6 +54,11 @@ var (
 	miscInTrafficMeter        = metrics.NewRegisteredMeter("eth/misc/in/traffic", nil)
 	miscOutPacketsMeter       = metrics.NewRegisteredMeter("eth/misc/out/packets", nil)
 	miscOutTrafficMeter       = metrics.NewRegisteredMeter("eth/misc/out/traffic", nil)
+
+	// All incoming block announcements (no dedup)
+	propAnnounceAllInMeter = metrics.NewRegisteredMeter("eth/announces/block/in/all", nil)
+	// All incoming block broadcasts
+	propBroadcastAllInMeter = metrics.NewRegisteredMeter("eth/broadcasts/block/in/all", nil)
 )
 
 // meteredMsgReadWriter is a wrapper around a p2p.MsgReadWriter, capable of

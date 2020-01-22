@@ -46,6 +46,9 @@ var (
 // blockRetrievalFn is a callback type for retrieving a block from the local chain.
 type blockRetrievalFn func(common.Hash) *types.Block
 
+// blockCheckFn is a callback type for checking if a given has exists in the local chain.
+type blockCheckFn func(common.Hash) bool
+
 // headerRequesterFn is a callback type for sending a header retrieval request.
 type headerRequesterFn func(common.Hash) error
 
@@ -130,6 +133,7 @@ type Fetcher struct {
 
 	// Callbacks
 	getBlock       blockRetrievalFn   // Retrieves a block from the local chain
+	hasBlock       blockCheckFn       // Retrieves a block from the local chain
 	verifyHeader   headerVerifierFn   // Checks if a block's headers have a valid proof of work
 	broadcastBlock blockBroadcasterFn // Broadcasts a block to connected peers
 	chainHeight    chainHeightFn      // Retrieves the current chain's height
@@ -147,21 +151,23 @@ type Fetcher struct {
 // New creates a block fetcher to retrieve blocks based on hash announcements.
 func New(getBlock blockRetrievalFn, verifyHeader headerVerifierFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, insertChain chainInsertFn, dropPeer peerDropFn) *Fetcher {
 	return &Fetcher{
-		notify:         make(chan *announce),
-		inject:         make(chan *inject),
-		headerFilter:   make(chan chan *headerFilterTask),
-		bodyFilter:     make(chan chan *bodyFilterTask),
-		done:           make(chan common.Hash),
-		quit:           make(chan struct{}),
-		announces:      make(map[string]int),
-		announced:      make(map[common.Hash][]*announce),
-		fetching:       make(map[common.Hash]*announce),
-		fetched:        make(map[common.Hash][]*announce),
-		completing:     make(map[common.Hash]*announce),
-		queue:          prque.New(nil),
-		queues:         make(map[string]int),
-		queued:         make(map[common.Hash]*inject),
-		getBlock:       getBlock,
+		notify:       make(chan *announce),
+		inject:       make(chan *inject),
+		headerFilter: make(chan chan *headerFilterTask),
+		bodyFilter:   make(chan chan *bodyFilterTask),
+		done:         make(chan common.Hash),
+		quit:         make(chan struct{}),
+		announces:    make(map[string]int),
+		announced:    make(map[common.Hash][]*announce),
+		fetching:     make(map[common.Hash]*announce),
+		fetched:      make(map[common.Hash][]*announce),
+		completing:   make(map[common.Hash]*announce),
+		queue:        prque.New(nil),
+		queues:       make(map[string]int),
+		queued:       make(map[common.Hash]*inject),
+		getBlock:     getBlock,
+		// This can be replaced this with a more optimized lookup
+		hasBlock:       func(hash common.Hash) bool { return getBlock(hash) != nil },
 		verifyHeader:   verifyHeader,
 		broadcastBlock: broadcastBlock,
 		chainHeight:    chainHeight,
@@ -194,6 +200,7 @@ func (f *Fetcher) Notify(peer string, hash common.Hash, number uint64, time time
 		fetchHeader: headerFetcher,
 		fetchBodies: bodyFetcher,
 	}
+	propAnnounceUsefulInMeter.Mark(1)
 	select {
 	case f.notify <- block:
 		return nil
@@ -204,6 +211,10 @@ func (f *Fetcher) Notify(peer string, hash common.Hash, number uint64, time time
 
 // Enqueue tries to fill gaps the fetcher's future import queue.
 func (f *Fetcher) Enqueue(peer string, block *types.Block) error {
+	if f.hasBlock(block.Hash()) {
+		return nil
+	}
+	propBroadcastUsefulMeter.Mark(1)
 	op := &inject{
 		origin: peer,
 		block:  block,
@@ -304,7 +315,7 @@ func (f *Fetcher) loop() {
 				break
 			}
 			// Otherwise if fresh and still unknown, try and import
-			if number+maxUncleDist < height || f.getBlock(hash) != nil {
+			if number+maxUncleDist < height || f.hasBlock(hash) {
 				f.forgetBlock(hash)
 				continue
 			}
@@ -318,7 +329,6 @@ func (f *Fetcher) loop() {
 
 		case notification := <-f.notify:
 			// A block was announced, make sure the peer isn't DOSing us
-			propAnnounceInMeter.Mark(1)
 
 			count := f.announces[notification.origin] + 1
 			if count > hashLimit {
@@ -352,7 +362,6 @@ func (f *Fetcher) loop() {
 
 		case op := <-f.inject:
 			// A direct block insertion was requested, try and fill any pending gaps
-			propBroadcastInMeter.Mark(1)
 			f.enqueue(op.origin, op.block)
 
 		case hash := <-f.done:
@@ -371,7 +380,7 @@ func (f *Fetcher) loop() {
 					f.forgetHash(hash)
 
 					// If the block still didn't arrive, queue for fetching
-					if f.getBlock(hash) == nil {
+					if !f.hasBlock(hash) {
 						request[announce.origin] = append(request[announce.origin], hash)
 						f.fetching[hash] = announce
 					}
@@ -406,7 +415,7 @@ func (f *Fetcher) loop() {
 				f.forgetHash(hash)
 
 				// If the block still didn't arrive, queue for completion
-				if f.getBlock(hash) == nil {
+				if !f.hasBlock(hash) {
 					request[announce.origin] = append(request[announce.origin], hash)
 					f.completing[hash] = announce
 				}
@@ -453,7 +462,7 @@ func (f *Fetcher) loop() {
 						continue
 					}
 					// Only keep if not imported by other means
-					if f.getBlock(hash) == nil {
+					if !f.hasBlock(hash) {
 						announce.header = header
 						announce.time = task.time
 
@@ -527,7 +536,7 @@ func (f *Fetcher) loop() {
 							// Mark the body matched, reassemble if still unknown
 							matched = true
 
-							if f.getBlock(hash) == nil {
+							if !f.hasBlock(hash) {
 								block := types.NewBlockWithHeader(announce.header).WithBody(task.transactions[i], task.uncles[i])
 								block.ReceivedAt = task.time
 
