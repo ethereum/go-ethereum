@@ -32,9 +32,9 @@ import (
 var (
 	bigZero                  = new(big.Int)
 	tt255                    = math.BigPow(2, 255)
-	ovmSLOADMethodId         = hashSha3([]byte("ovmSLOAD()"))[0:4]
-	ovmSSTOREMethodId        = hashSha3([]byte("ovmSStore()"))[0:4]
-	ovmContractAddress       = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
+	OvmSLOADMethodId         = hashSha3([]byte("ovmSLOAD()"))[0:4]
+	OvmSSTOREMethodId        = hashSha3([]byte("ovmSStore()"))[0:4]
+	OvmContractAddress       = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
 	errWriteProtection       = errors.New("evm: write protection")
 	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
 	errExecutionReverted     = errors.New("evm: execution reverted")
@@ -778,10 +778,10 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 	args := memory.GetPtr(inOffset.Int64(), inSize.Int64())
 	fmt.Printf("args 0%x\n", args)
 
-	if bytes.Equal(toAddr.Bytes(), ovmContractAddress) && bytes.Equal(args, ovmSLOADMethodId) {
+	if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(args, OvmSLOADMethodId) {
 		fmt.Println("SLOAD")
 	}
-	if bytes.Equal(toAddr.Bytes(), ovmContractAddress) && bytes.Equal(args, ovmSSTOREMethodId) {
+	if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(args, OvmSSTOREMethodId) {
 		fmt.Println("SSTORE")
 	}
 	if value.Sign() != 0 {
