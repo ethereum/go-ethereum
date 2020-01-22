@@ -253,6 +253,7 @@ func generateDatasetItem(cache []uint32, index uint32, keccak512 hasher) []byte 
 	// fnv it with a lot of random cache nodes based on index
 	for i := uint32(0); i < datasetParents; i++ {
 		parent := fnv(index^i, intMix[i%16]) % rows
+		//fmt.Printf("accessing cache %d\n", parent*hashWords)
 		fnvHash(intMix, cache[parent*hashWords:])
 	}
 	// Flatten the uint32 mix into a binary one and return

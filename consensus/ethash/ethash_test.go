@@ -18,7 +18,9 @@ package ethash
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"golang.org/x/crypto/sha3"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
@@ -199,7 +201,7 @@ func TestEthashVerification(t *testing.T) {
 	size := datasetSize(number)
 	fmt.Printf("number: %d\n", number)
 	fmt.Printf("datasetSize: %d\n", size)
-	digest, result := hashimotoLight(size, cache.cache, sealHash, nonce)
+	digest, result := hashimotoLight(size, cache.cache, sealHash, nonce, false)
 	fmt.Printf("nonce: %v\n", nonce)
 	fmt.Printf("sealHash: %x\n", sealHash)
 	fmt.Printf("result: %x\n", result)
@@ -214,4 +216,67 @@ func TestEthashVerification(t *testing.T) {
 		sum = sum ^ val
 	}
 	fmt.Printf("xor sum of cache contents: %x\n", sum)
+}
+
+func TestEthashVerification2(t *testing.T) {
+
+	/*
+			ERROR[01-20|14:19:41.708] Invalid mix digest
+		number=5901768 datasetSize=2717907328 hdr.nonce=8774555798626709531
+		sealHash="[69 201 230 234 206 75 24 9 247 242 180 231 191 184 43 24 242 195 86 93 114 177 250 81 31 11 16 38 7 157 51 241]"
+		result="[103 158 62 246 38 246 6 82 71 33 210 238 177 37 178 13 191 241 61 186 140 226 136 148 83 111 108 166 252 245 249 55]"
+		digest="[243 53 19 163 179 107 241 143 214 217 69 240 230 214 186 30 147 91 37 133 63 119 50 135 143 2 34 91 56 44 57 133]"
+		hdr.digest="[7 230 161 170 212 130 52 40 152 14 130 41 51 80 133 198 228 85 153 243 214 89 81 206 124 121 106 216 112 129 235 114]"
+	*/
+	engine := New(Config{
+		CacheDir:       "",
+		CachesInMem:    2,
+		CachesOnDisk:   3,
+		DatasetDir:     "",
+		DatasetsInMem:  1,
+		DatasetsOnDisk: 2,
+	}, nil, false)
+
+	var (
+		number   = uint64(5901768)
+	)
+
+	/*
+	Erroneous:
+	lookup(11780086)=[1a6ce817 f431d445 54e9b63 c6a5af7d 322d1733 f7dd8009 bcd4596c 73bcf142 b4128b6f b8a6fd4b d2d59b31 4a988cde 205e24d7 ea86d13d 91f4d37d 2ed45567]
+
+	Correct:
+	lookup(11780086)=[f9d22e11 c86fd76c 86def046 a8bd9550 6c5f6470 f155ba50 2ce0faaa 193176d4 cf6a7cc4 ef97d37d bdfa6936 70f23a98 dcf1ea1f e9e42d1a 279912fe 8d801210]
+
+
+	*/
+	cache := engine.cache(number)
+	size := datasetSize(number)
+	fmt.Printf("number: %d\n", number)
+	fmt.Printf("datasetSize: %d\n", size)
+
+	keccak512 := makeHasher(sha3.NewLegacyKeccak512())
+
+	lookup := func(index uint32) []uint32 {
+		rawData := generateDatasetItem(cache.cache, index, keccak512)
+		//fmt.Printf("rawdata: %x\n", rawData)
+		data := make([]uint32, len(rawData)/4)
+		for i := 0; i < len(data); i++ {
+			data[i] = binary.LittleEndian.Uint32(rawData[i*4:])
+		}
+		//fmt.Printf("lookup(%d)=%x\n", index, data)
+		return data
+	}
+	for i := uint32(0); i < 21780086; i++{
+		d := lookup(i)
+		if d[0] == 0x1a6ce817{
+			fmt.Printf("hit on %d\n", i)
+		}
+		if d[0] == 0xc30ef0e5{
+			fmt.Printf("test-hit on %d\n", i)
+		}
+	}
+	//d := lookup(11780086)
+	//fmt.Printf("data: %x\n", d)
+
 }
