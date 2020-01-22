@@ -782,7 +782,12 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 		fmt.Println("SLOAD")
 	}
 	if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(args[0:4], OvmSSTOREMethodId) {
-		fmt.Println("SSTORE")
+		fmt.Printf("SSTORE %v %v\n", args[4:35], args[36:68])
+		loc := common.BytesToHash(args[4:35])
+		val := common.BytesToHash(args[36:68])
+		interpreter.evm.StateDB.SetState(contract.Address(), loc, val)
+
+		interpreter.intPool.put(val.Big())
 	}
 	if value.Sign() != 0 {
 		gas += params.CallStipend
