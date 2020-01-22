@@ -610,7 +610,6 @@ func opMload(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory
 }
 
 func opMstore(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	fmt.Println("MSTORE Overriden")
 	// pop value of the stack
 	mStart, val := stack.pop(), stack.pop()
 	memory.Set32(mStart.Uint64(), val)
@@ -756,8 +755,16 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.BigToAddress(addr)
 	value = math.U256(value)
+
+	fmt.Printf("inOffset %s\n", inOffset)
+	fmt.Printf("inSize %s\n", inSize)
+	fmt.Printf("retOffset %s\n", retOffset)
+	fmt.Printf("retSize %s\n", retSize)
+	fmt.Printf("value %s\n", value)
+	fmt.Printf("address 0x%020x\n", addr)
 	// Get the arguments from the memory.
 	args := memory.GetPtr(inOffset.Int64(), inSize.Int64())
+	fmt.Printf("args 0%x\n", args)
 
 	if value.Sign() != 0 {
 		gas += params.CallStipend

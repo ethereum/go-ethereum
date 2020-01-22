@@ -240,7 +240,6 @@ func runCmd(ctx *cli.Context) error {
 	}
 	input := common.FromHex(string(bytes.TrimSpace(hexInput)))
 
-	fmt.Println(ctx.GlobalString(EVMInterpreterFlag.Name))
 	var execFunc func() ([]byte, uint64, error)
 	if ctx.GlobalBool(CreateFlag.Name) {
 		input = append(code, input...)

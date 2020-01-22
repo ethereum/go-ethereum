@@ -27,10 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/prologic/bitcask"
 )
 
-var Balances, err = bitcask.Open("balances.bitcask")
 var emptyCodeHash = crypto.Keccak256(nil)
 
 type Code []byte
@@ -363,7 +361,6 @@ func (s *stateObject) SetBalance(amount *big.Int) {
 		account: &s.address,
 		prev:    new(big.Int).Set(s.data.Balance),
 	})
-	Balances.Put(s.address.Bytes(), amount.Bytes())
 	s.setBalance(amount)
 }
 
