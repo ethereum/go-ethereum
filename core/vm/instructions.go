@@ -34,7 +34,7 @@ var (
 	tt255                    = math.BigPow(2, 255)
 	OvmSLOADMethodId         = hashSha3([]byte("ovmSLOAD()"))[0:4]
 	OvmSSTOREMethodId        = hashSha3([]byte("ovmSStore()"))[0:4]
-	OvmContractAddress       = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
+	OvmContractAddress       = common.FromHex("000000000000000000000000000000000000001")
 	errWriteProtection       = errors.New("evm: write protection")
 	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
 	errExecutionReverted     = errors.New("evm: execution reverted")
@@ -768,11 +768,11 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 	toAddr := common.BigToAddress(addr)
 	value = math.U256(value)
 
+	fmt.Printf("value %s\n", value)
 	fmt.Printf("inOffset %s\n", inOffset)
 	fmt.Printf("inSize %s\n", inSize)
 	fmt.Printf("retOffset %s\n", retOffset)
 	fmt.Printf("retSize %s\n", retSize)
-	fmt.Printf("value %s\n", value)
 	fmt.Printf("address 0x%020x\n", addr)
 	// Get the arguments from the memory.
 	args := memory.GetPtr(inOffset.Int64(), inSize.Int64())

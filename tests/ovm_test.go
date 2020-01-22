@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -23,27 +22,40 @@ func mstoreBytes(bytes []byte) []byte {
 	return output
 }
 
+func call(addr []byte, value uint, inOffset uint, inSize uint, retOffset uint, retSize uint) []byte {
+	output := []byte{
+		byte(vm.PUSH1), 0,
+		byte(vm.PUSH1), 0,
+		byte(vm.PUSH1), byte(retSize),
+		byte(vm.PUSH1), byte(retOffset),
+		byte(vm.PUSH1), byte(inSize),
+		byte(vm.PUSH1), byte(inOffset),
+		byte(vm.PUSH1), byte(value),
+	}
+	output = append(output, []byte{
+		byte(vm.PUSH20)}...)
+	output = append(output, addr...)
+	output = append(output, []byte{
+		byte(vm.GAS),
+		byte(vm.CALL),
+	}...)
+	return output
+}
+
 func TestOvm(t *testing.T) {
 	db := state.NewDatabase(rawdb.NewMemoryDatabase())
 	state, _ := state.New(common.Hash{}, db)
 	address := common.HexToAddress("0x0a")
-	fmt.Printf("%x\n", mstoreBytes(vm.OvmSLOADMethodId))
-	code := mstoreBytes(vm.OvmSLOADMethodId)
-	code = append(code, []byte{
-		byte(vm.PUSH1), 0,
-		byte(vm.PUSH1), 0,
-		byte(vm.PUSH1), 0,
-		byte(vm.PUSH1), 0,
-		byte(vm.PUSH1), 4,
-		byte(vm.PUSH1), 0,
-		byte(vm.PUSH1), 0,
-		// 0x00000000000000000001
-		byte(vm.PUSH20), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-		byte(vm.GAS),
-		byte(vm.CALL),
-	}...)
+	code := append(
+		mstoreBytes(vm.OvmSLOADMethodId),
+		call(
+			vm.OvmContractAddress,
+			0,
+			0,
+			4,
+			0,
+			0)...)
 
-	fmt.Printf("%x", code)
 	state.SetCode(address, code)
 
 	_, _, err := runtime.Call(address, nil, &runtime.Config{State: state, Debug: true})
