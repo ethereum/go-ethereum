@@ -36,14 +36,13 @@ var (
 	Web3Js      = deps.MustAsset("web3.js")
 )
 
-/*
-JSRE is a generic JS runtime environment embedding the goja JS interpreter.
-It provides some helper functions to
-- load code from files
-- run code snippets
-- require libraries
-- bind native go objects
-*/
+// JSRE is a JS runtime environment embedding the goja interpreter.
+// It provides helper functions to load code from files, run code snippets
+// and bind native go objects to JS.
+//
+// The runtime runs all code on a dedicated event loop and does not expose the underlying
+// goja runtime directly. To use the runtime, call JSRE.Do. When binding a Go function,
+// use the Call type to gain access to the runtime.
 type JSRE struct {
 	assetPath     string
 	output        io.Writer
@@ -51,6 +50,12 @@ type JSRE struct {
 	stopEventLoop chan bool
 	closed        chan struct{}
 	vm            *goja.Runtime
+}
+
+// Call is the argument type of Go functions which are callable from JS.
+type Call struct {
+	goja.FunctionCall
+	VM *goja.Runtime
 }
 
 // jsTimer is a single timer instance with a callback function
@@ -68,17 +73,17 @@ type evalReq struct {
 }
 
 // runtime must be stopped with Stop() after use and cannot be used after stopping
-func New(assetPath string, output io.Writer, vm *goja.Runtime) *JSRE {
+func New(assetPath string, output io.Writer) *JSRE {
 	re := &JSRE{
 		assetPath:     assetPath,
 		output:        output,
 		closed:        make(chan struct{}),
 		evalQueue:     make(chan *evalReq),
 		stopEventLoop: make(chan bool),
-		vm:            vm,
+		vm:            goja.New(),
 	}
 	go re.runEventLoop()
-	re.Set("loadScript", re.loadScript)
+	re.Set("loadScript", MakeCallback(re.vm, re.loadScript))
 	re.Set("inspect", re.prettyPrintJS)
 	return re
 }
@@ -244,21 +249,7 @@ func (re *JSRE) Exec(file string) error {
 	if err != nil {
 		return err
 	}
-	var script *goja.Program
-	re.Do(func(vm *goja.Runtime) {
-		script, err = goja.Compile(file, string(code), false)
-		if err != nil {
-			return
-		}
-		_, err = vm.RunProgram(script)
-	})
-	return err
-}
-
-// Bind assigns value v to a variable in the JS environment
-// This method is deprecated, use Set.
-func (re *JSRE) Bind(name string, v interface{}) error {
-	return re.Set(name, v)
+	return re.Compile(file, string(code))
 }
 
 // Run runs a piece of JS code.
@@ -267,40 +258,25 @@ func (re *JSRE) Run(code string) (v goja.Value, err error) {
 	return v, err
 }
 
-// Get returns the value of a variable in the JS environment.
-func (re *JSRE) Get(ns string) (v goja.Value) {
-	re.Do(func(vm *goja.Runtime) { v = vm.Get(ns) })
-	return v
-}
-
 // Set assigns value v to a variable in the JS environment.
 func (re *JSRE) Set(ns string, v interface{}) (err error) {
 	re.Do(func(vm *goja.Runtime) { vm.Set(ns, v) })
 	return err
 }
 
-// loadScript executes a JS script from inside the currently executing JS code.
-func (re *JSRE) loadScript(call goja.FunctionCall) goja.Value {
-	file := call.Argument(0).ToString().String()
-	file = common.AbsolutePath(re.assetPath, file)
-	source, err := ioutil.ReadFile(file)
-	if err != nil {
-		// Panicking with a goja.Value arg will cause a JS exception
-		// in the caller.
-		panic(re.vm.ToValue(fmt.Sprintf("Could not read file %s: %v", file, err)))
-	}
-	value, err := compileAndRun(re.vm, file, string(source))
-	if err != nil {
-		panic(re.vm.ToValue(fmt.Sprintf("Error while compiling or running script: %v", err)))
-	}
-	return value
+// MakeCallback turns the given function into a function that's callable by JS.
+func MakeCallback(vm *goja.Runtime, fn func(Call) (goja.Value, error)) goja.Value {
+	return vm.ToValue(func(call goja.FunctionCall) goja.Value {
+		result, err := fn(Call{call, vm})
+		if err != nil {
+			panic(vm.NewGoError(err))
+		}
+		return result
+	})
 }
 
-// Evaluate executes code and pretty prints the result to the specified output
-// stream.
-func (re *JSRE) Evaluate(code string, w io.Writer) error {
-	var fail error
-
+// Evaluate executes code and pretty prints the result to the specified output stream.
+func (re *JSRE) Evaluate(code string, w io.Writer) {
 	re.Do(func(vm *goja.Runtime) {
 		val, err := vm.RunString(code)
 		if err != nil {
@@ -310,13 +286,27 @@ func (re *JSRE) Evaluate(code string, w io.Writer) error {
 		}
 		fmt.Fprintln(w)
 	})
-	return fail
 }
 
 // Compile compiles and then runs a piece of JS code.
 func (re *JSRE) Compile(filename string, src string) (err error) {
 	re.Do(func(vm *goja.Runtime) { _, err = compileAndRun(vm, filename, src) })
 	return err
+}
+
+// loadScript loads and executes a JS file.
+func (re *JSRE) loadScript(call Call) (goja.Value, error) {
+	file := call.Argument(0).ToString().String()
+	file = common.AbsolutePath(re.assetPath, file)
+	source, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, fmt.Errorf("Could not read file %s: %v", file, err)
+	}
+	value, err := compileAndRun(re.vm, file, string(source))
+	if err != nil {
+		return nil, fmt.Errorf("Error while compiling or running script: %v", err)
+	}
+	return value, nil
 }
 
 func compileAndRun(vm *goja.Runtime, filename string, src string) (goja.Value, error) {

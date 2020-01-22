@@ -50,7 +50,7 @@ func newWithTestJS(t *testing.T, testjs string) (*JSRE, string) {
 			t.Fatal("cannot create test.js:", err)
 		}
 	}
-	jsre := New(dir, os.Stdout, goja.New())
+	jsre := New(dir, os.Stdout)
 	return jsre, dir
 }
 
@@ -102,10 +102,10 @@ func TestNatto(t *testing.T) {
 }
 
 func TestBind(t *testing.T) {
-	jsre := New("", os.Stdout, goja.New())
+	jsre := New("", os.Stdout)
 	defer jsre.Stop(false)
 
-	jsre.Bind("no", &testNativeObjectBinding{vm: jsre.vm})
+	jsre.Set("no", &testNativeObjectBinding{vm: jsre.vm})
 
 	_, err := jsre.Run(`no.TestMethod("testMsg")`)
 	if err != nil {
