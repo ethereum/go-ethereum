@@ -28,12 +28,6 @@ import (
 
 	"github.com/dop251/goja"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/internal/jsre/deps"
-)
-
-var (
-	BignumberJs = deps.MustAsset("bignumber.js")
-	Web3Js      = deps.MustAsset("web3.js")
 )
 
 // JSRE is a JS runtime environment embedding the goja interpreter.

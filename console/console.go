@@ -30,6 +30,7 @@ import (
 
 	"github.com/dop251/goja"
 	"github.com/ethereum/go-ethereum/internal/jsre"
+	"github.com/ethereum/go-ethereum/internal/jsre/deps"
 	"github.com/ethereum/go-ethereum/internal/web3ext"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mattn/go-colorable"
@@ -181,10 +182,12 @@ func (c *Console) initConsoleObject() {
 }
 
 func (c *Console) initWeb3(bridge *bridge) error {
-	if err := c.jsre.Compile("bignumber.js", string(jsre.BignumberJs)); err != nil {
+	bnJS := string(deps.MustAsset("bignumber.js"))
+	web3JS := string(deps.MustAsset("web3.js"))
+	if err := c.jsre.Compile("bignumber.js", bnJS); err != nil {
 		return fmt.Errorf("bignumber.js: %v", err)
 	}
-	if err := c.jsre.Compile("web3.js", string(jsre.Web3Js)); err != nil {
+	if err := c.jsre.Compile("web3.js", web3JS); err != nil {
 		return fmt.Errorf("web3.js: %v", err)
 	}
 	if _, err := c.jsre.Run("var Web3 = require('web3');"); err != nil {
