@@ -62,7 +62,7 @@ func TestStatusMsgErrors63(t *testing.T) {
 		wantError error
 	}{
 		{
-			code: TxMsg, data: []interface{}{},
+			code: TransactionMsg, data: []interface{}{},
 			wantError: errResp(ErrNoStatusMsg, "first msg has code 2 (!= 0)"),
 		},
 		{
@@ -114,7 +114,7 @@ func TestStatusMsgErrors64(t *testing.T) {
 		wantError error
 	}{
 		{
-			code: TxMsg, data: []interface{}{},
+			code: TransactionMsg, data: []interface{}{},
 			wantError: errResp(ErrNoStatusMsg, "first msg has code 2 (!= 0)"),
 		},
 		{
@@ -258,7 +258,7 @@ func testRecvTransactions(t *testing.T, protocol int) {
 	defer p.close()
 
 	tx := newTestTransaction(testAccount, 0, 0)
-	if err := p2p.Send(p.app, TxMsg, []interface{}{tx}); err != nil {
+	if err := p2p.Send(p.app, TransactionMsg, []interface{}{tx}); err != nil {
 		t.Fatalf("send error: %v", err)
 	}
 	select {
@@ -282,13 +282,16 @@ func testSendTransactions(t *testing.T, protocol int) {
 	pm, _ := newTestProtocolManagerMust(t, downloader.FullSync, 0, nil, nil)
 	defer pm.Stop()
 
-	// Fill the pool with big transactions.
+	// Fill the pool with big transactions (use a subscription to wait until all
+	// the transactions are announced to avoid spurious events causing extra
+	// broadcasts).
 	const txsize = txsyncPackSize / 10
 	alltxs := make([]*types.Transaction, 100)
 	for nonce := range alltxs {
 		alltxs[nonce] = newTestTransaction(testAccount, uint64(nonce), txsize)
 	}
 	pm.txpool.AddRemotes(alltxs)
+	time.Sleep(100 * time.Millisecond) // Wait until new tx even gets out of the system (lame)
 
 	// Connect several peers. They should all receive the pending transactions.
 	var wg sync.WaitGroup
@@ -300,8 +303,6 @@ func testSendTransactions(t *testing.T, protocol int) {
 			seen[tx.Hash()] = false
 		}
 		for n := 0; n < len(alltxs) && !t.Failed(); {
-			var txs []*types.Transaction
-			var hashes []common.Hash
 			var forAllHashes func(callback func(hash common.Hash))
 			switch protocol {
 			case 63:
@@ -310,11 +311,15 @@ func testSendTransactions(t *testing.T, protocol int) {
 				msg, err := p.app.ReadMsg()
 				if err != nil {
 					t.Errorf("%v: read error: %v", p.Peer, err)
-				} else if msg.Code != TxMsg {
+					continue
+				} else if msg.Code != TransactionMsg {
 					t.Errorf("%v: got code %d, want TxMsg", p.Peer, msg.Code)
+					continue
 				}
+				var txs []*types.Transaction
 				if err := msg.Decode(&txs); err != nil {
 					t.Errorf("%v: %v", p.Peer, err)
+					continue
 				}
 				forAllHashes = func(callback func(hash common.Hash)) {
 					for _, tx := range txs {
@@ -325,11 +330,15 @@ func testSendTransactions(t *testing.T, protocol int) {
 				msg, err := p.app.ReadMsg()
 				if err != nil {
 					t.Errorf("%v: read error: %v", p.Peer, err)
+					continue
 				} else if msg.Code != NewPooledTransactionHashesMsg {
-					t.Errorf("%v: got code %d, want TxMsg", p.Peer, msg.Code)
+					t.Errorf("%v: got code %d, want NewPooledTransactionHashesMsg", p.Peer, msg.Code)
+					continue
 				}
+				var hashes []common.Hash
 				if err := msg.Decode(&hashes); err != nil {
 					t.Errorf("%v: %v", p.Peer, err)
+					continue
 				}
 				forAllHashes = func(callback func(hash common.Hash)) {
 					for _, h := range hashes {
