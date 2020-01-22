@@ -108,14 +108,15 @@ func New(config Config) (*Console, error) {
 // init retrieves the available APIs from the remote RPC provider and initializes
 // the console's JavaScript namespaces based on the exposed modules.
 func (c *Console) init(preload []string) error {
+	c.initConsoleObject()
+
 	// Initialize the JavaScript <-> Go RPC bridge.
 	bridge := newBridge(c.client, c.prompter, c.printer)
 	if err := c.initWeb3(bridge); err != nil {
 		return err
 	}
-	c.jsre.Do(func(vm *goja.Runtime) { c.initConsoleObject(vm) })
 
-	// Load the supported APIs into the JavaScript runtime environment
+	// Load the supported APIs.
 	apis, err := c.client.SupportedModules()
 	if err != nil {
 		return fmt.Errorf("api modules: %v", err)
@@ -140,12 +141,13 @@ func (c *Console) init(preload []string) error {
 		return fmt.Errorf("namespace flattening: %v", err)
 	}
 
+	// Add bridge overrides for web3.js functionality.
 	c.jsre.Do(func(vm *goja.Runtime) {
 		c.initAdmin(vm, bridge)
 		c.initPersonal(vm, bridge)
 	})
 
-	// Preload any JavaScript files before starting the console
+	// Preload JavaScript files.
 	for _, path := range preload {
 		if err := c.jsre.Exec(path); err != nil {
 			failure := err.Error()
@@ -156,7 +158,7 @@ func (c *Console) init(preload []string) error {
 		}
 	}
 
-	// Configure the console's input prompter for history and tab completion.
+	// Configure the input prompter for history and tab completion.
 	if c.prompter != nil {
 		if content, err := ioutil.ReadFile(c.histPath); err != nil {
 			c.prompter.SetHistory(nil)
@@ -167,6 +169,15 @@ func (c *Console) init(preload []string) error {
 		c.prompter.SetWordCompleter(c.AutoCompleteInput)
 	}
 	return nil
+}
+
+func (c *Console) initConsoleObject() {
+	c.jsre.Do(func(vm *goja.Runtime) {
+		console := vm.NewObject()
+		console.Set("log", c.consoleOutput)
+		console.Set("error", c.consoleOutput)
+		vm.Set("console", console)
+	})
 }
 
 func (c *Console) initWeb3(bridge *bridge) error {
@@ -188,13 +199,6 @@ func (c *Console) initWeb3(bridge *bridge) error {
 		_, err = vm.RunString("var web3 = new Web3(_consoleWeb3Transport)")
 	})
 	return err
-}
-
-func (c *Console) initConsoleObject(vm *goja.Runtime) {
-	console := vm.NewObject()
-	console.Set("log", c.consoleOutput)
-	console.Set("error", c.consoleOutput)
-	vm.Set("console", console)
 }
 
 // initAdmin creates additional admin APIs implemented by the bridge.
