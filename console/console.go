@@ -64,14 +64,13 @@ type Config struct {
 // JavaScript console attached to a running node via an external or in-process RPC
 // client.
 type Console struct {
-	client   *rpc.Client   // RPC client to execute Ethereum requests through
-	jsre     *jsre.JSRE    // JavaScript runtime environment running the interpreter
-	prompt   string        // Input prompt prefix string
-	prompter UserPrompter  // Input prompter to allow interactive user feedback
-	histPath string        // Absolute path to the console scrollback history
-	history  []string      // Scroll history maintained by the console
-	printer  io.Writer     // Output writer to serialize any display strings to
-	runtime  *goja.Runtime // The javascript runtime
+	client   *rpc.Client  // RPC client to execute Ethereum requests through
+	jsre     *jsre.JSRE   // JavaScript runtime environment running the interpreter
+	prompt   string       // Input prompt prefix string
+	prompter UserPrompter // Input prompter to allow interactive user feedback
+	histPath string       // Absolute path to the console scrollback history
+	history  []string     // Scroll history maintained by the console
+	printer  io.Writer    // Output writer to serialize any display strings to
 }
 
 // New initializes a JavaScript interpreted runtime environment and sets defaults
@@ -88,14 +87,10 @@ func New(config Config) (*Console, error) {
 		config.Printer = colorable.NewColorableStdout()
 	}
 
-	// Create the JS runtime
-	runtime := goja.New()
-
 	// Initialize the console and return
 	console := &Console{
-		runtime:  runtime,
 		client:   config.Client,
-		jsre:     jsre.New(config.DocRoot, config.Printer, runtime),
+		jsre:     jsre.New(config.DocRoot, config.Printer),
 		prompt:   config.Prompt,
 		prompter: config.Prompter,
 		printer:  config.Printer,
@@ -113,32 +108,13 @@ func New(config Config) (*Console, error) {
 // init retrieves the available APIs from the remote RPC provider and initializes
 // the console's JavaScript namespaces based on the exposed modules.
 func (c *Console) init(preload []string) error {
-	// Initialize the JavaScript <-> Go RPC bridge
-	bridge := newBridge(c.client, c.prompter, c.printer, c.runtime)
-	c.jsre.Run("jeth = {};")
-	c.jsre.Run("console = {};")
+	// Initialize the JavaScript <-> Go RPC bridge.
+	bridge := newBridge(c.client, c.prompter, c.printer)
+	if err := c.initWeb3(bridge); err != nil {
+		return err
+	}
+	c.jsre.Do(func(vm *goja.Runtime) { c.initConsoleObject(vm) })
 
-	jethObj := c.jsre.Get("jeth").ToObject(c.runtime)
-	jethObj.Set("send", bridge.Send)
-	jethObj.Set("sendAsync", bridge.Send)
-
-	consoleObj := c.runtime.Get("console").ToObject(c.runtime)
-	consoleObj.Set("log", c.consoleOutput)
-	consoleObj.Set("error", c.consoleOutput)
-
-	// Load all the internal utility JavaScript libraries
-	if err := c.jsre.Compile("bignumber.js", string(jsre.BignumberJs)); err != nil {
-		return fmt.Errorf("bignumber.js: %v", err)
-	}
-	if err := c.jsre.Compile("web3.js", string(jsre.Web3Js)); err != nil {
-		return fmt.Errorf("web3.js: %v", err)
-	}
-	if _, err := c.jsre.Run("var Web3 = require('web3');"); err != nil {
-		return fmt.Errorf("web3 require: %v", err)
-	}
-	if _, err := c.jsre.Run("var web3 = new Web3(jeth);"); err != nil {
-		return fmt.Errorf("web3 provider: %v", err)
-	}
 	// Load the supported APIs into the JavaScript runtime environment
 	apis, err := c.client.SupportedModules()
 	if err != nil {
@@ -155,7 +131,7 @@ func (c *Console) init(preload []string) error {
 				return fmt.Errorf("%s.js: %v", api, err)
 			}
 			flatten += fmt.Sprintf("var %s = web3.%s; ", api, api)
-		} else if obj, err := c.jsre.Run("web3." + api); err == nil && obj.ToObject(c.runtime) != nil {
+		} else if _, err := c.jsre.Run("web3." + api); err == nil {
 			// Enable web3.js built-in extension if available.
 			flatten += fmt.Sprintf("var %s = web3.%s; ", api, api)
 		}
@@ -163,50 +139,12 @@ func (c *Console) init(preload []string) error {
 	if _, err = c.jsre.Run(flatten); err != nil {
 		return fmt.Errorf("namespace flattening: %v", err)
 	}
-	// Initialize the global name register (disabled for now)
-	//c.jsre.Run(`var GlobalRegistrar = eth.contract(` + registrar.GlobalRegistrarAbi + `);   registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
 
-	// If the console is in interactive mode, instrument password related methods to query the user
-	if c.prompter != nil {
-		// Retrieve the account management object to instrument
-		personal := c.jsre.Get("personal")
-		if personal == nil {
-			return fmt.Errorf("could not find personal")
-		}
-		// Override the openWallet, unlockAccount, newAccount and sign methods since
-		// these require user interaction. Assign these method in the Console the
-		// original web3 callbacks. These will be called by the jeth.* methods after
-		// they got the password from the user and send the original web3 request to
-		// the backend.
-		if obj := personal.ToObject(c.runtime); obj != nil { // make sure the personal api is enabled over the interface
-			if _, err = c.jsre.Run(`jeth.openWallet = personal.openWallet;`); err != nil {
-				return fmt.Errorf("personal.openWallet: %v", err)
-			}
-			if _, err = c.jsre.Run(`jeth.unlockAccount = personal.unlockAccount;`); err != nil {
-				return fmt.Errorf("personal.unlockAccount: %v", err)
-			}
-			if _, err = c.jsre.Run(`jeth.newAccount = personal.newAccount;`); err != nil {
-				return fmt.Errorf("personal.newAccount: %v", err)
-			}
-			if _, err = c.jsre.Run(`jeth.sign = personal.sign;`); err != nil {
-				return fmt.Errorf("personal.sign: %v", err)
-			}
-			obj.Set("openWallet", bridge.OpenWallet)
-			obj.Set("unlockAccount", bridge.UnlockAccount)
-			obj.Set("newAccount", bridge.NewAccount)
-			obj.Set("sign", bridge.Sign)
-		}
-	}
-	// The admin.sleep and admin.sleepBlocks are offered by the console and not by the RPC layer.
-	admin := c.jsre.Get("admin") // Could be `nil`
-	if admin != nil {
-		// make sure the admin api is enabled over the interface
-		if obj := admin.ToObject(c.runtime); obj != nil {
-			obj.Set("sleepBlocks", bridge.SleepBlocks)
-			obj.Set("sleep", bridge.Sleep)
-			obj.Set("clearHistory", c.clearHistory)
-		}
-	}
+	c.jsre.Do(func(vm *goja.Runtime) {
+		c.initAdmin(vm, bridge)
+		c.initPersonal(vm, bridge)
+	})
+
 	// Preload any JavaScript files before starting the console
 	for _, path := range preload {
 		if err := c.jsre.Exec(path); err != nil {
@@ -217,7 +155,8 @@ func (c *Console) init(preload []string) error {
 			return fmt.Errorf("%s: %v", path, failure)
 		}
 	}
-	// Configure the console's input prompter for scrollback and tab completion
+
+	// Configure the console's input prompter for history and tab completion.
 	if c.prompter != nil {
 		if content, err := ioutil.ReadFile(c.histPath); err != nil {
 			c.prompter.SetHistory(nil)
@@ -228,6 +167,66 @@ func (c *Console) init(preload []string) error {
 		c.prompter.SetWordCompleter(c.AutoCompleteInput)
 	}
 	return nil
+}
+
+func (c *Console) initWeb3(bridge *bridge) error {
+	if err := c.jsre.Compile("bignumber.js", string(jsre.BignumberJs)); err != nil {
+		return fmt.Errorf("bignumber.js: %v", err)
+	}
+	if err := c.jsre.Compile("web3.js", string(jsre.Web3Js)); err != nil {
+		return fmt.Errorf("web3.js: %v", err)
+	}
+	if _, err := c.jsre.Run("var Web3 = require('web3');"); err != nil {
+		return fmt.Errorf("web3 require: %v", err)
+	}
+	var err error
+	c.jsre.Do(func(vm *goja.Runtime) {
+		transport := vm.NewObject()
+		transport.Set("send", jsre.MakeCallback(vm, bridge.Send))
+		transport.Set("sendAsync", jsre.MakeCallback(vm, bridge.Send))
+		vm.Set("_consoleWeb3Transport", transport)
+		_, err = vm.RunString("var web3 = new Web3(_consoleWeb3Transport)")
+	})
+	return err
+}
+
+func (c *Console) initConsoleObject(vm *goja.Runtime) {
+	console := vm.NewObject()
+	console.Set("log", c.consoleOutput)
+	console.Set("error", c.consoleOutput)
+	vm.Set("console", console)
+}
+
+// initAdmin creates additional admin APIs implemented by the bridge.
+func (c *Console) initAdmin(vm *goja.Runtime, bridge *bridge) {
+	if admin := getObject(vm, "admin"); admin != nil {
+		admin.Set("sleepBlocks", jsre.MakeCallback(vm, bridge.SleepBlocks))
+		admin.Set("sleep", jsre.MakeCallback(vm, bridge.Sleep))
+		admin.Set("clearHistory", c.clearHistory)
+	}
+}
+
+// initPersonal redirects account-related API methods through the bridge.
+//
+// If the console is in interactive mode and the 'personal' API is available, override
+// the openWallet, unlockAccount, newAccount and sign methods since these require user
+// interaction. The original web3 callbacks are stored in 'jeth'. These will be called
+// by the bridge after the prompt and send the original web3 request to the backend.
+func (c *Console) initPersonal(vm *goja.Runtime, bridge *bridge) {
+	personal := getObject(vm, "personal")
+	if personal == nil || c.prompter == nil {
+		return
+	}
+	jeth := vm.NewObject()
+	vm.Set("jeth", jeth)
+	jeth.Set("openWallet", personal.Get("openWallet"))
+	jeth.Set("unlockAccount", personal.Get("unlockAccount"))
+	jeth.Set("newAccount", personal.Get("newAccount"))
+	jeth.Set("sign", personal.Get("sign"))
+	personal.Set("openWallet", jsre.MakeCallback(vm, bridge.OpenWallet))
+	personal.Set("unlockAccount", jsre.MakeCallback(vm, bridge.UnlockAccount))
+	personal.Set("newAccount", jsre.MakeCallback(vm, bridge.NewAccount))
+	personal.Set("sign", jsre.MakeCallback(vm, bridge.Sign))
 }
 
 func (c *Console) clearHistory() {
@@ -311,13 +310,13 @@ func (c *Console) Welcome() {
 
 // Evaluate executes code and pretty prints the result to the specified output
 // stream.
-func (c *Console) Evaluate(statement string) error {
+func (c *Console) Evaluate(statement string) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Fprintf(c.printer, "[native] error: %v\n", r)
 		}
 	}()
-	return c.jsre.Evaluate(statement, c.printer)
+	c.jsre.Evaluate(statement, c.printer)
 }
 
 // Interactive starts an interactive user session, where input is propted from
