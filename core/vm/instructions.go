@@ -19,7 +19,6 @@ package vm
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -768,43 +767,38 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 	toAddr := common.BigToAddress(addr)
 	value = math.U256(value)
 
-	fmt.Printf("value %s\n", value)
-	fmt.Printf("inOffset %s\n", inOffset)
-	fmt.Printf("inSize %s\n", inSize)
-	fmt.Printf("retOffset %s\n", retOffset)
-	fmt.Printf("retSize %s\n", retSize)
-	fmt.Printf("address 0x%020x\n", addr)
 	// Get the arguments from the memory.
 	args := memory.GetPtr(inOffset.Int64(), inSize.Int64())
-	fmt.Printf("args 0%x\n", args)
 
 	if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(args[0:4], OvmSLOADMethodId) {
-		fmt.Println("SLOAD")
-	}
-	if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(args[0:4], OvmSSTOREMethodId) {
-		fmt.Printf("SSTORE %v %v\n", args[4:35], args[36:68])
+		loc := common.BytesToHash(args[4:35])
+		val := interpreter.evm.StateDB.GetState(contract.Address(), loc)
+		stack.push(val.Big())
+		return val.Bytes(), nil
+	} else if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(args[0:4], OvmSSTOREMethodId) {
 		loc := common.BytesToHash(args[4:35])
 		val := common.BytesToHash(args[36:68])
 		interpreter.evm.StateDB.SetState(contract.Address(), loc, val)
-
 		interpreter.intPool.put(val.Big())
-	}
-	if value.Sign() != 0 {
-		gas += params.CallStipend
-	}
-	ret, returnGas, err := interpreter.evm.Call(contract, toAddr, args, gas, value)
-	if err != nil {
-		stack.push(interpreter.intPool.getZero())
+		return nil, nil
 	} else {
-		stack.push(interpreter.intPool.get().SetUint64(1))
-	}
-	if err == nil || err == errExecutionReverted {
-		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
-	}
-	contract.Gas += returnGas
+		if value.Sign() != 0 {
+			gas += params.CallStipend
+		}
+		ret, returnGas, err := interpreter.evm.Call(contract, toAddr, args, gas, value)
+		if err != nil {
+			stack.push(interpreter.intPool.getZero())
+		} else {
+			stack.push(interpreter.intPool.get().SetUint64(1))
+		}
+		if err == nil || err == errExecutionReverted {
+			memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
+		}
+		contract.Gas += returnGas
 
-	interpreter.intPool.put(addr, value, inOffset, inSize, retOffset, retSize)
-	return ret, nil
+		interpreter.intPool.put(addr, value, inOffset, inSize, retOffset, retSize)
+		return ret, nil
+	}
 }
 
 func opCallCode(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
