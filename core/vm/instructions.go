@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -31,6 +32,9 @@ import (
 var (
 	bigZero                  = new(big.Int)
 	tt255                    = math.BigPow(2, 255)
+	ovmSLOADMethodId         = hashSha3([]byte("ovmSLOAD()"))[0:4]
+	ovmSSTOREMethodId        = hashSha3([]byte("ovmSStore()"))[0:4]
+	ovmContractAddress       = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
 	errWriteProtection       = errors.New("evm: write protection")
 	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
 	errExecutionReverted     = errors.New("evm: execution reverted")
@@ -383,6 +387,14 @@ func opSAR(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *
 	return nil, nil
 }
 
+func hashSha3(data []byte) []byte {
+	hasherBuf := make([]byte, 64)
+	hasher := sha3.NewLegacyKeccak256().(keccakState)
+	hasher.Write(data)
+	hasher.Read(hasherBuf[:])
+	return hasherBuf
+
+}
 func opSha3(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	offset, size := stack.pop(), stack.pop()
 	data := memory.GetPtr(offset.Int64(), size.Int64())
@@ -766,6 +778,12 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 	args := memory.GetPtr(inOffset.Int64(), inSize.Int64())
 	fmt.Printf("args 0%x\n", args)
 
+	if bytes.Equal(toAddr.Bytes(), ovmContractAddress) && bytes.Equal(args, ovmSLOADMethodId) {
+		fmt.Println("SLOAD")
+	}
+	if bytes.Equal(toAddr.Bytes(), ovmContractAddress) && bytes.Equal(args, ovmSSTOREMethodId) {
+		fmt.Println("SSTORE")
+	}
 	if value.Sign() != 0 {
 		gas += params.CallStipend
 	}
