@@ -771,18 +771,21 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 
 	// Get the arguments from the memory.
 	args := memory.GetPtr(inOffset.Int64(), inSize.Int64())
+	methodId := args[0:4]
 
-	if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(args[0:4], OvmSLOADMethodId) {
-		loc := common.BytesToHash(args[4:36])
-		val := interpreter.evm.StateDB.GetState(contract.Address(), loc)
-		memory.Set(retOffset.Uint64(), retSize.Uint64(), val.Bytes())
-		stack.push(interpreter.intPool.get().SetUint64(1))
-		return val.Bytes(), nil
-	} else if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(args[0:4], OvmSSTOREMethodId) {
-		loc := common.BytesToHash(args[4:36])
-		val := common.BytesToHash(args[36:68])
-		interpreter.evm.StateDB.SetState(contract.Address(), loc, val)
-		interpreter.intPool.put(val.Big())
+	if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(methodId, OvmSLOADMethodId) {
+		storageSlot := new(big.Int).SetBytes(args[4:36])
+		stack.push(storageSlot)
+		opSload(pc, interpreter, contract, memory, stack)
+		storageValue := stack.peek()
+		memory.Set(retOffset.Uint64(), retSize.Uint64(), storageValue.Bytes())
+		return storageValue.Bytes(), nil
+	} else if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(methodId, OvmSSTOREMethodId) {
+		storageSlot := new(big.Int).SetBytes(args[4:36])
+		storageValue := new(big.Int).SetBytes(args[36:68])
+		stack.push(storageValue)
+		stack.push(storageSlot)
+		opSstore(pc, interpreter, contract, memory, stack)
 		stack.push(interpreter.intPool.get().SetUint64(1))
 		return nil, nil
 	} else {
