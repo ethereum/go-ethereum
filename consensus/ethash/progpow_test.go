@@ -93,8 +93,8 @@ func TestProgpowChanges(t *testing.T) {
 	mixHash, finalHash, _ := hashForBlock(blocknum, nonce, headerHash)
 	fmt.Printf("mixHash %x\n", mixHash)
 	fmt.Printf("finalHash %x\n", finalHash)
-	expMix := common.FromHex("11f19805c58ab46610ff9c719dcf0a5f18fa2f1605798eef770c47219274767d")
-	expHash := common.FromHex("5b7ccd472dbefdd95b895cac8ece67ff0deb5a6bd2ecc6e162383d00c3728ece")
+	expMix := common.FromHex("6018c151b0f9895ebe44a4ca6ce2829e5ba6ae1a68a4ccd05a67ac01219655c1")
+	expHash := common.FromHex("34d8436444aa5c61761ce0bcce0f11401df2eace77f5c14ba7039b86b5800c08")
 	if !bytes.Equal(expMix, mixHash) {
 		t.Errorf("mixhash err, expected %x, got %x", expMix, mixHash)
 	}
@@ -220,8 +220,8 @@ func speedyHashForBlock(ctx *periodContext, blocknum uint64, nonce uint64, heade
 
 func TestProgpowHash(t *testing.T) {
 	mixHash, finalHash, _ := hashForBlock(0, 0, common.Hash{})
-	expHash := common.FromHex("63155f732f2bf556967f906155b510c917e48e99685ead76ea83f4eca03ab12b")
-	expMix := common.FromHex("faeb1be51075b03a4ff44b335067951ead07a3b078539ace76fd56fc410557a3")
+	expHash := common.FromHex("b3bad9ca6f7c566cf0377d1f8cce29d6516a96562c122d924626281ec948ef02")
+	expMix := common.FromHex("f4ac202715ded4136e72887c39e63a4738331c57fd9eb79f6ec421c281aa8743")
 	if !bytes.Equal(mixHash, expMix) {
 		t.Errorf("mixhash err, got %x expected %x", mixHash, expMix)
 	}

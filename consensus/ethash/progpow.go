@@ -30,9 +30,9 @@ const (
 	progpowLanes        = 16                    // The number of parallel lanes that coordinate to calculate a single hash instance.
 	progpowRegs         = 32                    // The register file usage size
 	progpowDagLoads     = 4                     // Number of uint32 loads from the DAG per lane
-	progpowCntCache     = 12
-	progpowCntMath      = 20
-	progpowPeriodLength = 50           // Blocks per progpow epoch (N)
+	progpowCntCache     = 11
+	progpowCntMath      = 18
+	progpowPeriodLength = 10           // Blocks per progpow epoch (N)
 	progpowCntDag       = loopAccesses // Number of DAG accesses, same as ethash (64)
 	progpowMixBytes     = 2 * mixBytes
 )
