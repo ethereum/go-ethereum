@@ -91,7 +91,6 @@ type dialScheduler struct {
 	ctx         context.Context
 	nodesIn     chan *enode.Node
 	doneCh      chan *dialTask
-	peersetCh   chan map[enode.ID]*Peer
 	addStaticCh chan *enode.Node
 	remStaticCh chan *enode.Node
 	addPeerCh   chan *conn
