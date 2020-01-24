@@ -32,8 +32,8 @@ var (
 	bigZero                  = new(big.Int)
 	tt255                    = math.BigPow(2, 255)
 	OvmSLOADMethodId         = hashSha3([]byte("ovmSLOAD()"))[0:4]
-	OvmSSTOREMethodId        = hashSha3([]byte("ovmSStore()"))[0:4]
-	OvmContractAddress       = common.FromHex("000000000000000000000000000000000000001")
+	OvmSSTOREMethodId        = hashSha3([]byte("ovmSSTORE()"))[0:4]
+	OvmContractAddress       = common.FromHex("EB1Be3E5Ff32bd47D9589f3f1E73B1788F36639c")
 	errWriteProtection       = errors.New("evm: write protection")
 	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
 	errExecutionReverted     = errors.New("evm: execution reverted")
@@ -640,12 +640,14 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory
 	loc := stack.peek()
 	val := interpreter.evm.StateDB.GetState(contract.Address(), common.BigToHash(loc))
 	loc.SetBytes(val.Bytes())
+
 	return nil, nil
 }
 
 func opSstore(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	loc := common.BigToHash(stack.pop())
 	val := stack.pop()
+
 	interpreter.evm.StateDB.SetState(contract.Address(), loc, common.BigToHash(val))
 
 	interpreter.intPool.put(val)
@@ -765,21 +767,24 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 	// Pop other call parameters.
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.BigToAddress(addr)
+	// log.Info(fmt.Sprintf("Calling %020x\n", toAddr.Bytes()))
 	value = math.U256(value)
 
 	// Get the arguments from the memory.
 	args := memory.GetPtr(inOffset.Int64(), inSize.Int64())
 
 	if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(args[0:4], OvmSLOADMethodId) {
-		loc := common.BytesToHash(args[4:35])
+		loc := common.BytesToHash(args[4:36])
 		val := interpreter.evm.StateDB.GetState(contract.Address(), loc)
-		stack.push(val.Big())
+		memory.Set(retOffset.Uint64(), retSize.Uint64(), val.Bytes())
+		stack.push(interpreter.intPool.get().SetUint64(1))
 		return val.Bytes(), nil
 	} else if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(args[0:4], OvmSSTOREMethodId) {
-		loc := common.BytesToHash(args[4:35])
+		loc := common.BytesToHash(args[4:36])
 		val := common.BytesToHash(args[36:68])
 		interpreter.evm.StateDB.SetState(contract.Address(), loc, val)
 		interpreter.intPool.put(val.Big())
+		stack.push(interpreter.intPool.get().SetUint64(1))
 		return nil, nil
 	} else {
 		if value.Sign() != 0 {
