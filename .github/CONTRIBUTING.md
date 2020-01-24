@@ -1,40 +1,89 @@
 # Contributing
 
-Thank you for considering to help out with the source code! We welcome 
-contributions from anyone on the internet, and are grateful for even the 
-smallest of fixes!
+When contributing to this repository, please first discuss the change you wish to make via issue,
+email, or any other method with the owners of this repository before making a change. 
 
-If you'd like to contribute to go-ethereum, please fork, fix, commit and send a 
-pull request for the maintainers to review and merge into the main code base. If
-you wish to submit more complex changes though, please check up with the core 
-devs first on [our gitter channel](https://gitter.im/ethereum/go-ethereum) to 
-ensure those changes are in line with the general philosophy of the project 
-and/or get some early feedback which can make both your efforts much lighter as
-well as our review and merge procedures quick and simple.
+Please note we have a code of conduct, please follow it in all your interactions with the project.
 
-## Coding guidelines
+## Pull Request Process
 
-Please make sure your contributions adhere to our coding guidelines:
+1. Ensure that tests pass and code is lint free: `npm test`
+2. Update the README.md if any changes invalidate its current content.
+3. Include any tests for new functionality.
+4. Reference any revelant issues in your PR comment.
 
- * Code must adhere to the official Go 
-[formatting](https://golang.org/doc/effective_go.html#formatting) guidelines 
-(i.e. uses [gofmt](https://golang.org/cmd/gofmt/)).
- * Code must be documented adhering to the official Go 
-[commentary](https://golang.org/doc/effective_go.html#commentary) guidelines.
- * Pull requests need to be based on and opened against the `master` branch.
- * Commit messages should be prefixed with the package(s) they modify.
-   * E.g. "eth, rpc: make trace configs optional"
+## Code of Conduct
 
-## Can I have feature X
+### Our Pledge
 
-Before you submit a feature request, please check and make sure that it isn't 
-possible through some other means. The JavaScript-enabled console is a powerful 
-feature in the right hands. Please check our 
-[Wiki page](https://github.com/ethereum/go-ethereum/wiki) for more info
-and help.
+In the interest of fostering an open and welcoming environment, we as
+contributors and maintainers pledge to making participation in our project and
+our community a harassment-free experience for everyone, regardless of age, body
+size, disability, ethnicity, gender identity and expression, level of experience,
+nationality, personal appearance, race, religion, or sexual identity and
+orientation.
 
-## Configuration, dependencies, and tests
+### Our Standards
 
-Please see the [Developers' Guide](https://github.com/ethereum/go-ethereum/wiki/Developers'-Guide)
-for more details on configuring your environment, managing project dependencies
-and testing procedures.
+Examples of behavior that contributes to creating a positive environment
+include:
+
+* Using welcoming and inclusive language
+* Being respectful of differing viewpoints and experiences
+* Gracefully accepting constructive criticism
+* Focusing on what is best for the community
+* Showing empathy towards other community members
+
+Examples of unacceptable behavior by participants include:
+
+* The use of sexualized language or imagery and unwelcome sexual attention or
+advances
+* Trolling, insulting/derogatory comments, and personal or political attacks
+* Public or private harassment
+* Publishing others' private information, such as a physical or electronic
+  address, without explicit permission
+* Other conduct which could reasonably be considered inappropriate in a
+  professional setting
+
+### Our Responsibilities
+
+Project maintainers are responsible for clarifying the standards of acceptable
+behavior and are expected to take appropriate and fair corrective action in
+response to any instances of unacceptable behavior.
+
+Project maintainers have the right and responsibility to remove, edit, or
+reject comments, commits, code, wiki edits, issues, and other contributions
+that are not aligned to this Code of Conduct, or to ban temporarily or
+permanently any contributor for other behaviors that they deem inappropriate,
+threatening, offensive, or harmful.
+
+### Scope
+
+This Code of Conduct applies both within project spaces and in public spaces
+when an individual is representing the project or its community. Examples of
+representing a project or community include using an official project e-mail
+address, posting via an official social media account, or acting as an appointed
+representative at an online or offline event. Representation of a project may be
+further defined and clarified by project maintainers.
+
+### Enforcement
+
+Instances of abusive, harassing, or otherwise unacceptable behavior may be
+reported by contacting the project team at contributing@plasma.group. All
+complaints will be reviewed and investigated and will result in a response that
+is deemed necessary and appropriate to the circumstances. The project team is
+obligated to maintain confidentiality with regard to the reporter of an incident.
+Further details of specific enforcement policies may be posted separately.
+
+Project maintainers who do not follow or enforce the Code of Conduct in good
+faith may face temporary or permanent repercussions as determined by other
+members of the project's leadership.
+
+### Attribution
+
+This Code of Conduct is adapted from the [Contributor Covenant][homepage], version 1.4,
+available at [http://contributor-covenant.org/version/1/4][version] and from the [Angular Seed Contributing Guide][angular-contrib].
+
+[homepage]: http://contributor-covenant.org
+[version]: http://contributor-covenant.org/version/1/4/
+[angular-contrib]: https://github.com/mgechev/angular-seed/blob/master/.github/CONTRIBUTING.md
