@@ -619,7 +619,7 @@ func (srv *Server) maxInboundConns() int {
 }
 
 func (srv *Server) maxDialedConns() int {
-	if srv.NoDiscovery || srv.NoDial {
+	if srv.NoDial {
 		return 0
 	}
 	r := srv.DialRatio
