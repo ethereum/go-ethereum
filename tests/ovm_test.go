@@ -86,8 +86,8 @@ func TestOvm(t *testing.T) {
 		t.Fatal("didn't expect error", err)
 	}
 
-	if !bytes.Equal(returnValue, VALUE) {
-		t.Errorf("Expected %020x; got %020x", returnValue, VALUE)
+	if !bytes.Equal(common.BigToHash(common.Big1).Bytes(), returnValue) {
+		t.Errorf("Expected %020x; got %020x", common.BigToHash(common.Big1).Bytes(), returnValue)
 	}
 
 }
