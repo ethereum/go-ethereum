@@ -70,10 +70,9 @@ func TestOvm(t *testing.T) {
 			0,
 			36,
 			0,
-			0)...)
+			32)...)
 	code = append(code, []byte{
-		byte(vm.PUSH1), 0,
-		byte(vm.MSTORE),
+		byte(vm.POP),
 		byte(vm.PUSH1), 32,
 		byte(vm.PUSH1), 0,
 		byte(vm.RETURN),
@@ -86,8 +85,8 @@ func TestOvm(t *testing.T) {
 		t.Fatal("didn't expect error", err)
 	}
 
-	if !bytes.Equal(common.BigToHash(common.Big1).Bytes(), returnValue) {
-		t.Errorf("Expected %020x; got %020x", common.BigToHash(common.Big1).Bytes(), returnValue)
+	if !bytes.Equal(VALUE, returnValue) {
+		t.Errorf("Expected %020x; got %020x", VALUE, returnValue)
 	}
 
 }

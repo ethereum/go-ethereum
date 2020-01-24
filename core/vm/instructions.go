@@ -19,7 +19,6 @@ package vm
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -768,7 +767,6 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 	// Pop other call parameters.
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.BigToAddress(addr)
-	// log.Info(fmt.Sprintf("Calling %020x\n", toAddr.Bytes()))
 	value = math.U256(value)
 
 	// Get the arguments from the memory.
@@ -777,14 +775,12 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 	if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(args[0:4], OvmSLOADMethodId) {
 		loc := common.BytesToHash(args[4:36])
 		val := interpreter.evm.StateDB.GetState(contract.Address(), loc)
-		fmt.Printf("SLOAD %x\n", loc)
 		memory.Set(retOffset.Uint64(), retSize.Uint64(), val.Bytes())
 		stack.push(interpreter.intPool.get().SetUint64(1))
 		return val.Bytes(), nil
 	} else if bytes.Equal(toAddr.Bytes(), OvmContractAddress) && bytes.Equal(args[0:4], OvmSSTOREMethodId) {
 		loc := common.BytesToHash(args[4:36])
 		val := common.BytesToHash(args[36:68])
-		fmt.Printf("SSTORE %x %x\n", loc, val)
 		interpreter.evm.StateDB.SetState(contract.Address(), loc, val)
 		interpreter.intPool.put(val.Big())
 		stack.push(interpreter.intPool.get().SetUint64(1))
