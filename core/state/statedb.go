@@ -286,8 +286,6 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.GetState(s.db, hash)
-	} else {
-		log.Info("No state object")
 	}
 	return common.Hash{}
 }

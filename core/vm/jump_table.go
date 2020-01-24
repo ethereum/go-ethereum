@@ -1126,7 +1126,6 @@ func newFrontierInstructionSet() JumpTable {
 			memorySize:  memoryCall,
 			valid:       true,
 			returns:     true,
-			writes:      true,
 		},
 		CALLCODE: {
 			execute:     opCallCode,

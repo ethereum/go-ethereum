@@ -392,8 +392,8 @@ func hashSha3(data []byte) []byte {
 	hasher.Write(data)
 	hasher.Read(hasherBuf[:])
 	return hasherBuf
-
 }
+
 func opSha3(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	offset, size := stack.pop(), stack.pop()
 	data := memory.GetPtr(offset.Int64(), size.Int64())
@@ -640,14 +640,12 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory
 	loc := stack.peek()
 	val := interpreter.evm.StateDB.GetState(contract.Address(), common.BigToHash(loc))
 	loc.SetBytes(val.Bytes())
-
 	return nil, nil
 }
 
 func opSstore(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	loc := common.BigToHash(stack.pop())
 	val := stack.pop()
-
 	interpreter.evm.StateDB.SetState(contract.Address(), loc, common.BigToHash(val))
 
 	interpreter.intPool.put(val)
@@ -768,7 +766,6 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.BigToAddress(addr)
 	value = math.U256(value)
-
 	// Get the arguments from the memory.
 	args := memory.GetPtr(inOffset.Int64(), inSize.Int64())
 	methodId := args[0:4]
