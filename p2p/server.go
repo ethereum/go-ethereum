@@ -596,6 +596,7 @@ func (srv *Server) setupDiscovery() error {
 
 func (srv *Server) setupDialScheduler() {
 	config := dialConfig{
+		self:           srv.localnode.ID(),
 		maxDialPeers:   srv.maxDialedConns(),
 		maxActiveDials: srv.MaxPendingPeers,
 		resolver:       srv.ntab,

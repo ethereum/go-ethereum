@@ -250,10 +250,10 @@ func TestDialSchedManyStaticNodes(t *testing.T) {
 				uintID(0xFFFF),
 			},
 			wantNewDials: []*enode.Node{
-				newNode(uintID(0x0321), "127.0.0.1:30303"),
-				newNode(uintID(0x02E2), "127.0.0.1:30303"),
-				newNode(uintID(0x01E2), "127.0.0.1:30303"),
-				newNode(uintID(0x03D5), "127.0.0.1:30303"),
+				newNode(uintID(0x0085), "127.0.0.1:30303"),
+				newNode(uintID(0x02dc), "127.0.0.1:30303"),
+				newNode(uintID(0x0285), "127.0.0.1:30303"),
+				newNode(uintID(0x00cb), "127.0.0.1:30303"),
 			},
 		},
 	})

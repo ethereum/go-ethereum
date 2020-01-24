@@ -357,6 +357,9 @@ func (d *dialScheduler) freeDialSlots() int {
 
 // checkDial returns an error if node n should not be dialed.
 func (d *dialScheduler) checkDial(n *enode.Node) error {
+	if n.ID() == d.self {
+		return errSelf
+	}
 	if _, ok := d.dialing[n.ID()]; ok {
 		return errAlreadyDialing
 	}
