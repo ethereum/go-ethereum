@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -33,7 +34,7 @@ var (
 	tt255                    = math.BigPow(2, 255)
 	OvmSLOADMethodId         = hashSha3([]byte("ovmSLOAD()"))[0:4]
 	OvmSSTOREMethodId        = hashSha3([]byte("ovmSSTORE()"))[0:4]
-	OvmContractAddress       = common.FromHex("EB1Be3E5Ff32bd47D9589f3f1E73B1788F36639c")
+	OvmContractAddress       = common.FromHex(os.Getenv("EXECUTION_MANAGER_ADDRESS"))
 	errWriteProtection       = errors.New("evm: write protection")
 	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
 	errExecutionReverted     = errors.New("evm: execution reverted")
