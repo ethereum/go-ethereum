@@ -20,6 +20,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/log"
 
@@ -32,19 +33,21 @@ import (
 type DBStorage struct {
 	driverName     string
 	dataSourceName string
+	tableName      string
 	db             *sql.DB
 	key            []byte
 }
 
-// KPS is the structure to hold a row of our credentials database
-type KPS struct {
-	id      int
-	address string
-	json    string
+// DBRow is the structure to hold a row of our configuration database
+// table schemas for all three tables (kps, js, config) are the same
+type DBRow struct {
+	id  int
+	key string
+	val string
 }
 
 // NewDBStorage create new database backed storage
-func NewDBStorage(key []byte, driverName, dataSourceName string) (*DBStorage, error) {
+func NewDBStorage(key []byte, driverName, dataSourceName, tableName string) (*DBStorage, error) {
 	// sql.Open only validates the input, but didn't create a connection
 	db, err := sql.Open(driverName, dataSourceName)
 	if err != nil {
@@ -67,6 +70,7 @@ func NewDBStorage(key []byte, driverName, dataSourceName string) (*DBStorage, er
 	return &DBStorage{
 		driverName:     driverName,
 		dataSourceName: dataSourceName,
+		tableName:      tableName,
 		db:             db,
 		key:            key,
 	}, nil
@@ -84,7 +88,8 @@ func (s *DBStorage) Put(key, value string) {
 	}
 
 	creds := StoredCredential{Iv: iv, CipherText: ciphertext}
-	_, exist, err := s.queryRow("SELECT * FROM kps WHERE address = ?", key)
+	sql := s.formatSQL(getSQL)
+	_, exist, err := s.queryRow(sql, key)
 	if err != nil {
 		log.Warn("Failed to execute SQL", "err", err)
 		return
@@ -97,16 +102,19 @@ func (s *DBStorage) Put(key, value string) {
 	}
 
 	if !exist {
-		s.exec("INSERT INTO kps (address, json) VALUES (?, ?)", key, raw)
+		sql = s.formatSQL(insertSQL)
+		s.exec(sql, key, raw)
 	} else {
-		s.exec("UPDATE kps SET json = ? WHERE address = ?", raw, key)
+		sql = s.formatSQL(updateSQL)
+		s.exec(sql, raw, key)
 	}
 }
 
 // Get returns the previously stored value, or an error if it does not exist or
 // key is of 0-length.
 func (s *DBStorage) Get(key string) (string, error) {
-	kps, exist, err := s.queryRow("SELECT * FROM kps WHERE address = ?", key)
+	sql := s.formatSQL(getSQL)
+	row, exist, err := s.queryRow(sql, key)
 	if err != nil {
 		log.Warn("Failed to execute SQL", "err", err)
 		return "", err
@@ -117,7 +125,7 @@ func (s *DBStorage) Get(key string) (string, error) {
 	}
 
 	cred := StoredCredential{}
-	if err = json.Unmarshal([]byte(kps.json), &cred); err != nil {
+	if err = json.Unmarshal([]byte(row.val), &cred); err != nil {
 		log.Warn("Failed to unmarshall stored json", "err", err)
 		return "", err
 	}
@@ -133,7 +141,8 @@ func (s *DBStorage) Get(key string) (string, error) {
 
 // Del removes a key-value pair. If the key doesn't exist, the method is a noop.
 func (s *DBStorage) Del(key string) {
-	s.exec("DELETE FROM kps WHERE address = ?", key)
+	sql := s.formatSQL(deleteSQL)
+	s.exec(sql, key)
 }
 
 func (s *DBStorage) exec(query string, args ...interface{}) {
@@ -143,31 +152,46 @@ func (s *DBStorage) exec(query string, args ...interface{}) {
 	}
 }
 
-func (s *DBStorage) queryRow(query string, args ...interface{}) (*KPS, bool, error) {
-	kps := KPS{}
-	err := s.db.QueryRow(query, args...).Scan(&kps.id, &kps.address, &kps.json)
+func (s *DBStorage) queryRow(query string, args ...interface{}) (*DBRow, bool, error) {
+	row := DBRow{}
+	err := s.db.QueryRow(query, args...).Scan(&row.id, &row.key, &row.val)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, false, err
 	}
 
-	if kps.id == 0 {
+	if row.id == 0 {
 		return nil, false, nil
 	}
-	return &kps, true, nil
+	return &row, true, nil
+}
+
+var (
+	getSQL    string = "SELECT * FROM tableName WHERE key = ?"
+	updateSQL string = "UPDATE tableName SET val = ? WHERE key = ?"
+	insertSQL string = "INSERT INTO tableName (key, val) VALUES (?, ?)"
+	deleteSQL string = "DELETE FROM tableName WHERE key = ?"
+)
+
+func (s *DBStorage) formatSQL(sql string) string {
+	switch s.driverName {
+	case "postgres":
+		params := strings.Count(sql, "?")
+		for i := 1; i <= params; i++ {
+			sql = strings.Replace(sql, "?", fmt.Sprintf("$%d", i), 1)
+		}
+	case "goracle":
+		params := strings.Count(sql, "?")
+		for i := 1; i <= params; i++ {
+			sql = strings.Replace(sql, "?", fmt.Sprintf(":v%d", i), 1)
+		}
+	default:
+		// for MS SQL Server / MySQL / SQLite
+	}
+
+	return strings.ReplaceAll(sql, "tableName", s.tableName)
 }
 
 // Close sql.DB
 func (s *DBStorage) Close() {
 	s.db.Close()
-}
-
-func main() {
-	// "root:900406.mysql@tcp(localhost:3306)/adv_database"
-	db, err := sql.Open("mysql", "server=localhost;user id=root;password=900406.mysql;port=3306;database=adv_database")
-	if err != nil {
-		fmt.Println("failure")
-		panic(err)
-	}
-	fmt.Println("success")
-	defer db.Close()
 }
