@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
@@ -17,9 +16,7 @@ var (
 func init() {
 	key = "AES256Key-32Characters1234567890"
 	tmpDir, _ := ioutil.TempDir("", "eth-encrypted-db-storge-test")
-	fmt.Println(tmpDir)
 	ds, _ = NewDBStorage([]byte(key), "sqlite3", filepath.Join(tmpDir, "test.db"), "kps")
-	ds.exec("CREATE TABLE IF NOT EXISTS kps (id INTEGER PRIMARY KEY, key TEXT, val TEXT)")
 }
 
 func TestDBStorage(t *testing.T) {
@@ -55,10 +52,10 @@ func TestSwappedKeysForDBStorage(t *testing.T) {
 
 	// now make a modified copy
 	swap := func() {
-		creds1, _, _ := ds.queryRow("SELECT * FROM kps WHERE key = 'k1'")
-		creds2, _, _ := ds.queryRow("SELECT * FROM kps WHERE key = 'k2'")
-		ds.exec("UPDATE kps SET val = ? WHERE key = ?", creds1.val, "k2")
-		ds.exec("UPDATE kps SET val = ? WHERE key = ?", creds2.val, "k1")
+		creds1, _, _ := ds.queryRow("SELECT * FROM kps WHERE k = 'k1'")
+		creds2, _, _ := ds.queryRow("SELECT * FROM kps WHERE k = 'k2'")
+		ds.exec("UPDATE kps SET v = ? WHERE k = ?", creds1.val, "k2")
+		ds.exec("UPDATE kps SET v = ? WHERE k = ?", creds2.val, "k1")
 	}
 	swap()
 	if v, _ := ds.Get("k1"); v != "" {

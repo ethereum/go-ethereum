@@ -59,9 +59,10 @@ require (
 	github.com/syndtr/goleveldb v1.0.1-0.20190923125748-758128399b1d
 	github.com/tyler-smith/go-bip39 v1.0.1-0.20181017060643-dbb3b84ba2ef
 	github.com/wsddn/go-ecdh v0.0.0-20161211032359-48726bab9208
-	golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
+	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
+	golang.org/x/mobile v0.0.0-20200123024942-82c397c4c527 // indirect
 	golang.org/x/net v0.0.0-20190628185345-da137c7871d7 // indirect
-	golang.org/x/sync v0.0.0-20181108010431-42b317875d0f
+	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	golang.org/x/sys v0.0.0-20190712062909-fae7ac547cb7
 	golang.org/x/text v0.3.2
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4

@@ -130,9 +130,21 @@ var (
 		Name:  "stdio-ui-test",
 		Usage: "Mechanism to test interface between Clef and UI. Requires 'stdio-ui'.",
 	}
-	vaultFlag = cli.StringFlag{
-		Name:  "vault",
-		Usage: "URI to the user managed database which stores Clef vault data (ruleset & kps)",
+	keystoreDBFlag = cli.StringFlag{
+		Name:  "keystore-db",
+		Usage: "General SQL database name which stores keys, currently supported db type are: mysql, postgres",
+	}
+	keystoreDBDSNFlag = cli.StringFlag{
+		Name:  "keystore-db-dsn",
+		Usage: "Data Source Name (DSN) for keystore-db",
+	}
+	configDBFlag = cli.StringFlag{
+		Name:  "config-db",
+		Usage: "General SQL database name which is used to store configuration key value pairs, currently supported db type are: mysql, postgres",
+	}
+	configDBDSNFlag = cli.StringFlag{
+		Name:  "config-db-dsn",
+		Usage: "Data Source Name (DSN) for config-db",
 	}
 	app         = cli.NewApp()
 	initCommand = cli.Command{
@@ -223,7 +235,10 @@ func init() {
 		ruleFlag,
 		stdiouiFlag,
 		testFlag,
-		vaultFlag,
+		keystoreDBFlag,
+		keystoreDBDSNFlag,
+		configDBFlag,
+		configDBDSNFlag,
 		advancedMode,
 	}
 	app.Action = signer
@@ -431,10 +446,30 @@ func ipcEndpoint(ipcPath, datadir string) string {
 	return ipcPath
 }
 
+func checkFlag(c *cli.Context) error {
+	keystoreDB := c.GlobalString(keystoreDBFlag.Name)
+	keystoreDBDSN := c.GlobalString(keystoreDBDSNFlag.Name)
+	if keystoreDB != "" && keystoreDBDSN == "" {
+		return fmt.Errorf("%s has to be set along with %s", keystoreDBDSNFlag.Name, keystoreDBFlag.Name)
+	}
+
+	configDB := c.GlobalString(configDBFlag.Name)
+	configDBDSN := c.GlobalString(configDBDSNFlag.Name)
+	if configDB != "" && configDBDSN == "" {
+		return fmt.Errorf("%s has to be set along with %s", configDBDSNFlag.Name, configDBFlag.Name)
+	}
+
+	return nil
+}
+
 func signer(c *cli.Context) error {
 	// If we have some unrecognized command, bail out
 	if args := c.Args(); len(args) > 0 {
 		return fmt.Errorf("invalid command: %q", args[0])
+	}
+	// check flag legitimacy
+	if err := checkFlag(c); err != nil {
+		return err
 	}
 	if err := initialize(c); err != nil {
 		return err
@@ -459,25 +494,38 @@ func signer(c *cli.Context) error {
 	log.Info("Loaded 4byte database", "embeds", embeds, "locals", locals, "local", fourByteLocal)
 
 	var (
-		api       core.ExternalAPI
-		pwStorage storage.Storage = &storage.NoStorage{}
+		api           core.ExternalAPI
+		pwStorage     storage.Storage = &storage.NoStorage{}
+		jsStorage     storage.Storage = &storage.NoStorage{}
+		configStorage storage.Storage = &storage.NoStorage{}
 	)
 
 	configDir := c.GlobalString(configdirFlag.Name)
 	if stretchedKey, err := readMasterKey(c, ui); err != nil {
 		log.Warn("Failed to open master, rules disabled", "err", err)
 	} else {
-		vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
-
 		// Generate domain specific keys
 		pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
 		jskey := crypto.Keccak256([]byte("jsstorage"), stretchedKey)
 		confkey := crypto.Keccak256([]byte("config"), stretchedKey)
 
-		// Initialize the encrypted storages
-		pwStorage = storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
-		jsStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "jsstorage.json"), jskey)
-		configStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "config.json"), confkey)
+		if configDB := c.GlobalString(configDBFlag.Name); configDB != "" {
+			configDBDSN := c.GlobalString(configDBDSNFlag.Name)
+			pwStorage, err = storage.NewDBStorage(pwkey, configDB, configDBDSN, storage.PasswordTable)
+			if err != nil {
+				utils.Fatalf("Could not connect to config db %v, %v", configDB, configDBDSN)
+			}
+			// since we're literally connecting to the same database, so we don't need to check for err for 3 times
+			jsStorage, _ = storage.NewDBStorage(jskey, configDB, configDBDSN, storage.JsTable)
+			configStorage, _ = storage.NewDBStorage(jskey, configDB, configDBDSN, storage.ConfigTable)
+		} else {
+			vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
+
+			// Initialize the encrypted storages
+			pwStorage = storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
+			jsStorage = storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "jsstorage.json"), jskey)
+			configStorage = storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "config.json"), confkey)
+		}
 
 		// Do we have a rule-file?
 		if ruleFile := c.GlobalString(ruleFlag.Name); ruleFile != "" {

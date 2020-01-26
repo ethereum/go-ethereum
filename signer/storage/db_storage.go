@@ -46,6 +46,13 @@ type DBRow struct {
 	val string
 }
 
+// Default table name for storages
+const (
+	PasswordTable = "kps"
+	ConfigTable   = "config"
+	JsTable       = "js"
+)
+
 // NewDBStorage create new database backed storage
 func NewDBStorage(key []byte, driverName, dataSourceName, tableName string) (*DBStorage, error) {
 	// sql.Open only validates the input, but didn't create a connection
@@ -67,6 +74,9 @@ func NewDBStorage(key []byte, driverName, dataSourceName, tableName string) (*DB
 	// set connection limits
 	db.SetMaxOpenConns(5)
 
+	// init table
+	initTable(driverName, tableName, db)
+
 	return &DBStorage{
 		driverName:     driverName,
 		dataSourceName: dataSourceName,
@@ -74,6 +84,38 @@ func NewDBStorage(key []byte, driverName, dataSourceName, tableName string) (*DB
 		db:             db,
 		key:            key,
 	}, nil
+}
+
+func initTable(driverName, tableName string, db *sql.DB) error {
+	var err error
+	switch driverName {
+	case "postgres":
+		_, err = db.Exec(fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS %s (
+	id SERIAL PRIMARY KEY,
+	k VARCHAR(255) UNIQUE NOT NULL,
+	v TEXT NOT NULL
+)
+		`, tableName))
+	case "mysql":
+		_, err = db.Exec(fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS %s (
+	id INT AUTO_INCREMENT PRIMARY KEY,
+	k VARCHAR(255) UNIQUE NOT NULL, 
+	v TEXT NOT NULL
+)
+		`, tableName))
+	case "sqlite3":
+		_, err = db.Exec(fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS %s (
+	id INTEGER PRIMARY KEY, 
+	k TEXT, 
+	v TEXT
+)
+		`, tableName))
+	}
+
+	return err
 }
 
 // Put stores a value by key. 0-length keys results in noop.
@@ -166,10 +208,10 @@ func (s *DBStorage) queryRow(query string, args ...interface{}) (*DBRow, bool, e
 }
 
 var (
-	getSQL    string = "SELECT * FROM tableName WHERE key = ?"
-	updateSQL string = "UPDATE tableName SET val = ? WHERE key = ?"
-	insertSQL string = "INSERT INTO tableName (key, val) VALUES (?, ?)"
-	deleteSQL string = "DELETE FROM tableName WHERE key = ?"
+	getSQL    string = "SELECT * FROM tableName WHERE k = ?"
+	updateSQL string = "UPDATE tableName SET v = ? WHERE k = ?"
+	insertSQL string = "INSERT INTO tableName (k, v) VALUES (?, ?)"
+	deleteSQL string = "DELETE FROM tableName WHERE k = ?"
 )
 
 func (s *DBStorage) formatSQL(sql string) string {
@@ -179,13 +221,9 @@ func (s *DBStorage) formatSQL(sql string) string {
 		for i := 1; i <= params; i++ {
 			sql = strings.Replace(sql, "?", fmt.Sprintf("$%d", i), 1)
 		}
-	case "goracle":
-		params := strings.Count(sql, "?")
-		for i := 1; i <= params; i++ {
-			sql = strings.Replace(sql, "?", fmt.Sprintf(":v%d", i), 1)
-		}
 	default:
 		// for MS SQL Server / MySQL / SQLite
+		// since they're already using ? as placeholder, do nothing
 	}
 
 	return strings.ReplaceAll(sql, "tableName", s.tableName)
