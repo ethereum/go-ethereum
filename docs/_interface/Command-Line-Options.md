@@ -101,7 +101,7 @@ PERFORMANCE TUNING OPTIONS:
 
 ACCOUNT OPTIONS:
   --unlock value                      Comma separated list of accounts to unlock
-  --password value                    Password file to use for non-interactive password input
+  --password value                    Password file to use for non-interactive password input. Note this will not work for password files formatted with Byte Order Marks etc. as included by default with Windows text files; see https://github.com/ethereum/go-ethereum/issues/19905 for a workaround and updates.
   --signer value                      External signer (url or path to ipc file)
   --allow-insecure-unlock             Allow insecure account unlocking when account-related RPCs are exposed by http
 
