@@ -23,43 +23,36 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// checkModuleAvailable check that requested api modules (eg. via --rpcapi) are actually
-// available API services. If an invalid module is given (ie API "foo" wanted which does not exist),
-// then an error is returned including the invalid module and a list of available
-// API service names.
-func checkModuleAvailable(module string, apis []API) (err error) {
-	for _, api := range apis {
-		if module == api.Namespace {
-			return nil
-		}
-	}
-	// Module did not find a matching api namespace: this is an invalid module.
-	// Collect list of available modules for user debugging.
-	available := []string{}
-outer:
-	for _, api := range apis {
-
-		// Only include unique api names
-		for _, av := range available {
-			if av == api.Namespace {
-				continue outer
+// checkModuleAvailability check that all names given in modules are actually
+// available API services.
+func checkModuleAvailability(modules []string, apis []API) error {
+	available := make(map[string]struct{})
+	var availableNames string
+	for i, api := range apis {
+		if _, ok := available[api.Namespace]; !ok {
+			available[api.Namespace] = struct{}{}
+			if i > 0 {
+				availableNames += ", "
 			}
+			availableNames += api.Namespace
 		}
-		available = append(available, api.Namespace)
 	}
-	return fmt.Errorf("invalid api module: module=%s available=%v", module, available)
+	for _, name := range modules {
+		if _, ok := available[name]; !ok {
+			return fmt.Errorf("invalid API %q in whitelist (available: %s)", name, availableNames)
+		}
+	}
+	return nil
 }
 
-// StartHTTPEndpoint starts the HTTP RPC endpoint, configured with cors/vhosts/modules
+// StartHTTPEndpoint starts the HTTP RPC endpoint, configured with cors/vhosts/modules.
 func StartHTTPEndpoint(endpoint string, apis []API, modules []string, cors []string, vhosts []string, timeouts HTTPTimeouts) (net.Listener, *Server, error) {
+	if err := checkModuleAvailability(modules, apis); err != nil {
+		return nil, nil, err
+	}
 	// Generate the whitelist based on the allowed modules
 	whitelist := make(map[string]bool)
 	for _, module := range modules {
-
-		// Ensure the requested module is actually available.
-		if err := checkModuleAvailable(module, apis); err != nil {
-			return nil, nil, err
-		}
 		whitelist[module] = true
 	}
 	// Register all the APIs exposed by the services
@@ -84,17 +77,14 @@ func StartHTTPEndpoint(endpoint string, apis []API, modules []string, cors []str
 	return listener, handler, err
 }
 
-// StartWSEndpoint starts a websocket endpoint
+// StartWSEndpoint starts a websocket endpoint.
 func StartWSEndpoint(endpoint string, apis []API, modules []string, wsOrigins []string, exposeAll bool) (net.Listener, *Server, error) {
-
+	if err := checkModuleAvailability(modules, apis); err != nil {
+		return nil, nil, err
+	}
 	// Generate the whitelist based on the allowed modules
 	whitelist := make(map[string]bool)
 	for _, module := range modules {
-
-		// Ensure the requested module is actually available.
-		if err := checkModuleAvailable(module, apis); err != nil {
-			return nil, nil, err
-		}
 		whitelist[module] = true
 	}
 	// Register all the APIs exposed by the services
