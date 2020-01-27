@@ -9,12 +9,14 @@ require (
 	github.com/btcsuite/btcd v0.0.0-20171128150713-2e60448ffcc6
 	github.com/cespare/cp v1.1.1
 	github.com/davecgh/go-spew v1.1.1
-	github.com/deckarep/golang-set v1.8.0
+	github.com/deckarep/golang-set v0.0.0-20180603214616-504e848d77ea
 	github.com/docker/docker v1.4.2-0.20180625184442-8e610b2b55bf
-	github.com/edsrzf/mmap-go v1.0.0
-	github.com/fatih/color v1.6.0
-	github.com/gizak/termui v2.2.0+incompatible
-	github.com/globalsign/mgo v0.0.0-20181015135952-eeefdecb41b8
+	github.com/edsrzf/mmap-go v0.0.0-20160512033002-935e0e8a636c
+	github.com/elastic/gosigar v0.8.1-0.20180330100440-37f05ff46ffa
+	github.com/fatih/color v1.3.0
+	github.com/fjl/memsize v0.0.0-20180418122429-ca190fb6ffbc
+	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff
+	github.com/go-ole/go-ole v1.2.1 // indirect
 	github.com/go-stack/stack v1.8.0
 	github.com/golang/protobuf v1.3.2
 	github.com/golang/snappy v0.0.1
@@ -51,6 +53,9 @@ require (
 
 require (
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
+	github.com/dlclark/regexp2 v1.10.0 // indirect
+	github.com/dop251/goja v0.0.0-20200106141417-aaec0e7bde29 // indirect
+	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/google/go-cmp v0.3.1 // indirect
 	github.com/google/uuid v1.0.0 // indirect
 	github.com/kr/pretty v0.1.0 // indirect

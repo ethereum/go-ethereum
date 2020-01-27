@@ -40,6 +40,10 @@ func TestCompleteKeywords(t *testing.T) {
 		want  []string
 	}{
 		{
+			input: "St",
+			want:  []string{"String"},
+		},
+		{
 			input: "x",
 			want:  []string{"x."},
 		},

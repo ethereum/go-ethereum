@@ -52,7 +52,9 @@ func TestConsoleWelcome(t *testing.T) {
 	XDC.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
 	XDC.SetTemplateFunc("gover", runtime.Version)
 	XDC.SetTemplateFunc("XDCver", func() string { return params.Version })
-	XDC.SetTemplateFunc("niltime", func() string { return time.Unix(1559211559, 0).Format(time.RFC1123) })
+	XDC.SetTemplateFunc("niltime", func() string {
+		return time.Unix(1559211559, 0).Format("Mon Jan 02 2006 15:04:05 GMT-0700 (MST)")
+	})
 	XDC.SetTemplateFunc("apis", func() string { return ipcAPIs })
 
 	// Verify the actual welcome message to the required template
@@ -137,7 +139,9 @@ func testAttachWelcome(t *testing.T, XDC *testXDC, endpoint, apis string) {
 	attach.SetTemplateFunc("gover", runtime.Version)
 	attach.SetTemplateFunc("XDCver", func() string { return params.Version })
 	attach.SetTemplateFunc("etherbase", func() string { return XDC.Etherbase })
-	attach.SetTemplateFunc("niltime", func() string { return time.Unix(1559211559, 0).Format(time.RFC1123) })
+	attach.SetTemplateFunc("niltime", func() string {
+		return time.Unix(1559211559, 0).Format("Mon Jan 02 2006 15:04:05 GMT-0700 (MST)")
+	})
 	attach.SetTemplateFunc("ipc", func() bool { return strings.HasPrefix(endpoint, "ipc") })
 	attach.SetTemplateFunc("datadir", func() string { return XDC.Datadir })
 	attach.SetTemplateFunc("apis", func() string { return apis })
