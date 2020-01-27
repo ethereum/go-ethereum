@@ -17,16 +17,15 @@
 package vm
 
 import (
-	"math/big"
 	"sync"
-)
 
-var checkVal = big.NewInt(-42)
+	"github.com/holiman/uint256"
+)
 
 const poolLimit = 256
 
 // intPool is a pool of big integers that
-// can be reused for all big.Int operations.
+// can be reused for all uint256.Int operations.
 type intPool struct {
 	pool *Stack
 }
@@ -37,27 +36,27 @@ func newIntPool() *intPool {
 
 // get retrieves a big int from the pool, allocating one if the pool is empty.
 // Note, the returned int's value is arbitrary and will not be zeroed!
-func (p *intPool) get() *big.Int {
+func (p *intPool) get() *uint256.Int {
 	if p.pool.len() > 0 {
 		return p.pool.pop()
 	}
-	return new(big.Int)
+	return new(uint256.Int)
 }
 
 // getZero retrieves a big int from the pool, setting it to zero or allocating
 // a new one if the pool is empty.
-func (p *intPool) getZero() *big.Int {
+func (p *intPool) getZero() *uint256.Int {
 	if p.pool.len() > 0 {
-		return p.pool.pop().SetUint64(0)
+		return p.pool.pop().Clear()
 	}
-	return new(big.Int)
+	return new(uint256.Int)
 }
 
 // putOne returns an allocated big int to the pool to be later reused by get calls.
 // Note, the values as saved as is; neither put nor get zeroes the ints out!
 // As opposed to 'put' with variadic args, this method becomes inlined by the
 // go compiler
-func (p *intPool) putOne(i *big.Int) {
+func (p *intPool) putOne(i *uint256.Int) {
 	if len(p.pool.data) > poolLimit {
 		return
 	}
@@ -66,16 +65,11 @@ func (p *intPool) putOne(i *big.Int) {
 
 // put returns an allocated big int to the pool to be later reused by get calls.
 // Note, the values as saved as is; neither put nor get zeroes the ints out!
-func (p *intPool) put(is ...*big.Int) {
+func (p *intPool) put(is ...*uint256.Int) {
 	if len(p.pool.data) > poolLimit {
 		return
 	}
 	for _, i := range is {
-		// verifyPool is a build flag. Pool verification makes sure the integrity
-		// of the integer pool by comparing values to a default value.
-		if verifyPool {
-			i.Set(checkVal)
-		}
 		p.pool.push(i)
 	}
 }
