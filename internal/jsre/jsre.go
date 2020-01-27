@@ -26,30 +26,30 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/dop251/goja"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/internal/jsre/deps"
-	"github.com/robertkrimen/otto"
 )
 
-var (
-	BignumberJs = deps.MustAsset("bignumber.js")
-	Web3Js      = deps.MustAsset("web3.js")
-)
-
-/*
-JSRE is a generic JS runtime environment embedding the otto JS interpreter.
-It provides some helper functions to
-- load code from files
-- run code snippets
-- require libraries
-- bind native go objects
-*/
+// JSRE is a JS runtime environment embedding the goja interpreter.
+// It provides helper functions to load code from files, run code snippets
+// and bind native go objects to JS.
+//
+// The runtime runs all code on a dedicated event loop and does not expose the underlying
+// goja runtime directly. To use the runtime, call JSRE.Do. When binding a Go function,
+// use the Call type to gain access to the runtime.
 type JSRE struct {
 	assetPath     string
 	output        io.Writer
 	evalQueue     chan *evalReq
 	stopEventLoop chan bool
 	closed        chan struct{}
+	vm            *goja.Runtime
+}
+
+// Call is the argument type of Go functions which are callable from JS.
+type Call struct {
+	goja.FunctionCall
+	VM *goja.Runtime
 }
 
 // jsTimer is a single timer instance with a callback function
@@ -57,12 +57,12 @@ type jsTimer struct {
 	timer    *time.Timer
 	duration time.Duration
 	interval bool
-	call     otto.FunctionCall
+	call     goja.FunctionCall
 }
 
 // evalReq is a serialized vm execution request processed by runEventLoop.
 type evalReq struct {
-	fn   func(vm *otto.Otto)
+	fn   func(vm *goja.Runtime)
 	done chan bool
 }
 
@@ -74,9 +74,10 @@ func New(assetPath string, output io.Writer) *JSRE {
 		closed:        make(chan struct{}),
 		evalQueue:     make(chan *evalReq),
 		stopEventLoop: make(chan bool),
+		vm:            goja.New(),
 	}
 	go re.runEventLoop()
-	re.Set("loadScript", re.loadScript)
+	re.Set("loadScript", MakeCallback(re.vm, re.loadScript))
 	re.Set("inspect", re.prettyPrintJS)
 	return re
 }
@@ -99,21 +100,20 @@ func randomSource() *rand.Rand {
 // serialized way and calls timer callback functions at the appropriate time.
 
 // Exported functions always access the vm through the event queue. You can
-// call the functions of the otto vm directly to circumvent the queue. These
+// call the functions of the goja vm directly to circumvent the queue. These
 // functions should be used if and only if running a routine that was already
 // called from JS through an RPC call.
 func (re *JSRE) runEventLoop() {
 	defer close(re.closed)
 
-	vm := otto.New()
 	r := randomSource()
-	vm.SetRandomSource(r.Float64)
+	re.vm.SetRandSource(r.Float64)
 
 	registry := map[*jsTimer]*jsTimer{}
 	ready := make(chan *jsTimer)
 
-	newTimer := func(call otto.FunctionCall, interval bool) (*jsTimer, otto.Value) {
-		delay, _ := call.Argument(1).ToInteger()
+	newTimer := func(call goja.FunctionCall, interval bool) (*jsTimer, goja.Value) {
+		delay := call.Argument(1).ToInteger()
 		if 0 >= delay {
 			delay = 1
 		}
@@ -128,47 +128,43 @@ func (re *JSRE) runEventLoop() {
 			ready <- timer
 		})
 
-		value, err := call.Otto.ToValue(timer)
-		if err != nil {
-			panic(err)
-		}
-		return timer, value
+		return timer, re.vm.ToValue(timer)
 	}
 
-	setTimeout := func(call otto.FunctionCall) otto.Value {
+	setTimeout := func(call goja.FunctionCall) goja.Value {
 		_, value := newTimer(call, false)
 		return value
 	}
 
-	setInterval := func(call otto.FunctionCall) otto.Value {
+	setInterval := func(call goja.FunctionCall) goja.Value {
 		_, value := newTimer(call, true)
 		return value
 	}
 
-	clearTimeout := func(call otto.FunctionCall) otto.Value {
-		timer, _ := call.Argument(0).Export()
+	clearTimeout := func(call goja.FunctionCall) goja.Value {
+		timer := call.Argument(0).Export()
 		if timer, ok := timer.(*jsTimer); ok {
 			timer.timer.Stop()
 			delete(registry, timer)
 		}
-		return otto.UndefinedValue()
+		return goja.Undefined()
 	}
-	vm.Set("_setTimeout", setTimeout)
-	vm.Set("_setInterval", setInterval)
-	vm.Run(`var setTimeout = function(args) {
+	re.vm.Set("_setTimeout", setTimeout)
+	re.vm.Set("_setInterval", setInterval)
+	re.vm.RunString(`var setTimeout = function(args) {
 		if (arguments.length < 1) {
 			throw TypeError("Failed to execute 'setTimeout': 1 argument required, but only 0 present.");
 		}
 		return _setTimeout.apply(this, arguments);
 	}`)
-	vm.Run(`var setInterval = function(args) {
+	re.vm.RunString(`var setInterval = function(args) {
 		if (arguments.length < 1) {
 			throw TypeError("Failed to execute 'setInterval': 1 argument required, but only 0 present.");
 		}
 		return _setInterval.apply(this, arguments);
 	}`)
-	vm.Set("clearTimeout", clearTimeout)
-	vm.Set("clearInterval", clearTimeout)
+	re.vm.Set("clearTimeout", clearTimeout)
+	re.vm.Set("clearInterval", clearTimeout)
 
 	var waitForCallbacks bool
 
@@ -178,8 +174,8 @@ loop:
 		case timer := <-ready:
 			// execute callback, remove/reschedule the timer
 			var arguments []interface{}
-			if len(timer.call.ArgumentList) > 2 {
-				tmp := timer.call.ArgumentList[2:]
+			if len(timer.call.Arguments) > 2 {
+				tmp := timer.call.Arguments[2:]
 				arguments = make([]interface{}, 2+len(tmp))
 				for i, value := range tmp {
 					arguments[i+2] = value
@@ -187,11 +183,12 @@ loop:
 			} else {
 				arguments = make([]interface{}, 1)
 			}
-			arguments[0] = timer.call.ArgumentList[0]
-			_, err := vm.Call(`Function.call.call`, nil, arguments...)
-			if err != nil {
-				fmt.Println("js error:", err, arguments)
+			arguments[0] = timer.call.Arguments[0]
+			call, isFunc := goja.AssertFunction(timer.call.Arguments[0])
+			if !isFunc {
+				panic(re.vm.ToValue("js error: timer/timeout callback is not a function"))
 			}
+			call(goja.Null(), timer.call.Arguments...)
 
 			_, inreg := registry[timer] // when clearInterval is called from within the callback don't reset it
 			if timer.interval && inreg {
@@ -204,7 +201,7 @@ loop:
 			}
 		case req := <-re.evalQueue:
 			// run the code, send the result back
-			req.fn(vm)
+			req.fn(re.vm)
 			close(req.done)
 			if waitForCallbacks && (len(registry) == 0) {
 				break loop
@@ -223,7 +220,7 @@ loop:
 }
 
 // Do executes the given function on the JS event loop.
-func (re *JSRE) Do(fn func(*otto.Otto)) {
+func (re *JSRE) Do(fn func(*goja.Runtime)) {
 	done := make(chan bool)
 	req := &evalReq{fn, done}
 	re.evalQueue <- req
@@ -246,70 +243,36 @@ func (re *JSRE) Exec(file string) error {
 	if err != nil {
 		return err
 	}
-	var script *otto.Script
-	re.Do(func(vm *otto.Otto) {
-		script, err = vm.Compile(file, code)
-		if err != nil {
-			return
-		}
-		_, err = vm.Run(script)
-	})
-	return err
-}
-
-// Bind assigns value v to a variable in the JS environment
-// This method is deprecated, use Set.
-func (re *JSRE) Bind(name string, v interface{}) error {
-	return re.Set(name, v)
+	return re.Compile(file, string(code))
 }
 
 // Run runs a piece of JS code.
-func (re *JSRE) Run(code string) (v otto.Value, err error) {
-	re.Do(func(vm *otto.Otto) { v, err = vm.Run(code) })
-	return v, err
-}
-
-// Get returns the value of a variable in the JS environment.
-func (re *JSRE) Get(ns string) (v otto.Value, err error) {
-	re.Do(func(vm *otto.Otto) { v, err = vm.Get(ns) })
+func (re *JSRE) Run(code string) (v goja.Value, err error) {
+	re.Do(func(vm *goja.Runtime) { v, err = vm.RunString(code) })
 	return v, err
 }
 
 // Set assigns value v to a variable in the JS environment.
 func (re *JSRE) Set(ns string, v interface{}) (err error) {
-	re.Do(func(vm *otto.Otto) { err = vm.Set(ns, v) })
+	re.Do(func(vm *goja.Runtime) { vm.Set(ns, v) })
 	return err
 }
 
-// loadScript executes a JS script from inside the currently executing JS code.
-func (re *JSRE) loadScript(call otto.FunctionCall) otto.Value {
-	file, err := call.Argument(0).ToString()
-	if err != nil {
-		// TODO: throw exception
-		return otto.FalseValue()
-	}
-	file = common.AbsolutePath(re.assetPath, file)
-	source, err := ioutil.ReadFile(file)
-	if err != nil {
-		// TODO: throw exception
-		return otto.FalseValue()
-	}
-	if _, err := compileAndRun(call.Otto, file, source); err != nil {
-		// TODO: throw exception
-		fmt.Println("err:", err)
-		return otto.FalseValue()
-	}
-	// TODO: return evaluation result
-	return otto.TrueValue()
+// MakeCallback turns the given function into a function that's callable by JS.
+func MakeCallback(vm *goja.Runtime, fn func(Call) (goja.Value, error)) goja.Value {
+	return vm.ToValue(func(call goja.FunctionCall) goja.Value {
+		result, err := fn(Call{call, vm})
+		if err != nil {
+			panic(vm.NewGoError(err))
+		}
+		return result
+	})
 }
 
-// Evaluate executes code and pretty prints the result to the specified output
-// stream.
-func (re *JSRE) Evaluate(code string, w io.Writer) error {
-	var fail error
-
-	re.Do(func(vm *otto.Otto) {
-		val, err := vm.Run(code)
+// Evaluate executes code and pretty prints the result to the specified output stream.
+func (re *JSRE) Evaluate(code string, w io.Writer) {
+	re.Do(func(vm *goja.Runtime) {
+		val, err := vm.RunString(code)
 		if err != nil {
 			prettyError(vm, err, w)
 		} else {
@@ -317,19 +280,33 @@ func (re *JSRE) Evaluate(code string, w io.Writer) error {
 		}
 		fmt.Fprintln(w)
 	})
-	return fail
 }
 
 // Compile compiles and then runs a piece of JS code.
-func (re *JSRE) Compile(filename string, src interface{}) (err error) {
-	re.Do(func(vm *otto.Otto) { _, err = compileAndRun(vm, filename, src) })
+func (re *JSRE) Compile(filename string, src string) (err error) {
+	re.Do(func(vm *goja.Runtime) { _, err = compileAndRun(vm, filename, src) })
 	return err
 }
 
-func compileAndRun(vm *otto.Otto, filename string, src interface{}) (otto.Value, error) {
-	script, err := vm.Compile(filename, src)
+// loadScript loads and executes a JS file.
+func (re *JSRE) loadScript(call Call) (goja.Value, error) {
+	file := call.Argument(0).ToString().String()
+	file = common.AbsolutePath(re.assetPath, file)
+	source, err := ioutil.ReadFile(file)
 	if err != nil {
-		return otto.Value{}, err
+		return nil, fmt.Errorf("Could not read file %s: %v", file, err)
 	}
-	return vm.Run(script)
+	value, err := compileAndRun(re.vm, file, string(source))
+	if err != nil {
+		return nil, fmt.Errorf("Error while compiling or running script: %v", err)
+	}
+	return value, nil
+}
+
+func compileAndRun(vm *goja.Runtime, filename string, src string) (goja.Value, error) {
+	script, err := goja.Compile(filename, src, false)
+	if err != nil {
+		return goja.Null(), err
+	}
+	return vm.RunProgram(script)
 }
