@@ -115,15 +115,11 @@ func (w *lightPeerWrapper) RequestNodeData([]common.Hash) error {
 // newPeerConnection creates a new downloader peer.
 func newPeerConnection(id string, version int, peer Peer, logger log.Logger) *peerConnection {
 	return &peerConnection{
-		id:                id,
-		lacking:           make(map[common.Hash]struct{}),
-		peer:              peer,
-		version:           version,
-		log:               logger,
-		headerThroughput:  float64(MaxHeaderFetch / 8),
-		blockThroughput:   float64(MaxBlockFetch / 8),
-		receiptThroughput: float64(MaxReceiptFetch / 8),
-		stateThroughput:   float64(MaxStateFetch / 8),
+		id:      id,
+		lacking: make(map[common.Hash]struct{}),
+		peer:    peer,
+		version: version,
+		log:     logger,
 	}
 }
 
@@ -137,10 +133,10 @@ func (p *peerConnection) Reset() {
 	atomic.StoreInt32(&p.receiptIdle, 0)
 	atomic.StoreInt32(&p.stateIdle, 0)
 
-	p.headerThroughput = float64(MaxHeaderFetch / 8)
-	p.blockThroughput = float64(MaxBlockFetch / 8)
-	p.receiptThroughput = float64(MaxReceiptFetch / 8)
-	p.stateThroughput = float64(MaxStateFetch / 8)
+	p.headerThroughput = 0
+	p.blockThroughput = 0
+	p.receiptThroughput = 0
+	p.stateThroughput = 0
 
 	p.lacking = make(map[common.Hash]struct{})
 }

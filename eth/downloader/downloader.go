@@ -511,9 +511,9 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		d.syncInitHook(origin, height)
 	}
 	fetchers := []func() error{
-		func() error { return d.fetchHeaders(p, origin+1, pivot, height) }, // Headers are always retrieved
-		func() error { return d.fetchBodies(origin + 1) },                  // Bodies are retrieved during normal and fast sync
-		func() error { return d.fetchReceipts(origin + 1) },                // Receipts are retrieved during fast sync
+		func() error { return d.fetchHeaders(p, origin+1, pivot) }, // Headers are always retrieved
+		func() error { return d.fetchBodies(origin + 1) },          // Bodies are retrieved during normal and fast sync
+		func() error { return d.fetchReceipts(origin + 1) },        // Receipts are retrieved during fast sync
 		func() error { return d.processHeaders(origin+1, pivot, td) },
 	}
 	if d.mode == FastSync {
@@ -621,7 +621,7 @@ func (d *Downloader) fetchHeight(p *peerConnection) (*types.Header, error) {
 			// Make sure the peer actually gave something valid
 			headers := packet.(*headerPack).headers
 			if len(headers) != 1 {
-				p.log.Info("Multiple headers for single request", "headers", len(headers))
+				p.log.Warn("Multiple headers for single request", "headers", len(headers))
 				return nil, errBadPeer
 			}
 			head := headers[0]
@@ -853,7 +853,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 				// Make sure the peer actually gave something valid
 				headers := packer.(*headerPack).headers
 				if len(headers) != 1 {
-					p.log.Info("Multiple headers for single request", "headers", len(headers))
+					p.log.Warn("Multiple headers for single request", "headers", len(headers))
 					return 0, errBadPeer
 				}
 				arrived = true
@@ -877,7 +877,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 				}
 				header := d.lightchain.GetHeaderByHash(h) // Independent of sync mode, header surely exists
 				if header.Number.Uint64() != check {
-					p.log.Info("Received non requested header", "number", header.Number, "hash", header.Hash(), "request", check)
+					p.log.Warn("Received non requested header", "number", header.Number, "hash", header.Hash(), "request", check)
 					return 0, errBadPeer
 				}
 				start = check
@@ -910,7 +910,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 // other peers are only accepted if they map cleanly to the skeleton. If no one
 // can fill in the skeleton - not even the origin peer - it's assumed invalid and
 // the origin is dropped.
-func (d *Downloader) fetchHeaders(p *peerConnection, from, pivot, advertisedHead uint64) error {
+func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) error {
 	p.log.Debug("Directing header downloads", "origin", from)
 	defer p.log.Debug("Header download terminated")
 
@@ -927,6 +927,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from, pivot, advertisedHead
 
 		ttl = d.requestTTL()
 		timeout.Reset(ttl)
+
 		if skeleton {
 			p.log.Trace("Fetching skeleton headers", "count", MaxHeaderFetch, "from", from)
 			go p.peer.RequestHeadersByNumber(from+uint64(MaxHeaderFetch)-1, MaxSkeletonSize, MaxHeaderFetch-1, false)
@@ -982,7 +983,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from, pivot, advertisedHead
 				}
 			}
 			headers := packet.(*headerPack).headers
-			ignoredHeaders := 0
+
 			// If we received a skeleton batch, resolve internals concurrently
 			if skeleton {
 				filled, proced, err := d.fillHeaderSkeleton(from, headers)
@@ -1020,7 +1021,6 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from, pivot, advertisedHead
 							delay = n
 						}
 						headers = headers[:n-delay]
-						ignoredHeaders = delay
 					}
 				}
 			}
@@ -1035,15 +1035,8 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from, pivot, advertisedHead
 				from += uint64(len(headers))
 				getHeaders(from)
 			} else {
-				// No headers delivered
-				if !skeleton && ignoredHeaders == 0 && from < advertisedHead {
-					// This peer told is about a high number, but is not
-					// delivering
-					p.log.Trace("peer did not deliver", "requested", from, "head", advertisedHead)
-					return errStallingPeer
-				}
-				p.log.Trace("All headers delayed, waiting")
 				// No headers delivered, or all of them being delayed, sleep a bit and retry
+				p.log.Trace("All headers delayed, waiting")
 				select {
 				case <-time.After(fsHeaderContCheck):
 					getHeaders(from)
@@ -1328,7 +1321,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 				// have them.
 				request, progress, throttle, err := reserve(peer, capacity(peer))
 				if err != nil {
-					log.Info("Error in loop", "err", err)
+					log.Info("Error reserving fetch", "err", err)
 					return err
 				}
 				if progress {
@@ -1489,7 +1482,8 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 							rollbackErr = err
 							rollback = append(rollback, chunk[:n]...)
 						}
-						log.Info("Invalid header encountered", "number", chunk[n].Number, "hash", chunk[n].Hash(), "err", err, "parent", chunk[n].ParentHash)
+						log.Info("Invalid header encountered", "number", chunk[n].Number,
+							"hash", chunk[n].Hash(), "parent", chunk[n].ParentHash, "err", err)
 						return errInvalidChain
 					}
 					// All verifications passed, store newly found uncertain headers
@@ -1682,12 +1676,11 @@ func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 
 func splitAroundPivot(pivot uint64, results []*fetchResult) (p *fetchResult, before, after []*fetchResult) {
 	if len(results) == 0 {
-		return
+		return nil, nil, nil
 	}
 	if lastNum := results[len(results)-1].Header.Number.Uint64(); lastNum < pivot {
 		// the pivot is somewhere in the future
-		before = results
-		return
+		return nil, results, nil
 	}
 	// This can also be optimized, but only happens very seldom
 	for _, result := range results {
