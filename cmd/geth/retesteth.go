@@ -355,7 +355,7 @@ func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainPa
 			ChainID:             chainId,
 			HomesteadBlock:      homesteadBlock,
 			DAOForkBlock:        daoForkBlock,
-			DAOForkSupport:      false,
+			DAOForkSupport:      true,
 			EIP150Block:         eip150Block,
 			EIP155Block:         eip155Block,
 			EIP158Block:         eip158Block,
@@ -579,6 +579,9 @@ func (api *RetestethAPI) RewindToBlock(ctx context.Context, newHead uint64) (boo
 	if err := api.blockchain.SetHead(newHead); err != nil {
 		return false, err
 	}
+	// When we rewind, the transaction pool should be cleaned out.
+	api.txMap = make(map[common.Address]map[uint64]*types.Transaction)
+	api.txSenders = make(map[common.Address]struct{})
 	return true, nil
 }
 
