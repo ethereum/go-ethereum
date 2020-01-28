@@ -143,7 +143,7 @@ Creates a new account and prints the address.
 On the console, use:
 
 ```
-> personal.NewAccount()
+> personal.newAccount()
 ... you will be prompted for a password ...
 
 or
