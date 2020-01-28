@@ -262,7 +262,7 @@ loop:
 		case node := <-d.addStaticCh:
 			id := node.ID()
 			_, exists := d.static[id]
-			d.log.Trace("Adding static node", "id", id, "ip", node.IP(), "ok", !exists)
+			d.log.Trace("Adding static node", "id", id, "ip", node.IP(), "added", !exists)
 			if exists {
 				continue loop
 			}
