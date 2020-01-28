@@ -599,11 +599,13 @@ func (srv *Server) setupDialScheduler() {
 		self:           srv.localnode.ID(),
 		maxDialPeers:   srv.maxDialedConns(),
 		maxActiveDials: srv.MaxPendingPeers,
-		resolver:       srv.ntab,
 		log:            srv.Logger,
 		netRestrict:    srv.NetRestrict,
 		dialer:         srv.Dialer,
 		clock:          srv.clock,
+	}
+	if srv.ntab != nil {
+		config.resolver = srv.ntab
 	}
 	if config.dialer == nil {
 		config.dialer = tcpDialer{&net.Dialer{Timeout: defaultDialTimeout}}
