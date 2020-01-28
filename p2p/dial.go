@@ -119,7 +119,7 @@ type dialSetupFunc func(net.Conn, connFlag, *enode.Node) error
 
 type dialConfig struct {
 	self           enode.ID         // our own ID
-	maxDialPeers   int              // maximum number of connected dyn-dialed peers
+	maxDialPeers   int              // maximum number of dialed peers
 	maxActiveDials int              // maximum number of active dials
 	netRestrict    *netutil.Netlist // IP whitelist, disabled if nil
 	resolver       nodeResolver
