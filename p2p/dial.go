@@ -425,14 +425,15 @@ func (d *dialScheduler) startDial(task *dialTask) {
 	}()
 }
 
-// A dialTask is generated for each node that is dialed. All fields except
-// staticPoolIndex cannot be accessed while the task is running.
+// A dialTask generated for each node that is dialed.
 type dialTask struct {
-	flags           connFlag
-	dest            *enode.Node
-	lastResolved    mclock.AbsTime
-	resolveDelay    time.Duration
 	staticPoolIndex int
+	flags           connFlag
+	// These fields are private to the task and should not be
+	// accessed by dialScheduler while the task is running.
+	dest         *enode.Node
+	lastResolved mclock.AbsTime
+	resolveDelay time.Duration
 }
 
 func newDialTask(dest *enode.Node, flags connFlag) *dialTask {
@@ -470,7 +471,7 @@ func (t *dialTask) run(d *dialScheduler) {
 // The backoff delay resets when the node is found.
 func (t *dialTask) resolve(d *dialScheduler) bool {
 	if d.resolver == nil {
-		d.log.Debug("Can't resolve node", "id", t.dest.ID(), "err", "discovery is disabled")
+		d.log.Trace("Can't resolve node", "id", t.dest.ID(), "err", "discovery is disabled")
 		return false
 	}
 	if t.resolveDelay == 0 {
