@@ -675,7 +675,6 @@ func (srv *Server) run() {
 
 running:
 	for {
-
 		select {
 		case <-srv.quit:
 			// The server was stopped. Run the cleanup logic.
