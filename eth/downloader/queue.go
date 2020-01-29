@@ -847,7 +847,6 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 		i++
 	}
 
-	q.lock.Lock()
 	var acceptCount = 0
 	for _, header := range request.Headers[:i] {
 		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil {
@@ -871,7 +870,6 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	if acceptCount > 0 {
 		q.active.Signal()
 	}
-	q.lock.Unlock()
 	// If none of the data was good, it's a stale delivery
 	switch {
 	case failure == nil || failure == errInvalidChain:
