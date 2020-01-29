@@ -31,8 +31,8 @@ type ChainContext interface {
 	// Engine retrieves the chain's consensus engine.
 	Engine() consensus.Engine
 
-	// GetHeader returns the hash corresponding to their hash.
-	GetHeader(common.Hash, uint64) *types.Header
+	// GetAncestorHash return the hash of ancestor at the given number
+	GetAncestorHash(child *types.Header, number uint64) common.Hash
 }
 
 // NewEVMContext creates a new context for use in the EVM.
@@ -60,27 +60,8 @@ func NewEVMContext(msg Message, header *types.Header, chain ChainContext, author
 
 // GetHashFn returns a GetHashFunc which retrieves header hashes by number
 func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash {
-	var cache map[uint64]common.Hash
-
 	return func(n uint64) common.Hash {
-		// If there's no hash cache yet, make one
-		if cache == nil {
-			cache = map[uint64]common.Hash{
-				ref.Number.Uint64() - 1: ref.ParentHash,
-			}
-		}
-		// Try to fulfill the request from the cache
-		if hash, ok := cache[n]; ok {
-			return hash
-		}
-		// Not cached, iterate the blocks and cache the hashes
-		for header := chain.GetHeader(ref.ParentHash, ref.Number.Uint64()-1); header != nil; header = chain.GetHeader(header.ParentHash, header.Number.Uint64()-1) {
-			cache[header.Number.Uint64()-1] = header.ParentHash
-			if n == header.Number.Uint64()-1 {
-				return header.ParentHash
-			}
-		}
-		return common.Hash{}
+		return chain.GetAncestorHash(ref, n)
 	}
 }
 

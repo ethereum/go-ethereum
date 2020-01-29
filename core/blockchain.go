@@ -1721,6 +1721,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 
 		switch status {
 		case CanonStatTy:
+			bc.hc.hashHistory.Set(block.Header())
 			log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
 				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", common.PrettyDuration(time.Since(start)),
@@ -2023,6 +2024,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 
 		// Collect the new added transactions.
 		addedTxs = append(addedTxs, newChain[i].Transactions()...)
+		// Add to hash history
+		bc.hc.hashHistory.Set(newChain[i].Header())
 	}
 	// Delete useless indexes right now which includes the non-canonical
 	// transaction indexes, canonical chain indexes which above the head.
@@ -2254,4 +2257,9 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // block processing has started while false means it has stopped.
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
+}
+
+//GetAncestorHash return the hash of ancestor at the given number
+func (bc *BlockChain) GetAncestorHash(ref *types.Header, target uint64) common.Hash {
+	return bc.hc.GetAncestorHash(ref, target)
 }
