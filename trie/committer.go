@@ -88,11 +88,7 @@ func (c *committer) Commit(n node, db *Database) (hashNode, error) {
 	if err != nil {
 		return nil, err
 	}
-	hn, ok := h.(hashNode)
-	if !ok {
-		panic("commit did not hash down to a hashnode!")
-	}
-	return hn, nil
+	return h.(hashNode), nil
 }
 
 // commit collapses a node down into a hash node and inserts it into the database
