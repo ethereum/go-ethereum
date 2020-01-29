@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/params"
+	life_exec "github.com/perlin-network/life/exec"
 
 	//lint:ignore SA1019 Needed for precompile
 	"golang.org/x/crypto/ripemd160"
@@ -39,6 +41,76 @@ import (
 type PrecompiledContract interface {
 	RequiredGas(input []byte) uint64  // RequiredPrice calculates the contract gas use
 	Run(input []byte) ([]byte, error) // Run runs the precompiled contract
+}
+
+type wasmPrecompile struct {
+	vm         *life_exec.VirtualMachine
+	entrypoint int
+}
+
+type wasmPrecompileResolver struct{}
+
+func (wpr *wasmPrecompileResolver) ResolveFunc(module, field string) life_exec.FunctionImport {
+	return func(vm *life_exec.VirtualMachine) int64 {
+		return 0
+	}
+}
+
+func (wpr *wasmPrecompileResolver) ResolveGlobal(module, field string) int64 {
+	panic(fmt.Sprintf("Should not try to resolve globals, asked for %s", field))
+}
+
+func newWasmPrecompile(code []byte) *wasmPrecompile {
+	vm, err := life_exec.NewVirtualMachine(code, life_exec.VMConfig{DisableFloatingPoint: true}, &wasmPrecompileResolver{}, nil)
+	if err != nil {
+		panic(fmt.Sprintf("error loading a precompile: %v", err))
+	}
+
+	entrypoint, ok := vm.GetFunctionExport("main")
+	if !ok {
+		panic("Wasm doesn't have a main function")
+	}
+
+	return &wasmPrecompile{
+		entrypoint: entrypoint,
+		vm:         vm,
+	}
+}
+
+func (wp *wasmPrecompile) RequiredGas(input []byte) uint64 {
+	return 0
+}
+
+var addrList = []byte{229, 228, 160, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 128, 128, 0}
+var serializedProof = []byte{248, 110, 225, 160, 251, 145, 132, 252, 92, 249, 202, 65, 20, 16, 160, 32, 246, 163, 155, 125, 17, 186, 16, 171, 64, 108, 250, 70, 60, 207, 16, 164, 199, 41, 252, 143, 248, 56, 179, 242, 144, 49, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 160, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 131, 194, 32, 128, 209, 193, 1, 194, 128, 128, 194, 2, 31, 194, 4, 1, 194, 2, 128, 194, 4, 2}
+
+func (wp *wasmPrecompile) Run(input []byte) ([]byte, error) {
+	valid, ok := wp.vm.GetGlobalExport("valid")
+	if !ok || valid > len(wp.vm.Globals) || valid < 0 {
+		return nil, fmt.Errorf("Could not find valid in Wasm blob")
+	}
+
+	addrlist, ok := wp.vm.GetGlobalExport("address_list")
+	if !ok || addrlist > len(wp.vm.Globals) || addrlist < 0 {
+		return nil, fmt.Errorf("Could not find address_list in Wasm blob")
+	}
+	spAL := binary.LittleEndian.Uint32(wp.vm.Memory[wp.vm.Globals[addrlist]:])
+	copy(wp.vm.Memory[spAL:], addrList[:])
+
+	proof, ok := wp.vm.GetGlobalExport("serialized_proof")
+	if !ok || proof > len(wp.vm.Globals) || proof < 0 {
+		return nil, fmt.Errorf("Could not find address_list in Wasm blob")
+	}
+	spPtr := binary.LittleEndian.Uint32(wp.vm.Memory[wp.vm.Globals[proof]:])
+	copy(wp.vm.Memory[spPtr:], serializedProof[:])
+
+	ret, err := wp.vm.Run(wp.entrypoint)
+	if err != nil || ret < 0 {
+		wp.vm.PrintStackTrace()
+		frame := wp.vm.GetCurrentFrame()
+	}
+	validPtr := binary.LittleEndian.Uint32(wp.vm.Memory[wp.vm.Globals[valid]:])
+	return nil, err
 }
 
 // PrecompiledContractsHomestead contains the default set of pre-compiled Ethereum
@@ -66,15 +138,17 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
 // PrecompiledContractsIstanbul contains the default set of pre-compiled Ethereum
 // contracts used in the Istanbul release.
 var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{},
-	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{9}): &blake2F{},
+	common.BytesToAddress([]byte{1}):  &ecrecover{},
+	common.BytesToAddress([]byte{2}):  &sha256hash{},
+	common.BytesToAddress([]byte{3}):  &ripemd160hash{},
+	common.BytesToAddress([]byte{4}):  &dataCopy{},
+	common.BytesToAddress([]byte{5}):  &bigModExp{},
+	common.BytesToAddress([]byte{6}):  &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}):  &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}):  &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}):  &blake2F{},
+	common.BytesToAddress([]byte{10}): newWasmPrecompile(wasmVerify),
+	common.BytesToAddress([]byte{11}): newWasmPrecompile(wasmUpdate),
 }
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
