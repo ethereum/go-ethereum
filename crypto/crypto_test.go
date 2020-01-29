@@ -248,3 +248,41 @@ func TestPythonIntegration(t *testing.T) {
 	t.Logf("msg: %x, privkey: %s sig: %x\n", msg0, kh, sig0)
 	t.Logf("msg: %x, privkey: %s sig: %x\n", msg1, kh, sig1)
 }
+
+func TestCreateAddress2(t *testing.T) {
+	type args struct {
+		address  string
+		salt     string
+		initcode string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{"Example 0", args{"0x0000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000000000000000000000000000", "0x00"}, "0x4D1A2e2bB4F88F0250f26Ffff098B0b30B26BF38"},
+		{"Example 1", args{"0xdeadbeef00000000000000000000000000000000", "0x0000000000000000000000000000000000000000000000000000000000000000", "0x00"}, "0xB928f69Bb1D91Cd65274e3c79d8986362984fDA3"},
+		{"Example 2", args{"0xdeadbeef00000000000000000000000000000000", "0x000000000000000000000000feed000000000000000000000000000000000000", "0x00"}, "0xD04116cDd17beBE565EB2422F2497E06cC1C9833"},
+		{"Example 3", args{"0x0000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000000000000000000000000000", "0xdeadbeef"}, "0x70f2b2914A2a4b783FaEFb75f459A580616Fcb5e"},
+		{"Example 4", args{"0x00000000000000000000000000000000deadbeef", "0x00000000000000000000000000000000000000000000000000000000cafebabe", "0xdeadbeef"}, "0x60f3f640a8508fC6a86d45DF051962668E1e8AC7"},
+		{"Example 5", args{"0x00000000000000000000000000000000deadbeef", "0x00000000000000000000000000000000000000000000000000000000cafebabe", "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"}, "0x1d8bfDC5D46DC4f61D6b6115972536eBE6A8854C"},
+		{"Example 6", args{"0x0000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000000000000000000000000000", "0x"}, "0xE33C0C7F7df4809055C3ebA6c09CFe4BaF1BD9e0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			saltData := common.FromHex(tt.args.salt)
+			if length := len(saltData); length != 32 {
+				t.Errorf("Length of salt should be 32 but got %d", length)
+				return
+			}
+
+			var salt [32]byte
+			copy(salt[:], saltData)
+			address := common.HexToAddress(tt.args.address)
+			inithash := Keccak256(common.FromHex(tt.args.initcode))
+			if got := CreateAddress2(address, salt, inithash); got.Hex() != tt.want {
+				t.Errorf("CreateAddress2() = %v, want %v", got.Hex(), tt.want)
+			}
+		})
+	}
+}
