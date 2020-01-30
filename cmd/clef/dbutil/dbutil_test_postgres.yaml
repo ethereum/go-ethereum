@@ -1,0 +1,8 @@
+adapter: postgres
+username: test
+password: testpw
+host: localhost
+port: 5432
+database: pqtestdb
+params:
+    fakeparam: fakevalpq
