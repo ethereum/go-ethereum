@@ -29,6 +29,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
+
 	life_exec "github.com/perlin-network/life/exec"
 
 	//lint:ignore SA1019 Needed for precompile
@@ -81,28 +83,38 @@ func (wp *wasmPrecompile) RequiredGas(input []byte) uint64 {
 	return 0
 }
 
-var addrList = []byte{229, 228, 160, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 128, 128, 0}
-var serializedProof = []byte{248, 110, 225, 160, 251, 145, 132, 252, 92, 249, 202, 65, 20, 16, 160, 32, 246, 163, 155, 125, 17, 186, 16, 171, 64, 108, 250, 70, 60, 207, 16, 164, 199, 41, 252, 143, 248, 56, 179, 242, 144, 49, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 160, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 131, 194, 32, 128, 209, 193, 1, 194, 128, 128, 194, 2, 31, 194, 4, 1, 194, 2, 128, 194, 4, 2}
 
 func (wp *wasmPrecompile) Run(input []byte) ([]byte, error) {
+	// The expected format of the input is:
+	// - account list (rlp)
+	// - proof (rlp)
+	// this uses rlp.Split to separate the two items
+	_, addrList, serializedProof, err := rlp.Split(input)
+
+	if err != nil {
+		return nil, err
+	}
+
 	valid, ok := wp.vm.GetGlobalExport("valid")
 	if !ok || valid > len(wp.vm.Globals) || valid < 0 {
-		return nil, fmt.Errorf("Could not find valid in Wasm blob")
+		return nil, fmt.Errorf("Could not find `valid` in Wasm blob")
 	}
 
 	addrlist, ok := wp.vm.GetGlobalExport("address_list")
 	if !ok || addrlist > len(wp.vm.Globals) || addrlist < 0 {
-		return nil, fmt.Errorf("Could not find address_list in Wasm blob")
+		return nil, fmt.Errorf("Could not find `address_list` in Wasm blob")
 	}
 	spAL := binary.LittleEndian.Uint32(wp.vm.Memory[wp.vm.Globals[addrlist]:])
-	copy(wp.vm.Memory[spAL:], addrList[:])
+	// Split removes the first byte, which is required by the contract. Get it
+	// from the input.
+	copy(wp.vm.Memory[spAL:], input[:len(addrList)])
 
 	proof, ok := wp.vm.GetGlobalExport("serialized_proof")
 	if !ok || proof > len(wp.vm.Globals) || proof < 0 {
-		return nil, fmt.Errorf("Could not find address_list in Wasm blob")
+		return nil, fmt.Errorf("Could not find `serialized_proof` in Wasm blob")
 	}
 	spPtr := binary.LittleEndian.Uint32(wp.vm.Memory[wp.vm.Globals[proof]:])
-	copy(wp.vm.Memory[spPtr:], serializedProof[:])
+	copy(wp.vm.Memory[spPtr:], serializedProof)
 
 	ret, err := wp.vm.Run(wp.entrypoint)
 	if err != nil || ret < 0 {
