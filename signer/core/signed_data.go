@@ -923,7 +923,9 @@ func isPrimitiveTypeValid(primitiveType string) bool {
 		primitiveType == "bytes30" ||
 		primitiveType == "bytes30[]" ||
 		primitiveType == "bytes31" ||
-		primitiveType == "bytes31[]" {
+		primitiveType == "bytes31[]" ||
+		primitiveType == "bytes32" ||
+		primitiveType == "bytes32[]" {
 		return true
 	}
 	if primitiveType == "int" ||
