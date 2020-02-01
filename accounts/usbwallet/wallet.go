@@ -185,13 +185,16 @@ func (w *wallet) heartbeat() {
 		errc chan error
 		err  error
 	)
+
+	timer := time.NewTicker(heartbeatCycle)
+	defer timer.Stop()
 	for errc == nil && err == nil {
 		// Wait until termination is requested or the heartbeat cycle arrives
 		select {
 		case errc = <-w.healthQuit:
 			// Termination requested
 			continue
-		case <-time.After(heartbeatCycle):
+		case <-timer.C:
 			// Heartbeat time
 		}
 		// Execute a tiny data exchange to see responsiveness
