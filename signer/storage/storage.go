@@ -16,7 +16,13 @@
 
 package storage
 
-import "errors"
+import (
+	"encoding/json"
+	"errors"
+
+	"github.com/ethereum/go-ethereum/cmd/clef/dbutil"
+	"github.com/ethereum/go-ethereum/log"
+)
 
 var (
 	// ErrZeroKey is returned if an attempt was made to inset a 0-length key.
@@ -26,7 +32,8 @@ var (
 	ErrNotFound = errors.New("not found")
 )
 
-type Storage interface {
+// storageAPI is the interface that defines interactions with backend storage client
+type storageAPI interface {
 	// Put stores a value by key. 0-length keys results in noop.
 	Put(key, value string)
 
@@ -38,49 +45,109 @@ type Storage interface {
 	Del(key string)
 }
 
-// EphemeralStorage is an in-memory storage that does
-// not persist values to disk. Mainly used for testing
-type EphemeralStorage struct {
-	data map[string]string
+// Storage is the storage client which is used by client to store key/value mappings.
+// The keys are _not_ encrypted, only the values are.
+type Storage struct {
+	api storageAPI
+	key []byte
 }
 
-// Put stores a value by key. 0-length keys results in noop.
-func (s *EphemeralStorage) Put(key, value string) {
-	if len(key) == 0 {
-		return
-	}
-	s.data[key] = value
-}
-
-// Get returns the previously stored value, or an error if the key is 0-length
-// or unknown.
-func (s *EphemeralStorage) Get(key string) (string, error) {
+// Get calls the underlying storageApi's Get function and then decrypts the value field
+func (s *Storage) Get(key string) (string, error) {
 	if len(key) == 0 {
 		return "", ErrZeroKey
 	}
-	if v, ok := s.data[key]; ok {
-		return v, nil
+
+	data, err := s.api.Get(key)
+	if err != nil {
+		return "", err
 	}
-	return "", ErrNotFound
+
+	cred := StoredCredential{}
+	if err = json.Unmarshal([]byte(data), &cred); err != nil {
+		log.Warn("Failed to unmarshal encrypted credential", "err", err)
+		return "", err
+	}
+
+	entry, err := Decrypt(s.key, cred.Iv, cred.CipherText, []byte(key))
+	if err != nil {
+		log.Warn("Failed to decrypt key", "key", key)
+		return "", err
+	}
+
+	return string(entry), nil
 }
 
-// Del removes a key-value pair. If the key doesn't exist, the method is a noop.
-func (s *EphemeralStorage) Del(key string) {
-	delete(s.data, key)
+// Put encrypts the value field with key as additionalData to prevent value swap attack.
+// Then calls the underlying storageApi's Put function to persist the key/value pair
+func (s *Storage) Put(key, value string) {
+	if len(key) == 0 {
+		return
+	}
+
+	ciphertext, iv, err := Encrypt(s.key, []byte(value), []byte(key))
+	if err != nil {
+		log.Warn("Failed to encrypt entry", "err", err)
+		return
+	}
+
+	encrypted := StoredCredential{Iv: iv, CipherText: ciphertext}
+	raw, err := json.Marshal(encrypted)
+	if err != nil {
+		log.Warn("Failed to marshal credential", "err", err)
+		return
+	}
+	s.api.Put(key, string(raw))
 }
 
+// Del calls the underlying storageApi's Del function to delete the key/value pair
+func (s *Storage) Del(key string) {
+	s.api.Del(key)
+}
+
+// NewEphemeralStorage creates an in-memory storage that does
+// not persist values to disk. Mainly used for testing
 func NewEphemeralStorage() Storage {
-	s := &EphemeralStorage{
+	api := &EphemeralStorageAPI{
 		data: make(map[string]string),
 	}
-	return s
+	return Storage{
+		api: api,
+		key: []byte(""),
+	}
 }
 
-// NoStorage is a dummy construct which doesn't remember anything you tell it
-type NoStorage struct{}
+// NewNoStorage creates an dummy storage which didn't remember anything you tell it
+func NewNoStorage() Storage {
+	api := &NoStorageAPI{}
+	return Storage{
+		api: api,
+		key: []byte(""),
+	}
+}
 
-func (s *NoStorage) Put(key, value string) {}
-func (s *NoStorage) Del(key string)        {}
-func (s *NoStorage) Get(key string) (string, error) {
-	return "", errors.New("missing key, I probably forgot")
+// NewDBStorage creates a database storage
+func NewDBStorage(path, table string, key []byte) (*Storage, error) {
+	kvstore, err := dbutil.NewKVStore(path, table)
+	if err != nil {
+		return nil, err
+	}
+	api := &DBStorageAPI{
+		kvstore: kvstore,
+	}
+	return &Storage{
+		api: api,
+		key: key,
+	}, nil
+}
+
+// NewFileStorage creates a storage type which is backed by a json-file.
+func NewFileStorage(filename string, key []byte) *Storage {
+	api := &FileStorageAPI{
+		filename: filename,
+	}
+	return &Storage{
+		api: api,
+		key: key,
+	}
 }

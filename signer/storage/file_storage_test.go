@@ -17,42 +17,32 @@
 package storage
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/mattn/go-colorable"
 )
 
-func TestFileStorage(t *testing.T) {
-	a := map[string]StoredCredential{
-		"secret": {
-			Iv:         common.Hex2Bytes("cdb30036279601aeee60f16b"),
-			CipherText: common.Hex2Bytes("f311ac49859d7260c2c464c28ffac122daf6be801d3cfd3edcbde7e00c9ff74f"),
-		},
-		"secret2": {
-			Iv:         common.Hex2Bytes("afb8a7579bf971db9f8ceeed"),
-			CipherText: common.Hex2Bytes("2df87baf86b5073ef1f03e3cc738de75b511400f5465bb0ddeacf47ae4dc267d"),
-		},
+func TestFileStorageAPI(t *testing.T) {
+	a := map[string]string{
+		"secret":  "value1",
+		"secret2": "value2",
 	}
 	d, err := ioutil.TempDir("", "eth-encrypted-storage-test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	stored := &AESEncryptedStorage{
+	stored := &FileStorageAPI{
 		filename: fmt.Sprintf("%v/vault.json", d),
-		key:      []byte("AES256Key-32Characters1234567890"),
 	}
-	stored.writeEncryptedStorage(a)
-	read := &AESEncryptedStorage{
+	stored.writeStorage(a)
+	read := &FileStorageAPI{
 		filename: fmt.Sprintf("%v/vault.json", d),
-		key:      []byte("AES256Key-32Characters1234567890"),
 	}
-	creds, err := read.readEncryptedStorage()
+	creds, err := read.readStorage()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,15 +50,16 @@ func TestFileStorage(t *testing.T) {
 		if v2, exist := creds[k]; !exist {
 			t.Errorf("Missing entry %v", k)
 		} else {
-			if !bytes.Equal(v.CipherText, v2.CipherText) {
-				t.Errorf("Wrong ciphertext, expected %x got %x", v.CipherText, v2.CipherText)
+			if v != v2 {
+				t.Errorf("Wrong ciphertext, expected %x got %x", v, v2)
 			}
-			if !bytes.Equal(v.Iv, v2.Iv) {
+			if v != v2 {
 				t.Errorf("Wrong iv")
 			}
 		}
 	}
 }
+
 func TestEnd2End(t *testing.T) {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(3), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 
@@ -77,17 +68,21 @@ func TestEnd2End(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s1 := &AESEncryptedStorage{
-		filename: fmt.Sprintf("%v/vault.json", d),
-		key:      []byte("AES256Key-32Characters1234567890"),
-	}
-	s2 := &AESEncryptedStorage{
-		filename: fmt.Sprintf("%v/vault.json", d),
-		key:      []byte("AES256Key-32Characters1234567890"),
+	filename := fmt.Sprintf("%v/vault.json", d)
+	key := []byte("AES256Key-32Characters1234567890")
+	fs := NewFileStorage(filename, key)
+
+	fs.Put("bazonk", "foobar")
+
+	// make sure intermediate result is encrypted correctly
+	encrypted, err := fs.api.Get("bazonk")
+	cred := StoredCredential{}
+	if err = json.Unmarshal([]byte(encrypted), &cred); err != nil {
+		t.Error("Failed to unmarshal encrypted credential", "err", err)
 	}
 
-	s1.Put("bazonk", "foobar")
-	if v, err := s2.Get("bazonk"); v != "foobar" || err != nil {
+	// make sure return is correct
+	if v, err := fs.Get("bazonk"); v != "foobar" || err != nil {
 		t.Errorf("Expected bazonk->foobar (nil error), got '%v' (%v error)", v, err)
 	}
 }
@@ -102,16 +97,15 @@ func TestSwappedKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s1 := &AESEncryptedStorage{
-		filename: fmt.Sprintf("%v/vault.json", d),
-		key:      []byte("AES256Key-32Characters1234567890"),
-	}
+	filename := fmt.Sprintf("%v/vault.json", d)
+	key := []byte("AES256Key-32Characters1234567890")
+	s1 := NewFileStorage(filename, key)
 	s1.Put("k1", "v1")
 	s1.Put("k2", "v2")
 	// Now make a modified copy
 
-	creds := make(map[string]StoredCredential)
-	raw, err := ioutil.ReadFile(s1.filename)
+	creds := make(map[string]string)
+	raw, err := ioutil.ReadFile(filename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +120,7 @@ func TestSwappedKeys(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = ioutil.WriteFile(s1.filename, raw, 0600); err != nil {
+		if err = ioutil.WriteFile(filename, raw, 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
