@@ -7,11 +7,12 @@ type EphemeralStorageAPI struct {
 }
 
 // Put stores a value by key. 0-length keys results in noop.
-func (s *EphemeralStorageAPI) Put(key, value string) {
+func (s *EphemeralStorageAPI) Put(key, value string) error {
 	if len(key) == 0 {
-		return
+		return ErrZeroKey
 	}
 	s.data[key] = value
+	return nil
 }
 
 // Get returns the previously stored value, or an error if the key is 0-length

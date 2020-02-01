@@ -32,8 +32,8 @@ func (api *DBStorageAPI) Get(key string) (string, error) {
 }
 
 // Put stores a value by key. 0-length keys results in noop.
-func (api *DBStorageAPI) Put(key, value string) {
-	api.kvstore.Put(key, value)
+func (api *DBStorageAPI) Put(key, value string) error {
+	return api.kvstore.Put(key, value)
 }
 
 // Del removes a key-value pair. If the key doesn't exist, the method is a noop.

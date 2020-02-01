@@ -35,7 +35,7 @@ var (
 // storageAPI is the interface that defines interactions with backend storage client
 type storageAPI interface {
 	// Put stores a value by key. 0-length keys results in noop.
-	Put(key, value string)
+	Put(key, value string) error
 
 	// Get returns the previously stored value, or an error if the key is 0-length
 	// or unknown.
@@ -80,24 +80,24 @@ func (s *Storage) Get(key string) (string, error) {
 
 // Put encrypts the value field with key as additionalData to prevent value swap attack.
 // Then calls the underlying storageApi's Put function to persist the key/value pair
-func (s *Storage) Put(key, value string) {
+func (s *Storage) Put(key, value string) error {
 	if len(key) == 0 {
-		return
+		return ErrZeroKey
 	}
 
 	ciphertext, iv, err := Encrypt(s.key, []byte(value), []byte(key))
 	if err != nil {
 		log.Warn("Failed to encrypt entry", "err", err)
-		return
+		return err
 	}
 
 	encrypted := StoredCredential{Iv: iv, CipherText: ciphertext}
 	raw, err := json.Marshal(encrypted)
 	if err != nil {
 		log.Warn("Failed to marshal credential", "err", err)
-		return
+		return err
 	}
-	s.api.Put(key, string(raw))
+	return s.api.Put(key, string(raw))
 }
 
 // Del calls the underlying storageApi's Del function to delete the key/value pair
@@ -127,26 +127,26 @@ func NewNoStorage() Storage {
 }
 
 // NewDBStorage creates a database storage
-func NewDBStorage(path, table string, key []byte) (*Storage, error) {
+func NewDBStorage(path, table string, key []byte) (Storage, error) {
 	kvstore, err := dbutil.NewKVStore(path, table)
 	if err != nil {
-		return nil, err
+		return NewNoStorage(), err
 	}
 	api := &DBStorageAPI{
 		kvstore: kvstore,
 	}
-	return &Storage{
+	return Storage{
 		api: api,
 		key: key,
 	}, nil
 }
 
 // NewFileStorage creates a storage type which is backed by a json-file.
-func NewFileStorage(filename string, key []byte) *Storage {
+func NewFileStorage(filename string, key []byte) Storage {
 	api := &FileStorageAPI{
 		filename: filename,
 	}
-	return &Storage{
+	return Storage{
 		api: api,
 		key: key,
 	}

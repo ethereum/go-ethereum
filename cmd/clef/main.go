@@ -132,19 +132,11 @@ var (
 	}
 	keystoreDBFlag = cli.StringFlag{
 		Name:  "keystore-db",
-		Usage: "General SQL database name which stores keys, currently supported db type are: mysql, postgres",
-	}
-	keystoreDBDSNFlag = cli.StringFlag{
-		Name:  "keystore-db-dsn",
-		Usage: "Data Source Name (DSN) for keystore-db",
+		Usage: "Keystore database yaml config file path, currently supported db type are: mysql, postgres",
 	}
 	configDBFlag = cli.StringFlag{
 		Name:  "config-db",
-		Usage: "General SQL database name which is used to store configuration key value pairs, currently supported db type are: mysql, postgres",
-	}
-	configDBDSNFlag = cli.StringFlag{
-		Name:  "config-db-dsn",
-		Usage: "Data Source Name (DSN) for config-db",
+		Usage: "Config database yaml config file path, currently supported db type are: mysql, postgres",
 	}
 	app         = cli.NewApp()
 	initCommand = cli.Command{
@@ -236,9 +228,7 @@ func init() {
 		stdiouiFlag,
 		testFlag,
 		keystoreDBFlag,
-		keystoreDBDSNFlag,
 		configDBFlag,
-		configDBDSNFlag,
 		advancedMode,
 	}
 	app.Action = signer
@@ -320,6 +310,7 @@ You should treat 'masterseed.json' with utmost secrecy and make a backup of it!
 `)
 	return nil
 }
+
 func attestFile(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
@@ -332,12 +323,8 @@ func attestFile(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
-	configDir := ctx.GlobalString(configdirFlag.Name)
-	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
-	confKey := crypto.Keccak256([]byte("config"), stretchedKey)
-
-	// Initialize the encrypted storages
-	configStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "config.json"), confKey)
+	// Initialize the config storage
+	configStorage := initConfigStorage(stretchedKey, ctx)
 	val := ctx.Args().First()
 	configStorage.Put("ruleset_sha256", val)
 	log.Info("Ruleset attestation updated", "sha256", val)
@@ -363,11 +350,7 @@ func setCredential(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
-	configDir := ctx.GlobalString(configdirFlag.Name)
-	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
-	pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
-
-	pwStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
+	pwStorage := initPasswordStorage(stretchedKey, ctx)
 	pwStorage.Put(address.Hex(), password)
 
 	log.Info("Credential store updated", "set", address)
@@ -391,11 +374,7 @@ func removeCredential(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
-	configDir := ctx.GlobalString(configdirFlag.Name)
-	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
-	pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
-
-	pwStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
+	pwStorage := initPasswordStorage(stretchedKey, ctx)
 	pwStorage.Del(address.Hex())
 
 	log.Info("Credential store updated", "unset", address)
@@ -446,30 +425,10 @@ func ipcEndpoint(ipcPath, datadir string) string {
 	return ipcPath
 }
 
-func checkFlag(c *cli.Context) error {
-	keystoreDB := c.GlobalString(keystoreDBFlag.Name)
-	keystoreDBDSN := c.GlobalString(keystoreDBDSNFlag.Name)
-	if keystoreDB != "" && keystoreDBDSN == "" {
-		return fmt.Errorf("%s has to be set along with %s", keystoreDBDSNFlag.Name, keystoreDBFlag.Name)
-	}
-
-	configDB := c.GlobalString(configDBFlag.Name)
-	configDBDSN := c.GlobalString(configDBDSNFlag.Name)
-	if configDB != "" && configDBDSN == "" {
-		return fmt.Errorf("%s has to be set along with %s", configDBDSNFlag.Name, configDBFlag.Name)
-	}
-
-	return nil
-}
-
 func signer(c *cli.Context) error {
 	// If we have some unrecognized command, bail out
 	if args := c.Args(); len(args) > 0 {
 		return fmt.Errorf("invalid command: %q", args[0])
-	}
-	// check flag legitimacy
-	if err := checkFlag(c); err != nil {
-		return err
 	}
 	if err := initialize(c); err != nil {
 		return err
@@ -495,37 +454,19 @@ func signer(c *cli.Context) error {
 
 	var (
 		api           core.ExternalAPI
-		pwStorage     storage.Storage = &storage.NoStorage{}
-		jsStorage     storage.Storage = &storage.NoStorage{}
-		configStorage storage.Storage = &storage.NoStorage{}
+		pwStorage     storage.Storage = storage.NewNoStorage()
+		jsStorage     storage.Storage = storage.NewNoStorage()
+		configStorage storage.Storage = storage.NewNoStorage()
 	)
 
 	configDir := c.GlobalString(configdirFlag.Name)
 	if stretchedKey, err := readMasterKey(c, ui); err != nil {
 		log.Warn("Failed to open master, rules disabled", "err", err)
 	} else {
-		// Generate domain specific keys
-		pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
-		jskey := crypto.Keccak256([]byte("jsstorage"), stretchedKey)
-		confkey := crypto.Keccak256([]byte("config"), stretchedKey)
-
-		if configDB := c.GlobalString(configDBFlag.Name); configDB != "" {
-			configDBDSN := c.GlobalString(configDBDSNFlag.Name)
-			pwStorage, err = storage.NewDBStorage(pwkey, configDB, configDBDSN, storage.PasswordTable)
-			if err != nil {
-				utils.Fatalf("Could not connect to config db %v, %v", configDB, configDBDSN)
-			}
-			// since we're literally connecting to the same database, so we don't need to check for err for 3 times
-			jsStorage, _ = storage.NewDBStorage(jskey, configDB, configDBDSN, storage.JsTable)
-			configStorage, _ = storage.NewDBStorage(jskey, configDB, configDBDSN, storage.ConfigTable)
-		} else {
-			vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
-
-			// Initialize the encrypted storages
-			pwStorage = storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
-			jsStorage = storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "jsstorage.json"), jskey)
-			configStorage = storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "config.json"), confkey)
-		}
+		// create dedicated storages for different type of configuration
+		pwStorage = initPasswordStorage(stretchedKey, c)
+		jsStorage = initJsStorage(stretchedKey, c)
+		configStorage = initConfigStorage(stretchedKey, c)
 
 		// Do we have a rule-file?
 		if ruleFile := c.GlobalString(ruleFlag.Name); ruleFile != "" {
@@ -1111,5 +1052,42 @@ func GenDoc(ctx *cli.Context) {
 These data types are defined in the channel between clef and the UI`)
 	for _, elem := range output {
 		fmt.Println(elem)
+	}
+}
+
+// Constants for file/db storage vault/table name
+const (
+	PasswordStorageVault string = "credentials"
+	JsStorageVault       string = "jsstorage"
+	ConfigStorageVault   string = "config"
+)
+
+func initPasswordStorage(stretchedKey []byte, c *cli.Context) storage.Storage {
+	return initStorage(PasswordStorageVault, stretchedKey, c)
+}
+
+func initJsStorage(stretchedKey []byte, c *cli.Context) storage.Storage {
+	return initStorage(JsStorageVault, stretchedKey, c)
+}
+
+func initConfigStorage(stretchedKey []byte, c *cli.Context) storage.Storage {
+	return initStorage(ConfigStorageVault, stretchedKey, c)
+}
+
+func initStorage(storageName string, stretchedKey []byte, c *cli.Context) storage.Storage {
+	configDir := c.GlobalString(configdirFlag.Name)
+	key := crypto.Keccak256([]byte(storageName), stretchedKey)
+
+	if configDB := c.GlobalString(configDBFlag.Name); configDB != "" {
+		// if config-db is specified, create db backed storage
+		storage, err := storage.NewDBStorage(configDB, storageName, key)
+		if err != nil {
+			utils.Fatalf("Cannot init database storage for %s", storageName)
+		}
+		return storage
+	} else {
+		// otherwise create file storage
+		vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
+		return storage.NewFileStorage(filepath.Join(vaultLocation, storageName+".json"), key)
 	}
 }

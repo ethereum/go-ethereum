@@ -55,7 +55,7 @@ func testPQConfig(t *testing.T, path string) {
 }
 
 func TestKVStoreOperations(t *testing.T) {
-	kvstore, err := NewKVStore("./dbutil_test_sqlite3.yaml", PasswordTable)
+	kvstore, err := NewKVStore("./dbutil_test_sqlite3.yaml", "testTable")
 	if err != nil {
 		log.Fatal("Cannot initiate KVStore:", err)
 	}

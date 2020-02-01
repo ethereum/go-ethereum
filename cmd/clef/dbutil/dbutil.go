@@ -15,13 +15,6 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// Configuration database default table names
-const (
-	PasswordTable = "kps"
-	ConfigTable   = "config"
-	JsTable       = "js"
-)
-
 // Keystore database default table names
 const (
 	AccountTable = "accounts"
@@ -148,15 +141,15 @@ func (kvstore *KVStore) Get(key string) (string, error) {
 }
 
 // Put stores a value by key. 0-length keys results in noop.
-func (kvstore *KVStore) Put(key, value string) {
+func (kvstore *KVStore) Put(key, value string) error {
 	if len(key) == 0 {
-		return
+		return errors.New("0-length key")
 	}
 	_, err := kvstore.Get(key)
 	if err != nil || err == sql.ErrNoRows {
-		kvstore.insertRow(key, value)
+		return kvstore.insertRow(key, value)
 	} else {
-		kvstore.updateRow(key, value)
+		return kvstore.updateRow(key, value)
 	}
 }
 
@@ -199,14 +192,14 @@ func (kvstore *KVStore) All() []string {
 	return result
 }
 
-func (kvstore *KVStore) insertRow(key, value string) {
+func (kvstore *KVStore) insertRow(key, value string) error {
 	sql := kvstore.adjustSQLPlaceholder(insertSQL)
-	kvstore.exec(sql, key, value)
+	return kvstore.exec(sql, key, value)
 }
 
-func (kvstore *KVStore) updateRow(key, value string) {
+func (kvstore *KVStore) updateRow(key, value string) error {
 	sql := kvstore.adjustSQLPlaceholder(updateSQL)
-	kvstore.exec(sql, value, key)
+	return kvstore.exec(sql, value, key)
 }
 
 func (kvstore *KVStore) adjustSQLPlaceholder(sql string) string {

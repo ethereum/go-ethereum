@@ -31,19 +31,21 @@ type FileStorageAPI struct {
 }
 
 // Put stores a value by key. 0-length keys results in noop.
-func (s *FileStorageAPI) Put(key, value string) {
+func (s *FileStorageAPI) Put(key, value string) error {
 	if len(key) == 0 {
-		return
+		return ErrZeroKey
 	}
 	data, err := s.readStorage()
 	if err != nil {
 		log.Warn("Failed to read encrypted storage", "err", err, "file", s.filename)
-		return
+		return err
 	}
 	data[key] = value
 	if err = s.writeStorage(data); err != nil {
 		log.Warn("Failed to write entry", "err", err)
+		return err
 	}
+	return nil
 }
 
 // Get returns the previously stored value, or an error if it does not exist or

@@ -6,7 +6,9 @@ import "errors"
 type NoStorageAPI struct{}
 
 // Put is a dummy function that do nothing
-func (s *NoStorageAPI) Put(key, value string) {}
+func (s *NoStorageAPI) Put(key, value string) error {
+	return errors.New("I don't know how to remember")
+}
 
 // Del is a dummy function that do nothing
 func (s *NoStorageAPI) Del(key string) {}
