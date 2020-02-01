@@ -63,6 +63,11 @@ func (s *Storage) Get(key string) (string, error) {
 		return "", err
 	}
 
+	if len(s.key) == 0 {
+		// if there is no key for decryption, just store the value
+		return data, nil
+	}
+
 	cred := StoredCredential{}
 	if err = json.Unmarshal([]byte(data), &cred); err != nil {
 		log.Warn("Failed to unmarshal encrypted credential", "err", err)
@@ -83,6 +88,11 @@ func (s *Storage) Get(key string) (string, error) {
 func (s *Storage) Put(key, value string) error {
 	if len(key) == 0 {
 		return ErrZeroKey
+	}
+
+	if len(s.key) == 0 {
+		// if there is no key for encryption, just store the value
+		return s.api.Put(key, value)
 	}
 
 	ciphertext, iv, err := Encrypt(s.key, []byte(value), []byte(key))
