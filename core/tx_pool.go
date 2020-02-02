@@ -569,13 +569,15 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// EIP1559 guards
-	if pool.chainconfig.IsEIP1559(pool.chain.CurrentBlock().Number()) && pool.chain.CurrentBlock().BaseFee() == nil {
+	eip1559 := pool.chainconfig.IsEIP1559(pool.chain.CurrentBlock().Number())
+	eip1559Finalized := pool.chainconfig.IsEIP1559Finalized(pool.chain.CurrentBlock().Number())
+	if eip1559 && pool.chain.CurrentBlock().BaseFee() == nil {
 		return ErrNoBaseFee
 	}
-	if pool.chainconfig.IsEIP1559Finalized(pool.chain.CurrentBlock().Number()) && (tx.GasPremium() == nil || tx.FeeCap() == nil || tx.GasPrice() != nil) {
+	if eip1559Finalized && (tx.GasPremium() == nil || tx.FeeCap() == nil || tx.GasPrice() != nil) {
 		return ErrTxNotEIP1559
 	}
-	if !pool.chainconfig.IsEIP1559(pool.chain.CurrentBlock().Number()) && (tx.GasPremium() != nil || tx.FeeCap() != nil || tx.GasPrice() == nil) {
+	if !eip1559 && (tx.GasPremium() != nil || tx.FeeCap() != nil || tx.GasPrice() == nil) {
 		return ErrTxIsEIP1559
 	}
 	if tx.GasPrice() != nil && (tx.GasPremium() != nil || tx.FeeCap() != nil) {
@@ -600,7 +602,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrOversizedData
 	}
 	// If the transactions gas usage is above the per-tx limit, reject it
-	if tx.Gas() > pool.perTxGasLimit {
+	if eip1559 && tx.Gas() > pool.perTxGasLimit {
 		return ErrExceedGasLimit
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded

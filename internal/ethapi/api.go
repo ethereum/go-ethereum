@@ -832,10 +832,12 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	// EIP1559 guards
-	if b.ChainConfig().IsEIP1559Finalized(b.CurrentBlock().Number()) && (args.GasPremium == nil || args.FeeCap == nil || args.GasPrice != nil) {
+	eip1559 := b.ChainConfig().IsEIP1559(b.CurrentBlock().Number())
+	eip1559Finalized := b.ChainConfig().IsEIP1559Finalized(b.CurrentBlock().Number())
+	if eip1559Finalized && (args.GasPremium == nil || args.FeeCap == nil || args.GasPrice != nil) {
 		return nil, 0, false, core.ErrTxNotEIP1559
 	}
-	if !b.ChainConfig().IsEIP1559(b.CurrentBlock().Number()) && (args.GasPremium != nil || args.FeeCap != nil || args.GasPrice == nil) {
+	if !eip1559 && (args.GasPremium != nil || args.FeeCap != nil || args.GasPrice == nil) {
 		return nil, 0, false, core.ErrTxIsEIP1559
 	}
 	if args.GasPrice != nil && (args.GasPremium != nil || args.FeeCap != nil) {
@@ -1526,10 +1528,12 @@ type SendTxArgs struct {
 // setDefaults is a helper function that fills in default values for unspecified tx fields.
 func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 	// EIP1559 guards
-	if b.ChainConfig().IsEIP1559Finalized(b.CurrentBlock().Number()) && (args.GasPremium == nil || args.FeeCap == nil || args.GasPrice != nil) {
+	eip1559 := b.ChainConfig().IsEIP1559(b.CurrentBlock().Number())
+	eip1559Finalized := b.ChainConfig().IsEIP1559Finalized(b.CurrentBlock().Number())
+	if eip1559Finalized && (args.GasPremium == nil || args.FeeCap == nil || args.GasPrice != nil) {
 		return core.ErrTxNotEIP1559
 	}
-	if !b.ChainConfig().IsEIP1559(b.CurrentBlock().Number()) && (args.GasPremium != nil || args.FeeCap != nil || args.GasPrice == nil) {
+	if !eip1559 && (args.GasPremium != nil || args.FeeCap != nil || args.GasPrice == nil) {
 		return core.ErrTxIsEIP1559
 	}
 	if args.GasPrice != nil && (args.GasPremium != nil || args.FeeCap != nil) {
@@ -1695,10 +1699,12 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encod
 		return common.Hash{}, err
 	}
 	// EIP1559 guards
-	if s.b.ChainConfig().IsEIP1559Finalized(s.b.CurrentBlock().Number()) && (tx.GasPremium() == nil || tx.FeeCap() == nil || tx.GasPrice() != nil) {
+	eip1559 := s.b.ChainConfig().IsEIP1559(s.b.CurrentBlock().Number())
+	eip1559Finalized := s.b.ChainConfig().IsEIP1559Finalized(s.b.CurrentBlock().Number())
+	if eip1559Finalized && (tx.GasPremium() == nil || tx.FeeCap() == nil || tx.GasPrice() != nil) {
 		return common.Hash{}, core.ErrTxNotEIP1559
 	}
-	if !s.b.ChainConfig().IsEIP1559(s.b.CurrentBlock().Number()) && (tx.GasPremium() != nil || tx.FeeCap() != nil || tx.GasPrice() == nil) {
+	if !eip1559 && (tx.GasPremium() != nil || tx.FeeCap() != nil || tx.GasPrice() == nil) {
 		return common.Hash{}, core.ErrTxIsEIP1559
 	}
 	if tx.GasPrice() != nil && (tx.GasPremium() != nil || tx.FeeCap() != nil) {

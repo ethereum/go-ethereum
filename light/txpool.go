@@ -346,13 +346,15 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	header := pool.chain.GetHeaderByHash(pool.head)
 
 	// EIP1559 guards
-	if pool.config.IsEIP1559(header.Number) && header.BaseFee == nil {
+	eip1559 := pool.config.IsEIP1559(header.Number)
+	eip1559Finalized := pool.config.IsEIP1559Finalized(header.Number)
+	if eip1559 && header.BaseFee == nil {
 		return core.ErrNoBaseFee
 	}
-	if pool.config.IsEIP1559Finalized(header.Number) && (tx.GasPremium() == nil || tx.FeeCap() == nil || tx.GasPrice() != nil) {
+	if eip1559Finalized && (tx.GasPremium() == nil || tx.FeeCap() == nil || tx.GasPrice() != nil) {
 		return core.ErrTxNotEIP1559
 	}
-	if !pool.config.IsEIP1559(header.Number) && (tx.GasPremium() != nil || tx.FeeCap() != nil || tx.GasPrice() == nil) {
+	if !eip1559 && (tx.GasPremium() != nil || tx.FeeCap() != nil || tx.GasPrice() == nil) {
 		return core.ErrTxIsEIP1559
 	}
 	if tx.GasPrice() != nil && (tx.GasPremium() != nil || tx.FeeCap() != nil) {
