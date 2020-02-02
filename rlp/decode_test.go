@@ -109,7 +109,7 @@ func TestStreamErrors(t *testing.T) {
 		{"C8C9010101010101010101", calls{"List", "Kind"}, nil, ErrElemTooLarge},
 		{"C3C2010201", calls{"List", "List", "Uint", "Uint", "ListEnd", "Uint"}, nil, EOL},
 		{"00", calls{"ListEnd"}, nil, errNotInList},
-		{"C401020304", calls{"List", "Uint", "ListEnd"}, nil, errNotAtEOL},
+		{"C401020304", calls{"List", "Uint", "ListEnd"}, nil, ErrNotAtEOL},
 
 		// Non-canonical integers (e.g. leading zero bytes).
 		{"00", calls{"Uint"}, nil, ErrCanonInt},

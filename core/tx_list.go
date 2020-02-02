@@ -545,7 +545,7 @@ func (l *txPricedList) Underpriced(tx *types.Transaction, local *accountSet) boo
 	}
 	// Discard stale price points if found at the heap start
 	for len(l.items.txs) > 0 {
-		head := []*types.Transaction(l.items.txs)[0]
+		head := l.items.txs[0]
 		if l.all.Get(head.Hash()) == nil {
 			l.stales--
 			heap.Pop(l.items)
@@ -558,7 +558,7 @@ func (l *txPricedList) Underpriced(tx *types.Transaction, local *accountSet) boo
 		log.Error("Pricing query for empty pool") // This cannot happen, print to catch programming errors
 		return false
 	}
-	cheapest := []*types.Transaction(l.items.txs)[0]
+	cheapest := l.items.txs[0]
 	cheapestPrice := cheapest.GasPrice()
 	if cheapestPrice == nil {
 		cheapestPrice = new(big.Int).Add(l.items.baseFee, cheapest.GasPremium())

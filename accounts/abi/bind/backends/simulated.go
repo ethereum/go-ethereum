@@ -553,19 +553,21 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	// Ensure message is initialized properly.
 	// EIP1559 guards
 	// If we have finalized EIP1559 and do not have a properly formed EIP1559 trx, sub in default values
-	if b.config.IsEIP1559Finalized(block.Number()) && (call.GasPremium == nil || call.FeeCap == nil || call.GasPrice != nil) {
+	eip1559 := b.config.IsEIP1559(block.Number())
+	eip1559Finalized := b.config.IsEIP1559Finalized(block.Number())
+	if eip1559Finalized && (call.GasPremium == nil || call.FeeCap == nil || call.GasPrice != nil) {
 		call.GasPremium = big.NewInt(1)
 		call.FeeCap = big.NewInt(10)
 		call.GasPrice = nil
 	}
 	// If we have not activated EIP1559 and do not have a properly formed legacy trx, sub in default values
-	if !b.config.IsEIP1559(block.Number()) && (call.GasPremium != nil || call.FeeCap != nil || call.GasPrice == nil) {
+	if !eip1559 && (call.GasPremium != nil || call.FeeCap != nil || call.GasPrice == nil) {
 		call.GasPremium = nil
 		call.FeeCap = nil
 		call.GasPrice = big.NewInt(1)
 	}
 	// If we are in between activation and finalization
-	if b.config.IsEIP1559(block.Number()) && !b.config.IsEIP1559Finalized(block.Number()) {
+	if eip1559 && !eip1559Finalized {
 		// and we have neither a properly formed legacy or EIP1559 transaction, sub in default legacy values
 		if (call.GasPremium == nil || call.FeeCap == nil && call.GasPrice == nil) || (call.GasPremium != nil || call.FeeCap != nil && call.GasPrice != nil) {
 			call.GasPremium = nil
@@ -605,10 +607,12 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	defer b.mu.Unlock()
 
 	// EIP1559 guards
-	if b.config.IsEIP1559Finalized(b.blockchain.CurrentBlock().Number()) && (tx.GasPremium() == nil || tx.FeeCap() == nil || tx.GasPrice() != nil) {
+	eip1559 := b.config.IsEIP1559(b.blockchain.CurrentBlock().Number())
+	eip1559Finalized := b.config.IsEIP1559Finalized(b.blockchain.CurrentBlock().Number())
+	if eip1559Finalized && (tx.GasPremium() == nil || tx.FeeCap() == nil || tx.GasPrice() != nil) {
 		return core.ErrTxNotEIP1559
 	}
-	if !b.config.IsEIP1559(b.blockchain.CurrentBlock().Number()) && (tx.GasPremium() != nil || tx.FeeCap() != nil || tx.GasPrice() == nil) {
+	if !eip1559 && (tx.GasPremium() != nil || tx.FeeCap() != nil || tx.GasPrice() == nil) {
 		return core.ErrTxIsEIP1559
 	}
 	if tx.GasPrice() != nil && (tx.GasPremium() != nil || tx.FeeCap() != nil) {

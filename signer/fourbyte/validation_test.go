@@ -60,7 +60,7 @@ func dummyTxArgs(t txtestcase) *core.SendTxArgs {
 		To:       to,
 		Value:    value,
 		Nonce:    n,
-		GasPrice: gasPrice,
+		GasPrice: &gasPrice,
 		Gas:      gas,
 		Data:     data,
 		Input:    input,
