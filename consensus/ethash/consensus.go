@@ -170,7 +170,7 @@ func (ethash *Ethash) VerifyHeaders(chain consensus.ChainReader, headers []*type
 	return abort, errorsOut
 }
 
-// VerifyTransactions verifies a the transactions in a block do not exceed the per-transaction gas limit
+// VerifyTransactions verifies that the transactions in a block do not exceed the per-transaction gas limit
 func (*Ethash) VerifyTransactions(chain consensus.ChainReader, block *types.Block) error {
 	if chain.Config().IsEIP1559(block.Number()) {
 		for _, tx := range block.Transactions() {

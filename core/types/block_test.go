@@ -18,16 +18,12 @@ package types
 
 import (
 	"bytes"
-
-	"github.com/ethereum/go-ethereum/params"
-
-	//"fmt"
-	//"github.com/ethereum/go-ethereum/params"
 	"math/big"
 	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
