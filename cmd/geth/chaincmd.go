@@ -57,6 +57,18 @@ participating.
 
 It expects the genesis file as argument.`,
 	}
+	dumpGenesisCommand = cli.Command{
+		Action:    utils.MigrateFlags(dumpGenesis),
+		Name:      "dumpgenesis",
+		Usage:     "Dumps genesis block JSON configuration to stdout",
+		ArgsUsage: "",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
+		Description: `
+The dumpgenesis command dumps the genesis block configuration in JSON format to stdout.`,
+	}
 	importCommand = cli.Command{
 		Action:    utils.MigrateFlags(importChain),
 		Name:      "import",
@@ -223,6 +235,17 @@ func initGenesis(ctx *cli.Context) error {
 		}
 		chaindb.Close()
 		log.Info("Successfully wrote genesis state", "database", name, "hash", hash)
+	}
+	return nil
+}
+
+func dumpGenesis(ctx *cli.Context) error {
+	genesis := utils.MakeGenesis(ctx)
+	if genesis == nil {
+		genesis = core.DefaultGenesisBlock()
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(genesis); err != nil {
+		utils.Fatalf("could not encode genesis")
 	}
 	return nil
 }
