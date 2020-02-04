@@ -62,7 +62,7 @@ func (wpr *wasmPrecompileResolver) ResolveGlobal(module, field string) int64 {
 	panic(fmt.Sprintf("Should not try to resolve globals, asked for %s", field))
 }
 
-func newWasmPrecompile(code []byte) *wasmPrecompile {
+func newWasmPrecompile(code []byte, orig PrecompiledContract, num int) *wasmPrecompile {
 	vm, err := life_exec.NewVirtualMachine(code, life_exec.VMConfig{DisableFloatingPoint: true}, &wasmPrecompileResolver{}, nil)
 	if err != nil {
 		panic(fmt.Sprintf("error loading a precompile: %v", err))
@@ -76,13 +76,14 @@ func newWasmPrecompile(code []byte) *wasmPrecompile {
 	return &wasmPrecompile{
 		entrypoint: entrypoint,
 		vm:         vm,
+		original:   orig,
+		num:        num,
 	}
 }
 
 func (wp *wasmPrecompile) RequiredGas(input []byte) uint64 {
-	return 0
+	return wp.original.RequiredGas(input)
 }
-
 
 func (wp *wasmPrecompile) Run(input []byte) ([]byte, error) {
 	// The expected format of the input is:
@@ -128,39 +129,39 @@ func (wp *wasmPrecompile) Run(input []byte) ([]byte, error) {
 // PrecompiledContractsHomestead contains the default set of pre-compiled Ethereum
 // contracts used in the Frontier and Homestead releases.
 var PrecompiledContractsHomestead = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
+	common.BytesToAddress([]byte{1}): newWasmPrecompile(wasmEcrecover, &ecrecover{}, 1),
+	common.BytesToAddress([]byte{2}): newWasmPrecompile(wasmSha256Hash, &sha256hash{}, 2),
+	common.BytesToAddress([]byte{3}): newWasmPrecompile(wasmRipemd160hash, &ripemd160hash{}, 3),
+	common.BytesToAddress([]byte{4}): newWasmPrecompile(wasmIdentity, &dataCopy{}, 4),
 }
 
 // PrecompiledContractsByzantium contains the default set of pre-compiled Ethereum
 // contracts used in the Byzantium release.
 var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{},
-	common.BytesToAddress([]byte{6}): &bn256AddByzantium{},
-	common.BytesToAddress([]byte{7}): &bn256ScalarMulByzantium{},
-	common.BytesToAddress([]byte{8}): &bn256PairingByzantium{},
+	common.BytesToAddress([]byte{1}): newWasmPrecompile(wasmEcrecover, &ecrecover{}, 1),
+	common.BytesToAddress([]byte{2}): newWasmPrecompile(wasmSha256Hash, &sha256hash{}, 2),
+	common.BytesToAddress([]byte{3}): newWasmPrecompile(wasmRipemd160hash, &ripemd160hash{}, 3),
+	common.BytesToAddress([]byte{4}): newWasmPrecompile(wasmIdentity, &dataCopy{}, 4),
+	common.BytesToAddress([]byte{5}): newWasmPrecompile(wasmExpmod, &bigModExp{}, 5),
+	common.BytesToAddress([]byte{6}): newWasmPrecompile(wasmEcadd, &bn256AddByzantium{}, 6),
+	common.BytesToAddress([]byte{7}): newWasmPrecompile(wasmEcmul, &bn256ScalarMulByzantium{}, 7),
+	common.BytesToAddress([]byte{8}): newWasmPrecompile(wasmEcpairing, &bn256PairingByzantium{}, 8),
 }
 
 // PrecompiledContractsIstanbul contains the default set of pre-compiled Ethereum
 // contracts used in the Istanbul release.
 var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}):  &ecrecover{},
-	common.BytesToAddress([]byte{2}):  &sha256hash{},
-	common.BytesToAddress([]byte{3}):  &ripemd160hash{},
-	common.BytesToAddress([]byte{4}):  &dataCopy{},
-	common.BytesToAddress([]byte{5}):  &bigModExp{},
-	common.BytesToAddress([]byte{6}):  &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}):  &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}):  &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{1}):  newWasmPrecompile(wasmEcrecover, &ecrecover{}, 1),
+	common.BytesToAddress([]byte{2}):  newWasmPrecompile(wasmSha256Hash, &sha256hash{}, 2),
+	common.BytesToAddress([]byte{3}):  newWasmPrecompile(wasmRipemd160hash, &ripemd160hash{}, 3),
+	common.BytesToAddress([]byte{4}):  newWasmPrecompile(wasmIdentity, &dataCopy{}, 4),
+	common.BytesToAddress([]byte{5}):  newWasmPrecompile(wasmExpmod, &bigModExp{}, 5),
+	common.BytesToAddress([]byte{6}):  newWasmPrecompile(wasmEcadd, &bn256AddIstanbul{}, 6),
+	common.BytesToAddress([]byte{7}):  newWasmPrecompile(wasmEcmul, &bn256ScalarMulIstanbul{}, 7),
+	common.BytesToAddress([]byte{8}):  newWasmPrecompile(wasmEcpairing, &bn256PairingByzantium{}, 8),
 	common.BytesToAddress([]byte{9}):  &blake2F{},
-	common.BytesToAddress([]byte{10}): newWasmPrecompile(wasmVerify),
-	common.BytesToAddress([]byte{11}): newWasmPrecompile(wasmUpdate),
+	common.BytesToAddress([]byte{10}): newWasmPrecompile(wasmVerify, nil, 10),
+	common.BytesToAddress([]byte{11}): newWasmPrecompile(wasmUpdate, nil, 11),
 }
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
