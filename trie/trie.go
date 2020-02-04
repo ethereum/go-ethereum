@@ -51,7 +51,7 @@ type Trie struct {
 	// Keep track of the number leafs which have been inserted since the last
 	// hashing operation. This number will not directly map to the number of
 	// actually unhashed nodes
-	unhashedCount int
+	unhashed int
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -167,7 +167,7 @@ func (t *Trie) Update(key, value []byte) {
 //
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryUpdate(key, value []byte) error {
-	t.unhashedCount++
+	t.unhashed++
 	k := keybytesToHex(key)
 	if len(value) != 0 {
 		_, n, err := t.insert(t.root, nil, k, valueNode(value))
@@ -264,7 +264,7 @@ func (t *Trie) Delete(key []byte) {
 // TryDelete removes any existing value for key from the trie.
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryDelete(key []byte) error {
-	t.unhashedCount++
+	t.unhashed++
 	k := keybytesToHex(key)
 	_, n, err := t.delete(t.root, nil, k)
 	if err != nil {
@@ -467,9 +467,9 @@ func (t *Trie) hashRoot(db *Database) (node, node, error) {
 		return hashNode(emptyRoot.Bytes()), nil, nil
 	}
 	// If the number of changes is below 100, we let one thread handle it
-	h := newHasher(t.unhashedCount >= 100)
+	h := newHasher(t.unhashed >= 100)
 	defer returnHasherToPool(h)
 	hashed, cached := h.hash(t.root, true)
-	t.unhashedCount = 0
+	t.unhashed = 0
 	return hashed, cached, nil
 }
