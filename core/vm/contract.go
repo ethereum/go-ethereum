@@ -83,7 +83,7 @@ func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uin
 
 func (c *Contract) validJumpdest(dest *big.Int) bool {
 	udest := dest.Uint64()
-	// PC cannot go beyond len(code) and certainly can't be bigger than 63bits.
+	// PC cannot go beyond len(code) and certainly can't be bigger than 63 bits.
 	// Don't bother checking for JUMPDEST in that case.
 	if dest.BitLen() >= 63 || udest >= uint64(len(c.Code)) {
 		return false
@@ -115,6 +115,34 @@ func (c *Contract) validJumpdest(dest *big.Int) bool {
 	// However, we don't save it within the parent context
 	c.analysis = codeBitmap(c.Code)
 	return c.analysis.codeSegment(udest)
+}
+
+
+func (c *Contract) validJumpSubdest(udest uint64) bool {
+	// PC cannot go beyond len(code) and certainly can't be bigger than 63 bits.
+	// Don't bother checking for BEGINSUB in that case.
+	if int64(udest) < 0 || udest >= uint64(len(c.Code)) {
+		return false
+	}
+	// Only BEGINSUBs allowed for destinations
+	if OpCode(c.Code[udest]) != BEGINSUB {
+		return false
+	}
+   return true;
+}
+
+func (c *Contract) validReturndest(udest uint64) bool {
+	// PC cannot go beyond len(code) and certainly can't be bigger than 63 bits.
+	// Don't bother checking for JUMPSUB in that case.
+	if int64(udest) < 0 || udest >= uint64(len(c.Code)) {
+		return false
+	}
+	// Only JUMPSUBs allowed for subroutine returns
+	if OpCode(c.Code[udest]) != JUMPSUB {
+		return false
+	}
+   // TODO(gcolvin) is the code hash analysis in validJumpdest necessary?
+   return true;
 }
 
 // AsDelegate sets the contract to be a delegate call and returns the current

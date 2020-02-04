@@ -664,6 +664,32 @@ func opJumpdest(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 	return nil, nil
 }
 
+func opBeginSub(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	return nil, nil
+}
+
+func opJumpSub(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	pos := stack.pop().Uint64()
+	if !contract.validJumpSubdest(pos) {
+		return nil, errInvalidJump
+	}
+	callContext.rstack.push(*pc)
+	*pc = pos
+
+	// TODO(gcolvin) is this necessary?
+	// interpreter.intPool.put(pos)
+	return nil, nil
+}
+
+func opReturnSub(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	pos := callContext.rstack.pop()
+	if !contract.validReturndest(pos) {
+		return nil, errInvalidJump
+	}
+	*pc = pos
+	return nil, nil
+}
+
 func opPc(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	callContext.stack.push(interpreter.intPool.get().SetUint64(*pc))
 	return nil, nil

@@ -198,9 +198,16 @@ const (
 	LOG4
 )
 
+// 0xb0 range - subroutine ops.
+const (
+	JUMPSUB   OpCode = 0xb3
+	BEGINSUB  OpCode = 0xb5
+	RETURNSUB OpCode = 0xb7
+)
+
 // unofficial opcodes used for parsing.
 const (
-	PUSH OpCode = 0xb0 + iota
+	PUSH OpCode = 0xc0 + iota
 	DUP
 	SWAP
 )
@@ -370,6 +377,11 @@ var opCodeToString = map[OpCode]string{
 	LOG3:   "LOG3",
 	LOG4:   "LOG4",
 
+	// 0xb0 range
+	BEGINSUB:  "BEGINSUB",
+	JUMPSUB:   "JUMPSUB",
+	RETURNSUB: "RETURNSUB",
+
 	// 0xf0 range.
 	CREATE:       "CREATE",
 	CALL:         "CALL",
@@ -530,6 +542,8 @@ var stringToOp = map[string]OpCode{
 	"LOG2":           LOG2,
 	"LOG3":           LOG3,
 	"LOG4":           LOG4,
+	"JUMPSUB":        JUMPSUB,
+	"RETURNSUB":      RETURNSUB,
 	"CREATE":         CREATE,
 	"CREATE2":        CREATE2,
 	"CALL":           CALL,
