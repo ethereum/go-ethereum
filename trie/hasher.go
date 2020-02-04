@@ -46,8 +46,9 @@ func (b *sliceBuffer) Reset() {
 // hasher is a type used for the trie Hash operation. A hasher has some
 // internal preallocated temp space
 type hasher struct {
-	sha keccakState
-	tmp sliceBuffer
+	sha      keccakState
+	tmp      sliceBuffer
+	parallel bool // Whether to use paralallel threads when hashing
 }
 
 // hasherPool holds pureHashers
@@ -60,8 +61,9 @@ var hasherPool = sync.Pool{
 	},
 }
 
-func newHasher() *hasher {
+func newHasher(parallel bool) *hasher {
 	h := hasherPool.Get().(*hasher)
+	h.parallel = parallel
 	return h
 }
 
@@ -126,14 +128,31 @@ func (h *hasher) hashFullNodeChildren(n *fullNode) (collapsed *fullNode, cached 
 	// Hash the full node's children, caching the newly hashed subtrees
 	cached = n.copy()
 	collapsed = n.copy()
-	for i := 0; i < 16; i++ {
-		if child := n.Children[i]; child != nil {
-			collapsed.Children[i], cached.Children[i] = h.hash(child, false)
-		} else {
-			collapsed.Children[i] = nilValueNode
+	if h.parallel {
+		var wg sync.WaitGroup
+		wg.Add(16)
+		for i := 0; i < 16; i++ {
+			go func(i int) {
+				hasher := newHasher(false)
+				if child := n.Children[i]; child != nil {
+					collapsed.Children[i], cached.Children[i] = hasher.hash(child, false)
+				} else {
+					collapsed.Children[i] = nilValueNode
+				}
+				returnHasherToPool(hasher)
+				wg.Done()
+			}(i)
+		}
+		wg.Wait()
+	} else {
+		for i := 0; i < 16; i++ {
+			if child := n.Children[i]; child != nil {
+				collapsed.Children[i], cached.Children[i] = h.hash(child, false)
+			} else {
+				collapsed.Children[i] = nilValueNode
+			}
 		}
 	}
-	cached.Children[16] = n.Children[16]
 	return collapsed, cached
 }
 
