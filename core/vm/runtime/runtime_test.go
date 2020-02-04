@@ -294,10 +294,10 @@ func TestBlockhash(t *testing.T) {
 		BlockNumber: new(big.Int).Set(header.Number),
 	})
 	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
+		t.Fatalf("expected no error, got %v", err)
 	}
 	if len(ret) != 96 {
-		t.Fatalf("Expected returndata to be 96 bytes, got %d", len(ret))
+		t.Fatalf("expected returndata to be 96 bytes, got %d", len(ret))
 	}
 
 	zero := new(big.Int).SetBytes(ret[0:32])
