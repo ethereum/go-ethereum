@@ -62,8 +62,11 @@ func (n *proofList) Delete(key []byte) error {
 // * Contracts
 // * Accounts
 type StateDB struct {
-	db   Database
-	trie Trie
+	db           Database
+	prefetcher   *TriePrefetcher
+	originalRoot common.Hash // The pre-state root, before any changes were made
+	trie         Trie
+	hasher       crypto.KeccakState
 
 	snaps         *snapshot.Tree
 	snap          snapshot.Snapshot
@@ -125,6 +128,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	sdb := &StateDB{
 		db:                  db,
 		trie:                tr,
+		originalRoot:        root,
 		snaps:               snaps,
 		stateObjects:        make(map[common.Address]*stateObject),
 		stateObjectsPending: make(map[common.Address]struct{}),
@@ -133,6 +137,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		preimages:           make(map[common.Hash][]byte),
 		journal:             newJournal(),
 		accessList:          newAccessList(),
+		hasher:              crypto.NewKeccakState(),
 	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
@@ -142,6 +147,13 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		}
 	}
 	return sdb, nil
+}
+
+func (s *StateDB) UsePrefetcher(prefetcher *TriePrefetcher) {
+	if prefetcher != nil {
+		s.prefetcher = prefetcher
+		s.prefetcher.Resume(s.originalRoot)
+	}
 }
 
 // setError remembers the first non-nil error it is called with.
@@ -532,7 +544,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 			defer func(start time.Time) { s.SnapshotAccountReads += time.Since(start) }(time.Now())
 		}
 		var acc *snapshot.Account
-		if acc, err = s.snap.Account(crypto.Keccak256Hash(addr.Bytes())); err == nil {
+		if acc, err = s.snap.Account(crypto.HashData(s.hasher, addr.Bytes())); err == nil {
 			if acc == nil {
 				return nil
 			}
@@ -675,6 +687,7 @@ func (s *StateDB) Copy() *StateDB {
 		logSize:             s.logSize,
 		preimages:           make(map[common.Hash][]byte, len(s.preimages)),
 		journal:             newJournal(),
+		hasher:              crypto.NewKeccakState(),
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
@@ -760,6 +773,7 @@ func (s *StateDB) GetRefund() uint64 {
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
+	var addressesToPrefetch []common.Address
 	for addr := range s.journal.dirties {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
@@ -788,7 +802,17 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		}
 		s.stateObjectsPending[addr] = struct{}{}
 		s.stateObjectsDirty[addr] = struct{}{}
+		// At this point, also ship the address off to the precacher. The precacher
+		// will start loading tries, and when the change is eventually committed,
+		// the commit-phase will be a lot faster
+		if s.prefetcher != nil {
+			addressesToPrefetch = append(addressesToPrefetch, addr)
+		}
 	}
+	if s.prefetcher != nil {
+		s.prefetcher.PrefetchAddresses(addressesToPrefetch)
+	}
+
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
 }
@@ -800,6 +824,21 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
 
+	// Now we're about to start to write changes to the trie. The trie is so
+	// far _untouched_. We can check with the prefetcher, if it can give us
+	// a trie which has the same root, but also has some content loaded into it.
+	// If so, use that one instead.
+	if s.prefetcher != nil {
+		s.prefetcher.Pause()
+		// We only want to do this _once_, if someone calls IntermediateRoot again,
+		// we shouldn't fetch the trie again
+		if s.originalRoot != (common.Hash{}) {
+			if trie := s.prefetcher.GetTrie(s.originalRoot); trie != nil {
+				s.trie = trie
+			}
+			s.originalRoot = common.Hash{}
+		}
+	}
 	for addr := range s.stateObjectsPending {
 		obj := s.stateObjects[addr]
 		if obj.deleted {
