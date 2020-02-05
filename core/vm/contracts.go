@@ -17,11 +17,14 @@
 package vm
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -48,11 +51,68 @@ type PrecompiledContract interface {
 type wasmPrecompile struct {
 	vm         *life_exec.VirtualMachine
 	entrypoint int
+	original   PrecompiledContract
+	num        int
+	totalGas   uint64
+	input      []byte
+	retData    []byte
 }
 
-type wasmPrecompileResolver struct{}
+type wasmPrecompileResolver struct {
+	wp *wasmPrecompile
+}
 
 func (wpr *wasmPrecompileResolver) ResolveFunc(module, field string) life_exec.FunctionImport {
+	if module != "ethereum" {
+		panic(fmt.Sprintf("unknown module %s", module))
+	}
+	switch field {
+	case "useGas":
+		return func(vm *life_exec.VirtualMachine) int64 {
+			frame := vm.GetCurrentFrame()
+			gas := uint64(frame.Locals[0])
+			if gas > wpr.wp.totalGas {
+				vm.Exited = true
+				return 0
+			}
+
+			wpr.wp.totalGas -= gas
+
+			return 0
+		}
+	case "callDataCopy":
+		return func(vm *life_exec.VirtualMachine) int64 {
+			frame := vm.GetCurrentFrame()
+			offset := frame.Locals[0]
+			start := frame.Locals[1]
+			end := start + frame.Locals[2]
+			copy(vm.Memory[offset:], wpr.wp.input[start:end])
+			return 0
+		}
+	case "getCallDataSize":
+		return func(vm *life_exec.VirtualMachine) int64 {
+			frame := vm.GetCurrentFrame()
+			frame.Regs[frame.ReturnReg] = int64(len(wpr.wp.input))
+			return int64(len(wpr.wp.input))
+		}
+	case "finish", "revert":
+		return func(vm *life_exec.VirtualMachine) int64 {
+			frame := vm.GetCurrentFrame()
+			vm.Exited = true
+			if field == "finish" {
+				vm.ExitError = 0
+			} else {
+				vm.ExitError = 2
+			}
+			offset := frame.Locals[0]
+			length := frame.Locals[1]
+			wpr.wp.retData = make([]byte, int64(length))
+			copy(wpr.wp.retData, vm.Memory[offset:offset+length])
+			return 0
+		}
+	default:
+		panic(fmt.Sprintf("Unknown field %s", field))
+	}
 	return func(vm *life_exec.VirtualMachine) int64 {
 		return 0
 	}
@@ -63,7 +123,11 @@ func (wpr *wasmPrecompileResolver) ResolveGlobal(module, field string) int64 {
 }
 
 func newWasmPrecompile(code []byte, orig PrecompiledContract, num int) *wasmPrecompile {
-	vm, err := life_exec.NewVirtualMachine(code, life_exec.VMConfig{DisableFloatingPoint: true}, &wasmPrecompileResolver{}, nil)
+	wp := &wasmPrecompile{
+		original: orig,
+		num:      num,
+	}
+	vm, err := life_exec.NewVirtualMachine(code, life_exec.VMConfig{DisableFloatingPoint: true}, &wasmPrecompileResolver{wp: wp}, nil)
 	if err != nil {
 		panic(fmt.Sprintf("error loading a precompile: %v", err))
 	}
@@ -72,13 +136,10 @@ func newWasmPrecompile(code []byte, orig PrecompiledContract, num int) *wasmPrec
 	if !ok {
 		panic("Wasm doesn't have a main function")
 	}
+	wp.entrypoint = entrypoint
+	wp.vm = vm
 
-	return &wasmPrecompile{
-		entrypoint: entrypoint,
-		vm:         vm,
-		original:   orig,
-		num:        num,
-	}
+	return wp
 }
 
 func (wp *wasmPrecompile) RequiredGas(input []byte) uint64 {
@@ -86,43 +147,69 @@ func (wp *wasmPrecompile) RequiredGas(input []byte) uint64 {
 }
 
 func (wp *wasmPrecompile) Run(input []byte) ([]byte, error) {
-	// The expected format of the input is:
-	// - account list (rlp)
-	// - proof (rlp)
-	// this uses rlp.Split to separate the two items
-	_, addrList, serializedProof, err := rlp.Split(input)
-
+	retOrig, err := wp.original.Run(input)
 	if err != nil {
 		return nil, err
 	}
-
-	valid, ok := wp.vm.GetGlobalExport("valid")
-	if !ok || valid > len(wp.vm.Globals) || valid < 0 {
-		return nil, fmt.Errorf("Could not find `valid` in Wasm blob")
 	}
 
-	addrlist, ok := wp.vm.GetGlobalExport("address_list")
-	if !ok || addrlist > len(wp.vm.Globals) || addrlist < 0 {
-		return nil, fmt.Errorf("Could not find `address_list` in Wasm blob")
 	}
-	spAL := binary.LittleEndian.Uint32(wp.vm.Memory[wp.vm.Globals[addrlist]:])
-	// Split removes the first byte, which is required by the contract. Get it
-	// from the input.
-	copy(wp.vm.Memory[spAL:], input[:len(addrList)])
+	// Set the maximum gas so that the contract won't die when calling useGas
+	wp.totalGas = math.MaxUint64
 
-	proof, ok := wp.vm.GetGlobalExport("serialized_proof")
-	if !ok || proof > len(wp.vm.Globals) || proof < 0 {
-		return nil, fmt.Errorf("Could not find `serialized_proof` in Wasm blob")
-	}
-	spPtr := binary.LittleEndian.Uint32(wp.vm.Memory[wp.vm.Globals[proof]:])
-	copy(wp.vm.Memory[spPtr:], serializedProof)
+	var ret int64
+	if wp.num >= 10 {
+		// The expected format of the input is:
+		// - account list (rlp)
+		// - proof (rlp)
+		// this uses rlp.Split to separate the two items
+		_, addrList, serializedProof, err := rlp.Split(input)
+		if err != nil {
+			return nil, err
+		}
 
-	ret, err := wp.vm.Run(wp.entrypoint)
-	if err != nil || ret < 0 {
-		wp.vm.PrintStackTrace()
-		frame := wp.vm.GetCurrentFrame()
+		valid, ok := wp.vm.GetGlobalExport("valid")
+		if !ok || valid > len(wp.vm.Globals) || valid < 0 {
+			return nil, fmt.Errorf("Could not find `valid` in Wasm blob")
+		}
+
+		addrlist, ok := wp.vm.GetGlobalExport("address_list")
+		if !ok || addrlist > len(wp.vm.Globals) || addrlist < 0 {
+			return nil, fmt.Errorf("Could not find `address_list` in Wasm blob")
+		}
+		spAL := binary.LittleEndian.Uint32(wp.vm.Memory[wp.vm.Globals[addrlist]:])
+		// Split removes the first byte, which is required by the contract. Get it
+		// from the input.
+		copy(wp.vm.Memory[spAL:], input[:len(addrList)])
+
+		proof, ok := wp.vm.GetGlobalExport("serialized_proof")
+		if !ok || proof > len(wp.vm.Globals) || proof < 0 {
+			return nil, fmt.Errorf("Could not find `serialized_proof` in Wasm blob")
+		}
+		spPtr := binary.LittleEndian.Uint32(wp.vm.Memory[wp.vm.Globals[proof]:])
+		copy(wp.vm.Memory[spPtr:], serializedProof)
+		startNew := time.Now().Unix()
+		ret, err = wp.vm.Run(wp.entrypoint)
+		endNew := time.Now().Unix()
+		if err != nil || ret < 0 {
+			wp.vm.PrintStackTrace()
+			frame := wp.vm.GetCurrentFrame()
+		}
+		validPtr := binary.LittleEndian.Uint32(wp.vm.Memory[wp.vm.Globals[valid]:])
+	} else {
+		wp.input = input
+		startNew := time.Now().Unix()
+		ret, err = wp.vm.Run(wp.entrypoint)
+		endNew := time.Now().Unix()
+		if err != nil && err.Error() != "0" {
+			panic(err)
+		}
 	}
-	validPtr := binary.LittleEndian.Uint32(wp.vm.Memory[wp.vm.Globals[valid]:])
+
+	if !bytes.Equal(wp.retData, retOrig) {
+		panic(fmt.Sprintf("difference in output: %v != %v", wp.retData, retOrig))
+	}
+
 	return nil, err
 }
 
