@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/trie"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -254,6 +255,10 @@ func importChain(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
+	// Start metrics export if enabled
+	utils.SetupMetrics(ctx)
+	// Start system runtime metrics collection
+	go metrics.CollectProcessMetrics(3 * time.Second)
 	stack := makeFullNode(ctx)
 	defer stack.Close()
 
