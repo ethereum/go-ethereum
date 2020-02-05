@@ -303,16 +303,8 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
 	}
-	// Retrieve the snapshot storage map for the object
+	// The snapshot storage map for the object
 	var storage map[common.Hash][]byte
-	if s.db.snap != nil {
-		// Retrieve the old storage map, if available, create a new one otherwise
-		storage = s.db.snapStorage[s.addrHash]
-		if storage == nil {
-			storage = make(map[common.Hash][]byte)
-			s.db.snapStorage[s.addrHash] = storage
-		}
-	}
 	// Insert all the pending updates into the trie
 	tr := s.getTrie(db)
 	for key, value := range s.pendingStorage {
@@ -331,7 +323,14 @@ func (s *stateObject) updateTrie(db Database) Trie {
 			s.setError(tr.TryUpdate(key[:], v))
 		}
 		// If state snapshotting is active, cache the data til commit
-		if storage != nil {
+		if s.db.snap != nil {
+			if storage == nil {
+				// Retrieve the old storage map, if available, create a new one otherwise
+				if storage = s.db.snapStorage[s.addrHash]; storage == nil {
+					storage = make(map[common.Hash][]byte)
+					s.db.snapStorage[s.addrHash] = storage
+				}
+			}
 			storage[crypto.Keccak256Hash(key[:])] = v // v will be nil if value is 0x00
 		}
 	}
