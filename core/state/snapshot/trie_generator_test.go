@@ -28,16 +28,16 @@ import (
 
 func generateTrie(it AccountIterator, generator *trieGenerator) common.Hash {
 	var (
-		in  = make(chan leaf)        // chan to pass leafs
+		in  = make(chan leaf)        // chan to pass leaves
 		out = make(chan common.Hash) // chan to collect result
 		wg  sync.WaitGroup
 	)
 	wg.Add(1)
 	go func() {
-		generator.Generate2(in, out)
+		generator.Generate3(in, out)
 		wg.Done()
 	}()
-	// Feed leafs
+	// Feed leaves
 	for it.Next() {
 		in <- leaf{it.Hash(), it.Account()}
 	}
