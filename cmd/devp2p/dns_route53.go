@@ -171,7 +171,7 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 		}
 
 		prevRecords, exists := existing[path]
-		prevValue := combineTXT(prevRecords.values)
+		prevValue := strings.Join(prevRecords.values, "")
 		if !exists {
 			// Entry is unknown, push a new one
 			log.Info(fmt.Sprintf("Creating %s = %q", path, val))
@@ -191,8 +191,8 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 			continue
 		}
 		// Stale entry, nuke it.
-		log.Info(fmt.Sprintf("Deleting %s = %q", path, combineTXT(set.values)))
-		changes = append(changes, newTXTChange("DELETE", path, set.ttl, set.values))
+		log.Info(fmt.Sprintf("Deleting %s = %q", path, strings.Join(set.values, "")))
+		changes = append(changes, newTXTChange("DELETE", path, set.ttl, set.values...))
 	}
 
 	sortChanges(changes)
@@ -263,7 +263,7 @@ func (c *route53Client) collectRecords(name string) (map[string]recordSet, error
 }
 
 // newTXTChange creates a change to a TXT record.
-func newTXTChange(action, name string, ttl int64, values []string) *route53.Change {
+func newTXTChange(action, name string, ttl int64, values ...string) *route53.Change {
 	var c route53.Change
 	var r route53.ResourceRecordSet
 	var rrs []*route53.ResourceRecord
@@ -288,28 +288,16 @@ func isSubdomain(name, domain string) bool {
 	return strings.HasSuffix("."+name, "."+domain)
 }
 
-// combineTXT concatenates the given quoted strings into a single unquoted string.
-func combineTXT(values []string) string {
-	result := ""
-	for _, v := range values {
-		if v[0] == '"' {
-			v = v[1 : len(v)-1]
-		}
-		result += v
-	}
-	return result
-}
-
 // splitTXT splits value into a list of quoted 255-character strings.
-func splitTXT(value string) []string {
-	var result []string
+func splitTXT(value string) string {
+	var result strings.Builder
 	for len(value) > 0 {
 		rlen := len(value)
 		if rlen > 253 {
 			rlen = 253
 		}
-		result = append(result, strconv.Quote(value[:rlen]))
+		result.WriteString(strconv.Quote(value[:rlen]))
 		value = value[rlen:]
 	}
-	return result
+	return result.String()
 }
