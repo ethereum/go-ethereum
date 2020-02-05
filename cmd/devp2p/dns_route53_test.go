@@ -28,8 +28,7 @@ import (
 func TestRoute53ChangeSort(t *testing.T) {
 	testTree0 := map[string]recordSet{
 		"2kfjogvxdqtxxugbh7gs7naaai.n": {ttl: 3333, values: []string{
-			`"enr:-HW4QO1ml1DdXLeZLsUxewnthhUy8eROqkDyoMTyavfks9JlYQIlMFEUoM78PovJDPQrAkrb3LRJ-"`,
-			`"vtrymDguKCOIAWAgmlkgnY0iXNlY3AyNTZrMaEDffaGfJzgGhUif1JqFruZlYmA31HzathLSWxfbq_QoQ4"`,
+			`"enr:-HW4QO1ml1DdXLeZLsUxewnthhUy8eROqkDyoMTyavfks9JlYQIlMFEUoM78PovJDPQrAkrb3LRJ-""vtrymDguKCOIAWAgmlkgnY0iXNlY3AyNTZrMaEDffaGfJzgGhUif1JqFruZlYmA31HzathLSWxfbq_QoQ4"`,
 		}},
 		"fdxn3sn67na5dka4j2gok7bvqi.n": {ttl: treeNodeTTL, values: []string{`"enrtree-branch:"`}},
 		"n":                            {ttl: rootTTL, values: []string{`"enrtree-root:v1 e=2KFJOGVXDQTXXUGBH7GS7NAAAI l=FDXN3SN67NA5DKA4J2GOK7BVQI seq=0 sig=v_-J_q_9ICQg5ztExFvLQhDBGMb0lZPJLhe3ts9LAcgqhOhtT3YFJsl8BWNDSwGtamUdR-9xl88_w-X42SVpjwE"`}},
@@ -116,8 +115,7 @@ func TestRoute53ChangeSort(t *testing.T) {
 			ResourceRecordSet: &route53.ResourceRecordSet{
 				Name: sp("2kfjogvxdqtxxugbh7gs7naaai.n"),
 				ResourceRecords: []*route53.ResourceRecord{
-					{Value: sp(`"enr:-HW4QO1ml1DdXLeZLsUxewnthhUy8eROqkDyoMTyavfks9JlYQIlMFEUoM78PovJDPQrAkrb3LRJ-"`)},
-					{Value: sp(`"vtrymDguKCOIAWAgmlkgnY0iXNlY3AyNTZrMaEDffaGfJzgGhUif1JqFruZlYmA31HzathLSWxfbq_QoQ4"`)},
+					{Value: sp(`"enr:-HW4QO1ml1DdXLeZLsUxewnthhUy8eROqkDyoMTyavfks9JlYQIlMFEUoM78PovJDPQrAkrb3LRJ-""vtrymDguKCOIAWAgmlkgnY0iXNlY3AyNTZrMaEDffaGfJzgGhUif1JqFruZlYmA31HzathLSWxfbq_QoQ4"`)},
 				},
 				TTL:  ip(3333),
 				Type: sp("TXT"),
