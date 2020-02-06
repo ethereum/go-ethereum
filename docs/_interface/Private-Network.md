@@ -249,6 +249,9 @@ and will not attempt to connect to other nodes outside of the set IP range.
 
 ### Running Member Nodes
 
+Before running a member node, you have to initialize it with the same genesis file as
+used for the bootstrap node.
+
 With the bootnode operational and externally reachable (you can try `telnet <ip> <port>`
 to ensure it's indeed reachable), you can start more Geth nodes and connect them via the
 bootstrap node using the `--bootnodes` flag.
