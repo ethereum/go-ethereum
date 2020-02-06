@@ -17,11 +17,22 @@
 package eth
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+var knownDNSNetworks = map[common.Hash]string{
+	params.MainnetGenesisHash: "enrtree://AMBMWDM3J6UY3M32TMMROUNLX6Y3YTLVC3DC6HN2AVG5NHNSAXDW6@all.mainnet.nodes.ethflare.xyz",
+	params.TestnetGenesisHash: "enrtree://AMBMWDM3J6UY3M32TMMROUNLX6Y3YTLVC3DC6HN2AVG5NHNSAXDW6@all.ropsten.nodes.ethflare.xyz",
+	params.RinkebyGenesisHash: "enrtree://AMBMWDM3J6UY3M32TMMROUNLX6Y3YTLVC3DC6HN2AVG5NHNSAXDW6@all.rinkeby.nodes.ethflare.xyz",
+	params.GoerliGenesisHash:  "enrtree://AMBMWDM3J6UY3M32TMMROUNLX6Y3YTLVC3DC6HN2AVG5NHNSAXDW6@all.goerli.nodes.ethflare.xyz",
+}
 
 // ethEntry is the "eth" ENR entry which advertises eth protocol
 // on the discovery network.
@@ -37,6 +48,7 @@ func (e ethEntry) ENRKey() string {
 	return "eth"
 }
 
+// startEthEntryUpdate starts the ENR updater loop.
 func (eth *Ethereum) startEthEntryUpdate(ln *enode.LocalNode) {
 	var newHead = make(chan core.ChainHeadEvent, 10)
 	sub := eth.blockchain.SubscribeChainHeadEvent(newHead)
@@ -58,4 +70,21 @@ func (eth *Ethereum) startEthEntryUpdate(ln *enode.LocalNode) {
 
 func (eth *Ethereum) currentEthEntry() *ethEntry {
 	return &ethEntry{ForkID: forkid.NewID(eth.blockchain)}
+}
+
+// setupDiscovery creates the node discovery source for the eth protocol.
+func (eth *Ethereum) setupDiscovery(cfg *p2p.Config) (enode.Iterator, error) {
+	if cfg.NoDiscovery || eth.config.DisableDNSDiscovery {
+		return nil, nil
+	}
+	known := knownDNSNetworks[eth.blockchain.Genesis().Hash()]
+	urls := eth.config.DiscoveryURLs
+	if len(urls) == 0 {
+		if known == "" {
+			return nil, nil
+		}
+		urls = []string{known}
+	}
+	client := dnsdisc.NewClient(dnsdisc.Config{})
+	return client.NewIterator(urls...)
 }
