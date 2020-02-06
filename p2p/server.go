@@ -726,7 +726,7 @@ running:
 				// The handshakes are done and it passed all checks.
 				p := srv.launchPeer(c)
 				peers[c.node.ID()] = p
-				p.log.Debug("Adding p2p peer", "addr", p.RemoteAddr(), "peers", len(peers), "name", truncateName(c.name))
+				srv.log.Debug("Adding p2p peer", "peercount", len(peers), "id", p.ID(), "conn", c.flags, "addr", p.RemoteAddr(), "name", truncateName(c.name))
 				srv.dialsched.peerAdded(c)
 				if conn, ok := c.fd.(*meteredConn); ok {
 					conn.handshakeDone(p)
@@ -741,7 +741,7 @@ running:
 			// A peer disconnected.
 			d := common.PrettyDuration(mclock.Now() - pd.created)
 			delete(peers, pd.ID())
-			pd.log.Debug("Removing p2p peer", "addr", pd.RemoteAddr(), "peers", len(peers), "duration", d, "req", pd.requested, "err", pd.err)
+			srv.log.Debug("Removing p2p peer", "peercount", len(peers), "id", pd.ID(), "duration", d, "req", pd.requested, "err", pd.err)
 			srv.dialsched.peerRemoved(pd.rw)
 			if pd.Inbound() {
 				inboundCount--

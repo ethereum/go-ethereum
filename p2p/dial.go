@@ -39,6 +39,10 @@ const (
 	// private networks.
 	dialHistoryExpiration = inboundThrottleTime + 5*time.Second
 
+	// Config for the "Looking for peers" message.
+	dialStatsLogInterval = 10 * time.Second // printed at most this often
+	dialStatsPeerLimit   = 3                // but not if more than this many dialed peers
+
 	// Endpoint resolution is throttled with bounded backoff.
 	initialResolveDelay = 60 * time.Second
 	maxResolveDelay     = time.Hour
@@ -113,6 +117,10 @@ type dialScheduler struct {
 	history          expHeap
 	historyTimer     mclock.Timer
 	historyTimerTime mclock.AbsTime
+
+	// for logStats
+	lastStatsLog     mclock.AbsTime
+	doneSinceLastLog int
 }
 
 type dialSetupFunc func(net.Conn, connFlag, *enode.Node) error
@@ -162,6 +170,7 @@ func newDialScheduler(config dialConfig, it enode.Iterator, setupFunc dialSetupF
 		addPeerCh:   make(chan *conn),
 		remPeerCh:   make(chan *conn),
 	}
+	d.lastStatsLog = d.clock.Now()
 	d.ctx, d.cancel = context.WithCancel(context.Background())
 	d.wg.Add(2)
 	go d.readNodes(it)
@@ -225,6 +234,7 @@ loop:
 			nodesCh = nil
 		}
 		d.rearmHistoryTimer(historyExp)
+		d.logStats()
 
 		select {
 		case node := <-nodesCh:
@@ -238,6 +248,7 @@ loop:
 			id := task.dest.ID()
 			delete(d.dialing, id)
 			d.updateStaticPool(id)
+			d.doneSinceLastLog++
 
 		case c := <-d.addPeerCh:
 			if c.is(dynDialedConn) || c.is(staticDialedConn) {
@@ -310,6 +321,21 @@ func (d *dialScheduler) readNodes(it enode.Iterator) {
 		case <-d.ctx.Done():
 		}
 	}
+}
+
+// logStats prints dialer statistics to the log. The message is suppressed when enough
+// peers are connected because users should only see it while their client is starting up
+// or comes back online.
+func (d *dialScheduler) logStats() {
+	now := d.clock.Now()
+	if d.lastStatsLog.Add(dialStatsLogInterval) > now {
+		return
+	}
+	if d.dialPeers < dialStatsPeerLimit && d.dialPeers < d.maxDialPeers {
+		d.log.Info("Looking for peers", "peercount", len(d.peers), "tried", d.doneSinceLastLog, "static", len(d.static))
+	}
+	d.doneSinceLastLog = 0
+	d.lastStatsLog = now
 }
 
 // rearmHistoryTimer configures d.historyTimer to fire when the
