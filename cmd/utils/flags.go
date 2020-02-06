@@ -658,6 +658,10 @@ var (
 		Name:  "netrestrict",
 		Usage: "Restricts network communication to the given IP networks (CIDR masks)",
 	}
+	DisableDNSFlag = cli.BoolFlag{
+		Name:  "nodns",
+		Usage: "disables DNS-based node discovery",
+	}
 
 	// ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
@@ -1476,6 +1480,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	}
 	if ctx.GlobalIsSet(RPCGlobalGasCap.Name) {
 		cfg.RPCGasCap = new(big.Int).SetUint64(ctx.GlobalUint64(RPCGlobalGasCap.Name))
+	}
+	if ctx.GlobalIsSet(DisableDNSFlag.Name) {
+		cfg.DisableDNSDiscovery = ctx.GlobalBool(DisableDNSFlag.Name)
 	}
 
 	// Override any default configs for hard coded networks.
