@@ -25,14 +25,16 @@ var _ Clock = System{}
 var _ Clock = new(Simulated)
 
 func TestSimulatedAfter(t *testing.T) {
-	const timeout = 30 * time.Minute
-	const adv = time.Minute
-
 	var (
-		c   Simulated
-		end = c.Now().Add(timeout)
-		ch  = c.After(timeout)
+		timeout = 30 * time.Minute
+		offset  = 99 * time.Hour
+		adv     = 11 * time.Minute
+		c       Simulated
 	)
+	c.Run(offset)
+
+	end := c.Now().Add(timeout)
+	ch := c.After(timeout)
 	for c.Now() < end.Add(-adv) {
 		c.Run(adv)
 		select {
@@ -45,8 +47,8 @@ func TestSimulatedAfter(t *testing.T) {
 	c.Run(adv)
 	select {
 	case stamp := <-ch:
-		want := time.Time{}.Add(timeout)
-		if !stamp.Equal(want) {
+		want := AbsTime(0).Add(offset).Add(timeout)
+		if stamp != want {
 			t.Errorf("Wrong time sent on timer channel: got %v, want %v", stamp, want)
 		}
 	default:
@@ -111,5 +113,44 @@ func TestSimulatedSleep(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Sleep didn't return in time")
+	}
+}
+
+func TestSimulatedTimerReset(t *testing.T) {
+	var (
+		c       Simulated
+		timeout = 1 * time.Hour
+	)
+	timer := c.NewTimer(timeout)
+	c.Run(2 * timeout)
+	select {
+	case <-timer.Chan():
+	default:
+		t.Fatal("timer didn't fire")
+	}
+
+	timer.Reset(timeout)
+	c.Run(2 * timeout)
+	select {
+	case <-timer.Chan():
+	default:
+		t.Fatal("timer didn't fire again")
+	}
+}
+
+func TestSimulatedTimerStop(t *testing.T) {
+	var (
+		c       Simulated
+		timeout = 1 * time.Hour
+	)
+	timer := c.NewTimer(timeout)
+	c.Run(2 * timeout)
+	if timer.Stop() {
+		t.Errorf("Stop returned true for fired timer")
+	}
+	select {
+	case <-timer.Chan():
+	default:
+		t.Fatal("timer didn't fire")
 	}
 }
