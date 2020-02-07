@@ -72,6 +72,16 @@ func (g *gethrpc) addPeer(enode string) {
 }
 
 func (g *gethrpc) waitSynced() {
+	// Check if it's synced now
+	var result interface{}
+	g.callRPC(&result, "eth_syncing")
+	syncing, ok := result.(bool)
+	if ok && !syncing {
+		g.test.Logf("%v already synced", g.name)
+		return
+	}
+
+	// Actually wait, subscribe to the event
 	ch := make(chan interface{})
 	sub, err := g.rpc.Subscribe(context.Background(), "eth", ch, "syncing")
 	if err != nil {
@@ -79,10 +89,11 @@ func (g *gethrpc) waitSynced() {
 	}
 	defer sub.Unsubscribe()
 	g.test.Log("subscribed")
-	timeout := time.After(40 * time.Second)
+	timeout := time.After(4 * time.Second)
 	for {
 		select {
 		case ev := <-ch:
+			g.test.Log("'syncing' event", ev)
 			syncing, ok := ev.(bool)
 			if ok && !syncing {
 				return
@@ -90,8 +101,10 @@ func (g *gethrpc) waitSynced() {
 			g.test.Log("Other 'syncing' event", ev)
 		case err := <-sub.Err():
 			g.test.Fatalf("%v notification: %v", g.name, err)
+			return
 		case <-timeout:
-			g.test.Fatalf("%v timeout syncing: %v", g.name, err)
+			g.test.Fatalf("%v timeout syncing", g.name)
+			return
 		}
 	}
 }
@@ -144,7 +157,7 @@ func TestPriorityClient(t *testing.T) {
 	nodeInfo := make(map[string]interface{})
 	server.callRPC(&nodeInfo, "admin_nodeInfo")
 	enode := nodeInfo["enode"].(string)
-	//server.waitSynced()
+	server.waitSynced()
 
 	client := startClient(t)
 	defer client.killAndWait()
