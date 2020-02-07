@@ -368,3 +368,11 @@ func (ma *MixedcaseAddress) ValidChecksum() bool {
 func (ma *MixedcaseAddress) Original() string {
 	return ma.original
 }
+
+type TriePrefetcher interface {
+	Pause()
+	Reset(number uint64, root Hash)
+	PrefetchAddress(addr Address)
+	PrefetchStorage(root Hash, slots []Hash)
+	Close()
+}

@@ -178,9 +178,9 @@ type BlockChain struct {
 	wg            sync.WaitGroup // chain processing wait group for shutting down
 
 	engine     consensus.Engine
-	validator  Validator  // Block and state validator interface
-	prefetcher Prefetcher // Block state prefetcher interface
-	processor  Processor  // Block transaction processor interface
+	validator  Validator             // Block and state validator interface
+	prefetcher common.TriePrefetcher // Trie prefetcher interface
+	processor  Processor             // Block transaction processor interface
 	vmConfig   vm.Config
 
 	badBlocks       *lru.Cache                     // Bad block cache
@@ -228,7 +228,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		badBlocks:      badBlocks,
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
-	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
+	//bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
+	tp := newTriePrefetcher(bc.stateCache)
+	go tp.loop()
+	bc.prefetcher = tp
+
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
 
 	var err error
@@ -866,6 +870,9 @@ func (bc *BlockChain) Stop() {
 	atomic.StoreInt32(&bc.procInterrupt, 1)
 
 	bc.wg.Wait()
+	if bc.prefetcher != nil {
+		bc.prefetcher.Close()
+	}
 
 	// Ensure that the entirety of the state snapshot is journalled to disk.
 	var snapBase common.Hash
@@ -1690,31 +1697,33 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
 		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
+		bc.prefetcher.Reset(block.NumberU64(), parent.Root)
+		statedb.UsePrefetcher(bc.prefetcher)
 		if err != nil {
 			return it.index, err
 		}
 		// If we have a followup block, run that against the current state to pre-cache
 		// transactions and probabilistically some of the account/storage trie nodes.
-		var followupInterrupt uint32
-		if !bc.cacheConfig.TrieCleanNoPrefetch {
-			if followup, err := it.peek(); followup != nil && err == nil {
-				throwaway, _ := state.New(parent.Root, bc.stateCache, bc.snaps)
-				go func(start time.Time, followup *types.Block, throwaway *state.StateDB, interrupt *uint32) {
-					bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)
-
-					blockPrefetchExecuteTimer.Update(time.Since(start))
-					if atomic.LoadUint32(interrupt) == 1 {
-						blockPrefetchInterruptMeter.Mark(1)
-					}
-				}(time.Now(), followup, throwaway, &followupInterrupt)
-			}
-		}
+		//var followupInterrupt uint32
+		//if !bc.cacheConfig.TrieCleanNoPrefetch {
+		//	if followup, err := it.peek(); followup != nil && err == nil {
+		//		throwaway, _ := state.New(parent.Root, bc.stateCache, bc.snaps)
+		//		go func(start time.Time, followup *types.Block, throwaway *state.StateDB, interrupt *uint32) {
+		//			bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)
+		//
+		//			blockPrefetchExecuteTimer.Update(time.Since(start))
+		//			if atomic.LoadUint32(interrupt) == 1 {
+		//				blockPrefetchInterruptMeter.Mark(1)
+		//			}
+		//		}(time.Now(), followup, throwaway, &followupInterrupt)
+		//	}
+		//}
 		// Process block using the parent state as reference point
 		substart := time.Now()
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
-			atomic.StoreUint32(&followupInterrupt, 1)
+			//atomic.StoreUint32(&followupInterrupt, 1)
 			return it.index, err
 		}
 		// Update the metrics touched during block processing
@@ -1724,7 +1733,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete, we can mark them
 		snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete, we can mark them
 		snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete, we can mark them
-
+		bc.prefetcher.Pause()
 		triehash := statedb.AccountHashes + statedb.StorageHashes // Save to not double count in validation
 		trieproc := statedb.SnapshotAccountReads + statedb.AccountReads + statedb.AccountUpdates
 		trieproc += statedb.SnapshotStorageReads + statedb.StorageReads + statedb.StorageUpdates
@@ -1735,7 +1744,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		substart = time.Now()
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
 			bc.reportBlock(block, receipts, err)
-			atomic.StoreUint32(&followupInterrupt, 1)
+			//atomic.StoreUint32(&followupInterrupt, 1)
 			return it.index, err
 		}
 		proctime := time.Since(start)
@@ -1749,7 +1758,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Write the block to the chain and get the status.
 		substart = time.Now()
 		status, err := bc.writeBlockWithState(block, receipts, logs, statedb, false)
-		atomic.StoreUint32(&followupInterrupt, 1)
+		//atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
 			return it.index, err
 		}

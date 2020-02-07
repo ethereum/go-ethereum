@@ -65,6 +65,7 @@ func (n *proofList) Delete(key []byte) error {
 // * Accounts
 type StateDB struct {
 	db     Database
+	prefetcher common.TriePrefetcher
 	trie   Trie
 	hasher crypto.KeccakHasher
 
@@ -142,6 +143,10 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		}
 	}
 	return sdb, nil
+}
+
+func (s *StateDB) UsePrefetcher(prefetcher common.TriePrefetcher){
+	s.prefetcher = prefetcher
 }
 
 // setError remembers the first non-nil error it is called with.
@@ -758,6 +763,12 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		}
 		s.stateObjectsPending[addr] = struct{}{}
 		s.stateObjectsDirty[addr] = struct{}{}
+		// At this point, also ship the address off to the precacher. The precacher
+		// will start loading tries, and when the change is eventually committed,
+		// the commit-phase will be a lot faster
+		if s.prefetcher != nil{
+			s.prefetcher.PrefetchAddress(addr)
+		}
 	}
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
