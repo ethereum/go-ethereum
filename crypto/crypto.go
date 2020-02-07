@@ -24,6 +24,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -50,6 +51,27 @@ var (
 )
 
 var errInvalidPubkey = errors.New("invalid secp256k1 public key")
+
+// KeccakHasher wraps sha3.state. In addition to the usual hash methods, it also supports
+// Read to get a variable amount of data from the hash state. Read is faster than Sum
+// because it doesn't copy the internal state, but also modifies the internal state.
+type KeccakHasher interface {
+	hash.Hash
+	Read([]byte) (int, error)
+}
+
+func NewKeccakHasher() KeccakHasher {
+	return sha3.NewLegacyKeccak256().(KeccakHasher)
+}
+
+// hashData hashes the provided data and returns a 32 byte hash
+// This method is not threadsafe
+func HashData(kh KeccakHasher, data []byte) (h common.Hash) {
+	kh.Reset()
+	kh.Write(data)
+	kh.Read(h[:])
+	return h
+}
 
 // Keccak256 calculates and returns the Keccak256 hash of the input data.
 func Keccak256(data ...[]byte) []byte {

@@ -64,8 +64,9 @@ func (n *proofList) Delete(key []byte) error {
 // * Contracts
 // * Accounts
 type StateDB struct {
-	db   Database
-	trie Trie
+	db     Database
+	trie   Trie
+	hasher crypto.KeccakHasher
 
 	snaps         *snapshot.Tree
 	snap          snapshot.Snapshot
@@ -131,6 +132,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		logs:                make(map[common.Hash][]*types.Log),
 		preimages:           make(map[common.Hash][]byte),
 		journal:             newJournal(),
+		hasher:              crypto.NewKeccakHasher(),
 	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
@@ -516,7 +518,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 			defer func(start time.Time) { s.SnapshotAccountReads += time.Since(start) }(time.Now())
 		}
 		var acc *snapshot.Account
-		if acc, err = s.snap.Account(crypto.Keccak256Hash(addr[:])); err == nil {
+		if acc, err = s.snap.Account(crypto.HashData(s.hasher, addr[:])); err == nil {
 			if acc == nil {
 				return nil
 			}
@@ -648,6 +650,7 @@ func (s *StateDB) Copy() *StateDB {
 		logSize:             s.logSize,
 		preimages:           make(map[common.Hash][]byte, len(s.preimages)),
 		journal:             newJournal(),
+		hasher:              crypto.NewKeccakHasher(),
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
