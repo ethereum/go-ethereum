@@ -55,7 +55,7 @@ func (g *gethrpc) callRPC(result interface{}, method string, args ...interface{}
 }
 
 func (g *gethrpc) addPeer(enode string) {
-	g.test.Log("adding peer:", enode)
+	g.test.Logf("adding peer to %v: %v", g.name, enode)
 	peerCh := make(chan *p2p.PeerEvent)
 	sub, err := g.rpc.Subscribe(context.Background(), "admin", peerCh, "peerEvents")
 	if err != nil {
@@ -65,7 +65,7 @@ func (g *gethrpc) addPeer(enode string) {
 	g.callRPC(nil, "admin_addPeer", enode)
 	select {
 	case ev := <-peerCh:
-		g.test.Logf("%v received event: %v", g.name, ev)
+		g.test.Logf("%v received event: %#v", g.name, ev)
 	case err := <-sub.Err():
 		g.test.Fatalf("%v sub error: %v", g.name, err)
 	}
@@ -109,9 +109,10 @@ func (g *gethrpc) waitSynced() {
 	}
 }
 
-func startGethWithRpc(t *testing.T, name string, ipcpath string, args ...string) *gethrpc {
+func startGethWithRpc(t *testing.T, name string, datadir string, args ...string) *gethrpc {
+	ipcpath := filepath.Join(datadir, "geth.ipc")
 	g := &gethrpc{test: t, name: name}
-	args = append([]string{"--verbosity=5"}, args...)
+	args = append([]string{"--datadir", datadir, "--networkid=42", "--port=0", "--nousb", "--rpc", "--rpcport=0", "--rpcapi=admin,eth,les", "--verbosity=5"}, args...)
 	g.geth = runGeth(t, args...)
 	// wait before we can attach to it. TODO: probe for it properly
 	time.Sleep(1 * time.Second)
@@ -128,14 +129,13 @@ func startLightServer(t *testing.T) *gethrpc {
 	// Create a temporary data directory to use
 	datadir := tmpdir(t)
 	defer os.RemoveAll(datadir)
-	ipcpath := filepath.Join(datadir, "geth.ipc")
 
 	t.Log("server datadir", datadir)
 	runGeth(t, "--datadir", datadir, "init", "./testdata/genesis.json").WaitExit()
 	t.Log("init done")
 	runGeth(t, "--datadir", datadir, "--gcmode=archive", "import", "./testdata/blockchain.blocks").WaitExit()
 	t.Log("import done")
-	g := startGethWithRpc(t, "server", ipcpath, "--datadir", datadir, "--networkid=42", "--port=0", "--rpcport=0", "--rpc", "--rpcapi=admin,eth,les", "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1")
+	g := startGethWithRpc(t, "server", datadir, "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1")
 	return g
 }
 
@@ -143,10 +143,9 @@ func startClient(t *testing.T) *gethrpc {
 	// Create a temporary data directory to use
 	datadir := tmpdir(t)
 	defer os.RemoveAll(datadir)
-	ipcpath := filepath.Join(datadir, "geth.ipc")
 
 	runGeth(t, "--datadir", datadir, "init", "./testdata/genesis.json").WaitExit()
-	g := startGethWithRpc(t, "client", ipcpath, "--datadir", datadir, "--networkid=42", "--port=0", "--rpcport=0", "--rpc", "--rpcapi=admin,eth,les", "--nodiscover", "--syncmode=light")
+	g := startGethWithRpc(t, "client", datadir, "--nodiscover", "--syncmode=light")
 	return g
 }
 
@@ -158,6 +157,7 @@ func TestPriorityClient(t *testing.T) {
 	server.callRPC(&nodeInfo, "admin_nodeInfo")
 	enode := nodeInfo["enode"].(string)
 	server.waitSynced()
+	server.test.Log("server node", enode, nodeInfo["id"])
 
 	client := startClient(t)
 	defer client.killAndWait()
@@ -170,28 +170,6 @@ func TestPriorityClient(t *testing.T) {
 	}
 
 	/*
-
-		// Client
-		clientdir := "/tmp/client"
-		if err := runGeth(clientdir, false, "init", "./initdata/testGenesis.json"); err != nil {
-			t.Fatal("init client", err)
-		}
-		client, err := startGeth(clientdir, true, "--networkid=42", "--syncmode=light", "--nodiscover")
-		defer client.kill()
-		if err != nil {
-			t.Fatal("start client", err)
-		}
-		if err := client.addPeer(enode); err != nil {
-			t.Fatal("addPeer", err)
-		}
-		var peers []interface{}
-		if err := client.rpc.Call(&peers, "admin_peers"); err != nil {
-			t.Fatal("peers", err)
-		}
-		if len(peers) != 1 {
-			t.Log("Expected: # of client peers == 1")
-			t.Fail()
-		}
 
 		// Priority client
 		priodir := "/tmp/prio"
