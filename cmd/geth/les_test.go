@@ -112,7 +112,8 @@ func (g *gethrpc) waitSynced() {
 func startGethWithRpc(t *testing.T, name string, datadir string, args ...string) *gethrpc {
 	ipcpath := filepath.Join(datadir, "geth.ipc")
 	g := &gethrpc{test: t, name: name}
-	args = append([]string{"--datadir", datadir, "--networkid=42", "--port=0", "--nousb", "--rpc", "--rpcport=0", "--rpcapi=admin,eth,les", "--verbosity=5"}, args...)
+	args = append([]string{"--datadir", datadir, "--networkid=42", "--port=0", "--nousb", "--rpc", "--rpcport=0", "--rpcapi=admin,eth,les"}, args...)
+	//args = append([]string{"--verbosity=5"}, args...)
 	g.geth = runGeth(t, args...)
 	// wait before we can attach to it. TODO: probe for it properly
 	time.Sleep(1 * time.Second)
@@ -139,13 +140,13 @@ func startLightServer(t *testing.T) *gethrpc {
 	return g
 }
 
-func startClient(t *testing.T) *gethrpc {
+func startClient(t *testing.T, name string) *gethrpc {
 	// Create a temporary data directory to use
 	datadir := tmpdir(t)
 	defer os.RemoveAll(datadir)
 
 	runGeth(t, "--datadir", datadir, "init", "./testdata/genesis.json").WaitExit()
-	g := startGethWithRpc(t, "client", datadir, "--nodiscover", "--syncmode=light")
+	g := startGethWithRpc(t, name, datadir, "--nodiscover", "--syncmode=light")
 	return g
 }
 
@@ -155,13 +156,13 @@ func TestPriorityClient(t *testing.T) {
 	defer server.killAndWait()
 	nodeInfo := make(map[string]interface{})
 	server.callRPC(&nodeInfo, "admin_nodeInfo")
-	enode := nodeInfo["enode"].(string)
+	serverEnode := nodeInfo["enode"].(string)
 	server.waitSynced()
-	server.test.Log("server node", enode, nodeInfo["id"])
 
-	client := startClient(t)
+	// Start client and add server as peer
+	client := startClient(t, "client")
 	defer client.killAndWait()
-	client.addPeer(enode)
+	client.addPeer(serverEnode)
 	var peers []interface{}
 	client.callRPC(&peers, "admin_peers")
 	if len(peers) != 1 {
@@ -169,45 +170,25 @@ func TestPriorityClient(t *testing.T) {
 		t.Fail()
 	}
 
-	/*
+	// Set up priority client, get its nodeID, increase its balance on the server
+	prio := startClient(t, "prio")
+	defer prio.killAndWait()
+	prioNodeInfo := make(map[string]interface{})
+	prio.callRPC(&prioNodeInfo, "admin_nodeInfo")
+	nodeID := prioNodeInfo["id"].(string)
+	tokens := 3_000_000_000
+	server.callRPC(nil, "les_addBalance", nodeID, tokens, "foobar")
+	prio.addPeer(serverEnode)
 
-		// Priority client
-		priodir := "/tmp/prio"
-		if err := runGeth(priodir, false, "init", "./initdata/testGenesis.json"); err != nil {
-			t.Fatal("init prio", err)
-		}
-		prio, err := startGeth(priodir, true, "--networkid=42", "--syncmode=light", "--nodiscover")
-		defer prio.kill()
-		if err != nil {
-			t.Fatal(prio.cmd.String(), err)
-		}
-		prioNodeInfo := make(map[string]interface{})
-		if err := prio.rpc.Call(&prioNodeInfo, "admin_nodeInfo"); err != nil {
-			t.Fatal("prio nodeInfo:", err)
-		}
-		nodeID := prioNodeInfo["id"].(string)
-		t.Log("nodeID", nodeID)
-		tokens := 3_000_000_000
-		if err := server.rpc.Call(nil, "les_addBalance", nodeID, tokens, "foobar"); err != nil {
-			t.Fatal("addBalance:", err)
-		}
-		if err := prio.addPeer(enode); err != nil {
-			t.Fatal("addPeer", err)
-		}
-
-		// Check if priority client is actually syncing and the regular client got kicked out
-		if err := prio.rpc.Call(&peers, "admin_peers"); err != nil {
-			t.Fatal("prio peers", err)
-		}
-		if len(peers) != 1 {
-			t.Fatal("Expected: # of prio peers == 1")
-		}
-
-		if err := client.rpc.Call(&peers, "admin_peers"); err != nil {
-			t.Fatal("client peers", err)
-		}
-		if len(peers) > 0 {
-			t.Fatal("Expected: # of client peers == 0")
-		}
-	*/
+	// Check if priority client is actually syncing and the regular client got kicked out
+	prio.callRPC(&peers, "admin_peers")
+	if len(peers) != 1 {
+		t.Logf("Expected: # of prio peers == 1, actual: %v", len(peers))
+		t.Fail()
+	}
+	client.callRPC(&peers, "admin_peers")
+	if len(peers) > 0 {
+		t.Log("Expected: # of client peers == 0")
+		t.Fail()
+	}
 }
