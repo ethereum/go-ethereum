@@ -49,6 +49,29 @@ func TestClientRequest(t *testing.T) {
 	}
 }
 
+func TestClientResponseType(t *testing.T) {
+	server := newTestServer()
+	defer server.Stop()
+	client := DialInProc(server)
+	defer client.Close()
+
+	if err := client.Call(nil, "test_echo", "hello", 10, &echoArgs{"world"}); err != nil {
+		t.Errorf("Passing nil as result should be fine, but got an error: %v", err)
+	}
+	var resultVar echoResult
+	if err := client.Call(&resultVar, "test_echo", "hello", 10, &echoArgs{"world"}); err != nil {
+		t.Errorf("Passing reference as result should be fine, but got an error: %v", err)
+	}
+	if resultVar.Int != 10 {
+		t.Errorf("Passing reference should work, but result is: %v", resultVar)
+	}
+	// Note: passing the var, not a ref
+	err := client.Call(resultVar, "test_echo", "hello", 10, &echoArgs{"world"})
+	if err == nil {
+		t.Error("Passing a var as result should be an error")
+	}
+}
+
 func TestClientBatchRequest(t *testing.T) {
 	server := newTestServer()
 	defer server.Stop()
