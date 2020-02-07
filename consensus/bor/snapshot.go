@@ -192,9 +192,6 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			v := getUpdatedValidatorSet(snap.ValidatorSet.Copy(), newVals)
 			v.IncrementProposerPriority(1)
 			snap.ValidatorSet = v
-
-			// log new validator set
-			log.Info("New changed validator set", "number", snap.Number, "validatorSet", snap.ValidatorSet, "currentSigner", signer.Hex())
 		}
 	}
 	snap.Number += uint64(len(headers))
