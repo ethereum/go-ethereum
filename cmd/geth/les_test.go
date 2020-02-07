@@ -12,84 +12,6 @@ import (
 )
 
 /*
-var rpcArgs = []string{"--rpc", "--rpcapi=admin,eth,les"}
-
-var port int = 30303
-var rpcPort int = 8545
-
-type gethNode struct {
-	datadir string
-	args    []string
-	cmd     *exec.Cmd
-	rpc     *rpc.Client
-}
-
-func startGeth(datadir string, keepDatadir bool, args ...string) (*gethNode, error) {
-	g := &gethNode{datadir, args, nil, nil}
-	if !keepDatadir {
-		err := os.RemoveAll(datadir)
-		if err != nil {
-			return g, err
-		}
-	}
-	allArgs := []string{"--datadir", datadir, "--port", fmt.Sprintf("%d", port), "--rpcport", fmt.Sprintf("%d", rpcPort)}
-	port += 1
-	rpcPort += 1
-	allArgs = append(allArgs, rpcArgs...)
-	allArgs = append(allArgs, args...)
-	cmd := exec.Command("geth", allArgs...)
-	log.Println("to start", cmd.String())
-	var err error
-	cmd.Stderr = os.Stderr
-	err = cmd.Start()
-	if err != nil {
-		return nil, err
-	}
-	g.cmd = cmd
-	time.Sleep(1 * time.Second) // wait before we can attach to it
-	// TODO: probe for it properly
-	g.rpc, err = rpc.Dial(g.ipcpath())
-	if err != nil {
-		return nil, err
-	}
-	return g, nil
-}
-
-
-// Start and wait for it to finish
-func runGeth(datadir string, keepDatadir bool, args ...string) error {
-	if !keepDatadir {
-		if err := os.RemoveAll(datadir); err != nil {
-			return err
-		}
-	}
-	allArgs := []string{"--datadir", datadir}
-	allArgs = append(allArgs, args...)
-	cmd := exec.Command("geth", allArgs...)
-	log.Println("to run", cmd.String())
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("starting but %s", err)
-	}
-	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("waiting but %s", err)
-	}
-	return nil
-}
-
-func (g *gethNode) ipcpath() string {
-	return filepath.Join(g.datadir, "geth.ipc")
-}
-
-func (g *gethNode) kill() error {
-	err := g.cmd.Process.Kill()
-	if err != nil {
-		return err
-	}
-	_, err = g.cmd.Process.Wait()
-	return err
-}
-
 func (g *gethNode) waitSynced() error {
 	ch := make(chan interface{})
 	sub, err := g.rpc.Subscribe(context.Background(), "eth", ch, "syncing")
@@ -115,8 +37,10 @@ func (g *gethNode) waitSynced() error {
 */
 
 type gethrpc struct {
+	name string
 	rpc  *rpc.Client
 	geth *testgeth
+	test *testing.T
 }
 
 func (g *gethrpc) killAndWait() {
@@ -124,42 +48,68 @@ func (g *gethrpc) killAndWait() {
 	g.geth.WaitExit()
 }
 
-func (g *gethrpc) callRPC(t *testing.T, result interface{}, method string, args ...interface{}) {
+func (g *gethrpc) callRPC(result interface{}, method string, args ...interface{}) {
 	if err := g.rpc.Call(&result, method, args...); err != nil {
-		t.Fatalf("callRPC %v: %v", method, err)
+		g.test.Fatalf("callRPC %v: %v", method, err)
 	}
 }
 
-func (g *gethrpc) addPeer(t *testing.T, enode string) {
+func (g *gethrpc) addPeer(enode string) {
+	g.test.Log("adding peer:", enode)
 	peerCh := make(chan *p2p.PeerEvent)
 	sub, err := g.rpc.Subscribe(context.Background(), "admin", peerCh, "peerEvents")
 	if err != nil {
-		t.Fatalf("subscribe: %v", err)
+		g.test.Fatalf("subscribe %v: %v", g.name, err)
 	}
 	defer sub.Unsubscribe()
-	g.callRPC(t, nil, "admin_addPeer", enode)
+	g.callRPC(nil, "admin_addPeer", enode)
 	select {
 	case ev := <-peerCh:
-		t.Log("event", ev)
+		g.test.Logf("%v received event: %v", g.name, ev)
 	case err := <-sub.Err():
-		t.Fatalf("notification: %v", err)
+		g.test.Fatalf("%v sub error: %v", g.name, err)
 	}
 }
 
-func startGethWithRpc(t *testing.T, ipcpath string, args ...string) *gethrpc {
-	g := &gethrpc{}
+func (g *gethrpc) waitSynced() {
+	ch := make(chan interface{})
+	sub, err := g.rpc.Subscribe(context.Background(), "eth", ch, "syncing")
+	if err != nil {
+		g.test.Fatalf("%v syncing: %v", g.name, err)
+	}
+	defer sub.Unsubscribe()
+	g.test.Log("subscribed")
+	timeout := time.After(40 * time.Second)
+	for {
+		select {
+		case ev := <-ch:
+			syncing, ok := ev.(bool)
+			if ok && !syncing {
+				return
+			}
+			g.test.Log("Other 'syncing' event", ev)
+		case err := <-sub.Err():
+			g.test.Fatalf("%v notification: %v", g.name, err)
+		case <-timeout:
+			g.test.Fatalf("%v timeout syncing: %v", g.name, err)
+		}
+	}
+}
+
+func startGethWithRpc(t *testing.T, name string, ipcpath string, args ...string) *gethrpc {
+	g := &gethrpc{test: t, name: name}
+	args = append([]string{"--verbosity=5"}, args...)
 	g.geth = runGeth(t, args...)
 	// wait before we can attach to it. TODO: probe for it properly
 	time.Sleep(1 * time.Second)
 	var err error
 	g.rpc, err = rpc.Dial(ipcpath)
 	if err != nil {
-		t.Fatalf("rpc connect: %v", err)
+		t.Fatalf("%v rpc connect: %v", name, err)
 	}
-	t.Log("rpc dial done", ipcpath)
+	t.Logf("%v rpc dial done", name)
 	return g
 }
-
 
 func startLightServer(t *testing.T) *gethrpc {
 	// Create a temporary data directory to use
@@ -172,7 +122,7 @@ func startLightServer(t *testing.T) *gethrpc {
 	t.Log("init done")
 	runGeth(t, "--datadir", datadir, "--gcmode=archive", "import", "./testdata/blockchain.blocks").WaitExit()
 	t.Log("import done")
-	g := startGethWithRpc(t, ipcpath, "--datadir", datadir, "--networkid=42", "--port=0", "--rpcport=0", "--rpc", "--rpcapi=admin,eth,les", "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1")
+	g := startGethWithRpc(t, "server", ipcpath, "--datadir", datadir, "--networkid=42", "--port=0", "--rpcport=0", "--rpc", "--rpcapi=admin,eth,les", "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1")
 	return g
 }
 
@@ -183,7 +133,7 @@ func startClient(t *testing.T) *gethrpc {
 	ipcpath := filepath.Join(datadir, "geth.ipc")
 
 	runGeth(t, "--datadir", datadir, "init", "./testdata/genesis.json").WaitExit()
-	g := startGethWithRpc(t, ipcpath, "--datadir", datadir, "--networkid=42", "--port=0", "--rpcport=0", "--rpc", "--rpcapi=admin,eth,les", "--nodiscover", "--syncmode=light")
+	g := startGethWithRpc(t, "client", ipcpath, "--datadir", datadir, "--networkid=42", "--port=0", "--rpcport=0", "--rpc", "--rpcapi=admin,eth,les", "--nodiscover", "--syncmode=light")
 	return g
 }
 
@@ -192,15 +142,15 @@ func TestPriorityClient(t *testing.T) {
 	server := startLightServer(t)
 	defer server.killAndWait()
 	nodeInfo := make(map[string]interface{})
-	server.callRPC(t, &nodeInfo, "admin_nodeInfo")
+	server.callRPC(&nodeInfo, "admin_nodeInfo")
 	enode := nodeInfo["enode"].(string)
-	t.Log("enode", enode)
+	//server.waitSynced()
 
 	client := startClient(t)
 	defer client.killAndWait()
-	client.addPeer(t, enode)
+	client.addPeer(enode)
 	var peers []interface{}
-	client.callRPC(t, &peers, "admin_peers")
+	client.callRPC(&peers, "admin_peers")
 	if len(peers) != 1 {
 		t.Logf("Expected: # of client peers == 1, actual: %v", len(peers))
 		t.Fail()
