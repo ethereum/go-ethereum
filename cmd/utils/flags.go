@@ -1481,9 +1481,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(RPCGlobalGasCap.Name) {
 		cfg.RPCGasCap = new(big.Int).SetUint64(ctx.GlobalUint64(RPCGlobalGasCap.Name))
 	}
-	if ctx.GlobalIsSet(DisableDNSFlag.Name) {
-		cfg.DisableDNSDiscovery = ctx.GlobalBool(DisableDNSFlag.Name)
-	}
+	// if ctx.GlobalIsSet(DiscoveryURLFlag.Name) {
+	// }
 
 	// Override any default configs for hard coded networks.
 	switch {
@@ -1492,16 +1491,19 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 			cfg.NetworkId = 3
 		}
 		cfg.Genesis = core.DefaultTestnetGenesisBlock()
+		setDNSDiscoveryDefaults(ctx, cfg, params.KnownDNSNetworks[params.TestnetGenesisHash])
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 4
 		}
 		cfg.Genesis = core.DefaultRinkebyGenesisBlock()
+		setDNSDiscoveryDefaults(ctx, cfg, params.KnownDNSNetworks[params.RinkebyGenesisHash])
 	case ctx.GlobalBool(GoerliFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 5
 		}
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
+		setDNSDiscoveryDefaults(ctx, cfg, params.KnownDNSNetworks[params.GoerliGenesisHash])
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -1529,6 +1531,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 			cfg.Miner.GasPrice = big.NewInt(1)
 		}
 	}
+}
+
+// setDNSDiscoveryDefaults configures DNS discovery with the given URL if
+// no URL is set.
+func setDNSDiscoveryDefaults(ctx *cli.Context, cfg *eth.Config, url string) {
+	if len(cfg.DiscoveryURLs) > 0 || ctx.GlobalIsSet(DisableDNSFlag.Name) {
+		return
+	}
+	cfg.DiscoveryURLs = []string{url}
 }
 
 // RegisterEthService adds an Ethereum client to the stack.
