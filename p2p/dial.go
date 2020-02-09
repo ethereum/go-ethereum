@@ -64,8 +64,11 @@ type tcpDialer struct {
 }
 
 func (t tcpDialer) Dial(ctx context.Context, dest *enode.Node) (net.Conn, error) {
-	addr := &net.TCPAddr{IP: dest.IP(), Port: dest.TCP()}
-	return t.d.DialContext(ctx, "tcp", addr.String())
+	return t.d.DialContext(ctx, "tcp", nodeAddr(dest).String())
+}
+
+func nodeAddr(n *enode.Node) net.Addr {
+	return &net.TCPAddr{IP: n.IP(), Port: n.TCP()}
 }
 
 // checkDial errors:
@@ -479,7 +482,6 @@ func (t *dialTask) run(d *dialScheduler) {
 
 	err := t.dial(d, t.dest)
 	if err != nil {
-		d.log.Trace("Dial error", "task", t, "err", err)
 		// Try resolving the ID of static nodes if dialing failed.
 		if _, ok := err.(*dialError); ok && t.flags&staticDialedConn != 0 {
 			if t.resolve(d) {
@@ -497,7 +499,6 @@ func (t *dialTask) run(d *dialScheduler) {
 // The backoff delay resets when the node is found.
 func (t *dialTask) resolve(d *dialScheduler) bool {
 	if d.resolver == nil {
-		d.log.Trace("Can't resolve node", "id", t.dest.ID(), "err", "discovery is disabled")
 		return false
 	}
 	if t.resolveDelay == 0 {
@@ -525,8 +526,9 @@ func (t *dialTask) resolve(d *dialScheduler) bool {
 
 // dial performs the actual connection attempt.
 func (t *dialTask) dial(d *dialScheduler, dest *enode.Node) error {
-	fd, err := d.dialer.Dial(d.ctx, dest)
+	fd, err := d.dialer.Dial(d.ctx, t.dest)
 	if err != nil {
+		d.log.Trace("Dial error", "id", t.dest.ID(), "addr", nodeAddr(t.dest), "conn", t.flags, "err", cleanupDialErr(err))
 		return &dialError{err}
 	}
 	mfd := newMeteredConn(fd, false, &net.TCPAddr{IP: dest.IP(), Port: dest.TCP()})
@@ -536,4 +538,11 @@ func (t *dialTask) dial(d *dialScheduler, dest *enode.Node) error {
 func (t *dialTask) String() string {
 	id := t.dest.ID()
 	return fmt.Sprintf("%v %x %v:%d", t.flags, id[:8], t.dest.IP(), t.dest.TCP())
+}
+
+func cleanupDialErr(err error) error {
+	if netErr, ok := err.(*net.OpError); ok && netErr.Op == "dial" {
+		return netErr.Err
+	}
+	return err
 }
