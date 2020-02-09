@@ -65,4 +65,4 @@ You however should be able to run a light client on an HDD with minimal impact o
 
 **Q: When I try to use the --password command line flag, I get the error "Could not decrypt key with given passphrase" but the password is correct. Why does this error appear?**
 
-**A:** Especially if the password file was created on Windows, it may have a Byte Order Mark or other special encoding that the go-ethereum client doesn't currently recognize.  You can change this behavior with a PowerShell command like `echo "mypasswordhere" | out-file test.txt -encoding ASCII`.  Additional details and/or any updates on more robust handling are at https://github.com/ethereum/go-ethereum/issues/19905.
+**A:** Especially if the password file was created on Windows, it may have a Byte Order Mark or other special encoding that the go-ethereum client doesn't currently recognize.  You can change this behavior with a PowerShell command like `echo "mypasswordhere" | out-file test.txt -encoding ASCII`.  Additional details and/or any updates on more robust handling are at <https://github.com/ethereum/go-ethereum/issues/19905>.
