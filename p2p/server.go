@@ -620,15 +620,19 @@ func (srv *Server) maxInboundConns() int {
 	return srv.MaxPeers - srv.maxDialedConns()
 }
 
-func (srv *Server) maxDialedConns() int {
-	if srv.NoDial {
+func (srv *Server) maxDialedConns() (limit int) {
+	if srv.NoDial || srv.MaxPeers == 0 {
 		return 0
 	}
-	r := srv.DialRatio
-	if r == 0 {
-		r = defaultDialRatio
+	if srv.DialRatio == 0 {
+		limit = srv.MaxPeers / defaultDialRatio
+	} else {
+		limit = srv.MaxPeers / srv.DialRatio
 	}
-	return srv.MaxPeers / r
+	if limit == 0 {
+		limit = 1
+	}
+	return limit
 }
 
 func (srv *Server) setupListening() error {
