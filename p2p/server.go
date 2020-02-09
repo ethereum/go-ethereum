@@ -326,6 +326,9 @@ func (srv *Server) AddPeer(node *enode.Node) {
 
 // RemovePeer removes a node from the static node set. It also disconnects from the given
 // node if it is currently connected as a peer.
+//
+// This method blocks until all protocols have exited and the peer is removed. Do not use
+// RemovePeer in protocol implementations, call Disconnect on the Peer instead.
 func (srv *Server) RemovePeer(node *enode.Node) {
 	var (
 		ch  chan *PeerEvent
