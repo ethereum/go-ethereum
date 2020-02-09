@@ -34,10 +34,6 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// func init() {
-// 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
-// }
-
 type testTransport struct {
 	rpub *ecdsa.PublicKey
 	*rlpx
@@ -72,11 +68,12 @@ func (c *testTransport) close(err error) {
 
 func startTestServer(t *testing.T, remoteKey *ecdsa.PublicKey, pf func(*Peer)) *Server {
 	config := Config{
-		Name:       "test",
-		MaxPeers:   10,
-		ListenAddr: "127.0.0.1:0",
-		PrivateKey: newkey(),
-		Logger:     testlog.Logger(t, log.LvlTrace),
+		Name:        "test",
+		MaxPeers:    10,
+		ListenAddr:  "127.0.0.1:0",
+		NoDiscovery: true,
+		PrivateKey:  newkey(),
+		Logger:      testlog.Logger(t, log.LvlTrace),
 	}
 	server := &Server{
 		Config:       config,
@@ -204,9 +201,38 @@ func TestServerDial(t *testing.T) {
 	}
 }
 
-// This test checks that connections are disconnected
-// just after the encryption handshake when the server is
-// at capacity. Trusted connections should still be accepted.
+// This test checks that RemovePeer disconnects the peer if it is connected.
+func TestServerRemovePeerDisconnect(t *testing.T) {
+	srv1 := &Server{Config: Config{
+		PrivateKey:  newkey(),
+		MaxPeers:    1,
+		NoDiscovery: true,
+		Logger:      testlog.Logger(t, log.LvlTrace).New("server", "1"),
+	}}
+	srv2 := &Server{Config: Config{
+		PrivateKey:  newkey(),
+		MaxPeers:    1,
+		NoDiscovery: true,
+		NoDial:      true,
+		ListenAddr:  "127.0.0.1:0",
+		Logger:      testlog.Logger(t, log.LvlTrace).New("server", "2"),
+	}}
+	srv1.Start()
+	defer srv1.Stop()
+	srv2.Start()
+	defer srv2.Stop()
+
+	if !syncAddPeer(srv1, srv2.Self()) {
+		t.Fatal("peer not connected")
+	}
+	srv1.RemovePeer(srv2.Self())
+	if srv1.PeerCount() > 0 {
+		t.Fatal("removed peer still connected")
+	}
+}
+
+// This test checks that connections are disconnected just after the encryption handshake
+// when the server is at capacity. Trusted connections should still be accepted.
 func TestServerAtCap(t *testing.T) {
 	trustedNode := newkey()
 	trustedID := enode.PubkeyToIDV4(&trustedNode.PublicKey)
@@ -217,6 +243,7 @@ func TestServerAtCap(t *testing.T) {
 			NoDial:       true,
 			NoDiscovery:  true,
 			TrustedNodes: []*enode.Node{newNode(trustedID, "")},
+			Logger:       testlog.Logger(t, log.LvlTrace),
 		},
 	}
 	if err := srv.Start(); err != nil {
@@ -292,9 +319,9 @@ func TestServerPeerLimits(t *testing.T) {
 			NoDial:      true,
 			NoDiscovery: true,
 			Protocols:   []Protocol{discard},
+			Logger:      testlog.Logger(t, log.LvlTrace),
 		},
 		newTransport: func(fd net.Conn) transport { return tp },
-		log:          log.New(),
 	}
 	if err := srv.Start(); err != nil {
 		t.Fatalf("couldn't start server: %v", err)
@@ -576,4 +603,24 @@ func (l *fakeAddrListener) Accept() (net.Conn, error) {
 
 func (c *fakeAddrConn) RemoteAddr() net.Addr {
 	return c.remoteAddr
+}
+
+func syncAddPeer(srv *Server, node *enode.Node) bool {
+	var (
+		ch      = make(chan *PeerEvent)
+		sub     = srv.SubscribeEvents(ch)
+		timeout = time.After(2 * time.Second)
+	)
+	defer sub.Unsubscribe()
+	srv.AddPeer(node)
+	for {
+		select {
+		case ev := <-ch:
+			if ev.Type == PeerEventTypeAdd && ev.Peer == node.ID() {
+				return true
+			}
+		case <-timeout:
+			return false
+		}
+	}
 }
