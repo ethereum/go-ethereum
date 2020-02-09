@@ -976,9 +976,6 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		return err
 	}
 
-	// If the checks completed successfully, the connection has been added as a peer and
-	// runPeer has been launched.
-	clog.Trace("Connection set up", "inbound", dialDest == nil)
 	return nil
 }
 
