@@ -101,7 +101,7 @@ PERFORMANCE TUNING OPTIONS:
 
 ACCOUNT OPTIONS:
   --unlock value                      Comma separated list of accounts to unlock
-  --password value                    Password file to use for non-interactive password input.
+  --password value                    Password file to use for non-interactive password input
   --signer value                      External signer (url or path to ipc file)
   --allow-insecure-unlock             Allow insecure account unlocking when account-related RPCs are exposed by http
 
