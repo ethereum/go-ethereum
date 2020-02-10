@@ -132,8 +132,12 @@ func (am *Manager) update() {
 }
 
 // Backends retrieves the backend(s) with the given type from the account manager.
-func (am *Manager) Backends(kind reflect.Type) []Backend {
-	return am.backends[kind]
+func (am *Manager) Backends(kinds ...reflect.Type) []Backend {
+	backends := make([]Backend, 0)
+	for _, kind := range kinds {
+		backends = append(backends, am.backends[kind]...)
+	}
+	return backends
 }
 
 // Wallets returns all signer accounts registered under this account manager.

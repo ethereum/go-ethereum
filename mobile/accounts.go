@@ -86,7 +86,7 @@ func (a *Account) GetURL() string {
 }
 
 // KeyStore manages a key storage directory on disk.
-type KeyStore struct{ keystore *keystore.KeyStore }
+type KeyStore struct{ keystore keystore.KeyStore }
 
 // NewKeyStore creates a keystore for the given directory.
 func NewKeyStore(keydir string, scryptN, scryptP int) *KeyStore {

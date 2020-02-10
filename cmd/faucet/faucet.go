@@ -202,12 +202,12 @@ type faucet struct {
 	client *ethclient.Client   // Client connection to the Ethereum chain
 	index  []byte              // Index page to serve up on the web
 
-	keystore *keystore.KeyStore // Keystore containing the single signer
-	account  accounts.Account   // Account funding user faucet requests
-	head     *types.Header      // Current head header of the faucet
-	balance  *big.Int           // Current balance of the faucet
-	nonce    uint64             // Current pending nonce of the faucet
-	price    *big.Int           // Current gas price to issue funds with
+	keystore keystore.KeyStore // Keystore containing the single signer
+	account  accounts.Account  // Account funding user faucet requests
+	head     *types.Header     // Current head header of the faucet
+	balance  *big.Int          // Current balance of the faucet
+	nonce    uint64            // Current pending nonce of the faucet
+	price    *big.Int          // Current gas price to issue funds with
 
 	conns    []*websocket.Conn    // Currently live websocket connections
 	timeouts map[string]time.Time // History of users and their funding timeouts
@@ -217,7 +217,7 @@ type faucet struct {
 	lock sync.RWMutex // Lock protecting the faucet's internals
 }
 
-func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network uint64, stats string, ks *keystore.KeyStore, index []byte) (*faucet, error) {
+func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network uint64, stats string, ks keystore.KeyStore, index []byte) (*faucet, error) {
 	// Assemble the raw devp2p protocol stack
 	stack, err := node.New(&node.Config{
 		Name:    "geth",

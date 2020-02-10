@@ -205,7 +205,7 @@ func accountList(ctx *cli.Context) error {
 }
 
 // tries unlocking the specified account a few times.
-func unlockAccount(ks *keystore.KeyStore, address string, i int, passwords []string) (accounts.Account, string) {
+func unlockAccount(ks keystore.KeyStore, address string, i int, passwords []string) (accounts.Account, string) {
 	account, err := utils.MakeAddress(ks, address)
 	if err != nil {
 		utils.Fatalf("Could not list accounts: %v", err)
@@ -263,7 +263,7 @@ func getPassPhrase(prompt string, confirmation bool, i int, passwords []string) 
 	return password
 }
 
-func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrError, auth string) accounts.Account {
+func ambiguousAddrRecovery(ks keystore.KeyStore, err *keystore.AmbiguousAddrError, auth string) accounts.Account {
 	fmt.Printf("Multiple key files exist for address %x:\n", err.Addr)
 	for _, a := range err.Matches {
 		fmt.Println("  ", a.URL)
@@ -329,7 +329,7 @@ func accountUpdate(ctx *cli.Context) error {
 		utils.Fatalf("No accounts specified to update")
 	}
 	stack, _ := makeConfigNode(ctx)
-	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+	ks := stack.AccountManager().Backends(keystore.FSKeyStoreType, keystore.DBKeyStoreType)[0].(keystore.KeyStore)
 
 	for _, addr := range ctx.Args() {
 		account, oldPassword := unlockAccount(ks, addr, 0, nil)
@@ -354,7 +354,7 @@ func importWallet(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	passphrase := getPassPhrase("", false, 0, utils.MakePasswordList(ctx))
 
-	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+	ks := stack.AccountManager().Backends(keystore.FSKeyStoreType, keystore.DBKeyStoreType)[0].(keystore.KeyStore)
 	acct, err := ks.ImportPreSaleKey(keyJSON, passphrase)
 	if err != nil {
 		utils.Fatalf("%v", err)
@@ -375,7 +375,7 @@ func accountImport(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	passphrase := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
-	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+	ks := stack.AccountManager().Backends(keystore.FSKeyStoreType, keystore.DBKeyStoreType)[0].(keystore.KeyStore)
 	acct, err := ks.ImportECDSA(key, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)

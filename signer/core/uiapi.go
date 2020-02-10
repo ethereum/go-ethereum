@@ -110,8 +110,8 @@ func (s *UIServerAPI) DeriveAccount(url string, path string, pin *bool) (account
 }
 
 // fetchKeystore retrives the encrypted keystore from the account manager.
-func fetchKeystore(am *accounts.Manager) *keystore.KeyStore {
-	return am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+func fetchKeystore(am *accounts.Manager) keystore.KeyStore {
+	return am.Backends(keystore.FSKeyStoreType, keystore.DBKeyStoreType)[0].(keystore.KeyStore)
 }
 
 // ImportRawKey stores the given hex encoded ECDSA key into the key directory,
@@ -184,7 +184,7 @@ func (s *UIServerAPI) Export(ctx context.Context, addr common.Address) (json.Raw
 // Example (the address in question has privkey `11...11`):
 // {"jsonrpc":"2.0","method":"clef_import","params":[{"address":"19e7e376e7c213b7e7e7e46cc70a5dd086daff2a","crypto":{"cipher":"aes-128-ctr","ciphertext":"33e4cd3756091d037862bb7295e9552424a391a6e003272180a455ca2a9fb332","cipherparams":{"iv":"b54b263e8f89c42bb219b6279fba5cce"},"kdf":"scrypt","kdfparams":{"dklen":32,"n":262144,"p":1,"r":8,"salt":"e4ca94644fd30569c1b1afbbc851729953c92637b7fe4bb9840bbb31ffbc64a5"},"mac":"f4092a445c2b21c0ef34f17c9cd0d873702b2869ec5df4439a0c2505823217e7"},"id":"216c7eac-e8c1-49af-a215-fa0036f29141","version":3},"test","yaddayadda"], "id":4}
 func (api *UIServerAPI) Import(ctx context.Context, keyJSON json.RawMessage, oldPassphrase, newPassphrase string) (accounts.Account, error) {
-	be := api.am.Backends(keystore.KeyStoreType)
+	be := api.am.Backends(keystore.FSKeyStoreType, keystore.DBKeyStoreType)
 
 	if len(be) == 0 {
 		return accounts.Account{}, errors.New("password based accounts not supported")
@@ -192,7 +192,7 @@ func (api *UIServerAPI) Import(ctx context.Context, keyJSON json.RawMessage, old
 	if err := ValidatePasswordFormat(newPassphrase); err != nil {
 		return accounts.Account{}, fmt.Errorf("password requirements not met: %v", err)
 	}
-	return be[0].(*keystore.KeyStore).Import(keyJSON, oldPassphrase, newPassphrase)
+	return be[0].(keystore.KeyStore).Import(keyJSON, oldPassphrase, newPassphrase)
 }
 
 // Other methods to be added, not yet implemented are:

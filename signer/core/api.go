@@ -395,7 +395,7 @@ func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
 // the given password. Users are responsible to backup the private key that is stored
 // in the keystore location thas was specified when this API was created.
 func (api *SignerAPI) New(ctx context.Context) (common.Address, error) {
-	be := api.am.Backends(keystore.KeyStoreType)
+	be := api.am.Backends(keystore.FSKeyStoreType, keystore.DBKeyStoreType)
 	if len(be) == 0 {
 		return common.Address{}, errors.New("password based accounts not supported")
 	}
@@ -419,7 +419,7 @@ func (api *SignerAPI) New(ctx context.Context) (common.Address, error) {
 			api.UI.ShowError(fmt.Sprintf("Account creation attempt #%d failed due to password requirements: %v", (i + 1), pwErr))
 		} else {
 			// No error
-			acc, err := be[0].(*keystore.KeyStore).NewAccount(resp.Text)
+			acc, err := be[0].(keystore.KeyStore).NewAccount(resp.Text)
 			log.Info("Your new key was generated", "address", acc.Address)
 			log.Warn("Please backup your key file!", "path", acc.URL.Path)
 			log.Warn("Please remember your password!")
