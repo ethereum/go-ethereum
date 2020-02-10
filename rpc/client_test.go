@@ -59,12 +59,6 @@ func TestClientResponseType(t *testing.T) {
 		t.Errorf("Passing nil as result should be fine, but got an error: %v", err)
 	}
 	var resultVar echoResult
-	if err := client.Call(&resultVar, "test_echo", "hello", 10, &echoArgs{"world"}); err != nil {
-		t.Errorf("Passing reference as result should be fine, but got an error: %v", err)
-	}
-	if resultVar.Int != 10 {
-		t.Errorf("Passing reference should work, but result is: %v", resultVar)
-	}
 	// Note: passing the var, not a ref
 	err := client.Call(resultVar, "test_echo", "hello", 10, &echoArgs{"world"})
 	if err == nil {
