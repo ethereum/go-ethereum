@@ -170,10 +170,13 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			return "", errors.New("java binding for tuple arguments is not supported yet")
 		}
 
+		inputBin := strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x")
+		outputBin := strings.SplitAfter(inputBin, "6080604052")
 		contracts[types[i]] = &tmplContract{
 			Type:        capitalise(types[i]),
 			InputABI:    strings.Replace(strippedABI, "\"", "\\\"", -1),
-			InputBin:    strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x"),
+			InputBin:    inputBin,
+			OutputBin:   outputBin[len(outputBin)-1],
 			Constructor: evmABI.Constructor,
 			Calls:       calls,
 			Transacts:   transacts,

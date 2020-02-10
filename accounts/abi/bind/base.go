@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
@@ -72,6 +73,13 @@ type WatchOpts struct {
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 }
 
+// CheckOpts is the collection of options to check if a contract matches a provided bytecode.
+type CheckOpts struct {
+	Address     common.Address  // Address of the contract we want to check
+	BlockNumber *big.Int        // At which block we should check the contract (nil = latest)
+	Context     context.Context // Network context to support cancellation and timeouts (nil = no timeout)
+}
+
 // BoundContract is the base wrapper object that reflects a contract on the
 // Ethereum network. It contains a collection of methods that are used by the
 // higher level contract bindings to operate.
@@ -111,6 +119,19 @@ func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend Co
 	}
 	c.address = crypto.CreateAddress(opts.From, tx.Nonce())
 	return c.address, tx, c, nil
+}
+
+// CheckContract checks whether the deployed contract at the given address matches the provided binary
+func CheckContract(opts *CheckOpts, bytecode string, backend ContractBackend) (bool, error) {
+	if opts == nil {
+		return false, errors.New("Invalid CheckOpts provided")
+	}
+	code, err := backend.CodeAt(opts.Context, opts.Address, opts.BlockNumber)
+	if err != nil {
+		return false, err
+	}
+
+	return bytecode == hexutil.Encode(code), nil
 }
 
 // Call invokes the (constant) contract method with params as input values and
