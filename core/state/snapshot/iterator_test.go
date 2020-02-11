@@ -130,7 +130,7 @@ func (ti *testIterator) Hash() common.Hash {
 }
 
 func (ti *testIterator) Account() []byte {
-	return nil
+	return []byte{ti.values[0]}
 }
 
 func (ti *testIterator) Slot() []byte {
