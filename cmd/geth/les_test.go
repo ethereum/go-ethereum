@@ -44,6 +44,7 @@ type gethrpc struct {
 }
 
 func (g *gethrpc) killAndWait() {
+	g.test.Logf("Killing %v", g.name)
 	g.geth.Kill()
 	g.geth.WaitExit()
 }
@@ -113,7 +114,7 @@ func startGethWithRpc(t *testing.T, name string, datadir string, args ...string)
 	ipcpath := filepath.Join(datadir, "geth.ipc")
 	g := &gethrpc{test: t, name: name}
 	args = append([]string{"--datadir", datadir, "--networkid=42", "--port=0", "--nousb", "--rpc", "--rpcport=0", "--rpcapi=admin,eth,les"}, args...)
-	//args = append([]string{"--verbosity=5"}, args...)
+	args = append([]string{"--verbosity=5"}, args...)
 	g.geth = runGeth(t, args...)
 	// wait before we can attach to it. TODO: probe for it properly
 	time.Sleep(1 * time.Second)
@@ -126,20 +127,25 @@ func startGethWithRpc(t *testing.T, name string, datadir string, args ...string)
 	return g
 }
 
-func startLightServer(t *testing.T) *gethrpc {
-	// Create a temporary data directory to use
+func startMiner(t *testing.T) *gethrpc {
 	datadir := tmpdir(t)
 	defer os.RemoveAll(datadir)
 
-	t.Log("server datadir", datadir)
 	runGeth(t, "--datadir", datadir, "init", "./testdata/genesis.json").WaitExit()
-	t.Log("init done")
 	runGeth(t, "--datadir", datadir, "--gcmode=archive", "import", "./testdata/blockchain.blocks").WaitExit()
-	t.Log("import done")
-	g := startGethWithRpc(t, "server", datadir, "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1")
+	etherbase := "0x8888f1f195afa192cfee860698584c030f4c9db1"
+	g := startGethWithRpc(t, "miner", datadir, "--mine", "--nodiscover", "--light.serve=1", "--miner.etherbase", etherbase, "--nat=extip:127.0.0.1")
 	return g
 }
 
+func startLightServer(t *testing.T) *gethrpc {
+	datadir := tmpdir(t)
+	defer os.RemoveAll(datadir)
+
+	runGeth(t, "--datadir", datadir, "init", "./testdata/genesis.json").WaitExit()
+	g := startGethWithRpc(t, "miner", datadir, "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1")
+	return g
+}
 func startClient(t *testing.T, name string) *gethrpc {
 	// Create a temporary data directory to use
 	datadir := tmpdir(t)
@@ -152,11 +158,18 @@ func startClient(t *testing.T, name string) *gethrpc {
 
 func TestPriorityClient(t *testing.T) {
 	// Init and start server
+	miner := startMiner(t)
+	defer miner.killAndWait()
+
 	server := startLightServer(t)
 	defer server.killAndWait()
+
+	// Make the server sync to the miner
+	// This is the only way to make the server synced
 	nodeInfo := make(map[string]interface{})
 	server.callRPC(&nodeInfo, "admin_nodeInfo")
 	serverEnode := nodeInfo["enode"].(string)
+	miner.addPeer(serverEnode)
 	server.waitSynced()
 
 	// Start client and add server as peer
@@ -166,8 +179,8 @@ func TestPriorityClient(t *testing.T) {
 	var peers []interface{}
 	client.callRPC(&peers, "admin_peers")
 	if len(peers) != 1 {
-		t.Logf("Expected: # of client peers == 1, actual: %v", len(peers))
-		t.Fail()
+		t.Errorf("Expected: # of client peers == 1, actual: %v", len(peers))
+		return
 	}
 
 	// Set up priority client, get its nodeID, increase its balance on the server
@@ -183,12 +196,10 @@ func TestPriorityClient(t *testing.T) {
 	// Check if priority client is actually syncing and the regular client got kicked out
 	prio.callRPC(&peers, "admin_peers")
 	if len(peers) != 1 {
-		t.Logf("Expected: # of prio peers == 1, actual: %v", len(peers))
-		t.Fail()
+		t.Errorf("Expected: # of prio peers == 1, actual: %v", len(peers))
 	}
 	client.callRPC(&peers, "admin_peers")
 	if len(peers) > 0 {
-		t.Log("Expected: # of client peers == 0")
-		t.Fail()
+		t.Errorf("Expected: # of client peers == 0")
 	}
 }
