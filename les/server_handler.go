@@ -128,7 +128,7 @@ func (h *serverHandler) handle(p *peer) error {
 	}
 	// Reject light clients if server is not synced.
 	if !h.synced() {
-		p.Log().Debug("Light server not synced, so it's rejecting client", p)
+		p.Log().Debug("Light server not synced, so it's rejecting the client", p)
 		return p2p.DiscRequested
 	}
 	defer p.fcClient.Disconnect()
