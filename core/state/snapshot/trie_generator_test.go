@@ -18,6 +18,7 @@ package snapshot
 
 import (
 	"encoding/binary"
+	"math/rand"
 	"sync"
 	"testing"
 
@@ -26,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
-func generateTrie(it AccountIterator, generator *trieGenerator) common.Hash {
+func generateTrie(it AccountIterator, generatorFn trieGeneratorFn) common.Hash {
 	var (
 		in  = make(chan leaf)        // chan to pass leaves
 		out = make(chan common.Hash) // chan to collect result
@@ -34,7 +35,7 @@ func generateTrie(it AccountIterator, generator *trieGenerator) common.Hash {
 	)
 	wg.Add(1)
 	go func() {
-		generator.Generate3(in, out)
+		generatorFn(in, out)
 		wg.Done()
 	}()
 	// Feed leaves
@@ -60,6 +61,7 @@ func TestTrieGeneration(t *testing.T) {
 			base.root: base,
 		},
 	}
+	rand.Seed(1338)
 	// Stack three diff layers on top with various overlaps
 	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"),
 		randomAccountSet("0x11", "0x22", "0x33"), nil)
@@ -67,10 +69,9 @@ func TestTrieGeneration(t *testing.T) {
 	// sorted accountlists are not included in the results.
 	head := snaps.Snapshot(common.HexToHash("0x02"))
 	it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-	generator := &trieGenerator{}
-	hash := generateTrie(it, generator)
-	if exp, got := hash, common.HexToHash("807fbe7d4e4c62b80b1e7f682bb13ed409467df2a5903e5af44b88f6b08d0519"); exp != got {
-		t.Fatalf("expected %v got %v", exp, got)
+	hash := generateTrie(it, AppendOnlyGenerate)
+	if got, exp := hash, common.HexToHash("333a7c170a3d97bd53321d0f39b1a6b9a35b286ad2d3b3ced72ca339197c5dca"); exp != got {
+		t.Fatalf("expected %x got %x", exp, got)
 	}
 }
 
@@ -86,6 +87,7 @@ func TestTrieGenerationAppendonly(t *testing.T) {
 			base.root: base,
 		},
 	}
+	rand.Seed(1337)
 	// Stack three diff layers on top with various overlaps
 	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"),
 		randomAccountSet("0x11", "0x22", "0x33"), nil)
@@ -93,13 +95,16 @@ func TestTrieGenerationAppendonly(t *testing.T) {
 	// sorted accountlists are not included in the results.
 	head := snaps.Snapshot(common.HexToHash("0x02"))
 	it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-	generator := &trieGenerator{}
-	hash := generateTrie(it, generator)
-	if exp, got := hash, common.HexToHash("807fbe7d4e4c62b80b1e7f682bb13ed409467df2a5903e5af44b88f6b08d0519"); exp != got {
-		t.Fatalf("expected %v got %v", exp, got)
+	hash := generateTrie(it, AppendOnlyGenerate)
+	if got, exp := hash, common.HexToHash("c9dd8a9602446bfcce27efbb0188a78761bf5473dd363f4ae2f17975a308344a"); exp != got {
+		t.Fatalf("expected %x got %x", exp, got)
 	}
 }
 
+// BenchmarkTrieGeneration/4K/standard-6         	      98	  14141790 ns/op	 6164989 B/op	   57929 allocs/op
+// BenchmarkTrieGeneration/4K/pruning-6          	      72	  14015967 ns/op	 6604020 B/op	   54962 allocs/op
+// BenchmarkTrieGeneration/10K/standard-6        	      42	  30085495 ns/op	17280084 B/op	  151006 allocs/op
+// BenchmarkTrieGeneration/10K/pruning-6         	      32	  34536586 ns/op	16510731 B/op	  137402 allocs/op
 func BenchmarkTrieGeneration(b *testing.B) {
 	// Get a fairly large trie
 	// Create a custom account factory to recreate the same addresses
@@ -129,13 +134,22 @@ func BenchmarkTrieGeneration(b *testing.B) {
 		head := snaps.Snapshot(common.HexToHash("0x02"))
 		// Call it once to make it create the lists before test starts
 		head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-		b.ResetTimer()
-		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-			generator := &trieGenerator{}
-			generateTrie(it, generator)
-		}
+		b.Run("standard", func(b *testing.B) {
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
+				generateTrie(it, StdGenerate)
+			}
+		})
+		b.Run("pruning", func(b *testing.B) {
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
+				generateTrie(it, PruneGenerate)
+			}
+		})
 	})
 	b.Run("10K", func(b *testing.B) {
 		// 4K accounts
@@ -143,12 +157,21 @@ func BenchmarkTrieGeneration(b *testing.B) {
 		head := snaps.Snapshot(common.HexToHash("0x02"))
 		// Call it once to make it create the lists before test starts
 		head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-		b.ResetTimer()
-		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-			generator := &trieGenerator{}
-			generateTrie(it, generator)
-		}
+		b.Run("standard", func(b *testing.B) {
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
+				generateTrie(it, StdGenerate)
+			}
+		})
+		b.Run("pruning", func(b *testing.B) {
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
+				generateTrie(it, PruneGenerate)
+			}
+		})
 	})
 }

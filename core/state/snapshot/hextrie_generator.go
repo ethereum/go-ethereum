@@ -27,13 +27,11 @@ type leaf struct {
 	value []byte
 }
 
-// trieGenerator is a very basic hexary trie builder which uses the same Trie
-// as the rest of geth, with no enhancements or optimizations
-type trieGenerator struct{}
+type trieGeneratorFn func(in chan (leaf), out chan (common.Hash))
 
-//BenchmarkTrieGeneration/4K-8         	      73	  15309586 ns/op	 6614793 B/op	   55006 allocs/op
-//BenchmarkTrieGeneration/10K-8        	      28	  39538254 ns/op	16539589 B/op	  137515 allocs/op
-func (gen *trieGenerator) Generate3(in chan (leaf), out chan (common.Hash)) {
+// PruneGenerate is a hexary trie builder which collapses old nodes, but is still
+// based on more or less the ordinary trie builder
+func PruneGenerate(in chan (leaf), out chan (common.Hash)) {
 	t := trie.NewHashTrie()
 	for leaf := range in {
 		t.TryUpdate(leaf.key[:], leaf.value)
@@ -41,9 +39,9 @@ func (gen *trieGenerator) Generate3(in chan (leaf), out chan (common.Hash)) {
 	out <- t.Hash()
 }
 
-//BenchmarkTrieGeneration/4K-6         	      94	  12598506 ns/op	 6162370 B/op	   57921 allocs/op
-//BenchmarkTrieGeneration/10K-6        	      37	  33790908 ns/op	17278751 B/op	  151002 allocs/op
-func (gen *trieGenerator) Generate2(in chan (leaf), out chan (common.Hash)) {
+// StdGenerate is a very basic hexary trie builder which uses the same Trie
+// as the rest of geth, with no enhancements or optimizations
+func StdGenerate(in chan (leaf), out chan (common.Hash)) {
 	t, _ := trie.New(common.Hash{}, trie.NewDatabase(memorydb.New()))
 	for leaf := range in {
 		t.TryUpdate(leaf.key[:], leaf.value)
@@ -51,9 +49,9 @@ func (gen *trieGenerator) Generate2(in chan (leaf), out chan (common.Hash)) {
 	out <- t.Hash()
 }
 
-//BenchmarkTrieGeneration/4K-6         	     115	  12755614 ns/op	 2303051 B/op	   42678 allocs/op
-//BenchmarkTrieGeneration/10K-6        	      46	  25374595 ns/op	 5754446 B/op	  106676 allocs/op
-func (gen *trieGenerator) Generate(in chan (leaf), out chan (common.Hash)) {
+// AppendOnlyGenerate is a very basic hexary trie builder which uses the same Trie
+// as the rest of geth, but does not create as many objects while expanding the trie
+func AppendOnlyGenerate(in chan (leaf), out chan (common.Hash)) {
 	t := trie.NewAppendOnlyTrie()
 	for leaf := range in {
 		t.TryUpdate(leaf.key[:], leaf.value)
