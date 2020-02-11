@@ -52,8 +52,10 @@ type keyStore interface {
 	// Loads and decrypts the key from disk.
 	GetKey(addr common.Address, filename string, auth string) (*Key, error)
 	// Writes and encrypts the key.
+	// If it is a database backed keyStore, the input filename will be ignored
 	StoreKey(filename string, k *Key, auth string) error
-	// Joins filename with the key directory unless it is already absolute.
+	// JoinPath forms the Account URL Path
+	// If it is a database backed keyStore, the input should be the key string
 	JoinPath(filename string) string
 }
 

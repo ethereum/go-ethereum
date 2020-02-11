@@ -14,45 +14,34 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-/*
-
-This key store behaves as KeyStorePlain with the difference that
-the private key is encrypted and on disk uses another JSON encoding.
-
-The crypto is documented at https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition
-
-*/
-
 package keystore
 
 import (
-	"crypto/rand"
 	"fmt"
-	"io/ioutil"
-	"os"
-	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/cmd/clef/dbutil"
 	"github.com/ethereum/go-ethereum/common"
 )
 
-type keyStorePassphrase struct {
-	keysDirPath string
-	scryptN     int
-	scryptP     int
+type keyStorePassphraseDB struct {
+	db      *dbutil.KVStore
+	scryptN int
+	scryptP int
+
 	// skipKeyFileVerification disables the security-feature which does
 	// reads and decrypts any newly created keyfiles. This should be 'false' in all
 	// cases except tests -- setting this to 'true' is not recommended.
 	skipKeyFileVerification bool
 }
 
-func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) (*Key, error) {
-	// Load the key from the keystore and decrypt its contents
-	keyjson, err := ioutil.ReadFile(filename)
+func (ks keyStorePassphraseDB) GetKey(addr common.Address, auth string) (*Key, error) {
+	keyjson, err := ks.db.Get(addr.Hex())
 	if err != nil {
 		return nil, err
 	}
-	key, err := DecryptKey(keyjson, auth)
+
+	key, err := DecryptKey([]byte(keyjson), auth)
 	if err != nil {
 		return nil, err
 	}
@@ -63,42 +52,66 @@ func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) 
 	return key, nil
 }
 
-// StoreKey generates a key, encrypts with 'auth' and stores in the given directory
-func StoreKey(dir, auth string, scryptN, scryptP int) (accounts.Account, error) {
-	_, a, err := storeNewKey(&keyStorePassphrase{dir, scryptN, scryptP, false}, rand.Reader, auth)
-	return a, err
-}
-
-func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) error {
+func (ks keyStorePassphraseDB) StoreKey(key *Key, auth string) error {
 	keyjson, err := EncryptKey(key, auth, ks.scryptN, ks.scryptP)
 	if err != nil {
 		return err
 	}
-	// Write into temporary file
-	tmpName, err := writeTemporaryKeyFile(filename, keyjson)
+	// Write into database
+	err = ks.db.Put(key.Address.Hex(), string(keyjson))
 	if err != nil {
 		return err
 	}
 	if !ks.skipKeyFileVerification {
 		// Verify that we can decrypt the file with the given password.
-		_, err = ks.GetKey(key.Address, tmpName, auth)
+		_, err = ks.GetKey(key.Address, auth)
 		if err != nil {
 			msg := "An error was encountered when saving and verifying the keystore file. \n" +
 				"This indicates that the keystore is corrupted. \n" +
-				"The corrupted file is stored at \n%v\n" +
+				"The corrupted key is stored at \n%v\n" +
 				"Please file a ticket at:\n\n" +
 				"https://github.com/ethereum/go-ethereum/issues." +
 				"The error was : %s"
 			//lint:ignore ST1005 This is a message for the user
-			return fmt.Errorf(msg, tmpName, err)
+			return fmt.Errorf(msg, ks.db.Conf.DataSourceName(), err)
 		}
 	}
-	return os.Rename(tmpName, filename)
+	return nil
 }
 
-func (ks keyStorePassphrase) JoinPath(filename string) string {
-	if filepath.IsAbs(filename) {
-		return filename
+// JoinPath returns Path (custom database related) for creating accounts.Account
+func (ks keyStorePassphraseDB) JoinPath(key string) string {
+	return ks.db.Conf.Adapter + "/" + ks.db.Table + "/" + key
+}
+
+func (ks keyStorePassphraseDB) Exists(addr common.Address) bool {
+	return ks.db.Exists(addr.Hex())
+}
+
+func (ks keyStorePassphraseDB) All() []accounts.Account {
+	keys := ks.db.All()
+	accs := make([]accounts.Account, len(keys))
+	for idx, key := range keys {
+		accs[idx] = accounts.Account{
+			Address: common.HexToAddress(key),
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: ks.JoinPath(key)},
+		}
 	}
-	return filepath.Join(ks.keysDirPath, filename)
+	return accs
+}
+
+// Find returns the account with the correct URL for database backed account
+func (ks keyStorePassphraseDB) Find(a accounts.Account) (accounts.Account, error) {
+	found := ks.Exists(a.Address)
+	if found {
+		return accounts.Account{
+			Address: a.Address,
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: ks.JoinPath(a.Address.Hex())},
+		}, nil
+	}
+	return accounts.Account{}, ErrNoMatch
+}
+
+func (ks keyStorePassphraseDB) Size() int {
+	return ks.db.Size()
 }

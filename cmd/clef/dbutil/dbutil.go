@@ -66,9 +66,9 @@ func NewKVStore(path, table string) (*KVStore, error) {
 	}
 
 	return &KVStore{
-		conf:  conf,
+		Conf:  conf,
 		db:    db,
-		table: table,
+		Table: table,
 	}, nil
 }
 
@@ -124,8 +124,8 @@ CREATE TABLE IF NOT EXISTS %s (
 
 // KVStore is used for abstracting a generic database as a simple key value storage
 type KVStore struct {
-	table string
-	conf  *DBConf
+	Table string
+	Conf  *DBConf
 	db    *sql.DB
 }
 
@@ -145,8 +145,7 @@ func (kvstore *KVStore) Put(key, value string) error {
 	if len(key) == 0 {
 		return errors.New("0-length key")
 	}
-	_, err := kvstore.Get(key)
-	if err != nil || err == sql.ErrNoRows {
+	if !kvstore.Exists(key) {
 		return kvstore.insertRow(key, value)
 	} else {
 		return kvstore.updateRow(key, value)
@@ -161,15 +160,8 @@ func (kvstore *KVStore) Del(key string) {
 
 // All returns all keys in the database
 func (kvstore *KVStore) All() []string {
-	var size int
-	sql := kvstore.adjustSQLPlaceholder(countSQL)
-	err := kvstore.db.QueryRow(sql).Scan(&size)
-	if err != nil {
-		log.Error("Error counting key numbers: ", err)
-		return nil
-	}
-
-	sql = kvstore.adjustSQLPlaceholder(allSQL)
+	size := kvstore.Size()
+	sql := kvstore.adjustSQLPlaceholder(allSQL)
 	rows, err := kvstore.db.Query(sql)
 	if err != nil {
 		log.Error("Error retrieving all keys: ", err)
@@ -192,6 +184,24 @@ func (kvstore *KVStore) All() []string {
 	return result
 }
 
+// Exists returns a boolean indicates if the key exists or not
+func (kvstore *KVStore) Exists(key string) bool {
+	v, err := kvstore.Get(key)
+	return err == nil && v != ""
+}
+
+// Size returns number of entries that exists in the kvstore
+func (kvstore *KVStore) Size() int {
+	var size int
+	sql := kvstore.adjustSQLPlaceholder(countSQL)
+	err := kvstore.db.QueryRow(sql).Scan(&size)
+	if err != nil {
+		log.Error("Error counting key numbers: ", err)
+		return 0
+	}
+	return size
+}
+
 func (kvstore *KVStore) insertRow(key, value string) error {
 	sql := kvstore.adjustSQLPlaceholder(insertSQL)
 	return kvstore.exec(sql, key, value)
@@ -203,7 +213,7 @@ func (kvstore *KVStore) updateRow(key, value string) error {
 }
 
 func (kvstore *KVStore) adjustSQLPlaceholder(sql string) string {
-	switch kvstore.conf.Adapter {
+	switch kvstore.Conf.Adapter {
 	case "postgres":
 		params := strings.Count(sql, "?")
 		for i := 1; i <= params; i++ {
@@ -214,7 +224,7 @@ func (kvstore *KVStore) adjustSQLPlaceholder(sql string) string {
 		// since they're already using ? as placeholder, do nothing
 	}
 
-	return strings.ReplaceAll(sql, "tableName", kvstore.table)
+	return strings.ReplaceAll(sql, "tableName", kvstore.Table)
 }
 
 func (kvstore *KVStore) queryRow(query string, args ...interface{}) (string, error) {
