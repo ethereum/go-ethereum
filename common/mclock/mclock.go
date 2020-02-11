@@ -62,8 +62,8 @@ type Timer interface {
 type ChanTimer interface {
 	Timer
 
-	// The channel returned by Chan receives a value when the timer expires.
-	Chan() <-chan AbsTime
+	// The channel returned by C receives a value when the timer expires.
+	C() <-chan AbsTime
 	// Reset reschedules the timer with a new timeout.
 	// It should be invoked only on stopped or expired timers with drained channels.
 	Reset(time.Duration)
@@ -118,6 +118,6 @@ func (st *systemTimer) Reset(d time.Duration) {
 	st.Timer.Reset(d)
 }
 
-func (st *systemTimer) Chan() <-chan AbsTime {
+func (st *systemTimer) C() <-chan AbsTime {
 	return st.ch
 }

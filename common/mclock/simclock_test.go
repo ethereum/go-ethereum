@@ -124,7 +124,10 @@ func TestSimulatedTimerReset(t *testing.T) {
 	timer := c.NewTimer(timeout)
 	c.Run(2 * timeout)
 	select {
-	case <-timer.Chan():
+	case ftime := <-timer.C():
+		if ftime != AbsTime(timeout) {
+			t.Fatalf("wrong time %v sent on timer channel, want %v", ftime, AbsTime(timeout))
+		}
 	default:
 		t.Fatal("timer didn't fire")
 	}
@@ -132,7 +135,10 @@ func TestSimulatedTimerReset(t *testing.T) {
 	timer.Reset(timeout)
 	c.Run(2 * timeout)
 	select {
-	case <-timer.Chan():
+	case ftime := <-timer.C():
+		if ftime != AbsTime(3*timeout) {
+			t.Fatalf("wrong time %v sent on timer channel, want %v", ftime, AbsTime(3*timeout))
+		}
 	default:
 		t.Fatal("timer didn't fire again")
 	}
@@ -149,7 +155,7 @@ func TestSimulatedTimerStop(t *testing.T) {
 		t.Errorf("Stop returned true for fired timer")
 	}
 	select {
-	case <-timer.Chan():
+	case <-timer.C():
 	default:
 		t.Fatal("timer didn't fire")
 	}

@@ -119,7 +119,7 @@ func (s *Simulated) NewTimer(d time.Duration) ChanTimer {
 // After returns a channel which receives the current time after the clock
 // has advanced by d.
 func (s *Simulated) After(d time.Duration) <-chan AbsTime {
-	return s.NewTimer(d).Chan()
+	return s.NewTimer(d).C()
 }
 
 // AfterFunc runs fn after the clock has advanced by d. Unlike with the system
@@ -161,20 +161,18 @@ func (ev *simTimer) Reset(d time.Duration) {
 
 	ev.s.mu.Lock()
 	defer ev.s.mu.Unlock()
+	ev.at = ev.s.now.Add(d)
 	if ev.index < 0 {
-		// already expired
-		heap.Push(&ev.s.scheduled, ev)
+		heap.Push(&ev.s.scheduled, ev) // already expired
 	} else {
-		// hasn't fired yet, reschedule
-		ev.at = ev.s.now.Add(d)
-		heap.Fix(&ev.s.scheduled, ev.index)
+		heap.Fix(&ev.s.scheduled, ev.index) // hasn't fired yet, reschedule
 	}
 	ev.s.cond.Broadcast()
 }
 
-func (ev *simTimer) Chan() <-chan AbsTime {
+func (ev *simTimer) C() <-chan AbsTime {
 	if ev.ch == nil {
-		panic("mclock: Chan() on timer created by AfterFunc")
+		panic("mclock: C() on timer created by AfterFunc")
 	}
 	return ev.ch
 }
