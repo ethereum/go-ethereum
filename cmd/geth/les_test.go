@@ -11,31 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-/*
-func (g *gethNode) waitSynced() error {
-	ch := make(chan interface{})
-	sub, err := g.rpc.Subscribe(context.Background(), "eth", ch, "syncing")
-	if err != nil {
-		return fmt.Errorf("syncing: %v", err)
-	}
-	defer sub.Unsubscribe()
-	timeout := time.After(40 * time.Second)
-	for {
-		select {
-		case ev := <-ch:
-			syncing, ok := ev.(bool)
-			if ok && !syncing {
-				return nil
-			}
-		case err := <-sub.Err():
-			return fmt.Errorf("notification: %v", err)
-		case <-timeout:
-			return fmt.Errorf("timeout syncing")
-		}
-	}
-}
-*/
-
 type gethrpc struct {
 	name string
 	rpc  *rpc.Client
@@ -133,8 +108,9 @@ func startMiner(t *testing.T) *gethrpc {
 
 	runGeth(t, "--datadir", datadir, "init", "./testdata/genesis.json").WaitExit()
 	runGeth(t, "--datadir", datadir, "--gcmode=archive", "import", "./testdata/blockchain.blocks").WaitExit()
-	etherbase := "0x8888f1f195afa192cfee860698584c030f4c9db1"
-	g := startGethWithRpc(t, "miner", datadir, "--mine", "--nodiscover", "--light.serve=1", "--miner.etherbase", etherbase, "--nat=extip:127.0.0.1")
+	//etherbase := "0x8888f1f195afa192cfee860698584c030f4c9db1"
+	// g := startGethWithRpc(t, "miner", datadir, "--mine", "--nodiscover", "--light.serve=1", "--miner.etherbase", etherbase, "--nat=extip:127.0.0.1")
+	g := startGethWithRpc(t, "miner", datadir, "--nodiscover", "--light.serve=1", "--nat=extip:127.0.0.1")
 	return g
 }
 
@@ -143,7 +119,7 @@ func startLightServer(t *testing.T) *gethrpc {
 	defer os.RemoveAll(datadir)
 
 	runGeth(t, "--datadir", datadir, "init", "./testdata/genesis.json").WaitExit()
-	g := startGethWithRpc(t, "miner", datadir, "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1")
+	g := startGethWithRpc(t, "server", datadir, "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1")
 	return g
 }
 func startClient(t *testing.T, name string) *gethrpc {
