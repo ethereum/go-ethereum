@@ -187,7 +187,19 @@ func NewProtocolManager(config *params.ChainConfig, checkpoint *params.TrustedCh
 		}
 		return n, err
 	}
-	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, manager.removePeer)
+	headerRequest := func(id string) func(common.Hash) error {
+		if peer := manager.peers.Peer(id); peer != nil {
+			return peer.RequestOneHeader
+		}
+		return nil
+	}
+	bodyRequest := func(id string) func([]common.Hash) error {
+		if peer := manager.peers.Peer(id); peer != nil {
+			return peer.RequestBodies
+		}
+		return nil
+	}
+	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, manager.removePeer, headerRequest, bodyRequest)
 
 	return manager, nil
 }
