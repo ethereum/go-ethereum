@@ -1489,7 +1489,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 			cfg.DiscoveryURLs = splitAndTrim(urls)
 		}
 	}
-	fmt.Printf("%#v\n", cfg.DiscoveryURLs)
 
 	// Override any default configs for hard coded networks.
 	switch {
