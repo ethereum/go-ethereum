@@ -658,9 +658,9 @@ var (
 		Name:  "netrestrict",
 		Usage: "Restricts network communication to the given IP networks (CIDR masks)",
 	}
-	DiscoveryURLFlag = cli.StringSliceFlag{
-		Name:  "discovery-urls",
-		Usage: "Overrides DNS discovery entry points",
+	DNSDiscoveryFlag = cli.StringFlag{
+		Name:  "discovery.dns",
+		Usage: "Sets DNS discovery entry points (use \"\" to disable DNS)",
 	}
 
 	// ATM the url is left to the user and deployment to
@@ -815,9 +815,9 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 	switch {
 	case ctx.GlobalIsSet(BootnodesFlag.Name) || ctx.GlobalIsSet(BootnodesV4Flag.Name):
 		if ctx.GlobalIsSet(BootnodesV4Flag.Name) {
-			urls = strings.Split(ctx.GlobalString(BootnodesV4Flag.Name), ",")
+			urls = splitAndTrim(ctx.GlobalString(BootnodesV4Flag.Name))
 		} else {
-			urls = strings.Split(ctx.GlobalString(BootnodesFlag.Name), ",")
+			urls = splitAndTrim(ctx.GlobalString(BootnodesFlag.Name))
 		}
 	case ctx.GlobalBool(TestnetFlag.Name):
 		urls = params.TestnetBootnodes
@@ -849,9 +849,9 @@ func setBootstrapNodesV5(ctx *cli.Context, cfg *p2p.Config) {
 	switch {
 	case ctx.GlobalIsSet(BootnodesFlag.Name) || ctx.GlobalIsSet(BootnodesV5Flag.Name):
 		if ctx.GlobalIsSet(BootnodesV5Flag.Name) {
-			urls = strings.Split(ctx.GlobalString(BootnodesV5Flag.Name), ",")
+			urls = splitAndTrim(ctx.GlobalString(BootnodesV5Flag.Name))
 		} else {
-			urls = strings.Split(ctx.GlobalString(BootnodesFlag.Name), ",")
+			urls = splitAndTrim(ctx.GlobalString(BootnodesFlag.Name))
 		}
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		urls = params.RinkebyBootnodes
@@ -1481,9 +1481,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(RPCGlobalGasCap.Name) {
 		cfg.RPCGasCap = new(big.Int).SetUint64(ctx.GlobalUint64(RPCGlobalGasCap.Name))
 	}
-	if ctx.GlobalIsSet(DiscoveryURLFlag.Name) {
-		cfg.DiscoveryURLs = ctx.GlobalStringSlice(DiscoveryURLFlag.Name)
+	if ctx.GlobalIsSet(DNSDiscoveryFlag.Name) {
+		urls := ctx.GlobalString(DNSDiscoveryFlag.Name)
+		if urls == "" {
+			cfg.DiscoveryURLs = []string{}
+		} else {
+			cfg.DiscoveryURLs = splitAndTrim(urls)
+		}
 	}
+	fmt.Printf("%#v\n", cfg.DiscoveryURLs)
 
 	// Override any default configs for hard coded networks.
 	switch {
@@ -1492,19 +1498,19 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 			cfg.NetworkId = 3
 		}
 		cfg.Genesis = core.DefaultTestnetGenesisBlock()
-		setDNSDiscoveryDefaults(ctx, cfg, params.KnownDNSNetworks[params.TestnetGenesisHash])
+		setDNSDiscoveryDefaults(cfg, params.KnownDNSNetworks[params.TestnetGenesisHash])
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 4
 		}
 		cfg.Genesis = core.DefaultRinkebyGenesisBlock()
-		setDNSDiscoveryDefaults(ctx, cfg, params.KnownDNSNetworks[params.RinkebyGenesisHash])
+		setDNSDiscoveryDefaults(cfg, params.KnownDNSNetworks[params.RinkebyGenesisHash])
 	case ctx.GlobalBool(GoerliFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 5
 		}
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
-		setDNSDiscoveryDefaults(ctx, cfg, params.KnownDNSNetworks[params.GoerliGenesisHash])
+		setDNSDiscoveryDefaults(cfg, params.KnownDNSNetworks[params.GoerliGenesisHash])
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -1533,15 +1539,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		}
 	default:
 		if cfg.NetworkId == 1 {
-			setDNSDiscoveryDefaults(ctx, cfg, params.KnownDNSNetworks[params.MainnetGenesisHash])
+			setDNSDiscoveryDefaults(cfg, params.KnownDNSNetworks[params.MainnetGenesisHash])
 		}
 	}
 }
 
 // setDNSDiscoveryDefaults configures DNS discovery with the given URL if
-// no URL is set.
-func setDNSDiscoveryDefaults(ctx *cli.Context, cfg *eth.Config, url string) {
-	if len(cfg.DiscoveryURLs) > 0 {
+// no URLs are set.
+func setDNSDiscoveryDefaults(cfg *eth.Config, url string) {
+	if cfg.DiscoveryURLs != nil {
 		return
 	}
 	cfg.DiscoveryURLs = []string{url}
