@@ -28,7 +28,7 @@ func (g *gethrpc) callRPC(result interface{}, method string, args ...interface{}
 	}
 }
 
-func (g *gethrpc) addPeer(enode string) {
+func (g *gethrpc) addPeer(enode string, eventsToWait int) {
 	g.geth.Logf("adding peer to %v: %v", g.name, enode)
 	peerCh := make(chan *p2p.PeerEvent)
 	sub, err := g.rpc.Subscribe(context.Background(), "admin", peerCh, "peerEvents")
@@ -37,11 +37,18 @@ func (g *gethrpc) addPeer(enode string) {
 	}
 	defer sub.Unsubscribe()
 	g.callRPC(nil, "admin_addPeer", enode)
-	select {
-	case ev := <-peerCh:
-		g.geth.Logf("%v received event: type=%v, peer=%v", g.name, ev.Type, ev.Peer)
-	case err := <-sub.Err():
-		g.geth.Fatalf("%v sub error: %v", g.name, err)
+	timeout := time.After(14 * time.Second)
+	for i := 0; i < eventsToWait; i++ {
+		select {
+		case ev := <-peerCh:
+			g.geth.Logf("%v received event: type=%v, peer=%v", g.name, ev.Type, ev.Peer)
+		case err := <-sub.Err():
+			g.geth.Fatalf("%v sub error: %v", g.name, err)
+			return
+		case <-timeout:
+			g.geth.Error("timeout adding peer")
+			return
+		}
 	}
 }
 
@@ -133,13 +140,13 @@ func TestPriorityClient(t *testing.T) {
 	nodeInfo := make(map[string]interface{})
 	server.callRPC(&nodeInfo, "admin_nodeInfo")
 	serverEnode := nodeInfo["enode"].(string)
-	miner.addPeer(serverEnode)
+	miner.addPeer(serverEnode, 1)
 	server.waitSynced()
 
 	// Start client and add server as peer
 	client := startClient(t, "client")
 	defer client.killAndWait()
-	client.addPeer(serverEnode)
+	client.addPeer(serverEnode, 1)
 	var peers []interface{}
 	client.callRPC(&peers, "admin_peers")
 	if len(peers) != 1 {
@@ -156,7 +163,8 @@ func TestPriorityClient(t *testing.T) {
 	// 3_000_000_000 once we move to Go 1.13
 	tokens := 3000000000
 	server.callRPC(nil, "les_addBalance", prioNodeID, tokens, "foobar")
-	prio.addPeer(serverEnode)
+	// We expect two events, adding prio and removing the old client
+	prio.addPeer(serverEnode, 2)
 
 	// Check if priority client is actually syncing and the regular client got kicked out
 	prio.callRPC(&peers, "admin_peers")
@@ -167,7 +175,7 @@ func TestPriorityClient(t *testing.T) {
 	t.Logf("server peers(%v): %v, prioNodeID: %v", len(peers), peers[0], prioNodeID)
 
 	client.callRPC(&peers, "admin_peers")
-	if len(peers) > 0 {
-		t.Errorf("Expected: # of client peers == 0")
+	if len(peers) != 0 {
+		t.Errorf("Expected: # of client peers == 0, actual: %v", len(peers))
 	}
 }
