@@ -152,10 +152,10 @@ func TestPriorityClient(t *testing.T) {
 	defer prio.killAndWait()
 	prioNodeInfo := make(map[string]interface{})
 	prio.callRPC(&prioNodeInfo, "admin_nodeInfo")
-	nodeID := prioNodeInfo["id"].(string)
+	prioNodeID := prioNodeInfo["id"].(string)
 	// 3_000_000_000 once we move to Go 1.13
 	tokens := 3000000000
-	server.callRPC(nil, "les_addBalance", nodeID, tokens, "foobar")
+	server.callRPC(nil, "les_addBalance", prioNodeID, tokens, "foobar")
 	prio.addPeer(serverEnode)
 
 	// Check if priority client is actually syncing and the regular client got kicked out
@@ -163,6 +163,9 @@ func TestPriorityClient(t *testing.T) {
 	if len(peers) != 1 {
 		t.Errorf("Expected: # of prio peers == 1, actual: %v", len(peers))
 	}
+	server.callRPC(&peers, "admin_peers")
+	t.Logf("server peers(%v): %v, prioNodeID: %v", len(peers), peers[0], prioNodeID)
+
 	client.callRPC(&peers, "admin_peers")
 	if len(peers) > 0 {
 		t.Errorf("Expected: # of client peers == 0")
