@@ -287,7 +287,7 @@ func (n *ExecNode) Stop() error {
 	if err := n.Cmd.Process.Signal(syscall.SIGTERM); err != nil {
 		return n.Cmd.Process.Kill()
 	}
-	waitErr := make(chan error)
+	waitErr := make(chan error, 1)
 	go func() {
 		waitErr <- n.Cmd.Wait()
 	}()
