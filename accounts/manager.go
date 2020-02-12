@@ -144,7 +144,7 @@ func (am *Manager) Wallets() []Wallet {
 	return am.walletsNoLock()
 }
 
-// Wallets without lock.
+// walletsNoLock returns all registered wallets. Callers must hold am.lock.
 func (am *Manager) walletsNoLock() []Wallet {
 	cpy := make([]Wallet, len(am.wallets))
 	copy(cpy, am.wallets)
