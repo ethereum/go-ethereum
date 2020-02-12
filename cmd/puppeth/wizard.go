@@ -78,6 +78,13 @@ type wizard struct {
 
 	in   *bufio.Reader // Wrapper around stdin to allow reading user input
 	lock sync.Mutex    // Lock to protect configs during concurrent service discovery
+	consensusType	string
+        blocksTime	uint64
+	sealAccounts	string
+	preFundedAccounts	string
+	preCmpAddOneWei		string
+	networkID	uint64
+	nonInteract	bool
 }
 
 // read reads a single line from stdin, trimming if from spaces.
@@ -109,6 +116,9 @@ func (w *wizard) readString() string {
 // an empty line is entered, the default value is returned.
 func (w *wizard) readDefaultString(def string) string {
 	fmt.Printf("> ")
+	if w.nonInteract {
+		return def
+	}
 	text, err := w.in.ReadString('\n')
 	if err != nil {
 		log.Crit("Failed to read user input", "err", err)
@@ -303,6 +313,29 @@ func (w *wizard) readAddress() *common.Address {
 		address := common.BigToAddress(bigaddr)
 		return &address
 	}
+}
+
+// readAddress reads a single line from stdin, trimming if from spaces and converts
+// it to an Ethereum address.
+func (w *wizard) processAddress(address string) []common.Address {
+	// process the address from the string
+	var signers []common.Address
+	signerArray := strings.Split(address, ",")
+	for i := 0; i < len(signerArray); i++ {
+		text := strings.TrimSpace(signerArray[i])
+		if text == "" {
+			continue
+		}
+		// Make sure it looks ok and return it if so
+		if len(text) != 40 {
+			log.Error("Invalid address length, please retry")
+			continue
+		}
+		bigaddr, _ := new(big.Int).SetString(text, 16)
+		address := common.BigToAddress(bigaddr)
+		signers = append(signers, address)
+	}
+	return signers
 }
 
 // readDefaultAddress reads a single line from stdin, trimming if from spaces and

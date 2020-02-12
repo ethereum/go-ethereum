@@ -42,6 +42,31 @@ func main() {
 			Value: 3,
 			Usage: "log level to emit to the screen",
 		},
+		cli.StringFlag{
+			Name:  "consensusType",
+			Usage: "Which consensus engine to use? (default = null)\n \t\t1. Ethash - proof-of-work\n \t\t2. Clique - proof-of-authority",
+		},
+		cli.IntFlag{
+			Name:  "blocksTime",
+			Usage: "log level to emit to the screen",
+		},
+		cli.StringFlag{
+			Name:  "sealAccounts",
+			Usage: "Which accounts are allowed to seal? (mandatory at least one)",
+		},
+		cli.StringFlag{
+			Name:  "preFundedAccounts",
+			Usage: "Which accounts should be pre-funded? (advisable at least one)",
+		},
+		cli.StringFlag{
+			Name:  "preCmpAddressWithOneWei",
+			Usage: "Should the precompile-addresses (0x1 .. 0xff) be pre-funded with 1 wei?",
+		},
+		cli.Uint64Flag{
+			Name:  "networkID",
+			Value: 0,
+			Usage: "Specify your chain/network ID if you want an explicit one (default = random)",
+		},
 	}
 	app.Before = func(c *cli.Context) error {
 		// Set up the logger to print everything and the random generator
@@ -60,6 +85,15 @@ func runWizard(c *cli.Context) error {
 	if strings.Contains(network, " ") || strings.Contains(network, "-") || strings.ToLower(network) != network {
 		log.Crit("No spaces, hyphens or capital letters allowed in network name")
 	}
-	makeWizard(c.String("network")).run()
+	consensusType := c.String("consensusType")
+	blocksTime := uint64(c.Int("blocksTime"))
+	sealAccounts := c.String("sealAccounts")
+	preFundedAccounts := c.String("preFundedAccounts")
+        preCmpAddOneWei := c.String("preCmpAddressWithOneWei")
+	networkID := c.Uint64("networkID")
+
+	nonInteract := network != "" && consensusType != "" && blocksTime > 0 && sealAccounts != "" && preFundedAccounts != "" && preCmpAddOneWei != "" &&  networkID > 0
+
+	makeWizard(network, consensusType, blocksTime, sealAccounts, preFundedAccounts, preCmpAddOneWei, networkID, nonInteract).run()
 	return nil
 }

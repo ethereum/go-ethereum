@@ -30,7 +30,7 @@ import (
 )
 
 // makeWizard creates and returns a new puppeth wizard.
-func makeWizard(network string) *wizard {
+func makeWizard(network string, consensusType string, blocksTime uint64, sealAccounts string, preFundedAccounts string, preCmpAddOneWei string, networkID uint64, nonInteract bool) *wizard {
 	return &wizard{
 		network: network,
 		conf: config{
@@ -39,6 +39,13 @@ func makeWizard(network string) *wizard {
 		servers:  make(map[string]*sshClient),
 		services: make(map[string][]string),
 		in:       bufio.NewReader(os.Stdin),
+		consensusType:	consensusType,
+		blocksTime:	blocksTime,
+		sealAccounts:	sealAccounts,
+		preFundedAccounts:	preFundedAccounts,
+		preCmpAddOneWei:	preCmpAddOneWei,
+		networkID:	networkID,
+		nonInteract:	nonInteract,
 	}
 }
 
@@ -104,66 +111,71 @@ func (w *wizard) run() {
 		w.networkStats()
 	}
 	// Basics done, loop ad infinitum about what to do
-	for {
-		fmt.Println()
-		fmt.Println("What would you like to do? (default = stats)")
-		fmt.Println(" 1. Show network stats")
-		if w.conf.Genesis == nil {
-			fmt.Println(" 2. Configure new genesis")
-		} else {
-			fmt.Println(" 2. Manage existing genesis")
-		}
-		if len(w.servers) == 0 {
-			fmt.Println(" 3. Track new remote server")
-		} else {
-			fmt.Println(" 3. Manage tracked machines")
-		}
-		if len(w.services) == 0 {
-			fmt.Println(" 4. Deploy network components")
-		} else {
-			fmt.Println(" 4. Manage network components")
-		}
-
-		choice := w.read()
-		switch {
-		case choice == "" || choice == "1":
-			w.networkStats()
-
-		case choice == "2":
+        if w.nonInteract {
+		w.makeGenesis()
+		w.manageGenesis()
+	} else {
+		for {
+			fmt.Println()
+			fmt.Println("What would you like to do? (default = stats)")
+			fmt.Println(" 1. Show network stats")
 			if w.conf.Genesis == nil {
-				fmt.Println()
-				fmt.Println("What would you like to do? (default = create)")
-				fmt.Println(" 1. Create new genesis from scratch")
-				fmt.Println(" 2. Import already existing genesis")
-
-				choice := w.read()
-				switch {
-				case choice == "" || choice == "1":
-					w.makeGenesis()
-				case choice == "2":
-					w.importGenesis()
-				default:
-					log.Error("That's not something I can do")
-				}
+				fmt.Println(" 2. Configure new genesis")
 			} else {
-				w.manageGenesis()
+				fmt.Println(" 2. Manage existing genesis")
 			}
-		case choice == "3":
 			if len(w.servers) == 0 {
-				if w.makeServer() != "" {
-					w.networkStats()
-				}
+				fmt.Println(" 3. Track new remote server")
 			} else {
-				w.manageServers()
+				fmt.Println(" 3. Manage tracked machines")
 			}
-		case choice == "4":
 			if len(w.services) == 0 {
-				w.deployComponent()
+				fmt.Println(" 4. Deploy network components")
 			} else {
-				w.manageComponents()
+				fmt.Println(" 4. Manage network components")
 			}
-		default:
-			log.Error("That's not something I can do")
+
+			choice := w.read()
+			switch {
+			case choice == "" || choice == "1":
+				w.networkStats()
+
+			case choice == "2":
+				if w.conf.Genesis == nil {
+					fmt.Println()
+					fmt.Println("What would you like to do? (default = create)")
+					fmt.Println(" 1. Create new genesis from scratch")
+					fmt.Println(" 2. Import already existing genesis")
+
+					choice := w.read()
+					switch {
+					case choice == "" || choice == "1":
+						w.makeGenesis()
+					case choice == "2":
+						w.importGenesis()
+					default:
+						log.Error("That's not something I can do")
+					}
+				} else {
+					w.manageGenesis()
+				}
+			case choice == "3":
+				if len(w.servers) == 0 {
+					if w.makeServer() != "" {
+						w.networkStats()
+					}
+				} else {
+					w.manageServers()
+				}
+			case choice == "4":
+				if len(w.services) == 0 {
+					w.deployComponent()
+				} else {
+					w.manageComponents()
+				}
+			default:
+				log.Error("That's not something I can do")
+			}
 		}
 	}
 }
