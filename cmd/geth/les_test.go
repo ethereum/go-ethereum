@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -85,14 +84,14 @@ func (g *gethrpc) waitSynced() {
 	}
 }
 
-func startGethWithRpc(t *testing.T, name string, datadir string, args ...string) *gethrpc {
-	ipcpath := filepath.Join(datadir, "geth.ipc")
+func startGethWithRpc(t *testing.T, name string, args ...string) *gethrpc {
 	g := &gethrpc{test: t, name: name}
-	args = append([]string{"--datadir", datadir, "--networkid=42", "--port=0", "--nousb", "--rpc", "--rpcport=0", "--rpcapi=admin,eth,les"}, args...)
+	args = append([]string{"--networkid=42", "--port=0", "--nousb", "--rpc", "--rpcport=0", "--rpcapi=admin,eth,les"}, args...)
 	g.geth = runGeth(t, args...)
 	// wait before we can attach to it. TODO: probe for it properly
 	time.Sleep(1 * time.Second)
 	var err error
+	ipcpath := filepath.Join(g.geth.Datadir, "geth.ipc")
 	g.rpc, err = rpc.Dial(ipcpath)
 	if err != nil {
 		t.Fatalf("%v rpc connect: %v", name, err)
@@ -102,33 +101,23 @@ func startGethWithRpc(t *testing.T, name string, datadir string, args ...string)
 }
 
 func startServer(t *testing.T) *gethrpc {
-	datadir := tmpdir(t)
-	defer os.RemoveAll(datadir)
-
-	runGeth(t, "--datadir", datadir, "init", "./testdata/genesis.json").WaitExit()
-	runGeth(t, "--datadir", datadir, "--gcmode=archive", "import", "./testdata/blockchain.blocks").WaitExit()
-	g := startGethWithRpc(t, "server", datadir, "--nodiscover", "--light.serve=1", "--nat=extip:127.0.0.1")
+	runGeth(t, "init", "./testdata/genesis.json").WaitExit()
+	runGeth(t, "--gcmode=archive", "import", "./testdata/blockchain.blocks").WaitExit()
+	g := startGethWithRpc(t, "server", "--nodiscover", "--light.serve=1", "--nat=extip:127.0.0.1")
 	return g
 }
 
 func startLightServer(t *testing.T) *gethrpc {
-	datadir := tmpdir(t)
-	defer os.RemoveAll(datadir)
-
-	runGeth(t, "--datadir", datadir, "init", "./testdata/genesis.json").WaitExit()
+	runGeth(t, "init", "./testdata/genesis.json").WaitExit()
 	// Start it as a miner, otherwise it won't consider itself synced
 	// Use the coinbase from testdata/genesis.json
 	etherbase := "0x8888f1f195afa192cfee860698584c030f4c9db1"
-	g := startGethWithRpc(t, "lightserver", datadir, "--mine", "--miner.etherbase", etherbase, "--syncmode=fast", "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1")
+	g := startGethWithRpc(t, "lightserver", "--mine", "--miner.etherbase", etherbase, "--syncmode=fast", "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1")
 	return g
 }
 func startClient(t *testing.T, name string) *gethrpc {
-	// Create a temporary data directory to use
-	datadir := tmpdir(t)
-	defer os.RemoveAll(datadir)
-
-	runGeth(t, "--datadir", datadir, "init", "./testdata/genesis.json").WaitExit()
-	g := startGethWithRpc(t, name, datadir, "--nodiscover", "--syncmode=light")
+	runGeth(t, "init", "./testdata/genesis.json").WaitExit()
+	g := startGethWithRpc(t, name, "--nodiscover", "--syncmode=light")
 	return g
 }
 
