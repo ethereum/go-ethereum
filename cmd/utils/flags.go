@@ -658,9 +658,9 @@ var (
 		Name:  "netrestrict",
 		Usage: "Restricts network communication to the given IP networks (CIDR masks)",
 	}
-	DisableDNSFlag = cli.BoolFlag{
-		Name:  "nodns",
-		Usage: "disables DNS-based node discovery",
+	DiscoveryURLFlag = cli.StringSliceFlag{
+		Name:  "discovery-urls",
+		Usage: "Overrides DNS discovery entry points",
 	}
 
 	// ATM the url is left to the user and deployment to
@@ -1481,8 +1481,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(RPCGlobalGasCap.Name) {
 		cfg.RPCGasCap = new(big.Int).SetUint64(ctx.GlobalUint64(RPCGlobalGasCap.Name))
 	}
-	// if ctx.GlobalIsSet(DiscoveryURLFlag.Name) {
-	// }
+	if ctx.GlobalIsSet(DiscoveryURLFlag.Name) {
+		cfg.DiscoveryURLs = ctx.GlobalStringSlice(DiscoveryURLFlag.Name)
+	}
 
 	// Override any default configs for hard coded networks.
 	switch {
@@ -1530,13 +1531,17 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		if !ctx.GlobalIsSet(MinerGasPriceFlag.Name) && !ctx.GlobalIsSet(MinerLegacyGasPriceFlag.Name) {
 			cfg.Miner.GasPrice = big.NewInt(1)
 		}
+	default:
+		if cfg.NetworkId == 1 {
+			setDNSDiscoveryDefaults(ctx, cfg, params.KnownDNSNetworks[params.MainnetGenesisHash])
+		}
 	}
 }
 
 // setDNSDiscoveryDefaults configures DNS discovery with the given URL if
 // no URL is set.
 func setDNSDiscoveryDefaults(ctx *cli.Context, cfg *eth.Config, url string) {
-	if len(cfg.DiscoveryURLs) > 0 || ctx.GlobalIsSet(DisableDNSFlag.Name) {
+	if len(cfg.DiscoveryURLs) > 0 {
 		return
 	}
 	cfg.DiscoveryURLs = []string{url}

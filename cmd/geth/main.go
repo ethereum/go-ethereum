@@ -131,7 +131,7 @@ var (
 		utils.NetrestrictFlag,
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
-		utils.DisableDNSFlag,
+		utils.DiscoveryURLFlag,
 		utils.DeveloperFlag,
 		utils.DeveloperPeriodFlag,
 		utils.TestnetFlag,
