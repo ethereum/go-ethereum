@@ -4,7 +4,7 @@ sort_key: B
 ---
 <!-- TODO: Maybe move? -->
 
-Go Ethereum (as its name implies) is written in [Go](https://golang.org), and as such to build from source code you need to have at least Go 1.7 installed (preferably the latest version, currently at 1.9.2). This guide does not go into details on how to install Go itself, for that please read the [Go installation instructions](https://golang.org/doc/install).
+Go Ethereum (as its name implies) is written in [Go](https://golang.org), and as such to build from source code you need to have a Go version as recent as possible. This guide does not go into details on how to install Go itself, for that please read the [Go installation instructions](https://golang.org/doc/install).
 
 Assuming you have Go installed, you can download our project via:
 
