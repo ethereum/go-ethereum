@@ -11,9 +11,10 @@ import (
 )
 
 type gethrpc struct {
-	name string
-	rpc  *rpc.Client
-	geth *testgeth
+	name     string
+	rpc      *rpc.Client
+	geth     *testgeth
+	nodeInfo *p2p.NodeInfo
 }
 
 func (g *gethrpc) killAndWait() {
@@ -28,8 +29,9 @@ func (g *gethrpc) callRPC(result interface{}, method string, args ...interface{}
 	}
 }
 
-func (g *gethrpc) addPeer(enode string, eventsToWait int) {
-	g.geth.Logf("adding peer to %v: %v", g.name, enode)
+func (g *gethrpc) addPeer(peer *gethrpc, eventsToWait int) {
+	g.geth.Logf("%v.addPeer(%v)", g.name, peer.name)
+	enode := peer.getNodeInfo().Enode
 	peerCh := make(chan *p2p.PeerEvent)
 	sub, err := g.rpc.Subscribe(context.Background(), "admin", peerCh, "peerEvents")
 	if err != nil {
@@ -50,6 +52,16 @@ func (g *gethrpc) addPeer(enode string, eventsToWait int) {
 			return
 		}
 	}
+}
+
+// Use this function instead of `g.nodeInfo` directly
+func (g *gethrpc) getNodeInfo() *p2p.NodeInfo {
+	if g.nodeInfo != nil {
+		return g.nodeInfo
+	}
+	g.nodeInfo = &p2p.NodeInfo{}
+	g.callRPC(&g.nodeInfo, "admin_nodeInfo")
+	return g.nodeInfo
 }
 
 func (g *gethrpc) waitSynced() {
@@ -129,50 +141,49 @@ func startClient(t *testing.T, name string) *gethrpc {
 
 func TestPriorityClient(t *testing.T) {
 	// Init and start server
-	miner := startServer(t)
-	defer miner.killAndWait()
-
-	server := startLightServer(t)
+	server := startServer(t)
 	defer server.killAndWait()
 
-	// Make the server sync to the miner
-	// This is the only way to make the server synced
-	nodeInfo := make(map[string]interface{})
-	server.callRPC(&nodeInfo, "admin_nodeInfo")
-	serverEnode := nodeInfo["enode"].(string)
-	miner.addPeer(serverEnode, 1)
-	server.waitSynced()
+	lightServer := startLightServer(t)
+	defer lightServer.killAndWait()
 
-	// Start client and add server as peer
+	// Make the lightServer sync to the server
+	// This is the only way to make the lightServer synced
+	lightServer.addPeer(server, 1)
+	lightServer.waitSynced()
+
+	// Start client and add lightServer as peer
 	client := startClient(t, "client")
 	defer client.killAndWait()
-	client.addPeer(serverEnode, 1)
-	var peers []interface{}
+	client.addPeer(lightServer, 1)
+	var peers []*p2p.PeerInfo
 	client.callRPC(&peers, "admin_peers")
 	if len(peers) != 1 {
 		t.Errorf("Expected: # of client peers == 1, actual: %v", len(peers))
 		return
 	}
 
-	// Set up priority client, get its nodeID, increase its balance on the server
+	// Set up priority client, get its nodeID, increase its balance on the lightServer
 	prio := startClient(t, "prio")
 	defer prio.killAndWait()
-	prioNodeInfo := make(map[string]interface{})
-	prio.callRPC(&prioNodeInfo, "admin_nodeInfo")
-	prioNodeID := prioNodeInfo["id"].(string)
 	// 3_000_000_000 once we move to Go 1.13
 	tokens := 3000000000
-	server.callRPC(nil, "les_addBalance", prioNodeID, tokens, "foobar")
+	lightServer.callRPC(nil, "les_addBalance", prio.getNodeInfo().ID, tokens, "foobar")
 	// We expect two events, adding prio and removing the old client
-	prio.addPeer(serverEnode, 2)
+	prio.addPeer(lightServer, 1)
 
 	// Check if priority client is actually syncing and the regular client got kicked out
 	prio.callRPC(&peers, "admin_peers")
 	if len(peers) != 1 {
 		t.Errorf("Expected: # of prio peers == 1, actual: %v", len(peers))
 	}
-	server.callRPC(&peers, "admin_peers")
-	t.Logf("server peers(%v): %v, prioNodeID: %v", len(peers), peers[0], prioNodeID)
+
+	lightServer.callRPC(&peers, "admin_peers")
+	for _, p := range peers {
+		if p.Enode == client.getNodeInfo().Enode {
+			t.Error("client is still a peer of lightServer")
+		}
+	}
 
 	client.callRPC(&peers, "admin_peers")
 	if len(peers) != 0 {
