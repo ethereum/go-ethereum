@@ -14,35 +14,34 @@ type gethrpc struct {
 	name string
 	rpc  *rpc.Client
 	geth *testgeth
-	test *testing.T
 }
 
 func (g *gethrpc) killAndWait() {
-	g.test.Logf("Killing %v", g.name)
+	g.geth.Logf("Killing %v", g.name)
 	g.geth.Kill()
 	g.geth.WaitExit()
 }
 
 func (g *gethrpc) callRPC(result interface{}, method string, args ...interface{}) {
 	if err := g.rpc.Call(&result, method, args...); err != nil {
-		g.test.Fatalf("callRPC %v: %v", method, err)
+		g.geth.Fatalf("callRPC %v: %v", method, err)
 	}
 }
 
 func (g *gethrpc) addPeer(enode string) {
-	g.test.Logf("adding peer to %v: %v", g.name, enode)
+	g.geth.Logf("adding peer to %v: %v", g.name, enode)
 	peerCh := make(chan *p2p.PeerEvent)
 	sub, err := g.rpc.Subscribe(context.Background(), "admin", peerCh, "peerEvents")
 	if err != nil {
-		g.test.Fatalf("subscribe %v: %v", g.name, err)
+		g.geth.Fatalf("subscribe %v: %v", g.name, err)
 	}
 	defer sub.Unsubscribe()
 	g.callRPC(nil, "admin_addPeer", enode)
 	select {
 	case ev := <-peerCh:
-		g.test.Logf("%v received event: type=%v, peer=%v", g.name, ev.Type, ev.Peer)
+		g.geth.Logf("%v received event: type=%v, peer=%v", g.name, ev.Type, ev.Peer)
 	case err := <-sub.Err():
-		g.test.Fatalf("%v sub error: %v", g.name, err)
+		g.geth.Fatalf("%v sub error: %v", g.name, err)
 	}
 }
 
@@ -52,7 +51,7 @@ func (g *gethrpc) waitSynced() {
 	g.callRPC(&result, "eth_syncing")
 	syncing, ok := result.(bool)
 	if ok && !syncing {
-		g.test.Logf("%v already synced", g.name)
+		g.geth.Logf("%v already synced", g.name)
 		return
 	}
 
@@ -60,32 +59,32 @@ func (g *gethrpc) waitSynced() {
 	ch := make(chan interface{})
 	sub, err := g.rpc.Subscribe(context.Background(), "eth", ch, "syncing")
 	if err != nil {
-		g.test.Fatalf("%v syncing: %v", g.name, err)
+		g.geth.Fatalf("%v syncing: %v", g.name, err)
 	}
 	defer sub.Unsubscribe()
-	g.test.Log("subscribed")
+	g.geth.Log("subscribed")
 	timeout := time.After(4 * time.Second)
 	for {
 		select {
 		case ev := <-ch:
-			g.test.Log("'syncing' event", ev)
+			g.geth.Log("'syncing' event", ev)
 			syncing, ok := ev.(bool)
 			if ok && !syncing {
 				return
 			}
-			g.test.Log("Other 'syncing' event", ev)
+			g.geth.Log("Other 'syncing' event", ev)
 		case err := <-sub.Err():
-			g.test.Fatalf("%v notification: %v", g.name, err)
+			g.geth.Fatalf("%v notification: %v", g.name, err)
 			return
 		case <-timeout:
-			g.test.Fatalf("%v timeout syncing", g.name)
+			g.geth.Fatalf("%v timeout syncing", g.name)
 			return
 		}
 	}
 }
 
 func startGethWithRpc(t *testing.T, name string, args ...string) *gethrpc {
-	g := &gethrpc{test: t, name: name}
+	g := &gethrpc{name: name}
 	args = append([]string{"--networkid=42", "--port=0", "--nousb", "--rpc", "--rpcport=0", "--rpcapi=admin,eth,les"}, args...)
 	g.geth = runGeth(t, args...)
 	// wait before we can attach to it. TODO: probe for it properly
