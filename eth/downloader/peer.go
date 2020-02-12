@@ -226,6 +226,8 @@ func (p *peerConnection) FetchNodeData(hashes []common.Hash) error {
 // requests. Its estimated header retrieval throughput is updated with that measured
 // just now.
 func (p *peerConnection) SetHeadersIdle(delivered int) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
 	p.setIdle(p.headerStarted, delivered, &p.headerThroughput, &p.headerIdle)
 }
 
@@ -233,6 +235,8 @@ func (p *peerConnection) SetHeadersIdle(delivered int) {
 // requests. Its estimated body retrieval throughput is updated with that measured
 // just now.
 func (p *peerConnection) SetBodiesIdle(delivered int) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
 	p.setIdle(p.blockStarted, delivered, &p.blockThroughput, &p.blockIdle)
 }
 
@@ -240,6 +244,8 @@ func (p *peerConnection) SetBodiesIdle(delivered int) {
 // retrieval requests. Its estimated receipt retrieval throughput is updated
 // with that measured just now.
 func (p *peerConnection) SetReceiptsIdle(delivered int) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
 	p.setIdle(p.receiptStarted, delivered, &p.receiptThroughput, &p.receiptIdle)
 }
 
@@ -247,6 +253,8 @@ func (p *peerConnection) SetReceiptsIdle(delivered int) {
 // data retrieval requests. Its estimated state retrieval throughput is updated
 // with that measured just now.
 func (p *peerConnection) SetNodeDataIdle(delivered int) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
 	p.setIdle(p.stateStarted, delivered, &p.stateThroughput, &p.stateIdle)
 }
 
@@ -255,9 +263,6 @@ func (p *peerConnection) SetNodeDataIdle(delivered int) {
 func (p *peerConnection) setIdle(started time.Time, delivered int, throughput *float64, idle *int32) {
 	// Irrelevant of the scaling, make sure the peer ends up idle
 	defer atomic.StoreInt32(idle, 0)
-
-	p.lock.Lock()
-	defer p.lock.Unlock()
 
 	// If nothing was delivered (hard timeout / unavailable data), reduce throughput to minimum
 	if delivered == 0 {
