@@ -153,7 +153,8 @@ func TestPriorityClient(t *testing.T) {
 	prioNodeInfo := make(map[string]interface{})
 	prio.callRPC(&prioNodeInfo, "admin_nodeInfo")
 	nodeID := prioNodeInfo["id"].(string)
-	tokens := 3_000_000_000
+	// 3_000_000_000 once we move to Go 1.13
+	tokens := 3000000000
 	server.callRPC(nil, "les_addBalance", nodeID, tokens, "foobar")
 	prio.addPeer(serverEnode)
 
