@@ -138,6 +138,7 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 
 	if !f.typecheck(rvalue.Type()) {
 		f.sendLock <- struct{}{}
+		f.mu.Unlock()
 		panic(feedTypeError{op: "Send", got: rvalue.Type(), want: f.etype})
 	}
 	f.mu.Unlock()
