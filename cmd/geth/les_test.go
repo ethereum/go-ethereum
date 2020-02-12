@@ -98,19 +98,17 @@ func startGethWithRpc(t *testing.T, name string, datadir string, args ...string)
 	if err != nil {
 		t.Fatalf("%v rpc connect: %v", name, err)
 	}
-	t.Logf("%v rpc dial done", name)
+	t.Logf("Started with rpc: %v", name)
 	return g
 }
 
-func startMiner(t *testing.T) *gethrpc {
+func startServer(t *testing.T) *gethrpc {
 	datadir := tmpdir(t)
 	defer os.RemoveAll(datadir)
 
 	runGeth(t, "--datadir", datadir, "init", "./testdata/genesis.json").WaitExit()
 	runGeth(t, "--datadir", datadir, "--gcmode=archive", "import", "./testdata/blockchain.blocks").WaitExit()
-	//etherbase := "0x8888f1f195afa192cfee860698584c030f4c9db1"
-	// g := startGethWithRpc(t, "miner", datadir, "--mine", "--nodiscover", "--light.serve=1", "--miner.etherbase", etherbase, "--nat=extip:127.0.0.1")
-	g := startGethWithRpc(t, "miner", datadir, "--nodiscover", "--light.serve=1", "--nat=extip:127.0.0.1")
+	g := startGethWithRpc(t, "server", datadir, "--nodiscover", "--light.serve=1", "--nat=extip:127.0.0.1")
 	return g
 }
 
@@ -119,7 +117,10 @@ func startLightServer(t *testing.T) *gethrpc {
 	defer os.RemoveAll(datadir)
 
 	runGeth(t, "--datadir", datadir, "init", "./testdata/genesis.json").WaitExit()
-	g := startGethWithRpc(t, "server", datadir, "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1")
+	// Start it as a miner, otherwise it won't consider itself synced
+	// Use the coinbase from testdata/genesis.json
+	etherbase := "0x8888f1f195afa192cfee860698584c030f4c9db1"
+	g := startGethWithRpc(t, "lightserver", datadir, "--mine", "--miner.etherbase", etherbase, "--syncmode=fast", "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1")
 	return g
 }
 func startClient(t *testing.T, name string) *gethrpc {
@@ -134,7 +135,7 @@ func startClient(t *testing.T, name string) *gethrpc {
 
 func TestPriorityClient(t *testing.T) {
 	// Init and start server
-	miner := startMiner(t)
+	miner := startServer(t)
 	defer miner.killAndWait()
 
 	server := startLightServer(t)
