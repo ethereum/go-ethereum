@@ -41,7 +41,7 @@ func (g *gethrpc) addPeer(enode string) {
 	g.callRPC(nil, "admin_addPeer", enode)
 	select {
 	case ev := <-peerCh:
-		g.test.Logf("%v received event: %#v", g.name, ev)
+		g.test.Logf("%v received event: type=%v, peer=%v", g.name, ev.Type, ev.Peer)
 	case err := <-sub.Err():
 		g.test.Fatalf("%v sub error: %v", g.name, err)
 	}
@@ -89,7 +89,6 @@ func startGethWithRpc(t *testing.T, name string, datadir string, args ...string)
 	ipcpath := filepath.Join(datadir, "geth.ipc")
 	g := &gethrpc{test: t, name: name}
 	args = append([]string{"--datadir", datadir, "--networkid=42", "--port=0", "--nousb", "--rpc", "--rpcport=0", "--rpcapi=admin,eth,les"}, args...)
-	args = append([]string{"--verbosity=5"}, args...)
 	g.geth = runGeth(t, args...)
 	// wait before we can attach to it. TODO: probe for it properly
 	time.Sleep(1 * time.Second)
