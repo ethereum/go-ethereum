@@ -170,6 +170,7 @@ func TestPriorityClient(t *testing.T) {
 	tokens := 3000000000
 	lightServer.callRPC(nil, "les_addBalance", prio.getNodeInfo().ID, tokens, "foobar")
 	// We expect two events, adding prio and removing the old client
+	// TODO: s/1/2/ or understand why we don't receive a message when client is removed
 	prio.addPeer(lightServer, 1)
 
 	// Check if priority client is actually syncing and the regular client got kicked out
