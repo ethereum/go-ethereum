@@ -153,7 +153,9 @@ func (lc *LightChain) HeaderChain() *core.HeaderChain {
 func (lc *LightChain) loadLastState() error {
 	if head := rawdb.ReadHeadHeaderHash(lc.chainDb); head == (common.Hash{}) {
 		// Corrupt or empty database, init from scratch
+		lc.chainmu.Unlock()
 		lc.Reset()
+		lc.chainmu.Lock()
 	} else {
 		if header := lc.GetHeaderByHash(head); header != nil {
 			lc.hc.SetCurrentHeader(header)

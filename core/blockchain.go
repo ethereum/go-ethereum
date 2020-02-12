@@ -329,6 +329,8 @@ func (bc *BlockChain) loadLastState() error {
 	if head == (common.Hash{}) {
 		// Corrupt or empty database, init from scratch
 		log.Warn("Empty database, resetting chain")
+		bc.chainmu.Unlock()
+		defer bc.chainmu.Lock()
 		return bc.Reset()
 	}
 	// Make sure the entire head block is available
@@ -336,6 +338,8 @@ func (bc *BlockChain) loadLastState() error {
 	if currentBlock == nil {
 		// Corrupt or empty database, init from scratch
 		log.Warn("Head block missing, resetting chain", "hash", head)
+		bc.chainmu.Unlock()
+		defer bc.chainmu.Lock()
 		return bc.Reset()
 	}
 	// Make sure the state associated with the block is available
