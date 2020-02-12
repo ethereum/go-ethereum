@@ -79,7 +79,7 @@ type wizard struct {
 	in   *bufio.Reader // Wrapper around stdin to allow reading user input
 	lock sync.Mutex    // Lock to protect configs during concurrent service discovery
 	consensusType	string
-        blocksTime	uint64
+	blocksTime	uint64
 	sealAccounts	string
 	preFundedAccounts	string
 	preCmpAddOneWei		string
