@@ -150,6 +150,7 @@ func (s *scheduler) scheduleDeliveries(pend chan uint64, done chan []byte, quit 
 			// Wait until the request is honoured
 			s.lock.Lock()
 			res := s.responses[idx]
+			cached := res.cached
 			s.lock.Unlock()
 
 			select {
@@ -161,7 +162,7 @@ func (s *scheduler) scheduleDeliveries(pend chan uint64, done chan []byte, quit 
 			select {
 			case <-quit:
 				return
-			case done <- res.cached:
+			case done <- cached:
 			}
 		}
 	}
