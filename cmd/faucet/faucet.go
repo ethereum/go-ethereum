@@ -360,6 +360,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// Send over the initial stats and the latest header
+	f.lock.RLock()
 	if err = send(conn, map[string]interface{}{
 		"funds":    new(big.Int).Div(balance, ether),
 		"funded":   nonce,
@@ -367,8 +368,10 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 		"requests": f.reqs,
 	}, 3*time.Second); err != nil {
 		log.Warn("Failed to send initial stats to client", "err", err)
+		f.lock.RUnlock()
 		return
 	}
+	f.lock.RUnlock()
 	if err = send(conn, head, 3*time.Second); err != nil {
 		log.Warn("Failed to send initial header to client", "err", err)
 		return
