@@ -994,14 +994,27 @@ func TestLogRebirth(t *testing.T) {
 		signer      = types.NewEIP155Signer(gspec.Config.ChainID)
 		newLogCh    = make(chan bool)
 		removeLogCh = make(chan bool)
+		errMsgCh    = make(chan string, 5) // Receive error message from validateLogEvent
 	)
+
+	defer func() {
+		n := 5 // 5 is the number of times validateLogEvent is used to create new goroutines
+		for i := 0; i < n; i++ {
+			if msg := <-errMsgCh; msg != "" {
+				t.Fatal(msg)
+			}
+		}
+	}()
 
 	// validateLogEvent checks whether the received logs number is equal with expected.
 	validateLogEvent := func(sink interface{}, result chan bool, expect int) {
 		chanval := reflect.ValueOf(sink)
 		chantyp := chanval.Type()
 		if chantyp.Kind() != reflect.Chan || chantyp.ChanDir()&reflect.RecvDir == 0 {
-			t.Fatalf("invalid channel, given type %v", chantyp)
+			errMsgCh <- fmt.Sprintf("invalid channel, given type %v", chantyp)
+			return
+		} else {
+			errMsgCh <- ""
 		}
 		cnt := 0
 		var recv []reflect.Value
