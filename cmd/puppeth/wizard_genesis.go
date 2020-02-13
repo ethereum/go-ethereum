@@ -94,7 +94,7 @@ func (w *wizard) makeGenesis() {
 
 		var signers []common.Address
 		if w.sealAccounts != "" {
-			signers = w.processAddress(w.sealAccounts)	
+			signers = w.processAddress(w.sealAccounts)
 		} else {
 			for {
 				if address := w.readAddress(); address != nil {
