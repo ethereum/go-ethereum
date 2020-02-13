@@ -29,7 +29,7 @@ func (g *gethrpc) callRPC(result interface{}, method string, args ...interface{}
 	}
 }
 
-func (g *gethrpc) addPeer(peer *gethrpc, eventsToWait int) {
+func (g *gethrpc) addPeer(peer *gethrpc) {
 	g.geth.Logf("%v.addPeer(%v)", g.name, peer.name)
 	enode := peer.getNodeInfo().Enode
 	peerCh := make(chan *p2p.PeerEvent)
@@ -41,17 +41,13 @@ func (g *gethrpc) addPeer(peer *gethrpc, eventsToWait int) {
 	g.callRPC(nil, "admin_addPeer", enode)
 	dur := 14 * time.Second
 	timeout := time.After(dur)
-	for i := 0; i < eventsToWait; i++ {
-		select {
-		case ev := <-peerCh:
-			g.geth.Logf("%v received event: type=%v, peer=%v", g.name, ev.Type, ev.Peer)
-		case err := <-sub.Err():
-			g.geth.Fatalf("%v sub error: %v", g.name, err)
-			return
-		case <-timeout:
-			g.geth.Error("timeout adding peer after", dur)
-			return
-		}
+	select {
+	case ev := <-peerCh:
+		g.geth.Logf("%v received event: type=%v, peer=%v", g.name, ev.Type, ev.Peer)
+	case err := <-sub.Err():
+		g.geth.Fatalf("%v sub error: %v", g.name, err)
+	case <-timeout:
+		g.geth.Error("timeout adding peer after", dur)
 	}
 }
 
@@ -136,7 +132,7 @@ func startLightServer(t *testing.T) *gethrpc {
 }
 func startClient(t *testing.T, name string) *gethrpc {
 	runGeth(t, "init", "./testdata/genesis.json").WaitExit()
-	g := startGethWithRpc(t, name, "--nodiscover", "--syncmode=light")
+	g := startGethWithRpc(t, name, "--nodiscover", "--syncmode=light", "--nat=extip:127.0.0.1")
 	return g
 }
 
@@ -151,32 +147,30 @@ func TestPriorityClient(t *testing.T) {
 
 	// Make the lightServer sync to the server
 	// This is the only way to make the lightServer synced
-	lightServer.addPeer(server, 1)
+	lightServer.addPeer(server)
 	lightServer.waitSynced()
 
 	// Start client and add lightServer as peer
-	client := startClient(t, "client")
-	defer client.killAndWait()
-	client.addPeer(lightServer, 1)
+	freeCli := startClient(t, "freeCli")
+	defer freeCli.killAndWait()
+	freeCli.addPeer(lightServer)
 	var peers []*p2p.PeerInfo
-	client.callRPC(&peers, "admin_peers")
+	freeCli.callRPC(&peers, "admin_peers")
 	if len(peers) != 1 {
 		t.Errorf("Expected: # of client peers == 1, actual: %v", len(peers))
 		return
 	}
 
 	// Set up priority client, get its nodeID, increase its balance on the lightServer
-	prio := startClient(t, "prio")
-	defer prio.killAndWait()
+	prioCli := startClient(t, "prioCli")
+	defer prioCli.killAndWait()
 	// 3_000_000_000 once we move to Go 1.13
 	tokens := 3000000000
-	lightServer.callRPC(nil, "les_addBalance", prio.getNodeInfo().ID, tokens, "foobar")
-	// We expect two events, adding prio and removing the old client
-	// TODO: s/1/2/ or understand why we don't receive a message when client is removed
-	prio.addPeer(lightServer, 1)
+	lightServer.callRPC(nil, "les_addBalance", prioCli.getNodeInfo().ID, tokens, "foobar")
+	prioCli.addPeer(lightServer)
 
 	// Check if priority client is actually syncing and the regular client got kicked out
-	prio.callRPC(&peers, "admin_peers")
+	prioCli.callRPC(&peers, "admin_peers")
 	if len(peers) != 1 {
 		t.Errorf("Expected: # of prio peers == 1, actual: %v", len(peers))
 	}
@@ -184,23 +178,18 @@ func TestPriorityClient(t *testing.T) {
 	nodes := map[string]*gethrpc{
 		server.getNodeInfo().ID:      server,
 		lightServer.getNodeInfo().ID: lightServer,
-		client.getNodeInfo().ID:      client,
-		prio.getNodeInfo().ID:        prio,
+		freeCli.getNodeInfo().ID:     freeCli,
+		prioCli.getNodeInfo().ID:     prioCli,
 	}
 	lightServer.callRPC(&peers, "admin_peers")
 	peersWithNames := make(map[string]string)
 	for _, p := range peers {
 		peersWithNames[nodes[p.ID].name] = p.ID
 	}
-	if _, freeClientFound := peersWithNames[client.name]; freeClientFound {
+	if _, freeClientFound := peersWithNames[freeCli.name]; freeClientFound {
 		t.Error("client is still a peer of lightServer", peersWithNames)
 	}
-	if _, prioClientFound := peersWithNames[prio.name]; !prioClientFound {
+	if _, prioClientFound := peersWithNames[prioCli.name]; !prioClientFound {
 		t.Error("prio client is not among lightServer peers", peersWithNames)
-	}
-
-	client.callRPC(&peers, "admin_peers")
-	if len(peers) != 0 {
-		t.Errorf("Expected: # of client peers == 0, actual: %v", len(peers))
 	}
 }
