@@ -39,7 +39,8 @@ func (g *gethrpc) addPeer(peer *gethrpc, eventsToWait int) {
 	}
 	defer sub.Unsubscribe()
 	g.callRPC(nil, "admin_addPeer", enode)
-	timeout := time.After(14 * time.Second)
+	dur := 14 * time.Second
+	timeout := time.After(dur)
 	for i := 0; i < eventsToWait; i++ {
 		select {
 		case ev := <-peerCh:
@@ -48,7 +49,7 @@ func (g *gethrpc) addPeer(peer *gethrpc, eventsToWait int) {
 			g.geth.Fatalf("%v sub error: %v", g.name, err)
 			return
 		case <-timeout:
-			g.geth.Error("timeout adding peer")
+			g.geth.Error("timeout adding peer after", dur)
 			return
 		}
 	}
@@ -105,6 +106,7 @@ func (g *gethrpc) waitSynced() {
 func startGethWithRpc(t *testing.T, name string, args ...string) *gethrpc {
 	g := &gethrpc{name: name}
 	args = append([]string{"--networkid=42", "--port=0", "--nousb", "--rpc", "--rpcport=0", "--rpcapi=admin,eth,les"}, args...)
+	t.Logf("Starting %v with rpc: %v", name, args)
 	g.geth = runGeth(t, args...)
 	// wait before we can attach to it. TODO: probe for it properly
 	time.Sleep(1 * time.Second)
@@ -114,7 +116,6 @@ func startGethWithRpc(t *testing.T, name string, args ...string) *gethrpc {
 	if err != nil {
 		t.Fatalf("%v rpc connect: %v", name, err)
 	}
-	t.Logf("Started with rpc: %v", name)
 	return g
 }
 
@@ -140,6 +141,7 @@ func startClient(t *testing.T, name string) *gethrpc {
 }
 
 func TestPriorityClient(t *testing.T) {
+
 	// Init and start server
 	server := startServer(t)
 	defer server.killAndWait()
@@ -179,11 +181,22 @@ func TestPriorityClient(t *testing.T) {
 		t.Errorf("Expected: # of prio peers == 1, actual: %v", len(peers))
 	}
 
+	nodes := map[string]*gethrpc{
+		server.getNodeInfo().ID:      server,
+		lightServer.getNodeInfo().ID: lightServer,
+		client.getNodeInfo().ID:      client,
+		prio.getNodeInfo().ID:        prio,
+	}
 	lightServer.callRPC(&peers, "admin_peers")
+	peersWithNames := make(map[string]string)
 	for _, p := range peers {
-		if p.Enode == client.getNodeInfo().Enode {
-			t.Error("client is still a peer of lightServer")
-		}
+		peersWithNames[nodes[p.ID].name] = p.ID
+	}
+	if _, freeClientFound := peersWithNames[client.name]; freeClientFound {
+		t.Error("client is still a peer of lightServer", peersWithNames)
+	}
+	if _, prioClientFound := peersWithNames[prio.name]; !prioClientFound {
+		t.Error("prio client is not among lightServer peers", peersWithNames)
 	}
 
 	client.callRPC(&peers, "admin_peers")
