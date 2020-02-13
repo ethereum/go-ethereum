@@ -17,6 +17,7 @@
 package mclock
 
 import (
+	"container/heap"
 	"sync"
 	"time"
 )
@@ -32,18 +33,24 @@ import (
 // the timeout using a channel or semaphore.
 type Simulated struct {
 	now       AbsTime
-	scheduled []*simTimer
+	scheduled simTimerHeap
 	mu        sync.RWMutex
 	cond      *sync.Cond
-	lastId    uint64
 }
 
-// simTimer implements Timer on the virtual clock.
+// simTimer implements ChanTimer on the virtual clock.
 type simTimer struct {
-	do func()
-	at AbsTime
-	id uint64
-	s  *Simulated
+	at    AbsTime
+	index int // position in s.scheduled
+	s     *Simulated
+	do    func()
+	ch    <-chan AbsTime
+}
+
+func (s *Simulated) init() {
+	if s.cond == nil {
+		s.cond = sync.NewCond(&s.mu)
+	}
 }
 
 // Run moves the clock by the given duration, executing all timers before that duration.
@@ -53,14 +60,9 @@ func (s *Simulated) Run(d time.Duration) {
 
 	end := s.now + AbsTime(d)
 	var do []func()
-	for len(s.scheduled) > 0 {
-		ev := s.scheduled[0]
-		if ev.at > end {
-			break
-		}
-		s.now = ev.at
+	for len(s.scheduled) > 0 && s.scheduled[0].at <= end {
+		ev := heap.Pop(&s.scheduled).(*simTimer)
 		do = append(do, ev.do)
-		s.scheduled = s.scheduled[1:]
 	}
 	s.now = end
 	s.mu.Unlock()
@@ -102,14 +104,22 @@ func (s *Simulated) Sleep(d time.Duration) {
 	<-s.After(d)
 }
 
+// NewTimer creates a timer which fires when the clock has advanced by d.
+func (s *Simulated) NewTimer(d time.Duration) ChanTimer {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ch := make(chan AbsTime, 1)
+	var timer *simTimer
+	timer = s.schedule(d, func() { ch <- timer.at })
+	timer.ch = ch
+	return timer
+}
+
 // After returns a channel which receives the current time after the clock
 // has advanced by d.
-func (s *Simulated) After(d time.Duration) <-chan time.Time {
-	after := make(chan time.Time, 1)
-	s.AfterFunc(d, func() {
-		after <- (time.Time{}).Add(time.Duration(s.now))
-	})
-	return after
+func (s *Simulated) After(d time.Duration) <-chan AbsTime {
+	return s.NewTimer(d).C()
 }
 
 // AfterFunc runs fn after the clock has advanced by d. Unlike with the system
@@ -117,46 +127,83 @@ func (s *Simulated) After(d time.Duration) <-chan time.Time {
 func (s *Simulated) AfterFunc(d time.Duration, fn func()) Timer {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	return s.schedule(d, fn)
+}
+
+func (s *Simulated) schedule(d time.Duration, fn func()) *simTimer {
 	s.init()
 
 	at := s.now + AbsTime(d)
-	s.lastId++
-	id := s.lastId
-	l, h := 0, len(s.scheduled)
-	ll := h
-	for l != h {
-		m := (l + h) / 2
-		if (at < s.scheduled[m].at) || ((at == s.scheduled[m].at) && (id < s.scheduled[m].id)) {
-			h = m
-		} else {
-			l = m + 1
-		}
-	}
 	ev := &simTimer{do: fn, at: at, s: s}
-	s.scheduled = append(s.scheduled, nil)
-	copy(s.scheduled[l+1:], s.scheduled[l:ll])
-	s.scheduled[l] = ev
+	heap.Push(&s.scheduled, ev)
 	s.cond.Broadcast()
 	return ev
 }
 
 func (ev *simTimer) Stop() bool {
-	s := ev.s
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	ev.s.mu.Lock()
+	defer ev.s.mu.Unlock()
 
-	for i := 0; i < len(s.scheduled); i++ {
-		if s.scheduled[i] == ev {
-			s.scheduled = append(s.scheduled[:i], s.scheduled[i+1:]...)
-			s.cond.Broadcast()
-			return true
-		}
+	if ev.index < 0 {
+		return false
 	}
-	return false
+	heap.Remove(&ev.s.scheduled, ev.index)
+	ev.s.cond.Broadcast()
+	ev.index = -1
+	return true
 }
 
-func (s *Simulated) init() {
-	if s.cond == nil {
-		s.cond = sync.NewCond(&s.mu)
+func (ev *simTimer) Reset(d time.Duration) {
+	if ev.ch == nil {
+		panic("mclock: Reset() on timer created by AfterFunc")
 	}
+
+	ev.s.mu.Lock()
+	defer ev.s.mu.Unlock()
+	ev.at = ev.s.now.Add(d)
+	if ev.index < 0 {
+		heap.Push(&ev.s.scheduled, ev) // already expired
+	} else {
+		heap.Fix(&ev.s.scheduled, ev.index) // hasn't fired yet, reschedule
+	}
+	ev.s.cond.Broadcast()
+}
+
+func (ev *simTimer) C() <-chan AbsTime {
+	if ev.ch == nil {
+		panic("mclock: C() on timer created by AfterFunc")
+	}
+	return ev.ch
+}
+
+type simTimerHeap []*simTimer
+
+func (h *simTimerHeap) Len() int {
+	return len(*h)
+}
+
+func (h *simTimerHeap) Less(i, j int) bool {
+	return (*h)[i].at < (*h)[j].at
+}
+
+func (h *simTimerHeap) Swap(i, j int) {
+	(*h)[i], (*h)[j] = (*h)[j], (*h)[i]
+	(*h)[i].index = i
+	(*h)[j].index = j
+}
+
+func (h *simTimerHeap) Push(x interface{}) {
+	t := x.(*simTimer)
+	t.index = len(*h)
+	*h = append(*h, t)
+}
+
+func (h *simTimerHeap) Pop() interface{} {
+	end := len(*h) - 1
+	t := (*h)[end]
+	t.index = -1
+	(*h)[end] = nil
+	*h = (*h)[:end]
+	return t
 }
