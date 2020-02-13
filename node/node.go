@@ -241,6 +241,7 @@ func (n *Node) Start() error {
 			service.Stop()
 		}
 		running.Stop()
+		n.log.Error("Aborting startup", "error", err)
 		return err
 	}
 	// Finish initializing the startup
