@@ -76,7 +76,7 @@ type wizard struct {
 	servers  map[string]*sshClient // SSH connections to servers to administer
 	services map[string][]string   // Ethereum services known to be running on servers
 
-	in   *bufio.Reader // Wrapper around stdin to allow reading user input
+	in	*bufio.Reader // Wrapper around stdin to allow reading user input
 	lock sync.Mutex    // Lock to protect configs during concurrent service discovery
 	consensusType	string
 	blocksTime	uint64
