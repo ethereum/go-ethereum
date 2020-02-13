@@ -77,7 +77,7 @@ func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common
 
 // fetcherTester is a test simulator for mocking out local block chain.
 type fetcherTester struct {
-	fetcher *Fetcher
+	fetcher *BlockFetcher
 
 	hashes []common.Hash                // Hash chain belonging to the tester
 	blocks map[common.Hash]*types.Block // Blocks belonging to the tester
@@ -93,7 +93,7 @@ func newTester() *fetcherTester {
 		blocks: map[common.Hash]*types.Block{genesis.Hash(): genesis},
 		drops:  make(map[string]bool),
 	}
-	tester.fetcher = New(tester.getBlock, tester.verifyHeader, tester.handleProposedBlock, tester.broadcastBlock, tester.chainHeight, tester.insertBlock, tester.prepareBlock, tester.dropPeer)
+	tester.fetcher = NewBlockFetcher(tester.getBlock, tester.verifyHeader, tester.handleProposedBlock, tester.broadcastBlock, tester.chainHeight, tester.insertChain, tester.prepareBlock, tester.dropPeer)
 	tester.fetcher.Start()
 
 	return tester
@@ -556,9 +556,9 @@ func testImportDeduplication(t *testing.T, protocol int) {
 	bodyFetcher := tester.makeBodyFetcher("valid", blocks, 0)
 
 	counter := uint32(0)
-	tester.fetcher.insertBlock = func(block *types.Block) error {
+	tester.fetcher.insertChain = func(blocks types.Blocks) (int, error) {
 		atomic.AddUint32(&counter, uint32(1))
-		return tester.insertBlock(block)
+		return tester.insertChain(blocks)
 	}
 	// Instrument the fetching and imported events
 	fetching := make(chan []common.Hash)

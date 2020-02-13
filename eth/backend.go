@@ -282,8 +282,8 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config, XDCXServ *XDCx.XDCX
 			return block, false, nil
 		}
 
-		eth.protocolManager.fetcher.SetSignHook(signHook)
-		eth.protocolManager.fetcher.SetAppendM2HeaderHook(appendM2HeaderHook)
+		eth.protocolManager.blockFetcher.SetSignHook(signHook)
+		eth.protocolManager.blockFetcher.SetAppendM2HeaderHook(appendM2HeaderHook)
 
 		/*
 			XDPoS1.0 Specific hooks
