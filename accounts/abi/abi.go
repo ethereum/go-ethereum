@@ -139,59 +139,24 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 	for _, field := range fields {
 		switch field.Type {
 		case "constructor":
-			abi.Constructor = Method{
-				Inputs: field.Inputs,
-
-				// Note for constructor the `StateMutability` can only
-				// be payable or nonpayable according to the output of
-				// compiler. So constant is always false.
-				StateMutability: field.StateMutability,
-
-				// Legacy fields, keep them for backward compatibility
-				Constant: field.Constant,
-				Payable:  field.Payable,
-			}
-		case "function":
+			abi.Constructor = NewMethod("", "", field.StateMutability, field.Constant, field.Payable, false, false, field.Inputs, nil)
+		// empty defaults to function according to the abi spec
+		case "function", "":
 			name := field.Name
 			_, ok := abi.Methods[name]
 			for idx := 0; ok; idx++ {
 				name = fmt.Sprintf("%s%d", field.Name, idx)
 				_, ok = abi.Methods[name]
 			}
-			abi.Methods[name] = Method{
-				Name:            name,
-				RawName:         field.Name,
-				StateMutability: field.StateMutability,
-				Inputs:          field.Inputs,
-				Outputs:         field.Outputs,
-
-				// Legacy fields, keep them for backward compatibility
-				Constant: field.Constant,
-				Payable:  field.Payable,
-			}
+			isConst := field.Constant || field.StateMutability == "pure" || field.StateMutability == "view"
+			abi.Methods[name] = NewMethod(name, field.Name, field.StateMutability, isConst, field.Payable, false, false, field.Inputs, field.Outputs)
 		case "fallback":
 			// New introduced function type in v0.6.0, check more detail
 			// here https://solidity.readthedocs.io/en/v0.6.0/contracts.html#fallback-function
 			if abi.HasFallback() {
 				return errors.New("only single fallback is allowed")
 			}
-			abi.Fallback = Method{
-				Name:    "",
-				RawName: "",
-
-				// The `StateMutability` can only be payable or nonpayable,
-				// so the constant is always false.
-				StateMutability: field.StateMutability,
-				IsFallback:      true,
-
-				// Fallback doesn't have any input or output
-				Inputs:  nil,
-				Outputs: nil,
-
-				// Legacy fields, keep them for backward compatibility
-				Constant: field.Constant,
-				Payable:  field.Payable,
-			}
+			abi.Fallback = NewMethod("", "", field.StateMutability, field.Constant, field.Payable, true, false, nil, nil)
 		case "receive":
 			// New introduced function type in v0.6.0, check more detail
 			// here https://solidity.readthedocs.io/en/v0.6.0/contracts.html#fallback-function
@@ -201,23 +166,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			if field.StateMutability != "payable" {
 				return errors.New("the statemutability of receive can only be payable")
 			}
-			abi.Receive = Method{
-				Name:    "",
-				RawName: "",
-
-				// The `StateMutability` can only be payable, so constant
-				// is always true while payable is always false.
-				StateMutability: field.StateMutability,
-				IsReceive:       true,
-
-				// Receive doesn't have any input or output
-				Inputs:  nil,
-				Outputs: nil,
-
-				// Legacy fields, keep them for backward compatibility
-				Constant: field.Constant,
-				Payable:  field.Payable,
-			}
+			abi.Receive = NewMethod("", "", "payable", field.Constant, field.Payable, false, true, nil, nil)
 		case "event":
 			name := field.Name
 			_, ok := abi.Events[name]
