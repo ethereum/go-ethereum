@@ -42,26 +42,26 @@ func indirectInterfaceOrPtr(v reflect.Value) reflect.Value {
 // reflectIntKind returns the reflect using the given size and
 // unsignedness.
 func reflectIntKindAndType(unsigned bool, size int) (reflect.Kind, reflect.Type) {
-	switch size {
-	case 8:
-		if unsigned {
+	if unsigned {
+		switch size {
+		case 8:
 			return reflect.Uint8, uint8T
-		}
-		return reflect.Int8, int8T
-	case 16:
-		if unsigned {
+		case 16:
 			return reflect.Uint16, uint16T
-		}
-		return reflect.Int16, int16T
-	case 32:
-		if unsigned {
+		case 32:
 			return reflect.Uint32, uint32T
-		}
-		return reflect.Int32, int32T
-	case 64:
-		if unsigned {
+		case 64:
 			return reflect.Uint64, uint64T
 		}
+	}
+	switch size {
+	case 8:
+		return reflect.Int8, int8T
+	case 16:
+		return reflect.Int16, int16T
+	case 32:
+		return reflect.Int32, int32T
+	case 64:
 		return reflect.Int64, int64T
 	}
 	return reflect.Ptr, bigT
@@ -88,8 +88,8 @@ func set(dst, src reflect.Value) error {
 		return set(dst.Elem(), src)
 	case srcType.AssignableTo(dstType) && dst.CanSet():
 		dst.Set(src)
-	case dstType.Kind() == reflect.Slice && srcType.Kind() == reflect.Slice:
-		return setSlice(dst, src)
+	case dstType.Kind() == reflect.Slice && srcType.Kind() == reflect.Slice && dst.CanSet():
+		setSlice(dst, src)
 	default:
 		return fmt.Errorf("abi: cannot unmarshal %v in to %v", src.Type(), dst.Type())
 	}
@@ -98,15 +98,13 @@ func set(dst, src reflect.Value) error {
 
 // setSlice attempts to assign src to dst when slices are not assignable by default
 // e.g. src: [][]byte -> dst: [][15]byte
-func setSlice(dst, src reflect.Value) error {
+// setSlice ignores if we cannot copy all of src' elements.
+func setSlice(dst, src reflect.Value) {
 	slice := reflect.MakeSlice(dst.Type(), src.Len(), src.Len())
 	for i := 0; i < src.Len(); i++ {
-		v := src.Index(i)
-		reflect.Copy(slice.Index(i), v)
+		reflect.Copy(slice.Index(i), src.Index(i))
 	}
-
 	dst.Set(slice)
-	return nil
 }
 
 // requireAssignable assures that `dest` is a pointer and it's not an interface.
