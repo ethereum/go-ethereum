@@ -89,7 +89,7 @@ func runWizard(c *cli.Context) error {
 	blocksTime := uint64(c.Int("blocksTime"))
 	sealAccounts := c.String("sealAccounts")
 	preFundedAccounts := c.String("preFundedAccounts")
-        preCmpAddOneWei := c.String("preCmpAddressWithOneWei")
+	preCmpAddOneWei := c.String("preCmpAddressWithOneWei")
 	networkID := c.Uint64("networkID")
 
 	nonInteract := network != "" && consensusType != "" && blocksTime > 0 && sealAccounts != "" && preFundedAccounts != "" && preCmpAddOneWei != "" &&  networkID > 0

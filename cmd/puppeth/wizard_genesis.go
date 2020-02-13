@@ -64,7 +64,7 @@ func (w *wizard) makeGenesis() {
 	if w.consensusType != "" {
 		choice = w.consensusType
 		fmt.Println(w.consensusType)
-	}else{
+	} else {
 		choice = w.read()
 	}
 	switch {
@@ -84,7 +84,7 @@ func (w *wizard) makeGenesis() {
 		fmt.Println("How many seconds should blocks take? (default = 15)")
 		if w.blocksTime > 0 {
 			genesis.Config.Clique.Period = w.blocksTime
-		}else{
+		} else {
 			genesis.Config.Clique.Period = uint64(w.readDefaultInt(15))
 		}
 
@@ -133,7 +133,7 @@ func (w *wizard) makeGenesis() {
 				}
 				continue
 			}
-	}else{
+	} else {
 		for {
 			// Read the address of the account to fund
 			if address := w.readAddress(); address != nil {
