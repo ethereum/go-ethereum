@@ -39,6 +39,7 @@ var (
 )
 
 // U256 converts a big Int into a 256bit EVM number.
+// This operation is destructive.
 func U256(n *big.Int) []byte {
 	return math.PaddedBigBytes(math.U256(n), 32)
 }
