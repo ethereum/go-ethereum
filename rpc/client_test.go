@@ -297,7 +297,7 @@ func TestClientSubscribeClose(t *testing.T) {
 
 	var (
 		nc   = make(chan int)
-		errc = make(chan error)
+		errc = make(chan error, 1)
 		sub  *ClientSubscription
 		err  error
 	)

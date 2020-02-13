@@ -131,7 +131,7 @@ func TestServerDial(t *testing.T) {
 		t.Fatalf("could not setup listener: %v", err)
 	}
 	defer listener.Close()
-	accepted := make(chan net.Conn)
+	accepted := make(chan net.Conn, 1)
 	go func() {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -670,7 +670,7 @@ func TestServerInboundThrottle(t *testing.T) {
 	conn.Close()
 
 	// Dial again. This time the server should close the connection immediately.
-	connClosed := make(chan struct{})
+	connClosed := make(chan struct{}, 1)
 	conn, err = net.DialTimeout("tcp", srv.ListenAddr, timeout)
 	if err != nil {
 		t.Fatalf("could not dial: %v", err)
