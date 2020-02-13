@@ -95,6 +95,10 @@ type Config struct {
 	NetworkId uint64 // Network ID to use for selecting peers to connect to
 	SyncMode  downloader.SyncMode
 
+	// This can be set to list of enrtree:// URLs which will be queried for
+	// for nodes to connect to.
+	DiscoveryURLs []string
+
 	NoPruning  bool // Whether to disable pruning and flush everything to disk
 	NoPrefetch bool // Whether to disable prefetching and only load state on demand
 
@@ -156,8 +160,8 @@ type Config struct {
 	CheckpointOracle *params.CheckpointOracleConfig `toml:",omitempty"`
 
 	// Istanbul block override (TODO: remove after the fork)
-	OverrideIstanbul *big.Int
+	OverrideIstanbul *big.Int `toml:",omitempty"`
 
 	// MuirGlacier block override (TODO: remove after the fork)
-	OverrideMuirGlacier *big.Int
+	OverrideMuirGlacier *big.Int `toml:",omitempty"`
 }

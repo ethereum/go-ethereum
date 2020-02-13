@@ -21,6 +21,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		Genesis                 *core.Genesis `toml:",omitempty"`
 		NetworkId               uint64
 		SyncMode                downloader.SyncMode
+		DiscoveryURLs           []string
 		NoPruning               bool
 		NoPrefetch              bool
 		Whitelist               map[uint64]common.Hash `toml:"-"`
@@ -49,11 +50,14 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		RPCGasCap               *big.Int                       `toml:",omitempty"`
 		Checkpoint              *params.TrustedCheckpoint      `toml:",omitempty"`
 		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
+		OverrideIstanbul        *big.Int                       `toml:",omitempty"`
+		OverrideMuirGlacier     *big.Int                       `toml:",omitempty"`
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
 	enc.NetworkId = c.NetworkId
 	enc.SyncMode = c.SyncMode
+	enc.DiscoveryURLs = c.DiscoveryURLs
 	enc.NoPruning = c.NoPruning
 	enc.NoPrefetch = c.NoPrefetch
 	enc.Whitelist = c.Whitelist
@@ -82,6 +86,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.RPCGasCap = c.RPCGasCap
 	enc.Checkpoint = c.Checkpoint
 	enc.CheckpointOracle = c.CheckpointOracle
+	enc.OverrideIstanbul = c.OverrideIstanbul
+	enc.OverrideMuirGlacier = c.OverrideMuirGlacier
 	return &enc, nil
 }
 
@@ -91,6 +97,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		Genesis                 *core.Genesis `toml:",omitempty"`
 		NetworkId               *uint64
 		SyncMode                *downloader.SyncMode
+		DiscoveryURLs           []string
 		NoPruning               *bool
 		NoPrefetch              *bool
 		Whitelist               map[uint64]common.Hash `toml:"-"`
@@ -119,6 +126,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		RPCGasCap               *big.Int                       `toml:",omitempty"`
 		Checkpoint              *params.TrustedCheckpoint      `toml:",omitempty"`
 		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
+		OverrideIstanbul        *big.Int                       `toml:",omitempty"`
+		OverrideMuirGlacier     *big.Int                       `toml:",omitempty"`
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -132,6 +141,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.SyncMode != nil {
 		c.SyncMode = *dec.SyncMode
+	}
+	if dec.DiscoveryURLs != nil {
+		c.DiscoveryURLs = dec.DiscoveryURLs
 	}
 	if dec.NoPruning != nil {
 		c.NoPruning = *dec.NoPruning
@@ -216,6 +228,12 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.CheckpointOracle != nil {
 		c.CheckpointOracle = dec.CheckpointOracle
+	}
+	if dec.OverrideIstanbul != nil {
+		c.OverrideIstanbul = dec.OverrideIstanbul
+	}
+	if dec.OverrideMuirGlacier != nil {
+		c.OverrideMuirGlacier = dec.OverrideMuirGlacier
 	}
 	return nil
 }

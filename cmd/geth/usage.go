@@ -182,6 +182,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.BootnodesFlag,
 			utils.BootnodesV4Flag,
 			utils.BootnodesV5Flag,
+			utils.DNSDiscoveryFlag,
 			utils.ListenPortFlag,
 			utils.MaxPeersFlag,
 			utils.MaxPendingPeersFlag,

@@ -19,6 +19,8 @@ package eth
 import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -37,6 +39,7 @@ func (e ethEntry) ENRKey() string {
 	return "eth"
 }
 
+// startEthEntryUpdate starts the ENR updater loop.
 func (eth *Ethereum) startEthEntryUpdate(ln *enode.LocalNode) {
 	var newHead = make(chan core.ChainHeadEvent, 10)
 	sub := eth.blockchain.SubscribeChainHeadEvent(newHead)
@@ -58,4 +61,13 @@ func (eth *Ethereum) startEthEntryUpdate(ln *enode.LocalNode) {
 
 func (eth *Ethereum) currentEthEntry() *ethEntry {
 	return &ethEntry{ForkID: forkid.NewID(eth.blockchain)}
+}
+
+// setupDiscovery creates the node discovery source for the eth protocol.
+func (eth *Ethereum) setupDiscovery(cfg *p2p.Config) (enode.Iterator, error) {
+	if cfg.NoDiscovery || len(eth.config.DiscoveryURLs) == 0 {
+		return nil, nil
+	}
+	client := dnsdisc.NewClient(dnsdisc.Config{})
+	return client.NewIterator(eth.config.DiscoveryURLs...)
 }
