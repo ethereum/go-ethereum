@@ -340,11 +340,13 @@ func (c *Console) Evaluate(statement string) {
 // the configured user prompter.
 func (c *Console) Interactive() {
 	var (
-		prompt    = c.prompt          // Current prompt line (used for multi-line inputs)
-		indents   = 0                 // Current number of input indents (used for multi-line inputs)
-		input     = ""                // Current user input
-		scheduler = make(chan string) // Channel to send the next prompt on and receive the input
+		prompt    = c.prompt            // Current prompt line (used for multi-line inputs)
+		indents   = 0                   // Current number of input indents (used for multi-line inputs)
+		input     = ""                  // Current user input
+		scheduler = make(chan string)   // Channel to send the next prompt on and receive the input
+		stop      = make(chan struct{}) // Channel to signal the return of Interactive
 	)
+	defer close(stop)
 	// Start a goroutine to listen for prompt requests and send back inputs
 	go func() {
 		for {
@@ -354,14 +356,22 @@ func (c *Console) Interactive() {
 				// In case of an error, either clear the prompt or fail
 				if err == liner.ErrPromptAborted { // ctrl-C
 					prompt, indents, input = c.prompt, 0, ""
-					scheduler <- ""
+					select {
+					case <-stop:
+						return
+					case scheduler <- "":
+					}
 					continue
 				}
 				close(scheduler)
 				return
 			}
 			// User input retrieved, send for interpretation and loop
-			scheduler <- line
+			select {
+			case <-stop:
+				return
+			case scheduler <- line:
+			}
 		}
 	}()
 	// Monitor Ctrl-C too in case the input is empty and we need to bail

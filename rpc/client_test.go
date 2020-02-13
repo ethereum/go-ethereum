@@ -415,13 +415,19 @@ func TestClientHTTP(t *testing.T) {
 		results    = make([]echoResult, 100)
 		errc       = make(chan error)
 		wantResult = echoResult{"a", 1, new(echoArgs)}
+		stop       = make(chan struct{})
 	)
+	defer close(stop)
 	defer client.Close()
 	for i := range results {
 		i := i
 		go func() {
-			errc <- client.Call(&results[i], "test_echo",
-				wantResult.String, wantResult.Int, wantResult.Args)
+			select {
+			case <-stop:
+				return
+			case errc <- client.Call(&results[i], "test_echo",
+				wantResult.String, wantResult.Int, wantResult.Args):
+			}
 		}()
 	}
 

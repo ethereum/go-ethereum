@@ -218,6 +218,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	var (
 		loopErr   = make(chan error)
 		newBlock  = make(chan struct{})
+		stop      = make(chan struct{})
 		subscribe = make(chan struct{})
 	)
 	listenNewBlock := func() {
@@ -229,9 +230,17 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 			block := item.Data.(core.NewMinedBlockEvent).Block
 			_, err := chain.InsertChain([]*types.Block{block})
 			if err != nil {
-				loopErr <- fmt.Errorf("failed to insert new mined block:%d, error:%v", block.NumberU64(), err)
+				select {
+				case <-stop:
+					return
+				case loopErr <- fmt.Errorf("failed to insert new mined block:%d, error:%v", block.NumberU64(), err):
+				}
 			}
-			newBlock <- struct{}{}
+			select {
+			case <-stop:
+				return
+			case newBlock <- struct{}{}:
+			}
 		}
 	}
 	// Ignore empty commit here for less noise

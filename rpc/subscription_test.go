@@ -60,7 +60,10 @@ func TestSubscriptions(t *testing.T) {
 		successes              = make(chan subConfirmation)
 		notifications          = make(chan subscriptionResult)
 		errors                 = make(chan error, subCount*notificationCount+1)
+		stop                   = make(chan struct{})
 	)
+
+	defer close(stop)
 
 	// setup and start server
 	for _, namespace := range namespaces {
@@ -72,7 +75,7 @@ func TestSubscriptions(t *testing.T) {
 	defer server.Stop()
 
 	// wait for message and write them to the given channels
-	go waitForMessages(in, successes, notifications, errors)
+	go waitForMessages(in, successes, notifications, errors, stop)
 
 	// create subscriptions one by one
 	for i, namespace := range namespaces {
@@ -141,7 +144,9 @@ func TestServerUnsubscribe(t *testing.T) {
 	resps := make(chan subConfirmation)
 	notifications := make(chan subscriptionResult)
 	errors := make(chan error)
-	go waitForMessages(json.NewDecoder(p2), resps, notifications, errors)
+	stop := make(chan struct{})
+	defer close(stop)
+	go waitForMessages(json.NewDecoder(p2), resps, notifications, errors, stop)
 
 	// Receive the subscription ID.
 	var sub subConfirmation
@@ -173,7 +178,7 @@ type subConfirmation struct {
 	subid ID
 }
 
-func waitForMessages(in *json.Decoder, successes chan subConfirmation, notifications chan subscriptionResult, errors chan error) {
+func waitForMessages(in *json.Decoder, successes chan subConfirmation, notifications chan subscriptionResult, errors chan error, stop chan struct{}) {
 	for {
 		var msg jsonrpcMessage
 		if err := in.Decode(&msg); err != nil {
@@ -196,7 +201,11 @@ func waitForMessages(in *json.Decoder, successes chan subConfirmation, notificat
 				errors <- fmt.Errorf("invalid response: %v", err)
 			} else {
 				json.Unmarshal(msg.ID, &c.reqid)
-				successes <- c
+				select {
+				case successes <- c:
+				case <-stop:
+					return
+				}
 			}
 		default:
 			errors <- fmt.Errorf("unrecognized message: %v", msg)
