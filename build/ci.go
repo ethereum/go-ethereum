@@ -66,13 +66,13 @@ import (
 var (
 	// Files that end up in the geth*.zip archive.
 	gethArchiveFiles = []string{
-		"COPYING",
+		"COPYING.txt",
 		executablePath("geth"),
 	}
 
 	// Files that end up in the geth-alltools*.zip archive.
 	allToolsArchiveFiles = []string{
-		"COPYING",
+		"COPYING.txt",
 		executablePath("abigen"),
 		executablePath("bootnode"),
 		executablePath("evm"),
@@ -764,7 +764,7 @@ func doWindowsInstaller(cmdline []string) {
 		gethTool string
 	)
 	for _, file := range allToolsArchiveFiles {
-		if file == "COPYING" { // license, copied later
+		if file == "COPYING.txt" { // license, copied later
 			continue
 		}
 		allTools = append(allTools, filepath.Base(file))
@@ -778,7 +778,7 @@ func doWindowsInstaller(cmdline []string) {
 	// Render NSIS scripts: Installer NSIS contains two installer sections,
 	// first section contains the geth binary, second section holds the dev tools.
 	templateData := map[string]interface{}{
-		"License":  "COPYING",
+		"License":  "COPYING.txt",
 		"Geth":     gethTool,
 		"DevTools": devTools,
 	}
@@ -790,7 +790,7 @@ func doWindowsInstaller(cmdline []string) {
 	if err := cp.CopyFile(filepath.Join(*workdir, "SimpleFC.dll"), "build/nsis.simplefc.dll"); err != nil {
 		log.Fatal("Failed to copy SimpleFC.dll: %v", err)
 	}
-	if err := cp.CopyFile(filepath.Join(*workdir, "COPYING"), "COPYING"); err != nil {
+	if err := cp.CopyFile(filepath.Join(*workdir, "COPYING.txt"), "COPYING.txt"); err != nil {
 		log.Fatal("Failed to copy copyright note: %v", err)
 	}
 	// Build the installer. This assumes that all the needed files have been previously
