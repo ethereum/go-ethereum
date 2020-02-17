@@ -119,7 +119,7 @@ scheme. You can find the URL of your tree in the `enrtree-info.json` file create
 the published tree.
 
 ```shell
-geth --discovery.dns "enrtree://AMBMWDM3J6UY3M32TMMROUNLX6Y3YTLVC3DC6HN2AVG5NHNSAXDW6@mainet.nodes.example.org"
+geth --discovery.dns "enrtree://AMBMWDM3J6UY3M32TMMROUNLX6Y3YTLVC3DC6HN2AVG5NHNSAXDW6@mainnet.nodes.example.org"
 ```
 
 [dns-eip]: https://eips.ethereum.org/EIPS/eip-1459
