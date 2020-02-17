@@ -96,8 +96,8 @@ The resulting DNS tree metadata is stored in the
 ### Publishing DNS trees
 
 Now that the tree is signed, it can be published to a DNS provider. cmd/devp2p currently
-supports publishing to CloudFlare DNS. You can also export TXT records as a JSON file and
-publish them yourself.
+supports publishing to CloudFlare DNS and Amazon Route53. You can also export TXT records
+as a JSON file and publish them yourself.
 
 To publish to CloudFlare, first create an API token in the management console. cmd/devp2p
 expects the API token in the `CLOUDFLARE_API_TOKEN` environment variable. Now use the
@@ -109,5 +109,17 @@ devp2p dns to-cloudflare mainnet.nodes.example.org
 
 Note that this command uses the domain name specified during signing. Any existing records
 below this name will be erased by cmd/devp2p.
+
+### Using the DNS list with Geth
+
+Once your tree is available through a DNS name, you can tell geth to use it with the
+`--discovery.dns` command line flag. Node trees are referenced using the `enrtree://` URL
+scheme. You can find the URL of your tree in the `enrtree-info.json` file created by
+`devp2p dns sign`. Just pass the URL as an argument to the flag in order to make use of
+the published tree.
+
+```shell
+geth --discovery.dns "enrtree://AMBMWDM3J6UY3M32TMMROUNLX6Y3YTLVC3DC6HN2AVG5NHNSAXDW6@mainet.nodes.example.org"
+```
 
 [dns-eip]: https://eips.ethereum.org/EIPS/eip-1459
