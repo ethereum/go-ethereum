@@ -88,12 +88,20 @@ func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
 	return snap.signers(), nil
 }
 
-// GetSpan gets the current span details
+// GetCurrentProposer gets the current proposer
 func (api *API) GetCurrentProposer() (common.Address, error) {
-	header := api.chain.CurrentHeader()
-	snap, err := api.bor.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	snap, err := api.GetSnapshot(nil)
 	if err != nil {
-		return common.BytesToAddress(make([]byte, 20)), err
+		return common.Address{}, err
 	}
 	return snap.ValidatorSet.GetProposer().Address, nil
+}
+
+// GetCurrentValidators gets the current validators
+func (api *API) GetCurrentValidators() ([]*Validator, error) {
+	snap, err := api.GetSnapshot(nil)
+	if err != nil {
+		return make([]*Validator, 0), err
+	}
+	return snap.ValidatorSet.Validators, nil
 }
