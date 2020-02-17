@@ -101,10 +101,12 @@ func TestTrieGenerationAppendonly(t *testing.T) {
 	}
 }
 
-// BenchmarkTrieGeneration/4K/standard-6         	      98	  14141790 ns/op	 6164989 B/op	   57929 allocs/op
-// BenchmarkTrieGeneration/4K/pruning-6          	      72	  14015967 ns/op	 6604020 B/op	   54962 allocs/op
-// BenchmarkTrieGeneration/10K/standard-6        	      42	  30085495 ns/op	17280084 B/op	  151006 allocs/op
-// BenchmarkTrieGeneration/10K/pruning-6         	      32	  34536586 ns/op	16510731 B/op	  137402 allocs/op
+// BenchmarkTrieGeneration/4K/standard-8         	     127	   9429425 ns/op	 6188077 B/op	   58026 allocs/op
+// BenchmarkTrieGeneration/4K/pruning-8          	      72	  16544534 ns/op	 6617322 B/op	   55016 allocs/op
+// BenchmarkTrieGeneration/4K/stack-8            	     159	   6452936 ns/op	 6308393 B/op	   12022 allocs/op
+// BenchmarkTrieGeneration/10K/standard-8        	      50	  25025175 ns/op	17283703 B/op	  151023 allocs/op
+// BenchmarkTrieGeneration/10K/pruning-8         	      28	  38141602 ns/op	16540254 B/op	  137520 allocs/op
+// BenchmarkTrieGeneration/10K/stack-8           	      60	  18888649 ns/op	17557314 B/op	   30067 allocs/op
 func BenchmarkTrieGeneration(b *testing.B) {
 	// Get a fairly large trie
 	// Create a custom account factory to recreate the same addresses
@@ -150,6 +152,14 @@ func BenchmarkTrieGeneration(b *testing.B) {
 				generateTrie(it, PruneGenerate)
 			}
 		})
+		b.Run("stack", func(b *testing.B) {
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
+				generateTrie(it, StackGenerate)
+			}
+		})
 	})
 	b.Run("10K", func(b *testing.B) {
 		// 4K accounts
@@ -171,6 +181,14 @@ func BenchmarkTrieGeneration(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
 				generateTrie(it, PruneGenerate)
+			}
+		})
+		b.Run("stack", func(b *testing.B) {
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
+				generateTrie(it, StackGenerate)
 			}
 		})
 	})
