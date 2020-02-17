@@ -22,6 +22,7 @@ var Modules = map[string]string{
 	"admin":      AdminJs,
 	"chequebook": ChequebookJs,
 	"clique":     CliqueJs,
+	"bor":        BorJs,
 	"ethash":     EthashJs,
 	"debug":      DebugJs,
 	"eth":        EthJs,
@@ -107,6 +108,46 @@ web3._extend({
 		new web3._extend.Property({
 			name: 'proposals',
 			getter: 'clique_proposals'
+		}),
+	]
+});
+`
+
+const BorJs = `
+web3._extend({
+	property: 'bor',
+	methods: [
+		new web3._extend.Method({
+			name: 'getSnapshot',
+			call: 'bor_getSnapshot',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'getSnapshotAtHash',
+			call: 'bor_getSnapshotAtHash',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getSigners',
+			call: 'bor_getSigners',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'getSignersAtHash',
+			call: 'bor_getSignersAtHash',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getCurrentProposer',
+			call: 'bor_getCurrentProposer',
+			params: 0
+		}),
+		new web3._extend.Method({
+			name: 'getCurrentValidators',
+			call: 'bor_getCurrentValidators',
+			params: 0
 		}),
 	]
 });
@@ -765,7 +806,7 @@ web3._extend({
 const LESJs = `
 web3._extend({
 	property: 'les',
-	methods: 
+	methods:
 	[
 		new web3._extend.Method({
 			name: 'getCheckpoint',
@@ -773,7 +814,7 @@ web3._extend({
 			params: 1
 		}),
 	],
-	properties: 
+	properties:
 	[
 		new web3._extend.Property({
 			name: 'latestCheckpoint',

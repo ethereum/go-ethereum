@@ -87,3 +87,21 @@ func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
 	}
 	return snap.signers(), nil
 }
+
+// GetCurrentProposer gets the current proposer
+func (api *API) GetCurrentProposer() (common.Address, error) {
+	snap, err := api.GetSnapshot(nil)
+	if err != nil {
+		return common.Address{}, err
+	}
+	return snap.ValidatorSet.GetProposer().Address, nil
+}
+
+// GetCurrentValidators gets the current validators
+func (api *API) GetCurrentValidators() ([]*Validator, error) {
+	snap, err := api.GetSnapshot(nil)
+	if err != nil {
+		return make([]*Validator, 0), err
+	}
+	return snap.ValidatorSet.Validators, nil
+}
