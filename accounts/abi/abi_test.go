@@ -37,23 +37,43 @@ const jsondata = `
 
 const jsondata2 = `
 [
-	{ "type" : "function", "name" : "balance", "stateMutability" : "view" },
-	{ "type" : "function", "name" : "send", "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
-	{ "type" : "function", "name" : "test", "inputs" : [ { "name" : "number", "type" : "uint32" } ] },
-	{ "type" : "function", "name" : "string", "inputs" : [ { "name" : "inputs", "type" : "string" } ] },
-	{ "type" : "function", "name" : "bool", "inputs" : [ { "name" : "inputs", "type" : "bool" } ] },
-	{ "type" : "function", "name" : "address", "inputs" : [ { "name" : "inputs", "type" : "address" } ] },
-	{ "type" : "function", "name" : "uint64[2]", "inputs" : [ { "name" : "inputs", "type" : "uint64[2]" } ] },
-	{ "type" : "function", "name" : "uint64[]", "inputs" : [ { "name" : "inputs", "type" : "uint64[]" } ] },
-	{ "type" : "function", "name" : "foo", "inputs" : [ { "name" : "inputs", "type" : "uint32" } ] },
-	{ "type" : "function", "name" : "bar", "inputs" : [ { "name" : "inputs", "type" : "uint32" }, { "name" : "string", "type" : "uint16" } ] },
-	{ "type" : "function", "name" : "slice", "inputs" : [ { "name" : "inputs", "type" : "uint32[2]" } ] },
-	{ "type" : "function", "name" : "slice256", "inputs" : [ { "name" : "inputs", "type" : "uint256[2]" } ] },
-	{ "type" : "function", "name" : "sliceAddress", "inputs" : [ { "name" : "inputs", "type" : "address[]" } ] },
-	{ "type" : "function", "name" : "sliceMultiAddress", "inputs" : [ { "name" : "a", "type" : "address[]" }, { "name" : "b", "type" : "address[]" } ] },
-	{ "type" : "function", "name" : "nestedArray", "inputs" : [ { "name" : "a", "type" : "uint256[2][2]" }, { "name" : "b", "type" : "address[]" } ] },
-	{ "type" : "function", "name" : "nestedArray2", "inputs" : [ { "name" : "a", "type" : "uint8[][2]" } ] },
-	{ "type" : "function", "name" : "nestedSlice", "inputs" : [ { "name" : "a", "type" : "uint8[][]" } ] }
+	{"type":"function","name":"balance","stateMutability":"view"},
+	{"type":"function","name":"send","inputs":[{"name":"amount","type":"uint256"}]},
+	{"type":"function","name":"test","inputs":[{"name":"number","type":"uint32"}]},
+	{"type":"function","name":"string","inputs":[{"name":"inputs","type":"string"}]},
+	{"type":"function","name":"bool","inputs":[{"name":"inputs","type":"bool"}]},
+	{"type":"function","name":"address","inputs":[{"name":"inputs","type":"address"}]},
+	{"type":"function","name":"uint64[2]","inputs":[{"name":"inputs","type":"uint64[2]"}]},
+	{"type":"function","name":"uint64[]","inputs":[{"name":"inputs","type":"uint64[]"}]},
+	{"type":"function","name":"foo","inputs":[{"name":"inputs","type":"uint32"}]},
+	{"type":"function","name":"bar","inputs":[{"name":"inputs","type":"uint32"},{"name":"string","type":"uint16"}]},
+	{"type":"function","name":"slice","inputs":[{"name":"inputs","type":"uint32[2]"}]},
+	{"type":"function","name":"slice256","inputs":[{"name":"inputs","type":"uint256[2]"}]},
+	{"type":"function","name":"sliceAddress","inputs":[{"name":"inputs","type":"address[]"}]},
+	{"type":"function","name":"sliceMultiAddress","inputs":[{"name":"a","type":"address[]"},{"name":"b","type":"address[]"}]},
+	{"type":"function","name":"nestedArray","inputs":[{"name":"a","type":"uint256[2][2]"},{"name":"b","type":"address[]"}]},
+	{"type":"function","name":"nestedArray2","inputs":[{"name":"a","type":"uint8[][2]"}]},
+	{"type":"function","name":"nestedSlice","inputs":[{"name":"a","type":"uint8[][]"}]},
+	{"type":"function","name":"receive","inputs":[{"name":"memo","type":"bytes"}],"outputs":[],"payable":true,"stateMutability":"payable"},
+	{"type":"event","name":"received","anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}]},
+	{"type":"function","name":"fixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr","type":"uint256[2]"}]},
+	{"type":"function","name":"fixedArrBytes","constant":true,"inputs":[{"name":"str","type":"bytes"},{"name":"fixedArr","type":"uint256[2]"}]},
+	{"type":"function","name":"mixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr","type":"uint256[2]"},{"name":"dynArr","type":"uint256[]"}]},
+	{"type":"function","name":"doubleFixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr1","type":"uint256[2]"},{"name":"fixedArr2","type":"uint256[3]"}]},
+	{"type":"function","name":"multipleMixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr1","type":"uint256[2]"},{"name":"dynArr","type":"uint256[]"},{"name":"fixedArr2","type":"uint256[3]"}]},
+	{"type":"function","name":"send","inputs":[{"name":"amount","type":"uint256"}]},
+	{"type":"function","name":"test","inputs":[{"name":"number","type":"uint32"}]},
+	{"type":"function","name":"string","inputs":[{"name":"inputs","type":"string"}]},
+	{"type":"function","name":"bool","inputs":[{"name":"inputs","type":"bool"}]},
+	{"type":"function","name":"address","inputs":[{"name":"inputs","type":"address"}]},
+	{"type":"function","name":"uint64[2]","inputs":[{"name":"inputs","type":"uint64[2]"}]},
+	{"type":"function","name":"uint64[]","inputs":[{"name":"inputs","type":"uint64[]"}]},
+	{"type":"function","name":"foo","inputs":[{"name":"inputs","type":"uint32"}]},
+	{"type":"function","name":"bar","inputs":[{"name":"inputs","type":"uint32"},{"name":"string","type":"uint16"}]},
+	{"type":"function","name":"_slice","inputs":[{"name":"inputs","type":"uint32[2]"}]},
+	{"type":"function","name":"__slice256","inputs":[{"name":"inputs","type":"uint256[2]"}]},
+	{"type":"function","name":"sliceAddress","inputs":[{"name":"inputs","type":"address[]"}]},
+	{"type":"function","name":"sliceMultiAddress","inputs":[{"name":"a","type":"address[]"},{"name":"b","type":"address[]"}]}
 ]`
 
 func TestReader(t *testing.T) {
@@ -885,31 +905,7 @@ func TestUnpackIntoMapNamingConflict(t *testing.T) {
 }
 
 func TestABI_MethodById(t *testing.T) {
-	const abiJSON = `[
-		{"type":"function","name":"receive","constant":false,"inputs":[{"name":"memo","type":"bytes"}],"outputs":[],"payable":true,"stateMutability":"payable"},
-		{"type":"event","name":"received","anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}]},
-		{"type":"function","name":"fixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr","type":"uint256[2]"}]},
-		{"type":"function","name":"fixedArrBytes","constant":true,"inputs":[{"name":"str","type":"bytes"},{"name":"fixedArr","type":"uint256[2]"}]},
-		{"type":"function","name":"mixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr","type":"uint256[2]"},{"name":"dynArr","type":"uint256[]"}]},
-		{"type":"function","name":"doubleFixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr1","type":"uint256[2]"},{"name":"fixedArr2","type":"uint256[3]"}]},
-		{"type":"function","name":"multipleMixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr1","type":"uint256[2]"},{"name":"dynArr","type":"uint256[]"},{"name":"fixedArr2","type":"uint256[3]"}]},
-		{"type":"function","name":"balance","constant":true},
-		{"type":"function","name":"send","constant":false,"inputs":[{"name":"amount","type":"uint256"}]},
-		{"type":"function","name":"test","constant":false,"inputs":[{"name":"number","type":"uint32"}]},
-		{"type":"function","name":"string","constant":false,"inputs":[{"name":"inputs","type":"string"}]},
-		{"type":"function","name":"bool","constant":false,"inputs":[{"name":"inputs","type":"bool"}]},
-		{"type":"function","name":"address","constant":false,"inputs":[{"name":"inputs","type":"address"}]},
-		{"type":"function","name":"uint64[2]","constant":false,"inputs":[{"name":"inputs","type":"uint64[2]"}]},
-		{"type":"function","name":"uint64[]","constant":false,"inputs":[{"name":"inputs","type":"uint64[]"}]},
-		{"type":"function","name":"foo","constant":false,"inputs":[{"name":"inputs","type":"uint32"}]},
-		{"type":"function","name":"bar","constant":false,"inputs":[{"name":"inputs","type":"uint32"},{"name":"string","type":"uint16"}]},
-		{"type":"function","name":"_slice","constant":false,"inputs":[{"name":"inputs","type":"uint32[2]"}]},
-		{"type":"function","name":"__slice256","constant":false,"inputs":[{"name":"inputs","type":"uint256[2]"}]},
-		{"type":"function","name":"sliceAddress","constant":false,"inputs":[{"name":"inputs","type":"address[]"}]},
-		{"type":"function","name":"sliceMultiAddress","constant":false,"inputs":[{"name":"a","type":"address[]"},{"name":"b","type":"address[]"}]}
-	]
-`
-	abi, err := JSON(strings.NewReader(abiJSON))
+	abi, err := JSON(strings.NewReader(jsondata2))
 	if err != nil {
 		t.Fatal(err)
 	}
