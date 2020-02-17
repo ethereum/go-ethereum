@@ -61,19 +61,6 @@ const jsondata2 = `
 	{"type":"function","name":"mixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr","type":"uint256[2]"},{"name":"dynArr","type":"uint256[]"}]},
 	{"type":"function","name":"doubleFixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr1","type":"uint256[2]"},{"name":"fixedArr2","type":"uint256[3]"}]},
 	{"type":"function","name":"multipleMixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr1","type":"uint256[2]"},{"name":"dynArr","type":"uint256[]"},{"name":"fixedArr2","type":"uint256[3]"}]},
-	{"type":"function","name":"send","inputs":[{"name":"amount","type":"uint256"}]},
-	{"type":"function","name":"test","inputs":[{"name":"number","type":"uint32"}]},
-	{"type":"function","name":"string","inputs":[{"name":"inputs","type":"string"}]},
-	{"type":"function","name":"bool","inputs":[{"name":"inputs","type":"bool"}]},
-	{"type":"function","name":"address","inputs":[{"name":"inputs","type":"address"}]},
-	{"type":"function","name":"uint64[2]","inputs":[{"name":"inputs","type":"uint64[2]"}]},
-	{"type":"function","name":"uint64[]","inputs":[{"name":"inputs","type":"uint64[]"}]},
-	{"type":"function","name":"foo","inputs":[{"name":"inputs","type":"uint32"}]},
-	{"type":"function","name":"bar","inputs":[{"name":"inputs","type":"uint32"},{"name":"string","type":"uint16"}]},
-	{"type":"function","name":"_slice","inputs":[{"name":"inputs","type":"uint32[2]"}]},
-	{"type":"function","name":"__slice256","inputs":[{"name":"inputs","type":"uint256[2]"}]},
-	{"type":"function","name":"sliceAddress","inputs":[{"name":"inputs","type":"address[]"}]},
-	{"type":"function","name":"sliceMultiAddress","inputs":[{"name":"a","type":"address[]"},{"name":"b","type":"address[]"}]}
 ]`
 
 func TestReader(t *testing.T) {
