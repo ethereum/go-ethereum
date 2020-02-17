@@ -153,9 +153,7 @@ func (lc *LightChain) HeaderChain() *core.HeaderChain {
 func (lc *LightChain) loadLastState() error {
 	if head := rawdb.ReadHeadHeaderHash(lc.chainDb); head == (common.Hash{}) {
 		// Corrupt or empty database, init from scratch
-		lc.chainmu.Unlock()
-		lc.Reset()
-		lc.chainmu.Lock()
+		lc.resetWithGenesisBlockNoLock(lc.genesisBlock)
 	} else {
 		if header := lc.GetHeaderByHash(head); header != nil {
 			lc.hc.SetCurrentHeader(header)
@@ -167,6 +165,12 @@ func (lc *LightChain) loadLastState() error {
 	log.Info("Loaded most recent local header", "number", header.Number, "hash", header.Hash(), "td", headerTd, "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
 
 	return nil
+}
+
+// setHeadNoLock rewinds the local chain to a new head. Callers should hold lc.chainmu.
+func (lc *LightChain) setHeadNoLock(head uint64) error {
+	lc.hc.SetHead(head, nil, nil)
+	return lc.loadLastState()
 }
 
 // SetHead rewinds the local chain to a new head. Everything above the new
@@ -187,6 +191,25 @@ func (lc *LightChain) GasLimit() uint64 {
 // Reset purges the entire blockchain, restoring it to its genesis state.
 func (lc *LightChain) Reset() {
 	lc.ResetWithGenesisBlock(lc.genesisBlock)
+}
+
+// resetWithGenesisBlockNoLock purges the entire blockchain, restoring it to the
+// specified genesis state. Callers should hold lc.chainmu.
+func (lc *LightChain) resetWithGenesisBlockNoLock(genesis *types.Block) {
+	// Dump the entire block chain and purge the caches
+	lc.setHeadNoLock(0)
+
+	// Prepare the genesis block and reinitialise the chain
+	batch := lc.chainDb.NewBatch()
+	rawdb.WriteTd(batch, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
+	rawdb.WriteBlock(batch, genesis)
+	rawdb.WriteHeadHeaderHash(batch, genesis.Hash())
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to reset genesis block", "err", err)
+	}
+	lc.genesisBlock = genesis
+	lc.hc.SetGenesis(lc.genesisBlock.Header())
+	lc.hc.SetCurrentHeader(lc.genesisBlock.Header())
 }
 
 // ResetWithGenesisBlock purges the entire blockchain, restoring it to the
