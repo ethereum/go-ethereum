@@ -755,9 +755,6 @@ running:
 				peers[c.node.ID()] = p
 				srv.log.Debug("Adding p2p peer", "peercount", len(peers), "id", p.ID(), "conn", c.flags, "addr", p.RemoteAddr(), "name", truncateName(c.name))
 				srv.dialsched.peerAdded(c)
-				if conn, ok := c.fd.(*meteredConn); ok {
-					conn.handshakeDone(p)
-				}
 				if p.Inbound() {
 					inboundCount++
 				}
