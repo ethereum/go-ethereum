@@ -55,24 +55,117 @@ const jsondata2 = `
 	{"type":"function","name":"nestedArray2","inputs":[{"name":"a","type":"uint8[][2]"}]},
 	{"type":"function","name":"nestedSlice","inputs":[{"name":"a","type":"uint8[][]"}]},
 	{"type":"function","name":"receive","inputs":[{"name":"memo","type":"bytes"}],"outputs":[],"payable":true,"stateMutability":"payable"},
-	{"type":"event","name":"received","anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}]},
-	{"type":"function","name":"fixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr","type":"uint256[2]"}]},
-	{"type":"function","name":"fixedArrBytes","constant":true,"inputs":[{"name":"str","type":"bytes"},{"name":"fixedArr","type":"uint256[2]"}]},
-	{"type":"function","name":"mixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr","type":"uint256[2]"},{"name":"dynArr","type":"uint256[]"}]},
-	{"type":"function","name":"doubleFixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr1","type":"uint256[2]"},{"name":"fixedArr2","type":"uint256[3]"}]},
-	{"type":"function","name":"multipleMixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr1","type":"uint256[2]"},{"name":"dynArr","type":"uint256[]"},{"name":"fixedArr2","type":"uint256[3]"}]},
 ]`
 
-func TestReader(t *testing.T) {
-	Uint256, _ := NewType("uint256", "", nil)
+const jsondata3 = `
+[
+	{"type":"event","name":"received","anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}]},
+]`
+
+var (
+	Uint256, _    = NewType("uint256", "", nil)
+	Uint32, _     = NewType("uint32", "", nil)
+	Uint16, _     = NewType("uint16", "", nil)
+	String, _     = NewType("string", "", nil)
+	Bool, _       = NewType("bool", "", nil)
+	Bytes, _      = NewType("bytes", "", nil)
+	Address, _    = NewType("address", "", nil)
+	Uint64Arr, _  = NewType("uint64[]", "", nil)
+	AddressArr, _ = NewType("address[]", "", nil)
+	// Special types for testing
+	Uint32Arr2, _       = NewType("uint32[2]", "", nil)
+	Uint64Arr2, _       = NewType("uint64[2]", "", nil)
+	Uint256Arr, _       = NewType("uint256[]", "", nil)
+	Uint256Arr2, _      = NewType("uint256[2]", "", nil)
+	Uint256Arr3, _      = NewType("uint256[3]", "", nil)
+	Uint256ArrNested, _ = NewType("uint256[2][2]", "", nil)
+	Uint8ArrNested, _   = NewType("uint8[][2]", "", nil)
+	Uint8SliceNested, _ = NewType("uint8[][]", "", nil)
+)
+
+var methods = map[string]Method{
+	"balance":             NewMethod("balance", "balance", true, nil, nil),
+	"send":                NewMethod("send", "send", false, []Argument{{"amount", Uint256, false}}, nil),
+	"test":                NewMethod("test", "test", false, []Argument{{"number", Uint32, false}}, nil),
+	"string":              NewMethod("string", "string", false, []Argument{{"inputs", String, false}}, nil),
+	"bool":                NewMethod("bool", "bool", false, []Argument{{"inputs", Bool, false}}, nil),
+	"address":             NewMethod("address", "address", false, []Argument{{"inputs", Address, false}}, nil),
+	"uint64[]":            NewMethod("uint64[]", "uint64[]", false, []Argument{{"inputs", Uint64Arr, false}}, nil),
+	"uint64[2]":           NewMethod("uint64[2]", "uint64[2]", false, []Argument{{"inputs", Uint64Arr2, false}}, nil),
+	"foo":                 NewMethod("foo", "foo", false, []Argument{{"inputs", Uint32, false}}, nil),
+	"bar":                 NewMethod("bar", "bar", false, []Argument{{"inputs", Uint32, false}, {"string", Uint16, false}}, nil),
+	"slice":               NewMethod("slice", "slice", false, []Argument{{"inputs", Uint32Arr2, false}}, nil),
+	"slice256":            NewMethod("slice256", "slice256", false, []Argument{{"inputs", Uint256Arr2, false}}, nil),
+	"sliceAddress":        NewMethod("sliceAddress", "sliceAddress", false, []Argument{{"inputs", AddressArr, false}}, nil),
+	"sliceMultiAddress":   NewMethod("sliceMultiAddress", "sliceMultiAddress", false, []Argument{{"a", AddressArr, false}, {"b", AddressArr, false}}, nil),
+	"nestedArray":         NewMethod("nestedArray", "nestedArray", false, []Argument{{"a", Uint256ArrNested, false}, {"b", AddressArr, false}}, nil),
+	"nestedArray2":        NewMethod("nestedArray2", "nestedArray2", false, []Argument{{"a", Uint8ArrNested, false}}, nil),
+	"nestedSlice":         NewMethod("nestedSlice", "nestedSlice", false, []Argument{{"a", Uint8SliceNested, false}}, nil),
+	"receive":             NewMethod("receive", "receive", false, []Argument{{"memo", Bytes, false}}, []Argument{}),
+	"fixedArrStr":         NewMethod("fixedArrStr", "fixedArrStr", true, []Argument{{"str", String, false}, {"fixedArr", Uint256Arr2, false}}, nil),
+	"fixedArrBytes":       NewMethod("fixedArrBytes", "fixedArrBytes", true, []Argument{{"bytes", Bytes, false}, {"fixedArr", Uint256Arr2, false}}, nil),
+	"mixedArrStr":         NewMethod("mixedArrStr", "mixedArrStr", true, []Argument{{"str", String, false}, {"fixedArr", Uint256Arr2, false}, {"dynArr", Uint256Arr, false}}, nil),
+	"doubleFixedArrStr":   NewMethod("doubleFixedArrStr", "doubleFixedArrStr", true, []Argument{{"str", String, false}, {"fixedArr1", Uint256Arr2, false}, {"fixedArr2", Uint256Arr3, false}}, nil),
+	"multipleMixedArrStr": NewMethod("multipleMixedArrStr", "multipleMixedArrStr", true, []Argument{{"str", String, false}, {"fixedArr1", Uint256Arr2, false}, {"dynArr", Uint256Arr, false}, {"fixedArr2", Uint256Arr3, false}}, nil),
+}
+
+type PackUnpackTest struct {
+	input interface{}
+	err   error
+}
+
+var tests = map[string]PackUnpackTest{
+	"uint64[2]": PackUnpackTest{
+		input: [2]uint64{12, 44},
+		err:   nil,
+	},
+	"string": PackUnpackTest{
+		input: "This is a string",
+		err:   nil,
+	},
+}
+
+func TestPackUnpack(t *testing.T) {
 	abi := ABI{
+		Methods: methods,
+	}
+
+	for name := range tests {
+		t.Run(name, func(t *testing.T) {
+			test := tests[name]
+			data, err := abi.Pack(name, test.input)
+			if err != nil {
+				t.Error(err)
+			}
+			t.Log(data[4:])
+			outptr := reflect.New(reflect.TypeOf(test.input))
+			if err := abi.Methods[name].Inputs.Unpack(outptr.Interface(), data[4:]); err != nil {
+				if err == test.err {
+					return
+				}
+				t.Error(err)
+			}
+			out := outptr.Elem().Interface()
+			if !reflect.DeepEqual(test.input, out) {
+				t.Errorf("test %v failed: expected %v, got %v", name, test.input, out)
+			}
+		})
+	}
+}
+
+func TestReader(t *testing.T) {
+	abi := ABI{
+<<<<<<< HEAD
 		Methods: map[string]Method{
 			"balance": NewMethod("balance", "balance", Function, "view", false, false, nil, nil),
 			"send":    NewMethod("send", "send", Function, "", false, false, []Argument{{"amount", Uint256, false}}, nil),
 		},
+=======
+		Methods: methods,
+>>>>>>> f403c29e5... accounts/abi: reworked abi tests
 	}
 
-	exp, err := JSON(strings.NewReader(jsondata))
+	exp, err := JSON(strings.NewReader(jsondata2))
 	if err != nil {
 		t.Error(err)
 	}
@@ -173,8 +266,12 @@ func TestTestSlice(t *testing.T) {
 }
 
 func TestMethodSignature(t *testing.T) {
+<<<<<<< HEAD
 	String, _ := NewType("string", "", nil)
 	m := NewMethod("foo", "foo", Function, "", false, false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil)
+=======
+	m := NewMethod("foo", "foo", false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil)
+>>>>>>> f403c29e5... accounts/abi: reworked abi tests
 	exp := "foo(string,string)"
 	if m.Sig != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig)
@@ -185,8 +282,12 @@ func TestMethodSignature(t *testing.T) {
 		t.Errorf("expected ids to match %x != %x", m.ID, idexp)
 	}
 
+<<<<<<< HEAD
 	uintt, _ := NewType("uint256", "", nil)
 	m = NewMethod("foo", "foo", Function, "", false, false, []Argument{{"bar", uintt, false}}, nil)
+=======
+	m = NewMethod("foo", "foo", false, []Argument{{"bar", Uint256, false}}, nil)
+>>>>>>> f403c29e5... accounts/abi: reworked abi tests
 	exp = "foo(uint256)"
 	if m.Sig != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig)
@@ -401,15 +502,7 @@ func TestInputVariableInputLength(t *testing.T) {
 }
 
 func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
-	const definition = `[
-	{ "type" : "function", "name" : "fixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr", "type" : "uint256[2]" } ] },
-	{ "type" : "function", "name" : "fixedArrBytes", "constant" : true, "inputs" : [ { "name" : "str", "type" : "bytes" }, { "name" : "fixedArr", "type" : "uint256[2]" } ] },
-    { "type" : "function", "name" : "mixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr", "type": "uint256[2]" }, { "name" : "dynArr", "type": "uint256[]" } ] },
-    { "type" : "function", "name" : "doubleFixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr1", "type": "uint256[2]" }, { "name" : "fixedArr2", "type": "uint256[3]" } ] },
-    { "type" : "function", "name" : "multipleMixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr1", "type": "uint256[2]" }, { "name" : "dynArr", "type" : "uint256[]" }, { "name" : "fixedArr2", "type" : "uint256[3]" } ] }
-	]`
-
-	abi, err := JSON(strings.NewReader(definition))
+	abi, err := JSON(strings.NewReader(jsondata2))
 	if err != nil {
 		t.Error(err)
 	}
@@ -603,8 +696,6 @@ func TestBareEvents(t *testing.T) {
 	{ "type" : "event", "name" : "tuple", "inputs" : [{ "indexed":false, "name":"t", "type":"tuple", "components":[{"name":"a", "type":"uint256"}] }, { "indexed":true, "name":"arg1", "type":"address" }] }
 	]`
 
-	arg0, _ := NewType("uint256", "", nil)
-	arg1, _ := NewType("address", "", nil)
 	tuple, _ := NewType("tuple", "", []ArgumentMarshaling{{Name: "a", Type: "uint256"}})
 
 	expectedEvents := map[string]struct {
@@ -614,12 +705,12 @@ func TestBareEvents(t *testing.T) {
 		"balance": {false, nil},
 		"anon":    {true, nil},
 		"args": {false, []Argument{
-			{Name: "arg0", Type: arg0, Indexed: false},
-			{Name: "arg1", Type: arg1, Indexed: true},
+			{Name: "arg0", Type: Uint256, Indexed: false},
+			{Name: "arg1", Type: Address, Indexed: true},
 		}},
 		"tuple": {false, []Argument{
 			{Name: "t", Type: tuple, Indexed: false},
-			{Name: "arg1", Type: arg1, Indexed: true},
+			{Name: "arg1", Type: Address, Indexed: true},
 		}},
 	}
 
