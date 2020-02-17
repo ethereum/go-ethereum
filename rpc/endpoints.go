@@ -17,7 +17,6 @@
 package rpc
 
 import (
-	"fmt"
 	"net"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -25,30 +24,26 @@ import (
 
 // checkModuleAvailability check that all names given in modules are actually
 // available API services.
-func checkModuleAvailability(modules []string, apis []API) error {
-	available := make(map[string]struct{})
-	var availableNames string
-	for i, api := range apis {
-		if _, ok := available[api.Namespace]; !ok {
-			available[api.Namespace] = struct{}{}
-			if i > 0 {
-				availableNames += ", "
-			}
-			availableNames += api.Namespace
+func checkModuleAvailability(modules []string, apis []API) (bad, available []string) {
+	availableSet := make(map[string]struct{})
+	for _, api := range apis {
+		if _, ok := availableSet[api.Namespace]; !ok {
+			availableSet[api.Namespace] = struct{}{}
+			available = append(available, api.Namespace)
 		}
 	}
 	for _, name := range modules {
-		if _, ok := available[name]; !ok {
-			return fmt.Errorf("invalid API %q in whitelist (available: %s)", name, availableNames)
+		if _, ok := availableSet[name]; !ok {
+			bad = append(bad, name)
 		}
 	}
-	return nil
+	return bad, available
 }
 
 // StartHTTPEndpoint starts the HTTP RPC endpoint, configured with cors/vhosts/modules.
 func StartHTTPEndpoint(endpoint string, apis []API, modules []string, cors []string, vhosts []string, timeouts HTTPTimeouts) (net.Listener, *Server, error) {
-	if err := checkModuleAvailability(modules, apis); err != nil {
-		return nil, nil, err
+	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
+		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)
 	}
 	// Generate the whitelist based on the allowed modules
 	whitelist := make(map[string]bool)
@@ -79,8 +74,8 @@ func StartHTTPEndpoint(endpoint string, apis []API, modules []string, cors []str
 
 // StartWSEndpoint starts a websocket endpoint.
 func StartWSEndpoint(endpoint string, apis []API, modules []string, wsOrigins []string, exposeAll bool) (net.Listener, *Server, error) {
-	if err := checkModuleAvailability(modules, apis); err != nil {
-		return nil, nil, err
+	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
+		log.Error("Unavailable modules in WS API list", "unavailable", bad, "available", available)
 	}
 	// Generate the whitelist based on the allowed modules
 	whitelist := make(map[string]bool)
