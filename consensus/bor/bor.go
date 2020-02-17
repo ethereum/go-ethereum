@@ -1048,6 +1048,15 @@ func (c *Bor) commitSpan(
 		return err
 	}
 
+	// check if chain id matches with heimdall span
+	if heimdallSpan.ChainID != c.chainConfig.ChainID.String() {
+		return fmt.Errorf(
+			"Chain id proposed span, %s, and bor chain id, %s, doesn't match",
+			heimdallSpan.ChainID,
+			c.chainConfig.ChainID,
+		)
+	}
+
 	// get validators bytes
 	var validators []MinimalVal
 	for _, val := range heimdallSpan.ValidatorSet.Validators {
@@ -1167,11 +1176,22 @@ func (c *Bor) CommitStates(
 		if err := json.Unmarshal(response.Result, &eventRecord); err != nil {
 			return err
 		}
+
+		// check if chain id matches with event record
+		if eventRecord.ChainID != "" && eventRecord.ChainID != c.chainConfig.ChainID.String() {
+			return fmt.Errorf(
+				"Chain id proposed state in span, %s, and bor chain id, %s, doesn't match",
+				eventRecord.ChainID,
+				c.chainConfig.ChainID,
+			)
+		}
+
 		log.Info("→ committing new state",
 			"id", eventRecord.ID,
 			"contract", eventRecord.Contract,
 			"data", hex.EncodeToString(eventRecord.Data),
 			"txHash", eventRecord.TxHash,
+			"chainID", eventRecord.ChainID,
 		)
 
 		recordBytes, err := rlp.EncodeToBytes(eventRecord)
