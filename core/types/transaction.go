@@ -189,6 +189,11 @@ func (tx *Transaction) To() *common.Address {
 	return &to
 }
 
+// From returns the sender address of the transaction
+func (tx *Transaction) From() (common.Address, error) {
+	return NewEIP155Signer(tx.ChainId()).Sender(tx)
+}
+
 // Hash hashes the RLP encoding of tx.
 // It uniquely identifies the transaction.
 func (tx *Transaction) Hash() common.Hash {
