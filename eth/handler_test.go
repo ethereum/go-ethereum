@@ -670,7 +670,7 @@ func TestBroadcastMalformedBlock(t *testing.T) {
 	malformedEverything.TxHash[0]++
 
 	// Keep listening to broadcasts and notify if any arrives
-	notify := make(chan struct{})
+	notify := make(chan struct{}, 1)
 	go func() {
 		if _, err := sink.app.ReadMsg(); err == nil {
 			notify <- struct{}{}

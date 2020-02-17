@@ -96,7 +96,7 @@ func TestSimulatedSleep(t *testing.T) {
 	var (
 		c       Simulated
 		timeout = 1 * time.Hour
-		done    = make(chan AbsTime)
+		done    = make(chan AbsTime, 1)
 	)
 	go func() {
 		c.Sleep(timeout)
