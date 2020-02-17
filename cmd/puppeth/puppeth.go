@@ -91,9 +91,9 @@ func runWizard(c *cli.Context) error {
 	preFundedAccounts := c.String("preFundedAccounts")
 	preCmpAddOneWei := c.String("preCmpAddressWithOneWei")
 	networkID := c.Uint64("networkID")
-
-	nonInteract := network != "" && consensusType != "" && blocksTime > 0 && sealAccounts != "" && preFundedAccounts != "" && preCmpAddOneWei != "" &&  networkID > 0
-
+	nonInteract := 0
+	if network != "" && consensusType != "" && blocksTime > 0 && sealAccounts != "" && preFundedAccounts != "" && preCmpAddOneWei != "" &&  networkID > 0
+	-------nonInteract = 1
 	makeWizard(network, consensusType, blocksTime, sealAccounts, preFundedAccounts, preCmpAddOneWei, networkID, nonInteract).run()
 	return nil
 }
