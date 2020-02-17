@@ -50,9 +50,6 @@ const (
 	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
-
-	// minimim number of peers to broadcast entire blocks and transactions too.
-	minBroadcastPeers = 4
 )
 
 var (
@@ -830,14 +827,7 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 			return
 		}
 		// Send the block to a subset of our peers
-		transferLen := int(math.Sqrt(float64(len(peers))))
-		if transferLen < minBroadcastPeers {
-			transferLen = minBroadcastPeers
-		}
-		if transferLen > len(peers) {
-			transferLen = len(peers)
-		}
-		transfer := peers[:transferLen]
+		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
 		for _, peer := range transfer {
 			peer.AsyncSendNewBlock(block, td)
 		}
@@ -866,14 +856,7 @@ func (pm *ProtocolManager) BroadcastTransactions(txs types.Transactions, propaga
 			peers := pm.peers.PeersWithoutTx(tx.Hash())
 
 			// Send the block to a subset of our peers
-			transferLen := int(math.Sqrt(float64(len(peers))))
-			if transferLen < minBroadcastPeers {
-				transferLen = minBroadcastPeers
-			}
-			if transferLen > len(peers) {
-				transferLen = len(peers)
-			}
-			transfer := peers[:transferLen]
+			transfer := peers[:int(math.Sqrt(float64(len(peers))))]
 			for _, peer := range transfer {
 				txset[peer] = append(txset[peer], tx.Hash())
 			}
