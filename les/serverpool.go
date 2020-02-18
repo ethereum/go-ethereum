@@ -179,6 +179,19 @@ func (pool *serverPool) start(server *p2p.Server, topic discv5.Topic) {
 	pool.checkDial()
 	pool.wg.Add(1)
 	go pool.eventLoop()
+
+	// Inject the bootstrap nodes as initial dial candiates.
+	pool.wg.Add(1)
+	go func() {
+		defer pool.wg.Done()
+		for _, n := range server.BootstrapNodes {
+			select {
+			case pool.discNodes <- n:
+			case <-pool.closeCh:
+				return
+			}
+		}
+	}()
 }
 
 func (pool *serverPool) stop() {
