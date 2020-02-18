@@ -50,6 +50,29 @@ func randomAccount() []byte {
 	return data
 }
 
+func randomAccountWithSmall() []byte {
+	root := randomHash()
+	var a Account
+	// we want some accounts to be small
+	if rand.Intn(100) == 15 {
+		a = Account{
+			Balance:  new(big.Int),
+			Nonce:    uint64(1),
+			Root:     nil,
+			CodeHash: nil,
+		}
+	} else {
+		a = Account{
+			Balance:  big.NewInt(rand.Int63()),
+			Nonce:    rand.Uint64(),
+			Root:     root[:],
+			CodeHash: emptyCode[:],
+		}
+	}
+	data, _ := rlp.EncodeToBytes(a)
+	return data
+}
+
 // randomAccountSet generates a set of random accounts with the given strings as
 // the account address hashes.
 func randomAccountSet(hashes ...string) map[common.Hash][]byte {

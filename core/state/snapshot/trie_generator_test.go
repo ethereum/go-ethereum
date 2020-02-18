@@ -115,7 +115,7 @@ func BenchmarkTrieGeneration(b *testing.B) {
 		for i := 0; i < num; i++ {
 			h := common.Hash{}
 			binary.BigEndian.PutUint64(h[:], uint64(i+1))
-			accounts[h] = randomAccount()
+			accounts[h] = randomAccountWithSmall()
 		}
 		return accounts
 	}
@@ -139,26 +139,43 @@ func BenchmarkTrieGeneration(b *testing.B) {
 		b.Run("standard", func(b *testing.B) {
 			b.ResetTimer()
 			b.ReportAllocs()
+			var got common.Hash
 			for i := 0; i < b.N; i++ {
 				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-				generateTrie(it, StdGenerate)
+				got = generateTrie(it, StdGenerate)
+			}
+			b.StopTimer()
+			if exp := common.HexToHash("fecc4e1fce05c888c8acc8baa2d7677a531714668b7a09b5ede6e3e110be266b"); got != exp{
+				b.Fatalf("Error: got %x exp %x", got, exp)
 			}
 		})
 		b.Run("pruning", func(b *testing.B) {
 			b.ResetTimer()
 			b.ReportAllocs()
+			var got common.Hash
 			for i := 0; i < b.N; i++ {
 				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-				generateTrie(it, PruneGenerate)
+				got = generateTrie(it, PruneGenerate)
 			}
+			b.StopTimer()
+			if exp := common.HexToHash("fecc4e1fce05c888c8acc8baa2d7677a531714668b7a09b5ede6e3e110be266b"); got != exp{
+				b.Fatalf("Error: got %x exp %x", got, exp)
+			}
+
 		})
 		b.Run("stack", func(b *testing.B) {
 			b.ResetTimer()
 			b.ReportAllocs()
+			var got common.Hash
 			for i := 0; i < b.N; i++ {
 				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-				generateTrie(it, StackGenerate)
+				got = generateTrie(it, StackGenerate)
 			}
+			b.StopTimer()
+			if exp := common.HexToHash("fecc4e1fce05c888c8acc8baa2d7677a531714668b7a09b5ede6e3e110be266b"); got != exp{
+				b.Fatalf("Error: got %x exp %x", got, exp)
+			}
+
 		})
 	})
 	b.Run("10K", func(b *testing.B) {
