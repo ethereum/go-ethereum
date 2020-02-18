@@ -32,7 +32,7 @@ const (
 	forceSyncCycle      = 10 * time.Second // Time interval to force syncs, even if few peers are available
 	minDesiredPeerCount = 5                // Amount of peers desired to start syncing
 
-	// This is the target size for the packs of transactions sent by txsyncLoop.
+	// This is the target size for the packs of transactions sent by txsyncLoop64.
 	// A pack can get larger than this if a single transactions exceeds this size.
 	txsyncPackSize = 100 * 1024
 )
@@ -81,12 +81,15 @@ func (pm *ProtocolManager) syncTransactions(p *peer) {
 // transactions. In order to minimise egress bandwidth usage, we send
 // the transactions in small packs to one peer at a time.
 func (pm *ProtocolManager) txsyncLoop64() {
+	defer pm.wg.Done()
+
 	var (
 		pending = make(map[enode.ID]*txsync)
 		sending = false               // whether a send is active
 		pack    = new(txsync)         // the pack that is being sent
 		done    = make(chan error, 1) // result of the send
 	)
+
 	// send starts a sending a pack of transactions from the sync.
 	send := func(s *txsync) {
 		if s.p.version >= eth65 {
@@ -149,35 +152,41 @@ func (pm *ProtocolManager) txsyncLoop64() {
 	}
 }
 
-// syncer is responsible for periodically synchronising with the network, both
-// downloading hashes and blocks as well as handling the announcement handler.
+// syncer runs in its own goroutine and coordinates sync-related components.
 func (pm *ProtocolManager) syncer() {
-	// Start and ensure cleanup of sync mechanisms
+	defer pm.wg.Done()
+
 	pm.blockFetcher.Start()
 	pm.txFetcher.Start()
 	defer pm.blockFetcher.Stop()
 	defer pm.txFetcher.Stop()
 	defer pm.downloader.Terminate()
 
-	// Wait for different events to fire synchronisation operations
-	forceSync := time.NewTicker(forceSyncCycle)
-	defer forceSync.Stop()
+	for pm.syncTriggerWait() {
+		pm.synchronise(pm.peers.BestPeer())
+	}
+}
 
+// syncTriggerWait waits for sync start conditions to be met.
+func (pm *ProtocolManager) syncTriggerWait() bool {
+	force := time.NewTimer(forceSyncCycle)
+	defer force.Stop()
 	for {
 		select {
-		case <-pm.newPeerCh:
-			// Make sure we have peers to select from, then sync
-			if pm.peers.Len() < minDesiredPeerCount {
-				break
+		case <-pm.quitSync:
+			return false
+		default:
+			if pm.peers.Len() >= minDesiredPeerCount {
+				return true
 			}
-			go pm.synchronise(pm.peers.BestPeer())
-
-		case <-forceSync.C:
-			// Force a sync even if not enough peers are present
-			go pm.synchronise(pm.peers.BestPeer())
-
-		case <-pm.noMorePeers:
-			return
+			select {
+			case <-pm.newPeerCh:
+				// Go round and check the peer count again.
+			case <-force.C:
+				return true
+			case <-pm.quitSync:
+				return false
+			}
 		}
 	}
 }
