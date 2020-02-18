@@ -548,6 +548,13 @@ func (api *RetestethAPI) mineBlock() error {
 	if err != nil {
 		return err
 	}
+	resultCh := make(chan *types.Block, 1)
+	stopCh := make(chan struct{})
+	err = api.engine.Seal(api.blockchain, block, resultCh, stopCh)
+	if err != nil {
+		return err
+	}
+	block = <-resultCh
 	return api.importBlock(block)
 }
 
