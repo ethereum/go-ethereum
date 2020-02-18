@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// DumpAccount represents an account in the state
+// DumpAccount represents an account in the state.
 type DumpAccount struct {
 	Balance   string                 `json:"balance"`
 	Nonce     uint64                 `json:"nonce"`
@@ -40,18 +40,18 @@ type DumpAccount struct {
 
 }
 
-// Dump represents the full dump in a collected format, as one large map
+// Dump represents the full dump in a collected format, as one large map.
 type Dump struct {
 	Root     string                         `json:"root"`
 	Accounts map[common.Address]DumpAccount `json:"accounts"`
 }
 
-// iterativeDump is a 'collector'-implementation which dump output line-by-line iteratively
+// iterativeDump is a 'collector'-implementation which dump output line-by-line iteratively.
 type iterativeDump struct {
 	*json.Encoder
 }
 
-// IterationDump is an implementation for iterating over data
+// IteratorDump is an implementation for iterating over data.
 type IteratorDump struct {
 	Root     string                         `json:"root"`
 	Accounts map[common.Address]DumpAccount `json:"accounts"`
@@ -146,7 +146,6 @@ func (s *StateDB) dump(c collector, excludeCode, excludeStorage, excludeMissingP
 			}
 		}
 		c.onAccount(addr, account)
-
 		count++
 		if maxResults > 0 && count >= maxResults {
 			if it.Next() {
@@ -155,7 +154,6 @@ func (s *StateDB) dump(c collector, excludeCode, excludeStorage, excludeMissingP
 			break
 		}
 	}
-
 	if missingPreimages > 0 {
 		log.Warn("Dump incomplete due to missing preimages", "missing", missingPreimages)
 	}
