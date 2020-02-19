@@ -125,7 +125,10 @@ func (h *clientHandler) handle(p *peer) error {
 		serverConnectionGauge.Update(int64(h.backend.peers.Len()))
 	}()
 
-	h.fetcher.announce(p, p.headInfo)
+	p.lock.RLock()
+	headInfo := p.headInfo
+	p.lock.RUnlock()
+	h.fetcher.announce(p, headInfo)
 
 	// pool entry can be nil during the unit test.
 	if p.poolEntry != nil {

@@ -481,7 +481,10 @@ func (f *clientPool) setCapacity(c *clientInfo, capacity uint64) error {
 	f.connectedCap += capacity - oldCapacity
 	c.balanceTracker.setCapacity(capacity)
 	f.connectedQueue.Update(c.queueIndex)
-	if f.connectedCap > f.capLimit {
+	f.lock.Lock()
+	capLimit := f.capLimit
+	f.lock.Unlock()
+	if f.connectedCap > capLimit {
 		var kickList []*clientInfo
 		kick := true
 		f.connectedQueue.MultiPop(func(data interface{}, priority int64) bool {
@@ -491,7 +494,7 @@ func (f *clientPool) setCapacity(c *clientInfo, capacity uint64) error {
 			if client == c {
 				kick = false
 			}
-			return kick && (f.connectedCap > f.capLimit)
+			return kick && (f.connectedCap > capLimit)
 		})
 		if kick {
 			now := mclock.Now()
