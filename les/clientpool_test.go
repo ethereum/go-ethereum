@@ -527,7 +527,7 @@ func TestNodeDBExpiration(t *testing.T) {
 	if iterated != 4 {
 		t.Fatalf("Failed to evict useless negative balances, want %v, got %d", 4, iterated)
 	}
-
+	time.Sleep(100 * time.Millisecond) // Ensure the callback has been registered to virtual clock
 	for _, c := range cases {
 		ndb.setNB(c.ip, c.balance)
 	}
