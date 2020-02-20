@@ -766,14 +766,12 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	}
 	// Set sender address or use a default if none specified
 	var addr common.Address
-	if args.From == nil {
-		if wallets := b.AccountManager().Wallets(); len(wallets) > 0 {
-			if accounts := wallets[0].Accounts(); len(accounts) > 0 {
-				addr = accounts[0].Address
-			}
-		}
-	} else {
+	if args.From != nil {
 		addr = *args.From
+	} else {
+		// At some point, make From mandatory. For now, we'll accept (but grumble a bit)
+		log.Warn("call made without 'from'-address specified -- using 0x0 as default")
+		//return errors.New("parameter 'from' is mandatory")
 	}
 	// Override the fields of specified contracts before execution.
 	for addr, account := range overrides {
@@ -908,15 +906,11 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 
 	// Set sender address or use a default if none specified
 	if args.From == nil {
-		if wallets := b.AccountManager().Wallets(); len(wallets) > 0 {
-			if accounts := wallets[0].Accounts(); len(accounts) > 0 {
-				args.From = &accounts[0].Address
-			}
-		}
-	}
-	// Use zero-address if none other is available
-	if args.From == nil {
+		// Use zero-address if none is specified
 		args.From = &common.Address{}
+		// At some point, make From mandatory. For now, we'll accept (but grumble a bit)
+		log.Warn("call made without 'from'-address specified -- using 0x0 as default")
+		//return errors.New("parameter 'from' is mandatory")
 	}
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) bool {
