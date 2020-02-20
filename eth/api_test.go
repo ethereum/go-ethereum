@@ -39,7 +39,7 @@ func accountRangeTest(t *testing.T, trie *state.Trie, statedb *state.StateDB, st
 	if len(result.Accounts) != expectedNum {
 		t.Fatalf("expected %d results, got %d", expectedNum, len(result.Accounts))
 	}
-	for address, _ := range result.Accounts {
+	for address := range result.Accounts {
 		if address == (common.Address{}) {
 			t.Fatalf("empty address returned")
 		}
@@ -88,7 +88,7 @@ func TestAccountRange(t *testing.T) {
 	secondResult := accountRangeTest(t, &trie, state, common.BytesToHash(firstResult.Next), AccountRangeMaxResults, AccountRangeMaxResults)
 
 	hList := make(resultHash, 0)
-	for addr1, _ := range firstResult.Accounts {
+	for addr1 := range firstResult.Accounts {
 		// If address is empty, then it makes no sense to compare
 		// them as they might be two different accounts.
 		if addr1 == (common.Address{}) {
