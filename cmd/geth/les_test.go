@@ -136,8 +136,25 @@ func startClient(t *testing.T, name string) *gethrpc {
 	return g
 }
 
-func TestPriorityClient(t *testing.T) {
+func TestDev(t *testing.T) {
+	password := "foobar"
+	args := []string{"account", "new"}
+	g := runGeth(t, args...)
+	g.InputLine(password)
+	g.InputLine(password)
+	// Extract account from the returned string
+	_, output := g.ExpectRegexp(`(?ms)Public address of the key:   (0x[0-9a-fA-F]{40}).*`)
+	account := output[1]
+	t.Log("account", account)
+	g.WaitExit()
+	t.Log("finished 1")
 
+	args = []string{"--unlock", account, "--mine", "--datadir", g.Datadir}
+	g2 := runGeth(t, args...)
+	g2.InputLine(password)
+}
+
+func TestPriorityClient(t *testing.T) {
 	// Init and start server
 	server := startServer(t)
 	defer server.killAndWait()
