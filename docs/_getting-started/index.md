@@ -35,7 +35,7 @@ clef init
 Start clef, setting the keystore and chain id for the network we want to connect to:
 
 ```shell
-clef --keystore {GETH_LOCATION}/goerli/keystore --chainid 5
+clef --keystore <GETH_LOCATION>/goerli/keystore --chainid 5
 ```
 
 ## Sync your local node to a test network
@@ -43,12 +43,12 @@ clef --keystore {GETH_LOCATION}/goerli/keystore --chainid 5
 Start your node by connecting it to a network and setting a sync mode. The command below also enables the [Geth RPC interface](clef/tutorial) (which we cover [below](#)), and sets Clef as the transaction signer.
 
 ```shell
-geth --goerli --syncmode "light" --rpc --signer={CLEF_LOCATION}/clef.ipc
+geth --goerli --syncmode "light" --rpc --signer=<CLEF_LOCATION>/clef.ipc
 ```
 
 ### Sync modes
 
-You can start Geth in one of three different sync modes using the `--syncmode "{mode}"`
+You can start Geth in one of three different sync modes using the `--syncmode "<mode>"`
 argument that determines what sort of node it is in the network.
 
 These are:
@@ -75,7 +75,7 @@ RPC allows remote applications to access your node, but has limitations and secu
 You can connect to the IPC console in two ways. First when you start the node:
 
 ```shell
-geth --goerli --syncmode "light" --rpc --signer={CLEF_LOCATION}/clef.ipc console
+geth --goerli --syncmode "light" --rpc --signer=<CLEF_LOCATION>/clef.ipc console
 ```
 
 The node also outputs sync information, so using the console in the same terminal can be difficult.
@@ -83,7 +83,7 @@ The node also outputs sync information, so using the console in the same termina
 You can also open a console on the node from another terminal using:
 
 ```shell
-geth attach {IPC_LOCATION}
+geth attach <IPC_LOCATION>
 ```
 
 ### Create accounts
@@ -100,14 +100,14 @@ Unless you have Ether in another account on the Görli network, you can use a [f
 ### Check account balance
 
 ```javascript
-web3.fromWei(eth.getBalance("{ADDRESS-)}"),"ether")
+web3.fromWei(eth.getBalance("<ADDRESS_1>"),"ether")
 ```
 
 Getting the balance of an account does not require a signed transaction, so Clef does not ask for approval, and Geth returns the value.
 
 ### Send ETH to account
 
-Send 0.01 ETH from the account that you added ETH to with the Görli faucet, to the second accoutn you created:
+Send 0.01 ETH from the account that you added ETH to with the Görli faucet, to the second account you created:
 
 ```javascript
 eth.sendTransaction({from:"<ADDRESS_0>",to:"<ADDRESS_1>", value: web3.toWei(0.01,"ether")})
@@ -128,9 +128,9 @@ web3.fromWei(eth.getBalance("<ADDRESS_1>"),"ether")
 You can use standard HTTP requests to connect to a Geth node using the RPC APIs, for example:
 
 ```shell
-curl -X POST http://{GETH_IP_ADDRESS}:8545 --data \
+curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
     '{"jsonrpc":"2.0",
-    "method":"{API_METHOD}",
+    "method":"<API_METHOD>",
     "params":[],
     "id":1}' \
     -H "Content-Type:application/json"
@@ -139,10 +139,10 @@ curl -X POST http://{GETH_IP_ADDRESS}:8545 --data \
 ### Check account balance
 
 ```shell
-curl -X POST http://localhost:8545 --data 
+curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
     '{"jsonrpc":"2.0",
     "method":"eth_getBalance",
-    "params":["<ADDRESS_0>","latest"],
+    "params":["<ADDRESS_1>","latest"],
     "id":1}' 
     -H "Content-Type:application/json"
 ```
@@ -154,7 +154,7 @@ Getting the balance of an account does not require a signed transaction, so Clef
 Send 0.01 ETH from the account that you added ETH to with the Görli faucet, to the second account you created:
 
 ```shell
-curl -X POST http://localhost:8545 --data 
+curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
     '{"jsonrpc":"2.0",
     "method":"eth_sendTransaction",
     "params":[{"from": "<ADDRESS_0>","to": "<ADDRESS_1>","value": "0x9184e72a"}],
@@ -167,10 +167,10 @@ This action does require signing, so Clef prompts you to approve it, and if you 
 To check, get the account balance of the second account:
 
 ```javascript
-curl -X POST http://localhost:8545 --data 
+curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
     '{"jsonrpc":"2.0",
     "method":"eth_getBalance",
-    "params":["<ADDRESS_0>","latest"],
-    "id":1}' 
+    "params":["<ADDRESS_1>","latest"],
+    "id":1}'
     -H "Content-Type:application/json"
 ```
