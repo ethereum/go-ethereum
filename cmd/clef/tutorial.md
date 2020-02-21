@@ -1,6 +1,6 @@
 ## Initializing Clef
 
-First thing's first, Clef needs to store some data itself. Since that data might be sensitive (passwords, signing rules, accounts), Clef's entire storage is encrypted. To support encrypting data, the first step is to initialize Clef with a random master seed, itself too encrypted with your chosen password:
+First things first, Clef needs to store some data itself. Since that data might be sensitive (passwords, signing rules, accounts), Clef's entire storage is encrypted. To support encrypting data, the first step is to initialize Clef with a random master seed, itself too encrypted with your chosen password:
 
 ```text
 $ clef init
