@@ -17,10 +17,8 @@
 package les
 
 import (
-	"bytes"
 	"fmt"
 	"math/rand"
-	"reflect"
 	"testing"
 	"time"
 
@@ -116,7 +114,7 @@ func testClientPool(t *testing.T, activeLimit, clientCount, paidCount int, rando
 			// give a positive balance to some of the peers
 			amount := testClientPoolTicks / 2 * int64(time.Second) // enough for half of the simulation period
 			for i := 0; i < paidCount; i++ {
-				pool.addBalance(newPoolTestPeer(i, disconnCh).ID(), amount, "")
+				pool.addBalance(newPoolTestPeer(i, disconnCh).ID(), amount)
 			}
 		}
 
@@ -185,7 +183,7 @@ func TestConnectPaidClient(t *testing.T) {
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
 	// Add balance for an external client and mark it as paid client
-	pool.addBalance(newPoolTestPeer(0, nil).ID(), 1000, "")
+	pool.addBalance(newPoolTestPeer(0, nil).ID(), 1000)
 
 	if cap, _ := pool.connect(newPoolTestPeer(0, nil), 10); cap == 0 {
 		t.Fatalf("Failed to connect paid client")
@@ -203,7 +201,7 @@ func TestConnectPaidClientToSmallPool(t *testing.T) {
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
 	// Add balance for an external client and mark it as paid client
-	pool.addBalance(newPoolTestPeer(0, nil).ID(), 1000, "")
+	pool.addBalance(newPoolTestPeer(0, nil).ID(), 1000)
 
 	// Connect a fat paid client to pool, should reject it.
 	if cap, _ := pool.connect(newPoolTestPeer(0, nil), 100); cap != 0 {
@@ -223,15 +221,15 @@ func TestConnectPaidClientToFullPool(t *testing.T) {
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
 	for i := 0; i < 10; i++ {
-		pool.addBalance(newPoolTestPeer(i, nil).ID(), 1000000000, "")
+		pool.addBalance(newPoolTestPeer(i, nil).ID(), 1000000000)
 		pool.connect(newPoolTestPeer(i, nil), 1)
 	}
-	pool.addBalance(newPoolTestPeer(11, nil).ID(), 1000, "") // Add low balance to new paid client
+	pool.addBalance(newPoolTestPeer(11, nil).ID(), 1000) // Add low balance to new paid client
 	if cap, _ := pool.connect(newPoolTestPeer(11, nil), 1); cap != 0 {
 		t.Fatalf("Low balance paid client should be rejected")
 	}
 	clock.Run(time.Second)
-	pool.addBalance(newPoolTestPeer(12, nil).ID(), 1000000000*60*3+1, "") // Add high balance to new paid client
+	pool.addBalance(newPoolTestPeer(12, nil).ID(), 1000000000*60*3+1) // Add high balance to new paid client
 	if cap, _ := pool.connect(newPoolTestPeer(12, nil), 1); cap == 0 {
 		t.Fatalf("High balance paid client should be accepted")
 	}
@@ -250,7 +248,7 @@ func TestPaidClientKickedOut(t *testing.T) {
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
 	for i := 0; i < 10; i++ {
-		pool.addBalance(newPoolTestPeer(i, kickedCh).ID(), 1000000000, "") // 1 second allowance
+		pool.addBalance(newPoolTestPeer(i, kickedCh).ID(), 1000000000) // 1 second allowance
 		pool.connect(newPoolTestPeer(i, kickedCh), 1)
 		clock.Run(time.Millisecond)
 	}
@@ -359,12 +357,12 @@ func TestPositiveBalanceCalculation(t *testing.T) {
 	pool.setLimits(10, uint64(10)) // Total capacity limit is 10
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
-	pool.addBalance(newPoolTestPeer(0, kicked).ID(), int64(time.Minute*3), "")
+	pool.addBalance(newPoolTestPeer(0, kicked).ID(), int64(time.Minute*3))
 	pool.connect(newPoolTestPeer(0, kicked), 10)
 	clock.Run(time.Minute)
 
 	pool.disconnect(newPoolTestPeer(0, kicked))
-	pb := pool.ndb.getOrNewPB(newPoolTestPeer(0, kicked).ID())
+	pb := pool.ndb.getOrNewBalance(newPoolTestPeer(0, kicked).ID().Bytes(), false)
 	if pb.value != expval(uint64(time.Minute*2)) {
 		t.Fatalf("Positive balance mismatch, want %v, got %v", uint64(time.Minute*2), pb.value)
 	}
@@ -383,7 +381,7 @@ func TestDowngradePriorityClient(t *testing.T) {
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
 	p := newPoolTestPeer(0, kicked)
-	pool.addBalance(p.ID(), int64(time.Minute), "")
+	pool.addBalance(p.ID(), int64(time.Minute))
 	p.cap, _ = pool.connect(p, 10)
 	if p.cap != 10 {
 		t.Fatalf("The capcacity of priority peer hasn't been updated, got: %d", p.cap)
@@ -394,13 +392,13 @@ func TestDowngradePriorityClient(t *testing.T) {
 	if p.cap != 1 {
 		t.Fatalf("The capcacity of peer should be downgraded, got: %d", p.cap)
 	}
-	pb := pool.ndb.getOrNewPB(newPoolTestPeer(0, kicked).ID())
+	pb := pool.ndb.getOrNewBalance(newPoolTestPeer(0, kicked).ID().Bytes(), false)
 	if pb.value.base != 0 {
 		t.Fatalf("Positive balance mismatch, want %v, got %v", 0, pb.value)
 	}
 
-	pool.addBalance(newPoolTestPeer(0, kicked).ID(), int64(time.Minute), "")
-	pb = pool.ndb.getOrNewPB(newPoolTestPeer(0, kicked).ID())
+	pool.addBalance(newPoolTestPeer(0, kicked).ID(), int64(time.Minute))
+	pb = pool.ndb.getOrNewBalance(newPoolTestPeer(0, kicked).ID().Bytes(), false)
 	if pb.value != expval(uint64(time.Minute)) {
 		t.Fatalf("Positive balance mismatch, want %v, got %v", uint64(time.Minute), pb.value)
 	}
@@ -423,8 +421,8 @@ func TestNegativeBalanceCalculation(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		pool.disconnect(newPoolTestPeer(i, nil))
-		nb := pool.ndb.getOrNewNB(newPoolTestPeer(i, nil).freeClientId())
-		if nb.logValue != 0 {
+		nb := pool.ndb.getOrNewBalance([]byte(newPoolTestPeer(i, nil).freeClientId()), true)
+		if nb.value.base != 0 {
 			t.Fatalf("Short connection shouldn't be recorded")
 		}
 	}
@@ -443,108 +441,6 @@ func TestNegativeBalanceCalculation(t *testing.T) {
 	}
 }
 
-func TestNodeDB(t *testing.T) {
-	ndb := newNodeDB(rawdb.NewMemoryDatabase(), mclock.System{})
-	defer ndb.close()
-
-	if !bytes.Equal(ndb.verbuf[:], []byte{0x00, nodeDBVersion}) {
-		t.Fatalf("version buffer mismatch, want %v, got %v", []byte{0x00, nodeDBVersion}, ndb.verbuf)
-	}
-	var cases = []struct {
-		id       enode.ID
-		ip       string
-		balance  interface{}
-		positive bool
-	}{
-		{enode.ID{0x00, 0x01, 0x02}, "", posBalance{value: expval(100)}, true},
-		{enode.ID{0x00, 0x01, 0x02}, "", posBalance{value: expval(200)}, true},
-		{enode.ID{}, "127.0.0.1", negBalance{value: expval(100)}, false},
-		{enode.ID{}, "127.0.0.1", negBalance{value: expval(200)}, false},
-	}
-	for _, c := range cases {
-		if c.positive {
-			ndb.setPB(c.id, c.balance.(posBalance))
-			if pb := ndb.getOrNewPB(c.id); !reflect.DeepEqual(pb, c.balance.(posBalance)) {
-				t.Fatalf("Positive balance mismatch, want %v, got %v", c.balance.(posBalance), pb)
-			}
-		} else {
-			ndb.setNB(c.ip, c.balance.(negBalance))
-			if nb := ndb.getOrNewNB(c.ip); !reflect.DeepEqual(nb, c.balance.(negBalance)) {
-				t.Fatalf("Negative balance mismatch, want %v, got %v", c.balance.(negBalance), nb)
-			}
-		}
-	}
-	for _, c := range cases {
-		if c.positive {
-			ndb.delPB(c.id)
-			if pb := ndb.getOrNewPB(c.id); !reflect.DeepEqual(pb, posBalance{}) {
-				t.Fatalf("Positive balance mismatch, want %v, got %v", posBalance{}, pb)
-			}
-		} else {
-			ndb.delNB(c.ip)
-			if nb := ndb.getOrNewNB(c.ip); !reflect.DeepEqual(nb, negBalance{}) {
-				t.Fatalf("Negative balance mismatch, want %v, got %v", negBalance{}, nb)
-			}
-		}
-	}
-	ndb.setExpiration(100, 200)
-	if pos, neg := ndb.getExpiration(); pos != 100 || neg != 200 {
-		t.Fatalf("Expiration mismatch, want %v / %v, got %v / %v", 100, 200, pos, neg)
-	}
-}
-
-func TestNodeDBExpiration(t *testing.T) {
-	var (
-		iterated int
-		done     = make(chan struct{}, 1)
-	)
-	callback := func(now mclock.AbsTime, b negBalance) bool {
-		iterated += 1
-		return true
-	}
-	clock := &mclock.Simulated{}
-	ndb := newNodeDB(rawdb.NewMemoryDatabase(), clock)
-	defer ndb.close()
-	ndb.nbEvictCallBack = callback
-	ndb.cleanupHook = func() { done <- struct{}{} }
-
-	var cases = []struct {
-		ip      string
-		balance negBalance
-	}{
-		{"127.0.0.1", negBalance{value: expiredValue{base: 1}}},
-		{"127.0.0.2", negBalance{value: expiredValue{base: 1}}},
-		{"127.0.0.3", negBalance{value: expiredValue{base: 1}}},
-		{"127.0.0.4", negBalance{value: expiredValue{base: 1}}},
-	}
-	for _, c := range cases {
-		ndb.setNB(c.ip, c.balance)
-	}
-	clock.WaitForTimers(1)
-	clock.Run(time.Hour + time.Minute)
-	select {
-	case <-done:
-	case <-time.NewTimer(time.Second).C:
-		t.Fatalf("timeout")
-	}
-	if iterated != 4 {
-		t.Fatalf("Failed to evict useless negative balances, want %v, got %d", 4, iterated)
-	}
-	clock.WaitForTimers(1)
-	for _, c := range cases {
-		ndb.setNB(c.ip, c.balance)
-	}
-	clock.Run(time.Hour + time.Minute)
-	select {
-	case <-done:
-	case <-time.NewTimer(time.Second).C:
-		t.Fatalf("timeout")
-	}
-	if iterated != 8 {
-		t.Fatalf("Failed to evict useless negative balances, want %v, got %d", 4, iterated)
-	}
-}
-
 func TestInactiveClient(t *testing.T) {
 	var (
 		clock mclock.Simulated
@@ -557,8 +453,8 @@ func TestInactiveClient(t *testing.T) {
 	p1 := newPoolTestPeer(1, nil)
 	p2 := newPoolTestPeer(2, nil)
 	p3 := newPoolTestPeer(3, nil)
-	pool.addBalance(p1.ID(), 1000, "")
-	pool.addBalance(p3.ID(), 2000, "")
+	pool.addBalance(p1.ID(), 1000)
+	pool.addBalance(p3.ID(), 2000)
 	// p1: 1000  p2: 0  p3: 2000
 	p1.cap, _ = pool.connect(p1, 1)
 	if p1.cap != 1 {
@@ -575,7 +471,7 @@ func TestInactiveClient(t *testing.T) {
 	if p2.cap != 0 {
 		t.Fatalf("Failed to deactivate peer #2")
 	}
-	pool.addBalance(p2.ID(), 3000, "")
+	pool.addBalance(p2.ID(), 3000)
 	// p1: 1000  p2: 3000  p3: 2000
 	if p2.cap != 1 {
 		t.Fatalf("Failed to activate peer #2")
@@ -583,7 +479,7 @@ func TestInactiveClient(t *testing.T) {
 	if p1.cap != 0 {
 		t.Fatalf("Failed to deactivate peer #1")
 	}
-	pool.addBalance(p2.ID(), -2500, "")
+	pool.addBalance(p2.ID(), -2500)
 	// p1: 1000  p2: 500  p3: 2000
 	if p1.cap != 1 {
 		t.Fatalf("Failed to activate peer #1")
@@ -593,7 +489,7 @@ func TestInactiveClient(t *testing.T) {
 	}
 	pool.setDefaultFactors(priceFactors{1e-9, 0, 0}, priceFactors{1e-9, 0, 0})
 	p4 := newPoolTestPeer(4, nil)
-	pool.addBalance(p4.ID(), 1500, "")
+	pool.addBalance(p4.ID(), 1500)
 	// p1: 1000  p2: 500  p3: 2000  p4: 1500
 	p4.cap, _ = pool.connect(p4, 1)
 	if p4.cap != 1 {
@@ -616,7 +512,7 @@ func TestInactiveClient(t *testing.T) {
 	}
 	pool.disconnect(p2)
 	pool.disconnect(p4)
-	pool.addBalance(p1.ID(), -1000, "")
+	pool.addBalance(p1.ID(), -1000)
 	if p1.cap != 1 {
 		t.Fatalf("Should not deactivate peer #1")
 	}

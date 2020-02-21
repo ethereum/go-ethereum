@@ -104,12 +104,16 @@ func (api *PrivateLightServerAPI) clientInfo(c *clientInfo, id enode.ID) map[str
 		info["capacity"] = c.capacity
 		pb, nb := c.balanceTracker.getBalance(now)
 		info["pricing/balance"], info["pricing/negBalance"] = pb, nb
-		info["pricing/balanceMeta"] = c.balanceMetaInfo
+
+		cb := api.server.clientPool.ndb.getCurrencyBalance(id)
+		info["pricing/currency"] = cb.amount
 		info["priority"] = pb.base != 0
 	} else {
 		info["isConnected"] = false
-		pb := api.server.clientPool.ndb.getOrNewPB(id)
-		info["pricing/balance"], info["pricing/balanceMeta"] = pb.value, pb.meta
+		pb := api.server.clientPool.ndb.getOrNewBalance(id.Bytes(), false)
+
+		cb := api.server.clientPool.ndb.getCurrencyBalance(id)
+		info["pricing/balance"], info["pricing/currency"] = pb.value, cb.amount
 		info["priority"] = pb.value.base != 0
 	}
 	return info
@@ -172,8 +176,8 @@ func (api *PrivateLightServerAPI) setParams(params map[string]interface{}, clien
 
 // AddBalance updates the balance of a client (either overwrites it or adds to it).
 // It also updates the balance meta info string.
-func (api *PrivateLightServerAPI) AddBalance(id enode.ID, value int64, meta string) ([2]uint64, error) {
-	oldBalance, newBalance, err := api.server.clientPool.addBalance(id, value, meta)
+func (api *PrivateLightServerAPI) AddBalance(id enode.ID, value int64) ([2]uint64, error) {
+	oldBalance, newBalance, err := api.server.clientPool.addBalance(id, value)
 	return [2]uint64{oldBalance, newBalance}, err
 }
 

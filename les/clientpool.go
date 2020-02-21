@@ -17,22 +17,16 @@
 package les
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
-	"io"
 	"math"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rlp"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -42,8 +36,6 @@ const (
 	tryActivatePeriod        = time.Second * 5  // periodically check whether inactive clients can be activated
 	dropInactiveCycles       = 2                // number of activation check periods after non-priority inactive peers are dropped
 	persistExpirationRefresh = time.Minute * 5  // refresh period of the token expiration persistence
-	posBalanceCacheLimit     = 8192             // the maximum number of cached items in positive balance queue
-	negBalanceCacheLimit     = 8192             // the maximum number of cached items in negative balance queue
 	freeRatioTC              = time.Hour        // time constant of token supply control based on free service availability
 
 	// activeBias is applied to already connected clients So that
@@ -72,11 +64,8 @@ const (
 // each client can have several minutes of connection time.
 //
 // Balances of disconnected clients are stored in nodeDB including positive balance
-// and negative banalce. Negative balance is transformed into a logarithmic form
-// with a constantly shifting linear offset in order to implement an exponential
-// decrease. Besides nodeDB will have a background thread to check the negative
-// balance of disconnected client. If the balance is low enough, then the record
-// will be dropped.
+// and negative banalce. Boeth positive balance and negative balance will decrease
+// exponentially. If the balance is low enough, then the record will be dropped.
 type clientPool struct {
 	ndb        *nodeDB
 	lock       sync.Mutex
@@ -138,7 +127,6 @@ type clientInfo struct {
 	queueIndex             int // position in activeQueue
 	balanceTracker         balanceTracker
 	posFactors, negFactors priceFactors
-	balanceMetaInfo        string
 }
 
 // connSetIndex callback updates clientInfo item index in activeQueue
@@ -212,7 +200,7 @@ func newClientPool(db ethdb.Database, minCap, freeClientCap uint64, clock mclock
 			stop = true
 		}
 		for i := 0; i < l; i++ {
-			pool.inactiveBalances.addExp(pool.ndb.getOrNewPB(ids[i]).value)
+			pool.inactiveBalances.addExp(pool.ndb.getOrNewBalance(ids[i].Bytes(), false).value)
 		}
 		if stop {
 			break
@@ -220,8 +208,14 @@ func newClientPool(db ethdb.Database, minCap, freeClientCap uint64, clock mclock
 	}
 	// If the negative balance of free client is low enough,
 	// delete this entry.
-	ndb.nbEvictCallBack = func(now mclock.AbsTime, b negBalance) bool {
-		return b.value.value(pool.negExpiration(now)) < uint64(time.Second)
+	ndb.evictCallBack = func(now mclock.AbsTime, neg bool, b tokenBalance) bool {
+		var expiration float64
+		if neg {
+			expiration = pool.negExpiration(now)
+		} else {
+			expiration = pool.posExpiration(now)
+		}
+		return b.value.value(expiration) < uint64(time.Second)
 	}
 	go func() {
 		for {
@@ -239,11 +233,9 @@ func newClientPool(db ethdb.Database, minCap, freeClientCap uint64, clock mclock
 		for {
 			select {
 			case <-clock.After(persistExpirationRefresh):
-				pool.lock.Lock()
 				now := pool.clock.Now()
 				posExp := pool.posExpiration(now)
 				negExp := pool.negExpiration(now)
-				pool.lock.Unlock()
 				pool.ndb.setExpiration(posExp, negExp)
 			case <-pool.stopCh:
 				return
@@ -412,21 +404,20 @@ func (f *clientPool) connect(peer clientPoolPeer, reqCapacity uint64) (uint64, e
 		log.Debug("Client already connected", "address", freeID, "id", peerIdToString(id))
 		return 0, fmt.Errorf("Client already connected   address = %s  id = %s", freeID, peerIdToString(id))
 	}
-	pb := f.ndb.getOrNewPB(id)
-	nb := f.ndb.getOrNewNB(freeID)
+	pb := f.ndb.getOrNewBalance(id.Bytes(), false)
+	nb := f.ndb.getOrNewBalance([]byte(freeID), true)
 	e := &clientInfo{
-		capacity:        reqCapacity,
-		pool:            f,
-		peer:            peer,
-		address:         freeID,
-		queueIndex:      -1,
-		id:              id,
-		freeID:          freeID,
-		connectedAt:     f.clock.Now(),
-		priority:        pb.value.base != 0,
-		posFactors:      f.defaultPosFactors,
-		negFactors:      f.defaultNegFactors,
-		balanceMetaInfo: pb.meta,
+		capacity:    reqCapacity,
+		pool:        f,
+		peer:        peer,
+		address:     freeID,
+		queueIndex:  -1,
+		id:          id,
+		freeID:      freeID,
+		connectedAt: f.clock.Now(),
+		priority:    pb.value.base != 0,
+		posFactors:  f.defaultPosFactors,
+		negFactors:  f.defaultNegFactors,
 	}
 	missing, capacity := f.capAvailable(id, freeID, reqCapacity, 0, true)
 	f.connectedMap[id] = e
@@ -460,7 +451,7 @@ func (f *clientPool) connect(peer clientPoolPeer, reqCapacity uint64) (uint64, e
 }
 
 // initBalanceTracker initializes the positive and negative balances and price factors
-func (f *clientPool) initBalanceTracker(bt *balanceTracker, pb posBalance, nb negBalance, capacity uint64, active bool) {
+func (f *clientPool) initBalanceTracker(bt *balanceTracker, pb tokenBalance, nb tokenBalance, capacity uint64, active bool) {
 	bt.exp = f
 	bt.init(f.clock, capacity)
 	bt.setBalance(pb.value, nb.value)
@@ -552,7 +543,7 @@ func (f *clientPool) capAvailable(id enode.ID, freeID string, capacity uint64, m
 				bt = &client.balanceTracker
 			} else {
 				bt = &balanceTracker{}
-				f.initBalanceTracker(bt, f.ndb.getOrNewPB(id), f.ndb.getOrNewNB(freeID), capacity, true)
+				f.initBalanceTracker(bt, f.ndb.getOrNewBalance(id.Bytes(), false), f.ndb.getOrNewBalance([]byte(freeID), true), capacity, true)
 			}
 			if capacity != f.freeClientCap && targetPriority >= 0 {
 				targetPriority = -1
@@ -687,15 +678,24 @@ func (f *clientPool) finalizeBalance(c *clientInfo, now mclock.AbsTime) {
 	f.inactiveBalances.addExp(pos)
 	f.activeBalances.subExp(pos)
 
-	pb, nb := f.ndb.getOrNewPB(c.id), f.ndb.getOrNewNB(c.address)
-	pb.value = pos
-	f.ndb.setPB(c.id, pb)
-
-	if neg.value(f.negExpiration(f.clock.Now())) > uint64(time.Second) {
-		nb.value = neg
-		f.ndb.setNB(c.address, nb)
-	} else {
-		f.ndb.delNB(c.address) // Negative balance is small enough, drop it directly.
+	for index, value := range []expiredValue{pos, neg} {
+		var (
+			id         []byte
+			expiration float64
+		)
+		neg := index == 1
+		if !neg {
+			id = c.id.Bytes()
+			expiration = f.posExpiration(f.clock.Now())
+		} else {
+			id = []byte(c.address)
+			expiration = f.negExpiration(f.clock.Now())
+		}
+		if value.value(expiration) > uint64(time.Second) {
+			f.ndb.setBalance(id, neg, tokenBalance{value: value})
+		} else {
+			f.ndb.delBalance(id, neg) // balance is small enough, drop it directly.
+		}
 	}
 }
 
@@ -721,9 +721,7 @@ func (f *clientPool) balanceExhausted(id enode.ID) {
 		c.balanceTracker.setCapacity(c.capacity)
 		c.peer.updateCapacity(c.capacity)
 	}
-	pb := f.ndb.getOrNewPB(id)
-	pb.value = expiredValue{}
-	f.ndb.setPB(id, pb)
+	f.ndb.delBalance(id.Bytes(), false)
 }
 
 // setactiveLimit sets the maximum number and total capacity of connected clients,
@@ -811,26 +809,26 @@ func zeroPriceFactors(bt *balanceTracker) {
 }
 
 // getPosBalance retrieves a single positive balance entry from cache or the database
-func (f *clientPool) getPosBalance(id enode.ID) posBalance {
+func (f *clientPool) getPosBalance(id enode.ID) tokenBalance {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
 	if c := f.connectedMap[id]; c != nil {
-		pb, _ := c.balanceTracker.getBalance(f.clock.Now())
-		return posBalance{value: pb, meta: c.balanceMetaInfo}
+		value, _ := c.balanceTracker.getBalance(f.clock.Now())
+		return tokenBalance{value: value}
 	} else {
-		return f.ndb.getOrNewPB(id)
+		return f.ndb.getOrNewBalance(id.Bytes(), false)
 	}
 }
 
 // addBalance updates the balance of a client (either overwrites it or adds to it).
 // It also updates the balance meta info string.
-func (f *clientPool) addBalance(id enode.ID, amount int64, meta string) (uint64, uint64, error) {
+func (f *clientPool) addBalance(id enode.ID, amount int64) (uint64, uint64, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
 	now := f.clock.Now()
-	pb := f.ndb.getOrNewPB(id)
+	pb := f.ndb.getOrNewBalance(id.Bytes(), false)
 	var negBalance expiredValue
 	c := f.connectedMap[id]
 	if c != nil {
@@ -843,8 +841,7 @@ func (f *clientPool) addBalance(id enode.ID, amount int64, meta string) (uint64,
 		return oldValue, oldValue, errBalanceOverflow
 	}
 	pb.value.add(amount, posExp)
-	pb.meta = meta
-	f.ndb.setPB(id, pb)
+	f.ndb.setBalance(id.Bytes(), false, pb)
 	if c != nil {
 		c.balanceTracker.setBalance(pb.value, negBalance)
 		if c.active {
@@ -857,7 +854,6 @@ func (f *clientPool) addBalance(id enode.ID, amount int64, meta string) (uint64,
 				f.updateFreeRatio()
 				c.balanceTracker.addCallback(balanceCallbackZero, 0, func() { f.balanceExhausted(id) })
 			}
-			c.balanceMetaInfo = meta
 			f.activeBalances.subExp(oldBalance)
 			f.activeBalances.addExp(pb.value)
 		} else {
@@ -877,269 +873,4 @@ func (f *clientPool) addBalance(id enode.ID, amount int64, meta string) (uint64,
 	}
 	f.tryActivateClients()
 	return oldValue, pb.value.value(posExp), nil
-}
-
-// posBalance represents a recently accessed positive balance entry
-type posBalance struct {
-	value expiredValue
-	meta  string
-}
-
-// EncodeRLP implements rlp.Encoder
-func (e *posBalance) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{e.value.base, e.value.exp, e.meta})
-}
-
-// DecodeRLP implements rlp.Decoder
-func (e *posBalance) DecodeRLP(s *rlp.Stream) error {
-	var entry struct {
-		ValueBase, ValueExp uint64
-		Meta                string
-	}
-	if err := s.Decode(&entry); err != nil {
-		return err
-	}
-	e.value = expiredValue{base: entry.ValueBase, exp: entry.ValueExp}
-	e.meta = entry.Meta
-	return nil
-}
-
-// negBalance represents a negative balance entry of a disconnected client
-type negBalance struct{ value expiredValue }
-
-// EncodeRLP implements rlp.Encoder
-func (e *negBalance) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{e.value.base, e.value.exp})
-}
-
-// DecodeRLP implements rlp.Decoder
-func (e *negBalance) DecodeRLP(s *rlp.Stream) error {
-	var entry struct {
-		Base, Exp uint64
-	}
-	if err := s.Decode(&entry); err != nil {
-		return err
-	}
-	e.value = expiredValue{base: entry.Base, exp: entry.Exp}
-	return nil
-}
-
-const (
-	// nodeDBVersion is the version identifier of the node data in db
-	//
-	// Changelog:
-	// * Replace `lastTotal` with `meta` in positive balance: version 0=>1
-	nodeDBVersion = 1
-
-	// dbCleanupCycle is the cycle of db for useless data cleanup
-	dbCleanupCycle = time.Hour
-)
-
-var (
-	positiveBalancePrefix = []byte("pb:")         // dbVersion(uint16 big endian) + positiveBalancePrefix + id -> balance
-	negativeBalancePrefix = []byte("nb:")         // dbVersion(uint16 big endian) + negativeBalancePrefix + ip -> balance
-	expirationKey         = []byte("expiration:") // dbVersion(uint16 big endian) + expirationKey -> posExp, negExp
-)
-
-type nodeDB struct {
-	db              ethdb.Database
-	pcache          *lru.Cache
-	ncache          *lru.Cache
-	auxbuf          []byte                                // 37-byte auxiliary buffer for key encoding
-	verbuf          [2]byte                               // 2-byte auxiliary buffer for db version
-	nbEvictCallBack func(mclock.AbsTime, negBalance) bool // Callback to determine whether the negative balance can be evicted.
-	clock           mclock.Clock
-	closeCh         chan struct{}
-	cleanupHook     func() // Test hook used for testing
-}
-
-func newNodeDB(db ethdb.Database, clock mclock.Clock) *nodeDB {
-	pcache, _ := lru.New(posBalanceCacheLimit)
-	ncache, _ := lru.New(negBalanceCacheLimit)
-	ndb := &nodeDB{
-		db:      db,
-		pcache:  pcache,
-		ncache:  ncache,
-		auxbuf:  make([]byte, 37),
-		clock:   clock,
-		closeCh: make(chan struct{}),
-	}
-	binary.BigEndian.PutUint16(ndb.verbuf[:], uint16(nodeDBVersion))
-	go ndb.expirer()
-	return ndb
-}
-
-func (db *nodeDB) close() {
-	close(db.closeCh)
-}
-
-func (db *nodeDB) key(id []byte, neg bool) []byte {
-	prefix := positiveBalancePrefix
-	if neg {
-		prefix = negativeBalancePrefix
-	}
-	if len(prefix)+len(db.verbuf)+len(id) > len(db.auxbuf) {
-		db.auxbuf = append(db.auxbuf, make([]byte, len(prefix)+len(db.verbuf)+len(id)-len(db.auxbuf))...)
-	}
-	copy(db.auxbuf[:len(db.verbuf)], db.verbuf[:])
-	copy(db.auxbuf[len(db.verbuf):len(db.verbuf)+len(prefix)], prefix)
-	copy(db.auxbuf[len(prefix)+len(db.verbuf):len(prefix)+len(db.verbuf)+len(id)], id)
-	return db.auxbuf[:len(prefix)+len(db.verbuf)+len(id)]
-}
-
-func (db *nodeDB) getExpiration() (float64, float64) {
-	blob, err := db.db.Get(append(expirationKey, db.verbuf[:]...))
-	if err != nil || len(blob) != 16 {
-		return 0, 0
-	}
-	return math.Float64frombits(binary.BigEndian.Uint64(blob[:8])), math.Float64frombits(binary.BigEndian.Uint64(blob[8:16]))
-}
-
-func (db *nodeDB) setExpiration(pos, neg float64) {
-	binary.BigEndian.PutUint64(db.auxbuf[:8], math.Float64bits(pos))
-	binary.BigEndian.PutUint64(db.auxbuf[8:16], math.Float64bits(neg))
-	db.db.Put(append(expirationKey, db.verbuf[:]...), db.auxbuf[:16])
-}
-
-func (db *nodeDB) getOrNewPB(id enode.ID) posBalance {
-	key := db.key(id.Bytes(), false)
-	item, exist := db.pcache.Get(string(key))
-	if exist {
-		return item.(posBalance)
-	}
-	var balance posBalance
-	if enc, err := db.db.Get(key); err == nil {
-		if err := rlp.DecodeBytes(enc, &balance); err != nil {
-			log.Error("Failed to decode positive balance", "err", err)
-		}
-	}
-	db.pcache.Add(string(key), balance)
-	return balance
-}
-
-func (db *nodeDB) setPB(id enode.ID, b posBalance) {
-	if b.value.base == 0 && len(b.meta) == 0 {
-		db.delPB(id)
-		return
-	}
-	key := db.key(id.Bytes(), false)
-	enc, err := rlp.EncodeToBytes(&(b))
-	if err != nil {
-		log.Error("Failed to encode positive balance", "err", err)
-		return
-	}
-	db.db.Put(key, enc)
-	db.pcache.Add(string(key), b)
-}
-
-func (db *nodeDB) delPB(id enode.ID) {
-	key := db.key(id.Bytes(), false)
-	db.db.Delete(key)
-	db.pcache.Remove(string(key))
-}
-
-// getPosBalanceIDs returns a lexicographically ordered list of IDs of accounts
-// with a positive balance
-func (db *nodeDB) getPosBalanceIDs(start, stop enode.ID, maxCount int) (result []enode.ID) {
-	if maxCount <= 0 {
-		return
-	}
-	it := db.db.NewIteratorWithStart(db.key(start.Bytes(), false))
-	defer it.Release()
-	for i := len(stop[:]) - 1; i >= 0; i-- {
-		stop[i]--
-		if stop[i] != 255 {
-			break
-		}
-	}
-	stopKey := db.key(stop.Bytes(), false)
-	keyLen := len(stopKey)
-
-	for it.Next() {
-		var id enode.ID
-		if len(it.Key()) != keyLen || bytes.Compare(it.Key(), stopKey) == 1 {
-			return
-		}
-		copy(id[:], it.Key()[keyLen-len(id):])
-		result = append(result, id)
-		if len(result) == maxCount {
-			return
-		}
-	}
-	return
-}
-
-func (db *nodeDB) getOrNewNB(id string) negBalance {
-	key := db.key([]byte(id), true)
-	item, exist := db.ncache.Get(string(key))
-	if exist {
-		return item.(negBalance)
-	}
-	var balance negBalance
-	if enc, err := db.db.Get(key); err == nil {
-		if err := rlp.DecodeBytes(enc, &balance); err != nil {
-			log.Error("Failed to decode negative balance", "err", err)
-		}
-	}
-	db.ncache.Add(string(key), balance)
-	return balance
-}
-
-func (db *nodeDB) setNB(id string, b negBalance) {
-	key := db.key([]byte(id), true)
-	enc, err := rlp.EncodeToBytes(&(b))
-	if err != nil {
-		log.Error("Failed to encode negative balance", "err", err)
-		return
-	}
-	db.db.Put(key, enc)
-	db.ncache.Add(string(key), b)
-}
-
-func (db *nodeDB) delNB(id string) {
-	key := db.key([]byte(id), true)
-	db.db.Delete(key)
-	db.ncache.Remove(string(key))
-}
-
-func (db *nodeDB) expirer() {
-	for {
-		select {
-		case <-db.clock.After(dbCleanupCycle):
-			db.expireNodes()
-		case <-db.closeCh:
-			return
-		}
-	}
-}
-
-// expireNodes iterates the whole node db and checks whether the negative balance
-// entry can deleted.
-//
-// The rationale behind this is: server doesn't need to keep the negative balance
-// records if they are low enough.
-func (db *nodeDB) expireNodes() {
-	var (
-		visited int
-		deleted int
-		start   = time.Now()
-	)
-	iter := db.db.NewIteratorWithPrefix(append(db.verbuf[:], negativeBalancePrefix...))
-	for iter.Next() {
-		visited += 1
-		var balance negBalance
-		if err := rlp.DecodeBytes(iter.Value(), &balance); err != nil {
-			log.Error("Failed to decode negative balance", "err", err)
-			continue
-		}
-		if db.nbEvictCallBack != nil && db.nbEvictCallBack(db.clock.Now(), balance) {
-			deleted += 1
-			db.db.Delete(iter.Key())
-		}
-	}
-	// Invoke testing hook if it's not nil.
-	if db.cleanupHook != nil {
-		db.cleanupHook()
-	}
-	log.Debug("Expire nodes", "visited", visited, "deleted", deleted, "elapsed", common.PrettyDuration(time.Since(start)))
 }
