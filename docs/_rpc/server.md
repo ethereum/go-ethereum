@@ -31,8 +31,9 @@ The default listening port is 8545. You can customize address and port using the
     geth --rpc --rpcport 3334
 
 JSON-RPC method namespaces must be whitelisted in order to be available through
-the HTTP server. The default whitelist allows access to the "eth" and "shh"
-namespaces. To enable access to other APIs like account management ("personal")
+the HTTP server. An RPC error with error code `-32602` is generated if you call a
+namespace that isn't whitelisted. The default whitelist allows access to the "eth"
+and "shh" namespaces. To enable access to other APIs like account management ("personal")
 and debugging ("debug"), they must be configured via the `--rpcapi` flag. We do
 not recommend enabling such APIs over HTTP, however, since access to these
 methods increases the attack surface.
