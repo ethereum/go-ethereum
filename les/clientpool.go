@@ -36,17 +36,15 @@ import (
 )
 
 const (
-	defaultPosExpTC          = 36000              // default time constant (in seconds) for exponentially reducing positive balance
-	defaultNegExpTC          = 3600               // default time constant (in seconds) for exponentially reducing negative balance
-	logMultiplier            = 24204406.323122971 // constant to convert natural logarithms to fixed point format
-	log2Multiplier           = 0x1000000          // constant to convert 2-based logarithms to fixed point format
-	lazyQueueRefresh         = time.Second * 10   // refresh period of the connected queue
-	tryActivatePeriod        = time.Second * 5    // periodically check whether inactive clients can be activated
-	dropInactiveCycles       = 2                  // number of activation check periods after non-priority inactive peers are dropped
-	persistExpirationRefresh = time.Minute * 5    // refresh period of the token expiration persistence
-	posBalanceCacheLimit     = 8192               // the maximum number of cached items in positive balance queue
-	negBalanceCacheLimit     = 8192               // the maximum number of cached items in negative balance queue
-	freeRatioTC              = time.Hour          // time constant of token supply control based on free service availability
+	defaultPosExpTC          = 36000            // default time constant (in seconds) for exponentially reducing positive balance
+	defaultNegExpTC          = 3600             // default time constant (in seconds) for exponentially reducing negative balance
+	lazyQueueRefresh         = time.Second * 10 // refresh period of the connected queue
+	tryActivatePeriod        = time.Second * 5  // periodically check whether inactive clients can be activated
+	dropInactiveCycles       = 2                // number of activation check periods after non-priority inactive peers are dropped
+	persistExpirationRefresh = time.Minute * 5  // refresh period of the token expiration persistence
+	posBalanceCacheLimit     = 8192             // the maximum number of cached items in positive balance queue
+	negBalanceCacheLimit     = 8192             // the maximum number of cached items in negative balance queue
+	freeRatioTC              = time.Hour        // time constant of token supply control based on free service availability
 
 	// activeBias is applied to already connected clients So that
 	// already connected client won't be kicked out very soon and we
@@ -108,10 +106,10 @@ type clientPool struct {
 	disableBias    bool   // Disable connection bias(used in testing)
 
 	// fields in this group are protected by expLock
-	expLock                            sync.RWMutex
-	posExp, negExp, posExpTC, negExpTC uint64
-	posExpTCi, negExpTCi               float64 // already inverted (logMultiplier/time)
-	freeRatioLastUpdate                mclock.AbsTime
+	expLock             sync.RWMutex
+	posExpTC, negExpTC  uint64
+	posExp, negExp      float64
+	freeRatioLastUpdate mclock.AbsTime
 }
 
 // clientPoolPeer represents a client peer in the pool.
@@ -220,10 +218,10 @@ func newClientPool(db ethdb.Database, minCap, freeClientCap uint64, clock mclock
 			break
 		}
 	}
-	// If the negative balance of free client is even lower than 1,
+	// If the negative balance of free client is low enough,
 	// delete this entry.
 	ndb.nbEvictCallBack = func(now mclock.AbsTime, b negBalance) bool {
-		return b.logValue <= pool.negExpiration(now)
+		return b.value.value(pool.negExpiration(now)) < uint64(time.Second)
 	}
 	go func() {
 		for {
@@ -309,8 +307,8 @@ func (f *clientPool) updateFreeRatio() {
 	}
 	f.averageFreeRatio -= (f.freeRatio - f.averageFreeRatio) * math.Expm1(-float64(dt)/float64(freeRatioTC))
 	f.freeRatioLastUpdate = now
-	f.posExp += uint64(float64(dt) * f.posExpTCi * f.freeRatio)
-	f.negExp += uint64(float64(dt) * f.negExpTCi * f.freeRatio)
+	f.posExp += float64(dt) / float64(f.posExpTC) * f.freeRatio
+	f.negExp += float64(dt) / float64(f.negExpTC) * f.freeRatio
 	f.expLock.Unlock()
 }
 
@@ -323,16 +321,6 @@ func (f *clientPool) setExpirationTCs(pos, neg uint64) {
 
 	f.expLock.Lock()
 	f.posExpTC, f.negExpTC = pos, neg
-	if pos > 0 {
-		f.posExpTCi = logMultiplier / float64(pos*uint64(time.Second))
-	} else {
-		f.posExpTCi = 0
-	}
-	if neg > 0 {
-		f.negExpTCi = logMultiplier / float64(neg*uint64(time.Second))
-	} else {
-		f.negExpTCi = 0
-	}
 	f.expLock.Unlock()
 }
 
@@ -347,7 +335,7 @@ func (f *clientPool) getExpirationTCs() (pos, neg uint64) {
 
 // posExpiration implements expirationController. Expiration happens only when
 // free service is available.
-func (f *clientPool) posExpiration(now mclock.AbsTime) uint64 {
+func (f *clientPool) posExpiration(now mclock.AbsTime) float64 {
 	f.expLock.RLock()
 	defer f.expLock.RUnlock()
 
@@ -355,12 +343,12 @@ func (f *clientPool) posExpiration(now mclock.AbsTime) uint64 {
 	if dt < 0 {
 		dt = 0
 	}
-	return f.posExp + uint64(float64(dt)*f.posExpTCi*f.freeRatio)
+	return f.posExp + float64(dt)/float64(f.posExpTC)*f.freeRatio
 }
 
 // negExpiration implements expirationController. Expiration happens only when
 // free service is available.
-func (f *clientPool) negExpiration(now mclock.AbsTime) uint64 {
+func (f *clientPool) negExpiration(now mclock.AbsTime) float64 {
 	f.expLock.RLock()
 	defer f.expLock.RUnlock()
 
@@ -368,7 +356,7 @@ func (f *clientPool) negExpiration(now mclock.AbsTime) uint64 {
 	if dt < 0 {
 		dt = 0
 	}
-	return f.negExp + uint64(float64(dt)*f.negExpTCi*f.freeRatio)
+	return f.negExp + float64(dt)/float64(f.negExpTC)*f.freeRatio
 }
 
 // totalTokenLimit returns the current token supply limit. Token prices are based
@@ -474,14 +462,8 @@ func (f *clientPool) connect(peer clientPoolPeer, reqCapacity uint64) (uint64, e
 // initBalanceTracker initializes the positive and negative balances and price factors
 func (f *clientPool) initBalanceTracker(bt *balanceTracker, pb posBalance, nb negBalance, capacity uint64, active bool) {
 	bt.exp = f
-	posBalance := pb.value
-	var negBalance expiredValue
-	if nb.logValue != 0 {
-		negBalance.exp = nb.logValue / log2Multiplier
-		negBalance.base = uint64(math.Exp(float64(nb.logValue%log2Multiplier)/logMultiplier) * float64(time.Second))
-	}
 	bt.init(f.clock, capacity)
-	bt.setBalance(posBalance, negBalance)
+	bt.setBalance(pb.value, nb.value)
 	if active {
 		updatePriceFactors(bt, f.defaultPosFactors, f.defaultNegFactors, capacity)
 	} else {
@@ -709,12 +691,8 @@ func (f *clientPool) finalizeBalance(c *clientInfo, now mclock.AbsTime) {
 	pb.value = pos
 	f.ndb.setPB(c.id, pb)
 
-	var nbLog int64
-	if neg.base > 0 {
-		nbLog = int64(math.Log(float64(neg.base)/float64(time.Second))*logMultiplier) + int64(neg.exp*log2Multiplier)
-	}
-	if nbLog > 0 {
-		nb.logValue = uint64(nbLog)
+	if neg.value(f.negExpiration(f.clock.Now())) > uint64(time.Second) {
+		nb.value = neg
 		f.ndb.setNB(c.address, nb)
 	} else {
 		f.ndb.delNB(c.address) // Negative balance is small enough, drop it directly.
@@ -927,22 +905,22 @@ func (e *posBalance) DecodeRLP(s *rlp.Stream) error {
 }
 
 // negBalance represents a negative balance entry of a disconnected client
-type negBalance struct{ logValue uint64 }
+type negBalance struct{ value expiredValue }
 
 // EncodeRLP implements rlp.Encoder
 func (e *negBalance) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{e.logValue})
+	return rlp.Encode(w, []interface{}{e.value.base, e.value.exp})
 }
 
 // DecodeRLP implements rlp.Decoder
 func (e *negBalance) DecodeRLP(s *rlp.Stream) error {
 	var entry struct {
-		LogValue uint64
+		Base, Exp uint64
 	}
 	if err := s.Decode(&entry); err != nil {
 		return err
 	}
-	e.logValue = entry.LogValue
+	e.value = expiredValue{base: entry.Base, exp: entry.Exp}
 	return nil
 }
 
@@ -1009,17 +987,17 @@ func (db *nodeDB) key(id []byte, neg bool) []byte {
 	return db.auxbuf[:len(prefix)+len(db.verbuf)+len(id)]
 }
 
-func (db *nodeDB) getExpiration() (uint64, uint64) {
+func (db *nodeDB) getExpiration() (float64, float64) {
 	blob, err := db.db.Get(append(expirationKey, db.verbuf[:]...))
 	if err != nil || len(blob) != 16 {
 		return 0, 0
 	}
-	return binary.BigEndian.Uint64(blob[:8]), binary.BigEndian.Uint64(blob[8:16])
+	return math.Float64frombits(binary.BigEndian.Uint64(blob[:8])), math.Float64frombits(binary.BigEndian.Uint64(blob[8:16]))
 }
 
-func (db *nodeDB) setExpiration(pos, neg uint64) {
-	binary.BigEndian.PutUint64(db.auxbuf[:8], pos)
-	binary.BigEndian.PutUint64(db.auxbuf[8:16], neg)
+func (db *nodeDB) setExpiration(pos, neg float64) {
+	binary.BigEndian.PutUint64(db.auxbuf[:8], math.Float64bits(pos))
+	binary.BigEndian.PutUint64(db.auxbuf[8:16], math.Float64bits(neg))
 	db.db.Put(append(expirationKey, db.verbuf[:]...), db.auxbuf[:16])
 }
 

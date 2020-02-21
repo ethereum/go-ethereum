@@ -35,74 +35,8 @@ const (
 // expirationController controls the exponential expiration of positive and negative
 // balances
 type expirationController interface {
-	posExpiration(mclock.AbsTime) uint64
-	negExpiration(mclock.AbsTime) uint64
-}
-
-// expiredValue is a scalar value that is continuously expired (decreased exponentially)
-// based on the logarithmic expiration offset value provided by the expirationController.
-// The actual value can be calculated as base*2^(exp-logOffset/log2Multiplier).
-//
-// Note: this representation is basically a floating point value capable of handling
-// 64 bit exponents. The operations are not general purpose floating point operations
-// though because a monotonously increasing exponent is assumed and therefore if an
-// operation is performed with two different exponents then simply the higher one is used.
-type expiredValue struct {
-	base, exp uint64
-}
-
-// value calculates the value at the given moment
-func (e expiredValue) value(logOffset uint64) uint64 {
-	return uint64(math.Exp(float64(int64(e.exp*log2Multiplier-logOffset))/logMultiplier) * float64(e.base))
-}
-
-// add adds a signed value at the given moment
-func (e *expiredValue) add(amount int64, logOffset uint64) int64 {
-	addExp := logOffset / log2Multiplier
-	baseMul := math.Exp(float64(logOffset%log2Multiplier) / logMultiplier)
-	if addExp < e.exp {
-		baseMul /= math.Pow(2, float64(e.exp-addExp))
-	}
-	if addExp > e.exp {
-		e.base >>= (addExp - e.exp)
-		e.exp = addExp
-	}
-	add := int64(float64(amount) * baseMul)
-	if add >= 0 || uint64(-add) <= e.base {
-		e.base += uint64(add)
-		return amount
-	} else {
-		e.base = 0
-		return int64(-float64(e.base) / baseMul)
-	}
-}
-
-// addExp adds another expiredValue
-func (e *expiredValue) addExp(a expiredValue) {
-	if e.exp > a.exp {
-		a.base >>= (e.exp - a.exp)
-	}
-	if e.exp < a.exp {
-		e.base >>= (a.exp - e.exp)
-		e.exp = a.exp
-	}
-	e.base += a.base
-}
-
-// subExp subtracts another expiredValue
-func (e *expiredValue) subExp(a expiredValue) {
-	if e.exp > a.exp {
-		a.base >>= (e.exp - a.exp)
-	}
-	if e.exp < a.exp {
-		e.base >>= (a.exp - e.exp)
-		e.exp = a.exp
-	}
-	if e.base > a.base {
-		e.base -= a.base
-	} else {
-		e.base = 0
-	}
+	posExpiration(mclock.AbsTime) float64
+	negExpiration(mclock.AbsTime) float64
 }
 
 // balanceTracker keeps track of the positive and negative balances of a connected
