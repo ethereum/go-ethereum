@@ -24,6 +24,21 @@ import (
 func TestTableDatabase(t *testing.T)            { testTableDatabase(t, "prefix") }
 func TestEmptyPrefixTableDatabase(t *testing.T) { testTableDatabase(t, "") }
 
+type testReplayer struct {
+	puts [][]byte
+	dels [][]byte
+}
+
+func (r *testReplayer) Put(key []byte, value []byte) error {
+	r.puts = append(r.puts, key)
+	return nil
+}
+
+func (r *testReplayer) Delete(key []byte) error {
+	r.dels = append(r.dels, key)
+	return nil
+}
+
 func testTableDatabase(t *testing.T, prefix string) {
 	db := NewTable(NewMemoryDatabase(), prefix)
 
@@ -39,6 +54,7 @@ func testTableDatabase(t *testing.T, prefix string) {
 		{[]byte{0xff, 0xff, 0x02}, []byte{0x1c, 0x1d}},
 		{[]byte{0xff, 0xff, 0x03}, []byte{0x1e, 0x1f}},
 	}
+
 	// Test Put/Get operation
 	for _, entry := range entries {
 		db.Put(entry.key, entry.value)
@@ -52,6 +68,7 @@ func testTableDatabase(t *testing.T, prefix string) {
 			t.Fatalf("Value mismatch: want=%v, got=%v", entry.value, got)
 		}
 	}
+
 	// Test batch operation
 	db = NewTable(NewMemoryDatabase(), prefix)
 	batch := db.NewBatch()
@@ -68,6 +85,17 @@ func testTableDatabase(t *testing.T, prefix string) {
 			t.Fatalf("Value mismatch: want=%v, got=%v", entry.value, got)
 		}
 	}
+
+	// Test batch replayer
+	r := &testReplayer{}
+	batch.Replay(r)
+	for index, entry := range entries {
+		got := r.puts[index]
+		if !bytes.Equal(got, entry.key) {
+			t.Fatalf("Key mismatch: want=%v, got=%v", entry.key, got)
+		}
+	}
+
 	// Test iterators
 	iter := db.NewIterator()
 	var index int

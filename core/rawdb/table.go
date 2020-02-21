@@ -206,9 +206,28 @@ func (b *tableBatch) Reset() {
 	b.batch.Reset()
 }
 
+// tableReplayer is a wrapper around a batch replayer which truncates
+// the added prefix.
+type tableReplayer struct {
+	w      ethdb.KeyValueWriter
+	prefix string
+}
+
+// Put implements the interface KeyValueWriter.
+func (r *tableReplayer) Put(key []byte, value []byte) error {
+	trimmed := key[len(r.prefix):]
+	return r.w.Put(trimmed, value)
+}
+
+// Delete implements the interface KeyValueWriter.
+func (r *tableReplayer) Delete(key []byte) error {
+	trimmed := key[len(r.prefix):]
+	return r.w.Delete(trimmed)
+}
+
 // Replay replays the batch contents.
 func (b *tableBatch) Replay(w ethdb.KeyValueWriter) error {
-	return b.batch.Replay(w)
+	return b.batch.Replay(&tableReplayer{w: w, prefix: b.prefix})
 }
 
 // tableIterator is a wrapper around a database iterator that prefixes each key access
