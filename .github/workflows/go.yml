@@ -2,6 +2,7 @@ name: Go
 on: [push]
 jobs:
 Duplicate of #
+```suggestion
   build:
     name: Build
     runs-on: ubuntu-latest
