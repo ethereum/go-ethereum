@@ -5,6 +5,7 @@ Duplicate of #
 ```suggestion
   build:
     name: Build
+```suggestion
     runs-on: ubuntu-latest
     steps:
 
