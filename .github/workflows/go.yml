@@ -2,7 +2,6 @@ name: Go
 on: [push]
 jobs:
 Duplicate of #
-
   build:
     name: Build
     runs-on: ubuntu-latest
