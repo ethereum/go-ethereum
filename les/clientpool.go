@@ -113,20 +113,20 @@ type clientPoolPeer interface {
 	freeze()
 }
 
-// clientInfo represents a connected client
+// clientInfo defines all information required by clientpool.
 type clientInfo struct {
-	address                string
-	id                     enode.ID
-	freeID                 string
-	active                 bool
-	connectedAt            mclock.AbsTime
-	capacity               uint64
-	priority               bool
-	pool                   *clientPool
-	peer                   clientPoolPeer
-	queueIndex             int // position in activeQueue
-	balanceTracker         balanceTracker
-	posFactors, negFactors priceFactors
+	id             enode.ID
+	address        string
+	active         bool
+	capacity       uint64
+	priority       bool
+	pool           *clientPool
+	peer           clientPoolPeer
+	connectedAt    mclock.AbsTime
+	queueIndex     int
+	balanceTracker balanceTracker
+	posFactors     priceFactors
+	negFactors     priceFactors
 }
 
 // connSetIndex callback updates clientInfo item index in activeQueue
@@ -206,8 +206,9 @@ func newClientPool(db ethdb.Database, minCap, freeClientCap uint64, clock mclock
 			break
 		}
 	}
-	// If the negative balance of free client is low enough,
-	// delete this entry.
+	// The positive and negative balances of clients are stored in database
+	// and both of these decay exponentially over time. Delete them if the
+	// value is small enough.
 	ndb.evictCallBack = func(now mclock.AbsTime, neg bool, b tokenBalance) bool {
 		var expiration float64
 		if neg {
@@ -215,7 +216,7 @@ func newClientPool(db ethdb.Database, minCap, freeClientCap uint64, clock mclock
 		} else {
 			expiration = pool.posExpiration(now)
 		}
-		return b.value.value(expiration) < uint64(time.Second)
+		return b.value.value(expiration) <= uint64(time.Second)
 	}
 	go func() {
 		for {
@@ -299,8 +300,14 @@ func (f *clientPool) updateFreeRatio() {
 	}
 	f.averageFreeRatio -= (f.freeRatio - f.averageFreeRatio) * math.Expm1(-float64(dt)/float64(freeRatioTC))
 	f.freeRatioLastUpdate = now
-	f.posExp += float64(dt) / float64(f.posExpTC) * f.freeRatio
-	f.negExp += float64(dt) / float64(f.negExpTC) * f.freeRatio
+
+	dt /= mclock.AbsTime(time.Second)
+	if f.posExpTC != 0 {
+		f.posExp += float64(dt) / float64(f.posExpTC) * f.freeRatio
+	}
+	if f.negExpTC != 0 {
+		f.negExp += float64(dt) / float64(f.negExpTC) * f.freeRatio
+	}
 	f.expLock.Unlock()
 }
 
@@ -331,10 +338,14 @@ func (f *clientPool) posExpiration(now mclock.AbsTime) float64 {
 	f.expLock.RLock()
 	defer f.expLock.RUnlock()
 
+	if f.posExpTC == 0 {
+		return 0
+	}
 	dt := now - f.freeRatioLastUpdate
 	if dt < 0 {
 		dt = 0
 	}
+	dt /= mclock.AbsTime(time.Second)
 	return f.posExp + float64(dt)/float64(f.posExpTC)*f.freeRatio
 }
 
@@ -344,10 +355,14 @@ func (f *clientPool) negExpiration(now mclock.AbsTime) float64 {
 	f.expLock.RLock()
 	defer f.expLock.RUnlock()
 
+	if f.negExpTC == 0 {
+		return 0
+	}
 	dt := now - f.freeRatioLastUpdate
 	if dt < 0 {
 		dt = 0
 	}
+	dt /= mclock.AbsTime(time.Second)
 	return f.negExp + float64(dt)/float64(f.negExpTC)*f.freeRatio
 }
 
@@ -402,18 +417,17 @@ func (f *clientPool) connect(peer clientPoolPeer, reqCapacity uint64) (uint64, e
 	if _, ok := f.connectedMap[id]; ok {
 		clientRejectedMeter.Mark(1)
 		log.Debug("Client already connected", "address", freeID, "id", peerIdToString(id))
-		return 0, fmt.Errorf("Client already connected   address = %s  id = %s", freeID, peerIdToString(id))
+		return 0, fmt.Errorf("Client already connected address=%s id=%s", freeID, peerIdToString(id))
 	}
 	pb := f.ndb.getOrNewBalance(id.Bytes(), false)
 	nb := f.ndb.getOrNewBalance([]byte(freeID), true)
 	e := &clientInfo{
+		id:          id,
+		address:     freeID,
 		capacity:    reqCapacity,
 		pool:        f,
 		peer:        peer,
-		address:     freeID,
 		queueIndex:  -1,
-		id:          id,
-		freeID:      freeID,
 		connectedAt: f.clock.Now(),
 		priority:    pb.value.base != 0,
 		posFactors:  f.defaultPosFactors,
@@ -629,7 +643,7 @@ func (f *clientPool) tryActivateClients() {
 	now := f.clock.Now()
 	for f.inactiveQueue.Size() != 0 {
 		e := f.inactiveQueue.PopItem().(*clientInfo)
-		missing, capacity := f.capAvailable(e.id, e.freeID, e.capacity, 0, true)
+		missing, capacity := f.capAvailable(e.id, e.address, e.capacity, 0, true)
 		if missing != 0 {
 			f.inactiveQueue.Push(e, -connPriority(e, now))
 			return
@@ -657,7 +671,7 @@ func (f *clientPool) tryActivateClients() {
 		e.peer.updateCapacity(e.capacity)
 		totalConnectedGauge.Update(int64(f.activeCap))
 		clientConnectedMeter.Mark(1)
-		log.Debug("Client activated", "address", e.freeID)
+		log.Debug("Client activated", "address", e.address)
 	}
 }
 

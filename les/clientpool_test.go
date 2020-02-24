@@ -221,7 +221,7 @@ func TestConnectPaidClientToFullPool(t *testing.T) {
 	pool.setDefaultFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
 	for i := 0; i < 10; i++ {
-		pool.addBalance(newPoolTestPeer(i, nil).ID(), 1000000000)
+		pool.addBalance(newPoolTestPeer(i, nil).ID(), int64(time.Second))
 		pool.connect(newPoolTestPeer(i, nil), 1)
 	}
 	pool.addBalance(newPoolTestPeer(11, nil).ID(), 1000) // Add low balance to new paid client
@@ -229,7 +229,7 @@ func TestConnectPaidClientToFullPool(t *testing.T) {
 		t.Fatalf("Low balance paid client should be rejected")
 	}
 	clock.Run(time.Second)
-	pool.addBalance(newPoolTestPeer(12, nil).ID(), 1000000000*60*3+1) // Add high balance to new paid client
+	pool.addBalance(newPoolTestPeer(12, nil).ID(), int64(time.Minute*5)) // Add high balance to new paid client
 	if cap, _ := pool.connect(newPoolTestPeer(12, nil), 1); cap == 0 {
 		t.Fatalf("High balance paid client should be accepted")
 	}
@@ -417,7 +417,7 @@ func TestNegativeBalanceCalculation(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		pool.connect(newPoolTestPeer(i, nil), 1)
 	}
-	clock.Run(time.Millisecond * 999)
+	clock.Run(time.Second)
 
 	for i := 0; i < 10; i++ {
 		pool.disconnect(newPoolTestPeer(i, nil))
@@ -432,12 +432,11 @@ func TestNegativeBalanceCalculation(t *testing.T) {
 	clock.Run(time.Minute)
 	for i := 0; i < 10; i++ {
 		pool.disconnect(newPoolTestPeer(i, nil))
-		//nb := pool.ndb.getOrNewNB(newPoolTestPeer(i, nil).freeClientId())
-		//// nb.logValue -= pool.negExpiration(clock.Now())
-		//nb.logValue = uint64(float64(nb.logValue) / logMultiplier)
-		//if nb.logValue != uint64(math.Log(float64(time.Minute/time.Second))) {
-		//	t.Fatalf("Negative balance mismatch, want %v, got %v", int64(math.Log(float64(time.Minute/time.Second))), nb.logValue)
-		//}
+		nb := pool.ndb.getOrNewBalance([]byte(newPoolTestPeer(i, nil).freeClientId()), true)
+		value := nb.value.value(pool.negExpiration(clock.Now()))
+		if value != uint64(time.Minute) {
+			t.Fatalf("Negative balance mismatch, want %v, got %v", time.Minute, value)
+		}
 	}
 }
 
