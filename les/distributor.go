@@ -73,7 +73,7 @@ type distReq struct {
 }
 
 // newRequestDistributor creates a new request distributor
-func newRequestDistributor(peers *peerSet, clock mclock.Clock) *requestDistributor {
+func newRequestDistributor(peers *serverPeerSet, clock mclock.Clock) *requestDistributor {
 	d := &requestDistributor{
 		clock:    clock,
 		reqQueue: list.New(),

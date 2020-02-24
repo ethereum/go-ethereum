@@ -41,7 +41,7 @@ type lesTxRelay struct {
 	retriever *retrieveManager
 }
 
-func newLesTxRelay(ps *peerSet, retriever *retrieveManager) *lesTxRelay {
+func newLesTxRelay(ps *serverPeerSet, retriever *retrieveManager) *lesTxRelay {
 	r := &lesTxRelay{
 		txSent:    make(map[common.Hash]*ltrInfo),
 		txPending: make(map[common.Hash]struct{}),
@@ -75,6 +75,7 @@ func (ltrx *lesTxRelay) unregisterPeer(p *serverPeer) {
 		if peer == p {
 			// Remove from the peer list
 			ltrx.peerList = append(ltrx.peerList[:i], ltrx.peerList[i+1:]...)
+			return
 		}
 	}
 }

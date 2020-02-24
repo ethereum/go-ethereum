@@ -266,7 +266,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					default:
 					}
 				}
-			}, p.closeCh)
+			})
 		}
 	}
 	switch msg.Code {
@@ -914,7 +914,7 @@ func (h *serverHandler) broadcastHeaders() {
 	for {
 		select {
 		case ev := <-headCh:
-			peers := h.server.peers.allClientPeers()
+			peers := h.server.peers.allPeers()
 			if len(peers) == 0 {
 				continue
 			}
@@ -940,14 +940,18 @@ func (h *serverHandler) broadcastHeaders() {
 				p := p
 				switch p.announceType {
 				case announceTypeSimple:
-					p.mustQueueSend(func() { p.sendAnnounce(announce) }, p.closeCh)
+					if !p.queueSend(func() { p.sendAnnounce(announce) }) {
+						log.Debug("Drop announcement because queue is full", "number", number, "hash", hash)
+					}
 				case announceTypeSigned:
 					if !signed {
 						signedAnnounce = announce
 						signedAnnounce.sign(h.server.privateKey)
 						signed = true
 					}
-					p.mustQueueSend(func() { p.sendAnnounce(signedAnnounce) }, p.closeCh)
+					if !p.queueSend(func() { p.sendAnnounce(signedAnnounce) }) {
+						log.Debug("Drop announcement because queue is full", "number", number, "hash", hash)
+					}
 				}
 			}
 		case <-h.closeCh:

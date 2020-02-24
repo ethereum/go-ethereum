@@ -45,11 +45,11 @@ func (t *testServerPeerSub) registerPeer(p *serverPeer)   { t.regCh <- p }
 func (t *testServerPeerSub) unregisterPeer(p *serverPeer) { t.unregCh <- p }
 
 func TestPeerSubscription(t *testing.T) {
-	peers := newPeerSet(true)
+	peers := newServerPeerSet()
 	defer peers.close()
 
 	checkIds := func(expect []string) {
-		given := peers.allPeerIds()
+		given := peers.ids()
 		if len(given) == 0 && len(expect) == 0 {
 			return
 		}

@@ -49,6 +49,7 @@ import (
 type LightEthereum struct {
 	lesCommons
 
+	peers      *serverPeerSet
 	reqDist    *requestDistributor
 	retriever  *retrieveManager
 	odr        *LesOdr
@@ -80,7 +81,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	}
 	log.Info("Initialised chain configuration", "config", chainConfig)
 
-	peers := newPeerSet(true)
+	peers := newServerPeerSet()
 	leth := &LightEthereum{
 		lesCommons: lesCommons{
 			genesis:     genesisHash,
@@ -88,9 +89,9 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 			chainConfig: chainConfig,
 			iConfig:     light.DefaultClientIndexerConfig,
 			chainDb:     chainDb,
-			peers:       peers,
 			closeCh:     make(chan struct{}),
 		},
+		peers:          peers,
 		eventMux:       ctx.EventMux,
 		reqDist:        newRequestDistributor(peers, &mclock.System{}),
 		accountManager: ctx.AccountManager,
@@ -225,7 +226,7 @@ func (s *LightEthereum) EventMux() *event.TypeMux           { return s.eventMux 
 // network protocols to start.
 func (s *LightEthereum) Protocols() []p2p.Protocol {
 	return s.makeProtocols(ClientProtocolVersions, s.handler.runPeer, func(id enode.ID) interface{} {
-		if p := s.peers.serverPeer(peerIdToString(id)); p != nil {
+		if p := s.peers.peer(peerIdToString(id)); p != nil {
 			return p.Info()
 		}
 		return nil

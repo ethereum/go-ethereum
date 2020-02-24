@@ -38,7 +38,7 @@ var (
 // matching replies by request ID and handles timeouts and resends if necessary.
 type retrieveManager struct {
 	dist       *requestDistributor
-	peers      *peerSet
+	peers      *serverPeerSet
 	serverPool peerSelector
 
 	lock     sync.RWMutex
@@ -99,7 +99,7 @@ const (
 )
 
 // newRetrieveManager creates the retrieve manager
-func newRetrieveManager(peers *peerSet, dist *requestDistributor, serverPool peerSelector) *retrieveManager {
+func newRetrieveManager(peers *serverPeerSet, dist *requestDistributor, serverPool peerSelector) *retrieveManager {
 	return &retrieveManager{
 		peers:      peers,
 		dist:       dist,

@@ -166,7 +166,7 @@ func testIndexers(db ethdb.Database, odr light.OdrBackend, config *light.Indexer
 	return indexers[:]
 }
 
-func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, indexers []*core.ChainIndexer, db ethdb.Database, peers *peerSet, ulcServers []string, ulcFraction int) *clientHandler {
+func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, indexers []*core.ChainIndexer, db ethdb.Database, peers *serverPeerSet, ulcServers []string, ulcFraction int) *clientHandler {
 	var (
 		evmux  = new(event.TypeMux)
 		engine = ethash.NewFaker()
@@ -206,9 +206,9 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 			chainDb:     db,
 			oracle:      oracle,
 			chainReader: chain,
-			peers:       peers,
 			closeCh:     make(chan struct{}),
 		},
+		peers:      peers,
 		reqDist:    odr.retriever.dist,
 		retriever:  odr.retriever,
 		odr:        odr,
@@ -224,7 +224,7 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 	return client.handler
 }
 
-func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Database, peers *peerSet, clock mclock.Clock) (*serverHandler, *backends.SimulatedBackend) {
+func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Database, peers *clientPeerSet, clock mclock.Clock) (*serverHandler, *backends.SimulatedBackend) {
 	var (
 		gspec = core.Genesis{
 			Config:   params.AllEthashProtocolChanges,
@@ -269,9 +269,9 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 			chainDb:     db,
 			chainReader: simulation.Blockchain(),
 			oracle:      oracle,
-			peers:       peers,
 			closeCh:     make(chan struct{}),
 		},
+		peers:        peers,
 		servingQueue: newServingQueue(int64(time.Millisecond*10), 1),
 		defParams: flowcontrol.ServerParams{
 			BufLimit:    testBufLimit,
@@ -446,7 +446,7 @@ func newServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallba
 	if simClock {
 		clock = &mclock.Simulated{}
 	}
-	handler, b := newTestServerHandler(blocks, indexers, db, newPeerSet(false), clock)
+	handler, b := newTestServerHandler(blocks, indexers, db, newClientPeerSet(), clock)
 
 	var peer *testPeer
 	if newPeer {
@@ -485,14 +485,14 @@ func newServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallba
 
 func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallback, ulcServers []string, ulcFraction int, simClock bool, connect bool) (*testServer, *testClient, func()) {
 	sdb, cdb := rawdb.NewMemoryDatabase(), rawdb.NewMemoryDatabase()
-	speers, cPeers := newPeerSet(false), newPeerSet(true)
+	speers, cpeers := newServerPeerSet(), newClientPeerSet()
 
 	var clock mclock.Clock = &mclock.System{}
 	if simClock {
 		clock = &mclock.Simulated{}
 	}
-	dist := newRequestDistributor(cPeers, clock)
-	rm := newRetrieveManager(cPeers, dist, nil)
+	dist := newRequestDistributor(speers, clock)
+	rm := newRetrieveManager(speers, dist, nil)
 	odr := NewLesOdr(cdb, light.TestClientIndexerConfig, rm)
 
 	sindexers := testIndexers(sdb, nil, light.TestServerIndexerConfig)
@@ -502,8 +502,8 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 	ccIndexer, cbIndexer, cbtIndexer := cIndexers[0], cIndexers[1], cIndexers[2]
 	odr.SetIndexers(ccIndexer, cbIndexer, cbtIndexer)
 
-	server, b := newTestServerHandler(blocks, sindexers, sdb, speers, clock)
-	client := newTestClientHandler(b, odr, cIndexers, cdb, cPeers, ulcServers, ulcFraction)
+	server, b := newTestServerHandler(blocks, sindexers, sdb, cpeers, clock)
+	client := newTestClientHandler(b, odr, cIndexers, cdb, speers, ulcServers, ulcFraction)
 
 	scIndexer.Start(server.blockchain)
 	sbIndexer.Start(server.blockchain)
