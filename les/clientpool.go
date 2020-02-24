@@ -154,15 +154,6 @@ func connMaxPriority(a interface{}, until mclock.AbsTime) int64 {
 	return pri
 }
 
-// priceFactors determine the pricing policy (may apply either to positive or
-// negative balances which may have different factors).
-// - timeFactor is cost unit per nanosecond of connection time
-// - capacityFactor is cost unit per nanosecond of connection time per 1000000 capacity
-// - requestFactor is cost unit per request "realCost" unit
-type priceFactors struct {
-	timeFactor, capacityFactor, requestFactor float64
-}
-
 // newClientPool creates a new client pool
 func newClientPool(db ethdb.Database, minCap, freeClientCap uint64, clock mclock.Clock, removePeer func(enode.ID)) *clientPool {
 	ndb := newNodeDB(db, clock)
@@ -470,7 +461,7 @@ func (f *clientPool) initBalanceTracker(bt *balanceTracker, pb tokenBalance, nb 
 	bt.init(f.clock, capacity)
 	bt.setBalance(pb.value, nb.value)
 	if active {
-		updatePriceFactors(bt, f.defaultPosFactors, f.defaultNegFactors, capacity)
+		updatePriceFactors(bt, f.defaultPosFactors, f.defaultNegFactors)
 	} else {
 		zeroPriceFactors(bt)
 	}
@@ -654,7 +645,7 @@ func (f *clientPool) tryActivateClients() {
 		e.peer.updateCapacity(capacity)
 		balance, _ := e.balanceTracker.getBalance(now)
 		e.balanceTracker.setCapacity(capacity)
-		updatePriceFactors(&e.balanceTracker, f.defaultPosFactors, f.defaultNegFactors, capacity)
+		updatePriceFactors(&e.balanceTracker, f.defaultPosFactors, f.defaultNegFactors)
 		// Register activated client to connection queue.
 		f.inactiveBalances.subExp(balance)
 		f.activeBalances.addExp(balance)
@@ -782,7 +773,7 @@ func (f *clientPool) setCapacity(id enode.ID, freeID string, capacity uint64, mi
 		c.balanceTracker.setCapacity(capacity)
 		f.activeQueue.Update(c.queueIndex)
 		totalConnectedGauge.Update(int64(f.activeCap))
-		updatePriceFactors(&c.balanceTracker, c.posFactors, c.negFactors, c.capacity)
+		updatePriceFactors(&c.balanceTracker, c.posFactors, c.negFactors)
 		c.peer.updateCapacity(c.capacity)
 		f.tryActivateClients()
 	}
@@ -811,15 +802,13 @@ func (f *clientPool) requestCost(p *clientPeer, cost uint64) uint64 {
 }
 
 // updatePriceFactors sets the pricing factors for an individual connected client
-func updatePriceFactors(bt *balanceTracker, posFactors, negFactors priceFactors, capacity uint64) {
-	bt.setFactors(true, negFactors.timeFactor+float64(capacity)*negFactors.capacityFactor/1000000, negFactors.requestFactor)
-	bt.setFactors(false, posFactors.timeFactor+float64(capacity)*posFactors.capacityFactor/1000000, posFactors.requestFactor)
+func updatePriceFactors(bt *balanceTracker, posFactors, negFactors priceFactors) {
+	bt.setFactors(posFactors, negFactors)
 }
 
 // zeroPriceFactors sets the pricing factors to zero
 func zeroPriceFactors(bt *balanceTracker) {
-	bt.setFactors(true, 0, 0)
-	bt.setFactors(false, 0, 0)
+	bt.setFactors(priceFactors{0, 0, 0}, priceFactors{0, 0, 0})
 }
 
 // getPosBalance retrieves a single positive balance entry from cache or the database

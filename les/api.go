@@ -188,7 +188,7 @@ func (api *PrivateLightServerAPI) SetClientParams(ids []enode.ID, params map[str
 		if client != nil {
 			update, err := api.setParams(params, client, nil, nil)
 			if update {
-				updatePriceFactors(&client.balanceTracker, client.posFactors, client.negFactors, client.capacity)
+				updatePriceFactors(&client.balanceTracker, client.posFactors, client.negFactors)
 			}
 			return err
 		} else {
