@@ -41,7 +41,7 @@ func (its weightedAccountIterators) Len() int { return len(its) }
 // Less implements sort.Interface, returning which of two iterators in the stack
 // is before the other.
 func (its weightedAccountIterators) Less(i, j int) bool {
-	// Order the iterators primarilly by the account hashes
+	// Order the iterators primarily by the account hashes
 	hashI := its[i].it.Hash()
 	hashJ := its[j].it.Hash()
 
@@ -131,7 +131,7 @@ func (fi *fastAccountIterator) init() {
 				// determine which.
 				//
 				// This whole else-block can be avoided, if we instead
-				// do an inital priority-sort of the iterators. If we do that,
+				// do an initial priority-sort of the iterators. If we do that,
 				// then we'll only wind up here if a lower-priority (preferred) iterator
 				// has the same value, and then we will always just continue.
 				// However, it costs an extra sort, so it's probably not better
@@ -233,16 +233,8 @@ func (fi *fastAccountIterator) next(idx int) bool {
 		// The elem we're placing it next to has the same value,
 		// so whichever winds up on n+1 will need further iteraton
 		clash = n + 1
-		if cur.priority < fi.iterators[n+1].priority {
-			// We can drop the iterator here
-			return true
-		}
-		// We need to move it one step further
-		return false
-		// TODO benchmark which is best, this works too:
-		//clash = n
-		//return true
-		// Doing so should finish the current search earlier
+
+		return cur.priority < fi.iterators[n+1].priority
 	})
 	fi.move(idx, index)
 	if clash != -1 {

@@ -164,7 +164,7 @@ func loadDiffLayer(parent snapshot, r *rlp.Stream) (snapshot, error) {
 // Journal writes the persistent layer generator stats into a buffer to be stored
 // in the database as the snapshot journal.
 func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
-	// If the snapshot is currenty being generated, abort it
+	// If the snapshot is currently being generated, abort it
 	var stats *generatorStats
 	if dl.genAbort != nil {
 		abort := make(chan *generatorStats)

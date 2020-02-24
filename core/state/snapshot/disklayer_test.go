@@ -310,7 +310,7 @@ func TestDiskPartialMerge(t *testing.T) {
 			t.Helper()
 			blob, err := base.AccountRLP(account)
 			if bytes.Compare(account[:], genMarker) > 0 && err != ErrNotCoveredYet {
-				t.Fatalf("test %d: post-marker (%x) account access (%x) succeded: %x", i, genMarker, account, blob)
+				t.Fatalf("test %d: post-marker (%x) account access (%x) succeeded: %x", i, genMarker, account, blob)
 			}
 			if bytes.Compare(account[:], genMarker) <= 0 && !bytes.Equal(blob, data) {
 				t.Fatalf("test %d: pre-marker (%x) account access (%x) mismatch: have %x, want %x", i, genMarker, account, blob, data)
@@ -326,7 +326,7 @@ func TestDiskPartialMerge(t *testing.T) {
 			t.Helper()
 			blob, err := base.Storage(account, slot)
 			if bytes.Compare(append(account[:], slot[:]...), genMarker) > 0 && err != ErrNotCoveredYet {
-				t.Fatalf("test %d: post-marker (%x) storage access (%x:%x) succeded: %x", i, genMarker, account, slot, blob)
+				t.Fatalf("test %d: post-marker (%x) storage access (%x:%x) succeeded: %x", i, genMarker, account, slot, blob)
 			}
 			if bytes.Compare(append(account[:], slot[:]...), genMarker) <= 0 && !bytes.Equal(blob, data) {
 				t.Fatalf("test %d: pre-marker (%x) storage access (%x:%x) mismatch: have %x, want %x", i, genMarker, account, slot, blob, data)
@@ -386,7 +386,7 @@ func TestDiskPartialMerge(t *testing.T) {
 			t.Helper()
 			blob := rawdb.ReadAccountSnapshot(db, account)
 			if bytes.Compare(account[:], genMarker) > 0 && blob != nil {
-				t.Fatalf("test %d: post-marker (%x) account database access (%x) succeded: %x", i, genMarker, account, blob)
+				t.Fatalf("test %d: post-marker (%x) account database access (%x) succeeded: %x", i, genMarker, account, blob)
 			}
 			if bytes.Compare(account[:], genMarker) <= 0 && !bytes.Equal(blob, data) {
 				t.Fatalf("test %d: pre-marker (%x) account database access (%x) mismatch: have %x, want %x", i, genMarker, account, blob, data)
@@ -406,7 +406,7 @@ func TestDiskPartialMerge(t *testing.T) {
 			t.Helper()
 			blob := rawdb.ReadStorageSnapshot(db, account, slot)
 			if bytes.Compare(append(account[:], slot[:]...), genMarker) > 0 && blob != nil {
-				t.Fatalf("test %d: post-marker (%x) storage database access (%x:%x) succeded: %x", i, genMarker, account, slot, blob)
+				t.Fatalf("test %d: post-marker (%x) storage database access (%x:%x) succeeded: %x", i, genMarker, account, slot, blob)
 			}
 			if bytes.Compare(append(account[:], slot[:]...), genMarker) <= 0 && !bytes.Equal(blob, data) {
 				t.Fatalf("test %d: pre-marker (%x) storage database access (%x:%x) mismatch: have %x, want %x", i, genMarker, account, slot, blob, data)

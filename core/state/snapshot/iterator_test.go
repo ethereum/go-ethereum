@@ -67,14 +67,11 @@ func (ti *testIterator) Seek(common.Hash) {
 
 func (ti *testIterator) Next() bool {
 	ti.values = ti.values[1:]
-	if len(ti.values) == 0 {
-		return false
-	}
-	return true
+	return len(ti.values) > 0
 }
 
 func (ti *testIterator) Error() error {
-	panic("implement me")
+	return nil
 }
 
 func (ti *testIterator) Hash() common.Hash {
@@ -82,7 +79,7 @@ func (ti *testIterator) Hash() common.Hash {
 }
 
 func (ti *testIterator) Account() []byte {
-	panic("implement me")
+	return nil
 }
 
 func (ti *testIterator) Release() {}

@@ -93,7 +93,7 @@ func (gs *generatorStats) Log(msg string, marker []byte) {
 // and generation is continued in the background until done.
 func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, wiper chan struct{}) *diskLayer {
 	// Wipe any previously existing snapshot from the database if no wiper is
-	// currenty in progress.
+	// currently in progress.
 	if wiper == nil {
 		wiper = wipeSnapshot(diskdb, true)
 	}

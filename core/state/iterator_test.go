@@ -29,7 +29,7 @@ func TestNodeIteratorCoverage(t *testing.T) {
 	// Create some arbitrary test state to iterate
 	db, root, _ := makeTestState()
 
-	state, err := New(root, db)
+	state, err := New(root, db, nil)
 	if err != nil {
 		t.Fatalf("failed to create state trie at %x: %v", root, err)
 	}

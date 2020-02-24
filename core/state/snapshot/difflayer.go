@@ -478,7 +478,7 @@ func (dl *diffLayer) StorageList(accountHash common.Hash) []common.Hash {
 
 	storageMap := dl.storageData[accountHash]
 	storageList := make([]common.Hash, 0, len(storageMap))
-	for k, _ := range storageMap {
+	for k := range storageMap {
 		storageList = append(storageList, k)
 	}
 	sort.Sort(hashes(storageList))

@@ -167,7 +167,7 @@ func TestInsertAndMerge(t *testing.T) {
 	merged := (child.flatten()).(*diffLayer)
 	{ // Check that slot value is present
 		got, _ := merged.Storage(acc, slot)
-		if exp := []byte{0x01}; bytes.Compare(got, exp) != 0 {
+		if exp := []byte{0x01}; !bytes.Equal(got, exp) {
 			t.Errorf("merged slot value wrong, got %x, exp %x", got, exp)
 		}
 	}

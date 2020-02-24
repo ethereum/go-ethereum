@@ -35,7 +35,7 @@ type binaryAccountIterator struct {
 }
 
 // newBinaryAccountIterator creates a simplistic account iterator to step over
-// all the accounts in a slow, but eaily verifyable way.
+// all the accounts in a slow, but eaily verifiable way.
 func (dl *diffLayer) newBinaryAccountIterator() AccountIterator {
 	parent, ok := dl.parent.(*diffLayer)
 	if !ok {
