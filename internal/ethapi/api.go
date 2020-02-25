@@ -764,15 +764,13 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	if state == nil || err != nil {
 		return nil, 0, false, err
 	}
-	// Set sender address or use a default if none specified
+
+	// Set sender address or use zero address if none specified.
 	var addr common.Address
 	if args.From != nil {
 		addr = *args.From
-	} else {
-		// At some point, make From mandatory. For now, we'll accept (but grumble a bit)
-		log.Warn("call made without 'from'-address specified -- using 0x0 as default")
-		//return errors.New("parameter 'from' is mandatory")
 	}
+
 	// Override the fields of specified contracts before execution.
 	for addr, account := range overrides {
 		// Override account nonce.
@@ -904,13 +902,9 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 	}
 	cap = hi
 
-	// Set sender address or use a default if none specified
+	// Use zero address if sender unspecified.
 	if args.From == nil {
-		// Use zero-address if none is specified
-		args.From = &common.Address{}
-		// At some point, make From mandatory. For now, we'll accept (but grumble a bit)
-		log.Warn("call made without 'from'-address specified -- using 0x0 as default")
-		//return errors.New("parameter 'from' is mandatory")
+		args.From = new(common.Address)
 	}
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) bool {
