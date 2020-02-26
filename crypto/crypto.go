@@ -168,7 +168,7 @@ func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
 		return nil, err
 	}
 	if len(buf) != 64 {
-		return nil, errors.New(fmt.Sprintf("expected 64 hexa characters, got %v", len(buf)))
+		return nil, fmt.Errorf("expected 64 hexa characters, got %v", len(buf))
 	}
 
 	key, err := hex.DecodeString(string(buf))
