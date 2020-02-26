@@ -49,7 +49,7 @@ type requestDistributor struct {
 type distPeer interface {
 	waitBefore(uint64) (time.Duration, float64)
 	canQueue() bool
-	queueSend(f func())
+	queueSend(f func()) bool
 }
 
 // distReq is the request abstraction used by the distributor. It is based on
@@ -73,7 +73,7 @@ type distReq struct {
 }
 
 // newRequestDistributor creates a new request distributor
-func newRequestDistributor(peers *peerSet, clock mclock.Clock) *requestDistributor {
+func newRequestDistributor(peers *serverPeerSet, clock mclock.Clock) *requestDistributor {
 	d := &requestDistributor{
 		clock:    clock,
 		reqQueue: list.New(),
@@ -82,7 +82,7 @@ func newRequestDistributor(peers *peerSet, clock mclock.Clock) *requestDistribut
 		peers:    make(map[distPeer]struct{}),
 	}
 	if peers != nil {
-		peers.notify(d)
+		peers.subscribe(d)
 	}
 	d.wg.Add(1)
 	go d.loop()
@@ -90,14 +90,14 @@ func newRequestDistributor(peers *peerSet, clock mclock.Clock) *requestDistribut
 }
 
 // registerPeer implements peerSetNotify
-func (d *requestDistributor) registerPeer(p *peer) {
+func (d *requestDistributor) registerPeer(p *serverPeer) {
 	d.peerLock.Lock()
 	d.peers[p] = struct{}{}
 	d.peerLock.Unlock()
 }
 
 // unregisterPeer implements peerSetNotify
-func (d *requestDistributor) unregisterPeer(p *peer) {
+func (d *requestDistributor) unregisterPeer(p *serverPeer) {
 	d.peerLock.Lock()
 	delete(d.peers, p)
 	d.peerLock.Unlock()

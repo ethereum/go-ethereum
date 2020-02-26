@@ -166,7 +166,7 @@ func testIndexers(db ethdb.Database, odr light.OdrBackend, config *light.Indexer
 	return indexers[:]
 }
 
-func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, indexers []*core.ChainIndexer, db ethdb.Database, peers *peerSet, ulcServers []string, ulcFraction int) *clientHandler {
+func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, indexers []*core.ChainIndexer, db ethdb.Database, peers *serverPeerSet, ulcServers []string, ulcFraction int) *clientHandler {
 	var (
 		evmux  = new(event.TypeMux)
 		engine = ethash.NewFaker()
@@ -206,9 +206,9 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 			chainDb:     db,
 			oracle:      oracle,
 			chainReader: chain,
-			peers:       peers,
 			closeCh:     make(chan struct{}),
 		},
+		peers:      peers,
 		reqDist:    odr.retriever.dist,
 		retriever:  odr.retriever,
 		odr:        odr,
@@ -224,7 +224,7 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 	return client.handler
 }
 
-func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Database, peers *peerSet, clock mclock.Clock) (*serverHandler, *backends.SimulatedBackend) {
+func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Database, peers *clientPeerSet, clock mclock.Clock) (*serverHandler, *backends.SimulatedBackend) {
 	var (
 		gspec = core.Genesis{
 			Config:   params.AllEthashProtocolChanges,
@@ -269,9 +269,9 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 			chainDb:     db,
 			chainReader: simulation.Blockchain(),
 			oracle:      oracle,
-			peers:       peers,
 			closeCh:     make(chan struct{}),
 		},
+		peers:        peers,
 		servingQueue: newServingQueue(int64(time.Millisecond*10), 1),
 		defParams: flowcontrol.ServerParams{
 			BufLimit:    testBufLimit,
@@ -294,7 +294,8 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 
 // testPeer is a simulated peer to allow testing direct network calls.
 type testPeer struct {
-	peer *peer
+	cpeer *clientPeer
+	speer *serverPeer
 
 	net p2p.MsgReadWriter // Network layer reader/writer to simulate remote messaging
 	app *p2p.MsgPipeRW    // Application layer reader/writer to simulate the local side
@@ -308,7 +309,7 @@ func newTestPeer(t *testing.T, name string, version int, handler *serverHandler,
 	// Generate a random id and create the peer
 	var id enode.ID
 	rand.Read(id[:])
-	peer := newPeer(version, NetworkId, false, p2p.NewPeer(id, name, nil), net)
+	peer := newClientPeer(version, NetworkId, p2p.NewPeer(id, name, nil), net)
 
 	// Start the peer on a new thread
 	errCh := make(chan error, 1)
@@ -320,9 +321,9 @@ func newTestPeer(t *testing.T, name string, version int, handler *serverHandler,
 		}
 	}()
 	tp := &testPeer{
-		app:  app,
-		net:  net,
-		peer: peer,
+		app:   app,
+		net:   net,
+		cpeer: peer,
 	}
 	// Execute any implicitly requested handshakes and return
 	if shake {
@@ -354,8 +355,8 @@ func newTestPeerPair(name string, version int, server *serverHandler, client *cl
 	var id enode.ID
 	rand.Read(id[:])
 
-	peer1 := newPeer(version, NetworkId, false, p2p.NewPeer(id, name, nil), net)
-	peer2 := newPeer(version, NetworkId, false, p2p.NewPeer(id, name, nil), app)
+	peer1 := newClientPeer(version, NetworkId, p2p.NewPeer(id, name, nil), net)
+	peer2 := newServerPeer(version, NetworkId, false, p2p.NewPeer(id, name, nil), app)
 
 	// Start the peer on a new thread
 	errc1 := make(chan error, 1)
@@ -374,14 +375,14 @@ func newTestPeerPair(name string, version int, server *serverHandler, client *cl
 		case errc1 <- client.handle(peer2):
 		}
 	}()
-	return &testPeer{peer: peer1, net: net, app: app}, errc1, &testPeer{peer: peer2, net: app, app: net}, errc2
+	return &testPeer{cpeer: peer1, net: net, app: app}, errc1, &testPeer{speer: peer2, net: app, app: net}, errc2
 }
 
 // handshake simulates a trivial handshake that expects the same state from the
 // remote side as we are simulating locally.
 func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, costList RequestCostList) {
 	var expList keyValueList
-	expList = expList.add("protocolVersion", uint64(p.peer.version))
+	expList = expList.add("protocolVersion", uint64(p.cpeer.version))
 	expList = expList.add("networkId", uint64(NetworkId))
 	expList = expList.add("headTd", td)
 	expList = expList.add("headHash", head)
@@ -404,7 +405,7 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 	if err := p2p.Send(p.app, StatusMsg, sendList); err != nil {
 		t.Fatalf("status send: %v", err)
 	}
-	p.peer.fcParams = flowcontrol.ServerParams{
+	p.cpeer.fcParams = flowcontrol.ServerParams{
 		BufLimit:    testBufLimit,
 		MinRecharge: testBufRecharge,
 	}
@@ -445,7 +446,7 @@ func newServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallba
 	if simClock {
 		clock = &mclock.Simulated{}
 	}
-	handler, b := newTestServerHandler(blocks, indexers, db, newPeerSet(), clock)
+	handler, b := newTestServerHandler(blocks, indexers, db, newClientPeerSet(), clock)
 
 	var peer *testPeer
 	if newPeer {
@@ -473,6 +474,7 @@ func newServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallba
 	teardown := func() {
 		if newPeer {
 			peer.close()
+			peer.cpeer.close()
 			b.Close()
 		}
 		cIndexer.Close()
@@ -483,14 +485,14 @@ func newServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallba
 
 func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexerCallback, ulcServers []string, ulcFraction int, simClock bool, connect bool) (*testServer, *testClient, func()) {
 	sdb, cdb := rawdb.NewMemoryDatabase(), rawdb.NewMemoryDatabase()
-	speers, cPeers := newPeerSet(), newPeerSet()
+	speers, cpeers := newServerPeerSet(), newClientPeerSet()
 
 	var clock mclock.Clock = &mclock.System{}
 	if simClock {
 		clock = &mclock.Simulated{}
 	}
-	dist := newRequestDistributor(cPeers, clock)
-	rm := newRetrieveManager(cPeers, dist, nil)
+	dist := newRequestDistributor(speers, clock)
+	rm := newRetrieveManager(speers, dist, nil)
 	odr := NewLesOdr(cdb, light.TestClientIndexerConfig, rm)
 
 	sindexers := testIndexers(sdb, nil, light.TestServerIndexerConfig)
@@ -500,8 +502,8 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 	ccIndexer, cbIndexer, cbtIndexer := cIndexers[0], cIndexers[1], cIndexers[2]
 	odr.SetIndexers(ccIndexer, cbIndexer, cbtIndexer)
 
-	server, b := newTestServerHandler(blocks, sindexers, sdb, speers, clock)
-	client := newTestClientHandler(b, odr, cIndexers, cdb, cPeers, ulcServers, ulcFraction)
+	server, b := newTestServerHandler(blocks, sindexers, sdb, cpeers, clock)
+	client := newTestClientHandler(b, odr, cIndexers, cdb, speers, ulcServers, ulcFraction)
 
 	scIndexer.Start(server.blockchain)
 	sbIndexer.Start(server.blockchain)
@@ -548,6 +550,8 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, callback indexer
 		if connect {
 			speer.close()
 			cpeer.close()
+			cpeer.cpeer.close()
+			speer.speer.close()
 		}
 		ccIndexer.Close()
 		cbIndexer.Close()

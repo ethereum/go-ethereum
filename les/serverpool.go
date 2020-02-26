@@ -90,7 +90,7 @@ const (
 
 // connReq represents a request for peer connection.
 type connReq struct {
-	p      *peer
+	p      *serverPeer
 	node   *enode.Node
 	result chan *poolEntry
 }
@@ -220,7 +220,7 @@ func (pool *serverPool) discoverNodes() {
 // Otherwise, the connection should be rejected.
 // Note that whenever a connection has been accepted and a pool entry has been returned,
 // disconnect should also always be called.
-func (pool *serverPool) connect(p *peer, node *enode.Node) *poolEntry {
+func (pool *serverPool) connect(p *serverPeer, node *enode.Node) *poolEntry {
 	log.Debug("Connect new entry", "enode", p.id)
 	req := &connReq{p: p, node: node, result: make(chan *poolEntry, 1)}
 	select {
@@ -679,7 +679,7 @@ const (
 
 // poolEntry represents a server node and stores its current state and statistics.
 type poolEntry struct {
-	peer                  *peer
+	peer                  *serverPeer
 	pubkey                [64]byte // secp256k1 key of the node
 	addr                  map[string]*poolEntryAddress
 	node                  *enode.Node

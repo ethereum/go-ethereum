@@ -54,14 +54,14 @@ func testULCAnnounceThreshold(t *testing.T, protocol int) {
 			ids       []string
 		)
 		for i := 0; i < len(testcase.height); i++ {
-			s, n, teardown := newServerPeer(t, 0, protocol)
+			s, n, teardown := newTestServerPeer(t, 0, protocol)
 
 			servers = append(servers, s)
 			nodes = append(nodes, n)
 			teardowns = append(teardowns, teardown)
 			ids = append(ids, n.String())
 		}
-		c, teardown := newLightPeer(t, protocol, ids, testcase.threshold)
+		c, teardown := newTestLightPeer(t, protocol, ids, testcase.threshold)
 
 		// Connect all servers.
 		for i := 0; i < len(servers); i++ {
@@ -86,15 +86,15 @@ func testULCAnnounceThreshold(t *testing.T, protocol int) {
 	}
 }
 
-func connect(server *serverHandler, serverId enode.ID, client *clientHandler, protocol int) (*peer, *peer, error) {
+func connect(server *serverHandler, serverId enode.ID, client *clientHandler, protocol int) (*serverPeer, *clientPeer, error) {
 	// Create a message pipe to communicate through
 	app, net := p2p.MsgPipe()
 
 	var id enode.ID
 	rand.Read(id[:])
 
-	peer1 := newPeer(protocol, NetworkId, true, p2p.NewPeer(serverId, "", nil), net) // Mark server as trusted
-	peer2 := newPeer(protocol, NetworkId, false, p2p.NewPeer(id, "", nil), app)
+	peer1 := newServerPeer(protocol, NetworkId, true, p2p.NewPeer(serverId, "", nil), net) // Mark server as trusted
+	peer2 := newClientPeer(protocol, NetworkId, p2p.NewPeer(id, "", nil), app)
 
 	// Start the peerLight on a new thread
 	errc1 := make(chan error, 1)
@@ -124,8 +124,8 @@ func connect(server *serverHandler, serverId enode.ID, client *clientHandler, pr
 	return peer1, peer2, nil
 }
 
-// newServerPeer creates server peer.
-func newServerPeer(t *testing.T, blocks int, protocol int) (*testServer, *enode.Node, func()) {
+// newTestServerPeer creates server peer.
+func newTestServerPeer(t *testing.T, blocks int, protocol int) (*testServer, *enode.Node, func()) {
 	s, teardown := newServerEnv(t, blocks, protocol, nil, false, false, 0)
 	key, err := crypto.GenerateKey()
 	if err != nil {
@@ -136,8 +136,8 @@ func newServerPeer(t *testing.T, blocks int, protocol int) (*testServer, *enode.
 	return s, n, teardown
 }
 
-// newLightPeer creates node with light sync mode
-func newLightPeer(t *testing.T, protocol int, ulcServers []string, ulcFraction int) (*testClient, func()) {
+// newTestLightPeer creates node with light sync mode
+func newTestLightPeer(t *testing.T, protocol int, ulcServers []string, ulcFraction int) (*testClient, func()) {
 	_, c, teardown := newClientServerEnv(t, 0, protocol, nil, ulcServers, ulcFraction, false, false)
 	return c, teardown
 }

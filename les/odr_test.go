@@ -186,7 +186,7 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 	server, client, tearDown := newClientServerEnv(t, 4, protocol, nil, nil, 0, false, true)
 	defer tearDown()
 
-	client.handler.synchronise(client.peer.peer)
+	client.handler.synchronise(client.peer.speer)
 
 	// Ensure the client has synced all necessary data.
 	clientHead := client.handler.backend.blockchain.CurrentHeader()
@@ -224,19 +224,19 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 
 	// expect retrievals to fail (except genesis block) without a les peer
 	client.handler.backend.peers.lock.Lock()
-	client.peer.peer.hasBlock = func(common.Hash, uint64, bool) bool { return false }
+	client.peer.speer.hasBlock = func(common.Hash, uint64, bool) bool { return false }
 	client.handler.backend.peers.lock.Unlock()
 	test(expFail)
 
 	// expect all retrievals to pass
 	client.handler.backend.peers.lock.Lock()
-	client.peer.peer.hasBlock = func(common.Hash, uint64, bool) bool { return true }
+	client.peer.speer.hasBlock = func(common.Hash, uint64, bool) bool { return true }
 	client.handler.backend.peers.lock.Unlock()
 	test(5)
 
 	// still expect all retrievals to pass, now data should be cached locally
 	if checkCached {
-		client.handler.backend.peers.Unregister(client.peer.peer.id)
+		client.handler.backend.peers.unregister(client.peer.speer.id)
 		time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
 		test(5)
 	}
