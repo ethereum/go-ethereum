@@ -25,9 +25,9 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// ethEntry is the "eth" ENR entry which advertises eth protocol
+// EthEntry is the "eth" ENR entry which advertises eth protocol
 // on the discovery network.
-type ethEntry struct {
+type EthEntry struct {
 	ForkID forkid.ID // Fork identifier per EIP-2124
 
 	// Ignore additional fields (for forward compatibility).
@@ -35,7 +35,7 @@ type ethEntry struct {
 }
 
 // ENRKey implements enr.Entry.
-func (e ethEntry) ENRKey() string {
+func (e EthEntry) ENRKey() string {
 	return "eth"
 }
 
@@ -59,8 +59,8 @@ func (eth *Ethereum) startEthEntryUpdate(ln *enode.LocalNode) {
 	}()
 }
 
-func (eth *Ethereum) currentEthEntry() *ethEntry {
-	return &ethEntry{ForkID: forkid.NewID(eth.blockchain)}
+func (eth *Ethereum) currentEthEntry() *EthEntry {
+	return &EthEntry{ForkID: forkid.NewID(eth.blockchain)}
 }
 
 // setupDiscovery creates the node discovery source for the eth protocol.

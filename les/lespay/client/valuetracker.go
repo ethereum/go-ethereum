@@ -213,6 +213,15 @@ func (vt *ValueTracker) StatsExpirer() *utils.Expirer {
 	return &vt.statsExpirer
 }
 
+// StatsExpirer returns the current expiration factor so that other values can be expired
+// with the same rate as the service value statistics.
+func (vt *ValueTracker) StatsExpFactor() utils.ExpirationFactor {
+	vt.lock.Lock()
+	defer vt.lock.Unlock()
+
+	return vt.statsExpFactor
+}
+
 // loadFromDb loads the value tracker's state from the database and converts saved
 // request basket index mapping if it does not match the specified index to name mapping.
 func (vt *ValueTracker) loadFromDb(mapping []string) error {
