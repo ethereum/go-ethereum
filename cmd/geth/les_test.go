@@ -18,7 +18,6 @@ type gethrpc struct {
 }
 
 func (g *gethrpc) killAndWait() {
-	g.geth.Logf("Killing %v", g.name)
 	g.geth.Kill()
 	g.geth.WaitExit()
 }
@@ -78,24 +77,21 @@ func (g *gethrpc) waitSynced() {
 		g.geth.Fatalf("%v syncing: %v", g.name, err)
 	}
 	defer sub.Unsubscribe()
-	g.geth.Log("subscribed")
 	timeout := time.After(4 * time.Second)
-	for {
-		select {
-		case ev := <-ch:
-			g.geth.Log("'syncing' event", ev)
-			syncing, ok := ev.(bool)
-			if ok && !syncing {
-				return
-			}
-			g.geth.Log("Other 'syncing' event", ev)
-		case err := <-sub.Err():
-			g.geth.Fatalf("%v notification: %v", g.name, err)
-			return
-		case <-timeout:
-			g.geth.Fatalf("%v timeout syncing", g.name)
-			return
+	select {
+	case ev := <-ch:
+		g.geth.Log("'syncing' event", ev)
+		syncing, ok := ev.(bool)
+		if ok && !syncing {
+			break
 		}
+		g.geth.Log("Other 'syncing' event", ev)
+	case err := <-sub.Err():
+		g.geth.Fatalf("%v notification: %v", g.name, err)
+		break
+	case <-timeout:
+		g.geth.Fatalf("%v timeout syncing", g.name)
+		break
 	}
 }
 
@@ -123,16 +119,10 @@ func initGeth(t *testing.T) string {
 }
 
 func startLightServer(t *testing.T) *gethrpc {
-	// Create an account, we'll need the private key and password to unlock it later.
-	// We add the account to the genesis json
 	datadir := initGeth(t)
-	// key := "48aa455c373ec5ce7fefb0e54f44a215decdc85b9047bc4d09801e038909bdbe"
-	// password := "foobar"
 	runGeth(t, "--datadir", datadir, "--password", "./testdata/password.txt", "account", "import", "./testdata/key.prv").WaitExit()
 	account := "0x02f0d131f1f97aef08aec6e3291b957d9efe7105"
 	server := startGethWithRpc(t, "lightserver", "--allow-insecure-unlock", "--datadir", datadir, "--password", "./testdata/password.txt", "--unlock", account, "--mine", "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1")
-
-	// server.geth.InputLine(password)
 	return server
 }
 
@@ -149,9 +139,6 @@ func TestPriorityClient(t *testing.T) {
 	freeCli := startClient(t, "freeCli")
 	defer freeCli.killAndWait()
 	freeCli.addPeer(lightServer)
-	if true {
-		return
-	}
 
 	var peers []*p2p.PeerInfo
 	freeCli.callRPC(&peers, "admin_peers")
