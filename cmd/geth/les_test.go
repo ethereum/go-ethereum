@@ -115,62 +115,44 @@ func startGethWithRpc(t *testing.T, name string, args ...string) *gethrpc {
 	return g
 }
 
-func startServer(t *testing.T) *gethrpc {
-	runGeth(t, "init", "./testdata/genesis.json").WaitExit()
-	runGeth(t, "--gcmode=archive", "import", "./testdata/blockchain.blocks").WaitExit()
-	g := startGethWithRpc(t, "server", "--nodiscover", "--light.serve=1", "--nat=extip:127.0.0.1")
-	return g
+func initGeth(t *testing.T) string {
+	g := runGeth(t, "--networkid=42", "init", "./testdata/clique.json")
+	datadir := g.Datadir
+	g.WaitExit()
+	return datadir
 }
 
 func startLightServer(t *testing.T) *gethrpc {
-	runGeth(t, "init", "./testdata/genesis.json").WaitExit()
-	// Start it as a miner, otherwise it won't consider itself synced
-	// Use the coinbase from testdata/genesis.json
-	etherbase := "0x8888f1f195afa192cfee860698584c030f4c9db1"
-	g := startGethWithRpc(t, "lightserver", "--mine", "--miner.etherbase", etherbase, "--syncmode=fast", "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1")
-	return g
+	// Create an account, we'll need the private key and password to unlock it later.
+	// We add the account to the genesis json
+	datadir := initGeth(t)
+	// key := "48aa455c373ec5ce7fefb0e54f44a215decdc85b9047bc4d09801e038909bdbe"
+	// password := "foobar"
+	runGeth(t, "--datadir", datadir, "--password", "./testdata/password.txt", "account", "import", "./testdata/key.prv").WaitExit()
+	account := "0x02f0d131f1f97aef08aec6e3291b957d9efe7105"
+	server := startGethWithRpc(t, "lightserver", "--allow-insecure-unlock", "--datadir", datadir, "--password", "./testdata/password.txt", "--unlock", account, "--mine", "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1")
+
+	// server.geth.InputLine(password)
+	return server
 }
+
 func startClient(t *testing.T, name string) *gethrpc {
-	runGeth(t, "init", "./testdata/genesis.json").WaitExit()
-	g := startGethWithRpc(t, name, "--nodiscover", "--syncmode=light", "--nat=extip:127.0.0.1")
-	return g
-}
-
-func TestDev(t *testing.T) {
-	password := "foobar"
-	args := []string{"account", "new"}
-	g := runGeth(t, args...)
-	g.InputLine(password)
-	g.InputLine(password)
-	// Extract account from the returned string
-	_, output := g.ExpectRegexp(`(?ms)Public address of the key:   (0x[0-9a-fA-F]{40}).*`)
-	account := output[1]
-	t.Log("account", account)
-	g.WaitExit()
-	t.Log("finished 1")
-
-	args = []string{"--unlock", account, "--mine", "--datadir", g.Datadir}
-	g2 := runGeth(t, args...)
-	g2.InputLine(password)
+	datadir := initGeth(t)
+	return startGethWithRpc(t, name, "--datadir", datadir, "--nodiscover", "--syncmode=light", "--nat=extip:127.0.0.1")
 }
 
 func TestPriorityClient(t *testing.T) {
-	// Init and start server
-	server := startServer(t)
-	defer server.killAndWait()
-
 	lightServer := startLightServer(t)
 	defer lightServer.killAndWait()
-
-	// Make the lightServer sync to the server
-	// This is the only way to make the lightServer synced
-	lightServer.addPeer(server)
-	lightServer.waitSynced()
 
 	// Start client and add lightServer as peer
 	freeCli := startClient(t, "freeCli")
 	defer freeCli.killAndWait()
 	freeCli.addPeer(lightServer)
+	if true {
+		return
+	}
+
 	var peers []*p2p.PeerInfo
 	freeCli.callRPC(&peers, "admin_peers")
 	if len(peers) != 1 {
@@ -193,7 +175,6 @@ func TestPriorityClient(t *testing.T) {
 	}
 
 	nodes := map[string]*gethrpc{
-		server.getNodeInfo().ID:      server,
 		lightServer.getNodeInfo().ID: lightServer,
 		freeCli.getNodeInfo().ID:     freeCli,
 		prioCli.getNodeInfo().ID:     prioCli,
