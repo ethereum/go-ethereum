@@ -23,15 +23,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
-	"math/big"
-	"os"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
+	"io/ioutil"
+	"math/big"
 )
 
 //SignatureLength indicates the byte length required to carry a signature with recovery id.
@@ -166,14 +163,12 @@ func HexToECDSA(hexkey string) (*ecdsa.PrivateKey, error) {
 
 // LoadECDSA loads a secp256k1 private key from the given file.
 func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
-	buf := make([]byte, 64)
-	fd, err := os.Open(file)
+	buf, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
-	defer fd.Close()
-	if _, err := io.ReadFull(fd, buf); err != nil {
-		return nil, err
+	if len(buf) != 64 {
+		return nil, errors.New(fmt.Sprintf("expected 64 hexa characters, got %v", len(buf)))
 	}
 
 	key, err := hex.DecodeString(string(buf))
