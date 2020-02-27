@@ -1218,6 +1218,24 @@ func (c *Bor) CommitStates(
 	return nil
 }
 
+func (c *Bor) isValidatorAction(chain consensus.ChainReader, from common.Address, tx *types.Transaction) bool {
+	header := chain.CurrentHeader()
+	snap, err := c.snapshot(chain, header.Number.Uint64(), header.Hash(), nil)
+	if err != nil {
+		log.Error("Failed fetching snapshot", err)
+	}
+
+	_isValidatorAction := false
+	for _, validator := range snap.ValidatorSet.Validators {
+		if bytes.Compare(validator.Address.Bytes(), from.Bytes()) == 0 {
+			_isValidatorAction = true
+			break
+		}
+	}
+	// @todo only either of proposeState and proposeSpan should pass this check
+	return _isValidatorAction
+}
+
 //
 // Private methods
 //
