@@ -73,11 +73,15 @@ As with `--rpccorsdomain`, using `--wsorigins '*'` allows access from any origin
 JSON-RPC APIs are also provided on a UNIX domain socket. This server is enabled
 by default and has access to all JSON-RPC namespaces.
 
-The listening socket is placed into the data directory by default. On Linux, the
-default location of the geth socket is
+The listening socket is placed into the data directory by default. On Linux and macOS,
+the default location of the geth socket is
 
     ~/.ethereum/geth.ipc
 
+On Windows, IPC is provided via named pipes. The default location of the geth pipe is:
+
+    \\.\pipe\geth.ipc
+    
 You can configure the location of the socket using the `--ipcpath` flag. IPC can
 be disabled using the `--ipcdisable` flag.
 
