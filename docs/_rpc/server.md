@@ -78,6 +78,10 @@ default location of the geth socket is
 
     ~/.ethereum/geth.ipc
 
+On Windows the default location is
+
+    \\.\pipe\geth.ipc
+    
 You can configure the location of the socket using the `--ipcpath` flag. IPC can
 be disabled using the `--ipcdisable` flag.
 
