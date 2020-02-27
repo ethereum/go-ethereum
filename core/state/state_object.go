@@ -297,18 +297,11 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	// Retrieve the snapshot storage map for the object
 	var storage map[common.Hash][]byte
 	if s.db.snap != nil {
-		// Retrieve the old storage map, if available
-		s.db.snapLock.RLock()
+		// Retrieve the old storage map, if available, create a new one otherwise
 		storage = s.db.snapStorage[s.addrHash]
-		s.db.snapLock.RUnlock()
-
-		// If no old storage map was available, create a new one
 		if storage == nil {
 			storage = make(map[common.Hash][]byte)
-
-			s.db.snapLock.Lock()
 			s.db.snapStorage[s.addrHash] = storage
-			s.db.snapLock.Unlock()
 		}
 	}
 	// Insert all the pending updates into the trie

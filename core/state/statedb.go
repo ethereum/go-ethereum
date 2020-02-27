@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -72,7 +71,6 @@ type StateDB struct {
 	snap         snapshot.Snapshot
 	snapAccounts map[common.Hash][]byte
 	snapStorage  map[common.Hash]map[common.Hash][]byte
-	snapLock     sync.RWMutex // Lock for the concurrent storage updaters
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
 	stateObjects        map[common.Address]*stateObject
@@ -468,6 +466,10 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 
 	// If state snapshotting is active, cache the data til commit
 	if s.snap != nil {
+		// If the account is an empty resurrection, unmark the storage nil-ness
+		if storage, ok := s.snapStorage[obj.addrHash]; storage == nil && ok {
+			delete(s.snapStorage, obj.addrHash)
+		}
 		s.snapAccounts[obj.addrHash] = snapshot.AccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash)
 	}
 }
@@ -484,10 +486,8 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 
 	// If state snapshotting is active, cache the data til commit
 	if s.snap != nil {
-		s.snapLock.Lock()
 		s.snapAccounts[obj.addrHash] = nil // We need to maintain account deletions explicitly
 		s.snapStorage[obj.addrHash] = nil  // We need to maintain storage deletions explicitly
-		s.snapLock.Unlock()
 	}
 }
 
