@@ -123,7 +123,7 @@ type clientPoolPeer interface {
 	ID() enode.ID
 	freeClientId() string
 	updateCapacity(uint64)
-	freezeClient()
+	freeze()
 }
 
 // clientInfo represents a connected client
@@ -500,7 +500,7 @@ func (f *clientPool) disconnect(p clientPoolPeer) {
 }
 
 // drop deactivates the peer if necessary and drops it from the inactive queue
-func (f *clientPool) drop(p clientPeer, kicked bool) {
+func (f *clientPool) drop(p clientPoolPeer, kicked bool) {
 	// Short circuit if client pool is already closed.
 	if f.closed {
 		return

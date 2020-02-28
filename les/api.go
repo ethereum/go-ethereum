@@ -296,7 +296,7 @@ func (api *PrivateDebugAPI) FreezeClient(id enode.ID) error {
 		if c == nil {
 			return fmt.Errorf("client %064x is not connected", id[:])
 		}
-		c.peer.freezeClient()
+		c.peer.freeze()
 		return nil
 	})
 }
@@ -355,16 +355,18 @@ func (api *PrivateLightAPI) GetCheckpointContractAddress() (string, error) {
 
 // PrivateLespayAPI provides an API to use the LESpay commands of either the local or a remote server
 type PrivateLespayAPI struct {
-	peerSet       *peerSet
+	clientPeerSet *clientPeerSet
+	serverPeerSet *serverPeerSet
 	clientHandler *clientHandler
 	dht           *discv5.Network
 	tokenSale     *tokenSale
 }
 
 // NewPrivateLespayAPI creates a new LESPAY API.
-func NewPrivateLespayAPI(peerSet *peerSet, clientHandler *clientHandler, dht *discv5.Network, tokenSale *tokenSale) *PrivateLespayAPI {
+func NewPrivateLespayAPI(clientPeerSet *clientPeerSet, serverPeerSet *serverPeerSet, clientHandler *clientHandler, dht *discv5.Network, tokenSale *tokenSale) *PrivateLespayAPI {
 	return &PrivateLespayAPI{
-		peerSet:       peerSet,
+		clientPeerSet: clientPeerSet,
+		serverPeerSet: serverPeerSet,
 		clientHandler: clientHandler,
 		dht:           dht,
 		tokenSale:     tokenSale,
@@ -379,18 +381,25 @@ func NewPrivateLespayAPI(peerSet *peerSet, clientHandler *clientHandler, dht *di
 // If remote is false then the command is executed locally, with the specified remote node assumed as sender.
 func (api *PrivateLespayAPI) makeCall(ctx context.Context, remote bool, nodeStr string, cmd []byte) ([]byte, error) {
 	var (
-		id     enode.ID
-		freeID string
-		peer   *peer
-		node   *enode.Node
-		err    error
+		id         enode.ID
+		freeID     string
+		clientPeer *clientPeer
+		serverPeer *serverPeer
+		node       *enode.Node
+		err        error
 	)
 	if nodeStr != "" {
 		if id, err = enode.ParseID(nodeStr); err == nil {
-			if peer = api.peerSet.Peer(peerIdToString(id)); peer == nil {
-				return nil, errors.New("peer not connected")
+			if api.clientPeerSet != nil {
+				if clientPeer = api.clientPeerSet.peer(peerIdToString(id)); clientPeer == nil {
+					return nil, errors.New("peer not connected")
+				}
+				freeID = clientPeer.freeClientId()
+			} else {
+				if serverPeer = api.serverPeerSet.peer(peerIdToString(id)); serverPeer == nil {
+					return nil, errors.New("peer not connected")
+				}
 			}
-			freeID = peer.freeClientId()
 		} else {
 			var err error
 			if node, err = enode.Parse(enode.ValidSchemes, nodeStr); err == nil {
@@ -408,12 +417,12 @@ func (api *PrivateLespayAPI) makeCall(ctx context.Context, remote bool, nodeStr 
 			cancelFn func() bool
 		)
 		delivered := make(chan struct{})
-		if peer != nil {
+		if serverPeer != nil {
 			// remote call to a connected peer through LES
 			if api.clientHandler == nil {
 				return nil, errors.New("client handler not available")
 			}
-			cancelFn = api.clientHandler.makeLespayCall(peer, cmd, func(r []byte, delay uint) bool {
+			cancelFn = api.clientHandler.makeLespayCall(serverPeer, cmd, func(r []byte, delay uint) bool {
 				reply = r
 				close(delivered)
 				return reply != nil

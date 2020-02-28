@@ -309,7 +309,8 @@ func newTestPeer(t *testing.T, name string, version int, handler *serverHandler,
 	// Generate a random id and create the peer
 	var id enode.ID
 	rand.Read(id[:])
-	peer := newClientPeer(version, NetworkId, p2p.NewPeer(id, name, nil), net)
+	cpeer := newClientPeer(version, NetworkId, p2p.NewPeer(id, name, nil), net)
+	speer := newServerPeer(version, NetworkId, false, p2p.NewPeer(id, name, nil), app)
 
 	// Start the peer on a new thread
 	errCh := make(chan error, 1)
@@ -317,13 +318,14 @@ func newTestPeer(t *testing.T, name string, version int, handler *serverHandler,
 		select {
 		case <-handler.closeCh:
 			errCh <- p2p.DiscQuitting
-		case errCh <- handler.handle(peer):
+		case errCh <- handler.handle(cpeer):
 		}
 	}()
 	tp := &testPeer{
 		app:   app,
 		net:   net,
-		cpeer: peer,
+		cpeer: cpeer,
+		speer: speer,
 	}
 	// Execute any implicitly requested handshakes and return
 	if shake {
@@ -395,7 +397,7 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 	expList = expList.add("serveStateSince", uint64(0))
 	expList = expList.add("serveRecentState", uint64(core.TriesInMemory-4))
 	expList = expList.add("txRelay", nil)
-	if p.peer.version >= lpv4 {
+	if p.cpeer.version >= lpv4 {
 		expList = expList.add("flowControl/BL", uint64(0))
 		expList = expList.add("flowControl/MRR", uint64(0))
 	} else {
@@ -413,10 +415,11 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 	p.cpeer.fcParams = flowcontrol.ServerParams{
 		BufLimit:    testBufLimit,
 		MinRecharge: testBufRecharge,
+	}
 }
 
 func (p *testPeer) expectCapUpdate(t *testing.T) {
-	if p.peer.version >= lpv4 {
+	if p.cpeer.version >= lpv4 {
 		var expList keyValueList
 		expList = expList.add("flowControl/BL", testBufLimit)
 		expList = expList.add("flowControl/MRR", testBufRecharge)

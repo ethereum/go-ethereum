@@ -391,12 +391,12 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 // makeLespayCall sends a lespay command through an LES connection and registers
 // a response handler. It returns a cancel function that removes the response
 // handler and calls it with a nil parameter if the response has not arrived yet.
-func (h *clientHandler) makeLespayCall(p *peer, cmd []byte, handler func([]byte, uint) bool) func() bool {
+func (h *clientHandler) makeLespayCall(p *serverPeer, cmd []byte, handler func([]byte, uint) bool) func() bool {
 	reqID := genReqID()
 	h.lespayReplyLock.Lock()
 	h.lespayReplyHandlers[reqID] = handler
 	h.lespayReplyLock.Unlock()
-	if p.SendLespay(reqID, cmd) != nil {
+	if p.sendLespay(reqID, cmd) != nil {
 		h.lespayReplyLock.Lock()
 		delete(h.lespayReplyHandlers, reqID)
 		h.lespayReplyLock.Unlock()

@@ -177,7 +177,7 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 		// Send the hash request and verify the response
 		reqID++
 
-		cost := server.peer.peer.GetRequestCost(GetBlockHeadersMsg, int(tt.query.Amount))
+		cost := server.peer.speer.getRequestCost(GetBlockHeadersMsg, int(tt.query.Amount))
 		sendRequest(server.peer.app, GetBlockHeadersMsg, reqID, tt.query)
 		if err := expectResponse(server.peer.app, protocol, BlockHeadersMsg, reqID, testBufLimit, cost, headers); err != nil {
 			t.Errorf("test %d: headers mismatch: %v", i, err)
@@ -255,7 +255,7 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 		reqID++
 
 		// Send the hash request and verify the response
-		cost := server.peer.peer.GetRequestCost(GetBlockBodiesMsg, len(hashes))
+		cost := server.peer.speer.getRequestCost(GetBlockBodiesMsg, len(hashes))
 		sendRequest(server.peer.app, GetBlockBodiesMsg, reqID, hashes)
 		if err := expectResponse(server.peer.app, protocol, BlockBodiesMsg, reqID, testBufLimit, cost, bodies); err != nil {
 			t.Errorf("test %d: bodies mismatch: %v", i, err)
@@ -287,7 +287,7 @@ func testGetCode(t *testing.T, protocol int) {
 		}
 	}
 
-	cost := server.peer.peer.GetRequestCost(GetCodeMsg, len(codereqs))
+	cost := server.peer.speer.getRequestCost(GetCodeMsg, len(codereqs))
 	sendRequest(server.peer.app, GetCodeMsg, 42, codereqs)
 	if err := expectResponse(server.peer.app, protocol, CodeMsg, 42, testBufLimit, cost, codes); err != nil {
 		t.Errorf("codes mismatch: %v", err)
@@ -308,7 +308,7 @@ func testGetStaleCode(t *testing.T, protocol int) {
 			BHash:  bc.GetHeaderByNumber(number).Hash(),
 			AccKey: crypto.Keccak256(testContractAddr[:]),
 		}
-		cost := server.peer.peer.GetRequestCost(GetCodeMsg, 1)
+		cost := server.peer.speer.getRequestCost(GetCodeMsg, 1)
 		sendRequest(server.peer.app, GetCodeMsg, 42, []*CodeReq{req})
 		if err := expectResponse(server.peer.app, protocol, CodeMsg, 42, testBufLimit, cost, expected); err != nil {
 			t.Errorf("codes mismatch: %v", err)
@@ -340,7 +340,7 @@ func testGetReceipt(t *testing.T, protocol int) {
 		receipts = append(receipts, rawdb.ReadRawReceipts(server.db, block.Hash(), block.NumberU64()))
 	}
 	// Send the hash request and verify the response
-	cost := server.peer.peer.GetRequestCost(GetReceiptsMsg, len(hashes))
+	cost := server.peer.speer.getRequestCost(GetReceiptsMsg, len(hashes))
 	sendRequest(server.peer.app, GetReceiptsMsg, 42, hashes)
 	if err := expectResponse(server.peer.app, protocol, ReceiptsMsg, 42, testBufLimit, cost, receipts); err != nil {
 		t.Errorf("receipts mismatch: %v", err)
@@ -376,7 +376,7 @@ func testGetProofs(t *testing.T, protocol int) {
 		}
 	}
 	// Send the proof request and verify the response
-	cost := server.peer.peer.GetRequestCost(GetProofsV2Msg, len(proofreqs))
+	cost := server.peer.speer.getRequestCost(GetProofsV2Msg, len(proofreqs))
 	sendRequest(server.peer.app, GetProofsV2Msg, 42, proofreqs)
 	if err := expectResponse(server.peer.app, protocol, ProofsV2Msg, 42, testBufLimit, cost, proofsV2.NodeList()); err != nil {
 		t.Errorf("proofs mismatch: %v", err)
@@ -410,6 +410,7 @@ func testGetStaleProof(t *testing.T, protocol int) {
 			t.Prove(account, 0, proofsV2)
 			expected = proofsV2.NodeList()
 		}
+		cost := server.peer.speer.getRequestCost(GetProofsV2Msg, 1)
 		if err := expectResponse(server.peer.app, protocol, ProofsV2Msg, 42, testBufLimit, cost, expected); err != nil {
 			t.Errorf("codes mismatch: %v", err)
 		}
@@ -461,7 +462,7 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 		AuxReq:  auxHeader,
 	}}
 	// Send the proof request and verify the response
-	cost := server.peer.peer.GetRequestCost(GetHelperTrieProofsMsg, len(requestsV2))
+	cost := server.peer.speer.getRequestCost(GetHelperTrieProofsMsg, len(requestsV2))
 	sendRequest(server.peer.app, GetHelperTrieProofsMsg, 42, requestsV2)
 	if err := expectResponse(server.peer.app, protocol, HelperTrieProofsMsg, 42, testBufLimit, cost, proofsV2); err != nil {
 		t.Errorf("proofs mismatch: %v", err)
@@ -510,7 +511,7 @@ func testGetBloombitsProofs(t *testing.T, protocol int) {
 		trie.Prove(key, 0, &proofs.Proofs)
 
 		// Send the proof request and verify the response
-		cost := server.peer.peer.GetRequestCost(GetHelperTrieProofsMsg, len(requests))
+		cost := server.peer.speer.getRequestCost(GetHelperTrieProofsMsg, len(requests))
 		sendRequest(server.peer.app, GetHelperTrieProofsMsg, 42, requests)
 		if err := expectResponse(server.peer.app, protocol, HelperTrieProofsMsg, 42, testBufLimit, cost, proofs); err != nil {
 			t.Errorf("bit %d: proofs mismatch: %v", bit, err)
@@ -534,10 +535,10 @@ func testTransactionStatus(t *testing.T, protocol int) {
 		reqID++
 		var cost uint64
 		if send {
-			cost = server.peer.peer.GetRequestCost(SendTxV2Msg, 1)
+			cost = server.peer.speer.getRequestCost(SendTxV2Msg, 1)
 			sendRequest(server.peer.app, SendTxV2Msg, reqID, types.Transactions{tx})
 		} else {
-			cost = server.peer.peer.GetRequestCost(GetTxStatusMsg, 1)
+			cost = server.peer.speer.getRequestCost(GetTxStatusMsg, 1)
 			sendRequest(server.peer.app, GetTxStatusMsg, reqID, []common.Hash{tx.Hash()})
 		}
 		if err := expectResponse(server.peer.app, protocol, TxStatusMsg, reqID, testBufLimit, cost, []light.TxStatus{expStatus}); err != nil {

@@ -212,7 +212,7 @@ func (s *LightEthereum) APIs() []rpc.API {
 		{
 			Namespace: "lespay",
 			Version:   "1.0",
-			Service:   NewPrivateLespayAPI(s.lesCommons.peers, s.handler, s.srvr.DiscV5, nil),
+			Service:   NewPrivateLespayAPI(nil, s.peers, s.handler, s.srvr.DiscV5, nil),
 			Public:    false,
 		},
 	}...)

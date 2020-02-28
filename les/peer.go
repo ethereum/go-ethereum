@@ -857,40 +857,6 @@ func (p *clientPeer) updateCapacity(cap uint64) {
 
 }
 
-// freezeClient temporarily puts the client in a frozen state which means all
-// unprocessed and subsequent requests are dropped. Unfreezing happens automatically
-// after a short time if the client's buffer value is at least in the slightly positive
-// region. The client is also notified about being frozen/unfrozen with a Stop/Resume
-// message.
-func (p *clientPeer) freezeClient() {
-	if p.version < lpv3 {
-		// if Stop/Resume is not supported then just drop the peer after setting
-		// its frozen status permanently
-		atomic.StoreUint32(&p.frozen, 1)
-		p.Peer.Disconnect(p2p.DiscUselessPeer)
-		return
-	}
-	if atomic.SwapUint32(&p.frozen, 1) == 0 {
-		go func() {
-			p.sendStop()
-			time.Sleep(freezeTimeBase + time.Duration(rand.Int63n(int64(freezeTimeRandom))))
-			for {
-				bufValue, bufLimit := p.fcClient.BufferStatus()
-				if bufLimit == 0 {
-					return
-				}
-				if bufValue <= bufLimit/8 {
-					time.Sleep(freezeCheckPeriod)
-				} else {
-					atomic.StoreUint32(&p.frozen, 0)
-					p.sendResume(bufValue)
-					break
-				}
-			}
-		}()
-	}
-}
-
 // Handshake executes the les protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
 func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, server *LesServer) error {
@@ -1016,7 +982,7 @@ func (ps *clientPeerSet) unSubscribe(sub clientPeerSubscriber) {
 
 // register adds a new peer into the peer set, or returns an error if the
 // peer is already known.
-func (ps *clientPeerSet) register(peer *clientPeer) error {
+func (ps *clientPeerSet) register(p *clientPeer) error {
 	ps.lock.Lock()
 	if ps.closed {
 		ps.lock.Unlock()
@@ -1042,7 +1008,7 @@ func (ps *clientPeerSet) register(peer *clientPeer) error {
 // unregister removes a remote peer from the peer set, disabling any further
 // actions to/from that particular entity. It also initiates disconnection
 // at the networking layer.
-func (ps *clientPeerSet) unregister(id string) error {
+func (ps *clientPeerSet) unregister(p *clientPeer) error {
 	ps.lock.Lock()
 	if _, ok := ps.active[p.id]; !ok {
 		ps.lock.Unlock()
@@ -1125,7 +1091,7 @@ func (ps *clientPeerSet) allPeers() []*clientPeer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	list := make([]*clientPeer, 0, len(ps.peers))
+	list := make([]*clientPeer, 0, len(ps.active))
 	for _, p := range ps.active {
 		list = append(list, p)
 	}
@@ -1197,7 +1163,7 @@ func (ps *serverPeerSet) unSubscribe(sub serverPeerSubscriber) {
 
 // register adds a new server peer into the set, or returns an error if the
 // peer is already known.
-func (ps *serverPeerSet) register(peer *serverPeer) error {
+func (ps *serverPeerSet) register(p *serverPeer) error {
 	ps.lock.Lock()
 	if ps.closed {
 		ps.lock.Unlock()
@@ -1223,7 +1189,7 @@ func (ps *serverPeerSet) register(peer *serverPeer) error {
 // unregister removes a remote peer from the active set, disabling any further
 // actions to/from that particular entity. It also initiates disconnection at
 // the networking layer.
-func (ps *serverPeerSet) unregister(id string) error {
+func (ps *serverPeerSet) unregister(p *serverPeer) error {
 	ps.lock.Lock()
 	if _, ok := ps.active[p.id]; !ok {
 		ps.lock.Unlock()
@@ -1326,7 +1292,7 @@ func (ps *serverPeerSet) allPeers() []*serverPeer {
 	defer ps.lock.RUnlock()
 
 	list := make([]*serverPeer, 0, len(ps.active))
-	for _, p := range ps.peers {
+	for _, p := range ps.active {
 		list = append(list, p)
 	}
 	return list

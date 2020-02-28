@@ -142,12 +142,12 @@ func (h *serverHandler) handle(p *clientPeer) error {
 	)
 	p.activate = func() {
 		// Register the peer locally
-		if err := h.server.peers.Register(p); err != nil {
+		if err := h.server.peers.register(p); err != nil {
 			h.server.clientPool.disconnect(p)
 			p.Log().Error("Light Ethereum peer registration failed", "err", err)
 			return
 		}
-		clientConnectionGauge.Update(int64(h.server.peers.Len()))
+		clientConnectionGauge.Update(int64(h.server.peers.len()))
 		connectedAt = mclock.Now()
 		wg = new(sync.WaitGroup)
 		p.active = true
@@ -157,7 +157,7 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		if p.version < lpv4 {
 			h.server.peers.disconnect(p.id)
 		}
-		clientConnectionGauge.Update(int64(h.server.peers.Len()))
+		clientConnectionGauge.Update(int64(h.server.peers.len()))
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 		p.active = false
 	}
@@ -171,7 +171,7 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		return err
 	} else if capacity != p.fcParams.MinRecharge {
 		if p.version < lpv4 {
-			h.server.peers.Disconnect(p.id)
+			h.server.peers.disconnect(p.id)
 		} else {
 			p.updateCapacity(capacity)
 		}
@@ -417,8 +417,6 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					first = false
 				}
 				reply := p.replyBlockHeaders(req.ReqID, headers)
-				sendResponse(req.ReqID, query.Amount, p.replyBlockHeaders(req.ReqID, headers), task.done())
-				reply := p.ReplyBlockHeaders(req.ReqID, headers)
 				sendResponse(req.ReqID, query.Amount, reply, task.done())
 				if metrics.EnabledExpensive {
 					miscOutHeaderPacketsMeter.Mark(1)
@@ -894,7 +892,7 @@ func (h *serverHandler) handleMsg(p *clientPeer, wg *sync.WaitGroup) error {
 					miscOutLespayTrafficMeter.Mark(int64(len(reply)))
 				}
 				p.queueSend(func() {
-					p.ReplyLespay(req.ReqID, reply, delay)
+					p.replyLespay(req.ReqID, reply, delay)
 				})
 			},
 		}) {
