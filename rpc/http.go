@@ -251,7 +251,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// All checks passed, create a codec that reads direct from the request body
-	// until EOF, writes the response to w and order the server to process a
+	// until EOF, write the response to w, and order the server to process a
 	// single request.
 	ctx := r.Context()
 	ctx = context.WithValue(ctx, "remote", r.RemoteAddr)
