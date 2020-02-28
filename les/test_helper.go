@@ -412,10 +412,6 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 	if err := p2p.Send(p.app, StatusMsg, sendList); err != nil {
 		t.Fatalf("status send: %v", err)
 	}
-	p.cpeer.fcParams = flowcontrol.ServerParams{
-		BufLimit:    testBufLimit,
-		MinRecharge: testBufRecharge,
-	}
 }
 
 func (p *testPeer) expectCapUpdate(t *testing.T) {
