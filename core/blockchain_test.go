@@ -2362,3 +2362,131 @@ func TestDeleteCreateRevert(t *testing.T) {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 }
+
+// TestDeleteRecreate tests a state-transition that contains both deletion
+// and recreation of contract state.
+// Contract A exists, has slots 1 and 2 set
+// Tx 1: Selfdestruct A
+// Tx 2: Re-create A, set slots 3 and 4
+// Expected outcome is that _all_ slots are cleared from A, due to the selfdestruct,
+// and then the new slots exist
+func TestDeleteRecreate(t *testing.T) {
+	var (
+		// Generate a canonical chain to act as the main dataset
+		engine = ethash.NewFaker()
+		db     = rawdb.NewMemoryDatabase()
+		// A sender who makes transactions, has some funds
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address = crypto.PubkeyToAddress(key.PublicKey)
+		funds   = big.NewInt(1000000000)
+
+		aa        = common.HexToAddress("0x7217d81b76bdd8707601e959454e3d776aee5f43")
+		bb        = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
+		aaStorage = make(map[common.Hash]common.Hash) // Initial storage in AA
+		aaCode    = []byte{byte(vm.PC), 0xFF}         // Code for AA (simple selfdestruct)
+	)
+	// Populate two slots
+	aaStorage[common.HexToHash("01")] = common.HexToHash("01")
+	aaStorage[common.HexToHash("02")] = common.HexToHash("02")
+
+	// The bb-code needs to CREATE2 the aa contract. It consists of
+	// both initcode and deployment code
+	// initcode:
+	// 1. Set slots 3=3, 4=4,
+	// 2. Return aaCode
+
+	initCode := []byte{
+		byte(vm.PUSH1), 0x3, // value
+		byte(vm.PUSH1), 0x3, // location
+		byte(vm.SSTORE),     // Set slot[3] = 1
+		byte(vm.PUSH1), 0x4, // value
+		byte(vm.PUSH1), 0x4, // location
+		byte(vm.SSTORE), // Set slot[4] = 1
+		// Slots are set, now return the code
+		byte(vm.PUSH2), 0x88, 0xff, // Push code on stack
+		byte(vm.PUSH1), 0x0, // memory start on stack
+		byte(vm.MSTORE),
+		// Code is now in memory.
+		byte(vm.PUSH1), 0x2, // size
+		byte(vm.PUSH1), byte(32 - 2), // offset
+		byte(vm.RETURN),
+	}
+	if l := len(initCode); l > 32 {
+		t.Fatalf("init code is too long for a pushx, need a more elaborate deployer")
+	}
+	bbCode := []byte{
+		// Push initcode onto stack
+		byte(vm.PUSH1) + byte(len(initCode)-1)}
+	bbCode = append(bbCode, initCode...)
+	bbCode = append(bbCode, []byte{
+		byte(vm.PUSH1), 0x0, // memory start on stack
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 0x00, // salt
+		byte(vm.PUSH1), byte(len(initCode)), // size
+		byte(vm.PUSH1), byte(32 - len(initCode)), // offset
+		byte(vm.PUSH1), 0x00, // endowment
+		byte(vm.CREATE2),
+	}...)
+
+	gspec := &Genesis{
+		Config: params.TestChainConfig,
+		Alloc: GenesisAlloc{
+			address: {Balance: funds},
+			// The address 0xAAAAA selfdestructs if called
+			aa: {
+				// Code needs to just selfdestruct
+				Code:    aaCode,
+				Nonce:   1,
+				Balance: big.NewInt(0),
+				Storage: aaStorage,
+			},
+			// The contract BB recreates AA
+			bb: {
+				Code:    bbCode,
+				Balance: big.NewInt(1),
+			},
+		},
+	}
+	genesis := gspec.MustCommit(db)
+
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 1, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+		// One transaction to AA, to kill it
+		tx, _ := types.SignTx(types.NewTransaction(0, aa,
+			big.NewInt(0), 50000, big.NewInt(1), nil), types.HomesteadSigner{}, key)
+		b.AddTx(tx)
+		// One transaction to BB, to recreate AA
+		tx, _ = types.SignTx(types.NewTransaction(1, bb,
+			big.NewInt(0), 100000, big.NewInt(1), nil), types.HomesteadSigner{}, key)
+		b.AddTx(tx)
+	})
+	// Import the canonical chain
+	diskdb := rawdb.NewMemoryDatabase()
+	gspec.MustCommit(diskdb)
+	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{
+		Debug:  true,
+		Tracer: vm.NewJSONLogger(nil, os.Stdout),
+	}, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+	statedb, _ := chain.State()
+
+	// If all is correct, then slot 1 and 2 are zero
+	if got, exp := statedb.GetState(aa, common.HexToHash("01")), (common.Hash{}); got != exp {
+		t.Errorf("got %x exp %x", got, exp)
+	}
+	if got, exp := statedb.GetState(aa, common.HexToHash("02")), (common.Hash{}); got != exp {
+		t.Errorf("got %x exp %x", got, exp)
+	}
+	// Also, 3 and 4 should be set
+	if got, exp := statedb.GetState(aa, common.HexToHash("03")), common.HexToHash("03"); got != exp {
+		t.Fatalf("got %x exp %x", got, exp)
+	}
+	if got, exp := statedb.GetState(aa, common.HexToHash("04")), common.HexToHash("04"); got != exp {
+		t.Fatalf("got %x exp %x", got, exp)
+	}
+}
