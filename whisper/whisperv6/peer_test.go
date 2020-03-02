@@ -210,7 +210,7 @@ func initialize(t *testing.T) {
 			},
 		}
 
-		startServer(t, node.server)
+		startServer(t, node.server, i)
 		nodes[i] = &node
 	}
 
@@ -224,10 +224,16 @@ func initialize(t *testing.T) {
 	}
 }
 
-func startServer(t *testing.T, s *p2p.Server) {
+func startServer(t *testing.T, s *p2p.Server, nn int) {
 	err := s.Start()
 	if err != nil {
-		t.Fatalf("failed to start the first server. err: %v", err)
+		nodeinfo := ""
+		for _, n := range nodes {
+			if n != nil {
+				nodeinfo += fmt.Sprintf("%v\n", n.server.Config.ListenAddr)
+			}
+		}
+		t.Fatalf("failed to start server #%d. err: %v, node information: %s", nn, err, nodeinfo)
 	}
 }
 
