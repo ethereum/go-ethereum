@@ -20,13 +20,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"golang.org/x/crypto/sha3"
 	"io/ioutil"
 	"path/filepath"
 	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"golang.org/x/crypto/sha3"
 )
 
 func TestRandomMerge(t *testing.T) {

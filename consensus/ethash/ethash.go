@@ -546,6 +546,9 @@ func NewShared(progpowNumber *big.Int) *Ethash {
 	if progpowNumber == nil {
 		progpowNumber = new(big.Int).SetUint64(uint64(math.MaxUint64))
 	}
+	if sharedEngines == nil {
+		sharedEngines = make(map[uint64]*Ethash)
+	}
 	sharedEngine, exist := sharedEngines[progpowNumber.Uint64()]
 	if !exist {
 		sharedEngine = New(Config{"", 3, 0, false, "", 1, 0, false, ModeNormal, progpowNumber, nil}, nil, false)

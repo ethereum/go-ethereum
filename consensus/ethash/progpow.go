@@ -19,9 +19,9 @@ package ethash
 
 import (
 	"encoding/binary"
+	"math/bits"
 
 	"golang.org/x/crypto/sha3"
-	"math/bits"
 )
 
 const (
@@ -310,15 +310,14 @@ func progpowLoop(seed uint64, loop uint32, mix *[progpowLanes][progpowRegs]uint3
 	gOffset := mix[loop%progpowLanes][0] % (64 * datasetSize / (progpowLanes * progpowDagLoads))
 
 	var (
-		srcCounter = uint32(0)
-		dstCounter = uint32(0)
+		srcCounter uint32
+		dstCounter uint32
 		randState  kiss99State
 		srcSeq     [32]uint32
 		dstSeq     [32]uint32
 		rnd        = kiss99
-		//iMax       = uint32(0)
-		index           = uint32(0)
-		data_g []uint32 = make([]uint32, progpowDagLoads)
+		index      uint32
+		data_g     []uint32 = make([]uint32, progpowDagLoads)
 	)
 	// 256 bytes of dag data
 	dag_item := make([]byte, 256)
