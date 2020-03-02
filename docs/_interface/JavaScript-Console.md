@@ -20,7 +20,7 @@ Attach mode accepts an endpoint in case the geth node is running with a non defa
 ipc endpoint or you would like to connect over the rpc interface.
 
     geth attach /some/custom/path.ipc
-    eth attach http://191.168.1.1:8545
+    geth attach http://191.168.1.1:8545
     geth attach ws://191.168.1.1:8546
 
 Note that by default the geth node doesn't start the HTTP and WebSocket servers and not
