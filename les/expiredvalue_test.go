@@ -21,14 +21,14 @@ import "testing"
 func TestValueExpiration(t *testing.T) {
 	var cases = []struct {
 		input      expiredValue
-		timeOffset float64
+		timeOffset fixed64
 		expect     uint64
 	}{
-		{expiredValue{base: 128, exp: 0}, 0, 128},
-		{expiredValue{base: 128, exp: 0}, 1, 64},
-		{expiredValue{base: 128, exp: 0}, 2, 32},
-		{expiredValue{base: 128, exp: 2}, 2, 128},
-		{expiredValue{base: 128, exp: 2}, 3, 64},
+		{expiredValue{base: 128, exp: 0}, uint64ToFixed64(0), 128},
+		{expiredValue{base: 128, exp: 0}, uint64ToFixed64(1), 64},
+		{expiredValue{base: 128, exp: 0}, uint64ToFixed64(2), 32},
+		{expiredValue{base: 128, exp: 2}, uint64ToFixed64(2), 128},
+		{expiredValue{base: 128, exp: 2}, uint64ToFixed64(3), 64},
 	}
 	for _, c := range cases {
 		if got := c.input.value(c.timeOffset); got != c.expect {
@@ -41,29 +41,29 @@ func TestValueAddition(t *testing.T) {
 	var cases = []struct {
 		input      expiredValue
 		addend     int64
-		timeOffset float64
+		timeOffset fixed64
 		expect     uint64
 		expectNet  int64
 	}{
 		// Addition
-		{expiredValue{base: 128, exp: 0}, 128, 0, 256, 128},
-		{expiredValue{base: 128, exp: 2}, 128, 0, 640, 128},
+		{expiredValue{base: 128, exp: 0}, 128, uint64ToFixed64(0), 256, 128},
+		{expiredValue{base: 128, exp: 2}, 128, uint64ToFixed64(0), 640, 128},
 
 		// Addition with offset
-		{expiredValue{base: 128, exp: 0}, 128, 1, 192, 128},
-		{expiredValue{base: 128, exp: 2}, 128, 1, 384, 128},
-		{expiredValue{base: 128, exp: 2}, 128, 3, 192, 128},
+		{expiredValue{base: 128, exp: 0}, 128, uint64ToFixed64(1), 192, 128},
+		{expiredValue{base: 128, exp: 2}, 128, uint64ToFixed64(1), 384, 128},
+		{expiredValue{base: 128, exp: 2}, 128, uint64ToFixed64(3), 192, 128},
 
 		// Subtraction
-		{expiredValue{base: 128, exp: 0}, -64, 0, 64, -64},
-		{expiredValue{base: 128, exp: 0}, -128, 0, 0, -128},
-		{expiredValue{base: 128, exp: 0}, -192, 0, 0, -128},
+		{expiredValue{base: 128, exp: 0}, -64, uint64ToFixed64(0), 64, -64},
+		{expiredValue{base: 128, exp: 0}, -128, uint64ToFixed64(0), 0, -128},
+		{expiredValue{base: 128, exp: 0}, -192, uint64ToFixed64(0), 0, -128},
 
 		// Subtraction with offset
-		{expiredValue{base: 128, exp: 0}, -64, 1, 0, -64},
-		{expiredValue{base: 128, exp: 0}, -128, 1, 0, -64},
-		{expiredValue{base: 128, exp: 2}, -128, 1, 128, -128},
-		{expiredValue{base: 128, exp: 2}, -128, 2, 0, -128},
+		{expiredValue{base: 128, exp: 0}, -64, uint64ToFixed64(1), 0, -64},
+		{expiredValue{base: 128, exp: 0}, -128, uint64ToFixed64(1), 0, -64},
+		{expiredValue{base: 128, exp: 2}, -128, uint64ToFixed64(1), 128, -128},
+		{expiredValue{base: 128, exp: 2}, -128, uint64ToFixed64(2), 0, -128},
 	}
 	for _, c := range cases {
 		if net := c.input.add(c.addend, c.timeOffset); net != c.expectNet {
@@ -79,13 +79,13 @@ func TestExpiredValueAddition(t *testing.T) {
 	var cases = []struct {
 		input      expiredValue
 		another    expiredValue
-		timeOffset float64
+		timeOffset fixed64
 		expect     uint64
 	}{
-		{expiredValue{base: 128, exp: 0}, expiredValue{base: 128, exp: 0}, 0, 256},
-		{expiredValue{base: 128, exp: 1}, expiredValue{base: 128, exp: 0}, 0, 384},
-		{expiredValue{base: 128, exp: 0}, expiredValue{base: 128, exp: 1}, 0, 384},
-		{expiredValue{base: 128, exp: 0}, expiredValue{base: 128, exp: 0}, 1, 128},
+		{expiredValue{base: 128, exp: 0}, expiredValue{base: 128, exp: 0}, uint64ToFixed64(0), 256},
+		{expiredValue{base: 128, exp: 1}, expiredValue{base: 128, exp: 0}, uint64ToFixed64(0), 384},
+		{expiredValue{base: 128, exp: 0}, expiredValue{base: 128, exp: 1}, uint64ToFixed64(0), 384},
+		{expiredValue{base: 128, exp: 0}, expiredValue{base: 128, exp: 0}, uint64ToFixed64(1), 128},
 	}
 	for _, c := range cases {
 		c.input.addExp(c.another)
@@ -99,13 +99,13 @@ func TestExpiredValueSubtraction(t *testing.T) {
 	var cases = []struct {
 		input      expiredValue
 		another    expiredValue
-		timeOffset float64
+		timeOffset fixed64
 		expect     uint64
 	}{
-		{expiredValue{base: 128, exp: 0}, expiredValue{base: 128, exp: 0}, 0, 0},
-		{expiredValue{base: 128, exp: 0}, expiredValue{base: 128, exp: 1}, 0, 0},
-		{expiredValue{base: 128, exp: 1}, expiredValue{base: 128, exp: 0}, 0, 128},
-		{expiredValue{base: 128, exp: 1}, expiredValue{base: 128, exp: 0}, 1, 64},
+		{expiredValue{base: 128, exp: 0}, expiredValue{base: 128, exp: 0}, uint64ToFixed64(0), 0},
+		{expiredValue{base: 128, exp: 0}, expiredValue{base: 128, exp: 1}, uint64ToFixed64(0), 0},
+		{expiredValue{base: 128, exp: 1}, expiredValue{base: 128, exp: 0}, uint64ToFixed64(0), 128},
+		{expiredValue{base: 128, exp: 1}, expiredValue{base: 128, exp: 0}, uint64ToFixed64(1), 64},
 	}
 	for _, c := range cases {
 		c.input.subExp(c.another)

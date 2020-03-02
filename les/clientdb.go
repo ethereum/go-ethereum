@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
-	"math"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -138,18 +137,18 @@ func (db *nodeDB) key(id []byte, neg bool) []byte {
 	return append(prefix, id...)
 }
 
-func (db *nodeDB) getExpiration() (float64, float64) {
+func (db *nodeDB) getExpiration() (fixed64, fixed64) {
 	blob, err := db.db.Get(expirationKey)
 	if err != nil || len(blob) != 16 {
 		return 0, 0
 	}
-	return math.Float64frombits(binary.BigEndian.Uint64(blob[:8])), math.Float64frombits(binary.BigEndian.Uint64(blob[8:16]))
+	return fixed64(binary.BigEndian.Uint64(blob[:8])), fixed64(binary.BigEndian.Uint64(blob[8:16]))
 }
 
-func (db *nodeDB) setExpiration(pos, neg float64) {
+func (db *nodeDB) setExpiration(pos, neg fixed64) {
 	var buff [16]byte
-	binary.BigEndian.PutUint64(buff[:8], math.Float64bits(pos))
-	binary.BigEndian.PutUint64(buff[8:16], math.Float64bits(neg))
+	binary.BigEndian.PutUint64(buff[:8], uint64(pos))
+	binary.BigEndian.PutUint64(buff[8:16], uint64(neg))
 	db.db.Put(expirationKey, buff[:16])
 }
 

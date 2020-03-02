@@ -35,8 +35,8 @@ const (
 // expirationController controls the exponential expiration of positive and negative
 // balances
 type expirationController interface {
-	posExpiration(mclock.AbsTime) float64
-	negExpiration(mclock.AbsTime) float64
+	posExpiration(mclock.AbsTime) fixed64
+	negExpiration(mclock.AbsTime) fixed64
 }
 
 // priceFactors determine the pricing policy (may apply either to positive or

@@ -41,14 +41,15 @@ type expiredValue struct {
 }
 
 // value calculates the value at the given moment.
-func (e expiredValue) value(logOffset float64) uint64 {
-	return uint64(float64(e.base) * math.Pow(2, float64(e.exp)-logOffset))
+func (e expiredValue) value(logOffset fixed64) uint64 {
+	offset := uint64ToFixed64(e.exp) - logOffset
+	return uint64(float64(e.base) * offset.pow2Fixed())
 }
 
 // add adds a signed value at the given moment
-func (e *expiredValue) add(amount int64, logOffset float64) int64 {
-	integer, frac := uint64(logOffset), logOffset-float64(uint64(logOffset))
-	factor := math.Pow(2, frac)
+func (e *expiredValue) add(amount int64, logOffset fixed64) int64 {
+	integer, frac := logOffset.toUint64(), logOffset.fraction()
+	factor := frac.pow2Fixed()
 	base := factor * float64(amount)
 	if integer < e.exp {
 		base /= math.Pow(2, float64(e.exp-integer))
@@ -92,4 +93,36 @@ func (e *expiredValue) subExp(a expiredValue) {
 	} else {
 		e.base = 0
 	}
+}
+
+// fixedFactor is the factor used by fixed64
+const fixedFactor = 0x1000000
+
+// fixed64 is a float64 wrapper that uses integer arithmetic
+// to avoid precision loss in floating-point arithmetic.
+type fixed64 int64
+
+// uint64ToFixed64 converts uint64 integer to fixed64 format.
+func uint64ToFixed64(f uint64) fixed64 {
+	return fixed64(f * fixedFactor)
+}
+
+// float64ToFixed64 converts float64 to fixed64 format.
+func float64ToFixed64(f float64) fixed64 {
+	return fixed64(f * fixedFactor)
+}
+
+// toUint64 converts fixed64 format to uint64.
+func (f64 fixed64) toUint64() uint64 {
+	return uint64(f64) / fixedFactor
+}
+
+// fraction returns the fraction of the fixed64.
+func (f64 fixed64) fraction() fixed64 {
+	return f64 % fixedFactor
+}
+
+// pow2Fixed returns the 2 based pow of the fixed value.
+func (f64 fixed64) pow2Fixed() float64 {
+	return math.Pow(2, float64(f64)/fixedFactor)
 }

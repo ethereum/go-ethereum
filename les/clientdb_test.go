@@ -67,7 +67,7 @@ func TestNodeDB(t *testing.T) {
 			}
 		}
 	}
-	posExp, negExp := 100.1234, 200.5678
+	posExp, negExp := fixed64(1000), fixed64(2000)
 	ndb.setExpiration(posExp, negExp)
 	if pos, neg := ndb.getExpiration(); pos != posExp || neg != negExp {
 		t.Fatalf("Expiration mismatch, want %v / %v, got %v / %v", posExp, negExp, pos, neg)

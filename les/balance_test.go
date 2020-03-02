@@ -25,11 +25,11 @@ import (
 
 type zeroExpCtrl struct{}
 
-func (z zeroExpCtrl) posExpiration(mclock.AbsTime) float64 {
+func (z zeroExpCtrl) posExpiration(mclock.AbsTime) fixed64 {
 	return 0
 }
 
-func (z zeroExpCtrl) negExpiration(mclock.AbsTime) float64 {
+func (z zeroExpCtrl) negExpiration(mclock.AbsTime) fixed64 {
 	return 0
 }
 

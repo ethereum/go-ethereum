@@ -95,10 +95,11 @@ type clientPool struct {
 	disableBias    bool   // Disable connection bias(used in testing)
 
 	// fields in this group are protected by expLock
-	expLock             sync.RWMutex
-	posExpTC, negExpTC  uint64
-	posExp, negExp      float64
-	freeRatioLastUpdate mclock.AbsTime
+	expLock              sync.RWMutex
+	posExpTC, negExpTC   uint64
+	posExp, negExp       fixed64
+	posExpTCi, negExpTCi float64 // already inverted (logMultiplier/time)
+	freeRatioLastUpdate  mclock.AbsTime
 }
 
 // clientPoolPeer represents a client peer in the pool.
@@ -201,7 +202,7 @@ func newClientPool(db ethdb.Database, minCap, freeClientCap uint64, clock mclock
 	// and both of these decay exponentially over time. Delete them if the
 	// value is small enough.
 	ndb.evictCallBack = func(now mclock.AbsTime, neg bool, b tokenBalance) bool {
-		var expiration float64
+		var expiration fixed64
 		if neg {
 			expiration = pool.negExpiration(now)
 		} else {
@@ -292,13 +293,8 @@ func (f *clientPool) updateFreeRatio() {
 	f.averageFreeRatio -= (f.freeRatio - f.averageFreeRatio) * math.Expm1(-float64(dt)/float64(freeRatioTC))
 	f.freeRatioLastUpdate = now
 
-	dt /= mclock.AbsTime(time.Second)
-	if f.posExpTC != 0 {
-		f.posExp += float64(dt) / float64(f.posExpTC) * f.freeRatio
-	}
-	if f.negExpTC != 0 {
-		f.negExp += float64(dt) / float64(f.negExpTC) * f.freeRatio
-	}
+	f.posExp += fixed64(float64(dt) * f.posExpTCi * f.freeRatio)
+	f.negExp += fixed64(float64(dt) * f.negExpTCi * f.freeRatio)
 	f.expLock.Unlock()
 }
 
@@ -311,6 +307,16 @@ func (f *clientPool) setExpirationTCs(pos, neg uint64) {
 
 	f.expLock.Lock()
 	f.posExpTC, f.negExpTC = pos, neg
+	if pos > 0 {
+		f.posExpTCi = fixedFactor / float64(pos*uint64(time.Second))
+	} else {
+		f.posExpTCi = 0
+	}
+	if neg > 0 {
+		f.negExpTCi = fixedFactor / float64(neg*uint64(time.Second))
+	} else {
+		f.negExpTCi = 0
+	}
 	f.expLock.Unlock()
 }
 
@@ -325,7 +331,7 @@ func (f *clientPool) getExpirationTCs() (pos, neg uint64) {
 
 // posExpiration implements expirationController. Expiration happens only when
 // free service is available.
-func (f *clientPool) posExpiration(now mclock.AbsTime) float64 {
+func (f *clientPool) posExpiration(now mclock.AbsTime) fixed64 {
 	f.expLock.RLock()
 	defer f.expLock.RUnlock()
 
@@ -337,12 +343,12 @@ func (f *clientPool) posExpiration(now mclock.AbsTime) float64 {
 		dt = 0
 	}
 	dt /= mclock.AbsTime(time.Second)
-	return f.posExp + float64(dt)/float64(f.posExpTC)*f.freeRatio
+	return f.posExp + fixed64(float64(dt)/float64(f.posExpTC)*f.freeRatio)
 }
 
 // negExpiration implements expirationController. Expiration happens only when
 // free service is available.
-func (f *clientPool) negExpiration(now mclock.AbsTime) float64 {
+func (f *clientPool) negExpiration(now mclock.AbsTime) fixed64 {
 	f.expLock.RLock()
 	defer f.expLock.RUnlock()
 
@@ -354,7 +360,7 @@ func (f *clientPool) negExpiration(now mclock.AbsTime) float64 {
 		dt = 0
 	}
 	dt /= mclock.AbsTime(time.Second)
-	return f.negExp + float64(dt)/float64(f.negExpTC)*f.freeRatio
+	return f.negExp + fixed64(float64(dt)/float64(f.negExpTC)*f.freeRatio)
 }
 
 // totalTokenLimit returns the current token supply limit. Token prices are based
@@ -686,7 +692,7 @@ func (f *clientPool) finalizeBalance(c *clientInfo, now mclock.AbsTime) {
 	for index, value := range []expiredValue{pos, neg} {
 		var (
 			id         []byte
-			expiration float64
+			expiration fixed64
 		)
 		neg := index == 1
 		if !neg {
