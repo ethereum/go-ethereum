@@ -1233,6 +1233,7 @@ func (c *Bor) isValidatorAction(chain consensus.ChainReader, from common.Address
 		}
 	}
 	// @todo only either of proposeState and proposeSpan should pass this check
+	fmt.Println("tx.Data", tx.Data())
 	return _isValidatorAction
 }
 
