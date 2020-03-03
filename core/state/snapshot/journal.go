@@ -108,6 +108,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 		if base.genMarker == nil {
 			base.genMarker = []byte{}
 		}
+		base.genPending = make(chan struct{})
 		base.genAbort = make(chan chan *generatorStats)
 
 		var origin uint64

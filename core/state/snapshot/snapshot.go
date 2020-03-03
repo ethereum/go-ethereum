@@ -164,13 +164,16 @@ type Tree struct {
 // If the snapshot is missing or inconsistent, the entirety is deleted and will
 // be reconstructed from scratch based on the tries in the key-value store, on a
 // background thread.
-func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash) *Tree {
+func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, async bool) *Tree {
 	// Create a new, empty snapshot tree
 	snap := &Tree{
 		diskdb: diskdb,
 		triedb: triedb,
 		cache:  cache,
 		layers: make(map[common.Hash]snapshot),
+	}
+	if !async {
+		defer snap.waitBuild()
 	}
 	// Attempt to load a previously persisted snapshot and rebuild one if failed
 	head, err := loadSnapshot(diskdb, triedb, cache, root)
@@ -185,6 +188,27 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root comm
 		head = head.Parent()
 	}
 	return snap
+}
+
+// waitBuild blocks until the snapshot finishes rebuilding. This method is meant
+// to  be used by tests to ensure we're testing what we believe we are.
+func (t *Tree) waitBuild() {
+	// Find the rebuild termination channel
+	var done chan struct{}
+
+	t.lock.RLock()
+	for _, layer := range t.layers {
+		if layer, ok := layer.(*diskLayer); ok {
+			done = layer.genPending
+			break
+		}
+	}
+	t.lock.RUnlock()
+
+	// Wait until the snapshot is generated
+	if done != nil {
+		<-done
+	}
 }
 
 // Snapshot retrieves a snapshot belonging to the given block root, or nil if no
@@ -477,11 +501,12 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		log.Crit("Failed to write leftover snapshot", "err", err)
 	}
 	res := &diskLayer{
-		root:      bottom.root,
-		cache:     base.cache,
-		diskdb:    base.diskdb,
-		triedb:    base.triedb,
-		genMarker: base.genMarker,
+		root:       bottom.root,
+		cache:      base.cache,
+		diskdb:     base.diskdb,
+		triedb:     base.triedb,
+		genMarker:  base.genMarker,
+		genPending: base.genPending,
 	}
 	// If snapshot generation hasn't finished yet, port over all the starts and
 	// continue where the previous round left off.

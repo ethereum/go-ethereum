@@ -101,12 +101,13 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache i
 	rawdb.WriteSnapshotRoot(diskdb, root)
 
 	base := &diskLayer{
-		diskdb:    diskdb,
-		triedb:    triedb,
-		root:      root,
-		cache:     fastcache.New(cache * 1024 * 1024),
-		genMarker: []byte{}, // Initialized but empty!
-		genAbort:  make(chan chan *generatorStats),
+		diskdb:     diskdb,
+		triedb:     triedb,
+		root:       root,
+		cache:      fastcache.New(cache * 1024 * 1024),
+		genMarker:  []byte{}, // Initialized but empty!
+		genPending: make(chan struct{}),
+		genAbort:   make(chan chan *generatorStats),
 	}
 	go base.generate(&generatorStats{wiping: wiper, start: time.Now()})
 	return base
@@ -252,6 +253,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 
 	dl.lock.Lock()
 	dl.genMarker = nil
+	close(dl.genPending)
 	dl.lock.Unlock()
 
 	// Someone will be looking for us, wait it out
