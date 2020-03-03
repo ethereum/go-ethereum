@@ -171,7 +171,7 @@ func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
 	}
 	size := stat.Size()
 	if size != 64 {
-		return nil, fmt.Errorf("expected 64 hexa characters, got %v", size)
+		return nil, fmt.Errorf("expected 64 bytes, got %v", size)
 	}
 	buf, err := ioutil.ReadFile(file)
 	if err != nil {

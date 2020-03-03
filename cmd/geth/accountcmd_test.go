@@ -128,7 +128,7 @@ func TestAccountImportTooShort(t *testing.T) {
 	geth := runGeth(t, "account", "import", keyfile)
 	defer geth.ExpectExit()
 	geth.Expect(`
-Fatal: Failed to load the private key: expected 64 hexa characters, got 40
+Fatal: Failed to load the private key: expected 64 bytes, got 40
 `)
 }
 
