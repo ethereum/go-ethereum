@@ -2315,7 +2315,7 @@ func TestDeleteCreateRevert(t *testing.T) {
 				// The address 0xAAAAA selfdestructs if called
 				aa: {
 					// Code needs to just selfdestruct
-					Code:    []byte{byte(vm.PC), 0xFF},
+					Code:    []byte{byte(vm.PC), byte(vm.SELFDESTRUCT)},
 					Nonce:   1,
 					Balance: big.NewInt(0),
 				},
@@ -2382,8 +2382,8 @@ func TestDeleteRecreateSlots(t *testing.T) {
 
 		aa        = common.HexToAddress("0x7217d81b76bdd8707601e959454e3d776aee5f43")
 		bb        = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
-		aaStorage = make(map[common.Hash]common.Hash) // Initial storage in AA
-		aaCode    = []byte{byte(vm.PC), 0xFF}         // Code for AA (simple selfdestruct)
+		aaStorage = make(map[common.Hash]common.Hash)          // Initial storage in AA
+		aaCode    = []byte{byte(vm.PC), byte(vm.SELFDESTRUCT)} // Code for AA (simple selfdestruct)
 	)
 	// Populate two slots
 	aaStorage[common.HexToHash("01")] = common.HexToHash("01")
@@ -2506,8 +2506,8 @@ func TestDeleteRecreateAccount(t *testing.T) {
 		funds   = big.NewInt(1000000000)
 
 		aa        = common.HexToAddress("0x7217d81b76bdd8707601e959454e3d776aee5f43")
-		aaStorage = make(map[common.Hash]common.Hash) // Initial storage in AA
-		aaCode    = []byte{byte(vm.PC), 0xFF}         // Code for AA (simple selfdestruct)
+		aaStorage = make(map[common.Hash]common.Hash)          // Initial storage in AA
+		aaCode    = []byte{byte(vm.PC), byte(vm.SELFDESTRUCT)} // Code for AA (simple selfdestruct)
 	)
 	// Populate two slots
 	aaStorage[common.HexToHash("01")] = common.HexToHash("01")

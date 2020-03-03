@@ -67,10 +67,11 @@ type StateDB struct {
 	db   Database
 	trie Trie
 
-	snaps        *snapshot.Tree
-	snap         snapshot.Snapshot
-	snapAccounts map[common.Hash][]byte
-	snapStorage  map[common.Hash]map[common.Hash][]byte
+	snaps         *snapshot.Tree
+	snap          snapshot.Snapshot
+	snapDestructs map[common.Hash]struct{}
+	snapAccounts  map[common.Hash][]byte
+	snapStorage   map[common.Hash]map[common.Hash][]byte
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
 	stateObjects        map[common.Address]*stateObject
@@ -133,6 +134,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
+			sdb.snapDestructs = make(map[common.Hash]struct{})
 			sdb.snapAccounts = make(map[common.Hash][]byte)
 			sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
 		}
@@ -171,8 +173,9 @@ func (s *StateDB) Reset(root common.Hash) error {
 	s.clearJournalAndRefund()
 
 	if s.snaps != nil {
-		s.snapAccounts, s.snapStorage = nil, nil
+		s.snapAccounts, s.snapDestructs, s.snapStorage = nil, nil, nil
 		if s.snap = s.snaps.Snapshot(root); s.snap != nil {
+			s.snapDestructs = make(map[common.Hash]struct{})
 			s.snapAccounts = make(map[common.Hash][]byte)
 			s.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
 		}
@@ -463,15 +466,6 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		panic(fmt.Errorf("can't encode object at %x: %v", addr[:], err))
 	}
 	s.setError(s.trie.TryUpdate(addr[:], data))
-
-	// If state snapshotting is active, cache the data til commit
-	if s.snap != nil {
-		// If the account is an empty resurrection, unmark the storage nil-ness
-		if storage, ok := s.snapStorage[obj.addrHash]; storage == nil && ok {
-			delete(s.snapStorage, obj.addrHash)
-		}
-		s.snapAccounts[obj.addrHash] = snapshot.AccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash)
-	}
 }
 
 // deleteStateObject removes the given object from the state trie.
@@ -483,12 +477,6 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 	// Delete the account from the trie
 	addr := obj.Address()
 	s.setError(s.trie.TryDelete(addr[:]))
-
-	// If state snapshotting is active, cache the data til commit
-	if s.snap != nil {
-		s.snapAccounts[obj.addrHash] = nil // We need to maintain account deletions explicitly
-		s.snapStorage[obj.addrHash] = nil  // We need to maintain storage deletions explicitly
-	}
 }
 
 // getStateObject retrieves a state object given by the address, returning nil if
@@ -737,8 +725,23 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		}
 		if obj.suicided || (deleteEmptyObjects && obj.empty()) {
 			obj.deleted = true
+
+			// If state snapshotting is active, also mark the destruction there.
+			// Note, we can't do this only at the end of a block because multiple
+			// transactions within the same block might self destruct and then
+			// ressurrect an account and the snapshotter needs both events.
+			if s.snap != nil {
+				s.snapDestructs[obj.addrHash] = struct{}{} // We need to maintain account deletions explicitly (will remain set indefinitely)
+				delete(s.snapAccounts, obj.addrHash)       // Clear out any previously updated account data (may be recreated via a ressurrect)
+				delete(s.snapStorage, obj.addrHash)        // Clear out any previously updated storage data (may be recreated via a ressurrect)
+			}
 		} else {
 			obj.finalise()
+
+			// If state snapshotting is active, cache the data til commit
+			if s.snap != nil {
+				s.snapAccounts[obj.addrHash] = snapshot.AccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash)
+			}
 		}
 		s.stateObjectsPending[addr] = struct{}{}
 		s.stateObjectsDirty[addr] = struct{}{}
@@ -842,7 +845,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		}
 		// Only update if there's a state transition (skip empty Clique blocks)
 		if parent := s.snap.Root(); parent != root {
-			if err := s.snaps.Update(root, parent, s.snapAccounts, s.snapStorage); err != nil {
+			if err := s.snaps.Update(root, parent, s.snapDestructs, s.snapAccounts, s.snapStorage); err != nil {
 				log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
 			}
 			if err := s.snaps.Cap(root, 127); err != nil { // Persistent layer is 128th, the last available trie

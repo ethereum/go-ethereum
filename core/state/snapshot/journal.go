@@ -43,6 +43,11 @@ type journalGenerator struct {
 	Storage  uint64
 }
 
+// journalDestruct is an account deletion entry in a diffLayer's disk journal.
+type journalDestruct struct {
+	Hash common.Hash
+}
+
 // journalAccount is an account entry in a diffLayer's disk journal.
 type journalAccount struct {
 	Hash common.Hash
@@ -139,6 +144,14 @@ func loadDiffLayer(parent snapshot, r *rlp.Stream) (snapshot, error) {
 		}
 		return nil, fmt.Errorf("load diff root: %v", err)
 	}
+	var destructs []journalDestruct
+	if err := r.Decode(&destructs); err != nil {
+		return nil, fmt.Errorf("load diff destructs: %v", err)
+	}
+	destructSet := make(map[common.Hash]struct{})
+	for _, entry := range destructs {
+		destructSet[entry.Hash] = struct{}{}
+	}
 	var accounts []journalAccount
 	if err := r.Decode(&accounts); err != nil {
 		return nil, fmt.Errorf("load diff accounts: %v", err)
@@ -159,7 +172,7 @@ func loadDiffLayer(parent snapshot, r *rlp.Stream) (snapshot, error) {
 		}
 		storageData[entry.Hash] = slots
 	}
-	return loadDiffLayer(newDiffLayer(parent, root, accountData, storageData), r)
+	return loadDiffLayer(newDiffLayer(parent, root, destructSet, accountData, storageData), r)
 }
 
 // Journal writes the persistent layer generator stats into a buffer to be stored
@@ -216,6 +229,13 @@ func (dl *diffLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	}
 	// Everything below was journalled, persist this layer too
 	if err := rlp.Encode(buffer, dl.root); err != nil {
+		return common.Hash{}, err
+	}
+	destructs := make([]journalDestruct, 0, len(dl.destructSet))
+	for hash := range dl.destructSet {
+		destructs = append(destructs, journalDestruct{Hash: hash})
+	}
+	if err := rlp.Encode(buffer, destructs); err != nil {
 		return common.Hash{}, err
 	}
 	accounts := make([]journalAccount, 0, len(dl.accountData))

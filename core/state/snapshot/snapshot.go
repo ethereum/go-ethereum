@@ -125,7 +125,7 @@ type snapshot interface {
 	// the specified data items.
 	//
 	// Note, the maps are retained by the method to avoid copying everything.
-	Update(blockRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer
+	Update(blockRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer
 
 	// Journal commits an entire diff hierarchy to disk into a single journal entry.
 	// This is meant to be used during shutdown to persist the snapshot without
@@ -222,7 +222,7 @@ func (t *Tree) Snapshot(blockRoot common.Hash) Snapshot {
 
 // Update adds a new snapshot into the tree, if that can be linked to an existing
 // old parent. It is disallowed to insert a disk layer (the origin of all).
-func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error {
+func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error {
 	// Reject noop updates to avoid self-loops in the snapshot tree. This is a
 	// special case that can only happen for Clique networks where empty blocks
 	// don't modify the state (0 block subsidy).
@@ -237,7 +237,7 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, accounts ma
 	if parent == nil {
 		return fmt.Errorf("parent [%#x] snapshot missing", parentRoot)
 	}
-	snap := parent.Update(blockRoot, accounts, storage)
+	snap := parent.Update(blockRoot, destructs, accounts, storage)
 
 	// Save the new snapshot for later
 	t.lock.Lock()
@@ -425,40 +425,43 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	base.stale = true
 	base.lock.Unlock()
 
-	// Push all the accounts into the database
+	// Destroy all the destructed accounts from the database
+	for hash := range bottom.destructSet {
+		// Skip any account not covered yet by the snapshot
+		if base.genMarker != nil && bytes.Compare(hash[:], base.genMarker) > 0 {
+			continue
+		}
+		// Remove all storage slots
+		rawdb.DeleteAccountSnapshot(batch, hash)
+		base.cache.Set(hash[:], nil)
+
+		it := rawdb.IterateStorageSnapshots(base.diskdb, hash)
+		for it.Next() {
+			if key := it.Key(); len(key) == 65 { // TODO(karalabe): Yuck, we should move this into the iterator
+				batch.Delete(key)
+				base.cache.Del(key[1:])
+
+				snapshotFlushStorageItemMeter.Mark(1)
+			}
+		}
+		it.Release()
+	}
+	// Push all updated accounts into the database
 	for hash, data := range bottom.accountData {
 		// Skip any account not covered yet by the snapshot
 		if base.genMarker != nil && bytes.Compare(hash[:], base.genMarker) > 0 {
 			continue
 		}
-		if len(data) > 0 {
-			// Account was updated, push to disk
-			rawdb.WriteAccountSnapshot(batch, hash, data)
-			base.cache.Set(hash[:], data)
-			snapshotCleanAccountWriteMeter.Mark(int64(len(data)))
+		// Push the account to disk
+		rawdb.WriteAccountSnapshot(batch, hash, data)
+		base.cache.Set(hash[:], data)
+		snapshotCleanAccountWriteMeter.Mark(int64(len(data)))
 
-			if batch.ValueSize() > ethdb.IdealBatchSize {
-				if err := batch.Write(); err != nil {
-					log.Crit("Failed to write account snapshot", "err", err)
-				}
-				batch.Reset()
+		if batch.ValueSize() > ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				log.Crit("Failed to write account snapshot", "err", err)
 			}
-		} else {
-			// Account was deleted, remove all storage slots too
-			rawdb.DeleteAccountSnapshot(batch, hash)
-			base.cache.Set(hash[:], nil)
-
-			it := rawdb.IterateStorageSnapshots(base.diskdb, hash)
-			for it.Next() {
-				if key := it.Key(); len(key) == 65 { // TODO(karalabe): Yuck, we should move this into the iterator
-					batch.Delete(key)
-					base.cache.Del(key[1:])
-
-					snapshotFlushStorageItemMeter.Mark(1)
-					snapshotFlushStorageSizeMeter.Mark(int64(len(data)))
-				}
-			}
-			it.Release()
+			batch.Reset()
 		}
 		snapshotFlushAccountItemMeter.Mark(1)
 		snapshotFlushAccountSizeMeter.Mark(int64(len(data)))

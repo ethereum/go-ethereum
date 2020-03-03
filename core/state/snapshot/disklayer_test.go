@@ -116,13 +116,14 @@ func TestDiskMerge(t *testing.T) {
 	base.Storage(conNukeCache, conNukeCacheSlot)
 
 	// Modify or delete some accounts, flatten everything onto disk
-	if err := snaps.Update(diffRoot, baseRoot, map[common.Hash][]byte{
-		accModNoCache:  reverse(accModNoCache[:]),
-		accModCache:    reverse(accModCache[:]),
-		accDelNoCache:  nil,
-		accDelCache:    nil,
-		conNukeNoCache: nil,
-		conNukeCache:   nil,
+	if err := snaps.Update(diffRoot, baseRoot, map[common.Hash]struct{}{
+		accDelNoCache:  struct{}{},
+		accDelCache:    struct{}{},
+		conNukeNoCache: struct{}{},
+		conNukeCache:   struct{}{},
+	}, map[common.Hash][]byte{
+		accModNoCache: reverse(accModNoCache[:]),
+		accModCache:   reverse(accModCache[:]),
 	}, map[common.Hash]map[common.Hash][]byte{
 		conModNoCache: {conModNoCacheSlot: reverse(conModNoCacheSlot[:])},
 		conModCache:   {conModCacheSlot: reverse(conModCacheSlot[:])},
@@ -338,13 +339,14 @@ func TestDiskPartialMerge(t *testing.T) {
 		assertStorage(conNukeCache, conNukeCacheSlot, conNukeCacheSlot[:])
 
 		// Modify or delete some accounts, flatten everything onto disk
-		if err := snaps.Update(diffRoot, baseRoot, map[common.Hash][]byte{
-			accModNoCache:  reverse(accModNoCache[:]),
-			accModCache:    reverse(accModCache[:]),
-			accDelNoCache:  nil,
-			accDelCache:    nil,
-			conNukeNoCache: nil,
-			conNukeCache:   nil,
+		if err := snaps.Update(diffRoot, baseRoot, map[common.Hash]struct{}{
+			accDelNoCache:  struct{}{},
+			accDelCache:    struct{}{},
+			conNukeNoCache: struct{}{},
+			conNukeCache:   struct{}{},
+		}, map[common.Hash][]byte{
+			accModNoCache: reverse(accModNoCache[:]),
+			accModCache:   reverse(accModCache[:]),
 		}, map[common.Hash]map[common.Hash][]byte{
 			conModNoCache: {conModNoCacheSlot: reverse(conModNoCacheSlot[:])},
 			conModCache:   {conModCacheSlot: reverse(conModCacheSlot[:])},
