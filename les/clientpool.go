@@ -336,14 +336,13 @@ func (f *clientPool) posExpiration(now mclock.AbsTime) fixed64 {
 	defer f.expLock.RUnlock()
 
 	if f.posExpTC == 0 {
-		return 0
+		return f.posExp
 	}
 	dt := now - f.freeRatioLastUpdate
 	if dt < 0 {
 		dt = 0
 	}
-	dt /= mclock.AbsTime(time.Second)
-	return f.posExp + fixed64(float64(dt)/float64(f.posExpTC)*f.freeRatio)
+	return f.posExp + fixed64(float64(dt)*f.posExpTCi*f.freeRatio)
 }
 
 // negExpiration implements expirationController. Expiration happens only when
@@ -353,14 +352,13 @@ func (f *clientPool) negExpiration(now mclock.AbsTime) fixed64 {
 	defer f.expLock.RUnlock()
 
 	if f.negExpTC == 0 {
-		return 0
+		return f.negExp
 	}
 	dt := now - f.freeRatioLastUpdate
 	if dt < 0 {
 		dt = 0
 	}
-	dt /= mclock.AbsTime(time.Second)
-	return f.negExp + fixed64(float64(dt)/float64(f.negExpTC)*f.freeRatio)
+	return f.negExp + fixed64(float64(dt)*f.negExpTCi*f.freeRatio)
 }
 
 // totalTokenLimit returns the current token supply limit. Token prices are based
