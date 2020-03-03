@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -164,12 +165,17 @@ func HexToECDSA(hexkey string) (*ecdsa.PrivateKey, error) {
 
 // LoadECDSA loads a secp256k1 private key from the given file.
 func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
-	buf, err := ioutil.ReadFile(file)
+	stat, err := os.Stat(file)
 	if err != nil {
 		return nil, err
 	}
-	if len(buf) != 64 {
-		return nil, fmt.Errorf("expected 64 hexa characters, got %v", len(buf))
+	size := stat.Size()
+	if size != 64 {
+		return nil, fmt.Errorf("expected 64 hexa characters, got %v", size)
+	}
+	buf, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, err
 	}
 
 	key, err := hex.DecodeString(string(buf))
