@@ -305,6 +305,10 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		if interrupt != nil {
 			atomic.StoreInt32(interrupt, s)
 		}
+		// Disable empty mining solution precommit if required.
+		if !noempty && w.config.NoEmptyPrecommit {
+			noempty = true
+		}
 		interrupt = new(int32)
 		w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}
 		timer.Reset(recommit)
@@ -922,8 +926,10 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		log.Error("Failed to fetch pending transactions", "err", err)
 		return
 	}
-	// Short circuit if there is no available pending transactions
-	if len(pending) == 0 {
+	// Short circuit if there is no available pending transactions.
+	// But if we disable empty precommit already, ignore it. Since
+	// empty block is necessary to keep the liveness of the network.
+	if len(pending) == 0 && !w.config.NoEmptyPrecommit {
 		w.updateSnapshot()
 		return
 	}

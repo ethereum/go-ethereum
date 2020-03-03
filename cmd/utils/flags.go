@@ -483,6 +483,10 @@ var (
 		Name:  "miner.noverify",
 		Usage: "Disable remote sealing verification",
 	}
+	MinerNoEmptyPrecommitFlag = cli.BoolFlag{
+		Name:  "miner.noempty-precommit",
+		Usage: "Disable empty mining solution precommit",
+	}
 	// Account settings
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
@@ -1358,6 +1362,9 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	}
 	if ctx.GlobalIsSet(MinerNoVerfiyFlag.Name) {
 		cfg.Noverify = ctx.Bool(MinerNoVerfiyFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerNoEmptyPrecommitFlag.Name) {
+		cfg.NoEmptyPrecommit = ctx.Bool(MinerNoEmptyPrecommitFlag.Name)
 	}
 }
 
