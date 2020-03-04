@@ -534,7 +534,7 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 		}
 	}
 	// Wait until the test timeout passes to ensure proper cleanup
-	time.Sleep(syncChallengeTimeout + 100*time.Millisecond)
+	time.Sleep(syncChallengeTimeout + 300*time.Millisecond)
 
 	// Verify that the remote peer is maintained or dropped
 	if drop {
