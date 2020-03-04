@@ -120,7 +120,7 @@ const (
 // bor acts as a way to be able to type cast consensus.Engine;
 // since importing "github.com/maticnetwork/bor/consensus/bor" results in a cyclic dependency
 type bor interface {
-	isValidatorAction(chain consensus.ChainReader, from common.Address, tx *types.Transaction) bool
+	IsValidatorAction(chain consensus.ChainReader, from common.Address, tx *types.Transaction) bool
 }
 
 // blockChain provides the state of blockchain and current gas limit to do
@@ -537,7 +537,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// Drop non-local transactions under our own minimal accepted gas price
 	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
 	if !local &&
-		!pool.chain.Engine().(bor).isValidatorAction(pool.chain.(consensus.ChainReader), from, tx) &&
+		!pool.chain.Engine().(bor).IsValidatorAction(pool.chain.(consensus.ChainReader), from, tx) &&
 		pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
 		return ErrUnderpriced
 	}
