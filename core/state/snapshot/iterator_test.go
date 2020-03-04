@@ -130,8 +130,12 @@ func verifyIterator(t *testing.T, expCount int, it AccountIterator) {
 		last  = common.Hash{}
 	)
 	for it.Next() {
-		if hash := it.Hash(); bytes.Compare(last[:], hash[:]) >= 0 {
+		hash := it.Hash()
+		if bytes.Compare(last[:], hash[:]) >= 0 {
 			t.Errorf("wrong order: %x >= %x", last, hash)
+		}
+		if it.Account() == nil {
+			t.Errorf("iterator returned nil-value for hash %x", hash)
 		}
 		count++
 	}
@@ -375,6 +379,53 @@ func TestAccountIteratorSeek(t *testing.T) {
 	it, _ = snaps.AccountIterator(common.HexToHash("0x04"), common.HexToHash("0xff"))
 	defer it.Release()
 	verifyIterator(t, 0, it) // expected: nothing
+}
+
+// TestIteratorDeletions tests that the iterator behaves correct when there are
+// deleted accounts (where the Account() value is nil). The iterator
+// should not output any accounts or nil-values for those cases.
+func TestIteratorDeletions(t *testing.T) {
+	// Create an empty base layer and a snapshot tree out of it
+	base := &diskLayer{
+		diskdb: rawdb.NewMemoryDatabase(),
+		root:   common.HexToHash("0x01"),
+		cache:  fastcache.New(1024 * 500),
+	}
+	snaps := &Tree{
+		layers: map[common.Hash]snapshot{
+			base.root: base,
+		},
+	}
+	// Stack three diff layers on top with various overlaps
+	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"),
+		randomAccountSet("0x11", "0x22", "0x33"), nil)
+
+	set := randomAccountSet("0x11", "0x22", "0x33")
+	deleted := common.HexToHash("0x22")
+	set[deleted] = nil
+	snaps.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), set, nil)
+
+	snaps.Update(common.HexToHash("0x04"), common.HexToHash("0x03"),
+		randomAccountSet("0x33", "0x44", "0x55"), nil)
+
+	// The output should be 11,33,44,55
+	it, _ := snaps.AccountIterator(common.HexToHash("0x04"), common.Hash{})
+	// Do a quick check
+	verifyIterator(t, 4, it)
+	it.Release()
+
+	// And a more detailed verification that we indeed do not see '0x22'
+	it, _ = snaps.AccountIterator(common.HexToHash("0x04"), common.Hash{})
+	defer it.Release()
+	for it.Next() {
+		hash := it.Hash()
+		if it.Account() == nil {
+			t.Errorf("iterator returned nil-value for hash %x", hash)
+		}
+		if hash == deleted {
+			t.Errorf("expected deleted elem %x to not be returned by iterator", deleted)
+		}
+	}
 }
 
 // BenchmarkAccountIteratorTraversal is a bit a bit notorious -- all layers contain the

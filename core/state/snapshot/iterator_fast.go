@@ -164,17 +164,35 @@ func (fi *fastAccountIterator) Next() bool {
 		fi.curAccount = fi.iterators[0].it.Account()
 		if innerErr := fi.iterators[0].it.Error(); innerErr != nil {
 			fi.fail = innerErr
+			return false
 		}
-		return fi.Error() == nil
+		if fi.curAccount != nil {
+			return true
+		}
+		// Implicit else: we've hit a nil-account, and need to fall through to the
+		// loop below to land on something non-nil
 	}
-	if !fi.next(0) {
-		return false
+	// If an account is deleted in one of the layers, the key will still be there,
+	// but the actual value will be nil. However, the iterator should not
+	// export nil-values (but instead simply omit the key), so we need to loop
+	// here until we either
+	//  - get a non-nil value,
+	//  - hit an error,
+	//  - or exhaust the iterator
+	for {
+		if !fi.next(0) {
+			return false // exhausted
+		}
+		fi.curAccount = fi.iterators[0].it.Account()
+		if innerErr := fi.iterators[0].it.Error(); innerErr != nil {
+			fi.fail = innerErr
+			return false // error
+		}
+		if fi.curAccount != nil {
+			break // non-nil value found
+		}
 	}
-	fi.curAccount = fi.iterators[0].it.Account()
-	if innerErr := fi.iterators[0].it.Error(); innerErr != nil {
-		fi.fail = innerErr
-	}
-	return fi.Error() == nil
+	return true
 }
 
 // next handles the next operation internally and should be invoked when we know
