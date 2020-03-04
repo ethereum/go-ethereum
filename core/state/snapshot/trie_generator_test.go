@@ -18,6 +18,8 @@ package snapshot
 
 import (
 	"encoding/binary"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/trie"
 	"math/rand"
 	"testing"
 
@@ -228,4 +230,25 @@ func BenchmarkTrieGeneration(b *testing.B) {
 			}
 		})
 	})
+}
+
+func TestStackVsStandard(t *testing.T) {
+	type kv struct {
+		key   string
+		value string
+	}
+	vals := []kv{
+		{key: "04f0860f1d82f4f0e61a03038cb0ffc08d15e22cb3d91d902c8acc32fa709b95", value: "f8440180a08e762c2b29fb1357d0794271a4dbe16167d8b28f1792ad9f78cad08206816127a010b37de11f39e0a372615c70e1d4d7c613937e8f61823d59be9bea62112e175c"},
+		{key: "04f0862f9177d381deeed0e6af3b0751f3cce6887746ba13cf41aa1c4dbf6591", value: "f8440180a014baf10561054a68fe522434b4d4c25e1b377e745bf1d676afa71bc891cacf9ba0debc58a981ca4f637e282ab5985d169a0237d03ea9336bc3434d9dce79e62ab3"},
+		{key: "04f0a6c0cb97e624bcb799f7d88717fe7fe4894877a8987a27d4792c36a2833e", value: "f8440180a0880595df1b6b3923e8036106cb641aae6b1249faa02d3217da8c556c0fff172ba06569f607421e3779a571977d84910e1177059946e0a064e487b1502e6a282623"},
+	}
+	stackT := trie.NewStackTrie()
+	stdT, _ := trie.New(common.Hash{}, trie.NewDatabase(memorydb.New()))
+	for _, kv := range vals {
+		stackT.TryUpdate(common.FromHex(kv.key), common.FromHex(kv.value))
+		stdT.TryUpdate(common.FromHex(kv.key), common.FromHex(kv.value))
+	}
+	if got, exp := stackT.Hash(), stdT.Hash(); got != exp {
+		t.Errorf("Hash mismatch, got %x, exp %x", got, exp)
+	}
 }

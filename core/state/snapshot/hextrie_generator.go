@@ -17,10 +17,13 @@
 package snapshot
 
 import (
+	"sync"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
-	"sync"
 )
 
 type leaf struct {
@@ -32,7 +35,8 @@ type trieGeneratorFn func(in chan (leaf), out chan (common.Hash))
 
 // GenerateTrieRoot takes an account iterator and reproduces the root hash.
 func GenerateTrieRoot(it AccountIterator) common.Hash {
-	return generateTrieRoot(it, StackGenerate)
+	//return generateTrieRoot(it, StackGenerate)
+	return generateTrieRoot(it, StdGenerate)
 }
 
 func generateTrieRoot(it AccountIterator, generatorFn trieGeneratorFn) common.Hash {
@@ -47,11 +51,24 @@ func generateTrieRoot(it AccountIterator, generatorFn trieGeneratorFn) common.Ha
 		wg.Done()
 	}()
 	// Feed leaves
+	start := time.Now()
+	logged := time.Now()
+	accounts := 0
 	for it.Next() {
-		in <- leaf{it.Hash(), it.Account()}
+		slimData := it.Account()
+		fullData := SlimToFull(slimData)
+		l := leaf{it.Hash(), fullData}
+		in <- l
+		if time.Since(logged) > 8*time.Second {
+			log.Info("Generating trie hash from snapshot",
+				"at", l.key, "accounts", accounts, "elapsed", time.Since(start))
+			logged = time.Now()
+		}
+		accounts++
 	}
 	close(in)
 	result := <-out
+	log.Info("Generated trie hash from snapshot", "accounts", accounts, "elapsed", time.Since(start))
 	wg.Wait()
 	return result
 }
