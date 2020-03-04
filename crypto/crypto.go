@@ -17,6 +17,7 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -178,15 +179,12 @@ func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Check line ending
-	maybeLineEnding := buf[64:]
-	for _, ch := range maybeLineEnding {
-		if ch != '\n' && ch != '\r' {
-			return nil, fmt.Errorf("expected 64 bytes, got %v", size)
-		}
+	buf = bytes.TrimSpace(buf)
+	if len(buf) != 64 {
+		return nil, fmt.Errorf("expected 64 bytes, got %v", len(buf))
 	}
 
-	key, err := hex.DecodeString(string(buf[:64]))
+	key, err := hex.DecodeString(string(buf))
 	if err != nil {
 		return nil, err
 	}
