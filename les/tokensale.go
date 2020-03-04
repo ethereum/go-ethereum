@@ -19,7 +19,6 @@ package les
 import (
 	"encoding/binary"
 	"fmt"
-	"io"
 	"math"
 	"strconv"
 	"sync"
@@ -41,8 +40,8 @@ const (
 // payment technologies
 type paymentReceiver interface {
 	info() keyValueList
-	receivePayment(from enode.ID, proofOfPayment, oldMeta []byte) (value uint64, newMeta []byte, err error)
-	requestPayment(from enode.ID, value uint64, meta []byte) uint64
+	receivePayment(from enode.ID, proofOfPayment []byte) (value uint64, err error)
+	requestPayment(from enode.ID, value uint64) uint64
 }
 
 // tokenSale handles client balance deposits, conversion to and from service tokens
@@ -401,10 +400,8 @@ func (t *tokenSale) connection(id enode.ID, freeID string, requestedCapacity uin
 	tokensMissing, availableCapacity, err = t.clientPool.setCapacityLocked(id, freeID, requestedCapacity, stayConnected, setCap)
 	pb := t.clientPool.getPosBalance(id)
 	tokenBalance = pb.value.value(t.clientPool.posExpiration(mclock.Now()))
-	var meta tokenSaleMeta
-	if err := rlp.DecodeBytes([]byte(pb.meta), &meta); err == nil {
-		pcBalance = meta.pcBalance
-	}
+	cb := t.clientPool.ndb.getCurrencyBalance(id)
+	pcBalance = cb.amount
 	if tokensMissing == 0 {
 		return
 	}
@@ -440,7 +437,7 @@ func (t *tokenSale) connection(id enode.ID, freeID string, requestedCapacity uin
 		if rec, ok := t.receivers[recID]; !ok || pcMissing == math.MaxUint64 {
 			paymentRequired[i] = math.MaxUint64
 		} else {
-			paymentRequired[i] = rec.requestPayment(id, pcMissing, meta.receiverMeta[recID])
+			paymentRequired[i] = rec.requestPayment(id, pcMissing)
 		}
 	}
 	return
@@ -451,24 +448,19 @@ func (t *tokenSale) deposit(id enode.ID, paymentModule string, proofOfPayment []
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	pb := t.clientPool.getPosBalance(id)
-	var meta tokenSaleMeta
-	if err := rlp.DecodeBytes([]byte(pb.meta), &meta); err == nil {
-		pcBalance = meta.pcBalance
-	}
-
+	cb := t.clientPool.ndb.getCurrencyBalance(id)
+	pcBalance = cb.amount
 	pm := t.receivers[paymentModule]
 	if pm == nil {
 		return 0, pcBalance, fmt.Errorf("Unknown payment receiver '%s'", paymentModule)
 	}
-	pcValue, meta.receiverMeta[paymentModule], err = pm.receivePayment(id, proofOfPayment, meta.receiverMeta[paymentModule])
+	pcValue, err = pm.receivePayment(id, proofOfPayment)
 	if err != nil {
 		return 0, pcBalance, err
 	}
 	pcBalance += pcValue
-	meta.pcBalance = pcBalance
-	metaEnc, _ := rlp.EncodeToBytes(&meta)
-	t.clientPool.addBalance(id, 0, string(metaEnc))
+	cb.amount = pcBalance
+	t.clientPool.ndb.setCurrencyBalance(id, cb)
 	return
 }
 
@@ -491,10 +483,8 @@ func (t *tokenSale) buyTokens(id enode.ID, maxSpend, minReceive uint64, relative
 
 	pb := t.clientPool.getPosBalance(id)
 	tokenBalance = pb.value.value(t.clientPool.posExpiration(mclock.Now()))
-	var meta tokenSaleMeta
-	if err := rlp.DecodeBytes([]byte(pb.meta), &meta); err == nil {
-		pcBalance = meta.pcBalance
-	}
+	cb := t.clientPool.ndb.getCurrencyBalance(id)
+	pcBalance = cb.amount
 	if relative {
 		if pcBalance > maxSpend {
 			maxSpend = pcBalance - maxSpend
@@ -526,10 +516,10 @@ func (t *tokenSale) buyTokens(id enode.ID, maxSpend, minReceive uint64, relative
 	}
 	if success {
 		pcBalance -= spend
+		cb.amount = pcBalance
 		tokenBalance += receive
-		meta.pcBalance = pcBalance
-		metaEnc, _ := rlp.EncodeToBytes(&meta)
-		t.clientPool.addBalance(id, int64(receive), string(metaEnc))
+		t.clientPool.ndb.setCurrencyBalance(id, cb)
+		t.clientPool.addBalance(id, int64(receive))
 	}
 	return
 }
@@ -542,10 +532,8 @@ func (t *tokenSale) sellTokens(id enode.ID, maxSell, minRefund uint64, relative,
 
 	pb := t.clientPool.getPosBalance(id)
 	tokenBalance = pb.value.value(t.clientPool.posExpiration(mclock.Now()))
-	var meta tokenSaleMeta
-	if err := rlp.DecodeBytes([]byte(pb.meta), &meta); err == nil {
-		pcBalance = meta.pcBalance
-	}
+	cb := t.clientPool.ndb.getCurrencyBalance(id)
+	pcBalance = cb.amount
 	if relative {
 		if pcBalance < minRefund {
 			minRefund -= pcBalance
@@ -580,9 +568,9 @@ func (t *tokenSale) sellTokens(id enode.ID, maxSell, minRefund uint64, relative,
 	if success {
 		pcBalance += refund
 		tokenBalance -= sell
-		meta.pcBalance = pcBalance
-		metaEnc, _ := rlp.EncodeToBytes(&meta)
-		t.clientPool.addBalance(id, -int64(sell), string(metaEnc))
+		cb.amount = pcBalance
+		t.clientPool.ndb.setCurrencyBalance(id, cb)
+		t.clientPool.addBalance(id, -int64(sell))
 	}
 	return
 }
@@ -593,12 +581,8 @@ func (t *tokenSale) getBalance(id enode.ID) (pcBalance, tokenBalance uint64) {
 	defer t.lock.Unlock()
 
 	pb := t.clientPool.getPosBalance(id)
-	tokenBalance = pb.value.value(t.clientPool.posExpiration(mclock.Now()))
-	var meta tokenSaleMeta
-	if err := rlp.DecodeBytes([]byte(pb.meta), &meta); err == nil {
-		pcBalance = meta.pcBalance
-	}
-	return
+	cb := t.clientPool.ndb.getCurrencyBalance(id)
+	return pb.value.value(t.clientPool.posExpiration(mclock.Now())), cb.amount
 }
 
 // info returns general information about the server, including version info of the
@@ -624,65 +608,6 @@ func (t *tokenSale) receiverInfo(receiverIDs []string) []keyValueList {
 		}
 	}
 	return res
-}
-
-// tokenSaleMeta is the "meta" field used by the lespay token sale module. It is
-// attached to token balances and it includes the permanent balance of the client
-// nominated in the server's preferred currency and the meta fields provided by
-// the used payment receivers.
-type tokenSaleMeta struct {
-	pcBalance    uint64
-	receiverMeta map[string][]byte
-}
-
-// receiverMetaEnc is used for easy RLP encoding/decoding
-type receiverMetaEnc struct {
-	Id   string
-	Meta []byte
-}
-
-// tokenSaleMetaEnc is used for easy RLP encoding/decoding
-type tokenSaleMetaEnc struct {
-	Id        string
-	Version   uint
-	PcBalance uint64
-	Receivers []receiverMetaEnc
-}
-
-// EncodeRLP implements rlp.Encoder
-func (t *tokenSaleMeta) EncodeRLP(w io.Writer) error {
-	receivers := make([]receiverMetaEnc, len(t.receiverMeta))
-	i := 0
-	for id, meta := range t.receiverMeta {
-		receivers[i] = receiverMetaEnc{id, meta}
-		i++
-	}
-	return rlp.Encode(w, tokenSaleMetaEnc{
-		Id:        "tokenSale",
-		Version:   1,
-		PcBalance: t.pcBalance,
-		Receivers: receivers,
-	})
-}
-
-// DecodeRLP implements rlp.Decoder
-func (t *tokenSaleMeta) DecodeRLP(s *rlp.Stream) error {
-	if t.receiverMeta == nil {
-		t.receiverMeta = make(map[string][]byte)
-	}
-	var e tokenSaleMetaEnc
-	if err := s.Decode(&e); err != nil {
-		return err
-	}
-	if e.Id != "tokenSale" || e.Version != 1 {
-		return fmt.Errorf("Unknown balance meta format '%s' version %d", e.Id, e.Version)
-	}
-	t.receiverMeta = make(map[string][]byte)
-	t.pcBalance = e.PcBalance
-	for _, r := range e.Receivers {
-		t.receiverMeta[r.Id] = r.Meta
-	}
-	return nil
 }
 
 const (
@@ -853,7 +778,7 @@ func (t testReceiver) info() keyValueList {
 
 // receivePayment implements paymentReceiver. proofOfPayment is a base 10 ascii number
 // which is credited to the sender's account without any further conditions.
-func (t testReceiver) receivePayment(from enode.ID, proofOfPayment, oldMeta []byte) (value uint64, newMeta []byte, err error) {
+func (t testReceiver) receivePayment(from enode.ID, proofOfPayment []byte) (value uint64, err error) {
 	if len(proofOfPayment) > 8 {
 		err = fmt.Errorf("proof of payment is too long; max 8 bytes long big endian integer expected")
 		return
@@ -865,6 +790,6 @@ func (t testReceiver) receivePayment(from enode.ID, proofOfPayment, oldMeta []by
 }
 
 // requestPayment implements paymentReceiver
-func (t testReceiver) requestPayment(from enode.ID, value uint64, meta []byte) uint64 {
+func (t testReceiver) requestPayment(from enode.ID, value uint64) uint64 {
 	return value
 }

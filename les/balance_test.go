@@ -25,11 +25,11 @@ import (
 
 type zeroExpCtrl struct{}
 
-func (z zeroExpCtrl) posExpiration(mclock.AbsTime) uint64 {
+func (z zeroExpCtrl) posExpiration(mclock.AbsTime) fixed64 {
 	return 0
 }
 
-func (z zeroExpCtrl) negExpiration(mclock.AbsTime) uint64 {
+func (z zeroExpCtrl) negExpiration(mclock.AbsTime) fixed64 {
 	return 0
 }
 
@@ -70,8 +70,7 @@ func TestBalanceTimeCost(t *testing.T) {
 	)
 	tracker.init(clock, 1000)
 	defer tracker.stop(clock.Now())
-	tracker.setFactors(false, 1, 1)
-	tracker.setFactors(true, 1, 1)
+	tracker.setFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
 	tracker.setBalance(expval(uint64(time.Minute)), expval(0)) // 1 minute time allowance
 
@@ -114,8 +113,7 @@ func TestBalanceReqCost(t *testing.T) {
 	)
 	tracker.init(clock, 1000)
 	defer tracker.stop(clock.Now())
-	tracker.setFactors(false, 1, 1)
-	tracker.setFactors(true, 1, 1)
+	tracker.setFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
 	tracker.setBalance(expval(uint64(time.Minute)), expval(0)) // 1 minute time serving time allowance
 	var inputs = []struct {
@@ -146,8 +144,7 @@ func TestBalanceToPriority(t *testing.T) {
 	)
 	tracker.init(clock, 1000) // cap = 1000
 	defer tracker.stop(clock.Now())
-	tracker.setFactors(false, 1, 1)
-	tracker.setFactors(true, 1, 1)
+	tracker.setFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
 	var inputs = []struct {
 		pos      uint64
@@ -175,8 +172,7 @@ func TestEstimatedPriority(t *testing.T) {
 	)
 	tracker.init(clock, 1000000000) // cap = 1000,000,000
 	defer tracker.stop(clock.Now())
-	tracker.setFactors(false, 1, 1)
-	tracker.setFactors(true, 1, 1)
+	tracker.setFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
 	tracker.setBalance(expval(uint64(time.Minute)), expval(0))
 	var inputs = []struct {
@@ -219,8 +215,7 @@ func TestCallbackChecking(t *testing.T) {
 	)
 	tracker.init(clock, 1000000) // cap = 1000,000
 	defer tracker.stop(clock.Now())
-	tracker.setFactors(false, 1, 1)
-	tracker.setFactors(true, 1, 1)
+	tracker.setFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
 	var inputs = []struct {
 		priority int64
@@ -246,8 +241,7 @@ func TestCallback(t *testing.T) {
 	)
 	tracker.init(clock, 1000) // cap = 1000
 	defer tracker.stop(clock.Now())
-	tracker.setFactors(false, 1, 1)
-	tracker.setFactors(true, 1, 1)
+	tracker.setFactors(priceFactors{1, 0, 1}, priceFactors{1, 0, 1})
 
 	callCh := make(chan struct{}, 1)
 	tracker.setBalance(expval(uint64(time.Minute)), expval(0))
