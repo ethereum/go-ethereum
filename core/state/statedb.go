@@ -595,6 +595,9 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 	if prev != nil {
 		newObj.setBalance(prev.data.Balance)
 	}
+	if s.snap != nil && prev != nil {
+		s.snapDestructs[prev.addrHash] = struct{}{}
+	}
 }
 
 func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) error {
@@ -855,7 +858,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 127, "err", err)
 			}
 		}
-		s.snap, s.snapAccounts, s.snapStorage = nil, nil, nil
+		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 	}
 	return root, err
 }
