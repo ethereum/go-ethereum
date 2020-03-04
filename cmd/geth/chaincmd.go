@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -189,6 +190,22 @@ Use "ethereum dump 0" to dump the genesis block.`,
 		Action:    utils.MigrateFlags(inspect),
 		Name:      "inspect",
 		Usage:     "Inspect the storage size for each type of data in the database",
+		ArgsUsage: " ",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.AncientFlag,
+			utils.CacheFlag,
+			utils.TestnetFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.SyncModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
+	}
+	generateTrieCommand = cli.Command{
+		Action:    utils.MigrateFlags(snapToHash),
+		Name:      "snaphash",
+		Usage:     "Calculate the trie root hash from the snapshot db",
 		ArgsUsage: " ",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
@@ -574,6 +591,40 @@ func inspect(ctx *cli.Context) error {
 	defer chainDb.Close()
 
 	return rawdb.InspectDatabase(chainDb)
+}
+
+func snapToHash(ctx *cli.Context) error {
+	node, _ := makeConfigNode(ctx)
+	chain, chainDb := utils.MakeChain(ctx, node)
+
+	defer func() {
+		node.Close()
+		chain.Stop()
+		chainDb.Close()
+	}()
+
+	snapTree := chain.Snapshot()
+	if snapTree == nil {
+		return fmt.Errorf("No snapshot tree available")
+	}
+	block := chain.CurrentBlock()
+	if block == nil {
+		return fmt.Errorf("no blocks present")
+	}
+	root := block.Root()
+	it, err := snapTree.AccountIterator(root, common.Hash{})
+	if err != nil {
+		return fmt.Errorf("Could not create iterator for root %x: %v", root, err)
+	}
+	generatedRoot := snapshot.GenerateTrieRoot(it)
+	if err := it.Error(); err != nil {
+		fmt.Printf("Iterator error: %v\n", it.Error())
+	}
+	if root != generatedRoot {
+		return fmt.Errorf("Wrong hash generated, expected %x, got %x", root, generatedRoot[:])
+	}
+	log.Info("Generation done", "root", generatedRoot)
+	return nil
 }
 
 // hashish returns true for strings that look like hashes.

@@ -52,3 +52,19 @@ func AccountRLP(nonce uint64, balance *big.Int, root common.Hash, codehash []byt
 	}
 	return data
 }
+
+func SlimToFull(data []byte) []byte {
+	acc := &Account{}
+	rlp.DecodeBytes(data, acc)
+	if len(acc.Root) == 0 {
+		acc.Root = emptyRoot[:]
+	}
+	if len(acc.CodeHash) == 0 {
+		acc.CodeHash = emptyCode[:]
+	}
+	fullData, err := rlp.EncodeToBytes(acc)
+	if err != nil {
+		panic(err)
+	}
+	return fullData
+}
