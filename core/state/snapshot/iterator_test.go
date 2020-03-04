@@ -53,7 +53,7 @@ func TestAccountIteratorBasics(t *testing.T) {
 		}
 	}
 	// Add some (identical) layers on top
-	parent := newDiffLayer(emptyLayer(), common.Hash{}, destructs, accounts, storage)
+	parent := newDiffLayer(emptyLayer(), common.Hash{}, copyDestructs(destructs), copyAccounts(accounts), copyStorage(storage))
 	it := parent.AccountIterator(common.Hash{})
 	verifyIterator(t, 100, it)
 }
@@ -398,15 +398,17 @@ func TestIteratorDeletions(t *testing.T) {
 	}
 	// Stack three diff layers on top with various overlaps
 	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"),
-		randomAccountSet("0x11", "0x22", "0x33"), nil)
+		nil, randomAccountSet("0x11", "0x22", "0x33"), nil)
 
-	set := randomAccountSet("0x11", "0x22", "0x33")
 	deleted := common.HexToHash("0x22")
-	set[deleted] = nil
-	snaps.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), set, nil)
+	destructed := map[common.Hash]struct{}{
+		deleted: struct{}{},
+	}
+	snaps.Update(common.HexToHash("0x03"), common.HexToHash("0x02"),
+		destructed, randomAccountSet("0x11", "0x33"), nil)
 
 	snaps.Update(common.HexToHash("0x04"), common.HexToHash("0x03"),
-		randomAccountSet("0x33", "0x44", "0x55"), nil)
+		nil, randomAccountSet("0x33", "0x44", "0x55"), nil)
 
 	// The output should be 11,33,44,55
 	it, _ := snaps.AccountIterator(common.HexToHash("0x04"), common.Hash{})

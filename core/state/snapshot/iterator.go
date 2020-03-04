@@ -60,12 +60,6 @@ type diffAccountIterator struct {
 	// hash as long as the iterator is not touched any more.
 	curHash common.Hash
 
-	// curAccount is the current value the iterator is positioned on. The field
-	// is explicitly tracked since the referenced diff layer might go stale after
-	// the iterator was positioned and we don't want to fail accessing the old
-	// value as long as the iterator is not touched any more.
-	//curAccount []byte
-
 	layer *diffLayer    // Live layer to retrieve values from
 	keys  []common.Hash // Keys left in the layer to iterate
 	fail  error         // Any failures encountered (stale)
@@ -130,6 +124,9 @@ func (it *diffAccountIterator) Account() []byte {
 	it.layer.lock.RLock()
 	blob, ok := it.layer.accountData[it.curHash]
 	if !ok {
+		if _, ok := it.layer.destructSet[it.curHash]; ok {
+			return nil
+		}
 		panic(fmt.Sprintf("iterator referenced non-existent account: %x", it.curHash))
 	}
 	it.layer.lock.RUnlock()

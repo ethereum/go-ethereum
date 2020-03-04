@@ -27,6 +27,33 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
+func copyDestructs(destructs map[common.Hash]struct{}) map[common.Hash]struct{} {
+	copy := make(map[common.Hash]struct{})
+	for hash := range destructs {
+		copy[hash] = struct{}{}
+	}
+	return copy
+}
+
+func copyAccounts(accounts map[common.Hash][]byte) map[common.Hash][]byte {
+	copy := make(map[common.Hash][]byte)
+	for hash, blob := range accounts {
+		copy[hash] = blob
+	}
+	return copy
+}
+
+func copyStorage(storage map[common.Hash]map[common.Hash][]byte) map[common.Hash]map[common.Hash][]byte {
+	copy := make(map[common.Hash]map[common.Hash][]byte)
+	for accHash, slots := range storage {
+		copy[accHash] = make(map[common.Hash][]byte)
+		for slotHash, blob := range slots {
+			copy[accHash][slotHash] = blob
+		}
+	}
+	return copy
+}
+
 // TestMergeBasics tests some simple merges
 func TestMergeBasics(t *testing.T) {
 	var (
@@ -52,41 +79,41 @@ func TestMergeBasics(t *testing.T) {
 		}
 	}
 	// Add some (identical) layers on top
-	parent := newDiffLayer(emptyLayer(), common.Hash{}, destructs, accounts, storage)
-	child := newDiffLayer(parent, common.Hash{}, destructs, accounts, storage)
-	child = newDiffLayer(child, common.Hash{}, destructs, accounts, storage)
-	child = newDiffLayer(child, common.Hash{}, destructs, accounts, storage)
-	child = newDiffLayer(child, common.Hash{}, destructs, accounts, storage)
+	parent := newDiffLayer(emptyLayer(), common.Hash{}, copyDestructs(destructs), copyAccounts(accounts), copyStorage(storage))
+	child := newDiffLayer(parent, common.Hash{}, copyDestructs(destructs), copyAccounts(accounts), copyStorage(storage))
+	child = newDiffLayer(child, common.Hash{}, copyDestructs(destructs), copyAccounts(accounts), copyStorage(storage))
+	child = newDiffLayer(child, common.Hash{}, copyDestructs(destructs), copyAccounts(accounts), copyStorage(storage))
+	child = newDiffLayer(child, common.Hash{}, copyDestructs(destructs), copyAccounts(accounts), copyStorage(storage))
 	// And flatten
 	merged := (child.flatten()).(*diffLayer)
 
 	{ // Check account lists
-		if got, exp := len(merged.accountList), 0; got != exp {
-			t.Errorf("accountList wrong, got %v exp %v", got, exp)
+		if have, want := len(merged.accountList), 0; have != want {
+			t.Errorf("accountList wrong: have %v, want %v", have, want)
 		}
-		if got, exp := len(merged.AccountList()), len(accounts); got != exp {
-			t.Errorf("AccountList() wrong, got %v exp %v", got, exp)
+		if have, want := len(merged.AccountList()), len(accounts); have != want {
+			t.Errorf("AccountList() wrong: have %v, want %v", have, want)
 		}
-		if got, exp := len(merged.accountList), len(accounts); got != exp {
-			t.Errorf("accountList [2] wrong, got %v exp %v", got, exp)
+		if have, want := len(merged.accountList), len(accounts); have != want {
+			t.Errorf("accountList [2] wrong: have %v, want %v", have, want)
 		}
 	}
 	{ // Check account drops
-		if got, exp := len(merged.destructSet), len(destructs); got != exp {
-			t.Errorf("accountDrop wrong, got %v exp %v", got, exp)
+		if have, want := len(merged.destructSet), len(destructs); have != want {
+			t.Errorf("accountDrop wrong: have %v, want %v", have, want)
 		}
 	}
 	{ // Check storage lists
 		i := 0
 		for aHash, sMap := range storage {
-			if got, exp := len(merged.storageList), i; got != exp {
-				t.Errorf("[1] storageList wrong, got %v exp %v", got, exp)
+			if have, want := len(merged.storageList), i; have != want {
+				t.Errorf("[1] storageList wrong: have %v, want %v", have, want)
 			}
-			if got, exp := len(merged.StorageList(aHash)), len(sMap); got != exp {
-				t.Errorf("[2] StorageList() wrong, got %v exp %v", got, exp)
+			if have, want := len(merged.StorageList(aHash)), len(sMap); have != want {
+				t.Errorf("[2] StorageList() wrong: have %v, want %v", have, want)
 			}
-			if got, exp := len(merged.storageList[aHash]), len(sMap); got != exp {
-				t.Errorf("storageList wrong, got %v exp %v", got, exp)
+			if have, want := len(merged.storageList[aHash]), len(sMap); have != want {
+				t.Errorf("storageList wrong: have %v, want %v", have, want)
 			}
 			i++
 		}
@@ -160,8 +187,8 @@ func TestMergeDelete(t *testing.T) {
 	}
 	// If we add more granular metering of memory, we can enable this again,
 	// but it's not implemented for now
-	//if got, exp := merged.memory, child.memory; got != exp {
-	//	t.Errorf("mem wrong, got %d, exp %d", got, exp)
+	//if have, want := merged.memory, child.memory; have != want {
+	//	t.Errorf("mem wrong: have %d, want %d", have, want)
 	//}
 }
 
@@ -197,9 +224,9 @@ func TestInsertAndMerge(t *testing.T) {
 	// And flatten
 	merged := (child.flatten()).(*diffLayer)
 	{ // Check that slot value is present
-		got, _ := merged.Storage(acc, slot)
-		if exp := []byte{0x01}; !bytes.Equal(got, exp) {
-			t.Errorf("merged slot value wrong, got %x, exp %x", got, exp)
+		have, _ := merged.Storage(acc, slot)
+		if want := []byte{0x01}; !bytes.Equal(have, want) {
+			t.Errorf("merged slot value wrong: have %x, want %x", have, want)
 		}
 	}
 }

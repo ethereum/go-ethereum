@@ -493,11 +493,13 @@ func (dl *diffLayer) AccountList() []common.Hash {
 	defer dl.lock.Unlock()
 
 	dl.accountList = make([]common.Hash, 0, len(dl.destructSet)+len(dl.accountData))
-	for hash := range dl.destructSet {
-		dl.accountList = append(dl.accountList, hash)
-	}
 	for hash := range dl.accountData {
 		dl.accountList = append(dl.accountList, hash)
+	}
+	for hash := range dl.destructSet {
+		if _, ok := dl.accountData[hash]; !ok {
+			dl.accountList = append(dl.accountList, hash)
+		}
 	}
 	sort.Sort(hashes(dl.accountList))
 	return dl.accountList
