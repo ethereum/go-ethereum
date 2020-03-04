@@ -101,6 +101,48 @@ func TestTrieGenerationAppendonly(t *testing.T) {
 	}
 }
 
+func TestMultipleStackTrieInsertion(t *testing.T) {
+	// Get a fairly large trie
+	// Create a custom account factory to recreate the same addresses
+	makeAccounts := func(num int) map[common.Hash][]byte {
+		accounts := make(map[common.Hash][]byte)
+		for i := 0; i < num; i++ {
+			h := common.Hash{}
+			binary.BigEndian.PutUint64(h[:], uint64(i+1))
+			accounts[h] = randomAccountWithSmall()
+		}
+		return accounts
+	}
+	// Build up a large stack of snapshots
+	base := &diskLayer{
+		diskdb: rawdb.NewMemoryDatabase(),
+		root:   common.HexToHash("0x01"),
+		cache:  fastcache.New(1024 * 500),
+	}
+	snaps := &Tree{
+		layers: map[common.Hash]snapshot{
+			base.root: base,
+		},
+	}
+
+	// 4K accounts
+	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), makeAccounts(4000), nil)
+	head := snaps.Snapshot(common.HexToHash("0x02"))
+	// Call it once to make it create the lists before test starts
+	head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
+
+	var got1 common.Hash
+	it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
+	got1 = generateTrie(it, PruneGenerate)
+
+	var got2 common.Hash
+	it = head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
+	got2 = generateTrie(it, StackGenerate)
+	if got2 != got1 {
+		t.Fatalf("Error: got %x exp %x", got2, got1)
+	}
+}
+
 // BenchmarkTrieGeneration/4K/standard-8         	     127	   9429425 ns/op	 6188077 B/op	   58026 allocs/op
 // BenchmarkTrieGeneration/4K/pruning-8          	      72	  16544534 ns/op	 6617322 B/op	   55016 allocs/op
 // BenchmarkTrieGeneration/4K/stack-8            	     159	   6452936 ns/op	 6308393 B/op	   12022 allocs/op
@@ -145,7 +187,7 @@ func BenchmarkTrieGeneration(b *testing.B) {
 				got = generateTrie(it, StdGenerate)
 			}
 			b.StopTimer()
-			if exp := common.HexToHash("fecc4e1fce05c888c8acc8baa2d7677a531714668b7a09b5ede6e3e110be266b"); got != exp{
+			if exp := common.HexToHash("fecc4e1fce05c888c8acc8baa2d7677a531714668b7a09b5ede6e3e110be266b"); got != exp {
 				b.Fatalf("Error: got %x exp %x", got, exp)
 			}
 		})
@@ -158,7 +200,7 @@ func BenchmarkTrieGeneration(b *testing.B) {
 				got = generateTrie(it, PruneGenerate)
 			}
 			b.StopTimer()
-			if exp := common.HexToHash("fecc4e1fce05c888c8acc8baa2d7677a531714668b7a09b5ede6e3e110be266b"); got != exp{
+			if exp := common.HexToHash("fecc4e1fce05c888c8acc8baa2d7677a531714668b7a09b5ede6e3e110be266b"); got != exp {
 				b.Fatalf("Error: got %x exp %x", got, exp)
 			}
 
@@ -172,7 +214,7 @@ func BenchmarkTrieGeneration(b *testing.B) {
 				got = generateTrie(it, StackGenerate)
 			}
 			b.StopTimer()
-			if exp := common.HexToHash("fecc4e1fce05c888c8acc8baa2d7677a531714668b7a09b5ede6e3e110be266b"); got != exp{
+			if exp := common.HexToHash("fecc4e1fce05c888c8acc8baa2d7677a531714668b7a09b5ede6e3e110be266b"); got != exp {
 				b.Fatalf("Error: got %x exp %x", got, exp)
 			}
 
