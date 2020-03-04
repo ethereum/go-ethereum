@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/trie"
+	"sync"
 )
 
 type leaf struct {
@@ -28,6 +29,32 @@ type leaf struct {
 }
 
 type trieGeneratorFn func(in chan (leaf), out chan (common.Hash))
+
+// GenerateTrieRoot takes an account iterator and reproduces the root hash.
+func GenerateTrieRoot(it AccountIterator) common.Hash {
+	return generateTrieRoot(it, StackGenerate)
+}
+
+func generateTrieRoot(it AccountIterator, generatorFn trieGeneratorFn) common.Hash {
+	var (
+		in  = make(chan leaf)        // chan to pass leaves
+		out = make(chan common.Hash) // chan to collect result
+		wg  sync.WaitGroup
+	)
+	wg.Add(1)
+	go func() {
+		generatorFn(in, out)
+		wg.Done()
+	}()
+	// Feed leaves
+	for it.Next() {
+		in <- leaf{it.Hash(), it.Account()}
+	}
+	close(in)
+	result := <-out
+	wg.Wait()
+	return result
+}
 
 // StackGenerate is a hexary trie builder which is built from the bottom-up as
 // keys are added.

@@ -19,35 +19,12 @@ package snapshot
 import (
 	"encoding/binary"
 	"math/rand"
-	"sync"
 	"testing"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 )
-
-func generateTrie(it AccountIterator, generatorFn trieGeneratorFn) common.Hash {
-	var (
-		in  = make(chan leaf)        // chan to pass leaves
-		out = make(chan common.Hash) // chan to collect result
-		wg  sync.WaitGroup
-	)
-	wg.Add(1)
-	go func() {
-		generatorFn(in, out)
-		wg.Done()
-	}()
-	// Feed leaves
-	for it.Next() {
-		in <- leaf{it.Hash(), it.Account()}
-	}
-	close(in)
-	result := <-out
-	wg.Wait()
-	return result
-
-}
 
 func TestTrieGeneration(t *testing.T) {
 	// Create an empty base layer and a snapshot tree out of it
@@ -63,13 +40,13 @@ func TestTrieGeneration(t *testing.T) {
 	}
 	rand.Seed(1338)
 	// Stack three diff layers on top with various overlaps
-	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"),
+	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), nil,
 		randomAccountSet("0x11", "0x22", "0x33"), nil)
 	// We call this once before the benchmark, so the creation of
 	// sorted accountlists are not included in the results.
 	head := snaps.Snapshot(common.HexToHash("0x02"))
 	it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-	hash := generateTrie(it, AppendOnlyGenerate)
+	hash := generateTrieRoot(it, AppendOnlyGenerate)
 	if got, exp := hash, common.HexToHash("333a7c170a3d97bd53321d0f39b1a6b9a35b286ad2d3b3ced72ca339197c5dca"); exp != got {
 		t.Fatalf("expected %x got %x", exp, got)
 	}
@@ -89,13 +66,13 @@ func TestTrieGenerationAppendonly(t *testing.T) {
 	}
 	rand.Seed(1337)
 	// Stack three diff layers on top with various overlaps
-	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"),
+	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), nil,
 		randomAccountSet("0x11", "0x22", "0x33"), nil)
 	// We call this once before the benchmark, so the creation of
 	// sorted accountlists are not included in the results.
 	head := snaps.Snapshot(common.HexToHash("0x02"))
 	it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-	hash := generateTrie(it, AppendOnlyGenerate)
+	hash := generateTrieRoot(it, AppendOnlyGenerate)
 	if got, exp := hash, common.HexToHash("c9dd8a9602446bfcce27efbb0188a78761bf5473dd363f4ae2f17975a308344a"); exp != got {
 		t.Fatalf("expected %x got %x", exp, got)
 	}
@@ -126,18 +103,18 @@ func TestMultipleStackTrieInsertion(t *testing.T) {
 	}
 
 	// 4K accounts
-	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), makeAccounts(4000), nil)
+	snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), nil, makeAccounts(4000), nil)
 	head := snaps.Snapshot(common.HexToHash("0x02"))
 	// Call it once to make it create the lists before test starts
 	head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
 
 	var got1 common.Hash
 	it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-	got1 = generateTrie(it, PruneGenerate)
+	got1 = generateTrieRoot(it, PruneGenerate)
 
 	var got2 common.Hash
 	it = head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-	got2 = generateTrie(it, StackGenerate)
+	got2 = generateTrieRoot(it, StackGenerate)
 	if got2 != got1 {
 		t.Fatalf("Error: got %x exp %x", got2, got1)
 	}
@@ -174,7 +151,7 @@ func BenchmarkTrieGeneration(b *testing.B) {
 	}
 	b.Run("4K", func(b *testing.B) {
 		// 4K accounts
-		snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), makeAccounts(4000), nil)
+		snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), nil, makeAccounts(4000), nil)
 		head := snaps.Snapshot(common.HexToHash("0x02"))
 		// Call it once to make it create the lists before test starts
 		head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
@@ -184,7 +161,7 @@ func BenchmarkTrieGeneration(b *testing.B) {
 			var got common.Hash
 			for i := 0; i < b.N; i++ {
 				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-				got = generateTrie(it, StdGenerate)
+				got = generateTrieRoot(it, StdGenerate)
 			}
 			b.StopTimer()
 			if exp := common.HexToHash("fecc4e1fce05c888c8acc8baa2d7677a531714668b7a09b5ede6e3e110be266b"); got != exp {
@@ -197,7 +174,7 @@ func BenchmarkTrieGeneration(b *testing.B) {
 			var got common.Hash
 			for i := 0; i < b.N; i++ {
 				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-				got = generateTrie(it, PruneGenerate)
+				got = generateTrieRoot(it, PruneGenerate)
 			}
 			b.StopTimer()
 			if exp := common.HexToHash("fecc4e1fce05c888c8acc8baa2d7677a531714668b7a09b5ede6e3e110be266b"); got != exp {
@@ -211,7 +188,7 @@ func BenchmarkTrieGeneration(b *testing.B) {
 			var got common.Hash
 			for i := 0; i < b.N; i++ {
 				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-				got = generateTrie(it, StackGenerate)
+				got = generateTrieRoot(it, StackGenerate)
 			}
 			b.StopTimer()
 			if exp := common.HexToHash("fecc4e1fce05c888c8acc8baa2d7677a531714668b7a09b5ede6e3e110be266b"); got != exp {
@@ -222,7 +199,7 @@ func BenchmarkTrieGeneration(b *testing.B) {
 	})
 	b.Run("10K", func(b *testing.B) {
 		// 4K accounts
-		snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), makeAccounts(10000), nil)
+		snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), nil, makeAccounts(10000), nil)
 		head := snaps.Snapshot(common.HexToHash("0x02"))
 		// Call it once to make it create the lists before test starts
 		head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
@@ -231,7 +208,7 @@ func BenchmarkTrieGeneration(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-				generateTrie(it, StdGenerate)
+				generateTrieRoot(it, StdGenerate)
 			}
 		})
 		b.Run("pruning", func(b *testing.B) {
@@ -239,7 +216,7 @@ func BenchmarkTrieGeneration(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-				generateTrie(it, PruneGenerate)
+				generateTrieRoot(it, PruneGenerate)
 			}
 		})
 		b.Run("stack", func(b *testing.B) {
@@ -247,7 +224,7 @@ func BenchmarkTrieGeneration(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-				generateTrie(it, StackGenerate)
+				generateTrieRoot(it, StackGenerate)
 			}
 		})
 	})
