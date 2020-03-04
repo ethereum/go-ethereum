@@ -170,15 +170,23 @@ func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
 		return nil, err
 	}
 	size := stat.Size()
-	if size != 64 {
+	// Allow two extra chars for possible line ending to be checked later
+	if size < 64 || size > 66 {
 		return nil, fmt.Errorf("expected 64 bytes, got %v", size)
 	}
 	buf, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
+	// Check line ending
+	maybeLineEnding := buf[64:]
+	for _, ch := range maybeLineEnding {
+		if ch != '\n' && ch != '\r' {
+			return nil, fmt.Errorf("expected 64 bytes, got %v", size)
+		}
+	}
 
-	key, err := hex.DecodeString(string(buf))
+	key, err := hex.DecodeString(string(buf[:64]))
 	if err != nil {
 		return nil, err
 	}

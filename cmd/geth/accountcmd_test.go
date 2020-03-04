@@ -88,48 +88,36 @@ Path of the secret key file: .*UTC--.+--[0-9a-f]{40}
 `)
 }
 
-func hexadecimal(count int) string {
-	chars := "0123456789abcdef"
-	var sb strings.Builder
-	for i := 0; i < count; i++ {
-		c := string(chars[i%len(chars)])
-		sb.WriteString(c)
-	}
-	return sb.String()
-}
-
 func TestAccountImport(t *testing.T) {
-	dir := tmpdir(t)
-	keyfile := filepath.Join(dir, "key.prv")
-	key := hexadecimal(64)
-	if err := ioutil.WriteFile(keyfile, []byte(key), 0644); err != nil {
-		t.Error(err)
+	bytes64 := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	success := `Address: {[0-9a-f]{40}}`
+	failure := `Fatal: Failed to load the private key: expected 64 bytes, got \d+`
+	keyToMsg := make(map[string]string)
+	keyToMsg[bytes64] = success
+	keyToMsg[bytes64[:40]] = failure
+	keyToMsg[bytes64+"\n"] = success
+	keyToMsg[bytes64+"\r\n"] = success
+	keyToMsg[bytes64+"1"] = failure
+	keyToMsg[bytes64+"x"] = failure
+	keyToMsg[bytes64+bytes64] = failure
+	for key, msg := range keyToMsg {
+		importAccountWithExpect(t, key, msg)
 	}
-	geth := runGeth(t, "account", "import", keyfile)
-	defer geth.ExpectExit()
-	geth.Expect(`
-Your new account is locked with a password. Please give a password. Do not forget this password.
-!! Unsupported terminal, password will be echoed.
-Password: {{.InputLine "foobar"}}
-Repeat password: {{.InputLine "foobar"}}
-`)
-	geth.ExpectRegexp(`
-Address: {[0-9a-f]{40}}
-`)
 }
 
-func TestAccountImportTooShort(t *testing.T) {
+func importAccountWithExpect(t *testing.T, key string, expectedRegexp string) {
 	dir := tmpdir(t)
 	keyfile := filepath.Join(dir, "key.prv")
-	key := hexadecimal(40)
 	if err := ioutil.WriteFile(keyfile, []byte(key), 0644); err != nil {
 		t.Error(err)
 	}
-	geth := runGeth(t, "account", "import", keyfile)
+	passwordFile := filepath.Join(dir, "password.txt")
+	if err := ioutil.WriteFile(passwordFile, []byte("foobar"), 0644); err != nil {
+		t.Error(err)
+	}
+	geth := runGeth(t, "account", "import", keyfile, "-password", passwordFile)
 	defer geth.ExpectExit()
-	geth.Expect(`
-Fatal: Failed to load the private key: expected 64 bytes, got 40
-`)
+	geth.ExpectRegexp(expectedRegexp)
 }
 
 func TestAccountNewBadRepeat(t *testing.T) {
