@@ -163,6 +163,11 @@ Ethereum nodes with exposed APIs! Further, all browser tabs can access locally
 running web servers, so malicious web pages could try to subvert locally available
 APIs!**
 
+### Tests
+```
+go test github.com/maticnetwork/bor/consensus/bor_test
+```
+
 ## License
 
 The bor library (i.e. all code outside of the `cmd` directory) is licensed under the
