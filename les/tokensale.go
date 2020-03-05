@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -40,8 +41,8 @@ const (
 // payment technologies
 type paymentReceiver interface {
 	info() keyValueList
-	receivePayment(from enode.ID, proofOfPayment []byte) (value uint64, err error)
-	requestPayment(from enode.ID, value uint64) uint64
+	receivePayment(from enode.ID, proofOfPayment []byte, reader ethdb.KeyValueReader, writer ethdb.KeyValueWriter) (value uint64, err error)
+	requestPayment(from enode.ID, value uint64, reader ethdb.KeyValueReader) uint64
 }
 
 // tokenSale handles client balance deposits, conversion to and from service tokens
@@ -437,7 +438,7 @@ func (t *tokenSale) connection(id enode.ID, freeID string, requestedCapacity uin
 		if rec, ok := t.receivers[recID]; !ok || pcMissing == math.MaxUint64 {
 			paymentRequired[i] = math.MaxUint64
 		} else {
-			paymentRequired[i] = rec.requestPayment(id, pcMissing)
+			paymentRequired[i] = rec.requestPayment(id, pcMissing, newReaderTable(t.clientPool.ndb.db, receiverPrefix(id, recID)))
 		}
 	}
 	return
@@ -445,8 +446,12 @@ func (t *tokenSale) connection(id enode.ID, freeID string, requestedCapacity uin
 
 // deposit credits a payment on the sender's account using the specified payment module
 func (t *tokenSale) deposit(id enode.ID, paymentModule string, proofOfPayment []byte) (pcValue, pcBalance uint64, err error) {
+	writer := t.clientPool.ndb.atomicWriteLock(id.Bytes())
 	t.lock.Lock()
-	defer t.lock.Unlock()
+	defer func() {
+		t.lock.Unlock()
+		t.clientPool.ndb.atomicWriteUnlock(id.Bytes())
+	}()
 
 	cb := t.clientPool.ndb.getCurrencyBalance(id)
 	pcBalance = cb.amount
@@ -454,7 +459,8 @@ func (t *tokenSale) deposit(id enode.ID, paymentModule string, proofOfPayment []
 	if pm == nil {
 		return 0, pcBalance, fmt.Errorf("Unknown payment receiver '%s'", paymentModule)
 	}
-	pcValue, err = pm.receivePayment(id, proofOfPayment)
+	prefix := receiverPrefix(id, paymentModule)
+	pcValue, err = pm.receivePayment(id, proofOfPayment, newReaderTable(t.clientPool.ndb.db, prefix), newWriterTable(writer, prefix))
 	if err != nil {
 		return 0, pcBalance, err
 	}
@@ -478,8 +484,12 @@ func (t *tokenSale) deposit(id enode.ID, paymentModule string, proofOfPayment []
 // is impossible to do a conversion twice. In exchange the sender needs to know its current
 // balances (which it probably does if it has made a previous call to just ask the current price).
 func (t *tokenSale) buyTokens(id enode.ID, maxSpend, minReceive uint64, relative, spendAll bool) (pcBalance, tokenBalance, spend, receive uint64, success bool) {
+	t.clientPool.ndb.atomicWriteLock(id.Bytes())
 	t.lock.Lock()
-	defer t.lock.Unlock()
+	defer func() {
+		t.lock.Unlock()
+		t.clientPool.ndb.atomicWriteUnlock(id.Bytes())
+	}()
 
 	pb := t.clientPool.getPosBalance(id)
 	tokenBalance = pb.value.value(t.clientPool.posExpiration(mclock.Now()))
@@ -527,8 +537,12 @@ func (t *tokenSale) buyTokens(id enode.ID, maxSpend, minReceive uint64, relative
 // sellTokens tries to convert service tokens to permanent balance (nominated in the server's
 // preferred currency, PC). Parameters work similarly to buyTokens.
 func (t *tokenSale) sellTokens(id enode.ID, maxSell, minRefund uint64, relative, sellAll bool) (pcBalance, tokenBalance, sell, refund uint64, success bool) {
+	t.clientPool.ndb.atomicWriteLock(id.Bytes())
 	t.lock.Lock()
-	defer t.lock.Unlock()
+	defer func() {
+		t.lock.Unlock()
+		t.clientPool.ndb.atomicWriteUnlock(id.Bytes())
+	}()
 
 	pb := t.clientPool.getPosBalance(id)
 	tokenBalance = pb.value.value(t.clientPool.posExpiration(mclock.Now()))
@@ -778,7 +792,7 @@ func (t testReceiver) info() keyValueList {
 
 // receivePayment implements paymentReceiver. proofOfPayment is a base 10 ascii number
 // which is credited to the sender's account without any further conditions.
-func (t testReceiver) receivePayment(from enode.ID, proofOfPayment []byte) (value uint64, err error) {
+func (t testReceiver) receivePayment(from enode.ID, proofOfPayment []byte, reader ethdb.KeyValueReader, writer ethdb.KeyValueWriter) (value uint64, err error) {
 	if len(proofOfPayment) > 8 {
 		err = fmt.Errorf("proof of payment is too long; max 8 bytes long big endian integer expected")
 		return
@@ -790,6 +804,57 @@ func (t testReceiver) receivePayment(from enode.ID, proofOfPayment []byte) (valu
 }
 
 // requestPayment implements paymentReceiver
-func (t testReceiver) requestPayment(from enode.ID, value uint64) uint64 {
+func (t testReceiver) requestPayment(from enode.ID, value uint64, reader ethdb.KeyValueReader) uint64 {
 	return value
+}
+
+// readerTable is a wrapper around a database that prefixes each key access with a pre-
+// configured string.
+type readerTable struct {
+	db     ethdb.KeyValueReader
+	prefix []byte
+}
+
+// newReaderTable returns a database object that prefixes all keys with a given string.
+func newReaderTable(db ethdb.KeyValueReader, prefix []byte) ethdb.KeyValueReader {
+	return &readerTable{
+		db:     db,
+		prefix: prefix,
+	}
+}
+
+// Has retrieves if a prefixed version of a key is present in the database.
+func (t *readerTable) Has(key []byte) (bool, error) {
+	return t.db.Has(append(t.prefix, key...))
+}
+
+// Get retrieves the given prefixed key if it's present in the database.
+func (t *readerTable) Get(key []byte) ([]byte, error) {
+	return t.db.Get(append(t.prefix, key...))
+}
+
+// writerTable is a wrapper around a database that prefixes each key access with a pre-
+// configured string.
+type writerTable struct {
+	db     ethdb.KeyValueWriter
+	prefix []byte
+}
+
+// newReaderTable returns a database object that prefixes all keys with a given string.
+func newWriterTable(db ethdb.KeyValueWriter, prefix []byte) ethdb.KeyValueWriter {
+	return &writerTable{
+		db:     db,
+		prefix: prefix,
+	}
+}
+
+// Put inserts the given value into the database at a prefixed version of the
+// provided key.
+func (t *writerTable) Put(key []byte, value []byte) error {
+	return t.db.Put(append(t.prefix, key...), value)
+}
+
+// Delete removes the given prefixed key from the database.
+func (t writerTable) Delete(key []byte) error {
+	return t.db.Delete(append(t.prefix, key...))
 }
