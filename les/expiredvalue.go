@@ -43,13 +43,13 @@ type expiredValue struct {
 // value calculates the value at the given moment.
 func (e expiredValue) value(logOffset fixed64) uint64 {
 	offset := uint64ToFixed64(e.exp) - logOffset
-	return uint64(float64(e.base) * offset.pow2Fixed())
+	return uint64(float64(e.base) * offset.pow2())
 }
 
 // add adds a signed value at the given moment
 func (e *expiredValue) add(amount int64, logOffset fixed64) int64 {
 	integer, frac := logOffset.toUint64(), logOffset.fraction()
-	factor := frac.pow2Fixed()
+	factor := frac.pow2()
 	base := factor * float64(amount)
 	if integer < e.exp {
 		base /= math.Pow(2, float64(e.exp-integer))
@@ -95,11 +95,10 @@ func (e *expiredValue) subExp(a expiredValue) {
 	}
 }
 
-// fixedFactor is the factor used by fixed64
+// fixedFactor is the fixed point multiplier factor used by fixed64.
 const fixedFactor = 0x1000000
 
-// fixed64 is a float64 wrapper that uses integer arithmetic
-// to avoid precision loss in floating-point arithmetic.
+// fixed64 implements 64-bit fixed point arithmetic functions.
 type fixed64 int64
 
 // uint64ToFixed64 converts uint64 integer to fixed64 format.
@@ -117,12 +116,14 @@ func (f64 fixed64) toUint64() uint64 {
 	return uint64(f64) / fixedFactor
 }
 
-// fraction returns the fraction of the fixed64.
+// fraction returns the fractional part of a fixed64 value.
 func (f64 fixed64) fraction() fixed64 {
 	return f64 % fixedFactor
 }
 
-// pow2Fixed returns the 2 based pow of the fixed value.
-func (f64 fixed64) pow2Fixed() float64 {
-	return math.Pow(2, float64(f64)/fixedFactor)
+var fixedLogFactor = math.Log(2) / float64(fixedFactor)
+
+// pow2Fixed returns the base 2 power of the fixed point value.
+func (f64 fixed64) pow2() float64 {
+	return math.Exp(float64(f64) * fixedLogFactor)
 }

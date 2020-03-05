@@ -226,9 +226,11 @@ func newClientPool(db ethdb.Database, minCap, freeClientCap uint64, clock mclock
 		for {
 			select {
 			case <-clock.After(persistExpirationRefresh):
+				pool.lock.Lock()
 				now := pool.clock.Now()
 				posExp := pool.posExpiration(now)
 				negExp := pool.negExpiration(now)
+				pool.lock.Unlock()
 				pool.ndb.setExpiration(posExp, negExp)
 			case <-pool.stopCh:
 				return
