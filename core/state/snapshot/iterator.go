@@ -148,9 +148,10 @@ type diskAccountIterator struct {
 
 // AccountIterator creates an account iterator over a disk layer.
 func (dl *diskLayer) AccountIterator(seek common.Hash) AccountIterator {
+	// TODO: Fix seek position, or remove seek parameter
 	return &diskAccountIterator{
 		layer: dl,
-		it:    dl.diskdb.NewIteratorWithPrefix(append(rawdb.SnapshotAccountPrefix, seek[:]...)),
+		it:    dl.diskdb.NewIteratorWithPrefix(rawdb.SnapshotAccountPrefix),
 	}
 }
 
@@ -160,11 +161,16 @@ func (it *diskAccountIterator) Next() bool {
 	if it.it == nil {
 		return false
 	}
-	// Try to advance the iterator and release it if we reahed the end
-	if !it.it.Next() || !bytes.HasPrefix(it.it.Key(), rawdb.SnapshotAccountPrefix) {
-		it.it.Release()
-		it.it = nil
-		return false
+	// Try to advance the iterator and release it if we reached the end
+	for {
+		if !it.it.Next() || !bytes.HasPrefix(it.it.Key(), rawdb.SnapshotAccountPrefix) {
+			it.it.Release()
+			it.it = nil
+			return false
+		}
+		if len(it.it.Key()) == len(rawdb.SnapshotAccountPrefix)+common.HashLength {
+			break
+		}
 	}
 	return true
 }

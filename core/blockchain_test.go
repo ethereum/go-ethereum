@@ -2758,3 +2758,126 @@ func TestDeleteRecreateSlotsAcrossManyBlocks(t *testing.T) {
 		}
 	}
 }
+
+// TestInitThenFailCreateContract tests a pretty notorious case that happened
+// on mainnet over blocks 7338108, 7338110 and 7338115.
+// - Block 7338108: address e771789f5cccac282f23bb7add5690e1f6ca467c is initiated
+//   with 0.001 ether (thus created but no code)
+// - Block 7338110: a CREATE2 is attempted. The CREATE2 would deploy code on
+//   the same address e771789f5cccac282f23bb7add5690e1f6ca467c. However, the
+//   deployment fails due to OOG during initcode execution
+// - Block 7338115: another tx checks the balance of
+//   e771789f5cccac282f23bb7add5690e1f6ca467c, and the snapshotter returned it as
+//   zero.
+//
+// The problem being that the snapshotter maintains a destructset, and adds items
+// to the destructset in case something is created "onto" an existing item.
+// We need to either roll back the snapDestructs, or not place it into snapDestructs
+// in the first place.
+//
+func TestInitThenFailCreateContract(t *testing.T) {
+	var (
+		// Generate a canonical chain to act as the main dataset
+		engine = ethash.NewFaker()
+		db     = rawdb.NewMemoryDatabase()
+		// A sender who makes transactions, has some funds
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address = crypto.PubkeyToAddress(key.PublicKey)
+		funds   = big.NewInt(1000000000)
+		bb      = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
+	)
+
+	// The bb-code needs to CREATE2 the aa contract. It consists of
+	// both initcode and deployment code
+	// initcode:
+	// 1. If blocknum < 1, error out (e.g invalid opcode)
+	// 2. else, return a snippet of code
+	initCode := []byte{
+		byte(vm.PUSH1), 0x1, // y (2)
+		byte(vm.NUMBER), // x (number)
+		byte(vm.GT),     // x > y?
+		byte(vm.PUSH1), byte(0x8),
+		byte(vm.JUMPI), // jump to label if number > 2
+		byte(0xFE),     // illegal opcode
+		byte(vm.JUMPDEST),
+		byte(vm.PUSH1), 0x2, // size
+		byte(vm.PUSH1), 0x0, // offset
+		byte(vm.RETURN), // return 2 bytes of zero-code
+	}
+	if l := len(initCode); l > 32 {
+		t.Fatalf("init code is too long for a pushx, need a more elaborate deployer")
+	}
+	bbCode := []byte{
+		// Push initcode onto stack
+		byte(vm.PUSH1) + byte(len(initCode)-1)}
+	bbCode = append(bbCode, initCode...)
+	bbCode = append(bbCode, []byte{
+		byte(vm.PUSH1), 0x0, // memory start on stack
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 0x00, // salt
+		byte(vm.PUSH1), byte(len(initCode)), // size
+		byte(vm.PUSH1), byte(32 - len(initCode)), // offset
+		byte(vm.PUSH1), 0x00, // endowment
+		byte(vm.CREATE2),
+	}...)
+
+	initHash := crypto.Keccak256Hash(initCode)
+	aa := crypto.CreateAddress2(bb, [32]byte{}, initHash[:])
+	t.Logf("Destination address: %x\n", aa)
+
+	gspec := &Genesis{
+		Config: params.TestChainConfig,
+		Alloc: GenesisAlloc{
+			address: {Balance: funds},
+			// The address aa has some funds
+			aa: {Balance: big.NewInt(100000)},
+			// The contract BB tries to create code onto AA
+			bb: {
+				Code:    bbCode,
+				Balance: big.NewInt(1),
+			},
+		},
+	}
+	genesis := gspec.MustCommit(db)
+	nonce := uint64(0)
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 4, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+		// One transaction to BB
+		tx, _ := types.SignTx(types.NewTransaction(nonce, bb,
+			big.NewInt(0), 100000, big.NewInt(1), nil), types.HomesteadSigner{}, key)
+		b.AddTx(tx)
+		nonce++
+	})
+
+	// Import the canonical chain
+	diskdb := rawdb.NewMemoryDatabase()
+	gspec.MustCommit(diskdb)
+	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{
+		//Debug:  true,
+		//Tracer: vm.NewJSONLogger(nil, os.Stdout),
+	}, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	statedb, _ := chain.State()
+	if got, exp := statedb.GetBalance(aa), big.NewInt(100000); got.Cmp(exp) != 0 {
+		t.Fatalf("Genesis err, got %v exp %v", got, exp)
+	}
+	// First block tries to create, but fails
+	{
+		block := blocks[0]
+		if _, err := chain.InsertChain([]*types.Block{blocks[0]}); err != nil {
+			t.Fatalf("block %d: failed to insert into chain: %v", block.NumberU64(), err)
+		}
+		statedb, _ = chain.State()
+		if got, exp := statedb.GetBalance(aa), big.NewInt(100000); got.Cmp(exp) != 0 {
+			t.Fatalf("block %d: got %v exp %v", block.NumberU64(), got, exp)
+		}
+	}
+	// Import the rest of the blocks
+	for _, block := range blocks[1:] {
+		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+			t.Fatalf("block %d: failed to insert into chain: %v", block.NumberU64(), err)
+		}
+	}
+}
