@@ -41,6 +41,7 @@ const (
 	dbNodePrefix   = "n:"      // Identifier to prefix node entries with
 	dbLocalPrefix  = "local:"
 	dbDiscoverRoot = "v4"
+	dbDiscv5Root   = "v5"
 
 	// These fields are stored per ID and IP, the full key is "n:<ID>:v4:<IP>:findfail".
 	// Use nodeItemKey to create those keys.
@@ -48,10 +49,15 @@ const (
 	dbNodePing      = "lastping"
 	dbNodePong      = "lastpong"
 	dbNodeSeq       = "seq"
+	dbNodeKeys      = "keys"
+
+	// V5 information is stored by ID, the full key is "n:<ID>:v5:issuedt"
+	dbNodeIssuedTickets = "issuedt"
+	dbNodeUsedTickets   = "usedt"
+	dbLocalSeq          = "seq"
 
 	// Local information is keyed by ID only, the full key is "local:<ID>:seq".
 	// Use localItemKey to create those keys.
-	dbLocalSeq = "seq"
 )
 
 const (
@@ -170,6 +176,15 @@ func splitNodeItemKey(key []byte) (id ID, ip net.IP, field string) {
 	// Field is the remainder of key.
 	field = string(key)
 	return id, ip, field
+}
+
+func v5Key(id ID, field string) []byte {
+	key := append([]byte(dbNodePrefix), id[:]...)
+	key = append(key, ':')
+	key = append(key, dbDiscv5Root...)
+	key = append(key, ':')
+	key = append(key, field...)
+	return key
 }
 
 // localItemKey returns the key of a local node item.
@@ -376,6 +391,46 @@ func (db *DB) FindFails(id ID, ip net.IP) int {
 // UpdateFindFails updates the number of findnode failures since bonding.
 func (db *DB) UpdateFindFails(id ID, ip net.IP, fails int) error {
 	return db.storeInt64(nodeItemKey(id, ip, dbNodeFindFails), int64(fails))
+}
+
+// TopicRegTicketsV5 returns the ticket-related counters of a node.
+func (db *DB) TopicRegTicketsV5(id ID) (uint32, uint32) {
+	issued := db.fetchUint64(v5Key(id, dbNodeIssuedTickets))
+	used := db.fetchUint64(v5Key(id, dbNodeUsedTickets))
+	return uint32(issued), uint32(used)
+}
+
+// UpdateTopicRegTicketsV5 updates the ticket-related counters of a node.
+func (db *DB) UpdateTopicRegTicketsV5(id ID, issued, used uint32) {
+	db.storeUint64(v5Key(id, dbNodeIssuedTickets), uint64(issued))
+	db.storeUint64(v5Key(id, dbNodeUsedTickets), uint64(used))
+}
+
+// FindFailsV5 retrieves the discv5 findnode failure counter.
+func (db *DB) FindFailsV5(id ID) int {
+	return int(db.fetchInt64(v5Key(id, dbNodeFindFails)))
+}
+
+// UpdateFindFailsV5 stores the discv5 findnode failure counter.
+func (db *DB) UpdateFindFailsV5(id ID, fails int) error {
+	return db.storeInt64(v5Key(id, dbNodeFindFails), int64(fails))
+}
+
+// KeysV5 retrieves discv5 AES keys.
+func (db *DB) KeysV5(id ID, ip net.IP) ([]byte, []byte) {
+	k, _ := db.lvl.Get(v5Key(id, dbNodeKeys), nil)
+	if len(k) == 0 {
+		return nil, nil
+	}
+	return k[:16], k[16:32]
+}
+
+// StoreKeysV5 stores discv5 AES keys.
+func (db *DB) StoreKeysV5(id ID, ip net.IP, w, r []byte) error {
+	k := make([]byte, len(w)+len(r))
+	copy(k, w)
+	copy(k[len(w):], r)
+	return db.lvl.Put(v5Key(id, dbNodeKeys), k, nil)
 }
 
 // LocalSeq retrieves the local record sequence counter.
