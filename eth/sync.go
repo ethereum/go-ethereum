@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"math/big"
 	"math/rand"
 	"sync/atomic"
 	"time"
@@ -30,7 +31,7 @@ import (
 
 const (
 	forceSyncCycle      = 10 * time.Second // Time interval to force syncs, even if few peers are available
-	minDesiredPeerCount = 5                // Amount of peers desired to start syncing
+	defaultMinSyncPeers = 5                // Amount of peers desired to start syncing
 
 	// This is the target size for the packs of transactions sent by txsyncLoop64.
 	// A pack can get larger than this if a single transactions exceeds this size.
@@ -152,79 +153,146 @@ func (pm *ProtocolManager) txsyncLoop64() {
 	}
 }
 
-// syncer runs in its own goroutine and coordinates sync-related components.
-func (pm *ProtocolManager) syncer() {
-	defer pm.wg.Done()
+// chainSyncer coordinates blockchain sync components.
+type chainSyncer struct {
+	pm          *ProtocolManager
+	force       *time.Timer
+	forced      bool // true when force timer fired
+	peerEventCh chan struct{}
+	doneCh      chan error // non-nil when sync is running
+}
 
-	pm.blockFetcher.Start()
-	pm.txFetcher.Start()
-	defer pm.blockFetcher.Stop()
-	defer pm.txFetcher.Stop()
-	defer pm.downloader.Terminate()
+type chainSyncOp struct {
+	mode downloader.SyncMode
+	peer *peer
+	td   *big.Int
+	head common.Hash
+}
 
-	for pm.syncTriggerWait() {
-		pm.synchronise(pm.peers.BestPeer())
+func newChainSyncer(pm *ProtocolManager) *chainSyncer {
+	return &chainSyncer{
+		pm:          pm,
+		peerEventCh: make(chan struct{}),
 	}
 }
 
-// syncTriggerWait waits for sync start conditions to be met.
-func (pm *ProtocolManager) syncTriggerWait() bool {
-	force := time.NewTimer(forceSyncCycle)
-	defer force.Stop()
+// handlePeerEvent notifies the syncer about a change in the peer set.
+// This is called for new peers and every time a peer announces a new
+// chain head.
+func (cs *chainSyncer) handlePeerEvent(p *peer) bool {
+	select {
+	case cs.peerEventCh <- struct{}{}:
+		return true
+	case <-cs.pm.quitSync:
+		return false
+	}
+}
+
+// loop runs in its own goroutine and launches the sync when necessary.
+func (cs *chainSyncer) loop() {
+	defer cs.pm.wg.Done()
+
+	cs.pm.blockFetcher.Start()
+	cs.pm.txFetcher.Start()
+	defer cs.pm.blockFetcher.Stop()
+	defer cs.pm.txFetcher.Stop()
+	defer cs.pm.downloader.Terminate()
+
+	// The force timer lowers the peer count threshold down to one when it fires.
+	// This ensures we'll always start sync even if there aren't enough peers.
+	cs.force = time.NewTimer(forceSyncCycle)
+	defer cs.force.Stop()
+
 	for {
-		select {
-		case <-pm.quitSync:
-			return false
-		default:
-			if pm.peers.Len() >= minDesiredPeerCount {
-				return true
-			}
-			select {
-			case <-pm.newPeerCh:
-				// Go round and check the peer count again.
-			case <-force.C:
-				return true
-			case <-pm.quitSync:
-				return false
-			}
+		if op := cs.nextSyncOp(); op != nil {
+			log.Trace("Starting chain sync", "mode", op.mode, "peercount", cs.pm.peers.Len(), "id", op.peer.id)
+			cs.startSync(op)
 		}
-	}
-}
 
-// synchronise tries to sync up our local block chain with a remote peer.
-func (pm *ProtocolManager) synchronise(peer *peer) {
-	// Short circuit if no peers are available
-	if peer == nil {
-		return
-	}
-	// Make sure the peer's TD is higher than our own
-	currentHeader := pm.blockchain.CurrentHeader()
-	td := pm.blockchain.GetTd(currentHeader.Hash(), currentHeader.Number.Uint64())
+		select {
+		case <-cs.peerEventCh:
+			// Peer information changed, recheck.
+		case <-cs.doneCh:
+			cs.doneCh = nil
+			cs.force.Reset(forceSyncCycle)
+			cs.forced = false
+		case <-cs.force.C:
+			cs.forced = true
 
-	pHead, pTd := peer.Head()
-	if pTd.Cmp(td) <= 0 {
-		return
-	}
-	// Otherwise try to sync with the downloader
-	mode := downloader.FullSync
-	if atomic.LoadUint32(&pm.fastSync) == 1 {
-		// Fast sync was explicitly requested, and explicitly granted
-		mode = downloader.FastSync
-	}
-	if mode == downloader.FastSync {
-		// Make sure the peer's total difficulty we are synchronizing is higher.
-		if pm.blockchain.GetTdByHash(pm.blockchain.CurrentFastBlock().Hash()).Cmp(pTd) >= 0 {
+		case <-cs.pm.quitSync:
+			if cs.doneCh != nil {
+				<-cs.doneCh
+			}
 			return
 		}
 	}
-	// Run the sync cycle, and disable fast sync if we've went past the pivot block
-	if err := pm.downloader.Synchronise(peer.id, pHead, pTd, mode); err != nil {
-		return
+}
+
+// nextSyncOp determines whether sync is required at this time.
+func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
+	if cs.doneCh != nil {
+		return nil // Sync already running.
+	}
+
+	// Ensure we're at mininum peer count.
+	minPeers := defaultMinSyncPeers
+	if cs.forced {
+		minPeers = 1
+	} else if minPeers > cs.pm.maxPeers {
+		minPeers = cs.pm.maxPeers
+	}
+	if cs.pm.peers.Len() < minPeers {
+		return nil
+	}
+
+	// We have enough peers, check TD.
+	peer := cs.pm.peers.BestPeer()
+	if peer == nil {
+		return nil
+	}
+	mode, ourTD := cs.modeAndLocalHead()
+	op := peerToSyncOp(mode, peer)
+	if op.td.Cmp(ourTD) <= 0 {
+		return nil // We're in sync.
+	}
+	return op
+}
+
+func peerToSyncOp(mode downloader.SyncMode, p *peer) *chainSyncOp {
+	peerHead, peerTD := p.Head()
+	return &chainSyncOp{mode: mode, peer: p, td: peerTD, head: peerHead}
+}
+
+func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
+	if atomic.LoadUint32(&cs.pm.fastSync) == 1 {
+		block := cs.pm.blockchain.CurrentFastBlock()
+		td := cs.pm.blockchain.GetTdByHash(block.Hash())
+		return downloader.FastSync, td
+	} else {
+		head := cs.pm.blockchain.CurrentHeader()
+		td := cs.pm.blockchain.GetTd(head.Hash(), head.Number.Uint64())
+		return downloader.FullSync, td
+	}
+}
+
+// startSync launches doSync in a new goroutine.
+func (cs *chainSyncer) startSync(op *chainSyncOp) {
+	cs.doneCh = make(chan error, 1)
+	go func() { cs.doneCh <- cs.pm.doSync(op) }()
+}
+
+// doSync synchronizes the local blockchain with a remote peer.
+func (pm *ProtocolManager) doSync(op *chainSyncOp) error {
+	// Run the sync cycle, and disable fast sync if we're past the pivot block
+	err := pm.downloader.Synchronise(op.peer.id, op.head, op.td, op.mode)
+	if err != nil {
+		return err
 	}
 	if atomic.LoadUint32(&pm.fastSync) == 1 {
 		log.Info("Fast sync complete, auto disabling")
 		atomic.StoreUint32(&pm.fastSync, 0)
 	}
+
 	// If we've successfully finished a sync cycle and passed any required checkpoint,
 	// enable accepting transactions from the network.
 	head := pm.blockchain.CurrentBlock()
@@ -235,6 +303,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 			atomic.StoreUint32(&pm.acceptTxs, 1)
 		}
 	}
+
 	if head.NumberU64() > 0 {
 		// We've completed a sync cycle, notify all peers of new state. This path is
 		// essential in star-topology networks where a gateway node needs to notify
@@ -244,4 +313,6 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		// more reliably update peers or the local TD state.
 		go pm.BroadcastBlock(head, false)
 	}
+
+	return nil
 }

@@ -87,9 +87,10 @@ type ProtocolManager struct {
 	whitelist map[uint64]common.Hash
 
 	// channels for fetcher, syncer, txsyncLoop
-	newPeerCh chan *peer
-	txsyncCh  chan *txsync
-	quitSync  chan struct{}
+	txsyncCh chan *txsync
+	quitSync chan struct{}
+
+	chainSync *chainSyncer
 	wg        sync.WaitGroup
 	peerWG    sync.WaitGroup
 
@@ -109,10 +110,10 @@ func NewProtocolManager(config *params.ChainConfig, checkpoint *params.TrustedCh
 		blockchain: blockchain,
 		peers:      newPeerSet(),
 		whitelist:  whitelist,
-		newPeerCh:  make(chan *peer),
 		txsyncCh:   make(chan *txsync),
 		quitSync:   make(chan struct{}),
 	}
+
 	if mode == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the fast
 		// block is ahead, so fast sync was enabled for this node at a certain point.
@@ -136,6 +137,7 @@ func NewProtocolManager(config *params.ChainConfig, checkpoint *params.TrustedCh
 			manager.fastSync = uint32(1)
 		}
 	}
+
 	// If we have trusted checkpoints, enforce them on the chain
 	if checkpoint != nil {
 		manager.checkpointNumber = (checkpoint.SectionIndex+1)*params.CHTFrequency - 1
@@ -195,6 +197,8 @@ func NewProtocolManager(config *params.ChainConfig, checkpoint *params.TrustedCh
 	}
 	manager.txFetcher = fetcher.NewTxFetcher(txpool.Has, txpool.AddRemotes, fetchTx)
 
+	manager.chainSync = newChainSyncer(manager)
+
 	return manager, nil
 }
 
@@ -209,15 +213,7 @@ func (pm *ProtocolManager) makeProtocol(version uint) p2p.Protocol {
 		Version: version,
 		Length:  length,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			peer := pm.newPeer(int(version), p, rw, pm.txpool.Get)
-			select {
-			case pm.newPeerCh <- peer:
-				pm.peerWG.Add(1)
-				defer pm.peerWG.Done()
-				return pm.handle(peer)
-			case <-pm.quitSync:
-				return p2p.DiscQuitting
-			}
+			return pm.runPeer(pm.newPeer(int(version), p, rw, pm.txpool.Get))
 		},
 		NodeInfo: func() interface{} {
 			return pm.NodeInfo()
@@ -268,7 +264,7 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 
 	// start sync handlers
 	pm.wg.Add(2)
-	go pm.syncer()
+	go pm.chainSync.loop()
 	go pm.txsyncLoop64() // TODO(karalabe): Legacy initial tx echange, drop with eth/64.
 }
 
@@ -276,7 +272,7 @@ func (pm *ProtocolManager) Stop() {
 	pm.txsSub.Unsubscribe()        // quits txBroadcastLoop
 	pm.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
 
-	// Quit syncer and txsync64.
+	// Quit chainSync and txsync64.
 	// After this is done, no new peers will be accepted.
 	close(pm.quitSync)
 	pm.downloader.Cancel()
@@ -294,6 +290,15 @@ func (pm *ProtocolManager) Stop() {
 
 func (pm *ProtocolManager) newPeer(pv int, p *p2p.Peer, rw p2p.MsgReadWriter, getPooledTx func(hash common.Hash) *types.Transaction) *peer {
 	return newPeer(pv, p, rw, getPooledTx)
+}
+
+func (pm *ProtocolManager) runPeer(p *peer) error {
+	if !pm.chainSync.handlePeerEvent(p) {
+		return p2p.DiscQuitting
+	}
+	pm.peerWG.Add(1)
+	defer pm.peerWG.Done()
+	return pm.handle(p)
 }
 
 // handle is the callback invoked to manage the life cycle of an eth peer. When
@@ -317,6 +322,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		p.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
 	}
+
 	// Register the peer locally
 	if err := pm.peers.Register(p); err != nil {
 		p.Log().Error("Ethereum peer registration failed", "err", err)
@@ -717,14 +723,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// Update the peer's total difficulty if better than the previous
 		if _, td := p.Head(); trueTD.Cmp(td) > 0 {
 			p.SetHead(trueHead, trueTD)
-
-			// Schedule a sync if above ours. Note, this will not fire a sync for a gap of
-			// a single block (as the true TD is below the propagated block), however this
-			// scenario should easily be covered by the fetcher.
-			currentHeader := pm.blockchain.CurrentHeader()
-			if trueTD.Cmp(pm.blockchain.GetTd(currentHeader.Hash(), currentHeader.Number.Uint64())) > 0 {
-				go pm.synchronise(p)
-			}
+			pm.chainSync.handlePeerEvent(p)
 		}
 
 	case msg.Code == NewPooledTransactionHashesMsg && p.version >= eth65:
