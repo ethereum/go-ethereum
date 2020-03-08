@@ -27,6 +27,7 @@ import (
 	"math"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
@@ -40,6 +41,8 @@ const (
 	findnodeResultLimit     = 15 // applies in FINDNODE handler
 	totalNodesResponseLimit = 5  // applies in waitForNodes
 	nodesResponseItemLimit  = 3  // applies in sendNodes
+
+	respTimeoutV5 = 700 * time.Millisecond
 )
 
 // codecV5 is implemented by wireCodec (and testCodec).
@@ -107,10 +110,11 @@ type callV5 struct {
 	reqid        []byte
 	ch           chan packetV5 // responses sent here
 	err          chan error    // errors sent here
+
 	// Valid for active calls only:
-	authTag        []byte
-	handshakeCount int
-	challenge      *whoareyouV5
+	authTag        []byte       // authTag of request packet
+	handshakeCount int          // # times we attempted handshake for this call
+	challenge      *whoareyouV5 // last sent handshake challenge
 	timeout        mclock.Timer
 }
 
@@ -493,7 +497,7 @@ func (t *UDPv5) startResponseTimeout(c *callV5) {
 		timer mclock.Timer
 		done  = make(chan struct{})
 	)
-	timer = t.clock.AfterFunc(respTimeout, func() {
+	timer = t.clock.AfterFunc(respTimeoutV5, func() {
 		<-done
 		select {
 		case t.respTimeoutCh <- &callTimeout{c, timer}:
