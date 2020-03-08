@@ -18,6 +18,7 @@ package discover
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"errors"
@@ -92,9 +93,10 @@ type UDPv5 struct {
 	callQueue        map[enode.ID][]*callV5
 
 	// shutdown stuff
-	closing   chan struct{}
-	closeOnce sync.Once
-	wg        sync.WaitGroup
+	closeOnce      sync.Once
+	closeCtx       context.Context
+	cancelCloseCtx context.CancelFunc
+	wg             sync.WaitGroup
 }
 
 // callV5 represents a remote procedure call against another node.
@@ -133,6 +135,7 @@ func ListenV5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 
 // newUDPv5 creates a UDPv5 transport, but doesn't start any goroutines.
 func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
+	closeCtx, cancelCloseCtx := context.WithCancel(context.Background())
 	cfg = cfg.withDefaults()
 	t := &UDPv5{
 		// static fields
@@ -150,12 +153,14 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		callCh:        make(chan *callV5),
 		callDoneCh:    make(chan *callV5),
 		respTimeoutCh: make(chan *callTimeout),
-		closing:       make(chan struct{}),
 		// state of dispatch
 		codec:            newWireCodec(ln, cfg.PrivateKey, cfg.Clock),
 		activeCallByNode: make(map[enode.ID]*callV5),
 		activeCallByAuth: make(map[string]*callV5),
 		callQueue:        make(map[enode.ID][]*callV5),
+		// shutdown
+		closeCtx:       closeCtx,
+		cancelCloseCtx: cancelCloseCtx,
 	}
 	tab, err := newTable(t, t.db, cfg.Bootnodes, cfg.Log)
 	if err != nil {
@@ -173,7 +178,7 @@ func (t *UDPv5) Self() *enode.Node {
 // Close shuts down packet processing.
 func (t *UDPv5) Close() {
 	t.closeOnce.Do(func() {
-		close(t.closing)
+		t.cancelCloseCtx()
 		t.conn.Close()
 		t.wg.Wait()
 		t.tab.close()
@@ -206,81 +211,48 @@ func (t *UDPv5) Resolve(n *enode.Node) *enode.Node {
 	return n
 }
 
-// LookupRandom finds random nodes in the network.
-func (t *UDPv5) LookupRandom() []*enode.Node {
+func (t *UDPv5) RandomNodes() enode.Iterator {
 	if t.tab.len() == 0 {
 		// All nodes were dropped, refresh. The very first query will hit this
 		// case and run the bootstrapping logic.
 		<-t.tab.refresh()
 	}
-	return t.lookupRandom()
-}
 
-// lookupRandom looks up a random target.
-// This is needed to satisfy the transport interface.
-func (t *UDPv5) lookupRandom() []*enode.Node {
-	var target enode.ID
-	crand.Read(target[:])
-	return t.Lookup(target)
-}
-
-// lookupSelf looks up our own node ID.
-// This is needed to satisfy the transport interface.
-func (t *UDPv5) lookupSelf() []*enode.Node {
-	return t.Lookup(t.Self().ID())
+	return newLookupIterator(t.closeCtx, t.newRandomLookup)
 }
 
 // Lookup performs a recursive lookup for the given target.
 // It returns the closest nodes to target.
 func (t *UDPv5) Lookup(target enode.ID) []*enode.Node {
-	var (
-		asked          = make(map[enode.ID]bool)
-		seen           = make(map[enode.ID]bool)
-		response       = make(chan []*node, alpha)
-		pendingQueries = 0
-		result         *nodesByDistance
-	)
-	// Don't query further if we hit ourself.
-	// Unlikely to happen often in practice.
-	asked[t.Self().ID()] = true
+	return t.newLookup(t.closeCtx, target).run()
+}
 
-	// Generate the initial result set.
-	t.tab.mutex.Lock()
-	result = t.tab.closest(target, bucketSize, false)
-	t.tab.mutex.Unlock()
+// lookupRandom looks up a random target.
+// This is needed to satisfy the transport interface.
+func (t *UDPv5) lookupRandom() []*enode.Node {
+	return t.newRandomLookup(t.closeCtx).run()
+}
 
-	for {
-		// Ask the closest nodes we haven't asked yet.
-		for i := 0; i < len(result.entries) && pendingQueries < alpha; i++ {
-			n := result.entries[i]
-			if !asked[n.ID()] {
-				asked[n.ID()] = true
-				pendingQueries++
-				go t.lookupWorker(n, target, response)
-			}
-		}
-		if pendingQueries == 0 {
-			// We have asked all closest nodes, stop the search.
-			break
-		}
-		select {
-		case nodes := <-response:
-			for _, n := range nodes {
-				if n != nil && !seen[n.ID()] {
-					seen[n.ID()] = true
-					result.push(n, bucketSize)
-				}
-			}
-		case <-t.closing:
-			return nil // Shutdown, no need to continue.
-		}
-		pendingQueries--
-	}
-	return unwrapNodes(result.entries)
+// lookupSelf looks up our own node ID.
+// This is needed to satisfy the transport interface.
+func (t *UDPv5) lookupSelf() []*enode.Node {
+	return t.newLookup(t.closeCtx, t.Self().ID()).run()
+}
+
+func (t *UDPv5) newRandomLookup(ctx context.Context) *lookup {
+	var target enode.ID
+	crand.Read(target[:])
+	return t.newLookup(ctx, target)
+}
+
+func (t *UDPv5) newLookup(ctx context.Context, target enode.ID) *lookup {
+	return newLookup(ctx, t.tab, target, func(n *node) ([]*node, error) {
+		return t.lookupWorker(n, target)
+	})
 }
 
 // lookupWorker performs FINDNODE calls against a single node during lookup.
-func (t *UDPv5) lookupWorker(destNode *node, target enode.ID, response chan<- []*node) {
+func (t *UDPv5) lookupWorker(destNode *node, target enode.ID) ([]*node, error) {
 	var (
 		dists = lookupDistances(target, destNode.ID())
 		nodes = nodesByDistance{target: target}
@@ -288,22 +260,8 @@ func (t *UDPv5) lookupWorker(destNode *node, target enode.ID, response chan<- []
 	for i := 0; i < lookupRequestLimit && len(nodes.entries) < findnodeResultLimit; i++ {
 		fails := t.db.FindFailsV5(destNode.ID())
 		r, err := t.findnode(unwrapNode(destNode), dists[i])
-		if err == errClosed {
-			// Avoid recording failures on shutdown.
-			nodes.entries = nil
-			break
-		}
 		if len(r) == 0 {
-			// The query failed. Record the failure and drop the node if it fails repeatedly.
-			fails++
 			t.log.Trace("FINDNODE/v5 call found no useful nodes", "id", destNode.ID(), "d", dists[i], "failcount", fails, "err", err)
-			if fails >= maxFindnodeFailures {
-				t.log.Trace("Too many findnode failures, dropping", "id", destNode.ID(), "failcount", fails)
-				t.tab.delete(destNode)
-				break
-			}
-		} else if fails > 0 {
-			t.db.UpdateFindFailsV5(destNode.ID(), fails-1)
 		}
 		for _, n := range r {
 			if n.ID() != t.Self().ID() {
@@ -311,13 +269,7 @@ func (t *UDPv5) lookupWorker(destNode *node, target enode.ID, response chan<- []
 			}
 		}
 	}
-
-	// Add all result nodes to table. Some of them might not be alive anymore, but we'll
-	// just remove those again during revalidation.
-	for _, n := range nodes.entries {
-		t.tab.addSeenNode(n)
-	}
-	response <- nodes.entries
+	return nodes.entries, nil
 }
 
 // lookupDistances computes the distance parameter for FINDNODE calls to dest.
@@ -453,7 +405,7 @@ func (t *UDPv5) call(node *enode.Node, responseType byte, packet packetV5) *call
 	// Send call to dispatch.
 	select {
 	case t.callCh <- c:
-	case <-t.closing:
+	case <-t.closeCtx.Done():
 		c.err <- errClosed
 	}
 	return c
@@ -463,7 +415,7 @@ func (t *UDPv5) call(node *enode.Node, responseType byte, packet packetV5) *call
 func (t *UDPv5) callDone(c *callV5) {
 	select {
 	case t.callDoneCh <- c:
-	case <-t.closing:
+	case <-t.closeCtx.Done():
 	}
 }
 
@@ -513,7 +465,7 @@ func (t *UDPv5) dispatch() {
 			// Arm next read.
 			t.readNextCh <- struct{}{}
 
-		case <-t.closing:
+		case <-t.closeCtx.Done():
 			close(t.readNextCh)
 			for id, queue := range t.callQueue {
 				for _, c := range queue {
@@ -544,7 +496,7 @@ func (t *UDPv5) startResponseTimeout(c *callV5) {
 		<-done
 		select {
 		case t.respTimeoutCh <- &callTimeout{c, timer}:
-		case <-t.closing:
+		case <-t.closeCtx.Done():
 		}
 	})
 	c.timeout = timer
@@ -619,7 +571,7 @@ func (t *UDPv5) readLoop() {
 		}
 		select {
 		case t.packetInCh <- ReadPacket{Data: buf[:nbytes], Addr: from}:
-		case <-t.closing:
+		case <-t.closeCtx.Done():
 			return
 		}
 	}

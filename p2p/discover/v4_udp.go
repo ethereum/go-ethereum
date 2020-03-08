@@ -210,7 +210,7 @@ type UDPv4 struct {
 	addReplyMatcher chan *replyMatcher
 	gotreply        chan reply
 	closeCtx        context.Context
-	cancelCloseCtx  func()
+	cancelCloseCtx  context.CancelFunc
 }
 
 // replyMatcher represents a pending reply.
