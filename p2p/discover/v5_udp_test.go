@@ -554,10 +554,9 @@ func (test *udpV5Test) packetInFrom(key *ecdsa.PrivateKey, addr *net.UDPAddr, pa
 	if err != nil {
 		test.t.Errorf("%s encode error: %v", packet.name(), err)
 	}
-	test.udp.packetInCh <- ReadPacket{Data: enc, Addr: addr}
-
-	// unblock UDPv5.dispatch
-	<-test.udp.readNextCh
+	if test.udp.dispatchReadPacket(addr, enc) {
+		<-test.udp.readNextCh // unblock UDPv5.dispatch
+	}
 }
 
 // getNode ensures the test knows about a node at the given endpoint.

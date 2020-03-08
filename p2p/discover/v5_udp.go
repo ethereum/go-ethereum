@@ -569,11 +569,17 @@ func (t *UDPv5) readLoop() {
 			}
 			return
 		}
-		select {
-		case t.packetInCh <- ReadPacket{Data: buf[:nbytes], Addr: from}:
-		case <-t.closeCtx.Done():
-			return
-		}
+		t.dispatchReadPacket(from, buf[:nbytes])
+	}
+}
+
+// dispatchReadPacket sends a packet into the dispatch loop.
+func (t *UDPv5) dispatchReadPacket(from *net.UDPAddr, content []byte) bool {
+	select {
+	case t.packetInCh <- ReadPacket{content, from}:
+		return true
+	case <-t.closeCtx.Done():
+		return false
 	}
 }
 
