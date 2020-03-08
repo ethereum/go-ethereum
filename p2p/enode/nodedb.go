@@ -51,13 +51,9 @@ const (
 	dbNodeSeq       = "seq"
 	dbNodeKeys      = "keys"
 
-	// V5 information is stored by ID, the full key is "n:<ID>:v5:issuedt"
-	dbNodeIssuedTickets = "issuedt"
-	dbNodeUsedTickets   = "usedt"
-	dbLocalSeq          = "seq"
-
 	// Local information is keyed by ID only, the full key is "local:<ID>:seq".
 	// Use localItemKey to create those keys.
+	dbLocalSeq = "seq"
 )
 
 const (
@@ -391,19 +387,6 @@ func (db *DB) FindFails(id ID, ip net.IP) int {
 // UpdateFindFails updates the number of findnode failures since bonding.
 func (db *DB) UpdateFindFails(id ID, ip net.IP, fails int) error {
 	return db.storeInt64(nodeItemKey(id, ip, dbNodeFindFails), int64(fails))
-}
-
-// TopicRegTicketsV5 returns the ticket-related counters of a node.
-func (db *DB) TopicRegTicketsV5(id ID) (uint32, uint32) {
-	issued := db.fetchUint64(v5Key(id, dbNodeIssuedTickets))
-	used := db.fetchUint64(v5Key(id, dbNodeUsedTickets))
-	return uint32(issued), uint32(used)
-}
-
-// UpdateTopicRegTicketsV5 updates the ticket-related counters of a node.
-func (db *DB) UpdateTopicRegTicketsV5(id ID, issued, used uint32) {
-	db.storeUint64(v5Key(id, dbNodeIssuedTickets), uint64(issued))
-	db.storeUint64(v5Key(id, dbNodeUsedTickets), uint64(used))
 }
 
 // FindFailsV5 retrieves the discv5 findnode failure counter.
