@@ -57,7 +57,12 @@ var (
 		Name:   "listen",
 		Usage:  "Runs a node",
 		Action: discv5Listen,
-		Flags:  []cli.Flag{bootnodesFlag},
+		Flags: []cli.Flag{
+			bootnodesFlag,
+			nodekeyFlag,
+			nodedbFlag,
+			listenAddrFlag,
+		},
 	}
 )
 
@@ -99,7 +104,7 @@ func discv5Crawl(ctx *cli.Context) error {
 }
 
 func discv5Listen(ctx *cli.Context) error {
-	disc := startV5(nil)
+	disc := startV5(ctx)
 	defer disc.Close()
 
 	fmt.Println(disc.Self())
@@ -108,18 +113,9 @@ func discv5Listen(ctx *cli.Context) error {
 
 // startV5 starts an ephemeral discovery v5 node.
 func startV5(ctx *cli.Context) *discover.UDPv5 {
-	socket, ln, cfg, err := listen()
-	if err != nil {
-		exit(err)
-	}
-	if commandHasFlag(ctx, bootnodesFlag) {
-		bn, err := parseBootnodes(ctx)
-		if err != nil {
-			exit(err)
-		}
-		cfg.Bootnodes = bn
-	}
-	disc, err := discover.ListenV5(socket, ln, cfg)
+	ln, config := makeDiscoveryConfig(ctx)
+	socket := listen(ln, ctx.String(listenAddrFlag.Name))
+	disc, err := discover.ListenV5(socket, ln, config)
 	if err != nil {
 		exit(err)
 	}
