@@ -91,7 +91,7 @@ func TestHandshakeV5(t *testing.T) {
 	net.nodeA.expectDecode(t, p_nodesV5, nodes)
 }
 
-// This test checks that handshake attempts are removed withing the timeout.
+// This test checks that handshake attempts are removed within the timeout.
 func TestHandshakeV5_timeout(t *testing.T) {
 	t.Parallel()
 	net := newHandshakeTest()

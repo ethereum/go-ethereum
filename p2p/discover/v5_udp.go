@@ -585,7 +585,7 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 		return err
 	}
 	if fromNode != nil {
-		// Handshake suceeded, add to table.
+		// Handshake succeeded, add to table.
 		t.tab.addSeenNode(wrapNode(fromNode))
 	}
 	if packet.kind() != p_whoareyouV5 {

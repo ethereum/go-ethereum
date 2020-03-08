@@ -18,11 +18,11 @@ package discover
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"errors"
 	"math/big"
 	"net"
 	"time"
-	"crypto/elliptic"
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"

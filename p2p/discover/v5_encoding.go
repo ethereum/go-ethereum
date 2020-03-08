@@ -384,9 +384,9 @@ func (c *wireCodec) deriveKeys(n1, n2 enode.ID, priv *ecdsa.PrivateKey, pub *ecd
 	info = append(info, n2[:]...)
 	kdf := hkdf.New(c.sha256reset, eph, challenge.IDNonce[:], info)
 	sec := handshakeSecrets{
-		writeKey:    make([]byte, 16),
-		readKey:     make([]byte, 16),
-		authRespKey: make([]byte, 16),
+		writeKey:    make([]byte, aesKeySize),
+		readKey:     make([]byte, aesKeySize),
+		authRespKey: make([]byte, aesKeySize),
 	}
 	kdf.Read(sec.writeKey)
 	kdf.Read(sec.readKey)
