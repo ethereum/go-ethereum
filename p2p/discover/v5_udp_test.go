@@ -51,7 +51,7 @@ func TestEndToEndV5(t *testing.T) {
 	}
 
 	last := nodes[len(nodes)-1]
-	target := nodes[rand.Intn(len(nodes))].Self()
+	target := nodes[rand.Intn(len(nodes)-2)].Self()
 	results := last.Lookup(target.ID())
 	if len(results) == 0 || results[0].ID() != target.ID() {
 		t.Fatalf("lookup returned wrong results: %v", results)
