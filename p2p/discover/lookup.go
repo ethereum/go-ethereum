@@ -150,7 +150,7 @@ func (it *lookup) query(n *node, reply chan<- []*node) {
 	} else if len(r) == 0 {
 		fails++
 		it.tab.db.UpdateFindFails(n.ID(), n.IP(), fails)
-		it.tab.log.Trace("Findnode failed", "id", n.ID(), "failcount", fails, "err", err)
+		it.tab.log.Trace("Findnode failed", "id", n.ID(), "failcount", fails, "results", len(r), "err", err)
 		if fails >= maxFindnodeFailures {
 			it.tab.log.Trace("Too many findnode failures, dropping", "id", n.ID(), "failcount", fails)
 			it.tab.delete(n)

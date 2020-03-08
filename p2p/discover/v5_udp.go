@@ -256,12 +256,13 @@ func (t *UDPv5) lookupWorker(destNode *node, target enode.ID) ([]*node, error) {
 	var (
 		dists = lookupDistances(target, destNode.ID())
 		nodes = nodesByDistance{target: target}
+		err   error
 	)
 	for i := 0; i < lookupRequestLimit && len(nodes.entries) < findnodeResultLimit; i++ {
-		fails := t.db.FindFailsV5(destNode.ID())
-		r, err := t.findnode(unwrapNode(destNode), dists[i])
-		if len(r) == 0 {
-			t.log.Trace("FINDNODE/v5 call found no useful nodes", "id", destNode.ID(), "d", dists[i], "failcount", fails, "err", err)
+		var r []*enode.Node
+		r, err = t.findnode(unwrapNode(destNode), dists[i])
+		if err == errClosed {
+			return nil, err
 		}
 		for _, n := range r {
 			if n.ID() != t.Self().ID() {
@@ -269,7 +270,7 @@ func (t *UDPv5) lookupWorker(destNode *node, target enode.ID) ([]*node, error) {
 			}
 		}
 	}
-	return nodes.entries, nil
+	return nodes.entries, err
 }
 
 // lookupDistances computes the distance parameter for FINDNODE calls to dest.
