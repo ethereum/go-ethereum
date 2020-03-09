@@ -160,18 +160,10 @@ type wireCodec struct {
 	sha256           hash.Hash
 	localnode        *enode.LocalNode
 	privkey          *ecdsa.PrivateKey
-	clock            mclock.Clock
 	myChtagHash      enode.ID
 	myWhoareyouMagic []byte
 
-	// The handshake map stores sent WHOAREYOUs until an authResponse arrives for them
-	// or handshakeTimeout passes.
-	handshakes map[handshakeKey]*whoareyouV5
-}
-
-type handshakeKey struct {
-	id   enode.ID
-	addr string
+	sc *sessionCache
 }
 
 type handshakeSecrets struct {
@@ -220,11 +212,10 @@ func (h *authHeaderList) ephemeralKey(curve elliptic.Curve) *ecdsa.PublicKey {
 // newWireCodec creates a wire codec.
 func newWireCodec(ln *enode.LocalNode, key *ecdsa.PrivateKey, clock mclock.Clock) *wireCodec {
 	c := &wireCodec{
-		sha256:     sha256.New(),
-		localnode:  ln,
-		privkey:    key,
-		clock:      clock,
-		handshakes: make(map[handshakeKey]*whoareyouV5),
+		sha256:    sha256.New(),
+		localnode: ln,
+		privkey:   key,
+		sc:        newSessionCache(1024, clock),
 	}
 	// Create magic strings for packet matching.
 	self := ln.ID()
@@ -236,12 +227,12 @@ func newWireCodec(ln *enode.LocalNode, key *ecdsa.PrivateKey, clock mclock.Clock
 // encode encodes a packet to a node. 'id' and 'addr' specify the destination node. The
 // 'token' parameter should be set to the token in the most recently received WHOAREYOU
 // packet.
-func (c *wireCodec) encode(id enode.ID, addr *net.UDPAddr, packet packetV5, challenge *whoareyouV5) ([]byte, []byte, error) {
+func (c *wireCodec) encode(id enode.ID, addr string, packet packetV5, challenge *whoareyouV5) ([]byte, []byte, error) {
 	if packet.kind() == p_whoareyouV5 {
 		p := packet.(*whoareyouV5)
 		enc, err := c.encodeWhoareyou(id, p)
 		if err == nil {
-			c.storeSentHandshake(id, addr, p)
+			c.sc.storeSentHandshake(id, addr, p)
 		}
 		return enc, nil, err
 	}
@@ -249,7 +240,7 @@ func (c *wireCodec) encode(id enode.ID, addr *net.UDPAddr, packet packetV5, chal
 	if challenge != nil && challenge.node == nil {
 		panic("BUG: missing challenge.node in encode")
 	}
-	_, writeKey := c.loadKeys(id, addr)
+	writeKey := c.sc.writeKey(id, addr)
 	if writeKey != nil || challenge != nil {
 		return c.encodeEncrypted(id, addr, packet, writeKey, challenge)
 	}
@@ -287,7 +278,7 @@ func (c *wireCodec) encodeWhoareyou(toID enode.ID, packet *whoareyouV5) ([]byte,
 }
 
 // encodeEncrypted encodes an encrypted packet.
-func (c *wireCodec) encodeEncrypted(toID enode.ID, toAddr *net.UDPAddr, packet packetV5, writeKey []byte, challenge *whoareyouV5) (enc []byte, authTag []byte, err error) {
+func (c *wireCodec) encodeEncrypted(toID enode.ID, toAddr string, packet packetV5, writeKey []byte, challenge *whoareyouV5) (enc []byte, authTag []byte, err error) {
 	nonce := make([]byte, gcmNonceSize)
 	if _, err := crand.Read(nonce); err != nil {
 		return nil, nil, fmt.Errorf("can't get random data: %v", err)
@@ -306,8 +297,8 @@ func (c *wireCodec) encodeEncrypted(toID enode.ID, toAddr *net.UDPAddr, packet p
 		if headEnc, err = rlp.EncodeToBytes(header); err != nil {
 			return nil, nil, err
 		}
+		c.sc.storeNewSession(toID, toAddr, sec.readKey, sec.writeKey)
 		writeKey = sec.writeKey
-		c.storeKeys(toID, toAddr, sec.readKey, sec.writeKey)
 	}
 
 	// Encode the packet.
@@ -416,10 +407,10 @@ func (c *wireCodec) idNonceHash(nonce, ephkey []byte) []byte {
 }
 
 // decode decodes a discovery packet.
-func (c *wireCodec) decode(input []byte, addr *net.UDPAddr) (enode.ID, *enode.Node, packetV5, error) {
+func (c *wireCodec) decode(input []byte, addr string) (enode.ID, *enode.Node, packetV5, error) {
 	// Delete timed-out handshakes. This must happen before decoding to avoid
 	// processing the same handshake twice.
-	c.handshakeGC()
+	c.sc.handshakeGC()
 
 	if len(input) < 32 {
 		return enode.ID{}, nil, nil, errTooShort
@@ -441,7 +432,7 @@ func (c *wireCodec) decodeWhoareyou(input []byte) (packetV5, error) {
 }
 
 // decodeEncrypted decodes an encrypted discovery packet.
-func (c *wireCodec) decodeEncrypted(fromID enode.ID, fromAddr *net.UDPAddr, input []byte) (packetV5, *enode.Node, error) {
+func (c *wireCodec) decodeEncrypted(fromID enode.ID, fromAddr string, input []byte) (packetV5, *enode.Node, error) {
 	// Decode packet header.
 	var head authHeader
 	r := bytes.NewReader(input[32:])
@@ -475,13 +466,13 @@ func (c *wireCodec) decodeEncrypted(fromID enode.ID, fromAddr *net.UDPAddr, inpu
 }
 
 // decodeAuth processes an auth header.
-func (c *wireCodec) decodeAuth(fromID enode.ID, fromAddr *net.UDPAddr, head *authHeader) ([]byte, *enode.Node, error) {
+func (c *wireCodec) decodeAuth(fromID enode.ID, fromAddr string, head *authHeader) ([]byte, *enode.Node, error) {
 	if !head.isHandshake {
-		readKey, _ := c.loadKeys(fromID, fromAddr)
-		return readKey, nil, nil
+		return c.sc.readKey(fromID, fromAddr), nil, nil
 	}
+
 	// Remote is attempting handshake. Verify against our last WHOAREYOU.
-	challenge := c.getHandshake(fromID, fromAddr)
+	challenge := c.sc.getHandshake(fromID, fromAddr)
 	if challenge == nil {
 		return nil, nil, errUnexpectedHandshake
 	}
@@ -494,13 +485,13 @@ func (c *wireCodec) decodeAuth(fromID enode.ID, fromAddr *net.UDPAddr, head *aut
 	}
 	// Swap keys to match remote.
 	sec.readKey, sec.writeKey = sec.writeKey, sec.readKey
-	c.storeKeys(fromID, fromAddr, sec.readKey, sec.writeKey)
-	c.deleteHandshake(fromID, fromAddr)
+	c.sc.storeNewSession(fromID, fromAddr, sec.readKey, sec.writeKey)
+	c.sc.deleteHandshake(fromID, fromAddr)
 	return sec.readKey, n, err
 }
 
 // decodeAuthResp decodes and verifies an authentication response.
-func (c *wireCodec) decodeAuthResp(fromID enode.ID, fromAddr *net.UDPAddr, head *authHeaderList, challenge *whoareyouV5) (*handshakeSecrets, *enode.Node, error) {
+func (c *wireCodec) decodeAuthResp(fromID enode.ID, fromAddr string, head *authHeaderList, challenge *whoareyouV5) (*handshakeSecrets, *enode.Node, error) {
 	// Decrypt / decode.
 	if head.Scheme != authSchemeName {
 		return nil, nil, errUnknownAuthScheme
@@ -590,42 +581,6 @@ func decodePacketBodyV5(ptype byte, body []byte) (packetV5, error) {
 		return nil, err
 	}
 	return dec, nil
-}
-
-// getHandshake gets the handshake challenge we previously sent to the given remote node.
-func (c *wireCodec) getHandshake(id enode.ID, addr *net.UDPAddr) *whoareyouV5 {
-	return c.handshakes[handshakeKey{id, addr.String()}]
-}
-
-// storeSentHandshake stores the handshake challenge sent to the given remote node.
-func (c *wireCodec) storeSentHandshake(id enode.ID, addr *net.UDPAddr, challenge *whoareyouV5) {
-	challenge.sent = c.clock.Now()
-	c.handshakes[handshakeKey{id, addr.String()}] = challenge
-}
-
-// deleteHandshake deletes handshake data for the given node.
-func (c *wireCodec) deleteHandshake(id enode.ID, addr *net.UDPAddr) {
-	delete(c.handshakes, handshakeKey{id, addr.String()})
-}
-
-// handshakeGC deletes timed-out handshakes.
-func (c *wireCodec) handshakeGC() {
-	deadline := c.clock.Now().Add(-handshakeTimeout)
-	for key, challenge := range c.handshakes {
-		if challenge.sent < deadline {
-			delete(c.handshakes, key)
-		}
-	}
-}
-
-// loadKeys loads encryption keys from the database.
-func (c *wireCodec) loadKeys(id enode.ID, addr *net.UDPAddr) (r, w []byte) {
-	return c.localnode.Database().KeysV5(id, addr.IP)
-}
-
-// storeKeys stores encryption keys to the database.
-func (c *wireCodec) storeKeys(id enode.ID, addr *net.UDPAddr, r, w []byte) {
-	c.localnode.Database().StoreKeysV5(id, addr.IP, r, w)
 }
 
 // sha256reset returns the shared hash instance.

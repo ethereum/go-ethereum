@@ -82,7 +82,7 @@ func TestHandshakeV5(t *testing.T) {
 	// A -> B   FINDNODE
 	findnode, _ := net.nodeA.encodeWithChallenge(t, net.nodeB, challenge, &findnodeV5{})
 	net.nodeB.expectDecode(t, p_findnodeV5, findnode)
-	if len(net.nodeB.c.handshakes) > 0 {
+	if len(net.nodeB.c.sc.handshakes) > 0 {
 		t.Fatalf("node B didn't remove handshake from challenge map")
 	}
 
@@ -160,7 +160,7 @@ func TestHandshakeV5_rekey(t *testing.T) {
 		readKey:  []byte("BBBBBBBBBBBBBBBB"),
 		writeKey: []byte("AAAAAAAAAAAAAAAA"),
 	}
-	net.nodeA.c.storeKeys(net.nodeB.id(), net.nodeB.addr(), initKeys.readKey, initKeys.writeKey)
+	net.nodeA.c.sc.storeNewSession(net.nodeB.id(), net.nodeB.addr(), initKeys.readKey, initKeys.writeKey)
 
 	// A -> B   FINDNODE (encrypted with zero keys)
 	findnode, authTag := net.nodeA.encode(t, net.nodeB, &findnodeV5{})
@@ -172,10 +172,10 @@ func TestHandshakeV5_rekey(t *testing.T) {
 	net.nodeA.expectDecode(t, p_whoareyouV5, whoareyou)
 
 	// Check that new keys haven't been stored yet.
-	if r, w := net.nodeA.c.loadKeys(net.nodeB.id(), net.nodeB.addr()); !bytes.Equal(w, initKeys.writeKey) || !bytes.Equal(r, initKeys.readKey) {
+	if s := net.nodeA.c.sc.session(net.nodeB.id(), net.nodeB.addr()); !bytes.Equal(s.writeKey, initKeys.writeKey) || !bytes.Equal(s.readKey, initKeys.readKey) {
 		t.Fatal("node A stored keys too early")
 	}
-	if w, r := net.nodeB.c.loadKeys(net.nodeA.id(), net.nodeA.addr()); w != nil || r != nil {
+	if s := net.nodeB.c.sc.session(net.nodeA.id(), net.nodeA.addr()); s != nil {
 		t.Fatal("node B stored keys too early")
 	}
 
@@ -202,8 +202,8 @@ func TestHandshakeV5_rekey2(t *testing.T) {
 		readKey:  []byte("CCCCCCCCCCCCCCCC"),
 		writeKey: []byte("DDDDDDDDDDDDDDDD"),
 	}
-	net.nodeA.c.storeKeys(net.nodeB.id(), net.nodeB.addr(), initKeysA.readKey, initKeysA.writeKey)
-	net.nodeB.c.storeKeys(net.nodeA.id(), net.nodeA.addr(), initKeysB.readKey, initKeysA.writeKey)
+	net.nodeA.c.sc.storeNewSession(net.nodeB.id(), net.nodeB.addr(), initKeysA.readKey, initKeysA.writeKey)
+	net.nodeB.c.sc.storeNewSession(net.nodeA.id(), net.nodeA.addr(), initKeysB.readKey, initKeysA.writeKey)
 
 	// A -> B   FINDNODE encrypted with initKeysA
 	findnode, authTag := net.nodeA.encode(t, net.nodeB, &findnodeV5{Distance: 3})
@@ -263,8 +263,8 @@ func BenchmarkV5_DecodePing(b *testing.B) {
 
 	r := []byte{233, 203, 93, 195, 86, 47, 177, 186, 227, 43, 2, 141, 244, 230, 120, 17}
 	w := []byte{79, 145, 252, 171, 167, 216, 252, 161, 208, 190, 176, 106, 214, 39, 178, 134}
-	net.nodeA.c.storeKeys(net.nodeB.id(), net.nodeB.addr(), r, w)
-	net.nodeB.c.storeKeys(net.nodeA.id(), net.nodeA.addr(), w, r)
+	net.nodeA.c.sc.storeNewSession(net.nodeB.id(), net.nodeB.addr(), r, w)
+	net.nodeB.c.sc.storeNewSession(net.nodeA.id(), net.nodeA.addr(), w, r)
 	addrB := net.nodeA.addr()
 	ping := &pingV5{ReqID: []byte("reqid"), ENRSeq: 5}
 	enc, _, err := net.nodeA.c.encode(net.nodeB.id(), addrB, ping, nil)
@@ -356,7 +356,7 @@ func (n *handshakeTestNode) expectDecodeErr(t *testing.T, wantErr error, p []byt
 }
 
 func (n *handshakeTestNode) decode(input []byte) (packetV5, error) {
-	_, _, p, err := n.c.decode(input, &net.UDPAddr{IP: net.IP{127, 0, 0, 1}})
+	_, _, p, err := n.c.decode(input, "127.0.0.1")
 	return p, err
 }
 
@@ -364,8 +364,8 @@ func (n *handshakeTestNode) n() *enode.Node {
 	return n.ln.Node()
 }
 
-func (n *handshakeTestNode) addr() *net.UDPAddr {
-	return &net.UDPAddr{IP: n.ln.Node().IP()}
+func (n *handshakeTestNode) addr() string {
+	return n.ln.Node().IP().String()
 }
 
 func (n *handshakeTestNode) id() enode.ID {

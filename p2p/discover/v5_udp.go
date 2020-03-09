@@ -52,10 +52,11 @@ const (
 type codecV5 interface {
 	// encode encodes a packet. The 'challenge' parameter is non-nil for calls which got a
 	// WHOAREYOU response.
-	encode(fromID enode.ID, fromAddr *net.UDPAddr, p packetV5, challenge *whoareyouV5) (enc []byte, authTag []byte, err error)
+	encode(fromID enode.ID, fromAddr string, p packetV5, challenge *whoareyouV5) (enc []byte, authTag []byte, err error)
+
 	// decode decodes a packet. It returns an *unknownV5 packet if decryption fails.
 	// The fromNode return value is non-nil when the input contains a handshake response.
-	decode(input []byte, fromAddr *net.UDPAddr) (fromID enode.ID, fromNode *enode.Node, p packetV5, err error)
+	decode(input []byte, fromAddr string) (fromID enode.ID, fromNode *enode.Node, p packetV5, err error)
 }
 
 // packetV5 is implemented by all discv5 packet type structs.
@@ -546,13 +547,14 @@ func (t *UDPv5) sendResponse(toID enode.ID, toAddr *net.UDPAddr, packet packetV5
 
 // send sends a packet to the given node.
 func (t *UDPv5) send(toID enode.ID, toAddr *net.UDPAddr, packet packetV5, c *whoareyouV5) ([]byte, error) {
-	enc, authTag, err := t.codec.encode(toID, toAddr, packet, c)
+	addr := toAddr.String()
+	enc, authTag, err := t.codec.encode(toID, addr, packet, c)
 	if err != nil {
-		t.log.Warn(">> "+packet.name(), "id", toID, "addr", toAddr, "err", err)
+		t.log.Warn(">> "+packet.name(), "id", toID, "addr", addr, "err", err)
 		return authTag, err
 	}
 	_, err = t.conn.WriteToUDP(enc, toAddr)
-	t.log.Trace(">> "+packet.name(), "id", toID, "addr", toAddr)
+	t.log.Trace(">> "+packet.name(), "id", toID, "addr", addr)
 	return authTag, err
 }
 
@@ -590,9 +592,10 @@ func (t *UDPv5) dispatchReadPacket(from *net.UDPAddr, content []byte) bool {
 
 // handlePacket decodes and processes an incoming packet from the network.
 func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
-	fromID, fromNode, packet, err := t.codec.decode(rawpacket, fromAddr)
+	addr := fromAddr.String()
+	fromID, fromNode, packet, err := t.codec.decode(rawpacket, addr)
 	if err != nil {
-		t.log.Debug("Bad discv5 packet", "id", fromID, "addr", fromAddr, "err", err)
+		t.log.Debug("Bad discv5 packet", "id", fromID, "addr", addr, "err", err)
 		return err
 	}
 	if fromNode != nil {
@@ -601,7 +604,7 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 	}
 	if packet.kind() != p_whoareyouV5 {
 		// WHOAREYOU logged separately to report the sender ID.
-		t.log.Trace("<< "+packet.name(), "id", fromID, "addr", fromAddr)
+		t.log.Trace("<< "+packet.name(), "id", fromID, "addr", addr)
 	}
 	packet.handle(t, fromID, fromAddr)
 	return nil

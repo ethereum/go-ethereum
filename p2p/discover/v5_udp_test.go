@@ -472,7 +472,7 @@ type testCodecFrame struct {
 	Packet  rlp.RawValue
 }
 
-func (c *testCodec) encode(toID enode.ID, addr *net.UDPAddr, p packetV5, _ *whoareyouV5) ([]byte, []byte, error) {
+func (c *testCodec) encode(toID enode.ID, addr string, p packetV5, _ *whoareyouV5) ([]byte, []byte, error) {
 	c.ctr++
 	authTag := make([]byte, 8)
 	binary.BigEndian.PutUint64(authTag, c.ctr)
@@ -481,7 +481,7 @@ func (c *testCodec) encode(toID enode.ID, addr *net.UDPAddr, p packetV5, _ *whoa
 	return frame, authTag, err
 }
 
-func (c *testCodec) decode(input []byte, addr *net.UDPAddr) (enode.ID, *enode.Node, packetV5, error) {
+func (c *testCodec) decode(input []byte, addr string) (enode.ID, *enode.Node, packetV5, error) {
 	frame, p, err := c.decodeFrame(input)
 	if err != nil {
 		return enode.ID{}, nil, nil, err
@@ -550,7 +550,7 @@ func (test *udpV5Test) packetInFrom(key *ecdsa.PrivateKey, addr *net.UDPAddr, pa
 
 	ln := test.getNode(key, addr)
 	codec := &testCodec{test: test, id: ln.ID()}
-	enc, _, err := codec.encode(test.udp.Self().ID(), addr, packet, nil)
+	enc, _, err := codec.encode(test.udp.Self().ID(), addr.String(), packet, nil)
 	if err != nil {
 		test.t.Errorf("%s encode error: %v", packet.name(), err)
 	}
