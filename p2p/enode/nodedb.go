@@ -174,13 +174,14 @@ func splitNodeItemKey(key []byte) (id ID, ip net.IP, field string) {
 	return id, ip, field
 }
 
-func v5Key(id ID, field string) []byte {
-	key := append([]byte(dbNodePrefix), id[:]...)
-	key = append(key, ':')
-	key = append(key, dbDiscv5Root...)
-	key = append(key, ':')
-	key = append(key, field...)
-	return key
+func v5Key(id ID, ip net.IP, field string) []byte {
+	return bytes.Join([][]byte{
+		[]byte(dbNodePrefix),
+		id[:],
+		[]byte(dbDiscv5Root),
+		ip.To16(),
+		[]byte(field),
+	}, []byte{':'})
 }
 
 // localItemKey returns the key of a local node item.
@@ -390,18 +391,18 @@ func (db *DB) UpdateFindFails(id ID, ip net.IP, fails int) error {
 }
 
 // FindFailsV5 retrieves the discv5 findnode failure counter.
-func (db *DB) FindFailsV5(id ID) int {
-	return int(db.fetchInt64(v5Key(id, dbNodeFindFails)))
+func (db *DB) FindFailsV5(id ID, ip net.IP) int {
+	return int(db.fetchInt64(v5Key(id, ip, dbNodeFindFails)))
 }
 
 // UpdateFindFailsV5 stores the discv5 findnode failure counter.
-func (db *DB) UpdateFindFailsV5(id ID, fails int) error {
-	return db.storeInt64(v5Key(id, dbNodeFindFails), int64(fails))
+func (db *DB) UpdateFindFailsV5(id ID, ip net.IP, fails int) error {
+	return db.storeInt64(v5Key(id, ip, dbNodeFindFails), int64(fails))
 }
 
 // KeysV5 retrieves discv5 AES keys.
 func (db *DB) KeysV5(id ID, ip net.IP) ([]byte, []byte) {
-	k, _ := db.lvl.Get(v5Key(id, dbNodeKeys), nil)
+	k, _ := db.lvl.Get(v5Key(id, ip, dbNodeKeys), nil)
 	if len(k) == 0 {
 		return nil, nil
 	}
@@ -413,7 +414,7 @@ func (db *DB) StoreKeysV5(id ID, ip net.IP, w, r []byte) error {
 	k := make([]byte, len(w)+len(r))
 	copy(k, w)
 	copy(k[len(w):], r)
-	return db.lvl.Put(v5Key(id, dbNodeKeys), k, nil)
+	return db.lvl.Put(v5Key(id, ip, dbNodeKeys), k, nil)
 }
 
 // LocalSeq retrieves the local record sequence counter.

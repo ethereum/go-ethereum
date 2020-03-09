@@ -462,3 +462,16 @@ func TestDBExpiration(t *testing.T) {
 		}
 	}
 }
+
+// This test checks that expiration works when discovery v5 data is present
+// in the database.
+func TestDBExpireV5(t *testing.T) {
+	db, _ := OpenDB("")
+	defer db.Close()
+
+	ip := net.IP{127, 0, 0, 1}
+	key := make([]byte, 16)
+	db.StoreKeysV5(ID{}, ip, key, key)
+
+	db.expireNodes()
+}
