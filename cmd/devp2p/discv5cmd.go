@@ -68,7 +68,7 @@ var (
 
 func discv5Ping(ctx *cli.Context) error {
 	n := getNodeArg(ctx)
-	disc := startV5(nil)
+	disc := startV5(ctx)
 	defer disc.Close()
 
 	fmt.Println(disc.Ping(n))
@@ -77,7 +77,7 @@ func discv5Ping(ctx *cli.Context) error {
 
 func discv5Resolve(ctx *cli.Context) error {
 	n := getNodeArg(ctx)
-	disc := startV5(nil)
+	disc := startV5(ctx)
 	defer disc.Close()
 
 	fmt.Println(disc.Resolve(n))
