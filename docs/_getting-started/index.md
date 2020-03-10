@@ -5,46 +5,33 @@ sort_key: A
 ---
 
 To use Geth, you need to install it first. You can install Geth in a variety
-of ways that you can find in the "[Install and Build](install-and-build/installing-geth)" section. These include installing it via your favorite package manager, downloading a
-standalone pre-built binary, running it as a docker container, or building it yourself.
+of ways that you can find in the "[Install and Build](install-and-build/installing-geth)" section. 
+These include installing it via your favorite package manager, downloading a
+standalone pre-built binary, running it as a docker container or building it yourself.
 
-For this guide, we assume you have Geth installed and are ready to find  out how to use it. The guide shows you how to create accounts, sync to a network, and then send transactions between accounts.
+For this guide, we assume you have Geth installed and are ready to find  out how to use it. 
+The guide shows you how to create accounts, sync to a network, and then send transactions between accounts.
 
-## Networks
+This guide uses [Clef](clef/tutorial), which is our preferred tool for signing transactions with Geth, 
+and will replace Geth's account management.
 
-You can connect a Geth node to several different networks using its name as an argument. These include the main Ethereum network, [a private network](getting-started/private-net) you  create, and three test networks that use different consensus algorithms:
+## Start Geth
+
+Clef needs a Geth keystore path to start, and Geth needs a running Clef instance to connect to.
+To get around this, we recommend you first start Geth to create the keystore,
+and we will restart it with more options later.
+
+### Networks
+
+You can connect a Geth node to several different networks using the network name as an argument. 
+These include the main Ethereum network, [a private network](getting-started/private-net) you  create, 
+and three test networks that use different consensus algorithms:
 
 -   **Ropsten**: Proof-of-work test network
 -   **Rinkeby**: Proof-of-authority test network
 -   **Görli**: Proof-of-authority test network
 
-For this guide we use the Görli network.
-
-## Initialize and start Clef
-
-[Clef](clef/tutorial) is our preferred tool for signing transactions with Geth, and will replace Geth's account management.
-
-First initialize Clef with a random master seed, which is also encrypted with the password you define. The password must be at least 10 characters.
-
-```shell
-clef init
-```
-
-<!-- TODO: Image -->
-
-Start clef, setting the keystore and chain id for the network we want to connect to:
-
-```shell
-clef --keystore <GETH_LOCATION>/goerli/keystore --chainid 5
-```
-
-## Sync your local node to a test network
-
-Start your node by connecting it to a network and setting a sync mode. The command below also enables the [Geth RPC interface](clef/tutorial) (which we cover [below](#)), and sets Clef as the transaction signer.
-
-```shell
-geth --goerli --syncmode "light" --rpc --signer=<CLEF_LOCATION>/clef.ipc
-```
+For this guide, we use the Görli network.
 
 ### Sync modes
 
@@ -53,26 +40,83 @@ argument that determines what sort of node it is in the network.
 
 These are:
 
--   **Full**: Downloads all blocks (including headers, transactions and receipts) and
+-   **Full**: Downloads all blocks (including headers, transactions, and receipts) and
     generates the state of the blockchain incrementally by executing every block.
 -   **Fast** (Default): Downloads all blocks (including headers, transactions and
     receipts), verifies all headers, and downloads the state and verifies it against the
     headers.
 -   **Light**: Downloads all block headers, block data, and verifies some randomly.
 
+For this first step, connect to the `goerli` network and use a `light` sync:
+
+```shell
+geth --goerli --syncmode "light"
+```
+
+Let Geth run for a few minutes, stop it again, and continue with the rest of this guide.
+
+## Initialize and start Clef
+
+First, initialize Clef with a random master seed, which is also encrypted with the password you define.
+The password must be at least 10 characters.
+
+```shell
+clef init
+```
+
+![Clef init command](../../static/images/clef-init.gif)
+
+Start Clef, setting the keystore and chain id (goerli is 5) for the network we want to connect to:
+
+```shell
+clef --keystore <GETH_LOCATION>/keystore --chainid 5
+```
+
+To begin with, you see errors about a missing keystore, and we fix that soon.
+
+## Sync your local node to a test network
+
+Restart your Geth node. The command below also enables the [Geth RPC interface](clef/tutorial) 
+(which we cover below), and sets Clef as the transaction signer.
+
+```shell
+geth --goerli --syncmode "light" --rpc --signer=<CLEF_LOCATION>/clef.ipc
+```
+
+## Create accounts
+
+In another terminal, create two accounts with the `geth account new` command,
+set a password for each of them, and note the public address for each.
+
+![Create new account command](../../static/images/geth-account-new.gif)
+
+Notice that the Clef window that displayed an error about a missing keystore now starts to work.
+
+_[Read this guide](./interface/managing-your-accounts) for more details on importing
+existing Ethereum accounts and other uses of the `account` command._
+
+## Get ETH
+
+Unless you have Ether in another account on the Görli network, you can use a
+[faucet](https://goerli-faucet.slock.it/) to send ETH to one of your new account addresses to use for this guide.
+
 ## Connect to Geth with IPC or RPC
 
-You can interact with Geth in two ways: Directly with the node using the JavaScript console over IPC, or connecting to the node remotely over HTTP using RPC.
+You can interact with Geth in two ways: Directly with the node using the JavaScript
+console over IPC, or connecting to the node remotely over HTTP using RPC.
 
-IPC allows you to do more, especially when it comes to creating, and interacting with accounts, but you need direct access to the node.
+IPC allows you to do more, especially when it comes to creating and interacting
+with accounts, but you need direct access to the node.
 
-RPC allows remote applications to access your node, but has limitations and security considerations, and by default only allows access to methods in the `eth` and `shh` namespaces. Find out how to override this setting [in the RPC docs](rpc/server#http-server). 
+RPC allows remote applications to access your node but has limitations and security
+considerations, and by default only allows access to methods in the `eth` and `shh`
+namespaces. Find out how to override this setting [in the RPC docs](rpc/server#http-server). 
 
 ## Using IPC
 
 ### Connect to console
 
-You can connect to the IPC console in two ways. First when you start the node:
+You can connect to the IPC console in two ways. First, when you start the node:
 
 ```shell
 geth --goerli --syncmode "light" --rpc --signer=<CLEF_LOCATION>/clef.ipc console
@@ -86,34 +130,27 @@ You can also open a console on the node from another terminal using:
 geth attach <IPC_LOCATION>
 ```
 
-### Create accounts
-
-Using the console, create two accounts with the `personal.newAccount()` command, set a password for each of them, and note the public address for each.
-
-<!-- TODO: Add image -->
-
-_[Read this guide](./interface/managing-your-accounts) for more details on importing
-existing Ethereum accounts and other uses of the `account` command._
-
-Unless you have Ether in another account on the Görli network, you can use a [faucet](https://goerli-faucet.slock.it/) to send ETH to one of your new accounts to use for this guide.
-
 ### Check account balance
 
 ```javascript
 web3.fromWei(eth.getBalance("<ADDRESS_1>"),"ether")
 ```
 
-Getting the balance of an account does not require a signed transaction, so Clef does not ask for approval, and Geth returns the value.
+Getting the balance of an account does not require a signed transaction,
+so Clef does not ask for approval, and Geth returns the value.
 
 ### Send ETH to account
 
-Send 0.01 ETH from the account that you added ETH to with the Görli faucet, to the second account you created:
+Send 0.01 ETH from the account that you added ETH to with the Görli faucet,
+to the second account you created:
 
 ```javascript
 eth.sendTransaction({from:"<ADDRESS_0>",to:"<ADDRESS_1>", value: web3.toWei(0.01,"ether")})
 ```
 
-This action does require signing, so Clef prompts you to approve it, and if you select `y`, asks you for the password you are sending the ETH from. If the password is correct, Geth proceeds with the transaction.
+This action does require signing, so Clef prompts you to approve it, and if you
+do, asks you for the password you are sending the ETH from. 
+If the password is correct, Geth proceeds with the transaction.
 
 To check, get the account balance of the second account:
 
@@ -143,11 +180,12 @@ curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
     '{"jsonrpc":"2.0",
     "method":"eth_getBalance",
     "params":["<ADDRESS_1>","latest"],
-    "id":1}' 
+    "id":1}' \
     -H "Content-Type:application/json"
 ```
 
-Getting the balance of an account does not require a signed transaction, so Clef does not ask for approval, and Geth returns the value.
+Getting the balance of an account does not require a signed transaction,
+so Clef does not ask for approval, and Geth returns the value.
 
 ### Send ETH to accounts
 
@@ -162,11 +200,13 @@ curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
     -H "Content-Type:application/json"
 ```
 
-This action does require signing, so Clef prompts you to approve it, and if you select `y`, asks you for the password you are sending the ETH from. If the password is correct, Geth proceeds with the transaction.
+This action does require signing, so Clef prompts you to approve it, and if you do,
+asks you for the password you are sending the ETH from. If the password is correct,
+Geth proceeds with the transaction.
 
 To check, get the account balance of the second account:
 
-```javascript
+```shell
 curl -X POST http://<GETH_IP_ADDRESS>:8545 --data \
     '{"jsonrpc":"2.0",
     "method":"eth_getBalance",
