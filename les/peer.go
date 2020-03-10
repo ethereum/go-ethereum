@@ -637,12 +637,12 @@ type clientPeer struct {
 
 	// responseLock ensures that responses are queued in the same order as
 	// RequestProcessed is called
-	responseLock   sync.Mutex
-	server         bool
-	invalidCount   uint32 // Counter the invalid request the client peer has made.
-	responseCount  uint64 // Counter to generate an unique id for request processing.
-	errCh          chan error
-	fcClient       *flowcontrol.ClientNode // Server side mirror token bucket.
+	responseLock  sync.Mutex
+	server        bool
+	invalidCount  uint32 // Counter the invalid request the client peer has made.
+	responseCount uint64 // Counter to generate an unique id for request processing.
+	errCh         chan error
+	fcClient      *flowcontrol.ClientNode // Server side mirror token bucket.
 }
 
 func newClientPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *clientPeer {
