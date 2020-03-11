@@ -665,7 +665,7 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 	// commit span
 	headerNumber := header.Number.Uint64()
 	fmt.Println(header.Number, headerNumber % c.config.Sprint)
-	if headerNumber > 0 &&
+	if /* headerNumber > 0 && */
 		headerNumber % c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
 		fmt.Println("here 0.1")
@@ -1002,6 +1002,7 @@ func (c *Bor) checkAndCommitSpan(
 	go func() {
 		var err error
 		pending, err = c.isSpanPending(headerNumber - 1)
+		// pending, err = c.isSpanPending(headerNumber)
 		errors <- err
 		// wg.Done()
 	}()
@@ -1074,7 +1075,7 @@ func (c *Bor) fetchAndCommitSpan(
 	if err := json.Unmarshal(response.Result, &heimdallSpan); err != nil {
 		return err
 	}
-	fmt.Println("here 4", heimdallSpan)
+	// fmt.Println("here 4", heimdallSpan)
 	// check if chain id matches with heimdall span
 	if heimdallSpan.ChainID != c.chainConfig.ChainID.String() {
 		return fmt.Errorf(
