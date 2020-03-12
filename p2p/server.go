@@ -57,6 +57,10 @@ const (
 	// This time limits inbound connection attempts per source IP.
 	inboundThrottleTime = 30 * time.Second
 
+	// This time limits inbound connection attempts per source IP
+	// when the IP is banned.
+	banIPThrottleTime = 5 * time.Minute
+
 	// Maximum time allowed for reading a complete message.
 	// This is effectively the amount of time a connection can be idle.
 	frameReadTimeout = 30 * time.Second
@@ -198,6 +202,9 @@ type Server struct {
 
 	// State of run loop and listenLoop.
 	inboundHistory expHeap
+
+	bannedLock    sync.RWMutex // protects bannedHistory
+	bannedHistory expHeap
 }
 
 type peerOpFunc func(map[enode.ID]*Peer)
@@ -206,6 +213,7 @@ type peerDrop struct {
 	*Peer
 	err       error
 	requested bool // true if signaled by the peer
+	banned    bool // true if the peer is banned
 }
 
 type connFlag int32
@@ -774,6 +782,14 @@ running:
 			if pd.Inbound() {
 				inboundCount--
 			}
+			// Ban the IP if a peer is marked as bad peer.
+			if pd.banned {
+				remoteIP := netutil.AddrIP(pd.rw.fd.RemoteAddr())
+				srv.bannedLock.Lock()
+				srv.bannedHistory.add(remoteIP.String(), srv.clock.Now().Add(banIPThrottleTime))
+				srv.bannedLock.Unlock()
+				srv.dialsched.peerBanned(pd.rw)
+			}
 		}
 	}
 
@@ -905,8 +921,15 @@ func (srv *Server) checkInboundConn(fd net.Conn, remoteIP net.IP) error {
 	if srv.NetRestrict != nil && !srv.NetRestrict.Contains(remoteIP) {
 		return fmt.Errorf("not whitelisted in NetRestrict")
 	}
-	// Reject Internet peers that try too often.
+	// Reject Internet peers if they are marked as bad.
 	now := srv.clock.Now()
+	srv.bannedLock.Lock()
+	defer srv.bannedLock.Unlock()
+	srv.bannedHistory.expire(now, nil)
+	if !netutil.IsLAN(remoteIP) && srv.bannedHistory.contains(remoteIP.String()) {
+		return fmt.Errorf("bad peer")
+	}
+	// Reject Internet peers that try too often.
 	srv.inboundHistory.expire(now, nil)
 	if !netutil.IsLAN(remoteIP) && srv.inboundHistory.contains(remoteIP.String()) {
 		return fmt.Errorf("too many attempts")
@@ -1036,12 +1059,12 @@ func (srv *Server) runPeer(p *Peer) {
 	})
 
 	// Run the per-peer main loop.
-	remoteRequested, err := p.run()
+	remoteRequested, banned, err := p.run()
 
 	// Announce disconnect on the main loop to update the peer set.
 	// The main loop waits for existing peers to be sent on srv.delpeer
 	// before returning, so this send should not select on srv.quit.
-	srv.delpeer <- peerDrop{p, err, remoteRequested}
+	srv.delpeer <- peerDrop{p, err, remoteRequested, banned}
 
 	// Broadcast peer drop to external subscribers. This needs to be
 	// after the send to delpeer so subscribers have a consistent view of

@@ -113,6 +113,8 @@ type Peer struct {
 	protoErr chan error
 	closed   chan struct{}
 	disc     chan DiscReason
+	banOnce  sync.Once
+	ban      chan struct{}
 
 	// events receives message send / receive events if set
 	events *event.Feed
@@ -177,6 +179,14 @@ func (p *Peer) Disconnect(reason DiscReason) {
 	}
 }
 
+// Ban terminates the peer connection if the peer acts really bad.
+// The banned peer will be forbidden for re-connection in a short time(5 mins).
+func (p *Peer) Ban() {
+	p.banOnce.Do(func() {
+		close(p.ban)
+	})
+}
+
 // String implements fmt.Stringer.
 func (p *Peer) String() string {
 	id := p.ID()
@@ -195,6 +205,7 @@ func newPeer(log log.Logger, conn *conn, protocols []Protocol) *Peer {
 		running:  protomap,
 		created:  mclock.Now(),
 		disc:     make(chan DiscReason),
+		ban:      make(chan struct{}),
 		protoErr: make(chan error, len(protomap)+1), // protocols + pingLoop
 		closed:   make(chan struct{}),
 		log:      log.New("id", conn.node.ID(), "conn", conn.flags),
@@ -206,7 +217,7 @@ func (p *Peer) Log() log.Logger {
 	return p.log
 }
 
-func (p *Peer) run() (remoteRequested bool, err error) {
+func (p *Peer) run() (remoteRequested bool, banned bool, err error) {
 	var (
 		writeStart = make(chan struct{}, 1)
 		writeErr   = make(chan error, 1)
@@ -247,13 +258,24 @@ loop:
 		case err = <-p.disc:
 			reason = discReasonForError(err)
 			break loop
+		case <-p.ban:
+			banned = true
+			break loop
 		}
 	}
-
 	close(p.closed)
+
+	// If the peer is banned by up upper level protocol, just send the
+	// DiscRequested to peer. The reason is:
+	// - The banned disconnection reason is not yet defined
+	// - It's might unnecessary to tell the adversary the specified reason for
+	//   disconnection.
+	if banned {
+		reason = DiscRequested
+	}
 	p.rw.close(reason)
 	p.wg.Wait()
-	return remoteRequested, err
+	return remoteRequested, banned, err
 }
 
 func (p *Peer) pingLoop() {

@@ -103,7 +103,7 @@ func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan error) {
 	peer := newPeer(log.Root(), c1, protos)
 	errc := make(chan error, 1)
 	go func() {
-		_, err := peer.run()
+		_, _, err := peer.run()
 		errc <- err
 	}()
 

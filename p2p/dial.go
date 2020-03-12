@@ -77,6 +77,7 @@ var (
 	errAlreadyDialing   = errors.New("already dialing")
 	errAlreadyConnected = errors.New("already connected")
 	errRecentlyDialed   = errors.New("recently dialed")
+	errRecentlyBanned   = errors.New("recently banned")
 	errNotWhitelisted   = errors.New("not contained in netrestrict whitelist")
 	errNoPort           = errors.New("node does not provide TCP port")
 )
@@ -103,6 +104,7 @@ type dialScheduler struct {
 	remStaticCh chan *enode.Node
 	addPeerCh   chan *conn
 	remPeerCh   chan *conn
+	banPeerCh   chan *conn
 
 	// Everything below here belongs to loop and
 	// should only be accessed by code on the loop goroutine.
@@ -121,6 +123,9 @@ type dialScheduler struct {
 	history          expHeap
 	historyTimer     mclock.Timer
 	historyTimerTime mclock.AbsTime
+
+	// The bannedHistory keeps all recently banned nodes which won't be dialed for a short time
+	bannedHistory expHeap
 
 	// for logStats
 	lastStatsLog     mclock.AbsTime
@@ -173,6 +178,7 @@ func newDialScheduler(config dialConfig, it enode.Iterator, setupFunc dialSetupF
 		remStaticCh: make(chan *enode.Node),
 		addPeerCh:   make(chan *conn),
 		remPeerCh:   make(chan *conn),
+		banPeerCh:   make(chan *conn),
 	}
 	d.lastStatsLog = d.clock.Now()
 	d.ctx, d.cancel = context.WithCancel(context.Background())
@@ -216,6 +222,14 @@ func (d *dialScheduler) peerAdded(c *conn) {
 func (d *dialScheduler) peerRemoved(c *conn) {
 	select {
 	case d.remPeerCh <- c:
+	case <-d.ctx.Done():
+	}
+}
+
+// peerBanned notifies the dialer about banned peer
+func (d *dialScheduler) peerBanned(c *conn) {
+	select {
+	case d.banPeerCh <- c:
 	case <-d.ctx.Done():
 	}
 }
@@ -273,6 +287,14 @@ loop:
 			}
 			delete(d.peers, c.node.ID())
 			d.updateStaticPool(c.node.ID())
+
+		case c := <-d.banPeerCh:
+			// If it's not a static node and been banned,
+			// add to the blacklist for dialing.
+			if d.static[c.node.ID()] == nil {
+				remoteIP := netutil.AddrIP(c.fd.RemoteAddr())
+				d.bannedHistory.add(remoteIP.String(), d.clock.Now().Add(banIPThrottleTime))
+			}
 
 		case node := <-d.addStaticCh:
 			id := node.ID()
@@ -406,6 +428,10 @@ func (d *dialScheduler) checkDial(n *enode.Node) error {
 	}
 	if d.history.contains(string(n.ID().Bytes())) {
 		return errRecentlyDialed
+	}
+	d.bannedHistory.expire(d.clock.Now(), nil)
+	if !n.Incomplete() && !netutil.IsLAN(n.IP()) && d.bannedHistory.contains(n.IP().String()) {
+		return errRecentlyBanned
 	}
 	return nil
 }
