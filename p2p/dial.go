@@ -123,7 +123,8 @@ type dialScheduler struct {
 	historyTimer     mclock.Timer
 	historyTimerTime mclock.AbsTime
 
-	// The bannedHistory keeps all recently banned nodes which won't be dialed for a short time
+	// The bannedHistory keeps all recently banned nodes
+	// which won't be dialed for a short time
 	bannedHistory expHeap
 
 	// for logStats
@@ -288,7 +289,7 @@ loop:
 			d.updateStaticPool(c.node.ID())
 
 		case c := <-d.banPeerCh:
-			// If it's not a static node and been banned,
+			// If it's not a static node and has been banned,
 			// add to the blacklist for dialing.
 			if d.static[c.node.ID()] == nil {
 				remoteIP := netutil.AddrIP(c.fd.RemoteAddr())

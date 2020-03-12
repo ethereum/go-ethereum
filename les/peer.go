@@ -1030,6 +1030,24 @@ func (ps *clientPeerSet) allPeers() []*clientPeer {
 	return list
 }
 
+// banPeer terminates the connection and bans re-connection
+// or dialing in the short future.
+func (ps *clientPeerSet) banPeer(id string) error {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	peer := ps.peers[id]
+	if peer == nil {
+		return errNotRegistered
+	}
+	delete(ps.peers, id)
+	for _, sub := range ps.subscribers {
+		sub.unregisterPeer(peer)
+	}
+	peer.Ban()
+	return nil
+}
+
 // close disconnects all peers. No new peers can be registered
 // after close has returned.
 func (ps *clientPeerSet) close() {
@@ -1179,6 +1197,24 @@ func (ps *serverPeerSet) allPeers() []*serverPeer {
 		list = append(list, p)
 	}
 	return list
+}
+
+// banPeer terminates the connection and bans re-connection
+// or dialing in the short future.
+func (ps *serverPeerSet) banPeer(id string) error {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	peer := ps.peers[id]
+	if peer == nil {
+		return errNotRegistered
+	}
+	delete(ps.peers, id)
+	for _, sub := range ps.subscribers {
+		sub.unregisterPeer(peer)
+	}
+	peer.Ban()
+	return nil
 }
 
 // close disconnects all peers. No new peers can be registered
