@@ -131,6 +131,7 @@ type peerCommons struct {
 	network      uint64    // Network ID being on.
 	frozen       uint32    // Flag whether the peer is frozen.
 	announceType uint64    // New block announcement type.
+	serving      uint32    // The status indicates the peer is served.
 	headInfo     blockInfo // Latest block information.
 
 	// Background task queue for caching peer tasks and executing in order.
@@ -636,13 +637,12 @@ type clientPeer struct {
 
 	// responseLock ensures that responses are queued in the same order as
 	// RequestProcessed is called
-	responseLock   sync.Mutex
-	server         bool
-	invalidCount   uint32 // Counter the invalid request the client peer has made.
-	responseCount  uint64 // Counter to generate an unique id for request processing.
-	errCh          chan error
-	fcClient       *flowcontrol.ClientNode // Server side mirror token bucket.
-	balanceTracker *balanceTracker         // set by clientPool.connect, used and removed by serverHandler
+	responseLock  sync.Mutex
+	server        bool
+	invalidCount  uint32 // Counter the invalid request the client peer has made.
+	responseCount uint64 // Counter to generate an unique id for request processing.
+	errCh         chan error
+	fcClient      *flowcontrol.ClientNode // Server side mirror token bucket.
 }
 
 func newClientPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *clientPeer {

@@ -157,6 +157,9 @@ func (h *serverHandler) handle(p *clientPeer) error {
 		clientConnectionGauge.Update(int64(h.server.peers.len()))
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 	}()
+	// Mark the peer starts to be served.
+	atomic.StoreUint32(&p.serving, 1)
+	defer atomic.StoreUint32(&p.serving, 0)
 
 	// Spawn a main loop to handle all incoming messages.
 	for {
