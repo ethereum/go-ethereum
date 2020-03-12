@@ -179,7 +179,7 @@ func testClientCancel(transport string, t *testing.T) {
 	var (
 		wg       sync.WaitGroup
 		nreqs    = 10
-		ncallers = 6
+		ncallers = 10
 	)
 	caller := func(index int) {
 		defer wg.Done()
@@ -200,14 +200,16 @@ func testClientCancel(transport string, t *testing.T) {
 				// deadline.
 				ctx, cancel = context.WithTimeout(context.Background(), timeout)
 			}
+
 			// Now perform a call with the context.
 			// The key thing here is that no call will ever complete successfully.
-			sleepTime := maxContextCancelTimeout + 20*time.Millisecond
-			err := client.CallContext(ctx, nil, "test_sleep", sleepTime)
-			if err != nil {
-				log.Debug(fmt.Sprint("got expected error:", err))
-			} else {
-				t.Errorf("no error for call with %v wait time", timeout)
+			err := client.CallContext(ctx, nil, "test_block")
+			switch {
+			case err == nil:
+				_, hasDeadline := ctx.Deadline()
+				t.Errorf("no error for call with %v wait time (deadline: %v)", timeout, hasDeadline)
+				// default:
+				// 	t.Logf("got expected error with %v wait time: %v", timeout, err)
 			}
 			cancel()
 		}

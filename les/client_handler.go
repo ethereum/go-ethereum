@@ -19,6 +19,7 @@ package les
 import (
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -132,6 +133,10 @@ func (h *clientHandler) handle(p *serverPeer) error {
 	if p.poolEntry != nil {
 		h.backend.serverPool.registered(p.poolEntry)
 	}
+	// Mark the peer starts to be served.
+	atomic.StoreUint32(&p.serving, 1)
+	defer atomic.StoreUint32(&p.serving, 0)
+
 	// Spawn a main loop to handle all incoming messages.
 	for {
 		if err := h.handleMsg(p); err != nil {

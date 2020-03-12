@@ -186,8 +186,6 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 	server, client, tearDown := newClientServerEnv(t, 4, protocol, nil, nil, 0, false, true)
 	defer tearDown()
 
-	client.handler.synchronise(client.peer.speer)
-
 	// Ensure the client has synced all necessary data.
 	clientHead := client.handler.backend.blockchain.CurrentHeader()
 	if clientHead.Number.Uint64() != 4 {
