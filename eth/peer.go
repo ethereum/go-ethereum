@@ -155,9 +155,9 @@ func (p *peer) broadcastBlocks() {
 // node internals and at the same time rate limits queued data.
 func (p *peer) broadcastTransactions() {
 	var (
-		queue []common.Hash      // Queue of hashes to broadcast as full transactions
-		done  chan struct{}      // Non-nil if background broadcaster is running
-		fail  = make(chan error) // Channel used to receive network error
+		queue []common.Hash         // Queue of hashes to broadcast as full transactions
+		done  chan struct{}         // Non-nil if background broadcaster is running
+		fail  = make(chan error, 1) // Channel used to receive network error
 	)
 	for {
 		// If there's no in-flight broadcast running, check if a new one is needed
@@ -217,9 +217,9 @@ func (p *peer) broadcastTransactions() {
 // node internals and at the same time rate limits queued data.
 func (p *peer) announceTransactions() {
 	var (
-		queue []common.Hash      // Queue of hashes to announce as transaction stubs
-		done  chan struct{}      // Non-nil if background announcer is running
-		fail  = make(chan error) // Channel used to receive network error
+		queue []common.Hash         // Queue of hashes to announce as transaction stubs
+		done  chan struct{}         // Non-nil if background announcer is running
+		fail  = make(chan error, 1) // Channel used to receive network error
 	)
 	for {
 		// If there's no in-flight announce running, check if a new one is needed
