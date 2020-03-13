@@ -171,12 +171,24 @@ func (c *BoundContract) Transact(opts *TransactOpts, method string, params ...in
 	if err != nil {
 		return nil, err
 	}
+	// todo(rjl493456442) check the method is payable or not,
+	// reject invalid transaction at the first place
 	return c.transact(opts, &c.address, input)
+}
+
+// RawTransact initiates a transaction with the given raw calldata as the input.
+// It's usually used to initiates transaction for invoking **Fallback** function.
+func (c *BoundContract) RawTransact(opts *TransactOpts, calldata []byte) (*types.Transaction, error) {
+	// todo(rjl493456442) check the method is payable or not,
+	// reject invalid transaction at the first place
+	return c.transact(opts, &c.address, calldata)
 }
 
 // Transfer initiates a plain transaction to move funds to the contract, calling
 // its default method if one is available.
 func (c *BoundContract) Transfer(opts *TransactOpts) (*types.Transaction, error) {
+	// todo(rjl493456442) check the payable fallback or receive is defined
+	// or not, reject invalid transaction at the first place
 	return c.transact(opts, &c.address, nil)
 }
 
