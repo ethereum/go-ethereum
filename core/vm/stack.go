@@ -105,4 +105,3 @@ func (st *ReturnStack) pop() (ret uint64) {
 	st.data = st.data[:len(st.data)-1]
 	return
 }
-

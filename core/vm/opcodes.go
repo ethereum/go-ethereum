@@ -200,8 +200,8 @@ const (
 
 // 0xb0 range - subroutine ops.
 const (
+	BEGINSUB  OpCode = 0xb2
 	JUMPSUB   OpCode = 0xb3
-	BEGINSUB  OpCode = 0xb5
 	RETURNSUB OpCode = 0xb7
 )
 

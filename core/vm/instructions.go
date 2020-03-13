@@ -669,24 +669,31 @@ func opBeginSub(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 }
 
 func opJumpSub(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	pos := stack.pop().Uint64()
-	if !contract.validJumpSubdest(pos) {
-		return nil, errInvalidJump
+	if len(callContext.rstack.data) >= 1023 {
+		return nil, ErrReturnStackExceeded
+	}
+	pos := callContext.stack.pop()
+	if !pos.IsUint64() {
+		return nil, ErrInvalidJump
+	}
+	posU64 := pos.Uint64()
+	if !callContext.contract.validJumpSubdest(posU64) {
+		return nil, ErrInvalidJump
 	}
 	callContext.rstack.push(*pc)
-	*pc = pos
-
-	// TODO(gcolvin) is this necessary?
-	// interpreter.intPool.put(pos)
+	*pc = posU64
+	interpreter.intPool.put(pos)
 	return nil, nil
 }
 
 func opReturnSub(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	pos := callContext.rstack.pop()
-	if !contract.validReturndest(pos) {
-		return nil, errInvalidJump
+	if len(callContext.rstack.data) == 0 {
+		return nil, ErrInvalidRetsub
 	}
-	*pc = pos
+	// Other than the check that the return stack is not empty, there is no
+	// need to validate the pc from 'returns', since we only ever push valid
+	//values onto it via jumpsub.
+	*pc = callContext.rstack.pop()
 	return nil, nil
 }
 
