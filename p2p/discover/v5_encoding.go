@@ -225,8 +225,8 @@ func newWireCodec(ln *enode.LocalNode, key *ecdsa.PrivateKey, clock mclock.Clock
 }
 
 // encode encodes a packet to a node. 'id' and 'addr' specify the destination node. The
-// 'token' parameter should be set to the token in the most recently received WHOAREYOU
-// packet.
+// 'challenge' parameter should be the most recently received WHOAREYOU packet from that
+// node.
 func (c *wireCodec) encode(id enode.ID, addr string, packet packetV5, challenge *whoareyouV5) ([]byte, []byte, error) {
 	if packet.kind() == p_whoareyouV5 {
 		p := packet.(*whoareyouV5)
