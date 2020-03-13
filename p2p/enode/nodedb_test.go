@@ -471,7 +471,7 @@ func TestDBExpireV5(t *testing.T) {
 
 	ip := net.IP{127, 0, 0, 1}
 	key := make([]byte, 16)
-	db.StoreKeysV5(ID{}, ip, key, key)
+	db.StoreFindFailsV5(ID{}, ip, key, key)
 
 	db.expireNodes()
 }

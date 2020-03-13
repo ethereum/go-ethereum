@@ -49,7 +49,6 @@ const (
 	dbNodePing      = "lastping"
 	dbNodePong      = "lastpong"
 	dbNodeSeq       = "seq"
-	dbNodeKeys      = "keys"
 
 	// Local information is keyed by ID only, the full key is "local:<ID>:seq".
 	// Use localItemKey to create those keys.
@@ -398,23 +397,6 @@ func (db *DB) FindFailsV5(id ID, ip net.IP) int {
 // UpdateFindFailsV5 stores the discv5 findnode failure counter.
 func (db *DB) UpdateFindFailsV5(id ID, ip net.IP, fails int) error {
 	return db.storeInt64(v5Key(id, ip, dbNodeFindFails), int64(fails))
-}
-
-// KeysV5 retrieves discv5 AES keys.
-func (db *DB) KeysV5(id ID, ip net.IP) ([]byte, []byte) {
-	k, _ := db.lvl.Get(v5Key(id, ip, dbNodeKeys), nil)
-	if len(k) == 0 {
-		return nil, nil
-	}
-	return k[:16], k[16:32]
-}
-
-// StoreKeysV5 stores discv5 AES keys.
-func (db *DB) StoreKeysV5(id ID, ip net.IP, w, r []byte) error {
-	k := make([]byte, len(w)+len(r))
-	copy(k, w)
-	copy(k[len(w):], r)
-	return db.lvl.Put(v5Key(id, ip, dbNodeKeys), k, nil)
 }
 
 // LocalSeq retrieves the local record sequence counter.
