@@ -529,8 +529,12 @@ func (t *UDPv5) sendNextCall(id enode.ID) {
 // This performs a handshake if needed.
 func (t *UDPv5) sendCall(c *callV5) {
 	if len(c.authTag) > 0 {
+		// The call already has an authTag from a previous handshake attempt. Remove the
+		// entry for the authTag because we're about to generate a new authTag for this
+		// call.
 		delete(t.activeCallByAuth, string(c.authTag))
 	}
+
 	addr := &net.UDPAddr{IP: c.node.IP(), Port: c.node.UDP()}
 	newTag, _ := t.send(c.node.ID(), addr, c.packet, c.challenge)
 	c.authTag = newTag

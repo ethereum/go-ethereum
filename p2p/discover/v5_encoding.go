@@ -321,10 +321,16 @@ func (c *wireCodec) encodeEncrypted(toID enode.ID, toAddr string, packet packetV
 // encodeAuthHeader creates the auth header on a call packet following WHOAREYOU.
 func (c *wireCodec) makeAuthHeader(nonce []byte, challenge *whoareyouV5) (*authHeaderList, *handshakeSecrets, error) {
 	resp := &authResponse{Version: 5}
+
+	// Add our record to response if it's newer than what remote
+	// side has.
 	ln := c.localnode.Node()
 	if challenge.RecordSeq < ln.Seq() {
 		resp.Record = ln.Record()
 	}
+
+	// Create the ephemeral key. This needs to be first because the
+	// key is part of the ID nonce signature.
 	var remotePubkey = new(ecdsa.PublicKey)
 	if err := challenge.node.Load((*enode.Secp256k1)(remotePubkey)); err != nil {
 		return nil, nil, fmt.Errorf("can't find secp256k1 key for recipient")
@@ -334,17 +340,21 @@ func (c *wireCodec) makeAuthHeader(nonce []byte, challenge *whoareyouV5) (*authH
 		return nil, nil, fmt.Errorf("can't generate ephemeral key")
 	}
 	ephpubkey := encodePubkey(&ephkey.PublicKey)
+
+	// Add ID nonce signature to response.
 	idsig, err := c.signIDNonce(challenge.IDNonce[:], ephpubkey[:])
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't sign: %v", err)
 	}
 	resp.Signature = idsig
 
-	// Encrypt the authentication response.
+	// Create session keys.
 	sec := c.deriveKeys(c.localnode.ID(), challenge.node.ID(), ephkey, remotePubkey, challenge)
 	if sec == nil {
 		return nil, nil, fmt.Errorf("key derivation failed")
 	}
+
+	// Encrypt the authentication response and assemble the auth header.
 	respRLP, err := rlp.EncodeToBytes(resp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't encode auth response: %v", err)
@@ -492,7 +502,7 @@ func (c *wireCodec) decodeAuth(fromID enode.ID, fromAddr string, head *authHeade
 
 // decodeAuthResp decodes and verifies an authentication response.
 func (c *wireCodec) decodeAuthResp(fromID enode.ID, fromAddr string, head *authHeaderList, challenge *whoareyouV5) (*handshakeSecrets, *enode.Node, error) {
-	// Decrypt / decode.
+	// Decrypt / decode the response.
 	if head.Scheme != authSchemeName {
 		return nil, nil, errUnknownAuthScheme
 	}
