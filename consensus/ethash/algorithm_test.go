@@ -787,3 +787,28 @@ func BenchmarkHashimotoFullSmall(b *testing.B) {
 		hashimotoFull(dataset, hash, 0)
 	}
 }
+
+func benchmarkHashimotoFullMmap(b *testing.B, name string, lock bool) {
+	b.Run(name, func(b *testing.B) {
+		tmpdir, err := ioutil.TempDir("", "ethash-test")
+		if err != nil {
+			b.Fatal(err)
+		}
+		defer os.RemoveAll(tmpdir)
+
+		d := &dataset{epoch: 0}
+		d.generate(tmpdir, 1, lock, false)
+		var hash [common.HashLength]byte
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			binary.PutVarint(hash[:], int64(i))
+			hashimotoFull(d.dataset, hash[:], 0)
+		}
+	})
+}
+
+// Benchmarks the full verification performance for mmap
+func BenchmarkHashimotoFullMmap(b *testing.B) {
+	benchmarkHashimotoFullMmap(b, "WithLock", true)
+	benchmarkHashimotoFullMmap(b, "WithoutLock", false)
+}
