@@ -61,10 +61,10 @@ func TestReader(t *testing.T) {
 	exp := ABI{
 		Methods: map[string]Method{
 			"balance": {
-				"balance", "balance", "view", false, false, nil, nil,
+				"balance", "balance", "view", false, false, false, false, nil, nil,
 			},
 			"send": {
-				"send", "send", "", false, false, []Argument{
+				"send", "send", "", false, false, false, false, []Argument{
 					{"amount", Uint256, false},
 				}, nil,
 			},
@@ -173,7 +173,7 @@ func TestTestSlice(t *testing.T) {
 
 func TestMethodSignature(t *testing.T) {
 	String, _ := NewType("string", "", nil)
-	m := Method{"foo", "foo", "", false, false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil}
+	m := Method{"foo", "foo", "", false, false, false, false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil}
 	exp := "foo(string,string)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
@@ -185,7 +185,7 @@ func TestMethodSignature(t *testing.T) {
 	}
 
 	uintt, _ := NewType("uint256", "", nil)
-	m = Method{"foo", "foo", "", false, false, []Argument{{"bar", uintt, false}}, nil}
+	m = Method{"foo", "foo", "", false, false, false, false, []Argument{{"bar", uintt, false}}, nil}
 	exp = "foo(uint256)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
@@ -204,7 +204,7 @@ func TestMethodSignature(t *testing.T) {
 			{Name: "y", Type: "int256"},
 		}},
 	})
-	m = Method{"foo", "foo", "", false, false, []Argument{{"s", s, false}, {"bar", String, false}}, nil}
+	m = Method{"foo", "foo", "", false, false, false, false, []Argument{{"s", s, false}, {"bar", String, false}}, nil}
 	exp = "foo((int256,int256[],(int256,int256)[],(int256,int256)[2]),string)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
