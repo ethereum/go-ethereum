@@ -327,7 +327,6 @@ func (c *Bor) verifyHeader(chain consensus.ChainReader, header *types.Header, pa
 		return errUnknownBlock
 	}
 	number := header.Number.Uint64()
-
 	// Don't waste time checking blocks from the future
 	if header.Time > uint64(time.Now().Unix()) {
 		return consensus.ErrFutureBlock
@@ -339,10 +338,8 @@ func (c *Bor) verifyHeader(chain consensus.ChainReader, header *types.Header, pa
 	if len(header.Extra) < extraVanity+extraSeal {
 		return errMissingSignature
 	}
-
 	// check extr adata
 	isSprintEnd := (number+1)%c.config.Sprint == 0
-
 	// Ensure that the extra-data contains a signer list on checkpoint, but none otherwise
 	signersBytes := len(header.Extra) - extraVanity - extraSeal
 	if !isSprintEnd && signersBytes != 0 {
@@ -428,6 +425,7 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 	}
 
 	// All basic checks passed, verify the seal and return
+	// return nil
 	return c.verifySeal(chain, header, parents)
 }
 
@@ -564,7 +562,6 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 	if err != nil {
 		return err
 	}
-
 	if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
 		return errUnauthorizedSigner
 	}
@@ -664,25 +661,22 @@ func (c *Bor) Prepare(chain consensus.ChainReader, header *types.Header) error {
 func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	// commit span
 	headerNumber := header.Number.Uint64()
-	fmt.Println(header.Number, headerNumber % c.config.Sprint)
+
+	// @todo check if this is required
 	if /* headerNumber > 0 && */
-		headerNumber % c.config.Sprint == 0 {
+	headerNumber%c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
-		fmt.Println("here 0.1")
 		// check and commit span
 		if err := c.checkAndCommitSpan(state, header, cx); err != nil {
 			fmt.Println("Error while committing span", err)
 			log.Error("Error while committing span", "error", err)
 			return
 		}
-		fmt.Println("here 11")
 		// commit statees
-		// if err := c.CommitStates(state, header, cx); err != nil {
-		// 	log.Error("Error while committing states", "error", err)
-		// 	fmt.Println("here 12", err)
-		// 	return
-		// }
-		fmt.Println("here 12")
+		if err := c.CommitStates(state, header, cx); err != nil {
+			log.Error("Error while committing states", "error", err)
+			return
+		}
 	}
 
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
@@ -1017,21 +1011,15 @@ func (c *Bor) checkAndCommitSpan(
 
 	var err error
 	for i := 0; i < 2; i++ {
-		err = <- errors
+		err = <-errors
 		if err != nil {
-			// fmt.Println(i, err)
 			return err
 		}
 	}
 
-	fmt.Println("here 1")
-
 	// commit span if there is new span pending or span is ending or end block is not set
 	if pending || c.needToCommitSpan(span, headerNumber) {
-		fmt.Println("here 2", span)
-		err := c.fetchAndCommitSpan(span.ID + 1, state, header, chain)
-		// err := c.commitSpan(span, state, header, chain)
-		fmt.Println("here 10", err)
+		err := c.fetchAndCommitSpan(span.ID+1, state, header, chain)
 		return err
 	}
 
@@ -1039,8 +1027,6 @@ func (c *Bor) checkAndCommitSpan(
 }
 
 func (c *Bor) needToCommitSpan(span *Span, headerNumber uint64) bool {
-	fmt.Println("span", span)
-
 	// if span is nil
 	if span == nil {
 		return false
@@ -1066,7 +1052,7 @@ func (c *Bor) fetchAndCommitSpan(
 	chain core.ChainContext,
 ) error {
 	response, err := c.HeimdallClient.FetchWithRetry("bor", "span", strconv.FormatUint(newSpanID, 10))
-	fmt.Println("here 3")
+
 	if err != nil {
 		return err
 	}
@@ -1075,7 +1061,6 @@ func (c *Bor) fetchAndCommitSpan(
 	if err := json.Unmarshal(response.Result, &heimdallSpan); err != nil {
 		return err
 	}
-	// fmt.Println("here 4", heimdallSpan)
 	// check if chain id matches with heimdall span
 	if heimdallSpan.ChainID != c.chainConfig.ChainID.String() {
 		return fmt.Errorf(
@@ -1084,7 +1069,6 @@ func (c *Bor) fetchAndCommitSpan(
 			c.chainConfig.ChainID,
 		)
 	}
-	fmt.Println("here 5")
 	// get validators bytes
 	var validators []MinimalVal
 	for _, val := range heimdallSpan.ValidatorSet.Validators {
@@ -1094,7 +1078,6 @@ func (c *Bor) fetchAndCommitSpan(
 	if err != nil {
 		return err
 	}
-	fmt.Println("here 6")
 	// get producers bytes
 	var producers []MinimalVal
 	for _, val := range heimdallSpan.SelectedProducers {
@@ -1114,7 +1097,6 @@ func (c *Bor) fetchAndCommitSpan(
 		"validatorBytes", hex.EncodeToString(validatorBytes),
 		"producerBytes", hex.EncodeToString(producerBytes),
 	)
-	fmt.Println("here 7")
 	// get packed data
 	data, err := c.validatorSetABI.Pack(method,
 		big.NewInt(0).SetUint64(heimdallSpan.ID),
@@ -1127,10 +1109,8 @@ func (c *Bor) fetchAndCommitSpan(
 		log.Error("Unable to pack tx for commitSpan", "error", err)
 		return err
 	}
-	fmt.Println("here 8")
 	// get system message
 	msg := getSystemMessage(common.HexToAddress(c.config.ValidatorContract), data)
-	fmt.Println("here 9")
 	// apply message
 	return applyMessage(msg, state, header, c.chainConfig, chain)
 }
@@ -1357,10 +1337,8 @@ func applyMessage(
 		msg.Gas(),
 		msg.Value(),
 	)
-	fmt.Println("here 9.1", err)
 	// Update the state with pending changes
 	if err != nil {
-		fmt.Println("here 9.2", err)
 		state.Finalise(true)
 	}
 	return nil

@@ -730,7 +730,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNr rpc.BlockNumb
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	state, header, err := b.StateAndHeaderByNumber(ctx, blockNr)
-	fmt.Println("statedb.IntermediateRoot in DoCall", state.IntermediateRoot(true))
+	// fmt.Println("statedb.IntermediateRoot in DoCall", state.IntermediateRoot(false).Hex())
 	if state == nil || err != nil {
 		return nil, 0, false, err
 	}

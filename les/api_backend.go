@@ -19,6 +19,7 @@ package les
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/maticnetwork/bor/accounts"
@@ -60,8 +61,10 @@ func (b *LesApiBackend) SetHead(number uint64) {
 
 func (b *LesApiBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
 	if blockNr == rpc.LatestBlockNumber || blockNr == rpc.PendingBlockNumber {
+		fmt.Println("20")
 		return b.eth.blockchain.CurrentHeader(), nil
 	}
+	fmt.Println("21")
 	return b.eth.blockchain.GetHeaderByNumberOdr(ctx, uint64(blockNr))
 }
 

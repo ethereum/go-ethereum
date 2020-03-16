@@ -3,23 +3,18 @@ package bor_test
 import (
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
-
-	// "fmt"
 	"io/ioutil"
 	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	// "github.com/stretchr/testify/mock"
-
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/consensus/bor"
 	"github.com/maticnetwork/bor/core"
 	"github.com/maticnetwork/bor/core/rawdb"
-	// "github.com/maticnetwork/bor/core/state"
+	"github.com/maticnetwork/bor/crypto/secp256k1"
+
 	"github.com/maticnetwork/bor/core/types"
-	// "github.com/maticnetwork/bor/core/vm"
 	"github.com/maticnetwork/bor/crypto"
 	"github.com/maticnetwork/bor/eth"
 
@@ -28,22 +23,22 @@ import (
 	"github.com/maticnetwork/bor/node"
 )
 
+const (
+	extraSeal = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
+)
+
 type initializeData struct {
-	genesis *core.Genesis
+	genesis  *core.Genesis
 	ethereum *eth.Ethereum
 }
 
 func TestCommitSpan(t *testing.T) {
-	var (
-		// db     = rawdb.NewMemoryDatabase()
-		// key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		// addr   = crypto.PubkeyToAddress(key.PublicKey)
-	)
 	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
 
+	// Mock HeimdallClient.FetchWithRetry to return span data from span.json
 	spanData, err := ioutil.ReadFile("span.json")
 	if err != nil {
 		t.Fatalf("%s", err)
@@ -52,78 +47,55 @@ func TestCommitSpan(t *testing.T) {
 	if err := json.Unmarshal(spanData, res); err != nil {
 		t.Fatalf("%s", err)
 	}
-
 	h := &mocks.IHeimdallClient{}
 	h.On("FetchWithRetry", "bor", "span", "1").Return(res, nil)
 	_bor.SetHeimdallClient(h)
+
+	// Build 1st blocks header
 	db := init.ethereum.ChainDb()
 	block := init.genesis.ToBlock(db)
-	statedb, err := chain.StateAt(block.Root())
-	// statedb, _ := state.New(block.Root(), state.NewDatabase(db))
-	// _, _, _, err = chain.Processor().Process(block, statedb, vm.Config{})
-	// fmt.Println(err)
-	// _bor.Finalize(chain, block.Header(), statedb, nil, nil)
-
-	api := bor.NewBorApi(chain, _bor)
-	validators, _ := api.GetCurrentValidators()
-	fmt.Println(1, validators)
-
-	header := block.Header()
+	header := block.Header() // get 0th block header and mutate it as required
 	header.Number = big.NewInt(1)
 	header.ParentHash = block.Hash()
-	fmt.Println(block.Hash())
-	// header.Hash =
+	header.Time += (init.genesis.Config.Bor.Period + 1)
+	header.Extra = make([]byte, 97) // vanity (32) + extraSeal (65)
+	privKey, _ := hex.DecodeString("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+
+	statedb, err := chain.State()
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	block, err = _bor.FinalizeAndAssemble(chain, header, statedb, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	sig, err := secp256k1.Sign(crypto.Keccak256(bor.BorRLP(header)), privKey)
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+	copy(header.Extra[len(header.Extra)-extraSeal:], sig)
+
 	block = types.NewBlockWithHeader(header)
+	if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+		t.Fatalf("%s", err)
+	}
 
-	fmt.Println("statedb.IntermediateRoot", statedb.IntermediateRoot(true))
-	_bor.Finalize(chain, block.Header(), statedb, nil, nil)
-	// _, _, _, err = chain.Processor().Process(block, statedb, vm.Config{})
-	fmt.Println("statedb.IntermediateRoot 2", statedb.IntermediateRoot(true))
-	statedb, err = chain.StateAt(block.Root())
-	fmt.Println("statedb.IntermediateRoot 3", statedb.IntermediateRoot(true))
-
+	assert.True(t, h.AssertNumberOfCalls(t, "FetchWithRetry", 2))
+	validators, err := _bor.GetCurrentValidators(1, 256) // new span starts at 256
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
-	// fmt.Println(header.Number)
-	// _bor.Finalize(chain, header, statedb, nil, nil)
 
-	// status, err := chain.writeBlockWithState(block, receipts, statedb)
-
-	// chain.chainmu.Lock()
-	td := big.NewInt(0)
-	td.Add(block.Difficulty(), chain.GetTdByHash(block.ParentHash()))
-	fmt.Println("td", td)
-
-	rawdb.WriteTd(db,
-		block.Hash(),
-		block.NumberU64(),
-		td,
-	)
-	rawdb.WriteBlock(db, block)
-	root, err := statedb.Commit(false)
-	fmt.Println("root", root)
-	if err != nil {
+	var heimdallSpan bor.HeimdallSpan
+	if err := json.Unmarshal(res.Result, &heimdallSpan); err != nil {
 		t.Fatalf("%s", err)
 	}
-	// if err := statedb.Reset(root); err != nil {
-	// 	t.Fatalf("state reset after block %d failed: %v", block.NumberU64(), err)
-	// }
-	// blockchain.chainmu.Unlock()
-
-	assert.True(t, h.AssertNumberOfCalls(t, "FetchWithRetry", 1))
-	validators, _ = api.GetCurrentValidators()
-	fmt.Println(2, validators)
-
-	validators, _ = _bor.GetCurrentValidators(0, 255)
-	fmt.Println(3, validators)
-
-	validators, _ = _bor.GetCurrentValidators(0, 256)
-	fmt.Println(4, validators)
-
-	validators, _ = _bor.GetCurrentValidators(1, 256)
-	fmt.Println(4, validators)
-	// engine
+	for i, validator := range validators {
+		assert.Equal(t, validator.Address.Bytes(), heimdallSpan.SelectedProducers[i].Address.Bytes())
+		assert.Equal(t, validator.VotingPower, heimdallSpan.SelectedProducers[i].VotingPower)
+	}
 }
 
 func TestIsValidatorAction(t *testing.T) {
@@ -158,7 +130,7 @@ func TestIsValidatorAction(t *testing.T) {
 	assert.True(t, engine.(*bor.Bor).IsValidatorAction(chain, addr, tx))
 }
 
-func buildEthereumInstance(t *testing.T, db ethdb.Database) (*initializeData) {
+func buildEthereumInstance(t *testing.T, db ethdb.Database) *initializeData {
 	genesisData, err := ioutil.ReadFile("genesis.json")
 	if err != nil {
 		t.Fatalf("%s", err)
@@ -205,7 +177,7 @@ func buildEthereumInstance(t *testing.T, db ethdb.Database) (*initializeData) {
 	stack.Service(&ethereum)
 	ethConf.Genesis.MustCommit(ethereum.ChainDb())
 	return &initializeData{
-		genesis: gen,
+		genesis:  gen,
 		ethereum: ethereum,
 	}
 }

@@ -11,7 +11,7 @@
 				"endEpoch": 0,
 				"power": 10000,
 				"pubKey": "0x046434e10a34ade13c4fea917346a9fd1473eac2138a0b4e2a36426871918be63188fde4edbf598457592c9a49fe3b0036dd5497079495d132e5045bf499c4bdb1",
-				"signer": "0x1c4f0f054a0d6a1415382dc0fd83c6535188b220",
+				"signer": "0xc787af4624cb3e80ee23ae7faac0f2acea2be34c",
 				"last_updated": 0,
 				"accum": -40000
 			}, {
@@ -47,7 +47,7 @@
 				"endEpoch": 0,
 				"power": 10000,
 				"pubKey": "0x0469536ae98030a7e83ec5ef3baffed2d05a32e31d978e58486f6bdb0fbbf240293838325116090190c0639db03f9cbd8b9aecfd269d016f46e3a2287fbf9ad232",
-				"signer": "0xc787af4624cb3e80ee23ae7faac0f2acea2be34c",
+				"signer": "0x1c4f0f054a0d6a1415382dc0fd83c6535188b220",
 				"last_updated": 0,
 				"accum": 10000
 			}],
@@ -88,7 +88,7 @@
 			"pubKey": "0x0469536ae98030a7e83ec5ef3baffed2d05a32e31d978e58486f6bdb0fbbf240293838325116090190c0639db03f9cbd8b9aecfd269d016f46e3a2287fbf9ad232",
 			"signer": "0xc787af4624cb3e80ee23ae7faac0f2acea2be34c",
 			"last_updated": 0,
-			"accum": 10000
+			"accum": 5000
 		}],
 		"bor_chain_id": "15001"
 	}
