@@ -172,7 +172,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		case "fallback":
 			// New introduced function type in v0.6.0, check more detail
 			// here https://solidity.readthedocs.io/en/v0.6.0/contracts.html#fallback-function
-			if abi.Fallback.Name != "" {
+			if abi.Fallback.Fallback {
 				return errors.New("only single fallback is allowed")
 			}
 			abi.Fallback = Method{
@@ -195,7 +195,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		case "receive":
 			// New introduced function type in v0.6.0, check more detail
 			// here https://solidity.readthedocs.io/en/v0.6.0/contracts.html#fallback-function
-			if abi.Receive.Name != "" {
+			if abi.Receive.Receive {
 				return errors.New("only single receive is allowed")
 			}
 			if field.StateMutability != "payable" {

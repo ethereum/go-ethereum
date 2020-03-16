@@ -361,14 +361,14 @@ var (
 			return _{{$contract.Type}}.contract.RawTransact(opts, calldata)
 		}
 
-        // Fallback is a paid mutator transaction binding the contract fallback function.
-        //
+		// Fallback is a paid mutator transaction binding the contract fallback function.
+		//
 		// Solidity: {{formatmethod .Fallback.Original $structs}}
 		func (_{{$contract.Type}} *{{$contract.Type}}Session) Fallback(calldata []byte) (*types.Transaction, error) {
 		  return _{{$contract.Type}}.Contract.Fallback(&_{{$contract.Type}}.TransactOpts, calldata)
 		}
 	
-        // Fallback is a paid mutator transaction binding the contract fallback function.
+		// Fallback is a paid mutator transaction binding the contract fallback function.
 		// 
 		// Solidity: {{formatmethod .Fallback.Original $structs}}
 		func (_{{$contract.Type}} *{{$contract.Type}}TransactorSession) Fallback(calldata []byte) (*types.Transaction, error) {
@@ -385,7 +385,7 @@ var (
 		}
 
 		// Receive is a paid mutator transaction binding the contract receive function.
-        //
+		//
 		// Solidity: {{formatmethod .Receive.Original $structs}}
 		func (_{{$contract.Type}} *{{$contract.Type}}Session) Receive() (*types.Transaction, error) {
 		  return _{{$contract.Type}}.Contract.Receive(&_{{$contract.Type}}.TransactOpts)
