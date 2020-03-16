@@ -30,10 +30,6 @@ type API struct {
 	bor   *Bor
 }
 
-func NewBorApi(chain consensus.ChainReader, bor   *Bor) API {
-	return API{chain: chain, bor: bor}
-}
-
 // GetSnapshot retrieves the state snapshot at a given block.
 func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
 	// Retrieve the requested block number (or current if none requested)

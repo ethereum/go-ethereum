@@ -59,7 +59,6 @@ func Sign(msg []byte, seckey []byte) ([]byte, error) {
 	if len(msg) != 32 {
 		return nil, ErrInvalidMsgLen
 	}
-	
 	if len(seckey) != 32 {
 		return nil, ErrInvalidKey
 	}

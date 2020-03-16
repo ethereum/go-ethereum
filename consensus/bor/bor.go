@@ -11,7 +11,6 @@ import (
 	"math"
 	"math/big"
 
-	// "net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -327,6 +326,7 @@ func (c *Bor) verifyHeader(chain consensus.ChainReader, header *types.Header, pa
 		return errUnknownBlock
 	}
 	number := header.Number.Uint64()
+
 	// Don't waste time checking blocks from the future
 	if header.Time > uint64(time.Now().Unix()) {
 		return consensus.ErrFutureBlock
@@ -338,8 +338,10 @@ func (c *Bor) verifyHeader(chain consensus.ChainReader, header *types.Header, pa
 	if len(header.Extra) < extraVanity+extraSeal {
 		return errMissingSignature
 	}
+
 	// check extr adata
 	isSprintEnd := (number+1)%c.config.Sprint == 0
+
 	// Ensure that the extra-data contains a signer list on checkpoint, but none otherwise
 	signersBytes := len(header.Extra) - extraVanity - extraSeal
 	if !isSprintEnd && signersBytes != 0 {
@@ -425,7 +427,6 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainReader, header *types.H
 	}
 
 	// All basic checks passed, verify the seal and return
-	// return nil
 	return c.verifySeal(chain, header, parents)
 }
 
@@ -562,6 +563,7 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 	if err != nil {
 		return err
 	}
+
 	if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
 		return errUnauthorizedSigner
 	}
@@ -662,13 +664,10 @@ func (c *Bor) Finalize(chain consensus.ChainReader, header *types.Header, state 
 	// commit span
 	headerNumber := header.Number.Uint64()
 
-	// @todo check if this is required
-	if /* headerNumber > 0 && */
-	headerNumber%c.config.Sprint == 0 {
+	if headerNumber%c.config.Sprint == 0 {
 		cx := chainContext{Chain: chain, Bor: c}
 		// check and commit span
 		if err := c.checkAndCommitSpan(state, header, cx); err != nil {
-			fmt.Println("Error while committing span", err)
 			log.Error("Error while committing span", "error", err)
 			return
 		}
@@ -991,22 +990,16 @@ func (c *Bor) checkAndCommitSpan(
 	pending := false
 	var span *Span = nil
 	errors := make(chan error)
-	// var wg sync.WaitGroup
-	// wg.Add(1)
 	go func() {
 		var err error
 		pending, err = c.isSpanPending(headerNumber - 1)
-		// pending, err = c.isSpanPending(headerNumber)
 		errors <- err
-		// wg.Done()
 	}()
 
-	// wg.Add(1)
 	go func() {
 		var err error
 		span, err = c.GetCurrentSpan(headerNumber - 1)
 		errors <- err
-		// wg.Done()
 	}()
 
 	var err error
@@ -1061,6 +1054,7 @@ func (c *Bor) fetchAndCommitSpan(
 	if err := json.Unmarshal(response.Result, &heimdallSpan); err != nil {
 		return err
 	}
+
 	// check if chain id matches with heimdall span
 	if heimdallSpan.ChainID != c.chainConfig.ChainID.String() {
 		return fmt.Errorf(
@@ -1069,6 +1063,7 @@ func (c *Bor) fetchAndCommitSpan(
 			c.chainConfig.ChainID,
 		)
 	}
+
 	// get validators bytes
 	var validators []MinimalVal
 	for _, val := range heimdallSpan.ValidatorSet.Validators {
@@ -1078,6 +1073,7 @@ func (c *Bor) fetchAndCommitSpan(
 	if err != nil {
 		return err
 	}
+
 	// get producers bytes
 	var producers []MinimalVal
 	for _, val := range heimdallSpan.SelectedProducers {
@@ -1097,6 +1093,7 @@ func (c *Bor) fetchAndCommitSpan(
 		"validatorBytes", hex.EncodeToString(validatorBytes),
 		"producerBytes", hex.EncodeToString(producerBytes),
 	)
+
 	// get packed data
 	data, err := c.validatorSetABI.Pack(method,
 		big.NewInt(0).SetUint64(heimdallSpan.ID),
@@ -1109,8 +1106,10 @@ func (c *Bor) fetchAndCommitSpan(
 		log.Error("Unable to pack tx for commitSpan", "error", err)
 		return err
 	}
+
 	// get system message
 	msg := getSystemMessage(common.HexToAddress(c.config.ValidatorContract), data)
+
 	// apply message
 	return applyMessage(msg, state, header, c.chainConfig, chain)
 }
@@ -1235,6 +1234,7 @@ func (c *Bor) IsValidatorAction(chain consensus.ChainReader, from common.Address
 	snap, err := c.snapshot(chain, header.Number.Uint64(), header.Hash(), nil)
 	if err != nil {
 		log.Error("Failed fetching snapshot", err)
+		return false
 	}
 
 	isValidator := false
@@ -1275,10 +1275,6 @@ type chainContext struct {
 	Chain consensus.ChainReader
 	Bor   consensus.Engine
 }
-
-// func NewChainContext(chain consensus.ChainReader, bor   consensus.Engine) (chainContext) {
-// 	return {Chain: chain, Bor: bor}
-// }
 
 func (c chainContext) Engine() consensus.Engine {
 	return c.Bor
@@ -1341,6 +1337,7 @@ func applyMessage(
 	if err != nil {
 		state.Finalise(true)
 	}
+	
 	return nil
 }
 
