@@ -172,8 +172,8 @@ func MatchFilterHandler(key string, value interface{}, h Handler) Handler {
 		}
 
 		for i := 0; i < len(r.Ctx); i += 2 {
-			if r.Ctx[i] == key {
-				return r.Ctx[i+1] == value
+			if r.Ctx[i] == key && r.Ctx[i+1] == value  {
+				return true 
 			}
 		}
 		return false
