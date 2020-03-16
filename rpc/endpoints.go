@@ -22,18 +22,26 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// availableAPISetBase defines available api modules which are always available.
+var availableAPISetBase = map[string]struct{}{
+	MetadataApi: {},
+}
+
 // checkModuleAvailability check that all names given in modules are actually
 // available API services.
 func checkModuleAvailability(modules []string, apis []API) (bad, available []string) {
-	availableSet := make(map[string]struct{})
+	availableAPISet := make(map[string]struct{})
+	for k, v := range availableAPISetBase {
+		availableAPISet[k] = v
+	}
 	for _, api := range apis {
-		if _, ok := availableSet[api.Namespace]; !ok {
-			availableSet[api.Namespace] = struct{}{}
+		if _, ok := availableAPISet[api.Namespace]; !ok {
+			availableAPISet[api.Namespace] = struct{}{}
 			available = append(available, api.Namespace)
 		}
 	}
 	for _, name := range modules {
-		if _, ok := availableSet[name]; !ok {
+		if _, ok := availableAPISet[name]; !ok {
 			bad = append(bad, name)
 		}
 	}
