@@ -90,19 +90,18 @@ Path of the secret key file: .*UTC--.+--[0-9a-f]{40}
 }
 
 func TestAccountImport(t *testing.T) {
-	bytes64 := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	success := "Address: {fcad0b19bb29d4674531d6f115237e16afce377c}\n"
 	failureTemplate := "Fatal: Failed to load the private key: expected 64 bytes, got %v\n"
 	tests := []struct {
 		key    string
 		result string
 	}{
-		{key: bytes64, result: success},
-		{key: bytes64 + "\n", result: success},
-		{key: bytes64 + "\r\n", result: success},
-		{key: bytes64 + "1", result: fmt.Sprintf(failureTemplate, 65)},
-		{key: bytes64 + "x", result: fmt.Sprintf(failureTemplate, 65)},
-		{key: bytes64 + "\n\n\n", result: fmt.Sprintf(failureTemplate, 67)},
+		{key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", result: success},
+		{key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n", result: success},
+		{key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\r\n", result: success},
+		{key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1", result: fmt.Sprintf(failureTemplate, 65)},
+		{key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdefx", result: fmt.Sprintf(failureTemplate, 65)},
+		{key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n\n\n", result: fmt.Sprintf(failureTemplate, 67)},
 	}
 	for _, test := range tests {
 		importAccountWithExpect(t, test.key, test.result)
