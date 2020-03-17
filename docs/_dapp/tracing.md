@@ -41,7 +41,7 @@ result in different capabilities:
  * An **archive** node retaining **all historical data** can trace arbitrary transactions
    at any point in time. Tracing a single transaction also entails reexecuting all
    preceding transactions in the same block.
- * A **fast synced** node retaining **all historical data** after initial sync can only
+ * A **full synced** node retaining **all historical data** after initial sync can only
    trace transactions from blocks following the initial sync point. Tracing a single
    transaction also entails reexecuting all preceding transactions in the same block.
  * A **fast synced** node retaining only **periodic state data** after initial sync can
