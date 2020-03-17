@@ -23,7 +23,7 @@ import (
 )
 
 // checkModuleAvailability check that all names given in modules are actually
-// available API services.
+// available API services. It assumes that the special snowflake "rpc" module is always available.
 func checkModuleAvailability(modules []string, apis []API) (bad, available []string) {
 	availableSet := make(map[string]struct{})
 	for _, api := range apis {
@@ -33,7 +33,7 @@ func checkModuleAvailability(modules []string, apis []API) (bad, available []str
 		}
 	}
 	for _, name := range modules {
-		if _, ok := availableSet[name]; !ok {
+		if _, ok := availableSet[name]; !ok && name != MetadataApi {
 			bad = append(bad, name)
 		}
 	}
