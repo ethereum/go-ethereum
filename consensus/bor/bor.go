@@ -563,7 +563,6 @@ func (c *Bor) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 	if err != nil {
 		return err
 	}
-
 	if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
 		return errUnauthorizedSigner
 	}
@@ -1006,9 +1005,11 @@ func (c *Bor) checkAndCommitSpan(
 	for i := 0; i < 2; i++ {
 		err = <-errors
 		if err != nil {
+			close(errors)
 			return err
 		}
 	}
+	close(errors)
 
 	// commit span if there is new span pending or span is ending or end block is not set
 	if pending || c.needToCommitSpan(span, headerNumber) {
@@ -1231,19 +1232,20 @@ func (c *Bor) SetHeimdallClient(h IHeimdallClient) {
 
 func (c *Bor) IsValidatorAction(chain consensus.ChainReader, from common.Address, tx *types.Transaction) bool {
 	header := chain.CurrentHeader()
-	snap, err := c.snapshot(chain, header.Number.Uint64(), header.Hash(), nil)
+	validators, err := c.GetCurrentValidators(header.Number.Uint64(), header.Number.Uint64()+1)
 	if err != nil {
 		log.Error("Failed fetching snapshot", err)
 		return false
 	}
 
 	isValidator := false
-	for _, validator := range snap.ValidatorSet.Validators {
+	for _, validator := range validators {
 		if bytes.Compare(validator.Address.Bytes(), from.Bytes()) == 0 {
 			isValidator = true
 			break
 		}
 	}
+
 	return isValidator && (isProposeSpanAction(tx, chain.Config().Bor.ValidatorContract) ||
 		isProposeStateAction(tx, chain.Config().Bor.StateReceiverContract))
 }
@@ -1337,7 +1339,7 @@ func applyMessage(
 	if err != nil {
 		state.Finalise(true)
 	}
-	
+
 	return nil
 }
 

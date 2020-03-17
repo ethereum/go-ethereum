@@ -7,12 +7,13 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/consensus/bor"
 	"github.com/maticnetwork/bor/core"
 	"github.com/maticnetwork/bor/core/rawdb"
+	"github.com/maticnetwork/bor/core/state"
 	"github.com/maticnetwork/bor/crypto/secp256k1"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/maticnetwork/bor/core/types"
 	"github.com/maticnetwork/bor/crypto"
@@ -23,8 +24,11 @@ import (
 	"github.com/maticnetwork/bor/node"
 )
 
-const (
+var (
 	extraSeal = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
+	privKey   = "b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291"
+	key, _    = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	addr      = crypto.PubkeyToAddress(key.PublicKey) // 0x71562b71999873DB5b286dF957af199Ec94617F7
 )
 
 type initializeData struct {
@@ -39,48 +43,25 @@ func TestCommitSpan(t *testing.T) {
 	_bor := engine.(*bor.Bor)
 
 	// Mock HeimdallClient.FetchWithRetry to return span data from span.json
-	spanData, err := ioutil.ReadFile("span.json")
-	if err != nil {
-		t.Fatalf("%s", err)
-	}
-	res := &bor.ResponseWithHeight{}
-	if err := json.Unmarshal(spanData, res); err != nil {
-		t.Fatalf("%s", err)
-	}
+	res, heimdallSpan := loadSpanFromFile(t)
 	h := &mocks.IHeimdallClient{}
-	h.On("FetchWithRetry", "bor", "span", "1").Return(res, nil)
+	h.On("FetchWithRetry", "bor", "span", "1").
+		Return(res, nil).
+		Times(2) // both FinalizeAndAssemble and chain.InsertChain call HeimdallClient.FetchWithRetry. @todo Investigate this in depth
 	_bor.SetHeimdallClient(h)
 
-	// Build 1st blocks header
 	db := init.ethereum.ChainDb()
 	block := init.genesis.ToBlock(db)
-	header := block.Header() // get 0th block header and mutate it as required
-	header.Number = big.NewInt(1)
-	header.ParentHash = block.Hash()
-	header.Time += (init.genesis.Config.Bor.Period + 1)
-	header.Extra = make([]byte, 97) // vanity (32) + extraSeal (65)
-	privKey, _ := hex.DecodeString("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	// Build 1st block's header
+	header := buildMinimalNextHeader(t, block, init.genesis.Config.Bor.Period)
 
 	statedb, err := chain.State()
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
 
-	block, err = _bor.FinalizeAndAssemble(chain, header, statedb, nil, nil, nil)
-	if err != nil {
-		t.Fatalf("%s", err)
-	}
-
-	sig, err := secp256k1.Sign(crypto.Keccak256(bor.BorRLP(header)), privKey)
-	if err != nil {
-		t.Fatalf("%s", err)
-	}
-	copy(header.Extra[len(header.Extra)-extraSeal:], sig)
-
-	block = types.NewBlockWithHeader(header)
-	if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
-		t.Fatalf("%s", err)
-	}
+	_key, _ := hex.DecodeString(privKey)
+	insertNewBlock(t, _bor, chain, header, statedb, _key)
 
 	assert.True(t, h.AssertNumberOfCalls(t, "FetchWithRetry", 2))
 	validators, err := _bor.GetCurrentValidators(1, 256) // new span starts at 256
@@ -88,10 +69,7 @@ func TestCommitSpan(t *testing.T) {
 		t.Fatalf("%s", err)
 	}
 
-	var heimdallSpan bor.HeimdallSpan
-	if err := json.Unmarshal(res.Result, &heimdallSpan); err != nil {
-		t.Fatalf("%s", err)
-	}
+	assert.Equal(t, len(validators), 3)
 	for i, validator := range validators {
 		assert.Equal(t, validator.Address.Bytes(), heimdallSpan.SelectedProducers[i].Address.Bytes())
 		assert.Equal(t, validator.VotingPower, heimdallSpan.SelectedProducers[i].VotingPower)
@@ -99,35 +77,78 @@ func TestCommitSpan(t *testing.T) {
 }
 
 func TestIsValidatorAction(t *testing.T) {
-	var (
-		db     = rawdb.NewMemoryDatabase()
-		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		addr   = crypto.PubkeyToAddress(key.PublicKey)
-	)
-	init := buildEthereumInstance(t, db)
-	ethereum := init.ethereum
-	chain := ethereum.BlockChain()
-	engine := ethereum.Engine()
+	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
+	chain := init.ethereum.BlockChain()
+	engine := init.ethereum.Engine()
+	_bor := engine.(*bor.Bor)
 
-	// proposeState
-	data, _ := hex.DecodeString("ede01f170000000000000000000000000000000000000000000000000000000000000000")
-	tx := types.NewTransaction(
+	proposeStateData, _ := hex.DecodeString("ede01f170000000000000000000000000000000000000000000000000000000000000000")
+	proposeSpanData, _ := hex.DecodeString("4b0e4d17")
+	var tx *types.Transaction
+	tx = types.NewTransaction(
 		0,
 		common.HexToAddress(chain.Config().Bor.StateReceiverContract),
 		big.NewInt(0), 0, big.NewInt(0),
-		data,
+		proposeStateData,
 	)
-	assert.True(t, engine.(*bor.Bor).IsValidatorAction(chain, addr, tx))
+	assert.True(t, _bor.IsValidatorAction(chain, addr, tx))
 
-	// proposeSpan
-	data, _ = hex.DecodeString("4b0e4d17")
 	tx = types.NewTransaction(
 		0,
 		common.HexToAddress(chain.Config().Bor.ValidatorContract),
 		big.NewInt(0), 0, big.NewInt(0),
-		data,
+		proposeSpanData,
 	)
-	assert.True(t, engine.(*bor.Bor).IsValidatorAction(chain, addr, tx))
+	assert.True(t, _bor.IsValidatorAction(chain, addr, tx))
+
+	res, heimdallSpan := loadSpanFromFile(t)
+	h := &mocks.IHeimdallClient{}
+	h.On("FetchWithRetry", "bor", "span", "1").Return(res, nil)
+	_bor.SetHeimdallClient(h)
+
+	// Build 1st block's header
+	db := init.ethereum.ChainDb()
+	block := init.genesis.ToBlock(db)
+
+	header := buildMinimalNextHeader(t, block, init.genesis.Config.Bor.Period)
+	statedb, err := chain.State()
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	_key, _ := hex.DecodeString(privKey)
+	insertNewBlock(t, _bor, chain, header, statedb, _key)
+	block = types.NewBlockWithHeader(header)
+
+	var headers []*types.Header
+	for i := int64(2); i <= 255; i++ {
+		header := buildMinimalNextHeader(t, block, init.genesis.Config.Bor.Period)
+		headers = append(headers, header)
+		block = types.NewBlockWithHeader(header)
+	}
+	t.Logf("inserting %v headers", len(headers))
+	if _, err := chain.InsertHeaderChain(headers, 0); err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	for _, validator := range heimdallSpan.SelectedProducers {
+		_addr := validator.Address
+		tx = types.NewTransaction(
+			0,
+			common.HexToAddress(chain.Config().Bor.StateReceiverContract),
+			big.NewInt(0), 0, big.NewInt(0),
+			proposeStateData,
+		)
+		assert.True(t, _bor.IsValidatorAction(chain, _addr, tx))
+
+		tx = types.NewTransaction(
+			0,
+			common.HexToAddress(chain.Config().Bor.ValidatorContract),
+			big.NewInt(0), 0, big.NewInt(0),
+			proposeSpanData,
+		)
+		assert.True(t, _bor.IsValidatorAction(chain, _addr, tx))
+	}
 }
 
 func buildEthereumInstance(t *testing.T, db ethdb.Database) *initializeData {
@@ -139,7 +160,6 @@ func buildEthereumInstance(t *testing.T, db ethdb.Database) *initializeData {
 	if err := json.Unmarshal(genesisData, gen); err != nil {
 		t.Fatalf("%s", err)
 	}
-	// chainConfig, _, err := core.SetupGenesisBlock(db, gen)
 	ethConf := &eth.Config{
 		Genesis: gen,
 	}
@@ -180,4 +200,54 @@ func buildEthereumInstance(t *testing.T, db ethdb.Database) *initializeData {
 		genesis:  gen,
 		ethereum: ethereum,
 	}
+}
+
+func insertNewBlock(t *testing.T, _bor *bor.Bor, chain *core.BlockChain, header *types.Header, statedb *state.StateDB, privKey []byte) {
+	_, err := _bor.FinalizeAndAssemble(chain, header, statedb, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	sig, err := secp256k1.Sign(crypto.Keccak256(bor.BorRLP(header)), privKey)
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+	copy(header.Extra[len(header.Extra)-extraSeal:], sig)
+
+	block := types.NewBlockWithHeader(header)
+	if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+		t.Fatalf("%s", err)
+	}
+}
+
+func buildMinimalNextHeader(t *testing.T, block *types.Block, period uint64) *types.Header {
+	header := block.Header()
+	header.Number.Add(header.Number, big.NewInt(1))
+	header.ParentHash = block.Hash()
+	header.Time += (period + 1)
+	header.Extra = make([]byte, 97) // vanity (32) + extraSeal (65)
+	_key, _ := hex.DecodeString(privKey)
+	sig, err := secp256k1.Sign(crypto.Keccak256(bor.BorRLP(header)), _key)
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+	copy(header.Extra[len(header.Extra)-extraSeal:], sig)
+	return header
+}
+
+func loadSpanFromFile(t *testing.T) (*bor.ResponseWithHeight, *bor.HeimdallSpan) {
+	spanData, err := ioutil.ReadFile("span.json")
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+	res := &bor.ResponseWithHeight{}
+	if err := json.Unmarshal(spanData, res); err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	heimdallSpan := &bor.HeimdallSpan{}
+	if err := json.Unmarshal(res.Result, heimdallSpan); err != nil {
+		t.Fatalf("%s", err)
+	}
+	return res, heimdallSpan
 }
