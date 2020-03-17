@@ -328,9 +328,9 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 }
 
 // ReadCanonicalBodyRLP retrieves the block body (transactions and uncles) for the canonical
-// bloc at number, in RLP encoding.
+// block at number, in RLP encoding.
 func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
-	// if it's an ancient one, we don't need the canonical hash
+	// If it's an ancient one, we don't need the canonical hash
 	data, _ := db.Ancient(freezerBodiesTable, number)
 	if len(data) == 0 {
 		// Need to get the hash

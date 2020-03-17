@@ -231,7 +231,7 @@ var (
 	}
 	TxLookupLimitFlag = cli.Int64Flag{
 		Name:  "txlookuplimit",
-		Usage: "Number of recent blocks to index transactions-by-hash in (default = index all blocks)",
+		Usage: "Number of recent blocks to maintain transactions index by-hash for (default = index all blocks)",
 		Value: 0,
 	}
 	LightKDFFlag = cli.BoolFlag{
