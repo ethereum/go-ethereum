@@ -17,6 +17,7 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"runtime"
@@ -90,22 +91,25 @@ Path of the secret key file: .*UTC--.+--[0-9a-f]{40}
 
 func TestAccountImport(t *testing.T) {
 	bytes64 := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	success := `Address: {[0-9a-f]{40}}`
-	failure := `Fatal: Failed to load the private key: expected 64 bytes, got \d+`
-	keyToMsg := make(map[string]string)
-	keyToMsg[bytes64] = success
-	keyToMsg[bytes64[:40]] = failure
-	keyToMsg[bytes64+"\n"] = success
-	keyToMsg[bytes64+"\r\n"] = success
-	keyToMsg[bytes64+"1"] = failure
-	keyToMsg[bytes64+"x"] = failure
-	keyToMsg[bytes64+bytes64] = failure
-	for key, msg := range keyToMsg {
-		importAccountWithExpect(t, key, msg)
+	success := "Address: {fcad0b19bb29d4674531d6f115237e16afce377c}\n"
+	failureTemplate := "Fatal: Failed to load the private key: expected 64 bytes, got %v\n"
+	tests := []struct{
+		key string
+		result string
+	}{
+		{key: bytes64, result: success},
+		{key: bytes64 + "\n", result: success},
+		{key: bytes64 + "\r\n", result: success},
+		{key: bytes64 + "1", result: fmt.Sprintf(failureTemplate, 65)},
+		{key: bytes64 + "x", result: fmt.Sprintf(failureTemplate, 65)},
+		{key: bytes64 + "\n\n\n", result: fmt.Sprintf(failureTemplate, 67)},
+	}
+	for _, test := range tests {
+		importAccountWithExpect(t, test.key, test.result)
 	}
 }
 
-func importAccountWithExpect(t *testing.T, key string, expectedRegexp string) {
+func importAccountWithExpect(t *testing.T, key string, expected string) {
 	dir := tmpdir(t)
 	keyfile := filepath.Join(dir, "key.prv")
 	if err := ioutil.WriteFile(keyfile, []byte(key), 0644); err != nil {
@@ -117,7 +121,7 @@ func importAccountWithExpect(t *testing.T, key string, expectedRegexp string) {
 	}
 	geth := runGeth(t, "account", "import", keyfile, "-password", passwordFile)
 	defer geth.ExpectExit()
-	geth.ExpectRegexp(expectedRegexp)
+	geth.Expect(expected)
 }
 
 func TestAccountNewBadRepeat(t *testing.T) {
