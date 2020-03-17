@@ -93,8 +93,8 @@ func TestAccountImport(t *testing.T) {
 	bytes64 := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	success := "Address: {fcad0b19bb29d4674531d6f115237e16afce377c}\n"
 	failureTemplate := "Fatal: Failed to load the private key: expected 64 bytes, got %v\n"
-	tests := []struct{
-		key string
+	tests := []struct {
+		key    string
 		result string
 	}{
 		{key: bytes64, result: success},
