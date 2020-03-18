@@ -16,3 +16,5 @@ jobs:
       - checkout # check out source code to working directory
       - run:
           command: make bor
+      - run:
+          command: make test
