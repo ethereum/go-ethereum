@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -32,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
@@ -124,7 +124,7 @@ func (t *BlockTest) Run(snapshotter bool) error {
 		cache.SnapshotLimit = 1
 		cache.SnapshotWait = true
 	}
-	chain, err := core.NewBlockChain(db, cache, config, engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, cache, config, engine, vm.Config{}, nil)
 	if err != nil {
 		return err
 	}
@@ -147,8 +147,15 @@ func (t *BlockTest) Run(snapshotter bool) error {
 	}
 	// Cross-check the snapshot-to-hash against the trie hash
 	if snapshotter {
-		if err := snapshot.VerifyState(chain.Snapshot(), chain.CurrentBlock().Root()); err != nil {
-			return err
+		snapTree := chain.Snapshot()
+		root := chain.CurrentBlock().Root()
+		it, err := snapTree.AccountIterator(root, common.Hash{})
+		if err != nil {
+			return fmt.Errorf("Could not create iterator for root %x: %v", root, err)
+		}
+		generatedRoot := snapshot.GenerateTrieRoot(it)
+		if generatedRoot != root {
+			return fmt.Errorf("Snapshot corruption, got %d exp %d", generatedRoot, root)
 		}
 	}
 	return t.validateImportedHeaders(chain, validBlocks)
