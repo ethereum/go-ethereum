@@ -29,8 +29,8 @@ ios:
 	@echo "Done building."
 	@echo "Import \"$(GOBIN)/bor.framework\" to use the library."
 
-test: all
-	build/env.sh go run build/ci.go test
+test: bor
+	go test github.com/maticnetwork/bor/consensus/bor_test
 
 lint: ## Run linters.
 	build/env.sh go run build/ci.go lint
