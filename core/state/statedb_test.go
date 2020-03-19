@@ -67,6 +67,114 @@ func TestUpdateLeaks(t *testing.T) {
 	it.Release()
 }
 
+func TestStateChangesEmittedFromCommit(t *testing.T) {
+	// Create an empty state database
+	db := rawdb.NewMemoryDatabase()
+	state, _ := New(common.Hash{}, NewDatabase(db), nil)
+
+	// Commit 1: Create accounts with storage
+	expectedStateChangesOne := make(StateChanges)
+
+	for i := byte(0); i < 2; i++ {
+		addr := common.BytesToAddress([]byte{i})
+		modifiedAccount := ModifiedAccount{
+			Storage: make(map[common.Hash]common.Hash),
+			Account: Account{
+				Nonce:    0,
+				Balance:  big.NewInt(0),
+				Root:     emptyRoot,
+				CodeHash: emptyCodeHash,
+			},
+		}
+		newBalance := big.NewInt(int64(i))
+		state.SetBalance(addr, newBalance)
+		modifiedAccount.Account.Balance = newBalance
+
+		if i%2 == 0 {
+			storageKey := common.BytesToHash([]byte{i, i, i})
+			storageValue := common.BytesToHash([]byte{i, i, i, i})
+			modifiedAccount.Storage[storageKey] = storageValue
+
+			state.SetState(addr, storageKey, storageValue)
+		}
+
+		// Collect modified accounts to assert against
+		expectedStateChangesOne[addr] = modifiedAccount
+	}
+
+	_, actualStateChangesOne, commitErr := state.Commit(false)
+	if commitErr != nil {
+		t.Errorf("error committing to statedb")
+	}
+
+	assertStateChanges(actualStateChangesOne, expectedStateChangesOne, t)
+
+	// Commit 2: Update existing account storage
+	expectedStateChangesTwo := make(StateChanges)
+
+	var counter int
+	for addr, account := range expectedStateChangesOne {
+		// Only update some of the account storage
+		if counter%2 == 0 {
+			newBalance := big.NewInt(100)
+			account.Balance = newBalance
+			state.AddBalance(addr, newBalance)
+
+			for storageKey := range account.Storage {
+				updatedStorageValue := common.BytesToHash([]byte{0})
+
+				// Collect modified accounts to assert against
+				account.Storage[storageKey] = updatedStorageValue
+				expectedStateChangesTwo[addr] = account
+
+				state.SetState(addr, storageKey, updatedStorageValue)
+			}
+		}
+		counter++
+	}
+
+	_, stateChangesTwo, commitTwoErr := state.Commit(false)
+	if commitTwoErr != nil {
+		t.Errorf("error committing to statedb")
+	}
+
+	assertStateChanges(stateChangesTwo, expectedStateChangesTwo, t)
+}
+
+func assertStateChanges(actualChanges, expectedChanges StateChanges, t *testing.T) {
+	if len(actualChanges) != len(expectedChanges) {
+		t.Error("Test failure:", t.Name())
+		t.Logf("Mismatch in number of StateChanges.ModifiedAccounts. actual: %v, expected: %v", len(actualChanges), len(expectedChanges))
+	}
+
+	for addr, account := range actualChanges {
+		expected := expectedChanges[addr]
+
+		if !reflect.DeepEqual(account.Nonce, expected.Nonce) {
+			t.Error("Test failure:", t.Name())
+			t.Errorf("Account Nonce does not match expected. actual: %v, expected: %v", account.Nonce, expected.Nonce)
+		}
+
+		if !reflect.DeepEqual(account.Balance, expected.Balance) {
+			t.Error("Test failure:", t.Name())
+			t.Errorf("Account Balance does not match expected. actual: %v, expected: %v", account.Balance, expected.Balance)
+		}
+
+		if !reflect.DeepEqual(account.CodeHash, expected.CodeHash) {
+			t.Error("Test failure:", t.Name())
+			t.Errorf("Account CodeHash does not match expected. actual: %v, expected: %v", account.CodeHash, expected.CodeHash)
+		}
+
+		// Not asserting on the Account's Root because it's not easy to get the root between `SetState` calls
+
+		if !reflect.DeepEqual(account.Storage, expected.Storage) {
+			t.Error("Test failure:", t.Name())
+			t.Errorf("Account Storage does not match expected. actual: %v, expected: %v", account.Storage, expected.Storage)
+		}
+	}
+
+}
+
 // Tests that no intermediate state of an object is stored into the database,
 // only the one right before the commit.
 func TestIntermediateLeaks(t *testing.T) {
@@ -102,7 +210,7 @@ func TestIntermediateLeaks(t *testing.T) {
 	}
 
 	// Commit and cross check the databases.
-	transRoot, err := transState.Commit(false)
+	transRoot, _, err := transState.Commit(false)
 	if err != nil {
 		t.Fatalf("failed to commit transition state: %v", err)
 	}
@@ -110,7 +218,7 @@ func TestIntermediateLeaks(t *testing.T) {
 		t.Errorf("can not commit trie %v to persistent database", transRoot.Hex())
 	}
 
-	finalRoot, err := finalState.Commit(false)
+	finalRoot, _, err := finalState.Commit(false)
 	if err != nil {
 		t.Fatalf("failed to commit final state: %v", err)
 	}
@@ -459,7 +567,7 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 func TestTouchDelete(t *testing.T) {
 	s := newStateTest()
 	s.state.GetOrNewStateObject(common.Address{})
-	root, _ := s.state.Commit(false)
+	root, _, _ := s.state.Commit(false)
 	s.state.Reset(root)
 
 	snapshot := s.state.Snapshot()
@@ -661,7 +769,7 @@ func TestDeleteCreateRevert(t *testing.T) {
 	addr := toAddr([]byte("so"))
 	state.SetBalance(addr, big.NewInt(1))
 
-	root, _ := state.Commit(false)
+	root, _, _ := state.Commit(false)
 	state.Reset(root)
 
 	// Simulate self-destructing in one transaction, then create-reverting in another
@@ -673,7 +781,7 @@ func TestDeleteCreateRevert(t *testing.T) {
 	state.RevertToSnapshot(id)
 
 	// Commit the entire state and make sure we don't crash and have the correct state
-	root, _ = state.Commit(true)
+	root, _, _ = state.Commit(true)
 	state.Reset(root)
 
 	if state.getStateObject(addr) != nil {
@@ -698,7 +806,7 @@ func TestMissingTrieNodes(t *testing.T) {
 		a2 := toAddr([]byte("another"))
 		state.SetBalance(a2, big.NewInt(100))
 		state.SetCode(a2, []byte{1, 2, 4})
-		root, _ = state.Commit(false)
+		root, _, _ = state.Commit(false)
 		t.Logf("root: %x", root)
 		// force-flush
 		state.Database().TrieDB().Cap(0)
@@ -722,7 +830,7 @@ func TestMissingTrieNodes(t *testing.T) {
 	}
 	// Modify the state
 	state.SetBalance(addr, big.NewInt(2))
-	root, err := state.Commit(false)
+	root, err, _ := state.Commit(false)
 	if err == nil {
 		t.Fatalf("expected error, got root :%x", root)
 	}

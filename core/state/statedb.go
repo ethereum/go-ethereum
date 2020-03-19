@@ -802,28 +802,51 @@ func (s *StateDB) clearJournalAndRefund() {
 	s.validRevisions = s.validRevisions[:0] // Snapshots can be created without journal entires
 }
 
+// ModifiedAccount is an Account and it's Storage trie that has changed in the current block.
+type ModifiedAccount struct {
+	Account
+	Storage
+}
+
+// StateChanges are a map between an Account's address to it's ModifiedAccount.
+type StateChanges map[common.Address]ModifiedAccount
+
 // Commit writes the state to the underlying in-memory trie database.
-func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
+func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, StateChanges, error) {
 	if s.dbErr != nil {
-		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
+		return common.Hash{}, nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
+
 	// Finalize any pending changes and merge everything into the tries
 	s.IntermediateRoot(deleteEmptyObjects)
 
+	stateChanges := make(StateChanges)
+
 	// Commit objects to the trie, measuring the elapsed time
 	for addr := range s.stateObjectsDirty {
+		modifiedAccount := ModifiedAccount{}
+
 		if obj := s.stateObjects[addr]; !obj.deleted {
 			// Write any contract code associated with the state object
 			if obj.code != nil && obj.dirtyCode {
 				s.db.TrieDB().InsertBlob(common.BytesToHash(obj.CodeHash()), obj.code)
 				obj.dirtyCode = false
 			}
+
+			// Add the account to the modifiedAccounts map
+			modifiedAccount = ModifiedAccount{Account: obj.data}
+			// Add the origin storage to the modifiedAccounts map before it's committed (and flushed from in-memory)
+			modifiedAccount.Storage = obj.originStorage
+
 			// Write any storage changes in the state object to its storage trie
 			if err := obj.CommitTrie(s.db); err != nil {
-				return common.Hash{}, err
+				return common.Hash{}, StateChanges{}, err
 			}
 		}
+
+		stateChanges[addr] = modifiedAccount
 	}
+
 	if len(s.stateObjectsDirty) > 0 {
 		s.stateObjectsDirty = make(map[common.Address]struct{})
 	}
@@ -867,5 +890,6 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		}
 		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 	}
-	return root, err
+
+	return root, stateChanges, err
 }

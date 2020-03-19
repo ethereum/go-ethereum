@@ -686,7 +686,7 @@ func (api *RetestethAPI) AccountRange(ctx context.Context,
 			root = statedb.IntermediateRoot(vmenv.ChainConfig().IsEIP158(block.Number()))
 			if idx == int(txIndex) {
 				// This is to make sure root can be opened by OpenTrie
-				root, err = statedb.Commit(api.chainConfig.IsEIP158(block.Number()))
+				root, _, err = statedb.Commit(api.chainConfig.IsEIP158(block.Number()))
 				if err != nil {
 					return AccountRangeResult{}, err
 				}
@@ -796,7 +796,7 @@ func (api *RetestethAPI) StorageRangeAt(ctx context.Context,
 			_ = statedb.IntermediateRoot(vmenv.ChainConfig().IsEIP158(block.Number()))
 			if idx == int(txIndex) {
 				// This is to make sure root can be opened by OpenTrie
-				_, err = statedb.Commit(vmenv.ChainConfig().IsEIP158(block.Number()))
+				_, _, err = statedb.Commit(vmenv.ChainConfig().IsEIP158(block.Number()))
 				if err != nil {
 					return StorageRangeResult{}, err
 				}

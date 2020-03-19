@@ -167,7 +167,7 @@ func TestSnapshot2(t *testing.T) {
 	so0.deleted = false
 	state.setStateObject(so0)
 
-	root, _ := state.Commit(false)
+	root, _, _ := state.Commit(false)
 	state.Reset(root)
 
 	// and one with deleted == true
