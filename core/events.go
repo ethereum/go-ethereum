@@ -18,6 +18,7 @@ package core
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -34,6 +35,11 @@ type ChainEvent struct {
 	Block *types.Block
 	Hash  common.Hash
 	Logs  []*types.Log
+}
+
+type StateChangeEvent struct {
+	*types.Block
+	state.StateChanges
 }
 
 type ChainSideEvent struct {

@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -3026,5 +3027,81 @@ func TestInitThenFailCreateContract(t *testing.T) {
 		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
 			t.Fatalf("block %d: failed to insert into chain: %v", block.NumberU64(), err)
 		}
+	}
+}
+
+func TestSendingStateChangeEvents(t *testing.T) { testSendingStateChangeEvents(t, 3) }
+func testSendingStateChangeEvents(t *testing.T, numberOfEventsToSend int) {
+	var (
+		key1, _    = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1      = crypto.PubkeyToAddress(key1.PublicKey)
+		key2, _    = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		addr2      = crypto.PubkeyToAddress(key2.PublicKey)
+		db         = rawdb.NewMemoryDatabase()
+		gspec      = &Genesis{Config: params.TestChainConfig, Alloc: GenesisAlloc{addr1: {Balance: big.NewInt(10000000000000)}}}
+		genesis    = gspec.MustCommit(db)
+		signer     = types.NewEIP155Signer(gspec.Config.ChainID)
+		newEventCh = make(chan bool)
+	)
+
+	blockchain, _ := NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+	defer blockchain.Stop()
+
+	stateChangeCh := make(chan StateChangeEvent)
+	blockchain.SubscribeStateChangeEvents(stateChangeCh)
+
+	// create numberOfEventsToSend blocks that include State Changes
+	chain, _ := GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, numberOfEventsToSend, func(i int, block *BlockGen) {
+		tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
+		block.AddTx(tx)
+	})
+
+	// Spawn a goroutine to receive state change events
+	go validateEventsReceived(t, stateChangeCh, newEventCh, numberOfEventsToSend)
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatalf("failed to insert chain: %v", err)
+	}
+
+	if !<-newEventCh {
+		t.Fatal("failed to receive new event")
+	}
+}
+
+func validateEventsReceived(t *testing.T, sink interface{}, result chan bool, expect int) {
+	chanval := reflect.ValueOf(sink)
+	chantyp := chanval.Type()
+	if chantyp.Kind() != reflect.Chan || chantyp.ChanDir()&reflect.RecvDir == 0 {
+		t.Fatalf("invalid channel, given type %v", chantyp)
+	}
+	cnt := 0
+	var recv []reflect.Value
+	timeout := time.After(4 * time.Second)
+	cases := []reflect.SelectCase{{Chan: chanval, Dir: reflect.SelectRecv}, {Chan: reflect.ValueOf(timeout), Dir: reflect.SelectRecv}}
+	for {
+		chose, v, _ := reflect.Select(cases)
+		if chose == 1 {
+			t.Log("got a timeout")
+			// Not enough event received
+			result <- false
+			return
+		}
+		cnt += 1
+		recv = append(recv, v)
+		if cnt == expect {
+			t.Log("got an event")
+			break
+		}
+	}
+	done := time.After(50 * time.Millisecond)
+	cases = cases[:1]
+	cases = append(cases, reflect.SelectCase{Chan: reflect.ValueOf(done), Dir: reflect.SelectRecv})
+	chose, _, _ := reflect.Select(cases)
+	// If chose equal 0, it means receiving redundant events.
+	if chose == 1 {
+		t.Log("is done")
+		result <- true
+	} else {
+		t.Log("got too many events")
+		result <- false
 	}
 }
