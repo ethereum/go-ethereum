@@ -26,27 +26,28 @@ import (
 // expected to be changed and modified. stack does not take care of adding newly
 // initialised objects.
 type Stack struct {
-	data []*uint256.Int
+	data []uint256.Int
 }
 
 func newstack() *Stack {
-	return &Stack{data: make([]*uint256.Int, 0, 1024)}
+	return &Stack{data: make([]uint256.Int, 0, 1024)}
 }
 
 // Data returns the underlying uint256.Int array.
-func (st *Stack) Data() []*uint256.Int {
+func (st *Stack) Data() []uint256.Int {
 	return st.data
 }
 
 func (st *Stack) push(d *uint256.Int) {
 	// NOTE push limit (1024) is checked in baseCheck
-	st.data = append(st.data, d)
+	st.data = append(st.data, *d)
 }
-func (st *Stack) pushN(ds ...*uint256.Int) {
+func (st *Stack) pushN(ds ...uint256.Int) {
+	// FIXME: Is there a way to pass args by pointers.
 	st.data = append(st.data, ds...)
 }
 
-func (st *Stack) pop() (ret *uint256.Int) {
+func (st *Stack) pop() (ret uint256.Int) {
 	ret = st.data[len(st.data)-1]
 	st.data = st.data[:len(st.data)-1]
 	return
@@ -61,16 +62,16 @@ func (st *Stack) swap(n int) {
 }
 
 func (st *Stack) dup(n int) {
-	st.push(new(uint256.Int).Copy(st.data[st.len()-n]))
+	st.push(&st.data[st.len()-n])
 }
 
 func (st *Stack) peek() *uint256.Int {
-	return st.data[st.len()-1]
+	return &st.data[st.len()-1]
 }
 
 // Back returns the n'th item in stack
 func (st *Stack) Back(n int) *uint256.Int {
-	return st.data[st.len()-n-1]
+	return &st.data[st.len()-n-1]
 }
 
 // Print dumps the content of the stack
