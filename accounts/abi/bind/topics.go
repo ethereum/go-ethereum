@@ -103,13 +103,6 @@ func makeTopics(query ...[]interface{}) ([][]common.Hash, error) {
 	return topics, nil
 }
 
-// Big batch of reflect types for topic reconstruction.
-var (
-	reflectHash    = reflect.TypeOf(common.Hash{})
-	reflectAddress = reflect.TypeOf(common.Address{})
-	reflectBigInt  = reflect.TypeOf(new(big.Int))
-)
-
 // parseTopics converts the indexed topic fields into actual log field values.
 func parseTopics(out interface{}, fields abi.Arguments, topics []common.Hash) error {
 	store := func(arg abi.Argument, reconstr interface{}) {
