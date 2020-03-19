@@ -105,8 +105,8 @@ func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFu
 		stack.push(x)
 		stack.push(y)
 		opFn(&pc, evmInterpreter, &callCtx{nil, stack, nil})
-		if len(stack.data) != 1{
-			t.Errorf("Expected one item on stack after %v, got %d: ",name, len(stack.data) )
+		if len(stack.data) != 1 {
+			t.Errorf("Expected one item on stack after %v, got %d: ", name, len(stack.data))
 		}
 		actual := stack.pop()
 
@@ -524,12 +524,12 @@ func TestOpMstore(t *testing.T) {
 	mem.Resize(64)
 	pc := uint64(0)
 	v := "abcdef00000000000000abba000000000deaf000000c0de00100000000133700"
-	stack.pushN(new(uint256.Int).SetBytes(common.Hex2Bytes(v)), new(uint256.Int))
+	stack.pushN(*new(uint256.Int).SetBytes(common.Hex2Bytes(v)), *new(uint256.Int))
 	opMstore(&pc, evmInterpreter, &callCtx{mem, stack, nil})
 	if got := common.Bytes2Hex(mem.GetCopy(0, 32)); got != v {
 		t.Fatalf("Mstore fail, got %v, expected %v", got, v)
 	}
-	stack.pushN(new(uint256.Int).SetUint64(0x1), new(uint256.Int))
+	stack.pushN(*new(uint256.Int).SetUint64(0x1), *new(uint256.Int))
 	opMstore(&pc, evmInterpreter, &callCtx{mem, stack, nil})
 	if common.Bytes2Hex(mem.GetCopy(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
 		t.Fatalf("Mstore failed to overwrite previous value")
@@ -552,7 +552,7 @@ func BenchmarkOpMstore(bench *testing.B) {
 
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
-		stack.pushN(value, memStart)
+		stack.pushN(*value, *memStart)
 		opMstore(&pc, evmInterpreter, &callCtx{mem, stack, nil})
 	}
 }
@@ -571,7 +571,7 @@ func BenchmarkOpSHA3(bench *testing.B) {
 
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
-		stack.pushN(uint256.NewInt().SetUint64(32), start)
+		stack.pushN(*uint256.NewInt().SetUint64(32), *start)
 		opSha3(&pc, evmInterpreter, &callCtx{mem, stack, nil})
 	}
 }
