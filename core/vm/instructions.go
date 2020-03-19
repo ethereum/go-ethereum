@@ -268,7 +268,7 @@ func opCaller(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 }
 
 func opCallValue(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	v, _ := uint256.NewFromBig(callContext.contract.value)
+	v, _ := uint256.FromBig(callContext.contract.value)
 	callContext.stack.push(v)
 	return nil, nil
 }
@@ -420,7 +420,7 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx
 }
 
 func opGasprice(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	v, _ := uint256.NewFromBig(interpreter.evm.GasPrice)
+	v, _ := uint256.FromBig(interpreter.evm.GasPrice)
 	callContext.stack.push(v)
 	return nil, nil
 }
@@ -453,19 +453,19 @@ func opCoinbase(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 }
 
 func opTimestamp(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	v, _ := uint256.NewFromBig(interpreter.evm.Time)
+	v, _ := uint256.FromBig(interpreter.evm.Time)
 	callContext.stack.push(v)
 	return nil, nil
 }
 
 func opNumber(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	v, _ := uint256.NewFromBig(interpreter.evm.BlockNumber)
+	v, _ := uint256.FromBig(interpreter.evm.BlockNumber)
 	callContext.stack.push(v)
 	return nil, nil
 }
 
 func opDifficulty(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	v, _ := uint256.NewFromBig(interpreter.evm.Difficulty)
+	v, _ := uint256.FromBig(interpreter.evm.Difficulty)
 	callContext.stack.push(v)
 	return nil, nil
 }
