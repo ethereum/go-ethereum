@@ -1,0 +1,25 @@
+name: Bor Docker Image CI
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build the Bor Docker image
+      env:
+        DOCKERHUB: ${{ secrets.DOCKERHUB }}
+        DOCKERHUB_KEY: ${{ secrets.DOCKERHUB_KEY }}
+      run: |
+        ls -l
+        echo "Docker login"
+        docker login -u $DOCKERHUB -p $DOCKERHUB_KEY
+        echo "running build"
+        docker build -t maticnetwork/bor:${GITHUB_REF/refs\/tags\//} .
+        echo "pushing image"
+        docker push maticnetwork/bor:${GITHUB_REF/refs\/tags\//}
+        echo "DONE!"
