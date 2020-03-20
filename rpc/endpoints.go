@@ -22,8 +22,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// checkModuleAvailability check that all names given in modules are actually
-// available API services. It assumes that the special snowflake "rpc" module is always available.
+// checkModuleAvailability checks that all names given in modules are actually
+// available API services. It assumes that the MetadataApi module ("rpc") is always available;
+// the registration of this "rpc" module happens in NewServer() and is thus common to all endpoints.
 func checkModuleAvailability(modules []string, apis []API) (bad, available []string) {
 	availableSet := make(map[string]struct{})
 	for _, api := range apis {
