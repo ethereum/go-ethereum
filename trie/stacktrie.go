@@ -17,85 +17,279 @@
 package trie
 
 import (
-	"errors"
-	"fmt"
-	"sync"
+	"bytes"
+	"io"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/crypto/sha3"
 )
 
-var ErrCommitDisabled = errors.New("no database for committing")
-
-var stPool = sync.Pool{
-	New: func() interface{} {
-		return NewStackTrie(nil)
-	},
+// StackTrieItem represents an (extension, fullnode) tuple to be stored
+// in a "stack" in order to be reused multiple times so as to save many
+// allocations.
+type StackTrieItem struct {
+	ext          shortNode
+	branch       fullNode
+	depth        int
+	useBranch    bool
+	keyUntilHere []byte
 }
 
-func stackTrieFromPool(db ethdb.KeyValueStore) *StackTrie {
-	st := stPool.Get().(*StackTrie)
-	st.db = db
-	return st
-}
-
-func returnToPool(st *StackTrie) {
-	st.Reset()
-	stPool.Put(st)
-}
-
-// StackTrie is a trie implementation that expects keys to be inserted
-// in order. Once it determines that a subtree will no longer be inserted
-// into, it will hash it and free up the memory it uses.
+// StackTrie is a "stack" of (extension, fullnode) tuples that are
+// used to calculate the hash of a trie. The core idea is that at
+// any time, only one branch is expanded and the rest is hashed as
+// soon as it is determined it is no longer needed.
 type StackTrie struct {
-	nodeType  uint8          // node type (as in branch, ext, leaf)
-	val       []byte         // value contained by this node if it's a leaf
-	key       []byte         // key chunk covered by this (full|ext) node
-	keyOffset int            // offset of the key chunk inside a full key
-	children  [16]*StackTrie // list of children (for fullnodes and exts)
-
-	db ethdb.KeyValueStore // Pointer to the commit db, can be nil
+	stack  []StackTrieItem
+	top    int
+	hasher *hasher
 }
 
-// NewStackTrie allocates and initializes an empty trie.
-func NewStackTrie(db ethdb.KeyValueStore) *StackTrie {
+// NewStackTrie builds a new stack trie. The whole stack space is
+// pre-allocated so as to save reallocations down the road.
+func NewStackTrie() *StackTrie {
 	return &StackTrie{
-		nodeType: emptyNode,
-		db:       db,
+		top:    -1,
+		stack:  make([]StackTrieItem, 65),
+		hasher: newHasher(false),
 	}
 }
 
-func newLeaf(ko int, key, val []byte, db ethdb.KeyValueStore) *StackTrie {
-	st := stackTrieFromPool(db)
-	st.nodeType = leafNode
-	st.keyOffset = ko
-	st.key = append(st.key, key[ko:]...)
-	st.val = val
-	return st
+func (st *StackTrie) TryUpdate(key, value []byte) error {
+	k := keybytesToHex(key)
+	if len(value) == 0 {
+		panic("deletion not supported")
+	}
+	st.insert(&st.stack[0].ext, nil, k, valueNode(value))
+	return nil
 }
 
-func newExt(ko int, key []byte, child *StackTrie, db ethdb.KeyValueStore) *StackTrie {
-	st := stackTrieFromPool(db)
-	st.nodeType = extNode
-	st.keyOffset = ko
-	st.key = append(st.key, key[ko:]...)
-	st.children[0] = child
-	return st
+// alloc prepares the next stage in the stack for reuse.
+func (st *StackTrie) alloc() {
+	for i := 0; i < 16; i++ {
+		st.stack[st.top+1].branch.Children[i] = nil
+	}
+
+	st.top++
 }
 
-// List all values that StackTrie#nodeType can hold
+func (st *StackTrie) insert(n node, prefix, key []byte, value node) node {
+	// Special case: the trie is empty
+	if st.top == -1 {
+		st.top = 0
+		st.stack[st.top].depth = 0
+		st.stack[st.top].ext.Key = key
+		st.stack[st.top].ext.Val, _ = st.hasher.hash(value, false)
+		st.stack[st.top].keyUntilHere = []byte("")
+
+		return &st.stack[st.top].ext
+	}
+
+	// Use the prefix key to find the stack level in which the code needs to
+	// be inserted.
+	level := -1
+	for index := st.top; index >= 0; index-- {
+		level = index
+		if bytes.Equal(st.stack[level].keyUntilHere, key[:len(st.stack[level].keyUntilHere)]) {
+			// Found the common denominator, stop the search
+			break
+		}
+	}
+
+	// Already hash the value, which it will be anyway
+	hv, _ := st.hasher.hash(value, false)
+
+	// The difference happens at this level, find out where
+	// exactly. The extension part of the fullnode part?
+	extStart := len(st.stack[level].keyUntilHere)
+	extEnd := extStart + len(st.stack[level].ext.Key)
+	if bytes.Equal(st.stack[level].ext.Key, key[extStart:extEnd]) {
+		// The extension and the key are identical on the length of
+		// the extension, so st.stack[level].ext.Val should point to
+		// st.stack[level].branch, and the difference should be foud
+		// there.
+		var fn *fullNode
+		fn = &st.stack[level].branch
+
+		// The correct entry is the only one that isn't nil
+		for i := 15; i >= 0; i-- {
+			if fn.Children[i] != nil {
+				switch fn.Children[i].(type) {
+				// Only hash entries that are not already hashed
+				case *fullNode, *shortNode:
+					fn.Children[i], _ = st.hasher.hash(fn.Children[i], false)
+					st.top = level
+				default:
+				}
+				break
+			}
+		}
+
+		// That fullNode should have at most one non-hashNode child,
+		// hash it because no more nodes will be inserted in it.
+		st.alloc()
+		keyUntilHere := len(st.stack[level].keyUntilHere) + len(st.stack[level].ext.Key) + 1
+		st.stack[level].branch.Children[key[keyUntilHere-1]] = &st.stack[st.top].ext
+		st.stack[st.top].keyUntilHere = key[:keyUntilHere]
+		st.stack[st.top].ext.Key = key[keyUntilHere:]
+		st.stack[st.top].ext.Val = hv
+		st.stack[st.top].ext.flags = nodeFlag{dirty: true}
+		st.stack[st.top].depth = st.stack[level].depth + 1
+	} else {
+		// extension keys differ, need to create a split and
+		// hash the former node.
+		whereitdiffers := 0
+		offset := len(st.stack[level].keyUntilHere)
+		for i := range st.stack[level].ext.Key {
+			if key[offset+i] != st.stack[level].ext.Key[i] {
+				whereitdiffers = i
+				break
+			}
+		}
+
+		// Special case: the split is at the first byte, in this case
+		// the current ext needs to be skipped.
+		if whereitdiffers == 0 {
+			// Hash the existing node
+			saveSlot := st.stack[level].ext.Key[0]
+			st.stack[level].ext.Key = st.stack[level].ext.Key[1:]
+			var h node
+			if len(st.stack[level].ext.Key) == 0 {
+				h, _ = st.hasher.hash(&st.stack[level].branch, false)
+			} else {
+				h, _ = st.hasher.hash(&st.stack[level].ext, false)
+			}
+			for i := range st.stack[level].branch.Children {
+				st.stack[level].branch.Children[i] = nil
+			}
+			st.stack[level].branch.Children[saveSlot] = h
+			// Set the ext key to empty
+			st.stack[level].ext.Key = st.stack[level].ext.Key[:0]
+			st.top = level
+
+			// Insert the new leaf, starting with allocating more space
+			// if needed.
+			st.alloc()
+			st.stack[st.top].ext.Key = key[offset+1:]
+			st.stack[st.top].ext.Val = hv
+			st.stack[level].branch.Children[key[offset]] = &st.stack[st.top].ext
+
+			st.stack[st.top].keyUntilHere = key[:offset+1]
+
+			// Update parent reference if this isn't the root
+			if level > 0 {
+				parentslot := key[offset-1]
+				st.stack[level-1].branch.Children[parentslot] = &st.stack[level].branch
+			}
+		} else {
+			// Start by hashing the node right after the extension,
+			// to free some space.
+			var hashPrevBranch node
+			switch st.stack[level].ext.Val.(type) {
+			case *fullNode:
+				h, _ := st.hasher.hash(st.stack[level].ext.Val, false)
+				hashPrevBranch = h.(hashNode)
+				st.top = level
+			case hashNode, valueNode:
+				hashPrevBranch = st.stack[level].ext.Val
+			default:
+				panic("Encountered unexpected node type")
+			}
+
+			// Store the completed subtree in a fullNode at the slot
+			// where both keys differ.
+			slot := st.stack[level].ext.Key[whereitdiffers]
+
+			// Allocate the next full node, it's going to be
+			// reused several times.
+			st.alloc()
+
+			// Special case: the keys differ at the last element
+			if len(st.stack[level].ext.Key) == whereitdiffers+1 {
+				// Directly use the hashed value
+				for i := range st.stack[level].branch.Children {
+					st.stack[level].branch.Children[i] = nil
+				}
+				st.stack[level].branch.Children[slot] = hashPrevBranch
+			} else {
+				// Store the partially-hashed old node in the newly allocated
+				// slot, in order to finish the hashing.
+				st.stack[st.top].ext.Key = st.stack[level].ext.Key[whereitdiffers+1:]
+				st.stack[st.top].ext.Val = hashPrevBranch
+				st.stack[st.top].ext.flags = nodeFlag{dirty: true}
+
+				// Directly hash the branch if the extension is empty
+				var h node
+				if len(st.stack[st.top].ext.Key) == 0 {
+					h, _ = st.hasher.hash(&st.stack[st.top].branch, false)
+				} else {
+					h, _ = st.hasher.hash(&st.stack[st.top].ext, false)
+				}
+				st.stack[level].branch.Children[slot] = h
+			}
+			st.stack[level].ext.Val = &st.stack[level].branch
+			st.stack[level].ext.Key = st.stack[level].ext.Key[:whereitdiffers]
+
+			// Now use the newly allocated+hashed stack st.stack[level] to store
+			// the rest of the inserted (key, value) pair.
+			slot = key[whereitdiffers+len(st.stack[level].keyUntilHere)]
+			st.stack[st.top].ext.Key = key[whereitdiffers+len(st.stack[level].keyUntilHere)+1:]
+			if len(st.stack[st.top].ext.Key) == 0 {
+				st.stack[level].branch.Children[slot] = hv
+			} else {
+				st.stack[level].branch.Children[slot] = &st.stack[st.top].ext
+				st.stack[st.top].ext.Val = hv
+			}
+			st.stack[st.top].keyUntilHere = key[:whereitdiffers+len(st.stack[level].keyUntilHere)+1]
+			st.stack[st.top].depth = st.stack[level].depth + 1
+		}
+	}
+
+	// if ext.length == 0, directly return the full node.
+	if len(st.stack[0].ext.Key) == 0 {
+		return &st.stack[0].branch
+	}
+	return &st.stack[0].ext
+}
+
+// Hash hashes the stack trie by hashing the first entry in the stack
+func (st *StackTrie) Hash() common.Hash {
+	if st.top == -1 {
+		return emptyRoot
+	}
+
+	h, _ := st.hasher.hash(&st.stack[0].ext, false)
+	return common.BytesToHash(h.(hashNode))
+}
+
+// ReStackTrie is a reimplementation of the Stacktrie, that fixes
+// bugs in the previous implementation, and which also implements
+// its own hashing mechanism which is more specific and hopefully
+// more efficient that the default hasher.
+type ReStackTrie struct {
+	nodeType  uint8            // node type (as in branch, ext, leaf)
+	val       []byte           // value contained by this node if it's a leaf
+	key       []byte           // key chunk covered by this (full|ext) node
+	keyOffset int              // offset of the key chunk inside a full key
+	children  [16]*ReStackTrie // list of children (for fullnodes and exts)
+}
+
+// NewReStackTrie allocates and initializes an empty trie.
+func NewReStackTrie() *ReStackTrie {
+	return &ReStackTrie{
+		nodeType: 3,
+	}
+}
+
+// List all values that ReStackTrie#nodeType can hold
 const (
-	emptyNode = iota
-	branchNode
+	branchNode = iota
 	extNode
 	leafNode
-	hashedNode
+	emptyNode
 )
 
-// TryUpdate inserts a (key, value) pair into the stack trie
-func (st *StackTrie) TryUpdate(key, value []byte) error {
+func (st *ReStackTrie) TryUpdate(key, value []byte) error {
 	k := keybytesToHex(key)
 	if len(value) == 0 {
 		panic("deletion not supported")
@@ -104,27 +298,10 @@ func (st *StackTrie) TryUpdate(key, value []byte) error {
 	return nil
 }
 
-func (st *StackTrie) Update(key, value []byte) {
-	if err := st.TryUpdate(key, value); err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
-	}
-}
-
-func (st *StackTrie) Reset() {
-	st.db = nil
-	st.key = st.key[:0]
-	st.val = nil
-	for i := range st.children {
-		st.children[i] = nil
-	}
-	st.nodeType = emptyNode
-	st.keyOffset = 0
-}
-
 // Helper function that, given a full key, determines the index
 // at which the chunk pointed by st.keyOffset is different from
 // the same chunk in the full key.
-func (st *StackTrie) getDiffIndex(key []byte) int {
+func (st *ReStackTrie) getDiffIndex(key []byte) int {
 	diffindex := 0
 	for ; diffindex < len(st.key) && st.key[diffindex] == key[st.keyOffset+diffindex]; diffindex++ {
 	}
@@ -133,22 +310,12 @@ func (st *StackTrie) getDiffIndex(key []byte) int {
 
 // Helper function to that inserts a (key, value) pair into
 // the trie.
-func (st *StackTrie) insert(key, value []byte) {
+func (st *ReStackTrie) insert(key, value []byte) {
 	switch st.nodeType {
 	case branchNode: /* Branch */
-		idx := int(key[st.keyOffset])
-		// Unresolve elder siblings
-		for i := idx - 1; i >= 0; i-- {
-			if st.children[i] != nil {
-				if st.children[i].nodeType != hashedNode {
-					st.children[i].hash()
-				}
-				break
-			}
-		}
-		// Add new child
+		idx := key[st.keyOffset]
 		if st.children[idx] == nil {
-			st.children[idx] = stackTrieFromPool(st.db)
+			st.children[idx] = NewReStackTrie()
 			st.children[idx].keyOffset = st.keyOffset + 1
 		}
 		st.children[idx].insert(key, value)
@@ -165,48 +332,53 @@ func (st *StackTrie) insert(key, value []byte) {
 			// Ext key and key segment are identical, recurse into
 			// the child node.
 			st.children[0].insert(key, value)
-			return
-		}
-		// Save the original part. Depending if the break is
-		// at the extension's last byte or not, create an
-		// intermediate extension or use the extension's child
-		// node directly.
-		var n *StackTrie
-		if diffidx < len(st.key)-1 {
-			n = newExt(diffidx+1, st.key, st.children[0], st.db)
 		} else {
-			// Break on the last byte, no need to insert
-			// an extension node: reuse the current node
-			n = st.children[0]
-		}
-		// Convert to hash
-		n.hash()
-		var p *StackTrie
-		if diffidx == 0 {
-			// the break is on the first byte, so
-			// the current node is converted into
-			// a branch node.
-			st.children[0] = nil
-			p = st
-			st.nodeType = branchNode
-		} else {
-			// the common prefix is at least one byte
-			// long, insert a new intermediate branch
-			// node.
-			st.children[0] = stackTrieFromPool(st.db)
-			st.children[0].nodeType = branchNode
-			st.children[0].keyOffset = st.keyOffset + diffidx
-			p = st.children[0]
-		}
-		// Create a leaf for the inserted part
-		o := newLeaf(st.keyOffset+diffidx+1, key, value, st.db)
+			// Save the original part. Depending if the break is
+			// at the extension's last byte or not, create an
+			// intermediate extension or use the extension's child
+			// node directly.
+			var n *ReStackTrie
+			if diffidx < len(st.key)-1 {
+				n = NewReStackTrie()
+				n.key = st.key[diffidx+1:]
+				n.children[0] = st.children[0]
+				n.nodeType = 1
+			} else {
+				// Break on the last byte, no need to insert
+				// an extension node: reuse the current node
+				n = st.children[0]
+			}
+			n.keyOffset = st.keyOffset + diffidx + 1
 
-		// Insert both child leaves where they belong:
-		origIdx := st.key[diffidx]
-		newIdx := key[diffidx+st.keyOffset]
-		p.children[origIdx] = n
-		p.children[newIdx] = o
-		st.key = st.key[:diffidx]
+			// Create a leaf for the inserted part
+			o := NewReStackTrie()
+			o.keyOffset = st.keyOffset + diffidx + 1
+			o.key = key[o.keyOffset:]
+			o.val = value
+			o.nodeType = leafNode
+
+			// Insert both child leaves where they belong:
+			if diffidx == 0 {
+				// the break is on the first byte, so
+				// the current node is converted into
+				// a branch node.
+				st.children[0] = nil
+				st.children[st.key[diffidx]] = n
+				st.children[key[st.keyOffset+diffidx]] = o
+				st.nodeType = branchNode
+				st.key = nil
+			} else {
+				// the common prefix is at least one byte
+				// long, insert a new intermediate branch
+				// node.
+				st.children[0] = NewReStackTrie()
+				st.children[0].nodeType = branchNode
+				st.children[0].children[st.key[diffidx]] = n
+				st.children[0].children[key[st.keyOffset+diffidx]] = o
+				st.children[0].keyOffset = st.keyOffset + diffidx
+				st.key = st.key[:diffidx]
+			}
+		}
 
 	case leafNode: /* Leaf */
 		// Compare both key chunks and see where they differ
@@ -225,7 +397,7 @@ func (st *StackTrie) insert(key, value []byte) {
 		// Check if the split occurs at the first nibble of the
 		// chunk. In that case, no prefix extnode is necessary.
 		// Otherwise, create that
-		var p *StackTrie
+		var p *ReStackTrie
 		if diffidx == 0 {
 			// Convert current leaf into a branch
 			st.nodeType = branchNode
@@ -235,7 +407,7 @@ func (st *StackTrie) insert(key, value []byte) {
 			// Convert current node into an ext,
 			// and insert a child branch node.
 			st.nodeType = extNode
-			st.children[0] = NewStackTrie(st.db)
+			st.children[0] = NewReStackTrie()
 			st.children[0].nodeType = branchNode
 			st.children[0].keyOffset = st.keyOffset + diffidx
 			p = st.children[0]
@@ -243,169 +415,179 @@ func (st *StackTrie) insert(key, value []byte) {
 
 		// Create the two child leaves: the one containing the
 		// original value and the one containing the new value
-		// The child leave will be hashed directly in order to
-		// free up some memory.
 		origIdx := st.key[diffidx]
-		p.children[origIdx] = newLeaf(diffidx+1, st.key, st.val, st.db)
-		p.children[origIdx].hash()
+		p.children[origIdx] = NewReStackTrie()
+		p.children[origIdx].nodeType = leafNode
+		p.children[origIdx].key = st.key[diffidx+1:]
+		p.children[origIdx].val = st.val
+		p.children[origIdx].keyOffset = p.keyOffset + 1
 
 		newIdx := key[diffidx+st.keyOffset]
-		p.children[newIdx] = newLeaf(p.keyOffset+1, key, value, st.db)
+		p.children[newIdx] = NewReStackTrie()
+		p.children[newIdx].nodeType = leafNode
+		p.children[newIdx].key = key[p.keyOffset+1:]
+		p.children[newIdx].val = value
+		p.children[newIdx].keyOffset = p.keyOffset + 1
 
-		// Finally, cut off the key part that has been passed
-		// over to the children.
 		st.key = st.key[:diffidx]
-		st.val = nil
 	case emptyNode: /* Empty */
 		st.nodeType = leafNode
 		st.key = key[st.keyOffset:]
 		st.val = value
-	case hashedNode:
-		panic("trying to insert into hash")
 	default:
 		panic("invalid type")
 	}
 }
 
-// hash() hashes the node 'st' and converts it into 'hashedNode', if possible.
-// Possible outcomes:
-// 1. The rlp-encoded value was >= 32 bytes:
-//  - Then the 32-byte `hash` will be accessible in `st.val`.
-//  - And the 'st.type' will be 'hashedNode'
-// 2. The rlp-encoded value was < 32 bytes
-//  - Then the <32 byte rlp-encoded value will be accessible in 'st.val'.
-//  - And the 'st.type' will be 'hashedNode' AGAIN
-//
-// This method will also:
-// set 'st.type' to hashedNode
-// clear 'st.key'
-func (st *StackTrie) hash() {
-	/* Shortcut if node is already hashed */
-	if st.nodeType == hashedNode {
-		return
-	}
-	// The 'hasher' is taken from a pool, but we don't actually
-	// claim an instance until all children are done with their hashing,
-	// and we actually need one
-	var h *hasher
+// writeEvenHP writes a key with its hex prefix into a writer (presumably, the
+// input of a hasher) and then writes the value. The value can be a maximum of
+// 256 bytes, as it is only concerned with writing account leaves and optimize
+// for this use case.
+func writeHPRLP(writer io.Writer, key, val []byte, leaf bool) {
+	// DEBUG don't remove yet
+	//var writer bytes.Buffer
 
-	switch st.nodeType {
-	case branchNode:
-		var nodes [17]node
-		for i, child := range st.children {
-			if child == nil {
-				nodes[i] = nilValueNode
-				continue
-			}
-			child.hash()
-			if len(child.val) < 32 {
-				nodes[i] = rawNode(child.val)
+	// Determine the _t_ part of the hex prefix
+	hp := byte(0)
+	if leaf {
+		hp = 32
+	}
+
+	const maxHeaderSize = 1 /* key byte list header */ +
+		1 /* list header for key + value */ +
+		1 /* potential size byte if total size > 56 */ +
+		1 /* hex prefix if key is even-length*/
+	header := [maxHeaderSize]byte{}
+	keyOffset := 0
+	headerPos := maxHeaderSize - 1
+
+	// Add the hex prefix to its own byte if the key length is even, and
+	// as the most significant nibble of the key if it's odd.
+	// In the latter case, the first nibble of the key will be part of
+	// the header and it will be skipped later when it's added to the
+	// hasher sponge.
+	if len(key)%2 == 0 {
+		header[headerPos] = hp
+	} else {
+		header[headerPos] = hp | key[0] | 16
+		keyOffset = 1
+	}
+	headerPos--
+
+	// Add the key byte header, the key is 32 bytes max so it's always
+	// under 56 bytes - no extra byte needed.
+	keyByteSize := byte(len(key) / 2)
+	if len(key) > 1 || header[len(header)-1] > 128 {
+		header[headerPos] = 0x80 + keyByteSize + 1 /* HP */
+		headerPos--
+	}
+
+	// If this is a leaf being inserted, the header length for the
+	// value part will be two bytes as the leaf is more than 56 bytes
+	// long.
+	valHeaderLen := 1
+	if len(val) > 56 {
+		valHeaderLen = 2
+	}
+
+	// Add the global header, with optional length, and specify at
+	// which byte the header is starting.
+	payloadSize := int(keyByteSize) + (len(header) - headerPos - 1) +
+		valHeaderLen + len(val) /* value + rlp header */
+	var start int
+	if payloadSize > 56 {
+		header[headerPos] = byte(payloadSize)
+		headerPos--
+		header[headerPos] = 0xf8
+		start = headerPos
+	} else {
+		header[headerPos] = 0xc0 + byte(payloadSize)
+		start = headerPos
+	}
+
+	// Write the header into the sponge
+	writer.Write(header[start:])
+
+	// Write the key into the sponge
+	var m byte
+	for i, nibble := range key {
+		// Skip the first byte if the key has an odd-length, since
+		// it has already been written with the header.
+		if i >= keyOffset {
+			if (i-keyOffset)%2 == 0 {
+				m = nibble
 			} else {
-				nodes[i] = hashNode(child.val)
+				writer.Write([]byte{m*16 + nibble})
 			}
-			st.children[i] = nil // Reclaim mem from subtree
-			returnToPool(child)
 		}
-		nodes[16] = nilValueNode
-		h = newHasher(false)
-		defer returnHasherToPool(h)
-		h.tmp.Reset()
-		if err := rlp.Encode(&h.tmp, nodes); err != nil {
-			panic(err)
+	}
+
+	if leaf {
+		writer.Write([]byte{0xb8, byte(len(val))})
+	} else {
+		writer.Write([]byte{0x80 + byte(len(val))})
+	}
+	writer.Write(val)
+
+	// DEBUG don't remove yet
+	//if leaf {
+	//fmt.Println("leaf rlp ", writer)
+	//} else {
+	//fmt.Println("ext rlp ", writer)
+	//}
+	//io.Copy(w, &writer)
+}
+
+func (st *ReStackTrie) Hash() (h common.Hash) {
+	d := sha3.NewLegacyKeccak256()
+	switch st.nodeType {
+	case 0:
+		payload := [544]byte{}
+		pos := 3 // maximum header length given what we know
+		for _, v := range st.children {
+			if v != nil {
+				// Write a 32 byte list to the sponge
+				payload[pos] = 0xa0
+				pos++
+				copy(payload[pos:pos+32], v.Hash().Bytes())
+				pos += 32
+			} else {
+				// Write an empty list to the sponge
+				payload[pos] = 0x80
+				pos++
+			}
 		}
-	case extNode:
-		h = newHasher(false)
-		defer returnHasherToPool(h)
-		h.tmp.Reset()
-		st.children[0].hash()
-		// This is also possible:
-		//sz := hexToCompactInPlace(st.key)
-		//n := [][]byte{
-		//	st.key[:sz],
-		//	st.children[0].val,
-		//}
-		n := [][]byte{
-			hexToCompact(st.key),
-			st.children[0].val,
+		// Add empty 17th value
+		payload[pos] = 0x80
+		pos++
+
+		// Compute the header, length size is either 0, 1 or 2 bytes since
+		// there are at least 17 empty list headers, and at most 16 hashes
+		// plus an empty header for the value.
+		var start int
+		if pos-3 < 56 {
+			payload[2] = 0xc0 + byte(pos-3)
+			start = 2
+		} else if pos-3 < 256 {
+			payload[2] = byte(pos - 3)
+			payload[1] = 0xf8
+			start = 1
+		} else {
+			payload[2] = byte(pos - 3)
+			payload[1] = byte((pos - 3) >> 8)
+			payload[0] = 0xf9
+			start = 0
 		}
-		if err := rlp.Encode(&h.tmp, n); err != nil {
-			panic(err)
-		}
-		returnToPool(st.children[0])
-		st.children[0] = nil // Reclaim mem from subtree
-	case leafNode:
-		h = newHasher(false)
-		defer returnHasherToPool(h)
-		h.tmp.Reset()
-		st.key = append(st.key, byte(16))
-		sz := hexToCompactInPlace(st.key)
-		n := [][]byte{st.key[:sz], st.val}
-		if err := rlp.Encode(&h.tmp, n); err != nil {
-			panic(err)
-		}
-	case emptyNode:
-		st.val = st.val[:0]
-		st.val = append(st.val, emptyRoot[:]...)
-		st.key = st.key[:0]
-		st.nodeType = hashedNode
-		return
+		d.Write(payload[start:pos])
+	case 1:
+		ch := st.children[0].Hash().Bytes()
+		writeHPRLP(d, st.key, ch, false)
+	case 2:
+		writeHPRLP(d, st.key, st.val, true)
+	case 3:
 	default:
 		panic("Invalid node type")
 	}
-	st.key = st.key[:0]
-	st.nodeType = hashedNode
-	if len(h.tmp) < 32 {
-		st.val = st.val[:0]
-		st.val = append(st.val, h.tmp...)
-		return
-	}
-	// Going to write the hash to the 'val'. Need to ensure it's properly sized first
-	// Typically, 'branchNode's will have no 'val', and require this allocation
-	if required := 32 - len(st.val); required > 0 {
-		buf := make([]byte, required)
-		st.val = append(st.val, buf...)
-	}
-	st.val = st.val[:32]
-	h.sha.Reset()
-	h.sha.Write(h.tmp)
-	h.sha.Read(st.val)
-	if st.db != nil {
-		// TODO! Is it safe to Put the slice here?
-		// Do all db implementations copy the value provided?
-		st.db.Put(st.val, h.tmp)
-	}
-}
-
-// Hash returns the hash of the current node
-func (st *StackTrie) Hash() (h common.Hash) {
-	st.hash()
-	if len(st.val) != 32 {
-		// If the node's RLP isn't 32 bytes long, the node will not
-		// be hashed, and instead contain the  rlp-encoding of the
-		// node. For the top level node, we need to force the hashing.
-		ret := make([]byte, 32)
-		h := newHasher(false)
-		defer returnHasherToPool(h)
-		h.sha.Reset()
-		h.sha.Write(st.val)
-		h.sha.Read(ret)
-		return common.BytesToHash(ret)
-	}
-	return common.BytesToHash(st.val)
-}
-
-// Commit will firstly hash the entrie trie if it's still not hashed
-// and then commit all nodes to the associated database. Actually most
-// of the trie nodes MAY have been committed already. The main purpose
-// here is to commit the root node.
-//
-// The associated database is expected, otherwise the whole commit
-// functionality should be disabled.
-func (st *StackTrie) Commit() (common.Hash, error) {
-	if st.db == nil {
-		return common.Hash{}, ErrCommitDisabled
-	}
-	st.hash()
-	h := common.BytesToHash(st.val)
-	return h, nil
+	d.Sum(h[:0])
+	return
 }
