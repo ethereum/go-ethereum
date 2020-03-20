@@ -70,14 +70,13 @@ func readGenesis(genesisPath string) *core.Genesis {
 	return genesis
 }
 
-func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, uint64, time.Duration, error) {
-	var (
-		output   []byte
-		gasLeft  uint64
-		execTime time.Duration
-		err      error
-	)
+type execStats struct {
+	time           time.Duration // The execution time.
+	allocs         int64         // The number of heap allocations during execution.
+	bytesAllocated int64         // The cumulative number of bytes allocated during execution.
+}
 
+func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []byte, gasLeft uint64, stats execStats, err error) {
 	if bench {
 		result := testing.Benchmark(func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
@@ -87,14 +86,21 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, uin
 
 		// Get the average execution time from the benchmarking result.
 		// There are other useful stats here that could be reported.
-		execTime = time.Duration(result.NsPerOp())
+		stats.time = time.Duration(result.NsPerOp())
+		stats.allocs = result.AllocsPerOp()
+		stats.bytesAllocated = result.AllocedBytesPerOp()
 	} else {
+		var memStatsBefore, memStatsAfter goruntime.MemStats
+		goruntime.ReadMemStats(&memStatsBefore)
 		startTime := time.Now()
 		output, gasLeft, err = execFunc()
-		execTime = time.Since(startTime)
+		stats.time = time.Since(startTime)
+		goruntime.ReadMemStats(&memStatsAfter)
+		stats.allocs = int64(memStatsAfter.Mallocs - memStatsBefore.Mallocs)
+		stats.bytesAllocated = int64(memStatsAfter.TotalAlloc - memStatsBefore.TotalAlloc)
 	}
 
-	return output, gasLeft, execTime, err
+	return output, gasLeft, stats, err
 }
 
 func runCmd(ctx *cli.Context) error {
@@ -256,7 +262,8 @@ func runCmd(ctx *cli.Context) error {
 		}
 	}
 
-	output, leftOverGas, execTime, err := timedExec(ctx.GlobalBool(BenchFlag.Name), execFunc)
+	bench := ctx.GlobalBool(BenchFlag.Name)
+	output, leftOverGas, stats, err := timedExec(bench, execFunc)
 
 	if ctx.GlobalBool(DumpFlag.Name) {
 		statedb.Commit(true)
@@ -286,17 +293,12 @@ func runCmd(ctx *cli.Context) error {
 		vm.WriteLogs(os.Stderr, statedb.Logs())
 	}
 
-	if ctx.GlobalBool(StatDumpFlag.Name) {
-		var mem goruntime.MemStats
-		goruntime.ReadMemStats(&mem)
-		fmt.Fprintf(os.Stderr, `evm execution time: %v
-heap objects:       %d
-allocations:        %d
-total allocations:  %d
-GC calls:           %d
-Gas used:           %d
-
-`, execTime, mem.HeapObjects, mem.Alloc, mem.TotalAlloc, mem.NumGC, initialGas-leftOverGas)
+	if bench || ctx.GlobalBool(StatDumpFlag.Name) {
+		fmt.Fprintf(os.Stderr, `EVM gas used:    %d
+execution time:  %v
+allocations:     %d
+allocated bytes: %d
+`, initialGas-leftOverGas, stats.time, stats.allocs, stats.bytesAllocated)
 	}
 	if tracer == nil {
 		fmt.Printf("0x%x\n", output)
