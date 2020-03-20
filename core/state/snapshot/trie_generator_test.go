@@ -17,6 +17,7 @@
 package snapshot
 
 import (
+	"bytes"
 	"encoding/binary"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/trie"
@@ -116,7 +117,7 @@ func TestMultipleStackTrieInsertion(t *testing.T) {
 
 	var got2 common.Hash
 	it = head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-	got2 = generateTrieRoot(it, StackGenerate)
+	got2 = generateTrieRoot(it, ReStackGenerate)
 	if got2 != got1 {
 		t.Fatalf("Error: got %x exp %x", got2, got1)
 	}
@@ -156,7 +157,12 @@ func BenchmarkTrieGeneration(b *testing.B) {
 		snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), nil, makeAccounts(4000), nil)
 		head := snaps.Snapshot(common.HexToHash("0x02"))
 		// Call it once to make it create the lists before test starts
-		head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
+		it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
+		// Run the standard version once without the timer, to get the
+		// correct value. This will warm the cache and make StdGenerate
+		// appear a bit faster than it really is.
+		exp := generateTrieRoot(it, StdGenerate)
+
 		b.Run("standard", func(b *testing.B) {
 			b.ResetTimer()
 			b.ReportAllocs()
@@ -166,7 +172,7 @@ func BenchmarkTrieGeneration(b *testing.B) {
 				got = generateTrieRoot(it, StdGenerate)
 			}
 			b.StopTimer()
-			if exp := common.HexToHash("fecc4e1fce05c888c8acc8baa2d7677a531714668b7a09b5ede6e3e110be266b"); got != exp {
+			if got != exp {
 				b.Fatalf("Error: got %x exp %x", got, exp)
 			}
 		})
@@ -179,7 +185,7 @@ func BenchmarkTrieGeneration(b *testing.B) {
 				got = generateTrieRoot(it, PruneGenerate)
 			}
 			b.StopTimer()
-			if exp := common.HexToHash("fecc4e1fce05c888c8acc8baa2d7677a531714668b7a09b5ede6e3e110be266b"); got != exp {
+			if got != exp {
 				b.Fatalf("Error: got %x exp %x", got, exp)
 			}
 
@@ -190,10 +196,10 @@ func BenchmarkTrieGeneration(b *testing.B) {
 			var got common.Hash
 			for i := 0; i < b.N; i++ {
 				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-				got = generateTrieRoot(it, StackGenerate)
+				got = generateTrieRoot(it, ReStackGenerate)
 			}
 			b.StopTimer()
-			if exp := common.HexToHash("fecc4e1fce05c888c8acc8baa2d7677a531714668b7a09b5ede6e3e110be266b"); got != exp {
+			if got != exp {
 				b.Fatalf("Error: got %x exp %x", got, exp)
 			}
 
@@ -204,29 +210,48 @@ func BenchmarkTrieGeneration(b *testing.B) {
 		snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), nil, makeAccounts(10000), nil)
 		head := snaps.Snapshot(common.HexToHash("0x02"))
 		// Call it once to make it create the lists before test starts
-		head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
+		it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
+		// Run the standard version once without the timer, to get the
+		// correct value. This will warm the cache and make StdGenerate
+		// appear a bit faster than it really is.
+		exp := generateTrieRoot(it, StdGenerate)
 		b.Run("standard", func(b *testing.B) {
 			b.ResetTimer()
 			b.ReportAllocs()
+			var got common.Hash
 			for i := 0; i < b.N; i++ {
 				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-				generateTrieRoot(it, StdGenerate)
+				got = generateTrieRoot(it, StdGenerate)
+			}
+			b.StopTimer()
+			if got != exp {
+				b.Fatalf("Error: got %x exp %x", got, exp)
 			}
 		})
 		b.Run("pruning", func(b *testing.B) {
 			b.ResetTimer()
 			b.ReportAllocs()
+			var got common.Hash
 			for i := 0; i < b.N; i++ {
 				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-				generateTrieRoot(it, PruneGenerate)
+				got = generateTrieRoot(it, PruneGenerate)
+			}
+			b.StopTimer()
+			if got != exp {
+				b.Fatalf("Error: got %x exp %x", got, exp)
 			}
 		})
 		b.Run("stack", func(b *testing.B) {
 			b.ResetTimer()
 			b.ReportAllocs()
+			var got common.Hash
 			for i := 0; i < b.N; i++ {
 				it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
-				generateTrieRoot(it, StackGenerate)
+				got = generateTrieRoot(it, ReStackGenerate)
+			}
+			b.StopTimer()
+			if got != exp {
+				b.Fatalf("Error: got %x exp %x", got, exp)
 			}
 		})
 	})
@@ -242,7 +267,7 @@ func TestStackVsStandard(t *testing.T) {
 		{key: "04f0862f9177d381deeed0e6af3b0751f3cce6887746ba13cf41aa1c4dbf6591", value: "f8440180a014baf10561054a68fe522434b4d4c25e1b377e745bf1d676afa71bc891cacf9ba0debc58a981ca4f637e282ab5985d169a0237d03ea9336bc3434d9dce79e62ab3"},
 		{key: "04f0a6c0cb97e624bcb799f7d88717fe7fe4894877a8987a27d4792c36a2833e", value: "f8440180a0880595df1b6b3923e8036106cb641aae6b1249faa02d3217da8c556c0fff172ba06569f607421e3779a571977d84910e1177059946e0a064e487b1502e6a282623"},
 	}
-	stackT := trie.NewStackTrie()
+	stackT := trie.NewReStackTrie()
 	stdT, _ := trie.New(common.Hash{}, trie.NewDatabase(memorydb.New()))
 	for _, kv := range vals {
 		stackT.TryUpdate(common.FromHex(kv.key), common.FromHex(kv.value))
@@ -250,5 +275,19 @@ func TestStackVsStandard(t *testing.T) {
 	}
 	if got, exp := stackT.Hash(), stdT.Hash(); got != exp {
 		t.Errorf("Hash mismatch, got %x, exp %x", got, exp)
+	}
+}
+
+func TestReStackTrieLeafInsert(t *testing.T) {
+	root := trie.NewReStackTrie()
+	root.TryUpdate([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17}, []byte{248, 84, 136, 201, 58, 199, 94, 92, 47, 25, 82, 136, 85, 30, 0, 108, 3, 217, 199, 45, 160, 38, 197, 164, 24, 42, 129, 122, 66, 245, 69, 203, 198, 177, 205, 148, 164, 9, 87, 135, 151, 110, 131, 242, 141, 63, 75, 13, 236, 208, 24, 251, 99, 160, 197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112})
+	root.TryUpdate([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 34}, []byte{248, 84, 136, 151, 135, 82, 39, 143, 175, 28, 19, 136, 27, 243, 181, 127, 169, 210, 240, 84, 160, 52, 216, 185, 7, 102, 228, 7, 49, 45, 109, 52, 74, 37, 153, 183, 176, 196, 229, 64, 42, 194, 181, 0, 219, 64, 95, 83, 159, 218, 232, 244, 135, 160, 197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112})
+	root.TryUpdate([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 51}, []byte{248, 84, 136, 42, 104, 141, 120, 24, 60, 93, 100, 136, 113, 58, 195, 183, 81, 96, 180, 5, 160, 35, 125, 39, 98, 242, 32, 146, 145, 57, 131, 244, 142, 175, 147, 131, 149, 247, 74, 118, 76, 192, 96, 220, 249, 119, 73, 229, 183, 205, 104, 162, 122, 160, 197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112})
+	ref, _ := trie.New(common.Hash{}, trie.NewDatabase(memorydb.New()))
+	ref.TryUpdate([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17}, []byte{248, 84, 136, 201, 58, 199, 94, 92, 47, 25, 82, 136, 85, 30, 0, 108, 3, 217, 199, 45, 160, 38, 197, 164, 24, 42, 129, 122, 66, 245, 69, 203, 198, 177, 205, 148, 164, 9, 87, 135, 151, 110, 131, 242, 141, 63, 75, 13, 236, 208, 24, 251, 99, 160, 197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112})
+	ref.TryUpdate([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 34}, []byte{248, 84, 136, 151, 135, 82, 39, 143, 175, 28, 19, 136, 27, 243, 181, 127, 169, 210, 240, 84, 160, 52, 216, 185, 7, 102, 228, 7, 49, 45, 109, 52, 74, 37, 153, 183, 176, 196, 229, 64, 42, 194, 181, 0, 219, 64, 95, 83, 159, 218, 232, 244, 135, 160, 197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112})
+	ref.TryUpdate([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 51}, []byte{248, 84, 136, 42, 104, 141, 120, 24, 60, 93, 100, 136, 113, 58, 195, 183, 81, 96, 180, 5, 160, 35, 125, 39, 98, 242, 32, 146, 145, 57, 131, 244, 142, 175, 147, 131, 149, 247, 74, 118, 76, 192, 96, 220, 249, 119, 73, 229, 183, 205, 104, 162, 122, 160, 197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112})
+	if !bytes.Equal(ref.Hash().Bytes(), root.Hash().Bytes()) {
+		t.Fatalf("Invalid hash, expected %s got %s", common.ToHex(ref.Hash().Bytes()), common.ToHex(root.Hash().Bytes()))
 	}
 }

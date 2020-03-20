@@ -39,8 +39,8 @@ func GenerateTrieRoot(it AccountIterator) common.Hash {
 	return generateTrieRoot(it, StdGenerate)
 }
 
-func CrosscheckTriehasher(it AccountIterator, begin,end int) bool {
-	return verifyHasher(it, StackGenerate, begin, end)
+func CrosscheckTriehasher(it AccountIterator, begin, end int) bool {
+	return verifyHasher(it, ReStackGenerate, begin, end)
 }
 
 func generateTrieRoot(it AccountIterator, generatorFn trieGeneratorFn) common.Hash {
@@ -75,6 +75,17 @@ func generateTrieRoot(it AccountIterator, generatorFn trieGeneratorFn) common.Ha
 	log.Info("Generated trie hash from snapshot", "accounts", accounts, "elapsed", time.Since(start))
 	wg.Wait()
 	return result
+}
+
+// ReStackGenerate is a hexary trie builder which is built from the
+// bottom-up as keys are added. It attempts to save memory by doing
+// the RLP encoding on the fly during hashing.
+func ReStackGenerate(in chan (leaf), out chan (common.Hash)) {
+	t := trie.NewReStackTrie()
+	for leaf := range in {
+		t.TryUpdate(leaf.key[:], leaf.value)
+	}
+	out <- t.Hash()
 }
 
 func verifyHasher(it AccountIterator, generatorFn trieGeneratorFn, begin, end int) bool {
