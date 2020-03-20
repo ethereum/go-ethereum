@@ -39,6 +39,10 @@ func GenerateTrieRoot(it AccountIterator) common.Hash {
 	return generateTrieRoot(it, StdGenerate)
 }
 
+func CrosscheckTriehasher(it AccountIterator, begin,end int) bool {
+	return verifyHasher(it, StackGenerate, begin, end)
+}
+
 func generateTrieRoot(it AccountIterator, generatorFn trieGeneratorFn) common.Hash {
 	var (
 		in  = make(chan leaf)        // chan to pass leaves
@@ -71,6 +75,64 @@ func generateTrieRoot(it AccountIterator, generatorFn trieGeneratorFn) common.Ha
 	log.Info("Generated trie hash from snapshot", "accounts", accounts, "elapsed", time.Since(start))
 	wg.Wait()
 	return result
+}
+
+func verifyHasher(it AccountIterator, generatorFn trieGeneratorFn, begin, end int) bool {
+	var (
+		referenceFn = StdGenerate
+
+		inA  = make(chan leaf)        // chan to pass leaves
+		outA = make(chan common.Hash) // chan to collect result
+
+		inB  = make(chan leaf)        // chan to pass leaves
+		outB = make(chan common.Hash) // chan to collect result
+		wg   sync.WaitGroup
+	)
+	wg.Add(2)
+	go func() {
+		referenceFn(inA, outA)
+		wg.Done()
+	}()
+	go func() {
+		generatorFn(inB, outB)
+		wg.Done()
+	}()
+	// Feed leaves
+	start := time.Now()
+	logged := time.Now()
+	accounts := 0
+	for it.Next() {
+		if accounts < begin {
+			accounts++
+			continue
+		}
+		if end > 0 && accounts > end {
+			break
+		}
+		slimData := it.Account()
+		fullData := SlimToFull(slimData)
+		l := leaf{it.Hash(), fullData}
+		inA <- l
+		inB <- l
+		accounts++
+		if time.Since(logged) > 8*time.Second {
+			log.Info("Generating trie hash from snapshot",
+				"at", l.key, "accounts", accounts, "elapsed", time.Since(start))
+			logged = time.Now()
+		}
+	}
+	close(inA)
+	close(inB)
+	resultA := <-outA
+	resultB := <-outB
+	log.Info("Generated trie hash from snapshot", "accounts", accounts,
+		"elapsed", time.Since(start),
+		"start", begin,
+		"end", end,
+		"exp", resultA,
+		"got", resultB)
+	wg.Wait()
+	return resultA == resultB
 }
 
 // StackGenerate is a hexary trie builder which is built from the bottom-up as
