@@ -11,15 +11,18 @@
 GOBIN = $(shell pwd)/build/bin
 GO ?= latest
 GORUN = go run
+GOPATH = $(shell go env GOPATH)
 
 bor:
 	$(GORUN) build/ci.go install ./cmd/bor
+	mkdir -p $(GOPATH)/bin/
 	cp $(GOBIN)/bor $(GOPATH)/bin/
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/bor\" to launch bor."
 
 all:
 	$(GORUN) build/ci.go install
+	mkdir -p $(GOPATH)/bin/
 	cp $(GOBIN)/* $(GOPATH)/bin/
 
 android:

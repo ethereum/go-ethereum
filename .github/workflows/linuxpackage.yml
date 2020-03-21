@@ -1,0 +1,76 @@
+name: Linux package
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Go
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.13
+
+      - name: Set up Ruby 2.6
+        uses: actions/setup-ruby@v1
+        with:
+          ruby-version: 2.6
+  
+      - name: Build package
+        run: |
+          set -x
+
+          sudo apt-get -yqq install libpq-dev build-essential
+          gem install --no-document fpm
+          fpm --version
+          
+          make bor
+
+          cat > bor.service <<- "EOF"
+          [Unit]
+          Description=bor
+          [Service]
+          WorkingDirectory=/etc/bor/
+          EnvironmentFile=/etc/bor/metadata
+          ExecStartPre=/bin/mkdir -p /var/log/matic-logs/
+          ExecStart=/bin/bash -c "/usr/bin/bor --datadir /etc/bor/dataDir --port '30303' --rpc --rpcaddr '0.0.0.0' --rpcvhosts '*' --rpccorsdomain '*' --rpcport '8545' --ipcpath /etc/bor/geth.ipc --rpcapi 'bor,db,eth,net,web3,txpool' --networkid ${NETWORK_ID} --gasprice '0' --keystore /etc/bor/dataDir/keystore --unlock ${VALIDATOR_ADDRESS} --password /etc/bor/dataDir/password.txt --allow-insecure-unlock --maxpeers 150 --mine > /var/log/matic-logs/bor.log 2>&1"
+          Type=simple
+          User=root
+          EOF
+
+          cat > after_install.sh <<- "EOF"
+          #!/bin/bash
+          touch /etc/bor/metadata
+          EOF
+
+          cat > metadata <<- "EOF"
+          NETWORK_ID=
+          VALIDATOR_ADDRESS=
+          EOF
+
+          fpm -s dir -t deb --deb-user root --deb-group root -n matic-bor -v ${GITHUB_REF/refs\/tags\//} \
+            --after-install after_install.sh \
+            bor.service=/etc/systemd/system/ \
+            build/bin/bor=/usr/bin/ \
+            metadata=/etc/bor/
+          
+          mkdir packages-${GITHUB_REF/refs\/tags\//}
+
+          mv matic-bor_${GITHUB_REF/refs\/tags\//}_amd64.deb packages-${GITHUB_REF/refs\/tags\//}/
+
+          ls packages-${GITHUB_REF/refs\/tags\//}/
+
+      - uses: jakejarvis/s3-sync-action@master
+        with:
+          args: --acl public-read
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: 'us-east-1'   # optional: defaults to us-east-1
+          SOURCE_DIR: 'packages-${GITHUB_REF/refs\/tags\//}'
+          DEST_DIR: '${GITHUB_REF/refs\/tags\//}'
