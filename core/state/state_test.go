@@ -36,7 +36,7 @@ type stateTest struct {
 
 func newStateTest() *stateTest {
 	db := rawdb.NewMemoryDatabase()
-	sdb, _ := New(common.Hash{}, NewDatabase(db))
+	sdb, _ := New(common.Hash{}, NewDatabase(db), nil)
 	return &stateTest{db: db, state: sdb}
 }
 
@@ -146,7 +146,7 @@ func TestSnapshotEmpty(t *testing.T) {
 }
 
 func TestSnapshot2(t *testing.T) {
-	state, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()))
+	state, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()), nil)
 
 	stateobjaddr0 := toAddr([]byte("so0"))
 	stateobjaddr1 := toAddr([]byte("so1"))

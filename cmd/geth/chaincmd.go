@@ -79,6 +79,7 @@ The dumpgenesis command dumps the genesis block configuration in JSON format to 
 			utils.CacheFlag,
 			utils.SyncModeFlag,
 			utils.GCModeFlag,
+			utils.SnapshotFlag,
 			utils.CacheDatabaseFlag,
 			utils.CacheGCFlag,
 		},
@@ -544,7 +545,7 @@ func dump(ctx *cli.Context) error {
 			fmt.Println("{}")
 			utils.Fatalf("block not found")
 		} else {
-			state, err := state.New(block.Root(), state.NewDatabase(chainDb))
+			state, err := state.New(block.Root(), state.NewDatabase(chainDb), nil)
 			if err != nil {
 				utils.Fatalf("could not create new state: %v", err)
 			}

@@ -50,6 +50,7 @@ var DefaultConfig = Config{
 	TrieCleanCache:     256,
 	TrieDirtyCache:     256,
 	TrieTimeout:        60 * time.Minute,
+	SnapshotCache:      256,
 	Miner: miner.Config{
 		GasFloor: 8000000,
 		GasCeil:  8000000,
@@ -125,6 +126,7 @@ type Config struct {
 	TrieCleanCache int
 	TrieDirtyCache int
 	TrieTimeout    time.Duration
+	SnapshotCache  int
 
 	// Mining options
 	Miner miner.Config
