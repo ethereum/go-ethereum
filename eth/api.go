@@ -66,6 +66,11 @@ func (api *PublicEthereumAPI) Hashrate() hexutil.Uint64 {
 	return hexutil.Uint64(api.e.Miner().HashRate())
 }
 
+// GetHashrate returns the POW hashrate
+func (api *PublicEthereumAPI) GetHashrate() hexutil.Uint64 {
+	return api.Hashrate()
+}
+
 // ChainId is the EIP-155 replay-protection chain id for the current ethereum chain config.
 func (api *PublicEthereumAPI) ChainId() hexutil.Uint64 {
 	chainID := new(big.Int)
