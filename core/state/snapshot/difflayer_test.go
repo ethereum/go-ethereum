@@ -150,13 +150,16 @@ func TestMergeDelete(t *testing.T) {
 		}
 	}
 	// Add some flipAccs-flopping layers on top
-	parent := newDiffLayer(emptyLayer(), common.Hash{}, flipDrops(), flipAccs(), storage)
+	disk := emptyLayer()
+	parent := newDiffLayer(disk, common.Hash{}, flipDrops(), flipAccs(), storage)
 	child := parent.Update(common.Hash{}, flopDrops(), flopAccs(), storage)
 	child = child.Update(common.Hash{}, flipDrops(), flipAccs(), storage)
 	child = child.Update(common.Hash{}, flopDrops(), flopAccs(), storage)
 	child = child.Update(common.Hash{}, flipDrops(), flipAccs(), storage)
 	child = child.Update(common.Hash{}, flopDrops(), flopAccs(), storage)
 	child = child.Update(common.Hash{}, flipDrops(), flipAccs(), storage)
+
+	child.Prepare(disk)
 
 	if data, _ := child.Account(h1); data == nil {
 		t.Errorf("last diff layer: expected %x account to be non-nil", h1)
@@ -172,7 +175,7 @@ func TestMergeDelete(t *testing.T) {
 	}
 	// And flatten
 	merged := (child.flatten()).(*diffLayer)
-
+	merged.Prepare(disk)
 	if data, _ := merged.Account(h1); data == nil {
 		t.Errorf("merged layer: expected %x account to be non-nil", h1)
 	}
@@ -201,6 +204,7 @@ func TestInsertAndMerge(t *testing.T) {
 		slot   = common.HexToHash("0x02")
 		parent *diffLayer
 		child  *diffLayer
+		disk   = emptyLayer()
 	)
 	{
 		var (
@@ -208,7 +212,7 @@ func TestInsertAndMerge(t *testing.T) {
 			accounts  = make(map[common.Hash][]byte)
 			storage   = make(map[common.Hash]map[common.Hash][]byte)
 		)
-		parent = newDiffLayer(emptyLayer(), common.Hash{}, destructs, accounts, storage)
+		parent = newDiffLayer(disk, common.Hash{}, destructs, accounts, storage)
 	}
 	{
 		var (
@@ -223,6 +227,7 @@ func TestInsertAndMerge(t *testing.T) {
 	}
 	// And flatten
 	merged := (child.flatten()).(*diffLayer)
+	merged.Prepare(disk)
 	{ // Check that slot value is present
 		have, _ := merged.Storage(acc, slot)
 		if want := []byte{0x01}; !bytes.Equal(have, want) {
@@ -413,7 +418,7 @@ func BenchmarkBloom(b *testing.B) {
 		for i := 0; i < 1000; i++ {
 			accounts[randomHash()] = randomAccount()
 		}
-		return newDiffLayer(parent, common.Hash{}, accounts, storage)
+		return newDiffLayer(parent, common.Hash{}, nil, accounts, storage)
 	}
 	var layer snapshot
 	layer = emptyLayer()

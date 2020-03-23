@@ -18,6 +18,7 @@ package snapshot
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"math/rand"
 	"sort"
@@ -119,17 +120,17 @@ type diffLayer struct {
 // accountBloomHash  is s used to convert an account
 // hash into a 64 bit mini hash.
 func accountBloomHash(h common.Hash) uint64 {
-	return binary.BigEndian.Uint64(h[bloomHasherOffset : bloomHasherOffset+8])
+	return binary.BigEndian.Uint64(h[bloomAccountHasherOffset : bloomAccountHasherOffset+8])
 }
 
 // storageBloomHash is used to convert an account + storage hash into a 64 bit mini hash.
 func storageBloomHash(accountHash, storageHash common.Hash) uint64 {
-	return binary.BigEndian.Uint64(accountHash[bloomHasherOffset:bloomHasherOffset+8]) ^
-		binary.BigEndian.Uint64(storageHash[bloomHasherOffset:bloomHasherOffset+8])
+	return binary.BigEndian.Uint64(accountHash[bloomStorageHasherOffset:bloomStorageHasherOffset+8]) ^
+		binary.BigEndian.Uint64(storageHash[bloomStorageHasherOffset:bloomStorageHasherOffset+8])
 }
 
 // destructBloomHash is used to convert a destruct event into a 64 bit mini hash.
-func destructBloomHash(accountHash common.Hash) uint64 {
+func destructBloomHash(h common.Hash) uint64 {
 	return binary.BigEndian.Uint64(h[bloomDestructHasherOffset : bloomDestructHasherOffset+8])
 }
 
@@ -168,7 +169,7 @@ func (dl *diffLayer) initBloom() {
 	}
 	// Iterate over all the accounts and storage slots and index them
 	for hash := range dl.destructSet {
-		dl.diffed.Add(destructBloomHasher(hash))
+		dl.diffed.AddHash(destructBloomHash(hash))
 	}
 	// Also count memory consumption while we're at it
 	dl.memory = 0
@@ -340,7 +341,7 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	dl.lock.RLock()
 	hit := dl.cumulative.ContainsHash(storageBloomHash(accountHash, storageHash))
 	if !hit {
-		hit = dl.cumulative.Contains(destructBloomHash(accountHash))
+		hit = dl.cumulative.ContainsHash(destructBloomHash(accountHash))
 	}
 	dl.lock.RUnlock()
 

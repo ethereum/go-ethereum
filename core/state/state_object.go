@@ -329,17 +329,12 @@ func (s *stateObject) updateTrie(db Database) Trie {
 			// lazy load storage
 			if storage == nil {
 				// Retrieve the old storage map, if available
-				s.db.snapLock.RLock()
 				storage = s.db.snapStorage[s.addrHash]
-				s.db.snapLock.RUnlock()
 
 				// If no old storage map was available, create a new one
 				if storage == nil {
 					storage = make(map[common.Hash][]byte)
-
-					s.db.snapLock.Lock()
 					s.db.snapStorage[s.addrHash] = storage
-					s.db.snapLock.Unlock()
 				}
 			}
 			storage[crypto.Keccak256Hash(key[:])] = v // v will be nil if value is 0x00
