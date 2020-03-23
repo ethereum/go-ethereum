@@ -70,7 +70,7 @@ const (
 	SHR
 	SAR
 
-	SHA3 = 0x20
+	SHA3 OpCode = 0x20
 )
 
 // 0x30 range - closure state.
@@ -101,8 +101,8 @@ const (
 	NUMBER
 	DIFFICULTY
 	GASLIMIT
-	CHAINID     = 0x46
-	SELFBALANCE = 0x47
+	CHAINID     OpCode = 0x46
+	SELFBALANCE OpCode = 0x47
 )
 
 // 0x50 range - 'storage' and execution.
@@ -213,10 +213,9 @@ const (
 	RETURN
 	DELEGATECALL
 	CREATE2
-	STATICCALL = 0xfa
-
-	REVERT       = 0xfd
-	SELFDESTRUCT = 0xff
+	STATICCALL   OpCode = 0xfa
+	REVERT       OpCode = 0xfd
+	SELFDESTRUCT OpCode = 0xff
 )
 
 // Since the opcodes aren't all in order we can't use a regular slice.
