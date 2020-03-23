@@ -47,10 +47,6 @@ import (
 	"github.com/tyler-smith/go-bip39"
 )
 
-const (
-	defaultGasPrice = params.GWei
-)
-
 // PublicEthereumAPI provides an API to access Ethereum related information.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicEthereumAPI struct {
