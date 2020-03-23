@@ -241,7 +241,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 		if acc.Root != emptyRoot {
 			storeTrie, err := trie.NewSecure(acc.Root, dl.triedb)
 			if err != nil {
-				log.Error("Generator failed to access storage trie", "accroot", dl.root, "acchash", common.BytesToHash(accIt.Key), "stroot", acc.Root, "err", err)
+				log.Error("Generator failed to access storage trie", "root", dl.root, "account", accountHash, "stroot", acc.Root, "err", err)
 				abort := <-dl.genAbort
 				abort <- stats
 				return

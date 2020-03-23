@@ -17,111 +17,71 @@
 package eth
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Constants to match up protocol versions and messages
 const (
-	eth63 = 63
-	eth64 = 64
-	eth65 = 65
+	ETH63 = 63
+	ETH64 = 64
+	ETH65 = 65
 )
 
-// protocolName is the official short name of the protocol used during capability negotiation.
+// protocolName is the official short name of the `eth` protocol used during
+// devp2p capability negotiation.
 const protocolName = "eth"
 
-// ProtocolVersions are the supported versions of the eth protocol (first is primary).
-var ProtocolVersions = []uint{eth65, eth64, eth63}
+// protocolVersions are the supported versions of the `eth` protocol (first
+// is primary).
+var protocolVersions = []uint{ETH65, ETH64, ETH63}
 
-// protocolLengths are the number of implemented message corresponding to different protocol versions.
-var protocolLengths = map[uint]uint64{eth65: 17, eth64: 17, eth63: 17}
+// protocolLengths are the number of implemented message corresponding to
+// different protocol versions.
+var protocolLengths = map[uint]uint64{ETH65: 17, ETH64: 17, ETH63: 17}
 
-const protocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
-
-// eth protocol message codes
-const (
-	StatusMsg          = 0x00
-	NewBlockHashesMsg  = 0x01
-	TransactionMsg     = 0x02
-	GetBlockHeadersMsg = 0x03
-	BlockHeadersMsg    = 0x04
-	GetBlockBodiesMsg  = 0x05
-	BlockBodiesMsg     = 0x06
-	NewBlockMsg        = 0x07
-	GetNodeDataMsg     = 0x0d
-	NodeDataMsg        = 0x0e
-	GetReceiptsMsg     = 0x0f
-	ReceiptsMsg        = 0x10
-
-	// New protocol message codes introduced in eth65
-	//
-	// Previously these message ids were used by some legacy and unsupported
-	// eth protocols, reown them here.
-	NewPooledTransactionHashesMsg = 0x08
-	GetPooledTransactionsMsg      = 0x09
-	PooledTransactionsMsg         = 0x0a
-)
-
-type errCode int
+// maxMessageSize is the maximum cap on the size of a protocol message.
+const maxMessageSize = 10 * 1024 * 1024
 
 const (
-	ErrMsgTooLarge = iota
-	ErrDecode
-	ErrInvalidMsgCode
-	ErrProtocolVersionMismatch
-	ErrNetworkIDMismatch
-	ErrGenesisMismatch
-	ErrForkIDRejected
-	ErrNoStatusMsg
-	ErrExtraStatusMsg
+	// Protocol messages in eth/63 and eth/64
+	statusMsg          = 0x00
+	newBlockHashesMsg  = 0x01
+	transactionMsg     = 0x02
+	getBlockHeadersMsg = 0x03
+	blockHeadersMsg    = 0x04
+	getBlockBodiesMsg  = 0x05
+	blockBodiesMsg     = 0x06
+	newBlockMsg        = 0x07
+	getNodeDataMsg     = 0x0d
+	nodeDataMsg        = 0x0e
+	getReceiptsMsg     = 0x0f
+	receiptsMsg        = 0x10
+
+	// Protocol messages overloaded in eth/65
+	newPooledTransactionHashesMsg = 0x08
+	getPooledTransactionsMsg      = 0x09
+	pooledTransactionsMsg         = 0x0a
 )
 
-func (e errCode) String() string {
-	return errorToString[int(e)]
-}
-
-// XXX change once legacy code is out
-var errorToString = map[int]string{
-	ErrMsgTooLarge:             "Message too long",
-	ErrDecode:                  "Invalid message",
-	ErrInvalidMsgCode:          "Invalid message code",
-	ErrProtocolVersionMismatch: "Protocol version mismatch",
-	ErrNetworkIDMismatch:       "Network ID mismatch",
-	ErrGenesisMismatch:         "Genesis mismatch",
-	ErrForkIDRejected:          "Fork ID rejected",
-	ErrNoStatusMsg:             "No status message",
-	ErrExtraStatusMsg:          "Extra status message",
-}
-
-type txPool interface {
-	// Has returns an indicator whether txpool has a transaction
-	// cached with the given hash.
-	Has(hash common.Hash) bool
-
-	// Get retrieves the transaction from local txpool with given
-	// tx hash.
-	Get(hash common.Hash) *types.Transaction
-
-	// AddRemotes should add the given transactions to the pool.
-	AddRemotes([]*types.Transaction) []error
-
-	// Pending should return pending transactions.
-	// The slice should be modifiable by the caller.
-	Pending() (map[common.Address]types.Transactions, error)
-
-	// SubscribeNewTxsEvent should return an event subscription of
-	// NewTxsEvent and send events to the given channel.
-	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
-}
+var (
+	errNoStatusMsg             = errors.New("no status message")
+	errMsgTooLarge             = errors.New("message too long")
+	errDecode                  = errors.New("invalid message")
+	errInvalidMsgCode          = errors.New("invalid message code")
+	errProtocolVersionMismatch = errors.New("protocol version mismatch")
+	errNetworkIDMismatch       = errors.New("network ID mismatch")
+	errGenesisMismatch         = errors.New("genesis mismatch")
+	errForkIDRejected          = errors.New("fork ID rejected")
+	errExtraStatusMsg          = errors.New("extra status message")
+)
 
 // statusData63 is the network packet for the status message for eth/63.
 type statusData63 struct {

@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -38,7 +39,6 @@ import (
 )
 
 var (
-	MaxHashFetch    = 512 // Amount of hashes to be fetched per retrieval request
 	MaxBlockFetch   = 128 // Amount of blocks to be fetched per retrieval request
 	MaxHeaderFetch  = 192 // Amount of block headers to be fetched per retrieval request
 	MaxSkeletonSize = 128 // Number of header fetches to need for a skeleton assembly
@@ -142,6 +142,8 @@ type Downloader struct {
 	pivotHeader *types.Header // Pivot block header to dynamically push the syncing state root
 	pivotLock   sync.RWMutex  // Lock protecting pivot header reads from updates
 
+	snapSync       bool         // Whether to run state sync over the snap protocol
+	SnapSyncer     *snap.Syncer // TODO(karalabe): make private! hack for now
 	stateSyncStart chan *stateSync
 	trackStateReq  chan *stateReq
 	stateCh        chan dataPack // [eth/63] Channel receiving inbound node state data
@@ -237,6 +239,7 @@ func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, 
 		headerProcCh:   make(chan []*types.Header, 1),
 		quitCh:         make(chan struct{}),
 		stateCh:        make(chan dataPack),
+		SnapSyncer:     snap.NewSyncer(stateDb, stateBloom),
 		stateSyncStart: make(chan *stateSync),
 		syncStatsState: stateSyncStats{
 			processed: rawdb.ReadFastTrieProgress(stateDb),
@@ -286,19 +289,10 @@ func (d *Downloader) Synchronising() bool {
 	return atomic.LoadInt32(&d.synchronising) > 0
 }
 
-// SyncBloomContains tests if the syncbloom filter contains the given hash:
-//   - false: the bloom definitely does not contain hash
-//   - true:  the bloom maybe contains hash
-//
-// While the bloom is being initialized (or is closed), all queries will return true.
-func (d *Downloader) SyncBloomContains(hash []byte) bool {
-	return d.stateBloom == nil || d.stateBloom.Contains(hash)
-}
-
 // RegisterPeer injects a new download peer into the set of block source to be
 // used for fetching hashes and blocks from.
-func (d *Downloader) RegisterPeer(id string, version int, peer Peer) error {
-	logger := log.New("peer", id)
+func (d *Downloader) RegisterPeer(id string, version uint, peer Peer) error {
+	logger := log.New("peer", id[:16])
 	logger.Trace("Registering sync peer")
 	if err := d.peers.Register(newPeerConnection(id, version, peer, logger)); err != nil {
 		logger.Error("Failed to register sync peer", "err", err)
@@ -310,7 +304,7 @@ func (d *Downloader) RegisterPeer(id string, version int, peer Peer) error {
 }
 
 // RegisterLightPeer injects a light client peer, wrapping it so it appears as a regular peer.
-func (d *Downloader) RegisterLightPeer(id string, version int, peer LightPeer) error {
+func (d *Downloader) RegisterLightPeer(id string, version uint, peer LightPeer) error {
 	return d.RegisterPeer(id, version, &lightPeerWrapper{peer})
 }
 
@@ -319,7 +313,7 @@ func (d *Downloader) RegisterLightPeer(id string, version int, peer LightPeer) e
 // the queue.
 func (d *Downloader) UnregisterPeer(id string) error {
 	// Unregister the peer from the active peer set and revoke any fetch tasks
-	logger := log.New("peer", id)
+	logger := log.New("peer", id[:16])
 	logger.Trace("Unregistering sync peer")
 	if err := d.peers.Unregister(id); err != nil {
 		logger.Error("Failed to unregister sync peer", "err", err)
@@ -380,6 +374,16 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 	// when the user attempts to fast sync a new empty network.
 	if mode == FullSync && d.stateBloom != nil {
 		d.stateBloom.Close()
+	}
+	// If snap sync was requested, create the snap scheduler and switch to fast
+	// sync mode. Long term we could drop fast sync or merge the two together,
+	// but until snap becomes prevalent, we should support both. TODO(karalabe).
+	if mode == SnapSync {
+		if d.snapSync == false {
+			log.Warn("Enabling snapshot sync prototype")
+			d.snapSync = true
+		}
+		mode = FastSync
 	}
 	// Reset the queue, peer set and wake channels to clean any internal leftover state
 	d.queue.Reset(blockCacheMaxItems, blockCacheInitialItems)
@@ -1910,23 +1914,47 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 
 // DeliverHeaders injects a new batch of block headers received from a remote
 // node into the download schedule.
-func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) (err error) {
+func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) error {
 	return d.deliver(id, d.headerCh, &headerPack{id, headers}, headerInMeter, headerDropMeter)
 }
 
 // DeliverBodies injects a new batch of block bodies received from a remote node.
-func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction, uncles [][]*types.Header) (err error) {
+func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction, uncles [][]*types.Header) error {
 	return d.deliver(id, d.bodyCh, &bodyPack{id, transactions, uncles}, bodyInMeter, bodyDropMeter)
 }
 
 // DeliverReceipts injects a new batch of receipts received from a remote node.
-func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) (err error) {
+func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) error {
 	return d.deliver(id, d.receiptCh, &receiptPack{id, receipts}, receiptInMeter, receiptDropMeter)
 }
 
 // DeliverNodeData injects a new batch of node state data received from a remote node.
-func (d *Downloader) DeliverNodeData(id string, data [][]byte) (err error) {
+func (d *Downloader) DeliverNodeData(id string, data [][]byte) error {
 	return d.deliver(id, d.stateCh, &statePack{id, data}, stateInMeter, stateDropMeter)
+}
+
+// DeliverSnapshotAccounts is invoked from a peer's message handler when it transmits a range
+// of accounts for the local node to process.
+func (d *Downloader) DeliverSnapshotAccounts(peer *snap.Peer, id uint64, keys []common.Hash, accounts [][]byte, proof [][]byte) error {
+	return d.SnapSyncer.OnAccounts(peer, id, keys, accounts, proof)
+}
+
+// DeliverSnapshotStorage is invoked from a peer's message handler when it transmits ranges
+// of storage slots for the local node to process.
+func (d *Downloader) DeliverSnapshotStorage(peer *snap.Peer, id uint64, keys [][]common.Hash, slots [][][]byte, proof [][]byte) error {
+	return d.SnapSyncer.OnStorage(peer, id, keys, slots, proof)
+}
+
+// DeliverSnapshotByteCodes is invoked from a peer's message handler when it transmits a batch
+// of byte codes for the local node to process.
+func (d *Downloader) DeliverSnapshotByteCodes(peer *snap.Peer, id uint64, codes [][]byte) error {
+	return d.SnapSyncer.OnByteCodes(peer, id, codes)
+}
+
+// DeliverSnapshotTrieNodes is invoked from a peer's message handler when it transmits a batch
+// of trie nodes for the local node to process.
+func (d *Downloader) DeliverSnapshotTrieNodes(peer *snap.Peer, id uint64, nodes [][]byte) error {
+	return d.SnapSyncer.OnTrieNodes(peer, id, nodes)
 }
 
 // deliver injects a new batch of data received from a remote node.

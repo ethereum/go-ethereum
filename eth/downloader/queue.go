@@ -704,10 +704,10 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 	accepted := len(headers) == MaxHeaderFetch
 	if accepted {
 		if headers[0].Number.Uint64() != request.From {
-			log.Trace("First header broke chain ordering", "peer", id, "number", headers[0].Number, "hash", headers[0].Hash(), request.From)
+			log.Trace("First header broke chain ordering", "peer", id[:16], "number", headers[0].Number, "hash", headers[0].Hash(), "expected", request.From)
 			accepted = false
 		} else if headers[len(headers)-1].Hash() != target {
-			log.Trace("Last header broke skeleton structure ", "peer", id, "number", headers[len(headers)-1].Number, "hash", headers[len(headers)-1].Hash(), "expected", target)
+			log.Trace("Last header broke skeleton structure ", "peer", id[:16], "number", headers[len(headers)-1].Number, "hash", headers[len(headers)-1].Hash(), "expected", target)
 			accepted = false
 		}
 	}
@@ -716,12 +716,12 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 		for i, header := range headers[1:] {
 			hash := header.Hash()
 			if want := request.From + 1 + uint64(i); header.Number.Uint64() != want {
-				log.Warn("Header broke chain ordering", "peer", id, "number", header.Number, "hash", hash, "expected", want)
+				log.Warn("Header broke chain ordering", "peer", id[:16], "number", header.Number, "hash", hash, "expected", want)
 				accepted = false
 				break
 			}
 			if parentHash != header.ParentHash {
-				log.Warn("Header broke chain ancestry", "peer", id, "number", header.Number, "hash", hash)
+				log.Warn("Header broke chain ancestry", "peer", id[:16], "number", header.Number, "hash", hash)
 				accepted = false
 				break
 			}
@@ -731,7 +731,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 	}
 	// If the batch of headers wasn't accepted, mark as unavailable
 	if !accepted {
-		log.Trace("Skeleton filling not accepted", "peer", id, "from", request.From)
+		log.Trace("Skeleton filling not accepted", "peer", id[:16], "from", request.From)
 
 		miss := q.headerPeerMiss[id]
 		if miss == nil {
@@ -758,7 +758,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 
 		select {
 		case headerProcCh <- process:
-			log.Trace("Pre-scheduled new headers", "peer", id, "count", len(process), "from", process[0].Number)
+			log.Trace("Pre-scheduled new headers", "peer", id[:16], "count", len(process), "from", process[0].Number)
 			q.headerProced += len(process)
 		default:
 		}

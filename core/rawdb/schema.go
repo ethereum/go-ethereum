@@ -57,6 +57,9 @@ var (
 	// snapshotRecoveryKey tracks the snapshot recovery marker across restarts.
 	snapshotRecoveryKey = []byte("SnapshotRecovery")
 
+	// snapshotSyncStatusKey tracks the snapshot sync status across restarts.
+	snapshotSyncStatusKey = []byte("SnapshotSyncStatus")
+
 	// txIndexTailKey tracks the oldest block whose transactions have been indexed.
 	txIndexTailKey = []byte("TransactionIndexTail")
 

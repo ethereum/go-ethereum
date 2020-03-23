@@ -1585,16 +1585,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		cfg.RPCTxFeeCap = ctx.GlobalFloat64(RPCGlobalTxFeeCapFlag.Name)
 	}
 	if ctx.GlobalIsSet(NoDiscoverFlag.Name) {
-		cfg.DiscoveryURLs = []string{}
+		cfg.EthDiscoveryURLs, cfg.SnapDiscoveryURLs = []string{}, []string{}
 	} else if ctx.GlobalIsSet(DNSDiscoveryFlag.Name) {
 		urls := ctx.GlobalString(DNSDiscoveryFlag.Name)
 		if urls == "" {
-			cfg.DiscoveryURLs = []string{}
+			cfg.EthDiscoveryURLs = []string{}
 		} else {
-			cfg.DiscoveryURLs = SplitAndTrim(urls)
+			cfg.EthDiscoveryURLs = SplitAndTrim(urls)
 		}
 	}
-
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.GlobalBool(LegacyTestnetFlag.Name) || ctx.GlobalBool(RopstenFlag.Name):
@@ -1676,16 +1675,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 // SetDNSDiscoveryDefaults configures DNS discovery with the given URL if
 // no URLs are set.
 func SetDNSDiscoveryDefaults(cfg *eth.Config, genesis common.Hash) {
-	if cfg.DiscoveryURLs != nil {
+	if cfg.EthDiscoveryURLs != nil {
 		return // already set through flags/config
 	}
-
 	protocol := "all"
 	if cfg.SyncMode == downloader.LightSync {
 		protocol = "les"
 	}
 	if url := params.KnownDNSNetwork(genesis, protocol); url != "" {
-		cfg.DiscoveryURLs = []string{url}
+		cfg.EthDiscoveryURLs = []string{url}
 	}
 }
 
