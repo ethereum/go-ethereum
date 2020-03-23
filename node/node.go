@@ -382,7 +382,7 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 // stopHTTP terminates the HTTP RPC endpoint.
 func (n *Node) stopHTTP() {
 	if n.httpListener != nil {
-		url := fmt.Sprintf("http://%v", n.httpListener.Addr())
+		url := fmt.Sprintf("http://%v/", n.httpListener.Addr())
 		n.httpListener.Close()
 		n.httpListener = nil
 		n.log.Info("HTTP endpoint closed", "url", url)
