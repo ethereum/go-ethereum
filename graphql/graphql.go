@@ -1040,10 +1040,6 @@ func (r *Resolver) GasPrice(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*price), err
 }
 
-func (r *Resolver) ProtocolVersion(ctx context.Context) (int32, error) {
-	return int32(r.backend.ProtocolVersion()), nil
-}
-
 // SyncState represents the synchronisation status returned from the `syncing` accessor.
 type SyncState struct {
 	progress ethereum.SyncProgress

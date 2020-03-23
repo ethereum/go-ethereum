@@ -40,7 +40,6 @@ import (
 type Backend interface {
 	// General Ethereum API
 	Downloader() *downloader.Downloader
-	ProtocolVersion() int
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	ChainDb() ethdb.Database
 	AccountManager() *accounts.Manager
