@@ -217,7 +217,7 @@ func NewHTTPServer(cors []string, vhosts []string, timeouts HTTPTimeouts, srv ht
 	handler := newCorsHandler(srv, cors)
 	handler = newVHostHandler(vhosts, handler)
 	handler = newGzipHandler(handler)
-	handler = newWebsocketUpgradeHandler(handler, ws)
+	handler = NewWebsocketUpgradeHandler(handler, ws)
 
 	// Make sure timeout values are meaningful
 	if timeouts.ReadTimeout < time.Second {
@@ -298,6 +298,14 @@ func validateRequest(r *http.Request) (int, error) {
 	return http.StatusUnsupportedMediaType, err
 }
 
+// NewHTTPHandlerStack TODO document
+func NewHTTPHandlerStack(srv *Server, cors []string, vhosts []string) http.Handler {
+	// Wrap the CORS-handler within a host-handler
+	handler := newCorsHandler(srv, cors)
+	handler = newVHostHandler(vhosts, handler)
+	return newGzipHandler(handler)
+}
+
 func newCorsHandler(srv http.Handler, allowedOrigins []string) http.Handler {
 	// disable CORS support if user has not specified a custom CORS configuration
 	if len(allowedOrigins) == 0 {
@@ -359,10 +367,11 @@ func newVHostHandler(vhosts []string, next http.Handler) http.Handler {
 	return &virtualHostHandler{vhostMap, next}
 }
 
-func newWebsocketUpgradeHandler(h http.Handler, ws http.Handler) http.Handler {
+func NewWebsocketUpgradeHandler(h http.Handler, ws http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isWebsocket(r) {
 			ws.ServeHTTP(w, r)
+			log.Debug("serving websocket request")
 			return
 		}
 

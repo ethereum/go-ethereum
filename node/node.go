@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -368,7 +369,29 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 	if endpoint == "" {
 		return nil
 	}
-	listener, handler, err := rpc.StartHTTPEndpoint(endpoint, apis, modules, cors, vhosts, timeouts, wsOrigins)
+
+	srv := rpc.NewServer()
+
+	// TODO put this stuff in a separate function
+	// Generate the whitelist based on the allowed modules
+	whitelist := make(map[string]bool)
+	for _, module := range modules {
+		whitelist[module] = true
+	}
+	// Register all the APIs exposed by the services
+	for _, api := range apis {
+		if whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
+			if err := srv.RegisterName(api.Namespace, api.Service); err != nil {
+				return err
+			}
+			log.Debug("HTTP registered", "namespace", api.Namespace)
+		}
+	}
+
+	// create handler stack
+	handler := n.CreateHandler(srv, cors, vhosts, wsOrigins)
+
+	listener, err := rpc.StartHTTPEndpoint(endpoint, apis, modules, timeouts, handler)
 	if err != nil {
 		return err
 	}
@@ -383,9 +406,15 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 	// All listeners booted successfully
 	n.httpEndpoint = endpoint
 	n.httpListener = listener
-	n.httpHandler = handler
+	n.httpHandler = srv
 
 	return nil
+}
+
+// CreateHandler creates the handler stack necessary to handle both http rpc requests and websocket requests
+func (n *Node) CreateHandler(srv *rpc.Server, cors []string, vhosts []string, wsOrigins []string) http.Handler {
+	handler := rpc.NewHTTPHandlerStack(srv, cors, vhosts)
+	return rpc.NewWebsocketUpgradeHandler(handler, srv.WebsocketHandler(wsOrigins))
 }
 
 // stopHTTP terminates the HTTP RPC endpoint.
