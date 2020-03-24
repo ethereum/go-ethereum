@@ -60,16 +60,16 @@ func (s *Service) APIs() []rpc.API { return nil }
 // Start is called after all services have been constructed and the networking
 // layer was also initialized to spawn any goroutines required by the service.
 func (s *Service) Start(server *p2p.Server) error {
-	var err error
-	s.handler, err = newHandler(s.backend)
-	if err != nil {
-		return err
-	}
-	if s.listener, err = net.Listen("tcp", s.endpoint); err != nil {
-		return err
-	}
-	go rpc.NewHTTPServer(s.cors, s.vhosts, s.timeouts, s.handler).Serve(s.listener)
-	log.Info("GraphQL endpoint opened", "url", fmt.Sprintf("http://%s", s.endpoint))
+	//var err error
+	//s.handler, err = newHandler(s.backend)
+	//if err != nil {
+	//	return err
+	//}
+	//if s.listener, err = net.Listen("tcp", s.endpoint); err != nil {
+	//	return err
+	//}
+	//go rpc.NewHTTPServer(s.cors, s.vhosts, s.timeouts, s.handler, []string{}).Serve(s.listener)
+	//log.Info("GraphQL endpoint opened", "url", fmt.Sprintf("http://%s", s.endpoint))
 	return nil
 }
 

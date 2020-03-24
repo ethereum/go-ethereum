@@ -42,7 +42,7 @@ func checkModuleAvailability(modules []string, apis []API) (bad, available []str
 }
 
 // StartHTTPEndpoint starts the HTTP RPC endpoint, configured with cors/vhosts/modules.
-func StartHTTPEndpoint(endpoint string, apis []API, modules []string, cors []string, vhosts []string, timeouts HTTPTimeouts) (net.Listener, *Server, error) {
+func StartHTTPEndpoint(endpoint string, apis []API, modules []string, cors []string, vhosts []string, timeouts HTTPTimeouts, wsOrigins []string) (net.Listener, *Server, error) {
 	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
 		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)
 	}
@@ -69,7 +69,9 @@ func StartHTTPEndpoint(endpoint string, apis []API, modules []string, cors []str
 	if listener, err = net.Listen("tcp", endpoint); err != nil {
 		return nil, nil, err
 	}
-	go NewHTTPServer(cors, vhosts, timeouts, handler).Serve(listener)
+
+
+	go NewHTTPServer(cors, vhosts, timeouts, handler, handler.WebsocketHandler(wsOrigins)).Serve(listener)
 	return listener, handler, err
 }
 

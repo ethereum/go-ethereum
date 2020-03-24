@@ -212,11 +212,12 @@ func (t *httpServerConn) SetWriteDeadline(time.Time) error { return nil }
 // NewHTTPServer creates a new HTTP RPC server around an API provider.
 //
 // Deprecated: Server implements http.Handler
-func NewHTTPServer(cors []string, vhosts []string, timeouts HTTPTimeouts, srv http.Handler) *http.Server {
+func NewHTTPServer(cors []string, vhosts []string, timeouts HTTPTimeouts, srv http.Handler, ws http.Handler) *http.Server {
 	// Wrap the CORS-handler within a host-handler
 	handler := newCorsHandler(srv, cors)
 	handler = newVHostHandler(vhosts, handler)
 	handler = newGzipHandler(handler)
+	handler = newWebsocketUpgradeHandler(handler, ws)
 
 	// Make sure timeout values are meaningful
 	if timeouts.ReadTimeout < time.Second {
@@ -356,4 +357,20 @@ func newVHostHandler(vhosts []string, next http.Handler) http.Handler {
 		vhostMap[strings.ToLower(allowedHost)] = struct{}{}
 	}
 	return &virtualHostHandler{vhostMap, next}
+}
+
+func newWebsocketUpgradeHandler(h http.Handler, ws http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isWebsocket(r) {
+			ws.ServeHTTP(w, r)
+			return
+		}
+
+		h.ServeHTTP(w, r)
+	})
+}
+
+func isWebsocket(r *http.Request) bool {
+	return strings.ToLower(r.Header.Get("Upgrade")) == "websocket" &&
+		strings.ToLower(r.Header.Get("Connection")) == "upgrade"
 }
