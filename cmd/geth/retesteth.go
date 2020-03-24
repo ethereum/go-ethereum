@@ -848,7 +848,7 @@ func splitAndTrim(input string) []string {
 	return result
 }
 
-func retesteth(ctx *cli.Context) error { // TODO uncomment and fix test
+func retesteth(ctx *cli.Context) error {
 	log.Info("Welcome to retesteth!")
 	// register signer API with server
 	var (

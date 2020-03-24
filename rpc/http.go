@@ -298,7 +298,7 @@ func validateRequest(r *http.Request) (int, error) {
 	return http.StatusUnsupportedMediaType, err
 }
 
-// NewHTTPHandlerStack TODO document
+// NewHTTPHandlerStack returns wrapped http-related handlers
 func NewHTTPHandlerStack(srv *Server, cors []string, vhosts []string) http.Handler {
 	// Wrap the CORS-handler within a host-handler
 	handler := newCorsHandler(srv, cors)

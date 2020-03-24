@@ -58,7 +58,6 @@ func StartHTTPEndpoint(endpoint string, apis []API, modules []string, timeouts H
 		return nil, err
 	}
 
-	// TODO put timeout registration in separate function
 	// Make sure timeout values are meaningful
 	if timeouts.ReadTimeout < time.Second {
 		log.Warn("Sanitizing invalid HTTP read timeout", "provided", timeouts.ReadTimeout, "updated", DefaultHTTPTimeouts.ReadTimeout)
@@ -82,7 +81,6 @@ func StartHTTPEndpoint(endpoint string, apis []API, modules []string, timeouts H
 	}
 
 	go httpSrv.Serve(listener)
-	// 	go NewHTTPServer(cors, vhosts, timeouts, handler, handler.WebsocketHandler(wsOrigins)).Serve(listener) // TODO REMOVE
 	return listener, err
 }
 

@@ -372,12 +372,12 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 
 	srv := rpc.NewServer()
 
-	// TODO put this stuff in a separate function
 	// Generate the whitelist based on the allowed modules
 	whitelist := make(map[string]bool)
 	for _, module := range modules {
 		whitelist[module] = true
 	}
+
 	// Register all the APIs exposed by the services
 	for _, api := range apis {
 		if whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
