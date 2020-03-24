@@ -372,24 +372,15 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 
 	srv := rpc.NewServer()
 
-	// Generate the whitelist based on the allowed modules
-	whitelist := make(map[string]bool)
-	for _, module := range modules {
-		whitelist[module] = true
+	err := RegisterApisFromWhitelist(apis, modules, srv)
+
+	var ws http.Handler
+	if n.httpEndpoint == n.wsEndpoint {
+		ws = srv.WebsocketHandler(wsOrigins)
 	}
 
-	// Register all the APIs exposed by the services
-	for _, api := range apis {
-		if whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
-			if err := srv.RegisterName(api.Namespace, api.Service); err != nil {
-				return err
-			}
-			log.Debug("HTTP registered", "namespace", api.Namespace)
-		}
-	}
-
-	// create handler stack
-	handler := n.CreateHandler(srv, cors, vhosts, wsOrigins)
+	// wrap handler in websocket handler only if websocket port is the same as http rpc
+	handler := n.AddWebsocketHandler(rpc.NewHTTPHandlerStack(srv, cors, vhosts), ws)
 
 	listener, err := rpc.StartHTTPEndpoint(endpoint, apis, modules, timeouts, handler)
 	if err != nil {
@@ -411,10 +402,13 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 	return nil
 }
 
-// CreateHandler creates the handler stack necessary to handle both http rpc requests and websocket requests
-func (n *Node) CreateHandler(srv *rpc.Server, cors []string, vhosts []string, wsOrigins []string) http.Handler {
-	handler := rpc.NewHTTPHandlerStack(srv, cors, vhosts)
-	return rpc.NewWebsocketUpgradeHandler(handler, srv.WebsocketHandler(wsOrigins))
+// AddWebsocketHandler creates the handler stack necessary to handle both http rpc requests and websocket requests
+func (n *Node) AddWebsocketHandler(handler http.Handler, websocket http.Handler) http.Handler {
+	if websocket != nil {
+		return rpc.NewWebsocketUpgradeHandler(handler, websocket)
+	}
+
+	return handler
 }
 
 // stopHTTP terminates the HTTP RPC endpoint.
@@ -701,4 +695,24 @@ func (n *Node) apis() []rpc.API {
 			Public:    true,
 		},
 	}
+}
+
+func RegisterApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server) error {
+	// Generate the whitelist based on the allowed modules
+	whitelist := make(map[string]bool)
+	for _, module := range modules {
+		whitelist[module] = true
+	}
+
+	// Register all the APIs exposed by the services
+	for _, api := range apis {
+		if whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
+			if err := srv.RegisterName(api.Namespace, api.Service); err != nil {
+				return err
+			}
+			log.Debug("HTTP registered", "namespace", api.Namespace)
+		}
+	}
+
+	return nil
 }
