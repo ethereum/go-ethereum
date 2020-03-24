@@ -91,6 +91,25 @@ func Keccak512(data ...[]byte) []byte {
 	return d.Sum(nil)
 }
 
+// KeccakState wraps sha3.state. In addition to the usual hash methods, it also supports
+// Read to get a variable amount of data from the hash state. Read is faster than Sum
+// because it doesn't copy the internal state, but also modifies the internal state.
+type KeccakState interface {
+	hash.Hash
+	Read([]byte) (int, error)
+}
+
+type SliceBuffer []byte
+
+func (b *SliceBuffer) Write(data []byte) (n int, err error) {
+	*b = append(*b, data...)
+	return len(data), nil
+}
+
+func (b *SliceBuffer) Reset() {
+	*b = (*b)[:0]
+}
+
 // CreateAddress creates an ethereum address given the bytes and the nonce
 func CreateAddress(b common.Address, nonce uint64) common.Address {
 	data, _ := rlp.EncodeToBytes([]interface{}{b, nonce})

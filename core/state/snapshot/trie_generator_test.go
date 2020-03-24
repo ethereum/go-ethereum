@@ -19,14 +19,17 @@ package snapshot
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/trie"
+	"math/big"
 	"math/rand"
 	"testing"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/trie"
+	"golang.org/x/crypto/sha3"
 )
 
 func TestTrieGeneration(t *testing.T) {
@@ -290,4 +293,76 @@ func TestReStackTrieLeafInsert(t *testing.T) {
 	if !bytes.Equal(ref.Hash().Bytes(), root.Hash().Bytes()) {
 		t.Fatalf("Invalid hash, expected %s got %s", common.ToHex(ref.Hash().Bytes()), common.ToHex(root.Hash().Bytes()))
 	}
+}
+
+func TestSlimToFullHash(t *testing.T) {
+	rand.Seed(1881)
+	var slimAccounts [][]byte
+	for i := 0; i < 10000; i++ {
+		slimData := AccountRLP(rand.Uint64(),
+			big.NewInt(0).SetUint64(rand.Uint64()),
+			randomHash(),
+			randomHash().Bytes())
+		slimAccounts = append(slimAccounts, slimData)
+	}
+	hasher := sha3.NewLegacyKeccak256().(crypto.KeccakState)
+	for _, slimData := range slimAccounts {
+		// reference
+		expanded := SlimToFull(slimData)
+		exp := crypto.Keccak256Hash(expanded)
+		got := SlimToHash(slimData, hasher)
+		if got != exp {
+			t.Fatalf("got %x exp %x \ndata: %x", got, exp, slimData)
+		}
+	}
+}
+
+func BenchmarkSlimToFullHash(b *testing.B) {
+	rand.Seed(1881)
+	var slimAccounts [][]byte
+	for i := 0; i < 10000; i++ {
+		slimData := AccountRLP(rand.Uint64(),
+			big.NewInt(0).SetUint64(rand.Uint64()),
+			randomHash(),
+			randomHash().Bytes())
+		slimAccounts = append(slimAccounts, slimData)
+	}
+	b.ResetTimer()
+	var exp, got common.Hash
+	b.Run("naive-10K", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			for _, slimData := range slimAccounts {
+				// reference
+				expanded := SlimToFull(slimData)
+				exp = crypto.Keccak256Hash(expanded)
+			}
+		}
+	})
+	hasher := sha3.NewLegacyKeccak256().(crypto.KeccakState)
+
+	b.Run("directToHash-10K", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			for _, slimData := range slimAccounts {
+				got = SlimToHash(slimData, hasher)
+			}
+		}
+	})
+	if got != exp {
+		b.Fatalf("got %x exp %x", got, exp)
+	}
+	c := newConverter()
+	b.Run("directToHashBuf-10K", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			for _, slimData := range slimAccounts {
+				got = c.SlimToHash(slimData)
+			}
+		}
+	})
+	if got != exp {
+		b.Fatalf("got %x exp %x", got, exp)
+	}
+
 }

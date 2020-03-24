@@ -24,22 +24,11 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-type sliceBuffer []byte
-
-func (b *sliceBuffer) Write(data []byte) (n int, err error) {
-	*b = append(*b, data...)
-	return len(data), nil
-}
-
-func (b *sliceBuffer) Reset() {
-	*b = (*b)[:0]
-}
-
 // hasher is a type used for the trie Hash operation. A hasher has some
 // internal preallocated temp space
 type hasher struct {
 	sha      crypto.KeccakState
-	tmp      sliceBuffer
+	tmp      crypto.SliceBuffer
 	parallel bool // Whether to use paralallel threads when hashing
 }
 
@@ -47,7 +36,7 @@ type hasher struct {
 var hasherPool = sync.Pool{
 	New: func() interface{} {
 		return &hasher{
-			tmp: make(sliceBuffer, 0, 550), // cap is as large as a full fullNode.
+			tmp: make(crypto.SliceBuffer, 0, 550), // cap is as large as a full fullNode.
 			sha: sha3.NewLegacyKeccak256().(crypto.KeccakState),
 		}
 	},
@@ -66,11 +55,11 @@ func returnHasherToPool(h *hasher) {
 // hash collapses a node down into a hash node, also returning a copy of the
 // original node initialized with the computed hash to replace the original one.
 func (h *hasher) hash(n node, force bool) (hashed node, cached node) {
-	// Return the cached hash if it's available
+	// We're not storing the node, just hashing, use available cached data
 	if hash, _ := n.cache(); hash != nil {
 		return hash, n
 	}
-	// Trie not processed yet, walk the children
+	// Trie not processed yet or needs storage, walk the children
 	switch n := n.(type) {
 	case *shortNode:
 		collapsed, cached := h.hashShortNodeChildren(n)
