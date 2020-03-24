@@ -18,6 +18,8 @@ package rpc
 
 import (
 	"net"
+	"net/http"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -42,37 +44,44 @@ func checkModuleAvailability(modules []string, apis []API) (bad, available []str
 }
 
 // StartHTTPEndpoint starts the HTTP RPC endpoint, configured with cors/vhosts/modules.
-func StartHTTPEndpoint(endpoint string, apis []API, modules []string, cors []string, vhosts []string, timeouts HTTPTimeouts, wsOrigins []string) (net.Listener, *Server, error) {
+func StartHTTPEndpoint(endpoint string, apis []API, modules []string, timeouts HTTPTimeouts, handler http.Handler) (net.Listener, error) {
 	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
 		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)
 	}
-	// Generate the whitelist based on the allowed modules
-	whitelist := make(map[string]bool)
-	for _, module := range modules {
-		whitelist[module] = true
-	}
-	// Register all the APIs exposed by the services
-	handler := NewServer()
-	for _, api := range apis {
-		if whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
-			if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
-				return nil, nil, err
-			}
-			log.Debug("HTTP registered", "namespace", api.Namespace)
-		}
-	}
-	// All APIs registered, start the HTTP listener
+
+	// Start the HTTP listener
 	var (
 		listener net.Listener
 		err      error
 	)
 	if listener, err = net.Listen("tcp", endpoint); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
+	// Make sure timeout values are meaningful
+	if timeouts.ReadTimeout < time.Second {
+		log.Warn("Sanitizing invalid HTTP read timeout", "provided", timeouts.ReadTimeout, "updated", DefaultHTTPTimeouts.ReadTimeout)
+		timeouts.ReadTimeout = DefaultHTTPTimeouts.ReadTimeout
+	}
+	if timeouts.WriteTimeout < time.Second {
+		log.Warn("Sanitizing invalid HTTP write timeout", "provided", timeouts.WriteTimeout, "updated", DefaultHTTPTimeouts.WriteTimeout)
+		timeouts.WriteTimeout = DefaultHTTPTimeouts.WriteTimeout
+	}
+	if timeouts.IdleTimeout < time.Second {
+		log.Warn("Sanitizing invalid HTTP idle timeout", "provided", timeouts.IdleTimeout, "updated", DefaultHTTPTimeouts.IdleTimeout)
+		timeouts.IdleTimeout = DefaultHTTPTimeouts.IdleTimeout
+	}
 
-	go NewHTTPServer(cors, vhosts, timeouts, handler, handler.WebsocketHandler(wsOrigins)).Serve(listener)
-	return listener, handler, err
+	// Bundle and start the HTTP server
+	httpSrv := &http.Server{
+		Handler:      handler,
+		ReadTimeout:  timeouts.ReadTimeout,
+		WriteTimeout: timeouts.WriteTimeout,
+		IdleTimeout:  timeouts.IdleTimeout,
+	}
+
+	go httpSrv.Serve(listener)
+	return listener, err
 }
 
 // StartWSEndpoint starts a websocket endpoint.
