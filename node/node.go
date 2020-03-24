@@ -375,7 +375,7 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 	n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", listener.Addr()),
 		"cors", strings.Join(cors, ","),
 		"vhosts", strings.Join(vhosts, ","))
-	
+
 	if n.httpEndpoint == n.wsEndpoint {
 		n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", listener.Addr()))
 	}
