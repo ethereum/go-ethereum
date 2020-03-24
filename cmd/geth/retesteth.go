@@ -21,6 +21,8 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"os"
+	"os/signal"
 	"strings"
 	"time"
 
@@ -38,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -846,68 +849,74 @@ func splitAndTrim(input string) []string {
 }
 
 func retesteth(ctx *cli.Context) error { // TODO uncomment and fix test
-	//log.Info("Welcome to retesteth!")
-	//// register signer API with server
-	//var (
-	//	extapiURL string
-	//)
-	//apiImpl := &RetestethAPI{}
-	//var testApi RetestethTestAPI = apiImpl
-	//var ethApi RetestethEthAPI = apiImpl
-	//var debugApi RetestethDebugAPI = apiImpl
-	//var web3Api RetestWeb3API = apiImpl
-	//rpcAPI := []rpc.API{
-	//	{
-	//		Namespace: "test",
-	//		Public:    true,
-	//		Service:   testApi,
-	//		Version:   "1.0",
-	//	},
-	//	{
-	//		Namespace: "eth",
-	//		Public:    true,
-	//		Service:   ethApi,
-	//		Version:   "1.0",
-	//	},
-	//	{
-	//		Namespace: "debug",
-	//		Public:    true,
-	//		Service:   debugApi,
-	//		Version:   "1.0",
-	//	},
-	//	{
-	//		Namespace: "web3",
-	//		Public:    true,
-	//		Service:   web3Api,
-	//		Version:   "1.0",
-	//	},
-	//}
-	//vhosts := splitAndTrim(ctx.GlobalString(utils.RPCVirtualHostsFlag.Name))
-	//cors := splitAndTrim(ctx.GlobalString(utils.RPCCORSDomainFlag.Name))
-	//
-	//// start http server
-	//var RetestethHTTPTimeouts = rpc.HTTPTimeouts{
-	//	ReadTimeout:  120 * time.Second,
-	//	WriteTimeout: 120 * time.Second,
-	//	IdleTimeout:  120 * time.Second,
-	//}
-	//httpEndpoint := fmt.Sprintf("%s:%d", ctx.GlobalString(utils.RPCListenAddrFlag.Name), ctx.Int(rpcPortFlag.Name))
-	//listener, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcAPI, []string{"test", "eth", "debug", "web3"}, RetestethHTTPTimeouts, )
-	//if err != nil {
-	//	utils.Fatalf("Could not start RPC api: %v", err)
-	//}
-	//extapiURL = fmt.Sprintf("http://%s", httpEndpoint)
-	//log.Info("HTTP endpoint opened", "url", extapiURL)
-	//
-	//defer func() {
-	//	listener.Close()
-	//	log.Info("HTTP endpoint closed", "url", httpEndpoint)
-	//}()
-	//
-	//abortChan := make(chan os.Signal, 11)
-	//signal.Notify(abortChan, os.Interrupt)
-	//
-	//sig := <-abortChan
-	//log.Info("Exiting...", "signal", sig)
+	log.Info("Welcome to retesteth!")
+	// register signer API with server
+	var (
+		extapiURL string
+	)
+	apiImpl := &RetestethAPI{}
+	var testApi RetestethTestAPI = apiImpl
+	var ethApi RetestethEthAPI = apiImpl
+	var debugApi RetestethDebugAPI = apiImpl
+	var web3Api RetestWeb3API = apiImpl
+	rpcAPI := []rpc.API{
+		{
+			Namespace: "test",
+			Public:    true,
+			Service:   testApi,
+			Version:   "1.0",
+		},
+		{
+			Namespace: "eth",
+			Public:    true,
+			Service:   ethApi,
+			Version:   "1.0",
+		},
+		{
+			Namespace: "debug",
+			Public:    true,
+			Service:   debugApi,
+			Version:   "1.0",
+		},
+		{
+			Namespace: "web3",
+			Public:    true,
+			Service:   web3Api,
+			Version:   "1.0",
+		},
+	}
+	vhosts := splitAndTrim(ctx.GlobalString(utils.RPCVirtualHostsFlag.Name))
+	cors := splitAndTrim(ctx.GlobalString(utils.RPCCORSDomainFlag.Name))
+	wsOrigins := splitAndTrim(ctx.GlobalString(utils.WSAllowedOriginsFlag.Value))
+
+	srv := rpc.NewServer()
+
+	handler := rpc.NewHTTPHandlerStack(srv, cors, vhosts)
+	handler = rpc.NewWebsocketUpgradeHandler(handler, srv.WebsocketHandler(wsOrigins))
+
+	// start http server
+	var RetestethHTTPTimeouts = rpc.HTTPTimeouts{
+		ReadTimeout:  120 * time.Second,
+		WriteTimeout: 120 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+	httpEndpoint := fmt.Sprintf("%s:%d", ctx.GlobalString(utils.RPCListenAddrFlag.Name), ctx.Int(rpcPortFlag.Name))
+	listener, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcAPI, []string{"test", "eth", "debug", "web3"}, RetestethHTTPTimeouts, handler)
+	if err != nil {
+		utils.Fatalf("Could not start RPC api: %v", err)
+	}
+	extapiURL = fmt.Sprintf("http://%s", httpEndpoint)
+	log.Info("HTTP endpoint opened", "url", extapiURL)
+
+	defer func() {
+		listener.Close()
+		log.Info("HTTP endpoint closed", "url", httpEndpoint)
+	}()
+
+	abortChan := make(chan os.Signal, 11)
+	signal.Notify(abortChan, os.Interrupt)
+
+	sig := <-abortChan
+	log.Info("Exiting...", "signal", sig)
 	return nil
 }
