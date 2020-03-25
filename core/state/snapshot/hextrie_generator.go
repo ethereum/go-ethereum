@@ -36,7 +36,7 @@ type trieGeneratorFn func(in chan (leaf), out chan (common.Hash))
 // GenerateTrieRoot takes an account iterator and reproduces the root hash.
 func GenerateTrieRoot(it AccountIterator) common.Hash {
 	//return generateTrieRoot(it, StackGenerate)
-	return generateTrieRoot(it, StdGenerate)
+	return generateTrieRoot(it, ReStackGenerate)
 }
 
 func CrosscheckTriehasher(it AccountIterator, begin, end int) bool {

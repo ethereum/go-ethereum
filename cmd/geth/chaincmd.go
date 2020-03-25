@@ -18,7 +18,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"os"
@@ -617,18 +616,14 @@ func snapToHash(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("Could not create iterator for root %x: %v", root, err)
 	}
-	ollKorrekt := snapshot.CrosscheckTriehasher(it, 0, 10000)
-	//generatedRoot := snapshot.GenerateTrieRoot(it)
-	//if err := it.Error(); err != nil {
-	//	fmt.Printf("Iterator error: %v\n", it.Error())
-	//}
-	//if root != generatedRoot {
-	//	return fmt.Errorf("Wrong hash generated, expected %x, got %x", root, generatedRoot[:])
-	//}
-	if !ollKorrekt {
-		return errors.New("Computer says No, @gballet\n...come on man, fix me already!")
+	generatedRoot := snapshot.GenerateTrieRoot(it)
+	if err := it.Error(); err != nil {
+		fmt.Printf("Iterator error: %v\n", it.Error())
 	}
-	//log.Info("Generation done", "root", generatedRoot)
+	if root != generatedRoot {
+		return fmt.Errorf("Wrong hash generated, expected %x, got %x", root, generatedRoot[:])
+	}
+	log.Info("Generation done", "root", generatedRoot)
 	return nil
 }
 
