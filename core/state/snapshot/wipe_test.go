@@ -60,7 +60,7 @@ func TestWipe(t *testing.T) {
 	// Sanity check that all the keys are present
 	var items int
 
-	it := db.NewIteratorWithPrefix(rawdb.SnapshotAccountPrefix)
+	it := db.NewIteratorWith(rawdb.SnapshotAccountPrefix, nil)
 	defer it.Release()
 
 	for it.Next() {
@@ -69,7 +69,7 @@ func TestWipe(t *testing.T) {
 			items++
 		}
 	}
-	it = db.NewIteratorWithPrefix(rawdb.SnapshotStoragePrefix)
+	it = db.NewIteratorWith(rawdb.SnapshotStoragePrefix, nil)
 	defer it.Release()
 
 	for it.Next() {
@@ -88,7 +88,7 @@ func TestWipe(t *testing.T) {
 	<-wipeSnapshot(db, true)
 
 	// Iterate over the database end ensure no snapshot information remains
-	it = db.NewIteratorWithPrefix(rawdb.SnapshotAccountPrefix)
+	it = db.NewIteratorWith(rawdb.SnapshotAccountPrefix, nil)
 	defer it.Release()
 
 	for it.Next() {
@@ -97,7 +97,7 @@ func TestWipe(t *testing.T) {
 			t.Errorf("snapshot entry remained after wipe: %x", key)
 		}
 	}
-	it = db.NewIteratorWithPrefix(rawdb.SnapshotStoragePrefix)
+	it = db.NewIteratorWith(rawdb.SnapshotStoragePrefix, nil)
 	defer it.Release()
 
 	for it.Next() {

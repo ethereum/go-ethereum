@@ -18,7 +18,6 @@ package snapshot
 
 import (
 	"bytes"
-	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"io/ioutil"
 	"testing"
 
@@ -26,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
@@ -454,9 +454,9 @@ func tempDB() (ethdb.Database, error) {
 func TestDiskSeek(t *testing.T) {
 	// Create some accounts in the disk layer
 	//db := memorydb.New()
-	db ,err := tempDB()
+	db, err := tempDB()
 	if err != nil {
-		t.Fatal( err)
+		t.Fatal(err)
 	}
 	// Fill even keys [0,2,4...]
 	for i := 0; i < 0xff; i += 2 {

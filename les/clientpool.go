@@ -849,8 +849,9 @@ func (db *nodeDB) expireNodes() {
 		visited int
 		deleted int
 		start   = time.Now()
+		prefix  = db.getPrefix(true)
 	)
-	iter := db.db.NewIteratorWithPrefix(append(db.verbuf[:], negativeBalancePrefix...))
+	iter := db.db.NewIteratorWith(prefix, nil)
 	for iter.Next() {
 		visited += 1
 		var balance negBalance
