@@ -275,7 +275,6 @@ func (pm *ProtocolManager) Stop() {
 	// Quit chainSync and txsync64.
 	// After this is done, no new peers will be accepted.
 	close(pm.quitSync)
-	pm.downloader.Cancel()
 	pm.wg.Wait()
 
 	// Disconnect existing sessions.
