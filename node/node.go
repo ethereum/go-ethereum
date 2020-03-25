@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -377,12 +376,11 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 		return err // TODO this should return upon failure, right?
 	}
 
-	var ws http.Handler
-	if n.httpEndpoint == n.wsEndpoint {
-		ws = srv.WebsocketHandler(wsOrigins)
-	}
+	handler := NewHTTPHandlerStack(srv, cors, vhosts)
 	// wrap handler in websocket handler only if websocket port is the same as http rpc
-	handler := n.AddWebsocketHandler(NewHTTPHandlerStack(srv, cors, vhosts), ws)
+	if n.httpEndpoint == n.wsEndpoint {
+		handler = NewWebsocketUpgradeHandler(handler, srv.WebsocketHandler(wsOrigins))
+	}
 
 	listener, err := rpc.StartHTTPEndpoint(endpoint, timeouts, handler)
 	if err != nil {
@@ -400,15 +398,6 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 	n.httpHandler = srv
 
 	return nil
-}
-
-// AddWebsocketHandler creates the handler stack necessary to handle both http rpc requests and websocket requests
-func (n *Node) AddWebsocketHandler(handler http.Handler, websocket http.Handler) http.Handler {
-	if websocket != nil {
-		return NewWebsocketUpgradeHandler(handler, websocket)
-	}
-
-	return handler
 }
 
 // stopHTTP terminates the HTTP RPC endpoint.
