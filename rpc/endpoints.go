@@ -53,7 +53,6 @@ func StartHTTPEndpoint(endpoint string, apis []API, modules []string, timeouts H
 	if listener, err = net.Listen("tcp", endpoint); err != nil {
 		return nil, err
 	}
-
 	// Make sure timeout values are meaningful
 	if timeouts.ReadTimeout < time.Second {
 		log.Warn("Sanitizing invalid HTTP read timeout", "provided", timeouts.ReadTimeout, "updated", DefaultHTTPTimeouts.ReadTimeout)
@@ -67,7 +66,6 @@ func StartHTTPEndpoint(endpoint string, apis []API, modules []string, timeouts H
 		log.Warn("Sanitizing invalid HTTP idle timeout", "provided", timeouts.IdleTimeout, "updated", DefaultHTTPTimeouts.IdleTimeout)
 		timeouts.IdleTimeout = DefaultHTTPTimeouts.IdleTimeout
 	}
-
 	// Bundle and start the HTTP server
 	httpSrv := &http.Server{
 		Handler:      handler,
@@ -75,7 +73,6 @@ func StartHTTPEndpoint(endpoint string, apis []API, modules []string, timeouts H
 		WriteTimeout: timeouts.WriteTimeout,
 		IdleTimeout:  timeouts.IdleTimeout,
 	}
-
 	go httpSrv.Serve(listener)
 	return listener, err
 }
