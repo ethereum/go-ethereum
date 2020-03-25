@@ -287,6 +287,7 @@ const (
 	extNode
 	leafNode
 	emptyNode
+	hashedNode
 )
 
 func (st *ReStackTrie) TryUpdate(key, value []byte) error {
@@ -317,6 +318,18 @@ func (st *ReStackTrie) insert(key, value []byte) {
 		if st.children[idx] == nil {
 			st.children[idx] = NewReStackTrie()
 			st.children[idx].keyOffset = st.keyOffset + 1
+		}
+		for i := idx - 1; i >= 0; i-- {
+			if st.children[i] != nil {
+				if st.children[i].nodeType != hashedNode {
+					st.children[i].val = st.children[i].Hash().Bytes()
+					st.children[i].key = nil
+					st.children[i].nodeType = hashedNode
+				}
+
+				break
+			}
+
 		}
 		st.children[idx].insert(key, value)
 	case extNode: /* Ext */
@@ -415,12 +428,18 @@ func (st *ReStackTrie) insert(key, value []byte) {
 
 		// Create the two child leaves: the one containing the
 		// original value and the one containing the new value
+		// The child leave will be hashed directly in order to
+		// free up some memory.
 		origIdx := st.key[diffidx]
 		p.children[origIdx] = NewReStackTrie()
 		p.children[origIdx].nodeType = leafNode
 		p.children[origIdx].key = st.key[diffidx+1:]
 		p.children[origIdx].val = st.val
 		p.children[origIdx].keyOffset = p.keyOffset + 1
+
+		p.children[origIdx].val = p.children[origIdx].Hash().Bytes()
+		p.children[origIdx].nodeType = hashedNode
+		p.children[origIdx].key = nil
 
 		newIdx := key[diffidx+st.keyOffset]
 		p.children[newIdx] = NewReStackTrie()
@@ -434,6 +453,8 @@ func (st *ReStackTrie) insert(key, value []byte) {
 		st.nodeType = leafNode
 		st.key = key[st.keyOffset:]
 		st.val = value
+	case hashedNode:
+		panic("trying to insert into hash")
 	default:
 		panic("invalid type")
 	}
@@ -539,18 +560,24 @@ func writeHPRLP(writer io.Writer, key, val []byte, leaf bool) {
 }
 
 func (st *ReStackTrie) Hash() (h common.Hash) {
+	/* Shortcut if node is already hashed */
+	if st.nodeType == hashedNode {
+		return common.BytesToHash(st.val)
+	}
+
 	d := sha3.NewLegacyKeccak256()
 	switch st.nodeType {
-	case 0:
+	case branchNode:
 		payload := [544]byte{}
 		pos := 3 // maximum header length given what we know
-		for _, v := range st.children {
+		for i, v := range st.children {
 			if v != nil {
 				// Write a 32 byte list to the sponge
 				payload[pos] = 0xa0
 				pos++
 				copy(payload[pos:pos+32], v.Hash().Bytes())
 				pos += 32
+				st.children[i] = nil // Reclaim mem from subtree
 			} else {
 				// Write an empty list to the sponge
 				payload[pos] = 0x80
@@ -579,12 +606,13 @@ func (st *ReStackTrie) Hash() (h common.Hash) {
 			start = 0
 		}
 		d.Write(payload[start:pos])
-	case 1:
+	case extNode:
 		ch := st.children[0].Hash().Bytes()
 		writeHPRLP(d, st.key, ch, false)
-	case 2:
+		st.children[0] = nil // Reclaim mem from subtree
+	case leafNode:
 		writeHPRLP(d, st.key, st.val, true)
-	case 3:
+	case emptyNode:
 	default:
 		panic("Invalid node type")
 	}
