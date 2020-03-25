@@ -891,8 +891,8 @@ func retesteth(ctx *cli.Context) error {
 
 	srv := rpc.NewServer()
 
-	handler := rpc.NewHTTPHandlerStack(srv, cors, vhosts)
-	handler = rpc.NewWebsocketUpgradeHandler(handler, srv.WebsocketHandler(wsOrigins))
+	handler := node.NewHTTPHandlerStack(srv, cors, vhosts)
+	handler = node.NewWebsocketUpgradeHandler(handler, srv.WebsocketHandler(wsOrigins))
 
 	// start http server
 	var RetestethHTTPTimeouts = rpc.HTTPTimeouts{

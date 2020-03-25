@@ -372,7 +372,7 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 
 	srv := rpc.NewServer()
 
-	err := RegisterApisFromWhitelist(apis, modules, srv)
+	err := registerApisFromWhitelist(apis, modules, srv)
 
 	var ws http.Handler
 	if n.httpEndpoint == n.wsEndpoint {
@@ -380,7 +380,7 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 	}
 
 	// wrap handler in websocket handler only if websocket port is the same as http rpc
-	handler := n.AddWebsocketHandler(rpc.NewHTTPHandlerStack(srv, cors, vhosts), ws)
+	handler := n.AddWebsocketHandler(NewHTTPHandlerStack(srv, cors, vhosts), ws)
 
 	listener, err := rpc.StartHTTPEndpoint(endpoint, apis, modules, timeouts, handler)
 	if err != nil {
@@ -405,7 +405,7 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 // AddWebsocketHandler creates the handler stack necessary to handle both http rpc requests and websocket requests
 func (n *Node) AddWebsocketHandler(handler http.Handler, websocket http.Handler) http.Handler {
 	if websocket != nil {
-		return rpc.NewWebsocketUpgradeHandler(handler, websocket)
+		return NewWebsocketUpgradeHandler(handler, websocket)
 	}
 
 	return handler
@@ -697,7 +697,7 @@ func (n *Node) apis() []rpc.API {
 	}
 }
 
-func RegisterApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server) error {
+func registerApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server) error {
 	// Generate the whitelist based on the allowed modules
 	whitelist := make(map[string]bool)
 	for _, module := range modules {
