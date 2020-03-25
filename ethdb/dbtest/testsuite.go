@@ -32,31 +32,32 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		tests := []struct {
 			content map[string]string
 			prefix  string
+			start string
 			order   []string
 		}{
 			// Empty databases should be iterable
-			{map[string]string{}, "", nil},
-			{map[string]string{}, "non-existent-prefix", nil},
+			{map[string]string{}, "","", nil},
+			{map[string]string{}, "non-existent-prefix","", nil},
 
 			// Single-item databases should be iterable
-			{map[string]string{"key": "val"}, "", []string{"key"}},
-			{map[string]string{"key": "val"}, "k", []string{"key"}},
-			{map[string]string{"key": "val"}, "l", nil},
+			{map[string]string{"key": "val"}, "","", []string{"key"}},
+			{map[string]string{"key": "val"}, "k","", []string{"key"}},
+			{map[string]string{"key": "val"}, "l","", nil},
 
 			// Multi-item databases should be fully iterable
 			{
 				map[string]string{"k1": "v1", "k5": "v5", "k2": "v2", "k4": "v4", "k3": "v3"},
-				"",
+				"","",
 				[]string{"k1", "k2", "k3", "k4", "k5"},
 			},
 			{
 				map[string]string{"k1": "v1", "k5": "v5", "k2": "v2", "k4": "v4", "k3": "v3"},
-				"k",
+				"k","",
 				[]string{"k1", "k2", "k3", "k4", "k5"},
 			},
 			{
 				map[string]string{"k1": "v1", "k5": "v5", "k2": "v2", "k4": "v4", "k3": "v3"},
-				"l",
+				"l","",
 				nil,
 			},
 			// Multi-item databases should be prefix-iterable
@@ -65,7 +66,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 					"ka1": "va1", "ka5": "va5", "ka2": "va2", "ka4": "va4", "ka3": "va3",
 					"kb1": "vb1", "kb5": "vb5", "kb2": "vb2", "kb4": "vb4", "kb3": "vb3",
 				},
-				"ka",
+				"ka","",
 				[]string{"ka1", "ka2", "ka3", "ka4", "ka5"},
 			},
 			{
@@ -73,7 +74,24 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 					"ka1": "va1", "ka5": "va5", "ka2": "va2", "ka4": "va4", "ka3": "va3",
 					"kb1": "vb1", "kb5": "vb5", "kb2": "vb2", "kb4": "vb4", "kb3": "vb3",
 				},
-				"kc",
+				"kc","",
+				nil,
+			},
+			// Multi-item databases should be prefix-iterable with start position
+			{
+				map[string]string{
+					"ka1": "va1", "ka5": "va5", "ka2": "va2", "ka4": "va4", "ka3": "va3",
+					"kb1": "vb1", "kb5": "vb5", "kb2": "vb2", "kb4": "vb4", "kb3": "vb3",
+				},
+				"ka","3",
+				[]string{"ka3", "ka4", "ka5"},
+			},
+			{
+				map[string]string{
+					"ka1": "va1", "ka5": "va5", "ka2": "va2", "ka4": "va4", "ka3": "va3",
+					"kb1": "vb1", "kb5": "vb5", "kb2": "vb2", "kb4": "vb4", "kb3": "vb3",
+				},
+				"ka","8",
 				nil,
 			},
 		}
@@ -86,7 +104,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 				}
 			}
 			// Iterate over the database with the given configs and verify the results
-			it, idx := db.NewIteratorWithPrefix([]byte(tt.prefix)), 0
+			it, idx := db.NewIteratorWith([]byte(tt.prefix), []byte(tt.start)), 0
 			for it.Next() {
 				if len(tt.order) <= idx {
 					t.Errorf("test %d: prefix=%q more items than expected: checking idx=%d (key %q), expecting len=%d", i, tt.prefix, idx, it.Key(), len(tt.order))

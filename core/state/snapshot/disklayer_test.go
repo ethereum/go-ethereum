@@ -18,11 +18,14 @@ package snapshot
 
 import (
 	"bytes"
+	"github.com/ethereum/go-ethereum/ethdb/leveldb"
+	"io/ioutil"
 	"testing"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
@@ -435,15 +438,35 @@ func TestDiskMidAccountPartialMerge(t *testing.T) {
 	// TODO(@karalabe) ?
 }
 
+func tempDB() (ethdb.Database, error) {
+	dir, err := ioutil.TempDir("", "disklayer-test")
+	if err != nil {
+		return nil, err
+	}
+	diskdb, err := leveldb.New(dir, 256, 0, "")
+	if err != nil {
+		return nil, err
+	}
+	return rawdb.NewDatabase(diskdb), nil
+}
+
 // TestDiskSeek tests that seek-operations work on the disk layer
 func TestDiskSeek(t *testing.T) {
 	// Create some accounts in the disk layer
-	db := memorydb.New()
+	//db := memorydb.New()
+	db ,err := tempDB()
+	if err != nil {
+		t.Fatal( err)
+	}
 	// Fill even keys [0,2,4...]
 	for i := 0; i < 0xff; i += 2 {
 		acc := common.Hash{byte(i)}
 		rawdb.WriteAccountSnapshot(db, acc, acc[:])
 	}
+	// Add an 'higher' key, with incorrect (higher) prefix
+	highKey := []byte{rawdb.SnapshotAccountPrefix[0] + 1}
+	db.Put(highKey, []byte{0xff, 0xff})
+
 	baseRoot := randomHash()
 	rawdb.WriteSnapshotRoot(db, baseRoot)
 
@@ -475,16 +498,17 @@ func TestDiskSeek(t *testing.T) {
 		}
 		count := 0
 		for it.Next() {
-			count++
 			k, v, err := it.Hash()[0], it.Account()[0], it.Error()
 			if err != nil {
-				t.Fatalf("test %d, error: %v", i, err)
+				t.Fatalf("test %d, item %d, error: %v", i, count, err)
 			}
-			if k != tc.expkey {
-				t.Fatalf("test %d, got %v exp %v", i, k, tc.expkey)
+			// First item in iterator should have the expected key
+			if count == 0 && k != tc.expkey {
+				t.Fatalf("test %d, item %d, got %v exp %v", i, count, k, tc.expkey)
 			}
+			count++
 			if v != k {
-				t.Fatalf("test %d, value wrong, got %v exp %v", i, v, k)
+				t.Fatalf("test %d, item %d, value wrong, got %v exp %v", i, count, v, k)
 			}
 		}
 	}

@@ -127,7 +127,8 @@ func testTableDatabase(t *testing.T, prefix string) {
 	iter.Release()
 
 	// Test iterators with start point
-	iter = db.NewIteratorWithStart([]byte{0xff, 0xff, 0x02})
+	//iter = db.NewIteratorWithStart([]byte{0xff, 0xff, 0x02})
+	iter = db.NewIteratorWith(nil,[]byte{0xff, 0xff, 0x02})
 	index = 4
 	for iter.Next() {
 		key, value := iter.Key(), iter.Value()

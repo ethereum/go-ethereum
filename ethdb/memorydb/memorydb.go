@@ -139,45 +139,37 @@ func (db *Database) NewIterator() ethdb.Iterator {
 // database content starting at a particular initial key (or after, if it does
 // not exist).
 func (db *Database) NewIteratorWithStart(start []byte) ethdb.Iterator {
-	db.lock.RLock()
-	defer db.lock.RUnlock()
-
-	var (
-		st     = string(start)
-		keys   = make([]string, 0, len(db.db))
-		values = make([][]byte, 0, len(db.db))
-	)
-	// Collect the keys from the memory database corresponding to the given start
-	for key := range db.db {
-		if key >= st {
-			keys = append(keys, key)
-		}
-	}
-	// Sort the items and retrieve the associated values
-	sort.Strings(keys)
-	for _, key := range keys {
-		values = append(values, db.db[key])
-	}
-	return &iterator{
-		keys:   keys,
-		values: values,
-	}
+	return db.NewIteratorWith(nil, start)
 }
 
 // NewIteratorWithPrefix creates a binary-alphabetical iterator over a subset
 // of database content with a particular key prefix.
 func (db *Database) NewIteratorWithPrefix(prefix []byte) ethdb.Iterator {
+	return db.NewIteratorWith(prefix, nil)
+}
+
+// NewIteratorWith creates a binary-alphabetical iterator over a subset
+// of database content with a particular key prefix, starting at a particular
+// initial key (or after, if it does not exist).
+// Note: This method assumes that the prefix is NOT part of the start, so there's
+// no need for the caller to prepend the prefix to the start
+func (db *Database) NewIteratorWith(prefix []byte, start []byte) ethdb.Iterator {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
 	var (
 		pr     = string(prefix)
+		st     = string(append(prefix, start...))
 		keys   = make([]string, 0, len(db.db))
 		values = make([][]byte, 0, len(db.db))
 	)
 	// Collect the keys from the memory database corresponding to the given prefix
+	// and start
 	for key := range db.db {
-		if strings.HasPrefix(key, pr) {
+		if !strings.HasPrefix(key, pr) {
+			continue
+		}
+		if key >= st {
 			keys = append(keys, key)
 		}
 	}

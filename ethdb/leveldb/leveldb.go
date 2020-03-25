@@ -202,6 +202,13 @@ func (db *Database) NewIteratorWithPrefix(prefix []byte) ethdb.Iterator {
 	return db.db.NewIterator(util.BytesPrefix(prefix), nil)
 }
 
+// NewIteratorWith creates a binary-alphabetical iterator over a subset
+// of database content with a particular key prefix, starting at a particular
+// initial key (or after, if it does not exist).
+func (db *Database) NewIteratorWith(prefix []byte, start []byte) ethdb.Iterator {
+	return db.db.NewIterator(BytesPrefixRange(prefix, start), nil)
+}
+
 // Stat returns a particular internal stat of the database.
 func (db *Database) Stat(property string) (string, error) {
 	return db.db.GetProperty(property)
@@ -487,4 +494,13 @@ func (r *replayer) Delete(key []byte) {
 		return
 	}
 	r.failure = r.writer.Delete(key)
+}
+
+// BytesPrefixRange returns key range that satisfy
+// - the given prefix, and
+// - the given seek position
+func BytesPrefixRange(prefix, start []byte) *util.Range {
+	r := util.BytesPrefix(prefix)
+	r.Start = append(r.Start, start...)
+	return r
 }
