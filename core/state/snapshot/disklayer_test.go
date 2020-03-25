@@ -432,4 +432,60 @@ func TestDiskPartialMerge(t *testing.T) {
 // This test case is a tiny specialized case of TestDiskPartialMerge, which tests
 // some very specific cornercases that random tests won't ever trigger.
 func TestDiskMidAccountPartialMerge(t *testing.T) {
+	// TODO(@karalabe) ?
+}
+
+// TestDiskSeek tests that seek-operations work on the disk layer
+func TestDiskSeek(t *testing.T) {
+	// Create some accounts in the disk layer
+	db := memorydb.New()
+	// Fill even keys [0,2,4...]
+	for i := 0; i < 0xff; i += 2 {
+		acc := common.Hash{byte(i)}
+		rawdb.WriteAccountSnapshot(db, acc, acc[:])
+	}
+	baseRoot := randomHash()
+	rawdb.WriteSnapshotRoot(db, baseRoot)
+
+	snaps := &Tree{
+		layers: map[common.Hash]snapshot{
+			baseRoot: &diskLayer{
+				diskdb: db,
+				cache:  fastcache.New(500 * 1024),
+				root:   baseRoot,
+			},
+		},
+	}
+	// Test some different seek positions
+	type testcase struct {
+		pos    byte
+		expkey byte
+	}
+	var cases = []testcase{
+		{0xff, 0x55}, // this should exit immediately without checking key
+		{0x01, 0x02},
+		{0xfe, 0xfe},
+		{0xfd, 0xfe},
+		{0x00, 0x00},
+	}
+	for i, tc := range cases {
+		it, err := snaps.AccountIterator(baseRoot, common.Hash{tc.pos})
+		if err != nil {
+			t.Fatalf("case %d, error: %v", i, err)
+		}
+		count := 0
+		for it.Next() {
+			count++
+			k, v, err := it.Hash()[0], it.Account()[0], it.Error()
+			if err != nil {
+				t.Fatalf("test %d, error: %v", i, err)
+			}
+			if k != tc.expkey {
+				t.Fatalf("test %d, got %v exp %v", i, k, tc.expkey)
+			}
+			if v != k {
+				t.Fatalf("test %d, value wrong, got %v exp %v", i, v, k)
+			}
+		}
+	}
 }
