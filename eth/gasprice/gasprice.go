@@ -446,18 +446,19 @@ func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, bloc
 	var prices []*big.Int
 	for _, tx := range txs.txs {
 		sender, err := types.Sender(signer, tx)
-		if err == nil && sender != block.Coinbase() {
-			price := tx.GasPrice()
-			if price == nil {
-				price = new(big.Int).Add(block.BaseFee(), tx.GasPremium())
-				if price.Cmp(tx.FeeCap()) > 0 {
-					price.Set(tx.FeeCap())
-				}
+		if err != nil || sender == block.Coinbase() {
+			continue
+		}
+		price := tx.GasPrice()
+		if price == nil {
+			price = new(big.Int).Add(block.BaseFee(), tx.GasPremium())
+			if price.Cmp(tx.FeeCap()) > 0 {
+				price.Set(tx.FeeCap())
 			}
-			prices = append(prices, price)
-			if len(prices) >= limit {
-				break
-			}
+		}
+		prices = append(prices, price)
+		if len(prices) >= limit {
+			break
 		}
 	}
 	select {
@@ -484,17 +485,18 @@ func (gpo *Oracle) getBlockPremiums(ctx context.Context, signer types.Signer, bl
 
 	for _, tx := range txs.txs {
 		sender, err := types.Sender(signer, tx)
-		if err == nil && sender != block.Coinbase() {
-			premium := tx.GasPremium()
-			if premium == nil {
-				premium = new(big.Int).Sub(tx.GasPrice(), block.BaseFee())
-				if premium.Cmp(common.Big0) < 0 {
-					premium.Set(common.Big0)
-				}
-			}
-			ch <- getBlockPremiumsResult{premium, nil}
-			return
+		if err != nil || sender == block.Coinbase() {
+			continue
 		}
+		premium := tx.GasPremium()
+		if premium == nil {
+			premium = new(big.Int).Sub(tx.GasPrice(), block.BaseFee())
+			if premium.Cmp(common.Big0) < 0 {
+				premium.Set(common.Big0)
+			}
+		}
+		ch <- getBlockPremiumsResult{premium, nil}
+		return
 	}
 	ch <- getBlockPremiumsResult{nil, nil}
 }
@@ -515,14 +517,15 @@ func (gpo *Oracle) getBlockCaps(ctx context.Context, signer types.Signer, blockN
 
 	for _, tx := range txs {
 		sender, err := types.Sender(signer, tx)
-		if err == nil && sender != block.Coinbase() {
-			cap := tx.FeeCap()
-			if cap == nil {
-				cap = tx.GasPrice()
-			}
-			ch <- getBlockCapsResult{cap, nil}
-			return
+		if err != nil || sender == block.Coinbase() {
+			continue
 		}
+		cap := tx.FeeCap()
+		if cap == nil {
+			cap = tx.GasPrice()
+		}
+		ch <- getBlockCapsResult{cap, nil}
+		return
 	}
 	ch <- getBlockCapsResult{nil, nil}
 }

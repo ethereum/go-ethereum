@@ -102,26 +102,7 @@ type headerMarshaling struct {
 
 // EncodeRLP implements rlp.Encoder
 func (h *Header) EncodeRLP(w io.Writer) error {
-	if h.BaseFee == nil {
-		return rlp.Encode(w, []interface{}{
-			h.ParentHash,
-			h.UncleHash,
-			h.Coinbase,
-			h.Root,
-			h.TxHash,
-			h.ReceiptHash,
-			h.Bloom,
-			h.Difficulty,
-			h.Number,
-			h.GasLimit,
-			h.GasUsed,
-			h.Time,
-			h.Extra,
-			h.MixDigest,
-			h.Nonce,
-		})
-	}
-	return rlp.Encode(w, []interface{}{
+	encodedHeader := []interface{}{
 		h.ParentHash,
 		h.UncleHash,
 		h.Coinbase,
@@ -137,8 +118,11 @@ func (h *Header) EncodeRLP(w io.Writer) error {
 		h.Extra,
 		h.MixDigest,
 		h.Nonce,
-		h.BaseFee,
-	})
+	}
+	if h.BaseFee != nil {
+		encodedHeader = append(encodedHeader, h.BaseFee)
+	}
+	return rlp.Encode(w, encodedHeader)
 }
 
 // DecodeRLP implements rlp.Decoder

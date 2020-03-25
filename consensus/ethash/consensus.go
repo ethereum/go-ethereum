@@ -607,41 +607,25 @@ func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 // SealHash returns the hash of a block prior to it being sealed.
 func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 	hasher := sha3.NewLegacyKeccak256()
-
-	if header.BaseFee == nil {
-		rlp.Encode(hasher, []interface{}{
-			header.ParentHash,
-			header.UncleHash,
-			header.Coinbase,
-			header.Root,
-			header.TxHash,
-			header.ReceiptHash,
-			header.Bloom,
-			header.Difficulty,
-			header.Number,
-			header.GasLimit,
-			header.GasUsed,
-			header.Time,
-			header.Extra,
-		})
-	} else {
-		rlp.Encode(hasher, []interface{}{
-			header.ParentHash,
-			header.UncleHash,
-			header.Coinbase,
-			header.Root,
-			header.TxHash,
-			header.ReceiptHash,
-			header.Bloom,
-			header.Difficulty,
-			header.Number,
-			header.GasLimit,
-			header.GasUsed,
-			header.Time,
-			header.Extra,
-			header.BaseFee,
-		})
+	encodedHeader := []interface{}{
+		header.ParentHash,
+		header.UncleHash,
+		header.Coinbase,
+		header.Root,
+		header.TxHash,
+		header.ReceiptHash,
+		header.Bloom,
+		header.Difficulty,
+		header.Number,
+		header.GasLimit,
+		header.GasUsed,
+		header.Time,
+		header.Extra,
 	}
+	if header.BaseFee != nil {
+		encodedHeader = append(encodedHeader, header.BaseFee)
+	}
+	rlp.Encode(hasher, encodedHeader)
 
 	hasher.Sum(hash[:0])
 	return hash

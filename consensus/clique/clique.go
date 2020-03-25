@@ -728,46 +728,27 @@ func CliqueRLP(header *types.Header) []byte {
 }
 
 func encodeSigHeader(w io.Writer, header *types.Header) {
-	var err error
-	if header.BaseFee == nil {
-		err = rlp.Encode(w, []interface{}{
-			header.ParentHash,
-			header.UncleHash,
-			header.Coinbase,
-			header.Root,
-			header.TxHash,
-			header.ReceiptHash,
-			header.Bloom,
-			header.Difficulty,
-			header.Number,
-			header.GasLimit,
-			header.GasUsed,
-			header.Time,
-			header.Extra[:len(header.Extra)-crypto.SignatureLength], // Yes, this will panic if extra is too short
-			header.MixDigest,
-			header.Nonce,
-		})
-	} else {
-		err = rlp.Encode(w, []interface{}{
-			header.ParentHash,
-			header.UncleHash,
-			header.Coinbase,
-			header.Root,
-			header.TxHash,
-			header.ReceiptHash,
-			header.Bloom,
-			header.Difficulty,
-			header.Number,
-			header.GasLimit,
-			header.GasUsed,
-			header.Time,
-			header.Extra[:len(header.Extra)-crypto.SignatureLength], // Yes, this will panic if extra is too short
-			header.MixDigest,
-			header.Nonce,
-			header.BaseFee,
-		})
+	headerFields := []interface{}{
+		header.ParentHash,
+		header.UncleHash,
+		header.Coinbase,
+		header.Root,
+		header.TxHash,
+		header.ReceiptHash,
+		header.Bloom,
+		header.Difficulty,
+		header.Number,
+		header.GasLimit,
+		header.GasUsed,
+		header.Time,
+		header.Extra[:len(header.Extra)-crypto.SignatureLength], // Yes, this will panic if extra is too short
+		header.MixDigest,
+		header.Nonce,
 	}
-	if err != nil {
+	if header.BaseFee != nil {
+		headerFields = append(headerFields, header.BaseFee)
+	}
+	if err := rlp.Encode(w, headerFields); err != nil {
 		panic("can't encode: " + err.Error())
 	}
 }
