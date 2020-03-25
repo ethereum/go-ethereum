@@ -62,7 +62,8 @@ func VerifyEIP1559BaseFee(config *params.ChainConfig, header, parent *types.Head
 		}
 		return nil
 	}
-	// Verify the BaseFee is valid if we are past the EIP1559 activation block
+	// If we are past the EIP1559 activation block verify the header's BaseFee is valid by deriving
+	// it from the parent header and validating that they are the same
 	if config.IsEIP1559(header.Number) {
 		if parent.BaseFee == nil {
 			return errMissingParentBaseFee
@@ -91,7 +92,7 @@ func VerifyEIP1559BaseFee(config *params.ChainConfig, header, parent *types.Head
 			}
 			expectedBaseFee.Set(new(big.Int).Add(parent.BaseFee, max))
 		}
-		if expectedBaseFee.Cmp(header.BaseFee) > 0 {
+		if expectedBaseFee.Cmp(header.BaseFee) != 0 {
 			return errInvalidBaseFee
 		}
 		return nil
