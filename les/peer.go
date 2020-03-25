@@ -357,6 +357,7 @@ type serverPeer struct {
 
 	poolEntry *poolEntry              // Statistic for server peer.
 	fcServer  *flowcontrol.ServerNode // Client side mirror token bucket.
+	syncDrop  mclock.Timer            // Timed connection dropper if sync progress isn't validated in time
 
 	// Statistics
 	errCount    int // Counter the invalid responses server has replied

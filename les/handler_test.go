@@ -640,3 +640,51 @@ func TestStopResumeLes3(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckpointChallengeLes2(t *testing.T) { testCheckpointChallenge(t, 2) }
+func TestCheckpointChallengeLes3(t *testing.T) { testCheckpointChallenge(t, 3) }
+
+func testCheckpointChallenge(t *testing.T, protocol int) {
+	config := light.TestServerIndexerConfig
+
+	waitIndexers := func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
+		for {
+			cs, _, _ := cIndexer.Sections()
+			bts, _, _ := btIndexer.Sections()
+			if cs >= 1 && bts >= 1 {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	// Generate 512+4 blocks (totally 1 CHT sections)
+	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize+config.ChtConfirms), protocol, waitIndexers, nil, 0, false, false)
+	defer tearDown()
+
+	s, _, head := server.chtIndexer.Sections()
+	cp := &params.TrustedCheckpoint{
+		SectionIndex: 0,
+		SectionHead:  head,
+		CHTRoot:      light.GetChtRoot(server.db, s-1, head),
+		BloomRoot:    light.GetBloomTrieRoot(server.db, s-1, head),
+	}
+	// Register the assembled checkpoint as hardcoded one.
+	client.handler.clock = &mclock.Simulated{}
+	client.handler.checkpoint = cp
+	client.handler.backend.blockchain.AddTrustedCheckpoint(cp)
+
+	// Create connected peer pair.
+	newTestPeerPair("peer", protocol, server.handler, client.handler)
+	client.handler.clock.(*mclock.Simulated).Run(checkpointChallengeTimeout)
+	if client.handler.backend.peers.len() != 1 {
+		t.Fatalf("Should pass checkpoint challenge")
+	}
+
+	client.handler.ignoreCheckpoint = true // Explicitly ignore all received headers, trigger timer
+	// Create connected peer pair.
+	newTestPeerPair("peer2", protocol, server.handler, client.handler)
+	client.handler.clock.(*mclock.Simulated).Run(checkpointChallengeTimeout)
+	if client.handler.backend.peers.len() != 1 {
+		t.Fatalf("Shouldn't pass checkpoint challenge")
+	}
+}

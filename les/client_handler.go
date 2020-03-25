@@ -32,23 +32,30 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+var checkpointChallengeTimeout = 15 * time.Second // Time allowance for a server to reply to the checkpoint progress challenge
+
 // clientHandler is responsible for receiving and processing all incoming server
 // responses.
 type clientHandler struct {
 	ulc        *ulc
+	clock      mclock.Clock
 	checkpoint *params.TrustedCheckpoint
 	fetcher    *lightFetcher
 	downloader *downloader.Downloader
 	backend    *LightEthereum
 
-	closeCh  chan struct{}
-	wg       sync.WaitGroup // WaitGroup used to track all connected peers.
-	syncDone func()         // Test hooks when syncing is done.
+	closeCh chan struct{}
+	wg      sync.WaitGroup // WaitGroup used to track all connected peers.
+
+	// Testing fields or hooks
+	ignoreCheckpoint bool   // Indicator whether ignore received checkpoint
+	syncDone         func() // Test hooks when syncing is done.
 }
 
 func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.TrustedCheckpoint, backend *LightEthereum) *clientHandler {
 	handler := &clientHandler{
 		checkpoint: checkpoint,
+		clock:      mclock.System{},
 		backend:    backend,
 		closeCh:    make(chan struct{}),
 	}
@@ -62,7 +69,7 @@ func newClientHandler(ulcServers []string, ulcFraction int, checkpoint *params.T
 	}
 	var height uint64
 	if checkpoint != nil {
-		height = (checkpoint.SectionIndex+1)*params.CHTFrequency - 1
+		height = (checkpoint.SectionIndex+1)*backend.iConfig.ChtSize - 1
 	}
 	handler.fetcher = newLightFetcher(handler)
 	handler.downloader = downloader.New(height, backend.chainDb, nil, backend.eventMux, nil, backend.blockchain, handler.removePeer)
@@ -132,6 +139,26 @@ func (h *clientHandler) handle(p *serverPeer) error {
 	// pool entry can be nil during the unit test.
 	if p.poolEntry != nil {
 		h.backend.serverPool.registered(p.poolEntry)
+	}
+	// If we have a trusted CHT, reject all peers below that (avoid light sync eclipse)
+	if h.checkpoint != nil {
+		// Request the peer's checkpoint header for chain height/weight validation
+		wrapPeer := &peerConnection{handler: h, peer: p}
+		if err := wrapPeer.RequestHeadersByNumber((h.checkpoint.SectionIndex+1)*h.backend.iConfig.ChtSize-1, 1, 0, false); err != nil {
+			return err
+		}
+		// Start a timer to disconnect if the peer doesn't reply in time
+		p.syncDrop = h.clock.AfterFunc(checkpointChallengeTimeout, func() {
+			p.Log().Warn("Checkpoint challenge timed out, dropping", "addr", p.RemoteAddr(), "type", p.Name())
+			h.removePeer(p.id)
+		})
+		// Make sure it's cleaned up if the peer dies off
+		defer func() {
+			if p.syncDrop != nil {
+				p.syncDrop.Stop()
+				p.syncDrop = nil
+			}
+		}()
 	}
 	// Mark the peer starts to be served.
 	atomic.StoreUint32(&p.serving, 1)
@@ -205,6 +232,27 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+
+		// If no headers were received, but we're expecting a checkpoint header,
+		// drop the unsynced server.
+		if len(resp.Headers) == 0 && p.syncDrop != nil {
+			p.syncDrop.Stop()
+			p.syncDrop = nil
+			return errResp(ErrUselessPeer, "msg %v: %v", msg, err)
+		}
+		// If we are still waiting the checkpoint response.
+		if len(resp.Headers) == 1 && p.syncDrop != nil {
+			if !h.ignoreCheckpoint && resp.Headers[0].Number.Uint64() == (h.checkpoint.SectionIndex+1)*h.backend.iConfig.ChtSize-1 {
+				// First stop timer anyway.
+				p.syncDrop.Stop()
+				p.syncDrop = nil
+				if resp.Headers[0].Hash() != h.checkpoint.SectionHead {
+					return errResp(ErrUselessPeer, "msg %v: %v", msg, err)
+				}
+				return nil
+			}
+		}
+		// Deliver response header to concrete requester.
 		if h.fetcher.requestedID(resp.ReqID) {
 			h.fetcher.deliverHeaders(p, resp.ReqID, resp.Headers)
 		} else {
