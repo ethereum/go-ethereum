@@ -887,12 +887,11 @@ func retesteth(ctx *cli.Context) error {
 	}
 	vhosts := splitAndTrim(ctx.GlobalString(utils.RPCVirtualHostsFlag.Name))
 	cors := splitAndTrim(ctx.GlobalString(utils.RPCCORSDomainFlag.Name))
-	wsOrigins := splitAndTrim(ctx.GlobalString(utils.WSAllowedOriginsFlag.Value))
 
 	srv := rpc.NewServer()
 
 	handler := node.NewHTTPHandlerStack(srv, cors, vhosts)
-	handler = node.NewWebsocketUpgradeHandler(handler, srv.WebsocketHandler(wsOrigins))
+	handler = node.NewWebsocketUpgradeHandler(handler, nil)
 
 	// start http server
 	var RetestethHTTPTimeouts = rpc.HTTPTimeouts{

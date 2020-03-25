@@ -378,7 +378,6 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 	if n.httpEndpoint == n.wsEndpoint {
 		ws = srv.WebsocketHandler(wsOrigins)
 	}
-
 	// wrap handler in websocket handler only if websocket port is the same as http rpc
 	handler := n.AddWebsocketHandler(NewHTTPHandlerStack(srv, cors, vhosts), ws)
 
@@ -389,11 +388,9 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 	n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", listener.Addr()),
 		"cors", strings.Join(cors, ","),
 		"vhosts", strings.Join(vhosts, ","))
-
 	if n.httpEndpoint == n.wsEndpoint {
 		n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", listener.Addr()))
 	}
-
 	// All listeners booted successfully
 	n.httpEndpoint = endpoint
 	n.httpListener = listener
@@ -698,12 +695,14 @@ func (n *Node) apis() []rpc.API {
 }
 
 func registerApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server) error {
+	if bad, available := rpc.CheckModuleAvailability(modules, apis); len(bad) > 0 {
+		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)
+	}
 	// Generate the whitelist based on the allowed modules
 	whitelist := make(map[string]bool)
 	for _, module := range modules {
 		whitelist[module] = true
 	}
-
 	// Register all the APIs exposed by the services
 	for _, api := range apis {
 		if whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
@@ -713,6 +712,5 @@ func registerApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server
 			log.Debug("HTTP registered", "namespace", api.Namespace)
 		}
 	}
-
 	return nil
 }
