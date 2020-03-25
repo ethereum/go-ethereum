@@ -1253,6 +1253,10 @@ func (c *Bor) IsValidatorAction(chain consensus.ChainReader, from common.Address
 func isProposeSpanAction(tx *types.Transaction, validatorContract string) bool {
 	// keccak256('proposeSpan()').slice(0, 4)
 	proposeSpanSig, _ := hex.DecodeString("4b0e4d17")
+	if tx.Data() == nil || len(tx.Data()) < 4 {
+		return false
+	}
+
 	return bytes.Compare(proposeSpanSig, tx.Data()[:4]) == 0 &&
 		tx.To().String() == validatorContract
 }
@@ -1260,6 +1264,10 @@ func isProposeSpanAction(tx *types.Transaction, validatorContract string) bool {
 func isProposeStateAction(tx *types.Transaction, stateReceiverContract string) bool {
 	// keccak256('proposeState(uint256)').slice(0, 4)
 	proposeStateSig, _ := hex.DecodeString("ede01f17")
+	if tx.Data() == nil || len(tx.Data()) < 4 {
+		return false
+	}
+
 	return bytes.Compare(proposeStateSig, tx.Data()[:4]) == 0 &&
 		tx.To().String() == stateReceiverContract
 }

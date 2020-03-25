@@ -25,18 +25,13 @@ type IHeimdallClient interface {
 }
 
 type HeimdallClient struct {
-	u      *url.URL
-	client http.Client
+	urlString string
+	client    http.Client
 }
 
 func NewHeimdallClient(urlString string) (*HeimdallClient, error) {
-	u, err := url.Parse(urlString)
-	if err != nil {
-		return nil, err
-	}
-
 	h := &HeimdallClient{
-		u: u,
+		urlString: urlString,
 		client: http.Client{
 			Timeout: time.Duration(5 * time.Second),
 		},
@@ -45,35 +40,46 @@ func NewHeimdallClient(urlString string) (*HeimdallClient, error) {
 }
 
 func (h *HeimdallClient) Fetch(paths ...string) (*ResponseWithHeight, error) {
+	u, err := url.Parse(h.urlString)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, e := range paths {
 		if e != "" {
-			h.u.Path = path.Join(h.u.Path, e)
+			u.Path = path.Join(u.Path, e)
 		}
 	}
-	return h.internalFetch()
+
+	return h.internalFetch(u)
 }
 
 // FetchWithRetry returns data from heimdall with retry
 func (h *HeimdallClient) FetchWithRetry(paths ...string) (*ResponseWithHeight, error) {
+	u, err := url.Parse(h.urlString)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, e := range paths {
 		if e != "" {
-			h.u.Path = path.Join(h.u.Path, e)
+			u.Path = path.Join(u.Path, e)
 		}
 	}
 
 	for {
-		res, err := h.internalFetch()
+		res, err := h.internalFetch(u)
 		if err == nil && res != nil {
 			return res, nil
 		}
-		log.Info("Retrying again in 5 seconds for next Heimdall span", "path", h.u.Path)
+		log.Info("Retrying again in 5 seconds for next Heimdall span", "path", u.Path)
 		time.Sleep(5 * time.Second)
 	}
 }
 
 // internal fetch method
-func (h *HeimdallClient) internalFetch() (*ResponseWithHeight, error) {
-	res, err := h.client.Get(h.u.String())
+func (h *HeimdallClient) internalFetch(u *url.URL) (*ResponseWithHeight, error) {
+	res, err := h.client.Get(u.String())
 	if err != nil {
 		return nil, err
 	}
