@@ -113,7 +113,7 @@ func wipeKeyRange(db ethdb.KeyValueStore, kind string, prefix []byte, keylen int
 				return err
 			}
 			batch.Reset()
-			seekPos := bytes.Trim(key, prefix)
+			seekPos := key[len(prefix):]
 			it = db.NewIteratorWith(prefix, seekPos)
 
 			if time.Since(logged) > 8*time.Second {

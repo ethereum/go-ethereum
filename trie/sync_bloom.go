@@ -116,7 +116,7 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 			key := common.CopyBytes(it.Key())
 
 			it.Release()
-			it = database.NewIteratorWithStart(key)
+			it = database.NewIteratorWith(nil, key)
 
 			log.Info("Initializing fast sync bloom", "items", b.bloom.N(), "errorrate", b.errorRate(), "elapsed", common.PrettyDuration(time.Since(start)))
 			swap = time.Now()
