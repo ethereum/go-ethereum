@@ -372,7 +372,10 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 
 	srv := rpc.NewServer()
 
-	err := registerApisFromWhitelist(apis, modules, srv)
+	err := RegisterApisFromWhitelist(apis, modules, srv)
+	if err != nil {
+		return err // TODO this should return upon failure, right?
+	}
 
 	var ws http.Handler
 	if n.httpEndpoint == n.wsEndpoint {
@@ -381,7 +384,7 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 	// wrap handler in websocket handler only if websocket port is the same as http rpc
 	handler := n.AddWebsocketHandler(NewHTTPHandlerStack(srv, cors, vhosts), ws)
 
-	listener, err := rpc.StartHTTPEndpoint(endpoint, apis, modules, timeouts, handler)
+	listener, err := rpc.StartHTTPEndpoint(endpoint, timeouts, handler)
 	if err != nil {
 		return err
 	}
@@ -694,7 +697,7 @@ func (n *Node) apis() []rpc.API {
 	}
 }
 
-func registerApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server) error {
+func RegisterApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server) error {
 	if bad, available := rpc.CheckModuleAvailability(modules, apis); len(bad) > 0 {
 		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)
 	}

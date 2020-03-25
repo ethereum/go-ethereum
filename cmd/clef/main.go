@@ -539,9 +539,17 @@ func signer(c *cli.Context) error {
 		vhosts := splitAndTrim(c.GlobalString(utils.RPCVirtualHostsFlag.Name))
 		cors := splitAndTrim(c.GlobalString(utils.RPCCORSDomainFlag.Name))
 
-		// start http server
+		srv := rpc.NewServer()
+
+		err := node.RegisterApisFromWhitelist(rpcAPI, []string{"account"}, srv)
+		if err != nil {
+			utils.Fatalf("Could not register API: %w", err) // TODO should this be a fatal failure?
+		}
+
+		handler := node.NewHTTPHandlerStack(srv, cors, vhosts)
 		httpEndpoint := fmt.Sprintf("%s:%d", c.GlobalString(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
-		listener, _, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcAPI, []string{"account"}, cors, vhosts, rpc.DefaultHTTPTimeouts)
+		// start http server
+		listener, err := rpc.StartHTTPEndpoint(httpEndpoint, rpc.DefaultHTTPTimeouts, handler)
 		if err != nil {
 			utils.Fatalf("Could not start RPC api: %v", err)
 		}

@@ -44,7 +44,7 @@ func CheckModuleAvailability(modules []string, apis []API) (bad, available []str
 }
 
 // StartHTTPEndpoint starts the HTTP RPC endpoint, configured with cors/vhosts/modules.
-func StartHTTPEndpoint(endpoint string, apis []API, modules []string, timeouts HTTPTimeouts, handler http.Handler) (net.Listener, error) {
+func StartHTTPEndpoint(endpoint string, timeouts HTTPTimeouts, handler http.Handler) (net.Listener, error) {
 	// Start the HTTP listener
 	var (
 		listener net.Listener
