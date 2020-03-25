@@ -205,7 +205,6 @@ func (cs *chainSyncer) loop() {
 
 	for {
 		if op := cs.nextSyncOp(); op != nil {
-			log.Trace("Starting chain sync", "mode", op.mode, "peercount", cs.pm.peers.Len(), "id", op.peer.id)
 			cs.startSync(op)
 		}
 
