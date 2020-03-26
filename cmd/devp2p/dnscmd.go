@@ -98,7 +98,7 @@ var (
 
 const (
 	rootTTL     = 30 * 60              // 30 min
-	treeNodeTTL = 2 * 7 * 24 * 60 * 60 // 2 weeks
+	treeNodeTTL = 4 * 7 * 24 * 60 * 60 // 4 weeks
 )
 
 // dnsSync performs dnsSyncCommand.
