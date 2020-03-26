@@ -32,9 +32,11 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// The Route53 limits change sets to this size. DNS changes need to be split
-// up into multiple batches to work around the limit.
-const route53ChangeLimit = 30000
+// Route53 limits change sets to 32k of 'RDATA size'. DNS changes need to be split up into
+// multiple batches to work around the limit. Unfortunately I cannot find any
+// documentation explaining how the RDATA size of a change set is computed and the best we
+// can do is estimate it. For this reason, our internal limit is much lower than 32k.
+const route53ChangeLimit = 20000
 
 var (
 	route53AccessKeyFlag = cli.StringFlag{
