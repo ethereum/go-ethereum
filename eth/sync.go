@@ -162,6 +162,7 @@ type chainSyncer struct {
 	doneCh      chan error // non-nil when sync is running
 }
 
+// chainSyncOp is a scheduled sync operation.
 type chainSyncOp struct {
 	mode downloader.SyncMode
 	peer *peer
@@ -169,6 +170,7 @@ type chainSyncOp struct {
 	head common.Hash
 }
 
+// newChainSyncer creates a chainSyncer.
 func newChainSyncer(pm *ProtocolManager) *chainSyncer {
 	return &chainSyncer{
 		pm:          pm,
