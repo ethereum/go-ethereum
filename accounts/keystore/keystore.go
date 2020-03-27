@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/cmd/clef/dbutil"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
@@ -116,4 +117,15 @@ func NewPlaintextKeyStore(keydir string) KeyStore {
 	ks := &keyStoreFS{storage: &keyStorePlain{keydir}}
 	ks.init(keydir)
 	return ks
+}
+
+// NewKeyStoreDB creates a keystore for the given database
+func NewKeyStoreDB(path, table string, scryptN, scryptP int) (KeyStore, error) {
+	kvstore, err := dbutil.NewKVStore(path, table)
+	if err != nil {
+		return nil, err
+	}
+	storage := &keyStorePassphraseDB{kvstore, scryptN, scryptP, false}
+	ks := &keyStoreDB{storage: storage, unlocked: make(map[common.Address]*unlocked)}
+	return ks, nil
 }
