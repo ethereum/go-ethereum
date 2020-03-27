@@ -11,11 +11,11 @@ Setting up a private network can be a complex task; you need to configure a gene
 
 Any node you want to connect to the private network has some prerequisites:
 
-- The ethereum toolchain
-- Docker
-- A running instance of Geth
+- [The ethereum toolchain](./install-and-build/installing-geth)
+- [Docker](https://www.docker.com/get-started)
+- [A running instance of Geth](./getting-started)
 
-You may have these already, but for ease of testing, [we have a vagrant file](https://github.com/ChrisChinchilla/Puppeth-Vagrant) you can use to create a two-node test cluster.
+You may have these already running locally or remotely, but for ease of testing, [we have a vagrant file](https://github.com/ChrisChinchilla/Puppeth-Vagrant) you can use to create a two-node test cluster.
 
 With your nodes and geth running, run the following command:
 
@@ -27,7 +27,11 @@ Puppeth guides you through adding nodes to a private network, and this tutorial 
 
 First, create a name for your network, for example, `vagrantnet`.
 
-Puppeth then gives you four choices. Before any other steps, you need to add the instances. The IP addresses for the Vagrant nodes are "192.168.56.101" and "192.168.56.102". Select option `3` again, and then `2`, and add the IP address for one instance in the format `vagrant@192.168.56.101`, the password is "vagrant". Select option `3` again for adding the second node.
+Puppeth then gives you choices on what to do next. Before any other steps, you need to add the instances by selecting the option to _Track a new remote server_. Add a server in the format `[username[:identity]@]hostname[:port]`.
+
+If you're using our example cluster, then the IP addresses for the Vagrant nodes are "192.168.56.101" and "192.168.56.102", and the username for each node is `vagrant` and the password `password`.
+
+Select option `3` again, and then `2`, and add the IP address for one instance in the format `vagrant@192.168.56.101`, the password is "vagrant". Select option `3` again for adding the second node.
 
 You should now see a table listing the two nodes.
 
