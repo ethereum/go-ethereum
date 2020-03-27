@@ -63,9 +63,9 @@ type Interpreter interface {
 	CanRun([]byte) bool
 }
 
-// CallCtx contains the things that are per-call, such as stack and memory,
+// callCtx contains the things that are per-call, such as stack and memory,
 // but not transients like pc and gas
-type CallCtx struct {
+type callCtx struct {
 	memory   *Memory
 	stack    *Stack
 	contract *Contract
@@ -171,7 +171,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		op          OpCode        // current opcode
 		mem         = NewMemory() // bound memory
 		stack       = newstack()  // local stack
-		callContext = &CallCtx{
+		callContext = &callCtx{
 			memory:   mem,
 			stack:    stack,
 			contract: contract,
@@ -210,7 +210,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	steps := 0
 	for {
 		steps++
-		if steps%100 == 0 && atomic.LoadInt32(&in.evm.abort) != 0 {
+		if steps%1000 == 0 && atomic.LoadInt32(&in.evm.abort) != 0 {
 			break
 		}
 		if in.cfg.Debug {

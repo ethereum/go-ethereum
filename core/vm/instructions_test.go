@@ -109,7 +109,7 @@ func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFu
 		expected := new(big.Int).SetBytes(common.Hex2Bytes(test.Expected))
 		stack.push(x)
 		stack.push(y)
-		opFn(&pc, evmInterpreter, &CallCtx{nil, stack, nil})
+		opFn(&pc, evmInterpreter, &callCtx{nil, stack, nil})
 		actual := stack.pop()
 
 		if actual.Cmp(expected) != 0 {
@@ -223,7 +223,7 @@ func getResult(args []*twoOperandParams, opFn executionFunc) []TwoOperandTestcas
 		y := new(big.Int).SetBytes(common.Hex2Bytes(param.y))
 		stack.push(x)
 		stack.push(y)
-		opFn(&pc, interpreter, &CallCtx{nil, stack, nil})
+		opFn(&pc, interpreter, &callCtx{nil, stack, nil})
 		actual := stack.pop()
 		result[i] = TwoOperandTestcase{param.x, param.y, fmt.Sprintf("%064x", actual)}
 	}
@@ -281,7 +281,7 @@ func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 			a := new(big.Int).SetBytes(arg)
 			stack.push(a)
 		}
-		op(&pc, evmInterpreter, &CallCtx{nil, stack, nil})
+		op(&pc, evmInterpreter, &callCtx{nil, stack, nil})
 		stack.pop()
 	}
 	poolOfIntPools.put(evmInterpreter.intPool)
@@ -509,12 +509,12 @@ func TestOpMstore(t *testing.T) {
 	pc := uint64(0)
 	v := "abcdef00000000000000abba000000000deaf000000c0de00100000000133700"
 	stack.pushN(new(big.Int).SetBytes(common.Hex2Bytes(v)), big.NewInt(0))
-	opMstore(&pc, evmInterpreter, &CallCtx{mem, stack, nil})
+	opMstore(&pc, evmInterpreter, &callCtx{mem, stack, nil})
 	if got := common.Bytes2Hex(mem.GetCopy(0, 32)); got != v {
 		t.Fatalf("Mstore fail, got %v, expected %v", got, v)
 	}
 	stack.pushN(big.NewInt(0x1), big.NewInt(0))
-	opMstore(&pc, evmInterpreter, &CallCtx{mem, stack, nil})
+	opMstore(&pc, evmInterpreter, &callCtx{mem, stack, nil})
 	if common.Bytes2Hex(mem.GetCopy(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
 		t.Fatalf("Mstore failed to overwrite previous value")
 	}
@@ -539,7 +539,7 @@ func BenchmarkOpMstore(bench *testing.B) {
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
 		stack.pushN(value, memStart)
-		opMstore(&pc, evmInterpreter, &CallCtx{mem, stack, nil})
+		opMstore(&pc, evmInterpreter, &callCtx{mem, stack, nil})
 	}
 	poolOfIntPools.put(evmInterpreter.intPool)
 }
@@ -560,7 +560,7 @@ func BenchmarkOpSHA3(bench *testing.B) {
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
 		stack.pushN(big.NewInt(32), start)
-		opSha3(&pc, evmInterpreter, &CallCtx{mem, stack, nil})
+		opSha3(&pc, evmInterpreter, &callCtx{mem, stack, nil})
 	}
 	poolOfIntPools.put(evmInterpreter.intPool)
 }
