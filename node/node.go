@@ -158,7 +158,7 @@ func (n *Node) Register(constructor ServiceConstructor) error {
 	return nil
 }
 
-// Start create a live P2P node and starts running it.
+// Start creates a live P2P node and starts running it.
 func (n *Node) Start() error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
@@ -235,7 +235,7 @@ func (n *Node) Start() error {
 		// Mark the service started for potential cleanup
 		started = append(started, kind)
 	}
-	// Lastly start the configured RPC interfaces
+	// Lastly, start the configured RPC interfaces
 	if err := n.startRPC(services); err != nil {
 		for _, service := range services {
 			service.Stop()
@@ -274,7 +274,7 @@ func (n *Node) openDataDir() error {
 	return nil
 }
 
-// startRPC is a helper method to start all the various RPC endpoint during node
+// startRPC is a helper method to start all the various RPC endpoints during node
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
 func (n *Node) startRPC(services map[reflect.Type]Service) error {
