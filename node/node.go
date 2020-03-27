@@ -275,7 +275,7 @@ func (n *Node) openDataDir() error {
 }
 
 // startRPC is a helper method to start all the various RPC endpoints during node
-// startup. It's not meant to be called at any time afterwards, as it makes certain
+// startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
 func (n *Node) startRPC(services map[reflect.Type]Service) error {
 	// Gather all the possible APIs to surface
