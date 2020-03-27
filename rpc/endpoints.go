@@ -103,7 +103,6 @@ func StartWSEndpoint(endpoint string, apis []API, modules []string, wsOrigins []
 	}
 	go NewWSServer(wsOrigins, handler).Serve(listener)
 	return listener, handler, err
-
 }
 
 // StartIPCEndpoint starts an IPC endpoint.
