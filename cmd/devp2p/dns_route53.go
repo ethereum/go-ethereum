@@ -32,9 +32,13 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// The Route53 limits change sets to this size. DNS changes need to be split
-// up into multiple batches to work around the limit.
-const route53ChangeLimit = 30000
+const (
+	// Route53 limits change sets to 32k of 'RDATA size'. Change sets are also limited to
+	// 1000 items. UPSERTs count double.
+	// https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/DNSLimitations.html#limits-api-requests-changeresourcerecordsets
+	route53ChangeSizeLimit  = 32000
+	route53ChangeCountLimit = 1000
+)
 
 var (
 	route53AccessKeyFlag = cli.StringFlag{
@@ -102,7 +106,7 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 	}
 
 	// Submit change batches.
-	batches := splitChanges(changes, route53ChangeLimit)
+	batches := splitChanges(changes, route53ChangeSizeLimit, route53ChangeCountLimit)
 	for i, changes := range batches {
 		log.Info(fmt.Sprintf("Submitting %d changes to Route53", len(changes)))
 		batch := new(route53.ChangeBatch)
@@ -176,7 +180,7 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 			// Entry is unknown, push a new one
 			log.Info(fmt.Sprintf("Creating %s = %q", path, val))
 			changes = append(changes, newTXTChange("CREATE", path, ttl, splitTXT(val)))
-		} else if prevValue != val {
+		} else if prevValue != val || prevRecords.ttl != ttl {
 			// Entry already exists, only change its content.
 			log.Info(fmt.Sprintf("Updating %s from %q to %q", path, prevValue, val))
 			changes = append(changes, newTXTChange("UPSERT", path, ttl, splitTXT(val)))
@@ -212,18 +216,26 @@ func sortChanges(changes []*route53.Change) {
 
 // splitChanges splits up DNS changes such that each change batch
 // is smaller than the given RDATA limit.
-func splitChanges(changes []*route53.Change, limit int) [][]*route53.Change {
-	var batches [][]*route53.Change
-	var batchSize int
+func splitChanges(changes []*route53.Change, sizeLimit, countLimit int) [][]*route53.Change {
+	var (
+		batches    [][]*route53.Change
+		batchSize  int
+		batchCount int
+	)
 	for _, ch := range changes {
 		// Start new batch if this change pushes the current one over the limit.
-		size := changeSize(ch)
-		if len(batches) == 0 || batchSize+size > limit {
+		count := changeCount(ch)
+		size := changeSize(ch) * count
+		overSize := batchSize+size > sizeLimit
+		overCount := batchCount+count > countLimit
+		if len(batches) == 0 || overSize || overCount {
 			batches = append(batches, nil)
 			batchSize = 0
+			batchCount = 0
 		}
 		batches[len(batches)-1] = append(batches[len(batches)-1], ch)
 		batchSize += size
+		batchCount += count
 	}
 	return batches
 }
@@ -237,6 +249,13 @@ func changeSize(ch *route53.Change) int {
 		}
 	}
 	return size
+}
+
+func changeCount(ch *route53.Change) int {
+	if *ch.Action == "UPSERT" {
+		return 2
+	}
+	return 1
 }
 
 // collectRecords collects all TXT records below the given name.

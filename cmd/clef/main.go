@@ -545,12 +545,12 @@ func signer(c *cli.Context) error {
 		if err != nil {
 			utils.Fatalf("Could not start RPC api: %v", err)
 		}
-		extapiURL = fmt.Sprintf("http://%s", httpEndpoint)
+		extapiURL = fmt.Sprintf("http://%v/", listener.Addr())
 		log.Info("HTTP endpoint opened", "url", extapiURL)
 
 		defer func() {
 			listener.Close()
-			log.Info("HTTP endpoint closed", "url", httpEndpoint)
+			log.Info("HTTP endpoint closed", "url", extapiURL)
 		}()
 	}
 	if !c.GlobalBool(utils.IPCDisabledFlag.Name) {

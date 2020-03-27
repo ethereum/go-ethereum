@@ -140,11 +140,23 @@ func TestRoute53ChangeSort(t *testing.T) {
 		t.Fatalf("wrong changes (got %d, want %d)", len(changes), len(wantChanges))
 	}
 
+	// Check splitting according to size.
 	wantSplit := [][]*route53.Change{
 		wantChanges[:4],
-		wantChanges[4:8],
+		wantChanges[4:6],
+		wantChanges[6:],
 	}
-	split := splitChanges(changes, 600)
+	split := splitChanges(changes, 600, 4000)
+	if !reflect.DeepEqual(split, wantSplit) {
+		t.Fatalf("wrong split batches: got %d, want %d", len(split), len(wantSplit))
+	}
+
+	// Check splitting according to count.
+	wantSplit = [][]*route53.Change{
+		wantChanges[:5],
+		wantChanges[5:],
+	}
+	split = splitChanges(changes, 10000, 6)
 	if !reflect.DeepEqual(split, wantSplit) {
 		t.Fatalf("wrong split batches: got %d, want %d", len(split), len(wantSplit))
 	}

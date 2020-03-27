@@ -368,7 +368,9 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 	if err != nil {
 		return err
 	}
-	n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%s", endpoint), "cors", strings.Join(cors, ","), "vhosts", strings.Join(vhosts, ","))
+	n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", listener.Addr()),
+		"cors", strings.Join(cors, ","),
+		"vhosts", strings.Join(vhosts, ","))
 	// All listeners booted successfully
 	n.httpEndpoint = endpoint
 	n.httpListener = listener
@@ -380,10 +382,10 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 // stopHTTP terminates the HTTP RPC endpoint.
 func (n *Node) stopHTTP() {
 	if n.httpListener != nil {
+		url := fmt.Sprintf("http://%v/", n.httpListener.Addr())
 		n.httpListener.Close()
 		n.httpListener = nil
-
-		n.log.Info("HTTP endpoint closed", "url", fmt.Sprintf("http://%s", n.httpEndpoint))
+		n.log.Info("HTTP endpoint closed", "url", url)
 	}
 	if n.httpHandler != nil {
 		n.httpHandler.Stop()

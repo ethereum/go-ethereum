@@ -1740,11 +1740,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Write the block to the chain and get the status.
 		substart = time.Now()
 		status, err := bc.writeBlockWithState(block, receipts, logs, statedb, false)
+		atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
-			atomic.StoreUint32(&followupInterrupt, 1)
 			return it.index, err
 		}
-		atomic.StoreUint32(&followupInterrupt, 1)
 
 		// Update the metrics touched during block commit
 		accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
