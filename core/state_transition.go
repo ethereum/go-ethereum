@@ -219,7 +219,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.BlockNumber)
 	contractCreation := msg.To() == nil
 
-	// Check clauses 4-5, subtract intrinsic if everything is correct
+	// Check clauses 4-5, subtract intrinsic gas if everything is correct
 	gas, err := IntrinsicGas(st.data, contractCreation, homestead, istanbul)
 	if err != nil {
 		return nil, err
@@ -229,7 +229,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	st.gas -= gas
 
-	// Check clauses 6
+	// Check clause 6
 	if msg.Value().Sign() > 0 && !st.evm.CanTransfer(st.state, msg.From(), msg.Value()) {
 		return nil, ErrInsufficientBalanceForTransfer
 	}

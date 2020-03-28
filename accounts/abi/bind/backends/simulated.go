@@ -412,9 +412,9 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 
 		if err != nil {
 			if err == core.ErrInsufficientIntrinsicGas {
-				return true, nil, nil
+				return true, nil, nil // Special case, raise gas limit
 			}
-			return true, nil, err
+			return true, nil, err // Bail out
 		}
 		return res.Failed(), res, nil
 	}
@@ -442,9 +442,17 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 			return 0, err
 		}
 		if failed {
-			if result != nil && len(result.RevertReason) != 0 {
-				return 0, fmt.Errorf("Reverted %x", result.RevertReason)
+			if result != nil {
+				// If the revert reason is provided, return it to user.
+				if result.Err == vm.ErrExecutionReverted {
+					return 0, fmt.Errorf("transaction reverted (0x%x)", result.RevertReason)
+				}
+				// If it's an invalid transaction, return the concrete vm error
+				if result.Err != vm.ErrOutOfGas {
+					return 0, fmt.Errorf("always failing transaction (%v)", result.Err)
+				}
 			}
+			// Otherwise, the specified gas cap is too low
 			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
 		}
 	}

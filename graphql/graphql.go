@@ -815,7 +815,7 @@ func (b *Block) Call(ctx context.Context, args struct {
 		data:    result.Result,
 		gasUsed: hexutil.Uint64(result.UsedGas),
 		status:  status,
-	}, err
+	}, nil
 }
 
 func (b *Block) EstimateGas(ctx context.Context, args struct {
@@ -884,7 +884,7 @@ func (p *Pending) Call(ctx context.Context, args struct {
 		data:    result.Result,
 		gasUsed: hexutil.Uint64(result.UsedGas),
 		status:  status,
-	}, err
+	}, nil
 }
 
 func (p *Pending) EstimateGas(ctx context.Context, args struct {
