@@ -443,13 +443,12 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 		}
 		if failed {
 			if result != nil {
-				// If the revert reason is provided, return it to user.
-				if result.Err == vm.ErrExecutionReverted {
-					return 0, fmt.Errorf("transaction reverted (0x%x)", result.RevertReason)
-				}
-				// If it's an invalid transaction, return the concrete vm error
 				if result.Err != vm.ErrOutOfGas {
-					return 0, fmt.Errorf("always failing transaction (%v)", result.Err)
+					errMsg := fmt.Sprintf("always failing transaction (%v)", result.Err)
+					if len(result.RevertReason) > 0 {
+						errMsg += fmt.Sprintf(" (0x%x)", result.RevertReason)
+					}
+					return 0, errors.New(errMsg)
 				}
 			}
 			// Otherwise, the specified gas cap is too low
