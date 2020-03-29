@@ -2,8 +2,17 @@ language: go
 go_import_path: github.com/ethereum/go-ethereum
 sudo: false
 jobs:
+  allow_failures:
+    - stage: build
+      os: osx
+      go: 1.13.x
+      env:
+        - azure-osx
+        - azure-ios
+        - cocoapods-ios
+
   include:
-        # This builder only tests code linters on latest version of Go
+    # This builder only tests code linters on latest version of Go
     - stage: lint
       os: linux
       dist: xenial
