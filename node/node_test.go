@@ -633,7 +633,7 @@ func TestWebsocketHTTPOnSamePort_HTTPRequest(t *testing.T) {
 	go doHTTPRequest(httpResponses, httpReq, t)
 	httpResponse := <-httpResponses
 
-	assert.Equal(t,"gzip", httpResponse.Header.Get("Content-Encoding"))
+	assert.Equal(t, "gzip", httpResponse.Header.Get("Content-Encoding"))
 }
 
 func startHTTP(t *testing.T) {

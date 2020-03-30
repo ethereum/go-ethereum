@@ -33,6 +33,6 @@ func TestNewWebsocketUpgradeHandler_websocket(t *testing.T) {
 		responses <- resp
 	}(responses)
 
-	response := <- responses
-	assert.Equal(t,"websocket", response.Header.Get("Upgrade"))
+	response := <-responses
+	assert.Equal(t, "websocket", response.Header.Get("Upgrade"))
 }
