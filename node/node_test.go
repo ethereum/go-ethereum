@@ -19,6 +19,7 @@ package node
 import (
 	"errors"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"reflect"
 	"testing"
@@ -27,6 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -596,4 +599,62 @@ func TestAPIGather(t *testing.T) {
 			t.Fatalf("test %d: rpc execution timeout", i)
 		}
 	}
+}
+
+func TestWebsocketHTTPOnSamePort_WebsocketRequest(t *testing.T) {
+	startHTTP(t)
+
+	wsReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:4343", nil)
+	if err != nil {
+		t.Error("could not issue new http request ", err)
+	}
+	wsReq.Header.Set("Connection", "upgrade")
+	wsReq.Header.Set("Upgrade", "websocket")
+	wsReq.Header.Set("Sec-WebSocket-Version", "13")
+	wsReq.Header.Set("Sec-Websocket-Key", "SGVsbG8sIHdvcmxkIQ==")
+
+	wsResponses := make(chan *http.Response)
+	go doHTTPRequest(wsResponses, wsReq, t)
+	wsResponse := <-wsResponses
+
+	assert.Equal(t, "websocket", wsResponse.Header.Get("Upgrade"))
+}
+
+func TestWebsocketHTTPOnSamePort_HTTPRequest(t *testing.T) {
+	startHTTP(t)
+
+	httpReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:4343", nil)
+	if err != nil {
+		t.Error("could not issue new http request ", err)
+	}
+	httpReq.Header.Set("Accept-Encoding", "gzip")
+
+	httpResponses := make(chan *http.Response)
+	go doHTTPRequest(httpResponses, httpReq, t)
+	httpResponse := <-httpResponses
+
+	assert.Equal(t,"gzip", httpResponse.Header.Get("Content-Encoding"))
+}
+
+func startHTTP(t *testing.T) {
+	conf := &Config{HTTPPort: 4343, WSPort: 4343}
+	node, err := New(conf)
+	if err != nil {
+		t.Error("could not create a new node ", err)
+	}
+
+	err = node.startHTTP("127.0.0.1:4343", []rpc.API{}, []string{}, []string{}, []string{}, rpc.HTTPTimeouts{}, []string{})
+	if err != nil {
+		t.Error("could not start http service on node ", err)
+	}
+}
+
+func doHTTPRequest(responses chan *http.Response, req *http.Request, t *testing.T) {
+	client := &http.Client{}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Error("could not issue a GET request to the given endpoint", err)
+	}
+	responses <- resp
 }
