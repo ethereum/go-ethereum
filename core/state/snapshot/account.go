@@ -52,30 +52,3 @@ func AccountRLP(nonce uint64, balance *big.Int, root common.Hash, codehash []byt
 	}
 	return data
 }
-
-// conversionAccount is used for converting between full and slim format. When
-// doing this, we can consider 'balance' as a byte array, as it has already
-// been converted from big.Int into an rlp-byteslice.
-type conversionAccount struct {
-	Nonce    uint64
-	Balance  []byte
-	Root     []byte
-	CodeHash []byte
-}
-
-// SlimToFull converts data on the 'slim RLP' format into the full RLP-format
-func SlimToFull(data []byte) []byte {
-	acc := &conversionAccount{}
-	rlp.DecodeBytes(data, acc)
-	if len(acc.Root) == 0 {
-		acc.Root = emptyRoot[:]
-	}
-	if len(acc.CodeHash) == 0 {
-		acc.CodeHash = emptyCode[:]
-	}
-	fullData, err := rlp.EncodeToBytes(acc)
-	if err != nil {
-		panic(err)
-	}
-	return fullData
-}

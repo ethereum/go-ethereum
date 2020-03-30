@@ -23,24 +23,55 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-type leaf struct {
+// conversionAccount is used for converting between full and slim format. When
+// doing this, we can consider 'balance' as a byte array, as it has already
+// been converted from big.Int into an rlp-byteslice.
+type conversionAccount struct {
+	Nonce    uint64
+	Balance  []byte
+	Root     []byte
+	CodeHash []byte
+}
+
+// SlimToFull converts data on the 'slim RLP' format into the full RLP-format
+func SlimToFull(data []byte) ([]byte, error) {
+	acc := &conversionAccount{}
+	if err := rlp.DecodeBytes(data, acc); err != nil {
+		return nil, err
+	}
+	if len(acc.Root) == 0 {
+		acc.Root = emptyRoot[:]
+	}
+	if len(acc.CodeHash) == 0 {
+		acc.CodeHash = emptyCode[:]
+	}
+	fullData, err := rlp.EncodeToBytes(acc)
+	if err != nil {
+		return nil, err
+	}
+	return fullData, nil
+}
+
+// trieKV represents a trie key-value pair
+type trieKV struct {
 	key   common.Hash
 	value []byte
 }
 
-type trieGeneratorFn func(in chan (leaf), out chan (common.Hash))
+type trieGeneratorFn func(in chan (trieKV), out chan (common.Hash))
 
 // GenerateTrieRoot takes an account iterator and reproduces the root hash.
 func GenerateTrieRoot(it AccountIterator) common.Hash {
-	return generateTrieRoot(it, StdGenerate)
+	return generateTrieRoot(it, stdGenerate)
 }
 
 func generateTrieRoot(it AccountIterator, generatorFn trieGeneratorFn) common.Hash {
 	var (
-		in  = make(chan leaf)        // chan to pass leaves
+		in  = make(chan trieKV)      // chan to pass leaves
 		out = make(chan common.Hash) // chan to collect result
 		wg  sync.WaitGroup
 	)
@@ -55,9 +86,8 @@ func generateTrieRoot(it AccountIterator, generatorFn trieGeneratorFn) common.Ha
 	accounts := 0
 	for it.Next() {
 		slimData := it.Account()
-
-		fullData := SlimToFull(slimData)
-		l := leaf{it.Hash(), fullData}
+		fullData, _ := SlimToFull(slimData)
+		l := trieKV{it.Hash(), fullData}
 		in <- l
 		if time.Since(logged) > 8*time.Second {
 			log.Info("Generating trie hash from snapshot",
@@ -73,9 +103,9 @@ func generateTrieRoot(it AccountIterator, generatorFn trieGeneratorFn) common.Ha
 	return result
 }
 
-// StdGenerate is a very basic hexary trie builder which uses the same Trie
+// stdGenerate is a very basic hexary trie builder which uses the same Trie
 // as the rest of geth, with no enhancements or optimizations
-func StdGenerate(in chan (leaf), out chan (common.Hash)) {
+func stdGenerate(in chan (trieKV), out chan (common.Hash)) {
 	t, _ := trie.New(common.Hash{}, trie.NewDatabase(memorydb.New()))
 	for leaf := range in {
 		t.TryUpdate(leaf.key[:], leaf.value)
