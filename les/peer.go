@@ -531,8 +531,6 @@ func (p *serverPeer) getTxRelayCost(amount, size int) uint64 {
 // HasBlock checks if the peer has a given block
 func (p *serverPeer) HasBlock(hash common.Hash, number uint64, hasState bool) bool {
 	p.lock.RLock()
-	defer p.lock.RUnlock()
-
 	head := p.headInfo.Number
 	var since, recent uint64
 	if hasState {
@@ -543,6 +541,7 @@ func (p *serverPeer) HasBlock(hash common.Hash, number uint64, hasState bool) bo
 		recent = p.chainRecent
 	}
 	hasBlock := p.hasBlock
+	p.lock.RUnlock()
 
 	return head >= number && number >= since && (recent == 0 || number+recent+4 > head) && hasBlock != nil && hasBlock(hash, number, hasState)
 }
