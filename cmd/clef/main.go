@@ -541,7 +541,7 @@ func signer(c *cli.Context) error {
 
 		srv := rpc.NewServer()
 
-		err := node.RegisterApisFromWhitelist(rpcAPI, []string{"account"}, srv)
+		err := node.RegisterApisFromWhitelist(rpcAPI, []string{"account"}, srv, false)
 		if err != nil {
 			utils.Fatalf("Could not register API: %w", err) // TODO should this be a fatal failure?
 		}
