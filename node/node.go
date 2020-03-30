@@ -425,6 +425,9 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrig
 	handler := srv.WebsocketHandler(wsOrigins)
 
 	err := RegisterApisFromWhitelist(apis, modules, srv, exposeAll)
+	if err != nil {
+		return err // TODO this should return upon failure, right?
+	}
 
 	listener, err := rpc.StartWSEndpoint(endpoint, handler)
 	if err != nil {
