@@ -52,9 +52,9 @@ func newCorsHandler(srv http.Handler, allowedOrigins []string) http.Handler {
 }
 
 // virtualHostHandler is a handler which validates the Host-header of incoming requests.
-// The virtualHostHandler can prevent DNS rebinding attacks, which do not utilize CORS-headers,
-// since they do in-domain requests against the RPC api. Instead, we can see on the Host-header
-// which domain was used, and validate that against a whitelist.
+// Using virtual hosts can help prevent DNS rebinding attacks, where a 'random' domain name points to
+// the service ip address (but without CORS headers). By verifying the targeted virtual host, we can
+// ensure that it's a destination that the node operator has defined.
 type virtualHostHandler struct {
 	vhosts map[string]struct{}
 	next   http.Handler

@@ -892,7 +892,7 @@ func retesteth(ctx *cli.Context) error {
 
 	err := node.RegisterApisFromWhitelist(rpcAPI, []string{"test", "eth", "debug", "web3"}, srv, false)
 	if err != nil {
-		utils.Fatalf("Could not register RPC apis: %w", err) // TODO should this be a fatal error?
+		utils.Fatalf("Could not register RPC apis: %w", err)
 	}
 
 	handler := node.NewHTTPHandlerStack(srv, cors, vhosts)

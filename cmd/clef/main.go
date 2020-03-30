@@ -543,7 +543,7 @@ func signer(c *cli.Context) error {
 
 		err := node.RegisterApisFromWhitelist(rpcAPI, []string{"account"}, srv, false)
 		if err != nil {
-			utils.Fatalf("Could not register API: %w", err) // TODO should this be a fatal failure?
+			utils.Fatalf("Could not register API: %w", err)
 		}
 
 		handler := node.NewHTTPHandlerStack(srv, cors, vhosts)
