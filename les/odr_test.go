@@ -136,7 +136,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 				//vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(math.MaxUint64)
 				result, _ := core.ApplyMessage(vmenv, msg, gp)
-				res = append(res, result.Result...)
+				res = append(res, result.Return()...)
 			}
 		} else {
 			header := lc.GetHeaderByHash(bhash)
@@ -148,7 +148,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			gp := new(core.GasPool).AddGas(math.MaxUint64)
 			result, _ := core.ApplyMessage(vmenv, msg, gp)
 			if state.Error() == nil {
-				res = append(res, result.Result...)
+				res = append(res, result.Return()...)
 			}
 		}
 	}

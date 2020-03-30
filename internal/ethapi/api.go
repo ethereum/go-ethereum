@@ -879,7 +879,7 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 	if err != nil {
 		return nil, err
 	}
-	return result.Result, nil
+	return result.Return(), nil
 }
 
 func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap *big.Int) (hexutil.Uint64, error) {
@@ -915,7 +915,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 
 		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, vm.Config{}, 0, gasCap)
 		if err != nil {
-			if err == core.ErrInsufficientIntrinsicGas {
+			if err == core.ErrIntrinsicGas {
 				return true, nil, nil // Special case, raise gas limit
 			}
 			return true, nil, err // Bail out
@@ -928,8 +928,8 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 		failed, _, err := executable(mid)
 
 		// If the error is not nil(consensus error), it means the provided message
-		// call or transaction will never be accpeted no matter how many gas assigened.
-		// Return the error directly, don't struggle any more
+		// call or transaction will never be accepted no matter how much gas it is
+		// assigened. Return the error directly, don't struggle any more.
 		if err != nil {
 			return 0, err
 		}
@@ -949,8 +949,8 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 			if result != nil {
 				if result.Err != vm.ErrOutOfGas {
 					errMsg := fmt.Sprintf("always failing transaction (%v)", result.Err)
-					if len(result.RevertReason) > 0 {
-						errMsg += fmt.Sprintf(" (0x%x)", result.RevertReason)
+					if len(result.Revert()) > 0 {
+						errMsg += fmt.Sprintf(" (0x%x)", result.Revert())
 					}
 					return 0, errors.New(errMsg)
 				}

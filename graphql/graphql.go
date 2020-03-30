@@ -812,7 +812,7 @@ func (b *Block) Call(ctx context.Context, args struct {
 		status = 0
 	}
 	return &CallResult{
-		data:    result.Result,
+		data:    result.Return(),
 		gasUsed: hexutil.Uint64(result.UsedGas),
 		status:  status,
 	}, nil
@@ -881,7 +881,7 @@ func (p *Pending) Call(ctx context.Context, args struct {
 		status = 0
 	}
 	return &CallResult{
-		data:    result.Result,
+		data:    result.Return(),
 		gasUsed: hexutil.Uint64(result.UsedGas),
 		status:  status,
 	}, nil

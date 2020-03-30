@@ -768,7 +768,7 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 		return &ethapi.ExecutionResult{
 			Gas:         result.UsedGas,
 			Failed:      result.Failed(),
-			ReturnValue: fmt.Sprintf("%x", result.Result),
+			ReturnValue: fmt.Sprintf("%x", result.Return()),
 			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
 		}, nil
 

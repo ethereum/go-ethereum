@@ -68,13 +68,12 @@ type Message interface {
 	Data() []byte
 }
 
-// ExecutionResult includes all output after executing given evm message
-// no matter the execution itself is successful or not.
+// ExecutionResult includes all output after executing given evm
+// message no matter the execution itself is successful or not.
 type ExecutionResult struct {
-	UsedGas      uint64 // Total used gas but include the refunded gas
-	Err          error  // Any error encountered during the exection(listed in core/vm/errors.go)
-	Result       []byte // Returned value of the calling function
-	RevertReason []byte // Reason to perform revert thrown by solidity code
+	UsedGas    uint64 // Total used gas but include the refunded gas
+	Err        error  // Any error encountered during the exection(listed in core/vm/errors.go)
+	ReturnData []byte // Returned data from evm(function result or data supplied with revert opcode)
 }
 
 // Unwrap returns the internal evm error which allows us for further
@@ -85,6 +84,24 @@ func (result *ExecutionResult) Unwrap() error {
 
 // Failed returns the indicator whether the execution is successful or not
 func (result *ExecutionResult) Failed() bool { return result.Err != nil }
+
+// Return is a helper function to help caller distinguish between revert reason
+// and function return. Return returns the data after execution if no error occurs.
+func (result *ExecutionResult) Return() []byte {
+	if result.Err != nil {
+		return nil
+	}
+	return common.CopyBytes(result.ReturnData)
+}
+
+// Revert returns the concrete revert reason if the execution is aborted by `REVERT`
+// opcode. Note the reason can be nil if no data supplied with revert opcode.
+func (result *ExecutionResult) Revert() []byte {
+	if result.Err != vm.ErrExecutionReverted {
+		return nil
+	}
+	return common.CopyBytes(result.ReturnData)
+}
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
 func IntrinsicGas(data []byte, contractCreation, isHomestead bool, isEIP2028 bool) (uint64, error) {
@@ -110,13 +127,13 @@ func IntrinsicGas(data []byte, contractCreation, isHomestead bool, isEIP2028 boo
 			nonZeroGas = params.TxDataNonZeroGasEIP2028
 		}
 		if (math.MaxUint64-gas)/nonZeroGas < nz {
-			return 0, ErrGasOverflow
+			return 0, ErrGasUintOverflow
 		}
 		gas += nz * nonZeroGas
 
 		z := uint64(len(data)) - nz
 		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
-			return 0, ErrGasOverflow
+			return 0, ErrGasUintOverflow
 		}
 		gas += z * params.TxDataZeroGas
 	}
@@ -158,7 +175,7 @@ func (st *StateTransition) to() common.Address {
 func (st *StateTransition) buyGas() error {
 	mgval := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.gasPrice)
 	if st.state.GetBalance(st.msg.From()).Cmp(mgval) < 0 {
-		return ErrInsufficientBalanceForFee
+		return ErrInsufficientFunds
 	}
 	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
 		return err
@@ -188,10 +205,8 @@ func (st *StateTransition) preCheck() error {
 //
 // - used gas:
 //      total gas used (including gas being refunded)
-// - execution result:
-//      the return value of the calling function
-// - revert reason:
-//      reason to perform revert thrown by solidity code
+// - returndata:
+//      the returned data from evm
 // - concrete execution error:
 //      various **EVM** error which aborts the execution,
 //      e.g. ErrOutOfGas, ErrExecutionReverted
@@ -225,13 +240,13 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, err
 	}
 	if st.gas < gas {
-		return nil, ErrInsufficientIntrinsicGas
+		return nil, ErrIntrinsicGas
 	}
 	st.gas -= gas
 
 	// Check clause 6
 	if msg.Value().Sign() > 0 && !st.evm.CanTransfer(st.state, msg.From(), msg.Value()) {
-		return nil, ErrInsufficientBalanceForTransfer
+		return nil, ErrInsufficientFundsForTransfer
 	}
 	var (
 		ret   []byte
@@ -247,17 +262,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	st.refundGas()
 	st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
 
-	var revert, result []byte
-	if vmerr == vm.ErrExecutionReverted {
-		revert = ret // Revert reason will be returned in ret iif the vmerr is ErrExecutionReverted
-	} else {
-		result = ret // Otherwise the ret represents the execution result, may nil
-	}
 	return &ExecutionResult{
-		UsedGas:      st.gasUsed(),
-		Err:          vmerr,
-		Result:       result,
-		RevertReason: revert,
+		UsedGas:    st.gasUsed(),
+		Err:        vmerr,
+		ReturnData: ret,
 	}, nil
 }
 

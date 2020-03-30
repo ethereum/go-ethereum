@@ -29,8 +29,13 @@ var (
 	ErrNoGenesis = errors.New("genesis not found in chain")
 )
 
-// State transition consensus errors, any of them encountered during
-// the block processing can lead to consensus issue.
+// List of evm-call-message pre-checking errors. All state transtion messages will
+// be pre-checked before execution. If any invalidation detected, the corresponding
+// error should be returned which is defined here.
+//
+// - If the pre-checking happens in the miner, then the transaction won't be packed.
+// - If the pre-checking happens in the block processing procedure, then a "BAD BLOCk"
+// error should be emitted.
 var (
 	// ErrNonceTooLow is returned if the nonce of a transaction is lower than the
 	// one present in the local chain.
@@ -44,18 +49,18 @@ var (
 	// by a transaction is higher than what's left in the block.
 	ErrGasLimitReached = errors.New("gas limit reached")
 
-	// ErrInsufficientBalanceForTransfer is returned if the transaction sender doesn't
-	// have enough balance for transfer(topmost call only).
-	ErrInsufficientBalanceForTransfer = errors.New("insufficient balance for transfer")
+	// ErrInsufficientFundsForTransfer is returned if the transaction sender doesn't
+	// have enough funds for transfer(topmost call only).
+	ErrInsufficientFundsForTransfer = errors.New("insufficient funds for transfer")
 
-	// ErrInsufficientBalanceForFee is returned if transaction sender doesn't have
-	// enough balance to cover transaction fee.
-	ErrInsufficientBalanceForFee = errors.New("insufficient balance to pay fee")
+	// ErrInsufficientFunds is returned if the total cost of executing a transaction
+	// is higher than the balance of the user's account.
+	ErrInsufficientFunds = errors.New("insufficient funds for gas * price + value")
 
-	// ErrGasOverflow is returned when calculating gas usage.
-	ErrGasOverflow = errors.New("gas overflow")
+	// ErrGasUintOverflow is returned when calculating gas usage.
+	ErrGasUintOverflow = errors.New("gas uint64 overflow")
 
-	// ErrInsufficientIntrinsicGas is returned when the gas limit speicified in transaction
-	// is not enought to cover intrinsic gas usage.
-	ErrInsufficientIntrinsicGas = errors.New("insufficient intrinsic gas")
+	// ErrIntrinsicGas is returned if the transaction is specified to use less gas
+	// than required to start the invocation.
+	ErrIntrinsicGas = errors.New("intrinsic gas too low")
 )

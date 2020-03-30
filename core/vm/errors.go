@@ -50,17 +50,17 @@ func (e *ErrStackUnderflow) Error() string {
 // ErrStackOverflow wraps an evm error when the items on the stack exceeds
 // the maximum allowance.
 type ErrStackOverflow struct {
-	stackLen  int
-	allowance int
+	stackLen int
+	limit    int
 }
 
 func (e *ErrStackOverflow) Error() string {
-	return fmt.Sprintf("stack limit reached %d (%d)", e.stackLen, e.allowance)
+	return fmt.Sprintf("stack limit reached %d (%d)", e.stackLen, e.limit)
 }
 
 // ErrInvalidOpCode wraps an evm error when an invalid opcode is encountered.
 type ErrInvalidOpCode struct {
-	opcode int
+	opcode OpCode
 }
 
-func (e *ErrInvalidOpCode) Error() string { return fmt.Sprintf("invalid opcode 0x%x", e.opcode) }
+func (e *ErrInvalidOpCode) Error() string { return fmt.Sprintf("invalid opcode 0x%x", byte(e.opcode)) }
