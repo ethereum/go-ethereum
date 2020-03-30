@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/graph-gophers/graphql-go"
@@ -60,17 +62,43 @@ func (s *Service) APIs() []rpc.API { return nil }
 // Start is called after all services have been constructed and the networking
 // layer was also initialized to spawn any goroutines required by the service.
 func (s *Service) Start(server *p2p.Server) error {
-	//var err error
-	//s.handler, err = newHandler(s.backend)
-	//if err != nil {
-	//	return err
-	//}
-	//if s.listener, err = net.Listen("tcp", s.endpoint); err != nil {
-	//	return err
-	//}
-	//go rpc.NewHTTPServer(s.cors, s.vhosts, s.timeouts, s.handler, []string{}).Serve(s.listener)
-	//log.Info("GraphQL endpoint opened", "url", fmt.Sprintf("http://%s", s.endpoint))
+	var err error
+	s.handler, err = newHandler(s.backend)
+	if err != nil {
+		return err
+	}
+	if s.listener, err = net.Listen("tcp", s.endpoint); err != nil {
+		return err
+	}
+	// create handler stack and wrap the graphql handler
+	handler := node.NewHTTPHandlerStack(s.handler, s.cors, s.vhosts)
+	// make sure timeout values are meaningful
+	registerTimeouts(&s.timeouts)
+	// create http server
+	httpSrv := &http.Server{
+		Handler:      handler,
+		ReadTimeout:  s.timeouts.ReadTimeout,
+		WriteTimeout: s.timeouts.WriteTimeout,
+		IdleTimeout:  s.timeouts.IdleTimeout,
+	}
+	go httpSrv.Serve(s.listener)
+	log.Info("GraphQL endpoint opened", "url", fmt.Sprintf("http://%s", s.endpoint))
 	return nil
+}
+
+func registerTimeouts(timeouts *rpc.HTTPTimeouts){
+	if timeouts.ReadTimeout < time.Second {
+		log.Warn("Sanitizing invalid HTTP read timeout", "provided", timeouts.ReadTimeout, "updated", rpc.DefaultHTTPTimeouts.ReadTimeout)
+		timeouts.ReadTimeout = rpc.DefaultHTTPTimeouts.ReadTimeout
+	}
+	if timeouts.WriteTimeout < time.Second {
+		log.Warn("Sanitizing invalid HTTP write timeout", "provided", timeouts.WriteTimeout, "updated", rpc.DefaultHTTPTimeouts.WriteTimeout)
+		timeouts.WriteTimeout = rpc.DefaultHTTPTimeouts.WriteTimeout
+	}
+	if timeouts.IdleTimeout < time.Second {
+		log.Warn("Sanitizing invalid HTTP idle timeout", "provided", timeouts.IdleTimeout, "updated", rpc.DefaultHTTPTimeouts.IdleTimeout)
+		timeouts.IdleTimeout = rpc.DefaultHTTPTimeouts.IdleTimeout
+	}
 }
 
 // newHandler returns a new `http.Handler` that will answer GraphQL queries.
