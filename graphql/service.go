@@ -86,7 +86,7 @@ func (s *Service) Start(server *p2p.Server) error {
 	return nil
 }
 
-func registerTimeouts(timeouts *rpc.HTTPTimeouts){
+func registerTimeouts(timeouts *rpc.HTTPTimeouts) {
 	if timeouts.ReadTimeout < time.Second {
 		log.Warn("Sanitizing invalid HTTP read timeout", "provided", timeouts.ReadTimeout, "updated", rpc.DefaultHTTPTimeouts.ReadTimeout)
 		timeouts.ReadTimeout = rpc.DefaultHTTPTimeouts.ReadTimeout

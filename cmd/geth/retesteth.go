@@ -890,13 +890,12 @@ func retesteth(ctx *cli.Context) error {
 
 	srv := rpc.NewServer()
 
-	err := node.RegisterApisFromWhitelist(rpcAPI, []string{"test", "eth", "debug", "web3"}, srv)
+	err := node.RegisterApisFromWhitelist(rpcAPI, []string{"test", "eth", "debug", "web3"}, srv, false)
 	if err != nil {
 		utils.Fatalf("Could not register RPC apis: %w", err) // TODO should this be a fatal error?
 	}
 
 	handler := node.NewHTTPHandlerStack(srv, cors, vhosts)
-	handler = node.NewWebsocketUpgradeHandler(handler, nil)
 
 	// start http server
 	var RetestethHTTPTimeouts = rpc.HTTPTimeouts{

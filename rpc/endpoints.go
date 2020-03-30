@@ -45,7 +45,7 @@ func CheckModuleAvailability(modules []string, apis []API) (bad, available []str
 
 // StartHTTPEndpoint starts the HTTP RPC endpoint, configured with cors/vhosts/modules.
 func StartHTTPEndpoint(endpoint string, timeouts HTTPTimeouts, handler http.Handler) (net.Listener, error) {
-	// Start the HTTP listener
+	// start the HTTP listener
 	var (
 		listener net.Listener
 		err      error
@@ -53,19 +53,8 @@ func StartHTTPEndpoint(endpoint string, timeouts HTTPTimeouts, handler http.Hand
 	if listener, err = net.Listen("tcp", endpoint); err != nil {
 		return nil, err
 	}
-	// Make sure timeout values are meaningful
-	if timeouts.ReadTimeout < time.Second {
-		log.Warn("Sanitizing invalid HTTP read timeout", "provided", timeouts.ReadTimeout, "updated", DefaultHTTPTimeouts.ReadTimeout)
-		timeouts.ReadTimeout = DefaultHTTPTimeouts.ReadTimeout
-	}
-	if timeouts.WriteTimeout < time.Second {
-		log.Warn("Sanitizing invalid HTTP write timeout", "provided", timeouts.WriteTimeout, "updated", DefaultHTTPTimeouts.WriteTimeout)
-		timeouts.WriteTimeout = DefaultHTTPTimeouts.WriteTimeout
-	}
-	if timeouts.IdleTimeout < time.Second {
-		log.Warn("Sanitizing invalid HTTP idle timeout", "provided", timeouts.IdleTimeout, "updated", DefaultHTTPTimeouts.IdleTimeout)
-		timeouts.IdleTimeout = DefaultHTTPTimeouts.IdleTimeout
-	}
+
+	CheckTimeouts(&timeouts)
 	// Bundle and start the HTTP server
 	httpSrv := &http.Server{
 		Handler:      handler,
@@ -78,35 +67,18 @@ func StartHTTPEndpoint(endpoint string, timeouts HTTPTimeouts, handler http.Hand
 }
 
 // StartWSEndpoint starts a websocket endpoint.
-func StartWSEndpoint(endpoint string, apis []API, modules []string, wsOrigins []string, exposeAll bool) (net.Listener, *Server, error) {
-	if bad, available := CheckModuleAvailability(modules, apis); len(bad) > 0 {
-		log.Error("Unavailable modules in WS API list", "unavailable", bad, "available", available)
-	}
-	// Generate the whitelist based on the allowed modules
-	whitelist := make(map[string]bool)
-	for _, module := range modules {
-		whitelist[module] = true
-	}
-	// Register all the APIs exposed by the services
-	handler := NewServer()
-	for _, api := range apis {
-		if exposeAll || whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
-			if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
-				return nil, nil, err
-			}
-			log.Debug("WebSocket registered", "service", api.Service, "namespace", api.Namespace)
-		}
-	}
-	// All APIs registered, start the HTTP listener
+func StartWSEndpoint(endpoint string, handler http.Handler) (net.Listener, error) {
+	// start the HTTP listener
 	var (
 		listener net.Listener
 		err      error
 	)
 	if listener, err = net.Listen("tcp", endpoint); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	go NewWSServer(wsOrigins, handler).Serve(listener)
-	return listener, handler, err
+	wsSrv := &http.Server{Handler: handler}
+	go wsSrv.Serve(listener)
+	return listener, err
 }
 
 // StartIPCEndpoint starts an IPC endpoint.
@@ -126,4 +98,20 @@ func StartIPCEndpoint(ipcEndpoint string, apis []API) (net.Listener, *Server, er
 	}
 	go handler.ServeListener(listener)
 	return listener, handler, nil
+}
+
+// CheckTimeouts ensures that timeout values are meaningful
+func CheckTimeouts(timeouts *HTTPTimeouts) {
+	if timeouts.ReadTimeout < time.Second {
+		log.Warn("Sanitizing invalid HTTP read timeout", "provided", timeouts.ReadTimeout, "updated", DefaultHTTPTimeouts.ReadTimeout)
+		timeouts.ReadTimeout = DefaultHTTPTimeouts.ReadTimeout
+	}
+	if timeouts.WriteTimeout < time.Second {
+		log.Warn("Sanitizing invalid HTTP write timeout", "provided", timeouts.WriteTimeout, "updated", DefaultHTTPTimeouts.WriteTimeout)
+		timeouts.WriteTimeout = DefaultHTTPTimeouts.WriteTimeout
+	}
+	if timeouts.IdleTimeout < time.Second {
+		log.Warn("Sanitizing invalid HTTP idle timeout", "provided", timeouts.IdleTimeout, "updated", DefaultHTTPTimeouts.IdleTimeout)
+		timeouts.IdleTimeout = DefaultHTTPTimeouts.IdleTimeout
+	}
 }

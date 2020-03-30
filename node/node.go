@@ -371,7 +371,7 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 
 	srv := rpc.NewServer()
 
-	err := RegisterApisFromWhitelist(apis, modules, srv)
+	err := RegisterApisFromWhitelist(apis, modules, srv, false)
 	if err != nil {
 		return err // TODO this should return upon failure, right?
 	}
@@ -420,7 +420,13 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrig
 	if endpoint == "" {
 		return nil
 	}
-	listener, handler, err := rpc.StartWSEndpoint(endpoint, apis, modules, wsOrigins, exposeAll)
+
+	srv := rpc.NewServer()
+	handler := srv.WebsocketHandler(wsOrigins)
+
+	err := RegisterApisFromWhitelist(apis, modules, srv, exposeAll)
+
+	listener, err := rpc.StartWSEndpoint(endpoint, handler)
 	if err != nil {
 		return err
 	}
@@ -428,7 +434,7 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrig
 	// All listeners booted successfully
 	n.wsEndpoint = endpoint
 	n.wsListener = listener
-	n.wsHandler = handler
+	n.wsHandler = srv
 
 	return nil
 }
@@ -688,7 +694,7 @@ func (n *Node) apis() []rpc.API {
 
 // RegisterApisFromWhitelist checks the given modules' availability, generates a whitelist based on the allowed modules,
 // and then registers all of the APIs exposed by the services.
-func RegisterApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server) error {
+func RegisterApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server, exposeAll bool) error {
 	if bad, available := rpc.CheckModuleAvailability(modules, apis); len(bad) > 0 {
 		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)
 	}
@@ -699,7 +705,7 @@ func RegisterApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server
 	}
 	// Register all the APIs exposed by the services
 	for _, api := range apis {
-		if whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
+		if exposeAll || whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
 			if err := srv.RegisterName(api.Namespace, api.Service); err != nil {
 				return err
 			}
