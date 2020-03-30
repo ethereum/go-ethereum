@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"time"
 
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
@@ -73,7 +72,7 @@ func (s *Service) Start(server *p2p.Server) error {
 	// create handler stack and wrap the graphql handler
 	handler := node.NewHTTPHandlerStack(s.handler, s.cors, s.vhosts)
 	// make sure timeout values are meaningful
-	registerTimeouts(&s.timeouts)
+	rpc.CheckTimeouts(&s.timeouts)
 	// create http server
 	httpSrv := &http.Server{
 		Handler:      handler,
@@ -84,21 +83,6 @@ func (s *Service) Start(server *p2p.Server) error {
 	go httpSrv.Serve(s.listener)
 	log.Info("GraphQL endpoint opened", "url", fmt.Sprintf("http://%s", s.endpoint))
 	return nil
-}
-
-func registerTimeouts(timeouts *rpc.HTTPTimeouts) {
-	if timeouts.ReadTimeout < time.Second {
-		log.Warn("Sanitizing invalid HTTP read timeout", "provided", timeouts.ReadTimeout, "updated", rpc.DefaultHTTPTimeouts.ReadTimeout)
-		timeouts.ReadTimeout = rpc.DefaultHTTPTimeouts.ReadTimeout
-	}
-	if timeouts.WriteTimeout < time.Second {
-		log.Warn("Sanitizing invalid HTTP write timeout", "provided", timeouts.WriteTimeout, "updated", rpc.DefaultHTTPTimeouts.WriteTimeout)
-		timeouts.WriteTimeout = rpc.DefaultHTTPTimeouts.WriteTimeout
-	}
-	if timeouts.IdleTimeout < time.Second {
-		log.Warn("Sanitizing invalid HTTP idle timeout", "provided", timeouts.IdleTimeout, "updated", rpc.DefaultHTTPTimeouts.IdleTimeout)
-		timeouts.IdleTimeout = rpc.DefaultHTTPTimeouts.IdleTimeout
-	}
 }
 
 // newHandler returns a new `http.Handler` that will answer GraphQL queries.

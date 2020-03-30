@@ -896,7 +896,6 @@ func retesteth(ctx *cli.Context) error {
 	}
 
 	handler := node.NewHTTPHandlerStack(srv, cors, vhosts)
-
 	// start http server
 	var RetestethHTTPTimeouts = rpc.HTTPTimeouts{
 		ReadTimeout:  120 * time.Second,
