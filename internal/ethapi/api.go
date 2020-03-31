@@ -946,14 +946,12 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 			return 0, err
 		}
 		if failed {
-			if result != nil {
-				if result.Err != vm.ErrOutOfGas {
-					errMsg := fmt.Sprintf("always failing transaction (%v)", result.Err)
-					if len(result.Revert()) > 0 {
-						errMsg += fmt.Sprintf(" (0x%x)", result.Revert())
-					}
-					return 0, errors.New(errMsg)
+			if result != nil && result.Err != vm.ErrOutOfGas {
+				errMsg := fmt.Sprintf("always failing transaction (%v)", result.Err)
+				if len(result.Revert()) > 0 {
+					errMsg += fmt.Sprintf(" (0x%x)", result.Revert())
 				}
+				return 0, errors.New(errMsg)
 			}
 			// Otherwise, the specified gas cap is too low
 			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
