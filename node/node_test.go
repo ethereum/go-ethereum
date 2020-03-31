@@ -604,7 +604,7 @@ func TestAPIGather(t *testing.T) {
 func TestWebsocketHTTPOnSamePort_WebsocketRequest(t *testing.T) {
 	startHTTP(t)
 
-	wsReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:4343", nil)
+	wsReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8545", nil)
 	if err != nil {
 		t.Error("could not issue new http request ", err)
 	}
@@ -623,7 +623,7 @@ func TestWebsocketHTTPOnSamePort_WebsocketRequest(t *testing.T) {
 func TestWebsocketHTTPOnSamePort_HTTPRequest(t *testing.T) {
 	startHTTP(t)
 
-	httpReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:4343", nil)
+	httpReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8545", nil)
 	if err != nil {
 		t.Error("could not issue new http request ", err)
 	}
@@ -637,13 +637,13 @@ func TestWebsocketHTTPOnSamePort_HTTPRequest(t *testing.T) {
 }
 
 func startHTTP(t *testing.T) {
-	conf := &Config{HTTPPort: 4343, WSPort: 4343}
+	conf := &Config{HTTPPort: 8545, WSPort: 8545}
 	node, err := New(conf)
 	if err != nil {
 		t.Error("could not create a new node ", err)
 	}
 
-	err = node.startHTTP("127.0.0.1:4343", []rpc.API{}, []string{}, []string{}, []string{}, rpc.HTTPTimeouts{}, []string{})
+	err = node.startHTTP("127.0.0.1:8545", []rpc.API{}, []string{}, []string{}, []string{}, rpc.HTTPTimeouts{}, []string{})
 	if err != nil {
 		t.Error("could not start http service on node ", err)
 	}
