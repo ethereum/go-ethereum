@@ -305,6 +305,10 @@ var (
 		Usage: "Number of recent ethash caches to keep on disk (16MB each)",
 		Value: eth.DefaultConfig.Ethash.CachesOnDisk,
 	}
+	EthashCachesLockMmapFlag = cli.BoolFlag{
+		Name:  "ethash.cacheslockmmap",
+		Usage: "Lock memory maps of recent ethash caches",
+	}
 	EthashDatasetDirFlag = DirectoryFlag{
 		Name:  "ethash.dagdir",
 		Usage: "Directory to store the ethash mining DAGs",
@@ -319,6 +323,10 @@ var (
 		Name:  "ethash.dagsondisk",
 		Usage: "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
 		Value: eth.DefaultConfig.Ethash.DatasetsOnDisk,
+	}
+	EthashDatasetsLockMmapFlag = cli.BoolFlag{
+		Name:  "ethash.dagslockmmap",
+		Usage: "Lock memory maps for recent ethash mining DAGs",
 	}
 	// Transaction pool settings
 	TxPoolLocalsFlag = cli.StringFlag{
@@ -1306,11 +1314,17 @@ func setEthash(ctx *cli.Context, cfg *eth.Config) {
 	if ctx.GlobalIsSet(EthashCachesOnDiskFlag.Name) {
 		cfg.Ethash.CachesOnDisk = ctx.GlobalInt(EthashCachesOnDiskFlag.Name)
 	}
+	if ctx.GlobalIsSet(EthashCachesLockMmapFlag.Name) {
+		cfg.Ethash.CachesLockMmap = ctx.GlobalBool(EthashCachesLockMmapFlag.Name)
+	}
 	if ctx.GlobalIsSet(EthashDatasetsInMemoryFlag.Name) {
 		cfg.Ethash.DatasetsInMem = ctx.GlobalInt(EthashDatasetsInMemoryFlag.Name)
 	}
 	if ctx.GlobalIsSet(EthashDatasetsOnDiskFlag.Name) {
 		cfg.Ethash.DatasetsOnDisk = ctx.GlobalInt(EthashDatasetsOnDiskFlag.Name)
+	}
+	if ctx.GlobalIsSet(EthashDatasetsLockMmapFlag.Name) {
+		cfg.Ethash.DatasetsLockMmap = ctx.GlobalBool(EthashDatasetsLockMmapFlag.Name)
 	}
 }
 
@@ -1721,12 +1735,14 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 		engine = ethash.NewFaker()
 		if !ctx.GlobalBool(FakePoWFlag.Name) {
 			engine = ethash.New(ethash.Config{
-				CacheDir:       stack.ResolvePath(eth.DefaultConfig.Ethash.CacheDir),
-				CachesInMem:    eth.DefaultConfig.Ethash.CachesInMem,
-				CachesOnDisk:   eth.DefaultConfig.Ethash.CachesOnDisk,
-				DatasetDir:     stack.ResolvePath(eth.DefaultConfig.Ethash.DatasetDir),
-				DatasetsInMem:  eth.DefaultConfig.Ethash.DatasetsInMem,
-				DatasetsOnDisk: eth.DefaultConfig.Ethash.DatasetsOnDisk,
+				CacheDir:         stack.ResolvePath(eth.DefaultConfig.Ethash.CacheDir),
+				CachesInMem:      eth.DefaultConfig.Ethash.CachesInMem,
+				CachesOnDisk:     eth.DefaultConfig.Ethash.CachesOnDisk,
+				CachesLockMmap:   eth.DefaultConfig.Ethash.CachesLockMmap,
+				DatasetDir:       stack.ResolvePath(eth.DefaultConfig.Ethash.DatasetDir),
+				DatasetsInMem:    eth.DefaultConfig.Ethash.DatasetsInMem,
+				DatasetsOnDisk:   eth.DefaultConfig.Ethash.DatasetsOnDisk,
+				DatasetsLockMmap: eth.DefaultConfig.Ethash.DatasetsLockMmap,
 			}, nil, false)
 		}
 	}
