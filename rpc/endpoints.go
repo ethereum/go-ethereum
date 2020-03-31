@@ -18,68 +18,9 @@ package rpc
 
 import (
 	"net"
-	"net/http"
-	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 )
-
-// CheckModuleAvailability checks that all names given in modules are actually
-// available API services. It assumes that the MetadataApi module ("rpc") is always available;
-// the registration of this "rpc" module happens in NewServer() and is thus common to all endpoints.
-func CheckModuleAvailability(modules []string, apis []API) (bad, available []string) {
-	availableSet := make(map[string]struct{})
-	for _, api := range apis {
-		if _, ok := availableSet[api.Namespace]; !ok {
-			availableSet[api.Namespace] = struct{}{}
-			available = append(available, api.Namespace)
-		}
-	}
-	for _, name := range modules {
-		if _, ok := availableSet[name]; !ok && name != MetadataApi {
-			bad = append(bad, name)
-		}
-	}
-	return bad, available
-}
-
-// StartHTTPEndpoint starts the HTTP RPC endpoint, configured with cors/vhosts/modules.
-func StartHTTPEndpoint(endpoint string, timeouts HTTPTimeouts, handler http.Handler) (net.Listener, error) {
-	// start the HTTP listener
-	var (
-		listener net.Listener
-		err      error
-	)
-	if listener, err = net.Listen("tcp", endpoint); err != nil {
-		return nil, err
-	}
-
-	CheckTimeouts(&timeouts)
-	// Bundle and start the HTTP server
-	httpSrv := &http.Server{
-		Handler:      handler,
-		ReadTimeout:  timeouts.ReadTimeout,
-		WriteTimeout: timeouts.WriteTimeout,
-		IdleTimeout:  timeouts.IdleTimeout,
-	}
-	go httpSrv.Serve(listener)
-	return listener, err
-}
-
-// StartWSEndpoint starts a websocket endpoint.
-func StartWSEndpoint(endpoint string, handler http.Handler) (net.Listener, error) {
-	// start the HTTP listener
-	var (
-		listener net.Listener
-		err      error
-	)
-	if listener, err = net.Listen("tcp", endpoint); err != nil {
-		return nil, err
-	}
-	wsSrv := &http.Server{Handler: handler}
-	go wsSrv.Serve(listener)
-	return listener, err
-}
 
 // StartIPCEndpoint starts an IPC endpoint.
 func StartIPCEndpoint(ipcEndpoint string, apis []API) (net.Listener, *Server, error) {
@@ -98,20 +39,4 @@ func StartIPCEndpoint(ipcEndpoint string, apis []API) (net.Listener, *Server, er
 	}
 	go handler.ServeListener(listener)
 	return listener, handler, nil
-}
-
-// CheckTimeouts ensures that timeout values are meaningful
-func CheckTimeouts(timeouts *HTTPTimeouts) {
-	if timeouts.ReadTimeout < time.Second {
-		log.Warn("Sanitizing invalid HTTP read timeout", "provided", timeouts.ReadTimeout, "updated", DefaultHTTPTimeouts.ReadTimeout)
-		timeouts.ReadTimeout = DefaultHTTPTimeouts.ReadTimeout
-	}
-	if timeouts.WriteTimeout < time.Second {
-		log.Warn("Sanitizing invalid HTTP write timeout", "provided", timeouts.WriteTimeout, "updated", DefaultHTTPTimeouts.WriteTimeout)
-		timeouts.WriteTimeout = DefaultHTTPTimeouts.WriteTimeout
-	}
-	if timeouts.IdleTimeout < time.Second {
-		log.Warn("Sanitizing invalid HTTP idle timeout", "provided", timeouts.IdleTimeout, "updated", DefaultHTTPTimeouts.IdleTimeout)
-		timeouts.IdleTimeout = DefaultHTTPTimeouts.IdleTimeout
-	}
 }

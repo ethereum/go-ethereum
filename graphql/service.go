@@ -72,7 +72,7 @@ func (s *Service) Start(server *p2p.Server) error {
 	// create handler stack and wrap the graphql handler
 	handler := node.NewHTTPHandlerStack(s.handler, s.cors, s.vhosts)
 	// make sure timeout values are meaningful
-	rpc.CheckTimeouts(&s.timeouts)
+	node.CheckTimeouts(&s.timeouts)
 	// create http server
 	httpSrv := &http.Server{
 		Handler:      handler,
