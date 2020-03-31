@@ -217,7 +217,8 @@ aware of and agree upon. This consists of a small JSON file (e.g. call it `genes
     "eip158Block": 0,
     "byzantiumBlock": 0,
     "constantinopleBlock": 0,
-    "petersburgBlock": 0
+    "petersburgBlock": 0,
+    "istanbulBlock": 0
   },
   "alloc": {},
   "coinbase": "0x0000000000000000000000000000000000000000",
