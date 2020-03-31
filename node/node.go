@@ -372,7 +372,7 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 	srv := rpc.NewServer()
 	err := RegisterApisFromWhitelist(apis, modules, srv, false)
 	if err != nil {
-		return err // TODO this should return upon failure, right?
+		return err
 	}
 	handler := NewHTTPHandlerStack(srv, cors, vhosts)
 	// wrap handler in websocket handler only if websocket port is the same as http rpc
@@ -422,7 +422,7 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrig
 	handler := srv.WebsocketHandler(wsOrigins)
 	err := RegisterApisFromWhitelist(apis, modules, srv, exposeAll)
 	if err != nil {
-		return err // TODO this should return upon failure, right?
+		return err
 	}
 	listener, err := startWSEndpoint(endpoint, handler)
 	if err != nil {
