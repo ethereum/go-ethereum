@@ -41,14 +41,6 @@ func getChunk(size int, b int) []byte {
 	return data
 }
 
-func print(t *testing.T, f *freezerTable, item uint64) {
-	a, err := f.Retrieve(item)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("db[%d] =  %x\n", item, a)
-}
-
 // TestFreezerBasics test initializing a freezertable from scratch, writing to the table,
 // and reading it back.
 func TestFreezerBasics(t *testing.T) {
@@ -204,10 +196,8 @@ func TestFreezerRepairDanglingHeadLarge(t *testing.T) {
 			f.Append(uint64(x), data)
 		}
 		// The last item should be there
-		if _, err = f.Retrieve(f.items - 1); err == nil {
-			if err != nil {
-				t.Fatal(err)
-			}
+		if _, err = f.Retrieve(f.items - 1); err != nil {
+			t.Fatal(err)
 		}
 		f.Close()
 	}

@@ -51,7 +51,7 @@ const (
 // In addition to the checkpoint registered in the registrar contract, there are
 // several legacy hardcoded checkpoints in our codebase. These checkpoints are
 // also considered as valid.
-func (h *clientHandler) validateCheckpoint(peer *peer) error {
+func (h *clientHandler) validateCheckpoint(peer *serverPeer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -66,7 +66,7 @@ func (h *clientHandler) validateCheckpoint(peer *peer) error {
 	if err != nil {
 		return err
 	}
-	events := h.backend.oracle.contract.LookupCheckpointEvents(logs, cp.SectionIndex, cp.Hash())
+	events := h.backend.oracle.Contract().LookupCheckpointEvents(logs, cp.SectionIndex, cp.Hash())
 	if len(events) == 0 {
 		return errInvalidCheckpoint
 	}
@@ -78,7 +78,7 @@ func (h *clientHandler) validateCheckpoint(peer *peer) error {
 	for _, event := range events {
 		signatures = append(signatures, append(event.R[:], append(event.S[:], event.V)...))
 	}
-	valid, signers := h.backend.oracle.verifySigners(index, hash, signatures)
+	valid, signers := h.backend.oracle.VerifySigners(index, hash, signatures)
 	if !valid {
 		return errInvalidCheckpoint
 	}
@@ -87,7 +87,7 @@ func (h *clientHandler) validateCheckpoint(peer *peer) error {
 }
 
 // synchronise tries to sync up our local chain with a remote peer.
-func (h *clientHandler) synchronise(peer *peer) {
+func (h *clientHandler) synchronise(peer *serverPeer) {
 	// Short circuit if the peer is nil.
 	if peer == nil {
 		return
@@ -95,7 +95,7 @@ func (h *clientHandler) synchronise(peer *peer) {
 	// Make sure the peer's TD is higher than our own.
 	latest := h.backend.blockchain.CurrentHeader()
 	currentTd := rawdb.ReadTd(h.backend.chainDb, latest.Hash(), latest.Number.Uint64())
-	if currentTd != nil && peer.headBlockInfo().Td.Cmp(currentTd) < 0 {
+	if currentTd != nil && peer.Td().Cmp(currentTd) < 0 {
 		return
 	}
 	// Recap the checkpoint.
@@ -134,7 +134,7 @@ func (h *clientHandler) synchronise(peer *peer) {
 	case hardcoded:
 		mode = legacyCheckpointSync
 		log.Debug("Disable checkpoint syncing", "reason", "checkpoint is hardcoded")
-	case h.backend.oracle == nil || !h.backend.oracle.isRunning():
+	case h.backend.oracle == nil || !h.backend.oracle.IsRunning():
 		if h.checkpoint == nil {
 			mode = lightSync // Downgrade to light sync unfortunately.
 		} else {

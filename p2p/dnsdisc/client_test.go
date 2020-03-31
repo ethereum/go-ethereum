@@ -19,6 +19,7 @@ package dnsdisc
 import (
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"math/rand"
 	"reflect"
 	"testing"
@@ -54,7 +55,7 @@ func TestClientSyncTree(t *testing.T) {
 		wantSeq   = uint(1)
 	)
 
-	c, _ := NewClient(Config{Resolver: r, Logger: testlog.Logger(t, log.LvlTrace)})
+	c := NewClient(Config{Resolver: r, Logger: testlog.Logger(t, log.LvlTrace)})
 	stree, err := c.SyncTree("enrtree://AKPYQIUQIL7PSIACI32J7FGZW56E5FKHEFCCOFHILBIMW3M6LWXS2@n")
 	if err != nil {
 		t.Fatal("sync error:", err)
@@ -67,9 +68,6 @@ func TestClientSyncTree(t *testing.T) {
 	}
 	if stree.Seq() != wantSeq {
 		t.Errorf("synced tree has wrong seq: %d", stree.Seq())
-	}
-	if len(c.trees) > 0 {
-		t.Errorf("tree from SyncTree added to client")
 	}
 }
 
@@ -91,7 +89,7 @@ func TestClientSyncTreeBadNode(t *testing.T) {
 		"C7HRFPF3BLGF3YR4DY5KX3SMBE.n": "enrtree://AM5FCQLWIZX2QFPNJAP7VUERCCRNGRHWZG3YYHIUV7BVDQ5FDPRT2@morenodes.example.org",
 		"INDMVBZEEQ4ESVYAKGIYU74EAA.n": "enr:-----",
 	}
-	c, _ := NewClient(Config{Resolver: r, Logger: testlog.Logger(t, log.LvlTrace)})
+	c := NewClient(Config{Resolver: r, Logger: testlog.Logger(t, log.LvlTrace)})
 	_, err := c.SyncTree("enrtree://AKPYQIUQIL7PSIACI32J7FGZW56E5FKHEFCCOFHILBIMW3M6LWXS2@n")
 	wantErr := nameError{name: "INDMVBZEEQ4ESVYAKGIYU74EAA.n", err: entryError{typ: "enr", err: errInvalidENR}}
 	if err != wantErr {
@@ -99,59 +97,142 @@ func TestClientSyncTreeBadNode(t *testing.T) {
 	}
 }
 
-// This test checks that RandomNode hits all entries.
-func TestClientRandomNode(t *testing.T) {
+// This test checks that randomIterator finds all entries.
+func TestIterator(t *testing.T) {
 	nodes := testNodes(nodesSeed1, 30)
 	tree, url := makeTestTree("n", nodes, nil)
 	r := mapResolver(tree.ToTXT("n"))
-	c, _ := NewClient(Config{Resolver: r, Logger: testlog.Logger(t, log.LvlTrace)})
-	if err := c.AddTree(url); err != nil {
+	c := NewClient(Config{
+		Resolver:  r,
+		Logger:    testlog.Logger(t, log.LvlTrace),
+		RateLimit: 500,
+	})
+	it, err := c.NewIterator(url)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	checkRandomNode(t, c, nodes)
+	checkIterator(t, it, nodes)
 }
 
-// This test checks that RandomNode traverses linked trees as well as explicitly added trees.
-func TestClientRandomNodeLinks(t *testing.T) {
+// This test checks if closing randomIterator races.
+func TestIteratorClose(t *testing.T) {
+	nodes := testNodes(nodesSeed1, 500)
+	tree1, url1 := makeTestTree("t1", nodes, nil)
+	c := NewClient(Config{Resolver: newMapResolver(tree1.ToTXT("t1"))})
+	it, err := c.NewIterator(url1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		for it.Next() {
+			_ = it.Node()
+		}
+		close(done)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	it.Close()
+	<-done
+}
+
+// This test checks that randomIterator traverses linked trees as well as explicitly added trees.
+func TestIteratorLinks(t *testing.T) {
 	nodes := testNodes(nodesSeed1, 40)
 	tree1, url1 := makeTestTree("t1", nodes[:10], nil)
 	tree2, url2 := makeTestTree("t2", nodes[10:], []string{url1})
-	cfg := Config{
-		Resolver: newMapResolver(tree1.ToTXT("t1"), tree2.ToTXT("t2")),
-		Logger:   testlog.Logger(t, log.LvlTrace),
-	}
-	c, _ := NewClient(cfg)
-	if err := c.AddTree(url2); err != nil {
+	c := NewClient(Config{
+		Resolver:  newMapResolver(tree1.ToTXT("t1"), tree2.ToTXT("t2")),
+		Logger:    testlog.Logger(t, log.LvlTrace),
+		RateLimit: 500,
+	})
+	it, err := c.NewIterator(url2)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	checkRandomNode(t, c, nodes)
+	checkIterator(t, it, nodes)
 }
 
-// This test verifies that RandomNode re-checks the root of the tree to catch
+// This test verifies that randomIterator re-checks the root of the tree to catch
 // updates to nodes.
-func TestClientRandomNodeUpdates(t *testing.T) {
+func TestIteratorNodeUpdates(t *testing.T) {
 	var (
 		clock    = new(mclock.Simulated)
 		nodes    = testNodes(nodesSeed1, 30)
 		resolver = newMapResolver()
-		cfg      = Config{
+		c        = NewClient(Config{
 			Resolver:        resolver,
 			Logger:          testlog.Logger(t, log.LvlTrace),
 			RecheckInterval: 20 * time.Minute,
-		}
-		c, _ = NewClient(cfg)
+			RateLimit:       500,
+		})
 	)
 	c.clock = clock
 	tree1, url := makeTestTree("n", nodes[:25], nil)
+	it, err := c.NewIterator(url)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Sync the original tree.
 	resolver.add(tree1.ToTXT("n"))
-	c.AddTree(url)
-	checkRandomNode(t, c, nodes[:25])
+	checkIterator(t, it, nodes[:25])
 
-	// Update some nodes and ensure RandomNode returns the new nodes as well.
+	// Ensure RandomNode returns the new nodes after the tree is updated.
+	updateSomeNodes(nodesSeed1, nodes)
+	tree2, _ := makeTestTree("n", nodes, nil)
+	resolver.clear()
+	resolver.add(tree2.ToTXT("n"))
+	t.Log("tree updated")
+
+	clock.Run(c.cfg.RecheckInterval + 1*time.Second)
+	checkIterator(t, it, nodes)
+}
+
+// This test checks that the tree root is rechecked when a couple of leaf
+// requests have failed. The test is just like TestIteratorNodeUpdates, but
+// without advancing the clock by recheckInterval after the tree update.
+func TestIteratorRootRecheckOnFail(t *testing.T) {
+	var (
+		clock    = new(mclock.Simulated)
+		nodes    = testNodes(nodesSeed1, 30)
+		resolver = newMapResolver()
+		c        = NewClient(Config{
+			Resolver:        resolver,
+			Logger:          testlog.Logger(t, log.LvlTrace),
+			RecheckInterval: 20 * time.Minute,
+			RateLimit:       500,
+			// Disabling the cache is required for this test because the client doesn't
+			// notice leaf failures if all records are cached.
+			CacheLimit: 1,
+		})
+	)
+	c.clock = clock
+	tree1, url := makeTestTree("n", nodes[:25], nil)
+	it, err := c.NewIterator(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Sync the original tree.
+	resolver.add(tree1.ToTXT("n"))
+	checkIterator(t, it, nodes[:25])
+
+	// Ensure RandomNode returns the new nodes after the tree is updated.
+	updateSomeNodes(nodesSeed1, nodes)
+	tree2, _ := makeTestTree("n", nodes, nil)
+	resolver.clear()
+	resolver.add(tree2.ToTXT("n"))
+	t.Log("tree updated")
+
+	checkIterator(t, it, nodes)
+}
+
+// updateSomeNodes applies ENR updates to some of the given nodes.
+func updateSomeNodes(keySeed int64, nodes []*enode.Node) {
 	keys := testKeys(nodesSeed1, len(nodes))
 	for i, n := range nodes[:len(nodes)/2] {
 		r := n.Record()
@@ -161,26 +242,21 @@ func TestClientRandomNodeUpdates(t *testing.T) {
 		n2, _ := enode.New(enode.ValidSchemes, r)
 		nodes[i] = n2
 	}
-	tree2, _ := makeTestTree("n", nodes, nil)
-	clock.Run(cfg.RecheckInterval + 1*time.Second)
-	resolver.clear()
-	resolver.add(tree2.ToTXT("n"))
-	checkRandomNode(t, c, nodes)
 }
 
-// This test verifies that RandomNode re-checks the root of the tree to catch
+// This test verifies that randomIterator re-checks the root of the tree to catch
 // updates to links.
-func TestClientRandomNodeLinkUpdates(t *testing.T) {
+func TestIteratorLinkUpdates(t *testing.T) {
 	var (
 		clock    = new(mclock.Simulated)
 		nodes    = testNodes(nodesSeed1, 30)
 		resolver = newMapResolver()
-		cfg      = Config{
+		c        = NewClient(Config{
 			Resolver:        resolver,
 			Logger:          testlog.Logger(t, log.LvlTrace),
 			RecheckInterval: 20 * time.Minute,
-		}
-		c, _ = NewClient(cfg)
+			RateLimit:       500,
+		})
 	)
 	c.clock = clock
 	tree3, url3 := makeTestTree("t3", nodes[20:30], nil)
@@ -190,49 +266,54 @@ func TestClientRandomNodeLinkUpdates(t *testing.T) {
 	resolver.add(tree2.ToTXT("t2"))
 	resolver.add(tree3.ToTXT("t3"))
 
+	it, err := c.NewIterator(url1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// Sync tree1 using RandomNode.
-	c.AddTree(url1)
-	checkRandomNode(t, c, nodes[:20])
+	checkIterator(t, it, nodes[:20])
 
 	// Add link to tree3, remove link to tree2.
 	tree1, _ = makeTestTree("t1", nodes[:10], []string{url3})
 	resolver.add(tree1.ToTXT("t1"))
-	clock.Run(cfg.RecheckInterval + 1*time.Second)
 	t.Log("tree1 updated")
+
+	clock.Run(c.cfg.RecheckInterval + 1*time.Second)
 
 	var wantNodes []*enode.Node
 	wantNodes = append(wantNodes, tree1.Nodes()...)
 	wantNodes = append(wantNodes, tree3.Nodes()...)
-	checkRandomNode(t, c, wantNodes)
+	checkIterator(t, it, wantNodes)
 
 	// Check that linked trees are GCed when they're no longer referenced.
-	if len(c.trees) != 2 {
-		t.Errorf("client knows %d trees, want 2", len(c.trees))
+	knownTrees := it.(*randomIterator).trees
+	if len(knownTrees) != 2 {
+		t.Errorf("client knows %d trees, want 2", len(knownTrees))
 	}
 }
 
-func checkRandomNode(t *testing.T, c *Client, wantNodes []*enode.Node) {
+func checkIterator(t *testing.T, it enode.Iterator, wantNodes []*enode.Node) {
 	t.Helper()
 
 	var (
 		want     = make(map[enode.ID]*enode.Node)
-		maxCalls = len(wantNodes) * 2
+		maxCalls = len(wantNodes) * 3
 		calls    = 0
-		ctx      = context.Background()
 	)
 	for _, n := range wantNodes {
 		want[n.ID()] = n
 	}
 	for ; len(want) > 0 && calls < maxCalls; calls++ {
-		n := c.RandomNode(ctx)
-		if n == nil {
-			t.Fatalf("RandomNode returned nil (call %d)", calls)
+		if !it.Next() {
+			t.Fatalf("Next returned false (call %d)", calls)
 		}
+		n := it.Node()
 		delete(want, n.ID())
 	}
-	t.Logf("checkRandomNode called RandomNode %d times to find %d nodes", calls, len(wantNodes))
+	t.Logf("checkIterator called Next %d times to find %d nodes", calls, len(wantNodes))
 	for _, n := range want {
-		t.Errorf("RandomNode didn't discover node %v", n.ID())
+		t.Errorf("iterator didn't discover node %v", n.ID())
 	}
 }
 
@@ -312,5 +393,5 @@ func (mr mapResolver) LookupTXT(ctx context.Context, name string) ([]string, err
 	if record, ok := mr[name]; ok {
 		return []string{record}, nil
 	}
-	return nil, nil
+	return nil, errors.New("not found")
 }

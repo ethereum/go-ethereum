@@ -25,19 +25,24 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	checker "gopkg.in/check.v1"
 )
 
-type StateSuite struct {
+var toAddr = common.BytesToAddress
+
+type stateTest struct {
 	db    ethdb.Database
 	state *StateDB
 }
 
-var _ = checker.Suite(&StateSuite{})
+func newStateTest() *stateTest {
+	db := rawdb.NewMemoryDatabase()
+	sdb, _ := New(common.Hash{}, NewDatabase(db), nil)
+	return &stateTest{db: db, state: sdb}
+}
 
-var toAddr = common.BytesToAddress
+func TestDump(t *testing.T) {
+	s := newStateTest()
 
-func (s *StateSuite) TestDump(c *checker.C) {
 	// generate a few entries
 	obj1 := s.state.GetOrNewStateObject(toAddr([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
@@ -78,16 +83,12 @@ func (s *StateSuite) TestDump(c *checker.C) {
     }
 }`
 	if got != want {
-		c.Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
+		t.Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
 	}
 }
 
-func (s *StateSuite) SetUpTest(c *checker.C) {
-	s.db = rawdb.NewMemoryDatabase()
-	s.state, _ = New(common.Hash{}, NewDatabase(s.db))
-}
-
-func (s *StateSuite) TestNull(c *checker.C) {
+func TestNull(t *testing.T) {
+	s := newStateTest()
 	address := common.HexToAddress("0x823140710bf13990e4500136726d8b55")
 	s.state.CreateAccount(address)
 	//value := common.FromHex("0x823140710bf13990e4500136726d8b55")
@@ -97,18 +98,19 @@ func (s *StateSuite) TestNull(c *checker.C) {
 	s.state.Commit(false)
 
 	if value := s.state.GetState(address, common.Hash{}); value != (common.Hash{}) {
-		c.Errorf("expected empty current value, got %x", value)
+		t.Errorf("expected empty current value, got %x", value)
 	}
 	if value := s.state.GetCommittedState(address, common.Hash{}); value != (common.Hash{}) {
-		c.Errorf("expected empty committed value, got %x", value)
+		t.Errorf("expected empty committed value, got %x", value)
 	}
 }
 
-func (s *StateSuite) TestSnapshot(c *checker.C) {
+func TestSnapshot(t *testing.T) {
 	stateobjaddr := toAddr([]byte("aa"))
 	var storageaddr common.Hash
 	data1 := common.BytesToHash([]byte{42})
 	data2 := common.BytesToHash([]byte{43})
+	s := newStateTest()
 
 	// snapshot the genesis state
 	genesis := s.state.Snapshot()
@@ -121,23 +123,30 @@ func (s *StateSuite) TestSnapshot(c *checker.C) {
 	s.state.SetState(stateobjaddr, storageaddr, data2)
 	s.state.RevertToSnapshot(snapshot)
 
-	c.Assert(s.state.GetState(stateobjaddr, storageaddr), checker.DeepEquals, data1)
-	c.Assert(s.state.GetCommittedState(stateobjaddr, storageaddr), checker.DeepEquals, common.Hash{})
+	if v := s.state.GetState(stateobjaddr, storageaddr); v != data1 {
+		t.Errorf("wrong storage value %v, want %v", v, data1)
+	}
+	if v := s.state.GetCommittedState(stateobjaddr, storageaddr); v != (common.Hash{}) {
+		t.Errorf("wrong committed storage value %v, want %v", v, common.Hash{})
+	}
 
 	// revert up to the genesis state and ensure correct content
 	s.state.RevertToSnapshot(genesis)
-	c.Assert(s.state.GetState(stateobjaddr, storageaddr), checker.DeepEquals, common.Hash{})
-	c.Assert(s.state.GetCommittedState(stateobjaddr, storageaddr), checker.DeepEquals, common.Hash{})
+	if v := s.state.GetState(stateobjaddr, storageaddr); v != (common.Hash{}) {
+		t.Errorf("wrong storage value %v, want %v", v, common.Hash{})
+	}
+	if v := s.state.GetCommittedState(stateobjaddr, storageaddr); v != (common.Hash{}) {
+		t.Errorf("wrong committed storage value %v, want %v", v, common.Hash{})
+	}
 }
 
-func (s *StateSuite) TestSnapshotEmpty(c *checker.C) {
+func TestSnapshotEmpty(t *testing.T) {
+	s := newStateTest()
 	s.state.RevertToSnapshot(s.state.Snapshot())
 }
 
-// use testing instead of checker because checker does not support
-// printing/logging in tests (-check.vv does not work)
 func TestSnapshot2(t *testing.T) {
-	state, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()))
+	state, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()), nil)
 
 	stateobjaddr0 := toAddr([]byte("so0"))
 	stateobjaddr1 := toAddr([]byte("so1"))

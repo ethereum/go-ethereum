@@ -22,8 +22,30 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// StartHTTPEndpoint starts the HTTP RPC endpoint, configured with cors/vhosts/modules
+// checkModuleAvailability checks that all names given in modules are actually
+// available API services. It assumes that the MetadataApi module ("rpc") is always available;
+// the registration of this "rpc" module happens in NewServer() and is thus common to all endpoints.
+func checkModuleAvailability(modules []string, apis []API) (bad, available []string) {
+	availableSet := make(map[string]struct{})
+	for _, api := range apis {
+		if _, ok := availableSet[api.Namespace]; !ok {
+			availableSet[api.Namespace] = struct{}{}
+			available = append(available, api.Namespace)
+		}
+	}
+	for _, name := range modules {
+		if _, ok := availableSet[name]; !ok && name != MetadataApi {
+			bad = append(bad, name)
+		}
+	}
+	return bad, available
+}
+
+// StartHTTPEndpoint starts the HTTP RPC endpoint, configured with cors/vhosts/modules.
 func StartHTTPEndpoint(endpoint string, apis []API, modules []string, cors []string, vhosts []string, timeouts HTTPTimeouts) (net.Listener, *Server, error) {
+	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
+		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)
+	}
 	// Generate the whitelist based on the allowed modules
 	whitelist := make(map[string]bool)
 	for _, module := range modules {
@@ -51,9 +73,11 @@ func StartHTTPEndpoint(endpoint string, apis []API, modules []string, cors []str
 	return listener, handler, err
 }
 
-// StartWSEndpoint starts a websocket endpoint
+// StartWSEndpoint starts a websocket endpoint.
 func StartWSEndpoint(endpoint string, apis []API, modules []string, wsOrigins []string, exposeAll bool) (net.Listener, *Server, error) {
-
+	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
+		log.Error("Unavailable modules in WS API list", "unavailable", bad, "available", available)
+	}
 	// Generate the whitelist based on the allowed modules
 	whitelist := make(map[string]bool)
 	for _, module := range modules {
@@ -79,7 +103,6 @@ func StartWSEndpoint(endpoint string, apis []API, modules []string, wsOrigins []
 	}
 	go NewWSServer(wsOrigins, handler).Serve(listener)
 	return listener, handler, err
-
 }
 
 // StartIPCEndpoint starts an IPC endpoint.

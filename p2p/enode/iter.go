@@ -88,6 +88,8 @@ func (it *sliceIter) Next() bool {
 }
 
 func (it *sliceIter) Node() *Node {
+	it.mu.Lock()
+	defer it.mu.Unlock()
 	if len(it.nodes) == 0 {
 		return nil
 	}

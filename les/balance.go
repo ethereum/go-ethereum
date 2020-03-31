@@ -80,7 +80,7 @@ func (bt *balanceTracker) stop(now mclock.AbsTime) {
 	defer bt.lock.Unlock()
 
 	bt.stopped = true
-	bt.updateBalance(now)
+	bt.addBalance(now)
 	bt.negTimeFactor = 0
 	bt.negRequestFactor = 0
 	bt.timeFactor = 0
@@ -160,12 +160,20 @@ func (bt *balanceTracker) timeUntil(priority int64) (time.Duration, bool) {
 	return time.Duration(dt), true
 }
 
+// setCapacity updates the capacity value used for priority calculation
+func (bt *balanceTracker) setCapacity(capacity uint64) {
+	bt.lock.Lock()
+	defer bt.lock.Unlock()
+
+	bt.capacity = capacity
+}
+
 // getPriority returns the actual priority based on the current balance
 func (bt *balanceTracker) getPriority(now mclock.AbsTime) int64 {
 	bt.lock.Lock()
 	defer bt.lock.Unlock()
 
-	bt.updateBalance(now)
+	bt.addBalance(now)
 	return bt.balanceToPriority(bt.balance)
 }
 
@@ -186,8 +194,8 @@ func (bt *balanceTracker) estimatedPriority(at mclock.AbsTime, addReqCost bool) 
 	return bt.balanceToPriority(bt.reducedBalance(at, avgReqCost))
 }
 
-// updateBalance updates balance based on the time factor
-func (bt *balanceTracker) updateBalance(now mclock.AbsTime) {
+// addBalance updates balance based on the time factor
+func (bt *balanceTracker) addBalance(now mclock.AbsTime) {
 	if now > bt.lastUpdate {
 		bt.balance = bt.reducedBalance(now, 0)
 		bt.lastUpdate = now
@@ -245,7 +253,7 @@ func (bt *balanceTracker) updateAfter(dt time.Duration) {
 
 				if bt.callbackCount != 0 {
 					now := bt.clock.Now()
-					bt.updateBalance(now)
+					bt.addBalance(now)
 					bt.checkCallbacks(now)
 				}
 			})
@@ -262,7 +270,7 @@ func (bt *balanceTracker) requestCost(cost uint64) {
 		return
 	}
 	now := bt.clock.Now()
-	bt.updateBalance(now)
+	bt.addBalance(now)
 	fcost := float64(cost)
 
 	if bt.balance.pos != 0 {
@@ -294,7 +302,7 @@ func (bt *balanceTracker) getBalance(now mclock.AbsTime) (uint64, uint64) {
 	bt.lock.Lock()
 	defer bt.lock.Unlock()
 
-	bt.updateBalance(now)
+	bt.addBalance(now)
 	return bt.balance.pos, bt.balance.neg
 }
 
@@ -304,7 +312,7 @@ func (bt *balanceTracker) setBalance(pos, neg uint64) error {
 	defer bt.lock.Unlock()
 
 	now := bt.clock.Now()
-	bt.updateBalance(now)
+	bt.addBalance(now)
 	bt.balance.pos = pos
 	bt.balance.neg = neg
 	bt.checkCallbacks(now)
@@ -321,7 +329,7 @@ func (bt *balanceTracker) setFactors(neg bool, timeFactor, requestFactor float64
 		return
 	}
 	now := bt.clock.Now()
-	bt.updateBalance(now)
+	bt.addBalance(now)
 	if neg {
 		bt.negTimeFactor = timeFactor
 		bt.negRequestFactor = requestFactor
@@ -352,7 +360,7 @@ func (bt *balanceTracker) addCallback(id int, threshold int64, callback func()) 
 	bt.callbackIndex[id] = idx
 	bt.callbacks[idx] = balanceCallback{id, threshold, callback}
 	now := bt.clock.Now()
-	bt.updateBalance(now)
+	bt.addBalance(now)
 	bt.checkCallbacks(now)
 }
 

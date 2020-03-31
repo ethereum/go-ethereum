@@ -60,7 +60,7 @@ func (v *ValidationMessages) getWarnings() error {
 		}
 	}
 	if len(messages) > 0 {
-		return fmt.Errorf("Validation failed: %s", strings.Join(messages, ","))
+		return fmt.Errorf("validation failed: %s", strings.Join(messages, ","))
 	}
 	return nil
 }

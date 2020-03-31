@@ -80,14 +80,14 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 			data := append([]byte{0x19, 0x00}, append(registrarAddr.Bytes(), append([]byte{0, 0, 0, 0, 0, 0, 0, 0}, cp.Hash().Bytes()...)...)...)
 			sig, _ := crypto.Sign(crypto.Keccak256(data), signerKey)
 			sig[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
-			if _, err := server.handler.server.oracle.contract.RegisterCheckpoint(bind.NewKeyedTransactor(signerKey), cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(header.Number, big.NewInt(1)), header.ParentHash, [][]byte{sig}); err != nil {
+			if _, err := server.handler.server.oracle.Contract().RegisterCheckpoint(bind.NewKeyedTransactor(signerKey), cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(header.Number, big.NewInt(1)), header.ParentHash, [][]byte{sig}); err != nil {
 				t.Error("register checkpoint failed", err)
 			}
 			server.backend.Commit()
 
 			// Wait for the checkpoint registration
 			for {
-				_, hash, _, err := server.handler.server.oracle.contract.Contract().GetLatestCheckpoint(nil)
+				_, hash, _, err := server.handler.server.oracle.Contract().Contract().GetLatestCheckpoint(nil)
 				if err != nil || hash == [32]byte{} {
 					time.Sleep(10 * time.Millisecond)
 					continue
@@ -109,14 +109,12 @@ func testCheckpointSyncing(t *testing.T, protocol int, syncMode int) {
 	}
 
 	// Create connected peer pair.
-	_, err1, _, err2 := newTestPeerPair("peer", protocol, server.handler, client.handler)
-	select {
-	case <-time.After(time.Millisecond * 100):
-	case err := <-err1:
-		t.Fatalf("peer 1 handshake error: %v", err)
-	case err := <-err2:
-		t.Fatalf("peer 2 handshake error: %v", err)
+	peer1, peer2, err := newTestPeerPair("peer", protocol, server.handler, client.handler)
+	if err != nil {
+		t.Fatalf("Failed to connect testing peers %v", err)
 	}
+	defer peer1.close()
+	defer peer2.close()
 
 	select {
 	case err := <-done:
@@ -164,14 +162,14 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool) {
 	data := append([]byte{0x19, 0x00}, append(registrarAddr.Bytes(), append([]byte{0, 0, 0, 0, 0, 0, 0, 0}, cp.Hash().Bytes()...)...)...)
 	sig, _ := crypto.Sign(crypto.Keccak256(data), signerKey)
 	sig[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
-	if _, err := server.handler.server.oracle.contract.RegisterCheckpoint(bind.NewKeyedTransactor(signerKey), cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(header.Number, big.NewInt(1)), header.ParentHash, [][]byte{sig}); err != nil {
+	if _, err := server.handler.server.oracle.Contract().RegisterCheckpoint(bind.NewKeyedTransactor(signerKey), cp.SectionIndex, cp.Hash().Bytes(), new(big.Int).Sub(header.Number, big.NewInt(1)), header.ParentHash, [][]byte{sig}); err != nil {
 		t.Error("register checkpoint failed", err)
 	}
 	server.backend.Commit()
 
 	// Wait for the checkpoint registration
 	for {
-		_, hash, _, err := server.handler.server.oracle.contract.Contract().GetLatestCheckpoint(nil)
+		_, hash, _, err := server.handler.server.oracle.Contract().Contract().GetLatestCheckpoint(nil)
 		if err != nil || hash == [32]byte{} {
 			time.Sleep(100 * time.Millisecond)
 			continue
@@ -206,17 +204,10 @@ func testMissOracleBackend(t *testing.T, hasCheckpoint bool) {
 			done <- fmt.Errorf("blockchain length mismatch, want %d, got %d", expected, header.Number)
 		}
 	}
-
 	// Create connected peer pair.
-	_, err1, _, err2 := newTestPeerPair("peer", 2, server.handler, client.handler)
-	select {
-	case <-time.After(time.Millisecond * 100):
-	case err := <-err1:
-		t.Fatalf("peer 1 handshake error: %v", err)
-	case err := <-err2:
-		t.Fatalf("peer 2 handshake error: %v", err)
+	if _, _, err := newTestPeerPair("peer", 2, server.handler, client.handler); err != nil {
+		t.Fatalf("Failed to connect testing peers %v", err)
 	}
-
 	select {
 	case err := <-done:
 		if err != nil {

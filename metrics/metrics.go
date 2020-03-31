@@ -27,7 +27,7 @@ var Enabled = false
 var EnabledExpensive = false
 
 // enablerFlags is the CLI flag names to use to enable metrics collections.
-var enablerFlags = []string{"metrics", "dashboard"}
+var enablerFlags = []string{"metrics"}
 
 // expensiveEnablerFlags is the CLI flag names to use to enable metrics collections.
 var expensiveEnablerFlags = []string{"metrics.expensive"}

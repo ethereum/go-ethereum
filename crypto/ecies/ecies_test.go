@@ -66,22 +66,6 @@ func cmpParams(p1, p2 *ECIESParams) bool {
 		p1.BlockSize == p2.BlockSize
 }
 
-// cmpPublic returns true if the two public keys represent the same pojnt.
-func cmpPublic(pub1, pub2 PublicKey) bool {
-	if pub1.X == nil || pub1.Y == nil {
-		fmt.Println(ErrInvalidPublicKey.Error())
-		return false
-	}
-	if pub2.X == nil || pub2.Y == nil {
-		fmt.Println(ErrInvalidPublicKey.Error())
-		return false
-	}
-	pub1Out := elliptic.Marshal(pub1.Curve, pub1.X, pub1.Y)
-	pub2Out := elliptic.Marshal(pub2.Curve, pub2.X, pub2.Y)
-
-	return bytes.Equal(pub1Out, pub2Out)
-}
-
 // Validate the ECDH component.
 func TestSharedKey(t *testing.T) {
 	prv1, err := GenerateKey(rand.Reader, DefaultCurve, nil)

@@ -262,13 +262,12 @@ func TestWhisperIdentityManagement(t *testing.T) {
 func TestWhisperSymKeyManagement(t *testing.T) {
 	InitSingleTest()
 
-	var err error
-	var k1, k2 []byte
-	w := New(&DefaultConfig)
-	id1 := string("arbitrary-string-1")
-	id2 := string("arbitrary-string-2")
-
-	id1, err = w.GenerateSymKey()
+	var (
+		k1, k2 []byte
+		w      = New(&DefaultConfig)
+		id2    = string("arbitrary-string-2")
+	)
+	id1, err := w.GenerateSymKey()
 	if err != nil {
 		t.Fatalf("failed GenerateSymKey with seed %d: %s.", seed, err)
 	}

@@ -47,29 +47,29 @@ type httpConn struct {
 	client    *http.Client
 	req       *http.Request
 	closeOnce sync.Once
-	closed    chan interface{}
+	closeCh   chan interface{}
 }
 
 // httpConn is treated specially by Client.
-func (hc *httpConn) Write(context.Context, interface{}) error {
-	panic("Write called on httpConn")
+func (hc *httpConn) writeJSON(context.Context, interface{}) error {
+	panic("writeJSON called on httpConn")
 }
 
-func (hc *httpConn) RemoteAddr() string {
+func (hc *httpConn) remoteAddr() string {
 	return hc.req.URL.String()
 }
 
-func (hc *httpConn) Read() ([]*jsonrpcMessage, bool, error) {
-	<-hc.closed
+func (hc *httpConn) readBatch() ([]*jsonrpcMessage, bool, error) {
+	<-hc.closeCh
 	return nil, false, io.EOF
 }
 
-func (hc *httpConn) Close() {
-	hc.closeOnce.Do(func() { close(hc.closed) })
+func (hc *httpConn) close() {
+	hc.closeOnce.Do(func() { close(hc.closeCh) })
 }
 
-func (hc *httpConn) Closed() <-chan interface{} {
-	return hc.closed
+func (hc *httpConn) closed() <-chan interface{} {
+	return hc.closeCh
 }
 
 // HTTPTimeouts represents the configuration params for the HTTP RPC server.
@@ -116,7 +116,7 @@ func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
 
 	initctx := context.Background()
 	return newClient(initctx, func(context.Context) (ServerCodec, error) {
-		return &httpConn{client: client, req: req, closed: make(chan interface{})}, nil
+		return &httpConn{client: client, req: req, closeCh: make(chan interface{})}, nil
 	})
 }
 
@@ -195,7 +195,7 @@ type httpServerConn struct {
 func newHTTPServerConn(r *http.Request, w http.ResponseWriter) ServerCodec {
 	body := io.LimitReader(r.Body, maxRequestContentLength)
 	conn := &httpServerConn{Reader: body, Writer: w, r: r}
-	return NewJSONCodec(conn)
+	return NewCodec(conn)
 }
 
 // Close does nothing and always returns nil.
@@ -250,8 +250,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), code)
 		return
 	}
-	// All checks passed, create a codec that reads direct from the request body
-	// untilEOF and writes the response to w and order the server to process a
+	// All checks passed, create a codec that reads directly from the request body
+	// until EOF, writes the response to w, and orders the server to process a
 	// single request.
 	ctx := r.Context()
 	ctx = context.WithValue(ctx, "remote", r.RemoteAddr)
@@ -266,7 +266,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("content-type", contentType)
 	codec := newHTTPServerConn(r, w)
-	defer codec.Close()
+	defer codec.close()
 	s.serveSingleRequest(ctx, codec)
 }
 
@@ -338,7 +338,7 @@ func (h *virtualHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 
 	}
-	// Not an ip address, but a hostname. Need to validate
+	// Not an IP address, but a hostname. Need to validate
 	if _, exist := h.vhosts["*"]; exist {
 		h.next.ServeHTTP(w, r)
 		return

@@ -43,6 +43,7 @@ func init() {
 		commandSignMessage,
 		commandVerifyMessage,
 	}
+	cli.CommandHelpTemplate = utils.OriginCommandHelpTemplate
 }
 
 // Commonly used command line flags.

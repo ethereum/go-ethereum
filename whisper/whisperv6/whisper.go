@@ -352,7 +352,7 @@ func (whisper *Whisper) getPeer(peerID []byte) (*Peer, error) {
 			return p, nil
 		}
 	}
-	return nil, fmt.Errorf("Could not find peer with ID: %x", peerID)
+	return nil, fmt.Errorf("could not find peer with ID: %x", peerID)
 }
 
 // AllowP2PMessagesFromPeer marks specific peer trusted,

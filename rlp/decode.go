@@ -29,12 +29,13 @@ import (
 	"sync"
 )
 
-var (
-	// EOL is returned when the end of the current list
-	// has been reached during streaming.
-	EOL = errors.New("rlp: end of list")
+//lint:ignore ST1012 EOL is not an error.
 
-	// Actual Errors
+// EOL is returned when the end of the current list
+// has been reached during streaming.
+var EOL = errors.New("rlp: end of list")
+
+var (
 	ErrExpectedString   = errors.New("rlp: expected String or Byte")
 	ErrExpectedList     = errors.New("rlp: expected List")
 	ErrCanonInt         = errors.New("rlp: non-canonical integer format")
@@ -152,7 +153,6 @@ func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 	switch {
 	case typ == rawValueType:
 		return decodeRawValue, nil
-		return decodeDecoder, nil
 	case typ.AssignableTo(reflect.PtrTo(bigInt)):
 		return decodeBigInt, nil
 	case typ.AssignableTo(bigInt):
