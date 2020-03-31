@@ -322,7 +322,7 @@ func (st *ReStackTrie) insert(key, value []byte) {
 		for i := idx - 1; i >= 0; i-- {
 			if st.children[i] != nil {
 				if st.children[i].nodeType != hashedNode {
-					st.children[i].val = st.children[i].Hash().Bytes()
+					st.children[i].val = st.children[i].hash()
 					st.children[i].key = nil
 					st.children[i].nodeType = hashedNode
 				}
@@ -437,7 +437,7 @@ func (st *ReStackTrie) insert(key, value []byte) {
 		p.children[origIdx].val = st.val
 		p.children[origIdx].keyOffset = p.keyOffset + 1
 
-		p.children[origIdx].val = p.children[origIdx].Hash().Bytes()
+		p.children[origIdx].val = p.children[origIdx].hash()
 		p.children[origIdx].nodeType = hashedNode
 		p.children[origIdx].key = nil
 
@@ -559,10 +559,10 @@ func writeHPRLP(writer io.Writer, key, val []byte, leaf bool) {
 	//io.Copy(w, &writer)
 }
 
-func (st *ReStackTrie) Hash() (h common.Hash) {
+func (st *ReStackTrie) hash() []byte {
 	/* Shortcut if node is already hashed */
 	if st.nodeType == hashedNode {
-		return common.BytesToHash(st.val)
+		return st.val
 	}
 
 	d := sha3.NewLegacyKeccak256()
@@ -575,7 +575,7 @@ func (st *ReStackTrie) Hash() (h common.Hash) {
 				// Write a 32 byte list to the sponge
 				payload[pos] = 0xa0
 				pos++
-				copy(payload[pos:pos+32], v.Hash().Bytes())
+				copy(payload[pos:pos+32], v.hash())
 				pos += 32
 				st.children[i] = nil // Reclaim mem from subtree
 			} else {
@@ -607,7 +607,7 @@ func (st *ReStackTrie) Hash() (h common.Hash) {
 		}
 		d.Write(payload[start:pos])
 	case extNode:
-		ch := st.children[0].Hash().Bytes()
+		ch := st.children[0].hash()
 		writeHPRLP(d, st.key, ch, false)
 		st.children[0] = nil // Reclaim mem from subtree
 	case leafNode:
@@ -616,6 +616,9 @@ func (st *ReStackTrie) Hash() (h common.Hash) {
 	default:
 		panic("Invalid node type")
 	}
-	d.Sum(h[:0])
-	return
+	return d.Sum(nil)
+}
+
+func (st *ReStackTrie) Hash() (h common.Hash) {
+	return common.BytesToHash(st.hash())
 }
