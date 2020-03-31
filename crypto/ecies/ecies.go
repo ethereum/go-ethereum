@@ -145,17 +145,15 @@ var (
 
 // NIST SP 800-56 Concatenation Key Derivation Function (see section 5.8.1).
 func concatKDF(hash hash.Hash, z, s1 []byte, kdLen int) []byte {
-	counter := []byte{0, 0, 0, 1}
+	counterBytes := make([]byte, 4)
 	k := make([]byte, 0, kdLen+hash.Size())
-	for len(k) < kdLen {
+	for counter := uint32(1); len(k) < kdLen; counter++ {
 		hash.Reset()
-		hash.Write(counter)
+		binary.BigEndian.PutUint32(counterBytes, counter)
+		hash.Write(counterBytes)
 		hash.Write(z)
 		hash.Write(s1)
-		k = k[:len(k)+hash.Size()]
-		hash.Sum(k[:len(k)-hash.Size()])
-		// increment counter
-		binary.BigEndian.PutUint32(counter, binary.BigEndian.Uint32(counter)+1)
+		k = hash.Sum(k)
 	}
 	return k[:kdLen]
 }
