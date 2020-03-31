@@ -138,54 +138,26 @@ func (prv *PrivateKey) GenerateShared(pub *PublicKey, skLen, macLen int) (sk []b
 }
 
 var (
-	ErrKeyDataTooLong = fmt.Errorf("ecies: can't supply requested key data")
 	ErrSharedTooLong  = fmt.Errorf("ecies: shared secret is too long")
 	ErrInvalidMessage = fmt.Errorf("ecies: invalid message")
 )
 
-func incCounter(ctr []byte) {
-	if ctr[3]++; ctr[3] != 0 {
-		return
-	}
-	if ctr[2]++; ctr[2] != 0 {
-		return
-	}
-	if ctr[1]++; ctr[1] != 0 {
-		return
-	}
-	if ctr[0]++; ctr[0] != 0 {
-		return
-	}
-}
 
 // NIST SP 800-56 Concatenation Key Derivation Function (see section 5.8.1).
-func concatKDF(hash hash.Hash, z, s1 []byte, kdLen int) (k []byte, err error) {
-	if s1 == nil {
-		s1 = make([]byte, 0)
-	}
-
-	// reps is the maximum number of iterations of the
-	// counter hashing loop. This is capped to 32 bits to
-	// prevent overflow of the counter.
-	reps := (int64(kdLen) + 7) * 8 / int64(hash.Size()*8)
-	if reps > int64(^uint32(0)) {
-		return nil, ErrKeyDataTooLong
-	}
-
+func concatKDF(hash hash.Hash, z, s1 []byte, kdLen int) []byte {
 	counter := []byte{0, 0, 0, 1}
-	k = make([]byte, 0)
-
-	for i := int64(0); i <= reps; i++ {
+	k := make([]byte, 0, kdLen+hash.Size())
+	for len(k) < kdLen {
+		hash.Reset()
 		hash.Write(counter)
 		hash.Write(z)
 		hash.Write(s1)
-		k = append(k, hash.Sum(nil)...)
-		hash.Reset()
-		incCounter(counter)
+		k = k[:len(k)+hash.Size()]
+		hash.Sum(k[:len(k)-hash.Size()])
+		// increment counter
+		binary.BigEndian.PutUint32(counter, binary.BigEndian.Uint32(counter)+1)
 	}
-
-	k = k[:kdLen]
-	return
+	return k[:kdLen]
 }
 
 // messageTag computes the MAC of a message (called the tag) as per
@@ -263,10 +235,7 @@ func Encrypt(rand io.Reader, pub *PublicKey, m, s1, s2 []byte) (ct []byte, err e
 	if err != nil {
 		return
 	}
-	K, err := concatKDF(hash, z, s1, params.KeyLen+params.KeyLen)
-	if err != nil {
-		return
-	}
+	K := concatKDF(hash, z, s1, params.KeyLen+params.KeyLen)
 	Ke := K[:params.KeyLen]
 	Km := K[params.KeyLen:]
 	hash.Write(Km)
@@ -341,11 +310,7 @@ func (prv *PrivateKey) Decrypt(c, s1, s2 []byte) (m []byte, err error) {
 		return
 	}
 
-	K, err := concatKDF(hash, z, s1, params.KeyLen+params.KeyLen)
-	if err != nil {
-		return
-	}
-
+	K := concatKDF(hash, z, s1, params.KeyLen+params.KeyLen)
 	Ke := K[:params.KeyLen]
 	Km := K[params.KeyLen:]
 	hash.Write(Km)
