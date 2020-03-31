@@ -143,11 +143,6 @@ var (
 	ErrInvalidMessage = fmt.Errorf("ecies: invalid message")
 )
 
-var (
-	big2To32   = new(big.Int).Exp(big.NewInt(2), big.NewInt(32), nil)
-	big2To32M1 = new(big.Int).Sub(big2To32, big.NewInt(1))
-)
-
 func incCounter(ctr []byte) {
 	if ctr[3]++; ctr[3] != 0 {
 		return
@@ -169,8 +164,11 @@ func concatKDF(hash hash.Hash, z, s1 []byte, kdLen int) (k []byte, err error) {
 		s1 = make([]byte, 0)
 	}
 
-	reps := ((kdLen + 7) * 8) / (hash.Size() * 8)
-	if big.NewInt(int64(reps)).Cmp(big2To32M1) > 0 {
+	// reps is the maximum number of iterations of the
+	// counter hashing loop. This is capped to 32 bits to
+	// prevent overflow of the counter.
+	reps := (int64(kdLen) + 7) * 8 / int64(hash.Size()*8)
+	if reps > int64(^uint32(0)) {
 		return nil, ErrKeyDataTooLong
 	}
 
