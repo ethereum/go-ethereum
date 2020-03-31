@@ -37,24 +37,30 @@ const jsondata = `
 
 const jsondata2 = `
 [
-	{"type":"function","name":"balance","stateMutability":"view"},
-	{"type":"function","name":"send","inputs":[{"name":"amount","type":"uint256"}]},
-	{"type":"function","name":"test","inputs":[{"name":"number","type":"uint32"}]},
-	{"type":"function","name":"string","inputs":[{"name":"inputs","type":"string"}]},
-	{"type":"function","name":"bool","inputs":[{"name":"inputs","type":"bool"}]},
-	{"type":"function","name":"address","inputs":[{"name":"inputs","type":"address"}]},
-	{"type":"function","name":"uint64[2]","inputs":[{"name":"inputs","type":"uint64[2]"}]},
-	{"type":"function","name":"uint64[]","inputs":[{"name":"inputs","type":"uint64[]"}]},
-	{"type":"function","name":"foo","inputs":[{"name":"inputs","type":"uint32"}]},
-	{"type":"function","name":"bar","inputs":[{"name":"inputs","type":"uint32"},{"name":"string","type":"uint16"}]},
-	{"type":"function","name":"slice","inputs":[{"name":"inputs","type":"uint32[2]"}]},
-	{"type":"function","name":"slice256","inputs":[{"name":"inputs","type":"uint256[2]"}]},
-	{"type":"function","name":"sliceAddress","inputs":[{"name":"inputs","type":"address[]"}]},
-	{"type":"function","name":"sliceMultiAddress","inputs":[{"name":"a","type":"address[]"},{"name":"b","type":"address[]"}]},
-	{"type":"function","name":"nestedArray","inputs":[{"name":"a","type":"uint256[2][2]"},{"name":"b","type":"address[]"}]},
-	{"type":"function","name":"nestedArray2","inputs":[{"name":"a","type":"uint8[][2]"}]},
-	{"type":"function","name":"nestedSlice","inputs":[{"name":"a","type":"uint8[][]"}]},
-	{"type":"function","name":"receive","inputs":[{"name":"memo","type":"bytes"}],"outputs":[],"payable":true,"stateMutability":"payable"},
+	{ "type" : "function", "name" : "balance", "constant" : true },
+	{ "type" : "function", "name" : "send", "constant" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
+	{ "type" : "function", "name" : "test", "constant" : false, "inputs" : [ { "name" : "number", "type" : "uint32" } ] },
+	{ "type" : "function", "name" : "string", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "string" } ] },
+	{ "type" : "function", "name" : "bool", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "bool" } ] },
+	{ "type" : "function", "name" : "address", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "address" } ] },
+	{ "type" : "function", "name" : "uint64[2]", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[2]" } ] },
+	{ "type" : "function", "name" : "uint64[]", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[]" } ] },
+	{ "type" : "function", "name" : "int8", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "int8" } ] },
+	{ "type" : "function", "name" : "foo", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" } ] },
+	{ "type" : "function", "name" : "bar", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" }, { "name" : "string", "type" : "uint16" } ] },
+	{ "type" : "function", "name" : "slice", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32[2]" } ] },
+	{ "type" : "function", "name" : "slice256", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint256[2]" } ] },
+	{ "type" : "function", "name" : "sliceAddress", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "address[]" } ] },
+	{ "type" : "function", "name" : "sliceMultiAddress", "constant" : false, "inputs" : [ { "name" : "a", "type" : "address[]" }, { "name" : "b", "type" : "address[]" } ] },
+	{ "type" : "function", "name" : "nestedArray", "constant" : false, "inputs" : [ { "name" : "a", "type" : "uint256[2][2]" }, { "name" : "b", "type" : "address[]" } ] },
+	{ "type" : "function", "name" : "nestedArray2", "constant" : false, "inputs" : [ { "name" : "a", "type" : "uint8[][2]" } ] },
+	{ "type" : "function", "name" : "nestedSlice", "constant" : false, "inputs" : [ { "name" : "a", "type" : "uint8[][]" } ] },
+	{ "type" : "function", "name" : "receive", "constant" : false, "inputs" : [ { "name" : "memo", "type" : "bytes" }], "outputs" : [], "payable" : true, "stateMutability" : "payable" },
+	{ "type" : "function", "name" : "fixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr", "type" : "uint256[2]" } ] },
+	{ "type" : "function", "name" : "fixedArrBytes", "constant" : true, "inputs" : [ { "name" : "bytes", "type" : "bytes" }, { "name" : "fixedArr", "type" : "uint256[2]" } ] },
+	{ "type" : "function", "name" : "mixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr", "type" : "uint256[2]" }, { "name" : "dynArr", "type" : "uint256[]" } ] },
+	{ "type" : "function", "name" : "doubleFixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr1", "type" : "uint256[2]" }, { "name" : "fixedArr2", "type" : "uint256[3]" } ] },
+	{ "type" : "function", "name" : "multipleMixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr1", "type" : "uint256[2]" }, { "name" : "dynArr", "type" : "uint256[]" }, { "name" : "fixedArr2", "type" : "uint256[3]" } ] }
 ]`
 
 const jsondata3 = `
@@ -72,6 +78,7 @@ var (
 	Address, _    = NewType("address", "", nil)
 	Uint64Arr, _  = NewType("uint64[]", "", nil)
 	AddressArr, _ = NewType("address[]", "", nil)
+	Int8, _       = NewType("int8", "", nil)
 	// Special types for testing
 	Uint32Arr2, _       = NewType("uint32[2]", "", nil)
 	Uint64Arr2, _       = NewType("uint64[2]", "", nil)
@@ -84,7 +91,7 @@ var (
 )
 
 var methods = map[string]Method{
-	"balance":             NewMethod("balance", "balance", true, nil, nil),
+	"balance":             NewMethod("balance", "balance", Function, "view", true, false, nil, nil),
 	"send":                NewMethod("send", "send", false, []Argument{{"amount", Uint256, false}}, nil),
 	"test":                NewMethod("test", "test", false, []Argument{{"number", Uint32, false}}, nil),
 	"string":              NewMethod("string", "string", false, []Argument{{"inputs", String, false}}, nil),
@@ -92,6 +99,7 @@ var methods = map[string]Method{
 	"address":             NewMethod("address", "address", false, []Argument{{"inputs", Address, false}}, nil),
 	"uint64[]":            NewMethod("uint64[]", "uint64[]", false, []Argument{{"inputs", Uint64Arr, false}}, nil),
 	"uint64[2]":           NewMethod("uint64[2]", "uint64[2]", false, []Argument{{"inputs", Uint64Arr2, false}}, nil),
+	"int8":                NewMethod("int8", "int8", false, []Argument{{"inputs", Int8, false}}, nil),
 	"foo":                 NewMethod("foo", "foo", false, []Argument{{"inputs", Uint32, false}}, nil),
 	"bar":                 NewMethod("bar", "bar", false, []Argument{{"inputs", Uint32, false}, {"string", Uint16, false}}, nil),
 	"slice":               NewMethod("slice", "slice", false, []Argument{{"inputs", Uint32Arr2, false}}, nil),
@@ -121,6 +129,10 @@ var tests = map[string]PackUnpackTest{
 	},
 	"string": PackUnpackTest{
 		input: "This is a string",
+		err:   nil,
+	},
+	"int8": PackUnpackTest{
+		input: int8(-2),
 		err:   nil,
 	},
 }
@@ -155,14 +167,7 @@ func TestPackUnpack(t *testing.T) {
 
 func TestReader(t *testing.T) {
 	abi := ABI{
-<<<<<<< HEAD
-		Methods: map[string]Method{
-			"balance": NewMethod("balance", "balance", Function, "view", false, false, nil, nil),
-			"send":    NewMethod("send", "send", Function, "", false, false, []Argument{{"amount", Uint256, false}}, nil),
-		},
-=======
 		Methods: methods,
->>>>>>> f403c29e5... accounts/abi: reworked abi tests
 	}
 
 	exp, err := JSON(strings.NewReader(jsondata2))
@@ -266,12 +271,7 @@ func TestTestSlice(t *testing.T) {
 }
 
 func TestMethodSignature(t *testing.T) {
-<<<<<<< HEAD
-	String, _ := NewType("string", "", nil)
 	m := NewMethod("foo", "foo", Function, "", false, false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil)
-=======
-	m := NewMethod("foo", "foo", false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil)
->>>>>>> f403c29e5... accounts/abi: reworked abi tests
 	exp := "foo(string,string)"
 	if m.Sig != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig)
@@ -282,12 +282,7 @@ func TestMethodSignature(t *testing.T) {
 		t.Errorf("expected ids to match %x != %x", m.ID, idexp)
 	}
 
-<<<<<<< HEAD
-	uintt, _ := NewType("uint256", "", nil)
-	m = NewMethod("foo", "foo", Function, "", false, false, []Argument{{"bar", uintt, false}}, nil)
-=======
-	m = NewMethod("foo", "foo", false, []Argument{{"bar", Uint256, false}}, nil)
->>>>>>> f403c29e5... accounts/abi: reworked abi tests
+	m = NewMethod("foo", "foo", Function, "", false, false, []Argument{{"bar", Uint256, false}}, nil)
 	exp = "foo(uint256)"
 	if m.Sig != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig)
