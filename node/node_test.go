@@ -602,7 +602,8 @@ func TestAPIGather(t *testing.T) {
 }
 
 func TestWebsocketHTTPOnSamePort_WebsocketRequest(t *testing.T) {
-	startHTTP(t)
+	node := startHTTP(t)
+	defer node.stopHTTP()
 
 	wsReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:7453", nil)
 	if err != nil {
@@ -621,7 +622,8 @@ func TestWebsocketHTTPOnSamePort_WebsocketRequest(t *testing.T) {
 }
 
 func TestWebsocketHTTPOnSamePort_HTTPRequest(t *testing.T) {
-	startHTTP(t)
+	node := startHTTP(t)
+	defer node.stopHTTP()
 
 	httpReq, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:7453", nil)
 	if err != nil {
@@ -636,7 +638,7 @@ func TestWebsocketHTTPOnSamePort_HTTPRequest(t *testing.T) {
 	assert.Equal(t, "gzip", httpResponse.Header.Get("Content-Encoding"))
 }
 
-func startHTTP(t *testing.T) {
+func startHTTP(t *testing.T) *Node {
 	conf := &Config{HTTPPort: 7453, WSPort: 7453}
 	node, err := New(conf)
 	if err != nil {
@@ -647,6 +649,8 @@ func startHTTP(t *testing.T) {
 	if err != nil {
 		t.Error("could not start http service on node ", err)
 	}
+
+	return node
 }
 
 func doHTTPRequest(responses chan *http.Response, req *http.Request, t *testing.T) {
