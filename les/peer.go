@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -135,7 +136,7 @@ type peerCommons struct {
 	headInfo     blockInfo // Latest block information.
 
 	// Background task queue for caching peer tasks and executing in order.
-	sendQueue *execQueue
+	sendQueue *utils.ExecQueue
 
 	// Flow control agreement.
 	fcParams flowcontrol.ServerParams // The config for token bucket.
@@ -153,13 +154,13 @@ func (p *peerCommons) isFrozen() bool {
 
 // canQueue returns an indicator whether the peer can queue a operation.
 func (p *peerCommons) canQueue() bool {
-	return p.sendQueue.canQueue() && !p.isFrozen()
+	return p.sendQueue.CanQueue() && !p.isFrozen()
 }
 
 // queueSend caches a peer operation in the background task queue.
 // Please ensure to check `canQueue` before call this function
 func (p *peerCommons) queueSend(f func()) bool {
-	return p.sendQueue.queue(f)
+	return p.sendQueue.Queue(f)
 }
 
 // mustQueueSend starts a for loop and retry the caching if failed.
@@ -337,7 +338,7 @@ func (p *peerCommons) handshake(td *big.Int, head common.Hash, headNum uint64, g
 // close closes the channel and notifies all background routines to exit.
 func (p *peerCommons) close() {
 	close(p.closeCh)
-	p.sendQueue.quit()
+	p.sendQueue.Quit()
 }
 
 // serverPeer represents each node to which the client is connected.
@@ -375,7 +376,7 @@ func newServerPeer(version int, network uint64, trusted bool, p *p2p.Peer, rw p2
 			id:        peerIdToString(p.ID()),
 			version:   version,
 			network:   network,
-			sendQueue: newExecQueue(100),
+			sendQueue: utils.NewExecQueue(100),
 			closeCh:   make(chan struct{}),
 		},
 		trusted: trusted,
@@ -407,7 +408,7 @@ func (p *serverPeer) rejectUpdate(size uint64) bool {
 // frozen.
 func (p *serverPeer) freeze() {
 	if atomic.CompareAndSwapUint32(&p.frozen, 0, 1) {
-		p.sendQueue.clear()
+		p.sendQueue.Clear()
 	}
 }
 
@@ -652,7 +653,7 @@ func newClientPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWrite
 			id:        peerIdToString(p.ID()),
 			version:   version,
 			network:   network,
-			sendQueue: newExecQueue(100),
+			sendQueue: utils.NewExecQueue(100),
 			closeCh:   make(chan struct{}),
 		},
 		errCh: make(chan error, 1),

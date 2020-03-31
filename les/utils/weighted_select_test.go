@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package les
+package utils
 
 import (
 	"math/rand"
@@ -36,15 +36,15 @@ func (t *testWrsItem) Weight() int64 {
 
 func TestWeightedRandomSelect(t *testing.T) {
 	testFn := func(cnt int) {
-		s := newWeightedRandomSelect()
+		s := NewWeightedRandomSelect()
 		w := -1
 		list := make([]testWrsItem, cnt)
 		for i := range list {
 			list[i] = testWrsItem{idx: i, widx: &w}
-			s.update(&list[i])
+			s.Update(&list[i])
 		}
 		w = rand.Intn(cnt)
-		c := s.choose()
+		c := s.Choose()
 		if c == nil {
 			t.Errorf("expected item, got nil")
 		} else {
@@ -53,7 +53,7 @@ func TestWeightedRandomSelect(t *testing.T) {
 			}
 		}
 		w = -2
-		if s.choose() != nil {
+		if s.Choose() != nil {
 			t.Errorf("expected nil, got item")
 		}
 	}
