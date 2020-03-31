@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
-	"github.com/ethereum/go-ethereum/les/utilities"
+	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -136,7 +136,7 @@ type peerCommons struct {
 	headInfo     blockInfo // Latest block information.
 
 	// Background task queue for caching peer tasks and executing in order.
-	sendQueue *utilities.ExecQueue
+	sendQueue *utils.ExecQueue
 
 	// Flow control agreement.
 	fcParams flowcontrol.ServerParams // The config for token bucket.
@@ -376,7 +376,7 @@ func newServerPeer(version int, network uint64, trusted bool, p *p2p.Peer, rw p2
 			id:        peerIdToString(p.ID()),
 			version:   version,
 			network:   network,
-			sendQueue: utilities.NewExecQueue(100),
+			sendQueue: utils.NewExecQueue(100),
 			closeCh:   make(chan struct{}),
 		},
 		trusted: trusted,
@@ -653,7 +653,7 @@ func newClientPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWrite
 			id:        peerIdToString(p.ID()),
 			version:   version,
 			network:   network,
-			sendQueue: utilities.NewExecQueue(100),
+			sendQueue: utils.NewExecQueue(100),
 			closeCh:   make(chan struct{}),
 		},
 		errCh: make(chan error, 1),

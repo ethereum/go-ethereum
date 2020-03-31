@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/les/utilities"
+	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
@@ -130,7 +130,7 @@ type serverPool struct {
 	adjustStats          chan poolStatAdjust
 
 	knownQueue, newQueue       poolEntryQueue
-	knownSelect, newSelect     *utilities.WeightedRandomSelect
+	knownSelect, newSelect     *utils.WeightedRandomSelect
 	knownSelected, newSelected int
 	fastDiscover               bool
 	connCh                     chan *connReq
@@ -153,8 +153,8 @@ func newServerPool(db ethdb.Database, ulcServers []string) *serverPool {
 		disconnCh:    make(chan *disconnReq),
 		registerCh:   make(chan *registerReq),
 		closeCh:      make(chan struct{}),
-		knownSelect:  utilities.NewWeightedRandomSelect(),
-		newSelect:    utilities.NewWeightedRandomSelect(),
+		knownSelect:  utils.NewWeightedRandomSelect(),
+		newSelect:    utils.NewWeightedRandomSelect(),
 		fastDiscover: true,
 		trustedNodes: parseTrustedNodes(ulcServers),
 	}
@@ -403,7 +403,7 @@ func (pool *serverPool) eventLoop() {
 				entry.lastConnected = addr
 				entry.addr = make(map[string]*poolEntryAddress)
 				entry.addr[addr.strKey()] = addr
-				entry.addrSelect = *utilities.NewWeightedRandomSelect()
+				entry.addrSelect = *utils.NewWeightedRandomSelect()
 				entry.addrSelect.Update(addr)
 				req.result <- entry
 			}
@@ -460,7 +460,7 @@ func (pool *serverPool) findOrNewNode(node *enode.Node) *poolEntry {
 		entry = &poolEntry{
 			node:       node,
 			addr:       make(map[string]*poolEntryAddress),
-			addrSelect: *utilities.NewWeightedRandomSelect(),
+			addrSelect: *utils.NewWeightedRandomSelect(),
 			shortRetry: shortRetryCnt,
 		}
 		pool.entries[node.ID()] = entry
@@ -685,7 +685,7 @@ type poolEntry struct {
 	addr                  map[string]*poolEntryAddress
 	node                  *enode.Node
 	lastConnected, dialed *poolEntryAddress
-	addrSelect            utilities.WeightedRandomSelect
+	addrSelect            utils.WeightedRandomSelect
 
 	lastDiscovered                mclock.AbsTime
 	known, knownSelected, trusted bool
@@ -735,7 +735,7 @@ func (e *poolEntry) DecodeRLP(s *rlp.Stream) error {
 	e.node = enode.NewV4(pubkey, entry.IP, int(entry.Port), int(entry.Port))
 	e.addr = make(map[string]*poolEntryAddress)
 	e.addr[addr.strKey()] = addr
-	e.addrSelect = *utilities.NewWeightedRandomSelect()
+	e.addrSelect = *utils.NewWeightedRandomSelect()
 	e.addrSelect.Update(addr)
 	e.lastConnected = addr
 	e.connectStats = entry.CStat
