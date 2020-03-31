@@ -25,7 +25,7 @@ mkdir test-chain-dir
 For this guide, start geth in dev mode, and enable [RPC](../_rpc/server.md) so you can connect other applications to geth. For this guide, we use Remix, the web-based Ethereum IDE, so also allow its domains to accept cross-origin requests.
 
 ```shell
-geth --datadir test-chain-dir  --port 8545 --rpc --rpcport "8545" --dev --rpccorsdomain "https://remix.ethereum.org,http://remix.ethereum.org" console
+geth --datadir test-chain-dir --rpc --dev --rpccorsdomain "https://remix.ethereum.org,http://remix.ethereum.org" console
 ```
 
 Once geth is running in dev mode, you can interact with it in the same way as when geth is running in other ways.
