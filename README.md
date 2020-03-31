@@ -217,6 +217,8 @@ aware of and agree upon. This consists of a small JSON file (e.g. call it `genes
     "eip158Block": 0,
     "byzantiumBlock": 0,
     "constantinopleBlock": 0,
+    "istanbulBlock": 0,
+    "muirGlacierBlock": 0,
     "petersburgBlock": 0
   },
   "alloc": {},
