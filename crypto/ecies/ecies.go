@@ -35,6 +35,7 @@ import (
 	"crypto/elliptic"
 	"crypto/hmac"
 	"crypto/subtle"
+	"encoding/binary"
 	"fmt"
 	"hash"
 	"io"
