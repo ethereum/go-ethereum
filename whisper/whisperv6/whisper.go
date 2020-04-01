@@ -31,6 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/syndtr/goleveldb/leveldb/errors"
@@ -128,6 +130,12 @@ func New(cfg *Config) *Whisper {
 				"minimumPoW":     whisper.MinPow(),
 			}
 		},
+	}
+	//add dns discovery to whisper
+	client := dnsdisc.NewClient(dnsdisc.Config{})
+	s, err := client.NewIterator([]string{params.KnownDNSNetworks[params.MainnetGenesisHash]}...)
+	if err == nil {
+		whisper.protocol.DialCandidates = s
 	}
 
 	return whisper
