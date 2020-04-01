@@ -231,6 +231,7 @@ func init() {
 		dumpGenesisCommand,
 		inspectCommand,
 		generateTrieCommand,
+		generateBinaryTrieCommand,
 		// See accountcmd.go:
 		accountCommand,
 		walletCommand,
