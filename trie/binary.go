@@ -71,7 +71,7 @@ func (t *BinaryTrie) tryGet(key []byte, depth int) ([]byte, error) {
 			}
 			return t.value, nil
 		}
-		return t.left.tryGet(key, depth+1)
+		return t.right.tryGet(key, depth+1)
 	}
 }
 
