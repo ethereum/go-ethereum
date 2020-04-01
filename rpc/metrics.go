@@ -23,17 +23,17 @@ import (
 )
 
 var (
-	jsonrpcRequestGauge    = metrics.NewRegisteredGauge("rpc/jsonrpc/requests", nil)
-	successfulRequestGauge = metrics.NewRegisteredGauge("rpc/jsonrpc/success", nil)
-	failedReqeustGauge     = metrics.NewRegisteredGauge("rpc/jsonrpc/failure", nil)
-	jsonrpcServingTimer    = metrics.NewRegisteredTimer("rpc/jsonrpc/duration/all", nil)
+	rpcRequestGauge        = metrics.NewRegisteredGauge("rpc/requests", nil)
+	successfulRequestGauge = metrics.NewRegisteredGauge("rpc/success", nil)
+	failedReqeustGauge     = metrics.NewRegisteredGauge("rpc/failure", nil)
+	rpcServingTimer        = metrics.NewRegisteredTimer("rpc/duration/all", nil)
 )
 
-func newJsonrpcServingTimer(method string, valid bool) metrics.Timer {
+func newRPCServingTimer(method string, valid bool) metrics.Timer {
 	flag := "success"
 	if !valid {
 		flag = "failure"
 	}
-	m := fmt.Sprintf("rpc/jsonrpc/duration/%s/%s", method, flag)
+	m := fmt.Sprintf("rpc/duration/%s/%s", method, flag)
 	return metrics.GetOrRegisterTimer(m, nil)
 }
