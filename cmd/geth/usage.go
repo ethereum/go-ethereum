@@ -73,6 +73,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.SmartCardDaemonPathFlag,
 			utils.NetworkIdFlag,
 			utils.TestnetFlag,
+			utils.RopstenFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 			utils.SyncModeFlag,
