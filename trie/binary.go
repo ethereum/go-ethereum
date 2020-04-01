@@ -88,25 +88,39 @@ func (t *BinaryTrie) TryUpdate(key, value []byte) error {
 }
 
 func (t *BinaryTrie) insert(depth int, key, value []byte) error {
-	// TODO hash intermediate nodes
 	by := key[depth/8]
-	bi := (by >> uint(depth%8)) & 1
+	bi := (by >> uint(7-depth%8)) & 1
 	if bi == 0 {
 		if t.left == nil {
-			if depth == len(key)*8-2 {
+			switch depth {
+			case len(key)*8 - 1:
+				t.value = value
+				return nil
+			case len(key)*8 - 2:
 				t.left = &BinaryTrie{nil, nil, value, t.db}
 				return nil
-			} else {
+			default:
 				t.left = &BinaryTrie{nil, nil, nil, t.db}
 			}
 		}
 		return t.left.insert(depth+1, key, value)
 	} else {
 		if t.right == nil {
-			if depth == len(key)*8-2 {
+			// Free the space taken by left branch as insert
+			// will no longer visit it.
+			if t.left != nil {
+				h := t.left.Hash()
+				t.left = hashBinaryNode(h)
+			}
+
+			switch depth {
+			case len(key)*8 - 1:
+				t.value = value
+				return nil
+			case len(key)*8 - 2:
 				t.right = &BinaryTrie{nil, nil, value, t.db}
 				return nil
-			} else {
+			default:
 				t.right = &BinaryTrie{nil, nil, nil, t.db}
 			}
 		}

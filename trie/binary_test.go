@@ -95,3 +95,47 @@ func TestBinaryForkInsertRead(t *testing.T) {
 	}
 
 }
+
+func TestBinaryInsertLeftRight(t *testing.T) {
+	trie, err := NewBinary(nil)
+	if err != nil {
+		t.Fatalf("error creating binary trie: %v", err)
+	}
+
+	trie.TryUpdate([]byte{0}, []byte{0})
+	trie.TryUpdate([]byte{128}, []byte{1})
+
+	// Trie is expected to look like this:
+	//         /\
+	//        / /
+	//       / /
+	//      / /
+	//     / /
+	//    / /
+	//   / /
+	//  / /
+
+	// Check there is a left branch
+	if trie.left == nil {
+		t.Fatal("empty left branch")
+	}
+
+	// Check that the left branch has already been hashed
+	if _, ok := trie.left.(hashBinaryNode); !ok {
+		t.Fatalf("left branch should have been hashed!")
+	}
+
+	// Check there is a right branch
+	if trie.right == nil {
+		t.Fatal("empty right branch")
+	}
+
+	// Check that the right branch has only lefts after the
+	// first right.
+	for i, tr := 1, trie.right; i < 8; i++ {
+		if tr == nil {
+			t.Fatal("invalid trie structure")
+		}
+		tr = tr.(*BinaryTrie).left
+	}
+}
