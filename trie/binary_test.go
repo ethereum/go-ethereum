@@ -21,11 +21,10 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
 func TestBinaryLeafReadEmpty(t *testing.T) {
-	trie, err := NewBinary(NewDatabase(memorydb.New()))
+	trie, err := NewBinary(nil)
 	if err != nil {
 		t.Fatalf("error creating binary trie: %v", err)
 	}
@@ -37,7 +36,7 @@ func TestBinaryLeafReadEmpty(t *testing.T) {
 }
 
 func TestBinaryLeafInsert(t *testing.T) {
-	trie, err := NewBinary(NewDatabase(memorydb.New()))
+	trie, err := NewBinary(nil)
 	if err != nil {
 		t.Fatalf("error creating binary trie: %v", err)
 	}
@@ -50,7 +49,7 @@ func TestBinaryLeafInsert(t *testing.T) {
 }
 
 func TestBinaryLeafInsertRead(t *testing.T) {
-	trie, err := NewBinary(NewDatabase(memorydb.New()))
+	trie, err := NewBinary(nil)
 	if err != nil {
 		t.Fatalf("error creating binary trie: %v", err)
 	}
@@ -71,7 +70,7 @@ func TestBinaryLeafInsertRead(t *testing.T) {
 }
 
 func TestBinaryForkInsertRead(t *testing.T) {
-	trie, err := NewBinary(NewDatabase(memorydb.New()))
+	trie, err := NewBinary(nil)
 	if err != nil {
 		t.Fatalf("error creating binary trie: %v", err)
 	}
