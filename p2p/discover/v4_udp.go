@@ -280,7 +280,11 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 		return nil, err
 	}
 	t.tab = tab
-	go tab.loop()
+	t.wg.Add(1)
+	go func() {
+		defer t.wg.Done()
+		tab.loop()
+	}()
 
 	t.wg.Add(2)
 	go t.loop()
@@ -298,8 +302,8 @@ func (t *UDPv4) Close() {
 	t.closeOnce.Do(func() {
 		t.cancelCloseCtx()
 		t.conn.Close()
-		t.wg.Wait()
 		t.tab.close()
+		t.wg.Wait()
 	})
 }
 
