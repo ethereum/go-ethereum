@@ -905,6 +905,7 @@ func (whisper *Whisper) update() {
 	defer whisper.wg.Done()
 	// Start a ticker to check for expirations
 	expire := time.NewTicker(expirationCycle)
+	defer expire.Stop()
 
 	// Repeat updates until termination is requested
 	for {
