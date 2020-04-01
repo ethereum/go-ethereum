@@ -146,7 +146,7 @@ var (
 // NIST SP 800-56 Concatenation Key Derivation Function (see section 5.8.1).
 func concatKDF(hash hash.Hash, z, s1 []byte, kdLen int) []byte {
 	counterBytes := make([]byte, 4)
-	k := make([]byte, 0, kdLen+hash.Size())
+	k := make([]byte, 0, roundup(kdLen, hash.Size()))
 	for counter := uint32(1); len(k) < kdLen; counter++ {
 		binary.BigEndian.PutUint32(counterBytes, counter)
 		hash.Write(counterBytes)
@@ -156,6 +156,11 @@ func concatKDF(hash hash.Hash, z, s1 []byte, kdLen int) []byte {
 		hash.Reset()
 	}
 	return k[:kdLen]
+}
+
+// roundup rounds size up to the nearest multiple of blocksize.
+func roundup(size, blocksize int) int {
+	return size + blocksize - (size % blocksize)
 }
 
 // messageTag computes the MAC of a message (called the tag) as per
