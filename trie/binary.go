@@ -17,7 +17,9 @@
 package trie
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -25,17 +27,24 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-type BinaryTrie struct {
-	left  *BinaryTrie
-	right *BinaryTrie
-	value []byte
-	db    ethdb.Database
+type binaryNode interface {
+	Hash() []byte
+	Commit() error
+	insert(depth int, key, value []byte) error
+	tryGet(key []byte, depth int) ([]byte, error)
 }
 
-func NewBinary(db ethdb.Database) (*BinaryTrie, error) {
-	if db == nil {
-		return nil, fmt.Errorf("trie.NewBinary called without a database")
+type (
+	BinaryTrie struct {
+		left  binaryNode
+		right binaryNode
+		value []byte
+		db    ethdb.Database
 	}
+	hashBinaryNode []byte
+)
+
+func NewBinary(db ethdb.Database) (*BinaryTrie, error) {
 
 	return &BinaryTrie{db: db}, nil
 }
@@ -55,7 +64,7 @@ func (t *BinaryTrie) TryGet(key []byte) ([]byte, error) {
 
 func (t *BinaryTrie) tryGet(key []byte, depth int) ([]byte, error) {
 	by := key[depth/8]
-	bi := (by >> uint(depth%8)) & 1
+	bi := (by >> uint(7-depth%8)) & 1
 	if bi == 0 {
 		if t.left == nil {
 			if depth < len(key)*8-1 || t.value == nil {
@@ -79,6 +88,35 @@ func (t *BinaryTrie) Update(key, value []byte) {
 	if err := t.TryUpdate(key, value); err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
+}
+
+func (t *BinaryTrie) Hash() []byte {
+	var payload bytes.Buffer
+
+	var lh []byte
+	if t.left != nil {
+		lh = t.left.Hash()
+	}
+	payload.Write(lh)
+	t.left = hashBinaryNode(lh)
+
+	var rh []byte
+	if t.right != nil {
+		rh = t.right.Hash()
+	}
+	payload.Write(rh)
+	t.right = hashBinaryNode(rh)
+
+	hasher := sha3.NewLegacyKeccak256()
+	if t.value != nil {
+		hasher.Write(t.value)
+		hv := hasher.Sum(nil)
+		payload.Write(hv)
+	}
+
+	hasher.Reset()
+	io.Copy(hasher, &payload)
+	return hasher.Sum(nil)
 }
 
 func (t *BinaryTrie) TryUpdate(key, value []byte) error {
@@ -128,41 +166,63 @@ func (t *BinaryTrie) insert(depth int, key, value []byte) error {
 	}
 }
 
-func (t *BinaryTrie) Commit() ([]byte, error) {
-	var payload [3][]byte
+func (t *BinaryTrie) Commit() error {
+	var payload bytes.Buffer
 	var err error
+
+	var lh []byte
 	if t.left != nil {
-		payload[0], err = t.left.Commit()
+		lh = t.left.Hash()
+		err := t.left.Commit()
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
+	payload.Write(lh)
+	t.left = hashBinaryNode(lh)
+
+	var rh []byte
 	if t.right != nil {
-		payload[1], err = t.right.Commit()
+		rh = t.right.Hash()
+		err := t.right.Commit()
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
+	payload.Write(rh)
+	t.right = hashBinaryNode(rh)
+
 	hasher := sha3.NewLegacyKeccak256()
 	if t.value != nil {
 		hasher.Write(t.value)
-		hasher.Sum(payload[2][:])
+		hv := hasher.Sum(nil)
+		payload.Write(hv)
 	}
 
 	hasher.Reset()
-	hasher.Write(payload[0])
-	hasher.Write(payload[1])
-	hasher.Write(payload[2])
+	io.Copy(hasher, &payload)
 	h := hasher.Sum(nil)
-	data := make([]byte, len(payload[0])+len(payload[1])+len(payload[2])+3)
-	data[0] = byte(len(payload[0]))
-	copy(data[1:], payload[0])
-	data[len(payload[0])+1] = byte(len(payload[1]))
-	copy(data[2+len(payload[0]):], payload[1])
-	data[len(payload[0])+len(payload[1])+2] = byte(len(payload[2]))
-	copy(data[2+len(payload[0])+len(payload[1]):], payload[2])
 
-	t.db.Put(h, data)
+	err = t.db.Put(h, payload.Bytes())
 
-	return h, err
+	return err
+}
+
+func (h hashBinaryNode) Commit() error {
+	return nil
+}
+
+func (h hashBinaryNode) Hash() []byte {
+	return h
+}
+
+func (h hashBinaryNode) insert(depth int, key, value []byte) error {
+	return fmt.Errorf("trying to insert into a hash")
+}
+
+func (h hashBinaryNode) tryGet(key []byte, depth int) ([]byte, error) {
+	if depth == 2*len(key) {
+		return []byte(h), nil
+	}
+	return nil, fmt.Errorf("reached an empty branch")
 }

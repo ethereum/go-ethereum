@@ -53,12 +53,12 @@ func GenerateBinaryTree(it AccountIterator) common.Hash {
 	}
 	log.Info("Inserted all leaves", "count", counter)
 
-	h, err := btrie.Commit()
+	err = btrie.Commit()
 	if err != nil {
 		panic(fmt.Sprintf("error committing trie, err=%v", err))
 	}
 
-	return common.BytesToHash(h)
+	return common.Hash{}
 }
 
 // GenerateTrieRoot takes an account iterator and reproduces the root hash.
