@@ -886,9 +886,9 @@ func (srv *Server) listenLoop() {
 			srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
 		}
 		go func() {
-                        srv.SetupConn(fd, inboundConn, nil)
-                        slots <- struct{}{}
-                }()
+			srv.SetupConn(fd, inboundConn, nil)
+			slots <- struct{}{}
+		}()
 	}
 }
 
