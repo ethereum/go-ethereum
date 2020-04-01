@@ -72,7 +72,6 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.NoUSBFlag,
 			utils.SmartCardDaemonPathFlag,
 			utils.NetworkIdFlag,
-			utils.TestnetFlag,
 			utils.RopstenFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
@@ -246,6 +245,7 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "DEPRECATED",
 		Flags: []cli.Flag{
+			utils.LegacyTestnetFlag,
 			utils.LightLegacyServFlag,
 			utils.LightLegacyPeersFlag,
 			utils.MinerLegacyThreadsFlag,
