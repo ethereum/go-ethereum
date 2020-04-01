@@ -885,12 +885,12 @@ func (srv *Server) listenLoop() {
 			fd = newMeteredConn(fd, true, addr)
 			srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
 		}
-		srv.loopWG.Add(1)
 		go func() {
-			defer srv.loopWG.Done()
-			srv.SetupConn(fd, inboundConn, nil)
-			slots <- struct{}{}
-		}()
+                        defer func() {
+                                slots <- struct{}{}
+                        }()
+                        srv.SetupConn(fd, inboundConn, nil)
+                }()
 	}
 }
 
