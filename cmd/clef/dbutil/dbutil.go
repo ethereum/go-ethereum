@@ -76,7 +76,7 @@ func readConfigYAML(path string) (*DBConf, error) {
 	// yaml.Unmarshal()
 	yamlContent, err := ioutil.ReadFile(path)
 	if err != nil {
-		log.Warn("Cannot read yaml file fro file:", path)
+		log.Warn("Cannot read yaml file from file:", path)
 		return nil, err
 	}
 
@@ -231,7 +231,7 @@ func (kvstore *KVStore) queryRow(query string, args ...interface{}) (string, err
 	row := DBRow{}
 	err := kvstore.db.QueryRow(query, args...).Scan(&row.id, &row.key, &row.val)
 	if err != nil {
-		log.Error("Error querying row: ", err)
+		log.Warn("No existing result is present in the database. It should be fine if you're creating a new entry")
 		return "", err
 	}
 	return row.val, nil
