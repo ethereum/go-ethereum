@@ -613,18 +613,20 @@ func TestPack(t *testing.T) {
 				"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), // tuple[1].A[1]
 		},
 	} {
-		typ, err := NewType(test.typ, "", test.components)
-		if err != nil {
-			t.Fatalf("%v failed. Unexpected parse error: %v", i, err)
-		}
-		output, err := typ.pack(reflect.ValueOf(test.input))
-		if err != nil {
-			t.Fatalf("%v failed. Unexpected pack error: %v", i, err)
-		}
+		t.Run(test.typ, func(t *testing.T) {
+			typ, err := NewType(test.typ, "", test.components)
+			if err != nil {
+				t.Fatalf("%v failed. Unexpected parse error: %v", i, err)
+			}
+			output, err := typ.pack(reflect.ValueOf(test.input))
+			if err != nil {
+				t.Fatalf("%v failed. Unexpected pack error: %v", i, err)
+			}
 
-		if !bytes.Equal(output, test.output) {
-			t.Errorf("input %d for typ: %v failed. Expected bytes: '%x' Got: '%x'", i, typ.String(), test.output, output)
-		}
+			if !bytes.Equal(output, test.output) {
+				t.Errorf("input %d for typ: %v failed. Expected bytes: '%x' Got: '%x'", i, typ.String(), test.output, output)
+			}
+		})
 	}
 }
 
