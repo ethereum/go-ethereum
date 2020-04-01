@@ -1021,14 +1021,12 @@ func (srv *Server) launchPeer(c *conn) *Peer {
 		// to the peer.
 		p.events = &srv.peerFeed
 	}
-	srv.loopWG.Add(1)
 	go srv.runPeer(p)
 	return p
 }
 
 // runPeer runs in its own goroutine for each peer.
 func (srv *Server) runPeer(p *Peer) {
-	defer srv.loopWG.Done()
 	if srv.newPeerHook != nil {
 		srv.newPeerHook(p)
 	}
