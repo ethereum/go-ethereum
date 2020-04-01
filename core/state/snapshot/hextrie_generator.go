@@ -17,10 +17,12 @@
 package snapshot
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
@@ -32,6 +34,32 @@ type leaf struct {
 }
 
 type trieGeneratorFn func(in chan (leaf), out chan (common.Hash))
+
+func GenerateBinaryTree(it AccountIterator) common.Hash {
+	db, err := rawdb.NewLevelDBDatabase("./bintrie", 128, 1024, "")
+	if err != nil {
+		panic(fmt.Sprintf("error opening bintrie db, err=%v", err))
+	}
+	btrie, err := trie.NewBinary(db)
+	if err != nil {
+		panic(fmt.Sprintf("error creating binary trie, err=%v", err))
+	}
+	counter := 0
+	for it.Next() {
+		counter++
+		// Don't get the entire expanded account at this
+		// stage - NOTE
+		btrie.TryUpdate(it.Hash().Bytes(), it.Account())
+	}
+	log.Info("Inserted all leaves", "count", counter)
+
+	h, err := btrie.Commit()
+	if err != nil {
+		panic(fmt.Sprintf("error committing trie, err=%v", err))
+	}
+
+	return common.BytesToHash(h)
+}
 
 // GenerateTrieRoot takes an account iterator and reproduces the root hash.
 func GenerateTrieRoot(it AccountIterator) common.Hash {
