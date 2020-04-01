@@ -67,7 +67,7 @@ func (t *BinaryTrie) tryGet(key []byte, depth int) ([]byte, error) {
 	} else {
 		if t.right == nil {
 			if depth < len(key)*8-1 || t.value == nil {
-				return nil, fmt.Errorf("could not find key %s in trie", common.ToHex(key))
+				return nil, fmt.Errorf("could not find key 0x%x in trie", key)
 			}
 			return t.value, nil
 		}
