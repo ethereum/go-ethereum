@@ -23,9 +23,9 @@ import (
 )
 
 var (
-	jsonrpcRequestGauge    = metrics.NewRegisteredGauge("rpc/jsonrpc/count/in", nil)
-	successfulRequestGauge = metrics.NewRegisteredGauge("rpc/jsonrpc/count/success", nil)
-	failedReqeustGauge     = metrics.NewRegisteredGauge("rpc/jsonrpc/count/failure", nil)
+	jsonrpcRequestGauge    = metrics.NewRegisteredGauge("rpc/jsonrpc/requests", nil)
+	successfulRequestGauge = metrics.NewRegisteredGauge("rpc/jsonrpc/success", nil)
+	failedReqeustGauge     = metrics.NewRegisteredGauge("rpc/jsonrpc/failure", nil)
 	jsonrpcServingTimer    = metrics.NewRegisteredTimer("rpc/jsonrpc/duration/all", nil)
 )
 
