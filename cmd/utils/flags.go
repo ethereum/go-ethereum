@@ -1661,11 +1661,8 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	return genesis
 }
 
-func getGenesis(ctx *cli.Context) *core.Genesis {
-	genesisPath := ctx.Args().Get(len(ctx.Args()) - 1)
-	if genesisPath == "" {
-		return nil
-	}
+func getGenesis(genesisPath string) *core.Genesis {
+	log.Info("Reading genesis at ", "file", genesisPath)
 	file, _ := os.Open(genesisPath)
 	defer file.Close()
 
@@ -1676,10 +1673,8 @@ func getGenesis(ctx *cli.Context) *core.Genesis {
 
 // MakeChain creates a chain manager from set command line flags.
 func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb ethdb.Database) {
-	genesis := getGenesis(ctx)
-	if genesis == nil {
-		genesis = MakeGenesis(ctx)
-	}
+	// expecting the last argument to be the genesis file
+	genesis := getGenesis(ctx.Args().Get(len(ctx.Args()) - 1))
 
 	var err error
 	chainDb = MakeChainDatabase(ctx, stack)
