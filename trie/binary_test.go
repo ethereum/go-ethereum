@@ -82,15 +82,13 @@ func TestBinaryForkInsertRead(t *testing.T) {
 		}
 	}
 
-	for i := byte(0); i < 10; i++ {
-		v, err := trie.TryGet([]byte{i})
-		if err != nil {
-			t.Fatalf("could not read data back from simple binary trie, err=%v", err)
-		}
+	v, err := trie.TryGet([]byte{9})
+	if err != nil {
+		t.Fatalf("could not read data back from simple binary trie, err=%v", err)
+	}
 
-		if !bytes.Equal(v, common.FromHex("01")) {
-			t.Fatalf("Invalid value read from the binary trie: %s != %s", common.ToHex(v), "01")
-		}
+	if !bytes.Equal(v, common.FromHex("01")) {
+		t.Fatalf("Invalid value read from the binary trie: %s != %s", common.ToHex(v), "01")
 	}
 
 }
