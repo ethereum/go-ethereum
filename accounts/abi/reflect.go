@@ -118,18 +118,16 @@ func requireAssignable(dst, src reflect.Value) error {
 }
 
 // requireUnpackKind verifies preconditions for unpacking `args` into `kind`
-func requireUnpackKind(v reflect.Value, t reflect.Type, k reflect.Kind,
-	args Arguments) error {
-
-	switch k {
+func requireUnpackKind(v reflect.Value, minLength int, args Arguments) error {
+	switch v.Kind() {
 	case reflect.Struct:
 	case reflect.Slice, reflect.Array:
-		if minLen := args.LengthNonIndexed(); v.Len() < minLen {
+		if v.Len() < minLength {
 			return fmt.Errorf("abi: insufficient number of elements in the list/array for unpack, want %d, got %d",
-				minLen, v.Len())
+				minLength, v.Len())
 		}
 	default:
-		return fmt.Errorf("abi: cannot unmarshal tuple into %v", t)
+		return fmt.Errorf("abi: cannot unmarshal tuple into %v", v.Type())
 	}
 	return nil
 }
@@ -156,9 +154,8 @@ func mapArgNamesToStructFields(argNames []string, value reflect.Value) (map[stri
 			continue
 		}
 		// skip fields that have no abi:"" tag.
-		var ok bool
-		var tagName string
-		if tagName, ok = typ.Field(i).Tag.Lookup("abi"); !ok {
+		tagName, ok := typ.Field(i).Tag.Lookup("abi")
+		if !ok {
 			continue
 		}
 		// check if tag is empty.
