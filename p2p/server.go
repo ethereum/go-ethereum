@@ -562,7 +562,11 @@ func (srv *Server) setupDiscovery() error {
 	srv.log.Debug("UDP listener up", "addr", realaddr)
 	if srv.NAT != nil {
 		if !realaddr.IP.IsLoopback() {
-			go nat.Map(srv.NAT, srv.quit, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+			srv.loopWG.Add(1)
+			go func() {
+				defer srv.loopWG.Done()
+				nat.Map(srv.NAT, srv.quit, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+			}()
 		}
 	}
 	srv.localnode.SetFallbackUDP(realaddr.Port)
@@ -666,8 +670,8 @@ func (srv *Server) setupListening() error {
 		if !tcp.IP.IsLoopback() && srv.NAT != nil {
 			srv.loopWG.Add(1)
 			go func() {
+				defer srv.loopWG.Done()
 				nat.Map(srv.NAT, srv.quit, "tcp", tcp.Port, tcp.Port, "ethereum p2p")
-				srv.loopWG.Done()
 			}()
 		}
 	}
@@ -881,7 +885,9 @@ func (srv *Server) listenLoop() {
 			fd = newMeteredConn(fd, true, addr)
 			srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
 		}
+		srv.loopWG.Add(1)
 		go func() {
+			defer srv.loopWG.Done()
 			srv.SetupConn(fd, inboundConn, nil)
 			slots <- struct{}{}
 		}()
@@ -1015,12 +1021,14 @@ func (srv *Server) launchPeer(c *conn) *Peer {
 		// to the peer.
 		p.events = &srv.peerFeed
 	}
+	srv.loopWG.Add(1)
 	go srv.runPeer(p)
 	return p
 }
 
 // runPeer runs in its own goroutine for each peer.
 func (srv *Server) runPeer(p *Peer) {
+	defer srv.loopWG.Done()
 	if srv.newPeerHook != nil {
 		srv.newPeerHook(p)
 	}
