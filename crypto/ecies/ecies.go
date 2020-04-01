@@ -158,7 +158,7 @@ func concatKDF(hash hash.Hash, z, s1 []byte, kdLen int) []byte {
 	return k[:kdLen]
 }
 
-// roundup rounds size up to the nearest multiple of blocksize.
+// roundup rounds size up to the next multiple of blocksize.
 func roundup(size, blocksize int) int {
 	return size + blocksize - (size % blocksize)
 }
