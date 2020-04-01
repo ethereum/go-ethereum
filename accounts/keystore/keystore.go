@@ -23,6 +23,8 @@ var (
 // KeyStoreScheme is the protocol scheme prefixing account and wallet URLs.
 const KeyStoreScheme = "keystore"
 
+const keystoreDBTableName = "keystore"
+
 // KeyStore is the interface which abstracts all needed operations required
 type KeyStore interface {
 	// Wallets implements accounts.Backend, returning all single-key wallets from the KeyStore.
@@ -120,8 +122,8 @@ func NewPlaintextKeyStore(keydir string) KeyStore {
 }
 
 // NewKeyStoreDB creates a keystore for the given database
-func NewKeyStoreDB(path, table string, scryptN, scryptP int) (KeyStore, error) {
-	kvstore, err := dbutil.NewKVStore(path, table)
+func NewKeyStoreDB(path string, scryptN, scryptP int) (KeyStore, error) {
+	kvstore, err := dbutil.NewKVStore(path, keystoreDBTableName)
 	if err != nil {
 		return nil, err
 	}

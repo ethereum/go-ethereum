@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"path/filepath"
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -125,7 +126,8 @@ type Metadata struct {
 	Origin    string `json:"Origin"`
 }
 
-func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath string) *accounts.Manager {
+// StartClefAccountManager initializes and start clef Account Manager
+func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath string) (*accounts.Manager, error) {
 	var (
 		backends []accounts.Backend
 		n, p     = keystore.StandardScryptN, keystore.StandardScryptP
@@ -133,9 +135,28 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath str
 	if lightKDF {
 		n, p = keystore.LightScryptN, keystore.LightScryptP
 	}
+	// check keystore type
+	var fsKeystore bool
+	if len(ksLocation) > 0 {
+		ext := filepath.Ext(ksLocation)
+		if ext == ".yaml" {
+			fsKeystore = false
+		} else {
+			fsKeystore = true
+		}
+	}
+
 	// support password based accounts
 	if len(ksLocation) > 0 {
-		backends = append(backends, keystore.NewKeyStore(ksLocation, n, p))
+		if fsKeystore {
+			backends = append(backends, keystore.NewKeyStore(ksLocation, n, p))
+		} else {
+			ks, err := keystore.NewKeyStoreDB(ksLocation, n, p)
+			if err != nil {
+				return nil, err
+			}
+			backends = append(backends, ks)
+		}
 	}
 	if !nousb {
 		// Start a USB hub for Ledger hardware wallets
@@ -162,7 +183,7 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath str
 	}
 
 	// Start a smart card hub
-	if len(scpath) > 0 {
+	if len(scpath) > 0 && fsKeystore {
 		// Sanity check that the smartcard path is valid
 		fi, err := os.Stat(scpath)
 		if err != nil {
@@ -181,7 +202,7 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath str
 	}
 
 	// Clef doesn't allow insecure http account unlock.
-	return accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: false}, backends...)
+	return accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: false}, backends...), nil
 }
 
 // MetadataFromContext extracts Metadata from a given context.Context

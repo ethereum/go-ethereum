@@ -125,7 +125,10 @@ func setup(ksLoc string, t *testing.T) (*core.SignerAPI, *headlessUi) {
 		t.Fatal(err.Error())
 	}
 	ui := &headlessUi{make(chan string, 20), make(chan string, 20)}
-	am := core.StartClefAccountManager(ksLoc, true, true, "")
+	am, err := core.StartClefAccountManager(ksLoc, true, true, "")
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	api := core.NewSignerAPI(am, 1337, true, ui, db, true, storage.NewNoStorage())
 	return api, ui
 }
