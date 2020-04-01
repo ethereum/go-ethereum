@@ -165,9 +165,9 @@ var (
 		Usage: "Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten, 4=Rinkeby, 5=Görli)",
 		Value: eth.DefaultConfig.NetworkId,
 	}
-	LegacyTestnetFlag = cli.BoolFlag{
+	LegacyTestnetFlag = cli.BoolFlag{ // Deprecated in favor of --goerli, --rinkeby, or --ropsten
 		Name:  "testnet",
-		Usage: "Deprecated ambiguous flag: Please choose one of --goerli, --rinkeby, or --ropsten.",
+		Usage: "Pre-configured test network (Deprecated: Please choose one of --goerli, --rinkeby, or --ropsten.)",
 	}
 	RopstenFlag = cli.BoolFlag{
 		Name:  "ropsten",
@@ -1448,6 +1448,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	CheckExclusive(ctx, DeveloperFlag, LegacyTestnetFlag, RopstenFlag, RinkebyFlag, GoerliFlag)
 	CheckExclusive(ctx, LightLegacyServFlag, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
+
+	if ctx.GlobalIsSet(LegacyTestnetFlag.Name) {
+		log.Warn("The --testnet flag is ambiguous! Please specify one of --goerli, --rinkeby, or --ropsten.")
+		log.Warn("The generic --testnet flag is deprecated and will be removed in the future!")
+	}
 
 	var ks *keystore.KeyStore
 	if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0 {
