@@ -23,10 +23,10 @@ import (
 )
 
 var (
-	jsonrpcRequestGauge = metrics.NewRegisteredGauge("rpc/jsonrpc/count/in", nil)
-	validRequestGauge   = metrics.NewRegisteredGauge("rpc/jsonrpc/count/valid", nil)
-	invalidReqeustGauge = metrics.NewRegisteredGauge("rpc/jsonrpc/count/invalid", nil)
-	jsonrpcServingTimer = metrics.NewRegisteredTimer("rpc/jsonrpc/duration/all", nil)
+	jsonrpcRequestGauge    = metrics.NewRegisteredGauge("rpc/jsonrpc/count/in", nil)
+	successfulRequestGauge = metrics.NewRegisteredGauge("rpc/jsonrpc/count/success", nil)
+	failedReqeustGauge     = metrics.NewRegisteredGauge("rpc/jsonrpc/count/failure", nil)
+	jsonrpcServingTimer    = metrics.NewRegisteredTimer("rpc/jsonrpc/duration/all", nil)
 )
 
 func newJsonrpcServingTimer(version string, method string, valid bool) metrics.Timer {
