@@ -340,7 +340,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 			successfulRequestGauge.Inc(1)
 		}
 		jsonrpcServingTimer.UpdateSince(start)
-		newJsonrpcServingTimer(msg.Version, msg.Method, answer.Error == nil).UpdateSince(start)
+		newJsonrpcServingTimer(msg.Method, answer.Error == nil).UpdateSince(start)
 	}
 	return answer
 }

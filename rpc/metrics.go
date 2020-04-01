@@ -29,11 +29,11 @@ var (
 	jsonrpcServingTimer    = metrics.NewRegisteredTimer("rpc/jsonrpc/duration/all", nil)
 )
 
-func newJsonrpcServingTimer(version string, method string, valid bool) metrics.Timer {
+func newJsonrpcServingTimer(method string, valid bool) metrics.Timer {
 	flag := "success"
 	if !valid {
 		flag = "failure"
 	}
-	m := fmt.Sprintf("rpc/jsonrpc/duration/%s/%s/%s", version, method, flag)
+	m := fmt.Sprintf("rpc/jsonrpc/duration/%s/%s", method, flag)
 	return metrics.GetOrRegisterTimer(m, nil)
 }
