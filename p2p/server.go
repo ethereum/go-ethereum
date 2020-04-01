@@ -564,8 +564,8 @@ func (srv *Server) setupDiscovery() error {
 		if !realaddr.IP.IsLoopback() {
 			srv.loopWG.Add(1)
 			go func() {
-				defer srv.loopWG.Done()
 				nat.Map(srv.NAT, srv.quit, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+				srv.loopWG.Done()
 			}()
 		}
 	}
@@ -670,8 +670,8 @@ func (srv *Server) setupListening() error {
 		if !tcp.IP.IsLoopback() && srv.NAT != nil {
 			srv.loopWG.Add(1)
 			go func() {
-				defer srv.loopWG.Done()
 				nat.Map(srv.NAT, srv.quit, "tcp", tcp.Port, tcp.Port, "ethereum p2p")
+				srv.loopWG.Done()
 			}()
 		}
 	}
@@ -886,10 +886,8 @@ func (srv *Server) listenLoop() {
 			srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
 		}
 		go func() {
-                        defer func() {
-                                slots <- struct{}{}
-                        }()
                         srv.SetupConn(fd, inboundConn, nil)
+                        slots <- struct{}{}
                 }()
 	}
 }
