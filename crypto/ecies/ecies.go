@@ -143,18 +143,17 @@ var (
 	ErrInvalidMessage = fmt.Errorf("ecies: invalid message")
 )
 
-
 // NIST SP 800-56 Concatenation Key Derivation Function (see section 5.8.1).
 func concatKDF(hash hash.Hash, z, s1 []byte, kdLen int) []byte {
 	counterBytes := make([]byte, 4)
 	k := make([]byte, 0, kdLen+hash.Size())
 	for counter := uint32(1); len(k) < kdLen; counter++ {
-		hash.Reset()
 		binary.BigEndian.PutUint32(counterBytes, counter)
 		hash.Write(counterBytes)
 		hash.Write(z)
 		hash.Write(s1)
 		k = hash.Sum(k)
+		hash.Reset()
 	}
 	return k[:kdLen]
 }
