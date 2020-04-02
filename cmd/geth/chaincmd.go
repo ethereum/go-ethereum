@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -166,6 +167,48 @@ The export-preimages command export hash preimages to an RLP encoded stream`,
 		Description: `
 The arguments are interpreted as block numbers or hashes.
 Use "ethereum dump 0" to dump the genesis block.`,
+	}
+	trieRepairCommand = cli.Command{
+		Action:    utils.MigrateFlags(repairTrie),
+		Name:      "repairtrie",
+		Usage:     "Check and repair geth state database",
+		ArgsUsage: " ",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
+	}
+	trieInspectCommand = cli.Command{
+		Action:    utils.MigrateFlags(inspectTrie),
+		Name:      "inspecttrie",
+		Usage:     "Deep inspection of geth state database",
+		ArgsUsage: " ",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
+	}
+	blockInspectCommand = cli.Command{
+		Action:    utils.MigrateFlags(verifyBlocks),
+		Name:      "inspectblocks",
+		Usage:     "Check geth block database",
+		ArgsUsage: " ",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.RopstenFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
 	}
 )
 
@@ -416,6 +459,69 @@ func dump(ctx *cli.Context) error {
 		}
 	}
 	return nil
+}
+
+func repairTrie(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+	chain, chainDb := utils.MakeChain(ctx, stack)
+	defer chainDb.Close()
+	block := chain.CurrentBlock()
+	if block == nil {
+		return errors.New("No block found!")
+	}
+	log.Info("State root", "blockhash", block.Hash(), "state root", block.Root())
+	state, err := state.New(block.Root(), state.NewDatabase(chainDb), nil)
+	if err != nil {
+		return err
+	}
+	if state.Repair(chainDb) {
+		fmt.Printf("Please restart the node in fast-sync mode, and hope that it works!")
+	}
+	return nil
+}
+
+func verifyBlocks(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+	chain, chainDb := utils.MakeChain(ctx, stack)
+	defer chainDb.Close()
+	head := chain.CurrentBlock()
+	if head == nil {
+		return errors.New("No block found!")
+	}
+
+	log.Info("Checking if chain is intact ")
+	var prev *types.Block
+	for num := uint64(0); num < head.NumberU64(); num++ {
+		block := chain.GetBlockByNumber(num)
+		if prev != nil {
+			if block == nil {
+				log.Info("Missing block", "number", num)
+				return errors.New("Missing blocks")
+			}
+			if block.ParentHash() != prev.Hash() {
+				log.Info("Non-contiguous chain", "block", block.NumberU64(),
+					"parentHash", block.ParentHash(), "block", prev.NumberU64(),
+					"hash", prev.Hash())
+				return errors.New("Non-contiguous chain")
+			}
+			prev = block
+		}
+		if num%500000 == 0 {
+			log.Info("Checking at", "number", num)
+		}
+	}
+	log.Info("All seems ok", "inspected", head.NumberU64())
+	return nil
+}
+
+func inspectTrie(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+	chainDb := utils.MakeChainDatabase(ctx, stack, true)
+	defer chainDb.Close()
+	return state.InspectDb(chainDb)
 }
 
 // hashish returns true for strings that look like hashes.

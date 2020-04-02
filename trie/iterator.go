@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"container/heap"
 	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -219,7 +220,7 @@ func (it *nodeIterator) Error() error {
 // sets the Error field to the encountered failure. If `descend` is false,
 // skips iterating over any subnodes of the current node.
 func (it *nodeIterator) Next(descend bool) bool {
-	if it.err == errIteratorEnd {
+	if it.err != nil {
 		return false
 	}
 	if seek, ok := it.err.(seekError); ok {
@@ -574,4 +575,16 @@ func (it *unionIterator) Error() error {
 		}
 	}
 	return nil
+}
+
+func Pop(it NodeIterator) (bool, error) {
+	nit, ok := it.(*nodeIterator)
+	if !ok {
+		return false, fmt.Errorf("Type %T does not support pop", it)
+	}
+	if len(nit.stack) == 1 {
+		return false, nil
+	}
+	nit.pop()
+	return true, nil
 }
