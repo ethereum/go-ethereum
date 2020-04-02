@@ -232,12 +232,9 @@ func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-
 		wantPong     string
 		timer        *Timer
 	)
-	//timer := time.NewTimer(200 * time.Millisecond)
-	defer func() {
-		if timer != nil {
-			timer.Stop()
-		}
-	}()
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	<-timer.C
 	for {
 		select {
 		case _, open := <-sendPing:
@@ -254,11 +251,7 @@ func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-
 				t.Errorf("got pong with wrong data %q", data)
 			}
 			wantPong = ""
-			if timer == nil {
-				timer = time.NewTimer(200 * time.Millisecond)
-			} else {
-				timer.Reset(200 * time.Millisecond)
-			}
+			timer.Reset(200 * time.Millisecond)
 			sendResponse = timer.C
 		case <-sendResponse:
 			t.Logf("server sending response")
