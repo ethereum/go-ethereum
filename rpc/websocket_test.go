@@ -142,6 +142,7 @@ func TestClientWebsocketPing(t *testing.T) {
 
 	// Wait for the subscription result.
 	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
 	for {
 		select {
 		case err := <-sub.Err():
@@ -247,6 +248,11 @@ func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-
 			}
 			wantPong = ""
 			sendResponse = time.NewTimer(200 * time.Millisecond).C
+			defer func() {
+				if sendResponse != nil {
+					sendResponse.Stop()
+				}
+			}()
 		case <-sendResponse:
 			t.Logf("server sending response")
 			conn.WriteMessage(websocket.TextMessage, []byte(subNotify))
