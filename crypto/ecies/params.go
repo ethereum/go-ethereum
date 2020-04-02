@@ -49,7 +49,7 @@ var (
 	DefaultCurve                  = ethcrypto.S256()
 	ErrUnsupportedECDHAlgorithm   = fmt.Errorf("ecies: unsupported ECDH algorithm")
 	ErrUnsupportedECIESParameters = fmt.Errorf("ecies: unsupported ECIES parameters")
-	ErrInvalidKeyLen              = fmt.Errorf("ecies: invalid key size (> 256) in ECIESParams")
+	ErrInvalidKeyLen              = fmt.Errorf("ecies: invalid key size (> %d) in ECIESParams", maxKeyLen)
 )
 
 // KeyLen is limited to prevent overflow of the counter
