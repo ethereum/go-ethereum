@@ -52,9 +52,9 @@ var (
 	ErrInvalidKeyLen              = fmt.Errorf("ecies: invalid key size (> 256) in ECIESParams")
 )
 
-// Maximem key size is limited to prevent overflow of the counter
-// in ConcatKDF. While the theoretical limit is much higher, no known
-// cipher uses keys larger than 512 bytes.
+// KeyLen is limited to prevent overflow of the counter
+// in concatKDF. While the theoretical limit is much higher,
+// no known cipher uses keys larger than 512 bytes.
 const maxKeyLen = 512
 
 type ECIESParams struct {
