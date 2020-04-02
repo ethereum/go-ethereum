@@ -739,6 +739,7 @@ type CallArgs struct {
 	Data     *hexutil.Bytes  `json:"data"`
 }
 
+// ToMessage converts CallArgs to the Message type used by the core evm
 func (args *CallArgs) ToMessage(globalGasCap *big.Int) types.Message {
 	// Set sender address or use zero address if none specified.
 	var addr common.Address
@@ -770,7 +771,6 @@ func (args *CallArgs) ToMessage(globalGasCap *big.Int) types.Message {
 		data = []byte(*args.Data)
 	}
 
-	// Create new call message
 	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, false)
 	return msg
 }
