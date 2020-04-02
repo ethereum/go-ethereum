@@ -269,6 +269,7 @@ func (ct *costTracker) gfLoop() {
 			log.Debug("global cost factor saved", "value", factor)
 		}
 		saveTicker := time.NewTicker(time.Minute * 10)
+		defer saveTicker.Stop()
 
 		for {
 			select {
