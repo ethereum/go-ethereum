@@ -108,9 +108,6 @@ func (prv *PrivateKey) Decrypt(c, s1, s2 []byte) (m []byte, err error) {
 	if R.X == nil {
 		return nil, ErrInvalidPublicKey
 	}
-	if !R.Curve.IsOnCurve(R.X, R.Y) {
-		return nil, ErrInvalidCurve
-	}
 
 	z, err := prv.GenerateShared(R, params.KeyLen, params.KeyLen)
 	if err != nil {
