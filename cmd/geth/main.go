@@ -269,19 +269,25 @@ func prepare(ctx *cli.Context) {
 		}
 	}
 	// If we're running a known preset, log it for convenience.
-	if ctx.GlobalIsSet(utils.LegacyTestnetFlag.Name) {
+	switch {
+	case ctx.GlobalIsSet(utils.LegacyTestnetFlag.Name):
 		log.Info("Starting Geth on Ropsten testnet...")
 		log.Warn("The --testnet flag is ambiguous! Please specify one of --goerli, --rinkeby, or --ropsten.")
 		log.Warn("The generic --testnet flag is deprecated and will be removed in the future!")
-	} else if ctx.GlobalIsSet(utils.RopstenFlag.Name) {
+
+	case ctx.GlobalIsSet(utils.RopstenFlag.Name):
 		log.Info("Starting Geth on Ropsten testnet...")
-	} else if ctx.GlobalIsSet(utils.RinkebyFlag.Name) {
+
+	case ctx.GlobalIsSet(utils.RinkebyFlag.Name):
 		log.Info("Starting Geth on Rinkeby testnet...")
-	} else if ctx.GlobalIsSet(utils.GoerliFlag.Name) {
+
+	case ctx.GlobalIsSet(utils.GoerliFlag.Name):
 		log.Info("Starting Geth on Görli testnet...")
-	} else if ctx.GlobalIsSet(utils.DeveloperFlag.Name) {
+
+	case ctx.GlobalIsSet(utils.DeveloperFlag.Name):
 		log.Info("Starting Geth in ephemeral dev mode...")
-	} else if !ctx.GlobalIsSet(utils.NetworkIdFlag.Name) {
+
+	case !ctx.GlobalIsSet(utils.NetworkIdFlag.Name):
 		log.Info("Starting Geth on Ethereum mainnet...")
 	}
 	// If we're running a light client on any network, drop the cache to some meaningfully low amount
