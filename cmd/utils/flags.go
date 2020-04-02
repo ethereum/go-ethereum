@@ -781,13 +781,6 @@ var (
 func MakeDataDir(ctx *cli.Context) string {
 	if path := ctx.GlobalString(DataDirFlag.Name); path != "" {
 		if ctx.GlobalBool(LegacyTestnetFlag.Name) || ctx.GlobalBool(RopstenFlag.Name) {
-			// Maintain compatibility with older Geth configurations storing the
-			// Ropsten database in `testnet` instead of `ropsten`.
-			legacyPath := filepath.Join(path, "testnet")
-			if DatadirExists(legacyPath) {
-				log.Warn("Using the deprecated `testnet` datadir. Future versions will store the Ropsten chain in `ropsten`.")
-				return legacyPath
-			}
 			return filepath.Join(path, "ropsten")
 		}
 		if ctx.GlobalBool(RinkebyFlag.Name) {
@@ -1254,7 +1247,8 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		// Maintain compatibility with older Geth configurations storing the
 		// Ropsten database in `testnet` instead of `ropsten`.
 		legacyPath := filepath.Join(node.DefaultDataDir(), "testnet")
-		if DatadirExists(legacyPath) {
+		if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
+			log.Warn("Using the deprecated `testnet` datadir. Future versions will store the Ropsten chain in `ropsten`.")
 			cfg.DataDir = legacyPath
 		} else {
 			cfg.DataDir = filepath.Join(node.DefaultDataDir(), "ropsten")
@@ -1829,17 +1823,5 @@ func MigrateFlags(action func(ctx *cli.Context) error) func(*cli.Context) error 
 			}
 		}
 		return action(ctx)
-	}
-}
-
-// DatadirExists checks wether the datadir in `path` exists or not.
-//
-// E.g., can be used to determine wether to use the old `testnet` directory for
-// Ropsten or create a new `ropsten` datadir instead.
-func DatadirExists(path string) bool {
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		return true
-	} else {
-		return false
 	}
 }
