@@ -228,8 +228,8 @@ func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-
 
 	// Write messages.
 	var (
-		wantPong     string
-		timer        = time.NewTimer(0)
+		wantPong string
+		timer    = time.NewTimer(0)
 	)
 	defer timer.Stop()
 	<-timer.C
