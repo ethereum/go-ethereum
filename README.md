@@ -93,7 +93,7 @@ Specifying the `--goerli` flag, however, will reconfigure your `geth` instance a
    test network, which uses different P2P bootnodes, different network IDs and genesis
    states.
  * Instead of using the default data directory (`~/.ethereum` on Linux for example), `geth`
-   will nest itself one level deeper into a `goerli/` subfolder (`~/.ethereum/goerli` on
+   will nest itself one level deeper into a `goerli` subfolder (`~/.ethereum/goerli` on
    Linux). Note, on OSX and Linux this also means that attaching to a running testnet node
    requires the use of a custom endpoint since `geth attach` will try to attach to a
    production node endpoint by default, e.g.,
@@ -117,14 +117,16 @@ $ geth --rinkeby console
 
 ### Full node on the Ropsten test network
 
-In addition to Görli and Rinkeby, Go-Ethereum also supports the ancient Ropsten testnet.
-The Ropsten test network is based on the Ethash proof-of-work consensus algorithm. As such,
+In addition to Görli and Rinkeby, Geth also supports the ancient Ropsten testnet. The 
+Ropsten test network is based on the Ethash proof-of-work consensus algorithm. As such,
 it has certain extra overhead and is more susceptible to reorganization attacks due to the
 network's low difficulty/security. 
 
 ```shell
 $ geth --ropsten console
 ```
+
+*Note: Older Geth configurations store the Ropsten database in the `testnet` subdirectory.*
 
 ### Configuration
 
