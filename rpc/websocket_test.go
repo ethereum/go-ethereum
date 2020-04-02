@@ -247,12 +247,9 @@ func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-
 				t.Errorf("got pong with wrong data %q", data)
 			}
 			wantPong = ""
-			sendResponse = time.NewTimer(200 * time.Millisecond).C
-			defer func() {
-				if sendResponse != nil {
-					sendResponse.Stop()
-				}
-			}()
+			timer := time.NewTimer(200 * time.Millisecond)
+			defer timer.Stop()
+			sendResponse = timer.C
 		case <-sendResponse:
 			t.Logf("server sending response")
 			conn.WriteMessage(websocket.TextMessage, []byte(subNotify))
