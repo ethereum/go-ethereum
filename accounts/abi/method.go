@@ -60,10 +60,14 @@ type Method struct {
 
 	Inputs  Arguments
 	Outputs Arguments
-	// internal fields to prevent recalculation
-	sig string
-	id  []byte
-	str string
+	str     string
+	// Sig returns the methods string signature according to the ABI spec.
+	// e.g.		function foo(uint32 a, int b) = "foo(uint32,int256)"
+	// Please note that "int" is substitute for its canonical representation "int256"
+	Sig string
+	// ID returns the canonical representation of the method's signature used by the
+	// abi definition to identify method names and types.
+	ID []byte
 }
 
 // NewMethod creates a new Method.
@@ -71,6 +75,30 @@ type Method struct {
 // of the method.
 // A method should always be created using NewMethod.
 func NewMethod(name string, rawName string, mutability string, isConst, isPayable, isFallback, isReceive bool, inputs Arguments, outputs Arguments) Method {
+	// inputs
+	inputNames := make([]string, len(inputs))
+	types := make([]string, len(inputs))
+	for i, input := range inputs {
+		inputNames[i] = fmt.Sprintf("%v %v", input.Type, input.Name)
+		types[i] = input.Type.String()
+	}
+	// outputs
+	outputNames := make([]string, len(outputs))
+	for i, output := range outputs {
+		outputNames[i] = output.Type.String()
+		if len(output.Name) > 0 {
+			outputNames[i] += fmt.Sprintf(" %v", output.Name)
+		}
+	}
+	constant := ""
+	if isConst {
+		constant = "constant "
+	}
+
+	str := fmt.Sprintf("function %v(%v) %sreturns(%v)", rawName, strings.Join(inputNames, ", "), constant, strings.Join(outputNames, ", "))
+	sig := fmt.Sprintf("%v(%v)", rawName, strings.Join(types, ","))
+	id := crypto.Keccak256([]byte(sig))[:4]
+
 	method := Method{
 		Name:            name,
 		RawName:         rawName,
@@ -81,94 +109,13 @@ func NewMethod(name string, rawName string, mutability string, isConst, isPayabl
 		IsReceive:       isReceive,
 		Inputs:          inputs,
 		Outputs:         outputs,
+		str:             str,
+		Sig:             sig,
+		ID:              id,
 	}
-	method.initFields()
 	return method
-}
-
-// initFields should only be used in the unit tests
-// to create valid Method objects from json.
-func (method *Method) initFields() {
-	// Calculate and set Signature
-	method.sig = method.calcSig()
-	// Calculate the method id as the first 4 bytes of the hash of sig.
-	method.id = crypto.Keccak256([]byte(method.sig))[:4]
-	// Calculate and set the String representation
-	method.str = method.calcString()
-}
-
-// Sig returns the methods string signature according to the ABI spec.
-//
-// Example
-//
-//     function foo(uint32 a, int b) = "foo(uint32,int256)"
-//
-// Please note that "int" is substitute for its canonical representation "int256"
-func (method Method) Sig() string {
-	// Short circuit if the method is special. Fallback
-	// and Receive don't have signature at all.
-	if method.IsFallback || method.IsReceive {
-		return ""
-	}
-	return method.sig
 }
 
 func (method Method) String() string {
 	return method.str
-}
-
-// ID returns the canonical representation of the method's signature used by the
-// abi definition to identify method names and types.
-func (method Method) ID() []byte {
-	return method.id
-}
-
-// calcSig calculates the method string signature.
-func (method Method) calcSig() string {
-	types := make([]string, len(method.Inputs))
-	for i, input := range method.Inputs {
-		types[i] = input.Type.String()
-	}
-	return fmt.Sprintf("%v(%v)", method.RawName, strings.Join(types, ","))
-}
-
-func (method Method) calcString() string {
-	inputs := make([]string, len(method.Inputs))
-	for i, input := range method.Inputs {
-		inputs[i] = fmt.Sprintf("%v %v", input.Type, input.Name)
-	}
-	outputs := make([]string, len(method.Outputs))
-	for i, output := range method.Outputs {
-		outputs[i] = output.Type.String()
-		if len(output.Name) > 0 {
-			outputs[i] += fmt.Sprintf(" %v", output.Name)
-		}
-	}
-	// Extract meaningful state mutability of solidity method.
-	// If it's default value, never print it.
-	state := method.StateMutability
-	if state == "nonpayable" {
-		state = ""
-	}
-	if state != "" {
-		state = state + " "
-	}
-	identity := fmt.Sprintf("function %v", method.RawName)
-	if method.IsFallback {
-		identity = "fallback"
-	} else if method.IsReceive {
-		identity = "receive"
-	}
-	return fmt.Sprintf("%v(%v) %sreturns(%v)", identity, strings.Join(inputs, ", "), state, strings.Join(outputs, ", "))
-}
-
-// IsConstant returns the indicator whether the method is read-only.
-func (method Method) IsConstant() bool {
-	return method.StateMutability == "view" || method.StateMutability == "pure" || method.Constant
-}
-
-// IsPayable returns the indicator whether the method can process
-// plain ether transfers.
-func (method Method) IsPayable() bool {
-	return method.StateMutability == "payable" || method.Payable
 }

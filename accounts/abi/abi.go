@@ -76,7 +76,7 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 		return nil, err
 	}
 	// Pack up the method ID too if not a constructor and return
-	return append(method.ID(), arguments...), nil
+	return append(method.ID, arguments...), nil
 }
 
 // Unpack output in v according to the abi specification
@@ -163,13 +163,8 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			}
 			abi.Receive = NewMethod("", "", "payable", field.Constant, field.Payable, false, true, nil, nil)
 		case "event":
-			abi.Events[name] = Event{
-				Name:      name,
-				RawName:   field.Name,
-				Anonymous: field.Anonymous,
-				Inputs:    field.Inputs,
-			}
 			name := abi.eventName(field.Name)
+			abi.Events[name] = NewEvent(name, field.Name, field.Anonymous, field.Inputs)
 		}
 	}
 	return nil
@@ -210,7 +205,7 @@ func (abi *ABI) MethodById(sigdata []byte) (*Method, error) {
 		return nil, fmt.Errorf("data too short (%d bytes) for abi method lookup", len(sigdata))
 	}
 	for _, method := range abi.Methods {
-		if bytes.Equal(method.ID(), sigdata[:4]) {
+		if bytes.Equal(method.ID, sigdata[:4]) {
 			return &method, nil
 		}
 	}
@@ -221,7 +216,7 @@ func (abi *ABI) MethodById(sigdata []byte) (*Method, error) {
 // ABI and returns nil if none found.
 func (abi *ABI) EventByID(topic common.Hash) (*Event, error) {
 	for _, event := range abi.Events {
-		if bytes.Equal(event.ID().Bytes(), topic.Bytes()) {
+		if bytes.Equal(event.ID.Bytes(), topic.Bytes()) {
 			return &event, nil
 		}
 	}

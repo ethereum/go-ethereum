@@ -169,20 +169,20 @@ func TestMethodSignature(t *testing.T) {
 	String, _ := NewType("string", "", nil)
 	m := NewMethod("foo", "foo", "", false, false, false, false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil)
 	exp := "foo(string,string)"
-	if m.Sig() != exp {
-		t.Error("signature mismatch", exp, "!=", m.Sig())
+	if m.Sig != exp {
+		t.Error("signature mismatch", exp, "!=", m.Sig)
 	}
 
 	idexp := crypto.Keccak256([]byte(exp))[:4]
-	if !bytes.Equal(m.ID(), idexp) {
-		t.Errorf("expected ids to match %x != %x", m.ID(), idexp)
+	if !bytes.Equal(m.ID, idexp) {
+		t.Errorf("expected ids to match %x != %x", m.ID, idexp)
 	}
 
 	uintt, _ := NewType("uint256", "", nil)
 	m = NewMethod("foo", "foo", "", false, false, false, false, []Argument{{"bar", uintt, false}}, nil)
 	exp = "foo(uint256)"
-	if m.Sig() != exp {
-		t.Error("signature mismatch", exp, "!=", m.Sig())
+	if m.Sig != exp {
+		t.Error("signature mismatch", exp, "!=", m.Sig)
 	}
 
 	// Method with tuple arguments
@@ -200,8 +200,8 @@ func TestMethodSignature(t *testing.T) {
 	})
 	m = NewMethod("foo", "foo", "", false, false, false, false, []Argument{{"s", s, false}, {"bar", String, false}}, nil)
 	exp = "foo((int256,int256[],(int256,int256)[],(int256,int256)[2]),string)"
-	if m.Sig() != exp {
-		t.Error("signature mismatch", exp, "!=", m.Sig())
+	if m.Sig != exp {
+		t.Error("signature mismatch", exp, "!=", m.Sig)
 	}
 }
 
@@ -213,12 +213,12 @@ func TestOverloadedMethodSignature(t *testing.T) {
 	}
 	check := func(name string, expect string, method bool) {
 		if method {
-			if abi.Methods[name].Sig() != expect {
-				t.Fatalf("The signature of overloaded method mismatch, want %s, have %s", expect, abi.Methods[name].Sig())
+			if abi.Methods[name].Sig != expect {
+				t.Fatalf("The signature of overloaded method mismatch, want %s, have %s", expect, abi.Methods[name].Sig)
 			}
 		} else {
-			if abi.Events[name].Sig() != expect {
-				t.Fatalf("The signature of overloaded event mismatch, want %s, have %s", expect, abi.Events[name].Sig())
+			if abi.Events[name].Sig != expect {
+				t.Fatalf("The signature of overloaded event mismatch, want %s, have %s", expect, abi.Events[name].Sig)
 			}
 		}
 	}
@@ -915,13 +915,13 @@ func TestABI_MethodById(t *testing.T) {
 	}
 	for name, m := range abi.Methods {
 		a := fmt.Sprintf("%v", m)
-		m2, err := abi.MethodById(m.ID())
+		m2, err := abi.MethodById(m.ID)
 		if err != nil {
 			t.Fatalf("Failed to look up ABI method: %v", err)
 		}
 		b := fmt.Sprintf("%v", m2)
 		if a != b {
-			t.Errorf("Method %v (id %x) not 'findable' by id in ABI", name, m.ID())
+			t.Errorf("Method %v (id %x) not 'findable' by id in ABI", name, m.ID)
 		}
 	}
 	// Also test empty
@@ -989,8 +989,8 @@ func TestABI_EventById(t *testing.T) {
 			t.Errorf("We should find a event for topic %s, test #%d", topicID.Hex(), testnum)
 		}
 
-		if event.ID() != topicID {
-			t.Errorf("Event id %s does not match topic %s, test #%d", event.ID().Hex(), topicID.Hex(), testnum)
+		if event.ID != topicID {
+			t.Errorf("Event id %s does not match topic %s, test #%d", event.ID.Hex(), topicID.Hex(), testnum)
 		}
 
 		unknowntopicID := crypto.Keccak256Hash([]byte("unknownEvent"))
