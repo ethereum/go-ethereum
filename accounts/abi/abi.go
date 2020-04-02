@@ -142,12 +142,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			abi.Constructor = NewMethod("", "", field.StateMutability, field.Constant, field.Payable, false, false, field.Inputs, nil)
 		// empty defaults to function according to the abi spec
 		case "function", "":
-			name := field.Name
-			_, ok := abi.Methods[name]
-			for idx := 0; ok; idx++ {
-				name = fmt.Sprintf("%s%d", field.Name, idx)
-				_, ok = abi.Methods[name]
-			}
+			name := abi.methodName(field.Name)
 			isConst := field.Constant || field.StateMutability == "pure" || field.StateMutability == "view"
 			abi.Methods[name] = NewMethod(name, field.Name, field.StateMutability, isConst, field.Payable, false, false, field.Inputs, field.Outputs)
 		case "fallback":
@@ -168,21 +163,44 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			}
 			abi.Receive = NewMethod("", "", "payable", field.Constant, field.Payable, false, true, nil, nil)
 		case "event":
-			name := field.Name
-			_, ok := abi.Events[name]
-			for idx := 0; ok; idx++ {
-				name = fmt.Sprintf("%s%d", field.Name, idx)
-				_, ok = abi.Events[name]
-			}
 			abi.Events[name] = Event{
 				Name:      name,
 				RawName:   field.Name,
 				Anonymous: field.Anonymous,
 				Inputs:    field.Inputs,
 			}
+			name := abi.eventName(field.Name)
 		}
 	}
 	return nil
+}
+
+// methodName returns the next available name for a given function.
+//
+// e.g. if the abi contains Methods send, send1
+// methodName would return send2 for input send.
+func (abi *ABI) methodName(rawName string) string {
+	name := rawName
+	_, ok := abi.Methods[name]
+	for idx := 0; ok; idx++ {
+		name = fmt.Sprintf("%s%d", rawName, idx)
+		_, ok = abi.Methods[name]
+	}
+	return name
+}
+
+// eventName returns the next available name for a given event.
+//
+// e.g. if the abi contains events received, received1
+// eventName would return received2 for input received.
+func (abi *ABI) eventName(rawName string) string {
+	name := rawName
+	_, ok := abi.Events[name]
+	for idx := 0; ok; idx++ {
+		name = fmt.Sprintf("%s%d", rawName, idx)
+		_, ok = abi.Events[name]
+	}
+	return name
 }
 
 // MethodById looks up a method by the 4-byte id
