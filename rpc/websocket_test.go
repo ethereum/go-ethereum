@@ -228,11 +228,9 @@ func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-
 
 	// Write messages.
 	var (
-		sendResponse <-chan time.Time
 		wantPong     string
-		timer        *Timer
+		timer        = time.NewTimer(0)
 	)
-	timer := time.NewTimer(0)
 	defer timer.Stop()
 	<-timer.C
 	for {
@@ -252,11 +250,9 @@ func wsPingTestHandler(t *testing.T, conn *websocket.Conn, shutdown, sendPing <-
 			}
 			wantPong = ""
 			timer.Reset(200 * time.Millisecond)
-			sendResponse = timer.C
-		case <-sendResponse:
+		case <-timer.C:
 			t.Logf("server sending response")
 			conn.WriteMessage(websocket.TextMessage, []byte(subNotify))
-			sendResponse = nil
 		case <-shutdown:
 			conn.Close()
 			return
