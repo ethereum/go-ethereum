@@ -242,6 +242,7 @@ func (s *ProtocolSession) testExchange(e Exchange) error {
 		t = 2000 * time.Millisecond
 	}
 	alarm := time.NewTimer(t)
+	defer alarm.Stop()
 	select {
 	case err := <-errc:
 		return err
