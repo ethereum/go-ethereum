@@ -232,7 +232,7 @@ func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, 
 		bodyWakeCh:     make(chan bool, 1),
 		receiptWakeCh:  make(chan bool, 1),
 		headerProcCh:   make(chan []*types.Header, 1),
-		quitCh:         make(chan struct{}),
+		quitCh:         make(chan struct{}, 1),
 		stateCh:        make(chan dataPack),
 		stateSyncStart: make(chan *stateSync),
 		syncStatsState: stateSyncStats{
@@ -394,7 +394,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 	}
 	// Create cancel channel for aborting mid-flight and mark the master peer
 	d.cancelLock.Lock()
-	d.cancelCh = make(chan struct{})
+	d.cancelCh = make(chan struct{}, 1)
 	d.cancelPeer = id
 	d.cancelLock.Unlock()
 

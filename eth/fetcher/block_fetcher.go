@@ -176,7 +176,7 @@ func NewBlockFetcher(getBlock blockRetrievalFn, verifyHeader headerVerifierFn, b
 		headerFilter:   make(chan chan *headerFilterTask),
 		bodyFilter:     make(chan chan *bodyFilterTask),
 		done:           make(chan common.Hash),
-		quit:           make(chan struct{}),
+		quit:           make(chan struct{}, 1),
 		announces:      make(map[string]int),
 		announced:      make(map[common.Hash][]*blockAnnounce),
 		fetching:       make(map[common.Hash]*blockAnnounce),

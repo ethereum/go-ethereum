@@ -111,7 +111,7 @@ func NewProtocolManager(config *params.ChainConfig, checkpoint *params.TrustedCh
 		peers:      newPeerSet(),
 		whitelist:  whitelist,
 		txsyncCh:   make(chan *txsync),
-		quitSync:   make(chan struct{}),
+		quitSync:   make(chan struct{}, 1),
 	}
 
 	if mode == downloader.FullSync {

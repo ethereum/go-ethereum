@@ -192,7 +192,7 @@ func NewTxFetcherForTests(
 		notify:      make(chan *txAnnounce),
 		cleanup:     make(chan *txDelivery),
 		drop:        make(chan *txDrop),
-		quit:        make(chan struct{}),
+		quit:        make(chan struct{}, 1),
 		waitlist:    make(map[common.Hash]map[string]struct{}),
 		waittime:    make(map[common.Hash]mclock.AbsTime),
 		waitslots:   make(map[string]map[common.Hash]struct{}),

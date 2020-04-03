@@ -148,7 +148,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		eventMux:          ctx.EventMux,
 		accountManager:    ctx.AccountManager,
 		engine:            CreateConsensusEngine(ctx, chainConfig, &config.Ethash, config.Miner.Notify, config.Miner.Noverify, chainDb),
-		closeBloomHandler: make(chan struct{}),
+		closeBloomHandler: make(chan struct{}, 1),
 		networkID:         config.NetworkId,
 		gasPrice:          config.Miner.GasPrice,
 		etherbase:         config.Miner.Etherbase,

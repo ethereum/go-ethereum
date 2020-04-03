@@ -244,8 +244,8 @@ func newStateSync(d *Downloader, root common.Hash) *stateSync {
 		keccak:  sha3.NewLegacyKeccak256(),
 		tasks:   make(map[common.Hash]*stateTask),
 		deliver: make(chan *stateReq),
-		cancel:  make(chan struct{}),
-		done:    make(chan struct{}),
+		cancel:  make(chan struct{}, 1),
+		done:    make(chan struct{}, 1),
 	}
 }
 
