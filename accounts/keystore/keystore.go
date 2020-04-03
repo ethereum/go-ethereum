@@ -358,7 +358,7 @@ func (ks *KeyStore) TimedUnlock(a accounts.Account, passphrase string, timeout t
 		close(u.abort)
 	}
 	if timeout > 0 {
-		u = &unlocked{Key: key, abort: make(chan struct{})}
+		u = &unlocked{Key: key, abort: make(chan struct{}, 1)}
 		go ks.expire(a.Address, u, timeout)
 	} else {
 		u = &unlocked{Key: key}

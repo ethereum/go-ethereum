@@ -37,7 +37,7 @@ func newWatcher(ac *accountCache) *watcher {
 	return &watcher{
 		ac:   ac,
 		ev:   make(chan notify.EventInfo, 10),
-		quit: make(chan struct{}),
+		quit: make(chan struct{}, 1),
 	}
 }
 
