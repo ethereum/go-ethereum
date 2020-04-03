@@ -154,8 +154,8 @@ func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uin
 	// Initiate a new matching round
 	session := &MatcherSession{
 		matcher: m,
-		quit:    make(chan struct{}),
-		kill:    make(chan struct{}),
+		quit:    make(chan struct{}, 1),
+		kill:    make(chan struct{}, 1),
 		ctx:     ctx,
 	}
 	for _, scheduler := range m.schedulers {

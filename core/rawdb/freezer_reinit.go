@@ -44,7 +44,7 @@ func InitDatabaseFromFreezer(db ethdb.Database) error {
 		number  = ^uint64(0) // -1
 		results = make(chan *types.Block, 4*runtime.NumCPU())
 	)
-	abort := make(chan struct{})
+	abort := make(chan struct{}, 1)
 	defer close(abort)
 
 	for i := 0; i < runtime.NumCPU(); i++ {
