@@ -106,7 +106,7 @@ func New(cfg *Config) *Whisper {
 		peers:         make(map[*Peer]struct{}),
 		messageQueue:  make(chan *Envelope, messageQueueLimit),
 		p2pMsgQueue:   make(chan *Envelope, messageQueueLimit),
-		quit:          make(chan struct{}),
+		quit:          make(chan struct{}, 1),
 		syncAllowance: DefaultSyncAllowance,
 	}
 

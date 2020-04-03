@@ -57,7 +57,7 @@ func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 		trusted:        false,
 		powRequirement: 0.0,
 		known:          mapset.NewSet(),
-		quit:           make(chan struct{}),
+		quit:           make(chan struct{}, 1),
 		bloomFilter:    MakeFullNodeBloom(),
 		fullNode:       true,
 	}
