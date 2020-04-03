@@ -529,7 +529,8 @@ func (s *MatcherSession) Close() {
 	s.closer.Do(func() {
 		// Signal termination and wait for all goroutines to tear down
 		close(s.quit)
-		time.AfterFunc(time.Second, func() { close(s.kill) })
+		timeout := time.AfterFunc(time.Second, func() { close(s.kill) })
+		defer timeout.Stop()
 		s.pend.Wait()
 	})
 }
