@@ -413,21 +413,14 @@ func TestClientHTTP(t *testing.T) {
 	// Launch concurrent requests.
 	var (
 		results    = make([]echoResult, 100)
-		errc       = make(chan error)
+		errc       = make(chan error, len(results))
 		wantResult = echoResult{"a", 1, new(echoArgs)}
-		stop       = make(chan struct{})
 	)
-	defer close(stop)
 	defer client.Close()
 	for i := range results {
 		i := i
 		go func() {
-			select {
-			case <-stop:
-				return
-			case errc <- client.Call(&results[i], "test_echo",
-				wantResult.String, wantResult.Int, wantResult.Args):
-			}
+			errc <- client.Call(&results[i], "test_echo", wantResult.String, wantResult.Int, wantResult.Args)
 		}()
 	}
 
