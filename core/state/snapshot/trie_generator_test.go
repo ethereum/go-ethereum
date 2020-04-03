@@ -366,3 +366,97 @@ func BenchmarkSlimToFullHash(b *testing.B) {
 	}
 
 }
+
+func BenchmarkBinTrieInsert(b *testing.B) {
+	// Get a fairly large trie
+	// Create a custom account factory to recreate the same addresses
+	makeAccounts := func(num int) map[common.Hash][]byte {
+		accounts := make(map[common.Hash][]byte)
+		for i := 0; i < num; i++ {
+			h := common.Hash{}
+			binary.BigEndian.PutUint64(h[:], uint64(i+1))
+			accounts[h] = randomAccountWithSmall()
+		}
+		return accounts
+	}
+	// Build up a large stack of snapshots
+	base := &diskLayer{
+		diskdb: rawdb.NewMemoryDatabase(),
+		root:   common.HexToHash("0x01"),
+		cache:  fastcache.New(1024 * 500),
+	}
+	snaps := &Tree{
+		layers: map[common.Hash]snapshot{
+			base.root: base,
+		},
+	}
+	b.Run("4K", func(b *testing.B) {
+		// 4K accounts
+		snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), nil, makeAccounts(4000), nil)
+		head := snaps.Snapshot(common.HexToHash("0x02"))
+		// Call it once to make it create the lists before test starts
+		it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
+
+		b.Run("recursive", func(b *testing.B) {
+			b.Run("noext", func(b *testing.B) {
+				b.ResetTimer()
+				trie, _ := trie.NewBinary(nil)
+				b.ReportAllocs()
+				for n := 0; n < b.N; n++ {
+					for it.Next() {
+						trie.TryUpdate(it.Hash().Bytes(), it.Account())
+					}
+				}
+				b.StopTimer()
+			})
+		})
+	})
+}
+
+func BenchmarkBinTrieHash(b *testing.B) {
+	// Get a fairly large trie
+	// Create a custom account factory to recreate the same addresses
+	makeAccounts := func(num int) map[common.Hash][]byte {
+		accounts := make(map[common.Hash][]byte)
+		for i := 0; i < num; i++ {
+			h := common.Hash{}
+			binary.BigEndian.PutUint64(h[:], uint64(i+1))
+			accounts[h] = randomAccountWithSmall()
+		}
+		return accounts
+	}
+	// Build up a large stack of snapshots
+	base := &diskLayer{
+		diskdb: rawdb.NewMemoryDatabase(),
+		root:   common.HexToHash("0x01"),
+		cache:  fastcache.New(1024 * 500),
+	}
+	snaps := &Tree{
+		layers: map[common.Hash]snapshot{
+			base.root: base,
+		},
+	}
+	b.Run("4K", func(b *testing.B) {
+		// 4K accounts
+		snaps.Update(common.HexToHash("0x02"), common.HexToHash("0x01"), nil, makeAccounts(4000), nil)
+		head := snaps.Snapshot(common.HexToHash("0x02"))
+		// Call it once to make it create the lists before test starts
+		it := head.(*diffLayer).AccountIterator(common.HexToHash("0x00"))
+		trie, _ := trie.NewBinary(nil)
+
+		for it.Next() {
+			trie.TryUpdate(it.Hash().Bytes(), it.Account())
+		}
+
+		b.Run("recursive", func(b *testing.B) {
+			b.Run("noext", func(b *testing.B) {
+				b.ResetTimer()
+				b.ReportAllocs()
+				for n := 0; n < b.N; n++ {
+					trie.Hash()
+				}
+				b.StopTimer()
+			})
+		})
+	})
+}
