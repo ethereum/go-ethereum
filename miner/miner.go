@@ -71,7 +71,7 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 		eth:      eth,
 		mux:      mux,
 		engine:   engine,
-		exitCh:   make(chan struct{}),
+		exitCh:   make(chan struct{}, 1),
 		worker:   newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
 		canStart: 1,
 	}
