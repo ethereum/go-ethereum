@@ -370,7 +370,6 @@ func (c *Console) Interactive() {
 			return
 
 		case err := <-inputErr:
-			fmt.Printf("input: %q, err: %q\n", input, err)
 			if err == liner.ErrPromptAborted && indents > 0 {
 				// When prompting for multi-line input, the first Ctrl-C resets
 				// the multi-line state.
