@@ -19,7 +19,6 @@
 package geth
 
 import (
-	"errors"
 	"math/big"
 	"strings"
 
@@ -28,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // Signer is an interface defining the callback when a contract requires a
@@ -82,28 +80,14 @@ func NewTransactOpts() *TransactOpts {
 	return new(TransactOpts)
 }
 
-// NewKeyedTransactor is a utility method to easily create a transaction signer
+// NewKeyedTransactOpts is a utility method to easily create a transaction signer
 // from a single private key.
 func NewKeyedTransactOpts(keyJson []byte, passphrase string) (*TransactOpts, error) {
 	key, err := keystore.DecryptKey(keyJson, passphrase)
 	if err != nil {
 		return nil, err
 	}
-	keyAddr := crypto.PubkeyToAddress(key.PrivateKey.PublicKey)
-	opts := bind.TransactOpts{
-		From: keyAddr,
-		Signer: func(signer types.Signer, address common.Address, tx *types.Transaction) (*types.Transaction, error) {
-			if address != keyAddr {
-				return nil, errors.New("not authorized to sign this account")
-			}
-			signature, err := crypto.Sign(signer.Hash(tx).Bytes(), key.PrivateKey)
-			if err != nil {
-				return nil, err
-			}
-			return tx.WithSignature(signer, signature)
-		},
-	}
-	return &TransactOpts{opts}, nil
+	return &TransactOpts{*bind.NewKeyedTransactor(key.PrivateKey)}, nil
 }
 
 func (opts *TransactOpts) GetFrom() *Address    { return &Address{opts.opts.From} }
