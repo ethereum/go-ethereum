@@ -672,7 +672,8 @@ func (net *Network) refresh(done chan<- struct{}) {
 	}
 	if len(seeds) == 0 {
 		log.Trace("no seed nodes found")
-		time.AfterFunc(time.Second*10, func() { close(done) })
+		timeout := time.AfterFunc(time.Second*10, func() { close(done) })
+		defer timeout.Stop()
 		return
 	}
 	for _, n := range seeds {
