@@ -87,7 +87,7 @@ func (api *PublicFilterAPI) timeoutLoop() {
 			case <-f.deadline.C:
 				f.s.Unsubscribe()
 				delete(api.filters, id)
-				go f.deadline.Stop()
+				f.deadline.Stop()
 			default:
 				continue
 			}
