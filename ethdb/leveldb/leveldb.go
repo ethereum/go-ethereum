@@ -140,7 +140,7 @@ func (db *Database) Close() error {
 	defer db.quitLock.Unlock()
 
 	if db.quitChan != nil {
-		errc := make(chan error)
+		errc := make(chan error, 1)
 		db.quitChan <- errc
 		if err := <-errc; err != nil {
 			db.log.Error("Metrics collection failed", "err", err)
