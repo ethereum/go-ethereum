@@ -45,7 +45,7 @@ func newCrawler(input nodeSet, disc *discover.UDPv4, iters ...enode.Iterator) *c
 		iters:     iters,
 		inputIter: enode.IterNodes(input.nodes()),
 		ch:        make(chan *enode.Node),
-		closed:    make(chan struct{}),
+		closed:    make(chan struct{}, 1),
 	}
 	c.iters = append(c.iters, c.inputIter)
 	// Copy input to output initially. Any nodes that fail validation

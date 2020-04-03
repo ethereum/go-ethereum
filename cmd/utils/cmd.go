@@ -89,7 +89,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	// Watch for Ctrl-C while the import is running.
 	// If a signal is received, the import will stop at the next batch.
 	interrupt := make(chan os.Signal, 1)
-	stop := make(chan struct{})
+	stop := make(chan struct{}, 1)
 	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(interrupt)
 	defer close(interrupt)

@@ -175,7 +175,7 @@ func echo() {
 func initialize() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*argVerbosity), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
-	done = make(chan struct{})
+	done = make(chan struct{}, 1)
 	var peers []*enode.Node
 	var err error
 
