@@ -99,14 +99,15 @@ func makeTopics(query ...[]interface{}) ([][]common.Hash, error) {
 	return topics, nil
 }
 
-func genIntType(rule int64, size int) []byte {
+func genIntType(rule int64, size uint) []byte {
 	var topic [common.HashLength]byte
 	if rule < 0 {
 		// if a rule is negative, we need to put it into two's complement.
 		// extended to common.Hashlength bytes.
 		topic = [common.HashLength]byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255}
 	}
-	for i := 0; i < size; i++ {
+	var i uint
+	for i = 0; i < size; i++ {
 		topic[common.HashLength-i-1] = byte(rule >> (i * 8))
 	}
 	return topic[:]
