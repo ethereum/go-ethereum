@@ -85,7 +85,7 @@ func newMemoryNodeDB(self NodeID) (*nodeDB, error) {
 	return &nodeDB{
 		lvl:  db,
 		self: self,
-		quit: make(chan struct{}),
+		quit: make(chan struct{}, 1),
 	}, nil
 }
 
@@ -127,7 +127,7 @@ func newPersistentNodeDB(path string, version int, self NodeID) (*nodeDB, error)
 	return &nodeDB{
 		lvl:  db,
 		self: self,
-		quit: make(chan struct{}),
+		quit: make(chan struct{}, 1),
 	}, nil
 }
 

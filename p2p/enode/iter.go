@@ -160,7 +160,7 @@ type mixSource struct {
 func NewFairMix(timeout time.Duration) *FairMix {
 	m := &FairMix{
 		fromAny: make(chan *Node),
-		closed:  make(chan struct{}),
+		closed:  make(chan struct{}, 1),
 		timeout: timeout,
 	}
 	return m

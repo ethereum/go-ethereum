@@ -85,7 +85,7 @@ func newMemoryDB() (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &DB{lvl: db, quit: make(chan struct{})}, nil
+	return &DB{lvl: db, quit: make(chan struct{}, 1)}, nil
 }
 
 // newPersistentNodeDB creates/opens a leveldb backed persistent node database,
@@ -123,7 +123,7 @@ func newPersistentDB(path string) (*DB, error) {
 			return newPersistentDB(path)
 		}
 	}
-	return &DB{lvl: db, quit: make(chan struct{})}, nil
+	return &DB{lvl: db, quit: make(chan struct{}, 1)}, nil
 }
 
 // nodeKey returns the database key for a node record.

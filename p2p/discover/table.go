@@ -105,8 +105,8 @@ func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger
 		db:         db,
 		refreshReq: make(chan chan struct{}),
 		initDone:   make(chan struct{}),
-		closeReq:   make(chan struct{}),
-		closed:     make(chan struct{}),
+		closeReq:   make(chan struct{}, 1),
+		closed:     make(chan struct{}, 1),
 		rand:       mrand.New(mrand.NewSource(0)),
 		ips:        netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit},
 		log:        log,
@@ -205,7 +205,7 @@ func (tab *Table) isInitDone() bool {
 }
 
 func (tab *Table) refresh() <-chan struct{} {
-	done := make(chan struct{})
+	done := make(chan struct{}, 1)
 	select {
 	case tab.refreshReq <- done:
 	case <-tab.closeReq:
