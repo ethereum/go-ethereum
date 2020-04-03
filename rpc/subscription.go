@@ -219,7 +219,7 @@ func newClientSubscription(c *Client, namespace string, channel reflect.Value) *
 		namespace: namespace,
 		etype:     channel.Type().Elem(),
 		channel:   channel,
-		quit:      make(chan struct{}),
+		quit:      make(chan struct{}, 1),
 		err:       make(chan error, 1),
 		in:        make(chan json.RawMessage),
 	}
