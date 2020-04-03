@@ -61,7 +61,7 @@ It expects the genesis file as argument.`,
 		Action:    utils.MigrateFlags(importChain),
 		Name:      "import",
 		Usage:     "Import a blockchain file",
-		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
+		ArgsUsage: "<filename> (<filename 2> ... <filename N>) <genesisPath>",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
 			utils.CacheFlag,
@@ -228,8 +228,8 @@ func initGenesis(ctx *cli.Context) error {
 }
 
 func importChain(ctx *cli.Context) error {
-	if len(ctx.Args()) < 1 {
-		utils.Fatalf("This command requires an argument.")
+	if len(ctx.Args()) < 2 {
+		utils.Fatalf("This command requires atleast 2 arguments.")
 	}
 	stack := makeFullNode(ctx)
 	defer stack.Close()
@@ -255,12 +255,13 @@ func importChain(ctx *cli.Context) error {
 	// Import the chain
 	start := time.Now()
 
-	if len(ctx.Args()) == 1 {
+	// ArgsUsage: "<filename> (<filename 2> ... <filename N>) <genesisPath>",
+	if len(ctx.Args()) == 2 {
 		if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
 			log.Error("Import error", "err", err)
 		}
 	} else {
-		for _, arg := range ctx.Args() {
+		for _, arg := range ctx.Args()[:len(ctx.Args())-1] {
 			if err := utils.ImportChain(chain, arg); err != nil {
 				log.Error("Import error", "file", arg, "err", err)
 			}

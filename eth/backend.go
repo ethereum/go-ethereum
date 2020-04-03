@@ -231,6 +231,10 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	return eth, nil
 }
 
+func (s *Ethereum) SetBlockchain(blockchain *core.BlockChain) {
+	s.blockchain = blockchain
+}
+
 func makeExtraData(extra []byte) []byte {
 	if len(extra) == 0 {
 		// create default extradata
