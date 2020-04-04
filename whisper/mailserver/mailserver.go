@@ -71,7 +71,7 @@ func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, p
 
 	s.db, err = leveldb.OpenFile(path, &opt.Options{OpenFilesCacheCapacity: 32})
 	if _, iscorrupted := err.(*errors.ErrCorrupted); iscorrupted {
-		db, err = leveldb.RecoverFile(path, nil)
+		s.db, err = leveldb.RecoverFile(path, nil)
 	}
 	if err != nil {
 		return fmt.Errorf("open DB file: %s", err)
