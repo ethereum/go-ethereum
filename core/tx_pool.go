@@ -225,14 +225,16 @@ func (config *TxPoolConfig) sanitize() TxPoolConfig {
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
 type TxPool struct {
-	config      TxPoolConfig
-	chainconfig *params.ChainConfig
-	chain       blockChain
-	gasPrice    *big.Int
-	txFeed      event.Feed
-	scope       event.SubscriptionScope
-	signer      types.Signer
-	mu          sync.RWMutex
+	config       TxPoolConfig
+	chainconfig  *params.ChainConfig
+	chain        blockChain
+	gasPrice     *big.Int
+	txFeed       event.Feed
+	dropTxFeed   event.Feed
+	rejectTxFeed event.Feed
+	scope        event.SubscriptionScope
+	signer       types.Signer
+	mu           sync.RWMutex
 
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
 
@@ -374,9 +376,14 @@ func (pool *TxPool) loop() {
 				}
 				// Any non-locals old enough should be removed
 				if time.Since(pool.beats[addr]) > pool.config.Lifetime {
-					for _, tx := range pool.queue[addr].Flatten() {
+					txs := pool.queue[addr].Flatten()
+					for _, tx := range txs {
 						pool.removeTx(tx.Hash(), true)
 					}
+					pool.dropTxFeed.Send(DropTxsEvent{
+						Txs: txs,
+						Reason: dropOld,
+					})
 				}
 			}
 			pool.mu.Unlock()
@@ -415,6 +422,18 @@ func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- NewTxsEvent) event.Subscripti
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 
+// SubscribeDropTxsEvent registers a subscription of DropTxsEvent and
+// starts sending event to the given channel.
+func (pool *TxPool) SubscribeDropTxsEvent(ch chan<- DropTxsEvent) event.Subscription {
+	return pool.scope.Track(pool.dropTxFeed.Subscribe(ch))
+}
+
+// SubscribeRejectedTxsEvent registers a subscription of RejectedTxsEvent and
+// starts sending event to the given channel.
+func (pool *TxPool) SubscribeRejectedTxsEvent(ch chan<- RejectedTxsEvent) event.Subscription {
+	return pool.scope.Track(pool.rejectTxFeed.Subscribe(ch))
+}
+
 // GasPrice returns the current gas price enforced by the transaction pool.
 func (pool *TxPool) GasPrice() *big.Int {
 	pool.mu.RLock()
@@ -430,9 +449,14 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 	defer pool.mu.Unlock()
 
 	pool.gasPrice = price
-	for _, tx := range pool.priced.Cap(price, pool.locals) {
+	txs := pool.priced.Cap(price, pool.locals)
+	for _, tx := range txs {
 		pool.removeTx(tx.Hash(), false)
 	}
+	pool.dropTxFeed.Send(DropTxsEvent{
+		Txs: txs,
+		Reason: dropGasPriceUpdated,
+	})
 	log.Info("Transaction pool price threshold updated", "price", price)
 }
 
@@ -605,6 +629,10 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			underpricedTxMeter.Mark(1)
 			pool.removeTx(tx.Hash(), false)
 		}
+		pool.dropTxFeed.Send(DropTxsEvent{
+			Txs: drop,
+			Reason: dropUnderpriced,
+		})
 	}
 	// Try to replace an existing transaction in the pending pool
 	from, _ := types.Sender(pool.signer, tx) // already validated
@@ -620,6 +648,10 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			pool.all.Remove(old.Hash())
 			pool.priced.Removed(1)
 			pendingReplaceMeter.Mark(1)
+			pool.dropTxFeed.Send(DropTxsEvent{
+				Txs: []*types.Transaction{old},
+				Reason: dropReplaced,
+			})
 		}
 		pool.all.Add(tx)
 		pool.priced.Put(tx)
@@ -669,6 +701,10 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) (bool, er
 		pool.all.Remove(old.Hash())
 		pool.priced.Removed(1)
 		queuedReplaceMeter.Mark(1)
+		pool.dropTxFeed.Send(DropTxsEvent{
+			Txs: []*types.Transaction{old},
+			Reason: dropReplaced,
+		})
 	} else {
 		// Nothing was replaced, bump the queued counter
 		queuedGauge.Inc(1)
@@ -718,6 +754,10 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 		pool.priced.Removed(1)
 
 		pendingReplaceMeter.Mark(1)
+		pool.dropTxFeed.Send(DropTxsEvent{
+			Txs: []*types.Transaction{old},
+			Reason: dropReplaced,
+		})
 	} else {
 		// Nothing was replaced, bump the pending counter
 		pendingGauge.Inc(1)
@@ -907,6 +947,10 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 			pool.pendingNonces.setIfLower(addr, tx.Nonce())
 			// Reduce the pending counter
 			pendingGauge.Dec(int64(1 + len(invalids)))
+			pool.dropTxFeed.Send(DropTxsEvent{
+				Txs: invalids,
+				Reason: dropUnexecutable,
+			})
 			return
 		}
 	}
@@ -1194,6 +1238,10 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 			pool.all.Remove(hash)
 			log.Trace("Removed old queued transaction", "hash", hash)
 		}
+		pool.dropTxFeed.Send(DropTxsEvent{
+			Txs: forwards,
+			Reason: dropLowNonce,
+		})
 		// Drop all transactions that are too costly (low balance or out of gas)
 		drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
 		for _, tx := range drops {
@@ -1202,6 +1250,10 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 			log.Trace("Removed unpayable queued transaction", "hash", hash)
 		}
 		queuedNofundsMeter.Mark(int64(len(drops)))
+		pool.dropTxFeed.Send(DropTxsEvent{
+			Txs: drops,
+			Reason: dropUnpayable,
+		})
 
 		// Gather all executable transactions and promote them
 		readies := list.Ready(pool.pendingNonces.get(addr))
@@ -1224,6 +1276,10 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 				log.Trace("Removed cap-exceeding queued transaction", "hash", hash)
 			}
 			queuedRateLimitMeter.Mark(int64(len(caps)))
+			pool.dropTxFeed.Send(DropTxsEvent{
+				Txs: caps,
+				Reason: dropAccountCap,
+			})
 		}
 		// Mark all the items dropped as removed
 		pool.priced.Removed(len(forwards) + len(drops) + len(caps))
@@ -1287,6 +1343,10 @@ func (pool *TxPool) truncatePending() {
 						pool.pendingNonces.setIfLower(offenders[i], tx.Nonce())
 						log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
 					}
+					pool.dropTxFeed.Send(DropTxsEvent{
+						Txs: caps,
+						Reason: dropAccountCap,
+					})
 					pool.priced.Removed(len(caps))
 					pendingGauge.Dec(int64(len(caps)))
 					if pool.locals.contains(offenders[i]) {
@@ -1314,6 +1374,10 @@ func (pool *TxPool) truncatePending() {
 					pool.pendingNonces.setIfLower(addr, tx.Nonce())
 					log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
 				}
+				pool.dropTxFeed.Send(DropTxsEvent{
+					Txs: caps,
+					Reason: dropAccountCap,
+				})
 				pool.priced.Removed(len(caps))
 				pendingGauge.Dec(int64(len(caps)))
 				if pool.locals.contains(addr) {
@@ -1354,9 +1418,14 @@ func (pool *TxPool) truncateQueue() {
 
 		// Drop all transactions if they are less than the overflow
 		if size := uint64(list.Len()); size <= drop {
-			for _, tx := range list.Flatten() {
+			txs := list.Flatten()
+			for _, tx := range txs {
 				pool.removeTx(tx.Hash(), true)
 			}
+			pool.dropTxFeed.Send(DropTxsEvent{
+				Txs: txs,
+				Reason: dropTruncating,
+			})
 			drop -= size
 			queuedRateLimitMeter.Mark(int64(size))
 			continue
@@ -1367,6 +1436,10 @@ func (pool *TxPool) truncateQueue() {
 			pool.removeTx(txs[i].Hash(), true)
 			drop--
 			queuedRateLimitMeter.Mark(1)
+			pool.dropTxFeed.Send(DropTxsEvent{
+				Txs: []*types.Transaction{txs[i]},
+				Reason: dropTruncating,
+			})
 		}
 	}
 }
@@ -1386,6 +1459,10 @@ func (pool *TxPool) demoteUnexecutables() {
 			pool.all.Remove(hash)
 			log.Trace("Removed old pending transaction", "hash", hash)
 		}
+		pool.dropTxFeed.Send(DropTxsEvent{
+			Txs: olds,
+			Reason: dropLowNonce,
+		})
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
 		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
 		for _, tx := range drops {
@@ -1393,6 +1470,10 @@ func (pool *TxPool) demoteUnexecutables() {
 			log.Trace("Removed unpayable pending transaction", "hash", hash)
 			pool.all.Remove(hash)
 		}
+		pool.dropTxFeed.Send(DropTxsEvent{
+			Txs: drops,
+			Reason: dropUnpayable,
+		})
 		pool.priced.Removed(len(olds) + len(drops))
 		pendingNofundsMeter.Mark(int64(len(drops)))
 
