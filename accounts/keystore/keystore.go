@@ -138,3 +138,12 @@ func NewKeyStoreDB(path string, scryptN, scryptP int) (KeyStore, error) {
 	ks := &keyStoreDB{storage: storage, unlocked: make(map[common.Address]*unlocked)}
 	return ks, nil
 }
+
+// NewKeyStoreWalletDB creates a new wallet based on the account
+// this is only used for creating a db based wallet in AccountManager
+func NewKeyStoreWalletDB(acc accounts.Account, ks KeyStore) accounts.Wallet {
+	return &keystoreWalletDB{
+		account:  acc,
+		keystore: ks.(*keyStoreDB),
+	}
+}

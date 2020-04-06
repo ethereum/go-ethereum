@@ -58,7 +58,7 @@ func NewManager(config *Config, backends ...accounts.Backend) *Manager {
 	for _, backend := range backends {
 		// if we are using db backed keystore, it doesn't make sense to cache the potential millions of keys in our memory
 		if reflect.TypeOf(backend) != keystore.DBKeyStoreType {
-			wallets = backend.Wallets()
+			wallets = merge(wallets, backend.Wallets()...)
 		}
 	}
 	// Subscribe to wallet notifications from all backends
@@ -214,13 +214,11 @@ func (am *Manager) Find(account accounts.Account) (accounts.Wallet, error) {
 	dbBackends := am.Backends(keystore.DBKeyStoreType)
 	if len(dbBackends) == 1 {
 		dbKeyStore, _ := dbBackends[0].(keystore.KeyStore)
-		// TODO here
-		dbKeyStore.Accounts()
-		return nil, nil
-		// acc, err := dbKeyStore.Find(account)
-		// if err == nil {
-		// 	return &keystore.keystoreWalletDB{}, nil
-		// }
+		acc, err := dbKeyStore.Find(account)
+		if err == nil {
+			wallet := keystore.NewKeyStoreWalletDB(acc, dbKeyStore)
+			return wallet, nil
+		}
 	}
 
 	for _, wallet := range am.wallets {

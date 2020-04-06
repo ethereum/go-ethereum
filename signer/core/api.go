@@ -394,12 +394,10 @@ func (api *SignerAPI) startUSBListener() {
 // multiple accounts.
 func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
 	var accs []accounts.Account
-	log.Error(fmt.Sprint(len(api.am.Wallets())))
 	for _, wallet := range api.am.Wallets() {
 		log.Error(fmt.Sprint(len(wallet.Accounts())))
 		accs = append(accs, wallet.Accounts()...)
 	}
-	log.Error(fmt.Sprint(len(accs)))
 	result, err := api.UI.ApproveListing(&ListRequest{Accounts: accs, Meta: MetadataFromContext(ctx)})
 	if err != nil {
 		return nil, err
