@@ -53,6 +53,10 @@ const (
 	PendingTransactionsSubscription
 	// BlocksSubscription queries hashes for blocks that are imported
 	BlocksSubscription
+
+	//StateSubscription to listen main chain state
+	StateSubscription
+
 	// LastSubscription keeps track of the last index
 	LastIndexSubscription
 )
@@ -68,6 +72,8 @@ const (
 	logsChanSize = 10
 	// chainEvChanSize is the size of channel listening to ChainEvent.
 	chainEvChanSize = 10
+	// stateEvChanSize is the size of channel listening to ChainEvent.
+	stateEvChanSize = 10
 )
 
 var (
@@ -82,6 +88,7 @@ type subscription struct {
 	logs      chan []*types.Log
 	hashes    chan []common.Hash
 	headers   chan *types.Header
+	stateData chan *types.StateData
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
 }
@@ -99,15 +106,18 @@ type EventSystem struct {
 	logsSub       event.Subscription         // Subscription for new log event
 	rmLogsSub     event.Subscription         // Subscription for removed log event
 	chainSub      event.Subscription         // Subscription for new chain event
+	stateSub      event.Subscription         // Subscription for new state change event
 	pendingLogSub *event.TypeMuxSubscription // Subscription for pending log event
 
 	// Channels
-	install   chan *subscription         // install filter for event notification
-	uninstall chan *subscription         // remove filter for event notification
-	txsCh     chan core.NewTxsEvent      // Channel to receive new transactions event
-	logsCh    chan []*types.Log          // Channel to receive new log event
-	rmLogsCh  chan core.RemovedLogsEvent // Channel to receive removed log event
-	chainCh   chan core.ChainEvent       // Channel to receive new chain event
+	install   chan *subscription            // install filter for event notification
+	uninstall chan *subscription            // remove filter for event notification
+	txsCh     chan core.NewTxsEvent         // Channel to receive new transactions event
+	logsCh    chan []*types.Log             // Channel to receive new log event
+	rmLogsCh  chan core.RemovedLogsEvent    // Channel to receive removed log event
+	chainCh   chan core.ChainEvent          // Channel to receive new chain event
+	stateCh   chan core.NewStateChangeEvent // Channel to receive deposit state change event
+
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -127,6 +137,7 @@ func NewEventSystem(mux *event.TypeMux, backend Backend, lightMode bool) *EventS
 		logsCh:    make(chan []*types.Log, logsChanSize),
 		rmLogsCh:  make(chan core.RemovedLogsEvent, rmLogsChanSize),
 		chainCh:   make(chan core.ChainEvent, chainEvChanSize),
+		stateCh:   make(chan core.NewStateChangeEvent, stateEvChanSize),
 	}
 
 	// Subscribe events
@@ -134,12 +145,13 @@ func NewEventSystem(mux *event.TypeMux, backend Backend, lightMode bool) *EventS
 	m.logsSub = m.backend.SubscribeLogsEvent(m.logsCh)
 	m.rmLogsSub = m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh)
 	m.chainSub = m.backend.SubscribeChainEvent(m.chainCh)
+	m.stateSub = m.backend.SubscribeStateEvent(m.stateCh)
 	// TODO(rjl493456442): use feed to subscribe pending log event
 	m.pendingLogSub = m.mux.Subscribe(core.PendingLogsEvent{})
 
 	// Make sure none of the subscriptions are empty
 	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil ||
-		m.pendingLogSub.Closed() {
+		m.stateSub == nil || m.pendingLogSub.Closed() {
 		log.Crit("Subscribe for event system failed")
 	}
 
@@ -292,6 +304,24 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.Header) *Subscripti
 		logs:      make(chan []*types.Log),
 		hashes:    make(chan []common.Hash),
 		headers:   headers,
+		stateData: make(chan *types.StateData),
+		installed: make(chan struct{}),
+		err:       make(chan error),
+	}
+	return es.subscribe(sub)
+}
+
+// SubscribeNewHeads creates a subscription that writes the header of a block that is
+// imported in the chain.
+func (es *EventSystem) SubscribeNewDeposits(stateData chan *types.StateData) *Subscription {
+	sub := &subscription{
+		id:        rpc.NewID(),
+		typ:       StateSubscription,
+		created:   time.Now(),
+		logs:      make(chan []*types.Log),
+		hashes:    make(chan []common.Hash),
+		headers:   make(chan *types.Header),
+		stateData: stateData,
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -354,6 +384,10 @@ func (es *EventSystem) broadcast(filters filterIndex, ev interface{}) {
 		}
 		for _, f := range filters[PendingTransactionsSubscription] {
 			f.hashes <- hashes
+		}
+	case core.NewStateChangeEvent:
+		for _, f := range filters[StateSubscription] {
+			f.stateData <- e.StateData.StateData()
 		}
 	case core.ChainEvent:
 		for _, f := range filters[BlocksSubscription] {
@@ -470,6 +504,8 @@ func (es *EventSystem) eventLoop() {
 		case ev := <-es.rmLogsCh:
 			es.broadcast(index, ev)
 		case ev := <-es.chainCh:
+			es.broadcast(index, ev)
+		case ev := <-es.stateCh:
 			es.broadcast(index, ev)
 		case ev, active := <-es.pendingLogSub.Chan():
 			if !active { // system stopped

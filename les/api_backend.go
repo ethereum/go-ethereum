@@ -24,6 +24,7 @@ import (
 	"github.com/maticnetwork/bor/accounts"
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/common/math"
+	"github.com/maticnetwork/bor/consensus/bor"
 	"github.com/maticnetwork/bor/core"
 	"github.com/maticnetwork/bor/core/bloombits"
 	"github.com/maticnetwork/bor/core/rawdb"
@@ -162,6 +163,11 @@ func (b *LesApiBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) e
 
 func (b *LesApiBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
 	return b.eth.blockchain.SubscribeChainSideEvent(ch)
+}
+
+func (b *LesApiBackend) SubscribeStateEvent(ch chan<- core.NewStateChangeEvent) event.Subscription {
+	engine := b.eth.Engine()
+	return engine.(*bor.Bor).SubscribeStateEvent(ch)
 }
 
 func (b *LesApiBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {

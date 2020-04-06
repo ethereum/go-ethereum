@@ -60,6 +60,14 @@ type txdata struct {
 	Hash *common.Hash `json:"hash" rlp:"-"`
 }
 
+// State represents state received from Ethereum Blockchain
+type StateData struct {
+	Did      uint64
+	Contract common.Address
+	Data     string
+	TxHash   common.Hash
+}
+
 type txdataMarshaling struct {
 	AccountNonce hexutil.Uint64
 	Price        *hexutil.Big
@@ -69,6 +77,10 @@ type txdataMarshaling struct {
 	V            *hexutil.Big
 	R            *hexutil.Big
 	S            *hexutil.Big
+}
+
+func (sd *StateData) StateData() *StateData {
+	return sd
 }
 
 func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {

@@ -28,6 +28,7 @@ import (
 	"github.com/maticnetwork/bor/common/hexutil"
 	"github.com/maticnetwork/bor/common/mclock"
 	"github.com/maticnetwork/bor/consensus"
+	"github.com/maticnetwork/bor/consensus/bor"
 	"github.com/maticnetwork/bor/core"
 	"github.com/maticnetwork/bor/core/bloombits"
 	"github.com/maticnetwork/bor/core/rawdb"
@@ -59,6 +60,7 @@ type LightEthereum struct {
 	peers      *peerSet
 	txPool     *light.TxPool
 	blockchain *light.LightChain
+	bor        *bor.Bor
 	serverPool *serverPool
 	reqDist    *requestDistributor
 	retriever  *retrieveManager
