@@ -631,7 +631,7 @@ func TestPack(t *testing.T) {
 }
 
 func TestMethodPack(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsondata2))
+	abi, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Fatal(err)
 	}

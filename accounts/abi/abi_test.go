@@ -31,12 +31,7 @@ import (
 
 const jsondata = `
 [
-	{ "type" : "function", "name" : "balance", "stateMutability" : "view" },
-	{ "type" : "function", "name" : "send", "inputs" : [ { "name" : "amount", "type" : "uint256" } ] }
-]`
-
-const jsondata2 = `
-[
+	{ "type" : "function", "name" : "", "constant" : false },
 	{ "type" : "function", "name" : "balance", "constant" : true },
 	{ "type" : "function", "name" : "send", "constant" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
 	{ "type" : "function", "name" : "test", "constant" : false, "inputs" : [ { "name" : "number", "type" : "uint32" } ] },
@@ -91,6 +86,7 @@ var (
 )
 
 var methods = map[string]Method{
+	"":                    NewMethod("", "", false, nil, nil),
 	"balance":             NewMethod("balance", "balance", Function, "view", true, false, nil, nil),
 	"send":                NewMethod("send", "send", false, []Argument{{"amount", Uint256, false}}, nil),
 	"test":                NewMethod("test", "test", false, []Argument{{"number", Uint32, false}}, nil),
@@ -127,12 +123,20 @@ var tests = map[string]PackUnpackTest{
 		input: [2]uint64{12, 44},
 		err:   nil,
 	},
+	"uint64[]": PackUnpackTest{
+		input: []uint64{12, 44},
+		err:   nil,
+	},
 	"string": PackUnpackTest{
 		input: "This is a string",
 		err:   nil,
 	},
 	"int8": PackUnpackTest{
 		input: int8(-2),
+		err:   nil,
+	},
+	"bool": PackUnpackTest{
+		input: true,
 		err:   nil,
 	},
 }
@@ -170,7 +174,7 @@ func TestReader(t *testing.T) {
 		Methods: methods,
 	}
 
-	exp, err := JSON(strings.NewReader(jsondata2))
+	exp, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Error(err)
 	}
@@ -197,8 +201,45 @@ func TestReader(t *testing.T) {
 	}
 }
 
+// TestConstructor tests a constructor function.
+// The test is based on the following contract:
+// 	contract TestConstructor {
+// 		constructor(uint256 a, uint256 b) public{}
+//	}
+func TestConstructor(t *testing.T) {
+	json := `[{	"inputs": [{"internalType": "uint256","name": "a","type": "uint256"	},{	"internalType": "uint256","name": "b","type": "uint256"}],"stateMutability": "nonpayable","type": "constructor"}]`
+	method := NewMethod("", "", false, []Argument{{"a", Uint256, false}, {"b", Uint256, false}}, nil)
+	// Test from JSON
+	abi, err := JSON(strings.NewReader(json))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(abi.Constructor, method) {
+		t.Error("Missing expected constructor")
+	}
+	// Test pack/unpack
+	packed, err := abi.Pack("", big.NewInt(1), big.NewInt(2))
+	if err != nil {
+		t.Error(err)
+	}
+	v := struct {
+		A *big.Int
+		B *big.Int
+	}{new(big.Int), new(big.Int)}
+	//abi.Unpack(&v, "", packed)
+	if err := abi.Constructor.Inputs.Unpack(&v, packed); err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(v.A, big.NewInt(1)) {
+		t.Error("Unable to pack/unpack from constructor")
+	}
+	if !reflect.DeepEqual(v.B, big.NewInt(2)) {
+		t.Error("Unable to pack/unpack from constructor")
+	}
+}
+
 func TestTestNumbers(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsondata2))
+	abi, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,42 +271,6 @@ func TestTestNumbers(t *testing.T) {
 	}
 
 	if _, err := abi.Pack("test", uint32(1000)); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestTestString(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsondata2))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := abi.Pack("string", "hello world"); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestTestBool(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsondata2))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := abi.Pack("bool", true); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestTestSlice(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsondata2))
-	if err != nil {
-		t.Fatal(err)
-	}
-	slice := make([]uint64, 2)
-	if _, err := abi.Pack("uint64[2]", slice); err != nil {
-		t.Error(err)
-	}
-	if _, err := abi.Pack("uint64[]", slice); err != nil {
 		t.Error(err)
 	}
 }
@@ -332,7 +337,7 @@ func TestOverloadedMethodSignature(t *testing.T) {
 }
 
 func TestMultiPack(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsondata2))
+	abi, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -497,7 +502,7 @@ func TestInputVariableInputLength(t *testing.T) {
 }
 
 func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsondata2))
+	abi, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Error(err)
 	}
@@ -978,7 +983,7 @@ func TestUnpackIntoMapNamingConflict(t *testing.T) {
 }
 
 func TestABI_MethodById(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsondata2))
+	abi, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -992,6 +997,10 @@ func TestABI_MethodById(t *testing.T) {
 		if a != b {
 			t.Errorf("Method %v (id %x) not 'findable' by id in ABI", name, m.ID)
 		}
+	}
+	// test unsuccessful lookups
+	if _, err = abi.MethodById(crypto.Keccak256()); err == nil {
+		t.Error("Expected error: no method with this id")
 	}
 	// Also test empty
 	if _, err := abi.MethodById([]byte{0x00}); err == nil {
@@ -1073,26 +1082,6 @@ func TestABI_EventById(t *testing.T) {
 	}
 }
 
-func TestDuplicateMethodNames(t *testing.T) {
-	abiJSON := `[{"constant":false,"inputs":[{"name":"to","type":"address"},{"name":"value","type":"uint256"}],"name":"transfer","outputs":[{"name":"ok","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[{"name":"to","type":"address"},{"name":"value","type":"uint256"},{"name":"data","type":"bytes"}],"name":"transfer","outputs":[{"name":"ok","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[{"name":"to","type":"address"},{"name":"value","type":"uint256"},{"name":"data","type":"bytes"},{"name":"customFallback","type":"string"}],"name":"transfer","outputs":[{"name":"ok","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"}]`
-	contractAbi, err := JSON(strings.NewReader(abiJSON))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := contractAbi.Methods["transfer"]; !ok {
-		t.Fatalf("Could not find original method")
-	}
-	if _, ok := contractAbi.Methods["transfer0"]; !ok {
-		t.Fatalf("Could not find duplicate method")
-	}
-	if _, ok := contractAbi.Methods["transfer1"]; !ok {
-		t.Fatalf("Could not find duplicate method")
-	}
-	if _, ok := contractAbi.Methods["transfer2"]; ok {
-		t.Fatalf("Should not have found extra method")
-	}
-}
-
 // TestDoubleDuplicateMethodNames checks that if transfer0 already exists, there won't be a name
 // conflict and that the second transfer method will be renamed transfer1.
 func TestDoubleDuplicateMethodNames(t *testing.T) {
@@ -1112,6 +1101,34 @@ func TestDoubleDuplicateMethodNames(t *testing.T) {
 	}
 	if _, ok := contractAbi.Methods["transfer2"]; ok {
 		t.Fatalf("Should not have found extra method")
+	}
+}
+
+// TestDoubleDuplicateEventNames checks that if send0 already exists, there won't be a name
+// conflict and that the second send event will be renamed send1.
+// The test runs the abi of the following contract.
+// 	contract DuplicateEvent {
+// 		event send(uint256 a);
+//		event send0();
+//		event send();
+//	}
+func TestDoubleDuplicateEventNames(t *testing.T) {
+	abiJSON := `[{"anonymous": false,"inputs": [{"indexed": false,"internalType": "uint256","name": "a","type": "uint256"}],"name": "send","type": "event"},{"anonymous": false,"inputs": [],"name": "send0","type": "event"},{	"anonymous": false,	"inputs": [],"name": "send","type": "event"}]`
+	contractAbi, err := JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := contractAbi.Events["send"]; !ok {
+		t.Fatalf("Could not find original event")
+	}
+	if _, ok := contractAbi.Events["send0"]; !ok {
+		t.Fatalf("Could not find duplicate event")
+	}
+	if _, ok := contractAbi.Events["send1"]; !ok {
+		t.Fatalf("Could not find duplicate event")
+	}
+	if _, ok := contractAbi.Events["send2"]; ok {
+		t.Fatalf("Should not have found extra event")
 	}
 }
 
