@@ -150,6 +150,11 @@ type FilterQuery struct {
 	Topics [][]common.Hash
 }
 
+type FilterState struct {
+	Did      uint64
+	Contract common.Address
+}
+
 // LogFilterer provides access to contract log events using a one-off query or continuous
 // event subscription.
 //

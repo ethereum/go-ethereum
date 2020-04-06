@@ -30,6 +30,7 @@ import (
 	"github.com/maticnetwork/bor/core/vm"
 	"github.com/maticnetwork/bor/crypto"
 	"github.com/maticnetwork/bor/ethdb"
+	"github.com/maticnetwork/bor/event"
 	"github.com/maticnetwork/bor/internal/ethapi"
 	"github.com/maticnetwork/bor/log"
 	"github.com/maticnetwork/bor/params"
@@ -245,6 +246,8 @@ type Bor struct {
 	stateReceiverABI abi.ABI
 	HeimdallClient   IHeimdallClient
 
+	stateDataFeed event.Feed
+	scope         event.SubscriptionScope
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
 }
@@ -1201,6 +1204,16 @@ func (c *Bor) CommitStates(
 			"txHash", eventRecord.TxHash,
 			"chainID", eventRecord.ChainID,
 		)
+		stateData := types.StateData{
+			Did:      eventRecord.ID,
+			Contract: eventRecord.Contract,
+			Data:     hex.EncodeToString(eventRecord.Data),
+			TxHash:   eventRecord.TxHash,
+		}
+
+		go func() {
+			c.stateDataFeed.Send(core.NewStateChangeEvent{StateData: &stateData})
+		}()
 
 		recordBytes, err := rlp.EncodeToBytes(eventRecord)
 		if err != nil {
@@ -1224,6 +1237,11 @@ func (c *Bor) CommitStates(
 	}
 
 	return nil
+}
+
+// SubscribeStateEvent registers a subscription of ChainSideEvent.
+func (c *Bor) SubscribeStateEvent(ch chan<- core.NewStateChangeEvent) event.Subscription {
+	return c.scope.Track(c.stateDataFeed.Subscribe(ch))
 }
 
 func (c *Bor) SetHeimdallClient(h IHeimdallClient) {
