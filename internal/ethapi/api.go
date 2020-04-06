@@ -27,6 +27,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/common"
@@ -796,7 +797,6 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	if state == nil || err != nil {
 		return nil, err
 	}
-
 	// Override the fields of specified contracts before execution.
 	for addr, account := range overrides {
 		// Override account nonce.
@@ -882,6 +882,23 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 	return result.Return(), nil
 }
 
+type estimateGasError struct {
+	error  string // Concrete error type if it's failed to estimate gas usage
+	vmerr  error  // Additional field, it's non-nil if the given transaction is invalid
+	revert string // Additional field, it's non-empty if the transaction is reverted and reason is provided
+}
+
+func (e estimateGasError) Error() string {
+	errMsg := e.error
+	if e.vmerr != nil {
+		errMsg += fmt.Sprintf(" (%v)", e.vmerr)
+	}
+	if e.revert != "" {
+		errMsg += fmt.Sprintf(" (%s)", e.revert)
+	}
+	return errMsg
+}
+
 func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap *big.Int) (hexutil.Uint64, error) {
 	// Binary search the gas requirement, as it may be higher than the amount used
 	var (
@@ -947,14 +964,23 @@ func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNrOrHash 
 		}
 		if failed {
 			if result != nil && result.Err != vm.ErrOutOfGas {
-				errMsg := fmt.Sprintf("always failing transaction (%v)", result.Err)
+				var revert string
 				if len(result.Revert()) > 0 {
-					errMsg += fmt.Sprintf(" (0x%x)", result.Revert())
+					ret, err := abi.UnpackRevert(result.Revert())
+					if err != nil {
+						revert = "0x" + common.Bytes2Hex(result.Revert())
+					} else {
+						revert = ret
+					}
 				}
-				return 0, errors.New(errMsg)
+				return 0, estimateGasError{
+					error:  "always failing transaction",
+					vmerr:  result.Err,
+					revert: revert,
+				}
 			}
 			// Otherwise, the specified gas cap is too low
-			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
+			return 0, estimateGasError{error: fmt.Sprintf("gas required exceeds allowance (%d)", cap)}
 		}
 	}
 	return hexutil.Uint64(hi), nil

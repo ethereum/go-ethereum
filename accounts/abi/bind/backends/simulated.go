@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -445,7 +446,12 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 			if result != nil && result.Err != vm.ErrOutOfGas {
 				errMsg := fmt.Sprintf("always failing transaction (%v)", result.Err)
 				if len(result.Revert()) > 0 {
-					errMsg += fmt.Sprintf(" (0x%x)", result.Revert())
+					ret, err := abi.UnpackRevert(result.Revert())
+					if err != nil {
+						errMsg += fmt.Sprintf(" (0x%x)", result.Revert())
+					} else {
+						errMsg += fmt.Sprintf(" (%s)", ret)
+					}
 				}
 				return 0, errors.New(errMsg)
 			}
