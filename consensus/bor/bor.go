@@ -1161,7 +1161,6 @@ func (c *Bor) CommitStates(
 	header *types.Header,
 	chain core.ChainContext,
 ) error {
-	fmt.Println("comminting state")
 	// get pending state proposals
 	stateIds, err := c.GetPendingStateProposals(header.Number.Uint64() - 1)
 	if err != nil {
@@ -1239,7 +1238,6 @@ func (c *Bor) CommitStates(
 
 	return nil
 }
-
 
 // SubscribeStateEvent registers a subscription of ChainSideEvent.
 func (c *Bor) SubscribeStateEvent(ch chan<- core.NewStateChangeEvent) event.Subscription {

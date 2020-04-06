@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/hashicorp/golang-lru"
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/common/mclock"
 	"github.com/maticnetwork/bor/common/prque"
@@ -42,7 +43,6 @@ import (
 	"github.com/maticnetwork/bor/params"
 	"github.com/maticnetwork/bor/rlp"
 	"github.com/maticnetwork/bor/trie"
-	"github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -142,6 +142,7 @@ type BlockChain struct {
 	chainHeadFeed event.Feed
 	logsFeed      event.Feed
 	blockProcFeed event.Feed
+	stateDataFeed event.Feed
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
 
@@ -2175,6 +2176,11 @@ func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Su
 // SubscribeLogsEvent registers a subscription of []*types.Log.
 func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return bc.scope.Track(bc.logsFeed.Subscribe(ch))
+}
+
+// SubscribeStateEvent registers a subscription of ChainSideEvent.
+func (bc *BlockChain) SubscribeStateEvent(ch chan<- NewStateChangeEvent) event.Subscription {
+	return bc.scope.Track(bc.stateDataFeed.Subscribe(ch))
 }
 
 // SubscribeBlockProcessingEvent registers a subscription of bool where true means

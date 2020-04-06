@@ -79,10 +79,6 @@ type txdataMarshaling struct {
 	S            *hexutil.Big
 }
 
-func (sd *StateData) StateData() *StateData {
-	return sd
-}
-
 func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
 	return newTransaction(nonce, &to, amount, gasLimit, gasPrice, data)
 }

@@ -311,8 +311,7 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.Header) *Subscripti
 	return es.subscribe(sub)
 }
 
-// SubscribeNewHeads creates a subscription that writes the header of a block that is
-// imported in the chain.
+// SubscribeNewDeposits creates a subscription that writes details about the new state sync events (from mainchain to Bor)
 func (es *EventSystem) SubscribeNewDeposits(stateData chan *types.StateData) *Subscription {
 	sub := &subscription{
 		id:        rpc.NewID(),
@@ -387,7 +386,7 @@ func (es *EventSystem) broadcast(filters filterIndex, ev interface{}) {
 		}
 	case core.NewStateChangeEvent:
 		for _, f := range filters[StateSubscription] {
-			f.stateData <- e.StateData.StateData()
+			f.stateData <- e.StateData
 		}
 	case core.ChainEvent:
 		for _, f := range filters[BlocksSubscription] {
