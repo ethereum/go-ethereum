@@ -41,6 +41,10 @@ type ChainEvent struct {
 	Logs  []*types.Log
 }
 
+type NewStateChangeEvent struct {
+	StateData *types.StateData
+}
+
 type ChainSideEvent struct {
 	Block *types.Block
 }

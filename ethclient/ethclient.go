@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/maticnetwork/bor"
+	ethereum "github.com/maticnetwork/bor"
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/common/hexutil"
 	"github.com/maticnetwork/bor/core/types"
@@ -322,6 +322,11 @@ func (ec *Client) SyncProgress(ctx context.Context) (*ethereum.SyncProgress, err
 // on the given channel.
 func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "newHeads")
+}
+
+// SubscribeNewDeposit subscribes to new state sync events
+func (ec *Client) SubscribeNewDeposit(ctx context.Context, ch chan<- *types.StateData) (ethereum.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "newDeposits", nil)
 }
 
 // State Access

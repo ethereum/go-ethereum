@@ -30,6 +30,7 @@ import (
 	"github.com/maticnetwork/bor/core/vm"
 	"github.com/maticnetwork/bor/crypto"
 	"github.com/maticnetwork/bor/ethdb"
+	"github.com/maticnetwork/bor/event"
 	"github.com/maticnetwork/bor/internal/ethapi"
 	"github.com/maticnetwork/bor/log"
 	"github.com/maticnetwork/bor/params"
@@ -245,6 +246,8 @@ type Bor struct {
 	stateReceiverABI abi.ABI
 	HeimdallClient   IHeimdallClient
 
+	stateDataFeed event.Feed
+	scope         event.SubscriptionScope
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
 }
@@ -1201,6 +1204,16 @@ func (c *Bor) CommitStates(
 			"txHash", eventRecord.TxHash,
 			"chainID", eventRecord.ChainID,
 		)
+		stateData := types.StateData{
+			Did:      eventRecord.ID,
+			Contract: eventRecord.Contract,
+			Data:     hex.EncodeToString(eventRecord.Data),
+			TxHash:   eventRecord.TxHash,
+		}
+
+		go func() {
+			c.stateDataFeed.Send(core.NewStateChangeEvent{StateData: &stateData})
+		}()
 
 		recordBytes, err := rlp.EncodeToBytes(eventRecord)
 		if err != nil {
@@ -1224,6 +1237,11 @@ func (c *Bor) CommitStates(
 	}
 
 	return nil
+}
+
+// SubscribeStateEvent registers a subscription of ChainSideEvent.
+func (c *Bor) SubscribeStateEvent(ch chan<- core.NewStateChangeEvent) event.Subscription {
+	return c.scope.Track(c.stateDataFeed.Subscribe(ch))
 }
 
 func (c *Bor) SetHeimdallClient(h IHeimdallClient) {
@@ -1253,6 +1271,10 @@ func (c *Bor) IsValidatorAction(chain consensus.ChainReader, from common.Address
 func isProposeSpanAction(tx *types.Transaction, validatorContract string) bool {
 	// keccak256('proposeSpan()').slice(0, 4)
 	proposeSpanSig, _ := hex.DecodeString("4b0e4d17")
+	if tx.Data() == nil || len(tx.Data()) < 4 {
+		return false
+	}
+
 	return bytes.Compare(proposeSpanSig, tx.Data()[:4]) == 0 &&
 		tx.To().String() == validatorContract
 }
@@ -1260,6 +1282,10 @@ func isProposeSpanAction(tx *types.Transaction, validatorContract string) bool {
 func isProposeStateAction(tx *types.Transaction, stateReceiverContract string) bool {
 	// keccak256('proposeState(uint256)').slice(0, 4)
 	proposeStateSig, _ := hex.DecodeString("ede01f17")
+	if tx.Data() == nil || len(tx.Data()) < 4 {
+		return false
+	}
+
 	return bytes.Compare(proposeStateSig, tx.Data()[:4]) == 0 &&
 		tx.To().String() == stateReceiverContract
 }

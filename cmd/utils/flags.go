@@ -19,6 +19,7 @@ package utils
 
 import (
 	"crypto/ecdsa"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -34,6 +35,7 @@ import (
 	"github.com/maticnetwork/bor/common"
 	"github.com/maticnetwork/bor/common/fdlimit"
 	"github.com/maticnetwork/bor/consensus"
+
 	"github.com/maticnetwork/bor/consensus/bor"
 	"github.com/maticnetwork/bor/consensus/clique"
 	"github.com/maticnetwork/bor/consensus/ethash"
@@ -47,6 +49,8 @@ import (
 	"github.com/maticnetwork/bor/ethdb"
 	"github.com/maticnetwork/bor/ethstats"
 	"github.com/maticnetwork/bor/graphql"
+
+	pcsclite "github.com/gballet/go-libpcsclite"
 	"github.com/maticnetwork/bor/les"
 	"github.com/maticnetwork/bor/log"
 	"github.com/maticnetwork/bor/metrics"
@@ -61,7 +65,6 @@ import (
 	"github.com/maticnetwork/bor/params"
 	"github.com/maticnetwork/bor/rpc"
 	whisper "github.com/maticnetwork/bor/whisper/whisperv6"
-	pcsclite "github.com/gballet/go-libpcsclite"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -1658,19 +1661,63 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	return genesis
 }
 
+func getGenesis(genesisPath string) *core.Genesis {
+	log.Info("Reading genesis at ", "file", genesisPath)
+	file, _ := os.Open(genesisPath)
+	defer file.Close()
+
+	genesis := new(core.Genesis)
+	json.NewDecoder(file).Decode(genesis)
+	return genesis
+}
+
 // MakeChain creates a chain manager from set command line flags.
 func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb ethdb.Database) {
+	// expecting the last argument to be the genesis file
+	genesis := getGenesis(ctx.Args().Get(len(ctx.Args()) - 1))
+
 	var err error
 	chainDb = MakeChainDatabase(ctx, stack)
-	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))
+	config, _, err := core.SetupGenesisBlock(chainDb, genesis)
 	if err != nil {
 		Fatalf("%v", err)
 	}
+
 	var engine consensus.Engine
+	var ethereum *eth.Ethereum
 	if config.Clique != nil {
 		engine = clique.New(config.Clique, chainDb)
 	} else if config.Bor != nil {
-		engine = bor.New(config, chainDb, nil)
+		cfg := &eth.Config{Genesis: genesis}
+		workspace, err := ioutil.TempDir("", "console-tester-")
+		if err != nil {
+			Fatalf("failed to create temporary keystore: %v", err)
+		}
+
+		// Create a networkless protocol stack and start an Ethereum service within
+		stack, err := node.New(&node.Config{DataDir: workspace, UseLightweightKDF: true, Name: "console-tester"})
+		if err != nil {
+			Fatalf("failed to create node: %v", err)
+		}
+		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+			s, err := eth.New(ctx, cfg)
+			return s, err
+		})
+		if err != nil {
+			Fatalf("failed to register Ethereum protocol: %v", err)
+		}
+
+		// Start the node and assemble the JavaScript console around it
+		if err = stack.Start(); err != nil {
+			Fatalf("failed to start test stack: %v", err)
+		}
+		_, err = stack.Attach()
+		if err != nil {
+			Fatalf("failed to attach to node: %v", err)
+		}
+
+		stack.Service(&ethereum)
+		engine = ethereum.Engine().(*bor.Bor)
 	} else {
 		engine = ethash.NewFaker()
 		if !ctx.GlobalBool(FakePoWFlag.Name) {
@@ -1702,6 +1749,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	}
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
 	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil)
+	if ethereum != nil {
+		ethereum.SetBlockchain(chain)
+	}
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

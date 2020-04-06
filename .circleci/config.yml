@@ -15,6 +15,6 @@ jobs:
     steps:
       - checkout # check out source code to working directory
       - run:
-          command: make bor
+          command: make all
       - run:
           command: make test
