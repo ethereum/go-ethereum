@@ -781,6 +781,12 @@ var (
 func MakeDataDir(ctx *cli.Context) string {
 	if path := ctx.GlobalString(DataDirFlag.Name); path != "" {
 		if ctx.GlobalBool(LegacyTestnetFlag.Name) || ctx.GlobalBool(RopstenFlag.Name) {
+			// Maintain compatibility with older Geth configurations storing the
+			// Ropsten database in `testnet` instead of `ropsten`.
+			legacyPath := filepath.Join(path, "testnet")
+			if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
+				return legacyPath
+			}
 			return filepath.Join(path, "ropsten")
 		}
 		if ctx.GlobalBool(RinkebyFlag.Name) {
