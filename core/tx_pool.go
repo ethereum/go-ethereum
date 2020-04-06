@@ -428,9 +428,9 @@ func (pool *TxPool) SubscribeDropTxsEvent(ch chan<- DropTxsEvent) event.Subscrip
 	return pool.scope.Track(pool.dropTxFeed.Subscribe(ch))
 }
 
-// SubscribeRejectedTxsEvent registers a subscription of RejectedTxsEvent and
+// SubscribeRejectedTxsEvent registers a subscription of RejectedTxEvent and
 // starts sending event to the given channel.
-func (pool *TxPool) SubscribeRejectedTxsEvent(ch chan<- RejectedTxsEvent) event.Subscription {
+func (pool *TxPool) SubscribeRejectedTxsEvent(ch chan<- RejectedTxEvent) event.Subscription {
 	return pool.scope.Track(pool.rejectTxFeed.Subscribe(ch))
 }
 
@@ -853,6 +853,10 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		for errs[nilSlot] != nil {
 			nilSlot++
 		}
+		pool.rejectTxFeed.Send(RejectedTxEvent{
+			Tx: txs[nilSlot],
+			Reason: err,
+		})
 		errs[nilSlot] = err
 	}
 	// Reorg the pool internals if needed and return

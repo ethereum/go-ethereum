@@ -30,10 +30,10 @@ type DropTxsEvent struct{
 	Reason string
 }
 
-// RejectedTxsEvent is posted when a batch of transactions are removed from the transaction pool
-type RejectedTxsEvent struct{
-	Txs []*types.Transaction
-	Reason string
+// RejectedTxEvent is posted when a transaction is rejected from entering the transaction pool
+type RejectedTxEvent struct{
+	Tx *types.Transaction
+	Reason error
 }
 
 // NewMinedBlockEvent is posted when a block has been imported.
