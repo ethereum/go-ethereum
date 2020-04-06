@@ -19,7 +19,10 @@ jobs:
         uses: actions/setup-ruby@v1
         with:
           ruby-version: 2.6
-  
+
+      - name: Retrieve release version
+        run: echo "::set-env name=RELEASE_VERSION::${GITHUB_REF/refs\/tags\/v/}"
+
       - name: Build package
         run: |
           set -x
@@ -52,19 +55,20 @@ jobs:
           VALIDATOR_ADDRESS=
           EOF
 
-          fpm -s dir -t deb --deb-user root --deb-group root -n matic-bor -v ${GITHUB_REF/refs\/tags\//} \
+          fpm -s dir -t deb --deb-user root --deb-group root -n matic-bor -v ${{ env.RELEASE_VERSION }} \
             --after-install after_install.sh \
             bor.service=/etc/systemd/system/ \
             build/bin/bor=/usr/bin/ \
             metadata=/etc/bor/
           
-          mkdir packages-${GITHUB_REF/refs\/tags\//}
+          mkdir packages-v${{ env.RELEASE_VERSION }}
 
-          mv matic-bor_${GITHUB_REF/refs\/tags\//}_amd64.deb packages-${GITHUB_REF/refs\/tags\//}/
+          mv matic-bor_${{ env.RELEASE_VERSION }}_amd64.deb packages-v${{ env.RELEASE_VERSION }}/
 
-          ls packages-${GITHUB_REF/refs\/tags\//}/
+          ls packages-v${{ env.RELEASE_VERSION }}/
 
-      - uses: jakejarvis/s3-sync-action@master
+      - name: S3 upload
+        uses: jakejarvis/s3-sync-action@master
         with:
           args: --acl public-read
         env:
@@ -72,5 +76,13 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: 'us-east-1'   # optional: defaults to us-east-1
-          SOURCE_DIR: 'packages-${GITHUB_REF/refs\/tags\//}'
-          DEST_DIR: '${GITHUB_REF/refs\/tags\//}'
+          SOURCE_DIR: 'packages-v${{ env.RELEASE_VERSION }}'
+          DEST_DIR: 'v${{ env.RELEASE_VERSION }}'
+
+      - name: Slack Notification
+        uses: rtCamp/action-slack-notify@v2.0.0
+        env:
+          SLACK_CHANNEL: code-releases
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_TITLE: 'New linux package for Bor v${{ env.RELEASE_VERSION }} just got released'
+          SLACK_MESSAGE: 'Package has been uploaded to S3 bucket for public use and available at https://matic-public.s3.amazonaws.com/v${{ env.RELEASE_VERSION }}/matic-bor_${{ env.RELEASE_VERSION }}_amd64.deb'
