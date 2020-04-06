@@ -14,13 +14,15 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package accounts
+package manager
 
 import (
 	"reflect"
 	"sort"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 )
@@ -36,11 +38,11 @@ type Config struct {
 // Manager is an overarching account manager that can communicate with various
 // backends for signing transactions.
 type Manager struct {
-	config   *Config                    // Global account manager configurations
-	backends map[reflect.Type][]Backend // Index of backends currently registered
-	updaters []event.Subscription       // Wallet update subscriptions for all backends
-	updates  chan WalletEvent           // Subscription sink for backend wallet changes
-	wallets  []Wallet                   // Cache of all wallets from all registered backends
+	config   *Config                             // Global account manager configurations
+	backends map[reflect.Type][]accounts.Backend // Index of backends currently registered
+	updaters []event.Subscription                // Wallet update subscriptions for all backends
+	updates  chan accounts.WalletEvent           // Subscription sink for backend wallet changes
+	wallets  []accounts.Wallet                   // Cache of all wallets from all registered backends
 
 	feed event.Feed // Wallet feed notifying of arrivals/departures
 
@@ -50,14 +52,17 @@ type Manager struct {
 
 // NewManager creates a generic account manager to sign transaction via various
 // supported backends.
-func NewManager(config *Config, backends ...Backend) *Manager {
+func NewManager(config *Config, backends ...accounts.Backend) *Manager {
 	// Retrieve the initial list of wallets from the backends and sort by URL
-	var wallets []Wallet
+	var wallets []accounts.Wallet
 	for _, backend := range backends {
-		wallets = merge(wallets, backend.Wallets()...)
+		// if we are using db backed keystore, it doesn't make sense to cache the potential millions of keys in our memory
+		if reflect.TypeOf(backend) != keystore.DBKeyStoreType {
+			wallets = backend.Wallets()
+		}
 	}
 	// Subscribe to wallet notifications from all backends
-	updates := make(chan WalletEvent, 4*len(backends))
+	updates := make(chan accounts.WalletEvent, 4*len(backends))
 
 	subs := make([]event.Subscription, len(backends))
 	for i, backend := range backends {
@@ -66,7 +71,7 @@ func NewManager(config *Config, backends ...Backend) *Manager {
 	// Assemble the account manager and return
 	am := &Manager{
 		config:   config,
-		backends: make(map[reflect.Type][]Backend),
+		backends: make(map[reflect.Type][]accounts.Backend),
 		updaters: subs,
 		updates:  updates,
 		wallets:  wallets,
@@ -113,9 +118,9 @@ func (am *Manager) update() {
 			// Wallet event arrived, update local cache
 			am.lock.Lock()
 			switch event.Kind {
-			case WalletArrived:
+			case accounts.WalletArrived:
 				am.wallets = merge(am.wallets, event.Wallet)
-			case WalletDropped:
+			case accounts.WalletDropped:
 				am.wallets = drop(am.wallets, event.Wallet)
 			}
 			am.lock.Unlock()
@@ -132,8 +137,8 @@ func (am *Manager) update() {
 }
 
 // Backends retrieves the backend(s) with the given type from the account manager.
-func (am *Manager) Backends(kinds ...reflect.Type) []Backend {
-	backends := make([]Backend, 0)
+func (am *Manager) Backends(kinds ...reflect.Type) []accounts.Backend {
+	backends := make([]accounts.Backend, 0)
 	for _, kind := range kinds {
 		backends = append(backends, am.backends[kind]...)
 	}
@@ -141,21 +146,27 @@ func (am *Manager) Backends(kinds ...reflect.Type) []Backend {
 }
 
 // Wallets returns all signer accounts registered under this account manager.
-func (am *Manager) Wallets() []Wallet {
+func (am *Manager) Wallets() []accounts.Wallet {
 	am.lock.RLock()
 	defer am.lock.RUnlock()
 
-	cpy := make([]Wallet, len(am.wallets))
-	copy(cpy, am.wallets)
-	return cpy
+	dbBackends := am.Backends(keystore.DBKeyStoreType)
+	var wallets []accounts.Wallet
+	if len(dbBackends) == 1 {
+		wallets = dbBackends[0].Wallets()
+	} else {
+		wallets = make([]accounts.Wallet, 0)
+	}
+	wallets = append(wallets, am.wallets...)
+	return wallets
 }
 
 // Wallet retrieves the wallet associated with a particular URL.
-func (am *Manager) Wallet(url string) (Wallet, error) {
+func (am *Manager) Wallet(url string) (accounts.Wallet, error) {
 	am.lock.RLock()
 	defer am.lock.RUnlock()
 
-	parsed, err := parseURL(url)
+	parsed, err := accounts.ParseURL(url)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +175,7 @@ func (am *Manager) Wallet(url string) (Wallet, error) {
 			return wallet, nil
 		}
 	}
-	return nil, ErrUnknownWallet
+	return nil, accounts.ErrUnknownWallet
 }
 
 // Accounts returns all account addresses of all wallets within the account manager
@@ -172,7 +183,19 @@ func (am *Manager) Accounts() []common.Address {
 	am.lock.RLock()
 	defer am.lock.RUnlock()
 
-	addresses := make([]common.Address, 0) // return [] instead of nil if empty
+	var addresses []common.Address
+	dbBackends := am.Backends(keystore.DBKeyStoreType)
+	if len(dbBackends) == 1 {
+		dbWallets := dbBackends[0].Wallets()
+		addresses = make([]common.Address, len(dbWallets))
+		for i, wallet := range dbWallets {
+			// one dbWallet only have one account inside
+			addresses[i] = wallet.Accounts()[0].Address
+		}
+	} else {
+		addresses = make([]common.Address, 0) // return [] instead of nil if empty
+	}
+
 	for _, wallet := range am.wallets {
 		for _, account := range wallet.Accounts() {
 			addresses = append(addresses, account.Address)
@@ -184,21 +207,33 @@ func (am *Manager) Accounts() []common.Address {
 // Find attempts to locate the wallet corresponding to a specific account. Since
 // accounts can be dynamically added to and removed from wallets, this method has
 // a linear runtime in the number of wallets.
-func (am *Manager) Find(account Account) (Wallet, error) {
+func (am *Manager) Find(account accounts.Account) (accounts.Wallet, error) {
 	am.lock.RLock()
 	defer am.lock.RUnlock()
+
+	dbBackends := am.Backends(keystore.DBKeyStoreType)
+	if len(dbBackends) == 1 {
+		dbKeyStore, _ := dbBackends[0].(keystore.KeyStore)
+		// TODO here
+		dbKeyStore.Accounts()
+		return nil, nil
+		// acc, err := dbKeyStore.Find(account)
+		// if err == nil {
+		// 	return &keystore.keystoreWalletDB{}, nil
+		// }
+	}
 
 	for _, wallet := range am.wallets {
 		if wallet.Contains(account) {
 			return wallet, nil
 		}
 	}
-	return nil, ErrUnknownAccount
+	return nil, accounts.ErrUnknownAccount
 }
 
 // Subscribe creates an async subscription to receive notifications when the
 // manager detects the arrival or departure of a wallet from any of its backends.
-func (am *Manager) Subscribe(sink chan<- WalletEvent) event.Subscription {
+func (am *Manager) Subscribe(sink chan<- accounts.WalletEvent) event.Subscription {
 	return am.feed.Subscribe(sink)
 }
 
@@ -206,21 +241,21 @@ func (am *Manager) Subscribe(sink chan<- WalletEvent) event.Subscription {
 // origin list is preserved by inserting new wallets at the correct position.
 //
 // The original slice is assumed to be already sorted by URL.
-func merge(slice []Wallet, wallets ...Wallet) []Wallet {
+func merge(slice []accounts.Wallet, wallets ...accounts.Wallet) []accounts.Wallet {
 	for _, wallet := range wallets {
 		n := sort.Search(len(slice), func(i int) bool { return slice[i].URL().Cmp(wallet.URL()) >= 0 })
 		if n == len(slice) {
 			slice = append(slice, wallet)
 			continue
 		}
-		slice = append(slice[:n], append([]Wallet{wallet}, slice[n:]...)...)
+		slice = append(slice[:n], append([]accounts.Wallet{wallet}, slice[n:]...)...)
 	}
 	return slice
 }
 
 // drop is the couterpart of merge, which looks up wallets from within the sorted
 // cache and removes the ones specified.
-func drop(slice []Wallet, wallets ...Wallet) []Wallet {
+func drop(slice []accounts.Wallet, wallets ...accounts.Wallet) []accounts.Wallet {
 	for _, wallet := range wallets {
 		n := sort.Search(len(slice), func(i int) bool { return slice[i].URL().Cmp(wallet.URL()) >= 0 })
 		if n == len(slice) {

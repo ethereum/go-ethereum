@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/accounts/manager"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -40,7 +41,7 @@ import (
 // registry.
 type UIServerAPI struct {
 	extApi *SignerAPI
-	am     *accounts.Manager
+	am     *manager.Manager
 }
 
 // NewUIServerAPI creates a new UIServerAPI
@@ -110,7 +111,7 @@ func (s *UIServerAPI) DeriveAccount(url string, path string, pin *bool) (account
 }
 
 // fetchKeystore retrives the encrypted keystore from the account manager.
-func fetchKeystore(am *accounts.Manager) keystore.KeyStore {
+func fetchKeystore(am *manager.Manager) keystore.KeyStore {
 	return am.Backends(keystore.FSKeyStoreType, keystore.DBKeyStoreType)[0].(keystore.KeyStore)
 }
 

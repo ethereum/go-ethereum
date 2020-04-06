@@ -37,6 +37,8 @@ import (
 	"github.com/ethereum/go-ethereum/signer/core"
 	"github.com/ethereum/go-ethereum/signer/fourbyte"
 	"github.com/ethereum/go-ethereum/signer/storage"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 //Used for testing
@@ -232,7 +234,7 @@ func TestNewAcc(t *testing.T) {
 	testNewAcc(api, control, t)
 
 	// test db keystore
-	ksLoc := "sqlite3#" + filepath.Join(tmpDir, "test_new_account.db")
+	ksLoc := "testdata/dbconfig.yaml"
 	api, control = setup(ksLoc, t)
 	testNewAcc(api, control, t)
 }
@@ -343,7 +345,7 @@ func TestSignTx(t *testing.T) {
 	testSignTx(api, control, t)
 
 	// test db keystore
-	ksLoc := "sqlite3#" + filepath.Join(tmpDir, "test_sign_tx.db")
+	ksLoc := "testdata/dbconfig.yaml"
 	api, control = setup(ksLoc, t)
 	testSignTx(api, control, t)
 }

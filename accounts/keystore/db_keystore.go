@@ -21,7 +21,6 @@ import (
 	crand "crypto/rand"
 	"fmt"
 	"math/big"
-	"reflect"
 	"sync"
 	"time"
 
@@ -32,9 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/pborman/uuid"
 )
-
-// DBKeyStoreType is the reflect type of a keystore backend.
-var DBKeyStoreType = reflect.TypeOf(&keyStoreDB{})
 
 type keyStoreDB struct {
 	storage  *keyStorePassphraseDB        // storage backend, might be mysql or postgres

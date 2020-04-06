@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/accounts/manager"
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/common"
@@ -110,7 +111,7 @@ type Validator interface {
 // SignerAPI defines the actual implementation of ExternalAPI
 type SignerAPI struct {
 	chainID     *big.Int
-	am          *accounts.Manager
+	am          *manager.Manager
 	UI          UIClientAPI
 	validator   Validator
 	rejectMode  bool
@@ -127,7 +128,7 @@ type Metadata struct {
 }
 
 // StartClefAccountManager initializes and start clef Account Manager
-func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath string) (*accounts.Manager, error) {
+func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath string) (*manager.Manager, error) {
 	var (
 		backends []accounts.Backend
 		n, p     = keystore.StandardScryptN, keystore.StandardScryptP
@@ -202,7 +203,7 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath str
 	}
 
 	// Clef doesn't allow insecure http account unlock.
-	return accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: false}, backends...), nil
+	return manager.NewManager(&manager.Config{InsecureUnlockAllowed: false}, backends...), nil
 }
 
 // MetadataFromContext extracts Metadata from a given context.Context
@@ -297,7 +298,7 @@ var ErrRequestDenied = errors.New("request denied")
 // key that is generated when a new Account is created.
 // noUSB disables USB support that is required to support hardware devices such as
 // ledger and trezor.
-func NewSignerAPI(am *accounts.Manager, chainID int64, noUSB bool, ui UIClientAPI, validator Validator, advancedMode bool, credentials storage.Storage) *SignerAPI {
+func NewSignerAPI(am *manager.Manager, chainID int64, noUSB bool, ui UIClientAPI, validator Validator, advancedMode bool, credentials storage.Storage) *SignerAPI {
 	if advancedMode {
 		log.Info("Clef is in advanced mode: will warn instead of reject")
 	}
@@ -393,16 +394,18 @@ func (api *SignerAPI) startUSBListener() {
 // multiple accounts.
 func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
 	var accs []accounts.Account
+	log.Error(fmt.Sprint(len(api.am.Wallets())))
 	for _, wallet := range api.am.Wallets() {
+		log.Error(fmt.Sprint(len(wallet.Accounts())))
 		accs = append(accs, wallet.Accounts()...)
 	}
+	log.Error(fmt.Sprint(len(accs)))
 	result, err := api.UI.ApproveListing(&ListRequest{Accounts: accs, Meta: MetadataFromContext(ctx)})
 	if err != nil {
 		return nil, err
 	}
 	if result.Accounts == nil {
 		return nil, ErrRequestDenied
-
 	}
 	addresses := make([]common.Address, 0)
 	for _, acc := range result.Accounts {

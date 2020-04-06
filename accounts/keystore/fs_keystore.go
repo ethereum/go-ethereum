@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"reflect"
 	"runtime"
 	"sync"
 	"time"
@@ -37,9 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 )
-
-// FSKeyStoreType is the reflect type of a keystore backend.
-var FSKeyStoreType = reflect.TypeOf(&keyStoreFS{})
 
 // Maximum time between wallet refreshes (if filesystem notifications don't work).
 const walletRefreshCycle = 3 * time.Second

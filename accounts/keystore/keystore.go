@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/big"
 	"path/filepath"
+	"reflect"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -24,6 +25,12 @@ var (
 const KeyStoreScheme = "keystore"
 
 const keystoreDBTableName = "keystore"
+
+// DBKeyStoreType is the reflect type of a keystore backend.
+var DBKeyStoreType = reflect.TypeOf(&keyStoreDB{})
+
+// FSKeyStoreType is the reflect type of a keystore backend.
+var FSKeyStoreType = reflect.TypeOf(&keyStoreFS{})
 
 // KeyStore is the interface which abstracts all needed operations required
 type KeyStore interface {

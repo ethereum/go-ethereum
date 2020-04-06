@@ -21,7 +21,7 @@ import (
 )
 
 func TestURLParsing(t *testing.T) {
-	url, err := parseURL("https://ethereum.org")
+	url, err := ParseURL("https://ethereum.org")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestURLParsing(t *testing.T) {
 		t.Errorf("expected: %v, got: %v", "ethereum.org", url.Path)
 	}
 
-	_, err = parseURL("ethereum.org")
+	_, err = ParseURL("ethereum.org")
 	if err == nil {
 		t.Error("expected err, got: nil")
 	}
