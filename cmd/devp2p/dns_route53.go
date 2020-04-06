@@ -32,9 +32,13 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// The Route53 limits change sets to this size. DNS changes need to be split
-// up into multiple batches to work around the limit.
-const route53ChangeLimit = 30000
+const (
+	// Route53 limits change sets to 32k of 'RDATA size'. Change sets are also limited to
+	// 1000 items. UPSERTs count double.
+	// https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/DNSLimitations.html#limits-api-requests-changeresourcerecordsets
+	route53ChangeSizeLimit  = 32000
+	route53ChangeCountLimit = 1000
+)
 
 var (
 	route53AccessKeyFlag = cli.StringFlag{
@@ -102,7 +106,7 @@ func (c *route53Client) deploy(name string, t *dnsdisc.Tree) error {
 	}
 
 	// Submit change batches.
-	batches := splitChanges(changes, route53ChangeLimit)
+	batches := splitChanges(changes, route53ChangeSizeLimit, route53ChangeCountLimit)
 	for i, changes := range batches {
 		log.Info(fmt.Sprintf("Submitting %d changes to Route53", len(changes)))
 		batch := new(route53.ChangeBatch)
@@ -171,12 +175,12 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 		}
 
 		prevRecords, exists := existing[path]
-		prevValue := combineTXT(prevRecords.values)
+		prevValue := strings.Join(prevRecords.values, "")
 		if !exists {
 			// Entry is unknown, push a new one
 			log.Info(fmt.Sprintf("Creating %s = %q", path, val))
 			changes = append(changes, newTXTChange("CREATE", path, ttl, splitTXT(val)))
-		} else if prevValue != val {
+		} else if prevValue != val || prevRecords.ttl != ttl {
 			// Entry already exists, only change its content.
 			log.Info(fmt.Sprintf("Updating %s from %q to %q", path, prevValue, val))
 			changes = append(changes, newTXTChange("UPSERT", path, ttl, splitTXT(val)))
@@ -191,8 +195,8 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 			continue
 		}
 		// Stale entry, nuke it.
-		log.Info(fmt.Sprintf("Deleting %s = %q", path, combineTXT(set.values)))
-		changes = append(changes, newTXTChange("DELETE", path, set.ttl, set.values))
+		log.Info(fmt.Sprintf("Deleting %s = %q", path, strings.Join(set.values, "")))
+		changes = append(changes, newTXTChange("DELETE", path, set.ttl, set.values...))
 	}
 
 	sortChanges(changes)
@@ -212,18 +216,26 @@ func sortChanges(changes []*route53.Change) {
 
 // splitChanges splits up DNS changes such that each change batch
 // is smaller than the given RDATA limit.
-func splitChanges(changes []*route53.Change, limit int) [][]*route53.Change {
-	var batches [][]*route53.Change
-	var batchSize int
+func splitChanges(changes []*route53.Change, sizeLimit, countLimit int) [][]*route53.Change {
+	var (
+		batches    [][]*route53.Change
+		batchSize  int
+		batchCount int
+	)
 	for _, ch := range changes {
 		// Start new batch if this change pushes the current one over the limit.
-		size := changeSize(ch)
-		if len(batches) == 0 || batchSize+size > limit {
+		count := changeCount(ch)
+		size := changeSize(ch) * count
+		overSize := batchSize+size > sizeLimit
+		overCount := batchCount+count > countLimit
+		if len(batches) == 0 || overSize || overCount {
 			batches = append(batches, nil)
 			batchSize = 0
+			batchCount = 0
 		}
 		batches[len(batches)-1] = append(batches[len(batches)-1], ch)
 		batchSize += size
+		batchCount += count
 	}
 	return batches
 }
@@ -237,6 +249,13 @@ func changeSize(ch *route53.Change) int {
 		}
 	}
 	return size
+}
+
+func changeCount(ch *route53.Change) int {
+	if *ch.Action == "UPSERT" {
+		return 2
+	}
+	return 1
 }
 
 // collectRecords collects all TXT records below the given name.
@@ -263,7 +282,7 @@ func (c *route53Client) collectRecords(name string) (map[string]recordSet, error
 }
 
 // newTXTChange creates a change to a TXT record.
-func newTXTChange(action, name string, ttl int64, values []string) *route53.Change {
+func newTXTChange(action, name string, ttl int64, values ...string) *route53.Change {
 	var c route53.Change
 	var r route53.ResourceRecordSet
 	var rrs []*route53.ResourceRecord
@@ -288,28 +307,16 @@ func isSubdomain(name, domain string) bool {
 	return strings.HasSuffix("."+name, "."+domain)
 }
 
-// combineTXT concatenates the given quoted strings into a single unquoted string.
-func combineTXT(values []string) string {
-	result := ""
-	for _, v := range values {
-		if v[0] == '"' {
-			v = v[1 : len(v)-1]
-		}
-		result += v
-	}
-	return result
-}
-
 // splitTXT splits value into a list of quoted 255-character strings.
-func splitTXT(value string) []string {
-	var result []string
+func splitTXT(value string) string {
+	var result strings.Builder
 	for len(value) > 0 {
 		rlen := len(value)
 		if rlen > 253 {
 			rlen = 253
 		}
-		result = append(result, strconv.Quote(value[:rlen]))
+		result.WriteString(strconv.Quote(value[:rlen]))
 		value = value[rlen:]
 	}
-	return result
+	return result.String()
 }

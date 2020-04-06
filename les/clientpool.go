@@ -97,12 +97,12 @@ type clientPool struct {
 	disableBias       bool           // Disable connection bias(used in testing)
 }
 
-// clientPeer represents a client in the pool.
+// clientPoolPeer represents a client peer in the pool.
 // Positive balances are assigned to node key while negative balances are assigned
 // to freeClientId. Currently network IP address without port is used because
 // clients have a limited access to IP addresses while new node keys can be easily
 // generated so it would be useless to assign a negative value to them.
-type clientPeer interface {
+type clientPoolPeer interface {
 	ID() enode.ID
 	freeClientId() string
 	updateCapacity(uint64)
@@ -117,7 +117,7 @@ type clientInfo struct {
 	capacity               uint64
 	priority               bool
 	pool                   *clientPool
-	peer                   clientPeer
+	peer                   clientPoolPeer
 	queueIndex             int // position in connectedQueue
 	balanceTracker         balanceTracker
 	posFactors, negFactors priceFactors
@@ -207,7 +207,7 @@ func (f *clientPool) stop() {
 
 // connect should be called after a successful handshake. If the connection was
 // rejected, there is no need to call disconnect.
-func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
+func (f *clientPool) connect(peer clientPoolPeer, capacity uint64) bool {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
@@ -322,7 +322,7 @@ func (f *clientPool) connect(peer clientPeer, capacity uint64) bool {
 // disconnect should be called when a connection is terminated. If the disconnection
 // was initiated by the pool itself using disconnectFn then calling disconnect is
 // not necessary but permitted.
-func (f *clientPool) disconnect(p clientPeer) {
+func (f *clientPool) disconnect(p clientPoolPeer) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
@@ -516,7 +516,7 @@ func (f *clientPool) setCapacity(c *clientInfo, capacity uint64) error {
 }
 
 // requestCost feeds request cost after serving a request from the given peer.
-func (f *clientPool) requestCost(p *peer, cost uint64) {
+func (f *clientPool) requestCost(p *clientPeer, cost uint64) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 

@@ -25,15 +25,22 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
+const (
+	rootRecheckFailCount = 5 // update root if this many leaf requests fail
+)
+
 // clientTree is a full tree being synced.
 type clientTree struct {
 	c   *Client
 	loc *linkEntry // link to this tree
 
 	lastRootCheck mclock.AbsTime // last revalidation of root
-	root          *rootEntry
-	enrs          *subtreeSync
-	links         *subtreeSync
+	leafFailCount int
+	rootFailCount int
+
+	root  *rootEntry
+	enrs  *subtreeSync
+	links *subtreeSync
 
 	lc         *linkCache          // tracks all links between all trees
 	curLinks   map[string]struct{} // links contained in this tree
@@ -46,7 +53,7 @@ func newClientTree(c *Client, lc *linkCache, loc *linkEntry) *clientTree {
 
 // syncAll retrieves all entries of the tree.
 func (ct *clientTree) syncAll(dest map[string]entry) error {
-	if err := ct.updateRoot(); err != nil {
+	if err := ct.updateRoot(context.Background()); err != nil {
 		return err
 	}
 	if err := ct.links.resolveAll(dest); err != nil {
@@ -60,12 +67,20 @@ func (ct *clientTree) syncAll(dest map[string]entry) error {
 
 // syncRandom retrieves a single entry of the tree. The Node return value
 // is non-nil if the entry was a node.
-func (ct *clientTree) syncRandom(ctx context.Context) (*enode.Node, error) {
+func (ct *clientTree) syncRandom(ctx context.Context) (n *enode.Node, err error) {
 	if ct.rootUpdateDue() {
-		if err := ct.updateRoot(); err != nil {
+		if err := ct.updateRoot(ctx); err != nil {
 			return nil, err
 		}
 	}
+
+	// Update fail counter for leaf request errors.
+	defer func() {
+		if err != nil {
+			ct.leafFailCount++
+		}
+	}()
+
 	// Link tree sync has priority, run it to completion before syncing ENRs.
 	if !ct.links.done() {
 		err := ct.syncNextLink(ctx)
@@ -138,15 +153,22 @@ func removeHash(h []string, index int) []string {
 }
 
 // updateRoot ensures that the given tree has an up-to-date root.
-func (ct *clientTree) updateRoot() error {
+func (ct *clientTree) updateRoot(ctx context.Context) error {
+	if !ct.slowdownRootUpdate(ctx) {
+		return ctx.Err()
+	}
+
 	ct.lastRootCheck = ct.c.clock.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), ct.c.cfg.Timeout)
+	ctx, cancel := context.WithTimeout(ctx, ct.c.cfg.Timeout)
 	defer cancel()
 	root, err := ct.c.resolveRoot(ctx, ct.loc)
 	if err != nil {
+		ct.rootFailCount++
 		return err
 	}
 	ct.root = &root
+	ct.rootFailCount = 0
+	ct.leafFailCount = 0
 
 	// Invalidate subtrees if changed.
 	if ct.links == nil || root.lroot != ct.links.root {
@@ -161,7 +183,32 @@ func (ct *clientTree) updateRoot() error {
 
 // rootUpdateDue returns true when a root update is needed.
 func (ct *clientTree) rootUpdateDue() bool {
-	return ct.root == nil || time.Duration(ct.c.clock.Now()-ct.lastRootCheck) > ct.c.cfg.RecheckInterval
+	tooManyFailures := ct.leafFailCount > rootRecheckFailCount
+	scheduledCheck := ct.c.clock.Now().Sub(ct.lastRootCheck) > ct.c.cfg.RecheckInterval
+	return ct.root == nil || tooManyFailures || scheduledCheck
+}
+
+// slowdownRootUpdate applies a delay to root resolution if is tried
+// too frequently. This avoids busy polling when the client is offline.
+// Returns true if the timeout passed, false if sync was canceled.
+func (ct *clientTree) slowdownRootUpdate(ctx context.Context) bool {
+	var delay time.Duration
+	switch {
+	case ct.rootFailCount > 20:
+		delay = 10 * time.Second
+	case ct.rootFailCount > 5:
+		delay = 5 * time.Second
+	default:
+		return true
+	}
+	timeout := ct.c.clock.NewTimer(delay)
+	defer timeout.Stop()
+	select {
+	case <-timeout.C():
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 // subtreeSync is the sync of an ENR or link subtree.

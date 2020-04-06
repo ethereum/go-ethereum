@@ -1384,7 +1384,7 @@ var bindTests = []struct {
 			if n != 3 {
 				t.Fatalf("Invalid bar0 event")
 			}
-		case <-time.NewTimer(100 * time.Millisecond).C:
+		case <-time.NewTimer(3 * time.Second).C:
 			t.Fatalf("Wait bar0 event timeout")
 		}
 
@@ -1395,7 +1395,7 @@ var bindTests = []struct {
 			if n != 1 {
 				t.Fatalf("Invalid bar event")
 			}
-		case <-time.NewTimer(100 * time.Millisecond).C:
+		case <-time.NewTimer(3 * time.Second).C:
 			t.Fatalf("Wait bar event timeout")
 		}
 		close(stopCh)

@@ -63,6 +63,7 @@ func (c *crawler) run(timeout time.Duration) nodeSet {
 		doneCh       = make(chan enode.Iterator, len(c.iters))
 		liveIters    = len(c.iters)
 	)
+	defer timeoutTimer.Stop()
 	for _, it := range c.iters {
 		go c.runIterator(doneCh, it)
 	}

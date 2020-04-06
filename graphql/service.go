@@ -35,7 +35,7 @@ type Service struct {
 	cors     []string         // Allowed CORS domains
 	vhosts   []string         // Recognised vhosts
 	timeouts rpc.HTTPTimeouts // Timeout settings for HTTP requests.
-	backend  ethapi.Backend   // The backend that queries will operate onn.
+	backend  ethapi.Backend   // The backend that queries will operate on.
 	handler  http.Handler     // The `http.Handler` used to answer queries.
 	listener net.Listener     // The listening socket.
 }

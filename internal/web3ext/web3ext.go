@@ -74,7 +74,7 @@ web3._extend({
 			name: 'getSnapshot',
 			call: 'clique_getSnapshot',
 			params: 1,
-			inputFormatter: [web3._extend.utils.fromDecimal]
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 		new web3._extend.Method({
 			name: 'getSnapshotAtHash',
@@ -85,7 +85,7 @@ web3._extend({
 			name: 'getSigners',
 			call: 'clique_getSigners',
 			params: 1,
-			inputFormatter: [web3._extend.utils.fromDecimal]
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 		new web3._extend.Method({
 			name: 'getSignersAtHash',

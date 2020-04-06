@@ -20,6 +20,7 @@ package trie
 import (
 	"bytes"
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -47,6 +48,10 @@ type LeafCallback func(leaf []byte, parent common.Hash) error
 type Trie struct {
 	db   *Database
 	root node
+	// Keep track of the number leafs which have been inserted since the last
+	// hashing operation. This number will not directly map to the number of
+	// actually unhashed nodes
+	unhashed int
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -162,6 +167,7 @@ func (t *Trie) Update(key, value []byte) {
 //
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryUpdate(key, value []byte) error {
+	t.unhashed++
 	k := keybytesToHex(key)
 	if len(value) != 0 {
 		_, n, err := t.insert(t.root, nil, k, valueNode(value))
@@ -258,6 +264,7 @@ func (t *Trie) Delete(key []byte) {
 // TryDelete removes any existing value for key from the trie.
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryDelete(key []byte) error {
+	t.unhashed++
 	k := keybytesToHex(key)
 	_, n, err := t.delete(t.root, nil, k)
 	if err != nil {
@@ -404,7 +411,7 @@ func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 // Hash returns the root hash of the trie. It does not write to the
 // database and can be used even if the trie doesn't have one.
 func (t *Trie) Hash() common.Hash {
-	hash, cached, _ := t.hashRoot(nil, nil)
+	hash, cached, _ := t.hashRoot(nil)
 	t.root = cached
 	return common.BytesToHash(hash.(hashNode))
 }
@@ -415,19 +422,54 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	if t.db == nil {
 		panic("commit called on trie with nil database")
 	}
-	hash, cached, err := t.hashRoot(t.db, onleaf)
+	if t.root == nil {
+		return emptyRoot, nil
+	}
+	rootHash := t.Hash()
+	h := newCommitter()
+	defer returnCommitterToPool(h)
+	// Do a quick check if we really need to commit, before we spin
+	// up goroutines. This can happen e.g. if we load a trie for reading storage
+	// values, but don't write to it.
+	if !h.commitNeeded(t.root) {
+		return rootHash, nil
+	}
+	var wg sync.WaitGroup
+	if onleaf != nil {
+		h.onleaf = onleaf
+		h.leafCh = make(chan *leaf, leafChanSize)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			h.commitLoop(t.db)
+		}()
+	}
+	var newRoot hashNode
+	newRoot, err = h.Commit(t.root, t.db)
+	if onleaf != nil {
+		// The leafch is created in newCommitter if there was an onleaf callback
+		// provided. The commitLoop only _reads_ from it, and the commit
+		// operation was the sole writer. Therefore, it's safe to close this
+		// channel here.
+		close(h.leafCh)
+		wg.Wait()
+	}
 	if err != nil {
 		return common.Hash{}, err
 	}
-	t.root = cached
-	return common.BytesToHash(hash.(hashNode)), nil
+	t.root = newRoot
+	return rootHash, nil
 }
 
-func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
+// hashRoot calculates the root hash of the given trie
+func (t *Trie) hashRoot(db *Database) (node, node, error) {
 	if t.root == nil {
 		return hashNode(emptyRoot.Bytes()), nil, nil
 	}
-	h := newHasher(onleaf)
+	// If the number of changes is below 100, we let one thread handle it
+	h := newHasher(t.unhashed >= 100)
 	defer returnHasherToPool(h)
-	return h.hash(t.root, db, true)
+	hashed, cached := h.hash(t.root, true)
+	t.unhashed = 0
+	return hashed, cached, nil
 }

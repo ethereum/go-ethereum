@@ -10,6 +10,17 @@ TL;DR: Given a version number MAJOR.MINOR.PATCH, increment the:
 
 Additional labels for pre-release and build metadata are available as extensions to the MAJOR.MINOR.PATCH format.
 
+### 7.0.1 
+
+Added `clef_New` to the internal API calleable from a UI. 
+
+> `New` creates a new password protected Account. The private key is protected with
+> the given password. Users are responsible to backup the private key that is stored
+> in the keystore location that was specified when this API was created.
+> This method is the same as New on the external API, the difference being that
+> this implementation does not ask for confirmation, since it's initiated by
+> the user
+
 ### 7.0.0
 
 - The `message` field was renamed to `messages` in all data signing request methods to better reflect that it's a list, not a value.

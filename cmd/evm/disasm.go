@@ -34,17 +34,22 @@ var disasmCommand = cli.Command{
 }
 
 func disasmCmd(ctx *cli.Context) error {
-	if len(ctx.Args().First()) == 0 {
-		return errors.New("filename required")
+	var in string
+	switch {
+	case len(ctx.Args().First()) > 0:
+		fn := ctx.Args().First()
+		input, err := ioutil.ReadFile(fn)
+		if err != nil {
+			return err
+		}
+		in = string(input)
+	case ctx.GlobalIsSet(InputFlag.Name):
+		in = ctx.GlobalString(InputFlag.Name)
+	default:
+		return errors.New("Missing filename or --input value")
 	}
 
-	fn := ctx.Args().First()
-	in, err := ioutil.ReadFile(fn)
-	if err != nil {
-		return err
-	}
-
-	code := strings.TrimSpace(string(in))
+	code := strings.TrimSpace(in)
 	fmt.Printf("%v\n", code)
 	return asm.PrintDisassembled(code)
 }

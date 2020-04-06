@@ -276,6 +276,9 @@ func (c *Client) Call(result interface{}, method string, args ...interface{}) er
 // The result must be a pointer so that package json can unmarshal into it. You
 // can also pass nil, in which case the result is ignored.
 func (c *Client) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	if result != nil && reflect.TypeOf(result).Kind() != reflect.Ptr {
+		return fmt.Errorf("call result parameter must be pointer or nil interface: %v", result)
+	}
 	msg, err := c.newMessage(method, args...)
 	if err != nil {
 		return err
@@ -465,7 +468,7 @@ func (c *Client) newMessage(method string, paramsIn ...interface{}) (*jsonrpcMes
 func (c *Client) send(ctx context.Context, op *requestOp, msg interface{}) error {
 	select {
 	case c.reqInit <- op:
-		err := c.write(ctx, msg)
+		err := c.write(ctx, msg, false)
 		c.reqSent <- err
 		return err
 	case <-ctx.Done():
@@ -477,7 +480,7 @@ func (c *Client) send(ctx context.Context, op *requestOp, msg interface{}) error
 	}
 }
 
-func (c *Client) write(ctx context.Context, msg interface{}) error {
+func (c *Client) write(ctx context.Context, msg interface{}, retry bool) error {
 	// The previous write failed. Try to establish a new connection.
 	if c.writeConn == nil {
 		if err := c.reconnect(ctx); err != nil {
@@ -487,6 +490,9 @@ func (c *Client) write(ctx context.Context, msg interface{}) error {
 	err := c.writeConn.writeJSON(ctx, msg)
 	if err != nil {
 		c.writeConn = nil
+		if !retry {
+			return c.write(ctx, msg, true)
+		}
 	}
 	return err
 }

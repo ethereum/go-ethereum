@@ -124,7 +124,19 @@ func (b *SimulatedBackend) rollback() {
 	statedb, _ := b.blockchain.State()
 
 	b.pendingBlock = blocks[0]
-	b.pendingState, _ = state.New(b.pendingBlock.Root(), statedb.Database())
+	b.pendingState, _ = state.New(b.pendingBlock.Root(), statedb.Database(), nil)
+}
+
+// stateByBlockNumber retrieves a state by a given blocknumber.
+func (b *SimulatedBackend) stateByBlockNumber(ctx context.Context, blockNumber *big.Int) (*state.StateDB, error) {
+	if blockNumber == nil || blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) == 0 {
+		return b.blockchain.State()
+	}
+	block, err := b.BlockByNumber(ctx, blockNumber)
+	if err != nil {
+		return nil, err
+	}
+	return b.blockchain.StateAt(block.Hash())
 }
 
 // CodeAt returns the code associated with a certain account in the blockchain.
@@ -132,10 +144,11 @@ func (b *SimulatedBackend) CodeAt(ctx context.Context, contract common.Address, 
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if blockNumber != nil && blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) != 0 {
-		return nil, errBlockNumberUnsupported
+	statedb, err := b.stateByBlockNumber(ctx, blockNumber)
+	if err != nil {
+		return nil, err
 	}
-	statedb, _ := b.blockchain.State()
+
 	return statedb.GetCode(contract), nil
 }
 
@@ -144,10 +157,11 @@ func (b *SimulatedBackend) BalanceAt(ctx context.Context, contract common.Addres
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if blockNumber != nil && blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) != 0 {
-		return nil, errBlockNumberUnsupported
+	statedb, err := b.stateByBlockNumber(ctx, blockNumber)
+	if err != nil {
+		return nil, err
 	}
-	statedb, _ := b.blockchain.State()
+
 	return statedb.GetBalance(contract), nil
 }
 
@@ -156,10 +170,11 @@ func (b *SimulatedBackend) NonceAt(ctx context.Context, contract common.Address,
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if blockNumber != nil && blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) != 0 {
-		return 0, errBlockNumberUnsupported
+	statedb, err := b.stateByBlockNumber(ctx, blockNumber)
+	if err != nil {
+		return 0, err
 	}
-	statedb, _ := b.blockchain.State()
+
 	return statedb.GetNonce(contract), nil
 }
 
@@ -168,10 +183,11 @@ func (b *SimulatedBackend) StorageAt(ctx context.Context, contract common.Addres
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if blockNumber != nil && blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) != 0 {
-		return nil, errBlockNumberUnsupported
+	statedb, err := b.stateByBlockNumber(ctx, blockNumber)
+	if err != nil {
+		return nil, err
 	}
-	statedb, _ := b.blockchain.State()
+
 	val := statedb.GetState(contract, key)
 	return val[:], nil
 }
@@ -464,7 +480,7 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	statedb, _ := b.blockchain.State()
 
 	b.pendingBlock = blocks[0]
-	b.pendingState, _ = state.New(b.pendingBlock.Root(), statedb.Database())
+	b.pendingState, _ = state.New(b.pendingBlock.Root(), statedb.Database(), nil)
 	return nil
 }
 
@@ -577,7 +593,7 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	statedb, _ := b.blockchain.State()
 
 	b.pendingBlock = blocks[0]
-	b.pendingState, _ = state.New(b.pendingBlock.Root(), statedb.Database())
+	b.pendingState, _ = state.New(b.pendingBlock.Root(), statedb.Database(), nil)
 
 	return nil
 }

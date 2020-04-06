@@ -157,8 +157,15 @@ func (am *Manager) Wallets() []accounts.Wallet {
 	} else {
 		wallets = make([]accounts.Wallet, 0)
 	}
-	wallets = append(wallets, am.wallets...)
+	wallets = append(wallets, am.walletsNoLock()...)
 	return wallets
+}
+
+// walletsNoLock returns all registered wallets. Callers must hold am.lock.
+func (am *Manager) walletsNoLock() []accounts.Wallet {
+	cpy := make([]accounts.Wallet, len(am.wallets))
+	copy(cpy, am.wallets)
+	return cpy
 }
 
 // Wallet retrieves the wallet associated with a particular URL.
@@ -170,7 +177,7 @@ func (am *Manager) Wallet(url string) (accounts.Wallet, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, wallet := range am.Wallets() {
+	for _, wallet := range am.walletsNoLock() {
 		if wallet.URL() == parsed {
 			return wallet, nil
 		}
