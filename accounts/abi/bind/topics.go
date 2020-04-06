@@ -105,27 +105,27 @@ func makeTopics(query ...[]interface{}) ([][]common.Hash, error) {
 
 // parseTopics converts the indexed topic fields into actual log field values.
 func parseTopics(out interface{}, fields abi.Arguments, topics []common.Hash) error {
-	store := func(arg abi.Argument, reconstr interface{}) {
-		field := reflect.ValueOf(out).Elem().FieldByName(capitalise(arg.Name))
-		field.Set(reflect.ValueOf(reconstr))
-	}
-	return parseTopicIntoFunc(fields, topics, store)
+	return parseTopicWithSetter(fields, topics,
+		func(arg abi.Argument, reconstr interface{}) {
+			field := reflect.ValueOf(out).Elem().FieldByName(capitalise(arg.Name))
+			field.Set(reflect.ValueOf(reconstr))
+		})
 }
 
 // parseTopicsIntoMap converts the indexed topic field-value pairs into map key-value pairs
 func parseTopicsIntoMap(out map[string]interface{}, fields abi.Arguments, topics []common.Hash) error {
-	store := func(arg abi.Argument, reconstr interface{}) {
-		out[arg.Name] = reconstr
-	}
-	return parseTopicIntoFunc(fields, topics, store)
+	return parseTopicWithSetter(fields, topics,
+		func(arg abi.Argument, reconstr interface{}) {
+			out[arg.Name] = reconstr
+		})
 }
 
-// parseTopicIntoFunc converts the indexed topic field-value pairs and stores them using the
-// provided store function.
+// parseTopicWithSetter converts the indexed topic field-value pairs and stores them using the
+// provided set function.
 //
 // Note, dynamic types cannot be reconstructed since they get mapped to Keccak256
 // hashes as the topic value!
-func parseTopicIntoFunc(fields abi.Arguments, topics []common.Hash, store func(abi.Argument, interface{})) error {
+func parseTopicWithSetter(fields abi.Arguments, topics []common.Hash, set func(abi.Argument, interface{})) error {
 	// Sanity check that the fields and topics match up
 	if len(fields) != len(topics) {
 		return errors.New("topic/field count mismatch")
@@ -135,9 +135,10 @@ func parseTopicIntoFunc(fields abi.Arguments, topics []common.Hash, store func(a
 		if !arg.Indexed {
 			return errors.New("non-indexed field in topic reconstruction")
 		}
-		//reconstr, err := parseField(arg, topics[i])
 		var reconstr interface{}
 		switch arg.Type.T {
+		case abi.TupleTy:
+			return errors.New("tuple type in topic reconstruction")
 		case abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
 			// Array types (including strings and bytes) have their keccak256 hashes stored in the topic- not a hash
 			// whose bytes can be decoded to the actual value- so the best we can do is retrieve that hash
@@ -156,8 +157,8 @@ func parseTopicIntoFunc(fields abi.Arguments, topics []common.Hash, store func(a
 				return err
 			}
 		}
-		// Use the store function to store the value
-		store(arg, reconstr)
+		// Use the set function to store the value
+		set(arg, reconstr)
 	}
 
 	return nil

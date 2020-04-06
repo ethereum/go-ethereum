@@ -84,6 +84,7 @@ func setupTopicsTests() []topicTest {
 	bytesType, _ := abi.NewType("bytes5", "", nil)
 	int8Type, _ := abi.NewType("int8", "", nil)
 	int256Type, _ := abi.NewType("int256", "", nil)
+	tupleType, _ := abi.NewType("tuple(int256,int8)", "", nil)
 
 	tests := []topicTest{
 		{
@@ -144,6 +145,21 @@ func setupTopicsTests() []topicTest {
 				},
 			},
 			wantErr: false,
+		},
+		{
+			name: "tuple(int256, int8)",
+			args: args{
+				createObj: func() interface{} { return nil },
+				resultObj: func() interface{} { return nil },
+				resultMap: func() map[string]interface{} { return make(map[string]interface{}) },
+				fields: abi.Arguments{abi.Argument{
+					Name:    "tupletype",
+					Type:    tupleType,
+					Indexed: true,
+				}},
+				topics: []common.Hash{},
+			},
+			wantErr: true,
 		},
 	}
 
