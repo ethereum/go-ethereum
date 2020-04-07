@@ -357,21 +357,21 @@ var unpackTests = []unpackTest{
 	},
 	{
 		def: `[{"name":"int_one","type":"int256"}]`,
-		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		enc: "0000000000000000000000000000000000000000000000000000000000000001",
 		want: struct {
 			IntOne *big.Int
 		}{big.NewInt(1)},
 	},
 	{
 		def: `[{"name":"int__one","type":"int256"}]`,
-		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		enc: "0000000000000000000000000000000000000000000000000000000000000001",
 		want: struct {
 			IntOne *big.Int
 		}{big.NewInt(1)},
 	},
 	{
 		def: `[{"name":"int_one_","type":"int256"}]`,
-		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		enc: "0000000000000000000000000000000000000000000000000000000000000001",
 		want: struct {
 			IntOne *big.Int
 		}{big.NewInt(1)},
@@ -443,6 +443,7 @@ var unpackTests = []unpackTest{
 func TestUnpack(t *testing.T) {
 	for i, test := range unpackTests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			//Unpack
 			def := fmt.Sprintf(`[{ "name" : "method", "type": "function", "outputs": %s}]`, test.def)
 			abi, err := JSON(strings.NewReader(def))
 			if err != nil {
@@ -461,6 +462,36 @@ func TestUnpack(t *testing.T) {
 			out := outptr.Elem().Interface()
 			if !reflect.DeepEqual(test.want, out) {
 				t.Errorf("test %d (%v) failed: expected %v, got %v", i, test.def, test.want, out)
+			}
+			// Pack
+			if test.err != "" {
+				// cannot test erroring test cases for proper pack/unpacking
+				return
+			}
+			inDef := fmt.Sprintf(`[{ "name" : "method", "inputs": %s}]`, test.def)
+			inAbi, err := JSON(strings.NewReader(inDef))
+			if err != nil {
+				t.Fatalf("invalid ABI definition %s, %v", inDef, err)
+			}
+			var packed []byte
+			if reflect.TypeOf(test.want).Kind() != reflect.Struct {
+				packed, err = inAbi.Pack("method", test.want)
+			} else {
+				// if want is a struct we need to use the components.
+				elem := reflect.ValueOf(test.want)
+				var values []interface{}
+				for i := 0; i < elem.NumField(); i++ {
+					field := elem.Field(i)
+					values = append(values, field.Interface())
+				}
+				packed, err = inAbi.Pack("method", values...)
+			}
+
+			if err != nil {
+				t.Fatalf("test %d (%v) failed: %v", i, test.def, err)
+			}
+			if !reflect.DeepEqual(packed[4:], encb) {
+				t.Errorf("test %d (%v) failed: expected %v, got %v", i, test.def, encb, packed[4:])
 			}
 		})
 	}
