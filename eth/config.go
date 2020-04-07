@@ -154,4 +154,7 @@ type Config struct {
 
 	// CheckpointOracle is the configuration for checkpoint oracle.
 	CheckpointOracle *params.CheckpointOracleConfig
+
+	// URL to connect to Heimdall node
+	HeimdallURL string
 }

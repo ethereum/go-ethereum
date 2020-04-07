@@ -257,6 +257,7 @@ func New(
 	chainConfig *params.ChainConfig,
 	db ethdb.Database,
 	ethAPI *ethapi.PublicBlockChainAPI,
+	heimdallURL string,
 ) *Bor {
 	// get bor config
 	borConfig := chainConfig.Bor
@@ -271,7 +272,7 @@ func New(
 	signatures, _ := lru.NewARC(inmemorySignatures)
 	vABI, _ := abi.JSON(strings.NewReader(validatorsetABI))
 	sABI, _ := abi.JSON(strings.NewReader(stateReceiverABI))
-	heimdallClient, _ := NewHeimdallClient(chainConfig.Bor.Heimdall)
+	heimdallClient, _ := NewHeimdallClient(heimdallURL)
 
 	c := &Bor{
 		chainConfig:      chainConfig,

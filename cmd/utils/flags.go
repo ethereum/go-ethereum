@@ -741,6 +741,13 @@ var (
 		Usage: "External EVM configuration (default = built-in interpreter)",
 		Value: "",
 	}
+
+	// Bor Specific flags
+	HeimdallURLFlag = cli.StringFlag{
+		Name:  "heimdall",
+		Usage: "URL of Heimdall service",
+		Value: "http://localhost:1317",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1161,7 +1168,6 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	setNodeUserIdent(ctx, cfg)
 	setDataDir(ctx, cfg)
 	setSmartCard(ctx, cfg)
-
 	if ctx.GlobalIsSet(ExternalSignerFlag.Name) {
 		cfg.ExternalSigner = ctx.GlobalString(ExternalSignerFlag.Name)
 	}

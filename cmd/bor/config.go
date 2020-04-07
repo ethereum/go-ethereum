@@ -29,6 +29,7 @@ import (
 	"github.com/maticnetwork/bor/cmd/utils"
 	"github.com/maticnetwork/bor/dashboard"
 	"github.com/maticnetwork/bor/eth"
+	"github.com/maticnetwork/bor/log"
 	"github.com/maticnetwork/bor/node"
 	"github.com/maticnetwork/bor/params"
 	whisper "github.com/maticnetwork/bor/whisper/whisperv6"
@@ -150,6 +151,8 @@ func enableWhisper(ctx *cli.Context) bool {
 
 func makeFullNode(ctx *cli.Context) *node.Node {
 	stack, cfg := makeConfigNode(ctx)
+	cfg.Eth.HeimdallURL = ctx.String(utils.HeimdallURLFlag.Name)
+	log.Info("Connecting to heimdall service on...", "heimdallURL", cfg.Eth.HeimdallURL)
 	utils.RegisterEthService(stack, &cfg.Eth)
 
 	if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
