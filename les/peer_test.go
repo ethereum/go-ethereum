@@ -140,7 +140,7 @@ func TestHandshake(t *testing.T) {
 			if err != nil {
 				t.Fatalf("handshake failed, %v", err)
 			}
-		case <-time.NewTimer(100 * time.Millisecond).C:
+		case <-time.After(time.Second):
 			t.Fatalf("timeout")
 		}
 	}
