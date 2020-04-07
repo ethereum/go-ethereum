@@ -59,18 +59,6 @@ func (argument *Argument) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// LengthNonIndexed returns the number of arguments when not counting 'indexed' ones. Only events
-// can ever have 'indexed' arguments, it should always be false on arguments for method input/output
-func (arguments Arguments) LengthNonIndexed() int {
-	out := 0
-	for _, arg := range arguments {
-		if !arg.Indexed {
-			out++
-		}
-	}
-	return out
-}
-
 // NonIndexed returns the arguments with indexed arguments filtered out
 func (arguments Arguments) NonIndexed() Arguments {
 	var ret []Argument
