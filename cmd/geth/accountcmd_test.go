@@ -17,7 +17,6 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"runtime"
@@ -90,32 +89,29 @@ Path of the secret key file: .*UTC--.+--[0-9a-f]{40}
 }
 
 func TestAccountImport(t *testing.T) {
-	success := "Address: {fcad0b19bb29d4674531d6f115237e16afce377c}\n"
-	failureTemplate := "Fatal: Failed to load the private key: expected 64 bytes, got %v\n"
-	tests := []struct {
-		key    string
-		result string
-	}{
-		{key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", result: success},
-		{key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n", result: success},
-		{key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\r\n", result: success},
-		{key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1", result: fmt.Sprintf(failureTemplate, 65)},
-		{key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdefx", result: fmt.Sprintf(failureTemplate, 65)},
-		{key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n\n\n", result: fmt.Sprintf(failureTemplate, 67)},
+	tests := []struct{ key, output string }{
+		{
+			key:    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			output: "Address: {fcad0b19bb29d4674531d6f115237e16afce377c}\n",
+		},
+		{
+			key:    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1",
+			output: "Fatal: Failed to load the private key: invalid character '1' at end of key file\n",
+		},
 	}
 	for _, test := range tests {
-		importAccountWithExpect(t, test.key, test.result)
+		importAccountWithExpect(t, test.key, test.output)
 	}
 }
 
 func importAccountWithExpect(t *testing.T, key string, expected string) {
 	dir := tmpdir(t)
 	keyfile := filepath.Join(dir, "key.prv")
-	if err := ioutil.WriteFile(keyfile, []byte(key), 0644); err != nil {
+	if err := ioutil.WriteFile(keyfile, []byte(key), 0600); err != nil {
 		t.Error(err)
 	}
 	passwordFile := filepath.Join(dir, "password.txt")
-	if err := ioutil.WriteFile(passwordFile, []byte("foobar"), 0644); err != nil {
+	if err := ioutil.WriteFile(passwordFile, []byte("foobar"), 0600); err != nil {
 		t.Error(err)
 	}
 	geth := runGeth(t, "account", "import", keyfile, "-password", passwordFile)
