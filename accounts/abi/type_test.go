@@ -306,3 +306,28 @@ func TestTypeCheck(t *testing.T) {
 		}
 	}
 }
+
+func TestInternalType(t *testing.T) {
+	components := []ArgumentMarshaling{{Name: "a", Type: "int64"}}
+	internalType := "struct a.b[]"
+	kind := Type{
+		Kind: reflect.Struct,
+		T:    TupleTy,
+		Type: reflect.TypeOf(struct {
+			A int64 `json:"a"`
+		}{}),
+		stringKind:    "(int64)",
+		TupleRawName:  "ab[]",
+		TupleElems:    []*Type{{Kind: reflect.Int64, T: IntTy, Type: reflect.TypeOf(int64(0)), Size: 64, stringKind: "int64"}},
+		TupleRawNames: []string{"a"},
+	}
+
+	blob := "tuple"
+	typ, err := NewType(blob, internalType, components)
+	if err != nil {
+		t.Errorf("type %q: failed to parse type string: %v", blob, err)
+	}
+	if !reflect.DeepEqual(typ, kind) {
+		t.Errorf("type %q: parsed type mismatch:\nGOT %s\nWANT %s ", blob, spew.Sdump(typeWithoutStringer(typ)), spew.Sdump(typeWithoutStringer(kind)))
+	}
+}

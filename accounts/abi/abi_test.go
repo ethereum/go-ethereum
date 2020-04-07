@@ -179,7 +179,6 @@ func TestReader(t *testing.T) {
 		t.Error(err)
 	}
 
-	// deep equal fails for some reason
 	for name, expM := range exp.Methods {
 		gotM, exist := abi.Methods[name]
 		if !exist {
