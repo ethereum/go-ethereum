@@ -94,6 +94,30 @@ func TestReqValueFactor(t *testing.T) {
 	checkF64(t, "reqValueFactor", rvf, 333.333, 1)
 }
 
+func TestNormalize(t *testing.T) {
+	for cycle := 0; cycle < 100; cycle += 1 {
+		// Initialize data for testing
+		valueRange, lower := 1000000, 1000000
+		ref := referenceBasket{basket: requestBasket{items: make([]basketItem, 10)}}
+		for i := 0; i < 10; i++ {
+			ref.basket.items[i].amount = uint64(rand.Intn(valueRange) + lower)
+			ref.basket.items[i].value = uint64(rand.Intn(valueRange) + lower)
+		}
+		ref.normalize()
+
+		// Check whether SUM(amount) ~= SUM(value)
+		var sumAmount, sumValue uint64
+		for i := 0; i < 10; i++ {
+			sumAmount += ref.basket.items[i].amount
+			sumValue += ref.basket.items[i].value
+		}
+		var epsilon = 0.01
+		if float64(sumAmount)*(1+epsilon) < float64(sumValue) || float64(sumAmount)*(1-epsilon) > float64(sumValue) {
+			t.Fatalf("Failed to normalize sumAmount: %d sumValue: %d", sumAmount, sumValue)
+		}
+	}
+}
+
 func TestReqValueAdjustment(t *testing.T) {
 	var s1, s2 serverBasket
 	s1.init(3)

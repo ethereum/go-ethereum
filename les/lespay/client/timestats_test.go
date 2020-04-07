@@ -25,6 +25,25 @@ import (
 	"github.com/ethereum/go-ethereum/les/utils"
 )
 
+func TestTransition(t *testing.T) {
+	var epsilon = 0.01
+	var cases = []time.Duration{
+		time.Millisecond, minResponseTime,
+		time.Second, time.Second * 5, maxResponseTime,
+	}
+	for _, c := range cases {
+		got := StatScaleToTime(TimeToStatScale(c))
+		if float64(got)*(1+epsilon) < float64(c) || float64(got)*(1-epsilon) > float64(c) {
+			t.Fatalf("Failed to transition back")
+		}
+	}
+	// If the time is too large(exceeds the max response time.
+	got := StatScaleToTime(TimeToStatScale(2 * maxResponseTime))
+	if float64(got)*(1+epsilon) < float64(maxResponseTime) || float64(got)*(1-epsilon) > float64(maxResponseTime) {
+		t.Fatalf("Failed to transition back")
+	}
+}
+
 var maxResponseWeights = TimeoutWeights(maxResponseTime)
 
 func TestValue(t *testing.T) {

@@ -50,8 +50,6 @@ type NodeValueTracker struct {
 	basket               serverBasket
 	reqCosts             []uint64
 	reqValues            *[]float64
-
-	lastReqCosts []uint64 // accessed by ValueTracker only
 }
 
 // init initializes a NodeValueTracker.
@@ -60,7 +58,6 @@ type NodeValueTracker struct {
 func (nv *NodeValueTracker) init(now mclock.AbsTime, reqValues *[]float64) {
 	reqTypeCount := len(*reqValues)
 	nv.reqCosts = make([]uint64, reqTypeCount)
-	nv.lastReqCosts = nv.reqCosts
 	nv.lastTransfer = now
 	nv.reqValues = reqValues
 	nv.basket.init(reqTypeCount)
@@ -424,7 +421,6 @@ func (vt *ValueTracker) UpdateCosts(nv *NodeValueTracker, reqCosts []uint64) {
 	vt.lock.Lock()
 	defer vt.lock.Unlock()
 
-	nv.lastReqCosts = reqCosts
 	nv.updateCosts(reqCosts, &vt.refBasket.reqValues, vt.refBasket.reqValueFactor(reqCosts))
 }
 
@@ -454,7 +450,7 @@ func (vt *ValueTracker) periodicUpdate() {
 	vt.refBasket.normalize()
 	vt.refBasket.updateReqValues()
 	for _, nv := range vt.connected {
-		nv.updateCosts(nv.lastReqCosts, &vt.refBasket.reqValues, vt.refBasket.reqValueFactor(nv.lastReqCosts))
+		nv.updateCosts(nv.reqCosts, &vt.refBasket.reqValues, vt.refBasket.reqValueFactor(nv.reqCosts))
 	}
 	vt.saveToDb()
 }
