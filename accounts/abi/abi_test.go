@@ -1045,3 +1045,28 @@ func TestDoubleDuplicateMethodNames(t *testing.T) {
 		t.Fatalf("Should not have found extra method")
 	}
 }
+
+// TestDoubleDuplicateEventNames checks that an event with unnamed parameters is
+// correctly handled
+// The test runs the abi of the following contract.
+// 	contract TestEvent {
+//		event send(uint256, uint256);
+//	}
+func TestUnnamedEventParam(t *testing.T) {
+	abiJSON := `[{ "anonymous": false, "inputs": [{	"indexed": false,"internalType": "uint256",	"name": "","type": "uint256"},{"indexed": false,"internalType": "uint256","name": "","type": "uint256"}],"name": "send","type": "event"}]`
+	contractAbi, err := JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	event, ok := contractAbi.Events["send"]
+	if !ok {
+		t.Fatalf("Could not find event")
+	}
+	if event.Inputs[0].Name != "arg0" {
+		t.Fatalf("Could not find input")
+	}
+	if event.Inputs[1].Name != "arg1" {
+		t.Fatalf("Could not find input")
+	}
+}
