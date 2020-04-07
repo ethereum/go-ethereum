@@ -17,13 +17,14 @@
 package crypto
 
 import (
-	"bytes"
+	"bufio"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -158,37 +159,67 @@ func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
 // HexToECDSA parses a secp256k1 private key.
 func HexToECDSA(hexkey string) (*ecdsa.PrivateKey, error) {
 	b, err := hex.DecodeString(hexkey)
-	if err != nil {
-		return nil, errors.New("invalid hex string")
+	if byteErr, ok := err.(hex.InvalidByteError); ok {
+		return nil, fmt.Errorf("invalid hex character %q in private key", byte(byteErr))
+	} else if err != nil {
+		return nil, errors.New("invalid hex data for private key")
 	}
 	return ToECDSA(b)
 }
 
 // LoadECDSA loads a secp256k1 private key from the given file.
 func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
-	stat, err := os.Stat(file)
+	fd, err := os.Open(file)
 	if err != nil {
 		return nil, err
 	}
-	size := stat.Size()
-	// Allow two extra chars for possible line ending to be checked later
-	if size < 64 || size > 66 {
-		return nil, fmt.Errorf("expected 64 bytes, got %v", size)
-	}
-	buf, err := ioutil.ReadFile(file)
+	defer fd.Close()
+
+	r := bufio.NewReader(fd)
+	buf := make([]byte, 64)
+	n, err := readASCII(buf, r)
 	if err != nil {
 		return nil, err
+	} else if n != len(buf) {
+		return nil, fmt.Errorf("key file too short, want 64 hex characters")
 	}
-	buf = bytes.TrimSpace(buf)
-	if len(buf) != 64 {
-		return nil, fmt.Errorf("expected 64 bytes, got %v", len(buf))
+	if err := checkKeyFileEnd(r); err != nil {
+		return nil, err
 	}
 
-	key, err := hex.DecodeString(string(buf))
-	if err != nil {
-		return nil, err
+	return HexToECDSA(string(buf))
+}
+
+// readASCII reads into 'buf', stopping when the buffer is full or
+// when a non-printable control character is encountered.
+func readASCII(buf []byte, r *bufio.Reader) (n int, err error) {
+	for ; n < len(buf); n++ {
+		buf[n], err = r.ReadByte()
+		switch {
+		case err == io.EOF || buf[n] < '!':
+			return n, nil
+		case err != nil:
+			return n, err
+		}
 	}
-	return ToECDSA(key)
+	return n, nil
+}
+
+// checkKeyFileEnd skips over additional newlines at the end of a key file.
+func checkKeyFileEnd(r *bufio.Reader) error {
+	for i := 0; ; i++ {
+		b, err := r.ReadByte()
+		switch {
+		case err == io.EOF:
+			return nil
+		case err != nil:
+			return err
+		case b != '\n' && b != '\r':
+			return fmt.Errorf("invalid character %q at end of key file", b)
+		case i >= 2:
+			return errors.New("key file too long, want 64 hex characters")
+		}
+	}
 }
 
 // SaveECDSA saves a secp256k1 private key to the given file with
@@ -198,6 +229,7 @@ func SaveECDSA(file string, key *ecdsa.PrivateKey) error {
 	return ioutil.WriteFile(file, []byte(k), 0600)
 }
 
+// GenerateKey generates a new private key.
 func GenerateKey() (*ecdsa.PrivateKey, error) {
 	return ecdsa.GenerateKey(S256(), rand.Reader)
 }
