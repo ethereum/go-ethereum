@@ -76,6 +76,9 @@ func TestEnd2End(t *testing.T) {
 
 	// make sure intermediate result is encrypted correctly
 	encrypted, err := fs.api.Get("bazonk")
+	if err != nil {
+		t.Error("Failed to retrieve encrypted credential")
+	}
 	cred := StoredCredential{}
 	if err = json.Unmarshal([]byte(encrypted), &cred); err != nil {
 		t.Error("Failed to unmarshal encrypted credential", "err", err)

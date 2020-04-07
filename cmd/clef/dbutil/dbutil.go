@@ -81,7 +81,7 @@ func readConfigYAML(path string) (*DBConf, error) {
 	}
 
 	conf := &DBConf{}
-	if err = yaml.Unmarshal([]byte(yamlContent), conf); err != nil {
+	if err = yaml.Unmarshal(yamlContent, conf); err != nil {
 		log.Warn("Cannot parse yaml config: ", err)
 		return nil, err
 	}

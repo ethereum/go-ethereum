@@ -26,17 +26,19 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+const foo = "foo"
+
 func TestKeyStoreDB(t *testing.T) {
 	ks := tmpKeyStoreDB(t)
 
-	acc, err := ks.NewAccount("foo")
+	acc, err := ks.NewAccount(foo)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !ks.HasAddress(acc.Address) {
 		t.Errorf("HasAccount(%x) should've returned true", acc.Address)
 	}
-	if err := ks.Update(acc, "foo", "bar"); err != nil {
+	if err := ks.Update(acc, foo, "bar"); err != nil {
 		t.Errorf("Update error: %v", err)
 	}
 	if err := ks.Delete(acc, "bar"); err != nil {
@@ -93,7 +95,7 @@ func TestSignWithPassphraseDB(t *testing.T) {
 func TestTimedUnlockDB(t *testing.T) {
 	ks := tmpKeyStoreDB(t)
 
-	pass := "foo"
+	pass := foo
 	acc, err := ks.NewAccount(pass)
 	if err != nil {
 		t.Fatal(err)
@@ -127,7 +129,7 @@ func TestTimedUnlockDB(t *testing.T) {
 func TestOverrideUnlockDB(t *testing.T) {
 	ks := tmpKeyStoreDB(t)
 
-	pass := "foo"
+	pass := foo
 	acc, err := ks.NewAccount(pass)
 	if err != nil {
 		t.Fatal(err)

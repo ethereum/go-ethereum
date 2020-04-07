@@ -503,7 +503,6 @@ func signer(c *cli.Context) error {
 	var (
 		api           core.ExternalAPI
 		pwStorage     storage.Storage = storage.NewNoStorage()
-		jsStorage     storage.Storage = storage.NewNoStorage()
 		configStorage storage.Storage = storage.NewNoStorage()
 	)
 	configDir := c.GlobalString(configdirFlag.Name)
@@ -512,7 +511,7 @@ func signer(c *cli.Context) error {
 	} else {
 		// create dedicated storages for different type of configuration
 		pwStorage = initPasswordStorage(stretchedKey, c)
-		jsStorage = initJsStorage(stretchedKey, c)
+		jsStorage := initJsStorage(stretchedKey, c)
 		configStorage = initConfigStorage(stretchedKey, c)
 
 		// Do we have a rule-file?
