@@ -615,7 +615,7 @@ func testBroadcastBlock(t *testing.T, totalPeers, broadcastExpected int) {
 		case <-doneCh:
 			received++
 
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(time.Second):
 			if received != broadcastExpected {
 				t.Errorf("broadcast count mismatch: have %d, want %d", received, broadcastExpected)
 			}
