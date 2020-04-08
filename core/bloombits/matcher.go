@@ -155,7 +155,6 @@ func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uin
 	session := &MatcherSession{
 		matcher: m,
 		quit:    make(chan struct{}),
-		kill:    make(chan struct{}),
 		ctx:     ctx,
 	}
 	for _, scheduler := range m.schedulers {
@@ -415,10 +414,6 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 			}
 			shutdown = nil
 
-		case <-session.kill:
-			// Pending requests not honoured in time, hard terminate
-			return
-
 		case req := <-dist:
 			// New retrieval request arrived to be distributed to some fetcher process
 			queue := requests[req.bit]
@@ -514,7 +509,6 @@ type MatcherSession struct {
 
 	closer sync.Once     // Sync object to ensure we only ever close once
 	quit   chan struct{} // Quit channel to request pipeline termination
-	kill   chan struct{} // Term channel to signal non-graceful forced shutdown
 
 	ctx context.Context // Context used by the light client to abort filtering
 	err atomic.Value    // Global error to track retrieval failures deep in the chain
@@ -529,8 +523,6 @@ func (s *MatcherSession) Close() {
 	s.closer.Do(func() {
 		// Signal termination and wait for all goroutines to tear down
 		close(s.quit)
-		timeout := time.AfterFunc(time.Second, func() { close(s.kill) })
-		defer timeout.Stop()
 		s.pend.Wait()
 	})
 }
@@ -594,8 +586,6 @@ func (s *MatcherSession) AllocateSections(bit uint, count int) []uint64 {
 // bit index to be injected into the processing pipeline.
 func (s *MatcherSession) DeliverSections(bit uint, sections []uint64, bitsets [][]byte) {
 	select {
-	case <-s.kill:
-		return
 	case s.matcher.deliveries <- &Retrieval{Bit: bit, Sections: sections, Bitsets: bitsets}:
 	}
 }
