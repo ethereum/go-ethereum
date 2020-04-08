@@ -200,6 +200,19 @@ func TestReader(t *testing.T) {
 	}
 }
 
+func TestInvalidABI(t *testing.T) {
+	json := `[{ "type" : "function", "name" : "", "constant" : fals }]`
+	_, err := JSON(strings.NewReader(json))
+	if err == nil {
+		t.Fatal("invalid json should produce error")
+	}
+	json2 := `[{ "type" : "function", "name" : "send", "constant" : false, "inputs" : [ { "name" : "amount", "typ" : "uint256" } ] }]`
+	_, err = JSON(strings.NewReader(json2))
+	if err == nil {
+		t.Fatal("invalid json should produce error")
+	}
+}
+
 // TestConstructor tests a constructor function.
 // The test is based on the following contract:
 // 	contract TestConstructor {
