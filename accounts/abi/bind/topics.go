@@ -125,7 +125,7 @@ func parseTopicsIntoMap(out map[string]interface{}, fields abi.Arguments, topics
 //
 // Note, dynamic types cannot be reconstructed since they get mapped to Keccak256
 // hashes as the topic value!
-func parseTopicWithSetter(fields abi.Arguments, topics []common.Hash, set func(abi.Argument, interface{})) error {
+func parseTopicWithSetter(fields abi.Arguments, topics []common.Hash, setter func(abi.Argument, interface{})) error {
 	// Sanity check that the fields and topics match up
 	if len(fields) != len(topics) {
 		return errors.New("topic/field count mismatch")
@@ -157,8 +157,8 @@ func parseTopicWithSetter(fields abi.Arguments, topics []common.Hash, set func(a
 				return err
 			}
 		}
-		// Use the set function to store the value
-		set(arg, reconstr)
+		// Use the setter function to store the value
+		setter(arg, reconstr)
 	}
 
 	return nil
