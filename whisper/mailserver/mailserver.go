@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
@@ -70,6 +71,9 @@ func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, p
 	}
 
 	s.db, err = leveldb.OpenFile(path, &opt.Options{OpenFilesCacheCapacity: 32})
+	if _, iscorrupted := err.(*errors.ErrCorrupted); iscorrupted {
+		s.db, err = leveldb.RecoverFile(path, nil)
+	}
 	if err != nil {
 		return fmt.Errorf("open DB file: %s", err)
 	}
