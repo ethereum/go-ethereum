@@ -21,6 +21,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"crypto/sha512"
@@ -718,14 +719,14 @@ func requestExpiredMessagesLoop() {
 			timeUpp = 0xFFFFFFFF
 		}
 
-		data := make([]byte, 8, 8+whisper.BloomFilterSize)
-		binary.BigEndian.PutUint32(data, timeLow)
-		binary.BigEndian.PutUint32(data[4:], timeUpp)
-		data = append(data, bloom...)
+		buf := new(bytes.Buffer)
+		binary.Write(buf, binary.BigEndian, timeLow)
+		binary.Write(buf, binary.BigEndian, timeUpp)
+		binary.Write(buf, binary.BigEndian, bloom)
 
 		var params whisper.MessageParams
 		params.PoW = *argServerPoW
-		params.Payload = data
+		params.Payload = buf.Bytes()
 		params.KeySym = key
 		params.Src = asymKey
 		params.WorkTime = 5
