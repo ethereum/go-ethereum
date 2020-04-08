@@ -15,7 +15,7 @@ type dropNotification struct {
 }
 
 type rejectNotification struct {
-	Tx *types.Transaction
+	Tx *types.Transaction `json:"tx"`
 	Reason string `json:"reason"`
 }
 
@@ -67,7 +67,11 @@ func (api *PublicFilterAPI) RejectedTransactions(ctx context.Context) (*rpc.Subs
 		for {
 			select {
 			case d := <-rejected:
-				notifier.Notify(rpcSub.ID, &rejectNotification{Tx: d.Tx, Reason: d.Reason.Error()})
+				reason := ""
+				if d.Reason != nil {
+					reason = d.Reason.Error()
+				}
+				notifier.Notify(rpcSub.ID, &rejectNotification{Tx: d.Tx, Reason: reason})
 			case <-rpcSub.Err():
 				rejectedSub.Unsubscribe()
 				return
