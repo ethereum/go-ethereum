@@ -615,7 +615,7 @@ func TestWebsocketHTTPOnSamePort_WebsocketRequest(t *testing.T) {
 	wsReq.Header.Set("Sec-Websocket-Key", "SGVsbG8sIHdvcmxkIQ==")
 
 	wsResponses := make(chan *http.Response)
-	go doHTTPRequest(wsResponses, wsReq, t)
+	go doHTTPRequest(t, wsResponses, wsReq)
 	wsResponse := <-wsResponses
 
 	assert.Equal(t, "websocket", wsResponse.Header.Get("Upgrade"))
@@ -632,7 +632,7 @@ func TestWebsocketHTTPOnSamePort_HTTPRequest(t *testing.T) {
 	httpReq.Header.Set("Accept-Encoding", "gzip")
 
 	httpResponses := make(chan *http.Response)
-	go doHTTPRequest(httpResponses, httpReq, t)
+	go doHTTPRequest(t, httpResponses, httpReq)
 	httpResponse := <-httpResponses
 
 	assert.Equal(t, "gzip", httpResponse.Header.Get("Content-Encoding"))
@@ -653,7 +653,7 @@ func startHTTP(t *testing.T) *Node {
 	return node
 }
 
-func doHTTPRequest(responses chan *http.Response, req *http.Request, t *testing.T) {
+func doHTTPRequest(t *testing.T, responses chan *http.Response, req *http.Request) {
 	client := &http.Client{}
 
 	resp, err := client.Do(req)

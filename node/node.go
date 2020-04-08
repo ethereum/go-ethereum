@@ -707,7 +707,6 @@ func RegisterApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server
 			if err := srv.RegisterName(api.Namespace, api.Service); err != nil {
 				return err
 			}
-			log.Debug("HTTP registered", "namespace", api.Namespace)
 		}
 	}
 	return nil
