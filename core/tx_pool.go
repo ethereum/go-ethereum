@@ -428,9 +428,9 @@ func (pool *TxPool) SubscribeDropTxsEvent(ch chan<- DropTxsEvent) event.Subscrip
 	return pool.scope.Track(pool.dropTxFeed.Subscribe(ch))
 }
 
-// SubscribeRejectedTxsEvent registers a subscription of RejectedTxEvent and
+// SubscribeRejectedTxEvent registers a subscription of RejectedTxEvent and
 // starts sending event to the given channel.
-func (pool *TxPool) SubscribeRejectedTxsEvent(ch chan<- RejectedTxEvent) event.Subscription {
+func (pool *TxPool) SubscribeRejectedTxEvent(ch chan<- RejectedTxEvent) event.Subscription {
 	return pool.scope.Track(pool.rejectTxFeed.Subscribe(ch))
 }
 
