@@ -41,6 +41,7 @@ const (
 	dbNodePrefix   = "n:"      // Identifier to prefix node entries with
 	dbLocalPrefix  = "local:"
 	dbDiscoverRoot = "v4"
+	dbDiscv5Root   = "v5"
 
 	// These fields are stored per ID and IP, the full key is "n:<ID>:v4:<IP>:findfail".
 	// Use nodeItemKey to create those keys.
@@ -170,6 +171,16 @@ func splitNodeItemKey(key []byte) (id ID, ip net.IP, field string) {
 	// Field is the remainder of key.
 	field = string(key)
 	return id, ip, field
+}
+
+func v5Key(id ID, ip net.IP, field string) []byte {
+	return bytes.Join([][]byte{
+		[]byte(dbNodePrefix),
+		id[:],
+		[]byte(dbDiscv5Root),
+		ip.To16(),
+		[]byte(field),
+	}, []byte{':'})
 }
 
 // localItemKey returns the key of a local node item.
@@ -376,6 +387,16 @@ func (db *DB) FindFails(id ID, ip net.IP) int {
 // UpdateFindFails updates the number of findnode failures since bonding.
 func (db *DB) UpdateFindFails(id ID, ip net.IP, fails int) error {
 	return db.storeInt64(nodeItemKey(id, ip, dbNodeFindFails), int64(fails))
+}
+
+// FindFailsV5 retrieves the discv5 findnode failure counter.
+func (db *DB) FindFailsV5(id ID, ip net.IP) int {
+	return int(db.fetchInt64(v5Key(id, ip, dbNodeFindFails)))
+}
+
+// UpdateFindFailsV5 stores the discv5 findnode failure counter.
+func (db *DB) UpdateFindFailsV5(id ID, ip net.IP, fails int) error {
+	return db.storeInt64(v5Key(id, ip, dbNodeFindFails), int64(fails))
 }
 
 // LocalSeq retrieves the local record sequence counter.
