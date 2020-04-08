@@ -540,15 +540,14 @@ func signer(c *cli.Context) error {
 		cors := splitAndTrim(c.GlobalString(utils.RPCCORSDomainFlag.Name))
 
 		srv := rpc.NewServer()
-
 		err := node.RegisterApisFromWhitelist(rpcAPI, []string{"account"}, srv, false)
 		if err != nil {
 			utils.Fatalf("Could not register API: %w", err)
 		}
-
 		handler := node.NewHTTPHandlerStack(srv, cors, vhosts)
-		httpEndpoint := fmt.Sprintf("%s:%d", c.GlobalString(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
+		
 		// start http server
+		httpEndpoint := fmt.Sprintf("%s:%d", c.GlobalString(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
 		listener, err := node.StartHTTPEndpoint(httpEndpoint, rpc.DefaultHTTPTimeouts, handler)
 		if err != nil {
 			utils.Fatalf("Could not start RPC api: %v", err)
