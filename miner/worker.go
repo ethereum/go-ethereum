@@ -169,6 +169,13 @@ type worker struct {
 	running int32 // The indicator whether the consensus engine is running or not.
 	newTxs  int32 // New arrival transaction count since last sealing work submitting.
 
+	// noempty is the flag used to control whether the feature of pre-seal
+	// empty block is enabled. The default value is false.
+	// But in some special scenario the consensus engine will seal blocks
+	// instantaneously, in this case this feature will add all empty blocks
+	// into canonical chain non-stop and no real transaction will be included.
+	noempty bool
+
 	// External functions
 	isLocalBlock func(block *types.Block) bool // Function used to determine whether the specified block is mined by local miner.
 
@@ -247,6 +254,16 @@ func (w *worker) setRecommitInterval(interval time.Duration) {
 	w.resubmitIntervalCh <- interval
 }
 
+// disablePreseal disables pre-sealing mining feature
+func (w *worker) disablePreseal() {
+	w.noempty = true
+}
+
+// enablePreseal enables pre-sealing mining feature
+func (w *worker) enablePreseal() {
+	w.noempty = false
+}
+
 // pending returns the pending state and corresponding block.
 func (w *worker) pending() (*types.Block, *state.StateDB) {
 	// return a snapshot to avoid contention on currentMu mutex
@@ -304,10 +321,6 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	commit := func(noempty bool, s int32) {
 		if interrupt != nil {
 			atomic.StoreInt32(interrupt, s)
-		}
-		// Disable empty mining solution precommit if required.
-		if !noempty && w.config.NoEmptyPrecommit {
-			noempty = true
 		}
 		interrupt = new(int32)
 		w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}
@@ -484,8 +497,9 @@ func (w *worker) mainLoop() {
 					w.updateSnapshot()
 				}
 			} else {
-				// If clique is running in dev mode(period is 0), disable
-				// advance sealing here.
+				// Speical case, if the consensus engine is 0 period clique(dev mode),
+				// submit mining work here since all empty submission will be rejected
+				// by clique. Of course the advance sealing(empty submission) is disabled.
 				if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
 					w.commitNewWork(nil, true, time.Now().Unix())
 				}
@@ -914,9 +928,9 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	commitUncles(w.localUncles)
 	commitUncles(w.remoteUncles)
 
-	if !noempty {
-		// Create an empty block based on temporary copied state for sealing in advance without waiting block
-		// execution finished.
+	// Create an empty block based on temporary copied state for
+	// sealing in advance without waiting block execution finished.
+	if !noempty && !w.noempty {
 		w.commit(uncles, nil, false, tstart)
 	}
 
@@ -929,7 +943,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	// Short circuit if there is no available pending transactions.
 	// But if we disable empty precommit already, ignore it. Since
 	// empty block is necessary to keep the liveness of the network.
-	if len(pending) == 0 && !w.config.NoEmptyPrecommit {
+	if len(pending) == 0 && !w.noempty {
 		w.updateSnapshot()
 		return
 	}
