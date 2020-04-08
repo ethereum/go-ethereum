@@ -140,7 +140,7 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 	elemSize := getTypeSize(*t.Elem)
 
 	for i, j := start, 0; j < size; i, j = i+elemSize, j+1 {
-		inter, err := toGoType(i, *t.Elem, output)
+		inter, err := ToGoType(i, *t.Elem, output)
 		if err != nil {
 			return nil, err
 		}
@@ -157,7 +157,7 @@ func forTupleUnpack(t Type, output []byte) (interface{}, error) {
 	retval := reflect.New(t.Type).Elem()
 	virtualArgs := 0
 	for index, elem := range t.TupleElems {
-		marshalledValue, err := toGoType((index+virtualArgs)*32, *elem, output)
+		marshalledValue, err := ToGoType((index+virtualArgs)*32, *elem, output)
 		if elem.T == ArrayTy && !isDynamicType(*elem) {
 			// If we have a static array, like [3]uint256, these are coded as
 			// just like uint256,uint256,uint256.
@@ -183,9 +183,9 @@ func forTupleUnpack(t Type, output []byte) (interface{}, error) {
 	return retval.Interface(), nil
 }
 
-// toGoType parses the output bytes and recursively assigns the value of these bytes
+// ToGoType parses the output bytes and recursively assigns the value of these bytes
 // into a go type with accordance with the ABI spec.
-func toGoType(index int, t Type, output []byte) (interface{}, error) {
+func ToGoType(index int, t Type, output []byte) (interface{}, error) {
 	if index+32 > len(output) {
 		return nil, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %d require %d", len(output), index+32)
 	}

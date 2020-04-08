@@ -292,7 +292,7 @@ func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
 	retval := make([]interface{}, 0, arguments.LengthNonIndexed())
 	virtualArgs := 0
 	for index, arg := range arguments.NonIndexed() {
-		marshalledValue, err := toGoType((index+virtualArgs)*32, arg.Type, data)
+		marshalledValue, err := ToGoType((index+virtualArgs)*32, arg.Type, data)
 		if arg.Type.T == ArrayTy && !isDynamicType(arg.Type) {
 			// If we have a static array, like [3]uint256, these are coded as
 			// just like uint256,uint256,uint256.
