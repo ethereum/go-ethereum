@@ -19,6 +19,7 @@ package les
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -37,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/les/checkpointoracle"
+	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -49,15 +51,16 @@ import (
 type LightEthereum struct {
 	lesCommons
 
-	peers      *serverPeerSet
-	reqDist    *requestDistributor
-	retriever  *retrieveManager
-	odr        *LesOdr
-	relay      *lesTxRelay
-	handler    *clientHandler
-	txPool     *light.TxPool
-	blockchain *light.LightChain
-	serverPool *serverPool
+	peers        *serverPeerSet
+	reqDist      *requestDistributor
+	retriever    *retrieveManager
+	odr          *LesOdr
+	relay        *lesTxRelay
+	handler      *clientHandler
+	txPool       *light.TxPool
+	blockchain   *light.LightChain
+	serverPool   *serverPool
+	valueTracker *lpc.ValueTracker
 
 	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
 	bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
@@ -71,6 +74,10 @@ type LightEthereum struct {
 
 func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	chainDb, err := ctx.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/")
+	if err != nil {
+		return nil, err
+	}
+	lespayDb, err := ctx.OpenDatabase("lespay", 0, 0, "eth/db/lespay")
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +106,9 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   eth.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
 		serverPool:     newServerPool(chainDb, config.UltraLightServers),
+		valueTracker:   lpc.NewValueTracker(lespayDb, &mclock.System{}, requestList, time.Minute, 1/float64(time.Hour), 1/float64(time.Hour*100), 1/float64(time.Hour*1000)),
 	}
+	peers.subscribe((*vtSubscription)(leth.valueTracker))
 	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool)
 	leth.relay = newLesTxRelay(peers, leth.retriever)
 
@@ -154,6 +163,23 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	return leth, nil
 }
 
+// vtSubscription implements serverPeerSubscriber
+type vtSubscription lpc.ValueTracker
+
+// registerPeer implements serverPeerSubscriber
+func (v *vtSubscription) registerPeer(p *serverPeer) {
+	vt := (*lpc.ValueTracker)(v)
+	p.setValueTracker(vt, vt.Register(p.ID()))
+	p.updateVtParams()
+}
+
+// unregisterPeer implements serverPeerSubscriber
+func (v *vtSubscription) unregisterPeer(p *serverPeer) {
+	vt := (*lpc.ValueTracker)(v)
+	vt.Unregister(p.ID())
+	p.setValueTracker(nil, nil)
+}
+
 type LightDummyAPI struct{}
 
 // Etherbase is the address that mining rewards will be send to
@@ -206,6 +232,11 @@ func (s *LightEthereum) APIs() []rpc.API {
 			Namespace: "les",
 			Version:   "1.0",
 			Service:   NewPrivateLightAPI(&s.lesCommons),
+			Public:    false,
+		}, {
+			Namespace: "lespay",
+			Version:   "1.0",
+			Service:   lpc.NewPrivateClientAPI(s.valueTracker),
 			Public:    false,
 		},
 	}...)
@@ -266,6 +297,7 @@ func (s *LightEthereum) Stop() error {
 	s.engine.Close()
 	s.eventMux.Stop()
 	s.serverPool.stop()
+	s.valueTracker.Stop()
 	s.chainDb.Close()
 	s.wg.Wait()
 	log.Info("Light ethereum stopped")
