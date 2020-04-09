@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"os"
 	"os/signal"
@@ -39,13 +40,15 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
+
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -77,13 +80,13 @@ type RetestethTestAPI interface {
 }
 
 type RetestethEthAPI interface {
-	SendRawTransaction(ctx context.Context, rawTx hexutil.Bytes) (common.Hash, error)
-	BlockNumber(ctx context.Context) (uint64, error)
-	GetBlockByNumber(ctx context.Context, blockNr math.HexOrDecimal64, fullTx bool) (map[string]interface{}, error)
-	GetBlockByHash(ctx context.Context, blockHash common.Hash, fullTx bool) (map[string]interface{}, error)
-	GetBalance(ctx context.Context, address common.Address, blockNr math.HexOrDecimal64) (*math.HexOrDecimal256, error)
-	GetCode(ctx context.Context, address common.Address, blockNr math.HexOrDecimal64) (hexutil.Bytes, error)
-	GetTransactionCount(ctx context.Context, address common.Address, blockNr math.HexOrDecimal64) (uint64, error)
+    SendRawTransaction(ctx context.Context, rawTx hexutil.Bytes) (common.Hash, error)
+	//BlockNumber(ctx context.Context) (uint64, error)
+	//GetBlockByNumber(ctx context.Context, blockNr math.HexOrDecimal64, fullTx bool) (map[string]interface{}, error)
+	//GetBlockByHash(ctx context.Context, blockHash common.Hash, fullTx bool) (map[string]interface{}, error)
+	//GetBalance(ctx context.Context, address common.Address, blockNr math.HexOrDecimal64) (*math.HexOrDecimal256, error)
+	//GetCode(ctx context.Context, address common.Address, blockNr math.HexOrDecimal64) (hexutil.Bytes, error)
+	//GetTransactionCount(ctx context.Context, address common.Address, blockNr math.HexOrDecimal64) (uint64, error)
 }
 
 type RetestethDebugAPI interface {
@@ -102,19 +105,38 @@ type RetestWeb3API interface {
 	ClientVersion(ctx context.Context) (string, error)
 }
 
+
 type RetestethAPI struct {
-	ethDb         ethdb.Database
-	db            state.Database
-	chainConfig   *params.ChainConfig
+	test *tester
+
+	//ethereum 	  *eth.Ethereum
+	//node		  *node.Node
+	ctx			  *cli.Context
+	rpchandler    *rpc.Server
+
+	//ethDb         ethdb.Database
+	//db            state.Database
+	//chainConfig   *params.ChainConfig
 	author        common.Address
 	extraData     []byte
-	genesisHash   common.Hash
+	//genesisHash   common.Hash
 	engine        *NoRewardEngine
-	blockchain    *core.BlockChain
+	//blockchain    *core.BlockChain */
 	txMap         map[common.Address]map[uint64]*types.Transaction // Sender -> Nonce -> Transaction
 	txSenders     map[common.Address]struct{}                      // Set of transaction senders
 	blockInterval uint64
 }
+
+// tester is a console test environment for the console tests to operate on.
+type tester struct {
+	workspace string
+	stack     *node.Node
+	ethereum  *eth.Ethereum
+	//console   *Console
+	//input     *hookedPrompter
+	output    *bytes.Buffer
+}
+
 
 type ChainParams struct {
 	SealEngine string                            `json:"sealEngine"`
@@ -273,15 +295,141 @@ func (e *NoRewardEngine) Close() error {
 }
 
 func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainParams) (bool, error) {
+
+	// Read Fork Block Configuration
+	var (
+		homesteadBlock      *big.Int
+		daoForkBlock        *big.Int
+		eip150Block         *big.Int
+		eip155Block         *big.Int
+		eip158Block         *big.Int
+		byzantiumBlock      *big.Int
+		constantinopleBlock *big.Int
+		petersburgBlock     *big.Int
+		istanbulBlock       *big.Int
+	)
+	if chainParams.Params.HomesteadForkBlock != nil {
+		homesteadBlock = big.NewInt(int64(*chainParams.Params.HomesteadForkBlock))
+	}
+	if chainParams.Params.DaoHardforkBlock != nil {
+		daoForkBlock = big.NewInt(int64(*chainParams.Params.DaoHardforkBlock))
+	}
+	if chainParams.Params.EIP150ForkBlock != nil {
+		eip150Block = big.NewInt(int64(*chainParams.Params.EIP150ForkBlock))
+	}
+	if chainParams.Params.EIP158ForkBlock != nil {
+		eip158Block = big.NewInt(int64(*chainParams.Params.EIP158ForkBlock))
+		eip155Block = eip158Block
+	}
+	if chainParams.Params.ByzantiumForkBlock != nil {
+		byzantiumBlock = big.NewInt(int64(*chainParams.Params.ByzantiumForkBlock))
+	}
+	if chainParams.Params.ConstantinopleForkBlock != nil {
+		constantinopleBlock = big.NewInt(int64(*chainParams.Params.ConstantinopleForkBlock))
+	}
+	if chainParams.Params.ConstantinopleFixForkBlock != nil {
+		petersburgBlock = big.NewInt(int64(*chainParams.Params.ConstantinopleFixForkBlock))
+	}
+	if constantinopleBlock != nil && petersburgBlock == nil {
+		petersburgBlock = big.NewInt(100000000000)
+	}
+	if chainParams.Params.IstanbulBlock != nil {
+		istanbulBlock = big.NewInt(int64(*chainParams.Params.IstanbulBlock))
+	}
+
+	// Read Genesis State From Json
+	accounts := make(core.GenesisAlloc)
+	for address, account := range chainParams.Accounts {
+		balance := big.NewInt(0)
+		if account.Balance != nil {
+			balance.Set((*big.Int)(account.Balance))
+		}
+		var nonce uint64
+		if account.Nonce != nil {
+			nonce = uint64(*account.Nonce)
+		}
+		if account.Precompiled == nil || account.Balance != nil {
+			storage := make(map[common.Hash]common.Hash)
+			for k, v := range account.Storage {
+				storage[common.HexToHash(k)] = common.HexToHash(v)
+			}
+			accounts[address] = core.GenesisAccount{
+				Balance: balance,
+				Code:    account.Code,
+				Nonce:   nonce,
+				Storage: storage,
+			}
+		}
+	}
+	chainId := big.NewInt(1)
+	if chainParams.Params.ChainID != nil {
+		chainId.Set((*big.Int)(chainParams.Params.ChainID))
+	}
+	chainId = big.NewInt(12)
+
+	genesis := &core.Genesis{
+		Config: &params.ChainConfig{
+			ChainID:             chainId,
+			HomesteadBlock:      homesteadBlock,
+			DAOForkBlock:        daoForkBlock,
+			DAOForkSupport:      true,
+			EIP150Block:         eip150Block,
+			EIP155Block:         eip155Block,
+			EIP158Block:         eip158Block,
+			ByzantiumBlock:      byzantiumBlock,
+			ConstantinopleBlock: constantinopleBlock,
+			PetersburgBlock:     petersburgBlock,
+			IstanbulBlock:       istanbulBlock,
+		},
+		Nonce:      uint64(chainParams.Genesis.Nonce),
+		Timestamp:  uint64(chainParams.Genesis.Timestamp),
+		ExtraData:  chainParams.Genesis.ExtraData,
+		GasLimit:   uint64(chainParams.Genesis.GasLimit),
+		Difficulty: big.NewInt(0).Set((*big.Int)(chainParams.Genesis.Difficulty)),
+		Mixhash:    common.BigToHash((*big.Int)(chainParams.Genesis.MixHash)),
+		Coinbase:   chainParams.Genesis.Author,
+		ParentHash: chainParams.Genesis.ParentHash,
+		Alloc:      accounts,
+	}
+
 	// Clean up
-	if api.blockchain != nil {
-		api.blockchain.Stop()
+	if api.test.ethereum.BlockChain() != nil {
+		api.test.ethereum.BlockChain().Stop()
+	}
+	if api.test.ethereum.Engine() != nil {
+		api.test.ethereum.Engine().Close()
+	}
+	if api.test.ethereum.ChainDb() != nil {
+		api.test.ethereum.ChainDb().Close()
+	}
+
+
+	api.test.Close()
+	api.test = newTester(genesis)
+//	for i := 0; i < 1000000; i++ {
+//	}
+	api.rpchandler.RegisterName("eth", ethapi.NewPublicBlockChainAPI(api.test.ethereum.APIBackend))
+
+	//api.rpchandler.RegisterName("debug", ethapi.NewPublicDebugAPI(api.test.ethereum.APIBackend))
+	//api.rpchandler.RegisterName("debug", ethapi.NewPrivateDebugAPI(api.test.ethereum.APIBackend))
+
+
+	//log.Debug("HTTP registered", "namespace", "eth")
+
+	//ResetRPC(api.ctx, api)
+
+	return true, nil
+
+/*
+	// Clean up
+	if api.test.ethereum.BlockChain() != nil {
+		api.test.ethereum.BlockChain().Stop()
 	}
 	if api.engine != nil {
 		api.engine.Close()
 	}
-	if api.ethDb != nil {
-		api.ethDb.Close()
+	if api.test.ethereum.ChainDb() != nil {
+		api.test.ethereum.ChainDb().Close()
 	}
 	ethDb := rawdb.NewMemoryDatabase()
 	accounts := make(core.GenesisAlloc)
@@ -403,19 +551,22 @@ func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainPa
 		return false, err
 	}
 
-	api.chainConfig = chainConfig
+	api.test.ethereum.BlockChain().Config() = chainConfig
 	api.genesisHash = genesisHash
 	api.author = chainParams.Genesis.Author
 	api.extraData = chainParams.Genesis.ExtraData
-	api.ethDb = ethDb
+	api.test.ethereum.ChainDb() = ethDb
 	api.engine = engine
-	api.blockchain = blockchain
-	api.db = state.NewDatabase(api.ethDb)
+	api.test.ethereum.BlockChain() = blockchain
+	api.db = state.NewDatabase(api.test.ethereum.ChainDb())
 	api.txMap = make(map[common.Address]map[uint64]*types.Transaction)
 	api.txSenders = make(map[common.Address]struct{})
 	api.blockInterval = 0
 	return true, nil
+
+ */
 }
+
 
 func (api *RetestethAPI) SendRawTransaction(ctx context.Context, rawTx hexutil.Bytes) (common.Hash, error) {
 	tx := new(types.Transaction)
@@ -423,7 +574,7 @@ func (api *RetestethAPI) SendRawTransaction(ctx context.Context, rawTx hexutil.B
 		// Return nil is not by mistake - some tests include sending transaction where gasLimit overflows uint64
 		return common.Hash{}, nil
 	}
-	signer := types.MakeSigner(api.chainConfig, big.NewInt(int64(api.currentNumber())))
+	signer := types.MakeSigner(api.test.ethereum.BlockChain().Config(), big.NewInt(int64(api.currentNumber())))
 	sender, err := types.Sender(signer, tx)
 	if err != nil {
 		return common.Hash{}, err
@@ -439,6 +590,7 @@ func (api *RetestethAPI) SendRawTransaction(ctx context.Context, rawTx hexutil.B
 	return tx.Hash(), nil
 }
 
+
 func (api *RetestethAPI) MineBlocks(ctx context.Context, number uint64) (bool, error) {
 	for i := 0; i < int(number); i++ {
 		if err := api.mineBlock(); err != nil {
@@ -450,16 +602,17 @@ func (api *RetestethAPI) MineBlocks(ctx context.Context, number uint64) (bool, e
 }
 
 func (api *RetestethAPI) currentNumber() uint64 {
-	if current := api.blockchain.CurrentBlock(); current != nil {
+	if current := api.test.ethereum.BlockChain().CurrentBlock(); current != nil {
 		return current.NumberU64()
 	}
 	return 0
 }
 
 func (api *RetestethAPI) mineBlock() error {
+	api.test.ethereum.ChainDb()
 	number := api.currentNumber()
-	parentHash := rawdb.ReadCanonicalHash(api.ethDb, number)
-	parent := rawdb.ReadBlock(api.ethDb, parentHash, number)
+	parentHash := rawdb.ReadCanonicalHash(api.test.ethereum.ChainDb(), number)
+	parent := rawdb.ReadBlock(api.test.ethereum.ChainDb(), parentHash, number)
 	var timestamp uint64
 	if api.blockInterval == 0 {
 		timestamp = uint64(time.Now().Unix())
@@ -476,26 +629,26 @@ func (api *RetestethAPI) mineBlock() error {
 	}
 	header.Coinbase = api.author
 	if api.engine != nil {
-		api.engine.Prepare(api.blockchain, header)
+		api.engine.Prepare(api.test.ethereum.BlockChain(), header)
 	}
 	// If we are care about TheDAO hard-fork check whether to override the extra-data or not
-	if daoBlock := api.chainConfig.DAOForkBlock; daoBlock != nil {
+	if daoBlock := api.test.ethereum.BlockChain().Config().DAOForkBlock; daoBlock != nil {
 		// Check whether the block is among the fork extra-override range
 		limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
 		if header.Number.Cmp(daoBlock) >= 0 && header.Number.Cmp(limit) < 0 {
 			// Depending whether we support or oppose the fork, override differently
-			if api.chainConfig.DAOForkSupport {
+			if api.test.ethereum.BlockChain().Config().DAOForkSupport {
 				header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
 			} else if bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
 				header.Extra = []byte{} // If miner opposes, don't let it use the reserved extra-data
 			}
 		}
 	}
-	statedb, err := api.blockchain.StateAt(parent.Root())
+	statedb, err := api.test.ethereum.BlockChain().StateAt(parent.Root())
 	if err != nil {
 		return err
 	}
-	if api.chainConfig.DAOForkSupport && api.chainConfig.DAOForkBlock != nil && api.chainConfig.DAOForkBlock.Cmp(header.Number) == 0 {
+	if api.test.ethereum.BlockChain().Config().DAOForkSupport && api.test.ethereum.BlockChain().Config().DAOForkBlock != nil && api.test.ethereum.BlockChain().Config().DAOForkBlock.Cmp(header.Number) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
 	gasPool := new(core.GasPool).AddGas(header.GasLimit)
@@ -515,12 +668,12 @@ func (api *RetestethAPI) mineBlock() error {
 				snap := statedb.Snapshot()
 
 				receipt, err := core.ApplyTransaction(
-					api.chainConfig,
-					api.blockchain,
+					api.test.ethereum.BlockChain().Config(),
+					api.test.ethereum.BlockChain(),
 					&api.author,
 					gasPool,
 					statedb,
-					header, tx, &header.GasUsed, *api.blockchain.GetVMConfig(),
+					header, tx, &header.GasUsed, *api.test.ethereum.BlockChain().GetVMConfig(),
 				)
 				if err != nil {
 					statedb.RevertToSnapshot(snap)
@@ -544,7 +697,7 @@ func (api *RetestethAPI) mineBlock() error {
 			}
 		}
 	}
-	block, err := api.engine.FinalizeAndAssemble(api.blockchain, header, statedb, txs, []*types.Header{}, receipts)
+	block, err := api.engine.FinalizeAndAssemble(api.test.ethereum.BlockChain(), header, statedb, txs, []*types.Header{}, receipts)
 	if err != nil {
 		return err
 	}
@@ -552,10 +705,10 @@ func (api *RetestethAPI) mineBlock() error {
 }
 
 func (api *RetestethAPI) importBlock(block *types.Block) error {
-	if _, err := api.blockchain.InsertChain([]*types.Block{block}); err != nil {
+	if _, err := api.test.ethereum.BlockChain().InsertChain([]*types.Block{block}); err != nil {
 		return err
 	}
-	fmt.Printf("Imported block %d,  head is %d\n", block.NumberU64(), api.currentNumber())
+	fmt.Printf("Imported block %d,  head is %d\n", block.NumberU64(), api.test.ethereum.BlockChain().CurrentBlock().Number())
 	return nil
 }
 
@@ -569,7 +722,7 @@ func (api *RetestethAPI) ImportRawBlock(ctx context.Context, rawBlock hexutil.By
 	if err := rlp.DecodeBytes(rawBlock, block); err != nil {
 		return common.Hash{}, err
 	}
-	fmt.Printf("Importing block %d with parent hash: %x, genesisHash: %x\n", block.NumberU64(), block.ParentHash(), api.genesisHash)
+	fmt.Printf("Importing block %d with parent hash: %x, genesisHash: %x\n", block.NumberU64(), block.ParentHash(), api.test.ethereum.BlockChain().Genesis().Hash())
 	if err := api.importBlock(block); err != nil {
 		return common.Hash{}, err
 	}
@@ -577,7 +730,7 @@ func (api *RetestethAPI) ImportRawBlock(ctx context.Context, rawBlock hexutil.By
 }
 
 func (api *RetestethAPI) RewindToBlock(ctx context.Context, newHead uint64) (bool, error) {
-	if err := api.blockchain.SetHead(newHead); err != nil {
+	if err := api.test.ethereum.BlockChain().SetHead(newHead); err != nil {
 		return false, err
 	}
 	// When we rewind, the transaction pool should be cleaned out.
@@ -589,7 +742,7 @@ func (api *RetestethAPI) RewindToBlock(ctx context.Context, newHead uint64) (boo
 var emptyListHash common.Hash = common.HexToHash("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
 
 func (api *RetestethAPI) GetLogHash(ctx context.Context, txHash common.Hash) (common.Hash, error) {
-	receipt, _, _, _ := rawdb.ReadReceipt(api.ethDb, txHash, api.chainConfig)
+	receipt, _, _, _ := rawdb.ReadReceipt(api.test.ethereum.ChainDb(), txHash, api.test.ethereum.BlockChain().Config())
 	if receipt == nil {
 		return emptyListHash, nil
 	} else {
@@ -606,32 +759,33 @@ func (api *RetestethAPI) BlockNumber(ctx context.Context) (uint64, error) {
 }
 
 func (api *RetestethAPI) GetBlockByNumber(ctx context.Context, blockNr math.HexOrDecimal64, fullTx bool) (map[string]interface{}, error) {
-	block := api.blockchain.GetBlockByNumber(uint64(blockNr))
+	block := api.test.ethereum.BlockChain().GetBlockByNumber(uint64(blockNr))
 	if block != nil {
 		response, err := RPCMarshalBlock(block, true, fullTx)
 		if err != nil {
 			return nil, err
 		}
 		response["author"] = response["miner"]
-		response["totalDifficulty"] = (*hexutil.Big)(api.blockchain.GetTd(block.Hash(), uint64(blockNr)))
+		response["totalDifficulty"] = (*hexutil.Big)(api.test.ethereum.BlockChain().GetTd(block.Hash(), uint64(blockNr)))
 		return response, err
 	}
 	return nil, fmt.Errorf("block %d not found", blockNr)
 }
 
-func (api *RetestethAPI) GetBlockByHash(ctx context.Context, blockHash common.Hash, fullTx bool) (map[string]interface{}, error) {
-	block := api.blockchain.GetBlockByHash(blockHash)
+/*func (api *RetestethAPI) GetBlockByHash(ctx context.Context, blockHash common.Hash, fullTx bool) (map[string]interface{}, error) {
+
+	block := api.test.ethereum.BlockChain().GetBlockByHash(blockHash)
 	if block != nil {
 		response, err := RPCMarshalBlock(block, true, fullTx)
 		if err != nil {
 			return nil, err
 		}
 		response["author"] = response["miner"]
-		response["totalDifficulty"] = (*hexutil.Big)(api.blockchain.GetTd(block.Hash(), block.Number().Uint64()))
+		response["totalDifficulty"] = (*hexutil.Big)(api.test.ethereum.BlockChain().GetTd(block.Hash(), block.Number().Uint64()))
 		return response, err
 	}
 	return nil, fmt.Errorf("block 0x%x not found", blockHash)
-}
+}*/
 
 func (api *RetestethAPI) AccountRange(ctx context.Context,
 	blockHashOrNumber *math.HexOrDecimal256, txIndex uint64,
@@ -643,39 +797,41 @@ func (api *RetestethAPI) AccountRange(ctx context.Context,
 	)
 	if (*big.Int)(blockHashOrNumber).Cmp(big.NewInt(math.MaxInt64)) > 0 {
 		blockHash := common.BigToHash((*big.Int)(blockHashOrNumber))
-		header = api.blockchain.GetHeaderByHash(blockHash)
-		block = api.blockchain.GetBlockByHash(blockHash)
+		header = api.test.ethereum.BlockChain().GetHeaderByHash(blockHash)
+		block = api.test.ethereum.BlockChain().GetBlockByHash(blockHash)
 		//fmt.Printf("Account range: %x, txIndex %d, start: %x, maxResults: %d\n", blockHash, txIndex, common.BigToHash((*big.Int)(addressHash)), maxResults)
 	} else {
 		blockNumber := (*big.Int)(blockHashOrNumber).Uint64()
-		header = api.blockchain.GetHeaderByNumber(blockNumber)
-		block = api.blockchain.GetBlockByNumber(blockNumber)
+		header = api.test.ethereum.BlockChain().GetHeaderByNumber(blockNumber)
+		block = api.test.ethereum.BlockChain().GetBlockByNumber(blockNumber)
 		//fmt.Printf("Account range: %d, txIndex %d, start: %x, maxResults: %d\n", blockNumber, txIndex, common.BigToHash((*big.Int)(addressHash)), maxResults)
 	}
-	parentHeader := api.blockchain.GetHeaderByHash(header.ParentHash)
+
+
+	parentHeader := api.test.ethereum.BlockChain().GetHeaderByHash(header.ParentHash)
 	var root common.Hash
 	var statedb *state.StateDB
 	var err error
 	if parentHeader == nil || int(txIndex) >= len(block.Transactions()) {
 		root = header.Root
-		statedb, err = api.blockchain.StateAt(root)
+		statedb, err = api.test.ethereum.BlockChain().StateAt(root)
 		if err != nil {
 			return AccountRangeResult{}, err
 		}
 	} else {
 		root = parentHeader.Root
-		statedb, err = api.blockchain.StateAt(root)
+		statedb, err = api.test.ethereum.BlockChain().StateAt(root)
 		if err != nil {
 			return AccountRangeResult{}, err
 		}
 		// Recompute transactions up to the target index.
-		signer := types.MakeSigner(api.blockchain.Config(), block.Number())
+		signer := types.MakeSigner(api.test.ethereum.BlockChain().Config(), block.Number())
 		for idx, tx := range block.Transactions() {
 			// Assemble the transaction call message and return if the requested offset
 			msg, _ := tx.AsMessage(signer)
-			context := core.NewEVMContext(msg, block.Header(), api.blockchain, nil)
+			context := core.NewEVMContext(msg, block.Header(), api.test.ethereum.BlockChain(), nil)
 			// Not yet the searched for transaction, execute on top of the current state
-			vmenv := vm.NewEVM(context, statedb, api.blockchain.Config(), vm.Config{})
+			vmenv := vm.NewEVM(context, statedb, api.test.ethereum.BlockChain().Config(), vm.Config{})
 			if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 				return AccountRangeResult{}, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 			}
@@ -684,7 +840,7 @@ func (api *RetestethAPI) AccountRange(ctx context.Context,
 			root = statedb.IntermediateRoot(vmenv.ChainConfig().IsEIP158(block.Number()))
 			if idx == int(txIndex) {
 				// This is to make sure root can be opened by OpenTrie
-				root, err = statedb.Commit(api.chainConfig.IsEIP158(block.Number()))
+				root, err = statedb.Commit(api.test.ethereum.BlockChain().Config().IsEIP158(block.Number()))
 				if err != nil {
 					return AccountRangeResult{}, err
 				}
@@ -714,8 +870,8 @@ func (api *RetestethAPI) AccountRange(ctx context.Context,
 
 func (api *RetestethAPI) GetBalance(ctx context.Context, address common.Address, blockNr math.HexOrDecimal64) (*math.HexOrDecimal256, error) {
 	//fmt.Printf("GetBalance %x, block %d\n", address, blockNr)
-	header := api.blockchain.GetHeaderByNumber(uint64(blockNr))
-	statedb, err := api.blockchain.StateAt(header.Root)
+	header := api.test.ethereum.BlockChain().GetHeaderByNumber(uint64(blockNr))
+	statedb, err := api.test.ethereum.BlockChain().StateAt(header.Root)
 	if err != nil {
 		return nil, err
 	}
@@ -723,8 +879,8 @@ func (api *RetestethAPI) GetBalance(ctx context.Context, address common.Address,
 }
 
 func (api *RetestethAPI) GetCode(ctx context.Context, address common.Address, blockNr math.HexOrDecimal64) (hexutil.Bytes, error) {
-	header := api.blockchain.GetHeaderByNumber(uint64(blockNr))
-	statedb, err := api.blockchain.StateAt(header.Root)
+	header := api.test.ethereum.BlockChain().GetHeaderByNumber(uint64(blockNr))
+	statedb, err := api.test.ethereum.BlockChain().StateAt(header.Root)
 	if err != nil {
 		return nil, err
 	}
@@ -732,8 +888,8 @@ func (api *RetestethAPI) GetCode(ctx context.Context, address common.Address, bl
 }
 
 func (api *RetestethAPI) GetTransactionCount(ctx context.Context, address common.Address, blockNr math.HexOrDecimal64) (uint64, error) {
-	header := api.blockchain.GetHeaderByNumber(uint64(blockNr))
-	statedb, err := api.blockchain.StateAt(header.Root)
+	header := api.test.ethereum.BlockChain().GetHeaderByNumber(uint64(blockNr))
+	statedb, err := api.test.ethereum.BlockChain().StateAt(header.Root)
 	if err != nil {
 		return 0, err
 	}
@@ -751,41 +907,41 @@ func (api *RetestethAPI) StorageRangeAt(ctx context.Context,
 	)
 	if (*big.Int)(blockHashOrNumber).Cmp(big.NewInt(math.MaxInt64)) > 0 {
 		blockHash := common.BigToHash((*big.Int)(blockHashOrNumber))
-		header = api.blockchain.GetHeaderByHash(blockHash)
-		block = api.blockchain.GetBlockByHash(blockHash)
+		header = api.test.ethereum.BlockChain().GetHeaderByHash(blockHash)
+		block = api.test.ethereum.BlockChain().GetBlockByHash(blockHash)
 		//fmt.Printf("Storage range: %x, txIndex %d, addr: %x, start: %x, maxResults: %d\n",
 		//	blockHash, txIndex, address, common.BigToHash((*big.Int)(begin)), maxResults)
 	} else {
 		blockNumber := (*big.Int)(blockHashOrNumber).Uint64()
-		header = api.blockchain.GetHeaderByNumber(blockNumber)
-		block = api.blockchain.GetBlockByNumber(blockNumber)
+		header = api.test.ethereum.BlockChain().GetHeaderByNumber(blockNumber)
+		block = api.test.ethereum.BlockChain().GetBlockByNumber(blockNumber)
 		//fmt.Printf("Storage range: %d, txIndex %d, addr: %x, start: %x, maxResults: %d\n",
 		//	blockNumber, txIndex, address, common.BigToHash((*big.Int)(begin)), maxResults)
 	}
-	parentHeader := api.blockchain.GetHeaderByHash(header.ParentHash)
+	parentHeader := api.test.ethereum.BlockChain().GetHeaderByHash(header.ParentHash)
 	var root common.Hash
 	var statedb *state.StateDB
 	var err error
 	if parentHeader == nil || int(txIndex) >= len(block.Transactions()) {
 		root = header.Root
-		statedb, err = api.blockchain.StateAt(root)
+		statedb, err = api.test.ethereum.BlockChain().StateAt(root)
 		if err != nil {
 			return StorageRangeResult{}, err
 		}
 	} else {
 		root = parentHeader.Root
-		statedb, err = api.blockchain.StateAt(root)
+		statedb, err = api.test.ethereum.BlockChain().StateAt(root)
 		if err != nil {
 			return StorageRangeResult{}, err
 		}
 		// Recompute transactions up to the target index.
-		signer := types.MakeSigner(api.blockchain.Config(), block.Number())
+		signer := types.MakeSigner(api.test.ethereum.BlockChain().Config(), block.Number())
 		for idx, tx := range block.Transactions() {
 			// Assemble the transaction call message and return if the requested offset
 			msg, _ := tx.AsMessage(signer)
-			context := core.NewEVMContext(msg, block.Header(), api.blockchain, nil)
+			context := core.NewEVMContext(msg, block.Header(), api.test.ethereum.BlockChain(), nil)
 			// Not yet the searched for transaction, execute on top of the current state
-			vmenv := vm.NewEVM(context, statedb, api.blockchain.Config(), vm.Config{})
+			vmenv := vm.NewEVM(context, statedb, api.test.ethereum.BlockChain().Config(), vm.Config{})
 			if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 				return StorageRangeResult{}, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 			}
@@ -804,7 +960,7 @@ func (api *RetestethAPI) StorageRangeAt(ctx context.Context,
 	storageTrie := statedb.StorageTrie(address)
 	it := trie.NewIterator(storageTrie.NodeIterator(common.BigToHash((*big.Int)(begin)).Bytes()))
 	result := StorageRangeResult{Storage: make(map[common.Hash]SRItem)}
-	for i := 0; /*i < int(maxResults) && */ it.Next(); i++ {
+	for i := 0; it.Next(); i++ {
 		if preimage := storageTrie.GetKey(it.Key); preimage != nil {
 			key := (*math.HexOrDecimal256)(big.NewInt(0).SetBytes(preimage))
 			v, _, err := rlp.SplitString(it.Value)
@@ -848,17 +1004,117 @@ func splitAndTrim(input string) []string {
 	return result
 }
 
+// Start Ethereum service.
+func ResetNode(genesisConfig *core.Genesis) (*eth.Ethereum, *node.Node) {
+	var ethservice *eth.Ethereum
+	n, err := node.New(&node.Config{})
+	n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		config := &eth.DefaultConfig
+		if genesisConfig != nil {
+			config.Genesis = genesisConfig
+		}
+		config.Ethash.PowMode = ethash.ModeFake
+		ethservice, err = eth.New(ctx, config)
+		return ethservice, err
+	})
+	n.Start();
+	return ethservice, n
+}
+
+
+
+// newTester creates a test environment based on which the console can operate.
+// Please ensure you call Close() on the returned tester to avoid leaks.
+func newTester(genesisConfig *core.Genesis /*, confOverride func(*eth.Config)*/) *tester {
+	// Create a temporary storage for the node keys and initialize it
+	workspace, err := ioutil.TempDir("", "console-tester-")
+	if err != nil {
+		//t.Fatalf("failed to create temporary keystore: %v", err)
+	}
+
+	// Create a networkless protocol stack and start an Ethereum service within
+	stack, err := node.New(&node.Config{DataDir: workspace, UseLightweightKDF: true, Name: "retesteth"})
+	if err != nil {
+		//t.Fatalf("failed to create node: %v", err)
+	}
+	ethConf := &eth.Config{
+		Genesis: genesisConfig,
+		//Miner: miner.Config{
+		//	Etherbase: common.HexToAddress(testAddress),
+		//},
+		Ethash: ethash.Config{
+			PowMode: ethash.ModeFake,
+		},
+	}
+	//if confOverride != nil {
+	//	confOverride(ethConf)
+	//}
+	if err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) { return eth.New(ctx, ethConf) }); err != nil {
+		//t.Fatalf("failed to register Ethereum protocol: %v", err)
+	}
+	// Start the node and assemble the JavaScript console around it
+	if err = stack.Start(); err != nil {
+		//t.Fatalf("failed to start test stack: %v", err)
+	}
+	//client, err := stack.Attach()
+	//if err != nil {
+		//t.Fatalf("failed to attach to node: %v", err)
+	//}
+	//prompter := &hookedPrompter{scheduler: make(chan string)}
+	printer := new(bytes.Buffer)
+
+/*	console, err := New(Config{
+		DataDir:  stack.DataDir(),
+		DocRoot:  "testdata",
+		Client:   client,
+		Prompter: prompter,
+		Printer:  printer,
+		Preload:  []string{"preload.js"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create JavaScript console: %v", err)
+	} */
+	// Create the final tester and return
+	var ethereum *eth.Ethereum
+	stack.Service(&ethereum)
+
+	return &tester{
+		workspace: workspace,
+		stack:     stack,
+		ethereum:  ethereum,
+//		console:   console,
+//		input:     prompter,
+		output:    printer,
+	}
+}
+
+// Close cleans up any temporary data folders and held resources.
+func (env *tester) Close() {
+	//if err := env.console.Stop(false); err != nil {
+		//t.Errorf("failed to stop embedded console: %v", err)
+	//}
+	if err := env.stack.Close(); err != nil {
+		//t.Errorf("failed to tear down embedded node: %v", err)
+	}
+	os.RemoveAll(env.workspace)
+}
+
 func retesteth(ctx *cli.Context) error {
+	apiImpl := &RetestethAPI{}
+	//apiImpl.ethereum, apiImpl.node = ResetNode(nil)
+	apiImpl.test = newTester(nil)
+
 	log.Info("Welcome to retesteth!")
+	//ResetRPC(ctx, apiImpl)
+
+	var testApi RetestethTestAPI = apiImpl
+	//var debugApi RetestethDebugAPI = apiImpl
+	var web3Api RetestWeb3API = apiImpl
+
 	// register signer API with server
 	var (
 		extapiURL string
 	)
-	apiImpl := &RetestethAPI{}
-	var testApi RetestethTestAPI = apiImpl
-	var ethApi RetestethEthAPI = apiImpl
-	var debugApi RetestethDebugAPI = apiImpl
-	var web3Api RetestWeb3API = apiImpl
 	rpcAPI := []rpc.API{
 		{
 			Namespace: "test",
@@ -869,13 +1125,13 @@ func retesteth(ctx *cli.Context) error {
 		{
 			Namespace: "eth",
 			Public:    true,
-			Service:   ethApi,
+			Service:   testApi, //ethapi.NewPublicBlockChainAPI(apiImpl.ethereum.APIBackend), //eth.NewPublicEthereumAPI(ethservice),
 			Version:   "1.0",
 		},
 		{
 			Namespace: "debug",
 			Public:    true,
-			Service:   debugApi,
+			Service:   testApi,
 			Version:   "1.0",
 		},
 		{
@@ -885,6 +1141,7 @@ func retesteth(ctx *cli.Context) error {
 			Version:   "1.0",
 		},
 	}
+
 	vhosts := splitAndTrim(ctx.GlobalString(utils.RPCVirtualHostsFlag.Name))
 	cors := splitAndTrim(ctx.GlobalString(utils.RPCCORSDomainFlag.Name))
 
@@ -894,11 +1151,15 @@ func retesteth(ctx *cli.Context) error {
 		WriteTimeout: 120 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
+
 	httpEndpoint := fmt.Sprintf("%s:%d", ctx.GlobalString(utils.RPCListenAddrFlag.Name), ctx.Int(rpcPortFlag.Name))
-	listener, _, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcAPI, []string{"test", "eth", "debug", "web3"}, cors, vhosts, RetestethHTTPTimeouts)
+	listener, rpcHandler, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcAPI, []string{"test", "eth", "debug", "web3"}, cors, vhosts, RetestethHTTPTimeouts)
 	if err != nil {
 		utils.Fatalf("Could not start RPC api: %v", err)
 	}
+
+	apiImpl.rpchandler = rpcHandler
+
 	extapiURL = fmt.Sprintf("http://%s", httpEndpoint)
 	log.Info("HTTP endpoint opened", "url", extapiURL)
 
