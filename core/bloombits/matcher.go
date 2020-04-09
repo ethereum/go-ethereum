@@ -586,6 +586,8 @@ func (s *MatcherSession) AllocateSections(bit uint, count int) []uint64 {
 // bit index to be injected into the processing pipeline.
 func (s *MatcherSession) DeliverSections(bit uint, sections []uint64, bitsets [][]byte) {
 	select {
+	case <-s.quit:
+		return
 	case s.matcher.deliveries <- &Retrieval{Bit: bit, Sections: sections, Bitsets: bitsets}:
 	}
 }
