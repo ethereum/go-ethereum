@@ -49,17 +49,13 @@ func makeTopics(query ...[]interface{}) ([][]common.Hash, error) {
 					topic[common.HashLength-1] = 1
 				}
 			case int8:
-				blob := big.NewInt(int64(rule)).Bytes()
-				copy(topic[common.HashLength-len(blob):], blob)
+				copy(topic[:], genIntType(int64(rule), 1))
 			case int16:
-				blob := big.NewInt(int64(rule)).Bytes()
-				copy(topic[common.HashLength-len(blob):], blob)
+				copy(topic[:], genIntType(int64(rule), 2))
 			case int32:
-				blob := big.NewInt(int64(rule)).Bytes()
-				copy(topic[common.HashLength-len(blob):], blob)
+				copy(topic[:], genIntType(int64(rule), 4))
 			case int64:
-				blob := big.NewInt(rule).Bytes()
-				copy(topic[common.HashLength-len(blob):], blob)
+				copy(topic[:], genIntType(rule, 8))
 			case uint8:
 				blob := new(big.Int).SetUint64(uint64(rule)).Bytes()
 				copy(topic[common.HashLength-len(blob):], blob)
@@ -101,6 +97,19 @@ func makeTopics(query ...[]interface{}) ([][]common.Hash, error) {
 		}
 	}
 	return topics, nil
+}
+
+func genIntType(rule int64, size uint) []byte {
+	var topic [common.HashLength]byte
+	if rule < 0 {
+		// if a rule is negative, we need to put it into two's complement.
+		// extended to common.Hashlength bytes.
+		topic = [common.HashLength]byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255}
+	}
+	for i := uint(0); i < size; i++ {
+		topic[common.HashLength-i-1] = byte(rule >> (i * 8))
+	}
+	return topic[:]
 }
 
 // parseTopics converts the indexed topic fields into actual log field values.
