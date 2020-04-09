@@ -72,7 +72,7 @@ This command will:
    This tool is optional and if you leave it out you can always attach to an already running
    `geth` instance with `geth attach`.
 
-### A Full node on the Ethereum test network
+### A Full node on the Görli test network
 
 Transitioning towards developers, if you'd like to play around with creating Ethereum
 contracts, you almost certainly would like to do that without any real money involved until
@@ -81,23 +81,24 @@ network, you want to join the **test** network with your node, which is fully eq
 the main network, but with play-Ether only.
 
 ```shell
-$ geth --testnet console
+$ geth --goerli console
 ```
 
 The `console` subcommand has the exact same meaning as above and they are equally
-useful on the testnet too. Please see above for their explanations if you've skipped here.
+useful on the testnet too. Please, see above for their explanations if you've skipped here.
 
-Specifying the `--testnet` flag, however, will reconfigure your `geth` instance a bit:
+Specifying the `--goerli` flag, however, will reconfigure your `geth` instance a bit:
 
+ * Instead of connecting the main Ethereum network, the client will connect to the Görli
+   test network, which uses different P2P bootnodes, different network IDs and genesis
+   states.
  * Instead of using the default data directory (`~/.ethereum` on Linux for example), `geth`
-   will nest itself one level deeper into a `testnet` subfolder (`~/.ethereum/testnet` on
+   will nest itself one level deeper into a `goerli` subfolder (`~/.ethereum/goerli` on
    Linux). Note, on OSX and Linux this also means that attaching to a running testnet node
    requires the use of a custom endpoint since `geth attach` will try to attach to a
-   production node endpoint by default. E.g.
-   `geth attach <datadir>/testnet/geth.ipc`. Windows users are not affected by
+   production node endpoint by default, e.g.,
+   `geth attach <datadir>/goerli/geth.ipc`. Windows users are not affected by
    this.
- * Instead of connecting the main Ethereum network, the client will connect to the test
-   network, which uses different P2P bootnodes, different network IDs and genesis states.
 
 *Note: Although there are some internal protective measures to prevent transactions from
 crossing over between the main network and test network, you should make sure to always
@@ -107,16 +108,25 @@ accounts available between them.*
 
 ### Full node on the Rinkeby test network
 
-The above test network is a cross-client one based on the ethash proof-of-work consensus
-algorithm. As such, it has certain extra overhead and is more susceptible to reorganization
-attacks due to the network's low difficulty/security. Go Ethereum also supports connecting
-to a proof-of-authority based test network called [*Rinkeby*](https://www.rinkeby.io)
-(operated by members of the community). This network is lighter, more secure, but is only
-supported by go-ethereum.
+Go Ethereum also supports connecting to the older proof-of-authority based test network 
+called [*Rinkeby*](https://www.rinkeby.io) which is operated by members of the community.
 
 ```shell
 $ geth --rinkeby console
 ```
+
+### Full node on the Ropsten test network
+
+In addition to Görli and Rinkeby, Geth also supports the ancient Ropsten testnet. The 
+Ropsten test network is based on the Ethash proof-of-work consensus algorithm. As such,
+it has certain extra overhead and is more susceptible to reorganization attacks due to the
+network's low difficulty/security. 
+
+```shell
+$ geth --ropsten console
+```
+
+*Note: Older Geth configurations store the Ropsten database in the `testnet` subdirectory.*
 
 ### Configuration
 
