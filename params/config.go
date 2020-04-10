@@ -321,7 +321,6 @@ type BorConfig struct {
 	Sprint                uint64 `json:"sprint"`                // Epoch length to proposer
 	ValidatorContract     string `json:"validatorContract"`     // Validator set contract
 	StateReceiverContract string `json:"stateReceiverContract"` // State receiver contract
-	Heimdall              string `json:"heimdall"`              // heimdall light client url
 }
 
 // String implements the stringer interface, returning the consensus engine details.
