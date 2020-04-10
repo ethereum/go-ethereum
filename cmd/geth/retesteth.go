@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
@@ -32,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -80,7 +78,6 @@ type RetestethAPI struct {
 	rpchandler    *rpc.Server
 
 	// Block Mining Info
-	author        common.Address
 	extraData     []byte
 	engine        *NoRewardEngine
 	blockInterval uint64
@@ -89,12 +86,11 @@ type RetestethAPI struct {
 	txSenders     map[common.Address]struct{}                      // Set of transaction senders
 }
 
-// tester is a console test environment for the console tests to operate on.
+// tester is a list of classes that are being tested
 type tester struct {
 	workspace string
 	stack     *node.Node
 	ethereum  *eth.Ethereum
-	output    *bytes.Buffer
 }
 
 type ChainParams struct {
@@ -188,10 +184,12 @@ func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainPa
 	if api.testclient != nil {
 		api.testclient.Close()
 	}
-	api.testclient = newTester(&chainParams.Genesis)
-	api.author = chainParams.Genesis.Coinbase
 
-	nonceLock := new(ethapi.AddrLocker)
+	api.testclient = newTester(&chainParams.Genesis)
+	api.testclient.ethereum.SetEtherbase(chainParams.Genesis.Coinbase)
+	api.testclient.ethereum.Miner().SetExtra(chainParams.Genesis.ExtraData)
+
+	nonceLock := new(ethapi.AddrLocker) // !!!new
 	api.rpchandler.RegisterName("eth", ethapi.NewPublicBlockChainAPI(api.testclient.ethereum.APIBackend))
 	api.rpchandler.RegisterName("eth", ethapi.NewPublicTransactionPoolAPI(api.testclient.ethereum.APIBackend, nonceLock))
 	api.rpchandler.RegisterName("debug", eth.NewPrivateDebugAPI(api.testclient.ethereum))
@@ -210,6 +208,13 @@ func (api *RetestethAPI) MineBlocks(ctx context.Context, number uint64) (bool, e
 	return true, nil
 }
 
+func (api *RetestethAPI) mineBlock() error {
+	//api.testclient.ethereum.Etherbase()
+	//api.testclient.ethereum.Miner().Start()
+	return nil
+	//return api.importBlock(block)
+}
+
 func (api *RetestethAPI) currentNumber() uint64 {
 	if current := api.testclient.ethereum.BlockChain().CurrentBlock(); current != nil {
 		return current.NumberU64()
@@ -217,100 +222,6 @@ func (api *RetestethAPI) currentNumber() uint64 {
 	return 0
 }
 
-func (api *RetestethAPI) mineBlock() error {
-	number := api.currentNumber()
-	parentHash := rawdb.ReadCanonicalHash(api.testclient.ethereum.ChainDb(), number)
-	parent := rawdb.ReadBlock(api.testclient.ethereum.ChainDb(), parentHash, number)
-	var timestamp uint64
-	if api.blockInterval == 0 {
-		timestamp = uint64(time.Now().Unix())
-	} else {
-		timestamp = parent.Time() + api.blockInterval
-	}
-	gasLimit := core.CalcGasLimit(parent, 9223372036854775807, 9223372036854775807)
-	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Number:     big.NewInt(int64(number + 1)),
-		GasLimit:   gasLimit,
-		Extra:      api.extraData,
-		Time:       timestamp,
-	}
-	header.Coinbase = api.author
-	if api.engine != nil {
-		api.engine.Prepare(api.testclient.ethereum.BlockChain(), header)
-	}
-	// If we are care about TheDAO hard-fork check whether to override the extra-data or not
-	if daoBlock := api.testclient.ethereum.BlockChain().Config().DAOForkBlock; daoBlock != nil {
-		// Check whether the block is among the fork extra-override range
-		limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
-		if header.Number.Cmp(daoBlock) >= 0 && header.Number.Cmp(limit) < 0 {
-			// Depending whether we support or oppose the fork, override differently
-			if api.testclient.ethereum.BlockChain().Config().DAOForkSupport {
-				header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
-			} else if bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
-				header.Extra = []byte{} // If miner opposes, don't let it use the reserved extra-data
-			}
-		}
-	}
-	statedb, err := api.testclient.ethereum.BlockChain().StateAt(parent.Root())
-	if err != nil {
-		return err
-	}
-	if api.testclient.ethereum.BlockChain().Config().DAOForkSupport && api.testclient.ethereum.BlockChain().Config().DAOForkBlock != nil && api.testclient.ethereum.BlockChain().Config().DAOForkBlock.Cmp(header.Number) == 0 {
-		misc.ApplyDAOHardFork(statedb)
-	}
-	gasPool := new(core.GasPool).AddGas(header.GasLimit)
-	txCount := 0
-	var txs []*types.Transaction
-	var receipts []*types.Receipt
-	var blockFull = gasPool.Gas() < params.TxGas
-	for address := range api.txSenders {
-		if blockFull {
-			break
-		}
-		m := api.txMap[address]
-		for nonce := statedb.GetNonce(address); ; nonce++ {
-			if tx, ok := m[nonce]; ok {
-				// Try to apply transactions to the state
-				statedb.Prepare(tx.Hash(), common.Hash{}, txCount)
-				snap := statedb.Snapshot()
-
-				receipt, err := core.ApplyTransaction(
-					api.testclient.ethereum.BlockChain().Config(),
-					api.testclient.ethereum.BlockChain(),
-					&api.author,
-					gasPool,
-					statedb,
-					header, tx, &header.GasUsed, *api.testclient.ethereum.BlockChain().GetVMConfig(),
-				)
-				if err != nil {
-					statedb.RevertToSnapshot(snap)
-					break
-				}
-				txs = append(txs, tx)
-				receipts = append(receipts, receipt)
-				delete(m, nonce)
-				if len(m) == 0 {
-					// Last tx for the sender
-					delete(api.txMap, address)
-					delete(api.txSenders, address)
-				}
-				txCount++
-				if gasPool.Gas() < params.TxGas {
-					blockFull = true
-					break
-				}
-			} else {
-				break // Gap in the nonces
-			}
-		}
-	}
-	block, err := api.engine.FinalizeAndAssemble(api.testclient.ethereum.BlockChain(), header, statedb, txs, []*types.Header{}, receipts)
-	if err != nil {
-		return err
-	}
-	return api.importBlock(block)
-}
 
 func (api *RetestethAPI) importBlock(block *types.Block) error {
 	if _, err := api.testclient.ethereum.BlockChain().InsertChain([]*types.Block{block}); err != nil {
