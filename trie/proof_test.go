@@ -329,6 +329,44 @@ func BenchmarkVerifyProof(b *testing.B) {
 	}
 }
 
+func BenchmarkVerifyRangeProof10(b *testing.B)   { benchmarkVerifyRangeProof(b, 10) }
+func BenchmarkVerifyRangeProof100(b *testing.B)  { benchmarkVerifyRangeProof(b, 100) }
+func BenchmarkVerifyRangeProof1000(b *testing.B) { benchmarkVerifyRangeProof(b, 1000) }
+func BenchmarkVerifyRangeProof5000(b *testing.B) { benchmarkVerifyRangeProof(b, 5000) }
+
+func benchmarkVerifyRangeProof(b *testing.B, size int) {
+	trie, vals := randomTrie(8192)
+	var entries entrySlice
+	for _, kv := range vals {
+		entries = append(entries, kv)
+	}
+	sort.Sort(entries)
+
+	start := 2
+	end := start + size
+	firstProof, lastProof := memorydb.New(), memorydb.New()
+	if err := trie.Prove(entries[start].k, 0, firstProof); err != nil {
+		b.Fatalf("Failed to prove the first node %v", err)
+	}
+	if err := trie.Prove(entries[end-1].k, 0, lastProof); err != nil {
+		b.Fatalf("Failed to prove the last node %v", err)
+	}
+	var keys [][]byte
+	var values [][]byte
+	for i := start; i < end; i++ {
+		keys = append(keys, entries[i].k)
+		values = append(values, entries[i].v)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := VerifyRangeProof(trie.Hash(), keys, values, firstProof, lastProof)
+		if err != nil {
+			b.Fatalf("Case %d(%d->%d) expect no error, got %v", i, start, end-1, err)
+		}
+	}
+}
+
 func randomTrie(n int) (*Trie, map[string]*kv) {
 	trie := new(Trie)
 	vals := make(map[string]*kv)
