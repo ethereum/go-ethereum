@@ -159,10 +159,10 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			events[original.Name] = &tmplEvent{Original: original, Normalized: normalized}
 		}
 		// Add two special fallback functions if they exist
-		if evmABI.Fallback.Fallback {
+		if evmABI.HasFallback() {
 			fallback = &tmplMethod{Original: evmABI.Fallback}
 		}
-		if evmABI.Receive.Receive {
+		if evmABI.HasReceive() {
 			receive = &tmplMethod{Original: evmABI.Receive}
 		}
 		// There is no easy way to pass arbitrary java objects to the Go side.
@@ -639,9 +639,9 @@ func formatMethod(method abi.Method, structs map[string]*tmplStruct) string {
 		state = state + " "
 	}
 	identity := fmt.Sprintf("function %v", method.RawName)
-	if method.Fallback {
+	if method.IsFallback {
 		identity = "fallback"
-	} else if method.Receive {
+	} else if method.IsReceive {
 		identity = "receive"
 	}
 	return fmt.Sprintf("%s(%v) %sreturns(%v)", identity, strings.Join(inputs, ", "), state, strings.Join(outputs, ", "))

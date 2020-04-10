@@ -172,7 +172,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		case "fallback":
 			// New introduced function type in v0.6.0, check more detail
 			// here https://solidity.readthedocs.io/en/v0.6.0/contracts.html#fallback-function
-			if abi.Fallback.Fallback {
+			if abi.HasFallback() {
 				return errors.New("only single fallback is allowed")
 			}
 			abi.Fallback = Method{
@@ -182,7 +182,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 				// The `StateMutability` can only be payable or nonpayable,
 				// so the constant is always false.
 				StateMutability: field.StateMutability,
-				Fallback:        true,
+				IsFallback:      true,
 
 				// Fallback doesn't have any input or output
 				Inputs:  nil,
@@ -195,7 +195,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		case "receive":
 			// New introduced function type in v0.6.0, check more detail
 			// here https://solidity.readthedocs.io/en/v0.6.0/contracts.html#fallback-function
-			if abi.Receive.Receive {
+			if abi.HasReceive() {
 				return errors.New("only single receive is allowed")
 			}
 			if field.StateMutability != "payable" {
@@ -208,7 +208,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 				// The `StateMutability` can only be payable, so constant
 				// is always true while payable is always false.
 				StateMutability: field.StateMutability,
-				Receive:         true,
+				IsReceive:       true,
 
 				// Receive doesn't have any input or output
 				Inputs:  nil,
@@ -259,4 +259,14 @@ func (abi *ABI) EventByID(topic common.Hash) (*Event, error) {
 		}
 	}
 	return nil, fmt.Errorf("no event with id: %#x", topic.Hex())
+}
+
+// HasFallback returns an indicator whether a fallback function is included.
+func (abi *ABI) HasFallback() bool {
+	return abi.Fallback.IsFallback
+}
+
+// HasReceive returns an indicator whether a receive function is included.
+func (abi *ABI) HasReceive() bool {
+	return abi.Receive.IsReceive
 }

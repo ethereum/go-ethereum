@@ -55,8 +55,8 @@ type Method struct {
 
 	// The following two flags indicates whether the method is a
 	// special fallback introduced in solidity v0.6.0
-	Fallback bool
-	Receive  bool
+	IsFallback bool
+	IsReceive  bool
 
 	Inputs  Arguments
 	Outputs Arguments
@@ -72,7 +72,7 @@ type Method struct {
 func (method Method) Sig() string {
 	// Short circuit if the method is special. Fallback
 	// and Receive don't have signature at all.
-	if method.Fallback || method.Receive {
+	if method.IsFallback || method.IsReceive {
 		return ""
 	}
 	types := make([]string, len(method.Inputs))
@@ -104,9 +104,9 @@ func (method Method) String() string {
 		state = state + " "
 	}
 	identity := fmt.Sprintf("function %v", method.RawName)
-	if method.Fallback {
+	if method.IsFallback {
 		identity = "fallback"
-	} else if method.Receive {
+	} else if method.IsReceive {
 		identity = "receive"
 	}
 	return fmt.Sprintf("%v(%v) %sreturns(%v)", identity, strings.Join(inputs, ", "), state, strings.Join(outputs, ", "))
