@@ -86,13 +86,40 @@ var (
 		Name:  "trace",
 		Usage: "Write execution trace to the given file",
 	}
+	splunkurlFlag = cli.StringFlag{
+		Name:  "splunkurl",
+		Usage: "URL to Splunk HTTP Event Collector",
+	}
+	splunktokenFlag = cli.StringFlag{
+		Name:  "splunktoken",
+		Usage: "Splunk HTTP Event Collector token",
+	}
+	splunksourceFlag = cli.StringFlag{
+		Name:  "splunksource",
+		Usage: "Splunk source field value, description of the source of the event",
+		Value: "geth",
+	}
+	splunkindexFlag = cli.StringFlag{
+		Name:  "splunkindex",
+		Usage: "Splunk Index, optional name of the Splunk index to store the event in",
+	}
+	splunksourcetypeFlag = cli.StringFlag{
+		Name:  "splunksourcetype",
+		Usage: "Splunk source type, optional name of a sourcetype field value",
+	}
+	splunkskiptlsverifyFlag = cli.BoolFlag{
+		Name:  "splunkskiptlsverify",
+		Usage: "Skip verifying the certificate of the HTTP Event Collector",
+	}
 )
 
 // Flags holds all command-line flags required for debugging.
 var Flags = []cli.Flag{
 	verbosityFlag, vmoduleFlag, backtraceAtFlag, debugFlag,
 	pprofFlag, pprofAddrFlag, pprofPortFlag,
-	memprofilerateFlag, blockprofilerateFlag, cpuprofileFlag, traceFlag,
+	memprofilerateFlag, blockprofilerateFlag, cpuprofileFlag,
+	traceFlag, splunkurlFlag, splunktokenFlag, splunksourceFlag,
+	splunkindexFlag, splunksourcetypeFlag, splunkskiptlsverifyFlag,
 }
 
 var (
@@ -114,6 +141,24 @@ func init() {
 // It should be called as early as possible in the program.
 func Setup(ctx *cli.Context) error {
 	// logging
+	splunkURL := ctx.GlobalString(splunkurlFlag.Name)
+	if splunkURL != "" {
+		splunkToken := ctx.GlobalString(splunktokenFlag.Name)
+		splunkSource := ctx.GlobalString(splunksourceFlag.Name)
+		splunkSourceType := ctx.GlobalString(splunksourcetypeFlag.Name)
+		splunkIndex := ctx.GlobalString(splunkindexFlag.Name)
+		splunkSkipTLSVerify := ctx.GlobalBool(splunkskiptlsverifyFlag.Name)
+		originalHandler := log.NewGlogHandler(ostream)
+		originalHandler.Verbosity(log.Lvl(ctx.GlobalInt(verbosityFlag.Name)))
+		originalHandler.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
+		originalHandler.BacktraceAt(ctx.GlobalString(backtraceAtFlag.Name))
+		splunkstream, err := log.SplunkHandler(splunkURL, splunkToken, splunkSource, splunkSourceType, splunkIndex,
+			splunkSkipTLSVerify, log.TerminalFormat(false), originalHandler)
+		if err != nil {
+			return err
+		}
+		glogger.SetHandler(splunkstream)
+	}
 	log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(verbosityFlag.Name)))
 	glogger.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
