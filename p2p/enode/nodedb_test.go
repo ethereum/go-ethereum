@@ -67,7 +67,10 @@ func TestDBNodeItemKey(t *testing.T) {
 	if !bytes.Equal(enc, want) {
 		t.Errorf("wrong encoded key:\ngot  %q\nwant %q", enc, want)
 	}
-	id, ip, field := splitNodeItemKey(enc)
+	id, ip, field, err := splitNodeItemKey(enc)
+	if err != nil {
+		t.Errorf("could not split node iterm key: %v", err)
+	}
 	if id != keytestID {
 		t.Errorf("splitNodeItemKey returned wrong ID: %v", id)
 	}
@@ -76,6 +79,25 @@ func TestDBNodeItemKey(t *testing.T) {
 	}
 	if field != wantField {
 		t.Errorf("splitNodeItemKey returned wrong field: %q", field)
+	}
+}
+
+func TestDBSplitNodeItemKeyError(t *testing.T) {
+	// provide a key object less than 17 bytes, which is
+	// missing the required field in it.
+	enc := []byte{
+		'n', ':',
+		0x51, 0x23, 0x2b, 0x8d, 0x78, 0x21, 0x61, 0x7d, // node id
+		0x2b, 0x29, 0xb5, 0x4b, 0x81, 0xcd, 0xef, 0xb9, //
+		0xb3, 0xe9, 0xc3, 0x7d, 0x7f, 0xd5, 0xf6, 0x32, //
+		0x70, 0xbc, 0xc9, 0xe1, 0xa6, 0xf6, 0xa4, 0x39, //
+		':', 'v', '4', ':',
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // IP
+		0x00, 0x00, 0xff, 0xff, 0x7f, 0x00, 0x00, 0x03, //
+	}
+	_, _, _, err := splitNodeItemKey(enc)
+	if err == nil {
+		t.Error("expected error from providing a malformed key object")
 	}
 }
 
