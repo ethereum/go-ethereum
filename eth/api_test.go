@@ -26,9 +26,15 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var dumper = spew.ConfigState{Indent: "    "}
@@ -199,5 +205,234 @@ func TestStorageRangeAt(t *testing.T) {
 			t.Fatalf("wrong result for range 0x%x.., limit %d:\ngot %s\nwant %s",
 				test.start, test.limit, dumper.Sdump(result), dumper.Sdump(&test.want))
 		}
+	}
+}
+
+var (
+	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testAddr    = crypto.PubkeyToAddress(testKey.PublicKey)
+	testBalance = big.NewInt(2e10)
+)
+
+func generateTestChain() (*core.Genesis, []*types.Block) {
+	db := rawdb.NewMemoryDatabase()
+	config := params.AllEthashProtocolChanges
+	genesis := &core.Genesis{
+		Config:    config,
+		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
+		ExtraData: []byte("test genesis"),
+		Timestamp: 9000,
+	}
+	generate := func(i int, g *core.BlockGen) {
+		g.OffsetTime(5)
+		g.SetExtra([]byte("test"))
+	}
+	gblock := genesis.ToBlock(db)
+	engine := ethash.NewFaker()
+	blocks, _ := core.GenerateChain(config, gblock, engine, db, 10, generate)
+	blocks = append([]*types.Block{gblock}, blocks...)
+	return genesis, blocks
+}
+
+func generateTestChainWithFork(n int, fork int) (*core.Genesis, []*types.Block, []*types.Block) {
+	if fork >= n {
+		fork = n - 1
+	}
+	db := rawdb.NewMemoryDatabase()
+	config := params.AllEthashProtocolChanges
+	genesis := &core.Genesis{
+		Config:    config,
+		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
+		ExtraData: []byte("test genesis"),
+		Timestamp: 9000,
+	}
+	generate := func(i int, g *core.BlockGen) {
+		g.OffsetTime(5)
+		g.SetExtra([]byte("test"))
+	}
+	generateFork := func(i int, g *core.BlockGen) {
+		g.OffsetTime(5)
+		g.SetExtra([]byte("testF"))
+	}
+	gblock := genesis.ToBlock(db)
+	engine := ethash.NewFaker()
+	blocks, _ := core.GenerateChain(config, gblock, engine, db, n, generate)
+	blocks = append([]*types.Block{gblock}, blocks...)
+	forkedBlocks, _ := core.GenerateChain(config, blocks[fork], engine, db, n-fork, generateFork)
+	return genesis, blocks, forkedBlocks
+}
+
+func TestEth2ValidateBlock(t *testing.T) {
+	genesis, blocks := generateTestChain()
+
+	n, err := node.New(&node.Config{})
+	if err != nil {
+		t.Fatalf("could not get node: %v", err)
+	}
+	var eth *Ethereum
+	n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		config := &Config{Genesis: genesis}
+		config.Ethash.PowMode = ethash.ModeFake
+		eth, err = New(ctx, config)
+		return eth, err
+	})
+	if err := n.Start(); err != nil {
+		t.Fatalf("can't start test node: %v", err)
+	}
+	if _, err := eth.BlockChain().InsertChain(blocks[1:9]); err != nil {
+		t.Fatalf("can't import test blocks: %v", err)
+	}
+
+	api := NewEth2API(eth)
+	var blockRLP bytes.Buffer
+	rlp.Encode(&blockRLP, blocks[9])
+	valid, err := api.ValidateBlock(blockRLP.Bytes())
+	if err != nil || !valid {
+		t.Fatalf("block could not be validated, err=%v, valid=%v", err, valid)
+	}
+}
+
+func TestEth2ProduceBlock(t *testing.T) {
+	genesis, blocks := generateTestChain()
+
+	n, err := node.New(&node.Config{})
+	if err != nil {
+		t.Fatalf("could not get node: %v", err)
+	}
+	var eth *Ethereum
+	n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		config := &Config{Genesis: genesis}
+		config.Ethash.PowMode = ethash.ModeFake
+		eth, err = New(ctx, config)
+		return eth, err
+	})
+	if err := n.Start(); err != nil {
+		t.Fatalf("can't start test node: %v", err)
+	}
+	if _, err := eth.BlockChain().InsertChain(blocks[1:9]); err != nil {
+		t.Fatalf("can't import test blocks: %v", err)
+	}
+	eth.SetEtherbase(testAddr)
+
+	api := NewEth2API(eth)
+	signer := types.NewEIP155Signer(eth.BlockChain().Config().ChainID)
+	tx, err := types.SignTx(types.NewTransaction(0, blocks[8].Coinbase(), big.NewInt(1000), params.TxGas, nil, nil), signer, testKey)
+	eth.txPool.AddLocal(tx)
+	newblockrlp, err := api.ProduceBlock(blocks[8].Hash())
+
+	if err != nil {
+		t.Fatalf("error producing block, err=%v", err)
+	}
+
+	var newblock types.Block
+	if err = rlp.DecodeBytes(newblockrlp, &newblock); err != nil {
+		t.Fatalf("error decoding produced block %v", err)
+	}
+	if len(newblock.Transactions()) != 1 {
+		t.Fatalf("invalid number of transactions %d != 1", len(newblock.Transactions()))
+	}
+}
+
+func TestEth2InsertBlock(t *testing.T) {
+	genesis, blocks, forkedBlocks := generateTestChainWithFork(10, 5)
+
+	n, err := node.New(&node.Config{})
+	if err != nil {
+		t.Fatalf("could not get node: %v", err)
+	}
+	var eth *Ethereum
+	n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		config := &Config{Genesis: genesis}
+		config.Ethash.PowMode = ethash.ModeFake
+		eth, err = New(ctx, config)
+		return eth, err
+	})
+	if err := n.Start(); err != nil {
+		t.Fatalf("can't start test node: %v", err)
+	}
+	if _, err := eth.BlockChain().InsertChain(blocks[1:5]); err != nil {
+		t.Fatalf("can't import test blocks: %v", err)
+	}
+
+	api := NewEth2API(eth)
+	for i := 5; i < 10; i++ {
+		var blockRLP bytes.Buffer
+		rlp.Encode(&blockRLP, blocks[i])
+		err := api.InsertBlock(blockRLP.Bytes())
+		if err != nil {
+			t.Fatalf("Failed to insert block: %v", err)
+		}
+	}
+
+	if eth.BlockChain().CurrentBlock().Hash() != blocks[9].Hash() {
+		t.Fatalf("Wrong head")
+	}
+
+	for i := 0; i < 4; i++ {
+		var blockRLP bytes.Buffer
+		rlp.Encode(&blockRLP, forkedBlocks[i])
+		err := api.InsertBlock(blockRLP.Bytes())
+		if err != nil {
+			t.Fatalf("Failed to insert block: %v", err)
+		}
+	}
+
+	if eth.BlockChain().CurrentBlock().Hash() != blocks[9].Hash() {
+		t.Fatalf("Wrong head after inserting fork %x != %x", blocks[9].Hash(), eth.BlockChain().CurrentBlock().Hash())
+	}
+}
+
+func TestEth2SetHead(t *testing.T) {
+	genesis, blocks, forkedBlocks := generateTestChainWithFork(10, 5)
+
+	n, err := node.New(&node.Config{})
+	if err != nil {
+		t.Fatalf("could not get node: %v", err)
+	}
+	var eth *Ethereum
+	n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		config := &Config{Genesis: genesis}
+		config.Ethash.PowMode = ethash.ModeFake
+		eth, err = New(ctx, config)
+		return eth, err
+	})
+	if err := n.Start(); err != nil {
+		t.Fatalf("can't start test node: %v", err)
+	}
+	if _, err := eth.BlockChain().InsertChain(blocks[1:5]); err != nil {
+		t.Fatalf("can't import test blocks: %v", err)
+	}
+
+	api := NewEth2API(eth)
+	for i := 5; i < 10; i++ {
+		var blockRLP bytes.Buffer
+		rlp.Encode(&blockRLP, blocks[i])
+		err := api.InsertBlock(blockRLP.Bytes())
+		if err != nil {
+			t.Fatalf("Failed to insert block: %v", err)
+		}
+	}
+	api.head = blocks[9].Hash()
+
+	if eth.BlockChain().CurrentBlock().Hash() != blocks[9].Hash() {
+		t.Fatalf("Wrong head")
+	}
+
+	for i := 0; i < 3; i++ {
+		var blockRLP bytes.Buffer
+		rlp.Encode(&blockRLP, forkedBlocks[i])
+		err := api.InsertBlock(blockRLP.Bytes())
+		if err != nil {
+			t.Fatalf("Failed to insert block: %v", err)
+		}
+	}
+
+	api.SetHead(forkedBlocks[2].Hash())
+
+	if eth.BlockChain().CurrentBlock().Hash() == forkedBlocks[2].Hash() {
+		t.Fatalf("Wrong head after inserting fork %x != %x", blocks[9].Hash(), eth.BlockChain().CurrentBlock().Hash())
+	}
+	if api.head != forkedBlocks[2].Hash() {
+		t.Fatalf("Registered wrong head")
 	}
 }

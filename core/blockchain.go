@@ -1412,7 +1412,7 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 
 	current := bc.CurrentBlock()
 	if block.ParentHash() != current.Hash() {
-		if err := bc.reorg(current, block); err != nil {
+		if err := bc.Reorg(current, block); err != nil {
 			return err
 		}
 	}
@@ -1536,7 +1536,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if reorg {
 		// Reorganise the chain if the parent is not the head block
 		if block.ParentHash() != currentBlock.Hash() {
-			if err := bc.reorg(currentBlock, block); err != nil {
+			if err := bc.Reorg(currentBlock, block); err != nil {
 				return NonStatTy, err
 			}
 		}
@@ -2041,7 +2041,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 // reorg takes two blocks, an old chain and a new chain and will reconstruct the
 // blocks and inserts them to be part of the new canonical chain and accumulates
 // potential missing transactions and post an event about them.
-func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
+func (bc *BlockChain) Reorg(oldBlock, newBlock *types.Block) error {
 	var (
 		newChain    types.Blocks
 		oldChain    types.Blocks
