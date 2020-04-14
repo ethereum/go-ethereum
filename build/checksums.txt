@@ -1,6 +1,6 @@
 # This file contains sha256 checksums of optional build dependencies.
 
-b13bf04633d4d8cf53226ebeaace8d4d2fd07ae6fa676d0844a688339debec34  go1.13.8.src.tar.gz
+98de84e69726a66da7b4e58eac41b99cbe274d7e8906eeb8a5b7eb0aadee7f7c  go1.14.2.src.tar.gz
 
 aeaa5498682246b87d0b77ece283897348ea03d98e816760a074058bfca60b2a  golangci-lint-1.24.0-windows-amd64.zip
 7e854a70d449fe77b7a91583ec88c8603eb3bf96c45d52797dc4ba3f2f278dbe  golangci-lint-1.24.0-darwin-386.tar.gz
