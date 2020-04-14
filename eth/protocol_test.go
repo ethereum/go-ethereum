@@ -211,12 +211,12 @@ func TestForkIDSplit(t *testing.T) {
 	peerNoFork = newPeer(64, p2p.NewPeer(enode.ID{1}, "", nil), p2pNoFork, nil)
 	peerProFork = newPeer(64, p2p.NewPeer(enode.ID{2}, "", nil), p2pProFork, nil)
 
-	errc = make(chan error, 2)
-	go func() { errc <- ethNoFork.handle(peerProFork) }()
-	go func() { errc <- ethProFork.handle(peerNoFork) }()
+	errc2 := make(chan error, 2)
+	go func() { errc2 <- ethNoFork.handle(peerProFork) }()
+	go func() { errc2 <- ethProFork.handle(peerNoFork) }()
 
 	select {
-	case err := <-errc:
+	case err := <-errc2:
 		t.Fatalf("homestead nofork <-> profork failed: %v", err)
 	case <-time.After(250 * time.Millisecond):
 		p2pNoFork.Close()
@@ -230,12 +230,12 @@ func TestForkIDSplit(t *testing.T) {
 	peerNoFork = newPeer(64, p2p.NewPeer(enode.ID{1}, "", nil), p2pNoFork, nil)
 	peerProFork = newPeer(64, p2p.NewPeer(enode.ID{2}, "", nil), p2pProFork, nil)
 
-	errc = make(chan error, 2)
-	go func() { errc <- ethNoFork.handle(peerProFork) }()
-	go func() { errc <- ethProFork.handle(peerNoFork) }()
+	errc3 := make(chan error, 2)
+	go func() { errc3 <- ethNoFork.handle(peerProFork) }()
+	go func() { errc3 <- ethProFork.handle(peerNoFork) }()
 
 	select {
-	case err := <-errc:
+	case err := <-errc3:
 		if want := errResp(ErrForkIDRejected, forkid.ErrLocalIncompatibleOrStale.Error()); err.Error() != want.Error() {
 			t.Fatalf("fork ID rejection error mismatch: have %v, want %v", err, want)
 		}
