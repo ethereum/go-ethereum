@@ -552,12 +552,11 @@ func (t *freezerTable) Retrieve(item uint64) ([]byte, error) {
 		return nil, errOutOfBounds
 	}
 	// Ensure the item was not deleted from the tail either
-	offset := atomic.LoadUint32(&t.itemOffset)
-	if uint64(offset) > item {
+	if uint64(t.itemOffset) > item {
 		t.lock.RUnlock()
 		return nil, errOutOfBounds
 	}
-	startOffset, endOffset, filenum, err := t.getBounds(item - uint64(offset))
+	startOffset, endOffset, filenum, err := t.getBounds(item - uint64(t.itemOffset))
 	if err != nil {
 		t.lock.RUnlock()
 		return nil, err
