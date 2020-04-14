@@ -67,7 +67,8 @@ type KeyStore struct {
 	updateScope event.SubscriptionScope // Subscription scope tracking current live listeners
 	updating    bool                    // Whether the event notification loop is running
 
-	mu sync.RWMutex
+	mu    sync.RWMutex
+	impMu sync.RWMutex // Import Mutex locks the import to prevent two insertions from racing
 }
 
 type unlocked struct {
@@ -443,12 +444,19 @@ func (ks *KeyStore) Import(keyJSON []byte, passphrase, newPassphrase string) (ac
 	if err != nil {
 		return accounts.Account{}, err
 	}
+	ks.impMu.Lock()
+	defer ks.impMu.Unlock()
+	if ks.cache.hasAddress(key.Address) {
+		return accounts.Account{}, fmt.Errorf("account already exists")
+	}
 	return ks.importKey(key, newPassphrase)
 }
 
 // ImportECDSA stores the given key into the key directory, encrypting it with the passphrase.
 func (ks *KeyStore) ImportECDSA(priv *ecdsa.PrivateKey, passphrase string) (accounts.Account, error) {
 	key := newKeyFromECDSA(priv)
+	ks.impMu.Lock()
+	defer ks.impMu.Unlock()
 	if ks.cache.hasAddress(key.Address) {
 		return accounts.Account{}, fmt.Errorf("account already exists")
 	}
