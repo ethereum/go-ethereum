@@ -220,8 +220,13 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		EventMux:   eth.eventMux,
 		Checkpoint: checkpoint,
 		Whitelist:  config.Whitelist,
+		Catalyst:   config.Catalyst,
 	}); err != nil {
 		return nil, err
+	}
+	if config.Catalyst {
+		// Activate transaction processing by default in catalyst mode
+		eth.handler.acceptTxs = 1
 	}
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
@@ -336,6 +341,11 @@ func (s *Ethereum) APIs() []rpc.API {
 			Namespace: "net",
 			Version:   "1.0",
 			Service:   s.netRPCService,
+			Public:    true,
+		}, {
+			Namespace: "eth2",
+			Version:   "1.0",
+			Service:   NewEth2API(s),
 			Public:    true,
 		},
 	}...)

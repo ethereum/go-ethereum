@@ -62,6 +62,24 @@ var (
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
 
+//nolint:deadcode
+func newCatalystInstructionSet() JumpTable {
+	instructionSet := newBerlinInstructionSet()
+	instructionSet[BEACONSTATEROOT] = &operation{
+		execute:     opBeaconStateRoot,
+		constantGas: GasExtStep,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+	}
+	instructionSet[RANDAOMIX] = &operation{
+		execute:     opRandaoMix,
+		constantGas: GasExtStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+	return instructionSet
+}
+
 // newBerlinInstructionSet returns the frontier, homestead, byzantium,
 // contantinople, istanbul, petersburg and berlin instructions.
 func newBerlinInstructionSet() JumpTable {
