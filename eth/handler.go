@@ -674,60 +674,60 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case msg.Code == NewBlockHashesMsg:
-		var announces newBlockHashesData
-		if err := msg.Decode(&announces); err != nil {
-			return errResp(ErrDecode, "%v: %v", msg, err)
-		}
-		// Mark the hashes as present at the remote node
-		for _, block := range announces {
-			p.MarkBlock(block.Hash)
-		}
-		// Schedule all the unknown hashes for retrieval
-		unknown := make(newBlockHashesData, 0, len(announces))
-		for _, block := range announces {
-			if !pm.blockchain.HasBlock(block.Hash, block.Number) {
-				unknown = append(unknown, block)
-			}
-		}
-		for _, block := range unknown {
-			pm.blockFetcher.Notify(p.id, block.Hash, block.Number, time.Now(), p.RequestOneHeader, p.RequestBodies)
-		}
+		//var announces newBlockHashesData
+		//if err := msg.Decode(&announces); err != nil {
+		//return errResp(ErrDecode, "%v: %v", msg, err)
+		//}
+		//// Mark the hashes as present at the remote node
+		//for _, block := range announces {
+		//p.MarkBlock(block.Hash)
+		//}
+		//// Schedule all the unknown hashes for retrieval
+		//unknown := make(newBlockHashesData, 0, len(announces))
+		//for _, block := range announces {
+		//if !pm.blockchain.HasBlock(block.Hash, block.Number) {
+		//unknown = append(unknown, block)
+		//}
+		//}
+		//for _, block := range unknown {
+		//pm.blockFetcher.Notify(p.id, block.Hash, block.Number, time.Now(), p.RequestOneHeader, p.RequestBodies)
+		//}
 
 	case msg.Code == NewBlockMsg:
 		// Retrieve and decode the propagated block
-		var request newBlockData
-		if err := msg.Decode(&request); err != nil {
-			return errResp(ErrDecode, "%v: %v", msg, err)
-		}
-		if hash := types.CalcUncleHash(request.Block.Uncles()); hash != request.Block.UncleHash() {
-			log.Warn("Propagated block has invalid uncles", "have", hash, "exp", request.Block.UncleHash())
-			break // TODO(karalabe): return error eventually, but wait a few releases
-		}
-		if hash := types.DeriveSha(request.Block.Transactions()); hash != request.Block.TxHash() {
-			log.Warn("Propagated block has invalid body", "have", hash, "exp", request.Block.TxHash())
-			break // TODO(karalabe): return error eventually, but wait a few releases
-		}
-		if err := request.sanityCheck(); err != nil {
-			return err
-		}
-		request.Block.ReceivedAt = msg.ReceivedAt
-		request.Block.ReceivedFrom = p
+		//var request newBlockData
+		//if err := msg.Decode(&request); err != nil {
+		//return errResp(ErrDecode, "%v: %v", msg, err)
+		//}
+		//if hash := types.CalcUncleHash(request.Block.Uncles()); hash != request.Block.UncleHash() {
+		//log.Warn("Propagated block has invalid uncles", "have", hash, "exp", request.Block.UncleHash())
+		//break // TODO(karalabe): return error eventually, but wait a few releases
+		//}
+		//if hash := types.DeriveSha(request.Block.Transactions()); hash != request.Block.TxHash() {
+		//log.Warn("Propagated block has invalid body", "have", hash, "exp", request.Block.TxHash())
+		//break // TODO(karalabe): return error eventually, but wait a few releases
+		//}
+		//if err := request.sanityCheck(); err != nil {
+		//return err
+		//}
+		//request.Block.ReceivedAt = msg.ReceivedAt
+		//request.Block.ReceivedFrom = p
 
-		// Mark the peer as owning the block and schedule it for import
-		p.MarkBlock(request.Block.Hash())
-		pm.blockFetcher.Enqueue(p.id, request.Block)
+		//// Mark the peer as owning the block and schedule it for import
+		//p.MarkBlock(request.Block.Hash())
+		//pm.blockFetcher.Enqueue(p.id, request.Block)
 
-		// Assuming the block is importable by the peer, but possibly not yet done so,
-		// calculate the head hash and TD that the peer truly must have.
-		var (
-			trueHead = request.Block.ParentHash()
-			trueTD   = new(big.Int).Sub(request.TD, request.Block.Difficulty())
-		)
-		// Update the peer's total difficulty if better than the previous
-		if _, td := p.Head(); trueTD.Cmp(td) > 0 {
-			p.SetHead(trueHead, trueTD)
-			pm.chainSync.handlePeerEvent(p)
-		}
+		//// Assuming the block is importable by the peer, but possibly not yet done so,
+		//// calculate the head hash and TD that the peer truly must have.
+		//var (
+		//trueHead = request.Block.ParentHash()
+		//trueTD   = new(big.Int).Sub(request.TD, request.Block.Difficulty())
+		//)
+		//// Update the peer's total difficulty if better than the previous
+		//if _, td := p.Head(); trueTD.Cmp(td) > 0 {
+		//p.SetHead(trueHead, trueTD)
+		//pm.chainSync.handlePeerEvent(p)
+		//}
 
 	case msg.Code == NewPooledTransactionHashesMsg && p.version >= eth65:
 		// New transaction announcement arrived, make sure we have
@@ -809,34 +809,34 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 // BroadcastBlock will either propagate a block to a subset of its peers, or
 // will only announce its availability (depending what's requested).
 func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
-	hash := block.Hash()
-	peers := pm.peers.PeersWithoutBlock(hash)
+	//hash := block.Hash()
+	//peers := pm.peers.PeersWithoutBlock(hash)
 
-	// If propagation is requested, send to a subset of the peer
-	if propagate {
-		// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
-		var td *big.Int
-		if parent := pm.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
-			td = new(big.Int).Add(block.Difficulty(), pm.blockchain.GetTd(block.ParentHash(), block.NumberU64()-1))
-		} else {
-			log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
-			return
-		}
-		// Send the block to a subset of our peers
-		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
-		for _, peer := range transfer {
-			peer.AsyncSendNewBlock(block, td)
-		}
-		log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
-		return
-	}
-	// Otherwise if the block is indeed in out own chain, announce it
-	if pm.blockchain.HasBlock(hash, block.NumberU64()) {
-		for _, peer := range peers {
-			peer.AsyncSendNewBlockHash(block)
-		}
-		log.Trace("Announced block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
-	}
+	//// If propagation is requested, send to a subset of the peer
+	//if propagate {
+	//// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
+	//var td *big.Int
+	//if parent := pm.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
+	//td = new(big.Int).Add(block.Difficulty(), pm.blockchain.GetTd(block.ParentHash(), block.NumberU64()-1))
+	//} else {
+	//log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
+	//return
+	//}
+	//// Send the block to a subset of our peers
+	//transfer := peers[:int(math.Sqrt(float64(len(peers))))]
+	//for _, peer := range transfer {
+	//peer.AsyncSendNewBlock(block, td)
+	//}
+	//log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+	//return
+	//}
+	//// Otherwise if the block is indeed in out own chain, announce it
+	//if pm.blockchain.HasBlock(hash, block.NumberU64()) {
+	//for _, peer := range peers {
+	//peer.AsyncSendNewBlockHash(block)
+	//}
+	//log.Trace("Announced block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+	//}
 }
 
 // BroadcastTransactions will propagate a batch of transactions to all peers which are not known to
