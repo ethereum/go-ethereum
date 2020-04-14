@@ -18,6 +18,7 @@ package trie
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -37,6 +38,7 @@ type SecureTrie struct {
 	trie             Trie
 	hashKeyBuf       [common.HashLength]byte
 	secKeyCache      map[string][]byte
+	secKeyCacheMu    sync.Mutex
 	secKeyCacheOwner *SecureTrie // Pointer to self, replace the key cache on mismatch
 }
 
@@ -105,6 +107,8 @@ func (t *SecureTrie) TryUpdate(key, value []byte) error {
 	if err != nil {
 		return err
 	}
+	t.secKeyCacheMu.Lock()
+	defer t.secKeyCacheMu.Unlock()
 	t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
 	return nil
 }
@@ -120,6 +124,8 @@ func (t *SecureTrie) Delete(key []byte) {
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *SecureTrie) TryDelete(key []byte) error {
 	hk := t.hashKey(key)
+	t.secKeyCacheMu.Lock()
+	defer t.secKeyCacheMu.Unlock()
 	delete(t.getSecKeyCache(), string(hk))
 	return t.trie.TryDelete(hk)
 }
@@ -127,6 +133,8 @@ func (t *SecureTrie) TryDelete(key []byte) error {
 // GetKey returns the sha3 preimage of a hashed key that was
 // previously used to store a value.
 func (t *SecureTrie) GetKey(shaKey []byte) []byte {
+	t.secKeyCacheMu.Lock()
+	defer t.secKeyCacheMu.Unlock()
 	if key, ok := t.getSecKeyCache()[string(shaKey)]; ok {
 		return key
 	}
@@ -141,6 +149,8 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 // from the database.
 func (t *SecureTrie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	// Write all the pre-images to the actual disk database
+	t.secKeyCacheMu.Lock()
+	defer t.secKeyCacheMu.Unlock()
 	if len(t.getSecKeyCache()) > 0 {
 		t.trie.db.lock.Lock()
 		for hk, key := range t.secKeyCache {
