@@ -353,10 +353,10 @@ func TestImportECDSA(t *testing.T) {
 		t.Errorf("importing failed: %v", err)
 	}
 	if _, err = ks.ImportECDSA(key, "old"); err == nil {
-		t.Errorf("importing same key twice succeded")
+		t.Errorf("importing same key twice succeeded")
 	}
 	if _, err = ks.ImportECDSA(key, "new"); err == nil {
-		t.Errorf("importing same key twice succeded")
+		t.Errorf("importing same key twice succeeded")
 	}
 }
 
