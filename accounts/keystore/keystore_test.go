@@ -377,12 +377,17 @@ func TestImportExport(t *testing.T) {
 	if _, err = ks2.Import(json, "old", "old"); err == nil {
 		t.Errorf("importing with invalid password succeeded")
 	}
-	if _, err = ks2.Import(json, "new", "new"); err != nil {
+	acc2, err := ks2.Import(json, "new", "new")
+	if err != nil {
 		t.Errorf("importing failed: %v", err)
+	}
+	if acc.Address != acc2.Address {
+		t.Error("imported account does not match exported account")
 	}
 	if _, err = ks2.Import(json, "new", "new"); err == nil {
 		t.Errorf("importing a key twice succeeded")
 	}
+
 }
 
 // TestImportRace tests the keystore on races.
