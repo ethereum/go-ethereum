@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	lpc "github.com/ethereum/go-ethereum/les/lespay/client"
+	lps "github.com/ethereum/go-ethereum/les/lespay/server"
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -126,6 +127,7 @@ type peerCommons struct {
 	announceType uint64    // New block announcement type.
 	serving      uint32    // The status indicates the peer is served.
 	headInfo     blockInfo // Latest block information.
+	active       bool
 
 	// Background task queue for caching peer tasks and executing in order.
 	sendQueue *utils.ExecQueue
@@ -463,7 +465,7 @@ func (p *serverPeer) requestTxStatus(reqID uint64, txHashes []common.Hash) error
 	return p.sendRequest(GetTxStatusMsg, reqID, txHashes, len(txHashes))
 }
 
-// SendTxStatus creates a reply with a batch of transactions to be added to the remote transaction pool.
+// sendTxs creates a reply with a batch of transactions to be added to the remote transaction pool.
 func (p *serverPeer) sendTxs(reqID uint64, amount int, txs rlp.RawValue) error {
 	p.Log().Debug("Sending batch of transactions", "amount", amount, "size", len(txs))
 	sizeFactor := (len(txs) + txSizeCostLimit/2) / txSizeCostLimit
@@ -544,10 +546,12 @@ func (p *serverPeer) updateFlowControl(update keyValueMap) {
 
 	// If any of the flow control params is nil, refuse to update.
 	var params flowcontrol.ServerParams
+	updated := false
 	if update.get("flowControl/BL", &params.BufLimit) == nil && update.get("flowControl/MRR", &params.MinRecharge) == nil {
 		// todo can light client set a minimal acceptable flow control params?
 		p.fcParams = params
 		p.fcServer.UpdateParams(params)
+		updated = true
 	}
 	var MRC RequestCostList
 	if update.get("flowControl/MRC", &MRC) == nil {
@@ -555,7 +559,18 @@ func (p *serverPeer) updateFlowControl(update keyValueMap) {
 		for code, cost := range costUpdate {
 			p.fcCosts[code] = cost
 		}
+		updated = true
 	}
+	if updated {
+		p.active = p.paramsUseful()
+	}
+}
+
+// paramsUseful returns true if the server parameters ensure the minimum required
+// buffer limit and recharge
+func (p *serverPeer) paramsUseful() bool {
+	reqRecharge, reqBufLimit := p.fcCosts.reqParams()
+	return p.fcParams.MinRecharge >= reqRecharge && p.fcParams.BufLimit >= reqBufLimit
 }
 
 // updateHead updates the head information based on the announcement from
@@ -613,6 +628,7 @@ func (p *serverPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 		p.fcParams = sParams
 		p.fcServer = flowcontrol.NewServerNode(sParams, &mclock.System{})
 		p.fcCosts = MRC.decode(ProtocolLengths[uint(p.version)])
+		p.active = p.paramsUseful()
 
 		recv.get("checkpoint/value", &p.checkpoint)
 		recv.get("checkpoint/registerHeight", &p.checkpointNumber)
@@ -714,6 +730,10 @@ func (p *serverPeer) answeredRequest(id uint64) {
 type clientPeer struct {
 	peerCommons
 
+	activate, deactivate func()
+	balance              *lps.NodeBalance
+	//getBalance           func() uint64
+
 	// responseLock ensures that responses are queued in the same order as
 	// RequestProcessed is called
 	responseLock  sync.Mutex
@@ -802,6 +822,11 @@ func (p *clientPeer) freeze() {
 	}
 }
 
+// allowInactive implements clientPoolPeer
+func (p *clientPeer) allowInactive() bool {
+	return false
+}
+
 // reply struct represents a reply with the actual data already RLP encoded and
 // only the bv (buffer value) missing. This allows the serving mechanism to
 // calculate the bv value which depends on the data size before sending the reply.
@@ -882,46 +907,23 @@ func (p *clientPeer) updateCapacity(cap uint64) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	p.fcParams = flowcontrol.ServerParams{MinRecharge: cap, BufLimit: cap * bufLimitRatio}
-	p.fcClient.UpdateParams(p.fcParams)
-	var kvList keyValueList
-	kvList = kvList.add("flowControl/MRR", cap)
-	kvList = kvList.add("flowControl/BL", cap*bufLimitRatio)
-	p.queueSend(func() { p.sendAnnounce(announceData{Update: kvList}) })
-}
+	if !p.active && cap != 0 && p.activate != nil {
+		p.activate()
+	}
+	//	if cap != 0 { //|| p.version >= lpv4 {
+	if cap != p.fcParams.MinRecharge {
+		fmt.Println("updateCap", cap, p.fcParams.MinRecharge)
+		p.fcParams = flowcontrol.ServerParams{MinRecharge: cap, BufLimit: cap * bufLimitRatio}
+		p.fcClient.UpdateParams(p.fcParams)
+		var kvList keyValueList
+		kvList = kvList.add("flowControl/BL", cap*bufLimitRatio)
+		kvList = kvList.add("flowControl/MRR", cap)
+		p.queueSend(func() { p.sendAnnounce(announceData{Update: kvList}) })
+	}
+	if p.active && cap == 0 && p.deactivate != nil {
+		p.deactivate()
+	}
 
-// freezeClient temporarily puts the client in a frozen state which means all
-// unprocessed and subsequent requests are dropped. Unfreezing happens automatically
-// after a short time if the client's buffer value is at least in the slightly positive
-// region. The client is also notified about being frozen/unfrozen with a Stop/Resume
-// message.
-func (p *clientPeer) freezeClient() {
-	if p.version < lpv3 {
-		// if Stop/Resume is not supported then just drop the peer after setting
-		// its frozen status permanently
-		atomic.StoreUint32(&p.frozen, 1)
-		p.Peer.Disconnect(p2p.DiscUselessPeer)
-		return
-	}
-	if atomic.SwapUint32(&p.frozen, 1) == 0 {
-		go func() {
-			p.sendStop()
-			time.Sleep(freezeTimeBase + time.Duration(rand.Int63n(int64(freezeTimeRandom))))
-			for {
-				bufValue, bufLimit := p.fcClient.BufferStatus()
-				if bufLimit == 0 {
-					return
-				}
-				if bufValue <= bufLimit/8 {
-					time.Sleep(freezeCheckPeriod)
-				} else {
-					atomic.StoreUint32(&p.frozen, 0)
-					p.sendResume(bufValue)
-					break
-				}
-			}
-		}()
-	}
 }
 
 // Handshake executes the les protocol handshake, negotiating version number,
@@ -943,8 +945,14 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 			*lists = (*lists).add("serveRecentState", stateRecent)
 			*lists = (*lists).add("txRelay", nil)
 		}
-		*lists = (*lists).add("flowControl/BL", server.defParams.BufLimit)
-		*lists = (*lists).add("flowControl/MRR", server.defParams.MinRecharge)
+		p.active = true // p.version < lpv4
+		if p.active {
+			p.fcParams = server.defParams
+		} else {
+			p.fcParams = flowcontrol.ServerParams{}
+		}
+		*lists = (*lists).add("flowControl/BL", p.fcParams.BufLimit)
+		*lists = (*lists).add("flowControl/MRR", p.fcParams.MinRecharge)
 
 		var costList RequestCostList
 		if server.costTracker.testCostList != nil {
@@ -954,7 +962,6 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 		}
 		*lists = (*lists).add("flowControl/MRC", costList)
 		p.fcCosts = costList.decode(ProtocolLengths[uint(p.version)])
-		p.fcParams = server.defParams
 
 		// Add advertised checkpoint and register block height which
 		// client can verify the checkpoint validity.
@@ -974,7 +981,7 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 				// set default announceType on server side
 				p.announceType = announceTypeSimple
 			}
-			p.fcClient = flowcontrol.NewClientNode(server.fcManager, server.defParams)
+			p.fcClient = flowcontrol.NewClientNode(server.fcManager, p.fcParams)
 		}
 		return nil
 	})
@@ -1009,7 +1016,7 @@ type clientPeerSubscriber interface {
 // clientPeerSet represents the set of active client peers currently
 // participating in the Light Ethereum sub-protocol.
 type clientPeerSet struct {
-	peers map[string]*clientPeer
+	active, inactive map[string]*clientPeer
 	// subscribers is a batch of subscribers and peerset will notify
 	// these subscribers when the peerset changes(new client peer is
 	// added or removed)
@@ -1020,17 +1027,23 @@ type clientPeerSet struct {
 
 // newClientPeerSet creates a new peer set to track the client peers.
 func newClientPeerSet() *clientPeerSet {
-	return &clientPeerSet{peers: make(map[string]*clientPeer)}
+	return &clientPeerSet{
+		active:   make(map[string]*clientPeer),
+		inactive: make(map[string]*clientPeer),
+	}
 }
 
 // subscribe adds a service to be notified about added or removed
 // peers and also register all active peers into the given service.
 func (ps *clientPeerSet) subscribe(sub clientPeerSubscriber) {
 	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
 	ps.subscribers = append(ps.subscribers, sub)
-	for _, p := range ps.peers {
+	notify := make([]*clientPeer, 0, len(ps.active))
+	for _, p := range ps.active {
+		notify = append(notify, p)
+	}
+	ps.lock.Unlock()
+	for _, p := range notify {
 		sub.registerPeer(p)
 	}
 }
@@ -1050,19 +1063,25 @@ func (ps *clientPeerSet) unSubscribe(sub clientPeerSubscriber) {
 
 // register adds a new peer into the peer set, or returns an error if the
 // peer is already known.
-func (ps *clientPeerSet) register(peer *clientPeer) error {
+func (ps *clientPeerSet) register(p *clientPeer) error {
 	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
 	if ps.closed {
+		ps.lock.Unlock()
 		return errClosed
 	}
-	if _, exist := ps.peers[peer.id]; exist {
+	if _, ok := ps.active[p.id]; ok {
+		ps.lock.Unlock()
 		return errAlreadyRegistered
 	}
-	ps.peers[peer.id] = peer
-	for _, sub := range ps.subscribers {
-		sub.registerPeer(peer)
+	delete(ps.inactive, p.id)
+	ps.active[p.id] = p
+
+	peers := make([]clientPeerSubscriber, len(ps.subscribers))
+	copy(peers, ps.subscribers)
+	ps.lock.Unlock()
+
+	for _, n := range peers {
+		n.registerPeer(p)
 	}
 	return nil
 }
@@ -1070,29 +1089,60 @@ func (ps *clientPeerSet) register(peer *clientPeer) error {
 // unregister removes a remote peer from the peer set, disabling any further
 // actions to/from that particular entity. It also initiates disconnection
 // at the networking layer.
-func (ps *clientPeerSet) unregister(id string) error {
+func (ps *clientPeerSet) unregister(p *clientPeer) error {
 	ps.lock.Lock()
-	defer ps.lock.Unlock()
+	if _, ok := ps.active[p.id]; !ok {
+		ps.lock.Unlock()
+		return errNotRegistered
+	} else {
+		delete(ps.active, p.id)
+		ps.inactive[p.id] = p
+		peers := make([]clientPeerSubscriber, len(ps.subscribers))
+		copy(peers, ps.subscribers)
+		ps.lock.Unlock()
 
-	p, ok := ps.peers[id]
-	if !ok {
+		for _, n := range peers {
+			n.unregisterPeer(p)
+		}
+		return nil
+	}
+}
+
+// disconnect removes a remote peer from either the active or inactive set and
+// initiates disconnection at the networking layer.
+func (ps *clientPeerSet) disconnect(id string) error {
+	ps.lock.Lock()
+
+	var (
+		peers []clientPeerSubscriber
+		p     *clientPeer
+		ok    bool
+	)
+	if p, ok = ps.active[id]; ok {
+		delete(ps.active, p.id)
+		peers = make([]clientPeerSubscriber, len(ps.subscribers))
+		copy(peers, ps.subscribers)
+	} else if p, ok = ps.inactive[id]; ok {
+		delete(ps.inactive, id)
+	} else {
+		ps.lock.Unlock()
 		return errNotRegistered
 	}
-	delete(ps.peers, id)
-	for _, sub := range ps.subscribers {
-		sub.unregisterPeer(p)
+	ps.lock.Unlock()
+	for _, n := range peers {
+		n.unregisterPeer(p)
 	}
-	p.Peer.Disconnect(p2p.DiscRequested)
+	p.Peer.Disconnect(p2p.DiscUselessPeer)
 	return nil
 }
 
-// ids returns a list of all registered peer IDs
+// ids returns a list of all active peer IDs
 func (ps *clientPeerSet) ids() []string {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
 	var ids []string
-	for id := range ps.peers {
+	for id := range ps.active {
 		ids = append(ids, id)
 	}
 	return ids
@@ -1103,24 +1153,27 @@ func (ps *clientPeerSet) peer(id string) *clientPeer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	return ps.peers[id]
+	if p, ok := ps.active[id]; ok {
+		return p
+	}
+	return ps.inactive[id]
 }
 
-// len returns if the current number of peers in the set.
+// len returns if the current number of peers in the active set.
 func (ps *clientPeerSet) len() int {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	return len(ps.peers)
+	return len(ps.active)
 }
 
-// allClientPeers returns all client peers in a list.
+// allClientPeers returns all active client peers in a list.
 func (ps *clientPeerSet) allPeers() []*clientPeer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	list := make([]*clientPeer, 0, len(ps.peers))
-	for _, p := range ps.peers {
+	list := make([]*clientPeer, 0, len(ps.active))
+	for _, p := range ps.active {
 		list = append(list, p)
 	}
 	return list
@@ -1132,7 +1185,10 @@ func (ps *clientPeerSet) close() {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
-	for _, p := range ps.peers {
+	for _, p := range ps.active {
+		p.Disconnect(p2p.DiscQuitting)
+	}
+	for _, p := range ps.inactive {
 		p.Disconnect(p2p.DiscQuitting)
 	}
 	ps.closed = true
@@ -1141,7 +1197,7 @@ func (ps *clientPeerSet) close() {
 // serverPeerSet represents the set of active server peers currently
 // participating in the Light Ethereum sub-protocol.
 type serverPeerSet struct {
-	peers map[string]*serverPeer
+	active, inactive map[string]*serverPeer
 	// subscribers is a batch of subscribers and peerset will notify
 	// these subscribers when the peerset changes(new server peer is
 	// added or removed)
@@ -1152,17 +1208,23 @@ type serverPeerSet struct {
 
 // newServerPeerSet creates a new peer set to track the active server peers.
 func newServerPeerSet() *serverPeerSet {
-	return &serverPeerSet{peers: make(map[string]*serverPeer)}
+	return &serverPeerSet{
+		active:   make(map[string]*serverPeer),
+		inactive: make(map[string]*serverPeer),
+	}
 }
 
 // subscribe adds a service to be notified about added or removed
 // peers and also register all active peers into the given service.
 func (ps *serverPeerSet) subscribe(sub serverPeerSubscriber) {
 	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
 	ps.subscribers = append(ps.subscribers, sub)
-	for _, p := range ps.peers {
+	notify := make([]*serverPeer, 0, len(ps.active))
+	for _, p := range ps.active {
+		notify = append(notify, p)
+	}
+	ps.lock.Unlock()
+	for _, p := range notify {
 		sub.registerPeer(p)
 	}
 }
@@ -1182,19 +1244,25 @@ func (ps *serverPeerSet) unSubscribe(sub serverPeerSubscriber) {
 
 // register adds a new server peer into the set, or returns an error if the
 // peer is already known.
-func (ps *serverPeerSet) register(peer *serverPeer) error {
+func (ps *serverPeerSet) register(p *serverPeer) error {
 	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
 	if ps.closed {
+		ps.lock.Unlock()
 		return errClosed
 	}
-	if _, exist := ps.peers[peer.id]; exist {
+	if _, ok := ps.active[p.id]; ok {
+		ps.lock.Unlock()
 		return errAlreadyRegistered
 	}
-	ps.peers[peer.id] = peer
-	for _, sub := range ps.subscribers {
-		sub.registerPeer(peer)
+	delete(ps.inactive, p.id)
+	ps.active[p.id] = p
+
+	peers := make([]serverPeerSubscriber, len(ps.subscribers))
+	copy(peers, ps.subscribers)
+	ps.lock.Unlock()
+
+	for _, n := range peers {
+		n.registerPeer(p)
 	}
 	return nil
 }
@@ -1202,29 +1270,60 @@ func (ps *serverPeerSet) register(peer *serverPeer) error {
 // unregister removes a remote peer from the active set, disabling any further
 // actions to/from that particular entity. It also initiates disconnection at
 // the networking layer.
-func (ps *serverPeerSet) unregister(id string) error {
+func (ps *serverPeerSet) unregister(p *serverPeer) error {
 	ps.lock.Lock()
-	defer ps.lock.Unlock()
+	if _, ok := ps.active[p.id]; !ok {
+		ps.lock.Unlock()
+		return errNotRegistered
+	} else {
+		delete(ps.active, p.id)
+		ps.inactive[p.id] = p
+		peers := make([]serverPeerSubscriber, len(ps.subscribers))
+		copy(peers, ps.subscribers)
+		ps.lock.Unlock()
 
-	p, ok := ps.peers[id]
-	if !ok {
+		for _, n := range peers {
+			n.unregisterPeer(p)
+		}
+		return nil
+	}
+}
+
+// disconnect removes a remote peer from either the active or inactive set and
+// initiates disconnection at the networking layer.
+func (ps *serverPeerSet) disconnect(id string) error {
+	ps.lock.Lock()
+
+	var (
+		peers []serverPeerSubscriber
+		p     *serverPeer
+		ok    bool
+	)
+	if p, ok = ps.active[id]; ok {
+		delete(ps.active, p.id)
+		peers = make([]serverPeerSubscriber, len(ps.subscribers))
+		copy(peers, ps.subscribers)
+	} else if p, ok = ps.inactive[id]; ok {
+		delete(ps.inactive, id)
+	} else {
+		ps.lock.Unlock()
 		return errNotRegistered
 	}
-	delete(ps.peers, id)
-	for _, sub := range ps.subscribers {
-		sub.unregisterPeer(p)
+	ps.lock.Unlock()
+	for _, n := range peers {
+		n.unregisterPeer(p)
 	}
-	p.Peer.Disconnect(p2p.DiscRequested)
+	p.Peer.Disconnect(p2p.DiscUselessPeer)
 	return nil
 }
 
-// ids returns a list of all registered peer IDs
+// ids returns a list of all active peer IDs
 func (ps *serverPeerSet) ids() []string {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
 	var ids []string
-	for id := range ps.peers {
+	for id := range ps.active {
 		ids = append(ids, id)
 	}
 	return ids
@@ -1235,15 +1334,18 @@ func (ps *serverPeerSet) peer(id string) *serverPeer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	return ps.peers[id]
+	if p, ok := ps.active[id]; ok {
+		return p
+	}
+	return ps.inactive[id]
 }
 
-// len returns if the current number of peers in the set.
+// len returns if the current number of peers in the active set.
 func (ps *serverPeerSet) len() int {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	return len(ps.peers)
+	return len(ps.active)
 }
 
 // bestPeer retrieves the known peer with the currently highest total difficulty.
@@ -1257,7 +1359,7 @@ func (ps *serverPeerSet) bestPeer() *serverPeer {
 		bestPeer *serverPeer
 		bestTd   *big.Int
 	)
-	for _, p := range ps.peers {
+	for _, p := range ps.active {
 		if td := p.Td(); bestTd == nil || td.Cmp(bestTd) > 0 {
 			bestPeer, bestTd = p, td
 		}
@@ -1265,13 +1367,13 @@ func (ps *serverPeerSet) bestPeer() *serverPeer {
 	return bestPeer
 }
 
-// allServerPeers returns all server peers in a list.
+// allPeers returns all active server peers in a list.
 func (ps *serverPeerSet) allPeers() []*serverPeer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	list := make([]*serverPeer, 0, len(ps.peers))
-	for _, p := range ps.peers {
+	list := make([]*serverPeer, 0, len(ps.active))
+	for _, p := range ps.active {
 		list = append(list, p)
 	}
 	return list
@@ -1283,7 +1385,10 @@ func (ps *serverPeerSet) close() {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
-	for _, p := range ps.peers {
+	for _, p := range ps.active {
+		p.Disconnect(p2p.DiscQuitting)
+	}
+	for _, p := range ps.inactive {
 		p.Disconnect(p2p.DiscQuitting)
 	}
 	ps.closed = true

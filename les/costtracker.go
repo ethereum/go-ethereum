@@ -475,6 +475,23 @@ type (
 	}
 )
 
+// reqParams returns the minimum recharge rate and buffer necessary for a useful connection
+func (table requestCostTable) reqParams() (minRecharge, minBufLimit uint64) {
+	for code, c := range table {
+		amount := minBufferReqAmount[code]
+		cost := c.baseCost + amount*c.reqCost
+		if cost > minBufLimit {
+			minBufLimit = cost
+		}
+	}
+	minBufLimit *= uint64(minBufferMultiplier)
+	if minBufLimit < 1 {
+		minBufLimit = 1
+	}
+	minRecharge = (minBufLimit-1)/bufLimitRatio + 1
+	return
+}
+
 // getMaxCost calculates the estimated cost for a given request type and amount
 func (table requestCostTable) getMaxCost(code, amount uint64) uint64 {
 	costs := table[code]

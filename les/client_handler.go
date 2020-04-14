@@ -112,20 +112,34 @@ func (h *clientHandler) handle(p *serverPeer) error {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
-	// Register the peer locally
-	if err := h.backend.peers.register(p); err != nil {
-		p.Log().Error("Light Ethereum peer registration failed", "err", err)
-		return err
-	}
-	serverConnectionGauge.Update(int64(h.backend.peers.len()))
 
-	connectedAt := mclock.Now()
-	defer func() {
-		h.backend.peers.unregister(p.id)
+	var (
+		connectedAt mclock.AbsTime
+		lastActive  bool
+	)
+	activate := func() {
+		// Register the peer locally
+		if err := h.backend.peers.register(p); err != nil {
+			p.Log().Error("Light Ethereum peer registration failed", "err", err)
+			return
+		}
+		serverConnectionGauge.Update(int64(h.backend.peers.len()))
+		connectedAt = mclock.Now()
+		h.fetcher.announce(p, &announceData{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td})
+		lastActive = true
+	}
+	deactivate := func() {
+		h.backend.peers.unregister(p)
 		connectionTimer.Update(time.Duration(mclock.Now() - connectedAt))
 		serverConnectionGauge.Update(int64(h.backend.peers.len()))
+		lastActive = false
+	}
+	defer func() {
+		if lastActive {
+			deactivate()
+		}
+		h.backend.peers.disconnect(p.id)
 	}()
-	h.fetcher.announce(p, &announceData{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td})
 
 	// Mark the peer starts to be served.
 	atomic.StoreUint32(&p.serving, 1)
@@ -133,6 +147,12 @@ func (h *clientHandler) handle(p *serverPeer) error {
 
 	// Spawn a main loop to handle all incoming messages.
 	for {
+		if p.active && !lastActive {
+			activate()
+		}
+		if !p.active && lastActive {
+			deactivate()
+		}
 		if err := h.handleMsg(p); err != nil {
 			p.Log().Debug("Light Ethereum message handling failed", "err", err)
 			p.fcServer.DumpLogs()
@@ -340,7 +360,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 }
 
 func (h *clientHandler) removePeer(id string) {
-	h.backend.peers.unregister(id)
+	h.backend.peers.disconnect(id)
 }
 
 type peerConnection struct {

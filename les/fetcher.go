@@ -166,7 +166,7 @@ func newLightFetcher(chain *light.LightChain, engine consensus.Engine, peers *se
 		return engine.VerifyHeader(chain, header, ulc == nil)
 	}
 	heighter := func() uint64 { return chain.CurrentHeader().Number.Uint64() }
-	dropper := func(id string) { peers.unregister(id) }
+	dropper := func(id string) { peers.disconnect(id) }
 	inserter := func(headers []*types.Header) (int, error) {
 		// Disable PoW checking explicitly if we are running in ulc mode.
 		checkFreq := 1
@@ -314,7 +314,7 @@ func (f *lightFetcher) mainloop() {
 			// Announced tds should be strictly monotonic, drop the peer if
 			// the announce is out-of-order.
 			if peer.latest != nil && data.Td.Cmp(peer.latest.Td) <= 0 {
-				f.peerset.unregister(peerid.String())
+				f.peerset.disconnect(peerid.String())
 				log.Debug("Non-monotonic td", "peer", peerid, "current", data.Td, "previous", peer.latest.Td)
 				continue
 			}
@@ -370,7 +370,7 @@ func (f *lightFetcher) mainloop() {
 			for reqid, request := range fetching {
 				if time.Since(request.sendAt) > blockDelayTimeout-gatherSlack {
 					delete(fetching, reqid)
-					f.peerset.unregister(request.peerid.String())
+					f.peerset.disconnect(request.peerid.String())
 					log.Debug("Request timeout", "peer", request.peerid, "reqid", reqid)
 				}
 			}
@@ -386,12 +386,12 @@ func (f *lightFetcher) mainloop() {
 				// delivery some mismatched header. So it can't be punished by the underlying fetcher.
 				// We have to add two more rules here to detect.
 				if len(resp.headers) != 1 {
-					f.peerset.unregister(req.peerid.String())
+					f.peerset.disconnect(req.peerid.String())
 					log.Debug("Deliver more than requested", "peer", req.peerid, "reqid", req.reqid)
 					continue
 				}
 				if resp.headers[0].Hash() != req.hash {
-					f.peerset.unregister(req.peerid.String())
+					f.peerset.disconnect(req.peerid.String())
 					log.Debug("Deliver invalid header", "peer", req.peerid, "reqid", req.reqid)
 					continue
 				}
@@ -429,7 +429,7 @@ func (f *lightFetcher) mainloop() {
 				return true
 			})
 			for _, id := range droplist {
-				f.peerset.unregister(id.String())
+				f.peerset.disconnect(id.String())
 				log.Debug("Kicked out peer for invalid announcement")
 			}
 			if f.newHeadHook != nil {

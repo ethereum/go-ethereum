@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	lps "github.com/ethereum/go-ethereum/les/lespay/server"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -116,8 +117,8 @@ func NewLesServer(node *node.Node, e *eth.Ethereum, config *eth.Config) (*LesSer
 		srv.maxCapacity = totalRecharge
 	}
 	srv.fcManager.SetCapacityLimits(srv.freeCapacity, srv.maxCapacity, srv.freeCapacity*2)
-	srv.clientPool = newClientPool(srv.chainDb, srv.freeCapacity, mclock.System{}, func(id enode.ID) { go srv.peers.unregister(id.String()) })
-	srv.clientPool.setDefaultFactors(priceFactors{0, 1, 1}, priceFactors{0, 1, 1})
+	srv.clientPool = newClientPool(srv.chainDb, srv.minCapacity, srv.freeCapacity, defaultConnectedBias, mclock.System{}, func(id enode.ID) { go srv.peers.disconnect(id.String()) })
+	srv.clientPool.setDefaultFactors(lps.PriceFactors{0, 1, 1}, lps.PriceFactors{0, 1, 1})
 
 	checkpoint := srv.latestLocalCheckpoint()
 	if !checkpoint.Empty() {
