@@ -60,6 +60,8 @@ jobs:
       arch: amd64
       dist: xenial
       go: 1.14.x
+      env:
+        - GO111MODULE=on
       script:
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
@@ -70,6 +72,8 @@ jobs:
       arch: arm64
       dist: xenial
       go: 1.14.x
+      env:
+        - GO111MODULE=on
       script:
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
@@ -78,6 +82,8 @@ jobs:
       os: osx
       osx_image: xcode11.3
       go: 1.14.x
+      env:
+        - GO111MODULE=on
       script:
         - echo "Increase the maximum number of open file descriptors on macOS"
         - NOFILE=20480
@@ -99,6 +105,7 @@ jobs:
       go: 1.14.x
       env:
         - ubuntu-ppa
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       addons:
@@ -123,6 +130,7 @@ jobs:
       go: 1.14.x
       env:
         - azure-linux
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       addons:
@@ -159,6 +167,7 @@ jobs:
       go: 1.14.x
       env:
         - azure-linux-mips
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
@@ -199,6 +208,7 @@ jobs:
       env:
         - azure-android
         - maven-android
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       before_install:
@@ -225,6 +235,7 @@ jobs:
         - azure-osx
         - azure-ios
         - cocoapods-ios
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
@@ -254,6 +265,7 @@ jobs:
       go: 1.14.x
       env:
         - azure-purge
+        - GO111MODULE=on
       git:
         submodules: false # avoid cloning ethereum/tests
       script:

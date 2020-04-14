@@ -6,6 +6,7 @@ clone_depth: 5
 version: "{branch}.{build}"
 environment:
   global:
+    GO111MODULE: on
     GOPATH: C:\gopath
     CC: gcc.exe
   matrix:
