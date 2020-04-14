@@ -770,7 +770,7 @@ func (db *nodeDB) getPosBalanceIDs(start, stop enode.ID, maxCount int) (result [
 		return
 	}
 	prefix := db.getPrefix(false)
-	it := db.db.NewIteratorWith(prefix, start.Bytes())
+	it := db.db.NewIterator(prefix, start.Bytes())
 	defer it.Release()
 	for i := len(stop[:]) - 1; i >= 0; i-- {
 		stop[i]--
@@ -851,7 +851,7 @@ func (db *nodeDB) expireNodes() {
 		start   = time.Now()
 		prefix  = db.getPrefix(true)
 	)
-	iter := db.db.NewIteratorWith(prefix, nil)
+	iter := db.db.NewIterator(prefix, nil)
 	for iter.Next() {
 		visited += 1
 		var balance negBalance

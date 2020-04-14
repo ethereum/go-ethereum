@@ -60,7 +60,7 @@ func TestUpdateLeaks(t *testing.T) {
 	}
 
 	// Ensure that no data was leaked into the database
-	it := db.NewIterator()
+	it := db.NewIterator(nil, nil)
 	for it.Next() {
 		t.Errorf("State leaked into database: %x -> %x", it.Key(), it.Value())
 	}
@@ -118,7 +118,7 @@ func TestIntermediateLeaks(t *testing.T) {
 		t.Errorf("can not commit trie %v to persistent database", finalRoot.Hex())
 	}
 
-	it := finalDb.NewIterator()
+	it := finalDb.NewIterator(nil, nil)
 	for it.Next() {
 		key, fvalue := it.Key(), it.Value()
 		tvalue, err := transDb.Get(key)
@@ -131,7 +131,7 @@ func TestIntermediateLeaks(t *testing.T) {
 	}
 	it.Release()
 
-	it = transDb.NewIterator()
+	it = transDb.NewIterator(nil, nil)
 	for it.Next() {
 		key, tvalue := it.Key(), it.Value()
 		fvalue, err := finalDb.Get(key)

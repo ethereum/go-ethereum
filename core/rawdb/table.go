@@ -103,18 +103,12 @@ func (t *table) Delete(key []byte) error {
 	return t.db.Delete(append([]byte(t.prefix), key...))
 }
 
-// NewIterator creates a binary-alphabetical iterator over the entire keyspace
-// contained within the database.
-func (t *table) NewIterator() ethdb.Iterator {
-	return t.NewIteratorWith(nil, nil)
-}
-
-// NewIteratorWith creates a binary-alphabetical iterator over a subset
+// NewIterator creates a binary-alphabetical iterator over a subset
 // of database content with a particular key prefix, starting at a particular
 // initial key (or after, if it does not exist).
-func (t *table) NewIteratorWith(prefix []byte, start []byte) ethdb.Iterator {
+func (t *table) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 	innerPrefix := append([]byte(t.prefix), prefix...)
-	iter := t.db.NewIteratorWith(innerPrefix, start)
+	iter := t.db.NewIterator(innerPrefix, start)
 	return &tableIterator{
 		iter:   iter,
 		prefix: t.prefix,

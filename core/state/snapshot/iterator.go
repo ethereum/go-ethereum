@@ -151,7 +151,7 @@ func (dl *diskLayer) AccountIterator(seek common.Hash) AccountIterator {
 	pos := common.TrimRightZeroes(seek[:])
 	return &diskAccountIterator{
 		layer: dl,
-		it:    dl.diskdb.NewIteratorWith(rawdb.SnapshotAccountPrefix, pos),
+		it:    dl.diskdb.NewIterator(rawdb.SnapshotAccountPrefix, pos),
 	}
 }
 

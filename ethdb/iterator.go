@@ -51,12 +51,8 @@ type Iterator interface {
 
 // Iteratee wraps the NewIterator methods of a backing data store.
 type Iteratee interface {
-	// NewIterator creates a binary-alphabetical iterator over the entire keyspace
-	// contained within the key-value database.
-	NewIterator() Iterator
-
-	// NewIteratorWith creates a binary-alphabetical iterator over a subset
+	// NewIterator creates a binary-alphabetical iterator over a subset
 	// of database content with a particular key prefix, starting at a particular
 	// initial key (or after, if it does not exist).
-	NewIteratorWith(prefix []byte, start []byte) Iterator
+	NewIterator(prefix []byte, start []byte) Iterator
 }

@@ -117,12 +117,12 @@ func testTableDatabase(t *testing.T, prefix string) {
 		iter.Release()
 	}
 	// Test iterators
-	check(db.NewIterator(), 6, 0)
+	check(db.NewIterator(nil, nil), 6, 0)
 	// Test iterators with prefix
-	check(db.NewIteratorWith([]byte{0xff, 0xff}, nil), 3, 3)
+	check(db.NewIterator([]byte{0xff, 0xff}, nil), 3, 3)
 	// Test iterators with start point
-	check(db.NewIteratorWith(nil, []byte{0xff, 0xff, 0x02}), 2, 4)
+	check(db.NewIterator(nil, []byte{0xff, 0xff, 0x02}), 2, 4)
 	// Test iterators with prefix and start point
-	check(db.NewIteratorWith([]byte{0xee}, nil), 0, 0)
-	check(db.NewIteratorWith(nil, []byte{0x00}), 6, 0)
+	check(db.NewIterator([]byte{0xee}, nil), 0, 0)
+	check(db.NewIterator(nil, []byte{0x00}), 6, 0)
 }
