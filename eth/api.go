@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"errors"
@@ -35,6 +36,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
@@ -299,6 +302,203 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 		return state.Dump{}, err
 	}
 	return stateDb.RawDump(false, false, true), nil
+}
+
+type Eth2API struct {
+	eth  *Ethereum
+	env  *eth2bpenv
+	head common.Hash
+}
+
+// NewEth2API creates a new API definition for the eth2 prototype.
+func NewEth2API(eth *Ethereum) *Eth2API {
+	return &Eth2API{eth: eth}
+}
+
+func (api *Eth2API) ValidateBlock(blockRLP []byte) (bool, error) {
+	blockchain := api.eth.BlockChain()
+	// Deserializer le block
+	var block types.Block
+	if err := rlp.DecodeBytes(blockRLP, &block); err != nil {
+		return false, err
+	}
+
+	// Validate the block using the consensus engine - this will
+	// allow for testing against Rinkeby/Görli
+	if err := api.eth.Engine().VerifyHeader(blockchain, block.Header(), false); err != nil {
+		return false, err
+	}
+
+	if err := blockchain.Validator().ValidateBody(&block); err != nil {
+		return false, err
+	}
+
+	parent := blockchain.GetBlockByHash(block.ParentHash())
+	statedb, err := state.New(parent.Root(), blockchain.StateCache(), blockchain.Snapshot())
+	if err != nil {
+		return false, err
+	}
+	receipts, _, usedGas, err := blockchain.Processor().Process(&block, statedb, *blockchain.GetVMConfig())
+	if err != nil {
+		return false, err
+	}
+
+	if err := blockchain.Validator().ValidateState(&block, statedb, receipts, usedGas); err != nil {
+		return false, err
+	}
+
+	return true, api.InsertBlock(blockRLP)
+}
+
+type eth2bpenv struct {
+	state   *state.StateDB
+	tcount  int
+	gasPool *core.GasPool
+
+	header   *types.Header
+	txs      []*types.Transaction
+	receipts []*types.Receipt
+}
+
+func (api *Eth2API) commitTransaction(tx *types.Transaction, coinbase common.Address) error {
+	//snap := eth2rpc.current.state.Snapshot()
+
+	chain := api.eth.BlockChain()
+	receipt, err := core.ApplyTransaction(chain.Config(), chain, &coinbase, api.env.gasPool, api.env.state, api.env.header, tx, &api.env.header.GasUsed, *chain.GetVMConfig())
+	if err != nil {
+		//w.current.state.RevertToSnapshot(snap)
+		return err
+	}
+	api.env.txs = append(api.env.txs, tx)
+	api.env.receipts = append(api.env.receipts, receipt)
+
+	return nil
+}
+
+func (api *Eth2API) makeEnv(parent *types.Block, header *types.Header) error {
+	state, err := api.eth.BlockChain().StateAt(parent.Root())
+	if err != nil {
+		return err
+	}
+	api.env = &eth2bpenv{
+		state:   state,
+		header:  header,
+		gasPool: new(core.GasPool).AddGas(header.GasLimit),
+	}
+	return nil
+}
+
+func (api *Eth2API) ProduceBlock(parentHash common.Hash) ([]byte, error) {
+	bc := api.eth.BlockChain()
+	parent := bc.GetBlockByHash(parentHash)
+	pool := api.eth.TxPool()
+	pending, err := pool.Pending()
+	if err != nil {
+		return nil, err
+	}
+
+	num := parent.Number()
+	header := &types.Header{
+		ParentHash: parent.Hash(),
+		Number:     num.Add(num, common.Big1),
+		GasLimit:   parent.GasLimit(), // Keep the gas limit constant in this prototype
+		Extra:      []byte{},
+		Time:       uint64(time.Now().UnixNano()),
+	}
+	err = api.eth.Engine().Prepare(bc, header)
+	if err != nil {
+		return nil, err
+	}
+
+	err = api.makeEnv(parent, header)
+	if err != nil {
+		return nil, err
+	}
+	signer := types.NewEIP155Signer(bc.Config().ChainID)
+	txs := types.NewTransactionsByPriceAndNonce(signer, pending)
+	coinbase, err := api.eth.Etherbase()
+	if err != nil {
+		return nil, err
+	}
+
+	var transactions []*types.Transaction
+
+	for {
+		if api.env.gasPool.Gas() < params.TxGas {
+			log.Trace("Not enough gas for further transactions", "have", api.env.gasPool, "want", params.TxGas)
+			break
+		}
+
+		tx := txs.Peek()
+		if tx == nil {
+			break
+		}
+
+		from, _ := types.Sender(signer, tx)
+		// XXX replay protection check is missing
+
+		// Execute the transaction
+		api.env.state.Prepare(tx.Hash(), common.Hash{}, api.env.tcount)
+		err := api.commitTransaction(tx, coinbase)
+		switch err {
+		case core.ErrGasLimitReached:
+			// Pop the current out-of-gas transaction without shifting in the next from the account
+			log.Trace("Gas limit exceeded for current block", "sender", from)
+			txs.Pop()
+
+		case core.ErrNonceTooLow:
+			// New head notification data race between the transaction pool and miner, shift
+			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+			txs.Shift()
+
+		case core.ErrNonceTooHigh:
+			// Reorg notification data race between the transaction pool and miner, skip account =
+			log.Trace("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
+			txs.Pop()
+
+		case nil:
+			// Everything ok, collect the logs and shift in the next transaction from the same account
+			api.env.tcount++
+			txs.Shift()
+			transactions = append(transactions, tx)
+
+		default:
+			// Strange error, discard the transaction and get the next in line (note, the
+			// nonce-too-high clause will prevent us from executing in vain).
+			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			txs.Shift()
+		}
+	}
+
+	block, err := api.eth.Engine().FinalizeAndAssemble(bc, header, api.env.state, transactions, nil /* uncles */, api.env.receipts)
+	if err != nil {
+		return nil, err
+	}
+
+	var rlpbuf bytes.Buffer
+	block.EncodeRLP(&rlpbuf)
+	return rlpbuf.Bytes(), nil
+}
+
+func (api *Eth2API) InsertBlock(blockRLP []byte) error {
+	var block types.Block
+	if err := rlp.DecodeBytes(blockRLP, &block); err != nil {
+		return err
+	}
+
+	_, err := api.eth.BlockChain().InsertChain(types.Blocks([]*types.Block{&block}))
+	return err
+}
+
+func (api *Eth2API) SetHead(newHead common.Hash) error {
+	oldBlock := api.eth.BlockChain().GetBlockByHash(api.head)
+	newBlock := api.eth.BlockChain().GetBlockByHash(newHead)
+	err := api.eth.BlockChain().Reorg(oldBlock, newBlock)
+	if err != nil {
+		return err
+	}
+	api.head = newHead
+	return nil
 }
 
 // PrivateDebugAPI is the collection of Ethereum full node APIs exposed over
