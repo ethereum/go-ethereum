@@ -90,12 +90,23 @@ func NewMethod(name string, rawName string, mutability string, isConst, isPayabl
 			outputNames[i] += fmt.Sprintf(" %v", output.Name)
 		}
 	}
-	constant := ""
-	if isConst {
-		constant = "constant "
+	// Extract meaningful state mutability of solidity method.
+	// If it's default value, never print it.
+	state := mutability
+	if state == "nonpayable" {
+		state = ""
+	}
+	if state != "" {
+		state = state + " "
+	}
+	identity := fmt.Sprintf("function %v", rawName)
+	if isFallback {
+		identity = "fallback"
+	} else if isReceive {
+		identity = "receive"
 	}
 
-	str := fmt.Sprintf("function %v(%v) %sreturns(%v)", rawName, strings.Join(inputNames, ", "), constant, strings.Join(outputNames, ", "))
+	str := fmt.Sprintf("%v(%v) %sreturns(%v)", identity, strings.Join(inputNames, ", "), state, strings.Join(outputNames, ", "))
 	sig := fmt.Sprintf("%v(%v)", rawName, strings.Join(types, ","))
 	id := crypto.Keccak256([]byte(sig))[:4]
 
