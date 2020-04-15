@@ -19,6 +19,7 @@ package snapshot
 import (
 	"bytes"
 	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -438,25 +439,20 @@ func TestDiskMidAccountPartialMerge(t *testing.T) {
 	// TODO(@karalabe) ?
 }
 
-func tempDB() (ethdb.Database, error) {
-	dir, err := ioutil.TempDir("", "disklayer-test")
-	if err != nil {
-		return nil, err
-	}
-	diskdb, err := leveldb.New(dir, 256, 0, "")
-	if err != nil {
-		return nil, err
-	}
-	return rawdb.NewDatabase(diskdb), nil
-}
-
 // TestDiskSeek tests that seek-operations work on the disk layer
 func TestDiskSeek(t *testing.T) {
 	// Create some accounts in the disk layer
-	//db := memorydb.New()
-	db, err := tempDB()
-	if err != nil {
+	var db ethdb.Database
+
+	if dir, err := ioutil.TempDir("", "disklayer-test"); err != nil {
 		t.Fatal(err)
+	} else {
+		defer os.RemoveAll(dir)
+		diskdb, err := leveldb.New(dir, 256, 0, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		db = rawdb.NewDatabase(diskdb)
 	}
 	// Fill even keys [0,2,4...]
 	for i := 0; i < 0xff; i += 2 {

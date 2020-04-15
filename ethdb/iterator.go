@@ -54,5 +54,8 @@ type Iteratee interface {
 	// NewIterator creates a binary-alphabetical iterator over a subset
 	// of database content with a particular key prefix, starting at a particular
 	// initial key (or after, if it does not exist).
+	//
+	// Note: This method assumes that the prefix is NOT part of the start, so there's
+	// no need for the caller to prepend the prefix to the start
 	NewIterator(prefix []byte, start []byte) Iterator
 }

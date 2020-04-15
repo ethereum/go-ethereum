@@ -187,7 +187,7 @@ func (db *Database) NewBatch() ethdb.Batch {
 // of database content with a particular key prefix, starting at a particular
 // initial key (or after, if it does not exist).
 func (db *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
-	return db.db.NewIterator(BytesPrefixRange(prefix, start), nil)
+	return db.db.NewIterator(bytesPrefixRange(prefix, start), nil)
 }
 
 // Stat returns a particular internal stat of the database.
@@ -477,10 +477,10 @@ func (r *replayer) Delete(key []byte) {
 	r.failure = r.writer.Delete(key)
 }
 
-// BytesPrefixRange returns key range that satisfy
+// bytesPrefixRange returns key range that satisfy
 // - the given prefix, and
 // - the given seek position
-func BytesPrefixRange(prefix, start []byte) *util.Range {
+func bytesPrefixRange(prefix, start []byte) *util.Range {
 	r := util.BytesPrefix(prefix)
 	r.Start = append(r.Start, start...)
 	return r
