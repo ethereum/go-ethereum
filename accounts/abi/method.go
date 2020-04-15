@@ -130,3 +130,14 @@ func NewMethod(name string, rawName string, mutability string, isConst, isPayabl
 func (method Method) String() string {
 	return method.str
 }
+
+// IsConstant returns the indicator whether the method is read-only.
+func (method Method) IsConstant() bool {
+	return method.StateMutability == "view" || method.StateMutability == "pure" || method.Constant
+}
+
+// IsPayable returns the indicator whether the method can process
+// plain ether transfers.
+func (method Method) IsPayable() bool {
+	return method.StateMutability == "payable" || method.Payable
+}
