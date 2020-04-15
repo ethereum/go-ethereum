@@ -19,6 +19,7 @@ package abi
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 
@@ -32,6 +33,12 @@ type ABI struct {
 	Constructor Method
 	Methods     map[string]Method
 	Events      map[string]Event
+
+	// Additional "special" functions introduced in solidity v0.6.0.
+	// It's separated from the original default fallback. Each contract
+	// can only define one fallback and receive function.
+	Fallback Method // Note it's also used to represent legacy fallback before v0.6.0
+	Receive  Method
 }
 
 // JSON returns a parsed ABI interface and error if it failed.
@@ -42,7 +49,6 @@ func JSON(reader io.Reader) (ABI, error) {
 	if err := dec.Decode(&abi); err != nil {
 		return ABI{}, err
 	}
-
 	return abi, nil
 }
 
@@ -108,13 +114,22 @@ func (abi ABI) UnpackIntoMap(v map[string]interface{}, name string, data []byte)
 // UnmarshalJSON implements json.Unmarshaler interface
 func (abi *ABI) UnmarshalJSON(data []byte) error {
 	var fields []struct {
-		Type            string
-		Name            string
-		Constant        bool
+		Type    string
+		Name    string
+		Inputs  []Argument
+		Outputs []Argument
+
+		// Status indicator which can be: "pure", "view",
+		// "nonpayable" or "payable".
 		StateMutability string
-		Anonymous       bool
-		Inputs          []Argument
-		Outputs         []Argument
+
+		// Deprecated Status indicators, but removed in v0.6.0.
+		Constant bool // True if function is either pure or view
+		Payable  bool // True if function is payable
+
+		// Event relevant indicator represents the event is
+		// declared as anonymous.
+		Anonymous bool
 	}
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return err
@@ -126,22 +141,82 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		case "constructor":
 			abi.Constructor = Method{
 				Inputs: field.Inputs,
+
+				// Note for constructor the `StateMutability` can only
+				// be payable or nonpayable according to the output of
+				// compiler. So constant is always false.
+				StateMutability: field.StateMutability,
+
+				// Legacy fields, keep them for backward compatibility
+				Constant: field.Constant,
+				Payable:  field.Payable,
 			}
-		// empty defaults to function according to the abi spec
-		case "function", "":
+		case "function":
 			name := field.Name
 			_, ok := abi.Methods[name]
 			for idx := 0; ok; idx++ {
 				name = fmt.Sprintf("%s%d", field.Name, idx)
 				_, ok = abi.Methods[name]
 			}
-			isConst := field.Constant || field.StateMutability == "pure" || field.StateMutability == "view"
 			abi.Methods[name] = Method{
-				Name:    name,
-				RawName: field.Name,
-				Const:   isConst,
-				Inputs:  field.Inputs,
-				Outputs: field.Outputs,
+				Name:            name,
+				RawName:         field.Name,
+				StateMutability: field.StateMutability,
+				Inputs:          field.Inputs,
+				Outputs:         field.Outputs,
+
+				// Legacy fields, keep them for backward compatibility
+				Constant: field.Constant,
+				Payable:  field.Payable,
+			}
+		case "fallback":
+			// New introduced function type in v0.6.0, check more detail
+			// here https://solidity.readthedocs.io/en/v0.6.0/contracts.html#fallback-function
+			if abi.HasFallback() {
+				return errors.New("only single fallback is allowed")
+			}
+			abi.Fallback = Method{
+				Name:    "",
+				RawName: "",
+
+				// The `StateMutability` can only be payable or nonpayable,
+				// so the constant is always false.
+				StateMutability: field.StateMutability,
+				IsFallback:      true,
+
+				// Fallback doesn't have any input or output
+				Inputs:  nil,
+				Outputs: nil,
+
+				// Legacy fields, keep them for backward compatibility
+				Constant: field.Constant,
+				Payable:  field.Payable,
+			}
+		case "receive":
+			// New introduced function type in v0.6.0, check more detail
+			// here https://solidity.readthedocs.io/en/v0.6.0/contracts.html#fallback-function
+			if abi.HasReceive() {
+				return errors.New("only single receive is allowed")
+			}
+			if field.StateMutability != "payable" {
+				return errors.New("the statemutability of receive can only be payable")
+			}
+			abi.Receive = Method{
+				Name:    "",
+				RawName: "",
+
+				// The `StateMutability` can only be payable, so constant
+				// is always true while payable is always false.
+				StateMutability: field.StateMutability,
+				IsReceive:       true,
+
+				// Receive doesn't have any input or output
+				Inputs:  nil,
+				Outputs: nil,
+
+				// Legacy fields, keep them for backward compatibility
+				Constant: field.Constant,
+				Payable:  field.Payable,
 			}
 		case "event":
 			name := field.Name
@@ -158,7 +233,6 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -185,4 +259,14 @@ func (abi *ABI) EventByID(topic common.Hash) (*Event, error) {
 		}
 	}
 	return nil, fmt.Errorf("no event with id: %#x", topic.Hex())
+}
+
+// HasFallback returns an indicator whether a fallback function is included.
+func (abi *ABI) HasFallback() bool {
+	return abi.Fallback.IsFallback
+}
+
+// HasReceive returns an indicator whether a receive function is included.
+func (abi *ABI) HasReceive() bool {
+	return abi.Receive.IsReceive
 }

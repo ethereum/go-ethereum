@@ -31,29 +31,29 @@ import (
 
 const jsondata = `
 [
-	{ "type" : "function", "name" : "balance", "constant" : true },
-	{ "type" : "function", "name" : "send", "constant" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] }
+	{ "type" : "function", "name" : "balance", "stateMutability" : "view" },
+	{ "type" : "function", "name" : "send", "inputs" : [ { "name" : "amount", "type" : "uint256" } ] }
 ]`
 
 const jsondata2 = `
 [
-	{ "type" : "function", "name" : "balance", "constant" : true },
-	{ "type" : "function", "name" : "send", "constant" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
-	{ "type" : "function", "name" : "test", "constant" : false, "inputs" : [ { "name" : "number", "type" : "uint32" } ] },
-	{ "type" : "function", "name" : "string", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "string" } ] },
-	{ "type" : "function", "name" : "bool", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "bool" } ] },
-	{ "type" : "function", "name" : "address", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "address" } ] },
-	{ "type" : "function", "name" : "uint64[2]", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[2]" } ] },
-	{ "type" : "function", "name" : "uint64[]", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[]" } ] },
-	{ "type" : "function", "name" : "foo", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" } ] },
-	{ "type" : "function", "name" : "bar", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" }, { "name" : "string", "type" : "uint16" } ] },
-	{ "type" : "function", "name" : "slice", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32[2]" } ] },
-	{ "type" : "function", "name" : "slice256", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint256[2]" } ] },
-	{ "type" : "function", "name" : "sliceAddress", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "address[]" } ] },
-	{ "type" : "function", "name" : "sliceMultiAddress", "constant" : false, "inputs" : [ { "name" : "a", "type" : "address[]" }, { "name" : "b", "type" : "address[]" } ] },
-	{ "type" : "function", "name" : "nestedArray", "constant" : false, "inputs" : [ { "name" : "a", "type" : "uint256[2][2]" }, { "name" : "b", "type" : "address[]" } ] },
-	{ "type" : "function", "name" : "nestedArray2", "constant" : false, "inputs" : [ { "name" : "a", "type" : "uint8[][2]" } ] },
-	{ "type" : "function", "name" : "nestedSlice", "constant" : false, "inputs" : [ { "name" : "a", "type" : "uint8[][]" } ] }
+	{ "type" : "function", "name" : "balance", "stateMutability" : "view" },
+	{ "type" : "function", "name" : "send", "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
+	{ "type" : "function", "name" : "test", "inputs" : [ { "name" : "number", "type" : "uint32" } ] },
+	{ "type" : "function", "name" : "string", "inputs" : [ { "name" : "inputs", "type" : "string" } ] },
+	{ "type" : "function", "name" : "bool", "inputs" : [ { "name" : "inputs", "type" : "bool" } ] },
+	{ "type" : "function", "name" : "address", "inputs" : [ { "name" : "inputs", "type" : "address" } ] },
+	{ "type" : "function", "name" : "uint64[2]", "inputs" : [ { "name" : "inputs", "type" : "uint64[2]" } ] },
+	{ "type" : "function", "name" : "uint64[]", "inputs" : [ { "name" : "inputs", "type" : "uint64[]" } ] },
+	{ "type" : "function", "name" : "foo", "inputs" : [ { "name" : "inputs", "type" : "uint32" } ] },
+	{ "type" : "function", "name" : "bar", "inputs" : [ { "name" : "inputs", "type" : "uint32" }, { "name" : "string", "type" : "uint16" } ] },
+	{ "type" : "function", "name" : "slice", "inputs" : [ { "name" : "inputs", "type" : "uint32[2]" } ] },
+	{ "type" : "function", "name" : "slice256", "inputs" : [ { "name" : "inputs", "type" : "uint256[2]" } ] },
+	{ "type" : "function", "name" : "sliceAddress", "inputs" : [ { "name" : "inputs", "type" : "address[]" } ] },
+	{ "type" : "function", "name" : "sliceMultiAddress", "inputs" : [ { "name" : "a", "type" : "address[]" }, { "name" : "b", "type" : "address[]" } ] },
+	{ "type" : "function", "name" : "nestedArray", "inputs" : [ { "name" : "a", "type" : "uint256[2][2]" }, { "name" : "b", "type" : "address[]" } ] },
+	{ "type" : "function", "name" : "nestedArray2", "inputs" : [ { "name" : "a", "type" : "uint8[][2]" } ] },
+	{ "type" : "function", "name" : "nestedSlice", "inputs" : [ { "name" : "a", "type" : "uint8[][]" } ] }
 ]`
 
 func TestReader(t *testing.T) {
@@ -61,10 +61,10 @@ func TestReader(t *testing.T) {
 	exp := ABI{
 		Methods: map[string]Method{
 			"balance": {
-				"balance", "balance", true, nil, nil,
+				"balance", "balance", "view", false, false, false, false, nil, nil,
 			},
 			"send": {
-				"send", "send", false, []Argument{
+				"send", "send", "", false, false, false, false, []Argument{
 					{"amount", Uint256, false},
 				}, nil,
 			},
@@ -173,7 +173,7 @@ func TestTestSlice(t *testing.T) {
 
 func TestMethodSignature(t *testing.T) {
 	String, _ := NewType("string", "", nil)
-	m := Method{"foo", "foo", false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil}
+	m := Method{"foo", "foo", "", false, false, false, false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil}
 	exp := "foo(string,string)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
@@ -185,7 +185,7 @@ func TestMethodSignature(t *testing.T) {
 	}
 
 	uintt, _ := NewType("uint256", "", nil)
-	m = Method{"foo", "foo", false, []Argument{{"bar", uintt, false}}, nil}
+	m = Method{"foo", "foo", "", false, false, false, false, []Argument{{"bar", uintt, false}}, nil}
 	exp = "foo(uint256)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
@@ -204,7 +204,7 @@ func TestMethodSignature(t *testing.T) {
 			{Name: "y", Type: "int256"},
 		}},
 	})
-	m = Method{"foo", "foo", false, []Argument{{"s", s, false}, {"bar", String, false}}, nil}
+	m = Method{"foo", "foo", "", false, false, false, false, []Argument{{"s", s, false}, {"bar", String, false}}, nil}
 	exp = "foo((int256,int256[],(int256,int256)[],(int256,int256)[2]),string)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
@@ -582,7 +582,7 @@ func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
 }
 
 func TestDefaultFunctionParsing(t *testing.T) {
-	const definition = `[{ "name" : "balance" }]`
+	const definition = `[{ "name" : "balance", "type" : "function" }]`
 
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {

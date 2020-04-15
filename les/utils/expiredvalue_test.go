@@ -16,7 +16,9 @@
 
 package utils
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestValueExpiration(t *testing.T) {
 	var cases = []struct {
