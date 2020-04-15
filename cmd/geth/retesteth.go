@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/miner"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -77,22 +78,18 @@ type RetestethAPI struct {
 	testclient	  *tester
 	rpchandler    *rpc.Server
 
-	// Block Mining Info
-	extraData     []byte
-	engine        *NoRewardEngine
+	engine        *NoRewardEngine  // Mining without block reward for state tests support
 	blockInterval uint64
-
-	txMap         map[common.Address]map[uint64]*types.Transaction // Sender -> Nonce -> Transaction
-	txSenders     map[common.Address]struct{}                      // Set of transaction senders
 }
 
 // tester is a list of classes that are being tested
 type tester struct {
-	workspace string
+	workspace string		// Temp directory
 	stack     *node.Node
 	ethereum  *eth.Ethereum
 }
 
+// test_setChainParams json struct
 type ChainParams struct {
 	SealEngine string                            `json:"sealEngine"`
 	Genesis    core.Genesis	                     `json:"genesis"`
@@ -199,20 +196,51 @@ func (api *RetestethAPI) SetChainParams(ctx context.Context, chainParams ChainPa
 }
 
 func (api *RetestethAPI) MineBlocks(ctx context.Context, number uint64) (bool, error) {
-	for i := 0; i < int(number); i++ {
-		if err := api.mineBlock(); err != nil {
-			return false, err
+	currentNumber := api.testclient.ethereum.BlockChain().CurrentBlock().Number().Uint64()
+	startBlock := currentNumber
+	upToBlock := currentNumber + number
+	api.testclient.ethereum.StartMining(1)
+	api.testclient.ethereum.Miner().SetRecommitInterval(time.Second * 10)
+	fakeBlockRemoved := false
+
+	for currentNumber < upToBlock {
+		currentNumber = api.testclient.ethereum.BlockChain().CurrentBlock().Number().Uint64()
+		if currentNumber == startBlock + 1 && fakeBlockRemoved == false {
+			api.testclient.ethereum.BlockChain().SetHead(startBlock)
+			currentNumber = startBlock
+			fakeBlockRemoved = true
 		}
 	}
-	fmt.Printf("Mined %d blocks\n", number)
-	return true, nil
-}
+	api.testclient.ethereum.StopMining()
+	//time.Sleep(time.Second * 10)
+	api.testclient.ethereum.BlockChain().SetHead(upToBlock)
+	//time.Sleep(time.Second * 10)
+	//var origin types.Block
+	//origin = *api.testclient.ethereum.BlockChain().CurrentBlock()
+	//api.testclient.ethereum.BlockChain().InsertChain([]*types.Block{&origin})
 
-func (api *RetestethAPI) mineBlock() error {
-	//api.testclient.ethereum.Etherbase()
-	//api.testclient.ethereum.Miner().Start()
-	return nil
-	//return api.importBlock(block)
+
+	// Override timestamp ??
+	/*
+	var block types.Block
+	var origin *types.Block
+	var header types.Header
+	origin = api.testclient.ethereum.BlockChain().CurrentBlock()
+	header = *origin.Header()
+	header.Time = 1000
+	log.Warn(fmt.Sprintf("Hash %x", origin.Header().Hash()))
+	block = *types.NewBlockWithHeader(&header).WithBody(origin.Transactions(), origin.Uncles())
+
+	api.testclient.ethereum.BlockChain().SetHead(0)
+
+
+	if _, err := api.testclient.ethereum.BlockChain().InsertChain([]*types.Block{&block}); err != nil {
+		return false, err
+	}
+	fmt.Printf("Imported block %d,  head is %d\n", block.NumberU64(), api.testclient.ethereum.BlockChain().CurrentBlock().Header().Number)
+	log.Warn(fmt.Sprintf("Hash %x", api.testclient.ethereum.BlockChain().CurrentBlock().Hash()
+	 */
+	return true, nil
 }
 
 func (api *RetestethAPI) currentNumber() uint64 {
@@ -252,9 +280,6 @@ func (api *RetestethAPI) RewindToBlock(ctx context.Context, newHead uint64) (boo
 	if err := api.testclient.ethereum.BlockChain().SetHead(newHead); err != nil {
 		return false, err
 	}
-	// When we rewind, the transaction pool should be cleaned out.
-	api.txMap = make(map[common.Address]map[uint64]*types.Transaction)
-	api.txSenders = make(map[common.Address]struct{})
 	return true, nil
 }
 
@@ -299,14 +324,23 @@ func newTester(genesisConfig *core.Genesis) *tester {
 	}
 	ethConf := &eth.Config{
 		Genesis: genesisConfig,
-		//Miner: miner.Config{
-		//	Etherbase: common.HexToAddress(testAddress),
-		//},
+		Miner: miner.Config{
+			Etherbase: genesisConfig.Coinbase,
+			ExtraData: genesisConfig.ExtraData,
+			GasFloor: 0,
+			GasCeil: genesisConfig.GasLimit,
+			GasPrice: big.NewInt(0),
+			Recommit: 1 * time.Second,
+			Noverify: true,
+		},
 		Ethash: ethash.Config{
 			PowMode: ethash.ModeFake,
 		},
+		TxPool: core.TxPoolConfig{
+			NoLocals: false,
+			PriceLimit: 0,
+		},
 	}
-
 	if err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) { return eth.New(ctx, ethConf) }); err != nil {
 		utils.Fatalf("failed to register Ethereum protocol: %v", err)
 	}
@@ -331,6 +365,7 @@ func (env *tester) Close() {
 	if err := env.stack.Close(); err != nil {
 		utils.Fatalf("failed to tear down embedded node: %v", err)
 	}
+	env.ethereum.TxPool().Stop()
 	os.RemoveAll(env.workspace)
 }
 
