@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/external"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/accounts/manager"
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/common"
@@ -463,7 +464,7 @@ func (c *Config) AccountConfig() (int, int, string, error) {
 	return scryptN, scryptP, keydir, err
 }
 
-func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
+func makeAccountManager(conf *Config) (*manager.Manager, string, error) {
 	scryptN, scryptP, keydir, err := conf.AccountConfig()
 	var ephemeral string
 	if keydir == "" {
@@ -524,7 +525,7 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 		}
 	}
 
-	return accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: conf.InsecureUnlockAllowed}, backends...), ephemeral, nil
+	return manager.NewManager(&manager.Config{InsecureUnlockAllowed: conf.InsecureUnlockAllowed}, backends...), ephemeral, nil
 }
 
 var warnLock sync.Mutex

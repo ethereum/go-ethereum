@@ -37,6 +37,8 @@ import (
 	"github.com/ethereum/go-ethereum/signer/core"
 	"github.com/ethereum/go-ethereum/signer/fourbyte"
 	"github.com/ethereum/go-ethereum/signer/storage"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 //Used for testing
@@ -119,17 +121,20 @@ func tmpDirName(t *testing.T) string {
 	return d
 }
 
-func setup(t *testing.T) (*core.SignerAPI, *headlessUi) {
+func setup(ksLoc string, t *testing.T) (*core.SignerAPI, *headlessUi) {
 	db, err := fourbyte.New()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	ui := &headlessUi{make(chan string, 20), make(chan string, 20)}
-	am := core.StartClefAccountManager(tmpDirName(t), true, true, "")
-	api := core.NewSignerAPI(am, 1337, true, ui, db, true, &storage.NoStorage{})
+	am, err := core.StartClefAccountManager(ksLoc, true, true, "")
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	api := core.NewSignerAPI(am, 1337, true, ui, db, true, storage.NewNoStorage())
 	return api, ui
-
 }
+
 func createAccount(ui *headlessUi, api *core.SignerAPI, t *testing.T) {
 	ui.approveCh <- "Y"
 	ui.inputCh <- "a_long_password"
@@ -175,8 +180,7 @@ func list(ui *headlessUi, api *core.SignerAPI, t *testing.T) ([]common.Address, 
 
 }
 
-func TestNewAcc(t *testing.T) {
-	api, control := setup(t)
+func testNewAcc(api *core.SignerAPI, control *headlessUi, t *testing.T) {
 	verifyNum := func(num int) {
 		list, err := list(control, api, t)
 		if err != nil {
@@ -223,6 +227,18 @@ func TestNewAcc(t *testing.T) {
 	}
 }
 
+func TestNewAcc(t *testing.T) {
+	// test filesystem keystore
+	tmpDir := tmpDirName(t)
+	api, control := setup(tmpDir, t)
+	testNewAcc(api, control, t)
+
+	// test db keystore
+	ksLoc := "testdata/dbconfig.yaml"
+	api, control = setup(ksLoc, t)
+	testNewAcc(api, control, t)
+}
+
 func mkTestTx(from common.MixedcaseAddress) core.SendTxArgs {
 	to := common.NewMixedcaseAddress(common.HexToAddress("0x1337"))
 	gas := hexutil.Uint64(21000)
@@ -241,14 +257,13 @@ func mkTestTx(from common.MixedcaseAddress) core.SendTxArgs {
 	return tx
 }
 
-func TestSignTx(t *testing.T) {
+func testSignTx(api *core.SignerAPI, control *headlessUi, t *testing.T) {
 	var (
 		list      []common.Address
 		res, res2 *ethapi.SignTransactionResult
 		err       error
 	)
 
-	api, control := setup(t)
 	createAccount(control, api, t)
 	control.approveCh <- "A"
 	list, err = api.List(context.Background())
@@ -321,5 +336,16 @@ func TestSignTx(t *testing.T) {
 	if bytes.Equal(res.Raw, res2.Raw) {
 		t.Error("Expected tx to be modified by UI")
 	}
+}
 
+func TestSignTx(t *testing.T) {
+	// test filesystem keystore
+	tmpDir := tmpDirName(t)
+	api, control := setup(tmpDir, t)
+	testSignTx(api, control, t)
+
+	// test db keystore
+	ksLoc := "testdata/dbconfig.yaml"
+	api, control = setup(ksLoc, t)
+	testSignTx(api, control, t)
 }

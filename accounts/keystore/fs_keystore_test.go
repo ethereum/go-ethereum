@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -374,14 +375,31 @@ func checkEvents(t *testing.T, want []walletEvent, have []walletEvent) {
 	}
 }
 
-func tmpKeyStore(t *testing.T, encrypted bool) (string, *KeyStore) {
+func tmpKeyStore(t *testing.T, encrypted bool) (string, *keyStoreFS) {
 	d, err := ioutil.TempDir("", "eth-keystore-test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	newKs := NewPlaintextKeyStore
+	newKs := newPlaintextKeyStore
 	if encrypted {
-		newKs = func(kd string) *KeyStore { return NewKeyStore(kd, veryLightScryptN, veryLightScryptP) }
+		newKs = func(kd string) *keyStoreFS { return newKeyStore(kd, veryLightScryptN, veryLightScryptP) }
 	}
 	return d, newKs(d)
+}
+
+// NewKeyStore creates a keystore for the given directory.
+func newKeyStore(keydir string, scryptN, scryptP int) *keyStoreFS {
+	keydir, _ = filepath.Abs(keydir)
+	ks := &keyStoreFS{storage: &keyStorePassphrase{keydir, scryptN, scryptP, false}}
+	ks.init(keydir)
+	return ks
+}
+
+// NewPlaintextKeyStore creates a keystore for the given directory.
+// Deprecated: Use NewKeyStore.
+func newPlaintextKeyStore(keydir string) *keyStoreFS {
+	keydir, _ = filepath.Abs(keydir)
+	ks := &keyStoreFS{storage: &keyStorePlain{keydir}}
+	ks.init(keydir)
+	return ks
 }

@@ -23,10 +23,12 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"path/filepath"
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/accounts/manager"
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/common"
@@ -109,7 +111,7 @@ type Validator interface {
 // SignerAPI defines the actual implementation of ExternalAPI
 type SignerAPI struct {
 	chainID     *big.Int
-	am          *accounts.Manager
+	am          *manager.Manager
 	UI          UIClientAPI
 	validator   Validator
 	rejectMode  bool
@@ -125,7 +127,8 @@ type Metadata struct {
 	Origin    string `json:"Origin"`
 }
 
-func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath string) *accounts.Manager {
+// StartClefAccountManager initializes and start clef Account Manager
+func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath string) (*manager.Manager, error) {
 	var (
 		backends []accounts.Backend
 		n, p     = keystore.StandardScryptN, keystore.StandardScryptP
@@ -133,9 +136,28 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath str
 	if lightKDF {
 		n, p = keystore.LightScryptN, keystore.LightScryptP
 	}
+	// check keystore type
+	var fsKeystore bool
+	if len(ksLocation) > 0 {
+		ext := filepath.Ext(ksLocation)
+		if ext == ".yaml" {
+			fsKeystore = false
+		} else {
+			fsKeystore = true
+		}
+	}
+
 	// support password based accounts
 	if len(ksLocation) > 0 {
-		backends = append(backends, keystore.NewKeyStore(ksLocation, n, p))
+		if fsKeystore {
+			backends = append(backends, keystore.NewKeyStore(ksLocation, n, p))
+		} else {
+			ks, err := keystore.NewKeyStoreDB(ksLocation, n, p)
+			if err != nil {
+				return nil, err
+			}
+			backends = append(backends, ks)
+		}
 	}
 	if !nousb {
 		// Start a USB hub for Ledger hardware wallets
@@ -162,7 +184,7 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath str
 	}
 
 	// Start a smart card hub
-	if len(scpath) > 0 {
+	if len(scpath) > 0 && fsKeystore {
 		// Sanity check that the smartcard path is valid
 		fi, err := os.Stat(scpath)
 		if err != nil {
@@ -181,7 +203,7 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath str
 	}
 
 	// Clef doesn't allow insecure http account unlock.
-	return accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: false}, backends...)
+	return manager.NewManager(&manager.Config{InsecureUnlockAllowed: false}, backends...), nil
 }
 
 // MetadataFromContext extracts Metadata from a given context.Context
@@ -276,7 +298,7 @@ var ErrRequestDenied = errors.New("request denied")
 // key that is generated when a new Account is created.
 // noUSB disables USB support that is required to support hardware devices such as
 // ledger and trezor.
-func NewSignerAPI(am *accounts.Manager, chainID int64, noUSB bool, ui UIClientAPI, validator Validator, advancedMode bool, credentials storage.Storage) *SignerAPI {
+func NewSignerAPI(am *manager.Manager, chainID int64, noUSB bool, ui UIClientAPI, validator Validator, advancedMode bool, credentials storage.Storage) *SignerAPI {
 	if advancedMode {
 		log.Info("Clef is in advanced mode: will warn instead of reject")
 	}
@@ -373,6 +395,7 @@ func (api *SignerAPI) startUSBListener() {
 func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
 	var accs []accounts.Account
 	for _, wallet := range api.am.Wallets() {
+		log.Error(fmt.Sprint(len(wallet.Accounts())))
 		accs = append(accs, wallet.Accounts()...)
 	}
 	result, err := api.UI.ApproveListing(&ListRequest{Accounts: accs, Meta: MetadataFromContext(ctx)})
@@ -381,7 +404,6 @@ func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
 	}
 	if result.Accounts == nil {
 		return nil, ErrRequestDenied
-
 	}
 	addresses := make([]common.Address, 0)
 	for _, acc := range result.Accounts {
@@ -395,7 +417,7 @@ func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
 // the given password. Users are responsible to backup the private key that is stored
 // in the keystore location thas was specified when this API was created.
 func (api *SignerAPI) New(ctx context.Context) (common.Address, error) {
-	if be := api.am.Backends(keystore.KeyStoreType); len(be) == 0 {
+	if be := api.am.Backends(keystore.FSKeyStoreType, keystore.DBKeyStoreType); len(be) == 0 {
 		return common.Address{}, errors.New("password based accounts not supported")
 	}
 	if resp, err := api.UI.ApproveNewAccount(&NewAccountRequest{MetadataFromContext(ctx)}); err != nil {
@@ -409,7 +431,7 @@ func (api *SignerAPI) New(ctx context.Context) (common.Address, error) {
 // newAccount is the internal method to create a new account. It should be used
 // _after_ user-approval has been obtained
 func (api *SignerAPI) newAccount() (common.Address, error) {
-	be := api.am.Backends(keystore.KeyStoreType)
+	be := api.am.Backends(keystore.DBKeyStoreType, keystore.FSKeyStoreType)
 	if len(be) == 0 {
 		return common.Address{}, errors.New("password based accounts not supported")
 	}
@@ -427,7 +449,7 @@ func (api *SignerAPI) newAccount() (common.Address, error) {
 			api.UI.ShowError(fmt.Sprintf("Account creation attempt #%d failed due to password requirements: %v", (i + 1), pwErr))
 		} else {
 			// No error
-			acc, err := be[0].(*keystore.KeyStore).NewAccount(resp.Text)
+			acc, err := be[0].(keystore.KeyStore).NewAccount(resp.Text)
 			log.Info("Your new key was generated", "address", acc.Address)
 			log.Warn("Please backup your key file!", "path", acc.URL.Path)
 			log.Warn("Please remember your password!")

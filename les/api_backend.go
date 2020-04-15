@@ -21,7 +21,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/manager"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
@@ -250,7 +250,7 @@ func (b *LesApiBackend) ChainDb() ethdb.Database {
 	return b.eth.chainDb
 }
 
-func (b *LesApiBackend) AccountManager() *accounts.Manager {
+func (b *LesApiBackend) AccountManager() *manager.Manager {
 	return b.eth.accountManager
 }
 

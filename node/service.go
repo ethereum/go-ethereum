@@ -20,7 +20,7 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/manager"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -34,8 +34,8 @@ import (
 type ServiceContext struct {
 	services       map[reflect.Type]Service // Index of the already constructed services
 	Config         Config
-	EventMux       *event.TypeMux    // Event multiplexer used for decoupled notifications
-	AccountManager *accounts.Manager // Account manager created by the node.
+	EventMux       *event.TypeMux   // Event multiplexer used for decoupled notifications
+	AccountManager *manager.Manager // Account manager created by the node.
 }
 
 // OpenDatabase opens an existing database with the given name (or creates one

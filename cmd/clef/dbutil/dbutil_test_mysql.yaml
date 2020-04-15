@@ -1,0 +1,9 @@
+adapter: mysql
+username: test
+password: testpw
+protocol: tcp
+host: localhost
+port: 3306
+database: testdb
+params:
+    fakeparam: fakeval

@@ -1053,7 +1053,7 @@ func makeDatabaseHandles() int {
 
 // MakeAddress converts an account specified directly as a hex encoded string or
 // a key index in the key store to an internal account representation.
-func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error) {
+func MakeAddress(ks keystore.KeyStore, account string) (accounts.Account, error) {
 	// If the specified account is a valid address, return it
 	if common.IsHexAddress(account) {
 		return accounts.Account{Address: common.HexToAddress(account)}, nil
@@ -1078,7 +1078,7 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 
 // setEtherbase retrieves the etherbase either from the directly specified
 // command line flags or from the keystore if CLI indexed.
-func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *eth.Config) {
+func setEtherbase(ctx *cli.Context, ks keystore.KeyStore, cfg *eth.Config) {
 	// Extract the current etherbase, new flag overriding legacy one
 	var etherbase string
 	if ctx.GlobalIsSet(MinerLegacyEtherbaseFlag.Name) {
@@ -1462,9 +1462,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	CheckExclusive(ctx, LightLegacyServFlag, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 
-	var ks *keystore.KeyStore
-	if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0 {
-		ks = keystores[0].(*keystore.KeyStore)
+	var ks keystore.KeyStore
+	if keystores := stack.AccountManager().Backends(keystore.FSKeyStoreType, keystore.DBKeyStoreType); len(keystores) > 0 {
+		ks = keystores[0].(keystore.KeyStore)
 	}
 	setEtherbase(ctx, ks, cfg)
 	setGPO(ctx, &cfg.GPO)

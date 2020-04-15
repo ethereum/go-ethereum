@@ -130,6 +130,14 @@ var (
 		Name:  "stdio-ui-test",
 		Usage: "Mechanism to test interface between Clef and UI. Requires 'stdio-ui'.",
 	}
+	keystoreDBFlag = cli.StringFlag{
+		Name:  "keystore-db",
+		Usage: "Keystore database yaml config file path, currently supported db type are: mysql, postgres",
+	}
+	configDBFlag = cli.StringFlag{
+		Name:  "config-db",
+		Usage: "Config database yaml config file path, currently supported db type are: mysql, postgres",
+	}
 	app         = cli.NewApp()
 	initCommand = cli.Command{
 		Action:    utils.MigrateFlags(initializeSecrets),
@@ -234,6 +242,8 @@ func init() {
 		ruleFlag,
 		stdiouiFlag,
 		testFlag,
+		keystoreDBFlag,
+		configDBFlag,
 		advancedMode,
 	}
 	app.Action = signer
@@ -320,6 +330,7 @@ You should treat 'masterseed.json' with utmost secrecy and make a backup of it!
 `)
 	return nil
 }
+
 func attestFile(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
@@ -332,12 +343,8 @@ func attestFile(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
-	configDir := ctx.GlobalString(configdirFlag.Name)
-	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
-	confKey := crypto.Keccak256([]byte("config"), stretchedKey)
-
-	// Initialize the encrypted storages
-	configStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "config.json"), confKey)
+	// Initialize the config storage
+	configStorage := initConfigStorage(stretchedKey, ctx)
 	val := ctx.Args().First()
 	configStorage.Put("ruleset_sha256", val)
 	log.Info("Ruleset attestation updated", "sha256", val)
@@ -363,11 +370,7 @@ func setCredential(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
-	configDir := ctx.GlobalString(configdirFlag.Name)
-	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
-	pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
-
-	pwStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
+	pwStorage := initPasswordStorage(stretchedKey, ctx)
 	pwStorage.Put(address.Hex(), password)
 
 	log.Info("Credential store updated", "set", address)
@@ -391,11 +394,7 @@ func removeCredential(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
-	configDir := ctx.GlobalString(configdirFlag.Name)
-	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
-	pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
-
-	pwStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
+	pwStorage := initPasswordStorage(stretchedKey, ctx)
 	pwStorage.Del(address.Hex())
 
 	log.Info("Credential store updated", "unset", address)
@@ -410,12 +409,15 @@ func newAccount(c *cli.Context) error {
 	// UIs can use the UI-api instead. So we'll just use the native CLI UI here.
 	var (
 		ui                        = core.NewCommandlineUI()
-		pwStorage storage.Storage = &storage.NoStorage{}
+		pwStorage storage.Storage = storage.NewNoStorage()
 		ksLoc                     = c.GlobalString(keystoreFlag.Name)
 		lightKdf                  = c.GlobalBool(utils.LightKDFFlag.Name)
 	)
 	log.Info("Starting clef", "keystore", ksLoc, "light-kdf", lightKdf)
-	am := core.StartClefAccountManager(ksLoc, true, lightKdf, "")
+	am, err := core.StartClefAccountManager(ksLoc, true, lightKdf, "")
+	if err != nil {
+		utils.Fatalf(err.Error())
+	}
 	// This gives is us access to the external API
 	apiImpl := core.NewSignerAPI(am, 0, true, ui, nil, false, pwStorage)
 	// This gives us access to the internal API
@@ -499,24 +501,18 @@ func signer(c *cli.Context) error {
 	log.Info("Loaded 4byte database", "embeds", embeds, "locals", locals, "local", fourByteLocal)
 
 	var (
-		api       core.ExternalAPI
-		pwStorage storage.Storage = &storage.NoStorage{}
+		api           core.ExternalAPI
+		pwStorage     storage.Storage = storage.NewNoStorage()
+		configStorage storage.Storage = storage.NewNoStorage()
 	)
 	configDir := c.GlobalString(configdirFlag.Name)
 	if stretchedKey, err := readMasterKey(c, ui); err != nil {
 		log.Warn("Failed to open master, rules disabled", "err", err)
 	} else {
-		vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
-
-		// Generate domain specific keys
-		pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
-		jskey := crypto.Keccak256([]byte("jsstorage"), stretchedKey)
-		confkey := crypto.Keccak256([]byte("config"), stretchedKey)
-
-		// Initialize the encrypted storages
-		pwStorage = storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
-		jsStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "jsstorage.json"), jskey)
-		configStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "config.json"), confkey)
+		// create dedicated storages for different type of configuration
+		pwStorage = initPasswordStorage(stretchedKey, c)
+		jsStorage := initJsStorage(stretchedKey, c)
+		configStorage = initConfigStorage(stretchedKey, c)
 
 		// Do we have a rule-file?
 		if ruleFile := c.GlobalString(ruleFlag.Name); ruleFile != "" {
@@ -550,9 +546,17 @@ func signer(c *cli.Context) error {
 		nousb    = c.GlobalBool(utils.NoUSBFlag.Name)
 		scpath   = c.GlobalString(utils.SmartCardDaemonPathFlag.Name)
 	)
+	ksDB := c.GlobalString(keystoreDBFlag.Name)
+	if ksDB != "" {
+		// if keystoreDBFlag is set, ignore keystoreFlag
+		ksLoc = ksDB
+	}
 	log.Info("Starting signer", "chainid", chainId, "keystore", ksLoc,
 		"light-kdf", lightKdf, "advanced", advanced)
-	am := core.StartClefAccountManager(ksLoc, nousb, lightKdf, scpath)
+	am, err := core.StartClefAccountManager(ksLoc, nousb, lightKdf, scpath)
+	if err != nil {
+		utils.Fatalf(err.Error())
+	}
 	apiImpl := core.NewSignerAPI(am, chainId, nousb, ui, db, advanced, pwStorage)
 
 	// Establish the bidirectional communication, by creating a new UI backend and registering
@@ -1109,5 +1113,42 @@ func GenDoc(ctx *cli.Context) {
 These data types are defined in the channel between clef and the UI`)
 	for _, elem := range output {
 		fmt.Println(elem)
+	}
+}
+
+// Constants for file/db storage vault/table name
+const (
+	PasswordStorageVault string = "credentials"
+	JsStorageVault       string = "jsstorage"
+	ConfigStorageVault   string = "config"
+)
+
+func initPasswordStorage(stretchedKey []byte, c *cli.Context) storage.Storage {
+	return initStorage(PasswordStorageVault, stretchedKey, c)
+}
+
+func initJsStorage(stretchedKey []byte, c *cli.Context) storage.Storage {
+	return initStorage(JsStorageVault, stretchedKey, c)
+}
+
+func initConfigStorage(stretchedKey []byte, c *cli.Context) storage.Storage {
+	return initStorage(ConfigStorageVault, stretchedKey, c)
+}
+
+func initStorage(storageName string, stretchedKey []byte, c *cli.Context) storage.Storage {
+	configDir := c.GlobalString(configdirFlag.Name)
+	key := crypto.Keccak256([]byte(storageName), stretchedKey)
+
+	if configDB := c.GlobalString(configDBFlag.Name); configDB != "" {
+		// if config-db is specified, create db backed storage
+		storage, err := storage.NewDBStorage(configDB, storageName, key)
+		if err != nil {
+			utils.Fatalf("Cannot init database storage for %s", storageName)
+		}
+		return storage
+	} else {
+		// otherwise create file storage
+		vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
+		return storage.NewFileStorage(filepath.Join(vaultLocation, storageName+".json"), key)
 	}
 }

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -179,8 +180,7 @@ var typedData = core.TypedData{
 	Message:     messageStandard,
 }
 
-func TestSignData(t *testing.T) {
-	api, control := setup(t)
+func testSignData(api *core.SignerAPI, control *headlessUi, t *testing.T) {
 	//Create two accounts
 	createAccount(control, api, t)
 	createAccount(control, api, t)
@@ -228,6 +228,18 @@ func TestSignData(t *testing.T) {
 	if signature == nil || len(signature) != 65 {
 		t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
 	}
+}
+
+func TestSignData(t *testing.T) {
+	// test filesystem keystore
+	tmpDir := tmpDirName(t)
+	api, control := setup(tmpDir, t)
+	testSignData(api, control, t)
+
+	// test db keystore
+	ksLoc := "sqlite3#" + filepath.Join(tmpDir, "test_new_account.db")
+	api, control = setup(ksLoc, t)
+	testSignData(api, control, t)
 }
 
 func TestDomainChainId(t *testing.T) {

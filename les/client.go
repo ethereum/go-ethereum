@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/manager"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -68,7 +68,7 @@ type LightEthereum struct {
 	ApiBackend     *LesApiBackend
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
-	accountManager *accounts.Manager
+	accountManager *manager.Manager
 	netRPCService  *ethapi.PublicNetAPI
 }
 

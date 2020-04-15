@@ -41,7 +41,7 @@ type URL struct {
 }
 
 // parseURL converts a user supplied URL into the accounts specific structure.
-func parseURL(url string) (URL, error) {
+func ParseURL(url string) (URL, error) {
 	parts := strings.Split(url, "://")
 	if len(parts) != 2 || parts[0] == "" {
 		return URL{}, errors.New("protocol scheme missing")
@@ -81,7 +81,7 @@ func (u *URL) UnmarshalJSON(input []byte) error {
 	if err != nil {
 		return err
 	}
-	url, err := parseURL(textURL)
+	url, err := ParseURL(textURL)
 	if err != nil {
 		return err
 	}
