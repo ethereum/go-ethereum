@@ -68,7 +68,7 @@ type KeyStore struct {
 	updating    bool                    // Whether the event notification loop is running
 
 	mu       sync.RWMutex
-	importMu sync.RWMutex // Import Mutex locks the import to prevent two insertions from racing
+	importMu sync.Mutex // Import Mutex locks the import to prevent two insertions from racing
 }
 
 type unlocked struct {
