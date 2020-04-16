@@ -125,7 +125,7 @@ func (mux *TypeMux) del(s *TypeMuxSubscription) {
 			}
 		}
 	}
-	s.mux.mutex.Unlock()
+	mux.mutex.Unlock()
 }
 
 func find(slice []*TypeMuxSubscription, item *TypeMuxSubscription) int {
